@@ -1827,20 +1827,30 @@ rejected. The target-version query on `/download/pulse-agent` is cache identity,
 not trust evidence: checksum, embedded-key signature, self-test, and atomic
 replacement validation remain mandatory and fail closed.
 
-### Request-derived SSO endpoint URLs keep the trusted-proxy gate
+### Request-derived absolute URLs share one trusted command-target boundary
 
-`internal/api/router.go` gained `requestForwardedScheme`,
-`requestForwardedHost` and `requestOriginBaseURL`, extracted verbatim from the
-SSO OIDC callback URL builder so SSO provider responses can derive endpoint
-URLs from the inbound request instead of returning a hardcoded
-`http://localhost:7655`. The trust boundary is unchanged and fail-closed:
-`X-Forwarded-Proto`, `X-Forwarded-Scheme` and `X-Forwarded-Host` are honored
-only when the immediate peer matches `PULSE_TRUSTED_PROXY_CIDRS`, which is
-empty by default, so an untrusted client cannot steer a returned URL to a host
-or scheme of its choosing — it can only reach the same `Host` header handling
-the request already depends on. The derived value is returned in an
-admin-authenticated settings response and is never persisted, never used as a
-redirect target, and never used to make an authorization decision.
+`internal/api/router.go` owns one `resolveRequestOrigin` boundary behind
+`requestOriginBaseURL`, public-URL capture, and `Router.resolvePublicURL`.
+Direct `Host` values must parse as strict HTTP authorities and reject
+userinfo, schemes, path/query/fragment bytes, whitespace and controls,
+malformed DNS labels, invalid IPv4/IPv6 bracket forms, and ports outside
+1-65535. `X-Forwarded-Proto`, `X-Forwarded-Scheme`, `X-Forwarded-Host`, and
+`X-Forwarded-Port` are honored only when the immediate peer matches
+`PULSE_TRUSTED_PROXY_CIDRS`, which is empty by default. Invalid forwarded
+values are ignored independently rather than being copied or allowed to erase
+a valid direct fallback.
+
+This derivation is not authorization evidence, but it is security-sensitive
+credential targeting. A validated live origin may outrank only an
+auto-detected `PublicURL`; `AgentConnectURL` and explicit `PublicURL` remain
+authoritative. Diagnostics install commands, cluster deploy payloads, hosted
+install commands, onboarding payloads, security status, SSO endpoint
+responses, and magic links must consume the canonical resolver instead of raw
+request headers because several of those payloads pair the resulting URL with
+fresh API or bootstrap tokens. Hosted mode remains fail-closed without a
+configured external URL. The adversarial contract proof is
+`TestContract_RequestOriginCannotRetargetTokenBearingCommands` in
+`internal/api/contract_test.go`.
 
 ### The global security banner no longer scores a truncated status payload
 

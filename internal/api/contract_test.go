@@ -22499,6 +22499,171 @@ func TestContract_SSOProviderResponseBaseURLNeverGuessesLocalhost(t *testing.T) 
 	})
 }
 
+// TestContract_RequestOriginCannotRetargetTokenBearingCommands pins the single
+// request-origin trust boundary used by SSO URLs, agent install commands, and
+// deploy payloads. Direct Host remains useful live-origin evidence only after
+// strict authority validation; forwarded values require an explicitly trusted
+// immediate proxy.
+func TestContract_RequestOriginCannotRetargetTokenBearingCommands(t *testing.T) {
+	const autoDetectedURL = "http://192.168.50.10:7655"
+
+	newRouter := func() *Router {
+		return &Router{config: &config.Config{
+			PublicURL:             autoDetectedURL,
+			PublicURLAutoDetected: true,
+			FrontendPort:          7655,
+		}}
+	}
+
+	t.Run("untrusted forwarded origin is ignored", func(t *testing.T) {
+		t.Setenv("PULSE_TRUSTED_PROXY_CIDRS", "")
+		resetTrustedProxyCIDRsForTests()
+
+		req := httptest.NewRequest(http.MethodPost, "http://pulse.lan:7655/api/diagnostics/docker/prepare-token", nil)
+		req.RemoteAddr = "198.51.100.20:43210"
+		req.Header.Set("X-Forwarded-Host", "attacker.example")
+		req.Header.Set("X-Forwarded-Proto", "https")
+		req.Header.Set("X-Forwarded-Port", "443")
+
+		if got, want := newRouter().resolvePublicURL(req), "http://pulse.lan:7655"; got != want {
+			t.Fatalf("untrusted forwarded origin resolved to %q, want %q", got, want)
+		}
+	})
+
+	t.Run("malformed direct hosts fall back without carrying attacker bytes", func(t *testing.T) {
+		t.Setenv("PULSE_TRUSTED_PROXY_CIDRS", "")
+		resetTrustedProxyCIDRsForTests()
+
+		for _, host := range []string{
+			"user@attacker.example",
+			"pulse.example/path",
+			"pulse.example?next=attacker",
+			"pulse.example#fragment",
+			"pulse.example:7655;curl-attacker",
+			"pulse.example\r\nX-Injected: attacker",
+			" pulse.example ",
+			"[2001:db8::1]garbage",
+			"example..com",
+			"example.com:70000",
+		} {
+			req := httptest.NewRequest(http.MethodGet, "/", nil)
+			req.Host = host
+			req.RemoteAddr = "198.51.100.20:43210"
+			if got := newRouter().resolvePublicURL(req); got != autoDetectedURL {
+				t.Errorf("Host %q resolved to %q, want safe fallback %q", host, got, autoDetectedURL)
+			}
+		}
+	})
+
+	t.Run("trusted proxy preserves the external host scheme and port", func(t *testing.T) {
+		t.Setenv("PULSE_TRUSTED_PROXY_CIDRS", "192.0.2.0/24")
+		resetTrustedProxyCIDRsForTests()
+
+		req := httptest.NewRequest(http.MethodGet, "http://backend.internal:7655/", nil)
+		req.RemoteAddr = "192.0.2.44:41000"
+		req.Header.Set("X-Forwarded-Host", "pulse.example.com, backend.internal:7655")
+		req.Header.Set("X-Forwarded-Proto", "https, http")
+		req.Header.Set("X-Forwarded-Port", "8443")
+
+		if got, want := newRouter().resolvePublicURL(req), "https://pulse.example.com:8443"; got != want {
+			t.Fatalf("trusted forwarded origin resolved to %q, want %q", got, want)
+		}
+	})
+
+	t.Run("malformed trusted headers are ignored independently", func(t *testing.T) {
+		t.Setenv("PULSE_TRUSTED_PROXY_CIDRS", "192.0.2.0/24")
+		resetTrustedProxyCIDRsForTests()
+
+		req := httptest.NewRequest(http.MethodGet, "https://pulse.lan:9443/", nil)
+		req.RemoteAddr = "192.0.2.44:41000"
+		req.Header.Set("X-Forwarded-Host", "https://attacker.example/path")
+		req.Header.Set("X-Forwarded-Proto", "javascript")
+		req.Header.Set("X-Forwarded-Scheme", "also-invalid")
+		req.Header.Set("X-Forwarded-Port", "70000")
+
+		if got, want := newRouter().resolvePublicURL(req), "https://pulse.lan:9443"; got != want {
+			t.Fatalf("malformed forwarded headers resolved to %q, want %q", got, want)
+		}
+	})
+
+	t.Run("IPv4 and IPv6 authorities remain usable", func(t *testing.T) {
+		t.Setenv("PULSE_TRUSTED_PROXY_CIDRS", "192.0.2.0/24")
+		resetTrustedProxyCIDRsForTests()
+
+		ipv4 := httptest.NewRequest(http.MethodGet, "http://192.0.2.10:7655/", nil)
+		if got, want := newRouter().resolvePublicURL(ipv4), "http://192.0.2.10:7655"; got != want {
+			t.Fatalf("IPv4 origin = %q, want %q", got, want)
+		}
+
+		ipv6 := httptest.NewRequest(http.MethodGet, "http://[2001:db8::10]/", nil)
+		ipv6.RemoteAddr = "192.0.2.44:41000"
+		ipv6.Header.Set("X-Forwarded-Host", "2001:db8::20")
+		ipv6.Header.Set("X-Forwarded-Proto", "https")
+		ipv6.Header.Set("X-Forwarded-Port", "8443")
+		if got, want := newRouter().resolvePublicURL(ipv6), "https://[2001:db8::20]:8443"; got != want {
+			t.Fatalf("IPv6 forwarded origin = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("explicit public URL remains authoritative", func(t *testing.T) {
+		t.Setenv("PULSE_TRUSTED_PROXY_CIDRS", "192.0.2.0/24")
+		resetTrustedProxyCIDRsForTests()
+
+		router := &Router{config: &config.Config{PublicURL: "https://configured.example/base/"}}
+		req := httptest.NewRequest(http.MethodGet, "http://request.example/", nil)
+		req.RemoteAddr = "192.0.2.44:41000"
+		req.Header.Set("X-Forwarded-Host", "forwarded.example")
+		req.Header.Set("X-Forwarded-Proto", "http")
+
+		if got, want := router.resolvePublicURL(req), "https://configured.example/base"; got != want {
+			t.Fatalf("configured public URL resolved to %q, want %q", got, want)
+		}
+	})
+
+	t.Run("diagnostics and deploy token targets use the sanitized fallback", func(t *testing.T) {
+		t.Setenv("PULSE_TRUSTED_PROXY_CIDRS", "")
+		resetTrustedProxyCIDRsForTests()
+
+		req := httptest.NewRequest(http.MethodPost, "/api/clusters/lab/agent-deploy/jobs", nil)
+		req.Host = "attacker.example/path;sh"
+		req.RemoteAddr = "198.51.100.20:43210"
+		req.Header.Set("X-Forwarded-Host", "forwarded-attacker.example")
+		req.Header.Set("X-Forwarded-Proto", "https")
+
+		baseURL := newRouter().resolvePublicURL(req)
+		diagnosticsCommand := buildContainerRuntimeAgentInstallCommand(baseURL, "diagnostics-secret", true)
+		if !strings.Contains(diagnosticsCommand, autoDetectedURL) || !strings.Contains(diagnosticsCommand, "diagnostics-secret") {
+			t.Fatalf("diagnostics command did not retain safe target and token: %q", diagnosticsCommand)
+		}
+		if strings.Contains(diagnosticsCommand, "attacker") {
+			t.Fatalf("diagnostics command retained attacker-controlled origin bytes: %q", diagnosticsCommand)
+		}
+
+		deployPayload := agentexec.DeployInstallPayload{
+			RequestID: "request-origin-contract",
+			JobID:     "job-request-origin-contract",
+			PulseURL:  baseURL,
+			Targets: []agentexec.DeployInstallTarget{{
+				TargetID:       "target-1",
+				NodeName:       "pve-1",
+				NodeIP:         "192.0.2.50",
+				Arch:           "amd64",
+				BootstrapToken: "deploy-secret",
+			}},
+		}
+		encoded, err := json.Marshal(deployPayload)
+		if err != nil {
+			t.Fatalf("marshal deploy payload: %v", err)
+		}
+		if !bytes.Contains(encoded, []byte(autoDetectedURL)) || !bytes.Contains(encoded, []byte("deploy-secret")) {
+			t.Fatalf("deploy payload did not retain safe target and token: %s", encoded)
+		}
+		if bytes.Contains(encoded, []byte("attacker")) {
+			t.Fatalf("deploy payload retained attacker-controlled origin bytes: %s", encoded)
+		}
+	})
+}
+
 // Issue1649 regression coverage. Docker update (and every other typed) action
 // used to sit in "executing" forever whenever the agent could not produce a
 // terminal receipt: the agent-side receipt store marks an in-flight receipt

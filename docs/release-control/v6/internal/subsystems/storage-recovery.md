@@ -4930,19 +4930,19 @@ while storage detail drawers and filter controls must route summary series IDs,
 source tones, and disk metrics through the shared storage helpers instead of
 reconstructing them from local table state.
 
-### Shared internal/api request-origin helpers persist nothing
+### Shared internal/api request-origin resolution creates no recovery state
 
-The shared `internal/api` boundary this subsystem consumes gained
-`requestOriginBaseURL`, `requestForwardedScheme` and `requestForwardedHost` in
-`internal/api/router.go`, used by `internal/api/identity_sso_handlers.go` to
-derive SSO endpoint URLs from the inbound request when no public URL is
-configured. The derivation is per-response and read-only: nothing is written to
-`system.json`, the SSO config, or any other persisted artifact, and the
-separate `capturePublicURLFromRequest` detection path that does persist a
-detected public URL is unchanged. Tenant workspace preservation, recovery flows
-that copy `system.json` forward, and backup or restore attribution are
-unaffected, and the extension-point expectations on `internal/api/` and
-`internal/api/router.go` are otherwise unchanged.
+The shared `internal/api` boundary this subsystem consumes routes
+`requestOriginBaseURL`, `capturePublicURLFromRequest`, and
+`Router.resolvePublicURL` through one strict `resolveRequestOrigin` trust
+boundary in `internal/api/router.go`. The resolver itself performs no
+persistence. Capture may update the running config's auto-detected public URL
+for notification and SAML consumers, while command-target resolution may use
+the validated live origin ahead of that auto-detected guess; neither behavior
+creates a recovery point, backup artifact, restore authority, or protection
+freshness fact. No request-derived origin is written to storage/recovery
+records, and tenant workspace preservation or recovery flows that copy
+`system.json` remain outside this URL trust boundary.
 
 The shared `frontend-modern/src/App.tsx` shell boundary this subsystem consumes
 gained one authority gate on its global banner block. The banners rendered

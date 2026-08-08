@@ -4694,61 +4694,15 @@ func (r *Router) capturePublicURLFromRequest(req *http.Request) {
 		return
 	}
 
-	peerIP := extractRemoteIP(req.RemoteAddr)
-	trustedProxy := isTrustedProxyIP(peerIP)
-
-	rawHost := ""
-	if trustedProxy {
-		rawHost = firstForwardedValue(req.Header.Get("X-Forwarded-Host"))
-	}
-	if rawHost == "" {
-		rawHost = req.Host
-	}
-	hostWithPort, hostOnly := sanitizeForwardedHost(rawHost)
-	if hostWithPort == "" {
+	origin, ok := resolveRequestOrigin(req)
+	if !ok {
 		return
 	}
-	if isLoopbackHost(hostOnly) {
+	if isLoopbackHost(origin.hostname) {
 		return
 	}
 
-	rawProto := ""
-	if trustedProxy {
-		rawProto = firstForwardedValue(req.Header.Get("X-Forwarded-Proto"))
-		if rawProto == "" {
-			rawProto = firstForwardedValue(req.Header.Get("X-Forwarded-Scheme"))
-		}
-	}
-	scheme := strings.ToLower(strings.TrimSpace(rawProto))
-	switch scheme {
-	case "https", "http":
-		// supported values
-	default:
-		if req.TLS != nil {
-			scheme = "https"
-		} else {
-			scheme = "http"
-		}
-	}
-	if scheme == "" {
-		scheme = "http"
-	}
-
-	if _, _, err := net.SplitHostPort(hostWithPort); err != nil {
-		if forwardedPort := firstForwardedValue(req.Header.Get("X-Forwarded-Port")); forwardedPort != "" {
-			if shouldAppendForwardedPort(forwardedPort, scheme) {
-				if strings.Contains(hostWithPort, ":") && !strings.HasPrefix(hostWithPort, "[") {
-					hostWithPort = fmt.Sprintf("[%s]", hostWithPort)
-				} else if strings.HasPrefix(hostWithPort, "[") && !strings.Contains(hostWithPort, "]") {
-					hostWithPort = fmt.Sprintf("[%s]", strings.TrimPrefix(hostWithPort, "["))
-				}
-				hostWithPort = fmt.Sprintf("%s:%s", hostWithPort, forwardedPort)
-			}
-		}
-	}
-
-	candidate := fmt.Sprintf("%s://%s", scheme, hostWithPort)
-	normalizedCandidate := strings.TrimRight(strings.TrimSpace(candidate), "/")
+	normalizedCandidate := origin.baseURL()
 
 	r.publicURLMu.Lock()
 	if r.publicURLDetected {
@@ -4791,59 +4745,84 @@ func firstForwardedValue(header string) string {
 	return strings.TrimSpace(parts[0])
 }
 
-// requestForwardedScheme resolves the scheme the client used to reach Pulse.
-// X-Forwarded-Proto / X-Forwarded-Scheme are only honored when the immediate
-// peer is a trusted proxy, so untrusted clients cannot spoof "https".
-func requestForwardedScheme(req *http.Request) string {
-	scheme := "http"
-	if req == nil {
-		return scheme
+type resolvedRequestOrigin struct {
+	scheme    string
+	authority string
+	hostname  string
+}
+
+func (o resolvedRequestOrigin) baseURL() string {
+	if o.scheme == "" || o.authority == "" {
+		return ""
 	}
+	return o.scheme + "://" + o.authority
+}
+
+type validatedRequestHost struct {
+	authority string
+	hostname  string
+	hasPort   bool
+}
+
+// resolveRequestOrigin is the single trust boundary for request-derived
+// absolute URLs. Direct Host values are always parsed as a strict HTTP
+// authority. Forwarded host, scheme, and port values are considered only when
+// the immediate peer is configured in PULSE_TRUSTED_PROXY_CIDRS; malformed
+// forwarded values are ignored independently and cannot poison the direct
+// request fallback.
+func resolveRequestOrigin(req *http.Request) (resolvedRequestOrigin, bool) {
+	if req == nil {
+		return resolvedRequestOrigin{}, false
+	}
+
+	trustedProxy := isTrustedProxyIP(extractRemoteIP(req.RemoteAddr))
+	var host validatedRequestHost
+	var ok bool
+	if trustedProxy {
+		host, ok = validateRequestHost(firstForwardedValue(req.Header.Get("X-Forwarded-Host")))
+	}
+	if !ok {
+		host, ok = validateRequestHost(req.Host)
+	}
+	if !ok {
+		return resolvedRequestOrigin{}, false
+	}
+
+	scheme := "http"
 	if req.TLS != nil {
 		scheme = "https"
 	}
-
-	if isTrustedProxyIP(extractRemoteIP(req.RemoteAddr)) {
-		if proto := firstForwardedValue(req.Header.Get("X-Forwarded-Proto")); proto != "" {
-			scheme = proto
-		} else if proto := firstForwardedValue(req.Header.Get("X-Forwarded-Scheme")); proto != "" {
-			scheme = proto
+	if trustedProxy {
+		if forwardedScheme, valid := validateForwardedScheme(firstForwardedValue(req.Header.Get("X-Forwarded-Proto"))); valid {
+			scheme = forwardedScheme
+		} else if forwardedScheme, valid := validateForwardedScheme(firstForwardedValue(req.Header.Get("X-Forwarded-Scheme"))); valid {
+			scheme = forwardedScheme
 		}
 	}
 
-	scheme = strings.ToLower(strings.TrimSpace(scheme))
-	switch scheme {
-	case "http", "https":
-		return scheme
-	default:
-		if req.TLS != nil {
-			return "https"
+	if trustedProxy && !host.hasPort {
+		if forwardedPort := firstForwardedValue(req.Header.Get("X-Forwarded-Port")); shouldAppendForwardedPort(forwardedPort, scheme) {
+			host.authority = net.JoinHostPort(host.hostname, forwardedPort)
+			host.hasPort = true
 		}
-		return "http"
 	}
+
+	return resolvedRequestOrigin{
+		scheme:    scheme,
+		authority: host.authority,
+		hostname:  host.hostname,
+	}, true
 }
 
-// requestForwardedHost resolves the host:port the client used to reach Pulse.
-// X-Forwarded-Host is only honored when the immediate peer is a trusted proxy.
-// Returns "" when no host can be resolved.
-func requestForwardedHost(req *http.Request) string {
-	if req == nil {
-		return ""
+func validateForwardedScheme(raw string) (string, bool) {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "http":
+		return "http", true
+	case "https":
+		return "https", true
+	default:
+		return "", false
 	}
-
-	rawHost := ""
-	if isTrustedProxyIP(extractRemoteIP(req.RemoteAddr)) {
-		rawHost = firstForwardedValue(req.Header.Get("X-Forwarded-Host"))
-	}
-	if rawHost == "" {
-		rawHost = req.Host
-	}
-
-	host, _ := sanitizeForwardedHost(rawHost)
-	if host == "" {
-		host = strings.TrimSpace(req.Host)
-	}
-	return host
 }
 
 // requestOriginBaseURL derives the scheme://host base URL the admin's browser
@@ -4852,33 +4831,116 @@ func requestForwardedHost(req *http.Request) string {
 // request necessarily arrived over a reachable address, unlike a hardcoded
 // localhost guess. Returns "" when the host cannot be resolved.
 func requestOriginBaseURL(req *http.Request) string {
-	host := requestForwardedHost(req)
-	if host == "" {
+	origin, ok := resolveRequestOrigin(req)
+	if !ok {
 		return ""
 	}
-	return requestForwardedScheme(req) + "://" + host
+	return origin.baseURL()
 }
 
 func sanitizeForwardedHost(raw string) (string, string) {
-	host := strings.TrimSpace(raw)
-	if host == "" {
+	host, ok := validateRequestHost(raw)
+	if !ok {
 		return "", ""
 	}
+	return host.authority, host.hostname
+}
 
-	host = strings.TrimPrefix(host, "http://")
-	host = strings.TrimPrefix(host, "https://")
-	host = strings.TrimSpace(strings.TrimSuffix(host, "/"))
-	if host == "" {
-		return "", ""
+func validateRequestHost(raw string) (validatedRequestHost, bool) {
+	if raw == "" || strings.TrimSpace(raw) != raw {
+		return validatedRequestHost{}, false
+	}
+	for i := 0; i < len(raw); i++ {
+		if raw[i] <= 0x20 || raw[i] >= 0x7f {
+			return validatedRequestHost{}, false
+		}
+	}
+	if strings.ContainsAny(raw, "/\\?#@%") {
+		return validatedRequestHost{}, false
 	}
 
-	hostOnly := host
-	if h, _, err := net.SplitHostPort(hostOnly); err == nil {
-		hostOnly = h
-	}
-	hostOnly = strings.Trim(hostOnly, "[]")
+	authority := raw
+	hostname := raw
+	hasPort := false
 
-	return host, hostOnly
+	if strings.HasPrefix(raw, "[") {
+		closing := strings.IndexByte(raw, ']')
+		if closing <= 1 {
+			return validatedRequestHost{}, false
+		}
+		hostname = raw[1:closing]
+		if ip := net.ParseIP(hostname); ip == nil || ip.To4() != nil {
+			return validatedRequestHost{}, false
+		}
+		suffix := raw[closing+1:]
+		switch {
+		case suffix == "":
+			authority = "[" + hostname + "]"
+		case strings.HasPrefix(suffix, ":") && validRequestPort(suffix[1:]):
+			hasPort = true
+			authority = net.JoinHostPort(hostname, suffix[1:])
+		default:
+			return validatedRequestHost{}, false
+		}
+	} else if strings.Count(raw, ":") > 1 {
+		if ip := net.ParseIP(raw); ip == nil || ip.To4() != nil {
+			return validatedRequestHost{}, false
+		}
+		hostname = raw
+		authority = "[" + raw + "]"
+	} else if strings.Contains(raw, ":") {
+		hostPart, port, err := net.SplitHostPort(raw)
+		if err != nil || !validRequestPort(port) {
+			return validatedRequestHost{}, false
+		}
+		hostname = hostPart
+		hasPort = true
+	}
+
+	if ip := net.ParseIP(hostname); ip == nil && !validRequestHostname(hostname) {
+		return validatedRequestHost{}, false
+	}
+
+	return validatedRequestHost{
+		authority: authority,
+		hostname:  hostname,
+		hasPort:   hasPort,
+	}, true
+}
+
+func validRequestHostname(hostname string) bool {
+	name := strings.TrimSuffix(hostname, ".")
+	if name == "" || len(name) > 253 {
+		return false
+	}
+	if allNumericAndDots := strings.Trim(name, "0123456789.") == ""; allNumericAndDots {
+		return false
+	}
+	for _, label := range strings.Split(name, ".") {
+		if label == "" || len(label) > 63 || label[0] == '-' || label[len(label)-1] == '-' {
+			return false
+		}
+		for i := 0; i < len(label); i++ {
+			c := label[i]
+			if (c < 'a' || c > 'z') && (c < 'A' || c > 'Z') && (c < '0' || c > '9') && c != '-' {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func validRequestPort(port string) bool {
+	if port == "" {
+		return false
+	}
+	for i := 0; i < len(port); i++ {
+		if port[i] < '0' || port[i] > '9' {
+			return false
+		}
+	}
+	value, err := strconv.Atoi(port)
+	return err == nil && value >= 1 && value <= 65535
 }
 
 func isLoopbackHost(host string) bool {
@@ -4898,10 +4960,7 @@ func isLoopbackHost(host string) bool {
 }
 
 func shouldAppendForwardedPort(port, scheme string) bool {
-	if port == "" {
-		return false
-	}
-	if _, err := strconv.Atoi(port); err != nil {
+	if !validRequestPort(port) {
 		return false
 	}
 	if scheme == "https" && port == "443" {
@@ -10908,6 +10967,10 @@ func (r *Router) handleDiagnosticsDockerPrepareToken(w http.ResponseWriter, req 
 }
 
 func (r *Router) resolvePublicURL(req *http.Request) string {
+	if r == nil || r.config == nil {
+		return ""
+	}
+
 	// Hosted mode must never fall back to request host or localhost.
 	// A canonical externally-reachable URL must be configured via PublicURL / AgentConnectURL.
 	if r != nil && r.hostedMode {
@@ -10933,21 +10996,8 @@ func (r *Router) resolvePublicURL(req *http.Request) string {
 		return strings.TrimRight(publicURL, "/")
 	}
 
-	scheme := "http"
-	if req != nil {
-		if req.TLS != nil {
-			scheme = "https"
-		} else if proto := req.Header.Get("X-Forwarded-Proto"); strings.EqualFold(proto, "https") {
-			scheme = "https"
-		}
-	}
-
-	host := ""
-	if req != nil {
-		host = strings.TrimSpace(req.Host)
-	}
-	if host != "" {
-		return fmt.Sprintf("%s://%s", scheme, host)
+	if requestURL := requestOriginBaseURL(req); requestURL != "" {
+		return requestURL
 	}
 
 	if publicURL != "" {
@@ -10955,12 +11005,9 @@ func (r *Router) resolvePublicURL(req *http.Request) string {
 	}
 
 	if r.config.FrontendPort > 0 {
-		host = fmt.Sprintf("localhost:%d", r.config.FrontendPort)
-	} else {
-		host = "localhost:7655"
+		return fmt.Sprintf("http://localhost:%d", r.config.FrontendPort)
 	}
-
-	return fmt.Sprintf("%s://%s", scheme, host)
+	return "http://localhost:7655"
 }
 
 func fileExists(path string) bool {

@@ -5824,19 +5824,29 @@ split. `internal/hostagent/proxmox_setup_test.go`,
 health, first-install, type/host binding, one-time consumption, rejection,
 host-token bootstrap, and concurrent-completion contracts.
 
-### Shared internal/api request-origin helpers are read-only URL derivation
+### Shared internal/api request-origin resolution is lifecycle credential targeting
 
-The shared `internal/api` boundary this subsystem consumes gained
-`requestOriginBaseURL`, `requestForwardedScheme` and `requestForwardedHost` in
-`internal/api/router.go`, factored out of the existing SSO OIDC callback URL
-builder so SSO provider responses can derive endpoint URLs from the inbound
-request instead of guessing `http://localhost:7655`. The helpers only read the
-request; they honor forwarded headers under the same trusted-proxy gate the
-callback builder already applied, and they neither mutate nor persist
-`config.PublicURL`. No agent registration, token issuance, command admission,
-update targeting, or fleet-lifecycle authority is touched, and the
-extension-point expectations on `internal/api/` and `internal/api/router.go`
-are otherwise unchanged.
+The shared `internal/api` boundary this subsystem consumes now routes
+`requestOriginBaseURL`, in-memory public-URL capture, and
+`Router.resolvePublicURL` through one `resolveRequestOrigin` trust boundary in
+`internal/api/router.go`. Forwarded host, scheme, and port are admitted only
+from an immediate peer in `PULSE_TRUSTED_PROXY_CIDRS`; direct and forwarded
+hosts must pass strict authority validation, including bounded ports and valid
+IPv4/IPv6 forms, before they can become an absolute URL.
+
+The earlier governance claim that this derivation touched no token issuance,
+update targeting, or fleet lifecycle was false once live request origin began
+outranking an auto-detected public URL. The resolved value targets
+token-bearing diagnostics install commands and cluster deployment payloads,
+and it also feeds hosted install, onboarding, and agent URL projections.
+Therefore lifecycle consumers must treat it as an API/security credential-
+target boundary: explicit `AgentConnectURL` or operator `PublicURL` remains
+authoritative, only validated live origin may replace an auto-detected guess,
+invalid request evidence falls back safely, and hosted mode never guesses.
+It does not itself grant registration or command authority, but raw Host or
+forwarded headers must never bypass it before credentials are placed into an
+install or deploy transport. `TestContract_RequestOriginCannotRetargetTokenBearingCommands`
+is the routed lifecycle/API proof.
 
 ### Runtime branding stays outside agent lifecycle authority
 

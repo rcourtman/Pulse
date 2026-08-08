@@ -310,7 +310,11 @@ func buildSSOOIDCCallbackURL(req *http.Request, providerID string, configuredURL
 		return configured
 	}
 
-	return fmt.Sprintf("%s://%s/api/oidc/%s/callback", requestForwardedScheme(req), requestForwardedHost(req), providerID)
+	baseURL := requestOriginBaseURL(req)
+	if baseURL == "" {
+		return ""
+	}
+	return fmt.Sprintf("%s/api/oidc/%s/callback", baseURL, providerID)
 }
 
 // handleSSOOIDCLogin handles login for a multi-provider SSO OIDC provider.

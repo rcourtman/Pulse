@@ -8887,13 +8887,17 @@ Identity Provider, so a localhost guess was copied straight into an IdP where
 it fails with no diagnosable cause; the admin's own request, by contrast,
 necessarily arrived over an address that reaches Pulse.
 
-The request-derived base URL uses the shared
-`requestOriginBaseURL` / `requestForwardedScheme` / `requestForwardedHost`
-helpers in `internal/api/router.go`, which honor `X-Forwarded-Proto`,
-`X-Forwarded-Scheme` and `X-Forwarded-Host` only when the immediate peer is a
-trusted proxy (`PULSE_TRUSTED_PROXY_CIDRS`). `buildSSOOIDCCallbackURL` in
-`internal/api/oidc_handlers.go` now shares those helpers; its output is
-unchanged.
+The request-derived base URL uses the single `resolveRequestOrigin` trust
+boundary behind `requestOriginBaseURL` in `internal/api/router.go`. Direct
+`Host` is accepted only as a strict host authority: userinfo, schemes, paths,
+queries, fragments, whitespace/control characters, malformed labels, invalid
+brackets, and out-of-range ports fail closed. `X-Forwarded-Proto`,
+`X-Forwarded-Scheme`, `X-Forwarded-Host`, and `X-Forwarded-Port` are considered
+only when the immediate peer is a trusted proxy
+(`PULSE_TRUSTED_PROXY_CIDRS`); malformed forwarded fields are ignored and a
+valid direct authority remains the fallback. `buildSSOOIDCCallbackURL` in
+`internal/api/oidc_handlers.go` consumes the same base-URL resolver rather than
+reassembling scheme and host independently.
 
 All five fields are `omitempty` and are now omitted entirely when neither
 source resolves a host, rather than carrying a wrong absolute URL. Clients must
@@ -8902,6 +8906,28 @@ to configure a public URL. `TestContract_SSOProviderResponseBaseURLNeverGuessesL
 in `internal/api/contract_test.go` pins the precedence, the request fallback,
 the trusted-proxy gate on forwarded headers, and the empty-rather-than-wrong
 behavior.
+
+### Request-origin fallback cannot retarget credential-bearing commands
+
+`Router.resolvePublicURL` preserves the live-origin behavior required when an
+auto-detected LAN address is only a stale guess, but request-derived evidence
+now comes exclusively from `resolveRequestOrigin`. `AgentConnectURL` remains
+authoritative, an explicitly configured `PublicURL` remains authoritative, a
+validated live request origin may outrank only an auto-detected `PublicURL`,
+and invalid or absent request evidence falls back to that auto-detected value
+before the local frontend default. Hosted mode still never uses request origin
+or localhost.
+
+This resolver is a credential-target boundary, not presentation-only URL
+formatting. The diagnostics Docker/Podman migration response embeds a freshly
+minted token in its install command and service snippet, while cluster deploy
+install payloads pair `pulse_url` with per-target bootstrap tokens. Those
+consumers, hosted agent-install generation, onboarding, privileged security
+status, and magic-link URL generation must not read raw `Host` or forwarded
+headers around the resolver. `TestContract_RequestOriginCannotRetargetTokenBearingCommands`
+pins untrusted and malformed header rejection, trusted-proxy preserved-host
+behavior, IPv4/IPv6 and port handling, explicit configuration precedence, and
+the exact diagnostics/deploy target paired with token-bearing transport.
 
 ### Runtime branding is a narrow presentation contract
 

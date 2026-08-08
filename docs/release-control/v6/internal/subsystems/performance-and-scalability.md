@@ -2235,14 +2235,15 @@ remains an O(1) target projection. Cache-prevention headers and the
 agent-supplied non-secret cache key add no inventory scan, persistence read,
 metrics fan-out, or background work to `GET /api/agent/version`.
 
-### Request-origin URL helpers on internal/api/router.go stay O(1)
+### Canonical request-origin resolution on internal/api/router.go stays O(1)
 
-The `requestForwardedScheme`, `requestForwardedHost` and `requestOriginBaseURL`
-helpers added to `internal/api/router.go` perform only header reads and string
-manipulation on the request already in hand. They add no inventory scan,
-persistence read, lock acquisition, metrics fan-out, or background work, and
-their cost is constant per SSO provider entry rendered in the admin settings
-response.
+`resolveRequestOrigin` and `requestOriginBaseURL` in `internal/api/router.go`
+perform bounded trusted-peer lookup, header selection, and strict authority
+parsing on the request already in hand. Reuse by public-URL capture, SSO
+responses, install-command targeting, deployment payloads, onboarding, and
+security status adds no inventory scan, persistence read, metrics fan-out, or
+background work. The trusted-proxy CIDR cache remains process-local, and the
+resolver's request cost is bounded by the small authority/header inputs.
 
 ### Runtime branding remains a bounded bootstrap read
 

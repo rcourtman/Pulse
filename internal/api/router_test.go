@@ -319,10 +319,10 @@ func TestSanitizeForwardedHost(t *testing.T) {
 			wantHostOnly: "example.com",
 		},
 		{
-			name:         "hostname with whitespace",
+			name:         "hostname with whitespace is rejected",
 			raw:          "  example.com  ",
-			wantFull:     "example.com",
-			wantHostOnly: "example.com",
+			wantFull:     "",
+			wantHostOnly: "",
 		},
 		{
 			name:         "fqdn",
@@ -351,44 +351,44 @@ func TestSanitizeForwardedHost(t *testing.T) {
 			wantHostOnly: "example.com",
 		},
 
-		// With scheme prefixes
+		// Host is an authority, never a URL.
 		{
-			name:         "http scheme stripped",
+			name:         "http scheme rejected",
 			raw:          "http://example.com",
-			wantFull:     "example.com",
-			wantHostOnly: "example.com",
+			wantFull:     "",
+			wantHostOnly: "",
 		},
 		{
-			name:         "https scheme stripped",
+			name:         "https scheme rejected",
 			raw:          "https://example.com",
-			wantFull:     "example.com",
-			wantHostOnly: "example.com",
+			wantFull:     "",
+			wantHostOnly: "",
 		},
 		{
-			name:         "http scheme with port",
+			name:         "http scheme with port rejected",
 			raw:          "http://example.com:8080",
-			wantFull:     "example.com:8080",
-			wantHostOnly: "example.com",
+			wantFull:     "",
+			wantHostOnly: "",
 		},
 		{
-			name:         "https scheme with port",
+			name:         "https scheme with port rejected",
 			raw:          "https://example.com:9443",
-			wantFull:     "example.com:9443",
-			wantHostOnly: "example.com",
+			wantFull:     "",
+			wantHostOnly: "",
 		},
 
 		// Trailing slashes/paths
 		{
-			name:         "trailing slash stripped",
+			name:         "trailing slash rejected",
 			raw:          "example.com/",
-			wantFull:     "example.com",
-			wantHostOnly: "example.com",
+			wantFull:     "",
+			wantHostOnly: "",
 		},
 		{
-			name:         "scheme and trailing slash",
+			name:         "scheme and trailing slash rejected",
 			raw:          "https://example.com/",
-			wantFull:     "example.com",
-			wantHostOnly: "example.com",
+			wantFull:     "",
+			wantHostOnly: "",
 		},
 
 		// IPv4 addresses
@@ -405,10 +405,10 @@ func TestSanitizeForwardedHost(t *testing.T) {
 			wantHostOnly: "192.168.1.1",
 		},
 		{
-			name:         "IPv4 with scheme",
+			name:         "IPv4 with scheme rejected",
 			raw:          "http://10.0.0.1",
-			wantFull:     "10.0.0.1",
-			wantHostOnly: "10.0.0.1",
+			wantFull:     "",
+			wantHostOnly: "",
 		},
 
 		// IPv6 addresses (key edge case - bracket handling)
@@ -437,15 +437,15 @@ func TestSanitizeForwardedHost(t *testing.T) {
 			wantHostOnly: "2001:db8::1",
 		},
 		{
-			name:         "IPv6 with scheme",
+			name:         "IPv6 with scheme rejected",
 			raw:          "https://[::1]:9443",
-			wantFull:     "[::1]:9443",
-			wantHostOnly: "::1",
+			wantFull:     "",
+			wantHostOnly: "",
 		},
 		{
 			name:         "IPv6 without brackets (raw - no port possible)",
 			raw:          "::1",
-			wantFull:     "::1",
+			wantFull:     "[::1]",
 			wantHostOnly: "::1",
 		},
 
@@ -646,10 +646,22 @@ func TestShouldAppendForwardedPort(t *testing.T) {
 			want:   false,
 		},
 		{
-			name:   "negative port string (Atoi accepts it)",
+			name:   "negative port rejected",
 			port:   "-80",
 			scheme: "http",
-			want:   true, // strconv.Atoi parses "-80" as -80 (valid int)
+			want:   false,
+		},
+		{
+			name:   "zero port rejected",
+			port:   "0",
+			scheme: "http",
+			want:   false,
+		},
+		{
+			name:   "out of range port rejected",
+			port:   "65536",
+			scheme: "https",
+			want:   false,
 		},
 
 		// Default ports that should NOT be appended
@@ -707,12 +719,6 @@ func TestShouldAppendForwardedPort(t *testing.T) {
 		},
 
 		// Edge cases
-		{
-			name:   "port 0",
-			port:   "0",
-			scheme: "http",
-			want:   true,
-		},
 		{
 			name:   "high port number",
 			port:   "65535",
@@ -854,6 +860,7 @@ func TestResolvePublicURL_AutoDetectedYieldsToRequest(t *testing.T) {
 		autoDetected bool
 		reqHost      string
 		forwardProto string
+		trustedProxy bool
 		want         string
 	}{
 		{
@@ -862,6 +869,7 @@ func TestResolvePublicURL_AutoDetectedYieldsToRequest(t *testing.T) {
 			autoDetected: true,
 			reqHost:      "pulse.example.com",
 			forwardProto: "https",
+			trustedProxy: true,
 			want:         "https://pulse.example.com",
 		},
 		{
@@ -889,6 +897,13 @@ func TestResolvePublicURL_AutoDetectedYieldsToRequest(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			if tt.trustedProxy {
+				t.Setenv("PULSE_TRUSTED_PROXY_CIDRS", "192.0.2.1/32")
+			} else {
+				t.Setenv("PULSE_TRUSTED_PROXY_CIDRS", "")
+			}
+			resetTrustedProxyConfig()
+
 			r := &Router{
 				config: &config.Config{
 					PublicURL:             tt.publicURL,
@@ -900,6 +915,9 @@ func TestResolvePublicURL_AutoDetectedYieldsToRequest(t *testing.T) {
 			if tt.reqHost != "" {
 				req = httptest.NewRequest(http.MethodGet, "/", nil)
 				req.Host = tt.reqHost
+				if tt.trustedProxy {
+					req.RemoteAddr = "192.0.2.1:12345"
+				}
 				if tt.forwardProto != "" {
 					req.Header.Set("X-Forwarded-Proto", tt.forwardProto)
 				}
@@ -935,18 +953,18 @@ func TestResolvePublicURL_FromRequest(t *testing.T) {
 			want:   "https://pulse.example.com",
 		},
 		{
-			name:          "HTTP request with X-Forwarded-Proto https",
+			name:          "untrusted X-Forwarded-Proto https is ignored",
 			host:          "pulse.example.com",
 			useTLS:        false,
 			xForwardProto: "https",
-			want:          "https://pulse.example.com",
+			want:          "http://pulse.example.com",
 		},
 		{
-			name:          "X-Forwarded-Proto case insensitive",
+			name:          "untrusted X-Forwarded-Proto case variant is ignored",
 			host:          "pulse.example.com",
 			useTLS:        false,
 			xForwardProto: "HTTPS",
-			want:          "https://pulse.example.com",
+			want:          "http://pulse.example.com",
 		},
 		{
 			name:          "X-Forwarded-Proto http remains http",
@@ -962,10 +980,10 @@ func TestResolvePublicURL_FromRequest(t *testing.T) {
 			want:   "http://pulse.example.com:8080",
 		},
 		{
-			name:   "Host with whitespace is trimmed",
+			name:   "Host with whitespace is rejected",
 			host:   "  pulse.example.com  ",
 			useTLS: false,
-			want:   "http://pulse.example.com",
+			want:   "http://localhost:7655",
 		},
 	}
 
