@@ -136,14 +136,24 @@ TLS-unverified receipts leave the claim at `implemented` or
    and poll that exact run ID. Selecting the newest run by workflow, branch, or
    dispatch timestamp is forbidden because different release versions and manual
    dispatches may run concurrently.
-6. The public v6 release pipeline must publish and publicly verify the GitHub
-   release before it dispatches `rcourtman/pulse-pro` `Promote Paid Runtime
-   Release` with the same version and R2 prefix. The live paid-download broker
-   is a mutable customer pointer and must never advance to a release that can
-   still be returned to draft quarantine by activation verification. A failed
-   private build or live promotion fails the public release workflow; private
-   Pro RC/GA advancement must not depend on an operator noticing a checklist
-   item after the public RC has shipped.
+6. The public v6 release pipeline must durably dispatch a dedicated convergence
+   run before it publishes GitHub, then publish and publicly verify the GitHub
+   release before that run may dispatch `rcourtman/pulse-pro` `Promote Paid
+   Runtime Release` with the same version and R2 prefix. The live paid-download
+   broker is a mutable customer pointer and must never advance before the
+   verified `release-activation.json` commit marker exists. A failed private
+   build prevents that commit. A failed live promotion is post-commit
+   convergence debt: it fails and retries the separate convergence run without
+   claiming that the already-public release rolled back.
+   The activation marker must bind the exact staged R2 prefix. The dispatch must
+   pass that prefix with the exact Pulse lease SHA and convergence run ID.
+   `pulse-pro` must reject an unleased dispatch, verify the public Pulse lock ref,
+   lease commit owner, active convergence run, and activation marker without
+   relying on its repository-scoped `GITHUB_TOKEN`, then repeat that check
+   immediately before live mutation. `pulse-pro` may serialize only the same
+   validated lease correlation, never all releases or arbitrary R2 prefixes.
+   Exact duplicates are therefore sequential and target-identical, while
+   invalid lease values cannot replace a legitimate pending child.
 7. Customer-facing private Pro archive or Docker promotion must use the generated
    paid-runtime proof packet from the Pro release workflow. The canonical command
    is `scripts/promote_paid_runtime_release_packet.sh --release-dir <proof-packet-dir> --admin-token-file <explicit-token-file> --execute-live`
@@ -274,15 +284,36 @@ TLS-unverified receipts leave the claim at `implemented` or
 4. Exact-version Docker publication, staged release-asset verification, exact
    Helm OCI publication, staged install smoke, and the exact-version private
    Pro build begin from the unpublished draft and converge at one immutable
-   readiness gate. `activate_release` is the next and only transition: it
-   publishes the GitHub release, verifies the public checksums, installer, and
-   canonical Linux archive URLs, and returns the release to draft quarantine
-   on verification failure.
-5. Mutable Docker aliases, the live paid-runtime broker, the public Helm Pages
-   index, and stable demo deployment depend directly on successful activation.
-   They may fan out in parallel only after the release can no longer be
-   quarantined by activation verification. `Definitive Release Verdict` still
-   fails unless every applicable terminal result passes.
+   readiness gate. The pipeline must durably dispatch the release convergence
+   run before publication. `activate_release` then publishes the GitHub release,
+   verifies the public checksums, installer, provider-MSP bundle, and canonical
+   Linux archive URLs, and returns the release to draft quarantine on any
+   failure before `release-activation.json` is successfully uploaded. The upload
+   is the irreversible release commit point because convergence may observe it
+   immediately; activation-side read-back and the final verdict are post-commit
+   public proof and may never return the release to draft.
+5. Mutable Docker aliases, the live paid-runtime broker, the additive public
+   Helm Pages index, and stable demo deployment belong to the separately visible Release
+   Convergence run after the commit point. A global repository-ref lease must
+   serialize those surfaces across every release version while exact-version
+   staging remains version-parallel. Under the lease, every committed release
+   must merge its chart into Helm Pages. If a newer committed activation marker
+   exists, the superseded run must skip only Docker aliases, the paid-runtime
+   broker, and the stable demo rather than move those targets backward.
+   Any surface failure leaves the GitHub release committed, fails the convergence
+   verdict, releases or stale-recovers the lease, and re-runs the complete
+   idempotent convergence workflow. It must not fail a so-called definitive
+   release verdict or return the committed release to draft.
+   The three reusable mutation workflows expose `workflow_call` only; direct
+   dispatch of aliases, Pages, or demo deployment would bypass the lease and is
+   prohibited. Non-mutating demo verification remains part of Release Dry Run.
+   The activation marker keeps the original convergence owner immutable. After
+   that owner completes, a fresh workflow dispatch from repaired `main` may
+   adopt the same exact release, source run, target commit, release ID, and R2
+   lineage. It must first acquire the global lease, then publish a unique
+   immutable owner asset named with its run ID, attempt, and lease SHA. Every
+   child receives that exact asset name and digest. A clobbered constant owner
+   asset is forbidden because stale CDN bytes could authorize the prior owner.
 6. `Release Dry Run` remains the no-public-release rehearsal surface. It calls
    the same candidate builder and no-mutation demo verification, but a separate
    dry run is not required before a normal release because the single publish
@@ -318,14 +349,13 @@ TLS-unverified receipts leave the claim at `implemented` or
    A version-bound unsigned Windows decision must additionally be supplied
    through `--unsigned-windows-exception-reason`; it never follows implicitly
    from emergency patch status.
-5. The release workflow must await Docker publication, stable demo deployment,
-   public health/browser verification, install smoke, Helm publication,
-   floating-tag promotion, and private Pro promotion where applicable. The
-   terminal `Definitive Release Verdict` job is the one release result; an
-   asynchronously dispatched demo workflow is not release completion. Every
-   mutable pointer and live-environment job must depend on successful GitHub
-   release activation and public verification, never only on pre-activation
-   exact-version readiness.
+5. The release workflow must await every immutable readiness gate, durably
+   enqueue the exact convergence run, and verify the public activation marker.
+   `Release Activation Commit Verdict` is the release result. Docker aliases,
+   stable demo deployment and browser proof, Helm Pages, and private Pro live
+   promotion are post-commit convergence outcomes in the linked workflow run.
+   They remain blocking convergence debt until green, but their failure must
+   not misreport the committed GitHub release as an atomic rollback.
 
 ## Rollout Rules
 

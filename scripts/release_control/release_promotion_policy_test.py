@@ -9,6 +9,9 @@ import subprocess
 import unittest
 import json
 
+import yaml
+from yaml.constructor import ConstructorError
+
 import record_rc_to_ga_blocked as blocked_record
 from live_runtime_proof import evaluate_live_runtime
 from release_promotion_policy_support import (
@@ -46,6 +49,31 @@ def workflow_job_block(workflow: str, job: str) -> str:
     if match is None:
         raise AssertionError(f"workflow missing job {job}")
     return match.group(0)
+
+
+class UniqueKeyLoader(yaml.SafeLoader):
+    """YAML loader that fails instead of silently overwriting duplicate keys."""
+
+
+def _construct_unique_mapping(loader: UniqueKeyLoader, node: yaml.MappingNode, deep: bool = False) -> dict:
+    seen: set[object] = set()
+    for key_node, _ in node.value:
+        key = loader.construct_object(key_node, deep=deep)
+        if key in seen:
+            raise ConstructorError(
+                "while constructing a mapping",
+                node.start_mark,
+                f"found duplicate key {key!r}",
+                key_node.start_mark,
+            )
+        seen.add(key)
+    return yaml.SafeLoader.construct_mapping(loader, node, deep=deep)
+
+
+UniqueKeyLoader.add_constructor(
+    yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG,
+    _construct_unique_mapping,
+)
 
 
 _RC_DRAFT_PACKET_NAME_RE = re.compile(r"^RELEASE_NOTES_v6_RC(\d+)_DRAFT\.md$")
@@ -151,10 +179,42 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
                 + "\n- ".join(STAGED_GOVERNANCE_INPUT_ERRORS)
             )
 
-    def test_release_activation_precedes_every_mutable_customer_target(self) -> None:
+    def test_release_workflows_reject_duplicate_yaml_keys(self) -> None:
+        for workflow_path in (
+            ".github/workflows/create-release.yml",
+            ".github/workflows/release-convergence.yml",
+            ".github/workflows/retry-release-convergence.yml",
+            ".github/workflows/promote-private-pro-runtime.yml",
+            ".github/workflows/promote-floating-tags.yml",
+            ".github/workflows/helm-pages.yml",
+            ".github/workflows/update-demo-server.yml",
+            ".github/workflows/deploy-demo-server.yml",
+        ):
+            with self.subTest(workflow_path=workflow_path):
+                yaml.load(read(workflow_path), Loader=UniqueKeyLoader)
+
+    def test_customer_promotion_lease_helper_is_tracked_and_executable(self) -> None:
+        helper = REPO_ROOT / "scripts" / "release_control" / "customer_promotion_lease.sh"
+        tracked = subprocess.run(
+            ["git", "ls-files", "--error-unmatch", str(helper.relative_to(REPO_ROOT))],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(tracked.returncode, 0, tracked.stderr)
+        self.assertTrue(os.access(helper, os.X_OK), f"{helper} must be executable")
+        convergence = read(".github/workflows/release-convergence.yml")
+        self.assertIn("scripts/release_control/customer_promotion_lease.sh acquire", convergence)
+        self.assertIn("scripts/release_control/customer_promotion_lease.sh release", convergence)
+
+    def test_release_commit_dispatches_durable_convergence_before_activation(self) -> None:
         workflow = read(".github/workflows/create-release.yml")
+        convergence = read(".github/workflows/release-convergence.yml")
         readiness = workflow_job_block(workflow, "release_readiness")
+        dispatch = workflow_job_block(workflow, "dispatch_release_convergence")
         activation = workflow_job_block(workflow, "activate_release")
+        commit_verdict = workflow_job_block(workflow, "release_commit_verdict")
 
         for dependency in (
             "create_release",
@@ -174,15 +234,53 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
             with self.subTest(mutable_job=mutable_job):
                 self.assertNotIn(f"- {mutable_job}", readiness)
                 self.assertNotIn(f"- {mutable_job}", activation)
-                mutable = workflow_job_block(workflow, mutable_job)
-                self.assertIn("- activate_release", mutable)
-                self.assertIn("needs.activate_release.result == 'success'", mutable)
+                self.assertNotRegex(workflow, rf"(?m)^  {mutable_job}:$")
+                mutable = workflow_job_block(convergence, mutable_job)
+                self.assertIn("needs: acquire_customer_promotion_lease", mutable)
 
         self.assertIn("- release_readiness", activation)
+        self.assertIn("- dispatch_release_convergence", activation)
+        self.assertIn("- release_readiness", dispatch)
+        self.assertIn("return_run_details: true", dispatch)
+        self.assertIn("release-convergence.yml/dispatches", dispatch)
+        self.assertIn("Customer convergence dispatch did not return an exact workflow run", dispatch)
+        self.assertIn("continue-on-error: true", activation)
         self.assertIn("returning ${TAG} to draft quarantine", activation)
-        self.assertIn("Activated and publicly verified ${TAG}", activation)
+        self.assertIn('committed=false', activation)
+        self.assertIn('[ "$committed" != "true" ]', activation)
+        self.assertIn("release-activation.json", activation)
+        self.assertIn("r2_prefix: $r2_prefix", activation)
+        self.assertIn(".r2_prefix == $r2_prefix", activation)
+        self.assertIn(".r2_prefix == $r2_prefix", convergence)
+        self.assertIn("committed=true", activation)
+        self.assertIn("Irreversibly committed and publicly verified ${TAG}", activation)
+        marker_upload = activation.index('gh release upload "${TAG}"')
+        commit_flip = activation.index("committed=true", marker_upload)
+        activation_readback = activation.index("curl -fsSL --retry 12", commit_flip)
+        self.assertLess(marker_upload, commit_flip)
+        self.assertLess(commit_flip, activation_readback)
 
-        demo = workflow_job_block(workflow, "update_stable_demo")
+        # Failure injection: after the marker upload succeeds, activation-side
+        # public read-back may fail, but the ERR trap must see committed=true
+        # and may no longer quarantine while convergence owns the marker.
+        state = {"activated": True, "marker_uploaded": False, "committed": False}
+        state["marker_uploaded"] = True
+        state["committed"] = True
+        activation_readback_succeeded = False
+        should_quarantine = state["activated"] and not state["committed"]
+        self.assertFalse(activation_readback_succeeded)
+        self.assertFalse(should_quarantine)
+        self.assertIn("Release Activation Commit Verdict", commit_verdict)
+        self.assertIn("release-activation.json", commit_verdict)
+        for forbidden in (
+            "FLOATING_RESULT",
+            "HELM_PAGES_RESULT",
+            "PRIVATE_PRO_PROMOTION_RESULT",
+            "DEMO_RESULT",
+        ):
+            self.assertNotIn(forbidden, commit_verdict)
+
+        demo = workflow_job_block(convergence, "update_stable_demo")
         self.assertNotIn("release_id:", demo)
         demo_workflow = read(".github/workflows/update-demo-server.yml")
         self.assertNotIn("release_id:", demo_workflow)
@@ -204,22 +302,306 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
                 self.assertIn("--json isDraft,publishedAt,tagName", guarded_workflow)
                 self.assertIn(refusal, guarded_workflow)
 
+    def test_each_post_commit_surface_failure_is_retriable_convergence_debt(self) -> None:
+        release_workflow = read(".github/workflows/create-release.yml")
+        convergence = read(".github/workflows/release-convergence.yml")
+        retry = read(".github/workflows/retry-release-convergence.yml")
+        commit_verdict = workflow_job_block(release_workflow, "release_commit_verdict")
+        convergence_verdict = workflow_job_block(convergence, "convergence_verdict")
+
+        surfaces = {
+            "promote_floating_tags": ("FLOATING_RESULT", "Docker aliases"),
+            "publish_helm_pages": ("HELM_PAGES_RESULT", "Helm Pages"),
+            "promote_private_pro_runtime": ("PRIVATE_PRO_RESULT", "paid-runtime broker"),
+            "update_stable_demo": ("DEMO_RESULT", "stable demo"),
+        }
+        for failed_job, (result_variable, surface_name) in surfaces.items():
+            with self.subTest(failed_job=failed_job):
+                injected_results = {job: "success" for job in surfaces}
+                injected_results[failed_job] = "failure"
+                release_state = "committed"
+                convergence_state = (
+                    "debt"
+                    if any(result != "success" for result in injected_results.values())
+                    else "converged"
+                )
+                self.assertEqual(release_state, "committed")
+                self.assertEqual(convergence_state, "debt")
+                self.assertNotIn(result_variable, commit_verdict)
+                self.assertIn(result_variable, convergence_verdict)
+                self.assertIn(surface_name, convergence_verdict)
+                self.assertIn("the committed release remains public", convergence_verdict)
+
+        self.assertIn("github.event.workflow_run.conclusion != 'success'", retry)
+        self.assertIn("actions/runs/${RUN_ID}/rerun", retry)
+        self.assertNotIn("rerun-failed-jobs", retry)
+        self.assertIn("RUN_ATTEMPT >= MAX_ATTEMPTS", retry)
+        self.assertIn("release-activation.json", retry)
+
+    def test_mutating_reusable_workflows_have_no_direct_dispatch_lock_bypass(self) -> None:
+        convergence = read(".github/workflows/release-convergence.yml")
+        for workflow_path, convergence_job in (
+            (".github/workflows/promote-floating-tags.yml", "promote_floating_tags"),
+            (".github/workflows/helm-pages.yml", "publish_helm_pages"),
+            (".github/workflows/update-demo-server.yml", "update_stable_demo"),
+        ):
+            with self.subTest(workflow_path=workflow_path):
+                workflow = read(workflow_path)
+                self.assertIn("workflow_call:", workflow)
+                self.assertNotIn("workflow_dispatch:", workflow)
+                self.assertIn(
+                    "needs: acquire_customer_promotion_lease",
+                    workflow_job_block(convergence, convergence_job),
+                )
+
+        dry_run = read(".github/workflows/release-dry-run.yml")
+        demo_verification = workflow_job_block(dry_run, "demo_path_preflight")
+        self.assertIn("uses: ./.github/workflows/update-demo-server.yml", demo_verification)
+        self.assertIn("verify_only: true", demo_verification)
+
+        retired_bootstrap = read(".github/workflows/deploy-demo-server.yml")
+        self.assertIn("Verify Current Committed Stable Demo (No Mutation)", retired_bootstrap)
+        self.assertIn("tag: latest", retired_bootstrap)
+        self.assertIn("verify_only: true", retired_bootstrap)
+        for forbidden in ("go build", "scp ", "docker compose", "verify_only: false"):
+            self.assertNotIn(forbidden, retired_bootstrap)
+
+        # Only the lease owner may call a mutator. The two demo callers outside
+        # convergence are verification-only and cannot write the stable host.
+        expected_callers = {
+            "promote-floating-tags.yml": {"release-convergence.yml"},
+            "helm-pages.yml": {"release-convergence.yml"},
+            "update-demo-server.yml": {
+                "release-convergence.yml",
+                "release-dry-run.yml",
+                "deploy-demo-server.yml",
+            },
+        }
+        workflow_dir = REPO_ROOT / ".github" / "workflows"
+        for callee, expected in expected_callers.items():
+            callers = {
+                path.name
+                for path in workflow_dir.glob("*.yml")
+                if f"uses: ./.github/workflows/{callee}" in read(str(path.relative_to(REPO_ROOT)))
+            }
+            self.assertEqual(callers, expected)
+
+    def test_live_demo_and_paid_broker_require_exact_committed_lease_owner(self) -> None:
+        convergence = read(".github/workflows/release-convergence.yml")
+        demo_workflow = read(".github/workflows/update-demo-server.yml")
+        demo_mutation = workflow_job_block(demo_workflow, "update-demo")
+        demo_caller = workflow_job_block(convergence, "update_stable_demo")
+        paid_caller = workflow_job_block(convergence, "promote_private_pro_runtime")
+        paid_dispatch = read(".github/workflows/promote-private-pro-runtime.yml")
+
+        for needle in (
+            "Require exact committed activation marker for mutation",
+            "inputs.verify_only != true",
+            "release-activation.json",
+            ".convergence_run_id == $convergence_run_id",
+            "Stable demo mutation refuses inactive or prerelease tag",
+        ):
+            self.assertIn(needle, demo_mutation)
+        self.assertIn("tag: ${{ inputs.tag }}", demo_caller)
+        self.assertIn("verify_only: false", demo_caller)
+        self.assertIn("activation_convergence_run_id: ${{ github.run_id }}", demo_caller)
+        self.assertIn("convergence_owner_asset_name:", demo_caller)
+        self.assertIn("convergence_owner_asset_sha256:", demo_caller)
+
+        self.assertIn(
+            "pulse_lease_sha: ${{ needs.acquire_customer_promotion_lease.outputs.lock_sha }}",
+            paid_caller,
+        )
+        self.assertIn("pulse_convergence_run_id: ${{ github.run_id }}", paid_caller)
+        self.assertIn("pulse_owner_asset_name:", paid_caller)
+        self.assertIn("pulse_owner_asset_sha256:", paid_caller)
+        for needle in (
+            "pulse_lease_sha: $pulse_lease_sha",
+            "pulse_convergence_run_id: $pulse_convergence_run_id",
+            "pulse_owner_asset_name: $pulse_owner_asset_name",
+            "pulse_owner_asset_sha256: $pulse_owner_asset_sha256",
+            "return_run_details: true",
+        ):
+            self.assertIn(needle, paid_dispatch)
+
+    def test_global_promotion_lease_serializes_and_rejects_out_of_order_channels(self) -> None:
+        release_workflow = read(".github/workflows/create-release.yml")
+        convergence = read(".github/workflows/release-convergence.yml")
+        lease = workflow_job_block(convergence, "acquire_customer_promotion_lease")
+        release_lease = workflow_job_block(convergence, "release_customer_promotion_lease")
+        lease_script = read("scripts/release_control/customer_promotion_lease.sh")
+
+        self.assertIn(
+            "release-${{ github.event.inputs.version || github.ref || github.run_id }}",
+            release_workflow,
+        )
+        self.assertNotIn("release-customer-promotion-lock", release_workflow)
+        self.assertIn("customer_promotion_lease.sh acquire", lease)
+        self.assertIn("refs/heads/release-customer-promotion-lock", lease_script)
+        self.assertIn("git push origin \"${lock_commit}:${LOCK_REF}\"", lease_script)
+        self.assertIn("--force-with-lease=\"${LOCK_REF}:${observed_sha}\"", lease_script)
+        self.assertIn("owner_status", lease_script)
+        self.assertIn("sort -Vr", lease)
+        self.assertIn(".isPrerelease == $prerelease", lease)
+        self.assertIn("release-activation.json", lease)
+        self.assertIn("superseded=true", lease)
+        self.assertIn("no global customer pointer will move backward", lease)
+        self.assertIn("customer_promotion_lease.sh release", release_lease)
+        self.assertIn("--force-with-lease=\"${LOCK_REF}:${lock_sha}\"", lease_script)
+
+        helm_pages = workflow_job_block(convergence, "publish_helm_pages")
+        convergence_verdict = workflow_job_block(convergence, "convergence_verdict")
+        self.assertNotIn("superseded != 'true'", helm_pages)
+        self.assertLess(
+            convergence_verdict.index('require_success "Helm Pages"'),
+            convergence_verdict.index('if [ "${SUPERSEDED}" = "true" ]'),
+        )
+        for rollback_prone_job in (
+            "promote_floating_tags",
+            "promote_private_pro_runtime",
+            "update_stable_demo",
+        ):
+            self.assertIn(
+                "superseded != 'true'",
+                workflow_job_block(convergence, rollback_prone_job),
+            )
+        self.assertIn("without moving rollback-prone pointers", convergence_verdict)
+
+        def version_key(tag: str) -> tuple[int, int, int, int, int]:
+            match = re.fullmatch(r"v(\d+)\.(\d+)\.(\d+)(?:-rc\.(\d+))?", tag)
+            self.assertIsNotNone(match)
+            assert match is not None
+            major, minor, patch, rc = match.groups()
+            return (
+                int(major),
+                int(minor),
+                int(patch),
+                1 if rc is None else 0,
+                int(rc or 0),
+            )
+
+        def admitted(target: str, committed_same_channel: tuple[str, ...]) -> bool:
+            return target == max(committed_same_channel, key=version_key)
+
+        self.assertFalse(admitted("v6.2.0", ("v6.2.0", "v6.2.1")))
+        self.assertTrue(admitted("v6.2.1", ("v6.2.0", "v6.2.1")))
+        self.assertFalse(admitted("v6.3.0-rc.1", ("v6.3.0-rc.1", "v6.3.0-rc.2")))
+        self.assertTrue(admitted("v6.3.0-rc.2", ("v6.3.0-rc.1", "v6.3.0-rc.2")))
+        self.assertTrue(admitted("v6.2.1", ("v6.2.1",)))
+        self.assertTrue(admitted("v6.3.0-rc.2", ("v6.3.0-rc.2",)))
+
+        helm_index = {"v6.2.1"}
+        pointer_target = "v6.2.1"
+        older = "v6.2.0"
+        helm_index.add(older)
+        if admitted(older, (older, pointer_target)):
+            pointer_target = older
+        self.assertEqual(helm_index, {"v6.2.0", "v6.2.1"})
+        self.assertEqual(pointer_target, "v6.2.1")
+
+        rc_helm_index = {"v6.3.0-rc.2"}
+        rc_pointer_target = "v6.3.0-rc.2"
+        older_rc = "v6.3.0-rc.1"
+        rc_helm_index.add(older_rc)
+        if admitted(older_rc, (older_rc, rc_pointer_target)):
+            rc_pointer_target = older_rc
+        self.assertEqual(rc_helm_index, {"v6.3.0-rc.1", "v6.3.0-rc.2"})
+        self.assertEqual(rc_pointer_target, "v6.3.0-rc.2")
+
+    def test_prepare_to_commit_handoff_survives_delayed_activation(self) -> None:
+        release_workflow = read(".github/workflows/create-release.yml")
+        convergence = read(".github/workflows/release-convergence.yml")
+        retry = read(".github/workflows/retry-release-convergence.yml")
+        activation = workflow_job_block(release_workflow, "activate_release")
+
+        self.assertIn(
+            "Release convergence ${{ inputs.tag }} source ${{ inputs.source_release_run_id }}",
+            convergence,
+        )
+        await_commit = workflow_job_block(convergence, "await_activation_commit")
+        self.assertIn("timeout-minutes: 360", await_commit)
+        self.assertIn("seq 1 2100", await_commit)
+        self.assertIn("source_release_run_id", await_commit)
+        self.assertIn("EXPECTED_CONVERGENCE_RUN_ID: ${{ github.run_id }}", await_commit)
+        self.assertIn('original_status}" != "completed"', await_commit)
+        self.assertIn("successor adoption is not yet allowed", await_commit)
+        self.assertIn("activation_marker_sha256", await_commit)
+
+        self.assertIn("source_release_run_id=\"${BASH_REMATCH[2]}\"", retry)
+        self.assertIn("actions/runs/${source_release_run_id}", retry)
+        self.assertIn('source_status}" != "completed"', retry)
+        self.assertIn("RUN_ATTEMPT < 50", retry)
+        self.assertIn("renewing the pre-commit convergence owner", retry)
+
+        self.assertIn("require_viable_convergence_owner()", activation)
+        self.assertEqual(activation.count("require_viable_convergence_owner"), 3)
+        self.assertIn('gh run view "${CONVERGENCE_RUN_ID}"', activation)
+        self.assertIn("--json event,status,conclusion,workflowName,displayTitle,url", activation)
+        self.assertIn('expected_title="Release convergence ${TAG} source ${GITHUB_RUN_ID}"', activation)
+        self.assertIn('[ "${owner_status}" = "completed" ]', activation)
+        self.assertIn("immediately before the marker", activation)
+        self.assertLess(
+            activation.index("require_viable_convergence_owner\n          gh api"),
+            activation.index("-X PATCH --input \"$publish_payload\""),
+        )
+        self.assertLess(
+            activation.rindex("require_viable_convergence_owner"),
+            activation.index('gh release upload "${TAG}"'),
+        )
+
+    def test_fresh_fixed_code_convergence_can_adopt_completed_original_owner(self) -> None:
+        convergence = read(".github/workflows/release-convergence.yml")
+        await_commit = workflow_job_block(convergence, "await_activation_commit")
+        lease = workflow_job_block(convergence, "acquire_customer_promotion_lease")
+
+        original_owner = "100"
+        successor_owner = "200"
+        original_status = "completed"
+        marker_lineage = {
+            "tag": "v6.2.0",
+            "source_release_run_id": "50",
+            "convergence_run_id": original_owner,
+            "r2_prefix": "v6.2.0-pro-20260808-50",
+        }
+        successor_may_adopt = (
+            marker_lineage["convergence_run_id"] != successor_owner
+            and original_status == "completed"
+        )
+        self.assertTrue(successor_may_adopt)
+        self.assertIn("Adopting committed ${TAG} from completed convergence owner", await_commit)
+        self.assertIn("Bind this lease as the active convergence successor", lease)
+        self.assertIn("activation_owner_run_id", lease)
+        self.assertIn("activation_marker_sha256", lease)
+        self.assertIn("release-convergence-owner-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${LEASE_SHA}.json", lease)
+        self.assertNotIn("#release-convergence-owner.json", lease)
+        self.assertIn("owner_asset_sha256", lease)
+        self.assertIn("sha256sum --check --", lease)
+
+        stale_name = f"release-convergence-owner-{original_owner}-5-{'a' * 40}.json"
+        successor_name = f"release-convergence-owner-{successor_owner}-1-{'b' * 40}.json"
+        self.assertNotEqual(stale_name, successor_name)
+
     def test_private_dispatches_wait_for_the_exact_created_run(self) -> None:
-        workflow = read(".github/workflows/create-release.yml")
+        release_workflow = read(".github/workflows/create-release.yml")
+        private_promotion_workflow = read(
+            ".github/workflows/promote-private-pro-runtime.yml"
+        )
         cases = (
             (
+                release_workflow,
                 "stage_private_pro_runtime",
                 "repos/rcourtman/pulse-enterprise/actions/workflows/build-pro-release.yml/dispatches",
                 "build_run_id",
             ),
             (
-                "promote_private_pro_runtime",
+                private_promotion_workflow,
+                "promote",
                 "repos/rcourtman/pulse-pro/actions/workflows/promote-paid-runtime-release.yml/dispatches",
                 "promote_run_id",
             ),
         )
 
-        for job_name, endpoint, run_id_variable in cases:
+        for workflow, job_name, endpoint, run_id_variable in cases:
             with self.subTest(job_name=job_name):
                 job = workflow_job_block(workflow, job_name)
                 self.assertIn("return_run_details: true", job)
@@ -658,7 +1040,7 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
 
     def test_update_demo_server_workflow_uses_stable_tag_example(self) -> None:
         workflow = read(".github/workflows/update-demo-server.yml")
-        self.assertIn("Stable release tag to deploy (e.g., v6.0.0)", workflow)
+        self.assertIn("Stable release tag to deploy", workflow)
         self.assertIn("Prerelease demo updates are retired after v6 GA", workflow)
         self.assertNotIn("v6.0.0-rc.1", workflow)
 
@@ -794,8 +1176,8 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("render_release_body.py", content)
         self.assertIn("build_promotion_metadata_section", renderer)
         self.assertIn("uses: ./.github/workflows/publish-docker.yml", content)
-        self.assertIn("uses: ./.github/workflows/update-demo-server.yml", content)
-        self.assertIn("Definitive Release Verdict", content)
+        self.assertIn("release-convergence.yml/dispatches", content)
+        self.assertIn("Release Activation Commit Verdict", content)
         self.assertNotIn('gh workflow run publish-docker.yml --ref "${REQUIRED_BRANCH}"', content)
         self.assertNotIn('gh workflow run update-demo-server.yml --ref "${REQUIRED_BRANCH}"', content)
         self.assertIn("sanitize_release_notes", renderer)
@@ -905,11 +1287,12 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("does not trust the configured release signing key", candidate_workflow)
         self.assertIn("TRUSTED_SSH_PUBLIC_KEY", update_demo_workflow)
         self.assertIn('sed -i "s|^PINNED_RELEASE_SSH_PUBLIC_KEY=.*|PINNED_RELEASE_SSH_PUBLIC_KEY=\\"${TRUSTED_SSH_PUBLIC_KEY}\\"|" /tmp/pulse-install.sh', update_demo_workflow)
-        for demo_workflow in (update_demo_workflow, deploy_demo_workflow):
-            self.assertIn("bash .github/scripts/setup-demo-ssh.sh", demo_workflow)
-            self.assertIn("bash .github/scripts/check-demo-reachability.sh", demo_workflow)
-            self.assertIn("ping: ${{ secrets.DEMO_SERVER_HOST }}", demo_workflow)
-            self.assertIn("tailscale/github-action@306e68a486fd2350f2bfc3b19fcd143891a4a2d8 # v4", demo_workflow)
+        self.assertIn("bash .github/scripts/setup-demo-ssh.sh", update_demo_workflow)
+        self.assertIn("bash .github/scripts/check-demo-reachability.sh", update_demo_workflow)
+        self.assertIn("ping: ${{ secrets.DEMO_SERVER_HOST }}", update_demo_workflow)
+        self.assertIn("tailscale/github-action@306e68a486fd2350f2bfc3b19fcd143891a4a2d8 # v4", update_demo_workflow)
+        self.assertIn("uses: ./.github/workflows/update-demo-server.yml", deploy_demo_workflow)
+        self.assertIn("verify_only: true", deploy_demo_workflow)
         self.assertIn('MAX_SSH_SETUP_ATTEMPTS="${DEMO_SSH_SETUP_ATTEMPTS:-3}"', demo_ssh_helper)
         self.assertIn("ipaddress.ip_address(sys.argv[1])", demo_ssh_helper)
         self.assertIn("host_needs_dns=false", demo_ssh_helper)
@@ -1157,26 +1540,19 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn(r'<script\b[^>]*\bsrc=\"(/assets/index-[^\"]*\.js)\"', demo)
         self.assertIn("Public demo is serving $PUBLIC_ASSET but the target service is serving $REMOTE_ASSET.", demo)
         self.assertIn("uses: ./.github/workflows/publish-docker.yml", release_workflow)
-        self.assertIn("uses: ./.github/workflows/update-demo-server.yml", release_workflow)
+        self.assertIn("release-convergence.yml/dispatches", release_workflow)
         self.assertIn("uses: ./.github/workflows/build-release-candidate.yml", release_workflow)
         self.assertIn("Build Immutable Release Candidate", release_workflow)
-        self.assertIn("Definitive Release Verdict", release_workflow)
+        self.assertIn("Release Activation Commit Verdict", release_workflow)
         self.assertNotIn("Require recent exact-SHA stable patch preflight", release_workflow)
         self.assertNotIn("gh workflow run update-demo-server.yml", release_workflow)
         self.assertNotIn("gh workflow run publish-docker.yml", release_workflow)
-        self.assertNotIn("preview-v6", preview_deploy)
-        self.assertNotIn("demo-preview-v6", preview_deploy)
-        self.assertNotIn('SERVICE_NAME="pulse-v6-preview"', preview_deploy)
-        self.assertNotIn("Preview demo deployments must not target the stable pulse service.", preview_deploy)
-        self.assertIn("DEMO_EXPECTED_HOSTNAME", preview_deploy)
-        self.assertIn("Verify target host identity", preview_deploy)
-        self.assertIn("Demo environment points at host $REMOTE_HOSTNAME but expected $DEMO_EXPECTED_HOSTNAME.", preview_deploy)
-        self.assertIn("Verify frontend parity", preview_deploy)
-        self.assertIn("Verify public browser smoke", preview_deploy)
-        self.assertIn("./scripts/run_demo_public_browser_smoke.sh", preview_deploy)
-        self.assertIn("extract_entry_asset()", preview_deploy)
-        self.assertIn(r'<script\b[^>]*\bsrc=\"(/assets/index-[^\"]*\.js)\"', preview_deploy)
-        self.assertIn("Public demo is serving $PUBLIC_ASSET but the build expected $EXPECTED_ASSET.", preview_deploy)
+        self.assertIn("Verify Current Committed Stable Demo (No Mutation)", preview_deploy)
+        self.assertIn("uses: ./.github/workflows/update-demo-server.yml", preview_deploy)
+        self.assertIn("tag: latest", preview_deploy)
+        self.assertIn("verify_only: true", preview_deploy)
+        self.assertNotIn("go build", preview_deploy)
+        self.assertNotIn("scp ", preview_deploy)
         self.assertIn("validate_artifact_release_line.py", helm)
         self.assertIn("validate_artifact_release_line.py", helm_pages)
         self.assertIn("release_branch_for_version", artifact_validator)
@@ -1214,8 +1590,8 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("helm status pulse || true", helm_pages)
         self.assertIn("kubectl describe pods -A || true", helm_pages)
         self.assertIn("kubectl get events -A --sort-by=.lastTimestamp || kubectl get events -A || true", helm_pages)
-        self.assertIn("uses: ./.github/workflows/update-demo-server.yml", release_workflow)
-        self.assertIn("Definitive Release Verdict", release_workflow)
+        self.assertIn("release-convergence.yml/dispatches", release_workflow)
+        self.assertIn("Release Activation Commit Verdict", release_workflow)
         self.assertNotIn('gh workflow run update-demo-server.yml --ref "${REQUIRED_BRANCH}"', release_workflow)
         self.assertNotIn('TARGET="preview-v6"', release_workflow)
         self.assertIn("sync_chart_release_metadata.py", helm)

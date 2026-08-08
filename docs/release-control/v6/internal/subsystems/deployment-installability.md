@@ -55,12 +55,19 @@ TLS floor in the dynamic config.
 14. `.github/workflows/deploy-demo-server.yml`
 15. `.github/workflows/helm-pages.yml`
 16. `.github/workflows/promote-floating-tags.yml`
-17. `.github/workflows/publish-docker.yml`
-18. `.github/workflows/publish-helm-chart.yml`
-19. `.github/workflows/release-dry-run.yml`
-20. `.github/workflows/update-demo-server.yml`
-21. `.github/workflows/validate-release-assets.yml`
-22. `.github/workflows/install-sh-smoke.yml`
+17. `.github/workflows/promote-private-pro-runtime.yml`
+18. `.github/workflows/publish-docker.yml`
+19. `.github/workflows/publish-helm-chart.yml`
+20. `.github/workflows/release-convergence.yml`
+21. `.github/workflows/release-dry-run.yml`
+22. `.github/workflows/retry-release-convergence.yml`
+23. `.github/workflows/update-demo-server.yml`
+24. `.github/workflows/validate-release-assets.yml`
+25. `.github/workflows/install-sh-smoke.yml`
+26. `scripts/release_control/customer_promotion_lease.sh`
+27. `pulse-pro:.github/workflows/promote-paid-runtime-release.yml`
+28. `pulse-pro:scripts/validate_paid_runtime_distribution.py`
+29. `pulse-pro:scripts/tests/test_validate_paid_runtime_distribution.py`
 23. `.github/ISSUE_TEMPLATE/v6_rc_feedback.yml`
 23. `docs/RELEASE_NOTES.md`
 24. `docs/releases/`
@@ -439,7 +446,7 @@ upgrade, update, release, or artifact-selection behavior.
 ## Extension Points
 
 1. Add or change deployment-type detection, update planning, or apply behavior through `internal/updates/`
-2. Add or change release-build metadata injection, Docker build-context allowlists, release artifact assembly, governed promotion metadata resolution, artifact release-line validation, post-install live-runtime claim proof, the canonical version file, operator-facing release packet content, prerelease feedback intake wording, historical published-release integrity backfill, release asset validation status publication, download endpoint checksum/signature header proof, end-to-end install.sh smoke against staged or published release assets, or the canonical in-repo v6 upgrade guide through `scripts/build-release.sh`, `scripts/release_asset_common.sh`, `scripts/backfill-release-assets.sh`, `scripts/release_ldflags.sh`, `scripts/check-workflow-dispatch-inputs.py`, `scripts/release_control/live_runtime_proof.py`, `scripts/release_control/live_runtime_proof_test.py`, `scripts/release_control/mobile_release_gate.py`, `scripts/release_control/render_release_body.py`, `scripts/release_control/resolve_release_promotion.py`, `scripts/release_control/validate_artifact_release_line.py`, `scripts/release_control/record_rc_to_ga_rehearsal.py`, `scripts/release_control/internal/record_rc_to_ga_rehearsal.py`, `scripts/release_control/release_promotion_policy_support.py`, `.dockerignore`, `Dockerfile`, `.github/ISSUE_TEMPLATE/v6_rc_feedback.yml`, `docs/RELEASE_NOTES.md`, `docs/releases/`, `docs/UPGRADE_v6.md`, `docs/release-control/v6/internal/RELEASE_PROMOTION_POLICY.md`, `docs/release-control/v6/internal/PRE_RELEASE_CHECKLIST.md`, `docs/release-control/v6/internal/RC_TO_GA_REHEARSAL_TEMPLATE.md`, `scripts/validate-release.sh`, `scripts/validate-published-release.sh`, the operator dispatch helpers `scripts/trigger-release.sh` and `scripts/trigger-release-dry-run.sh`, and the governed release workflows `.github/workflows/backfill-release-assets.yml`, `.github/workflows/create-release.yml`, `.github/workflows/deploy-demo-server.yml`, `.github/workflows/helm-pages.yml`, `.github/workflows/install-sh-smoke.yml`, `.github/workflows/publish-docker.yml`, `.github/workflows/publish-helm-chart.yml`, `.github/workflows/promote-floating-tags.yml`, `.github/workflows/release-dry-run.yml`, `.github/workflows/update-demo-server.yml`, and `.github/workflows/validate-release-assets.yml`
+2. Add or change release-build metadata injection, Docker build-context allowlists, release artifact assembly, governed promotion metadata resolution, artifact release-line validation, post-install live-runtime claim proof, the canonical version file, operator-facing release packet content, prerelease feedback intake wording, historical published-release integrity backfill, release asset validation status publication, download endpoint checksum/signature header proof, end-to-end install.sh smoke against staged or published release assets, or the canonical in-repo v6 upgrade guide through `scripts/build-release.sh`, `scripts/release_asset_common.sh`, `scripts/backfill-release-assets.sh`, `scripts/release_ldflags.sh`, `scripts/check-workflow-dispatch-inputs.py`, `scripts/release_control/live_runtime_proof.py`, `scripts/release_control/live_runtime_proof_test.py`, `scripts/release_control/mobile_release_gate.py`, `scripts/release_control/render_release_body.py`, `scripts/release_control/resolve_release_promotion.py`, `scripts/release_control/validate_artifact_release_line.py`, `scripts/release_control/record_rc_to_ga_rehearsal.py`, `scripts/release_control/internal/record_rc_to_ga_rehearsal.py`, `scripts/release_control/release_promotion_policy_support.py`, `.dockerignore`, `Dockerfile`, `.github/ISSUE_TEMPLATE/v6_rc_feedback.yml`, `docs/RELEASE_NOTES.md`, `docs/releases/`, `docs/UPGRADE_v6.md`, `docs/release-control/v6/internal/RELEASE_PROMOTION_POLICY.md`, `docs/release-control/v6/internal/PRE_RELEASE_CHECKLIST.md`, `docs/release-control/v6/internal/RC_TO_GA_REHEARSAL_TEMPLATE.md`, `scripts/validate-release.sh`, `scripts/validate-published-release.sh`, the operator dispatch helpers `scripts/trigger-release.sh` and `scripts/trigger-release-dry-run.sh`, and the governed release workflows `.github/workflows/backfill-release-assets.yml`, `.github/workflows/create-release.yml`, `.github/workflows/deploy-demo-server.yml`, `.github/workflows/helm-pages.yml`, `.github/workflows/install-sh-smoke.yml`, `.github/workflows/promote-floating-tags.yml`, `.github/workflows/promote-private-pro-runtime.yml`, `.github/workflows/publish-docker.yml`, `.github/workflows/publish-helm-chart.yml`, `.github/workflows/release-convergence.yml`, `.github/workflows/release-dry-run.yml`, `.github/workflows/retry-release-convergence.yml`, `.github/workflows/update-demo-server.yml`, and `.github/workflows/validate-release-assets.yml`
    Normal releases are single-build promotions. The exact pushed SHA must
    produce one release candidate with the policy-required native signing lanes
    through `.github/workflows/build-release-candidate.yml` while independent
@@ -751,7 +758,7 @@ upgrade, update, release, or artifact-selection behavior.
    the helper must wait for the Organization selector to hold the requested org
    before a scenario navigates onward, so an interrupted org-list bootstrap
    cannot fall back to `default` and mask the scoped UI under test.
-6. Add or change governed release-promotion workflow inputs, operator-facing promotion metadata, the canonical version file, prerelease feedback intake prompts, artifact publication lineage enforcement, release note or changelog packet composition, or stable-promotion rehearsal summaries through `.github/workflows/create-release.yml`, `.github/workflows/helm-pages.yml`, `.github/workflows/publish-docker.yml`, `.github/workflows/publish-helm-chart.yml`, `.github/workflows/promote-floating-tags.yml`, `.github/workflows/release-dry-run.yml`, `.github/workflows/update-demo-server.yml`, `.github/ISSUE_TEMPLATE/v6_rc_feedback.yml`, `docs/RELEASE_NOTES.md`, `docs/releases/`, `docs/release-control/v6/internal/RELEASE_PROMOTION_POLICY.md`, `docs/release-control/v6/internal/PRE_RELEASE_CHECKLIST.md`, `docs/release-control/v6/internal/RC_TO_GA_REHEARSAL_TEMPLATE.md`, `scripts/check-workflow-dispatch-inputs.py`, `scripts/release_control/mobile_release_gate.py`, `scripts/release_control/mobile_release_gate_test.py`, `scripts/release_control/render_release_body.py`, `scripts/release_control/validate_artifact_release_line.py`, `scripts/release_control/record_rc_to_ga_rehearsal.py`, `scripts/release_control/internal/record_rc_to_ga_rehearsal.py`, `scripts/release_control/release_promotion_policy_support.py`, `scripts/trigger-release.sh`, and `scripts/trigger-release-dry-run.sh`
+6. Add or change governed release-promotion workflow inputs, operator-facing promotion metadata, the canonical version file, prerelease feedback intake prompts, artifact publication lineage enforcement, release note or changelog packet composition, or stable-promotion rehearsal summaries through `.github/workflows/create-release.yml`, `.github/workflows/helm-pages.yml`, `.github/workflows/promote-floating-tags.yml`, `.github/workflows/promote-private-pro-runtime.yml`, `.github/workflows/publish-docker.yml`, `.github/workflows/publish-helm-chart.yml`, `.github/workflows/release-convergence.yml`, `.github/workflows/release-dry-run.yml`, `.github/workflows/retry-release-convergence.yml`, `.github/workflows/update-demo-server.yml`, `.github/ISSUE_TEMPLATE/v6_rc_feedback.yml`, `docs/RELEASE_NOTES.md`, `docs/releases/`, `docs/release-control/v6/internal/RELEASE_PROMOTION_POLICY.md`, `docs/release-control/v6/internal/PRE_RELEASE_CHECKLIST.md`, `docs/release-control/v6/internal/RC_TO_GA_REHEARSAL_TEMPLATE.md`, `scripts/check-workflow-dispatch-inputs.py`, `scripts/release_control/mobile_release_gate.py`, `scripts/release_control/mobile_release_gate_test.py`, `scripts/release_control/render_release_body.py`, `scripts/release_control/validate_artifact_release_line.py`, `scripts/release_control/record_rc_to_ga_rehearsal.py`, `scripts/release_control/internal/record_rc_to_ga_rehearsal.py`, `scripts/release_control/release_promotion_policy_support.py`, `scripts/trigger-release.sh`, and `scripts/trigger-release-dry-run.sh`
    That release-promotion boundary also owns prerelease note packet lineage:
    shipped RC notes must remain historically accurate, the top-level
    `docs/RELEASE_NOTES.md` index must continue to point at the current shipped
@@ -925,11 +932,11 @@ upgrade, update, release, or artifact-selection behavior.
    workflow-run details from GitHub and poll the exact returned run ID; it must
    never infer its child from the newest matching workflow/branch/timestamp,
    because version-scoped release concurrency and manual dispatches can overlap.
-   Only after public release
-   asset validation, staged install smoke, exact public Docker publication,
-   exact Helm OCI publication, and successful GitHub release activation and
-   public verification may it call the private `rcourtman/pulse-pro` `Promote
-   Paid Runtime Release` workflow with the same version and R2 prefix.
+   Only after public release asset validation, staged install smoke, exact
+   public Docker publication, exact Helm OCI publication, durable convergence
+   dispatch, and the publicly readable activation-commit marker may the
+   convergence run call the private `rcourtman/pulse-pro` `Promote Paid Runtime
+   Release` workflow with the same version and R2 prefix.
    The promotion workflow downloads the signed proof packet and runs
    `scripts/promote_paid_runtime_release_packet.sh --release-dir <proof-packet-dir> --execute-live`
    from `repos/pulse-pro`. That command is the canonical live-broker promotion
@@ -937,13 +944,24 @@ upgrade, update, release, or artifact-selection behavior.
    manifest on `pulse-license`, runs the customer-path live proof, and restores
    the previous remote manifest if the gate fails. GA promotions also require
    `--allow-ga-prefix`. A failed private build leaves the GitHub release
-   unpublished; a failed live promotion leaves the already activated GitHub
-   release public and restores the previous broker manifest. Both failures
-   must fail the public release workflow; future private Pro publication must
-   not depend on an operator noticing a manual checklist step after the public
-   RC has shipped.
-   A promotion-only failure must be recoverable by rerunning the public
-   release run's failed jobs: the paid-runtime R2 prefix is derived from
+   unpublished. A failed live promotion leaves the already committed GitHub
+   release public, restores the previous broker manifest, and fails the
+   separately retriable convergence workflow. It must not turn the activation
+   workflow red or imply that GitHub publication rolled back.
+   The activation marker must bind the exact staged R2 prefix. The Pulse caller
+   must pass that prefix with its exact customer-promotion lease SHA and
+   convergence run ID to `pulse-pro:.github/workflows/promote-paid-runtime-release.yml`.
+   That mutator must reject missing or stale ownership, verify the live public
+   Pulse lock ref, lease commit message, active workflow run, and activation
+   marker before packet handling and again immediately before broker mutation.
+   Those public cross-repository REST reads must be deliberately unauthenticated
+   with bounded retry rather than depend on the repository-scoped `pulse-pro`
+   `GITHUB_TOKEN`. Its Actions concurrency key may serialize only the validated
+   Pulse lease SHA. That makes copied valid dispatches target-identical and
+   sequential without letting arbitrary invalid values replace the legitimate
+   pending child. The ref lease remains the cross-release serialization primitive.
+   A promotion-only failure must be recoverable by rerunning the complete
+   convergence workflow: the paid-runtime R2 prefix is derived from
    run-stable values (the run's creation date and run id, never the
    wall-clock date at attempt time), and the private build dispatch sets
    `reuse_existing_packet=true` so `Build Pro Release` validates a complete
@@ -952,24 +970,45 @@ upgrade, update, release, or artifact-selection behavior.
    A rebuilt packet from identical inputs is waste and lineage churn; a
    non-empty prefix that fails packet validation must fail the private build
    instead of being overwritten.
-   GitHub release publication is the atomic barrier between exact-version
-   staging and mutable customer rollout, not a final notification after live
-   pointers have already moved. `activate_release` must verify the draft's tag,
-   target commit, prerelease state, and unpublished state, depend on all
-   required immutable public and private readiness jobs, and only then PATCH
-   `draft=false`. It must prove the public checksums, installer, and canonical
-   Linux archive URLs immediately after activation; a failed public read must
-   attempt to return the release to draft quarantine and fail closed before
-   any mutable pointer or live-environment job becomes eligible. Exact-version
-   artifacts may exist before this boundary so they can be tested.
+   A successfully uploaded `release-activation.json` asset is the irreversible
+   release commit, not the earlier `draft=false` PATCH by itself. Before that
+   marker, `activate_release` must verify the draft identity and every required
+   public asset and return failures to draft quarantine. The convergence run is
+   dispatched first but must wait for a marker bound to the exact tag, target
+   commit, release ID, source release run, and convergence run. Successful
+   marker upload is the irreversible commit because convergence can observe it
+   immediately; activation-side read-back failure after upload must not
+   quarantine the release. Once that marker is public, the
+   release remains committed and mutable-surface failures become explicit
+   convergence debt rather than a fictional release rollback.
    One immutable-readiness join must cover the staged release packet, staged
    install smoke, exact public Docker images, exact Helm OCI chart, and (for
-   v6) the exact Pro image and signed packet. After that join, activation and
-   public verification must succeed before the Docker floating aliases,
+   v6) the exact Pro image and signed packet. After that join, activation must
+   publish the marker before the Docker floating aliases,
    paid-runtime broker manifest, public Helm Pages index, or stable demo may
-   advance. Those independent post-activation mutations may run in parallel,
-   and the definitive verdict must await all of them without pretending the
-   external systems share a transaction.
+   advance. The separate convergence workflow must hold the global
+   `release-customer-promotion-lock` ref lease across those mutations. This
+   avoids version-scoped release runs racing global customer state and avoids
+   GitHub Actions concurrency's replaceable pending slot. Under the lease,
+   committed releases are compared per stable/RC channel. Every committed
+   release must add its chart to Helm Pages under the lease, including an older
+   release that finishes after a newer one. Superseded runs skip only Docker
+   aliases, paid-runtime broker state, and stable demo deployment, so overlapping
+   or out-of-order completion cannot move a rollback-prone channel backward or
+   omit a committed chart version. The reusable alias, Pages, and demo mutators
+   must not expose direct workflow dispatch paths that bypass the lease; the dry
+   run retains non-mutating demo verification. A failed surface fails only convergence;
+   the full workflow is retried so it reacquires the lease and safely replays
+   all idempotent surfaces.
+   The activation marker preserves its original convergence run ID. Once that
+   run is completed, a fresh manual convergence dispatch from fixed workflow
+   code may adopt the same immutable tag, source run, target commit, release ID,
+   R2 prefix, and activation-marker digest. Adoption happens only after lease
+   acquisition and publishes a unique immutable owner record whose asset name
+   includes the new run ID, run attempt, and lease SHA. Downstream demo and paid
+   broker mutation must verify the exact passed owner filename and SHA-256. A
+   clobbered constant owner record is forbidden because cached prior bytes could
+   authorize stale ownership.
    A support-only private Pro prerelease image is a narrower exception for
    customer verification of an already-fixed defect. It may dispatch the private
    `Build Pro Release` workflow with `publish_docker_image=true`,
@@ -1792,10 +1831,13 @@ than cross-package contention on 2-core hosted runners.
 That same governed demo-deployment boundary now owns the post-GA single-demo
 contract. `.github/workflows/create-release.yml`,
 `.github/workflows/update-demo-server.yml`, and `.github/workflows/deploy-demo-server.yml`
-must treat `demo-stable` as the only active public demo target: stable releases
-may update it, prerelease tags must not create or update a second public v6
-preview target by default, and any future preview surface requires a new
-explicitly governed target instead of reusing the retired v6-preview path.
+must treat `demo-stable` as the only active public demo target. Stable releases
+may update it only from the lease-owning convergence workflow with an exact
+stable tag and matching activation marker. The historical deploy workflow is a
+non-mutating verification wrapper and must never deploy branch-tip source.
+Prerelease tags must not create or update a second public v6 preview target by
+default, and any future preview surface requires a new explicitly governed
+target instead of reusing the retired v6-preview path.
 That same demo deployment boundary also owns service-identity and public-shell
 parity proof. Stable demo runs default to the `pulse` service identity, must
 prove that the SSH target reports the governed expected hostname before any
@@ -1806,11 +1848,11 @@ response as enough evidence that the public shell actually updated. That proof
 must use a deterministic HTML parser for the actual module entry script rather
 than brittle escaped shell regex or a first-match asset scrape that can fail
 differently over SSH or select the wrong preloaded chunk.
-Those same governed demo deploy/update workflows also own the runner-to-host
-network path. They must establish the canonical Tailscale connectivity step
+The governed demo update workflow also owns the runner-to-host network path.
+It must establish the canonical Tailscale connectivity step
 before SSH setup so stable or preview targets may stay on governed private
 hostnames or Tailscale IPs, rather than silently depending on public SSH
-reachability from GitHub-hosted runners. The workflows must use the current
+reachability from GitHub-hosted runners. The workflow must use the current
 pinned Tailscale GitHub Action, its target `ping` readiness gate, and the shared
 `.github/scripts/check-demo-reachability.sh` TCP/22 diagnostic before SSH key
 capture. A successful tailnet join alone is not connectivity proof. After that
@@ -1819,15 +1861,17 @@ setup must wait for configured demo hostnames to resolve, accept configured IP
 literals without a DNS precheck, and then capture host keys with bounded
 short retries before any installer or binary copy runs; a long `ssh-keyscan`
 loop must not hide an ACL, peer-propagation, firewall, or sshd failure.
-`create-release.yml` must call the update workflow as an awaited reusable job,
-and its terminal `Definitive Release Verdict` must require stable demo runtime,
-frontend, public health, and browser proof. During a stable release cut, the
+`release-convergence.yml` must call the update workflow as a reusable job after
+the irreversible activation commit. Its `Customer Promotion Convergence
+Verdict` must require stable demo runtime, frontend, public health, and browser
+proof. During a stable release cut, the
 update workflow must wait for the activated public release assets and install
 the exact requested version through the normal signed release path. It must not
 accept an unpublished draft release ID or install draft assets into the live
 demo. The stable demo update may run in parallel with the other mutable
 customer pointers only after activation, and the definitive verdict must await
-its proof. An
+its proof. A demo failure is retriable convergence debt and cannot retroactively
+unpublish the committed GitHub release. An
 asynchronous dispatch or manual SSH deployment is not release completion. A one-shot `ssh-keyscan`
 against a private demo target is not sufficient release or deploy proof.
 Those same workflows also own customer-visible browser truth for the public

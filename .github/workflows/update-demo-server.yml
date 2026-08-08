@@ -17,25 +17,26 @@ on:
         required: false
         default: false
         type: boolean
-  workflow_dispatch:
-    inputs:
-      tag:
-        description: 'Stable release tag to deploy (e.g., v6.0.0)'
-        required: true
+      activation_convergence_run_id:
+        description: 'Exact Release Convergence owner. Required for every mutating call.'
+        required: false
+        default: ''
         type: string
-      target:
-        description: 'Demo target to deploy'
+      customer_promotion_lease_sha:
+        description: 'Exact active customer-promotion lease. Required for every mutating call.'
         required: false
-        default: auto
-        type: choice
-        options:
-          - auto
-          - stable
-      verify_only:
-        description: 'Verify connectivity and the current stable demo without changing the host'
+        default: ''
+        type: string
+      convergence_owner_asset_name:
+        description: 'Unique immutable owner record for the active convergence lease.'
         required: false
-        default: false
-        type: boolean
+        default: ''
+        type: string
+      convergence_owner_asset_sha256:
+        description: 'SHA-256 digest of the immutable convergence owner record.'
+        required: false
+        default: ''
+        type: string
 
 permissions:
   contents: read
@@ -178,6 +179,72 @@ jobs:
           [ -n "$DEMO_EXPECTED_HOSTNAME" ] || { echo "::error::DEMO_EXPECTED_HOSTNAME is required in the selected demo environment."; exit 1; }
           [ -n "$DEMO_LOCAL_BASE_URL" ] || { echo "::error::DEMO_LOCAL_BASE_URL is required in the selected demo environment."; exit 1; }
           [ -n "$DEMO_PUBLIC_HEALTH_URL" ] || { echo "::error::DEMO_PUBLIC_HEALTH_URL is required in the selected demo environment."; exit 1; }
+
+      - name: Require exact committed activation marker for mutation
+        if: inputs.verify_only != true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.resolve.outputs.tag }}
+          CONVERGENCE_RUN_ID: ${{ inputs.activation_convergence_run_id }}
+          LEASE_SHA: ${{ inputs.customer_promotion_lease_sha }}
+          OWNER_ASSET_NAME: ${{ inputs.convergence_owner_asset_name }}
+          OWNER_ASSET_SHA256: ${{ inputs.convergence_owner_asset_sha256 }}
+        run: |
+          set -euo pipefail
+          if [[ ! "${TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || \
+             [[ ! "${CONVERGENCE_RUN_ID}" =~ ^[0-9]+$ ]] || \
+             [[ ! "${LEASE_SHA}" =~ ^[0-9a-f]{40}$ ]] || \
+             [[ "${OWNER_ASSET_NAME}" != "release-convergence-owner-${CONVERGENCE_RUN_ID}-"*"-${LEASE_SHA}.json" ]] || \
+             [[ ! "${OWNER_ASSET_SHA256}" =~ ^[0-9a-f]{64}$ ]]; then
+            echo "::error::Stable demo mutation requires an exact stable tag, convergence owner, and lease."
+            exit 1
+          fi
+          release_state="$(
+            gh release view "${TAG}" --json isDraft,isPrerelease,publishedAt,tagName \
+              --jq '[.tagName, (.isDraft | tostring), (.isPrerelease | tostring), (.publishedAt // "")] | @tsv'
+          )"
+          if [ "$(awk -F '\t' '{print $1}' <<<"${release_state}")" != "${TAG}" ] || \
+             [ "$(awk -F '\t' '{print $2}' <<<"${release_state}")" != "false" ] || \
+             [ "$(awk -F '\t' '{print $3}' <<<"${release_state}")" != "false" ] || \
+             [ -z "$(awk -F '\t' '{print $4}' <<<"${release_state}")" ]; then
+            echo "::error::Stable demo mutation refuses inactive or prerelease tag ${TAG}."
+            exit 1
+          fi
+          marker="$(mktemp)"
+          owner_record="$(mktemp)"
+          curl -fsSL --retry 4 --retry-delay 2 --retry-all-errors \
+            -o "${marker}" \
+            "https://github.com/${{ github.repository }}/releases/download/${TAG}/release-activation.json"
+          jq -e \
+            --arg tag "${TAG}" \
+            '.schema_version == 1 and .tag == $tag and (.convergence_run_id | test("^[0-9]+$"))' \
+            "${marker}" >/dev/null
+          activation_owner_run_id="$(jq -r '.convergence_run_id' "${marker}")"
+          activation_marker_sha256="$(sha256sum "${marker}" | awk '{print $1}')"
+          observed_lease_sha="$(
+            gh api \
+              "repos/${{ github.repository }}/git/ref/heads/release-customer-promotion-lock" \
+              --jq '.object.sha'
+          )"
+          if [ "${observed_lease_sha}" != "${LEASE_SHA}" ]; then
+            echo "::error::Stable demo lease is ${observed_lease_sha:-absent}, expected ${LEASE_SHA}."
+            exit 1
+          fi
+          curl -fsSL --retry 4 --retry-delay 2 --retry-all-errors \
+            -o "${owner_record}" \
+            "https://github.com/${{ github.repository }}/releases/download/${TAG}/${OWNER_ASSET_NAME}"
+          printf '%s  %s\n' "${OWNER_ASSET_SHA256}" "${owner_record}" | sha256sum --check --
+          jq -e \
+            --arg tag "${TAG}" \
+            --arg activation_owner_run_id "${activation_owner_run_id}" \
+            --arg activation_marker_sha256 "${activation_marker_sha256}" \
+            --arg convergence_run_id "${CONVERGENCE_RUN_ID}" \
+            --arg lease_sha "${LEASE_SHA}" \
+            --arg owner_asset_name "${OWNER_ASSET_NAME}" \
+            '.schema_version == 1 and .tag == $tag and .activation_owner_run_id == $activation_owner_run_id and .activation_marker_sha256 == $activation_marker_sha256 and .convergence_run_id == $convergence_run_id and .lease_sha == $lease_sha and .owner_asset_name == $owner_asset_name' \
+            "${owner_record}" >/dev/null
+          rm -f "${marker}" "${owner_record}"
+          echo "[OK] Stable demo mutation is bound to committed ${TAG} convergence run ${CONVERGENCE_RUN_ID}."
 
       - name: Checkout repository
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3

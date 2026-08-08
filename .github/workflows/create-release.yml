@@ -1299,22 +1299,6 @@ jobs:
       asset_source: staged
       release_id: ${{ needs.create_release.outputs.release_id }}
 
-  update_stable_demo:
-    needs:
-      - prepare
-      - create_release
-      - release_readiness
-      - activate_release
-    if: ${{ always() && needs.prepare.result == 'success' && needs.create_release.result == 'success' && needs.release_readiness.result == 'success' && needs.activate_release.result == 'success' && needs.prepare.outputs.is_prerelease != 'true' && startsWith(needs.prepare.outputs.version, '6.') }}
-    permissions:
-      contents: read
-    uses: ./.github/workflows/update-demo-server.yml
-    secrets: inherit
-    with:
-      tag: ${{ needs.prepare.outputs.tag }}
-      target: stable
-      verify_only: false
-
   # Publish the Helm chart for this release. publish-helm-chart.yml also
   # listens for `release: published` events directly, but the create_release
   # publish step PATCHes a draft release to draft=false rather than creating
@@ -1339,24 +1323,6 @@ jobs:
       chart_version: ${{ needs.prepare.outputs.version }}
       app_version: ${{ needs.prepare.outputs.version }}
 
-  # Publish and prove the mutable Helm Pages index only after the GitHub
-  # release has survived public activation verification. The legacy
-  # workflow_run chain remains forbidden because it bypasses this ordering.
-  publish_helm_pages:
-    needs:
-      - prepare
-      - publish_docker
-      - validate_release_assets
-      - publish_helm_chart
-      - activate_release
-    if: ${{ always() && needs.prepare.result == 'success' && needs.publish_docker.result == 'success' && needs.validate_release_assets.result == 'success' && needs.publish_helm_chart.result == 'success' && needs.activate_release.result == 'success' && needs.prepare.outputs.historical_asset_backfill_only != 'true' && github.event.inputs.draft_only != 'true' }}
-    permissions:
-      contents: write
-    uses: ./.github/workflows/helm-pages.yml
-    secrets: inherit
-    with:
-      chart_version: ${{ needs.prepare.outputs.version }}
-
   # One immutable-readiness gate joins every exact-version path before the
   # GitHub release crosses its public activation boundary. v6 additionally
   # requires the staged Pro image and signed packet; older release lines have
@@ -1377,26 +1343,6 @@ jobs:
     steps:
       - name: Confirm immutable release readiness
         run: echo "All exact-version release paths are ready for customer activation."
-
-  # Mutable image aliases move only after the exact-version images and staged
-  # release assets have passed validation and the GitHub release has survived
-  # public activation verification. promote-floating-tags.yml has no implicit
-  # workflow_run trigger, so this explicit call is the sole owner of
-  # rc/latest/major/minor pointers for both runtime images.
-  promote_floating_tags:
-    needs:
-      - prepare
-      - release_readiness
-      - activate_release
-    if: ${{ always() && needs.prepare.result == 'success' && needs.release_readiness.result == 'success' && needs.activate_release.result == 'success' }}
-    permissions:
-      contents: read
-      packages: write
-    uses: ./.github/workflows/promote-floating-tags.yml
-    secrets: inherit
-    with:
-      tag: ${{ needs.prepare.outputs.tag }}
-      prerelease: ${{ needs.prepare.outputs.is_prerelease == 'true' }}
 
   # Stage the exact private Pro image and signed R2 packet as soon as the draft
   # release/tag exist. This slow build runs in parallel with public artifact
@@ -1521,122 +1467,94 @@ jobs:
           build_run_id="$(jq -r '.workflow_run_id // empty' <<<"${build_dispatch}")"
           wait_for_workflow rcourtman/pulse-enterprise "${build_run_id}" "private Pro build" 7200
 
-  # The paid-runtime broker is a mutable customer pointer, so promote it only
-  # after every exact-version public artifact and staged install path is ready
-  # and the GitHub release has survived public activation verification. A
-  # rerun reuses the run-stable R2 prefix produced by the staging job.
-  promote_private_pro_runtime:
+  # Durably enqueue customer convergence before crossing the irreversible
+  # publication boundary. The separate run waits for release-activation.json,
+  # so it cannot mutate a customer surface until public verification commits.
+  dispatch_release_convergence:
     needs:
       - prepare
+      - create_release
       - release_readiness
       - stage_private_pro_runtime
-      - activate_release
-    if: ${{ always() && needs.prepare.result == 'success' && needs.release_readiness.result == 'success' && needs.stage_private_pro_runtime.result == 'success' && needs.activate_release.result == 'success' && startsWith(needs.prepare.outputs.version, '6.') }}
+    if: ${{ always() && needs.prepare.result == 'success' && needs.create_release.result == 'success' && needs.release_readiness.result == 'success' && ( !startsWith(needs.prepare.outputs.version, '6.') || needs.stage_private_pro_runtime.result == 'success' ) }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 65
+    timeout-minutes: 10
+    permissions:
+      actions: write
+      contents: read
+    outputs:
+      run_id: ${{ steps.dispatch.outputs.run_id }}
+      run_url: ${{ steps.dispatch.outputs.run_url }}
     steps:
-      - name: Promote and verify private Pro runtime
+      - name: Dispatch durable customer convergence
+        id: dispatch
         env:
-          GH_TOKEN: ${{ secrets.WORKFLOW_PAT }}
-          VERSION: ${{ needs.prepare.outputs.version }}
+          GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.prepare.outputs.tag }}
+          VERSION: ${{ needs.prepare.outputs.version }}
           IS_PRERELEASE: ${{ needs.prepare.outputs.is_prerelease }}
+          TARGET_COMMITISH: ${{ needs.create_release.outputs.target_commitish }}
+          RELEASE_ID: ${{ needs.create_release.outputs.release_id }}
           R2_PREFIX: ${{ needs.stage_private_pro_runtime.outputs.r2_prefix }}
         run: |
           set -euo pipefail
-
-          if [[ -z "${GH_TOKEN:-}" ]]; then
-            echo "::error::WORKFLOW_PAT is required to dispatch private Pro promotion workflows."
-            exit 1
-          fi
-          if [[ -z "${R2_PREFIX:-}" ]]; then
-            echo "::error::Private Pro staging did not return an R2 prefix."
-            exit 1
-          fi
-
-          wait_for_workflow() {
-            local repo="$1"
-            local run_id="$2"
-            local label="$3"
-            local timeout_seconds="$4"
-            local deadline=$((SECONDS + timeout_seconds))
-
-            if [[ ! "${run_id}" =~ ^[0-9]+$ ]]; then
-              echo "::error::Dispatch for ${label} did not return an exact workflow run ID."
-              return 1
-            fi
-
-            echo "Watching exact ${label} run ${run_id} in ${repo}."
-
-            while (( SECONDS < deadline )); do
-              run_state="$(
-                gh run view "${run_id}" \
-                  --repo "${repo}" \
-                  --json status,conclusion,url \
-                  --jq '[.status, (.conclusion // ""), .url] | @tsv'
-              )"
-              status="$(awk -F '\t' '{print $1}' <<<"${run_state}")"
-              conclusion="$(awk -F '\t' '{print $2}' <<<"${run_state}")"
-              url="$(awk -F '\t' '{print $3}' <<<"${run_state}")"
-              echo "${label}: status=${status} conclusion=${conclusion:-pending} ${url}"
-              if [[ "${status}" == "completed" ]]; then
-                if [[ "${conclusion}" == "success" ]]; then
-                  echo "[OK] ${label} completed successfully: ${url}"
-                  return 0
-                fi
-                echo "::error::${label} failed with conclusion=${conclusion}: ${url}"
-                return 1
-              fi
-
-              sleep 30
-            done
-
-            echo "::error::Timed out waiting for ${label} after ${timeout_seconds}s."
-            return 1
-          }
-
-          allow_ga_publish=false
-          if [[ "${IS_PRERELEASE}" != "true" ]]; then
-            allow_ga_publish=true
-          fi
-          echo "Dispatching live paid-runtime promotion for ${TAG} with R2 prefix ${R2_PREFIX}."
-          promote_dispatch="$(
+          dispatch="$(
             jq -n \
+              --arg tag "${TAG}" \
               --arg version "${VERSION}" \
+              --arg prerelease "${IS_PRERELEASE}" \
+              --arg target_commitish "${TARGET_COMMITISH}" \
+              --arg release_id "${RELEASE_ID}" \
               --arg r2_prefix "${R2_PREFIX}" \
-              --arg allow_ga_prefix "${allow_ga_publish}" \
+              --arg source_release_run_id "${GITHUB_RUN_ID}" \
               '{
                 ref: "main",
                 return_run_details: true,
                 inputs: {
+                  tag: $tag,
                   version: $version,
+                  prerelease: $prerelease,
+                  target_commitish: $target_commitish,
+                  release_id: $release_id,
                   r2_prefix: $r2_prefix,
-                  allow_ga_prefix: $allow_ga_prefix
+                  source_release_run_id: $source_release_run_id
                 }
               }' | \
               gh api \
                 --method POST \
                 -H "Accept: application/vnd.github+json" \
                 -H "X-GitHub-Api-Version: 2026-03-10" \
-                repos/rcourtman/pulse-pro/actions/workflows/promote-paid-runtime-release.yml/dispatches \
+                "repos/${{ github.repository }}/actions/workflows/release-convergence.yml/dispatches" \
                 --input -
           )"
-          promote_run_id="$(jq -r '.workflow_run_id // empty' <<<"${promote_dispatch}")"
-          wait_for_workflow rcourtman/pulse-pro "${promote_run_id}" "private Pro live promotion" 3600
+          run_id="$(jq -r '.workflow_run_id // empty' <<<"${dispatch}")"
+          run_url="$(jq -r '.html_url // empty' <<<"${dispatch}")"
+          if [[ ! "${run_id}" =~ ^[0-9]+$ ]] || [ -z "${run_url}" ]; then
+            echo "::error::Customer convergence dispatch did not return an exact workflow run."
+            exit 1
+          fi
+          echo "run_id=${run_id}" >> "$GITHUB_OUTPUT"
+          echo "run_url=${run_url}" >> "$GITHUB_OUTPUT"
+          echo "[OK] Customer convergence is durably queued as ${run_url}."
 
-  # Customer activation is the publication barrier between exact-version
-  # staging and every mutable customer pointer or live environment. If public
-  # asset reads fail immediately after activation, quarantine the release back
-  # to draft before those downstream mutations become eligible to run.
+  # release-activation.json is the irreversible publication commit. Before the
+  # marker is public, any verification failure returns the release to draft.
+  # After the marker is public, customer convergence owns retriable rollout and
+  # the release is never described as rolled back merely because a mutable
+  # external surface is temporarily unavailable.
   activate_release:
     needs:
       - prepare
       - create_release
       - release_readiness
-    if: ${{ always() && needs.prepare.result == 'success' && needs.create_release.result == 'success' && needs.release_readiness.result == 'success' }}
+      - dispatch_release_convergence
+      - stage_private_pro_runtime
+    if: ${{ always() && needs.prepare.result == 'success' && needs.create_release.result == 'success' && needs.release_readiness.result == 'success' && needs.dispatch_release_convergence.result == 'success' }}
+    continue-on-error: true
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 15
     permissions:
+      actions: read
       contents: write
     steps:
       - name: Publish the fully staged release
@@ -1646,15 +1564,47 @@ jobs:
           RELEASE_ID: ${{ needs.create_release.outputs.release_id }}
           EXPECTED_COMMIT: ${{ needs.create_release.outputs.target_commitish }}
           IS_PRERELEASE: ${{ needs.prepare.outputs.is_prerelease }}
+          CONVERGENCE_RUN_ID: ${{ needs.dispatch_release_convergence.outputs.run_id }}
+          R2_PREFIX: ${{ needs.stage_private_pro_runtime.outputs.r2_prefix }}
         run: |
           set -euo pipefail
           release_json=$(mktemp)
           publish_payload=$(mktemp)
           quarantine_payload=$(mktemp)
+          activation_marker_dir=$(mktemp -d)
+          activation_marker="${activation_marker_dir}/release-activation.json"
+          verified_marker=$(mktemp)
           activated=false
+          committed=false
+
+          require_viable_convergence_owner() {
+            local owner_state
+            owner_state="$(
+              gh run view "${CONVERGENCE_RUN_ID}" \
+                --repo "${{ github.repository }}" \
+                --json event,status,conclusion,workflowName,displayTitle,url \
+                --jq '[.event, .status, (.conclusion // ""), .workflowName, .displayTitle, .url] | @tsv'
+            )"
+            owner_event="$(awk -F '\t' '{print $1}' <<<"${owner_state}")"
+            owner_status="$(awk -F '\t' '{print $2}' <<<"${owner_state}")"
+            owner_conclusion="$(awk -F '\t' '{print $3}' <<<"${owner_state}")"
+            owner_workflow="$(awk -F '\t' '{print $4}' <<<"${owner_state}")"
+            owner_title="$(awk -F '\t' '{print $5}' <<<"${owner_state}")"
+            owner_url="$(awk -F '\t' '{print $6}' <<<"${owner_state}")"
+            expected_title="Release convergence ${TAG} source ${GITHUB_RUN_ID}"
+            if [ "${owner_event}" != "workflow_dispatch" ] || \
+               [ "${owner_workflow}" != "Release Convergence" ] || \
+               [ "${owner_title}" != "${expected_title}" ] || \
+               [ "${owner_status}" = "completed" ] || \
+               [ -n "${owner_conclusion}" ]; then
+              echo "::error::Exact convergence owner ${CONVERGENCE_RUN_ID} is not viable for ${TAG}: status=${owner_status} conclusion=${owner_conclusion:-none} ${owner_url}."
+              return 1
+            fi
+            echo "Verified viable convergence owner ${CONVERGENCE_RUN_ID}: ${owner_status} ${owner_url}."
+          }
 
           quarantine_on_error() {
-            if [ "$activated" = "true" ]; then
+            if [ "$activated" = "true" ] && [ "$committed" != "true" ]; then
               echo "::warning::Public asset verification failed; returning ${TAG} to draft quarantine."
               gh api "repos/${{ github.repository }}/releases/${RELEASE_ID}" \
                 -X PATCH --input "$quarantine_payload" >/dev/null || true
@@ -1687,6 +1637,7 @@ jobs:
             '{draft: false, make_latest: $make_latest}' > "$publish_payload"
           jq -n '{draft: true, make_latest: "false"}' > "$quarantine_payload"
 
+          require_viable_convergence_owner
           gh api "repos/${{ github.repository }}/releases/${RELEASE_ID}" \
             -X PATCH --input "$publish_payload" > "$release_json"
           activated=true
@@ -1706,12 +1657,51 @@ jobs:
               -o /dev/null "${base}/${asset_name}"
           done
 
+          # Close the dispatch-to-commit race: the exact durable convergence
+          # owner must still be queued or running immediately before the marker
+          # makes activation irreversible.
+          require_viable_convergence_owner
+          jq -n \
+            --arg tag "${TAG}" \
+            --arg target_commitish "${EXPECTED_COMMIT}" \
+            --arg release_id "${RELEASE_ID}" \
+            --arg source_release_run_id "${GITHUB_RUN_ID}" \
+            --arg convergence_run_id "${CONVERGENCE_RUN_ID}" \
+            --arg r2_prefix "${R2_PREFIX}" \
+            '{
+              schema_version: 1,
+              tag: $tag,
+              target_commitish: $target_commitish,
+              release_id: $release_id,
+              source_release_run_id: $source_release_run_id,
+              convergence_run_id: $convergence_run_id,
+              r2_prefix: $r2_prefix
+            }' > "${activation_marker}"
+          gh release upload "${TAG}" \
+            "${activation_marker}" --clobber
+          # The successful upload is the single irreversible logical boundary:
+          # convergence may observe the marker immediately, so no later
+          # activation-side read failure may return the release to draft.
+          committed=true
+          curl -fsSL --retry 12 --retry-delay 5 --retry-all-errors \
+            -o "${verified_marker}" "${base}/release-activation.json"
+          jq -e \
+            --arg tag "${TAG}" \
+            --arg target_commitish "${EXPECTED_COMMIT}" \
+            --arg release_id "${RELEASE_ID}" \
+            --arg source_release_run_id "${GITHUB_RUN_ID}" \
+            --arg convergence_run_id "${CONVERGENCE_RUN_ID}" \
+            --arg r2_prefix "${R2_PREFIX}" \
+            '.schema_version == 1 and .tag == $tag and .target_commitish == $target_commitish and .release_id == $release_id and .source_release_run_id == $source_release_run_id and .convergence_run_id == $convergence_run_id and .r2_prefix == $r2_prefix' \
+            "${verified_marker}" >/dev/null
           trap - ERR
-          rm -f "$release_json" "$publish_payload" "$quarantine_payload"
-          echo "[OK] Activated and publicly verified ${TAG}; mutable customer promotion may begin."
+          rm -f "$release_json" "$publish_payload" "$quarantine_payload" \
+            "$verified_marker"
+          rm -rf "$activation_marker_dir"
+          echo "[OK] Irreversibly committed and publicly verified ${TAG}; convergence run ${CONVERGENCE_RUN_ID} owns customer rollout."
 
-  release_verdict:
-    name: Definitive Release Verdict
+  release_commit_verdict:
+    name: Release Activation Commit Verdict
     needs:
       - prepare
       - release_smoke
@@ -1720,36 +1710,35 @@ jobs:
       - publish_docker
       - validate_release_assets
       - install_sh_smoke
-      - update_stable_demo
       - publish_helm_chart
-      - publish_helm_pages
       - release_readiness
-      - promote_floating_tags
       - stage_private_pro_runtime
-      - promote_private_pro_runtime
+      - dispatch_release_convergence
       - activate_release
     if: ${{ always() && needs.prepare.result == 'success' && needs.prepare.outputs.historical_asset_backfill_only != 'true' }}
     runs-on: ubuntu-24.04
     steps:
-      - name: Enforce terminal release outcomes
+      - name: Enforce irreversible release commit outcome
         env:
+          GH_TOKEN: ${{ github.token }}
           DRAFT_ONLY: ${{ github.event.inputs.draft_only }}
           VERSION: ${{ needs.prepare.outputs.version }}
-          IS_PRERELEASE: ${{ needs.prepare.outputs.is_prerelease }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+          EXPECTED_COMMIT: ${{ needs.create_release.outputs.target_commitish }}
+          RELEASE_ID: ${{ needs.create_release.outputs.release_id }}
           CREATE_RESULT: ${{ needs.create_release.result }}
           SMOKE_RESULT: ${{ needs.release_smoke.result }}
           WINDOWS_INSTALL_COMMAND_RESULT: ${{ needs.windows_install_command_smoke.result }}
           DOCKER_RESULT: ${{ needs.publish_docker.result }}
           VALIDATE_RESULT: ${{ needs.validate_release_assets.result }}
           INSTALL_RESULT: ${{ needs.install_sh_smoke.result }}
-          DEMO_RESULT: ${{ needs.update_stable_demo.result }}
           HELM_RESULT: ${{ needs.publish_helm_chart.result }}
-          HELM_PAGES_RESULT: ${{ needs.publish_helm_pages.result }}
           READINESS_RESULT: ${{ needs.release_readiness.result }}
-          FLOATING_RESULT: ${{ needs.promote_floating_tags.result }}
           PRIVATE_PRO_STAGE_RESULT: ${{ needs.stage_private_pro_runtime.result }}
-          PRIVATE_PRO_PROMOTION_RESULT: ${{ needs.promote_private_pro_runtime.result }}
-          ACTIVATION_RESULT: ${{ needs.activate_release.result }}
+          CONVERGENCE_DISPATCH_RESULT: ${{ needs.dispatch_release_convergence.result }}
+          CONVERGENCE_RUN_ID: ${{ needs.dispatch_release_convergence.outputs.run_id }}
+          CONVERGENCE_RUN_URL: ${{ needs.dispatch_release_convergence.outputs.run_url }}
+          R2_PREFIX: ${{ needs.stage_private_pro_runtime.outputs.r2_prefix }}
         run: |
           set -euo pipefail
           require_result() {
@@ -1771,17 +1760,29 @@ jobs:
             require_result "exact-version Docker staging" "$DOCKER_RESULT" success
             require_result "staged install.sh smoke" "$INSTALL_RESULT" success
             require_result "Helm staging" "$HELM_RESULT" success
-            require_result "public Helm repository promotion" "$HELM_PAGES_RESULT" success
             require_result "immutable release readiness" "$READINESS_RESULT" success
-            require_result "floating-tag promotion" "$FLOATING_RESULT" success
-            require_result "release activation" "$ACTIVATION_RESULT" success
+            require_result "durable customer convergence dispatch" "$CONVERGENCE_DISPATCH_RESULT" success
             if [[ "$VERSION" == 6.* ]]; then
               require_result "private Pro staging" "$PRIVATE_PRO_STAGE_RESULT" success
-              require_result "private Pro live promotion" "$PRIVATE_PRO_PROMOTION_RESULT" success
-              if [ "$IS_PRERELEASE" != "true" ]; then
-                require_result "stable demo deployment and verification" "$DEMO_RESULT" success
-              fi
             fi
+
+            marker="$(mktemp)"
+            curl -fsSL --retry 6 --retry-delay 5 --retry-all-errors \
+              -o "${marker}" \
+              "https://github.com/${{ github.repository }}/releases/download/${TAG}/release-activation.json"
+            jq -e \
+              --arg tag "${TAG}" \
+              --arg target_commitish "${EXPECTED_COMMIT}" \
+              --arg release_id "${RELEASE_ID}" \
+              --arg source_release_run_id "${GITHUB_RUN_ID}" \
+              --arg convergence_run_id "${CONVERGENCE_RUN_ID}" \
+              --arg r2_prefix "${R2_PREFIX}" \
+              '.schema_version == 1 and .tag == $tag and .target_commitish == $target_commitish and .release_id == $release_id and .source_release_run_id == $source_release_run_id and .convergence_run_id == $convergence_run_id and .r2_prefix == $r2_prefix' \
+              "${marker}" >/dev/null
+            rm -f "${marker}"
           fi
 
-          echo "Release verdict passed for v${VERSION}."
+          echo "Release activation commit passed for v${VERSION}."
+          if [ "${DRAFT_ONLY:-false}" != "true" ]; then
+            echo "Customer convergence continues independently in ${CONVERGENCE_RUN_URL}."
+          fi

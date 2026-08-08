@@ -1,0 +1,145 @@
+name: Promote Private Pro Runtime
+run-name: Promote Private Pro Runtime ${{ inputs.tag }}
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: "Exact Pulse version without the leading v."
+        required: true
+        type: string
+      tag:
+        description: "Exact Pulse release tag."
+        required: true
+        type: string
+      prerelease:
+        description: "Whether this release targets the RC broker slot."
+        required: true
+        type: boolean
+      r2_prefix:
+        description: "Signed private Pro packet prefix staged before activation."
+        required: true
+        type: string
+      pulse_lease_sha:
+        description: "Exact customer-promotion lease commit owned by this convergence run."
+        required: true
+        type: string
+      pulse_convergence_run_id:
+        description: "Exact Release Convergence run that owns the lease."
+        required: true
+        type: string
+      pulse_owner_asset_name:
+        description: "Unique immutable convergence-owner evidence asset."
+        required: true
+        type: string
+      pulse_owner_asset_sha256:
+        description: "SHA-256 digest of the immutable convergence-owner evidence."
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  promote:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 65
+    steps:
+      - name: Promote and verify private Pro runtime
+        env:
+          GH_TOKEN: ${{ secrets.WORKFLOW_PAT }}
+          VERSION: ${{ inputs.version }}
+          TAG: ${{ inputs.tag }}
+          IS_PRERELEASE: ${{ inputs.prerelease }}
+          R2_PREFIX: ${{ inputs.r2_prefix }}
+          PULSE_LEASE_SHA: ${{ inputs.pulse_lease_sha }}
+          PULSE_CONVERGENCE_RUN_ID: ${{ inputs.pulse_convergence_run_id }}
+          PULSE_OWNER_ASSET_NAME: ${{ inputs.pulse_owner_asset_name }}
+          PULSE_OWNER_ASSET_SHA256: ${{ inputs.pulse_owner_asset_sha256 }}
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${GH_TOKEN:-}" ]]; then
+            echo "::error::WORKFLOW_PAT is required to dispatch private Pro promotion workflows."
+            exit 1
+          fi
+          if [[ -z "${R2_PREFIX:-}" ]]; then
+            echo "::error::Private Pro staging did not return an R2 prefix."
+            exit 1
+          fi
+
+          wait_for_workflow() {
+            local repo="$1"
+            local run_id="$2"
+            local label="$3"
+            local timeout_seconds="$4"
+            local deadline=$((SECONDS + timeout_seconds))
+
+            if [[ ! "${run_id}" =~ ^[0-9]+$ ]]; then
+              echo "::error::Dispatch for ${label} did not return an exact workflow run ID."
+              return 1
+            fi
+
+            echo "Watching exact ${label} run ${run_id} in ${repo}."
+            while (( SECONDS < deadline )); do
+              run_state="$(
+                gh run view "${run_id}" \
+                  --repo "${repo}" \
+                  --json status,conclusion,url \
+                  --jq '[.status, (.conclusion // ""), .url] | @tsv'
+              )"
+              status="$(awk -F '\t' '{print $1}' <<<"${run_state}")"
+              conclusion="$(awk -F '\t' '{print $2}' <<<"${run_state}")"
+              url="$(awk -F '\t' '{print $3}' <<<"${run_state}")"
+              echo "${label}: status=${status} conclusion=${conclusion:-pending} ${url}"
+              if [[ "${status}" == "completed" ]]; then
+                if [[ "${conclusion}" == "success" ]]; then
+                  echo "[OK] ${label} completed successfully: ${url}"
+                  return 0
+                fi
+                echo "::error::${label} failed with conclusion=${conclusion}: ${url}"
+                return 1
+              fi
+              sleep 30
+            done
+
+            echo "::error::Timed out waiting for ${label} after ${timeout_seconds}s."
+            return 1
+          }
+
+          allow_ga_publish=false
+          if [[ "${IS_PRERELEASE}" != "true" ]]; then
+            allow_ga_publish=true
+          fi
+          echo "Dispatching live paid-runtime promotion for ${TAG} with R2 prefix ${R2_PREFIX}."
+          promote_dispatch="$(
+            jq -n \
+              --arg version "${VERSION}" \
+              --arg r2_prefix "${R2_PREFIX}" \
+              --arg allow_ga_prefix "${allow_ga_publish}" \
+              --arg pulse_lease_sha "${PULSE_LEASE_SHA}" \
+              --arg pulse_convergence_run_id "${PULSE_CONVERGENCE_RUN_ID}" \
+              --arg pulse_owner_asset_name "${PULSE_OWNER_ASSET_NAME}" \
+              --arg pulse_owner_asset_sha256 "${PULSE_OWNER_ASSET_SHA256}" \
+              '{
+                ref: "main",
+                return_run_details: true,
+                inputs: {
+                  version: $version,
+                  r2_prefix: $r2_prefix,
+                  allow_ga_prefix: $allow_ga_prefix,
+                  pulse_lease_sha: $pulse_lease_sha,
+                  pulse_convergence_run_id: $pulse_convergence_run_id,
+                  pulse_owner_asset_name: $pulse_owner_asset_name,
+                  pulse_owner_asset_sha256: $pulse_owner_asset_sha256
+                }
+              }' | \
+              gh api \
+                --method POST \
+                -H "Accept: application/vnd.github+json" \
+                -H "X-GitHub-Api-Version: 2026-03-10" \
+                repos/rcourtman/pulse-pro/actions/workflows/promote-paid-runtime-release.yml/dispatches \
+                --input -
+          )"
+          promote_run_id="$(jq -r '.workflow_run_id // empty' <<<"${promote_dispatch}")"
+          wait_for_workflow rcourtman/pulse-pro "${promote_run_id}" "private Pro live promotion" 3600

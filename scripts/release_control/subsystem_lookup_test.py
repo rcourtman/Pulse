@@ -3640,6 +3640,7 @@ class SubsystemLookupTest(unittest.TestCase):
             match["verification_requirement"]["exact_files"],
             [
                 "frontend-modern/src/components/__tests__/whatsNewModel.test.ts",
+                "pulse-pro:scripts/tests/test_validate_paid_runtime_distribution.py",
                 "scripts/installtests/build_release_assets_test.go",
                 "scripts/release_control/internal/record_rc_to_ga_rehearsal_test.py",
                 "scripts/release_control/mobile_release_gate_test.py",
@@ -3678,6 +3679,7 @@ class SubsystemLookupTest(unittest.TestCase):
             match["verification_requirement"]["exact_files"],
             [
                 "frontend-modern/src/components/__tests__/whatsNewModel.test.ts",
+                "pulse-pro:scripts/tests/test_validate_paid_runtime_distribution.py",
                 "scripts/installtests/build_release_assets_test.go",
                 "scripts/release_control/internal/record_rc_to_ga_rehearsal_test.py",
                 "scripts/release_control/mobile_release_gate_test.py",
@@ -3723,6 +3725,7 @@ class SubsystemLookupTest(unittest.TestCase):
                 match["verification_requirement"]["exact_files"],
                 [
                     "frontend-modern/src/components/__tests__/whatsNewModel.test.ts",
+                    "pulse-pro:scripts/tests/test_validate_paid_runtime_distribution.py",
                     "scripts/installtests/build_release_assets_test.go",
                     "scripts/release_control/internal/record_rc_to_ga_rehearsal_test.py",
                     "scripts/release_control/mobile_release_gate_test.py",
@@ -3761,6 +3764,7 @@ class SubsystemLookupTest(unittest.TestCase):
             match["verification_requirement"]["exact_files"],
             [
                 "frontend-modern/src/components/__tests__/whatsNewModel.test.ts",
+                "pulse-pro:scripts/tests/test_validate_paid_runtime_distribution.py",
                 "scripts/installtests/build_release_assets_test.go",
                 "scripts/release_control/internal/record_rc_to_ga_rehearsal_test.py",
                 "scripts/release_control/mobile_release_gate_test.py",
@@ -3799,6 +3803,7 @@ class SubsystemLookupTest(unittest.TestCase):
             match["verification_requirement"]["exact_files"],
             [
                 "frontend-modern/src/components/__tests__/whatsNewModel.test.ts",
+                "pulse-pro:scripts/tests/test_validate_paid_runtime_distribution.py",
                 "scripts/installtests/build_release_assets_test.go",
                 "scripts/release_control/internal/record_rc_to_ga_rehearsal_test.py",
                 "scripts/release_control/mobile_release_gate_test.py",
@@ -3837,6 +3842,7 @@ class SubsystemLookupTest(unittest.TestCase):
             match["verification_requirement"]["exact_files"],
             [
                 "frontend-modern/src/components/__tests__/whatsNewModel.test.ts",
+                "pulse-pro:scripts/tests/test_validate_paid_runtime_distribution.py",
                 "scripts/installtests/build_release_assets_test.go",
                 "scripts/release_control/internal/record_rc_to_ga_rehearsal_test.py",
                 "scripts/release_control/mobile_release_gate_test.py",

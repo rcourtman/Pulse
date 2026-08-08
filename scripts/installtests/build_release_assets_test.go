@@ -328,9 +328,14 @@ func TestCreateReleaseUploadsPowerShellInstaller(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read validate-release-assets.yml: %v", err)
 	}
+	convergenceContent, err := os.ReadFile(repoFile(".github", "workflows", "release-convergence.yml"))
+	if err != nil {
+		t.Fatalf("read release-convergence.yml: %v", err)
+	}
 
 	workflow := string(content)
 	validationWorkflow := string(validationContent)
+	convergenceWorkflow := string(convergenceContent)
 	required := []string{
 		`historical_asset_backfill_only:`,
 		`description: 'Repair an already-published release packet in place without rebuilding binaries'`,
@@ -400,22 +405,20 @@ func TestCreateReleaseUploadsPowerShellInstaller(t *testing.T) {
 		`publish_helm_chart:`,
 		`chart_version: ${{ needs.prepare.outputs.version }}`,
 		`app_version: ${{ needs.prepare.outputs.version }}`,
-		`uses: ./.github/workflows/helm-pages.yml`,
-		`publish_helm_pages:`,
-		// Mutable image aliases have one explicit owner at the activation
-		// barrier; no implicit workflow_run may race that call.
-		`uses: ./.github/workflows/promote-floating-tags.yml`,
-		`promote_floating_tags:`,
-		`tag: ${{ needs.prepare.outputs.tag }}`,
-		`prerelease: ${{ needs.prepare.outputs.is_prerelease == 'true' }}`,
 		// Draft-only mode stops after staged validation and skips the
 		// customer activation sequence.
 		`needs.prepare.outputs.historical_asset_backfill_only != 'true' && github.event.inputs.draft_only != 'true'`,
+		`dispatch_release_convergence:`,
+		`release-convergence.yml/dispatches`,
+		`return_run_details: true`,
 		`activate_release:`,
-		`needs.activate_release.result == 'success'`,
+		`continue-on-error: true`,
 		`Publish the fully staged release`,
 		`'{draft: false, make_latest: $make_latest}'`,
 		`returning ${TAG} to draft quarantine`,
+		`release-activation.json`,
+		`release_commit_verdict:`,
+		`Release Activation Commit Verdict`,
 	}
 	for _, needle := range required {
 		if !strings.Contains(workflow, needle) {
@@ -424,7 +427,7 @@ func TestCreateReleaseUploadsPowerShellInstaller(t *testing.T) {
 	}
 
 	publishedReleaseGuard := `needs.prepare.outputs.historical_asset_backfill_only != 'true' && github.event.inputs.draft_only != 'true'`
-	for _, job := range []string{"install_sh_smoke", "publish_helm_chart", "publish_helm_pages"} {
+	for _, job := range []string{"install_sh_smoke", "publish_helm_chart"} {
 		block := workflowJobBlock(t, workflow, job)
 		if !strings.Contains(block, publishedReleaseGuard) {
 			t.Fatalf("create-release.yml job %s must skip historical backfill and draft-only runs before invoking downstream workflow_call", job)
@@ -434,9 +437,23 @@ func TestCreateReleaseUploadsPowerShellInstaller(t *testing.T) {
 	if !strings.Contains(readinessJob, publishedReleaseGuard) {
 		t.Fatal("release_readiness must skip historical backfill and draft-only runs")
 	}
-	floatingJob := workflowJobBlock(t, workflow, "promote_floating_tags")
-	if !strings.Contains(floatingJob, `needs.activate_release.result == 'success'`) {
-		t.Fatal("floating-tag promotion must run only after successful public activation")
+	for _, job := range []string{"promote_floating_tags", "publish_helm_pages", "promote_private_pro_runtime", "update_stable_demo"} {
+		if strings.Contains(workflow, "\n  "+job+":\n") {
+			t.Fatalf("create-release.yml must not mutate customer surface %s inline", job)
+		}
+	}
+	for _, needle := range []string{
+		`await_activation_commit:`,
+		`release-activation.json`,
+		`acquire_customer_promotion_lease:`,
+		`uses: ./.github/workflows/promote-floating-tags.yml`,
+		`uses: ./.github/workflows/helm-pages.yml`,
+		`uses: ./.github/workflows/promote-private-pro-runtime.yml`,
+		`uses: ./.github/workflows/update-demo-server.yml`,
+	} {
+		if !strings.Contains(convergenceWorkflow, needle) {
+			t.Fatalf("release-convergence.yml missing durable customer-promotion contract: %s", needle)
+		}
 	}
 
 	if !strings.Contains(workflow, `draft: true`) {
@@ -905,7 +922,7 @@ func TestReleaseValidationRequiresSignedSidecars(t *testing.T) {
 	}
 }
 
-func TestDockerAndDemoBuildsUseCanonicalReleaseLdflags(t *testing.T) {
+func TestDockerBuildUsesCanonicalReleaseLdflags(t *testing.T) {
 	dockerfileBytes, err := os.ReadFile(repoFile("Dockerfile"))
 	if err != nil {
 		t.Fatalf("read Dockerfile: %v", err)
@@ -964,26 +981,6 @@ func TestDockerAndDemoBuildsUseCanonicalReleaseLdflags(t *testing.T) {
 		t.Fatalf("Dockerfile release go builds must all disable automatic VCS stamping: builds=%d clean_builds=%d", builds, cleanBuilds)
 	}
 
-	workflowBytes, err := os.ReadFile(repoFile(".github", "workflows", "deploy-demo-server.yml"))
-	if err != nil {
-		t.Fatalf("read deploy-demo-server workflow: %v", err)
-	}
-	workflow := string(workflowBytes)
-	workflowRequired := []string{
-		`./scripts/release_ldflags.sh server --version "${VERSION}" --build-time "${BUILD_TIME}" --git-commit "${GIT_COMMIT}"`,
-		`-buildvcs=false`,
-		`demo-stable`,
-		`workflow_dispatch:`,
-		`target:`,
-	}
-	for _, needle := range workflowRequired {
-		if !strings.Contains(workflow, needle) {
-			t.Fatalf("deploy-demo-server workflow missing canonical release ldflags usage: %s", needle)
-		}
-	}
-	if strings.Contains(workflow, `preview-v6`) || strings.Contains(workflow, `demo-preview-v6`) {
-		t.Fatal("deploy-demo-server workflow must not keep a separate v6 preview demo target after GA")
-	}
 }
 
 func TestDockerRuntimeShipsPinnedAppriseCLI(t *testing.T) {
@@ -1342,7 +1339,7 @@ func TestHelmChartDoesNotPublishRetiredExplorePrepassMonitoring(t *testing.T) {
 	}
 }
 
-func TestDeployDemoWorkflowFailsClosedForStableAndVerifiesFrontendParity(t *testing.T) {
+func TestDeployDemoWorkflowIsRetiredToNonMutatingVerification(t *testing.T) {
 	workflowBytes, err := os.ReadFile(repoFile(".github", "workflows", "deploy-demo-server.yml"))
 	if err != nil {
 		t.Fatalf("read deploy-demo-server workflow: %v", err)
@@ -1350,38 +1347,22 @@ func TestDeployDemoWorkflowFailsClosedForStableAndVerifiesFrontendParity(t *test
 
 	workflow := string(workflowBytes)
 	required := []string{
-		`DEMO_EXPECTED_HOSTNAME: ${{ vars.DEMO_EXPECTED_HOSTNAME }}`,
-		`DEMO_LOCAL_BASE_URL: ${{ vars.DEMO_LOCAL_BASE_URL }}`,
-		`[ -n "$DEMO_EXPECTED_HOSTNAME" ] || { echo "::error::DEMO_EXPECTED_HOSTNAME is required in the selected demo environment."; exit 1; }`,
-		`[ -n "$DEMO_LOCAL_BASE_URL" ] || { echo "::error::DEMO_LOCAL_BASE_URL is required in the selected demo environment."; exit 1; }`,
-		`ENVIRONMENT_NAME="demo-stable"`,
-		`options:`,
-		`          - stable`,
-		`Capture expected frontend entry asset`,
-		`Verify target host identity`,
-		`uses: tailscale/github-action@306e68a486fd2350f2bfc3b19fcd143891a4a2d8 # v4`,
-		`ping: ${{ secrets.DEMO_SERVER_HOST }}`,
-		`bash .github/scripts/check-demo-reachability.sh`,
-		`bash .github/scripts/setup-demo-ssh.sh`,
-		`SERVICE_NAME="pulse"`,
-		`Unsupported demo target: ${TARGET}`,
-		`Demo environment points at host $REMOTE_HOSTNAME but expected $DEMO_EXPECTED_HOSTNAME.`,
-		`Verify frontend parity`,
-		`Verify public browser smoke`,
-		`./scripts/run_demo_public_browser_smoke.sh`,
-		`extract_entry_asset()`,
-		`<script\b[^>]*\bsrc=\"(/assets/index-[^\"]*\.js)\"`,
-		`Remote service is serving $REMOTE_ASSET but the build expected $EXPECTED_ASSET.`,
-		`Public demo is serving $PUBLIC_ASSET but the build expected $EXPECTED_ASSET.`,
+		`name: Verify Demo Server`,
+		`workflow_dispatch:`,
+		`Verify Current Committed Stable Demo (No Mutation)`,
+		`uses: ./.github/workflows/update-demo-server.yml`,
+		`tag: latest`,
+		`target: stable`,
+		`verify_only: true`,
 	}
 	for _, needle := range required {
 		if !strings.Contains(workflow, needle) {
-			t.Fatalf("deploy-demo-server workflow missing stable isolation or frontend parity proof: %s", needle)
+			t.Fatalf("retired deploy-demo-server workflow missing non-mutating verification contract: %s", needle)
 		}
 	}
-	for _, forbidden := range []string{`pulse-v6-preview`, `preview-v6`, `demo-preview-v6`} {
+	for _, forbidden := range []string{`go build`, `scp `, `docker compose`, `verify_only: false`} {
 		if strings.Contains(workflow, forbidden) {
-			t.Fatalf("deploy-demo-server workflow must not retain retired v6 preview target %s", forbidden)
+			t.Fatalf("retired deploy-demo-server workflow must not mutate the stable demo: %s", forbidden)
 		}
 	}
 }
@@ -1432,6 +1413,11 @@ func TestUpdateDemoWorkflowUsesGovernedNetworkPath(t *testing.T) {
 		`/api/license/runtime-capabilities`,
 		`Mock mode enabled`,
 		`Demo server mock mode did not enable after entitlement sync`,
+		`Require exact committed activation marker for mutation`,
+		`activation_convergence_run_id:`,
+		`release-activation.json`,
+		`.convergence_run_id == $convergence_run_id`,
+		`Stable demo mutation refuses inactive or prerelease tag`,
 		`Verify public browser smoke`,
 		`./scripts/run_demo_public_browser_smoke.sh`,
 	}
@@ -1970,21 +1956,33 @@ func TestReleasePipelinePromotesOneImmutableCandidate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read validate-release-assets.yml: %v", err)
 	}
+	convergenceBytes, err := os.ReadFile(repoFile(".github", "workflows", "release-convergence.yml"))
+	if err != nil {
+		t.Fatalf("read release-convergence.yml: %v", err)
+	}
+	leaseScriptBytes, err := os.ReadFile(repoFile("scripts", "release_control", "customer_promotion_lease.sh"))
+	if err != nil {
+		t.Fatalf("read customer_promotion_lease.sh: %v", err)
+	}
 
 	createWorkflow := string(createBytes)
 	candidateWorkflow := string(candidateBytes)
 	validationWorkflow := string(validationBytes)
+	convergenceWorkflow := string(convergenceBytes)
+	leaseScript := string(leaseScriptBytes)
 	createJob := workflowJobBlock(t, createWorkflow, "create_release")
 	backendJob := workflowJobBlock(t, createWorkflow, "backend_tests")
 	integrationJob := workflowJobBlock(t, createWorkflow, "integration_tests")
 	validationJob := workflowJobBlock(t, createWorkflow, "validate_release_assets")
 	privateStageJob := workflowJobBlock(t, createWorkflow, "stage_private_pro_runtime")
 	readinessJob := workflowJobBlock(t, createWorkflow, "release_readiness")
-	privatePromotionJob := workflowJobBlock(t, createWorkflow, "promote_private_pro_runtime")
+	dispatchJob := workflowJobBlock(t, createWorkflow, "dispatch_release_convergence")
 	activationJob := workflowJobBlock(t, createWorkflow, "activate_release")
-	floatingJob := workflowJobBlock(t, createWorkflow, "promote_floating_tags")
-	helmPagesJob := workflowJobBlock(t, createWorkflow, "publish_helm_pages")
-	demoJob := workflowJobBlock(t, createWorkflow, "update_stable_demo")
+	leaseJob := workflowJobBlock(t, convergenceWorkflow, "acquire_customer_promotion_lease")
+	privatePromotionJob := workflowJobBlock(t, convergenceWorkflow, "promote_private_pro_runtime")
+	floatingJob := workflowJobBlock(t, convergenceWorkflow, "promote_floating_tags")
+	helmPagesJob := workflowJobBlock(t, convergenceWorkflow, "publish_helm_pages")
+	demoJob := workflowJobBlock(t, convergenceWorkflow, "update_stable_demo")
 
 	for _, needle := range []string{
 		`./scripts/build-release.sh "${{ inputs.version }}"`,
@@ -2051,8 +2049,13 @@ func TestReleasePipelinePromotesOneImmutableCandidate(t *testing.T) {
 			t.Fatalf("immutable readiness must exclude mutable customer state: %s", forbiddenDependency)
 		}
 	}
-	if !strings.Contains(activationJob, "- release_readiness") {
-		t.Fatal("release activation must depend on immutable release readiness")
+	for _, dependency := range []string{"- release_readiness", "- stage_private_pro_runtime"} {
+		if !strings.Contains(dispatchJob, dependency) {
+			t.Fatalf("durable convergence dispatch missing staged dependency: %s", dependency)
+		}
+	}
+	if !strings.Contains(activationJob, "- dispatch_release_convergence") {
+		t.Fatal("release activation must depend on the exact durable convergence dispatch")
 	}
 	for _, forbiddenDependency := range []string{
 		"- update_stable_demo",
@@ -2066,21 +2069,34 @@ func TestReleasePipelinePromotesOneImmutableCandidate(t *testing.T) {
 	if !strings.Contains(activationJob, `'{draft: false, make_latest: $make_latest}'`) {
 		t.Fatal("release activation must be the job that crosses the draft publication boundary")
 	}
-	for jobName, jobBlock := range map[string]string{
-		"floating-tag promotion":      floatingJob,
-		"public Helm Pages promotion": helmPagesJob,
-		"private Pro live promotion":  privatePromotionJob,
-		"stable demo deployment":      demoJob,
-	} {
-		if !strings.Contains(jobBlock, "- activate_release") ||
-			!strings.Contains(jobBlock, `needs.activate_release.result == 'success'`) {
-			t.Fatalf("%s must depend on successful public activation", jobName)
+	for _, needle := range []string{`release-activation.json`, `require_viable_convergence_owner`, `continue-on-error: true`} {
+		if !strings.Contains(activationJob, needle) {
+			t.Fatalf("release activation missing irreversible handoff contract: %s", needle)
 		}
 	}
-	for _, dependency := range []string{"- release_readiness", "- stage_private_pro_runtime", "- activate_release"} {
-		if !strings.Contains(privatePromotionJob, dependency) {
-			t.Fatalf("private Pro live promotion missing required dependency: %s", dependency)
+	for _, needle := range []string{`sort -Vr`, `superseded=true`} {
+		if !strings.Contains(leaseJob, needle) {
+			t.Fatalf("global customer-promotion lease missing monotonicity contract: %s", needle)
 		}
+	}
+	for _, needle := range []string{`refs/heads/release-customer-promotion-lock`, `--force-with-lease="${LOCK_REF}:${observed_sha}"`} {
+		if !strings.Contains(leaseScript, needle) {
+			t.Fatalf("shared global customer-promotion lease helper missing contract: %s", needle)
+		}
+	}
+	for jobName, jobBlock := range map[string]string{
+		"floating-tag promotion":     floatingJob,
+		"private Pro live promotion": privatePromotionJob,
+		"stable demo deployment":     demoJob,
+	} {
+		if !strings.Contains(jobBlock, `needs: acquire_customer_promotion_lease`) ||
+			!strings.Contains(jobBlock, `needs.acquire_customer_promotion_lease.outputs.superseded != 'true'`) {
+			t.Fatalf("%s must run under the monotonic global promotion lease", jobName)
+		}
+	}
+	if !strings.Contains(helmPagesJob, `needs: acquire_customer_promotion_lease`) ||
+		strings.Contains(helmPagesJob, `superseded != 'true'`) {
+		t.Fatal("additive Helm Pages indexing must run under the lease for every committed release")
 	}
 	if strings.Contains(demoJob, "release_id:") {
 		t.Fatal("stable demo must use activated public assets, not an unpublished release id")
@@ -2107,7 +2123,7 @@ func TestReleaseCutGatesCriticalFrontendAndWindowsRuntimeProof(t *testing.T) {
 	windowsJob := workflowJobBlock(t, workflow, "windows_install_command_smoke")
 	smokeJob := workflowJobBlock(t, workflow, "release_smoke")
 	createJob := workflowJobBlock(t, workflow, "create_release")
-	verdictJob := workflowJobBlock(t, workflow, "release_verdict")
+	verdictJob := workflowJobBlock(t, workflow, "release_commit_verdict")
 
 	for _, needle := range []string{
 		`npm --prefix frontend-modern run type-check`,
@@ -2138,7 +2154,7 @@ func TestReleaseCutGatesCriticalFrontendAndWindowsRuntimeProof(t *testing.T) {
 		t.Fatal("release assembly must fail closed on the Windows install-command smoke")
 	}
 	if !strings.Contains(verdictJob, `require_result "Windows install command smoke" "$WINDOWS_INSTALL_COMMAND_RESULT" success`) {
-		t.Fatal("definitive release verdict must report the Windows install-command smoke")
+		t.Fatal("release activation commit verdict must report the Windows install-command smoke")
 	}
 }
 
@@ -2149,7 +2165,16 @@ func TestCreateReleasePublishesPrivateProRuntime(t *testing.T) {
 	}
 	workflow := string(content)
 	stageJob := workflowJobBlock(t, workflow, "stage_private_pro_runtime")
-	promotionJob := workflowJobBlock(t, workflow, "promote_private_pro_runtime")
+	promotionContent, err := os.ReadFile(repoFile(".github", "workflows", "promote-private-pro-runtime.yml"))
+	if err != nil {
+		t.Fatalf("read promote-private-pro-runtime.yml: %v", err)
+	}
+	convergenceContent, err := os.ReadFile(repoFile(".github", "workflows", "release-convergence.yml"))
+	if err != nil {
+		t.Fatalf("read release-convergence.yml: %v", err)
+	}
+	promotionJob := workflowJobBlock(t, string(promotionContent), "promote")
+	convergencePromotionJob := workflowJobBlock(t, string(convergenceContent), "promote_private_pro_runtime")
 
 	for _, needle := range []string{
 		`needs.create_release.result == 'success'`,
@@ -2178,11 +2203,14 @@ func TestCreateReleasePublishesPrivateProRuntime(t *testing.T) {
 		}
 	}
 	for _, needle := range []string{
-		`needs.stage_private_pro_runtime.result == 'success'`,
-		`R2_PREFIX: ${{ needs.stage_private_pro_runtime.outputs.r2_prefix }}`,
+		`R2_PREFIX: ${{ inputs.r2_prefix }}`,
+		`PULSE_LEASE_SHA: ${{ inputs.pulse_lease_sha }}`,
+		`PULSE_CONVERGENCE_RUN_ID: ${{ inputs.pulse_convergence_run_id }}`,
 		`return_run_details: true`,
 		`r2_prefix: $r2_prefix`,
 		`allow_ga_prefix: $allow_ga_prefix`,
+		`pulse_lease_sha: $pulse_lease_sha`,
+		`pulse_convergence_run_id: $pulse_convergence_run_id`,
 		`repos/rcourtman/pulse-pro/actions/workflows/promote-paid-runtime-release.yml/dispatches`,
 		`promote_run_id="$(jq -r '.workflow_run_id // empty' <<<"${promote_dispatch}")"`,
 		`wait_for_workflow rcourtman/pulse-pro "${promote_run_id}" "private Pro live promotion"`,
@@ -2190,6 +2218,17 @@ func TestCreateReleasePublishesPrivateProRuntime(t *testing.T) {
 	} {
 		if !strings.Contains(promotionJob, needle) {
 			t.Fatalf("promote_private_pro_runtime missing required contract: %s", needle)
+		}
+	}
+	for _, needle := range []string{
+		`uses: ./.github/workflows/promote-private-pro-runtime.yml`,
+		`r2_prefix: ${{ inputs.r2_prefix }}`,
+		`pulse_lease_sha: ${{ needs.acquire_customer_promotion_lease.outputs.lock_sha }}`,
+		`pulse_convergence_run_id: ${{ github.run_id }}`,
+		`needs: acquire_customer_promotion_lease`,
+	} {
+		if !strings.Contains(convergencePromotionJob, needle) {
+			t.Fatalf("release convergence private Pro promotion missing required contract: %s", needle)
 		}
 	}
 	if strings.Contains(stageJob, "continue-on-error: true") || strings.Contains(promotionJob, "continue-on-error: true") {

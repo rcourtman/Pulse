@@ -6,10 +6,8 @@ run-name: Promote Floating Tags ${{ inputs.tag }}
 # by publish-docker.yml; this workflow is the sole owner of mutable aliases and
 # refuses to point them at a draft or quarantined GitHub release.
 #
-# Triggers:
-# - workflow_call: called explicitly from create-release.yml after the exact
-#   version images and release assets pass their staging checks.
-# - workflow_dispatch: manual backfill path.
+# This mutator is callable only from release-convergence.yml, which owns the
+# global customer-promotion lease. A direct dispatch would bypass that lease.
 
 on:
   workflow_call:
@@ -22,22 +20,6 @@ on:
         description: "Is this a prerelease?"
         required: true
         type: boolean
-  workflow_dispatch:
-    inputs:
-      tag:
-        description: 'Release tag (e.g., v6.0.0)'
-        required: true
-        type: string
-      prerelease:
-        description: 'Is this a prerelease?'
-        required: true
-        type: boolean
-        default: false
-      force_latest:
-        description: 'Move :latest to this tag even if it is not the highest stable (rollback)'
-        required: false
-        type: boolean
-        default: false
 
 permissions:
   contents: read
@@ -140,7 +122,6 @@ jobs:
           TAG: ${{ steps.extract.outputs.tag }}
           PRERELEASE: ${{ steps.extract.outputs.prerelease }}
           OWNER: ${{ github.repository_owner }}
-          FORCE_LATEST: ${{ github.event_name == 'workflow_dispatch' && inputs.force_latest || false }}
         run: |
           set -euo pipefail
           VERSION="${TAG#v}"
@@ -170,7 +151,7 @@ jobs:
               -t "ghcr.io/${OWNER}/${image}:${MAJOR_MINOR}"
               -t "ghcr.io/${OWNER}/${image}:${MAJOR}"
             )
-            if [ "$TAG" = "$HIGHEST_STABLE" ] || [ "${FORCE_LATEST}" = "true" ]; then
+            if [ "$TAG" = "$HIGHEST_STABLE" ]; then
               docker_hub_tags+=( -t "rcourtman/${image}:latest" )
               ghcr_tags+=( -t "ghcr.io/${OWNER}/${image}:latest" )
               echo "Promoting stable aliases for ${image} from ${TAG}, including :latest."

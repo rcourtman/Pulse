@@ -1,10 +1,9 @@
 name: Release Helm Chart to GitHub Pages
 run-name: Release Helm Chart ${{ inputs.chart_version }}
 
-# Called explicitly from create-release.yml after the exact Docker image is
-# pullable and the GitHub release is activated, or dispatched manually for a
-# governed published-release backfill. This workflow mutates the public Pages
-# index and must never advertise a draft or quarantined release.
+# Called only from release-convergence.yml while it holds the global customer-
+# promotion lease. This workflow mutates the public Pages index and must never
+# expose a direct dispatch path that bypasses that lease.
 on:
   workflow_call:
     inputs:
@@ -12,11 +11,6 @@ on:
         description: "Chart version (e.g., 6.2.0-rc.9)."
         required: true
         type: string
-  workflow_dispatch:
-    inputs:
-      chart_version:
-        description: "Chart version (e.g., 4.28.0)"
-        required: true
 
 permissions:
   contents: write

@@ -77,7 +77,7 @@ Optional environment variables:
 
 ### How It Works
 
-1. **Trigger**: Runs automatically when a GitHub release is published
+1. **Trigger**: Runs from the lease-owning Release Convergence workflow after an exact activation marker is committed
 2. **Target selection**: Stable tags deploy to `demo-stable`; prerelease tags are skipped because the public v6 preview target is retired after GA
 3. **Service identity**: Stable runs default to the `pulse` service identity
 4. **Governance check**: Validates the selected tag is reachable from the governed release branch for that version
@@ -91,10 +91,8 @@ Optional environment variables:
 
 ### Testing
 
-To test without publishing a release:
-1. Go to `Actions` tab in GitHub
-2. Select `Update Demo Server` workflow
-3. Provide a stable tag and choose `stable` or `auto`
+Use `Release Dry Run` for the governed no-mutation demo-path preflight, or run
+`Verify Demo Server` to verify the current committed stable target manually.
 
 ### Benefits
 
@@ -103,25 +101,15 @@ To test without publishing a release:
 - ✅ Validates the real server installer path on the selected target
 - ✅ Removes release-operator guesswork about which demo should move
 
-## Deploy Demo Server
+## Verify Demo Server
 
 **File**: `deploy-demo-server.yml`
 
-Manually deploys the current branch build to the stable demo environment
-without changing the governed release workflow.
-
-- Uses the same `demo-stable` environment contract as the release-driven updater
-- Joins Tailscale before SSH so governed demo targets can stay on private
-  addresses instead of requiring public runner reachability
-- Requires `DEMO_EXPECTED_HOSTNAME`, `DEMO_LOCAL_BASE_URL`, and `DEMO_PUBLIC_HEALTH_URL`
-- Supports optional `DEMO_SERVICE_NAME`, `DEMO_INSTALL_DIR`, `DEMO_TEST_PORT`,
-  `DEMO_AUTH_USER`, and `DEMO_AUTH_PASS`
-- Assumes the target service and install directory already exist on the host
-- Verifies the SSH target reports the governed expected hostname before deploy
-- Verifies that the public demo shell serves the same frontend entry asset that
-  was built and deployed
-- Uses `scripts/run_demo_public_browser_smoke.sh` to prove the public demo
-  still renders the login shell in Chromium after deploy/update verification
+The former branch-build deploy path is retired because it could replace the
+stable public demo with unreleased `main`. Its manual dispatch is now a
+non-mutating wrapper that verifies the current committed stable target. All
+stable demo writes require an exact stable tag and activation marker and run
+from `release-convergence.yml` under the global customer-promotion lease.
 
 ## Helm CI
 

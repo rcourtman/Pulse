@@ -102,6 +102,11 @@ class DevRuntimeGovernanceTest(unittest.TestCase):
             [
                 ".github/workflows/publish-docker.yml",
                 ".github/workflows/promote-floating-tags.yml",
+                ".github/workflows/promote-private-pro-runtime.yml",
+                ".github/workflows/release-convergence.yml",
+                ".github/workflows/retry-release-convergence.yml",
+                "pulse-pro:.github/workflows/promote-paid-runtime-release.yml",
+                "pulse-pro:scripts/validate_paid_runtime_distribution.py",
             ]
         )
         self.assertEqual(result["unowned_runtime_files"], [])
