@@ -618,6 +618,10 @@ only graft them onto fixture data.
    poll-provider path. `internal/monitoring/availability_poller.go` owns ICMP,
    TCP, and HTTP probes, provider health, scheduler task construction, and
    supplemental unified-resource records for saved availability targets.
+   HTTP and HTTPS probes start with `HEAD` and retry once with `GET` only when
+   the endpoint explicitly reports that `HEAD` is unsupported (`405 Method
+   Not Allowed` or `501 Not Implemented`). Other server-error responses remain
+   failed probes and must not be converted into reachability evidence.
    Failed endpoint probes are observed runtime state for that target; they
    must publish provider health and incidents without dead-lettering the
    scheduler task itself.
