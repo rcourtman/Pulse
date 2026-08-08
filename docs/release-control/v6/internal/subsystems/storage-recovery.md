@@ -4954,6 +4954,13 @@ only for a session that can reach settings, using the single
 handoff, demo organization suppression, and platform-page route carriage in
 `frontend-modern/src/App.tsx` are unchanged; nothing about backup, restore, or
 recovery routing keys off banner visibility.
+Within that block, the global update progress watcher now has its own route
+authority gate: authenticated sessions mount it only when
+`settingsCapabilities.systemSettingsRead` mirrors `RequireAdmin` plus
+`settings:read` on `/api/updates/status`, while auth-free installations keep
+the watcher because the route remains reachable. This shell-only gate does not
+alter recovery settings admission, backup polling, export/import authority, or
+any persisted recovery state.
 
 The persisted `reportBranding` object remains adjacent tenant/runtime
 configuration rather than storage inventory or recovery state. The

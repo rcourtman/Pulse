@@ -73,6 +73,7 @@ import {
   type PrimaryPlatformNavId,
 } from '@/features/platformNavigation/platformNavigationModel';
 import type { Resource } from '@/types/resource';
+import type { SecurityStatusSettingsCapabilities } from '@/types/config';
 
 function isPublicRoutePath(pathname: string): boolean {
   // Public routes must be viewable without authentication.
@@ -151,6 +152,27 @@ export function getDefaultWorkspaceRoute(
   const navId = selectFirstVisiblePrimaryPlatformNavigationId(visibility);
   if (navId) return PRIMARY_INFRASTRUCTURE_ROUTE_BY_ID[navId];
   return hasSettingsAccess ? '/settings/infrastructure' : '/alerts';
+}
+
+/**
+ * Mirrors the RequireAdmin + settings:read gate on /api/updates/status.
+ * Auth-free installations remain allowed because RequireAdmin intentionally
+ * leaves their update routes reachable even though security status is public.
+ */
+export function sessionCanReadUpdateStatus(
+  status:
+    | {
+        requiresAuth: boolean;
+        settingsCapabilities?: Pick<
+          SecurityStatusSettingsCapabilities,
+          'systemSettingsRead'
+        > | null;
+      }
+    | null
+    | undefined,
+): boolean {
+  if (!status || !status.requiresAuth) return true;
+  return status.settingsCapabilities?.systemSettingsRead === true;
 }
 
 async function preloadAppShellRoutes() {
@@ -306,6 +328,9 @@ function App() {
     const platformNavigationVisibility = () => platformNavigationAdmission().visibility;
     const hasSettingsAccess = createMemo(() =>
       sessionHasSettingsAccess(runtime.securityStatus()?.tokenScopes),
+    );
+    const canReadUpdateStatus = createMemo(() =>
+      sessionCanReadUpdateStatus(runtime.securityStatus()),
     );
     let appShellRoutePreloadCleanup: (() => void) | undefined;
     let appShellRoutesPreloadScheduled = false;
@@ -512,7 +537,9 @@ function App() {
                         <WhatsNewCard />
                         <GitHubStarBanner />
                         <BusinessEstateCard />
-                        <GlobalUpdateProgressWatcher />
+                        <Show when={canReadUpdateStatus()}>
+                          <GlobalUpdateProgressWatcher />
+                        </Show>
                       </Show>
                       {/* Main layout container - flexbox to allow AI panel to push content */}
                       <div class="flex h-screen overflow-hidden">

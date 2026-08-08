@@ -4998,6 +4998,12 @@ likewise server-updater shell chrome, not assistant surface: its in-progress
 stage vocabulary mirrors the backend updater pipeline (including the
 `restoring` stage emitted by update rollback), and assistant state, drawer
 ownership, and AI runtime surfaces must not key off those update stages.
+On authenticated installations that watcher also mounts only when the served
+`settingsCapabilities.systemSettingsRead` value mirrors the update-status
+route's `RequireAdmin` plus `settings:read` gate. Auth-free installations keep
+the watcher because those routes remain reachable there. Neither branch may
+become an Assistant capability, provider-readiness signal, or AI bootstrap
+probe.
 That same shared shell boundary must respect blocking modal ownership.
 `frontend-modern/src/App.tsx` and `frontend-modern/src/AppLayout.tsx` may use
 the shared dialog runtime to hide the closed assistant launcher and close the

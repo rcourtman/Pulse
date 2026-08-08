@@ -3286,6 +3286,12 @@ global banner block in `frontend-modern/src/App.tsx` (security, demo,
 commercial migration, update, what's-new, GitHub star) must be gated on the
 same predicate because those banners deep-link into settings destinations a
 scope-limited session cannot open.
+The global update progress watcher inside that block has a narrower,
+non-commercial authority boundary: authenticated sessions mount it only when
+`settingsCapabilities.systemSettingsRead` mirrors the update-status route's
+`RequireAdmin` plus `settings:read` gate, while auth-free installations keep
+it because their update routes remain reachable. That nested gate must not
+depend on plan, entitlement, organization, checkout, or upgrade-prompt state.
 
 The authenticated shell may project tenant-local application branding only
 through the narrow `GET /api/runtime/branding` response after normal session

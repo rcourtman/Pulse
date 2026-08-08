@@ -11037,15 +11037,18 @@ func TestContract_SecurityStatusSystemSettingsReadTracksSettingsReadScope(t *tes
 					payload.SettingsCapabilities.SystemSettingsRead, tc.want)
 			}
 
-			// The capability is only honest if the routes behind the tabs agree.
-			probe := httptest.NewRequest(http.MethodGet, "/api/system/settings", nil)
-			probe.Header.Set("X-API-Token", rawToken)
-			probeRec := httptest.NewRecorder()
-			router.Handler().ServeHTTP(probeRec, probe)
-			refused := probeRec.Code == http.StatusForbidden
-			if refused == tc.want {
-				t.Fatalf("GET /api/system/settings = %d, which contradicts systemSettingsRead=%v",
-					probeRec.Code, tc.want)
+			// The capability is only honest if the routes behind the System tabs
+			// and the global update watcher agree with it.
+			for _, path := range []string{"/api/system/settings", "/api/updates/status"} {
+				probe := httptest.NewRequest(http.MethodGet, path, nil)
+				probe.Header.Set("X-API-Token", rawToken)
+				probeRec := httptest.NewRecorder()
+				router.Handler().ServeHTTP(probeRec, probe)
+				refused := probeRec.Code == http.StatusForbidden
+				if refused == tc.want {
+					t.Fatalf("GET %s = %d, which contradicts systemSettingsRead=%v",
+						path, probeRec.Code, tc.want)
+				}
 			}
 		})
 	}

@@ -2017,3 +2017,17 @@ Pinned by `auth_denial_signal_test.go`: below-threshold refusals stay at debug,
 the escalation fires exactly once per window, a closed window re-arms it, a
 username aggregates across addresses, separate callers keep separate budgets,
 and the tracked set stays bounded.
+
+### Global update polling follows the route's served authority
+
+`/api/updates/status` remains protected by `RequireAdmin` plus
+`settings:read`. The authenticated app shell now mounts its five-second
+fallback watcher only when `/api/security/status` serves
+`settingsCapabilities.systemSettingsRead=true`, the capability derived from
+that same admin-and-scope predicate. Authenticated viewers therefore do not
+generate a perpetual stream of expected 403 responses. Auth-free installations
+remain an explicit exception: `requiresAuth=false` keeps the watcher mounted
+because `RequireAdmin` intentionally leaves the update route reachable there.
+The frontend behavior is pinned by `App.architecture.test.ts`, and
+`TestContract_SecurityStatusSystemSettingsReadTracksSettingsReadScope` pins the
+capability against both `/api/system/settings` and `/api/updates/status`.

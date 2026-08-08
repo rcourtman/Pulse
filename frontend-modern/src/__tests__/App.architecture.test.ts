@@ -1,7 +1,11 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { getDefaultWorkspaceRoute, resolvePlatformNavigationAdmission } from '@/App';
+import {
+  getDefaultWorkspaceRoute,
+  resolvePlatformNavigationAdmission,
+  sessionCanReadUpdateStatus,
+} from '@/App';
 import appSource from '@/App.tsx?raw';
 import appLayoutSource from '@/AppLayout.tsx?raw';
 import appRuntimeContextSource from '@/contexts/appRuntime.ts?raw';
@@ -105,6 +109,45 @@ describe('App platform navigation admission', () => {
     expect(Object.values(admission.visibility)).toEqual([false, false, false, false, false, false]);
     expect(getDefaultWorkspaceRoute(admission.visibility, true)).toBe('/settings/infrastructure');
     expect(getDefaultWorkspaceRoute(admission.visibility, false)).toBe('/alerts');
+  });
+});
+
+describe('Global update progress authorization', () => {
+  it('keeps the watcher available when update routes are open without authentication', () => {
+    expect(
+      sessionCanReadUpdateStatus({
+        requiresAuth: false,
+        settingsCapabilities: undefined,
+      }),
+    ).toBe(true);
+  });
+
+  it('follows the served system-settings capability on authenticated installations', () => {
+    expect(
+      sessionCanReadUpdateStatus({
+        requiresAuth: true,
+        settingsCapabilities: {
+          systemSettingsRead: true,
+        },
+      }),
+    ).toBe(true);
+    expect(
+      sessionCanReadUpdateStatus({
+        requiresAuth: true,
+        settingsCapabilities: {
+          systemSettingsRead: false,
+        },
+      }),
+    ).toBe(false);
+  });
+
+  it('fails closed when an authenticated status omits the route capability', () => {
+    expect(
+      sessionCanReadUpdateStatus({
+        requiresAuth: true,
+        settingsCapabilities: undefined,
+      }),
+    ).toBe(false);
   });
 });
 
@@ -357,6 +400,18 @@ describe('App architecture', () => {
     // the never-emitted legacy 'installing' stage must not return.
     expect(appSource).not.toContain("'checking',");
     expect(appSource).not.toContain("'installing'");
+  });
+
+  it('mounts the update progress watcher only behind its route capability', () => {
+    expect(appSource).toContain('sessionCanReadUpdateStatus(runtime.securityStatus())');
+    expect(appSource).toContain('return status.settingsCapabilities?.systemSettingsRead === true;');
+    expect(appSource).toContain('if (!status || !status.requiresAuth) return true;');
+
+    const watcherGate = appSource.indexOf('<Show when={canReadUpdateStatus()}>');
+    const watcherMount = appSource.indexOf('<GlobalUpdateProgressWatcher />');
+    expect(watcherGate).toBeGreaterThan(-1);
+    expect(watcherMount).toBeGreaterThan(watcherGate);
+    expect(appSource.split('<GlobalUpdateProgressWatcher />')).toHaveLength(2);
   });
 
   it('keeps integration browser proofs off the retired AI route', () => {
