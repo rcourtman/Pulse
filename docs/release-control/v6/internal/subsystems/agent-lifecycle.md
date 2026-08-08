@@ -701,6 +701,23 @@ installer path. The `agentDoctor` route key is canonical; the older
 Doctor must not replace the canonical `/api/connections` fleet projection used
 by Infrastructure.
 
+Authentication repair is a distinct lifecycle handoff, not a successful
+upgrade. When a reported host still names a token record that is absent from
+the server inventory or has expired, Agent Doctor must raise a critical
+credential reason and may offer `repair_authentication` only for a recognized,
+unambiguous local runtime. The copied Unix repair command mints a fresh scoped
+agent credential and transports it through an ephemeral `--token-file`; an
+ordinary version-only Unix update stays tokenless and recovers the installed
+credential from installer-owned state. If two different host agent IDs report
+the same non-empty machine ID and equivalent hostname, both installations stay
+visible as distinct fleet rows with peer identity/version evidence. Pulse must
+not collapse them into one apparent agent or choose one generic local service:
+authentication and upgrade handoffs fail closed until the duplicate
+installation is resolved or an installation-specific path exists. Finally,
+local process health cannot override server authentication: a definitive
+registration 401/403 makes `scripts/install.sh` complete with the non-zero
+`auth_rejected` result instead of printing installation or upgrade success.
+
 Agent lifecycle and fleet-operation surfaces may consume
 `POST /api/actions/plan` for resource capability planning, but the action plan
 contract remains API-owned through `internal/api/actions.go`,

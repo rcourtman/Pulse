@@ -90,6 +90,7 @@ const (
 	fleetCredentialRotationExpired  = "expired"
 	fleetCredentialRotationExpiring = "expiring"
 	fleetCredentialRotationHealthy  = "healthy"
+	fleetCredentialRotationInvalid  = "invalid"
 	fleetCredentialRotationNone     = "not-applicable"
 	fleetCredentialStatusExpired    = "expired"
 	fleetCredentialStatusExpiring   = "expiring"
@@ -107,21 +108,22 @@ const (
 // from the handler makes the aggregator unit-testable without spinning up a
 // monitor or persistence layer.
 type aggregatorInputs struct {
-	pveInstances         []config.PVEInstance
-	pbsInstances         []config.PBSInstance
-	pmgInstances         []config.PMGInstance
-	vmwareInstances      []config.VMwareVCenterInstance
-	vmwareSummaries      map[string]monitoring.VMwareConnectionSummary
-	truenasInstances     []config.TrueNASInstance
-	truenasSummaries     map[string]monitoring.TrueNASConnectionSummary
-	availabilityTargets  []config.AvailabilityTarget
-	availabilityStatuses map[string]monitoring.AvailabilityProbeStatus
-	hosts                []models.Host
-	apiTokens            []config.APITokenRecord
-	agentDesiredConfigs  map[string]connectionAgentDesiredConfig
-	instanceHealth       map[string]monitoring.InstanceHealth
-	expectedAgentVersion string
-	now                  time.Time
+	pveInstances             []config.PVEInstance
+	pbsInstances             []config.PBSInstance
+	pmgInstances             []config.PMGInstance
+	vmwareInstances          []config.VMwareVCenterInstance
+	vmwareSummaries          map[string]monitoring.VMwareConnectionSummary
+	truenasInstances         []config.TrueNASInstance
+	truenasSummaries         map[string]monitoring.TrueNASConnectionSummary
+	availabilityTargets      []config.AvailabilityTarget
+	availabilityStatuses     map[string]monitoring.AvailabilityProbeStatus
+	hosts                    []models.Host
+	apiTokens                []config.APITokenRecord
+	agentTokenInventoryKnown bool
+	agentDesiredConfigs      map[string]connectionAgentDesiredConfig
+	instanceHealth           map[string]monitoring.InstanceHealth
+	expectedAgentVersion     string
+	now                      time.Time
 
 	// pbsReportedNodeNames maps a configured PBS instance name to the hostname
 	// that node reports about itself. Reported identity outranks configured
@@ -175,6 +177,7 @@ func buildConnections(in aggregatorInputs) []Connection {
 	for _, target := range in.availabilityTargets {
 		out = append(out, buildAvailabilityConnection(target, in.availabilityStatuses[target.ID], now))
 	}
+	agentTokenRecords := connectionAgentTokenRecordsByID(in.apiTokens)
 	for _, host := range in.hosts {
 		// Integration-monitored machines (vSphere ESXi hosts, TrueNAS boxes)
 		// are represented by their owning platform connection; fabricating an
@@ -184,7 +187,7 @@ func buildConnections(in aggregatorInputs) []Connection {
 			continue
 		}
 		desiredConfig := connectionAgentDesiredConfigForHost(in.agentDesiredConfigs, host.ID)
-		out = append(out, buildAgentConnection(host, in.expectedAgentVersion, now, desiredConfig))
+		out = append(out, buildAgentConnection(host, in.expectedAgentVersion, now, desiredConfig, agentTokenRecords[strings.TrimSpace(host.TokenID)], in.agentTokenInventoryKnown))
 	}
 
 	sort.Slice(out, func(i, j int) bool {
@@ -522,7 +525,7 @@ func buildAvailabilityConnection(target config.AvailabilityTarget, status monito
 // buildAgentConnection derives a connection row from an agent Host record.
 // Agents have no pause toggle and no scope — reports are all-or-nothing —
 // so capability flags are off.
-func buildAgentConnection(host models.Host, expectedAgentVersion string, now time.Time, desiredConfig *connectionAgentDesiredConfig) Connection {
+func buildAgentConnection(host models.Host, expectedAgentVersion string, now time.Time, desiredConfig *connectionAgentDesiredConfig, tokenRecord *config.APITokenRecord, tokenInventoryKnown bool) Connection {
 	name := host.DisplayName
 	if strings.TrimSpace(name) == "" {
 		name = host.Hostname
@@ -583,8 +586,11 @@ func buildAgentConnection(host models.Host, expectedAgentVersion string, now tim
 		agentID:              strings.TrimSpace(host.ID),
 		agentTokenID:         strings.TrimSpace(host.TokenID),
 	}, now)
+	if tokenInventoryKnown && agentCredentialRecordInvalid(host, tokenRecord, now) {
+		conn.Fleet.CredentialStatus = fleetStateInvalid
+	}
 	conn.Fleet.ConfigDrift = connectionFleetAgentConfigDrift(conn, desiredConfig, host.AppliedConfig)
-	conn.Fleet.CredentialHealth = connectionFleetAgentCredentialHealth(conn, host, now)
+	conn.Fleet.CredentialHealth = connectionFleetAgentCredentialHealth(conn, host, tokenRecord, tokenInventoryKnown, now)
 	conn.Fleet.CommandPolicy = connectionFleetAgentCommandPolicy(conn, host, desiredConfig)
 	conn.Fleet.Rollout = connectionFleetRollout(conn)
 	return conn
@@ -994,12 +1000,34 @@ func connectionFleetCredentialHealthNotApplicable() *ConnectionFleetCredentialHe
 	}
 }
 
-func connectionFleetAgentCredentialHealth(conn Connection, host models.Host, now time.Time) *ConnectionFleetCredentialHealth {
+func agentCredentialRecordInvalid(host models.Host, record *config.APITokenRecord, now time.Time) bool {
+	if strings.TrimSpace(host.TokenID) == "" {
+		return false
+	}
+	if record == nil {
+		return true
+	}
+	return record.ExpiresAt != nil && !record.ExpiresAt.After(now)
+}
+
+func connectionFleetAgentCredentialHealth(conn Connection, host models.Host, record *config.APITokenRecord, tokenInventoryKnown bool, now time.Time) *ConnectionFleetCredentialHealth {
 	kind := fleetStateUnknown
 	if strings.TrimSpace(host.TokenID) != "" || strings.TrimSpace(host.TokenName) != "" || strings.TrimSpace(host.TokenHint) != "" {
 		kind = fleetCredentialKindAgentToken
 	}
-	return connectionFleetCredentialHealth(conn, kind, host.TokenLastUsedAt, nil, now)
+	lastUsedAt := host.TokenLastUsedAt
+	var expiresAt *time.Time
+	if record != nil {
+		lastUsedAt = record.LastUsedAt
+		expiresAt = record.ExpiresAt
+	}
+	health := connectionFleetCredentialHealth(conn, kind, lastUsedAt, expiresAt, now)
+	if tokenInventoryKnown && strings.TrimSpace(host.TokenID) != "" && record == nil {
+		health.Status = fleetStateInvalid
+		health.Rotation = fleetCredentialRotationInvalid
+		health.LastVerifiedAt = nil
+	}
+	return health
 }
 
 func connectionFleetCommandPolicy(conn Connection) *ConnectionFleetCommandPolicy {

@@ -620,6 +620,102 @@ func TestBuildConnections_AgentFleetGovernance(t *testing.T) {
 	}
 }
 
+func TestBuildConnections_AgentCredentialInventoryDrivesFleetHealth(t *testing.T) {
+	now := time.Date(2026, 8, 9, 12, 0, 0, 0, time.UTC)
+	lastUsedAt := now.Add(-time.Minute)
+	expiredAt := now.Add(-time.Hour)
+
+	tests := []struct {
+		name               string
+		tokenID            string
+		tokens             []config.APITokenRecord
+		wantStatus         string
+		wantHealthStatus   string
+		wantHealthRotation string
+	}{
+		{
+			name:               "active",
+			tokenID:            "active-token",
+			tokens:             []config.APITokenRecord{{ID: "active-token", LastUsedAt: &lastUsedAt}},
+			wantStatus:         fleetStateVerified,
+			wantHealthStatus:   fleetStateVerified,
+			wantHealthRotation: fleetCredentialRotationHealthy,
+		},
+		{
+			name:               "missing or revoked",
+			tokenID:            "missing-token",
+			wantStatus:         fleetStateInvalid,
+			wantHealthStatus:   fleetStateInvalid,
+			wantHealthRotation: fleetCredentialRotationInvalid,
+		},
+		{
+			name:    "expired",
+			tokenID: "expired-token",
+			tokens: []config.APITokenRecord{{
+				ID:        "expired-token",
+				ExpiresAt: &expiredAt,
+			}},
+			wantStatus:         fleetStateInvalid,
+			wantHealthStatus:   fleetCredentialStatusExpired,
+			wantHealthRotation: fleetCredentialRotationExpired,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			connections := buildConnections(aggregatorInputs{
+				apiTokens:                test.tokens,
+				agentTokenInventoryKnown: true,
+				hosts: []models.Host{{
+					ID:           "agent-auth",
+					Hostname:     "agent-auth",
+					Status:       "online",
+					LastSeen:     now,
+					AgentVersion: "6.2.0",
+					TokenID:      test.tokenID,
+				}},
+				expectedAgentVersion: "6.2.0",
+				now:                  now,
+			})
+			if len(connections) != 1 {
+				t.Fatalf("connections = %d, want 1", len(connections))
+			}
+			fleet := connections[0].Fleet
+			if fleet.CredentialStatus != test.wantStatus {
+				t.Fatalf("credential status = %q, want %q", fleet.CredentialStatus, test.wantStatus)
+			}
+			if fleet.CredentialHealth == nil ||
+				fleet.CredentialHealth.Status != test.wantHealthStatus ||
+				fleet.CredentialHealth.Rotation != test.wantHealthRotation {
+				t.Fatalf("credential health = %+v, want status %q rotation %q", fleet.CredentialHealth, test.wantHealthStatus, test.wantHealthRotation)
+			}
+		})
+	}
+}
+
+func TestBuildConnections_UnknownCredentialInventoryDoesNotInventInvalidState(t *testing.T) {
+	now := time.Date(2026, 8, 9, 12, 0, 0, 0, time.UTC)
+	connections := buildConnections(aggregatorInputs{
+		hosts: []models.Host{{
+			ID:           "agent-mock",
+			Hostname:     "agent-mock",
+			Status:       "online",
+			LastSeen:     now,
+			AgentVersion: "6.2.0",
+			TokenID:      "synthetic-token",
+		}},
+		expectedAgentVersion: "6.2.0",
+		now:                  now,
+	})
+
+	if len(connections) != 1 {
+		t.Fatalf("connections = %d, want 1", len(connections))
+	}
+	if got := connections[0].Fleet.CredentialStatus; got != fleetStateVerified {
+		t.Fatalf("credential status = %q, want %q when inventory is unavailable", got, fleetStateVerified)
+	}
+}
+
 func TestBuildConnections_AgentWithoutManagedDesiredConfigDoesNotReportRolloutPending(t *testing.T) {
 	now := time.Now()
 	in := aggregatorInputs{

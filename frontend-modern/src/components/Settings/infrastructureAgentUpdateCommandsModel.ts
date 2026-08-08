@@ -32,6 +32,7 @@ export type InfrastructureAgentDoctorTarget = Omit<
   reasons: AgentFleetDiagnosticReason[];
   evidence: string[];
   needsUpdate: boolean;
+  needsCredentialRepair: boolean;
   commandPlatform: AgentCommandPlatform | null;
   commandBlockedReason?: string;
   updaterLabel?: string;
@@ -311,6 +312,22 @@ const ledgerFallbackReasons = (
       break;
   }
 
+  if (
+    connection.state !== 'unauthorized' &&
+    (connection.fleet?.credentialStatus === 'invalid' ||
+      connection.fleet?.credentialHealth?.status === 'expired')
+  ) {
+    reasons.push(
+      fallbackReason(
+        'ledger_credential_invalid',
+        'critical',
+        connection.fleet?.credentialHealth?.status === 'expired'
+          ? 'The agent credential has expired.'
+          : 'The agent credential is missing or no longer valid on this Pulse server.',
+      ),
+    );
+  }
+
   if (connection.agentUpdate?.state === 'error') {
     reasons.push(
       fallbackReason(
@@ -482,7 +499,13 @@ const doctorTargetFromBinding = (
       ? Array.from(
           new Map(
             [
-              ...fallbackReasons.filter((reason) => reason.code === 'command_channel_disconnected'),
+              ...fallbackReasons.filter((reason) =>
+                [
+                  'command_channel_disconnected',
+                  'ledger_credential_invalid',
+                  'ledger_unauthorized',
+                ].includes(reason.code),
+              ),
               ...(diagnostic.reasons ?? []),
             ].map((reason) => [reason.code, reason]),
           ).values(),
@@ -514,8 +537,22 @@ const doctorTargetFromBinding = (
   }
 
   const commandPlatform = resolveKnownAgentCommandPlatform(connection.agentIdentity?.platform);
+  const needsCredentialRepair = reasons.some((reason) =>
+    [
+      'agent_credential_missing',
+      'agent_credential_expired',
+      'ledger_credential_invalid',
+      'ledger_unauthorized',
+    ].includes(reason.code),
+  );
+  const hasDuplicateInstallation = reasons.some(
+    (reason) => reason.code === 'duplicate_host_agent_installation',
+  );
   let commandBlockedReason: string | undefined;
-  if (needsUpdate && !expectedVersion) {
+  if ((needsUpdate || needsCredentialRepair) && hasDuplicateInstallation) {
+    commandBlockedReason =
+      'Multiple host-installed Pulse Agents are reporting from this machine. Pulse cannot safely choose a local service; inspect and remove or explicitly update the duplicate installation first.';
+  } else if (needsUpdate && !expectedVersion) {
     commandBlockedReason = 'No supported target version is available, so Pulse will not guess.';
   } else if (needsUpdate && !parseAgentVersion(expectedVersion)) {
     commandBlockedReason = 'The reported target version is not a supported release version.';
@@ -545,6 +582,22 @@ const doctorTargetFromBinding = (
     commandBlockedReason = 'The diagnostic service did not offer a supported update repair.';
   }
 
+  const hasStructuredCredentialRepair = Boolean(
+    diagnostic?.repairActions?.some(
+      (action) => action.code === 'repair_authentication' && action.supported,
+    ),
+  );
+  if (
+    needsCredentialRepair &&
+    diagnosticsAvailable &&
+    diagnostic &&
+    !hasStructuredCredentialRepair &&
+    !commandBlockedReason
+  ) {
+    commandBlockedReason =
+      'The diagnostic service did not identify a safe local authentication repair path.';
+  }
+
   const profileLabel =
     diagnostic?.profileName?.trim() || diagnostic?.profileId?.trim() || undefined;
   const profileVersionLabel = diagnosticProfileVersionLabel(diagnostic);
@@ -563,6 +616,7 @@ const doctorTargetFromBinding = (
     reasons,
     evidence: evidenceFor(connection, diagnostic),
     needsUpdate,
+    needsCredentialRepair,
     commandPlatform,
     commandBlockedReason,
     updaterLabel: updater.label,
@@ -626,6 +680,7 @@ const diagnosticOnlyDoctorTarget = (
     reasons: diagnostic.reasons ?? [],
     evidence: evidenceFor(undefined, diagnostic),
     needsUpdate: false,
+    needsCredentialRepair: false,
     commandPlatform: resolveKnownAgentCommandPlatform(diagnostic.platform),
     profileLabel: diagnostic.profileName?.trim() || diagnostic.profileId?.trim() || undefined,
     profileVersionLabel: diagnosticProfileVersionLabel(diagnostic),

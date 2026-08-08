@@ -4874,6 +4874,38 @@ func TestInstallSHRegistrationRetryWindowOutlastsFirstReportCycle(t *testing.T) 
 	}
 }
 
+func TestInstallSHRejectedCredentialPreventsSuccessfulCompletion(t *testing.T) {
+	completeFlow := extractInstallShellFunction(t, "complete_installation_flow")
+	script := `
+		EXIT_AUTH_REJECTED=18
+		UPGRADE_MODE="true"
+		save_connection_info() { :; }
+		verify_agent_started() { return 2; }
+		report_proxmox_registration_outcome() { printf 'unexpected-proxmox-report\n'; }
+		log_info() { printf 'INFO:%s\n' "$*"; }
+		log_warn() { printf 'WARN:%s\n' "$*"; }
+		log_error() { printf 'ERROR:%s\n' "$*"; }
+		json_event() { printf 'JSON:%s:%s:%s:%s\n' "$1" "$2" "$3" "${4:-}"; }
+` + completeFlow + `
+		complete_installation_flow "/tmp/state" "INSTALL-SUCCESS" "UPGRADE-SUCCESS" "logs"
+		printf 'unreachable\n'
+	`
+	out, err := exec.Command("bash", "-c", script).CombinedOutput()
+	var exitErr *exec.ExitError
+	if !errors.As(err, &exitErr) || exitErr.ExitCode() != 18 {
+		t.Fatalf("rejected credential exit = %v, want 18\n%s", err, out)
+	}
+	output := string(out)
+	if !strings.Contains(output, "JSON:complete:auth_rejected") || !strings.Contains(output, "authentication failed") {
+		t.Fatalf("rejected credential did not produce actionable non-success completion:\n%s", output)
+	}
+	for _, forbidden := range []string{"INSTALL-SUCCESS", "UPGRADE-SUCCESS", "unreachable", "unexpected-proxmox-report"} {
+		if strings.Contains(output, forbidden) {
+			t.Fatalf("rejected credential emitted forbidden success output %q:\n%s", forbidden, output)
+		}
+	}
+}
+
 // TestInstallSHSurfacesBlockedProxmoxRegistration verifies the installer reads
 // the agent's proxmox-<type>-registration-blocked marker and prints the denial
 // in its own output instead of leaving it buried in the agent journal (#1644).

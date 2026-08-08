@@ -3058,6 +3058,15 @@ gets skipped the time it is real. Token-bearing
 copy-paste commands must pass credentials through ephemeral `--token-file`
 transport and leave the installed service configured with the persistent
 runtime token file, never a raw `--token` process argument.
+The same rule governs credential repair after a server restore, token
+revocation, or expiry: the Unix repair handoff must run the normal installer
+preflight, pass the fresh scoped credential through a temporary mode-0600 token
+file, and invoke update mode without exposing the token in the agent service
+arguments. Installer completion is authenticated completion, not merely local
+process health. When the post-start registration lookup returns 401 or 403,
+`scripts/install.sh` must emit the structured `auth_rejected` completion and
+exit 18; it must not print the normal install/upgrade success message or report
+the Proxmox registration outcome as though the agent were enrolled.
 That Windows installer-owned state must also be cleared after successful
 PowerShell uninstall, so a removed installation does not leave stale ProgramData
 identity or transport continuity behind for later lifecycle commands.

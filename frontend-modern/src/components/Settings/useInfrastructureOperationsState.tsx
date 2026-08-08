@@ -2,6 +2,7 @@ import { createContext, useContext, type ParentComponent } from 'solid-js';
 import type { Connection } from '@/api/connections';
 import {
   buildPowerShellInstallScriptBootstrap,
+  buildUnixAgentInstallCommand,
   buildWindowsAgentInstallCommand,
   powerShellQuote,
   resolveAgentCommandPlatform,
@@ -186,6 +187,7 @@ export const useInfrastructureOperationsState = (
     connection: Connection,
     installFlags: string[] = [],
     platformOverride?: AgentPlatform,
+    replaceCredential = false,
   ) => {
     const token = resolvedCommandToken();
     const url = installState.selectedAgentUrl();
@@ -216,6 +218,20 @@ export const useInfrastructureOperationsState = (
       });
     }
 
+    if (replaceCredential) {
+      const extraArgs = ['--update', ...installFlags];
+      if (commandsEnabled || installState.enableCommands()) {
+        extraArgs.push('--enable-commands');
+      }
+      return buildUnixAgentInstallCommand({
+        baseUrl: url,
+        token,
+        insecure: installState.insecureMode(),
+        caCertPath: selectedCustomCaPath(),
+        extraArgs,
+      });
+    }
+
     let command = `curl ${getCurlFlags()}${getShellCustomCaCurlFlag()} ${shellQuoteArg(`${url}/install.sh`)} | bash -s -- --update --url ${shellQuoteArg(url)} --non-interactive`;
     if (installFlags.length > 0) {
       command += ` ${installFlags.join(' ')}`;
@@ -233,9 +249,14 @@ export const useInfrastructureOperationsState = (
   const getAgentConnectionUpgradeCommandRequiresToken = (
     connection: Connection,
     platformOverride?: AgentPlatform,
+    replaceCredential = false,
   ) =>
-    (platformOverride ?? getConnectionUpgradePlatform(connection)) === 'windows' &&
-    installState.requiresToken();
+    installState.requiresToken() &&
+    ((platformOverride ?? getConnectionUpgradePlatform(connection)) === 'windows' ||
+      replaceCredential ||
+      connection.state === 'unauthorized' ||
+      connection.fleet?.credentialStatus === 'invalid' ||
+      connection.fleet?.credentialHealth?.status === 'expired');
 
   return {
     ...installState,

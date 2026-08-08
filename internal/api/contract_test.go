@@ -16216,6 +16216,9 @@ func TestContract_LedgerDropsIntegrationMonitoredMachines(t *testing.T) {
 func TestContract_AgentDefaultDesiredConfigDoesNotCreateRolloutAttention(t *testing.T) {
 	now := time.Date(2026, 5, 14, 10, 30, 0, 0, time.UTC)
 	connections := buildConnections(aggregatorInputs{
+		apiTokens: []config.APITokenRecord{{
+			ID: "token-1",
+		}},
 		hosts: []models.Host{
 			{
 				ID:              "host-1",

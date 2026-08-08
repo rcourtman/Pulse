@@ -76,7 +76,9 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
 ) => {
   const operations = useInfrastructureOperationsContext();
   const summary = createMemo(() => summarizeInfrastructureAgentDoctorTargets(props.targets));
-  const anyTargetNeedsUpdate = createMemo(() => props.targets.some((target) => target.needsUpdate));
+  const anyTargetNeedsRepair = createMemo(() =>
+    props.targets.some((target) => target.needsUpdate || target.needsCredentialRepair),
+  );
   const summaryChips = createMemo(() => {
     const counts = summary();
     const order: { status: InfrastructureAgentDoctorStatus; count: number }[] = [
@@ -92,30 +94,56 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
   const commandTargets = createMemo(() =>
     props.targets.filter(
       (target) =>
-        target.needsUpdate &&
+        (target.needsUpdate || target.needsCredentialRepair) &&
         Boolean(target.connection) &&
         Boolean(target.commandPlatform) &&
         !target.commandBlockedReason,
     ),
   );
-  const tokenGatedTargetCount = createMemo(
-    () =>
-      commandTargets().filter(
-        (target) =>
-          target.connection &&
-          operations.getAgentConnectionUpgradeCommandRequiresToken(
-            target.connection,
-            target.commandPlatform ?? undefined,
-          ),
-      ).length,
+  const tokenGatedTargets = createMemo(() =>
+    commandTargets().filter(
+      (target) =>
+        target.connection &&
+        operations.getAgentConnectionUpgradeCommandRequiresToken(
+          target.connection,
+          target.commandPlatform ?? undefined,
+          target.needsCredentialRepair,
+        ),
+    ),
   );
-  const commandReadyForTarget = (target: InfrastructureAgentDoctorTarget) =>
-    Boolean(target.connection && target.commandPlatform && !target.commandBlockedReason) &&
-    (!operations.getAgentConnectionUpgradeCommandRequiresToken(
+  const tokenGatedTargetCount = createMemo(() => tokenGatedTargets().length);
+  const [selectedTokenTargetKey, setSelectedTokenTargetKey] = createSignal('');
+  const [tokenMintedForTargetKey, setTokenMintedForTargetKey] = createSignal('');
+  const selectedTokenTarget = createMemo(
+    () =>
+      tokenGatedTargets().find((target) => target.key === selectedTokenTargetKey()) ??
+      tokenGatedTargets()[0],
+  );
+  const commandRequiresToken = (target: InfrastructureAgentDoctorTarget) =>
+    operations.getAgentConnectionUpgradeCommandRequiresToken(
       target.connection!,
       target.commandPlatform!,
-    ) ||
-      operations.commandsUnlocked());
+      target.needsCredentialRepair,
+    );
+  const commandReadyForTarget = (target: InfrastructureAgentDoctorTarget) => {
+    if (!target.connection || !target.commandPlatform || target.commandBlockedReason) return false;
+    if (!commandRequiresToken(target)) return true;
+    if (!operations.commandsUnlocked()) return false;
+    return tokenGatedTargetCount() === 1 || tokenMintedForTargetKey() === target.key;
+  };
+
+  const generateRepairToken = async () => {
+    const target = selectedTokenTarget();
+    if (!target) return;
+    const previousToken = operations.currentToken();
+    operations.setEnableCommands(Boolean(target.connection?.agentIdentity?.commandsEnabled));
+    await operations.handleGenerateToken();
+    const generatedToken = operations.currentToken();
+    if (generatedToken && generatedToken !== previousToken) {
+      setTokenMintedForTargetKey(target.key);
+      setSelectedTokenTargetKey(target.key);
+    }
+  };
 
   const copyCommand = async (command: string) => {
     const success = await copyToClipboard(command);
@@ -260,11 +288,11 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
           </Button>
         </section>
 
-        <Show when={anyTargetNeedsUpdate()}>
+        <Show when={anyTargetNeedsRepair()}>
           <div class="rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-xs leading-5 text-blue-900 dark:border-blue-800 dark:bg-blue-950/30 dark:text-blue-100">
-            Update commands are host-local: copy one to the affected machine to update its Pulse
-            Agent from this server. They do not update the Pulse server runtime and Pulse does not
-            run them remotely.
+            Update and authentication-repair commands are host-local: copy one to the affected
+            machine to repair its Pulse Agent from this server. They do not update the Pulse server
+            runtime and Pulse does not run them remotely.
           </div>
         </Show>
 
@@ -272,7 +300,7 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
           when={
             tokenGatedTargetCount() > 0 &&
             operations.requiresToken() &&
-            !operations.commandsUnlocked()
+            (!operations.commandsUnlocked() || tokenGatedTargetCount() > 1)
           }
         >
           <section class="space-y-3 rounded-md border border-blue-200 bg-blue-50 px-4 py-3 dark:border-blue-800 dark:bg-blue-950/30">
@@ -282,18 +310,35 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
               </h3>
               <p class="text-xs leading-5 text-blue-800 dark:text-blue-200">
                 {tokenGatedTargetCount() === 1
-                  ? 'One Windows repair needs a scoped install token before Pulse can show its command.'
-                  : `${tokenGatedTargetCount()} Windows repairs need a scoped install token before Pulse can show their commands.`}
+                  ? 'One repair needs a fresh scoped agent credential before Pulse can show its command.'
+                  : `${tokenGatedTargetCount()} repairs need separate scoped credentials. Each credential binds to the first agent that uses it; select one installation, generate and run its command, then continue with the next.`}
               </p>
             </div>
             <div class="flex flex-col gap-2 sm:flex-row">
+              <Show when={tokenGatedTargetCount() > 1}>
+                <select
+                  value={selectedTokenTarget()?.key}
+                  onChange={(event) => setSelectedTokenTargetKey(event.currentTarget.value)}
+                  aria-label="Agent installation to repair"
+                  class="min-h-10 flex-1 rounded-md border border-blue-200 bg-surface px-3 py-2 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-blue-700 dark:bg-blue-950 dark:focus:ring-blue-900"
+                >
+                  <For each={tokenGatedTargets()}>
+                    {(target) => (
+                      <option value={target.key}>
+                        {target.displayName} · {target.connectionId}
+                        {target.currentVersion ? ` · ${target.currentVersion}` : ''}
+                      </option>
+                    )}
+                  </For>
+                </select>
+              </Show>
               <input
                 type="text"
                 value={operations.tokenName()}
                 onInput={(event) => operations.setTokenName(event.currentTarget.value)}
                 onKeyDown={(event) => {
                   if (event.key === 'Enter' && !operations.isGeneratingToken()) {
-                    void operations.handleGenerateToken();
+                    void generateRepairToken();
                   }
                 }}
                 placeholder="Token name (optional)"
@@ -301,11 +346,15 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
               />
               <button
                 type="button"
-                onClick={() => void operations.handleGenerateToken()}
+                onClick={() => void generateRepairToken()}
                 disabled={operations.isGeneratingToken()}
                 class="inline-flex min-h-10 items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {operations.isGeneratingToken() ? 'Generating...' : 'Generate token'}
+                {operations.isGeneratingToken()
+                  ? 'Generating...'
+                  : operations.commandsUnlocked()
+                    ? 'Generate fresh token'
+                    : 'Generate token'}
               </button>
             </div>
           </section>
@@ -375,11 +424,14 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
                           target.connection,
                           target.installFlags,
                           target.commandPlatform,
+                          target.needsCredentialRepair,
                         )
                       : '';
                   const otherRepairs = () =>
                     (target.diagnostic?.repairActions ?? []).filter(
-                      (action) => action.code !== 'copy_upgrade_command',
+                      (action) =>
+                        action.code !== 'copy_upgrade_command' &&
+                        action.code !== 'repair_authentication',
                     );
                   const uninstallHandoff = () =>
                     getInfrastructureAgentDoctorUninstallHandoff(target);
@@ -506,7 +558,7 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
                               )}
                             </For>
 
-                            <Show when={target.needsUpdate}>
+                            <Show when={target.needsUpdate || target.needsCredentialRepair}>
                               <Show
                                 when={!target.commandBlockedReason}
                                 fallback={
@@ -519,15 +571,17 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
                                   when={commandReadyForTarget(target)}
                                   fallback={
                                     <div class="rounded-md border border-border bg-surface px-3 py-3 text-xs text-muted">
-                                      Generate a token to unlock this host-local update command.
+                                      {commandRequiresToken(target) && tokenGatedTargetCount() > 1
+                                        ? 'Select this installation above and generate a separate credential to unlock its host-local repair command.'
+                                        : 'Generate a token to unlock this host-local repair command.'}
                                     </div>
                                   }
                                 >
                                   <div class="relative">
                                     <CommandCopyButton
                                       onClick={() => void copyCommand(command())}
-                                      title="Copy host-local agent update command"
-                                      label={`Copy update command for ${target.displayName}`}
+                                      title="Copy host-local agent repair command"
+                                      label={`Copy ${target.needsCredentialRepair ? 'authentication repair' : 'update'} command for ${target.displayName}`}
                                     />
                                     <pre class="overflow-x-auto rounded-md bg-base p-3 pr-12 text-xs text-base-content">
                                       <code>{command()}</code>

@@ -10,7 +10,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/fleethealth"
+	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/platformsupport"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
@@ -33,10 +35,14 @@ const (
 	AgentFleetReasonUpdateStateUnverified = "agent_update_installer_state_unverified"
 	AgentFleetReasonModuleFailed          = "agent_module_failed"
 	AgentFleetReasonModuleDegraded        = "agent_module_degraded"
+	AgentFleetReasonCredentialMissing     = "agent_credential_missing"
+	AgentFleetReasonCredentialExpired     = "agent_credential_expired"
+	AgentFleetReasonDuplicateInstallation = "duplicate_host_agent_installation"
 
-	AgentFleetActionAllowReenroll      = "allow_reenroll"
-	AgentFleetActionCopyUpgradeCommand = "copy_upgrade_command"
-	AgentFleetRepairModeHandoff        = "handoff"
+	AgentFleetActionAllowReenroll        = "allow_reenroll"
+	AgentFleetActionCopyUpgradeCommand   = "copy_upgrade_command"
+	AgentFleetActionRepairAuthentication = "repair_authentication"
+	AgentFleetRepairModeHandoff          = "handoff"
 )
 
 type AgentFleetDiagnostics struct {
@@ -143,6 +149,12 @@ type agentFleetSubject struct {
 	removedPlatform string // last-known reported platform retained on the removed record
 }
 
+type agentFleetTokenInventory struct {
+	known   bool
+	active  map[string]struct{}
+	expired map[string]struct{}
+}
+
 // GetAgentFleetDiagnostics preserves the original call contract for callers
 // where the server version is also the agent update target.
 func (m *Monitor) GetAgentFleetDiagnostics(serverVersion string, now time.Time) AgentFleetDiagnostics {
@@ -169,6 +181,7 @@ func (m *Monitor) GetAgentFleetDiagnosticsForTarget(serverVersion, agentUpdateTa
 	}
 
 	state := m.GetState()
+	tokenInventory := m.agentFleetTokenInventory(now)
 	profiles, assignments, deployments := m.agentFleetProfileState()
 	profileByID := mapProfilesByID(profiles)
 	assignmentByAgent := mapAssignmentsByAgent(assignments)
@@ -176,7 +189,7 @@ func (m *Monitor) GetAgentFleetDiagnosticsForTarget(serverVersion, agentUpdateTa
 	subjects := buildAgentFleetSubjects(state)
 
 	for i := range subjects {
-		diagnostic := diagnoseAgentFleetSubject(subjects[i], state, out.AgentUpdateTargetVersion, now, profileByID, assignmentByAgent, deploymentByAgentProfile)
+		diagnostic := diagnoseAgentFleetSubject(subjects[i], state, out.AgentUpdateTargetVersion, now, tokenInventory, profileByID, assignmentByAgent, deploymentByAgentProfile)
 		out.Agents = append(out.Agents, diagnostic)
 	}
 
@@ -202,6 +215,32 @@ func (m *Monitor) GetAgentFleetDiagnosticsForTarget(serverVersion, agentUpdateTa
 	}
 
 	return out
+}
+
+func (m *Monitor) agentFleetTokenInventory(now time.Time) agentFleetTokenInventory {
+	if m == nil || m.config == nil || mock.IsMockEnabled() {
+		return agentFleetTokenInventory{}
+	}
+
+	inventory := agentFleetTokenInventory{
+		known:   true,
+		active:  make(map[string]struct{}),
+		expired: make(map[string]struct{}),
+	}
+	config.Mu.RLock()
+	defer config.Mu.RUnlock()
+	for _, record := range m.config.APITokens {
+		id := strings.TrimSpace(record.ID)
+		if id == "" {
+			continue
+		}
+		if record.ExpiresAt != nil && !record.ExpiresAt.After(now) {
+			inventory.expired[id] = struct{}{}
+			continue
+		}
+		inventory.active[id] = struct{}{}
+	}
+	return inventory
 }
 
 func (m *Monitor) agentFleetProfileState() ([]models.AgentProfile, []models.AgentProfileAssignment, []models.ProfileDeploymentStatus) {
@@ -352,6 +391,7 @@ func diagnoseAgentFleetSubject(
 	state models.StateSnapshot,
 	serverVersion string,
 	now time.Time,
+	tokenInventory agentFleetTokenInventory,
 	profileByID map[string]models.AgentProfile,
 	assignmentByAgent map[string]models.AgentProfileAssignment,
 	deploymentByAgentProfile map[string]models.ProfileDeploymentStatus,
@@ -408,9 +448,11 @@ func diagnoseAgentFleetSubject(
 	}
 
 	result.Reasons = append(result.Reasons, diagnoseAgentConnectivity(subject, now)...)
+	result.Reasons = append(result.Reasons, diagnoseAgentCredential(subject, tokenInventory)...)
 	result.Reasons = append(result.Reasons, diagnoseAgentVersion(subject, serverVersion)...)
 	result.Reasons = append(result.Reasons, diagnoseAgentUpdate(subject, serverVersion)...)
 	result.Reasons = append(result.Reasons, diagnoseAgentModules(subject)...)
+	result.Reasons = append(result.Reasons, diagnoseDuplicateHostAgentInstallation(subject, state)...)
 	result.Reasons = append(result.Reasons, diagnoseAgentIdentitySplit(subject, state)...)
 
 	assignment, hasAssignment := findAgentAssignment(subject, assignmentByAgent)
@@ -438,6 +480,22 @@ func diagnoseAgentFleetSubject(
 		}
 	}
 
+	if diagnosticHasAnyReason(result.Reasons, AgentFleetReasonCredentialMissing, AgentFleetReasonCredentialExpired) {
+		platform, supported := safeAgentUpdatePlatform(subject)
+		if platform == platformsupport.RuntimePlatformFreeBSD || diagnosticHasAnyReason(result.Reasons, AgentFleetReasonDuplicateInstallation) {
+			supported = false
+		}
+		result.RepairActions = append(result.RepairActions, AgentFleetDiagnosticRepair{
+			Code:        AgentFleetActionRepairAuthentication,
+			Label:       "Repair authentication",
+			Description: "Generate a fresh scoped agent credential and run the host-local repair command for this installation.",
+			Supported:   supported,
+			Mode:        AgentFleetRepairModeHandoff,
+			Platform:    platform,
+			Scope:       "settings:write + local_admin_shell",
+		})
+	}
+
 	for _, reason := range result.Reasons {
 		if reason.Code == "agent_version_stale" {
 			platform, supported := safeAgentUpdatePlatform(subject)
@@ -455,6 +513,9 @@ func diagnoseAgentFleetSubject(
 					Message:  "Pulse cannot verify the saved FreeBSD or pfSense installer state required for a safe in-place update.",
 				})
 			}
+			if diagnosticHasAnyReason(result.Reasons, AgentFleetReasonDuplicateInstallation) {
+				supported = false
+			}
 			result.RepairActions = append(result.RepairActions, AgentFleetDiagnosticRepair{
 				Code:        AgentFleetActionCopyUpgradeCommand,
 				Label:       "Copy upgrade command",
@@ -470,6 +531,77 @@ func diagnoseAgentFleetSubject(
 
 	result.Status = diagnosticStatusFromReasons(result.Reasons)
 	return result
+}
+
+func diagnosticHasAnyReason(reasons []AgentFleetDiagnosticReason, codes ...string) bool {
+	for _, reason := range reasons {
+		for _, code := range codes {
+			if reason.Code == code {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func diagnoseAgentCredential(subject agentFleetSubject, inventory agentFleetTokenInventory) []AgentFleetDiagnosticReason {
+	tokenID := strings.TrimSpace(subject.tokenID)
+	if subject.removed || !inventory.known || tokenID == "" {
+		return nil
+	}
+	if _, ok := inventory.active[tokenID]; ok {
+		return nil
+	}
+	if _, ok := inventory.expired[tokenID]; ok {
+		return []AgentFleetDiagnosticReason{{
+			Code:     AgentFleetReasonCredentialExpired,
+			Severity: AgentFleetStatusCritical,
+			Message:  "The credential last used by this agent has expired and can no longer authenticate.",
+			Evidence: []string{"Credential status: expired"},
+		}}
+	}
+	return []AgentFleetDiagnosticReason{{
+		Code:     AgentFleetReasonCredentialMissing,
+		Severity: AgentFleetStatusCritical,
+		Message:  "The credential last used by this agent no longer exists on this Pulse server.",
+		Evidence: []string{"Credential status: missing or revoked"},
+	}}
+}
+
+func diagnoseDuplicateHostAgentInstallation(subject agentFleetSubject, state models.StateSnapshot) []AgentFleetDiagnosticReason {
+	if subject.removed || subject.host == nil {
+		return nil
+	}
+	machineID := strings.TrimSpace(subject.host.MachineID)
+	hostname := strings.TrimSpace(subject.host.Hostname)
+	if machineID == "" || hostname == "" {
+		return nil
+	}
+
+	for _, peer := range state.Hosts {
+		if strings.TrimSpace(peer.ID) == strings.TrimSpace(subject.host.ID) ||
+			strings.TrimSpace(peer.MachineID) != machineID ||
+			!unifiedresources.HostnamesEquivalent(peer.Hostname, hostname) {
+			continue
+		}
+		evidence := []string{
+			"Peer agent ID: " + strings.TrimSpace(peer.ID),
+			"Peer hostname: " + strings.TrimSpace(peer.Hostname),
+		}
+		if version := strings.TrimSpace(peer.AgentVersion); version != "" {
+			evidence = append(evidence, "Peer version: "+version)
+		}
+		if !peer.LastSeen.IsZero() {
+			evidence = append(evidence, "Peer last seen: "+peer.LastSeen.UTC().Format(time.RFC3339))
+		}
+		return []AgentFleetDiagnosticReason{{
+			Code:     AgentFleetReasonDuplicateInstallation,
+			Severity: AgentFleetStatusCritical,
+			Message:  "Multiple host-installed Pulse Agents are reporting from the same machine. A generic update command cannot safely choose which local service to change.",
+			Evidence: evidence,
+		}}
+	}
+	return nil
 }
 
 func diagnoseAgentConnectivity(subject agentFleetSubject, now time.Time) []AgentFleetDiagnosticReason {

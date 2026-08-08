@@ -2594,6 +2594,20 @@ avoids a duplicated distro allowlist, so long-tail distributions such as
 Mageia receive the same Linux repair handoff as Ubuntu or Debian. Unknown
 updater states remain explicit warnings, and unverified FreeBSD/pfSense
 installer state still fails closed for upgrade-command support.
+Credential truth is derived from the current server token inventory, not the
+last successful heartbeat alone. A live host whose reported `TokenID` no
+longer resolves emits `agent_credential_missing`; a resolved but expired record
+emits `agent_credential_expired`; both are critical and expose a bounded
+authentication-repair handoff only when the runtime family is safely known.
+Monitoring also compares live host-agent generations without merging them: two
+different host IDs with the same non-empty machine ID and equivalent hostname
+each receive `duplicate_host_agent_installation` plus bounded peer evidence.
+That reason disables generic upgrade and authentication handoffs, because the
+server cannot infer which co-installed local service an operator's command
+would mutate. Distinct rows are retained so Agent Doctor does not disguise two
+installations as one healthy machine. Mock mode has no authoritative token
+inventory for its synthetic hosts and therefore must not turn fixture token IDs
+into missing-credential incidents.
 `internal/fleethealth/agent_test.go` and
 `internal/monitoring/agent_fleet_doctor_test.go` are the focused runtime proofs.
 

@@ -121,6 +121,93 @@ describe('Agent Doctor model', () => {
     expect(targets[0].commandBlockedReason).toBeUndefined();
   });
 
+  it('turns a missing credential into a token-gated authentication repair', () => {
+    const connection = connectionFixture({
+      agentUpdateAvailable: false,
+      agentVersion: '6.2.0',
+      expectedAgentVersion: '6.2.0',
+      fleet: {
+        versionDrift: 'current',
+        credentialStatus: 'invalid',
+        credentialHealth: {
+          status: 'invalid',
+          kind: 'agent-token',
+          rotation: 'invalid',
+        },
+      } as Connection['fleet'],
+    });
+    const [target] = collectInfrastructureAgentDoctorTargets({
+      rows: [rowFixture(connection)],
+      connections: [connection],
+      diagnostics: [
+        diagnosticFixture({
+          status: 'critical',
+          version: '6.2.0',
+          reasons: [
+            {
+              code: 'agent_credential_missing',
+              severity: 'critical',
+              message: 'The credential no longer exists.',
+            },
+          ],
+          repairActions: [
+            {
+              code: 'repair_authentication',
+              label: 'Repair authentication',
+              description: 'Generate a fresh scoped credential.',
+              supported: true,
+              platform: 'linux',
+            },
+          ],
+        }),
+      ],
+      diagnosticsAvailable: true,
+      targetVersion: '6.2.0',
+    });
+
+    expect(target).toMatchObject({
+      status: 'critical',
+      needsUpdate: false,
+      needsCredentialRepair: true,
+      commandPlatform: 'linux',
+    });
+    expect(target.commandBlockedReason).toBeUndefined();
+  });
+
+  it('fails closed when duplicate host installations make the repair target ambiguous', () => {
+    const connection = connectionFixture();
+    const [target] = collectInfrastructureAgentDoctorTargets({
+      rows: [rowFixture(connection)],
+      connections: [connection],
+      diagnostics: [
+        diagnosticFixture({
+          status: 'critical',
+          reasons: [
+            {
+              code: 'duplicate_host_agent_installation',
+              severity: 'critical',
+              message: 'Multiple host agents report from this machine.',
+            },
+            ...diagnosticFixture().reasons,
+          ],
+          repairActions: [
+            {
+              code: 'copy_upgrade_command',
+              label: 'Copy upgrade command',
+              description: 'Unsafe generic repair.',
+              supported: false,
+              platform: 'linux',
+            },
+          ],
+        }),
+      ],
+      diagnosticsAvailable: true,
+      targetVersion: '6.2.0',
+    });
+
+    expect(target.commandBlockedReason).toContain('Multiple host-installed Pulse Agents');
+  });
+
   it('does not invent a deployed v0 profile version when no legacy acknowledgement exists', () => {
     const connection = connectionFixture({
       agentUpdateAvailable: false,
@@ -572,6 +659,7 @@ describe('Agent Doctor model', () => {
       reasons: [],
       evidence: [],
       needsUpdate: false,
+      needsCredentialRepair: false,
       commandPlatform: null,
       source: 'diagnostics',
       ...overrides,

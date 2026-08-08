@@ -31,6 +31,7 @@ func buildAggregatorInputsWithRuntimeSources(
 		inputs.pbsInstances = cfg.PBSInstances
 		inputs.pmgInstances = cfg.PMGInstances
 		inputs.apiTokens = append([]config.APITokenRecord(nil), cfg.APITokens...)
+		inputs.agentTokenInventoryKnown = true
 		inputs.pvePollingInterval = cfg.PVEPollingInterval
 		inputs.pbsPollingInterval = cfg.PBSPollingInterval
 		inputs.pmgPollingInterval = cfg.PMGPollingInterval
@@ -72,6 +73,7 @@ func buildAggregatorInputsWithRuntimeSources(
 	}
 	if mock.IsMockEnabled() {
 		inputs = applyMockLedgerInputs(inputs)
+		inputs.agentTokenInventoryKnown = false
 	}
 	inputs.expectedAgentVersion = currentAgentTargetVersion()
 	_ = ctx

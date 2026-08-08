@@ -233,6 +233,7 @@ EXIT_PREFLIGHT_FAILED=14
 EXIT_ALREADY_INSTALLED=15    # Not a failure — used with --preflight-only
 EXIT_MISSING_ARGS=16
 EXIT_SIGNATURE_FAILED=17
+EXIT_AUTH_REJECTED=18
 
 json_event() {
     # Usage: json_event <phase> <code> <message> [exitCode]
@@ -641,6 +642,7 @@ verify_agent_started() {
                     log_info "Agent process is running and registered with Pulse."
                 elif [[ $reg_rc -eq 2 ]]; then
                     warn_agent_token_rejected
+                    return 2
                 else
                     log_warn "Agent process is running, but server registration was not confirmed yet."
                 fi
@@ -667,6 +669,7 @@ verify_agent_started() {
                 log_info "Agent is running, healthy, and registered with Pulse."
             elif [[ $reg_rc -eq 2 ]]; then
                 warn_agent_token_rejected
+                return 2
             else
                 log_warn "Agent local health is ready, but server registration was not confirmed yet."
             fi
@@ -1296,8 +1299,11 @@ complete_installation_flow() {
     local upgrade_success_message="$3"
     local unhealthy_log_hint="$4"
 
+    local verification_rc=0
+
     save_connection_info "$state_dir"
-    if verify_agent_started; then
+    verify_agent_started || verification_rc=$?
+    if [[ $verification_rc -eq 0 ]]; then
         report_proxmox_registration_outcome "$state_dir" || true
         if [[ "$UPGRADE_MODE" == "true" ]]; then
             log_info "$upgrade_success_message"
@@ -1306,6 +1312,10 @@ complete_installation_flow() {
             log_info "$install_success_message"
             json_event "complete" "installed" "Installation installed"
         fi
+    elif [[ $verification_rc -eq 2 ]]; then
+        log_error "Pulse Agent authentication failed. The local service is running, but Pulse rejected its credential; installation is not complete. Generate a fresh scoped agent credential in Pulse and run the repair command again."
+        json_event "complete" "auth_rejected" "Pulse rejected the agent credential" "$EXIT_AUTH_REJECTED"
+        exit "$EXIT_AUTH_REJECTED"
     else
         if [[ "$UPGRADE_MODE" == "true" ]]; then
             log_warn "Upgrade complete, but the agent may not be running correctly."

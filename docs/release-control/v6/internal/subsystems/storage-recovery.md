@@ -183,6 +183,16 @@ states do not change the underlying storage evidence or active lifecycle.
 
 ## Extension Points
 
+Agent-token validation added to `internal/api/connections_aggregator.go` and
+its runtime input assembly in `internal/api/connections_alerts.go` is
+fleet-governance evidence only. A missing, revoked, or expired host-agent
+credential may mark that agent connection invalid and drive a local
+authentication-repair handoff, but storage/recovery consumers must not
+reinterpret that credential state as backup failure, protection drift,
+recovery-point loss, restore readiness, datastore health, or provider
+identity. Token inventory that is unavailable or deliberately synthetic stays
+unknown rather than fabricating storage or agent incidents.
+
 Docker / Podman report ingress under `internal/api/docker_agents.go` is outside
 storage/recovery ownership even though storage/recovery routes share the broad
 `internal/api/` extension boundary. Encoded/decoded report ceilings,

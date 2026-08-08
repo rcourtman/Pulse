@@ -6180,6 +6180,21 @@ must tolerate absent optional fields and preserve `/api/connections` fallback
 rows. Repair objects describe whether an existing local handoff is supported
 and for which normalized platform; they are not executable commands or
 authorization grants.
+The canonical connections projection must validate a host's non-empty
+`TokenID` against the current API-token inventory. Missing records project
+`fleet.credentialStatus="invalid"` and credential-health
+`status/rotation="invalid"`; expired records project invalid top-level status
+with expired health and rotation. Agent Doctor preserves those ledger facts
+even when its structured snapshot lags. Structured diagnostics add the stable
+`agent_credential_missing`, `agent_credential_expired`, and
+`duplicate_host_agent_installation` reason codes plus the
+`repair_authentication` handoff. The browser may render a fresh scoped
+token-file repair only when that action is supported. A duplicate-installation
+reason always blocks generic repair command rendering, while retaining each
+connection row and its peer evidence so UI composition never selects one stale
+identity as the machine's sole agent. When the token inventory is deliberately
+unavailable, including synthetic mock-ledger projection, the API preserves the
+prior unknown-compatible credential state instead of inventing invalidity.
 That same shared infrastructure-settings boundary also owns install-profile
 semantics surfaced by
 `frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx`:

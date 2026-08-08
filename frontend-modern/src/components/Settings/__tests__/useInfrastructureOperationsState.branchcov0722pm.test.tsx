@@ -522,4 +522,65 @@ describe('useInfrastructureOperationsState command-building closures', () => {
       dispose();
     });
   });
+
+  describe('Linux authentication repair commands', () => {
+    it('uses a fresh credential through a temporary token file and preserves update flags', async () => {
+      const { state, dispose } = mountHook();
+      await flushAsync();
+      state.setCustomAgentUrl(HTTPS_URL);
+      await state.handleGenerateToken();
+
+      const cmd = state.getAgentConnectionUpgradeCommand(
+        baseConnection,
+        ['--enable-proxmox', '--proxmox-type', 'pve'],
+        'linux',
+        true,
+      );
+
+      expect(cmd).toContain('tmp_dir=$(mktemp -d)');
+      expect(cmd).toContain('printf %s \'tok-1\' > "$token_file"');
+      expect(cmd).toContain('--token-file "$token_file"');
+      expect(cmd).toContain('--update');
+      expect(cmd).toContain('--enable-proxmox');
+      expect(cmd).toContain('--proxmox-type');
+      expect(cmd).toContain('pve');
+      expect(cmd).not.toContain("--token 'tok-1'");
+      dispose();
+    });
+
+    it('keeps an ordinary Linux update tokenless', async () => {
+      const { state, dispose } = mountHook();
+      await flushAsync();
+      state.setCustomAgentUrl(HTTPS_URL);
+
+      const cmd = state.getAgentConnectionUpgradeCommand(baseConnection, [], 'linux');
+
+      expect(cmd).toContain('| { if [ "$(id -u)" -eq 0 ]; then bash -s -- --update');
+      expect(cmd).not.toContain('--token-file');
+      expect(cmd).not.toContain('mktemp -d');
+      dispose();
+    });
+
+    it('requires a fresh token for explicit or ledger-derived credential repair', async () => {
+      const { state, dispose } = mountHook();
+      await flushAsync();
+
+      expect(
+        state.getAgentConnectionUpgradeCommandRequiresToken(baseConnection, 'linux', true),
+      ).toBe(true);
+      expect(
+        state.getAgentConnectionUpgradeCommandRequiresToken(
+          {
+            ...baseConnection,
+            fleet: { credentialStatus: 'invalid' } as Connection['fleet'],
+          },
+          'linux',
+        ),
+      ).toBe(true);
+      expect(state.getAgentConnectionUpgradeCommandRequiresToken(baseConnection, 'linux')).toBe(
+        false,
+      );
+      dispose();
+    });
+  });
 });

@@ -37,6 +37,129 @@ func TestAgentFleetDiagnosticsDetectsStaleAgentVersion(t *testing.T) {
 	}
 }
 
+func TestAgentFleetDiagnosticsDetectsMissingAndExpiredCredentials(t *testing.T) {
+	now := time.Date(2026, 8, 9, 12, 0, 0, 0, time.UTC)
+	expiredAt := now.Add(-time.Hour)
+
+	tests := []struct {
+		name       string
+		tokenID    string
+		tokens     []config.APITokenRecord
+		wantReason string
+	}{
+		{
+			name:       "missing or revoked",
+			tokenID:    "revoked-token",
+			wantReason: AgentFleetReasonCredentialMissing,
+		},
+		{
+			name:    "expired",
+			tokenID: "expired-token",
+			tokens: []config.APITokenRecord{{
+				ID:        "expired-token",
+				ExpiresAt: &expiredAt,
+			}},
+			wantReason: AgentFleetReasonCredentialExpired,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			monitor := newAgentFleetDoctorTestMonitor(t)
+			monitor.config.APITokens = test.tokens
+			monitor.state.UpsertHost(models.Host{
+				ID:           "agent-auth",
+				Hostname:     "auth-node",
+				Platform:     "linux",
+				Status:       "online",
+				LastSeen:     now,
+				AgentVersion: "6.2.0",
+				TokenID:      test.tokenID,
+			})
+
+			agent := requireAgentDiagnostic(t, monitor.GetAgentFleetDiagnostics("6.2.0", now), "agent-agent-auth")
+			requireReasonCode(t, agent, test.wantReason)
+			if agent.Status != AgentFleetStatusCritical {
+				t.Fatalf("status = %q, want %q", agent.Status, AgentFleetStatusCritical)
+			}
+			if !hasSupportedRepair(agent, AgentFleetActionRepairAuthentication) {
+				t.Fatalf("expected safe authentication repair action: %#v", agent.RepairActions)
+			}
+		})
+	}
+}
+
+func TestAgentFleetDiagnosticsAcceptsActiveCredential(t *testing.T) {
+	now := time.Date(2026, 8, 9, 12, 0, 0, 0, time.UTC)
+	monitor := newAgentFleetDoctorTestMonitor(t)
+	monitor.config.APITokens = []config.APITokenRecord{{ID: "active-token"}}
+	monitor.state.UpsertHost(models.Host{
+		ID:           "agent-auth",
+		Hostname:     "auth-node",
+		Platform:     "linux",
+		Status:       "online",
+		LastSeen:     now,
+		AgentVersion: "6.2.0",
+		TokenID:      "active-token",
+	})
+
+	agent := requireAgentDiagnostic(t, monitor.GetAgentFleetDiagnostics("6.2.0", now), "agent-agent-auth")
+	for _, reason := range agent.Reasons {
+		if reason.Code == AgentFleetReasonCredentialMissing || reason.Code == AgentFleetReasonCredentialExpired {
+			t.Fatalf("active credential produced repair reason: %#v", agent.Reasons)
+		}
+	}
+}
+
+func TestAgentFleetDiagnosticsDoesNotValidateSyntheticMockCredentials(t *testing.T) {
+	now := time.Date(2026, 8, 9, 12, 0, 0, 0, time.UTC)
+	mustSetMockEnabled(t, true)
+	t.Cleanup(func() { mustSetMockEnabled(t, false) })
+	monitor := newAgentFleetDoctorTestMonitor(t)
+	monitor.config.APITokens = []config.APITokenRecord{{ID: "synthetic-token"}}
+
+	if inventory := monitor.agentFleetTokenInventory(now); inventory.known {
+		t.Fatalf("mock token inventory = %+v, want deliberately unknown", inventory)
+	}
+}
+
+func TestAgentFleetDiagnosticsBlocksGenericRepairForDuplicateHostInstallations(t *testing.T) {
+	now := time.Date(2026, 8, 9, 12, 0, 0, 0, time.UTC)
+	monitor := newAgentFleetDoctorTestMonitor(t)
+	for _, host := range []models.Host{
+		{
+			ID:           "agent-primary",
+			Hostname:     "pi",
+			MachineID:    "machine-pi",
+			Platform:     "linux",
+			Status:       "online",
+			LastSeen:     now,
+			AgentVersion: "6.2.0-rc.11",
+		},
+		{
+			ID:           "agent-legacy",
+			Hostname:     "PI.local",
+			MachineID:    "machine-pi",
+			Platform:     "linux",
+			Status:       "online",
+			LastSeen:     now.Add(-time.Minute),
+			AgentVersion: "6.2.0-rc.6",
+		},
+	} {
+		monitor.state.UpsertHost(host)
+	}
+
+	for _, rowKey := range []string{"agent-agent-primary", "agent-agent-legacy"} {
+		agent := requireAgentDiagnostic(t, monitor.GetAgentFleetDiagnostics("6.2.0-rc.11", now), rowKey)
+		requireReasonCode(t, agent, AgentFleetReasonDuplicateInstallation)
+		for _, repair := range agent.RepairActions {
+			if (repair.Code == AgentFleetActionCopyUpgradeCommand || repair.Code == AgentFleetActionRepairAuthentication) && repair.Supported {
+				t.Fatalf("duplicate installation offered unsafe generic repair: %#v", agent.RepairActions)
+			}
+		}
+	}
+}
+
 func TestAgentFleetDiagnosticsSurfacesReportedUpdateModuleAndIdentityEvidence(t *testing.T) {
 	now := time.Date(2026, 7, 13, 12, 0, 0, 0, time.UTC)
 	checkedAt := now.Add(-time.Minute)
