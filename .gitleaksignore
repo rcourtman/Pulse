@@ -3,3 +3,44 @@
 # required content digests as credentials; suppress only those exact fingerprints.
 frontend-modern/browser-verification.json:generic-api-key:11
 frontend-modern/browser-verification.json:generic-api-key:12
+
+# Historical findings proven to be deterministic examples, placeholders, or
+# public-key/path false positives. Keep these commit-, path-, rule-, and
+# line-specific so provider credentials and expired tokens remain visible.
+05491b990d59ea9237cfc559d35828340a4761ac:frontend-modern/src/components/Settings/Settings.tsx:curl-auth-header:1587
+0824e22338e65b2fa4c72bafc181cf5738674a2e:docs/SECURITY.md:generic-api-key:39
+0824e22338e65b2fa4c72bafc181cf5738674a2e:docs/SECURITY.md:generic-api-key:126
+13eebae80e81e48c4e5d02623baff3de416fd31e:test-security-fixes.sh:generic-api-key:99
+1b9a30e08f539d4ae39fee9716330b08ed7c7f4a:REGISTRATION_TOKEN_DESIGN.md:generic-api-key:28
+1fe32a3baabb43225d9f1948e754029fe046b7ce:reports/proxmox-api-test-2025-03-04T11-41-12.389Z.json:generic-api-key:10
+261bd7ac74e18363ac2291f73300b396da0c8695:docs/API.md:generic-api-key:473
+2788bd2ce37bccafe095c926f906eb4a695644a5:scripts/test-security.sh:curl-auth-header:70
+3b425f348824edd8839588a07a1024836aa0b63e:docs/API.md:curl-auth-header:29
+4fef3b23be6ca8ddf96b1102f383656376e7473b:testing-tools/registration-token-complete-test.md:curl-auth-header:110
+4fef3b23be6ca8ddf96b1102f383656376e7473b:testing-tools/test-registration-tokens.sh:curl-auth-header:68
+5a2d808aa16e01de3e1b163f1df3c711005891ce:docs/API.md:generic-api-key:761
+5ecf347a05b85457c7ed81cd4c61256e74f64a1e:docs/PBS_PUSH_MODE.md:curl-auth-header:220
+5ecf347a05b85457c7ed81cd4c61256e74f64a1e:docs/PBS_PUSH_MODE.md:curl-auth-header:228
+61f011af1dd96dbf38dc4f077cdb2410baee40f8:scripts/tests/test-sensor-proxy-http.sh:curl-auth-header:214
+659c2ae8342d89d18dfcb73f85a9136ce1f6dc03:frontend-modern/src/components/Settings/GenerateAPIToken.tsx:curl-auth-header:90
+6eb1a10d9bb4df8a985422a4c3bc735c3849bcd0:docs/API.md:curl-auth-header:53
+7e78676fc44507d71d0a2b9d74e18ef65cd9ea33:docs/REVERSE_PROXY.md:generic-api-key:243
+813e987776f96af0245232bd3b9e30b59420da51:docs/CONFIGURATION.md:generic-api-key:81
+87fc9e2c60259680326e6dfbe9ca1b6cdfadd893:docs/TROUBLESHOOTING.md:curl-auth-header:29
+941cc85cfb945c6145a33e87139ec404381ad213:docs/API.md:curl-auth-user:40
+9bb29bd9843e3a3a587a01ef53df947cfc3da19a:docs/PBS_PUSH_MODE.md:generic-api-key:284
+9d2bad3af65d08cf4d185d094f2eee82445a99a1:NOTIFICATION_AUDIT.md:generic-api-key:141
+b4eb0326770412eefb44d6812eb10f586bd8e6c7:docs/CONFIGURATION.md:curl-auth-header:163
+b9524448370c65f9438cdd1d82caad728e6b9534:cmd/pulse-sensor-proxy/main.go:generic-api-key:393
+b9524448370c65f9438cdd1d82caad728e6b9534:cmd/pulse-sensor-proxy/main.go:generic-api-key:415
+b9524448370c65f9438cdd1d82caad728e6b9534:cmd/pulse-sensor-proxy/main.go:generic-api-key:574
+b9524448370c65f9438cdd1d82caad728e6b9534:cmd/pulse-sensor-proxy/ssh.go:generic-api-key:28
+bafeea14a393477208948aa9e1f42c1cfd605f59:scripts/test-edge-cases.sh:curl-auth-header:72
+bafeea14a393477208948aa9e1f42c1cfd605f59:scripts/test-security.sh:curl-auth-header:54
+e7bc33889140bf4c272b3a5a60b3f6894231101b:cmd/pulse-temp-proxy/main.go:generic-api-key:251
+e7bc33889140bf4c272b3a5a60b3f6894231101b:cmd/pulse-temp-proxy/main.go:generic-api-key:273
+e7bc33889140bf4c272b3a5a60b3f6894231101b:cmd/pulse-temp-proxy/ssh.go:generic-api-key:20
+f46ff1792bd53436891c9a7a8b74180f443f0772:docs/API.md:curl-auth-header:48
+f46ff1792bd53436891c9a7a8b74180f443f0772:docs/CONFIGURATION.md:curl-auth-header:394
+f46ff1792bd53436891c9a7a8b74180f443f0772:docs/REVERSE_PROXY.md:generic-api-key:260
+f46ff1792bd53436891c9a7a8b74180f443f0772:docs/TROUBLESHOOTING.md:curl-auth-header:29
