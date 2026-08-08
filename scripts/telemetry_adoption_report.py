@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import argparse
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 import gzip
 import json
@@ -53,7 +53,19 @@ ADOPTION_COUNT_FIELDS = (
     ("vmware_vms", "VMware VMs"),
     ("vmware_datastores", "VMware datastores"),
     ("availability_targets", "Availability targets"),
+    ("availability_probe_targets", "Availability probe targets"),
+    ("availability_probe_agents", "Availability probe agents"),
     ("active_alerts", "Active alerts"),
+    ("rbac_custom_roles", "Custom RBAC roles"),
+    ("rbac_user_assignments", "RBAC user assignments"),
+    ("audit_reads_30d", "Audit reads (30d)"),
+    ("report_schedules", "Report schedules"),
+    ("report_schedules_enabled", "Enabled report schedules"),
+    ("report_schedules_run_30d", "Report schedule runs (30d)"),
+    ("agent_profiles", "Agent profiles"),
+    ("update_attempts_30d", "Update attempts (30d)"),
+    ("update_successes_30d", "Update successes (30d)"),
+    ("update_failures_30d", "Update failures (30d)"),
 )
 FEATURE_BOOL_FIELDS = (
     ("ai_enabled", "AI enabled"),
@@ -61,6 +73,7 @@ FEATURE_BOOL_FIELDS = (
     ("discovery_enabled", "Discovery enabled"),
     ("notifications_enabled", "Notifications enabled"),
     ("ai_actions_enabled", "AI actions enabled"),
+    ("alert_ai_enabled", "Alert AI enabled"),
     ("relay_enabled", "Relay enabled"),
     ("sso_enabled", "SSO enabled"),
     ("multi_tenant", "Multi-tenant"),
@@ -79,6 +92,7 @@ USER_BASE_CATEGORY_FIELDS = (
     ("activation_stage", "Highest observed activation stage"),
     ("time_to_first_monitored_resource_bucket", "Time to first monitored resource"),
     ("estate_size_bucket", "Estate size"),
+    ("update_last_failure_category", "Last update failure category"),
 )
 USER_BASE_BOOL_FIELDS = (
     ("auth_configured", "Authentication configured"),
@@ -925,10 +939,23 @@ DEEP_SIGNAL_FIELDS = (
     ("vmware_vms", "VMware VMs", "count"),
     ("vmware_datastores", "VMware datastores", "count"),
     ("availability_targets", "Availability targets", "count"),
+    ("availability_probe_targets", "Availability probe targets", "count"),
+    ("availability_probe_agents", "Availability probe agents", "count"),
+    ("rbac_custom_roles", "Custom RBAC roles", "count"),
+    ("rbac_user_assignments", "RBAC user assignments", "count"),
+    ("audit_reads_30d", "Audit reads (30d)", "count"),
+    ("report_schedules", "Report schedules", "count"),
+    ("report_schedules_enabled", "Enabled report schedules", "count"),
+    ("report_schedules_run_30d", "Report schedule runs (30d)", "count"),
+    ("agent_profiles", "Agent profiles", "count"),
+    ("update_attempts_30d", "Update attempts (30d)", "count"),
+    ("update_successes_30d", "Update successes (30d)", "count"),
+    ("update_failures_30d", "Update failures (30d)", "count"),
     ("patrol_enabled", "Patrol enabled", "bool"),
     ("discovery_enabled", "Discovery enabled", "bool"),
     ("notifications_enabled", "Notifications enabled", "bool"),
     ("ai_actions_enabled", "AI actions enabled", "bool"),
+    ("alert_ai_enabled", "Alert AI enabled", "bool"),
     *(
         (field, label, "bool")
         for field, label in PULSE_INTELLIGENCE_BOOL_FIELDS
@@ -937,6 +964,39 @@ DEEP_SIGNAL_FIELDS = (
         (field, label, "count")
         for field, label in PULSE_INTELLIGENCE_COUNT_FIELDS
     ),
+)
+REPORT_ROW_COLUMNS = tuple(
+    dict.fromkeys(
+        (
+            "received_at",
+            "install_id",
+            "version",
+            "version_raw",
+            "schema_version",
+            "version_channel",
+            "version_build",
+            "version_is_development",
+            "version_is_published_release",
+            "platform",
+            "notification_failures_7d",
+            *(key for key, _ in ADOPTION_COUNT_FIELDS),
+            *(key for key, _ in FEATURE_BOOL_FIELDS),
+            *(key for key, _ in USER_BASE_CATEGORY_FIELDS),
+            *(key for key, _ in USER_BASE_BOOL_FIELDS),
+            *(key for key, _ in USER_BASE_COUNT_FIELDS),
+            *(key for key, _ in PULSE_INTELLIGENCE_BOOL_FIELDS),
+            *(key for key, _ in PULSE_INTELLIGENCE_COUNT_FIELDS),
+        )
+    )
+)
+REPORT_ROW_PROJECTION = ", ".join(REPORT_ROW_COLUMNS)
+REPORT_HISTORY_SIGNAL_COLUMNS = tuple(
+    dict.fromkeys(
+        (
+            *(key for key, _ in PULSE_INTELLIGENCE_BOOL_FIELDS),
+            *(key for key, _ in PULSE_INTELLIGENCE_COUNT_FIELDS),
+        )
+    )
 )
 GIT_DESCRIBE_RE = re.compile(
     r"^(?P<base>\d+\.\d+\.\d+(?:-[0-9A-Za-z\.-]+)?)-(?P<count>\d+)-g(?P<sha>[0-9a-fA-F]+)(?P<dirty>-dirty)?$"
@@ -967,6 +1027,77 @@ class PulseIntelligenceInstallAnalysis:
     free_cohort_keys: frozenset[str]
     signal_groups: frozenset[str]
     free_signal_groups: frozenset[str]
+
+
+@dataclass
+class _PulseIntelligenceInstallAccumulator:
+    latest_received_at: datetime | None = None
+    first_free_at: datetime | None = None
+    first_paid_at: datetime | None = None
+    cohort_keys: set[str] = field(default_factory=set)
+    signal_groups: set[str] = field(default_factory=set)
+    earliest_free_cohort_at: dict[str, datetime] = field(default_factory=dict)
+    earliest_free_signal_group_at: dict[str, datetime] = field(default_factory=dict)
+
+    def observe(self, row: dict[str, Any]) -> None:
+        received_at = parse_received_at(str(row["received_at"]))
+        posture = parse_optional_bool(row.get("paid_license"))
+        if self.latest_received_at is None or received_at > self.latest_received_at:
+            self.latest_received_at = received_at
+        if posture is False and (
+            self.first_free_at is None or received_at < self.first_free_at
+        ):
+            self.first_free_at = received_at
+        if posture is True and (
+            self.first_paid_at is None or received_at < self.first_paid_at
+        ):
+            self.first_paid_at = received_at
+
+        row_cohort_keys, row_signal_groups = pulse_intelligence_row_analysis_keys(row)
+        self.cohort_keys.update(row_cohort_keys)
+        self.signal_groups.update(row_signal_groups)
+        if posture is not False:
+            return
+        for key in row_cohort_keys:
+            observed_at = self.earliest_free_cohort_at.get(key)
+            if observed_at is None or received_at < observed_at:
+                self.earliest_free_cohort_at[key] = received_at
+        for key in row_signal_groups:
+            observed_at = self.earliest_free_signal_group_at.get(key)
+            if observed_at is None or received_at < observed_at:
+                self.earliest_free_signal_group_at[key] = received_at
+
+    def finalize(self) -> PulseIntelligenceInstallAnalysis:
+        if self.latest_received_at is None:
+            raise ValueError("Pulse Intelligence install analysis requires at least one row")
+
+        first_paid_at = self.first_paid_at
+        free_cohort_keys = {
+            key
+            for key, observed_at in self.earliest_free_cohort_at.items()
+            if first_paid_at is None or observed_at < first_paid_at
+        }
+        free_signal_groups = {
+            key
+            for key, observed_at in self.earliest_free_signal_group_at.items()
+            if first_paid_at is None or observed_at < first_paid_at
+        }
+        signal_groups = set(self.signal_groups)
+        pulse_intelligence_derive_signal_groups(signal_groups)
+        pulse_intelligence_derive_signal_groups(free_signal_groups)
+        observed_free_start = self.first_free_at is not None and (
+            first_paid_at is None or self.first_free_at < first_paid_at
+        )
+        return PulseIntelligenceInstallAnalysis(
+            latest_received_at=self.latest_received_at,
+            first_paid_at=first_paid_at,
+            observed_free_start=observed_free_start,
+            observed_free_to_paid=observed_free_start and first_paid_at is not None,
+            cohort_keys=frozenset(self.cohort_keys),
+            free_cohort_keys=frozenset(free_cohort_keys),
+            signal_groups=frozenset(signal_groups),
+            free_signal_groups=frozenset(free_signal_groups),
+        )
 
 
 PULSE_INTELLIGENCE_ANALYSIS_BOOL_FIELDS = tuple(
@@ -1296,15 +1427,16 @@ def fetch_rows_local(db_path: str, since_days: int) -> dict[str, Any]:
                 """
             ).fetchone()
         )
+        rows_sql = (
+            f"SELECT {REPORT_ROW_PROJECTION} "
+            "FROM telemetry_pings "
+            "WHERE received_at >= datetime('now', ?) "
+            "ORDER BY received_at DESC"
+        )
         rows = [
             dict(row)
             for row in conn.execute(
-                """
-                SELECT *
-                FROM telemetry_pings
-                WHERE received_at >= datetime('now', ?)
-                ORDER BY received_at DESC
-                """,
+                rows_sql,
                 (f"-{since_days} days",),
             ).fetchall()
         ]
@@ -1314,8 +1446,9 @@ def fetch_rows_local(db_path: str, since_days: int) -> dict[str, Any]:
 
 
 def fetch_rows_remote(ssh_host: str, db_path: str, since_days: int) -> dict[str, Any]:
-    # Streams JSON-lines (db_stats header, then one row per line) so the remote
-    # process never holds the full result set — the license droplet has 1GB RAM.
+    # Let SQLite aggregate the history into sufficient per-install evidence.
+    # Only the latest row and compact Pulse Intelligence facts cross the
+    # network, not the full heartbeat history.
     remote_script = """
 import gzip
 import json
@@ -1324,6 +1457,18 @@ import sys
 
 db_path = sys.argv[1]
 since_days = int(sys.argv[2])
+column_names = sys.argv[3].split(",")
+intelligence_columns = sys.argv[4].split(",")
+if not column_names or any(
+    not name or not name[0].isalpha() or not name.replace("_", "").isalnum()
+    for name in column_names
+):
+    raise ValueError("invalid telemetry report column projection")
+if not intelligence_columns or any(
+    name not in column_names
+    for name in intelligence_columns
+):
+    raise ValueError("invalid telemetry history signal projection")
 conn = sqlite3.connect(db_path)
 conn.row_factory = sqlite3.Row
 db_stats_sql = (
@@ -1333,27 +1478,79 @@ db_stats_sql = (
     "FROM telemetry_pings"
 )
 rows_sql = (
-    "SELECT * "
+    "WITH ranked AS ("
+    "SELECT " + ", ".join(column_names) + ", "
+    "ROW_NUMBER() OVER ("
+    "PARTITION BY install_id ORDER BY received_at DESC, rowid DESC"
+    ") AS latest_rank "
+    "FROM telemetry_pings "
+    "WHERE received_at >= datetime('now', ?)"
+    ") SELECT " + ", ".join(column_names) + " "
+    "FROM ranked WHERE latest_rank = 1"
+)
+analysis_selects = [
+    "install_id",
+    "MAX(received_at)",
+    "MIN(CASE WHEN paid_license = 0 THEN received_at END)",
+    "MIN(CASE WHEN paid_license = 1 THEN received_at END)",
+]
+for name in intelligence_columns:
+    analysis_selects.append(
+        "MAX(CASE WHEN " + name + " <> 0 THEN 1 ELSE 0 END)"
+    )
+    analysis_selects.append(
+        "MIN(CASE WHEN paid_license = 0 AND " + name +
+        " <> 0 THEN received_at END)"
+    )
+analysis_sql = (
+    "SELECT " + ", ".join(analysis_selects) + " "
     "FROM telemetry_pings "
     "WHERE received_at >= datetime('now', ?) "
-    "ORDER BY received_at DESC"
+    "GROUP BY install_id"
 )
-output = gzip.GzipFile(fileobj=sys.stdout.buffer, mode="wb", compresslevel=6)
+output = gzip.GzipFile(fileobj=sys.stdout.buffer, mode="wb", compresslevel=1)
 
 def emit(value):
     output.write(json.dumps(value, separators=(",", ":")).encode("utf-8") + b"\\n")
 
 try:
     db_stats = dict(conn.execute(db_stats_sql).fetchone())
-    emit({"db_stats": db_stats})
-    for row in conn.execute(rows_sql, (f"-{since_days} days",)):
-        emit(dict(row))
+    emit({"db_stats": db_stats, "row_columns": column_names})
+    cutoff = f"-{since_days} days"
+    for row in conn.execute(analysis_sql, (cutoff,)):
+        first_paid_at = row[3]
+        signal_fields = []
+        free_signal_fields = []
+        for signal_index, name in enumerate(intelligence_columns):
+            value_index = 4 + (signal_index * 2)
+            if row[value_index]:
+                signal_fields.append(name)
+            free_observed_at = row[value_index + 1]
+            if free_observed_at is not None and (
+                first_paid_at is None or free_observed_at < first_paid_at
+            ):
+                free_signal_fields.append(name)
+        emit({"a": [
+            row[0], row[1], row[2], first_paid_at,
+            signal_fields, free_signal_fields,
+        ]})
+    for row in conn.execute(rows_sql, (cutoff,)):
+        emit({"r": list(row)})
 finally:
     conn.close()
     output.close()
 """
     result = subprocess.run(
-        ["ssh", ssh_host, "python3", "-", db_path, str(since_days)],
+        [
+            "ssh",
+            ssh_host,
+            "python3",
+            "-",
+            db_path,
+            str(since_days),
+            ",".join(REPORT_ROW_COLUMNS),
+            ",".join(REPORT_HISTORY_SIGNAL_COLUMNS),
+        ],
         input=remote_script.encode("utf-8"),
         capture_output=True,
         check=True,
@@ -1367,7 +1564,39 @@ finally:
         header = json.loads(next(lines))
     except StopIteration:
         raise RuntimeError(f"empty response from remote telemetry fetch on {ssh_host}") from None
-    return {"db_stats": header["db_stats"], "rows": [json.loads(line) for line in lines]}
+    row_columns = header.get("row_columns")
+    if row_columns != list(REPORT_ROW_COLUMNS):
+        raise RuntimeError(f"invalid row schema from remote telemetry fetch on {ssh_host}")
+    rows: list[dict[str, Any]] = []
+    analysis_facts: list[dict[str, Any]] = []
+    for line in lines:
+        record = json.loads(line)
+        if "r" in record:
+            values = record["r"]
+            if len(values) != len(row_columns):
+                raise RuntimeError(f"invalid row from remote telemetry fetch on {ssh_host}")
+            rows.append(dict(zip(row_columns, values)))
+        elif "a" in record:
+            values = record["a"]
+            if len(values) != 6:
+                raise RuntimeError(f"invalid analysis from remote telemetry fetch on {ssh_host}")
+            analysis_facts.append(
+                {
+                    "install_id": values[0],
+                    "latest_received_at": values[1],
+                    "first_free_at": values[2],
+                    "first_paid_at": values[3],
+                    "signal_fields": values[4],
+                    "free_signal_fields": values[5],
+                }
+            )
+        else:
+            raise RuntimeError(f"invalid record from remote telemetry fetch on {ssh_host}")
+    return {
+        "db_stats": header["db_stats"],
+        "rows": rows,
+        "pulse_intelligence_analysis_facts": analysis_facts,
+    }
 
 
 def counter_entries(counter: Counter[str], key_name: str) -> list[dict[str, Any]]:
@@ -1644,50 +1873,62 @@ def pulse_intelligence_row_analysis_keys(
     return cohort_keys, signal_groups
 
 
+def pulse_intelligence_field_analysis_keys(
+    fields: Iterable[str],
+) -> tuple[set[str], set[str]]:
+    cohort_keys: set[str] = set()
+    signal_groups: set[str] = set()
+    for field in fields:
+        cohort_keys.update(PULSE_INTELLIGENCE_COHORT_BOOL_KEYS_BY_FIELD.get(field, ()))
+        cohort_keys.update(PULSE_INTELLIGENCE_COHORT_COUNT_KEYS_BY_FIELD.get(field, ()))
+        signal_groups.update(PULSE_INTELLIGENCE_SIGNAL_GROUP_BOOL_KEYS_BY_FIELD.get(field, ()))
+        signal_groups.update(PULSE_INTELLIGENCE_SIGNAL_GROUP_COUNT_KEYS_BY_FIELD.get(field, ()))
+    pulse_intelligence_derive_signal_groups(signal_groups)
+    return cohort_keys, signal_groups
+
+
+def analyze_pulse_intelligence_facts(
+    facts: Iterable[dict[str, Any]],
+) -> dict[str, PulseIntelligenceInstallAnalysis]:
+    analyses: dict[str, PulseIntelligenceInstallAnalysis] = {}
+    for fact in facts:
+        install_id = str(fact.get("install_id") or "").strip()
+        latest_raw = str(fact.get("latest_received_at") or "").strip()
+        if not install_id or not latest_raw:
+            continue
+        first_free_raw = str(fact.get("first_free_at") or "").strip()
+        first_paid_raw = str(fact.get("first_paid_at") or "").strip()
+        first_free_at = parse_received_at(first_free_raw) if first_free_raw else None
+        first_paid_at = parse_received_at(first_paid_raw) if first_paid_raw else None
+        cohort_keys, signal_groups = pulse_intelligence_field_analysis_keys(
+            fact.get("signal_fields") or ()
+        )
+        free_cohort_keys, free_signal_groups = pulse_intelligence_field_analysis_keys(
+            fact.get("free_signal_fields") or ()
+        )
+        observed_free_start = first_free_at is not None and (
+            first_paid_at is None or first_free_at < first_paid_at
+        )
+        analyses[install_id] = PulseIntelligenceInstallAnalysis(
+            latest_received_at=parse_received_at(latest_raw),
+            first_paid_at=first_paid_at,
+            observed_free_start=observed_free_start,
+            observed_free_to_paid=observed_free_start and first_paid_at is not None,
+            cohort_keys=frozenset(cohort_keys),
+            free_cohort_keys=frozenset(free_cohort_keys),
+            signal_groups=frozenset(signal_groups),
+            free_signal_groups=frozenset(free_signal_groups),
+        )
+    return analyses
+
+
 def analyze_pulse_intelligence_install(
     install_rows: Iterable[dict[str, Any]],
 ) -> PulseIntelligenceInstallAnalysis:
-    timed_rows = pulse_intelligence_timed_rows(install_rows)
-    if not timed_rows:
-        raise ValueError("Pulse Intelligence install analysis requires at least one row")
-
-    first_free_at = next(
-        (received_at for received_at, _, posture in timed_rows if posture is False),
-        None,
-    )
-    first_paid_at = next(
-        (received_at for received_at, _, posture in timed_rows if posture is True),
-        None,
-    )
-    observed_free_start = first_free_at is not None and (
-        first_paid_at is None or first_free_at < first_paid_at
-    )
-
-    cohort_keys: set[str] = set()
-    free_cohort_keys: set[str] = set()
-    signal_groups: set[str] = set()
-    free_signal_groups: set[str] = set()
-
-    for received_at, row, posture in timed_rows:
-        row_cohort_keys, row_signal_groups = pulse_intelligence_row_analysis_keys(row)
-        cohort_keys.update(row_cohort_keys)
-        signal_groups.update(row_signal_groups)
-        if posture is False and (first_paid_at is None or received_at < first_paid_at):
-            free_cohort_keys.update(row_cohort_keys)
-            free_signal_groups.update(row_signal_groups)
-
-    pulse_intelligence_derive_signal_groups(signal_groups)
-    pulse_intelligence_derive_signal_groups(free_signal_groups)
-    return PulseIntelligenceInstallAnalysis(
-        latest_received_at=timed_rows[-1][0],
-        first_paid_at=first_paid_at,
-        observed_free_start=observed_free_start,
-        observed_free_to_paid=observed_free_start and first_paid_at is not None,
-        cohort_keys=frozenset(cohort_keys),
-        free_cohort_keys=frozenset(free_cohort_keys),
-        signal_groups=frozenset(signal_groups),
-        free_signal_groups=frozenset(free_signal_groups),
-    )
+    accumulator = _PulseIntelligenceInstallAccumulator()
+    for row in install_rows:
+        accumulator.observe(row)
+    return accumulator.finalize()
 
 
 def pulse_intelligence_first_paid_at(
@@ -1903,23 +2144,22 @@ def summarize_pulse_intelligence_install_outcomes(
     }
 
 
-def group_pulse_intelligence_rows_by_install(
-    rows: Iterable[dict[str, Any]],
-) -> dict[str, list[dict[str, Any]]]:
-    rows_by_install: dict[str, list[dict[str, Any]]] = {}
-    for row in rows:
-        install_id = str(row.get("install_id") or "").strip()
-        if install_id:
-            rows_by_install.setdefault(install_id, []).append(row)
-    return rows_by_install
-
-
 def analyze_pulse_intelligence_rows(
     rows: Iterable[dict[str, Any]],
 ) -> dict[str, PulseIntelligenceInstallAnalysis]:
+    accumulators: dict[str, _PulseIntelligenceInstallAccumulator] = {}
+    for row in rows:
+        install_id = str(row.get("install_id") or "").strip()
+        if not install_id:
+            continue
+        accumulator = accumulators.get(install_id)
+        if accumulator is None:
+            accumulator = _PulseIntelligenceInstallAccumulator()
+            accumulators[install_id] = accumulator
+        accumulator.observe(row)
     return {
-        install_id: analyze_pulse_intelligence_install(install_rows)
-        for install_id, install_rows in group_pulse_intelligence_rows_by_install(rows).items()
+        install_id: accumulator.finalize()
+        for install_id, accumulator in accumulators.items()
     }
 
 
@@ -2087,7 +2327,12 @@ def summarize_user_base_signals(
         schema_version = parse_optional_nonnegative_int(row.get("schema_version"))
         schema_versions[str(schema_version or "legacy")] += 1
         for field, _ in USER_BASE_CATEGORY_FIELDS:
-            value = str(row.get(field) or "legacy_unknown").strip() or "legacy_unknown"
+            fallback = (
+                "not_reported"
+                if field == "update_last_failure_category"
+                else "legacy_unknown"
+            )
+            value = str(row.get(field) or fallback).strip() or fallback
             categories[field][value] += 1
         for field, _ in USER_BASE_BOOL_FIELDS:
             if parse_optional_bool(row.get(field)):
@@ -2180,6 +2425,7 @@ def summarize_rows(
     include_mock_fleet: bool = False,
     *,
     now: datetime | None = None,
+    pulse_intelligence_analysis_facts: Iterable[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     row_list: list[dict[str, Any]] = []
     mock_fleet_rows = 0
@@ -2199,7 +2445,16 @@ def summarize_rows(
             latest_by_install[install_id] = row
 
     current_time = now or datetime.now(timezone.utc)
-    pulse_intelligence_analysis = analyze_pulse_intelligence_rows(row_list)
+    pulse_intelligence_analysis = (
+        analyze_pulse_intelligence_facts(pulse_intelligence_analysis_facts)
+        if pulse_intelligence_analysis_facts is not None
+        else analyze_pulse_intelligence_rows(row_list)
+    )
+    pulse_intelligence_analysis = {
+        install_id: analysis
+        for install_id, analysis in pulse_intelligence_analysis.items()
+        if install_id in latest_by_install
+    }
     latest_install_windows = summarize_latest_install_windows(
         latest_by_install,
         published_versions,
@@ -2380,7 +2635,7 @@ def format_text(summary: dict[str, Any], repo: str, since_days: int) -> str:
             f"  - {entry['version']}: {entry['installs']}"
             for entry in user_base.get("schema_versions", [])
         )
-        lines.append("- lifecycle and audience buckets:")
+        lines.append("- lifecycle, audience, and update buckets:")
         for signal in user_base.get("category_signals", []):
             buckets = ", ".join(
                 f"{entry['bucket']} {entry['installs']}"
@@ -2597,6 +2852,9 @@ def main(argv: list[str] | None = None) -> int:
         published_versions,
         target_version=target_version,
         include_mock_fleet=args.include_mock_fleet,
+        pulse_intelligence_analysis_facts=source.get(
+            "pulse_intelligence_analysis_facts"
+        ),
     )
 
     if args.format == "json":

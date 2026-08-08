@@ -1988,6 +1988,37 @@ actor, and every audit row read stay on the install.
 `TestWithAuditReadActivity_RecordIsContentFree` and
 `TestRecordAuditReadActivity_RejectsUnknownActivity` pin both properties.
 
+### Telemetry ingestion matches the released sender while storage stays compatible
+
+The active outbound contract remains schema v7. The draft schema-v8
+`business_estate` field was reverted before release and must not remain in the
+license server's accepted ping struct merely because a private receiver build
+and database migration briefly carried it. Existing deployed databases need no
+destructive column migration, while new databases do not recreate the retired
+column. Incoming draft-field values are ignored and can never enter adoption
+reporting. `TestTelemetryPing_IgnoresRetiredBusinessEstateField` pins that
+boundary, while `scripts/check_telemetry_schema_parity.py` requires the public
+sender, frontend preview, and active private receiver struct to stay exact apart
+from the two named legacy compatibility inputs.
+
+### Adoption reporting aggregates high-cardinality history in one pass
+
+`scripts/telemetry_adoption_report.py` must select only its explicit reporting
+projection instead of copying every receiver column over SSH. That projection
+includes the licensed-feature, availability-probe, and updater signals added to
+the released schema, while excluding the retired `business_estate` draft.
+SQLite reduces remote history to one latest-state row plus compact sufficient
+facts per install: first free, first paid, observed signal fields, and signal
+fields observed while free before the first paid posture. This preserves
+latest-state reporting, first-free/first-paid conversion, and all outcome
+cohort membership without sending raw heartbeat history over SSH. The local
+fallback must analyze each row once and keep only bounded per-install evidence
+sets and earliest observation times. It must not regroup rows into per-install
+history lists or sort those lists before producing the outcome cohorts and
+operations funnel. The production-scale guard exercises 120,000 rows across
+12,000 installs, verifies exactly one timestamp parse per row, and keeps the
+cohort plus funnel aggregation inside the bounded runtime budget.
+
 ### Licensed-feature adoption fields must discriminate
 
 `telemetry.LicensedFeatureAdoptionFields` registers every telemetry field whose

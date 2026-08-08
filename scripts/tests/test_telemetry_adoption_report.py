@@ -7,8 +7,10 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import gzip
 import json
+import sqlite3
 import subprocess
 import sys
+import tempfile
 import time
 import unittest
 from unittest import mock
@@ -37,7 +39,50 @@ class TelemetryAdoptionReportTest(unittest.TestCase):
             {"install_id": "a", "received_at": "2026-07-17 00:00:00"},
             {"install_id": "b", "received_at": "2026-07-16 00:00:00"},
         ]
-        stdout = "\n".join([json.dumps({"db_stats": db_stats}), *(json.dumps(row) for row in rows), ""])
+        analysis_facts = [
+            {
+                "install_id": "a",
+                "latest_received_at": "2026-07-17 00:00:00",
+                "first_free_at": "2026-07-17 00:00:00",
+                "first_paid_at": None,
+                "signal_fields": [],
+                "free_signal_fields": [],
+            }
+        ]
+        stdout = "\n".join(
+            [
+                json.dumps(
+                    {
+                        "db_stats": db_stats,
+                        "row_columns": list(report.REPORT_ROW_COLUMNS),
+                    }
+                ),
+                *(
+                    json.dumps(
+                        {
+                            "a": [
+                                fact["install_id"],
+                                fact["latest_received_at"],
+                                fact["first_free_at"],
+                                fact["first_paid_at"],
+                                fact["signal_fields"],
+                                fact["free_signal_fields"],
+                            ]
+                        }
+                    )
+                    for fact in analysis_facts
+                ),
+                *(
+                    json.dumps(
+                        {
+                            "r": [row.get(column) for column in report.REPORT_ROW_COLUMNS]
+                        }
+                    )
+                    for row in rows
+                ),
+                "",
+            ]
+        )
         completed = subprocess.CompletedProcess(
             args=[],
             returncode=0,
@@ -46,11 +91,152 @@ class TelemetryAdoptionReportTest(unittest.TestCase):
         )
         with mock.patch.object(report.subprocess, "run", return_value=completed) as run_mock:
             result = report.fetch_rows_remote("pulse-license", "/opt/licenses.sqlite", 30)
-        self.assertEqual(result, {"db_stats": db_stats, "rows": rows})
+        expanded_rows = [
+            {column: row.get(column) for column in report.REPORT_ROW_COLUMNS}
+            for row in rows
+        ]
+        self.assertEqual(
+            result,
+            {
+                "db_stats": db_stats,
+                "rows": expanded_rows,
+                "pulse_intelligence_analysis_facts": analysis_facts,
+            },
+        )
         remote_script = run_mock.call_args.kwargs["input"].decode("utf-8")
         self.assertNotIn("fetchall", remote_script)
+        self.assertNotIn("SELECT *", remote_script)
         self.assertIn("received_at >= datetime('now', ?)", remote_script)
+        self.assertEqual(
+            run_mock.call_args.args[0][-2],
+            ",".join(report.REPORT_ROW_COLUMNS),
+        )
+        self.assertEqual(
+            run_mock.call_args.args[0][-1],
+            ",".join(report.REPORT_HISTORY_SIGNAL_COLUMNS),
+        )
+        self.assertIn("ROW_NUMBER() OVER (", remote_script)
+        self.assertIn("GROUP BY install_id", remote_script)
+        self.assertIn("MIN(CASE WHEN paid_license = 0", remote_script)
         compile(remote_script, "<telemetry-remote-fetch>", "exec")
+
+    def test_report_projection_and_signal_specs_cover_recent_schema_fields(self) -> None:
+        recent_count_fields = {
+            "availability_probe_targets",
+            "availability_probe_agents",
+            "rbac_custom_roles",
+            "rbac_user_assignments",
+            "audit_reads_30d",
+            "report_schedules",
+            "report_schedules_enabled",
+            "report_schedules_run_30d",
+            "agent_profiles",
+            "update_attempts_30d",
+            "update_successes_30d",
+            "update_failures_30d",
+        }
+        projected = set(report.REPORT_ROW_COLUMNS)
+        self.assertTrue(recent_count_fields <= projected)
+        self.assertIn("alert_ai_enabled", projected)
+        self.assertIn("update_last_failure_category", projected)
+        self.assertNotIn("business_estate", projected)
+
+        specs = {entry["field"]: entry for entry in report.telemetry_signal_specs()}
+        for field in recent_count_fields:
+            self.assertEqual(specs[field]["type"], "count")
+            self.assertEqual(specs[field]["group"], "deep")
+        self.assertEqual(specs["alert_ai_enabled"]["type"], "bool")
+        self.assertEqual(specs["alert_ai_enabled"]["group"], "deep")
+
+    def test_compact_intelligence_facts_match_full_history_analysis(self) -> None:
+        numeric_columns = {
+            "schema_version",
+            "version_is_development",
+            "version_is_published_release",
+            *(key for key, _ in report.ADOPTION_COUNT_FIELDS),
+            *(key for key, _ in report.FEATURE_BOOL_FIELDS),
+            *(key for key, _ in report.USER_BASE_BOOL_FIELDS),
+            *(key for key, _ in report.USER_BASE_COUNT_FIELDS),
+            *(key for key, _ in report.PULSE_INTELLIGENCE_BOOL_FIELDS),
+            *(key for key, _ in report.PULSE_INTELLIGENCE_COUNT_FIELDS),
+        }
+        column_definitions = ", ".join(
+            f"{column} {'INTEGER' if column in numeric_columns else 'TEXT'}"
+            for column in report.REPORT_ROW_COLUMNS
+        )
+        now = datetime.now(timezone.utc).replace(microsecond=0)
+        rows = [
+            {
+                "install_id": "install-a",
+                "received_at": (now - timedelta(hours=6)).strftime("%Y-%m-%d %H:%M:%S"),
+                "paid_license": 0,
+            },
+            {
+                "install_id": "install-a",
+                "received_at": (now - timedelta(hours=5)).strftime("%Y-%m-%d %H:%M:%S"),
+                "paid_license": 0,
+                "pulse_intelligence_loop_configured": 1,
+            },
+            {
+                "install_id": "install-a",
+                "received_at": (now - timedelta(hours=4)).strftime("%Y-%m-%d %H:%M:%S"),
+                "paid_license": 0,
+            },
+            {
+                "install_id": "install-a",
+                "received_at": (now - timedelta(hours=3)).strftime("%Y-%m-%d %H:%M:%S"),
+                "paid_license": 1,
+            },
+            {
+                "install_id": "install-a",
+                "received_at": (now - timedelta(hours=2)).strftime("%Y-%m-%d %H:%M:%S"),
+                "paid_license": 1,
+                "pulse_intelligence_approved_action_successes_30d": 1,
+            },
+            {
+                "install_id": "install-a",
+                "received_at": (now - timedelta(hours=1)).strftime("%Y-%m-%d %H:%M:%S"),
+                "paid_license": 1,
+            },
+        ]
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db_path = str(Path(temp_dir) / "telemetry.sqlite")
+            conn = sqlite3.connect(db_path)
+            try:
+                conn.execute(f"CREATE TABLE telemetry_pings ({column_definitions})")
+                for row in rows:
+                    columns = ", ".join(row)
+                    placeholders = ", ".join("?" for _ in row)
+                    conn.execute(
+                        f"INSERT INTO telemetry_pings ({columns}) VALUES ({placeholders})",
+                        tuple(row.values()),
+                    )
+                conn.commit()
+            finally:
+                conn.close()
+
+            fetched_rows = report.fetch_rows_local(db_path, 1)["rows"]
+
+        self.assertEqual(len(fetched_rows), len(rows))
+        facts = [
+            {
+                "install_id": "install-a",
+                "latest_received_at": rows[-1]["received_at"],
+                "first_free_at": rows[0]["received_at"],
+                "first_paid_at": rows[3]["received_at"],
+                "signal_fields": [
+                    "pulse_intelligence_loop_configured",
+                    "pulse_intelligence_approved_action_successes_30d",
+                ],
+                "free_signal_fields": ["pulse_intelligence_loop_configured"],
+            }
+        ]
+        self.assertEqual(
+            report.analyze_pulse_intelligence_facts(facts),
+            report.analyze_pulse_intelligence_rows(rows),
+        )
+        self.assertEqual(fetched_rows[0]["received_at"], rows[-1]["received_at"])
 
     def test_fetch_rows_remote_rejects_empty_response(self) -> None:
         completed = subprocess.CompletedProcess(
@@ -1445,8 +1631,10 @@ class TelemetryAdoptionReportTest(unittest.TestCase):
         now = datetime(2026, 7, 23, 12, tzinfo=timezone.utc)
         rows: list[dict[str, object]] = []
         latest_by_install: dict[str, dict[str, object]] = {}
-        install_count = 500
-        rows_per_install = 100
+        # Match the high-cardinality shape of the production 14-day window,
+        # where many installs contribute a small number of heartbeat rows.
+        install_count = 12_000
+        rows_per_install = 10
         for install_index in range(install_count):
             install_id = f"install-{install_index:04d}"
             for row_index in range(rows_per_install):
@@ -1493,8 +1681,8 @@ class TelemetryAdoptionReportTest(unittest.TestCase):
         self.assertEqual(parse_received_at.call_count, len(rows))
         self.assertLess(
             elapsed,
-            5.0,
-            f"50,000-row Pulse Intelligence aggregation took {elapsed:.3f}s",
+            8.0,
+            f"120,000-row high-cardinality Pulse Intelligence aggregation took {elapsed:.3f}s",
         )
 
     def test_is_mock_fleet_row_matches_scaled_fixture_signature(self) -> None:
