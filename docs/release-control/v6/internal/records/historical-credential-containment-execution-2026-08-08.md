@@ -128,10 +128,20 @@ uses the scoped token. The scoped token passed the provider's active-token
 verification and successfully read the current Pages project inventory. The
 invalidated global key was removed from the protected local credential source,
 which now retains only the scoped-token path and non-secret account metadata.
-No replacement global key was retrieved or persisted. A later local diagnostic
-rendered the scoped token outside its protected source, so that replacement is
-being rotated before the prerelease gate can close.
+No replacement global key was retrieved or persisted.
 
-Disposition: provider `revoked`; replacement pending scoped-token rotation.
+A later local diagnostic rendered the scoped token outside its protected
+source. That token was capability-matched to its provider record, revoked in
+the provider dashboard, and then rejected by the provider verification API
+with HTTP 401. Its exact dashboard row is absent. A fresh single-account token
+grants only `Cloudflare Pages: Edit`; it was installed atomically in the
+protected local credential source with mode `0600`, and verified active. The
+replacement also successfully read the Pages project inventory and located the
+current landing project. Neither repository has a GitHub Actions secret or
+current-tree credential consumer for this role; the only active consumer is
+the protected local landing deployment path.
+
+Disposition: provider `revoked`; replacement `validated` after scoped-token
+re-rotation.
 
 No history rewrite was performed or is required for provider containment.

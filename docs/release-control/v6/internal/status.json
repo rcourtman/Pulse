@@ -8045,7 +8045,7 @@
       "owner": "release-owner-and-provider-owners",
       "blocking_level": "rc-ready",
       "minimum_evidence_tier": "production-observed",
-      "status": "owner-action",
+      "status": "passed",
       "verification_doc": "docs/release-control/v6/internal/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
       "lane_ids": [
         "L1",
@@ -8310,6 +8310,20 @@
             "subject_id": "PBS-02",
             "disposition": "validated",
             "recorded_at": "2026-08-08T16:15:00Z",
+            "verifier": "credential-containment-audit",
+            "evidence": [
+              {
+                "repo": "pulse",
+                "path": "docs/release-control/v6/internal/records/historical-credential-containment-execution-2026-08-08.md",
+                "kind": "file",
+                "evidence_tier": "production-observed"
+              }
+            ]
+          },
+          {
+            "subject_id": "PRO-CLOUDFLARE-01",
+            "disposition": "validated",
+            "recorded_at": "2026-08-08T16:48:18Z",
             "verifier": "credential-containment-audit",
             "evidence": [
               {
