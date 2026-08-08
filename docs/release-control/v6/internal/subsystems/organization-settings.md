@@ -238,6 +238,14 @@ helper so handlers do not duplicate membership lookup or accidentally bind
 sessions to email. A matching owner/member contact email without a stored
 `OwnerUserID` or member `UserID` is not a principal; the helper must fail
 closed instead of manufacturing a session key from email.
+Before that organization lookup can lead to one-time token persistence, the
+public hosted magic-link route must first resolve a valid canonical hosted
+external URL. Unavailable URL configuration therefore returns the same generic
+response for registered and unknown contact emails without touching either
+supported token store, while configured URL success still reaches this stable
+principal resolver. Stripe completion applies the same ordering before its
+best-effort organization-member delivery and must not let an optional URL
+failure disturb billing or event idempotency.
 If one contact email matches multiple distinct stored principals, the model
 must also fail closed instead of selecting a principal by owner/member row
 order.

@@ -8961,6 +8961,23 @@ route, proves zero in-memory and persisted token mutation on every hosted
 failure, and preserves both configured-URL precedence and the self-hosted
 request-origin fallback.
 
+Hosted magic-link issuance follows the same mutation-order contract. The
+registered `/api/public/magic-link/request` handler must resolve the canonical
+hosted external URL before organization lookup or `GenerateToken`, return the
+same generic `200 OK` body for registered and unknown emails when that URL is
+unavailable, and leave both the in-memory and SQLite magic-link stores empty.
+Stripe `checkout.session.completed` processing must resolve that URL before
+best-effort token generation too; failure skips only sign-in delivery while
+billing projection, customer indexing, event completion, and duplicate replay
+remain successful and idempotent. Neither path may recover from missing,
+auto-detected-only, invalid, or invalid-higher-precedence hosted configuration
+through direct Host or trusted/untrusted forwarded headers. Configured
+`PublicURL` and higher-precedence `AgentConnectURL` remain the successful
+targets. `TestContract_HostedMagicLinkRequestValidatesOriginBeforeMutation`
+and `TestStripeWebhook_CheckoutMagicLinkValidatesOriginBeforeMutation` prove
+that boundary with exact in-memory/SQLite token counts and adjacent success,
+self-hosted, enumeration-resistance, and replay cases.
+
 ### Runtime branding is a narrow presentation contract
 
 `GET /api/runtime/branding` is the authenticated `monitoring:read` boundary

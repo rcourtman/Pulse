@@ -1877,6 +1877,19 @@ untrusted-forwarded request evidence; the install/setup proof also follows the
 returned setup artifact through the public script route so the rendered
 token-bearing shell body remains bound to the configured origin.
 
+The returning-user and post-checkout magic-link paths are credential-target
+consumers of that same resolver. They must resolve a valid authoritative hosted
+URL before `GenerateToken`, so missing, auto-detected-only, invalid, or invalid-
+higher-precedence configuration cannot leave an unreachable HMAC token record
+and cannot fall through to direct Host or trusted/untrusted forwarded headers.
+The public route preserves one generic `200 OK` response for registered and
+unknown email while leaving both supported stores empty; Stripe completion
+skips only best-effort delivery while preserving billing and event idempotency.
+Configured `PublicURL` and higher-precedence `AgentConnectURL` remain valid
+targets. Exact in-memory/SQLite state and adversarial header proof lives in
+`TestContract_HostedMagicLinkRequestValidatesOriginBeforeMutation` and
+`TestStripeWebhook_CheckoutMagicLinkValidatesOriginBeforeMutation`.
+
 ### The global security banner no longer scores a truncated status payload
 
 `/api/security/status` in `internal/api/router_routes_auth_security.go` returns

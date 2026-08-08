@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -658,6 +659,272 @@ func TestStripeWebhook_DoesNotSendMagicLinkWithoutPublicURL(t *testing.T) {
 	}
 	if emailer.Count() != 0 {
 		t.Fatalf("magic link send count=%d, want %d (public url missing must fail closed)", emailer.Count(), 0)
+	}
+}
+
+func TestStripeWebhook_CheckoutMagicLinkValidatesOriginBeforeMutation(t *testing.T) {
+	type originHeaders struct {
+		host             string
+		remoteAddr       string
+		trustedProxyCIDR string
+		forwardedHost    string
+		forwardedProto   string
+	}
+	type storeFactory struct {
+		name string
+		new  func(*testing.T) (MagicLinkStore, func(*testing.T) int)
+	}
+	type testCase struct {
+		name            string
+		publicURL       string
+		autoDetected    bool
+		agentConnectURL string
+		wantBaseURL     string
+		headers         originHeaders
+	}
+
+	storeFactories := []storeFactory{
+		{
+			name: "in-memory",
+			new: func(t *testing.T) (MagicLinkStore, func(*testing.T) int) {
+				t.Helper()
+				store := NewInMemoryMagicLinkStore()
+				return store, func(t *testing.T) int {
+					t.Helper()
+					store.mu.RLock()
+					defer store.mu.RUnlock()
+					return len(store.tokens)
+				}
+			},
+		},
+		{
+			name: "sqlite",
+			new: func(t *testing.T) (MagicLinkStore, func(*testing.T) int) {
+				t.Helper()
+				store, err := NewSQLiteMagicLinkStore(t.TempDir())
+				if err != nil {
+					t.Fatalf("NewSQLiteMagicLinkStore: %v", err)
+				}
+				return store, func(t *testing.T) int {
+					t.Helper()
+					var count int
+					if err := store.db.QueryRow(`SELECT COUNT(*) FROM magic_link_tokens`).Scan(&count); err != nil {
+						t.Fatalf("count SQLite magic-link tokens: %v", err)
+					}
+					return count
+				}
+			},
+		},
+	}
+
+	cases := []testCase{
+		{
+			name: "missing configuration ignores hostile direct Host and untrusted forwarding",
+			headers: originHeaders{
+				host:           "user@direct-attacker.example/path",
+				remoteAddr:     "198.51.100.20:41000",
+				forwardedHost:  "forwarded-attacker.example",
+				forwardedProto: "https",
+			},
+		},
+		{
+			name:         "auto-detected URL is not hosted authority",
+			publicURL:    "https://auto-detected.example",
+			autoDetected: true,
+			headers: originHeaders{
+				host:           "direct-attacker.example",
+				remoteAddr:     "198.51.100.20:41000",
+				forwardedHost:  "forwarded-attacker.example",
+				forwardedProto: "https",
+			},
+		},
+		{
+			name:      "invalid PublicURL ignores trusted forwarding",
+			publicURL: "https://user@configured.example",
+			headers: originHeaders{
+				host:             "direct-attacker.example",
+				remoteAddr:       "192.0.2.44:41000",
+				trustedProxyCIDR: "192.0.2.0/24",
+				forwardedHost:    "trusted-forwarded-attacker.example",
+				forwardedProto:   "https",
+			},
+		},
+		{
+			name:            "invalid higher-precedence AgentConnectURL does not fall through",
+			publicURL:       "https://configured.example",
+			agentConnectURL: "https://user@agents.configured.example",
+			headers: originHeaders{
+				host:           "direct-attacker.example",
+				remoteAddr:     "198.51.100.20:41000",
+				forwardedHost:  "forwarded-attacker.example",
+				forwardedProto: "https",
+			},
+		},
+		{
+			name:        "configured PublicURL defeats hostile direct Host and untrusted forwarding",
+			publicURL:   "https://configured.example/base/",
+			wantBaseURL: "https://configured.example/base",
+			headers: originHeaders{
+				host:           "direct-attacker.example",
+				remoteAddr:     "198.51.100.20:41000",
+				forwardedHost:  "forwarded-attacker.example",
+				forwardedProto: "http",
+			},
+		},
+		{
+			name:            "configured AgentConnectURL outranks PublicURL and trusted forwarding",
+			publicURL:       "https://configured.example",
+			agentConnectURL: "https://agents.configured.example/",
+			wantBaseURL:     "https://agents.configured.example",
+			headers: originHeaders{
+				host:             "direct-attacker.example",
+				remoteAddr:       "192.0.2.44:41000",
+				trustedProxyCIDR: "192.0.2.0/24",
+				forwardedHost:    "trusted-forwarded-attacker.example",
+				forwardedProto:   "http",
+			},
+		},
+	}
+
+	for _, factory := range storeFactories {
+		factory := factory
+		for _, tc := range cases {
+			tc := tc
+			t.Run(factory.name+" "+tc.name, func(t *testing.T) {
+				t.Setenv("STRIPE_WEBHOOK_SECRET", "whsec_magic_link_origin_order")
+				t.Setenv("PULSE_TRUSTED_PROXY_CIDRS", tc.headers.trustedProxyCIDR)
+				resetTrustedProxyCIDRsForTests()
+
+				dataPath := t.TempDir()
+				persistence := config.NewMultiTenantPersistence(dataPath)
+				rbacProvider := NewTenantRBACProvider(dataPath)
+				t.Cleanup(func() { _ = rbacProvider.Close() })
+				billingStore := config.NewFileBillingStore(dataPath)
+				createTestOrg(t, persistence, "org_magic_checkout", "owner@example.com")
+
+				store, countTokens := factory.new(t)
+				emailer := &captureEmailer{}
+				magicLinks := NewMagicLinkServiceWithKey(
+					[]byte("0123456789abcdef0123456789abcdef"),
+					store,
+					emailer,
+					NewRateLimiter(100, time.Hour),
+				)
+				t.Cleanup(magicLinks.Stop)
+
+				urlRouter := &Router{
+					hostedMode: true,
+					config: &config.Config{
+						PublicURL:             tc.publicURL,
+						PublicURLAutoDetected: tc.autoDetected,
+						AgentConnectURL:       tc.agentConnectURL,
+					},
+				}
+				handler := NewStripeWebhookHandlers(
+					billingStore,
+					persistence,
+					rbacProvider,
+					magicLinks,
+					urlRouter.resolvePublicURL,
+					true,
+					dataPath,
+				)
+
+				event := map[string]any{
+					"id":   "evt_checkout_magic_link_origin_order",
+					"type": "checkout.session.completed",
+					"data": map[string]any{
+						"object": map[string]any{
+							"id":             "cs_magic_link_origin_order",
+							"mode":           "subscription",
+							"customer":       "cus_magic_link_origin_order",
+							"customer_email": "owner@example.com",
+							"subscription":   "sub_magic_link_origin_order",
+							"metadata": map[string]any{
+								"org_id":       "org_magic_checkout",
+								"org_name":     "Magic Checkout",
+								"plan_version": "cloud-v1",
+							},
+						},
+					},
+				}
+				payload, err := json.Marshal(event)
+				if err != nil {
+					t.Fatalf("marshal Stripe event: %v", err)
+				}
+				signed := webhook.GenerateTestSignedPayload(&webhook.UnsignedPayload{
+					Payload:   payload,
+					Secret:    "whsec_magic_link_origin_order",
+					Timestamp: time.Now(),
+					Scheme:    "v1",
+				})
+
+				post := func(t *testing.T) *httptest.ResponseRecorder {
+					t.Helper()
+					req := httptest.NewRequest(http.MethodPost, "/api/webhooks/stripe", bytes.NewReader(payload))
+					req.Host = tc.headers.host
+					req.RemoteAddr = tc.headers.remoteAddr
+					if tc.headers.forwardedHost != "" {
+						req.Header.Set("X-Forwarded-Host", tc.headers.forwardedHost)
+					}
+					if tc.headers.forwardedProto != "" {
+						req.Header.Set("X-Forwarded-Proto", tc.headers.forwardedProto)
+					}
+					req.Header.Set("Stripe-Signature", signed.Header)
+					rec := httptest.NewRecorder()
+					handler.HandleStripeWebhook(rec, req)
+					return rec
+				}
+
+				first := post(t)
+				if first.Code != http.StatusOK || !strings.Contains(first.Body.String(), `"status":"processed"`) {
+					t.Fatalf("first checkout status = %d body=%s, want processed 200", first.Code, first.Body.String())
+				}
+				wantTokens := 0
+				if tc.wantBaseURL != "" {
+					wantTokens = 1
+				}
+				if got := countTokens(t); got != wantTokens {
+					t.Fatalf("stored magic-link token count after processed event = %d, want exactly %d", got, wantTokens)
+				}
+
+				second := post(t)
+				if second.Code != http.StatusOK || !strings.Contains(second.Body.String(), `"status":"duplicate"`) {
+					t.Fatalf("duplicate checkout status = %d body=%s, want duplicate 200", second.Code, second.Body.String())
+				}
+				if got := countTokens(t); got != wantTokens {
+					t.Fatalf("stored magic-link token count after duplicate event = %d, want exactly %d", got, wantTokens)
+				}
+
+				state, err := billingStore.GetBillingState("org_magic_checkout")
+				if err != nil {
+					t.Fatalf("GetBillingState: %v", err)
+				}
+				if state == nil || state.SubscriptionState != entitlements.SubStateActive || state.StripeCustomerID != "cus_magic_link_origin_order" {
+					t.Fatalf("billing state = %#v, want active checkout projection", state)
+				}
+				mappedOrgID, ok, err := handler.index.LookupOrgID("cus_magic_link_origin_order")
+				if err != nil || !ok || mappedOrgID != "org_magic_checkout" {
+					t.Fatalf("customer index = org:%q ok:%t err:%v", mappedOrgID, ok, err)
+				}
+
+				if tc.wantBaseURL == "" {
+					if emailer.Count() != 0 {
+						t.Fatalf("magic-link sends = %d, want 0 when canonical URL is unavailable", emailer.Count())
+					}
+					return
+				}
+				if emailer.Count() != 1 {
+					t.Fatalf("magic-link sends = %d, want exactly 1 across duplicate delivery", emailer.Count())
+				}
+				emailer.mu.Lock()
+				magicLinkURL := emailer.calls[0].url
+				emailer.mu.Unlock()
+				if !strings.HasPrefix(magicLinkURL, tc.wantBaseURL+"/api/public/magic-link/verify?") || strings.Contains(magicLinkURL, "attacker") {
+					t.Fatalf("magic-link URL was not bound to configured base %q: %q", tc.wantBaseURL, magicLinkURL)
+				}
+			})
+		}
 	}
 }
 

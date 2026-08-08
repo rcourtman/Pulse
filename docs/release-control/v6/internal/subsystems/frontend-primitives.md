@@ -5255,6 +5255,15 @@ slice; registered-route proof lives in
 `TestContract_HostedDiagnosticsDockerPrepareTokenValidatesOriginBeforeMutation`,
 while the existing settings architecture proof continues to own the Public
 URL guidance.
+The same backend boundary now covers returning-user and Stripe post-checkout
+magic links before their one-time token is persisted. The public request UI
+contract remains unchanged: unavailable hosted URL configuration produces the
+same generic accepted response for registered and unknown email and exposes no
+configuration diagnostic or account-existence signal, while checkout simply
+skips its optional sign-in delivery. No frontend runtime file changes in this
+slice; the API proofs are
+`TestContract_HostedMagicLinkRequestValidatesOriginBeforeMutation` and
+`TestStripeWebhook_CheckoutMagicLinkValidatesOriginBeforeMutation`.
 `frontend-modern/src/utils/discoveryPresentation.ts` now owns the
 customer-facing discovery-section framing copy, scan-scope labels, subnet
 guidance, command-execution settings targets, API Access handoff labels, and

@@ -4964,6 +4964,14 @@ state unchanged and creates no recovery state. The router-level
 `TestContract_HostedDiagnosticsDockerPrepareTokenValidatesOriginBeforeMutation`
 proves that boundary for missing, auto-detected-only, invalid, precedence, and
 configured success cases without widening storage or recovery authority.
+The shared public and Stripe-completion magic-link callers now resolve the same
+canonical hosted URL before one-time token persistence. Their unavailable-URL
+paths leave exact in-memory and SQLite token state empty; the Stripe caller
+still completes billing, customer indexing, event handling, and duplicate
+replay. Those changes create no recovery point, backup artifact, restore
+authority, storage identity, or recovery-local retry contract. Router/handler
+proof lives in `TestContract_HostedMagicLinkRequestValidatesOriginBeforeMutation`
+and `TestStripeWebhook_CheckoutMagicLinkValidatesOriginBeforeMutation`.
 
 The shared `frontend-modern/src/App.tsx` shell boundary this subsystem consumes
 gained one authority gate on its global banner block. The banners rendered

@@ -2258,6 +2258,14 @@ path. Router-level proof lives in
 `TestContract_HostedDiagnosticsDockerPrepareTokenValidatesOriginBeforeMutation`,
 while the self-hosted request-origin matrix remains in those diagnostics cases
 and `TestContract_RequestOriginCannotRetargetTokenBearingCommands`.
+Hosted returning-user and Stripe checkout magic-link paths likewise perform one
+O(1) configured-URL resolution before account lookup or token persistence.
+Unavailable configuration adds no token-store write or cleanup scan: the public
+route returns its bounded generic response and the Stripe path completes its
+existing billing/index/deduper work while skipping only optional email
+delivery. In-memory and SQLite proof plus duplicate-event coverage lives in
+`TestContract_HostedMagicLinkRequestValidatesOriginBeforeMutation` and
+`TestStripeWebhook_CheckoutMagicLinkValidatesOriginBeforeMutation`.
 
 ### Runtime branding remains a bounded bootstrap read
 

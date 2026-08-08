@@ -5879,6 +5879,16 @@ adds missing, auto-detected-only, invalid, invalid-high-precedence,
 persisted token-state checks. The self-hosted precedence and validated
 live-origin fallback remain covered by that diagnostics proof and
 `TestContract_RequestOriginCannotRetargetTokenBearingCommands`.
+The adjacent hosted returning-user and Stripe checkout magic-link callers now
+resolve the same canonical external URL before persisting their one-time token.
+Unavailable configuration leaves both in-memory and SQLite magic-link state
+empty; the public caller retains its enumeration-resistant generic response
+and the Stripe caller retains checkout/event idempotency. These credentials
+grant browser-session entry only after the existing stable organization-
+principal verification and do not become agent enrollment, setup, install,
+profile, update, or fleet authority. Proof lives in
+`TestContract_HostedMagicLinkRequestValidatesOriginBeforeMutation` and
+`TestStripeWebhook_CheckoutMagicLinkValidatesOriginBeforeMutation`.
 
 ### Runtime branding stays outside agent lifecycle authority
 

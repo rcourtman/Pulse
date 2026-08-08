@@ -139,7 +139,7 @@
             "test",
             "./internal/api",
             "-run",
-            "TestHostedLifecycle|TestHostedSignupSuccess|TestHostedSignupValidationFailures|TestHostedSignupHostedModeGate|TestHostedSignupRateLimit|TestHostedSignupRateLimit_NoProvisioningSideEffects|TestHostedSignupCleanupOnRBACFailure|TestHostedSignupFailsClosedWithoutPublicURL",
+            "TestContract_HostedMagicLinkRequestValidatesOriginBeforeMutation|TestHostedLifecycle|TestHostedSignupSuccess|TestHostedSignupValidationFailures|TestHostedSignupHostedModeGate|TestHostedSignupRateLimit|TestHostedSignupRateLimit_NoProvisioningSideEffects|TestHostedSignupCleanupOnRBACFailure|TestHostedSignupFailsClosedWithoutPublicURL|TestStripeWebhook_CheckoutMagicLinkValidatesOriginBeforeMutation",
             "-count=1"
           ]
         },
@@ -178,12 +178,22 @@
         },
         {
           "repo": "pulse",
+          "path": "internal/api/contract_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "internal/api/hosted_lifecycle_integration_test.go",
           "kind": "file"
         },
         {
           "repo": "pulse",
           "path": "internal/api/hosted_signup_handlers_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/stripe_webhook_handlers_test.go",
           "kind": "file"
         },
         {
@@ -957,7 +967,7 @@
             "test",
             "./internal/api",
             "-run",
-            "TestHostedLifecycle|TestHostedOrgAdminHandlers|TestHostedSignupSuccess|TestHostedSignupValidationFailures|TestHostedSignupHostedModeGate|TestHostedSignupRateLimit|TestHostedSignupRateLimit_NoProvisioningSideEffects|TestHostedSignupCleanupOnRBACFailure|TestHostedSignupFailsClosedWithoutPublicURL|TestStripeWebhook_",
+            "TestContract_HostedMagicLinkRequestValidatesOriginBeforeMutation|TestHostedLifecycle|TestHostedOrgAdminHandlers|TestHostedSignupSuccess|TestHostedSignupValidationFailures|TestHostedSignupHostedModeGate|TestHostedSignupRateLimit|TestHostedSignupRateLimit_NoProvisioningSideEffects|TestHostedSignupCleanupOnRBACFailure|TestHostedSignupFailsClosedWithoutPublicURL|TestStripeWebhook_",
             "-count=1"
           ]
         },
@@ -1052,6 +1062,11 @@
         },
         {
           "repo": "pulse",
+          "path": "internal/api/contract_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "internal/api/hosted_lifecycle_integration_test.go",
           "kind": "file"
         },
@@ -1063,6 +1078,11 @@
         {
           "repo": "pulse",
           "path": "internal/api/hosted_signup_handlers_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/stripe_webhook_handlers_test.go",
           "kind": "file"
         },
         {

@@ -14,6 +14,8 @@ import (
 
 const magicLinkRequestBodyLimit = 16 * 1024
 
+const magicLinkRequestAcceptedMessage = "If that email is registered, you'll receive a magic link shortly."
+
 type MagicLinkHandlers struct {
 	persistence      *config.MultiTenantPersistence
 	service          *MagicLinkService
@@ -74,38 +76,7 @@ func (h *MagicLinkHandlers) HandlePublicMagicLinkRequest(w http.ResponseWriter, 
 	// Always return 200 to avoid leaking whether the email exists.
 	// Rate limiting is still enforced by silently not sending additional links.
 	if !h.service.AllowRequest(email) {
-		writeJSON(w, http.StatusOK, map[string]interface{}{
-			"success": true,
-			"message": "If that email is registered, you'll receive a magic link shortly.",
-		})
-		return
-	}
-
-	orgID, ok, err := h.findOrgForEmail(email)
-	if err != nil {
-		log.Warn().Err(err).Str("email", email).Msg("Magic link request: failed to resolve org")
-		writeJSON(w, http.StatusOK, map[string]interface{}{
-			"success": true,
-			"message": "If that email is registered, you'll receive a magic link shortly.",
-		})
-		return
-	}
-	if !ok {
-		// Unknown email: don't send mail, but still return 200.
-		writeJSON(w, http.StatusOK, map[string]interface{}{
-			"success": true,
-			"message": "If that email is registered, you'll receive a magic link shortly.",
-		})
-		return
-	}
-
-	token, err := h.service.GenerateToken(email, orgID)
-	if err != nil {
-		log.Warn().Err(err).Str("email", email).Str("org_id", orgID).Msg("Magic link request: failed to generate token")
-		writeJSON(w, http.StatusOK, map[string]interface{}{
-			"success": true,
-			"message": "If that email is registered, you'll receive a magic link shortly.",
-		})
+		writeMagicLinkRequestAccepted(w)
 		return
 	}
 
@@ -114,12 +85,30 @@ func (h *MagicLinkHandlers) HandlePublicMagicLinkRequest(w http.ResponseWriter, 
 		baseURL = h.resolvePublicURL(r)
 	}
 	// Hosted mode must never fall back to request Host header (host header injection risk).
-	// If public URL isn't configured, fail closed by not sending any email.
+	// Resolve the canonical external URL before looking up the account or minting a
+	// credential so unavailable configuration keeps the response uniform and leaves
+	// token storage untouched.
 	if baseURL == "" {
-		writeJSON(w, http.StatusOK, map[string]interface{}{
-			"success": true,
-			"message": "If that email is registered, you'll receive a magic link shortly.",
-		})
+		writeMagicLinkRequestAccepted(w)
+		return
+	}
+
+	orgID, ok, err := h.findOrgForEmail(email)
+	if err != nil {
+		log.Warn().Err(err).Str("email", email).Msg("Magic link request: failed to resolve org")
+		writeMagicLinkRequestAccepted(w)
+		return
+	}
+	if !ok {
+		// Unknown email: don't send mail, but still return 200.
+		writeMagicLinkRequestAccepted(w)
+		return
+	}
+
+	token, err := h.service.GenerateToken(email, orgID)
+	if err != nil {
+		log.Warn().Err(err).Str("email", email).Str("org_id", orgID).Msg("Magic link request: failed to generate token")
+		writeMagicLinkRequestAccepted(w)
 		return
 	}
 
@@ -128,9 +117,13 @@ func (h *MagicLinkHandlers) HandlePublicMagicLinkRequest(w http.ResponseWriter, 
 		// Still 200 to avoid revealing existence.
 	}
 
+	writeMagicLinkRequestAccepted(w)
+}
+
+func writeMagicLinkRequestAccepted(w http.ResponseWriter) {
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
-		"message": "If that email is registered, you'll receive a magic link shortly.",
+		"message": magicLinkRequestAcceptedMessage,
 	})
 }
 

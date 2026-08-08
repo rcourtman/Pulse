@@ -22921,6 +22921,304 @@ func TestContract_RequestOriginCannotRetargetTokenBearingCommands(t *testing.T) 
 	})
 }
 
+func TestContract_HostedMagicLinkRequestValidatesOriginBeforeMutation(t *testing.T) {
+	type originHeaders struct {
+		host             string
+		remoteAddr       string
+		trustedProxyCIDR string
+		forwardedHost    string
+		forwardedProto   string
+	}
+	type storeFactory struct {
+		name string
+		new  func(*testing.T) (MagicLinkStore, func(*testing.T) int)
+	}
+
+	storeFactories := []storeFactory{
+		{
+			name: "in-memory",
+			new: func(t *testing.T) (MagicLinkStore, func(*testing.T) int) {
+				t.Helper()
+				store := NewInMemoryMagicLinkStore()
+				return store, func(t *testing.T) int {
+					t.Helper()
+					store.mu.RLock()
+					defer store.mu.RUnlock()
+					return len(store.tokens)
+				}
+			},
+		},
+		{
+			name: "sqlite",
+			new: func(t *testing.T) (MagicLinkStore, func(*testing.T) int) {
+				t.Helper()
+				store, err := NewSQLiteMagicLinkStore(t.TempDir())
+				if err != nil {
+					t.Fatalf("NewSQLiteMagicLinkStore: %v", err)
+				}
+				return store, func(t *testing.T) int {
+					t.Helper()
+					var count int
+					if err := store.db.QueryRow(`SELECT COUNT(*) FROM magic_link_tokens`).Scan(&count); err != nil {
+						t.Fatalf("count SQLite magic-link tokens: %v", err)
+					}
+					return count
+				}
+			},
+		},
+	}
+
+	newRouter := func(
+		t *testing.T,
+		hosted bool,
+		publicURL string,
+		autoDetected bool,
+		agentConnectURL string,
+		headers originHeaders,
+		factory storeFactory,
+	) (*Router, *magicLinkCaptureEmailer, func(*testing.T) int) {
+		t.Helper()
+		t.Setenv("PULSE_TRUSTED_PROXY_CIDRS", headers.trustedProxyCIDR)
+		resetTrustedProxyCIDRsForTests()
+
+		dataPath := t.TempDir()
+		persistence := config.NewMultiTenantPersistence(dataPath)
+		now := time.Now().UTC()
+		if err := persistence.SaveOrganization(&models.Organization{
+			ID:          "org_magic_origin",
+			DisplayName: "Magic Origin",
+			CreatedAt:   now,
+			OwnerUserID: "u_magic_origin_owner",
+			OwnerEmail:  "owner@example.com",
+			Members: []models.OrganizationMember{{
+				UserID:  "u_magic_origin_owner",
+				Email:   "owner@example.com",
+				Role:    models.OrgRoleOwner,
+				AddedAt: now,
+				AddedBy: "u_magic_origin_owner",
+			}},
+		}); err != nil {
+			t.Fatalf("SaveOrganization: %v", err)
+		}
+
+		store, countTokens := factory.new(t)
+		emailer := &magicLinkCaptureEmailer{}
+		service := NewMagicLinkServiceWithKey(
+			[]byte("0123456789abcdef0123456789abcdef"),
+			store,
+			emailer,
+			NewRateLimiter(100, time.Hour),
+		)
+		t.Cleanup(service.Stop)
+
+		router := &Router{
+			mux:         http.NewServeMux(),
+			hostedMode:  hosted,
+			multiTenant: persistence,
+			config: &config.Config{
+				DataPath:              dataPath,
+				FrontendPort:          7655,
+				PublicURL:             publicURL,
+				PublicURLAutoDetected: autoDetected,
+				AgentConnectURL:       agentConnectURL,
+			},
+		}
+		handler := NewMagicLinkHandlers(persistence, service, hosted, router.resolvePublicURL)
+		router.registerHostedRoutes(nil, handler, nil)
+		t.Cleanup(func() {
+			if router.signupRateLimiter != nil {
+				router.signupRateLimiter.Stop()
+			}
+			if router.handoffExchangeRateLimiter != nil {
+				router.handoffExchangeRateLimiter.Stop()
+			}
+		})
+		return router, emailer, countTokens
+	}
+
+	doRequest := func(t *testing.T, router *Router, email string, headers originHeaders) *httptest.ResponseRecorder {
+		t.Helper()
+		body, err := json.Marshal(map[string]string{"email": email})
+		if err != nil {
+			t.Fatalf("marshal magic-link request: %v", err)
+		}
+		req := httptest.NewRequest(http.MethodPost, "/api/public/magic-link/request", bytes.NewReader(body))
+		req.Host = headers.host
+		req.RemoteAddr = headers.remoteAddr
+		if headers.forwardedHost != "" {
+			req.Header.Set("X-Forwarded-Host", headers.forwardedHost)
+		}
+		if headers.forwardedProto != "" {
+			req.Header.Set("X-Forwarded-Proto", headers.forwardedProto)
+		}
+		rec := httptest.NewRecorder()
+		router.mux.ServeHTTP(rec, req)
+		return rec
+	}
+
+	assertAccepted := func(t *testing.T, rec *httptest.ResponseRecorder) {
+		t.Helper()
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status = %d, want %d: %s", rec.Code, http.StatusOK, rec.Body.String())
+		}
+		var response struct {
+			Success bool   `json:"success"`
+			Message string `json:"message"`
+		}
+		if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+			t.Fatalf("decode magic-link response: %v", err)
+		}
+		if !response.Success || response.Message != magicLinkRequestAcceptedMessage {
+			t.Fatalf("response = %#v, want generic accepted shape", response)
+		}
+		if strings.Contains(rec.Body.String(), "configured") || strings.Contains(rec.Body.String(), "attacker") {
+			t.Fatalf("response disclosed URL configuration or request authority: %q", rec.Body.String())
+		}
+	}
+
+	failureCases := []struct {
+		name            string
+		publicURL       string
+		autoDetected    bool
+		agentConnectURL string
+		headers         originHeaders
+	}{
+		{
+			name: "missing configuration ignores hostile direct Host and untrusted forwarding",
+			headers: originHeaders{
+				host:           "user@direct-attacker.example/path",
+				remoteAddr:     "198.51.100.20:41000",
+				forwardedHost:  "forwarded-attacker.example",
+				forwardedProto: "https",
+			},
+		},
+		{
+			name:         "auto-detected URL is not hosted authority",
+			publicURL:    "https://auto-detected.example",
+			autoDetected: true,
+			headers: originHeaders{
+				host:           "direct-attacker.example",
+				remoteAddr:     "198.51.100.20:41000",
+				forwardedHost:  "forwarded-attacker.example",
+				forwardedProto: "https",
+			},
+		},
+		{
+			name:      "invalid PublicURL ignores trusted forwarding",
+			publicURL: "https://user@configured.example",
+			headers: originHeaders{
+				host:             "direct-attacker.example",
+				remoteAddr:       "192.0.2.44:41000",
+				trustedProxyCIDR: "192.0.2.0/24",
+				forwardedHost:    "trusted-forwarded-attacker.example",
+				forwardedProto:   "https",
+			},
+		},
+		{
+			name:            "invalid higher-precedence AgentConnectURL does not fall through",
+			publicURL:       "https://configured.example",
+			agentConnectURL: "https://user@agents.configured.example",
+			headers: originHeaders{
+				host:           "direct-attacker.example",
+				remoteAddr:     "198.51.100.20:41000",
+				forwardedHost:  "forwarded-attacker.example",
+				forwardedProto: "https",
+			},
+		},
+	}
+
+	for _, factory := range storeFactories {
+		factory := factory
+		t.Run(factory.name, func(t *testing.T) {
+			for _, tc := range failureCases {
+				tc := tc
+				t.Run(tc.name, func(t *testing.T) {
+					router, emailer, countTokens := newRouter(t, true, tc.publicURL, tc.autoDetected, tc.agentConnectURL, tc.headers, factory)
+					registered := doRequest(t, router, "owner@example.com", tc.headers)
+					unknown := doRequest(t, router, "unknown@example.com", tc.headers)
+					assertAccepted(t, registered)
+					assertAccepted(t, unknown)
+					if registered.Body.String() != unknown.Body.String() {
+						t.Fatalf("registered and unknown responses differ: registered=%q unknown=%q", registered.Body.String(), unknown.Body.String())
+					}
+					if got := countTokens(t); got != 0 {
+						t.Fatalf("stored magic-link token count = %d, want exactly 0", got)
+					}
+					if len(emailer.urls) != 0 || len(emailer.to) != 0 {
+						t.Fatalf("magic-link email side effects = to:%v urls:%v, want none", emailer.to, emailer.urls)
+					}
+				})
+			}
+		})
+	}
+
+	successCases := []struct {
+		name            string
+		publicURL       string
+		agentConnectURL string
+		wantBaseURL     string
+		headers         originHeaders
+	}{
+		{
+			name:        "configured PublicURL defeats hostile direct Host and untrusted forwarding",
+			publicURL:   "https://configured.example/base/",
+			wantBaseURL: "https://configured.example/base",
+			headers: originHeaders{
+				host:           "direct-attacker.example",
+				remoteAddr:     "198.51.100.20:41000",
+				forwardedHost:  "forwarded-attacker.example",
+				forwardedProto: "http",
+			},
+		},
+		{
+			name:            "configured AgentConnectURL outranks PublicURL and trusted forwarding",
+			publicURL:       "https://configured.example",
+			agentConnectURL: "https://agents.configured.example/",
+			wantBaseURL:     "https://agents.configured.example",
+			headers: originHeaders{
+				host:             "direct-attacker.example",
+				remoteAddr:       "192.0.2.44:41000",
+				trustedProxyCIDR: "192.0.2.0/24",
+				forwardedHost:    "trusted-forwarded-attacker.example",
+				forwardedProto:   "http",
+			},
+		},
+	}
+
+	for _, factory := range storeFactories {
+		factory := factory
+		for _, tc := range successCases {
+			tc := tc
+			t.Run(factory.name+" "+tc.name, func(t *testing.T) {
+				router, emailer, countTokens := newRouter(t, true, tc.publicURL, false, tc.agentConnectURL, tc.headers, factory)
+				rec := doRequest(t, router, "OWNER@example.com", tc.headers)
+				assertAccepted(t, rec)
+				if got := countTokens(t); got != 1 {
+					t.Fatalf("stored magic-link token count = %d, want exactly 1", got)
+				}
+				if len(emailer.to) != 1 || !strings.EqualFold(emailer.to[0], "owner@example.com") || len(emailer.urls) != 1 {
+					t.Fatalf("magic-link email = to:%v urls:%v, want one owner delivery", emailer.to, emailer.urls)
+				}
+				if !strings.HasPrefix(emailer.urls[0], tc.wantBaseURL+"/api/public/magic-link/verify?") || strings.Contains(emailer.urls[0], "attacker") {
+					t.Fatalf("magic-link URL was not bound to configured base %q: %q", tc.wantBaseURL, emailer.urls[0])
+				}
+			})
+		}
+	}
+
+	t.Run("self-hosted public route remains unavailable", func(t *testing.T) {
+		headers := originHeaders{host: "pulse.lan:7655", remoteAddr: "198.51.100.20:41000"}
+		router, emailer, countTokens := newRouter(t, false, "", false, "", headers, storeFactories[0])
+		rec := doRequest(t, router, "owner@example.com", headers)
+		if rec.Code != http.StatusNotFound {
+			t.Fatalf("status = %d, want %d: %s", rec.Code, http.StatusNotFound, rec.Body.String())
+		}
+		if got := countTokens(t); got != 0 || len(emailer.urls) != 0 {
+			t.Fatalf("self-hosted magic-link side effects: tokens=%d urls=%v", got, emailer.urls)
+		}
+	})
+}
+
 func TestContract_HostedDiagnosticsDockerPrepareTokenValidatesOriginBeforeMutation(t *testing.T) {
 	const existingToken = "hosted-diagnostics-existing.12345678"
 

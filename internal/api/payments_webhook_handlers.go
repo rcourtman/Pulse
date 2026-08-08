@@ -311,16 +311,19 @@ func (h *StripeWebhookHandlers) handleCheckoutSessionCompleted(ctx context.Conte
 	// Best-effort: issue a magic link so the user can sign in quickly after checkout.
 	// (In dev/staging this is log-only; production should swap in a real emailer.)
 	if h.magicLinks != nil && email != "" {
-		// Only send a link to an existing org member/owner. Stripe customer email is user-controlled.
-		userID, role, ok := org.ResolvePrincipalByEmail(email)
-		if ok && strings.TrimSpace(userID) != "" && models.IsValidOrganizationRole(role) && h.magicLinks.AllowRequest(email) {
-			token, genErr := h.magicLinks.GenerateToken(email, orgID)
-			if genErr == nil {
-				baseURL := ""
-				if h.publicURL != nil && r != nil {
-					baseURL = h.publicURL(r)
-				}
-				if baseURL != "" {
+		baseURL := ""
+		if h.publicURL != nil && r != nil {
+			baseURL = h.publicURL(r)
+		}
+		// URL resolution is best-effort, but it must precede token persistence.
+		// A completed checkout remains successful and idempotently handled when no
+		// canonical hosted URL is available; only the optional sign-in delivery is skipped.
+		if baseURL != "" {
+			// Only send a link to an existing org member/owner. Stripe customer email is user-controlled.
+			userID, role, ok := org.ResolvePrincipalByEmail(email)
+			if ok && strings.TrimSpace(userID) != "" && models.IsValidOrganizationRole(role) && h.magicLinks.AllowRequest(email) {
+				token, genErr := h.magicLinks.GenerateToken(email, orgID)
+				if genErr == nil {
 					if sendErr := h.magicLinks.SendMagicLink(email, orgID, token, baseURL); sendErr != nil {
 						log.Warn().Err(sendErr).Str("email", email).Str("org_id", orgID).Msg("Stripe checkout: failed to send magic link")
 					}

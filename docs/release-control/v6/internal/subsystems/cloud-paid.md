@@ -726,6 +726,12 @@ the App/AppLayout, routing, and desktop Actions journey tests.
    billing for a server-linked org, but it must not send a sign-in link merely
    because Stripe `customer_email` matches contact metadata with no stored
    principal.
+   The webhook must also resolve the canonical hosted external URL before it
+   generates or persists the one-time token. Missing, auto-detected-only,
+   invalid, or invalid-higher-precedence hosted URL configuration skips only
+   the optional sign-in delivery; checkout billing projection, customer-org
+   indexing, handled-event completion, and duplicate replay remain successful
+   and idempotent with no unreachable credential record left behind.
    Tenant-targeted hosted magic-link handoff must fail closed when the
    control-plane registry cannot resolve a stable account `User.ID`; it must
    not sign a tenant handoff with a blank subject and let the tenant runtime
@@ -2827,6 +2833,17 @@ edge: syntactically valid signup requests return one uniform `202 Accepted`
 Pulse Account message whether the backend provisioned/sent email or suppressed
 side effects due to the owner-email rate limit, so the route does not reveal
 prior email usage through `201` versus `429` drift.
+Returning-user magic-link requests now apply the same fail-closed delivery
+posture to hosted URL configuration. The registered public request handler
+resolves the canonical configured external URL before account lookup or token
+persistence; unavailable configuration returns the existing generic `200 OK`
+response for both registered and unknown emails and leaves in-memory and
+SQLite token state empty. Checkout completion uses that same resolver before
+its optional token generation, so a URL failure cannot turn a successfully
+handled Stripe event into an endlessly retried billing mutation or an
+unreachable stored credential. The adversarial proof is
+`TestContract_HostedMagicLinkRequestValidatesOriginBeforeMutation` plus
+`TestStripeWebhook_CheckoutMagicLinkValidatesOriginBeforeMutation`.
 Hosted billing-state normalization now follows the same rule: a missing
 `plan_version` must remain missing instead of being synthesized from
 `subscription_state`, while explicit trial defaults remain explicit.
