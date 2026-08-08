@@ -139,6 +139,9 @@ describe('settings architecture guardrails', () => {
     expect(settingsPageShellSource).toContain('max-h-[calc(100dvh-12rem)]');
     expect(settingsPageShellSource).toContain('overflow-y-auto overscroll-contain');
     expect(settingsPageShellSource).toContain('lg:min-h-[600px]');
+    expect(settingsPageShellSource).toContain('data-settings-content');
+    expect(settingsPageShellSource).toContain('class={`min-w-0 flex-1 overflow-hidden');
+    expect(settingsPageShellSource).not.toContain('animate-slideInRight');
     expect(settingsPageShellSource).not.toContain('min-h-[600px]">');
     expect(settingsDialogsSource).toContain('export const SettingsDialogs');
   });
@@ -336,6 +339,67 @@ describe('settings architecture guardrails', () => {
     expect(settingsHeaderMetaSource).toContain(
       'description: SELF_HOSTED_PRO_BILLING_PRESENTATION.shellDescription',
     );
+  });
+
+  it('gates the Infrastructure nav item on the served infrastructureRead capability', () => {
+    // Unlike system-relay, Infrastructure is not a paid-feature teaser: every
+    // endpoint behind it is RequireAdmin, so a session without settings:read
+    // gets an all-empty page whose 15s and 30s pollers log a warn-level denial
+    // on every tick. Hiding the item is what stops the pollers mounting.
+    const infrastructureNavBlock = settingsNavCatalogSource.match(
+      /id: 'infrastructure-systems',[\s\S]*?requiredCapability: 'infrastructureRead',\n\s*},/,
+    );
+    expect(infrastructureNavBlock?.[0]).toBeTruthy();
+
+    // DEFAULT_SETTINGS_TAB points at the tab we just made blockable, so the
+    // fallback must resolve a reachable tab rather than the hardcoded default,
+    // or a non-admin lands back on the blocked route.
+    expect(settingsAccessSource).toContain('SETTINGS_FALLBACK_TAB_ORDER.find(');
+    expect(settingsAccessSource).toContain('setActiveTab(fallbackTab)');
+  });
+
+  it('keeps capability-gated panels fail-closed before their routes resolve', () => {
+    expect(settingsSource).toContain(
+      'canMountSettingsPanel(currentTab, securityStatus()?.settingsCapabilities)',
+    );
+    expect(settingsAccessSource).toContain('securityStatus() !== null || !securityStatusLoading()');
+    expect(settingsAccessSource).toContain("DEFAULT_SETTINGS_TAB,\n  'system-general'");
+  });
+
+  it('gates every remaining admin-only Settings panel on its named capability', () => {
+    const adminOnlyTabs: Array<[string, string]> = [
+      ['monitoring-availability', 'availabilityRead'],
+      ['system-ai', 'pulseIntelligenceRead'],
+      ['system-ai-patrol', 'pulseIntelligenceRead'],
+      ['system-ai-assistant', 'pulseIntelligenceRead'],
+      ['support-diagnostics', 'diagnosticsRead'],
+      ['support-reporting', 'reportingRead'],
+      ['support-logs', 'systemLogsRead'],
+    ];
+
+    for (const [tab, capability] of adminOnlyTabs) {
+      expect(settingsNavCatalogSource).toMatch(
+        new RegExp(`id: '${tab}',[\\s\\S]*?requiredCapability: '${capability}',`),
+      );
+    }
+  });
+
+  it('gates the admin-only System tabs on the served systemSettingsRead capability', () => {
+    // Same rationale as Infrastructure rather than the paid-feature one: a free
+    // install can act on a paid tab by upgrading, but a non-admin cannot grant
+    // themselves admin, so Network / Pulse server updates / Recovery can only
+    // end in a panel they will never populate.
+    for (const id of ['system-network', 'system-updates', 'system-recovery']) {
+      const navBlock = settingsNavCatalogSource.match(
+        new RegExp(`id: '${id}',[\\s\\S]*?requiredCapability: 'systemSettingsRead',\\n\\s*},`),
+      );
+      expect(navBlock?.[0]).toBeTruthy();
+    }
+
+    // system-general carries user-scoped theme, language, and unit preferences,
+    // so gating it would take personal settings away from every non-admin.
+    const generalNavBlock = settingsNavCatalogSource.match(/id: 'system-general',[\s\S]*?\n {6}},/);
+    expect(generalNavBlock?.[0]).not.toContain('requiredCapability');
   });
 
   it('keeps the external-agent (MCP) connector setup findable from sidebar search', () => {
