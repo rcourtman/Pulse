@@ -3,15 +3,24 @@ package pbs
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"slices"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 )
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return f(req)
+}
 
 func TestNewClient_TokenAuth_SetsAuthorizationHeader(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -465,14 +474,172 @@ func TestClient_GetNodeName_CachesResult(t *testing.T) {
 }
 
 func TestClient_GetNodeName_PermissionDenialDefersRetry(t *testing.T) {
+	for _, status := range []int{http.StatusUnauthorized, http.StatusForbidden} {
+		t.Run(http.StatusText(status), func(t *testing.T) {
+			var nodesCalls atomic.Int64
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path != "/api2/json/nodes" {
+					t.Fatalf("unexpected path: %s", r.URL.Path)
+				}
+				nodesCalls.Add(1)
+				w.WriteHeader(status)
+				_, _ = w.Write([]byte(`{"message":"access denied"}`))
+			}))
+			defer server.Close()
+
+			client, err := NewClient(ClientConfig{
+				Host:       server.URL,
+				TokenName:  "root@pam!pulse-token",
+				TokenValue: "secret",
+				Timeout:    2 * time.Second,
+			})
+			if err != nil {
+				t.Fatalf("NewClient: %v", err)
+			}
+
+			_, firstErr := client.GetNodeName(context.Background())
+			if firstErr == nil {
+				t.Fatal("first GetNodeName: expected error")
+			}
+			if got, ok := pbsHTTPStatus(firstErr); !ok || got != status {
+				t.Fatalf("first GetNodeName status = (%d, %v), want (%d, true): %v", got, ok, status, firstErr)
+			}
+			for i := 0; i < 2; i++ {
+				if _, err := client.GetNodeName(context.Background()); err == nil {
+					t.Fatalf("deferred GetNodeName call %d: expected error", i)
+				}
+			}
+			if got := nodesCalls.Load(); got != 1 {
+				t.Fatalf("/nodes hit %d times, want 1 (%d defers retries)", got, status)
+			}
+		})
+	}
+}
+
+func TestClient_GetNodeName_TransientHTTPFailuresRetryAndRecover(t *testing.T) {
+	tests := []struct {
+		name   string
+		status int
+		body   string
+	}{
+		{name: "rate limited", status: http.StatusTooManyRequests, body: `{"message":"slow down"}`},
+		{name: "internal server error", status: http.StatusInternalServerError, body: `{"message":"temporary failure"}`},
+		{name: "service unavailable body mentions permission", status: http.StatusServiceUnavailable, body: `{"message":"permission service unavailable"}`},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var nodesCalls atomic.Int64
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path != "/api2/json/nodes" {
+					t.Fatalf("unexpected path: %s", r.URL.Path)
+				}
+				if nodesCalls.Add(1) == 1 {
+					w.WriteHeader(tc.status)
+					_, _ = w.Write([]byte(tc.body))
+					return
+				}
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"data": []map[string]any{{"node": "pbs-recovered"}},
+				})
+			}))
+			defer server.Close()
+
+			client, err := NewClient(ClientConfig{
+				Host:       server.URL,
+				TokenName:  "root@pam!pulse-token",
+				TokenValue: "secret",
+				Timeout:    2 * time.Second,
+			})
+			if err != nil {
+				t.Fatalf("NewClient: %v", err)
+			}
+
+			_, firstErr := client.GetNodeName(context.Background())
+			if firstErr == nil {
+				t.Fatal("first GetNodeName: expected error")
+			}
+			if got, ok := pbsHTTPStatus(firstErr); !ok || got != tc.status {
+				t.Fatalf("first GetNodeName status = (%d, %v), want (%d, true): %v", got, ok, tc.status, firstErr)
+			}
+			client.nodeNameMu.Lock()
+			retryAfter := client.nodeNameRetryAfter
+			client.nodeNameMu.Unlock()
+			if !retryAfter.IsZero() {
+				t.Fatalf("transient status %d set permission retry deferral to %s", tc.status, retryAfter)
+			}
+
+			name, err := client.GetNodeName(context.Background())
+			if err != nil {
+				t.Fatalf("recovery GetNodeName: %v", err)
+			}
+			if name != "pbs-recovered" {
+				t.Fatalf("recovery GetNodeName = %q, want pbs-recovered", name)
+			}
+			if got := nodesCalls.Load(); got != 2 {
+				t.Fatalf("/nodes hit %d times, want 2 (transient failure then recovery)", got)
+			}
+		})
+	}
+}
+
+func TestClient_GetNodeName_NetworkFailureRetriesAndRecovers(t *testing.T) {
+	client, err := NewClient(ClientConfig{
+		Host:       "http://pbs.example.test",
+		TokenName:  "root@pam!pulse-token",
+		TokenValue: "secret",
+		Timeout:    2 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+
+	var calls atomic.Int64
+	client.httpClient.Transport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		if calls.Add(1) == 1 {
+			return nil, errors.New("network permission proxy failure")
+		}
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Header:     make(http.Header),
+			Body:       io.NopCloser(strings.NewReader(`{"data":[{"node":"pbs-network-recovered"}]}`)),
+			Request:    req,
+		}, nil
+	})
+
+	if _, err := client.GetNodeName(context.Background()); err == nil {
+		t.Fatal("first GetNodeName: expected network error")
+	}
+	client.nodeNameMu.Lock()
+	retryAfter := client.nodeNameRetryAfter
+	client.nodeNameMu.Unlock()
+	if !retryAfter.IsZero() {
+		t.Fatalf("network error set permission retry deferral to %s", retryAfter)
+	}
+
+	name, err := client.GetNodeName(context.Background())
+	if err != nil {
+		t.Fatalf("recovery GetNodeName: %v", err)
+	}
+	if name != "pbs-network-recovered" {
+		t.Fatalf("recovery GetNodeName = %q, want pbs-network-recovered", name)
+	}
+	if got := calls.Load(); got != 2 {
+		t.Fatalf("transport called %d times, want 2", got)
+	}
+}
+
+func TestClient_GetNodeName_PermissionDeferralExpiresAndRecovers(t *testing.T) {
 	var nodesCalls atomic.Int64
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api2/json/nodes" {
-			t.Fatalf("unexpected path: %s", r.URL.Path)
+		if nodesCalls.Add(1) == 1 {
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte(`{"message":"access denied"}`))
+			return
 		}
-		nodesCalls.Add(1)
-		w.WriteHeader(http.StatusForbidden)
-		_, _ = w.Write([]byte(`{"message":"permission check failed"}`))
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"data": []map[string]any{{"node": "pbs-after-acl-repair"}},
+		})
 	}))
 	defer server.Close()
 
@@ -486,24 +653,121 @@ func TestClient_GetNodeName_PermissionDenialDefersRetry(t *testing.T) {
 		t.Fatalf("NewClient: %v", err)
 	}
 
-	for i := 0; i < 3; i++ {
-		if _, err := client.GetNodeName(context.Background()); err == nil {
-			t.Fatalf("GetNodeName call %d: expected error", i)
+	if _, err := client.GetNodeName(context.Background()); err == nil {
+		t.Fatal("first GetNodeName: expected permission error")
+	}
+	if _, err := client.GetNodeName(context.Background()); err == nil {
+		t.Fatal("deferred GetNodeName: expected error")
+	}
+	if got := nodesCalls.Load(); got != 1 {
+		t.Fatalf("/nodes hit %d times during deferral, want 1", got)
+	}
+
+	client.nodeNameMu.Lock()
+	client.nodeNameRetryAfter = time.Now().Add(-time.Second)
+	client.nodeNameMu.Unlock()
+
+	name, err := client.GetNodeName(context.Background())
+	if err != nil {
+		t.Fatalf("GetNodeName after deferral expiry: %v", err)
+	}
+	if name != "pbs-after-acl-repair" {
+		t.Fatalf("GetNodeName after deferral expiry = %q, want pbs-after-acl-repair", name)
+	}
+	if got := nodesCalls.Load(); got != 2 {
+		t.Fatalf("/nodes hit %d times after recovery, want 2", got)
+	}
+}
+
+func TestClient_GetNodeName_ConcurrentTransientFailureIsSingleFlight(t *testing.T) {
+	const callers = 16
+
+	var nodesCalls atomic.Int64
+	requestStarted := make(chan struct{})
+	releaseFirstRequest := make(chan struct{})
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if nodesCalls.Add(1) == 1 {
+			close(requestStarted)
+			<-releaseFirstRequest
+			w.WriteHeader(http.StatusServiceUnavailable)
+			_, _ = w.Write([]byte(`{"message":"temporary permission backend outage"}`))
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"data": []map[string]any{{"node": "pbs-concurrent-recovery"}},
+		})
+	}))
+	defer server.Close()
+
+	client, err := NewClient(ClientConfig{
+		Host:       server.URL,
+		TokenName:  "root@pam!pulse-token",
+		TokenValue: "secret",
+		Timeout:    2 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+
+	start := make(chan struct{})
+	errs := make(chan error, callers)
+	var wg sync.WaitGroup
+	for i := 0; i < callers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			_, err := client.GetNodeName(context.Background())
+			errs <- err
+		}()
+	}
+	close(start)
+	<-requestStarted
+
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		client.nodeNameMu.Lock()
+		joined := 0
+		if client.nodeNameAttempt != nil {
+			joined = client.nodeNameAttempt.joined
+		}
+		client.nodeNameMu.Unlock()
+		if joined == callers-1 {
+			break
+		}
+		if time.Now().After(deadline) {
+			close(releaseFirstRequest)
+			t.Fatalf("only %d of %d concurrent callers joined the in-flight request", joined, callers-1)
+		}
+		time.Sleep(time.Millisecond)
+	}
+	close(releaseFirstRequest)
+	wg.Wait()
+	close(errs)
+
+	for err := range errs {
+		if err == nil {
+			t.Fatal("concurrent GetNodeName: expected transient error")
+		}
+		if got, ok := pbsHTTPStatus(err); !ok || got != http.StatusServiceUnavailable {
+			t.Fatalf("concurrent GetNodeName status = (%d, %v), want (503, true): %v", got, ok, err)
 		}
 	}
 	if got := nodesCalls.Load(); got != 1 {
-		t.Fatalf("/nodes hit %d times, want 1 (403 defers retries)", got)
+		t.Fatalf("/nodes hit %d times for concurrent transient failure, want 1", got)
 	}
 
-	// A transient (non-permission) failure must not defer: reset the deferral
-	// and confirm the next call goes back to the server.
-	client.nodeNameMu.Lock()
-	client.nodeNameRetryAfter = time.Time{}
-	client.nodeNameMu.Unlock()
-	if _, err := client.GetNodeName(context.Background()); err == nil {
-		t.Fatal("expected error after deferral reset")
+	name, err := client.GetNodeName(context.Background())
+	if err != nil {
+		t.Fatalf("recovery GetNodeName: %v", err)
+	}
+	if name != "pbs-concurrent-recovery" {
+		t.Fatalf("recovery GetNodeName = %q, want pbs-concurrent-recovery", name)
+	}
+	if _, err := client.GetNodeName(context.Background()); err != nil {
+		t.Fatalf("cached GetNodeName: %v", err)
 	}
 	if got := nodesCalls.Load(); got != 2 {
-		t.Fatalf("/nodes hit %d times after deferral reset, want 2", got)
+		t.Fatalf("/nodes hit %d times after recovery and cache read, want 2", got)
 	}
 }

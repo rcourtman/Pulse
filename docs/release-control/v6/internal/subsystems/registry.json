@@ -5270,7 +5270,8 @@
         "internal/monitoring/",
         "internal/storagehealth/",
         "internal/truenas/",
-        "pkg/diskinventory/"
+        "pkg/diskinventory/",
+        "pkg/pbs/"
       ],
       "owned_files": [
         "docker-entrypoint.sh",
@@ -5670,6 +5671,20 @@
               "internal/mock/platform_fixtures_test.go",
               "internal/mock/recovery_points_test.go",
               "tests/integration/tests/43-platform-mock-runtime.spec.ts"
+            ]
+          },
+          {
+            "id": "pbs-client-runtime",
+            "label": "PBS API transport and node identity proof",
+            "match_prefixes": [
+              "pkg/pbs/"
+            ],
+            "match_files": [],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "pkg/pbs/client_http_test.go",
+              "pkg/pbs/client_test.go"
             ]
           },
           {

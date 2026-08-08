@@ -5928,6 +5928,17 @@
         },
         {
           "repo": "pulse",
+          "path": "pkg/pbs/client.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "pkg/pbs/client_http_test.go",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse",
           "path": "scripts/release_control/subsystem_lookup_test.py",
           "kind": "file"
         }

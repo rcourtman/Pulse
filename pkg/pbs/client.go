@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -44,6 +45,14 @@ type Client struct {
 	nodeNameMu         sync.Mutex
 	cachedNodeName     string
 	nodeNameRetryAfter time.Time
+	nodeNameAttempt    *nodeNameAttempt
+}
+
+type nodeNameAttempt struct {
+	done   chan struct{}
+	joined int
+	name   string
+	err    error
 }
 
 // nodeNamePermissionRetryInterval throttles /nodes retries after a permission
@@ -304,6 +313,45 @@ func shouldFallbackToForm(err error) bool {
 	return false
 }
 
+// apiHTTPError preserves the response status separately from the server body
+// so callers can make retry and permission decisions without parsing text.
+type apiHTTPError struct {
+	status int
+	body   string
+}
+
+func (e *apiHTTPError) Error() string {
+	message := fmt.Sprintf("API error %d: %s", e.status, e.body)
+	if e.status == http.StatusUnauthorized || e.status == http.StatusForbidden {
+		return "authentication error: " + message
+	}
+	return message
+}
+
+func pbsHTTPStatus(err error) (int, bool) {
+	var apiErr *apiHTTPError
+	if errors.As(err, &apiErr) {
+		return apiErr.status, true
+	}
+
+	var authErr *authHTTPError
+	if errors.As(err, &authErr) {
+		return authErr.status, true
+	}
+
+	return 0, false
+}
+
+func isPBSPermissionError(err error) bool {
+	status, ok := pbsHTTPStatus(err)
+	return ok && (status == http.StatusUnauthorized || status == http.StatusForbidden)
+}
+
+func isPBSNotFoundError(err error) bool {
+	status, ok := pbsHTTPStatus(err)
+	return ok && status == http.StatusNotFound
+}
+
 // request performs an API request
 func (c *Client) request(ctx context.Context, method, path string, data url.Values) (*http.Response, error) {
 	// Re-authenticate if needed
@@ -369,18 +417,10 @@ func (c *Client) request(ctx context.Context, method, path string, data url.Valu
 		defer resp.Body.Close()
 		body, err := readResponseBodyLimited(resp.Body)
 		if err != nil {
-			return nil, err
+			return nil, &apiHTTPError{status: resp.StatusCode, body: fmt.Sprintf("read response body: %v", err)}
 		}
 
-		// Create base error
-		apiErr := fmt.Errorf("API error %d: %s", resp.StatusCode, string(body))
-
-		// Wrap with appropriate error type
-		if resp.StatusCode == 401 || resp.StatusCode == 403 {
-			return nil, fmt.Errorf("authentication error: %w", apiErr)
-		}
-
-		return nil, apiErr
+		return nil, &apiHTTPError{status: resp.StatusCode, body: string(body)}
 	}
 
 	return resp, nil
@@ -508,7 +548,7 @@ func (c *Client) DeleteUserToken(ctx context.Context, userID, tokenName string) 
 	resp, err := c.delete(ctx, path)
 	if err != nil {
 		// Deleting a missing token should be treated as already converged.
-		if strings.Contains(err.Error(), "API error 404") {
+		if isPBSNotFoundError(err) {
 			return nil
 		}
 		return fmt.Errorf("delete token: %w", err)
@@ -635,17 +675,43 @@ func (c *Client) GetNodeName(ctx context.Context) (string, error) {
 		c.nodeNameMu.Unlock()
 		return "", fmt.Errorf("node name unavailable: /nodes permission denied, retry deferred")
 	}
+	if attempt := c.nodeNameAttempt; attempt != nil {
+		attempt.joined++
+		c.nodeNameMu.Unlock()
+		select {
+		case <-ctx.Done():
+			return "", ctx.Err()
+		case <-attempt.done:
+			return attempt.name, attempt.err
+		}
+	}
+	attempt := &nodeNameAttempt{done: make(chan struct{})}
+	c.nodeNameAttempt = attempt
 	c.nodeNameMu.Unlock()
 
+	name, err := c.fetchNodeName(ctx)
+
+	c.nodeNameMu.Lock()
+	attempt.name = name
+	attempt.err = err
+	if err == nil {
+		c.cachedNodeName = name
+		c.nodeNameRetryAfter = time.Time{}
+	} else if isPBSPermissionError(err) {
+		c.nodeNameRetryAfter = time.Now().Add(nodeNamePermissionRetryInterval)
+	}
+	c.nodeNameAttempt = nil
+	close(attempt.done)
+	c.nodeNameMu.Unlock()
+
+	return name, err
+}
+
+func (c *Client) fetchNodeName(ctx context.Context) (string, error) {
 	log.Debug().Msg("PBS GetNodeName: fetching node name")
 
 	resp, err := c.get(ctx, "/nodes")
 	if err != nil {
-		if strings.Contains(err.Error(), "403") || strings.Contains(err.Error(), "permission") {
-			c.nodeNameMu.Lock()
-			c.nodeNameRetryAfter = time.Now().Add(nodeNamePermissionRetryInterval)
-			c.nodeNameMu.Unlock()
-		}
 		return "", fmt.Errorf("failed to get nodes: %w", err)
 	}
 	defer resp.Body.Close()
@@ -666,10 +732,6 @@ func (c *Client) GetNodeName(ctx context.Context) (string, error) {
 
 	// Return the first (usually only) node name
 	nodeName := result.Data[0].Node
-	c.nodeNameMu.Lock()
-	c.cachedNodeName = nodeName
-	c.nodeNameRetryAfter = time.Time{}
-	c.nodeNameMu.Unlock()
 	log.Debug().Str("nodeName", nodeName).Msg("PBS GetNodeName: found node name")
 	return nodeName, nil
 }
@@ -683,8 +745,7 @@ func (c *Client) GetNodeStatus(ctx context.Context) (*NodeStatus, error) {
 	// We'll gracefully handle the permission error and return nil
 	statusResp, err := c.get(ctx, "/nodes/localhost/status")
 	if err != nil {
-		// Check if this is a permission error (403)
-		if strings.Contains(err.Error(), "403") || strings.Contains(err.Error(), "permission") {
+		if isPBSPermissionError(err) {
 			log.Debug().Msg("PBS GetNodeStatus: permission denied (expected with API tokens) - returning nil")
 			return nil, nil // Return nil without error for permission issues
 		}
@@ -1638,21 +1699,6 @@ func boolJobField(raw map[string]interface{}, keys ...string) bool {
 		}
 	}
 	return false
-}
-
-func isPBSPermissionError(err error) bool {
-	if err == nil {
-		return false
-	}
-	msg := strings.ToLower(err.Error())
-	return strings.Contains(msg, "403") || strings.Contains(msg, "401") || strings.Contains(msg, "permission") || strings.Contains(msg, "authentication")
-}
-
-func isPBSNotFoundError(err error) bool {
-	if err == nil {
-		return false
-	}
-	return strings.Contains(strings.ToLower(err.Error()), "404")
 }
 
 func firstNonEmptyString(values ...string) string {

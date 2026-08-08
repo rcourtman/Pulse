@@ -273,6 +273,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                 "proxmox-backup-identity-monitoring",
                 "container-entrypoint-runtime",
                 "mock-runtime-fixtures",
+                "pbs-client-runtime",
                 "pbs-protection-evidence-runtime",
                 "diskinventory-collection-trust",
                 "agent-fleet-diagnostics-runtime",
@@ -375,6 +376,36 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                     "exact_files": [
                         "pkg/proxmox/ceph_test.go",
                         "pkg/proxmox/cluster_client_api_test.go",
+                    ],
+                }
+            ],
+        )
+
+    def test_pbs_client_runtime_change_requires_monitoring_contract(self):
+        required = infer_impacted_subsystems(["pkg/pbs/client.go"])
+        self.assertEqual(set(required), {"monitoring"})
+
+        monitoring = required["monitoring"]
+        self.assertEqual(
+            monitoring["contract"],
+            "docs/release-control/v6/internal/subsystems/monitoring.md",
+        )
+        self.assertEqual(
+            monitoring["touched_runtime_files"],
+            ["pkg/pbs/client.go"],
+        )
+        self.assertEqual(
+            monitoring["verification_requirements"],
+            [
+                {
+                    "id": "pbs-client-runtime",
+                    "label": "PBS API transport and node identity proof",
+                    "touched_runtime_files": ["pkg/pbs/client.go"],
+                    "allow_same_subsystem_tests": False,
+                    "test_prefixes": [],
+                    "exact_files": [
+                        "pkg/pbs/client_http_test.go",
+                        "pkg/pbs/client_test.go",
                     ],
                 }
             ],

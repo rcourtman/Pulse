@@ -4198,6 +4198,28 @@ class SubsystemLookupTest(unittest.TestCase):
             ],
         )
 
+    def test_lookup_paths_assigns_pbs_client_runtime_to_monitoring(self) -> None:
+        result = lookup_paths(["pkg/pbs/client.go", "pkg/pbs/client_http_test.go"])
+        self.assertEqual(result["unowned_runtime_files"], [])
+
+        for file_entry in result["files"]:
+            self.assertEqual(len(file_entry["matches"]), 1)
+            match = file_entry["matches"][0]
+            self.assertEqual(match["subsystem"], "monitoring")
+            self.assertEqual(
+                match["contract"],
+                "docs/release-control/v6/internal/subsystems/monitoring.md",
+            )
+            self.assertEqual(match["lane_context"]["lane_id"], "L13")
+            self.assertEqual(
+                match["verification_requirement"]["id"],
+                "pbs-client-runtime",
+            )
+            self.assertEqual(
+                match["verification_requirement"]["exact_files"],
+                ["pkg/pbs/client_http_test.go", "pkg/pbs/client_test.go"],
+            )
+
     def test_lookup_paths_assigns_monitoring_metrics_history_runtime(self) -> None:
         result = lookup_paths(["internal/monitoring/metrics_history.go"])
         self.assertEqual(result["unowned_runtime_files"], [])

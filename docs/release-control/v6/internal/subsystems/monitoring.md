@@ -405,6 +405,7 @@ only graft them onto fixture data.
 21b. `pkg/proxmox/client.go`
 21c. `pkg/proxmox/io_counters.go`
 22. `pkg/proxmox/zfs.go`
+22a. `pkg/pbs/client.go`
 23. `internal/monitoring/guest_memory_sources.go`
 24. `internal/monitoring/guest_memory_stability.go`
 25. `internal/monitoring/monitor_polling_vm.go`
@@ -852,6 +853,14 @@ only graft them onto fixture data.
     into the alert manager, but threshold selection, override identity, active
     alert state, and notification delivery remain alerts-owned. The monitoring
     sync bridge must not introduce per-platform evaluator branches.
+20. Add or change PBS API transport, optional node identity collection, or PBS
+    HTTP retry classification through `pkg/pbs/client.go`. HTTP status decisions
+    must use the concrete client error status rather than rendered error or body
+    text. Node identity permission suppression is limited to 401 and 403;
+    429, 5xx, decoding, cancellation, timeout, and network failures remain
+    transient and retry on the next polling call. Concurrent callers must share
+    one in-flight `/nodes` request so immediate retry does not create a request
+    storm.
 
 ## Forbidden Paths
 
@@ -972,6 +981,10 @@ only graft them onto fixture data.
     `TestCrashedTrueNASAppContainerStillRaisesIncident` and
     `TestStoppedTrueNASAppContainerStateStaysExited` in
     `internal/truenas/provider_oneshot_containers_test.go`.
+15. Keep PBS client HTTP error status structural and the node-name retry policy
+    explicit. Package proof must cover 401/403 deferral, 429/5xx and network
+    retry, response bodies containing permission-like text, recovery, caching,
+    and concurrent single-flight behavior under the race detector.
 
 
 ## Current State
@@ -1027,7 +1040,15 @@ probe into a connection failure. Once connectivity is proven, the poll also
 captures the hostname the PBS node reports about itself (`GET /nodes`) on
 `models.PBSInstance.NodeName` as machine-identity evidence for connected-system
 grouping; node-name fetch failure is partial data like the other optional
-collections, never a poll failure.
+collections, never a poll failure. `pkg/pbs/client.go` preserves HTTP status in
+its concrete API error. Only 401 and 403 defer another node-name request for 30
+minutes; 429, 5xx, malformed responses, cancellation, timeout, and network
+errors retry on the next call regardless of error-body wording. A successful
+node name remains cached for the client lifetime, and concurrent callers join
+one in-flight request so a transient response produces one bounded request per
+polling wave rather than one request per caller. The `GetNodeName` tests in
+`pkg/pbs/client_http_test.go` are the focused retry, recovery, cache, and race
+proof.
 
 ### Host snapshots carry integration provenance; doctor copy is user-facing
 
