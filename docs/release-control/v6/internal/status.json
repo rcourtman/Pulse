@@ -9118,21 +9118,7 @@
   ],
   "coverage_gaps": [],
   "candidate_lanes": [],
-  "work_claims": [
-    {
-      "id": "codex-v6-control-plane-lane-followup-architecture-post-rc-canonicalization",
-      "agent_id": "codex-v6-control-plane",
-      "summary": "Restore the canonical control-plane worktree helper public entrypoints and executable regression coverage for the advertised isolated-worktree workflow.",
-      "target_id": "v6-product-lane-expansion",
-      "claimed_at": "2026-08-08T03:02:17Z",
-      "heartbeat_at": "2026-08-08T03:02:17Z",
-      "expires_at": "2026-08-08T05:02:17Z",
-      "work_item": {
-        "kind": "lane-followup",
-        "id": "architecture-post-rc-canonicalization"
-      }
-    }
-  ],
+  "work_claims": [],
   "open_decisions": [
     {
       "id": "self-hosted-commercial-surfaces-owner-approval",
