@@ -26,8 +26,9 @@ from canonical_completion_guard import (
     stdin_files,
     subsystem_matches_path,
 )
+from repo_file_io import canonical_workspace_repos_root
 
-WORKSPACE_REPOS_ROOT = REPO_ROOT.parent
+WORKSPACE_REPOS_ROOT = canonical_workspace_repos_root(REPO_ROOT)
 
 PLATFORM_CONNECTIONS_WORKSPACE_EXACT_FILES = [
     "frontend-modern/src/components/Settings/ConnectionEditor/__tests__/ConnectionEditor.test.tsx",
@@ -103,11 +104,15 @@ def owned_runtime_files(rule: dict) -> list[str]:
             search_roots.add(parent)
 
     for root in search_roots:
-        repo_root = root
-        while repo_root != WORKSPACE_REPOS_ROOT and repo_root.parent != WORKSPACE_REPOS_ROOT:
-            repo_root = repo_root.parent
-        if repo_root.parent != WORKSPACE_REPOS_ROOT:
+        try:
+            root.relative_to(REPO_ROOT)
             repo_root = REPO_ROOT
+        except ValueError:
+            repo_root = root
+            while repo_root.parent != repo_root and repo_root.parent != WORKSPACE_REPOS_ROOT:
+                repo_root = repo_root.parent
+            if repo_root.parent != WORKSPACE_REPOS_ROOT:
+                repo_root = REPO_ROOT
         for path in root.rglob("*"):
             if not path.is_file():
                 continue

@@ -9,8 +9,12 @@ from pathlib import Path
 import subprocess
 import sys
 
-from repo_file_io import REPO_ROOT
-from worktree_claim import WORKTREES_ROOT, list_worktrees
+RELEASE_CONTROL_DIR = Path(__file__).resolve().parents[1]
+if str(RELEASE_CONTROL_DIR) not in sys.path:
+    sys.path.append(str(RELEASE_CONTROL_DIR))
+
+from repo_file_io import REPO_ROOT, repo_root_context
+from worktree_claim import canonical_worktrees_root, list_worktrees
 
 
 def git(*args: str, cwd: Path, check: bool = True) -> subprocess.CompletedProcess[str]:
@@ -28,7 +32,11 @@ def base_slug(branch_name: str) -> str:
 
 
 def canonical_base_worktree_path(*, repo_root: Path, branch_name: str) -> Path:
-    return WORKTREES_ROOT / repo_root.name / base_slug(branch_name)
+    return (
+        canonical_worktrees_root(repo_root=repo_root)
+        / repo_root_context(repo_root).repo_id
+        / base_slug(branch_name)
+    )
 
 
 def find_worktree_by_path(*, repo_root: Path, path: Path) -> dict[str, str] | None:

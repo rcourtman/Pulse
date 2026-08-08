@@ -1,6 +1,7 @@
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from worktree_claim import (
@@ -47,10 +48,17 @@ class WorktreeClaimTest(unittest.TestCase):
         )
 
     def test_build_worktree_path_uses_workspace_root(self) -> None:
-        path = build_worktree_path(
-            repo_root=Path("/Volumes/Development/pulse/repos/pulse"),
-            branch_name="pulse/claude-code/lane-l15",
-        )
+        with patch(
+            "worktree_claim.repo_root_context",
+            return_value=SimpleNamespace(
+                repo_id="pulse",
+                workspace_repos_root=Path("/Volumes/Development/pulse/repos"),
+            ),
+        ):
+            path = build_worktree_path(
+                repo_root=Path("/isolated/worktrees/l15/pulse"),
+                branch_name="pulse/claude-code/lane-l15",
+            )
         self.assertEqual(
             path,
             Path("/Volumes/Development/pulse/worktrees/pulse/claude-code__lane-l15"),

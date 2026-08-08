@@ -1,8 +1,13 @@
+import os
+import subprocess
+import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from canonical_completion_guard import REPO_ROOT
-from subsystem_lookup import lookup_paths, parse_args, render_pretty
+from repo_file_io import canonical_workspace_repos_root, strip_local_git_env
+from subsystem_lookup import lookup_paths, normalize_input_path, parse_args, render_pretty
 
 
 RECOVERY_PRODUCT_SURFACE_EXACT_FILES = [
@@ -75,6 +80,16 @@ def _contract_reference(contract_path: str, needle: str, runtime_path: str) -> d
 
 
 class SubsystemLookupTest(unittest.TestCase):
+    def git(self, repo_root: Path, *args: str) -> None:
+        subprocess.run(
+            ["git", *args],
+            cwd=repo_root,
+            check=True,
+            capture_output=True,
+            text=True,
+            env=strip_local_git_env(os.environ.copy()),
+        )
+
     def test_parse_args_accepts_lean_flag(self) -> None:
         args = parse_args(["internal/api/ai_handler.go", "--pretty", "--lean"])
         self.assertEqual(args.paths, ["internal/api/ai_handler.go"])
@@ -139,7 +154,9 @@ class SubsystemLookupTest(unittest.TestCase):
             )
 
     def test_lookup_paths_normalizes_cross_repo_absolute_runtime_paths(self) -> None:
-        result = lookup_paths([str(REPO_ROOT.parent / "pulse-mobile" / "src/relay/client.ts")])
+        result = lookup_paths(
+            [str(canonical_workspace_repos_root(REPO_ROOT) / "pulse-mobile" / "src/relay/client.ts")]
+        )
         self.assertEqual(result["unowned_runtime_files"], [])
         self.assertEqual(
             {item["subsystem"] for item in result["impacted_subsystems"]},
@@ -155,6 +172,37 @@ class SubsystemLookupTest(unittest.TestCase):
         match = file_entry["matches"][0]
         self.assertEqual(match["lane_context"]["lane_id"], "L7")
         self.assertEqual(match["verification_requirement"]["id"], "mobile-relay-runtime")
+
+    def test_normalize_input_path_resolves_canonical_sibling_from_linked_worktree(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            workspace = Path(tmpdir) / "workspace"
+            repo_root = workspace / "repos" / "pulse"
+            sibling_path = workspace / "repos" / "pulse-mobile" / "src" / "relay" / "client.ts"
+            linked_worktree = workspace / ".worktrees" / "pulse-subsystem-lookup"
+            repo_root.mkdir(parents=True)
+            sibling_path.parent.mkdir(parents=True)
+            sibling_path.write_text("export const relayClient = true;\n", encoding="utf-8")
+
+            self.git(repo_root, "init")
+            (repo_root / "README.md").write_text("pulse\n", encoding="utf-8")
+            self.git(repo_root, "add", "README.md")
+            self.git(
+                repo_root,
+                "-c",
+                "user.name=Pulse Test",
+                "-c",
+                "user.email=pulse-test@example.invalid",
+                "commit",
+                "-m",
+                "initial",
+            )
+            self.git(repo_root, "worktree", "add", "--detach", str(linked_worktree), "HEAD")
+
+            with patch("subsystem_lookup.REPO_ROOT", linked_worktree):
+                self.assertEqual(
+                    normalize_input_path(str(sibling_path)),
+                    "pulse-mobile:src/relay/client.ts",
+                )
 
     def test_lookup_paths_normalizes_workspace_relative_cross_repo_runtime_paths(self) -> None:
         result = lookup_paths(["repos/pulse-pro/scripts/grandfathered_recurring_cutover_preview.py"])

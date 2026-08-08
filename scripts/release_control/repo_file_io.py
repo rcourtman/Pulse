@@ -5,6 +5,8 @@ from __future__ import annotations
 
 import json
 import os
+from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 import subprocess
 from typing import Any, Iterable
@@ -43,6 +45,16 @@ REPO_TARGET_GIT_ENV_VARS = (
     "GIT_SHALLOW_FILE",
     "GIT_COMMON_DIR",
 )
+
+
+@dataclass(frozen=True)
+class RepoRootContext:
+    """Keep local worktree I/O separate from shared repository identity."""
+
+    execution_root: Path
+    shared_repo_root: Path
+    repo_id: str
+    workspace_repos_root: Path
 
 
 def strip_local_git_env(env: dict[str, str]) -> dict[str, str]:
@@ -162,19 +174,57 @@ def git_common_dir(repo_root: Path | None = None) -> Path:
     return common_dir.resolve()
 
 
-def canonical_repo_root(repo_root: Path | None = None) -> Path:
-    common_dir = git_common_dir(repo_root)
+def execution_repo_root(repo_root: Path | None = None) -> Path:
+    """Return the worktree whose files and index the current operation owns."""
+
+    root = (repo_root or REPO_ROOT).resolve()
+    result = subprocess.run(
+        ["git", "rev-parse", "--path-format=absolute", "--show-toplevel"],
+        cwd=root,
+        check=True,
+        capture_output=True,
+        text=True,
+        env=git_env(root),
+    )
+    return Path(result.stdout.strip()).resolve()
+
+
+def shared_repo_root(repo_root: Path | None = None) -> Path:
+    """Return the primary checkout used only for shared Git/workspace identity."""
+
+    worktree_root = execution_repo_root(repo_root)
+    return _shared_repo_root_for_execution(worktree_root)
+
+
+def _shared_repo_root_for_execution(worktree_root: Path) -> Path:
+    common_dir = git_common_dir(worktree_root)
     if common_dir.name == ".git":
         return common_dir.parent.resolve()
-    return (repo_root or REPO_ROOT).resolve()
+    return worktree_root
+
+
+@lru_cache(maxsize=None)
+def _repo_root_context(root: Path) -> RepoRootContext:
+    execution_root = execution_repo_root(root)
+    identity_root = _shared_repo_root_for_execution(execution_root)
+    return RepoRootContext(
+        execution_root=execution_root,
+        shared_repo_root=identity_root,
+        repo_id=identity_root.name,
+        workspace_repos_root=identity_root.parent,
+    )
+
+
+def repo_root_context(repo_root: Path | None = None) -> RepoRootContext:
+    return _repo_root_context((repo_root or REPO_ROOT).resolve())
 
 
 def canonical_repo_id(repo_root: Path | None = None) -> str:
-    return canonical_repo_root(repo_root).name
+    return repo_root_context(repo_root).repo_id
 
 
 def canonical_workspace_repos_root(repo_root: Path | None = None) -> Path:
-    return canonical_repo_root(repo_root).parent
+    return repo_root_context(repo_root).workspace_repos_root
 
 
 def repo_relative_path(path: str | Path) -> str:

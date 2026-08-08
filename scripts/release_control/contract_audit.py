@@ -14,9 +14,8 @@ from canonical_completion_guard import REPO_ROOT, subsystem_matches_path
 from control_plane import DEFAULT_CONTROL_PLANE
 from repo_file_io import (
     canonical_repo_id,
-    canonical_repo_root,
-    canonical_workspace_repos_root,
     load_repo_json,
+    repo_root_context,
 )
 from subsystem_contracts import tracked_contract_files
 
@@ -115,20 +114,17 @@ def looks_like_repo_path(token: str) -> bool:
 
 
 def repo_roots_for_status(status_payload: dict[str, Any], *, repo_root: Path | None = None) -> dict[str, Path]:
-    root = repo_root or REPO_ROOT
-    local_repo_id = canonical_repo_id(root)
-    local_repo_root = canonical_repo_root(root)
-    workspace_repos_root = canonical_workspace_repos_root(root)
+    context = repo_root_context(repo_root or REPO_ROOT)
     active_repos = [
         repo_id
         for repo_id in status_payload.get("scope", {}).get("active_repos", [])
         if isinstance(repo_id, str) and repo_id.strip()
     ]
-    repo_roots = {local_repo_id: local_repo_root}
+    repo_roots = {context.repo_id: context.execution_root}
     for repo_id in active_repos:
-        if repo_id == local_repo_id:
+        if repo_id == context.repo_id:
             continue
-        repo_roots[repo_id] = workspace_repos_root / repo_id
+        repo_roots[repo_id] = context.workspace_repos_root / repo_id
     return repo_roots
 
 

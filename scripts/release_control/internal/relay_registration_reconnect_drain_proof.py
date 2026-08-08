@@ -8,6 +8,13 @@ import json
 import subprocess
 from dataclasses import asdict, dataclass
 from pathlib import Path
+import sys
+
+RELEASE_CONTROL_DIR = Path(__file__).resolve().parents[1]
+if str(RELEASE_CONTROL_DIR) not in sys.path:
+    sys.path.append(str(RELEASE_CONTROL_DIR))
+
+from repo_file_io import canonical_workspace_repos_root
 
 
 @dataclass
@@ -32,7 +39,7 @@ def default_pulse_dir() -> Path:
 
 
 def default_pulse_mobile_dir() -> Path:
-    return default_pulse_dir().parent / "pulse-mobile"
+    return canonical_workspace_repos_root(default_pulse_dir()) / "pulse-mobile"
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:

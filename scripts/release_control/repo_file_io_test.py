@@ -9,12 +9,14 @@ from unittest.mock import patch
 
 from repo_file_io import (
     canonical_repo_id,
-    canonical_repo_root,
     canonical_workspace_repos_root,
+    execution_repo_root,
     git_env,
     load_repo_json,
     missing_staged_repo_paths,
     read_repo_text,
+    repo_root_context,
+    shared_repo_root,
     strip_local_git_env,
 )
 
@@ -148,6 +150,48 @@ class RepoFileIoTest(unittest.TestCase):
             with patch("repo_file_io.REPO_ROOT", repo_root):
                 self.assertEqual(missing_staged_repo_paths([staged_rel, missing_rel]), [missing_rel])
 
+    def test_linked_worktree_reads_ignore_conflicting_primary_checkout_state(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            workspace = Path(tmpdir) / "workspace"
+            repo_root = workspace / "repos" / "pulse"
+            linked_worktree = workspace / ".worktrees" / "pulse-release-control-isolation"
+            rel = "docs/release-control/v6/internal/status.json"
+            primary_path = repo_root / rel
+            repo_root.mkdir(parents=True)
+            primary_path.parent.mkdir(parents=True)
+
+            self.git(repo_root, "init")
+            primary_path.write_text('{"version": "head"}\n', encoding="utf-8")
+            self.git(repo_root, "add", rel)
+            self.git(
+                repo_root,
+                "-c",
+                "user.name=Pulse Test",
+                "-c",
+                "user.email=pulse-test@example.invalid",
+                "commit",
+                "-m",
+                "initial",
+            )
+            self.git(repo_root, "worktree", "add", "--detach", str(linked_worktree), "HEAD")
+
+            primary_path.unlink()
+            linked_path = linked_worktree / rel
+            linked_path.write_text('{"version": "linked-index"}\n', encoding="utf-8")
+            self.git(linked_worktree, "add", rel)
+            linked_path.write_text('{"version": "linked-worktree"}\n', encoding="utf-8")
+
+            with (
+                patch("repo_file_io.REPO_ROOT", linked_worktree),
+                patch("repo_file_io.DEFAULT_REPO_ROOT", linked_worktree),
+                patch.dict(os.environ, self.hook_env_for_worktree(linked_worktree), clear=False),
+            ):
+                self.assertEqual(read_repo_text(rel), '{"version": "linked-worktree"}\n')
+                self.assertEqual(read_repo_text(rel, staged=True), '{"version": "linked-index"}\n')
+                self.assertEqual(load_repo_json(rel, staged=True), {"version": "linked-index"})
+
+            self.assertFalse(primary_path.exists())
+
     def test_git_env_preserves_local_hook_env_and_scrubs_other_repos(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             workspace = Path(tmpdir) / "workspace"
@@ -223,7 +267,7 @@ class RepoFileIoTest(unittest.TestCase):
             self.assertNotIn("GIT_INDEX_FILE", env)
             self.assertNotIn("GIT_COMMON_DIR", env)
 
-    def test_canonical_repo_identity_uses_git_common_dir_for_linked_worktree(self) -> None:
+    def test_repo_root_context_separates_linked_worktree_from_shared_identity(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             workspace = Path(tmpdir) / "workspace"
             repo_root = workspace / "repos" / "pulse"
@@ -246,9 +290,22 @@ class RepoFileIoTest(unittest.TestCase):
             )
             self.git(repo_root, "worktree", "add", "--detach", str(linked_worktree), "HEAD")
 
-            self.assertEqual(canonical_repo_root(linked_worktree), repo_root.resolve())
+            context = repo_root_context(linked_worktree)
+
+            self.assertEqual(execution_repo_root(linked_worktree), linked_worktree.resolve())
+            self.assertEqual(shared_repo_root(linked_worktree), repo_root.resolve())
+            self.assertEqual(context.execution_root, linked_worktree.resolve())
+            self.assertEqual(context.shared_repo_root, repo_root.resolve())
+            self.assertEqual(context.repo_id, "pulse")
+            self.assertEqual(context.workspace_repos_root, (workspace / "repos").resolve())
             self.assertEqual(canonical_repo_id(linked_worktree), "pulse")
             self.assertEqual(canonical_workspace_repos_root(linked_worktree), (workspace / "repos").resolve())
+
+            primary_context = repo_root_context(repo_root)
+            self.assertEqual(primary_context.execution_root, repo_root.resolve())
+            self.assertEqual(primary_context.shared_repo_root, repo_root.resolve())
+            self.assertEqual(primary_context.repo_id, "pulse")
+            self.assertEqual(primary_context.workspace_repos_root, (workspace / "repos").resolve())
 
     def test_scratch_git_init_tests_scrub_env_through_shared_helper(self) -> None:
         # Running "git init" in a scratch directory while the pre-commit hook

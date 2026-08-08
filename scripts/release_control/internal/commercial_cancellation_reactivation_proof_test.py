@@ -28,7 +28,9 @@ class CommercialCancellationReactivationProofTest(unittest.TestCase):
         self.assertEqual(proof.default_pulse_dir(), Path(proof.__file__).resolve().parents[3])
         self.assertEqual(
             proof.default_pulse_pro_license_server_dir(),
-            proof.default_pulse_dir().parent / "pulse-pro" / "license-server",
+            proof.canonical_workspace_repos_root(proof.default_pulse_dir())
+            / "pulse-pro"
+            / "license-server",
         )
 
     def test_build_command_specs_uses_expected_directories(self) -> None:

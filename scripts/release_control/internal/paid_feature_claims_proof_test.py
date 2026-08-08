@@ -126,15 +126,19 @@ class PaidFeatureClaimsProofTest(unittest.TestCase):
         self.assertEqual(proof.default_pulse_dir(), Path(proof.__file__).resolve().parents[3])
         self.assertEqual(
             proof.default_pulse_pro_license_server_dir(),
-            proof.default_pulse_dir().parent / "pulse-pro" / "license-server",
+            proof.canonical_workspace_repos_root(proof.default_pulse_dir())
+            / "pulse-pro"
+            / "license-server",
         )
         self.assertEqual(
             proof.default_pulse_pro_relay_server_dir(),
-            proof.default_pulse_dir().parent / "pulse-pro" / "relay-server",
+            proof.canonical_workspace_repos_root(proof.default_pulse_dir())
+            / "pulse-pro"
+            / "relay-server",
         )
         self.assertEqual(
             proof.default_pulse_enterprise_dir(),
-            proof.default_pulse_dir().parent / "pulse-enterprise",
+            proof.canonical_workspace_repos_root(proof.default_pulse_dir()) / "pulse-enterprise",
         )
 
     def test_build_command_specs_cover_paid_claim_layers(self) -> None:

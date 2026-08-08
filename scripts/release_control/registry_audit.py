@@ -19,7 +19,7 @@ from canonical_completion_guard import (
     subsystem_matches_path,
 )
 from control_plane import DEFAULT_CONTROL_PLANE
-from repo_file_io import canonical_repo_id, canonical_workspace_repos_root, git_env, load_repo_json
+from repo_file_io import canonical_repo_id, git_env, load_repo_json, repo_root_context
 from status_audit import load_status_payload
 
 
@@ -67,9 +67,9 @@ def tracked_repo_files() -> set[str]:
 
 def tracked_workspace_files(*, active_repos: list[str], local_repo: str) -> set[str]:
     files: set[str] = set()
-    repos_root = canonical_workspace_repos_root(REPO_ROOT)
+    context = repo_root_context(REPO_ROOT)
     for repo_id in active_repos:
-        repo_root = REPO_ROOT if repo_id == local_repo else repos_root / repo_id
+        repo_root = context.execution_root if repo_id == local_repo else context.workspace_repos_root / repo_id
         if not repo_root.exists():
             continue
         result = subprocess.run(

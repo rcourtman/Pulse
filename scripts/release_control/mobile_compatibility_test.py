@@ -8,9 +8,10 @@ import unittest
 
 from generate_mobile_compatibility import REPO_ROOT, load_manifest
 from mobile_compatibility import compare_contracts, load_consumer
+from repo_file_io import canonical_workspace_repos_root
 
 
-MOBILE_REPO = REPO_ROOT.parent / "pulse-mobile"
+MOBILE_REPO = canonical_workspace_repos_root(REPO_ROOT) / "pulse-mobile"
 
 
 class MobileCompatibilityTest(unittest.TestCase):

@@ -23,33 +23,33 @@ from canonical_completion_guard import (
 from subsystem_contracts import load_contract_index, referenced_contracts_for_path
 from status_audit import audit_status_payload, load_status_payload
 from registry_audit import load_registry_payload
-
-WORKSPACE_REPOS_ROOT = REPO_ROOT.parent
+from repo_file_io import repo_root_context
 
 
 def normalize_input_path(raw: str) -> str:
+    context = repo_root_context(REPO_ROOT)
     candidate = Path(raw.strip())
     parts = candidate.parts
     if len(parts) >= 3 and parts[0] == "repos":
         repo_id = parts[1]
         rel = Path(*parts[2:]).as_posix()
-        if repo_id == REPO_ROOT.name:
+        if repo_id == context.repo_id:
             return rel
         return f"{repo_id}:{rel}"
     if candidate.is_absolute():
         candidate = candidate.resolve()
         try:
-            candidate = candidate.relative_to(REPO_ROOT)
+            candidate = candidate.relative_to(context.execution_root)
         except ValueError:
             try:
-                repo_relative = candidate.relative_to(WORKSPACE_REPOS_ROOT)
+                repo_relative = candidate.relative_to(context.workspace_repos_root)
             except ValueError:
                 return candidate.as_posix()
             parts = repo_relative.parts
             if len(parts) >= 2:
                 repo_id = parts[0]
                 rel = Path(*parts[1:]).as_posix()
-                if repo_id == REPO_ROOT.name:
+                if repo_id == context.repo_id:
                     return rel
                 return f"{repo_id}:{rel}"
             return candidate.as_posix()

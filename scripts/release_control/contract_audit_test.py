@@ -383,7 +383,7 @@ Cross-repo relay ownership is explicit.
 
         self.assertEqual(report["errors"], [])
 
-    def test_audit_contract_payload_resolves_sibling_repos_from_linked_worktree(self) -> None:
+    def test_audit_contract_payload_isolates_local_paths_and_resolves_siblings_from_linked_worktree(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             workspace = Path(tmpdir) / "workspace"
             repo_root = workspace / "repos" / "pulse"
@@ -408,6 +408,7 @@ Cross-repo relay ownership is explicit.
                 "initial",
             )
             self.git(repo_root, "worktree", "add", "--detach", str(linked_worktree), "HEAD")
+            (repo_root / "README.md").unlink()
 
             status_payload = {
                 "scope": {
@@ -416,7 +417,7 @@ Cross-repo relay ownership is explicit.
                 "lanes": [{"id": "L7"}],
             }
             repo_roots = repo_roots_for_status(status_payload, repo_root=linked_worktree)
-            self.assertEqual(repo_roots["pulse"], repo_root.resolve())
+            self.assertEqual(repo_roots["pulse"], linked_worktree.resolve())
             self.assertEqual(repo_roots["pulse-mobile"], sibling_root.resolve())
 
             registry_payload = {
@@ -450,7 +451,8 @@ Own relay runtime truth.
 
 ## Canonical Files
 
-1. `pulse-mobile:src/relay/client.ts`
+1. `README.md`
+2. `pulse-mobile:src/relay/client.ts`
 
 ## Shared Boundaries
 

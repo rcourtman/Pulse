@@ -10,6 +10,10 @@ import subprocess
 import sys
 from typing import Any
 
+RELEASE_CONTROL_DIR = Path(__file__).resolve().parents[1]
+if str(RELEASE_CONTROL_DIR) not in sys.path:
+    sys.path.append(str(RELEASE_CONTROL_DIR))
+
 from repo_file_io import REPO_ROOT
 from worktree_base import canonical_base_worktree_path
 from worktree_claim import list_worktrees

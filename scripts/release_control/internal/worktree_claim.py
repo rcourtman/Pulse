@@ -10,12 +10,14 @@ import subprocess
 import sys
 from typing import Any
 
-from repo_file_io import REPO_ROOT
+RELEASE_CONTROL_DIR = Path(__file__).resolve().parents[1]
+if str(RELEASE_CONTROL_DIR) not in sys.path:
+    sys.path.append(str(RELEASE_CONTROL_DIR))
+
+from repo_file_io import REPO_ROOT, repo_root_context
 from work_claim import reserve_claim, write_status_payload, _slug
 
 
-WORKSPACE_ROOT = REPO_ROOT.parents[1]
-WORKTREES_ROOT = WORKSPACE_ROOT / "worktrees"
 DEFAULT_BASE_BRANCH = "pulse/v6"
 
 
@@ -29,8 +31,13 @@ def branch_path_slug(branch_name: str) -> str:
     return branch_name.replace("/", "__")
 
 
+def canonical_worktrees_root(*, repo_root: Path) -> Path:
+    return repo_root_context(repo_root).workspace_repos_root.parent / "worktrees"
+
+
 def build_worktree_path(*, repo_root: Path, branch_name: str) -> Path:
-    return WORKTREES_ROOT / repo_root.name / branch_path_slug(branch_name)
+    context = repo_root_context(repo_root)
+    return canonical_worktrees_root(repo_root=repo_root) / context.repo_id / branch_path_slug(branch_name)
 
 
 def parse_worktree_list(output: str) -> list[dict[str, str]]:

@@ -20,7 +20,7 @@ class RelayRegistrationReconnectDrainProofTest(unittest.TestCase):
         self.assertEqual(proof.default_pulse_dir(), Path(proof.__file__).resolve().parents[3])
         self.assertEqual(
             proof.default_pulse_mobile_dir(),
-            proof.default_pulse_dir().parent / "pulse-mobile",
+            proof.canonical_workspace_repos_root(proof.default_pulse_dir()) / "pulse-mobile",
         )
 
     def test_build_command_specs_are_sorted_and_cover_expected_workspaces(self) -> None:
