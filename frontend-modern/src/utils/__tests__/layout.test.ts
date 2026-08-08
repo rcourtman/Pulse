@@ -17,7 +17,7 @@ describe('layout store applyServerMode (#1130)', () => {
   });
 
   it('applies the server full-width value even when a stale local preference exists', () => {
-    // Stale local preference that loadFromServer() would otherwise honor.
+    // Stale local preference the server value has to beat.
     localStorage.setItem(STORAGE_KEYS.FULL_WIDTH_MODE, 'default');
 
     const store = createLayoutStore();

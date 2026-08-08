@@ -22703,6 +22703,56 @@ func TestContract_CheckoutStartSourceAttributionReachesHandoffNeverPortal(t *tes
 	}
 }
 
+// App bootstrap requires presentation defaults for every authenticated role.
+// Pin both sides of the privilege boundary: the narrow runtime projection is
+// readable by a viewer, while the complete system settings payload remains
+// admin-only.
+func TestContract_RuntimeDisplayServesPresentationValuesWithoutAdmin(t *testing.T) {
+	prevAuthorizer := authpkg.GetAuthorizer()
+	authpkg.SetAuthorizer(&authpkg.DefaultAuthorizer{})
+	defer authpkg.SetAuthorizer(prevAuthorizer)
+
+	cfg := newCapabilityConfig(t, "admin")
+	persistence := config.NewConfigPersistence(cfg.ConfigPath)
+	settings := config.DefaultSystemSettings()
+	settings.Theme = "dark"
+	settings.FullWidthMode = true
+	if err := persistence.SaveSystemSettings(*settings); err != nil {
+		t.Fatalf("save system settings: %v", err)
+	}
+
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	cookie := capabilitySessionCookie(t, "viewer@example.com")
+
+	get := func(path string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		req.AddCookie(cookie)
+		rec := httptest.NewRecorder()
+		router.Handler().ServeHTTP(rec, req)
+		return rec
+	}
+
+	if rec := get("/api/system/settings"); rec.Code != http.StatusForbidden {
+		t.Fatalf("non-admin GET /api/system/settings = %d, want 403", rec.Code)
+	}
+
+	rec := get("/api/runtime/display")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("non-admin GET /api/runtime/display = %d, want 200 (%s)", rec.Code, rec.Body.String())
+	}
+
+	var display RuntimeDisplayResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &display); err != nil {
+		t.Fatalf("decode runtime display: %v", err)
+	}
+	if display.Theme != "dark" {
+		t.Fatalf("theme = %q, want dark", display.Theme)
+	}
+	if !display.FullWidthMode {
+		t.Fatal("fullWidthMode = false, want true")
+	}
+}
+
 // The refusal itself is the contract; its log severity is not. This pins both
 // halves of the 2026-08-07 logging change together, because the tempting way to
 // quiet a noisy log is to stop refusing — a "fix" that would be a security

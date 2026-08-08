@@ -2298,3 +2298,12 @@ strictly newer than the running agent, and at most once per distinct version
 (`TestNudgeVersionNudgesEachDistinctVersionOnce`), so steady-state report
 traffic — equal versions on every cycle — never wakes the update loop and adds
 no recurring work on either side.
+
+### Runtime display load preserves the bootstrap request budget
+
+The authenticated bootstrap in `frontend-modern/src/useAppRuntimeState.ts`
+replaces its one `GET /api/system/settings` request with one
+`GET /api/runtime/display` request. It remains concurrent with runtime branding,
+runs once per authenticated page bootstrap, and adds no poll or serial round
+trip. Non-admin sessions also stop producing the refused admin request and its
+fallback path.

@@ -6,9 +6,12 @@
  */
 
 import { createSignal } from 'solid-js';
-import { SettingsAPI, type RuntimeBrandingResponse } from '@/api/settings';
+import {
+  SettingsAPI,
+  type RuntimeBrandingResponse,
+  type RuntimeDisplayResponse,
+} from '@/api/settings';
 import { logger } from '@/utils/logger';
-import type { SystemConfig } from '@/types/config';
 
 // Server-side setting to hide Docker update buttons while still detecting updates
 const [disableDockerUpdateActions, setDisableDockerUpdateActions] = createSignal(false);
@@ -24,35 +27,16 @@ const [runtimeBranding, setRuntimeBranding] = createSignal<RuntimeBrandingRespon
 const [systemSettingsLoaded, setSystemSettingsLoaded] = createSignal(false);
 
 /**
- * Update the system settings store from an existing settings object.
- * Call this after you've already fetched system settings (e.g., for theme loading).
+ * Update the shell flags from the authenticated runtime display projection.
  */
-export function updateSystemSettingsFromResponse(settings: SystemConfig): void {
-  setDisableDockerUpdateActions(settings.disableDockerUpdateActions ?? false);
-  setReduceProUpsellNoise(settings.reduceProUpsellNoise ?? false);
+export function updateRuntimeDisplayFromResponse(display: RuntimeDisplayResponse): void {
+  setDisableDockerUpdateActions(display.disableDockerUpdateActions ?? false);
+  setReduceProUpsellNoise(display.reduceProUpsellNoise ?? false);
   setSystemSettingsLoaded(true);
-  logger.debug('System settings updated from response', {
-    disableDockerUpdateActions: settings.disableDockerUpdateActions,
-    reduceProUpsellNoise: settings.reduceProUpsellNoise,
+  logger.debug('System settings updated from runtime display response', {
+    disableDockerUpdateActions: display.disableDockerUpdateActions,
+    reduceProUpsellNoise: display.reduceProUpsellNoise,
   });
-}
-
-/**
- * Load system settings from the server.
- * Use this only when you need settings but haven't fetched them elsewhere.
- * Prefer `updateSystemSettingsFromResponse` when you already have the settings.
- */
-export async function loadSystemSettings(): Promise<void> {
-  try {
-    const settings = await SettingsAPI.getSystemSettings();
-    updateSystemSettingsFromResponse(settings);
-  } catch (err) {
-    logger.warn('Failed to load system settings, using defaults', err);
-    // Use safe defaults
-    setDisableDockerUpdateActions(false);
-    setReduceProUpsellNoise(false);
-    setSystemSettingsLoaded(true);
-  }
 }
 
 export async function loadRuntimeBranding(): Promise<void> {

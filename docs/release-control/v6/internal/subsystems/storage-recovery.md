@@ -5082,3 +5082,11 @@ Routine authorization refusals raised by `internal/api/auth.go` and
 `internal/api/auth_denial_signal.go`. No recovery or storage route, payload, or
 persisted shape changes. The security-privacy and api-contracts entries hold the
 authoritative description and proof.
+
+### Runtime display reads settings persistence without changing storage state
+
+`internal/api/runtime_display.go` reads `LoadSystemSettings()` and projects four
+presentation-only fields for authenticated clients. It writes no settings,
+adds no persisted shape, and changes no storage or recovery route, evidence, or
+freshness semantics. `api-contracts` owns the response and authorization
+contract.

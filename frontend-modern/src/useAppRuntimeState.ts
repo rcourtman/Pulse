@@ -57,7 +57,7 @@ import { layoutStore } from '@/utils/layout';
 import {
   loadRuntimeBranding,
   markSystemSettingsLoadedWithDefaults,
-  updateSystemSettingsFromResponse,
+  updateRuntimeDisplayFromResponse,
 } from '@/stores/systemSettings';
 
 type EnhancedStore = ReturnType<typeof getGlobalWebSocketStore>;
@@ -315,18 +315,20 @@ export const useAppRuntimeState = () => {
     }
   };
 
-  const loadSystemSettingsAndLayout = async () => {
+  const loadRuntimeDisplayAndLayout = async () => {
     try {
-      const systemSettings = await SettingsAPI.getSystemSettings();
-      updateSystemSettingsFromResponse(systemSettings);
-      applyServerThemeIfAllowed(systemSettings.theme);
+      // Bootstrap runs for every authenticated role. Read only the explicit
+      // session-tier display projection; /api/system/settings remains admin-only.
+      const display = await SettingsAPI.getRuntimeDisplay();
+      updateRuntimeDisplayFromResponse(display);
+      applyServerThemeIfAllowed(display.theme);
       setHasLoadedServerTheme(true);
       // Apply the server's canonical full-width mode using the settings we just
       // fetched, so it is honored after auth even if a stale localStorage
-      // preference exists (#1130) — loadFromServer() would short-circuit on it.
-      layoutStore.applyServerMode(systemSettings.fullWidthMode);
+      // preference exists (#1130).
+      layoutStore.applyServerMode(display.fullWidthMode);
     } catch (error) {
-      logger.error('Failed to load system settings from server', error);
+      logger.error('Failed to load runtime display settings from server', error);
       markSystemSettingsLoadedWithDefaults();
     }
   };
@@ -371,7 +373,7 @@ export const useAppRuntimeState = () => {
     await loadOrganizations();
     setWsStore(acquireWsStore());
     setBackendHealthy(true);
-    await Promise.all([loadSystemSettingsAndLayout(), loadRuntimeBranding()]);
+    await Promise.all([loadRuntimeDisplayAndLayout(), loadRuntimeBranding()]);
     // Shared commercial posture stays off ordinary self-hosted app shells.
     if (!presentationPolicyHidesUpgradePrompts()) {
       void loadCommercialPosture();

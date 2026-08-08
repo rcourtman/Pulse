@@ -532,6 +532,8 @@ describe('App architecture', () => {
     );
     expect(appRuntimeStateSource).toContain('if (!(await loadAuthenticatedBootstrapState())) {');
     expect(appRuntimeStateSource.match(/apiFetch\('\/api\/state'/g)).toHaveLength(1);
+    expect(appRuntimeStateSource).toContain('SettingsAPI.getRuntimeDisplay()');
+    expect(appRuntimeStateSource).not.toContain('SettingsAPI.getSystemSettings');
     expect(appRuntimeStateSource).toContain(
       'const [backendHealthy, setBackendHealthy] = createSignal(false);',
     );
@@ -654,7 +656,7 @@ describe('App architecture', () => {
 
   it('keeps licensed application branding inside the authenticated shell bootstrap', () => {
     expect(appRuntimeStateSource).toContain(
-      'await Promise.all([loadSystemSettingsAndLayout(), loadRuntimeBranding()]);',
+      'await Promise.all([loadRuntimeDisplayAndLayout(), loadRuntimeBranding()]);',
     );
     expect(appLayoutSource).toContain("import { runtimeBranding } from '@/stores/systemSettings';");
     expect(appLayoutSource).toContain(

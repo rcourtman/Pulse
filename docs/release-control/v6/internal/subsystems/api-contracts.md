@@ -9074,3 +9074,27 @@ withholding that tab would take personal settings away from every non-admin.
 served value against a `settings:read` token versus a `monitoring:read` token.
 `TestSettingsCapabilitiesMatchRouteEnforcementWithoutRBAC` keeps the withheld
 case honest against live 403s on `/api/config/nodes` and `/api/system/settings`.
+
+### Authenticated runtime display projection
+
+`GET /api/runtime/display`, implemented by
+`internal/api/runtime_display.go` and registered in
+`internal/api/router_routes_registration.go`, uses `RequireAuth` plus
+`monitoring:read`, matching the sibling `/api/runtime/branding` route. Its
+explicit `RuntimeDisplayResponse` whitelist contains only `theme`,
+`fullWidthMode`, `disableDockerUpdateActions`, and `reduceProUpsellNoise`.
+
+Authenticated app bootstrap needs those values for every role. It must not read
+them from `GET /api/system/settings`, whose `RequireAdmin` plus `settings:read`
+guard protects the complete system settings object, including origin, public
+URL, webhook-network, telemetry, and login configuration. The admin route and
+payload remain unchanged; the new route never embeds or projects
+`config.SystemSettings`, so future settings fields are not published by
+omission. `disableDockerUpdateActions` comes from effective runtime config so
+the environment override remains authoritative.
+
+`TestContract_RuntimeDisplayServesPresentationValuesWithoutAdmin` pins a viewer
+receiving 200 from the runtime route while still receiving 403 from the admin
+route. `TestHandleGetRuntimeDisplay_PublishesOnlyPresentationFields` pins the
+serialized whitelist, and the frontend bootstrap tests pin that
+`useAppRuntimeState` never calls `getSystemSettings()`.

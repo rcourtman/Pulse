@@ -486,6 +486,7 @@ var allRouteAllowlist = []string{
 	"/api/admin/profiles/",
 	"/api/config/system",
 	"/api/runtime/branding",
+	"/api/runtime/display",
 	"/api/system/settings/telemetry-preview",
 	"/api/system/settings/telemetry-reset-id",
 	"/api/system/mock-mode",

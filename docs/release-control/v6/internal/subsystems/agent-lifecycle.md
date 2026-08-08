@@ -6008,3 +6008,13 @@ status codes and payloads unchanged — an agent presenting insufficient
 credentials is refused exactly as before, it simply no longer emits a warn line
 per attempt. The security-privacy and api-contracts entries hold the
 authoritative description and proof.
+
+### Authenticated runtime display projection
+
+`internal/api/runtime_display.go` adds `GET /api/runtime/display` under
+`RequireAuth` plus `monitoring:read`. This is an API-contract change only: it
+does not alter agent enrollment, reports, commands, identity, or lifecycle
+state. Monitoring-capable agents may read the same presentation-only defaults
+as other authenticated clients, but the response contains no connection,
+credential, or agent identity data. `api-contracts` owns the authoritative
+payload and authorization proof.

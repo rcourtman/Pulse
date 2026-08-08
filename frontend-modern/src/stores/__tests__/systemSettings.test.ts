@@ -12,7 +12,7 @@ import {
   shouldHideDockerUpdateActions,
   shouldReduceProUpsellNoise,
   updateRuntimeBrandingFromResponse,
-  updateSystemSettingsFromResponse,
+  updateRuntimeDisplayFromResponse,
 } from '@/stores/systemSettings';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -27,8 +27,8 @@ describe('systemSettings store', () => {
   });
 
   it('applies route and docker feature flags from API response', () => {
-    updateSystemSettingsFromResponse({
-      autoUpdateEnabled: false,
+    updateRuntimeDisplayFromResponse({
+      theme: 'dark',
       disableDockerUpdateActions: true,
       reduceProUpsellNoise: true,
     });
@@ -38,8 +38,8 @@ describe('systemSettings store', () => {
   });
 
   it('resets route and docker feature flags to safe defaults', () => {
-    updateSystemSettingsFromResponse({
-      autoUpdateEnabled: false,
+    updateRuntimeDisplayFromResponse({
+      theme: 'dark',
       disableDockerUpdateActions: true,
       reduceProUpsellNoise: true,
     });
@@ -50,8 +50,8 @@ describe('systemSettings store', () => {
   });
 
   it('keeps privacy and local paid-flow defaults safe when flags are omitted', () => {
-    updateSystemSettingsFromResponse({
-      autoUpdateEnabled: false,
+    updateRuntimeDisplayFromResponse({
+      theme: 'dark',
     });
 
     expect(areSystemSettingsLoaded()).toBe(true);

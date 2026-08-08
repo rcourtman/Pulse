@@ -210,6 +210,24 @@ describe('SettingsAPI', () => {
     });
   });
 
+  describe('getRuntimeDisplay', () => {
+    it('fetches display settings from the authenticated runtime route', async () => {
+      const display = {
+        theme: 'dark',
+        fullWidthMode: true,
+        disableDockerUpdateActions: true,
+        reduceProUpsellNoise: false,
+      };
+      vi.mocked(apiFetchJSON).mockResolvedValueOnce(display);
+
+      const result = await SettingsAPI.getRuntimeDisplay();
+
+      expect(apiFetchJSON).toHaveBeenCalledWith('/api/runtime/display');
+      expect(apiFetchJSON).not.toHaveBeenCalledWith('/api/system/settings');
+      expect(result).toEqual(display);
+    });
+  });
+
   describe('getTelemetryPreview', () => {
     it('fetches the telemetry preview payload', async () => {
       const mockPreview = {

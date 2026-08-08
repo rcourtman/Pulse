@@ -3335,3 +3335,13 @@ fall through to the Pulse-hosted branch and mint leases claiming those three
 Pulse-service-backed capabilities. `providerChained` retains its narrower
 meaning: a Pulse-signed licence is available to embed so release builds can
 verify the lease.
+
+### Runtime display load remains outside commercial bootstrap ownership
+
+`frontend-modern/src/useAppRuntimeState.ts` now loads presentation defaults
+from authenticated `GET /api/runtime/display` instead of admin-only
+`GET /api/system/settings`. The request stays in the existing concurrent
+bootstrap group beside runtime branding, after authentication and organization
+context resolve. Hosted-mode, organization, license, entitlement, and
+presentation-policy behavior are unchanged. `reduceProUpsellNoise` remains a
+compatibility display flag; it does not grant or derive commercial capability.
