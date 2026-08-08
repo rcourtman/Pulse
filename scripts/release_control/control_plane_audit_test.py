@@ -1,6 +1,14 @@
+import shlex
+import subprocess
+import sys
 import unittest
 
-from control_plane import agent_entrypoint, parse_args as control_plane_parse_args, release_branch_for_version
+from control_plane import (
+    REPO_ROOT,
+    agent_entrypoint,
+    parse_args as control_plane_parse_args,
+    release_branch_for_version,
+)
 from control_plane_audit import audit_control_plane_payload, parse_args
 
 
@@ -161,6 +169,38 @@ class ControlPlaneAuditTest(unittest.TestCase):
         self.assertEqual(entrypoint["worktree_base"], "scripts/release_control/worktree_base.py")
         self.assertEqual(entrypoint["worktree_claim"], "scripts/release_control/worktree_claim.py")
         self.assertEqual(entrypoint["worktree_finish"], "scripts/release_control/worktree_finish.py")
+
+    def test_every_advertised_helper_entrypoint_executes(self) -> None:
+        entrypoint = agent_entrypoint()
+        commands = entrypoint["startup_commands"] + entrypoint["targeted_lookup_commands"]
+        helper_paths = {
+            tokens[1]
+            for command in commands
+            if len(tokens := shlex.split(command)) >= 2 and tokens[0] == "python3"
+        }
+        helper_paths.update(
+            value
+            for value in entrypoint.values()
+            if isinstance(value, str) and value.endswith(".py")
+        )
+
+        for helper_rel in sorted(helper_paths):
+            with self.subTest(helper=helper_rel):
+                helper_path = REPO_ROOT / helper_rel
+                self.assertTrue(helper_path.is_file(), f"advertised helper is missing: {helper_rel}")
+                result = subprocess.run(
+                    [sys.executable, str(helper_path), "--help"],
+                    cwd=REPO_ROOT,
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                self.assertEqual(
+                    result.returncode,
+                    0,
+                    f"advertised helper failed to execute: {helper_rel}\n{result.stderr}",
+                )
+                self.assertIn("usage:", result.stdout)
 
     def test_audit_accepts_valid_payload(self) -> None:
         report = audit_control_plane_payload(

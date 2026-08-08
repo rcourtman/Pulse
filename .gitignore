@@ -278,6 +278,9 @@ scripts/release_control/*
 !scripts/release_control/ssh_host_key_policy_test.py
 !scripts/release_control/work_claim.py
 !scripts/release_control/work_claim_test.py
+!scripts/release_control/worktree_base.py
+!scripts/release_control/worktree_claim.py
+!scripts/release_control/worktree_finish.py
 .agent/
 
 # Pulse Pro landing page (private)
