@@ -9177,21 +9177,7 @@
   ],
   "coverage_gaps": [],
   "candidate_lanes": [],
-  "work_claims": [
-    {
-      "id": "hosted-installer-origin-019fde93-lane-l16",
-      "agent_id": "hosted-installer-origin-019fde93",
-      "summary": "Close the hosted installer-origin gap by propagating runtime hosted mode into canonical PVE/PBS command and setup-artifact resolution before any token mutation, with router-level adversarial proof.",
-      "target_id": "v6-product-lane-expansion",
-      "claimed_at": "2026-08-08T09:43:22Z",
-      "heartbeat_at": "2026-08-08T09:43:22Z",
-      "expires_at": "2026-08-08T17:43:22Z",
-      "work_item": {
-        "kind": "lane",
-        "id": "L16"
-      }
-    }
-  ],
+  "work_claims": [],
   "open_decisions": [
     {
       "id": "self-hosted-commercial-surfaces-owner-approval",
