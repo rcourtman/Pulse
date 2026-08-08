@@ -137,14 +137,18 @@ func normalizeEnvAuthPassword(raw string) (string, error) {
 // NOTE: The envconfig tags are legacy and not used - configuration is loaded from encrypted JSON files
 type Config struct {
 	// Server settings
-	BindAddress     string
-	FrontendPort    int `envconfig:"FRONTEND_PORT" default:"7655"`
-	ConfigPath      string
-	DataPath        string
-	AppRoot         string `json:"-"`                                        // Root directory of the application (where binary lives)
-	PublicURL       string `envconfig:"PULSE_PUBLIC_URL" default:""`         // Full URL to access Pulse (e.g., http://198.51.100.100:7655)
-	AgentConnectURL string `envconfig:"PULSE_AGENT_CONNECT_URL" default:""`  // Dedicated direct connect URL for agents (e.g. http://192.0.2.5:7655)
-	AgentIngestPort int    `envconfig:"PULSE_AGENT_INGEST_PORT" default:"0"` // When >0, additionally serve agent ingest (/api/agents/*) on this dedicated port so it can be network-isolated from the UI/API. 0 = disabled (single-port, default).
+	BindAddress  string
+	FrontendPort int `envconfig:"FRONTEND_PORT" default:"7655"`
+	ConfigPath   string
+	DataPath     string
+	AppRoot      string `json:"-"`                                // Root directory of the application (where binary lives)
+	PublicURL    string `envconfig:"PULSE_PUBLIC_URL" default:""` // Full URL to access Pulse (e.g., http://198.51.100.100:7655)
+	// PublicURLAutoDetected marks PublicURL as a boot-time or request-time
+	// guess rather than operator configuration. Auto-detected values yield to
+	// the live request origin when advertising URLs (refs #1692).
+	PublicURLAutoDetected bool   `json:"-"`
+	AgentConnectURL       string `envconfig:"PULSE_AGENT_CONNECT_URL" default:""`  // Dedicated direct connect URL for agents (e.g. http://192.0.2.5:7655)
+	AgentIngestPort       int    `envconfig:"PULSE_AGENT_INGEST_PORT" default:"0"` // When >0, additionally serve agent ingest (/api/agents/*) on this dedicated port so it can be network-isolated from the UI/API. 0 = disabled (single-port, default).
 
 	// Proxmox VE connections
 	PVEInstances []PVEInstance
@@ -1675,10 +1679,13 @@ func load(initLogging bool) (*Config, error) {
 		// In hosted mode, fail closed unless explicitly configured.
 		if os.Getenv("PULSE_HOSTED_MODE") == "true" {
 			log.Warn().Msg("Hosted mode enabled: public URL not configured; external links (e.g., magic links) will be disabled. Set PULSE_PUBLIC_URL.")
-		} else {
-			// Try to auto-detect public URL if not explicitly configured
+		} else if cfg.PublicURL == "" {
+			// Try to auto-detect public URL if not explicitly configured.
+			// A value loaded from system settings is operator configuration
+			// and must not be clobbered by detection on restart.
 			if detectedURL := detectPublicURL(cfg.FrontendPort); detectedURL != "" {
 				cfg.PublicURL = detectedURL
+				cfg.PublicURLAutoDetected = true
 				log.Info().Str("url", detectedURL).Msg("Auto-detected public URL for webhook notifications")
 			}
 		}

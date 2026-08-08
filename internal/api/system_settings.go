@@ -1042,6 +1042,8 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 	}
 	if _, ok := rawRequest["publicURL"]; ok {
 		h.config.PublicURL = settings.PublicURL
+		// Operator input, even empty, supersedes any auto-detected guess.
+		h.config.PublicURLAutoDetected = false
 	}
 
 	// ---- Side effects (discovery, temperature, notifications) ----

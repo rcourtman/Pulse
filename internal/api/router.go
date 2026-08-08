@@ -4765,6 +4765,7 @@ func (r *Router) capturePublicURLFromRequest(req *http.Request) {
 	}
 
 	r.config.PublicURL = normalizedCandidate
+	r.config.PublicURLAutoDetected = true
 	r.publicURLDetected = true
 	r.publicURLMu.Unlock()
 
@@ -10923,7 +10924,12 @@ func (r *Router) resolvePublicURL(req *http.Request) string {
 		return strings.TrimRight(agentConnectURL, "/")
 	}
 
-	if publicURL := strings.TrimSpace(r.config.PublicURL); publicURL != "" {
+	// An operator-configured public URL is authoritative. An auto-detected one
+	// is only a guess (boot-time LAN IP probe or first-request capture), so the
+	// live request's own origin outranks it: the URL the admin is browsing
+	// right now is fresher evidence of how this instance is reached (#1692).
+	publicURL := strings.TrimSpace(r.config.PublicURL)
+	if publicURL != "" && !r.config.PublicURLAutoDetected {
 		return strings.TrimRight(publicURL, "/")
 	}
 
@@ -10940,12 +10946,18 @@ func (r *Router) resolvePublicURL(req *http.Request) string {
 	if req != nil {
 		host = strings.TrimSpace(req.Host)
 	}
-	if host == "" {
-		if r.config.FrontendPort > 0 {
-			host = fmt.Sprintf("localhost:%d", r.config.FrontendPort)
-		} else {
-			host = "localhost:7655"
-		}
+	if host != "" {
+		return fmt.Sprintf("%s://%s", scheme, host)
+	}
+
+	if publicURL != "" {
+		return strings.TrimRight(publicURL, "/")
+	}
+
+	if r.config.FrontendPort > 0 {
+		host = fmt.Sprintf("localhost:%d", r.config.FrontendPort)
+	} else {
+		host = "localhost:7655"
 	}
 
 	return fmt.Sprintf("%s://%s", scheme, host)

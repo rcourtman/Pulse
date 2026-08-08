@@ -847,6 +847,72 @@ func TestResolvePublicURL_ConfiguredPublicURL(t *testing.T) {
 	}
 }
 
+func TestResolvePublicURL_AutoDetectedYieldsToRequest(t *testing.T) {
+	tests := []struct {
+		name         string
+		publicURL    string
+		autoDetected bool
+		reqHost      string
+		forwardProto string
+		want         string
+	}{
+		{
+			name:         "auto-detected loses to request origin",
+			publicURL:    "http://192.168.1.50:7655",
+			autoDetected: true,
+			reqHost:      "pulse.example.com",
+			forwardProto: "https",
+			want:         "https://pulse.example.com",
+		},
+		{
+			name:         "auto-detected loses to plain http request origin",
+			publicURL:    "http://192.168.1.50:7655",
+			autoDetected: true,
+			reqHost:      "pulse.lan:7655",
+			want:         "http://pulse.lan:7655",
+		},
+		{
+			name:         "explicit config still beats request origin",
+			publicURL:    "http://192.168.1.50:7655",
+			autoDetected: false,
+			reqHost:      "pulse.example.com",
+			forwardProto: "https",
+			want:         "http://192.168.1.50:7655",
+		},
+		{
+			name:         "auto-detected survives when request has no host",
+			publicURL:    "http://192.168.1.50:7655",
+			autoDetected: true,
+			want:         "http://192.168.1.50:7655",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := &Router{
+				config: &config.Config{
+					PublicURL:             tt.publicURL,
+					PublicURLAutoDetected: tt.autoDetected,
+				},
+			}
+
+			var req *http.Request
+			if tt.reqHost != "" {
+				req = httptest.NewRequest(http.MethodGet, "/", nil)
+				req.Host = tt.reqHost
+				if tt.forwardProto != "" {
+					req.Header.Set("X-Forwarded-Proto", tt.forwardProto)
+				}
+			}
+
+			got := r.resolvePublicURL(req)
+			if got != tt.want {
+				t.Errorf("resolvePublicURL() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestResolvePublicURL_FromRequest(t *testing.T) {
 	tests := []struct {
 		name          string
