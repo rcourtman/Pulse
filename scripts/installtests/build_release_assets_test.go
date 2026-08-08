@@ -649,9 +649,9 @@ func TestCurrentSupportPrereleasePacketTracksInstallMetadata(t *testing.T) {
 		"## Highlights",
 		"stable `v"+previous+"`",
 		"supersedes `v6.2.0-rc.9`",
-		"Installer, diagnostic, and sign-in URLs reject untrusted origins",
-		"Settings, resource links, update polling, health",
-		"Agent/PBS lifecycle fixes",
+		"Security hardening blocks untrusted installer, diagnostic, sign-in, and SSH cleanup origins",
+		"Role-correct Settings and resilient recovery keep viewer access and live resource state coherent",
+		"Proxmox availability retries GET when a server rejects HEAD with HTTP 405 or 501",
 		"Targeted proof covers request-origin validation, SSH host-key enforcement",
 		"iOS build 12 is distributed through the TestFlight public beta link",
 		"Android versionCode 9 remains available through Play open testing",
@@ -662,7 +662,8 @@ func TestCurrentSupportPrereleasePacketTracksInstallMetadata(t *testing.T) {
 	)
 	assertFileContainsAllNormalized(t, changelogPath,
 		"Version: `v"+version+"`",
-		"Previous candidate: `v6.2.0-rc.9`",
+		"Previous public candidate: `v6.2.0-rc.9`",
+		"Abandoned partial candidate: `v6.2.0-rc.10`",
 		"Previous stable: `v"+previous+"`",
 		"Rollback target: `v"+previous+"`",
 		"Promotion path: exact-SHA single-build release candidate from `main`",
@@ -711,7 +712,7 @@ func TestCurrentSupportPrereleasePacketTracksInstallMetadata(t *testing.T) {
 		"This support prerelease keeps `rollback_version=v"+previous+"`, publishes a versioned public GitHub prerelease plus versioned Docker and Helm artifacts, and does not move stable/latest install pointers or stable semver aliases.",
 		"For the active support prerelease `v"+version+"` cut, the repo-root compose default and `scripts/install-docker.sh` fallback must both pin `"+version+"` until the next governed stable cut moves them forward.",
 		"The `v"+version+"` server cut is classified `existing-mobile-build-compatible`.",
-		"The changes since RC9 preserve the checked-in mobile API, Relay, pairing, approval, push, authentication, and onboarding contracts; no additional companion upload or public store rollout is part of RC10.",
+		"The changes since RC9 preserve the checked-in mobile API, Relay, pairing, approval, push, authentication, and onboarding contracts; no additional companion upload or public store rollout is part of RC11.",
 	)
 }
 

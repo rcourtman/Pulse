@@ -1338,23 +1338,25 @@ host-local redirect contract as runtime token minting and exchange. Proof input
 must reject absolute, scheme-relative, backslash-authority, encoded-separator,
 and control-character targets before constructing the handoff request.
 
-The active support prerelease `v6.2.0-rc.10` cut sets the repo-root `VERSION`,
+The active support prerelease `v6.2.0-rc.11` cut sets the repo-root `VERSION`,
 repo-root `docker-compose.yml` image default, `scripts/install-docker.sh`
-fallback, and Helm chart release metadata to the same `6.2.0-rc.10` release
+fallback, and Helm chart release metadata to the same `6.2.0-rc.11` release
 version. This support prerelease keeps `rollback_version=v6.1.2`, publishes a
 versioned public GitHub prerelease plus versioned Docker and Helm artifacts, and
 does not move stable/latest install pointers or stable semver aliases. Stable
 install pointers stay on `v6.1.2`, whose active stable cut is recorded below and
-continues to govern the stable line until this candidate is promoted. The tenth
-`v6.2.0` candidate is a security-boundary, role-correct access, live-state
-recovery, and release-operations cut that supersedes `v6.2.0-rc.9`: it validates
+continues to govern the stable line until this candidate is promoted. The
+eleventh `v6.2.0` candidate is a security-boundary, role-correct access,
+live-state recovery, and release-operations cut that supersedes
+`v6.2.0-rc.9`: it validates
 request-derived origins, verifies legacy-cleanup SSH hosts, aligns Settings and
 resource reads with session authority, recovers oversized WebSocket state,
 converges agent and PBS lifecycle behavior, restores the deliberate self-hosted
-commercial opt-in posture, and closes the historical credential-containment
-gate. The exact `main` SHA must pass the integrated release checks and
-immutable-candidate build before the single-build workflow crosses its public
-mutation boundary.
+commercial opt-in posture, closes the historical credential-containment gate,
+and retries GET when Proxmox reports HTTP 405 or 501 for unsupported HEAD
+availability probes. The exact `main` SHA must pass the integrated release
+checks and immutable-candidate build before the single-build workflow crosses
+its public mutation boundary.
 Every release cut, including a prerelease, now gates that mutation boundary on
 the complete frontend unit suite, frontend type-checking, and a deterministic
 render smoke against the verified frontend bundle. The smoke must render
@@ -1365,13 +1367,22 @@ diagnostics. The same release workflow also executes the generated self-signed
 and custom-CA Windows installer commands through Windows PowerShell 5.1 before
 release assembly, so the first HTTPS fetch is release proof rather than a
 string-shape assertion.
-The `v6.2.0-rc.10` server cut is classified
+The `v6.2.0-rc.11` server cut is classified
 `existing-mobile-build-compatible`. The synchronized Pulse Mobile 1.0.0 iOS
 build 12 and Android versionCode 9 candidates, both using runtime version 2,
 remain distributed to the existing beta cohort through TestFlight and Play
 open testing. The changes since RC9 preserve the checked-in mobile API, Relay,
 pairing, approval, push, authentication, and onboarding contracts; no additional
-companion upload or public store rollout is part of RC10.
+companion upload or public store rollout is part of RC11.
+The preceding `v6.2.0-rc.10` attempt used the same support-prerelease path with
+`rollback_version=v6.1.2`, but it is an abandoned partial candidate rather than
+the current public-testing identity. Run `31267947317` staged its annotated tag,
+unpublished draft and exact-version release assets, public Docker images, public
+OCI Helm chart, and private Pro runtime from
+`76e07be290892ed8453bbed942855c1e7f673232` before install smoke failed. Because
+those immutable-looking versioned artifacts escaped the draft boundary, RC10
+must not be retargeted to another source revision; RC11 provides the clean
+successor identity while the RC10 evidence remains available for audit.
 The preceding `v6.2.0-rc.9` candidate used the same support-prerelease path
 with `rollback_version=v6.1.2` and pinned the same four install surfaces to
 `6.2.0-rc.9`. It is superseded by this cut and no longer governs the install
@@ -1567,22 +1578,22 @@ For the active stable `v6.1.2` cut, the repo-root compose default and
 `scripts/install-docker.sh` fallback must both pin `6.1.2` whenever the
 governed `VERSION` is that stable cut. The stable promotion guard remains in
 force and rejects leftover `-rc.` defaults.
-For the active support prerelease `v6.2.0-rc.10` cut, the repo-root compose
-default and `scripts/install-docker.sh` fallback must both pin `6.2.0-rc.10`
+For the active support prerelease `v6.2.0-rc.11` cut, the repo-root compose
+default and `scripts/install-docker.sh` fallback must both pin `6.2.0-rc.11`
 until the next governed stable cut moves them forward. The stable promotion
 guard remains in force and must reject leftover `-rc.` defaults when the
 governed `VERSION` returns to a stable release. Each new candidate on the
 `v6.2.0` line moves these two pins together with the repo-root `VERSION` and
 the Helm chart metadata in the same commit; a candidate that leaves any of the
 four on a superseded `6.2.0-rc.*` value is a release-packet blocker.
-The RC10 packet records `5ff0855882cdbcfc9d4c8f8d87a1ffa3972db818` as
-the code-backed validation-risk head. That head covers 61 commits and 226 files
+The RC11 packet records `2018aa8a9a965d693982e260f525f6cc4f49aa41` as
+the code-backed validation-risk head. That head covers 68 commits and 241 files
 since RC9 across request-origin and SSH trust, settings RBAC and responsive
 layout, WebSocket recovery and resource deltas, agent and PBS lifecycle,
-commercial-surface rollback, release-control hardening, and customer artifact
-promotion. The credential-containment record and metadata-only
-release-preparation commits may be the workflow dispatch head because they do
-not change that code-backed release-risk range.
+commercial-surface rollback, Proxmox availability fallback, release-control
+hardening, and customer artifact promotion. The monitoring-contract correction
+and metadata-only release-preparation commits may be the workflow dispatch head
+because they do not change that code-backed release-risk range.
 
 `internal/updates/` is the live deployment and upgrade planner. It owns
 deployment-type detection, update-plan generation, adapter selection, server
