@@ -282,7 +282,7 @@ func probeHTTP(ctx context.Context, target config.AvailabilityTarget, timeout ti
 	if err == nil {
 		defer resp.Body.Close()
 		certificate := certificateObservationFromResponse(resp)
-		if resp.StatusCode == http.StatusMethodNotAllowed {
+		if resp.StatusCode == http.StatusMethodNotAllowed || resp.StatusCode == http.StatusNotImplemented {
 			return probeHTTPGet(ctx, client, u)
 		}
 		if resp.StatusCode >= http.StatusInternalServerError {

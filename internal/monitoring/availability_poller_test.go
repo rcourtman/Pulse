@@ -14,28 +14,32 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/pkg/tlsutil"
 )
 
-func TestProbeAvailabilityTargetHTTPFallsBackToGETWhenHeadNotAllowed(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case http.MethodHead:
-			w.WriteHeader(http.StatusMethodNotAllowed)
-		case http.MethodGet:
-			w.WriteHeader(http.StatusNoContent)
-		default:
-			w.WriteHeader(http.StatusMethodNotAllowed)
-		}
-	}))
-	defer server.Close()
+func TestProbeAvailabilityTargetHTTPFallsBackToGETWhenHeadUnsupported(t *testing.T) {
+	for _, headStatus := range []int{http.StatusMethodNotAllowed, http.StatusNotImplemented} {
+		t.Run(http.StatusText(headStatus), func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				switch r.Method {
+				case http.MethodHead:
+					w.WriteHeader(headStatus)
+				case http.MethodGet:
+					w.WriteHeader(http.StatusNoContent)
+				default:
+					w.WriteHeader(http.StatusMethodNotAllowed)
+				}
+			}))
+			defer server.Close()
 
-	target := config.NormalizeAvailabilityTarget(config.AvailabilityTarget{
-		Address:       server.URL,
-		Protocol:      config.AvailabilityProbeHTTP,
-		Enabled:       true,
-		TimeoutMillis: 1000,
-	})
+			target := config.NormalizeAvailabilityTarget(config.AvailabilityTarget{
+				Address:       server.URL,
+				Protocol:      config.AvailabilityProbeHTTP,
+				Enabled:       true,
+				TimeoutMillis: 1000,
+			})
 
-	if err := ProbeAvailabilityTarget(context.Background(), target); err != nil {
-		t.Fatalf("ProbeAvailabilityTarget() error = %v", err)
+			if err := ProbeAvailabilityTarget(context.Background(), target); err != nil {
+				t.Fatalf("ProbeAvailabilityTarget() error = %v", err)
+			}
+		})
 	}
 }
 
