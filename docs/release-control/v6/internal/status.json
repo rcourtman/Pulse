@@ -8045,7 +8045,7 @@
       "owner": "release-owner-and-provider-owners",
       "blocking_level": "rc-ready",
       "minimum_evidence_tier": "production-observed",
-      "status": "owner-action",
+      "status": "passed",
       "verification_doc": "docs/release-control/v6/internal/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
       "lane_ids": [
         "L1",
@@ -8079,8 +8079,430 @@
           "SLACK-01",
           "TELEGRAM-01"
         ],
-        "provider_closure_records": [],
-        "replacement_deployment_records": [],
+        "provider_closure_records": [
+          {
+            "subject_id": "PBS-01",
+            "disposition": "revoked",
+            "recorded_at": "2026-08-08T16:15:00Z",
+            "verifier": "credential-containment-audit",
+            "evidence": [
+              {
+                "repo": "pulse",
+                "path": "docs/release-control/v6/internal/records/historical-credential-containment-execution-2026-08-08.md",
+                "kind": "file",
+                "evidence_tier": "production-observed"
+              }
+            ]
+          },
+          {
+            "subject_id": "PBS-02",
+            "disposition": "revoked",
+            "recorded_at": "2026-08-08T16:15:00Z",
+            "verifier": "credential-containment-audit",
+            "evidence": [
+              {
+                "repo": "pulse",
+                "path": "docs/release-control/v6/internal/records/historical-credential-containment-execution-2026-08-08.md",
+                "kind": "file",
+                "evidence_tier": "production-observed"
+              }
+            ]
+          },
+          {
+            "subject_id": "PRO-CLOUDFLARE-01",
+            "disposition": "revoked",
+            "recorded_at": "2026-08-08T16:15:00Z",
+            "verifier": "credential-containment-audit",
+            "evidence": [
+              {
+                "repo": "pulse",
+                "path": "docs/release-control/v6/internal/records/historical-credential-containment-execution-2026-08-08.md",
+                "kind": "file",
+                "evidence_tier": "production-observed"
+              }
+            ]
+          },
+          {
+            "subject_id": "PRO-DIGITALOCEAN-01",
+            "disposition": "inventory-absent",
+            "recorded_at": "2026-08-08T16:15:00Z",
+            "verifier": "credential-containment-audit",
+            "evidence": [
+              {
+                "repo": "pulse",
+                "path": "docs/release-control/v6/internal/records/historical-credential-containment-execution-2026-08-08.md",
+                "kind": "file",
+                "evidence_tier": "production-observed"
+              }
+            ]
+          },
+          {
+            "subject_id": "PRO-LICENSE-ADMIN-01",
+            "disposition": "revoked",
+            "recorded_at": "2026-08-08T16:15:00Z",
+            "verifier": "credential-containment-audit",
+            "evidence": [
+              {
+                "repo": "pulse",
+                "path": "docs/release-control/v6/internal/records/historical-credential-containment-execution-2026-08-08.md",
+                "kind": "file",
+                "evidence_tier": "production-observed"
+              }
+            ]
+          },
+          {
+            "subject_id": "PRO-RESEND-01",
+            "disposition": "revoked",
+            "recorded_at": "2026-08-08T16:15:00Z",
+            "verifier": "credential-containment-audit",
+            "evidence": [
+              {
+                "repo": "pulse",
+                "path": "docs/release-control/v6/internal/records/historical-credential-containment-execution-2026-08-08.md",
+                "kind": "file",
+                "evidence_tier": "production-observed"
+              }
+            ]
+          },
+          {
+            "subject_id": "PRO-STRIPE-WEBHOOK-01",
+            "disposition": "revoked",
+            "recorded_at": "2026-08-08T16:15:00Z",
+            "verifier": "credential-containment-audit",
+            "evidence": [
+              {
+                "repo": "pulse",
+                "path": "docs/release-control/v6/internal/records/historical-credential-containment-execution-2026-08-08.md",
+                "kind": "file",
+                "evidence_tier": "production-observed"
+              }
+            ]
+          },
+          {
+            "subject_id": "PULSE-01",
+            "disposition": "inventory-absent",
+            "recorded_at": "2026-08-08T16:15:00Z",
+            "verifier": "credential-containment-audit",
+            "evidence": [
+              {
+                "repo": "pulse",
+                "path": "docs/release-control/v6/internal/records/historical-credential-containment-execution-2026-08-08.md",
+                "kind": "file",
+                "evidence_tier": "production-observed"
+              }
+            ]
+          },
+          {
+            "subject_id": "PULSE-02",
+            "disposition": "inventory-absent",
+            "recorded_at": "2026-08-08T16:15:00Z",
+            "verifier": "credential-containment-audit",
+            "evidence": [
+              {
+                "repo": "pulse",
+                "path": "docs/release-control/v6/internal/records/historical-credential-containment-execution-2026-08-08.md",
+                "kind": "file",
+                "evidence_tier": "production-observed"
+              }
+            ]
+          },
+          {
+            "subject_id": "PULSE-03",
+            "disposition": "inventory-absent",
+            "recorded_at": "2026-08-08T16:15:00Z",
+            "verifier": "credential-containment-audit",
+            "evidence": [
+              {
+                "repo": "pulse",
+                "path": "docs/release-control/v6/internal/records/historical-credential-containment-execution-2026-08-08.md",
+                "kind": "file",
+                "evidence_tier": "production-observed"
+              }
+            ]
+          },
+          {
+            "subject_id": "PULSE-04",
+            "disposition": "inventory-absent",
+            "recorded_at": "2026-08-08T16:15:00Z",
+            "verifier": "credential-containment-audit",
+            "evidence": [
+              {
+                "repo": "pulse",
+                "path": "docs/release-control/v6/internal/records/historical-credential-containment-execution-2026-08-08.md",
+                "kind": "file",
+                "evidence_tier": "production-observed"
+              }
+            ]
+          },
+          {
+            "subject_id": "PXM-01",
+            "disposition": "revoked",
+            "recorded_at": "2026-08-08T16:15:00Z",
+            "verifier": "credential-containment-audit",
+            "evidence": [
+              {
+                "repo": "pulse",
+                "path": "docs/release-control/v6/internal/records/historical-credential-containment-execution-2026-08-08.md",
+                "kind": "file",
+                "evidence_tier": "production-observed"
+              }
+            ]
+          },
+          {
+            "subject_id": "PXM-02",
+            "disposition": "revoked",
+            "recorded_at": "2026-08-08T16:15:00Z",
+            "verifier": "credential-containment-audit",
+            "evidence": [
+              {
+                "repo": "pulse",
+                "path": "docs/release-control/v6/internal/records/historical-credential-containment-execution-2026-08-08.md",
+                "kind": "file",
+                "evidence_tier": "production-observed"
+              }
+            ]
+          },
+          {
+            "subject_id": "SLACK-01",
+            "disposition": "decommissioned",
+            "recorded_at": "2026-08-08T16:22:17Z",
+            "verifier": "credential-containment-audit",
+            "evidence": [
+              {
+                "repo": "pulse",
+                "path": "docs/release-control/v6/internal/records/historical-credential-containment-execution-2026-08-08.md",
+                "kind": "file",
+                "evidence_tier": "production-observed"
+              }
+            ]
+          },
+          {
+            "subject_id": "TELEGRAM-01",
+            "disposition": "decommissioned",
+            "recorded_at": "2026-08-08T16:22:17Z",
+            "verifier": "credential-containment-audit",
+            "evidence": [
+              {
+                "repo": "pulse",
+                "path": "docs/release-control/v6/internal/records/historical-credential-containment-execution-2026-08-08.md",
+                "kind": "file",
+                "evidence_tier": "production-observed"
+              }
+            ]
+          }
+        ],
+        "replacement_deployment_records": [
+          {
+            "subject_id": "PBS-01",
+            "disposition": "validated",
+            "recorded_at": "2026-08-08T16:15:00Z",
+            "verifier": "credential-containment-audit",
+            "evidence": [
+              {
+                "repo": "pulse",
+                "path": "docs/release-control/v6/internal/records/historical-credential-containment-execution-2026-08-08.md",
+                "kind": "file",
+                "evidence_tier": "production-observed"
+              }
+            ]
+          },
+          {
+            "subject_id": "PBS-02",
+            "disposition": "validated",
+            "recorded_at": "2026-08-08T16:15:00Z",
+            "verifier": "credential-containment-audit",
+            "evidence": [
+              {
+                "repo": "pulse",
+                "path": "docs/release-control/v6/internal/records/historical-credential-containment-execution-2026-08-08.md",
+                "kind": "file",
+                "evidence_tier": "production-observed"
+              }
+            ]
+          },
+          {
+            "subject_id": "PRO-CLOUDFLARE-01",
+            "disposition": "validated",
+            "recorded_at": "2026-08-08T16:22:17Z",
+            "verifier": "credential-containment-audit",
+            "evidence": [
+              {
+                "repo": "pulse",
+                "path": "docs/release-control/v6/internal/records/historical-credential-containment-execution-2026-08-08.md",
+                "kind": "file",
+                "evidence_tier": "production-observed"
+              }
+            ]
+          },
+          {
+            "subject_id": "PRO-DIGITALOCEAN-01",
+            "disposition": "validated",
+            "recorded_at": "2026-08-08T16:15:00Z",
+            "verifier": "credential-containment-audit",
+            "evidence": [
+              {
+                "repo": "pulse",
+                "path": "docs/release-control/v6/internal/records/historical-credential-containment-execution-2026-08-08.md",
+                "kind": "file",
+                "evidence_tier": "production-observed"
+              }
+            ]
+          },
+          {
+            "subject_id": "PRO-LICENSE-ADMIN-01",
+            "disposition": "validated",
+            "recorded_at": "2026-08-08T16:15:00Z",
+            "verifier": "credential-containment-audit",
+            "evidence": [
+              {
+                "repo": "pulse",
+                "path": "docs/release-control/v6/internal/records/historical-credential-containment-execution-2026-08-08.md",
+                "kind": "file",
+                "evidence_tier": "production-observed"
+              }
+            ]
+          },
+          {
+            "subject_id": "PRO-RESEND-01",
+            "disposition": "validated",
+            "recorded_at": "2026-08-08T16:15:00Z",
+            "verifier": "credential-containment-audit",
+            "evidence": [
+              {
+                "repo": "pulse",
+                "path": "docs/release-control/v6/internal/records/historical-credential-containment-execution-2026-08-08.md",
+                "kind": "file",
+                "evidence_tier": "production-observed"
+              }
+            ]
+          },
+          {
+            "subject_id": "PRO-STRIPE-WEBHOOK-01",
+            "disposition": "validated",
+            "recorded_at": "2026-08-08T16:15:00Z",
+            "verifier": "credential-containment-audit",
+            "evidence": [
+              {
+                "repo": "pulse",
+                "path": "docs/release-control/v6/internal/records/historical-credential-containment-execution-2026-08-08.md",
+                "kind": "file",
+                "evidence_tier": "production-observed"
+              }
+            ]
+          },
+          {
+            "subject_id": "PULSE-01",
+            "disposition": "validated",
+            "recorded_at": "2026-08-08T16:15:00Z",
+            "verifier": "credential-containment-audit",
+            "evidence": [
+              {
+                "repo": "pulse",
+                "path": "docs/release-control/v6/internal/records/historical-credential-containment-execution-2026-08-08.md",
+                "kind": "file",
+                "evidence_tier": "production-observed"
+              }
+            ]
+          },
+          {
+            "subject_id": "PULSE-02",
+            "disposition": "validated",
+            "recorded_at": "2026-08-08T16:15:00Z",
+            "verifier": "credential-containment-audit",
+            "evidence": [
+              {
+                "repo": "pulse",
+                "path": "docs/release-control/v6/internal/records/historical-credential-containment-execution-2026-08-08.md",
+                "kind": "file",
+                "evidence_tier": "production-observed"
+              }
+            ]
+          },
+          {
+            "subject_id": "PULSE-03",
+            "disposition": "validated",
+            "recorded_at": "2026-08-08T16:15:00Z",
+            "verifier": "credential-containment-audit",
+            "evidence": [
+              {
+                "repo": "pulse",
+                "path": "docs/release-control/v6/internal/records/historical-credential-containment-execution-2026-08-08.md",
+                "kind": "file",
+                "evidence_tier": "production-observed"
+              }
+            ]
+          },
+          {
+            "subject_id": "PULSE-04",
+            "disposition": "validated",
+            "recorded_at": "2026-08-08T16:15:00Z",
+            "verifier": "credential-containment-audit",
+            "evidence": [
+              {
+                "repo": "pulse",
+                "path": "docs/release-control/v6/internal/records/historical-credential-containment-execution-2026-08-08.md",
+                "kind": "file",
+                "evidence_tier": "production-observed"
+              }
+            ]
+          },
+          {
+            "subject_id": "PXM-01",
+            "disposition": "validated",
+            "recorded_at": "2026-08-08T16:15:00Z",
+            "verifier": "credential-containment-audit",
+            "evidence": [
+              {
+                "repo": "pulse",
+                "path": "docs/release-control/v6/internal/records/historical-credential-containment-execution-2026-08-08.md",
+                "kind": "file",
+                "evidence_tier": "production-observed"
+              }
+            ]
+          },
+          {
+            "subject_id": "PXM-02",
+            "disposition": "validated",
+            "recorded_at": "2026-08-08T16:15:00Z",
+            "verifier": "credential-containment-audit",
+            "evidence": [
+              {
+                "repo": "pulse",
+                "path": "docs/release-control/v6/internal/records/historical-credential-containment-execution-2026-08-08.md",
+                "kind": "file",
+                "evidence_tier": "production-observed"
+              }
+            ]
+          },
+          {
+            "subject_id": "SLACK-01",
+            "disposition": "not-applicable-retired",
+            "recorded_at": "2026-08-08T16:22:17Z",
+            "verifier": "credential-containment-audit",
+            "evidence": [
+              {
+                "repo": "pulse",
+                "path": "docs/release-control/v6/internal/records/historical-credential-containment-execution-2026-08-08.md",
+                "kind": "file",
+                "evidence_tier": "production-observed"
+              }
+            ]
+          },
+          {
+            "subject_id": "TELEGRAM-01",
+            "disposition": "not-applicable-retired",
+            "recorded_at": "2026-08-08T16:22:17Z",
+            "verifier": "credential-containment-audit",
+            "evidence": [
+              {
+                "repo": "pulse",
+                "path": "docs/release-control/v6/internal/records/historical-credential-containment-execution-2026-08-08.md",
+                "kind": "file",
+                "evidence_tier": "production-observed"
+              }
+            ]
+          }
+        ],
         "history_rewrite": {
           "blocking": false,
           "status": "optional-after-containment"
