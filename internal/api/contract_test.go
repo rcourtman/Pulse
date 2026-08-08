@@ -22921,6 +22921,254 @@ func TestContract_RequestOriginCannotRetargetTokenBearingCommands(t *testing.T) 
 	})
 }
 
+func TestContract_HostedDiagnosticsDockerPrepareTokenValidatesOriginBeforeMutation(t *testing.T) {
+	const existingToken = "hosted-diagnostics-existing.12345678"
+
+	type originHeaders struct {
+		host             string
+		remoteAddr       string
+		trustedProxyCIDR string
+		forwardedHost    string
+		forwardedProto   string
+	}
+
+	newRouter := func(t *testing.T, hosted bool, publicURL string, autoDetected bool, agentConnectURL string, headers originHeaders) (*Router, *config.Config, *config.ConfigPersistence, []config.APITokenRecord, string) {
+		t.Helper()
+		if hosted {
+			t.Setenv("PULSE_HOSTED_MODE", "true")
+		} else {
+			t.Setenv("PULSE_HOSTED_MODE", "false")
+		}
+		t.Setenv("PULSE_TRUSTED_PROXY_CIDRS", headers.trustedProxyCIDR)
+		resetTrustedProxyCIDRsForTests()
+
+		existingRecord := newTokenRecord(t, existingToken, []string{config.ScopeSettingsRead}, nil)
+		cfg := newTestConfigWithTokens(t, existingRecord)
+		cfg.AuthUser = "admin"
+		cfg.AuthPass = "configured-password-hash"
+		cfg.FrontendPort = 7655
+		cfg.PublicURL = publicURL
+		cfg.PublicURLAutoDetected = autoDetected
+		cfg.AgentConnectURL = agentConnectURL
+		persistence := config.NewConfigPersistence(cfg.DataPath)
+		if err := persistence.SaveAPITokens(cfg.APITokens); err != nil {
+			t.Fatalf("persist baseline API tokens: %v", err)
+		}
+		baseline, err := persistence.LoadAPITokens()
+		if err != nil {
+			t.Fatalf("load baseline API tokens: %v", err)
+		}
+
+		monitor, state, _ := newTestMonitor(t)
+		state.DockerHosts = []models.DockerHost{{ID: "host-1", DisplayName: "Docker Host"}}
+		router := NewRouter(cfg, monitor, nil, nil, nil, "1.0.0")
+		t.Cleanup(router.shutdownBackgroundWorkers)
+		sessionToken := generateSessionToken()
+		GetSessionStore().CreateSession(sessionToken, time.Hour, "test-browser", "127.0.0.1", "admin")
+		if router.hostedMode != hosted {
+			t.Fatalf("Router hosted mode = %t, want %t", router.hostedMode, hosted)
+		}
+		return router, cfg, persistence, baseline, sessionToken
+	}
+
+	doRequest := func(t *testing.T, router *Router, sessionToken string, headers originHeaders) *httptest.ResponseRecorder {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodPost, "/api/diagnostics/docker/prepare-token", strings.NewReader(`{"agentId":"host-1"}`))
+		req.Host = headers.host
+		req.RemoteAddr = headers.remoteAddr
+		if headers.forwardedHost != "" {
+			req.Header.Set("X-Forwarded-Host", headers.forwardedHost)
+		}
+		if headers.forwardedProto != "" {
+			req.Header.Set("X-Forwarded-Proto", headers.forwardedProto)
+		}
+		req.AddCookie(&http.Cookie{Name: sessionCookieName(isConnectionSecure(req)), Value: sessionToken})
+		req.Header.Set("X-CSRF-Token", generateCSRFToken(sessionToken))
+		rec := httptest.NewRecorder()
+		router.Handler().ServeHTTP(rec, req)
+		return rec
+	}
+
+	assertTokenRecordsEqual := func(t *testing.T, label string, got []config.APITokenRecord, want []config.APITokenRecord) {
+		t.Helper()
+		gotJSON, err := json.Marshal(got)
+		if err != nil {
+			t.Fatalf("marshal %s API tokens: %v", label, err)
+		}
+		wantJSON, err := json.Marshal(want)
+		if err != nil {
+			t.Fatalf("marshal baseline API tokens: %v", err)
+		}
+		if string(gotJSON) != string(wantJSON) {
+			t.Fatalf("%s API tokens mutated: got %s, want %s", label, gotJSON, wantJSON)
+		}
+	}
+
+	assertPersistedUnchanged := func(t *testing.T, persistence *config.ConfigPersistence, baseline []config.APITokenRecord) {
+		t.Helper()
+		persisted, err := persistence.LoadAPITokens()
+		if err != nil {
+			t.Fatalf("load persisted API tokens: %v", err)
+		}
+		assertTokenRecordsEqual(t, "persisted", persisted, baseline)
+	}
+
+	failureCases := []struct {
+		name            string
+		publicURL       string
+		autoDetected    bool
+		agentConnectURL string
+		headers         originHeaders
+	}{
+		{
+			name: "missing configuration ignores hostile direct Host and untrusted forwarding",
+			headers: originHeaders{
+				host:           "direct-attacker.example",
+				remoteAddr:     "198.51.100.20:41000",
+				forwardedHost:  "forwarded-attacker.example",
+				forwardedProto: "https",
+			},
+		},
+		{
+			name:         "auto-detected URL is not hosted authority",
+			publicURL:    "https://auto-detected.example",
+			autoDetected: true,
+			headers: originHeaders{
+				host:          "direct-attacker.example",
+				remoteAddr:    "198.51.100.20:41000",
+				forwardedHost: "forwarded-attacker.example",
+			},
+		},
+		{
+			name:      "invalid PublicURL ignores trusted forwarding",
+			publicURL: "https://user@configured.example",
+			headers: originHeaders{
+				host:             "direct-attacker.example",
+				remoteAddr:       "192.0.2.44:41000",
+				trustedProxyCIDR: "192.0.2.0/24",
+				forwardedHost:    "trusted-forwarded-attacker.example",
+				forwardedProto:   "https",
+			},
+		},
+		{
+			name:            "invalid higher-precedence AgentConnectURL does not fall through",
+			publicURL:       "https://configured.example",
+			agentConnectURL: "https://agents.example/path?retarget=attacker",
+			headers: originHeaders{
+				host:           "direct-attacker.example",
+				remoteAddr:     "198.51.100.20:41000",
+				forwardedHost:  "forwarded-attacker.example",
+				forwardedProto: "https",
+			},
+		},
+	}
+
+	for _, tc := range failureCases {
+		t.Run(tc.name, func(t *testing.T) {
+			router, cfg, persistence, baseline, sessionToken := newRouter(t, true, tc.publicURL, tc.autoDetected, tc.agentConnectURL, tc.headers)
+			rec := doRequest(t, router, sessionToken, tc.headers)
+			if rec.Code != http.StatusServiceUnavailable {
+				t.Fatalf("status = %d, want %d: %s", rec.Code, http.StatusServiceUnavailable, rec.Body.String())
+			}
+			assertTokenRecordsEqual(t, "in-memory", cfg.APITokens, baseline)
+			if strings.Contains(rec.Body.String(), "attacker") {
+				t.Fatalf("failure response retained attacker-controlled origin: %q", rec.Body.String())
+			}
+			assertPersistedUnchanged(t, persistence, baseline)
+		})
+	}
+
+	successCases := []struct {
+		name            string
+		publicURL       string
+		agentConnectURL string
+		wantBaseURL     string
+		headers         originHeaders
+	}{
+		{
+			name:        "configured PublicURL defeats hostile direct Host and untrusted forwarding",
+			publicURL:   "https://configured.example/base/",
+			wantBaseURL: "https://configured.example/base",
+			headers: originHeaders{
+				host:           "direct-attacker.example",
+				remoteAddr:     "198.51.100.20:41000",
+				forwardedHost:  "forwarded-attacker.example",
+				forwardedProto: "http",
+			},
+		},
+		{
+			name:            "configured AgentConnectURL outranks PublicURL and trusted forwarding",
+			publicURL:       "https://configured.example",
+			agentConnectURL: "https://agents.configured.example/",
+			wantBaseURL:     "https://agents.configured.example",
+			headers: originHeaders{
+				host:             "direct-attacker.example",
+				remoteAddr:       "192.0.2.44:41000",
+				trustedProxyCIDR: "192.0.2.0/24",
+				forwardedHost:    "trusted-forwarded-attacker.example",
+				forwardedProto:   "http",
+			},
+		},
+	}
+
+	for _, tc := range successCases {
+		t.Run(tc.name, func(t *testing.T) {
+			router, cfg, persistence, baseline, sessionToken := newRouter(t, true, tc.publicURL, false, tc.agentConnectURL, tc.headers)
+			rec := doRequest(t, router, sessionToken, tc.headers)
+			if rec.Code != http.StatusOK {
+				t.Fatalf("status = %d, want %d: %s", rec.Code, http.StatusOK, rec.Body.String())
+			}
+			var response map[string]any
+			if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+				t.Fatalf("decode response: %v", err)
+			}
+			if response["pulseURL"] != tc.wantBaseURL {
+				t.Fatalf("pulseURL = %q, want %q", response["pulseURL"], tc.wantBaseURL)
+			}
+			command, _ := response["installCommand"].(string)
+			if !strings.Contains(command, tc.wantBaseURL+"/install.sh") || strings.Contains(command, "attacker") {
+				t.Fatalf("install command was not bound to configured URL %q: %q", tc.wantBaseURL, command)
+			}
+			if len(cfg.APITokens) != len(baseline)+1 {
+				t.Fatalf("in-memory API token count = %d, want %d", len(cfg.APITokens), len(baseline)+1)
+			}
+			persisted, err := persistence.LoadAPITokens()
+			if err != nil {
+				t.Fatalf("load persisted API tokens: %v", err)
+			}
+			if len(persisted) != len(baseline)+1 {
+				t.Fatalf("persisted API token count = %d, want %d", len(persisted), len(baseline)+1)
+			}
+		})
+	}
+
+	t.Run("self-hosted request-origin fallback remains available", func(t *testing.T) {
+		headers := originHeaders{host: "pulse.lan:7655", remoteAddr: "198.51.100.20:41000"}
+		router, cfg, persistence, baseline, sessionToken := newRouter(t, false, "", false, "", headers)
+		rec := doRequest(t, router, sessionToken, headers)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status = %d, want %d: %s", rec.Code, http.StatusOK, rec.Body.String())
+		}
+		var response map[string]any
+		if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+			t.Fatalf("decode response: %v", err)
+		}
+		if response["pulseURL"] != "http://pulse.lan:7655" {
+			t.Fatalf("pulseURL = %q, want self-hosted request origin", response["pulseURL"])
+		}
+		if len(cfg.APITokens) != len(baseline)+1 {
+			t.Fatalf("in-memory API token count = %d, want %d", len(cfg.APITokens), len(baseline)+1)
+		}
+		persisted, err := persistence.LoadAPITokens()
+		if err != nil {
+			t.Fatalf("load persisted API tokens: %v", err)
+		}
+		if len(persisted) != len(baseline)+1 {
+			t.Fatalf("persisted API token count = %d, want %d", len(persisted), len(baseline)+1)
+		}
+	})
+}
+
 func TestContract_HostedInstallerOriginsFailClosedAtRouter(t *testing.T) {
 	const adminToken = "hosted-installer-admin.12345678"
 

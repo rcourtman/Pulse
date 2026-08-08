@@ -2250,10 +2250,14 @@ Hosted config-owned callers add one constant-size configured-URL validation
 before any token mutation. Missing, auto-detected, or invalid hosted
 configuration exits before API-token persistence, setup-token insertion, PBS
 network I/O, or instance persistence; successful PVE/PBS command and
-setup-artifact generation performs no additional scan or fan-out. Router-level
-proof lives in `TestContract_HostedInstallerOriginsFailClosedAtRouter`, and the
-self-hosted request-origin matrix remains in
-`TestContract_RequestOriginCannotRetargetTokenBearingCommands`.
+setup-artifact generation performs no additional scan or fan-out. The
+diagnostics Docker/Podman migration route performs the same O(1) resolution
+before token generation and adds no persistence read on its hosted failure
+path. Router-level proof lives in
+`TestContract_HostedInstallerOriginsFailClosedAtRouter` and
+`TestContract_HostedDiagnosticsDockerPrepareTokenValidatesOriginBeforeMutation`,
+while the self-hosted request-origin matrix remains in those diagnostics cases
+and `TestContract_RequestOriginCannotRetargetTokenBearingCommands`.
 
 ### Runtime branding remains a bounded bootstrap read
 

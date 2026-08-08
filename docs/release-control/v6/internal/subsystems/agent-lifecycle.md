@@ -5865,13 +5865,19 @@ URL validator. An invalid authoritative value, an auto-detected `PublicURL`,
 or missing configuration fails closed without consulting direct or forwarded
 request authority. Config-owned PVE/PBS install commands and setup-script
 bootstrap artifacts resolve that target before creating an API or setup token,
-and password-driven PBS setup resolves it before contacting PBS to derive or
-create the managed token label. `TestContract_HostedInstallerOriginsFailClosedAtRouter`
+the diagnostics Docker/Podman migration route resolves it before creating or
+persisting its lifecycle token, and password-driven PBS setup resolves it
+before contacting PBS to derive or create the managed token label.
+`TestContract_HostedInstallerOriginsFailClosedAtRouter`
 exercises those registered routes for PVE and PBS with hostile direct Host,
 untrusted and trusted forwarded headers, missing/invalid configuration,
 configured URL success, rendered setup-script delivery, and zero token/state
-mutation on failure. The self-hosted precedence and validated live-origin
-fallback remain covered by
+mutation on failure. The diagnostics-specific
+`TestContract_HostedDiagnosticsDockerPrepareTokenValidatesOriginBeforeMutation`
+adds missing, auto-detected-only, invalid, invalid-high-precedence,
+`PublicURL`, and `AgentConnectURL` router proof with exact in-memory and
+persisted token-state checks. The self-hosted precedence and validated
+live-origin fallback remain covered by that diagnostics proof and
 `TestContract_RequestOriginCannotRetargetTokenBearingCommands`.
 
 ### Runtime branding stays outside agent lifecycle authority

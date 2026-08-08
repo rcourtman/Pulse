@@ -10886,6 +10886,15 @@ func (r *Router) handleDiagnosticsDockerPrepareToken(w http.ResponseWriter, req 
 		enableHost = *payload.EnableHost
 	}
 
+	// Resolve the credential target before minting or persisting the token.
+	// Hosted mode deliberately has no request-origin or localhost fallback, so
+	// an absent or invalid authoritative URL must leave token state untouched.
+	baseURL := normalizeAgentInstallBaseURL(r.resolvePublicURL(req))
+	if r.hostedMode && baseURL == "" {
+		writeConfigAgentInstallBaseURLUnavailable(w)
+		return
+	}
+
 	rawToken, err := auth.GenerateAPIToken()
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to generate container runtime migration token")
@@ -10944,7 +10953,6 @@ func (r *Router) handleDiagnosticsDockerPrepareToken(w http.ResponseWriter, req 
 	}
 	config.Mu.Unlock()
 
-	baseURL := normalizeAgentInstallBaseURL(r.resolvePublicURL(req))
 	installCommand := buildContainerRuntimeAgentInstallCommand(baseURL, rawToken, enableHost)
 	systemdSnippet := fmt.Sprintf("[Service]\nType=simple\nEnvironment=\"PULSE_URL=%s\"\nEnvironment=\"PULSE_TOKEN=%s\"\nExecStart=/usr/local/bin/pulse-agent --url %s --token %s --enable-docker %s --interval 30s\nRestart=always\nRestartSec=5s\nUser=root", baseURL, rawToken, baseURL, rawToken, containerRuntimeAgentHostFlag(enableHost))
 

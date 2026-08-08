@@ -8942,18 +8942,24 @@ propagated into `ConfigHandlers` and passed to that same resolver for every
 config-owned caller. Hosted resolution accepts only a canonically validated
 authoritative `AgentConnectURL` or explicit, non-auto-detected `PublicURL`; an
 invalid higher-precedence value fails closed instead of falling through to a
-different URL or to request headers. `/api/agent-install-command` and
-`/api/setup-script-url` must complete this resolution before minting their API
-or setup token, and PBS password-based add-node handling must complete it
+different URL or to request headers. `/api/agent-install-command`,
+`/api/setup-script-url`, and `/api/diagnostics/docker/prepare-token` must
+complete this resolution before minting their API, setup, or container-runtime
+migration token, and PBS password-based add-node handling must complete it
 before deriving its managed token label or contacting PBS. A 503 from this
-boundary therefore leaves the API-token store, setup-token map, PBS remote,
-and configured PBS instances unchanged. The router-level
+boundary therefore leaves the in-memory and persisted API-token stores,
+setup-token map, PBS remote, and configured PBS instances unchanged. The
+router-level
 `TestContract_HostedInstallerOriginsFailClosedAtRouter` proves missing,
 auto-detected, invalid, direct-Host-spoofed, trusted-forwarded, untrusted-
 forwarded, configured `PublicURL`, and configured `AgentConnectURL` cases for
 both PVE/PBS commands and setup-script artifacts, including fetching the
-rendered script. Self-hosted live-origin precedence stays on the existing
-adversarial contract proof.
+rendered script. The adjacent
+`TestContract_HostedDiagnosticsDockerPrepareTokenValidatesOriginBeforeMutation`
+applies the same adversarial matrix to the registered diagnostics migration
+route, proves zero in-memory and persisted token mutation on every hosted
+failure, and preserves both configured-URL precedence and the self-hosted
+request-origin fallback.
 
 ### Runtime branding is a narrow presentation contract
 

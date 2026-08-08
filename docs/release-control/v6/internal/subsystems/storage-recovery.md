@@ -4957,7 +4957,13 @@ cannot leave a remote PBS token or a partially configured PBS instance. This
 changes no backup, restore, datastore, protection, or recovery authority.
 `TestContract_HostedInstallerOriginsFailClosedAtRouter` proves the no-state
 failure cases and follows successful PVE/PBS artifacts through rendered script
-delivery under hostile direct and forwarded request evidence.
+delivery under hostile direct and forwarded request evidence. The shared
+diagnostics migration route now also resolves that target before its durable
+API-token mutation; its 503 path leaves both in-memory and persisted token
+state unchanged and creates no recovery state. The router-level
+`TestContract_HostedDiagnosticsDockerPrepareTokenValidatesOriginBeforeMutation`
+proves that boundary for missing, auto-detected-only, invalid, precedence, and
+configured success cases without widening storage or recovery authority.
 
 The shared `frontend-modern/src/App.tsx` shell boundary this subsystem consumes
 gained one authority gate on its global banner block. The banners rendered

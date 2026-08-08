@@ -1863,13 +1863,17 @@ not only inside the router-owned resolver. `Router.hostedMode` is immutable
 input to `ConfigHandlers`; hosted config-owned consumers validate the selected
 `AgentConnectURL` or explicit `PublicURL` through the canonical Pulse URL
 validator and never accept an auto-detected URL, direct Host, or forwarded
-origin as a substitute. PVE/PBS API-token issuance, setup-token issuance, and
-password-driven PBS token-label creation all occur only after that resolution
-succeeds. `TestContract_HostedInstallerOriginsFailClosedAtRouter` proves that
-missing or invalid hosted configuration returns 503 without an API-token
-record, setup-token record, PBS request, or PBS instance mutation, while a
-valid configured URL remains authoritative under hostile direct, trusted-
-forwarded, and untrusted-forwarded request evidence. The same test follows the
+origin as a substitute. PVE/PBS API-token issuance, setup-token issuance,
+diagnostics container-runtime migration-token issuance, and password-driven
+PBS token-label creation all occur only after that resolution succeeds.
+`TestContract_HostedInstallerOriginsFailClosedAtRouter` proves the config-owned
+install/setup boundary, while
+`TestContract_HostedDiagnosticsDockerPrepareTokenValidatesOriginBeforeMutation`
+proves that missing, auto-detected-only, invalid, or invalid-higher-precedence
+hosted configuration returns 503 from the registered diagnostics route without
+changing the in-memory or persisted API-token store. Both proofs keep valid
+configured URLs authoritative under hostile direct, trusted-forwarded, and
+untrusted-forwarded request evidence; the install/setup proof also follows the
 returned setup artifact through the public script route so the rendered
 token-bearing shell body remains bound to the configured origin.
 
