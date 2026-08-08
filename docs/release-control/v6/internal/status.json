@@ -9177,21 +9177,7 @@
   ],
   "coverage_gaps": [],
   "candidate_lanes": [],
-  "work_claims": [
-    {
-      "id": "request-origin-security-20260808-lane-l6",
-      "agent_id": "request-origin-security-20260808",
-      "summary": "Contain request-origin spoofing in token-bearing API command generation and repair API/security/lifecycle contracts",
-      "target_id": "v6-product-lane-expansion",
-      "claimed_at": "2026-08-08T08:28:31Z",
-      "heartbeat_at": "2026-08-08T08:28:31Z",
-      "expires_at": "2026-08-08T16:28:31Z",
-      "work_item": {
-        "kind": "lane",
-        "id": "L6"
-      }
-    }
-  ],
+  "work_claims": [],
   "open_decisions": [
     {
       "id": "self-hosted-commercial-surfaces-owner-approval",
