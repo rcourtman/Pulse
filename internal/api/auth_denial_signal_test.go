@@ -2,8 +2,10 @@ package api
 
 import (
 	"bytes"
+	"encoding/json"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -11,12 +13,32 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+// lockedLogBuffer keeps log capture safe when another package goroutine logs
+// while an auth-denial test owns the process-wide zerolog logger. bytes.Buffer
+// is not safe for concurrent writes or for a read racing a write.
+type lockedLogBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (b *lockedLogBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *lockedLogBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
+}
+
 // captureAuthDenialLogs swaps the global logger for a buffer at debug level and
 // resets the denial tracker, so each case starts from a known window.
-func captureAuthDenialLogs(t *testing.T) *bytes.Buffer {
+func captureAuthDenialLogs(t *testing.T) *lockedLogBuffer {
 	t.Helper()
 
-	var buf bytes.Buffer
+	var buf lockedLogBuffer
 	prevLogger := log.Logger
 	prevLevel := zerolog.GlobalLevel()
 	log.Logger = zerolog.New(&buf).Level(zerolog.DebugLevel)
@@ -39,8 +61,26 @@ func captureAuthDenialLogs(t *testing.T) *bytes.Buffer {
 	return &buf
 }
 
-func countLevel(output, level string) int {
-	return strings.Count(output, `"level":"`+level+`"`)
+func countLogEvents(t *testing.T, buf *lockedLogBuffer, level, message string) int {
+	t.Helper()
+
+	count := 0
+	for _, line := range strings.Split(strings.TrimSpace(buf.String()), "\n") {
+		if line == "" {
+			continue
+		}
+		var event struct {
+			Level   string `json:"level"`
+			Message string `json:"message"`
+		}
+		if err := json.Unmarshal([]byte(line), &event); err != nil {
+			t.Fatalf("decode captured log event %q: %v", line, err)
+		}
+		if event.Level == level && event.Message == message {
+			count++
+		}
+	}
+	return count
 }
 
 // A non-admin browsing a UI that still mounts an admin-only surface produces a
@@ -49,16 +89,16 @@ func countLevel(output, level string) int {
 func TestAuthDenialBelowThresholdStaysDebug(t *testing.T) {
 	buf := captureAuthDenialLogs(t)
 	req := httptest.NewRequest("GET", "/api/connections", nil)
+	const message = "Non-admin user attempted to access admin endpoint"
 
 	for i := 0; i < authDenialWarnThreshold-1; i++ {
-		logAuthDenial(req, "viewer", "Non-admin user attempted to access admin endpoint", nil)
+		logAuthDenial(req, "viewer", message, nil)
 	}
 
-	output := buf.String()
-	if got := countLevel(output, "debug"); got != authDenialWarnThreshold-1 {
+	if got := countLogEvents(t, buf, "debug", message); got != authDenialWarnThreshold-1 {
 		t.Fatalf("debug lines = %d, want %d", got, authDenialWarnThreshold-1)
 	}
-	if got := countLevel(output, "warn"); got != 0 {
+	if got := countLogEvents(t, buf, "warn", "Repeated authorization denials from one caller; possible endpoint probing"); got != 0 {
 		t.Fatalf("warn lines = %d, want 0 below the probing threshold", got)
 	}
 }
@@ -74,7 +114,7 @@ func TestAuthDenialEscalatesOncePerWindow(t *testing.T) {
 	}
 
 	output := buf.String()
-	if got := countLevel(output, "warn"); got != 1 {
+	if got := countLogEvents(t, buf, "warn", "Repeated authorization denials from one caller; possible endpoint probing"); got != 1 {
 		t.Fatalf("warn lines = %d, want exactly 1 for a single window", got)
 	}
 	if !strings.Contains(output, "possible endpoint probing") {
@@ -91,7 +131,7 @@ func TestAuthDenialWindowRolloverRearmsEscalation(t *testing.T) {
 	for i := 0; i < authDenialWarnThreshold; i++ {
 		logAuthDenial(req, "viewer", "denied", nil)
 	}
-	if got := countLevel(buf.String(), "warn"); got != 1 {
+	if got := countLogEvents(t, buf, "warn", "Repeated authorization denials from one caller; possible endpoint probing"); got != 1 {
 		t.Fatalf("first window warn lines = %d, want 1", got)
 	}
 
@@ -101,7 +141,7 @@ func TestAuthDenialWindowRolloverRearmsEscalation(t *testing.T) {
 	for i := 0; i < authDenialWarnThreshold; i++ {
 		logAuthDenial(req, "viewer", "denied", nil)
 	}
-	if got := countLevel(buf.String(), "warn"); got != 2 {
+	if got := countLogEvents(t, buf, "warn", "Repeated authorization denials from one caller; possible endpoint probing"); got != 2 {
 		t.Fatalf("warn lines after rollover = %d, want 2", got)
 	}
 }
@@ -117,7 +157,7 @@ func TestAuthDenialTracksIdentityAcrossAddresses(t *testing.T) {
 		logAuthDenial(req, "viewer", "denied", nil)
 	}
 
-	if got := countLevel(buf.String(), "warn"); got != 1 {
+	if got := countLogEvents(t, buf, "warn", "Repeated authorization denials from one caller; possible endpoint probing"); got != 1 {
 		t.Fatalf("warn lines = %d, want 1 — identity should aggregate across addresses", got)
 	}
 }
@@ -133,8 +173,49 @@ func TestAuthDenialSeparatesCallers(t *testing.T) {
 		logAuthDenial(req, "viewer-b", "denied", nil)
 	}
 
-	if got := countLevel(buf.String(), "warn"); got != 0 {
+	if got := countLogEvents(t, buf, "warn", "Repeated authorization denials from one caller; possible endpoint probing"); got != 0 {
 		t.Fatalf("warn lines = %d, want 0 — neither caller crossed the threshold", got)
+	}
+}
+
+// The API package can have background monitor goroutines logging while these
+// tests run, and production handlers may record denials concurrently. Exercise
+// that concurrency directly so an unsynchronized capture sink or tracker state
+// fails deterministically under go test -race.
+func TestAuthDenialConcurrentLoggingIsRaceFreeAndWarnsOnce(t *testing.T) {
+	buf := captureAuthDenialLogs(t)
+
+	base := time.Unix(1_700_000_000, 0)
+	authDenialNow = func() time.Time { return base }
+	const (
+		identity = "concurrent-viewer"
+		message  = "concurrent denial"
+		attempts = authDenialWarnThreshold * 8
+	)
+
+	var wg sync.WaitGroup
+	wg.Add(attempts)
+	for i := 0; i < attempts; i++ {
+		go func() {
+			defer wg.Done()
+			req := httptest.NewRequest("GET", "/api/connections", nil)
+			logAuthDenial(req, identity, message, nil)
+		}()
+	}
+	wg.Wait()
+
+	if got := countLogEvents(t, buf, "debug", message); got != attempts {
+		t.Fatalf("debug lines = %d, want %d", got, attempts)
+	}
+	if got := countLogEvents(t, buf, "warn", "Repeated authorization denials from one caller; possible endpoint probing"); got != 1 {
+		t.Fatalf("warn lines = %d, want exactly 1 for concurrent denials in one window", got)
+	}
+
+	authDenialMu.Lock()
+	entry := *authDenials["user:"+identity]
+	authDenialMu.Unlock()
+	if entry.count != attempts || !entry.warned {
+		t.Fatalf("counter = {count:%d warned:%t}, want {count:%d warned:true}", entry.count, entry.warned, attempts)
 	}
 }
 
