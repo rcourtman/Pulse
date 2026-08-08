@@ -8909,25 +8909,33 @@ behavior.
 
 ### Request-origin fallback cannot retarget credential-bearing commands
 
-`Router.resolvePublicURL` preserves the live-origin behavior required when an
-auto-detected LAN address is only a stale guess, but request-derived evidence
-now comes exclusively from `resolveRequestOrigin`. `AgentConnectURL` remains
-authoritative, an explicitly configured `PublicURL` remains authoritative, a
-validated live request origin may outrank only an auto-detected `PublicURL`,
-and invalid or absent request evidence falls back to that auto-detected value
-before the local frontend default. Hosted mode still never uses request origin
-or localhost.
+`resolveConfiguredPublicBaseURL` is the single precedence function behind
+`Router.resolvePublicURL`, config-owned PVE/PBS install commands, setup-script
+artifacts, and request-derived PBS token labels. Request evidence inside that
+function comes exclusively from `resolveRequestOrigin`. `AgentConnectURL`
+remains authoritative, an explicitly configured `PublicURL` remains
+authoritative, a validated live request origin may outrank only an
+auto-detected `PublicURL`, and invalid or absent request evidence falls back to
+that auto-detected value before the local frontend default. Hosted mode still
+never uses request origin or localhost. The superseded
+`resolveLoopbackAwarePublicBaseURL` path is retired rather than retained as a
+second raw-header implementation.
 
 This resolver is a credential-target boundary, not presentation-only URL
-formatting. The diagnostics Docker/Podman migration response embeds a freshly
-minted token in its install command and service snippet, while cluster deploy
-install payloads pair `pulse_url` with per-target bootstrap tokens. Those
-consumers, hosted agent-install generation, onboarding, privileged security
-status, and magic-link URL generation must not read raw `Host` or forwarded
-headers around the resolver. `TestContract_RequestOriginCannotRetargetTokenBearingCommands`
-pins untrusted and malformed header rejection, trusted-proxy preserved-host
-behavior, IPv4/IPv6 and port handling, explicit configuration precedence, and
-the exact diagnostics/deploy target paired with token-bearing transport.
+formatting. `POST /api/agent-install-command` embeds a freshly minted PVE/PBS
+API token in its returned installer command, setup-script artifacts carry a
+short-lived setup token, the diagnostics Docker/Podman migration response
+embeds a fresh token in its install command and service snippet, and cluster
+deploy install payloads pair `pulse_url` with per-target bootstrap tokens.
+Those consumers, hosted agent-install generation, onboarding, privileged
+security status, and magic-link URL generation must not read raw `Host` or
+forwarded headers around the resolver.
+`TestContract_RequestOriginCannotRetargetTokenBearingCommands` now exercises
+the real PVE/PBS endpoint and pins Host-spoof containment, untrusted and trusted
+forwarded-header behavior, malformed authority rejection, IPv4/IPv6 and port
+handling, `AgentConnectURL` and explicit `PublicURL` precedence, auto-detected
+and local fallback, and the exact sanitized target paired with each fresh
+token-bearing command.
 
 ### Runtime branding is a narrow presentation contract
 

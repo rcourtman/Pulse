@@ -5827,18 +5827,24 @@ host-token bootstrap, and concurrent-completion contracts.
 ### Shared internal/api request-origin resolution is lifecycle credential targeting
 
 The shared `internal/api` boundary this subsystem consumes now routes
-`requestOriginBaseURL`, in-memory public-URL capture, and
-`Router.resolvePublicURL` through one `resolveRequestOrigin` trust boundary in
+`requestOriginBaseURL`, in-memory public-URL capture,
+`Router.resolvePublicURL`, config-owned PVE/PBS install commands, and
+setup-script artifacts through one `resolveRequestOrigin` trust boundary and
+one `resolveConfiguredPublicBaseURL` precedence function in
 `internal/api/router.go`. Forwarded host, scheme, and port are admitted only
 from an immediate peer in `PULSE_TRUSTED_PROXY_CIDRS`; direct and forwarded
 hosts must pass strict authority validation, including bounded ports and valid
-IPv4/IPv6 forms, before they can become an absolute URL.
+IPv4/IPv6 forms, before they can become an absolute URL. The prior
+`resolveLoopbackAwarePublicBaseURL` implementation is retired so lifecycle
+code cannot drift back to raw request authority or untrusted forwarded scheme
+handling.
 
 The earlier governance claim that this derivation touched no token issuance,
 update targeting, or fleet lifecycle was false once live request origin began
 outranking an auto-detected public URL. The resolved value targets
-token-bearing diagnostics install commands and cluster deployment payloads,
-and it also feeds hosted install, onboarding, and agent URL projections.
+token-bearing config PVE/PBS install commands, setup-script artifacts,
+diagnostics install commands, and cluster deployment payloads, and it also
+feeds hosted install, onboarding, and agent URL projections.
 Therefore lifecycle consumers must treat it as an API/security credential-
 target boundary: explicit `AgentConnectURL` or operator `PublicURL` remains
 authoritative, only validated live origin may replace an auto-detected guess,
@@ -5846,7 +5852,9 @@ invalid request evidence falls back safely, and hosted mode never guesses.
 It does not itself grant registration or command authority, but raw Host or
 forwarded headers must never bypass it before credentials are placed into an
 install or deploy transport. `TestContract_RequestOriginCannotRetargetTokenBearingCommands`
-is the routed lifecycle/API proof.
+is the routed lifecycle/API proof and invokes the actual
+`POST /api/agent-install-command` PVE/PBS handler so every asserted target is
+paired with the fresh token returned by that endpoint.
 
 ### Runtime branding stays outside agent lifecycle authority
 

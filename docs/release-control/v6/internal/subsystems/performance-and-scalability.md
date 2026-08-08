@@ -2237,13 +2237,15 @@ metrics fan-out, or background work to `GET /api/agent/version`.
 
 ### Canonical request-origin resolution on internal/api/router.go stays O(1)
 
-`resolveRequestOrigin` and `requestOriginBaseURL` in `internal/api/router.go`
-perform bounded trusted-peer lookup, header selection, and strict authority
-parsing on the request already in hand. Reuse by public-URL capture, SSO
-responses, install-command targeting, deployment payloads, onboarding, and
-security status adds no inventory scan, persistence read, metrics fan-out, or
-background work. The trusted-proxy CIDR cache remains process-local, and the
-resolver's request cost is bounded by the small authority/header inputs.
+`resolveRequestOrigin`, `requestOriginBaseURL`, and
+`resolveConfiguredPublicBaseURL` in `internal/api/router.go` perform bounded
+trusted-peer lookup, header selection, strict authority parsing, and constant-
+size configuration precedence on the request already in hand. Reuse by
+public-URL capture, SSO responses, config-owned PVE/PBS install commands,
+setup-script artifacts, deployment payloads, onboarding, and security status
+adds no inventory scan, persistence read, metrics fan-out, or background work.
+The trusted-proxy CIDR cache remains process-local, and the resolver's request
+cost is bounded by the small authority/header inputs.
 
 ### Runtime branding remains a bounded bootstrap read
 

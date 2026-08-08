@@ -3,10 +3,8 @@ package api
 import (
 	"errors"
 	"fmt"
-	"net"
 	"net/http"
 	"net/url"
-	"strconv"
 	"strings"
 	"time"
 
@@ -186,53 +184,6 @@ func withPrivilegeEscalation(command string) string {
 		`; else echo "Root privileges required. Run as root (su -) and retry." >&2; exit 1; fi; }`
 }
 
-func requestTargetsLocalFrontend(host string, frontendPort int) bool {
-	if frontendPort <= 0 {
-		return false
-	}
-
-	parsedHost, parsedPort, err := net.SplitHostPort(strings.TrimSpace(host))
-	if err != nil || parsedPort != strconv.Itoa(frontendPort) {
-		return false
-	}
-
-	switch strings.Trim(parsedHost, "[]") {
-	case "127.0.0.1", "localhost", "::1":
-		return true
-	default:
-		return false
-	}
-}
-
-func resolveLoopbackAwarePublicBaseURL(req *http.Request, cfg *config.Config) string {
-	if req != nil && cfg != nil && requestTargetsLocalFrontend(req.Host, cfg.FrontendPort) {
-		if publicURL := strings.TrimSpace(cfg.PublicURL); publicURL != "" {
-			if parsedURL, err := url.Parse(publicURL); err == nil && parsedURL.Scheme != "" && parsedURL.Host != "" {
-				return strings.TrimRight(parsedURL.String(), "/")
-			}
-		}
-	}
-
-	host := ""
-	if req != nil {
-		host = strings.TrimSpace(req.Host)
-	}
-	if host == "" {
-		if cfg != nil && cfg.FrontendPort > 0 {
-			host = fmt.Sprintf("localhost:%d", cfg.FrontendPort)
-		} else {
-			host = "localhost:7655"
-		}
-	}
-
-	scheme := "http"
-	if req != nil && (req.TLS != nil || strings.EqualFold(req.Header.Get("X-Forwarded-Proto"), "https")) {
-		scheme = "https"
-	}
-
-	return fmt.Sprintf("%s://%s", scheme, host)
-}
-
 func buildProxmoxAgentInstallCommand(opts agentInstallCommandOptions) string {
 	baseURL := normalizeAgentInstallBaseURL(opts.BaseURL)
 	installScriptURL := baseURL + "/install.sh"
@@ -397,11 +348,5 @@ func buildSetupScriptInstallArtifact(baseURL string, installType string, host st
 }
 
 func resolveConfigAgentInstallBaseURL(req *http.Request, cfg *config.Config) string {
-	if cfg != nil {
-		if agentConnectURL := strings.TrimSpace(cfg.AgentConnectURL); agentConnectURL != "" {
-			return normalizeAgentInstallBaseURL(agentConnectURL)
-		}
-	}
-
-	return resolveLoopbackAwarePublicBaseURL(req, cfg)
+	return resolveConfiguredPublicBaseURL(req, cfg, false)
 }

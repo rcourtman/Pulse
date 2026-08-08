@@ -1830,7 +1830,9 @@ replacement validation remain mandatory and fail closed.
 ### Request-derived absolute URLs share one trusted command-target boundary
 
 `internal/api/router.go` owns one `resolveRequestOrigin` boundary behind
-`requestOriginBaseURL`, public-URL capture, and `Router.resolvePublicURL`.
+`requestOriginBaseURL`, public-URL capture, and the shared
+`resolveConfiguredPublicBaseURL` precedence function consumed by
+`Router.resolvePublicURL` and config-owned installer paths.
 Direct `Host` values must parse as strict HTTP authorities and reject
 userinfo, schemes, path/query/fragment bytes, whitespace and controls,
 malformed DNS labels, invalid IPv4/IPv6 bracket forms, and ports outside
@@ -1843,14 +1845,18 @@ a valid direct fallback.
 This derivation is not authorization evidence, but it is security-sensitive
 credential targeting. A validated live origin may outrank only an
 auto-detected `PublicURL`; `AgentConnectURL` and explicit `PublicURL` remain
-authoritative. Diagnostics install commands, cluster deploy payloads, hosted
+authoritative. Config-owned PVE/PBS install commands and setup-script
+artifacts, diagnostics install commands, cluster deploy payloads, hosted
 install commands, onboarding payloads, security status, SSO endpoint
 responses, and magic links must consume the canonical resolver instead of raw
 request headers because several of those payloads pair the resulting URL with
-fresh API or bootstrap tokens. Hosted mode remains fail-closed without a
-configured external URL. The adversarial contract proof is
+fresh API or bootstrap tokens. The legacy loopback-aware helper that copied
+raw `Host` and untrusted forwarded scheme values is retired. Hosted mode
+remains fail-closed without a configured external URL. The adversarial
+contract proof is
 `TestContract_RequestOriginCannotRetargetTokenBearingCommands` in
-`internal/api/contract_test.go`.
+`internal/api/contract_test.go`, including direct execution of the PVE/PBS
+`POST /api/agent-install-command` handler with a newly minted token.
 
 ### The global security banner no longer scores a truncated status payload
 

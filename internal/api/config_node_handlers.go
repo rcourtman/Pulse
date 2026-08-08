@@ -581,7 +581,7 @@ func (h *ConfigHandlers) handleAddNode(w http.ResponseWriter, r *http.Request) {
 				// Fallback to password auth
 				pbsPassword = req.Password
 			} else {
-				pulseURL := resolveLoopbackAwarePublicBaseURL(r, h.getConfig(r.Context()))
+				pulseURL := resolveConfiguredPublicBaseURL(r, h.getConfig(r.Context()), false)
 				tokenName := buildPulseMonitorTokenName(pulseURL)
 
 				tokenID, tokenSecret, err := pbsClient.SetupMonitoringAccess(context.Background(), tokenName)

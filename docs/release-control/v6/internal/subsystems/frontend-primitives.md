@@ -5236,6 +5236,12 @@ workspace instead of the System/Network route. Shared prop contracts for the
 network-boundary surface must extend
 `frontend-modern/src/components/Settings/networkSettingsModel.ts` instead of
 re-expanding the shell or reintroducing page-local section types.
+The Public URL control must describe both customer alert links and copied
+agent install/update command targets, recommend the externally reachable HTTPS
+domain used through a reverse proxy, and present request auto-detection as a
+fallback rather than implying the field affects notifications alone. The
+settings architecture proof pins that copy, and the responsive browser receipt
+proves the label and helper text remain readable without horizontal overflow.
 `frontend-modern/src/utils/discoveryPresentation.ts` now owns the
 customer-facing discovery-section framing copy, scan-scope labels, subnet
 guidance, command-execution settings targets, API Access handoff labels, and

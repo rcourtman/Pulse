@@ -729,7 +729,7 @@ func (h *ConfigHandlers) handleSetupScriptURL(w http.ResponseWriter, r *http.Req
 		Msg("Generated temporary setup token")
 
 	// Build the canonical bootstrap artifact for setup-script transport.
-	pulseURL := resolveLoopbackAwarePublicBaseURL(r, h.getConfig(r.Context()))
+	pulseURL := resolveConfiguredPublicBaseURL(r, h.getConfig(r.Context()), false)
 	artifact := buildSetupScriptInstallArtifact(
 		pulseURL,
 		req.Type,

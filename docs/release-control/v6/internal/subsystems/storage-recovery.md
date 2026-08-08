@@ -4933,16 +4933,19 @@ reconstructing them from local table state.
 ### Shared internal/api request-origin resolution creates no recovery state
 
 The shared `internal/api` boundary this subsystem consumes routes
-`requestOriginBaseURL`, `capturePublicURLFromRequest`, and
-`Router.resolvePublicURL` through one strict `resolveRequestOrigin` trust
-boundary in `internal/api/router.go`. The resolver itself performs no
-persistence. Capture may update the running config's auto-detected public URL
-for notification and SAML consumers, while command-target resolution may use
-the validated live origin ahead of that auto-detected guess; neither behavior
-creates a recovery point, backup artifact, restore authority, or protection
-freshness fact. No request-derived origin is written to storage/recovery
-records, and tenant workspace preservation or recovery flows that copy
-`system.json` remain outside this URL trust boundary.
+`requestOriginBaseURL`, `capturePublicURLFromRequest`,
+`Router.resolvePublicURL`, config-owned install commands, setup-script
+artifacts, and PBS token labels through one strict `resolveRequestOrigin`
+trust boundary and one `resolveConfiguredPublicBaseURL` precedence function in
+`internal/api/router.go`. The resolver itself performs no persistence. Capture
+may update the running config's auto-detected public URL for notification and
+SAML consumers, while command-target resolution may use the validated live
+origin ahead of that auto-detected guess; neither behavior creates a recovery
+point, backup artifact, restore authority, or protection freshness fact. The
+retired loopback-aware helper no longer provides a second request-header path.
+No request-derived origin is written to storage/recovery records, and tenant
+workspace preservation or recovery flows that copy `system.json` remain
+outside this URL trust boundary.
 
 The shared `frontend-modern/src/App.tsx` shell boundary this subsystem consumes
 gained one authority gate on its global banner block. The banners rendered

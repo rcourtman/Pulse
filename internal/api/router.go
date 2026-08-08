@@ -10966,24 +10966,24 @@ func (r *Router) handleDiagnosticsDockerPrepareToken(w http.ResponseWriter, req 
 	}
 }
 
-func (r *Router) resolvePublicURL(req *http.Request) string {
-	if r == nil || r.config == nil {
+func resolveConfiguredPublicBaseURL(req *http.Request, cfg *config.Config, hostedMode bool) string {
+	if cfg == nil {
 		return ""
 	}
 
 	// Hosted mode must never fall back to request host or localhost.
 	// A canonical externally-reachable URL must be configured via PublicURL / AgentConnectURL.
-	if r != nil && r.hostedMode {
-		if agentConnectURL := strings.TrimSpace(r.config.AgentConnectURL); agentConnectURL != "" {
+	if hostedMode {
+		if agentConnectURL := strings.TrimSpace(cfg.AgentConnectURL); agentConnectURL != "" {
 			return strings.TrimRight(agentConnectURL, "/")
 		}
-		if publicURL := strings.TrimSpace(r.config.PublicURL); publicURL != "" {
+		if publicURL := strings.TrimSpace(cfg.PublicURL); publicURL != "" {
 			return strings.TrimRight(publicURL, "/")
 		}
 		return ""
 	}
 
-	if agentConnectURL := strings.TrimSpace(r.config.AgentConnectURL); agentConnectURL != "" {
+	if agentConnectURL := strings.TrimSpace(cfg.AgentConnectURL); agentConnectURL != "" {
 		return strings.TrimRight(agentConnectURL, "/")
 	}
 
@@ -10991,8 +10991,8 @@ func (r *Router) resolvePublicURL(req *http.Request) string {
 	// is only a guess (boot-time LAN IP probe or first-request capture), so the
 	// live request's own origin outranks it: the URL the admin is browsing
 	// right now is fresher evidence of how this instance is reached (#1692).
-	publicURL := strings.TrimSpace(r.config.PublicURL)
-	if publicURL != "" && !r.config.PublicURLAutoDetected {
+	publicURL := strings.TrimSpace(cfg.PublicURL)
+	if publicURL != "" && !cfg.PublicURLAutoDetected {
 		return strings.TrimRight(publicURL, "/")
 	}
 
@@ -11004,10 +11004,17 @@ func (r *Router) resolvePublicURL(req *http.Request) string {
 		return strings.TrimRight(publicURL, "/")
 	}
 
-	if r.config.FrontendPort > 0 {
-		return fmt.Sprintf("http://localhost:%d", r.config.FrontendPort)
+	if cfg.FrontendPort > 0 {
+		return fmt.Sprintf("http://localhost:%d", cfg.FrontendPort)
 	}
 	return "http://localhost:7655"
+}
+
+func (r *Router) resolvePublicURL(req *http.Request) string {
+	if r == nil {
+		return ""
+	}
+	return resolveConfiguredPublicBaseURL(req, r.config, r.hostedMode)
 }
 
 func fileExists(path string) bool {

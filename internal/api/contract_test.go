@@ -7217,7 +7217,7 @@ func TestContract_AssignProfileRejectsMissingProfile(t *testing.T) {
 	}
 }
 
-func TestContract_ResolveLoopbackAwarePublicBaseURLPreservesConfiguredHTTPS(t *testing.T) {
+func TestContract_ResolveConfiguredPublicBaseURLPreservesConfiguredHTTPS(t *testing.T) {
 	cfg := &config.Config{
 		PublicURL:    "https://public.example.com/base/",
 		FrontendPort: 7655,
@@ -7225,7 +7225,7 @@ func TestContract_ResolveLoopbackAwarePublicBaseURLPreservesConfiguredHTTPS(t *t
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	req.Host = "127.0.0.1:7655"
 
-	if got := resolveLoopbackAwarePublicBaseURL(req, cfg); got != "https://public.example.com/base" {
+	if got := resolveConfiguredPublicBaseURL(req, cfg, false); got != "https://public.example.com/base" {
 		t.Fatalf("baseURL = %q, want %q", got, "https://public.example.com/base")
 	}
 }
@@ -22660,6 +22660,262 @@ func TestContract_RequestOriginCannotRetargetTokenBearingCommands(t *testing.T) 
 		}
 		if bytes.Contains(encoded, []byte("attacker")) {
 			t.Fatalf("deploy payload retained attacker-controlled origin bytes: %s", encoded)
+		}
+	})
+
+	t.Run("PVE and PBS install endpoint uses only the canonical resolved origin", func(t *testing.T) {
+		type installOriginCase struct {
+			name             string
+			installType      string
+			trustedProxyCIDR string
+			publicURL        string
+			publicAuto       bool
+			agentConnectURL  string
+			host             string
+			remoteAddr       string
+			tls              bool
+			headers          map[string]string
+			wantBaseURL      string
+			forbidden        []string
+		}
+
+		cases := []installOriginCase{
+			{
+				name:        "PVE ignores untrusted forwarded host proto and port",
+				installType: "pve",
+				publicURL:   autoDetectedURL,
+				publicAuto:  true,
+				host:        "pulse.lan:7655",
+				remoteAddr:  "198.51.100.20:43210",
+				headers: map[string]string{
+					"X-Forwarded-Host":  "forwarded-attacker.example",
+					"X-Forwarded-Proto": "https",
+					"X-Forwarded-Port":  "443",
+				},
+				wantBaseURL: "http://pulse.lan:7655",
+				forbidden:   []string{"forwarded-attacker.example"},
+			},
+			{
+				name:             "PBS accepts external IPv6 origin from a trusted proxy",
+				installType:      "pbs",
+				trustedProxyCIDR: "192.0.2.0/24",
+				publicURL:        autoDetectedURL,
+				publicAuto:       true,
+				host:             "backend.internal:7655",
+				remoteAddr:       "192.0.2.44:41000",
+				headers: map[string]string{
+					"X-Forwarded-Host":  "2001:db8::20",
+					"X-Forwarded-Proto": "https",
+					"X-Forwarded-Port":  "8443",
+				},
+				wantBaseURL: "https://[2001:db8::20]:8443",
+				forbidden:   []string{"backend.internal"},
+			},
+			{
+				name:        "PVE preserves direct IPv4 authority and port",
+				installType: "pve",
+				publicURL:   autoDetectedURL,
+				publicAuto:  true,
+				host:        "192.0.2.10:8765",
+				remoteAddr:  "198.51.100.20:43210",
+				wantBaseURL: "http://192.0.2.10:8765",
+			},
+			{
+				name:        "PBS rejects direct userinfo to auto-detected fallback",
+				installType: "pbs",
+				publicURL:   autoDetectedURL,
+				publicAuto:  true,
+				host:        "user@attacker.example",
+				remoteAddr:  "198.51.100.20:43210",
+				wantBaseURL: autoDetectedURL,
+				forbidden:   []string{"attacker.example"},
+			},
+			{
+				name:        "PVE rejects direct path bytes to auto-detected fallback",
+				installType: "pve",
+				publicURL:   autoDetectedURL,
+				publicAuto:  true,
+				host:        "attacker.example/path",
+				remoteAddr:  "198.51.100.20:43210",
+				wantBaseURL: autoDetectedURL,
+				forbidden:   []string{"attacker.example"},
+			},
+			{
+				name:        "PBS rejects direct control bytes to auto-detected fallback",
+				installType: "pbs",
+				publicURL:   autoDetectedURL,
+				publicAuto:  true,
+				host:        "attacker.example\r\nX-Injected: yes",
+				remoteAddr:  "198.51.100.20:43210",
+				wantBaseURL: autoDetectedURL,
+				forbidden:   []string{"attacker.example", "X-Injected"},
+			},
+			{
+				name:        "PVE rejects out-of-range direct port to auto-detected fallback",
+				installType: "pve",
+				publicURL:   autoDetectedURL,
+				publicAuto:  true,
+				host:        "attacker.example:70000",
+				remoteAddr:  "198.51.100.20:43210",
+				wantBaseURL: autoDetectedURL,
+				forbidden:   []string{"attacker.example"},
+			},
+			{
+				name:             "PVE ignores malformed trusted forwarded fields independently",
+				installType:      "pve",
+				trustedProxyCIDR: "192.0.2.0/24",
+				publicURL:        autoDetectedURL,
+				publicAuto:       true,
+				host:             "pulse.lan:9443",
+				remoteAddr:       "192.0.2.44:41000",
+				tls:              true,
+				headers: map[string]string{
+					"X-Forwarded-Host":   "https://attacker.example/path",
+					"X-Forwarded-Proto":  "javascript",
+					"X-Forwarded-Scheme": "also-invalid",
+					"X-Forwarded-Port":   "70000",
+				},
+				wantBaseURL: "https://pulse.lan:9443",
+				forbidden:   []string{"attacker.example", "javascript"},
+			},
+			{
+				name:        "PBS explicit PublicURL defeats valid Host spoofing",
+				installType: "pbs",
+				publicURL:   "https://configured.example/base/",
+				host:        "host-spoof.attacker.example:9443",
+				remoteAddr:  "198.51.100.20:43210",
+				wantBaseURL: "https://configured.example/base",
+				forbidden:   []string{"host-spoof.attacker.example"},
+			},
+			{
+				name:             "PVE AgentConnectURL outranks configured and forwarded origins",
+				installType:      "pve",
+				trustedProxyCIDR: "192.0.2.0/24",
+				publicURL:        "https://configured.example/base",
+				agentConnectURL:  "https://agents.example:9443/",
+				host:             "host-spoof.attacker.example",
+				remoteAddr:       "192.0.2.44:41000",
+				headers: map[string]string{
+					"X-Forwarded-Host":  "forwarded-attacker.example",
+					"X-Forwarded-Proto": "http",
+				},
+				wantBaseURL: "https://agents.example:9443",
+				forbidden:   []string{"host-spoof.attacker.example", "forwarded-attacker.example", "configured.example"},
+			},
+			{
+				name:        "PBS malformed request uses safe local fallback without configured URL",
+				installType: "pbs",
+				host:        "pulse.example:7655;curl-attacker",
+				remoteAddr:  "198.51.100.20:43210",
+				wantBaseURL: "http://localhost:7655",
+				forbidden:   []string{"curl-attacker"},
+			},
+		}
+
+		for _, tc := range cases {
+			t.Run(tc.name, func(t *testing.T) {
+				t.Setenv("PULSE_TRUSTED_PROXY_CIDRS", tc.trustedProxyCIDR)
+				resetTrustedProxyCIDRsForTests()
+
+				cfg := &config.Config{
+					DataPath:              t.TempDir(),
+					AuthUser:              "admin",
+					AuthPass:              "hashed-password",
+					FrontendPort:          7655,
+					PublicURL:             tc.publicURL,
+					PublicURLAutoDetected: tc.publicAuto,
+					AgentConnectURL:       tc.agentConnectURL,
+				}
+				handler := &ConfigHandlers{
+					defaultConfig:      cfg,
+					defaultPersistence: config.NewConfigPersistence(cfg.DataPath),
+				}
+
+				req := httptest.NewRequest(
+					http.MethodPost,
+					"/api/agent-install-command",
+					strings.NewReader(fmt.Sprintf(`{"type":%q}`, tc.installType)),
+				)
+				req.Host = tc.host
+				req.RemoteAddr = tc.remoteAddr
+				if tc.tls {
+					req.TLS = &tls.ConnectionState{}
+				}
+				for name, value := range tc.headers {
+					req.Header.Set(name, value)
+				}
+
+				rec := httptest.NewRecorder()
+				handler.HandleAgentInstallCommand(rec, req)
+				if rec.Code != http.StatusOK {
+					t.Fatalf("status = %d, want %d: %s", rec.Code, http.StatusOK, rec.Body.String())
+				}
+
+				var response AgentInstallCommandResponse
+				if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+					t.Fatalf("decode response: %v", err)
+				}
+				if response.Token == "" || !strings.Contains(response.Command, response.Token) {
+					t.Fatalf("fresh token was not carried by install command: %#v", response)
+				}
+				if !strings.Contains(response.Command, tc.wantBaseURL+"/install.sh") ||
+					!strings.Contains(response.Command, "--url "+posixShellQuote(tc.wantBaseURL)) {
+					t.Fatalf("install command did not use resolved base URL %q: %q", tc.wantBaseURL, response.Command)
+				}
+				for _, forbidden := range tc.forbidden {
+					if strings.Contains(response.Command, forbidden) {
+						t.Fatalf("install command retained forbidden origin bytes %q: %q", forbidden, response.Command)
+					}
+				}
+				if len(cfg.APITokens) != 1 {
+					t.Fatalf("minted token record count = %d, want 1", len(cfg.APITokens))
+				}
+			})
+		}
+	})
+
+	t.Run("setup-script artifact cannot retarget its setup token", func(t *testing.T) {
+		t.Setenv("PULSE_TRUSTED_PROXY_CIDRS", "")
+		resetTrustedProxyCIDRsForTests()
+
+		cfg := &config.Config{
+			DataPath:              t.TempDir(),
+			FrontendPort:          7655,
+			PublicURL:             autoDetectedURL,
+			PublicURLAutoDetected: true,
+		}
+		handler := newTestConfigHandlers(t, cfg)
+		req := httptest.NewRequest(
+			http.MethodPost,
+			"/api/setup-script-url",
+			strings.NewReader(`{"type":"pve","host":"pve1.local"}`),
+		)
+		req.Host = "user@attacker.example/path:70000"
+		req.RemoteAddr = "198.51.100.20:43210"
+		req.Header.Set("X-Forwarded-Host", "forwarded-attacker.example")
+		req.Header.Set("X-Forwarded-Proto", "https")
+
+		rec := httptest.NewRecorder()
+		handler.HandleSetupScriptURL(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status = %d, want %d: %s", rec.Code, http.StatusOK, rec.Body.String())
+		}
+
+		var artifact setupScriptInstallArtifact
+		if err := json.Unmarshal(rec.Body.Bytes(), &artifact); err != nil {
+			t.Fatalf("decode setup artifact: %v", err)
+		}
+		if artifact.SetupToken == "" ||
+			!strings.Contains(artifact.DownloadURL, artifact.SetupToken) ||
+			!strings.Contains(artifact.Command, artifact.SetupToken) {
+			t.Fatalf("setup token was not carried by canonical artifact: %#v", artifact)
+		}
+		if !strings.HasPrefix(artifact.URL, autoDetectedURL+"/api/setup-script?") ||
+			!strings.HasPrefix(artifact.DownloadURL, autoDetectedURL+"/api/setup-script?") {
+			t.Fatalf("setup artifact did not use sanitized fallback %q: %#v", autoDetectedURL, artifact)
+		}
+		if strings.Contains(artifact.Command, "attacker") || strings.Contains(artifact.DownloadURL, "attacker") {
+			t.Fatalf("setup artifact retained attacker-controlled origin bytes: %#v", artifact)
 		}
 	})
 }
