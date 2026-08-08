@@ -999,6 +999,10 @@ upgrade, update, release, or artifact-selection behavior.
    require the same draft release ID, tag, target commit, and absent activation
    marker. It then dispatches a fresh durable convergence owner and repeats the
    activation commit without rebuilding or replacing any candidate artifact.
+   Because a newly dispatched Actions run can be visible before its workflow
+   name and display title are coherently indexed, both normal and recovered
+   activation use a bounded metadata-propagation wait before rejecting the
+   convergence owner; a terminal owner still fails immediately.
    One immutable-readiness join must cover the staged release packet, staged
    install smoke, exact public Docker images, exact Helm OCI chart, and (for
    v6) the exact Pro image and signed packet. After that join, activation must

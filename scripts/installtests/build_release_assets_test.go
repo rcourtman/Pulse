@@ -2121,6 +2121,8 @@ func TestReleasePipelinePromotesOneImmutableCandidate(t *testing.T) {
 		`failure outside the recoverable activation boundary`,
 		`release-convergence.yml/dispatches`,
 		`activation_recovery_run_id`,
+		`for attempt in $(seq 1 12)`,
+		`waiting for GitHub indexing`,
 		`--repo "${GITHUB_REPOSITORY}"`,
 	} {
 		if !strings.Contains(recoveryWorkflow, needle) {

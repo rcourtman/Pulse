@@ -1591,29 +1591,39 @@ jobs:
           committed=false
 
           require_viable_convergence_owner() {
-            local owner_state
-            owner_state="$(
-              gh run view "${CONVERGENCE_RUN_ID}" \
-                --repo "${{ github.repository }}" \
-                --json event,status,conclusion,workflowName,displayTitle,url \
-                --jq '[.event, .status, (.conclusion // ""), .workflowName, .displayTitle, .url] | @tsv'
-            )"
-            owner_event="$(awk -F '\t' '{print $1}' <<<"${owner_state}")"
-            owner_status="$(awk -F '\t' '{print $2}' <<<"${owner_state}")"
-            owner_conclusion="$(awk -F '\t' '{print $3}' <<<"${owner_state}")"
-            owner_workflow="$(awk -F '\t' '{print $4}' <<<"${owner_state}")"
-            owner_title="$(awk -F '\t' '{print $5}' <<<"${owner_state}")"
-            owner_url="$(awk -F '\t' '{print $6}' <<<"${owner_state}")"
+            local attempt owner_state owner_event owner_status owner_conclusion
+            local owner_workflow owner_title owner_url expected_title
             expected_title="Release convergence ${TAG} source ${GITHUB_RUN_ID}"
-            if [ "${owner_event}" != "workflow_dispatch" ] || \
-               [ "${owner_workflow}" != "Release Convergence" ] || \
-               [ "${owner_title}" != "${expected_title}" ] || \
-               [ "${owner_status}" = "completed" ] || \
-               [ -n "${owner_conclusion}" ]; then
-              echo "::error::Exact convergence owner ${CONVERGENCE_RUN_ID} is not viable for ${TAG}: status=${owner_status} conclusion=${owner_conclusion:-none} ${owner_url}."
-              return 1
-            fi
-            echo "Verified viable convergence owner ${CONVERGENCE_RUN_ID}: ${owner_status} ${owner_url}."
+            for attempt in $(seq 1 12); do
+              owner_state="$(
+                gh run view "${CONVERGENCE_RUN_ID}" \
+                  --repo "${{ github.repository }}" \
+                  --json event,status,conclusion,workflowName,displayTitle,url \
+                  --jq '[.event, .status, (.conclusion // ""), .workflowName, .displayTitle, .url] | @tsv'
+              )"
+              owner_event="$(awk -F '\t' '{print $1}' <<<"${owner_state}")"
+              owner_status="$(awk -F '\t' '{print $2}' <<<"${owner_state}")"
+              owner_conclusion="$(awk -F '\t' '{print $3}' <<<"${owner_state}")"
+              owner_workflow="$(awk -F '\t' '{print $4}' <<<"${owner_state}")"
+              owner_title="$(awk -F '\t' '{print $5}' <<<"${owner_state}")"
+              owner_url="$(awk -F '\t' '{print $6}' <<<"${owner_state}")"
+              if [ "${owner_event}" = "workflow_dispatch" ] && \
+                 [ "${owner_workflow}" = "Release Convergence" ] && \
+                 [ "${owner_title}" = "${expected_title}" ] && \
+                 [ "${owner_status}" != "completed" ] && \
+                 [ -z "${owner_conclusion}" ]; then
+                echo "Verified viable convergence owner ${CONVERGENCE_RUN_ID}: ${owner_status} ${owner_url}."
+                return 0
+              fi
+              if [ "${owner_status}" = "completed" ] || [ -n "${owner_conclusion}" ]; then
+                echo "::error::Exact convergence owner ${CONVERGENCE_RUN_ID} is terminal for ${TAG}: status=${owner_status} conclusion=${owner_conclusion:-none} ${owner_url}."
+                return 1
+              fi
+              echo "Convergence owner ${CONVERGENCE_RUN_ID} metadata is not coherent yet (${attempt}/12); waiting for GitHub indexing."
+              sleep 2
+            done
+            echo "::error::Exact convergence owner ${CONVERGENCE_RUN_ID} metadata did not converge for ${TAG}: event=${owner_event:-missing} workflow=${owner_workflow:-missing} title=${owner_title:-missing} status=${owner_status:-missing} ${owner_url:-}."
+            return 1
           }
 
           quarantine_on_error() {
