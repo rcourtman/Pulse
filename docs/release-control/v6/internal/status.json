@@ -9118,7 +9118,21 @@
   ],
   "coverage_gaps": [],
   "candidate_lanes": [],
-  "work_claims": [],
+  "work_claims": [
+    {
+      "id": "settings-responsive-20260808-release-gate-settings-surface-layout-consistency",
+      "agent_id": "settings-responsive-20260808",
+      "summary": "Repair confirmed responsive clipping in the shared Settings shell and prove direct Plans & Billing plus adjacent panels at narrow viewports without changing commercial behavior.",
+      "target_id": "v6-product-lane-expansion",
+      "claimed_at": "2026-08-08T03:47:09Z",
+      "heartbeat_at": "2026-08-08T03:47:09Z",
+      "expires_at": "2026-08-08T05:47:09Z",
+      "work_item": {
+        "kind": "release-gate",
+        "id": "settings-surface-layout-consistency"
+      }
+    }
+  ],
   "open_decisions": [
     {
       "id": "self-hosted-commercial-surfaces-owner-approval",

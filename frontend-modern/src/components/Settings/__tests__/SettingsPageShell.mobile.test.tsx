@@ -54,4 +54,39 @@ describe('SettingsPageShell mobile navigation', () => {
       expect(screen.getAllByText('API Access')).toHaveLength(2);
     });
   });
+
+  it('keeps the narrow content column width-constrained and at rest', () => {
+    const [activeTab] = createSignal<SettingsTab>('api');
+    const [mobileMenuOpen, setMobileMenuOpen] = createSignal(false);
+    const [sidebarCollapsed, setSidebarCollapsed] = createSignal(false);
+    const [searchQuery, setSearchQuery] = createSignal('');
+
+    const { container } = render(() => (
+      <SettingsPageShell
+        headerMeta={() => ({ title: 'API Access', description: 'Manage API access.' })}
+        hasUnsavedChanges={() => false}
+        activeTabSaveBehavior={() => undefined}
+        saveSettings={() => undefined}
+        discardChanges={() => undefined}
+        isMobileMenuOpen={mobileMenuOpen}
+        setIsMobileMenuOpen={setMobileMenuOpen}
+        sidebarCollapsed={sidebarCollapsed}
+        setSidebarCollapsed={setSidebarCollapsed}
+        searchQuery={searchQuery}
+        setSearchQuery={setSearchQuery}
+        filteredTabGroups={() => [{ id: 'infrastructure', label: 'Settings', items: tabs }]}
+        flatTabs={() => tabs}
+        activeTab={activeTab}
+        setActiveTab={() => undefined}
+        isPro={() => false}
+      >
+        <div>Panel content</div>
+      </SettingsPageShell>
+    ));
+
+    const content = container.querySelector('[data-settings-content]');
+    expect(content).toHaveClass('min-w-0', 'flex-1', 'overflow-hidden', 'block');
+    expect(content).not.toHaveClass('animate-slideInRight');
+    expect(content?.lastElementChild).toHaveClass('min-w-0');
+  });
 });

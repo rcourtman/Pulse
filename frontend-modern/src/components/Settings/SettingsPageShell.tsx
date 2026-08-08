@@ -41,7 +41,7 @@ export const SettingsPageShell: Component<SettingsPageShellProps> = (props) => {
       : props.activeTab() === itemId;
 
   return (
-    <div class="space-y-6">
+    <div class="min-w-0 max-w-full space-y-6">
       <PageHeader title={props.headerMeta().title} description={props.headerMeta().description} />
 
       <Show when={props.hasUnsavedChanges() && props.activeTabSaveBehavior() === 'system'}>
@@ -90,7 +90,10 @@ export const SettingsPageShell: Component<SettingsPageShellProps> = (props) => {
         </div>
       </Show>
 
-      <Card padding="none" class="relative flex overflow-hidden lg:min-h-[600px] lg:flex-row">
+      <Card
+        padding="none"
+        class="relative flex min-w-0 max-w-full overflow-hidden lg:min-h-[600px] lg:flex-row"
+      >
         <div
           class={`${props.isMobileMenuOpen() ? 'flex w-full flex-col' : 'hidden lg:flex lg:flex-col'} ${props.sidebarCollapsed() ? 'lg:w-16 lg:min-w-[4rem] lg:max-w-[4rem] lg:basis-[4rem]' : 'lg:w-72 lg:min-w-[18rem] lg:max-w-[18rem] lg:basis-[18rem]'} relative z-10 max-h-[calc(100dvh-12rem)] flex-shrink-0 overflow-y-auto overscroll-contain border-b border-border bg-surface transition-all duration-200 lg:max-h-none lg:overflow-visible lg:border-b-0 lg:border-r lg:bg-transparent lg:align-top`}
           aria-label={shellCopy().navigationAriaLabel}
@@ -229,7 +232,8 @@ export const SettingsPageShell: Component<SettingsPageShellProps> = (props) => {
         </div>
 
         <div
-          class={`flex-1 overflow-hidden ${props.isMobileMenuOpen() ? 'hidden lg:block' : 'block animate-slideInRight lg:animate-none'}`}
+          data-settings-content
+          class={`min-w-0 flex-1 overflow-hidden ${props.isMobileMenuOpen() ? 'hidden lg:block' : 'block'}`}
         >
           <Show when={props.flatTabs().length > 0}>
             <div class="lg:hidden sticky top-0 z-40 bg-surface/95 border-b border-border-subtle px-3 py-2.5 flex items-center shadow-none">
@@ -257,7 +261,9 @@ export const SettingsPageShell: Component<SettingsPageShellProps> = (props) => {
             </div>
           </Show>
 
-          <div class={infrastructureWorkspaceActive() ? 'p-3 sm:p-4 lg:p-5' : 'p-4 sm:p-6 lg:p-8'}>
+          <div
+            class={`min-w-0 ${infrastructureWorkspaceActive() ? 'p-3 sm:p-4 lg:p-5' : 'p-4 sm:p-6 lg:p-8'}`}
+          >
             {props.children}
           </div>
         </div>

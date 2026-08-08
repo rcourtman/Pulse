@@ -2009,6 +2009,12 @@ default` instead of fusing provider and badge text such as
 2. Keep top-level settings surfaces routed through the canonical settings shell
    and maintain both `frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts`
    plus `tests/integration/tests/15-settings-shell-consistency.spec.ts`
+   The shared Settings content column must remain explicitly width-constrained
+   and at rest across the `lg` breakpoint. Do not attach a transform animation
+   unconditionally to the responsive panel container: entering a narrow
+   viewport must not reactivate motion that translates or clips the active
+   panel. Responsive proof must cover a desktop-to-390-pixel resize and the
+   direct Plans & Billing route as well as ordinary Settings navigation.
 3. Keep Settings loading placeholders on the shared
    `SettingsLoadingSkeleton` primitive and the
    `settings-loading-skeleton-shell` registry rule instead of local

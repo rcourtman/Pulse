@@ -65,6 +65,11 @@ const SETTINGS_SHELL_ROUTES = [
     title: 'Recovery',
     description: 'Manage backup/snapshot polling plus configuration export and import workflows.',
   },
+  {
+    route: '/settings/pulse-intelligence/billing/plan',
+    title: 'Plans & Billing',
+    description: 'Plan, license, and Patrol mode for this instance.',
+  },
 ] as const;
 
 const test = base.extend<{}, WorkerFixtures>({
@@ -141,4 +146,31 @@ test.describe('Settings shell consistency', () => {
       ).toBeVisible();
     });
   }
+
+  test('keeps direct Settings content inside a 390px viewport after desktop resize', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto('/settings/pulse-intelligence/billing/plan', {
+      waitUntil: 'domcontentloaded',
+    });
+
+    const content = page.locator('[data-settings-content]');
+    await expect(content).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Plans & Billing' })).toBeVisible();
+
+    await page.setViewportSize({ width: 390, height: 844 });
+
+    const layout = await content.evaluate((element) => {
+      const bounds = element.getBoundingClientRect();
+      return {
+        animationName: getComputedStyle(element).animationName,
+        left: bounds.left,
+        right: bounds.right,
+        viewportWidth: document.documentElement.clientWidth,
+      };
+    });
+
+    expect(layout.animationName).toBe('none');
+    expect(layout.left).toBeGreaterThanOrEqual(0);
+    expect(layout.right).toBeLessThanOrEqual(layout.viewportWidth);
+  });
 });
