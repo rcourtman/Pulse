@@ -5848,12 +5848,30 @@ which pins the withheld, granted, and unresolved cases plus the
 
 Because `DEFAULT_SETTINGS_TAB` *is* `infrastructure-systems`, the blocked-route
 fallback in `useSettingsAccess.ts` can no longer resolve to the constant — that
-sent a refused session straight back to the tab that had just refused it. It now
-falls back to `flatTabs()[0]`, the first tab the session can actually reach, and
-only uses `DEFAULT_SETTINGS_TAB` when no tab resolves at all.
+sent a refused session straight back to the tab that had just refused it. The
+fallback uses an explicit preference order: the default when reachable, then
+the user-scoped `system-general` tab, and only then the first remaining route.
+Catalog order is not a safety policy; after the admin-only routes are removed it
+can otherwise land a viewer on Plans, an upgrade surface they cannot administer.
+
+The capability rule also covers every remaining panel whose mount read is
+admin-only: Availability checks, all three Pulse Intelligence tabs, Diagnostics
+& Health, Data & Reports, and System Logs declare their own named capability.
+Data & Reports keeps its independent `advanced_reporting` feature gate because
+feature discovery and administrative reachability answer different questions.
+
+Navigation remains stable while `/api/security/status` is loading, but
+`canMountSettingsPanel` refuses to instantiate a capability-gated panel until
+the exact named capability is `true`. A failed or incomplete status response is
+a resolved denial: the route is removed and the fallback selects General. This
+prevents first-paint panel fetches from racing the capability request while
+keeping a successful status usable during later refreshes.
 
 Pinned by the `infrastructure-systems` block assertion in
 `settingsArchitecture.test.ts` and by
 `__tests__/infrastructureNavCapabilityGate.test.ts`, which also pins that
 neither gate fires before the security status resolves — hiding on an
 unresolved status would flash the default tab away from an admin on every load.
+`__tests__/adminOnlySettingsNavGates.test.ts` and
+`__tests__/useSettingsAccess.test.tsx` pin the complete named-capability,
+fail-closed mount, failed-status, deduplicated-load, and General-fallback rules.

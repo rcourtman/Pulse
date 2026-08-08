@@ -11051,6 +11051,139 @@ func TestContract_SecurityStatusSystemSettingsReadTracksSettingsReadScope(t *tes
 	}
 }
 
+func TestContract_SecurityStatusAdminOnlySettingsCapabilitiesTrackMountRoutes(t *testing.T) {
+	surfaces := []struct {
+		name   string
+		read   func(securityStatusSettingsCapabilities) bool
+		routes []string
+	}{
+		{
+			"availabilityRead",
+			func(c securityStatusSettingsCapabilities) bool { return c.AvailabilityRead },
+			[]string{"/api/availability-targets"},
+		},
+		{
+			"pulseIntelligenceRead",
+			func(c securityStatusSettingsCapabilities) bool { return c.PulseIntelligenceRead },
+			[]string{"/api/settings/ai"},
+		},
+		{
+			"diagnosticsRead",
+			func(c securityStatusSettingsCapabilities) bool { return c.DiagnosticsRead },
+			[]string{"/api/diagnostics"},
+		},
+		{
+			"systemLogsRead",
+			func(c securityStatusSettingsCapabilities) bool { return c.SystemLogsRead },
+			[]string{"/api/logs/level"},
+		},
+		{
+			"reportingRead",
+			func(c securityStatusSettingsCapabilities) bool { return c.ReportingRead },
+			[]string{"/api/admin/reports/catalog"},
+		},
+	}
+
+	for _, tc := range []struct {
+		name   string
+		scopes []string
+		want   bool
+	}{
+		{"settings read grants panel mount routes", []string{config.ScopeSettingsRead}, true},
+		{"monitoring read withholds panel mount routes", []string{config.ScopeMonitoringRead}, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			rawToken := fmt.Sprintf("contract-admin-settings-%s.12345678", strings.ReplaceAll(tc.name, " ", "-"))
+			record := newTokenRecord(t, rawToken, tc.scopes, nil)
+			cfg := newTestConfigWithTokens(t, record)
+			router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+			req := httptest.NewRequest(http.MethodGet, "/api/security/status", nil)
+			req.Header.Set("X-API-Token", rawToken)
+			rec := httptest.NewRecorder()
+			router.Handler().ServeHTTP(rec, req)
+			if rec.Code != http.StatusOK {
+				t.Fatalf("security status = %d, want 200 (%s)", rec.Code, rec.Body.String())
+			}
+
+			var payload struct {
+				SettingsCapabilities securityStatusSettingsCapabilities `json:"settingsCapabilities"`
+			}
+			if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+				t.Fatalf("decode security status payload: %v", err)
+			}
+
+			for _, surface := range surfaces {
+				if got := surface.read(payload.SettingsCapabilities); got != tc.want {
+					t.Fatalf("settingsCapabilities.%s = %v, want %v", surface.name, got, tc.want)
+				}
+				for _, path := range surface.routes {
+					probe := httptest.NewRequest(http.MethodGet, path, nil)
+					probe.Header.Set("X-API-Token", rawToken)
+					probeRec := httptest.NewRecorder()
+					router.Handler().ServeHTTP(probeRec, probe)
+					refused := probeRec.Code == http.StatusForbidden
+					if refused == tc.want {
+						t.Fatalf("GET %s = %d, contradicting %s=%v", path, probeRec.Code, surface.name, tc.want)
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestContract_SecurityStatusPermissionedSettingsCapabilitiesIncludeRouteAuthorization(t *testing.T) {
+	prevAuthorizer := authpkg.GetAuthorizer()
+	authpkg.SetAuthorizer(&allowRulesAuthorizer{
+		rules: map[string]bool{
+			"read:settings": true,
+			"read:nodes":    false,
+		},
+	})
+	defer authpkg.SetAuthorizer(prevAuthorizer)
+
+	rawToken := "contract-permissioned-settings.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsRead}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/security/status", nil)
+	req.Header.Set("X-API-Token", rawToken)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("security status = %d, want 200 (%s)", rec.Code, rec.Body.String())
+	}
+	var payload struct {
+		SettingsCapabilities securityStatusSettingsCapabilities `json:"settingsCapabilities"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode security status payload: %v", err)
+	}
+	if !payload.SettingsCapabilities.PulseIntelligenceRead {
+		t.Fatal("pulseIntelligenceRead = false with read:settings permission")
+	}
+	if payload.SettingsCapabilities.ReportingRead {
+		t.Fatal("reportingRead = true without read:nodes permission")
+	}
+
+	for _, probe := range []struct {
+		path string
+		want int
+	}{
+		{"/api/settings/ai", http.StatusOK},
+		{"/api/admin/reports/catalog", http.StatusForbidden},
+	} {
+		request := httptest.NewRequest(http.MethodGet, probe.path, nil)
+		request.Header.Set("X-API-Token", rawToken)
+		response := httptest.NewRecorder()
+		router.Handler().ServeHTTP(response, request)
+		if response.Code != probe.want {
+			t.Fatalf("GET %s = %d, want %d", probe.path, response.Code, probe.want)
+		}
+	}
+}
+
 func TestContract_SecurityStatusSplitsAuditLogCapabilityFromSettingsRead(t *testing.T) {
 	prevAuthorizer := authpkg.GetAuthorizer()
 	authpkg.SetAuthorizer(&allowRulesAuthorizer{

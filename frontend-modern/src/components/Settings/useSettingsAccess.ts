@@ -1,4 +1,4 @@
-import { Accessor, createEffect, createMemo, createSignal } from 'solid-js';
+import { Accessor, createEffect, createMemo, createSignal, onMount } from 'solid-js';
 import {
   presentationPolicyHidesCommercialSurfaces,
   presentationPolicyHidesOrganizationSurfaces,
@@ -19,7 +19,16 @@ import { DEFAULT_SETTINGS_TAB, type SettingsTab } from './settingsNavigationMode
 import { tabFeatureRequirements } from './settingsFeatureGates';
 import { getSettingsHeaderMeta } from './settingsHeaderMeta';
 import { getSettingsNavGroups, getSettingsNavItem } from './settingsNavCatalog';
-import { shouldBlockSettingsRouteItem, shouldHideSettingsNavItem } from './settingsNavVisibility';
+import {
+  canMountSettingsPanel,
+  shouldBlockSettingsRouteItem,
+  shouldHideSettingsNavItem,
+} from './settingsNavVisibility';
+
+const SETTINGS_FALLBACK_TAB_ORDER: readonly SettingsTab[] = [
+  DEFAULT_SETTINGS_TAB,
+  'system-general',
+];
 
 interface UseSettingsAccessParams {
   activeTab: Accessor<SettingsTab>;
@@ -78,7 +87,10 @@ export function useSettingsAccess({
   const routeAccessContext = createMemo(() => {
     const hostedModeEnabled = isHostedModeEnabled();
     const settingsCapabilities = securityStatus()?.settingsCapabilities ?? null;
-    const settingsCapabilitiesResolved = securityStatus() !== null;
+    // A failed status request is a resolved denial, not permission to expose
+    // capability-gated routes. Keep an existing successful status usable while
+    // it refreshes, but fail closed once the first request settles without one.
+    const settingsCapabilitiesResolved = securityStatus() !== null || !securityStatusLoading();
 
     return {
       hasFeature,
@@ -184,14 +196,23 @@ export function useSettingsAccess({
       }
       // The default tab is itself gated now (Infrastructure needs
       // settings:read), so falling back to it unconditionally would strand a
-      // non-admin session on a blocked tab. Prefer the first tab this session
-      // can actually reach.
-      const fallbackTab = flatTabs()[0]?.id ?? DEFAULT_SETTINGS_TAB;
+      // non-admin session on a blocked tab. Use an explicit safe preference:
+      // catalog order can move and currently puts the Plans surface before the
+      // user-scoped General tab once the admin-only entries are removed.
+      const reachable = flatTabs().filter((item) =>
+        canMountSettingsPanel(item.id, securityStatus()?.settingsCapabilities),
+      );
+      const fallbackTab =
+        SETTINGS_FALLBACK_TAB_ORDER.find((tab) => reachable.some((item) => item.id === tab)) ??
+        reachable[0]?.id ??
+        DEFAULT_SETTINGS_TAB;
       setActiveTab(fallbackTab);
     }
   });
 
-  async function loadSecurityStatus() {
+  let securityStatusRequest: Promise<void> | null = null;
+
+  async function fetchSecurityStatus() {
     setSecurityStatusLoading(true);
     try {
       const { apiFetch } = await import('@/utils/apiClient');
@@ -210,6 +231,24 @@ export function useSettingsAccess({
       setSecurityStatusLoading(false);
     }
   }
+
+  function loadSecurityStatus(): Promise<void> {
+    if (securityStatusRequest) {
+      return securityStatusRequest;
+    }
+    const request = fetchSecurityStatus().finally(() => {
+      securityStatusRequest = null;
+    });
+    securityStatusRequest = request;
+    return request;
+  }
+
+  // Capability resolution belongs to the access model. Other Settings hooks
+  // may await the same request, but panel safety must not depend on an
+  // unrelated infrastructure bootstrap continuing to mount.
+  onMount(() => {
+    void loadSecurityStatus();
+  });
 
   return {
     securityStatus,

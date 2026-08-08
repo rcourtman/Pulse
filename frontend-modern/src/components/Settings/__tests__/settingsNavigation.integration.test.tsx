@@ -179,6 +179,7 @@ describe('settingsNavigation integration scaffold', () => {
           settingsCapabilities: {
             auditLog: true,
             auditWebhooksRead: true,
+            reportingRead: true,
             relayRead: true,
             roles: true,
             users: true,

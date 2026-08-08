@@ -5074,6 +5074,15 @@ surface that finds the capability withheld must present an access state and
 must not record the skipped fetch as coverage loss or mutate recovery
 freshness from it.
 
+The payload also gained `availabilityRead`, `pulseIntelligenceRead`,
+`diagnosticsRead`, `systemLogsRead`, and `reportingRead`. They are request-time
+authorization projections only: no capability is persisted and none changes a
+storage, backup, recovery, retention, or report artifact. In particular,
+`reportingRead` gates whether the Data & Reports panel may mount; it does not
+grant `advanced_reporting`, create a schedule, or imply that any generated
+artifact exists. The api-contracts entry owns the authoritative predicate and
+route proof.
+
 ### API-layer refusal logging moved to debug
 
 `internal/api/` is a canonical reference in this contract's Extension Points.

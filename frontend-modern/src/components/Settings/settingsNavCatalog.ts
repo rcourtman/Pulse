@@ -56,6 +56,7 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
         label: 'Availability checks',
         icon: Activity,
         iconProps: { strokeWidth: 2 },
+        requiredCapability: 'availabilityRead',
       },
     ],
   },
@@ -68,12 +69,14 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
         label: 'Provider & Models',
         icon: Sparkles,
         iconProps: { strokeWidth: 2 },
+        requiredCapability: 'pulseIntelligenceRead',
       },
       {
         id: 'system-ai-patrol',
         label: 'Patrol',
         icon: Activity,
         iconProps: { strokeWidth: 2 },
+        requiredCapability: 'pulseIntelligenceRead',
       },
       {
         id: 'system-billing',
@@ -96,6 +99,7 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
         ],
         icon: Terminal,
         iconProps: { strokeWidth: 2 },
+        requiredCapability: 'pulseIntelligenceRead',
       },
     ],
   },
@@ -211,6 +215,7 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
         icon: Activity,
         iconProps: { strokeWidth: 2 },
         hideWhenDemoMode: true,
+        requiredCapability: 'diagnosticsRead',
       },
       {
         id: 'support-reporting',
@@ -222,6 +227,7 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
         // revision): the panel renders its own upgrade gate, and hiding the
         // item made the capability undiscoverable — same rationale as Relay.
         hideWhenDemoMode: true,
+        requiredCapability: 'reportingRead',
       },
       {
         id: 'support-logs',
@@ -229,6 +235,7 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
         icon: Terminal,
         iconProps: { strokeWidth: 2 },
         hideWhenDemoMode: true,
+        requiredCapability: 'systemLogsRead',
       },
     ],
   },

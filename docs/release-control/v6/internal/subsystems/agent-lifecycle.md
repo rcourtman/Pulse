@@ -5997,6 +5997,15 @@ than the new field — the two are siblings precisely so neither page's gate can
 be moved by a change aimed at the other. The api-contracts entry holds the
 authoritative description and its proof.
 
+The same security-status payload now includes the additive
+`availabilityRead`, `pulseIntelligenceRead`, `diagnosticsRead`,
+`systemLogsRead`, and `reportingRead` fields. This is recorded because
+`internal/api/` is an Extension Point here; none of the fields changes an agent
+route, enrollment contract, report payload, capability manifest, or lifecycle
+decision. Agent-facing code must not infer any of these browser Settings grants
+from agent credentials. The api-contracts contract owns their predicates and
+proof.
+
 ### API-layer refusal logging moved to debug
 
 `internal/api/` is a canonical reference in this contract's Extension Points, so

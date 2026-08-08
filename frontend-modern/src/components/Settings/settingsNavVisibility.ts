@@ -17,6 +17,14 @@ export interface SettingsNavVisibilityContext {
   isRuntimeCapabilityBlocked?: (feature: string, reason?: string) => boolean;
 }
 
+export function canMountSettingsPanel(
+  tab: SettingsTab,
+  settingsCapabilities: Partial<SecurityStatusSettingsCapabilities> | null | undefined,
+): boolean {
+  const requiredCapability = getSettingsNavItem(tab)?.requiredCapability;
+  return !requiredCapability || settingsCapabilities?.[requiredCapability] === true;
+}
+
 function hasRequiredFeatures(tab: SettingsTab, hasFeature: (feature: string) => boolean): boolean {
   const requiredFeatures = getSettingsNavItem(tab)?.features ?? [];
   return requiredFeatures.every((feature) => hasFeature(feature));

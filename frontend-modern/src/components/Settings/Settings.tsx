@@ -26,6 +26,7 @@ import { useSystemSettingsState } from './useSystemSettingsState';
 import { useSettingsNavigation } from './useSettingsNavigation';
 import { getSettingsLoadingState } from '@/utils/settingsShellPresentation';
 import { isRouteableSettingsLocation } from './settingsNavigationModel';
+import { canMountSettingsPanel } from './settingsNavVisibility';
 import NotFound from '@/pages/NotFound';
 
 import { getRuntimeLimit, loadRuntimeCapabilities } from '@/stores/license';
@@ -155,6 +156,12 @@ const SettingsWorkspace: Component<SettingsProps> = (props) => {
   });
   const activeSettingsPanelEntry = createMemo(() => {
     const currentTab = activeTab();
+    // Panels fetch on mount. A capability-gated panel therefore mounts only
+    // after the server has explicitly granted its named capability; unresolved,
+    // failed, missing, and denied states all stay closed.
+    if (!canMountSettingsPanel(currentTab, securityStatus()?.settingsCapabilities)) {
+      return null;
+    }
     if (!flatTabs().some((tab) => tab.id === currentTab)) {
       return null;
     }

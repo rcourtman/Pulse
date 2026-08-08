@@ -351,8 +351,34 @@ describe('settings architecture guardrails', () => {
     // DEFAULT_SETTINGS_TAB points at the tab we just made blockable, so the
     // fallback must resolve a reachable tab rather than the hardcoded default,
     // or a non-admin lands back on the blocked route.
-    expect(settingsAccessSource).toContain('const fallbackTab = flatTabs()[0]?.id');
+    expect(settingsAccessSource).toContain('SETTINGS_FALLBACK_TAB_ORDER.find(');
     expect(settingsAccessSource).toContain('setActiveTab(fallbackTab)');
+  });
+
+  it('keeps capability-gated panels fail-closed before their routes resolve', () => {
+    expect(settingsSource).toContain(
+      'canMountSettingsPanel(currentTab, securityStatus()?.settingsCapabilities)',
+    );
+    expect(settingsAccessSource).toContain('securityStatus() !== null || !securityStatusLoading()');
+    expect(settingsAccessSource).toContain("DEFAULT_SETTINGS_TAB,\n  'system-general'");
+  });
+
+  it('gates every remaining admin-only Settings panel on its named capability', () => {
+    const adminOnlyTabs: Array<[string, string]> = [
+      ['monitoring-availability', 'availabilityRead'],
+      ['system-ai', 'pulseIntelligenceRead'],
+      ['system-ai-patrol', 'pulseIntelligenceRead'],
+      ['system-ai-assistant', 'pulseIntelligenceRead'],
+      ['support-diagnostics', 'diagnosticsRead'],
+      ['support-reporting', 'reportingRead'],
+      ['support-logs', 'systemLogsRead'],
+    ];
+
+    for (const [tab, capability] of adminOnlyTabs) {
+      expect(settingsNavCatalogSource).toMatch(
+        new RegExp(`id: '${tab}',[\\s\\S]*?requiredCapability: '${capability}',`),
+      );
+    }
   });
 
   it('gates the admin-only System tabs on the served systemSettingsRead capability', () => {

@@ -77,6 +77,11 @@ func TestSettingsCapabilitiesMatchRouteEnforcementWithoutRBAC(t *testing.T) {
 		"authenticationRead",
 		"authenticationWrite",
 		"infrastructureRead",
+		"availabilityRead",
+		"pulseIntelligenceRead",
+		"diagnosticsRead",
+		"systemLogsRead",
+		"reportingRead",
 		// Sibling of infrastructureRead for the admin-only System tabs. Same
 		// derivation today, but each names its own surface so tightening one
 		// gate cannot silently hide the other's tabs.
@@ -96,6 +101,13 @@ func TestSettingsCapabilitiesMatchRouteEnforcementWithoutRBAC(t *testing.T) {
 		// them, so a withheld infrastructureRead has to line up with a refusal.
 		{http.MethodGet, "/api/config/nodes"},
 		{http.MethodGet, "/api/system/settings"},
+		{http.MethodGet, "/api/availability-targets"},
+		{http.MethodGet, "/api/settings/ai"},
+		{http.MethodGet, "/api/diagnostics"},
+		{http.MethodGet, "/api/logs/level"},
+		{http.MethodGet, "/api/logs/stream"},
+		{http.MethodGet, "/api/admin/reports/catalog"},
+		{http.MethodGet, "/api/admin/reports/schedules"},
 	} {
 		req := httptest.NewRequest(probe.method, probe.path, nil)
 		req.AddCookie(capabilitySessionCookie(t, "sso:outsider@example.com"))
@@ -118,9 +130,38 @@ func TestSettingsCapabilitiesGrantConfiguredAdminWithoutRBAC(t *testing.T) {
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
 
 	caps := fetchSettingsCapabilities(t, router, capabilitySessionCookie(t, "admin"))
-	for _, key := range []string{"apiAccessRead", "apiAccessWrite", "singleSignOnRead", "singleSignOnWrite", "infrastructureRead", "systemSettingsRead"} {
+	for _, key := range []string{
+		"apiAccessRead",
+		"apiAccessWrite",
+		"singleSignOnRead",
+		"singleSignOnWrite",
+		"infrastructureRead",
+		"availabilityRead",
+		"pulseIntelligenceRead",
+		"diagnosticsRead",
+		"systemLogsRead",
+		"reportingRead",
+		"systemSettingsRead",
+	} {
 		if caps[key] != true {
 			t.Fatalf("%s = %v for the configured admin, want true", key, caps[key])
+		}
+	}
+
+	for _, path := range []string{
+		"/api/availability-targets",
+		"/api/settings/ai",
+		"/api/diagnostics",
+		"/api/logs/level",
+		"/api/admin/reports/catalog",
+		"/api/admin/reports/schedules",
+	} {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		req.AddCookie(capabilitySessionCookie(t, "admin"))
+		rec := httptest.NewRecorder()
+		router.Handler().ServeHTTP(rec, req)
+		if rec.Code == http.StatusForbidden {
+			t.Fatalf("GET %s = 403 for the configured admin, contradicting its capability", path)
 		}
 	}
 }

@@ -9098,3 +9098,32 @@ receiving 200 from the runtime route while still receiving 403 from the admin
 route. `TestHandleGetRuntimeDisplay_PublishesOnlyPresentationFields` pins the
 serialized whitelist, and the frontend bootstrap tests pin that
 `useAppRuntimeState` never calls `getSystemSettings()`.
+
+### Security status names every admin-only Settings panel capability
+
+The authenticated `GET /api/security/status` payload also carries five
+additive, fail-closed capabilities for Settings panels that read privileged
+routes on mount:
+
+- `availabilityRead` mirrors `RequireAdmin` + `settings:read` on
+  `/api/availability-targets`;
+- `diagnosticsRead` mirrors the same pair on `/api/diagnostics`;
+- `systemLogsRead` mirrors the pair on `/api/logs/level`, `/api/logs/stream`,
+  and `/api/logs/download`;
+- `pulseIntelligenceRead` combines the handler's settings-admin/scope check
+  with `RequirePermission(read, settings)` from `/api/settings/ai`;
+- `reportingRead` combines `ensureAdminSession`, `settings:read`, and
+  `RequirePermission(read, nodes)` from `/api/admin/reports/catalog`.
+
+Those last two must not collapse to `canReadSettings`: a custom authorizer can
+deny the route even when the caller has the settings scope. Reporting's
+`advanced_reporting` entitlement stays separate; the catalog is intentionally
+available without it so an authorized administrator can see the inline upgrade
+state, while a non-admin cannot reach the reporting surface at all.
+
+`TestContract_SecurityStatusAdminOnlySettingsCapabilitiesTrackMountRoutes`
+pins the settings-scope grant and refusal against each unconditional mount
+route. `TestContract_SecurityStatusPermissionedSettingsCapabilitiesIncludeRouteAuthorization`
+pins the extra authorizer predicates, and
+`TestSettingsCapabilitiesMatchRouteEnforcementWithoutRBAC` proves that a
+non-admin browser session receives both false capabilities and matching 403s.

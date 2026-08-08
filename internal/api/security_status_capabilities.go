@@ -20,6 +20,20 @@ type securityStatusSettingsCapabilities struct {
 	// that would otherwise mount 15s and 30s pollers whose every request is
 	// refused and logged at warn level.
 	InfrastructureRead bool `json:"infrastructureRead"`
+	// AvailabilityRead, DiagnosticsRead, and SystemLogsRead mirror the
+	// RequireAdmin + settings:read guards on the read routes mounted by those
+	// Settings panels.
+	AvailabilityRead bool `json:"availabilityRead"`
+	DiagnosticsRead  bool `json:"diagnosticsRead"`
+	SystemLogsRead   bool `json:"systemLogsRead"`
+	// PulseIntelligenceRead also includes read:settings authorization because
+	// /api/settings/ai applies RequirePermission before its handler repeats the
+	// settings:read admin/scope check.
+	PulseIntelligenceRead bool `json:"pulseIntelligenceRead"`
+	// ReportingRead includes read:nodes authorization as well as the explicit
+	// admin session and settings:read checks on the reporting catalog route.
+	// The advanced_reporting feature gate remains a separate UI concern.
+	ReportingRead bool `json:"reportingRead"`
 	// SystemSettingsRead mirrors the same RequireAdmin + settings:read gate for
 	// the System → Network, Pulse server updates, and Recovery tabs, whose
 	// panels read and write the public URL and CORS boundaries, the server
@@ -263,24 +277,33 @@ func (r *Router) securityStatusSettingsCapabilitiesFromSnapshot(snapshot securit
 	canReadAudit := snapshot.passesPrivilegedSessionGate() &&
 		r.canAccessPermissionSurface(snapshot, internalauth.ActionRead, internalauth.ResourceAuditLogs, config.ScopeAuditRead)
 	canManageRoles := snapshot.passesPrivilegedSessionGate() && canManageUsers
+	canReadPulseIntelligence := canReadSettings &&
+		r.canAccessPermissionSurface(snapshot, internalauth.ActionRead, internalauth.ResourceSettings, config.ScopeSettingsRead)
+	canReadReporting := canReadSettings &&
+		r.canAccessPermissionSurface(snapshot, internalauth.ActionRead, internalauth.ResourceNodes, config.ScopeSettingsRead)
 
 	return securityStatusSettingsCapabilities{
-		InfrastructureRead:  canReadSettings,
-		SystemSettingsRead:  canReadSettings,
-		APIAccessRead:       r.canAccessPermissionSurface(snapshot, internalauth.ActionAdmin, internalauth.ResourceUsers, config.ScopeSettingsRead),
-		APIAccessWrite:      r.canAccessPermissionSurface(snapshot, internalauth.ActionAdmin, internalauth.ResourceUsers, config.ScopeSettingsWrite),
-		AuthenticationRead:  canReadSettings,
-		AuthenticationWrite: canAdminSettings,
-		SingleSignOnRead:    r.canAccessPermissionSurface(snapshot, internalauth.ActionAdmin, internalauth.ResourceUsers, config.ScopeSettingsRead),
-		SingleSignOnWrite:   r.canAccessPermissionSurface(snapshot, internalauth.ActionAdmin, internalauth.ResourceUsers, config.ScopeSettingsWrite),
-		Roles:               canManageRoles,
-		Users:               canManageRoles,
-		AuditLog:            canReadAudit,
-		AuditWebhooksRead:   snapshot.passesPrivilegedSessionGate() && r.canAccessPermissionSurface(snapshot, internalauth.ActionAdmin, internalauth.ResourceAuditLogs, config.ScopeSettingsRead),
-		AuditWebhooksWrite:  snapshot.passesPrivilegedSessionGate() && r.canAccessPermissionSurface(snapshot, internalauth.ActionAdmin, internalauth.ResourceAuditLogs, config.ScopeSettingsWrite),
-		RelayRead:           canReadSettings,
-		RelayWrite:          canAdminSettings,
-		BillingAdmin:        r.canAccessPlatformAdminSurface(snapshot),
+		InfrastructureRead:    canReadSettings,
+		AvailabilityRead:      canReadSettings,
+		PulseIntelligenceRead: canReadPulseIntelligence,
+		DiagnosticsRead:       canReadSettings,
+		SystemLogsRead:        canReadSettings,
+		ReportingRead:         canReadReporting,
+		SystemSettingsRead:    canReadSettings,
+		APIAccessRead:         r.canAccessPermissionSurface(snapshot, internalauth.ActionAdmin, internalauth.ResourceUsers, config.ScopeSettingsRead),
+		APIAccessWrite:        r.canAccessPermissionSurface(snapshot, internalauth.ActionAdmin, internalauth.ResourceUsers, config.ScopeSettingsWrite),
+		AuthenticationRead:    canReadSettings,
+		AuthenticationWrite:   canAdminSettings,
+		SingleSignOnRead:      r.canAccessPermissionSurface(snapshot, internalauth.ActionAdmin, internalauth.ResourceUsers, config.ScopeSettingsRead),
+		SingleSignOnWrite:     r.canAccessPermissionSurface(snapshot, internalauth.ActionAdmin, internalauth.ResourceUsers, config.ScopeSettingsWrite),
+		Roles:                 canManageRoles,
+		Users:                 canManageRoles,
+		AuditLog:              canReadAudit,
+		AuditWebhooksRead:     snapshot.passesPrivilegedSessionGate() && r.canAccessPermissionSurface(snapshot, internalauth.ActionAdmin, internalauth.ResourceAuditLogs, config.ScopeSettingsRead),
+		AuditWebhooksWrite:    snapshot.passesPrivilegedSessionGate() && r.canAccessPermissionSurface(snapshot, internalauth.ActionAdmin, internalauth.ResourceAuditLogs, config.ScopeSettingsWrite),
+		RelayRead:             canReadSettings,
+		RelayWrite:            canAdminSettings,
+		BillingAdmin:          r.canAccessPlatformAdminSurface(snapshot),
 	}
 }
 

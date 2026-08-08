@@ -1,23 +1,31 @@
 {
   "version": 1,
-  "base_sha": "fbee92614a1a837d811e533eaf47d722db4ff71f",
-  "verified_at": "2026-08-08T00:05:39Z",
+  "base_sha": "ff03168e5eec670822fcd0a5315cf84f6ac74bd1",
+  "verified_at": "2026-08-08T00:17:09Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/api/settings.ts",
-    "frontend-modern/src/stores/systemSettings.ts",
-    "frontend-modern/src/useAppRuntimeState.ts",
-    "frontend-modern/src/utils/layout.ts"
+    "frontend-modern/src/components/Settings/Settings.tsx",
+    "frontend-modern/src/components/Settings/settingsNavCatalog.ts",
+    "frontend-modern/src/components/Settings/settingsNavVisibility.ts",
+    "frontend-modern/src/components/Settings/useSettingsAccess.ts",
+    "frontend-modern/src/types/config.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/api/settings.ts": "74ba64f4854a293a79d8339271ff442846121fdd9046ff873ff0abf2e72a1f79",
-    "frontend-modern/src/stores/systemSettings.ts": "fdb3e8bbe05854f528d873a2181916bd1014f8f48e131353f39de1f2a105ec71",
-    "frontend-modern/src/useAppRuntimeState.ts": "4cb1c3b50f1ad611299cf294363d3b36f8e88de99a581bb3478f4737a4fbf489",
-    "frontend-modern/src/utils/layout.ts": "d82536f0e7d2ea135d0d92a882942db15eded5f78fdea34818b04bd9dfa81fbc"
+    "frontend-modern/src/components/Settings/Settings.tsx": "3053ee87a22ed5eecff3f9edac20260c23b5f6a48c80ce2ff592ff74b8687da2",
+    "frontend-modern/src/components/Settings/settingsNavCatalog.ts": "4bed8aa881bc59af56119e079ed97dc23ac9d983e227f3f0d4877e3ae3d20d04",
+    "frontend-modern/src/components/Settings/settingsNavVisibility.ts": "eefa115abc68f9b9f636eb105bbd1b71c529ec9f731bb4eb6de785c26eae2c83",
+    "frontend-modern/src/components/Settings/useSettingsAccess.ts": "895b74346f56e10f0a21fc2e808cf098a9b956da262b3b73ba067b46c30b8339",
+    "frontend-modern/src/types/config.ts": "9dc0faa8e9b41eab526245aae72e447535709108c0b109c76545ab73500a2588"
   },
   "routes": [
-    "/",
-    "/api/runtime/display"
+    "/settings",
+    "/settings/monitoring/availability",
+    "/settings/pulse-intelligence/provider",
+    "/settings/pulse-intelligence/patrol",
+    "/settings/pulse-intelligence/assistant",
+    "/settings/support/diagnostics",
+    "/settings/support/reporting",
+    "/settings/support/logs"
   ],
   "viewports": [
     {
@@ -25,19 +33,23 @@
       "height": 800
     },
     {
-      "width": 375,
+      "width": 390,
       "height": 812
     }
   ],
   "states": [
-    "Fresh isolated backend returned the configured authenticated runtime projection with fullWidthMode=true, disableDockerUpdateActions=true, and reduceProUpsellNoise=true.",
-    "Authenticated desktop bootstrap rendered the current embedded build at 1280x800 with the full shell, 1280px document width, and no console errors.",
-    "Authenticated narrow bootstrap rendered the current embedded build at 375x812 with the mobile shell and document scroll width equal to the 375px viewport."
+    "Real proxy-auth viewer at 1280x800: /settings settled on /settings/system-general, the General panel rendered, and the Settings navigation contained only Plans & Billing, General, and Security Overview; Availability checks, Provider & Models, Patrol, Assistant, Diagnostics & Health, Data & Reports, and System Logs were absent.",
+    "Same viewer from each named admin-only deep link: all seven routes settled on /settings/system-general. An instrumented proxy recorded an empty request list for /api/availability-targets, /api/settings/ai*, /api/diagnostics*, /api/admin/reports*, and /api/logs*, proving the panels did not mount during first paint or fallback.",
+    "Real proxy-auth administrator at 1280x800: all seven navigation entries remained visible; opening each rendered its expected heading at its canonical route. security/status returned all five named capabilities true, and the representative read routes returned 200.",
+    "Viewer at 390x812: /settings again settled on General; the opened mobile Settings drawer contained only Plans & Billing, General, and Security Overview, and document scroll width equalled the 390px viewport.",
+    "Administrator at 390x812: /settings/support/logs rendered the System Logs panel, and document scroll width equalled the 390px viewport."
   ],
   "interactions": [
-    "Built the production frontend and launched the current backend on an isolated local port and temporary data directory so concurrent audit-repair runtimes were untouched.",
-    "Configured the four-field runtime display response through the admin-only update route, then read GET /api/runtime/display and confirmed the explicit projection values.",
-    "Signed in to the isolated current build, reloaded after the server display settings were active, and inspected authenticated shell state at desktop and narrow viewports.",
-    "Read the desktop console errors and confirmed none were emitted."
+    "Built the current production frontend embed and current backend binary, then ran them on isolated localhost ports behind disposable viewer and administrator proxy-auth identities.",
+    "Loaded /settings as the viewer, inspected the desktop navigation and General panel, then loaded every named admin-only deep link and checked its settled URL.",
+    "Captured protected API-family requests in the viewer proxy while exercising /settings and all seven direct deep links; the captured list remained empty.",
+    "Loaded /settings as the administrator and clicked Availability checks, Provider & Models, Patrol, Assistant, Diagnostics & Health, Data & Reports, and System Logs, checking each canonical URL and rendered page heading.",
+    "Loaded the viewer at 390x812, opened the mobile Settings drawer, inspected its entries and horizontal overflow, then loaded System Logs as the administrator at the same viewport and checked its rendered heading and overflow.",
+    "Read the administrator security-status capability projection and representative protected read routes as a backend A/B control; all five capabilities were true and all five routes returned 200."
   ]
 }

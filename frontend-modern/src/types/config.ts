@@ -97,6 +97,11 @@ export interface NodesConfig {
  */
 export interface SecurityStatusSettingsCapabilities {
   infrastructureRead: boolean;
+  availabilityRead: boolean;
+  pulseIntelligenceRead: boolean;
+  diagnosticsRead: boolean;
+  systemLogsRead: boolean;
+  reportingRead: boolean;
   /**
    * The same RequireAdmin + settings:read gate as infrastructureRead, scoped to
    * the System > Network / Pulse server updates / Recovery tabs. A sibling

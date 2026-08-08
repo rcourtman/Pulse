@@ -13,6 +13,7 @@ const presentationPolicyIsReadOnlyMock = vi.fn();
 const sessionPresentationPolicyResolvedMock = vi.fn();
 const shouldHideSettingsNavItemMock = vi.fn();
 const shouldBlockSettingsRouteItemMock = vi.fn();
+const apiFetchMock = vi.fn();
 
 vi.mock('@/stores/license', () => ({
   hasFeature: (...args: unknown[]) => hasFeatureMock(...args),
@@ -35,6 +36,28 @@ vi.mock('@/stores/sessionPresentationPolicy', () => ({
 }));
 
 vi.mock('../settingsNavVisibility', () => ({
+  canMountSettingsPanel: (tab: string) =>
+    ![
+      'infrastructure-systems',
+      'monitoring-availability',
+      'system-ai',
+      'system-ai-patrol',
+      'system-ai-assistant',
+      'support-diagnostics',
+      'support-reporting',
+      'support-logs',
+      'system-network',
+      'system-updates',
+      'system-recovery',
+      'api',
+      'security-auth',
+      'security-sso',
+      'security-roles',
+      'security-users',
+      'security-audit',
+      'security-webhooks',
+      'system-relay',
+    ].includes(tab),
   shouldBlockSettingsRouteItem: (...args: unknown[]) => shouldBlockSettingsRouteItemMock(...args),
   shouldHideSettingsNavItem: (...args: unknown[]) => shouldHideSettingsNavItemMock(...args),
 }));
@@ -44,6 +67,10 @@ vi.mock('@/utils/logger', () => ({
     debug: vi.fn(),
     error: vi.fn(),
   },
+}));
+
+vi.mock('@/utils/apiClient', () => ({
+  apiFetch: (...args: unknown[]) => apiFetchMock(...args),
 }));
 
 function renderHarness(setActiveTabSpy: (tab: string) => void, initialTab = 'organization-access') {
@@ -73,6 +100,7 @@ describe('useSettingsAccess', () => {
     sessionPresentationPolicyResolvedMock.mockReset();
     shouldHideSettingsNavItemMock.mockReset();
     shouldBlockSettingsRouteItemMock.mockReset();
+    apiFetchMock.mockReset();
 
     hasFeatureMock.mockImplementation((feature: string) => feature === 'multi_tenant');
     runtimeCapabilitiesLoadedMock.mockReturnValue(true);
@@ -86,6 +114,10 @@ describe('useSettingsAccess', () => {
       (tab: string) => tab === 'organization-access',
     );
     shouldBlockSettingsRouteItemMock.mockReturnValue(false);
+    apiFetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({ settingsCapabilities: {} }),
+    });
   });
 
   afterEach(() => {
@@ -102,7 +134,7 @@ describe('useSettingsAccess', () => {
     });
   });
 
-  it('falls back to the default tab when the current route is no longer allowed', async () => {
+  it('falls back to General while the default capability is unresolved', async () => {
     const setActiveTabSpy = vi.fn();
     hasFeatureMock.mockReturnValue(false);
     shouldBlockSettingsRouteItemMock.mockImplementation(
@@ -112,8 +144,87 @@ describe('useSettingsAccess', () => {
     renderHarness(setActiveTabSpy);
 
     await waitFor(() => {
-      expect(setActiveTabSpy).toHaveBeenCalledWith('infrastructure-systems');
+      expect(setActiveTabSpy).toHaveBeenCalledWith('system-general');
     });
+  });
+
+  it('prefers General over catalog order when admin-only routes are blocked', async () => {
+    const setActiveTabSpy = vi.fn();
+    hasFeatureMock.mockReturnValue(false);
+    const blockedForNonAdmin = new Set([
+      'organization-access',
+      'infrastructure-systems',
+      'monitoring-availability',
+      'system-ai',
+      'system-ai-patrol',
+      'system-ai-assistant',
+      'support-diagnostics',
+      'support-reporting',
+      'support-logs',
+      'system-network',
+      'system-updates',
+      'system-recovery',
+      'api',
+      'security-auth',
+      'security-sso',
+      'security-roles',
+      'security-users',
+      'security-audit',
+      'security-webhooks',
+      'system-relay',
+    ]);
+    shouldBlockSettingsRouteItemMock.mockImplementation((tab: string) =>
+      blockedForNonAdmin.has(tab),
+    );
+
+    renderHarness(setActiveTabSpy);
+
+    await waitFor(() => {
+      expect(setActiveTabSpy).toHaveBeenCalledWith('system-general');
+    });
+    expect(setActiveTabSpy).not.toHaveBeenCalledWith('system-billing');
+  });
+
+  it('treats a failed security-status request as a resolved denial', async () => {
+    const setActiveTabSpy = vi.fn();
+    apiFetchMock.mockResolvedValue({ ok: false, status: 503 });
+    shouldBlockSettingsRouteItemMock.mockImplementation(
+      (tab: string, context: { settingsCapabilitiesResolved?: boolean }) =>
+        tab === 'infrastructure-systems' && context.settingsCapabilitiesResolved === true,
+    );
+
+    renderHarness(setActiveTabSpy, 'infrastructure-systems');
+
+    await waitFor(() => {
+      expect(setActiveTabSpy).toHaveBeenCalledWith('system-general');
+    });
+  });
+
+  it('deduplicates concurrent security-status loads', async () => {
+    let resolveFetch!: (value: { ok: boolean; json: () => Promise<unknown> }) => void;
+    apiFetchMock.mockReturnValue(
+      new Promise((resolve) => {
+        resolveFetch = resolve;
+      }),
+    );
+    let access!: ReturnType<typeof useSettingsAccess>;
+    render(() => {
+      const [activeTab, setActiveTab] = createSignal('system-general' as never);
+      access = useSettingsAccess({
+        activeTab,
+        setActiveTab: setActiveTab as never,
+        searchQuery: () => '',
+      });
+      return null;
+    });
+
+    await waitFor(() => expect(apiFetchMock).toHaveBeenCalledTimes(1));
+    const first = access.loadSecurityStatus();
+    const second = access.loadSecurityStatus();
+    expect(apiFetchMock).toHaveBeenCalledTimes(1);
+
+    resolveFetch({ ok: true, json: async () => ({ settingsCapabilities: {} }) });
+    await Promise.all([first, second]);
   });
 
   it('keeps direct feature-gated routes active when the panel owns the locked state', async () => {
