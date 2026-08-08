@@ -167,7 +167,7 @@ describe('BusinessEstateCard', () => {
     expect(JSON.parse(localStorage.getItem(DISMISSED_KEY) ?? 'false')).toBe(true);
   });
 
-  it('navigates to the plan route and dismisses permanently on the primary action', async () => {
+  it('navigates to plan selection and dismisses permanently on the primary action', async () => {
     seedEligibleState();
 
     await renderCard();
@@ -176,7 +176,7 @@ describe('BusinessEstateCard', () => {
     fireEvent.click(screen.getByRole('button', { name: 'See business plans' }));
 
     expect(mockNavigate).toHaveBeenCalledWith(
-      '/settings/pulse-intelligence/billing/plan?source=estate-card',
+      '/settings/pulse-intelligence/billing/plan?intent=self_hosted_plan&source=estate-card',
     );
     expect(queryCard()).toBeNull();
     expect(JSON.parse(localStorage.getItem(DISMISSED_KEY) ?? 'false')).toBe(true);

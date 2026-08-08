@@ -99,7 +99,7 @@ describe('PatrolIntelligenceHeader', () => {
     expect(headerSource).toContain('sm:min-h-0');
   });
 
-  it('makes Patrol mode a simple four-level choice without rendering plan-locked paid modes', () => {
+  it('makes Patrol mode a simple four-level choice with plan-locked paid modes disabled and Pro-badged', () => {
     expect(PATROL_AUTONOMY_POLICY_PRESENTATION).toEqual({
       monitor: {
         label: 'Watch only',
@@ -222,7 +222,7 @@ describe('PatrolIntelligenceHeader', () => {
       locked: true,
       title: 'Watch only',
       body: 'This install watches infrastructure and shows issues.',
-      actionLabel: 'Plans & Billing',
+      actionLabel: 'Unlock Patrol modes',
       destination: {
         href: '/settings/pulse-intelligence/billing/plan',
         external: false,

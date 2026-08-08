@@ -142,7 +142,10 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
     }),
   );
   const shouldShowAutonomyOptions = createMemo(
-    () => canChooseAutonomyLevel() || autonomyAvailability().kind === 'runtime_locked',
+    () =>
+      canChooseAutonomyLevel() ||
+      autonomyAvailability().kind === 'runtime_locked' ||
+      (autonomyAvailability().kind === 'plan_locked' && !commercialSurfacesHidden()),
   );
   const showAutonomyUpgradeAction = createMemo(
     () =>

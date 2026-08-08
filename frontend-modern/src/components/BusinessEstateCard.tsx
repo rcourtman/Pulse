@@ -11,6 +11,7 @@ import { presentationPolicyHidesUpgradePrompts } from '@/stores/sessionPresentat
 import {
   getSelfHostedBillingHref,
   PURCHASE_HANDOFF_SOURCE_ESTATE_CARD,
+  SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_INTENT,
 } from '@/utils/pricingHandoff';
 import { ActionIconButton, Button } from '@/components/shared/Button';
 import BriefcaseIcon from 'lucide-solid/icons/briefcase';
@@ -107,7 +108,12 @@ export function BusinessEstateCard() {
   const handleSeePlans = () => {
     setDismissed(true);
     setShowCard(false);
-    navigate(getSelfHostedBillingHref('plan', { source: PURCHASE_HANDOFF_SOURCE_ESTATE_CARD }));
+    navigate(
+      getSelfHostedBillingHref('plan', {
+        intent: SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_INTENT,
+        source: PURCHASE_HANDOFF_SOURCE_ESTATE_CARD,
+      }),
+    );
   };
 
   createEffect(() => {

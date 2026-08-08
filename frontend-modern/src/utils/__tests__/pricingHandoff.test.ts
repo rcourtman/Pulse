@@ -46,27 +46,27 @@ describe('pricingHandoff', () => {
     expect(getInProductPricingDestination('cloud')).toBeUndefined();
   });
 
-  it('routes paid self-hosted feature upgrades to the in-product billing plan page with gate attribution', () => {
+  it('routes paid self-hosted feature upgrades to in-product plan selection with gate attribution', () => {
     expect(getUpgradeFallbackDestination('relay')).toBe(
-      `${SELF_HOSTED_PRO_BILLING_PLAN_HREF}?source=gate-relay`,
+      `${SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_HREF}&source=gate-relay`,
     );
     expect(getUpgradeFallbackDestination('mobile_app')).toBe(
-      `${SELF_HOSTED_PRO_BILLING_PLAN_HREF}?source=gate-mobile-app`,
+      `${SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_HREF}&source=gate-mobile-app`,
     );
     expect(getUpgradeFallbackDestination('push_notifications')).toBe(
-      `${SELF_HOSTED_PRO_BILLING_PLAN_HREF}?source=gate-push-notifications`,
+      `${SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_HREF}&source=gate-push-notifications`,
     );
     expect(getUpgradeFallbackDestination('ai_alerts')).toBe(
-      `${SELF_HOSTED_PRO_BILLING_PLAN_HREF}?source=gate-ai-alerts`,
+      `${SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_HREF}&source=gate-ai-alerts`,
     );
     expect(getUpgradeFallbackDestination('ai_autofix')).toBe(
       `${SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_HREF}&source=gate-ai-autofix`,
     );
     expect(getUpgradeFallbackDestination('rbac')).toBe(
-      `${SELF_HOSTED_PRO_BILLING_PLAN_HREF}?source=gate-rbac`,
+      `${SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_HREF}&source=gate-rbac`,
     );
     expect(getUpgradeFallbackDestination('advanced_reporting')).toBe(
-      `${SELF_HOSTED_PRO_BILLING_PLAN_HREF}?source=gate-reporting`,
+      `${SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_HREF}&source=gate-reporting`,
     );
   });
 
@@ -106,9 +106,7 @@ describe('pricingHandoff', () => {
     };
     for (const key of paidCatalogFeatureKeys) {
       expect(getUpgradeFallbackDestination(key)).toBe(
-        key === 'ai_autofix'
-          ? `${SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_HREF}&source=gate-ai-autofix`
-          : `${SELF_HOSTED_PRO_BILLING_PLAN_HREF}?source=${expectedGateSources[key]}`,
+        `${SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_HREF}&source=${expectedGateSources[key]}`,
       );
     }
   });
@@ -143,7 +141,9 @@ describe('pricingHandoff', () => {
       `${SELF_HOSTED_PURCHASE_START_PATH}?feature=relay`,
     );
     // The public /pricing resolver stays unsourced for mapped features.
-    expect(getPricingRouteDestination('?feature=rbac')).toBe(SELF_HOSTED_PRO_BILLING_PLAN_HREF);
+    expect(getPricingRouteDestination('?feature=rbac')).toBe(
+      SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_HREF,
+    );
   });
 
   it('keeps retired trial-expired out of upgrade fallbacks while preserving neutral legacy arrival', () => {

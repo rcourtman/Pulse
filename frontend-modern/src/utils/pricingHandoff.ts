@@ -102,17 +102,17 @@ const IN_PRODUCT_PRICING_DESTINATIONS: Record<string, string> = {
   // Paid self-hosted feature keys: route to the owned billing plan page instead
   // of the Pulse Account purchase-start handoff, which fails for local instances
   // without PublicURL.
-  mobile_app: SELF_HOSTED_PRO_BILLING_PLAN_HREF,
-  push_notifications: SELF_HOSTED_PRO_BILLING_PLAN_HREF,
-  ai_alerts: SELF_HOSTED_PRO_BILLING_PLAN_HREF,
+  mobile_app: SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_HREF,
+  push_notifications: SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_HREF,
+  ai_alerts: SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_HREF,
   ai_autofix: SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_HREF,
-  relay: SELF_HOSTED_PRO_BILLING_PLAN_HREF,
-  rbac: SELF_HOSTED_PRO_BILLING_PLAN_HREF,
-  audit_logging: SELF_HOSTED_PRO_BILLING_PLAN_HREF,
-  advanced_reporting: SELF_HOSTED_PRO_BILLING_PLAN_HREF,
-  agent_profiles: SELF_HOSTED_PRO_BILLING_PLAN_HREF,
-  external_probe: SELF_HOSTED_PRO_BILLING_PLAN_HREF,
-  long_term_metrics: SELF_HOSTED_PRO_BILLING_PLAN_HREF,
+  relay: SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_HREF,
+  rbac: SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_HREF,
+  audit_logging: SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_HREF,
+  advanced_reporting: SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_HREF,
+  agent_profiles: SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_HREF,
+  external_probe: SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_HREF,
+  long_term_metrics: SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_HREF,
 };
 
 const RETIRED_TRIAL_PRICING_FEATURES = new Set(['trial_expired']);

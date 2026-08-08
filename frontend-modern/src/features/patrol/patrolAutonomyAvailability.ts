@@ -83,7 +83,7 @@ export function getPatrolAutonomyAvailabilityPresentation(
     ...(input.upgradePromptsHidden
       ? {}
       : {
-          actionLabel: 'Plans & Billing',
+          actionLabel: 'Unlock Patrol modes',
           destination: input.planUpgradeDestination,
         }),
   };
