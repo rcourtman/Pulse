@@ -1,40 +1,41 @@
 {
   "version": 1,
-  "base_sha": "98ecfb3f10143cdb7b317cb7ab410ae5b2852ab2",
-  "verified_at": "2026-08-08T00:30:24Z",
+  "base_sha": "d1f687c0ea8ea6cfd91f6fc942a82f67b25652ab",
+  "verified_at": "2026-08-08T02:35:34Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/stores/websocket.ts",
-    "frontend-modern/src/types/api.ts"
+    "frontend-modern/src/api/runtimeInventorySources.ts",
+    "frontend-modern/src/components/Workloads/WorkloadsSurface.tsx",
+    "frontend-modern/src/components/Workloads/useWorkloadsState.ts",
+    "frontend-modern/src/components/Workloads/workloadInventorySourceIssues.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/stores/websocket.ts": "2b6d4ae3c797c00e18bd4ec7ad3582c3878bf673345604efd65f8d030fd6de2d",
-    "frontend-modern/src/types/api.ts": "5ef74848b2fb1eb1a2f3a3e0d5b6d7832247755cd79cba14eb8a33f1facf7e59"
+    "frontend-modern/src/api/runtimeInventorySources.ts": "39ceabc3047ad6013d6173a6514b39130e99fec52343200ebe84a3c6a929b5b6",
+    "frontend-modern/src/components/Workloads/WorkloadsSurface.tsx": "b389fe9ad4bbe0df8f791eca104159e803373bbbbbb5f3b0bd1eb4c65cc9ecaf",
+    "frontend-modern/src/components/Workloads/useWorkloadsState.ts": "3fa8ba82ae7646024b6510fe1eede14157b9bb85332f639002d34a0368277c5a",
+    "frontend-modern/src/components/Workloads/workloadInventorySourceIssues.ts": "5f9bdc807aebbfa4e1c1c33da75bd1ffe834c4cf957a10a0135c20cd8191241d"
   },
-  "routes": [
-    "/docker/overview",
-    "/standalone/machines"
-  ],
+  "routes": ["/proxmox/overview"],
   "viewports": [
     {
       "width": 1280,
       "height": 800
     },
     {
-      "width": 375,
-      "height": 812
+      "width": 390,
+      "height": 844
     }
   ],
   "states": [
-    "Authenticated Docker overview at 1280x800 on the final combined build, then stopped the backend: the amber reconnect status appeared while the previously received Tower host and pbs container rows remained coherent and readable.",
-    "At 375x812 the reconnecting Docker view retained its compact responsive tables, mobile navigation, and a document scroll width equal to the 375px viewport.",
-    "Mobile navigation reached /standalone/machines and returned to /docker/overview with the reconnect status intact; the newly mounted Machines REST projection failed closed while the retained Docker snapshot remained rendered on return.",
-    "The in-app browser console showed the expected reconnect diagnostics and REST fetch failures caused by deliberately stopping the backend, with no exception or rendering failure attributable to the changed WebSocket store."
+    "Authenticated Proxmox overview on the final d1f687c0 replay issued GET /api/runtime/inventory-sources and received HTTP 200 application/json, with no /api/connections request in the captured load.",
+    "A controlled viewer-safe unreachable PVE projection rendered Source unreachable: Primary lab with only the generic recovery message and no raw connection error or administrative detail.",
+    "The projected source-health state remained readable at 1280x800 and 390x844; the mobile document clientWidth and scrollWidth were both 390 pixels.",
+    "The local development WebSocket reported its expected origin rejection; the verified runtime inventory HTTP request and rendered source-health state completed independently."
   ],
   "interactions": [
-    "Built and started the final backend plus frontend source on http://127.0.0.1:5174, signed in with the documented development account, and confirmed a connected Docker host/container snapshot at 1280x800.",
-    "Stopped the backend, captured and inspected the rendered desktop reconnect state, and confirmed the mounted Docker snapshot remained visible rather than accepting an unbased stream.",
-    "Resized to 375x812, verified the retained Docker tables and horizontal overflow metrics, then used mobile navigation to open Machines and return to Docker during reconnect.",
-    "Read the browser console after the interaction matrix and classified the reconnect and failed REST diagnostics against the deliberate backend shutdown."
+    "Built the production frontend and final Pulse binary from d1f687c0, started the isolated mock runtime, and opened /proxmox/overview in the in-app browser.",
+    "Captured the final page-load network events and confirmed the Workloads read path used only /api/runtime/inventory-sources rather than the admin-only /api/connections route.",
+    "Intercepted only the runtime inventory response locally with the exact narrow source projection, applied an unmatched workload search to expose source health, and inspected the rendered desktop and mobile states.",
+    "Cleared the response interception, restored the viewport, closed all verification tabs, and stopped the isolated frontend and backend processes."
   ]
 }

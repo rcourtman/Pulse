@@ -95,6 +95,9 @@ let setWsConnectedSignal: ((next: boolean) => void) | null = null;
 const connectionsApiMocks = vi.hoisted(() => ({
   list: vi.fn(),
 }));
+const runtimeInventorySourcesApiMocks = vi.hoisted(() => ({
+  list: vi.fn(),
+}));
 
 const pushMockWorkloads = (next: Array<Record<string, unknown>>) => {
   mockWorkloads = next;
@@ -187,6 +190,12 @@ vi.mock('@/hooks/useUnifiedResources', () => ({
 vi.mock('@/api/connections', () => ({
   ConnectionsAPI: {
     list: connectionsApiMocks.list,
+  },
+}));
+
+vi.mock('@/api/runtimeInventorySources', () => ({
+  RuntimeInventorySourcesAPI: {
+    list: runtimeInventorySourcesApiMocks.list,
   },
 }));
 
@@ -502,6 +511,8 @@ describe('Workloads performance contract', () => {
     navigateSpy.mockReset();
     connectionsApiMocks.list.mockReset();
     connectionsApiMocks.list.mockResolvedValue({ connections: [], systems: [] });
+    runtimeInventorySourcesApiMocks.list.mockReset();
+    runtimeInventorySourcesApiMocks.list.mockResolvedValue({ sources: [] });
     resetCreateNonSuspendingQueryCacheForTest();
     guestRowMountCount = 0;
     guestRowUnmountCount = 0;
@@ -546,10 +557,12 @@ describe('Workloads performance contract', () => {
       expect(document.body).not.toHaveTextContent('Attempting to reconnect…');
     });
 
-    it('keeps workload rows visible while connection inventory refresh is still pending', async () => {
+    it('keeps workload rows visible while runtime source-health refresh is still pending', async () => {
       mockLocationSearch = '?type=all';
       mockWorkloads = [makeGuest(1, { name: 'refresh-stable-workload' })];
-      connectionsApiMocks.list.mockImplementationOnce(() => new Promise(() => undefined));
+      runtimeInventorySourcesApiMocks.list.mockImplementationOnce(
+        () => new Promise(() => undefined),
+      );
 
       render(() => <WorkloadsSurface vms={[]} containers={[]} nodes={[]} useWorkloads />);
 
@@ -561,6 +574,27 @@ describe('Workloads performance contract', () => {
 
       expect(document.body).not.toHaveTextContent('Loading view...');
       expect(document.body).not.toHaveTextContent('Loading...');
+    });
+
+    it('loads viewer-safe source health without requesting the admin connections ledger', async () => {
+      mockWorkloads = [makeGuest(1, { name: 'viewer-workload' })];
+      runtimeInventorySourcesApiMocks.list.mockResolvedValueOnce({
+        sources: [
+          {
+            type: 'pve',
+            name: 'viewer-source',
+            state: 'stale',
+            surfaces: ['vms'],
+          },
+        ],
+      });
+
+      render(() => <WorkloadsSurface vms={[]} containers={[]} nodes={[]} useWorkloads />);
+
+      await waitFor(() => expect(runtimeInventorySourcesApiMocks.list).toHaveBeenCalledTimes(1));
+      expect(connectionsApiMocks.list).not.toHaveBeenCalled();
+      expect(workloadsStateSource).not.toContain('/api/connections');
+      expect(workloadsStateSource).not.toContain('ConnectionsAPI.list');
     });
 
     it('surfaces blocked Proxmox inventory sources when the platform workloads table is empty', () => {
@@ -604,7 +638,6 @@ describe('Workloads performance contract', () => {
                     }),
                     workloadInventoryIssues: () => [
                       {
-                        id: 'pve:delly',
                         name: 'delly',
                         type: 'pve',
                         typeLabel: 'Proxmox VE',
@@ -613,11 +646,8 @@ describe('Workloads performance contract', () => {
                         coverageLabel: 'VMs and containers',
                         description:
                           'Pulse has VMs and containers enabled for delly, but the Proxmox VE API is unreachable.',
-                        detail:
-                          'Connection blocked. The request was blocked before Pulse could read inventory. Check proxy, firewall, or network policy settings.',
                       },
                       {
-                        id: 'docker:tower',
                         name: 'Tower',
                         type: 'docker',
                         typeLabel: 'Docker',
@@ -646,11 +676,7 @@ describe('Workloads performance contract', () => {
           'Pulse has VMs and containers enabled for delly, but the Proxmox VE API is unreachable.',
         ),
       ).toBeInTheDocument();
-      expect(
-        screen.getByText(
-          'Connection blocked. The request was blocked before Pulse could read inventory. Check proxy, firewall, or network policy settings.',
-        ),
-      ).toBeInTheDocument();
+      expect(document.body).not.toHaveTextContent('request was blocked before Pulse');
       expect(screen.getByRole('link', { name: 'Review infrastructure sources' })).toHaveAttribute(
         'href',
         '/settings/infrastructure',
@@ -696,7 +722,6 @@ describe('Workloads performance contract', () => {
                     }),
                     workloadInventoryIssues: () => [
                       {
-                        id: 'pve:delly',
                         name: 'delly',
                         type: 'pve',
                         typeLabel: 'Proxmox VE',
@@ -1093,11 +1118,15 @@ describe('Workloads performance contract', () => {
       expect(workloadsStateSource).toContain('useWorkloadsDerivedState');
       expect(workloadsStateSource).toContain('useWorkloadRouteState');
       expect(workloadsStateSource).toContain('buildWorkloadInventorySourceIssues');
-      expect(workloadsStateSource).toContain('createNonSuspendingQuery<ConnectionsListResponse');
-      expect(workloadsStateSource).toContain('connectionsSnapshot.refetch({ background: true })');
-      expect(workloadsStateSource).not.toContain('createResource<ConnectionsListResponse');
+      expect(workloadsStateSource).toContain('RuntimeInventorySourcesAPI.list()');
+      expect(workloadsStateSource).toContain(
+        'inventorySourcesSnapshot.refetch({ background: true })',
+      );
+      expect(workloadsStateSource).not.toContain('ConnectionsAPI');
+      expect(workloadsStateSource).not.toContain('ConnectionsListResponse');
+      expect(workloadsStateSource).not.toContain('workloads-connections:');
       expect(workloadInventorySourceIssuesSource).toContain('WORKLOAD_CAPABLE_TYPES');
-      expect(workloadInventorySourceIssuesSource).toContain('formatConnectionErrorMessage');
+      expect(workloadInventorySourceIssuesSource).not.toContain('formatConnectionErrorMessage');
       expect(workloadsStateSource).toContain('createWorkloadSortComparator');
       expect(workloadsStateSource).toContain('filterWorkloads(params)');
       expect(workloadsStateSource).not.toContain('useBreakpoint');

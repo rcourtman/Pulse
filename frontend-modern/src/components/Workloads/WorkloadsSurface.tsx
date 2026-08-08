@@ -52,9 +52,6 @@ function WorkloadInventoryIssueList(props: { issues: readonly WorkloadInventoryS
                     {issue.stateLabel}: {issue.name}
                   </p>
                   <p class="text-sm leading-6 text-muted">{issue.description}</p>
-                  <Show when={issue.detail}>
-                    <p class="text-xs leading-5 text-muted">{issue.detail}</p>
-                  </Show>
                 </div>
                 <span class="shrink-0 rounded bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-950 dark:text-amber-200">
                   {issue.coverageLabel}

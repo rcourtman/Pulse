@@ -1,19 +1,20 @@
-import type { Connection, ConnectionState, ConnectionType } from '@/api/connections';
-import { formatConnectionErrorMessage } from '@/utils/connectionErrorPresentation';
+import type {
+  RuntimeInventorySource,
+  RuntimeInventorySourceState,
+  RuntimeInventorySourceType,
+} from '@/api/runtimeInventorySources';
 
 export interface WorkloadInventorySourceIssue {
-  id: string;
   name: string;
-  type: ConnectionType;
+  type: RuntimeInventorySourceType;
   typeLabel: string;
-  state: ConnectionState;
+  state: RuntimeInventorySourceState;
   stateLabel: string;
   coverageLabel: string;
   description: string;
-  detail?: string;
 }
 
-const WORKLOAD_CAPABLE_TYPES: ReadonlySet<ConnectionType> = new Set([
+const WORKLOAD_CAPABLE_TYPES: ReadonlySet<RuntimeInventorySourceType> = new Set([
   'pve',
   'vmware',
   'docker',
@@ -29,15 +30,14 @@ const WORKLOAD_SURFACE_LABELS: Record<string, string> = {
 };
 const WORKLOAD_SURFACE_ORDER = ['vms', 'containers', 'docker', 'pods', 'kubernetes'];
 
-const CONNECTION_TYPE_LABELS: Partial<Record<ConnectionType, string>> = {
+const CONNECTION_TYPE_LABELS: Record<RuntimeInventorySourceType, string> = {
   docker: 'Docker',
   kubernetes: 'Kubernetes',
   pve: 'Proxmox VE',
   vmware: 'VMware vCenter',
 };
 
-const STATE_RANK: Record<ConnectionState, number> = {
-  active: 0,
+const STATE_RANK: Record<RuntimeInventorySourceState, number> = {
   paused: 1,
   pending: 2,
   stale: 3,
@@ -45,7 +45,7 @@ const STATE_RANK: Record<ConnectionState, number> = {
   unreachable: 5,
 };
 
-const BLOCKING_STATES: ReadonlySet<ConnectionState> = new Set([
+const BLOCKING_STATES: ReadonlySet<RuntimeInventorySourceState> = new Set([
   'paused',
   'pending',
   'stale',
@@ -53,16 +53,8 @@ const BLOCKING_STATES: ReadonlySet<ConnectionState> = new Set([
   'unreachable',
 ]);
 
-const credentialInvalid = (connection: Connection): boolean =>
-  connection.state === 'unauthorized' ||
-  connection.fleet?.credentialStatus === 'invalid' ||
-  connection.fleet?.credentialHealth?.status === 'invalid' ||
-  connection.fleet?.credentialHealth?.status === 'expired';
-
-const activeWorkloadSurfaces = (connection: Connection): string[] => {
-  const scope = connection.scope ?? {};
-  const scoped = Object.keys(scope).filter((surface) => scope[surface]);
-  const surfaces = scoped.length > 0 ? scoped : (connection.surfaces ?? []);
+const activeWorkloadSurfaces = (source: RuntimeInventorySource): string[] => {
+  const surfaces = source.surfaces ?? [];
   const seen = new Set<string>();
   const labels: string[] = [];
   const orderedSurfaces = [...surfaces].sort((left, right) => {
@@ -89,9 +81,8 @@ const formatCoverage = (labels: readonly string[]): string => {
   return `${labels.slice(0, -1).join(', ')}, and ${labels[labels.length - 1]}`;
 };
 
-const stateLabelFor = (connection: Connection): string => {
-  if (credentialInvalid(connection)) return 'Credentials invalid';
-  switch (connection.state) {
+const stateLabelFor = (source: RuntimeInventorySource): string => {
+  switch (source.state) {
     case 'paused':
       return 'Collection paused';
     case 'pending':
@@ -108,56 +99,47 @@ const stateLabelFor = (connection: Connection): string => {
 };
 
 const descriptionFor = (
-  connection: Connection,
+  source: RuntimeInventorySource,
   typeLabel: string,
   coverageLabel: string,
 ): string => {
-  if (credentialInvalid(connection)) {
-    return `Pulse has ${coverageLabel} enabled for ${connection.name}, but its ${typeLabel} API credentials are invalid.`;
+  if (source.state === 'unauthorized') {
+    return `Pulse has ${coverageLabel} enabled for ${source.name}, but its ${typeLabel} API credentials are invalid.`;
   }
-  switch (connection.state) {
+  switch (source.state) {
     case 'paused':
-      return `Pulse has ${coverageLabel} enabled for ${connection.name}, but collection is paused.`;
+      return `Pulse has ${coverageLabel} enabled for ${source.name}, but collection is paused.`;
     case 'pending':
-      return `Pulse has ${coverageLabel} enabled for ${connection.name}, but collection has not completed yet.`;
+      return `Pulse has ${coverageLabel} enabled for ${source.name}, but collection has not completed yet.`;
     case 'stale':
-      return `Pulse has ${coverageLabel} enabled for ${connection.name}, but the last inventory data is stale.`;
+      return `Pulse has ${coverageLabel} enabled for ${source.name}, but the last inventory data is stale.`;
     case 'unreachable':
-      return `Pulse has ${coverageLabel} enabled for ${connection.name}, but the ${typeLabel} API is unreachable.`;
+      return `Pulse has ${coverageLabel} enabled for ${source.name}, but the ${typeLabel} API is unreachable.`;
     default:
-      return `Pulse has ${coverageLabel} enabled for ${connection.name}, but collection is blocked.`;
+      return `Pulse has ${coverageLabel} enabled for ${source.name}, but collection is blocked.`;
   }
 };
 
-const compactDetail = (raw?: string | null): string | undefined => {
-  const formatted = formatConnectionErrorMessage(raw);
-  if (!formatted) return undefined;
-  return formatted.length > 220 ? `${formatted.slice(0, 217)}...` : formatted;
-};
-
-const connectionHasWorkloadCoverage = (connection: Connection): boolean =>
-  WORKLOAD_CAPABLE_TYPES.has(connection.type) && activeWorkloadSurfaces(connection).length > 0;
+const sourceHasWorkloadCoverage = (source: RuntimeInventorySource): boolean =>
+  WORKLOAD_CAPABLE_TYPES.has(source.type) && activeWorkloadSurfaces(source).length > 0;
 
 export const buildWorkloadInventorySourceIssues = (
-  connections: readonly Connection[],
+  sources: readonly RuntimeInventorySource[],
 ): WorkloadInventorySourceIssue[] =>
-  connections
-    .filter((connection) => connection.enabled)
-    .filter(connectionHasWorkloadCoverage)
-    .filter((connection) => BLOCKING_STATES.has(connection.state) || credentialInvalid(connection))
-    .map((connection) => {
-      const coverageLabel = formatCoverage(activeWorkloadSurfaces(connection));
-      const typeLabel = CONNECTION_TYPE_LABELS[connection.type] ?? connection.type;
+  sources
+    .filter(sourceHasWorkloadCoverage)
+    .filter((source) => BLOCKING_STATES.has(source.state))
+    .map((source) => {
+      const coverageLabel = formatCoverage(activeWorkloadSurfaces(source));
+      const typeLabel = CONNECTION_TYPE_LABELS[source.type];
       return {
-        id: connection.id,
-        name: connection.name,
-        type: connection.type,
+        name: source.name,
+        type: source.type,
         typeLabel,
-        state: connection.state,
-        stateLabel: stateLabelFor(connection),
+        state: source.state,
+        stateLabel: stateLabelFor(source),
         coverageLabel,
-        description: descriptionFor(connection, typeLabel, coverageLabel),
-        detail: compactDetail(connection.lastError?.message ?? connection.stateReason),
+        description: descriptionFor(source, typeLabel, coverageLabel),
       };
     })
     .sort((left, right) => {

@@ -5106,3 +5106,19 @@ presentation-only fields for authenticated clients. It writes no settings,
 adds no persisted shape, and changes no storage or recovery route, evidence, or
 freshness semantics. `api-contracts` owns the response and authorization
 contract.
+
+### Viewer inventory health is read-only and storage-free
+
+`GET /api/runtime/inventory-sources` is an additive authenticated
+`monitoring:read` route under `internal/api/`. It aggregates already-loaded
+configuration and cached poller health without probing, persisting, writing a
+cache, or changing backup, restore, snapshot, retention, or recovery state.
+Unavailable handler wiring returns 503 rather than an empty healthy-looking
+response.
+
+The projection filters coverage to workload labels (`vms`, containers, pods,
+and Kubernetes) before serialization. Storage and backup labels, source
+addresses, stable connection IDs, raw error text, credential state objects, and
+all administrative configuration remain absent by construction. The
+api-contracts contract owns the authoritative four-field payload and
+authorization proof.

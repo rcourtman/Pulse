@@ -6027,3 +6027,20 @@ state. Monitoring-capable agents may read the same presentation-only defaults
 as other authenticated clients, but the response contains no connection,
 credential, or agent identity data. `api-contracts` owns the authoritative
 payload and authorization proof.
+
+### Viewer inventory health excludes agent lifecycle identity
+
+The authenticated `GET /api/runtime/inventory-sources` monitoring projection
+derives cached source health through the shared connection aggregator but is not
+an agent enumeration, enrollment, update, or command route. Its four-field wire
+type carries only source `type`, operator-facing `name`, normalized blocking
+`state`, and workload-only `surfaces`.
+
+It has no stable connection or agent ID, token binding, address, report IP,
+hostname identity object, operating-system, kernel or architecture fact, agent
+version, update or module state, command-session state, commands-enabled value,
+fleet policy, or credential-health object. The handler deliberately skips the
+command-session enrichment used by the administrative ledger. Agent reporting,
+registration, update, and command authority remain unchanged, and the
+fully-populated projection test fails if any of those lifecycle facts cross the
+viewer boundary.

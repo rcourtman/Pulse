@@ -159,10 +159,12 @@ an enabled external-probe assignment.
 64. `internal/api/demo_middleware.go`
 65. `frontend-modern/src/stores/aiRuntimeState.ts`
 66. `internal/api/connections_types.go`
+    66a. `internal/api/runtime_inventory_sources.go`
 67. `internal/api/connections_aggregator.go`
 68. `internal/api/connections_handlers.go`
 69. `internal/api/connections_probe.go`
 70. `frontend-modern/src/api/connections.ts`
+    70a. `frontend-modern/src/api/runtimeInventorySources.ts`
 71. `frontend-modern/src/utils/connectionErrorPresentation.ts`
 72. `internal/api/availability_handlers.go`
 73. `frontend-modern/src/api/availabilityTargets.ts`
@@ -9142,3 +9144,36 @@ route. `TestContract_SecurityStatusPermissionedSettingsCapabilitiesIncludeRouteA
 pins the extra authorizer predicates, and
 `TestSettingsCapabilitiesMatchRouteEnforcementWithoutRBAC` proves that a
 non-admin browser session receives both false capabilities and matching 403s.
+
+### Workload inventory health has a viewer-safe runtime contract
+
+`GET /api/runtime/inventory-sources` is the authenticated `monitoring:read`
+boundary for Workloads source-health warnings. It is not a privilege-filtered
+serialization of the administrative connection ledger. The route wraps the
+complete handler in `RequireAuth` plus `monitoring:read`; missing handler wiring
+returns `503 inventory_sources_unavailable`, and tokens without the monitoring
+scope receive 403. Authenticated viewer and admin browser sessions receive the
+same narrow response. `GET /api/connections` remains unchanged behind
+`RequireAdmin` plus `settings:read` and continues to be the only connection
+configuration and fleet ledger.
+
+The response envelope is `{"sources": [...]}` and every source has exactly four
+fields: operator-facing `type` and `name`, normalized blocking `state`, and a
+`surfaces` array containing only effective workload coverage. The backend drops
+healthy, disabled, non-workload, and coverage-free connections before the wire;
+resolves configured scope over declared surfaces; removes storage and backup
+coverage; and normalizes cached invalid or expired credential health to
+`state="unauthorized"`. There is no privileged variant.
+
+The whitelist intentionally has no connection ID, address, host alias, raw
+state reason or error, timestamp, source origin, agent identity, version or
+module, fleet policy or credential-health object, capability, credential,
+configuration, or mutation field.
+`TestRuntimeInventorySourceWireShapeIsAnExactWhitelist` fails if the Go wire
+type grows, while
+`TestRuntimeInventorySourcesOmitAdministrativeAndSensitiveFacts` projects a
+fully populated administrative record and proves those values cannot travel.
+The route-authorization test proves the exact viewer 200 / ledger 403 pairing,
+the scope test proves unauthenticated and wrong-scope refusal, and the frontend
+API plus Workloads integration tests prove the surface reads only the runtime
+projection.

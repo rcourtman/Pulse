@@ -471,6 +471,7 @@ var allRouteAllowlist = []string{
 	"/api/config/nodes/test-connection",
 	"/api/config/nodes/",
 	"/api/connections",
+	"GET /api/runtime/inventory-sources",
 	"/api/connections/probe",
 	"/api/availability-targets",
 	"/api/availability-targets/test",

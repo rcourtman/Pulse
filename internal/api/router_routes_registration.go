@@ -217,6 +217,17 @@ func (r *Router) registerConfigSystemRoutes(updateHandlers *UpdateHandlers) {
 		}
 		RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.connectionsHandlers.HandleList))(w, req)
 	})
+	// Workloads needs source health at the monitoring tier, but the connection
+	// ledger above is intentionally administrative. Authentication and
+	// monitoring scope wrap the entire handler so unavailable wiring and every
+	// other response remain behind the same fail-closed boundary.
+	r.mux.HandleFunc("GET /api/runtime/inventory-sources", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, func(w http.ResponseWriter, req *http.Request) {
+		if r.connectionsHandlers == nil {
+			writeErrorResponse(w, http.StatusServiceUnavailable, "inventory_sources_unavailable", "Inventory source health unavailable", nil)
+			return
+		}
+		r.connectionsHandlers.HandleRuntimeInventorySources(w, req)
+	})))
 
 	// Connection address probe — stateless type detection before credential entry.
 	r.mux.HandleFunc("/api/connections/probe", func(w http.ResponseWriter, req *http.Request) {

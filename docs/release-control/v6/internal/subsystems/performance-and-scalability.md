@@ -2307,3 +2307,22 @@ replaces its one `GET /api/system/settings` request with one
 runs once per authenticated page bootstrap, and adds no poll or serial round
 trip. Non-admin sessions also stop producing the refused admin request and its
 fallback path.
+
+### Workloads polls only the bounded runtime inventory projection
+
+`useWorkloadsState.ts` retains one non-suspending source-health query on mount,
+one background refresh every 15 seconds, and one refresh when the surface
+reconnects. That query now uses `RuntimeInventorySourcesAPI.list()` exclusively;
+the Workloads owner contains neither `ConnectionsAPI.list()` nor the
+`workloads-connections` cache key, so the polling loop cannot regress to the
+admin ledger. `WorkloadsSurface.performance.contract.test.tsx` mounts the real
+state owner, observes the runtime request, and proves the mocked admin client is
+never called; its raw-source ratchet pins the same invariant for every future
+interval refetch.
+
+The server work remains one cached `buildConnections` aggregation with no
+probing, persistence, grouped-system construction, or command-session
+enrichment. It filters healthy, disabled, non-workload, and coverage-free rows
+before serialization, so the response is no larger than the actionable banner
+input. Client presentation is a single pass over that bounded list and performs
+no per-source fetch or detail lookup.

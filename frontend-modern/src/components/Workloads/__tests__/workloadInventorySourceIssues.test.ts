@@ -1,85 +1,40 @@
 import { describe, expect, it } from 'vitest';
-import type { Connection } from '@/api/connections';
+import type { RuntimeInventorySource } from '@/api/runtimeInventorySources';
 import { buildWorkloadInventorySourceIssues } from '../workloadInventorySourceIssues';
 
-const connection = (overrides: Partial<Connection>): Connection =>
-  ({
-    id: 'pve:delly',
-    type: 'pve',
-    name: 'delly',
-    address: 'https://delly:8006',
-    state: 'active',
-    enabled: true,
-    surfaces: ['vms', 'containers', 'storage', 'backups'],
-    scope: { vms: true, containers: true, storage: true, backups: true },
-    lastSeen: null,
-    lastError: null,
-    source: 'agent',
-    fleet: {
-      enrollmentState: 'configured',
-      livenessState: 'active',
-      versionDrift: 'not-applicable',
-      adapterHealth: 'healthy',
-      configRollout: 'configured',
-      credentialStatus: 'verified',
-      updateStatus: 'not-applicable',
-      remoteControl: 'not-applicable',
-    },
-    capabilities: {
-      supportsPause: true,
-      supportsScope: true,
-      supportsTest: true,
-    },
-    ...overrides,
-  }) as Connection;
+const source = (overrides: Partial<RuntimeInventorySource> = {}): RuntimeInventorySource => ({
+  type: 'pve',
+  name: 'delly',
+  state: 'stale',
+  surfaces: ['vms', 'containers'],
+  ...overrides,
+});
 
 describe('buildWorkloadInventorySourceIssues', () => {
-  it('reports enabled workload-capable sources with invalid credentials', () => {
-    const issues = buildWorkloadInventorySourceIssues([
-      connection({
-        state: 'unauthorized',
-        fleet: {
-          enrollmentState: 'configured',
-          livenessState: 'unauthorized',
-          versionDrift: 'not-applicable',
-          adapterHealth: 'blocked',
-          configRollout: 'configured',
-          credentialStatus: 'invalid',
-          updateStatus: 'not-applicable',
-          remoteControl: 'not-applicable',
-        },
-        lastError: {
-          at: '2026-05-13T23:58:54Z',
-          message: 'Authentication failed - check API token or credentials',
-        },
-      }),
-    ]);
+  it('presents the viewer-safe credential issue without diagnostic detail', () => {
+    const issues = buildWorkloadInventorySourceIssues([source({ state: 'unauthorized' })]);
 
     expect(issues).toEqual([
-      expect.objectContaining({
-        id: 'pve:delly',
+      {
         name: 'delly',
+        type: 'pve',
+        typeLabel: 'Proxmox VE',
+        state: 'unauthorized',
         stateLabel: 'Credentials invalid',
         coverageLabel: 'VMs and containers',
         description:
           'Pulse has VMs and containers enabled for delly, but its Proxmox VE API credentials are invalid.',
-        detail: 'Authentication failed. Re-check the API token or username/password.',
-      }),
+      },
     ]);
+    expect(issues[0]).not.toHaveProperty('detail');
+    expect(issues[0]).not.toHaveProperty('id');
   });
 
-  it('ignores active, disabled, and non-workload sources', () => {
+  it('defensively ignores active, non-workload, and coverage-free rows', () => {
     const issues = buildWorkloadInventorySourceIssues([
-      connection({ id: 'pve:pi', name: 'pi', state: 'active' }),
-      connection({ id: 'pve:paused', enabled: false, state: 'unauthorized' }),
-      connection({
-        id: 'pbs:tower',
-        type: 'pbs',
-        name: 'pbs-docker',
-        state: 'unreachable',
-        surfaces: ['backups'],
-        scope: { backups: true },
-      }),
+      source({ name: 'healthy', state: 'active' as never }),
+      source({ name: 'unsupported', type: 'pbs' as never }),
+      source({ name: 'empty', surfaces: [] }),
     ]);
 
     expect(issues).toEqual([]);
