@@ -674,19 +674,26 @@ path_env = {
 go_mod = Path(os.environ["GO_MOD_PATH"]).read_text(encoding="utf-8")
 
 subsystem = next(item for item in registry["subsystems"] if item["id"] == "deployment-installability")
-policy = next(
-    item
-    for item in subsystem["verification"]["path_policies"]
-    if item["id"] == "dev-runtime-orchestration"
-)
+policies = subsystem["verification"]["path_policies"]
 owned = set(subsystem["owned_files"])
-matched = set(policy["match_files"])
+
+
+def effective_policy(path):
+    # First match wins, mirroring canonical_completion_guard.path_policy_matches.
+    for policy in policies:
+        prefixes = policy.get("match_prefixes", [])
+        if any(path == prefix.rstrip("/") or path.startswith(prefix) for prefix in prefixes) or path in policy.get(
+            "match_files", []
+        ):
+            return policy["id"]
+    return None
+
 
 for path in paths:
     exists = Path(os.environ[path_env[path]]).is_file()
     print(f"{path}:exists={exists}")
     print(f"{path}:owned={path in owned}")
-    print(f"{path}:policy={path in matched}")
+    print(f"{path}:policy={effective_policy(path)}")
     print(f"{path}:contract={f'`{path}`' in contract}")
 
 print(f"go.mod:uses_moby_api={'github.com/moby/moby/api' in go_mod}")
@@ -703,9 +710,17 @@ PY
     "frontend-modern/vite.config.ts" \
     "go.mod" \
     "go.sum"; do
+    case "${manifest_path}" in
+      frontend-modern/package.json | frontend-modern/package-lock.json)
+        expected_policy="frontend-dependency-security"
+        ;;
+      *)
+        expected_policy="dev-runtime-orchestration"
+        ;;
+    esac
     assert_contains "dev runtime manifest exists: ${manifest_path}" "${output}" "${manifest_path}:exists=True"
     assert_contains "dev runtime manifest owned: ${manifest_path}" "${output}" "${manifest_path}:owned=True"
-    assert_contains "dev runtime manifest has proof policy: ${manifest_path}" "${output}" "${manifest_path}:policy=True"
+    assert_contains "dev runtime manifest has proof policy: ${manifest_path}" "${output}" "${manifest_path}:policy=${expected_policy}"
     assert_contains "dev runtime manifest is in contract: ${manifest_path}" "${output}" "${manifest_path}:contract=True"
   done
 
