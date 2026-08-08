@@ -64,7 +64,6 @@ export interface TelemetryPingPreview {
   sso_enabled: boolean;
   multi_tenant: boolean;
   paid_license: boolean;
-  business_estate: boolean;
   has_api_tokens: boolean;
   rbac_custom_roles: number;
   rbac_user_assignments: number;

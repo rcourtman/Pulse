@@ -551,9 +551,6 @@ func Run(ctx context.Context, version string) error {
 			snap.NotificationFailuresConfiguration7d = counts.NotificationFailuresConfiguration7d
 			snap.NotificationFailuresRejected7d = counts.NotificationFailuresRejected7d
 			snap.NotificationFailuresUnknown7d = counts.NotificationFailuresUnknown7d
-			// Coarse business-scale classification derived from the same
-			// aggregate counts; thresholds live in internal/monitoring.
-			snap.BusinessEstate = counts.BusinessScaleEstate()
 			snap.DiscoveryEnabled = currentCfg.DiscoveryEnabled
 
 			// Feature flags from persisted config (using pre-created persistence).

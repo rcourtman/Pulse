@@ -7,6 +7,7 @@ export interface SettingsNavVisibilityContext {
   hasFeature: (feature: string) => boolean;
   runtimeCapabilitiesLoaded: () => boolean;
   presentationPolicyHidesCommercial?: boolean;
+  presentationPolicyHidesUpgrade?: boolean;
   presentationPolicyIsDemoMode?: boolean;
   presentationPolicyIsReadOnly?: boolean;
   presentationPolicyHidesOrganizations?: boolean;
@@ -78,6 +79,16 @@ export function shouldHideSettingsNavItem(
     }
 
     if (context.presentationPolicyHidesCommercial) {
+      return true;
+    }
+  }
+
+  if (item.hideWhenUpgradeHidden) {
+    if (context.presentationPolicyResolved === false) {
+      return true;
+    }
+
+    if (context.presentationPolicyHidesUpgrade) {
       return true;
     }
   }

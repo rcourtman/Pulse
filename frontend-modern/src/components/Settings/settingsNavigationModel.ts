@@ -85,6 +85,9 @@ export interface SettingsNavItem {
   hideWhenUnavailable?: boolean;
   hostedOnly?: boolean;
   hideWhenCommercialHidden?: boolean;
+  // Navigation-only suppression for opt-in commercial surfaces. Direct routes
+  // remain reachable for activation, recovery, and explicit handoffs.
+  hideWhenUpgradeHidden?: boolean;
   hideWhenOrganizationHidden?: boolean;
   hideWhenDemoMode?: boolean;
   hideWhenReadOnly?: boolean;

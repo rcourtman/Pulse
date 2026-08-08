@@ -5230,17 +5230,14 @@ runtime contract for `demoMode`, `readOnly`,
 must therefore defer their first read until that policy has resolved, so
 public demos fail closed without probing hidden commercial routes during
 bootstrap.
-For ordinary self-hosted v6 installs, that same security-status contract owns
-the revised commercial posture (2026-08-07, supersedes the 2026-04-25 opt-in
-posture; see records/self-hosted-commercial-surfaces-revision-2026-08-07.md):
-`hideUpgrade` and `hideCommercial` default to false and are forced true only
-for demo mode and white-label runtimes. API consumers must still treat them as
-the prompt-suppression contract for upgrade links, plan upsells, and
-commercial navigation rather than as a billing entitlement change. The
-authenticated `sessionCapabilities` payload additionally carries
-`businessEstate`, a business-scale estate marker for free installs; it must
-never move onto the pre-auth presentation policy, because the public response
-would leak estate size to anonymous visitors.
+For ordinary free self-hosted v6 installs, that same security-status contract
+owns the opt-in commercial posture: `hideUpgrade` defaults true so navigation,
+upgrade links, plan upsells, and proactive prompts fail closed. Hosted sessions
+and installs with existing paid, activation, or recovery context may receive
+`hideUpgrade=false`. `hideCommercial` remains the stronger suppression boundary
+for demo mode and white-label runtimes. API consumers must treat both fields as
+presentation policy rather than as billing entitlement truth, and direct
+activation or recovery routes remain separately routeable.
 That same contract split also makes the licensing boundary explicit:
 `/api/license/runtime-capabilities` is the public runtime feature contract,
 `/api/license/commercial-posture` is the non-billing upgrade posture
@@ -9031,26 +9028,6 @@ together: `type Ping struct` in `internal/telemetry/telemetry.go`, the
 Retired columns stay in the live receiver database rather than being dropped:
 migrations only add, the columns hold real rows from the schema-v6 window, and
 nothing writes them once the receiver struct loses the fields.
-### Telemetry payload parity spans three surfaces at schema v8
-
-The outbound telemetry contract stays defined in exactly three places that move
-together: `type Ping struct` in `internal/telemetry/telemetry.go`, the
-`var ping struct` receiver in the private license server, and
-`export interface TelemetryPingPreview` in
-`frontend-modern/src/api/settings.ts`, all checked by
-`scripts/check_telemetry_schema_parity.py`. Schema v8 adds `business_estate`,
-a boolean the install derives inside the `pkg/server` snapshot closure from
-the same `AggregateInstallSnapshotCounts` values the payload already carries.
-The thresholds (>=5 PVE nodes, >=10 Docker hosts, or >=3 VMware hosts) live in
-exactly one place, `internal/monitoring/business_estate.go`, and the
-session-capability surface that drives the in-product business-estate card
-(`internal/api/security_status_capabilities.go`) delegates to that same
-definition, so the card cohort and the telemetry cohort cannot drift apart
-(`TestContract_BusinessScaleEstateThresholds`,
-`TestInstallSnapshotCountsBusinessScaleEstate`). The flag reveals nothing the
-resource counts in the payload do not already reveal; it exists so
-receiver-side cohort queries keep a stable column even if the thresholds
-change in a later schema.
 ### Per-tenant resource stores are released on offboarding and shutdown
 
 `ResourceHandlers.getStore` opens a SQLite handle per org and caches it for the
@@ -9076,24 +9053,6 @@ router echoes it end-to-end on enrollment acks
 (`TestHostAgentRemovalLifecycleThroughAuthenticatedRouterAndRestart`). Agents
 use it to trigger an immediate self-update check after a server upgrade. The
 field is additive: agents that predate it ignore it.
-### Checkout start forwards attribution in the handoff body, never the portal URL
-
-`GET /auth/license-purchase-start` accepts an optional `source` query
-parameter alongside `feature`. It is validated in
-`internal/api/licensing_handlers.go` against the same closed kebab vocabulary
-the frontend emits (`normalizeSelfHostedPurchaseSource`); anything else is
-dropped rather than forwarded. Like `feature`, `source` is added to the
-skip list in `pulseAccountUpgradeURLForRequest`, so it never reaches the
-browser-visible Pulse Account portal redirect; it travels only inside the
-`CreateCheckoutPortalHandoff` request body, where `omitempty` keeps
-source-less installs compatible with a license server that predates the
-field. The cancelled-checkout return URL echoes a valid source back onto the
-plan route (`licensePurchaseActivationRedirectPathWithSource`) so a retry
-keeps the surface that started it. Unrelated query parameters keep their
-existing pass-through behavior.
-`TestContract_CheckoutStartSourceAttributionReachesHandoffNeverPortal` pins
-both the forwarding and the drop of a malformed value.
-
 ### Security status serves an infrastructureRead settings capability
 
 `GET /api/security/status` adds `settingsCapabilities.infrastructureRead` to the

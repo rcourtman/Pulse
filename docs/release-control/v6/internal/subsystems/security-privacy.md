@@ -1636,11 +1636,7 @@ availability fact through
 `/api/security/status.sessionCapabilities.assistantEnabled`, so general
 settings or security surfaces do not probe `/api/settings/ai` or other
 assistant endpoints merely to decide whether dormant assistant chrome may be
-opened. The same tiering rule protects estate size: the business-scale
-marker `sessionCapabilities.businessEstate` (2026-08-07 commercial-surfaces
-revision) is authenticated-session data and must never move onto the
-pre-auth `presentationPolicy` payload, where it would disclose to anonymous
-visitors that an install monitors a business-scale estate.
+opened.
 Security status disclosure is tiered by construction: public callers receive
 only login/setup discovery, authenticated callers receive their own identity
 and capability context, and deployment, network, credential, token-hint,
@@ -1991,20 +1987,6 @@ classes are dropped rather than stored. Query filters, requested ranges, the
 actor, and every audit row read stay on the install.
 `TestWithAuditReadActivity_RecordIsContentFree` and
 `TestRecordAuditReadActivity_RejectsUnknownActivity` pin both properties.
-
-### Business-estate telemetry is classification, not new information
-
-Schema v8's `business_estate` boolean is derived on the install, inside the
-`pkg/server` telemetry snapshot closure, from the same aggregate resource
-counts (`pve_nodes`, `docker_hosts`, `vmware_hosts`) the payload already
-sends; no additional infrastructure detail leaves the install. It is the
-telemetry counterpart of the authenticated
-`sessionCapabilities.businessEstate` marker and classifies against the same
-single threshold definition in `internal/monitoring/business_estate.go`. The
-authenticated-only tiering rule above is unaffected: telemetry pings are
-pseudonymous outbound payloads under the standing telemetry opt-out, not a
-pre-auth API surface. Both PRIVACY.md copies document the field alongside the
-counts it is derived from.
 
 ### Licensed-feature adoption fields must discriminate
 

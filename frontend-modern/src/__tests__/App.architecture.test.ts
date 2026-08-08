@@ -722,22 +722,3 @@ describe('App architecture', () => {
     expect(appRuntimeStateSource).not.toContain('/api/license/entitlements');
   });
 });
-
-// 2026-08-07 commercial-surfaces revision: the one-shot business-estate card
-// is the only proactive commercial surface, and it must stay inside the same
-// kiosk/settings-access mount gate as the other global prompts so kiosk
-// sessions and viewers without settings access never see it.
-describe('App commercial prompt mounting', () => {
-  it('mounts the business estate card behind the kiosk and settings-access gate', () => {
-    const gateStart = appSource.indexOf('<Show when={!kioskMode() && hasSettingsAccess()}>');
-    expect(gateStart).toBeGreaterThan(-1);
-    const gatedBlock = appSource.slice(
-      gateStart,
-      appSource.indexOf('<GlobalUpdateProgressWatcher />', gateStart),
-    );
-    expect(gatedBlock).toContain('<GitHubStarBanner />');
-    expect(gatedBlock).toContain('<BusinessEstateCard />');
-    // Exactly one mount, and only the gated one.
-    expect(appSource.split('<BusinessEstateCard />').length).toBe(2);
-  });
-});

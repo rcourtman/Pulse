@@ -3119,12 +3119,9 @@ query...`, and `Reading storage...` before streamed tool arguments are
    evidence must remain independent from Assistant session, handoff, and drawer
    state, and browser-local Assistant or resource metadata must not resolve
    platform navigation on an otherwise evidence-free first load. The app
-   shell's global prompt mounts (GitHub star and, since the 2026-08-07
-   commercial-surfaces revision, the one-shot business-estate card) stay
-   behind the kiosk/settings-access gate and outside every AI runtime
-   surface: Assistant, Patrol, Actions, and Discovery chrome must not host
-   commercial prompts, and the business-estate card must not read or alter
-   Assistant or Patrol state.
+   shell's global GitHub-star prompt stays behind the kiosk/settings-access
+   gate and outside every AI runtime surface. Assistant, Patrol, Actions, and
+   Discovery chrome must not host commercial prompts.
    Reloaded Assistant sessions may consume the backend-owned
    `handoff_summary` only as safe presentation state and a Patrol finding
    pointer; hidden model context, command payloads, preflight data, and action

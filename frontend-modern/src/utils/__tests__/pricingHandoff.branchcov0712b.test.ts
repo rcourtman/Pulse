@@ -123,17 +123,13 @@ describe('pricingHandoff (branch coverage)', () => {
 
   describe('getInProductPricingDestination', () => {
     it('maps known in-product feature keys to their plan/selection hrefs', () => {
-      expect(getInProductPricingDestination('relay')).toBe(
-        SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_HREF,
-      );
-      expect(getInProductPricingDestination('mobile_app')).toBe(
-        SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_HREF,
-      );
+      expect(getInProductPricingDestination('relay')).toBe(SELF_HOSTED_PRO_BILLING_PLAN_HREF);
+      expect(getInProductPricingDestination('mobile_app')).toBe(SELF_HOSTED_PRO_BILLING_PLAN_HREF);
       expect(getInProductPricingDestination('long_term_metrics')).toBe(
-        SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_HREF,
+        SELF_HOSTED_PRO_BILLING_PLAN_HREF,
       );
       expect(getInProductPricingDestination('agent_profiles')).toBe(
-        SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_HREF,
+        SELF_HOSTED_PRO_BILLING_PLAN_HREF,
       );
       expect(getInProductPricingDestination('self_hosted_plan')).toBe(
         SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_HREF,

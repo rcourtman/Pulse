@@ -230,22 +230,15 @@ puts the same machine on two surfaces that do not share an identity.
 Settings navigation discoverability is part of the shared settings-shell
 boundary. A settings route that is available in normal commercial presentation
 must be reachable through the sidebar unless it is explicitly a hidden
-deep-link flow. The self-hosted `Plans` page is not a deep-link-only flow:
-`system-billing` stays visible whenever commercial presentation is allowed,
-while demo or commercial-suppressed sessions may still hide it.
-`system-relay` (Remote Access) is likewise not a deep-link-only flow: its nav
-item stays visible without the `relay` feature so Relay remains discoverable
-to free installs, and the panel-owned feature gate — not nav hiding —
-communicates the paid boundary. Capability-based hiding (`relayRead`) still
-applies; feature-based `hideWhenUnavailable` must not be reintroduced on that
-item. Per the 2026-08-07 self-hosted commercial-surfaces revision
-(`records/self-hosted-commercial-surfaces-revision-2026-08-07.md`), the same
-rule extends to `support-reporting`, `security-roles`, `security-users`,
-`security-audit`, and `security-webhooks`: their nav items stay visible
-without the paid feature, the panel-owned gates communicate the paid
-boundary, capability-based hiding still applies, and feature-based
-`hideWhenUnavailable` must not be reintroduced on them. The `multi_tenant`
-organization items are deliberately excluded and keep `hideWhenUnavailable`.
+deep-link flow. Ordinary free self-hosted sessions use the explicit opt-in
+boundary: `system-billing` is hidden from navigation while
+`presentationPolicy.hideUpgrade` is true, and paid-feature items including
+`system-relay`, `support-reporting`, `security-roles`, `security-users`,
+`security-audit`, and `security-webhooks` use `hideWhenUnavailable`. Their
+direct routes remain available because the owning panels still handle explicit
+activation, recovery, and feature-gate handoffs. Capability-based hiding still
+applies independently, so a session that lacks route authority cannot mount a
+panel merely because it has paid or recovery context.
 
 Candidate import-plan presentation inside the Infrastructure settings dialog is
 a shared primitive composition boundary. `NodeCandidateImportPlan.tsx` may use
@@ -2037,10 +2030,10 @@ default` instead of fusing provider and badge text such as
    and keep adjacent settings-shell referrals such as
    `InfrastructureWorkspace.tsx` on that same shared owner instead of
    reintroducing local “go to Pulse Pro” variants.
-   That same shared owner must also keep self-hosted commercial settings
-   discoverable: the nav label and page shell title use the shared
-   `Plans & Billing` label, and the owned plan shell must foreground the active
-   plan name plus available
+   That same shared owner must keep self-hosted commercial settings coherent
+   when deliberately reached: the direct route, page shell, and any navigation
+   shown for paid or recovery context use the shared `Plans & Billing` label,
+   and the owned plan shell must foreground the active plan name plus available
    capabilities before secondary billing or recovery detail so paid upgrades
    can confirm their entitlement immediately after activation without making
    default Community look like it is missing an activation key.
@@ -5857,12 +5850,13 @@ in `frontend-modern/src/components/Settings/settingsNavCatalog.ts`, so
 `shouldHideSettingsNavItem` and `shouldBlockSettingsRouteItem` withhold both the
 sidebar entry and the route from a session the backend says cannot read it.
 
-This is a different gate from `system-relay` and `support-reporting`, which stay
-visible without their paid feature so the panel can render its own upgrade
-prompt. Infrastructure has no upgrade story: every endpoint behind it is
+This is a different gate from `system-relay` and `support-reporting`. Paid
+feature navigation is hidden from ordinary free sessions, but its panel-owned
+direct route remains available for an explicit activation or recovery handoff.
+Infrastructure has no such route exception: every endpoint behind it is
 `RequireAdmin`, so a non-admin got an all-empty page whose pollers logged a
-warn-level denial on every tick. Hiding the item is what stops those pollers
-mounting.
+warn-level denial on every tick. Hiding and blocking the item is what stops
+those pollers mounting.
 
 The same rule now covers the admin-only System tabs. `system-network`,
 `system-updates`, and `system-recovery` declare

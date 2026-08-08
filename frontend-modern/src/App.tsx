@@ -11,7 +11,6 @@ import { WhatsNewCard } from './components/WhatsNewCard';
 import { DemoBanner } from './components/DemoBanner';
 import { CommercialMigrationBanner } from './components/CommercialMigrationBanner';
 import { GitHubStarBanner } from './components/GitHubStarBanner';
-import { BusinessEstateCard } from './components/BusinessEstateCard';
 // Modals are only mounted when opened, so their code can stay out of the
 // entry bundle until first use (same pattern as AIChat below).
 const KeyboardShortcutsModal = lazy(() =>
@@ -536,7 +535,6 @@ function App() {
                         <UpdateBanner />
                         <WhatsNewCard />
                         <GitHubStarBanner />
-                        <BusinessEstateCard />
                         <Show when={canReadUpdateStatus()}>
                           <GlobalUpdateProgressWatcher />
                         </Show>

@@ -9198,20 +9198,7 @@
   "coverage_gaps": [],
   "candidate_lanes": [],
   "work_claims": [],
-  "open_decisions": [
-    {
-      "id": "self-hosted-commercial-surfaces-owner-approval",
-      "summary": "Choose whether to retain or revert the complete 2026-08-07 self-hosted commercial-surface cluster. The landed cluster exposes reactive paid navigation, inline gates, Plans & Billing, and one proactive business-estate card to ordinary free self-hosted sessions, then adds schema-v8 business-estate telemetry and checkout-source attribution across pulse and pulse-pro. Its original quantitative rationale is not exactly reproducible, its paid-license percentages were mislabeled as conversion, and no durable artifact confirms project-owner approval. A narrower posture requires a new explicit product decision rather than a partial implicit approval.",
-      "owner": "project-owner",
-      "blocking_level": "rc-ready",
-      "status": "owner-action",
-      "opened_at": "2026-08-08",
-      "lane_ids": [
-        "L2"
-      ],
-      "subsystem_ids": []
-    }
-  ],
+  "open_decisions": [],
   "source_of_truth_file": "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",
   "resolved_decisions": [
     {
@@ -10093,6 +10080,19 @@
         "L3",
         "L12",
         "L17"
+      ]
+    },
+    {
+      "id": "self-hosted-commercial-surfaces-opt-in-posture",
+      "summary": "The project owner chose the complete revert of the 2026-08-07 self-hosted commercial-surface cluster. Ordinary free self-hosted sessions return to the prior opt-in commercial posture; the proactive business-estate prompt and telemetry, checkout-source attribution, and newly broadened reactive paid entry points are removed. Any narrower reintroduction requires a new explicit product decision with reproducible evidence.",
+      "kind": "release-policy",
+      "decided_at": "2026-08-08",
+      "subsystem_ids": [
+        "cloud-paid"
+      ],
+      "lane_ids": [
+        "L2",
+        "L3"
       ]
     }
   ]

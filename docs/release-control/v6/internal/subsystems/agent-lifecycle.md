@@ -3077,14 +3077,13 @@ records for private Pro runtime hooks. Lifecycle-adjacent flows must treat
 those records as executable-runtime identity, not as agent enrollment,
 installer success, or lifecycle capability evidence, and must leave private
 runtime download guidance to the licensing/settings surfaces that own it.
-The same presentation-policy split still governs paid lifecycle extensions in
-ordinary self-hosted v6 installs, under the revised default (2026-08-07
-commercial-surfaces revision): `presentationPolicy.hideUpgrade` is no longer
-forced true outside hosted mode, but wherever it is true (demo mode,
-white-label runtimes) default Infrastructure navigation must not advertise
-agent-profile upgrades, trial prompts, or paid helper links. Agent lifecycle
-flows themselves carry no commercial content either way; the revision changes
-browser presentation posture only, not agent auth, registration, or the
+The same presentation-policy split governs paid lifecycle extensions in
+ordinary self-hosted v6 installs. `presentationPolicy.hideUpgrade` defaults
+true for free self-hosted sessions, and demo mode or white-label runtimes also
+force the stronger commercial suppression boundary. Default Infrastructure
+navigation must not advertise agent-profile upgrades, trial prompts, or paid
+helper links. Agent lifecycle flows themselves carry no commercial content.
+This presentation posture does not alter agent auth, registration, or the
 security-status auth snapshot.
 The normal Infrastructure installer also follows that contract. Agent-command
 execution controls may describe the runtime trust and command-execution effect,
@@ -5984,19 +5983,6 @@ ack invokes the hook — observer acks never steer the updater
 `TestAgentSendReport_ObserverAckNeverInvokesCallback`).
 `agentupdate.Config.InitialCheckDelay` overrides the five-second initial check
 delay; zero keeps the default.
-### Session-capability estate classification delegates to monitoring
-
-The business-estate marker on the authenticated session-capability surface
-(`internal/api/security_status_capabilities.go`, an extension point of this
-subsystem's agent routes) no longer carries its own threshold constants:
-`businessScaleEstateCounts` now delegates to the monitoring-owned definition
-in `internal/monitoring/business_estate.go`, which the schema-v8 telemetry
-`business_estate` field also classifies against. Behavior is unchanged — the
-agent-host counting inputs (Docker hosts from read state, VMware agent-type
-unified resources) and the pinned thresholds
-(`TestContract_BusinessScaleEstateThresholds`) are identical; only the source
-of the numbers moved, so the card cohort and the telemetry cohort cannot
-drift.
 ### Purchase-start attribution does not touch agent routes
 
 The `source` attribution parameter added to

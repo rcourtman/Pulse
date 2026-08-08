@@ -2,6 +2,7 @@ import { Accessor, createEffect, createMemo, createSignal, onMount } from 'solid
 import {
   presentationPolicyHidesCommercialSurfaces,
   presentationPolicyHidesOrganizationSurfaces,
+  presentationPolicyHidesUpgradePrompts,
   presentationPolicyIsDemoMode,
   presentationPolicyIsReadOnly,
   sessionPresentationPolicyResolved,
@@ -56,6 +57,13 @@ export function useSettingsAccess({
   const presentationPolicyResolved = createMemo(
     () => securityStatus() !== null || sessionPresentationPolicyResolved(),
   );
+  const upgradePromptsHidden = createMemo(() => {
+    const resolvedSecurityStatus = securityStatus();
+    if (resolvedSecurityStatus) {
+      return resolvedSecurityStatus.presentationPolicy?.hideUpgrade !== false;
+    }
+    return presentationPolicyHidesUpgradePrompts();
+  });
   const demoMode = createMemo(() => {
     const resolvedSecurityStatus = securityStatus();
     if (resolvedSecurityStatus) {
@@ -96,6 +104,7 @@ export function useSettingsAccess({
       hasFeature,
       runtimeCapabilitiesLoaded,
       presentationPolicyHidesCommercial: commercialSurfacesHidden(),
+      presentationPolicyHidesUpgrade: upgradePromptsHidden(),
       presentationPolicyIsDemoMode: demoMode(),
       presentationPolicyIsReadOnly: readOnly(),
       presentationPolicyHidesOrganizations: organizationSurfacesHidden(),
@@ -175,6 +184,7 @@ export function useSettingsAccess({
     const requiresCapabilityResolution = Boolean(currentItem?.requiredCapability);
     const requiresPresentationPolicyResolution = Boolean(
       currentItem?.hideWhenCommercialHidden ||
+      currentItem?.hideWhenUpgradeHidden ||
       currentItem?.hideWhenOrganizationHidden ||
       currentItem?.hideWhenReadOnly ||
       currentItem?.hideWhenDemoMode,

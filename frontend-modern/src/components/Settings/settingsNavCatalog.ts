@@ -83,6 +83,7 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
         label: SELF_HOSTED_PRO_BILLING_PRESENTATION.navLabel,
         icon: PulseLogoIcon,
         hideWhenCommercialHidden: true,
+        hideWhenUpgradeHidden: true,
       },
       {
         id: 'system-ai-assistant',
@@ -223,9 +224,7 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
         icon: FileText,
         iconProps: { strokeWidth: 2 },
         features: ['advanced_reporting'],
-        // Visible without the feature (2026-08-07 commercial-surfaces
-        // revision): the panel renders its own upgrade gate, and hiding the
-        // item made the capability undiscoverable — same rationale as Relay.
+        hideWhenUnavailable: true,
         hideWhenDemoMode: true,
         requiredCapability: 'reportingRead',
       },
@@ -282,7 +281,7 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
         icon: ShieldCheck,
         iconProps: { strokeWidth: 2 },
         features: ['rbac'],
-        // Visible without the feature: the panel gates inline (see Relay).
+        hideWhenUnavailable: true,
         requiredCapability: 'roles',
       },
       {
@@ -291,7 +290,7 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
         icon: Users,
         iconProps: { strokeWidth: 2 },
         features: ['rbac'],
-        // Visible without the feature: the panel gates inline (see Relay).
+        hideWhenUnavailable: true,
         requiredCapability: 'users',
       },
       {
@@ -300,7 +299,7 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
         icon: Activity,
         iconProps: { strokeWidth: 2 },
         features: ['audit_logging'],
-        // Visible without the feature: the panel gates inline (see Relay).
+        hideWhenUnavailable: true,
         requiredCapability: 'auditLog',
       },
       {
@@ -309,7 +308,7 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
         icon: Globe,
         iconProps: { strokeWidth: 2 },
         features: ['audit_logging'],
-        // Visible without the feature: the panel gates inline (see Relay).
+        hideWhenUnavailable: true,
         requiredCapability: 'auditWebhooksRead',
       },
       {
@@ -318,9 +317,7 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
         icon: RadioTower,
         iconProps: { strokeWidth: 2 },
         features: ['relay'],
-        // Deliberately visible without the relay feature: the panel renders its
-        // own upgrade gate, and hiding the item made Relay undiscoverable for
-        // free installs.
+        hideWhenUnavailable: true,
         requiredCapability: 'relayRead',
       },
     ],

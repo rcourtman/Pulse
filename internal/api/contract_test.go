@@ -10855,10 +10855,10 @@ func TestContract_PublicSecurityStatusIncludesDemoPresentationPolicy(t *testing.
 	}
 }
 
-func TestContract_SecurityStatusPresentationPolicyShowsUpgradeByDefault(t *testing.T) {
-	// 2026-08-07 self-hosted commercial-surfaces revision: ordinary free
-	// self-hosted sessions see upgrade CTAs; suppression is reserved for demo
-	// mode and white-label runtimes (pinned separately below).
+func TestContract_SecurityStatusPresentationPolicyHidesUpgradeByDefault(t *testing.T) {
+	// Ordinary free self-hosted sessions stay opt-in. The billing route remains
+	// directly reachable, but the served policy suppresses upgrade prompts and
+	// navigation until there is hosted, paid, activation, or recovery context.
 	cfg := newTestConfigWithTokens(t)
 	cfg.DemoMode = false
 
@@ -10884,7 +10884,7 @@ func TestContract_SecurityStatusPresentationPolicyShowsUpgradeByDefault(t *testi
 		"demoMode":       false,
 		"readOnly":       false,
 		"hideCommercial": false,
-		"hideUpgrade":    false,
+		"hideUpgrade":    true,
 	} {
 		if got, _ := presentationPolicy[key].(bool); got != want {
 			t.Fatalf("presentationPolicy.%s = %v, want %v", key, presentationPolicy[key], want)
@@ -10894,48 +10894,26 @@ func TestContract_SecurityStatusPresentationPolicyShowsUpgradeByDefault(t *testi
 
 func TestContract_SecurityStatusPresentationPolicySuppressionInputs(t *testing.T) {
 	cases := []struct {
-		name       string
-		demoMode   bool
-		whiteLabel bool
-		wantHidden bool
+		name              string
+		demoMode          bool
+		whiteLabel        bool
+		commercialContext bool
+		wantCommercial    bool
+		wantUpgrade       bool
 	}{
-		{"default shows commercial surfaces", false, false, false},
-		{"demo mode hides commercial surfaces", true, false, true},
-		{"white-label hides commercial surfaces", false, true, true},
-		{"demo and white-label hides commercial surfaces", true, true, true},
+		{"free self-hosted stays opt-in", false, false, false, false, true},
+		{"hosted or paid context exposes upgrade navigation", false, false, true, false, false},
+		{"demo mode suppresses every commercial surface", true, false, true, true, true},
+		{"white-label suppresses every commercial surface", false, true, true, true, true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			policy := resolveSecurityStatusPresentationPolicy(tc.demoMode, tc.whiteLabel)
-			if policy.HideUpgrade != tc.wantHidden || policy.HideCommercial != tc.wantHidden {
-				t.Fatalf("policy = %+v, want hideUpgrade=hideCommercial=%v", policy, tc.wantHidden)
+			policy := resolveSecurityStatusPresentationPolicy(tc.demoMode, tc.whiteLabel, tc.commercialContext)
+			if policy.HideUpgrade != tc.wantUpgrade || policy.HideCommercial != tc.wantCommercial {
+				t.Fatalf("policy = %+v, want hideUpgrade=%v hideCommercial=%v", policy, tc.wantUpgrade, tc.wantCommercial)
 			}
 			if policy.DemoMode != tc.demoMode || policy.ReadOnly != tc.demoMode {
 				t.Fatalf("policy = %+v, want demoMode=readOnly=%v", policy, tc.demoMode)
-			}
-		})
-	}
-}
-
-func TestContract_BusinessScaleEstateThresholds(t *testing.T) {
-	// Thresholds mirror the 2026-08-07 telemetry segmentation: >=5 PVE nodes,
-	// >=10 Docker hosts, or >=3 VMware hosts marks a business-scale estate.
-	cases := []struct {
-		name                               string
-		pveNodes, dockerHosts, vmwareHosts int
-		want                               bool
-	}{
-		{"empty estate", 0, 0, 0, false},
-		{"homelab scale", 4, 9, 2, false},
-		{"pve threshold", 5, 0, 0, true},
-		{"docker threshold", 0, 10, 0, true},
-		{"vmware threshold", 0, 0, 3, true},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := businessScaleEstateCounts(tc.pveNodes, tc.dockerHosts, tc.vmwareHosts); got != tc.want {
-				t.Fatalf("businessScaleEstateCounts(%d, %d, %d) = %v, want %v",
-					tc.pveNodes, tc.dockerHosts, tc.vmwareHosts, got, tc.want)
 			}
 		})
 	}
@@ -23981,76 +23959,6 @@ func TestUnifiedAgentHandlers_HandleReportAckOmitsEmptyServerVersion(t *testing.
 	ack := postUnifiedAgentReport(t, handler)
 	if _, present := ack["serverVersion"]; present {
 		t.Fatalf("ack unexpectedly carries serverVersion: %v", ack["serverVersion"])
-	}
-}
-
-// Checkout source attribution is an in-app funnel signal, not a browser-visible
-// one: it must reach the license server only inside the portal-handoff body and
-// must never appear on the Pulse Account portal redirect the browser follows.
-func TestContract_CheckoutStartSourceAttributionReachesHandoffNeverPortal(t *testing.T) {
-	cases := []struct {
-		name          string
-		querySource   string
-		wantSource    string
-		wantCancelURL string
-	}{
-		{
-			name:          "valid gate source",
-			querySource:   "gate-rbac",
-			wantSource:    "gate-rbac",
-			wantCancelURL: "https://pulse.example.com/settings/system/billing/plan?purchase=cancelled&source=gate-rbac",
-		},
-		{
-			name:          "malformed source is dropped",
-			querySource:   "Bad Source!",
-			wantSource:    "",
-			wantCancelURL: "https://pulse.example.com/settings/system/billing/plan?purchase=cancelled",
-		},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			handler := createTestHandler(t)
-			handler.SetConfig(&config.Config{PublicURL: "https://pulse.example.com"})
-			var capturedReq struct {
-				Feature   string `json:"feature"`
-				CancelURL string `json:"cancel_url"`
-				Source    string `json:"source"`
-			}
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if err := json.NewDecoder(r.Body).Decode(&capturedReq); err != nil {
-					t.Fatalf("decode checkout portal handoff request: %v", err)
-				}
-				w.Header().Set("Content-Type", "application/json")
-				_ = json.NewEncoder(w).Encode(map[string]any{"portal_handoff_id": "cph_test_source"})
-			}))
-			defer server.Close()
-			t.Setenv("PULSE_LICENSE_SERVER_URL", server.URL)
-
-			req := httptest.NewRequest(
-				http.MethodGet,
-				"https://pulse.example.com/auth/license-purchase-start?feature=rbac&source="+url.QueryEscape(tc.querySource),
-				nil,
-			)
-			rec := httptest.NewRecorder()
-			handler.HandleCheckoutStart(rec, req)
-
-			if rec.Code != http.StatusSeeOther {
-				t.Fatalf("status = %d, want %d (body=%q)", rec.Code, http.StatusSeeOther, rec.Body.String())
-			}
-			redirectURL, err := url.Parse(rec.Header().Get("Location"))
-			if err != nil {
-				t.Fatalf("parse redirect location: %v", err)
-			}
-			if got := redirectURL.Query().Get("source"); got != "" {
-				t.Fatalf("source = %q, want omitted from portal query", got)
-			}
-			if capturedReq.Source != tc.wantSource {
-				t.Fatalf("handoff source = %q, want %q", capturedReq.Source, tc.wantSource)
-			}
-			if capturedReq.CancelURL != tc.wantCancelURL {
-				t.Fatalf("cancel_url = %q, want %q", capturedReq.CancelURL, tc.wantCancelURL)
-			}
-		})
 	}
 }
 

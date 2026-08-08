@@ -114,11 +114,27 @@ describe('settingsNavigation integration scaffold', () => {
     ).toBe(true);
   });
 
-  it('keeps self-hosted billing discoverable from Pulse Intelligence settings', () => {
+  it('keeps self-hosted billing direct-routeable while hiding free default navigation', () => {
     expect(deriveTabFromPath('/settings/pulse-intelligence/billing/plan')).toBe('system-billing');
     expect(deriveTabFromPath('/settings/system/billing/plan')).toBe('system-billing');
     expect(settingsTabPath('system-billing')).toBe('/settings/pulse-intelligence/billing/plan');
     expect(getSettingsNavItem('system-billing')?.hideFromSidebar).not.toBe(true);
+    expect(getSettingsNavItem('system-billing')?.hideWhenUpgradeHidden).toBe(true);
+    const freeContext = {
+      hasFeature: hasFeatures([]),
+      runtimeCapabilitiesLoaded: () => true,
+      presentationPolicyResolved: true,
+      presentationPolicyHidesUpgrade: true,
+      hostedModeEnabled: false,
+    };
+    expect(shouldHideSettingsNavItem('system-billing', freeContext)).toBe(true);
+    expect(shouldBlockSettingsRouteItem('system-billing', freeContext)).toBe(false);
+    expect(
+      shouldHideSettingsNavItem('system-billing', {
+        ...freeContext,
+        presentationPolicyHidesUpgrade: false,
+      }),
+    ).toBe(false);
   });
 
   it('keeps resource privacy route-backed but out of the normal sidebar', () => {
@@ -135,10 +151,7 @@ describe('settingsNavigation integration scaffold', () => {
     ).toBe(false);
   });
 
-  it('keeps the Remote Access tab visible to free installs so Relay stays discoverable', () => {
-    // system-relay deliberately omits hideWhenUnavailable: the panel renders its
-    // own upgrade gate, so free installs see the entry instead of never learning
-    // the capability exists.
+  it('hides Remote Access navigation for free installs but keeps the direct route available', () => {
     expect(
       shouldHideSettingsNavItem('system-relay', {
         hasFeature: hasFeatures([]),
@@ -147,7 +160,7 @@ describe('settingsNavigation integration scaffold', () => {
         settingsCapabilitiesResolved: true,
         settingsCapabilities: { relayRead: true },
       }),
-    ).toBe(false);
+    ).toBe(true);
     expect(
       shouldBlockSettingsRouteItem('system-relay', {
         hasFeature: hasFeatures([]),
@@ -159,10 +172,7 @@ describe('settingsNavigation integration scaffold', () => {
     ).toBe(false);
   });
 
-  // 2026-08-07 commercial-surfaces revision: paid-only tabs stay visible for
-  // free installs and their panels gate inline, following the Relay
-  // precedent. Hiding them made the capabilities undiscoverable.
-  it('shows paid-only self-hosted tabs to free installs (panels gate inline)', () => {
+  it('hides paid-only self-hosted tabs from free installs', () => {
     for (const tab of [
       'security-roles',
       'security-users',
@@ -185,11 +195,11 @@ describe('settingsNavigation integration scaffold', () => {
             users: true,
           },
         }),
-      ).toBe(false);
+      ).toBe(true);
     }
   });
 
-  it('keeps reporting navigation visible with and without advanced reporting', () => {
+  it('shows reporting navigation only with advanced reporting', () => {
     expect(
       shouldHideSettingsNavItem('support-reporting', {
         hasFeature: hasFeatures([]),
@@ -198,7 +208,7 @@ describe('settingsNavigation integration scaffold', () => {
         presentationPolicyIsDemoMode: false,
         hostedModeEnabled: false,
       }),
-    ).toBe(false);
+    ).toBe(true);
 
     expect(
       shouldHideSettingsNavItem('support-reporting', {
@@ -211,7 +221,7 @@ describe('settingsNavigation integration scaffold', () => {
     ).toBe(false);
   });
 
-  it('keeps panel-owned feature gate tabs visible and routeable for free installs', () => {
+  it('keeps hidden panel-owned feature gates directly routeable for free installs', () => {
     for (const tab of [
       'support-reporting',
       'security-roles',
@@ -228,7 +238,7 @@ describe('settingsNavigation integration scaffold', () => {
           hostedModeEnabled: false,
           settingsCapabilitiesResolved: false,
         }),
-      ).toBe(false);
+      ).toBe(true);
       expect(
         shouldBlockSettingsRouteItem(tab, {
           hasFeature: hasFeatures([]),

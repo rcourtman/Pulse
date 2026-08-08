@@ -236,12 +236,7 @@ describe('settings architecture guardrails', () => {
     );
   });
 
-  // 2026-08-07 commercial-surfaces revision (see
-  // docs/release-control/v6/internal/records/
-  // self-hosted-commercial-surfaces-revision-2026-08-07.md): paid-feature
-  // tabs stay visible for free installs and their panels gate inline, while
-  // the multi_tenant organization tabs deliberately stay feature-hidden.
-  it('keeps paid-feature settings tabs visible with panel-owned inline gates', () => {
+  it('keeps paid-feature settings navigation opt-in while direct panels own their gates', () => {
     const itemBlock = (id: string): string => {
       const start = settingsNavCatalogSource.indexOf(`id: '${id}'`);
       expect(start, `nav item ${id} present in catalog`).toBeGreaterThan(-1);
@@ -256,21 +251,13 @@ describe('settings architecture guardrails', () => {
       'security-audit',
       'security-webhooks',
       'system-relay',
-    ]) {
-      expect(
-        itemBlock(id),
-        `${id} must stay visible without the paid feature (panel gates inline)`,
-      ).not.toContain('hideWhenUnavailable');
-    }
-
-    for (const id of [
       'organization-overview',
       'organization-access',
       'organization-sharing',
       'organization-billing',
       'organization-billing-admin',
     ]) {
-      expect(itemBlock(id), `${id} stays hidden without multi_tenant`).toContain(
+      expect(itemBlock(id), `${id} stays hidden without its paid feature`).toContain(
         'hideWhenUnavailable: true',
       );
     }
@@ -312,11 +299,12 @@ describe('settings architecture guardrails', () => {
     );
     expect(pulseIntelligenceNavBlock?.[0]).toContain("id: 'system-billing'");
     const systemBillingNavBlock = settingsNavCatalogSource.match(
-      /id: 'system-billing',[\s\S]*?hideWhenCommercialHidden: true,\n\s*},/,
+      /id: 'system-billing',[\s\S]*?hideWhenUpgradeHidden: true,\n\s*},/,
     );
     expect(systemBillingNavBlock?.[0]).toContain(
       'label: SELF_HOSTED_PRO_BILLING_PRESENTATION.navLabel',
     );
+    expect(systemBillingNavBlock?.[0]).toContain('hideWhenUpgradeHidden: true');
     expect(systemBillingNavBlock?.[0]).not.toContain('hideFromSidebar');
     const systemNavBlock = settingsNavCatalogSource.match(/id: 'system',[\s\S]*?id: 'support',/);
     expect(systemNavBlock?.[0]).not.toContain("id: 'system-billing'");
@@ -325,14 +313,11 @@ describe('settings architecture guardrails', () => {
     expect(settingsNavCatalogSource).toContain("features: ['relay']");
     expect(settingsNavCatalogSource).toContain("features: ['advanced_reporting']");
     expect(settingsNavCatalogSource).toContain('hideWhenUnavailable: true');
-    // system-relay deliberately stays visible without the relay feature so
-    // Relay remains discoverable to free installs; the panel-owned upgrade
-    // gate communicates the paid boundary instead of nav hiding.
     const systemRelayNavBlock = settingsNavCatalogSource.match(
       /id: 'system-relay',[\s\S]*?requiredCapability: 'relayRead',\n\s*},/,
     );
     expect(systemRelayNavBlock?.[0]).toContain("features: ['relay']");
-    expect(systemRelayNavBlock?.[0]).not.toContain('hideWhenUnavailable');
+    expect(systemRelayNavBlock?.[0]).toContain('hideWhenUnavailable: true');
     expect(settingsHeaderMetaSource).toContain(
       'title: SELF_HOSTED_PRO_BILLING_PRESENTATION.shellTitle',
     );

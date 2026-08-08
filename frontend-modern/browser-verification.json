@@ -1,40 +1,71 @@
 {
   "version": 1,
-  "base_sha": "76f433c2f86159be3a741628873001975e95dedc",
-  "verified_at": "2026-08-08T08:56:14Z",
+  "base_sha": "7d95a707bcedd82c48158d48e1d203d2c8ea9d07",
+  "verified_at": "2026-08-08T15:41:56Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Settings/NetworkBoundarySettingsSection.tsx"
+    "frontend-modern/src/App.tsx",
+    "frontend-modern/src/api/settings.ts",
+    "frontend-modern/src/components/BusinessEstateCard.tsx",
+    "frontend-modern/src/components/Settings/ProLicensePanel.tsx",
+    "frontend-modern/src/components/Settings/settingsNavCatalog.ts",
+    "frontend-modern/src/components/Settings/settingsNavVisibility.ts",
+    "frontend-modern/src/components/Settings/settingsNavigationModel.ts",
+    "frontend-modern/src/components/Settings/useProLicensePanelState.ts",
+    "frontend-modern/src/components/Settings/useSettingsAccess.ts",
+    "frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx",
+    "frontend-modern/src/features/patrol/patrolAutonomyAvailability.ts",
+    "frontend-modern/src/stores/sessionCapabilities.ts",
+    "frontend-modern/src/types/config.ts",
+    "frontend-modern/src/utils/pricingHandoff.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Settings/NetworkBoundarySettingsSection.tsx": "f75ab0102c54238b634fce3bb7662ef2fd2a5d819edd32cecf0689e49e35b517"
+    "frontend-modern/src/App.tsx": "cf12ab5e6b1e96d1bdf7da889db49b88f4c3161fb60fa9b879400039b361f84c",
+    "frontend-modern/src/api/settings.ts": "5347422cc84eb13f212e196cddaa45515446b445858ff95f9d1a6ba6810db6f7",
+    "frontend-modern/src/components/BusinessEstateCard.tsx": "deleted",
+    "frontend-modern/src/components/Settings/ProLicensePanel.tsx": "be6955b43cc09cd2bca41cdf3a93c2ebe2c6c95c8a893b777df6d9bae7d35fd1",
+    "frontend-modern/src/components/Settings/settingsNavCatalog.ts": "a95ed0a83af7ba54755928b2fb4955481780240c03351f6b850f3b31d696dc5e",
+    "frontend-modern/src/components/Settings/settingsNavVisibility.ts": "05407c809e71724694ba39a01288d3580bbe3c35ab7c5dee502ed0ab31364a13",
+    "frontend-modern/src/components/Settings/settingsNavigationModel.ts": "94f00fe53960b3d7fda42ad7b226197e9fddf5b055cdda80615c75274f464ea0",
+    "frontend-modern/src/components/Settings/useProLicensePanelState.ts": "7559445debf9afdd86d2e3c5f15a22e81f3eacc4e5bd185c54fe1fc586933f41",
+    "frontend-modern/src/components/Settings/useSettingsAccess.ts": "42c586bdc3a5f91fdcd8c120bf65e4bd7105d5cc948defc6784ccf389ff631b4",
+    "frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx": "de74125176e6d7421cec5717c963cd8e992f0ef0f11bf9304bb7b75c6f844658",
+    "frontend-modern/src/features/patrol/patrolAutonomyAvailability.ts": "7f68482c556ef0164770ac81156a38c6dd3ef600bfa567240cf5ffaf0b517784",
+    "frontend-modern/src/stores/sessionCapabilities.ts": "8e7557152025a5bdd99a8072b6283c4d3ec3c21ebbeab4f4464ee10308fa9e60",
+    "frontend-modern/src/types/config.ts": "86778a683f7f259bb3eb0b47586ac177e82a953955538868cec25010585fd5ec",
+    "frontend-modern/src/utils/pricingHandoff.ts": "d7b863c45a6f8d8a991e8aad99e03869aa50bb3ad525c9ab22a445c1607b4d4d"
   },
   "routes": [
-    "/settings (System > Network section)"
+    "/settings/security-roles",
+    "/settings/pulse-intelligence/billing/plan",
+    "/settings/system-general",
+    "/patrol"
   ],
   "viewports": [
     {
-      "width": 390,
-      "height": 844
-    },
-    {
-      "width": 768,
-      "height": 1024
-    },
-    {
       "width": 1280,
       "height": 800
+    },
+    {
+      "width": 390,
+      "height": 844
     }
   ],
   "states": [
-    "Public URL section default view with empty field showing the https FQDN placeholder",
-    "PULSE_PUBLIC_URL environment-override state: disabled input with amber override alert",
-    "Mobile 390x844 and tablet 768x1024 wrapped label/description with zero horizontal overflow"
+    "Authenticated free self-hosted Roles route with presentationPolicy.hideUpgrade=true, no paid-feature or Plans & Billing navigation, and no trial, upgrade, hosted-handoff, or business-estate prompt.",
+    "Authenticated free self-hosted direct Plans & Billing route with the Community plan visible while its sidebar navigation item remains absent.",
+    "The refreshed responsive Settings shell kept direct content inside the 390-pixel viewport after a desktop-to-narrow resize and preserved the General route after mobile navigation.",
+    "Commercial Roles and direct Plans & Billing states rendered from the final production frontend build at 1280x800 and 390x844 and were inspected from captured Chromium screenshots.",
+    "Authenticated free self-hosted Patrol rendered only the Watch only mode, with no disabled paid-mode controls, Unlock Patrol modes copy, or Plans & Billing action at 1280x800 and 390x844.",
+    "The production Patrol build remained within the 390-pixel viewport with no horizontal overflow, while the mode, run control, settings control, attention filters, and finding rows remained visible and usable."
   ],
   "interactions": [
-    "Logged in at 1280x800 with real typed credentials and navigated Settings > System > Network via real clicks",
-    "Read the rendered label, description, and example copy via page text extraction and confirmed the exact new wording",
-    "Inspected the live input element: placeholder https://pulse.example.com, disabled by PULSE_PUBLIC_URL override",
-    "Re-rendered the section at 768x1024 and 390x844 (DOM-dispatched nav clicks; hidden-pane real input unavailable) and measured documentElement.scrollWidth == innerWidth at both"
+    "Built the production frontend and local Pulse backend from the refreshed isolated candidate, authenticated through the managed Playwright backend, and mocked only the commercial posture, entitlements, runtime capabilities, and security status responses.",
+    "Opened /settings/security-roles and verified default paid navigation and proactive commercial calls to action were absent while the deliberately reached Roles panel remained usable.",
+    "Opened /settings/pulse-intelligence/billing/plan directly and verified the Plans & Billing panel and Community plan rendered without restoring its sidebar navigation item.",
+    "Ran the canonical Settings shell matrix, resized direct Plans & Billing from desktop to 390x844, verified the content remained within the viewport, and navigated the narrow shell to General.",
+    "Captured and inspected full-page screenshots for commercial desktop and narrow states.",
+    "Built and embedded the final production frontend, opened /patrol against the isolated backend, confirmed Watch only was the sole free-session Patrol mode, and inspected captured desktop and narrow screenshots.",
+    "Measured the 390-pixel Patrol document at a 390-pixel scroll width and verified the Run Patrol, Patrol settings, attention-state selector, refresh action, and finding list remained reachable without exposing paid-mode discovery."
   ]
 }

@@ -22,7 +22,7 @@ describe('patrol commercial boundary', () => {
     expect(patrolIntelligenceHeaderSource).toContain(
       "autonomyAvailability().kind === 'plan_locked'",
     );
-    expect(patrolAutonomyAvailabilitySource).toContain('Unlock Patrol modes');
+    expect(patrolAutonomyAvailabilitySource).toContain('Plans & Billing');
     expect(patrolAutonomyAvailabilitySource).toContain('input.upgradePromptsHidden');
     expect(patrolIntelligenceHeaderSource).toContain('getPatrolAutonomyAvailabilityPresentation');
     expect(patrolIntelligenceHeaderSource).toContain('!presentationPolicyHidesUpgradePrompts()');

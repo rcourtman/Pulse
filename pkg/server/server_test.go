@@ -375,25 +375,3 @@ func TestServerRun_RejectsWildcardTrustedProxyCIDR(t *testing.T) {
 		t.Fatalf("expected wildcard trusted proxy configuration to be rejected, got %v", err)
 	}
 }
-
-// The telemetry snapshot closure in Run is not directly invocable, so this
-// pins the wiring: business_estate must be derived from the same
-// AggregateInstallSnapshotCounts values the payload already carries, via the
-// monitoring-owned threshold definition. The derivation itself is pinned in
-// internal/monitoring (TestInstallSnapshotCountsBusinessScaleEstate) and the
-// thresholds in internal/api (TestContract_BusinessScaleEstateThresholds).
-func TestTelemetrySnapshotDerivesBusinessEstateFromAggregateCounts(t *testing.T) {
-	source, err := os.ReadFile("server.go")
-	if err != nil {
-		t.Fatalf("read server.go: %v", err)
-	}
-	src := string(source)
-	if !strings.Contains(src, "snap.BusinessEstate = counts.BusinessScaleEstate()") {
-		t.Fatal("telemetry snapshot must derive BusinessEstate from AggregateInstallSnapshotCounts via counts.BusinessScaleEstate()")
-	}
-	counts := strings.Index(src, "reloadableMonitor.AggregateInstallSnapshotCounts()")
-	derived := strings.Index(src, "snap.BusinessEstate = counts.BusinessScaleEstate()")
-	if counts < 0 || derived < counts {
-		t.Fatal("BusinessEstate must be derived after the aggregate counts are captured in the snapshot closure")
-	}
-}

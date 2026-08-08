@@ -8,6 +8,7 @@ const runtimeCapabilitiesLoadedMock = vi.fn();
 const isHostedModeEnabledMock = vi.fn();
 const presentationPolicyHidesCommercialSurfacesMock = vi.fn();
 const presentationPolicyHidesOrganizationSurfacesMock = vi.fn();
+const presentationPolicyHidesUpgradePromptsMock = vi.fn();
 const presentationPolicyIsDemoModeMock = vi.fn();
 const presentationPolicyIsReadOnlyMock = vi.fn();
 const sessionPresentationPolicyResolvedMock = vi.fn();
@@ -28,6 +29,8 @@ vi.mock('@/stores/sessionPresentationPolicy', () => ({
     presentationPolicyHidesCommercialSurfacesMock(...args),
   presentationPolicyHidesOrganizationSurfaces: (...args: unknown[]) =>
     presentationPolicyHidesOrganizationSurfacesMock(...args),
+  presentationPolicyHidesUpgradePrompts: (...args: unknown[]) =>
+    presentationPolicyHidesUpgradePromptsMock(...args),
   presentationPolicyIsDemoMode: (...args: unknown[]) => presentationPolicyIsDemoModeMock(...args),
   presentationPolicyIsReadOnly: (...args: unknown[]) => presentationPolicyIsReadOnlyMock(...args),
   sessionPresentationPolicyResolved: (...args: unknown[]) =>
@@ -95,6 +98,7 @@ describe('useSettingsAccess', () => {
     isHostedModeEnabledMock.mockReset();
     presentationPolicyHidesCommercialSurfacesMock.mockReset();
     presentationPolicyHidesOrganizationSurfacesMock.mockReset();
+    presentationPolicyHidesUpgradePromptsMock.mockReset();
     presentationPolicyIsDemoModeMock.mockReset();
     presentationPolicyIsReadOnlyMock.mockReset();
     sessionPresentationPolicyResolvedMock.mockReset();
@@ -107,6 +111,7 @@ describe('useSettingsAccess', () => {
     isHostedModeEnabledMock.mockReturnValue(false);
     presentationPolicyHidesCommercialSurfacesMock.mockReturnValue(false);
     presentationPolicyHidesOrganizationSurfacesMock.mockReturnValue(false);
+    presentationPolicyHidesUpgradePromptsMock.mockReturnValue(true);
     presentationPolicyIsDemoModeMock.mockReturnValue(false);
     presentationPolicyIsReadOnlyMock.mockReturnValue(false);
     sessionPresentationPolicyResolvedMock.mockReturnValue(true);

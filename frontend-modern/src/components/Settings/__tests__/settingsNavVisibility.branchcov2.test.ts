@@ -442,9 +442,8 @@ describe('isSettingsNavItemLocked', () => {
   });
 
   it('returns false for a tab with hideWhenUnavailable (early `item.hideWhenUnavailable` branch)', () => {
-    // Since the 2026-08-07 commercial-surfaces revision only the organization-*
-    // tabs still carry hideWhenUnavailable -> short-circuit before isTabLocked
-    // is consulted.
+    // organization-overview, security-roles, system-relay, support-reporting all
+    // carry hideWhenUnavailable -> short-circuit before isTabLocked is consulted.
     expect(
       isSettingsNavItemLocked(
         'organization-overview',
@@ -452,36 +451,18 @@ describe('isSettingsNavItemLocked', () => {
       ),
     ).toBe(false);
     expect(
-      isSettingsNavItemLocked(
-        'organization-access',
-        createContext({ hasFeature: hasFeatures([]) }),
-      ),
+      isSettingsNavItemLocked('security-roles', createContext({ hasFeature: hasFeatures([]) })),
     ).toBe(false);
   });
 
-  it('reports system-relay as locked for free installs (visible nav item, panel-owned gate)', () => {
+  it('hides system-relay instead of reporting a locked navigation item for free installs', () => {
     expect(
       isSettingsNavItemLocked('system-relay', createContext({ hasFeature: hasFeatures([]) })),
-    ).toBe(true);
+    ).toBe(false);
     expect(
       isSettingsNavItemLocked(
         'system-relay',
         createContext({ hasFeature: hasFeatures(['relay']) }),
-      ),
-    ).toBe(false);
-  });
-
-  it('reports security-webhooks as locked for free installs (visible nav item, panel-owned gate)', () => {
-    // Relay-shaped since the 2026-08-07 commercial-surfaces revision: the
-    // catalog entry dropped hideWhenUnavailable so the tab stays visible and
-    // the panel gates inline, so the lock state reports honestly.
-    expect(
-      isSettingsNavItemLocked('security-webhooks', createContext({ hasFeature: hasFeatures([]) })),
-    ).toBe(true);
-    expect(
-      isSettingsNavItemLocked(
-        'security-webhooks',
-        createContext({ hasFeature: hasFeatures(['audit_logging']) }),
       ),
     ).toBe(false);
   });
@@ -501,12 +482,11 @@ describe('isSettingsNavItemLocked', () => {
     ).toBe(false);
   });
 
-  it('never reports other real catalog tabs as locked', () => {
-    // system-relay and security-webhooks are the two deliberate exceptions:
-    // they stay visible without their feature and report locked (see the
-    // dedicated tests above). The organization-* tabs still hide via
-    // hideWhenUnavailable, and the rest carry no lock requirements.
+  it('never reports other real catalog tabs as locked (their feature gates also carry hideWhenUnavailable)', () => {
+    // Paid feature navigation stays quiet when unavailable. Deliberate direct
+    // routes remain panel-owned and continue to render their opt-in affordance.
     const tabs: SettingsTab[] = [
+      'security-webhooks',
       'organization-overview',
       'organization-access',
       'organization-sharing',

@@ -263,12 +263,12 @@ describe('patrolAutonomyAvailability', () => {
         });
 
         expect(result.kind).toBe('plan_locked');
-        expect(result.actionLabel).toBe('Unlock Patrol modes');
+        expect(result.actionLabel).toBe('Plans & Billing');
       });
     });
 
     describe('plan_locked presentation', () => {
-      it('shows the unlock action when surfaces are visible', () => {
+      it('shows the Plans & Billing action when surfaces are visible', () => {
         const result = getPatrolAutonomyAvailabilityPresentation({
           autoFixLocked: true,
           planUpgradeDestination: planDestination,
@@ -279,7 +279,7 @@ describe('patrolAutonomyAvailability', () => {
           locked: true,
           title: 'Watch only',
           body: 'This install watches infrastructure and shows issues.',
-          actionLabel: 'Unlock Patrol modes',
+          actionLabel: 'Plans & Billing',
           destination: planDestination,
         });
       });

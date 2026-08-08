@@ -1316,27 +1316,22 @@ hands-on Patrol modes, issue investigation, verified fixes, and longer history`.
     pricing/checkout, upgrade-metrics, or infrastructure-onboarding analytics
     fields, controls, routes, stores, or startup DB artifacts to normal product
     users.
-17. Keep ordinary self-hosted v6 commercial surfaces reactive and
-    policy-governed (2026-08-07 revision, supersedes the 2026-04-25 opt-in
-    posture; see
-    records/self-hosted-commercial-surfaces-revision-2026-08-07.md). Default
-    free self-hosted browser surfaces show paid-feature settings navigation
-    with panel-owned inline gates, render gate CTAs, and keep Plans & Billing
-    discoverable including the MSP/provider path with its self-issued
-    evaluation. Exactly one proactive commercial surface is allowed: the
-    one-shot business-estate card driven by the authenticated
-    `sessionCapabilities.businessEstate` flag, shown only to free installs
-    and permanently dismissible in a single interaction.
-    `presentationPolicy.hideUpgrade` remains the suppression contract and is
-    forced true for demo mode and white-label runtimes (which covers MSP
-    tenant containers); every commercial surface must keep honoring it
-    wherever it is true. Trial CTAs, hosted handoff prompts, and
-    monitored-system limit pressure stay out of default self-hosted UI. The
-    authenticated app shell must still skip background
-    `/api/license/commercial-posture` bootstrap while
-    `presentationPolicy.hideUpgrade` is true; explicit self-hosted plan,
-    activation/recovery, and prompt-allowed flows may refresh the shared
-    posture store.
+17. Keep ordinary self-hosted v6 commercial surfaces explicitly opt-in under
+    the 2026-04-25 posture. Default free self-hosted browser surfaces hide
+    paid-feature settings navigation, Plans & Billing navigation, upgrade
+    calls to action, trial ceremony, hosted handoff prompts, and proactive
+    commercial cards. Direct plan, activation, recovery, and feature-gate
+    routes remain available for an operator who deliberately enters that
+    context. Hosted sessions and installs with an existing paid, activation,
+    or recovery context may expose the corresponding navigation.
+    `presentationPolicy.hideUpgrade` is the fail-closed navigation and prompt
+    contract. Demo mode and white-label runtimes also force
+    `hideCommercial`, which keeps all commercial surfaces suppressed for demos,
+    kiosks, and MSP tenant containers. The authenticated app shell must still
+    skip background `/api/license/commercial-posture` bootstrap while the
+    presentation policy forbids the relevant commercial surface. Explicit
+    self-hosted plan, activation, recovery, and prompt-allowed flows may
+    refresh the shared posture store.
 18. Keep hosted and trial billing construction separate from retired hosted-AI
     quickstart inventory: `pkg/licensing/trial_start.go` and hosted
     entitlement refresh paths may preserve historical billing fields for old
@@ -1411,30 +1406,6 @@ hands-on Patrol modes, issue investigation, verified fixes, and longer history`.
     scope-limited session gets the temporary header reveal instead. The
     blocked-route redirect and the banner block must stay active for a
     scope-limited session even when kiosk is off.
-30. Keep checkout source attribution closed-vocabulary, authenticated-only,
-    and out of browser-visible portal URLs. In-app upgrade CTAs stamp a
-    `source` token (`gate-<feature>`, `estate-card`, or the `plans-page`
-    default) onto the owned billing plan route and the authenticated
-    `/auth/license-purchase-start` URL
-    (`frontend-modern/src/utils/pricingHandoff.ts`); the public `/pricing`
-    route and the public pricing URL never carry it, and
-    `getSelfHostedPurchaseStartUrl` scrubs it from forwarded query strings so
-    a crafted website link cannot claim in-app attribution. Server-side,
-    `HandleCheckoutStart` validates the token against the closed kebab
-    pattern, sends it only inside the `CreateCheckoutPortalHandoff` body
-    (`omitempty`, so source-less requests stay compatible with older license
-    servers), skip-lists it from the Pulse Account portal redirect query, and
-    echoes it onto the cancel return so a retry keeps its origin
-    (`TestHandleCheckoutStart_SourceAttributionReachesHandoffNeverPortal`).
-    The license server persists it on the checkout intent and stamps Stripe
-    session metadata `checkout_source`, with `checkout_origin` now honestly
-    split: `pulse_app` for intent-resolved sessions, `pulserelay_landing`
-    only for the public landing funnel
-    (`TestHandleCheckoutSessionCreate_CarriesSourceAttributionToStripe`,
-    `TestCreateStripeCheckoutSessionKeepsLandingOriginWithoutIntent`).
-    Deploy ordering: the license server must carry the `source` field before
-    a Pulse release that sends it, because the handoff body decodes strictly.
-
 ## Current State
 
 The approved commercial contract is recorded in
@@ -2156,9 +2127,9 @@ Browser and shell coverage now guard that retired boundary:
 `tests/integration/scripts/retired-trial-acquisition-contract.sh` must expect `404` from the
 retired route and prove entitlements remain unchanged. The paid-prompt browser
 proof in `tests/integration/tests/58-self-hosted-trial-rate-limit-ui.spec.ts`
-must keep trial CTAs and hosted handoff prompts out of the default
-self-hosted UI while proving paid-feature navigation stays visible with
-panel-owned inline gates (2026-08-07 commercial-surfaces revision).
+must keep trial CTAs, hosted handoff prompts, paid-feature navigation, and
+Plans & Billing navigation out of the default free self-hosted UI while keeping
+explicit direct routes available for activation and recovery.
 `scripts/tests/test-retired-trial-acquisition-docs.sh` guards the same documentation posture
 so active operator docs and eval metadata describe the retired route instead of
 the old hosted-signup acquisition contract.

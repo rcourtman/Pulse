@@ -13,7 +13,6 @@ import {
   getSelfHostedBillingHref,
   getPublicPricingUrl,
   getSelfHostedPurchaseStartUrl,
-  PURCHASE_HANDOFF_SOURCE_PLANS_PAGE,
   SELF_HOSTED_PRO_BILLING_PLAN_HREF,
   SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_INTENT,
   SELF_HOSTED_PRO_BILLING_PURCHASE_ACTIVATED,
@@ -273,23 +272,6 @@ describe('ProLicensePanel', () => {
     expect(screen.queryByText('Relay plan')).not.toBeInTheDocument();
     expect(screen.queryByText('Pulse Pro plan')).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'View plans' })).not.toBeInTheDocument();
-  });
-
-  // 2026-08-07 commercial-surfaces revision: the plans page is the landing
-  // surface for business-estate prompts, so it must carry the MSP/provider
-  // path including the self-issued evaluation.
-  it('surfaces the MSP provider section with the self-issued evaluation', async () => {
-    renderPanel();
-
-    await waitFor(() => {
-      expect(loadLicenseEntitlementsMock).toHaveBeenCalled();
-    });
-
-    expect(screen.getByText('MSPs and multi-client providers')).toBeInTheDocument();
-    expect(screen.getByText(/Plans start at \$149\/mo/)).toBeInTheDocument();
-    expect(screen.getByText(/free\s*60-day evaluation/)).toBeInTheDocument();
-    const mspLink = screen.getByRole('link', { name: /pulserelay\.pro\/msp/i });
-    expect(mspLink).toHaveAttribute('href', 'https://pulserelay.pro/msp');
   });
 
   it('opens compare-plan checkout from the explicit self-hosted billing handoff', async () => {
@@ -1151,11 +1133,7 @@ describe('ProLicensePanel', () => {
       purchase: SELF_HOSTED_PRO_BILLING_PURCHASE_CANCELLED,
       title: 'Checkout cancelled',
       actionLabel: 'View plans',
-      actionHref: getSelfHostedPurchaseStartUrl(
-        SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_INTENT,
-        undefined,
-        PURCHASE_HANDOFF_SOURCE_PLANS_PAGE,
-      ),
+      actionHref: getSelfHostedPurchaseStartUrl(SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_INTENT),
       redirectedHref: getSelfHostedBillingHref('plan', {
         intent: SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_INTENT,
       }),
@@ -1164,11 +1142,7 @@ describe('ProLicensePanel', () => {
       purchase: SELF_HOSTED_PRO_BILLING_PURCHASE_EXPIRED,
       title: 'Upgrade return expired',
       actionLabel: 'View plans',
-      actionHref: getSelfHostedPurchaseStartUrl(
-        undefined,
-        undefined,
-        PURCHASE_HANDOFF_SOURCE_PLANS_PAGE,
-      ),
+      actionHref: getSelfHostedPurchaseStartUrl(),
     },
     {
       purchase: SELF_HOSTED_PRO_BILLING_PURCHASE_FAILED,
@@ -1185,11 +1159,7 @@ describe('ProLicensePanel', () => {
       purchase: SELF_HOSTED_PRO_BILLING_PURCHASE_UNAVAILABLE,
       title: 'Pulse Account unavailable',
       actionLabel: 'Try again',
-      actionHref: getSelfHostedPurchaseStartUrl(
-        undefined,
-        undefined,
-        PURCHASE_HANDOFF_SOURCE_PLANS_PAGE,
-      ),
+      actionHref: getSelfHostedPurchaseStartUrl(),
     },
   ])(
     'shows the purchase arrival notice for $purchase',
@@ -1445,11 +1415,7 @@ describe('ProLicensePanel', () => {
       compareLinks.some(
         (link) =>
           link.getAttribute('href') ===
-          getSelfHostedPurchaseStartUrl(
-            SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_INTENT,
-            undefined,
-            PURCHASE_HANDOFF_SOURCE_PLANS_PAGE,
-          ),
+          getSelfHostedPurchaseStartUrl(SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_INTENT),
       ),
     ).toBe(true);
     expect(screen.queryByRole('button', { name: 'Hide counting rules' })).not.toBeInTheDocument();
