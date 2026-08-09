@@ -1043,7 +1043,7 @@ func (m *Manager) clearGuestMetricAlerts(guestID string, metrics ...string) int 
 
 	cleared := 0
 	for storageKey, alert := range m.activeAlerts {
-		if alert == nil || alert.Type == "powered-off" {
+		if alert == nil || !isMetricThresholdAlertType(alert.Type) {
 			continue
 		}
 		if alert.ResourceID != guestID && !strings.HasPrefix(alert.ResourceID, perDiskPrefix) &&

@@ -9,6 +9,15 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+func isMetricThresholdAlertType(metricType string) bool {
+	switch metricType {
+	case "cpu", "memory", "disk", "diskRead", "diskWrite", "networkIn", "networkOut", "temperature", "usage":
+		return true
+	default:
+		return false
+	}
+}
+
 // getThresholdForMetric returns the threshold for a specific metric type from a ThresholdConfig.
 func getThresholdForMetric(config ThresholdConfig, metricType string) *HysteresisThreshold {
 	switch metricType {

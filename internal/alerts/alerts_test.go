@@ -15069,6 +15069,52 @@ func TestCheckGuest(t *testing.T) {
 		}
 	})
 
+	t.Run("non-running guest preserves posture alerts", func(t *testing.T) {
+		m := newTestManager(t)
+
+		backupStateID := buildCanonicalStateID("vm100", "vm100-backup-age")
+		snapshotStateID := buildCanonicalStateID("vm100", "vm100/snapshot:snap1")
+		m.mu.Lock()
+		m.activeAlerts[backupStateID] = &Alert{
+			ID:              backupStateID,
+			ResourceID:      "vm100",
+			Type:            "backup-age",
+			CanonicalKind:   string(alertspecs.AlertSpecKindPostureThreshold),
+			CanonicalSpecID: "vm100-backup-age",
+			CanonicalState:  backupStateID,
+		}
+		m.activeAlerts[snapshotStateID] = &Alert{
+			ID:              snapshotStateID,
+			ResourceID:      "vm100",
+			Type:            "snapshot-age",
+			CanonicalKind:   string(alertspecs.AlertSpecKindPostureThreshold),
+			CanonicalSpecID: "vm100/snapshot:snap1",
+			CanonicalState:  snapshotStateID,
+		}
+		m.mu.Unlock()
+
+		vm := models.VM{
+			ID:     "vm100",
+			Name:   "TestVM",
+			Node:   "node1",
+			Status: "stopped",
+		}
+
+		m.CheckGuest(vm, "pve1")
+
+		m.mu.RLock()
+		_, backupExists := testLookupActiveAlert(t, m, backupStateID)
+		_, snapshotExists := testLookupActiveAlert(t, m, snapshotStateID)
+		m.mu.RUnlock()
+
+		if !backupExists {
+			t.Error("expected backup-age alert to remain active for a non-running guest")
+		}
+		if !snapshotExists {
+			t.Error("expected snapshot-age alert to remain active for a non-running guest")
+		}
+	})
+
 	t.Run("running guest clears powered-off alert", func(t *testing.T) {
 		// t.Parallel()
 		m := newTestManager(t)

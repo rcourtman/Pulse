@@ -29,6 +29,10 @@ their updated thresholds and may apply explicit resource-disable policies, but
 it must not treat provider-owned incidents as missing thresholds. Unrelated
 configuration saves preserve those incidents and their acknowledgement state
 until their provider evaluator supplies recovery evidence.
+When a VM or container stops, guest evaluation resolves only metric-threshold
+alerts whose observations are no longer meaningful. Backup-age and snapshot
+posture remain owned by their posture evaluator and may stay active while the
+guest is powered off; stopped state is not backup-recovery evidence.
 Docker and Podman container CPU thresholds evaluate host-capacity-normalized
 CPU percent, not Docker's runtime-native per-core percent. Alert metadata may
 carry the raw per-core value and reporting host CPU count for evidence, but the

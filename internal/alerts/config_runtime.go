@@ -326,15 +326,6 @@ func alertResourceTypeKeysContain(keys []string, target string) bool {
 	return false
 }
 
-func isConfigReevaluatedMetricType(metricType string) bool {
-	switch metricType {
-	case "cpu", "memory", "disk", "diskRead", "diskWrite", "networkIn", "networkOut", "temperature", "usage":
-		return true
-	default:
-		return false
-	}
-}
-
 // reevaluateActiveAlertsLocked re-evaluates all active alerts against the current configuration.
 // This should only be called with m.mu already locked.
 func (m *Manager) reevaluateActiveAlertsLocked() {
@@ -545,7 +536,7 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 		// observations. An unrelated config save must leave their lifecycle and
 		// acknowledgement state intact; only their evaluator (or an explicit
 		// resource-disable policy handled above) can resolve them.
-		if !isConfigReevaluatedMetricType(metricType) {
+		if !isMetricThresholdAlertType(metricType) {
 			continue
 		}
 
