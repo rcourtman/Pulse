@@ -27,10 +27,10 @@ entries:
       org.opencontainers.image.source: https://github.com/rcourtman/Pulse
     apiVersion: v2
     appVersion: 6.2.0
-    created: "2026-08-09T18:59:26.18540234Z"
+    created: "2026-08-09T19:02:34.910775933Z"
     description: Helm chart for deploying the Pulse hub and optional Docker, Kubernetes,
       or OpenShift monitoring agent.
-    digest: 17441ac1a0eea7f0e3af00cd0230e46f8a3da8c7b12912ea6c7d13ea5552b3bf
+    digest: 302e6125f6ef6d86fe590ad1fcf01f5b0eb351d09c62a42385223ac3eb1c9c20
     home: https://github.com/rcourtman/Pulse
     icon: https://raw.githubusercontent.com/rcourtman/Pulse/v6.2.0/docs/images/pulse-logo.svg
     keywords:
@@ -3800,4 +3800,4 @@ entries:
     urls:
     - https://github.com/rcourtman/Pulse/releases/download/helm-chart-4.28.0/pulse-4.28.0.tgz
     version: 4.28.0
-generated: "2026-08-09T18:59:26.184528938Z"
+generated: "2026-08-09T19:02:34.909745677Z"
