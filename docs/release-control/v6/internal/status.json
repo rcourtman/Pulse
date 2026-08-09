@@ -9398,7 +9398,7 @@
     },
     {
       "id": "performance-post-rc-headroom",
-      "summary": "Track additional scalability headroom and non-blocking performance polish beyond the current release floor.",
+      "summary": "Track additional scalability headroom and non-blocking performance polish beyond the current release floor. Release Dry Runs 31307581484 and 31308753863 on exact SHA e2a2e7d4d2016428a502347248af925200e44ee0 both passed native policy, macOS signing and notarization, and complete immutable candidate validation, then failed the backend lane on runner-local wall-clock performance thresholds. TestLoad_500Node_ConcurrentMetricsHistory completed exactly 161 requests in both runs against an 800-request threshold; the first run also measured TestSLO_MetricsHistoryStore p95 at 12.410ms against 12ms. Targeted local repetitions classified the overruns as host CPU contention rather than a product regression. Stabilize or isolate these timing proofs in a separately claimed test-harness slice; do not weaken thresholds or iterate stabilization commits inside the v6.2.0 release task.",
       "owner": "project-owner",
       "status": "planned",
       "recorded_at": "2026-03-13",
@@ -9619,21 +9619,7 @@
   ],
   "coverage_gaps": [],
   "candidate_lanes": [],
-  "work_claims": [
-    {
-      "id": "release-operator-620-release-gate-single-build-release-promotion-path",
-      "agent_id": "release-operator-620",
-      "summary": "Prepare, dry-run, and publish v6.2.0 stable with the owner-approved 72-hour soak waiver",
-      "target_id": "v6-product-lane-expansion",
-      "claimed_at": "2026-08-09T09:43:04Z",
-      "heartbeat_at": "2026-08-09T09:43:04Z",
-      "expires_at": "2026-08-09T11:43:04Z",
-      "work_item": {
-        "kind": "release-gate",
-        "id": "single-build-release-promotion-path"
-      }
-    }
-  ],
+  "work_claims": [],
   "open_decisions": [],
   "source_of_truth_file": "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",
   "resolved_decisions": [
