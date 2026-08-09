@@ -5249,8 +5249,10 @@ separately compiled Pro binary and never by license-active state) is such paid
 context: a Pro-edition session serves `hideUpgrade=false` even before its
 license activates, because the Pro binary reaches an install only through the
 paid broker flow and hiding the Plans & Billing activation entry from it
-strands a paying customer. Community binaries — with or without a license key
-applied later — keep the opt-in default. `hideCommercial` remains the stronger
+strands a paying customer. Community binaries without separate hosted,
+non-free license, subscription, activation, or recovery context keep the opt-in
+default; existing license- and subscription-derived commercial context remains
+independent of the compiled edition. `hideCommercial` remains the stronger
 suppression boundary for demo mode and white-label runtimes and wins over
 edition-derived context. API consumers must treat both fields as
 presentation policy rather than as billing entitlement truth, and direct
