@@ -323,6 +323,86 @@ func TestInstallSHPreflightChecksAgentDownloadArtifact(t *testing.T) {
 	}
 }
 
+func TestInstallSHPreflightFollowsAgentDownloadRedirect(t *testing.T) {
+	var requestedArtifactMethod string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/health":
+			w.WriteHeader(http.StatusOK)
+		case "/download/pulse-agent":
+			w.Header().Set("X-Checksum-Sha256", strings.Repeat("a", 64))
+			http.Redirect(w, r, "/artifacts/pulse-agent?"+r.URL.RawQuery, http.StatusTemporaryRedirect)
+		case "/artifacts/pulse-agent":
+			requestedArtifactMethod = r.Method
+			w.Header().Set("X-Checksum-Sha256", strings.Repeat("b", 64))
+			w.WriteHeader(http.StatusOK)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	cmd := exec.Command(
+		"bash",
+		repoFile("scripts", "install.sh"),
+		"--url",
+		server.URL,
+		"--preflight-only",
+		"--output",
+		"json",
+		"--non-interactive",
+	)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("redirected preflight failed: %v\n%s", err, out)
+	}
+
+	if got := string(out); !strings.Contains(got, `"code":"agent_download_available"`) {
+		t.Fatalf("redirected preflight did not report agent download availability:\n%s", got)
+	}
+	if requestedArtifactMethod != http.MethodHead {
+		t.Fatalf("redirected artifact method = %q, want HEAD", requestedArtifactMethod)
+	}
+}
+
+func TestInstallSHPreflightRejectsChecksumOnlyOnRedirectResponse(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/health":
+			w.WriteHeader(http.StatusOK)
+		case "/download/pulse-agent":
+			w.Header().Set("X-Checksum-Sha256", strings.Repeat("a", 64))
+			http.Redirect(w, r, "/artifacts/pulse-agent?"+r.URL.RawQuery, http.StatusTemporaryRedirect)
+		case "/artifacts/pulse-agent":
+			w.WriteHeader(http.StatusOK)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	cmd := exec.Command(
+		"bash",
+		repoFile("scripts", "install.sh"),
+		"--url",
+		server.URL,
+		"--preflight-only",
+		"--output",
+		"json",
+		"--non-interactive",
+	)
+	out, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatalf("preflight accepted checksum metadata from an intermediate redirect:\n%s", out)
+	}
+	if exitErr, ok := err.(*exec.ExitError); !ok || exitErr.ExitCode() != 12 {
+		t.Fatalf("redirect-only checksum exit = %v, want 12\n%s", err, out)
+	}
+	if got := string(out); !strings.Contains(got, `"code":"agent_download_checksum_missing"`) {
+		t.Fatalf("preflight did not report missing final-response checksum metadata:\n%s", got)
+	}
+}
+
 func TestInstallSHPreflightDoesNotRequireRoot(t *testing.T) {
 	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
 	if err != nil {
@@ -333,8 +413,8 @@ func TestInstallSHPreflightDoesNotRequireRoot(t *testing.T) {
 	required := []string{
 		`if [[ $EUID -ne 0 && "$PREFLIGHT_ONLY" != "true" ]]; then`,
 		`DOWNLOAD_CHECK_URL="${PULSE_URL}/download/${BINARY_NAME}?arch=${PF_ARCH_PARAM}"`,
-		`CURL_DOWNLOAD_CHECK_ARGS=(-fsSI --connect-timeout 5 --max-time 30 -D "$PREFLIGHT_HEADERS" -o /dev/null)`,
-		`grep -i '^X-Checksum-Sha256:' "$PREFLIGHT_HEADERS"`,
+		`CURL_DOWNLOAD_CHECK_ARGS=(-fsSIL --connect-timeout 5 --max-time 30 -D "$PREFLIGHT_HEADERS" -o /dev/null)`,
+		`final_response_header_value "$PREFLIGHT_HEADERS" "X-Checksum-Sha256"`,
 		`"agent_download_available"`,
 		`"agent_download_unavailable"`,
 		`"agent_download_checksum_missing"`,
@@ -3646,7 +3726,7 @@ func TestInstallSHRequiresPinnedSignatureVerificationForReleaseDownloads(t *test
 	required := []string{
 		`PINNED_INSTALLER_SSH_PUBLIC_KEY="__PULSE_INSTALLER_SSH_PUBLIC_KEY__"`,
 		`has_pinned_installer_signature_key() {`,
-		`grep -i '^X-Signature-SSHSIG:' "$TMP_HEADERS"`,
+		`final_response_header_value "$TMP_HEADERS" "X-Signature-SSHSIG"`,
 		`Server did not provide checksum header; refusing install.`,
 		`Server did not provide SSH signature header; refusing signed install.`,
 		`ssh-keygen -Y verify`,

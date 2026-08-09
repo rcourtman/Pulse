@@ -3050,7 +3050,10 @@ For Unix-family copied host installs, the deployment-owned shell installer must
 support preflight before privilege escalation: `--preflight-only` may run
 without root, must check both `/api/health` and the exact
 `/download/pulse-agent?arch=...` artifact for checksum metadata, and must fail
-before installation if the server cannot provide that binary.
+before installation if the server cannot provide that binary. Both checks must
+follow redirects to the operator's final Pulse origin before deciding
+reachability or inspecting checksum metadata; an HTTP redirect accepted as a
+successful transport response is not the agent artifact contract.
 A server may only hand out an agent binary that carries its own agent version.
 Local agent artifacts are build outputs that nothing refreshes on their own, so
 they go stale silently, and staleness is not cosmetic: the installer renders its

@@ -5136,7 +5136,10 @@ For Unix-family host installs, that same seamless installer contract requires
 the copied command to fetch the shared installer into an ephemeral directory,
 run `install.sh --preflight-only` before privilege escalation, and fail before
 `sudo` if the selected Pulse URL or exact `/download/pulse-agent?arch=...`
-artifact is unavailable or missing checksum metadata. Token-bearing copied
+artifact is unavailable or missing checksum metadata. Preflight must follow
+redirects to the final Pulse download response before reading that metadata so
+reverse-proxied and canonicalized public URLs do not fail on an intermediate
+redirect that never served an agent binary. Token-bearing copied
 commands must pass the credential to the installer through an ephemeral
 `--token-file` and clean it up with the downloaded installer script, so the
 installed service never receives a raw `--token` argument.

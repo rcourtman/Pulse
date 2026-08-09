@@ -204,6 +204,32 @@ url_encode() {
     fi
     printf '%s' "$output"
 }
+final_response_header_value() {
+    local headers_path="$1"
+    local header_name="$2"
+
+    awk -v header_name="$header_name" '
+        BEGIN {
+            prefix = tolower(header_name) ":"
+            value = ""
+        }
+        /^HTTP\// {
+            value = ""
+            next
+        }
+        {
+            line = $0
+            sub(/\r$/, "", line)
+            if (substr(tolower(line), 1, length(prefix)) == prefix) {
+                value = substr(line, length(prefix) + 1)
+                sub(/^[[:space:]]+/, "", value)
+            }
+        }
+        END {
+            print value
+        }
+    ' "$headers_path" 2>/dev/null
+}
 fail() {
     local code="${2:-1}"
     if [[ "$OUTPUT_FORMAT" == "json" ]]; then
@@ -3485,7 +3511,7 @@ if [[ "$PREFLIGHT_ONLY" == "true" ]]; then
 
     # Check 4: Pulse URL reachability and agent binary availability
     if [[ -n "$PULSE_URL" ]]; then
-        CURL_TEST_ARGS=(-sf --connect-timeout 5 -o /dev/null)
+        CURL_TEST_ARGS=(-sfL --connect-timeout 5 -o /dev/null)
         if [[ "$INSECURE" == "true" ]]; then CURL_TEST_ARGS+=(-k); fi
         if [[ -n "$CURL_CA_BUNDLE" ]]; then CURL_TEST_ARGS+=(--cacert "$CURL_CA_BUNDLE"); fi
         if curl "${CURL_TEST_ARGS[@]}" "${PULSE_URL}/api/health"; then
@@ -3497,13 +3523,13 @@ if [[ "$PREFLIGHT_ONLY" == "true" ]]; then
 
         PREFLIGHT_HEADERS=$(mktemp)
         TMP_FILES+=("$PREFLIGHT_HEADERS")
-        CURL_DOWNLOAD_CHECK_ARGS=(-fsSI --connect-timeout 5 --max-time 30 -D "$PREFLIGHT_HEADERS" -o /dev/null)
+        CURL_DOWNLOAD_CHECK_ARGS=(-fsSIL --connect-timeout 5 --max-time 30 -D "$PREFLIGHT_HEADERS" -o /dev/null)
         if [[ "$INSECURE" == "true" ]]; then CURL_DOWNLOAD_CHECK_ARGS+=(-k); fi
         if [[ -n "$CURL_CA_BUNDLE" ]]; then CURL_DOWNLOAD_CHECK_ARGS+=(--cacert "$CURL_CA_BUNDLE"); fi
 
         DOWNLOAD_CHECK_URL="${PULSE_URL}/download/${BINARY_NAME}?arch=${PF_ARCH_PARAM}"
         if curl "${CURL_DOWNLOAD_CHECK_ARGS[@]}" "$DOWNLOAD_CHECK_URL"; then
-            PREFLIGHT_EXPECTED_SHA=$(grep -i '^X-Checksum-Sha256:' "$PREFLIGHT_HEADERS" 2>/dev/null | tr -d '\r' | awk '{print $2}' || true)
+            PREFLIGHT_EXPECTED_SHA=$(final_response_header_value "$PREFLIGHT_HEADERS" "X-Checksum-Sha256" || true)
             if [[ -n "$PREFLIGHT_EXPECTED_SHA" ]]; then
                 json_event "preflight" "agent_download_available" "Agent binary available for ${PF_ARCH_PARAM}"
             else
@@ -3629,8 +3655,8 @@ fi
 # Release metadata verification
 EXPECTED_SHA=""
 SSH_SIGNATURE_HEADER=""
-EXPECTED_SHA=$(grep -i '^X-Checksum-Sha256:' "$TMP_HEADERS" 2>/dev/null | tr -d '\r' | awk '{print $2}' || true)
-SSH_SIGNATURE_HEADER=$(grep -i '^X-Signature-SSHSIG:' "$TMP_HEADERS" 2>/dev/null | tr -d '\r' | sed 's/^[^:]*:[[:space:]]*//' || true)
+EXPECTED_SHA=$(final_response_header_value "$TMP_HEADERS" "X-Checksum-Sha256" || true)
+SSH_SIGNATURE_HEADER=$(final_response_header_value "$TMP_HEADERS" "X-Signature-SSHSIG" || true)
 
 if [[ -z "$EXPECTED_SHA" ]]; then
     fail "Server did not provide checksum header; refusing install." "$EXIT_CHECKSUM_FAILED"
