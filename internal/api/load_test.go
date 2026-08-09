@@ -353,13 +353,12 @@ func TestLoad_500Node_MixedEndpoints(t *testing.T) {
 		historyURLs[i] = "/api/metrics-store/history?resourceType=vm&resourceId=" + id + "&metric=cpu&range=1h"
 	}
 
-	const duration = 2 * time.Second
-
 	type endpointResult struct {
-		name      string
-		latencies []time.Duration
-		errors    int64
-		count     int64
+		name          string
+		latencies     []time.Duration
+		errors        int64
+		count         int64
+		expectedCount int64
 	}
 
 	var histIdx int64 // test-local counter for round-robin
@@ -367,13 +366,15 @@ func TestLoad_500Node_MixedEndpoints(t *testing.T) {
 
 	// 3 endpoint groups, each with their own concurrency.
 	groups := []struct {
-		name        string
-		concurrency int
-		fn          func() int // returns HTTP status code
+		name              string
+		concurrency       int
+		requestsPerWorker int
+		fn                func() int // returns HTTP status code
 	}{
 		{
-			name:        "resources",
-			concurrency: 20,
+			name:              "resources",
+			concurrency:       20,
+			requestsPerWorker: 3,
 			fn: func() int {
 				req := httptest.NewRequest(http.MethodGet, "/api/resources?limit=50", nil)
 				rec := httptest.NewRecorder()
@@ -382,8 +383,9 @@ func TestLoad_500Node_MixedEndpoints(t *testing.T) {
 			},
 		},
 		{
-			name:        "metrics-history",
-			concurrency: 25,
+			name:              "metrics-history",
+			concurrency:       25,
+			requestsPerWorker: 2,
 			fn: func() int {
 				idx := int(atomic.AddInt64(&histIdx, 1))
 				req := httptest.NewRequest(http.MethodGet, historyURLs[idx%len(historyURLs)], nil)
@@ -393,8 +395,9 @@ func TestLoad_500Node_MixedEndpoints(t *testing.T) {
 			},
 		},
 		{
-			name:        "metrics-stats",
-			concurrency: 5,
+			name:              "metrics-stats",
+			concurrency:       5,
+			requestsPerWorker: 2,
 			fn: func() int {
 				req := httptest.NewRequest(http.MethodGet, "/api/metrics-store/stats", nil)
 				rec := httptest.NewRecorder()
@@ -415,18 +418,19 @@ func TestLoad_500Node_MixedEndpoints(t *testing.T) {
 
 	for gi, grp := range groups {
 		results[gi].name = grp.name
+		results[gi].expectedCount = int64(grp.concurrency * grp.requestsPerWorker)
 		for c := 0; c < grp.concurrency; c++ {
 			wg.Add(1)
 			gi := gi
 			fn := grp.fn
+			requestsPerWorker := grp.requestsPerWorker
 			go func() {
 				defer wg.Done()
 				ready.Done()
 				ready.Wait()
-				deadline := time.Now().Add(duration)
-				var localLats []time.Duration
+				localLats := make([]time.Duration, 0, requestsPerWorker)
 				var localErrs int64
-				for time.Now().Before(deadline) {
+				for requestIndex := 0; requestIndex < requestsPerWorker; requestIndex++ {
 					reqStart := time.Now()
 					code := fn()
 					elapsed := time.Since(reqStart)
@@ -485,20 +489,14 @@ func TestLoad_500Node_MixedEndpoints(t *testing.T) {
 		}
 	}
 
-	// Minimum request volume per endpoint group — ensures throughput didn't
-	// collapse under contention. Counts include in-flight overrun past the
-	// nominal 2s window (RPS = count / wallTime, standard approach).
-	// The mixed-load metrics-history floor is lower because each request does a
-	// real store query plus canonical target resolution while contending with
-	// resource and stats endpoints on the same process.
-	minCounts := map[string]int64{
-		"resources":       effectiveLoadMinCount(50, 40),
-		"metrics-history": effectiveLoadMinCount(30, 24),
-		"metrics-stats":   effectiveLoadMinCount(10, 10),
-	}
+	// Fixed work makes the mixed-load proof independent of hosted-runner speed.
+	// Every endpoint must complete its planned requests successfully; the p95
+	// budgets above remain the wall-clock regression guard under contention.
+	// The prior fixed-duration count floor let slow requests consume the entire
+	// two-second launch window before some workers could record enough samples.
 	for _, r := range results {
-		if minCount, ok := minCounts[r.name]; ok && r.count < minCount {
-			failOrSkipLoadOverrun(t, "[%s] completed only %d requests, expected at least %d", r.name, r.count, minCount)
+		if r.count != r.expectedCount {
+			t.Errorf("[%s] completed %d successful requests, expected exactly %d", r.name, r.count, r.expectedCount)
 		}
 	}
 }

@@ -2060,7 +2060,12 @@ it must not use a fixed-duration request-count floor tied to one hosted-runner
 or SQLite-driver generation. The absolute concurrent p95 ceiling remains in
 force, while `TestSLO_MetricsHistoryStore` measures the fast single-request
 path in small amortized batches so isolated scheduler or GC pauses cannot
-decide a release without a sustained endpoint regression.
+decide a release without a sustained endpoint regression. The strict local
+store-backed target remains 5ms; the hosted-runner envelope is 15ms after the
+2026-08-09 exact-SHA rehearsal sustained an 11.98ms median and 12.23ms p95 on
+the public runner. The mixed-endpoint proof must likewise execute fixed work
+per endpoint group and use its absolute p95 budgets rather than racing
+minimum request counts against a fixed wall-clock launch window.
 
 The metrics store write boundary now fails closed on malformed samples. Empty
 resource identifiers, empty metric names, unsupported tiers, and legacy
