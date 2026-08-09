@@ -2,6 +2,7 @@ package monitoring
 
 import (
 	"context"
+	stderrors "errors"
 	"fmt"
 	"strings"
 	"time"
@@ -324,7 +325,7 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 	// address is an IP or DNS alias the agent never reports.
 	if nodeName, nodeNameErr := client.GetNodeName(ctx); nodeNameErr == nil {
 		pbsInst.NodeName = strings.TrimSpace(nodeName)
-	} else if debugEnabled {
+	} else if !stderrors.Is(nodeNameErr, pbs.ErrNodeNameUnavailableForAuth) && debugEnabled {
 		log.Debug().Err(nodeNameErr).Str("instance", instanceName).Msg("could not get PBS node name")
 	}
 

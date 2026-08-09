@@ -383,7 +383,7 @@ func TestClient_GetNodeStatus_JsonError(t *testing.T) {
 }
 
 func TestClient_GetNodeName(t *testing.T) {
-	client, server := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api2/json/nodes" {
 			http.Error(w, "bad path", http.StatusNotFound)
 			return
@@ -393,8 +393,9 @@ func TestClient_GetNodeName(t *testing.T) {
 				{"node": "pve1"},
 			},
 		})
-	})
+	}))
 	defer server.Close()
+	client := newRootNodeNameClient(t, server.URL)
 
 	name, err := client.GetNodeName(context.Background())
 	if err != nil {
@@ -406,12 +407,13 @@ func TestClient_GetNodeName(t *testing.T) {
 }
 
 func TestClient_GetNodeName_Empty(t *testing.T) {
-	client, server := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(map[string]any{
 			"data": []map[string]string{},
 		})
-	})
+	}))
 	defer server.Close()
+	client := newRootNodeNameClient(t, server.URL)
 
 	_, err := client.GetNodeName(context.Background())
 	if err == nil {
@@ -1143,7 +1145,9 @@ func TestClient_ListMethods_NetworkError(t *testing.T) {
 	if _, err := client.ListBackupSnapshots(context.Background(), "s", "", "vm", "1"); err == nil {
 		t.Error("ListBackupSnapshots: expected network error")
 	}
-	if _, err := client.GetNodeName(context.Background()); err == nil {
+	nodeNameClient := newRootNodeNameClient(t, "http://example.com")
+	nodeNameClient.httpClient = &http.Client{Transport: &errorTransport{}}
+	if _, err := nodeNameClient.GetNodeName(context.Background()); err == nil {
 		t.Error("GetNodeName: expected network error")
 	}
 }
@@ -1505,19 +1509,21 @@ func TestListMethods_Errors(t *testing.T) {
 }
 
 func TestGetNodeName_Errors(t *testing.T) {
-	client1, server1 := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+	server1 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "server error", http.StatusInternalServerError)
-	})
+	}))
 	defer server1.Close()
+	client1 := newRootNodeNameClient(t, server1.URL)
 	_, err := client1.GetNodeName(context.Background())
 	if err == nil {
 		t.Error("Expected server error for GetNodeName, got nil")
 	}
 
-	client2, server2 := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+	server2 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("invalid json"))
-	})
+	}))
 	defer server2.Close()
+	client2 := newRootNodeNameClient(t, server2.URL)
 	_, err = client2.GetNodeName(context.Background())
 	if err == nil {
 		t.Error("Expected JSON error for GetNodeName, got nil")

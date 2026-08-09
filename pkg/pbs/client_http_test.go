@@ -22,6 +22,19 @@ func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
 	return f(req)
 }
 
+func newRootNodeNameClient(t *testing.T, host string) *Client {
+	t.Helper()
+	client, err := NewClient(ClientConfig{
+		Host:    host,
+		User:    "root@pam",
+		Timeout: 2 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+	return client
+}
+
 func TestNewClient_TokenAuth_SetsAuthorizationHeader(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api2/json/version" {
@@ -449,15 +462,7 @@ func TestClient_GetNodeName_CachesResult(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, err := NewClient(ClientConfig{
-		Host:       server.URL,
-		TokenName:  "root@pam!pulse-token",
-		TokenValue: "secret",
-		Timeout:    2 * time.Second,
-	})
-	if err != nil {
-		t.Fatalf("NewClient: %v", err)
-	}
+	client := newRootNodeNameClient(t, server.URL)
 
 	for i := 0; i < 3; i++ {
 		name, err := client.GetNodeName(context.Background())
@@ -473,7 +478,7 @@ func TestClient_GetNodeName_CachesResult(t *testing.T) {
 	}
 }
 
-func TestClient_GetNodeName_PermissionDenialDefersRetry(t *testing.T) {
+func TestClient_GetNodeName_SuperuserPermissionFailureRetries(t *testing.T) {
 	for _, status := range []int{http.StatusUnauthorized, http.StatusForbidden} {
 		t.Run(http.StatusText(status), func(t *testing.T) {
 			var nodesCalls atomic.Int64
@@ -481,21 +486,18 @@ func TestClient_GetNodeName_PermissionDenialDefersRetry(t *testing.T) {
 				if r.URL.Path != "/api2/json/nodes" {
 					t.Fatalf("unexpected path: %s", r.URL.Path)
 				}
-				nodesCalls.Add(1)
-				w.WriteHeader(status)
-				_, _ = w.Write([]byte(`{"message":"access denied"}`))
+				if nodesCalls.Add(1) == 1 {
+					w.WriteHeader(status)
+					_, _ = w.Write([]byte(`{"message":"access denied"}`))
+					return
+				}
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"data": []map[string]any{{"node": "pbs-recovered"}},
+				})
 			}))
 			defer server.Close()
 
-			client, err := NewClient(ClientConfig{
-				Host:       server.URL,
-				TokenName:  "root@pam!pulse-token",
-				TokenValue: "secret",
-				Timeout:    2 * time.Second,
-			})
-			if err != nil {
-				t.Fatalf("NewClient: %v", err)
-			}
+			client := newRootNodeNameClient(t, server.URL)
 
 			_, firstErr := client.GetNodeName(context.Background())
 			if firstErr == nil {
@@ -504,13 +506,15 @@ func TestClient_GetNodeName_PermissionDenialDefersRetry(t *testing.T) {
 			if got, ok := pbsHTTPStatus(firstErr); !ok || got != status {
 				t.Fatalf("first GetNodeName status = (%d, %v), want (%d, true): %v", got, ok, status, firstErr)
 			}
-			for i := 0; i < 2; i++ {
-				if _, err := client.GetNodeName(context.Background()); err == nil {
-					t.Fatalf("deferred GetNodeName call %d: expected error", i)
-				}
+			name, err := client.GetNodeName(context.Background())
+			if err != nil {
+				t.Fatalf("second GetNodeName: %v", err)
 			}
-			if got := nodesCalls.Load(); got != 1 {
-				t.Fatalf("/nodes hit %d times, want 1 (%d defers retries)", got, status)
+			if name != "pbs-recovered" {
+				t.Fatalf("second GetNodeName = %q, want pbs-recovered", name)
+			}
+			if got := nodesCalls.Load(); got != 2 {
+				t.Fatalf("/nodes hit %d times, want 2 (%d is retryable for direct root session)", got, status)
 			}
 		})
 	}
@@ -545,15 +549,7 @@ func TestClient_GetNodeName_TransientHTTPFailuresRetryAndRecover(t *testing.T) {
 			}))
 			defer server.Close()
 
-			client, err := NewClient(ClientConfig{
-				Host:       server.URL,
-				TokenName:  "root@pam!pulse-token",
-				TokenValue: "secret",
-				Timeout:    2 * time.Second,
-			})
-			if err != nil {
-				t.Fatalf("NewClient: %v", err)
-			}
+			client := newRootNodeNameClient(t, server.URL)
 
 			_, firstErr := client.GetNodeName(context.Background())
 			if firstErr == nil {
@@ -562,13 +558,6 @@ func TestClient_GetNodeName_TransientHTTPFailuresRetryAndRecover(t *testing.T) {
 			if got, ok := pbsHTTPStatus(firstErr); !ok || got != tc.status {
 				t.Fatalf("first GetNodeName status = (%d, %v), want (%d, true): %v", got, ok, tc.status, firstErr)
 			}
-			client.nodeNameMu.Lock()
-			retryAfter := client.nodeNameRetryAfter
-			client.nodeNameMu.Unlock()
-			if !retryAfter.IsZero() {
-				t.Fatalf("transient status %d set permission retry deferral to %s", tc.status, retryAfter)
-			}
-
 			name, err := client.GetNodeName(context.Background())
 			if err != nil {
 				t.Fatalf("recovery GetNodeName: %v", err)
@@ -584,15 +573,7 @@ func TestClient_GetNodeName_TransientHTTPFailuresRetryAndRecover(t *testing.T) {
 }
 
 func TestClient_GetNodeName_NetworkFailureRetriesAndRecovers(t *testing.T) {
-	client, err := NewClient(ClientConfig{
-		Host:       "http://pbs.example.test",
-		TokenName:  "root@pam!pulse-token",
-		TokenValue: "secret",
-		Timeout:    2 * time.Second,
-	})
-	if err != nil {
-		t.Fatalf("NewClient: %v", err)
-	}
+	client := newRootNodeNameClient(t, "http://pbs.example.test")
 
 	var calls atomic.Int64
 	client.httpClient.Transport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
@@ -610,12 +591,6 @@ func TestClient_GetNodeName_NetworkFailureRetriesAndRecovers(t *testing.T) {
 	if _, err := client.GetNodeName(context.Background()); err == nil {
 		t.Fatal("first GetNodeName: expected network error")
 	}
-	client.nodeNameMu.Lock()
-	retryAfter := client.nodeNameRetryAfter
-	client.nodeNameMu.Unlock()
-	if !retryAfter.IsZero() {
-		t.Fatalf("network error set permission retry deferral to %s", retryAfter)
-	}
 
 	name, err := client.GetNodeName(context.Background())
 	if err != nil {
@@ -629,53 +604,55 @@ func TestClient_GetNodeName_NetworkFailureRetriesAndRecovers(t *testing.T) {
 	}
 }
 
-func TestClient_GetNodeName_PermissionDeferralExpiresAndRecovers(t *testing.T) {
-	var nodesCalls atomic.Int64
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if nodesCalls.Add(1) == 1 {
-			w.WriteHeader(http.StatusForbidden)
-			_, _ = w.Write([]byte(`{"message":"access denied"}`))
-			return
-		}
-		_ = json.NewEncoder(w).Encode(map[string]any{
-			"data": []map[string]any{{"node": "pbs-after-acl-repair"}},
+func TestClient_GetNodeName_UnsupportedAuthNeverCallsNodes(t *testing.T) {
+	tests := []struct {
+		name   string
+		config ClientConfig
+	}{
+		{
+			name: "API token including root owner",
+			config: ClientConfig{
+				TokenName:  "root@pam!pulse-token",
+				TokenValue: "secret",
+			},
+		},
+		{
+			name: "non-superuser password identity",
+			config: ClientConfig{
+				User: "admin@pbs",
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var nodesCalls atomic.Int64
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				nodesCalls.Add(1)
+				t.Fatalf("unsupported auth requested %s", r.URL.Path)
+			}))
+			defer server.Close()
+
+			tc.config.Host = server.URL
+			tc.config.Timeout = 2 * time.Second
+			client, err := NewClient(tc.config)
+			if err != nil {
+				t.Fatalf("NewClient: %v", err)
+			}
+
+			for i := 0; i < 3; i++ {
+				name, err := client.GetNodeName(context.Background())
+				if name != "" {
+					t.Fatalf("GetNodeName call %d = %q, want empty", i, name)
+				}
+				if !errors.Is(err, ErrNodeNameUnavailableForAuth) {
+					t.Fatalf("GetNodeName call %d error = %v, want ErrNodeNameUnavailableForAuth", i, err)
+				}
+			}
+			if got := nodesCalls.Load(); got != 0 {
+				t.Fatalf("/nodes hit %d times, want 0", got)
+			}
 		})
-	}))
-	defer server.Close()
-
-	client, err := NewClient(ClientConfig{
-		Host:       server.URL,
-		TokenName:  "root@pam!pulse-token",
-		TokenValue: "secret",
-		Timeout:    2 * time.Second,
-	})
-	if err != nil {
-		t.Fatalf("NewClient: %v", err)
-	}
-
-	if _, err := client.GetNodeName(context.Background()); err == nil {
-		t.Fatal("first GetNodeName: expected permission error")
-	}
-	if _, err := client.GetNodeName(context.Background()); err == nil {
-		t.Fatal("deferred GetNodeName: expected error")
-	}
-	if got := nodesCalls.Load(); got != 1 {
-		t.Fatalf("/nodes hit %d times during deferral, want 1", got)
-	}
-
-	client.nodeNameMu.Lock()
-	client.nodeNameRetryAfter = time.Now().Add(-time.Second)
-	client.nodeNameMu.Unlock()
-
-	name, err := client.GetNodeName(context.Background())
-	if err != nil {
-		t.Fatalf("GetNodeName after deferral expiry: %v", err)
-	}
-	if name != "pbs-after-acl-repair" {
-		t.Fatalf("GetNodeName after deferral expiry = %q, want pbs-after-acl-repair", name)
-	}
-	if got := nodesCalls.Load(); got != 2 {
-		t.Fatalf("/nodes hit %d times after recovery, want 2", got)
 	}
 }
 
@@ -699,15 +676,7 @@ func TestClient_GetNodeName_ConcurrentTransientFailureIsSingleFlight(t *testing.
 	}))
 	defer server.Close()
 
-	client, err := NewClient(ClientConfig{
-		Host:       server.URL,
-		TokenName:  "root@pam!pulse-token",
-		TokenValue: "secret",
-		Timeout:    2 * time.Second,
-	})
-	if err != nil {
-		t.Fatalf("NewClient: %v", err)
-	}
+	client := newRootNodeNameClient(t, server.URL)
 
 	start := make(chan struct{})
 	errs := make(chan error, callers)

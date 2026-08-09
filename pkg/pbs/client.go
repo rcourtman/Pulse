@@ -40,12 +40,11 @@ type Client struct {
 	config     ClientConfig
 
 	// GetNodeName caching. The node hostname is stable for the lifetime of a
-	// connection, and polling /nodes every cycle makes PBS log a 403 every few
-	// seconds when the token lacks permission (refs #1691).
-	nodeNameMu         sync.Mutex
-	cachedNodeName     string
-	nodeNameRetryAfter time.Time
-	nodeNameAttempt    *nodeNameAttempt
+	// connection. PBS exposes /nodes as a superuser-only compatibility endpoint,
+	// so GetNodeName rejects API-token and non-superuser sessions before I/O.
+	nodeNameMu      sync.Mutex
+	cachedNodeName  string
+	nodeNameAttempt *nodeNameAttempt
 }
 
 type nodeNameAttempt struct {
@@ -55,10 +54,11 @@ type nodeNameAttempt struct {
 	err    error
 }
 
-// nodeNamePermissionRetryInterval throttles /nodes retries after a permission
-// denial. Long enough to stop per-cycle 403 spam in the PBS syslog, short
-// enough to self-heal once an operator widens the token's ACL.
-const nodeNamePermissionRetryInterval = 30 * time.Minute
+// ErrNodeNameUnavailableForAuth means the current PBS authentication mode
+// cannot access the superuser-only /nodes compatibility endpoint. Callers
+// should treat this as absent optional identity evidence, not as a connection
+// or permission failure that the operator can repair by widening an API token.
+var ErrNodeNameUnavailableForAuth = errors.New("PBS node name is unavailable for this authentication mode")
 
 func (c *Client) apiBaseURL() (*url.URL, error) {
 	if c.baseAPIURL != nil {
@@ -658,22 +658,22 @@ func (c *Client) GetVersion(ctx context.Context) (*Version, error) {
 	return &result.Data, nil
 }
 
-// GetNodeName returns the PBS node's hostname. The result is cached for the
-// lifetime of the client: the hostname cannot change underneath an open
-// connection, and re-fetching /nodes on every poll cycle floods the PBS syslog
-// with 403s when the token cannot read it (refs #1691). Permission denials
-// defer the next attempt by nodeNamePermissionRetryInterval; transient
-// failures retry on the next call.
+// GetNodeName returns the PBS node's hostname. PBS exposes /nodes as a
+// superuser-only compatibility endpoint, so only a direct root@pam session may
+// perform the request. API tokens and non-superuser sessions return
+// ErrNodeNameUnavailableForAuth without network I/O (refs #1691). Successful
+// results are cached for the client lifetime, transient failures retry on the
+// next call, and concurrent callers share one in-flight request.
 func (c *Client) GetNodeName(ctx context.Context) (string, error) {
+	if !c.canReadNodeName() {
+		return "", ErrNodeNameUnavailableForAuth
+	}
+
 	c.nodeNameMu.Lock()
 	if c.cachedNodeName != "" {
 		name := c.cachedNodeName
 		c.nodeNameMu.Unlock()
 		return name, nil
-	}
-	if !c.nodeNameRetryAfter.IsZero() && time.Now().Before(c.nodeNameRetryAfter) {
-		c.nodeNameMu.Unlock()
-		return "", fmt.Errorf("node name unavailable: /nodes permission denied, retry deferred")
 	}
 	if attempt := c.nodeNameAttempt; attempt != nil {
 		attempt.joined++
@@ -696,15 +696,16 @@ func (c *Client) GetNodeName(ctx context.Context) (string, error) {
 	attempt.err = err
 	if err == nil {
 		c.cachedNodeName = name
-		c.nodeNameRetryAfter = time.Time{}
-	} else if isPBSPermissionError(err) {
-		c.nodeNameRetryAfter = time.Now().Add(nodeNamePermissionRetryInterval)
 	}
 	c.nodeNameAttempt = nil
 	close(attempt.done)
 	c.nodeNameMu.Unlock()
 
 	return name, err
+}
+
+func (c *Client) canReadNodeName() bool {
+	return c.auth.tokenName == "" && c.auth.user == "root" && c.auth.realm == "pam"
 }
 
 func (c *Client) fetchNodeName(ctx context.Context) (string, error) {

@@ -860,11 +860,16 @@ only graft them onto fixture data.
 20. Add or change PBS API transport, optional node identity collection, or PBS
     HTTP retry classification through `pkg/pbs/client.go`. HTTP status decisions
     must use the concrete client error status rather than rendered error or body
-    text. Node identity permission suppression is limited to 401 and 403;
-    429, 5xx, decoding, cancellation, timeout, and network failures remain
-    transient and retry on the next polling call. Concurrent callers must share
-    one in-flight `/nodes` request so immediate retry does not create a request
-    storm.
+    text. PBS exposes the compatibility `/nodes` node-name endpoint only to a
+    direct `root@pam` session: API tokens, including tokens owned by root, and
+    non-superuser password sessions must return the typed unavailable-for-auth
+    result without issuing a request. Callers must treat that result as absent
+    optional identity evidence without repetitive failure logging, not as a
+    reason to request broader credentials.
+    For an eligible direct-root session, 401, 403, 429, 5xx, decoding,
+    cancellation, timeout, and network failures remain transient and retry on
+    the next polling call. Concurrent callers must share one in-flight `/nodes`
+    request so immediate retry does not create a request storm.
 
 ## Forbidden Paths
 
@@ -985,10 +990,12 @@ only graft them onto fixture data.
     `TestCrashedTrueNASAppContainerStillRaisesIncident` and
     `TestStoppedTrueNASAppContainerStateStaysExited` in
     `internal/truenas/provider_oneshot_containers_test.go`.
-15. Keep PBS client HTTP error status structural and the node-name retry policy
-    explicit. Package proof must cover 401/403 deferral, 429/5xx and network
-    retry, response bodies containing permission-like text, recovery, caching,
-    and concurrent single-flight behavior under the race detector.
+15. Keep PBS client HTTP error status structural and the node-name authentication
+    boundary explicit. Package proof must cover zero `/nodes` I/O for API-token
+    and non-superuser sessions, direct-root 401/403, 429/5xx, and network retry,
+    response bodies containing permission-like text, recovery, caching, and
+    concurrent single-flight behavior under the race detector. Monitoring proof
+    must cover a healthy API-token poll without a `/nodes` request.
 
 
 ## Current State
@@ -1045,14 +1052,19 @@ captures the hostname the PBS node reports about itself (`GET /nodes`) on
 `models.PBSInstance.NodeName` as machine-identity evidence for connected-system
 grouping; node-name fetch failure is partial data like the other optional
 collections, never a poll failure. `pkg/pbs/client.go` preserves HTTP status in
-its concrete API error. Only 401 and 403 defer another node-name request for 30
-minutes; 429, 5xx, malformed responses, cancellation, timeout, and network
-errors retry on the next call regardless of error-body wording. A successful
-node name remains cached for the client lifetime, and concurrent callers join
-one in-flight request so a transient response produces one bounded request per
-polling wave rather than one request per caller. The `GetNodeName` tests in
-`pkg/pbs/client_http_test.go` are the focused retry, recovery, cache, and race
-proof.
+its concrete API error. Because PBS restricts the compatibility `/nodes`
+endpoint to direct superuser sessions, API-token and non-superuser password
+clients return typed unavailable-for-auth evidence without network I/O; Pulse
+does not ask operators to broaden credentials for this optional grouping hint.
+For an eligible direct `root@pam` session, 401, 403, 429, 5xx, malformed
+responses, cancellation, timeout, and network errors retry on the next call
+regardless of error-body wording. A successful node name remains cached for the
+client lifetime, and concurrent callers join one in-flight request so a
+transient response produces one bounded request per polling wave rather than
+one request per caller. The `GetNodeName` tests in
+`pkg/pbs/client_http_test.go` are the focused authentication-boundary, retry,
+recovery, cache, and race proof; monitoring coverage also proves a token poll
+never requests `/nodes`.
 
 ### Host snapshots carry integration provenance; doctor copy is user-facing
 

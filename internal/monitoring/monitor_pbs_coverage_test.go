@@ -98,6 +98,9 @@ func TestPollPBSInstanceDoesNotQueryExcludedDatastoreDetails(t *testing.T) {
 	mu.Lock()
 	defer mu.Unlock()
 	for _, path := range requestedPaths {
+		if path == "/api2/json/nodes" {
+			t.Fatalf("API-token poll queried the superuser-only node-name endpoint: %s", path)
+		}
 		if strings.Contains(path, "exthdd1500gb") {
 			t.Fatalf("excluded datastore received a detail request: %s", path)
 		}
@@ -128,11 +131,7 @@ func TestPollPBSInstanceCapturesReportedNodeName(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, err := pbs.NewClient(pbs.ClientConfig{
-		Host:       server.URL,
-		TokenName:  "root@pam!pulse-token",
-		TokenValue: "secret",
-	})
+	client, err := pbs.NewClient(pbs.ClientConfig{Host: server.URL, User: "root@pam"})
 	if err != nil {
 		t.Fatalf("NewClient failed: %v", err)
 	}
