@@ -200,9 +200,28 @@ func TestLoad_500Node_ConcurrentMetricsHistory(t *testing.T) {
 		urls[i] = "/api/metrics-store/history?resourceType=vm&resourceId=" + id + "&metric=cpu&range=1h"
 	}
 
+	// Measure a same-run serial baseline before applying concurrent pressure.
+	// An absolute request-count floor in a fixed wall-clock window conflates
+	// endpoint regressions with hosted-runner CPU and filesystem speed. The
+	// serial baseline keeps the concurrency assertion sensitive to contention
+	// added by the endpoint while the absolute p95 guard below still catches a
+	// uniformly slow implementation.
+	const baselineRequests = 50
+	baselineStart := time.Now()
+	for i := 0; i < baselineRequests; i++ {
+		req := httptest.NewRequest(http.MethodGet, urls[i%len(urls)], nil)
+		rec := httptest.NewRecorder()
+		router.handleMetricsHistory(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("serial baseline request %d failed: status %d, body: %s", i, rec.Code, rec.Body.String())
+		}
+	}
+	baselineWallTime := time.Since(baselineStart)
+	baselineRPS := float64(baselineRequests) / baselineWallTime.Seconds()
+
 	const (
-		concurrency = 50
-		duration    = 2 * time.Second
+		concurrency       = 50
+		requestsPerWorker = 4
 	)
 
 	var (
@@ -218,14 +237,13 @@ func TestLoad_500Node_ConcurrentMetricsHistory(t *testing.T) {
 	for g := 0; g < concurrency; g++ {
 		wg.Add(1)
 		g := g
-		latencies[g] = make([]time.Duration, 0, 200)
+		latencies[g] = make([]time.Duration, 0, requestsPerWorker)
 		go func() {
 			defer wg.Done()
 			ready.Done()
 			ready.Wait()
-			deadline := time.Now().Add(duration)
 			idx := g // Each goroutine starts with a different resource
-			for time.Now().Before(deadline) {
+			for requestIndex := 0; requestIndex < requestsPerWorker; requestIndex++ {
 				reqStart := time.Now()
 				req := httptest.NewRequest(http.MethodGet, urls[idx%len(urls)], nil)
 				rec := httptest.NewRecorder()
@@ -261,6 +279,7 @@ func TestLoad_500Node_ConcurrentMetricsHistory(t *testing.T) {
 	rps := float64(totalCount) / wallTime.Seconds()
 
 	t.Logf("metrics-history 500-node load: %d requests in %v (%.1f rps)", totalCount, wallTime, rps)
+	t.Logf("  serial baseline: %d requests in %v (%.1f rps)", baselineRequests, baselineWallTime, baselineRPS)
 	t.Logf("  p50=%v  p95=%v  p99=%v", p50, p95, p99)
 
 	// Under concurrent SQLite reads (WAL mode), p95 should stay under 200ms
@@ -273,14 +292,16 @@ func TestLoad_500Node_ConcurrentMetricsHistory(t *testing.T) {
 	if p95 > target {
 		failOrSkipLoadOverrun(t, "p95 latency %v exceeds %v budget for concurrent metrics-history load", p95, target)
 	}
-	// Use completed request count here as well so tail-overrun is not
-	// double-counted against both latency and throughput. GitHub hosted runners
-	// completed 922 requests in the June 3, 2026 v6.0.0 stable dry run while
-	// staying inside the hosted p95 budget, so the CI floor keeps useful
-	// regression signal without failing on shared-runner scheduling variance.
-	minCount := effectiveLoadMinCount(1000, 800)
-	if totalCount < minCount {
-		failOrSkipLoadOverrun(t, "completed only %d requests (%.1f rps), expected at least %d for concurrent metrics-history load", totalCount, rps, minCount)
+	// Fixed work plus a same-run serial baseline isolates concurrency-specific
+	// degradation from runner speed. The concurrent path may be slower than the
+	// serial projection because four SQLite reader connections contend for CPU
+	// and filesystem service, but it must retain at least half of serial
+	// throughput. A regression that slows every request remains covered by the
+	// absolute p95 guard above and TestSLO_MetricsHistoryStore.
+	concurrencyEfficiency := rps / baselineRPS
+	t.Logf("  concurrency efficiency: %.2fx serial throughput", concurrencyEfficiency)
+	if concurrencyEfficiency < 0.5 {
+		failOrSkipLoadOverrun(t, "concurrent throughput %.1f rps is only %.2fx the same-run serial baseline %.1f rps; expected at least 0.50x", rps, concurrencyEfficiency, baselineRPS)
 	}
 }
 
@@ -599,6 +620,9 @@ func newLoadTestMetricsStore(t *testing.T) *metrics.Store {
 	store, err := metrics.NewStore(cfg)
 	if err != nil {
 		t.Fatalf("NewStore: %v", err)
+	}
+	if err := store.WaitForMaintenance(5 * time.Second); err != nil {
+		t.Fatalf("WaitForMaintenance: %v", err)
 	}
 	t.Cleanup(func() { store.Close() })
 	return store

@@ -2052,6 +2052,16 @@ Those CI targets remain regression guardrails, but they are calibrated to the
 observed contention and CPU variability of the public release workflow rather
 than to workstation-class latency.
 
+The store-backed metrics-history proof separates absolute latency from
+concurrency degradation. Its load fixture waits for deferred metrics-store
+startup maintenance, executes fixed concurrent work, and compares throughput
+with a serial baseline measured in the same process immediately beforehand;
+it must not use a fixed-duration request-count floor tied to one hosted-runner
+or SQLite-driver generation. The absolute concurrent p95 ceiling remains in
+force, while `TestSLO_MetricsHistoryStore` measures the fast single-request
+path in small amortized batches so isolated scheduler or GC pauses cannot
+decide a release without a sustained endpoint regression.
+
 The metrics store write boundary now fails closed on malformed samples. Empty
 resource identifiers, empty metric names, unsupported tiers, and legacy
 resource-type writes must be dropped before they reach SQLite so the governed
