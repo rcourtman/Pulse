@@ -37,6 +37,7 @@ const (
 	AgentFleetReasonModuleDegraded        = "agent_module_degraded"
 	AgentFleetReasonCredentialMissing     = "agent_credential_missing"
 	AgentFleetReasonCredentialExpired     = "agent_credential_expired"
+	AgentFleetReasonExecScopeMissing      = "agent_exec_scope_missing"
 	AgentFleetReasonDuplicateInstallation = "duplicate_host_agent_installation"
 
 	AgentFleetActionAllowReenroll        = "allow_reenroll"
@@ -151,7 +152,7 @@ type agentFleetSubject struct {
 
 type agentFleetTokenInventory struct {
 	known   bool
-	active  map[string]struct{}
+	active  map[string]config.APITokenRecord
 	expired map[string]struct{}
 }
 
@@ -224,7 +225,7 @@ func (m *Monitor) agentFleetTokenInventory(now time.Time) agentFleetTokenInvento
 
 	inventory := agentFleetTokenInventory{
 		known:   true,
-		active:  make(map[string]struct{}),
+		active:  make(map[string]config.APITokenRecord),
 		expired: make(map[string]struct{}),
 	}
 	config.Mu.RLock()
@@ -238,7 +239,7 @@ func (m *Monitor) agentFleetTokenInventory(now time.Time) agentFleetTokenInvento
 			inventory.expired[id] = struct{}{}
 			continue
 		}
-		inventory.active[id] = struct{}{}
+		inventory.active[id] = record.Clone()
 	}
 	return inventory
 }
@@ -480,7 +481,12 @@ func diagnoseAgentFleetSubject(
 		}
 	}
 
-	if diagnosticHasAnyReason(result.Reasons, AgentFleetReasonCredentialMissing, AgentFleetReasonCredentialExpired) {
+	if diagnosticHasAnyReason(
+		result.Reasons,
+		AgentFleetReasonCredentialMissing,
+		AgentFleetReasonCredentialExpired,
+		AgentFleetReasonExecScopeMissing,
+	) {
 		platform, supported := safeAgentUpdatePlatform(subject)
 		if platform == platformsupport.RuntimePlatformFreeBSD || diagnosticHasAnyReason(result.Reasons, AgentFleetReasonDuplicateInstallation) {
 			supported = false
@@ -549,7 +555,18 @@ func diagnoseAgentCredential(subject agentFleetSubject, inventory agentFleetToke
 	if subject.removed || !inventory.known || tokenID == "" {
 		return nil
 	}
-	if _, ok := inventory.active[tokenID]; ok {
+	if record, ok := inventory.active[tokenID]; ok {
+		if subject.host != nil && subject.host.CommandsEnabled && !record.HasScope(config.ScopeAgentExec) {
+			return []AgentFleetDiagnosticReason{{
+				Code:     AgentFleetReasonExecScopeMissing,
+				Severity: AgentFleetStatusCritical,
+				Message:  "The agent is configured to accept Pulse commands, but its credential does not grant command execution.",
+				Evidence: []string{
+					"Agent command execution: enabled",
+					"Credential scope: agent:exec missing",
+				},
+			}}
+		}
 		return nil
 	}
 	if _, ok := inventory.expired[tokenID]; ok {

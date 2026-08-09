@@ -404,6 +404,73 @@ describe('useInfrastructureOperationsState command-building closures', () => {
     });
   });
 
+  describe('install token and command-option atomicity', () => {
+    it('locks copyable commands until a command-enabled replacement token is ready', async () => {
+      const { state, dispose } = mountHook();
+      await flushAsync();
+      await state.handleGenerateToken();
+
+      let resolveReplacement!: (value: {
+        token: string;
+        record: {
+          id: string;
+          name: string;
+          prefix: string;
+          suffix: string;
+          createdAt: string;
+        };
+      }) => void;
+      mocks.createHostAgentInstallToken.mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveReplacement = resolve;
+          }),
+      );
+
+      const replacement = state.setEnableCommands(true);
+
+      expect(state.enableCommands()).toBe(true);
+      expect(state.currentToken()).toBeNull();
+      expect(state.commandsUnlocked()).toBe(false);
+      expect(mocks.createHostAgentInstallToken).toHaveBeenLastCalledWith({
+        enableCommands: true,
+        name: expect.any(String),
+      });
+
+      resolveReplacement({
+        token: 'tok-command',
+        record: {
+          id: 'rec-command',
+          name: 'Agent',
+          prefix: 'pul',
+          suffix: 'exec',
+          createdAt: '2026-01-01',
+        },
+      });
+      await replacement;
+
+      expect(state.currentToken()).toBe('tok-command');
+      expect(state.commandsUnlocked()).toBe(true);
+      expect(mocks.securityDeleteToken).toHaveBeenCalledWith('rec-1');
+      dispose();
+    });
+
+    it('restores the previous complete command state when replacement minting fails', async () => {
+      const { state, dispose } = mountHook();
+      await flushAsync();
+      await state.handleGenerateToken();
+      mocks.createHostAgentInstallToken.mockRejectedValueOnce(new Error('mint failed'));
+
+      await state.setEnableCommands(true);
+
+      expect(state.enableCommands()).toBe(false);
+      expect(state.currentToken()).toBe('tok-1');
+      expect(state.commandsUnlocked()).toBe(true);
+      expect(mocks.securityDeleteToken).not.toHaveBeenCalled();
+      dispose();
+    });
+  });
+
   describe('getCanonicalConnectionAgentId (via getAgentConnectionUpgradeCommand windows arm)', () => {
     it('resolves to empty for a non-agent connection (no PULSE_AGENT_ID env)', async () => {
       const { state, dispose } = mountHook();

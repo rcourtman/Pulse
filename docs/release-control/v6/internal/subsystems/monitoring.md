@@ -2611,6 +2611,13 @@ last successful heartbeat alone. A live host whose reported `TokenID` no
 longer resolves emits `agent_credential_missing`; a resolved but expired record
 emits `agent_credential_expired`; both are critical and expose a bounded
 authentication-repair handoff only when the runtime family is safely known.
+An active record is not sufficient when the host reports Pulse command
+execution enabled: if that record lacks `agent:exec`, the diagnostic emits the
+critical `agent_exec_scope_missing` reason and exposes the same bounded
+authentication-repair handoff. Command-channel disconnection alone is not
+credential evidence and must not synthesize this reason. The token inventory
+therefore retains the active record's normalized scopes for read-only
+diagnosis rather than reducing active credentials to an existence set.
 Monitoring also compares live host-agent generations without merging them: two
 different host IDs with the same non-empty machine ID and equivalent hostname
 each receive `duplicate_host_agent_installation` plus bounded peer evidence.

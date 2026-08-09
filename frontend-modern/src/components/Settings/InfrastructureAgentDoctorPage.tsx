@@ -137,8 +137,10 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
     const target = selectedTokenTarget();
     if (!target) return;
     const previousToken = operations.currentToken();
-    operations.setEnableCommands(Boolean(target.connection?.agentIdentity?.commandsEnabled));
-    await operations.handleGenerateToken();
+    await operations.setEnableCommands(Boolean(target.connection?.agentIdentity?.commandsEnabled));
+    if (!operations.currentToken() || operations.currentToken() === previousToken) {
+      await operations.handleGenerateToken();
+    }
     const generatedToken = operations.currentToken();
     if (generatedToken && generatedToken !== previousToken) {
       setTokenMintedForTargetKey(target.key);

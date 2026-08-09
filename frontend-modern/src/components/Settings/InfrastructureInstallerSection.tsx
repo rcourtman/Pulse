@@ -541,7 +541,7 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
                   </Show>
 
                   <label
-                    class="inline-flex cursor-pointer items-center gap-2 text-sm text-base-content"
+                    class={`inline-flex items-center gap-2 text-sm text-base-content ${state.isGeneratingToken() ? 'cursor-wait opacity-70' : 'cursor-pointer'}`}
                     title="Skip TLS certificate verification (for self-signed certificates)"
                   >
                     <input
@@ -560,7 +560,10 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
                     <input
                       type="checkbox"
                       checked={state.enableCommands()}
-                      onChange={(event) => state.setEnableCommands(event.currentTarget.checked)}
+                      disabled={state.isGeneratingToken()}
+                      onChange={(event) =>
+                        void state.setEnableCommands(event.currentTarget.checked)
+                      }
                       class="rounded text-blue-600 focus:ring-blue-500"
                     />
                     Enable Pulse command execution (Patrol actions and Proxmox LXC Docker inventory)

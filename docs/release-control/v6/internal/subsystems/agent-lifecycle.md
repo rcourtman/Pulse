@@ -703,10 +703,14 @@ by Infrastructure.
 
 Authentication repair is a distinct lifecycle handoff, not a successful
 upgrade. When a reported host still names a token record that is absent from
-the server inventory or has expired, Agent Doctor must raise a critical
-credential reason and may offer `repair_authentication` only for a recognized,
-unambiguous local runtime. The copied Unix repair command mints a fresh scoped
-agent credential and transports it through an ephemeral `--token-file`; an
+the server inventory, has expired, or lacks `agent:exec` while that host reports
+Pulse command execution enabled, Agent Doctor must raise a critical typed
+credential reason (`agent_credential_missing`, `agent_credential_expired`, or
+`agent_exec_scope_missing`) and may offer `repair_authentication` only for a
+recognized, unambiguous local runtime. A disconnected command channel alone is
+not proof of a scope defect. The copied Unix repair command mints a fresh scoped
+agent credential—including command scope when the affected host reports it
+enabled—and transports it through an ephemeral `--token-file`; an
 ordinary version-only Unix update stays tokenless and recovers the installed
 credential from installer-owned state. If two different host agent IDs report
 the same non-empty machine ID and equivalent hostname, both installations stay
@@ -715,8 +719,11 @@ not collapse them into one apparent agent or choose one generic local service:
 authentication and upgrade handoffs fail closed until the duplicate
 installation is resolved or an installation-specific path exists. Finally,
 local process health cannot override server authentication: a definitive
-registration 401/403 makes `scripts/install.sh` complete with the non-zero
-`auth_rejected` result instead of printing installation or upgrade success.
+registration 401 or missing-scope 403 makes `scripts/install.sh` complete with
+the non-zero `auth_rejected` result instead of printing installation or upgrade
+success. An ownership-mismatch 403 is not definitive during first-use binding;
+the installer must prefer the persisted agent ID and continue its bounded
+verification window rather than mislabeling a fresh token.
 
 Agent lifecycle and fleet-operation surfaces may consume
 `POST /api/actions/plan` for resource capability planning, but the action plan
@@ -2186,6 +2193,13 @@ command transport, update policy, or fleet lifecycle authority.
    execution is granted only by backend-issued host-bound runtime tokens or by
    first-use Proxmox install-command tokens carrying the governed install
    metadata that the command websocket can bind to one agent identity.
+   The browser must treat the chosen command-execution option and the minted
+   token as one atomic copy state. Changing that option after minting locks all
+   copyable commands, requests the matching replacement scope, and unlocks only
+   after the replacement arrives; failure restores the complete previous
+   option/token pair. It must never render `--enable-commands` with the prior
+   non-exec token, even briefly, and must not accept another option change while
+   a token request is in flight.
 7. Keep first-session lifecycle handoff explicit: the live setup completion
    surface in `frontend-modern/src/components/SetupWizard/SetupCompletionPanel.tsx`
    must route the primary CTA into `/settings/infrastructure?add=pick`, frame

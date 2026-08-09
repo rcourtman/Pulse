@@ -248,7 +248,7 @@ Pulse prepares the first-host install token from setup so you can move straight 
   const generateInstallToken = async (
     source: 'manual' | 'setup_handoff',
     options: { notifySuccess?: boolean } = {},
-  ) => {
+  ): Promise<boolean> => {
     setIsGeneratingToken(true);
     try {
       // The server owns install-token semantics. It decides the scopes from
@@ -263,7 +263,7 @@ Pulse prepares the first-host install token from setup so you can move straight 
       });
 
       if (disposed) {
-        return;
+        return false;
       }
       setCurrentToken(token);
       setLatestRecord(record);
@@ -279,9 +279,10 @@ Pulse prepares the first-host install token from setup so you can move straight 
           4000,
         );
       }
+      return true;
     } catch (err) {
       if (disposed) {
-        return;
+        return false;
       }
       logger.error('Failed to generate agent token', err);
       if (source === 'setup_handoff') {
@@ -292,6 +293,7 @@ Pulse prepares the first-host install token from setup so you can move straight 
           6000,
         );
       }
+      return false;
     } finally {
       if (!disposed) {
         setIsGeneratingToken(false);
@@ -311,27 +313,52 @@ Pulse prepares the first-host install token from setup so you can move straight 
   // Toggling command execution changes which scopes the token needs, and an
   // already-minted token cannot be upgraded. Regenerate it so the copied
   // command always carries a token that matches the checkbox (#1586).
-  const handleEnableCommandsChange = (value: boolean) => {
+  const handleEnableCommandsChange = async (value: boolean): Promise<void> => {
     if (value === enableCommands()) return;
+    if (isGeneratingToken()) {
+      notificationStore.info(
+        'Wait for the current token to finish generating, then try again.',
+        4000,
+      );
+      return;
+    }
+
+    const previousEnableCommands = enableCommands();
+    const supersededToken = currentToken();
+    const supersededRecord = latestRecord();
+    const source = latestTokenSource() ?? 'manual';
     setEnableCommands(value);
-    if (currentToken() && !isGeneratingToken()) {
-      const source = latestTokenSource() ?? 'manual';
-      const supersededTokenId = latestRecord()?.id;
-      void generateInstallToken(source, { notifySuccess: false }).then(() => {
-        if (disposed || !currentToken()) return;
-        notificationStore.info(
-          value
-            ? 'Token regenerated with command execution permission. Copy the install command again.'
-            : 'Token regenerated without command execution permission. Copy the install command again.',
-          5000,
-        );
-        // The superseded token was never handed to an agent; revoke it so
-        // toggling does not accumulate orphaned install tokens.
-        if (supersededTokenId && supersededTokenId !== latestRecord()?.id) {
-          SecurityAPI.deleteToken(supersededTokenId).catch((err) => {
-            logger.warn('Failed to revoke superseded install token', err);
-          });
-        }
+    if (!supersededToken) return;
+
+    // Token scope and rendered flags are one atomic command state. Lock the
+    // command surface before minting so --enable-commands can never be copied
+    // with the previous non-exec token (or the inverse).
+    setCurrentToken(null);
+    setLatestRecord(null);
+    const generated = await generateInstallToken(source, { notifySuccess: false });
+    if (disposed) return;
+
+    if (!generated) {
+      // Restore the complete previous state; never leave new flags paired with
+      // the old credential after a failed replacement.
+      setEnableCommands(previousEnableCommands);
+      setCurrentToken(supersededToken);
+      setLatestRecord(supersededRecord);
+      return;
+    }
+
+    notificationStore.info(
+      value
+        ? 'Token regenerated with command execution permission. Copy the install command again.'
+        : 'Token regenerated without command execution permission. Copy the install command again.',
+      5000,
+    );
+    // The superseded token was never handed to an agent; revoke it so
+    // toggling does not accumulate orphaned install tokens.
+    const supersededTokenId = supersededRecord?.id;
+    if (supersededTokenId && supersededTokenId !== latestRecord()?.id) {
+      SecurityAPI.deleteToken(supersededTokenId).catch((err) => {
+        logger.warn('Failed to revoke superseded install token', err);
       });
     }
   };

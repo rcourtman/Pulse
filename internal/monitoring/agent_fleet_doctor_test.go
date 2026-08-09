@@ -111,6 +111,63 @@ func TestAgentFleetDiagnosticsAcceptsActiveCredential(t *testing.T) {
 	}
 }
 
+func TestAgentFleetDiagnosticsRepairsCommandCredentialWithoutExecScope(t *testing.T) {
+	now := time.Date(2026, 8, 9, 12, 0, 0, 0, time.UTC)
+	monitor := newAgentFleetDoctorTestMonitor(t)
+	monitor.config.APITokens = []config.APITokenRecord{{
+		ID: "report-only-token",
+		Scopes: []string{
+			config.ScopeAgentReport,
+			config.ScopeAgentConfigRead,
+		},
+	}}
+	monitor.state.UpsertHost(models.Host{
+		ID:              "agent-command-scope",
+		Hostname:        "pve-command-scope",
+		Platform:        "linux",
+		Status:          "online",
+		LastSeen:        now,
+		AgentVersion:    "6.2.0",
+		TokenID:         "report-only-token",
+		CommandsEnabled: true,
+	})
+
+	agent := requireAgentDiagnostic(t, monitor.GetAgentFleetDiagnostics("6.2.0", now), "agent-agent-command-scope")
+	requireReasonCode(t, agent, AgentFleetReasonExecScopeMissing)
+	if agent.Status != AgentFleetStatusCritical {
+		t.Fatalf("status = %q, want %q", agent.Status, AgentFleetStatusCritical)
+	}
+	if !hasSupportedRepair(agent, AgentFleetActionRepairAuthentication) {
+		t.Fatalf("expected command-scope mismatch to expose authentication repair: %#v", agent.RepairActions)
+	}
+}
+
+func TestAgentFleetDiagnosticsAcceptsCommandCredentialWithExecScope(t *testing.T) {
+	now := time.Date(2026, 8, 9, 12, 0, 0, 0, time.UTC)
+	monitor := newAgentFleetDoctorTestMonitor(t)
+	monitor.config.APITokens = []config.APITokenRecord{{
+		ID:     "command-token",
+		Scopes: []string{config.ScopeAgentReport, config.ScopeAgentExec},
+	}}
+	monitor.state.UpsertHost(models.Host{
+		ID:              "agent-command-scope",
+		Hostname:        "pve-command-scope",
+		Platform:        "linux",
+		Status:          "online",
+		LastSeen:        now,
+		AgentVersion:    "6.2.0",
+		TokenID:         "command-token",
+		CommandsEnabled: true,
+	})
+
+	agent := requireAgentDiagnostic(t, monitor.GetAgentFleetDiagnostics("6.2.0", now), "agent-agent-command-scope")
+	for _, reason := range agent.Reasons {
+		if reason.Code == AgentFleetReasonExecScopeMissing {
+			t.Fatalf("exec-scoped credential produced repair reason: %#v", agent.Reasons)
+		}
+	}
+}
+
 func TestAgentFleetDiagnosticsDoesNotValidateSyntheticMockCredentials(t *testing.T) {
 	now := time.Date(2026, 8, 9, 12, 0, 0, 0, time.UTC)
 	mustSetMockEnabled(t, true)

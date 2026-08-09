@@ -6196,10 +6196,13 @@ The canonical connections projection must validate a host's non-empty
 `status/rotation="invalid"`; expired records project invalid top-level status
 with expired health and rotation. Agent Doctor preserves those ledger facts
 even when its structured snapshot lags. Structured diagnostics add the stable
-`agent_credential_missing`, `agent_credential_expired`, and
-`duplicate_host_agent_installation` reason codes plus the
+`agent_credential_missing`, `agent_credential_expired`,
+`agent_exec_scope_missing`, and `duplicate_host_agent_installation` reason codes plus the
 `repair_authentication` handoff. The browser may render a fresh scoped
-token-file repair only when that action is supported. A duplicate-installation
+token-file repair only when that action is supported. The exec-scope reason is
+emitted only when an active token record lacks `agent:exec` while the host's
+reported `commandsEnabled` state is true; command-channel disconnection by
+itself remains transport evidence rather than credential evidence. A duplicate-installation
 reason always blocks generic repair command rendering, while retaining each
 connection row and its peer evidence so UI composition never selects one stale
 identity as the machine's sole agent. When the token inventory is deliberately

@@ -365,6 +365,21 @@ describe('infrastructure operations model', () => {
     expect(useInfrastructureInstallStateSource).not.toContain('AGENT_REPORT_SCOPE');
   });
 
+  it('keeps install token scope and rendered command options atomic', () => {
+    const lockIndex = useInfrastructureInstallStateSource.indexOf('setCurrentToken(null);');
+    const replacementIndex = useInfrastructureInstallStateSource.indexOf(
+      'generateInstallToken(source, { notifySuccess: false })',
+    );
+
+    expect(lockIndex).toBeGreaterThan(-1);
+    expect(replacementIndex).toBeGreaterThan(lockIndex);
+    expect(useInfrastructureInstallStateSource).toContain(
+      'setEnableCommands(previousEnableCommands);',
+    );
+    expect(useInfrastructureInstallStateSource).toContain('setCurrentToken(supersededToken);');
+    expect(infrastructureInstallerSectionSource).toContain('disabled={state.isGeneratingToken()}');
+  });
+
   it('keeps infrastructure install and operations surfaces free of retired commercial telemetry wrappers', () => {
     for (const source of [
       infrastructureOperationsModelSource,

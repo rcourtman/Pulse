@@ -541,6 +541,7 @@ const doctorTargetFromBinding = (
     [
       'agent_credential_missing',
       'agent_credential_expired',
+      'agent_exec_scope_missing',
       'ledger_credential_invalid',
       'ledger_unauthorized',
     ].includes(reason.code),

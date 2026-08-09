@@ -1,26 +1,23 @@
 {
   "version": 1,
-  "base_sha": "70f7ca9f6f2b1b176d117a8f4f3315e3538847ac",
-  "verified_at": "2026-08-09T12:25:13Z",
+  "base_sha": "cd63e0848abe224967ff5429e56bfcf06c5860c6",
+  "verified_at": "2026-08-09T19:42:00Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/api/rbac.ts",
-    "frontend-modern/src/components/Settings/UserAssignmentsDialog.tsx",
-    "frontend-modern/src/components/Settings/UserAssignmentsPanel.tsx",
-    "frontend-modern/src/components/Settings/useUserAssignmentsPanelState.ts",
-    "frontend-modern/src/types/rbac.ts",
-    "frontend-modern/src/utils/rbacPresentation.ts"
+    "frontend-modern/src/components/Settings/InfrastructureAgentDoctorPage.tsx",
+    "frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx",
+    "frontend-modern/src/components/Settings/infrastructureAgentUpdateCommandsModel.ts",
+    "frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/api/rbac.ts": "9e4c2366443ba770e4b0755aa095686c44c44ec9d4b7a6bb90fb5359082982ba",
-    "frontend-modern/src/components/Settings/UserAssignmentsDialog.tsx": "1a7990c833e6ddd98a5cceb6476f894745674b957cfa26d1fdfa820299a8a68b",
-    "frontend-modern/src/components/Settings/UserAssignmentsPanel.tsx": "8e2a89c845572591a73eac622effd137e5e9e96741ce700a4168f9b8e58a3ca2",
-    "frontend-modern/src/components/Settings/useUserAssignmentsPanelState.ts": "8497e59dffc7f19a50aff30b787ca1236b354b7404890774871712efbc4bea15",
-    "frontend-modern/src/types/rbac.ts": "1c08ceffc1aea3f4975455db2c4d92774060fa2d0ce7088e116930b85b5c2fbc",
-    "frontend-modern/src/utils/rbacPresentation.ts": "07b2affbeda8921da3def1063141fd4d1074ed02a8939288d06644376ed768ba"
+    "frontend-modern/src/components/Settings/InfrastructureAgentDoctorPage.tsx": "99368f451d9153a735180d0f3889bf0d7983af6bce2f9e3012f87b7ad594d265",
+    "frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx": "595c0509e2c93574ccea5669f06c5143d4ece7e4772906b8d41d04392e0431cc",
+    "frontend-modern/src/components/Settings/infrastructureAgentUpdateCommandsModel.ts": "baf908e004f6805b4dfcd013a139ee822a7e91589fa4d086a9440cabfb6c812a",
+    "frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx": "9a1a2c2d9f7712e1fbf4dbc462d75fe56c79c63aed809196e780b74e2cbd0381"
   },
   "routes": [
-    "/settings/security-users"
+    "/settings/infrastructure?add=linux-host",
+    "/settings/infrastructure?agentDoctor=1"
   ],
   "viewports": [
     {
@@ -33,18 +30,16 @@
     }
   ],
   "states": [
-    "An isolated Pro development runtime showed an OIDC user by the mutable display name Alice Example, with alice@example.com and OIDC · okta as secondary identity context while retaining the stable sso:oidc:okta:browser-subject authorization principal.",
-    "The Manage Access dialog used the readable identity in its title and exposed email and provider context while preserving the current Viewer role and effective-permissions preview.",
-    "The removal confirmation clearly stated that roles and active Pulse sessions are removed, that the upstream identity-provider account is not disabled, and that a later authorized SSO login can recreate the Pulse identity.",
-    "A successful removal returned the filtered list to no matching SSO user and displayed User access removed for Alice Example; an attempted self-removal retained the admin row and displayed You cannot remove your own user access.",
-    "At 390x844 the page remained exactly 390 pixels wide, the shared table shell provided horizontal access to both actions, and the 358-pixel confirmation dialog stayed inside the viewport without clipping or horizontal document overflow."
+    "The host installer started with a reporting-only token and copy-ready commands, then immediately locked and removed the previous credential from every rendered command while a command-enabled replacement token was pending.",
+    "Successful replacement restored the advanced options with Pulse command execution checked and exposed only commands containing the new exec-scoped token.",
+    "A failed attempt to remove command execution restored the complete prior checked option and exec-scoped token pair, retained copy-ready commands, and surfaced the minting error instead of composing mixed state.",
+    "Agent Doctor rendered agent_exec_scope_missing as a critical credential diagnosis with explicit agent:exec evidence and a token-gated host-local authentication repair.",
+    "After Agent Doctor generated the repair credential, the request carried enableCommands=true and the unlocked repair command used an ephemeral token file plus --enable-commands."
   ],
   "interactions": [
-    "Searched by the mutable SSO email claim and confirmed the readable identity, provider label, stable principal, Viewer role, Manage Access action, and Remove action at 1440x900.",
-    "Opened Manage Access, inspected the readable identity and role state, dismissed it with Escape, and confirmed focus returned to Manage Access.",
-    "Opened Remove, clicked the backdrop and confirmed the non-dismissible destructive dialog remained open, then dismissed it with Escape and confirmed focus returned to Remove.",
-    "At 390x844 horizontally scrolled the shared data-grid shell to reach Manage Access and Remove, opened the confirmation, verified initial focus on Cancel and in-viewport placement, cancelled it, and confirmed focus returned to Remove.",
-    "Reopened the narrow confirmation and removed Alice Example through the live DELETE endpoint, then verified the row disappeared and the success notification appeared.",
-    "Seeded the current admin identity in the isolated fixture, attempted self-removal through the same confirmation, and verified the backend denial remained non-destructive and surfaced the specific self-removal message."
+    "At 1440x900 generated a reporting token, opened advanced install options, enabled Pulse command execution, held the replacement API response, and confirmed the command surface locked with no old token visible before releasing the exec-scoped replacement.",
+    "At 390x844 forced the next replacement request to fail, confirmed the checkbox and prior token rolled back atomically, and verified the page had no document-level horizontal overflow and the error remained visible.",
+    "Opened Agent Doctor against a structured agent_exec_scope_missing response, expanded the critical agent row, verified the typed reason and evidence, generated its repair token, and confirmed the backend request explicitly selected command scope.",
+    "Verified the unlocked Agent Doctor authentication-repair command contained the fresh credential, token-file transport, and --enable-commands, then repeated the critical row inspection at 390x844 with no document-level horizontal overflow."
   ]
 }

@@ -348,8 +348,13 @@ upgrade, update, release, or artifact-selection behavior.
    Post-install verification must not declare server registration
    unconfirmed from a single lookup: the local `/readyz` gate flips before the
    agent's first report cycle completes, so the installer polls the server
-   lookup for a bounded retry window before warning, while a definitive
-   401/403 token rejection still short-circuits immediately (#1644).
+   lookup for a bounded retry window before warning. Once the canonical local
+   agent ID exists, verification must prefer it over hostname so a previous
+   registration cannot impersonate the just-installed process. A 401 or a 403
+   caused by missing reporting scope is definitive and short-circuits; a 403
+   `agent_lookup_forbidden` during post-start verification is a transient
+   first-use ownership race and must keep polling for the new ownership rather
+   than falsely rejecting the fresh install credential (#1644).
    When Proxmox integration is enabled, the installer must also report the
    agent's Proxmox registration outcome in its own output: it waits a bounded
    window on the agent state directory, surfaces the reason recorded in a

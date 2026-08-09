@@ -4748,6 +4748,7 @@ func TestInstallSHVerifyAgentServerRegistrationDetectsRejectedToken(t *testing.T
 	}{
 		{"rejected token 401", http.StatusUnauthorized, `{"error":"Authentication required"}`, "rc=2"},
 		{"rejected token 403", http.StatusForbidden, `{"error":"missing_scope"}`, "rc=2"},
+		{"previous hostname owner during binding", http.StatusForbidden, `{"error":{"code":"agent_lookup_forbidden","message":"Agent does not belong to this API token"}}`, "rc=1"},
 		{"registered", http.StatusOK, `{"success":true,"agent":{"id":"agent-omv"}}`, "rc=0"},
 		{"not reported yet", http.StatusNotFound, `{"error":"agent_not_found"}`, "rc=1"},
 	}
@@ -4768,6 +4769,7 @@ func TestInstallSHVerifyAgentServerRegistrationDetectsRejectedToken(t *testing.T
 			script := `
 				PULSE_URL="` + server.URL + `"
 				PULSE_TOKEN="stale-token"
+				AGENT_ID=""
 				HOSTNAME_OVERRIDE="omv"
 				INSECURE="false"
 				CURL_CA_BUNDLE=""
@@ -4785,6 +4787,44 @@ func TestInstallSHVerifyAgentServerRegistrationDetectsRejectedToken(t *testing.T
 				t.Fatalf("case %q: want %s, got:\n%s", tc.name, tc.wantRC, out)
 			}
 		})
+	}
+}
+
+func TestInstallSHVerifyAgentServerRegistrationPrefersCanonicalAgentID(t *testing.T) {
+	urlEncode := extractInstallShellFunction(t, "url_encode")
+	curlWithPulseToken := extractInstallShellFunction(t, "curl_with_pulse_token")
+	verifyFn := extractInstallShellFunction(t, "verify_agent_server_registration")
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.URL.Query().Get("id"); got != "agent-current" {
+			t.Errorf("lookup id = %q, want canonical agent ID", got)
+		}
+		if got := r.URL.Query().Get("hostname"); got != "" {
+			t.Errorf("hostname lookup = %q, want ID-only lookup", got)
+		}
+		_, _ = w.Write([]byte(`{"success":true,"agent":{"id":"agent-current"}}`))
+	}))
+	defer server.Close()
+
+	script := `
+		PULSE_URL="` + server.URL + `"
+		PULSE_TOKEN="install-token"
+		AGENT_ID="agent-current"
+		HOSTNAME_OVERRIDE="hostname-owned-by-previous-token"
+		INSECURE="false"
+		CURL_CA_BUNDLE=""
+` + curlWithPulseToken + `
+` + urlEncode + `
+` + verifyFn + `
+		verify_agent_server_registration
+		echo "rc=$?"
+	`
+	out, err := exec.Command("bash", "-c", script).CombinedOutput()
+	if err != nil {
+		t.Fatalf("bash: %v\n%s", err, out)
+	}
+	if !strings.Contains(string(out), "rc=0") {
+		t.Fatalf("canonical ID lookup failed:\n%s", out)
 	}
 }
 
@@ -4844,6 +4884,7 @@ func TestInstallSHRegistrationRetryWindowOutlastsFirstReportCycle(t *testing.T) 
 			script := `
 				PULSE_URL="` + server.URL + `"
 				PULSE_TOKEN="install-token"
+				AGENT_ID=""
 				HOSTNAME_OVERRIDE="pve-1644"
 				INSECURE="false"
 				CURL_CA_BUNDLE=""

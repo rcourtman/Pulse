@@ -501,16 +501,19 @@ restore_selinux_contexts() {
 # server rejects the agent's token. Keeps the message in one place so both
 # health-check paths report it identically.
 warn_agent_token_rejected() {
-    log_warn "Pulse rejected this agent's API token (HTTP 401/403). The saved token is no longer valid on the server, which usually means Pulse was restored/reinstalled or upgraded (for example v5 -> v6) without carrying the token across."
-    log_warn "Re-run the full agent install command from the Pulse UI to mint a fresh token. The agent will keep reporting 401 until the token is replaced."
+    log_warn "Pulse rejected this agent's API token or required reporting scope (HTTP 401/403). The saved credential cannot authenticate this agent on the server, which usually means Pulse was restored/reinstalled or upgraded (for example v5 -> v6) without carrying the token across."
+    log_warn "Re-run the full agent install command from the Pulse UI to mint a fresh token. The agent will keep reporting 401/403 until the credential is replaced."
 }
 
 # verify_agent_server_registration returns:
 #   0 - the server confirmed this agent's registration
 #   1 - registration not confirmed yet (transient: agent not reported, network)
-#   2 - the server rejected the token (HTTP 401/403 - actionable, permanent)
+#   2 - the server rejected the credential (401, or 403 other than a stale
+#       hostname ownership match - actionable, permanent)
 verify_agent_server_registration() {
+    local lookup_id="${AGENT_ID}"
     local lookup_hostname="${HOSTNAME_OVERRIDE}"
+    local lookup_query=""
     local lookup_out=""
     local lookup_status=""
     local lookup_body=""
@@ -522,25 +525,42 @@ verify_agent_server_registration() {
     if [[ -z "$PULSE_URL" ]]; then
         return 1
     fi
-    if [[ -z "$lookup_hostname" ]]; then
+    if [[ -z "$lookup_id" ]] && declare -F recover_agent_id_from_state_file >/dev/null 2>&1; then
+        lookup_id=$(recover_agent_id_from_state_file || true)
+        if [[ -n "$lookup_id" ]]; then
+            AGENT_ID="$lookup_id"
+        fi
+    fi
+    if [[ -z "$lookup_id" && -z "$lookup_hostname" ]]; then
         lookup_hostname=$(hostname 2>/dev/null || true)
     fi
-    if [[ -z "$lookup_hostname" ]]; then
+    if [[ -n "$lookup_id" ]]; then
+        lookup_query="id=$(url_encode "$lookup_id")"
+    elif [[ -n "$lookup_hostname" ]]; then
+        lookup_query="hostname=$(url_encode "$lookup_hostname")"
+    else
         return 1
     fi
 
     if [[ "$INSECURE" == "true" ]]; then lookup_args+=(-k); fi
     if [[ -n "$CURL_CA_BUNDLE" ]]; then lookup_args+=(--cacert "$CURL_CA_BUNDLE"); fi
 
-    lookup_out=$(curl_with_pulse_token "${lookup_args[@]}" "${PULSE_URL}/api/agents/agent/lookup?hostname=$(url_encode "$lookup_hostname")" 2>/dev/null || true)
+    lookup_out=$(curl_with_pulse_token "${lookup_args[@]}" "${PULSE_URL}/api/agents/agent/lookup?${lookup_query}" 2>/dev/null || true)
     lookup_status="${lookup_out##*$'\n'}"
     lookup_body="${lookup_out%$'\n'*}"
 
-    # A rejected token is a definitive, actionable failure distinct from "the
-    # agent has not reported yet"; signal it so the caller can tell the operator
-    # the token needs replacing instead of leaving a silent 401 loop behind.
+    # Authentication failure and missing reporting scope are definitive. A
+    # lookup can instead hit the previous registration during first-use token
+    # binding; agent_lookup_forbidden is transient until the new ownership is
+    # visible, so keep polling rather than falsely condemning the fresh token.
     case "$lookup_status" in
-        401|403) return 2 ;;
+        401) return 2 ;;
+        403)
+            if echo "$lookup_body" | grep -q '"code"[[:space:]]*:[[:space:]]*"agent_lookup_forbidden"'; then
+                return 1
+            fi
+            return 2
+            ;;
     esac
 
     if echo "$lookup_body" | grep -q '"agent"[[:space:]]*:' && echo "$lookup_body" | grep -q '"id"[[:space:]]*:'; then

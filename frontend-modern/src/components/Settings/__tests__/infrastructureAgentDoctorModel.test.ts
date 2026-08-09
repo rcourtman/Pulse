@@ -174,6 +174,57 @@ describe('Agent Doctor model', () => {
     expect(target.commandBlockedReason).toBeUndefined();
   });
 
+  it('turns a command credential without exec scope into a token-gated repair', () => {
+    const connection = connectionFixture({
+      agentUpdateAvailable: false,
+      agentVersion: '6.2.0',
+      expectedAgentVersion: '6.2.0',
+      agentIdentity: {
+        hostname: 'host-1',
+        platform: 'ubuntu',
+        architecture: 'amd64',
+        commandsEnabled: true,
+      },
+      fleet: { versionDrift: 'current' } as Connection['fleet'],
+    });
+    const [target] = collectInfrastructureAgentDoctorTargets({
+      rows: [rowFixture(connection)],
+      connections: [connection],
+      diagnostics: [
+        diagnosticFixture({
+          status: 'critical',
+          version: '6.2.0',
+          reasons: [
+            {
+              code: 'agent_exec_scope_missing',
+              severity: 'critical',
+              message: 'Command execution is enabled but agent:exec is missing.',
+            },
+          ],
+          repairActions: [
+            {
+              code: 'repair_authentication',
+              label: 'Repair authentication',
+              description: 'Generate a command-enabled scoped credential.',
+              supported: true,
+              platform: 'linux',
+            },
+          ],
+        }),
+      ],
+      diagnosticsAvailable: true,
+      targetVersion: '6.2.0',
+    });
+
+    expect(target).toMatchObject({
+      status: 'critical',
+      needsUpdate: false,
+      needsCredentialRepair: true,
+      commandPlatform: 'linux',
+    });
+    expect(target.commandBlockedReason).toBeUndefined();
+  });
+
   it('fails closed when duplicate host installations make the repair target ambiguous', () => {
     const connection = connectionFixture();
     const [target] = collectInfrastructureAgentDoctorTargets({
