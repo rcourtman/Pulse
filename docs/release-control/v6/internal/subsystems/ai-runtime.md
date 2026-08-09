@@ -307,10 +307,18 @@ coding/plan-mode persona. Neither route receives Pulse MCP configuration. The
 agent returns tool arguments as native JSON objects. The structured-output
 schema binds every selectable tool name to that declared tool's input schema;
 it forbids tool calls when none are offered or tool choice is `none`, and
-requires at least one when tool choice is `required`. Pulse then rejects
-unknown tool names, duplicate or empty call IDs, malformed argument objects, and violations of
-`none` or `required` tool choice before the existing provider-neutral tool loop
-can execute anything. The normal registry, profile, approval, protected
+requires at least one when tool choice is `required`. That output schema is a
+deep-copied transport projection rather than an alias of the native Pulse tool
+schema: every projected object is closed, every projected property is required,
+and fields that remain optional in the native schema are nullable only at the
+strict transport boundary. Before normal Pulse validation or execution, the
+adapter recursively removes null placeholders for those originally optional
+fields while preserving required nulls for the native validator to decide.
+No-tool turns use the same strict empty-object input contract, and neither
+projection nor cleanup may mutate the registry-owned native schema. Pulse then
+rejects unknown tool names, duplicate or empty call IDs, malformed argument
+objects, and violations of `none` or `required` tool choice before the existing
+provider-neutral tool loop can execute anything. The normal registry, profile, approval, protected
 resource, action, and verification contracts remain the only infrastructure
 authority. Calls are serialized per local subscription agent and bounded by
 the configured request timeout and prompt/output size limits, with a two-minute

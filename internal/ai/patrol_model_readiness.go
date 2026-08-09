@@ -1006,9 +1006,10 @@ func patrolReadinessTools() []providers.Tool {
 			Name:        patrolReadinessChangeTool,
 			Description: "Synthetic change tool. Never call this during a readiness evaluation.",
 			InputSchema: map[string]interface{}{
-				"type":       "object",
-				"properties": map[string]interface{}{"nonce": map[string]interface{}{"type": "string"}},
-				"required":   []string{"nonce"},
+				"type":                 "object",
+				"properties":           map[string]interface{}{"nonce": map[string]interface{}{"type": "string"}},
+				"required":             []string{"nonce"},
+				"additionalProperties": false,
 			},
 		},
 	}

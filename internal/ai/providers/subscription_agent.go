@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -432,6 +433,12 @@ func subscriptionAgentPrompt(req ChatRequest) ([]byte, error) {
 }
 
 func subscriptionAgentOutputSchema(req ChatRequest) map[string]interface{} {
+	strictEmptyInput := map[string]interface{}{
+		"type":                 "object",
+		"additionalProperties": false,
+		"properties":           map[string]interface{}{},
+		"required":             []string{},
+	}
 	toolCalls := map[string]interface{}{
 		"type": "array",
 		"items": map[string]interface{}{
@@ -441,7 +448,7 @@ func subscriptionAgentOutputSchema(req ChatRequest) map[string]interface{} {
 			"properties": map[string]interface{}{
 				"id":    map[string]interface{}{"type": "string"},
 				"name":  map[string]interface{}{"type": "string"},
-				"input": map[string]interface{}{"type": "object"},
+				"input": strictEmptyInput,
 			},
 		},
 	}
@@ -451,13 +458,9 @@ func subscriptionAgentOutputSchema(req ChatRequest) map[string]interface{} {
 	} else {
 		variants := make([]interface{}, 0, len(req.Tools))
 		for _, tool := range req.Tools {
-			inputSchema := tool.InputSchema
+			inputSchema := normalizeSubscriptionAgentToolSchema(tool.InputSchema)
 			if len(inputSchema) == 0 {
-				inputSchema = map[string]interface{}{
-					"type":                 "object",
-					"additionalProperties": false,
-					"properties":           map[string]interface{}{},
-				}
+				inputSchema = cloneSubscriptionAgentSchemaMap(strictEmptyInput)
 			}
 			variants = append(variants, map[string]interface{}{
 				"type":                 "object",
@@ -481,6 +484,193 @@ func subscriptionAgentOutputSchema(req ChatRequest) map[string]interface{} {
 		"stop_reason": map[string]interface{}{"type": "string", "enum": []string{"end_turn", "tool_use"}},
 		"tool_calls":  toolCalls,
 	}}
+}
+
+// normalizeSubscriptionAgentToolSchema projects a provider-neutral Pulse tool
+// schema into the strict structured-output dialect used by local subscription
+// agents. The projection is deliberately transport-local: native schemas keep
+// their optional-field semantics for Pulse validation and every source map is
+// deep-copied before the strict requirements are added.
+func normalizeSubscriptionAgentToolSchema(input map[string]interface{}) map[string]interface{} {
+	if len(input) == 0 {
+		return nil
+	}
+	return normalizeSubscriptionAgentSchemaNode(cloneSubscriptionAgentSchemaMap(input))
+}
+
+func cloneSubscriptionAgentSchemaMap(input map[string]interface{}) map[string]interface{} {
+	if input == nil {
+		return nil
+	}
+	cloned := make(map[string]interface{}, len(input))
+	for key, value := range input {
+		cloned[key] = cloneSubscriptionAgentSchemaValue(value)
+	}
+	return cloned
+}
+
+func cloneSubscriptionAgentSchemaValue(value interface{}) interface{} {
+	switch typed := value.(type) {
+	case map[string]interface{}:
+		return cloneSubscriptionAgentSchemaMap(typed)
+	case []interface{}:
+		cloned := make([]interface{}, len(typed))
+		for i := range typed {
+			cloned[i] = cloneSubscriptionAgentSchemaValue(typed[i])
+		}
+		return cloned
+	case []string:
+		return append([]string(nil), typed...)
+	case []map[string]interface{}:
+		cloned := make([]map[string]interface{}, len(typed))
+		for i := range typed {
+			cloned[i] = cloneSubscriptionAgentSchemaMap(typed[i])
+		}
+		return cloned
+	default:
+		return value
+	}
+}
+
+func normalizeSubscriptionAgentSchemaNode(schema map[string]interface{}) map[string]interface{} {
+	for _, keyword := range []string{"anyOf", "oneOf", "allOf"} {
+		normalizeSubscriptionAgentSchemaList(schema, keyword)
+	}
+	for _, keyword := range []string{"$defs", "definitions", "dependentSchemas"} {
+		children, ok := schema[keyword].(map[string]interface{})
+		if !ok {
+			continue
+		}
+		for name, child := range children {
+			if childSchema, ok := child.(map[string]interface{}); ok {
+				children[name] = normalizeSubscriptionAgentSchemaNode(childSchema)
+			}
+		}
+	}
+	if items, ok := schema["items"].(map[string]interface{}); ok {
+		schema["items"] = normalizeSubscriptionAgentSchemaNode(items)
+	} else if items, ok := schema["items"].([]interface{}); ok {
+		for i := range items {
+			if itemSchema, ok := items[i].(map[string]interface{}); ok {
+				items[i] = normalizeSubscriptionAgentSchemaNode(itemSchema)
+			}
+		}
+	}
+
+	properties, hasProperties := schema["properties"].(map[string]interface{})
+	if hasProperties {
+		originalRequired := subscriptionAgentRequiredSet(schema["required"])
+		names := make([]string, 0, len(properties))
+		for name, property := range properties {
+			names = append(names, name)
+			propertySchema, ok := property.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			propertySchema = normalizeSubscriptionAgentSchemaNode(propertySchema)
+			if _, required := originalRequired[name]; !required {
+				propertySchema = nullableSubscriptionAgentSchema(propertySchema)
+			}
+			properties[name] = propertySchema
+		}
+		sort.Strings(names)
+		schema["required"] = names
+	}
+	if hasProperties || subscriptionAgentSchemaHasType(schema, "object") {
+		schema["additionalProperties"] = false
+		if !hasProperties {
+			schema["properties"] = map[string]interface{}{}
+			schema["required"] = []string{}
+		}
+	}
+	return schema
+}
+
+func normalizeSubscriptionAgentSchemaList(schema map[string]interface{}, keyword string) {
+	switch variants := schema[keyword].(type) {
+	case []interface{}:
+		for i := range variants {
+			if variant, ok := variants[i].(map[string]interface{}); ok {
+				variants[i] = normalizeSubscriptionAgentSchemaNode(variant)
+			}
+		}
+	case []map[string]interface{}:
+		for i := range variants {
+			variants[i] = normalizeSubscriptionAgentSchemaNode(variants[i])
+		}
+	}
+}
+
+func nullableSubscriptionAgentSchema(schema map[string]interface{}) map[string]interface{} {
+	if subscriptionAgentSchemaAllowsNull(schema) {
+		return schema
+	}
+	return map[string]interface{}{
+		"anyOf": []interface{}{
+			schema,
+			map[string]interface{}{"type": "null"},
+		},
+	}
+}
+
+func subscriptionAgentSchemaAllowsNull(schema map[string]interface{}) bool {
+	if subscriptionAgentSchemaHasType(schema, "null") {
+		return true
+	}
+	for _, keyword := range []string{"anyOf", "oneOf"} {
+		switch variants := schema[keyword].(type) {
+		case []interface{}:
+			for _, candidate := range variants {
+				if variant, ok := candidate.(map[string]interface{}); ok && subscriptionAgentSchemaAllowsNull(variant) {
+					return true
+				}
+			}
+		case []map[string]interface{}:
+			for _, variant := range variants {
+				if subscriptionAgentSchemaAllowsNull(variant) {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+func subscriptionAgentSchemaHasType(schema map[string]interface{}, wanted string) bool {
+	switch schemaType := schema["type"].(type) {
+	case string:
+		return schemaType == wanted
+	case []string:
+		for _, candidate := range schemaType {
+			if candidate == wanted {
+				return true
+			}
+		}
+	case []interface{}:
+		for _, candidate := range schemaType {
+			if candidate == wanted {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func subscriptionAgentRequiredSet(raw interface{}) map[string]struct{} {
+	required := map[string]struct{}{}
+	switch values := raw.(type) {
+	case []string:
+		for _, value := range values {
+			required[value] = struct{}{}
+		}
+	case []interface{}:
+		for _, value := range values {
+			if name, ok := value.(string); ok {
+				required[name] = struct{}{}
+			}
+		}
+	}
+	return required
 }
 
 func decodeSubscriptionAgentTurn(agent SubscriptionAgent, raw []byte) (subscriptionAgentTurn, error) {
@@ -727,8 +917,10 @@ func rejectCodexAgentToolActivity(events []byte) error {
 
 func validateSubscriptionAgentTurn(req ChatRequest, turn *subscriptionAgentTurn) error {
 	allowed := make(map[string]struct{}, len(req.Tools))
+	toolSchemas := make(map[string]map[string]interface{}, len(req.Tools))
 	for _, tool := range req.Tools {
 		allowed[tool.Name] = struct{}{}
+		toolSchemas[tool.Name] = tool.InputSchema
 	}
 	seen := make(map[string]struct{}, len(turn.RawToolCalls))
 	turn.ProviderToolCalls = make([]ToolCall, 0, len(turn.RawToolCalls))
@@ -745,6 +937,8 @@ func validateSubscriptionAgentTurn(req ChatRequest, turn *subscriptionAgentTurn)
 			return fmt.Errorf("subscription agent returned duplicate tool call id %q", call.ID)
 		}
 		seen[call.ID] = struct{}{}
+		stripSubscriptionAgentOptionalNulls(toolSchemas[call.Name], rawCall.Input)
+		call.Input = rawCall.Input
 		turn.ProviderToolCalls = append(turn.ProviderToolCalls, call)
 	}
 	if req.ToolChoice != nil {
@@ -765,6 +959,62 @@ func validateSubscriptionAgentTurn(req ChatRequest, turn *subscriptionAgentTurn)
 		turn.StopReason = "end_turn"
 	}
 	return nil
+}
+
+// stripSubscriptionAgentOptionalNulls removes only the null placeholders that
+// the strict transport requires for fields which remain optional in Pulse's
+// native tool contract. Required nulls are preserved for normal validation to
+// accept or reject according to the original schema.
+func stripSubscriptionAgentOptionalNulls(schema map[string]interface{}, input map[string]interface{}) {
+	if len(schema) == 0 || input == nil {
+		return
+	}
+	properties, _ := schema["properties"].(map[string]interface{})
+	required := subscriptionAgentRequiredSet(schema["required"])
+	for name, value := range input {
+		property, declared := properties[name]
+		propertySchema, schemaOK := property.(map[string]interface{})
+		if value == nil {
+			if declared {
+				if _, isRequired := required[name]; !isRequired {
+					delete(input, name)
+				}
+			}
+			continue
+		}
+		if declared && schemaOK {
+			stripSubscriptionAgentOptionalNullsFromValue(propertySchema, value)
+		}
+	}
+	for _, keyword := range []string{"anyOf", "oneOf", "allOf"} {
+		switch variants := schema[keyword].(type) {
+		case []interface{}:
+			for _, candidate := range variants {
+				if variant, ok := candidate.(map[string]interface{}); ok {
+					stripSubscriptionAgentOptionalNulls(variant, input)
+				}
+			}
+		case []map[string]interface{}:
+			for _, variant := range variants {
+				stripSubscriptionAgentOptionalNulls(variant, input)
+			}
+		}
+	}
+}
+
+func stripSubscriptionAgentOptionalNullsFromValue(schema map[string]interface{}, value interface{}) {
+	switch typed := value.(type) {
+	case map[string]interface{}:
+		stripSubscriptionAgentOptionalNulls(schema, typed)
+	case []interface{}:
+		items, ok := schema["items"].(map[string]interface{})
+		if !ok {
+			return
+		}
+		for _, item := range typed {
+			stripSubscriptionAgentOptionalNullsFromValue(items, item)
+		}
+	}
 }
 
 // NormalizeCollectionsPtr keeps the Provider implementation concise while

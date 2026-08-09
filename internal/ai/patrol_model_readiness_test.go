@@ -167,6 +167,17 @@ func TestPatrolReadinessContextFixturesDoNotPutEvidenceAtTheRecencyEdge(t *testi
 	}
 }
 
+func TestPatrolReadinessToolsUseClosedObjectSchemas(t *testing.T) {
+	for _, tool := range patrolReadinessTools() {
+		if tool.InputSchema["type"] != "object" {
+			t.Fatalf("%s input schema type = %#v", tool.Name, tool.InputSchema["type"])
+		}
+		if tool.InputSchema["additionalProperties"] != false {
+			t.Fatalf("%s input schema is not closed: %#v", tool.Name, tool.InputSchema)
+		}
+	}
+}
+
 func TestRunPatrolModelReadinessWithProvider_SeparatesProtocolFromContextQuality(t *testing.T) {
 	provider := &scriptedReadinessProvider{contextWindow: 32768, wrongContext: true}
 	result := runPatrolModelReadinessWithProvider(

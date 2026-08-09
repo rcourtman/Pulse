@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strings"
 	"testing"
@@ -142,6 +143,125 @@ func TestSubscriptionAgentOutputSchemaUsesDeclaredNativeToolInputs(t *testing.T)
 	noTools := subscriptionAgentOutputSchema(ChatRequest{})["properties"].(map[string]interface{})["tool_calls"].(map[string]interface{})
 	if noTools["maxItems"] != 0 {
 		t.Fatalf("no-tool schema maxItems = %#v", noTools["maxItems"])
+	}
+	fallbackProperties := noTools["items"].(map[string]interface{})["properties"].(map[string]interface{})
+	fallbackInput := fallbackProperties["input"].(map[string]interface{})
+	if fallbackInput["additionalProperties"] != false || len(fallbackInput["properties"].(map[string]interface{})) != 0 || !reflect.DeepEqual(fallbackInput["required"], []string{}) {
+		t.Fatalf("no-tool fallback input is not a strict empty object: %#v", fallbackInput)
+	}
+}
+
+func TestSubscriptionAgentOutputSchemaNormalizesNestedOptionalFieldsWithoutMutation(t *testing.T) {
+	native := map[string]interface{}{
+		"type":                 "object",
+		"additionalProperties": true,
+		"required":             []string{"node"},
+		"properties": map[string]interface{}{
+			"node":         map[string]interface{}{"type": "string"},
+			"cluster_name": map[string]interface{}{"type": "string"},
+			"filters": map[string]interface{}{
+				"type":     "object",
+				"required": []string{"severity"},
+				"properties": map[string]interface{}{
+					"severity": map[string]interface{}{"type": "string", "enum": []string{"warning", "critical"}},
+					"limit":    map[string]interface{}{"type": "integer"},
+				},
+			},
+		},
+	}
+	before, err := json.Marshal(native)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	schema := subscriptionAgentOutputSchema(ChatRequest{Tools: []Tool{{Name: "get_node_status", InputSchema: native}}})
+	toolCalls := schema["properties"].(map[string]interface{})["tool_calls"].(map[string]interface{})
+	variant := toolCalls["items"].(map[string]interface{})["anyOf"].([]interface{})[0].(map[string]interface{})
+	input := variant["properties"].(map[string]interface{})["input"].(map[string]interface{})
+	if input["additionalProperties"] != false || !reflect.DeepEqual(input["required"], []string{"cluster_name", "filters", "node"}) {
+		t.Fatalf("strict root input = %#v", input)
+	}
+	inputProperties := input["properties"].(map[string]interface{})
+	clusterNullable := inputProperties["cluster_name"].(map[string]interface{})["anyOf"].([]interface{})
+	if len(clusterNullable) != 2 || clusterNullable[1].(map[string]interface{})["type"] != "null" {
+		t.Fatalf("optional cluster_name was not nullable: %#v", inputProperties["cluster_name"])
+	}
+	filtersNullable := inputProperties["filters"].(map[string]interface{})["anyOf"].([]interface{})
+	filters := filtersNullable[0].(map[string]interface{})
+	if filters["additionalProperties"] != false || !reflect.DeepEqual(filters["required"], []string{"limit", "severity"}) {
+		t.Fatalf("strict nested filters = %#v", filters)
+	}
+	limitNullable := filters["properties"].(map[string]interface{})["limit"].(map[string]interface{})["anyOf"].([]interface{})
+	if len(limitNullable) != 2 || limitNullable[1].(map[string]interface{})["type"] != "null" {
+		t.Fatalf("optional nested limit was not nullable: %#v", limitNullable)
+	}
+
+	after, err := json.Marshal(native)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(after) != string(before) {
+		t.Fatalf("native tool schema mutated:\n before=%s\n after=%s", before, after)
+	}
+}
+
+func TestValidateSubscriptionAgentTurnStripsOnlyOptionalNullPlaceholders(t *testing.T) {
+	req := ChatRequest{Tools: []Tool{{Name: "get_node_status", InputSchema: map[string]interface{}{
+		"type":     "object",
+		"required": []string{"node", "required_nullable"},
+		"properties": map[string]interface{}{
+			"node":              map[string]interface{}{"type": "string"},
+			"required_nullable": map[string]interface{}{"type": []string{"string", "null"}},
+			"cluster_name":      map[string]interface{}{"type": "string"},
+			"filters": map[string]interface{}{
+				"type":     "object",
+				"required": []string{"mode"},
+				"properties": map[string]interface{}{
+					"mode":  map[string]interface{}{"type": "string"},
+					"label": map[string]interface{}{"type": "string"},
+				},
+			},
+			"targets": map[string]interface{}{
+				"type": "array",
+				"items": map[string]interface{}{
+					"type":       "object",
+					"properties": map[string]interface{}{"id": map[string]interface{}{"type": "string"}, "note": map[string]interface{}{"type": "string"}},
+					"required":   []string{"id"},
+				},
+			},
+		},
+	}}}}
+	turn := subscriptionAgentTurn{RawToolCalls: []subscriptionAgentToolCall{{
+		ID:   "call-1",
+		Name: "get_node_status",
+		Input: map[string]interface{}{
+			"node":              "tower",
+			"required_nullable": nil,
+			"cluster_name":      nil,
+			"filters":           map[string]interface{}{"mode": "active", "label": nil},
+			"targets":           []interface{}{map[string]interface{}{"id": "node-1", "note": nil}},
+		},
+	}}}
+	if err := validateSubscriptionAgentTurn(req, &turn); err != nil {
+		t.Fatal(err)
+	}
+	input := turn.ProviderToolCalls[0].Input
+	if _, ok := input["cluster_name"]; ok {
+		t.Fatalf("optional root null placeholder survived: %#v", input)
+	}
+	if value, ok := input["required_nullable"]; !ok || value != nil {
+		t.Fatalf("required null was not preserved for native validation: %#v", input)
+	}
+	filters := input["filters"].(map[string]interface{})
+	if _, ok := filters["label"]; ok || filters["mode"] != "active" {
+		t.Fatalf("nested optional null cleanup = %#v", filters)
+	}
+	target := input["targets"].([]interface{})[0].(map[string]interface{})
+	if _, ok := target["note"]; ok || target["id"] != "node-1" {
+		t.Fatalf("array item optional null cleanup = %#v", target)
+	}
+	if _, ok := turn.RawToolCalls[0].Input["cluster_name"]; ok {
+		t.Fatalf("raw transport call retained optional placeholder: %#v", turn.RawToolCalls[0].Input)
 	}
 }
 
