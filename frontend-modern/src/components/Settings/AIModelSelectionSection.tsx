@@ -426,6 +426,7 @@ export const AIModelOverrideField: Component<{
               onInput={(e) => setSelectedModel(e.currentTarget.value)}
               placeholder="Use shared default model"
               aria-label={config().ariaLabel}
+              autocomplete="off"
               class={controlClass()}
               disabled={state.saving()}
             />
@@ -535,6 +536,7 @@ export const AIModelSelectionSection: Component<AIModelSelectionSectionProps> = 
               onInput={(e) => state.setForm('model', e.currentTarget.value)}
               placeholder="Configure a provider below to see available models"
               aria-label="Default model identifier"
+              autocomplete="off"
               class={controlClass()}
               disabled={state.saving()}
             />

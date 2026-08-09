@@ -1704,6 +1704,15 @@ Agent`), with the plain-language source phrase available through accessible
     summary when those fields are present. The settings shell may compose that
     safe backend diagnostic for display, but it must not infer provider
     remediation by parsing raw upstream error strings in the browser. Provider
+    model identifiers, custom provider URLs, and API-key controls must compose
+    the shared semantic form surface in both themes and must not be classified
+    as website login credentials. The Provider & Models form and manual model
+    identifiers opt out of credential autofill, provider secrets use the
+    `new-password` autocomplete purpose, and the global form CSS preserves the
+    active semantic surface and text tokens when a browser legitimately
+    autofills another control. Dark mode must not expose the browser's pale
+    credential fill or inject an admin username into a model identifier.
+    Provider
     setup cards must describe provider families through the current
     backend-owned provider contract; DeepSeek setup copy is the V4 family and
     must not regress to old V3 or compatibility-alias wording. First-class

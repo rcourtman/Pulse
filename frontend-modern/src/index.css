@@ -59,6 +59,8 @@
 /* Custom styles */
 @layer base {
   :root {
+    color-scheme: light;
+
     /*
       Layout tokens.
       Goal: keep top-level navigation spatially stable while giving dense operational views room to breathe.
@@ -92,6 +94,8 @@
   }
 
   .dark {
+    color-scheme: dark;
+
     /* Semantic Colors - Dark Mode */
     --color-bg-base: theme('colors.slate.900');
     --color-bg-surface: theme('colors.slate.800');
@@ -130,6 +134,32 @@
   textarea {
     background-color: var(--color-bg-surface);
     color: var(--color-text-base);
+  }
+
+  /* Browser autofill paints its own pale credential background unless the
+     theme surface is restored explicitly. Keep legitimate autofill readable
+     without letting it break the active color scheme. */
+  input:-webkit-autofill,
+  input:-webkit-autofill:hover,
+  input:-webkit-autofill:focus,
+  textarea:-webkit-autofill,
+  textarea:-webkit-autofill:hover,
+  textarea:-webkit-autofill:focus,
+  select:-webkit-autofill,
+  select:-webkit-autofill:hover,
+  select:-webkit-autofill:focus {
+    -webkit-text-fill-color: var(--color-text-base);
+    caret-color: var(--color-text-base);
+    -webkit-box-shadow: 0 0 0 1000px var(--color-bg-surface) inset;
+    box-shadow: 0 0 0 1000px var(--color-bg-surface) inset;
+  }
+
+  input:autofill,
+  textarea:autofill,
+  select:autofill {
+    color: var(--color-text-base);
+    caret-color: var(--color-text-base);
+    box-shadow: 0 0 0 1000px var(--color-bg-surface) inset;
   }
 
   /* The document root never scrolls: the app shell is h-screen with

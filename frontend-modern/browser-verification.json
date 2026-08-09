@@ -1,21 +1,27 @@
 {
   "version": 1,
-  "base_sha": "37e3c81b03bc6f59b4c393762daf10020a245b36",
-  "verified_at": "2026-08-09T09:29:29Z",
+  "base_sha": "c94ed3906e1290eefe2332e5b9807d5fb012a0dc",
+  "verified_at": "2026-08-09T09:26:15Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/features/platformPage/agentVersion.ts"
+    "frontend-modern/src/components/Settings/AIModelSelectionSection.tsx",
+    "frontend-modern/src/components/Settings/AIProviderConfigurationSection.tsx",
+    "frontend-modern/src/components/Settings/AISettings.tsx",
+    "frontend-modern/src/index.css"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/platformPage/agentVersion.ts": "db80e0021579408af18677a9ce34ae13aadf018d76ace3357df19058175d1bff"
+    "frontend-modern/src/components/Settings/AIModelSelectionSection.tsx": "8591b74410989224fc62460ac0db612d922bc4d5288c2728a4f19a9eb0c77877",
+    "frontend-modern/src/components/Settings/AIProviderConfigurationSection.tsx": "177ac200d4f3b4dcb64b792f746bd17cc1259d1dafb66c5900bad5eb17936f14",
+    "frontend-modern/src/components/Settings/AISettings.tsx": "2e8bab6f7bbca5c4a7dbd772f3325fd89763b1c384ee30c2d0b0ea3b97266a6e",
+    "frontend-modern/src/index.css": "87f4ab4ec40b8042cf33eb407ca849acd285dbe9ce650c0014596aa39752852b"
   },
   "routes": [
-    "/proxmox/overview"
+    "/settings/pulse-intelligence/provider"
   ],
   "viewports": [
     {
       "width": 1440,
-      "height": 900
+      "height": 1000
     },
     {
       "width": 390,
@@ -23,11 +29,15 @@
     }
   ],
   "states": [
-    "A provider-backed Proxmox node with a retained stale agent facet did not render the outdated-agent notice at desktop or narrow widths.",
-    "The Proxmox overview remained usable at 390 pixels with document width equal to viewport width and no console errors."
+    "Dark-mode shared model and Anthropic API-key controls rendered on the semantic slate surface with light text at desktop and narrow widths, including empty, filled, focused, open-provider, and closed-provider states.",
+    "After reloading the persisted Provider & Models route, both controls remained empty instead of receiving the local admin credential, retained autocomplete=off and autocomplete=new-password respectively, and kept the dark semantic surface.",
+    "The 390x844 layout kept both controls within the viewport with document scrollWidth equal to innerWidth, and the focused API-key control remained visible above the mobile navigation without clipping.",
+    "The verified route produced no browser console errors."
   ],
   "interactions": [
-    "Opened the current-build Proxmox overview at 1440x900 and confirmed no outdated-agent notice was rendered for non-reporting retained agent metadata.",
-    "Repeated the notice and horizontal-overflow checks at 390x844, inspected browser console errors, and reset the temporary viewport."
+    "Signed in to the managed local development runtime, opened Settings > Provider & Models, and expanded the Anthropic provider configuration.",
+    "Focused and edited the shared model and API-key controls without saving, verified their computed background, text, border, autocomplete, and password-type properties, then cleared both temporary values.",
+    "Collapsed and reopened the Anthropic provider, reloaded the Provider & Models route, and confirmed browser credential autofill did not repopulate either field.",
+    "Repeated the visual and focus checks at 1440x1000 and 390x844, including horizontal-overflow and console-error inspection."
   ]
 }

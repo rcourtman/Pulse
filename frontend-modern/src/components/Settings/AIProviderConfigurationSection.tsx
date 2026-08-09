@@ -220,6 +220,7 @@ export const AIProviderConfigurationSection: Component<AIProviderConfigurationSe
                           aria-label={`${getAIProviderDisplayName(config.provider)} ${
                             config.inputType === 'url' ? 'server URL' : 'API key'
                           }`}
+                          autocomplete={config.inputType === 'password' ? 'new-password' : 'off'}
                           class={controlClass()}
                           disabled={props.saving()}
                         />
@@ -260,6 +261,7 @@ export const AIProviderConfigurationSection: Component<AIProviderConfigurationSe
                             }
                             placeholder={extraField.placeholder}
                             aria-label={`${getAIProviderDisplayName(config.provider)} ${extraField.label}`}
+                            autocomplete="off"
                             class={controlClass()}
                             disabled={props.saving()}
                           />

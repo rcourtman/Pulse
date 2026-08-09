@@ -1293,6 +1293,17 @@ describe('settings architecture guardrails', () => {
     );
   });
 
+  it('keeps provider configuration fields out of login credential autofill', () => {
+    expect(aiSettingsSource).toContain('<form class="divide-y divide-border" autocomplete="off"');
+    expect(aiModelSelectionSectionSource).toContain('autocomplete="off"');
+    expect(aiProviderConfigurationSectionSource).toContain(
+      "autocomplete={config.inputType === 'password' ? 'new-password' : 'off'}",
+    );
+    expect(aiProviderConfigurationSectionSource).toContain(
+      'aria-label={`${getAIProviderDisplayName(config.provider)} ${extraField.label}`}\n                            autocomplete="off"',
+    );
+  });
+
   it('keeps system AI save feedback tied to provider and Patrol readiness context', () => {
     expect(aiSettingsSource).toContain('Choose a Patrol mode on the Patrol page.');
     expect(aiSettingsSource).toContain('Open Patrol');

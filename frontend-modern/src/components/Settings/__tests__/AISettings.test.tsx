@@ -278,6 +278,19 @@ describe('AISettings model loading error states', () => {
     expect(screen.queryByText(/Set how much Patrol can do/i)).not.toBeInTheDocument();
   });
 
+  it('keeps model identifiers and provider secrets out of login credential autofill', async () => {
+    renderComponent();
+
+    const modelInput = await screen.findByLabelText('Default model identifier');
+    expect(modelInput).toHaveAttribute('autocomplete', 'off');
+    expect(modelInput.closest('form')).toHaveAttribute('autocomplete', 'off');
+
+    expect(await screen.findByLabelText('Anthropic API key')).toHaveAttribute(
+      'autocomplete',
+      'new-password',
+    );
+  });
+
   it('shows Patrol scheduling and readiness without rendering the operator loop', async () => {
     getSettingsMock.mockResolvedValue({
       ...baseSettings(),

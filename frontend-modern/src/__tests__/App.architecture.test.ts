@@ -160,6 +160,16 @@ describe('App architecture', () => {
     );
   });
 
+  it('keeps native form and browser autofill paint on semantic theme tokens', () => {
+    expect(appStylesSource).toContain('color-scheme: light');
+    expect(appStylesSource).toContain('color-scheme: dark');
+    expect(appStylesSource).toContain('input:-webkit-autofill');
+    expect(appStylesSource).toContain(
+      '-webkit-box-shadow: 0 0 0 1000px var(--color-bg-surface) inset;',
+    );
+    expect(appStylesSource).toContain('-webkit-text-fill-color: var(--color-text-base);');
+  });
+
   it('keeps infrastructure platforms marked as dense data surfaces', () => {
     platformSurfaceSources.forEach((source) => {
       expect(source).toMatch(/data-testid="[^"]+-page" class="pulse-wide-data-surface /);

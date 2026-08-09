@@ -411,7 +411,7 @@ export const AISettings: Component<{ page?: AISettingsPage }> = (props) => {
           }
           noPadding
         >
-          <form class="divide-y divide-border" onSubmit={state.handleSave}>
+          <form class="divide-y divide-border" autocomplete="off" onSubmit={state.handleSave}>
             <Show when={state.loading()}>
               <div class="flex items-center gap-3 text-sm text-muted p-4 sm:p-6">
                 <LoadingSpinner size="md" tone="current" />
