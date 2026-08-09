@@ -9621,16 +9621,16 @@
   "candidate_lanes": [],
   "work_claims": [
     {
-      "id": "v620-release-owner-lane-followup-performance-post-rc-headroom",
+      "id": "v620-release-owner-lane-followup-self-hosted-ga-promotion-package",
       "agent_id": "v620-release-owner",
-      "summary": "Close remaining API load-harness lifecycle and fixed-duration release-proof gaps found by dry run 31320692142.",
+      "summary": "Execute v6.2.0 exact-SHA rehearsal and publication after complete API package-order performance proof.",
       "target_id": "v6-product-lane-expansion",
-      "claimed_at": "2026-08-09T15:45:22Z",
-      "heartbeat_at": "2026-08-09T15:45:22Z",
-      "expires_at": "2026-08-09T21:45:22Z",
+      "claimed_at": "2026-08-09T15:54:08Z",
+      "heartbeat_at": "2026-08-09T15:54:08Z",
+      "expires_at": "2026-08-09T21:54:08Z",
       "work_item": {
         "kind": "lane-followup",
-        "id": "performance-post-rc-headroom"
+        "id": "self-hosted-ga-promotion-package"
       }
     }
   ],
