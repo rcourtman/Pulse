@@ -197,6 +197,10 @@ export const DE_MESSAGE_OVERRIDES = {
     'Oeffnen Sie Infrastruktur hinzufuegen, um eine Plattform-API, Pulse Agent oder beides zu waehlen.',
   'setup.completion.nextStep.title.connected': 'Infrastruktur oeffnen',
   'setup.completion.nextStep.title.empty': 'Strategie fuer erste Quelle waehlen',
+  'setup.completion.proActivation.action': 'Aktivierungsschluessel eingeben',
+  'setup.completion.proActivation.description':
+    'Dieser Server laeuft mit dem Pulse Pro Build, aber ohne aktive Lizenz. Geben Sie den Aktivierungsschluessel aus Ihrer Kauf-E-Mail ein, um die Pro-Funktionen freizuschalten.',
+  'setup.completion.proActivation.title': 'Pulse Pro aktivieren',
   'setup.completion.resource.unknownName': 'Unbekannt',
   'setup.completion.sourceOptions.agent.description':
     'Knotenlokale Telemetrie fuer eigenstaendige Hosts, Dienste, Docker und Kubernetes.',

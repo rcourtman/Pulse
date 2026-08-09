@@ -7,20 +7,24 @@ import { getPulseBaseUrl } from '@/utils/url';
 import { ActionIconButton } from '@/components/shared/Button';
 import type { State } from '@/types/api';
 import type { Resource } from '@/types/resource';
+import type { LicenseRuntimeCapabilities, LicenseStatus } from '@/api/license';
 import {
   buildInfrastructureOnboardingPath,
   buildInfrastructureWorkspacePath,
 } from '@/components/Settings/infrastructureWorkspaceModel';
+import { SELF_HOSTED_PRO_BILLING_PLAN_ROUTE } from '@/utils/pricingHandoff';
 import type { WizardState } from '../SetupWizard';
 import {
   buildSetupCompletionConnectedSystems,
   buildSetupCompletionViewModel,
+  shouldShowSetupProActivationPointer,
 } from './setupCompletionModel';
 
 interface CompleteStepProps {
   state: WizardState;
   onComplete: (nextPath?: string) => void;
   connectedResourcesOverride?: readonly Resource[];
+  proActivationOverride?: boolean;
 }
 
 const ADD_INFRASTRUCTURE_PATH = buildInfrastructureOnboardingPath('pick');
@@ -31,9 +35,42 @@ export const SetupCompletionPanel: Component<CompleteStepProps> = (props) => {
   const [copied, setCopied] = createSignal<'password' | 'admin-token' | null>(null);
   let copiedTimer: ReturnType<typeof setTimeout> | undefined;
   const [showCredentials, setShowCredentials] = createSignal(true);
+  const [showProActivation, setShowProActivation] = createSignal(false);
   const [connectedSystems, setConnectedSystems] = createSignal<
     ReturnType<typeof buildSetupCompletionConnectedSystems>
   >([]);
+
+  createEffect(() => {
+    if (props.proActivationOverride !== undefined) {
+      // Preview scenarios force the flag so browser proof stays deterministic
+      // without touching live license endpoints.
+      setShowProActivation(props.proActivationOverride);
+      return;
+    }
+
+    void (async () => {
+      try {
+        const [capabilities, licenseStatus] = await Promise.all([
+          apiFetchJSON<LicenseRuntimeCapabilities>('/api/license/runtime-capabilities', {
+            headers: { 'X-API-Token': props.state.apiToken },
+          }),
+          apiFetchJSON<LicenseStatus>('/api/license/status', {
+            headers: { 'X-API-Token': props.state.apiToken },
+          }),
+        ]);
+        setShowProActivation(
+          shouldShowSetupProActivationPointer({
+            runtimeBuild: capabilities?.runtime?.build,
+            licenseValid: licenseStatus?.valid,
+          }),
+        );
+      } catch (error) {
+        // A failed probe keeps the pointer hidden; community installs must
+        // never see it because a license endpoint errored.
+        logger.error('Failed to check Pro activation state:', error);
+      }
+    })();
+  });
 
   createEffect(() => {
     if (props.connectedResourcesOverride !== undefined) {
@@ -387,6 +424,21 @@ export const SetupCompletionPanel: Component<CompleteStepProps> = (props) => {
             </div>
           </Show>
         </div>
+
+        <Show when={showProActivation()}>
+          <div class="bg-surface rounded-md border border-border p-5 sm:p-6 text-left mb-6">
+            <h3 class="text-sm font-semibold text-base-content">
+              {t('setup.completion.proActivation.title')}
+            </h3>
+            <p class="mt-1 text-xs text-muted">{t('setup.completion.proActivation.description')}</p>
+            <button
+              onClick={() => props.onComplete(SELF_HOSTED_PRO_BILLING_PLAN_ROUTE)}
+              class="mt-3 inline-flex items-center justify-center gap-2 rounded-md border border-border px-4 py-2.5 text-sm font-medium text-base-content transition-colors hover:bg-surface-hover"
+            >
+              {t('setup.completion.proActivation.action')}
+            </button>
+          </div>
+        </Show>
 
         <div
           aria-label={t('setup.completion.nextStep.ariaLabel')}

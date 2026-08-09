@@ -242,6 +242,22 @@ describe('i18n foundation', () => {
     }
   });
 
+  it('keeps the setup completion Pro activation pointer in the localized first-session journey', () => {
+    expect(LOCALIZED_FIRST_SESSION_MONITORING_JOURNEY_KEYS).toEqual(
+      expect.arrayContaining([
+        'setup.completion.proActivation.action',
+        'setup.completion.proActivation.description',
+        'setup.completion.proActivation.title',
+      ]),
+    );
+    for (const locale of FIRST_LOCALIZATION_LOCALES) {
+      expect(I18N_MESSAGES[locale]['setup.completion.proActivation.title']).toContain('Pulse Pro');
+      expect(I18N_MESSAGES[locale]['setup.completion.proActivation.description']).toContain(
+        'Pulse Pro',
+      );
+    }
+  });
+
   it('keeps machine-facing identifiers unchanged in first-session monitoring catalog copy', () => {
     for (const locale of FIRST_LOCALIZATION_LOCALES) {
       const telemetryNotice = I18N_MESSAGES[locale]['setup.welcome.telemetryNotice.description'];

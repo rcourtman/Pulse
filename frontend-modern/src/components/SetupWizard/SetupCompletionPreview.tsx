@@ -18,6 +18,7 @@ export const SetupCompletionPreview: Component = () => {
   return (
     <SetupCompletionPanel
       connectedResourcesOverride={previewScenario().resources}
+      proActivationOverride={previewScenario().proActivation}
       state={previewWizardState}
       onComplete={(nextPath) => {
         if (nextPath) {

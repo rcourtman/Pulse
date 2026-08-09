@@ -56,6 +56,10 @@ export const EN_MESSAGES = {
     'Open Add infrastructure to choose a platform API, Pulse Agent, or both.',
   'setup.completion.nextStep.title.connected': 'Open Infrastructure',
   'setup.completion.nextStep.title.empty': 'Choose the first source strategy',
+  'setup.completion.proActivation.action': 'Enter activation key',
+  'setup.completion.proActivation.description':
+    'This server is running the Pulse Pro build without an active license. Enter the activation key from your purchase email to unlock Pro features.',
+  'setup.completion.proActivation.title': 'Activate Pulse Pro',
   'setup.completion.resource.unknownName': 'Unknown',
   'setup.completion.sourceOptions.agent.description':
     'Node-local telemetry for standalone hosts, services, Docker, and Kubernetes.',
@@ -591,6 +595,9 @@ export const FIRST_SESSION_MONITORING_MIGRATED_MESSAGE_KEYS = [
   'setup.completion.nextStep.summary.empty',
   'setup.completion.nextStep.title.connected',
   'setup.completion.nextStep.title.empty',
+  'setup.completion.proActivation.action',
+  'setup.completion.proActivation.description',
+  'setup.completion.proActivation.title',
   'setup.completion.resource.unknownName',
   'setup.completion.sourceOptions.agent.description',
   'setup.completion.sourceOptions.agent.title',

@@ -353,6 +353,13 @@ the `white_label` branding entitlement.
    only for redirect/manual-link copy and must preserve `Pulse Account`,
    security/privacy disclosures, token names, API field names, route/query keys,
    and purchase-return state exactly.
+   The first-session setup completion Pro activation pointer
+   (`setup.completion.proActivation.*`) is likewise product-surface copy in the
+   shared catalogs: it must stay a factual statement of build edition and
+   license state plus the activation action, must not add upgrade-marketing
+   language, and must not alter API token, authentication, privacy-disclosure,
+   or non-translatable security terms. `Pulse Pro` stays untranslated as a
+   product identifier across locales.
    Alerts-owned localization may distinguish detector state, in-product alert
    visibility, and external notification delivery, but it must preserve all
    security/privacy terminology and destination confidentiality. Pausing

@@ -30,6 +30,9 @@ const migratedFirstSessionCopy = [
   'Inventory and health from Proxmox, TrueNAS, VMware, PBS, or PMG.',
   'Node-local telemetry for standalone hosts, services, Docker, and Kubernetes.',
   'Open Add infrastructure to choose a platform API, Pulse Agent, or both.',
+  'Activate Pulse Pro',
+  'Enter the activation key from your purchase email',
+  'Enter activation key',
 ];
 
 const migratedSources = [
@@ -195,5 +198,24 @@ describe('SetupCompletionPanel guardrails', () => {
     expect(setupCompletionPanelSource).toContain('setup.completion.action.copyPassword');
     expect(setupCompletionPanelSource).toContain('setup.completion.action.copyAdminToken');
     expect(setupCompletionPanelSource).toContain('min-h-10 min-w-10');
+  });
+
+  it('keeps the Pro activation pointer on the direct billing route behind an explicit license gate', () => {
+    expect(setupCompletionPanelSource).toContain(
+      "import { SELF_HOSTED_PRO_BILLING_PLAN_ROUTE } from '@/utils/pricingHandoff';",
+    );
+    expect(setupCompletionPanelSource).toContain(
+      'props.onComplete(SELF_HOSTED_PRO_BILLING_PLAN_ROUTE)',
+    );
+    expect(setupCompletionPanelSource).toContain("'/api/license/runtime-capabilities'");
+    expect(setupCompletionPanelSource).toContain("'/api/license/status'");
+    expect(setupCompletionPanelSource).toContain('shouldShowSetupProActivationPointer');
+    expect(setupCompletionPanelSource).toContain('props.proActivationOverride !== undefined');
+    expect(setupCompletionPanelSource).toContain('setup.completion.proActivation.title');
+    expect(setupCompletionPanelSource).toContain('setup.completion.proActivation.description');
+    expect(setupCompletionPanelSource).toContain('setup.completion.proActivation.action');
+    expect(setupCompletionModelSource).toContain(
+      "state.runtimeBuild === 'pro' && state.licenseValid === false",
+    );
   });
 });

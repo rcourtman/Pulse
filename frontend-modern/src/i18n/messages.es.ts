@@ -191,6 +191,10 @@ export const ES_MESSAGE_OVERRIDES = {
     'Abre Agregar infraestructura para elegir una API de plataforma, Pulse Agent o ambos.',
   'setup.completion.nextStep.title.connected': 'Abrir Infraestructura',
   'setup.completion.nextStep.title.empty': 'Elige la estrategia de primera fuente',
+  'setup.completion.proActivation.action': 'Introducir clave de activación',
+  'setup.completion.proActivation.description':
+    'Este servidor ejecuta la compilación Pulse Pro sin una licencia activa. Introduce la clave de activación de tu correo de compra para desbloquear las funciones Pro.',
+  'setup.completion.proActivation.title': 'Activar Pulse Pro',
   'setup.completion.resource.unknownName': 'Desconocido',
   'setup.completion.sourceOptions.agent.description':
     'Telemetría local del nodo para hosts independientes, servicios, Docker y Kubernetes.',

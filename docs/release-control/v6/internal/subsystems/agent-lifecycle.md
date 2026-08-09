@@ -5449,6 +5449,19 @@ primitive, carry localized names for the exact value being copied, and retain
 a 40-pixel mobile touch floor. The setup surface must not reintroduce raw,
 unlabelled icon buttons or a phone-only copy-control fork.
 
+The setup completion surface also owns the Pro activation handoff. When the
+compiled Pro edition reports no valid license (both read with the setup
+token from `/api/license/runtime-capabilities` and `/api/license/status`,
+gated by `shouldShowSetupProActivationPointer` requiring an explicitly
+invalid license, never a failed or missing probe), the completion panel
+renders a factual activation card whose action targets the direct
+`/settings/pulse-intelligence/billing/plan` route. That direct-route target
+is deliberate: the Plans & Billing navigation entry stays
+navigation-suppressed for unlicensed self-hosted sessions, so the pointer
+must not instruct users to find a hidden nav item, and it must never appear
+on community builds, licensed installs, or probe failures — the self-hosted
+opt-in commercial posture is unchanged.
+
 Agent-facing action completion events and resource-context history now expose
 the canonical `ActionResultV2` alongside bounded legacy projections. Consumers
 must branch on execution and verification separately: a completed transport is

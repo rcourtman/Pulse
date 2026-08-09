@@ -2117,6 +2117,16 @@ default` instead of fusing provider and badge text such as
     `/api/state` runtime or inherit whatever connected systems happen to exist
     on the current backend, and browser proof for `/preview/setup-complete`
     must select explicit preview scenarios instead of ambient runtime state.
+    That determinism boundary also covers the setup completion Pro activation
+    pointer: every preview scenario in
+    `frontend-modern/src/components/SetupWizard/setupCompletionPreviewScenarios.ts`
+    must carry an explicit `proActivation` boolean so preview rendering never
+    falls through to the live license probe, and the `pro-unlicensed` scenario
+    is the canonical browser proof for the pointer. The pointer's localized
+    strings (`setup.completion.proActivation.*`) are part of the first-session
+    monitoring journey catalog and must stay in
+    `FIRST_SESSION_MONITORING_MIGRATED_MESSAGE_KEYS` with non-identical DE/ES
+    translations.
 13. Keep AI settings setup UI backend-driven:
     `frontend-modern/src/components/Settings/useAISettingsState.ts` and
     `frontend-modern/src/components/Settings/AISettingsDialogs.tsx` may collect

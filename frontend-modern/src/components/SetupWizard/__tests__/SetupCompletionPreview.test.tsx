@@ -71,4 +71,24 @@ describe('SetupCompletionPreview', () => {
     expect(screen.getByText('VMware vSphere')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Add infrastructure' })).toBeInTheDocument();
   });
+
+  it('renders the pro-unlicensed scenario with the activation pointer and no license probe', () => {
+    locationSearch = '?scenario=pro-unlicensed';
+
+    render(() => <SetupCompletionPreview />);
+
+    expect(apiFetchJSONMock).not.toHaveBeenCalled();
+    expect(screen.getByText('Activate Pulse Pro')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Enter activation key' }));
+
+    expect(navigateMock).toHaveBeenCalledWith('/settings/pulse-intelligence/billing/plan');
+  });
+
+  it('keeps the activation pointer out of the default preview scenario', () => {
+    render(() => <SetupCompletionPreview />);
+
+    expect(apiFetchJSONMock).not.toHaveBeenCalled();
+    expect(screen.queryByText('Activate Pulse Pro')).not.toBeInTheDocument();
+  });
 });

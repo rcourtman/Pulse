@@ -250,3 +250,20 @@ export function buildSetupCompletionViewModel(
     showAgentInstallAction: false,
   };
 }
+
+export interface SetupCompletionProActivationState {
+  runtimeBuild?: string;
+  licenseValid?: boolean;
+}
+
+// The Pro build is only distributed to paying customers, and its Plans &
+// Billing navigation entry stays hidden until a license activates
+// (hideWhenUpgradeHidden), so the completion screen is the one guaranteed
+// in-product surface that can point a fresh Pro install at the activation
+// form. licenseValid must be explicitly false: a failed or missing probe keeps
+// the pointer hidden so community sessions can never see it by accident.
+export function shouldShowSetupProActivationPointer(
+  state: SetupCompletionProActivationState,
+): boolean {
+  return state.runtimeBuild === 'pro' && state.licenseValid === false;
+}
