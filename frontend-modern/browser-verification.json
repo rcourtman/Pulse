@@ -1,27 +1,21 @@
 {
   "version": 1,
-  "base_sha": "c94ed3906e1290eefe2332e5b9807d5fb012a0dc",
-  "verified_at": "2026-08-09T09:26:15Z",
+  "base_sha": "e9904157e718d6233d6d8bfe292a3f820ec2e123",
+  "verified_at": "2026-08-09T09:53:20Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Settings/AIModelSelectionSection.tsx",
-    "frontend-modern/src/components/Settings/AIProviderConfigurationSection.tsx",
-    "frontend-modern/src/components/Settings/AISettings.tsx",
-    "frontend-modern/src/index.css"
+    "frontend-modern/src/components/Settings/InfrastructureAgentDoctorPage.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Settings/AIModelSelectionSection.tsx": "8591b74410989224fc62460ac0db612d922bc4d5288c2728a4f19a9eb0c77877",
-    "frontend-modern/src/components/Settings/AIProviderConfigurationSection.tsx": "177ac200d4f3b4dcb64b792f746bd17cc1259d1dafb66c5900bad5eb17936f14",
-    "frontend-modern/src/components/Settings/AISettings.tsx": "2e8bab6f7bbca5c4a7dbd772f3325fd89763b1c384ee30c2d0b0ea3b97266a6e",
-    "frontend-modern/src/index.css": "87f4ab4ec40b8042cf33eb407ca849acd285dbe9ce650c0014596aa39752852b"
+    "frontend-modern/src/components/Settings/InfrastructureAgentDoctorPage.tsx": "3391790f60fe53f5d2c353cfd71d388e2e46e2e949bafd35d60a5732cb8f4dd0"
   },
   "routes": [
-    "/settings/pulse-intelligence/provider"
+    "/settings/infrastructure/agent-doctor"
   ],
   "viewports": [
     {
       "width": 1440,
-      "height": 1000
+      "height": 900
     },
     {
       "width": 390,
@@ -29,15 +23,15 @@
     }
   ],
   "states": [
-    "Dark-mode shared model and Anthropic API-key controls rendered on the semantic slate surface with light text at desktop and narrow widths, including empty, filled, focused, open-provider, and closed-provider states.",
-    "After reloading the persisted Provider & Models route, both controls remained empty instead of receiving the local admin credential, retained autocomplete=off and autocomplete=new-password respectively, and kept the dark semantic surface.",
-    "The 390x844 layout kept both controls within the viewport with document scrollWidth equal to innerWidth, and the focused API-key control remained visible above the mobile navigation without clipping.",
-    "The verified route produced no browser console errors."
+    "Isolated worktree backend with two genuinely enrolled agents (macOS host agent plus a colima Linux VM agent) whose API tokens were then revoked over the real settings API, producing a real two-installation credential-repair state with both connections reporting credentialStatus invalid.",
+    "The Generate update token section rendered the multiple-repair guidance and the installation selector as the shared labelled FormSelect primitive: a visible 'Agent installation to repair' label associated to the select via label[for] matching the select id, replacing the previous aria-label-only raw select.",
+    "After minting a token for the selected installation, the selected agent's detail exposed its host-local repair command with the fresh scoped credential embedded while the unselected installation stayed locked with the select-this-installation-above guidance.",
+    "At 390x844 the Agent Doctor document scroll width measured exactly 390 pixels with the labelled selector rendered full-width inside the token section."
   ],
   "interactions": [
-    "Signed in to the managed local development runtime, opened Settings > Provider & Models, and expanded the Anthropic provider configuration.",
-    "Focused and edited the shared model and API-key controls without saving, verified their computed background, text, border, autocomplete, and password-type properties, then cleared both temporary values.",
-    "Collapsed and reopened the Anthropic provider, reloaded the Provider & Models route, and confirmed browser credential autofill did not repopulate either field.",
-    "Repeated the visual and focus checks at 1440x1000 and 390x844, including horizontal-overflow and console-error inspection."
+    "Logged in and opened the Agent Doctor at 1440x900 with two critical credential-repair targets present.",
+    "Changed the installation selector from triage-mac-01 to triage-vm-01 and confirmed the select value, selected option text, and visible associated label via DOM inspection.",
+    "Clicked Generate token for the selected installation, then expanded both agent rows and verified the per-installation unlock: triage-vm-01's command carried the embedded token and triage-mac-01 remained gated.",
+    "Resized to 390x844, reloaded, and re-verified the labelled selector rendering and a 390-pixel document scroll width against the 390-pixel viewport."
   ]
 }

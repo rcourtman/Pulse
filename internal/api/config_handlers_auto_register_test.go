@@ -31,7 +31,13 @@ func newTestConfigHandlers(t *testing.T, cfg *config.Config) *ConfigHandlers {
 	h.defaultConfig = cfg
 	h.defaultPersistence = config.NewConfigPersistence(cfg.DataPath)
 	monitor, _, _ := newTestMonitor(t)
-	setUnexportedField(t, monitor, "alertManager", alerts.NewManager())
+	// Stop the manager's background workers on cleanup: a leaked
+	// periodicSaveAlerts goroutine logs through the global zerolog logger and
+	// races with tests that swap it (e.g. the authorization-refusal contract
+	// test under -race).
+	alertManager := alerts.NewManager()
+	t.Cleanup(alertManager.Stop)
+	setUnexportedField(t, monitor, "alertManager", alertManager)
 	h.defaultMonitor = monitor
 
 	return h

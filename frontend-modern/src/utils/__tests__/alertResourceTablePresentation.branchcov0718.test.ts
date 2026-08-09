@@ -122,7 +122,7 @@ describe('alertResourceTablePresentation.branchcov0718', () => {
     it('exposes the enable/disable metric-input title constants', () => {
       expect(ALERT_RESOURCE_TABLE_ENABLE_METRIC_TITLE).toBe('Click to enable this metric');
       expect(ALERT_RESOURCE_TABLE_DISABLE_METRIC_TITLE).toBe(
-        'Set to -1 or use the Off toggle to disable alerts for this metric',
+        'Use the Off control to disable alerts for this metric',
       );
     });
 

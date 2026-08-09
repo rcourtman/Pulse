@@ -1,6 +1,7 @@
 import { For, Show, createEffect, createMemo, createSignal, type Component } from 'solid-js';
 import { ChevronDown, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-solid';
 import { Button, CommandCopyButton } from '@/components/shared/Button';
+import { FormSelect } from '@/components/shared/FormSelect';
 import {
   Table,
   TableBody,
@@ -316,11 +317,13 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
             </div>
             <div class="flex flex-col gap-2 sm:flex-row">
               <Show when={tokenGatedTargetCount() > 1}>
-                <select
+                <FormSelect
+                  label="Agent installation to repair"
+                  fieldClass="flex-1"
+                  labelClass="text-xs font-medium text-blue-900 dark:text-blue-100"
                   value={selectedTokenTarget()?.key}
                   onChange={(event) => setSelectedTokenTargetKey(event.currentTarget.value)}
-                  aria-label="Agent installation to repair"
-                  class="min-h-10 flex-1 rounded-md border border-blue-200 bg-surface px-3 py-2 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-blue-700 dark:bg-blue-950 dark:focus:ring-blue-900"
+                  selectBaseClass="min-h-10 w-full rounded-md border border-blue-200 bg-surface px-3 py-2 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-blue-700 dark:bg-blue-950 dark:focus:ring-blue-900"
                 >
                   <For each={tokenGatedTargets()}>
                     {(target) => (
@@ -330,7 +333,7 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
                       </option>
                     )}
                   </For>
-                </select>
+                </FormSelect>
               </Show>
               <input
                 type="text"
