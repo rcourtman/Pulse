@@ -171,9 +171,9 @@ if [ "$IS_PRERELEASE" != "true" ]; then
     fi
   fi
 
-  if [ "$VERSION" = "6.1.0" ]; then
+  if [[ "$VERSION" =~ ^6\.(1\.[012]|2\.0)$ ]]; then
     echo ""
-    read -r -p "Use the recorded v6.1.0 unsigned Windows exception? [y/N] " UNSIGNED_WINDOWS_REPLY
+    read -r -p "Use the recorded v${VERSION} unsigned Windows exception? [y/N] " UNSIGNED_WINDOWS_REPLY
     if [[ "$UNSIGNED_WINDOWS_REPLY" =~ ^[Yy]$ ]]; then
       UNSIGNED_WINDOWS_EXCEPTION="true"
       read -r -p "Unsigned Windows exception reason: " UNSIGNED_WINDOWS_REASON

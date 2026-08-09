@@ -277,8 +277,18 @@ TLS-unverified receipts leave the claim at `implemented` or
      release-note, qualification, test-guardrail, and release-control metadata.
      The exact pushed SHA must pass the no-publication `Release Dry Run` before
      the same SHA is dispatched through the single-build publication workflow.
-   - Stable v6.2.0 restores mandatory Windows Authenticode signing through
-     SignPath. No unsigned-Windows exception is authorized by this soak waiver.
+   - Exact-SHA dry run `31306697834` failed closed before candidate assembly or
+     public mutation because the SignPath `release-signing` policy was invalid:
+     its `Release certificate 2026` CSR remained pending. After that failure,
+     the release owner separately approved a `v6.2.0`-only unsigned-Windows
+     exception. This signing exception is independent of the soak waiver and is
+     not a standing decision for later releases.
+   - The unsigned Windows artifacts remain bound by the exact-SHA candidate
+     manifest, checksums, detached `.sig`/`.sshsig` signatures, and published
+     digests. Public notes must disclose that they are not Authenticode-signed
+     and may display an Unknown Publisher warning. Stable `v6.2.1` and later
+     restore mandatory Windows Authenticode unless another explicit,
+     version-bound owner decision is recorded.
 
 ## Single-Build Release Path
 

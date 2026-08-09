@@ -476,13 +476,13 @@ upgrade, update, release, or artifact-selection behavior.
    apply the same channel-specific native-signing policy as a publish run.
    macOS notarization remains mandatory for both prerelease and stable
    candidates. Windows Authenticode remains mandatory for stable candidates
-   except for the explicitly version-bound `v6.1.0`, `v6.1.1`, and `v6.1.2`
-   owner exceptions; prerelease candidates and those three stable exceptions may
+   except for the explicitly version-bound `v6.1.0`, `v6.1.1`, `v6.1.2`, and
+   `v6.2.0` owner exceptions; prerelease candidates and those four stable exceptions may
    retain checksum and detached-signature verification without Authenticode
    while the release packet explicitly discloses the unknown-publisher warning.
    Prerelease promotion remains blocked on the normal stable signing
-   requirement, and stable `v6.1.3` and later restore it automatically unless
-   policy records a new version-bound owner decision. A cheap
+   requirement. Stable releases after each recorded exception restore it
+   automatically unless policy records a new version-bound owner decision. A cheap
    signing-configuration job
    must report every missing secret for the platforms required by that
    candidate before either platform runner is allocated. Stable Windows signing must use SignPath's GitHub
@@ -1395,8 +1395,12 @@ remain distributed to the existing beta cohort through TestFlight and Play
 open testing. The v6.2.0 changes preserve the checked-in mobile API, Relay,
 pairing, approval, push, authentication, and onboarding contracts; no
 additional companion upload or public store rollout is part of the stable
-server cut. Stable Windows artifacts must complete the SignPath Authenticode
-path; the soak waiver grants no unsigned-Windows exception.
+server cut. Exact-SHA dry run `31306697834` failed closed before candidate
+assembly because the SignPath `Release certificate 2026` CSR remained pending.
+The release owner then separately approved a v6.2.0-only unsigned-Windows
+exception. The Windows packet must disclose the Unknown Publisher warning and
+retain exact-SHA, checksum, detached-signature, manifest, and published-digest
+verification; this decision is not inherited by later releases.
 The first RC11 publication attempt, run `31274524321`, passed every immutable
 release gate and briefly crossed the draft boundary, then failed before the
 irreversible activation marker because the checkout-free activation job relied
@@ -1462,10 +1466,13 @@ with `rollback_version=v6.1.2` and pinned the same four install surfaces to
 pins; its packet stays in `docs/releases/` as the historical candidate record
 for the `v6.2.0` line.
 Authenticode signing through SignPath is the canonical Windows signing backend
-for the `v6.2.0` line. The owner-approved unsigned-Windows exception is bounded
-to `v6.1.0`, `v6.1.1`, and `v6.1.2` and does not extend to any `v6.2.0`
-release, so stable `v6.2.0` promotion must fail closed when the SignPath
-configuration or the returned signer proof is unavailable.
+for the `v6.2.0` line. After exact-SHA dry run `31306697834` failed closed on
+the pending SignPath release-certificate CSR, the release owner approved a
+`v6.2.0`-only unsigned-Windows exception. It preserves the exact-SHA candidate,
+checksum, detached-signature, manifest, published-digest, owner-reason, and
+public Unknown Publisher disclosure controls. Stable `v6.2.1` and later
+restore mandatory Authenticode unless policy records another explicit,
+version-bound decision.
 
 The active stable `v6.1.2` cut sets the repo-root `VERSION`, repo-root
 `docker-compose.yml` image default, `scripts/install-docker.sh` fallback, and
@@ -3143,9 +3150,9 @@ discloses the unsigned Windows publisher state and the Windows binaries retain
 the exact-SHA candidate, checksum, detached-signature, and post-publication
 digest controls. Stable publication and the stable-path dry-run must continue
 to require both native signing lanes except for the recorded, version-bound
-`v6.1.0`, `v6.1.1`, and `v6.1.2` Windows exceptions; stable `v6.1.3` and later restore
-both requirements unless policy records a new explicit version-bound owner
-decision. `scripts/build-release.sh` must replace
+`v6.1.0`, `v6.1.1`, `v6.1.2`, and `v6.2.0` Windows exceptions; subsequent
+stable versions restore both requirements unless policy records a new explicit
+version-bound owner decision. `scripts/build-release.sh` must replace
 only the native targets required by those independent inputs and must fail
 closed when a required native-binary directory or target is absent.
 Historical published-release repair must flow through

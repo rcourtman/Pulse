@@ -71,8 +71,11 @@ the final stable cutoff.
   v6.2.0; that version-bound decision is risk acceptance, not soak evidence.
 - The exact pushed stable SHA must pass the no-publication Release Dry Run
   before the same SHA enters the single-build publication workflow.
-- Stable Windows Unified Agent binaries are Authenticode-signed through
-  SignPath. No unsigned-Windows exception applies to v6.2.0.
+- Windows Unified Agent binaries in v6.2.0 are not Authenticode-signed and may
+  show an Unknown Publisher warning. Verify their checksums and detached
+  `.sig`/`.sshsig` signatures. This is a v6.2.0-only owner exception while the
+  SignPath release certificate CSR remains pending; later releases restore the
+  signing requirement unless separately approved.
 
 ## Upgrade Notes
 

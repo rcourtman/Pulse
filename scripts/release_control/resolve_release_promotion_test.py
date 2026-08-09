@@ -230,10 +230,39 @@ class ResolveReleasePromotionTest(unittest.TestCase):
         self.assertEqual(metadata["require_windows_signing"], "false")
         self.assertEqual(metadata["unsigned_windows_exception"], "true")
 
+    def test_v620_owner_exception_allows_disclosed_stable_promotion(self) -> None:
+        metadata = resolver.resolve_metadata(
+            version="6.2.0",
+            promoted_from_tag_input="v6.2.0-rc.11",
+            rollback_version_input="v6.1.2",
+            ga_date_input="",
+            v5_eos_date_input="",
+            hotfix_exception=True,
+            hotfix_reason_input="Owner waived the remaining prerelease soak.",
+            release_notes_input=(
+                "Windows Unified Agent binaries are not Authenticode-signed for v6.2.0."
+            ),
+            unsigned_windows_exception=True,
+            unsigned_windows_reason_input=(
+                "The release certificate CSR remains pending; the release owner accepts "
+                "unsigned Windows binaries for v6.2.0."
+            ),
+            tag_exists_fn=lambda tag: tag in {"v6.2.0-rc.11", "v6.1.2"},
+            tag_commit_fn=lambda tag: "rc11-commit",
+            head_descends_from_fn=lambda commit: commit == "rc11-commit",
+            tag_created_unix_fn=lambda tag: 100,
+            now_unix_fn=lambda: 100 + (13 * 3600),
+        )
+
+        self.assertEqual(metadata["promotion_mode"], "stable-rc-promotion")
+        self.assertEqual(metadata["rollback_tag"], "v6.1.2")
+        self.assertEqual(metadata["require_windows_signing"], "false")
+        self.assertEqual(metadata["unsigned_windows_exception"], "true")
+
     def test_unsigned_windows_exception_is_rejected_for_other_stable_versions(self) -> None:
         with self.assertRaisesRegex(
             ValueError,
-            "approved only for stable v6.1.0, v6.1.1, or v6.1.2",
+            "approved only for stable v6.1.0, v6.1.1, v6.1.2, or v6.2.0",
         ):
             resolver.resolve_metadata(
                 version="6.1.3",

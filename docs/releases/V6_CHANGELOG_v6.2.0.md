@@ -55,9 +55,11 @@ _This changelog describes stable `v6.2.0` compared with stable `v6.1.2`._
   v6.2.0-only soak waiver and the single-build release workflow
 - Soak decision: the release owner waived the remainder of the normal 72-hour
   RC11 soak for v6.2.0; this is version-bound risk acceptance, not soak evidence
-- Windows signing decision: stable Windows Unified Agent artifacts require
-  Authenticode signing and signer verification through SignPath; no unsigned
-  exception applies
+- Windows signing decision: the v6.2.0-only owner exception permits Windows
+  Unified Agent artifacts that are not Authenticode-signed while the SignPath
+  release certificate CSR remains pending; users receive an Unknown Publisher
+  disclosure and checksum, detached-signature, exact-SHA, manifest, and
+  published-digest verification remain mandatory
 - Mobile decision: `existing-mobile-build-compatible`; Pulse Mobile 1.0.0 iOS
   build 12 and Android versionCode 9 remain the compatible beta candidates,
   both using runtime version 2, with no companion upload or public store rollout

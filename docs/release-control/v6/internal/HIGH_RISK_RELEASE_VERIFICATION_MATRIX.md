@@ -1082,8 +1082,8 @@ Companion drill:
   release packet, independent post-release jobs are serialized, or the
   definitive verdict can pass without all applicable downstream results. Also
   block if an unsigned stable Windows exception can apply to any version other
-  than the recorded `v6.1.0`, `v6.1.1`, and `v6.1.2` decisions or can omit its owner
-  reason and release-note disclosure.
+  than the recorded `v6.1.0`, `v6.1.1`, `v6.1.2`, and `v6.2.0` decisions or can
+  omit its owner reason and release-note disclosure.
 
 ## Gate: `operational-trust-canonical-lifecycle`
 
