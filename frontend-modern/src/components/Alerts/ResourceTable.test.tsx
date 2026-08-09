@@ -826,6 +826,20 @@ describe('ResourceTable', () => {
       expect(screen.getByTestId('status-badge')).toHaveTextContent('Off');
     });
 
+    it('does not stage 0 through the row numeric input', () => {
+      const setEditingThresholds = vi.fn();
+      const props = editorProps({
+        resources: [makeResource({ id: 'vm-1', thresholds: { cpu: 80 }, defaults: { cpu: 80 } })],
+        editingThresholds: () => ({ cpu: 80 }),
+        setEditingThresholds,
+      });
+      render(() => <ResourceTable {...props} />);
+
+      fireEvent.input(screen.getByRole('spinbutton'), { target: { value: '0' } });
+
+      expect(setEditingThresholds).not.toHaveBeenCalled();
+    });
+
     it('stages an explicit threshold when the inherited default is itself off', () => {
       // Clearing the override would only re-inherit the disabled default, so
       // the save path would drop the change and the metric would stay off.
@@ -1623,9 +1637,9 @@ describe('ResourceTable', () => {
       });
       render(() => <ResourceTable {...props} />);
 
-      // Find the editing input with the "Set to -1" title (unique to resource editing inputs)
+      // Find the resource editing input by its explicit Off-control guidance.
       const editInputs = document.querySelectorAll(
-        'input[type="number"][title="Set to -1 or use the Off toggle to disable alerts for this metric"]',
+        'input[type="number"][title="Use the Off control to disable alerts for this metric"]',
       );
       expect(editInputs.length).toBeGreaterThanOrEqual(1);
       fireEvent.input(editInputs[0], { target: { value: '95' } });
@@ -1648,7 +1662,7 @@ describe('ResourceTable', () => {
       render(() => <ResourceTable {...props} />);
 
       const editInputs = document.querySelectorAll(
-        'input[type="number"][title="Set to -1 or use the Off toggle to disable alerts for this metric"]',
+        'input[type="number"][title="Use the Off control to disable alerts for this metric"]',
       );
       expect(editInputs.length).toBeGreaterThanOrEqual(1);
       fireEvent.blur(editInputs[0]);

@@ -11,6 +11,7 @@ import {
   README_DOC_URL,
   SECURITY_DOC_URL,
   TERMS_DOC_URL,
+  TROUBLESHOOTING_DOC_URL,
   SHIPPED_DOCS_ROOT,
   getShippedDocUrl,
 } from '@/utils/docsLinks';
@@ -69,6 +70,7 @@ describe('docsLinks', () => {
     expect(PRIVACY_DOC_URL).toBe('/docs/PRIVACY');
     expect(README_DOC_URL).toBe('/docs/README');
     expect(MIGRATION_GUIDE_DOC_URL).toBe('/docs/MIGRATION_UNIFIED_NAV');
+    expect(TROUBLESHOOTING_DOC_URL).toBe('/docs/TROUBLESHOOTING');
     expect(CONFIGURATION_DOC_URL).toBe('/docs/CONFIGURATION');
     expect(PROXY_AUTH_DOC_URL).toBe('/docs/PROXY_AUTH');
     expect(SECURITY_DOC_URL).toBe('/docs/SECURITY');

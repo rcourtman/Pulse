@@ -16,6 +16,15 @@ import { clearRuntimeBranding, updateRuntimeBrandingFromResponse } from '@/store
 HTMLElement.prototype.scrollIntoView = vi.fn();
 window.scrollTo = vi.fn();
 
+function setViewportWidth(width: number) {
+  Object.defineProperty(window, 'innerWidth', {
+    value: width,
+    writable: true,
+    configurable: true,
+  });
+  window.dispatchEvent(new Event('resize'));
+}
+
 const patrolAttentionMockState = vi.hoisted(() => ({
   activeCount: 0,
 }));
@@ -115,6 +124,7 @@ const renderLayout = (
 
 describe('AppLayout navigation icons', () => {
   beforeEach(() => {
+    setViewportWidth(1440);
     window.history.replaceState({}, '', '/settings/infrastructure');
     resetPrimaryNavigationRouteMemory();
     patrolAttentionMockState.activeCount = 0;
@@ -166,16 +176,21 @@ describe('AppLayout navigation icons', () => {
     ).toBeNull();
     expect(within(systemGroup as HTMLElement).queryByRole('tab', { name: 'Patrol P' })).toBeNull();
 
-    const mobileTablist = screen.getByRole('tablist', { name: 'Mobile navigation' });
-    ['alerts', 'actions', 'ai', 'settings'].forEach((tabId) => {
-      const button = mobileTablist.querySelector<HTMLElement>(`[data-tab-id="${tabId}"]`);
+    const mobileNav = screen.getByRole('navigation', { name: 'Mobile navigation' });
+    ['alerts', 'actions', 'ai'].forEach((tabId) => {
+      const button = mobileNav.querySelector<HTMLElement>(`[data-tab-id="${tabId}"]`);
       expect(button).toBeTruthy();
       expect(button?.querySelector('svg')).toBeTruthy();
     });
-    const mobilePatrolTab = within(mobileTablist).getByRole('button', {
+    const mobilePatrolTab = within(mobileNav).getByRole('button', {
       name: 'Patrol',
     });
     expect(mobilePatrolTab.querySelector('svg')).toBeTruthy();
+
+    fireEvent.click(within(mobileNav).getByRole('button', { name: 'More navigation' }));
+    const mobileOverflow = screen.getByRole('menu', { name: 'More navigation destinations' });
+    const mobileSettingsTab = within(mobileOverflow).getByRole('menuitem', { name: 'Settings' });
+    expect(mobileSettingsTab.querySelector('svg')).toBeTruthy();
 
     expect(container).toHaveTextContent('Infrastructure body');
   });
@@ -195,13 +210,13 @@ describe('AppLayout navigation icons', () => {
     expect(desktopPatrolTab).toHaveTextContent('2');
     expect(within(systemGroup as HTMLElement).queryByText('Needs Attention')).toBeNull();
 
-    const mobileTablist = screen.getByRole('tablist', { name: 'Mobile navigation' });
-    const mobilePatrolTab = within(mobileTablist).getByRole('button', {
+    const mobileNav = screen.getByRole('navigation', { name: 'Mobile navigation' });
+    const mobilePatrolTab = within(mobileNav).getByRole('button', {
       name: 'Patrol: 2 active attention items',
     });
     expect(mobilePatrolTab).toHaveTextContent('Patrol');
     expect(mobilePatrolTab).toHaveTextContent('2');
-    expect(within(mobileTablist).queryByText('Needs Attention')).toBeNull();
+    expect(within(mobileNav).queryByText('Needs Attention')).toBeNull();
   });
 
   it('shows platform and runtime lens tabs with supported infrastructure evidence', () => {
@@ -355,22 +370,30 @@ describe('AppLayout navigation icons', () => {
     expect(document.title).toBe('Settings · Acme Operations');
   });
 
-  it('keeps the assistant launcher in the mobile edge gutter above navigation', () => {
+  it('keeps the mobile Assistant launcher in header flow instead of covering page content', () => {
+    setViewportWidth(390);
     renderLayout();
 
     const launcher = screen.getByRole('button', { name: 'Ask Pulse Assistant about Settings' });
     const launcherClass = launcher.getAttribute('class') ?? '';
 
-    expect(launcherClass).toContain('right-0');
-    expect(launcherClass).toContain('bottom-[calc(5rem+env(safe-area-inset-bottom,0px))]');
     expect(launcherClass).toContain('h-11');
-    expect(launcherClass).toContain('w-8');
-    expect(launcherClass).toContain('rounded-l-full');
-    expect(launcherClass).toContain('rounded-r-none');
-    expect(launcherClass).toContain('border-r-0');
-    expect(launcherClass).toContain('lg:top-1/2');
-    expect(launcherClass).toContain('lg:bottom-auto');
-    expect(launcherClass).not.toContain('sm:top-1/2');
+    expect(launcherClass).toContain('w-11');
+    expect(launcherClass).toContain('rounded-full');
+    expect(launcherClass).not.toContain('fixed');
+    expect(launcher.closest('.header-controls')).toBeInTheDocument();
+  });
+
+  it('preserves the Assistant edge launcher on desktop', () => {
+    setViewportWidth(1440);
+    renderLayout();
+
+    const launcher = screen.getByRole('button', { name: 'Ask Pulse Assistant about Settings' });
+    expect(launcher).toHaveClass('fixed');
+    expect(launcher).toHaveClass('right-0');
+    expect(launcher).toHaveClass('top-1/2');
+    expect(launcher).toHaveClass('-translate-y-1/2');
+    expect(launcher.closest('.header-controls')).toBeNull();
   });
 
   it('opens Assistant with the current route attached', async () => {

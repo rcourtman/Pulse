@@ -252,6 +252,9 @@ export function AlertResourceTableDesktop(props: AlertResourceTableDesktopProps)
                               if (Number.isNaN(nextValue)) {
                                 return;
                               }
+                              if (nextValue < bounds.min || nextValue > bounds.max) {
+                                return;
+                              }
                               props.table.setGlobalDefaults?.((prev) => ({
                                 ...prev,
                                 [metric]: nextValue,

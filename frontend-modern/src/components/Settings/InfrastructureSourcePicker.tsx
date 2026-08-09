@@ -37,7 +37,9 @@ const CARD_ICON: Record<InfrastructureSourcePickerItemId, Component<{ class?: st
   kubernetes: ServerCog,
 };
 
-const PRIMARY_PATH_PICKER_ITEM_IDS: ReadonlySet<InfrastructureSourcePickerItemId> = new Set();
+const PRIMARY_PATH_PICKER_ITEM_IDS: ReadonlySet<InfrastructureSourcePickerItemId> = new Set([
+  'linux-host',
+]);
 
 // Popular sources shown by default. The rest are hidden behind 'Show more
 // sources' to keep the picker scannable at a glance and let users scroll to
@@ -47,7 +49,6 @@ const POPULAR_PICKER_ITEM_IDS: ReadonlySet<InfrastructureSourcePickerItemId> = n
   'pve',
   'truenas',
   'unraid',
-  'linux-host',
 ]);
 
 const itemMatchesQuery = (item: InfrastructureSourcePickerItemPresentation, query: string) => {

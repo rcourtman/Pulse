@@ -14,16 +14,37 @@ interface CollapsedSectionsState {
 }
 
 /**
- * Default collapsed state for sections
- * Sections not listed here default to expanded (false)
+ * Every resource section starts collapsed so the thresholds page opens as an
+ * overview instead of a wall of tables. Explicit user choices still win when
+ * they are restored from localStorage.
  */
 const DEFAULT_COLLAPSED: CollapsedSectionsState = {
-  // In Proxmox tab, collapse less-frequently-used sections by default
-  storage: true,
+  nodes: true,
+  pbs: true,
+  guests: true,
+  guestDisks: true,
+  'guest-filtering': true,
   backups: true,
   snapshots: true,
-  // PBS servers often empty, collapse by default
-  pbs: true,
+  storage: true,
+  pmg: true,
+  agents: true,
+  agentDisks: true,
+  dockerHosts: true,
+  dockerContainers: true,
+  kubernetesClusters: true,
+  kubernetesNodes: true,
+  kubernetesNamespaces: true,
+  kubernetesDeployments: true,
+  kubernetesPods: true,
+  trueNASSystems: true,
+  trueNASPools: true,
+  trueNASDatasets: true,
+  trueNASDisks: true,
+  vmwareHosts: true,
+  vmwareVMs: true,
+  vmwareDatastores: true,
+  vmwareNetworks: true,
 };
 
 /**
@@ -114,11 +135,11 @@ export function useCollapsedSections(): UseCollapsedSectionsResult {
 
   const isCollapsed = (sectionId: string): boolean => {
     const state = collapsedState();
-    // If not explicitly set, check defaults
+    // Unknown future resource sections follow the same overview-first default.
     if (sectionId in state) {
       return state[sectionId];
     }
-    return DEFAULT_COLLAPSED[sectionId] ?? false;
+    return DEFAULT_COLLAPSED[sectionId] ?? true;
   };
 
   const toggleSection = (sectionId: string): void => {

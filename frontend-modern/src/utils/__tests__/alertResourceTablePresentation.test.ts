@@ -96,7 +96,7 @@ describe('alertResourceTablePresentation', () => {
     });
     expect(getAlertResourceTableMetricInputTitle(true)).toBe('Click to enable this metric');
     expect(getAlertResourceTableMetricInputTitle(false)).toBe(
-      'Set to -1 or use the Off toggle to disable alerts for this metric',
+      'Use the Off control to disable alerts for this metric',
     );
     expect(getAlertResourceTableEditMetricTitle()).toBe('Click to edit this metric');
   });

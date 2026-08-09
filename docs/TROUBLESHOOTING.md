@@ -3,7 +3,29 @@
 ## ⚡ Quick Fixes
 
 ### I forgot my password
+
+Pulse does not provide an email password-reset flow. Choose the path that
+matches how this self-hosted instance authenticates:
+
+- **Local Pulse username and password**: recovery requires shell access to the
+  Pulse host or container. Follow the deployment-specific steps below.
+- **OIDC, SAML, or proxy authentication**: contact the identity-provider or
+  Pulse administrator. If the administrator deliberately kept local login as a
+  fallback, they can open the Pulse URL with `?show_local=true`; this only
+  reveals the existing local form and does not reset credentials.
+- **Temporary lockout**: wait for the lockout to expire. Another signed-in
+  administrator can use the lockout reset in Pulse; password recovery is not
+  required.
+
+The local recovery steps remove only the Pulse-generated authentication file.
+After restart, Pulse still requires the host-only bootstrap token before it
+will accept replacement credentials. If `PULSE_AUTH_USER` or `PULSE_AUTH_PASS`
+is supplied by Docker Compose, Kubernetes, systemd, or another deployment
+manager, update that deployment configuration instead; its environment values
+override the generated file.
+
 **Docker**:
+
 ```bash
 docker exec pulse rm /data/.env
 docker restart pulse
@@ -11,12 +33,15 @@ docker restart pulse
 # Get it with:
 docker exec pulse /app/pulse bootstrap-token
 ```
+
 **Systemd**:
-Delete `/etc/pulse/.env` and restart the service. Pulse will require a bootstrap token for setup:
 
 ```bash
+sudo rm /etc/pulse/.env
+sudo systemctl restart pulse
 sudo pulse bootstrap-token
 ```
+
 **Proxmox LXC** (installed from the Proxmox shell):
 Pulse runs inside the container, so run the same steps through `pct exec` on the Proxmox host. The binary needs its absolute path here, because `pct exec` runs with `PATH=/sbin:/bin:/usr/sbin:/usr/bin` and that does not include `/usr/local/bin`:
 
@@ -27,6 +52,10 @@ pct exec <ctid> -- /usr/local/bin/pulse bootstrap-token
 ```
 
 If you only missed the token during a fresh install (no password set yet), skip the first two commands and just read it back with the last one.
+
+Treat the bootstrap token like a password: enter it only in the Pulse setup
+screen for this instance and do not paste it into support requests or issue
+reports.
 
 ### Port change didn't take effect
 1. Check which service is running: `systemctl status pulse` (legacy installs may use `pulse-backend`).

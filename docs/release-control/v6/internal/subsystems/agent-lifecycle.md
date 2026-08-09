@@ -3811,6 +3811,12 @@ add flow. `InfrastructureSourcePicker.tsx` must present grouped source types
 only after the operator deliberately clicks `Add infrastructure`, and
 `ConnectionEditor.tsx` must stay focused on detect-driven handoff and the
 selected type's form body instead of reviving a second top-level catalog.
+The default picker must present the generic Linux, macOS, and Windows host
+journey once through the primary `Install Pulse Agent` path instead of
+duplicating it as a specific-source card. The canonical host catalog item must
+remain searchable by platform names and aliases so deliberate catalog lookup
+still reaches the same `linux-host` installer route with full platform
+coverage.
 Product grouping belongs to the governed platform-support presentation helper,
 not lane-local card lists. Detect utility copy must stay provider-neutral and
 operationally plain, and returning from a chosen credential slot to detect

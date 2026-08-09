@@ -1,7 +1,19 @@
 import { A } from '@solidjs/router';
+import ChevronLeftIcon from 'lucide-solid/icons/chevron-left';
+import ChevronRightIcon from 'lucide-solid/icons/chevron-right';
 import RotateCcwIcon from 'lucide-solid/icons/rotate-ccw';
 import TriangleAlertIcon from 'lucide-solid/icons/triangle-alert';
-import { For, Show, createMemo, createSignal, type Component, type JSX } from 'solid-js';
+import {
+  For,
+  Show,
+  createEffect,
+  createMemo,
+  createSignal,
+  onCleanup,
+  onMount,
+  type Component,
+  type JSX,
+} from 'solid-js';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { type FilterOption as PlatformTableFilterOption } from '@/components/shared/FilterButtonGroup';
 import { FilterBar, filterChipStatusDot, type FilterDef } from '@/components/shared/FilterBar';
@@ -72,36 +84,106 @@ export function PlatformSectionTabs<TabId extends string>(props: {
   ariaLabel: string;
 }) {
   let tabListRef: HTMLElement | undefined;
+  const [canScrollLeft, setCanScrollLeft] = createSignal(false);
+  const [canScrollRight, setCanScrollRight] = createSignal(false);
+
+  const updateScrollControls = () => {
+    const rail = tabListRef;
+    if (!rail) return;
+    const maxScrollLeft = Math.max(0, rail.scrollWidth - rail.clientWidth);
+    setCanScrollLeft(rail.scrollLeft > 1);
+    setCanScrollRight(rail.scrollLeft < maxScrollLeft - 1);
+  };
+
   useActiveHorizontalRailItemVisibility({
     active: () => props.active,
     rail: () => tabListRef,
   });
 
+  createEffect(() => {
+    void props.active;
+    queueMicrotask(updateScrollControls);
+  });
+
+  onMount(() => {
+    const rail = tabListRef;
+    if (!rail) return;
+
+    rail.addEventListener('scroll', updateScrollControls, { passive: true });
+    window.addEventListener('resize', updateScrollControls, { passive: true });
+    const resizeObserver =
+      typeof ResizeObserver === 'function' ? new ResizeObserver(updateScrollControls) : undefined;
+    resizeObserver?.observe(rail);
+    updateScrollControls();
+
+    onCleanup(() => {
+      rail.removeEventListener('scroll', updateScrollControls);
+      window.removeEventListener('resize', updateScrollControls);
+      resizeObserver?.disconnect();
+    });
+  });
+
+  const scrollSections = (direction: -1 | 1) => {
+    const rail = tabListRef;
+    if (!rail) return;
+    rail.scrollBy({
+      left: direction * Math.max(160, Math.round(rail.clientWidth * 0.7)),
+      behavior: 'smooth',
+    });
+  };
+
   return (
     <Show when={props.tabs.length > 1}>
-      <nav
-        ref={(element) => {
-          tabListRef = element;
-        }}
-        class="flex min-w-0 items-center gap-1 overflow-x-auto border-b border-border scrollbar-hide"
-        aria-label={props.ariaLabel}
-      >
-        <For each={props.tabs}>
-          {(tab) => (
-            <A
-              href={tab.path}
-              class={`inline-flex min-h-10 shrink-0 select-none items-center whitespace-nowrap border-b-2 px-3 text-sm font-medium transition-colors ${
-                props.active === tab.id
-                  ? 'border-blue-500 text-blue-600 dark:text-blue-300'
-                  : 'border-transparent text-muted hover:border-border hover:text-base-content'
-              }`}
-              aria-current={props.active === tab.id ? 'page' : undefined}
-            >
-              {tab.label}
-            </A>
-          )}
-        </For>
-      </nav>
+      <div class="relative min-w-0 border-b border-border">
+        <nav
+          ref={(element) => {
+            tabListRef = element;
+          }}
+          class="flex min-w-0 scroll-px-10 items-center gap-1 overflow-x-auto px-10 scrollbar-hide sm:scroll-px-0 sm:px-0"
+          aria-label={props.ariaLabel}
+        >
+          <For each={props.tabs}>
+            {(tab) => (
+              <A
+                href={tab.path}
+                class={`inline-flex min-h-10 shrink-0 select-none items-center whitespace-nowrap border-b-2 px-3 text-sm font-medium transition-colors ${
+                  props.active === tab.id
+                    ? 'border-blue-500 text-blue-600 dark:text-blue-300'
+                    : 'border-transparent text-muted hover:border-border hover:text-base-content'
+                }`}
+                aria-current={props.active === tab.id ? 'page' : undefined}
+              >
+                {tab.label}
+              </A>
+            )}
+          </For>
+        </nav>
+
+        <Show when={canScrollLeft()}>
+          <button
+            type="button"
+            class="absolute inset-y-0 left-0 z-10 flex w-10 items-center justify-start bg-gradient-to-r from-surface via-surface to-transparent pl-1 text-muted hover:text-base-content focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-blue-500 sm:hidden"
+            onClick={() => scrollSections(-1)}
+            aria-label={`${props.ariaLabel}: scroll left`}
+          >
+            <span class="flex h-8 w-8 items-center justify-center rounded-full border border-border bg-surface shadow-sm">
+              <ChevronLeftIcon class="h-4 w-4" aria-hidden="true" />
+            </span>
+          </button>
+        </Show>
+        <Show when={canScrollRight()}>
+          <button
+            type="button"
+            class="absolute inset-y-0 right-0 z-10 flex w-10 items-center justify-end bg-gradient-to-l from-surface via-surface to-transparent pr-1 text-muted hover:text-base-content focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-blue-500 sm:hidden"
+            onClick={() => scrollSections(1)}
+            aria-label={`${props.ariaLabel}: scroll right`}
+          >
+            <span class="flex h-8 w-8 items-center justify-center rounded-full border border-border bg-surface shadow-sm">
+              <ChevronRightIcon class="h-4 w-4" aria-hidden="true" />
+            </span>
+          </button>
+        </Show>
+      </div>
     </Show>
   );
 }

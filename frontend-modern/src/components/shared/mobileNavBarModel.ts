@@ -35,6 +35,15 @@ export type MobileNavBarProps = {
   onUtilityClick: (tab: MobileNavBarUtilityTab) => void;
 };
 
+export type MobileNavBarDestination =
+  | { kind: 'primary'; tab: MobileNavBarPrimaryTab }
+  | { kind: 'utility'; tab: MobileNavBarUtilityTab };
+
+export type MobileNavBarLayout = {
+  fixedDestinations: MobileNavBarDestination[];
+  overflowDestinations: MobileNavBarDestination[];
+};
+
 const MOBILE_NAV_PRIMARY_PRIORITY = [
   'proxmox',
   'docker',
@@ -45,6 +54,11 @@ const MOBILE_NAV_PRIMARY_PRIORITY = [
 ] as const;
 
 const MOBILE_NAV_UTILITY_PRIORITY = ['alerts', 'actions', 'ai', 'settings'] as const;
+const MOBILE_NAV_FIXED_UTILITY_IDS = new Set<MobileNavBarUtilityTab['id']>([
+  'alerts',
+  'actions',
+  'ai',
+]);
 
 export function buildOrderedMobileNavTabs<T extends { id: string }>(
   tabs: T[],
@@ -76,6 +90,56 @@ export function buildOrderedMobileNavUtilityTabs(
   tabs: MobileNavBarUtilityTab[],
 ): MobileNavBarUtilityTab[] {
   return buildOrderedMobileNavTabs(tabs, MOBILE_NAV_UTILITY_PRIORITY);
+}
+
+/**
+ * Keep the bottom bar to five predictable targets at most: the primary
+ * infrastructure destination, the three daily operations destinations, and
+ * More. Every other admitted platform and utility remains available in More.
+ */
+export function buildMobileNavBarLayout(
+  primaryTabs: MobileNavBarPrimaryTab[],
+  utilityTabs: MobileNavBarUtilityTab[],
+): MobileNavBarLayout {
+  const orderedPrimaryTabs = buildOrderedMobileNavPrimaryTabs(primaryTabs);
+  const orderedUtilityTabs = buildOrderedMobileNavUtilityTabs(utilityTabs);
+  const fixedPrimaryTabs = orderedPrimaryTabs.slice(0, 1);
+  const fixedUtilityTabs = orderedUtilityTabs.filter((tab) =>
+    MOBILE_NAV_FIXED_UTILITY_IDS.has(tab.id),
+  );
+
+  return {
+    fixedDestinations: [
+      ...fixedPrimaryTabs.map((tab): MobileNavBarDestination => ({ kind: 'primary', tab })),
+      ...fixedUtilityTabs.map((tab): MobileNavBarDestination => ({ kind: 'utility', tab })),
+    ],
+    overflowDestinations: [
+      ...orderedPrimaryTabs
+        .slice(1)
+        .map((tab): MobileNavBarDestination => ({ kind: 'primary', tab })),
+      ...orderedUtilityTabs
+        .filter((tab) => !MOBILE_NAV_FIXED_UTILITY_IDS.has(tab.id))
+        .map((tab): MobileNavBarDestination => ({ kind: 'utility', tab })),
+    ],
+  };
+}
+
+export function getMobileNavDestinationKey(destination: MobileNavBarDestination): string {
+  return `${destination.kind}:${destination.tab.id}`;
+}
+
+export function isMobileNavDestinationActive(
+  destination: MobileNavBarDestination,
+  activeTab: string | null,
+): boolean {
+  return destination.tab.id === activeTab;
+}
+
+export function mobileNavDestinationHasBadge(destination: MobileNavBarDestination): boolean {
+  if (destination.kind === 'primary') {
+    return Boolean(destination.tab.badge || !destination.tab.enabled);
+  }
+  return Boolean(destination.tab.badge || (destination.tab.count && destination.tab.count > 0));
 }
 
 export function getMobileNavAlertBadgeCounts(
@@ -113,22 +177,7 @@ export function getMobileNavTabButtonClass(options: {
   active: boolean;
   enabled?: boolean;
 }): string {
-  return `relative flex min-h-10 shrink-0 select-none flex-col items-center gap-1 rounded-md px-2 py-1.5 text-[11px] font-medium transition-colors ${
+  return `relative flex min-h-12 min-w-0 flex-1 select-none flex-col items-center justify-center gap-1 rounded-md px-1 py-1.5 text-[11px] font-medium transition-colors ${
     options.active ? 'bg-blue-50 text-blue-700 dark:bg-blue-900 dark:text-blue-300' : 'text-muted'
   } ${options.enabled === false ? 'opacity-70' : ''}`.trim();
-}
-
-export function getMobileNavFadeState(element: HTMLDivElement | undefined): {
-  showLeftFade: boolean;
-  showRightFade: boolean;
-} {
-  if (!element) {
-    return { showLeftFade: false, showRightFade: false };
-  }
-
-  const maxScrollLeft = element.scrollWidth - element.clientWidth;
-  return {
-    showLeftFade: element.scrollLeft > 1,
-    showRightFade: maxScrollLeft > 1 && element.scrollLeft < maxScrollLeft - 1,
-  };
 }

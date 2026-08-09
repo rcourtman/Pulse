@@ -354,10 +354,52 @@ describe('ThresholdsTable basics', () => {
 
   it('allows dismissing the help banner', () => {
     render(() => <ThresholdsTable {...(baseProps() as any)} />);
+    expect(screen.getByText('How thresholds work')).toBeInTheDocument();
+    expect(screen.getByText(/Use the On\/Off control beside a metric/)).toBeInTheDocument();
+    expect(screen.queryByText(/-1/)).not.toBeInTheDocument();
     const dismissButton = screen.getByLabelText(/Dismiss tips/i);
     expect(dismissButton).toHaveClass('min-h-11', 'min-w-11', 'sm:min-h-0', 'sm:min-w-0');
     fireEvent.click(dismissButton);
-    expect(screen.queryByText(/Quick tips:/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/How thresholds work/i)).not.toBeInTheDocument();
+  });
+
+  it('surfaces custom overrides separately from inherited resources', async () => {
+    setPathname('/alerts/thresholds/systems');
+    const customHost = {
+      id: 'custom-host',
+      hostname: 'custom-host',
+      displayName: 'Custom Host',
+      status: 'online',
+      lastSeen: 123,
+    } as Agent;
+    const inheritedHost = {
+      id: 'inherited-host',
+      hostname: 'inherited-host',
+      displayName: 'Inherited Host',
+      status: 'online',
+      lastSeen: 123,
+    } as Agent;
+
+    render(() => (
+      <ThresholdsTable
+        {...(baseProps() as any)}
+        agents={[customHost, inheritedHost]}
+        overrides={() => [
+          {
+            id: 'custom-host',
+            name: 'Custom Host',
+            type: 'agent' as const,
+            thresholds: { cpu: 91 },
+          },
+        ]}
+      />
+    ));
+
+    const summary = await screen.findByRole('region', { name: 'Custom overrides' });
+    expect(summary).toHaveTextContent('differ from the inherited defaults');
+    expect(
+      within(summary).getByRole('button', { name: 'Show Machines: 1 custom' }),
+    ).toBeInTheDocument();
   });
 });
 
@@ -411,7 +453,7 @@ describe('ThresholdsTable navigation and redirection', () => {
     render(() => <ThresholdsTable {...(baseProps() as any)} agents={[host]} />);
 
     await waitFor(() => {
-      expect(screen.getByTestId('resource-table-Machines')).toBeInTheDocument();
+      expect(screen.getByTestId('section-Machines')).toBeInTheDocument();
     });
   });
 
@@ -459,10 +501,9 @@ describe('ThresholdsTable Resource Rendering', () => {
     render(() => <ThresholdsTable {...(baseProps() as any)} agents={[host]} />);
 
     await waitFor(() => {
-      expect(screen.getByTestId('resource-table-Machines')).toBeInTheDocument();
+      expect(screen.getByTestId('section-Machines')).toBeInTheDocument();
     });
 
-    expect(screen.getByTestId('resource-count-Machines')).toHaveTextContent('1');
     expect(screen.getByTestId('resource-name-h1')).toHaveTextContent('Host 1');
   });
 
@@ -489,7 +530,7 @@ describe('ThresholdsTable Resource Rendering', () => {
     render(() => <ThresholdsTable {...(baseProps() as any)} agents={[host]} />);
 
     await waitFor(() => {
-      expect(screen.getByTestId('resource-table-Machines')).toBeInTheDocument();
+      expect(screen.getByTestId('section-Machines')).toBeInTheDocument();
     });
 
     expect(screen.getByTestId('resource-name-h2')).toHaveTextContent('Secret Host');
@@ -736,7 +777,7 @@ describe('ThresholdsTable Resource Rendering', () => {
     ));
 
     await waitFor(() => {
-      expect(screen.getByTestId('resource-table-Container Runtimes')).toBeInTheDocument();
+      expect(screen.getByTestId('section-Container Runtimes')).toBeInTheDocument();
     });
 
     expect(screen.getByTestId('resource-name-truenas-resource')).toHaveTextContent('TrueNAS');

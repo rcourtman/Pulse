@@ -486,7 +486,7 @@ export function AlertResourceTableRow(props: AlertResourceTableRowProps) {
                             return;
                           }
                           const val = parseFloat(raw);
-                          if (!Number.isNaN(val)) {
+                          if (!Number.isNaN(val) && val >= bounds.min && val <= bounds.max) {
                             updateEditingThreshold(metric, val);
                           }
                         }}

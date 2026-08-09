@@ -282,6 +282,54 @@ describe('PatrolAttentionWorkbench', () => {
     expect(window.location.search).toBe('?attention=record-1');
   });
 
+  it('uses plain scan-row language while keeping unknown trust metadata in detail', async () => {
+    const unknownTrust = item({
+      state: 'unknown',
+      evidenceFreshness: 'unknown',
+      evidenceCompleteness: 'complete',
+      protectionPosture: {
+        ...item().protectionPosture!,
+        state: 'unknown',
+        explanation: 'Pulse has not received enough protection evidence to classify this resource.',
+        providerStates: [
+          {
+            provider: 'pbs',
+            source: 'recovery-points',
+            scope: 'primary',
+            jobState: 'unknown',
+            historyCompleteness: 'complete',
+            permissions: 'sufficient',
+            evidenceIds: [],
+            verificationExpected: true,
+          },
+        ],
+      },
+    });
+    apiMocks.getList.mockResolvedValue(
+      listResponse([unknownTrust], summary({ activeCount: 1, uncertainCount: 1, calm: false })),
+    );
+    apiMocks.getDetail.mockResolvedValue(detail(unknownTrust));
+    renderWorkbench();
+
+    const row = await screen.findByRole('button', { name: 'Open Disk pressure on Database VM' });
+    expect(within(row).getByText('Evidence timing unavailable')).toBeInTheDocument();
+    expect(within(row).queryByText('Unknown / Complete')).not.toBeInTheDocument();
+    expect(within(row).queryByText(/Protection/)).not.toBeInTheDocument();
+
+    fireEvent.click(row);
+
+    const detailRegion = await screen.findByRole('complementary', {
+      name: 'Disk pressure on Database VM',
+    });
+    expect(within(detailRegion).getByText('Evidence timing unavailable')).toBeInTheDocument();
+    expect(within(detailRegion).getByText('Protection status unavailable')).toBeInTheDocument();
+    expect(within(detailRegion).getByText('Job status unavailable')).toBeInTheDocument();
+    expect(within(detailRegion).getByText('History: Complete')).toBeInTheDocument();
+    expect(
+      within(detailRegion).getByText(/not received enough protection evidence/i),
+    ).toBeInTheDocument();
+  });
+
   it('keeps repeated evidence observations available without overwhelming the default detail', async () => {
     const active = item();
     const expandedDetail = detail(active);

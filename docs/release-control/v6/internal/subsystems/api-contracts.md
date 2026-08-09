@@ -3758,6 +3758,10 @@ The Patrol workbench may project the summary counts into its fixed lifecycle
 filter labels at either desktop or narrow widths, but changing presentation
 does not create a parallel count or filter vocabulary: every selection still
 uses the canonical `AttentionFilter` request and the returned list summary.
+Likewise, the frontend may reduce typed evidence freshness/completeness and
+protection state into plain scan-row language or omit unavailable row metadata,
+provided selected detail continues to expose the typed facts. Presentation
+copy must not rewrite transport values or synthesize a stronger trust state.
 
 Lifecycle read failure returns a typed unavailable response and never a
 synthetic zero or calm state. Protection lookup failure may return lifecycle

@@ -18,7 +18,7 @@ export const ALERT_RESOURCE_TABLE_OFFLINE_STATE_CRITICAL_TITLE =
   'Offline alerts will raise critical-level notifications.';
 export const ALERT_RESOURCE_TABLE_ENABLE_METRIC_TITLE = 'Click to enable this metric';
 export const ALERT_RESOURCE_TABLE_DISABLE_METRIC_TITLE =
-  'Set to -1 or use the Off toggle to disable alerts for this metric';
+  'Use the Off control to disable alerts for this metric';
 export const ALERT_RESOURCE_TABLE_EDIT_METRIC_TITLE = 'Click to edit this metric';
 export const ALERT_RESOURCE_TABLE_METRIC_OFF_TOGGLE_LABEL_ON = 'On';
 export const ALERT_RESOURCE_TABLE_METRIC_OFF_TOGGLE_LABEL_OFF = 'Off';

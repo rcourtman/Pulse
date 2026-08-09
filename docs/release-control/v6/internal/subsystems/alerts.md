@@ -1132,6 +1132,19 @@ redirect to the matching platform-shaped route. Legacy
 peer platform routes through the shared `Subtabs` primitive rather than an
 inline FilterBar group. Clearing search or override filters must preserve the
 active platform route.
+The thresholds shell is overview-first: every resource section starts
+collapsed, persisted operator expansion choices still win, and Expand all /
+Collapse all remain available on every platform tab. Because collapsed tables
+cannot carry the discovery burden, the shell must surface a filter-independent
+custom-override summary above the sections; choosing a summary item selects
+the Custom-only filter, opens its owning section, and moves that section into
+view. Resources not represented there continue to inherit their group defaults.
+Metric enablement is an explicit On/Off interaction in row, global-default,
+mobile, and bulk editors. Enabled numeric inputs accept positive trigger values
+only and user-facing copy must not expose the persisted disable sentinel.
+Internally, the canonical `<= 0` read rule remains intact for legacy data, while
+new Off actions write `-1`, so existing configuration and the API contract
+continue to round-trip without making `0` a second customer-facing disable path.
 Within the Proxmox tab, render-heavy ownership now further routes through
 `frontend-modern/src/components/Alerts/ThresholdsTableProxmoxNodesSection.tsx`,
 `frontend-modern/src/components/Alerts/ThresholdsTableProxmoxPBSSection.tsx`,

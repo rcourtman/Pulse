@@ -1,4 +1,4 @@
-import { Show } from 'solid-js';
+import { For, Show } from 'solid-js';
 import { getPlatformIcon } from '@/features/platformPage/platformIcon';
 import { FilterBar, type FilterDef } from '@/components/shared/FilterBar';
 import { Subtabs, type SubtabOption } from '@/components/shared/Subtabs';
@@ -56,6 +56,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
       ],
     },
   ];
+  const customOverrideItems = () => state.summaryItems().filter((item) => item.overrides > 0);
 
   return (
     <div class="space-y-4">
@@ -120,27 +121,54 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
               />
             </svg>
             <div class="text-sm text-blue-900 dark:text-blue-100">
-              <span class="font-medium">{state.getAlertThresholdsHelpBanner().title}</span> Set any
-              threshold to{' '}
-              <code class="px-1 py-0.5 bg-blue-100 dark:bg-blue-900 rounded text-xs font-mono">
-                {state.getAlertThresholdsHelpBanner().disableValue}
-              </code>{' '}
-              to disable alerts for that metric. Click on disabled thresholds showing{' '}
-              <span class="italic">{state.getAlertThresholdsHelpBanner().reenableLabel}</span> to
-              re-enable them. Resources with custom settings show a{' '}
-              <span class="inline-flex items-center px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded text-xs">
-                {state.getAlertThresholdsHelpBanner().customBadgeLabel}
-              </span>{' '}
-              badge.{' '}
-              <span class="text-blue-600 dark:text-blue-400">
+              <p class="font-medium">{state.getAlertThresholdsHelpBanner().title}</p>
+              <p class="mt-1">{state.getAlertThresholdsHelpBanner().toggleGuidance}</p>
+              <p>{state.getAlertThresholdsHelpBanner().inheritanceGuidance}</p>
+              <p>{state.getAlertThresholdsHelpBanner().bulkGuidance}</p>
+              <p class="text-blue-600 dark:text-blue-400">
                 {state.getAlertThresholdsHelpBanner().collapseHint}
-              </span>
+              </p>
             </div>
           </div>
         </div>
       </Show>
 
-      <Show when={state.activeTab() === 'proxmox'}>
+      <Show when={customOverrideItems().length > 0}>
+        <section
+          class="rounded-lg border border-sky-200 bg-sky-50/70 p-3 dark:border-sky-800 dark:bg-sky-950/30"
+          aria-label={state.getAlertThresholdsOverridesPresentation().title}
+        >
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h3 class="text-sm font-semibold text-base-content">
+                {state.getAlertThresholdsOverridesPresentation().title}
+              </h3>
+              <p class="mt-0.5 text-xs text-muted">
+                {state.getAlertThresholdsOverridesPresentation().description}
+              </p>
+            </div>
+            <div class="flex flex-wrap gap-2">
+              <For each={customOverrideItems()}>
+                {(item) => (
+                  <button
+                    type="button"
+                    class="inline-flex min-h-11 items-center gap-2 rounded-full border border-sky-200 bg-surface px-3 py-1.5 text-xs font-medium text-base-content transition-colors hover:border-sky-400 hover:bg-sky-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 sm:min-h-0 dark:border-sky-700 dark:hover:bg-sky-900"
+                    onClick={() => state.revealCustomOverrides(item.key)}
+                    aria-label={`Show ${item.label}: ${state.getAlertThresholdsOverrideCountLabel(item.overrides)}`}
+                  >
+                    <span>{item.label}</span>
+                    <span class="rounded-full bg-sky-100 px-2 py-0.5 text-sky-700 dark:bg-sky-900 dark:text-sky-200">
+                      {state.getAlertThresholdsOverrideCountLabel(item.overrides)}
+                    </span>
+                  </button>
+                )}
+              </For>
+            </div>
+          </div>
+        </section>
+      </Show>
+
+      <Show when={state.summaryItems().length > 0}>
         <div class="flex justify-end gap-2">
           <button
             type="button"

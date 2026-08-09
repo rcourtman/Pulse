@@ -5,6 +5,9 @@ import {
   getPatrolProInvestigationHandoff,
   getPatrolQueueWorkspaceDescription,
   getPatrolWatchOnlyInvestigationNudge,
+  getPatrolAttentionEvidencePresentation,
+  getPatrolAttentionProtectionPresentation,
+  getPatrolProtectionProviderLabels,
   getMonitorContextPatrolProtectionPosture,
   getPatrolReadyWorkDetail,
   getPatrolSetupIssueReason,
@@ -15,6 +18,67 @@ import {
 } from '../patrolControlPresentation';
 
 describe('patrolControlPresentation', () => {
+  it.each([
+    ['fresh', 'complete', 'Evidence current', 'success'],
+    ['stale', 'complete', 'Evidence out of date', 'warning'],
+    ['unknown', 'complete', 'Evidence timing unavailable', 'warning'],
+    ['fresh', 'partial', 'Evidence incomplete', 'warning'],
+    ['stale', 'partial', 'Evidence incomplete and out of date', 'warning'],
+    ['unknown', 'partial', 'Evidence incomplete; timing unavailable', 'warning'],
+    ['fresh', 'unavailable', 'Evidence unavailable', 'muted'],
+    ['stale', 'unavailable', 'Evidence unavailable', 'muted'],
+    ['unknown', 'unavailable', 'Evidence unavailable', 'muted'],
+  ] as const)(
+    'presents %s/%s evidence as plain operator language',
+    (freshness, completeness, label, tone) => {
+      expect(getPatrolAttentionEvidencePresentation(freshness, completeness)).toEqual({
+        label,
+        tone,
+      });
+    },
+  );
+
+  it('keeps meaningful protection states in rows and reserves unavailable state for detail', () => {
+    expect(getPatrolAttentionProtectionPresentation('protected')).toEqual({
+      detailLabel: 'Protected',
+      rowLabel: 'Protected',
+      tone: 'success',
+    });
+    expect(getPatrolAttentionProtectionPresentation('attention')).toEqual({
+      detailLabel: 'Protection needs attention',
+      rowLabel: 'Protection needs attention',
+      tone: 'warning',
+    });
+    expect(getPatrolAttentionProtectionPresentation('unprotected')).toEqual({
+      detailLabel: 'Not protected',
+      rowLabel: 'Not protected',
+      tone: 'danger',
+    });
+    expect(getPatrolAttentionProtectionPresentation('unknown')).toEqual({
+      detailLabel: 'Protection status unavailable',
+      tone: 'muted',
+    });
+    expect(getPatrolAttentionProtectionPresentation()).toEqual({
+      detailLabel: 'Protection status unavailable',
+      tone: 'muted',
+    });
+  });
+
+  it('names provider protection fields instead of presenting an ambiguous value pair', () => {
+    expect(
+      getPatrolProtectionProviderLabels({
+        jobState: 'unknown',
+        historyCompleteness: 'complete',
+      }),
+    ).toEqual({ job: 'Job status unavailable', history: 'History: Complete' });
+    expect(
+      getPatrolProtectionProviderLabels({
+        jobState: 'success',
+        historyCompleteness: 'unknown',
+      }),
+    ).toEqual({ job: 'Job: Success', history: 'History unavailable' });
+  });
+
   it('keeps the four Patrol mode options in user-facing language', () => {
     expect(PATROL_AUTONOMY_POLICY_PRESENTATION).toEqual({
       monitor: {

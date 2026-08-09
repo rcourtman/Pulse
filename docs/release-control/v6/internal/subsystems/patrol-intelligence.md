@@ -967,6 +967,12 @@ protection posture, timeline, next step, resource navigation, and the
 contextual Assistant handoff. Assistant is absent before selection and receives
 explanation-only typed context without action or approval authority. Browser
 proof is `tests/integration/tests/91-operational-trust-attention-workbench.spec.ts`.
+The scan row must reduce evidence freshness/completeness into one plain phrase,
+omit protection posture when its state is unavailable, and use operator language
+for meaningful protection states. The selected detail retains the typed evidence
+and protection facts, but labels unknown timing, protection state, provider job
+state, and history availability explicitly instead of exposing ambiguous raw
+value pairs such as `Unknown / Complete`.
 
 Attached availability failures use this same queue and detail contract. Their
 attention item keeps the owning canonical resource ID, the exact

@@ -147,24 +147,24 @@ export function normalizeAlertResourceMetricKey(column: string): string {
 
 export function getAlertResourceMetricBounds(metric: string): { min: number; max: number } {
   if (metric === 'temperature' || metric === 'diskTemperature') {
-    return { min: -1, max: 150 };
+    return { min: 1, max: 150 };
   }
   if (['diskRead', 'diskWrite', 'networkIn', 'networkOut'].includes(metric)) {
-    return { min: -1, max: 10000 };
+    return { min: 0.01, max: 10000 };
   }
   if (['cpu', 'memory', 'disk', 'usage', 'memoryWarnPct', 'memoryCriticalPct'].includes(metric)) {
-    return { min: -1, max: 100 };
+    return { min: 1, max: 100 };
   }
   if (['warningSizeGiB', 'criticalSizeGiB'].includes(metric)) {
-    return { min: -1, max: 100000 };
+    return { min: 0.01, max: 100000 };
   }
   if (metric === 'restartCount') {
-    return { min: -1, max: 50 };
+    return { min: 1, max: 50 };
   }
   if (metric === 'restartWindow') {
-    return { min: -1, max: 86400 };
+    return { min: 1, max: 86400 };
   }
-  return { min: -1, max: 10000 };
+  return { min: 1, max: 10000 };
 }
 
 export function getAlertResourceMetricStep(metric: string): string | number {

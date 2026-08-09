@@ -1,5 +1,11 @@
 import type { PatrolAutonomyLevel, PatrolRunRecord, PatrolStatus } from '@/api/patrol';
 import type { MetadataBadgeTone } from '@/components/shared/MetadataBadge';
+import type { EvidenceCompleteness, EvidenceFreshness } from '@/types/operationalTrust';
+import type {
+  ProtectionHistoryCompleteness,
+  ProtectionState,
+  RecoveryOutcome,
+} from '@/types/recovery';
 import {
   getPatrolFindingIssueCountLabel,
   getPatrolWorkTypeCompositionClause,
@@ -47,6 +53,76 @@ export const PATROL_WORKSPACE_SETUP_DESCRIPTION =
 export const PATROL_WORKSPACE_QUEUE_TITLE = 'Open work';
 
 export const PATROL_WORKSPACE_RUN_RECORD_TITLE = 'Check details';
+
+export interface PatrolAttentionEvidencePresentation {
+  label: string;
+  tone: MetadataBadgeTone;
+}
+
+export interface PatrolAttentionProtectionPresentation {
+  detailLabel: string;
+  rowLabel?: string;
+  tone: MetadataBadgeTone;
+}
+
+export function getPatrolAttentionEvidencePresentation(
+  freshness: EvidenceFreshness,
+  completeness: EvidenceCompleteness,
+): PatrolAttentionEvidencePresentation {
+  if (completeness === 'unavailable') {
+    return { label: 'Evidence unavailable', tone: 'muted' };
+  }
+  if (completeness === 'complete') {
+    if (freshness === 'fresh') return { label: 'Evidence current', tone: 'success' };
+    if (freshness === 'stale') return { label: 'Evidence out of date', tone: 'warning' };
+    return { label: 'Evidence timing unavailable', tone: 'warning' };
+  }
+  if (freshness === 'fresh') return { label: 'Evidence incomplete', tone: 'warning' };
+  if (freshness === 'stale') {
+    return { label: 'Evidence incomplete and out of date', tone: 'warning' };
+  }
+  return { label: 'Evidence incomplete; timing unavailable', tone: 'warning' };
+}
+
+export function getPatrolAttentionProtectionPresentation(
+  state?: ProtectionState,
+): PatrolAttentionProtectionPresentation {
+  switch (state) {
+    case 'protected':
+      return { detailLabel: 'Protected', rowLabel: 'Protected', tone: 'success' };
+    case 'attention':
+      return {
+        detailLabel: 'Protection needs attention',
+        rowLabel: 'Protection needs attention',
+        tone: 'warning',
+      };
+    case 'unprotected':
+      return { detailLabel: 'Not protected', rowLabel: 'Not protected', tone: 'danger' };
+    default:
+      return { detailLabel: 'Protection status unavailable', tone: 'muted' };
+  }
+}
+
+function formatAttentionMetadataToken(value: string): string {
+  const normalized = value.trim().replace(/[_-]+/g, ' ');
+  return normalized ? normalized.charAt(0).toUpperCase() + normalized.slice(1) : 'Unavailable';
+}
+
+export function getPatrolProtectionProviderLabels(input: {
+  jobState: RecoveryOutcome;
+  historyCompleteness: ProtectionHistoryCompleteness;
+}): { job: string; history: string } {
+  return {
+    job:
+      input.jobState === 'unknown'
+        ? 'Job status unavailable'
+        : `Job: ${formatAttentionMetadataToken(input.jobState)}`,
+    history:
+      input.historyCompleteness === 'unknown' || input.historyCompleteness === 'unavailable'
+        ? 'History unavailable'
+        : `History: ${formatAttentionMetadataToken(input.historyCompleteness)}`,
+  };
+}
 
 interface PatrolControlCopyInput {
   autonomyLevel?: PatrolAutonomyLevel;

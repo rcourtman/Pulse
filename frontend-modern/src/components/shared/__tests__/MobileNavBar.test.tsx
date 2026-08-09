@@ -1,32 +1,16 @@
 import { fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
 import { describe, expect, it, vi } from 'vitest';
-import { createSignal, type Component } from 'solid-js';
+import { type Component } from 'solid-js';
 import mobileNavBarSource from '@/components/shared/MobileNavBar.tsx?raw';
 import mobileNavBarModelSource from '@/components/shared/mobileNavBarModel.ts?raw';
 import mobileNavBarStateSource from '@/components/shared/useMobileNavBarState.ts?raw';
-import { MobileNavBar } from '@/components/shared/MobileNavBar';
+import {
+  MobileNavBar,
+  type MobileNavBarPrimaryTab,
+  type MobileNavBarUtilityTab,
+} from '@/components/shared/MobileNavBar';
 
-// Records the element each call landed on, so tests can assert the rail centred
-// the ACTIVE tab rather than merely that scrollIntoView was called at all.
-const scrollIntoViewCalls: Array<{ element: HTMLElement; options: unknown }> = [];
-HTMLElement.prototype.scrollIntoView = vi.fn(function (
-  this: HTMLElement,
-  options?: boolean | ScrollIntoViewOptions,
-) {
-  scrollIntoViewCalls.push({ element: this, options });
-});
-window.requestAnimationFrame = ((callback: FrameRequestCallback) => {
-  callback(0);
-  return 1;
-}) as typeof window.requestAnimationFrame;
-
-const StandaloneIcon: Component<{ class?: string }> = (props) => (
-  <span class={props.class}>SA</span>
-);
-const ProxmoxIcon: Component<{ class?: string }> = (props) => <span class={props.class}>PX</span>;
-const AlertsIcon: Component<{ class?: string }> = (props) => <span class={props.class}>AL</span>;
-const ActionsIcon: Component<{ class?: string }> = (props) => <span class={props.class}>AC</span>;
-const SettingsIcon: Component<{ class?: string }> = (props) => <span class={props.class}>SE</span>;
+const TextIcon: Component<{ class?: string }> = (props) => <span class={props.class}>Icon</span>;
 const PatrolIcon: Component<{ class?: string }> = (props) => (
   <svg aria-label="Pulse Patrol" class={props.class} viewBox="0 0 24 24">
     <title>Pulse Patrol</title>
@@ -34,26 +18,63 @@ const PatrolIcon: Component<{ class?: string }> = (props) => (
   </svg>
 );
 
+function makePrimary(
+  id: string,
+  label: string,
+  overrides: Partial<MobileNavBarPrimaryTab> = {},
+): MobileNavBarPrimaryTab {
+  return {
+    id,
+    label,
+    route: `/${id}/overview`,
+    settingsRoute: '/settings/infrastructure',
+    tooltip: label,
+    enabled: true,
+    live: true,
+    icon: TextIcon,
+    alwaysShow: true,
+    ...overrides,
+  };
+}
+
+function makeUtility(
+  id: MobileNavBarUtilityTab['id'],
+  label: string,
+  overrides: Partial<MobileNavBarUtilityTab> = {},
+): MobileNavBarUtilityTab {
+  return {
+    id,
+    label,
+    route: id === 'ai' ? '/patrol' : `/${id}`,
+    tooltip: label,
+    badge: null,
+    count: undefined,
+    breakdown: undefined,
+    icon: id === 'ai' ? PatrolIcon : TextIcon,
+    ...overrides,
+  };
+}
+
 describe('MobileNavBar', () => {
   it('keeps the mobile nav on shell, runtime, and model owners', () => {
     expect(mobileNavBarSource).toContain('useMobileNavBarState');
     expect(mobileNavBarSource).toContain('getMobileNavTabButtonClass');
+    expect(mobileNavBarSource).toContain('role="menu"');
     expect(mobileNavBarSource).toContain('pb-safe xl:hidden');
-    expect(mobileNavBarSource).not.toContain('pb-safe lg:hidden');
     expect(mobileNavBarSource).not.toContain('createSignal');
     expect(mobileNavBarSource).not.toContain('requestAnimationFrame');
-    expect(mobileNavBarSource).not.toContain('new Set(priority)');
+    expect(mobileNavBarSource).not.toContain('overflow-x-auto');
 
     expect(mobileNavBarStateSource).toContain('createSignal');
-    expect(mobileNavBarStateSource).toContain('window.addEventListener');
-    expect(mobileNavBarStateSource).toContain('requestAnimationFrame');
-    expect(mobileNavBarStateSource).toContain('scrollIntoView');
+    expect(mobileNavBarStateSource).toContain("document.addEventListener('pointerdown'");
+    expect(mobileNavBarStateSource).toContain("event.key === 'Escape'");
     expect(mobileNavBarStateSource).toContain('export function useMobileNavBarState');
+    expect(mobileNavBarStateSource).not.toContain('scrollIntoView');
 
+    expect(mobileNavBarModelSource).toContain('buildMobileNavBarLayout');
     expect(mobileNavBarModelSource).toContain('buildOrderedMobileNavPrimaryTabs');
     expect(mobileNavBarModelSource).toContain('buildOrderedMobileNavUtilityTabs');
     expect(mobileNavBarModelSource).toContain('getMobileNavAlertBadgeCounts');
-    expect(mobileNavBarModelSource).toContain('getMobileNavFadeState');
     expect(mobileNavBarModelSource).toContain("'proxmox'");
     expect(mobileNavBarModelSource).toContain("'docker'");
     expect(mobileNavBarModelSource).toContain("'kubernetes'");
@@ -62,380 +83,182 @@ describe('MobileNavBar', () => {
     expect(mobileNavBarModelSource).not.toContain("'workloads'");
     expect(mobileNavBarModelSource).not.toContain("'storage'");
     expect(mobileNavBarModelSource).not.toContain("'recovery'");
-    expect(mobileNavBarModelSource).not.toContain("'infrastructure'");
   });
 
-  it('keeps decorative icon labels out of mobile tab accessible names', () => {
-    render(() => (
-      <MobileNavBar
-        activeTab={() => 'ai'}
-        primaryTabs={() => []}
-        utilityTabs={() => [
-          {
-            id: 'ai',
-            label: 'Patrol',
-            route: '/patrol',
-            tooltip: 'Continuous verification',
-            badge: null,
-            count: undefined,
-            breakdown: undefined,
-            icon: PatrolIcon,
-          },
-        ]}
-        onPrimaryClick={() => {}}
-        onUtilityClick={() => {}}
-      />
-    ));
-
-    const navList = screen.getByRole('tablist', { name: 'Mobile navigation' });
-    const patrolButton = within(navList).getByRole('button', { name: 'Patrol' });
-
-    expect(patrolButton).toHaveAttribute('data-tab-id', 'ai');
-    expect(within(navList).queryByRole('button', { name: 'Pulse Patrol Patrol' })).toBeNull();
-  });
-
-  it('renders Patrol open-work counts without renaming the mobile tab', () => {
-    render(() => (
-      <MobileNavBar
-        activeTab={() => 'ai'}
-        primaryTabs={() => []}
-        utilityTabs={() => [
-          {
-            id: 'ai',
-            label: 'Patrol',
-            route: '/patrol',
-            tooltip: 'Review Patrol checks, findings, and approvals',
-            badge: null,
-            count: 2,
-            countLabel: '2 open work items',
-            breakdown: undefined,
-            icon: PatrolIcon,
-          },
-        ]}
-        onPrimaryClick={() => {}}
-        onUtilityClick={() => {}}
-      />
-    ));
-
-    const navList = screen.getByRole('tablist', { name: 'Mobile navigation' });
-    const patrolButton = within(navList).getByRole('button', {
-      name: 'Patrol: 2 open work items',
-    });
-
-    expect(patrolButton).toHaveAttribute('data-tab-id', 'ai');
-    expect(within(patrolButton).getByText('Patrol')).toBeInTheDocument();
-    expect(within(patrolButton).getByText('2')).toBeInTheDocument();
-    expect(within(navList).queryByText('Needs Attention')).toBeNull();
-  });
-
-  it('keeps Actions named, reachable, and route-correct among monitor-first destinations', () => {
-    const onUtilityClick = vi.fn();
-    const utilityTabs = [
-      {
-        id: 'settings' as const,
-        label: 'Settings',
-        route: '/settings',
-        tooltip: 'Settings',
-        badge: null,
-        count: undefined,
-        breakdown: undefined,
-        icon: SettingsIcon,
-      },
-      {
-        id: 'ai' as const,
-        label: 'Patrol',
-        route: '/patrol',
-        tooltip: 'Patrol',
-        badge: null,
-        count: undefined,
-        breakdown: undefined,
-        icon: PatrolIcon,
-      },
-      {
-        id: 'actions' as const,
-        label: 'Actions',
-        route: '/actions',
-        tooltip: 'Review actions',
-        badge: null,
-        count: undefined,
-        breakdown: undefined,
-        icon: ActionsIcon,
-      },
-      {
-        id: 'alerts' as const,
-        label: 'Alerts',
-        route: '/alerts',
-        tooltip: 'Alerts',
-        badge: null,
-        count: undefined,
-        breakdown: undefined,
-        icon: AlertsIcon,
-      },
-    ];
-
-    const { container } = render(() => (
-      <MobileNavBar
-        activeTab={() => 'actions'}
-        primaryTabs={() => []}
-        utilityTabs={() => utilityTabs}
-        onPrimaryClick={() => {}}
-        onUtilityClick={onUtilityClick}
-      />
-    ));
-
-    const navList = screen.getByRole('tablist', { name: 'Mobile navigation' });
-    const actionsButton = within(navList).getByRole('button', { name: 'Actions' });
-    expect(
-      Array.from(container.querySelectorAll('button[data-tab-id]')).map((button) =>
-        button.getAttribute('data-tab-id'),
-      ),
-    ).toEqual(['alerts', 'actions', 'ai', 'settings']);
-    expect(actionsButton).toHaveAttribute('data-tab-id', 'actions');
-    expect(actionsButton).toHaveAttribute('type', 'button');
-    actionsButton.focus();
-    expect(actionsButton).toHaveFocus();
-    fireEvent.click(actionsButton);
-    expect(onUtilityClick).toHaveBeenCalledWith(
-      expect.objectContaining({
-        id: 'actions',
-        label: 'Actions',
-        route: '/actions',
-      }),
-    );
-  });
-
-  it('allows inactive platform tabs to render without an active mobile tab', () => {
-    const { container } = render(() => (
-      <MobileNavBar
-        activeTab={() => null}
-        primaryTabs={() => [
-          {
-            id: 'standalone',
-            label: 'Machines',
-            route: '/standalone/machines',
-            settingsRoute: '/settings/infrastructure',
-            tooltip: 'Machines',
-            enabled: true,
-            live: true,
-            icon: StandaloneIcon,
-            alwaysShow: true,
-          },
-        ]}
-        utilityTabs={() => [
-          {
-            id: 'settings',
-            label: 'Settings',
-            route: '/settings',
-            tooltip: 'Settings',
-            badge: null,
-            count: undefined,
-            breakdown: undefined,
-            icon: SettingsIcon,
-          },
-        ]}
-        onPrimaryClick={() => {}}
-        onUtilityClick={() => {}}
-      />
-    ));
-
-    const buttons = container.querySelectorAll('button[data-tab-id]');
-    expect(buttons).toHaveLength(2);
-    buttons.forEach((button) => {
-      expect(button).not.toHaveClass('bg-blue-50');
-      expect(button).not.toHaveClass('text-blue-700');
-    });
-  });
-
-  it('brings the active platform tab into view on mount', () => {
-    scrollIntoViewCalls.length = 0;
-
+  it('renders one platform and the daily operations set with every other route in More', async () => {
     const { container } = render(() => (
       <MobileNavBar
         activeTab={() => 'standalone'}
         primaryTabs={() => [
-          {
-            id: 'proxmox',
-            label: 'Proxmox',
-            route: '/proxmox/overview',
-            settingsRoute: '/settings/infrastructure',
-            tooltip: 'Proxmox',
-            enabled: true,
-            live: true,
-            icon: ProxmoxIcon,
-            alwaysShow: true,
-          },
-          {
-            id: 'standalone',
-            label: 'Machines',
-            route: '/standalone/machines',
-            settingsRoute: '/settings/infrastructure',
-            tooltip: 'Machines',
-            enabled: true,
-            live: true,
-            icon: StandaloneIcon,
-            alwaysShow: true,
-          },
+          makePrimary('standalone', 'Machines'),
+          makePrimary('proxmox', 'Proxmox'),
         ]}
-        utilityTabs={() => []}
+        utilityTabs={() => [
+          makeUtility('settings', 'Settings'),
+          makeUtility('ai', 'Patrol'),
+          makeUtility('actions', 'Actions'),
+          makeUtility('alerts', 'Alerts'),
+        ]}
         onPrimaryClick={() => {}}
         onUtilityClick={() => {}}
       />
     ));
 
-    const activeButton = container.querySelector('button[data-tab-id="standalone"]');
-    expect(activeButton).toBeTruthy();
-    expect(scrollIntoViewCalls.map((call) => call.element)).toContain(activeButton);
-    expect(scrollIntoViewCalls.at(-1)?.options).toEqual(
-      expect.objectContaining({ inline: 'center' }),
+    const fixedRail = container.querySelector('[data-mobile-nav-rail="fixed"]');
+    expect(fixedRail).toBeTruthy();
+    expect(
+      Array.from(fixedRail?.querySelectorAll('button[data-tab-id]') ?? []).map((button) =>
+        button.getAttribute('data-tab-id'),
+      ),
+    ).toEqual(['proxmox', 'alerts', 'actions', 'ai', 'more']);
+
+    const more = screen.getByRole('button', { name: 'More navigation' });
+    expect(more).toHaveAttribute('aria-haspopup', 'menu');
+    expect(more).toHaveAttribute('aria-expanded', 'false');
+    expect(more).toHaveAttribute('aria-current', 'page');
+    fireEvent.click(more);
+
+    const menu = await screen.findByRole('menu', { name: 'More navigation destinations' });
+    expect(more).toHaveAttribute('aria-expanded', 'true');
+    expect(within(menu).getByRole('group', { name: 'Infrastructure' })).toBeInTheDocument();
+    expect(within(menu).getByRole('group', { name: 'Pulse' })).toBeInTheDocument();
+    expect(
+      within(menu)
+        .getAllByRole('menuitem')
+        .map((item) => item.getAttribute('data-tab-id')),
+    ).toEqual(['standalone', 'settings']);
+    expect(within(menu).getByRole('menuitem', { name: 'Machines' })).toHaveAttribute(
+      'aria-current',
+      'page',
     );
   });
 
-  it('re-centres the rail when the active platform tab changes', async () => {
-    scrollIntoViewCalls.length = 0;
-    const [activeTab, setActiveTab] = createSignal<string | null>('proxmox');
-
-    const { container } = render(() => (
-      <MobileNavBar
-        activeTab={activeTab}
-        primaryTabs={() => [
-          {
-            id: 'proxmox',
-            label: 'Proxmox',
-            route: '/proxmox/overview',
-            settingsRoute: '/settings/infrastructure',
-            tooltip: 'Proxmox',
-            enabled: true,
-            live: true,
-            icon: ProxmoxIcon,
-            alwaysShow: true,
-          },
-          {
-            id: 'standalone',
-            label: 'Machines',
-            route: '/standalone/machines',
-            settingsRoute: '/settings/infrastructure',
-            tooltip: 'Machines',
-            enabled: true,
-            live: true,
-            icon: StandaloneIcon,
-            alwaysShow: true,
-          },
-        ]}
-        utilityTabs={() => []}
-        onPrimaryClick={() => {}}
-        onUtilityClick={() => {}}
-      />
-    ));
-
-    const machinesButton = container.querySelector('button[data-tab-id="standalone"]');
-    expect(scrollIntoViewCalls.map((call) => call.element)).not.toContain(machinesButton);
-
-    setActiveTab('standalone');
-
-    await waitFor(() => {
-      expect(scrollIntoViewCalls.map((call) => call.element)).toContain(machinesButton);
-    });
-  });
-
-  it('orders tabs, renders alert badges, and shows fades from scroll state', async () => {
+  it('preserves route callbacks for fixed and overflow destinations', async () => {
     const onPrimaryClick = vi.fn();
     const onUtilityClick = vi.fn();
-
-    const { container } = render(() => (
+    render(() => (
       <MobileNavBar
         activeTab={() => 'proxmox'}
         primaryTabs={() => [
-          {
-            id: 'standalone',
-            label: 'Machines',
-            route: '/standalone/machines',
-            settingsRoute: '/settings/infrastructure',
-            tooltip: 'Machines',
-            enabled: true,
-            live: true,
-            icon: StandaloneIcon,
-            alwaysShow: true,
-          },
-          {
-            id: 'proxmox',
-            label: 'Proxmox',
-            route: '/proxmox/overview',
-            settingsRoute: '/settings/infrastructure',
-            tooltip: 'Proxmox',
-            enabled: true,
-            live: true,
-            icon: ProxmoxIcon,
-            alwaysShow: true,
-          },
+          makePrimary('proxmox', 'Proxmox'),
+          makePrimary('standalone', 'Machines'),
         ]}
-        utilityTabs={() => [
-          {
-            id: 'settings',
-            label: 'Settings',
-            route: '/settings',
-            tooltip: 'Settings',
-            badge: 'pro',
-            count: undefined,
-            breakdown: undefined,
-            icon: SettingsIcon,
-          },
-          {
-            id: 'alerts',
-            label: 'Alerts',
-            route: '/alerts',
-            tooltip: 'Alerts',
-            badge: null,
-            count: 5,
-            breakdown: { critical: 2, warning: 3 },
-            icon: AlertsIcon,
-          },
-        ]}
+        utilityTabs={() => [makeUtility('alerts', 'Alerts'), makeUtility('settings', 'Settings')]}
         onPrimaryClick={onPrimaryClick}
         onUtilityClick={onUtilityClick}
       />
     ));
 
-    const primaryRail = container.querySelector('[data-mobile-nav-rail="primary"]');
-    const utilityRail = container.querySelector('[data-mobile-nav-rail="utility"]');
-    expect(primaryRail).toBeTruthy();
-    expect(utilityRail).toBeTruthy();
-    Object.defineProperty(primaryRail as Element, 'scrollWidth', {
-      configurable: true,
-      value: 400,
-    });
-    Object.defineProperty(primaryRail as Element, 'clientWidth', {
-      configurable: true,
-      value: 200,
-    });
-    Object.defineProperty(primaryRail as Element, 'scrollLeft', {
-      configurable: true,
-      value: 20,
-      writable: true,
-    });
+    fireEvent.click(screen.getByRole('button', { name: 'Alerts' }));
+    expect(onUtilityClick).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'alerts', route: '/alerts' }),
+    );
 
-    fireEvent.scroll(primaryRail as Element);
+    const more = screen.getByRole('button', { name: 'More navigation' });
+    fireEvent.click(more);
+    const menu = await screen.findByRole('menu');
+    fireEvent.click(within(menu).getByRole('menuitem', { name: 'Machines' }));
+    expect(onPrimaryClick).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'standalone', route: '/standalone/overview' }),
+    );
+    expect(screen.queryByRole('menu')).toBeNull();
 
-    const buttons = container.querySelectorAll('button[data-tab-id]');
-    expect(buttons[0]).toHaveAttribute('data-tab-id', 'proxmox');
-    expect(buttons[1]).toHaveAttribute('data-tab-id', 'standalone');
-    expect(buttons[2]).toHaveAttribute('data-tab-id', 'alerts');
-    expect(buttons[3]).toHaveAttribute('data-tab-id', 'settings');
+    fireEvent.click(more);
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Settings' }));
+    expect(onUtilityClick).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'settings', route: '/settings' }),
+    );
+  });
 
-    expect(screen.getByText('2')).toBeInTheDocument();
-    expect(screen.getByText('3')).toBeInTheDocument();
-    expect(screen.getByText('Pro')).toBeInTheDocument();
-    expect(within(utilityRail as HTMLElement).getByTitle('Alerts')).toBeInTheDocument();
-    expect(within(utilityRail as HTMLElement).getByTitle('Settings')).toBeInTheDocument();
+  it('preserves fixed and overflow badges and keeps icon labels decorative', async () => {
+    render(() => (
+      <MobileNavBar
+        activeTab={() => 'ai'}
+        primaryTabs={() => [
+          makePrimary('proxmox', 'Proxmox'),
+          makePrimary('standalone', 'Machines', { enabled: false }),
+        ]}
+        utilityTabs={() => [
+          makeUtility('alerts', 'Alerts', {
+            count: 5,
+            breakdown: { critical: 2, warning: 3 },
+          }),
+          makeUtility('ai', 'Patrol', { count: 2, countLabel: '2 open work items' }),
+          makeUtility('settings', 'Settings', { badge: 'update' }),
+        ]}
+        onPrimaryClick={() => {}}
+        onUtilityClick={() => {}}
+      />
+    ));
 
-    fireEvent.click(screen.getByTitle('Machines'));
-    expect(onPrimaryClick).toHaveBeenCalledWith(expect.objectContaining({ id: 'standalone' }));
+    const nav = screen.getByRole('navigation', { name: 'Mobile navigation' });
+    expect(
+      within(nav).getByRole('button', { name: 'Alerts: 2 critical, 3 warning' }),
+    ).toHaveTextContent('23');
+    expect(
+      within(nav).getByRole('button', { name: 'Patrol: 2 open work items' }),
+    ).toHaveTextContent('Patrol2');
+    expect(within(nav).queryByRole('button', { name: 'Pulse Patrol Patrol' })).toBeNull();
 
-    fireEvent.click(screen.getByTitle('Alerts'));
-    expect(onUtilityClick).toHaveBeenCalledWith(expect.objectContaining({ id: 'alerts' }));
+    fireEvent.click(within(nav).getByRole('button', { name: 'More navigation' }));
+    const menu = await screen.findByRole('menu');
+    expect(within(menu).getByRole('menuitem', { name: /Machines/ })).toHaveTextContent(
+      'MachinesSetup',
+    );
+    expect(within(menu).getByRole('menuitem', { name: 'Settings' })).toBeInTheDocument();
+  });
 
-    await waitFor(() => {
-      expect(container.querySelector('.bg-gradient-to-r')).toBeTruthy();
-      expect(container.querySelector('.bg-gradient-to-l')).toBeTruthy();
+  it('supports menu arrow keys, Escape focus return, and outside dismissal', async () => {
+    render(() => (
+      <MobileNavBar
+        activeTab={() => 'proxmox'}
+        primaryTabs={() => [
+          makePrimary('proxmox', 'Proxmox'),
+          makePrimary('standalone', 'Machines'),
+        ]}
+        utilityTabs={() => [makeUtility('alerts', 'Alerts'), makeUtility('settings', 'Settings')]}
+        onPrimaryClick={() => {}}
+        onUtilityClick={() => {}}
+      />
+    ));
+
+    const more = screen.getByRole('button', { name: 'More navigation' });
+    more.focus();
+    fireEvent.keyDown(more, { key: 'ArrowDown' });
+    const menu = await screen.findByRole('menu');
+    const items = within(menu).getAllByRole('menuitem');
+    await waitFor(() => expect(items[0]).toHaveFocus());
+
+    fireEvent.keyDown(items[0], { key: 'ArrowDown' });
+    expect(items[1]).toHaveFocus();
+    fireEvent.keyDown(items[1], { key: 'Home' });
+    expect(items[0]).toHaveFocus();
+    fireEvent.keyDown(items[0], { key: 'End' });
+    expect(items[1]).toHaveFocus();
+    fireEvent.keyDown(items[1], { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
+    expect(more).toHaveFocus();
+
+    fireEvent.click(more);
+    await screen.findByRole('menu');
+    fireEvent.pointerDown(document.body);
+    await waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
+  });
+
+  it('omits More when every supplied destination fits the fixed set', () => {
+    render(() => (
+      <MobileNavBar
+        activeTab={() => null}
+        primaryTabs={() => [makePrimary('proxmox', 'Proxmox')]}
+        utilityTabs={() => [makeUtility('alerts', 'Alerts'), makeUtility('ai', 'Patrol')]}
+        onPrimaryClick={() => {}}
+        onUtilityClick={() => {}}
+      />
+    ));
+
+    expect(screen.queryByRole('button', { name: 'More navigation' })).toBeNull();
+    screen.getAllByRole('button').forEach((button) => {
+      expect(button).not.toHaveAttribute('aria-current');
     });
   });
 });

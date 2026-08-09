@@ -2398,10 +2398,11 @@ hosted chrome may not leave the Pulse Assistant launcher or an already-open
 assistant drawer interactive behind a modal that currently owns the viewport.
 That same hosted chrome rule also covers responsive launcher placement. While
 the authenticated shell is using mobile navigation, `frontend-modern/src/AppLayout.tsx`
-must keep the closed Pulse Assistant launcher as a bottom floating affordance
-that clears the mobile nav; it must not reintroduce the desktop right-edge
-launcher until the desktop shell breakpoint, otherwise hosted and self-hosted
-operators lose usable dashboard and billing-page edge space at tablet widths.
+must keep the closed Pulse Assistant launcher in the authenticated header flow,
+where it cannot cover page content or compete with the mobile nav. It must not
+reintroduce the desktop right-edge launcher until the desktop shell breakpoint,
+otherwise hosted and self-hosted operators lose usable dashboard and
+billing-page edge space at tablet widths.
 That same authenticated shell contract now also has to distinguish backend
 availability from websocket-stream liveness. When hosted runtime health stays
 available during a stream reconnect or renegotiation window,

@@ -3,6 +3,7 @@ import { logger } from '@/utils/logger';
 import { PulseBrandMark } from '@/components/Brand/PulseBrandMark';
 import { apiClient, apiFetchJSON } from '@/utils/apiClient';
 import { STORAGE_KEYS } from '@/utils/localStorage';
+import { TROUBLESHOOTING_DOC_URL } from '@/utils/docsLinks';
 import Globe from 'lucide-solid/icons/globe';
 import Key from 'lucide-solid/icons/key';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
@@ -643,6 +644,14 @@ const LoginForm: Component<{
               </button>
             </div>
           </Show>
+          <div class="border-t border-border pt-4 text-center">
+            <a
+              href={TROUBLESHOOTING_DOC_URL}
+              class="inline-flex min-h-10 items-center rounded px-1 text-xs font-medium text-blue-700 underline-offset-2 transition-colors hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60 dark:text-blue-300 sm:min-h-9"
+            >
+              Can’t sign in?
+            </a>
+          </div>
         </form>
       </div>
     </div>

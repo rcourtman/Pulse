@@ -1,6 +1,6 @@
 import { cleanup, render, screen, waitFor, within } from '@solidjs/testing-library';
 import { Route, Router } from '@solidjs/router';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { getHorizontalRailScrollLeft } from '@/components/shared/horizontalRailVisibilityModel';
 import { PlatformSectionTabs } from '../sharedPlatformPage';
 
@@ -117,6 +117,56 @@ describe('PlatformSectionTabs', () => {
     expect(activeLink).toHaveAttribute('aria-current', 'page');
     expect(activeLink).toHaveClass('shrink-0');
     expect(activeLink).toHaveClass('whitespace-nowrap');
+  });
+
+  it('exposes operable phone-width controls when more sections are clipped', async () => {
+    render(() => (
+      <Router>
+        <Route
+          path="/"
+          component={() => (
+            <PlatformSectionTabs
+              tabs={
+                [
+                  { id: 'overview', label: 'Overview', path: '/example/overview' },
+                  { id: 'images', label: 'Images', path: '/example/images' },
+                  { id: 'storage', label: 'Storage', path: '/example/storage' },
+                  { id: 'networks', label: 'Networks', path: '/example/networks' },
+                ] as const
+              }
+              active="overview"
+              ariaLabel="Example sections"
+            />
+          )}
+        />
+      </Router>
+    ));
+
+    const navigation = screen.getByRole('navigation', { name: 'Example sections' });
+    const scrollBy = vi.fn();
+    Object.defineProperties(navigation, {
+      clientWidth: { configurable: true, value: 220 },
+      scrollWidth: { configurable: true, value: 520 },
+      scrollLeft: { configurable: true, writable: true, value: 0 },
+      scrollBy: { configurable: true, value: scrollBy },
+    });
+
+    window.dispatchEvent(new Event('resize'));
+    const scrollRight = await screen.findByRole('button', {
+      name: 'Example sections: scroll right',
+    });
+    expect(
+      screen.queryByRole('button', { name: 'Example sections: scroll left' }),
+    ).not.toBeInTheDocument();
+
+    scrollRight.click();
+    expect(scrollBy).toHaveBeenCalledWith({ left: 160, behavior: 'smooth' });
+
+    navigation.scrollLeft = 120;
+    navigation.dispatchEvent(new Event('scroll'));
+    expect(
+      await screen.findByRole('button', { name: 'Example sections: scroll left' }),
+    ).toBeInTheDocument();
   });
 
   it('keeps the active destination visible when the tab rail narrows', async () => {

@@ -38,6 +38,11 @@ import { LabeledFilterToggleGroup } from '@/components/shared/FilterToolbar';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 import { MetadataBadge, type MetadataBadgeTone } from '@/components/shared/MetadataBadge';
 import { ActionReviewDialog } from '@/features/actions/ActionReviewDialog';
+import {
+  getPatrolAttentionEvidencePresentation,
+  getPatrolAttentionProtectionPresentation,
+  getPatrolProtectionProviderLabels,
+} from '@/features/patrol/patrolControlPresentation';
 import { aiChatStore } from '@/stores/aiChat';
 import { patrolAttentionStore } from '@/stores/patrolAttention';
 import {
@@ -721,11 +726,7 @@ function AttentionDetail(props: {
                               <span class="font-medium text-base-content">
                                 {formatProvider(provider.provider)}
                               </span>
-                              <span class="text-muted">
-                                {' '}
-                                · {formatLabel(provider.jobState)} ·{' '}
-                                {formatLabel(provider.historyCompleteness)}
-                              </span>
+                              <ProtectionProviderMetadata provider={provider} />
                             </li>
                           )}
                         </For>
@@ -1090,43 +1091,46 @@ function StateBadge(props: { item: AttentionItem }) {
 }
 
 function EvidenceLabel(props: { item: AttentionItem; badge?: boolean }) {
-  const label = () =>
-    props.item.evidenceFreshness === 'fresh' && props.item.evidenceCompleteness === 'complete'
-      ? 'Evidence current'
-      : `${formatLabel(props.item.evidenceFreshness)} / ${formatLabel(props.item.evidenceCompleteness)}`;
+  const presentation = () =>
+    getPatrolAttentionEvidencePresentation(
+      props.item.evidenceFreshness,
+      props.item.evidenceCompleteness,
+    );
   if (props.badge) {
     return (
-      <MetadataBadge
-        tone={
-          props.item.evidenceFreshness === 'fresh' && props.item.evidenceCompleteness === 'complete'
-            ? 'success'
-            : 'warning'
-        }
-        size="xs"
-        shape="rounded"
-      >
-        {label()}
+      <MetadataBadge tone={presentation().tone} size="xs" shape="rounded">
+        {presentation().label}
       </MetadataBadge>
     );
   }
-  return <span>{label()}</span>;
+  return <span>{presentation().label}</span>;
 }
 
 function ProtectionLabel(props: { item: AttentionItem; badge?: boolean }) {
-  const state = () => props.item.protectionPosture?.state ?? 'unknown';
-  const label = () => `Protection ${formatLabel(state())}`;
+  const presentation = () =>
+    getPatrolAttentionProtectionPresentation(props.item.protectionPosture?.state);
   if (props.badge) {
     return (
-      <MetadataBadge
-        tone={state() === 'protected' ? 'success' : state() === 'unknown' ? 'muted' : 'warning'}
-        size="xs"
-        shape="rounded"
-      >
-        {label()}
+      <MetadataBadge tone={presentation().tone} size="xs" shape="rounded">
+        {presentation().detailLabel}
       </MetadataBadge>
     );
   }
-  return <span>{label()}</span>;
+  return <Show when={presentation().rowLabel}>{(label) => <span>{label()}</span>}</Show>;
+}
+
+function ProtectionProviderMetadata(props: {
+  provider: NonNullable<AttentionItem['protectionPosture']>['providerStates'][number];
+}) {
+  const labels = () => getPatrolProtectionProviderLabels(props.provider);
+  return (
+    <span class="text-muted">
+      {' · '}
+      <span>{labels().job}</span>
+      {' · '}
+      <span>{labels().history}</span>
+    </span>
+  );
 }
 
 function stateTone(item: AttentionItem): MetadataBadgeTone {

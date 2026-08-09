@@ -725,6 +725,10 @@ test("makes active operational work primary and preserves the evidence boundary"
       "CPU has remained above the configured threshold for two collection cycles.",
     ),
   ).toBeVisible();
+  await expect(queue.getByText("Evidence current").first()).toBeVisible();
+  await expect(
+    queue.getByText("Protection needs attention").first(),
+  ).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Explain with Assistant" }),
   ).toHaveCount(0);
@@ -741,6 +745,11 @@ test("makes active operational work primary and preserves the evidence boundary"
   await expect(
     queue.getByText("Connection state unknown for pve-edge"),
   ).toBeVisible();
+  await expect(
+    queue.getByText("Evidence incomplete; timing unavailable"),
+  ).toBeVisible();
+  await expect(queue.getByText("Protection Unknown")).toHaveCount(0);
+  await expect(queue.getByText("Unknown / Partial")).toHaveCount(0);
   await selectAttentionState(page, "Recent resolved 1", "resolved");
   await expect(
     queue.getByText("Storage pressure resolved on pve-recovered"),
@@ -773,6 +782,11 @@ test("makes active operational work primary and preserves the evidence boundary"
       "A current backup exists, but its verification is outside the verification window.",
     ),
   ).toBeVisible();
+  await expect(
+    detailPanel.getByText("Protection needs attention"),
+  ).toBeVisible();
+  await expect(detailPanel.getByText("Job: Success")).toBeVisible();
+  await expect(detailPanel.getByText("History: Complete")).toBeVisible();
   await expect(detailPanel.getByText("Observing to Open")).toBeVisible();
   await expect(page).toHaveURL(
     new RegExp(`attention=${encodeURIComponent(attentionID)}`),

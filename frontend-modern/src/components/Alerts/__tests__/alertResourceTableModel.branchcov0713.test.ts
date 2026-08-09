@@ -200,11 +200,11 @@ describe('normalizeAlertResourceMetricKey — compound replace chains', () => {
 
 describe('getAlertResourceMetricBounds — edge inputs', () => {
   it('returns the default bounds for an empty-string metric', () => {
-    expect(getAlertResourceMetricBounds('')).toStrictEqual({ min: -1, max: 10000 });
+    expect(getAlertResourceMetricBounds('')).toStrictEqual({ min: 1, max: 10000 });
   });
 
   it('returns the default bounds for a whitespace metric', () => {
-    expect(getAlertResourceMetricBounds('   ')).toStrictEqual({ min: -1, max: 10000 });
+    expect(getAlertResourceMetricBounds('   ')).toStrictEqual({ min: 1, max: 10000 });
   });
 });
 

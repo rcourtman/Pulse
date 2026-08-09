@@ -368,6 +368,11 @@ and Kubernetes platform pages may add native API-backed sections, but the tabs
 must use `PlatformSectionTabs`, canonical table alignment helpers, and shared
 resource type presentation/reporting helpers rather than page-local tab shells,
 alignment classes, or ad hoc report-category coercion. Platform tabs are
+responsively scrollable within that shared shell. When the rail overflows, the
+primitive must expose focusable, labeled previous/next controls and keep their
+availability synchronized with the rail position so hidden workflows remain
+discoverable without widening the document or requiring precision swipes.
+Platform tabs are
 feature-owned consumers of canonical resource payloads: Docker page model
 helpers may prefer backend-authored `DockerData` stack and Podman metadata for
 search/display while shared primitives continue to own only the tab shell,
@@ -1068,6 +1073,14 @@ not a replacement status card, CTA band, or page-local nested card.
    icon components may keep their standalone labels, but the nav must treat
    those icons as decorative inside tab buttons so names come from the tab
    label plus meaningful badge counts, not duplicated icon titles.
+   That mobile route surface must remain a bounded navigation rail rather than
+   compressing every destination into unreadable tabs. It keeps the active
+   priority platform destination together with Alerts, Actions, and Patrol in
+   the fixed rail, groups the remaining platform and utility destinations
+   (including Settings) behind a labeled More menu, and preserves active-state
+   and badge context on that disclosure. The route rail is a semantic `nav`,
+   not a tablist; the More menu must support first/last/active focus, arrow-key
+   movement, Escape focus return, outside dismissal, and route-change closure.
    Shared grouped-resource presentation primitives must keep grouped resource
    labels operator-readable: count-led labels may aggregate repeated resources,
    but uncountable or category-like resource types such as storage must use
@@ -2540,7 +2553,10 @@ The default queue may show resource, impact, evidence, protection, next-step,
 and age facts. Provider evidence and lifecycle history belong in selected
 detail, while legacy Patrol analytics belong in collapsed supporting context.
 Unavailable and partial states must use explicit copy rather than success
-styling.
+styling. Scan rows omit unavailable protection metadata and collapse evidence
+freshness/completeness into one operator phrase; selected detail keeps the typed
+facts with named fields and plain unavailable-state labels rather than raw token
+pairs.
 
 The selected attention detail may compose the shared Actions review for an
 eligible backend-authored offer. The detail owns only the expected
@@ -4159,6 +4175,13 @@ Canonical customer disclosures inside shared shells route through
 `frontend-modern/src/utils/docsLinks.ts`, so settings privacy links resolve to
 shipped `/docs/...` assets instead of hard-coded GitHub `main` URLs that can
 drift from the running build.
+The pre-authenticated Login shell uses that same canonical docs-link boundary
+for self-hosted access recovery. `TROUBLESHOOTING_DOC_URL` routes the always-
+visible `Can’t sign in?` action to the shipped Troubleshooting guide, including
+when local login is hidden behind SSO, and the `/docs/...` public-route contract
+keeps that destination readable without an authenticated session. The login
+surface must remain guidance-only: it may not expose secrets, imply an email
+reset flow, or create a browser-side authentication bypass.
 The shared summary strip primitives now follow that same owner split.
 `frontend-modern/src/components/shared/SummaryPanel.tsx` and
 `frontend-modern/src/components/shared/SummaryMetricCard.tsx` stay the render
@@ -4929,6 +4952,16 @@ links such as `/alerts/thresholds/infrastructure`,
 `/alerts/thresholds/containers`, and `/alerts/thresholds/mail-gateway` must
 redirect to the matching platform-shaped route; legacy
 `/alerts/thresholds/agents` links must continue to resolve to Systems.
+Thresholds section state is also owned there and composed through the shared
+collapsible-section pattern. Resource sections open collapsed by default on
+desktop and narrow layouts, while persisted operator choices, Expand all, and
+Collapse all stay authoritative. The thresholds shell must pair that compact
+default with an immediately visible custom-override summary whose actions open
+the selected section under the Custom-only filter, so inherited state remains
+clear without forcing every table open. Metric editors on desktop, mobile, and
+bulk surfaces use explicit On/Off controls and positive enabled-value bounds;
+legacy values at or below zero still read as Off, while the backend disable
+sentinel remains compatibility data rather than customer-facing input or copy.
 The Proxmox tab is itself now a shell that composes
 `frontend-modern/src/components/Alerts/ThresholdsTableProxmoxNodesSection.tsx`,
 `frontend-modern/src/components/Alerts/ThresholdsTableProxmoxPBSSection.tsx`,

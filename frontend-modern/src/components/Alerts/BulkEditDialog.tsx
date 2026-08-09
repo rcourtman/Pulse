@@ -81,16 +81,16 @@ export function BulkEditDialog(props: BulkEditDialogProps) {
       case 'memoryWarnPct':
       case 'memoryCriticalPct':
       case 'usage':
-        return { min: 0, max: 100, step: 1 };
+        return { min: 1, max: 100, step: 1 };
       case 'temperature':
       case 'diskTemperature':
         return { min: 20, max: 120, step: 1 };
       case 'restartCount':
-        return { min: 0, max: 100, step: 1 };
+        return { min: 1, max: 100, step: 1 };
       case 'restartWindow':
-        return { min: 0, max: 3600, step: 60 };
+        return { min: 1, max: 3600, step: 60 };
       default:
-        return { min: 0, max: 1000, step: 1 };
+        return { min: 1, max: 1000, step: 1 };
     }
   };
 
@@ -153,6 +153,7 @@ export function BulkEditDialog(props: BulkEditDialogProps) {
                               max={bounds.max}
                               value={val() !== undefined && !isOff() ? val()! : bounds.min}
                               onChange={(v) => {
+                                if (v < bounds.min || v > bounds.max) return;
                                 setThresholds((prev) => ({ ...prev, [metric]: v }));
                               }}
                             />
@@ -172,6 +173,9 @@ export function BulkEditDialog(props: BulkEditDialogProps) {
                             }
                             onInput={(e) => {
                               const v = parseFloat(e.currentTarget.value);
+                              if (!isNaN(v) && (v < bounds.min || v > bounds.max)) {
+                                return;
+                              }
                               setThresholds((prev) => ({
                                 ...prev,
                                 [metric]: isNaN(v) ? undefined : v,

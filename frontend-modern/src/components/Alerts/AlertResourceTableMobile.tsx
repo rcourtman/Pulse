@@ -183,6 +183,9 @@ export function AlertResourceTableMobile(props: AlertResourceTableMobileProps) {
                             if (Number.isNaN(nextValue)) {
                               return;
                             }
+                            if (nextValue < bounds.min || nextValue > bounds.max) {
+                              return;
+                            }
                             props.table.setGlobalDefaults?.((prev) => ({
                               ...prev,
                               [metric]: nextValue,
@@ -422,6 +425,12 @@ export function AlertResourceTableMobile(props: AlertResourceTableMobileProps) {
                                     class="min-h-11 w-16 text-right text-xs p-1 rounded border border-border bg-surface"
                                     onInput={(e) => {
                                       const nextValue = parseFloat(e.currentTarget.value);
+                                      if (
+                                        !Number.isNaN(nextValue) &&
+                                        (nextValue < bounds.min || nextValue > bounds.max)
+                                      ) {
+                                        return;
+                                      }
                                       props.table.setEditingThresholds({
                                         ...props.table.editingThresholds(),
                                         [metric]: Number.isNaN(nextValue) ? undefined : nextValue,

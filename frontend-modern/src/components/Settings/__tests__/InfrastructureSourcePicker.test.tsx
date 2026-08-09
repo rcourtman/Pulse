@@ -23,7 +23,7 @@ describe('InfrastructureSourcePicker', () => {
     expect(screen.getByText('Preview')).toBeInTheDocument();
     expect(screen.queryByText('Available now')).toBeNull();
     expect(screen.getByText('Unraid')).toBeInTheDocument();
-    expect(screen.getByText('Linux, macOS, Windows host')).toBeInTheDocument();
+    expect(screen.queryByText('Linux, macOS, Windows host')).toBeNull();
     expect(screen.getByText('Array health, disks, Docker, host telemetry')).toBeInTheDocument();
     expect(screen.queryByText('Agent telemetry')).toBeNull();
   });
@@ -44,7 +44,8 @@ describe('InfrastructureSourcePicker', () => {
   });
 
   it('filters the catalog by user-recognizable names and aliases', () => {
-    render(() => <InfrastructureSourcePicker onSelectStep={vi.fn()} />);
+    const onSelectStep = vi.fn();
+    render(() => <InfrastructureSourcePicker onSelectStep={onSelectStep} />);
 
     fireEvent.input(screen.getByPlaceholderText('Search sources, devices, services...'), {
       target: { value: 'nas' },
@@ -60,5 +61,14 @@ describe('InfrastructureSourcePicker', () => {
     });
 
     expect(screen.queryByText('Network endpoint')).toBeNull();
+
+    fireEvent.input(screen.getByPlaceholderText('Search sources, devices, services...'), {
+      target: { value: 'windows' },
+    });
+
+    const hostButton = screen.getByText('Linux, macOS, Windows host').closest('button');
+    expect(hostButton).not.toBeNull();
+    fireEvent.click(hostButton!);
+    expect(onSelectStep).toHaveBeenLastCalledWith('linux-host');
   });
 });

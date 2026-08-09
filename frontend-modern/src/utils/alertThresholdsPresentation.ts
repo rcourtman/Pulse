@@ -27,6 +27,9 @@ export const CONTAINER_RUNTIMES_FILTER_EMPTY_STATE =
 export const CONTAINERS_FILTER_EMPTY_STATE = 'No containers match the current filters.';
 export const ALERT_THRESHOLDS_SEARCH_PLACEHOLDER = 'Search resources...';
 export const ALERT_THRESHOLDS_HELP_DISMISS_LABEL = 'Dismiss tips';
+export const ALERT_THRESHOLDS_OVERRIDES_TITLE = 'Custom overrides';
+export const ALERT_THRESHOLDS_OVERRIDES_DESCRIPTION =
+  'These resources differ from the inherited defaults. Choose a group to review only its custom settings.';
 export const ALERT_THRESHOLDS_GUEST_IGNORED_PREFIXES_TITLE = 'Ignored prefixes';
 export const ALERT_THRESHOLDS_GUEST_IGNORED_PREFIXES_DESCRIPTION =
   'Skip metrics for VMs and containers starting with:';
@@ -101,12 +104,23 @@ export function getAlertThresholdsHelpDismissLabel() {
 
 export function getAlertThresholdsHelpBanner() {
   return {
-    title: 'Quick tips:',
-    disableValue: '-1',
-    reenableLabel: 'Off',
-    customBadgeLabel: 'Custom',
-    collapseHint: 'Click sections to collapse/expand.',
+    title: 'How thresholds work',
+    toggleGuidance: 'Use the On/Off control beside a metric to enable or disable its alerts.',
+    inheritanceGuidance: 'Resources inherit their group defaults until you save a custom override.',
+    bulkGuidance: 'Select multiple resources to apply the same threshold changes in bulk.',
+    collapseHint: 'Resource groups start collapsed; open only the group you need.',
   } as const;
+}
+
+export function getAlertThresholdsOverridesPresentation() {
+  return {
+    title: ALERT_THRESHOLDS_OVERRIDES_TITLE,
+    description: ALERT_THRESHOLDS_OVERRIDES_DESCRIPTION,
+  } as const;
+}
+
+export function getAlertThresholdsOverrideCountLabel(count: number) {
+  return `${count} custom`;
 }
 
 export function getAlertThresholdsGuestFilterPresentation() {

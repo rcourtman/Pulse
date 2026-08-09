@@ -2000,10 +2000,16 @@ describe('AIChat', () => {
     it('switches to overlay layout below the dock threshold', () => {
       setViewportWidth(1024);
       renderChat();
-      expect(screen.getByText('Pulse Assistant').closest('[data-layout-mode]')).toHaveAttribute(
-        'data-layout-mode',
-        'overlay',
-      );
+      const panel = screen.getByText('Pulse Assistant').closest('[data-layout-mode]');
+      expect(panel).toHaveAttribute('data-layout-mode', 'overlay');
+      expect(panel).toHaveClass('top-0');
+      expect(panel).toHaveClass('bottom-[calc(5rem+env(safe-area-inset-bottom,0px))]');
+      expect(panel).toHaveClass('h-auto');
+      expect(panel).not.toHaveClass('inset-y-0');
+      expect(panel).not.toHaveClass('h-full');
+      const backdrop = screen.getByRole('button', { name: 'Close Pulse Assistant backdrop' });
+      expect(backdrop).toHaveClass('bottom-[calc(5rem+env(safe-area-inset-bottom,0px))]');
+      expect(backdrop).not.toHaveClass('inset-0');
       expect(screen.queryByTitle('Collapse Pulse Assistant')).not.toBeInTheDocument();
       expect(screen.getByLabelText('Close Pulse Assistant')).toBeInTheDocument();
     });

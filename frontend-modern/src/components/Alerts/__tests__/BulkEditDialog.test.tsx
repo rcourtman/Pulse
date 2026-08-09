@@ -280,21 +280,17 @@ describe('BulkEditDialog', () => {
     expect(saved.restartCount).toBeUndefined();
   });
 
-  it('reads a staged 0 as Off, matching the alert engine', () => {
-    // The engine disables any metric whose trigger is <= 0, and older builds
-    // told operators to type 0, so 0 must not read as On here.
+  it('does not stage 0 through the numeric input', () => {
     const props = defaultProps();
     props.columns = ['Restart Count'];
     render(() => <BulkEditDialog {...props} />);
 
     fireEvent.input(screen.getByRole('spinbutton'), { target: { value: '0' } });
 
-    expect(screen.getByRole('button', { name: 'Off' })).toBeInTheDocument();
-
-    // Toggling that stale 0 back on stages the canonical enabled default.
-    fireEvent.click(screen.getByRole('button', { name: 'Off' }));
+    expect(screen.getByRole('button', { name: 'On' })).toBeInTheDocument();
+    expect(screen.getByText('Unchanged')).toBeInTheDocument();
     fireEvent.click(screen.getByText(/Apply to 3 items/));
-    expect(props.onSave).toHaveBeenCalledWith({ restartCount: 3 });
+    expect(props.onSave).toHaveBeenCalledWith({});
   });
 
   it('typing a value after turning a metric off replaces the staged -1', () => {
@@ -388,13 +384,13 @@ describe('BulkEditDialog', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
-  it('passes correct bounds for percentage metrics (0-100)', () => {
+  it('passes positive bounds for percentage metrics (1-100)', () => {
     const props = defaultProps();
     props.columns = ['CPU %'];
     render(() => <BulkEditDialog {...props} />);
 
     const slider = screen.getByTestId('slider-cpu') as HTMLInputElement;
-    expect(slider.min).toBe('0');
+    expect(slider.min).toBe('1');
     expect(slider.max).toBe('100');
   });
 
@@ -408,24 +404,24 @@ describe('BulkEditDialog', () => {
     expect(slider.max).toBe('120');
   });
 
-  it('passes correct bounds for restartWindow (0-3600 step 60)', () => {
+  it('passes positive bounds for restartWindow (1-3600 step 60)', () => {
     const props = defaultProps();
     props.columns = ['Restart Window (s)'];
     render(() => <BulkEditDialog {...props} />);
 
     const input = screen.getByRole('spinbutton') as HTMLInputElement;
-    expect(input.min).toBe('0');
+    expect(input.min).toBe('1');
     expect(input.max).toBe('3600');
     expect(input.step).toBe('60');
   });
 
-  it('passes default bounds for unknown metrics (0-1000 step 1)', () => {
+  it('passes positive default bounds for unknown metrics (1-1000 step 1)', () => {
     const props = defaultProps();
     props.columns = ['Custom Widget'];
     render(() => <BulkEditDialog {...props} />);
 
     const input = screen.getByRole('spinbutton') as HTMLInputElement;
-    expect(input.min).toBe('0');
+    expect(input.min).toBe('1');
     expect(input.max).toBe('1000');
     expect(input.step).toBe('1');
   });

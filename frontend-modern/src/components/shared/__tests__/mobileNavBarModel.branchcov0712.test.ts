@@ -1,13 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildMobileNavBarLayout,
   buildOrderedMobileNavTabs,
   getMobileNavAlertBadgeCounts,
-  getMobileNavFadeState,
   getMobileNavTabAriaLabel,
   getMobileNavTabButtonClass,
 } from '@/components/shared/mobileNavBarModel';
 import type {
   MobileNavBarIcon,
+  MobileNavBarPrimaryTab,
   MobileNavBarUtilityTab,
 } from '@/components/shared/mobileNavBarModel';
 
@@ -27,6 +28,24 @@ function makeUtilityTab(overrides: Partial<MobileNavBarUtilityTab> = {}): Mobile
     count: undefined,
     breakdown: undefined,
     icon: noopIcon,
+    ...overrides,
+  };
+}
+
+function makePrimaryTab(
+  id: string,
+  overrides: Partial<MobileNavBarPrimaryTab> = {},
+): MobileNavBarPrimaryTab {
+  return {
+    id,
+    label: id,
+    route: `/${id}`,
+    settingsRoute: '/settings/infrastructure',
+    tooltip: id,
+    enabled: true,
+    live: true,
+    icon: noopIcon,
+    alwaysShow: true,
     ...overrides,
   };
 }
@@ -199,9 +218,54 @@ describe('mobileNavBarModel.branchcov2', () => {
     });
   });
 
+  describe('buildMobileNavBarLayout', () => {
+    it('keeps one priority-ordered platform and daily operations fixed', () => {
+      const layout = buildMobileNavBarLayout(
+        [makePrimaryTab('standalone'), makePrimaryTab('docker'), makePrimaryTab('proxmox')],
+        [
+          makeUtilityTab({ id: 'settings' }),
+          makeUtilityTab({ id: 'ai' }),
+          makeUtilityTab({ id: 'actions' }),
+          makeUtilityTab({ id: 'alerts' }),
+        ],
+      );
+
+      expect(layout.fixedDestinations.map((destination) => destination.tab.id)).toEqual([
+        'proxmox',
+        'alerts',
+        'actions',
+        'ai',
+      ]);
+      expect(layout.overflowDestinations.map((destination) => destination.tab.id)).toEqual([
+        'docker',
+        'standalone',
+        'settings',
+      ]);
+      expect(layout.overflowDestinations.map((destination) => destination.kind)).toEqual([
+        'primary',
+        'primary',
+        'utility',
+      ]);
+    });
+
+    it('does not invent an overflow destination when all supplied tabs are fixed', () => {
+      const layout = buildMobileNavBarLayout(
+        [makePrimaryTab('proxmox')],
+        [makeUtilityTab({ id: 'alerts' }), makeUtilityTab({ id: 'ai' })],
+      );
+
+      expect(layout.fixedDestinations.map((destination) => destination.tab.id)).toEqual([
+        'proxmox',
+        'alerts',
+        'ai',
+      ]);
+      expect(layout.overflowDestinations).toEqual([]);
+    });
+  });
+
   describe('getMobileNavTabButtonClass', () => {
     const BASE =
-      'relative flex min-h-10 shrink-0 select-none flex-col items-center gap-1 rounded-md px-2 py-1.5 text-[11px] font-medium transition-colors';
+      'relative flex min-h-12 min-w-0 flex-1 select-none flex-col items-center justify-center gap-1 rounded-md px-1 py-1.5 text-[11px] font-medium transition-colors';
     const ACTIVE = 'bg-blue-50 text-blue-700 dark:bg-blue-900 dark:text-blue-300';
     const MUTED = 'text-muted';
 
@@ -227,77 +291,6 @@ describe('mobileNavBarModel.branchcov2', () => {
 
     it('does not append opacity-70 when enabled is true (strict === false check)', () => {
       expect(getMobileNavTabButtonClass({ active: true, enabled: true })).toBe(`${BASE} ${ACTIVE}`);
-    });
-  });
-
-  describe('getMobileNavFadeState', () => {
-    // Helper: jsdom reports 0 for all scroll geometry by default, so define the
-    // readonly scroll metrics as configurable own properties on the instance.
-    function makeScrollEl(props: {
-      scrollWidth: number;
-      clientWidth: number;
-      scrollLeft: number;
-    }): HTMLDivElement {
-      const el = document.createElement('div');
-      Object.defineProperty(el, 'scrollWidth', { configurable: true, value: props.scrollWidth });
-      Object.defineProperty(el, 'clientWidth', { configurable: true, value: props.clientWidth });
-      Object.defineProperty(el, 'scrollLeft', { configurable: true, value: props.scrollLeft });
-      return el;
-    }
-
-    it('returns both fades false when the element is undefined (early-return guard)', () => {
-      expect(getMobileNavFadeState(undefined)).toStrictEqual({
-        showLeftFade: false,
-        showRightFade: false,
-      });
-    });
-
-    it('returns both fades false when there is no scrollable overflow (maxScrollLeft <= 1)', () => {
-      const el = makeScrollEl({ scrollWidth: 100, clientWidth: 100, scrollLeft: 0 });
-      expect(getMobileNavFadeState(el)).toStrictEqual({
-        showLeftFade: false,
-        showRightFade: false,
-      });
-    });
-
-    it('shows only the right fade at the left edge (scrollLeft > 1 false)', () => {
-      const el = makeScrollEl({ scrollWidth: 200, clientWidth: 100, scrollLeft: 0 });
-      expect(getMobileNavFadeState(el)).toStrictEqual({
-        showLeftFade: false,
-        showRightFade: true,
-      });
-    });
-
-    it('treats scrollLeft === 1 as not past the left threshold (> 1 strict boundary)', () => {
-      const el = makeScrollEl({ scrollWidth: 200, clientWidth: 100, scrollLeft: 1 });
-      expect(getMobileNavFadeState(el)).toStrictEqual({
-        showLeftFade: false,
-        showRightFade: true,
-      });
-    });
-
-    it('shows both fades in the middle of the scroll range', () => {
-      const el = makeScrollEl({ scrollWidth: 200, clientWidth: 100, scrollLeft: 50 });
-      expect(getMobileNavFadeState(el)).toStrictEqual({
-        showLeftFade: true,
-        showRightFade: true,
-      });
-    });
-
-    it('shows only the left fade at the far-right edge (scrollLeft < maxScrollLeft - 1 false)', () => {
-      const el = makeScrollEl({ scrollWidth: 200, clientWidth: 100, scrollLeft: 100 });
-      expect(getMobileNavFadeState(el)).toStrictEqual({
-        showLeftFade: true,
-        showRightFade: false,
-      });
-    });
-
-    it('treats scrollLeft === maxScrollLeft - 1 as already at the right edge (< strict boundary)', () => {
-      const el = makeScrollEl({ scrollWidth: 200, clientWidth: 100, scrollLeft: 99 });
-      expect(getMobileNavFadeState(el)).toStrictEqual({
-        showLeftFade: true,
-        showRightFade: false,
-      });
     });
   });
 });

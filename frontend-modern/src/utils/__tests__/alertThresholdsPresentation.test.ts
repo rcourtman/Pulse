@@ -51,6 +51,8 @@ import {
   getAlertThresholdsGuestFilterPresentation,
   getAlertThresholdsHelpBanner,
   getAlertThresholdsHelpDismissLabel,
+  getAlertThresholdsOverrideCountLabel,
+  getAlertThresholdsOverridesPresentation,
   getAlertThresholdsSearchPlaceholder,
   getAlertThresholdsSectionTitles,
 } from '../alertThresholdsPresentation';
@@ -94,15 +96,19 @@ describe('alertThresholdsPresentation', () => {
     expect(ALERT_THRESHOLDS_HELP_DISMISS_LABEL).toBe('Dismiss tips');
     expect(getAlertThresholdsHelpDismissLabel()).toBe('Dismiss tips');
     expect(getAlertThresholdsHelpBanner()).toEqual({
-      title: 'Quick tips:',
-      // Must match the value the backend and docs/FAQ.md treat as "off";
-      // the banner told users to type 0, which edit-state off detection
-      // (=== -1) never recognised.
-      disableValue: '-1',
-      reenableLabel: 'Off',
-      customBadgeLabel: 'Custom',
-      collapseHint: 'Click sections to collapse/expand.',
+      title: 'How thresholds work',
+      toggleGuidance: 'Use the On/Off control beside a metric to enable or disable its alerts.',
+      inheritanceGuidance:
+        'Resources inherit their group defaults until you save a custom override.',
+      bulkGuidance: 'Select multiple resources to apply the same threshold changes in bulk.',
+      collapseHint: 'Resource groups start collapsed; open only the group you need.',
     });
+    expect(getAlertThresholdsOverridesPresentation()).toEqual({
+      title: 'Custom overrides',
+      description:
+        'These resources differ from the inherited defaults. Choose a group to review only its custom settings.',
+    });
+    expect(getAlertThresholdsOverrideCountLabel(2)).toBe('2 custom');
   });
 
   it('exports canonical thresholds auxiliary filter and backup vocabulary', () => {

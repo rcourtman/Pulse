@@ -1,8 +1,8 @@
 import { createEffect, createMemo, createSignal, onCleanup } from 'solid-js';
 import {
-  buildOrderedMobileNavPrimaryTabs,
-  buildOrderedMobileNavUtilityTabs,
-  getMobileNavFadeState,
+  buildMobileNavBarLayout,
+  isMobileNavDestinationActive,
+  type MobileNavBarDestination,
   type MobileNavBarPrimaryTab,
   type MobileNavBarProps,
   type MobileNavBarUtilityTab,
@@ -15,51 +15,80 @@ export type {
 } from './mobileNavBarModel';
 
 export function useMobileNavBarState(props: MobileNavBarProps) {
-  const [showFade, setShowFade] = createSignal(false);
-  const [showLeftFade, setShowLeftFade] = createSignal(false);
-  const [navRef, setNavRef] = createSignal<HTMLDivElement>();
+  const [isOverflowOpen, setIsOverflowOpen] = createSignal(false);
+  const [overflowTriggerRef, setOverflowTriggerRef] = createSignal<HTMLButtonElement>();
+  const [overflowMenuRef, setOverflowMenuRef] = createSignal<HTMLDivElement>();
 
-  const orderedPrimaryTabs = createMemo(() =>
-    buildOrderedMobileNavPrimaryTabs(props.primaryTabs()),
+  const layout = createMemo(() =>
+    buildMobileNavBarLayout(props.primaryTabs(), props.utilityTabs()),
   );
-  const orderedUtilityTabs = createMemo(() =>
-    buildOrderedMobileNavUtilityTabs(props.utilityTabs()),
+  const fixedDestinations = createMemo(() => layout().fixedDestinations);
+  const overflowDestinations = createMemo(() => layout().overflowDestinations);
+  const overflowPrimaryDestinations = createMemo(() =>
+    overflowDestinations().filter(
+      (destination): destination is Extract<MobileNavBarDestination, { kind: 'primary' }> =>
+        destination.kind === 'primary',
+    ),
+  );
+  const overflowUtilityDestinations = createMemo(() =>
+    overflowDestinations().filter(
+      (destination): destination is Extract<MobileNavBarDestination, { kind: 'utility' }> =>
+        destination.kind === 'utility',
+    ),
+  );
+  const overflowIsActive = createMemo(() =>
+    overflowDestinations().some((destination) =>
+      isMobileNavDestinationActive(destination, props.activeTab()),
+    ),
   );
 
-  const updateFadeIndicator = () => {
-    const fadeState = getMobileNavFadeState(navRef());
-    setShowFade(fadeState.showRightFade);
-    setShowLeftFade(fadeState.showLeftFade);
+  const overflowMenuItems = () =>
+    Array.from(overflowMenuRef()?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]') ?? []);
+
+  const focusOverflowItem = (target: 'active' | 'first' | 'last') => {
+    queueMicrotask(() => {
+      const items = overflowMenuItems();
+      if (items.length === 0) return;
+      const item =
+        target === 'last'
+          ? items.at(-1)
+          : target === 'active'
+            ? items.find((candidate) => candidate.getAttribute('aria-current') === 'page')
+            : undefined;
+      (item ?? items[0])?.focus();
+    });
+  };
+
+  const openOverflow = (focusTarget: 'active' | 'first' | 'last' = 'active') => {
+    setIsOverflowOpen(true);
+    focusOverflowItem(focusTarget);
+  };
+
+  const closeOverflow = (restoreFocus = false) => {
+    setIsOverflowOpen(false);
+    if (restoreFocus) {
+      queueMicrotask(() => overflowTriggerRef()?.focus());
+    }
   };
 
   createEffect(() => {
-    const nav = navRef();
-    if (!nav) return;
+    if (!isOverflowOpen()) return;
 
-    updateFadeIndicator();
-    const handleScroll = () => updateFadeIndicator();
-    nav.addEventListener('scroll', handleScroll, { passive: true });
-    window.addEventListener('resize', handleScroll);
-    onCleanup(() => {
-      nav.removeEventListener('scroll', handleScroll);
-      window.removeEventListener('resize', handleScroll);
-    });
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target as Node;
+      if (overflowMenuRef()?.contains(target) || overflowTriggerRef()?.contains(target)) return;
+      closeOverflow();
+    };
+    document.addEventListener('pointerdown', handlePointerDown);
+    onCleanup(() => document.removeEventListener('pointerdown', handlePointerDown));
   });
 
+  let previousActiveTab = props.activeTab();
   createEffect(() => {
-    const nav = navRef();
-    if (!nav) return;
-
-    const activeId = props.activeTab();
-    if (!activeId) return;
-
-    const activeEl = nav.querySelector<HTMLElement>(`[data-tab-id="${activeId}"]`);
-    if (!activeEl) return;
-
-    requestAnimationFrame(() => {
-      activeEl.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
-      updateFadeIndicator();
-    });
+    const activeTab = props.activeTab();
+    if (activeTab === previousActiveTab) return;
+    previousActiveTab = activeTab;
+    closeOverflow();
   });
 
   const handlePrimaryClick = (tab: MobileNavBarPrimaryTab) => {
@@ -70,13 +99,69 @@ export function useMobileNavBarState(props: MobileNavBarProps) {
     props.onUtilityClick(tab);
   };
 
+  const handleDestinationClick = (destination: MobileNavBarDestination) => {
+    closeOverflow();
+    if (destination.kind === 'primary') {
+      handlePrimaryClick(destination.tab);
+      return;
+    }
+    handleUtilityClick(destination.tab);
+  };
+
+  const handleOverflowTriggerClick = () => {
+    if (isOverflowOpen()) {
+      closeOverflow();
+      return;
+    }
+    openOverflow();
+  };
+
+  const handleOverflowTriggerKeyDown = (event: KeyboardEvent) => {
+    if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+    event.preventDefault();
+    openOverflow(event.key === 'ArrowUp' ? 'last' : 'first');
+  };
+
+  const handleOverflowMenuKeyDown = (event: KeyboardEvent) => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      closeOverflow(true);
+      return;
+    }
+    if (event.key === 'Tab') {
+      closeOverflow();
+      return;
+    }
+    if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
+
+    const items = overflowMenuItems();
+    if (items.length === 0) return;
+    event.preventDefault();
+    const currentIndex = items.indexOf(document.activeElement as HTMLButtonElement);
+    let nextIndex = 0;
+    if (event.key === 'End') {
+      nextIndex = items.length - 1;
+    } else if (event.key === 'ArrowDown') {
+      nextIndex = currentIndex < 0 ? 0 : (currentIndex + 1) % items.length;
+    } else if (event.key === 'ArrowUp') {
+      nextIndex = currentIndex <= 0 ? items.length - 1 : currentIndex - 1;
+    }
+    items[nextIndex]?.focus();
+  };
+
   return {
-    handlePrimaryClick,
-    handleUtilityClick,
-    orderedPrimaryTabs,
-    orderedUtilityTabs,
-    setNavRef,
-    showFade,
-    showLeftFade,
+    closeOverflow,
+    fixedDestinations,
+    handleDestinationClick,
+    handleOverflowMenuKeyDown,
+    handleOverflowTriggerClick,
+    handleOverflowTriggerKeyDown,
+    isOverflowOpen,
+    overflowDestinations,
+    overflowIsActive,
+    overflowPrimaryDestinations,
+    overflowUtilityDestinations,
+    setOverflowMenuRef,
+    setOverflowTriggerRef,
   };
 }

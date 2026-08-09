@@ -82,6 +82,10 @@ describe('Login', () => {
     expect(await screen.findByPlaceholderText('Username')).toBeInTheDocument();
     expect(screen.getByPlaceholderText('Password')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /sign in to pulse/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Can’t sign in?' })).toHaveAttribute(
+      'href',
+      '/docs/TROUBLESHOOTING',
+    );
   });
 
   it('hides local login form when hideLocalLogin is true and an SSO provider is available', async () => {
@@ -115,6 +119,10 @@ describe('Login', () => {
     // Username and password fields should NOT be visible
     expect(screen.queryByPlaceholderText('Username')).toBeNull();
     expect(screen.queryByPlaceholderText('Password')).toBeNull();
+    expect(screen.getByRole('link', { name: 'Can’t sign in?' })).toHaveAttribute(
+      'href',
+      '/docs/TROUBLESHOOTING',
+    );
   });
 
   it('shows local login form when show_local=true is in URL even if hideLocalLogin is true', async () => {

@@ -7794,15 +7794,15 @@ describe('shared primitive guardrails', () => {
     expect(mobileNavBarSource).not.toContain('new Set(priority)');
 
     expect(mobileNavBarStateSource).toContain('createSignal');
-    expect(mobileNavBarStateSource).toContain('window.addEventListener');
-    expect(mobileNavBarStateSource).toContain('requestAnimationFrame');
-    expect(mobileNavBarStateSource).toContain('scrollIntoView');
+    expect(mobileNavBarStateSource).toContain('document.addEventListener');
+    expect(mobileNavBarStateSource).toContain('handleOverflowMenuKeyDown');
+    expect(mobileNavBarStateSource).not.toContain('scrollIntoView');
     expect(mobileNavBarStateSource).toContain('export function useMobileNavBarState');
 
+    expect(mobileNavBarModelSource).toContain('buildMobileNavBarLayout');
     expect(mobileNavBarModelSource).toContain('buildOrderedMobileNavPrimaryTabs');
     expect(mobileNavBarModelSource).toContain('buildOrderedMobileNavUtilityTabs');
     expect(mobileNavBarModelSource).toContain('getMobileNavAlertBadgeCounts');
-    expect(mobileNavBarModelSource).toContain('getMobileNavFadeState');
   });
 
   it('keeps pulse data grid on shell, runtime, and model owners', () => {

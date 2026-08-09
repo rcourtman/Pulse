@@ -2460,13 +2460,13 @@ describe('frontend resource type boundaries', () => {
     expect(mobileNavBarSource).not.toContain('requestAnimationFrame');
     expect(mobileNavBarSource).not.toContain('new Set(priority)');
     expect(mobileNavBarStateSource).toContain('createSignal');
-    expect(mobileNavBarStateSource).toContain('window.addEventListener');
-    expect(mobileNavBarStateSource).toContain('requestAnimationFrame');
-    expect(mobileNavBarStateSource).toContain('scrollIntoView');
+    expect(mobileNavBarStateSource).toContain('document.addEventListener');
+    expect(mobileNavBarStateSource).toContain('handleOverflowMenuKeyDown');
+    expect(mobileNavBarStateSource).not.toContain('scrollIntoView');
+    expect(mobileNavBarModelSource).toContain('buildMobileNavBarLayout');
     expect(mobileNavBarModelSource).toContain('buildOrderedMobileNavPrimaryTabs');
     expect(mobileNavBarModelSource).toContain('buildOrderedMobileNavUtilityTabs');
     expect(mobileNavBarModelSource).toContain('getMobileNavAlertBadgeCounts');
-    expect(mobileNavBarModelSource).toContain('getMobileNavFadeState');
     expect(useUnifiedResourcesSource).not.toContain('normalizeResourcePolicyAISafeSummary(');
     expect(useUnifiedResourcesSource).not.toContain('normalizeResourcePolicy(');
     expect(useUnifiedResourcesSource).not.toContain('const resolvePolicySensitivity =');

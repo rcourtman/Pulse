@@ -30,6 +30,7 @@ import type { Organization } from '@/api/orgs';
 import type { VersionInfo } from '@/api/updates';
 import type { Alert, State } from '@/types/api';
 import { useKioskMode } from '@/hooks/useKioskMode';
+import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { layoutStore } from '@/utils/layout';
 import { logger } from '@/utils/logger';
 import { getActiveTabForPath } from '@/routing/navigation';
@@ -129,8 +130,10 @@ export function sessionHasSettingsAccess(scopes: string[] | undefined): boolean 
   return scopes.includes('*') || scopes.includes(SETTINGS_READ_SCOPE);
 }
 const NAV_TAB_ICON_CLASS = 'w-4 h-4 shrink-0';
-const AI_CHAT_LAUNCHER_BUTTON_CLASS =
-  'fixed right-0 bottom-[calc(5rem+env(safe-area-inset-bottom,0px))] z-40 flex h-11 w-8 items-center justify-center rounded-l-full rounded-r-none border border-r-0 border-border bg-surface text-blue-600 shadow-lg transition-colors duration-200 hover:bg-surface-hover hover:text-blue-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 dark:text-blue-400 dark:hover:text-blue-300 lg:top-1/2 lg:bottom-auto lg:h-auto lg:w-auto lg:min-h-9 lg:min-w-10 lg:-translate-y-1/2 lg:rounded-l-lg lg:px-2.5 lg:py-2.5 lg:shadow-none';
+const AI_CHAT_MOBILE_LAUNCHER_BUTTON_CLASS =
+  'group relative flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full bg-surface-hover text-blue-600 transition-colors hover:bg-border hover:text-blue-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 dark:text-blue-400 dark:hover:text-blue-300';
+const AI_CHAT_DESKTOP_LAUNCHER_BUTTON_CLASS =
+  'fixed right-0 top-1/2 z-40 flex min-h-9 min-w-10 -translate-y-1/2 items-center justify-center rounded-l-lg border border-r-0 border-border bg-surface px-2.5 py-2.5 text-blue-600 transition-colors duration-200 hover:bg-surface-hover hover:text-blue-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 dark:text-blue-400 dark:hover:text-blue-300';
 
 function getDesktopUtilityTabAriaLabel(tab: UtilityTab): string {
   const count = tab.count ?? 0;
@@ -236,6 +239,7 @@ export function AppLayout(props: AppLayoutProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const kioskMode = useKioskMode();
+  const viewport = useBreakpoint();
   const brandMotionActive = createMemo(() => props.connectionStatus().tone === 'healthy');
   const customBrandLogo = createMemo(() =>
     runtimeBranding().enabled ? runtimeBranding().logoDataUrl : '',
@@ -443,6 +447,25 @@ export function AppLayout(props: AppLayoutProps) {
     restoreAssistantLauncherFocus = true;
     aiChatStore.open(assistantPageContext().context);
   };
+  const assistantLauncherVisible = createMemo(
+    () =>
+      aiChatStore.enabled === true &&
+      !aiChatStore.isOpenSignal() &&
+      !kioskMode() &&
+      !dialogStackHasBlockingDialog(),
+  );
+  const renderAssistantLauncher = (className: string) => (
+    <button
+      ref={assistantLauncherEl}
+      type="button"
+      onClick={openAssistantFromLauncher}
+      class={className}
+      title={assistantPageContext().title}
+      aria-label={assistantPageContext().ariaLabel}
+    >
+      <SparklesIcon class="h-5 w-5 flex-shrink-0" />
+    </button>
+  );
   createEffect(() => {
     if (aiChatStore.isOpenSignal() || !restoreAssistantLauncherFocus) return;
     restoreAssistantLauncherFocus = false;
@@ -805,6 +828,9 @@ export function AppLayout(props: AppLayoutProps) {
         <div
           class={`header-controls flex items-center gap-2 ${kioskMode() ? '' : 'justify-end sm:col-start-3 sm:col-end-4 sm:w-auto sm:justify-end sm:justify-self-end'}`}
         >
+          <Show when={assistantLauncherVisible() && viewport.isBelow('lg')}>
+            {renderAssistantLauncher(AI_CHAT_MOBILE_LAUNCHER_BUTTON_CLASS)}
+          </Show>
           <Show when={props.hasAuth() && !props.needsAuth()}>
             <div class="flex items-center gap-2">
               <Show when={props.showOrgSwitcher()}>
@@ -1022,29 +1048,11 @@ export function AppLayout(props: AppLayoutProps) {
         </footer>
       </Show>
 
-      <Show
-        when={
-          aiChatStore.enabled === true &&
-          !aiChatStore.isOpenSignal() &&
-          !kioskMode() &&
-          !dialogStackHasBlockingDialog()
-        }
-      >
+      <Show when={assistantLauncherVisible() && viewport.isAtLeast('lg')}>
         {/* Portaled out of .app-scroll-shell: as a descendant the scroll
             container's own scrollbar hit-tests above the tab's right edge,
             leaving the screen-edge click zone dead. */}
-        <Portal>
-          <button
-            ref={assistantLauncherEl}
-            type="button"
-            onClick={openAssistantFromLauncher}
-            class={AI_CHAT_LAUNCHER_BUTTON_CLASS}
-            title={assistantPageContext().title}
-            aria-label={assistantPageContext().ariaLabel}
-          >
-            <SparklesIcon class="h-5 w-5 flex-shrink-0" />
-          </button>
-        </Portal>
+        <Portal>{renderAssistantLauncher(AI_CHAT_DESKTOP_LAUNCHER_BUTTON_CLASS)}</Portal>
       </Show>
     </div>
   );

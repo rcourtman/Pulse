@@ -44,12 +44,12 @@ describe('useCollapsedSections', () => {
       expect(isCollapsed('pbs')).toBe(true);
     });
 
-    it('returns expanded (false) for unknown sections', () => {
+    it('keeps known and future resource sections collapsed by default', () => {
       const { isCollapsed } = useCollapsedSections();
 
-      expect(isCollapsed('nodes')).toBe(false);
-      expect(isCollapsed('vms')).toBe(false);
-      expect(isCollapsed('anything-else')).toBe(false);
+      expect(isCollapsed('nodes')).toBe(true);
+      expect(isCollapsed('dockerContainers')).toBe(true);
+      expect(isCollapsed('anything-else')).toBe(true);
     });
   });
 
@@ -73,7 +73,7 @@ describe('useCollapsedSections', () => {
       const { isCollapsed } = useCollapsedSections();
 
       expect(isCollapsed('storage')).toBe(true);
-      expect(isCollapsed('nodes')).toBe(false);
+      expect(isCollapsed('nodes')).toBe(true);
     });
 
     it('falls back to defaults when localStorage has non-object value', () => {
@@ -82,7 +82,7 @@ describe('useCollapsedSections', () => {
       const { isCollapsed } = useCollapsedSections();
 
       expect(isCollapsed('storage')).toBe(true);
-      expect(isCollapsed('nodes')).toBe(false);
+      expect(isCollapsed('nodes')).toBe(true);
     });
 
     it('falls back to defaults when localStorage has null', () => {
@@ -91,7 +91,7 @@ describe('useCollapsedSections', () => {
       const { isCollapsed } = useCollapsedSections();
 
       expect(isCollapsed('storage')).toBe(true);
-      expect(isCollapsed('nodes')).toBe(false);
+      expect(isCollapsed('nodes')).toBe(true);
     });
 
     it('handles localStorage.getItem throwing an error', () => {
@@ -103,7 +103,7 @@ describe('useCollapsedSections', () => {
 
       // Should fall back to defaults
       expect(isCollapsed('storage')).toBe(true);
-      expect(isCollapsed('nodes')).toBe(false);
+      expect(isCollapsed('nodes')).toBe(true);
     });
 
     it('handles localStorage.setItem throwing on init gracefully', () => {
@@ -152,22 +152,22 @@ describe('useCollapsedSections', () => {
       expect(isCollapsed('storage')).toBe(false);
     });
 
-    it('toggles a default-expanded section to collapsed', () => {
+    it('toggles a default-collapsed resource section to expanded', () => {
       const { isCollapsed, toggleSection } = useCollapsedSections();
 
-      expect(isCollapsed('nodes')).toBe(false);
-      toggleSection('nodes');
       expect(isCollapsed('nodes')).toBe(true);
+      toggleSection('nodes');
+      expect(isCollapsed('nodes')).toBe(false);
     });
 
     it('toggles back and forth', () => {
       const { isCollapsed, toggleSection } = useCollapsedSections();
 
-      expect(isCollapsed('nodes')).toBe(false);
-      toggleSection('nodes');
       expect(isCollapsed('nodes')).toBe(true);
       toggleSection('nodes');
       expect(isCollapsed('nodes')).toBe(false);
+      toggleSection('nodes');
+      expect(isCollapsed('nodes')).toBe(true);
     });
 
     it('persists toggle to localStorage', () => {
@@ -181,7 +181,7 @@ describe('useCollapsedSections', () => {
       );
       expect(calls.length).toBeGreaterThan(0);
       const lastWritten = JSON.parse(calls[calls.length - 1][1]);
-      expect(lastWritten.nodes).toBe(true);
+      expect(lastWritten.nodes).toBe(false);
     });
   });
 
@@ -189,7 +189,7 @@ describe('useCollapsedSections', () => {
     it('explicitly sets a section to collapsed', () => {
       const { isCollapsed, setCollapsed } = useCollapsedSections();
 
-      expect(isCollapsed('nodes')).toBe(false);
+      expect(isCollapsed('nodes')).toBe(true);
       setCollapsed('nodes', true);
       expect(isCollapsed('nodes')).toBe(true);
     });
@@ -209,7 +209,7 @@ describe('useCollapsedSections', () => {
 
       expect(isCollapsed('nodes')).toBe(true);
       expect(isCollapsed('storage')).toBe(true); // default
-      expect(isCollapsed('vms')).toBe(false); // default
+      expect(isCollapsed('vms')).toBe(true); // overview-first default
     });
   });
 
@@ -232,8 +232,8 @@ describe('useCollapsedSections', () => {
     it('expands manually collapsed sections', () => {
       const { isCollapsed, toggleSection, expandAll } = useCollapsedSections();
 
-      toggleSection('nodes'); // collapse it
-      expect(isCollapsed('nodes')).toBe(true);
+      toggleSection('nodes'); // expand it
+      expect(isCollapsed('nodes')).toBe(false);
 
       expandAll();
 
@@ -282,7 +282,7 @@ describe('useCollapsedSections', () => {
       resetToDefaults();
 
       expect(isCollapsed('storage')).toBe(true); // back to default
-      expect(isCollapsed('nodes')).toBe(false); // back to default (not in defaults)
+      expect(isCollapsed('nodes')).toBe(true); // back to overview-first default
     });
 
     it('restores all default-collapsed sections', () => {
@@ -307,8 +307,8 @@ describe('useCollapsedSections', () => {
 
       // hook2 should still reflect its own initial state
       // (both loaded from same localStorage at creation time, but signals are independent)
-      expect(hook1.isCollapsed('nodes')).toBe(true);
-      expect(hook2.isCollapsed('nodes')).toBe(false);
+      expect(hook1.isCollapsed('nodes')).toBe(false);
+      expect(hook2.isCollapsed('nodes')).toBe(true);
     });
   });
 
@@ -366,8 +366,7 @@ describe('useCollapsedSections', () => {
         (c: string[]) => c[0] === STORAGE_KEY,
       );
       const lastWritten = JSON.parse(calls[calls.length - 1][1]);
-      // 'nodes' should not be in reset state (only defaults)
-      expect(lastWritten.nodes).toBeUndefined();
+      expect(lastWritten.nodes).toBe(true);
       expect(lastWritten.storage).toBe(true);
     });
 
