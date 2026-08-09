@@ -1420,7 +1420,7 @@ func TestUpdateDemoWorkflowUsesGovernedNetworkPath(t *testing.T) {
 		`activation_convergence_run_id:`,
 		`release-activation.json`,
 		`.convergence_run_id == $convergence_run_id`,
-		`gh release view "${TAG}" --repo rcourtman/Pulse`,
+		`gh release view "${TAG}" --repo "${GITHUB_REPOSITORY}"`,
 		`Stable demo mutation refuses inactive or prerelease tag`,
 		`Verify public browser smoke`,
 		`./scripts/run_demo_public_browser_smoke.sh`,

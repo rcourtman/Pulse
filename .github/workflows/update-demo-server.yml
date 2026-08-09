@@ -200,7 +200,7 @@ jobs:
             exit 1
           fi
           release_state="$(
-            gh release view "${TAG}" --repo rcourtman/Pulse --json isDraft,isPrerelease,publishedAt,tagName \
+            gh release view "${TAG}" --repo "${GITHUB_REPOSITORY}" --json isDraft,isPrerelease,publishedAt,tagName \
               --jq '[.tagName, (.isDraft | tostring), (.isPrerelease | tostring), (.publishedAt // "")] | @tsv'
           )"
           if [ "$(awk -F '\t' '{print $1}' <<<"${release_state}")" != "${TAG}" ] || \

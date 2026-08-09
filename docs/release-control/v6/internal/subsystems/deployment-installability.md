@@ -1947,6 +1947,8 @@ against a private demo target is not sufficient release or deploy proof.
 Checkout-free mutation guards must address the Pulse repository explicitly
 when querying release state; they must not rely on `gh` discovering a local git
 checkout before the workflow's checkout step has intentionally been admitted.
+The repository binding must use GitHub's exact `GITHUB_REPOSITORY` context so
+the guard remains explicit without hard-coding an owner or fork identity.
 Those same workflows also own customer-visible browser truth for the public
 demo shell. Health checks and entry-asset parity are necessary but not
 sufficient; after those checks pass, the governed helpers

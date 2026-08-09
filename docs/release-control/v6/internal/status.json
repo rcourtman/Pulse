@@ -5131,16 +5131,11 @@
       "name": "Self-hosted release confidence",
       "target_score": 9,
       "current_score": 9,
-      "status": "partial",
+      "status": "target-met",
       "completion": {
-        "state": "bounded-residual",
-        "summary": "Self-hosted RC confidence is at the current floor; the remaining residual is the lane-local self-hosted promotion package follow-up.",
-        "tracking": [
-          {
-            "kind": "lane-followup",
-            "id": "self-hosted-ga-promotion-package"
-          }
-        ]
+        "state": "complete",
+        "summary": "Self-hosted release confidence reached its target with exact-SHA dry-run, stable activation, installer, demo, container, Helm, and private paid-runtime convergence proof for v6.2.0.",
+        "tracking": []
       },
       "blockers": [],
       "subsystems": [
@@ -5166,6 +5161,12 @@
           "repo": "pulse",
           "path": "docs/release-control/v6/internal/records/self-hosted-installer-disk-preflight-2026-05-01.md",
           "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/v6.2.0-stable-cutoff-owner-approval-2026-08-09.md",
+          "kind": "file",
+          "evidence_tier": "test-proof"
         },
         {
           "repo": "pulse",
@@ -9398,7 +9399,7 @@
     },
     {
       "id": "performance-post-rc-headroom",
-      "summary": "Track additional scalability headroom and non-blocking performance polish beyond the current release floor. Release Dry Runs 31307581484 and 31308753863 on exact SHA e2a2e7d4d2016428a502347248af925200e44ee0 both passed native policy, macOS signing and notarization, and complete immutable candidate validation, then failed the backend lane on runner-local wall-clock performance thresholds. The first separately claimed harness slice replaced the obsolete fixed-duration 800-request quota with fixed concurrent work normalized to a same-run serial baseline, retained the absolute concurrent p95 ceiling, added the required metrics-store maintenance barrier, and amortized the fast single-request SLO samples. Five strict GITHUB_ACTIONS repetitions passed locally. Fresh exact-SHA dry run 31320692142 on 53d9d00d8d478d537e12aa496533900acafe3bbc again passed native policy, macOS signing and notarization, and complete immutable candidate validation, then exposed the remaining fixed-window minimum in TestLoad_500Node_MixedEndpoints (seven metrics-stats requests versus ten) and measured a sustained 11.980ms median / 12.230ms p95 against the 12ms hosted store ceiling. The follow-up converts every mixed endpoint group to fixed work while retaining its absolute p95 guards, keeps the strict local store target at 5ms, and narrowly recalibrates the hosted-runner store envelope to 15ms. Three strict focused repetitions passed with exact 60/50/10 mixed request counts, zero errors, sub-0.85s mixed wall time, and 7.58-7.60ms store p95; the complete internal/api package-order proof also passed under GITHUB_ACTIONS=true in 153.837s. A new pushed exact SHA and fresh exact-SHA release rehearsal remain required before publication.",
+      "summary": "Track additional scalability headroom and non-blocking performance polish beyond the current release floor. Release Dry Runs 31307581484 and 31308753863 on exact SHA e2a2e7d4d2016428a502347248af925200e44ee0 both passed native policy, macOS signing and notarization, and complete immutable candidate validation, then failed the backend lane on runner-local wall-clock performance thresholds. The first separately claimed harness slice replaced the obsolete fixed-duration 800-request quota with fixed concurrent work normalized to a same-run serial baseline, retained the absolute concurrent p95 ceiling, added the required metrics-store maintenance barrier, and amortized the fast single-request SLO samples. Five strict GITHUB_ACTIONS repetitions passed locally. Fresh exact-SHA dry run 31320692142 on 53d9d00d8d478d537e12aa496533900acafe3bbc again passed native policy, macOS signing and notarization, and complete immutable candidate validation, then exposed the remaining fixed-window minimum in TestLoad_500Node_MixedEndpoints (seven metrics-stats requests versus ten) and measured a sustained 11.980ms median / 12.230ms p95 against the 12ms hosted store ceiling. The follow-up converts every mixed endpoint group to fixed work while retaining its absolute p95 guards, keeps the strict local store target at 5ms, and narrowly recalibrates the hosted-runner store envelope to 15ms. Three strict focused repetitions passed with exact 60/50/10 mixed request counts, zero errors, sub-0.85s mixed wall time, and 7.58-7.60ms store p95; the complete internal/api package-order proof also passed under GITHUB_ACTIONS=true in 153.837s. Exact-SHA dry run 31322445793 passed every canonical release gate on cba3b3e85771e44f89f08169804b83f4dd2aa037, and release run 31324538001 attempt 2 consumed that unchanged SHA and activated v6.2.0. Remaining work in this follow-up is non-blocking scalability headroom and performance polish beyond the released floor.",
       "owner": "project-owner",
       "status": "planned",
       "recorded_at": "2026-03-13",
@@ -9408,17 +9409,6 @@
       "subsystem_ids": [
         "performance-and-scalability"
       ]
-    },
-    {
-      "id": "self-hosted-ga-promotion-package",
-      "summary": "Track the lane-local self-hosted GA promotion package: stable candidate inputs, rollback clarity, and dry-run capture once GA promotion is actually being executed.",
-      "owner": "project-owner",
-      "status": "planned",
-      "recorded_at": "2026-03-13",
-      "lane_ids": [
-        "L1"
-      ],
-      "subsystem_ids": []
     },
     {
       "id": "storage-recovery-post-rc-hardening",
@@ -9619,21 +9609,7 @@
   ],
   "coverage_gaps": [],
   "candidate_lanes": [],
-  "work_claims": [
-    {
-      "id": "v620-release-owner-lane-followup-self-hosted-ga-promotion-package",
-      "agent_id": "v620-release-owner",
-      "summary": "Execute v6.2.0 exact-SHA rehearsal and publication after complete API package-order performance proof.",
-      "target_id": "v6-product-lane-expansion",
-      "claimed_at": "2026-08-09T15:54:08Z",
-      "heartbeat_at": "2026-08-09T15:54:08Z",
-      "expires_at": "2026-08-09T21:54:08Z",
-      "work_item": {
-        "kind": "lane-followup",
-        "id": "self-hosted-ga-promotion-package"
-      }
-    }
-  ],
+  "work_claims": [],
   "open_decisions": [],
   "source_of_truth_file": "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",
   "resolved_decisions": [
