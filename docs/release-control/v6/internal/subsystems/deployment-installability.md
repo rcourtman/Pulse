@@ -1944,6 +1944,9 @@ its proof. A demo failure is retriable convergence debt and cannot retroactively
 unpublish the committed GitHub release. An
 asynchronous dispatch or manual SSH deployment is not release completion. A one-shot `ssh-keyscan`
 against a private demo target is not sufficient release or deploy proof.
+Checkout-free mutation guards must address the Pulse repository explicitly
+when querying release state; they must not rely on `gh` discovering a local git
+checkout before the workflow's checkout step has intentionally been admitted.
 Those same workflows also own customer-visible browser truth for the public
 demo shell. Health checks and entry-asset parity are necessary but not
 sufficient; after those checks pass, the governed helpers
