@@ -15074,6 +15074,12 @@ func TestCheckGuest(t *testing.T) {
 
 		backupStateID := buildCanonicalStateID("vm100", "vm100-backup-age")
 		snapshotStateID := buildCanonicalStateID("vm100", "vm100/snapshot:snap1")
+		cpuStateID := canonicalMetricStateID("vm100", "cpu")
+		resolvedIDs := make(chan string, 3)
+		m.SetResolvedCallback(func(alertID string) {
+			resolvedIDs <- alertID
+		})
+
 		m.mu.Lock()
 		m.activeAlerts[backupStateID] = &Alert{
 			ID:              backupStateID,
@@ -15091,6 +15097,11 @@ func TestCheckGuest(t *testing.T) {
 			CanonicalSpecID: "vm100/snapshot:snap1",
 			CanonicalState:  snapshotStateID,
 		}
+		m.activeAlerts[cpuStateID] = &Alert{
+			ID:         cpuStateID,
+			ResourceID: "vm100",
+			Type:       "cpu",
+		}
 		m.mu.Unlock()
 
 		vm := models.VM{
@@ -15102,9 +15113,24 @@ func TestCheckGuest(t *testing.T) {
 
 		m.CheckGuest(vm, "pve1")
 
+		select {
+		case resolvedID := <-resolvedIDs:
+			if resolvedID != cpuStateID {
+				t.Fatalf("expected only the CPU metric alert to resolve, got %q", resolvedID)
+			}
+		case <-time.After(time.Second):
+			t.Fatal("expected the CPU metric alert to emit a resolution callback")
+		}
+		select {
+		case resolvedID := <-resolvedIDs:
+			t.Fatalf("unexpected posture-alert resolution callback %q", resolvedID)
+		case <-time.After(100 * time.Millisecond):
+		}
+
 		m.mu.RLock()
 		_, backupExists := testLookupActiveAlert(t, m, backupStateID)
 		_, snapshotExists := testLookupActiveAlert(t, m, snapshotStateID)
+		_, cpuExists := testLookupActiveAlert(t, m, cpuStateID)
 		m.mu.RUnlock()
 
 		if !backupExists {
@@ -15112,6 +15138,9 @@ func TestCheckGuest(t *testing.T) {
 		}
 		if !snapshotExists {
 			t.Error("expected snapshot-age alert to remain active for a non-running guest")
+		}
+		if cpuExists {
+			t.Error("expected CPU metric alert to resolve for a non-running guest")
 		}
 	})
 
