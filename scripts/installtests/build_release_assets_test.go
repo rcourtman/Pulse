@@ -586,7 +586,7 @@ func TestCurrentStableMinorReleasePacketTracksInstallMetadata(t *testing.T) {
 		"Operational Trust",
 		"Actions provides a dedicated inbox",
 		"existing Pulse Mobile candidate",
-		"not Authenticode-signed",
+		"Authenticode-signed through SignPath",
 		"The rollback target is `v"+previous+"`",
 	)
 	assertFileContainsAllNormalized(t, changelogPath,

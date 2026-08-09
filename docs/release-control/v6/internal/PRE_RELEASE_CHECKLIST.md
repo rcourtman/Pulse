@@ -32,6 +32,10 @@ Use this as the final gate before cutting a Pulse v6 pre-release.
 - The release-owner acceptance is not validation evidence for the post-RC7
   changes. It is the explicit decision to ship the current branch without RC8,
   another soak, or additional current-branch validation before GA.
+- The 2026-08-09 v6.2.0 stable-cutoff decision separately authorizes promotion
+  from `v6.2.0-rc.11` without completing the normal 72-hour soak. It is a
+  version-bound owner-risk acceptance, not soak evidence; the exact stable SHA
+  still requires the no-publication dry run and mandatory SignPath proof.
 - `known-rc-issue-closure-for-ga` was introduced on 2026-04-21 to reflect the
   locked rule that v6 GA must be feature-complete relative to the prerelease
   issue set. It is currently blocked on the dated RC issue-closure packet.
@@ -53,6 +57,9 @@ Use this as the final gate before cutting a Pulse v6 pre-release.
 - [x] For an RC-required stable promotion, confirm the chosen `promoted_from_tag` is a prerelease that was actually published through the governed prerelease path, not an accidental git tag.
 - [x] For an RC-required stable promotion, confirm the prerelease soak window is at least 72 hours or document the hotfix exception explicitly.
 - [x] For stable promotion, record the 2026-07-02 release-owner decision accepting the current-branch validation risk for the post-RC7 changes.
+- [x] For stable v6.2.0 promotion, record the 2026-08-09 release-owner decision
+  accepting the shortened RC11 soak and bind it to the exact content cutoff,
+  rollback command, dry-run requirement, and mandatory SignPath path.
 - [x] For GA/stable promotion, confirm `V5_MAINTENANCE_SUPPORT_POLICY.md` is still the intended policy and replace any placeholder GA notice dates with the exact v6 GA date and exact v5 end-of-support date that will ship with the announcement.
 - [x] For GA/stable promotion, confirm the pushed governed release-branch copy of `.github/workflows/release-dry-run.yml` already accepts the governed stable rehearsal metadata envelope (`promoted_from_tag`, `rollback_version`, `ga_date`, `v5_eos_date`) through `workflow_dispatch`, because GitHub executes the selected remote ref and does not see local-only governance state.
 - [x] For GA/stable promotion, confirm the local rehearsal branch exactly matches `origin` before dispatching `Release Dry Run`, so the run exercises the intended governed branch state instead of stale remote control-plane metadata.

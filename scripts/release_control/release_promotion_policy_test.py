@@ -1378,6 +1378,7 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("Publish the fully staged release", content)
         self.assertIn('gh api "repos/${{ github.repository }}/releases?per_page=100" --paginate', content)
         self.assertIn('git push origin "refs/tags/${TAG}" --force', content)
+
         self.assertIn('Retargeting existing draft tag ${TAG}', content)
         self.assertIn('Resuming quarantined draft for ${TAG}', content)
         self.assertIn('Resuming quarantined draft release for ${TAG}', content)
@@ -1639,6 +1640,28 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
             "append the standardized installation and promotion metadata sections exactly once",
             normalize_ws(contract),
         )
+
+    def test_v620_owner_soak_waiver_is_version_bound(self) -> None:
+        policy = normalize_ws(
+            read("docs/release-control/v6/internal/RELEASE_PROMOTION_POLICY.md")
+        )
+        owner_record = normalize_ws(
+            read(
+                "docs/release-control/v6/internal/records/"
+                "v6.2.0-stable-cutoff-owner-approval-2026-08-09.md"
+            )
+        )
+
+        self.assertIn("v6.2.0 release-cutoff exception", policy)
+        self.assertIn("not soak evidence and not a standing exception", policy)
+        self.assertIn("mandatory Windows Authenticode signing through SignPath", policy)
+        self.assertIn("Promoted prerelease: `v6.2.0-rc.11`", owner_record)
+        self.assertIn("Rollback target: `v6.1.2`", owner_record)
+        self.assertIn(
+            "Exact rollback reinstall command: `./scripts/install.sh --version v6.1.2`",
+            owner_record,
+        )
+        self.assertIn("No unsigned-Windows exception is granted", owner_record)
 
     def test_release_artifact_workflows_refuse_stable_without_matching_rc(self) -> None:
         publish = read(".github/workflows/publish-docker.yml")

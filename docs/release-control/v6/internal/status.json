@@ -9619,7 +9619,21 @@
   ],
   "coverage_gaps": [],
   "candidate_lanes": [],
-  "work_claims": [],
+  "work_claims": [
+    {
+      "id": "release-operator-620-release-gate-single-build-release-promotion-path",
+      "agent_id": "release-operator-620",
+      "summary": "Prepare, dry-run, and publish v6.2.0 stable with the owner-approved 72-hour soak waiver",
+      "target_id": "v6-product-lane-expansion",
+      "claimed_at": "2026-08-09T09:43:04Z",
+      "heartbeat_at": "2026-08-09T09:43:04Z",
+      "expires_at": "2026-08-09T11:43:04Z",
+      "work_item": {
+        "kind": "release-gate",
+        "id": "single-build-release-promotion-path"
+      }
+    }
+  ],
   "open_decisions": [],
   "source_of_truth_file": "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",
   "resolved_decisions": [

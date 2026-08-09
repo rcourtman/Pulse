@@ -1358,17 +1358,18 @@ host-local redirect contract as runtime token minting and exchange. Proof input
 must reject absolute, scheme-relative, backslash-authority, encoded-separator,
 and control-character targets before constructing the handoff request.
 
-The active support prerelease `v6.2.0-rc.11` cut sets the repo-root `VERSION`,
-repo-root `docker-compose.yml` image default, `scripts/install-docker.sh`
-fallback, and Helm chart release metadata to the same `6.2.0-rc.11` release
-version. This support prerelease keeps `rollback_version=v6.1.2`, publishes a
-versioned public GitHub prerelease plus versioned Docker and Helm artifacts, and
-does not move stable/latest install pointers or stable semver aliases. Stable
-install pointers stay on `v6.1.2`, whose active stable cut is recorded below and
-continues to govern the stable line until this candidate is promoted. The
-eleventh `v6.2.0` candidate is a security-boundary, role-correct access,
-live-state recovery, and release-operations cut that supersedes
-`v6.2.0-rc.9`: it validates
+The active stable `v6.2.0` cut sets the repo-root `VERSION`, repo-root
+`docker-compose.yml` image default, `scripts/install-docker.sh` fallback, and
+Helm chart release metadata to the same `6.2.0` release version. This stable
+minor release uses `promoted_from_tag=v6.2.0-rc.11`,
+`rollback_version=v6.1.2`, and the explicit version-bound decision recorded on
+2026-08-09 to waive the remainder of the normal 72-hour soak. The workflow
+input `hotfix_exception=true` transports that approved waiver through the
+shared promotion resolver; it does not reclassify v6.2.0 as a patch hotfix.
+The exact stable `main` SHA must pass the no-publication dry run before the same
+SHA is dispatched through the single-build publish workflow. The release moves
+stable/latest install pointers and stable semver aliases only after the exact
+public and private candidate paths pass. The v6.2.0 line validates
 request-derived origins, verifies legacy-cleanup SSH hosts, aligns Settings and
 resource reads with session authority, recovers oversized WebSocket state,
 converges agent and PBS lifecycle behavior, restores the deliberate self-hosted
@@ -1387,13 +1388,15 @@ diagnostics. The same release workflow also executes the generated self-signed
 and custom-CA Windows installer commands through Windows PowerShell 5.1 before
 release assembly, so the first HTTPS fetch is release proof rather than a
 string-shape assertion.
-The `v6.2.0-rc.11` server cut is classified
-`existing-mobile-build-compatible`. The synchronized Pulse Mobile 1.0.0 iOS
+The stable server cut is classified `existing-mobile-build-compatible`. The
+synchronized Pulse Mobile 1.0.0 iOS
 build 12 and Android versionCode 9 candidates, both using runtime version 2,
 remain distributed to the existing beta cohort through TestFlight and Play
-open testing. The changes since RC9 preserve the checked-in mobile API, Relay,
-pairing, approval, push, authentication, and onboarding contracts; no additional
-companion upload or public store rollout is part of RC11.
+open testing. The v6.2.0 changes preserve the checked-in mobile API, Relay,
+pairing, approval, push, authentication, and onboarding contracts; no
+additional companion upload or public store rollout is part of the stable
+server cut. Stable Windows artifacts must complete the SignPath Authenticode
+path; the soak waiver grants no unsigned-Windows exception.
 The first RC11 publication attempt, run `31274524321`, passed every immutable
 release gate and briefly crossed the draft boundary, then failed before the
 irreversible activation marker because the checkout-free activation job relied
@@ -1608,14 +1611,13 @@ For the active stable `v6.1.2` cut, the repo-root compose default and
 `scripts/install-docker.sh` fallback must both pin `6.1.2` whenever the
 governed `VERSION` is that stable cut. The stable promotion guard remains in
 force and rejects leftover `-rc.` defaults.
-For the active support prerelease `v6.2.0-rc.11` cut, the repo-root compose
-default and `scripts/install-docker.sh` fallback must both pin `6.2.0-rc.11`
-until the next governed stable cut moves them forward. The stable promotion
-guard remains in force and must reject leftover `-rc.` defaults when the
-governed `VERSION` returns to a stable release. Each new candidate on the
-`v6.2.0` line moves these two pins together with the repo-root `VERSION` and
-the Helm chart metadata in the same commit; a candidate that leaves any of the
-four on a superseded `6.2.0-rc.*` value is a release-packet blocker.
+For the active stable `v6.2.0` cut, the repo-root compose default and
+`scripts/install-docker.sh` fallback must both pin `6.2.0` until the next
+governed release moves them forward. The stable promotion guard remains in
+force and rejects leftover `-rc.` defaults. Each new release moves these two
+pins together with the repo-root `VERSION` and the Helm chart metadata in the
+same commit; a cut that leaves any of the four on a superseded value is a
+release-packet blocker.
 The RC11 packet records `2018aa8a9a965d693982e260f525f6cc4f49aa41` as
 the code-backed validation-risk head. That head covers 68 commits and 241 files
 since RC9 across request-origin and SSH trust, settings RBAC and responsive

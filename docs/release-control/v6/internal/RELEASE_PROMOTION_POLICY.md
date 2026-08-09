@@ -263,6 +263,22 @@ TLS-unverified receipts leave the claim at `implemented` or
    - Unproved self-service commercial transitions remain unavailable and
      unadvertised under the exposure-safety gate. This exception does not
      authorize enabling that feature or running a production billing proof.
+11. v6.2.0 release-cutoff exception:
+   - On 2026-08-09, the release owner declared current `main` at
+     `b9811cdf538224e7f2870718744300ef8f80afa0` the v6.2.0 content cutoff and
+     explicitly directed promotion from `v6.2.0-rc.11` without completing the
+     normal 72-hour soak. The dated decision record is
+     `docs/release-control/v6/internal/records/v6.2.0-stable-cutoff-owner-approval-2026-08-09.md`.
+   - This is a bounded v6.2.0 owner-risk acceptance, not soak evidence and not
+     a standing exception for later releases. The workflow input
+     `hotfix_exception=true` transports the approved waiver through the shared
+     resolver; it does not reclassify v6.2.0 as a patch hotfix.
+   - The final release-preparation commit may change only governed version,
+     release-note, qualification, test-guardrail, and release-control metadata.
+     The exact pushed SHA must pass the no-publication `Release Dry Run` before
+     the same SHA is dispatched through the single-build publication workflow.
+   - Stable v6.2.0 restores mandatory Windows Authenticode signing through
+     SignPath. No unsigned-Windows exception is authorized by this soak waiver.
 
 ## Single-Build Release Path
 
