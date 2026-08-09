@@ -1363,7 +1363,7 @@ host-local redirect contract as runtime token minting and exchange. Proof input
 must reject absolute, scheme-relative, backslash-authority, encoded-separator,
 and control-character targets before constructing the handoff request.
 
-The active stable `v6.2.0` cut sets the repo-root `VERSION`, repo-root
+The preceding stable `v6.2.0` cut set the repo-root `VERSION`, repo-root
 `docker-compose.yml` image default, `scripts/install-docker.sh` fallback, and
 Helm chart release metadata to the same `6.2.0` release version. This stable
 minor release uses `promoted_from_tag=v6.2.0-rc.11`,
@@ -1393,6 +1393,23 @@ diagnostics. The same release workflow also executes the generated self-signed
 and custom-CA Windows installer commands through Windows PowerShell 5.1 before
 release assembly, so the first HTTPS fetch is release proof rather than a
 string-shape assertion.
+The active stable `v6.2.1` cut sets the repo-root `VERSION`, repo-root
+`docker-compose.yml` image default, `scripts/install-docker.sh` fallback, and
+Helm chart release metadata to the same `6.2.1` release version. This emergency
+patch uses the integrated exact-SHA candidate and definitive release verdict
+because the release range repairs active customer
+harm in agent download preflight, Agent Doctor credential recovery, strict
+subscription-provider tool schemas, and fresh Pro activation discovery. The
+installer/updater risk boundary requires the explicit patch hotfix reason even
+though the workflow performs the normal immutable-candidate checks before its
+publication boundary. Windows executables must be Authenticode-signed through
+SignPath; no unsigned-Windows exception is authorized for `v6.2.1`. The mobile
+decision is `no-mobile-impact` because the patch does not change the checked-in
+mobile API, Relay, pairing, approval, push, authentication, or onboarding
+contracts.
+This patch release uses the stable hotfix path with
+`rollback_version=v6.2.0`, `hotfix_exception=true`, a release-owner reason, and
+no fabricated same-version RC tag.
 The stable server cut is classified `existing-mobile-build-compatible`. The
 synchronized Pulse Mobile 1.0.0 iOS
 build 12 and Android versionCode 9 candidates, both using runtime version 2,
@@ -1623,13 +1640,12 @@ For the active stable `v6.1.2` cut, the repo-root compose default and
 `scripts/install-docker.sh` fallback must both pin `6.1.2` whenever the
 governed `VERSION` is that stable cut. The stable promotion guard remains in
 force and rejects leftover `-rc.` defaults.
-For the active stable `v6.2.0` cut, the repo-root compose default and
-`scripts/install-docker.sh` fallback must both pin `6.2.0` until the next
-governed release moves them forward. The stable promotion guard remains in
-force and rejects leftover `-rc.` defaults. Each new release moves these two
-pins together with the repo-root `VERSION` and the Helm chart metadata in the
-same commit; a cut that leaves any of the four on a superseded value is a
-release-packet blocker.
+For the active stable `v6.2.1` cut, the repo-root compose default and
+`scripts/install-docker.sh` fallback must both pin `6.2.1`. The stable
+promotion guard remains in force and rejects leftover `-rc.` defaults. Each
+new release moves these two pins together with the repo-root `VERSION` and the
+Helm chart metadata in the same commit; a cut that leaves any of the four on a
+superseded value is a release-packet blocker.
 The RC11 packet records `2018aa8a9a965d693982e260f525f6cc4f49aa41` as
 the code-backed validation-risk head. That head covers 68 commits and 241 files
 since RC9 across request-origin and SSH trust, settings RBAC and responsive
