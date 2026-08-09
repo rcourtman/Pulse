@@ -198,6 +198,34 @@ describe('ProxmoxPageSurface contract', () => {
     );
   });
 
+  it('does not call a retained version from a stopped Proxmox agent currently running', () => {
+    mockVersionInfo.mockReturnValue({
+      version: 'v6.0.0-rc.6',
+      agentUpdateTargetVersion: 'v6.0.0-rc.6',
+    });
+    setResources([
+      makeResource({
+        id: 'agent:old-pi-agent',
+        name: 'pi',
+        displayName: 'pi',
+        type: 'agent',
+        status: 'online',
+        proxmox: { nodeName: 'pi', clusterName: 'homelab' },
+        agent: {
+          agentId: 'old-pi-agent',
+          agentVersion: 'v6.0.0-rc.5',
+          stale: true,
+          lastReportAt: '2026-08-08T23:05:41Z',
+        },
+      }),
+    ]);
+
+    render(() => <ProxmoxPageSurface />);
+
+    expect(screen.getByTestId('nodes-table')).toHaveAttribute('data-rows', '1');
+    expect(screen.queryByTestId('platform-outdated-agent-notice')).not.toBeInTheDocument();
+  });
+
   it('renders guest totals from the filtered workload collection', () => {
     setResources([
       makeResource({

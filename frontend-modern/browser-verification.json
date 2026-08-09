@@ -1,69 +1,16 @@
 {
   "version": 1,
-  "base_sha": "63a0adf9ac0828c43db3af6fa15f8f201d0c18ac",
-  "verified_at": "2026-08-09T00:14:31Z",
+  "base_sha": "37e3c81b03bc6f59b4c393762daf10020a245b36",
+  "verified_at": "2026-08-09T09:29:29Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/AppLayout.tsx",
-    "frontend-modern/src/components/AI/Chat/index.tsx",
-    "frontend-modern/src/components/Alerts/AlertResourceTableDesktop.tsx",
-    "frontend-modern/src/components/Alerts/AlertResourceTableMobile.tsx",
-    "frontend-modern/src/components/Alerts/AlertResourceTableRow.tsx",
-    "frontend-modern/src/components/Alerts/BulkEditDialog.tsx",
-    "frontend-modern/src/components/Alerts/Thresholds/hooks/useCollapsedSections.ts",
-    "frontend-modern/src/components/Alerts/ThresholdsTable.tsx",
-    "frontend-modern/src/components/Alerts/ThresholdsTableAgentsResourcesSection.tsx",
-    "frontend-modern/src/components/Alerts/ThresholdsTableDockerContainersSection.tsx",
-    "frontend-modern/src/components/Alerts/ThresholdsTableDockerHostsSection.tsx",
-    "frontend-modern/src/components/Alerts/alertResourceTableModel.ts",
-    "frontend-modern/src/components/Login.tsx",
-    "frontend-modern/src/components/Settings/InfrastructureSourcePicker.tsx",
-    "frontend-modern/src/components/shared/MobileNavBar.tsx",
-    "frontend-modern/src/components/shared/mobileNavBarModel.ts",
-    "frontend-modern/src/components/shared/useMobileNavBarState.ts",
-    "frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsTableState.ts",
-    "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx",
-    "frontend-modern/src/features/patrol/patrolControlPresentation.ts",
-    "frontend-modern/src/features/platformPage/sharedPlatformPage.tsx",
-    "frontend-modern/src/utils/alertResourceTablePresentation.ts",
-    "frontend-modern/src/utils/alertThresholdsPresentation.ts",
-    "frontend-modern/src/utils/docsLinks.ts"
+    "frontend-modern/src/features/platformPage/agentVersion.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/AppLayout.tsx": "8acb2e0855ddbf6c73a83c15ba7ec867c07c16362e22376938cf8b0f254e91cd",
-    "frontend-modern/src/components/AI/Chat/index.tsx": "03544f314050f763b673aa11f9a03043e665a58fef0dbc92bce0407a3c02c008",
-    "frontend-modern/src/components/Alerts/AlertResourceTableDesktop.tsx": "c2fe7968e9bd414518b91179b9c8d378b1d6db0fca7a2322b48f16c7bf266bd1",
-    "frontend-modern/src/components/Alerts/AlertResourceTableMobile.tsx": "75348c3dc0812f378cc889ddca5ee8bc93c9dd003808436c10e045081ff66912",
-    "frontend-modern/src/components/Alerts/AlertResourceTableRow.tsx": "05da249dc2ce437dd096d775708521b74bf504c15a5cd39adbdc4024a10e1594",
-    "frontend-modern/src/components/Alerts/BulkEditDialog.tsx": "86a01e0d70930c8b8aebd2b6df658253895eb8c1149ff294f53b2822af5e3bfa",
-    "frontend-modern/src/components/Alerts/Thresholds/hooks/useCollapsedSections.ts": "579f92f5bc7d117b8ff66b4e722dff1b9f8836577eded1353f925181270d4008",
-    "frontend-modern/src/components/Alerts/ThresholdsTable.tsx": "18d1de01e2d58188d8a946fdfda6286390eda87ec5e42954fa383b16a5ff22c5",
-    "frontend-modern/src/components/Alerts/ThresholdsTableAgentsResourcesSection.tsx": "1b224861764d806c01413e1015c1509a7530636cd482d20007805413fbadc209",
-    "frontend-modern/src/components/Alerts/ThresholdsTableDockerContainersSection.tsx": "65dd1ef45028d2e4006907f15fb0f8d125d7c0546339ce5ec36ad70075a65ed4",
-    "frontend-modern/src/components/Alerts/ThresholdsTableDockerHostsSection.tsx": "0d1e2eb5873d7975b0195551105dd84f00e165709b07eadc2ef8079a70ee38ad",
-    "frontend-modern/src/components/Alerts/alertResourceTableModel.ts": "89ba2a0b6ebb9d6f56f6425f22cd6f1c4793d92c27153ffc8c0aadf3150f86ba",
-    "frontend-modern/src/components/Login.tsx": "f3ce94c4d38e0346ad7795388b9fb57800a67007a82087b5f8b18f4845d9ce72",
-    "frontend-modern/src/components/Settings/InfrastructureSourcePicker.tsx": "610386b9a8b47a9559b32e54ccf72b3e06c10f48ee4a37441c15fa2b3da2c37a",
-    "frontend-modern/src/components/shared/MobileNavBar.tsx": "96cd6fee4aaa0f7c11501ae525857952e7c5eb7e4dbb545f4a1f38da2b5694c3",
-    "frontend-modern/src/components/shared/mobileNavBarModel.ts": "21e3ab0adc2533b5328391e8c5dff38ef58232f4e33d6eec0a493abac74800d2",
-    "frontend-modern/src/components/shared/useMobileNavBarState.ts": "0d6321f1109f10d4fc100191fcbc24c075e2f3c9ec72246a80a1a0b9f124836b",
-    "frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsTableState.ts": "0fc9036d2b8bbc213c031d10103edda7d33a80aaca43dac1a3dc98eaaa765da5",
-    "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx": "280db76a0ee63e15a3de2e3e8c5d95a82c49f553ac4bdd078c22db49e67fc0a6",
-    "frontend-modern/src/features/patrol/patrolControlPresentation.ts": "a552c303cb7c0e17701f157e19eaedede35f8e10bcfed3435ad2f37cc28761a6",
-    "frontend-modern/src/features/platformPage/sharedPlatformPage.tsx": "b0825d9f94a3f5725e480f3632a62e0589a19657b74ca04e97922be5ff8c9628",
-    "frontend-modern/src/utils/alertResourceTablePresentation.ts": "0c61123312e72e7642b79fe42ff8828efab1a457bfbf05a11deaa88ed189476b",
-    "frontend-modern/src/utils/alertThresholdsPresentation.ts": "9223fef1e0b794e8db3b59a58227154d0dcd68460dd34eb9fdc6769640bb744a",
-    "frontend-modern/src/utils/docsLinks.ts": "957f8949adb3183a51b769fd796fedc7f24f847e87f4bfa5c5f60fb30f70fc96"
+    "frontend-modern/src/features/platformPage/agentVersion.ts": "db80e0021579408af18677a9ce34ae13aadf018d76ace3357df19058175d1bff"
   },
   "routes": [
-    "/",
-    "/docs/TROUBLESHOOTING",
-    "/settings/infrastructure",
-    "/settings/infrastructure?add=linux-host",
-    "/patrol",
-    "/alerts/thresholds/systems",
-    "/docker/overview",
-    "/kubernetes/overview"
+    "/proxmox/overview"
   ],
   "viewports": [
     {
@@ -76,26 +23,11 @@
     }
   ],
   "states": [
-    "The pre-authenticated login showed an always-visible Can’t sign in? link at desktop and 390x844, and the shipped Troubleshooting route remained readable without a session with local, SSO/proxy, lockout, environment-override, and bootstrap-token guidance.",
-    "Add infrastructure opened with one primary Install Pulse Agent path, kept the Linux/macOS/Windows host choice out of the default specific-source list, exposed it once after expansion or Windows search, and routed the choice to ?add=linux-host.",
-    "Patrol attention scan rows used one plain evidence phrase, omitted unavailable protection metadata, and retained named evidence and protection facts in selected detail without raw token pairs.",
-    "A fresh threshold visit rendered the Machines section with aria-expanded=false, a zero-height and zero-opacity content rail, explicit On/Off help, and no customer-facing -1 instruction.",
-    "Threshold CPU editing exposed min=1; submitting 0 left the inherited 80% unchanged, Off saved as Off, re-enabling with a positive value restored 80%, and an 81% custom override produced the prominent Custom overrides summary.",
-    "The custom-override summary selected the Custom-only filter and expanded the matching Machines section, then reverting returned the resource to inherited defaults.",
-    "At 390x844 the semantic Mobile navigation rail kept one primary destination plus Alerts, Actions, Patrol, and More; an active overflow destination marked More as the current page and preserved alert/action badges.",
-    "The More menu grouped infrastructure and Pulse destinations, focused a menu item when opened, returned focus to the trigger on Escape, reopened from ArrowDown, and closed after navigating to Kubernetes.",
-    "Kubernetes subnavigation exposed labeled right and left scroll controls only when needed, moved the rail from scrollLeft 0 to 242, and kept the document width at exactly 390 pixels.",
-    "The mobile Assistant launcher stayed in the authenticated header flow; the open drawer and backdrop both ended at y=764 above the mobile nav at y=782.5, while the 1440px desktop launcher stayed centered on the right edge.",
-    "The integrated desktop and mobile routes produced no browser console warnings or errors."
+    "A provider-backed Proxmox node with a retained stale agent facet did not render the outdated-agent notice at desktop or narrow widths.",
+    "The Proxmox overview remained usable at 390 pixels with document width equal to viewport width and no console errors."
   ],
   "interactions": [
-    "Opened the login and public Troubleshooting routes before authentication, then signed in to the isolated integrated mock runtime.",
-    "Opened Add infrastructure, expanded the source list, searched for Windows, selected Linux/macOS/Windows host, and confirmed the governed host-add route.",
-    "Opened Patrol, inspected compact attention rows, and selected an attention item to confirm detailed typed evidence remained available.",
-    "Opened thresholds from a fresh browser origin, expanded Machines, attempted and submitted an invalid zero, disabled and re-enabled CPU alerts, created an 81% override, followed the summary action, and reverted it.",
-    "Resized to 390x844, opened and dismissed the More menu with keyboard controls, reopened it with ArrowDown, and navigated to Kubernetes from the overflow menu.",
-    "Clicked the Kubernetes subnavigation scroll-right control and measured the rail and document widths before and after movement.",
-    "Opened the Assistant from the mobile header, measured drawer/backdrop clearance against the mobile nav, closed it, and measured the desktop launcher at 1440x900.",
-    "Logged out at 390x844 and confirmed the recovery link remained visible without horizontal overflow."
+    "Opened the current-build Proxmox overview at 1440x900 and confirmed no outdated-agent notice was rendered for non-reporting retained agent metadata.",
+    "Repeated the notice and horizontal-overflow checks at 390x844, inspected browser console errors, and reset the temporary viewport."
   ]
 }

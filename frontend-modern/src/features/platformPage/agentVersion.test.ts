@@ -161,6 +161,21 @@ describe('collectOutdatedAgentHosts', () => {
     expect(collectOutdatedAgentHosts([host({ name: 'mystery' })], server)).toEqual([]);
   });
 
+  it('does not present a retained version from a non-reporting agent as currently running', () => {
+    const providerBackedHost = host({
+      name: 'pi',
+      status: 'online',
+      agent: {
+        agentId: 'old-pi-agent',
+        agentVersion: 'v6.0.0-rc.5',
+        stale: true,
+        lastReportAt: '2026-08-08T23:05:41Z',
+      } as Resource['agent'],
+    });
+
+    expect(collectOutdatedAgentHosts([providerBackedHost], server)).toEqual([]);
+  });
+
   it('returns nothing when the server version is unknown or unparseable', () => {
     const hosts = [
       host({ name: 'tower', docker: { agentVersion: 'v6.0.0-rc.5' } as Resource['docker'] }),

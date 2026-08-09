@@ -76,6 +76,13 @@ export function collectOutdatedAgentHosts(
 
   const outdated: OutdatedAgentHost[] = [];
   for (const host of hosts) {
+    // A provider-backed host can remain online after its Pulse Agent stops
+    // reporting. The unified-resource adapter deliberately retains the last
+    // agent version for diagnosis and marks that facet stale. Do not describe
+    // that retained value as an agent that "is running" an older release;
+    // Agent Doctor owns the separate non-reporting-agent diagnosis.
+    if (host.agent?.stale === true) continue;
+
     const version = hostAgentVersion(host);
     if (!version) continue;
     const cmp = compareAgentVersions(version, serverVersion);
