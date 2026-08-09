@@ -56,6 +56,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/pkg/audit"
 	authpkg "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/cloudauth"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/edition"
 	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 	licensetestsupport "github.com/rcourtman/pulse-go-rewrite/pkg/licensing/testsupport"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
@@ -10856,9 +10857,11 @@ func TestContract_PublicSecurityStatusIncludesDemoPresentationPolicy(t *testing.
 }
 
 func TestContract_SecurityStatusPresentationPolicyHidesUpgradeByDefault(t *testing.T) {
-	// Ordinary free self-hosted sessions stay opt-in. The billing route remains
-	// directly reachable, but the served policy suppresses upgrade prompts and
-	// navigation until there is hosted, paid, activation, or recovery context.
+	// Ordinary free self-hosted sessions run the community binary and stay
+	// opt-in. The billing route remains directly reachable, but the served
+	// policy suppresses upgrade prompts and navigation until there is hosted,
+	// paid, activation, or recovery context — which includes the compiled Pro
+	// edition, covered by the ProEditionCommercialContext contract test below.
 	cfg := newTestConfigWithTokens(t)
 	cfg.DemoMode = false
 
@@ -10917,6 +10920,85 @@ func TestContract_SecurityStatusPresentationPolicySuppressionInputs(t *testing.T
 			}
 		})
 	}
+}
+
+// The compiled Pro binary is only distributed through the paid broker flow, so
+// a Pro-edition session is commercial context even before a license activates.
+// Without this the Plans & Billing navigation entry — the only one holding the
+// activation form — is hidden exactly while the install is unlicensed
+// (support case 2026-08-09: a fresh Pro install could not find where to enter
+// its activation key). Community binaries keep the opt-in default, and demo
+// mode keeps every commercial surface suppressed regardless of edition.
+func TestContract_SecurityStatusPresentationPolicyProEditionCommercialContext(t *testing.T) {
+	servePresentationPolicy := func(t *testing.T, demoMode bool) map[string]any {
+		t.Helper()
+
+		cfg := newTestConfigWithTokens(t)
+		cfg.DemoMode = demoMode
+
+		router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+		req := httptest.NewRequest(http.MethodGet, "/api/security/status", nil)
+		rec := httptest.NewRecorder()
+		router.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("security status = %d, want 200 (%s)", rec.Code, rec.Body.String())
+		}
+
+		var payload map[string]any
+		if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+			t.Fatalf("decode security status payload: %v", err)
+		}
+		presentationPolicy, ok := payload["presentationPolicy"].(map[string]any)
+		if !ok {
+			t.Fatalf("presentationPolicy = %#v, want object", payload["presentationPolicy"])
+		}
+		return presentationPolicy
+	}
+
+	assertPolicy := func(t *testing.T, presentationPolicy map[string]any, want map[string]bool) {
+		t.Helper()
+		for key, wantValue := range want {
+			if got, _ := presentationPolicy[key].(bool); got != wantValue {
+				t.Fatalf("presentationPolicy.%s = %v, want %v", key, presentationPolicy[key], wantValue)
+			}
+		}
+	}
+
+	t.Run("pro edition exposes commercial navigation before activation", func(t *testing.T) {
+		edition.SetEdition(edition.Pro)
+		t.Cleanup(func() { edition.SetEdition(edition.Community) })
+
+		assertPolicy(t, servePresentationPolicy(t, false), map[string]bool{
+			"demoMode":       false,
+			"readOnly":       false,
+			"hideCommercial": false,
+			"hideUpgrade":    false,
+		})
+	})
+
+	t.Run("demo mode suppresses commercial surfaces even on the pro edition", func(t *testing.T) {
+		edition.SetEdition(edition.Pro)
+		t.Cleanup(func() { edition.SetEdition(edition.Community) })
+
+		assertPolicy(t, servePresentationPolicy(t, true), map[string]bool{
+			"demoMode":       true,
+			"readOnly":       true,
+			"hideCommercial": true,
+			"hideUpgrade":    true,
+		})
+	})
+
+	t.Run("community edition keeps the opt-in default", func(t *testing.T) {
+		edition.SetEdition(edition.Community)
+
+		assertPolicy(t, servePresentationPolicy(t, false), map[string]bool{
+			"demoMode":       false,
+			"readOnly":       false,
+			"hideCommercial": false,
+			"hideUpgrade":    true,
+		})
+	})
 }
 
 // Settings → Infrastructure reads only RequireAdmin + settings:read endpoints

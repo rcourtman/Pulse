@@ -5456,11 +5456,15 @@ gated by `shouldShowSetupProActivationPointer` requiring an explicitly
 invalid license, never a failed or missing probe), the completion panel
 renders a factual activation card whose action targets the direct
 `/settings/pulse-intelligence/billing/plan` route. That direct-route target
-is deliberate: the Plans & Billing navigation entry stays
-navigation-suppressed for unlicensed self-hosted sessions, so the pointer
-must not instruct users to find a hidden nav item, and it must never appear
-on community builds, licensed installs, or probe failures — the self-hosted
-opt-in commercial posture is unchanged.
+is deliberate: it must not depend on any navigation entry being visible, and
+the pointer must never appear on community builds, licensed installs, or
+probe failures — the community self-hosted opt-in commercial posture is
+unchanged. On compiled Pro-edition binaries the served presentation policy
+now also exposes the Plans & Billing navigation entry before activation
+(edition-derived commercial context in the security-status contract), so the
+first-run pointer and the visible nav entry together close the activation
+handoff; the pointer keeps its own explicit license gate rather than
+inheriting the nav policy.
 
 Agent-facing action completion events and resource-context history now expose
 the canonical `ActionResultV2` alongside bounded legacy projections. Consumers

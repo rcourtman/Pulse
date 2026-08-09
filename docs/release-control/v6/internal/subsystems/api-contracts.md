@@ -5244,8 +5244,15 @@ For ordinary free self-hosted v6 installs, that same security-status contract
 owns the opt-in commercial posture: `hideUpgrade` defaults true so navigation,
 upgrade links, plan upsells, and proactive prompts fail closed. Hosted sessions
 and installs with existing paid, activation, or recovery context may receive
-`hideUpgrade=false`. `hideCommercial` remains the stronger suppression boundary
-for demo mode and white-label runtimes. API consumers must treat both fields as
+`hideUpgrade=false`. The compiled Pro edition (`pkg/edition`, set only by the
+separately compiled Pro binary and never by license-active state) is such paid
+context: a Pro-edition session serves `hideUpgrade=false` even before its
+license activates, because the Pro binary reaches an install only through the
+paid broker flow and hiding the Plans & Billing activation entry from it
+strands a paying customer. Community binaries — with or without a license key
+applied later — keep the opt-in default. `hideCommercial` remains the stronger
+suppression boundary for demo mode and white-label runtimes and wins over
+edition-derived context. API consumers must treat both fields as
 presentation policy rather than as billing entitlement truth, and direct
 activation or recovery routes remain separately routeable.
 That same contract split also makes the licensing boundary explicit:

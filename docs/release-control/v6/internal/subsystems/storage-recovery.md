@@ -968,7 +968,12 @@ recovery scope, or a storage/recovery-owned secret source.
    copy may describe unavailable local capability, but ordinary self-hosted v6
    installs must not reinterpret `presentationPolicy.hideUpgrade` as a license
    upsell opportunity or surface paid history/recovery upgrade prompts by
-   default.
+   default. `hideUpgrade` is now served false on compiled Pro-edition binaries
+   even before license activation (edition-derived commercial context), so
+   storage/recovery surfaces must keep following the served policy verbatim in
+   both directions: they may show their existing gated-capability affordances
+   when the policy exposes them, and they must not add edition- or
+   license-sniffing of their own to re-suppress or re-expose paid prompts.
 5. Route canonical storage/recovery resource selection through `frontend-modern/src/hooks/useUnifiedResources.ts` and the owning `unified-resources` contract
    That shared hook now also projects resource `clusterId` through the shared cluster-name helper, so storage and recovery links keep the same cluster-context label as other unified-resource consumers instead of rebuilding a local fallback chain.
    That shared hook plus the adjacent websocket/store adapter path must keep

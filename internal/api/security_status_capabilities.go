@@ -7,6 +7,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/edition"
 )
 
 type securityStatusSettingsCapabilities struct {
@@ -315,8 +316,11 @@ func (r *Router) securityStatusSessionCapabilities(ctx context.Context) security
 // resolveSecurityStatusPresentationPolicy maps commercial suppression inputs
 // to the served policy. Ordinary free self-hosted sessions stay opt-in and do
 // not receive upgrade prompts. Hosted sessions and installs with existing paid
-// or recovery context may expose the commercial navigation. Demo mode and
-// white-label runtimes remain fully suppressed.
+// or recovery context may expose the commercial navigation; a compiled
+// Pro-edition binary counts as paid context because it is only distributed
+// through the paid broker flow, and hiding Plans & Billing from it strands a
+// customer with no way to find the activation form. Demo mode and white-label
+// runtimes remain fully suppressed.
 func resolveSecurityStatusPresentationPolicy(demoMode, whiteLabel, commercialContext bool) securityStatusPresentationPolicy {
 	hideCommercial := demoMode || whiteLabel
 	return securityStatusPresentationPolicy{
@@ -331,6 +335,15 @@ func (r *Router) securityStatusPresentationPolicy(ctx context.Context) securityS
 	demoMode := r != nil && r.config != nil && r.config.DemoMode
 	whiteLabel := false
 	commercialContext := r != nil && r.hostedMode
+	if edition.IsPro() {
+		// The compiled Pro binary reaches an install only through the paid
+		// broker flow, so the session was never an ordinary free self-hosted
+		// one — even before its license activates. Without this, the only
+		// navigation entry holding the activation form is hidden exactly
+		// while the install is unlicensed. Community binaries with or
+		// without a license key are unaffected.
+		commercialContext = true
+	}
 	if r != nil && !demoMode {
 		if svc := getLicenseServiceForContext(ctx); svc != nil {
 			whiteLabel = svc.HasFeature(featureWhiteLabelValue)
