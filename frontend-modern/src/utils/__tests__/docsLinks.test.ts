@@ -120,6 +120,16 @@ describe('docsLinks', () => {
     }
   });
 
+  it('ships the readable SSO identity and user deprovisioning contract', () => {
+    const apiReference = readFileSync(path.join(repoRoot, 'docs', 'API.md'), 'utf8');
+    const rbacGuide = readFileSync(path.join(repoRoot, 'docs', 'RBAC.md'), 'utf8');
+
+    expect(apiReference).toContain('`DELETE /api/admin/users/{username}`');
+    expect(apiReference).toContain('`displayName`, `email`, `providerType`, `providerId`');
+    expect(rbacGuide).toMatch(/revokes its active\s+sessions/);
+    expect(rbacGuide).toMatch(/Removal does not disable\s+the upstream IdP account/);
+  });
+
   it('routes runtime docs links through shipped local docs instead of GitHub main', () => {
     expect(apiAccessPanelSource).toContain('API_TOKEN_SCOPES_DOC_URL');
     expect(apiAccessPanelSource).not.toContain(

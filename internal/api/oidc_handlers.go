@@ -644,6 +644,15 @@ func (r *Router) handleSSOOIDCCallback(w http.ResponseWriter, req *http.Request)
 		} else if len(rolesToAssign) > 0 {
 			LogAuditEventForTenant(GetOrgID(req.Context()), "sso_oidc_role_assignment", principal, GetClientIP(req), req.URL.Path, true, "Auto-assigned roles: "+strings.Join(rolesToAssign, ", "))
 		}
+		if err := recordSSOIdentity(authManager, principal, internalauth.UserIdentityMetadata{
+			DisplayName:  username,
+			Email:        email,
+			ProviderType: string(config.SSOProviderTypeOIDC),
+			ProviderID:   providerID,
+			LastLoginAt:  time.Now(),
+		}); err != nil {
+			log.Error().Err(err).Str("user", principal).Str("display_user", username).Msg("Failed to record SSO OIDC identity metadata")
+		}
 	}
 
 	// Stamp issuer/client on the session even when the provider issued no

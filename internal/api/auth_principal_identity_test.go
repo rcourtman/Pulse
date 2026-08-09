@@ -13,6 +13,14 @@ type ssoIdentityRBACManager struct {
 	assignments  map[string]auth.UserRoleAssignment
 	updatedUser  string
 	updatedRoles []string
+	identityUser string
+	identity     auth.UserIdentityMetadata
+}
+
+func (m *ssoIdentityRBACManager) UpsertUserIdentity(username string, metadata auth.UserIdentityMetadata) error {
+	m.identityUser = username
+	m.identity = metadata
+	return nil
 }
 
 func (m *ssoIdentityRBACManager) GetUserAssignment(username string) (auth.UserRoleAssignment, bool) {
@@ -64,6 +72,18 @@ func TestStableSSOPrincipalUsesProviderScopedOpaqueSubject(t *testing.T) {
 func TestStableSSOPrincipalRequiresSubject(t *testing.T) {
 	if _, err := stableSSOPrincipal(config.SSOProviderTypeSAML, "okta", ""); err == nil {
 		t.Fatal("expected missing subject to fail")
+	}
+}
+
+func TestRecordSSOIdentityKeepsDisplayClaimsSeparate(t *testing.T) {
+	manager := &ssoIdentityRBACManager{}
+	principal := "sso:oidc:okta:stable"
+	metadata := auth.UserIdentityMetadata{DisplayName: "Alice Example", Email: "alice@example.com", ProviderType: "oidc", ProviderID: "okta"}
+	if err := recordSSOIdentity(manager, principal, metadata); err != nil {
+		t.Fatalf("recordSSOIdentity: %v", err)
+	}
+	if manager.identityUser != principal || manager.identity.DisplayName != "Alice Example" || manager.identity.Email != "alice@example.com" {
+		t.Fatalf("identity write = user %q metadata %#v", manager.identityUser, manager.identity)
 	}
 }
 

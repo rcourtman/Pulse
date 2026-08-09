@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"time"
 )
@@ -41,11 +42,52 @@ type Role struct {
 	UpdatedAt   time.Time    `json:"updatedAt"`
 }
 
-// UserRoleAssignment maps a user to one or more roles.
+// UserIdentityMetadata is mutable, presentation-only identity information for
+// a durable RBAC principal. Username remains the authorization key.
+type UserIdentityMetadata struct {
+	DisplayName  string    `json:"displayName,omitempty"`
+	Email        string    `json:"email,omitempty"`
+	ProviderType string    `json:"providerType,omitempty"`
+	ProviderID   string    `json:"providerId,omitempty"`
+	LastLoginAt  time.Time `json:"lastLoginAt,omitempty"`
+}
+
+// UserRoleAssignment maps a durable user principal to roles and optional
+// human-readable identity metadata captured from the latest SSO login.
 type UserRoleAssignment struct {
-	Username  string    `json:"username"`
-	RoleIDs   []string  `json:"roleIds"`
-	UpdatedAt time.Time `json:"updatedAt"`
+	Username     string     `json:"username"`
+	RoleIDs      []string   `json:"roleIds"`
+	DisplayName  string     `json:"displayName,omitempty"`
+	Email        string     `json:"email,omitempty"`
+	ProviderType string     `json:"providerType,omitempty"`
+	ProviderID   string     `json:"providerId,omitempty"`
+	LastLoginAt  *time.Time `json:"lastLoginAt,omitempty"`
+	UpdatedAt    time.Time  `json:"updatedAt"`
+}
+
+const (
+	maxIdentityDisplayNameRunes = 256
+	maxIdentityEmailRunes       = 320
+	maxIdentityProviderRunes    = 128
+)
+
+// NormalizeUserIdentityMetadata bounds mutable IdP claims before persistence.
+// It does not turn any display field into an authorization identity.
+func NormalizeUserIdentityMetadata(metadata UserIdentityMetadata) UserIdentityMetadata {
+	metadata.DisplayName = truncateIdentityText(metadata.DisplayName, maxIdentityDisplayNameRunes)
+	metadata.Email = truncateIdentityText(metadata.Email, maxIdentityEmailRunes)
+	metadata.ProviderType = strings.ToLower(truncateIdentityText(metadata.ProviderType, maxIdentityProviderRunes))
+	metadata.ProviderID = truncateIdentityText(metadata.ProviderID, maxIdentityProviderRunes)
+	return metadata
+}
+
+func truncateIdentityText(value string, maxRunes int) string {
+	value = strings.TrimSpace(value)
+	runes := []rune(value)
+	if len(runes) > maxRunes {
+		return string(runes[:maxRunes])
+	}
+	return value
 }
 
 // RBACChangeLog represents an audit entry for RBAC changes.
@@ -132,6 +174,22 @@ type ErrorAwareManager interface {
 // identity alias to its canonical principal.
 type AssignmentMigrator interface {
 	MigrateUserAssignment(fromUsername, toUsername string) error
+}
+
+// UserIdentityManager persists mutable display metadata separately from the
+// durable principal used for authorization.
+type UserIdentityManager interface {
+	UpsertUserIdentity(username string, metadata UserIdentityMetadata) error
+}
+
+// UserDeprovisioner removes a known RBAC identity and all of its assignments.
+type UserDeprovisioner interface {
+	DeleteUser(username string) (bool, error)
+}
+
+// ContextualUserDeprovisioner adds the acting principal to the RBAC changelog.
+type ContextualUserDeprovisioner interface {
+	DeleteUserWithContext(username, byUser string) (bool, error)
 }
 
 var (

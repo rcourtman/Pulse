@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"database/sql"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -8,6 +9,45 @@ import (
 	"testing"
 	"time"
 )
+
+func TestSQLiteManagerAddsIdentityMetadataColumnsOnUpgrade(t *testing.T) {
+	tmpDir := t.TempDir()
+	rbacDir := filepath.Join(tmpDir, "rbac")
+	if err := os.MkdirAll(rbacDir, 0700); err != nil {
+		t.Fatalf("create RBAC directory: %v", err)
+	}
+	db, err := sql.Open("sqlite", filepath.Join(rbacDir, "rbac.db"))
+	if err != nil {
+		t.Fatalf("open legacy database: %v", err)
+	}
+	if _, err := db.Exec(`CREATE TABLE rbac_users (username TEXT PRIMARY KEY, updated_at INTEGER NOT NULL)`); err != nil {
+		t.Fatalf("create legacy users table: %v", err)
+	}
+	if _, err := db.Exec(`INSERT INTO rbac_users (username, updated_at) VALUES ('legacy-user', 1)`); err != nil {
+		t.Fatalf("seed legacy user: %v", err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatalf("close legacy database: %v", err)
+	}
+
+	manager, err := NewSQLiteManager(SQLiteManagerConfig{DataDir: tmpDir})
+	if err != nil {
+		t.Fatalf("upgrade legacy database: %v", err)
+	}
+	defer manager.Close()
+	if err := manager.UpsertUserIdentity("legacy-user", UserIdentityMetadata{
+		DisplayName:  "Alice Example",
+		Email:        "alice@example.com",
+		ProviderType: "OIDC",
+		ProviderID:   "okta",
+	}); err != nil {
+		t.Fatalf("write identity metadata after upgrade: %v", err)
+	}
+	assignment, ok := manager.GetUserAssignment("legacy-user")
+	if !ok || assignment.DisplayName != "Alice Example" || assignment.Email != "alice@example.com" || assignment.ProviderType != "oidc" || assignment.ProviderID != "okta" || assignment.LastLoginAt == nil {
+		t.Fatalf("upgraded identity metadata = %#v, exists=%v", assignment, ok)
+	}
+}
 
 func TestSQLiteManager(t *testing.T) {
 	// Create temp directory for tests
@@ -659,6 +699,46 @@ func TestSQLiteManagerKeepsIdentityWhenRolesAreEmptyOrDeleted(t *testing.T) {
 		VALUES ('orphaned-user', ?, ?)
 	`, RoleViewer, time.Now().Unix()); err == nil {
 		t.Fatal("assignment schema accepted an identity missing from rbac_users")
+	}
+}
+
+func TestSQLiteManagerIdentityMetadataSurvivesRoleUpdatesAndDeprovisions(t *testing.T) {
+	manager, err := NewSQLiteManager(SQLiteManagerConfig{DataDir: t.TempDir()})
+	if err != nil {
+		t.Fatalf("NewSQLiteManager: %v", err)
+	}
+	defer manager.Close()
+	principal := "sso:oidc:okta:stable"
+	loginAt := time.Unix(1_700_000_000, 0)
+	if err := manager.UpsertUserIdentity(principal, UserIdentityMetadata{
+		DisplayName: "Alice Example", Email: "alice@example.com", ProviderType: "OIDC", ProviderID: "okta", LastLoginAt: loginAt,
+	}); err != nil {
+		t.Fatalf("UpsertUserIdentity: %v", err)
+	}
+	if err := manager.UpdateUserRoles(principal, []string{RoleViewer}); err != nil {
+		t.Fatalf("UpdateUserRoles: %v", err)
+	}
+	assignment, ok := manager.GetUserAssignment(principal)
+	if !ok || assignment.DisplayName != "Alice Example" || assignment.Email != "alice@example.com" || assignment.ProviderType != "oidc" || assignment.ProviderID != "okta" || assignment.LastLoginAt == nil || !assignment.LastLoginAt.Equal(loginAt) {
+		t.Fatalf("identity metadata lost during role update: %#v, exists=%v", assignment, ok)
+	}
+	deleted, err := manager.DeleteUserWithContext(principal, "admin")
+	if err != nil || !deleted {
+		t.Fatalf("DeleteUserWithContext = %v, %v", deleted, err)
+	}
+	if _, ok := manager.GetUserAssignment(principal); ok {
+		t.Fatal("deprovisioned identity still exists")
+	}
+	logs := manager.GetChangeLogsForEntity("assignment", principal)
+	foundDeprovision := false
+	for _, entry := range logs {
+		if entry.Action == ActionUserUnassigned && entry.User == "admin" {
+			foundDeprovision = true
+			break
+		}
+	}
+	if !foundDeprovision {
+		t.Fatalf("deprovision changelog = %#v", logs)
 	}
 }
 

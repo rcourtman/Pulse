@@ -3,6 +3,7 @@ package auth
 import (
 	"os"
 	"testing"
+	"time"
 )
 
 func TestFileManager(t *testing.T) {
@@ -132,6 +133,35 @@ func TestFileManager(t *testing.T) {
 		assignment, _ := m.GetUserAssignment("testuser")
 		if len(assignment.RoleIDs) != 1 {
 			t.Errorf("Expected 1 role after removal, got %d", len(assignment.RoleIDs))
+		}
+	})
+
+	t.Run("Identity metadata survives role updates and can be deprovisioned", func(t *testing.T) {
+		const principal = "sso:oidc:okta:stable"
+		loginAt := time.Unix(1_700_000_000, 0)
+		if err := m.UpsertUserIdentity(principal, UserIdentityMetadata{
+			DisplayName: "Alice Example", Email: "alice@example.com", ProviderType: "OIDC", ProviderID: "okta", LastLoginAt: loginAt,
+		}); err != nil {
+			t.Fatalf("UpsertUserIdentity: %v", err)
+		}
+		if err := m.UpdateUserRoles(principal, []string{RoleViewer}); err != nil {
+			t.Fatalf("UpdateUserRoles: %v", err)
+		}
+
+		persisted, err := NewFileManager(tmpDir)
+		if err != nil {
+			t.Fatalf("reload FileManager: %v", err)
+		}
+		assignment, ok := persisted.GetUserAssignment(principal)
+		if !ok || assignment.DisplayName != "Alice Example" || assignment.Email != "alice@example.com" || assignment.ProviderType != "oidc" || assignment.LastLoginAt == nil || !assignment.LastLoginAt.Equal(loginAt) {
+			t.Fatalf("persisted identity metadata = %#v, exists=%v", assignment, ok)
+		}
+		deleted, err := persisted.DeleteUser(principal)
+		if err != nil || !deleted {
+			t.Fatalf("DeleteUser = %v, %v", deleted, err)
+		}
+		if _, ok := persisted.GetUserAssignment(principal); ok {
+			t.Fatal("deprovisioned file-backed identity still exists")
 		}
 	})
 

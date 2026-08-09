@@ -104,6 +104,10 @@ curl http://localhost:7655/api/admin/users \
   -H "Authorization: Bearer $TOKEN"
 ```
 
+SSO users are displayed using the latest configured username claim and email
+when available. The `username` field remains the provider-scoped stable
+principal used for authorization.
+
 ### Setting Roles for a User
 
 Role assignments are set as a complete list — the user's roles are replaced with the provided set:
@@ -125,6 +129,17 @@ curl -X PUT http://localhost:7655/api/admin/users/jane/roles \
 ```
 
 Note: Users cannot modify their own role assignments (self-escalation prevention).
+
+### Removing User Access
+
+```bash
+curl -X DELETE http://localhost:7655/api/admin/users/jane \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+This removes the Pulse identity and all role assignments and revokes its active
+sessions. You cannot remove your own current identity. Removal does not disable
+the upstream IdP account; a later authorized SSO login recreates the record.
 
 ---
 

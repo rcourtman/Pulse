@@ -297,6 +297,63 @@ func (h *RBACHandlers) HandleUserRoleActions(w http.ResponseWriter, r *http.Requ
 	}
 
 	switch r.Method {
+	case http.MethodDelete:
+		if len(parts) != 1 {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		callerUser := auth.GetUser(r.Context())
+		if callerUser != "" && strings.EqualFold(callerUser, username) {
+			LogAuditEventForTenant(GetOrgID(r.Context()), "user_deprovision_self_denied", callerUser, GetClientIP(r), r.URL.Path, false, "Attempted to deprovision own identity")
+			writeErrorResponse(w, http.StatusForbidden, "self_deprovision_denied", "Cannot remove your own user access", nil)
+			return
+		}
+
+		contextual, supportsContextualDelete := manager.(auth.ContextualUserDeprovisioner)
+		deprovisioner, supportsDelete := manager.(auth.UserDeprovisioner)
+		if !supportsContextualDelete && !supportsDelete {
+			writeErrorResponse(w, http.StatusNotImplemented, "deprovision_unavailable", "User removal is not available for this RBAC store", nil)
+			return
+		}
+		var exists bool
+		if errorAware, ok := manager.(auth.ErrorAwareManager); ok {
+			_, exists, err = errorAware.GetUserAssignmentWithError(username)
+		} else {
+			_, exists = manager.GetUserAssignment(username)
+		}
+		if err != nil {
+			writeRBACStoreError(w, err)
+			return
+		}
+		if !exists {
+			writeErrorResponse(w, http.StatusNotFound, "not_found", "User assignment not found", nil)
+			return
+		}
+
+		// Revoke first so a storage failure can never leave an authenticated
+		// session alive after its RBAC identity has disappeared. If the delete
+		// then fails, the retained identity can safely establish a new session.
+		InvalidateUserSessions(username)
+		var deleted bool
+		if supportsContextualDelete {
+			deleted, err = contextual.DeleteUserWithContext(username, callerUser)
+		} else {
+			deleted, err = deprovisioner.DeleteUser(username)
+		}
+		if err != nil {
+			LogAuditEventForTenant(GetOrgID(r.Context()), "user_deprovision_failed", callerUser, GetClientIP(r), r.URL.Path, false, "Revoked sessions but failed to remove user "+username)
+			writeRBACStoreError(w, err)
+			return
+		}
+		if !deleted {
+			writeErrorResponse(w, http.StatusNotFound, "not_found", "User assignment not found", nil)
+			return
+		}
+
+		LogAuditEventForTenant(GetOrgID(r.Context()), "user_deprovisioned", callerUser, GetClientIP(r), r.URL.Path, true, "Removed user "+username+" and revoked active sessions")
+		RecordRBACRoleMutation("deprovision")
+		w.WriteHeader(http.StatusNoContent)
+
 	case http.MethodPut, http.MethodPost:
 		// Self-escalation prevention: users cannot modify their own role assignments.
 		// This prevents privilege escalation and ensures audit trail integrity.

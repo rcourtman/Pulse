@@ -1,16 +1,26 @@
 {
   "version": 1,
-  "base_sha": "e9904157e718d6233d6d8bfe292a3f820ec2e123",
-  "verified_at": "2026-08-09T09:53:20Z",
+  "base_sha": "70f7ca9f6f2b1b176d117a8f4f3315e3538847ac",
+  "verified_at": "2026-08-09T12:25:13Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Settings/InfrastructureAgentDoctorPage.tsx"
+    "frontend-modern/src/api/rbac.ts",
+    "frontend-modern/src/components/Settings/UserAssignmentsDialog.tsx",
+    "frontend-modern/src/components/Settings/UserAssignmentsPanel.tsx",
+    "frontend-modern/src/components/Settings/useUserAssignmentsPanelState.ts",
+    "frontend-modern/src/types/rbac.ts",
+    "frontend-modern/src/utils/rbacPresentation.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Settings/InfrastructureAgentDoctorPage.tsx": "3391790f60fe53f5d2c353cfd71d388e2e46e2e949bafd35d60a5732cb8f4dd0"
+    "frontend-modern/src/api/rbac.ts": "9e4c2366443ba770e4b0755aa095686c44c44ec9d4b7a6bb90fb5359082982ba",
+    "frontend-modern/src/components/Settings/UserAssignmentsDialog.tsx": "1a7990c833e6ddd98a5cceb6476f894745674b957cfa26d1fdfa820299a8a68b",
+    "frontend-modern/src/components/Settings/UserAssignmentsPanel.tsx": "8e2a89c845572591a73eac622effd137e5e9e96741ce700a4168f9b8e58a3ca2",
+    "frontend-modern/src/components/Settings/useUserAssignmentsPanelState.ts": "8497e59dffc7f19a50aff30b787ca1236b354b7404890774871712efbc4bea15",
+    "frontend-modern/src/types/rbac.ts": "1c08ceffc1aea3f4975455db2c4d92774060fa2d0ce7088e116930b85b5c2fbc",
+    "frontend-modern/src/utils/rbacPresentation.ts": "07b2affbeda8921da3def1063141fd4d1074ed02a8939288d06644376ed768ba"
   },
   "routes": [
-    "/settings/infrastructure/agent-doctor"
+    "/settings/security-users"
   ],
   "viewports": [
     {
@@ -23,15 +33,18 @@
     }
   ],
   "states": [
-    "Isolated worktree backend with two genuinely enrolled agents (macOS host agent plus a colima Linux VM agent) whose API tokens were then revoked over the real settings API, producing a real two-installation credential-repair state with both connections reporting credentialStatus invalid.",
-    "The Generate update token section rendered the multiple-repair guidance and the installation selector as the shared labelled FormSelect primitive: a visible 'Agent installation to repair' label associated to the select via label[for] matching the select id, replacing the previous aria-label-only raw select.",
-    "After minting a token for the selected installation, the selected agent's detail exposed its host-local repair command with the fresh scoped credential embedded while the unselected installation stayed locked with the select-this-installation-above guidance.",
-    "At 390x844 the Agent Doctor document scroll width measured exactly 390 pixels with the labelled selector rendered full-width inside the token section."
+    "An isolated Pro development runtime showed an OIDC user by the mutable display name Alice Example, with alice@example.com and OIDC · okta as secondary identity context while retaining the stable sso:oidc:okta:browser-subject authorization principal.",
+    "The Manage Access dialog used the readable identity in its title and exposed email and provider context while preserving the current Viewer role and effective-permissions preview.",
+    "The removal confirmation clearly stated that roles and active Pulse sessions are removed, that the upstream identity-provider account is not disabled, and that a later authorized SSO login can recreate the Pulse identity.",
+    "A successful removal returned the filtered list to no matching SSO user and displayed User access removed for Alice Example; an attempted self-removal retained the admin row and displayed You cannot remove your own user access.",
+    "At 390x844 the page remained exactly 390 pixels wide, the shared table shell provided horizontal access to both actions, and the 358-pixel confirmation dialog stayed inside the viewport without clipping or horizontal document overflow."
   ],
   "interactions": [
-    "Logged in and opened the Agent Doctor at 1440x900 with two critical credential-repair targets present.",
-    "Changed the installation selector from triage-mac-01 to triage-vm-01 and confirmed the select value, selected option text, and visible associated label via DOM inspection.",
-    "Clicked Generate token for the selected installation, then expanded both agent rows and verified the per-installation unlock: triage-vm-01's command carried the embedded token and triage-mac-01 remained gated.",
-    "Resized to 390x844, reloaded, and re-verified the labelled selector rendering and a 390-pixel document scroll width against the 390-pixel viewport."
+    "Searched by the mutable SSO email claim and confirmed the readable identity, provider label, stable principal, Viewer role, Manage Access action, and Remove action at 1440x900.",
+    "Opened Manage Access, inspected the readable identity and role state, dismissed it with Escape, and confirmed focus returned to Manage Access.",
+    "Opened Remove, clicked the backdrop and confirmed the non-dismissible destructive dialog remained open, then dismissed it with Escape and confirmed focus returned to Remove.",
+    "At 390x844 horizontally scrolled the shared data-grid shell to reach Manage Access and Remove, opened the confirmation, verified initial focus on Cancel and in-viewport placement, cancelled it, and confirmed focus returned to Remove.",
+    "Reopened the narrow confirmation and removed Alice Example through the live DELETE endpoint, then verified the row disappeared and the success notification appeared.",
+    "Seeded the current admin identity in the isolated fixture, attempted self-removal through the same confirmation, and verified the backend denial remained non-destructive and surfaced the specific self-removal message."
   ]
 }

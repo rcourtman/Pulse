@@ -63,6 +63,8 @@ an enabled external-probe assignment.
 
 ## Canonical Files
 
+1a. `docs/API.md`
+1b. `frontend-modern/public/docs/API.md`
 1. `internal/api/contract_test.go`
    1a. `internal/api/platform_connection_shared.go`
    1b. `internal/api/metadata_handlers_shared.go`
@@ -5208,7 +5210,11 @@ That same runtime SSO contract also owns browser-session principal identity:
 OIDC/SAML session users from provider-scoped stable subjects (`sub`/`NameID`
 plus provider ID), not mutable username, email, or display-name claims. Legacy
 username/email RBAC assignments may be copied only as compatibility migration
-inputs when no authoritative group mapping is present.
+inputs when no authoritative group mapping is present. Successful OIDC/SAML
+login may upsert bounded `displayName`, `email`, `providerType`, `providerId`,
+and `lastLoginAt` presentation metadata against that stable principal; these
+fields are returned by RBAC user-assignment reads but never become session or
+authorization identity.
 The SSO entitlement contract is part of that same API boundary. Provider
 administration, SAML metadata preview/test, and runtime SAML routes may require
 the core `sso` capability, but they must not gate SAML or multi-provider
@@ -7851,6 +7857,13 @@ canonical manager. Healthy empty role-assignment collections serialize as
 return `503 rbac_store_unavailable` and must not be normalized into a
 successful empty response. Stable colon-delimited SSO principals remain valid
 assignment targets, while slashes and path-traversal input remain rejected.
+`DELETE /api/admin/users/{username}` is the canonical deprovision operation:
+it removes the stored identity and all role assignments, revokes all persisted
+sessions and CSRF state for the principal, emits central and RBAC changelog
+audit evidence, returns `404` for an unknown identity, and returns
+`403 self_deprovision_denied` when the caller targets their own principal.
+Paths ending in `/roles` or `/permissions` are not deprovision targets. The
+operation does not block a later IdP-authorized login from recreating the user.
 The onboarding QR payload flow now also carries explicit token-bound auth
 semantics: when the frontend requests `/api/onboarding/qr` with a pairing
 token, the API client must send that token explicitly so the returned payload

@@ -88,8 +88,9 @@ into availability-probe entitlement.
 45. `internal/api/agent_exec_token_binding.go`
 46. `internal/logging/logging.go`
 47. `pkg/auth/rbac.go`
-48. `pkg/auth/sqlite_manager.go`
-49. `pkg/server/server.go`
+48. `pkg/auth/rbac_manager.go`
+49. `pkg/auth/sqlite_manager.go`
+50. `pkg/server/server.go`
 
 ## Shared Boundaries
 
@@ -1497,7 +1498,15 @@ conflicts with newer v6 state must preserve the source files and make RBAC
 unavailable with an explicit error rather than silently yielding empty data.
 The canonical identity table must retain known local and stable SSO principals
 when their role set is empty or a custom role is deleted, without retaining a
-permission grant to the deleted role. Enterprise regression coverage in
+permission grant to the deleted role. It may also retain bounded mutable SSO
+display-name, email, provider, and last-login metadata for operator
+presentation, but those claims never replace the stable provider-scoped
+principal used for authorization. Deprovisioning removes the identity and its
+assignments, writes the acting administrator to the RBAC changelog, rejects
+self-removal, and revokes every persisted session and matching CSRF record for
+that principal, including sessions restored after restart. Deprovisioning is
+not an IdP denylist: a later login that still passes provider restrictions may
+recreate the identity. Enterprise regression coverage in
 `pulse-enterprise/internal/rbac/rbac_test.go` must preserve the real startup
 order and prove that an OIDC principal assigned after initialization is
 authorized from the canonical manager.

@@ -15,6 +15,7 @@ const getRolesMock = vi.fn();
 const getUsersMock = vi.fn();
 const getUserPermissionsMock = vi.fn();
 const updateUserRolesMock = vi.fn();
+const deleteUserMock = vi.fn();
 const notificationSuccessMock = vi.fn();
 const notificationErrorMock = vi.fn();
 const loggerErrorMock = vi.fn();
@@ -49,6 +50,7 @@ vi.mock('@/api/rbac', () => ({
     getUsers: (...args: unknown[]) => getUsersMock(...args),
     getUserPermissions: (...args: unknown[]) => getUserPermissionsMock(...args),
     updateUserRoles: (...args: unknown[]) => updateUserRolesMock(...args),
+    deleteUser: (...args: unknown[]) => deleteUserMock(...args),
     saveRole: vi.fn(),
     deleteRole: vi.fn(),
   },
@@ -82,6 +84,7 @@ describe('RBAC paywall settings panels', () => {
     getUsersMock.mockReset();
     getUserPermissionsMock.mockReset();
     updateUserRolesMock.mockReset();
+    deleteUserMock.mockReset();
     notificationSuccessMock.mockReset();
     notificationErrorMock.mockReset();
     loggerErrorMock.mockReset();
@@ -110,6 +113,7 @@ describe('RBAC paywall settings panels', () => {
     ]);
     getUserPermissionsMock.mockResolvedValue([]);
     updateUserRolesMock.mockResolvedValue(undefined);
+    deleteUserMock.mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -240,6 +244,36 @@ describe('RBAC paywall settings panels', () => {
       'min-h-11',
       'sm:min-h-9',
     );
+  });
+
+  it('shows readable SSO identity details and confirms deprovisioning', async () => {
+    getUsersMock.mockResolvedValueOnce([
+      {
+        username: 'sso:oidc:okta:opaque_subject',
+        displayName: 'Alice Example',
+        email: 'alice@example.com',
+        providerType: 'oidc',
+        providerId: 'okta',
+        roleIds: ['admin'],
+      },
+    ]);
+
+    render(() => <UserAssignmentsPanel />);
+
+    expect(await screen.findByText('Alice Example')).toBeInTheDocument();
+    expect(screen.getByText('alice@example.com')).toBeInTheDocument();
+    expect(screen.getByText('OIDC · okta')).toBeInTheDocument();
+    expect(screen.getByTitle('sso:oidc:okta:opaque_subject')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Remove user access: Alice Example' });
+    expect(dialog).toHaveTextContent('does not disable the account at the identity provider');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Remove User Access' }));
+    await waitFor(() => {
+      expect(deleteUserMock).toHaveBeenCalledWith('sso:oidc:okta:opaque_subject');
+    });
+    expect(notificationSuccessMock).toHaveBeenCalledWith('User access removed for Alice Example');
   });
 
   it('does not render stale user data when assignment storage is unavailable', async () => {

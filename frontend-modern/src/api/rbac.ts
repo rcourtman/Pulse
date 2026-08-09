@@ -26,6 +26,8 @@ export const RBACAPI = {
       method: 'PUT',
       body: JSON.stringify({ roleIds }),
     }),
+  deleteUser: (username: string) =>
+    apiFetchJSON(`/api/admin/users/${encodeURIComponent(username)}`, { method: 'DELETE' }),
 
   getUserPermissions: (username: string) =>
     apiFetchJSON<Permission[]>(`/api/admin/users/${encodeURIComponent(username)}/permissions`),

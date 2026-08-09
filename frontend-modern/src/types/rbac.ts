@@ -16,5 +16,10 @@ export interface Role {
 export interface UserRoleAssignment {
   username: string;
   roleIds: string[];
+  displayName?: string;
+  email?: string;
+  providerType?: string;
+  providerId?: string;
+  lastLoginAt?: string;
   updatedAt?: string;
 }

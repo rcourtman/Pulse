@@ -8,7 +8,9 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
@@ -56,6 +58,15 @@ func (m *mockRBACManager) UpdateUserRoles(username string, roleIDs []string) err
 	return nil
 }
 func (m *mockRBACManager) RemoveRole(username string, roleID string) error { return nil }
+func (m *mockRBACManager) DeleteUser(username string) (bool, error) {
+	for i, assignment := range m.assignments {
+		if assignment.Username == username {
+			m.assignments = append(m.assignments[:i], m.assignments[i+1:]...)
+			return true, nil
+		}
+	}
+	return false, nil
+}
 func (m *mockRBACManager) GetUserPermissions(username string) []auth.Permission {
 	return []auth.Permission{{Action: "read", Resource: "nodes"}}
 }
@@ -205,6 +216,44 @@ func TestHandleUserRoleActions(t *testing.T) {
 		}
 		if len(mock.assignments) != beforeAssignments {
 			t.Fatalf("self mutation should not write assignments, got %+v", mock.assignments)
+		}
+	})
+
+	t.Run("Block self deprovision", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodDelete, "/api/admin/users/admin", nil)
+		req = req.WithContext(auth.WithUser(req.Context(), "AdMiN"))
+		rr := httptest.NewRecorder()
+
+		h.HandleUserRoleActions(rr, req)
+
+		if rr.Code != http.StatusForbidden || !strings.Contains(rr.Body.String(), "self_deprovision_denied") {
+			t.Fatalf("self deprovision response = %d %s", rr.Code, rr.Body.String())
+		}
+	})
+
+	t.Run("Deprovision user and revoke sessions", func(t *testing.T) {
+		resetSessionTracking()
+		resetSessionStoreForTests()
+		resetCSRFStoreForTests()
+		t.Cleanup(resetSessionStoreForTests)
+		t.Cleanup(resetCSRFStoreForTests)
+		dir := t.TempDir()
+		InitSessionStore(dir)
+		InitCSRFStore(dir)
+		mock.assignments = append(mock.assignments, auth.UserRoleAssignment{Username: "retired-user", RoleIDs: []string{"viewer"}})
+		token := generateSessionToken()
+		GetSessionStore().CreateSession(token, time.Hour, "agent", "127.0.0.1", "retired-user")
+
+		req := httptest.NewRequest(http.MethodDelete, "/api/admin/users/retired-user", nil)
+		req = req.WithContext(auth.WithUser(req.Context(), "admin"))
+		rr := httptest.NewRecorder()
+		h.HandleUserRoleActions(rr, req)
+
+		if rr.Code != http.StatusNoContent {
+			t.Fatalf("deprovision response = %d %s", rr.Code, rr.Body.String())
+		}
+		if GetSessionStore().GetSession(token) != nil {
+			t.Fatal("deprovision left persisted session active")
 		}
 	})
 }

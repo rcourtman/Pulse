@@ -63,6 +63,25 @@ func TestSessionHash(t *testing.T) {
 	}
 }
 
+func TestSessionStoreDeleteSessionsForUser(t *testing.T) {
+	store := NewSessionStore(t.TempDir())
+	t.Cleanup(store.Shutdown)
+	store.CreateSession("alice-one", time.Hour, "agent", "127.0.0.1", "alice")
+	store.CreateSession("alice-two", time.Hour, "agent", "127.0.0.1", "alice")
+	store.CreateSession("bob-one", time.Hour, "agent", "127.0.0.1", "bob")
+
+	deletedKeys := store.DeleteSessionsForUser("alice")
+	if len(deletedKeys) != 2 {
+		t.Fatalf("deleted session keys = %d, want 2", len(deletedKeys))
+	}
+	if store.GetSession("alice-one") != nil || store.GetSession("alice-two") != nil {
+		t.Fatal("target user's sessions survived deletion")
+	}
+	if store.GetSession("bob-one") == nil {
+		t.Fatal("another user's session was deleted")
+	}
+}
+
 func TestSessionHash_Format(t *testing.T) {
 	hash := sessionHash("test-token")
 

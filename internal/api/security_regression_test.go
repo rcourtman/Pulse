@@ -31,6 +31,34 @@ type wsRawMessage struct {
 	Payload json.RawMessage       `json:"payload,omitempty"`
 }
 
+func TestDeprovisionSessionRevocationIncludesPersistedUntrackedSessions(t *testing.T) {
+	resetSessionTracking()
+	resetSessionStoreForTests()
+	resetCSRFStoreForTests()
+	t.Cleanup(resetSessionStoreForTests)
+	t.Cleanup(resetCSRFStoreForTests)
+
+	dir := t.TempDir()
+	InitSessionStore(dir)
+	InitCSRFStore(dir)
+	token := generateSessionToken()
+	GetSessionStore().CreateSession(token, time.Hour, "agent", "127.0.0.1", "retired-user")
+	csrfToken := generateCSRFToken(token)
+	if !GetCSRFStore().ValidateCSRFToken(token, csrfToken) {
+		t.Fatal("expected CSRF token to be valid before revocation")
+	}
+	// Deliberately do not call TrackUserSession: this models a session loaded
+	// from persistent storage after process restart.
+	InvalidateUserSessions("retired-user")
+
+	if GetSessionStore().GetSession(token) != nil {
+		t.Fatal("persisted untracked session survived account-wide revocation")
+	}
+	if GetCSRFStore().ValidateCSRFToken(token, csrfToken) {
+		t.Fatal("CSRF state survived account-wide revocation")
+	}
+}
+
 func TestBrowserCookiePolicyWritesSecureCookiesForTLS(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "https://pulse.example/api/config", nil)
 	rec := httptest.NewRecorder()

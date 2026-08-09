@@ -5141,3 +5141,14 @@ addresses, stable connection IDs, raw error text, credential state objects, and
 all administrative configuration remain absent by construction. The
 api-contracts contract owns the authoritative four-field payload and
 authorization proof.
+
+### RBAC identity metadata and deprovisioning preserve storage boundaries
+
+`internal/api/` is a canonical reference in this contract's Extension Points.
+The additive RBAC identity metadata columns live only in the canonical RBAC
+SQLite store, and user deprovisioning removes that identity, its assignments,
+persisted browser sessions, and matching CSRF state. It does not mutate backup,
+restore, retention, resource-store, or recovery evidence. Additive RBAC schema
+upgrade preserves older identities and fails construction on migration errors;
+the security-privacy and api-contracts contracts own the authoritative shape
+and proof.

@@ -91,3 +91,17 @@ func applySSORoleAssignments(manager internalauth.Manager, principal string, leg
 	}
 	return nil
 }
+
+// recordSSOIdentity keeps mutable presentation claims separate from the
+// provider-scoped authorization principal. Managers predating identity
+// metadata remain compatible; durable managers implement UserIdentityManager.
+func recordSSOIdentity(manager internalauth.Manager, principal string, metadata internalauth.UserIdentityMetadata) error {
+	if manager == nil || strings.TrimSpace(principal) == "" {
+		return nil
+	}
+	identityManager, ok := manager.(internalauth.UserIdentityManager)
+	if !ok {
+		return nil
+	}
+	return identityManager.UpsertUserIdentity(principal, metadata)
+}

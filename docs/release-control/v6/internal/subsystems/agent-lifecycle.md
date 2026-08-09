@@ -6105,3 +6105,13 @@ command-session enrichment used by the administrative ledger. Agent reporting,
 registration, update, and command authority remain unchanged, and the
 fully-populated projection test fails if any of those lifecycle facts cross the
 viewer boundary.
+
+### RBAC user deprovisioning does not alter agent identity
+
+`internal/api/` is a canonical reference in this contract's Extension Points,
+so this records the additive RBAC user-removal route and SSO presentation
+metadata. Human browser principals remain separate from enrolled agent IDs,
+agent tokens, command sessions, and report identity. Deprovisioning a human
+principal revokes that principal's browser sessions only and does not delete,
+reassign, or synthesize agent lifecycle state. The api-contracts and
+security-privacy contracts own the authoritative behavior and proof.

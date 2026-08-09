@@ -7,8 +7,11 @@ import {
   getRolesRequiredFieldsMessage,
   getRolesSaveErrorMessage,
   getUserAssignmentsLoadErrorMessage,
+  getUserAssignmentsDeleteErrorMessage,
   getUserAssignmentsEmptyStateCopy,
   getUserAssignmentsUpdateErrorMessage,
+  getUserIdentityDisplayName,
+  getUserIdentityProviderLabel,
 } from '@/utils/rbacPresentation';
 
 describe('rbacPresentation', () => {
@@ -48,6 +51,19 @@ describe('rbacPresentation', () => {
     expect(getRolesEmptyState()).toBe('No roles available.');
   });
 
+  it('presents mutable identity claims without replacing the stable principal', () => {
+    const user = {
+      username: 'sso:oidc:okta:stable',
+      displayName: 'Alice Example',
+      email: 'alice@example.com',
+      providerType: 'oidc',
+      providerId: 'okta',
+    };
+    expect(getUserIdentityDisplayName(user)).toBe('Alice Example');
+    expect(getUserIdentityProviderLabel(user)).toBe('OIDC · okta');
+    expect(getUserIdentityDisplayName({ username: 'local-admin' })).toBe('local-admin');
+  });
+
   it('returns canonical RBAC admin error copy', () => {
     expect(getRolesLoadErrorMessage()).toBe('Failed to load roles');
     expect(getRolesDeleteErrorMessage()).toBe('Failed to delete role');
@@ -55,5 +71,12 @@ describe('rbacPresentation', () => {
     expect(getRolesSaveErrorMessage()).toBe('Failed to save role');
     expect(getUserAssignmentsLoadErrorMessage()).toBe('Failed to load user assignments');
     expect(getUserAssignmentsUpdateErrorMessage()).toBe('Failed to update user roles');
+    expect(getUserAssignmentsDeleteErrorMessage()).toBe('Failed to remove user access');
+    expect(
+      getUserAssignmentsDeleteErrorMessage({
+        status: 403,
+        code: 'self_deprovision_denied',
+      }),
+    ).toBe('You cannot remove your own user access.');
   });
 });

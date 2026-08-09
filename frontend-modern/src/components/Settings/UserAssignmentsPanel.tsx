@@ -8,11 +8,17 @@ import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 import Users from 'lucide-solid/icons/users';
 import Shield from 'lucide-solid/icons/shield';
 import Pencil from 'lucide-solid/icons/pencil';
+import Trash2 from 'lucide-solid/icons/trash-2';
 import { SearchField } from '@/components/shared/SearchField';
 import { PulseDataGrid } from '@/components/shared/PulseDataGrid';
-import { getUserAssignmentsEmptyStateCopy } from '@/utils/rbacPresentation';
+import {
+  getUserAssignmentsEmptyStateCopy,
+  getUserIdentityDisplayName,
+  getUserIdentityProviderLabel,
+} from '@/utils/rbacPresentation';
 import { InlineNotice } from '@/components/shared/InlineNotice';
 import TriangleAlert from 'lucide-solid/icons/triangle-alert';
+import { Dialog } from '@/components/shared/Dialog';
 
 export const UserAssignmentsPanel: Component = () => {
   const state = useUserAssignmentsPanelState();
@@ -101,9 +107,29 @@ export const UserAssignmentsPanel: Component = () => {
             columns={[
               {
                 key: 'username',
-                label: 'Username',
+                label: 'User',
                 render: (assignment) => (
-                  <span class="font-medium text-base-content">{assignment.username}</span>
+                  <div class="min-w-0">
+                    <div class="font-medium text-base-content">
+                      {getUserIdentityDisplayName(assignment)}
+                    </div>
+                    <Show when={assignment.email && assignment.email !== assignment.displayName}>
+                      <div class="truncate text-xs text-muted">{assignment.email}</div>
+                    </Show>
+                    <Show when={getUserIdentityProviderLabel(assignment)}>
+                      <div class="text-xs text-muted">
+                        {getUserIdentityProviderLabel(assignment)}
+                      </div>
+                    </Show>
+                    <Show when={assignment.username !== getUserIdentityDisplayName(assignment)}>
+                      <div
+                        class="max-w-md truncate font-mono text-[10px] text-muted"
+                        title={assignment.username}
+                      >
+                        {assignment.username}
+                      </div>
+                    </Show>
+                  </div>
                 ),
               },
               {
@@ -130,15 +156,26 @@ export const UserAssignmentsPanel: Component = () => {
                 label: 'Actions',
                 align: 'right',
                 render: (assignment) => (
-                  <Button
-                    variant="ghost"
-                    size="settingsAction"
-                    class="min-h-11 gap-2 sm:min-h-9"
-                    onClick={() => state.openManageAccess(assignment)}
-                  >
-                    <Pencil class="w-4 h-4" />
-                    Manage Access
-                  </Button>
+                  <div class="flex flex-wrap justify-end gap-1">
+                    <Button
+                      variant="ghost"
+                      size="settingsAction"
+                      class="min-h-11 gap-2 sm:min-h-9"
+                      onClick={() => state.openManageAccess(assignment)}
+                    >
+                      <Pencil class="w-4 h-4" />
+                      Manage Access
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="settingsAction"
+                      class="min-h-11 gap-2 text-red-600 hover:text-red-700 sm:min-h-9"
+                      onClick={() => state.openDeleteUser(assignment)}
+                    >
+                      <Trash2 class="w-4 h-4" />
+                      Remove
+                    </Button>
+                  </div>
                 ),
               },
             ]}
@@ -162,6 +199,44 @@ export const UserAssignmentsPanel: Component = () => {
         onSave={state.handleSaveAssignments}
         onToggleRole={state.toggleRole}
       />
+
+      <Show when={state.userPendingDeletion()}>
+        {(user) => (
+          <Dialog
+            isOpen={true}
+            onClose={state.closeDeleteUser}
+            closeOnBackdrop={false}
+            panelClass="max-w-lg"
+            ariaLabel={`Remove user access: ${getUserIdentityDisplayName(user())}`}
+          >
+            <div class="space-y-5 p-6">
+              <div>
+                <h3 class="text-lg font-semibold text-base-content">Remove user access?</h3>
+                <p class="mt-2 text-sm text-muted">
+                  This removes all role assignments for {getUserIdentityDisplayName(user())} and
+                  revokes their active Pulse sessions.
+                </p>
+              </div>
+              <div class="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-100">
+                This does not disable the account at the identity provider. A later authorized SSO
+                login will create the user record again.
+              </div>
+              <div class="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+                <Button onClick={state.closeDeleteUser} disabled={state.deletingUser()}>
+                  Cancel
+                </Button>
+                <Button
+                  variant="danger"
+                  isLoading={state.deletingUser()}
+                  onClick={() => void state.handleDeleteUser()}
+                >
+                  Remove User Access
+                </Button>
+              </div>
+            </div>
+          </Dialog>
+        )}
+      </Show>
     </div>
   );
 };

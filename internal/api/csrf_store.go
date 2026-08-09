@@ -253,6 +253,28 @@ func (c *CSRFTokenStore) DeleteCSRFToken(sessionID string) {
 	c.saveUnsafe()
 }
 
+// DeleteCSRFSessionKeys removes records by their hashed session-storage keys.
+// This is used for account-wide revocation, where persisted sessions can be
+// found by principal without retaining their raw bearer tokens.
+func (c *CSRFTokenStore) DeleteCSRFSessionKeys(sessionKeys []string) {
+	if len(sessionKeys) == 0 {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	changed := false
+	for _, key := range sessionKeys {
+		if _, ok := c.tokens[key]; ok {
+			delete(c.tokens, key)
+			changed = true
+		}
+	}
+	if changed {
+		c.saveUnsafe()
+	}
+}
+
 func (c *CSRFTokenStore) addTokenUnsafe(sessionKey string, token *CSRFToken, now time.Time) {
 	if token == nil || sessionKey == "" {
 		return

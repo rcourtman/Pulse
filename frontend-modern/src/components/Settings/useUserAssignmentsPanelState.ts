@@ -4,8 +4,10 @@ import type { Permission, Role, UserRoleAssignment } from '@/types/rbac';
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
 import {
+  getUserAssignmentsDeleteErrorMessage,
   getUserAssignmentsLoadErrorMessage,
   getUserAssignmentsUpdateErrorMessage,
+  getUserIdentityDisplayName,
 } from '@/utils/rbacPresentation';
 import { useRBACFeatureGateState } from './useRBACFeatureGateState';
 
@@ -21,6 +23,10 @@ export function useUserAssignmentsPanelState() {
   const [loadingPermissions, setLoadingPermissions] = createSignal(false);
   const [formRoleIds, setFormRoleIds] = createSignal<string[]>([]);
   const [loadError, setLoadError] = createSignal<string | null>(null);
+  const [deletingUser, setDeletingUser] = createSignal(false);
+  const [userPendingDeletion, setUserPendingDeletion] = createSignal<UserRoleAssignment | null>(
+    null,
+  );
 
   const featureGate = useRBACFeatureGateState({
     kind: 'user-assignments',
@@ -78,7 +84,15 @@ export function useUserAssignmentsPanelState() {
   const filteredAssignments = createMemo(() => {
     const query = searchQuery().toLowerCase();
     if (!query) return assignments();
-    return assignments().filter((assignment) => assignment.username.toLowerCase().includes(query));
+    return assignments().filter((assignment) =>
+      [
+        assignment.username,
+        assignment.displayName,
+        assignment.email,
+        assignment.providerType,
+        assignment.providerId,
+      ].some((value) => value?.toLowerCase().includes(query)),
+    );
   });
 
   const loadUserPermissions = async (username: string) => {
@@ -112,6 +126,33 @@ export function useUserAssignmentsPanelState() {
     await loadUserPermissions(assignment.username);
   };
 
+  const openDeleteUser = (assignment: UserRoleAssignment) => {
+    setUserPendingDeletion(assignment);
+  };
+
+  const closeDeleteUser = () => {
+    if (!deletingUser()) setUserPendingDeletion(null);
+  };
+
+  const handleDeleteUser = async () => {
+    const user = userPendingDeletion();
+    if (!user) return;
+
+    setDeletingUser(true);
+    try {
+      await RBACAPI.deleteUser(user.username);
+      notificationStore.success(`User access removed for ${getUserIdentityDisplayName(user)}`);
+      if (editingUser()?.username === user.username) closeModal();
+      setUserPendingDeletion(null);
+      await loadData();
+    } catch (err) {
+      logger.error('Failed to remove user access', err);
+      notificationStore.error(getUserAssignmentsDeleteErrorMessage(err));
+    } finally {
+      setDeletingUser(false);
+    }
+  };
+
   const handleSaveAssignments = async () => {
     const user = editingUser();
     if (!user) return;
@@ -143,24 +184,29 @@ export function useUserAssignmentsPanelState() {
     roles().find((role) => role.id === roleId)?.name || roleId;
 
   return {
+    closeDeleteUser,
     closeModal,
+    deletingUser,
     editingUser,
     featureGate,
     filteredAssignments,
     formRoleIds,
     getRoleName,
     handleSaveAssignments,
+    handleDeleteUser,
     loading,
     loadData,
     loadError,
     loadingPermissions,
     openManageAccess,
+    openDeleteUser,
     roles,
     saving,
     searchQuery,
     setSearchQuery,
     showModal,
     toggleRole,
+    userPendingDeletion,
     userPermissions,
   };
 }

@@ -786,19 +786,25 @@ func InvalidateUserSessions(user string) {
 	defer sessionsMu.Unlock()
 
 	sessionIDs := allSessions[user]
-	for _, sid := range sessionIDs {
-		// Delete from persistent session store
-		GetSessionStore().DeleteSession(sid)
-
-		// Delete CSRF tokens
-		GetCSRFStore().DeleteCSRFToken(sid)
+	sessionKeys := GetSessionStore().DeleteSessionsForUser(user)
+	seenKeys := make(map[string]struct{}, len(sessionKeys)+len(sessionIDs))
+	for _, key := range sessionKeys {
+		seenKeys[key] = struct{}{}
 	}
+	for _, sid := range sessionIDs {
+		key := sessionHash(sid)
+		if _, ok := seenKeys[key]; !ok {
+			sessionKeys = append(sessionKeys, key)
+			seenKeys[key] = struct{}{}
+		}
+	}
+	GetCSRFStore().DeleteCSRFSessionKeys(sessionKeys)
 
 	delete(allSessions, user)
 
 	log.Info().
 		Str("user", user).
-		Int("sessions_invalidated", len(sessionIDs)).
+		Int("sessions_invalidated", len(sessionKeys)).
 		Msg("Invalidated all user sessions")
 }
 

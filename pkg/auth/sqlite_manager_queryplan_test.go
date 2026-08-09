@@ -209,11 +209,22 @@ func newRBACPlanTestDB(t *testing.T) *sql.DB {
 			FOREIGN KEY (role_id) REFERENCES rbac_roles(id) ON DELETE CASCADE
 		);
 
+		CREATE TABLE IF NOT EXISTS rbac_users (
+			username TEXT PRIMARY KEY,
+			display_name TEXT NOT NULL DEFAULT '',
+			email TEXT NOT NULL DEFAULT '',
+			provider_type TEXT NOT NULL DEFAULT '',
+			provider_id TEXT NOT NULL DEFAULT '',
+			last_login_at INTEGER NOT NULL DEFAULT 0,
+			updated_at INTEGER NOT NULL
+		);
+
 		CREATE TABLE IF NOT EXISTS rbac_user_assignments (
 			username TEXT NOT NULL,
 			role_id TEXT NOT NULL,
 			updated_at INTEGER NOT NULL,
 			PRIMARY KEY (username, role_id),
+			FOREIGN KEY (username) REFERENCES rbac_users(username) ON DELETE CASCADE,
 			FOREIGN KEY (role_id) REFERENCES rbac_roles(id) ON DELETE CASCADE
 		);
 
@@ -259,6 +270,12 @@ func newRBACPlanTestDB(t *testing.T) *sql.DB {
 	}
 	for i := 0; i < 10; i++ {
 		username := fmt.Sprintf("user%d", i)
+		if _, err := db.Exec(
+			`INSERT INTO rbac_users (username, updated_at) VALUES (?, ?)`,
+			username, now,
+		); err != nil {
+			t.Fatalf("seed user %s: %v", username, err)
+		}
 		if _, err := db.Exec(
 			`INSERT INTO rbac_user_assignments (username, role_id, updated_at) VALUES (?, 'viewer', ?)`,
 			username, now,

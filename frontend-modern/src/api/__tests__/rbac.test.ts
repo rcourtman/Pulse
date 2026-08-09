@@ -134,6 +134,19 @@ describe('RBACAPI', () => {
     });
   });
 
+  describe('deleteUser', () => {
+    it('deprovisions an encoded stable SSO principal', async () => {
+      vi.mocked(apiFetchJSON).mockResolvedValueOnce(undefined);
+
+      await RBACAPI.deleteUser('sso:oidc:okta:opaque_subject');
+
+      expect(apiFetchJSON).toHaveBeenCalledWith(
+        '/api/admin/users/sso%3Aoidc%3Aokta%3Aopaque_subject',
+        expect.objectContaining({ method: 'DELETE' }),
+      );
+    });
+  });
+
   describe('getUserPermissions', () => {
     it('fetches user permissions', async () => {
       const mockPermissions = [{ name: 'read:alerts' }];

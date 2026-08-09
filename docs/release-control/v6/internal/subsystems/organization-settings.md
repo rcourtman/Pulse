@@ -21,6 +21,8 @@ create, review, and approve cross-organization shares.
 
 ## Canonical Files
 
+1a. `docs/RBAC.md`
+1b. `frontend-modern/public/docs/RBAC.md`
 1. `frontend-modern/src/api/orgs.ts`
 2. `frontend-modern/src/api/rbac.ts`
 3. `frontend-modern/src/components/Settings/OrganizationAccessLoadingState.tsx`
@@ -52,11 +54,13 @@ create, review, and approve cross-organization shares.
 29. `frontend-modern/src/utils/organizationRolePresentation.ts`
 30. `frontend-modern/src/utils/organizationSettingsPresentation.ts`
 31. `frontend-modern/src/utils/orgUtils.ts`
-32. `internal/api/access_control_handlers.go`
-33. `internal/api/enterprise_extension_rbac_admin.go`
-34. `internal/api/org_handlers.go`
-35. `internal/api/org_lifecycle_handlers.go`
-36. `internal/models/organization.go`
+32. `frontend-modern/src/types/rbac.ts`
+33. `frontend-modern/src/utils/rbacPresentation.ts`
+34. `internal/api/access_control_handlers.go`
+35. `internal/api/enterprise_extension_rbac_admin.go`
+36. `internal/api/org_handlers.go`
+37. `internal/api/org_lifecycle_handlers.go`
+38. `internal/models/organization.go`
 
 ## Shared Boundaries
 
@@ -82,7 +86,7 @@ create, review, and approve cross-organization shares.
    `OrganizationRoleBadge` / `OrganizationShareStatusBadge` over the shared
    `MetadataBadge` primitive instead of using `roleBadgeClass`,
    `statusBadgeClass`, or local pill span classes in each section.
-3. Route organization and RBAC frontend transport changes through `frontend-modern/src/api/orgs.ts` and `frontend-modern/src/api/rbac.ts`
+3. Route organization and RBAC frontend transport changes through `frontend-modern/src/api/orgs.ts`, `frontend-modern/src/api/rbac.ts`, `frontend-modern/src/types/rbac.ts`, and `frontend-modern/src/utils/rbacPresentation.ts`
 4. Keep backend organization management and lifecycle handlers aligned through `internal/api/org_handlers.go` and `internal/api/org_lifecycle_handlers.go`
    Organization resource shares may reference the canonical Docker / Podman
    and Kubernetes inventory resource types exposed by `/api/resources`, but the
@@ -321,6 +325,13 @@ license and free-trial runtime, `useRolesPanelState.ts` plus
 `useUserAssignmentsPanelState.ts` plus `UserAssignmentsDialog.tsx` own the
 user-assignment runtime split. `RolesPanel.tsx` and `UserAssignmentsPanel.tsx`
 remain the canonical render shells for those governed RBAC surfaces.
+The User Access surface must present bounded SSO display-name, email, and
+provider metadata ahead of the opaque stable authorization principal while
+keeping that principal available for exact operator diagnosis. Search covers
+both presentation metadata and the stable principal. User removal requires an
+explicit confirmation, calls the canonical deprovision endpoint, and explains
+that Pulse revokes assignments and active sessions but does not disable the
+upstream IdP account; a later authorized SSO login may recreate the record.
 That RBAC gate now also depends on the shared commercial navigation contract:
 `RBACFeatureGateSection.tsx` may request the canonical `rbac` destination from
 the shared license boundary, but it must render that destination through the

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 )
@@ -288,13 +289,70 @@ func (m *FileManager) UpdateUserRoles(username string, roleIDs []string) error {
 		}
 	}
 
-	m.assignments[username] = UserRoleAssignment{
-		Username:  username,
-		RoleIDs:   roleIDs,
-		UpdatedAt: time.Now(),
-	}
+	assignment := m.assignments[username]
+	assignment.Username = username
+	assignment.RoleIDs = roleIDs
+	assignment.UpdatedAt = time.Now()
+	m.assignments[username] = assignment
 
 	return m.saveAssignments()
+}
+
+// UpsertUserIdentity records mutable presentation metadata without changing
+// the durable principal or its role assignments.
+func (m *FileManager) UpsertUserIdentity(username string, metadata UserIdentityMetadata) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	username = strings.TrimSpace(username)
+	if username == "" {
+		return fmt.Errorf("username is required")
+	}
+	metadata = NormalizeUserIdentityMetadata(metadata)
+	if metadata.LastLoginAt.IsZero() {
+		metadata.LastLoginAt = time.Now()
+	}
+	previous, existed := m.assignments[username]
+	assignment := previous
+	assignment.Username = username
+	if assignment.RoleIDs == nil {
+		assignment.RoleIDs = []string{}
+	}
+	assignment.DisplayName = metadata.DisplayName
+	assignment.Email = metadata.Email
+	assignment.ProviderType = metadata.ProviderType
+	assignment.ProviderID = metadata.ProviderID
+	lastLoginAt := metadata.LastLoginAt
+	assignment.LastLoginAt = &lastLoginAt
+	assignment.UpdatedAt = time.Now()
+	m.assignments[username] = assignment
+
+	if err := m.saveAssignments(); err != nil {
+		if existed {
+			m.assignments[username] = previous
+		} else {
+			delete(m.assignments, username)
+		}
+		return err
+	}
+	return nil
+}
+
+// DeleteUser removes a known identity and every role assignment attached to it.
+func (m *FileManager) DeleteUser(username string) (bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	previous, existed := m.assignments[username]
+	if !existed {
+		return false, nil
+	}
+	delete(m.assignments, username)
+	if err := m.saveAssignments(); err != nil {
+		m.assignments[username] = previous
+		return false, err
+	}
+	return true, nil
 }
 
 // RemoveRole removes a role from a user.

@@ -2621,6 +2621,7 @@ class SubsystemLookupTest(unittest.TestCase):
                 "frontend-modern/src/utils/__tests__/orgUtils.test.ts",
                 "frontend-modern/src/utils/__tests__/organizationRolePresentation.test.ts",
                 "frontend-modern/src/utils/__tests__/organizationSettingsPresentation.test.ts",
+                "frontend-modern/src/utils/__tests__/rbacPresentation.test.ts",
             ],
         )
 
@@ -2822,6 +2823,7 @@ class SubsystemLookupTest(unittest.TestCase):
                 "frontend-modern/src/utils/__tests__/orgUtils.test.ts",
                 "frontend-modern/src/utils/__tests__/organizationRolePresentation.test.ts",
                 "frontend-modern/src/utils/__tests__/organizationSettingsPresentation.test.ts",
+                "frontend-modern/src/utils/__tests__/rbacPresentation.test.ts",
             ],
         )
 
@@ -2861,6 +2863,7 @@ class SubsystemLookupTest(unittest.TestCase):
                 "frontend-modern/src/utils/__tests__/orgUtils.test.ts",
                 "frontend-modern/src/utils/__tests__/organizationRolePresentation.test.ts",
                 "frontend-modern/src/utils/__tests__/organizationSettingsPresentation.test.ts",
+                "frontend-modern/src/utils/__tests__/rbacPresentation.test.ts",
             ],
         )
 
@@ -2996,20 +2999,20 @@ class SubsystemLookupTest(unittest.TestCase):
                 {
                     "heading": "## Canonical Files",
                     "path": "frontend-modern/src/api/orgs.ts",
-                    "line": 24,
+                    "line": 26,
                     "heading_line": 22,
                 },
                 {
                     "heading": "## Shared Boundaries",
                     "path": "frontend-modern/src/api/orgs.ts",
-                    "line": 63,
-                    "heading_line": 61,
+                    "line": 67,
+                    "heading_line": 65,
                 },
                 {
                     "heading": "## Extension Points",
                     "path": "frontend-modern/src/api/orgs.ts",
-                    "line": 85,
-                    "heading_line": 70,
+                    "line": 89,
+                    "heading_line": 74,
                 },
             ],
         )
@@ -3071,20 +3074,20 @@ class SubsystemLookupTest(unittest.TestCase):
                 {
                     "heading": "## Canonical Files",
                     "path": "internal/api/access_control_handlers.go",
-                    "line": 55,
+                    "line": 59,
                     "heading_line": 22,
                 },
                 {
                     "heading": "## Shared Boundaries",
                     "path": "internal/api/access_control_handlers.go",
-                    "line": 65,
-                    "heading_line": 61,
+                    "line": 69,
+                    "heading_line": 65,
                 },
                 {
                     "heading": "## Extension Points",
                     "path": "internal/api/access_control_handlers.go",
-                    "line": 99,
-                    "heading_line": 70,
+                    "line": 103,
+                    "heading_line": 74,
                 },
             ],
         )

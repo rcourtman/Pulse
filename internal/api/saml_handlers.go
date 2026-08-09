@@ -285,6 +285,15 @@ func (r *Router) handleSAMLACS(w http.ResponseWriter, req *http.Request) {
 				Msg("Auto-assigning roles based on SAML group mapping")
 			LogAuditEventForTenant(GetOrgID(req.Context()), "saml_role_assignment", principal, GetClientIP(req), req.URL.Path, true, "Auto-assigned roles: "+strings.Join(rolesToAssign, ", "))
 		}
+		if err := recordSSOIdentity(authManager, principal, internalauth.UserIdentityMetadata{
+			DisplayName:  result.Username,
+			Email:        result.Email,
+			ProviderType: string(config.SSOProviderTypeSAML),
+			ProviderID:   providerID,
+			LastLoginAt:  time.Now(),
+		}); err != nil {
+			log.Error().Err(err).Str("user", principal).Str("display_user", result.Username).Msg("Failed to record SAML identity metadata")
+		}
 	}
 
 	// Store SAML session info for potential SLO

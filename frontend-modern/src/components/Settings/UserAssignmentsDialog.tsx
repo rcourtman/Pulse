@@ -5,6 +5,7 @@ import type { Permission, Role, UserRoleAssignment } from '@/types/rbac';
 import BadgeCheck from 'lucide-solid/icons/badge-check';
 import Shield from 'lucide-solid/icons/shield';
 import X from 'lucide-solid/icons/x';
+import { getUserIdentityDisplayName, getUserIdentityProviderLabel } from '@/utils/rbacPresentation';
 
 interface UserAssignmentsDialogProps {
   editingUser: UserRoleAssignment | null;
@@ -26,17 +27,26 @@ export const UserAssignmentsDialog: Component<UserAssignmentsDialogProps> = (pro
       onClose={props.onClose}
       panelClass="max-w-2xl"
       closeOnBackdrop={false}
-      ariaLabel={`Manage access: ${props.editingUser?.username ?? 'user'}`}
+      ariaLabel={`Manage access: ${props.editingUser ? getUserIdentityDisplayName(props.editingUser) : 'user'}`}
     >
       <div class="w-full max-h-[92vh] overflow-hidden">
         <div class="flex items-start justify-between gap-3 px-4 sm:px-6 py-4 border-b border-border">
           <div>
             <h3 class="text-lg font-semibold text-base-content">
-              Manage Access: {props.editingUser?.username}
+              Manage Access:{' '}
+              {props.editingUser ? getUserIdentityDisplayName(props.editingUser) : 'User'}
             </h3>
             <p class="text-xs text-muted uppercase tracking-wider font-semibold mt-0.5">
               Role Assignments
             </p>
+            <Show when={props.editingUser?.email}>
+              <p class="mt-1 text-xs text-muted">{props.editingUser?.email}</p>
+            </Show>
+            <Show when={props.editingUser && getUserIdentityProviderLabel(props.editingUser)}>
+              <p class="text-xs text-muted">
+                {props.editingUser && getUserIdentityProviderLabel(props.editingUser)}
+              </p>
+            </Show>
           </div>
           <button
             type="button"

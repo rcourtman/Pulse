@@ -472,6 +472,26 @@ func (s *SessionStore) DeleteSession(token string) {
 	s.saveUnsafe()
 }
 
+// DeleteSessionsForUser removes every persisted session for a stable
+// principal and returns their already-hashed storage keys so the matching
+// CSRF records can be removed without access to raw session tokens.
+func (s *SessionStore) DeleteSessionsForUser(username string) []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	deletedKeys := make([]string, 0)
+	for key, session := range s.sessions {
+		if session != nil && session.Username == username {
+			delete(s.sessions, key)
+			deletedKeys = append(deletedKeys, key)
+		}
+	}
+	if len(deletedKeys) > 0 {
+		s.saveUnsafe()
+	}
+	return deletedKeys
+}
+
 // cleanup removes expired sessions
 func (s *SessionStore) cleanup() {
 	s.mu.Lock()

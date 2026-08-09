@@ -2473,8 +2473,10 @@
         "cmd/agent-probe/main.go",
         "cmd/pulse-mcp/main.go",
         "cmd/pulse-mcp/README.md",
+        "docs/API.md",
         "docs/release-control/v6/internal/MOBILE_COMPATIBILITY_MANIFEST.json",
         "docs/release-control/v6/internal/mobile_compatibility_manifest.schema.json",
+        "frontend-modern/public/docs/API.md",
         "frontend-modern/src/components/Settings/AgentIntegrationsPanel.tsx",
         "frontend-modern/src/components/Settings/APITokenManager.tsx",
         "frontend-modern/src/components/Settings/APITokenManagerDialogs.tsx",
@@ -2533,6 +2535,20 @@
         ],
         "require_explicit_path_policy_coverage": true,
         "path_policies": [
+          {
+            "id": "api-reference-docs",
+            "label": "canonical and published API reference synchronization proof",
+            "match_prefixes": [],
+            "match_files": [
+              "docs/API.md",
+              "frontend-modern/public/docs/API.md"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/utils/__tests__/docsLinks.test.ts"
+            ]
+          },
           {
             "id": "pulse-mobile-compatibility-contract",
             "label": "Pulse and Pulse Mobile exact-revision compatibility proof",
@@ -5865,6 +5881,8 @@
       "contract": "docs/release-control/v6/internal/subsystems/organization-settings.md",
       "owned_prefixes": [],
       "owned_files": [
+        "docs/RBAC.md",
+        "frontend-modern/public/docs/RBAC.md",
         "frontend-modern/src/api/orgs.ts",
         "frontend-modern/src/api/rbac.ts",
         "frontend-modern/src/components/Settings/OrganizationAccessInvitationsSection.tsx",
@@ -5892,9 +5910,11 @@
         "frontend-modern/src/components/Settings/useRBACFeatureGateState.ts",
         "frontend-modern/src/components/Settings/useRolesPanelState.ts",
         "frontend-modern/src/components/Settings/useUserAssignmentsPanelState.ts",
+		"frontend-modern/src/types/rbac.ts",
         "frontend-modern/src/utils/organizationRolePresentation.ts",
         "frontend-modern/src/utils/organizationSettingsPresentation.ts",
         "frontend-modern/src/utils/orgUtils.ts",
+		"frontend-modern/src/utils/rbacPresentation.ts",
         "internal/api/access_control_handlers.go",
         "internal/api/enterprise_extension_rbac_admin.go",
         "internal/api/org_handlers.go",
@@ -5919,7 +5939,8 @@
             "match_prefixes": [],
             "match_files": [
               "frontend-modern/src/api/orgs.ts",
-              "frontend-modern/src/api/rbac.ts"
+			  "frontend-modern/src/api/rbac.ts",
+			  "frontend-modern/src/types/rbac.ts"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
@@ -5942,6 +5963,20 @@
               "internal/api/org_lifecycle_handlers_test.go",
               "internal/api/org_validation_test.go",
               "internal/models/organization_additional_test.go"
+            ]
+          },
+          {
+            "id": "organization-rbac-reference-docs",
+            "label": "canonical and published RBAC reference synchronization proof",
+            "match_prefixes": [],
+            "match_files": [
+              "docs/RBAC.md",
+              "frontend-modern/public/docs/RBAC.md"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/utils/__tests__/docsLinks.test.ts"
             ]
           },
           {
@@ -5994,7 +6029,8 @@
               "frontend-modern/src/components/Settings/useUserAssignmentsPanelState.ts",
               "frontend-modern/src/utils/organizationRolePresentation.ts",
               "frontend-modern/src/utils/organizationSettingsPresentation.ts",
-              "frontend-modern/src/utils/orgUtils.ts"
+			  "frontend-modern/src/utils/orgUtils.ts",
+			  "frontend-modern/src/utils/rbacPresentation.ts"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
@@ -6008,7 +6044,8 @@
               "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
               "frontend-modern/src/utils/__tests__/organizationRolePresentation.test.ts",
               "frontend-modern/src/utils/__tests__/organizationSettingsPresentation.test.ts",
-              "frontend-modern/src/utils/__tests__/orgUtils.test.ts"
+			  "frontend-modern/src/utils/__tests__/orgUtils.test.ts",
+			  "frontend-modern/src/utils/__tests__/rbacPresentation.test.ts"
             ]
           },
           {
@@ -6719,6 +6756,7 @@
         "pkg/audit/audit.go",
         "pkg/audit/sqlite_logger.go",
         "pkg/auth/rbac.go",
+		"pkg/auth/rbac_manager.go",
         "pkg/auth/sqlite_manager.go",
         "pkg/extensions/audit_admin.go",
         "pkg/server/server.go",
@@ -6943,6 +6981,7 @@
             "match_prefixes": [],
             "match_files": [
               "pkg/auth/rbac.go",
+			  "pkg/auth/rbac_manager.go",
               "pkg/auth/sqlite_manager.go",
               "pkg/server/server.go"
             ],
@@ -6953,6 +6992,7 @@
               "internal/api/rbac_tenant_provider_test.go",
               "internal/api/security_regression_test.go",
               "pkg/auth/rbac_manager_test.go",
+			  "pkg/auth/sqlite_manager_queryplan_test.go",
               "pkg/auth/sqlite_manager_test.go",
               "pkg/server/server_test.go"
             ]

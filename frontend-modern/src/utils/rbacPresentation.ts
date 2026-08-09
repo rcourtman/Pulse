@@ -14,6 +14,24 @@ export interface UserAssignmentsEmptyStateCopy {
   syncHint: string;
 }
 
+interface UserIdentityPresentation {
+  username: string;
+  displayName?: string;
+  email?: string;
+  providerType?: string;
+  providerId?: string;
+}
+
+export function getUserIdentityDisplayName(user: UserIdentityPresentation): string {
+  return user.displayName?.trim() || user.email?.trim() || user.username;
+}
+
+export function getUserIdentityProviderLabel(user: UserIdentityPresentation): string {
+  const providerType = user.providerType?.trim().toUpperCase();
+  const providerId = user.providerId?.trim();
+  return [providerType, providerId].filter(Boolean).join(' · ');
+}
+
 export function getRBACFeatureGateCopy(
   kind: 'roles' | 'user-assignments',
   options: RBACFeatureGateCopyOptions = {},
@@ -71,4 +89,14 @@ export function getUserAssignmentsLoadErrorMessage(): string {
 
 export function getUserAssignmentsUpdateErrorMessage(): string {
   return 'Failed to update user roles';
+}
+
+export function getUserAssignmentsDeleteErrorMessage(error?: unknown): string {
+  if (error && typeof error === 'object') {
+    const typedError = error as { code?: unknown; status?: unknown };
+    if (typedError.status === 403 && typedError.code === 'self_deprovision_denied') {
+      return 'You cannot remove your own user access.';
+    }
+  }
+  return 'Failed to remove user access';
 }

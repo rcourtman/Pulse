@@ -922,16 +922,18 @@ Update an existing role's name, description, or permissions.
 
 ### List Users
 `GET /api/admin/users`
-Returns all users with their role assignments.
+Returns all users with their role assignments and, when available, mutable SSO presentation fields (`displayName`, `email`, `providerType`, `providerId`, and `lastLoginAt`). The opaque `username` remains the stable authorization principal.
 
-### Assign Role to User
-`POST /api/admin/users/{username}/roles`
+### Set User Roles
+`PUT /api/admin/users/{username}/roles`
 ```json
-{ "role_id": "operator" }
+{ "roleIds": ["operator", "viewer"] }
 ```
 
-### Remove Role from User
-`DELETE /api/admin/users/{username}/roles/{role_id}`
+### Remove User Access
+`DELETE /api/admin/users/{username}`
+
+Deletes the Pulse RBAC identity and all assignments and revokes its active sessions. Administrators cannot remove their own current identity. This does not disable the upstream IdP account; a later authorized SSO login recreates the Pulse user record.
 
 > **Note**: OIDC group-to-role mapping can automatically assign roles on login. See [OIDC.md](OIDC.md) for configuration.
 

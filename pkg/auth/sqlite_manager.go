@@ -167,6 +167,11 @@ func (m *SQLiteManager) initSchema() error {
 	-- User role assignments
 	CREATE TABLE IF NOT EXISTS rbac_users (
 		username TEXT PRIMARY KEY,
+		display_name TEXT NOT NULL DEFAULT '',
+		email TEXT NOT NULL DEFAULT '',
+		provider_type TEXT NOT NULL DEFAULT '',
+		provider_id TEXT NOT NULL DEFAULT '',
+		last_login_at INTEGER NOT NULL DEFAULT 0,
 		updated_at INTEGER NOT NULL
 	);
 
@@ -205,8 +210,57 @@ func (m *SQLiteManager) initSchema() error {
 	CREATE INDEX IF NOT EXISTS idx_rbac_changelog_entity ON rbac_changelog(entity_type, entity_id);
 	`
 
-	_, err := m.db.Exec(schema)
-	return err
+	if _, err := m.db.Exec(schema); err != nil {
+		return err
+	}
+	return m.ensureRBACUserIdentityColumns()
+}
+
+func (m *SQLiteManager) ensureRBACUserIdentityColumns() error {
+	rows, err := m.db.Query("PRAGMA table_info(rbac_users)")
+	if err != nil {
+		return err
+	}
+	existing := make(map[string]struct{})
+	for rows.Next() {
+		var cid int
+		var name, columnType string
+		var notNull, primaryKey int
+		var defaultValue any
+		if err := rows.Scan(&cid, &name, &columnType, &notNull, &defaultValue, &primaryKey); err != nil {
+			rows.Close()
+			return err
+		}
+		existing[name] = struct{}{}
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return err
+	}
+	if err := rows.Close(); err != nil {
+		return err
+	}
+
+	required := []struct {
+		name       string
+		definition string
+	}{
+		{name: "display_name", definition: "TEXT NOT NULL DEFAULT ''"},
+		{name: "email", definition: "TEXT NOT NULL DEFAULT ''"},
+		{name: "provider_type", definition: "TEXT NOT NULL DEFAULT ''"},
+		{name: "provider_id", definition: "TEXT NOT NULL DEFAULT ''"},
+		{name: "last_login_at", definition: "INTEGER NOT NULL DEFAULT 0"},
+	}
+	for _, column := range required {
+		if _, ok := existing[column.name]; ok {
+			continue
+		}
+		statement := fmt.Sprintf("ALTER TABLE rbac_users ADD COLUMN %s %s", column.name, column.definition)
+		if _, err := m.db.Exec(statement); err != nil {
+			return fmt.Errorf("add rbac_users.%s: %w", column.name, err)
+		}
+	}
+	return nil
 }
 
 func (m *SQLiteManager) initBuiltInRoles() error {
@@ -681,12 +735,13 @@ func (m *SQLiteManager) getUserAssignmentUnsafe(username string) UserRoleAssignm
 }
 
 func (m *SQLiteManager) getUserAssignmentWithErrorUnsafe(username string) (UserRoleAssignment, bool, error) {
-	var userUpdatedAt int64
+	var displayName, email, providerType, providerID string
+	var lastLoginAt, userUpdatedAt int64
 	err := m.db.QueryRow(`
-		SELECT updated_at
+		SELECT display_name, email, provider_type, provider_id, last_login_at, updated_at
 		FROM rbac_users
 		WHERE username = ?
-	`, username).Scan(&userUpdatedAt)
+	`, username).Scan(&displayName, &email, &providerType, &providerID, &lastLoginAt, &userUpdatedAt)
 	if err == sql.ErrNoRows {
 		return UserRoleAssignment{Username: username, RoleIDs: []string{}}, false, nil
 	}
@@ -722,11 +777,20 @@ func (m *SQLiteManager) getUserAssignmentWithErrorUnsafe(username string) (UserR
 		return UserRoleAssignment{}, false, err
 	}
 
-	return UserRoleAssignment{
-		Username:  username,
-		RoleIDs:   roleIDs,
-		UpdatedAt: time.Unix(latestUpdate, 0),
-	}, true, nil
+	assignment := UserRoleAssignment{
+		Username:     username,
+		RoleIDs:      roleIDs,
+		DisplayName:  displayName,
+		Email:        email,
+		ProviderType: providerType,
+		ProviderID:   providerID,
+		UpdatedAt:    time.Unix(latestUpdate, 0),
+	}
+	if lastLoginAt > 0 {
+		value := time.Unix(lastLoginAt, 0)
+		assignment.LastLoginAt = &value
+	}
+	return assignment, true, nil
 }
 
 // GetUserAssignment returns the role assignment for a user.
@@ -847,11 +911,85 @@ func (m *SQLiteManager) UpdateUserRolesWithContext(username string, roleIDs []st
 	}
 
 	// Log change
-	newAssignment := UserRoleAssignment{Username: username, RoleIDs: roleIDs, UpdatedAt: time.Unix(now, 0)}
+	newAssignment := oldAssignment
+	newAssignment.Username = username
+	newAssignment.RoleIDs = roleIDs
+	newAssignment.UpdatedAt = time.Unix(now, 0)
 	newValueJSON, _ := json.Marshal(newAssignment)
 	m.logChangeUnsafe(ActionUserRolesUpdate, "assignment", username, string(oldValueJSON), string(newValueJSON), byUser)
 
 	return nil
+}
+
+// UpsertUserIdentity records mutable SSO presentation metadata without using
+// any claim as the durable authorization principal.
+func (m *SQLiteManager) UpsertUserIdentity(username string, metadata UserIdentityMetadata) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	username = strings.TrimSpace(username)
+	if username == "" {
+		return fmt.Errorf("username is required")
+	}
+	metadata = NormalizeUserIdentityMetadata(metadata)
+	if metadata.LastLoginAt.IsZero() {
+		metadata.LastLoginAt = time.Now()
+	}
+	now := time.Now().Unix()
+	_, err := m.db.Exec(`
+		INSERT INTO rbac_users (
+			username, display_name, email, provider_type, provider_id,
+			last_login_at, updated_at
+		)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT(username) DO UPDATE SET
+			display_name = excluded.display_name,
+			email = excluded.email,
+			provider_type = excluded.provider_type,
+			provider_id = excluded.provider_id,
+			last_login_at = excluded.last_login_at,
+			updated_at = excluded.updated_at
+	`, username, metadata.DisplayName, metadata.Email, metadata.ProviderType,
+		metadata.ProviderID, metadata.LastLoginAt.Unix(), now)
+	return err
+}
+
+// DeleteUser removes a known identity and all assignments attached to it.
+func (m *SQLiteManager) DeleteUser(username string) (bool, error) {
+	return m.DeleteUserWithContext(username, "")
+}
+
+// DeleteUserWithContext removes a user and records the acting principal in the
+// RBAC changelog. The foreign key cascades role assignments atomically.
+func (m *SQLiteManager) DeleteUserWithContext(username, byUser string) (bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	username = strings.TrimSpace(username)
+	if username == "" {
+		return false, fmt.Errorf("username is required")
+	}
+	oldAssignment, exists, err := m.getUserAssignmentWithErrorUnsafe(username)
+	if err != nil {
+		return false, err
+	}
+	if !exists {
+		return false, nil
+	}
+	result, err := m.db.Exec("DELETE FROM rbac_users WHERE username = ?", username)
+	if err != nil {
+		return false, err
+	}
+	deleted, err := result.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+	if deleted == 0 {
+		return false, nil
+	}
+	oldValueJSON, _ := json.Marshal(oldAssignment)
+	m.logChangeUnsafe(ActionUserUnassigned, "assignment", username, string(oldValueJSON), "", byUser)
+	return true, nil
 }
 
 // MigrateUserAssignment atomically moves a legacy identity alias to a
@@ -897,11 +1035,25 @@ func (m *SQLiteManager) MigrateUserAssignment(fromUsername, toUsername string) e
 	defer func() { _ = tx.Rollback() }()
 
 	now := time.Now().Unix()
+	sourceLastLoginAt := int64(0)
+	if source.LastLoginAt != nil {
+		sourceLastLoginAt = source.LastLoginAt.Unix()
+	}
 	if _, err := tx.Exec(`
-		INSERT INTO rbac_users (username, updated_at)
-		VALUES (?, ?)
-		ON CONFLICT(username) DO UPDATE SET updated_at = excluded.updated_at
-	`, toUsername, now); err != nil {
+		INSERT INTO rbac_users (
+			username, display_name, email, provider_type, provider_id,
+			last_login_at, updated_at
+		)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT(username) DO UPDATE SET
+			display_name = CASE WHEN rbac_users.display_name = '' THEN excluded.display_name ELSE rbac_users.display_name END,
+			email = CASE WHEN rbac_users.email = '' THEN excluded.email ELSE rbac_users.email END,
+			provider_type = CASE WHEN rbac_users.provider_type = '' THEN excluded.provider_type ELSE rbac_users.provider_type END,
+			provider_id = CASE WHEN rbac_users.provider_id = '' THEN excluded.provider_id ELSE rbac_users.provider_id END,
+			last_login_at = MAX(rbac_users.last_login_at, excluded.last_login_at),
+			updated_at = excluded.updated_at
+	`, toUsername, source.DisplayName, source.Email, source.ProviderType,
+		source.ProviderID, sourceLastLoginAt, now); err != nil {
 		return err
 	}
 	if _, err := tx.Exec("DELETE FROM rbac_user_assignments WHERE username = ?", toUsername); err != nil {
@@ -926,11 +1078,11 @@ func (m *SQLiteManager) MigrateUserAssignment(fromUsername, toUsername string) e
 	}
 
 	oldValueJSON, _ := json.Marshal(source)
-	newValueJSON, _ := json.Marshal(UserRoleAssignment{
-		Username:  toUsername,
-		RoleIDs:   sourceRoleIDs,
-		UpdatedAt: time.Unix(now, 0),
-	})
+	newAssignment := source
+	newAssignment.Username = toUsername
+	newAssignment.RoleIDs = sourceRoleIDs
+	newAssignment.UpdatedAt = time.Unix(now, 0)
+	newValueJSON, _ := json.Marshal(newAssignment)
 	m.logChangeUnsafe(
 		ActionUserRolesUpdate,
 		"assignment",
