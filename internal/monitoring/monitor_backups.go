@@ -2409,23 +2409,22 @@ func parseVzdumpJobLog(jobTask models.BackupTask, upid string, logLines []proxmo
 }
 
 func (m *Monitor) pollPVEBackupsAsync(
-	ctx context.Context,
 	instanceName string,
 	instanceCfg *config.PVEInstance,
 	client PVEClientInterface,
 	nodes []proxmox.Node,
 	nodeEffectiveStatus map[string]string,
-) error {
+) {
 	// Poll backups if enabled - respect configured interval or cycle gating
 	if !instanceCfg.MonitorBackups {
-		return nil
+		return
 	}
 
 	if !m.backupPollingEnabledSetting() {
 		log.Debug().
 			Str("instance", instanceName).
 			Msg("Skipping backup polling - globally disabled")
-		return nil
+		return
 	}
 
 	now := time.Now()
@@ -2442,50 +2441,47 @@ func (m *Monitor) pollPVEBackupsAsync(
 				Str("reason", reason).
 				Msg("Skipping PVE backup polling this cycle")
 		}
-		return nil
+		return
 	}
 
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	default:
-		// Set initial timestamp before starting goroutine (prevents concurrent starts)
+	// Set initial timestamp before starting goroutine (prevents concurrent starts).
+	// This optional work owns a runtime-scoped timeout below; the completed core
+	// PVE generation must not be reclassified as unreachable merely because its
+	// per-cycle context expired before background scheduling.
+	m.mu.Lock()
+	m.lastPVEBackupPoll[instanceName] = newLast
+	m.mu.Unlock()
+
+	// Run backup polling in a separate goroutine to avoid blocking real-time stats
+	go func(startTime time.Time, inst string, pveClient PVEClientInterface) {
+		defer recoverFromPanic(fmt.Sprintf("pollPVEBackups-%s", inst))
+		timeout := m.calculateBackupOperationTimeout(inst)
+		log.Info().
+			Str("instance", inst).
+			Dur("timeout", timeout).
+			Msg("Starting background backup/snapshot polling")
+
+		// The per-cycle ctx is canceled as soon as the main polling loop finishes,
+		// so derive the backup poll context from the long-lived runtime context instead.
+		parentCtx := m.getRuntimeContext()
+		if parentCtx == nil {
+			parentCtx = context.Background()
+		}
+
+		m.pollPVEBackupsAndSnapshots(parentCtx, inst, pveClient, nodes, nodeEffectiveStatus, timeout)
+
+		duration := time.Since(startTime)
+		log.Info().
+			Str("instance", inst).
+			Dur("duration", duration).
+			Msg("Completed background backup/snapshot polling")
+
+		// Update timestamp after completion for accurate interval scheduling
 		m.mu.Lock()
-		m.lastPVEBackupPoll[instanceName] = newLast
+		m.lastPVEBackupPoll[inst] = time.Now()
 		m.mu.Unlock()
+	}(now, instanceName, client)
 
-		// Run backup polling in a separate goroutine to avoid blocking real-time stats
-		go func(startTime time.Time, inst string, pveClient PVEClientInterface) {
-			defer recoverFromPanic(fmt.Sprintf("pollPVEBackups-%s", inst))
-			timeout := m.calculateBackupOperationTimeout(inst)
-			log.Info().
-				Str("instance", inst).
-				Dur("timeout", timeout).
-				Msg("Starting background backup/snapshot polling")
-
-			// The per-cycle ctx is canceled as soon as the main polling loop finishes,
-			// so derive the backup poll context from the long-lived runtime context instead.
-			parentCtx := m.getRuntimeContext()
-			if parentCtx == nil {
-				parentCtx = context.Background()
-			}
-
-			m.pollPVEBackupsAndSnapshots(parentCtx, inst, pveClient, nodes, nodeEffectiveStatus, timeout)
-
-			duration := time.Since(startTime)
-			log.Info().
-				Str("instance", inst).
-				Dur("duration", duration).
-				Msg("Completed background backup/snapshot polling")
-
-			// Update timestamp after completion for accurate interval scheduling
-			m.mu.Lock()
-			m.lastPVEBackupPoll[inst] = time.Now()
-			m.mu.Unlock()
-		}(now, instanceName, client)
-	}
-
-	return nil
 }
 
 // checkMockAlerts checks alerts for mock data

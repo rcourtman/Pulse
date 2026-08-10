@@ -1520,15 +1520,8 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 	// Update cluster endpoint online status if this is a cluster
 	m.updateClusterEndpointStatus(instanceName, instanceCfg, client, modelNodes)
 
-	if err := m.pollStorageAsync(ctx, instanceName, instanceCfg, client, nodes); err != nil {
-		pollErr = err
-		return
-	}
-
-	if err := m.pollPVEBackupsAsync(ctx, instanceName, instanceCfg, client, nodes, nodeEffectiveStatus); err != nil {
-		pollErr = err
-		return
-	}
+	m.pollStorageAsync(instanceName, instanceCfg, client, nodes)
+	m.pollPVEBackupsAsync(instanceName, instanceCfg, client, nodes, nodeEffectiveStatus)
 }
 
 func copyFloatPointer(src *float64) *float64 {

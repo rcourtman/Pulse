@@ -10,6 +10,31 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+const (
+	// Deep guest detail is deliberately bounded below the whole PVE poll
+	// deadline. The authoritative cluster/resources generation can contain
+	// hundreds of guests; reserving the tail keeps connection-health
+	// publication from inheriting an exhausted context.
+	pveGuestEnrichmentMaxDuration = 60 * time.Second
+	pvePollTailReserve            = 15 * time.Second
+)
+
+func pveGuestEnrichmentContext(ctx context.Context) (context.Context, context.CancelFunc) {
+	budget := pveGuestEnrichmentMaxDuration
+	if deadline, ok := ctx.Deadline(); ok {
+		available := time.Until(deadline) - pvePollTailReserve
+		if available <= 0 {
+			boundedCtx, cancel := context.WithCancel(ctx)
+			cancel()
+			return boundedCtx, func() {}
+		}
+		if available < budget {
+			budget = available
+		}
+	}
+	return context.WithTimeout(ctx, budget)
+}
+
 // pollVMsAndContainersEfficient uses the cluster/resources endpoint to get all VMs and containers in one call
 // This works on both clustered and standalone nodes for efficient polling
 // When the instance is part of a cluster, the cluster name is used for guest IDs to prevent duplicates
@@ -29,17 +54,20 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 		return false
 	}
 	m.updatePVEBackupTemplateSubjectsFromClusterResources(instanceName, resources)
+	enrichmentCtx, cancelEnrichment := pveGuestEnrichmentContext(ctx)
+	defer cancelEnrichment()
 
 	// Capture previous guest state once per poll cycle so fallback and grace-period
 	// behavior is based on a consistent pre-poll snapshot.
 	prevGuests := m.previousGuestContextForInstance(instanceName)
 
 	allVMs, allContainers := m.collectGuestsFromClusterResources(
-		ctx,
+		enrichmentCtx,
 		instanceName,
 		resources,
 		client,
 		prevGuests.containerOCIByVMID,
+		prevGuests.containersByID,
 		prevGuests.vmsByID,
 		prevGuests.hostAgentsByVMID,
 	)
@@ -47,8 +75,8 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 	allVMs, allContainers = m.preserveGuestsForGracePeriod(instanceName, resources, prevGuests.vms, prevGuests.containers, nodeEffectiveStatus, allVMs, allContainers)
 
 	// Check Docker presence for containers that need it (new, restarted, started)
-	allContainers = m.CheckContainersForDocker(ctx, allContainers)
-	m.CollectProxmoxGuestDockerInventory(ctx, allContainers)
+	allContainers = m.CheckContainersForDocker(enrichmentCtx, allContainers)
+	m.CollectProxmoxGuestDockerInventory(enrichmentCtx, allContainers)
 
 	// Publish the complete guest generation only after both VM and container
 	// collection/enrichment has finished. Empty authoritative results still
@@ -57,7 +85,7 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 
 	m.recordGuestMetrics(allVMs, allContainers, cycleStart)
 
-	m.pollReplicationStatus(ctx, instanceName, client, allVMs)
+	m.pollReplicationStatusAsync(instanceName, client, allVMs)
 
 	log.Debug().
 		Str("instance", instanceName).
@@ -74,12 +102,14 @@ func (m *Monitor) collectGuestsFromClusterResources(
 	resources []proxmox.ClusterResource,
 	client PVEClientInterface,
 	prevContainerIsOCI map[int]bool,
+	prevContainerByID map[string]models.Container,
 	prevVMByID map[string]models.VM,
 	vmIDToHostAgent map[string]models.Host,
 ) ([]models.VM, []models.Container) {
 	allVMs := make([]models.VM, 0, len(resources))
 	allContainers := make([]models.Container, 0, len(resources))
 	vmResources := make([]indexedClusterResource, 0, len(resources))
+	containerResources := make([]indexedClusterResource, 0, len(resources))
 
 	for _, res := range resources {
 		// Generate canonical guest ID: instance:node:vmid
@@ -101,17 +131,33 @@ func (m *Monitor) collectGuestsFromClusterResources(
 				guestID:  guestID,
 			})
 		case "lxc":
-			container, ok := m.handleClusterContainerResource(ctx, instanceName, res, guestID, client, prevContainerIsOCI)
-			if !ok {
-				continue
-			}
-			allContainers = append(allContainers, container)
+			containerResources = append(containerResources, indexedClusterResource{
+				order:    len(containerResources),
+				resource: res,
+				guestID:  guestID,
+			})
 		}
 	}
 
-	if len(vmResources) > 0 {
-		allVMs = append(allVMs, m.collectClusterVMResources(ctx, instanceName, vmResources, client, prevVMByID, vmIDToHostAgent)...)
+	// Let VM and LXC detail compete fairly for the shared enrichment slots.
+	// Running one type to completion first can consume the entire bounded budget
+	// on a large mixed cluster and permanently starve the other type.
+	var collectionWG sync.WaitGroup
+	if len(containerResources) > 0 {
+		collectionWG.Add(1)
+		go func() {
+			defer collectionWG.Done()
+			allContainers = m.collectClusterContainerResources(ctx, instanceName, containerResources, client, prevContainerIsOCI, prevContainerByID)
+		}()
 	}
+	if len(vmResources) > 0 {
+		collectionWG.Add(1)
+		go func() {
+			defer collectionWG.Done()
+			allVMs = m.collectClusterVMResources(ctx, instanceName, vmResources, client, prevVMByID, vmIDToHostAgent)
+		}()
+	}
+	collectionWG.Wait()
 
 	return allVMs, allContainers
 }
@@ -126,6 +172,122 @@ type clusterVMResourceResult struct {
 	order int
 	vm    models.VM
 	ok    bool
+}
+
+func rotatingResourceOffset(total int) int {
+	if total <= 1 {
+		return 0
+	}
+	return int(uint64(time.Now().UnixNano()) % uint64(total))
+}
+
+func preserveVMOptionalEnrichment(current models.VM, previous *models.VM) models.VM {
+	if previous == nil {
+		return current
+	}
+	if len(current.IPAddresses) == 0 {
+		current.IPAddresses = cloneStringSlice(previous.IPAddresses)
+	}
+	if len(current.NetworkInterfaces) == 0 {
+		current.NetworkInterfaces = cloneGuestNetworkInterfaces(previous.NetworkInterfaces)
+	}
+	if current.OSName == "" {
+		current.OSName = previous.OSName
+	}
+	if current.OSVersion == "" {
+		current.OSVersion = previous.OSVersion
+	}
+	if current.AgentVersion == "" {
+		current.AgentVersion = previous.AgentVersion
+	}
+	if len(current.Disks) == 0 {
+		current.Disks = cloneGuestDisks(previous.Disks)
+	}
+	if current.OnBoot == nil && previous.OnBoot != nil {
+		onBoot := *previous.OnBoot
+		current.OnBoot = &onBoot
+	}
+	if current.Lock == "" {
+		current.Lock = previous.Lock
+	}
+	return current
+}
+
+func preserveContainerOptionalEnrichment(current models.Container, previous *models.Container) models.Container {
+	if previous == nil {
+		return current
+	}
+	if len(current.IPAddresses) == 0 {
+		current.IPAddresses = cloneStringSlice(previous.IPAddresses)
+	}
+	if len(current.NetworkInterfaces) == 0 {
+		current.NetworkInterfaces = cloneGuestNetworkInterfaces(previous.NetworkInterfaces)
+	}
+	if current.OSName == "" {
+		current.OSName = previous.OSName
+	}
+	if current.OSTemplate == "" {
+		current.OSTemplate = previous.OSTemplate
+	}
+	if len(current.Disks) == 0 {
+		current.Disks = cloneGuestDisks(previous.Disks)
+	}
+	if current.OnBoot == nil && previous.OnBoot != nil {
+		onBoot := *previous.OnBoot
+		current.OnBoot = &onBoot
+	}
+	if current.DockerCheckedAt.IsZero() {
+		current.HasDocker = previous.HasDocker
+		current.DockerCheckedAt = previous.DockerCheckedAt
+	}
+	if current.Lock == "" {
+		current.Lock = previous.Lock
+	}
+	return current
+}
+
+func (m *Monitor) collectClusterContainerResources(
+	ctx context.Context,
+	instanceName string,
+	resources []indexedClusterResource,
+	client PVEClientInterface,
+	prevContainerIsOCI map[int]bool,
+	prevContainerByID map[string]models.Container,
+) []models.Container {
+	orderedContainers := make([]models.Container, len(resources))
+	orderedOK := make([]bool, len(resources))
+	offset := rotatingResourceOffset(len(resources))
+
+	for i := range resources {
+		entry := resources[(offset+i)%len(resources)]
+		var container models.Container
+		var ok bool
+		ran := m.runGuestAgentVMWork(ctx, func(workCtx context.Context) {
+			container, ok = m.handleClusterContainerResource(workCtx, instanceName, entry.resource, entry.guestID, client, prevContainerIsOCI)
+		})
+		if !ran {
+			// The enrichment budget is exhausted, but cluster/resources is still
+			// authoritative inventory. A canceled context makes remote detail
+			// calls fail immediately while the builder retains the base row.
+			container, ok = m.handleClusterContainerResource(ctx, instanceName, entry.resource, entry.guestID, client, prevContainerIsOCI)
+		}
+		if ctx.Err() != nil {
+			previous := prevContainerByID[entry.guestID]
+			container = preserveContainerOptionalEnrichment(container, &previous)
+		}
+		if ok {
+			orderedContainers[entry.order] = container
+			orderedOK[entry.order] = true
+		}
+	}
+
+	containers := make([]models.Container, 0, len(resources))
+	for i, ok := range orderedOK {
+		if ok {
+			containers = append(containers, orderedContainers[i])
+		}
+	}
+	return containers
 }
 
 func (m *Monitor) collectClusterVMResources(
@@ -160,15 +322,30 @@ func (m *Monitor) collectClusterVMResources(
 					}
 				})
 				if !ran {
-					result = clusterVMResourceResult{order: entry.order, ok: false}
+					// Do not turn an exhausted detail budget into missing inventory.
+					// Re-run only the builder with the canceled context so it emits the
+					// current cluster/resources row without remote enrichment.
+					var prevVM *models.VM
+					if prev, ok := prevVMByID[entry.guestID]; ok {
+						prevVM = &prev
+					}
+					vm, ok := m.handleClusterVMResource(ctx, instanceName, entry.resource, entry.guestID, client, prevVM, vmIDToHostAgent)
+					result = clusterVMResourceResult{order: entry.order, vm: vm, ok: ok}
+				}
+				if ctx.Err() != nil && result.ok {
+					previous, exists := prevVMByID[entry.guestID]
+					if exists {
+						result.vm = preserveVMOptionalEnrichment(result.vm, &previous)
+					}
 				}
 				resultCh <- result
 			}
 		}()
 	}
 
-	for _, entry := range resources {
-		jobCh <- entry
+	offset := rotatingResourceOffset(len(resources))
+	for i := range resources {
+		jobCh <- resources[(offset+i)%len(resources)]
 	}
 	close(jobCh)
 

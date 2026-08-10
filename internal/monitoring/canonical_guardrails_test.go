@@ -1116,7 +1116,7 @@ func TestProxmoxGuestDockerInventoryUsesCanonicalReportIngestPath(t *testing.T) 
 			"ParseProxmoxGuestDockerInventoryVMIDs",
 		},
 		"monitor_pve_guest_poll.go": {
-			"m.CollectProxmoxGuestDockerInventory(ctx, allContainers)",
+			"m.CollectProxmoxGuestDockerInventory(enrichmentCtx, allContainers)",
 			"m.state.UpdateGuestsForInstance(instanceName, allVMs, allContainers)",
 		},
 		"monitor_polling_containers.go": {

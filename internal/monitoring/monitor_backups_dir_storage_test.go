@@ -221,3 +221,30 @@ func TestPollStorageBackups_Issue1639HarvestsPBSGuestConfirmations(t *testing.T)
 		}
 	}
 }
+
+func TestPollPVEBackupsAsyncUsesRuntimeContextIndependentOfCycle(t *testing.T) {
+	runtimeCtx, cancelRuntime := context.WithCancel(context.Background())
+	cancelRuntime()
+	m := &Monitor{
+		state:             models.NewState(),
+		runtimeCtx:        runtimeCtx,
+		lastPVEBackupPoll: make(map[string]time.Time),
+		config: &config.Config{
+			EnableBackupPolling: true,
+			BackupPollingCycles: 1,
+		},
+	}
+	m.pollPVEBackupsAsync(
+		"cluster-a",
+		&config.PVEInstance{MonitorBackups: true},
+		&mockPVEClientExtra{},
+		nil,
+		map[string]string{},
+	)
+	m.mu.RLock()
+	scheduledAt := m.lastPVEBackupPoll["cluster-a"]
+	m.mu.RUnlock()
+	if scheduledAt.IsZero() {
+		t.Fatal("backup polling was not scheduled on the monitor runtime context")
+	}
+}

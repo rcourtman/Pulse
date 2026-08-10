@@ -21,7 +21,12 @@ func (m *Monitor) efficientQEMUWorkerCount(total int) int {
 
 func (m *Monitor) acquireGuestAgentWorkSlot(ctx context.Context) bool {
 	if m == nil || m.guestAgentWorkSlots == nil {
-		return true
+		select {
+		case <-ctx.Done():
+			return false
+		default:
+			return true
+		}
 	}
 	select {
 	case m.guestAgentWorkSlots <- struct{}{}:

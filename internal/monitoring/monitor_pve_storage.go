@@ -253,42 +253,32 @@ func (m *Monitor) applyStorageFallbackAndRecordNodeMetrics(
 }
 
 func (m *Monitor) pollStorageAsync(
-	ctx context.Context,
 	instanceName string,
 	instanceCfg *config.PVEInstance,
 	client PVEClientInterface,
 	nodes []proxmox.Node,
-) error {
+) {
 	// Poll storage in background if enabled - storage APIs can be slow (NFS mounts, etc.)
 	// so we run this asynchronously to prevent it from causing task timeouts.
 	// This is similar to how backup polling runs in the background.
 	if !instanceCfg.MonitorStorage {
-		return nil
+		return
 	}
 
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	default:
-		go func(inst string, pveClient PVEClientInterface, nodeList []proxmox.Node) {
-			defer recoverFromPanic(fmt.Sprintf("pollStorageWithNodes-%s", inst))
+	go func(inst string, pveClient PVEClientInterface, nodeList []proxmox.Node) {
+		defer recoverFromPanic(fmt.Sprintf("pollStorageWithNodes-%s", inst))
 
-			// Use a generous timeout for storage polling - it's not blocking the main task
-			storageTimeout := 60 * time.Second
-			// Use monitor lifecycle context so shutdown can interrupt detached async polling.
-			parentCtx := m.getRuntimeContext()
-			if parentCtx == nil {
-				parentCtx = ctx
-			}
-			if parentCtx == nil {
-				parentCtx = context.Background()
-			}
-			storageCtx, storageCancel := context.WithTimeout(parentCtx, storageTimeout)
-			defer storageCancel()
+		// Use a generous timeout for storage polling - it's not blocking the main task
+		storageTimeout := 60 * time.Second
+		// Use monitor lifecycle context so shutdown can interrupt detached async polling.
+		parentCtx := m.getRuntimeContext()
+		if parentCtx == nil {
+			parentCtx = context.Background()
+		}
+		storageCtx, storageCancel := context.WithTimeout(parentCtx, storageTimeout)
+		defer storageCancel()
 
-			m.pollStorageWithNodes(storageCtx, inst, pveClient, nodeList)
-		}(instanceName, client, nodes)
-	}
+		m.pollStorageWithNodes(storageCtx, inst, pveClient, nodeList)
+	}(instanceName, client, nodes)
 
-	return nil
 }

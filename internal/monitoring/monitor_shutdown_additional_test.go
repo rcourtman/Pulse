@@ -70,9 +70,7 @@ func TestPollStorageAsync_UsesRuntimeContextForShutdown(t *testing.T) {
 		MonitorStorage: true,
 	}
 
-	if err := monitor.pollStorageAsync(context.Background(), "inst", instanceCfg, client, nil); err != nil {
-		t.Fatalf("pollStorageAsync() error = %v", err)
-	}
+	monitor.pollStorageAsync("inst", instanceCfg, client, nil)
 
 	waitForSignal(t, client.allStorageCalled, time.Second, "expected async storage polling goroutine to call GetAllStorage")
 

@@ -43,6 +43,15 @@ source-native `{instance}:{node}:{vmid}` IDs; a successful empty member
 enumeration is authoritative and removes genuinely deleted guests. Collection
 failure remains visible through source freshness/error state and must not be
 converted into an authoritative empty inventory.
+Large Proxmox generations separate authoritative inventory from optional deep
+detail. The efficient poller must bound VM/LXC enrichment below the whole-cycle
+deadline, rotate the first enriched row across cycles, and still publish every
+non-template row returned by `cluster/resources` when that detail budget is
+exhausted. VM and LXC work share the bounded slots concurrently so one guest
+kind cannot permanently starve the other. Replication, storage, backup, and
+snapshot enrichment owns independent runtime-scoped budgets; exhaustion or
+cancellation of those optional tails must not turn a successfully enumerated
+PVE API connection into `unreachable`.
 Running LXC filesystem detail may be supplemented by a node-local Unified
 Agent report when the reporting host is securely linked to exactly one current
 PVE node. Monitoring admits only bounded, normalized VMID/name/disk rows,
@@ -996,9 +1005,30 @@ only graft them onto fixture data.
     response bodies containing permission-like text, recovery, caching, and
     concurrent single-flight behavior under the race detector. Monitoring proof
     must cover a healthy API-token poll without a `/nodes` request.
+16. Keep large-cluster Proxmox polling bounded without weakening inventory or
+    reachability truth. `cluster/resources` remains authoritative for the full
+    VM/LXC generation when optional detail runs out of budget, optional tail
+    collectors use runtime-scoped contexts, and only a failed core provider read
+    may make the PVE connection unreachable. Regression coverage lives in
+    `internal/monitoring/proxmox_large_cluster_poll_budget_test.go`,
+    `internal/monitoring/monitor_shutdown_additional_test.go`, and
+    `internal/monitoring/monitor_backups_dir_storage_test.go`.
 
 
 ## Current State
+
+### Large Proxmox generations preserve reachability under bounded enrichment
+
+The efficient PVE poll reserves a fixed tail of the scheduler deadline and
+spends at most sixty seconds on per-guest VM/LXC detail. Work begins at a
+rotating offset and both guest kinds share the worker pool concurrently. When
+the budget closes, builders retain the live `cluster/resources` rows under a
+canceled detail context, then publish one complete coherent generation.
+Replication runs asynchronously with its own ten-second runtime-scoped budget;
+storage and backup polls schedule against the monitor lifecycle rather than the
+completed cycle.
+The core poll therefore records success after an authoritative inventory even
+when those optional collectors time out independently.
 
 ### Local libvirt guests are bounded host-agent observations
 

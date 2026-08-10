@@ -12,6 +12,22 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+const pveReplicationPollTimeout = 10 * time.Second
+
+func (m *Monitor) pollReplicationStatusAsync(instanceName string, client PVEClientInterface, vms []models.VM) {
+	parentCtx := m.getRuntimeContext()
+	if parentCtx == nil {
+		parentCtx = context.Background()
+	}
+	guestSnapshot := append([]models.VM(nil), vms...)
+	go func() {
+		defer recoverFromPanic(fmt.Sprintf("pollReplicationStatus-%s", instanceName))
+		ctx, cancel := context.WithTimeout(parentCtx, pveReplicationPollTimeout)
+		defer cancel()
+		m.pollReplicationStatus(ctx, instanceName, client, guestSnapshot)
+	}()
+}
+
 // pollReplicationStatus polls storage replication jobs for a PVE instance.
 func (m *Monitor) pollReplicationStatus(ctx context.Context, instanceName string, client PVEClientInterface, vms []models.VM) {
 	log.Debug().Str("instance", instanceName).Msg("polling replication status")

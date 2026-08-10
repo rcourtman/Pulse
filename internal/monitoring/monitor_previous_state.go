@@ -11,6 +11,7 @@ type previousGuestContext struct {
 	vms                []models.VM
 	vmsByID            map[string]models.VM
 	containers         []models.Container
+	containersByID     map[string]models.Container
 	containerOCIByVMID map[int]bool
 	hostAgentsByVMID   map[string]models.Host
 }
@@ -20,6 +21,7 @@ func (m *Monitor) previousGuestContextForInstance(instanceName string) previousG
 		vms:                make([]models.VM, 0),
 		vmsByID:            make(map[string]models.VM),
 		containers:         make([]models.Container, 0),
+		containersByID:     make(map[string]models.Container),
 		containerOCIByVMID: make(map[int]bool),
 		hostAgentsByVMID:   make(map[string]models.Host),
 	}
@@ -50,6 +52,13 @@ func (m *Monitor) previousGuestContextForInstance(instanceName string) previousG
 		}
 		container := previousContainerFromView(ct)
 		ctx.containers = append(ctx.containers, container)
+		if container.ID != "" {
+			ctx.containersByID[container.ID] = container
+		}
+		guestID := makeGuestID(container.Instance, container.Node, container.VMID)
+		if guestID != "" {
+			ctx.containersByID[guestID] = container
+		}
 		if container.VMID > 0 && (strings.EqualFold(strings.TrimSpace(container.Type), "oci") || container.IsOCI) {
 			ctx.containerOCIByVMID[container.VMID] = true
 		}
@@ -108,6 +117,7 @@ func previousVMFromView(vm *unifiedresources.VMView) models.VM {
 		OSName:       vm.OSName(),
 		OSVersion:    vm.OSVersion(),
 		AgentVersion: vm.AgentVersion(),
+		Lock:         vm.Lock(),
 		Disk: models.Disk{
 			Used:  vm.DiskUsed(),
 			Total: vm.DiskTotal(),
@@ -129,15 +139,23 @@ func previousContainerFromView(ct *unifiedresources.ContainerView) models.Contai
 	node := ct.Node()
 	vmid := ct.VMID()
 	return models.Container{
-		ID:       makeGuestID(instance, node, vmid),
-		Instance: instance,
-		Node:     node,
-		VMID:     vmid,
-		Name:     ct.Name(),
-		Status:   ct.RuntimeStatus(),
-		Type:     ct.ContainerType(),
-		IsOCI:    ct.IsOCI(),
-		LastSeen: ct.LastSeen(),
+		ID:                makeGuestID(instance, node, vmid),
+		Instance:          instance,
+		Node:              node,
+		VMID:              vmid,
+		Name:              ct.Name(),
+		Status:            ct.RuntimeStatus(),
+		Type:              ct.ContainerType(),
+		IsOCI:             ct.IsOCI(),
+		LastSeen:          ct.LastSeen(),
+		IPAddresses:       ct.IPAddresses(),
+		NetworkInterfaces: guestNetworkInterfacesFromReadStateView(ct.NetworkInterfaces()),
+		OSName:            ct.OSName(),
+		OSTemplate:        ct.OSTemplate(),
+		HasDocker:         ct.HasDocker(),
+		DockerCheckedAt:   ct.DockerCheckedAt(),
+		Disks:             guestDisksFromReadStateView(ct.Disks()),
+		Lock:              ct.Lock(),
 		Memory: models.Memory{
 			Used:  ct.MemoryUsed(),
 			Total: ct.MemoryTotal(),
