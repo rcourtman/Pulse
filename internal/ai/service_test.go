@@ -6,13 +6,16 @@ import (
 	"errors"
 	"os"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/servicediscovery"
 	unifiedresources "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 )
@@ -350,6 +353,54 @@ func TestService_LoadConfig_SyncsInfraDiscoveryLifecycle(t *testing.T) {
 	}
 	if !svc.discoveryService.IsCommandScanningEnabled() {
 		t.Fatalf("expected manual discovery mode to keep command scanning enabled")
+	}
+}
+
+func TestService_DeepDiscoveryUsesInterfaceBackedAgentServer(t *testing.T) {
+	var commandCalls atomic.Int32
+	agentServer := &mockAgentServer{
+		agents: []agentexec.ConnectedAgent{{
+			AgentID:  "agent-1",
+			Hostname: "home-assistant",
+			Platform: "linux",
+		}},
+		executeFunc: func(_ context.Context, _ string, cmd agentexec.ExecuteCommandPayload) (*agentexec.CommandResultPayload, error) {
+			commandCalls.Add(1)
+			return &agentexec.CommandResultPayload{
+				RequestID: cmd.RequestID,
+				Success:   true,
+				Stdout:    "probe output",
+			}, nil
+		},
+	}
+
+	svc := NewService(config.NewConfigPersistence(t.TempDir()), agentServer)
+	defer svc.Stop()
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestSnapshot(models.StateSnapshot{})
+	svc.SetReadState(registry)
+
+	discoveryService := svc.GetDiscoveryService()
+	if discoveryService == nil {
+		t.Fatal("expected deep discovery service to be initialized")
+	}
+	discoveryService.SetCommandScanningEnabled(true)
+
+	result, err := discoveryService.DiscoverResource(context.Background(), servicediscovery.DiscoveryRequest{
+		ResourceType: servicediscovery.ResourceTypeAgent,
+		ResourceID:   "agent-1",
+		TargetID:     "agent-1",
+		Hostname:     "home-assistant",
+		Force:        true,
+	})
+	if err != nil {
+		t.Fatalf("DiscoverResource() error = %v", err)
+	}
+	if commandCalls.Load() == 0 {
+		t.Fatal("expected deep discovery to dispatch commands through the interface-backed agent server")
+	}
+	if len(result.RawCommandOutput) == 0 {
+		t.Fatal("expected deep discovery to retain command evidence")
 	}
 }
 

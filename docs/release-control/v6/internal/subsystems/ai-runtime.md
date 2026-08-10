@@ -5198,6 +5198,14 @@ single-resource discovery, and `pulse_discovery` refreshes before any
 `discovery_interval_hours: 0` is the only manual-command-scan mode: recurring
 scans stay stopped, but explicit admin-triggered refreshes may use the
 hardcoded trusted catalog.
+Each per-organization AI service now passes its organization-pinned
+`AgentServer` interface directly into `internal/ai/discovery_adapter.go`.
+Deep discovery does not recover the concrete global `agentexec.Server` or
+silently drop command execution when the runtime supplies an
+`agentexec.OrganizationServer`; connected-agent lookup and command dispatch
+therefore remain on the same tenant-scoped view. The interface-backed service
+regression in `internal/ai/service_test.go` requires a real deep-discovery run
+to dispatch the trusted probe catalog and retain its command evidence.
 The value boundary for keeping Discovery is observed workload context:
 Assistant and Patrol may consume normalized service name, version, endpoint,
 port, config path, data path, log path, bind-mount, confidence, and user-note

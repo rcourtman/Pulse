@@ -15,13 +15,14 @@ const (
 	minDiscoveryCommandTimeoutSeconds     = 1
 )
 
-// discoveryCommandAdapter adapts agentexec.Server to servicediscovery.CommandExecutor
+// discoveryCommandAdapter adapts the AI service's organization-scoped agent
+// server view to servicediscovery.CommandExecutor.
 type discoveryCommandAdapter struct {
-	server *agentexec.Server
+	server AgentServer
 }
 
 // newDiscoveryCommandAdapter creates a new adapter
-func newDiscoveryCommandAdapter(server *agentexec.Server) *discoveryCommandAdapter {
+func newDiscoveryCommandAdapter(server AgentServer) *discoveryCommandAdapter {
 	return &discoveryCommandAdapter{server: server}
 }
 
@@ -97,7 +98,12 @@ func (a *discoveryCommandAdapter) IsAgentConnected(agentID string) bool {
 	if a.server == nil {
 		return false
 	}
-	return a.server.IsAgentConnected(agentID)
+	for _, agent := range a.server.GetConnectedAgents() {
+		if agent.AgentID == agentID {
+			return true
+		}
+	}
+	return false
 }
 
 func nonNilContext(ctx context.Context) context.Context {

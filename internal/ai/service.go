@@ -608,10 +608,10 @@ func (s *Service) initDiscoveryServiceLocked() {
 		return
 	}
 
-	// Create command executor adapter (wraps agentexec.Server)
+	// Create a command executor adapter over the organization-scoped server view.
 	var cmdExecutor servicediscovery.CommandExecutor
-	if agentSrv, ok := s.agentServer.(*agentexec.Server); ok {
-		cmdExecutor = newDiscoveryCommandAdapter(agentSrv)
+	if s.agentServer != nil {
+		cmdExecutor = newDiscoveryCommandAdapter(s.agentServer)
 	}
 
 	// Create deep scanner
