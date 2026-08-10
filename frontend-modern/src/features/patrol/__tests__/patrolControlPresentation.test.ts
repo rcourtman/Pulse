@@ -46,12 +46,12 @@ describe('patrolControlPresentation', () => {
 
   it('never warns about timing when the evidence source publishes no validity window', () => {
     expect(getPatrolAttentionEvidencePresentation('unknown', 'complete').tone).toBe('muted');
-    expect(
-      getPatrolAttentionEvidencePresentation('unknown', 'complete').detailLabel,
-    ).not.toMatch(/timing/i);
-    expect(
-      getPatrolAttentionEvidencePresentation('unknown', 'partial').detailLabel,
-    ).not.toMatch(/timing/i);
+    expect(getPatrolAttentionEvidencePresentation('unknown', 'complete').detailLabel).not.toMatch(
+      /timing/i,
+    );
+    expect(getPatrolAttentionEvidencePresentation('unknown', 'partial').detailLabel).not.toMatch(
+      /timing/i,
+    );
   });
 
   it('keeps meaningful protection states in rows and reserves unavailable state for detail', () => {
