@@ -1,50 +1,40 @@
 {
   "version": 1,
-  "base_sha": "a7849c9ef04ababee688135394c81adca61c0ea2",
-  "verified_at": "2026-08-09T22:58:23Z",
+  "base_sha": "8bde827941f6c2a0c89da2e1a424e04c175edb5d",
+  "verified_at": "2026-08-10T05:40:00Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/SetupWizard/SetupCompletionPanel.tsx",
-    "frontend-modern/src/components/SetupWizard/SetupCompletionPreview.tsx",
-    "frontend-modern/src/components/SetupWizard/setupCompletionModel.ts",
-    "frontend-modern/src/components/SetupWizard/setupCompletionPreviewScenarios.ts",
-    "frontend-modern/src/i18n/messages.de.ts",
-    "frontend-modern/src/i18n/messages.es.ts",
-    "frontend-modern/src/i18n/messages.ts"
+    "frontend-modern/src/components/Settings/UpdatesSettingsPanel.tsx",
+    "frontend-modern/src/stores/updates.ts",
+    "frontend-modern/src/utils/updatesPresentation.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/SetupWizard/SetupCompletionPanel.tsx": "c349eb0a08633a2f331b2c79c4aa5f74f27d62c1342d2dd1d3a69558d05c6ac3",
-    "frontend-modern/src/components/SetupWizard/SetupCompletionPreview.tsx": "15d130f8b6cad7079db2215e4df5ab9d282bdb03f0e644578e515086e47e24c8",
-    "frontend-modern/src/components/SetupWizard/setupCompletionModel.ts": "0111a04873eff8c028ffdeb8a9616e60ce54e72177c83445631413144eb13355",
-    "frontend-modern/src/components/SetupWizard/setupCompletionPreviewScenarios.ts": "224c4424ac0934c42275adc2f7dad0c536adf06b245120cfcf7cf2b83592bdf3",
-    "frontend-modern/src/i18n/messages.de.ts": "8f1131c143c64e207460a32a9b78a20289084c3a1ada0ea3f7581c1ef63c7abd",
-    "frontend-modern/src/i18n/messages.es.ts": "5595cc905c70d2a4bfc8f7541edc733896449dac8ee9af518d6824bb613295b0",
-    "frontend-modern/src/i18n/messages.ts": "467ceeefc62f6f65f33db541de98e830168fa195863cac3cb5afd9c0495f7142"
+    "frontend-modern/src/components/Settings/UpdatesSettingsPanel.tsx": "67dfd5413739e71afff3a8930e5de14a5401f0446ae6a346e2e6354a189715b8",
+    "frontend-modern/src/stores/updates.ts": "367fc3dcbdedce632209c578b0ba38ecc6aca66800652cf13d6f1a2fb9d0bb83",
+    "frontend-modern/src/utils/updatesPresentation.ts": "91043539d8b46795d0ded6ead89d11a42d050d86b9662641aa37c8554c0adc6d"
   },
   "routes": [
-    "/preview/setup-complete?scenario=pro-unlicensed",
-    "/preview/setup-complete",
-    "/settings/pulse-intelligence/billing/plan"
+    "/settings (System > Pulse server updates panel)"
   ],
   "viewports": [
     {
-      "width": 1440,
-      "height": 1600
+      "width": 1280,
+      "height": 720
     },
     {
       "width": 390,
-      "height": 1500
+      "height": 844
     }
   ],
   "states": [
-    "The pro-unlicensed preview scenario rendered the Activate Pulse Pro card between the credentials card and the next-step card, with the factual license description and the Enter activation key button, in dark desktop and light 390px mobile viewports.",
-    "The default preview scenario rendered the completion panel with no Activate Pulse Pro text anywhere in the document, confirming the pointer is absent for community sessions.",
-    "The live dev backend (Pro binary, unlicensed Community tier) served /settings/pulse-intelligence/billing/plan as the full Plans & Billing panel including the License recovery section with the Paste your license key input, confirming the pointer's destination renders the activation form rather than blanking.",
-    "Console showed only WebSocket sync-reconnect noise from the ad-hoc Vite proxy; no errors from the new panel code."
+    "Up to date status with no prior check in this browser rendered 'Not checked yet' directly under the status label.",
+    "Up to date status backed by a three-hour-old cached check (seeded pulse-updates localStorage entry with matching currentVersion, page reloaded) rendered 'Checked 3 hours ago' under the status label.",
+    "The freshness line rendered on desktop 1280px and mobile 390px viewports without layout breakage next to the existing check-mode footer.",
+    "Console showed no errors after exercising both states."
   ],
   "interactions": [
-    "Clicked Enter activation key on the pro-unlicensed preview scenario and confirmed client-side navigation landed on /settings/pulse-intelligence/billing/plan.",
-    "Logged into the live dev backend through the sidecar Vite proxy and loaded /settings/pulse-intelligence/billing/plan to inspect the rendered license recovery form.",
-    "Reloaded the preview route across dark 1440px and light 390px viewports to confirm layout and theming of the activation card."
+    "Logged into the live dev frontend, reached the Pulse server updates panel via settings search.",
+    "Seeded the pulse-updates localStorage entry with lastCheck three hours in the past and reloaded to exercise the cached-verdict path.",
+    "Removed the seeded localStorage entry after verification."
   ]
 }

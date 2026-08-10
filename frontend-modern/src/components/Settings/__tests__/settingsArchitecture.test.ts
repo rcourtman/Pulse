@@ -42,6 +42,7 @@ import systemLogsPanelSource from '../SystemLogsPanel.tsx?raw';
 import updatesSettingsPanelSource from '../UpdatesSettingsPanel.tsx?raw';
 import updateHistorySectionSource from '../UpdateHistorySection.tsx?raw';
 import updateInstallGuideSource from '../UpdateInstallGuide.tsx?raw';
+import updatesPresentationSource from '../../../utils/updatesPresentation.ts?raw';
 import agentProfilesPanelSource from '../AgentProfilesPanel.tsx?raw';
 import infrastructureWorkspaceSource from '../InfrastructureWorkspace.tsx?raw';
 import infrastructureInstallerSectionSource from '../InfrastructureInstallerSection.tsx?raw';
@@ -1369,6 +1370,20 @@ describe('settings architecture guardrails', () => {
     expect(updateHistorySectionSource).toContain(
       "entry.action === 'update' && entry.status === 'success' && Boolean(entry.backup_path)",
     );
+  });
+
+  it('keeps the update verdict honest about the age of the check behind it', () => {
+    // The displayed verdict can come from the 24h localStorage cache, so the
+    // Up to date state must carry the age of the check it came from through
+    // the shared presentation helper, or a stale verdict reads as a live
+    // comparison (#1601). The copy stays in the presentation owner, never
+    // inline in the panel shell.
+    expect(updatesSettingsPanelSource).toContain(
+      'getUpdateCheckedLabel(updateStore.lastCheckedAt())',
+    );
+    expect(updatesSettingsPanelSource).toContain('!props.versionInfo()?.isSourceBuild');
+    expect(updatesPresentationSource).toContain("return 'Not checked yet'");
+    expect(updatesPresentationSource).toContain('`Checked ${relative}`');
   });
 
   it('keeps infrastructure on a source-manager landing with route-backed dialogs', () => {

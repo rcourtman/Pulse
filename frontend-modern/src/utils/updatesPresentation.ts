@@ -1,4 +1,5 @@
 import type { VersionInfo } from '@/api/updates';
+import { formatRelativeTime } from '@/utils/format';
 
 export interface UpdateBuildBadge {
   label: string;
@@ -71,6 +72,15 @@ export function getUpdatePrimaryStatusLabel(available: boolean): string {
 
 export function getUpdateCheckModeLabel(enabled: boolean): string {
   return enabled ? 'Auto-check enabled' : 'Manual checks only';
+}
+
+// The displayed verdict can come from a day-old cached check, so "Up to date"
+// must carry the age of the check it is based on or it reads as a live
+// comparison (#1601).
+export function getUpdateCheckedLabel(lastCheckedMs: number | null | undefined): string {
+  if (!lastCheckedMs || lastCheckedMs <= 0) return 'Not checked yet';
+  const relative = formatRelativeTime(lastCheckedMs);
+  return relative ? `Checked ${relative}` : 'Not checked yet';
 }
 
 export function getUpdateCheckActionLabel(checking: boolean): string {

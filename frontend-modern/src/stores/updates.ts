@@ -154,6 +154,11 @@ const [versionInfo, setVersionInfo] = createSignal<VersionInfo | null>(null);
 const [isChecking, setIsChecking] = createSignal(false);
 const [isDismissed, setIsDismissed] = createSignal(false);
 const [lastError, setLastError] = createSignal<string | null>(null);
+// Epoch ms of the check that produced the currently displayed verdict. The
+// verdict can be served from the 24h localStorage cache, so the panel pairs
+// its no-update status with this timestamp to avoid reading as a live
+// comparison (#1601).
+const [lastCheckedAt, setLastCheckedAt] = createSignal<number | null>(null);
 
 const sleep = (ms: number): Promise<void> =>
   new Promise((resolve) => {
@@ -315,6 +320,7 @@ const checkForUpdates = async (force = false): Promise<void> => {
           setVersionInfo(currentVersion);
           setUpdateInfo(state.updateInfo);
           setUpdateAvailable(state.updateInfo.available);
+          setLastCheckedAt(state.lastCheck || null);
           setLastError(null);
 
           // Check if this version was dismissed
@@ -381,6 +387,7 @@ const checkForUpdates = async (force = false): Promise<void> => {
     }
 
     // Save to cache
+    setLastCheckedAt(now);
     saveState({
       ...state,
       lastCheck: now,
@@ -394,6 +401,7 @@ const checkForUpdates = async (force = false): Promise<void> => {
       logger.warn('Using cached update info after update check failure');
       setUpdateInfo(fallbackInfo);
       setUpdateAvailable(fallbackInfo.available);
+      setLastCheckedAt(state.lastCheck || null);
       setIsDismissed(state.dismissedVersion === fallbackInfo.latestVersion);
     } else {
       setUpdateAvailable(false);
@@ -438,6 +446,7 @@ export const updateStore = {
   isChecking,
   isDismissed,
   lastError,
+  lastCheckedAt,
   isUpdateVisible,
 
   // Actions

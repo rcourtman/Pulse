@@ -1,8 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   getUpdateCheckActionLabel,
   getUpdateAvailabilityHeading,
   getUpdateBuildBadges,
+  getUpdateCheckedLabel,
   getUpdateCheckModeLabel,
   getUpdatePrimaryStatusLabel,
   UPDATES_PANEL_COPY,
@@ -48,5 +49,31 @@ describe('updatesPresentation', () => {
     expect(getUpdateCheckModeLabel(false)).toBe('Manual checks only');
     expect(getUpdateCheckActionLabel(true)).toBe('Checking...');
     expect(getUpdateCheckActionLabel(false)).toBe('Check Now');
+  });
+
+  describe('getUpdateCheckedLabel', () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('labels a missing or unset check as not checked', () => {
+      expect(getUpdateCheckedLabel(null)).toBe('Not checked yet');
+      expect(getUpdateCheckedLabel(undefined)).toBe('Not checked yet');
+      expect(getUpdateCheckedLabel(0)).toBe('Not checked yet');
+    });
+
+    it('states the age of the check the verdict came from', () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-08-10T12:00:00Z'));
+      expect(getUpdateCheckedLabel(new Date('2026-08-10T09:00:00Z').getTime())).toBe(
+        'Checked 3 hours ago',
+      );
+      expect(getUpdateCheckedLabel(new Date('2026-08-10T11:59:30Z').getTime())).toBe(
+        'Checked 30s ago',
+      );
+      expect(getUpdateCheckedLabel(new Date('2026-08-09T11:00:00Z').getTime())).toBe(
+        'Checked 1 day ago',
+      );
+    });
   });
 });

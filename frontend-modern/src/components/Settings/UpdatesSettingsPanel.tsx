@@ -23,10 +23,12 @@ import {
   getUpdateCheckActionLabel,
   getUpdateAvailabilityHeading,
   getUpdateBuildBadges,
+  getUpdateCheckedLabel,
   getUpdateCheckModeLabel,
   getUpdatePrimaryStatusLabel,
   UPDATES_PANEL_COPY,
 } from '@/utils/updatesPresentation';
+import { updateStore } from '@/stores/updates';
 
 export interface UpdatesSettingsPanelProps {
   versionInfo: Accessor<VersionInfo | null>;
@@ -166,9 +168,16 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
                     <Show
                       when={props.updateInfo()?.available}
                       fallback={
-                        <p class="mt-1 text-lg font-bold text-base-content">
-                          {getUpdatePrimaryStatusLabel(false)}
-                        </p>
+                        <>
+                          <p class="mt-1 text-lg font-bold text-base-content">
+                            {getUpdatePrimaryStatusLabel(false)}
+                          </p>
+                          <Show when={!props.versionInfo()?.isSourceBuild}>
+                            <p class="mt-0.5 text-xs text-muted">
+                              {getUpdateCheckedLabel(updateStore.lastCheckedAt())}
+                            </p>
+                          </Show>
+                        </>
                       }
                     >
                       <p class="mt-1 text-lg font-bold text-green-700 dark:text-green-300">

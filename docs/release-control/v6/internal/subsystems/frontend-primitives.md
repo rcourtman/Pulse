@@ -4540,6 +4540,19 @@ update-surface wording inline. `CopyCommandBlock` must use the shared
 Clipboard API fallback path and only report copied state after the shared copy
 path succeeds.
 
+The update verdict is honest about its age. The frontend serves the update
+verdict from a 24-hour localStorage cache, so the panel's "Up to date" state
+must render the age of the check it came from rather than reading as a live
+comparison (#1601). `frontend-modern/src/stores/updates.ts` exposes
+`lastCheckedAt`, the epoch milliseconds of the check backing the currently
+displayed verdict, set on fresh checks, on cached-verdict reuse, and on the
+cached fallback after a failed check.
+`frontend-modern/src/utils/updatesPresentation.ts` owns the customer-facing
+wording through `getUpdateCheckedLabel` ("Checked 3 hours ago", "Not checked
+yet"); the panel shell must not inline that copy and hides the line for
+source builds, where update checks are disabled. Regression boundary:
+`frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts`.
+
 The reporting operations surface now follows the same shell-state-model rule.
 `frontend-modern/src/components/Settings/ReportingPanel.tsx` stays the
 operations-panel shell, while
