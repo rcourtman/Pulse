@@ -1400,6 +1400,8 @@ patch uses the integrated exact-SHA candidate and definitive release verdict
 because the release range repairs active customer
 harm in agent download preflight, Agent Doctor credential recovery, strict
 subscription-provider tool schemas, and fresh Pro activation discovery. The
+same cut includes the frontend-primitives-owned update verdict age from #1601,
+so a cached "Up to date" result identifies when its backing check ran. The
 installer/updater risk boundary requires the explicit patch hotfix reason even
 though the workflow performs the normal immutable-candidate checks before its
 publication boundary. Windows executables must be Authenticode-signed through

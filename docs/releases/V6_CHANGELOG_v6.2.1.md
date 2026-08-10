@@ -8,6 +8,8 @@ _This changelog describes stable `v6.2.1` compared with stable `v6.2.0`._
   before a license is activated, while demo and white-label suppression remains
   authoritative.
 - Fresh Pro setup points operators directly to license activation.
+- The server updates panel shows the age of the check behind cached "Up to date"
+  verdicts (#1601).
 
 ## Fixed
 

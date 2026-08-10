@@ -189,6 +189,20 @@ class RenderReleaseBodyTest(unittest.TestCase):
 
         render_release_body.validate_release_notes_shape(notes, "6.2.1")
 
+    def test_v621_packet_documents_cached_update_verdict_age(self) -> None:
+        release_notes = (
+            _REPO_ROOT / "docs/releases/RELEASE_NOTES_v6.2.1.md"
+        ).read_text(encoding="utf-8")
+        changelog = (
+            _REPO_ROOT / "docs/releases/V6_CHANGELOG_v6.2.1.md"
+        ).read_text(encoding="utf-8")
+
+        render_release_body.validate_release_notes_shape(release_notes, "6.2.1")
+        self.assertIn('cached "Up to date" verdicts', release_notes)
+        self.assertIn('cached "Up to date"', changelog)
+        self.assertIn("#1601", release_notes)
+        self.assertIn("#1601", changelog)
+
     def test_sanitize_release_notes_strips_draft_markers_duplicate_sections_and_draft_links(self) -> None:
         raw = """# Pulse v6.0.0-rc.2 Draft Release Notes
 

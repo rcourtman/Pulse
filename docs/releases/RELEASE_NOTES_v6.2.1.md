@@ -26,6 +26,9 @@ discoverable on fresh Pulse Pro installs.
   expected commercial navigation after activation.
 - Demo state converges after successful activation instead of retaining stale
   pre-activation presentation.
+- The server updates panel labels cached "Up to date" verdicts with the age of
+  the check behind them, so a cached result no longer reads as a live comparison
+  (#1601).
 
 ## Upgrade Notes
 
