@@ -253,6 +253,60 @@ print a non-passing receipt skeleton with
 `python3 scripts/release_control/browser_verification_guard.py --print-template`
 after staging the intended frontend paths.
 
+## Reporter Test Image Validation Path
+
+When a reviewed fix needs live confirmation from one or a few Docker-based
+reporters, use an immutable reporter test image by default instead of cutting
+an RC solely to obtain that narrow evidence. This is a diagnostic source-build
+path. It is not a release channel, a lighter RC, or an alternate promotion
+mechanism.
+
+The canonical operational contract lives in
+`docs/release-control/v6/internal/RELEASE_PROMOTION_POLICY.md`. Every reporter
+test image must satisfy these agent-facing rules:
+
+1. bind the image to one exact reviewed repository commit and one named issue
+2. build only trusted project code in an isolated builder that cannot expose
+   workspace secrets, signing material, production data, or unrelated Docker
+   workloads
+3. publish a new immutable tag shaped as `test-<issue>-<short-sha>` and record
+   the registry digest, never overwrite or reuse the tag
+4. stamp source, revision, and an explicit test-build version identity so the
+   runtime cannot be mistaken for a released stable or RC build
+5. target the reporter's required platform, with multi-architecture publication
+   only when the validation cohort actually needs it
+6. pass the targeted regression proof plus a clean-container start, health,
+   and version smoke before the image is offered
+7. provide the exact tag and digest, focused validation steps, diagnostic-build
+   warning, backup guidance, rollback image, and failure-evidence request in
+   the approved reporter reply
+8. keep the issue open until the named user-visible behavior is confirmed or
+   conservatively superseded by another active issue
+9. treat reporter confirmation as narrow live evidence for that issue and
+   environment, never as release qualification or prerelease lineage
+10. fix failed images forward under new commit-derived tags and never mutate
+    an already shared artifact
+
+This path must not create a GitHub release or git tag, update release notes or
+update feeds, publish Helm, move Docker aliases, update the demo, stage or
+promote private paid artifacts, or satisfy any RC or stable release gate. A
+real RC, stable, or patch release still enters once through the canonical
+single-build release workflow and rebuilds the release artifact under its
+governed version and qualification contract.
+
+Use the full RC path when the intended cohort is broad, several independent
+reporters or platforms need validation, or the proof depends on installers,
+updaters, Helm, private artifacts, cross-repo compatibility, migrations,
+destructive state changes, authentication or another trust boundary, or
+stable-promotion lineage. When classification is uncertain, choose the RC
+path.
+
+Successful reporter validation does not force an immediate patch release.
+Severity and active customer harm decide scheduling. After a stable release
+containing the fix ships and the issue is resolved, the test image becomes
+eligible for removal only with explicit maintainer approval. Its tag must
+never be reused.
+
 ## Task Completion Protocol
 
 Every substantial task must finish by checking these questions:

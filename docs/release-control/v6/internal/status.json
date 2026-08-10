@@ -10506,6 +10506,16 @@
         "L2",
         "L3"
       ]
+    },
+    {
+      "id": "reporter-test-image-validation-path",
+      "summary": "A reviewed Docker fix that needs confirmation from one or a few named issue reporters uses an immutable issue-and-commit test image by default instead of manufacturing an RC solely for narrow validation. The image remains a diagnostic source build, cannot mutate release surfaces or satisfy release lineage, and does not force an immediate patch after successful reporter confirmation.",
+      "kind": "release-policy",
+      "decided_at": "2026-08-10",
+      "subsystem_ids": [],
+      "lane_ids": [
+        "L1"
+      ]
     }
   ]
 }

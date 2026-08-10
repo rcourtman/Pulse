@@ -28,6 +28,95 @@ Cloud, and self-hosted production users.
    - Are not a customer-facing release channel.
    - Remain reserved for development, debugging, and branch validation.
 
+## Reporter Test Image Contract
+
+A reporter test image is an issue-scoped diagnostic source build for one or a
+few explicitly participating Docker users. It exists to validate a reviewed
+fix quickly without manufacturing an RC or exposing the broader preview
+cohort to an unqualified candidate.
+
+It is not a fourth release channel. It does not count as `rc`, `stable`, a
+published prerelease, release qualification, or stable-promotion lineage.
+
+### Eligibility
+
+Use a reporter test image only when all of these conditions hold:
+
+1. the reported behavior has a concrete diagnosis or reproduction, an exact
+   reviewed fix commit, and targeted automated regression proof
+2. the reporter runs Docker or an equivalent OCI deployment and the affected
+   behavior can be validated without an installer, updater, Helm, mobile,
+   private paid-runtime, or other release-only surface
+3. the validation cohort is one or a few named issue participants rather than
+   a broad preview audience
+4. the reporter can pin an exact image and return to a known release image
+5. the test does not require destructive data migration, production secret
+   handling, or a widened authentication, authorization, tenant, billing,
+   licensing, relay, or other trust boundary
+
+If any condition is false or uncertain, use the governed RC path.
+
+### Build And Publication
+
+1. Build from one exact reviewed commit in the canonical Pulse repository.
+   Never build arbitrary contributor code on a machine or builder that can
+   access registry credentials, signing material, production data, workspace
+   secrets, or unrelated Docker workloads.
+2. Use an isolated builder and clean source state. Do not pass host secrets,
+   production mounts, privileged runtime access, or unrelated Docker sockets
+   into the build.
+3. Publish a new immutable tag shaped as `test-<issue>-<short-sha>`, for
+   example `rcourtman/pulse:test-1437-44a3f194`. Never overwrite or reuse the
+   tag.
+4. Stamp OCI source and revision labels. The running Pulse version must identify
+   the released base plus test issue and commit metadata, for example
+   `v6.2.1+test.1437.44a3f194`. It must not impersonate a stable or RC version.
+5. Build only the reporter's required platform unless more than one platform
+   is part of the named validation cohort. Record every published platform.
+6. Run the targeted regression proof plus a clean-container start, health
+   check, and version check before sharing the image. Pull the published image
+   by digest for the final smoke so registry publication itself is exercised.
+7. Record the source commit, image tag, registry digest, platform, proof
+   commands, smoke result, exact pull or Compose override, and exact rollback
+   image in the task handoff. Preserve the tag, digest, test steps, and rollback
+   image in the approved issue reply so later triage can recover the artifact
+   identity without relying on chat history.
+
+### Reporter Guidance And Claims
+
+1. Do not offer the image until it is published, pullable by digest, and has
+   passed the required smoke.
+2. The approved reporter reply must include the exact tag and digest, describe
+   it as a temporary diagnostic build, name the focused checks, recommend a
+   backup and non-production use where practical, provide the prior stable
+   rollback image, and request fresh diagnostics from the same reproduction
+   window if validation fails.
+3. Keep the issue open until the named user-visible behavior is confirmed or
+   conservatively superseded by another active issue.
+4. Reporter confirmation is narrow live evidence for the named issue,
+   environment, commit, image digest, and exercised behavior. It does not
+   qualify installers, updater behavior, Helm, other architectures, private
+   paid runtime, cross-repo compatibility, migrations, security boundaries,
+   or the wider release.
+5. A successful test does not force an immediate patch release. Schedule the
+   fix by severity and active customer harm. Any later RC, stable, or patch
+   must rebuild and qualify through the canonical release workflow rather
+   than promote the reporter image.
+
+### Forbidden Release Mutations And Lifecycle
+
+1. A reporter test image must never create a GitHub release or git tag, update
+   release notes or update feeds, publish Helm, move Docker aliases, update the
+   demo, stage or promote private paid artifacts, or satisfy an RC or stable
+   release gate.
+2. Never attach `latest`, a stable version, an RC version, or another mutable
+   alias to the image.
+3. Failed validation is fixed forward from a new reviewed commit and published
+   under a new commit-derived tag. Shared tags and digests are immutable.
+4. After a stable release containing the fix ships and the issue is resolved,
+   the test image becomes eligible for removal only with explicit maintainer
+   approval. The old tag remains retired and must never be reused.
+
 ## Development Model
 
 1. Use short-lived feature branches and feature flags for incomplete or risky

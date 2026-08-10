@@ -660,6 +660,17 @@ Assertion design rules:
     `cloud-commercial-transition-external-proof`, and
     `account-commercial-transition-external-proof`; they must pass before the
     feature is enabled.
+21. A reviewed Docker fix that needs confirmation from one or a few named issue
+    reporters should use an immutable issue-and-commit reporter test image by
+    default instead of cutting an RC solely for that narrow validation. The
+    image is a diagnostic source build, not a release channel, prerelease,
+    release-qualified artifact, or stable-promotion lineage. It may not move
+    mutable aliases or any GitHub, updater, Helm, demo, private paid-runtime,
+    or other release surface. Broad, multi-platform, release-surface,
+    migration, destructive-state, trust-boundary, cross-repo, and promotion-
+    lineage validation remains on the governed RC path. Successful reporter
+    confirmation informs severity-based release scheduling but does not force
+    an immediate patch release.
 
 ## TrueNAS Support Floor
 
