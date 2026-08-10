@@ -1405,10 +1405,16 @@ so a cached "Up to date" result identifies when its backing check ran. The
 installer/updater risk boundary requires the explicit patch hotfix reason even
 though the workflow performs the normal immutable-candidate checks before its
 publication boundary. Windows executables must be Authenticode-signed through
-SignPath; no unsigned-Windows exception is authorized for `v6.2.1`. The mobile
-decision is `no-mobile-impact` because the patch does not change the checked-in
-mobile API, Relay, pairing, approval, push, authentication, or onboarding
-contracts.
+SignPath by default. For `v6.2.1`, failed release run `31343128024` proved that
+the external `Release certificate 2026` CSR remained pending, and the release
+owner approved a version-bound unsigned-Windows exception. The Windows packet
+must disclose that it is not Authenticode-signed and may display an Unknown
+Publisher warning while retaining exact-SHA, checksum, detached-signature,
+manifest, and published-digest verification. Stable `v6.2.2` and later restore
+mandatory Authenticode unless another explicit version-bound decision is
+recorded. The mobile decision is `no-mobile-impact` because the patch does not
+change the checked-in mobile API, Relay, pairing, approval, push,
+authentication, or onboarding contracts.
 This patch release uses the stable hotfix path with
 `rollback_version=v6.2.0`, `hotfix_exception=true`, a release-owner reason, and
 no fabricated same-version RC tag.
@@ -1425,6 +1431,8 @@ The release owner then separately approved a v6.2.0-only unsigned-Windows
 exception. The Windows packet must disclose the Unknown Publisher warning and
 retain exact-SHA, checksum, detached-signature, manifest, and published-digest
 verification; this decision is not inherited by later releases.
+The separately authorized `v6.2.1` exception is recorded in
+`docs/release-control/v6/internal/records/v6.2.1-unsigned-windows-owner-approval-2026-08-10.md`.
 The first RC11 publication attempt, run `31274524321`, passed every immutable
 release gate and briefly crossed the draft boundary, then failed before the
 irreversible activation marker because the checkout-free activation job relied
@@ -3181,9 +3189,9 @@ discloses the unsigned Windows publisher state and the Windows binaries retain
 the exact-SHA candidate, checksum, detached-signature, and post-publication
 digest controls. Stable publication and the stable-path dry-run must continue
 to require both native signing lanes except for the recorded, version-bound
-`v6.1.0`, `v6.1.1`, `v6.1.2`, and `v6.2.0` Windows exceptions; subsequent
-stable versions restore both requirements unless policy records a new explicit
-version-bound owner decision. `scripts/build-release.sh` must replace
+`v6.1.0`, `v6.1.1`, `v6.1.2`, `v6.2.0`, and `v6.2.1` Windows exceptions;
+subsequent stable versions restore both requirements unless policy records a
+new explicit version-bound owner decision. `scripts/build-release.sh` must replace
 only the native targets required by those independent inputs and must fail
 closed when a required native-binary directory or target is absent.
 Historical published-release repair must flow through

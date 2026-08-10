@@ -38,12 +38,12 @@ on:
         required: false
         type: string
       unsigned_windows_exception:
-        description: 'v6.1.0, v6.1.1, v6.1.2, or v6.2.0 only: publish Windows agents without Authenticode under a recorded owner exception'
+        description: 'v6.1.0, v6.1.1, v6.1.2, v6.2.0, or v6.2.1 only: publish Windows agents without Authenticode under a recorded owner exception'
         required: false
         type: boolean
         default: false
       unsigned_windows_reason:
-        description: 'v6.1.0, v6.1.1, v6.1.2, or v6.2.0 only: owner reason for the unsigned Windows exception'
+        description: 'v6.1.0, v6.1.1, v6.1.2, v6.2.0, or v6.2.1 only: owner reason for the unsigned Windows exception'
         required: false
         type: string
       historical_asset_backfill_only:

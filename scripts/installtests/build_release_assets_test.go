@@ -513,8 +513,8 @@ func TestCurrentStablePatchReleasePacketTracksInstallMetadata(t *testing.T) {
 		"`v"+previous+"`",
 		"Use the normal v6 install or update flow",
 		"integrated exact-SHA candidate checks",
-		"Authenticode-signed through SignPath",
-		"No unsigned-Windows exception is authorized",
+		"not Authenticode-signed",
+		"Unknown Publisher",
 		"`no-mobile-impact`",
 		"rollback target is `v"+previous+"`",
 	)
@@ -522,8 +522,8 @@ func TestCurrentStablePatchReleasePacketTracksInstallMetadata(t *testing.T) {
 		"Version: `v"+version+"`",
 		"Rollback target: `v"+previous+"`",
 		"Promotion path: emergency stable patch from `"+releaseBranch+"`",
-		"Windows signing decision: Authenticode is required through SignPath",
-		"no unsigned-Windows exception is authorized for `v"+version+"`",
+		"Windows signing decision: version-bound unsigned-Windows exception",
+		"not Authenticode-signed",
 		"Mobile decision: `no-mobile-impact`",
 	)
 	assertFileContainsAll(t, repoFile("docs", "RELEASE_NOTES.md"),
@@ -1080,12 +1080,12 @@ func TestReleaseCandidateRequiresPlatformNativeAgentSigning(t *testing.T) {
 	)
 	assertFileContainsAll(t, repoFile(".github", "workflows", "release-dry-run.yml"),
 		`Definitive Dry-Run Verdict`,
-		`require_windows_signing: ${{ !contains(inputs.version, '-') && !((inputs.version == '6.1.0' || inputs.version == '6.1.1' || inputs.version == '6.1.2' || inputs.version == '6.2.0') && inputs.unsigned_windows_exception) }}`,
+		`require_windows_signing: ${{ !contains(inputs.version, '-') && !((inputs.version == '6.1.0' || inputs.version == '6.1.1' || inputs.version == '6.1.2' || inputs.version == '6.2.0' || inputs.version == '6.2.1') && inputs.unsigned_windows_exception) }}`,
 		`require_result "exact-SHA release candidate" "$CANDIDATE_RESULT" success`,
 		`require_result "stable demo no-mutation verification" "$DEMO_RESULT" success`,
 	)
 	assertFileContainsAll(t, repoFile("scripts", "release_control", "resolve_release_promotion.py"),
-		`version not in {"6.1.0", "6.1.1", "6.1.2", "6.2.0"}`,
+		`version not in {"6.1.0", "6.1.1", "6.1.2", "6.2.0", "6.2.1"}`,
 		`unsigned_windows_reason is required`,
 		`not Authenticode-signed`,
 		`require_windows_signing = not is_prerelease and not unsigned_windows_exception`,

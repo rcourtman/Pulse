@@ -40,9 +40,11 @@ release workflow still requires the integrated exact-SHA candidate checks,
 immutable artifacts, published-digest verification, and definitive release
 verdict.
 
-Windows Unified Agent binaries in `v6.2.1` are required to be
-Authenticode-signed through SignPath. No unsigned-Windows exception is
-authorized for this release.
+Windows Unified Agent binaries in `v6.2.1` are not Authenticode-signed under a
+version-bound release-owner exception while the SignPath `Release certificate
+2026` CSR remains pending. Windows may therefore display an Unknown Publisher
+warning. The immutable candidate manifest, checksums, detached `.sig` and
+`.sshsig` signatures, and published-digest verification remain required.
 
 The rollback target is `v6.2.0`. The exact rollback reinstall command is:
 

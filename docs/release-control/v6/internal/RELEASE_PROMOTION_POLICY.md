@@ -287,8 +287,22 @@ TLS-unverified receipts leave the claim at `implemented` or
      manifest, checksums, detached `.sig`/`.sshsig` signatures, and published
      digests. Public notes must disclose that they are not Authenticode-signed
      and may display an Unknown Publisher warning. Stable `v6.2.1` and later
-     restore mandatory Windows Authenticode unless another explicit,
+   restore mandatory Windows Authenticode unless another explicit,
+   version-bound owner decision is recorded.
+12. v6.2.1 unsigned-Windows exception:
+   - On 2026-08-10, release run `31343128024` failed closed before candidate
+     assembly or public mutation because the SignPath `release-signing` policy
+     remained invalid while its `Release certificate 2026` CSR was pending.
+     The release owner then explicitly authorized unsigned Windows artifacts
+     for `v6.2.1`. The dated decision record is
+     `docs/release-control/v6/internal/records/v6.2.1-unsigned-windows-owner-approval-2026-08-10.md`.
+   - This is a bounded `v6.2.1` decision, not a standing exception. Stable
+     `v6.2.2` and later restore mandatory Authenticode unless another explicit,
      version-bound owner decision is recorded.
+   - Windows artifacts remain bound by the exact-SHA candidate manifest,
+     checksums, detached `.sig`/`.sshsig` signatures, and published digests.
+     Public notes must disclose that the binaries are not Authenticode-signed
+     and may display an Unknown Publisher warning.
 
 ## Single-Build Release Path
 

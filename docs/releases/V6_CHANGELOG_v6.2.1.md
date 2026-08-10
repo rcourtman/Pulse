@@ -31,7 +31,9 @@ _This changelog describes stable `v6.2.1` compared with stable `v6.2.0`._
 - Emergency reason: active customer harm in agent download preflight,
   installed-agent credential recovery, subscription-backed tool execution, and
   fresh Pro activation discovery
-- Windows signing decision: Authenticode is required through SignPath; no
-  unsigned-Windows exception is authorized for `v6.2.1`
+- Windows signing decision: version-bound unsigned-Windows exception approved
+  for `v6.2.1`; the binaries are not Authenticode-signed and may display an
+  Unknown Publisher warning, while checksum, detached-signature, manifest, and
+  published-digest verification remain mandatory
 - Mobile decision: `no-mobile-impact`; no companion build upload or public
   store rollout is required
