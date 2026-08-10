@@ -55,7 +55,8 @@ export const PATROL_WORKSPACE_QUEUE_TITLE = 'Open work';
 export const PATROL_WORKSPACE_RUN_RECORD_TITLE = 'Check details';
 
 export interface PatrolAttentionEvidencePresentation {
-  label: string;
+  detailLabel: string;
+  rowLabel?: string;
   tone: MetadataBadgeTone;
 }
 
@@ -65,23 +66,39 @@ export interface PatrolAttentionProtectionPresentation {
   tone: MetadataBadgeTone;
 }
 
+// Unknown freshness means the evidence source publishes no validity window
+// (only availability probes do today), not that something is wrong — so it
+// never warns and never claims "timing unavailable" while the envelope's
+// observation time is displayed right next to it. Row labels surface only
+// states worth a glance; the expected complete-evidence state stays quiet.
 export function getPatrolAttentionEvidencePresentation(
   freshness: EvidenceFreshness,
   completeness: EvidenceCompleteness,
 ): PatrolAttentionEvidencePresentation {
   if (completeness === 'unavailable') {
-    return { label: 'Evidence unavailable', tone: 'muted' };
+    return { detailLabel: 'Evidence unavailable', rowLabel: 'Evidence unavailable', tone: 'muted' };
   }
   if (completeness === 'complete') {
-    if (freshness === 'fresh') return { label: 'Evidence current', tone: 'success' };
-    if (freshness === 'stale') return { label: 'Evidence out of date', tone: 'warning' };
-    return { label: 'Evidence timing unavailable', tone: 'warning' };
+    if (freshness === 'fresh') {
+      return { detailLabel: 'Evidence current', rowLabel: 'Evidence current', tone: 'success' };
+    }
+    if (freshness === 'stale') {
+      return {
+        detailLabel: 'Evidence out of date',
+        rowLabel: 'Evidence out of date',
+        tone: 'warning',
+      };
+    }
+    return { detailLabel: 'Evidence recorded', tone: 'muted' };
   }
-  if (freshness === 'fresh') return { label: 'Evidence incomplete', tone: 'warning' };
   if (freshness === 'stale') {
-    return { label: 'Evidence incomplete and out of date', tone: 'warning' };
+    return {
+      detailLabel: 'Evidence incomplete and out of date',
+      rowLabel: 'Evidence incomplete and out of date',
+      tone: 'warning',
+    };
   }
-  return { label: 'Evidence incomplete; timing unavailable', tone: 'warning' };
+  return { detailLabel: 'Evidence incomplete', rowLabel: 'Evidence incomplete', tone: 'warning' };
 }
 
 export function getPatrolAttentionProtectionPresentation(

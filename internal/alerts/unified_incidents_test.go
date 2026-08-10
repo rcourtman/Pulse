@@ -75,6 +75,81 @@ func TestSyncUnifiedResourceIncidentsCreatesAndClearsAlerts(t *testing.T) {
 	assertAlertMissing(t, m, alertID)
 }
 
+func TestSyncUnifiedResourceIncidentsAttachesFirstClassIncidentEvidence(t *testing.T) {
+	m := newTestManager(t)
+	configureUnifiedEvalManager(t, m, unifiedEvalBaseConfig())
+
+	resource := unifiedresources.Resource{
+		ID:         "storage:tank",
+		Type:       unifiedresources.ResourceTypeStorage,
+		Name:       "tank",
+		ParentName: "truenas-main",
+		Sources:    []unifiedresources.DataSource{unifiedresources.SourceTrueNAS},
+		Storage: &unifiedresources.StorageMeta{
+			Platform:   "truenas",
+			Topology:   "pool",
+			Protection: "zfs",
+			IsZFS:      true,
+		},
+		Incidents: []unifiedresources.ResourceIncident{{
+			Provider: "truenas",
+			NativeID: "alert-1",
+			Code:     "truenas_volume_status",
+			Severity: storagehealth.RiskWarning,
+			Source:   "alerts",
+			Summary:  "Pool tank is DEGRADED",
+		}},
+	}
+
+	m.SyncUnifiedResourceIncidents([]unifiedresources.Resource{resource})
+
+	alertID := buildCanonicalStateID(resource.ID, "alertspec:provider-incident:6d90d4cfe0dab6cc")
+	m.mu.RLock()
+	alert := testRequireActiveAlert(t, m, alertID)
+	m.mu.RUnlock()
+
+	if len(alert.Evidence) != 1 {
+		t.Fatalf("evidence count = %d, want 1", len(alert.Evidence))
+	}
+	envelope := alert.Evidence[0]
+	if envelope.Completeness != operationaltrust.EvidenceComplete {
+		t.Fatalf("completeness = %q, want complete (legacy partial shim must not back a directly observed incident)", envelope.Completeness)
+	}
+	if envelope.Confidence != operationaltrust.EvidenceConfirmed {
+		t.Fatalf("confidence = %q, want confirmed", envelope.Confidence)
+	}
+	if envelope.Source.Provider != "truenas" || envelope.Source.Collector != "alerts" {
+		t.Fatalf("source = %+v, want provider truenas / collector alerts", envelope.Source)
+	}
+	if envelope.Subject.ResourceID != resource.ID {
+		t.Fatalf("subject resource = %q, want %q", envelope.Subject.ResourceID, resource.ID)
+	}
+	if envelope.PayloadRef == nil || envelope.PayloadRef.Kind != "unified-incident-digest" {
+		t.Fatalf("payload ref = %+v, want unified-incident-digest", envelope.PayloadRef)
+	}
+	if alert.OperationalRecord == nil || len(alert.OperationalRecord.EvidenceIDs) != 1 ||
+		alert.OperationalRecord.EvidenceIDs[0] != envelope.ID {
+		t.Fatalf("operational record evidence ids = %+v, want [%s]", alert.OperationalRecord, envelope.ID)
+	}
+
+	// A later sync re-observes the incident: the live alert keeps accumulating
+	// the freshly observed envelopes instead of pinning the raise-time one.
+	m.SyncUnifiedResourceIncidents([]unifiedresources.Resource{resource})
+	m.mu.RLock()
+	refreshed := testRequireActiveAlert(t, m, alertID)
+	m.mu.RUnlock()
+	if len(refreshed.Evidence) < 1 {
+		t.Fatalf("refreshed evidence count = %d, want >= 1", len(refreshed.Evidence))
+	}
+	latest := refreshed.Evidence[len(refreshed.Evidence)-1]
+	if latest.ObservedAt.Before(envelope.ObservedAt) {
+		t.Fatalf("latest evidence observedAt %v predates raise-time %v", latest.ObservedAt, envelope.ObservedAt)
+	}
+	if latest.Completeness != operationaltrust.EvidenceComplete {
+		t.Fatalf("refreshed completeness = %q, want complete", latest.Completeness)
+	}
+}
+
 func TestSyncUnifiedResourceIncidentsRoutesAttachedCheckThroughSourceOwnedLifecycle(t *testing.T) {
 	m := newTestManager(t)
 	configureUnifiedEvalManager(t, m, unifiedEvalBaseConfig())

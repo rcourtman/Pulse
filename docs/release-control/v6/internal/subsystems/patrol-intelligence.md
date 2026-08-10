@@ -969,10 +969,18 @@ explanation-only typed context without action or approval authority. Browser
 proof is `tests/integration/tests/91-operational-trust-attention-workbench.spec.ts`.
 The scan row must reduce evidence freshness/completeness into one plain phrase,
 omit protection posture when its state is unavailable, and use operator language
-for meaningful protection states. The selected detail retains the typed evidence
-and protection facts, but labels unknown timing, protection state, provider job
-state, and history availability explicitly instead of exposing ambiguous raw
-value pairs such as `Unknown / Complete`.
+for meaningful protection states. Unknown evidence freshness means the backing
+source publishes no validity window (only availability-poller evidence does),
+so it is not an operator-facing warning: the scan row surfaces an evidence
+phrase only for states worth a glance (unavailable, incomplete, stale, or
+window-backed current evidence) and stays quiet for complete evidence with
+unknown freshness, mirroring the unavailable-protection row rule. The selected
+detail retains the typed evidence and protection facts, but labels unknown
+timing, protection state, provider job state, and history availability
+explicitly instead of exposing ambiguous raw value pairs such as
+`Unknown / Complete`; for complete evidence without a validity window it uses
+the neutral muted `Evidence recorded` label and must not claim timing is
+unavailable while per-envelope observation times render beside it.
 
 Attached availability failures use this same queue and detail contract. Their
 attention item keeps the owning canonical resource ID, the exact

@@ -312,7 +312,8 @@ describe('PatrolAttentionWorkbench', () => {
     renderWorkbench();
 
     const row = await screen.findByRole('button', { name: 'Open Disk pressure on Database VM' });
-    expect(within(row).getByText('Evidence timing unavailable')).toBeInTheDocument();
+    expect(within(row).queryByText(/Evidence/)).not.toBeInTheDocument();
+    expect(within(row).queryByText(/timing/i)).not.toBeInTheDocument();
     expect(within(row).queryByText('Unknown / Complete')).not.toBeInTheDocument();
     expect(within(row).queryByText(/Protection/)).not.toBeInTheDocument();
 
@@ -321,7 +322,7 @@ describe('PatrolAttentionWorkbench', () => {
     const detailRegion = await screen.findByRole('complementary', {
       name: 'Disk pressure on Database VM',
     });
-    expect(within(detailRegion).getByText('Evidence timing unavailable')).toBeInTheDocument();
+    expect(within(detailRegion).getByText('Evidence recorded')).toBeInTheDocument();
     expect(within(detailRegion).getByText('Protection status unavailable')).toBeInTheDocument();
     expect(within(detailRegion).getByText('Job status unavailable')).toBeInTheDocument();
     expect(within(detailRegion).getByText('History: Complete')).toBeInTheDocument();

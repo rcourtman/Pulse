@@ -745,9 +745,8 @@ test("makes active operational work primary and preserves the evidence boundary"
   await expect(
     queue.getByText("Connection state unknown for pve-edge"),
   ).toBeVisible();
-  await expect(
-    queue.getByText("Evidence incomplete; timing unavailable"),
-  ).toBeVisible();
+  await expect(queue.getByText("Evidence incomplete")).toBeVisible();
+  await expect(queue.getByText(/timing unavailable/)).toHaveCount(0);
   await expect(queue.getByText("Protection Unknown")).toHaveCount(0);
   await expect(queue.getByText("Unknown / Partial")).toHaveCount(0);
   await selectAttentionState(page, "Recent resolved 1", "resolved");

@@ -1,40 +1,38 @@
 {
   "version": 1,
-  "base_sha": "8bde827941f6c2a0c89da2e1a424e04c175edb5d",
-  "verified_at": "2026-08-10T05:40:00Z",
+  "base_sha": "bcb172c1274b393f1bdd8d51b4fffb7f0585e4bd",
+  "verified_at": "2026-08-10T08:55:00Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Settings/UpdatesSettingsPanel.tsx",
-    "frontend-modern/src/stores/updates.ts",
-    "frontend-modern/src/utils/updatesPresentation.ts"
+    "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx",
+    "frontend-modern/src/features/patrol/patrolControlPresentation.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Settings/UpdatesSettingsPanel.tsx": "67dfd5413739e71afff3a8930e5de14a5401f0446ae6a346e2e6354a189715b8",
-    "frontend-modern/src/stores/updates.ts": "367fc3dcbdedce632209c578b0ba38ecc6aca66800652cf13d6f1a2fb9d0bb83",
-    "frontend-modern/src/utils/updatesPresentation.ts": "91043539d8b46795d0ded6ead89d11a42d050d86b9662641aa37c8554c0adc6d"
+    "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx": "da3ddd2c2fd5bf94e9642d178c8f60c361b21de3559e6085047e911539301fef",
+    "frontend-modern/src/features/patrol/patrolControlPresentation.ts": "1f395d06a16be436f5222cd36259a9585aaa2f7a036399fbfd4ee8b3c98bf12e"
   },
   "routes": [
-    "/settings (System > Pulse server updates panel)"
+    "/patrol (Needs attention workbench rows and attention detail drawer)"
   ],
   "viewports": [
     {
       "width": 1280,
-      "height": 720
+      "height": 800
     },
     {
-      "width": 390,
-      "height": 844
+      "width": 744,
+      "height": 1024
     }
   ],
   "states": [
-    "Up to date status with no prior check in this browser rendered 'Not checked yet' directly under the status label.",
-    "Up to date status backed by a three-hour-old cached check (seeded pulse-updates localStorage entry with matching currentVersion, page reloaded) rendered 'Checked 3 hours ago' under the status label.",
-    "The freshness line rendered on desktop 1280px and mobile 390px viewports without layout breakage next to the existing check-mode footer.",
-    "Console showed no errors after exercising both states."
+    "Attention rows (46 mock alerts, complete + unknown-freshness evidence) render resource name and relative time with no evidence label; the 'Evidence incomplete; timing unavailable' / 'Evidence timing unavailable' warning line is gone from every row.",
+    "Attention detail drawer shows the muted 'Evidence recorded' badge next to the state badge, with per-envelope observations reading 'Pulse Complete Confirmed - observed just now'.",
+    "Full-page text contains no 'timing unavailable' occurrence in any state exercised at either viewport.",
+    "Backend half verified via scratch instance API: /api/ai/patrol/attention returned all 44-46 mock rows with evidenceCompleteness=complete (previously provider-incident rows were partial via the legacy shim)."
   ],
   "interactions": [
-    "Logged into the live dev frontend, reached the Pulse server updates panel via settings search.",
-    "Seeded the pulse-updates localStorage entry with lastCheck three hours in the past and reloaded to exercise the cached-verdict path.",
-    "Removed the seeded localStorage entry after verification."
+    "Ran a scratch mock-mode instance built from this working tree (backend + built dist) on port 7671 with the dev admin bypass.",
+    "Opened /patrol at 1280px, read the attention list rows, clicked the vaultwarden memory-limit row, and inspected the detail drawer badges and evidence observations.",
+    "Reloaded /patrol at 744px, re-checked the row metadata line, re-opened the detail drawer, and screenshotted the drawer showing 'Evidence recorded'."
   ]
 }

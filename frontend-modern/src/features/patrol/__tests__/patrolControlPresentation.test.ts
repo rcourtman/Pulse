@@ -19,24 +19,40 @@ import {
 
 describe('patrolControlPresentation', () => {
   it.each([
-    ['fresh', 'complete', 'Evidence current', 'success'],
-    ['stale', 'complete', 'Evidence out of date', 'warning'],
-    ['unknown', 'complete', 'Evidence timing unavailable', 'warning'],
-    ['fresh', 'partial', 'Evidence incomplete', 'warning'],
-    ['stale', 'partial', 'Evidence incomplete and out of date', 'warning'],
-    ['unknown', 'partial', 'Evidence incomplete; timing unavailable', 'warning'],
-    ['fresh', 'unavailable', 'Evidence unavailable', 'muted'],
-    ['stale', 'unavailable', 'Evidence unavailable', 'muted'],
-    ['unknown', 'unavailable', 'Evidence unavailable', 'muted'],
+    ['fresh', 'complete', 'Evidence current', 'Evidence current', 'success'],
+    ['stale', 'complete', 'Evidence out of date', 'Evidence out of date', 'warning'],
+    ['unknown', 'complete', 'Evidence recorded', undefined, 'muted'],
+    ['fresh', 'partial', 'Evidence incomplete', 'Evidence incomplete', 'warning'],
+    [
+      'stale',
+      'partial',
+      'Evidence incomplete and out of date',
+      'Evidence incomplete and out of date',
+      'warning',
+    ],
+    ['unknown', 'partial', 'Evidence incomplete', 'Evidence incomplete', 'warning'],
+    ['fresh', 'unavailable', 'Evidence unavailable', 'Evidence unavailable', 'muted'],
+    ['stale', 'unavailable', 'Evidence unavailable', 'Evidence unavailable', 'muted'],
+    ['unknown', 'unavailable', 'Evidence unavailable', 'Evidence unavailable', 'muted'],
   ] as const)(
     'presents %s/%s evidence as plain operator language',
-    (freshness, completeness, label, tone) => {
-      expect(getPatrolAttentionEvidencePresentation(freshness, completeness)).toEqual({
-        label,
-        tone,
-      });
+    (freshness, completeness, detailLabel, rowLabel, tone) => {
+      const presentation = getPatrolAttentionEvidencePresentation(freshness, completeness);
+      expect(presentation.detailLabel).toBe(detailLabel);
+      expect(presentation.rowLabel).toBe(rowLabel);
+      expect(presentation.tone).toBe(tone);
     },
   );
+
+  it('never warns about timing when the evidence source publishes no validity window', () => {
+    expect(getPatrolAttentionEvidencePresentation('unknown', 'complete').tone).toBe('muted');
+    expect(
+      getPatrolAttentionEvidencePresentation('unknown', 'complete').detailLabel,
+    ).not.toMatch(/timing/i);
+    expect(
+      getPatrolAttentionEvidencePresentation('unknown', 'partial').detailLabel,
+    ).not.toMatch(/timing/i);
+  });
 
   it('keeps meaningful protection states in rows and reserves unavailable state for detail', () => {
     expect(getPatrolAttentionProtectionPresentation('protected')).toEqual({

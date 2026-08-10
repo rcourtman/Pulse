@@ -1,6 +1,9 @@
 package alerts
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"strconv"
 	"strings"
 	"time"
@@ -247,6 +250,14 @@ func (m *Manager) SyncUnifiedResourceIncidents(resources []unifiedresources.Reso
 			existing.Instance = alert.Instance
 			existing.Message = alert.Message
 			existing.Metadata = alert.Metadata
+			// Each sync re-observes the incident, so carry the cycle's evidence
+			// into the live alert. Without this the envelope attached at first
+			// raise ages out (availability evidence drifts past its validity
+			// window, pre-upgrade alerts keep the legacy partial shim) even
+			// though the condition is still directly observed.
+			for _, envelope := range alert.Evidence {
+				existing.Evidence = appendOperationalEvidence(existing.Evidence, envelope.Clone())
+			}
 			applyCanonicalIdentity(existing, alert.CanonicalSpecID, alert.CanonicalKind)
 			m.setActiveAlertNoLock(storageKey, existing)
 			continue
@@ -449,8 +460,60 @@ func unifiedIncidentAlert(resource unifiedresources.Resource, incident unifiedre
 		alert.Evidence = []operationaltrust.EvidenceEnvelope{
 			availability.Evidence.Clone(),
 		}
+	} else if envelope, ok := unifiedIncidentEvidenceEnvelope(resource, incident, now); ok {
+		alert.Evidence = []operationaltrust.EvidenceEnvelope{envelope}
 	}
 	return alert
+}
+
+// unifiedIncidentEvidenceEnvelope wraps a provider-reported incident in a
+// first-class evidence envelope. The incident is the complete, directly
+// observed payload backing the alert, so without this the alert would reach
+// the operational contract evidence-less and get the legacy partial shim —
+// surfacing "Evidence incomplete" on every provider-incident attention row.
+func unifiedIncidentEvidenceEnvelope(
+	resource unifiedresources.Resource,
+	incident unifiedresources.ResourceIncident,
+	observedAt time.Time,
+) (operationaltrust.EvidenceEnvelope, bool) {
+	payload, err := json.Marshal(incident)
+	if err != nil {
+		return operationaltrust.EvidenceEnvelope{}, false
+	}
+	digest := sha256.Sum256(payload)
+	digestID := hex.EncodeToString(digest[:])
+	provider := strings.TrimSpace(incident.Provider)
+	if provider == "" {
+		provider = "pulse"
+	}
+	collector := strings.TrimSpace(incident.Source)
+	if collector == "" {
+		collector = "unified-resource-incident"
+	}
+	source := operationaltrust.EvidenceSource{
+		Provider:  provider,
+		Collector: collector,
+	}
+	subject := operationaltrust.EvidenceSubject{ResourceID: resource.ID}
+	id, err := operationaltrust.NewEvidenceID(source, subject, observedAt, digestID)
+	if err != nil {
+		return operationaltrust.EvidenceEnvelope{}, false
+	}
+	envelope := operationaltrust.EvidenceEnvelope{
+		ID:           id,
+		Source:       source,
+		Subject:      subject,
+		ObservedAt:   observedAt,
+		IngestedAt:   observedAt,
+		Completeness: operationaltrust.EvidenceComplete,
+		Confidence:   operationaltrust.EvidenceConfirmed,
+		Permissions:  operationaltrust.EvidencePermissionsSufficient,
+		PayloadRef: &operationaltrust.EvidencePayloadRef{
+			Kind: "unified-incident-digest",
+			ID:   digestID,
+		},
+	}
+	return envelope, envelope.Validate() == nil
 }
 
 func unifiedIncidentAlertID(resource unifiedresources.Resource, incident unifiedresources.ResourceIncident) string {

@@ -663,6 +663,14 @@ a second endpoint-only evaluator or alert identity family outside
 checks, the incident `NativeID` selects the exact check evidence envelope that
 is copied into the alert and its `OperationalRecord`; the singular
 compatibility summary must never substitute evidence from a different target.
+An incident with no backing availability check still carries first-class
+evidence: the bridge derives a complete/confirmed envelope from the directly
+observed incident payload (provider and collector from the incident, digest
+payload ref) instead of leaving the alert evidence-less for the legacy partial
+shim to backfill. Because each sync re-observes the incident, the bridge merges
+the cycle's freshly observed envelopes into the already-active alert, so
+raise-time evidence (including availability envelopes with validity windows)
+does not age out while the condition is still directly observed.
 The same lifecycle transition then projects into Patrol like every other
 canonical operational record.
 

@@ -1099,11 +1099,11 @@ function EvidenceLabel(props: { item: AttentionItem; badge?: boolean }) {
   if (props.badge) {
     return (
       <MetadataBadge tone={presentation().tone} size="xs" shape="rounded">
-        {presentation().label}
+        {presentation().detailLabel}
       </MetadataBadge>
     );
   }
-  return <span>{presentation().label}</span>;
+  return <Show when={presentation().rowLabel}>{(label) => <span>{label()}</span>}</Show>;
 }
 
 function ProtectionLabel(props: { item: AttentionItem; badge?: boolean }) {
