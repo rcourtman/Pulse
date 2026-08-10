@@ -297,6 +297,64 @@ func TestHostAgentRemovalLifecycleSurvivesMonitorReconstruction(t *testing.T) {
 	}
 }
 
+func TestHostAgentRemovalLifecycleKeepsOfflineRowRemovableAfterRestart(t *testing.T) {
+	dataPath := t.TempDir()
+	now := time.Now().UTC()
+	token := &config.APITokenRecord{
+		ID:        "offline-restart-token",
+		CreatedAt: now.Add(-time.Hour),
+	}
+	report := hostRemovalLifecycleReport(
+		"offline-restart-machine",
+		"offline-restart-machine",
+		"offline-restart-agent",
+		"offline-restart.local",
+		"linux",
+		now,
+	)
+
+	first := newHostRemovalLifecycleMonitor(t, dataPath)
+	host, err := first.ApplyHostReport(report, token)
+	if err != nil {
+		t.Fatalf("initial ApplyHostReport: %v", err)
+	}
+
+	// Reconstruct the monitor without another agent report. The durable row
+	// must remain visible as offline so its removal action stays reachable.
+	restarted := newHostRemovalLifecycleMonitor(t, dataPath)
+	hosts := restarted.HostsSnapshot()
+	if len(hosts) != 1 || hosts[0].ID != host.ID {
+		t.Fatalf("restart host inventory = %+v, want continuity row %q", hosts, host.ID)
+	}
+	if hosts[0].Status != "offline" {
+		t.Fatalf("restart continuity status = %q, want offline", hosts[0].Status)
+	}
+
+	for i := 0; i < 3; i++ {
+		restarted.evaluateHostAgents(now.Add(10*time.Minute + time.Duration(i)*time.Second))
+	}
+	if alerts := restarted.alertManager.GetActiveAlerts(); len(alerts) != 1 || alerts[0].Type != "host-offline" {
+		t.Fatalf("restart offline alerts = %+v, want one host-offline alert", alerts)
+	}
+
+	removed, err := restarted.RemoveHostAgent(host.ID)
+	if err != nil {
+		t.Fatalf("RemoveHostAgent after restart: %v", err)
+	}
+	if removed.ID != host.ID || removed.Hostname != host.Hostname {
+		t.Fatalf("removed continuity host = %+v, want %+v", removed, host)
+	}
+	if hosts := restarted.HostsSnapshot(); len(hosts) != 0 {
+		t.Fatalf("removed host remained visible after restart: %+v", hosts)
+	}
+	if alerts := restarted.alertManager.GetActiveAlerts(); len(alerts) != 0 {
+		t.Fatalf("removed host alerts remained active: %+v", alerts)
+	}
+	if tombstones := restarted.hostContinuityStore.RemovedEntries(); len(tombstones) != 1 || tombstones[0].HostID != host.ID {
+		t.Fatalf("removal tombstones = %+v, want host %q", tombstones, host.ID)
+	}
+}
+
 func TestHostAgentRemovalLifecycleDoesNotPoisonDuplicateActiveIdentity(t *testing.T) {
 	monitor := newHostRemovalLifecycleMonitor(t, t.TempDir())
 	now := time.Now().UTC()

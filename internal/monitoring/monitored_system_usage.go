@@ -108,7 +108,12 @@ func (m *Monitor) readStateWithStandaloneHostContinuity(
 		if _, ok := existingAgentIDs[hostID]; ok {
 			continue
 		}
-		records = append(records, unifiedresources.HostIngestRecord(hostFromContinuityEntry(entry)))
+		// A continuity-only row has no live report in this monitor generation.
+		// Preserve its last-known identity so the operator can inspect or remove
+		// it, but never present persisted telemetry as a current online sighting.
+		host := hostFromContinuityEntry(entry)
+		host.Status = "offline"
+		records = append(records, unifiedresources.HostIngestRecord(host))
 	}
 	if len(records) == 0 {
 		return readState

@@ -1297,7 +1297,11 @@ That same continuity rule applies to canonical unified resource snapshots.
 continuity records onto `UnifiedResourceSnapshot()` and
 `GetUnifiedReadStateOrSnapshot()` results, so first-login and post-restart
 Infrastructure views retain the durable agent-backed systems Pulse already
-knows about while live reports and supplemental providers catch up.
+knows about while live reports and supplemental providers catch up. A host
+projected only from durable continuity has no current report in that monitor
+generation and must therefore render offline while preserving its last-known
+identity and removal action; persisted telemetry must never manufacture an
+online sighting after restart.
 That same monitoring owner also governs collector payload compatibility at the
 shared boundary. Podman container stats must honor Podman's compat payload when
 it exposes a direct CPU percentage and otherwise fall back to Podman's
