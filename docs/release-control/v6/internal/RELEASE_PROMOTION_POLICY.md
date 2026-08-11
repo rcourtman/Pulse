@@ -66,7 +66,7 @@ If any condition is false or uncertain, use the governed RC path.
    production mounts, privileged runtime access, or unrelated Docker sockets
    into the build. The workstation's current default builder for reporter
    test images, with fallback and traps, is documented in the workspace
-   `LOCAL_CAPABILITIES.md` ("Remote amd64 Builder on gamingpc").
+   `LOCAL_CAPABILITIES.md` ("Remote amd64 Builder on longonk442").
    The server-only diagnostic image (no embedded installer or agent-download
    artifacts) is the `hosted_runtime` Dockerfile target. Setting
    `BUILD_AGENT=0` does NOT achieve this: the default `runtime` target always
