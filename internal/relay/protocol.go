@@ -149,10 +149,18 @@ type RegisterAckPayload struct {
 
 // ConnectPayload is sent by the app in CONNECT frames.
 type ConnectPayload struct {
-	InstanceID  string `json:"instance_id"`
-	AuthToken   string `json:"auth_token"`
-	DeviceToken string `json:"device_token,omitempty"` // push notification device token (mobile apps only)
-	Platform    string `json:"platform,omitempty"`     // "ios" or "android" (mobile apps only)
+	InstanceID              string                       `json:"instance_id"`
+	AuthToken               string                       `json:"auth_token"`
+	DeviceToken             string                       `json:"device_token,omitempty"`             // push notification device token (mobile apps only)
+	Platform                string                       `json:"platform,omitempty"`                 // "ios" or "android" (mobile apps only)
+	NotificationPreferences *PushNotificationPreferences `json:"notification_preferences,omitempty"` // server-enforced delivery preferences
+}
+
+type PushNotificationPreferences struct {
+	CriticalEnabled  bool `json:"critical_enabled"`
+	WarningEnabled   bool `json:"warning_enabled"`
+	ApprovalEnabled  bool `json:"approval_enabled"`
+	FixResultEnabled bool `json:"fix_result_enabled"`
 }
 
 // ConnectAckPayload is sent by the relay in CONNECT_ACK frames.

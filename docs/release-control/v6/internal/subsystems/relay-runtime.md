@@ -21,6 +21,10 @@ Own the desktop and mobile relay runtimes, their persisted relay state
 boundaries, the server-owned mobile relay capability boundary, and the
 canonical reconnect, encryption, protocol, proxy, and relay-trust behavior
 for Pulse instance bridging.
+Mobile CONNECT frames may carry explicit push preferences for critical,
+warning, approval, and fix-result notifications. The relay protocol preserves
+each boolean so server-side delivery can enforce the paired device's choices;
+legacy clients omit the entire preferences object and remain wire-compatible.
 
 The generated mobile push vocabulary includes
 `external_probe_offline` for a Pulse instance that is still connected while
