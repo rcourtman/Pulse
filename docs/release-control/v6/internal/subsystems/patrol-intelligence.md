@@ -2169,3 +2169,20 @@ reads, cancellation, and clean retry.
 `frontend-modern/src/features/patrol/__tests__/usePatrolIntelligenceState.test.ts`
 and `frontend-modern/src/pages/__tests__/AIIntelligence.test.tsx` prove typed
 start-failure presentation and the accepted-run page transition.
+
+### Resource monitoring policy is actionable where noise appears
+
+The resource drawer replaces the overloaded intentionally-offline toggle with
+canonical Monitoring and Lifecycle selectors. Normal, expected-offline, muted,
+active, and retired copy states their exact Alerts, Patrol, inventory, and
+automation effects. Provider-aware retirement copy makes clear that Proxmox,
+Kubernetes, vSphere, and container-runtime inventory is not deleted by a Pulse
+policy change and that the resource can be restored to active monitoring.
+
+Active alert cards expose the same canonical policy through a compact
+Monitoring action. It reads the current resource state, preserves maintenance,
+criticality, notes, remediation settings, and capability allowlists, then
+writes through `@/api/resourceOperatorState`; no alert-local mute document is
+created. `ResourceMonitoringPolicyAction.test.tsx` and the resource operator
+state section tests pin provider copy, expected-offline persistence, retirement,
+and compatibility preservation.

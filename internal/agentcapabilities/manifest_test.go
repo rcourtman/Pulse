@@ -134,6 +134,29 @@ func TestCanonicalManifestUsesSharedOperatorStateVocabulary(t *testing.T) {
 			t.Fatalf("%s path = %q, want %q", name, cap.Path, OperatorStateCapabilityPath)
 		}
 	}
+
+	setCapability, _ := FindCapability(manifest.Capabilities, SetOperatorStateCapabilityName)
+	var inputSchema map[string]any
+	if err := json.Unmarshal(ToolInputSchema(setCapability), &inputSchema); err != nil {
+		t.Fatal(err)
+	}
+	inputProperties, _ := inputSchema["properties"].(map[string]any)
+	for _, field := range []string{"monitoringMode", "lifecycleState"} {
+		if _, ok := inputProperties[field]; !ok {
+			t.Fatalf("set_operator_state input schema missing %q: %v", field, inputProperties)
+		}
+	}
+	getCapability, _ := FindCapability(manifest.Capabilities, GetOperatorStateCapabilityName)
+	var outputSchema map[string]any
+	if err := json.Unmarshal(getCapability.OutputSchema, &outputSchema); err != nil {
+		t.Fatal(err)
+	}
+	outputProperties, _ := outputSchema["properties"].(map[string]any)
+	for _, field := range []string{"monitoringMode", "lifecycleState"} {
+		if _, ok := outputProperties[field]; !ok {
+			t.Fatalf("get_operator_state output schema missing %q: %v", field, outputProperties)
+		}
+	}
 }
 
 func TestCanonicalManifestUsesSharedFindingVocabulary(t *testing.T) {

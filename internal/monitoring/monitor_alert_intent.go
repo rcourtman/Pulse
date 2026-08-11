@@ -50,6 +50,8 @@ func (m *Monitor) installOperatorIntentResolver(store ResourceStoreInterface) {
 		}
 		return alerts.OperatorIntentContext{
 			IntentionallyOffline: state.IntentionallyOffline,
+			MonitoringMode:       string(state.MonitoringMode),
+			LifecycleState:       string(state.LifecycleState),
 			MaintenanceStartAt:   state.MaintenanceStartAt,
 			MaintenanceEndAt:     state.MaintenanceEndAt,
 			MaintenanceReason:    state.MaintenanceReason,

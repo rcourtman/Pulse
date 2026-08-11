@@ -408,6 +408,9 @@ func (m *Manager) shouldSuppressNotification(alert *Alert) (bool, string) {
 	if alert == nil {
 		return false, ""
 	}
+	if suppressed, reason := m.operatorSuppressionForAlertNoLock(alert, time.Now().UTC()); suppressed {
+		return true, reason
+	}
 
 	if !m.isInQuietHours() {
 		return false, ""
@@ -520,6 +523,16 @@ func (m *Manager) ShouldSuppressNotification(alert *Alert) bool {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
+	if suppressed, reason := m.operatorSuppressionForAlertNoLock(alert, time.Now().UTC()); suppressed {
+		clearQuietHoursNotificationReplay(alert)
+		log.Debug().
+			Str("alertID", alert.ID).
+			Str("type", alert.Type).
+			Str("operatorPolicy", reason).
+			Msg("Notification suppressed by resource monitoring policy")
+		return true
+	}
+
 	suppressed, reason := m.shouldSuppressNotification(alert)
 	if suppressed {
 		replayAt := m.quietHoursReplayAt()
@@ -555,6 +568,15 @@ func (m *Manager) ShouldSuppressResolvedNotification(alert *Alert) bool {
 			Str("alertID", alert.ID).
 			Str("type", alert.Type).
 			Msg("Recovery notification suppressed for acknowledged alert")
+		return true
+	}
+	if suppressed, reason := m.operatorSuppressionForAlertNoLock(alert, time.Now().UTC()); suppressed {
+		clearQuietHoursNotificationReplay(alert)
+		log.Debug().
+			Str("alertID", alert.ID).
+			Str("type", alert.Type).
+			Str("operatorPolicy", reason).
+			Msg("Recovery notification suppressed by resource monitoring policy")
 		return true
 	}
 

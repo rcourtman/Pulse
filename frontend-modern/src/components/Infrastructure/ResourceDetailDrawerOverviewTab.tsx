@@ -712,6 +712,8 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
         <Show when={resource.id}>
           <ResourceOperatorStateSection
             resourceId={resource.id}
+            resourceType={resource.type}
+            platformType={resource.platformType}
             capabilities={resource.capabilities}
           />
         </Show>

@@ -8,6 +8,7 @@ import { DiscoveryProvenanceMarker } from '@/components/shared/DiscoveryProvenan
 import { InfoCardFrame } from '@/components/shared/InfoCardFrame';
 import { WebInterfaceUrlField } from '@/components/shared/WebInterfaceUrlField';
 import { AvailabilityProbeStatusCards } from '@/components/Infrastructure/AvailabilityProbeStatusCard';
+import { ResourceOperatorStateSection } from '@/components/Infrastructure/ResourceOperatorStateSection';
 import type { DiscoveryIdentifiedSummary } from '@/utils/discoveryPresentation';
 import { formatBytes, formatUptime } from '@/utils/format';
 import type { MetricDisplayThresholds } from '@/utils/metricThresholds';
@@ -463,7 +464,12 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
         </Show>
       </div>
 
-      <div class="mt-3">
+      <div class="mt-3 space-y-3">
+        <ResourceOperatorStateSection
+          resourceId={props.guestId}
+          resourceType={isGuestDrawerVM(props.guest) ? 'vm' : 'system-container'}
+          platformType="proxmox"
+        />
         <WebInterfaceUrlField
           metadataKind="guest"
           metadataId={props.webInterfaceMetadataId}

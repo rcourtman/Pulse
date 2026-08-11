@@ -4,9 +4,40 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 )
+
+func TestInstallOperatorIntentResolverProjectsCanonicalResourcePolicy(t *testing.T) {
+	store := unifiedresources.NewMemoryStore()
+	registry := unifiedresources.NewRegistry(store)
+	registry.IngestResources([]unifiedresources.Resource{{
+		ID: "vm:101", Type: unifiedresources.ResourceTypeVM, Name: "database",
+	}})
+	if err := store.SetResourceOperatorState(unifiedresources.ResourceOperatorState{
+		CanonicalID:    "vm:101",
+		MonitoringMode: unifiedresources.MonitoringModeMuted,
+		LifecycleState: unifiedresources.LifecycleStateRetired,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	manager := alerts.NewManagerWithDataDir(t.TempDir())
+	t.Cleanup(manager.Stop)
+	monitor := &Monitor{alertManager: manager}
+	monitor.installOperatorIntentResolver(unifiedresources.NewMonitorAdapter(registry))
+	preview, err := manager.PreviewIntentPolicy(alerts.AlertIntentPolicyPreviewRequest{
+		ResourceID: "vm:101", ResourceType: "vm", Signal: string(alerts.AlertIntentSignalOffline), ConditionActive: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if preview.Reason != "operator_retired" || preview.Status != "expected_transient" {
+		t.Fatalf("canonical operator policy preview = %+v", preview)
+	}
+}
 
 func TestResolveBackupIntentContextRequiresFreshActiveMatchingEvidence(t *testing.T) {
 	now := time.Date(2026, 7, 20, 12, 0, 0, 0, time.UTC)

@@ -234,7 +234,7 @@ the live set.
 
 **Operator state (per-resource intent):**
 
-- `get_operator_state` (Get operator state, `GET /api/resources/{resourceId}/operator-state`, scope `monitoring:read`, mode `read`, approval `scope_only`): Read the operator-set state for a resource (intentionally offline, never auto-remediate, maintenance window, criticality).
+- `get_operator_state` (Get operator state, `GET /api/resources/{resourceId}/operator-state`, scope `monitoring:read`, mode `read`, approval `scope_only`): Read the operator-set monitoring mode, lifecycle state, remediation lock, maintenance window, and criticality for a resource.
 - `set_operator_state` (Set operator state, `PUT /api/resources/{resourceId}/operator-state`, scope `monitoring:write`, mode `write`, approval `scope_only`): Replace the operator-set state for a resource. URL canonicalId wins over body; server populates setAt and setBy from the authenticated identity.
 - `clear_operator_state` (Clear operator state, `DELETE /api/resources/{resourceId}/operator-state`, scope `monitoring:write`, mode `write`, approval `scope_only`): Remove any operator-set state for a resource. Idempotent — succeeds whether or not an entry was present.
 

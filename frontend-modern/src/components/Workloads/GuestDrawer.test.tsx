@@ -8,6 +8,7 @@ import { aiChatStore } from '@/stores/aiChat';
 import { getCanonicalWorkloadId, getWorkloadMetadataId } from '@/utils/workloads';
 import { getDiscoveryProvenanceTitle } from '@/utils/discoveryPresentation';
 import guestDrawerSource from './GuestDrawer.tsx?raw';
+import guestDrawerOverviewSource from './GuestDrawerOverview.tsx?raw';
 
 // ── Mocks ──────────────────────────────────────────────────────────────
 
@@ -205,6 +206,12 @@ describe('GuestDrawer', () => {
     expect(guestDrawerSource).not.toContain(
       'animate-spin h-6 w-6 border-2 border-blue-500 border-t-transparent rounded-full',
     );
+  });
+
+  it('mounts canonical resource policy only in the selected guest overview', () => {
+    expect(guestDrawerOverviewSource).toContain('<ResourceOperatorStateSection');
+    expect(guestDrawerOverviewSource).toContain('resourceId={props.guestId}');
+    expect(guestDrawerOverviewSource).toContain('platformType="proxmox"');
   });
 
   describe('Assistant context actions', () => {

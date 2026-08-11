@@ -5968,3 +5968,15 @@ unresolved status would flash the default tab away from an admin on every load.
 `__tests__/adminOnlySettingsNavGates.test.ts` and
 `__tests__/useSettingsAccess.test.tsx` pin the complete named-capability,
 fail-closed mount, failed-status, deduplicated-load, and General-fallback rules.
+
+### Alert monitoring actions preserve domain ownership
+
+The Alerts overview may offer a compact per-resource Monitoring menu, but the
+menu is an adapter over the canonical resource operator-state API. It must
+preserve unrelated state on every write, distinguish availability-only
+expected-offline from all-attention mute, and state that retirement changes
+Pulse monitoring rather than deleting provider inventory. Resource detail and
+alert surfaces use the same typed monitoring and lifecycle vocabulary and
+provider-ownership presentation helper. They must not create local alert mute,
+archive, or removal state. The menu remains keyboard reachable, uses ordinary
+shared surface and border tokens, and retains usable controls at phone width.

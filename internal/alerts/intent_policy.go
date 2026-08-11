@@ -11,9 +11,32 @@ var ErrAlertIntentPolicyRevisionConflict = errors.New("alert_intent_policy_revis
 
 type OperatorIntentContext struct {
 	IntentionallyOffline bool       `json:"intentionallyOffline"`
+	MonitoringMode       string     `json:"monitoringMode"`
+	LifecycleState       string     `json:"lifecycleState"`
 	MaintenanceStartAt   *time.Time `json:"maintenanceStartAt,omitempty"`
 	MaintenanceEndAt     *time.Time `json:"maintenanceEndAt,omitempty"`
 	MaintenanceReason    string     `json:"maintenanceReason,omitempty"`
+}
+
+func (c OperatorIntentContext) suppressionForSignal(signal string) (bool, string) {
+	mode := strings.ToLower(strings.TrimSpace(c.MonitoringMode))
+	if mode == "" && c.IntentionallyOffline {
+		mode = "expected_offline"
+	}
+	lifecycle := strings.ToLower(strings.TrimSpace(c.LifecycleState))
+	if lifecycle == "retired" {
+		return true, "operator_retired"
+	}
+	if mode == "muted" {
+		return true, "operator_muted"
+	}
+	if mode == "expected_offline" {
+		switch strings.ToLower(strings.TrimSpace(signal)) {
+		case string(AlertIntentSignalOffline), string(AlertIntentSignalAvailability):
+			return true, "operator_expected_offline"
+		}
+	}
+	return false, ""
 }
 
 func (c OperatorIntentContext) MaintenanceActiveAt(now time.Time) bool {
@@ -174,7 +197,10 @@ func (m *Manager) resolveEffectiveIntentPolicyNoLock(resourceID, resourceType, s
 	resourceID = strings.TrimSpace(resourceID)
 	resourceType = strings.ToLower(strings.TrimSpace(resourceType))
 	signal = strings.ToLower(strings.TrimSpace(signal))
-	effective := EffectiveAlertIntentPolicy{Sources: make(map[string]string)}
+	effective := EffectiveAlertIntentPolicy{
+		HonorOperatorState: true,
+		Sources:            make(map[string]string),
+	}
 
 	if strings.HasPrefix(signal, "metric.") {
 		metric := strings.TrimPrefix(signal, "metric.")
@@ -245,7 +271,7 @@ func (m *Manager) resolveEffectiveIntentPolicyNoLock(resourceID, resourceType, s
 
 func (m *Manager) ResolveEffectiveIntentPolicy(resourceID, resourceType, signal string) EffectiveAlertIntentPolicy {
 	if m == nil {
-		return EffectiveAlertIntentPolicy{Sources: map[string]string{"graceSeconds": "factory", "honorOperatorState": "factory"}}
+		return EffectiveAlertIntentPolicy{HonorOperatorState: true, Sources: map[string]string{"graceSeconds": "factory", "honorOperatorState": "factory"}}
 	}
 	m.mu.RLock()
 	effective := m.resolveEffectiveIntentPolicyNoLock(resourceID, resourceType, signal)
@@ -309,13 +335,6 @@ func (m *Manager) evaluateIntentNoLock(resourceID, resourceType, signal, trackin
 		decision.Reason = "condition_clear"
 		return decision
 	}
-	if !effective.Explicit {
-		if m.clearIntentPendingNoLock(trackingKey) {
-			decision.StateChanged = true
-		}
-		decision.ShouldActivate = true
-		return decision
-	}
 	observedAt := m.policyNow().UTC()
 	tick := m.intentTickNoLock()
 	state, exists := m.intentPending[trackingKey]
@@ -357,14 +376,21 @@ func (m *Manager) evaluateIntentNoLock(resourceID, resourceType, signal, trackin
 				}
 				return decision
 			}
-			if signal == string(AlertIntentSignalOffline) && operator.IntentionallyOffline {
+			if suppressed, reason := operator.suppressionForSignal(signal); suppressed {
 				m.intentPending[trackingKey] = state
 				decision.Pending = true
 				decision.Suppressed = true
-				decision.Reason = "operator_intentionally_offline"
+				decision.Reason = reason
 				return decision
 			}
 		}
+	}
+	if !effective.Explicit {
+		if m.clearIntentPendingNoLock(trackingKey) {
+			decision.StateChanged = true
+		}
+		decision.ShouldActivate = true
+		return decision
 	}
 
 	eligibleElapsed := time.Duration(effective.GraceSeconds) * time.Second
@@ -521,7 +547,8 @@ func (m *Manager) PreviewIntentPolicy(request AlertIntentPolicyPreviewRequest) (
 		preview.Contexts = append(preview.Contexts, ctx)
 	}
 	if operatorFound {
-		active := operator.IntentionallyOffline || operator.MaintenanceActiveAt(now)
+		suppressed, _ := operator.suppressionForSignal(request.Signal)
+		active := suppressed || operator.MaintenanceActiveAt(now)
 		ctx := AlertIntentPolicyPreviewContext{Kind: "operator_state", Active: active, Evidence: operator.MaintenanceReason}
 		if operator.MaintenanceEndAt != nil {
 			expiresAt := operator.MaintenanceEndAt.UTC()

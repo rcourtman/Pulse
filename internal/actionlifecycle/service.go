@@ -1640,7 +1640,7 @@ func boundedActionAvailabilityText(value string, maxRunes int) string {
 }
 
 // validateExecutionPolicy enforces operator-set per-resource policy at the
-// dispatch decision point, currently the NeverAutoRemediate lock.
+// dispatch decision point, including explicit locks and retired lifecycle.
 func validateExecutionPolicy(store Store, record unified.ActionAuditRecord) error {
 	if store == nil {
 		return errors.New("action audit store unavailable")
@@ -1653,7 +1653,7 @@ func validateExecutionPolicy(store Store, record unified.ActionAuditRecord) erro
 	if err != nil || !found {
 		return err
 	}
-	if state.NeverAutoRemediate {
+	if state.BlocksRemediation() {
 		return unified.ErrResourceRemediationLocked
 	}
 	return nil

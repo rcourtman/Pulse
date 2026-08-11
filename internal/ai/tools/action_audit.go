@@ -1106,7 +1106,7 @@ func (e *PulseToolExecutor) isResourceRemediationLocked(resourceID string) (bool
 	if !found {
 		return false, nil
 	}
-	return state.NeverAutoRemediate, nil
+	return state.BlocksRemediation(), nil
 }
 
 // checkRemediationLockForDispatch applies the operator NeverAutoRemediate

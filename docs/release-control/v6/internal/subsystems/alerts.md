@@ -1633,3 +1633,24 @@ incident from cluster health.
 `internal/truenas/provider_pool_health_contract_test.go`, and
 `internal/unifiedresources/ceph_pool_health_contract_test.go` prove the
 lifecycle and deduplication matrix.
+
+### Per-resource monitoring policy is an alert-runtime invariant
+
+The canonical unified-resource operator state is honored without requiring an
+explicit versioned alert-intent rule. Factory behavior enables operator-state
+evaluation, and a signal rule cannot weaken a persisted resource monitoring or
+lifecycle policy. `expected_offline` suppresses only `state.offline` and
+`incident.availability`; `muted`, `retired`, and active maintenance suppress all
+signals. Unknown alert families fail safe to the default signal and cannot be
+hidden by expected-offline.
+
+Every active-alert writer passes through the same operator-state gate, and
+notification delivery consults the same decision before quiet-hours policy.
+Operator suppression is never converted into a quiet-hours replay, including
+for recovery notifications carrying stale replay metadata.
+After a persisted policy mutation, `ReconcileResourceOperatorState` resolves
+already-active records for that resource immediately; later detector writes
+cannot recreate them while suppression remains active. Existing prefix, tag,
+and `pulse-no-alerts` bulk rules remain compatible inputs and do not create a
+second per-resource state store. `internal/alerts/intent_policy_test.go` pins
+factory operator-state evaluation, writer gating, and active reconciliation.

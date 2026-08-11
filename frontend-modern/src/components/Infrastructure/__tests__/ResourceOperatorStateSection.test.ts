@@ -17,6 +17,11 @@ const supportDisclosureSource = readFileSync(
   'utf-8',
 );
 
+const guestOverviewSource = readFileSync(
+  resolve(__dirname, '..', '..', 'Workloads', 'GuestDrawerOverview.tsx'),
+  'utf-8',
+);
+
 describe('ResourceOperatorStateSection', () => {
   it('exposes operator-set controls bound to the canonical API client', () => {
     // The section is the operator's window into the per-resource state
@@ -28,7 +33,10 @@ describe('ResourceOperatorStateSection', () => {
     expect(sectionSource).toContain('getResourceOperatorState');
     expect(sectionSource).toContain('setResourceOperatorState');
     expect(sectionSource).toContain('clearResourceOperatorState');
-    expect(sectionSource).toContain('Intentionally offline');
+    expect(sectionSource).toContain('Normal monitoring');
+    expect(sectionSource).toContain('Expected offline');
+    expect(sectionSource).toContain('Mute all attention');
+    expect(sectionSource).toContain('Retired from monitoring');
     expect(sectionSource).toContain('Never auto-remediate');
     expect(sectionSource).toContain('Patrol priority');
     expect(sectionSource).toContain('Operator note');
@@ -159,7 +167,11 @@ describe('ResourceOperatorStateSection', () => {
     expect(sectionSource).toContain('Cancel window');
     // handleClearMaintenanceWindow must preserve toggles by reading
     // the current edit-state signals rather than nulling everything.
-    expect(sectionSource).toContain('intentionallyOffline: intentionallyOffline()');
+    expect(sectionSource).toContain('monitoringMode: monitoringMode()');
+    expect(sectionSource).toContain('lifecycleState: lifecycleState()');
+    expect(sectionSource).toContain(
+      "intentionallyOffline: monitoringMode() === 'expected_offline'",
+    );
     expect(sectionSource).toContain('neverAutoRemediate: neverAutoRemediate()');
     expect(sectionSource).toContain('maintenanceStartAt: undefined,');
     expect(sectionSource).toContain('maintenanceEndAt: undefined,');
@@ -223,5 +235,16 @@ describe('ResourceDetailDrawerOverviewTab integration', () => {
     expect(overviewTabSource).toContain('<Show when={resource.id}>');
     expect(overviewTabSource).not.toContain('shouldRenderOperatorStateSection');
     expect(sectionSource).toContain('<Show when={eligibleAutoCapabilities().length > 0}>');
+  });
+});
+
+describe('Proxmox guest drawer integration', () => {
+  it('exposes the same canonical policy with provider ownership context', () => {
+    expect(guestOverviewSource).toContain(
+      "from '@/components/Infrastructure/ResourceOperatorStateSection'",
+    );
+    expect(guestOverviewSource).toContain('<ResourceOperatorStateSection');
+    expect(guestOverviewSource).toContain('resourceId={props.guestId}');
+    expect(guestOverviewSource).toContain('platformType="proxmox"');
   });
 });

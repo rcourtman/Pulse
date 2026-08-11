@@ -42,6 +42,13 @@ type ResourceHandlers struct {
 	actionExecutionAuthorizer actionlifecycle.ExecutionAuthorizer
 	actionRefreshPlanner      actionlifecycle.RefreshPlanner
 	discoveryReadiness        ResourceDiscoveryReadinessProvider
+	operatorStateChanged      func(orgID, resourceID string)
+}
+
+// SetOperatorStateChanged installs the runtime reconciliation hook invoked
+// after a canonical operator-state mutation commits successfully.
+func (h *ResourceHandlers) SetOperatorStateChanged(callback func(orgID, resourceID string)) {
+	h.operatorStateChanged = callback
 }
 
 // ResourceDiscoveryReadinessProvider projects service-discovery state onto a

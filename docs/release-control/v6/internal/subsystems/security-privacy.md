@@ -2126,3 +2126,12 @@ because `RequireAdmin` intentionally leaves the update route reachable there.
 The frontend behavior is pinned by `App.architecture.test.ts`, and
 `TestContract_SecurityStatusSystemSettingsReadTracksSettingsReadScope` pins the
 capability against both `/api/system/settings` and `/api/updates/status`.
+
+### Resource policy identity resolution remains tenant scoped
+
+Operator-state reads and writes resolve source-native or superseded resource
+references through the requesting tenant's canonical registry before touching
+the tenant resource store. Runtime reconciliation may visit every live monitor,
+but each alert manager resolves policy through its own tenant-scoped store, so a
+matching provider ID in another organization cannot import the mutation. The
+existing route scopes and authenticated actor attribution remain unchanged.

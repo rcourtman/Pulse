@@ -540,6 +540,8 @@ func (s *SQLiteResourceStore) initSchema() error {
 
 	CREATE TABLE IF NOT EXISTS resource_operator_state (
 		canonical_id TEXT PRIMARY KEY,
+		monitoring_mode TEXT NOT NULL DEFAULT 'normal',
+		lifecycle_state TEXT NOT NULL DEFAULT 'active',
 		intentionally_offline INTEGER NOT NULL DEFAULT 0,
 		never_auto_remediate INTEGER NOT NULL DEFAULT 0,
 		auto_remediation_policy_json TEXT,
@@ -642,10 +644,26 @@ func (s *SQLiteResourceStore) migrateResourceOperatorStateSchema() error {
 	if err != nil {
 		return err
 	}
-	if _, ok := columns["auto_remediation_policy_json"]; !ok {
-		if _, err := s.db.Exec("ALTER TABLE resource_operator_state ADD COLUMN auto_remediation_policy_json TEXT"); err != nil {
-			return fmt.Errorf("add resource_operator_state.auto_remediation_policy_json column: %w", err)
+	definitions := map[string]string{
+		"monitoring_mode":              "TEXT NOT NULL DEFAULT 'normal'",
+		"lifecycle_state":              "TEXT NOT NULL DEFAULT 'active'",
+		"auto_remediation_policy_json": "TEXT",
+	}
+	for name, definition := range definitions {
+		if _, ok := columns[name]; ok {
+			continue
 		}
+		if _, err := s.db.Exec("ALTER TABLE resource_operator_state ADD COLUMN " + name + " " + definition); err != nil {
+			return fmt.Errorf("add resource_operator_state.%s column: %w", name, err)
+		}
+	}
+	// Rows written before monitoring_mode existed used the compatibility
+	// boolean as their source of truth. Promote those rows once so all future
+	// reads and writes use the canonical enum.
+	if _, err := s.db.Exec(`UPDATE resource_operator_state
+		SET monitoring_mode = 'expected_offline'
+		WHERE intentionally_offline = 1 AND monitoring_mode = 'normal'`); err != nil {
+		return fmt.Errorf("migrate resource_operator_state monitoring mode: %w", err)
 	}
 	return nil
 }
@@ -2925,7 +2943,8 @@ func getResourceOperatorStateSQL(queryer resourceOperatorStateQueryRower, canoni
 		return ResourceOperatorState{}, false, nil
 	}
 	row := queryer.QueryRow(`
-		SELECT canonical_id, intentionally_offline, never_auto_remediate,
+		SELECT canonical_id, monitoring_mode, lifecycle_state,
+		       intentionally_offline, never_auto_remediate,
 		       auto_remediation_policy_json,
 		       maintenance_start_at, maintenance_end_at, maintenance_reason,
 		       criticality, note, set_at, set_by
@@ -2943,6 +2962,8 @@ func getResourceOperatorStateSQL(queryer resourceOperatorStateQueryRower, canoni
 func scanResourceOperatorState(scanner resourceOperatorStateScanner) (ResourceOperatorState, error) {
 	var state ResourceOperatorState
 	var (
+		monitoringMode string
+		lifecycleState string
 		intentional    int
 		neverRemediate int
 		autoPolicyJSON sql.NullString
@@ -2954,6 +2975,8 @@ func scanResourceOperatorState(scanner resourceOperatorStateScanner) (ResourceOp
 	)
 	if err := scanner.Scan(
 		&state.CanonicalID,
+		&monitoringMode,
+		&lifecycleState,
 		&intentional,
 		&neverRemediate,
 		&autoPolicyJSON,
@@ -2967,6 +2990,8 @@ func scanResourceOperatorState(scanner resourceOperatorStateScanner) (ResourceOp
 	); err != nil {
 		return ResourceOperatorState{}, err
 	}
+	state.MonitoringMode = ResourceMonitoringMode(monitoringMode)
+	state.LifecycleState = ResourceLifecycleState(lifecycleState)
 	state.IntentionallyOffline = intentional != 0
 	state.NeverAutoRemediate = neverRemediate != 0
 	if autoPolicyJSON.Valid && strings.TrimSpace(autoPolicyJSON.String) != "" {
@@ -2998,7 +3023,7 @@ func scanResourceOperatorState(scanner resourceOperatorStateScanner) (ResourceOp
 	if setBy.Valid {
 		state.SetBy = setBy.String
 	}
-	return state, nil
+	return NormalizeResourceOperatorState(state), nil
 }
 
 // SetResourceOperatorState upserts the state row. Validates and
@@ -3069,12 +3094,15 @@ func setResourceOperatorStateSQL(execer sqlExecutor, state ResourceOperatorState
 	}
 	_, err := execer.Exec(`
 		INSERT INTO resource_operator_state (
-			canonical_id, intentionally_offline, never_auto_remediate,
+			canonical_id, monitoring_mode, lifecycle_state,
+			intentionally_offline, never_auto_remediate,
 			auto_remediation_policy_json,
 			maintenance_start_at, maintenance_end_at, maintenance_reason,
 			criticality, note, set_at, set_by
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(canonical_id) DO UPDATE SET
+			monitoring_mode = excluded.monitoring_mode,
+			lifecycle_state = excluded.lifecycle_state,
 			intentionally_offline = excluded.intentionally_offline,
 			never_auto_remediate = excluded.never_auto_remediate,
 			auto_remediation_policy_json = excluded.auto_remediation_policy_json,
@@ -3086,6 +3114,8 @@ func setResourceOperatorStateSQL(execer sqlExecutor, state ResourceOperatorState
 			set_at = excluded.set_at,
 			set_by = excluded.set_by`,
 		state.CanonicalID,
+		state.MonitoringMode,
+		state.LifecycleState,
 		intentional,
 		neverRemediate,
 		autoPolicyJSON,

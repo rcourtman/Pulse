@@ -14,6 +14,28 @@ import (
 // is the default ("no operator-set criticality"), distinct from "medium".
 type ResourceCriticality string
 
+// ResourceMonitoringMode is the canonical per-resource alerting posture. It
+// separates expected availability from an explicit all-signal mute so callers
+// do not have to overload one boolean with incompatible meanings.
+type ResourceMonitoringMode string
+
+const (
+	MonitoringModeNormal          ResourceMonitoringMode = "normal"
+	MonitoringModeExpectedOffline ResourceMonitoringMode = "expected_offline"
+	MonitoringModeMuted           ResourceMonitoringMode = "muted"
+)
+
+// ResourceLifecycleState records whether a provider-owned inventory item is
+// still operationally active in Pulse. Retired resources remain discoverable
+// because their owning provider may continue to report them, but Pulse removes
+// them from alert attention and refuses automated remediation.
+type ResourceLifecycleState string
+
+const (
+	LifecycleStateActive  ResourceLifecycleState = "active"
+	LifecycleStateRetired ResourceLifecycleState = "retired"
+)
+
 const (
 	CriticalityHigh   ResourceCriticality = "high"
 	CriticalityMedium ResourceCriticality = "medium"
@@ -51,6 +73,22 @@ func IsValidCriticality(value string) bool {
 	return false
 }
 
+func IsValidMonitoringMode(value string) bool {
+	switch ResourceMonitoringMode(value) {
+	case MonitoringModeNormal, MonitoringModeExpectedOffline, MonitoringModeMuted:
+		return true
+	}
+	return false
+}
+
+func IsValidLifecycleState(value string) bool {
+	switch ResourceLifecycleState(value) {
+	case LifecycleStateActive, LifecycleStateRetired:
+		return true
+	}
+	return false
+}
+
 // ResourceOperatorState captures operator-set per-resource intent that
 // modulates Patrol's behavior on findings against this resource. The shape
 // is intentionally narrow: every field encodes a specific operator intent
@@ -70,11 +108,21 @@ type ResourceOperatorState struct {
 	// unified-resources store; the API boundary trims and rejects empty.
 	CanonicalID string `json:"canonicalId"`
 
-	// IntentionallyOffline marks the resource as expected-to-be-offline.
-	// Findings of the form "resource X is offline" against this resource
-	// will be auto-acknowledged with reason=intentionally_offline by the
-	// Patrol findings store. Other finding categories (high CPU, disk
-	// pressure on a still-mounted volume, etc.) are unaffected.
+	// MonitoringMode is the canonical alert and Patrol posture. Normal keeps
+	// all monitoring active, expected_offline suppresses availability noise,
+	// and muted suppresses all alert and finding attention while preserving
+	// inventory visibility.
+	MonitoringMode ResourceMonitoringMode `json:"monitoringMode"`
+
+	// LifecycleState is active by default. Retired is an operator-owned
+	// lifecycle decision for resources that remain in provider inventory but
+	// should no longer participate in alerting or automated remediation.
+	LifecycleState ResourceLifecycleState `json:"lifecycleState"`
+
+	// IntentionallyOffline is the compatibility projection for clients that
+	// predate MonitoringMode. NormalizeResourceOperatorState derives it from
+	// MonitoringMode, and maps legacy true writes to expected_offline when the
+	// new field is absent. Runtime policy must consume MonitoringMode instead.
 	IntentionallyOffline bool `json:"intentionallyOffline"`
 
 	// NeverAutoRemediate forbids Patrol from dispatching automated fixes
@@ -130,7 +178,9 @@ type ResourceOperatorState struct {
 // the persistence layer MAY keep an audit row to track that the operator
 // explicitly cleared the state.
 func (s ResourceOperatorState) IsEmpty() bool {
-	return !s.IntentionallyOffline &&
+	normalized := NormalizeResourceOperatorState(s)
+	return normalized.MonitoringMode == MonitoringModeNormal &&
+		normalized.LifecycleState == LifecycleStateActive &&
 		!s.NeverAutoRemediate &&
 		!s.AutoRemediationPolicy.Enabled &&
 		len(s.AutoRemediationPolicy.CapabilityNames) == 0 &&
@@ -140,6 +190,28 @@ func (s ResourceOperatorState) IsEmpty() bool {
 		strings.TrimSpace(s.MaintenanceReason) == "" &&
 		s.Criticality == "" &&
 		strings.TrimSpace(s.Note) == ""
+}
+
+// SuppressesAllAttention reports whether every Alerts and Patrol signal is
+// outside the resource's current operator-owned monitoring posture.
+func (s ResourceOperatorState) SuppressesAllAttention() bool {
+	s = NormalizeResourceOperatorState(s)
+	return s.MonitoringMode == MonitoringModeMuted || s.LifecycleState == LifecycleStateRetired
+}
+
+// ExpectsOffline reports whether availability loss is expected while other
+// monitoring signals remain eligible.
+func (s ResourceOperatorState) ExpectsOffline() bool {
+	s = NormalizeResourceOperatorState(s)
+	return s.MonitoringMode == MonitoringModeExpectedOffline || s.SuppressesAllAttention()
+}
+
+// BlocksRemediation reports whether automated action is incompatible with the
+// operator's explicit state. Retirement is a lifecycle lock even when the
+// legacy NeverAutoRemediate flag was not separately set.
+func (s ResourceOperatorState) BlocksRemediation() bool {
+	s = NormalizeResourceOperatorState(s)
+	return s.NeverAutoRemediate || s.LifecycleState == LifecycleStateRetired
 }
 
 // IsInMaintenanceAt reports whether `now` falls within the configured
@@ -173,11 +245,18 @@ var ErrResourceOperatorStateInvalid = errors.New("resource_operator_state_invali
 // is structural only — operator-set meaning (was the maintenance window
 // actually intended? is the note correct?) is the operator's call.
 func ValidateResourceOperatorState(state ResourceOperatorState) error {
+	state = NormalizeResourceOperatorState(state)
 	if strings.TrimSpace(state.CanonicalID) == "" {
 		return fmt.Errorf("%w: canonical_id is required", ErrResourceOperatorStateInvalid)
 	}
 	if !IsValidCriticality(string(state.Criticality)) {
 		return fmt.Errorf("%w: criticality %q is not one of (high, medium, low, empty)", ErrResourceOperatorStateInvalid, state.Criticality)
+	}
+	if !IsValidMonitoringMode(string(state.MonitoringMode)) {
+		return fmt.Errorf("%w: monitoring_mode %q is not one of (normal, expected_offline, muted)", ErrResourceOperatorStateInvalid, state.MonitoringMode)
+	}
+	if !IsValidLifecycleState(string(state.LifecycleState)) {
+		return fmt.Errorf("%w: lifecycle_state %q is not one of (active, retired)", ErrResourceOperatorStateInvalid, state.LifecycleState)
 	}
 	if err := ValidateAutoRemediationPolicy(state.AutoRemediationPolicy); err != nil {
 		return fmt.Errorf("%w: %v", ErrResourceOperatorStateInvalid, err)
@@ -201,6 +280,19 @@ func ValidateResourceOperatorState(state ResourceOperatorState) error {
 // NOT validate — call ValidateResourceOperatorState afterward.
 func NormalizeResourceOperatorState(state ResourceOperatorState) ResourceOperatorState {
 	state.CanonicalID = strings.TrimSpace(state.CanonicalID)
+	state.MonitoringMode = ResourceMonitoringMode(strings.ToLower(strings.TrimSpace(string(state.MonitoringMode))))
+	if state.MonitoringMode == "" {
+		if state.IntentionallyOffline {
+			state.MonitoringMode = MonitoringModeExpectedOffline
+		} else {
+			state.MonitoringMode = MonitoringModeNormal
+		}
+	}
+	state.IntentionallyOffline = state.MonitoringMode == MonitoringModeExpectedOffline
+	state.LifecycleState = ResourceLifecycleState(strings.ToLower(strings.TrimSpace(string(state.LifecycleState))))
+	if state.LifecycleState == "" {
+		state.LifecycleState = LifecycleStateActive
+	}
 	state.MaintenanceReason = strings.TrimSpace(state.MaintenanceReason)
 	state.Note = strings.TrimSpace(state.Note)
 	state.SetBy = strings.TrimSpace(state.SetBy)

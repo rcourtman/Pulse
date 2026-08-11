@@ -19,6 +19,8 @@ import (
 // type's evolution stays decoupled from the wire format.
 type resourceOperatorStateAPI struct {
 	CanonicalID           string                        `json:"canonicalId"`
+	MonitoringMode        string                        `json:"monitoringMode"`
+	LifecycleState        string                        `json:"lifecycleState"`
 	IntentionallyOffline  bool                          `json:"intentionallyOffline"`
 	NeverAutoRemediate    bool                          `json:"neverAutoRemediate"`
 	AutoRemediationPolicy unified.AutoRemediationPolicy `json:"autoRemediationPolicy"`
@@ -32,8 +34,11 @@ type resourceOperatorStateAPI struct {
 }
 
 func toResourceOperatorStateAPI(state unified.ResourceOperatorState) resourceOperatorStateAPI {
+	state = unified.NormalizeResourceOperatorState(state)
 	return resourceOperatorStateAPI{
 		CanonicalID:           state.CanonicalID,
+		MonitoringMode:        string(state.MonitoringMode),
+		LifecycleState:        string(state.LifecycleState),
 		IntentionallyOffline:  state.IntentionallyOffline,
 		NeverAutoRemediate:    state.NeverAutoRemediate,
 		AutoRemediationPolicy: state.AutoRemediationPolicy,
@@ -73,6 +78,7 @@ func (h *ResourceHandlers) HandleResourceOperatorState(w http.ResponseWriter, r 
 	}
 
 	orgID := GetOrgID(r.Context())
+	resourceID = h.resolveOperatorStateCanonicalID(orgID, resourceID)
 	store, err := h.getStore(orgID)
 	if err != nil {
 		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
@@ -103,6 +109,8 @@ func (h *ResourceHandlers) HandleResourceOperatorState(w http.ResponseWriter, r 
 		// (operator wrote vm:101 in the URL but vm:102 in the body).
 		state := unified.ResourceOperatorState{
 			CanonicalID:           resourceID,
+			MonitoringMode:        unified.ResourceMonitoringMode(payload.MonitoringMode),
+			LifecycleState:        unified.ResourceLifecycleState(payload.LifecycleState),
 			IntentionallyOffline:  payload.IntentionallyOffline,
 			NeverAutoRemediate:    payload.NeverAutoRemediate,
 			AutoRemediationPolicy: payload.AutoRemediationPolicy,
@@ -130,6 +138,9 @@ func (h *ResourceHandlers) HandleResourceOperatorState(w http.ResponseWriter, r 
 			http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
 			return
 		}
+		if h.operatorStateChanged != nil {
+			h.operatorStateChanged(orgID, resourceID)
+		}
 		writeJSON(w, http.StatusOK, toResourceOperatorStateAPI(persisted))
 
 	case http.MethodDelete:
@@ -141,11 +152,34 @@ func (h *ResourceHandlers) HandleResourceOperatorState(w http.ResponseWriter, r 
 			http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
 			return
 		}
+		if h.operatorStateChanged != nil {
+			h.operatorStateChanged(orgID, resourceID)
+		}
 		w.WriteHeader(http.StatusNoContent)
 
 	default:
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 	}
+}
+
+// resolveOperatorStateCanonicalID ensures every UI and agent entry point writes
+// one policy record even when it starts from a source-native alert ID, a
+// superseded ID, or another canonical identity alias. If the live registry
+// cannot resolve the reference, preserving the normalized input retains the
+// established API behavior for resources that are not currently inventoried.
+func (h *ResourceHandlers) resolveOperatorStateCanonicalID(orgID, resourceID string) string {
+	resourceID = unified.CanonicalResourceID(resourceID)
+	if resourceID == "" {
+		return ""
+	}
+	registry, err := h.buildRegistry(orgID)
+	if err != nil || registry == nil {
+		return resourceID
+	}
+	if _, canonicalID, found := registry.GetByReference(resourceID); found {
+		return canonicalID
+	}
+	return resourceID
 }
 
 // extractOperatorStateResourceID pulls the canonical resource ID out of a

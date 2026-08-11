@@ -1,18 +1,29 @@
 {
   "version": 1,
-  "base_sha": "bcb172c1274b393f1bdd8d51b4fffb7f0585e4bd",
-  "verified_at": "2026-08-10T08:55:00Z",
+  "base_sha": "c45a950a74c11d299b1be6277a8b552e87f9c5d9",
+  "verified_at": "2026-08-11T10:30:03Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx",
-    "frontend-modern/src/features/patrol/patrolControlPresentation.ts"
+    "frontend-modern/src/api/resourceOperatorState.ts",
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx",
+    "frontend-modern/src/components/Infrastructure/ResourceOperatorStateSection.tsx",
+    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx",
+    "frontend-modern/src/features/alerts/AlertOverviewAlertCard.tsx",
+    "frontend-modern/src/features/alerts/ResourceMonitoringPolicyAction.tsx",
+    "frontend-modern/src/utils/resourceMonitoringPolicy.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx": "da3ddd2c2fd5bf94e9642d178c8f60c361b21de3559e6085047e911539301fef",
-    "frontend-modern/src/features/patrol/patrolControlPresentation.ts": "1f395d06a16be436f5222cd36259a9585aaa2f7a036399fbfd4ee8b3c98bf12e"
+    "frontend-modern/src/api/resourceOperatorState.ts": "2b27d3dcc3415cc2a57b9bd201d06f04150ede3b29d91816ce3715a065eb8459",
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx": "9b757063cbd6c0b97ab0057754d45ad2e2067ad58f4ec0b388c7ae28e51d8239",
+    "frontend-modern/src/components/Infrastructure/ResourceOperatorStateSection.tsx": "3c5008b4db7027a7a08c8dff796a7546b5b343a522bf7439361467c0031318f3",
+    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx": "f0339dc3c3fdd2e08f2c5fea75a62a0a5ecdfab833970653bf9f74982c4ba891",
+    "frontend-modern/src/features/alerts/AlertOverviewAlertCard.tsx": "83081abb871d76e5531bf66ddcddb47171c05c86c1d91249a0e9c6ef5dad73dd",
+    "frontend-modern/src/features/alerts/ResourceMonitoringPolicyAction.tsx": "287ff35169c4082f9cb8cac3e36bcbaaab9e343801c497e89da8602d9af276d2",
+    "frontend-modern/src/utils/resourceMonitoringPolicy.ts": "ba5133bbdeb57a236845f3ee946f0f0c13518e293810eec1ae7e4fab2ab3e2d5"
   },
   "routes": [
-    "/patrol (Needs attention workbench rows and attention detail drawer)"
+    "/alerts",
+    "/proxmox/overview"
   ],
   "viewports": [
     {
@@ -20,19 +31,22 @@
       "height": 800
     },
     {
-      "width": 744,
-      "height": 1024
+      "width": 390,
+      "height": 844
     }
   ],
   "states": [
-    "Attention rows (46 mock alerts, complete + unknown-freshness evidence) render resource name and relative time with no evidence label; the 'Evidence incomplete; timing unavailable' / 'Evidence timing unavailable' warning line is gone from every row.",
-    "Attention detail drawer shows the muted 'Evidence recorded' badge next to the state badge, with per-envelope observations reading 'Pulse Complete Confirmed - observed just now'.",
-    "Full-page text contains no 'timing unavailable' occurrence in any state exercised at either viewport.",
-    "Backend half verified via scratch instance API: /api/ai/patrol/attention returned all 44-46 mock rows with evidenceCompleteness=complete (previously provider-incident rows were partial via the legacy shim)."
+    "Active powered-off Proxmox guest alert with the Monitoring policy menu open and provider ownership copy visible.",
+    "Normal monitoring restored, powered-off detector alert reactivated, then Expected offline applied from that alert and the alert removed immediately.",
+    "Proxmox guest drawer with Monitoring and Lifecycle controls showing Expected offline and provider-owned retirement guidance.",
+    "Retired lifecycle selected with monitoring disabled and the retained-inventory, history, attention, and automation notice visible.",
+    "Mobile Alerts overview with the policy menu open, all four choices reachable, and main content clientWidth and scrollWidth both 362 pixels."
   ],
   "interactions": [
-    "Ran a scratch mock-mode instance built from this working tree (backend + built dist) on port 7671 with the dev admin bypass.",
-    "Opened /patrol at 1280px, read the attention list rows, clicked the vaultwarden memory-limit row, and inspected the detail drawer badges and evidence observations.",
-    "Reloaded /patrol at 744px, re-checked the row metadata line, re-opened the detail drawer, and screenshotted the drawer showing 'Evidence recorded'."
+    "Opened the Monitoring menu from a live powered-off alert and confirmed Proxmox remains the inventory owner.",
+    "Applied Expected offline from the alert, observed the success notification, and confirmed the alert disappeared immediately while the active count decreased.",
+    "Opened dev-portal-01 in the Proxmox guest drawer, changed Monitoring between Normal and Expected offline, and saved through the canonical resource policy.",
+    "Changed Lifecycle to Retired, confirmed the retirement notice and disabled monitoring control, then restored Active while preserving Expected offline.",
+    "Repeated the Alerts policy-menu inspection at 390 by 844 pixels and confirmed there was no horizontal content overflow."
   ]
 }

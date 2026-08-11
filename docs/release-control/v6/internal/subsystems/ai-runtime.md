@@ -6904,6 +6904,22 @@ to the same policy as the outer address, so `PULSE_AI_ALLOW_LOOPBACK` and
 `PULSE_AI_ALLOW_PRIVATE_IPS` relax the embedded check exactly as they relax the
 outer one, and a transition address wrapping a permitted public target stays
 permitted.
+
+### Patrol consumes canonical monitoring and lifecycle policy
+
+The findings operator-state projection carries canonical `MonitoringMode` and
+`LifecycleState` in the same store read as maintenance, criticality, and action
+lock state. Active maintenance, expected-offline, muted, and retired policy
+produce distinct lifecycle causes in durable finding history. Suppression is
+reversible when the canonical cause lifts. Legacy providers that project only
+`IntentionallyOffline` retain their established cause and behavior.
+
+Retired lifecycle also projects an effective remediation lock into Patrol
+investigation and the shared execution admission paths, so a resource cannot
+be retired from attention while remaining eligible for autonomous action.
+Canonical enum fields are additive in the agent capability manifest and its
+generated documentation; the legacy boolean remains a compatibility edge, not
+the AI runtime policy source of truth.
 ### Patrol run records no longer carry a dead auto-fix count
 
 `PatrolRunRecord.AutoFixCount` was removed from `internal/ai/patrol.go`,

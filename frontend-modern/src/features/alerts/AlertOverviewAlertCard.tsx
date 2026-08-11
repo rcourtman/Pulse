@@ -21,6 +21,7 @@ import { alertTypeDisplayLabel } from './helpers';
 import { getCanonicalAlertId } from './identity';
 import type { AlertIncidentTimelineState } from './useAlertIncidentTimelineState';
 import type { AlertOverviewState } from './useAlertOverviewState';
+import { ResourceMonitoringPolicyAction } from './ResourceMonitoringPolicyAction';
 
 interface AlertOverviewAlertCardProps {
   alert: Alert;
@@ -52,7 +53,32 @@ export function AlertOverviewAlertCard(props: AlertOverviewAlertCardProps) {
       return '/docker/overview';
     if (resourceType === 'kubernetes' || resourceType.startsWith('k8s-'))
       return '/kubernetes/overview';
+    if (resourceType.startsWith('vmware-') || props.alert.message?.toLowerCase().includes('vmware'))
+      return '/vmware/overview';
     return '/proxmox/overview';
+  };
+
+  const platformTypeForPolicy = (): string | undefined => {
+    const metadataPlatform = props.alert.metadata?.platformType;
+    if (typeof metadataPlatform === 'string' && metadataPlatform.trim()) return metadataPlatform;
+    const link = resourceLink();
+    if (link.startsWith('/proxmox')) return 'proxmox';
+    if (link.startsWith('/docker')) return 'docker';
+    if (link.startsWith('/kubernetes')) return 'kubernetes';
+    if (link.startsWith('/vmware')) return 'vmware';
+    if (link.startsWith('/machines')) return 'agent';
+    return undefined;
+  };
+
+  const resourceTypeForPolicy = (): string | undefined => {
+    const metadataType = props.alert.metadata?.resourceType;
+    if (typeof metadataType === 'string' && metadataType.trim()) return metadataType;
+    const resourceId = (props.alert.resourceId || '').toLowerCase();
+    if (resourceId.startsWith('agent:')) return 'agent';
+    if (resourceId.includes('docker')) return 'app-container';
+    if (resourceId.includes('k8s') || resourceId.includes('kubernetes')) return 'pod';
+    if (resourceLink() === '/proxmox/overview') return 'vm';
+    return undefined;
   };
 
   return (
@@ -155,6 +181,14 @@ export function AlertOverviewAlertCard(props: AlertOverviewAlertCardProps) {
               props.timelineState.expandedIncidents().has(alertKey()),
             )}
           </button>
+          <Show when={(props.alert.resourceId || '').trim()}>
+            <ResourceMonitoringPolicyAction
+              resourceId={props.alert.resourceId}
+              resourceName={props.alert.resourceName || props.alert.resourceId}
+              resourceType={resourceTypeForPolicy()}
+              platformType={platformTypeForPolicy()}
+            />
+          </Show>
           <InvestigateAlertButton
             alert={props.alert}
             resourceType={

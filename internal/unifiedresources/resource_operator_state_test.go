@@ -149,6 +149,49 @@ func TestValidateResourceOperatorState(t *testing.T) {
 	})
 }
 
+func TestResourceOperatorStateMonitoringAndLifecyclePolicy(t *testing.T) {
+	t.Run("legacy intentionally offline normalizes to expected offline", func(t *testing.T) {
+		state := NormalizeResourceOperatorState(ResourceOperatorState{IntentionallyOffline: true})
+		if state.MonitoringMode != MonitoringModeExpectedOffline || !state.IntentionallyOffline {
+			t.Fatalf("legacy normalization = %+v", state)
+		}
+		if state.LifecycleState != LifecycleStateActive {
+			t.Fatalf("default lifecycle = %q, want active", state.LifecycleState)
+		}
+	})
+
+	t.Run("canonical mode owns compatibility projection", func(t *testing.T) {
+		state := NormalizeResourceOperatorState(ResourceOperatorState{
+			MonitoringMode:       MonitoringModeMuted,
+			IntentionallyOffline: true,
+		})
+		if state.IntentionallyOffline {
+			t.Fatal("muted mode must not remain projected as intentionally offline")
+		}
+		if !state.SuppressesAllAttention() {
+			t.Fatal("muted mode must suppress all attention")
+		}
+	})
+
+	t.Run("retired lifecycle suppresses attention and blocks remediation", func(t *testing.T) {
+		state := ResourceOperatorState{LifecycleState: LifecycleStateRetired}
+		if !state.SuppressesAllAttention() || !state.BlocksRemediation() {
+			t.Fatalf("retired policy not enforced: %+v", state)
+		}
+	})
+
+	t.Run("invalid enum values fail closed", func(t *testing.T) {
+		for _, state := range []ResourceOperatorState{
+			{CanonicalID: "vm:101", MonitoringMode: "sometimes"},
+			{CanonicalID: "vm:101", LifecycleState: "deleted"},
+		} {
+			if err := ValidateResourceOperatorState(state); !errors.Is(err, ErrResourceOperatorStateInvalid) {
+				t.Fatalf("ValidateResourceOperatorState(%+v) error = %v", state, err)
+			}
+		}
+	})
+}
+
 func TestNormalizeResourceOperatorState_TrimsAndLowersCriticality(t *testing.T) {
 	got := NormalizeResourceOperatorState(ResourceOperatorState{
 		CanonicalID:       "  vm:101  ",

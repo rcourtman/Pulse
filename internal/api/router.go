@@ -540,6 +540,34 @@ func (r *Router) setupRoutes() {
 	r.unifiedAgentHandlers.SetServerVersion(r.serverVersion)
 	r.kubernetesAgentHandlers.SetRecoveryIngestor(r.recoveryHandlers)
 	r.resourceHandlers = NewResourceHandlers(r.config)
+	r.resourceHandlers.SetOperatorStateChanged(func(_ string, resourceID string) {
+		seen := make(map[*monitoring.Monitor]struct{})
+		reconcile := func(monitor *monitoring.Monitor) {
+			if monitor == nil {
+				return
+			}
+			if _, duplicate := seen[monitor]; duplicate {
+				return
+			}
+			seen[monitor] = struct{}{}
+			if reconciler, ok := any(monitor.GetAlertManager()).(interface {
+				ReconcileResourceOperatorState(string) int
+			}); ok {
+				reconciler.ReconcileResourceOperatorState(resourceID)
+				monitor.SyncAlertState()
+			}
+		}
+
+		if r.mtMonitor != nil {
+			// The store mutation is already tenant scoped. Each live monitor's
+			// resolver reads its own tenant store, so visiting every live monitor
+			// cannot apply another tenant's policy. It does avoid selecting a newly
+			// initialized, empty tenant monitor while alerts still live on the
+			// legacy/default runtime during startup and development transitions.
+			r.mtMonitor.ForEachMonitor(reconcile)
+		}
+		reconcile(r.monitor)
+	})
 	actionOrgChecker := NewAuthorizationChecker(NewMultiTenantOrganizationLoader(r.multiTenant))
 	actionAuth := actionAuthority{authorizer: r.authorizer, orgChecker: actionOrgChecker}
 	r.resourceHandlers.SetActionAuthorizers(actionAuth, actionAuth)
@@ -2466,8 +2494,13 @@ func (r *Router) startPatrolForContext(ctx context.Context, orgID string) bool {
 						}
 						projection := ai.ResourceOperatorStateProjection{
 							IntentionallyOffline: state.IntentionallyOffline,
+							MonitoringMode:       string(state.MonitoringMode),
+							LifecycleState:       string(state.LifecycleState),
 							NeverAutoRemediate:   state.NeverAutoRemediate,
 							Criticality:          string(state.Criticality),
+						}
+						if state.LifecycleState == unifiedresources.LifecycleStateRetired {
+							projection.NeverAutoRemediate = true
 						}
 						if state.IsInMaintenanceAt(now) {
 							projection.MaintenanceWindow = &ai.ResourceOperatorStateMaintenanceWindow{

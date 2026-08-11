@@ -144,6 +144,13 @@ func TestMCPSurfaceContractMarkdownFallsBackForLegacyManifest(t *testing.T) {
 	}
 }
 
+func TestMCPToolInventoryDescribesCanonicalResourcePolicy(t *testing.T) {
+	got := MCPToolCapabilityInventoryMarkdown(CanonicalManifest())
+	if !strings.Contains(got, "monitoring mode, lifecycle state, remediation lock") {
+		t.Fatalf("operator-state inventory omits canonical policy vocabulary:\n%s", got)
+	}
+}
+
 func TestMCPToolCapabilityInventoryMarkdownProjectsManifestTools(t *testing.T) {
 	got := MCPToolCapabilityInventoryMarkdown(Manifest{
 		SurfaceContract: CanonicalManifest().SurfaceContract,

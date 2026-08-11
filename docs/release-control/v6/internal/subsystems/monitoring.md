@@ -2940,3 +2940,14 @@ Known and deliberately unchanged: each changed guest still triggers a full-file
 save, so one poll cycle over N changed guests performs N marshals and N atomic
 writes that serialize on the store mutex. Coalescing them is a behavioural
 change beyond the shutdown defect.
+
+### Monitoring projects canonical resource policy into alert evaluation
+
+The monitoring-owned operator-intent adapter projects `monitoringMode` and
+`lifecycleState` together with maintenance timing and the legacy compatibility
+boolean. It still resolves source-native references through canonical resource
+identity before reading the store and fails open on missing, ambiguous, or
+errored identity lookup. Monitoring does not reinterpret provider ownership or
+invent lifecycle state; Alerts owns signal suppression and unified resources
+owns persistence. `internal/monitoring/monitor_alert_intent_test.go` and the
+alerts intent-policy proof pin this adapter boundary.

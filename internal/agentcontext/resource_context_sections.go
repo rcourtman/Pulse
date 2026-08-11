@@ -48,6 +48,8 @@ type Section struct {
 // stays independent of HTTP and storage owners.
 type OperatorState struct {
 	IntentionallyOffline    bool
+	MonitoringMode          string
+	LifecycleState          string
 	NeverAutoRemediate      bool
 	MaintenanceWindowActive bool
 	MaintenanceStartAt      *time.Time
@@ -638,8 +640,13 @@ func formatAgentRelationshipFact(rel unified.ResourceRelationship, policy *unifi
 
 func formatOperatorStateFact(state OperatorState) string {
 	parts := []string{}
-	if state.IntentionallyOffline {
+	if state.MonitoringMode != "" {
+		parts = append(parts, "monitoring="+state.MonitoringMode)
+	} else if state.IntentionallyOffline {
 		parts = append(parts, "intentionally offline")
+	}
+	if state.LifecycleState != "" {
+		parts = append(parts, "lifecycle="+state.LifecycleState)
 	}
 	if state.NeverAutoRemediate {
 		parts = append(parts, "never auto-remediate")

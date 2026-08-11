@@ -105,6 +105,9 @@ func (m *Manager) setActiveAlertNoLock(storageKey string, alert *Alert) {
 		return
 	}
 	backfillCanonicalIdentity(alert)
+	if suppressed, _ := m.operatorSuppressionForAlertNoLock(alert, time.Now().UTC()); suppressed {
+		return
+	}
 	ensureOperationalContract(alert, time.Now())
 	requestedKey := storageKey
 	storageKey = activeAlertStorageKey(alert, storageKey)

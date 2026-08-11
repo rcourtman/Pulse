@@ -72,6 +72,8 @@ describe('resourceOperatorState api', () => {
   it('PUTs the canonical body shape and returns the read-after-write record', async () => {
     apiFetchJSONMock.mockResolvedValueOnce({
       canonicalId: 'vm:101',
+      monitoringMode: 'expected_offline',
+      lifecycleState: 'active',
       intentionallyOffline: true,
       neverAutoRemediate: false,
       setAt: '2026-05-09T11:00:00Z',
@@ -79,6 +81,8 @@ describe('resourceOperatorState api', () => {
     } satisfies ResourceOperatorState);
 
     const input: ResourceOperatorStateInput = {
+      monitoringMode: 'expected_offline',
+      lifecycleState: 'active',
       intentionallyOffline: true,
       neverAutoRemediate: false,
       autoRemediationPolicy: {
@@ -100,7 +104,11 @@ describe('resourceOperatorState api', () => {
     // (setAt, setBy) — never echo the input verbatim.
     expect(result.setAt).toBe('2026-05-09T11:00:00Z');
     expect(result.setBy).toBe('operator:richard');
+    expect(result.monitoringMode).toBe('expected_offline');
+    expect(result.lifecycleState).toBe('active');
     expect(JSON.parse(apiFetchJSONMock.mock.calls[0][1]?.body as string)).toMatchObject({
+      monitoringMode: 'expected_offline',
+      lifecycleState: 'active',
       autoRemediationPolicy: {
         enabled: true,
         capabilityNames: ['restart'],

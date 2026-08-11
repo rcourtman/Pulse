@@ -4450,3 +4450,24 @@ teardown. `TestCachedResourceStoresHaveATenantReleasePath` in
 `internal/unifiedresources/code_standards_test.go` is a source-shape guard,
 because the leak is invisible at runtime until a tenant is deleted or a data
 directory is torn down.
+
+### Canonical resource monitoring and lifecycle policy
+
+`ResourceOperatorState` owns one durable per-resource monitoring posture and
+lifecycle. `monitoringMode` is the closed vocabulary `normal`,
+`expected_offline`, or `muted`; `lifecycleState` is `active` or `retired`.
+Expected-offline is availability-specific, while muted removes all Alerts and
+Patrol attention. Retired resources remain in canonical provider inventory and
+retain history, but they also suppress attention and block automated
+remediation until restored to active. Provider inventory deletion is not a
+side effect of this policy.
+
+The SQLite row persists both enums. Schema migration promotes legacy
+`intentionally_offline=1` rows to `monitoring_mode=expected_offline`, and the
+legacy boolean remains only a derived wire compatibility projection. New
+runtime consumers must use the enum helpers rather than assign a second meaning
+to that boolean. Identity succession continues to rekey the same state row.
+`internal/unifiedresources/resource_operator_state_test.go` and
+`resource_operator_state_policy_test.go` pin normalization, validation,
+round-trip persistence, attention suppression, and the retired remediation
+lock.

@@ -9255,3 +9255,22 @@ The route-authorization test proves the exact viewer 200 / ledger 403 pairing,
 the scope test proves unauthenticated and wrong-scope refusal, and the frontend
 API plus Workloads integration tests prove the surface reads only the runtime
 projection.
+
+### Resource operator-state API exposes canonical policy with legacy compatibility
+
+`GET` and `PUT /api/resources/{id}/operator-state` add `monitoringMode` and
+`lifecycleState` to the stable resource-state shape. The accepted vocabularies
+are `normal|expected_offline|muted` and `active|retired`. The existing
+`intentionallyOffline` field remains readable and writable for older clients:
+when the enum is absent, true maps to expected-offline; when the enum is
+present, it is authoritative and the response boolean is derived from it.
+Invalid enum values fail with the existing stable operator-state validation
+error.
+
+A successful mutation invokes alert reconciliation only after durable commit,
+so the API cannot report a policy that has not landed and existing active
+alerts leave attention promptly. Agent resource context, fleet context, and
+the canonical capability manifest project both new fields. Retired lifecycle
+is also an execution-time remediation lock in the shared action lifecycle.
+`internal/api/resources_operator_state_test.go`, agent-context tests, manifest
+tests, and the generated `cmd/pulse-mcp/README.md` pin this additive contract.

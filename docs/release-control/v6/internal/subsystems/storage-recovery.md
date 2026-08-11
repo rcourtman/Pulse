@@ -5157,3 +5157,13 @@ restore, retention, resource-store, or recovery evidence. Additive RBAC schema
 upgrade preserves older identities and fails construction on migration errors;
 the security-privacy and api-contracts contracts own the authoritative shape
 and proof.
+
+### Resource monitoring lifecycle preserves recovery evidence
+
+Mutating `monitoringMode` or `lifecycleState` changes Pulse attention and
+automated remediation admission only. Expected-offline, mute, and retirement do
+not delete resource history, backups, snapshots, recovery points, retention
+configuration, or provider inventory. A retired resource fails closed for
+automated remediation through the shared action lifecycle, while recovery
+evidence remains available for operator review and for restoration to active
+monitoring.

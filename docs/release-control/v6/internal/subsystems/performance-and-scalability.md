@@ -2364,3 +2364,12 @@ enrichment. It filters healthy, disabled, non-workload, and coverage-free rows
 before serialization, so the response is no larger than the actionable banner
 input. Client presentation is a single pass over that bounded list and performs
 no per-source fetch or detail lookup.
+
+### Resource policy reads stay outside the Workloads hot path
+
+The Proxmox guest drawer mounts `ResourceOperatorStateSection` only for the
+currently expanded workload. Its non-suspending query performs one canonical
+operator-state read for that selected resource and does not add table-row,
+hover-preview, interval, or websocket work. Saving monitoring or lifecycle
+policy performs one mutation and one selected-resource refetch. The Workloads
+list, selectors, windowing, and polling budgets remain unchanged.

@@ -194,6 +194,90 @@ func TestAlertIntentPreviewHonorsOperatorStateWithoutMutatingRuntime(t *testing.
 	}
 }
 
+func TestAlertIntentHonorsCanonicalResourcePolicyWithoutExplicitRules(t *testing.T) {
+	m := newTestManager(t)
+	m.SetOperatorIntentContextResolver(func(resourceID string, observedAt time.Time) (OperatorIntentContext, bool) {
+		return OperatorIntentContext{MonitoringMode: "expected_offline", LifecycleState: "active"}, true
+	})
+
+	preview, err := m.PreviewIntentPolicy(AlertIntentPolicyPreviewRequest{
+		ResourceID:      "vm:101",
+		ResourceType:    "vm",
+		Signal:          string(AlertIntentSignalOffline),
+		ConditionActive: true,
+	})
+	if err != nil {
+		t.Fatalf("PreviewIntentPolicy() error = %v", err)
+	}
+	if preview.Status != "expected_transient" || preview.Reason != "operator_expected_offline" {
+		t.Fatalf("preview = %+v", preview)
+	}
+	if preview.Effective.Explicit {
+		t.Fatal("operator policy regression test must not rely on an explicit intent rule")
+	}
+}
+
+func TestCanonicalResourcePolicyGatesAllAlertWritersAndReconcilesExisting(t *testing.T) {
+	m := newTestManager(t)
+	mode := "normal"
+	m.SetOperatorIntentContextResolver(func(resourceID string, observedAt time.Time) (OperatorIntentContext, bool) {
+		return OperatorIntentContext{MonitoringMode: mode, LifecycleState: "active"}, true
+	})
+
+	existing := &Alert{ID: "backup-vm-101", ResourceID: "vm:101", Type: "backup-age"}
+	m.mu.Lock()
+	m.setActiveAlertNoLock(existing.ID, existing)
+	m.mu.Unlock()
+	if got := len(m.GetActiveAlerts()); got != 1 {
+		t.Fatalf("active alerts before mute = %d, want 1", got)
+	}
+
+	mode = "muted"
+	if cleared := m.ReconcileResourceOperatorState("vm:101"); cleared != 1 {
+		t.Fatalf("ReconcileResourceOperatorState() cleared = %d, want 1", cleared)
+	}
+
+	m.mu.Lock()
+	m.setActiveAlertNoLock(existing.ID, existing)
+	_, reactivated := m.getActiveAlertNoLock(existing.ID)
+	m.mu.Unlock()
+	if reactivated {
+		t.Fatal("muted resource alert was reactivated through a noncanonical writer")
+	}
+}
+
+func TestCanonicalResourcePolicyCannotEnterQuietHoursReplay(t *testing.T) {
+	m := newTestManager(t)
+	m.SetOperatorIntentContextResolver(func(resourceID string, observedAt time.Time) (OperatorIntentContext, bool) {
+		return OperatorIntentContext{MonitoringMode: "muted", LifecycleState: "active"}, true
+	})
+	alert := &Alert{
+		ID:         "offline-vm-101",
+		ResourceID: "vm:101",
+		Type:       "offline",
+		Level:      AlertLevelWarning,
+		Metadata: map[string]interface{}{
+			MetadataQuietHoursSuppressed:        true,
+			MetadataQuietHoursSuppressionReason: "non-critical",
+			MetadataQuietHoursReplayAt:          time.Now().Add(time.Hour).UTC().Format(time.RFC3339),
+		},
+	}
+
+	if !m.ShouldSuppressNotification(alert) {
+		t.Fatal("muted resource firing notification must be dropped, not queued for replay")
+	}
+	if hasQuietHoursNotificationReplay(alert) {
+		t.Fatal("operator suppression must clear stale quiet-hours replay metadata")
+	}
+	markQuietHoursNotificationReplay(alert, "non-critical", time.Now().Add(time.Hour))
+	if !m.ShouldSuppressResolvedNotification(alert) {
+		t.Fatal("muted resource recovery notification must stay suppressed despite replay metadata")
+	}
+	if hasQuietHoursNotificationReplay(alert) {
+		t.Fatal("operator-suppressed recovery must not remain queued for quiet-hours replay")
+	}
+}
+
 func TestLifecycleAlertStartsAtFirstIntentMatch(t *testing.T) {
 	m := NewManagerWithDataDir(t.TempDir())
 	t.Cleanup(m.Stop)

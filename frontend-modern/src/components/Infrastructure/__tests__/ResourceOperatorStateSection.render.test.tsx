@@ -58,7 +58,7 @@ describe('ResourceOperatorStateSection render with capabilityNames: null', () =>
     // The section itself must be up (pre-fix, the throw escaped render
     // and nothing below the header survived).
     expect(screen.getByText('Operator overrides')).toBeTruthy();
-    expect(screen.getByText('Intentionally offline')).toBeTruthy();
+    expect(screen.getByText('Monitoring')).toBeTruthy();
     expect(screen.getByText('Never auto-remediate')).toBeTruthy();
 
     // "Clear all overrides" only renders for persisted() && !isDirty() —

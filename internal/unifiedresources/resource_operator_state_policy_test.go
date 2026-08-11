@@ -64,7 +64,9 @@ func TestAutoRemediationPolicySQLiteRoundTrip(t *testing.T) {
 	defer store.Close()
 
 	state := ResourceOperatorState{
-		CanonicalID: "docker:container:web",
+		CanonicalID:    "docker:container:web",
+		MonitoringMode: MonitoringModeMuted,
+		LifecycleState: LifecycleStateRetired,
 		AutoRemediationPolicy: AutoRemediationPolicy{
 			Enabled:         true,
 			CapabilityNames: []string{"restart"},
@@ -84,6 +86,9 @@ func TestAutoRemediationPolicySQLiteRoundTrip(t *testing.T) {
 	}
 	if !got.AutoRemediationPolicy.Enabled || len(got.AutoRemediationPolicy.CapabilityNames) != 1 || got.AutoRemediationPolicy.Window == nil || got.AutoRemediationPolicy.Window.Timezone != "Europe/London" {
 		t.Fatalf("round-trip policy = %#v", got.AutoRemediationPolicy)
+	}
+	if got.MonitoringMode != MonitoringModeMuted || got.LifecycleState != LifecycleStateRetired {
+		t.Fatalf("round-trip monitoring policy = %+v", got)
 	}
 }
 

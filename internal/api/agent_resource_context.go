@@ -123,6 +123,8 @@ type AgentFleetResourceSummary struct {
 	ResourceName            string                  `json:"resourceName"`
 	Technology              string                  `json:"technology,omitempty"`
 	IntentionallyOffline    bool                    `json:"intentionallyOffline"`
+	MonitoringMode          string                  `json:"monitoringMode"`
+	LifecycleState          string                  `json:"lifecycleState"`
 	NeverAutoRemediate      bool                    `json:"neverAutoRemediate"`
 	MaintenanceWindowActive bool                    `json:"maintenanceWindowActive"`
 	Findings                AgentFleetFindingCounts `json:"findings"`
@@ -212,6 +214,8 @@ type AgentOperationsLoopStatus struct {
 // the underlying store type's JSON tags shift.
 type AgentResourceOperatorState struct {
 	IntentionallyOffline bool       `json:"intentionallyOffline"`
+	MonitoringMode       string     `json:"monitoringMode"`
+	LifecycleState       string     `json:"lifecycleState"`
 	NeverAutoRemediate   bool       `json:"neverAutoRemediate"`
 	MaintenanceStartAt   *time.Time `json:"maintenanceStartAt,omitempty"`
 	MaintenanceEndAt     *time.Time `json:"maintenanceEndAt,omitempty"`
@@ -644,6 +648,8 @@ func agentResourceOperatorStateForContext(state *AgentResourceOperatorState) *ag
 	}
 	return &agentcontext.OperatorState{
 		IntentionallyOffline:    state.IntentionallyOffline,
+		MonitoringMode:          state.MonitoringMode,
+		LifecycleState:          state.LifecycleState,
 		NeverAutoRemediate:      state.NeverAutoRemediate,
 		MaintenanceWindowActive: state.MaintenanceWindowActive,
 		MaintenanceStartAt:      state.MaintenanceStartAt,
@@ -745,7 +751,9 @@ func (h *AgentContextHandler) HandleFleetContext(w http.ResponseWriter, r *http.
 		}
 		if state, found, opErr := store.GetResourceOperatorState(canonical); opErr == nil && found {
 			summary.IntentionallyOffline = state.IntentionallyOffline
-			summary.NeverAutoRemediate = state.NeverAutoRemediate
+			summary.MonitoringMode = string(state.MonitoringMode)
+			summary.LifecycleState = string(state.LifecycleState)
+			summary.NeverAutoRemediate = state.BlocksRemediation()
 			summary.MaintenanceWindowActive = state.IsInMaintenanceAt(now)
 		}
 		if h.findingsProvider != nil {
@@ -1322,9 +1330,12 @@ func projectAgentResourceOperatorState(
 	state unified.ResourceOperatorState,
 	now time.Time,
 ) AgentResourceOperatorState {
+	state = unified.NormalizeResourceOperatorState(state)
 	return AgentResourceOperatorState{
 		IntentionallyOffline:    state.IntentionallyOffline,
-		NeverAutoRemediate:      state.NeverAutoRemediate,
+		MonitoringMode:          string(state.MonitoringMode),
+		LifecycleState:          string(state.LifecycleState),
+		NeverAutoRemediate:      state.BlocksRemediation(),
 		MaintenanceStartAt:      state.MaintenanceStartAt,
 		MaintenanceEndAt:        state.MaintenanceEndAt,
 		MaintenanceReason:       state.MaintenanceReason,

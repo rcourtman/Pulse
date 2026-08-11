@@ -822,6 +822,8 @@ type ResourceOperatorStateMaintenanceWindow struct {
 type ResourceOperatorStateProjection struct {
 	MaintenanceWindow    *ResourceOperatorStateMaintenanceWindow
 	IntentionallyOffline bool
+	MonitoringMode       string
+	LifecycleState       string
 	// NeverAutoRemediate is the operator's "do not act on this
 	// resource" flag. The findings store does not consume it during
 	// suppression (that's the action broker's concern), but the
@@ -831,6 +833,26 @@ type ResourceOperatorStateProjection struct {
 	// hot paths share a single read.
 	NeverAutoRemediate bool
 	Criticality        string
+}
+
+func (p ResourceOperatorStateProjection) monitoringSuppressionCause() string {
+	if strings.EqualFold(strings.TrimSpace(p.LifecycleState), "retired") {
+		return "resource_retired"
+	}
+	switch strings.ToLower(strings.TrimSpace(p.MonitoringMode)) {
+	case "muted":
+		return "monitoring_muted"
+	case "expected_offline":
+		return "expected_offline"
+	}
+	if p.IntentionallyOffline {
+		return "intentionally_offline"
+	}
+	return ""
+}
+
+func (p ResourceOperatorStateProjection) suppressesFindings() bool {
+	return p.MaintenanceWindow != nil || p.monitoringSuppressionCause() != ""
 }
 
 // ResourceOperatorStateProvider is the narrow interface the findings
@@ -1789,8 +1811,7 @@ func (s *FindingsStore) Add(f *Finding) bool {
 			if !willFixReminderDue && existing.DismissedReason == "expected_behavior" && !existing.Suppressed {
 				if cause := findOperatorStateDismissCause(existing); cause != "" {
 					if operatorStateProviderPresent {
-						currentlySuppressing := operatorProjectionOK &&
-							(operatorProjection.MaintenanceWindow != nil || operatorProjection.IntentionallyOffline)
+						currentlySuppressing := operatorProjectionOK && operatorProjection.suppressesFindings()
 						operatorStateLifted = !currentlySuppressing
 					} else {
 						// No provider currently wired but the finding was
@@ -1992,18 +2013,18 @@ func (s *FindingsStore) Add(f *Finding) bool {
 					"maintenance_end_at":   window.EndAt.Format(time.RFC3339),
 				})
 				s.syncLoopStateLocked(f)
-			case projection.IntentionallyOffline:
-				// Operator has marked this resource as expected-to-be-offline,
-				// so any finding raised against it is by definition expected
-				// noise. Auto-dismiss with a clear note so the operator
-				// understands why future findings stayed quiet without
-				// expanding each row.
+			case projection.monitoringSuppressionCause() != "":
+				cause := projection.monitoringSuppressionCause()
 				f.DismissedReason = "expected_behavior"
 				f.AcknowledgedAt = &now
-				f.UserNote = "Resource is marked intentionally offline by the operator. Clear the flag on the resource detail surface to resume notifications."
-				s.appendLifecycleLocked(f, "dismissed", "Auto-acknowledged: resource is intentionally offline", f.LoopState, string(FindingLoopStateDismissed), map[string]string{
+				if cause == "intentionally_offline" {
+					f.UserNote = "Resource is marked intentionally offline by the operator. Clear the flag on the resource detail surface to resume notifications."
+				} else {
+					f.UserNote = "Resource monitoring policy suppresses Patrol attention. Return monitoring and lifecycle to active defaults on the resource detail surface to resume findings."
+				}
+				s.appendLifecycleLocked(f, "dismissed", "Auto-acknowledged: resource monitoring policy suppresses attention", f.LoopState, string(FindingLoopStateDismissed), map[string]string{
 					"reason":               "expected_behavior",
-					"operator_state_cause": "intentionally_offline",
+					"operator_state_cause": cause,
 				})
 				s.syncLoopStateLocked(f)
 			}

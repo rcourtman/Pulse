@@ -84,6 +84,7 @@ describe('OverviewTab Last 24 Hours stat', () => {
       .closest('tr')
       ?.querySelector('[data-testid="alert-overview-stat-value"]');
     expect(statValue?.textContent).toBe('1');
+    expect(screen.getAllByText('Monitoring')).toHaveLength(2);
   });
 
   it('shows 0 when all alerts are older than 24 hours', () => {

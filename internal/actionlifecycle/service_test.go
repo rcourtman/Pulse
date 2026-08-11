@@ -1414,6 +1414,33 @@ func TestExecuteRefusesRemediationLockedResource(t *testing.T) {
 	}
 }
 
+func TestExecuteRefusesRetiredResourceWithoutDispatch(t *testing.T) {
+	now := time.Now().UTC()
+	env := newServiceEnv(t, testResource(now, unified.ApprovalNone))
+
+	plan, err := env.service.Plan(context.Background(), "default", restartRequest(), testActionActor("requester", "default"))
+	if err != nil {
+		t.Fatalf("Plan: %v", err)
+	}
+	if err := env.store.SetResourceOperatorState(unified.ResourceOperatorState{
+		CanonicalID:    "vm:42",
+		LifecycleState: unified.LifecycleStateRetired,
+	}); err != nil {
+		t.Fatalf("SetResourceOperatorState: %v", err)
+	}
+
+	failed, err := env.service.Execute(context.Background(), "default", plan.ActionID, testActionActor("agent:test", "default"), "")
+	if !errors.Is(err, unified.ErrResourceRemediationLocked) {
+		t.Fatalf("error = %v, want ErrResourceRemediationLocked", err)
+	}
+	if env.executor.calls != 0 {
+		t.Fatalf("executor must not run for retired resources, calls = %d", env.executor.calls)
+	}
+	if failed.State != unified.ActionStateFailed {
+		t.Fatalf("retirement refusal must persist a failed audit, state = %q", failed.State)
+	}
+}
+
 func TestExecuteRefusesDriftedPlan(t *testing.T) {
 	now := time.Now().UTC()
 	env := newServiceEnv(t, testResource(now, unified.ApprovalNone))

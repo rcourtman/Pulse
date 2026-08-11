@@ -8,6 +8,8 @@ import { apiFetchJSON } from '@/utils/apiClient';
  * for the suppression / refusal semantics each field drives.
  */
 export type ResourceCriticality = 'high' | 'medium' | 'low' | '';
+export type ResourceMonitoringMode = 'normal' | 'expected_offline' | 'muted';
+export type ResourceLifecycleState = 'active' | 'retired';
 
 export interface AutoRemediationWindow {
   timezone: string;
@@ -28,6 +30,8 @@ export interface AutoRemediationPolicy {
 
 export interface ResourceOperatorState {
   canonicalId: string;
+  monitoringMode?: ResourceMonitoringMode;
+  lifecycleState?: ResourceLifecycleState;
   /**
    * When true, new findings raised against this resource get
    * auto-acknowledged with reason=expected_behavior — Patrol stops
@@ -74,6 +78,13 @@ export type ResourceOperatorStateInput = Omit<
   'canonicalId' | 'setAt' | 'setBy'
 >;
 
+const normalizeResourceOperatorState = (state: ResourceOperatorState): ResourceOperatorState => ({
+  ...state,
+  monitoringMode:
+    state.monitoringMode || (state.intentionallyOffline ? 'expected_offline' : 'normal'),
+  lifecycleState: state.lifecycleState || 'active',
+});
+
 /**
  * Read the operator-set state for a resource. Resolves to null when
  * the server returns 404 (no entry recorded — the default no-state
@@ -83,10 +94,11 @@ export async function getResourceOperatorState(
   resourceId: string,
 ): Promise<ResourceOperatorState | null> {
   try {
-    return await apiFetchJSON<ResourceOperatorState>(
+    const state = await apiFetchJSON<ResourceOperatorState>(
       `/api/resources/${encodeURIComponent(resourceId)}/operator-state`,
       { cache: 'no-store' },
     );
+    return normalizeResourceOperatorState(state);
   } catch (err) {
     // The 404 response shape is `{ error: 'operator_state_not_set', ... }`.
     // Translating into null lets the caller treat "no state" as a clean
@@ -113,7 +125,7 @@ export async function setResourceOperatorState(
   resourceId: string,
   state: ResourceOperatorStateInput,
 ): Promise<ResourceOperatorState> {
-  return apiFetchJSON<ResourceOperatorState>(
+  const persisted = await apiFetchJSON<ResourceOperatorState>(
     `/api/resources/${encodeURIComponent(resourceId)}/operator-state`,
     {
       method: 'PUT',
@@ -121,6 +133,7 @@ export async function setResourceOperatorState(
       headers: { 'Content-Type': 'application/json' },
     },
   );
+  return normalizeResourceOperatorState(persisted);
 }
 
 /**

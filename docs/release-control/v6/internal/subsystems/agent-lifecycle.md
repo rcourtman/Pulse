@@ -6149,3 +6149,15 @@ agent tokens, command sessions, and report identity. Deprovisioning a human
 principal revokes that principal's browser sessions only and does not delete,
 reassign, or synthesize agent lifecycle state. The api-contracts and
 security-privacy contracts own the authoritative behavior and proof.
+
+### Resource monitoring policy does not mutate agent lifecycle
+
+The shared `internal/api/` router now reconciles alert attention after a
+resource operator-state mutation, but it does not unregister, delete, retoken,
+or reassign an agent. Monitoring and lifecycle policy is keyed through the
+tenant's canonical resource registry and is separate from enrolled agent
+identity. Agent context may report `monitoringMode` and `lifecycleState` so an
+operator or external agent can explain current attention behavior, without
+changing registration or command authority. Retiring an agent-backed resource
+blocks automated remediation through the shared action policy while preserving
+its enrollment and history.

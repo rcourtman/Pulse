@@ -85,7 +85,7 @@ func TestBuildResourceContextSectionsAppliesRedactionTrustAndFreshness(t *testin
 
 	sections := BuildResourceContextSections(resource, nil, BuildOptions{
 		GeneratedAt:          now,
-		OperatorState:        &OperatorState{IntentionallyOffline: true, NeverAutoRemediate: true, Criticality: "high", NotePresent: true, SetAt: operatorSetAt},
+		OperatorState:        &OperatorState{MonitoringMode: "muted", LifecycleState: "retired", NeverAutoRemediate: true, Criticality: "high", NotePresent: true, SetAt: operatorSetAt},
 		ActiveFindingCount:   2,
 		PendingApprovalCount: 1,
 		RecentActionCount:    3,
@@ -173,7 +173,7 @@ func TestBuildResourceContextSectionsAppliesRedactionTrustAndFreshness(t *testin
 	if operatorState.ObservedAt == nil || !operatorState.ObservedAt.Equal(operatorSetAt) {
 		t.Fatalf("operator state observedAt = %v, want %v", operatorState.ObservedAt, operatorSetAt)
 	}
-	for _, want := range []string{"intentionally offline", "never auto-remediate", "criticality=high", "note present"} {
+	for _, want := range []string{"monitoring=muted", "lifecycle=retired", "never auto-remediate", "criticality=high", "note present"} {
 		if !strings.Contains(operatorState.Value, want) {
 			t.Fatalf("operator state value = %q, want %q", operatorState.Value, want)
 		}

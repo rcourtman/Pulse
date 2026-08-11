@@ -2246,6 +2246,8 @@ func TestFindingsStore_OperatorStateProjectionFor_ProxiesProvider(t *testing.T) 
 	store := NewFindingsStore()
 	expected := ResourceOperatorStateProjection{
 		IntentionallyOffline: true,
+		MonitoringMode:       "muted",
+		LifecycleState:       "retired",
 		NeverAutoRemediate:   true,
 		Criticality:          "high",
 	}
@@ -2261,6 +2263,9 @@ func TestFindingsStore_OperatorStateProjectionFor_ProxiesProvider(t *testing.T) 
 	}
 	if got.IntentionallyOffline != expected.IntentionallyOffline {
 		t.Errorf("IntentionallyOffline must round-trip; got %v want %v", got.IntentionallyOffline, expected.IntentionallyOffline)
+	}
+	if got.MonitoringMode != expected.MonitoringMode || got.LifecycleState != expected.LifecycleState {
+		t.Errorf("canonical monitoring projection = (%q, %q), want (%q, %q)", got.MonitoringMode, got.LifecycleState, expected.MonitoringMode, expected.LifecycleState)
 	}
 	if got.NeverAutoRemediate != expected.NeverAutoRemediate {
 		t.Errorf("NeverAutoRemediate must round-trip — investigation runtime reads this projection too; got %v want %v", got.NeverAutoRemediate, expected.NeverAutoRemediate)

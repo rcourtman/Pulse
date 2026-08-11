@@ -3,6 +3,8 @@ import { Toggle } from '@/components/shared/Toggle';
 import { notificationStore } from '@/stores/notifications';
 import {
   type ResourceCriticality,
+  type ResourceLifecycleState,
+  type ResourceMonitoringMode,
   type ResourceOperatorState,
   type ResourceOperatorStateInput,
   clearResourceOperatorState,
@@ -12,6 +14,7 @@ import {
 import { createNonSuspendingQuery } from '@/hooks/createNonSuspendingQuery';
 import { formatRelativeTime } from '@/utils/format';
 import type { ResourceCapability } from '@/types/resource';
+import { describeResourceInventoryOwnership } from '@/utils/resourceMonitoringPolicy';
 
 /**
  * ResourceOperatorStateSection surfaces the operator-set per-resource
@@ -31,6 +34,8 @@ import type { ResourceCapability } from '@/types/resource';
  */
 interface ResourceOperatorStateSectionProps {
   resourceId: string;
+  resourceType?: string;
+  platformType?: string;
   capabilities?: ResourceCapability[];
 }
 
@@ -61,7 +66,8 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
   // Local edit state, hydrated from the persisted record. Operators can
   // toggle either flag and the section dirty-tracks until they hit Save
   // or Discard.
-  const [intentionallyOffline, setIntentionallyOffline] = createSignal(false);
+  const [monitoringMode, setMonitoringMode] = createSignal<ResourceMonitoringMode>('normal');
+  const [lifecycleState, setLifecycleState] = createSignal<ResourceLifecycleState>('active');
   const [neverAutoRemediate, setNeverAutoRemediate] = createSignal(false);
   const [criticality, setCriticality] = createSignal<ResourceCriticality>('');
   const [note, setNote] = createSignal('');
@@ -78,6 +84,9 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
     (props.capabilities ?? []).filter(
       (capability) => capability.autoAuthorization && capability.autoAuthorization !== 'never',
     ),
+  );
+  const inventoryOwnership = createMemo(() =>
+    describeResourceInventoryOwnership(props.resourceType, props.platformType),
   );
 
   const minuteToTime = (minute: number): string => {
@@ -112,7 +121,10 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
   createEffect(() => {
     const current = persisted();
     if (current === undefined) return;
-    setIntentionallyOffline(current?.intentionallyOffline ?? false);
+    setMonitoringMode(
+      current?.monitoringMode ?? (current?.intentionallyOffline ? 'expected_offline' : 'normal'),
+    );
+    setLifecycleState(current?.lifecycleState ?? 'active');
     setNeverAutoRemediate(current?.neverAutoRemediate ?? false);
     setCriticality(current?.criticality ?? '');
     setNote(current?.note ?? '');
@@ -130,7 +142,9 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
 
   const isDirty = createMemo(() => {
     const current = persisted();
-    const persistedOffline = current?.intentionallyOffline ?? false;
+    const persistedMonitoringMode =
+      current?.monitoringMode ?? (current?.intentionallyOffline ? 'expected_offline' : 'normal');
+    const persistedLifecycleState = current?.lifecycleState ?? 'active';
     const persistedLocked = current?.neverAutoRemediate ?? false;
     const persistedCriticality = current?.criticality ?? '';
     const persistedNote = current?.note ?? '';
@@ -149,7 +163,8 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
         persistedAuto.window.endMinute !== timeToMinute(autoWindowEnd())
       : Boolean(persistedAuto.window);
     return (
-      intentionallyOffline() !== persistedOffline ||
+      monitoringMode() !== persistedMonitoringMode ||
+      lifecycleState() !== persistedLifecycleState ||
       neverAutoRemediate() !== persistedLocked ||
       criticality() !== persistedCriticality ||
       note().trim() !== persistedNote ||
@@ -186,7 +201,9 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
     try {
       const current = persisted();
       const input: ResourceOperatorStateInput = {
-        intentionallyOffline: intentionallyOffline(),
+        monitoringMode: monitoringMode(),
+        lifecycleState: lifecycleState(),
+        intentionallyOffline: monitoringMode() === 'expected_offline',
         neverAutoRemediate: neverAutoRemediate(),
         autoRemediationPolicy: {
           enabled: autoRemediationEnabled(),
@@ -226,7 +243,10 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
 
   const handleDiscard = () => {
     const current = persisted();
-    setIntentionallyOffline(current?.intentionallyOffline ?? false);
+    setMonitoringMode(
+      current?.monitoringMode ?? (current?.intentionallyOffline ? 'expected_offline' : 'normal'),
+    );
+    setLifecycleState(current?.lifecycleState ?? 'active');
     setNeverAutoRemediate(current?.neverAutoRemediate ?? false);
     setCriticality(current?.criticality ?? '');
     setNote(current?.note ?? '');
@@ -250,7 +270,8 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
       // resolve to null and the section will return to the no-state
       // posture.
       await query.refetch();
-      setIntentionallyOffline(false);
+      setMonitoringMode('normal');
+      setLifecycleState('active');
       setNeverAutoRemediate(false);
       setCriticality('');
       setNote('');
@@ -378,7 +399,9 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
       const input: ResourceOperatorStateInput = {
         // Keep the toggle state intact when scheduling — operator
         // editing one facet must not lose work on the other.
-        intentionallyOffline: intentionallyOffline(),
+        monitoringMode: monitoringMode(),
+        lifecycleState: lifecycleState(),
+        intentionallyOffline: monitoringMode() === 'expected_offline',
         neverAutoRemediate: neverAutoRemediate(),
         autoRemediationPolicy: {
           enabled: autoRemediationEnabled(),
@@ -416,7 +439,9 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
     setSaving(true);
     try {
       const input: ResourceOperatorStateInput = {
-        intentionallyOffline: intentionallyOffline(),
+        monitoringMode: monitoringMode(),
+        lifecycleState: lifecycleState(),
+        intentionallyOffline: monitoringMode() === 'expected_offline',
         neverAutoRemediate: neverAutoRemediate(),
         autoRemediationPolicy: {
           enabled: autoRemediationEnabled(),
@@ -459,8 +484,8 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
         <div>
           <h3 class="text-sm font-semibold text-base-content">Operator overrides</h3>
           <p class="text-xs text-muted">
-            Tell Pulse how Patrol should treat this resource — suppress expected noise, prioritize
-            its findings, or lock it against automated remediation.
+            Control Alerts, Patrol, lifecycle, priority, and automated remediation from one
+            persisted resource policy.
           </p>
         </div>
         <Show when={persisted()?.setBy || persisted()?.setAt}>
@@ -781,20 +806,53 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
         </div>
       </Show>
 
-      <div class="flex items-start justify-between gap-3">
-        <div class="min-w-0 flex-1">
-          <label class="text-sm font-medium text-base-content">Intentionally offline</label>
-          <p class="text-[11px] text-muted mt-0.5 leading-tight">
-            Suppress findings on this resource. Use when a workload is deprecated, a dev environment
-            is shut down on purpose, or a host is archived.
-          </p>
-        </div>
-        <Toggle
-          checked={intentionallyOffline()}
-          onChange={(e) => setIntentionallyOffline(e.currentTarget.checked)}
-          disabled={saving()}
-        />
+      <div class="grid grid-cols-1 gap-3 border-t border-border-subtle pt-3 sm:grid-cols-2">
+        <label class="block">
+          <span class="block text-sm font-medium text-base-content">Monitoring</span>
+          <select
+            value={monitoringMode()}
+            onChange={(event) =>
+              setMonitoringMode(event.currentTarget.value as ResourceMonitoringMode)
+            }
+            disabled={saving() || lifecycleState() === 'retired'}
+            class="mt-1 block min-h-11 w-full rounded border border-border bg-surface px-2 py-1.5 text-xs text-base-content focus:outline-none focus:ring-1 focus:ring-blue-400 disabled:opacity-50 sm:min-h-0"
+          >
+            <option value="normal">Normal monitoring</option>
+            <option value="expected_offline">Expected offline</option>
+            <option value="muted">Mute all attention</option>
+          </select>
+          <span class="mt-1 block text-[11px] leading-tight text-muted">
+            Expected offline hides availability noise only. Mute all stops Alerts and Patrol while
+            keeping this resource visible.
+          </span>
+        </label>
+
+        <label class="block">
+          <span class="block text-sm font-medium text-base-content">Lifecycle</span>
+          <select
+            value={lifecycleState()}
+            onChange={(event) =>
+              setLifecycleState(event.currentTarget.value as ResourceLifecycleState)
+            }
+            disabled={saving()}
+            class="mt-1 block min-h-11 w-full rounded border border-border bg-surface px-2 py-1.5 text-xs text-base-content focus:outline-none focus:ring-1 focus:ring-blue-400 disabled:opacity-50 sm:min-h-0"
+          >
+            <option value="active">Active</option>
+            <option value="retired">Retired from monitoring</option>
+          </select>
+          <span class="mt-1 block text-[11px] leading-tight text-muted">
+            {inventoryOwnership().retirementDescription}
+          </span>
+        </label>
       </div>
+
+      <Show when={lifecycleState() === 'retired'}>
+        <div class="rounded border border-border bg-surface-alt px-3 py-2 text-xs text-base-content">
+          Retired resources remain in {inventoryOwnership().ownerLabel} inventory and keep their
+          Pulse history. All alert attention and automated remediation are disabled until the
+          lifecycle returns to Active.
+        </div>
+      </Show>
 
       <div class="flex items-start justify-between gap-3 pt-2 border-t border-border-subtle">
         <div class="min-w-0 flex-1">
@@ -810,7 +868,7 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
         <Toggle
           checked={neverAutoRemediate()}
           onChange={(e) => handleNeverAutoRemediateToggle(e.currentTarget.checked)}
-          disabled={saving()}
+          disabled={saving() || lifecycleState() === 'retired'}
         />
       </div>
 

@@ -14,7 +14,8 @@ import (
 // state row. Order is not guaranteed.
 func (s *SQLiteResourceStore) ListResourceOperatorStates() ([]ResourceOperatorState, error) {
 	rows, err := s.db.Query(`
-		SELECT canonical_id, intentionally_offline, never_auto_remediate,
+		SELECT canonical_id, monitoring_mode, lifecycle_state,
+			intentionally_offline, never_auto_remediate,
 			maintenance_start_at, maintenance_end_at, maintenance_reason,
 			criticality, note, set_at, set_by
 		FROM resource_operator_state`)
@@ -27,6 +28,8 @@ func (s *SQLiteResourceStore) ListResourceOperatorStates() ([]ResourceOperatorSt
 	for rows.Next() {
 		var (
 			state          ResourceOperatorState
+			monitoringMode string
+			lifecycleState string
 			intentional    int
 			neverRemediate int
 			startAt, endAt sql.NullTime
@@ -37,6 +40,8 @@ func (s *SQLiteResourceStore) ListResourceOperatorStates() ([]ResourceOperatorSt
 		)
 		if err := rows.Scan(
 			&state.CanonicalID,
+			&monitoringMode,
+			&lifecycleState,
 			&intentional,
 			&neverRemediate,
 			&startAt,
@@ -49,6 +54,8 @@ func (s *SQLiteResourceStore) ListResourceOperatorStates() ([]ResourceOperatorSt
 		); err != nil {
 			return nil, fmt.Errorf("scan resource operator state row: %w", err)
 		}
+		state.MonitoringMode = ResourceMonitoringMode(monitoringMode)
+		state.LifecycleState = ResourceLifecycleState(lifecycleState)
 		state.IntentionallyOffline = intentional != 0
 		state.NeverAutoRemediate = neverRemediate != 0
 		if startAt.Valid {
@@ -71,7 +78,7 @@ func (s *SQLiteResourceStore) ListResourceOperatorStates() ([]ResourceOperatorSt
 		if setBy.Valid {
 			state.SetBy = setBy.String
 		}
-		out = append(out, state)
+		out = append(out, NormalizeResourceOperatorState(state))
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("iterate resource operator state rows: %w", err)

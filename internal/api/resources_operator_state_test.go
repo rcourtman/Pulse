@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	unified "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
@@ -127,6 +128,90 @@ func TestHandleResourceOperatorState_PutPersistsAndGetReturns200(t *testing.T) {
 	}
 	if got.MaintenanceStartAt == nil || !got.MaintenanceStartAt.Equal(start) {
 		t.Errorf("maintenance start must round-trip; got %v", got.MaintenanceStartAt)
+	}
+}
+
+func TestHandleResourceOperatorState_CanonicalPolicyTakesPrecedenceAndReconciles(t *testing.T) {
+	h := newOperatorStateHandlers(t)
+	var reconciledOrg, reconciledResource string
+	h.SetOperatorStateChanged(func(orgID, resourceID string) {
+		reconciledOrg, reconciledResource = orgID, resourceID
+	})
+
+	body := bytes.NewBufferString(`{
+		"monitoringMode":"muted",
+		"lifecycleState":"retired",
+		"intentionallyOffline":true,
+		"neverAutoRemediate":false
+	}`)
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPut, "/api/resources/vm:101/operator-state", body)
+	h.HandleResourceOperatorState(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("PUT status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	var got resourceOperatorStateAPI
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.MonitoringMode != "muted" || got.LifecycleState != "retired" {
+		t.Fatalf("canonical policy response = %+v", got)
+	}
+	if got.IntentionallyOffline {
+		t.Fatal("compatibility boolean must derive from canonical monitoring mode")
+	}
+	if reconciledOrg != "default" || reconciledResource != "vm:101" {
+		t.Fatalf("reconciliation callback = (%q, %q)", reconciledOrg, reconciledResource)
+	}
+}
+
+func TestHandleResourceOperatorState_ResolvesSourceAliasToCanonicalResource(t *testing.T) {
+	h := newOperatorStateHandlers(t)
+	now := time.Date(2026, 8, 11, 10, 0, 0, 0, time.UTC)
+	h.SetStateProvider(resourceUnifiedSeedProvider{
+		snapshot: models.StateSnapshot{LastUpdate: now},
+		resources: []unified.Resource{{
+			ID:                     "system-container-canonical",
+			Type:                   unified.ResourceTypeSystemContainer,
+			Name:                   "dev-portal-01",
+			LastSeen:               now,
+			SupersededCanonicalIDs: []string{"mock-cluster-pve3-115"},
+		}},
+	})
+
+	var reconciledResource string
+	h.SetOperatorStateChanged(func(_, resourceID string) {
+		reconciledResource = resourceID
+	})
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPut, "/api/resources/mock-cluster-pve3-115/operator-state", bytes.NewBufferString(`{
+		"monitoringMode":"expected_offline",
+		"lifecycleState":"active"
+	}`))
+	h.HandleResourceOperatorState(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("PUT status = %d body=%s", rec.Code, rec.Body.String())
+	}
+
+	var got resourceOperatorStateAPI
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.CanonicalID != "system-container-canonical" {
+		t.Fatalf("canonical ID = %q", got.CanonicalID)
+	}
+	if reconciledResource != "system-container-canonical" {
+		t.Fatalf("reconciled resource = %q", reconciledResource)
+	}
+	store, err := h.getStore("default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, found, err := store.GetResourceOperatorState("mock-cluster-pve3-115"); err != nil || found {
+		t.Fatalf("source alias must not receive a duplicate record: found=%v err=%v", found, err)
+	}
+	if state, found, err := store.GetResourceOperatorState("system-container-canonical"); err != nil || !found || state.MonitoringMode != unified.MonitoringModeExpectedOffline {
+		t.Fatalf("canonical policy = %+v found=%v err=%v", state, found, err)
 	}
 }
 

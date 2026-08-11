@@ -115,7 +115,15 @@ func resourceCapabilitiesOutputSchema() json.RawMessage {
 
 func operatorStateOutputSchema() json.RawMessage {
 	return agentObjectOutputSchema([]string{"canonicalId", "intentionallyOffline", "neverAutoRemediate", "setAt"}, map[string]any{
-		"canonicalId":             stringOption("Canonical Pulse resource id."),
+		"canonicalId": stringOption("Canonical Pulse resource id."),
+		"monitoringMode": map[string]any{
+			"type": "string", "enum": []string{"normal", "expected_offline", "muted"},
+			"description": "Canonical per-resource monitoring posture.",
+		},
+		"lifecycleState": map[string]any{
+			"type": "string", "enum": []string{"active", "retired"},
+			"description": "Whether the resource remains operationally active in Pulse.",
+		},
 		"intentionallyOffline":    booleanOption("Whether this resource is expected to be offline."),
 		"neverAutoRemediate":      booleanOption("Whether automated remediation must be refused for this resource."),
 		"maintenanceStartAt":      dateTimeOption("Maintenance window start time when set."),
@@ -277,6 +285,14 @@ func updateNodeInputSchema() json.RawMessage {
 func operatorStateInputSchema() json.RawMessage {
 	schema := agentObjectInputSchemaMap([]string{ResourceIDArgumentName, "intentionallyOffline", "neverAutoRemediate"}, map[string]any{
 		ResourceIDArgumentName: stringOption("Canonical resource id from get_fleet_context or get_resource_context. This path value wins over any body id."),
+		"monitoringMode": map[string]any{
+			"type": "string", "enum": []string{"normal", "expected_offline", "muted"},
+			"description": "Canonical monitoring posture. When supplied, this takes precedence over the intentionallyOffline compatibility field.",
+		},
+		"lifecycleState": map[string]any{
+			"type": "string", "enum": []string{"active", "retired"},
+			"description": "Retired resources stay in provider inventory but leave alert attention and automated remediation.",
+		},
 		"intentionallyOffline": map[string]any{
 			"type":        "boolean",
 			"description": "Whether the resource is expected to be offline. This suppresses offline findings for this resource.",
@@ -917,7 +933,7 @@ var canonicalManifest = Manifest{
 		{
 			Name:           GetOperatorStateCapabilityName,
 			Title:          "Get operator state",
-			Description:    "Read the operator-set state for a resource (intentionally offline, never auto-remediate, maintenance window, criticality).",
+			Description:    "Read the operator-set monitoring mode, lifecycle state, remediation lock, maintenance window, and criticality for a resource.",
 			Category:       "operator-state",
 			Method:         http.MethodGet,
 			Path:           OperatorStateCapabilityPath,
