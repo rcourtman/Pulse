@@ -2091,6 +2091,11 @@ store must create or re-harden the selected database directory as owner-only
 and must reject symlink or non-regular database targets before opening SQLite;
 the `.db`, `.db-wal`, and `.db-shm` artifacts must be chmodded owner-only even
 under a permissive process umask.
+That hardening must never chmod a filesystem root, sticky shared directory, or
+directory owned by another account. Unsafe parents such as direct
+`/tmp/metrics.db` placement must fail with dedicated-subdirectory guidance;
+external systemd mounts must remain explicit `ReadWritePaths` grants rather
+than weakening the default service sandbox.
 That same metrics hot path must also keep startup maintenance off the
 constructor critical path. `NewStore` may initialize schema and return a usable
 store, but restart-time retention cleanup and one-time auto-vacuum migration
