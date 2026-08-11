@@ -115,6 +115,39 @@ that already belong to the canonical system.
    deserve normal use. When a slice changes frontend code, inspect the changed
    surface in Playwright before calling that slice progress or done.
 
+## Customer Support and External Communication
+
+- Complete the investigation and any authorized action before drafting the
+  customer reply.
+- Use the support thread, product knowledge, code, logs, and available admin
+  data to give the best diagnosis, fix, or workaround possible in the current
+  task. Do not stop at acknowledgement when useful resolution work can be done.
+- Do not defer work with phrases such as "I will verify", "I will investigate",
+  "I will check", or "I will follow up" when the work can be done in the current
+  task.
+- Customer replies must state what was verified or changed, or give the
+  customer the exact action they need to take.
+- Ask the customer only for information, access, or consent that cannot be
+  obtained or safely inferred. Do not transfer investigation work to the
+  customer when it can be completed internally.
+- If access or information blocks completion, report the specific blocker to
+  the project owner. Do not turn that blocker into a vague future promise to
+  the customer.
+- Do not imply that an agent will perform asynchronous work later. Continue
+  until the work is complete or a concrete blocker requires the project
+  owner's input.
+- Avoid em dashes and en dashes in customer-facing prose. Use sentences,
+  commas, parentheses, or simple hyphens instead.
+- Write customer replies in a plain, mundane maintainer voice. Avoid headings,
+  colon-led structures, excessive formatting, and wording that sounds
+  generated or promotional.
+- Do not reuse a formulaic opening such as "Thanks for the report" or "Thanks,
+  the screenshots helped" across replies. Start with the specific finding,
+  answer, or completed action when that reads naturally, and vary openings like
+  a human correspondent would.
+- Verify customer-facing claims against the support thread, product behavior,
+  code, and relevant admin data before proposing a reply.
+
 ## Delegation Rule
 
 Use this file for values and posture only.
