@@ -35,10 +35,16 @@ only a non-production JSON evidence record after verification. It never uploads
 the test-signed binaries as a GitHub artifact or assembles a release candidate.
 
 The canonical CI integration uses SignPath's GitHub trusted-build-system
-action. GitHub Actions uploads the three unsigned Windows agent executables as
-one immutable workflow artifact, submits it to SignPath, waits for approval and
-completion, downloads the signed result, and verifies every file before
-candidate assembly. A non-secret evidence artifact records the SignPath request
+action, split into two phases because production signing requests require
+manual approval in the SignPath UI. The Windows build job uploads the three
+unsigned agent executables as one immutable workflow artifact, submits it to
+SignPath without waiting, and records the signing request id. A separate
+collection job absorbs the approval latency: it waits for the recorded request
+to complete, downloads the signed result by request id, and verifies every
+file before candidate assembly. If approval outlasts the collection job's
+polling window, that job fails with re-run guidance, and re-running it
+collects the same recorded request — no rebuild, no second submission, no
+second approval. A non-secret evidence artifact records the SignPath request
 URL, source SHA, signer identity, and signed-file SHA-256 values.
 
 The artifact configuration accepts exactly these ZIP-root files and no others:

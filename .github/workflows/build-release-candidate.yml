@@ -31,7 +31,7 @@ on:
         value: ${{ jobs.build.outputs.manifest_artifact_name }}
       windows_signing_backend:
         description: 'Windows signing backend used for the candidate'
-        value: ${{ jobs.sign-windows-agent.outputs.signing_backend }}
+        value: ${{ jobs.collect-windows-signing.outputs.signing_backend }}
 
 permissions:
   contents: read
@@ -210,16 +210,14 @@ jobs:
           compression-level: 0
 
   sign-windows-agent:
-    name: Authenticode Sign Windows Agent
+    name: Build and Submit Windows Agent Signing
     needs: signing-configuration
     if: ${{ inputs.require_windows_signing && needs.signing-configuration.result == 'success' }}
     runs-on: windows-2025
-    timeout-minutes: 50
+    timeout-minutes: 25
     permissions:
       actions: read
       contents: read
-    outputs:
-      signing_backend: ${{ steps.evidence.outputs.signing_backend }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
@@ -272,6 +270,16 @@ jobs:
             if ($LASTEXITCODE -ne 0) { throw "Authenticode signing failed for $($output.Name)." }
           }
 
+      - name: Upload legacy signed binaries
+        if: ${{ inputs.windows_signing_backend == 'legacy-pfx' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: legacy-signed-windows-agent-${{ github.sha }}-${{ inputs.version }}
+          path: unsigned-native-agent-binaries/
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+
       - name: Upload unsigned SignPath input
         if: ${{ inputs.windows_signing_backend == 'signpath' }}
         id: upload-unsigned-windows
@@ -283,6 +291,10 @@ jobs:
           retention-days: 1
           compression-level: 0
 
+      # Production release-signing requests need manual approval in the
+      # SignPath UI, so submission must not wait for completion here: the
+      # collect-windows-signing job absorbs the approval latency instead,
+      # and this build job finishes as soon as the request is on record.
       - name: Submit SignPath Authenticode request
         if: ${{ inputs.windows_signing_backend == 'signpath' }}
         id: signpath
@@ -295,20 +307,128 @@ jobs:
           artifact-configuration-slug: ${{ vars.SIGNPATH_ARTIFACT_CONFIGURATION_SLUG }}
           github-artifact-id: ${{ steps.upload-unsigned-windows.outputs.artifact-id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          wait-for-completion: true
-          wait-for-completion-timeout-in-seconds: 2400
-          output-artifact-directory: signed-native-agent-binaries
+          wait-for-completion: false
           parameters: |
             version: ${{ toJSON(inputs.version) }}
+
+      - name: Record SignPath signing request
+        if: ${{ inputs.windows_signing_backend == 'signpath' }}
+        shell: pwsh
+        env:
+          SIGNPATH_SIGNING_REQUEST_ID: ${{ steps.signpath.outputs.signing-request-id }}
+          SIGNPATH_SIGNING_REQUEST_URL: ${{ steps.signpath.outputs.signing-request-web-url }}
+          SIGNPATH_INPUT_ARTIFACT_ID: ${{ steps.upload-unsigned-windows.outputs.artifact-id }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ([string]::IsNullOrWhiteSpace($env:SIGNPATH_SIGNING_REQUEST_ID)) {
+            throw 'SignPath submission returned no signing request id.'
+          }
+          [ordered]@{
+            schemaVersion = 1
+            signingRequestId = $env:SIGNPATH_SIGNING_REQUEST_ID
+            signingRequestUrl = $env:SIGNPATH_SIGNING_REQUEST_URL
+            githubInputArtifactId = $env:SIGNPATH_INPUT_ARTIFACT_ID
+          } | ConvertTo-Json | Set-Content windows-signing-request.json -Encoding utf8NoBOM
+          Write-Host "::notice::SignPath signing request submitted and awaiting approval: $env:SIGNPATH_SIGNING_REQUEST_URL"
+
+      # 7-day retention (not 1) so a failed collection job can still be
+      # re-run against the recorded request days later without a rebuild.
+      - name: Upload SignPath signing request record
+        if: ${{ inputs.windows_signing_backend == 'signpath' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: windows-signing-request-${{ github.sha }}-${{ inputs.version }}
+          path: windows-signing-request.json
+          if-no-files-found: error
+          retention-days: 7
+
+  # Production SignPath signing needs manual approval in the SignPath UI, so
+  # collection is decoupled from the build: if approval outlasts the polling
+  # window below, approve the request and use "Re-run failed jobs" - the
+  # recorded signing request is collected as-is, with no rebuild and no
+  # second submission or approval.
+  collect-windows-signing:
+    name: Collect and Verify Windows Authenticode
+    needs: sign-windows-agent
+    if: ${{ inputs.require_windows_signing && needs.sign-windows-agent.result == 'success' }}
+    runs-on: windows-2025
+    timeout-minutes: 120
+    outputs:
+      signing_backend: ${{ steps.evidence.outputs.signing_backend }}
+    steps:
+      - name: Download legacy signed binaries
+        if: ${{ inputs.windows_signing_backend == 'legacy-pfx' }}
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: legacy-signed-windows-agent-${{ github.sha }}-${{ inputs.version }}
+          path: unsigned-native-agent-binaries
+
+      - name: Download SignPath signing request record
+        if: ${{ inputs.windows_signing_backend == 'signpath' }}
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: windows-signing-request-${{ github.sha }}-${{ inputs.version }}
+          path: windows-signing-request
+
+      - name: Wait for SignPath approval and download signed binaries
+        if: ${{ inputs.windows_signing_backend == 'signpath' }}
+        id: signpath
+        shell: pwsh
+        env:
+          SIGNPATH_API_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
+          SIGNPATH_ORGANIZATION_ID: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $record = Get-Content windows-signing-request/windows-signing-request.json -Raw | ConvertFrom-Json
+          $requestId = $record.signingRequestId
+          $requestUrl = $record.signingRequestUrl
+          if ([string]::IsNullOrWhiteSpace($requestId)) { throw 'Signing request record has no signing request id.' }
+          "signing_request_id=$requestId" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "signing_request_url=$requestUrl" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "github_input_artifact_id=$($record.githubInputArtifactId)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
+          $statusUri = "https://app.signpath.io/API/v1/$($env:SIGNPATH_ORGANIZATION_ID)/SigningRequests/$requestId"
+          $headers = @{ Authorization = "Bearer $($env:SIGNPATH_API_TOKEN)" }
+          $deadline = (Get-Date).AddMinutes(115)
+          $transientFailures = 0
+          while ($true) {
+            try {
+              $request = Invoke-RestMethod -Uri $statusUri -Headers $headers -TimeoutSec 60
+              $transientFailures = 0
+            } catch {
+              $transientFailures++
+              if ($transientFailures -ge 10) { throw }
+              Write-Host "Transient SignPath status error ($transientFailures/10): $($_.Exception.Message)"
+              Start-Sleep -Seconds 60
+              continue
+            }
+            $status = $request.status
+            Write-Host "SignPath signing request $requestId status: $status (workflow: $($request.workflowStatus))"
+            if ($status -eq 'Completed') { break }
+            if ($status -in @('Failed', 'Denied', 'Canceled')) {
+              throw "SignPath signing request $requestId finished as ${status}: $requestUrl"
+            }
+            if ((Get-Date) -gt $deadline) {
+              Write-Host "::error::SignPath signing request $requestId is still $status. Approve it in SignPath ($requestUrl), then use 'Re-run failed jobs' - the recorded request is collected without rebuilding or resubmitting."
+              exit 1
+            }
+            Start-Sleep -Seconds 60
+          }
+
+          $zipPath = Join-Path $env:RUNNER_TEMP 'signpath-signed-artifact.zip'
+          Invoke-WebRequest -Uri "$statusUri/SignedArtifact" -Headers $headers -OutFile $zipPath -TimeoutSec 300
+          New-Item -ItemType Directory -Path signed-native-agent-binaries -Force | Out-Null
+          Expand-Archive -Path $zipPath -DestinationPath signed-native-agent-binaries
+          Get-ChildItem signed-native-agent-binaries
 
       - name: Verify Authenticode signatures and write evidence
         id: evidence
         shell: pwsh
         env:
           WINDOWS_SIGNING_BACKEND: ${{ inputs.windows_signing_backend }}
-          SIGNPATH_SIGNING_REQUEST_ID: ${{ steps.signpath.outputs.signing-request-id }}
-          SIGNPATH_SIGNING_REQUEST_URL: ${{ steps.signpath.outputs.signing-request-web-url }}
-          SIGNPATH_INPUT_ARTIFACT_ID: ${{ steps.upload-unsigned-windows.outputs.artifact-id }}
+          SIGNPATH_SIGNING_REQUEST_ID: ${{ steps.signpath.outputs.signing_request_id }}
+          SIGNPATH_SIGNING_REQUEST_URL: ${{ steps.signpath.outputs.signing_request_url }}
+          SIGNPATH_INPUT_ARTIFACT_ID: ${{ steps.signpath.outputs.github_input_artifact_id }}
           SIGNPATH_EXPECTED_CERTIFICATE_SUBJECT: ${{ vars.SIGNPATH_EXPECTED_CERTIFICATE_SUBJECT }}
         run: |
           $ErrorActionPreference = 'Stop'
@@ -366,8 +486,8 @@ jobs:
 
   build:
     name: Build and Validate Release Candidate
-    needs: [sign-macos-agent, sign-windows-agent]
-    if: ${{ always() && (!inputs.require_macos_signing || needs.sign-macos-agent.result == 'success') && (!inputs.require_windows_signing || needs.sign-windows-agent.result == 'success') }}
+    needs: [sign-macos-agent, collect-windows-signing]
+    if: ${{ always() && (!inputs.require_macos_signing || needs.sign-macos-agent.result == 'success') && (!inputs.require_windows_signing || needs.collect-windows-signing.result == 'success') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     outputs:

@@ -1049,9 +1049,13 @@ func TestReleaseCandidateRequiresPlatformNativeAgentSigning(t *testing.T) {
 		`result.get('status') != 'Accepted'`,
 		`codesign --verify --deep --strict --verbose=2`,
 		`sign-windows-agent:`,
+		`collect-windows-signing:`,
 		`windows_signing_backend:`,
 		`signpath/github-action-submit-signing-request@b9d91eadd323de506c0c81cf0c7fe7438f3360fd # v2`,
 		`github-artifact-id: ${{ steps.upload-unsigned-windows.outputs.artifact-id }}`,
+		`wait-for-completion: false`,
+		`windows-signing-request.json`,
+		`Re-run failed jobs`,
 		`SIGNPATH_API_TOKEN`,
 		`SIGNPATH_ORGANIZATION_ID`,
 		`SIGNPATH_PROJECT_SLUG`,
@@ -1070,6 +1074,9 @@ func TestReleaseCandidateRequiresPlatformNativeAgentSigning(t *testing.T) {
 	}
 	if strings.Contains(string(candidateWorkflow), `spctl --assess --type execute`) {
 		t.Fatal("bare command-line Mach-O binaries must not use Gatekeeper app assessment after notarization")
+	}
+	if strings.Contains(string(candidateWorkflow), `wait-for-completion: true`) {
+		t.Fatal("SignPath submission must not block the Windows build job on manual approval; collection is a separate resumable job")
 	}
 	assertFileContainsAll(t, repoFile(".github", "workflows", "create-release.yml"),
 		`require_macos_signing: true`,

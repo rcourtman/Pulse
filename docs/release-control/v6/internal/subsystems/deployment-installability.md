@@ -495,6 +495,14 @@ upgrade, update, release, or artifact-selection behavior.
    by id, verify every returned executable, and retain evidence binding the
    request, source SHA, signer identity, and file digests. A repository-secret
    PFX backend is an explicitly selected break-glass fallback only.
+   Production SignPath signing requests require manual approval in the
+   SignPath UI, so the Windows signing lane must split submission from
+   collection: the build job submits the immutable artifact without waiting
+   and records the signing request id, and a separate collection job absorbs
+   approval latency, downloads the signed result for the recorded request,
+   verifies it, and writes evidence. A collection timeout must fail with
+   operator re-run guidance, and re-running the failed collection job must
+   reuse the recorded request rather than rebuilding or resubmitting.
    macOS command-line agent notarization must fail closed unless
    `notarytool --wait --output-format json` reports `Accepted`, then verify the
    exact candidate bytes with strict `codesign`. Bare Mach-O command-line
