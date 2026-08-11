@@ -15,6 +15,11 @@
 
 ## Purpose
 
+Agent-profile assignment presents one actionable identity per connected host.
+When a PBS or PMG provider resource projects an agent ID that is not an active
+host-telemetry surface control, the provider projection is excluded so the
+same physical server cannot appear twice or receive conflicting assignments.
+
 First-run security setup persists the canonical authentication environment file
 before activating runtime credentials for every deployment shape. A systemd
 override may additionally bind service startup, but agent and server lifecycle

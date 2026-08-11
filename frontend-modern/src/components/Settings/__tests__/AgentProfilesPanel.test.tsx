@@ -468,6 +468,69 @@ describe('AgentProfilesPanel V6 agent ID handling', () => {
     expect(screen.getAllByRole('combobox')).toHaveLength(1);
   });
 
+  it('excludes a duplicate PBS provider identity when host telemetry owns the profile', async () => {
+    mockResources = [
+      makeAgentResource({
+        id: 'pbs-host-resource',
+        name: 'pbs01',
+        displayName: 'pbs01',
+        platformId: 'pbs01',
+        platformType: 'proxmox-pbs',
+        identity: { hostname: 'pbs01' },
+        agent: { agentId: 'pbs-host-agent' },
+      }),
+      makeAgentResource({
+        id: 'pbs-provider-resource',
+        type: 'pbs',
+        name: 'pbs01',
+        displayName: 'pbs01',
+        platformId: 'pbs01',
+        platformType: 'proxmox-pbs',
+        sourceType: 'api',
+        identity: { hostname: 'pbs01' },
+        agent: { agentId: 'pbs-provider-agent' },
+      }),
+    ];
+    mockWsStore.state.connectedInfrastructure = [
+      makeHostInfrastructureItem({
+        id: 'pbs:pbs01',
+        name: 'pbs01',
+        displayName: 'pbs01',
+        hostname: 'pbs01',
+        scopeAgentId: 'pbs-host-agent',
+        surfaces: [
+          {
+            id: 'agent:pbs-host-agent',
+            kind: 'agent',
+            label: 'Host telemetry',
+            controlId: 'pbs-host-agent',
+          },
+          {
+            id: 'pbs:pbs01',
+            kind: 'pbs',
+            label: 'PBS data',
+          },
+        ],
+      }),
+    ];
+    listAssignmentsMock.mockResolvedValue([
+      {
+        agent_id: 'pbs-host-agent',
+        profile_id: 'profile-a',
+        updated_at: new Date().toISOString(),
+      },
+    ]);
+
+    render(() => <AgentProfilesPanel />);
+
+    const agentCells = await screen.findAllByText('pbs01');
+    expect(agentCells).toHaveLength(1);
+    expect(screen.getAllByRole('combobox')).toHaveLength(1);
+    await waitFor(() => {
+      expect(screen.getByRole('combobox')).toHaveValue('profile-a');
+    });
+  });
+
   it('excludes offline assignable resources from agent assignments', async () => {
     mockResources = [makeAgentResource({ displayName: 'Offline Agent', status: 'offline' })];
     mockWsStore.state.connectedInfrastructure = [

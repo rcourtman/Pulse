@@ -105,7 +105,7 @@ export const useAgentProfilesPanelState = () => {
       .filter(isAgentProfileAssignableResource)
       .filter((resource) => isConnectedHealthStatus(resource.status))
       .filter((resource) => {
-        if (resource.type === 'agent') {
+        if (resource.type === 'agent' || resource.type === 'pbs' || resource.type === 'pmg') {
           const agentId = getActionableAgentIdFromResource(resource);
           return !agentId || activeSurfaceControlIds().agent.has(agentId);
         }
