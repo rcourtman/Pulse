@@ -14,20 +14,21 @@ import (
 )
 
 type mockCollector struct {
-	hostInfoFn      func(ctx context.Context) (*gohost.InfoStat, error)
-	hostUptimeFn    func(ctx context.Context) (uint64, error)
-	metricsFn       func(ctx context.Context, exclude []string) (hostmetrics.Snapshot, error)
-	sensorsLocalFn  func(ctx context.Context) (string, error)
-	sensorsParseFn  func(jsonStr string) (*sensors.TemperatureData, error)
-	sensorsPowerFn  func(ctx context.Context) (*sensors.PowerData, error)
-	raidArraysFn    func(ctx context.Context) ([]agentshost.RAIDArray, error)
-	unraidStorageFn func(ctx context.Context) (*agentshost.UnraidStorage, error)
-	cephStatusFn    func(ctx context.Context) (*CephClusterStatus, error)
-	smartLocalFn    func(ctx context.Context, exclude []string, unraid *agentshost.UnraidStorage) ([]DiskSMART, error)
-	nowFn           func() time.Time
-	goos            string
-	readFileFn      func(name string) ([]byte, error)
-	netInterfacesFn func() ([]net.Interface, error)
+	hostInfoFn               func(ctx context.Context) (*gohost.InfoStat, error)
+	hostUptimeFn             func(ctx context.Context) (uint64, error)
+	metricsFn                func(ctx context.Context, exclude []string) (hostmetrics.Snapshot, error)
+	metricsWithDiskFiltersFn func(ctx context.Context, exclude, include []string) (hostmetrics.Snapshot, error)
+	sensorsLocalFn           func(ctx context.Context) (string, error)
+	sensorsParseFn           func(jsonStr string) (*sensors.TemperatureData, error)
+	sensorsPowerFn           func(ctx context.Context) (*sensors.PowerData, error)
+	raidArraysFn             func(ctx context.Context) ([]agentshost.RAIDArray, error)
+	unraidStorageFn          func(ctx context.Context) (*agentshost.UnraidStorage, error)
+	cephStatusFn             func(ctx context.Context) (*CephClusterStatus, error)
+	smartLocalFn             func(ctx context.Context, exclude []string, unraid *agentshost.UnraidStorage) ([]DiskSMART, error)
+	nowFn                    func() time.Time
+	goos                     string
+	readFileFn               func(name string) ([]byte, error)
+	netInterfacesFn          func() ([]net.Interface, error)
 
 	hostnameFn                     func() (string, error)
 	lookupIPFn                     func(host string) ([]net.IP, error)
@@ -65,6 +66,13 @@ func (m *mockCollector) Metrics(ctx context.Context, exclude []string) (hostmetr
 		return m.metricsFn(ctx, exclude)
 	}
 	return hostmetrics.Snapshot{}, nil
+}
+
+func (m *mockCollector) MetricsWithDiskFilters(ctx context.Context, exclude, include []string) (hostmetrics.Snapshot, error) {
+	if m.metricsWithDiskFiltersFn != nil {
+		return m.metricsWithDiskFiltersFn(ctx, exclude, include)
+	}
+	return m.Metrics(ctx, exclude)
 }
 
 func (m *mockCollector) SensorsLocal(ctx context.Context) (string, error) {

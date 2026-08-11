@@ -148,6 +148,60 @@ func TestCollectDisksExcludesFreeBSDFdescfsBeforeUsage(t *testing.T) {
 	}
 }
 
+func TestCollectDisksIncludesExplicitTmpfsMount(t *testing.T) {
+	origPartitions := diskPartitions
+	origUsage := diskUsage
+	t.Cleanup(func() {
+		diskPartitions = origPartitions
+		diskUsage = origUsage
+	})
+
+	diskPartitions = func(context.Context, bool) ([]godisk.PartitionStat, error) {
+		return []godisk.PartitionStat{
+			{Device: "log2ram", Mountpoint: "/var/log", Fstype: "tmpfs"},
+			{Device: "tmpfs", Mountpoint: "/run", Fstype: "tmpfs"},
+		}, nil
+	}
+	diskUsage = func(_ context.Context, path string) (*godisk.UsageStat, error) {
+		return &godisk.UsageStat{
+			Path:        path,
+			Total:       1024,
+			Used:        768,
+			Free:        256,
+			UsedPercent: 75,
+		}, nil
+	}
+
+	disks := collectDisksWithIncludes(context.Background(), nil, []string{"/var/log"})
+	if len(disks) != 1 || disks[0].Mountpoint != "/var/log" || disks[0].Filesystem != "tmpfs" {
+		t.Fatalf("explicit tmpfs include was not reported correctly: %+v", disks)
+	}
+}
+
+func TestCollectDisksExplicitExcludeWinsOverInclude(t *testing.T) {
+	origPartitions := diskPartitions
+	origUsage := diskUsage
+	t.Cleanup(func() {
+		diskPartitions = origPartitions
+		diskUsage = origUsage
+	})
+
+	diskPartitions = func(context.Context, bool) ([]godisk.PartitionStat, error) {
+		return []godisk.PartitionStat{
+			{Device: "log2ram", Mountpoint: "/var/log", Fstype: "tmpfs"},
+		}, nil
+	}
+	diskUsage = func(context.Context, string) (*godisk.UsageStat, error) {
+		t.Fatal("excluded mount should not be queried")
+		return nil, nil
+	}
+
+	disks := collectDisksWithIncludes(context.Background(), []string{"/var/log"}, []string{"/var/log"})
+	if len(disks) != 0 {
+		t.Fatalf("explicit exclusion should win over include: %+v", disks)
+	}
+}
+
 func TestCollectSplitsReclaimableCache(t *testing.T) {
 	origVirtualMemory := virtualMemory
 	t.Cleanup(func() { virtualMemory = origVirtualMemory })

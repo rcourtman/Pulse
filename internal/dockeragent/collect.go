@@ -109,7 +109,7 @@ func (a *Agent) buildReport(ctx context.Context) (agentsdocker.Report, error) {
 	uptime := readSystemUptime()
 
 	metricsCtx, metricsCancel := context.WithTimeout(ctx, 10*time.Second)
-	snapshot, err := hostmetricsCollect(metricsCtx, a.cfg.DiskExclude)
+	snapshot, err := hostmetricsCollectWithDiskFilters(metricsCtx, a.cfg.DiskExclude, a.cfg.DiskInclude)
 	metricsCancel()
 	if err != nil {
 		return agentsdocker.Report{}, fmt.Errorf("collect host metrics: %w", err)

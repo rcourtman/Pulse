@@ -38,6 +38,11 @@ and target lists must remain local. Detection remains behind the existing
 Pulse Pro availability entitlement; the push adapter cannot turn Relay access
 into availability-probe entitlement.
 
+`cmd/pulse-agent/main.go` treats disk inclusion as explicit local operator
+configuration. It may override Pulse's automatic filesystem suppression only;
+it must not override a matching operator exclusion or introduce remote
+authority to expand the reported filesystem set silently.
+
 ## Canonical Files
 
 1. `SECURITY.md`

@@ -305,6 +305,7 @@ sudo chmod 0700 /usr/local/libexec/pulse-queue-depth
 | `--enable-commands` | `PULSE_ENABLE_COMMANDS` | Enable Pulse command execution: Docker / Podman container actions from the UI (start/stop/restart/update), Patrol actions, and Proxmox LXC Docker inventory (disabled by default) | `false` |
 | `--disable-commands` | `PULSE_DISABLE_COMMANDS` | **Deprecated** (commands are disabled by default) | - |
 | `--disk-exclude` | `PULSE_DISK_EXCLUDE` | Device name/path or mount point patterns to exclude from disk and S.M.A.R.T. monitoring (repeatable or CSV) | *(none)* |
+| `--disk-include` | `PULSE_DISK_INCLUDE` | Device name/path or mount point patterns to include despite automatic filesystem filtering (repeatable or CSV) | *(none)* |
 | `--kubeconfig` | `PULSE_KUBECONFIG` | Kubeconfig path (optional) | *(auto)* |
 | `--kube-context` | `PULSE_KUBE_CONTEXT` | Kubeconfig context (optional) | *(auto)* |
 | `--kube-include-namespace` | `PULSE_KUBE_INCLUDE_NAMESPACES` | Limit namespaces (repeatable or CSV, wildcards supported) | *(all)* |
@@ -488,6 +489,23 @@ PULSE_DISK_EXCLUDE=/dev/sda,*pbs*,/var/run/samba/fd
 Exclusions are applied before filesystem usage, disk I/O, and S.M.A.R.T. collection.
 On linked Proxmox hosts, matching physical-disk health and SSD wear alerts are
 also suppressed.
+
+### Include an Automatically Filtered Filesystem
+
+Pulse normally filters pseudo-filesystems such as `tmpfs` to keep system mounts
+out of disk monitoring. A specific mount can be opted back in when its capacity
+matters, such as a log2ram volume mounted at `/var/log`.
+
+```bash
+pulse-agent --disk-include /var/log
+
+# Via environment variable
+PULSE_DISK_INCLUDE=/var/log
+```
+
+Include patterns use the same exact, prefix, and contains matching rules as
+exclusions. They only override automatic filesystem filtering. An explicit
+`--disk-exclude` match still wins.
 
 ## S.M.A.R.T. Disk Health
 

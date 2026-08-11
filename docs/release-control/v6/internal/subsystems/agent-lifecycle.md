@@ -161,6 +161,12 @@ identity, validity, and trust are observation payloads only. They do not renew
 the target lease, agent enrollment, host heartbeat, or command readiness beyond
 the accepted report's existing server-receipt evidence.
 
+Explicit disk inclusion is an agent lifecycle input. The CLI, persisted
+service arguments, unified host agent, and Docker/Podman agent must carry the
+same include list to collection. Includes may opt a matching filesystem back
+in after Pulse's automatic pseudo-filesystem filtering, while an explicit
+operator exclusion remains authoritative.
+
 ## Canonical Files
 
 1. `internal/api/agent_install_command_shared.go`

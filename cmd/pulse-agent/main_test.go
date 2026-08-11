@@ -1155,19 +1155,22 @@ func TestLoadConfig(t *testing.T) {
 		}
 	})
 
-	t.Run("tags and repeated disk exclusions", func(t *testing.T) {
+	t.Run("tags and repeated disk filters", func(t *testing.T) {
 		cfg, err := loadConfig([]string{
 			"-token", "T",
 			"-tag", "t1",
 			"-tag", "t2",
 			"-disk-exclude", "sdb",
 			"-disk-exclude", "/mnt/pve/local-backup",
+			"-disk-include", "/var/log",
 		}, func(s string) string {
 			switch s {
 			case "PULSE_TAGS":
 				return "e1,e2"
 			case "PULSE_DISK_EXCLUDE":
 				return "/dev/sda,/var/run/samba/fd"
+			case "PULSE_DISK_INCLUDE":
+				return "log2ram"
 			}
 			return ""
 		})
@@ -1181,6 +1184,10 @@ func TestLoadConfig(t *testing.T) {
 		expectedDisk := []string{"/dev/sda", "/var/run/samba/fd", "sdb", "/mnt/pve/local-backup"}
 		if !reflect.DeepEqual(cfg.DiskExclude, expectedDisk) {
 			t.Errorf("expected disk exclude %v, got %v", expectedDisk, cfg.DiskExclude)
+		}
+		expectedIncludedDisk := []string{"log2ram", "/var/log"}
+		if !reflect.DeepEqual(cfg.DiskInclude, expectedIncludedDisk) {
+			t.Errorf("expected disk include %v, got %v", expectedIncludedDisk, cfg.DiskInclude)
 		}
 	})
 }

@@ -248,6 +248,14 @@ func MatchesDiskExclude(device, mountpoint string, excludePatterns []string) boo
 	return false
 }
 
+// MatchesDiskInclude checks whether a disk was explicitly opted back into
+// monitoring by device or mountpoint. Include patterns use the same matching
+// rules as exclusions, but only override Pulse's automatic filesystem filter.
+// An explicit user exclusion still takes precedence.
+func MatchesDiskInclude(device, mountpoint string, includePatterns []string) bool {
+	return MatchesDiskExclude(device, mountpoint, includePatterns)
+}
+
 // virtualBlockDevicePrefixes are device-name prefixes for virtual or
 // pseudo block devices that should never be treated as physical disks.
 // The list is shared between the host agent (which skips these during

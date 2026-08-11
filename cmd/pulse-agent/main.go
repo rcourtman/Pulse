@@ -417,6 +417,7 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 			EnableCommands:      cfg.EnableCommands,
 			Enroll:              cfg.Enroll,
 			DiskExclude:         cfg.DiskExclude,
+			DiskInclude:         cfg.DiskInclude,
 			StateDir:            cfg.StateDir,
 			ReportIP:            cfg.ReportIP,
 			DisableCeph:         cfg.DisableCeph,
@@ -469,6 +470,7 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 			IncludeTasks:        true,
 			CollectDiskMetrics:  false,
 			DiskExclude:         cfg.DiskExclude,
+			DiskInclude:         cfg.DiskInclude,
 			Targets:             dockerReportTargets(cfg),
 		}
 
@@ -855,6 +857,7 @@ type Config struct {
 
 	// Disk filtering
 	DiskExclude []string // Mount points or patterns to exclude from disk monitoring
+	DiskInclude []string // Devices or mount points to opt into monitoring despite automatic filtering
 
 	// Network configuration
 	ReportIP    string // IP address to report (for multi-NIC systems)
@@ -988,6 +991,7 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 	envKubeMaxPods := strings.TrimSpace(getenv("PULSE_KUBE_MAX_PODS"))
 	envStateDir := strings.TrimSpace(getenv("PULSE_STATE_DIR"))
 	envDiskExclude := strings.TrimSpace(getenv("PULSE_DISK_EXCLUDE"))
+	envDiskInclude := strings.TrimSpace(getenv("PULSE_DISK_INCLUDE"))
 	envReportIP := strings.TrimSpace(getenv("PULSE_REPORT_IP"))
 	envDisableCeph := strings.TrimSpace(getenv("PULSE_DISABLE_CEPH"))
 	envObserversFile := strings.TrimSpace(getenv("PULSE_OBSERVERS_FILE"))
@@ -1082,6 +1086,8 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 	fs.Var(&kubeExcludeNamespaceFlags, "kube-exclude-namespace", "Namespace to exclude (repeatable)")
 	var diskExcludeFlags multiValue
 	fs.Var(&diskExcludeFlags, "disk-exclude", "Device name/path or mount point pattern to exclude from disk monitoring (repeatable)")
+	var diskIncludeFlags multiValue
+	fs.Var(&diskIncludeFlags, "disk-include", "Device name/path or mount point pattern to include despite automatic filesystem filtering (repeatable)")
 
 	if err := fs.Parse(args); err != nil {
 		return Config{}, err
@@ -1161,6 +1167,7 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 	kubeIncludeNamespaces := gatherCSV(envKubeIncludeNamespaces, kubeIncludeNamespaceFlags)
 	kubeExcludeNamespaces := gatherCSV(envKubeExcludeNamespaces, kubeExcludeNamespaceFlags)
 	diskExclude := gatherCSV(envDiskExclude, diskExcludeFlags)
+	diskInclude := gatherCSV(envDiskInclude, diskIncludeFlags)
 
 	// Check if Docker was explicitly configured via fs or env. An explicit
 	// local disable is a privacy boundary and cannot be reversed by remote
@@ -1222,6 +1229,7 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 		KubeMaxPods:               kubeMaxPods,
 		StateDir:                  stateDir,
 		DiskExclude:               diskExclude,
+		DiskInclude:               diskInclude,
 		ReportIP:                  strings.TrimSpace(*reportIPFlag),
 		DisableCeph:               *disableCephFlag,
 		SelfTest:                  *selfTest,

@@ -44,8 +44,16 @@ type Snapshot struct {
 }
 
 // Collect gathers a point-in-time snapshot of host resource utilisation.
-// diskExclude contains user-defined patterns for mount points to exclude.
+// diskExclude contains user-defined patterns for devices or mount points to
+// exclude. It preserves the original API for callers that do not need includes.
 func Collect(ctx context.Context, diskExclude []string) (Snapshot, error) {
+	return CollectWithDiskFilters(ctx, diskExclude, nil)
+}
+
+// CollectWithDiskFilters gathers a snapshot with user-defined disk exclusions
+// and includes. Includes opt matching filesystems back in after Pulse's
+// automatic pseudo-filesystem filtering. Explicit exclusions always win.
+func CollectWithDiskFilters(ctx context.Context, diskExclude, diskInclude []string) (Snapshot, error) {
 	collectCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
@@ -127,7 +135,7 @@ func Collect(ctx context.Context, diskExclude []string) (Snapshot, error) {
 		SwapUsed:   swapUsed,
 	}
 
-	snapshot.Disks = collectDisks(collectCtx, diskExclude)
+	snapshot.Disks = collectDisksWithIncludes(collectCtx, diskExclude, diskInclude)
 	snapshot.DiskIO = collectDiskIO(collectCtx, diskExclude)
 	snapshot.Network = collectNetwork(collectCtx)
 
@@ -219,6 +227,10 @@ func spotCPUUsage(ctx context.Context) (float64, error) {
 }
 
 func collectDisks(ctx context.Context, diskExclude []string) []agentshost.Disk {
+	return collectDisksWithIncludes(ctx, diskExclude, nil)
+}
+
+func collectDisksWithIncludes(ctx context.Context, diskExclude, diskInclude []string) []agentshost.Disk {
 	partitions, err := diskPartitions(ctx, true)
 	if err != nil {
 		log.Debug().Err(err).Msg("disk: failed to list partitions")
@@ -288,7 +300,8 @@ func collectDisks(ctx context.Context, diskExclude []string) []agentshost.Disk {
 		// - Virtual/pseudo filesystems (tmpfs, devtmpfs, cgroup, etc.)
 		// - Container overlay paths (Docker/Podman layers on ZFS, including TrueNAS .ix-apps)
 		// See issues #505, #690, #718, #790.
-		if shouldSkip, _ := fsfilters.ShouldSkipFilesystem(part.Fstype, part.Mountpoint, usage.Total, usage.Used); shouldSkip {
+		explicitlyIncluded := fsfilters.MatchesDiskInclude(part.Device, part.Mountpoint, diskInclude)
+		if shouldSkip, _ := fsfilters.ShouldSkipFilesystem(part.Fstype, part.Mountpoint, usage.Total, usage.Used); shouldSkip && !explicitlyIncluded {
 			continue
 		}
 

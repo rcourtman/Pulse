@@ -1678,3 +1678,37 @@ func TestIssue1647ReconnectAfterPersistentDaemonGone(t *testing.T) {
 		t.Fatalf("healthy collects must not trigger further reconnects, got %d", reconnects)
 	}
 }
+
+func TestBuildReportForwardsExplicitDiskIncludesAndExcludes(t *testing.T) {
+	var gotExclude, gotInclude []string
+	swap(t, &hostmetricsCollectWithDiskFilters, func(_ context.Context, exclude, include []string) (hostmetrics.Snapshot, error) {
+		gotExclude = append([]string(nil), exclude...)
+		gotInclude = append([]string(nil), include...)
+		return hostmetrics.Snapshot{}, nil
+	})
+
+	agent := &Agent{
+		cfg: Config{
+			AgentID:     "docker-agent-1",
+			Interval:    30 * time.Second,
+			DiskExclude: []string{"/mnt/private"},
+			DiskInclude: []string{"/mnt/containers"},
+		},
+		docker: &fakeDockerClient{
+			infoFunc: func(context.Context) (systemtypes.Info, error) {
+				return systemtypes.Info{ID: "daemon", ServerVersion: "24.0.0"}, nil
+			},
+		},
+		logger: zerolog.Nop(),
+	}
+
+	if _, err := agent.buildReport(context.Background()); err != nil {
+		t.Fatalf("buildReport() failed: %v", err)
+	}
+	if got := strings.Join(gotExclude, ","); got != "/mnt/private" {
+		t.Fatalf("disk excludes = %q, want /mnt/private", got)
+	}
+	if got := strings.Join(gotInclude, ","); got != "/mnt/containers" {
+		t.Fatalf("disk includes = %q, want /mnt/containers", got)
+	}
+}

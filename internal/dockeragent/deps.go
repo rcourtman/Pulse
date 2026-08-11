@@ -15,8 +15,14 @@ import (
 )
 
 var (
-	connectRuntimeFn         = connectRuntime
-	hostmetricsCollect       = hostmetrics.Collect
+	connectRuntimeFn                  = connectRuntime
+	hostmetricsCollect                = hostmetrics.Collect
+	hostmetricsCollectWithDiskFilters = func(ctx context.Context, exclude, include []string) (hostmetrics.Snapshot, error) {
+		if len(include) == 0 {
+			return hostmetricsCollect(ctx, exclude)
+		}
+		return hostmetrics.CollectWithDiskFilters(ctx, exclude, include)
+	}
 	newTickerFn              = time.NewTicker
 	randomDurationFn         = randomDuration
 	nowFn                    = time.Now

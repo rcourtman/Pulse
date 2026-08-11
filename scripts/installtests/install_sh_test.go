@@ -454,6 +454,7 @@ func TestBuildPlistProgramArgumentsUsesSharedExecArgs(t *testing.T) {
 		HOSTNAME_OVERRIDE="Richard's Mac & Mini"
 		STATE_DIR="/var/lib/pulse-agent"
 		DISK_EXCLUDES=("Time Machine")
+		DISK_INCLUDES=("/var/log")
 		build_plist_program_arguments "/usr/local/bin/pulse-agent"
 		printf '%s\n' "$PLIST_ARGS"
 	`
@@ -479,6 +480,8 @@ func TestBuildPlistProgramArgumentsUsesSharedExecArgs(t *testing.T) {
 		`<string>/var/lib/pulse-agent</string>`,
 		`<string>--disk-exclude</string>`,
 		`<string>Time Machine</string>`,
+		`<string>--disk-include</string>`,
+		`<string>/var/log</string>`,
 	}
 	for _, needle := range required {
 		if !strings.Contains(got, needle) {
@@ -818,7 +821,7 @@ func TestInstallSHSupportsSavedStateUpdateMode(t *testing.T) {
 		`recover_connection_state_from_arg_stream`,
 		`recover_token_from_default_agent_token_file() {`,
 		`normalize_recovered_agent_arg_key() {`,
-		`-url|-pulse-url|-token|-token-file|-interval|-agent-id|-hostname|-report-ip|-cacert|-server-fingerprint|-observers-file|-health-addr|-state-dir|-kubeconfig|-proxmox-type|-disk-exclude)`,
+		`-url|-pulse-url|-token|-token-file|-interval|-agent-id|-hostname|-report-ip|-cacert|-server-fingerprint|-observers-file|-health-addr|-state-dir|-kubeconfig|-proxmox-type|-disk-exclude|-disk-include)`,
 		`--enable-host|-enable-host|--enable-host=true|-enable-host=true)`,
 		`recover_connection_state_from_env_stream`,
 		`recovered_connection_state_ready() {`,
@@ -870,6 +873,7 @@ func TestInstallSHRecoversV5ProcessArgsForSavedStateUpdate(t *testing.T) {
 		KUBE_INCLUDE_ALL_PODS="false"
 		KUBE_INCLUDE_ALL_DEPLOYMENTS="false"
 		DISK_EXCLUDES=()
+		DISK_INCLUDES=()
 		RUNTIME_TOKEN_FILE="/var/lib/pulse-agent/token"
 ` + extractInstallShellFunction(t, "strip_recovered_arg_quotes") + `
 ` + extractInstallShellFunction(t, "normalize_recovered_agent_arg_key") + `
@@ -898,6 +902,8 @@ pve-one
 --disk-exclude
 /dev/sda
 --disk-exclude=/var/run/samba/fd
+--disk-include
+/var/log
 ARGS
 		build_exec_args
 		printf 'URL=%s\nTOKEN=%s\nDOCKER=%s\nDOCKER_EXPLICIT=%s\nINSECURE=%s\nAGENT_ID=%s\nHOSTNAME=%s\nEXEC_ARGS=%s\n' \
@@ -921,6 +927,7 @@ ARGS
 		"--enable-docker",
 		"--disk-exclude /dev/sda",
 		"--disk-exclude /var/run/samba/fd",
+		"--disk-include /var/log",
 	}
 	for _, needle := range required {
 		if !strings.Contains(got, needle) {

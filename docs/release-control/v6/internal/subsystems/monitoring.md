@@ -387,6 +387,11 @@ on this path: agent ingest is not gated on `PULSE_MOCK_KEEP_REAL_POLLING`, and
 the read state is mock-substituted either way, so injecting real hosts would
 only graft them onto fixture data.
 
+Host and container-runtime disk collection supports an explicit include list
+for filesystems hidden by Pulse's automatic virtual/container filtering. The
+include list is bounded to that automatic filter; explicit disk exclusions
+still win and disk-I/O filtering retains its existing exclusion semantics.
+
 ## Canonical Files
 
 1. `internal/monitoring/monitor.go`

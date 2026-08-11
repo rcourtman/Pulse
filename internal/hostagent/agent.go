@@ -69,6 +69,7 @@ type Config struct {
 
 	// Disk filtering
 	DiskExclude []string // Mount points or path prefixes to exclude from disk monitoring
+	DiskInclude []string // Devices or mount points to opt into monitoring despite automatic filtering
 
 	// State directory for persistent files (agent-id, proxmox registration, etc.)
 	StateDir string // Default: /var/lib/pulse-agent
@@ -617,6 +618,7 @@ type runtimeConfigSnapshot struct {
 	interval        time.Duration
 	commandsEnabled bool
 	diskExclude     []string
+	diskInclude     []string
 	tags            []string
 	reportIP        string
 	disableCeph     bool
@@ -646,6 +648,7 @@ func (a *Agent) runtimeConfigSnapshot() runtimeConfigSnapshot {
 		interval:        a.interval,
 		commandsEnabled: a.cfg.EnableCommands,
 		diskExclude:     append([]string(nil), a.cfg.DiskExclude...),
+		diskInclude:     append([]string(nil), a.cfg.DiskInclude...),
 		tags:            append([]string(nil), a.cfg.Tags...),
 		reportIP:        a.reportIP,
 		disableCeph:     a.cfg.DisableCeph,
@@ -1104,7 +1107,7 @@ func (a *Agent) buildReport(ctx context.Context) (agentshost.Report, error) {
 	if err != nil {
 		a.logger.Debug().Err(err).Msg("Failed to collect host uptime; defaulting to 0")
 	}
-	snapshot, err := a.collector.Metrics(collectCtx, runtimeConfig.diskExclude)
+	snapshot, err := collectMetricsWithDiskFilters(collectCtx, a.collector, runtimeConfig.diskExclude, runtimeConfig.diskInclude)
 	if err != nil {
 		return agentshost.Report{}, fmt.Errorf("collect metrics: %w", err)
 	}

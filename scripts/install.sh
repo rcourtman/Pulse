@@ -21,6 +21,7 @@
 #   --interval <dur>    Reporting interval (default: 30s)
 #   --agent-id <id>     Custom agent identifier (default: auto-generated)
 #   --disk-exclude <pattern>  Exclude device names/paths or mount points (repeatable)
+#   --disk-include <pattern>  Include a device or mount point despite automatic filtering (repeatable)
 #   --insecure          Skip TLS certificate verification
 #   --server-fingerprint <sha256> Pin the Pulse server leaf certificate
 #   --observers-file <path> Report to additional observer Pulse instances
@@ -95,6 +96,7 @@ KUBECONFIG_PATH=""  # Path to kubeconfig file for Kubernetes monitoring
 KUBE_INCLUDE_ALL_PODS="false"
 KUBE_INCLUDE_ALL_DEPLOYMENTS="false"
 DISK_EXCLUDES=()  # Array for multiple --disk-exclude values
+DISK_INCLUDES=()  # Array for multiple --disk-include values
 AGENT_LOG_FILE="" # When set, pass --log-file so the agent's rotating log writer engages (set per platform)
 DEFAULT_STATE_DIR="/var/lib/pulse-agent"
 STATE_DIR="$DEFAULT_STATE_DIR"  # Persistent state directory (overridden per platform)
@@ -473,6 +475,7 @@ Options:
   --report-ip <ip>        IP address to report to Pulse (for multi-NIC systems)
   --state-dir <path>      Override persistent state directory
   --disk-exclude <pattern> Exclude device names/paths or mount points (repeatable)
+  --disk-include <pattern> Include a device or mount point despite automatic filtering (repeatable)
   --insecure              Skip TLS verification (auto-enabled for http:// URLs)
   --cacert <path>         Custom CA certificate for TLS (used by curl and agent)
   --server-fingerprint <sha256> Pin the Pulse server leaf certificate for agent connections
@@ -1965,6 +1968,9 @@ build_exec_arg_items() {
     for pattern in ${DISK_EXCLUDES[@]+"${DISK_EXCLUDES[@]}"}; do
         EXEC_ARG_ITEMS+=(--disk-exclude "$pattern")
     done
+    for pattern in ${DISK_INCLUDES[@]+"${DISK_INCLUDES[@]}"}; do
+        EXEC_ARG_ITEMS+=(--disk-include "$pattern")
+    done
 }
 
 join_exec_arg_items() {
@@ -2301,6 +2307,10 @@ apply_recovered_agent_arg_value() {
             DISK_EXCLUDES+=("$value")
             RECOVERED_AGENT_ARG_STATE="true"
             ;;
+        disk-include)
+            DISK_INCLUDES+=("$value")
+            RECOVERED_AGENT_ARG_STATE="true"
+            ;;
     esac
 }
 
@@ -2328,10 +2338,10 @@ recover_connection_state_from_arg_stream() {
         fi
 
         case "$arg" in
-            --url|--pulse-url|--token|--token-file|--interval|--agent-id|--hostname|--report-ip|--cacert|--server-fingerprint|--observers-file|--health-addr|--state-dir|--kubeconfig|--proxmox-type|--disk-exclude|-url|-pulse-url|-token|-token-file|-interval|-agent-id|-hostname|-report-ip|-cacert|-server-fingerprint|-observers-file|-health-addr|-state-dir|-kubeconfig|-proxmox-type|-disk-exclude)
+            --url|--pulse-url|--token|--token-file|--interval|--agent-id|--hostname|--report-ip|--cacert|--server-fingerprint|--observers-file|--health-addr|--state-dir|--kubeconfig|--proxmox-type|--disk-exclude|--disk-include|-url|-pulse-url|-token|-token-file|-interval|-agent-id|-hostname|-report-ip|-cacert|-server-fingerprint|-observers-file|-health-addr|-state-dir|-kubeconfig|-proxmox-type|-disk-exclude|-disk-include)
                 pending_key=$(normalize_recovered_agent_arg_key "$arg")
                 ;;
-            --url=*|--pulse-url=*|--token=*|--token-file=*|--interval=*|--agent-id=*|--hostname=*|--report-ip=*|--cacert=*|--server-fingerprint=*|--observers-file=*|--health-addr=*|--state-dir=*|--kubeconfig=*|--proxmox-type=*|--disk-exclude=*|-url=*|-pulse-url=*|-token=*|-token-file=*|-interval=*|-agent-id=*|-hostname=*|-report-ip=*|-cacert=*|-server-fingerprint=*|-observers-file=*|-health-addr=*|-state-dir=*|-kubeconfig=*|-proxmox-type=*|-disk-exclude=*)
+            --url=*|--pulse-url=*|--token=*|--token-file=*|--interval=*|--agent-id=*|--hostname=*|--report-ip=*|--cacert=*|--server-fingerprint=*|--observers-file=*|--health-addr=*|--state-dir=*|--kubeconfig=*|--proxmox-type=*|--disk-exclude=*|--disk-include=*|-url=*|-pulse-url=*|-token=*|-token-file=*|-interval=*|-agent-id=*|-hostname=*|-report-ip=*|-cacert=*|-server-fingerprint=*|-observers-file=*|-health-addr=*|-state-dir=*|-kubeconfig=*|-proxmox-type=*|-disk-exclude=*|-disk-include=*)
                 key="${arg%%=*}"
                 value="${arg#*=}"
                 apply_recovered_agent_arg_value "$key" "$value"
@@ -2928,6 +2938,7 @@ while [[ $# -gt 0 ]]; do
         --kube-include-all-pods) KUBE_INCLUDE_ALL_PODS="true"; shift ;;
         --kube-include-all-deployments) KUBE_INCLUDE_ALL_DEPLOYMENTS="true"; shift ;;
         --disk-exclude) DISK_EXCLUDES+=("$2"); shift 2 ;;
+        --disk-include) DISK_INCLUDES+=("$2"); shift 2 ;;
         --non-interactive) NON_INTERACTIVE="true"; shift ;;
         --token-file) TOKEN_FILE_PATH="$2"; shift 2 ;;
         --pulse-url) PULSE_URL="$2"; shift 2 ;;

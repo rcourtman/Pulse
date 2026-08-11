@@ -27,6 +27,11 @@ pin trusted proxy CIDRs to the provider network, block tenant bridge access to
 cloud metadata endpoints at the host firewall when possible, and pin the Traefik
 TLS floor in the dynamic config.
 
+Installer argument persistence includes repeated `--disk-include` values. An
+upgrade must recover those values from both split and `--key=value` service
+arguments and reproduce them in the generated systemd command without
+discarding existing explicit disk exclusions.
+
 ## Canonical Files
 
 1. `internal/updates/`

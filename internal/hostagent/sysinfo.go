@@ -44,6 +44,17 @@ type SystemCollector interface {
 	LookPath(file string) (string, error)
 }
 
+type diskFilterMetricsCollector interface {
+	MetricsWithDiskFilters(ctx context.Context, exclude, include []string) (hostmetrics.Snapshot, error)
+}
+
+func collectMetricsWithDiskFilters(ctx context.Context, collector SystemCollector, exclude, include []string) (hostmetrics.Snapshot, error) {
+	if filtered, ok := collector.(diskFilterMetricsCollector); ok {
+		return filtered.MetricsWithDiskFilters(ctx, exclude, include)
+	}
+	return collector.Metrics(ctx, exclude)
+}
+
 // NewDefaultCollector returns a SystemCollector that uses real OS calls.
 func NewDefaultCollector() SystemCollector {
 	return &defaultCollector{}
@@ -61,6 +72,10 @@ func (c *defaultCollector) HostUptime(ctx context.Context) (uint64, error) {
 
 func (c *defaultCollector) Metrics(ctx context.Context, exclude []string) (hostmetrics.Snapshot, error) {
 	return hostmetrics.Collect(ctx, exclude)
+}
+
+func (c *defaultCollector) MetricsWithDiskFilters(ctx context.Context, exclude, include []string) (hostmetrics.Snapshot, error) {
+	return hostmetrics.CollectWithDiskFilters(ctx, exclude, include)
 }
 
 func (c *defaultCollector) SensorsLocal(ctx context.Context) (string, error) {

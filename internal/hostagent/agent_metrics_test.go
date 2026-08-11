@@ -476,6 +476,38 @@ rdevId.29=
 	})
 }
 
+func TestBuildReportForwardsExplicitDiskIncludesAndExcludes(t *testing.T) {
+	var gotExclude, gotInclude []string
+	mc := &mockCollector{
+		metricsWithDiskFiltersFn: func(_ context.Context, exclude, include []string) (hostmetrics.Snapshot, error) {
+			gotExclude = append([]string(nil), exclude...)
+			gotInclude = append([]string(nil), include...)
+			return hostmetrics.Snapshot{}, nil
+		},
+	}
+	agent, err := New(Config{
+		APIToken:    "token",
+		AgentID:     "agent-1",
+		LogLevel:    -1,
+		Collector:   mc,
+		DiskExclude: []string{"/mnt/private"},
+		DiskInclude: []string{"/mnt/containers"},
+	})
+	if err != nil {
+		t.Fatalf("New() failed: %v", err)
+	}
+
+	if _, err := agent.buildReport(context.Background()); err != nil {
+		t.Fatalf("buildReport() failed: %v", err)
+	}
+	if got := strings.Join(gotExclude, ","); got != "/mnt/private" {
+		t.Fatalf("disk excludes = %q, want /mnt/private", got)
+	}
+	if got := strings.Join(gotInclude, ","); got != "/mnt/containers" {
+		t.Fatalf("disk includes = %q, want /mnt/containers", got)
+	}
+}
+
 func TestBuildReportIncludesDarwinThermalState(t *testing.T) {
 	mc := &mockCollector{
 		goos:  "darwin",

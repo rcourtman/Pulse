@@ -35,6 +35,12 @@ directives reduce service blast radius while keeping the filesystem and device
 access needed for full host telemetry, Proxmox token setup, SMART, Docker, and
 NAS integrations.
 
+Disk monitoring normally filters pseudo-filesystems such as `tmpfs`. The local
+`--disk-include` option can opt a specific device or mount point back into
+capacity monitoring, for example a log2ram `/var/log` mount. This reports
+filesystem capacity and usage metadata. It does not read or transmit file
+contents. Local `--disk-exclude` rules still take precedence.
+
 Command execution is disabled by default. It can be enabled with
 `--enable-commands`, `PULSE_ENABLE_COMMANDS=true`, or the centralized agent
 command setting after enrollment. Leave it disabled for read-only monitoring.
