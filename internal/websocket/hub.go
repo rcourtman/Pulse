@@ -1783,6 +1783,15 @@ func (h *Hub) sendPing() {
 	h.BroadcastMessage(msg)
 }
 
+func isUnexpectedClientClose(err error) bool {
+	return websocket.IsUnexpectedCloseError(
+		err,
+		websocket.CloseNormalClosure,
+		websocket.CloseGoingAway,
+		websocket.CloseAbnormalClosure,
+	)
+}
+
 // readPump handles incoming messages from the client
 func (c *Client) readPump() {
 	defer func() {
@@ -1810,7 +1819,7 @@ func (c *Client) readPump() {
 	for {
 		_, message, err := c.conn.ReadMessage()
 		if err != nil {
-			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
+			if isUnexpectedClientClose(err) {
 				log.Error().Err(err).Str("client", c.id).Msg("webSocket read error")
 			} else {
 				log.Info().Err(err).Str("client", c.id).Msg("webSocket closed")

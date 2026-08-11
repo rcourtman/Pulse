@@ -9,8 +9,27 @@ import (
 	"testing"
 	"time"
 
+	gorillawebsocket "github.com/gorilla/websocket"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 )
+
+func TestNormalClientCloseIsNotAnError(t *testing.T) {
+	normal := &gorillawebsocket.CloseError{
+		Code: gorillawebsocket.CloseNormalClosure,
+		Text: "Component unmounting",
+	}
+	if isUnexpectedClientClose(normal) {
+		t.Fatal("normal component unmount was classified as an unexpected close")
+	}
+
+	policyViolation := &gorillawebsocket.CloseError{
+		Code: gorillawebsocket.ClosePolicyViolation,
+		Text: "authentication failed",
+	}
+	if !isUnexpectedClientClose(policyViolation) {
+		t.Fatal("policy violation was not classified as an unexpected close")
+	}
+}
 
 func TestClientSafeSendAndCloseAreSynchronized(t *testing.T) {
 	client := &Client{send: make(chan []byte, 1)}

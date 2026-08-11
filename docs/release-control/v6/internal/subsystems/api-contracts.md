@@ -20,6 +20,11 @@
 
 ## Purpose
 
+Browser WebSocket shutdown distinguishes ordinary client lifecycle from
+transport failure. Normal closure, navigation/going-away, and abnormal closure
+codes used by disconnected clients are informational; policy violations and
+other unexpected codes remain error-classified for operator visibility.
+
 Successful quick security setup is durable before its success response is
 emitted: Pulse writes the canonical auth environment file, activates the same
 hashed credentials in memory, and for root systemd installs reports both the
