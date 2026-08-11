@@ -5029,7 +5029,7 @@ func (m *Monitor) syncUnifiedAgentMetrics(store ResourceStoreInterface) {
 		}
 	}
 	if len(storeWrites) > 0 {
-		m.metricsStore.WriteBatchSync(storeWrites)
+		m.metricsStore.WriteBatchBounded(storeWrites)
 	}
 }
 
@@ -5144,7 +5144,7 @@ func (m *Monitor) syncUnifiedVMMetrics(store ResourceStoreInterface) {
 		}
 	}
 	if len(storeWrites) > 0 {
-		m.metricsStore.WriteBatchSync(storeWrites)
+		m.metricsStore.WriteBatchBounded(storeWrites)
 	}
 }
 
@@ -5242,7 +5242,7 @@ func (m *Monitor) syncUnifiedStorageMetrics(store ResourceStoreInterface) {
 		}
 	}
 	if len(storeWrites) > 0 {
-		m.metricsStore.WriteBatchSync(storeWrites)
+		m.metricsStore.WriteBatchBounded(storeWrites)
 	}
 }
 
@@ -5433,7 +5433,7 @@ func (m *Monitor) syncUnifiedAppContainerMetrics(store ResourceStoreInterface) {
 		}
 	}
 	if len(storeWrites) > 0 {
-		m.metricsStore.WriteBatchSync(storeWrites)
+		m.metricsStore.WriteBatchBounded(storeWrites)
 	}
 }
 

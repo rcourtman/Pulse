@@ -753,13 +753,11 @@ func (s *Store) WriteWithTier(resourceType, resourceID, metricType string, value
 	s.enqueueWrite(writeRequest{metrics: toWrite})
 }
 
-// WriteBatchSync bypasses the in-memory sample buffer but still serializes the
-// batch through the ingestion worker. Platform pollers call this concurrently;
-// letting every caller open its own SQLite transaction exhausts the shared
-// reader pool while those transactions wait on the single WAL writer lock.
-func (s *Store) WriteBatchSync(metrics []WriteMetric) {
+// prepareWriteBatch validates and normalizes a caller batch, logging and
+// dropping invalid entries. Shared by the synchronous and bounded batch paths.
+func (s *Store) prepareWriteBatch(metrics []WriteMetric) []bufferedMetric {
 	if len(metrics) == 0 {
-		return
+		return nil
 	}
 
 	batch := make([]bufferedMetric, 0, len(metrics))
@@ -796,11 +794,34 @@ func (s *Store) WriteBatchSync(metrics []WriteMetric) {
 			Int("dropped", droppedInvalid).
 			Msg("Dropped invalid metrics writes from batch")
 	}
+	return batch
+}
+
+// WriteBatchSync bypasses the in-memory sample buffer but still serializes the
+// batch through the ingestion worker, waiting for the commit however long it
+// takes. Callers rely on read-your-writes: mock seeding reads store coverage
+// straight back, and the write-path invariant tests count committed rows. The
+// live monitoring pipeline must NOT use this — it calls WriteBatchBounded so a
+// slow metrics disk can never stall polling (#1437).
+func (s *Store) WriteBatchSync(metrics []WriteMetric) {
+	batch := s.prepareWriteBatch(metrics)
 	if len(batch) == 0 {
 		return
 	}
-
 	s.enqueueAndWait(writeRequest{metrics: batch})
+}
+
+// WriteBatchBounded is the monitoring-pipeline variant of WriteBatchSync: it
+// hands the batch to the ingestion worker but never blocks the caller past
+// syncWriteWaitTimeout. Within the budget it behaves like WriteBatchSync; past
+// it the batch stays queued (or, if the queue cannot even accept it, is
+// dropped with a warning) and the caller moves on.
+func (s *Store) WriteBatchBounded(metrics []WriteMetric) {
+	batch := s.prepareWriteBatch(metrics)
+	if len(batch) == 0 {
+		return
+	}
+	s.boundedEnqueueAndWait(writeRequest{metrics: batch})
 }
 
 func (s *Store) enqueueMaintenance(run func()) {
@@ -917,22 +938,42 @@ func (s *Store) enqueueWrite(req writeRequest) {
 	}
 }
 
-// syncWriteWaitTimeout bounds how long a synchronous batch write blocks on the
-// ingestion worker. The monitoring pipeline calls WriteBatchSync inline (state
-// broadcast, agent ingest, poll publish), so an unbounded wait lets a slow
-// metrics disk starve polling entirely: on #1437's instance SQLite commits ran
-// for seconds to minutes and the monitor froze after its first cycle while
-// history writes queued behind retention maintenance. Within the budget the
-// call keeps read-your-writes; past it the caller moves on and history lands
-// whenever the worker catches up.
+// syncWriteWaitTimeout bounds how long a WriteBatchBounded call blocks on the
+// ingestion worker. The monitoring pipeline writes inline (state broadcast,
+// agent ingest, poll publish), so an unbounded wait lets a slow metrics disk
+// starve polling entirely: on #1437's instance SQLite commits ran for seconds
+// to minutes and the monitor froze after its first cycle while history writes
+// queued behind retention maintenance. Within the budget the call keeps
+// read-your-writes; past it the caller moves on and history lands whenever
+// the worker catches up.
 const syncWriteWaitTimeout = 2 * time.Second
 
 // enqueueAndWait hands the batch to the ingestion worker and waits for its
-// commit, but never longer than syncWriteWaitTimeout in total. If the queue
-// cannot even accept the batch within the budget the batch is dropped, matching
-// enqueueWrite's saturation behavior. If only the commit is outstanding the
-// batch stays queued and is not lost.
+// commit with no deadline. WriteBatchSync callers depend on read-your-writes
+// regardless of disk speed. Only store shutdown releases the wait early.
 func (s *Store) enqueueAndWait(req writeRequest) {
+	if req.done == nil {
+		req.done = make(chan struct{})
+	}
+
+	select {
+	case s.writeCh <- req:
+	case <-s.stopCh:
+		return
+	}
+
+	select {
+	case <-req.done:
+	case <-s.stopCh:
+	}
+}
+
+// boundedEnqueueAndWait hands the batch to the ingestion worker and waits for
+// its commit, but never longer than syncWriteWaitTimeout in total. If the
+// queue cannot even accept the batch within the budget the batch is dropped,
+// matching enqueueWrite's saturation behavior. If only the commit is
+// outstanding the batch stays queued and is not lost.
+func (s *Store) boundedEnqueueAndWait(req writeRequest) {
 	if req.done == nil {
 		req.done = make(chan struct{})
 	}
@@ -951,7 +992,7 @@ func (s *Store) enqueueAndWait(req writeRequest) {
 			Int("batch_size", len(req.metrics)).
 			Int("write_queue_depth", len(s.writeCh)).
 			Int("write_queue_capacity", cap(s.writeCh)).
-			Msg("Metrics write queue saturated, dropping synchronous batch to keep monitoring live")
+			Msg("Metrics write queue saturated, dropping bounded batch to keep monitoring live")
 		return
 	}
 
