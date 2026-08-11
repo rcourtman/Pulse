@@ -24,6 +24,11 @@ export interface WorkloadsDiskPresentation {
 export const hasWorkloadsDiskCapacity = (disk: Disk): boolean =>
   typeof disk.total === 'number' && disk.total > 0;
 
+// The poller reports usage -1 for mounts it can only see in the container
+// config (capacity may be known, live usage is not).
+export const isWorkloadsDiskUsageUnknown = (disk: Disk): boolean =>
+  typeof disk.usage === 'number' && disk.usage < 0;
+
 export const getWorkloadsDiskUsagePercent = (disk: Disk): number => {
   const total = disk.total ?? 0;
   if (total <= 0) {
@@ -39,13 +44,21 @@ export const getWorkloadsDiskLabel = (disk: Disk): string =>
 export const getWorkloadsDiskLabelTitle = (label: string): string | undefined =>
   label !== 'Unknown' ? label : undefined;
 
-export const getWorkloadsDiskUsageText = (disk: Disk): string =>
-  hasWorkloadsDiskCapacity(disk)
+export const getWorkloadsDiskUsageText = (disk: Disk): string => {
+  if (isWorkloadsDiskUsageUnknown(disk)) {
+    return hasWorkloadsDiskCapacity(disk)
+      ? `?/${formatBytes(disk.total ?? 0)}`
+      : 'Usage unavailable';
+  }
+  return hasWorkloadsDiskCapacity(disk)
     ? `${formatBytes(disk.used ?? 0)}/${formatBytes(disk.total ?? 0)}`
     : 'Usage unavailable';
+};
 
 export const getWorkloadsDiskUsagePercentLabel = (disk: Disk): string =>
-  hasWorkloadsDiskCapacity(disk) ? `${getWorkloadsDiskUsagePercent(disk).toFixed(0)}%` : '—';
+  hasWorkloadsDiskCapacity(disk) && !isWorkloadsDiskUsageUnknown(disk)
+    ? `${getWorkloadsDiskUsagePercent(disk).toFixed(0)}%`
+    : '—';
 
 export const getWorkloadsDiskProgressClass = (
   disk: Disk,
@@ -53,7 +66,9 @@ export const getWorkloadsDiskProgressClass = (
 ): string => getMetricColorClass(getWorkloadsDiskUsagePercent(disk), 'disk', thresholds);
 
 export const getWorkloadsDiskProgressWidth = (disk: Disk): string =>
-  `${Math.min(getWorkloadsDiskUsagePercent(disk), 100)}%`;
+  isWorkloadsDiskUsageUnknown(disk)
+    ? '0%'
+    : `${Math.min(getWorkloadsDiskUsagePercent(disk), 100)}%`;
 
 export const getWorkloadsDiskTypeLabel = (disk: Disk): string => disk.type?.toUpperCase() ?? '';
 

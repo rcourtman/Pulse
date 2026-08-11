@@ -583,6 +583,7 @@ func TestParseContainerMountMetadataEdgeCases(t *testing.T) {
 					Key:        "rootfs",
 					Mountpoint: "/",
 					Source:     "local:100/vm-100-disk-0.raw",
+					Size:       8589934592,
 				},
 			},
 		},
@@ -642,6 +643,7 @@ func TestParseContainerMountMetadataEdgeCases(t *testing.T) {
 					Key:        "rootfs",
 					Mountpoint: "/",
 					Source:     "local:100/vm-100-disk-0.raw",
+					Size:       8589934592,
 				},
 			},
 		},
@@ -655,6 +657,7 @@ func TestParseContainerMountMetadataEdgeCases(t *testing.T) {
 					Key:        "mp1",
 					Mountpoint: "",
 					Source:     "local:volume",
+					Size:       10737418240,
 				},
 			},
 		},
@@ -669,6 +672,7 @@ func TestParseContainerMountMetadataEdgeCases(t *testing.T) {
 					Key:        "rootfs",
 					Mountpoint: "/",
 					Source:     "local:disk",
+					Size:       8589934592,
 				},
 				"mp0": {
 					Key:        "mp0",
@@ -1074,6 +1078,90 @@ func TestConvertContainerDiskInfo(t *testing.T) {
 			},
 		},
 		{
+			name: "metadata mount missing from status is retained as unavailable",
+			status: &proxmox.Container{
+				DiskInfo: map[string]proxmox.ContainerDiskUsage{
+					"rootfs": {
+						Total: 8589934592,
+						Used:  4294967296,
+					},
+				},
+			},
+			metadata: map[string]containerMountMetadata{
+				"mp0": {
+					Key:        "mp0",
+					Mountpoint: "/data",
+					Source:     "local-lvm:vm-100-disk-1",
+					Size:       10737418240,
+				},
+				"rootfs": {
+					Key:        "rootfs",
+					Mountpoint: "/",
+					Source:     "local-lvm:vm-100-disk-0",
+				},
+			},
+			want: []models.Disk{
+				{
+					Total:      8589934592,
+					Used:       4294967296,
+					Free:       4294967296,
+					Usage:      50.0,
+					Mountpoint: "/",
+					Type:       "rootfs",
+					Device:     "local-lvm:vm-100-disk-0",
+				},
+				{
+					Total:      10737418240,
+					Usage:      -1,
+					Mountpoint: "/data",
+					Type:       "mp0",
+					Device:     "local-lvm:vm-100-disk-1",
+				},
+			},
+		},
+		{
+			name: "metadata only disks are surfaced with unavailable usage",
+			status: &proxmox.Container{
+				DiskInfo: map[string]proxmox.ContainerDiskUsage{},
+			},
+			metadata: map[string]containerMountMetadata{
+				"mp0": {
+					Key:        "mp0",
+					Mountpoint: "/mnt/media",
+					Source:     "/mnt/pve/media/subvol-100-disk-1",
+				},
+			},
+			want: []models.Disk{
+				{
+					Usage:      -1,
+					Mountpoint: "/mnt/media",
+					Type:       "mp0",
+					Device:     "/mnt/pve/media/subvol-100-disk-1",
+				},
+			},
+		},
+		{
+			name:   "nil status with metadata still lists mounts",
+			status: nil,
+			metadata: map[string]containerMountMetadata{
+				"mp0": {
+					Key:        "mp0",
+					Mountpoint: "/srv/backup",
+					Source:     "tank:subvol-101-disk-1",
+					Size:       21474836480,
+				},
+			},
+			want: []models.Disk{
+				{
+					Total:      21474836480,
+					Usage:      -1,
+					Mountpoint: "/srv/backup",
+					Type:       "mp0",
+					Device:     "tank:subvol-101-disk-1",
+				},
+			},
+		},
+		{
 			name: "multiple disks sorted by mountpoint",
 			status: &proxmox.Container{
 				DiskInfo: map[string]proxmox.ContainerDiskUsage{
@@ -1386,6 +1474,56 @@ func TestConvertContainerDiskInfo(t *testing.T) {
 	}
 }
 
+func TestMergeContainerDisksPreservingExisting(t *testing.T) {
+	t.Parallel()
+
+	existing := []models.Disk{
+		{Mountpoint: "/", Type: "rootfs", Total: 1000, Used: 500, Free: 500, Usage: 50},
+	}
+	discovered := []models.Disk{
+		{Mountpoint: "/", Type: "rootfs", Usage: -1},
+		{Mountpoint: "/data", Type: "mp0", Device: "local:vm-100-disk-1", Total: 2000, Usage: -1},
+	}
+
+	got := mergeContainerDisksPreservingExisting(existing, discovered)
+	want := []models.Disk{
+		{Mountpoint: "/", Type: "rootfs", Total: 1000, Used: 500, Free: 500, Usage: 50},
+		{Mountpoint: "/data", Type: "mp0", Device: "local:vm-100-disk-1", Total: 2000, Usage: -1},
+	}
+
+	if !diskSlicesEqual(got, want) {
+		t.Fatalf("mergeContainerDisksPreservingExisting() = %+v, want %+v", got, want)
+	}
+}
+
+func TestParseProxmoxVolumeSize(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		input string
+		want  int64
+	}{
+		{"8G", 8589934592},
+		{"512M", 536870912},
+		{"10k", 10240},
+		{"1T", 1099511627776},
+		{"19.5G", 20937965568},
+		{"100", 100},
+		{" 8G ", 8589934592},
+		{"", 0},
+		{"0", 0},
+		{"-5G", 0},
+		{"abc", 0},
+		{"G", 0},
+	}
+
+	for _, tt := range tests {
+		if got := parseProxmoxVolumeSize(tt.input); got != tt.want {
+			t.Errorf("parseProxmoxVolumeSize(%q) = %d, want %d", tt.input, got, tt.want)
+		}
+	}
+}
+
 func TestEnsureContainerRootDiskEntry(t *testing.T) {
 	t.Parallel()
 
@@ -1665,7 +1803,7 @@ func mountMetadataMapsEqual(a, b map[string]containerMountMetadata) bool {
 		if !ok {
 			return false
 		}
-		if valA.Key != valB.Key || valA.Mountpoint != valB.Mountpoint || valA.Source != valB.Source {
+		if valA.Key != valB.Key || valA.Mountpoint != valB.Mountpoint || valA.Source != valB.Source || valA.Size != valB.Size {
 			return false
 		}
 	}

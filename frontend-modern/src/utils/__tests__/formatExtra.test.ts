@@ -152,6 +152,16 @@ describe('normalizeDiskArray', () => {
     expect(result?.[0].usage).toBe(0);
   });
 
+  it('preserves the unknown-usage sentinel instead of computing a percent', () => {
+    // Config-only LXC mounts (#1477) arrive with capacity but usage -1.
+    const result = normalizeDiskArray([
+      { mountpoint: '/srv/archive', filesystem: 'mp0', total: 1000, usage: -1 },
+    ]);
+    expect(result?.[0].usage).toBe(-1);
+    expect(result?.[0].total).toBe(1000);
+    expect(result?.[0].used).toBe(0);
+  });
+
   it('uses filesystem type when available', () => {
     const result = normalizeDiskArray([{ device: '/dev/sda', filesystem: 'ext4' }]);
     expect(result?.[0].type).toBe('ext4');

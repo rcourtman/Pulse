@@ -281,6 +281,42 @@ describe('DiskList', () => {
     });
   });
 
+  describe('config-only mounts (usage unknown sentinel)', () => {
+    it('shows capacity with "?" used marker when usage is -1 and total is known', () => {
+      const disk = makeDisk({
+        mountpoint: '/data',
+        type: 'mp0',
+        used: 0,
+        free: 0,
+        usage: -1,
+      });
+      render(() => <DiskList disks={[disk]} />);
+      expect(screen.getByText('?/100 GB')).toBeInTheDocument();
+    });
+
+    it('shows dash instead of a percent when usage is -1 despite known capacity', () => {
+      const disk = makeDisk({ used: 0, free: 0, usage: -1 });
+      render(() => <DiskList disks={[disk]} />);
+      expect(screen.getByText('—')).toBeInTheDocument();
+      expect(screen.queryByText('0%')).not.toBeInTheDocument();
+    });
+
+    it('keeps the progress bar empty when usage is -1', () => {
+      const disk = makeDisk({ used: 53687091200, usage: -1 });
+      const { container } = render(() => <DiskList disks={[disk]} />);
+
+      const bar = getBarFill(container);
+      expect(bar).toBeInTheDocument();
+      expect(bar).toHaveStyle({ width: '0%' });
+    });
+
+    it('shows "Usage unavailable" when usage is -1 and total is unknown', () => {
+      const disk = makeDisk({ total: 0, used: 0, free: 0, usage: -1 });
+      render(() => <DiskList disks={[disk]} />);
+      expect(screen.getByText('Usage unavailable')).toBeInTheDocument();
+    });
+  });
+
   describe('disk type display', () => {
     it('builds disk presentation through the canonical disk-list model', () => {
       const presentation = buildWorkloadsDiskPresentation(

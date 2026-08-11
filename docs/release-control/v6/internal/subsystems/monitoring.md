@@ -66,6 +66,19 @@ the cadence-derived cache lease. Missing, expired, renamed, stopped, or
 migrated observations fall back to the Proxmox API disk view; a fresh accepted
 rootfs reading also replaces the row's primary disk summary before alerts and
 history are evaluated.
+The Proxmox API disk view must itself enumerate every configured mount point.
+Stock PVE reports no per-mount LXC usage through the status API, so mounts
+known only from the container config (`rootfs`/`mpX` keys with
+`mp=`/`mountpoint=` targets and `size=` capacity) surface as disk rows carrying
+the configured capacity and the negative unknown-usage sentinel instead of
+being dropped (#1477, restoring the v5.1.32 behavior on the v6 line).
+Config-only rows merge by mountpoint identity and must never displace an
+existing live-usage entry such as the aggregate-seeded rootfs row; admitted
+node-local `pct df` agent rows replace the config-derived view wholesale.
+Consumers must treat negative usage as unknown, never as a measured zero — the
+alert engine already skips such rows in both aggregate and per-disk
+evaluation, and mock mode must keep at least one running container fixture in
+this exact shape so frontend surfaces keep exercising it.
 Host-agent report liveness is server-observed, not agent-clock-observed:
 `ApplyHostReport` must stamp `Host.LastSeen`, agent-sourced Ceph cluster
 freshness, and host-agent cluster sensor freshness from Pulse receipt time, so

@@ -3,7 +3,9 @@ package monitoring
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"sort"
+	"strconv"
 	"strings"
 	"unicode"
 
@@ -23,6 +25,7 @@ type containerMountMetadata struct {
 	Key        string
 	Mountpoint string
 	Source     string
+	Size       int64
 }
 
 // ensureContainerRootDiskEntry adds a root disk entry to a container if none exists.
@@ -60,66 +63,93 @@ func ensureContainerRootDiskEntry(container *models.Container) {
 }
 
 // convertContainerDiskInfo converts Proxmox container disk info to the models format.
+// Mount points that only exist in the container config (the normal case — stock
+// Proxmox reports no per-mount usage through the status API) are surfaced with
+// the configured capacity and a -1 usage sentinel so they still appear in the UI.
 func convertContainerDiskInfo(status *proxmox.Container, metadata map[string]containerMountMetadata) []models.Disk {
-	if status == nil || len(status.DiskInfo) == 0 {
-		return nil
+	disks := make([]models.Disk, 0)
+	seen := make(map[string]struct{})
+
+	if status != nil && len(status.DiskInfo) > 0 {
+		for name, info := range status.DiskInfo {
+			total := clampToInt64(info.Total)
+			used := clampToInt64(info.Used)
+			if total > 0 && used > total {
+				used = total
+			}
+			free := total - used
+			if free < 0 {
+				free = 0
+			}
+
+			disk := models.Disk{
+				Total: total,
+				Used:  used,
+				Free:  free,
+			}
+
+			if total > 0 {
+				disk.Usage = safePercentage(float64(used), float64(total))
+			}
+
+			label := strings.TrimSpace(name)
+			lowerLabel := strings.ToLower(label)
+			metadataKey := lowerLabel
+			if strings.EqualFold(label, "rootfs") || label == "" {
+				metadataKey = "rootfs"
+			}
+			seen[metadataKey] = struct{}{}
+			mountpoint := ""
+			device := ""
+
+			if metadata != nil {
+				if meta, ok := metadata[metadataKey]; ok {
+					mountpoint = strings.TrimSpace(meta.Mountpoint)
+					device = strings.TrimSpace(meta.Source)
+				}
+			}
+
+			if strings.EqualFold(label, "rootfs") || label == "" {
+				if mountpoint == "" {
+					mountpoint = "/"
+				}
+				disk.Type = "rootfs"
+				if device == "" {
+					device = sanitizeRootFSDevice(status.RootFS)
+				}
+			} else {
+				if mountpoint == "" {
+					mountpoint = label
+				}
+				disk.Type = lowerLabel
+			}
+
+			disk.Mountpoint = mountpoint
+			if disk.Device == "" && device != "" {
+				disk.Device = device
+			}
+
+			disks = append(disks, disk)
+		}
 	}
 
-	disks := make([]models.Disk, 0, len(status.DiskInfo))
-	for name, info := range status.DiskInfo {
-		total := clampToInt64(info.Total)
-		used := clampToInt64(info.Used)
-		if total > 0 && used > total {
-			used = total
+	if len(metadata) > 0 {
+		keys := make([]string, 0, len(metadata))
+		for key := range metadata {
+			keys = append(keys, key)
 		}
-		free := total - used
-		if free < 0 {
-			free = 0
-		}
+		sort.Strings(keys)
 
-		disk := models.Disk{
-			Total: total,
-			Used:  used,
-			Free:  free,
-		}
-
-		if total > 0 {
-			disk.Usage = safePercentage(float64(used), float64(total))
-		}
-
-		label := strings.TrimSpace(name)
-		lowerLabel := strings.ToLower(label)
-		mountpoint := ""
-		device := ""
-
-		if metadata != nil {
-			if meta, ok := metadata[lowerLabel]; ok {
-				mountpoint = strings.TrimSpace(meta.Mountpoint)
-				device = strings.TrimSpace(meta.Source)
+		for _, key := range keys {
+			if _, ok := seen[key]; ok {
+				continue
 			}
-		}
-
-		if strings.EqualFold(label, "rootfs") || label == "" {
-			if mountpoint == "" {
-				mountpoint = "/"
+			meta := metadata[key]
+			if strings.TrimSpace(meta.Key) == "" {
+				meta.Key = key
 			}
-			disk.Type = "rootfs"
-			if device == "" {
-				device = sanitizeRootFSDevice(status.RootFS)
-			}
-		} else {
-			if mountpoint == "" {
-				mountpoint = label
-			}
-			disk.Type = lowerLabel
+			disks = append(disks, diskFromContainerMountMetadata(meta))
 		}
-
-		disk.Mountpoint = mountpoint
-		if disk.Device == "" && device != "" {
-			disk.Device = device
-		}
-
-		disks = append(disks, disk)
 	}
 
 	if len(disks) > 1 {
@@ -128,7 +158,85 @@ func convertContainerDiskInfo(status *proxmox.Container, metadata map[string]con
 		})
 	}
 
+	if len(disks) == 0 {
+		return nil
+	}
+
 	return disks
+}
+
+// diskFromContainerMountMetadata builds a disk entry for a mount point known
+// only from the container config. Capacity comes from the config's size
+// parameter when present; live usage is unavailable, signalled by Usage -1.
+func diskFromContainerMountMetadata(meta containerMountMetadata) models.Disk {
+	diskType := strings.ToLower(strings.TrimSpace(meta.Key))
+	if diskType == "" {
+		diskType = "rootfs"
+	}
+
+	mountpoint := strings.TrimSpace(meta.Mountpoint)
+	if mountpoint == "" {
+		if diskType == "rootfs" {
+			mountpoint = "/"
+		} else {
+			mountpoint = diskType
+		}
+	}
+
+	disk := models.Disk{
+		Mountpoint: mountpoint,
+		Device:     strings.TrimSpace(meta.Source),
+		Type:       diskType,
+		Usage:      -1,
+	}
+	if meta.Size > 0 {
+		disk.Total = meta.Size
+	}
+	return disk
+}
+
+// mergeContainerDisksPreservingExisting appends discovered disks to the
+// existing list, keeping the existing entry when both describe the same mount.
+func mergeContainerDisksPreservingExisting(existing, discovered []models.Disk) []models.Disk {
+	if len(existing) == 0 {
+		return discovered
+	}
+	if len(discovered) == 0 {
+		return existing
+	}
+
+	merged := append([]models.Disk{}, existing...)
+	seen := make(map[string]struct{}, len(existing))
+	for _, disk := range existing {
+		seen[containerDiskIdentity(disk)] = struct{}{}
+	}
+
+	for _, disk := range discovered {
+		key := containerDiskIdentity(disk)
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		merged = append(merged, disk)
+	}
+
+	if len(merged) > 1 {
+		sort.SliceStable(merged, func(i, j int) bool {
+			return merged[i].Mountpoint < merged[j].Mountpoint
+		})
+	}
+
+	return merged
+}
+
+func containerDiskIdentity(disk models.Disk) string {
+	if mountpoint := strings.ToLower(strings.TrimSpace(disk.Mountpoint)); mountpoint != "" {
+		return "mount:" + mountpoint
+	}
+	if diskType := strings.ToLower(strings.TrimSpace(disk.Type)); diskType != "" {
+		return "type:" + diskType
+	}
+	return "device:" + strings.ToLower(strings.TrimSpace(disk.Device))
 }
 
 // sanitizeRootFSDevice extracts the device path from a rootfs config string.
@@ -364,6 +472,8 @@ func parseContainerMountMetadata(config map[string]interface{}) map[string]conta
 			switch k {
 			case "mp", "mountpoint":
 				meta.Mountpoint = v
+			case "size":
+				meta.Size = parseProxmoxVolumeSize(v)
 			}
 		}
 
@@ -379,6 +489,43 @@ func parseContainerMountMetadata(config map[string]interface{}) map[string]conta
 	}
 
 	return results
+}
+
+// parseProxmoxVolumeSize parses a Proxmox volume size parameter (e.g. "8G",
+// "512M") into bytes. Proxmox writes sizes as a number with an optional binary
+// K/M/G/T suffix; a bare number is bytes. Returns 0 when the value cannot be
+// parsed.
+func parseProxmoxVolumeSize(value string) int64 {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return 0
+	}
+
+	multiplier := float64(1)
+	switch value[len(value)-1] {
+	case 'K', 'k':
+		multiplier = 1 << 10
+		value = value[:len(value)-1]
+	case 'M', 'm':
+		multiplier = 1 << 20
+		value = value[:len(value)-1]
+	case 'G', 'g':
+		multiplier = 1 << 30
+		value = value[:len(value)-1]
+	case 'T', 't':
+		multiplier = 1 << 40
+		value = value[:len(value)-1]
+	}
+
+	parsed, err := strconv.ParseFloat(strings.TrimSpace(value), 64)
+	if err != nil || math.IsNaN(parsed) || math.IsInf(parsed, 0) || parsed <= 0 {
+		return 0
+	}
+	bytes := parsed * multiplier
+	if bytes > math.MaxInt64 {
+		return 0
+	}
+	return int64(math.Round(bytes))
 }
 
 // mergeContainerNetworkInterface merges network interface details into the target slice.

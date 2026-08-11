@@ -436,6 +436,44 @@ func ensureFreshFilesystemFixture(data *models.StateSnapshot) {
 	}
 }
 
+// ensureConfigOnlyMountFixture guarantees at least one running container
+// carries a mount known only from its config: capacity from the size
+// parameter, live usage unavailable (Usage -1). Stock Proxmox reports no
+// per-mount usage through the status API, so API-polled containers surface
+// their mpX mounts in exactly this shape (#1477). The rootfs entry is seeded
+// from the aggregate the same way the poller's ensureContainerRootDiskEntry
+// does when only aggregate stats exist.
+func ensureConfigOnlyMountFixture(data *models.StateSnapshot) {
+	const archiveBytes = int64(20) * 1024 * 1024 * 1024
+	for i := range data.Containers {
+		ct := &data.Containers[i]
+		if ct.Status != "running" {
+			continue
+		}
+		if len(ct.Disks) == 0 {
+			if ct.Disk.Total <= 0 {
+				continue
+			}
+			ct.Disks = []models.Disk{{
+				Total:      ct.Disk.Total,
+				Used:       ct.Disk.Used,
+				Free:       ct.Disk.Free,
+				Usage:      ct.Disk.Usage,
+				Mountpoint: "/",
+				Type:       "rootfs",
+			}}
+		}
+		ct.Disks = append(ct.Disks, models.Disk{
+			Total:      archiveBytes,
+			Usage:      -1,
+			Mountpoint: "/srv/archive",
+			Type:       "mp0",
+			Device:     fmt.Sprintf("tank:subvol-%d-disk-1", ct.VMID),
+		})
+		return
+	}
+}
+
 // buildFixtureState synthesizes the snapshot-backed portion of the canonical
 // fixture graph for demo and test environments.
 func buildFixtureState(config MockConfig) models.StateSnapshot {
@@ -602,6 +640,7 @@ func buildFixtureState(config MockConfig) models.StateSnapshot {
 	data.ReplicationJobs = generateReplicationJobs(data.Nodes, data.VMs)
 
 	ensureFreshFilesystemFixture(&data)
+	ensureConfigOnlyMountFixture(&data)
 
 	// Calculate stats
 	data.Stats.StartTime = time.Now()

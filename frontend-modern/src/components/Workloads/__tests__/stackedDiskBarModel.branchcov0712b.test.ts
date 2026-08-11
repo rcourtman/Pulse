@@ -349,27 +349,31 @@ describe('stackedDiskBarModel (branch coverage 2)', () => {
 
     it('builds vertical bars clamped to 0..100 and the vertical-bars container class', () => {
       // verticalBarsMode = mode === 'vertical-bars' && hasDisks; fillPercent uses
-      // Math.max(0, Math.min(percent, 100)) -> exercises both clamps.
+      // Math.max(0, Math.min(percent, 100)) -> exercises the upper clamp. A
+      // negative usage is the unknown-usage sentinel: excluded from the bars,
+      // still listed in the tooltip.
       const p = buildStackedDiskBarPresentation(
         {
           mode: 'vertical-bars',
           disks: [
             makeDisk({ mountpoint: '/x', total: 100, used: 40, free: 60, usage: 40 }),
             makeDisk({ mountpoint: '/y', total: 100, used: 120, free: 0, usage: 120 }),
-            makeDisk({ mountpoint: '/z', total: 100, used: -5, free: 105, usage: -5 }),
+            makeDisk({ mountpoint: '/z', total: 100, used: 0, free: 0, usage: -5 }),
           ],
         },
         400,
       );
       expect(p.verticalBarsMode).toBe(true);
       expect(p.containerClass).toBe('metric-text w-full h-4 min-w-0');
-      expect(p.verticalBars.map((b) => b.fillPercent)).toEqual([40, 100, 0]);
+      expect(p.verticalBars.map((b) => b.fillPercent)).toEqual([40, 100]);
       expect(p.verticalBars[0]).toStrictEqual({
         color: NORMAL,
         fillPercent: 40,
         title: '/x: 40% (40.0 B/100 B)',
       });
       expect(p.verticalBars[1].color).toBe(CRITICAL); // 120% -> critical
+      expect(p.tooltipContent).toHaveLength(3);
+      expect(p.tooltipContent[2]).toMatchObject({ label: '/z', percent: '—', used: '?' });
     });
 
     it('enables inline disk mode and its container class in mini mode', () => {
@@ -468,6 +472,47 @@ describe('stackedDiskBarModel (branch coverage 2)', () => {
       );
       expect(p.showSublabel).toBe(false);
       expect(p.displaySublabel).toBe('25.0 B/100 B');
+    });
+
+    it('excludes config-only mounts (usage -1) from usage visuals but lists them in the tooltip', () => {
+      // A container with a measured rootfs plus a mount known only from the
+      // guest config (usage -1, capacity from size=). The unknown mount must
+      // not get a bar slot or skew the summary math, but stays discoverable
+      // in the tooltip with capacity and no fabricated 0%.
+      const p = buildStackedDiskBarPresentation(
+        {
+          disks: [
+            makeDisk({ mountpoint: '/', total: 100, used: 50, free: 50, usage: 50 }),
+            makeDisk({ mountpoint: '/srv/archive', total: 200, used: 0, free: 0, usage: -1 }),
+          ],
+        },
+        400,
+      );
+      expect(p.hasMultipleDisks).toBe(false); // only the measured disk counts
+      expect(p.inlineDiskMode).toBe(false); // no "archive 0%" mini slot
+      expect(p.miniDisks.map((d) => d.label)).toEqual(['/']);
+      expect(p.displayPercentValue).toBe(50); // unknown capacity not in the denominator
+      expect(p.tooltipContent).toHaveLength(2);
+      expect(p.tooltipContent[1]).toMatchObject({
+        label: '/srv/archive',
+        percent: '—',
+        used: '?',
+        total: '200 B',
+      });
+    });
+
+    it('falls back to the aggregate disk when every listed disk has unknown usage', () => {
+      const p = buildStackedDiskBarPresentation(
+        {
+          disks: [makeDisk({ mountpoint: '/srv/archive', total: 200, used: 0, free: 0, usage: -1 })],
+          aggregateDisk: makeDisk({ total: 100, used: 25, free: 75, usage: 25 }),
+        },
+        400,
+      );
+      expect(p.hasDisks).toBe(false);
+      expect(p.displayPercentValue).toBe(25);
+      expect(p.tooltipContent).toHaveLength(1);
+      expect(p.tooltipContent[0]).toMatchObject({ label: '/srv/archive', percent: '—' });
     });
   });
 });

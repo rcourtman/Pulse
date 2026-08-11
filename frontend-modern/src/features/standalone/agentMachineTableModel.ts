@@ -202,15 +202,18 @@ const getDiskUsagePercent = (disk: {
   used?: number;
   usage?: number;
 }): number | undefined => {
+  const reportedUsage = getPlatformTableFiniteMetric(disk.usage);
+  // usage < 0 is the poller's "usage unknown" sentinel — no percent to report.
+  if (reportedUsage !== undefined && reportedUsage < 0) return undefined;
+
   const total = getPlatformTableFiniteMetric(disk.total);
   const used = getPlatformTableFiniteMetric(disk.used);
   if (total && total > 0 && typeof used === 'number') {
     return (used / total) * 100;
   }
 
-  const usage = getPlatformTableFiniteMetric(disk.usage);
-  if (usage === undefined) return undefined;
-  return usage <= 1 ? usage * 100 : usage;
+  if (reportedUsage === undefined) return undefined;
+  return reportedUsage <= 1 ? reportedUsage * 100 : reportedUsage;
 };
 
 const getMaxOperationalDiskPercent = (machine: Resource): number | undefined => {

@@ -337,3 +337,59 @@ func TestIssue1634LXCMemoryStaysUnavailableWithoutListingValue(t *testing.T) {
 		t.Fatal("expected memory to stay marked unavailable without any usage evidence")
 	}
 }
+
+func TestIssue1477ConfigOnlyMountsSurviveIntoContainerDisks(t *testing.T) {
+	t.Parallel()
+
+	// Stock PVE reports no per-mount usage through the LXC status API, so the
+	// only record of an mpX mount is the container config. The API path must
+	// still surface it: capacity from size=, usage unknown (-1), and the
+	// aggregate-seeded rootfs row (live usage) must survive the merge.
+	metadata := parseContainerMountMetadata(map[string]interface{}{
+		"rootfs": "local-lvm:vm-106-disk-0,size=59G",
+		"mp0":    "tank:subvol-106-disk-1,mp=/srv/archive,size=20G",
+	})
+
+	discovered := convertContainerDiskInfo(nil, metadata)
+	if len(discovered) != 2 {
+		t.Fatalf("discovered disks = %+v, want rootfs + mp0", discovered)
+	}
+
+	seededRootfs := models.Disk{
+		Total:      63350767616,
+		Used:       23530764893,
+		Free:       39820002723,
+		Usage:      37.14,
+		Mountpoint: "/",
+		Type:       "rootfs",
+	}
+	merged := mergeContainerDisksPreservingExisting([]models.Disk{seededRootfs}, discovered)
+	if len(merged) != 2 {
+		t.Fatalf("merged disks = %+v, want rootfs + mp0", merged)
+	}
+
+	var rootfs, archive *models.Disk
+	for i := range merged {
+		switch merged[i].Mountpoint {
+		case "/":
+			rootfs = &merged[i]
+		case "/srv/archive":
+			archive = &merged[i]
+		}
+	}
+	if rootfs == nil || rootfs.Used != seededRootfs.Used || rootfs.Usage != seededRootfs.Usage {
+		t.Fatalf("live rootfs row must win the merge, got %+v", rootfs)
+	}
+	if archive == nil {
+		t.Fatal("config-only mount dropped by the merge")
+	}
+	if archive.Usage != -1 {
+		t.Fatalf("config-only mount usage = %f, want the -1 unknown sentinel", archive.Usage)
+	}
+	if archive.Total != int64(20)*1024*1024*1024 {
+		t.Fatalf("config-only mount total = %d, want 20 GiB from size=", archive.Total)
+	}
+	if archive.Device != "tank:subvol-106-disk-1" || archive.Type != "mp0" {
+		t.Fatalf("config-only mount must keep device and mp key, got %+v", archive)
+	}
+}

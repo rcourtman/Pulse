@@ -848,3 +848,48 @@ func TestMemoryTotalForResourceTracksFixtureCapacity(t *testing.T) {
 		t.Fatalf("blank guest capacity = %f, want 0", got)
 	}
 }
+
+func TestEnsureConfigOnlyMountFixtureSeedsUnknownUsageMount(t *testing.T) {
+	data := buildFixtureState(DefaultConfig)
+
+	var fixtureContainer *models.Container
+	for i := range data.Containers {
+		for _, disk := range data.Containers[i].Disks {
+			if disk.Mountpoint == "/srv/archive" {
+				fixtureContainer = &data.Containers[i]
+			}
+		}
+	}
+	if fixtureContainer == nil {
+		t.Fatal("no container carries the config-only mount fixture (#1477)")
+	}
+	if fixtureContainer.Status != "running" {
+		t.Fatalf("fixture container %s is %s, want running", fixtureContainer.Name, fixtureContainer.Status)
+	}
+
+	var rootfs, archive *models.Disk
+	for i := range fixtureContainer.Disks {
+		disk := &fixtureContainer.Disks[i]
+		switch disk.Mountpoint {
+		case "/":
+			rootfs = disk
+		case "/srv/archive":
+			archive = disk
+		}
+	}
+	if rootfs == nil || rootfs.Total <= 0 || rootfs.Usage < 0 {
+		t.Fatalf("fixture container must keep a measured rootfs row, got %+v", rootfs)
+	}
+	if archive == nil {
+		t.Fatal("config-only mount row missing")
+	}
+	if archive.Usage != -1 {
+		t.Fatalf("config-only mount usage = %f, want the -1 unknown sentinel", archive.Usage)
+	}
+	if archive.Total != int64(20)*1024*1024*1024 {
+		t.Fatalf("config-only mount total = %d, want the configured 20 GiB", archive.Total)
+	}
+	if archive.Type != "mp0" || archive.Device == "" {
+		t.Fatalf("config-only mount must keep its mp key and device, got %+v", archive)
+	}
+}

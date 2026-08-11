@@ -111,6 +111,15 @@ function getDiskUsagePercent(disk: Disk): number {
   return 0;
 }
 
+// The poller reports usage -1 for mounts it only knows from the guest config
+// (capacity may be known, live usage is not). Those cannot be drawn as usage
+// bars; they surface in the tooltip instead.
+export function isStackedDiskUsageUnknown(disk: Disk): boolean {
+  return typeof disk.usage === 'number' && disk.usage < 0;
+}
+
+const UNKNOWN_DISK_COLOR = 'rgba(148, 163, 184, 0.5)';
+
 function getDiskLabel(disk: Disk, index: number): string {
   return disk.mountpoint || disk.device || `Disk ${index + 1}`;
 }
@@ -184,6 +193,15 @@ function buildTooltipContent(
     options.aggregateMode || options.inlineDiskMode || options.miniMode || options.verticalBarsMode;
   if (disks.length > 0) {
     return disks.map((disk, index) => {
+      if (isStackedDiskUsageUnknown(disk)) {
+        return {
+          color: UNKNOWN_DISK_COLOR,
+          label: getDiskLabel(disk, index),
+          percent: '—',
+          total: (disk.total ?? 0) > 0 ? formatBytes(disk.total ?? 0) : '—',
+          used: '?',
+        };
+      }
       const percentValue = getDiskUsagePercent(disk);
       return {
         color: useUsageColors
@@ -237,7 +255,10 @@ export function buildStackedDiskBarPresentation(
   props: StackedDiskBarProps,
   containerWidth: number,
 ): StackedDiskBarPresentation {
-  const disks = props.disks ?? [];
+  const allDisks = props.disks ?? [];
+  // Usage visualisations only draw disks with measured usage; config-only
+  // mounts (usage -1) stay listed in the tooltip.
+  const disks = allDisks.filter((disk) => !isStackedDiskUsageUnknown(disk));
   const hasDisks = disks.length > 0;
   const hasMultipleDisks = disks.length > 1;
   const aggregateMode = props.mode === 'aggregate';
@@ -338,7 +359,7 @@ export function buildStackedDiskBarPresentation(
         };
       })
     : [];
-  const tooltipContent = buildTooltipContent(disks, {
+  const tooltipContent = buildTooltipContent(allDisks, {
     aggregateDisk: props.aggregateDisk,
     aggregateMode,
     inlineDiskMode,
@@ -378,7 +399,7 @@ export function buildStackedDiskBarPresentation(
     showMaxLabel,
     showSublabel,
     tooltipContent,
-    tooltipTitle: hasMultipleDisks ? 'Disk Breakdown' : 'Disk Usage',
+    tooltipTitle: allDisks.length > 1 ? 'Disk Breakdown' : 'Disk Usage',
     useStackedSegments,
     verticalBars,
     verticalBarsMode,

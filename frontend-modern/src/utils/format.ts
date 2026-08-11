@@ -10,6 +10,7 @@ type DiskInput = {
   total?: number;
   used?: number;
   free?: number;
+  usage?: number;
 };
 
 const NON_OPERATIONAL_DISK_MOUNT_PREFIXES = [
@@ -340,7 +341,11 @@ export function normalizeDiskArray(disks?: DiskInput[]): NormalizedDisk[] | unde
     const total = d.total ?? 0;
     const used = d.used ?? 0;
     const free = d.free ?? (total > 0 ? Math.max(0, total - used) : 0);
-    const usage = total > 0 ? (used / total) * 100 : 0;
+    // usage < 0 is the poller's "usage unknown" sentinel (e.g. LXC mounts
+    // known only from the guest config, #1477) — preserve it rather than
+    // fabricating a computed percent.
+    const usage =
+      typeof d.usage === 'number' && d.usage < 0 ? -1 : total > 0 ? (used / total) * 100 : 0;
     return {
       total,
       used,
@@ -368,8 +373,9 @@ export function getResourceDiskSummary(
     };
   }
 
-  const disks = normalizeDiskArray(resource.agent?.disks);
-  if (!disks) return undefined;
+  // Disks with unknown usage (sentinel -1) have no measured used/free to sum.
+  const disks = normalizeDiskArray(resource.agent?.disks)?.filter((disk) => disk.usage >= 0);
+  if (!disks || disks.length === 0) return undefined;
 
   const total = disks.reduce((sum, disk) => sum + disk.total, 0);
   if (total <= 0) return undefined;
