@@ -75,6 +75,7 @@ export const useAPITokenManagerState = (props: APITokenManagerProps) => {
   const [loading, setLoading] = createSignal(true);
   const [isGenerating, setIsGenerating] = createSignal(false);
   const [updatingTokenId, setUpdatingTokenId] = createSignal<string | null>(null);
+  const [isRenaming, setIsRenaming] = createSignal(false);
   const [newTokenValue, setNewTokenValue] = createSignal<string | null>(null);
   const [newTokenRecord, setNewTokenRecord] = createSignal<APITokenRecord | null>(null);
   const [nameInput, setNameInput] = createSignal('');
@@ -415,6 +416,31 @@ export const useAPITokenManagerState = (props: APITokenManagerProps) => {
     }
   };
 
+  const handleRename = async (record: APITokenRecord, name: string): Promise<boolean> => {
+    if (!canManage() || isRenaming()) return false;
+    const trimmedName = name.trim();
+    if (!trimmedName) {
+      notificationStore.error('Enter a token name.');
+      return false;
+    }
+
+    setIsRenaming(true);
+    try {
+      const updated = await SecurityAPI.renameToken(record.id, trimmedName);
+      setTokens((previous) => previous.map((token) => (token.id === updated.id ? updated : token)));
+      setNewTokenRecord((current) => (current?.id === updated.id ? updated : current));
+      notificationStore.success('Token renamed');
+      props.onTokensChanged?.();
+      return true;
+    } catch (err) {
+      logger.error('Failed to rename API token', err);
+      notificationStore.error('Unable to rename the API token.');
+      return false;
+    } finally {
+      setIsRenaming(false);
+    }
+  };
+
   const isRevealActiveForCurrentToken = () => {
     const active = tokenRevealState();
     return newTokenValue() !== null && Boolean(active && active.token === newTokenValue());
@@ -472,11 +498,13 @@ export const useAPITokenManagerState = (props: APITokenManagerProps) => {
     handleDelete,
     handleGenerate,
     handleUpdateScopes,
+    handleRename,
     hasWildcardTokens,
     hasScopeSelection,
     isFullAccessSelected,
     isGenerating,
     updatingTokenId,
+    isRenaming,
     isRevealActiveForCurrentToken,
     loading,
     nameInput,

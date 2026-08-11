@@ -65,4 +65,15 @@ export class SecurityAPI {
       method: 'DELETE',
     });
   }
+
+  static async renameToken(id: string, name: string): Promise<APITokenRecord> {
+    const response = await apiFetchJSON<{ record: APITokenRecord }>(
+      `/api/security/tokens/${encodeURIComponent(id)}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({ name }),
+      },
+    );
+    return response.record;
+  }
 }

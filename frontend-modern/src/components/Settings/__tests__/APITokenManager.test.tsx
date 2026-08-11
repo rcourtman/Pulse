@@ -25,6 +25,7 @@ import { APITokenManager } from '../APITokenManager';
 const listTokensMock = vi.fn();
 const createTokenMock = vi.fn();
 const updateTokenScopesMock = vi.fn();
+const renameTokenMock = vi.fn();
 const deleteTokenMock = vi.fn();
 const fetchAgentCapabilitiesManifestMock = vi.fn();
 const notificationSuccessMock = vi.fn();
@@ -42,6 +43,7 @@ vi.mock('@/api/security', () => ({
     listTokens: (...args: unknown[]) => listTokensMock(...args),
     createToken: (...args: unknown[]) => createTokenMock(...args),
     updateTokenScopes: (...args: unknown[]) => updateTokenScopesMock(...args),
+    renameToken: (...args: unknown[]) => renameTokenMock(...args),
     deleteToken: (...args: unknown[]) => deleteTokenMock(...args),
   },
 }));
@@ -177,6 +179,7 @@ describe('APITokenManager', () => {
     listTokensMock.mockReset();
     createTokenMock.mockReset();
     updateTokenScopesMock.mockReset();
+    renameTokenMock.mockReset();
     deleteTokenMock.mockReset();
     notificationSuccessMock.mockReset();
     notificationErrorMock.mockReset();
@@ -227,6 +230,7 @@ describe('APITokenManager', () => {
     updateTokenScopesMock.mockImplementation(
       async (id: string, scopes: string[]): Promise<APITokenRecord> => makeToken({ id, scopes }),
     );
+    renameTokenMock.mockImplementation(async (id: string, name: string) => makeToken({ id, name }));
   });
 
   afterEach(() => {
@@ -754,6 +758,34 @@ describe('APITokenManager', () => {
     expect(
       within(row).queryByText('backup server resource; status online; sources pbs'),
     ).not.toBeInTheDocument();
+  });
+
+  it('renames an existing token without revoking it', async () => {
+    listTokensMock.mockResolvedValue([
+      makeToken({
+        id: 'token-pbs',
+        name: 'proxmox-agent-pbs-1785306083',
+        scopes: [AGENT_REPORT_SCOPE],
+      }),
+    ]);
+
+    render(() => <APITokenManager onTokensChanged={vi.fn()} canManage />);
+
+    const row = await findTokenTableRow('proxmox-agent-pbs-1785306083');
+    const renameButton = within(row).getByRole('button', { name: 'Rename' });
+    fireEvent.click(renameButton);
+
+    const input = await screen.findByRole('textbox', { name: 'Token name' });
+    fireEvent.input(input, { target: { value: 'PBS 01 telemetry' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => {
+      expect(renameTokenMock).toHaveBeenCalledWith('token-pbs', 'PBS 01 telemetry');
+      expect(screen.getAllByText('PBS 01 telemetry').length).toBeGreaterThan(0);
+      expect(document.activeElement).toHaveTextContent('Rename');
+    });
+    expect(deleteTokenMock).not.toHaveBeenCalled();
+    expect(notificationSuccessMock).toHaveBeenCalledWith('Token renamed');
   });
 
   it('surfaces scope denial when token generation is blocked by caller scope', async () => {

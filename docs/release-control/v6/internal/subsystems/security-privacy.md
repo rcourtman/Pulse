@@ -18,6 +18,11 @@
 
 ## Purpose
 
+API-token rename is an authenticated token-management mutation: blank labels
+fail closed, successful changes are persisted and audited as `token_renamed`,
+and neither the plaintext credential nor its stored hash is exposed or
+rotated. Rename UI copy must state that connected agents remain unchanged.
+
 Own Pulse's canonical privacy disclosures, outbound usage-data boundary,
 and the security-facing settings surfaces that expose authentication posture,
 token-management visibility, and privacy controls to operators. Customer-facing

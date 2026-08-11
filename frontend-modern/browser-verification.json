@@ -1,20 +1,22 @@
 {
   "version": 1,
-  "base_sha": "70469660b3e38895ff28b50d28e320e975a3e908",
-  "verified_at": "2026-08-11T14:08:23Z",
+  "base_sha": "83dc17bf71368c64f63824142a1a72368c7f24ab",
+  "verified_at": "2026-08-11T14:17:19Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/api/nodes.ts",
-    "frontend-modern/src/components/Settings/NodeModalSetupGuideSection.tsx",
-    "frontend-modern/src/components/Settings/useNodeModalState.ts"
+    "frontend-modern/src/api/security.ts",
+    "frontend-modern/src/components/Settings/APITokenManager.tsx",
+    "frontend-modern/src/components/Settings/APITokenManagerDialogs.tsx",
+    "frontend-modern/src/components/Settings/useAPITokenManagerState.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/api/nodes.ts": "1f06a674b715cfeef5cfe219e239b54df70e95a09eb2907bc31de8c01dce0012",
-    "frontend-modern/src/components/Settings/NodeModalSetupGuideSection.tsx": "b21eebe819132f039874415c83c99fee1337b34ebf06e73e91aaacc3181fad96",
-    "frontend-modern/src/components/Settings/useNodeModalState.ts": "973d4ed2fbe5cef53f4e7853888a351b137ca1bcfa7574ff964c4efa83548eaa"
+    "frontend-modern/src/api/security.ts": "28f831a37a8b5030af96aba86654e152b4b6ecc8e795491c354c64e21acc235a",
+    "frontend-modern/src/components/Settings/APITokenManager.tsx": "c6e1490bc5f03ea22cb318eaed3c8e8aaf85f74327e9c6c3d0bcc9fd497f0a7f",
+    "frontend-modern/src/components/Settings/APITokenManagerDialogs.tsx": "51830fa6bb09b561d0e614614abbb782dcf04c3b5c97533876e27ed9f9031939",
+    "frontend-modern/src/components/Settings/useAPITokenManagerState.ts": "685b7bf347899c221945ecd42038ebd644bba114c47b1c1d115f32abe286fde3"
   },
   "routes": [
-    "/settings/infrastructure"
+    "/settings/security/api"
   ],
   "viewports": [
     {
@@ -27,17 +29,18 @@
     }
   ],
   "states": [
-    "Proxmox VE source dialog on the API inventory strategy with the TLS override absent.",
-    "Proxmox VE source dialog on Host Telemetry Agent with the TLS override visible, off by default, and then checked.",
-    "Desktop dialog at 1440 by 1000 with the full control label visible, focused, and no page or modal horizontal overflow.",
-    "Narrow dialog at 390 by 844 with the checked control and wrapped label reachable in the modal scroll region, no page or modal horizontal overflow, and the surrounding SSL settings unclipped.",
-    "Reopened Proxmox host-agent dialog after dismissal with the TLS override reset to off."
+    "API Access with one scoped token in the compact inventory and Rename available alongside scope editing and revocation.",
+    "Rename API token dialog with the existing name selected, explanatory credential-continuity copy visible, and input autofocus confirmed.",
+    "Whitespace-only rename input with Save disabled, followed by a nonblank replacement name with Save enabled.",
+    "Desktop dialog at 1440 by 1000 with a 448-pixel centered panel and no horizontal page overflow.",
+    "Narrow dialog at 390 by 844 with a 358-pixel panel, 308-pixel input, and no page or dialog horizontal overflow.",
+    "Successful rename with the updated inventory label, unchanged Settings read scope, success notification, closed dialog, and focus restored to Rename."
   ],
   "interactions": [
-    "Opened Add infrastructure, chose Proxmox VE, and switched from the recommended API inventory path to Host Telemetry Agent.",
-    "Clicked the TLS override and confirmed the native checkbox changed from unchecked to checked while retaining focus.",
-    "Repeated the host-agent surface inspection at 390 by 844 pixels and scrolled the dialog to the TLS and SSL controls.",
-    "Dismissed the dialog with Escape, confirmed focus returned to Add infrastructure, reopened the flow, and confirmed the override did not persist.",
-    "Closed the reopened dialog with its named close button."
+    "Created one scoped token in the isolated dev runtime, dismissed the one-time credential reveal without reading or recording the token value, and opened Rename from its inventory card.",
+    "Cleared the name to whitespace and confirmed Save failed closed, then entered a nonblank replacement.",
+    "Inspected and exercised the same dialog at desktop and narrow viewports, including autofocus and overflow boundaries.",
+    "Saved the rename through the live API and confirmed the visible name changed while the token's Settings read scope remained present.",
+    "Confirmed the success notification, dialog dismissal, and focus restoration to the replacement Rename button after the inventory row re-rendered."
   ]
 }

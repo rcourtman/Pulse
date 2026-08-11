@@ -108,6 +108,28 @@ func TestSecurityTokens_ListCreateDelete(t *testing.T) {
 		t.Fatalf("expected record id %q, got %q", createResp.Record.ID, getResp.Record.ID)
 	}
 
+	req = httptest.NewRequest(
+		http.MethodPatch,
+		"/api/security/tokens/"+createResp.Record.ID,
+		strings.NewReader(`{"name":"renamed token"}`),
+	)
+	req = req.WithContext(authpkg.WithUser(req.Context(), "alice"))
+	rr = httptest.NewRecorder()
+	router.handleRenameAPIToken(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected rename status %d, got %d", http.StatusOK, rr.Code)
+	}
+
+	var renameResp struct {
+		Record apiTokenDTO `json:"record"`
+	}
+	if err := json.NewDecoder(rr.Body).Decode(&renameResp); err != nil {
+		t.Fatalf("decode rename response: %v", err)
+	}
+	if renameResp.Record.Name != "renamed token" || cfg.APITokens[0].Name != "renamed token" {
+		t.Fatalf("token rename did not update response and config: response=%q config=%q", renameResp.Record.Name, cfg.APITokens[0].Name)
+	}
+
 	req = httptest.NewRequest(http.MethodDelete, "/api/security/tokens/", nil)
 	rr = httptest.NewRecorder()
 	router.handleDeleteAPIToken(rr, req)
@@ -151,7 +173,7 @@ func TestSecurityTokens_ListCreateDelete(t *testing.T) {
 		t.Fatalf("query audit events: %v", err)
 	}
 
-	var sawCreate, sawDelete bool
+	var sawCreate, sawRename, sawDelete bool
 	for _, event := range events {
 		if event.EventType == "token_created" && event.Success {
 			sawCreate = true
@@ -165,12 +187,56 @@ func TestSecurityTokens_ListCreateDelete(t *testing.T) {
 		if event.EventType == "token_deleted" && event.Success {
 			sawDelete = true
 		}
+		if event.EventType == "token_renamed" && event.Success {
+			sawRename = true
+		}
 	}
 	if !sawCreate {
 		t.Fatalf("expected successful token_created audit event")
 	}
 	if !sawDelete {
 		t.Fatalf("expected successful token_deleted audit event")
+	}
+	if !sawRename {
+		t.Fatalf("expected successful token_renamed audit event")
+	}
+}
+
+func TestSecurityTokens_RenameRejectsInvalidRequests(t *testing.T) {
+	cfg := &config.Config{APITokens: []config.APITokenRecord{{
+		ID:        "token-1",
+		Name:      "Original",
+		Hash:      "hash",
+		CreatedAt: time.Now(),
+	}}}
+	router := &Router{
+		config:      cfg,
+		persistence: config.NewConfigPersistence(t.TempDir()),
+	}
+
+	tests := []struct {
+		name string
+		path string
+		body string
+		want int
+	}{
+		{name: "missing id", path: "/api/security/tokens/", body: `{"name":"New"}`, want: http.StatusBadRequest},
+		{name: "invalid body", path: "/api/security/tokens/token-1", body: `{bad`, want: http.StatusBadRequest},
+		{name: "blank name", path: "/api/security/tokens/token-1", body: `{"name":"  "}`, want: http.StatusBadRequest},
+		{name: "not found", path: "/api/security/tokens/missing", body: `{"name":"New"}`, want: http.StatusNotFound},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPatch, test.path, strings.NewReader(test.body))
+			rr := httptest.NewRecorder()
+			router.handleRenameAPIToken(rr, req)
+			if rr.Code != test.want {
+				t.Fatalf("status = %d, want %d", rr.Code, test.want)
+			}
+		})
+	}
+	if cfg.APITokens[0].Name != "Original" {
+		t.Fatalf("invalid rename changed token name to %q", cfg.APITokens[0].Name)
 	}
 }
 

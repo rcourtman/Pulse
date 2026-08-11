@@ -15,6 +15,10 @@
 
 ## Purpose
 
+API-token names are operator-facing metadata, not agent identity. Renaming an
+existing token must preserve its ID, secret hash, scopes, expiry, and connected
+agent sessions, so lifecycle continuity never depends on a display label.
+
 Own unified agent installation, registration, update continuity, profile
 management, and fleet control surfaces. Pulse v6 has one host-installed
 infrastructure agent binary, `pulse-agent`; host, Docker / Podman,

@@ -33,6 +33,8 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
   const [tokenToRevoke, setTokenToRevoke] = createSignal<APITokenRecord | null>(null);
   const [tokenToEdit, setTokenToEdit] = createSignal<APITokenRecord | null>(null);
   const [editScopes, setEditScopes] = createSignal<string[]>([]);
+  const [tokenToRename, setTokenToRename] = createSignal<APITokenRecord | null>(null);
+  const [renameInput, setRenameInput] = createSignal('');
   let dialogTrigger: HTMLButtonElement | undefined;
   const {
     API_SCOPE_LABELS,
@@ -52,10 +54,12 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
     handleDelete,
     handleGenerate,
     handleUpdateScopes,
+    handleRename,
     hasWildcardTokens,
     hasScopeSelection,
     isFullAccessSelected,
     isGenerating,
+    isRenaming,
     isRevealActiveForCurrentToken,
     loading,
     nameInput,
@@ -87,10 +91,28 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
 
   const restoreDialogTrigger = () => {
     const trigger = dialogTrigger;
+    const tokenId = trigger?.dataset.apiTokenId;
+    const action = trigger?.dataset.apiTokenAction;
     dialogTrigger = undefined;
-    queueMicrotask(() => {
-      if (trigger?.isConnected && !trigger.disabled) trigger.focus();
-    });
+    window.setTimeout(() => {
+      if (trigger?.isConnected && !trigger.disabled) {
+        trigger.focus();
+        return;
+      }
+      if (!tokenId || !action) return;
+      const replacement = Array.from(
+        document.querySelectorAll<HTMLButtonElement>(
+          'button[data-api-token-id][data-api-token-action]',
+        ),
+      ).find(
+        (button) =>
+          button.dataset.apiTokenId === tokenId &&
+          button.dataset.apiTokenAction === action &&
+          button.offsetParent !== null &&
+          !button.disabled,
+      );
+      replacement?.focus();
+    }, 0);
   };
 
   const openScopeEditor = (token: APITokenRecord, trigger: HTMLButtonElement) => {
@@ -102,6 +124,12 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
   const openRevokeDialog = (token: APITokenRecord, trigger: HTMLButtonElement) => {
     rememberDialogTrigger(trigger);
     setTokenToRevoke(token);
+  };
+
+  const openRenameDialog = (token: APITokenRecord, trigger: HTMLButtonElement) => {
+    rememberDialogTrigger(trigger);
+    setRenameInput(token.name ?? '');
+    setTokenToRename(token);
   };
 
   const closeScopeEditor = () => {
@@ -152,6 +180,23 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
   const cancelRevoke = () => {
     setTokenToRevoke(null);
     restoreDialogTrigger();
+  };
+
+  const closeRenameDialog = () => {
+    if (isRenaming()) return;
+    setTokenToRename(null);
+    setRenameInput('');
+    restoreDialogTrigger();
+  };
+
+  const renameToken = async () => {
+    const token = tokenToRename();
+    if (!token) return;
+    if (await handleRename(token, renameInput())) {
+      setTokenToRename(null);
+      setRenameInput('');
+      restoreDialogTrigger();
+    }
   };
 
   const renderTokenScopes = (token: APITokenRecord) => {
@@ -239,6 +284,8 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
     >
       <button
         type="button"
+        data-api-token-id={token.id}
+        data-api-token-action="edit-scopes"
         onClick={(event) => openScopeEditor(token, event.currentTarget)}
         disabled={!canManage()}
         class={`inline-flex min-h-10 items-center justify-center rounded-md px-2.5 py-1.5 text-sm font-semibold text-blue-600 transition hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-60 dark:text-blue-300 dark:hover:bg-blue-900 dark:hover:text-blue-200 ${
@@ -249,6 +296,20 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
       </button>
       <button
         type="button"
+        data-api-token-id={token.id}
+        data-api-token-action="rename"
+        onClick={(event) => openRenameDialog(token, event.currentTarget)}
+        disabled={!canManage()}
+        class={`inline-flex min-h-10 items-center justify-center rounded-md px-2.5 py-1.5 text-sm font-semibold text-blue-600 transition hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-60 dark:text-blue-300 dark:hover:bg-blue-900 dark:hover:text-blue-200 ${
+          compact ? 'flex-1 border border-blue-200 dark:border-blue-800' : 'sm:min-h-9'
+        }`}
+      >
+        Rename
+      </button>
+      <button
+        type="button"
+        data-api-token-id={token.id}
+        data-api-token-action="revoke"
         onClick={(event) => openRevokeDialog(token, event.currentTarget)}
         disabled={!canManage()}
         class={`inline-flex min-h-10 items-center justify-center rounded-md px-2.5 py-1.5 text-sm font-semibold text-red-600 transition hover:bg-red-50 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-60 dark:text-red-400 dark:hover:bg-red-900 dark:hover:text-red-300 ${
@@ -726,19 +787,25 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
         </ExternalTextLink>
       </Card>
 
-      <Show when={tokenToEdit() || tokenToRevoke()}>
+      <Show when={tokenToEdit() || tokenToRevoke() || tokenToRename()}>
         <APITokenManagerDialogs
           tokenToEdit={tokenToEdit}
           tokenToRevoke={tokenToRevoke}
+          tokenToRename={tokenToRename}
+          renameInput={renameInput}
           editScopes={editScopes}
           scopeGroups={scopeGroups}
           updatingTokenId={updatingTokenId}
+          isRenaming={isRenaming}
           editScopesChanged={editScopesChanged}
           onToggleEditScope={toggleEditScope}
           onCloseScopeEditor={closeScopeEditor}
           onSaveEditedScopes={() => void saveEditedScopes()}
           onCancelRevoke={cancelRevoke}
           onRevoke={revokeToken}
+          onRenameInput={setRenameInput}
+          onCloseRename={closeRenameDialog}
+          onRename={() => void renameToken()}
         />
       </Show>
     </div>

@@ -257,4 +257,25 @@ describe('SecurityAPI', () => {
       );
     });
   });
+
+  describe('renameToken', () => {
+    it('renames a token without rotating it', async () => {
+      const record: APITokenRecord = {
+        id: 'token/1',
+        name: 'PBS host',
+        prefix: 'pulse',
+        suffix: '1234',
+        createdAt: '',
+      };
+      vi.mocked(apiFetchJSON).mockResolvedValueOnce({ record });
+
+      const result = await SecurityAPI.renameToken('token/1', 'PBS host');
+
+      expect(apiFetchJSON).toHaveBeenCalledWith('/api/security/tokens/token%2F1', {
+        method: 'PATCH',
+        body: JSON.stringify({ name: 'PBS host' }),
+      });
+      expect(result).toEqual(record);
+    });
+  });
 });

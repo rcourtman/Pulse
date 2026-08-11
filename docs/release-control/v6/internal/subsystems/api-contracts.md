@@ -20,6 +20,11 @@
 
 ## Purpose
 
+`PATCH /api/security/tokens/{id}` supports bounded metadata updates. A nonblank
+`name` renames the record without rotating its secret or changing scopes; a
+`scopes` update retains the existing delegation checks, and omitted fields are
+left unchanged. The response returns the complete updated token record.
+
 Own canonical runtime payload shapes between backend and frontend, including
 the trust boundary that keeps customer-safe support diagnostics and normal
 product API routes free of maintainer commercial analytics.

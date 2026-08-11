@@ -21,6 +21,11 @@
 
 ## Purpose
 
+Token display-name changes use the existing API-token persistence boundary.
+The in-memory record must roll back if persistence fails, while the token ID,
+secret hash, scopes, and expiry remain intact so restart and restore preserve
+both credential continuity and the latest successfully stored label.
+
 Own the storage and recovery product surfaces, recovery-point persistence and
 querying, and the operator-facing storage health presentation layer while
 keeping adjacent commercial reporting APIs out of storage/recovery product

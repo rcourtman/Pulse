@@ -6,15 +6,21 @@ import type { APITokenRecord } from '@/types/api';
 interface APITokenManagerDialogsProps {
   tokenToEdit: Accessor<APITokenRecord | null>;
   tokenToRevoke: Accessor<APITokenRecord | null>;
+  tokenToRename: Accessor<APITokenRecord | null>;
+  renameInput: Accessor<string>;
   editScopes: Accessor<string[]>;
   scopeGroups: Accessor<[APIScopeOption['group'], APIScopeOption[]][]>;
   updatingTokenId: Accessor<string | null>;
+  isRenaming: Accessor<boolean>;
   editScopesChanged: () => boolean;
   onToggleEditScope: (scope: string) => void;
   onCloseScopeEditor: () => void;
   onSaveEditedScopes: () => void;
   onCancelRevoke: () => void;
   onRevoke: (token: APITokenRecord) => void;
+  onRenameInput: (name: string) => void;
+  onCloseRename: () => void;
+  onRename: () => void;
 }
 
 export const APITokenManagerDialogs: Component<APITokenManagerDialogsProps> = (props) => (
@@ -116,6 +122,57 @@ export const APITokenManagerDialogs: Component<APITokenManagerDialogsProps> = (p
             </button>
           </div>
         </div>
+      </Dialog>
+    </Show>
+
+    <Show when={props.tokenToRename()}>
+      <Dialog
+        isOpen={true}
+        onClose={props.onCloseRename}
+        panelClass="max-w-md"
+        ariaLabel="Rename API token"
+      >
+        <form
+          class="w-full p-6"
+          onSubmit={(event) => {
+            event.preventDefault();
+            props.onRename();
+          }}
+        >
+          <h3 class="mb-2 text-lg font-semibold text-base-content">Rename API token</h3>
+          <p class="mb-4 text-sm text-muted">
+            This only changes the name shown in Pulse. The token value and connected agents stay
+            unchanged.
+          </p>
+          <label class="block space-y-2">
+            <span class="text-xs font-semibold uppercase tracking-wide text-muted">Token name</span>
+            <input
+              type="text"
+              value={props.renameInput()}
+              onInput={(event) => props.onRenameInput(event.currentTarget.value)}
+              disabled={props.isRenaming()}
+              class="w-full min-h-10 rounded-md border border-border bg-surface px-3 py-2 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+              autofocus
+            />
+          </label>
+          <div class="mt-5 flex justify-end gap-3">
+            <button
+              type="button"
+              onClick={props.onCloseRename}
+              disabled={props.isRenaming()}
+              class="rounded-md border border-border px-4 py-2 text-sm font-medium text-base-content hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={props.isRenaming() || !props.renameInput().trim()}
+              class="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {props.isRenaming() ? 'Saving…' : 'Save'}
+            </button>
+          </div>
+        </form>
       </Dialog>
     </Show>
 
