@@ -80,9 +80,21 @@ tier lists, the classification data behind them, and the
 promotion/demotion rule (10 consecutive green main runs promotes a
 probation spec; one failure or retry-flake demotes it back) are
 documented next to `PROBATION_SPECS` and `QUARANTINED_SPECS` in
-`playwright.config.ts`. Quarantined specs are rotted and do not run at
+`e2e-tiering.mjs`. Quarantined specs are rotted and do not run at
 all; probation specs run on every push but cannot fail the
 `e2e-verdict` job in `.github/workflows/test-e2e.yml`.
+
+Validate the ledger and Playwright's complete per-project split with:
+
+```bash
+cd tests/integration
+npm run check:e2e-tiers
+```
+
+The check uses Playwright's own `--list` output, verifies that stable and
+probation are disjoint and exhaustive across every configured project, rejects
+stale/duplicate/overlapping ledger entries, and protects a minimum stable-tier
+signal floor.
 
 ### Eval Packs (No Manual Steps)
 Run the curated scenario pack (multi-tenant, retired-trial-acquisition, cloud-hosting, cloud-billing-lifecycle) and emit a report:
