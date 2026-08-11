@@ -302,8 +302,16 @@ default_image_ref() {
 # imagetools, which the Docker install above provides, and which reads the
 # registry without pulling the image.
 resolve_image_digest() {
-  local ref="$1" digest
-  digest="$(docker buildx imagetools inspect "${ref}" --format '{{.Manifest.Digest}}' 2>/dev/null || true)"
+  local ref="$1" manifest_json digest
+  manifest_json="$(docker buildx imagetools inspect "${ref}" --format '{{json .Manifest}}' 2>/dev/null || true)"
+  digest="$(printf '%s' "${manifest_json}" | jq -r 'if type == "object" then .digest // empty else empty end' 2>/dev/null || true)"
+  if [[ "${digest}" != sha256:* ]]; then
+    # Ubuntu's packaged Buildx and Docker's plugin have differed in which
+    # fields their Go template exposes. Keep a human-output fallback so an
+    # already-working Docker install is not rejected only because its Buildx
+    # formatter is older or distro-patched.
+    digest="$(docker buildx imagetools inspect "${ref}" 2>/dev/null | awk '$1 == "Digest:" {print $2; exit}' || true)"
+  fi
   [[ "${digest}" == sha256:* ]] || return 1
   printf '%s@%s\n' "${ref%:*}" "${digest}"
 }
@@ -715,6 +723,15 @@ The license must bind this key or the control plane will refuse to start."
 
 validate_compose_config() {
   log "validating compose config"
+  local license_file
+  license_file="$(env_value CP_PROVIDER_MSP_LICENSE_FILE "${PULSE_PROVIDER_MSP_INSTALL_DIR}/.env")"
+  if [[ "${1:-}" == "--allow-missing-evaluation-license" && -z "${license_file}" ]]; then
+    # Compose requires a non-empty secret source even for a config-only
+    # parse. Use a non-secret placeholder for this pre-issuance validation;
+    # the normal validation after ensure_eval_license uses the real file.
+    (cd "${PULSE_PROVIDER_MSP_INSTALL_DIR}" && CP_PROVIDER_MSP_LICENSE_FILE=/dev/null docker compose config --quiet)
+    return 0
+  fi
   (cd "${PULSE_PROVIDER_MSP_INSTALL_DIR}" && docker compose config --quiet)
 }
 
@@ -724,7 +741,13 @@ pull_provider_images() {
     return 0
   fi
   log "pulling provider MSP images"
-  (cd "${PULSE_PROVIDER_MSP_INSTALL_DIR}" && docker compose pull traefik docker-socket-proxy control-plane)
+  local env_path="${PULSE_PROVIDER_MSP_INSTALL_DIR}/.env"
+  local key image_ref
+  for key in TRAEFIK_IMAGE DOCKER_SOCKET_PROXY_IMAGE CONTROL_PLANE_IMAGE CP_PULSE_IMAGE; do
+    image_ref="$(env_value "${key}" "${env_path}")"
+    [[ "${image_ref}" == *@sha256:* ]] || die "${key} is not digest-pinned before image pull"
+    docker pull "${image_ref}"
+  done
 }
 
 run_install_proof_if_requested() {
@@ -820,12 +843,13 @@ main() {
   create_data_dirs
   ensure_docker_network
   block_container_metadata_service
-  validate_compose_config
+  validate_compose_config --allow-missing-evaluation-license
   pull_provider_images
   # Issue the evaluation only after the host is configured and the immutable
   # images are reachable. This makes an issued evaluation a useful activation
   # signal rather than a record created before setup can succeed.
   ensure_eval_license
+  validate_compose_config
   run_install_proof_if_requested
   print_summary
 }

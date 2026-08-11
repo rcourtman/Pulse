@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -449,6 +450,7 @@ func (rt *providerMSPProofRuntime) proveProviderMSPWorkspace(ctx context.Context
 		OwnerUserID: ownerUserID,
 		BaseURL:     publicURL,
 	})
+	err = rt.reconcileProviderMSPProofRuntimeMutation(tenant, tenantDataDir, "install token generation", err)
 	if err != nil {
 		return providerMSPProofWorkspace{}, fmt.Errorf("generate hosted tenant install command: %w", err)
 	}
@@ -457,6 +459,7 @@ func (rt *providerMSPProofRuntime) proveProviderMSPWorkspace(ctx context.Context
 	}
 
 	tokenAuthVerified, err := markProviderMSPProofAgentTokenUsed(tenantDataDir, tenant.ID, install.Token)
+	err = rt.reconcileProviderMSPProofRuntimeMutation(tenant, tenantDataDir, "install token use", err)
 	if err != nil {
 		return providerMSPProofWorkspace{}, err
 	}
@@ -466,16 +469,19 @@ func (rt *providerMSPProofRuntime) proveProviderMSPWorkspace(ctx context.Context
 		facts.LastAgentSeenAt != nil
 
 	agentReport, err := rt.verifyProviderMSPProofAgentReportIngest(ctx, tenant, tenantDataDir, install.Token, install.TokenID)
+	err = rt.reconcileProviderMSPProofRuntimeMutation(tenant, tenantDataDir, "agent report ingest", err)
 	if err != nil {
 		return providerMSPProofWorkspace{}, err
 	}
 
 	rotation, err := rt.verifyProviderMSPProofInstallTokenRotation(ctx, tenant, tenantDataDir, install.Token, install.TokenID)
+	err = rt.reconcileProviderMSPProofRuntimeMutation(tenant, tenantDataDir, "install token rotation", err)
 	if err != nil {
 		return providerMSPProofWorkspace{}, err
 	}
 
 	exchangedTargetPath, err := rt.verifyProviderMSPProofHandoff(ctx, tenant, ownerUserID, targetPath)
+	err = rt.reconcileProviderMSPProofRuntimeMutation(tenant, tenantDataDir, "handoff exchange", err)
 	if err != nil {
 		return providerMSPProofWorkspace{}, err
 	}
@@ -486,6 +492,7 @@ func (rt *providerMSPProofRuntime) proveProviderMSPWorkspace(ctx context.Context
 	}
 
 	portalRollup, err := rt.verifyProviderMSPProofPortalRollup(ctx, tenant, tenantDataDir, agentReport)
+	err = rt.reconcileProviderMSPProofRuntimeMutation(tenant, tenantDataDir, "portal rollup", err)
 	if err != nil {
 		return providerMSPProofWorkspace{}, err
 	}
@@ -527,6 +534,23 @@ func (rt *providerMSPProofRuntime) proveProviderMSPWorkspace(ctx context.Context
 		CriticalAlertCount:          portalRollup.CriticalAlertCount,
 		WarningAlertCount:           portalRollup.WarningAlertCount,
 	}, nil
+}
+
+func (rt *providerMSPProofRuntime) reconcileProviderMSPProofRuntimeMutation(tenant *registry.Tenant, tenantDataDir, stage string, mutationErr error) error {
+	if rt == nil || rt.docker == nil || tenant == nil || strings.TrimSpace(tenant.ContainerID) == "" {
+		return mutationErr
+	}
+	reconcileErr := rt.docker.ReconcileTenantRuntimeMountSources(tenantDataDir)
+	if reconcileErr != nil {
+		reconcileErr = fmt.Errorf("reconcile tenant runtime ownership after %s: %w", stage, reconcileErr)
+	}
+	if mutationErr != nil && reconcileErr != nil {
+		return errors.Join(mutationErr, reconcileErr)
+	}
+	if mutationErr != nil {
+		return mutationErr
+	}
+	return reconcileErr
 }
 
 type providerMSPProofPortalRollup struct {

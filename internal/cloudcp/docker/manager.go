@@ -556,6 +556,21 @@ func (m *Manager) CreateAndStart(ctx context.Context, tenantID, tenantDataDir st
 	return resp.ID, nil
 }
 
+// ReconcileTenantRuntimeMountSources restores the configured rootless runtime
+// ownership after the provider control plane has deliberately mutated a live
+// tenant's files on its behalf. CreateAndStart performs the same preparation
+// before first boot; provider-hosted proof paths need this public boundary when
+// they hand files back to an already-running tenant.
+func (m *Manager) ReconcileTenantRuntimeMountSources(tenantDataDir string) error {
+	if m == nil {
+		return fmt.Errorf("docker manager is required")
+	}
+	if err := prepareTenantRuntimeMountSources(tenantDataDir, tenantRuntimeUIDFor(m.cfg), tenantRuntimeGIDFor(m.cfg)); err != nil {
+		return fmt.Errorf("reconcile tenant runtime mounts: %w", err)
+	}
+	return nil
+}
+
 func tenantRuntimeContainerConfig(tenantID string, cfg ManagerConfig, labels map[string]string, trustedProxyCIDRs []string) *container.Config {
 	return &container.Config{
 		Image:  cfg.Image,

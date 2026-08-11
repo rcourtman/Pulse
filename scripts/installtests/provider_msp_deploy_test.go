@@ -3,6 +3,7 @@ package installtests
 import (
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -156,7 +157,7 @@ func TestProviderMSPSetupScriptMatchesProviderContract(t *testing.T) {
 		"CP_ALLOW_DOCKERLESS_PROVISIONING must be false",
 		"CP_STORAGE_GUARDRAILS_ENABLED must be true",
 		"docker compose config --quiet",
-		"docker compose pull traefik docker-socket-proxy control-plane",
+		`docker pull "${image_ref}"`,
 		"PULSE_PROVIDER_MSP_ACCOUNT_NAME",
 		"PULSE_PROVIDER_MSP_OWNER_EMAIL",
 		"./run-install-proof.sh",
@@ -353,6 +354,12 @@ func TestProviderMSPSetupScriptSupportsUnlicensedEvaluation(t *testing.T) {
 		"default_image_ref",
 		"resolve_image_digest",
 		"buildx imagetools inspect",
+		`--format '{{json .Manifest}}'`,
+		`jq -r 'if type == "object" then .digest // empty else empty end'`,
+		`awk '$1 == "Digest:" {print $2; exit}'`,
+		"validate_compose_config --allow-missing-evaluation-license",
+		`CP_PROVIDER_MSP_LICENSE_FILE=/dev/null docker compose config --quiet`,
+		`docker pull "${image_ref}"`,
 		`if [[ "${current}" == *@sha256:*`,
 		`ref="${current}"`,
 		// Self-issue, and the three ways it must degrade instead of blocking.
@@ -368,6 +375,10 @@ func TestProviderMSPSetupScriptSupportsUnlicensedEvaluation(t *testing.T) {
 	)
 	if strings.LastIndex(script, "pull_provider_images\n") > strings.LastIndex(script, "ensure_eval_license\n") {
 		t.Fatal("evaluation must be issued only after pinned provider images are reachable")
+	}
+	setupSequence := "validate_compose_config --allow-missing-evaluation-license\n  pull_provider_images\n  # Issue the evaluation only after the host is configured and the immutable\n  # images are reachable. This makes an issued evaluation a useful activation\n  # signal rather than a record created before setup can succeed.\n  ensure_eval_license\n  validate_compose_config"
+	if !strings.Contains(script, setupSequence) {
+		t.Fatal("setup must validate compose, pull pinned images, issue the evaluation, then validate compose with the installed licence")
 	}
 
 	// The install must never abort because an evaluation licence could not be
@@ -403,6 +414,39 @@ func TestProviderMSPSetupScriptSupportsUnlicensedEvaluation(t *testing.T) {
 		if !strings.Contains(env, "\n"+key+"=\n") {
 			t.Fatalf(".env.example must ship %s blank so setup.sh resolves its digest", key)
 		}
+	}
+}
+
+func TestProviderMSPResolveImageDigestAcceptsManifestJSON(t *testing.T) {
+	scriptBytes, err := os.ReadFile(repoFile("deploy", "provider-msp", "setup.sh"))
+	if err != nil {
+		t.Fatalf("read provider MSP setup: %v", err)
+	}
+	script := strings.Replace(string(scriptBytes), `main "$@"`, "", 1)
+	if script == string(scriptBytes) {
+		t.Fatal("provider MSP setup main invocation not found")
+	}
+
+	tempDir := t.TempDir()
+	digest := "sha256:" + strings.Repeat("a", 64)
+	fakeDocker := filepath.Join(tempDir, "docker")
+	if err := os.WriteFile(fakeDocker, []byte("#!/bin/sh\nprintf '%s\\n' '{\"digest\":\""+digest+"\"}'\n"), 0o755); err != nil {
+		t.Fatalf("write fake docker: %v", err)
+	}
+	runner := filepath.Join(tempDir, "resolve-image-digest.sh")
+	if err := os.WriteFile(runner, []byte(script+"\nresolve_image_digest example.invalid/provider:v1\n"), 0o755); err != nil {
+		t.Fatalf("write setup runner: %v", err)
+	}
+
+	cmd := exec.Command("bash", runner)
+	cmd.Env = append(os.Environ(), "PATH="+tempDir+":"+os.Getenv("PATH"))
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("resolve image digest: %v\n%s", err, output)
+	}
+	want := "example.invalid/provider@" + digest
+	if got := strings.TrimSpace(string(output)); got != want {
+		t.Fatalf("resolved image = %q, want %q", got, want)
 	}
 }
 

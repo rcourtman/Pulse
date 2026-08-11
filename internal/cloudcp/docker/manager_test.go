@@ -452,8 +452,9 @@ func TestPrepareTenantRuntimeMountSourcesAlignsOwnershipAndPermissions(t *testin
 	if err := os.WriteFile(nestedPath, []byte("state"), 0o644); err != nil {
 		t.Fatalf("write nested state: %v", err)
 	}
-	if err := prepareTenantRuntimeMountSources(tenantDataDir, uid, gid); err != nil {
-		t.Fatalf("prepareTenantRuntimeMountSources after nested state: %v", err)
+	mgr := &Manager{cfg: ManagerConfig{TenantRuntimeUID: uid, TenantRuntimeGID: gid}}
+	if err := mgr.ReconcileTenantRuntimeMountSources(tenantDataDir); err != nil {
+		t.Fatalf("ReconcileTenantRuntimeMountSources after nested state: %v", err)
 	}
 
 	for _, path := range []string{tenantDataDir, nestedDir, nestedPath} {

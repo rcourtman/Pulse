@@ -396,6 +396,10 @@ copy must not imply that the external agent independently sends alerts.
     including recursive ownership alignment to the configured tenant UID/GID and
     strict permissions on tenant key files, so `CapDrop: ["ALL"]` and
     read-only root filesystems remain compatible with first workspace startup.
+    Root-running control-plane proof paths that mutate files on behalf of an
+    already-running tenant must reuse that Docker-manager ownership boundary
+    before returning control to the rootless runtime; owner-only credential,
+    handoff, ingest, or report state must never remain readable only by root.
     Client-bound proof must cover the boundary itself: workspace limits must not
     be raceable past the licensed cap, handoff tokens must not be replayed or
     retargeted across workspaces, org-bound agent install/report tokens must not

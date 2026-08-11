@@ -207,6 +207,11 @@ upgrade, update, release, or artifact-selection behavior.
    `license_file` must be the
    resolved provider MSP plan source unless the operator explicitly opts into
    the local-development `--allow-env-plan` escape hatch.
+   When the root-running provider proof mutates files on behalf of an already
+   running rootless tenant, it must reconcile the full tenant mount tree to the
+   Docker manager's configured runtime UID/GID before the next live-runtime
+   stage. Credential rotation, handoff, report ingest, and portal-rollup proof
+   must not leave owner-only tenant state readable only by the control plane.
    The same proof surface must also keep adversarial client-boundary probes in
    scope: workspace-limit check/create must be locked against concurrent cap
    bypass, handoff tokens must reject cross-workspace retargeting without being
@@ -256,6 +261,13 @@ upgrade, update, release, or artifact-selection behavior.
    the host Docker socket, the provider data directory must be mounted at the
    same absolute path inside the control-plane container that the host Docker
    daemon will later use for tenant runtime bind mounts.
+   Setup must perform its first compose parse with a non-secret placeholder
+   when no evaluation file exists yet, pull each resolved digest-pinned image
+   without requiring compose secret interpolation, issue the evaluation only
+   after those image pulls succeed, and then repeat normal compose validation
+   against the installed signed license. Image resolution must accept the
+   manifest JSON exposed by current Buildx and retain a human-output digest
+   fallback for supported distro-packaged Buildx variants.
    The setup artifact must also generate strong provider secrets when the
    template leaves `CP_ADMIN_KEY` or `CP_TRIAL_ACTIVATION_PRIVATE_KEY` blank,
    enforce minimum admin-key strength and a valid activation signing key before
