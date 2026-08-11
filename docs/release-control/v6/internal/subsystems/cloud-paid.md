@@ -3334,7 +3334,8 @@ licences must remain separate. The licence server admin surface may aggregate
 those licence stages over bounded time windows. Optional evaluator email and the public
 evaluation licence ID may join an assisted upgrade to its activation, but no
 stage may collect client inventory, credentials, private signing material, or
-free-form runtime telemetry. Anonymous evaluation must remain available.
+free-form runtime telemetry. Evaluation must remain available without
+requiring the requester to identify themselves.
 
 The activation interpretation requires the bounded `setup_stage=images_ready`
 audit value. An evaluation without that value, including issuance from the
