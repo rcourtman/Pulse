@@ -97,6 +97,7 @@ func TestOperatorOutcomeUpgradeReasonsRemainCanonical(t *testing.T) {
 		FeatureLongTermMetrics: "Get Relay for 14 days of history, or Pro for 90 days, so you can see what changed before and after an incident.",
 		FeatureAIAlerts:        "Upgrade to Pro so Patrol can investigate issues instead of handing you a stack of symptoms.",
 		FeatureAIAutoFix:       "Upgrade to Pro so Patrol can investigate issues, apply safe fixes within Patrol mode, and verify the result.",
+		FeatureExternalProbe:   "Upgrade to Pro to run availability checks from an agent outside the monitored site and report the results back to Pulse for alerting.",
 	}
 
 	for _, entry := range UpgradeReasonMatrix {

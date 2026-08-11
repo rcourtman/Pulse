@@ -265,7 +265,7 @@ var featureMetadataCatalog = map[string]FeatureMetadata{
 			Relay:     SelfHostedFeatureRoleHidden,
 			Pro:       SelfHostedFeatureRoleIncludedExtra,
 		},
-		UpgradeReason:   "Upgrade to Pro to run availability checks from a probe outside the monitored site, with independent alerting.",
+		UpgradeReason:   "Upgrade to Pro to run availability checks from an agent outside the monitored site and report the results back to Pulse for alerting.",
 		UpgradePriority: 7,
 	},
 	FeatureMultiUser: {

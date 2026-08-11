@@ -133,6 +133,11 @@ scheduled report cadence/delivery, generated output retention, and the
 `white_label` entitlement gate. This keeps provider-hosted MSP Stripe-free and
 avoids a cloud-control-plane report data path across clients.
 
+The self-hosted External Probes offer is an agent-originated availability
+contract: an agent outside the monitored site performs the check and reports
+its result to Pulse, while Pulse remains the alerting authority. Commercial
+copy must not imply that the external agent independently sends alerts.
+
 ## Canonical Files
 
 1. `pkg/licensing/features.go`
