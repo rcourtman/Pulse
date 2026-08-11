@@ -18,7 +18,7 @@ func newHostRemovalLifecycleMonitor(t *testing.T, dataPath string) *Monitor {
 	t.Helper()
 	monitor := &Monitor{
 		state:               models.NewState(),
-		alertManager:        alerts.NewManager(),
+		alertManager:        alerts.NewManagerWithDataDir(dataPath),
 		hostTokenBindings:   make(map[string]string),
 		removedHostAgents:   make(map[string]time.Time),
 		rateTracker:         NewRateTracker(),
@@ -218,6 +218,99 @@ func TestHostAgentRemovalLifecycleRepublishesUnifiedReadState(t *testing.T) {
 	}
 	if hosts := adapter.Hosts(); len(hosts) != 0 {
 		t.Fatalf("unified read state retained removed host: %+v", hosts)
+	}
+}
+
+func TestHostAgentRemovalLifecycleRemovesAssociatedDockerSurfacesAndAlerts(t *testing.T) {
+	monitor := newHostRemovalLifecycleMonitor(t, t.TempDir())
+	now := time.Now().UTC()
+	report := hostRemovalLifecycleReport(
+		"host-machine-id",
+		"host-machine-id",
+		"host-agent-id",
+		"shared-name.local",
+		"linux",
+		now,
+	)
+	host, err := monitor.ApplyHostReport(report, &config.APITokenRecord{
+		ID:        "host-token",
+		CreatedAt: now.Add(-time.Hour),
+	})
+	if err != nil {
+		t.Fatalf("ApplyHostReport: %v", err)
+	}
+
+	dockerHosts := []models.DockerHost{
+		{
+			ID:          "docker-agent-alias",
+			AgentID:     report.Agent.ID,
+			Hostname:    report.Host.Hostname,
+			DisplayName: report.Host.Hostname,
+			Status:      "offline",
+			TokenID:     "docker-token-one",
+		},
+		{
+			ID:          "docker-machine-alias",
+			MachineID:   report.Host.MachineID,
+			Hostname:    report.Host.Hostname,
+			DisplayName: report.Host.Hostname,
+			Status:      "offline",
+			TokenID:     "docker-token-two",
+		},
+		{
+			ID:          "unrelated-docker-host",
+			AgentID:     "unrelated-agent",
+			MachineID:   "unrelated-machine",
+			Hostname:    report.Host.Hostname,
+			DisplayName: report.Host.Hostname,
+			Status:      "offline",
+			TokenID:     "unrelated-token",
+		},
+	}
+	for _, dockerHost := range dockerHosts {
+		monitor.state.UpsertDockerHost(dockerHost)
+		for range 3 {
+			monitor.alertManager.HandleDockerHostOffline(dockerHost)
+		}
+	}
+	activeResources := make(map[string]bool)
+	for _, alert := range monitor.alertManager.GetActiveAlerts() {
+		activeResources[alert.ResourceID] = true
+	}
+	for _, dockerHost := range dockerHosts {
+		resourceID := "docker:" + dockerHost.ID
+		if !activeResources[resourceID] {
+			t.Fatalf("active alerts before host removal did not include %q", resourceID)
+		}
+	}
+
+	if _, err := monitor.RemoveHostAgent(host.ID); err != nil {
+		t.Fatalf("RemoveHostAgent: %v", err)
+	}
+	remaining := monitor.state.GetDockerHosts()
+	if len(remaining) != 1 || remaining[0].ID != "unrelated-docker-host" {
+		t.Fatalf("remaining Docker hosts = %+v, want only unrelated host", remaining)
+	}
+	activeResources = make(map[string]bool)
+	for _, alert := range monitor.alertManager.GetActiveAlerts() {
+		activeResources[alert.ResourceID] = true
+	}
+	if activeResources["docker:docker-agent-alias"] || activeResources["docker:docker-machine-alias"] {
+		t.Fatalf("associated Docker alerts remained active after host removal: %+v", activeResources)
+	}
+	if !activeResources["docker:unrelated-docker-host"] {
+		t.Fatalf("unrelated Docker alert was cleared after host removal: %+v", activeResources)
+	}
+
+	removedIDs := make(map[string]bool)
+	for _, removed := range monitor.state.GetRemovedDockerHosts() {
+		removedIDs[removed.ID] = true
+	}
+	if !removedIDs["docker-agent-alias"] || !removedIDs["docker-machine-alias"] {
+		t.Fatalf("removed Docker hosts = %+v, want both associated surfaces", removedIDs)
+	}
+	if removedIDs["unrelated-docker-host"] {
+		t.Fatal("same-hostname unrelated Docker host was removed")
 	}
 }
 

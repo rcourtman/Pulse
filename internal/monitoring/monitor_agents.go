@@ -281,12 +281,30 @@ func (m *Monitor) RemoveDockerHost(hostID string) (models.DockerHost, error) {
 		}
 	}
 
-	// Track removal to prevent resurrection from cached reports
-	removedAt := time.Now()
+	// Track removal to prevent resurrection from cached reports.
+	m.finalizeDockerHostRemoval(host, time.Now().UTC())
+
+	log.Info().
+		Str("dockerHost", host.Hostname).
+		Str("dockerHostID", hostID).
+		Bool("removed", removed).
+		Msg("Docker host removed and alerts cleared")
+
+	return host, nil
+}
+
+func (m *Monitor) finalizeDockerHostRemoval(host models.DockerHost, removedAt time.Time) {
+	hostID := strings.TrimSpace(host.ID)
+	if hostID == "" {
+		return
+	}
 
 	m.mu.Lock()
+	if m.removedDockerHosts == nil {
+		m.removedDockerHosts = make(map[string]time.Time)
+	}
 	m.removedDockerHosts[hostID] = removedAt
-	// Unbind the token so it can be reused with a different agent if needed
+	// Unbind the token so it can be reused with a different agent if needed.
 	if host.TokenID != "" {
 		delete(m.dockerTokenBindings, host.TokenID)
 		log.Debug().
@@ -314,14 +332,55 @@ func (m *Monitor) RemoveDockerHost(hostID string) (models.DockerHost, error) {
 		m.alertManager.HandleDockerHostRemoved(host)
 		m.SyncAlertState()
 	}
+}
 
-	log.Info().
-		Str("dockerHost", host.Hostname).
-		Str("dockerHostID", hostID).
-		Bool("removed", removed).
-		Msg("Docker host removed and alerts cleared")
+func dockerHostBelongsToHostAgent(
+	dockerHost models.DockerHost,
+	hostID string,
+	host models.Host,
+	continuity config.HostContinuityEntry,
+) bool {
+	hostAliases := uniqueNonEmptyStrings(
+		hostID,
+		host.ID,
+		host.MachineID,
+		continuity.HostID,
+		continuity.ReportHostID,
+		continuity.AgentReportedID,
+		continuity.MachineID,
+	)
+	for _, dockerAlias := range []string{dockerHost.ID, dockerHost.AgentID} {
+		for _, hostAlias := range hostAliases {
+			if hostAgentIdentifiersMatch(dockerAlias, hostAlias) {
+				return true
+			}
+		}
+	}
 
-	return host, nil
+	dockerMachineID := strings.TrimSpace(dockerHost.MachineID)
+	hostMachineID := firstNonEmpty(continuity.MachineID, host.MachineID)
+	return hostAgentIdentifiersMatch(dockerMachineID, hostMachineID)
+}
+
+func (m *Monitor) removeDockerHostsForHostAgent(
+	hostID string,
+	host models.Host,
+	continuity config.HostContinuityEntry,
+	removedAt time.Time,
+) int {
+	removedCount := 0
+	for _, dockerHost := range m.state.GetDockerHosts() {
+		if !dockerHostBelongsToHostAgent(dockerHost, hostID, host, continuity) {
+			continue
+		}
+		removedDockerHost, removed := m.state.RemoveDockerHost(dockerHost.ID)
+		if !removed {
+			continue
+		}
+		m.finalizeDockerHostRemoval(removedDockerHost, removedAt)
+		removedCount++
+	}
+	return removedCount
 }
 
 // RemoveHostAgent removes a host agent from monitoring state and clears related data.
@@ -377,6 +436,8 @@ func (m *Monitor) RemoveHostAgent(hostID string) (models.Host, error) {
 	m.clearHostAgentIdentityTrackingLocked(hostID)
 	m.mu.Unlock()
 	m.state.AddRemovedHostAgent(removedEntry)
+
+	removedDockerHosts := m.removeDockerHostsForHostAgent(hostID, host, tombstone, removedAt)
 
 	tokenID := strings.TrimSpace(host.TokenID)
 	hostname := strings.TrimSpace(host.Hostname)
@@ -484,6 +545,7 @@ func (m *Monitor) RemoveHostAgent(hostID string) (models.Host, error) {
 		Str("host", host.Hostname).
 		Str("hostID", hostID).
 		Bool("removed", removed).
+		Int("removedDockerHosts", removedDockerHosts).
 		Msg("Host agent removed from monitoring")
 
 	if m.alertManager != nil {

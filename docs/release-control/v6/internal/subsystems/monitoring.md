@@ -392,6 +392,11 @@ for filesystems hidden by Pulse's automatic virtual/container filtering. The
 include list is bounded to that automatic filter; explicit disk exclusions
 still win and disk-I/O filtering retains its existing exclusion semantics.
 
+Unified host removal is authoritative for monitoring state owned by that
+agent, including Docker/Podman runtime reports and active alerts keyed to the
+removed host. Pulse must republish the remaining unified read state after the
+cleanup so readers cannot retain orphaned runtime or alert projections.
+
 ## Canonical Files
 
 1. `internal/monitoring/monitor.go`

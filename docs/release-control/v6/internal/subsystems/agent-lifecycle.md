@@ -167,6 +167,11 @@ same include list to collection. Includes may opt a matching filesystem back
 in after Pulse's automatic pseudo-filesystem filtering, while an explicit
 operator exclusion remains authoritative.
 
+Removing a unified host agent is also an ownership cleanup boundary for the
+Docker/Podman module attached to that host identity. The removal must delete
+the associated runtime report surfaces and clear their active alerts instead
+of leaving container alerts or inventory detached from a removed agent.
+
 ## Canonical Files
 
 1. `internal/api/agent_install_command_shared.go`
