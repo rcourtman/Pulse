@@ -361,7 +361,13 @@ func TestProviderMSPSetupScriptSupportsUnlicensedEvaluation(t *testing.T) {
 		"PULSE_PROVIDER_MSP_SKIP_EVAL_LICENSE",
 		"reusing existing evaluation license",
 		"could not reach the license server",
+		"PULSE_PROVIDER_MSP_EVAL_EMAIL",
+		"PULSE_PROVIDER_MSP_SIGNUP_SOURCE",
+		"eval_license_id=",
 	)
+	if strings.LastIndex(script, "pull_provider_images\n") > strings.LastIndex(script, "ensure_eval_license\n") {
+		t.Fatal("evaluation must be issued only after pinned provider images are reachable")
+	}
 
 	// The install must never abort because an evaluation licence could not be
 	// obtained. `|| true` inside the substitution does not achieve that: the
@@ -399,7 +405,7 @@ func TestProviderMSPSetupScriptSupportsUnlicensedEvaluation(t *testing.T) {
 	}
 }
 
-func TestProviderMSPEvaluationDocsFailClosedUntilSignedBundlePublication(t *testing.T) {
+func TestProviderMSPEvaluationDocsUsePublishedSignedBundle(t *testing.T) {
 	repoDocBytes, err := os.ReadFile(repoFile("docs", "MSP.md"))
 	if err != nil {
 		t.Fatalf("read repo MSP guide: %v", err)
@@ -414,14 +420,17 @@ func TestProviderMSPEvaluationDocsFailClosedUntilSignedBundlePublication(t *test
 
 	doc := string(repoDocBytes)
 	assertContainsAll(t, doc,
-		"Self-service evaluation is available only from an exact release page",
-		"three assets, stop: evaluation onboarding for that release remains",
-		"request-assisted. Do **not** download the moving `main` branch archive",
+		"signed provider bundle published",
+		"with Pulse v6.2.1",
+		"**not** download the moving `main` branch archive",
+		`export PULSE_VERSION=v6.2.1`,
 		`PULSE_MSP_BUNDLE="pulse-provider-msp-${PULSE_VERSION}.tar.gz"`,
 		`releases/download/${PULSE_VERSION}`,
 		"ssh-keygen -Y verify",
 		`-s "${PULSE_MSP_BUNDLE}.sshsig" < "${PULSE_MSP_BUNDLE}"`,
 		`sha256sum -c "${PULSE_MSP_BUNDLE}.sha256"`,
+		`PULSE_PROVIDER_MSP_EVAL_EMAIL=you@example.com`,
+		`PULSE_PROVIDER_MSP_SIGNUP_SOURCE=msp_docs`,
 		`sudo -E bash ./setup.sh`,
 	)
 	assertNotContainsAny(t, doc,

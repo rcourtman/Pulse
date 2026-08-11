@@ -20,6 +20,9 @@ PULSE_PROVIDER_MSP_ACCOUNT_NAME="${PULSE_PROVIDER_MSP_ACCOUNT_NAME:-}"
 PULSE_PROVIDER_MSP_OWNER_EMAIL="${PULSE_PROVIDER_MSP_OWNER_EMAIL:-}"
 PULSE_PROVIDER_MSP_LICENSE_URL="${PULSE_PROVIDER_MSP_LICENSE_URL:-https://license.pulserelay.pro}"
 PULSE_PROVIDER_MSP_SKIP_EVAL_LICENSE="${PULSE_PROVIDER_MSP_SKIP_EVAL_LICENSE:-0}"
+PULSE_PROVIDER_MSP_EVAL_EMAIL="${PULSE_PROVIDER_MSP_EVAL_EMAIL:-}"
+PULSE_PROVIDER_MSP_SIGNUP_SOURCE="${PULSE_PROVIDER_MSP_SIGNUP_SOURCE:-provider_msp_setup}"
+PULSE_PROVIDER_MSP_UPGRADE_URL="${PULSE_PROVIDER_MSP_UPGRADE_URL:-https://pulserelay.pro/msp.html}"
 
 log() {
   echo "[$(date -u +'%Y-%m-%dT%H:%M:%SZ')] $*"
@@ -395,7 +398,13 @@ ensure_eval_license() {
 
   log "requesting a 2-client evaluation license from ${PULSE_PROVIDER_MSP_LICENSE_URL}"
   local body response token
-  body="$(printf '{"entitlement_signing_public_key":"%s"}' "${public_key}")"
+  body="$(jq -cn \
+    --arg public_key "${public_key}" \
+    --arg email "${PULSE_PROVIDER_MSP_EVAL_EMAIL}" \
+    --arg signup_source "${PULSE_PROVIDER_MSP_SIGNUP_SOURCE}" \
+    '{entitlement_signing_public_key: $public_key}
+      + (if $email == "" then {} else {email: $email} end)
+      + (if $signup_source == "" then {} else {signup_source: $signup_source} end)')"
   response="$(curl -fsS --max-time 20 \
     -H 'Content-Type: application/json' \
     -d "${body}" \
@@ -419,10 +428,16 @@ ensure_eval_license() {
   chmod 0600 "${eval_path}"
   set_env_value CP_PROVIDER_MSP_LICENSE_FILE "./provider-msp-eval-license.jwt" "${env_path}"
 
-  local expires
+  local expires license_id
   expires="$(printf '%s' "${response}" | jq -r '.expires_at // empty' 2>/dev/null || true)"
+  license_id="$(printf '%s' "${response}" | jq -r '.license_id // empty' 2>/dev/null || true)"
   log "evaluation license installed: 2 client workspaces${expires:+, expires ${expires}}"
-  log "  buy a plan and set CP_PROVIDER_MSP_LICENSE_FILE to lift the cap"
+  if [[ "${license_id}" =~ ^lic_msp_[a-f0-9]+$ ]]; then
+    log "  when you need a third client, request an upgrade at:"
+    log "  ${PULSE_PROVIDER_MSP_UPGRADE_URL%/}?eval_license_id=${license_id}#request"
+  else
+    log "  when you need a third client, request an upgrade at ${PULSE_PROVIDER_MSP_UPGRADE_URL%/}#request"
+  fi
 }
 
 ensure_generated_secrets() {
@@ -798,8 +813,6 @@ main() {
   ensure_env_file
   ensure_dns_credentials_file
   ensure_generated_secrets
-  # After the signing key exists, since the license binds its public half.
-  ensure_eval_license
   # After install_docker_ce, which provides the buildx used to read the
   # registry, and before validation, which requires the pins to be set.
   ensure_image_pins
@@ -809,6 +822,10 @@ main() {
   block_container_metadata_service
   validate_compose_config
   pull_provider_images
+  # Issue the evaluation only after the host is configured and the immutable
+  # images are reachable. This makes an issued evaluation a useful activation
+  # signal rather than a record created before setup can succeed.
+  ensure_eval_license
   run_install_proof_if_requested
   print_summary
 }

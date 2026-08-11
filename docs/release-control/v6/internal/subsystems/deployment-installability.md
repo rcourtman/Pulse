@@ -1311,14 +1311,12 @@ upgrade, update, release, or artifact-selection behavior.
 
 ## Current State
 
-Provider-hosted MSP evaluation source exists, but the active published release
-line does not yet contain a signed evaluation-capable deploy bundle. Public MSP
-guidance therefore fails closed instead of running the moving `main` archive.
-Future release candidates now assemble a dedicated versioned provider MSP
-bundle, stamp its Pulse image refs to the same exact tag, cover it with the
-canonical candidate manifest/checksum/signature path, and require the asset at
-the final publication barrier. The remaining dependency is publication of the
-first release built from this packaging path.
+Pulse v6.2.1 is the first active published release with the signed,
+evaluation-capable provider MSP deploy bundle. Public MSP guidance pins that
+exact version, verifies its detached SSH signature and checksum before root
+execution, and continues to reject the moving `main` archive. Future release
+guidance may advance the pin only after the new exact-version provider asset
+and sidecars pass the same publication barrier.
 
 The shell installer's container-runtime discovery prefers a working rootful
 Docker daemon over any rootless socket (#1647).
@@ -3315,6 +3313,17 @@ which never leaves the host. Without this the evaluation is hollow: an
 unlicensed control plane starts, but release-build client runtimes reject its
 unchained entitlement leases and the client workspaces run without the
 capabilities being evaluated.
+
+Evaluation issuance happens only after setup has validated the operator
+configuration and confirmed that every immutable provider image is reachable.
+That ordering makes a stored `msp_eval` issue an activation signal rather than
+a download-intent signal created before the install can succeed. Setup may
+include an optional evaluator email and a fixed signup-source label so support
+can match an assisted paid upgrade to the deployment. Those fields must remain
+optional and bounded; the request must never contain client inventory,
+credentials, private keys, or free-form runtime telemetry. The returned public
+evaluation licence ID may be carried in the upgrade URL as a non-secret
+correlation key.
 
 Self-issue must degrade rather than block. A missing signing key, an
 unreachable licence server, or a response carrying no licence leaves the

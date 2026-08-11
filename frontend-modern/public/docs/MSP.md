@@ -258,26 +258,25 @@ reports or collect report data in the provider control plane.
 MSP and Enterprise capabilities (`multi_tenant`, `unlimited`, `white_label`)
 are carried on the licence key. MSP plans are sized by client workspace count
 (Starter 5, Growth 15, Scale 40); workspace creation is blocked, not billed,
-when the limit is reached. MSP and Enterprise keys are issued through sales —
-contact support to get set up or to join the MSP design-partner program.
+when the limit is reached. The 60-day, two-workspace evaluation is
+self-service. Paid MSP licences are currently issued through the assisted
+upgrade path so the recurring licence renewal and key binding are checked
+before money changes hands.
 
 ### Evaluating without a licence
 
-Self-service evaluation is available only from an exact release page that
-includes the evaluation-capable provider MSP bundle and both integrity
-sidecars described below. If the release you intend to use does not list all
-three assets, stop: evaluation onboarding for that release remains
-request-assisted. Do **not** download the moving `main` branch archive or run
-its `setup.sh` as root; contact support or join the MSP design-partner program
-instead.
+Self-service evaluation is available from the signed provider bundle published
+with Pulse v6.2.1. Use this exact release asset and its integrity sidecars; do
+**not** download the moving `main` branch archive or run its `setup.sh` as
+root. For a later release, first confirm its release page contains the
+versioned provider archive, checksum, and SSH signature before changing the
+version below.
 
-Once an exact release publishes
-`pulse-provider-msp-vX.Y.Z.tar.gz`, download that versioned asset and its
-integrity sidecars, verify the archive with Pulse's pinned release key, and
+Download the versioned asset, verify it with Pulse's pinned release key, and
 only then extract and run the guided setup:
 
 ```bash
-export PULSE_VERSION=vX.Y.Z
+export PULSE_VERSION=v6.2.1
 export PULSE_MSP_BUNDLE="pulse-provider-msp-${PULSE_VERSION}.tar.gz"
 export PULSE_RELEASE_BASE="https://github.com/rcourtman/Pulse/releases/download/${PULSE_VERSION}"
 
@@ -294,8 +293,15 @@ sha256sum -c "${PULSE_MSP_BUNDLE}.sha256"
 
 tar -xzf "${PULSE_MSP_BUNDLE}"
 cd "pulse-provider-msp-${PULSE_VERSION}"
+export PULSE_PROVIDER_MSP_EVAL_EMAIL=you@example.com
+export PULSE_PROVIDER_MSP_SIGNUP_SOURCE=msp_docs
 sudo -E bash ./setup.sh
 ```
+
+`PULSE_PROVIDER_MSP_EVAL_EMAIL` is optional. Set it if you want setup help and
+want an eventual paid upgrade matched to this deployment; omit it for an
+anonymous evaluation. The signup-source value is a fixed attribution label,
+not free-form telemetry.
 
 The host needs Ubuntu 24.04 or similar, a domain you can point at it, and
 ports 80 and 443 free. Install `curl`, `openssh-client`, `coreutils`, and `tar`
@@ -304,12 +310,13 @@ with Cloudflare as the default provider (`CF_DNS_API_TOKEN`); any other
 Traefik dnsChallenge provider works by setting `ACME_DNS_PROVIDER` in `.env`
 and putting that provider's credential variables in `dns-credentials.env`.
 
-In a published evaluation-capable bundle, leave
-`CP_PROVIDER_MSP_LICENSE_FILE` blank and `setup.sh` self-issues a 2-client
-evaluation licence. It sends only the public half of the signing key generated
-on your host, exactly as the paid path does, and the private key never leaves
-the machine. You can then onboard two real clients and confirm the isolation
-boundary on your own infrastructure before buying.
+Leave `CP_PROVIDER_MSP_LICENSE_FILE` blank and `setup.sh` self-issues a
+2-client evaluation licence after configuration validation succeeds and the
+immutable images are reachable. It sends only the public half of the signing
+key generated on your host, the optional contact address above, and the fixed
+signup-source label. The private key, client inventory, and credentials never
+leave the machine. You can then onboard two real clients and confirm the
+isolation boundary on your own infrastructure before buying.
 
 The evaluation licence lasts 60 days and re-running `setup.sh` reuses the one
 already on disk. On an air-gapped host set
