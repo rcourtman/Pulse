@@ -251,7 +251,7 @@ func NewStore(config StoreConfig) (*Store, error) {
 
 	dir := filepath.Dir(config.DBPath)
 	if err := ensureOwnerOnlyDir(dir); err != nil {
-		return nil, fmt.Errorf("failed to create metrics directory: %w", err)
+		return nil, fmt.Errorf("failed to prepare metrics directory: %w", err)
 	}
 
 	if err := rejectSymlinkOrNonRegular(config.DBPath); err != nil && !errors.Is(err, os.ErrNotExist) {
@@ -2256,10 +2256,41 @@ func (s *Store) Close() error {
 }
 
 func ensureOwnerOnlyDir(dir string) error {
-	if err := os.MkdirAll(dir, privateDirPerm); err != nil {
+	cleanedDir := filepath.Clean(dir)
+	if filepath.IsAbs(cleanedDir) && filepath.Dir(cleanedDir) == cleanedDir {
+		return fmt.Errorf("metrics database must use a dedicated subdirectory, not filesystem root %q", cleanedDir)
+	}
+
+	info, err := os.Lstat(cleanedDir)
+	if errors.Is(err, os.ErrNotExist) {
+		if err := os.MkdirAll(cleanedDir, privateDirPerm); err != nil {
+			return err
+		}
+		info, err = os.Lstat(cleanedDir)
+	}
+	if err != nil {
 		return err
 	}
-	return os.Chmod(dir, privateDirPerm)
+	if info.Mode()&os.ModeSymlink != 0 {
+		return fmt.Errorf("unsafe metrics directory %q: symlink is not allowed", cleanedDir)
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("unsafe metrics directory %q: not a directory", cleanedDir)
+	}
+	if info.Mode()&os.ModeSticky != 0 && info.Mode().Perm()&0o022 != 0 {
+		return fmt.Errorf("metrics directory %q is shared; choose a dedicated Pulse-owned subdirectory", cleanedDir)
+	}
+	// Do not try to harden shared parents such as /tmp or /dev/shm. Apart from
+	// usually failing for the unprivileged service user, a root-run container
+	// could otherwise make the shared directory inaccessible to the host. A
+	// dedicated child remains safe and lets Pulse enforce owner-only access.
+	if !directoryOwnedByCurrentUser(info) {
+		return fmt.Errorf("metrics directory %q is not owned by the current user; choose a dedicated Pulse-owned subdirectory", cleanedDir)
+	}
+	if err := os.Chmod(cleanedDir, privateDirPerm); err != nil {
+		return fmt.Errorf("secure metrics directory %q to %04o (ensure it is writable in the service sandbox): %w", cleanedDir, privateDirPerm, err)
+	}
+	return nil
 }
 
 func rejectSymlinkOrNonRegular(path string) error {

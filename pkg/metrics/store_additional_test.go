@@ -326,6 +326,110 @@ func TestNewStoreCanonicalizesDBPath(t *testing.T) {
 	}
 }
 
+func TestEnsureOwnerOnlyDirHardensOwnedDirectory(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "metrics")
+	if err := os.Mkdir(dir, 0o755); err != nil {
+		t.Fatalf("Mkdir: %v", err)
+	}
+
+	if err := ensureOwnerOnlyDir(dir); err != nil {
+		t.Fatalf("ensureOwnerOnlyDir: %v", err)
+	}
+
+	info, err := os.Stat(dir)
+	if err != nil {
+		t.Fatalf("Stat: %v", err)
+	}
+	if got := info.Mode().Perm(); got != privateDirPerm {
+		t.Fatalf("directory permissions = %#o, want %#o", got, privateDirPerm)
+	}
+}
+
+func TestEnsureOwnerOnlyDirRejectsFilesystemRoot(t *testing.T) {
+	root := string(filepath.Separator)
+	before, err := os.Stat(root)
+	if err != nil {
+		t.Fatalf("Stat root: %v", err)
+	}
+
+	err = ensureOwnerOnlyDir(root)
+	if err == nil || !strings.Contains(err.Error(), "dedicated subdirectory") {
+		t.Fatalf("ensureOwnerOnlyDir(root) error = %v, want dedicated-subdirectory guidance", err)
+	}
+
+	after, err := os.Stat(root)
+	if err != nil {
+		t.Fatalf("Stat root after rejection: %v", err)
+	}
+	if after.Mode().Perm() != before.Mode().Perm() {
+		t.Fatalf("root permissions changed from %#o to %#o", before.Mode().Perm(), after.Mode().Perm())
+	}
+}
+
+func TestEnsureOwnerOnlyDirRejectsSystemTemporaryDirectory(t *testing.T) {
+	dir := os.TempDir()
+	before, err := os.Stat(dir)
+	if err != nil {
+		t.Skipf("temporary directory is unavailable: %v", err)
+	}
+	if directoryOwnedByCurrentUser(before) {
+		t.Skip("temporary directory is owned by the test user on this platform")
+	}
+
+	err = ensureOwnerOnlyDir(dir)
+	if err == nil || (!strings.Contains(err.Error(), "is shared") && !strings.Contains(err.Error(), "not owned by the current user")) {
+		t.Fatalf("ensureOwnerOnlyDir(%q) error = %v, want shared-directory or ownership guidance", dir, err)
+	}
+
+	after, err := os.Stat(dir)
+	if err != nil {
+		t.Fatalf("Stat shared directory after rejection: %v", err)
+	}
+	if after.Mode().Perm() != before.Mode().Perm() {
+		t.Fatalf("shared directory permissions changed from %#o to %#o", before.Mode().Perm(), after.Mode().Perm())
+	}
+}
+
+func TestEnsureOwnerOnlyDirRejectsOwnedStickySharedDirectory(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "shared")
+	if err := os.Mkdir(dir, 0o777); err != nil {
+		t.Fatalf("Mkdir: %v", err)
+	}
+	if err := os.Chmod(dir, os.ModeSticky|0o777); err != nil {
+		t.Skipf("sticky directories are unavailable: %v", err)
+	}
+
+	err := ensureOwnerOnlyDir(dir)
+	if err == nil || !strings.Contains(err.Error(), "is shared") {
+		t.Fatalf("ensureOwnerOnlyDir(sticky shared directory) error = %v, want shared-directory guidance", err)
+	}
+
+	after, err := os.Stat(dir)
+	if err != nil {
+		t.Fatalf("Stat shared directory after rejection: %v", err)
+	}
+	if after.Mode().Perm() != 0o777 || after.Mode()&os.ModeSticky == 0 {
+		t.Fatalf("shared directory mode changed to %v", after.Mode())
+	}
+}
+
+func TestEnsureOwnerOnlyDirRejectsSymlink(t *testing.T) {
+	root := t.TempDir()
+	target := filepath.Join(root, "target")
+	link := filepath.Join(root, "metrics")
+	if err := os.Mkdir(target, privateDirPerm); err != nil {
+		t.Fatalf("Mkdir target: %v", err)
+	}
+	if err := os.Symlink(target, link); err != nil {
+		t.Skipf("symlinks are unavailable: %v", err)
+	}
+
+	err := ensureOwnerOnlyDir(link)
+	if err == nil || !strings.Contains(err.Error(), "symlink is not allowed") {
+		t.Fatalf("ensureOwnerOnlyDir(symlink) error = %v, want symlink rejection", err)
+	}
+}
+
 func TestStoreFilesOwnerOnlyUnderPermissiveUmask(t *testing.T) {
 	oldUmask := syscall.Umask(0o022)
 	defer syscall.Umask(oldUmask)

@@ -56,6 +56,33 @@ only the metrics SQLite database without moving secrets or general config:
 PULSE_METRICS_DB_PATH=/dev/shm/pulse/metrics.db
 ```
 
+Use a dedicated directory owned by the account running Pulse. Do not place the
+database directly in a shared parent such as `/tmp/metrics.db`: Pulse secures
+the database directory to mode `0700` and will reject a directory owned by
+another user. On systemd installs, `PrivateTmp=true` also means a path below
+`/tmp` is private to the service and will not appear in the host's `/tmp`.
+
+The default systemd sandbox permits `/dev/shm/pulse` and Pulse can create that
+subdirectory itself. A dedicated mount elsewhere, such as `/mnt/ramdisk`, also
+needs an explicit writable-path grant:
+
+```bash
+sudo install -d -o pulse -g pulse -m 0700 /mnt/ramdisk/pulse
+sudo systemctl edit pulse
+```
+
+Add this drop-in (replace `pulse` with the installed unit name if different):
+
+```ini
+[Service]
+ReadWritePaths=/mnt/ramdisk/pulse
+```
+
+Then set `PULSE_METRICS_DB_PATH=/mnt/ramdisk/pulse/metrics.db` in
+`/etc/pulse/.env` and restart Pulse. `ProtectSystem=strict` deliberately keeps
+paths outside the unit's writable allowlist read-only even when Unix ownership
+would otherwise permit writes.
+
 For Docker, mount a tmpfs at the selected directory and keep `/data` on a
 persistent volume:
 
