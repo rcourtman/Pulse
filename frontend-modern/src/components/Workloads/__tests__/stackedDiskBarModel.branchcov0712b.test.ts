@@ -504,7 +504,9 @@ describe('stackedDiskBarModel (branch coverage 2)', () => {
     it('falls back to the aggregate disk when every listed disk has unknown usage', () => {
       const p = buildStackedDiskBarPresentation(
         {
-          disks: [makeDisk({ mountpoint: '/srv/archive', total: 200, used: 0, free: 0, usage: -1 })],
+          disks: [
+            makeDisk({ mountpoint: '/srv/archive', total: 200, used: 0, free: 0, usage: -1 }),
+          ],
           aggregateDisk: makeDisk({ total: 100, used: 25, free: 75, usage: 25 }),
         },
         400,
