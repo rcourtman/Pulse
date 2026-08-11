@@ -429,6 +429,62 @@ func TestAgentFleetDiagnosticsDetectsMissingDockerTelemetryFromProfile(t *testin
 	}
 }
 
+func TestDiagnoseProfileCapabilityDriftOnlyRequiresPVEProfilesToLinkToNodes(t *testing.T) {
+	host := models.Host{ID: "agent-1", Hostname: "pbs01"}
+	subject := agentFleetSubject{host: &host}
+
+	for _, test := range []struct {
+		name         string
+		proxmoxType  interface{}
+		pbsInstances []models.PBSInstance
+		wantReason   bool
+	}{
+		{name: "PBS", proxmoxType: "pbs", wantReason: false},
+		{
+			name:        "auto detected PBS",
+			proxmoxType: "auto",
+			pbsInstances: []models.PBSInstance{{
+				Name: "pbs01",
+				Host: "https://192.168.1.121:8007",
+			}},
+			wantReason: false,
+		},
+		{
+			name:        "missing type on known PBS host",
+			proxmoxType: nil,
+			pbsInstances: []models.PBSInstance{{
+				Name: "pbs01",
+				Host: "https://192.168.1.121:8007",
+			}},
+			wantReason: false,
+		},
+		{name: "auto without PBS match", proxmoxType: "auto", wantReason: true},
+		{name: "PVE", proxmoxType: "pve", wantReason: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			profileConfig := models.AgentConfigMap{"enable_proxmox": true}
+			if test.proxmoxType != nil {
+				profileConfig["proxmox_type"] = test.proxmoxType
+			}
+			reasons := diagnoseProfileCapabilityDrift(
+				subject,
+				models.StateSnapshot{PBSInstances: test.pbsInstances},
+				models.AgentProfile{Config: profileConfig},
+			)
+
+			found := false
+			for _, reason := range reasons {
+				if reason.Code == "proxmox_profile_unlinked" {
+					found = true
+				}
+			}
+			if found != test.wantReason {
+				t.Fatalf("proxmox_profile_unlinked present = %v, want %v; reasons = %#v", found, test.wantReason, reasons)
+			}
+		})
+	}
+}
+
 func TestAgentFleetDiagnosticsDetectsProfileVersionDrift(t *testing.T) {
 	now := time.Date(2026, 6, 29, 12, 0, 0, 0, time.UTC)
 	monitor := newAgentFleetDoctorTestMonitor(t)

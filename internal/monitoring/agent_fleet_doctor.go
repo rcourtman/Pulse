@@ -1120,7 +1120,17 @@ func diagnoseProfileCapabilityDrift(subject agentFleetSubject, state models.Stat
 		})
 	}
 
-	if enabled, ok := configBool(profile.Config, "enable_proxmox"); ok && enabled && subject.host != nil && subject.host.LinkedNodeID == "" {
+	proxmoxType, _ := configString(profile.Config, "proxmox_type")
+	pbsProfile := strings.EqualFold(proxmoxType, "pbs")
+	pbsHost := !strings.EqualFold(proxmoxType, "pve") &&
+		subject.host != nil &&
+		hostMatchesPBSInstance(*subject.host, state.PBSInstances)
+	if enabled, ok := configBool(profile.Config, "enable_proxmox"); ok &&
+		enabled &&
+		!pbsProfile &&
+		!pbsHost &&
+		subject.host != nil &&
+		subject.host.LinkedNodeID == "" {
 		reasons = append(reasons, AgentFleetDiagnosticReason{
 			Code:     "proxmox_profile_unlinked",
 			Severity: AgentFleetStatusWarning,
@@ -1252,6 +1262,48 @@ func configBool(config models.AgentConfigMap, key string) (bool, bool) {
 	default:
 		return false, false
 	}
+}
+
+func configString(config models.AgentConfigMap, key string) (string, bool) {
+	raw, ok := config[key]
+	if !ok {
+		return "", false
+	}
+	value, ok := raw.(string)
+	if !ok {
+		return "", false
+	}
+	return strings.TrimSpace(value), true
+}
+
+func hostMatchesPBSInstance(host models.Host, instances []models.PBSInstance) bool {
+	hostName := unifiedresources.NormalizeHostname(host.Hostname)
+	reportedIPs := make(map[string]struct{})
+	if reportIP := unifiedresources.NormalizeIP(host.ReportIP); reportIP != "" {
+		reportedIPs[reportIP] = struct{}{}
+	}
+	for _, network := range host.NetworkInterfaces {
+		for _, address := range network.Addresses {
+			if ip := unifiedresources.NormalizeIP(address); ip != "" {
+				reportedIPs[ip] = struct{}{}
+			}
+		}
+	}
+
+	for _, instance := range instances {
+		endpointHost := extractHostname(instance.Host)
+		for _, candidate := range []string{instance.Name, endpointHost} {
+			if hostName != "" && unifiedresources.NormalizeHostname(candidate) == hostName {
+				return true
+			}
+		}
+		if endpointIP := unifiedresources.NormalizeIP(endpointHost); endpointIP != "" {
+			if _, ok := reportedIPs[endpointIP]; ok {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func sortedAgentTypes(types map[string]struct{}) []string {

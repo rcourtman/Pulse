@@ -19,6 +19,11 @@
 
 Own polling, typed collection, runtime state assembly, and canonical monitoring
 truth for live infrastructure data.
+Agent Doctor interprets Proxmox capability profiles according to the monitored
+product. Only PVE host profiles require a link to a PVE node; an explicit PBS
+profile, or an auto/missing-type host that matches a configured PBS instance by
+normalized hostname or reported address, must not receive the PVE-only
+`proxmox_profile_unlinked` warning.
 Monitor construction also applies the persisted alert schedule's normalized
 initial-delivery target to the tenant notification manager. This is runtime
 wiring only: monitoring does not choose destinations or own notification
