@@ -205,6 +205,7 @@ type Store struct {
 	maintenanceDoneCh          chan struct{}
 	stopOnce                   sync.Once
 	stopping                   atomic.Bool
+	syncWaitWarnNano           atomic.Int64
 	identityMigrationPending   atomic.Bool
 	commercialRetentionSeconds atomic.Int64
 	commercialPurgeEligibleAt  atomic.Int64
@@ -916,13 +917,67 @@ func (s *Store) enqueueWrite(req writeRequest) {
 	}
 }
 
+// syncWriteWaitTimeout bounds how long a synchronous batch write blocks on the
+// ingestion worker. The monitoring pipeline calls WriteBatchSync inline (state
+// broadcast, agent ingest, poll publish), so an unbounded wait lets a slow
+// metrics disk starve polling entirely: on #1437's instance SQLite commits ran
+// for seconds to minutes and the monitor froze after its first cycle while
+// history writes queued behind retention maintenance. Within the budget the
+// call keeps read-your-writes; past it the caller moves on and history lands
+// whenever the worker catches up.
+const syncWriteWaitTimeout = 2 * time.Second
+
+// enqueueAndWait hands the batch to the ingestion worker and waits for its
+// commit, but never longer than syncWriteWaitTimeout in total. If the queue
+// cannot even accept the batch within the budget the batch is dropped, matching
+// enqueueWrite's saturation behavior. If only the commit is outstanding the
+// batch stays queued and is not lost.
 func (s *Store) enqueueAndWait(req writeRequest) {
 	if req.done == nil {
 		req.done = make(chan struct{})
 	}
 
-	s.writeCh <- req
-	<-req.done
+	timer := time.NewTimer(syncWriteWaitTimeout)
+	defer timer.Stop()
+
+	select {
+	case s.writeCh <- req:
+	case <-s.stopCh:
+		return
+	case <-timer.C:
+		log.Warn().
+			Str("component", "metrics_store").
+			Str("action", "drop_sync_write_batch").
+			Int("batch_size", len(req.metrics)).
+			Int("write_queue_depth", len(s.writeCh)).
+			Int("write_queue_capacity", cap(s.writeCh)).
+			Msg("Metrics write queue saturated, dropping synchronous batch to keep monitoring live")
+		return
+	}
+
+	select {
+	case <-req.done:
+	case <-s.stopCh:
+	case <-timer.C:
+		s.warnSyncWriteBacklog(len(req.metrics))
+	}
+}
+
+// warnSyncWriteBacklog reports a lagging ingestion worker at most once per
+// 30-second window. Unlike a dropped batch this is not data loss, so the
+// per-call signal is redundant while the condition persists.
+func (s *Store) warnSyncWriteBacklog(batchSize int) {
+	now := time.Now().UnixNano()
+	last := s.syncWaitWarnNano.Load()
+	if now-last < int64(30*time.Second) || !s.syncWaitWarnNano.CompareAndSwap(last, now) {
+		return
+	}
+	log.Warn().
+		Str("component", "metrics_store").
+		Str("action", "sync_write_backlogged").
+		Int("batch_size", batchSize).
+		Int("write_queue_depth", len(s.writeCh)).
+		Msg("Metrics write worker lagging, batch left queued and monitoring continues")
 }
 
 func (s *Store) drainBuffer() []bufferedMetric {
