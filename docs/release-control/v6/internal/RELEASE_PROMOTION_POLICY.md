@@ -64,7 +64,13 @@ If any condition is false or uncertain, use the governed RC path.
    secrets, or unrelated Docker workloads.
 2. Use an isolated builder and clean source state. Do not pass host secrets,
    production mounts, privileged runtime access, or unrelated Docker sockets
-   into the build.
+   into the build. The workstation's current default builder for reporter
+   test images, with fallback and traps, is documented in the workspace
+   `LOCAL_CAPABILITIES.md` ("Remote amd64 Builder on gamingpc").
+   The server-only diagnostic image (no embedded installer or agent-download
+   artifacts) is the `hosted_runtime` Dockerfile target. Setting
+   `BUILD_AGENT=0` does NOT achieve this: the default `runtime` target always
+   builds the full agent artifact set regardless of that arg.
 3. Publish a new immutable tag shaped as `test-<issue>-<short-sha>`, for
    example `rcourtman/pulse:test-1437-44a3f194`. Never overwrite or reuse the
    tag.
