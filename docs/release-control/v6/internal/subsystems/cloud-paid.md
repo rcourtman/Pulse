@@ -3325,9 +3325,12 @@ or adding client-workspace phone-home. An explicit landing-page evaluation
 start is delivered to the support inbox with the fixed `msp_landing` source; a
 persisted `msp_eval` licence is the activation stage and is issued only after
 provider setup validates configuration and resolves the immutable images; a
-persisted `msp_starter`, `msp_growth`, or `msp_scale` licence is the paid
-fulfilment stage. The licence server admin surface may aggregate those licence
-stages over bounded time windows. Optional evaluator email and the public
+persisted `msp_starter`, `msp_growth`, or `msp_scale` licence is an assisted
+licence stage, not proof of payment by itself. Administrative issuance must
+record a bounded reason, and only the first `paid_conversion` reason may enter
+the paid-conversion stage; pilots, renewals, replacements, and internal
+licences must remain separate. The licence server admin surface may aggregate
+those licence stages over bounded time windows. Optional evaluator email and the public
 evaluation licence ID may join an assisted upgrade to its activation, but no
 stage may collect client inventory, credentials, private signing material, or
 free-form runtime telemetry. Anonymous evaluation must remain available.
