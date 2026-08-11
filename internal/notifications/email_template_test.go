@@ -737,3 +737,78 @@ func TestEmailTemplateEscapesHTMLContent(t *testing.T) {
 		t.Fatalf("plain text body should preserve original message, got %q", textBody)
 	}
 }
+
+func TestEmailTemplatePatrolFindingShowsFindingInsteadOfMetrics(t *testing.T) {
+	t.Parallel()
+
+	alert := &alerts.Alert{
+		ID:           "patrol-finding-apt",
+		Level:        "warning",
+		Type:         "patrol_finding",
+		ResourceName: "docker-host-gcp-01",
+		ResourceID:   "agent:docker-host-gcp-01",
+		Message:      "1 operating system update(s) are ready on docker-host-gcp-01",
+		Value:        0,
+		Threshold:    0,
+		StartTime:    time.Now().Add(-5 * time.Minute),
+		Metadata:     map[string]interface{}{"category": "reliability"},
+	}
+
+	t.Run("grouped", func(t *testing.T) {
+		_, htmlBody, textBody := EmailTemplate([]*alerts.Alert{alert}, false)
+
+		if !strings.Contains(htmlBody, alert.Message) {
+			t.Fatalf("grouped HTML omitted finding title: %q", htmlBody)
+		}
+		if strings.Contains(htmlBody, "patrol_finding on") {
+			t.Fatalf("grouped HTML used generic alert fallback: %q", htmlBody)
+		}
+		if strings.Contains(htmlBody, ">0.0<") || strings.Contains(htmlBody, ">of 0<") {
+			t.Fatalf("grouped HTML rendered meaningless Patrol metrics: %q", htmlBody)
+		}
+		if !strings.Contains(htmlBody, ">Finding<") || !strings.Contains(htmlBody, ">Reliability<") {
+			t.Fatalf("grouped HTML omitted finding labels: %q", htmlBody)
+		}
+		if !strings.Contains(textBody, alert.Message) || strings.Contains(textBody, "Value: 0.0") {
+			t.Fatalf("grouped text did not render Patrol finding cleanly: %q", textBody)
+		}
+	})
+
+	t.Run("single", func(t *testing.T) {
+		subject, htmlBody, textBody := EmailTemplate([]*alerts.Alert{alert}, true)
+
+		if !strings.Contains(subject, "Patrol Finding") {
+			t.Fatalf("single subject = %q, want Patrol Finding", subject)
+		}
+		if !strings.Contains(htmlBody, alert.Message) {
+			t.Fatalf("single HTML omitted finding title: %q", htmlBody)
+		}
+		if strings.Contains(htmlBody, "Current Value") || strings.Contains(htmlBody, "Threshold") {
+			t.Fatalf("single HTML rendered meaningless Patrol metrics: %q", htmlBody)
+		}
+		if strings.Contains(textBody, "Current Value:") || strings.Contains(textBody, "Threshold:") {
+			t.Fatalf("single text rendered meaningless Patrol metrics: %q", textBody)
+		}
+	})
+}
+
+func TestEmailTemplateGroupedPatrolFindingEscapesFindingContent(t *testing.T) {
+	t.Parallel()
+
+	alert := &alerts.Alert{
+		Level:        "warning",
+		Type:         "patrol_finding",
+		ResourceName: `<img src=x onerror="alert(1)">`,
+		Message:      `Update <script>alert("xss")</script>`,
+		StartTime:    time.Now(),
+		Metadata:     map[string]interface{}{"category": `<script>alert("category")</script>`},
+	}
+
+	_, htmlBody, _ := EmailTemplate([]*alerts.Alert{alert}, false)
+	if strings.Contains(htmlBody, "<script>") || strings.Contains(htmlBody, `<img src=x onerror="alert(1)">`) {
+		t.Fatalf("grouped Patrol HTML did not escape finding content: %q", htmlBody)
+	}
+	if !strings.Contains(htmlBody, `Update &lt;script&gt;alert(&#34;xss&#34;)&lt;/script&gt;`) {
+		t.Fatalf("grouped Patrol HTML omitted escaped finding title: %q", htmlBody)
+	}
+}

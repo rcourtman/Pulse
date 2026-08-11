@@ -28,6 +28,10 @@ window delivers each alert independently, and disabling grouping flushes any
 pending alerts as individual deliveries. Grouped provider payloads must retain
 every alert, while live ntfy firing deliveries and webhook tests share the same
 severity-derived title, priority, and tags.
+Email rendering treats `patrol_finding` as a finding rather than a numeric
+threshold alert. Single and grouped HTML/text bodies show the finding message
+and optional category, omit meaningless zero-value metrics, preserve mixed
+group headings, and HTML-escape every resource, message, and category field.
 
 ## Canonical Files
 

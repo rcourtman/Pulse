@@ -37,6 +37,35 @@ func alertNodeDisplay(alert *alerts.Alert) string {
 	return alert.Node
 }
 
+func isPatrolFindingAlert(alert *alerts.Alert) bool {
+	return alert != nil && strings.EqualFold(strings.TrimSpace(alert.Type), "patrol_finding")
+}
+
+func alertTypeDisplay(alertType string) string {
+	switch strings.ToLower(strings.TrimSpace(alertType)) {
+	case "cpu":
+		return "CPU"
+	case "memory":
+		return "Memory"
+	case "disk":
+		return "Disk"
+	case "io":
+		return "I/O"
+	case "patrol_finding":
+		return "Patrol Finding"
+	default:
+		return titleCase(alertType)
+	}
+}
+
+func patrolFindingCategory(alert *alerts.Alert) string {
+	if alert == nil || alert.Metadata == nil {
+		return ""
+	}
+	category, _ := alert.Metadata["category"].(string)
+	return titleCase(strings.TrimSpace(category))
+}
+
 // EmailTemplate generates a professional HTML email template for alerts
 func EmailTemplate(alertList []*alerts.Alert, isSingle bool) (subject, htmlBody, textBody string) {
 	if isSingle && len(alertList) == 1 {
@@ -53,20 +82,7 @@ func singleAlertTemplate(alert *alerts.Alert) (subject, htmlBody, textBody strin
 		levelBg = "#fffaeb"
 	}
 
-	// Properly format alert type (CPU, Memory, etc.)
-	alertType := alert.Type
-	switch strings.ToLower(alertType) {
-	case "cpu":
-		alertType = "CPU"
-	case "memory":
-		alertType = "Memory"
-	case "disk":
-		alertType = "Disk"
-	case "io":
-		alertType = "I/O"
-	default:
-		alertType = titleCase(alertType)
-	}
+	alertType := alertTypeDisplay(alert.Type)
 
 	subject = fmt.Sprintf("[Pulse Alert] %s: %s on %s",
 		titleCase(string(alert.Level)), alertType, alert.ResourceName)
@@ -82,6 +98,24 @@ func singleAlertTemplate(alert *alerts.Alert) (subject, htmlBody, textBody strin
 	escapedInstance := html.EscapeString(alert.Instance)
 	escapedStarted := html.EscapeString(formatAlertStartTime(alert.StartTime))
 	escapedDuration := html.EscapeString(formatDuration(time.Since(alert.StartTime)))
+
+	metricsHTML := fmt.Sprintf(`
+            <div class="metrics">
+                <div class="metric">
+                    <div class="metric-label">Current Value</div>
+                    <div class="metric-value">%s</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">Threshold</div>
+                    <div class="metric-value">%s</div>
+                </div>
+            </div>`,
+		escapedCurrentValue,
+		escapedThresholdValue,
+	)
+	if isPatrolFindingAlert(alert) {
+		metricsHTML = ""
+	}
 
 	htmlBody = fmt.Sprintf(`<!DOCTYPE html>
 <html>
@@ -130,17 +164,7 @@ func singleAlertTemplate(alert *alerts.Alert) (subject, htmlBody, textBody strin
                 <div class="alert-resource">%s</div>
                 <div>%s</div>
             </div>
-            
-            <div class="metrics">
-                <div class="metric">
-                    <div class="metric-label">Current Value</div>
-                    <div class="metric-value">%s</div>
-                </div>
-                <div class="metric">
-                    <div class="metric-label">Threshold</div>
-                    <div class="metric-value">%s</div>
-                </div>
-            </div>
+            %s
             
             <div class="details">
                 <div class="detail-row">
@@ -180,8 +204,7 @@ func singleAlertTemplate(alert *alerts.Alert) (subject, htmlBody, textBody strin
 		escapedLevel,
 		escapedResourceName,
 		escapedMessage,
-		escapedCurrentValue,
-		escapedThresholdValue,
+		metricsHTML,
 		escapedResourceID,
 		escapedAlertType,
 		escapedNode,
@@ -190,7 +213,37 @@ func singleAlertTemplate(alert *alerts.Alert) (subject, htmlBody, textBody strin
 		escapedDuration,
 	)
 
-	// Plain text version
+	if isPatrolFindingAlert(alert) {
+		textBody = fmt.Sprintf(`PULSE MONITORING ALERT
+
+%s ALERT: %s
+
+Resource: %s (%s)
+Type: %s
+Message: %s
+
+Details:
+- Node: %s
+- Instance: %s
+- Started: %s
+- Duration: %s
+
+This is an automated notification from Pulse Monitoring.
+View alerts and configure settings in your Pulse dashboard.`,
+			strings.ToUpper(string(alert.Level)),
+			alert.ResourceName,
+			alert.ResourceName,
+			alert.ResourceID,
+			alertType,
+			alert.Message,
+			alertNodeDisplay(alert),
+			alert.Instance,
+			formatAlertStartTime(alert.StartTime),
+			formatDuration(time.Since(alert.StartTime)),
+		)
+		return subject, htmlBody, textBody
+	}
+
 	textBody = fmt.Sprintf(`PULSE MONITORING ALERT
 
 %s ALERT: %s
@@ -228,11 +281,15 @@ View alerts and configure settings in your Pulse dashboard.`,
 func groupedAlertTemplate(alertList []*alerts.Alert) (subject, htmlBody, textBody string) {
 	critical := 0
 	warning := 0
+	patrolFindings := 0
 	for _, alert := range alertList {
 		if alert.Level == "critical" {
 			critical++
 		} else {
 			warning++
+		}
+		if isPatrolFindingAlert(alert) {
+			patrolFindings++
 		}
 	}
 
@@ -260,6 +317,18 @@ func groupedAlertTemplate(alertList []*alerts.Alert) (subject, htmlBody, textBod
 		escapedValue := html.EscapeString(formatMetricValue(alert.Type, alert.Value))
 		escapedThreshold := html.EscapeString(formatMetricThreshold(alert.Type, alert.Threshold))
 		escapedDuration := html.EscapeString(formatDuration(time.Since(alert.StartTime)))
+		escapedDetail := escapedType + " on " + escapedNode
+		value := fmt.Sprintf(`<div style="font-weight: 500;">%s</div>
+                        <div style="font-size: 12px; color: #666;">of %s</div>`, escapedValue, escapedThreshold)
+		if isPatrolFindingAlert(alert) {
+			escapedDetail = html.EscapeString(alert.Message)
+			category := html.EscapeString(patrolFindingCategory(alert))
+			value = `<div style="font-weight: 500;">Patrol</div>`
+			if category != "" {
+				value += fmt.Sprintf(`
+                        <div style="font-size: 12px; color: #666;">%s</div>`, category)
+			}
+		}
 
 		alertRows.WriteString(fmt.Sprintf(`
                 <tr>
@@ -268,7 +337,7 @@ func groupedAlertTemplate(alertList []*alerts.Alert) (subject, htmlBody, textBod
                             <span style="display: inline-block; width: 8px; height: 8px; background: %s; border-radius: 50%%; margin-right: 10px;"></span>
                             <div>
                                 <div style="font-weight: 500; color: #1a1a1a;">%s</div>
-                                <div style="font-size: 12px; color: #666; margin-top: 2px;">%s on %s</div>
+                                <div style="font-size: 12px; color: #666; margin-top: 2px;">%s</div>
                             </div>
                         </div>
                     </td>
@@ -276,8 +345,7 @@ func groupedAlertTemplate(alertList []*alerts.Alert) (subject, htmlBody, textBod
                         <span style="color: %s; font-weight: 500; text-transform: uppercase; font-size: 12px;">%s</span>
                     </td>
                     <td style="padding: 12px; border-bottom: 1px solid #e9ecef; text-align: right;">
-                        <div style="font-weight: 500;">%s</div>
-                        <div style="font-size: 12px; color: #666;">of %s</div>
+                        %s
                     </td>
                     <td style="padding: 12px; border-bottom: 1px solid #e9ecef; text-align: right; color: #666; font-size: 12px;">
                         %s ago
@@ -285,11 +353,18 @@ func groupedAlertTemplate(alertList []*alerts.Alert) (subject, htmlBody, textBod
                 </tr>`,
 			levelColor,
 			escapedResourceName,
-			escapedType, escapedNode,
+			escapedDetail,
 			levelColor, escapedLevel,
-			escapedValue, escapedThreshold,
+			value,
 			escapedDuration,
 		))
+	}
+
+	valueHeading := "Value"
+	if patrolFindings == len(alertList) {
+		valueHeading = "Finding"
+	} else if patrolFindings > 0 {
+		valueHeading = "Value / Finding"
 	}
 
 	htmlBody = fmt.Sprintf(`<!DOCTYPE html>
@@ -361,7 +436,7 @@ func groupedAlertTemplate(alertList []*alerts.Alert) (subject, htmlBody, textBod
                     <tr>
                         <th>Resource</th>
                         <th style="text-align: center;">Level</th>
-                        <th style="text-align: right;">Value</th>
+                        <th style="text-align: right;">%s</th>
                         <th style="text-align: right;">Duration</th>
                     </tr>
                 </thead>
@@ -375,7 +450,7 @@ func groupedAlertTemplate(alertList []*alerts.Alert) (subject, htmlBody, textBod
         </div>
     </div>
 </body>
-</html>`, alertRows.String())
+</html>`, valueHeading, alertRows.String())
 
 	// Plain text version
 	var textBuilder strings.Builder
@@ -393,7 +468,9 @@ func groupedAlertTemplate(alertList []*alerts.Alert) (subject, htmlBody, textBod
 	for i, alert := range alertList {
 		textBuilder.WriteString(fmt.Sprintf("\n%d. %s (%s)\n", i+1, alert.ResourceName, alert.ResourceID))
 		textBuilder.WriteString(fmt.Sprintf("   Level: %s | Type: %s\n", strings.ToUpper(string(alert.Level)), alert.Type))
-		textBuilder.WriteString(fmt.Sprintf("   Value: %s (Threshold: %s)\n", formatMetricValue(alert.Type, alert.Value), formatMetricThreshold(alert.Type, alert.Threshold)))
+		if !isPatrolFindingAlert(alert) {
+			textBuilder.WriteString(fmt.Sprintf("   Value: %s (Threshold: %s)\n", formatMetricValue(alert.Type, alert.Value), formatMetricThreshold(alert.Type, alert.Threshold)))
+		}
 		textBuilder.WriteString(fmt.Sprintf("   Node: %s | Started: %s ago\n", alertNodeDisplay(alert), formatDuration(time.Since(alert.StartTime))))
 		textBuilder.WriteString(fmt.Sprintf("   Message: %s\n", alert.Message))
 	}
