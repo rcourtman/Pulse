@@ -1903,7 +1903,7 @@ func TestUnifiedAppContainerMetricsUseCanonicalGuestHistoryPath(t *testing.T) {
 		`storeWrites := make([]metrics.WriteMetric, 0)`,
 		`appendStoreWrite("dockerContainer", targetID, "cpu", value)`,
 		`appendStoreWrite("dockerContainer", targetID, "diskwrite", metric.Value)`,
-		`m.metricsStore.WriteBatchSync(storeWrites)`,
+		`m.metricsStore.WriteBatchBounded(storeWrites)`,
 	}
 	for _, snippet := range requiredSnippets {
 		if !strings.Contains(source, snippet) {
@@ -1947,7 +1947,7 @@ func TestUnifiedAgentMetricsUseCanonicalHostHistoryPath(t *testing.T) {
 		`storeWrites := make([]metrics.WriteMetric, 0)`,
 		`appendStoreWrite("agent", targetID, "cpu", value)`,
 		`appendStoreWrite("agent", targetID, "diskwrite", metric.Value)`,
-		`m.metricsStore.WriteBatchSync(storeWrites)`,
+		`m.metricsStore.WriteBatchBounded(storeWrites)`,
 	}
 	for _, snippet := range requiredSnippets {
 		if !strings.Contains(source, snippet) {
@@ -1969,7 +1969,7 @@ func TestUnifiedVMMetricsUseCanonicalVMHistoryPath(t *testing.T) {
 		`storeWrites := make([]metrics.WriteMetric, 0)`,
 		`appendStoreWrite("vm", targetID, "cpu", value)`,
 		`appendStoreWrite("vm", targetID, "diskwrite", metric.Value)`,
-		`m.metricsStore.WriteBatchSync(storeWrites)`,
+		`m.metricsStore.WriteBatchBounded(storeWrites)`,
 	}
 	for _, snippet := range requiredSnippets {
 		if !strings.Contains(source, snippet) {
