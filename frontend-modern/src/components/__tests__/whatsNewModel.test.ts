@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { extractHighlights, isReleaseVersion } from '../whatsNewModel';
+import { extractChangelog, extractHighlights, isReleaseVersion } from '../whatsNewModel';
 import whatsNewCardSource from '../WhatsNewCard.tsx?raw';
 
 describe('extractHighlights', () => {
@@ -79,6 +79,93 @@ describe('extractHighlights', () => {
 
   it('does not match headings that merely contain the word later', () => {
     expect(extractHighlights('## Not the Highlights\n- nope')).toBeNull();
+  });
+});
+
+describe('extractChangelog', () => {
+  it('builds a categorized changelog and excludes the highlights summary', () => {
+    const body = [
+      '# Pulse v6.2.1 Release Notes',
+      '',
+      '## Highlights',
+      '- Agent improvements and fixes.',
+      '',
+      '## Added',
+      '- Plans & Billing is now available before Pro activation.',
+      '',
+      '## Improved',
+      '- Update results show when the last check ran.',
+      '',
+      '## Fixed',
+      '- Agent downloads now work when the server redirects the request (#1696).',
+      '',
+      '## Upgrade Notes',
+      'Use the normal update flow.',
+    ].join('\n');
+
+    expect(extractChangelog(body)).toBe(
+      [
+        '### Added',
+        '',
+        '- Plans & Billing is now available before Pro activation.',
+        '',
+        '### Improved',
+        '',
+        '- Update results show when the last check ran.',
+        '',
+        '### Fixed',
+        '',
+        '- Agent downloads now work when the server redirects the request (#1696).',
+      ].join('\n'),
+    );
+  });
+
+  it('normalizes generated section names into stable changelog labels', () => {
+    const body = [
+      '## v6.2.2',
+      '### New Features',
+      '- Add certificate expiry monitoring.',
+      '### Improvements',
+      '- Make storage filters easier to scan.',
+      '### Bug Fixes',
+      '- Keep acknowledged alerts dismissed after refresh.',
+    ].join('\n');
+
+    expect(extractChangelog(body)).toBe(
+      [
+        '### Added',
+        '',
+        '- Add certificate expiry monitoring.',
+        '',
+        '### Improved',
+        '',
+        '- Make storage filters easier to scan.',
+        '',
+        '### Fixed',
+        '',
+        '- Keep acknowledged alerts dismissed after refresh.',
+      ].join('\n'),
+    );
+  });
+
+  it('preserves nested details inside a recognized category', () => {
+    const body = [
+      '## Fixed',
+      '### Proxmox',
+      '- Storage rows no longer disappear after refresh.',
+      '## Installation',
+      '- Not part of the changelog.',
+    ].join('\n');
+
+    expect(extractChangelog(body)).toBe(
+      '### Fixed\n\n### Proxmox\n- Storage rows no longer disappear after refresh.',
+    );
+  });
+
+  it('returns null for summaries and release metadata without change categories', () => {
+    expect(
+      extractChangelog('## Highlights\n- Faster updates.\n\n## Installation\n- Pull the image.'),
+    ).toBeNull();
   });
 });
 

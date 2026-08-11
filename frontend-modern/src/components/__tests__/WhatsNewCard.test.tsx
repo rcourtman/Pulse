@@ -126,7 +126,7 @@ describe('WhatsNewCard', () => {
     expect(screen.queryByTestId('telemetry-payload-update-notice')).not.toBeInTheDocument();
   });
 
-  it('shows curated highlights after the running release changes', async () => {
+  it('shows the categorized changelog after the running release changes', async () => {
     localStorage.setItem(STORAGE_KEYS.WHATS_NEW_LAST_SEEN, '6.0.5');
     versionInfoMock.mockReturnValue({
       version: '6.1.0-rc.1',
@@ -135,7 +135,19 @@ describe('WhatsNewCard', () => {
     });
     getReleaseNotesMock.mockResolvedValue({
       version: 'v6.1.0-rc.1',
-      releaseNotes: '## Highlights\n- Reviewed Actions inbox\n\n## Changes\n- Internal work',
+      releaseNotes: [
+        '## Highlights',
+        '- General agent improvements',
+        '',
+        '## Added',
+        '- Actions now has a dedicated inbox for approvals.',
+        '',
+        '## Fixed',
+        '- Acknowledged alerts now stay dismissed after refresh.',
+        '',
+        '## Release Qualification',
+        '- Internal work',
+      ].join('\n'),
       releaseDate: '2026-07-13T12:00:00Z',
       isPrerelease: true,
     });
@@ -146,8 +158,16 @@ describe('WhatsNewCard', () => {
       expect(screen.getByTestId('whats-new-modal')).toBeInTheDocument();
     });
     expect(screen.getByRole('dialog')).toBeInTheDocument();
-    expect(screen.getByText("What's new in v6.1.0-rc.1")).toBeInTheDocument();
-    expect(screen.getByText('Reviewed Actions inbox')).toBeInTheDocument();
+    expect(screen.getByText('Pulse v6.1.0-rc.1 changelog')).toBeInTheDocument();
+    expect(screen.getByText('Added')).toBeInTheDocument();
+    expect(
+      screen.getByText('Actions now has a dedicated inbox for approvals.'),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Fixed')).toBeInTheDocument();
+    expect(
+      screen.getByText('Acknowledged alerts now stay dismissed after refresh.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('General agent improvements')).not.toBeInTheDocument();
     expect(screen.queryByText('Internal work')).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Full release notes →' })).toHaveAttribute(
       'href',
@@ -164,7 +184,7 @@ describe('WhatsNewCard', () => {
     });
     getReleaseNotesMock.mockResolvedValue({
       version: '6.1.0-rc.1',
-      releaseNotes: '## Highlights\n- Reviewed Actions inbox',
+      releaseNotes: '## Added\n- Actions now has a dedicated inbox for approvals.',
       releaseDate: '2026-07-13T12:00:00Z',
       isPrerelease: true,
     });
@@ -178,6 +198,28 @@ describe('WhatsNewCard', () => {
       expect(screen.queryByTestId('whats-new-modal')).not.toBeInTheDocument();
     });
     expect(localStorage.getItem(STORAGE_KEYS.WHATS_NEW_LAST_SEEN)).toBe('6.1.0-rc.1');
+  });
+
+  it('stays quiet when a release has only a highlights summary', async () => {
+    localStorage.setItem(STORAGE_KEYS.WHATS_NEW_LAST_SEEN, '6.0.5');
+    versionInfoMock.mockReturnValue({
+      version: '6.1.0-rc.1',
+      isDevelopment: false,
+      isSourceBuild: false,
+    });
+    getReleaseNotesMock.mockResolvedValue({
+      version: '6.1.0-rc.1',
+      releaseNotes: '## Highlights\n- General improvements',
+      releaseDate: '2026-07-13T12:00:00Z',
+      isPrerelease: true,
+    });
+
+    await renderCard();
+
+    await waitFor(() => {
+      expect(localStorage.getItem(STORAGE_KEYS.WHATS_NEW_LAST_SEEN)).toBe('6.1.0-rc.1');
+    });
+    expect(screen.queryByTestId('whats-new-modal')).not.toBeInTheDocument();
   });
 
   it('stays quiet for development builds', async () => {

@@ -10,7 +10,7 @@ import { Dialog } from '@/components/shared/Dialog';
 import { ExternalTextLink } from '@/components/shared/ExternalTextLink';
 import { InlineNotice } from '@/components/shared/InlineNotice';
 import { buildReleaseNotesUrl, normalizeReleaseVersion } from '@/components/updateVersion';
-import { extractHighlights, isReleaseVersion } from '@/components/whatsNewModel';
+import { extractChangelog, isReleaseVersion } from '@/components/whatsNewModel';
 import { renderMarkdown } from '@/components/AI/aiChatUtils';
 import { t } from '@/i18n';
 import { PRIVACY_DOC_URL } from '@/utils/docsLinks';
@@ -56,9 +56,9 @@ const markTelemetryPayloadNoticeSeen = () => {
 
 /**
  * Post-update "What's New" dialog. Shows once after the running version
- * changes, and only when that release has a curated `## Highlights` section
- * in its GitHub release notes. Dismissing (or a highlights-free release)
- * records the version so the dialog stays quiet until the next update.
+ * changes, and only when that release has categorized user-facing changelog
+ * entries in its GitHub release notes. Dismissing (or a release without those
+ * entries) records the version so the dialog stays quiet until the next update.
  *
  * This release communication boundary also owns the one-time, non-blocking
  * telemetry schema v2 notice. Existing installations see it once; fresh
@@ -69,7 +69,7 @@ export function WhatsNewCard() {
   const [visible, setVisible] = createSignal(false);
   const [telemetryNoticeVisible, setTelemetryNoticeVisible] = createSignal(false);
   const [version, setVersion] = createSignal('');
-  const [highlightsHtml, setHighlightsHtml] = createSignal('');
+  const [changelogHtml, setChangelogHtml] = createSignal('');
   const hadPriorReleaseBaseline = readLastSeenVersion() !== null;
   let checked = false;
   let telemetryNoticeChecked = false;
@@ -82,12 +82,12 @@ export function WhatsNewCard() {
       if (normalizeReleaseVersion(notes.version) !== currentVersion) {
         return;
       }
-      const highlights = extractHighlights(notes.releaseNotes);
-      if (!highlights) {
+      const changelog = extractChangelog(notes.releaseNotes);
+      if (!changelog) {
         markVersionSeen(currentVersion);
         return;
       }
-      setHighlightsHtml(renderMarkdown(highlights));
+      setChangelogHtml(renderMarkdown(changelog));
       setVersion(currentVersion);
       setVisible(true);
     } catch (error) {
@@ -244,9 +244,9 @@ export function WhatsNewCard() {
                       id="whats-new-title"
                       class="text-lg font-semibold text-base-content truncate"
                     >
-                      What's new in v{version()}
+                      Pulse v{version()} changelog
                     </h2>
-                    <p class="text-xs text-muted">Pulse updated successfully</p>
+                    <p class="text-xs text-muted">What changed in this release</p>
                   </div>
                 </div>
                 <ActionIconButton
@@ -263,9 +263,9 @@ export function WhatsNewCard() {
             </div>
 
             <div
-              class="px-6 py-4 max-h-[60vh] overflow-y-auto text-sm text-base-content [&_ul]:list-disc [&_ul]:pl-5 [&_ul]:space-y-2 [&_ol]:list-decimal [&_ol]:pl-5 [&_ol]:space-y-2 [&_p]:mt-2 [&_a]:underline [&_code]:font-mono [&_code]:text-xs"
+              class="px-6 py-4 max-h-[60vh] overflow-y-auto text-sm text-base-content [&_h3]:mt-5 [&_h3:first-child]:mt-0 [&_h3]:mb-2 [&_h3]:text-base [&_h3]:font-semibold [&_ul]:list-disc [&_ul]:pl-5 [&_ul]:space-y-2 [&_ol]:list-decimal [&_ol]:pl-5 [&_ol]:space-y-2 [&_p]:mt-2 [&_a]:underline [&_code]:font-mono [&_code]:text-xs"
               // eslint-disable-next-line solid/no-innerhtml -- renderMarkdown sanitizes via DOMPurify
-              innerHTML={highlightsHtml()}
+              innerHTML={changelogHtml()}
             />
 
             <div class="px-6 py-4 bg-surface-alt border-t border-border flex items-center justify-between gap-3">

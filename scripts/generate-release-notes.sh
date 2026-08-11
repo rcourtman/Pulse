@@ -78,24 +78,35 @@ internal fixes or minor patches), OMIT this entire section — that deliberately
 keeps the in-app banner silent for maintenance releases. Keep the heading at
 level 3 (###).]
 
-### New Features
-[Genuinely new user-facing capabilities. Be specific about what users can now do.]
+### Added
+[Genuinely new user-facing capabilities. Name the page, workflow, integration,
+or platform where users will find each one, then say what they can now do.]
 
-### Bug Fixes
-[Fixes for problems users would have encountered. Include issue refs like
-(#1234) only when the fix verifiably addresses that issue.]
+### Improved
+[Meaningful changes to existing behavior. Name the affected experience and the
+observable improvement; do not summarize several unrelated changes together.]
 
-### Improvements
-[Enhancements to existing features.]
+### Fixed
+[Problems users would have encountered. State the visible symptom that no
+longer happens, not the internal cause. Include issue refs like (#1234) only
+when the fix verifiably addresses that issue.]
 
 Guidelines:
 - Plain, factual, understated. No marketing language, no emojis.
 - Omit any section that has no items.
-- Do NOT write an Installation section or anything after Improvements — the
+- Every Added, Improved, and Fixed bullet must stand on its own as a concrete
+  changelog entry. A reader should understand where they would notice the
+  change and what is different without knowing Pulse's implementation.
+- Avoid internal release and architecture vocabulary such as canonical,
+  governed, schema, provider transport, preflight, convergence, or runtime
+  boundary unless that exact term is visible to the user in the product.
+- Do not use vague entries such as "improved agent handling" or "various UI
+  fixes". Split unrelated changes and name the behavior that changed.
+- Do NOT write an Installation section or anything after Fixed — the
   release pipeline appends those.
-- Highlights is the ONE exception to "boring": it is shown in-app to users who
-  just updated, so make it the shortest useful explanation of what changed —
-  still factual, with no hype.
+- Highlights is the ONE exception to "boring": it is shown in-app before users
+  update, so make it the shortest useful preview of what changed — still
+  factual, with no hype.
 
 Your reply must be ONLY the release-notes markdown, starting with
 "## v${VERSION}" — no preamble, no code fences, no commentary.
