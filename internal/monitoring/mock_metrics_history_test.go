@@ -51,8 +51,13 @@ const boundedMockHistoryProofWindow = 4 * time.Hour
 // expectedCanonicalStoreUsageSample returns the value the store seeder writes
 // for a storage usage series at the given aligned timestamp: the canonical
 // mock runtime sample, clamped to a valid percentage.
-func expectedCanonicalStoreUsageSample(resourceID string, ts time.Time) float64 {
-	return clampFloat(mock.SampleMetric("storage", resourceID, "usage", ts), 0, 100)
+// expectedCanonicalStoreUsageSample must sample through the same graph-aware
+// sampler the seeder used. The package-level mock.SampleMetric consults the
+// global role registry, which only other tests populate — comparing against it
+// makes the assertion pass or fail depending on which tests ran earlier in the
+// process (CI reshards flipped it red on 2026-08-11).
+func expectedCanonicalStoreUsageSample(sampler mock.MetricSampler, resourceID string, ts time.Time) float64 {
+	return clampFloat(sampler.SampleMetric("storage", resourceID, "usage", ts), 0, 100)
 }
 
 func compactMockChartFixtureConfig() mock.MockConfig {
@@ -622,12 +627,14 @@ func TestSeedMockMetricsHistory_SeedsVMwareMetricsStore(t *testing.T) {
 	defer store.Close()
 
 	mh := NewMetricsHistory(1000, seedDuration)
-	seedMockMetricsHistory(mh, store, mock.FixtureGraph{
+	graph := mock.FixtureGraph{
 		State: state,
 		PlatformFixtures: mock.PlatformFixtures{
 			VMware: vmware.DefaultFixtures(),
 		},
-	}, now, seedDuration, time.Minute)
+	}
+	sampler := mock.NewMetricSampler(graph)
+	seedMockMetricsHistory(mh, store, graph, now, seedDuration, time.Minute)
 
 	hostPoints, err := store.Query("agent", "vc-mock-1:host:host-101", "cpu", now.Add(-seedDuration), now, 3600)
 	if err != nil {
@@ -653,7 +660,7 @@ func TestSeedMockMetricsHistory_SeedsVMwareMetricsStore(t *testing.T) {
 		t.Fatal("expected metrics store to have seeded VMware datastore usage points")
 	}
 	lastStoragePoint := storagePoints[len(storagePoints)-1]
-	if got, want := lastStoragePoint.Value, expectedCanonicalStoreUsageSample("vc-mock-1:datastore:datastore-201", lastStoragePoint.Timestamp); math.Abs(got-want) > 1e-9 {
+	if got, want := lastStoragePoint.Value, expectedCanonicalStoreUsageSample(sampler, "vc-mock-1:datastore:datastore-201", lastStoragePoint.Timestamp); math.Abs(got-want) > 1e-9 {
 		t.Fatalf("expected VMware datastore usage seed at %s to match canonical mock runtime sample, got=%v want=%v", lastStoragePoint.Timestamp.Format(time.RFC3339), got, want)
 	}
 
@@ -693,12 +700,14 @@ func TestSeedMockMetricsHistory_SeedsTrueNASMetricsStore(t *testing.T) {
 	defer store.Close()
 
 	mh := NewMetricsHistory(1000, seedDuration)
-	seedMockMetricsHistory(mh, store, mock.FixtureGraph{
+	graph := mock.FixtureGraph{
 		State: state,
 		PlatformFixtures: mock.PlatformFixtures{
 			TrueNAS: fixtures,
 		},
-	}, now, seedDuration, time.Minute)
+	}
+	sampler := mock.NewMetricSampler(graph)
+	seedMockMetricsHistory(mh, store, graph, now, seedDuration, time.Minute)
 
 	systemPoints, err := store.Query("agent", fixtures.System.Hostname, "disk", now.Add(-seedDuration), now, 3600)
 	if err != nil {
@@ -725,7 +734,7 @@ func TestSeedMockMetricsHistory_SeedsTrueNASMetricsStore(t *testing.T) {
 		t.Fatal("expected metrics store to have seeded canonical TrueNAS dataset usage points")
 	}
 	lastDatasetPoint := datasetPoints[len(datasetPoints)-1]
-	if got, want := lastDatasetPoint.Value, expectedCanonicalStoreUsageSample(datasetID, lastDatasetPoint.Timestamp); math.Abs(got-want) > 1e-9 {
+	if got, want := lastDatasetPoint.Value, expectedCanonicalStoreUsageSample(sampler, datasetID, lastDatasetPoint.Timestamp); math.Abs(got-want) > 1e-9 {
 		t.Fatalf("expected TrueNAS dataset usage seed at %s to match canonical mock runtime sample, got=%v want=%v", lastDatasetPoint.Timestamp.Format(time.RFC3339), got, want)
 	}
 
