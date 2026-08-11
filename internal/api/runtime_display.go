@@ -20,6 +20,7 @@ type RuntimeDisplayResponse struct {
 	Theme                      string `json:"theme"`
 	FullWidthMode              bool   `json:"fullWidthMode"`
 	DisableDockerUpdateActions bool   `json:"disableDockerUpdateActions"`
+	TelemetryEnabled           bool   `json:"telemetryEnabled"`
 	ReduceProUpsellNoise       bool   `json:"reduceProUpsellNoise"`
 }
 
@@ -31,11 +32,14 @@ func (h *SystemSettingsHandler) HandleGetRuntimeDisplay(w http.ResponseWriter, r
 		return
 	}
 
-	response := RuntimeDisplayResponse{}
+	response := RuntimeDisplayResponse{TelemetryEnabled: true}
 	if h != nil && h.config != nil {
 		// Match HandleGetSystemSettings so the environment override wins over
-		// the persisted value for every role.
+		// the persisted value for every role. These booleans reveal only the
+		// effective operator policy, not the admin-only configuration or
+		// telemetry payload.
 		response.DisableDockerUpdateActions = h.config.DisableDockerUpdateActions
+		response.TelemetryEnabled = h.config.TelemetryEnabled
 	}
 
 	if h == nil || h.persistence == nil {
@@ -53,6 +57,12 @@ func (h *SystemSettingsHandler) HandleGetRuntimeDisplay(w http.ResponseWriter, r
 		response.Theme = settings.Theme
 		response.FullWidthMode = settings.FullWidthMode
 		response.ReduceProUpsellNoise = settings.ReduceProUpsellNoise
+		if h.config == nil || (!h.config.EnvOverrides["disableDockerUpdateActions"] && !h.config.EnvOverrides["PULSE_DISABLE_DOCKER_UPDATE_ACTIONS"]) {
+			response.DisableDockerUpdateActions = settings.DisableDockerUpdateActions
+		}
+		if settings.TelemetryEnabled != nil && (h.config == nil || (!h.config.EnvOverrides["telemetryEnabled"] && !h.config.EnvOverrides["PULSE_TELEMETRY"])) {
+			response.TelemetryEnabled = *settings.TelemetryEnabled
+		}
 	}
 
 	if err := utils.WriteJSONResponse(w, response); err != nil {

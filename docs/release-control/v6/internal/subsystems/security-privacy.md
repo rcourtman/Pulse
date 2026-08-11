@@ -312,6 +312,14 @@ the `white_label` branding entitlement.
    metadata, or remediation output.
 2. Change security policy, hardening guidance, or supported auth boundaries through `SECURITY.md`.
 3. Change telemetry/privacy settings state handling through `frontend-modern/src/components/Settings/useSystemSettingsState.ts`.
+   A non-admin General panel may read the effective `telemetryEnabled` boolean
+   from the authenticated `/api/runtime/display` whitelist after the complete
+   admin settings request is refused. That fallback must expose no preview
+   payload, install ID, environment override, origin, webhook-network, or login
+   configuration, and it must preserve an operator-selected `false` rather than
+   reverting to the frontend's enabled default. The same response may carry
+   the effective Docker-action display boolean because both values are needed
+   to render read-only global state; this does not widen settings write access.
    Relay runtime access through `internal/api/router.go` must stay behind the
    existing protected route and API-token gates. Testable router seams may
    expose relay status to onboarding validation, but they must not broaden

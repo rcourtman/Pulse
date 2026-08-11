@@ -24109,6 +24109,9 @@ func TestContract_RuntimeDisplayServesPresentationValuesWithoutAdmin(t *testing.
 	settings := config.DefaultSystemSettings()
 	settings.Theme = "dark"
 	settings.FullWidthMode = true
+	settings.DisableDockerUpdateActions = true
+	telemetryEnabled := false
+	settings.TelemetryEnabled = &telemetryEnabled
 	if err := persistence.SaveSystemSettings(*settings); err != nil {
 		t.Fatalf("save system settings: %v", err)
 	}
@@ -24142,6 +24145,12 @@ func TestContract_RuntimeDisplayServesPresentationValuesWithoutAdmin(t *testing.
 	}
 	if !display.FullWidthMode {
 		t.Fatal("fullWidthMode = false, want true")
+	}
+	if !display.DisableDockerUpdateActions {
+		t.Fatal("disableDockerUpdateActions = false, want true")
+	}
+	if display.TelemetryEnabled {
+		t.Fatal("telemetryEnabled = true, want false")
 	}
 }
 
