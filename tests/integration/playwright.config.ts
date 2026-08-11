@@ -1,83 +1,9 @@
 import { defineConfig, devices } from '@playwright/test';
+import {
+  PROBATION_SPECS,
+  QUARANTINED_SPECS,
+} from './e2e-tiering.mjs';
 import { preferredBrowserBaseURL } from './tests/runtime-defaults';
-
-/**
- * QUARANTINE (2026-07-17): these specs assert the pre-platform-first UI
- * (element locators, URLs, and subheader copy that the June IA rebuild
- * replaced) and have failed on every push since 2026-06-29, drowning the
- * signal from the healthy specs. Quarantining them keeps the rest of the
- * suite as a live per-push gate while each file is re-pinned to the
- * current UI and removed from this list. This is a stopgap, not a fix:
- * the recovery work is tracked as its own effort, and a spec leaves this
- * list only by being repaired, never by deletion.
- */
-const QUARANTINED_SPECS = [
-  // Multi-tenant scenarios 6/7 have an unresolved org-resolution bug (see
-  // core-e2e-failure-taxonomy): after switchOrg+reload the UI still resolves
-  // the default org. CI runs a multi-tenant environment, so delisting this
-  // spec turns that open bug into a permanent red.
-  '**/03-multi-tenant.spec.ts',
-  '**/47-inline-selection-scroll-stability.spec.ts',
-  '**/48-summary-hover-selection.spec.ts',
-];
-
-/**
- * PROBATION (2026-07-20): specs that run on every push but do NOT gate the
- * Core E2E verdict. CI runs the suite in two passes per shard, selected by
- * PULSE_E2E_TIER: "stable" (everything not listed here — gating) and
- * "probation" (this list — reported, continue-on-error). Locally, with
- * PULSE_E2E_TIER unset, both tiers run together exactly as before.
- *
- * Seeded from per-spec failure data mined out of the "Core E2E Tests"
- * workflow's failed-shard logs for the 31 completed main runs between the
- * 2026-07-18 quarantine delist and 2026-07-20: every spec that failed or
- * retry-flaked within the 10 most recent completed runs starts here; specs
- * whose last incident is older already satisfy the promotion rule below.
- *
- * Promotion rule — a spec earns its way OUT of this list (into the gating
- * stable tier) after 10 consecutive Core E2E runs on main in which it
- * neither failed nor went flaky (a retry-pass reported as "flaky" counts as
- * an incident — the retry hid it from the verdict, not from this ledger).
- * Demotion rule — one flake on main demotes a stable spec back to this
- * list, restarting its count. A spec leaves the suite only via QUARANTINE
- * (still-rotted, doesn't run) or deliberate deletion; probation is for
- * specs that run green sometimes but haven't yet proven they always do.
- */
-const PROBATION_SPECS = [
-  '**/01-core-e2e.spec.ts',
-  '**/02-navigation-perf.spec.ts',
-  '**/04-mobile.spec.ts',
-  '**/05-settings-mobile-audit.spec.ts',
-  '**/11-first-session.spec.ts',
-  '**/15-settings-shell-consistency.spec.ts',
-  '**/20-local-doc-links.spec.ts',
-  '**/21-truenas-connections-workspace.spec.ts',
-  '**/38-vmware-ai-chat-mentions.spec.ts',
-  '**/39-vmware-resource-detail-drawer.spec.ts',
-  '**/40-vmware-storage-source-filter.spec.ts',
-  '**/41-vmware-phase1-exclusion-integrity.spec.ts',
-  '**/42-vmware-ai-chat-read-recovery.spec.ts',
-  '**/43-platform-mock-runtime.spec.ts',
-  '**/44-workloads-chart-spacing.spec.ts',
-  '**/45-workloads-memory-tail.spec.ts',
-  '**/46-storage-summary-continuity.spec.ts',
-  '**/49-demo-scenario-curation.spec.ts',
-  '**/50-storage-physical-disk-io-history.spec.ts',
-  '**/56-pulse-account-upgrade-bootstrap.spec.ts',
-  '**/59-workloads-column-layout.spec.ts',
-  '**/62-storage-growth-column.spec.ts',
-  '**/64-workloads-proxmox-refresh-stability.spec.ts',
-  // Demoted 2026-08-05: rate-limit/shared-state retry flake on main in
-  // run 31033254657; it must earn 10 consecutive green runs to return.
-  '**/68-infrastructure-onboarding.spec.ts',
-  '**/68-platform-pages-shell.spec.ts',
-  '**/77-msp-isolation.spec.ts',
-  '**/79-update-flow.spec.ts',
-  // Demoted 2026-07-20: failed on main in run 29731882505, the first
-  // tiered run, one run after clearing the 10-green seeding window.
-  '**/90-operational-trust-protection-posture.spec.ts',
-  '**/91-proxmox-node-display-names.spec.ts',
-];
 
 const E2E_TIER = String(process.env.PULSE_E2E_TIER || '')
   .trim()
