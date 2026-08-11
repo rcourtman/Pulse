@@ -122,6 +122,12 @@ func TestControlFrameRoundTrip(t *testing.T) {
 			AuthToken:   "auth-token-xyz",
 			DeviceToken: "device-token-123",
 			Platform:    "ios",
+			NotificationPreferences: &PushNotificationPreferences{
+				CriticalEnabled:  true,
+				WarningEnabled:   false,
+				ApprovalEnabled:  true,
+				FixResultEnabled: false,
+			},
 		}
 		frame, err := NewControlFrame(FrameConnect, 0, orig)
 		if err != nil {
@@ -154,6 +160,23 @@ func TestControlFrameRoundTrip(t *testing.T) {
 		}
 		if got.Platform != orig.Platform {
 			t.Errorf("Platform: got %q, want %q", got.Platform, orig.Platform)
+		}
+		if got.NotificationPreferences == nil {
+			t.Fatal("NotificationPreferences was omitted from CONNECT round trip")
+		}
+		if *got.NotificationPreferences != *orig.NotificationPreferences {
+			t.Errorf("NotificationPreferences: got %#v, want %#v", got.NotificationPreferences, orig.NotificationPreferences)
+		}
+
+		legacyFrame, err := NewControlFrame(FrameConnect, 0, ConnectPayload{
+			InstanceID: "relay_legacy",
+			AuthToken:  "legacy-auth",
+		})
+		if err != nil {
+			t.Fatalf("NewControlFrame(legacy CONNECT) error = %v", err)
+		}
+		if bytes.Contains(legacyFrame.Payload, []byte("notification_preferences")) {
+			t.Fatalf("legacy CONNECT unexpectedly serialized notification preferences: %s", legacyFrame.Payload)
 		}
 	})
 
