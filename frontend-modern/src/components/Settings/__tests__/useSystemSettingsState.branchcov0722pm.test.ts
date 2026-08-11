@@ -11,6 +11,7 @@ import { useSystemSettingsState } from '../useSystemSettingsState';
 // identical to the sibling test.
 const mocks = vi.hoisted(() => ({
   getSystemSettingsMock: vi.fn(),
+  getRuntimeDisplayMock: vi.fn(),
   updateSystemSettingsMock: vi.fn(),
   getTelemetryPreviewMock: vi.fn(),
   resetTelemetryInstallIDMock: vi.fn(),
@@ -35,6 +36,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/api/settings', () => ({
   SettingsAPI: {
     getSystemSettings: mocks.getSystemSettingsMock,
+    getRuntimeDisplay: mocks.getRuntimeDisplayMock,
     getTelemetryPreview: mocks.getTelemetryPreviewMock,
     resetTelemetryInstallID: mocks.resetTelemetryInstallIDMock,
     updateSystemSettings: mocks.updateSystemSettingsMock,
@@ -100,6 +102,7 @@ const flushAsync = async () => {
 describe('useSystemSettingsState branch coverage', () => {
   beforeEach(() => {
     mocks.getSystemSettingsMock.mockResolvedValue({});
+    mocks.getRuntimeDisplayMock.mockResolvedValue({});
     mocks.updateSystemSettingsMock.mockResolvedValue(undefined);
     mocks.loadRuntimeBrandingMock.mockResolvedValue(undefined);
     mocks.getUpdatePlanMock.mockResolvedValue({
@@ -153,6 +156,26 @@ describe('useSystemSettingsState branch coverage', () => {
     await flushAsync();
     return mounted;
   };
+
+  describe('read-only runtime settings fallback', () => {
+    it('shows effective Docker-action and telemetry state when admin settings are forbidden', async () => {
+      mocks.getSystemSettingsMock.mockRejectedValueOnce(new Error('Admin privileges required'));
+      mocks.getRuntimeDisplayMock.mockResolvedValueOnce({
+        disableDockerUpdateActions: true,
+        telemetryEnabled: false,
+      });
+      const { hookState, dispose } = mountHook();
+
+      await hookState.initializeSystemSettingsState();
+      await flushAsync();
+
+      expect(mocks.getRuntimeDisplayMock).toHaveBeenCalledTimes(1);
+      expect(hookState.disableDockerUpdateActions()).toBe(true);
+      expect(hookState.telemetryEnabled()).toBe(false);
+      expect(mocks.updateDockerUpdateActionsSettingMock).toHaveBeenCalledWith(true);
+      dispose();
+    });
+  });
 
   describe.each([
     {

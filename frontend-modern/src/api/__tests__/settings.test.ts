@@ -215,6 +215,7 @@ describe('SettingsAPI', () => {
         theme: 'dark',
         fullWidthMode: true,
         disableDockerUpdateActions: true,
+        telemetryEnabled: false,
         reduceProUpsellNoise: false,
       };
       vi.mocked(apiFetchJSON).mockResolvedValueOnce(display);

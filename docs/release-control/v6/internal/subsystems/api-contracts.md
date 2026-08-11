@@ -9198,7 +9198,8 @@ case honest against live 403s on `/api/config/nodes` and `/api/system/settings`.
 `internal/api/router_routes_registration.go`, uses `RequireAuth` plus
 `monitoring:read`, matching the sibling `/api/runtime/branding` route. Its
 explicit `RuntimeDisplayResponse` whitelist contains only `theme`,
-`fullWidthMode`, `disableDockerUpdateActions`, and `reduceProUpsellNoise`.
+`fullWidthMode`, `disableDockerUpdateActions`, `telemetryEnabled`, and
+`reduceProUpsellNoise`.
 
 Authenticated app bootstrap needs those values for every role. It must not read
 them from `GET /api/system/settings`, whose `RequireAdmin` plus `settings:read`
@@ -9207,12 +9208,22 @@ URL, webhook-network, telemetry, and login configuration. The admin route and
 payload remain unchanged; the new route never embeds or projects
 `config.SystemSettings`, so future settings fields are not published by
 omission. `disableDockerUpdateActions` comes from effective runtime config so
-the environment override remains authoritative.
+the environment override remains authoritative. `telemetryEnabled` is the
+effective boolean only: it lets a read-only General panel reflect the
+operator's global privacy choice, but it never exposes the telemetry preview,
+rotating install ID, environment overrides, or any other admin setting.
+
+When the General settings state owner receives the expected 403 from the admin
+settings route, it must fall back to this narrow runtime projection for those
+two global booleans and synchronize the shared Docker-action store. It must not
+retry through a broader route or replace an operator-disabled telemetry value
+with the frontend default.
 
 `TestContract_RuntimeDisplayServesPresentationValuesWithoutAdmin` pins a viewer
 receiving 200 from the runtime route while still receiving 403 from the admin
 route. `TestHandleGetRuntimeDisplay_PublishesOnlyPresentationFields` pins the
-serialized whitelist, and the frontend bootstrap tests pin that
+serialized whitelist, the frontend settings/API tests pin the read-only
+fallback and effective boolean values, and the frontend bootstrap tests pin that
 `useAppRuntimeState` never calls `getSystemSettings()`.
 
 ### Security status names every admin-only Settings panel capability

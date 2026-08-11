@@ -1,17 +1,17 @@
 {
   "version": 1,
-  "base_sha": "791a2f86bf16871eefe19acf3bedadb4d0d3edaa",
-  "verified_at": "2026-08-11T14:40:54Z",
+  "base_sha": "501575524519294805e98b47dd3f0b746df8d175",
+  "verified_at": "2026-08-11T18:56:00Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/utils/alertDestinationsPresentation.ts"
+    "frontend-modern/src/api/settings.ts",
+    "frontend-modern/src/components/Settings/useSystemSettingsState.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/utils/alertDestinationsPresentation.ts": "f0b392eb161f3117f543c6a97fcede9f2c42dd079eb3d40a3e491e7f5c287ebd"
+    "frontend-modern/src/api/settings.ts": "160fdba69870f19682cb234eb582f0f6ea6fb83ef67e0ca3662d2ac0da4b4325",
+    "frontend-modern/src/components/Settings/useSystemSettingsState.ts": "6e3fc2e3ea80458b30178463fea8f74ffff3498e992c6aa38578daa684653a99"
   },
-  "routes": [
-    "/alerts/notifications"
-  ],
+  "routes": ["/settings/system-general", "/docker/containers"],
   "viewports": [
     {
       "width": 1440,
@@ -23,17 +23,15 @@
     }
   ],
   "states": [
-    "Notifications with one failed delivery retained for 7 days and two dead-lettered deliveries retained for 30 days.",
-    "The delivery warning explained that expired records are removed hourly and that the warning clears after the last retained failure reaches its retention limit when no new terminal failures occur.",
-    "Desktop Notifications at 1440 by 1000 with the warning and Refresh delivery status control visible and no document or body horizontal overflow.",
-    "Narrow Notifications at 390 by 844 with the warning and refresh control visible and no document or body horizontal overflow.",
-    "Healthy queue state after controlled fixture cleanup, with the warning removed."
+    "The running mock backend had Docker update actions disabled and outbound usage telemetry disabled, while the complete admin settings request was deliberately answered with 403 to exercise the viewer fallback.",
+    "System General reflected Hide update buttons as enabled and Outbound usage telemetry as disabled from the authenticated runtime projection at desktop and narrow widths.",
+    "Docker Containers rendered no Update or Update all action buttons while the global hide policy was active.",
+    "System General had no document or body horizontal overflow at either viewport."
   ],
   "interactions": [
-    "Inserted three synthetic terminal queue records with no destination or customer data into the ignored isolated runtime database, then opened Alerts and Notifications through visible navigation controls.",
-    "Confirmed the retained-delivery counts, hourly cleanup explanation, retention-limit clearing condition, and refresh control in the real warning card.",
-    "Refreshed delivery status at desktop width and confirmed the warning remained while retained failures existed.",
-    "Repeated the warning and overflow checks at the narrow viewport.",
-    "Deleted the three synthetic records, refreshed delivery status, and confirmed the warning cleared."
+    "Started the current managed mock runtime and persisted disableDockerUpdateActions=true plus telemetryEnabled=false through the live settings API.",
+    "Intercepted only GET /api/system/settings with the expected 403 refusal, then opened System General through the current browser build and confirmed the fallback values from GET /api/runtime/display.",
+    "Inspected full-page desktop and narrow screenshots and measured document and body overflow.",
+    "Navigated to Docker Containers at both viewports and confirmed the shared global policy left zero Update or Update all buttons."
   ]
 }

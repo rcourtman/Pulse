@@ -1238,6 +1238,12 @@ instead of lifecycle-local centered icon/text shells.
 
 ## Extension Points
 
+The authenticated runtime-display projection under shared `internal/api/` may
+carry the effective global `disableDockerUpdateActions` boolean so non-admin
+viewers render container updates read-only. This is API/settings presentation
+only: it neither disables image-update detection nor changes agent update,
+registration, profile, command, enrollment, or fleet-control authority.
+
 Manual scoped Patrol work that reaches `internal/api/ai_handlers.go` (such as an
 alert-initiated targeted Patrol check via `POST /api/ai/patrol/run`) is
 investigation-only over agent-reporting resources: it must not alter agent

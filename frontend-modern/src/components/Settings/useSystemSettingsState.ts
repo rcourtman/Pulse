@@ -179,6 +179,19 @@ export function useSystemSettingsState({
       }
     } catch (error) {
       logger.error('Failed to load settings', error);
+
+      // Viewers cannot read the admin settings payload, but they still need to
+      // see the effective server-wide state of read-only controls. Use the
+      // deliberately narrow authenticated-session projection for those values.
+      try {
+        const runtimeDisplay = await SettingsAPI.getRuntimeDisplay();
+        const dockerActionsDisabled = runtimeDisplay.disableDockerUpdateActions ?? false;
+        setDisableDockerUpdateActions(dockerActionsDisabled);
+        updateDockerUpdateActionsSetting(dockerActionsDisabled);
+        setTelemetryEnabled(runtimeDisplay.telemetryEnabled ?? true);
+      } catch (runtimeDisplayError) {
+        logger.warn('Failed to load read-only runtime settings', runtimeDisplayError);
+      }
     }
 
     try {

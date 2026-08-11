@@ -76,6 +76,7 @@ func TestHandleGetRuntimeDisplay_PublishesOnlyPresentationFields(t *testing.T) {
 		"theme":                      {},
 		"fullWidthMode":              {},
 		"disableDockerUpdateActions": {},
+		"telemetryEnabled":           {},
 		"reduceProUpsellNoise":       {},
 	}
 	for key := range raw {
@@ -94,11 +95,34 @@ func TestHandleGetRuntimeDisplay_UsesEffectiveDockerUpdateActionsSetting(t *test
 	settings := config.DefaultSystemSettings()
 	settings.DisableDockerUpdateActions = false
 
-	handler := newRuntimeDisplayHandler(t, &config.Config{DisableDockerUpdateActions: true}, settings)
+	handler := newRuntimeDisplayHandler(t, &config.Config{
+		DisableDockerUpdateActions: true,
+		EnvOverrides: map[string]bool{
+			"PULSE_DISABLE_DOCKER_UPDATE_ACTIONS": true,
+		},
+	}, settings)
 	got, _ := fetchRuntimeDisplay(t, handler)
 
 	if !got.DisableDockerUpdateActions {
 		t.Fatal("disableDockerUpdateActions = false, want the effective config override to win")
+	}
+}
+
+func TestHandleGetRuntimeDisplay_UsesEffectiveTelemetrySetting(t *testing.T) {
+	settings := config.DefaultSystemSettings()
+	enabled := true
+	settings.TelemetryEnabled = &enabled
+
+	handler := newRuntimeDisplayHandler(t, &config.Config{
+		TelemetryEnabled: false,
+		EnvOverrides: map[string]bool{
+			"PULSE_TELEMETRY": true,
+		},
+	}, settings)
+	got, _ := fetchRuntimeDisplay(t, handler)
+
+	if got.TelemetryEnabled {
+		t.Fatal("telemetryEnabled = true, want the effective config override to win")
 	}
 }
 

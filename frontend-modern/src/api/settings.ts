@@ -177,6 +177,7 @@ export interface RuntimeDisplayResponse {
   theme?: string;
   fullWidthMode?: boolean;
   disableDockerUpdateActions?: boolean;
+  telemetryEnabled?: boolean;
   reduceProUpsellNoise?: boolean;
 }
 

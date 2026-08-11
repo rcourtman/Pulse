@@ -197,6 +197,29 @@ func TestTelemetryUpdate_GetReturnsEffectiveValue(t *testing.T) {
 	}
 }
 
+func TestRuntimeDisplayPublishesOnlyEffectiveTelemetryState(t *testing.T) {
+	settings := config.DefaultSystemSettings()
+	persistedEnabled := true
+	settings.TelemetryEnabled = &persistedEnabled
+	handler := newRuntimeDisplayHandler(t, &config.Config{
+		TelemetryEnabled: false,
+		EnvOverrides: map[string]bool{
+			"PULSE_TELEMETRY": true,
+		},
+	}, settings)
+
+	display, raw := fetchRuntimeDisplay(t, handler)
+	if display.TelemetryEnabled {
+		t.Fatal("runtime telemetry state = enabled, want effective disabled override")
+	}
+	if _, ok := raw["telemetryEnabled"]; !ok {
+		t.Fatal("runtime display omitted telemetryEnabled")
+	}
+	if _, ok := raw["telemetryPreview"]; ok {
+		t.Fatal("runtime display exposed admin-only telemetry preview")
+	}
+}
+
 func TestTelemetryPreview_ReturnsCurrentPayload(t *testing.T) {
 	tempDir := t.TempDir()
 	cfg := &config.Config{
