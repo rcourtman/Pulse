@@ -10590,6 +10590,54 @@ func TestContract_QuickSecuritySetupBootstrapRetrievalGuidance(t *testing.T) {
 	}
 }
 
+func TestContract_QuickSecuritySetupPersistsCanonicalAuthEnvironment(t *testing.T) {
+	resetPersistentAuthStoresForTests()
+	t.Cleanup(resetPersistentAuthStoresForTests)
+
+	tempDir := t.TempDir()
+	cfg := &config.Config{
+		DataPath:   tempDir,
+		ConfigPath: tempDir,
+	}
+	router := &Router{
+		config:      cfg,
+		persistence: config.NewConfigPersistence(cfg.DataPath),
+	}
+	router.initializeBootstrapToken()
+	InitPersistentAuthStores(tempDir)
+
+	token, _, _, err := loadOrCreateBootstrapToken(tempDir)
+	if err != nil {
+		t.Fatalf("loadOrCreateBootstrapToken: %v", err)
+	}
+	body := `{"username":"canonical-admin","password":"StrongPass!1","apiToken":"` + strings.Repeat("ac", 32) + `"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/security/quick-setup", strings.NewReader(body))
+	req.RemoteAddr = "127.0.0.1:54321"
+	req.Header.Set(bootstrapTokenHeader, token)
+	rec := httptest.NewRecorder()
+
+	authLimiter.Reset("127.0.0.1")
+	handleQuickSecuritySetupFixed(router)(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("quick setup status = %d, want 200 (%s)", rec.Code, rec.Body.String())
+	}
+
+	authEnv, err := os.ReadFile(resolveAuthEnvPath(cfg.ConfigPath))
+	if err != nil {
+		t.Fatalf("read canonical auth environment: %v", err)
+	}
+	authText := string(authEnv)
+	if !strings.Contains(authText, "PULSE_AUTH_USER='canonical-admin'\n") {
+		t.Fatalf("canonical auth environment missing username")
+	}
+	if !strings.Contains(authText, "PULSE_AUTH_PASS='$2") {
+		t.Fatalf("canonical auth environment missing password hash")
+	}
+	if strings.Contains(authText, "StrongPass!1") {
+		t.Fatal("canonical auth environment stored the plaintext password")
+	}
+}
+
 // A valid bootstrap token authorizes quick setup from any origin — the token
 // is the security boundary, and it's only readable by callers with filesystem
 // access to the Pulse data directory. The loopback-only path remains for the

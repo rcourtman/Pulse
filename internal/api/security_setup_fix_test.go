@@ -147,6 +147,18 @@ func TestQuickSecuritySetupRequiresBootstrapToken(t *testing.T) {
 	if router.bootstrapTokenHash != "" {
 		t.Fatalf("expected bootstrap token hash to be cleared after successful setup")
 	}
+
+	authEnv, err := os.ReadFile(resolveAuthEnvPath(cfg.ConfigPath))
+	if err != nil {
+		t.Fatalf("read persisted authentication configuration: %v", err)
+	}
+	authEnvText := string(authEnv)
+	if !strings.Contains(authEnvText, "PULSE_AUTH_USER='bootstrap'\n") {
+		t.Fatalf("persisted authentication configuration missing username:\n%s", authEnvText)
+	}
+	if !strings.Contains(authEnvText, "PULSE_AUTH_PASS='$2") {
+		t.Fatalf("persisted authentication configuration missing password hash:\n%s", authEnvText)
+	}
 }
 
 func TestQuickSecuritySetupRejectsUnsafeUsernamesBeforeStateChanges(t *testing.T) {

@@ -15,6 +15,11 @@
 
 ## Purpose
 
+First-run security setup persists the canonical authentication environment file
+before activating runtime credentials for every deployment shape. A systemd
+override may additionally bind service startup, but agent and server lifecycle
+must not depend on successful service-name detection to retain authentication.
+
 API-token names are operator-facing metadata, not agent identity. Renaming an
 existing token must preserve its ID, secret hash, scopes, expiry, and connected
 agent sessions, so lifecycle continuity never depends on a display label.

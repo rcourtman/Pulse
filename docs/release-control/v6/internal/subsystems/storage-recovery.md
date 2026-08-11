@@ -21,6 +21,11 @@
 
 ## Purpose
 
+First-run authentication always writes the canonical `.env` persistence
+artifact before runtime state changes. Root systemd installation may also
+write a service override, but reload, restart, backup, and recovery remain
+anchored to the canonical data/config-path file rather than service discovery.
+
 Token display-name changes use the existing API-token persistence boundary.
 The in-memory record must roll back if persistence fails, while the token ID,
 secret hash, scopes, and expiry remain intact so restart and restore preserve

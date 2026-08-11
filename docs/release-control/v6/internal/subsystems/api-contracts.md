@@ -20,6 +20,11 @@
 
 ## Purpose
 
+Successful quick security setup is durable before its success response is
+emitted: Pulse writes the canonical auth environment file, activates the same
+hashed credentials in memory, and for root systemd installs reports both the
+canonical `envFile` and the supplemental service override behavior.
+
 `PATCH /api/security/tokens/{id}` supports bounded metadata updates. A nonblank
 `name` renames the record without rotating its secret or changing scopes; a
 `scopes` update retains the existing delegation checks, and omitted fields are

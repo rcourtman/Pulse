@@ -484,6 +484,17 @@ func handleQuickSecuritySetupFixed(r *Router) http.HandlerFunc {
 		}
 		setAPITokenOwnerUserID(tokenRecord, setupRequest.Username)
 
+		// Persist the canonical auth file for every deployment type before
+		// updating runtime state. Systemd root installs also write an override
+		// below, but the canonical file keeps config reloads and recovery
+		// independent of service-name detection.
+		envPath, err := writeAuthEnvFile(r.config.ConfigPath, r.config.DataPath, authEnvContent)
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to write authentication configuration")
+			http.Error(w, "Failed to save security configuration", http.StatusInternalServerError)
+			return
+		}
+
 		if r.config.HasAPITokens() && r.config.AuthUser == "" && r.config.AuthPass == "" {
 			// We had API-only access before, now replacing with full security
 			log.Info().Msg("Replacing API-only token with new secure token")
@@ -545,13 +556,6 @@ func handleQuickSecuritySetupFixed(r *Router) http.HandlerFunc {
 
 		// Choose appropriate method based on environment
 		if isDocker {
-			envPath, err := writeAuthEnvFile(r.config.ConfigPath, r.config.DataPath, authEnvContent)
-			if err != nil {
-				log.Error().Err(err).Msg("Failed to write .env file in Docker")
-				http.Error(w, "Failed to save security configuration", http.StatusInternalServerError)
-				return
-			}
-
 			log.Info().Str("path", envPath).Msg("Docker security configuration saved")
 
 			response := map[string]interface{}{
@@ -570,13 +574,6 @@ func handleQuickSecuritySetupFixed(r *Router) http.HandlerFunc {
 		} else if isSystemd && !isRoot {
 			// Systemd but not root (ProxmoxVE script scenario)
 			// Don't attempt sudo, just save config and provide instructions
-
-			envPath, err := writeAuthEnvFile(r.config.ConfigPath, r.config.DataPath, authEnvContent)
-			if err != nil {
-				log.Error().Err(err).Msg("Failed to write .env file")
-				http.Error(w, "Failed to save security configuration", http.StatusInternalServerError)
-				return
-			}
 
 			// Create response - security is active immediately
 			response := map[string]interface{}{
@@ -629,11 +626,12 @@ func handleQuickSecuritySetupFixed(r *Router) http.HandlerFunc {
 				"success":               true,
 				"method":                "systemd-root",
 				"serviceName":           serviceName,
+				"envFile":               envPath,
 				"deploymentType":        updates.GetDeploymentType(),
 				"automatic":             true,
 				"requiresManualRestart": false,
 				"message":               "Security enabled immediately! Your settings are saved and active.",
-				"note":                  "Systemd override created for persistence across restarts.",
+				"note":                  "Authentication file and systemd override created for persistence across restarts.",
 			}
 
 			w.Header().Set("Content-Type", "application/json")
@@ -642,12 +640,6 @@ func handleQuickSecuritySetupFixed(r *Router) http.HandlerFunc {
 
 		} else {
 			// Manual installation or development
-			envPath, err := writeAuthEnvFile(r.config.ConfigPath, r.config.DataPath, authEnvContent)
-			if err != nil {
-				log.Error().Err(err).Msg("Failed to write .env file")
-				// Still return success with manual instructions
-			}
-
 			// Get deployment type for restart instructions
 			deploymentType := updates.GetDeploymentType()
 
