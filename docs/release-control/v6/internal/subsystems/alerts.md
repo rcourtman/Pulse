@@ -1419,7 +1419,10 @@ destinations render shell and composes
 the dedicated load/error wrappers. The delivery card must warn for retained
 terminal failures, present an unavailable queue-health read as unverified
 rather than healthy, and give the operator a refresh action plus configuration
-and test guidance. Recoverable retry attempts must not produce this warning.
+and test guidance. Its warning copy must explain that expired delivery records
+are removed hourly and that, absent another terminal failure, the warning
+clears only after the last retained record reaches its configured retention
+limit. Recoverable retry attempts must not produce this warning.
 `frontend-modern/src/features/alerts/AlertDeliveryHealthCard.test.tsx` and
 `frontend-modern/src/features/alerts/__tests__/useAlertDestinationsTabState.test.tsx`
 are the focused render and runtime proofs for that operator surface.

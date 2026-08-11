@@ -192,7 +192,7 @@ export function getAlertDestinationsDeliveryHealthDescription(input: {
       diagnostic = `Most recent terminal failures were classified as ${dominant[0].replace('_', ' ')} (${dominant[1]}). ${guidanceByClass[dominant[0]] ?? guidanceByClass.unknown}`;
     }
   }
-  return `${summary}. These notifications were not delivered. ${diagnostic} Recoverable retry attempts do not trigger this warning.`;
+  return `${summary}. These notifications were not delivered. Pulse removes expired records hourly, so this warning clears after the last retained failure reaches its retention limit if no new terminal failures occur. ${diagnostic} Recoverable retry attempts do not trigger this warning.`;
 }
 
 export function getAlertDestinationsDeliveryRefreshLabel() {
