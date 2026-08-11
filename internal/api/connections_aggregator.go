@@ -139,6 +139,27 @@ type aggregatorInputs struct {
 	pvePollingInterval time.Duration
 	pbsPollingInterval time.Duration
 	pmgPollingInterval time.Duration
+
+	// plannedPollIntervals maps instanceHealth keys ("pve::<name>") to the
+	// adaptive scheduler's currently planned interval for that instance.
+	// Adaptive polling deliberately stretches cadence past the configured
+	// interval while data is fresh, so the active→stale cutoff must follow
+	// the schedule actually in force or a healthy connection reads as stale
+	// for the back half of every stretched cycle (#1437). Absent or zero
+	// entries fall back to the configured cadence.
+	plannedPollIntervals map[string]time.Duration
+}
+
+// effectivePollInterval picks the cadence the stale cutoff should scale by:
+// the adaptive scheduler's planned interval when it stretched beyond the
+// configured one, otherwise the configured interval. A planned interval that
+// shrank below the configured cadence never tightens the cutoff, so a genuine
+// poll outage still trips the connectionStaleThreshold floor on time.
+func effectivePollInterval(configured, planned time.Duration) time.Duration {
+	if planned > configured {
+		return planned
+	}
+	return configured
 }
 
 type connectionAgentDesiredConfig struct {
@@ -160,13 +181,16 @@ func buildConnections(in aggregatorInputs) []Connection {
 			len(in.vmwareInstances)+len(in.truenasInstances)+len(in.availabilityTargets)+len(in.hosts))
 
 	for _, pve := range in.pveInstances {
-		out = append(out, buildPVEConnection(pve, in.instanceHealth, now, in.pvePollingInterval))
+		interval := effectivePollInterval(in.pvePollingInterval, in.plannedPollIntervals["pve::"+pve.Name])
+		out = append(out, buildPVEConnection(pve, in.instanceHealth, now, interval))
 	}
 	for _, pbs := range in.pbsInstances {
-		out = append(out, buildPBSConnection(pbs, in.instanceHealth, now, in.pbsPollingInterval, in.pbsReportedNodeNames[pbs.Name]))
+		interval := effectivePollInterval(in.pbsPollingInterval, in.plannedPollIntervals["pbs::"+pbs.Name])
+		out = append(out, buildPBSConnection(pbs, in.instanceHealth, now, interval, in.pbsReportedNodeNames[pbs.Name]))
 	}
 	for _, pmg := range in.pmgInstances {
-		out = append(out, buildPMGConnection(pmg, in.instanceHealth, now, in.pmgPollingInterval))
+		interval := effectivePollInterval(in.pmgPollingInterval, in.plannedPollIntervals["pmg::"+pmg.Name])
+		out = append(out, buildPMGConnection(pmg, in.instanceHealth, now, interval))
 	}
 	for _, vmw := range in.vmwareInstances {
 		out = append(out, buildVMwareConnection(vmw, in.instanceHealth, in.vmwareSummaries, now))

@@ -66,6 +66,7 @@ func buildAggregatorInputsWithRuntimeSources(
 		inputs.instanceHealth = instanceHealthByKey(monitor.SchedulerHealth())
 		inputs.availabilityStatuses = monitor.AvailabilityStatusSnapshot()
 		inputs.pbsReportedNodeNames = pbsReportedNodeNamesByInstance(monitor.PBSInstancesSnapshot())
+		inputs.plannedPollIntervals = plannedPollIntervalsForConfig(monitor, cfg)
 	} else {
 		inputs.hosts = []models.Host{}
 		inputs.instanceHealth = map[string]monitoring.InstanceHealth{}
@@ -142,4 +143,30 @@ func buildAlertConnectionSnapshotsWithRuntimeSources(
 ) []alerts.ConnectionSnapshot {
 	inputs := buildAggregatorInputsWithRuntimeSources(ctx, cfg, persistence, monitor, runtime)
 	return snapshotConnectionsForAlerts(buildConnections(inputs))
+}
+
+// plannedPollIntervalsForConfig collects the adaptive scheduler's currently
+// planned interval for every configured PVE/PBS/PMG instance, keyed the same
+// way as instanceHealth ("pve::<name>"). Instances the scheduler has no plan
+// for are omitted so the aggregator falls back to the configured cadence.
+func plannedPollIntervalsForConfig(monitor *monitoring.Monitor, cfg *config.Config) map[string]time.Duration {
+	if monitor == nil || cfg == nil {
+		return nil
+	}
+	out := make(map[string]time.Duration)
+	record := func(instanceType monitoring.InstanceType, keyPrefix, name string) {
+		if interval := monitor.PlannedPollInterval(instanceType, name); interval > 0 {
+			out[keyPrefix+name] = interval
+		}
+	}
+	for _, inst := range cfg.PVEInstances {
+		record(monitoring.InstanceTypePVE, "pve::", inst.Name)
+	}
+	for _, inst := range cfg.PBSInstances {
+		record(monitoring.InstanceTypePBS, "pbs::", inst.Name)
+	}
+	for _, inst := range cfg.PMGInstances {
+		record(monitoring.InstanceTypePMG, "pmg::", inst.Name)
+	}
+	return out
 }

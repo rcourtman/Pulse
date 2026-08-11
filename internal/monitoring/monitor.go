@@ -2636,6 +2636,22 @@ func (m *Monitor) DeadLetterCount() int {
 	return m.deadLetterQueue.Size()
 }
 
+// PlannedPollInterval reports the adaptive scheduler's currently planned
+// interval for one instance, or zero when no plan exists (adaptive polling
+// disabled, unknown instance, or startup before the first plan). Consumers
+// use it to judge poll freshness against the schedule actually in force
+// rather than the configured cadence, which adaptive polling deliberately
+// stretches while data is fresh.
+func (m *Monitor) PlannedPollInterval(instanceType InstanceType, instanceName string) time.Duration {
+	if m == nil || m.scheduler == nil {
+		return 0
+	}
+	if task, ok := m.scheduler.LastScheduled(instanceType, instanceName); ok {
+		return task.Interval
+	}
+	return 0
+}
+
 func (m *Monitor) SchedulerHealth() SchedulerHealthResponse {
 	response := emptySchedulerHealthResponse(m.config != nil && m.config.AdaptivePollingEnabled)
 
