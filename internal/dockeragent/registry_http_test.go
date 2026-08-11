@@ -36,6 +36,26 @@ func TestRegistryChecker_CheckImageUpdate_Behavior(t *testing.T) {
 		}
 	})
 
+	t.Run("Pulse private image uses the product update service", func(t *testing.T) {
+		checker := NewRegistryChecker(logger)
+		for _, image := range []string{
+			"license.pulserelay.pro/pulse-pro:6.2.0-rc.4",
+			"license.pulserelay.pro/pulse-pro@sha256:abc123",
+			"registry.pulserelay.pro/pulse/pulse-pro:v6.0.5",
+		} {
+			if result := checker.CheckImageUpdate(
+				context.Background(),
+				image,
+				"sha256:current",
+				"",
+				"",
+				"",
+			); result != nil {
+				t.Fatalf("CheckImageUpdate(%q) = %#v, want nil", image, result)
+			}
+		}
+	})
+
 	t.Run("empty image name", func(t *testing.T) {
 		checker := NewRegistryChecker(logger)
 		checker.httpClient = &http.Client{

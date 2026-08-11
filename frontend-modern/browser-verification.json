@@ -1,17 +1,16 @@
 {
   "version": 1,
-  "base_sha": "66d8e90c0c93b12ae17bde406254a7c734613b03",
-  "verified_at": "2026-08-11T14:34:04Z",
+  "base_sha": "a49e016246ec3dd030c0f50896326a9a07876ba9",
+  "verified_at": "2026-08-11T14:37:59Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Settings/useAgentProfilesPanelState.ts"
+    "frontend-modern/src/features/docker/dockerImagePresentation.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Settings/useAgentProfilesPanelState.ts": "85b0efd3b3f002414daeee7c29cff51c9688539452eea74388f4d72a453d6ee2"
+    "frontend-modern/src/features/docker/dockerImagePresentation.ts": "f51882f1d4110e6f2fc69d9f15ac384409eb32497b5529bf5c500ff4574a3f20"
   },
   "routes": [
-    "/proxmox/backups",
-    "/settings/infrastructure"
+    "/docker/images"
   ],
   "viewports": [
     {
@@ -24,16 +23,15 @@
     }
   ],
   "states": [
-    "Proxmox Backups with the mock PBS server backup-vault visible in the Backup server inventory.",
-    "Agent Profiles expanded inside the Pulse Agent installation dialog with 21 actionable assignment controls and no backup-vault provider projection.",
-    "Desktop Agent Profiles at 1440 by 1000 with no document or body horizontal overflow.",
-    "Narrow Agent Profiles at 390 by 844 with the Agent Assignments heading and all 21 assignment controls present, no backup-vault provider projection, and no document or body horizontal overflow."
+    "Docker Images with a used license.pulserelay.pro/pulse-pro image rendered as Managed by Pulse rather than as a registry authentication failure.",
+    "The managed-image update cell exposed the detail that Pulse checks the private image through its product update service.",
+    "Desktop Docker Images at 1440 by 1000 with the managed image row present and no document or body horizontal overflow.",
+    "Narrow Docker Images at 390 by 844 with the managed image row present and no document or body horizontal overflow."
   ],
   "interactions": [
-    "Applied the repository's sanctioned infra entitlement profile only to the ignored isolated runtime billing-state path, then opened the Pro-linked unique-port browser runtime.",
-    "Opened Proxmox Backups and confirmed backup-vault was rendered as a real PBS fixture.",
-    "Opened Settings, Infrastructure, Install Pulse Agent, and Manage agent profiles through visible controls.",
-    "Confirmed the PBS provider fixture was not exposed as an actionable profile assignment while 21 legitimate assignment comboboxes remained available.",
-    "Repeated the assignment-table and overflow checks at desktop and narrow viewports."
+    "Used a temporary uncommitted mock-only image reference in the isolated runtime so the private Pulse image branch was reachable; removed that fixture immediately after verification.",
+    "Opened Docker and then Images through visible navigation controls.",
+    "Confirmed one used private Pulse image row showed Managed by Pulse and the product-update-service explanation at desktop width.",
+    "Repeated the managed-row visibility and overflow checks at the narrow viewport."
   ]
 }

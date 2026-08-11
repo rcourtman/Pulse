@@ -66,6 +66,21 @@ type ImageUpdateResult struct {
 	Error           string    `json:"error,omitempty"`
 }
 
+func isPulseManagedImageReference(image string) bool {
+	normalized := strings.ToLower(strings.TrimSpace(image))
+	for _, repository := range []string{
+		"license.pulserelay.pro/pulse-pro",
+		"registry.pulserelay.pro/pulse/pulse-pro",
+	} {
+		if normalized == repository ||
+			strings.HasPrefix(normalized, repository+":") ||
+			strings.HasPrefix(normalized, repository+"@") {
+			return true
+		}
+	}
+	return false
+}
+
 // NewRegistryChecker creates a new registry checker for the Docker / Podman module.
 func NewRegistryChecker(logger zerolog.Logger) *RegistryChecker {
 	return newRegistryCheckerWithConfig(logger, true)
@@ -149,6 +164,9 @@ const proBrokerRegistry = "license.pulserelay.pro"
 // CheckImageUpdate checks if a newer version of the image is available.
 func (r *RegistryChecker) CheckImageUpdate(ctx context.Context, image, currentDigest, arch, goos, variant string) *ImageUpdateResult {
 	if !r.Enabled() {
+		return nil
+	}
+	if isPulseManagedImageReference(image) {
 		return nil
 	}
 

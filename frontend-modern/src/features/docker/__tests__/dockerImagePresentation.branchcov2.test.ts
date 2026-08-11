@@ -324,6 +324,50 @@ describe('dockerImagePresentation.branchcov2', () => {
   });
 
   describe('getDockerImageOperationalPresentation (update-state branches)', () => {
+    it('uses the Pulse update service for the running private Pulse image', () => {
+      const pulseImage = image({
+        name: 'license.pulserelay.pro/pulse-pro:6.2.0-rc.4',
+        displayName: 'license.pulserelay.pro/pulse-pro:6.2.0-rc.4',
+        docker: {
+          runtime: 'docker',
+          image: 'license.pulserelay.pro/pulse-pro:6.2.0-rc.4',
+        },
+      });
+      const result = getDockerImageOperationalPresentation(pulseImage, [
+        container({
+          name: 'pulse',
+          docker: {
+            runtime: 'docker',
+            image: 'license.pulserelay.pro/pulse-pro:6.2.0-rc.4',
+            updateStatus: { error: 'authentication required' },
+          },
+        }),
+      ]);
+      expect(result).toStrictEqual({
+        consumerCount: 1,
+        consumerSummary: 'pulse',
+        updateLabel: 'Managed by Pulse',
+        updateDetail: 'Pulse checks this private image through its product update service.',
+        updateTone: 'muted',
+      });
+    });
+
+    it('leaves an unused private Pulse image as not checked', () => {
+      const result = getDockerImageOperationalPresentation(
+        image({
+          name: 'license.pulserelay.pro/pulse-pro@sha256:abc',
+          displayName: 'license.pulserelay.pro/pulse-pro@sha256:abc',
+          docker: {
+            runtime: 'docker',
+            image: 'license.pulserelay.pro/pulse-pro@sha256:abc',
+          },
+        }),
+        [],
+      );
+      expect(result.updateLabel).toBe('Not checked');
+      expect(result.updateTone).toBe('muted');
+    });
+
     it('returns the danger branch when an updateStatus has a non-empty error', () => {
       const result = getDockerImageOperationalPresentation(
         image({

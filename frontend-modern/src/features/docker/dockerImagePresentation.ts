@@ -36,6 +36,23 @@ const containerUsesImage = (container: Resource, tokens: ReadonlySet<string>): b
 const resourceLabel = (resource: Resource): string =>
   trimmed(resource.name) || trimmed(resource.displayName) || resource.id;
 
+const isPulseManagedImage = (image: Resource): boolean => {
+  const references = [
+    image.name,
+    image.displayName,
+    image.docker?.image,
+    ...(image.docker?.repoTags ?? []),
+  ].map((value) => trimmed(value).toLowerCase());
+  return references.some((reference) =>
+    ['license.pulserelay.pro/pulse-pro', 'registry.pulserelay.pro/pulse/pulse-pro'].some(
+      (repository) =>
+        reference === repository ||
+        reference.startsWith(`${repository}:`) ||
+        reference.startsWith(`${repository}@`),
+    ),
+  );
+};
+
 const summarizeConsumers = (consumers: readonly Resource[], reportedCount: number): string => {
   if (consumers.length === 0) {
     if (reportedCount <= 0) return 'Unused';
@@ -62,6 +79,15 @@ export function getDockerImageOperationalPresentation(
     (state) => trimmed(state.error).length > 0 && !isContainerUpdatePinned(state),
   );
 
+  if (consumerCount > 0 && isPulseManagedImage(image)) {
+    return {
+      consumerCount,
+      consumerSummary: summarizeConsumers(consumers, reportedCount),
+      updateLabel: 'Managed by Pulse',
+      updateDetail: 'Pulse checks this private image through its product update service.',
+      updateTone: 'muted',
+    };
+  }
   if (failed) {
     return {
       consumerCount,
