@@ -2,6 +2,7 @@ package dockeragent
 
 import (
 	"context"
+	"crypto/sha256"
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
@@ -351,17 +352,82 @@ func (r *RegistryChecker) fetchDigest(ctx context.Context, registry, repository,
 	contentType := resp.Header.Get("Content-Type")
 	isManifestList := strings.Contains(contentType, "manifest.list") || strings.Contains(contentType, "image.index")
 
-	// If it's a manifest list and we have arch info, we need to resolve it
+	if digest == "" {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			r.logger.Debug().Err(closeErr).Msg("Failed to close registry HEAD response")
+		}
+		manifestDigest, manifestContentType, manifestBody, err := r.fetchManifest(ctx, manifestURL, token)
+		if err != nil {
+			return "", "", err
+		}
+		if len(manifestBody) == 0 {
+			return "", "", fmt.Errorf("no digest in response")
+		}
+
+		digest = manifestDigest
+		if digest == "" {
+			digest = fmt.Sprintf("sha256:%x", sha256.Sum256(manifestBody))
+		}
+
+		isManifestList = isManifestList ||
+			strings.Contains(manifestContentType, "manifest.list") ||
+			strings.Contains(manifestContentType, "image.index")
+		if isManifestList && arch != "" && goos != "" {
+			resolved, resolveErr := resolveManifestListBody(manifestBody, arch, goos, variant)
+			return resolved, digest, resolveErr
+		}
+	}
+
+	// If it's a manifest list and we have arch info, resolve the platform
+	// manifest only after establishing the parent digest. Registries that
+	// identify an index on HEAD but omit its digest need the GET fallback above
+	// to preserve both values.
 	if isManifestList && arch != "" && goos != "" {
 		resolved, err := r.resolveManifestList(ctx, registry, repository, tag, arch, goos, variant, token)
 		return resolved, digest, err
 	}
 
-	if digest == "" {
-		return "", "", fmt.Errorf("no digest in response")
+	return digest, digest, nil
+}
+
+// fetchManifest retrieves a manifest body when a registry accepts HEAD but
+// omits the digest headers. The digest of the exact response body is a valid
+// fallback under the registry content-addressing contract.
+func (r *RegistryChecker) fetchManifest(ctx context.Context, manifestURL, token string) (string, string, []byte, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, manifestURL, nil)
+	if err != nil {
+		return "", "", nil, fmt.Errorf("create manifest request: %w", err)
+	}
+	r.setManifestRequestHeaders(req, token)
+
+	resp, err := r.httpClient.Do(req)
+	if err != nil {
+		return "", "", nil, fmt.Errorf("manifest request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusUnauthorized {
+		return "", "", nil, fmt.Errorf("authentication required")
+	}
+	if resp.StatusCode == http.StatusNotFound {
+		return "", "", nil, fmt.Errorf("image not found")
+	}
+	if resp.StatusCode == http.StatusTooManyRequests {
+		return "", "", nil, fmt.Errorf("rate limited")
+	}
+	if resp.StatusCode >= 400 {
+		return "", "", nil, fmt.Errorf("registry error: %d", resp.StatusCode)
 	}
 
-	return digest, digest, nil
+	body, err := readBodyWithLimit(resp.Body, maxRegistryManifestBodyBytes)
+	if err != nil {
+		return "", "", nil, fmt.Errorf("read manifest body: %w", err)
+	}
+	digest := strings.Trim(resp.Header.Get("Docker-Content-Digest"), `"`)
+	if digest == "" {
+		digest = strings.Trim(resp.Header.Get("Etag"), `"`)
+	}
+	return digest, resp.Header.Get("Content-Type"), body, nil
 }
 
 // headManifest issues a manifest HEAD request with the multi-arch Accept set.
@@ -371,7 +437,16 @@ func (r *RegistryChecker) headManifest(ctx context.Context, manifestURL, token s
 		return nil, fmt.Errorf("create request: %w", err)
 	}
 
-	// Accept headers for multi-arch manifest support
+	r.setManifestRequestHeaders(req, token)
+
+	resp, err := r.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("request: %w", err)
+	}
+	return resp, nil
+}
+
+func (r *RegistryChecker) setManifestRequestHeaders(req *http.Request, token string) {
 	req.Header.Set("Accept", strings.Join([]string{
 		"application/vnd.docker.distribution.manifest.list.v2+json",
 		"application/vnd.docker.distribution.manifest.v2+json",
@@ -382,12 +457,6 @@ func (r *RegistryChecker) headManifest(ctx context.Context, manifestURL, token s
 	if token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
 	}
-
-	resp, err := r.httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("request: %w", err)
-	}
-	return resp, nil
 }
 
 // tokenFromChallenge negotiates an anonymous pull token from the token
@@ -469,29 +538,20 @@ func (r *RegistryChecker) resolveManifestList(ctx context.Context, registry, rep
 		return "", fmt.Errorf("read list body: %w", err)
 	}
 
+	return resolveManifestListBody(body, arch, goos, variant)
+}
+
+func resolveManifestListBody(body []byte, arch, goos, variant string) (string, error) {
 	var list manifestList
 	if err := json.Unmarshal(body, &list); err != nil {
 		return "", fmt.Errorf("decode manifest list: %w", err)
 	}
 
-	// Find the matching manifest
-	// We matched arch and os. Variant is tricky as it's not always passed or available clearly.
-	// We'll prioritize exact match including variant (if we had it), but for now standard match.
-	// Since we strictly want to match what the local image is, and we'll get that from ImageInspect.
-
-	// Simple matching logic for now: exact match on Arch and OS
 	for _, m := range list.Manifests {
 		if m.Platform.Architecture == arch && m.Platform.OS == goos {
 			if variant != "" && m.Platform.Variant != "" && variant != m.Platform.Variant {
 				continue
 			}
-			r.logger.Debug().
-				Str("image", repository+":"+tag).
-				Str("arch", arch).
-				Str("variant", variant).
-				Str("foundDigest", m.Digest).
-				Str("foundVariant", m.Platform.Variant).
-				Msg("Resolved manifest list digest")
 			return m.Digest, nil
 		}
 	}

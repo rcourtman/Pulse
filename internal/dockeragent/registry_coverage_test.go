@@ -2,7 +2,9 @@ package dockeragent
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -344,6 +346,95 @@ func TestRegistryChecker_FetchDigest_DigestHeaders(t *testing.T) {
 		}
 		if digest != "sha256:etag" {
 			t.Fatalf("Expected digest sha256:etag, got %q", digest)
+		}
+	})
+
+	t.Run("GET fallback hashes manifest body", func(t *testing.T) {
+		manifestBody := `{"schemaVersion":2,"config":{"digest":"sha256:config"}}`
+		var methods []string
+		checker := &RegistryChecker{
+			httpClient: &http.Client{
+				Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+					methods = append(methods, req.Method)
+					if req.Method == http.MethodHead {
+						return newStringResponse(http.StatusOK, map[string]string{
+							"Content-Type": "application/vnd.oci.image.manifest.v1+json",
+						}, ""), nil
+					}
+					return newStringResponse(http.StatusOK, map[string]string{
+						"Content-Type": "application/vnd.oci.image.manifest.v1+json",
+					}, manifestBody), nil
+				}),
+			},
+		}
+
+		digest, headDigest, err := checker.fetchDigest(context.Background(), "example.test", "repo", "tag", "", "", "")
+		if err != nil {
+			t.Fatalf("Expected digest, got error %v", err)
+		}
+		wantDigest := fmt.Sprintf("sha256:%x", sha256.Sum256([]byte(manifestBody)))
+		if digest != wantDigest || headDigest != wantDigest {
+			t.Fatalf("Expected computed digest %q, got %q / %q", wantDigest, digest, headDigest)
+		}
+		if got := strings.Join(methods, ","); got != "HEAD,GET" {
+			t.Fatalf("Expected HEAD followed by GET, got %s", got)
+		}
+	})
+
+	t.Run("GET fallback resolves manifest list", func(t *testing.T) {
+		manifestBody := `{"manifests":[{"digest":"sha256:amd64","platform":{"architecture":"amd64","os":"linux"}}]}`
+		checker := &RegistryChecker{
+			httpClient: &http.Client{
+				Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+					if req.Method == http.MethodHead {
+						return newStringResponse(http.StatusOK, nil, ""), nil
+					}
+					return newStringResponse(http.StatusOK, map[string]string{
+						"Content-Type":          "application/vnd.oci.image.index.v1+json",
+						"Docker-Content-Digest": "sha256:index",
+					}, manifestBody), nil
+				}),
+			},
+		}
+
+		digest, headDigest, err := checker.fetchDigest(context.Background(), "example.test", "repo", "tag", "amd64", "linux", "")
+		if err != nil {
+			t.Fatalf("Expected digest, got error %v", err)
+		}
+		if digest != "sha256:amd64" || headDigest != "sha256:index" {
+			t.Fatalf("Expected resolved/index digests, got %q / %q", digest, headDigest)
+		}
+	})
+
+	t.Run("GET fallback preserves index digest when HEAD identifies a manifest list", func(t *testing.T) {
+		manifestBody := `{"manifests":[{"digest":"sha256:amd64","platform":{"architecture":"amd64","os":"linux"}}]}`
+		var methods []string
+		checker := &RegistryChecker{
+			httpClient: &http.Client{
+				Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+					methods = append(methods, req.Method)
+					if req.Method == http.MethodHead {
+						return newStringResponse(http.StatusOK, map[string]string{
+							"Content-Type": "application/vnd.oci.image.index.v1+json",
+						}, ""), nil
+					}
+					return newStringResponse(http.StatusOK, map[string]string{
+						"Content-Type": "application/vnd.oci.image.index.v1+json",
+					}, manifestBody), nil
+				}),
+			},
+		}
+
+		digest, headDigest, err := checker.fetchDigest(context.Background(), "example.test", "repo", "tag", "amd64", "linux", "")
+		if err != nil {
+			t.Fatalf("Expected digest, got error %v", err)
+		}
+		wantHeadDigest := fmt.Sprintf("sha256:%x", sha256.Sum256([]byte(manifestBody)))
+		if digest != "sha256:amd64" || headDigest != wantHeadDigest {
+			t.Fatalf("Expected resolved/index digests %q / %q, got %q / %q", "sha256:amd64", wantHeadDigest, digest, headDigest)
+		}
+		if got := strings.Join(methods, ","); got != "HEAD,GET" {
+			t.Fatalf("Expected HEAD followed by GET, got %s", got)
 		}
 	})
 }

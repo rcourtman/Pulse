@@ -2,6 +2,8 @@ package dockeragent
 
 import (
 	"context"
+	"crypto/sha256"
+	"fmt"
 	"net/http"
 	"strings"
 	"testing"
@@ -12,16 +14,7 @@ import (
 func TestRegistryChecker_ResolveManifestList(t *testing.T) {
 	logger := zerolog.Nop()
 	t.Run("resolve manifest list", func(t *testing.T) {
-		checker := NewRegistryChecker(logger)
-		checker.httpClient = &http.Client{
-			Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
-				if req.Method == "HEAD" {
-					return newStringResponse(http.StatusOK, map[string]string{
-						"Content-Type": "application/vnd.docker.distribution.manifest.list.v2+json",
-					}, ""), nil
-				}
-				// GET request for body
-				body := `{
+		manifestListBody := `{
                     "manifests": [
                         {
                             "digest": "sha256:armv7",
@@ -33,20 +26,36 @@ func TestRegistryChecker_ResolveManifestList(t *testing.T) {
                         }
                     ]
                 }`
-				return newStringResponse(http.StatusOK, nil, body), nil
+		wantIndexDigest := fmt.Sprintf("sha256:%x", sha256.Sum256([]byte(manifestListBody)))
+		checker := NewRegistryChecker(logger)
+		checker.httpClient = &http.Client{
+			Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+				if req.Method == "HEAD" {
+					return newStringResponse(http.StatusOK, map[string]string{
+						"Content-Type": "application/vnd.docker.distribution.manifest.list.v2+json",
+					}, ""), nil
+				}
+				// GET request for body
+				return newStringResponse(http.StatusOK, nil, manifestListBody), nil
 			}),
 		}
 
 		// Test matching amd64
-		result := checker.CheckImageUpdate(context.Background(), "image:tag", "sha256:current", "amd64", "linux", "")
-		if result.LatestDigest != "sha256:amd64" {
-			t.Errorf("Expected sha256:amd64, got %s", result.LatestDigest)
+		result := checker.CheckImageUpdate(context.Background(), "image:tag", "sha256:amd64", "amd64", "linux", "")
+		if result.LatestDigest != wantIndexDigest {
+			t.Errorf("Expected index digest %s, got %s", wantIndexDigest, result.LatestDigest)
+		}
+		if result.UpdateAvailable {
+			t.Error("Expected matching amd64 platform digest to suppress the update")
 		}
 
 		// Test matching arm/v7
-		result = checker.CheckImageUpdate(context.Background(), "image:tag", "sha256:current", "arm", "linux", "v7")
-		if result.LatestDigest != "sha256:armv7" {
-			t.Errorf("Expected sha256:armv7, got %s", result.LatestDigest)
+		result = checker.CheckImageUpdate(context.Background(), "image:tag", "sha256:armv7", "arm", "linux", "v7")
+		if result.LatestDigest != wantIndexDigest {
+			t.Errorf("Expected index digest %s, got %s", wantIndexDigest, result.LatestDigest)
+		}
+		if result.UpdateAvailable {
+			t.Error("Expected matching arm/v7 platform digest to suppress the update")
 		}
 	})
 
