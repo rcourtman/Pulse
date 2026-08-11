@@ -293,15 +293,12 @@ sha256sum -c "${PULSE_MSP_BUNDLE}.sha256"
 
 tar -xzf "${PULSE_MSP_BUNDLE}"
 cd "pulse-provider-msp-${PULSE_VERSION}"
-export PULSE_PROVIDER_MSP_EVAL_EMAIL=you@example.com
-export PULSE_PROVIDER_MSP_SIGNUP_SOURCE=msp_docs
 sudo -E bash ./setup.sh
 ```
 
-`PULSE_PROVIDER_MSP_EVAL_EMAIL` is optional. Set it if you want setup help and
-want an eventual paid upgrade matched to this deployment; omit it for an
-anonymous evaluation. The signup-source value is a fixed attribution label,
-not free-form telemetry.
+The v6.2.1 evaluation request is anonymous. If you want setup help, start from
+the [Pulse MSP evaluation page](https://pulserelay.pro/msp.html#evaluate) first;
+that contact request remains separate from the licence activation.
 
 The host needs Ubuntu 24.04 or similar, a domain you can point at it, and
 ports 80 and 443 free. Install `curl`, `openssh-client`, `coreutils`, and `tar`
@@ -311,12 +308,11 @@ Traefik dnsChallenge provider works by setting `ACME_DNS_PROVIDER` in `.env`
 and putting that provider's credential variables in `dns-credentials.env`.
 
 Leave `CP_PROVIDER_MSP_LICENSE_FILE` blank and `setup.sh` self-issues a
-2-client evaluation licence after configuration validation succeeds and the
-immutable images are reachable. It sends only the public half of the signing
-key generated on your host, the optional contact address above, and the fixed
-signup-source label. The private key, client inventory, and credentials never
-leave the machine. You can then onboard two real clients and confirm the
-isolation boundary on your own infrastructure before buying.
+2-client evaluation licence. The v6.2.1 bundle sends only the public half of
+the signing key generated on your host. The private key, client inventory,
+credentials, and contact details never leave the machine. You can then onboard
+two real clients and confirm the isolation boundary on your own infrastructure
+before buying.
 
 The evaluation licence lasts 60 days and re-running `setup.sh` reuses the one
 already on disk. On an air-gapped host set

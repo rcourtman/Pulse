@@ -363,6 +363,7 @@ func TestProviderMSPSetupScriptSupportsUnlicensedEvaluation(t *testing.T) {
 		"could not reach the license server",
 		"PULSE_PROVIDER_MSP_EVAL_EMAIL",
 		"PULSE_PROVIDER_MSP_SIGNUP_SOURCE",
+		`setup_stage: "images_ready"`,
 		"eval_license_id=",
 	)
 	if strings.LastIndex(script, "pull_provider_images\n") > strings.LastIndex(script, "ensure_eval_license\n") {
@@ -429,8 +430,8 @@ func TestProviderMSPEvaluationDocsUsePublishedSignedBundle(t *testing.T) {
 		"ssh-keygen -Y verify",
 		`-s "${PULSE_MSP_BUNDLE}.sshsig" < "${PULSE_MSP_BUNDLE}"`,
 		`sha256sum -c "${PULSE_MSP_BUNDLE}.sha256"`,
-		`PULSE_PROVIDER_MSP_EVAL_EMAIL=you@example.com`,
-		`PULSE_PROVIDER_MSP_SIGNUP_SOURCE=msp_docs`,
+		"The v6.2.1 evaluation request is anonymous",
+		"contact request remains separate from the licence activation",
 		`sudo -E bash ./setup.sh`,
 	)
 	assertNotContainsAny(t, doc,

@@ -3314,16 +3314,25 @@ unlicensed control plane starts, but release-build client runtimes reject its
 unchained entitlement leases and the client workspaces run without the
 capabilities being evaluated.
 
-Evaluation issuance happens only after setup has validated the operator
-configuration and confirmed that every immutable provider image is reachable.
-That ordering makes a stored `msp_eval` issue an activation signal rather than
-a download-intent signal created before the install can succeed. Setup may
+Current setup code issues an evaluation only after validating the operator
+configuration and confirming that every immutable provider image is reachable,
+and records the fixed `setup_stage=images_ready` value. That combination makes
+the stored `msp_eval` row an activation signal rather than a download-intent
+signal created before the install can succeed. Setup may
 include an optional evaluator email and a fixed signup-source label so support
 can match an assisted paid upgrade to the deployment. Those fields must remain
 optional and bounded; the request must never contain client inventory,
 credentials, private keys, or free-form runtime telemetry. The returned public
 evaluation licence ID may be carried in the upgrade URL as a non-secret
 correlation key.
+
+That ordering and attribution contract applies only when the request carries
+the fixed `setup_stage=images_ready` marker. The immutable v6.2.1 provider
+bundle predates the marker and requests its evaluation earlier, so its stored
+`msp_eval` row proves issuance only, not install readiness, and remains
+anonymous. Public v6.2.1 guidance must state that exact behavior. It must not
+claim automatic contact correlation or post-image-ready activation until a
+newer signed bundle containing the contract is published.
 
 Self-issue must degrade rather than block. A missing signing key, an
 unreachable licence server, or a response carrying no licence leaves the

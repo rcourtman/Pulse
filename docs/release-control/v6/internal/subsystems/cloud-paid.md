@@ -3323,8 +3323,9 @@ The provider-hosted MSP acquisition funnel uses commercial records that already
 belong to the boundary rather than reviving retired generic browser analytics
 or adding client-workspace phone-home. An explicit landing-page evaluation
 start is delivered to the support inbox with the fixed `msp_landing` source; a
-persisted `msp_eval` licence is the activation stage and is issued only after
-provider setup validates configuration and resolves the immutable images; a
+persisted `msp_eval` licence is the evaluation-issuance stage, and becomes a
+ready-host activation only when its audit carries the bounded `images_ready`
+stage after provider setup validates configuration and resolves the immutable images; a
 persisted `msp_starter`, `msp_growth`, or `msp_scale` licence is an assisted
 licence stage, not proof of payment by itself. Administrative issuance must
 record a bounded reason, and only the first `paid_conversion` reason may enter
@@ -3334,6 +3335,12 @@ those licence stages over bounded time windows. Optional evaluator email and the
 evaluation licence ID may join an assisted upgrade to its activation, but no
 stage may collect client inventory, credentials, private signing material, or
 free-form runtime telemetry. Anonymous evaluation must remain available.
+
+The activation interpretation requires the bounded `setup_stage=images_ready`
+audit value. An evaluation without that value, including issuance from the
+published v6.2.1 bundle, remains an issued evaluation rather than a proved
+ready-host activation. Funnel aggregation must report both values separately
+and must not infer readiness from plan version, contactability, or source.
 
 Provider-hosted Starter remains assisted even though the signed evaluation
 bundle is now public. A generic recurring Stripe checkout is not a valid

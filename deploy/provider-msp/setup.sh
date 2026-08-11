@@ -402,7 +402,7 @@ ensure_eval_license() {
     --arg public_key "${public_key}" \
     --arg email "${PULSE_PROVIDER_MSP_EVAL_EMAIL}" \
     --arg signup_source "${PULSE_PROVIDER_MSP_SIGNUP_SOURCE}" \
-    '{entitlement_signing_public_key: $public_key}
+    '{entitlement_signing_public_key: $public_key, setup_stage: "images_ready"}
       + (if $email == "" then {} else {email: $email} end)
       + (if $signup_source == "" then {} else {signup_source: $signup_source} end)')"
   response="$(curl -fsS --max-time 20 \
