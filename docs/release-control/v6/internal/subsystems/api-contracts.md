@@ -61,6 +61,12 @@ no infrastructure name, target, address, error text, or arbitrary alert
 metadata. A host-offline alert is eligible only when that host currently owns
 an enabled external-probe assignment.
 
+`POST /api/agent-install-command` accepts an optional `insecure` boolean for
+Proxmox installer generation. When true, the returned command uses insecure
+TLS for the installer download and passes `--insecure` to the agent; omission
+or false preserves certificate verification. The server, not the browser,
+continues to mint and quote the enrollment token.
+
 ## Canonical Files
 
 1a. `docs/API.md`

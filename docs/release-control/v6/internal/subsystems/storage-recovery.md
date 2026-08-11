@@ -99,6 +99,11 @@ retaining agent check time as observation metadata; storage/recovery must not
 reinterpret either timestamp as backup recency, datastore health, or recovery
 freshness.
 
+Agent-install command generation under `internal/api/` may carry an explicit
+TLS-verification override, but it does not alter storage credentials, backup
+authority, restore behavior, or persisted recovery state. The generated
+command remains a bounded onboarding artifact with server-owned token quoting.
+
 ## Canonical Files
 
 1. `internal/recovery/index.go`

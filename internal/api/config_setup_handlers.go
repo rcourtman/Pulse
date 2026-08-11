@@ -2448,6 +2448,7 @@ func (h *ConfigHandlers) generateOrLoadSSHKey(sshDir, privateKeyPath, publicKeyP
 type AgentInstallCommandRequest struct {
 	Type           string `json:"type"` // "pve", "pbs", or "host"
 	EnableCommands bool   `json:"enableCommands,omitempty"`
+	Insecure       bool   `json:"insecure,omitempty"`
 	Name           string `json:"name,omitempty"` // optional token name (host installs)
 }
 
@@ -2526,12 +2527,14 @@ func (h *ConfigHandlers) handleAgentInstallCommand(w http.ResponseWriter, r *htt
 		InstallType:        installType,
 		IncludeInstallType: true,
 		EnableCommands:     req.EnableCommands,
+		Insecure:           req.Insecure,
 	})
 
 	log.Info().
 		Str("type", installType).
 		Bool("token_issued", rawToken != "").
 		Bool("enable_commands", req.EnableCommands).
+		Bool("insecure", req.Insecure).
 		Msg("Generated agent install command")
 
 	w.Header().Set("Content-Type", "application/json")

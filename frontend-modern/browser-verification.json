@@ -1,23 +1,25 @@
 {
   "version": 1,
-  "base_sha": "3826316eec488cef2561eb64397f225979a0adc1",
-  "verified_at": "2026-08-11T14:57:15Z",
+  "base_sha": "70469660b3e38895ff28b50d28e320e975a3e908",
+  "verified_at": "2026-08-11T14:08:23Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/WhatsNewCard.tsx",
-    "frontend-modern/src/components/whatsNewModel.ts"
+    "frontend-modern/src/api/nodes.ts",
+    "frontend-modern/src/components/Settings/NodeModalSetupGuideSection.tsx",
+    "frontend-modern/src/components/Settings/useNodeModalState.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/WhatsNewCard.tsx": "f7f905d0e08b56c98b908653ec663332dc9d140d4e82b6d20c9428be6bbd5b15",
-    "frontend-modern/src/components/whatsNewModel.ts": "d6aaf56335e9cb1505e5f574c51f2d396636db850f2162fbc56cf61330df5cc5"
+    "frontend-modern/src/api/nodes.ts": "1f06a674b715cfeef5cfe219e239b54df70e95a09eb2907bc31de8c01dce0012",
+    "frontend-modern/src/components/Settings/NodeModalSetupGuideSection.tsx": "b21eebe819132f039874415c83c99fee1337b34ebf06e73e91aaacc3181fad96",
+    "frontend-modern/src/components/Settings/useNodeModalState.ts": "973d4ed2fbe5cef53f4e7853888a351b137ca1bcfa7574ff964c4efa83548eaa"
   },
   "routes": [
-    "/proxmox/overview"
+    "/settings/infrastructure"
   ],
   "viewports": [
     {
       "width": 1440,
-      "height": 900
+      "height": 1000
     },
     {
       "width": 390,
@@ -25,18 +27,17 @@
     }
   ],
   "states": [
-    "Post-update Pulse v6.2.2 changelog open with Added, Improved, and Fixed sections while Highlights and Release Qualification are absent.",
-    "Desktop dialog fully visible with all categorized entries fitting without page clipping or horizontal overflow.",
-    "Mobile dialog open at the top with internal vertical scrolling and no horizontal overflow.",
-    "Mobile dialog scrolled to the final Fixed entry with the close action still reachable.",
-    "Dialog dismissed with Escape, reopened, and dismissed by clicking the backdrop."
+    "Proxmox VE source dialog on the API inventory strategy with the TLS override absent.",
+    "Proxmox VE source dialog on Host Telemetry Agent with the TLS override visible, off by default, and then checked.",
+    "Desktop dialog at 1440 by 1000 with the full control label visible, focused, and no page or modal horizontal overflow.",
+    "Narrow dialog at 390 by 844 with the checked control and wrapped label reachable in the modal scroll region, no page or modal horizontal overflow, and the surrounding SSL settings unclipped.",
+    "Reopened Proxmox host-agent dialog after dismissal with the TLS override reset to off."
   ],
   "interactions": [
-    "Triggered the post-update dialog from a simulated completed v6.2.2 update and inspected the rendered changelog content.",
-    "Resized from 1440 by 900 pixels to 390 by 844 pixels and confirmed responsive containment.",
-    "Scrolled the changelog body to the bottom and confirmed the final entry remained readable.",
-    "Dismissed with Escape and confirmed page scrolling was restored.",
-    "Reopened the dialog and dismissed it by clicking outside the panel.",
-    "Inspected browser warning and error logs and found none."
+    "Opened Add infrastructure, chose Proxmox VE, and switched from the recommended API inventory path to Host Telemetry Agent.",
+    "Clicked the TLS override and confirmed the native checkbox changed from unchecked to checked while retaining focus.",
+    "Repeated the host-agent surface inspection at 390 by 844 pixels and scrolled the dialog to the TLS and SSL controls.",
+    "Dismissed the dialog with Escape, confirmed focus returned to Add infrastructure, reopened the flow, and confirmed the override did not persist.",
+    "Closed the reopened dialog with its named close button."
   ]
 }

@@ -128,6 +128,7 @@ type agentInstallCommandOptions struct {
 	InstallType        string
 	IncludeInstallType bool
 	EnableCommands     bool
+	Insecure           bool
 }
 
 type setupScriptInstallArtifact struct {
@@ -187,6 +188,10 @@ func withPrivilegeEscalation(command string) string {
 func buildProxmoxAgentInstallCommand(opts agentInstallCommandOptions) string {
 	baseURL := normalizeAgentInstallBaseURL(opts.BaseURL)
 	installScriptURL := baseURL + "/install.sh"
+	curlFlags := "-fsSL"
+	if opts.Insecure {
+		curlFlags = "-kfsSL"
+	}
 	token := strings.TrimSpace(opts.Token)
 	tokenSetup := ""
 	tokenArg := ""
@@ -197,13 +202,13 @@ func buildProxmoxAgentInstallCommand(opts agentInstallCommandOptions) string {
   --token-file "$token_file"`
 		tokenCleanup = `; rc=$?; rm -f "$token_file"; exit $rc`
 	}
-	command := fmt.Sprintf(`%scurl -fsSL %s | bash -s -- \
+	command := fmt.Sprintf(`%scurl %s %s | bash -s -- \
   --url %s \
   --enable-proxmox`,
-		tokenSetup, posixShellQuote(installScriptURL), posixShellQuote(baseURL))
+		tokenSetup, curlFlags, posixShellQuote(installScriptURL), posixShellQuote(baseURL))
 	command += tokenArg
 
-	if installBaseURLRequiresInsecure(baseURL) {
+	if opts.Insecure || installBaseURLRequiresInsecure(baseURL) {
 		command += ` \
   --insecure`
 	}

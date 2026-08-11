@@ -112,6 +112,16 @@ const settingsRuntimeSources = import.meta.glob(['../*.tsx', '../ConnectionEdito
 }) as Record<string, string>;
 
 describe('settings architecture guardrails', () => {
+  it('keeps the Proxmox installer TLS override explicit and request-bound', () => {
+    expect(nodeModalSetupGuideSectionSource).toContain(
+      'Skip TLS certificate verification when downloading the installer and',
+    );
+    expect(nodeModalSetupGuideSectionSource).toContain('connecting the agent to Pulse');
+    expect(nodeModalSetupGuideSectionSource).toContain('state.agentInstallInsecure()');
+    expect(nodeModalSetupGuideSectionSource).toContain('state.setAgentInstallInsecure');
+    expect(nodeModalStateSource).toContain('insecure: agentInstallInsecure()');
+  });
+
   it('keeps Unified Agent lifecycle failures on the shared connections contract', () => {
     expect(connectionsApiSource).toContain("| 'failed'");
     expect(connectionsApiSource).toContain("'disabled' | 'disconnected' | 'enabled'");

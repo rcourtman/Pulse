@@ -19,6 +19,7 @@ const renderSetupGuide = (
   const copyQuickSetupCommand = vi.fn();
   const Harness = () => {
     const [setupMode, setSetupMode] = createSignal<NodeModalSetupMode>('auto');
+    const [agentInstallInsecure, setAgentInstallInsecure] = createSignal(false);
     const updateField = vi.fn((field: string, value: string | boolean | number) => {
       if (field === 'setupMode') {
         setSetupMode(value as NodeModalSetupMode);
@@ -28,6 +29,7 @@ const renderSetupGuide = (
     const state = {
       agentCommandError: () => null,
       agentInstallCommand: () => '',
+      agentInstallInsecure,
       copyCommand,
       copyProxmoxAgentInstallCommand: vi.fn(),
       copyQuickSetupCommand,
@@ -40,6 +42,7 @@ const renderSetupGuide = (
       quickSetupExpiryLabel: () => '',
       quickSetupCommandReady: () => Boolean(options.quickSetupCommandReady),
       quickSetupTokenHint: () => options.quickSetupTokenHint ?? '',
+      setAgentInstallInsecure,
       updateField,
     } as unknown as NodeModalState;
 
@@ -109,6 +112,12 @@ describe('NodeModalSetupGuideSection', () => {
     expect(screen.getByText(/temperatures, SMART, ZFS, Ceph, and mdadm/i)).toBeInTheDocument();
     expect(screen.getByText(/Docker inside Proxmox LXCs:/i)).toBeInTheDocument();
     expect(screen.getAllByText(/Pulse command execution/i).length).toBeGreaterThan(0);
+    const tlsOverride = screen.getByRole('checkbox', {
+      name: /Skip TLS certificate verification when downloading the installer/i,
+    });
+    expect(tlsOverride).not.toBeChecked();
+    fireEvent.click(tlsOverride);
+    expect(tlsOverride).toBeChecked();
     expect(
       screen.getByText('PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY=true'),
     ).toBeInTheDocument();

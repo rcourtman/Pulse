@@ -48,6 +48,20 @@ func TestBuildProxmoxAgentInstallCommand_IncludesInsecureForPlainHTTP(t *testing
 	require.Contains(t, command, "--insecure")
 }
 
+func TestBuildProxmoxAgentInstallCommand_IncludesExplicitInsecureForSelfSignedHTTPS(t *testing.T) {
+	command := buildProxmoxAgentInstallCommand(agentInstallCommandOptions{
+		BaseURL:            "https://pulse.example.com:7655/",
+		Token:              "token-123",
+		InstallType:        "pve",
+		IncludeInstallType: true,
+		Insecure:           true,
+	})
+
+	require.Contains(t, command, "curl -kfsSL "+posixShellQuote("https://pulse.example.com:7655/install.sh"))
+	require.Contains(t, command, "--url "+posixShellQuote("https://pulse.example.com:7655"))
+	require.Contains(t, command, "--insecure")
+}
+
 func TestBuildProxmoxAgentInstallCommand_UsesPrivilegeEscalationWrapper(t *testing.T) {
 	command := buildProxmoxAgentInstallCommand(agentInstallCommandOptions{
 		BaseURL:            "https://pulse.example.com/",

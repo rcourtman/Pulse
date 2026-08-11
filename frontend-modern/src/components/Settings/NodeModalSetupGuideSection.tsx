@@ -223,6 +223,20 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                   <Show when={state.agentCommandError()}>
                     <p class="text-xs text-red-500">{state.agentCommandError()}</p>
                   </Show>
+                  <label class="flex items-start gap-2 text-xs text-base-content">
+                    <input
+                      type="checkbox"
+                      checked={state.agentInstallInsecure()}
+                      onChange={(event) =>
+                        state.setAgentInstallInsecure(event.currentTarget.checked)
+                      }
+                      class="mt-0.5 rounded text-blue-600 focus:ring-blue-500"
+                    />
+                    <span>
+                      Skip TLS certificate verification when downloading the installer and
+                      connecting the agent to Pulse
+                    </span>
+                  </label>
                   <p class="text-[11px] text-muted italic">
                     No token fields are needed here. The node appears in Pulse automatically after
                     the agent starts.
@@ -696,6 +710,20 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                   <Show when={state.agentCommandError()}>
                     <p class="text-xs text-red-500">{state.agentCommandError()}</p>
                   </Show>
+                  <label class="flex items-start gap-2 text-xs text-base-content">
+                    <input
+                      type="checkbox"
+                      checked={state.agentInstallInsecure()}
+                      onChange={(event) =>
+                        state.setAgentInstallInsecure(event.currentTarget.checked)
+                      }
+                      class="mt-0.5 rounded text-blue-600 focus:ring-blue-500"
+                    />
+                    <span>
+                      Skip TLS certificate verification when downloading the installer and
+                      connecting the agent to Pulse
+                    </span>
+                  </label>
                   <p class="text-xs text-muted">
                     No token fields are needed here. The server appears in Pulse automatically after
                     the agent connects.

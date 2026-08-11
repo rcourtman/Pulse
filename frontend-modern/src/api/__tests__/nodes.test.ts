@@ -298,13 +298,19 @@ describe('NodesAPI', () => {
         type: 'pve',
         enableProxmox: true,
         enableCommands: true,
+        insecure: true,
       });
 
       expect(apiFetchJSON).toHaveBeenCalledWith(
         '/api/agent-install-command',
         expect.objectContaining({
           method: 'POST',
-          body: JSON.stringify({ type: 'pve', enableProxmox: true, enableCommands: true }),
+          body: JSON.stringify({
+            type: 'pve',
+            enableProxmox: true,
+            enableCommands: true,
+            insecure: true,
+          }),
         }),
       );
       expect(result).toEqual({ command: 'curl ...' });

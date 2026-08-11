@@ -172,6 +172,11 @@ Docker/Podman module attached to that host identity. The removal must delete
 the associated runtime report surfaces and clear their active alerts instead
 of leaving container alerts or inventory detached from a removed agent.
 
+Proxmox node and backup-server setup may request an explicitly insecure
+Unified Agent installer command. The choice must remain off by default, be
+visible at the point where the command is generated, and affect both the
+installer download and the agent's subsequent Pulse TLS connection.
+
 ## Canonical Files
 
 1. `internal/api/agent_install_command_shared.go`

@@ -44,6 +44,7 @@ export const useNodeModalState = (props: NodeModalProps) => {
   const [agentInstallCommand, setAgentInstallCommand] = createSignal('');
   const [loadingAgentCommand, setLoadingAgentCommand] = createSignal(false);
   const [agentCommandError, setAgentCommandError] = createSignal<string | null>(null);
+  const [agentInstallInsecure, setAgentInstallInsecure] = createSignal(false);
 
   const isAdvancedSetupMode = () => formData().setupMode === 'manual';
   const showTemperatureMonitoringSection = () =>
@@ -84,6 +85,7 @@ export const useNodeModalState = (props: NodeModalProps) => {
         type,
         enableProxmox: true,
         enableCommands: type === 'pve',
+        insecure: agentInstallInsecure(),
       });
       setAgentInstallCommand(data.command);
       const copied = await copyToClipboard(data.command);
@@ -560,6 +562,7 @@ export const useNodeModalState = (props: NodeModalProps) => {
   return {
     agentCommandError,
     agentInstallCommand,
+    agentInstallInsecure,
     copyCommand,
     copyProxmoxAgentInstallCommand,
     copyQuickSetupCommand,
@@ -575,6 +578,7 @@ export const useNodeModalState = (props: NodeModalProps) => {
     quickSetupExpiryLabel,
     quickSetupCommandReady,
     quickSetupTokenHint,
+    setAgentInstallInsecure,
     showTemperatureMonitoringSection,
     temperatureMonitoringEnabledValue,
     testResult,
