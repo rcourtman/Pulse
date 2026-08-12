@@ -5188,3 +5188,21 @@ configuration, or provider inventory. A retired resource fails closed for
 automated remediation through the shared action lifecycle, while recovery
 evidence remains available for operator review and for restoration to active
 monitoring.
+
+### Configuration archive recovery is authorized before persistence
+
+Encrypted configuration export/import is a storage-recovery boundary only
+after authorization succeeds. The API guard resolves the selected organization
+and authenticating principal before either handler decodes an archive, reads
+the tenant export persistence, begins an import transaction, replaces live
+configuration, or reloads monitoring state. A tenant viewer or member cannot
+transfer configuration; tenant managers and owners may operate only on their
+resolved tenant, and scoped API tokens retain their organization binding.
+
+Truly unauthenticated recovery is limited to direct loopback for both
+operations. The deliberate `ALLOW_UNPROTECTED_EXPORT` exception widens export
+only and cannot authorize import. Existing encryption, archive versions,
+transactional rollback, metadata replacement, and successful reload semantics
+remain unchanged behind this boundary. The config-transfer router matrix and
+existing archive compatibility/rollback tests jointly pin denial-before-access
+and authorized recovery behavior.

@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -28,6 +29,34 @@ func setupTelemetryTest(t *testing.T, cfg *config.Config) (*SystemSettingsHandle
 
 	handler := newTestSystemSettingsHandler(cfg, persistence, &mockMonitor{}, func() {}, func() error { return nil })
 	return handler, persistence, tokenVal
+}
+
+func TestSecurityOperatorDocsPublishEffectiveConfigTransferPolicy(t *testing.T) {
+	rootSecurity, err := os.ReadFile(filepath.Clean("../../SECURITY.md"))
+	if err != nil {
+		t.Fatalf("read root security guide: %v", err)
+	}
+	shippedSecurity, err := os.ReadFile(filepath.Clean("../../frontend-modern/public/docs/SECURITY.md"))
+	if err != nil {
+		t.Fatalf("read shipped security guide: %v", err)
+	}
+	if !bytes.Equal(rootSecurity, shippedSecurity) {
+		t.Fatal("shipped security guide drifted from the canonical root guide")
+	}
+	guide := strings.Join(strings.Fields(string(rootSecurity)), " ")
+	for _, policy := range []string{
+		"only to configuration export",
+		"It never enables import",
+		"direct loopback connection",
+		"private-network and forwarded requests are not loopback",
+		"settings:read",
+		"settings:write",
+		"organization-bound tokens",
+	} {
+		if !strings.Contains(guide, policy) {
+			t.Fatalf("security guide missing config transfer policy %q", policy)
+		}
+	}
 }
 
 func TestTelemetryUpdate_EnvLockRejects(t *testing.T) {

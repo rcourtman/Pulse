@@ -2163,3 +2163,23 @@ the tenant resource store. Runtime reconciliation may visit every live monitor,
 but each alert manager resolves policy through its own tenant-scoped store, so a
 matching provider ID in another organization cannot import the mutation. The
 existing route scopes and authenticated actor attribution remain unchanged.
+
+### Secret-bearing configuration transfer fails closed before data access
+
+Configuration archives may contain node credentials, notification secrets,
+API-token hashes and metadata, OIDC client secrets, and SAML private keys. The
+export/import router therefore authorizes the resolved organization before
+request-body parsing or persistence access. Hosted mode, enabled persisted or
+environment-backed SSO, and an SSO load failure all require authentication;
+none may fall through to no-auth recovery. Browser sessions need instance-admin
+or tenant-management authority, proxy identities need the configured admin
+role, and API tokens preserve organization binding plus the operation-specific
+`settings:read` or `settings:write` scope.
+
+No-auth recovery trusts only a direct loopback transport without forwarded
+identity headers. `ALLOW_UNPROTECTED_EXPORT` is an export-only exception and is
+ineffective once any authentication or hosted mode is active. Security status
+reports that effective policy rather than the environment variable alone, and
+the root and shipped security guides remain byte-for-byte synchronized. The
+router matrix proves that malformed and otherwise valid denied requests read no
+body and perform no export, import, config replacement, or runtime reload.

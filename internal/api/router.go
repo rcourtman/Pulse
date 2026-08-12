@@ -22,6 +22,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
@@ -149,6 +150,7 @@ type Router struct {
 	oidcManager                     *OIDCServiceManager
 	samlManager                     *SAMLServiceManager
 	ssoConfig                       *config.SSOConfig
+	ssoAuthLoadFailed               atomic.Bool
 	sessionStore                    *SessionStore
 	csrfStore                       *CSRFTokenStore
 	recoveryTokenStore              *RecoveryTokenStore
@@ -335,6 +337,10 @@ func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, mtMonitor *monit
 	// Initialize SSO service managers
 	r.oidcManager = NewOIDCServiceManager()
 	r.samlManager = NewSAMLServiceManager("")
+	// Load persisted and environment-backed SSO before routes begin serving.
+	// Configuration transfer and no-auth recovery must never observe the old
+	// lazy-loading window as an unauthenticated installation.
+	r.ensureSSOConfig()
 	if err := r.syncSAMLPublicURL(); err != nil {
 		log.Error().Err(err).Msg("Failed to initialize SAML public URL")
 	}

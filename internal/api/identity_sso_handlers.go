@@ -236,7 +236,10 @@ func (r *Router) ensureSSOConfig() *config.SSOConfig {
 		if r.persistence != nil {
 			cfg, err := r.persistence.LoadSSOConfig()
 			if err != nil {
+				r.ssoAuthLoadFailed.Store(true)
 				log.Error().Err(err).Msg("Failed to load SSO config from persistence")
+			} else {
+				r.ssoAuthLoadFailed.Store(false)
 			}
 			if cfg != nil {
 				r.ssoConfig = cfg
@@ -258,6 +261,10 @@ func (r *Router) ensureSSOConfig() *config.SSOConfig {
 
 	setSSOAuthSnapshot(r.config, r.ssoConfig)
 	return r.ssoConfig
+}
+
+func (r *Router) ssoAuthenticationLoadFailed() bool {
+	return r != nil && r.ssoAuthLoadFailed.Load()
 }
 
 func (r *Router) handleListSSOProviders(w http.ResponseWriter, req *http.Request) {
@@ -622,12 +629,14 @@ func (r *Router) handleDeleteSSOProvider(w http.ResponseWriter, req *http.Reques
 func (r *Router) saveSSOConfig() error {
 	if r.persistence == nil {
 		setSSOAuthSnapshot(r.config, r.ssoConfig)
+		r.ssoAuthLoadFailed.Store(false)
 		return nil
 	}
 	if err := r.persistence.SaveSSOConfig(r.ssoConfig); err != nil {
 		return err
 	}
 	setSSOAuthSnapshot(r.config, r.ssoConfig)
+	r.ssoAuthLoadFailed.Store(false)
 	return nil
 }
 

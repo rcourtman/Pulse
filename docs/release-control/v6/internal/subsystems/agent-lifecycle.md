@@ -6197,3 +6197,15 @@ operator or external agent can explain current attention behavior, without
 changing registration or command authority. Retiring an agent-backed resource
 blocks automated remediation through the shared action policy while preserving
 its enrollment and history.
+
+### Configuration transfer authority does not derive from agent membership
+
+The shared `internal/api/` configuration export/import routes use browser,
+proxy, Basic, or API-token administration authority for the resolved
+organization before entering persistence. Agent registration, report, setup,
+and command credentials do not become configuration-transfer authority merely
+because they authenticate another lifecycle route. An API token must retain
+organization binding and carry `settings:read` for export or `settings:write`
+for import; tenant browser membership without management authority is denied.
+This boundary neither enrolls nor mutates agent identity, tokens, command
+sessions, fleet policy, or update state.

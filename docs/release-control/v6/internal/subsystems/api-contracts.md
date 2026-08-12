@@ -9306,3 +9306,28 @@ the canonical capability manifest project both new fields. Retired lifecycle
 is also an execution-time remediation lock in the shared action lifecycle.
 `internal/api/resources_operator_state_test.go`, agent-context tests, manifest
 tests, and the generated `cmd/pulse-mcp/README.md` pin this additive contract.
+
+### Configuration transfer has one organization-aware authorization boundary
+
+`POST /api/config/export` and `POST /api/config/import` remain route-local
+public exceptions only so deliberate no-auth recovery can be evaluated. Before
+either handler reads a body or resolves persistence, the shared transfer guard
+classifies password, proxy, API-token, persisted or environment-backed SSO,
+hosted, and SSO-load-failure state. Any configured or uncertain authentication
+state requires a real credential. Sessions require instance-admin authority on
+the default organization or `CanUserIDManage` on the resolved tenant; tenant
+membership alone is insufficient. API tokens retain tenant-middleware
+organization binding and require `settings:read` for export or `settings:write`
+for import, including legacy unbound-token compatibility on the default
+organization only.
+
+When no authentication exists, import and export recovery are limited to a
+direct loopback peer with no forwarding headers. `ALLOW_UNPROTECTED_EXPORT=true`
+may additionally admit export only; it cannot admit import or override any
+authenticated or hosted mode. Denials precede archive decoding, export reads,
+import transactions, live-config replacement, and runtime reload. The public
+and privileged security-status projections use the same classification, and
+the canonical and shipped API references describe the same scope and tenant
+rules. `config_transfer_authorization_test.go`, the contract ratchet in
+`contract_test.go`, and the shipped-doc assertions in `docsLinks.test.ts` pin
+the boundary and its published shape.

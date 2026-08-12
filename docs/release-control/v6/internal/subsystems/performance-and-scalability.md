@@ -2387,3 +2387,13 @@ operator-state read for that selected resource and does not add table-row,
 hover-preview, interval, or websocket work. Saving monitoring or lifecycle
 policy performs one mutation and one selected-resource refetch. The Workloads
 list, selectors, windowing, and polling budgets remain unchanged.
+
+### Configuration transfer authorization stays off persistence hot paths
+
+Persisted and environment-backed SSO state is loaded into the router's auth
+snapshot during construction. Export/import authorization then uses in-memory
+configuration, session, token-context, organization-context, and hosted-state
+checks before handing the request to either body-decoding handler. Denied
+requests perform no configuration export loads, import transaction work,
+metadata replacement, or runtime reload. Authorized archive encryption,
+decryption, transactional persistence, and reload costs are unchanged.
