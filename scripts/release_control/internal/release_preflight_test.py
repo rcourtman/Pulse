@@ -93,6 +93,7 @@ class ReleasePreflightTest(unittest.TestCase):
         self.assertIn("unset GH_TOKEN GITHUB_TOKEN", worker)
         self.assertIn("export GITHUB_ACTIONS=true", worker)
         self.assertIn("export CI=true", worker)
+        self.assertIn('sub(/^toolchain /, "")', worker)
         self.assertNotIn("docker push", worker)
         self.assertNotIn("gh release", worker)
         self.assertIn("mcr.microsoft.com/playwright:v${PLAYWRIGHT_VERSION}-noble", worker)

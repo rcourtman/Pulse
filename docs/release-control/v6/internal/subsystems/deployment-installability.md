@@ -483,6 +483,9 @@ upgrade, update, release, or artifact-selection behavior.
    worker remains an operator acceleration choice, not a new canonical release
    gate; the typed release gates and the self-contained GitHub release workflow
    remain authoritative.
+   Worker startup must compare the complete `go`-prefixed toolchain identity
+   from `go.mod` with `go env GOVERSION` so a formatting mismatch cannot reject
+   an otherwise exact toolchain or conceal a real version drift.
    The rehearsal diagnostic spec is opt-in by design, so both the hosted
    rehearsal and its worker profile must set `PULSE_E2E_DIAGNOSTIC=1`; invoking
    that spec while leaving it skipped is not browser proof.

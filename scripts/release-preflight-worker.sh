@@ -117,7 +117,7 @@ git -C "$REPOSITORY_DIR" checkout --detach --force "$SOURCE_SHA"
 git -C "$REPOSITORY_DIR" clean -ffdx
 
 cd "$REPOSITORY_DIR"
-EXPECTED_GO="$(awk '/^toolchain go/ { sub(/^toolchain go/, ""); print; exit }' go.mod)"
+EXPECTED_GO="$(awk '/^toolchain go/ { sub(/^toolchain /, ""); print; exit }' go.mod)"
 ACTUAL_GO="$(go env GOVERSION)"
 if [ -n "$EXPECTED_GO" ] && [ "$ACTUAL_GO" != "$EXPECTED_GO" ]; then
   echo "Error: worker Go toolchain is ${ACTUAL_GO}; exact-SHA source requires ${EXPECTED_GO}." >&2
