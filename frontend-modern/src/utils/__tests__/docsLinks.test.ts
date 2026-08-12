@@ -111,6 +111,7 @@ describe('docsLinks', () => {
       }));
 
     expect(docPairs.length).toBeGreaterThan(0);
+    expect(docPairs.map(({ target }) => target)).toContain('UPGRADE_v6.md');
 
     for (const { source, target } of docPairs) {
       const rootDoc = readFileSync(source, 'utf8');

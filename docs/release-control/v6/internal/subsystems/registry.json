@@ -4166,6 +4166,7 @@
         "frontend-modern/package-lock.json",
         "frontend-modern/package.json",
         "frontend-modern/public/docs/MSP.md",
+        "frontend-modern/public/docs/UPGRADE_v6.md",
         "frontend-modern/src/api/updates.ts",
         "frontend-modern/src/components/UpdateBanner.tsx",
         "frontend-modern/src/components/WhatsNewCard.tsx",
@@ -4247,7 +4248,8 @@
         "docs/UPGRADE_v6.md",
         "docs/releases/RELEASE_NOTES_v6_RC*_DRAFT.md",
         "docs/releases/V6_CHANGELOG_RC*_DRAFT.md",
-        "docs/releases/V6_RC*_OPERATOR_SUPPORT_PACK_DRAFT.md"
+        "docs/releases/V6_RC*_OPERATOR_SUPPORT_PACK_DRAFT.md",
+        "frontend-modern/public/docs/UPGRADE_v6.md"
       ],
       "verification": {
         "allow_same_subsystem_tests": false,
@@ -4345,6 +4347,7 @@
               "docs/release-control/v6/internal/RELEASE_PROMOTION_POLICY.md",
               "docs/RELEASE_NOTES.md",
               "docs/UPGRADE_v6.md",
+              "frontend-modern/public/docs/UPGRADE_v6.md",
               "frontend-modern/src/components/UpdateBanner.tsx",
               "frontend-modern/src/components/WhatsNewCard.tsx",
               "frontend-modern/src/components/whatsNewModel.ts",
@@ -4373,6 +4376,7 @@
             "test_prefixes": [],
             "exact_files": [
               "frontend-modern/src/components/__tests__/whatsNewModel.test.ts",
+              "frontend-modern/src/utils/__tests__/docsLinks.test.ts",
               "pulse-pro:scripts/tests/test_validate_paid_runtime_distribution.py",
               "scripts/installtests/build_release_assets_test.go",
               "scripts/release_control/internal/record_rc_to_ga_rehearsal_test.py",

@@ -80,6 +80,7 @@ discarding existing explicit disk exclusions.
 25. `docs/MSP.md`
 26. `frontend-modern/public/docs/MSP.md`
 27. `docs/UPGRADE_v6.md`
+28. `frontend-modern/public/docs/UPGRADE_v6.md`
 28. `docs/release-control/v6/internal/PRE_RELEASE_CHECKLIST.md`
 29. `docs/release-control/v6/internal/RC_TO_GA_REHEARSAL_TEMPLATE.md`
 30. `docs/release-control/v6/internal/RELEASE_PROMOTION_POLICY.md`
@@ -827,9 +828,11 @@ upgrade, update, release, or artifact-selection behavior.
    must render the public release body through a canonical sanitizer instead of
    publishing `Draft Release Notes` framing, `_DRAFT.md` packet links, or
    duplicate appended `Installation` / `Promotion Metadata` sections verbatim.
-   `docs/UPGRADE_v6.md` must also stay aligned with the current RC support
-   packet so upgrade guidance does not keep pointing operators at retired
-   rollout/support docs after a later RC packet is prepared.
+   `docs/UPGRADE_v6.md` and its shipped frontend copy
+   `frontend-modern/public/docs/UPGRADE_v6.md` must also stay byte-aligned with
+   the current RC support packet so upgrade guidance does not keep pointing
+   operators at retired rollout/support docs after a later RC packet is
+   prepared.
    The upgrade guide's license and entitlement guidance must also stay aligned
    with the free-first self-hosted GA posture: it may describe activation,
    recovery, and signed support handoffs, but it must not teach ordinary
@@ -1353,6 +1356,10 @@ upgrade, update, release, or artifact-selection behavior.
    evaluation-capable exact-version release asset is not yet published. Any
    future installation command must verify the dedicated archive with the
    pinned release key before extraction or root execution.
+15. Keep `docs/UPGRADE_v6.md` and
+   `frontend-modern/public/docs/UPGRADE_v6.md` byte-synchronized. The shipped
+   copy is part of every release packet, and `docsLinks.test.ts` must fail when
+   release preparation changes only one side.
 
 ## Current State
 

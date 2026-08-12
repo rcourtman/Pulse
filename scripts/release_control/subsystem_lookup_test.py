@@ -54,6 +54,21 @@ CONNECTIONS_LEDGER_WORKSPACE_EXACT_FILES = [
     "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
 ]
 
+RELEASE_PROMOTION_METADATA_EXACT_FILES = [
+    "frontend-modern/src/components/__tests__/whatsNewModel.test.ts",
+    "frontend-modern/src/utils/__tests__/docsLinks.test.ts",
+    "pulse-pro:scripts/tests/test_validate_paid_runtime_distribution.py",
+    "scripts/installtests/build_release_assets_test.go",
+    "scripts/release_control/internal/record_rc_to_ga_rehearsal_test.py",
+    "scripts/release_control/internal/release_preflight_test.py",
+    "scripts/release_control/mobile_release_gate_test.py",
+    "scripts/release_control/release_promotion_policy_support_test.py",
+    "scripts/release_control/release_promotion_policy_test.py",
+    "scripts/release_control/render_release_body_test.py",
+    "scripts/release_control/resolve_release_promotion_test.py",
+    "scripts/release_control/validate_artifact_release_line_test.py",
+]
+
 
 def _contract_reference(contract_path: str, needle: str, runtime_path: str) -> dict:
     lines = (REPO_ROOT / contract_path).read_text(encoding="utf-8").splitlines()
@@ -3712,19 +3727,7 @@ class SubsystemLookupTest(unittest.TestCase):
         )
         self.assertEqual(
             match["verification_requirement"]["exact_files"],
-            [
-                "frontend-modern/src/components/__tests__/whatsNewModel.test.ts",
-                "pulse-pro:scripts/tests/test_validate_paid_runtime_distribution.py",
-                "scripts/installtests/build_release_assets_test.go",
-                "scripts/release_control/internal/record_rc_to_ga_rehearsal_test.py",
-                "scripts/release_control/internal/release_preflight_test.py",
-                "scripts/release_control/mobile_release_gate_test.py",
-                "scripts/release_control/release_promotion_policy_support_test.py",
-                "scripts/release_control/release_promotion_policy_test.py",
-                "scripts/release_control/render_release_body_test.py",
-                "scripts/release_control/resolve_release_promotion_test.py",
-                "scripts/release_control/validate_artifact_release_line_test.py",
-            ],
+            RELEASE_PROMOTION_METADATA_EXACT_FILES,
         )
 
     def test_lookup_paths_assigns_rc_release_packet_docs_to_deployment_installability(self) -> None:
@@ -3752,19 +3755,7 @@ class SubsystemLookupTest(unittest.TestCase):
         )
         self.assertEqual(
             match["verification_requirement"]["exact_files"],
-            [
-                "frontend-modern/src/components/__tests__/whatsNewModel.test.ts",
-                "pulse-pro:scripts/tests/test_validate_paid_runtime_distribution.py",
-                "scripts/installtests/build_release_assets_test.go",
-                "scripts/release_control/internal/record_rc_to_ga_rehearsal_test.py",
-                "scripts/release_control/internal/release_preflight_test.py",
-                "scripts/release_control/mobile_release_gate_test.py",
-                "scripts/release_control/release_promotion_policy_support_test.py",
-                "scripts/release_control/release_promotion_policy_test.py",
-                "scripts/release_control/render_release_body_test.py",
-                "scripts/release_control/resolve_release_promotion_test.py",
-                "scripts/release_control/validate_artifact_release_line_test.py",
-            ],
+            RELEASE_PROMOTION_METADATA_EXACT_FILES,
         )
 
     def test_lookup_paths_assigns_stable_and_historical_release_packet_docs_to_deployment_installability(self) -> None:
@@ -3799,19 +3790,7 @@ class SubsystemLookupTest(unittest.TestCase):
             )
             self.assertEqual(
                 match["verification_requirement"]["exact_files"],
-                [
-                    "frontend-modern/src/components/__tests__/whatsNewModel.test.ts",
-                    "pulse-pro:scripts/tests/test_validate_paid_runtime_distribution.py",
-                    "scripts/installtests/build_release_assets_test.go",
-                    "scripts/release_control/internal/record_rc_to_ga_rehearsal_test.py",
-                    "scripts/release_control/internal/release_preflight_test.py",
-                    "scripts/release_control/mobile_release_gate_test.py",
-                    "scripts/release_control/release_promotion_policy_support_test.py",
-                    "scripts/release_control/release_promotion_policy_test.py",
-                    "scripts/release_control/render_release_body_test.py",
-                    "scripts/release_control/resolve_release_promotion_test.py",
-                    "scripts/release_control/validate_artifact_release_line_test.py",
-                ],
+                RELEASE_PROMOTION_METADATA_EXACT_FILES,
             )
 
     def test_lookup_paths_assigns_upgrade_guide_to_deployment_installability(self) -> None:
@@ -3839,19 +3818,7 @@ class SubsystemLookupTest(unittest.TestCase):
         )
         self.assertEqual(
             match["verification_requirement"]["exact_files"],
-            [
-                "frontend-modern/src/components/__tests__/whatsNewModel.test.ts",
-                "pulse-pro:scripts/tests/test_validate_paid_runtime_distribution.py",
-                "scripts/installtests/build_release_assets_test.go",
-                "scripts/release_control/internal/record_rc_to_ga_rehearsal_test.py",
-                "scripts/release_control/internal/release_preflight_test.py",
-                "scripts/release_control/mobile_release_gate_test.py",
-                "scripts/release_control/release_promotion_policy_support_test.py",
-                "scripts/release_control/release_promotion_policy_test.py",
-                "scripts/release_control/render_release_body_test.py",
-                "scripts/release_control/resolve_release_promotion_test.py",
-                "scripts/release_control/validate_artifact_release_line_test.py",
-            ],
+            RELEASE_PROMOTION_METADATA_EXACT_FILES,
         )
 
     def test_lookup_paths_assigns_v6_feedback_template_to_deployment_installability(self) -> None:
@@ -3879,19 +3846,7 @@ class SubsystemLookupTest(unittest.TestCase):
         )
         self.assertEqual(
             match["verification_requirement"]["exact_files"],
-            [
-                "frontend-modern/src/components/__tests__/whatsNewModel.test.ts",
-                "pulse-pro:scripts/tests/test_validate_paid_runtime_distribution.py",
-                "scripts/installtests/build_release_assets_test.go",
-                "scripts/release_control/internal/record_rc_to_ga_rehearsal_test.py",
-                "scripts/release_control/internal/release_preflight_test.py",
-                "scripts/release_control/mobile_release_gate_test.py",
-                "scripts/release_control/release_promotion_policy_support_test.py",
-                "scripts/release_control/release_promotion_policy_test.py",
-                "scripts/release_control/render_release_body_test.py",
-                "scripts/release_control/resolve_release_promotion_test.py",
-                "scripts/release_control/validate_artifact_release_line_test.py",
-            ],
+            RELEASE_PROMOTION_METADATA_EXACT_FILES,
         )
 
     def test_lookup_paths_assigns_version_file_to_deployment_installability(self) -> None:
@@ -3919,19 +3874,7 @@ class SubsystemLookupTest(unittest.TestCase):
         )
         self.assertEqual(
             match["verification_requirement"]["exact_files"],
-            [
-                "frontend-modern/src/components/__tests__/whatsNewModel.test.ts",
-                "pulse-pro:scripts/tests/test_validate_paid_runtime_distribution.py",
-                "scripts/installtests/build_release_assets_test.go",
-                "scripts/release_control/internal/record_rc_to_ga_rehearsal_test.py",
-                "scripts/release_control/internal/release_preflight_test.py",
-                "scripts/release_control/mobile_release_gate_test.py",
-                "scripts/release_control/release_promotion_policy_support_test.py",
-                "scripts/release_control/release_promotion_policy_test.py",
-                "scripts/release_control/render_release_body_test.py",
-                "scripts/release_control/resolve_release_promotion_test.py",
-                "scripts/release_control/validate_artifact_release_line_test.py",
-            ],
+            RELEASE_PROMOTION_METADATA_EXACT_FILES,
         )
 
     def test_lookup_paths_assigns_helm_chart_to_deployment_installability(self) -> None:
