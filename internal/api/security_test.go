@@ -1854,6 +1854,67 @@ func TestRequireAdmin_ProxyAuthNoRoleHeaderDefaultsToAdmin(t *testing.T) {
 	}
 }
 
+// Configuring a role header is the operator's signal that admin access is
+// role-gated. When ProxyAuthAdminRole is left unset the gate must fall back to
+// the documented default role rather than switching off: the empty-admin-role
+// short circuit let a proxied "user" read and write /api/system/settings.
+func TestRequireAdmin_ProxyAuthRoleHeaderWithoutAdminRoleStillGates(t *testing.T) {
+	cfg := &config.Config{
+		ProxyAuthSecret:     "secret123",
+		ProxyAuthUserHeader: "X-Remote-User",
+		ProxyAuthRoleHeader: "X-Remote-Roles",
+		// No ProxyAuthAdminRole set - must resolve to the documented default.
+	}
+
+	handlerCalled := false
+	handler := RequireAdmin(cfg, func(w http.ResponseWriter, r *http.Request) {
+		handlerCalled = true
+		w.WriteHeader(http.StatusOK)
+	})
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/api/admin/test", nil)
+	req.Header.Set("X-Proxy-Secret", "secret123")
+	req.Header.Set("X-Remote-User", "regular-user")
+	req.Header.Set("X-Remote-Roles", "user|viewer")
+	handler(w, req)
+
+	if handlerCalled {
+		t.Error("RequireAdmin should not call handler for a non-admin proxy user when the admin role is unset")
+	}
+	if w.Code != http.StatusForbidden {
+		t.Errorf("RequireAdmin returned status %d, want %d", w.Code, http.StatusForbidden)
+	}
+}
+
+func TestRequireAdmin_ProxyAuthRoleHeaderWithoutAdminRoleAllowsDefaultRole(t *testing.T) {
+	cfg := &config.Config{
+		ProxyAuthSecret:     "secret123",
+		ProxyAuthUserHeader: "X-Remote-User",
+		ProxyAuthRoleHeader: "X-Remote-Roles",
+	}
+
+	handlerCalled := false
+	handler := RequireAdmin(cfg, func(w http.ResponseWriter, r *http.Request) {
+		handlerCalled = true
+		w.WriteHeader(http.StatusOK)
+	})
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/api/admin/test", nil)
+	req.Header.Set("X-Proxy-Secret", "secret123")
+	req.Header.Set("X-Remote-User", "admin-user")
+	req.Header.Set("X-Remote-Roles", config.DefaultProxyAuthAdminRole+"|user")
+	handler(w, req)
+
+	if !handlerCalled {
+		t.Error("RequireAdmin should call handler for a proxy user carrying the default admin role")
+	}
+	if w.Code != http.StatusOK {
+		t.Errorf("RequireAdmin returned status %d, want %d", w.Code, http.StatusOK)
+	}
+}
+
 func TestRequireAdmin_ProxyAuthConfiguredRoleHeaderMissingForbidden(t *testing.T) {
 	cfg := &config.Config{
 		ProxyAuthSecret:     "secret123",

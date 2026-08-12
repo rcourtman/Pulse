@@ -299,12 +299,15 @@ evidence. Pulse Mobile's OTA gate separately proves the app against server
 lines already in customers' hands.
 
 Proxy-auth administrator evaluation is a shared auth/API contract. Once
-`PROXY_AUTH_ROLE_HEADER` and `PROXY_AUTH_ADMIN_ROLE` are configured,
-`internal/api/auth.go` must treat a valid proxy-auth user with a missing or
-blank role header as authenticated but non-admin, and only an explicit
-configured admin role may pass admin gates. Installations that intentionally
-make every proxy-authenticated user an admin must do that by leaving the role
-header unset and protecting Pulse at the proxy/IdP layer.
+`PROXY_AUTH_ROLE_HEADER` is configured, `internal/api/auth.go` must treat a
+valid proxy-auth user with a missing or blank role header as authenticated but
+non-admin, and only an explicit admin role may pass admin gates. An unset
+`PROXY_AUTH_ADMIN_ROLE` resolves to `config.DefaultProxyAuthAdminRole` and must
+never disable role gating: `CheckProxyAuth` is the single admin verdict every
+proxy-auth gate consumes, so a half-configured role header would otherwise
+promote every proxied user to administrator across all of them. Installations
+that intentionally make every proxy-authenticated user an admin must do that by
+leaving the role header unset and protecting Pulse at the proxy/IdP layer.
 
 Local credential auth reads are also part of this shared boundary. Handlers in
 `internal/api/auth.go` and `internal/api/router.go` that compare `AuthUser` and

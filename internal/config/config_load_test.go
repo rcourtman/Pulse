@@ -366,6 +366,35 @@ func TestLoad_ProxyAuth(t *testing.T) {
 	assert.Equal(t, "X-User", cfg.ProxyAuthUserHeader)
 }
 
+// A deployment that configures a role header but never names an admin role must
+// still get the documented default. Leaving ProxyAuthAdminRole empty made
+// CheckProxyAuth skip role gating entirely, so every proxied user read and wrote
+// admin-only settings.
+func TestLoad_ProxyAuthAdminRoleDefaultsWhenUnset(t *testing.T) {
+	t.Setenv("PULSE_DATA_DIR", t.TempDir())
+	t.Setenv("PROXY_AUTH_SECRET", "secret")
+	t.Setenv("PROXY_AUTH_USER_HEADER", "X-User")
+	t.Setenv("PROXY_AUTH_ROLE_HEADER", "X-Roles")
+
+	cfg, err := Load()
+	require.NoError(t, err)
+
+	assert.Equal(t, DefaultProxyAuthAdminRole, cfg.ProxyAuthAdminRole)
+}
+
+func TestLoad_ProxyAuthAdminRoleEnvOverridesDefault(t *testing.T) {
+	t.Setenv("PULSE_DATA_DIR", t.TempDir())
+	t.Setenv("PROXY_AUTH_SECRET", "secret")
+	t.Setenv("PROXY_AUTH_USER_HEADER", "X-User")
+	t.Setenv("PROXY_AUTH_ROLE_HEADER", "X-Roles")
+	t.Setenv("PROXY_AUTH_ADMIN_ROLE", "pulse-admins")
+
+	cfg, err := Load()
+	require.NoError(t, err)
+
+	assert.Equal(t, "pulse-admins", cfg.ProxyAuthAdminRole)
+}
+
 func TestLegacyOIDCEnvProvider(t *testing.T) {
 	t.Setenv("PULSE_DATA_DIR", t.TempDir())
 	t.Setenv("OIDC_ENABLED", "true")

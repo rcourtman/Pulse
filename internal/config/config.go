@@ -42,6 +42,14 @@ const (
 	DefaultGuestMetadataMaxConcurrent = 4
 )
 
+// DefaultProxyAuthAdminRole is the role name that grants admin access when a
+// proxy-auth deployment configures a role header without naming an admin role.
+// The struct's envconfig `default` tag never applies (see the Config note
+// below), so this default has to be resolved explicitly by every consumer of
+// ProxyAuthAdminRole — otherwise role gating silently switches off and every
+// proxy-authenticated user is treated as an administrator.
+const DefaultProxyAuthAdminRole = "admin"
+
 // Vars for mocking system calls in tests
 var (
 	osStat            = os.Stat
@@ -1392,6 +1400,11 @@ func load(initLogging bool) (*Config, error) {
 		if adminRole := os.Getenv("PROXY_AUTH_ADMIN_ROLE"); adminRole != "" {
 			cfg.ProxyAuthAdminRole = adminRole
 			log.Info().Str("role", adminRole).Msg("Proxy auth admin role configured")
+		} else if cfg.ProxyAuthAdminRole == "" {
+			// Documented default (docs/PROXY_AUTH.md). Leaving it empty while a
+			// role header is configured would disable role gating entirely.
+			cfg.ProxyAuthAdminRole = DefaultProxyAuthAdminRole
+			log.Info().Str("role", cfg.ProxyAuthAdminRole).Msg("Proxy auth admin role defaulted")
 		}
 		if logoutURL := os.Getenv("PROXY_AUTH_LOGOUT_URL"); logoutURL != "" {
 			cfg.ProxyAuthLogoutURL = logoutURL
