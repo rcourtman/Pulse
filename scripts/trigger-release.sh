@@ -68,7 +68,7 @@ echo "✓ On required branch (${REQUIRED_BRANCH})"
 # Check 4: Up to date with remote
 git fetch origin --quiet
 LOCAL=$(git rev-parse @)
-REMOTE=$(git rev-parse @{u})
+REMOTE=$(git rev-parse '@{u}')
 
 if [ "$LOCAL" != "$REMOTE" ]; then
   echo "❌ Local branch is not fully pushed to origin"
@@ -83,6 +83,11 @@ if [ "$LOCAL" != "$REMOTE" ]; then
 else
   echo "✓ Up to date with remote"
 fi
+
+./scripts/run-release-preflight.sh \
+  --sha "$LOCAL" \
+  --profile release \
+  --if-configured
 
 python3 scripts/check-workflow-dispatch-inputs.py \
   --workflow-path .github/workflows/create-release.yml \

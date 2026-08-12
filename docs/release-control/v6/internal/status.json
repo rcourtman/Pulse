@@ -9609,7 +9609,21 @@
   ],
   "coverage_gaps": [],
   "candidate_lanes": [],
-  "work_claims": [],
+  "work_claims": [
+    {
+      "id": "release-v6-2-2-rc-1-lane-l1",
+      "agent_id": "release-v6.2.2-rc.1",
+      "summary": "Accelerate exact-SHA release qualification with the remote amd64 builder before v6.2.2-rc.1",
+      "target_id": "v6-product-lane-expansion",
+      "claimed_at": "2026-08-12T14:53:53Z",
+      "heartbeat_at": "2026-08-12T14:55:19Z",
+      "expires_at": "2026-08-12T18:55:19Z",
+      "work_item": {
+        "kind": "lane",
+        "id": "L1"
+      }
+    }
+  ],
   "open_decisions": [],
   "source_of_truth_file": "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",
   "resolved_decisions": [
