@@ -65,7 +65,7 @@ location / {
 | Issue | Check |
 | :--- | :--- |
 | **401 Unauthorized** | Verify `X-Proxy-Secret` matches `PROXY_AUTH_SECRET`. Check if headers are being stripped by intermediate proxies. |
-| **Not Admin** | Verify `PROXY_AUTH_ROLE_HEADER` is set and contains `PROXY_AUTH_ADMIN_ROLE`. |
+| **Not Admin** | Check the role header actually reaches Pulse and contains the admin role **exactly** — matching is case-sensitive and compares whole roles, so `Admins` and `authentik Admins` do not match the `admin` default. Set `PROXY_AUTH_ADMIN_ROLE` to your IdP's admin group name. Pulse logs a warning at startup when it falls back to the default. |
 | **Logout Fails** | Ensure `PROXY_AUTH_LOGOUT_URL` is set to your IdP's logout endpoint. |
 
 ### Verify Headers

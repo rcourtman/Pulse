@@ -1404,7 +1404,18 @@ func load(initLogging bool) (*Config, error) {
 			// Documented default (docs/PROXY_AUTH.md). Leaving it empty while a
 			// role header is configured would disable role gating entirely.
 			cfg.ProxyAuthAdminRole = DefaultProxyAuthAdminRole
-			log.Info().Str("role", cfg.ProxyAuthAdminRole).Msg("Proxy auth admin role defaulted")
+			if cfg.ProxyAuthRoleHeader != "" {
+				// Role gating is live but the admin group was never named, so
+				// admin now hinges on an exact-case match against this default.
+				// An IdP sending "Admins" or "authentik Admins" grants nobody
+				// admin; say so here or the operator has nothing to go on.
+				log.Warn().
+					Str("role_header", cfg.ProxyAuthRoleHeader).
+					Str("admin_role", cfg.ProxyAuthAdminRole).
+					Msg("PROXY_AUTH_ADMIN_ROLE is not set, so proxy-auth admin access requires the role header to contain exactly \"admin\" (case-sensitive). Set PROXY_AUTH_ADMIN_ROLE to your IdP's admin group name if it differs, or unset PROXY_AUTH_ROLE_HEADER to treat every proxy-authenticated user as an admin.")
+			} else {
+				log.Info().Str("role", cfg.ProxyAuthAdminRole).Msg("Proxy auth admin role defaulted")
+			}
 		}
 		if logoutURL := os.Getenv("PROXY_AUTH_LOGOUT_URL"); logoutURL != "" {
 			cfg.ProxyAuthLogoutURL = logoutURL
