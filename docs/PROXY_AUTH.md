@@ -27,6 +27,8 @@ Setting `PROXY_AUTH_ROLE_HEADER` turns on role gating. From then on admin access
 
 If you intentionally want every proxy-authenticated user to be an admin, leave `PROXY_AUTH_ROLE_HEADER` unset and protect Pulse entirely at the proxy/IdP layer.
 
+Running Pulse 5.x? Role gating behaves differently there and needs two extra steps — see [Pulse 5.x (end-of-life)](#pulse-5x-end-of-life).
+
 ## ⚠️ Header Trust Boundary
 
 Pulse trusts these headers completely — they *are* the identity and the privilege decision. Two deployment requirements make that safe, and both are yours to enforce:
@@ -84,3 +86,25 @@ curl -H "X-Proxy-Secret: your-secret" \
      -H "X-Authentik-Username: admin" \
      http://localhost:7655/api/state
 ```
+
+## Pulse 5.x (end-of-life)
+
+The 5.x line is end-of-life and does not receive fixes. **Upgrade to 6.2.2 or later**, which is where proxy-auth role gating behaves as documented above.
+
+If you cannot upgrade immediately, 5.x needs two configuration changes before role gating actually restricts anyone. **Both are required** — either one alone leaves administrator access open:
+
+1. **Set `PROXY_AUTH_ADMIN_ROLE` explicitly.** 5.x never applies the documented `admin` default. While it is empty, 5.x skips role checking altogether and treats every proxy-authenticated user as an administrator, whatever their role header says.
+2. **Send a non-empty role header on every authenticated request.** 5.x only evaluates roles when that header carries a value; an absent or empty header leaves the user an administrator. A user with no groups in your identity provider commonly produces exactly that, so have the proxy send a placeholder such as `none` rather than nothing. Any non-empty value that does not contain your admin role correctly resolves to non-admin.
+
+Verify both with a request carrying a non-admin role — it should be refused:
+
+```bash
+curl -si -H "X-Proxy-Secret: your-secret" \
+     -H "X-Authentik-Username: testuser" \
+     -H "X-Proxy-Roles: none" \
+     http://localhost:7655/api/system/settings | head -1
+```
+
+Expected: `HTTP/1.1 403 Forbidden`. Repeat it with the role header omitted entirely — that must also be refused. If either returns `200`, admin access is still open.
+
+6.2.2 and later fix both behaviors: role gating activates on the presence of the role header alone, and an absent or blank header resolves to non-admin.
