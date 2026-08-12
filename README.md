@@ -182,5 +182,10 @@ unsolicited pull requests.
 
 ## License
 
-Pulse Community is available under the [MIT License](LICENSE). Pulse Pro is
-subject to the [Terms of Service](TERMS.md).
+Everything in this repository is licensed under the [MIT License](LICENSE).
+There is no dual licensing and no commercial or source-available code here.
+
+Pulse Pro is a separate commercial product, built from private sources and
+distributed through [pulserelay.pro](https://pulserelay.pro). Its use is
+governed by the [Terms of Service](TERMS.md), which apply to that product
+only, not to anything in this repository.

@@ -3,6 +3,8 @@
 **Version 1.0**  
 **Effective Date: January 1, 2026**
 
+**Scope**: This agreement applies only to the commercial Pulse Pro distribution obtained from Pulse Monitoring Ltd. It does not apply to, and does not modify the license of, any code in the open-source Pulse repository (github.com/rcourtman/Pulse). Everything in that repository is licensed under the MIT License.
+
 IMPORTANT: PLEASE READ THIS AGREEMENT CAREFULLY. BY PURCHASING, INSTALLING, OR USING PULSE PRO ("THE SOFTWARE"), YOU AGREE TO BE BOUND BY THESE TERMS.
 
 ## 1. THE SOFTWARE
