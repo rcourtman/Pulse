@@ -130,6 +130,28 @@ describe('docsLinks', () => {
     expect(rbacGuide).toMatch(/Removal does not disable\s+the upstream IdP account/);
   });
 
+  it('ships the configuration transfer authorization contract', () => {
+    const apiReference = readFileSync(path.join(repoRoot, 'docs', 'API.md'), 'utf8');
+    const shippedAPIReference = readFileSync(
+      path.join(frontendRoot, 'public', 'docs', 'API.md'),
+      'utf8',
+    );
+
+    expect(shippedAPIReference).toBe(apiReference);
+    const exportContract = apiReference
+      .split('### Export Configuration')[1]
+      ?.split('### Import Configuration')[0]
+      ?.replace(/\s+/g, ' ');
+    const importContract = apiReference
+      .split('### Import Configuration')[1]
+      ?.split('---')[0]
+      ?.replace(/\s+/g, ' ');
+    expect(exportContract).toContain('tenant manager');
+    expect(exportContract).toContain('settings:read');
+    expect(importContract).toContain('tenant manager');
+    expect(importContract).toContain('settings:write');
+  });
+
   it('routes runtime docs links through shipped local docs instead of GitHub main', () => {
     expect(apiAccessPanelSource).toContain('API_TOKEN_SCOPES_DOC_URL');
     expect(apiAccessPanelSource).not.toContain(

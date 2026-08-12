@@ -3,14 +3,12 @@ package api
 import (
 	"encoding/json"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
-	"github.com/rs/zerolog/log"
 )
 
 const featureAgentProfilesKey = "agent_profiles"
@@ -428,135 +426,14 @@ func (r *Router) registerConfigSystemRoutes(updateHandlers *UpdateHandlers) {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
 	})
-	// Config export/import routes (requires authentication)
+	// Config export/import routes. These stay globally public so the deliberate
+	// no-auth recovery policy can operate; authorizeConfigTransfer is the single
+	// fail-closed boundary for every authenticated, hosted, and tenant mode.
 	r.mux.HandleFunc("/api/config/export", r.exportLimiter.Middleware(func(w http.ResponseWriter, req *http.Request) {
 		if req.Method == http.MethodPost {
-			// Check proxy auth first
-			hasValidProxyAuth := false
-			proxyAuthIsAdmin := false
-			if r.config.ProxyAuthSecret != "" {
-				if valid, _, isAdmin := CheckProxyAuth(r.config, req); valid {
-					hasValidProxyAuth = true
-					proxyAuthIsAdmin = isAdmin
-				}
-			}
-
-			// Check authentication - accept proxy auth, session auth or API token
-			hasValidSession := false
-			sessionUsername := ""
-			sessionIsAdmin := false
-			if cookie, err := readSessionCookie(req); err == nil && cookie.Value != "" {
-				hasValidSession = ValidateSession(cookie.Value)
-				if hasValidSession {
-					sessionUsername = strings.TrimSpace(GetSessionUsername(cookie.Value))
-					// Same admin test the settings routes apply. Comparing
-					// against r.config.AuthUser alone cannot match on an
-					// instance whose only administrators are SSO principals,
-					// which locked those operators out of their own config
-					// export and import.
-					sessionIsAdmin = sessionUserCarriesAdminPrivileges(r.config, sessionUsername)
-				}
-			}
-
-			validateAPIToken := func(token string) bool {
-				if token == "" || !r.config.HasAPITokens() {
-					return false
-				}
-				_, ok := r.config.ValidateAPIToken(token)
-				return ok
-			}
-
-			token := req.Header.Get("X-API-Token")
-			if token == "" {
-				if authHeader := req.Header.Get("Authorization"); strings.HasPrefix(authHeader, "Bearer ") {
-					token = strings.TrimPrefix(authHeader, "Bearer ")
-				}
-			}
-			hasValidAPIToken := validateAPIToken(token)
-
-			// Check if any valid auth method is present
-			hasValidAuth := hasValidProxyAuth || sessionIsAdmin || hasValidAPIToken
-
-			// Determine if auth is required
-			authRequired := r.config.AuthUser != "" && r.config.AuthPass != "" ||
-				r.config.HasAPITokens() ||
-				r.config.ProxyAuthSecret != ""
-
-			// Check admin privileges for proxy auth users
-			if hasValidProxyAuth && !proxyAuthIsAdmin {
-				log.Warn().
-					Str("ip", req.RemoteAddr).
-					Str("path", req.URL.Path).
-					Msg("Non-admin proxy auth user attempted export/import")
-				http.Error(w, "Admin privileges required for export/import", http.StatusForbidden)
+			if !r.authorizeConfigTransfer(w, req, configTransferExport) {
 				return
 			}
-			if authRequired && hasValidSession && !sessionIsAdmin {
-				log.Warn().
-					Str("ip", req.RemoteAddr).
-					Str("path", req.URL.Path).
-					Str("user", sessionUsername).
-					Msg("Non-admin session user attempted export/import")
-				http.Error(w, "Admin privileges required for export/import", http.StatusForbidden)
-				return
-			}
-
-			if authRequired && !hasValidAuth {
-				log.Warn().
-					Str("ip", req.RemoteAddr).
-					Str("path", req.URL.Path).
-					Bool("proxyAuth", hasValidProxyAuth).
-					Bool("session", sessionIsAdmin).
-					Bool("apiToken", hasValidAPIToken).
-					Msg("Unauthorized export attempt")
-				http.Error(w, "Unauthorized - please log in or provide API token", http.StatusUnauthorized)
-				return
-			} else if !authRequired {
-				// No auth configured - check if this is a homelab/private network
-				clientIP := GetClientIP(req)
-
-				isPrivate := isPrivateIP(clientIP)
-				allowUnprotected := os.Getenv("ALLOW_UNPROTECTED_EXPORT") == "true"
-
-				if !isPrivate && !allowUnprotected {
-					// Public network access without auth - definitely block
-					log.Warn().
-						Str("ip", req.RemoteAddr).
-						Bool("private_network", isPrivate).
-						Msg("Export blocked - public network requires authentication")
-					http.Error(w, "Export requires authentication on public networks", http.StatusForbidden)
-					return
-				} else if isPrivate && !allowUnprotected {
-					// Private network but ALLOW_UNPROTECTED_EXPORT not set - show helpful message
-					log.Info().
-						Str("ip", req.RemoteAddr).
-						Msg("Export allowed - private network with no auth")
-					// Continue - allow export on private networks for homelab users
-				}
-			}
-
-			// SECURITY: Check settings:read scope for API token auth
-			if hasValidAPIToken && token != "" {
-				record, _ := r.config.ValidateAPIToken(token)
-				if record != nil && !record.HasScope(config.ScopeSettingsRead) {
-					log.Warn().
-						Str("ip", req.RemoteAddr).
-						Str("path", req.URL.Path).
-						Str("token_id", record.ID).
-						Msg("API token missing settings:read scope for export")
-					http.Error(w, "API token missing required scope: settings:read", http.StatusForbidden)
-					return
-				}
-			}
-
-			// Log successful export attempt
-			log.Info().
-				Str("ip", req.RemoteAddr).
-				Bool("proxy_auth", hasValidProxyAuth).
-				Bool("session_auth", sessionIsAdmin).
-				Bool("api_token_auth", hasValidAPIToken).
-				Msg("Configuration export initiated")
-
 			r.configHandlers.HandleExportConfig(w, req)
 		} else {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -565,131 +442,9 @@ func (r *Router) registerConfigSystemRoutes(updateHandlers *UpdateHandlers) {
 
 	r.mux.HandleFunc("/api/config/import", r.exportLimiter.Middleware(func(w http.ResponseWriter, req *http.Request) {
 		if req.Method == http.MethodPost {
-			// Check proxy auth first
-			hasValidProxyAuth := false
-			proxyAuthIsAdmin := false
-			if r.config.ProxyAuthSecret != "" {
-				if valid, _, isAdmin := CheckProxyAuth(r.config, req); valid {
-					hasValidProxyAuth = true
-					proxyAuthIsAdmin = isAdmin
-				}
-			}
-
-			// Check authentication - accept proxy auth, session auth or API token
-			hasValidSession := false
-			sessionUsername := ""
-			sessionIsAdmin := false
-			if cookie, err := readSessionCookie(req); err == nil && cookie.Value != "" {
-				hasValidSession = ValidateSession(cookie.Value)
-				if hasValidSession {
-					sessionUsername = strings.TrimSpace(GetSessionUsername(cookie.Value))
-					// Same admin test the settings routes apply. Comparing
-					// against r.config.AuthUser alone cannot match on an
-					// instance whose only administrators are SSO principals,
-					// which locked those operators out of their own config
-					// export and import.
-					sessionIsAdmin = sessionUserCarriesAdminPrivileges(r.config, sessionUsername)
-				}
-			}
-
-			validateAPIToken := func(token string) bool {
-				if token == "" || !r.config.HasAPITokens() {
-					return false
-				}
-				_, ok := r.config.ValidateAPIToken(token)
-				return ok
-			}
-
-			token := req.Header.Get("X-API-Token")
-			if token == "" {
-				if authHeader := req.Header.Get("Authorization"); strings.HasPrefix(authHeader, "Bearer ") {
-					token = strings.TrimPrefix(authHeader, "Bearer ")
-				}
-			}
-			hasValidAPIToken := validateAPIToken(token)
-
-			// Check if any valid auth method is present
-			hasValidAuth := hasValidProxyAuth || sessionIsAdmin || hasValidAPIToken
-
-			// Determine if auth is required
-			authRequired := r.config.AuthUser != "" && r.config.AuthPass != "" ||
-				r.config.HasAPITokens() ||
-				r.config.ProxyAuthSecret != ""
-
-			// Check admin privileges for proxy auth users
-			if hasValidProxyAuth && !proxyAuthIsAdmin {
-				log.Warn().
-					Str("ip", req.RemoteAddr).
-					Str("path", req.URL.Path).
-					Msg("Non-admin proxy auth user attempted export/import")
-				http.Error(w, "Admin privileges required for export/import", http.StatusForbidden)
+			if !r.authorizeConfigTransfer(w, req, configTransferImport) {
 				return
 			}
-			if authRequired && hasValidSession && !sessionIsAdmin {
-				log.Warn().
-					Str("ip", req.RemoteAddr).
-					Str("path", req.URL.Path).
-					Str("user", sessionUsername).
-					Msg("Non-admin session user attempted export/import")
-				http.Error(w, "Admin privileges required for export/import", http.StatusForbidden)
-				return
-			}
-
-			if authRequired && !hasValidAuth {
-				log.Warn().
-					Str("ip", req.RemoteAddr).
-					Str("path", req.URL.Path).
-					Bool("proxyAuth", hasValidProxyAuth).
-					Bool("session", sessionIsAdmin).
-					Bool("apiToken", hasValidAPIToken).
-					Msg("Unauthorized import attempt")
-				http.Error(w, "Unauthorized - please log in or provide API token", http.StatusUnauthorized)
-				return
-			} else if !authRequired {
-				// No auth configured - check if this is a homelab/private network
-				clientIP := GetClientIP(req)
-
-				isPrivate := isPrivateIP(clientIP)
-				allowUnprotected := os.Getenv("ALLOW_UNPROTECTED_EXPORT") == "true"
-
-				if !isPrivate && !allowUnprotected {
-					// Public network access without auth - definitely block
-					log.Warn().
-						Str("ip", req.RemoteAddr).
-						Bool("private_network", isPrivate).
-						Msg("Import blocked - public network requires authentication")
-					http.Error(w, "Import requires authentication on public networks", http.StatusForbidden)
-					return
-				} else if isPrivate && !allowUnprotected {
-					// Private network but ALLOW_UNPROTECTED_EXPORT not set - show helpful message
-					log.Info().
-						Str("ip", req.RemoteAddr).
-						Msg("Import allowed - private network with no auth")
-					// Continue - allow import on private networks for homelab users
-				}
-			}
-
-			// SECURITY: Check settings:write scope for API token auth
-			if hasValidAPIToken && token != "" {
-				record, _ := r.config.ValidateAPIToken(token)
-				if record != nil && !record.HasScope(config.ScopeSettingsWrite) {
-					log.Warn().
-						Str("ip", req.RemoteAddr).
-						Str("path", req.URL.Path).
-						Str("token_id", record.ID).
-						Msg("API token missing settings:write scope for import")
-					http.Error(w, "API token missing required scope: settings:write", http.StatusForbidden)
-					return
-				}
-			}
-
-			// Log successful import attempt
-			log.Info().
-				Str("ip", req.RemoteAddr).
-				Bool("session_auth", sessionIsAdmin).
-				Bool("api_token_auth", hasValidAPIToken).
-				Msg("Configuration import initiated")
-
 			r.configHandlers.HandleImportConfig(w, req)
 		} else {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)

@@ -236,6 +236,12 @@ Environment="ALLOW_UNPROTECTED_EXPORT=true"
 docker run -e ALLOW_UNPROTECTED_EXPORT=true rcourtman/pulse:latest
 ```
 
+This exception applies only when Pulse has no configured authentication and
+only to configuration export. It never enables import and never overrides
+password, proxy, API-token, SSO, or hosted authentication. Without the
+exception, unauthenticated export and import recovery is limited to a direct
+loopback connection; private-network and forwarded requests are not loopback.
+
 **Note:** for production, prefer Docker secrets or systemd environment files
 for sensitive data.
 
@@ -419,7 +425,10 @@ curl -X POST \
   http://localhost:7655/api/config/export
 ```
 
-Most API endpoints also accept `Authorization: Bearer <token>`, but export/import uses the `X-API-Token` header.
+Configuration export accepts a token with `settings:read`; import accepts a
+token with `settings:write`. Both `X-API-Token` and `Authorization: Bearer`
+forms are supported, and organization-bound tokens can transfer only the
+organization selected by the request.
 
 ### Scoped API Tokens
 
@@ -633,7 +642,7 @@ curl -X POST http://localhost:7655/api/security/reset-lockout \
 ## Troubleshooting
 
 **Account locked?** Wait 15 minutes or contact admin for manual reset  
-**Export blocked?** You're on a public network – login with password, create an API token, or set `ALLOW_UNPROTECTED_EXPORT=true`  
+**Export blocked?** Authenticate with management authority, use a correctly scoped API token, connect directly over loopback on a no-auth installation, or deliberately set `ALLOW_UNPROTECTED_EXPORT=true` for export only<br>
 **Rate limited?** Wait 1 minute and try again  
 **Can't login?** Check `PULSE_AUTH_USER` and `PULSE_AUTH_PASS` environment variables  
 **API access denied?** Verify the token you supplied matches one of the values created in *Settings → API Tokens* (use the original token, not the hash)  

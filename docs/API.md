@@ -360,7 +360,9 @@ Validates node config without saving.
 `POST /api/config/nodes/{id}/refresh-cluster`
 
 ### Export Configuration
-`POST /api/config/export` (admin or API token)
+`POST /api/config/export` (instance admin for the default organization, tenant
+manager for a selected tenant, or an API token bound to the selected
+organization with `settings:read`)
 Request body:
 ```json
 { "passphrase": "use-a-strong-passphrase" }
@@ -368,7 +370,9 @@ Request body:
 Returns an encrypted export bundle in `data`. Passphrases must be at least 12 characters.
 
 ### Import Configuration
-`POST /api/config/import` (admin)
+`POST /api/config/import` (instance admin for the default organization, tenant
+manager for a selected tenant, or an API token bound to the selected
+organization with `settings:write`)
 Request body:
 ```json
 {

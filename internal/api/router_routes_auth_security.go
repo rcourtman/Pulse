@@ -82,17 +82,7 @@ type privilegedSecurityStatusResponse struct {
 }
 
 func (r *Router) securityAuthenticationConfigured() bool {
-	if r == nil || r.config == nil {
-		return false
-	}
-	if (r.config.AuthUser != "" && r.config.AuthPass != "") ||
-		r.config.HasAPITokens() ||
-		r.config.ProxyAuthSecret != "" ||
-		r.hostedMode {
-		return true
-	}
-	ssoCfg := r.ensureSSOConfig()
-	return ssoCfg != nil && ssoCfg.HasEnabledProviders()
+	return r.configTransferAuthenticationConfigured()
 }
 
 func (r *Router) authorizeSecurityRestart(w http.ResponseWriter, req *http.Request) bool {
@@ -342,18 +332,10 @@ func (r *Router) registerAuthSecurityInstallRoutes() {
 			ssoProviders = append(ssoProviders, info)
 		}
 
+		requiresAuth := r.securityAuthenticationConfigured()
 		hasAuthentication := os.Getenv("PULSE_AUTH_USER") != "" ||
 			os.Getenv("REQUIRE_AUTH") == "true" ||
-			r.config.AuthUser != "" ||
-			r.config.AuthPass != "" ||
-			r.config.HasAPITokens() ||
-			r.config.ProxyAuthSecret != "" ||
-			r.hostedMode ||
-			hasEnabledSSO
-		requiresAuth := r.config.HasAPITokens() ||
-			(r.config.AuthUser != "" && r.config.AuthPass != "") ||
-			r.config.ProxyAuthSecret != "" ||
-			hasEnabledSSO
+			requiresAuth
 
 		publicStatus := publicSecurityStatusResponse{
 			DetailLevel:        securityStatusDetailPublic,
@@ -435,12 +417,13 @@ func (r *Router) registerAuthSecurityInstallRoutes() {
 
 		authenticatedStatus.DetailLevel = securityStatusDetailPrivileged
 		authenticatedStatus.HasProxyAuth = hasProxyAuth
+		unprotectedExportAllowed := !r.configTransferAuthenticationConfigured() && os.Getenv("ALLOW_UNPROTECTED_EXPORT") == "true"
 		status := privilegedSecurityStatusResponse{
 			authenticatedSecurityStatusResponse: authenticatedStatus,
 			APITokenConfigured:                  r.config.HasAPITokens(),
 			APITokenHint:                        r.config.PrimaryAPITokenHint(),
-			ExportProtected:                     r.config.HasAPITokens() || os.Getenv("ALLOW_UNPROTECTED_EXPORT") != "true",
-			UnprotectedExportAllowed:            os.Getenv("ALLOW_UNPROTECTED_EXPORT") == "true",
+			ExportProtected:                     !unprotectedExportAllowed,
+			UnprotectedExportAllowed:            unprotectedExportAllowed,
 			ConfiguredButPendingRestart:         configuredButPendingRestart,
 			HasAuditLogging:                     os.Getenv("PULSE_AUDIT_LOG") == "true" || os.Getenv("AUDIT_LOG_ENABLED") == "true",
 			CredentialsEncrypted:                true,

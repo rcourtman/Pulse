@@ -67,6 +67,54 @@ import (
 	tmock "github.com/stretchr/testify/mock"
 )
 
+func TestContract_ConfigTransferRoutesUseCanonicalPreHandlerAuthorization(t *testing.T) {
+	routesSource, err := os.ReadFile(filepath.Clean("router_routes_registration.go"))
+	if err != nil {
+		t.Fatalf("read config route registration: %v", err)
+	}
+	routes := string(routesSource)
+	if got := strings.Count(routes, "authorizeConfigTransfer(w, req,"); got != 2 {
+		t.Fatalf("config transfer authorization calls = %d, want exactly export and import", got)
+	}
+	if strings.Contains(routes, "ALLOW_UNPROTECTED_EXPORT") || strings.Contains(routes, "isPrivateIP(") {
+		t.Fatal("config transfer routes reintroduced a local override or private-network approximation")
+	}
+	for _, sequence := range []struct {
+		authorize string
+		handler   string
+	}{
+		{authorize: "authorizeConfigTransfer(w, req, configTransferExport)", handler: "HandleExportConfig(w, req)"},
+		{authorize: "authorizeConfigTransfer(w, req, configTransferImport)", handler: "HandleImportConfig(w, req)"},
+	} {
+		authorizeAt := strings.Index(routes, sequence.authorize)
+		handlerAt := strings.Index(routes, sequence.handler)
+		if authorizeAt < 0 || handlerAt < 0 || authorizeAt >= handlerAt {
+			t.Fatalf("%s must precede %s", sequence.authorize, sequence.handler)
+		}
+	}
+
+	authoritySource, err := os.ReadFile(filepath.Clean("config_transfer_authorization.go"))
+	if err != nil {
+		t.Fatalf("read canonical config transfer authority: %v", err)
+	}
+	authority := string(authoritySource)
+	for _, invariant := range []string{
+		"hasEnabledSSOProvidersForAuth(r.config)",
+		"r.hostedMode",
+		"r.ssoAuthenticationLoadFailed()",
+		"isDirectLoopbackRequest(req)",
+		"op == configTransferExport",
+		"getAPITokenRecordFromRequest(req)",
+		"ensureAdminSession(r.config, w, req)",
+		"config.ScopeSettingsRead",
+		"config.ScopeSettingsWrite",
+	} {
+		if !strings.Contains(authority, invariant) {
+			t.Fatalf("canonical config transfer authority missing %q", invariant)
+		}
+	}
+}
+
 type basicActionContractAuthorizer struct {
 	wantUser string
 }
