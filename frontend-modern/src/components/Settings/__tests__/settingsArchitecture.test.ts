@@ -1148,6 +1148,13 @@ describe('settings architecture guardrails', () => {
     expect(auditLogPresentationSource).toContain(
       "AUDIT_VERIFICATION_FILTER_ALL_LABEL = getAllFilterOptionLabel('verification')",
     );
+    expect(auditLogPanelSource).toContain("{ value: 'strong', label: 'Strong' }");
+    expect(auditLogPanelSource).toContain("{ value: 'compatibility', label: 'Compatibility' }");
+    expect(auditLogPanelSource).toContain("{ value: 'invalid', label: 'Invalid/Error' }");
+    expect(auditLogPanelSource).toContain("{ value: 'unknown', label: 'Unknown/Unavailable' }");
+    expect(auditLogPanelSource).toContain("{ value: 'unsigned', label: 'Unsigned' }");
+    expect(auditLogStateSource).toContain('AUTHORITATIVE_VERIFICATION_STATUSES');
+    expect(auditLogStateSource).not.toContain("status: 'verified'");
   });
 
   it('keeps audit-log fetch errors and page-size normalization on shared owners', () => {

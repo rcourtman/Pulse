@@ -152,6 +152,21 @@ describe('docsLinks', () => {
     expect(importContract).toContain('settings:write');
   });
 
+  it('ships the authoritative audit assurance contract', () => {
+    const apiReference = readFileSync(path.join(repoRoot, 'docs', 'API.md'), 'utf8');
+    const shippedAPIReference = readFileSync(
+      path.join(frontendRoot, 'public', 'docs', 'API.md'),
+      'utf8',
+    );
+
+    expect(shippedAPIReference).toBe(apiReference);
+    expect(apiReference).toContain('`status` and `assurance` are authoritative');
+    expect(apiReference).toContain('`strong`, `compatibility`, `invalid`, `unknown`, and');
+    expect(apiReference).toContain('`unsigned`');
+    expect(apiReference).toContain('Unknown/malformed envelopes do not fall back');
+    expect(apiReference).toContain('`compatibility_signature_count`');
+  });
+
   it('routes runtime docs links through shipped local docs instead of GitHub main', () => {
     expect(apiAccessPanelSource).toContain('API_TOKEN_SCOPES_DOC_URL');
     expect(apiAccessPanelSource).not.toContain(

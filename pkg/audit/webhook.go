@@ -29,26 +29,38 @@ var resolveWebhookIPs = net.DefaultResolver.LookupIPAddr
 
 // WebhookDelivery handles async webhook delivery with retries.
 type WebhookDelivery struct {
-	mu       sync.RWMutex
-	urls     []string
-	client   *http.Client
-	queue    chan Event
-	stopChan chan struct{}
-	stopOnce sync.Once
-	wg       sync.WaitGroup
+	mu                sync.RWMutex
+	urls              []string
+	client            *http.Client
+	classifySignature func(Event) SignatureVerification
+	queue             chan Event
+	stopChan          chan struct{}
+	stopOnce          sync.Once
+	wg                sync.WaitGroup
 }
 
 // WebhookPayload is the JSON payload sent to webhooks.
 type WebhookPayload struct {
-	Event     string    `json:"event"`
-	Timestamp time.Time `json:"timestamp"`
-	Data      Event     `json:"data"`
+	Event              string             `json:"event"`
+	Timestamp          time.Time          `json:"timestamp"`
+	SignatureVersion   SignatureVersion   `json:"signature_version"`
+	SignatureStatus    VerificationStatus `json:"signature_status"`
+	SignatureAssurance SignatureAssurance `json:"signature_assurance"`
+	Data               Event              `json:"data"`
 }
 
 // NewWebhookDelivery creates a new webhook delivery worker.
 func NewWebhookDelivery(urls []string) *WebhookDelivery {
+	return newWebhookDelivery(urls, nil)
+}
+
+// newWebhookDelivery binds authoritative verification to delivery. The
+// exported constructor deliberately has no verifier and therefore cannot make
+// an assurance claim for directly enqueued or replayed events.
+func newWebhookDelivery(urls []string, classify func(Event) SignatureVerification) *WebhookDelivery {
 	return &WebhookDelivery{
-		urls: urls,
+		urls:              urls,
+		classifySignature: classify,
 		client: securityutil.NewRestrictedOutboundHTTPClient(webhookTimeout, securityutil.RestrictedOutboundHTTPOptions{
 			AllowedSchemes: []string{"http", "https"},
 			ResolveIPAddrs: resolveWebhookIPs,
@@ -204,10 +216,14 @@ func (w *WebhookDelivery) deliverWithRetry(url string, event Event) error {
 
 // deliver sends a single event to a webhook URL.
 func (w *WebhookDelivery) deliver(url string, event Event) error {
+	verification := w.verificationForEvent(event)
 	payload := WebhookPayload{
-		Event:     "audit." + event.EventType,
-		Timestamp: event.Timestamp,
-		Data:      event,
+		Event:              "audit." + event.EventType,
+		Timestamp:          event.Timestamp,
+		SignatureVersion:   verification.Version,
+		SignatureStatus:    verification.Status,
+		SignatureAssurance: verification.Assurance,
+		Data:               event,
 	}
 
 	body, err := json.Marshal(payload)
@@ -248,6 +264,26 @@ func (w *WebhookDelivery) deliver(url string, event Event) error {
 	}
 
 	return nil
+}
+
+func (w *WebhookDelivery) verificationForEvent(event Event) SignatureVerification {
+	fallback := unverifiedWebhookSignature(event)
+	if w.classifySignature == nil {
+		return fallback
+	}
+	verification := w.classifySignature(event)
+	if verification.Version != fallback.Version {
+		return fallback
+	}
+	return verification
+}
+
+func unverifiedWebhookSignature(event Event) SignatureVerification {
+	version := DetectSignatureVersion(event.Signature)
+	if version == SignatureVersionUnsigned {
+		return signatureVerification(VerificationStatusUnsigned, version, SignatureAssuranceNone, false)
+	}
+	return signatureVerification(VerificationStatusUnknown, version, SignatureAssuranceNone, false)
 }
 
 func validateWebhookURL(ctx context.Context, rawURL string) error {

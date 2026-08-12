@@ -219,9 +219,9 @@ func TestSignerSign(t *testing.T) {
 
 	sig := signer.Sign(event)
 
-	// The envelope identifies v2 and carries a 64-character SHA-256 MAC.
-	if len(sig) != len("v2:")+64 || !strings.HasPrefix(sig, "v2:") {
-		t.Errorf("Expected v2 signature envelope, got %q", sig)
+	// The envelope identifies v3 and carries a 64-character SHA-256 MAC.
+	if len(sig) != len("v3:")+64 || !strings.HasPrefix(sig, "v3:") {
+		t.Errorf("Expected v3 signature envelope, got %q", sig)
 	}
 
 	// Same event should produce same signature

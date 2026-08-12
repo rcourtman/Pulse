@@ -21,6 +21,17 @@
 
 ## Purpose
 
+The shared audit SQLite store is a security persistence boundary adjacent to
+storage recovery. Its schema admits exactly one SQLite representation for
+each authenticated field, including integer `success` values limited to zero
+or one, and reads validate raw storage classes before projection. Schema-v3
+migration transactionally rebuilds mixed historic data, preserves exact
+RFC3339Nano timestamp material needed to evaluate fractional legacy
+signatures, normalizes finite in-range legacy SQLite REAL timestamps through
+the previously supported truncation rule, and rolls back without partial
+publication, row loss, ordering drift, re-signing, or assurance upgrade when
+any row is malformed.
+
 First-run authentication always writes the canonical `.env` persistence
 artifact before runtime state changes. Root systemd installation may also
 write a service override, but reload, restart, backup, and recovery remain

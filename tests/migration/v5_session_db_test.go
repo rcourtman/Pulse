@@ -460,7 +460,7 @@ func TestV5DataDir_AuditDBSchemaAutoMigration(t *testing.T) {
 
 	var version int
 	require.NoError(t, db.QueryRow("SELECT version FROM schema_version ORDER BY version DESC LIMIT 1").Scan(&version))
-	assert.Equal(t, 2, version, "schema_version should be 2")
+	assert.Equal(t, 3, version, "schema_version should be 3")
 }
 
 // TestV5DataDir_AuditDBPreExistingData verifies that the v6 audit logger

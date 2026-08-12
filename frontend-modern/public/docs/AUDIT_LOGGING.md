@@ -34,6 +34,7 @@ Pulse automatically captures the following events:
 | `agent_config_fetch` | Agent configuration retrieval attempts | Agent config fetched successfully |
 
 Each event includes:
+
 - **Timestamp** (UTC)
 - **Event type**
 - **User** who triggered the event
@@ -98,7 +99,7 @@ The export includes all events matching the current filter criteria.
 
 ## Tamper Detection
 
-Every audit event is cryptographically signed at creation time. You can verify that an event has not been modified:
+Current audit events are cryptographically signed at creation time. Verification reports both whether the retained bytes match and what integrity claim that signature format can support:
 
 ```bash
 curl http://localhost:7655/api/audit/6b3c9c3c-9a2f-4b3c-9a3b-3d0e8c5c5d45/verify \
@@ -110,11 +111,33 @@ Response:
 {
   "available": true,
   "verified": true,
-  "message": "Event signature verified"
+  "status": "strong",
+  "version": "v3",
+  "assurance": "strong",
+  "message": "Event signature strongly verified"
 }
 ```
 
-If `verified` is `false`, the event data has been tampered with since it was recorded.
+`status` and `assurance` are authoritative. `verified` is retained for older clients and is `true` for both `strong` and `compatibility`; it must not be used to present those states as equivalent.
+
+| Status | Meaning |
+|--------|---------|
+| `strong` | A valid current `v3` signature with injective field encoding and a version-specific HMAC key domain. |
+| `compatibility` | A valid historical `v2` or unprefixed legacy signature. The bytes match an accepted historical format, but that format does not support the current integrity claim. |
+| `invalid` | A known signature format did not verify. Treat the evidence as failed integrity validation. |
+| `unknown` | The envelope is malformed or unsupported, or verification key material is unavailable. Do not retry it under an older format. |
+| `unsigned` | No signature was retained. |
+
+The list API returns `signature_version`, `signature_status`, and `signature_assurance` on every row. JSON and CSV exports include the version and, with `verify=true`, the status and assurance. Summaries separately count strong, compatibility, invalid, unknown, and unsigned evidence. The UI reserves the green **Strongly verified** state for `strong`; compatibility history is amber and explicitly lower assurance.
+
+### Signature versions and compatibility
+
+- `v3:<64 hex digits>` is the current format. Its authenticated message contains the `v3` domain and envelope, an injective length-prefixed representation of every signed string, the exact persisted Unix-second timestamp and success byte, and the retained historical timestamp-evidence field. Its HMAC-SHA256 key is derived from the instance master audit key under the dedicated `pulse.audit.hmac-key\0v3\0` domain. Removing or changing the envelope cannot move the digest into the accepted `v2` or legacy key domain.
+- `v2:<64 hex digits>` uses injective fields but shares the historical master-key domain, so it is compatibility evidence only.
+- An unprefixed 64-hex signature may match one of three historical delimiter-separated encodings. Those encodings have ambiguous string boundaries, so a match is compatibility evidence only.
+- Any other envelope or malformed MAC is `unknown`. Verification dispatch never falls back from a failed prefixed version into an older representation.
+
+Signatures are opaque versioned strings, not fixed-length bare hex fields. The repository has no supported audit consumer that should assume 64 or 67 characters. Webhook/SIEM clients should retain the signature and the explicit version/assurance fields unchanged and use Pulse's verification endpoint for the authoritative result.
 
 ---
 
@@ -153,9 +176,14 @@ Audit events are stored in a SQLite database in the Pulse data directory:
 - **Multi-tenant:** `{data-dir}/orgs/{org-id}/audit/audit.db`
 
 Data directory locations:
+
 - systemd: `/etc/pulse/`
 - Docker/Kubernetes: `/data/`
 - Development: `tmp/dev-config/`
+
+At startup, Pulse transactionally migrates older audit tables to a strict canonical schema. All signed strings are non-null SQLite `TEXT`, timestamps and success flags are canonical `INTEGER` values, and success is restricted to `0` or `1`. Reads validate raw SQLite storage classes and fail closed on alternate integers, nulls, blobs, reals, or noncanonical timestamp evidence instead of verifying a lossy Go projection.
+
+Historical textual timestamps are normalized for ordering while their canonical RFC3339Nano form is retained separately as signature evidence. This preserves genuine fractional legacy timestamps through migration and restart. Pulse never replaces or re-signs a historical signature. A row that was migrated by an older release after its fractional timestamp material had already been discarded remains `invalid` or otherwise lower assurance; the new migration does not invent evidence or upgrade it. A malformed mixed dataset rolls back as one transaction, leaving the original table and rows intact.
 
 ---
 

@@ -124,7 +124,24 @@ Pro, legacy Pro+, and Cloud support dedicated audit webhooks for security event 
 2. Add your endpoint URL (e.g., `https://siem.corp.local/ingest/pulse`).
 
 ### Security
-Audit webhooks are dispatched asynchronously. The payload includes a `signature` field which can be verified using the per-instance HMAC key stored (encrypted) at `.audit-signing.key` in the Pulse data directory. There is no `PULSE_AUDIT_SIGNING_KEY` override.
+Audit webhooks are dispatched asynchronously. The envelope contains
+`signature_version`, `signature_status`, and `signature_assurance`; its
+`data.signature` is an opaque versioned value. Pulse verifies each event before
+making an assurance claim. New deliveries use `v3`/`strong`/`strong`. A valid
+historical `v2` or unprefixed signature is labelled `compatibility`, never
+strong; an event delivered without an authoritative verifier is `unknown` with
+`none` assurance.
+
+Use `GET /api/audit/<id>/verify` for the authoritative status. Do not treat a
+successful historical boolean result as current assurance, strip or substitute
+the signature prefix, or retry an unknown version as legacy. Core-managed
+instances keep the per-instance master audit key encrypted at
+`.audit-signing.key`; the encrypted file is not raw HMAC material. Pulse Pro can
+instead supply externally managed key material through
+`PULSE_AUDIT_SIGNING_KEY`; treat that value as a high-entropy secret. Pulse does
+not expose raw key material through this webhook contract. External receivers
+should retain the full payload and its explicit version, status, and assurance
+fields rather than assuming a fixed signature length.
 
 ## 🏢 Provider-hosted MSP webhooks
 

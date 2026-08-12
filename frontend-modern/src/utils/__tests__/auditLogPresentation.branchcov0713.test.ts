@@ -103,8 +103,8 @@ describe('getAuditVerificationBadgePresentation (branch coverage)', () => {
   it('distinguishes the three outcome colours while sharing one neutral class', () => {
     const notChecked = getAuditVerificationBadgePresentation(undefined);
     const unavailable = getAuditVerificationBadgePresentation({ status: 'unavailable' });
-    const verified = getAuditVerificationBadgePresentation({ status: 'verified' });
-    const failed = getAuditVerificationBadgePresentation({ status: 'failed' });
+    const verified = getAuditVerificationBadgePresentation({ status: 'strong' });
+    const failed = getAuditVerificationBadgePresentation({ status: 'invalid' });
     const errored = getAuditVerificationBadgePresentation({ status: 'error' });
 
     // The verified/failed/error outcomes each carry a distinct colour class.

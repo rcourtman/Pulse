@@ -84,7 +84,7 @@ func (h *AuditHandlers) HandleListAuditEvents(w http.ResponseWriter, r *http.Req
 	}
 
 	response := map[string]interface{}{
-		"events":            events,
+		"events":            audit.ProjectEvents(events, logger),
 		"total":             totalCount,
 		"persistentLogging": true,
 	}
@@ -199,9 +199,9 @@ func (h *AuditHandlers) HandleVerifyAuditEvent(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	verifier, ok := logger.(interface {
-		VerifySignature(event audit.Event) bool
-	})
+	_, booleanVerifier := logger.(audit.SignatureVerifier)
+	_, classifiedVerifier := logger.(audit.ClassifiedSignatureVerifier)
+	ok := booleanVerifier || classifiedVerifier
 	if !ok {
 		writeErrorResponse(w, http.StatusNotImplemented, "verify_unavailable", "Signature verification is not available", nil)
 		return
@@ -221,17 +221,16 @@ func (h *AuditHandlers) HandleVerifyAuditEvent(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	verified := verifier.VerifySignature(events[0])
-	message := "Event signature verified"
-	if !verified {
-		message = "Event signature verification failed"
-	}
+	result := audit.ClassifySignature(logger, events[0])
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"available": true,
-		"verified":  verified,
-		"message":   message,
+		"verified":  result.Verified,
+		"status":    result.Status,
+		"version":   result.Version,
+		"assurance": result.Assurance,
+		"message":   audit.VerificationMessage(result),
 	})
 }
 

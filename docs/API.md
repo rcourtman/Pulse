@@ -711,7 +711,11 @@ Response:
       "path": "/api/login",
       "success": true,
       "details": "Successful login",
-      "signature": "..."
+      "signature": "v3:...",
+      "signature_version": "v3",
+      "signature_status": "strong",
+      "signature_assurance": "strong",
+      "signature_valid": true
     }
   ],
   "total": 1,
@@ -727,9 +731,30 @@ Response:
 {
   "available": true,
   "verified": true,
-  "message": "Event signature verified"
+  "status": "strong",
+  "version": "v3",
+  "assurance": "strong",
+  "message": "Event signature strongly verified"
 }
 ```
+
+`status` and `assurance` are authoritative. `verified` and per-event
+`signature_valid` remain compatibility fields: both `strong` current evidence
+and `compatibility` historical evidence can have a value of `true`. Clients
+must not turn the boolean alone into a green or current-assurance result.
+
+The complete status set is `strong`, `compatibility`, `invalid`, `unknown`, and
+`unsigned`. Versions are `v3`, `v2`, `legacy`, `unknown`, and `unsigned`.
+Unknown/malformed envelopes do not fall back into historical verification.
+
+### Export and Summary
+
+- `GET /api/audit/export?format=json|csv&verify=true` includes signature
+  version, status, and assurance. The compatibility boolean is also retained.
+- `GET /api/audit/summary` returns separate
+  `strong_signature_count`, `compatibility_signature_count`,
+  `invalid_signature_count`, `unknown_signature_count`, and
+  `unsigned_signature_count` totals.
 
 ### Validate API Token (Admin)
 `POST /api/security/validate-token`

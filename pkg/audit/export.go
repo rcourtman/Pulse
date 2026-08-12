@@ -26,16 +26,19 @@ type ExportResult struct {
 
 // ExportEvent extends Event with verification status for exports.
 type ExportEvent struct {
-	ID             string    `json:"id"`
-	Timestamp      time.Time `json:"timestamp"`
-	EventType      string    `json:"event_type"`
-	User           string    `json:"user,omitempty"`
-	IP             string    `json:"ip,omitempty"`
-	Path           string    `json:"path,omitempty"`
-	Success        bool      `json:"success"`
-	Details        string    `json:"details,omitempty"`
-	Signature      string    `json:"signature,omitempty"`
-	SignatureValid *bool     `json:"signature_valid,omitempty"`
+	ID                 string             `json:"id"`
+	Timestamp          time.Time          `json:"timestamp"`
+	EventType          string             `json:"event_type"`
+	User               string             `json:"user,omitempty"`
+	IP                 string             `json:"ip,omitempty"`
+	Path               string             `json:"path,omitempty"`
+	Success            bool               `json:"success"`
+	Details            string             `json:"details,omitempty"`
+	Signature          string             `json:"signature,omitempty"`
+	SignatureVersion   SignatureVersion   `json:"signature_version"`
+	SignatureStatus    VerificationStatus `json:"signature_status,omitempty"`
+	SignatureAssurance SignatureAssurance `json:"signature_assurance,omitempty"`
+	SignatureValid     *bool              `json:"signature_valid,omitempty"`
 }
 
 // PersistentLogger defines the interface for loggers that support querying and verification.
@@ -69,20 +72,26 @@ func (e *Exporter) Export(filter QueryFilter, format ExportFormat, includeVerifi
 	exportEvents := make([]ExportEvent, len(events))
 	for i, event := range events {
 		exportEvents[i] = ExportEvent{
-			ID:        event.ID,
-			Timestamp: event.Timestamp,
-			EventType: event.EventType,
-			User:      event.User,
-			IP:        event.IP,
-			Path:      event.Path,
-			Success:   event.Success,
-			Details:   event.Details,
-			Signature: event.Signature,
+			ID:               event.ID,
+			Timestamp:        event.Timestamp,
+			EventType:        event.EventType,
+			User:             event.User,
+			IP:               event.IP,
+			Path:             event.Path,
+			Success:          event.Success,
+			Details:          event.Details,
+			Signature:        event.Signature,
+			SignatureVersion: DetectSignatureVersion(event.Signature),
 		}
 
-		if includeVerification && event.Signature != "" {
-			valid := e.logger.VerifySignature(event)
-			exportEvents[i].SignatureValid = &valid
+		if includeVerification {
+			result := ClassifySignature(e.logger, event)
+			exportEvents[i].SignatureStatus = result.Status
+			exportEvents[i].SignatureAssurance = result.Assurance
+			if result.Status != VerificationStatusUnsigned {
+				valid := result.Verified
+				exportEvents[i].SignatureValid = &valid
+			}
 		}
 	}
 
@@ -105,9 +114,9 @@ func (e *Exporter) exportCSV(events []ExportEvent, timestamp string, includeVeri
 	writer := csv.NewWriter(&buf)
 
 	// Write header
-	header := []string{"ID", "Timestamp", "Event Type", "User", "IP", "Path", "Success", "Details", "Signature"}
+	header := []string{"ID", "Timestamp", "Event Type", "User", "IP", "Path", "Success", "Details", "Signature", "Signature Version"}
 	if includeVerification {
-		header = append(header, "Signature Valid")
+		header = append(header, "Signature Valid", "Signature Status", "Signature Assurance")
 	}
 	if err := writer.Write(header); err != nil {
 		return nil, fmt.Errorf("failed to write CSV header: %w", err)
@@ -130,6 +139,7 @@ func (e *Exporter) exportCSV(events []ExportEvent, timestamp string, includeVeri
 			success,
 			event.Details,
 			event.Signature,
+			string(event.SignatureVersion),
 		}
 
 		if includeVerification {
@@ -141,7 +151,7 @@ func (e *Exporter) exportCSV(events []ExportEvent, timestamp string, includeVeri
 					sigValid = "false"
 				}
 			}
-			row = append(row, sigValid)
+			row = append(row, sigValid, string(event.SignatureStatus), string(event.SignatureAssurance))
 		}
 
 		if err := writer.Write(row); err != nil {
@@ -190,14 +200,18 @@ func (e *Exporter) exportJSON(events []ExportEvent, timestamp string) (*ExportRe
 
 // ExportSummary generates a summary of audit activity.
 type ExportSummary struct {
-	TotalEvents     int            `json:"total_events"`
-	SuccessCount    int            `json:"success_count"`
-	FailureCount    int            `json:"failure_count"`
-	EventsByType    map[string]int `json:"events_by_type"`
-	EventsByUser    map[string]int `json:"events_by_user"`
-	StartTime       *time.Time     `json:"start_time,omitempty"`
-	EndTime         *time.Time     `json:"end_time,omitempty"`
-	InvalidSigCount int            `json:"invalid_signature_count,omitempty"`
+	TotalEvents           int            `json:"total_events"`
+	SuccessCount          int            `json:"success_count"`
+	FailureCount          int            `json:"failure_count"`
+	EventsByType          map[string]int `json:"events_by_type"`
+	EventsByUser          map[string]int `json:"events_by_user"`
+	StartTime             *time.Time     `json:"start_time,omitempty"`
+	EndTime               *time.Time     `json:"end_time,omitempty"`
+	StrongSigCount        int            `json:"strong_signature_count"`
+	CompatibilitySigCount int            `json:"compatibility_signature_count"`
+	InvalidSigCount       int            `json:"invalid_signature_count"`
+	UnknownSigCount       int            `json:"unknown_signature_count"`
+	UnsignedSigCount      int            `json:"unsigned_signature_count"`
 }
 
 // GenerateSummary creates a summary of audit events matching the filter.
@@ -242,11 +256,21 @@ func (e *Exporter) GenerateSummary(filter QueryFilter, verifySignatures bool) (*
 			maxTime = &t
 		}
 
-		// Verify signatures if requested
-		if verifySignatures && event.Signature != "" {
-			if !e.logger.VerifySignature(event) {
-				summary.InvalidSigCount++
-			}
+		// Always classify summary evidence so lower-assurance and unsigned rows
+		// cannot disappear into a single invalid count. verifySignatures remains
+		// in the API for request compatibility.
+		_ = verifySignatures
+		switch ClassifySignature(e.logger, event).Status {
+		case VerificationStatusStrong:
+			summary.StrongSigCount++
+		case VerificationStatusCompatibility:
+			summary.CompatibilitySigCount++
+		case VerificationStatusInvalid:
+			summary.InvalidSigCount++
+		case VerificationStatusUnknown:
+			summary.UnknownSigCount++
+		case VerificationStatusUnsigned:
+			summary.UnsignedSigCount++
 		}
 	}
 

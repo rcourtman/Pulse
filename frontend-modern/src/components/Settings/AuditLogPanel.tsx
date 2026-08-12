@@ -28,6 +28,7 @@ import {
   getAuditEventStatusPresentation,
   getAuditEventTypeBadgeClass,
   getAuditLogFeatureGateCopy,
+  getAuditSignatureTooltip,
   getAuditLogEmptyState,
   getAuditLogLoadingState,
   getAuditVerificationBadgePresentation,
@@ -114,8 +115,11 @@ export default function AuditLogPanel() {
   const auditVerificationOptions = (): FilterSelectOption[] => [
     { value: 'all', label: AUDIT_VERIFICATION_FILTER_ALL_LABEL },
     { value: 'needs', label: AUDIT_VERIFICATION_FILTER_NEEDS_LABEL },
-    { value: 'verified', label: 'Verified' },
-    { value: 'failed', label: 'Failed/Error' },
+    { value: 'strong', label: 'Strong' },
+    { value: 'compatibility', label: 'Compatibility' },
+    { value: 'invalid', label: 'Invalid/Error' },
+    { value: 'unknown', label: 'Unknown/Unavailable' },
+    { value: 'unsigned', label: 'Unsigned' },
   ];
 
   const buildAuditFilters = (): FilterDef[] => [
@@ -342,8 +346,11 @@ export default function AuditLogPanel() {
         <div class="flex flex-wrap items-center gap-3 text-xs text-muted">
           <span>Total: {totalEvents()}</span>
           <span>Signed: {verificationSummary().signed}</span>
-          <span>Verified: {verificationSummary().verified}</span>
-          <span>Failed: {verificationSummary().failed}</span>
+          <span>Strong: {verificationSummary().strong}</span>
+          <span>Compatibility: {verificationSummary().compatibility}</span>
+          <span>Invalid: {verificationSummary().invalid}</span>
+          <span>Unknown: {verificationSummary().unknown}</span>
+          <span>Unsigned: {verificationSummary().unsigned}</span>
           <span>Errors: {verificationSummary().error}</span>
           <span>Unavailable: {verificationSummary().unavailable}</span>
           <span>Unchecked: {verificationSummary().unchecked}</span>
@@ -352,10 +359,13 @@ export default function AuditLogPanel() {
             onMouseEnter={(e) => {
               const rect = e.currentTarget.getBoundingClientRect();
               const content = [
-                'Unsigned: no signature stored for this event',
+                'Strong: current v3 signature verified in its cryptographically separate domain',
+                'Compatibility: a historical v2 or legacy signature matched with lower assurance',
+                'Unsigned: no signature is stored for this event',
+                'Unknown: the envelope is unsupported or the verification key is unavailable',
                 'Unavailable: verification not supported by the logger',
                 'Not checked: signature exists but has not been verified',
-                'Failed: signature mismatch or tampering detected',
+                'Invalid: signature mismatch or tampering detected',
                 'Error: verification request failed',
               ].join('\n');
               showTooltip(content, rect.left + rect.width / 2, rect.top, {
@@ -433,9 +443,6 @@ export default function AuditLogPanel() {
                 key: 'verification',
                 label: 'Verification',
                 render: (event) => {
-                  if (!event.signature) {
-                    return <span class="text-xs">Unsigned</span>;
-                  }
                   const state = verification()[event.id];
                   const isVerifying = verifying()[event.id];
                   const badge = getAuditVerificationBadgePresentation(state);
@@ -447,6 +454,7 @@ export default function AuditLogPanel() {
                         fallback={
                           <span
                             class={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${badge.className}`}
+                            title={getAuditSignatureTooltip(event, state)}
                           >
                             {badge.label}
                           </span>
@@ -456,7 +464,7 @@ export default function AuditLogPanel() {
                       </Show>
                       <button
                         onClick={() => void verifyEvent(event)}
-                        disabled={isVerifying}
+                        disabled={isVerifying || !event.signature}
                         class={AUDIT_VERIFY_ROW_BUTTON_CLASS}
                       >
                         Verify

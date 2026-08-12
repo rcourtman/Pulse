@@ -963,17 +963,27 @@ startup, the configured cleanup cadence is preserved across the enterprise
 configuration seam, and cleanup must tolerate concurrent writers without
 exposing partial results. Existing core and Pro signing keys remain valid
 through upgrade. Every new global and tenant SQLite row must carry a
-self-identifying `v2:` HMAC-SHA256 signature over the domain-separated,
+self-identifying `v3:` HMAC-SHA256 signature over the domain-separated,
 length-prefixed persisted tuple (ID, Unix-second timestamp, event type, user,
-IP, path, success, and details). Arbitrary string bytes, including pipes,
-empty values, Unicode, and newlines, must retain injective field boundaries.
+IP, path, success, details, and retained historical timestamp evidence).
+Arbitrary string bytes, including pipes, empty values, Unicode, and newlines,
+must retain injective field boundaries. The v3 envelope is authenticated and
+the MAC key is derived under a v3-specific key domain, so stripping or
+substituting the prefix cannot move a digest into an accepted v2 or legacy
+message/key domain.
 Verification dispatches by the signature envelope: unknown or malformed
-versions fail closed, and a v2 signature is never retried against a historical
-representation. Unprefixed 64-hex signatures remain explicitly identifiable
-as legacy and may verify against the three previously accepted encodings for
-read/export compatibility, but that result proves only the historical MAC and
-must not be represented as providing v2 boundary integrity. Startup and reads
-must not rewrite or re-sign those historical rows.
+versions fail closed, and a prefixed signature is never retried against a
+historical representation. V2 and unprefixed 64-hex legacy signatures remain
+readable for compatibility, but a match is explicitly lower assurance and
+must not be represented as current strong verification. Strong,
+compatibility, invalid, unknown, and unsigned evidence remain distinct through
+core and Enterprise list/verify routes, exports, summaries, and the UI.
+Startup and reads must not rewrite or re-sign historical rows. Schema-v3
+migration retains canonical RFC3339Nano timestamp evidence for historical
+textual rows before normalizing their query timestamp, uses a strict SQLite
+schema for every authenticated field, and validates raw storage classes on
+read. A malformed mixed migration rolls back without publishing a partial
+replacement table or upgrading retained evidence.
 That shared token-management boundary now also includes
 `frontend-modern/src/utils/apiTokenPresentation.ts`, so API-token load,
 generate, and revoke errors stay on one governed customer-facing wording path

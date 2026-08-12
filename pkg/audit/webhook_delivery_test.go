@@ -34,6 +34,11 @@ func TestWebhookDeliveryDeliverWithRetry(t *testing.T) {
 		Path:      "/api/login",
 		Success:   true,
 	}
+	signer, err := NewSignerWithKey([]byte("0123456789abcdef0123456789abcdef"))
+	if err != nil {
+		t.Fatalf("NewSignerWithKey: %v", err)
+	}
+	event.Signature = signer.Sign(event)
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		attempts++
@@ -63,6 +68,11 @@ func TestWebhookDeliveryDeliverWithRetry(t *testing.T) {
 		if payload.Data.ID != event.ID {
 			t.Fatalf("expected payload event id %q, got %q", event.ID, payload.Data.ID)
 		}
+		if payload.SignatureVersion != SignatureVersionV3 ||
+			payload.SignatureStatus != VerificationStatusStrong ||
+			payload.SignatureAssurance != SignatureAssuranceStrong {
+			t.Fatalf("unexpected signature assurance: %+v", payload)
+		}
 
 		if attempts < 3 {
 			w.WriteHeader(http.StatusInternalServerError)
@@ -87,7 +97,7 @@ func TestWebhookDeliveryDeliverWithRetry(t *testing.T) {
 		},
 	}
 
-	delivery := NewWebhookDelivery([]string{"http://" + targetHost + "/audit"})
+	delivery := newWebhookDelivery([]string{"http://" + targetHost + "/audit"}, signer.VerifyResult)
 	delivery.client = &http.Client{Transport: transport}
 
 	if err := delivery.deliverWithRetry("http://"+targetHost+"/audit", event); err != nil {
@@ -95,6 +105,30 @@ func TestWebhookDeliveryDeliverWithRetry(t *testing.T) {
 	}
 	if attempts != 3 {
 		t.Fatalf("expected 3 attempts, got %d", attempts)
+	}
+}
+
+func TestWebhookDeliveryAssuranceRequiresAuthoritativeVerification(t *testing.T) {
+	signer, err := NewSignerWithKey([]byte("0123456789abcdef0123456789abcdef"))
+	if err != nil {
+		t.Fatalf("NewSignerWithKey: %v", err)
+	}
+	event := Event{ID: "proof", EventType: "login", Timestamp: time.Unix(123, 0), Success: true}
+	event.Signature = signer.Sign(event)
+
+	unverified := NewWebhookDelivery(nil).verificationForEvent(event)
+	if unverified.Status != VerificationStatusUnknown || unverified.Assurance != SignatureAssuranceNone || unverified.Verified {
+		t.Fatalf("unverified delivery result = %+v", unverified)
+	}
+
+	delivery := newWebhookDelivery(nil, signer.VerifyResult)
+	if verified := delivery.verificationForEvent(event); verified.Status != VerificationStatusStrong || verified.Assurance != SignatureAssuranceStrong || !verified.Verified {
+		t.Fatalf("verified delivery result = %+v", verified)
+	}
+
+	event.Details = "tampered"
+	if invalid := delivery.verificationForEvent(event); invalid.Status != VerificationStatusInvalid || invalid.Assurance != SignatureAssuranceNone || invalid.Verified {
+		t.Fatalf("tampered delivery result = %+v", invalid)
 	}
 }
 

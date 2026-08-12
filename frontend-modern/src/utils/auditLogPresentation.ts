@@ -3,7 +3,8 @@ import CheckCircle from 'lucide-solid/icons/check-circle';
 import XCircle from 'lucide-solid/icons/x-circle';
 import { getAllFilterOptionLabel } from '@/components/shared/filterOptionPresentation';
 
-export type AuditVerificationStatus = 'verified' | 'failed' | 'unavailable' | 'error';
+export type AuditVerificationStatus =
+  'strong' | 'compatibility' | 'invalid' | 'unknown' | 'unsigned' | 'unavailable' | 'error';
 
 export interface AuditBadgePresentation {
   label: string;
@@ -79,16 +80,28 @@ export function getAuditVerificationBadgePresentation(
   }
 
   switch (state.status) {
-    case 'verified':
+    case 'strong':
       return {
-        label: 'Verified',
+        label: 'Strong',
         className: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
       };
-    case 'failed':
+    case 'compatibility':
       return {
-        label: 'Failed',
+        label: 'Compatibility',
+        className: 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200',
+      };
+    case 'invalid':
+      return {
+        label: 'Invalid',
         className: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
       };
+    case 'unknown':
+      return {
+        label: 'Unknown',
+        className: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200',
+      };
+    case 'unsigned':
+      return { label: 'Unsigned', className: 'bg-surface-alt text-base-content' };
     case 'error':
       return {
         label: 'Error',
@@ -97,6 +110,35 @@ export function getAuditVerificationBadgePresentation(
     default:
       return { label: 'Unavailable', className: 'bg-surface-alt text-base-content' };
   }
+}
+
+export function getAuditSignatureTooltip(
+  event: { signature_version?: string; signature_assurance?: string },
+  state?: { status: AuditVerificationStatus; message?: string } | null,
+): string {
+  if (state?.message) return state.message;
+  if (state) {
+    switch (state.status) {
+      case 'strong':
+        return 'Current signature strongly verified';
+      case 'compatibility':
+        return 'Historical signature verified with compatibility assurance only';
+      case 'invalid':
+        return 'Signature verification failed';
+      case 'unknown':
+        return 'Signature version is unknown';
+      case 'unsigned':
+        return 'No signature was retained';
+      case 'error':
+        return 'Signature verification returned an error';
+      default:
+        return 'Signature verification is unavailable';
+    }
+  }
+  if (event.signature_version && event.signature_assurance) {
+    return `Signature ${event.signature_version}; ${event.signature_assurance} assurance`;
+  }
+  return 'Signature assurance has not been checked';
 }
 
 export function getAuditLogLoadingState() {

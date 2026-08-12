@@ -1,10 +1,17 @@
 package audit
 
 import (
+	"encoding/hex"
 	"strings"
 	"testing"
 	"time"
 )
+
+type booleanOnlySignatureVerifier bool
+
+func (v booleanOnlySignatureVerifier) VerifySignature(Event) bool {
+	return bool(v)
+}
 
 func securityTestSigner(t *testing.T) *Signer {
 	t.Helper()
@@ -28,7 +35,7 @@ func securityTestEvent() Event {
 	}
 }
 
-func TestSignerV2RejectsEquivalentLegacyBoundaryShifts(t *testing.T) {
+func TestSignerV3RejectsEquivalentLegacyBoundaryShifts(t *testing.T) {
 	signer := securityTestSigner(t)
 
 	tests := []struct {
@@ -69,17 +76,17 @@ func TestSignerV2RejectsEquivalentLegacyBoundaryShifts(t *testing.T) {
 			}
 			original.Signature = signer.Sign(original)
 			if original.Signature == signer.Sign(forged) {
-				t.Fatal("v2 signatures collided for distinct tuples")
+				t.Fatal("v3 signatures collided for distinct tuples")
 			}
 			forged.Signature = original.Signature
 			if signer.Verify(forged) {
-				t.Fatal("v2 signature verified after a boundary shift")
+				t.Fatal("v3 signature verified after a boundary shift")
 			}
 		})
 	}
 }
 
-func TestSignerV2AuthenticatesEveryPersistedField(t *testing.T) {
+func TestSignerV3AuthenticatesEveryPersistedField(t *testing.T) {
 	signer := securityTestSigner(t)
 	original := securityTestEvent()
 	original.Signature = signer.Sign(original)
@@ -96,6 +103,7 @@ func TestSignerV2AuthenticatesEveryPersistedField(t *testing.T) {
 		{name: "path", mutate: func(e *Event) { e.Path += "-tampered" }},
 		{name: "success", mutate: func(e *Event) { e.Success = !e.Success }},
 		{name: "details", mutate: func(e *Event) { e.Details += "-tampered" }},
+		{name: "signature timestamp", mutate: func(e *Event) { e.SignatureTimestamp = "2024-09-05T20:59:15Z" }},
 		{name: "field order", mutate: func(e *Event) { e.EventType, e.User = e.User, e.EventType }},
 	}
 
@@ -110,7 +118,7 @@ func TestSignerV2AuthenticatesEveryPersistedField(t *testing.T) {
 	}
 }
 
-func TestSignerV2PreservesArbitraryStringContent(t *testing.T) {
+func TestSignerV3PreservesArbitraryStringContent(t *testing.T) {
 	signer := securityTestSigner(t)
 	tests := []struct {
 		name  string
@@ -129,11 +137,11 @@ func TestSignerV2PreservesArbitraryStringContent(t *testing.T) {
 			event.User = tt.value
 			event.Details = tt.value
 			event.Signature = signer.Sign(event)
-			if DetectSignatureVersion(event.Signature) != SignatureVersionV2 {
-				t.Fatalf("signature version = %q, want v2", DetectSignatureVersion(event.Signature))
+			if DetectSignatureVersion(event.Signature) != SignatureVersionV3 {
+				t.Fatalf("signature version = %q, want v3", DetectSignatureVersion(event.Signature))
 			}
 			if !signer.Verify(event) {
-				t.Fatal("valid v2 signature did not verify")
+				t.Fatal("valid v3 signature did not verify")
 			}
 			tampered := event
 			tampered.Details += "x"
@@ -144,7 +152,7 @@ func TestSignerV2PreservesArbitraryStringContent(t *testing.T) {
 	}
 }
 
-func TestSignerV2CanonicalRepresentationFixture(t *testing.T) {
+func TestSignerV3CanonicalRepresentationFixture(t *testing.T) {
 	signer := securityTestSigner(t)
 	event := Event{
 		ID:        "id|1",
@@ -156,7 +164,8 @@ func TestSignerV2CanonicalRepresentationFixture(t *testing.T) {
 		Success:   true,
 		Details:   "done|ok",
 	}
-	want := "pulse.audit.event\x00v2\x00" +
+	want := "pulse.audit.event\x00v3\x00" +
+		"\x00\x00\x00\x00\x00\x00\x00\x03v3:" +
 		"\x00\x00\x00\x00\x00\x00\x00\x04id|1" +
 		"\xff\xff\xff\xff\xff\xff\xff\xff" +
 		"\x00\x00\x00\x00\x00\x00\x00\x06監査" +
@@ -164,16 +173,18 @@ func TestSignerV2CanonicalRepresentationFixture(t *testing.T) {
 		"\x00\x00\x00\x00\x00\x00\x00\x01\x00" +
 		"\x00\x00\x00\x00\x00\x00\x00\x01\n" +
 		"\x01" +
-		"\x00\x00\x00\x00\x00\x00\x00\x07done|ok"
-	if got := string(signer.canonicalV2Form(event)); got != want {
-		t.Fatalf("canonical v2 bytes changed:\n got %x\nwant %x", got, want)
+		"\x00\x00\x00\x00\x00\x00\x00\x07done|ok" +
+		"\x00\x00\x00\x00\x00\x00\x00\x00"
+	if got := string(signer.canonicalV3Form(event)); got != want {
+		t.Fatalf("canonical v3 bytes changed:\n got %x\nwant %x", got, want)
 	}
 }
 
 func TestSignerVersionDispatchFailsClosedWithoutDowngrade(t *testing.T) {
 	signer := securityTestSigner(t)
 	event := securityTestEvent()
-	v2Signature := signer.Sign(event)
+	v3Signature := signer.Sign(event)
+	v2Signature := signatureV2Prefix + hex.EncodeToString(signer.mac(signer.canonicalV2Form(event)))
 	legacySignature := signer.signCanonical(signer.legacyZeroOneCanonicalForm(event))
 
 	for _, signature := range []string{
@@ -181,7 +192,7 @@ func TestSignerVersionDispatchFailsClosedWithoutDowngrade(t *testing.T) {
 		"v2:not-hex",
 		"v2:" + strings.Repeat("0", 62),
 		"v2:" + strings.Repeat("0", 66),
-		"v3:" + strings.TrimPrefix(v2Signature, signatureV2Prefix),
+		"v4:" + strings.TrimPrefix(v3Signature, signatureV3Prefix),
 		"unknown:" + strings.TrimPrefix(v2Signature, signatureV2Prefix),
 		strings.TrimPrefix(v2Signature, signatureV2Prefix),
 		"v2:" + legacySignature,
@@ -196,14 +207,95 @@ func TestSignerVersionDispatchFailsClosedWithoutDowngrade(t *testing.T) {
 		})
 	}
 
+	if DetectSignatureVersion(v3Signature) != SignatureVersionV3 {
+		t.Fatal("valid v3 signature was not identified")
+	}
 	if DetectSignatureVersion(v2Signature) != SignatureVersionV2 {
 		t.Fatal("valid v2 signature was not identified")
 	}
 	if DetectSignatureVersion(legacySignature) != SignatureVersionLegacy {
 		t.Fatal("valid legacy envelope was not identified")
 	}
-	if DetectSignatureVersion("v3:"+strings.TrimPrefix(v2Signature, signatureV2Prefix)) != SignatureVersionUnknown {
+	if DetectSignatureVersion("v4:"+strings.TrimPrefix(v3Signature, signatureV3Prefix)) != SignatureVersionUnknown {
 		t.Fatal("unknown version did not fail closed")
+	}
+}
+
+func TestSignerV3KeyDomainRejectsHistoricalCrossEventPrefixStripping(t *testing.T) {
+	signer := securityTestSigner(t)
+	current := securityTestEvent()
+	const legacySuffix = "|0|||||0|"
+	current.Details = legacySuffix
+
+	// Retain the exact historic reproduction: the v2 canonical bytes can be
+	// reinterpreted as the delimiter-based canonical form for a distinct event.
+	v2Message := signer.canonicalV2Form(current)
+	legacy := Event{
+		ID:        string(v2Message[:len(v2Message)-len(legacySuffix)]),
+		Timestamp: time.Unix(0, 0).UTC(),
+	}
+	if got := signer.legacyZeroOneCanonicalForm(legacy); got != string(v2Message) {
+		t.Fatalf("historic cross-event fixture lost byte equality:\n got %x\nwant %x", got, v2Message)
+	}
+	legacy.Signature = hex.EncodeToString(signer.mac(v2Message))
+	if !signer.Verify(legacy) {
+		t.Fatal("fixture no longer reproduces the accepted historical v2-to-legacy conversion")
+	}
+
+	// The current digest uses both an authenticated v3 message and a derived
+	// key. Removing its envelope cannot verify in the master-key legacy domain.
+	current.Signature = signer.Sign(current)
+	legacy.Signature = strings.TrimPrefix(current.Signature, signatureV3Prefix)
+	if signer.Verify(legacy) {
+		t.Fatal("stripped v3 digest verified for a distinct legacy event")
+	}
+	if h := hex.EncodeToString(signer.mac(signer.canonicalV3Form(current))); h == legacy.Signature {
+		t.Fatal("v3 unexpectedly reused the historical master-key MAC")
+	}
+}
+
+func TestSignerVerificationAssuranceMatrix(t *testing.T) {
+	signer := securityTestSigner(t)
+	event := securityTestEvent()
+
+	event.Signature = signer.Sign(event)
+	if got := signer.VerifyResult(event); got.Status != VerificationStatusStrong || got.Assurance != SignatureAssuranceStrong || !got.Verified {
+		t.Fatalf("v3 result = %+v", got)
+	}
+
+	event.Signature = signatureV2Prefix + hex.EncodeToString(signer.mac(signer.canonicalV2Form(event)))
+	if got := signer.VerifyResult(event); got.Status != VerificationStatusCompatibility || got.Assurance != SignatureAssuranceCompatibility || !got.Verified {
+		t.Fatalf("v2 result = %+v", got)
+	}
+
+	event.Signature = signer.signCanonical(signer.legacyZeroOneCanonicalForm(event))
+	if got := signer.VerifyResult(event); got.Status != VerificationStatusCompatibility || got.Assurance != SignatureAssuranceCompatibility || !got.Verified {
+		t.Fatalf("legacy result = %+v", got)
+	}
+
+	event.Signature = "v9:" + strings.Repeat("0", 64)
+	if got := signer.VerifyResult(event); got.Status != VerificationStatusUnknown || got.Verified {
+		t.Fatalf("unknown result = %+v", got)
+	}
+
+	event.Signature = ""
+	if got := signer.VerifyResult(event); got.Status != VerificationStatusUnsigned || got.Version != SignatureVersionUnsigned || got.Verified {
+		t.Fatalf("unsigned result = %+v", got)
+	}
+}
+
+func TestClassifySignatureBooleanFallbackCannotClaimStrongOrAcceptUnknown(t *testing.T) {
+	signer := securityTestSigner(t)
+	event := securityTestEvent()
+	event.Signature = signer.Sign(event)
+
+	if got := ClassifySignature(booleanOnlySignatureVerifier(true), event); got.Status != VerificationStatusCompatibility || got.Assurance != SignatureAssuranceCompatibility || !got.Verified {
+		t.Fatalf("boolean-only v3 result = %+v", got)
+	}
+
+	event.Signature = "v9:" + strings.Repeat("0", 64)
+	if got := ClassifySignature(booleanOnlySignatureVerifier(true), event); got.Status != VerificationStatusUnknown || got.Assurance != SignatureAssuranceNone || got.Verified {
+		t.Fatalf("boolean-only unknown result = %+v", got)
 	}
 }
 

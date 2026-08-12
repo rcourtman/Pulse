@@ -96,13 +96,15 @@ func (l *AsyncLogger) IsPersistentAuditLogger() bool {
 
 // VerifySignature delegates verification to persistent backends.
 func (l *AsyncLogger) VerifySignature(event Event) bool {
+	return l.VerifySignatureResult(event).Verified
+}
+
+// VerifySignatureResult preserves classified assurance through async wrapping.
+func (l *AsyncLogger) VerifySignatureResult(event Event) SignatureVerification {
 	if l == nil {
-		return false
+		return ClassifySignature(nil, event)
 	}
-	verifier, ok := l.backend.(interface {
-		VerifySignature(Event) bool
-	})
-	return ok && verifier.VerifySignature(event)
+	return ClassifySignature(l.backend, event)
 }
 
 // Close drains queued events, stops the worker, and closes the backend logger.

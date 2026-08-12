@@ -1,47 +1,47 @@
 {
   "version": 1,
-  "base_sha": "3adeb77d60620cdcc4c71431685725384bdc562a",
-  "verified_at": "2026-08-12T08:19:01Z",
+  "base_sha": "b8d61b9e1240be042ab86e724e37910dedda5e9d",
+  "verified_at": "2026-08-12T12:32:29Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/api/settings.ts",
-    "frontend-modern/src/components/Settings/useInfrastructureSettingsState.ts",
-    "frontend-modern/src/components/Settings/useSystemSettingsState.ts"
+    "frontend-modern/src/components/Settings/AuditLogPanel.tsx",
+    "frontend-modern/src/components/Settings/useAuditLogPanelState.ts",
+    "frontend-modern/src/utils/auditLogPresentation.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/api/settings.ts": "cb95289d5df7cd9332cc78573a5c6052f8968cc0fbb2d66c15c8ddc49f44ab62",
-    "frontend-modern/src/components/Settings/useInfrastructureSettingsState.ts": "528b32af6b1c777ed87f5dd2d5b15b531f830c520b0f624acfc5a2d75ad3e314",
-    "frontend-modern/src/components/Settings/useSystemSettingsState.ts": "acb66acc4a0254a6816564713f65a1ed5cf723eb526e4960076b4c84335e2c09"
+    "frontend-modern/src/components/Settings/AuditLogPanel.tsx": "4e03c4857c755c96d3672d095ca47485b76d97e9909f64c768d03d9f4e851ae1",
+    "frontend-modern/src/components/Settings/useAuditLogPanelState.ts": "11cd7e750816e8dd937c3ab6885732d6e19ce2bc703459eb15b42303932a3e87",
+    "frontend-modern/src/utils/auditLogPresentation.ts": "20a7770c962309300acc43394e363bb1479a184ceaa1d0726decb8ff41086a6e"
   },
   "routes": [
-    "/settings/system-general"
+    "/settings/security-audit",
+    "/settings/security-audit?verification=compatibility"
   ],
   "viewports": [
     {
       "width": 1280,
-      "height": 720
+      "height": 800
     },
     {
-      "width": 375,
-      "height": 812
+      "width": 390,
+      "height": 844
     }
   ],
   "states": [
-    "Admin session Monitoring Cadence card at the fresh-install Realtime (10s) default",
-    "Admin card after selecting the Low (60s) preset and saving (GET /api/system/settings confirmed pvePollingInterval 60)",
-    "Non-admin session (persisted session cookie whose user no longer matches the configured admin) with GET /api/system/settings returning 403 while GET /api/runtime/display returned pvePollingInterval 60: card showed Current cadence: 60 seconds with Low (60s) pressed instead of the old Realtime fallback",
-    "Admin card after switching to Custom 45s and saving (GET /api/system/settings confirmed 45)",
-    "Non-admin card after reload showing Current cadence: 45 seconds with Custom pressed and 45 in the custom input",
-    "Same non-admin Custom 45s state re-exercised at the 375px mobile viewport",
-    "Admin session reload showing Custom 45s restored through the refactored preset-resolution path"
+    "Synthetic current v3 evidence rendered Strong with green trust styling and a current-verification tooltip",
+    "Synthetic historical v2 evidence rendered Compatibility with amber styling and an explicit lower-assurance tooltip",
+    "Synthetic tampered v3 evidence rendered Invalid with red styling and a verification-failed tooltip",
+    "Unsupported-envelope evidence rendered Unknown distinctly from Invalid",
+    "Evidence with no retained signature rendered Unsigned distinctly from unchecked signed evidence",
+    "Summary totals reported one Strong, Compatibility, Invalid, Unknown, and Unsigned record without combining categories",
+    "The same assurance matrix and responsive table were exercised at 1280x800 and 390x844",
+    "The compatibility verification filter retained only the historical compatibility row at both viewports"
   ],
   "interactions": [
-    "Built the sidecar backend and ran it as a scratch instance; logged in as admin on the pulse-1601-admin Vite frontend",
-    "Selected Low (60s) on the Monitoring Cadence card and saved; verified the effective interval via the settings and runtime-display APIs",
-    "Restarted the backend with a different configured admin username so the persisted browser session became a genuine non-admin session (settings 403, security-status capabilities all false)",
-    "Reloaded /settings/system-general in that non-admin session and confirmed the cadence card rendered the server's real 60s interval from the runtime-display projection",
-    "Logged in as the new admin in a separate cookie jar, set a non-preset Custom 45s cadence, and saved",
-    "Reloaded the non-admin session and confirmed Custom 45s displayed, then repeated the check at the 375px mobile viewport",
-    "Reloaded the admin session to confirm the shared preset-resolution refactor still renders the saved Custom 45s state"
+    "Built and ran the exact candidate backend and Vite frontend with an isolated synthetic data directory and key, then authenticated through the real development login flow",
+    "Intercepted only capability and audit evidence responses with a deterministic five-state synthetic fixture while retaining the production page, routing, state hook, and presentation code",
+    "Loaded /settings/security-audit at desktop and narrow viewports and checked every badge plus all five summary totals",
+    "Hovered Compatibility and Invalid row badges and checked their native tooltip text against the authoritative lower-assurance and failure states",
+    "Navigated to the compatibility-filtered route at both viewports and confirmed the Strong row was excluded while Compatibility remained visible"
   ]
 }

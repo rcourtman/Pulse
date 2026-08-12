@@ -110,8 +110,12 @@ const unsignedEvent = (id: string): AuditEvent => ({
   details: id,
 });
 
-const auditListResponse = (events: AuditEvent[], total: number = events.length): Response =>
-  new Response(JSON.stringify({ events, total, persistentLogging: false }), {
+const auditListResponse = (
+  events: AuditEvent[],
+  total: number = events.length,
+  persistentLogging = false,
+): Response =>
+  new Response(JSON.stringify({ events, total, persistentLogging }), {
     status: 200,
     headers: JSON_HEADERS,
   });
@@ -378,7 +382,10 @@ describe('useAuditLogPanelState branch coverage', () => {
       const { result, cleanup } = await renderIdle();
       const event = signedEvent('a');
       await result.verifyEvent(event);
-      expect(result.verification()[event.id]).toEqual({ status: 'verified', message: 'matched' });
+      expect(result.verification()[event.id]).toEqual({
+        status: 'compatibility',
+        message: 'matched',
+      });
       expect(result.verifying()[event.id]).toBe(false);
       cleanup();
     });
@@ -408,7 +415,7 @@ describe('useAuditLogPanelState branch coverage', () => {
       const { result, cleanup } = await renderIdle();
       const event = signedEvent('a');
       await result.verifyEvent(event);
-      expect(result.verification()[event.id]).toEqual({ status: 'failed', message: 'mismatch' });
+      expect(result.verification()[event.id]).toEqual({ status: 'invalid', message: 'mismatch' });
       cleanup();
     });
 
@@ -485,6 +492,84 @@ describe('useAuditLogPanelState branch coverage', () => {
       expect(result.resumeCount()).toBe(1);
       cleanup();
     });
+  });
+
+  it('uses authoritative server assurance for totals, filters, and resume decisions', async () => {
+    const events: AuditEvent[] = [
+      {
+        ...signedEvent('strong'),
+        signature_version: 'v3',
+        signature_status: 'strong',
+        signature_assurance: 'strong',
+      },
+      {
+        ...signedEvent('compatibility'),
+        signature_version: 'legacy',
+        signature_status: 'compatibility',
+        signature_assurance: 'compatibility',
+      },
+      {
+        ...signedEvent('invalid'),
+        signature_version: 'v3',
+        signature_status: 'invalid',
+        signature_assurance: 'none',
+      },
+      {
+        ...signedEvent('unknown'),
+        signature_version: 'unknown',
+        signature_status: 'unknown',
+        signature_assurance: 'none',
+      },
+      {
+        ...unsignedEvent('unsigned'),
+        signature_version: 'unsigned',
+        signature_status: 'unsigned',
+        signature_assurance: 'none',
+      },
+    ];
+    vi.mocked(apiFetch).mockResolvedValue(auditListResponse(events));
+
+    const { result, cleanup } = await renderIdle({
+      locationSearch: '?verification=compatibility',
+    });
+    expect(result.verificationSummary()).toMatchObject({
+      total: 5,
+      signed: 4,
+      strong: 1,
+      compatibility: 1,
+      invalid: 1,
+      unknown: 1,
+      unsigned: 1,
+      unchecked: 0,
+    });
+    expect(result.filteredEvents().map((event) => event.id)).toEqual(['compatibility']);
+    expect(result.resumeCount()).toBe(1);
+    expect(result.verification()['compatibility']).toEqual({
+      status: 'compatibility',
+      message: 'Historical signature verified with compatibility assurance only',
+    });
+    cleanup();
+  });
+
+  it('does not re-verify events whose list projection already has an authoritative status', async () => {
+    const event: AuditEvent = {
+      ...signedEvent('projected'),
+      signature_version: 'v3',
+      signature_status: 'strong',
+      signature_assurance: 'strong',
+    };
+    vi.mocked(apiFetch).mockImplementation(async (url: string) => {
+      if (isVerifyCall(url)) {
+        throw new Error('projected event was redundantly verified');
+      }
+      return auditListResponse([event], 1, true);
+    });
+
+    const { result, cleanup } = await renderIdle();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(result.verification()['projected']?.status).toBe('strong');
+    expect(vi.mocked(apiFetch).mock.calls.filter(([url]) => isVerifyCall(url))).toHaveLength(0);
+    cleanup();
   });
 
   describe('verifyAllLabel', () => {

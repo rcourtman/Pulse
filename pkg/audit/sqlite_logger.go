@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"math"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -64,9 +65,10 @@ const (
 
 var auditSQLiteRetryDelays = []time.Duration{25 * time.Millisecond, 75 * time.Millisecond}
 var auditSQLiteRetrySleep = time.Sleep
+var auditMigrationBeforeInsert = func(canonicalAuditRow) error { return nil }
 
 const (
-	auditSchemaVersion               = 2
+	auditSchemaVersion               = 3
 	auditTimestampMigrationBatchSize = 512
 	defaultAuditCleanupInterval      = 24 * time.Hour
 )
@@ -240,7 +242,7 @@ func NewSQLiteLogger(cfg SQLiteLoggerConfig) (*SQLiteLogger, error) {
 	// Load webhook URLs from config table
 	urls := l.loadWebhookURLs()
 	if len(urls) > 0 {
-		l.webhookDelivery = NewWebhookDelivery(urls)
+		l.webhookDelivery = newWebhookDelivery(urls, l.signer.VerifyResult)
 		l.webhookDelivery.Start()
 	}
 
@@ -268,16 +270,17 @@ func (l *SQLiteLogger) IsPersistentAuditLogger() bool {
 func (l *SQLiteLogger) initSchema() error {
 	schema := `
 	CREATE TABLE IF NOT EXISTS audit_events (
-		id TEXT PRIMARY KEY,
-		timestamp INTEGER NOT NULL,
-		event_type TEXT NOT NULL,
-		user TEXT,
-		ip TEXT,
-		path TEXT,
-		success INTEGER NOT NULL,
-		details TEXT,
-		signature TEXT NOT NULL
-	);
+		id TEXT NOT NULL PRIMARY KEY CHECK (typeof(id) = 'text'),
+		timestamp INTEGER NOT NULL CHECK (typeof(timestamp) = 'integer'),
+		event_type TEXT NOT NULL CHECK (typeof(event_type) = 'text'),
+		user TEXT NOT NULL CHECK (typeof(user) = 'text'),
+		ip TEXT NOT NULL CHECK (typeof(ip) = 'text'),
+		path TEXT NOT NULL CHECK (typeof(path) = 'text'),
+		success INTEGER NOT NULL CHECK (typeof(success) = 'integer' AND success IN (0, 1)),
+		details TEXT NOT NULL CHECK (typeof(details) = 'text'),
+		signature TEXT NOT NULL CHECK (typeof(signature) = 'text'),
+		signature_timestamp TEXT NOT NULL DEFAULT '' CHECK (typeof(signature_timestamp) = 'text')
+	) STRICT;
 
 	CREATE INDEX IF NOT EXISTS idx_audit_timestamp ON audit_events(timestamp);
 	CREATE INDEX IF NOT EXISTS idx_audit_timestamp_id ON audit_events(timestamp DESC, id DESC);
@@ -316,23 +319,24 @@ func (l *SQLiteLogger) initSchema() error {
 		return err
 	}
 
-	return l.migrateLegacyTimestamps()
+	return l.migrateAuditSchema()
 }
 
 type canonicalAuditRow struct {
-	rowID     int64
-	id        string
-	timestamp int64
-	eventType string
-	user      sql.NullString
-	ip        sql.NullString
-	path      sql.NullString
-	success   int
-	details   sql.NullString
-	signature sql.NullString
+	rowID              int64
+	id                 string
+	timestamp          int64
+	eventType          string
+	user               string
+	ip                 string
+	path               string
+	success            int64
+	details            string
+	signature          string
+	signatureTimestamp string
 }
 
-func (l *SQLiteLogger) migrateLegacyTimestamps() error {
+func (l *SQLiteLogger) migrateAuditSchema() error {
 	var migrated int
 	err := withSQLiteRetry("migrate_audit_timestamps", func() error {
 		tx, err := l.db.Begin()
@@ -341,7 +345,7 @@ func (l *SQLiteLogger) migrateLegacyTimestamps() error {
 		}
 		defer func() { _ = tx.Rollback() }()
 
-		needsRebuild, err := auditEventsNeedRebuild(tx)
+		needsRebuild, hasSignatureTimestamp, err := auditEventsNeedRebuild(tx)
 		if err != nil {
 			return err
 		}
@@ -361,65 +365,69 @@ func (l *SQLiteLogger) migrateLegacyTimestamps() error {
 		).Scan(&migrated); err != nil {
 			return err
 		}
-		if _, err := tx.Exec(`DROP TABLE IF EXISTS audit_events_v2`); err != nil {
+		if _, err := tx.Exec(`DROP TABLE IF EXISTS audit_events_v3`); err != nil {
 			return err
 		}
 		if _, err := tx.Exec(`
-			CREATE TABLE audit_events_v2 (
-				id TEXT PRIMARY KEY,
-				timestamp INTEGER NOT NULL,
-				event_type TEXT NOT NULL,
-				user TEXT,
-				ip TEXT,
-				path TEXT,
-				success INTEGER NOT NULL,
-				details TEXT,
-				signature TEXT NOT NULL
-			)`); err != nil {
+			CREATE TABLE audit_events_v3 (
+				id TEXT NOT NULL PRIMARY KEY CHECK (typeof(id) = 'text'),
+				timestamp INTEGER NOT NULL CHECK (typeof(timestamp) = 'integer'),
+				event_type TEXT NOT NULL CHECK (typeof(event_type) = 'text'),
+				user TEXT NOT NULL CHECK (typeof(user) = 'text'),
+				ip TEXT NOT NULL CHECK (typeof(ip) = 'text'),
+				path TEXT NOT NULL CHECK (typeof(path) = 'text'),
+				success INTEGER NOT NULL CHECK (typeof(success) = 'integer' AND success IN (0, 1)),
+				details TEXT NOT NULL CHECK (typeof(details) = 'text'),
+				signature TEXT NOT NULL CHECK (typeof(signature) = 'text'),
+				signature_timestamp TEXT NOT NULL DEFAULT '' CHECK (typeof(signature_timestamp) = 'text')
+			) STRICT`); err != nil {
 			return err
 		}
 
-		lastRowID := int64(-1 << 63)
+		var lastRowID int64
+		firstBatch := true
 		for {
-			rows, err := tx.Query(`
-				SELECT rowid, id, timestamp, event_type, user, ip, path, success, details, signature
-				FROM audit_events
-				WHERE rowid > ?
-				ORDER BY rowid
-				LIMIT ?`, lastRowID, auditTimestampMigrationBatchSize)
+			query := `
+				SELECT rowid, id, timestamp, event_type, user, ip, path, success, details, signature`
+			if hasSignatureTimestamp {
+				query += `, signature_timestamp`
+			}
+			query += ` FROM audit_events`
+			args := []any{}
+			if !firstBatch {
+				query += ` WHERE rowid > ?`
+				args = append(args, lastRowID)
+			}
+			query += ` ORDER BY rowid LIMIT ?`
+			args = append(args, auditTimestampMigrationBatchSize)
+			rows, err := tx.Query(query, args...)
 			if err != nil {
 				return err
 			}
 
 			batch := make([]canonicalAuditRow, 0, auditTimestampMigrationBatchSize)
 			for rows.Next() {
-				var item canonicalAuditRow
-				var value any
-				if err := rows.Scan(
-					&item.rowID,
-					&item.id,
-					&value,
-					&item.eventType,
-					&item.user,
-					&item.ip,
-					&item.path,
-					&item.success,
-					&item.details,
-					&item.signature,
-				); err != nil {
+				var raw [10]any
+				destinations := []any{
+					&raw[0], &raw[1], &raw[2], &raw[3], &raw[4],
+					&raw[5], &raw[6], &raw[7], &raw[8], &raw[9],
+				}
+				if hasSignatureTimestamp {
+					destinations = append(destinations, new(any))
+				}
+				if err := rows.Scan(destinations...); err != nil {
 					rows.Close()
 					return &auditStoreDataError{field: "row"}
 				}
-				timestamp, err := parseAuditTimestamp(value)
+				var signatureTimestamp any
+				if hasSignatureTimestamp {
+					signatureTimestamp = *(destinations[len(destinations)-1].(*any))
+				}
+				item, err := canonicalizeMigratedAuditRow(raw, signatureTimestamp, hasSignatureTimestamp)
 				if err != nil {
 					rows.Close()
-					return &auditStoreDataError{field: "timestamp"}
+					return err
 				}
-				if item.id == "" || item.eventType == "" || (item.success != 0 && item.success != 1) {
-					rows.Close()
-					return &auditStoreDataError{field: "row"}
-				}
-				item.timestamp = timestamp.Unix()
 				batch = append(batch, item)
 			}
 			if err := rows.Err(); err != nil {
@@ -434,10 +442,13 @@ func (l *SQLiteLogger) migrateLegacyTimestamps() error {
 			}
 
 			for _, item := range batch {
+				if err := auditMigrationBeforeInsert(item); err != nil {
+					return err
+				}
 				if _, err := tx.Exec(
-					`INSERT INTO audit_events_v2
-						(id, timestamp, event_type, user, ip, path, success, details, signature)
-					 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+					`INSERT INTO audit_events_v3
+						(id, timestamp, event_type, user, ip, path, success, details, signature, signature_timestamp)
+					 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 					item.id,
 					item.timestamp,
 					item.eventType,
@@ -446,18 +457,20 @@ func (l *SQLiteLogger) migrateLegacyTimestamps() error {
 					item.path,
 					item.success,
 					item.details,
-					item.signature.String,
+					item.signature,
+					item.signatureTimestamp,
 				); err != nil {
 					return err
 				}
 			}
 			lastRowID = batch[len(batch)-1].rowID
+			firstBatch = false
 		}
 
 		if _, err := tx.Exec(`DROP TABLE audit_events`); err != nil {
 			return err
 		}
-		if _, err := tx.Exec(`ALTER TABLE audit_events_v2 RENAME TO audit_events`); err != nil {
+		if _, err := tx.Exec(`ALTER TABLE audit_events_v3 RENAME TO audit_events`); err != nil {
 			return err
 		}
 		if _, err := tx.Exec(`
@@ -480,26 +493,147 @@ func (l *SQLiteLogger) migrateLegacyTimestamps() error {
 		return tx.Commit()
 	})
 	if err != nil {
-		return fmt.Errorf("normalize audit timestamp storage: %w", err)
+		return fmt.Errorf("normalize audit event storage: %w", err)
 	}
 	if migrated > 0 {
 		log.Info().
 			Int("rows", migrated).
-			Msg("Normalized legacy audit timestamp storage")
+			Msg("Normalized legacy audit event storage")
 	}
 	return nil
 }
 
-func auditEventsNeedRebuild(tx *sql.Tx) (bool, error) {
+func canonicalizeMigratedAuditRow(raw [10]any, rawSignatureTimestamp any, hasSignatureTimestamp bool) (canonicalAuditRow, error) {
+	rowID, ok := raw[0].(int64)
+	if !ok {
+		return canonicalAuditRow{}, &auditStoreDataError{field: "row"}
+	}
+	id, err := migratedRequiredString(raw[1])
+	if err != nil {
+		return canonicalAuditRow{}, &auditStoreDataError{field: "row"}
+	}
+	timestamp, derivedSignatureTimestamp, err := migratedTimestamp(raw[2])
+	if err != nil {
+		return canonicalAuditRow{}, &auditStoreDataError{field: "timestamp"}
+	}
+	eventType, err := migratedRequiredString(raw[3])
+	if err != nil {
+		return canonicalAuditRow{}, &auditStoreDataError{field: "row"}
+	}
+	user, err := migratedNullableString(raw[4])
+	if err != nil {
+		return canonicalAuditRow{}, &auditStoreDataError{field: "row"}
+	}
+	ip, err := migratedNullableString(raw[5])
+	if err != nil {
+		return canonicalAuditRow{}, &auditStoreDataError{field: "row"}
+	}
+	path, err := migratedNullableString(raw[6])
+	if err != nil {
+		return canonicalAuditRow{}, &auditStoreDataError{field: "row"}
+	}
+	success, ok := raw[7].(int64)
+	if !ok || (success != 0 && success != 1) {
+		return canonicalAuditRow{}, &auditStoreDataError{field: "row"}
+	}
+	details, err := migratedNullableString(raw[8])
+	if err != nil {
+		return canonicalAuditRow{}, &auditStoreDataError{field: "row"}
+	}
+	signature, err := migratedNullableString(raw[9])
+	if err != nil {
+		return canonicalAuditRow{}, &auditStoreDataError{field: "row"}
+	}
+
+	signatureTimestamp := derivedSignatureTimestamp
+	if hasSignatureTimestamp {
+		signatureTimestamp, err = migratedRequiredString(rawSignatureTimestamp)
+		if err != nil || !isCanonicalSignatureTimestamp(signatureTimestamp, timestamp) {
+			return canonicalAuditRow{}, &auditStoreDataError{field: "signature timestamp"}
+		}
+	}
+
+	return canonicalAuditRow{
+		rowID:              rowID,
+		id:                 id,
+		timestamp:          timestamp,
+		eventType:          eventType,
+		user:               user,
+		ip:                 ip,
+		path:               path,
+		success:            success,
+		details:            details,
+		signature:          signature,
+		signatureTimestamp: signatureTimestamp,
+	}, nil
+}
+
+func migratedRequiredString(value any) (string, error) {
+	text, ok := value.(string)
+	if !ok {
+		return "", errors.New("not text")
+	}
+	return text, nil
+}
+
+func migratedNullableString(value any) (string, error) {
+	if value == nil {
+		return "", nil
+	}
+	return migratedRequiredString(value)
+}
+
+func migratedTimestamp(value any) (int64, string, error) {
+	var preserveCanonical bool
+	switch v := value.(type) {
+	case time.Time, string, []byte:
+		preserveCanonical = true
+	case int64, int, int32:
+	case float64:
+		// Permissive historical tables allowed SQLite REAL timestamps and the
+		// previous migration normalized them by truncating toward zero. Preserve
+		// that compatibility only while the conversion is finite and in range;
+		// the rebuilt STRICT table stores the result as canonical INTEGER.
+		const maxInt64Exclusive = 9223372036854775808.0
+		if math.IsNaN(v) || math.IsInf(v, 0) || v < math.MinInt64 || v >= maxInt64Exclusive {
+			return 0, "", errors.New("REAL timestamp is non-finite or outside int64 range")
+		}
+	default:
+		return 0, "", errors.New("noncanonical timestamp type")
+	}
+	timestamp, err := parseAuditTimestamp(value)
+	if err != nil {
+		return 0, "", err
+	}
+	canonical := ""
+	if preserveCanonical {
+		canonical = timestamp.UTC().Format(time.RFC3339Nano)
+	}
+	return timestamp.Unix(), canonical, nil
+}
+
+func isCanonicalSignatureTimestamp(value string, unix int64) bool {
+	if value == "" {
+		return true
+	}
+	parsed, err := time.Parse(time.RFC3339Nano, value)
+	if err != nil || parsed.Unix() != unix {
+		return false
+	}
+	return parsed.UTC().Format(time.RFC3339Nano) == value
+}
+
+func auditEventsNeedRebuild(tx *sql.Tx) (bool, bool, error) {
 	rows, err := tx.Query(`PRAGMA table_info(audit_events)`)
 	if err != nil {
-		return false, err
+		return false, false, err
 	}
 	defer rows.Close()
 
 	columns := make(map[string]struct {
 		columnType string
 		notNull    bool
+		primaryKey bool
 	})
 	for rows.Next() {
 		var position int
@@ -514,38 +648,60 @@ func auditEventsNeedRebuild(tx *sql.Tx) (bool, error) {
 			&defaultValue,
 			&primaryKey,
 		); err != nil {
-			return false, &auditStoreDataError{field: "schema"}
+			return false, false, &auditStoreDataError{field: "schema"}
 		}
 		columns[name] = struct {
 			columnType string
 			notNull    bool
-		}{columnType: strings.ToUpper(columnType), notNull: notNull != 0}
+			primaryKey bool
+		}{columnType: strings.ToUpper(columnType), notNull: notNull != 0, primaryKey: primaryKey != 0}
 	}
 	if err := rows.Err(); err != nil {
-		return false, err
+		return false, false, err
 	}
 
-	timestamp, timestampOK := columns["timestamp"]
-	signature, signatureOK := columns["signature"]
-	if !timestampOK || !signatureOK {
-		return false, &auditStoreDataError{field: "schema"}
+	requiredTypes := map[string]string{
+		"id": "TEXT", "timestamp": "INTEGER", "event_type": "TEXT",
+		"user": "TEXT", "ip": "TEXT", "path": "TEXT", "success": "INTEGER",
+		"details": "TEXT", "signature": "TEXT", "signature_timestamp": "TEXT",
 	}
-	if timestamp.columnType != "INTEGER" || !timestamp.notNull || !signature.notNull {
-		return true, nil
+	_, hasSignatureTimestamp := columns["signature_timestamp"]
+	for name, columnType := range requiredTypes {
+		column, ok := columns[name]
+		if !ok {
+			if name == "signature_timestamp" {
+				continue
+			}
+			return false, hasSignatureTimestamp, &auditStoreDataError{field: "schema"}
+		}
+		if column.columnType != columnType || !column.notNull || (name == "id" && !column.primaryKey) {
+			return true, hasSignatureTimestamp, nil
+		}
 	}
 
-	var hasNonInteger int
+	var schemaSQL string
 	if err := tx.QueryRow(
-		`SELECT EXISTS(SELECT 1 FROM audit_events WHERE typeof(timestamp) != 'integer')`,
-	).Scan(&hasNonInteger); err != nil {
-		return false, err
+		`SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'audit_events'`,
+	).Scan(&schemaSQL); err != nil {
+		return false, hasSignatureTimestamp, err
 	}
-	return hasNonInteger != 0, nil
+	normalized := strings.ToLower(schemaSQL)
+	for _, required := range []string{
+		"strict", "typeof(timestamp) = 'integer'", "typeof(success) = 'integer'",
+		"success in (0, 1)", "typeof(signature_timestamp) = 'text'",
+	} {
+		if !strings.Contains(normalized, required) {
+			return true, hasSignatureTimestamp, nil
+		}
+	}
+	return false, hasSignatureTimestamp, nil
 }
 
 // Log records an audit event with HMAC signature.
 func (l *SQLiteLogger) Record(event Event) error {
-	// Sign the event
+	// The persistent tuple has one timestamp and historical-evidence encoding.
+	event.Timestamp = time.Unix(event.Timestamp.Unix(), 0).UTC()
+	event.SignatureTimestamp = ""
 	event.Signature = l.signer.Sign(event)
 
 	// Insert into database
@@ -560,8 +716,8 @@ func (l *SQLiteLogger) Record(event Event) error {
 		defer l.mu.Unlock()
 
 		_, err = l.db.Exec(`
-			INSERT INTO audit_events (id, timestamp, event_type, user, ip, path, success, details, signature)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			INSERT INTO audit_events (id, timestamp, event_type, user, ip, path, success, details, signature, signature_timestamp)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			event.ID,
 			event.Timestamp.Unix(),
 			event.EventType,
@@ -571,6 +727,7 @@ func (l *SQLiteLogger) Record(event Event) error {
 			success,
 			event.Details,
 			event.Signature,
+			event.SignatureTimestamp,
 		)
 		return err
 	})
@@ -631,7 +788,7 @@ type auditSQLReader interface {
 }
 
 func queryAuditEvents(reader auditSQLReader, filter QueryFilter) ([]Event, error) {
-	query := "SELECT id, timestamp, event_type, user, ip, path, success, details, signature FROM audit_events WHERE 1=1"
+	query := "SELECT id, timestamp, event_type, user, ip, path, success, details, signature, signature_timestamp FROM audit_events WHERE 1=1"
 	args := []interface{}{}
 
 	if filter.ID != "" {
@@ -686,32 +843,86 @@ func queryAuditEvents(reader auditSQLReader, filter QueryFilter) ([]Event, error
 
 	events := make([]Event, 0)
 	for rows.Next() {
-		var e Event
-		var timestampValue any
-		var success int
-		var user, ip, path, details, signature sql.NullString
-
-		err := rows.Scan(&e.ID, &timestampValue, &e.EventType, &user, &ip, &path, &success, &details, &signature)
+		var raw [10]any
+		destinations := make([]any, len(raw))
+		for i := range raw {
+			destinations[i] = &raw[i]
+		}
+		if err := rows.Scan(destinations...); err != nil {
+			return nil, fmt.Errorf("failed to scan audit event: %w", err)
+		}
+		e, err := decodeCanonicalAuditEvent(raw)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan audit event: %w", err)
 		}
-		timestamp, err := parseAuditTimestamp(timestampValue)
-		if err != nil {
-			return nil, fmt.Errorf("failed to scan audit event: %w", err)
-		}
-
-		e.Timestamp = timestamp
-		e.Success = success == 1
-		e.User = user.String
-		e.IP = ip.String
-		e.Path = path.String
-		e.Details = details.String
-		e.Signature = signature.String
-
 		events = append(events, e)
 	}
 
 	return events, rows.Err()
+}
+
+func decodeCanonicalAuditEvent(raw [10]any) (Event, error) {
+	text := func(value any) (string, error) {
+		result, ok := value.(string)
+		if !ok {
+			return "", &auditStoreDataError{field: "row"}
+		}
+		return result, nil
+	}
+
+	id, err := text(raw[0])
+	if err != nil {
+		return Event{}, err
+	}
+	timestamp, ok := raw[1].(int64)
+	if !ok {
+		return Event{}, &auditStoreDataError{field: "timestamp"}
+	}
+	eventType, err := text(raw[2])
+	if err != nil {
+		return Event{}, err
+	}
+	user, err := text(raw[3])
+	if err != nil {
+		return Event{}, err
+	}
+	ip, err := text(raw[4])
+	if err != nil {
+		return Event{}, err
+	}
+	path, err := text(raw[5])
+	if err != nil {
+		return Event{}, err
+	}
+	success, ok := raw[6].(int64)
+	if !ok || (success != 0 && success != 1) {
+		return Event{}, &auditStoreDataError{field: "success"}
+	}
+	details, err := text(raw[7])
+	if err != nil {
+		return Event{}, err
+	}
+	signature, err := text(raw[8])
+	if err != nil {
+		return Event{}, err
+	}
+	signatureTimestamp, err := text(raw[9])
+	if err != nil || !isCanonicalSignatureTimestamp(signatureTimestamp, timestamp) {
+		return Event{}, &auditStoreDataError{field: "signature timestamp"}
+	}
+
+	return Event{
+		ID:                 id,
+		Timestamp:          time.Unix(timestamp, 0).UTC(),
+		EventType:          eventType,
+		User:               user,
+		IP:                 ip,
+		Path:               path,
+		Success:            success == 1,
+		Details:            details,
+		Signature:          signature,
+		SignatureTimestamp: signatureTimestamp,
+	}, nil
 }
 
 // QueryPage reads events and their matching count from one SQLite snapshot.
@@ -905,7 +1116,7 @@ func (l *SQLiteLogger) UpdateWebhookURLs(urls []string) error {
 	// Update delivery worker
 	if len(urls) > 0 {
 		if l.webhookDelivery == nil {
-			l.webhookDelivery = NewWebhookDelivery(urls)
+			l.webhookDelivery = newWebhookDelivery(urls, l.signer.VerifyResult)
 			l.webhookDelivery.Start()
 		} else {
 			l.webhookDelivery.UpdateURLs(urls)
@@ -921,6 +1132,11 @@ func (l *SQLiteLogger) UpdateWebhookURLs(urls []string) error {
 // VerifySignature checks if an event's signature is valid.
 func (l *SQLiteLogger) VerifySignature(event Event) bool {
 	return l.signer.Verify(event)
+}
+
+// VerifySignatureResult returns the signature version and evidence assurance.
+func (l *SQLiteLogger) VerifySignatureResult(event Event) SignatureVerification {
+	return l.signer.VerifyResult(event)
 }
 
 // Close gracefully shuts down the logger.

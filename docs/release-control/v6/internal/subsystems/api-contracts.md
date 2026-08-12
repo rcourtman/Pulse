@@ -20,6 +20,14 @@
 
 ## Purpose
 
+Audit evidence APIs expose `signature_version`, `signature_status`, and
+`signature_assurance` as the authoritative contract. The status vocabulary is
+`strong`, `compatibility`, `invalid`, `unknown`, and `unsigned`; compatibility
+booleans may remain for older clients but must never collapse historical v2 or
+legacy evidence into current strong verification. List, single-event verify,
+JSON/CSV export, and summary projections must use the same classification and
+fail closed for malformed or unsupported envelopes.
+
 Browser WebSocket shutdown distinguishes ordinary client lifecycle from
 transport failure. Normal closure, navigation/going-away, and abnormal closure
 codes used by disconnected clients are informational; policy violations and

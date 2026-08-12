@@ -17,9 +17,12 @@ import (
 )
 
 type verifyResponse struct {
-	Available bool   `json:"available"`
-	Verified  bool   `json:"verified"`
-	Message   string `json:"message"`
+	Available bool                     `json:"available"`
+	Verified  bool                     `json:"verified"`
+	Status    audit.VerificationStatus `json:"status"`
+	Version   audit.SignatureVersion   `json:"version"`
+	Assurance audit.SignatureAssurance `json:"assurance"`
+	Message   string                   `json:"message"`
 }
 
 type testAuditLogger struct {
@@ -30,6 +33,15 @@ type testAuditLogger struct {
 	countErr     error
 	lastQuery    audit.QueryFilter
 	lastCount    audit.QueryFilter
+}
+
+type classifiedTestAuditLogger struct {
+	*testAuditLogger
+	results map[string]audit.SignatureVerification
+}
+
+func (l *classifiedTestAuditLogger) VerifySignatureResult(event audit.Event) audit.SignatureVerification {
+	return l.results[event.ID]
 }
 
 func (l *testAuditLogger) Record(event audit.Event) error {
@@ -184,7 +196,7 @@ func TestHandleVerifyAuditEvent_NotFound(t *testing.T) {
 
 func TestHandleVerifyAuditEvent_Verified(t *testing.T) {
 	setAuditLogger(t, &testAuditLogger{
-		events:       []audit.Event{{ID: "abc"}},
+		events:       []audit.Event{{ID: "abc", Signature: "v3:" + strings.Repeat("0", 64)}},
 		verifyResult: true,
 	})
 	handler := NewAuditHandlers()
@@ -209,11 +221,14 @@ func TestHandleVerifyAuditEvent_Verified(t *testing.T) {
 	if !resp.Verified {
 		t.Fatalf("expected verified to be true")
 	}
+	assert.Equal(t, audit.VerificationStatusCompatibility, resp.Status)
+	assert.Equal(t, audit.SignatureVersionV3, resp.Version)
+	assert.Equal(t, audit.SignatureAssuranceCompatibility, resp.Assurance)
 }
 
 func TestHandleVerifyAuditEvent_Failed(t *testing.T) {
 	setAuditLogger(t, &testAuditLogger{
-		events:       []audit.Event{{ID: "abc"}},
+		events:       []audit.Event{{ID: "abc", Signature: "v3:" + strings.Repeat("0", 64)}},
 		verifyResult: false,
 	})
 	handler := NewAuditHandlers()
@@ -238,6 +253,9 @@ func TestHandleVerifyAuditEvent_Failed(t *testing.T) {
 	if resp.Verified {
 		t.Fatalf("expected verified to be false")
 	}
+	assert.Equal(t, audit.VerificationStatusInvalid, resp.Status)
+	assert.Equal(t, audit.SignatureVersionV3, resp.Version)
+	assert.Equal(t, audit.SignatureAssuranceNone, resp.Assurance)
 
 	t.Run("Event not found", func(t *testing.T) {
 		setAuditLogger(t, &testAuditLogger{

@@ -88,7 +88,7 @@ func TestExporterExportAndSummary(t *testing.T) {
 	if err != nil {
 		t.Fatalf("summary error: %v", err)
 	}
-	if summary.TotalEvents != 2 || summary.InvalidSigCount == 0 {
+	if summary.TotalEvents != 2 || summary.UnknownSigCount != 1 || summary.UnsignedSigCount != 1 {
 		t.Fatalf("unexpected summary: %+v", summary)
 	}
 }

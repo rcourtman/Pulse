@@ -1,7 +1,6 @@
 package audit
 
 import (
-	"database/sql"
 	"errors"
 	"fmt"
 	"testing"
@@ -301,7 +300,7 @@ func TestSQLiteLoggerQuery(t *testing.T) {
 	})
 }
 
-func TestSQLiteLoggerQueryHandlesLegacyDatetimeTimestampRows(t *testing.T) {
+func TestSQLiteLoggerCanonicalSchemaRejectsLegacyDatetimeTimestampRows(t *testing.T) {
 	tempDir := t.TempDir()
 
 	logger, err := NewSQLiteLogger(SQLiteLoggerConfig{
@@ -321,29 +320,18 @@ func TestSQLiteLoggerQueryHandlesLegacyDatetimeTimestampRows(t *testing.T) {
 		"legacy-datetime",
 		legacyTime,
 		"startup",
-		sql.NullString{},
-		sql.NullString{},
+		"",
+		"",
 		"/api/audit",
 		1,
 		"legacy Pro runtime timestamp",
 		"legacy-signature",
-	); err != nil {
-		t.Fatalf("insert legacy datetime row: %v", err)
-	}
-
-	events, err := logger.Query(QueryFilter{ID: "legacy-datetime", Limit: 1})
-	if err != nil {
-		t.Fatalf("Query failed for legacy datetime timestamp row: %v", err)
-	}
-	if len(events) != 1 {
-		t.Fatalf("Expected 1 event, got %d", len(events))
-	}
-	if !events[0].Timestamp.Equal(legacyTime) {
-		t.Fatalf("timestamp = %s, want %s", events[0].Timestamp, legacyTime)
+	); err == nil {
+		t.Fatal("canonical schema accepted a legacy datetime timestamp after migration")
 	}
 }
 
-func TestSQLiteLoggerQueryHandlesLegacyGoMonotonicTimestampRows(t *testing.T) {
+func TestSQLiteLoggerCanonicalSchemaRejectsLegacyGoMonotonicTimestampRows(t *testing.T) {
 	tempDir := t.TempDir()
 
 	logger, err := NewSQLiteLogger(SQLiteLoggerConfig{
@@ -357,32 +345,20 @@ func TestSQLiteLoggerQueryHandlesLegacyGoMonotonicTimestampRows(t *testing.T) {
 	defer logger.Close()
 
 	const legacyTimestamp = "2026-07-05 08:51:23.65653076 +0000 UTC m=+0.009025344"
-	want := time.Date(2026, 7, 5, 8, 51, 23, 656530760, time.UTC)
 	if _, err := logger.db.Exec(`
 		INSERT INTO audit_events (id, timestamp, event_type, user, ip, path, success, details, signature)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		"legacy-go-monotonic",
 		legacyTimestamp,
 		"startup",
-		sql.NullString{},
-		sql.NullString{},
+		"",
+		"",
 		"/api/audit",
 		1,
 		"legacy Go monotonic timestamp",
 		"legacy-signature",
-	); err != nil {
-		t.Fatalf("insert legacy Go monotonic row: %v", err)
-	}
-
-	events, err := logger.Query(QueryFilter{ID: "legacy-go-monotonic", Limit: 1})
-	if err != nil {
-		t.Fatalf("Query failed for legacy Go monotonic timestamp row: %v", err)
-	}
-	if len(events) != 1 {
-		t.Fatalf("Expected 1 event, got %d", len(events))
-	}
-	if !events[0].Timestamp.Equal(want) {
-		t.Fatalf("timestamp = %s, want %s", events[0].Timestamp, want)
+	); err == nil {
+		t.Fatal("canonical schema accepted a legacy monotonic timestamp after migration")
 	}
 }
 

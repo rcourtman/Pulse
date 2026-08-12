@@ -15,6 +15,13 @@
 
 ## Purpose
 
+The shared authenticated API router also composes Enterprise audit defaults.
+Audit list and verification routes must preserve the core logger's
+authoritative signature version, status, and assurance when those defaults are
+non-nil; the Enterprise extension may not replace that production composition
+with a boolean-only fallback. This adjacent security projection grants no
+agent enrollment, update, reporting, profile, command, or fleet authority.
+
 Agent-profile assignment presents one actionable identity per connected host.
 When a PBS or PMG provider resource projects an agent ID that is not an active
 host-telemetry surface control, the provider projection is excluded so the

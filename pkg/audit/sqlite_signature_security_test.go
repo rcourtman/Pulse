@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-func TestSQLiteV2AndLegacySignaturesSurviveRestartQueryAndExport(t *testing.T) {
+func TestSQLiteCurrentAndLegacySignaturesSurviveRestartQueryAndExport(t *testing.T) {
 	dataDir := t.TempDir()
 	signingKey := []byte("0123456789abcdef0123456789abcdef")
 	logger, err := NewSQLiteLogger(SQLiteLoggerConfig{DataDir: dataDir, SigningKey: signingKey})
@@ -16,8 +16,8 @@ func TestSQLiteV2AndLegacySignaturesSurviveRestartQueryAndExport(t *testing.T) {
 		t.Fatalf("NewSQLiteLogger: %v", err)
 	}
 
-	v2Event := Event{
-		ID:        "v2-event",
+	currentEvent := Event{
+		ID:        "v3-event",
 		Timestamp: time.Unix(1_725_555_555, 987_654_321).UTC(),
 		EventType: "security|alert",
 		User:      "監査\noperator",
@@ -26,8 +26,8 @@ func TestSQLiteV2AndLegacySignaturesSurviveRestartQueryAndExport(t *testing.T) {
 		Success:   true,
 		Details:   "line one\nline two|done",
 	}
-	if err := logger.Record(v2Event); err != nil {
-		t.Fatalf("Record v2 event: %v", err)
+	if err := logger.Record(currentEvent); err != nil {
+		t.Fatalf("Record v3 event: %v", err)
 	}
 
 	legacyEvent := Event{
@@ -80,8 +80,8 @@ func TestSQLiteV2AndLegacySignaturesSurviveRestartQueryAndExport(t *testing.T) {
 			t.Fatalf("signature for %s did not verify after restart", event.ID)
 		}
 	}
-	if versions[v2Event.ID] != SignatureVersionV2 {
-		t.Fatalf("new SQLite row version = %q, want v2", versions[v2Event.ID])
+	if versions[currentEvent.ID] != SignatureVersionV3 {
+		t.Fatalf("new SQLite row version = %q, want v3", versions[currentEvent.ID])
 	}
 	if versions[legacyEvent.ID] != SignatureVersionLegacy {
 		t.Fatalf("historical SQLite row version = %q, want legacy", versions[legacyEvent.ID])
@@ -113,6 +113,12 @@ func TestSQLiteV2AndLegacySignaturesSurviveRestartQueryAndExport(t *testing.T) {
 		if event.SignatureValid == nil || !*event.SignatureValid {
 			t.Fatalf("JSON export signature verdict for %s = %v", event.ID, event.SignatureValid)
 		}
+		if event.ID == currentEvent.ID && (event.SignatureStatus != VerificationStatusStrong || event.SignatureAssurance != SignatureAssuranceStrong) {
+			t.Fatalf("current export assurance = %s/%s", event.SignatureStatus, event.SignatureAssurance)
+		}
+		if event.ID == legacyEvent.ID && (event.SignatureStatus != VerificationStatusCompatibility || event.SignatureAssurance != SignatureAssuranceCompatibility) {
+			t.Fatalf("legacy export assurance = %s/%s", event.SignatureStatus, event.SignatureAssurance)
+		}
 	}
 
 	csvResult, err := exporter.Export(QueryFilter{}, ExportFormatCSV, true)
@@ -127,16 +133,16 @@ func TestSQLiteV2AndLegacySignaturesSurviveRestartQueryAndExport(t *testing.T) {
 		t.Fatalf("CSV records = %d, want header plus 2 rows", len(records))
 	}
 	for _, row := range records[1:] {
-		if row[len(row)-1] != "true" {
-			t.Fatalf("CSV signature verdict for %s = %q", row[0], row[len(row)-1])
+		if row[len(row)-3] != "true" {
+			t.Fatalf("CSV signature verdict for %s = %q", row[0], row[len(row)-3])
 		}
-		if DetectSignatureVersion(row[len(row)-2]) == SignatureVersionUnknown {
+		if SignatureVersion(row[len(row)-4]) == SignatureVersionUnknown || DetectSignatureVersion(row[len(row)-5]) == SignatureVersionUnknown {
 			t.Fatalf("CSV signature for %s lost its identifiable envelope", row[0])
 		}
 	}
 }
 
-func TestTenantSQLiteFactoryWritesV2Signatures(t *testing.T) {
+func TestTenantSQLiteFactoryWritesV3Signatures(t *testing.T) {
 	manager := NewTenantLoggerManager(t.TempDir(), &SQLiteLoggerFactory{
 		CryptoMgr: newMockCryptoManager(),
 	})
@@ -152,14 +158,14 @@ func TestTenantSQLiteFactoryWritesV2Signatures(t *testing.T) {
 	if len(events) != 1 {
 		t.Fatalf("tenant events = %d, want 1", len(events))
 	}
-	if DetectSignatureVersion(events[0].Signature) != SignatureVersionV2 {
-		t.Fatalf("tenant signature version = %q, want v2", DetectSignatureVersion(events[0].Signature))
+	if DetectSignatureVersion(events[0].Signature) != SignatureVersionV3 {
+		t.Fatalf("tenant signature version = %q, want v3", DetectSignatureVersion(events[0].Signature))
 	}
 	logger, ok := manager.GetLogger("tenant-a").(*SQLiteLogger)
 	if !ok {
 		t.Fatalf("tenant logger type = %T, want *SQLiteLogger", manager.GetLogger("tenant-a"))
 	}
 	if !logger.VerifySignature(events[0]) {
-		t.Fatal("tenant v2 signature did not verify")
+		t.Fatal("tenant v3 signature did not verify")
 	}
 }

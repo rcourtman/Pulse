@@ -21,15 +21,16 @@ import (
 
 // Event represents a single audit log entry.
 type Event struct {
-	ID        string    `json:"id"`
-	Timestamp time.Time `json:"timestamp"`
-	EventType string    `json:"event"` // "login", "logout", "config_change", etc.
-	User      string    `json:"user,omitempty"`
-	IP        string    `json:"ip"`
-	Path      string    `json:"path,omitempty"`
-	Success   bool      `json:"success"`
-	Details   string    `json:"details,omitempty"`
-	Signature string    `json:"signature,omitempty"` // Empty for OSS, HMAC for enterprise
+	ID                 string    `json:"id"`
+	Timestamp          time.Time `json:"timestamp"`
+	EventType          string    `json:"event"` // "login", "logout", "config_change", etc.
+	User               string    `json:"user,omitempty"`
+	IP                 string    `json:"ip"`
+	Path               string    `json:"path,omitempty"`
+	Success            bool      `json:"success"`
+	Details            string    `json:"details,omitempty"`
+	Signature          string    `json:"signature,omitempty"` // Empty for OSS, HMAC for enterprise
+	SignatureTimestamp string    `json:"-"`                   // Retained legacy RFC3339Nano signing material.
 }
 
 // QueryFilter defines filters for querying audit events.

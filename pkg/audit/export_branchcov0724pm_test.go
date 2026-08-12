@@ -44,7 +44,7 @@ func TestBranchcov0724pmExportCSV_EmptyEventsAndVerificationArms(t *testing.T) {
 	if len(records) != 1 {
 		t.Fatalf("want exactly 1 header record, got %d", len(records))
 	}
-	wantHeader := []string{"ID", "Timestamp", "Event Type", "User", "IP", "Path", "Success", "Details", "Signature"}
+	wantHeader := []string{"ID", "Timestamp", "Event Type", "User", "IP", "Path", "Success", "Details", "Signature", "Signature Version"}
 	if len(records[0]) != len(wantHeader) {
 		t.Fatalf("header has %d cols, want %d (%v)", len(records[0]), len(wantHeader), records[0])
 	}
@@ -78,11 +78,11 @@ func TestBranchcov0724pmExportCSV_EmptyEventsAndVerificationArms(t *testing.T) {
 	if len(records) != 4 { // header + 3 rows
 		t.Fatalf("want 4 records, got %d", len(records))
 	}
-	// Header must now carry the appended verification column.
-	if records[0][len(records[0])-1] != "Signature Valid" {
-		t.Fatalf("last header = %q, want %q", records[0][len(records[0])-1], "Signature Valid")
+	// Header carries validity plus authoritative status and assurance columns.
+	if records[0][len(records[0])-3] != "Signature Valid" || records[0][len(records[0])-2] != "Signature Status" || records[0][len(records[0])-1] != "Signature Assurance" {
+		t.Fatalf("verification headers = %v", records[0])
 	}
-	// Per-row verdict column (last column) must reflect each sub-arm exactly.
+	// Per-row validity column must reflect each sub-arm exactly.
 	wantVerdicts := map[string]string{
 		"nil-verdict":   "",
 		"true-verdict":  "true",
@@ -90,7 +90,7 @@ func TestBranchcov0724pmExportCSV_EmptyEventsAndVerificationArms(t *testing.T) {
 	}
 	for _, row := range records[1:] {
 		id := row[0]
-		verdict := row[len(row)-1]
+		verdict := row[len(row)-3]
 		if wantVerdicts[id] != verdict {
 			t.Fatalf("row %q verdict col = %q, want %q", id, verdict, wantVerdicts[id])
 		}

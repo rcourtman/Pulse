@@ -22,6 +22,13 @@
 
 Own reusable frontend primitives and canonical page-shell patterns so feature
 work extends shared components instead of creating new local variants.
+The Audit Log settings surface composes those primitives while retaining the
+server's evidence classification. Current strong verification is green,
+historical compatibility is amber, invalid evidence is red, unknown evidence
+is distinct from failure, and unsigned evidence remains neutral. Filters,
+totals, tooltips, projected batch state, and retry actions must use the same
+five-state vocabulary; neither a true compatibility boolean nor an envelope
+prefix alone may render a green current-assurance result.
 The alert schedule's initial-delivery selector composes `SettingsPanel` and
 `FormSelect`, uses the shared alert-configuration presentation vocabulary, and
 exposes the same email, webhook, Apprise, and all-destination labels used by

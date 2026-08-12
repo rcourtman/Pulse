@@ -14,6 +14,7 @@ import {
   getAuditEventTypeBadgeClass,
   getAuditLogFetchErrorMessage,
   getAuditLogFeatureGateCopy,
+  getAuditSignatureTooltip,
   getAuditVerificationBadgePresentation,
 } from '@/utils/auditLogPresentation';
 
@@ -30,14 +31,47 @@ describe('auditLogPresentation', () => {
       label: 'Not checked',
       className: 'bg-surface-alt text-base-content',
     });
-    expect(getAuditVerificationBadgePresentation({ status: 'verified' })).toEqual({
-      label: 'Verified',
+    expect(getAuditVerificationBadgePresentation({ status: 'strong' })).toEqual({
+      label: 'Strong',
       className: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
     });
-    expect(getAuditVerificationBadgePresentation({ status: 'failed' })).toEqual({
-      label: 'Failed',
+    expect(getAuditVerificationBadgePresentation({ status: 'compatibility' })).toEqual({
+      label: 'Compatibility',
+      className: 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200',
+    });
+    expect(getAuditVerificationBadgePresentation({ status: 'invalid' })).toEqual({
+      label: 'Invalid',
       className: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
     });
+  });
+
+  it('keeps signature tooltips explicit about assurance', () => {
+    expect(
+      getAuditSignatureTooltip(
+        { signature_version: 'v3', signature_assurance: 'strong' },
+        { status: 'strong' },
+      ),
+    ).toBe('Current signature strongly verified');
+    expect(
+      getAuditSignatureTooltip(
+        { signature_version: 'legacy', signature_assurance: 'compatibility' },
+        { status: 'compatibility' },
+      ),
+    ).toBe('Historical signature verified with compatibility assurance only');
+    expect(
+      getAuditSignatureTooltip(
+        { signature_version: 'v3', signature_assurance: 'none' },
+        { status: 'invalid' },
+      ),
+    ).toBe('Signature verification failed');
+    expect(
+      getAuditSignatureTooltip(
+        { signature_version: 'unknown', signature_assurance: 'none' },
+        { status: 'unknown' },
+      ),
+    ).toBe('Signature version is unknown');
+    expect(getAuditSignatureTooltip({}, { status: 'unknown' })).toContain('unknown');
+    expect(getAuditSignatureTooltip({}, undefined)).toContain('not been checked');
   });
 
   it('returns canonical event status icon presentation', () => {

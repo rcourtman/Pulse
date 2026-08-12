@@ -13,7 +13,10 @@ import { getUpgradeActionDestination } from '@/stores/licenseCommercial';
 import { presentationPolicyHidesUpgradePrompts } from '@/stores/sessionPresentationPolicy';
 import { getRuntimeCapabilityBlock, loadRuntimeCapabilities } from '@/stores/license';
 import { resolveUpgradeDestination } from '@/utils/upgradeNavigation';
-import { getAuditLogFetchErrorMessage } from '@/utils/auditLogPresentation';
+import {
+  getAuditLogFetchErrorMessage,
+  type AuditVerificationStatus,
+} from '@/utils/auditLogPresentation';
 
 export interface AuditEvent {
   id: string;
@@ -25,6 +28,10 @@ export interface AuditEvent {
   success: boolean;
   details: string;
   signature?: string;
+  signature_version?: 'v3' | 'v2' | 'legacy' | 'unknown' | 'unsigned';
+  signature_status?: 'strong' | 'compatibility' | 'invalid' | 'unknown' | 'unsigned';
+  signature_assurance?: 'strong' | 'compatibility' | 'none';
+  signature_valid?: boolean;
 }
 
 interface AuditResponse {
@@ -36,10 +43,13 @@ interface AuditResponse {
 interface VerifyResponse {
   available: boolean;
   verified?: boolean;
+  status?: 'strong' | 'compatibility' | 'invalid' | 'unknown' | 'unsigned';
+  version?: 'v3' | 'v2' | 'legacy' | 'unknown' | 'unsigned';
+  assurance?: 'strong' | 'compatibility' | 'none';
   message?: string;
 }
 
-type VerificationStatus = 'verified' | 'failed' | 'unavailable' | 'error';
+type VerificationStatus = AuditVerificationStatus;
 
 export type VerificationState = {
   status: VerificationStatus;
@@ -57,9 +67,25 @@ type VerifyAllOptions = {
   limit?: number;
   showToast?: boolean;
   resume?: boolean;
+  uncheckedOnly?: boolean;
 };
 
-const ALLOWED_VERIFICATION_FILTERS = new Set(['all', 'needs', 'verified', 'failed']);
+const ALLOWED_VERIFICATION_FILTERS = new Set([
+  'all',
+  'needs',
+  'strong',
+  'compatibility',
+  'invalid',
+  'unknown',
+  'unsigned',
+]);
+const AUTHORITATIVE_VERIFICATION_STATUSES = new Set<AuditVerificationStatus>([
+  'strong',
+  'compatibility',
+  'invalid',
+  'unknown',
+  'unsigned',
+]);
 const ALLOWED_SUCCESS_FILTERS = new Set(['all', 'success', 'failed']);
 const ALLOWED_EVENT_FILTERS = new Set(['', 'login', 'logout', 'config_change', 'startup']);
 const USER_FILTER_DEBOUNCE_MS = 300;
@@ -254,6 +280,19 @@ export const useAuditLogPanelState = () => {
       }
 
       setEvents(data.events);
+      const projectedVerification: Record<string, VerificationState> = {};
+      for (const event of data.events) {
+        const status = event.signature_status;
+        if (!status || !AUTHORITATIVE_VERIFICATION_STATUSES.has(status)) continue;
+        projectedVerification[event.id] = {
+          status,
+          message:
+            status === 'compatibility'
+              ? 'Historical signature verified with compatibility assurance only'
+              : '',
+        };
+      }
+      setVerification(projectedVerification);
       setIsPersistent(data.persistentLogging);
       setTotalEvents(data.total);
 
@@ -262,7 +301,11 @@ export const useAuditLogPanelState = () => {
         if (verificationLimit <= 0) return;
         setTimeout(() => {
           if (!isMounted() || requestGeneration !== auditRequestGeneration) return;
-          void verifyAllEvents({ limit: verificationLimit, showToast: false });
+          void verifyAllEvents({
+            limit: verificationLimit,
+            showToast: false,
+            uncheckedOnly: true,
+          });
         }, 0);
       }
     } catch (err) {
@@ -316,10 +359,13 @@ export const useAuditLogPanelState = () => {
       let status: VerificationStatus = 'unavailable';
       if (!data.available) {
         status = 'unavailable';
+      } else if (data.status) {
+        status = data.status;
       } else if (data.verified) {
-        status = 'verified';
+        // Old servers cannot establish current strong assurance for this UI.
+        status = 'compatibility';
       } else {
-        status = 'failed';
+        status = 'invalid';
       }
 
       setVerification((prev) => ({
@@ -353,10 +399,13 @@ export const useAuditLogPanelState = () => {
 
     const limit = options?.limit;
     let signedEvents = events().filter((event) => event.signature);
+    if (options?.uncheckedOnly) {
+      signedEvents = signedEvents.filter((event) => !verification()[event.id]);
+    }
     if (options?.resume) {
       signedEvents = signedEvents.filter((event) => {
         const state = verification()[event.id];
-        return !state || state.status === 'failed' || state.status === 'error';
+        return !state || state.status === 'invalid' || state.status === 'error';
       });
     }
     if (limit !== undefined) {
@@ -391,8 +440,10 @@ export const useAuditLogPanelState = () => {
     setVerifyCanceled(false);
 
     if (options?.showToast) {
-      let verified = 0;
-      let failed = 0;
+      let strong = 0;
+      let compatibility = 0;
+      let invalid = 0;
+      let unknown = 0;
       let errors = 0;
       let unavailable = 0;
 
@@ -400,11 +451,17 @@ export const useAuditLogPanelState = () => {
         const state = verification()[event.id];
         if (!state) continue;
         switch (state.status) {
-          case 'verified':
-            verified += 1;
+          case 'strong':
+            strong += 1;
             break;
-          case 'failed':
-            failed += 1;
+          case 'compatibility':
+            compatibility += 1;
+            break;
+          case 'invalid':
+            invalid += 1;
+            break;
+          case 'unknown':
+            unknown += 1;
             break;
           case 'error':
             errors += 1;
@@ -417,13 +474,16 @@ export const useAuditLogPanelState = () => {
         }
       }
 
-      if (failed > 0 || errors > 0) {
+      if (compatibility > 0 || invalid > 0 || unknown > 0 || errors > 0) {
         showWarning(
           'Signature verification completed',
-          `Verified ${verified}, failed ${failed}, errors ${errors}, unavailable ${unavailable}.`,
+          `Strong ${strong}, compatibility ${compatibility}, invalid ${invalid}, unknown ${unknown}, errors ${errors}, unavailable ${unavailable}.`,
         );
       } else {
-        showSuccess('Signature verification completed', `Verified ${verified} events.`);
+        showSuccess(
+          'Signature verification completed',
+          `Strong ${strong}, compatibility ${compatibility}.`,
+        );
       }
     }
   };
@@ -433,13 +493,13 @@ export const useAuditLogPanelState = () => {
     events().some((event) => {
       if (!event.signature) return false;
       const state = verification()[event.id];
-      return !state || state.status === 'failed' || state.status === 'error';
+      return !state || state.status === 'invalid' || state.status === 'error';
     });
   const resumeCount = () =>
     events().filter((event) => {
       if (!event.signature) return false;
       const state = verification()[event.id];
-      return !state || state.status === 'failed' || state.status === 'error';
+      return !state || state.status === 'invalid' || state.status === 'error';
     }).length;
   const verifyAllLabel = () => {
     if (!verifyingAll()) return 'Verify All';
@@ -460,15 +520,21 @@ export const useAuditLogPanelState = () => {
     const summary = {
       total: events().length,
       signed: 0,
-      verified: 0,
-      failed: 0,
+      strong: 0,
+      compatibility: 0,
+      invalid: 0,
+      unknown: 0,
+      unsigned: 0,
       error: 0,
       unavailable: 0,
       unchecked: 0,
     };
 
     for (const event of events()) {
-      if (!event.signature) continue;
+      if (!event.signature) {
+        summary.unsigned += 1;
+        continue;
+      }
       summary.signed += 1;
       const state = verification()[event.id];
       if (!state) {
@@ -476,11 +542,17 @@ export const useAuditLogPanelState = () => {
         continue;
       }
       switch (state.status) {
-        case 'verified':
-          summary.verified += 1;
+        case 'strong':
+          summary.strong += 1;
           break;
-        case 'failed':
-          summary.failed += 1;
+        case 'compatibility':
+          summary.compatibility += 1;
+          break;
+        case 'invalid':
+          summary.invalid += 1;
+          break;
+        case 'unknown':
+          summary.unknown += 1;
           break;
         case 'error':
           summary.error += 1;
@@ -522,13 +594,15 @@ export const useAuditLogPanelState = () => {
     const filter = verificationFilter();
     if (filter === 'all') return events();
     return events().filter((event) => {
-      if (!event.signature) return false;
+      if (!event.signature) return filter === 'unsigned';
       const state = verification()[event.id];
       if (!state) {
         return filter === 'needs';
       }
-      if (filter === 'verified') return state.status === 'verified';
-      if (filter === 'failed') return state.status === 'failed' || state.status === 'error';
+      if (filter === 'strong') return state.status === 'strong';
+      if (filter === 'compatibility') return state.status === 'compatibility';
+      if (filter === 'invalid') return state.status === 'invalid' || state.status === 'error';
+      if (filter === 'unknown') return state.status === 'unknown' || state.status === 'unavailable';
       return false;
     });
   });

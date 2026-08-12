@@ -254,7 +254,7 @@ func TestSQLiteLoggerLegacyMigrationRollsBackMalformedRows(t *testing.T) {
 	}
 	var scratchTables int
 	if err := db.QueryRow(`
-		SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'audit_events_v2'
+		SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'audit_events_v3'
 	`).Scan(&scratchTables); err != nil {
 		t.Fatalf("check migration scratch table: %v", err)
 	}
