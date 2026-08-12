@@ -136,6 +136,7 @@ func TestPreviousStableForPrereleaseVersionCrossesMinorBoundaries(t *testing.T) 
 		{version: "6.2.0-rc.9", want: "6.1.2"},
 		{version: "6.2.0-rc.10", want: "6.1.2"},
 		{version: "6.2.0-rc.11", want: "6.1.2"},
+		{version: "6.2.2-rc.1", want: "6.2.1"},
 	}
 
 	for _, test := range tests {
@@ -342,25 +343,17 @@ func TestInstallDockerProofTracksSupportPrereleaseContract(t *testing.T) {
 	if !ok {
 		t.Skip("current prerelease does not have a previous stable patch")
 	}
+	stableTarget, _, ok := strings.Cut(version, "-")
+	if !ok {
+		t.Fatalf("current prerelease %q has no stable target", version)
+	}
 
 	assertFileContainsAllNormalized(t, repoFile("docs", "release-control", "v6", "internal", "subsystems", "deployment-installability.md"),
 		"The active support prerelease `v"+version+"` cut sets the repo-root `VERSION`, repo-root `docker-compose.yml` image default, `scripts/install-docker.sh` fallback, and Helm chart release metadata to the same `"+version+"` release version.",
 		"This support prerelease keeps `rollback_version=v"+previous+"`, publishes a versioned public GitHub prerelease plus versioned Docker and Helm artifacts, and does not move stable/latest install pointers or stable semver aliases.",
-		"is a security-boundary, role-correct access, live-state recovery, and release-operations cut that supersedes `v6.2.0-rc.9`: it validates request-derived origins, verifies legacy-cleanup SSH hosts, aligns Settings and resource reads with session authority, recovers oversized WebSocket state, converges agent and PBS lifecycle behavior, restores the deliberate self-hosted commercial opt-in posture, closes the historical credential-containment gate, and retries GET when Proxmox reports HTTP 405 or 501 for unsupported HEAD availability probes.",
-		"The preceding `v6.2.0-rc.10` attempt used the same support-prerelease path with `rollback_version=v6.1.2`, but it is an abandoned partial candidate rather than the current public-testing identity.",
-		"The preceding `v6.2.0-rc.9` candidate used the same support-prerelease path with `rollback_version=v6.1.2` and pinned the same four install surfaces to `6.2.0-rc.9`.",
-		"The preceding `v6.2.0-rc.8` candidate used the same support-prerelease path with `rollback_version=v6.1.2` and pinned the same four install surfaces to `6.2.0-rc.8`.",
-		"The preceding `v6.2.0-rc.7` candidate used the same support-prerelease path with `rollback_version=v6.1.2` and pinned the same four install surfaces to `6.2.0-rc.7`.",
-		"The preceding `v6.2.0-rc.6` candidate used the same support-prerelease path with `rollback_version=v6.1.2` and pinned the same four install surfaces to `6.2.0-rc.6`.",
-		"The preceding `v6.2.0-rc.5` candidate used the same support-prerelease path with `rollback_version=v6.1.2` and pinned the same four install surfaces to `6.2.0-rc.5`.",
-		"The preceding `v6.2.0-rc.4` candidate used the same support-prerelease path with `rollback_version=v6.1.2` and pinned the same four install surfaces to `6.2.0-rc.4`.",
-		"The preceding `v6.2.0-rc.3` candidate used the same support-prerelease path with `rollback_version=v6.1.2` and pinned the same four install surfaces to `6.2.0-rc.3`.",
-		"The preceding `v6.2.0-rc.2` candidate used the same support-prerelease path with `rollback_version=v6.1.2` and pinned the same four install surfaces to `6.2.0-rc.2`.",
-		"The preceding `v6.2.0-rc.1` candidate used the same support-prerelease path with `rollback_version=v6.1.2` and pinned the same four install surfaces to `6.2.0-rc.1`.",
 		"The `v"+version+"` server cut is classified `existing-mobile-build-compatible`.",
-		"Pulse Mobile 1.0.0 iOS build 12 and Android versionCode 9 candidates, both using runtime version 2, remain distributed to the existing beta cohort through TestFlight and Play open testing.",
-		"The changes since RC9 preserve the checked-in mobile API, Relay, pairing, approval, push, authentication, and onboarding contracts; no additional companion upload or public store rollout is part of RC11.",
-		"Authenticode signing through SignPath is the canonical Windows signing backend for the `v6.2.0` line.",
+		"Pulse Mobile 1.0.0 iOS build 12 and Android versionCode 9 remain distributed to the existing beta cohort; no companion upload or public mobile-store rollout is part of this candidate.",
+		"The prerelease Windows path retains exact-SHA, checksum, and detached-signature verification without Authenticode; stable `v"+stableTarget+"` restores mandatory SignPath signing unless a new version-bound decision is recorded.",
 		"For the active support prerelease `v"+version+"` cut, the repo-root compose default and `scripts/install-docker.sh` fallback must both pin `"+version+"` until the next governed stable cut moves them forward.",
 	)
 }

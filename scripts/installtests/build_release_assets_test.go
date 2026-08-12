@@ -637,6 +637,10 @@ func TestCurrentSupportPrereleasePacketTracksInstallMetadata(t *testing.T) {
 	if !ok {
 		t.Skip("current prerelease does not have a previous stable patch")
 	}
+	stableTarget, _, ok := strings.Cut(version, "-")
+	if !ok {
+		t.Fatalf("current prerelease %q has no stable target", version)
+	}
 
 	releaseNotesPath := repoFile("docs", "releases", "RELEASE_NOTES_v"+version+".md")
 	changelogPath := repoFile("docs", "releases", "V6_CHANGELOG_v"+version+".md")
@@ -645,37 +649,28 @@ func TestCurrentSupportPrereleasePacketTracksInstallMetadata(t *testing.T) {
 		"`v"+version+"` is a release candidate",
 		"## Highlights",
 		"stable `v"+previous+"`",
-		"supersedes `v6.2.0-rc.9`",
-		"Security hardening blocks untrusted installer, diagnostic, sign-in, and SSH cleanup origins",
-		"Role-correct Settings and resilient recovery keep viewer access and live resource state coherent",
-		"Proxmox availability retries GET when a server rejects HEAD with HTTP 405 or 501",
-		"Targeted proof covers request-origin validation, SSH host-key enforcement",
-		"iOS build 12 is distributed through the TestFlight public beta link",
-		"Android versionCode 9 remains available through Play open testing",
-		"No public mobile-store rollout is part of this RC",
-		"not yet Authenticode-signed",
-		"No unsigned-Windows exception applies to any `v6.2.0` release",
-		"rollback target is stable `v"+previous+"`",
+		"Canonical resource monitoring policy and operator-state controls",
+		"Configuration transfer endpoints require a dedicated authorization envelope",
+		"The release triggers now run portable exact-SHA qualification",
+		"The rollback target is `v"+previous+"`",
+		"Pulse Mobile `1.0.0` iOS build `12` and Android versionCode `9` remain compatible",
+		"Windows Unified Agent binaries in this prerelease retain exact-SHA, checksum, and detached-signature verification but are not Authenticode-signed",
+		"Stable `v"+stableTarget+"` still requires the normal SignPath Authenticode lane",
+		"Paid Pulse Pro, Relay, and eligible legacy customers should continue to use the private download page",
 	)
 	assertFileContainsAllNormalized(t, changelogPath,
 		"Version: `v"+version+"`",
-		"Previous public candidate: `v6.2.0-rc.9`",
-		"Abandoned partial candidate: `v6.2.0-rc.10`",
 		"Previous stable: `v"+previous+"`",
 		"Rollback target: `v"+previous+"`",
 		"Promotion path: exact-SHA single-build release candidate from `main`",
-		"This changelog describes the changes since `v6.2.0-rc.9`",
-		"Typed prerelease containment records",
-		"Fail-closed origin validation",
-		"Viewer-safe Settings and workload navigation",
-		"Oversized WebSocket snapshot recovery",
-		"Unified Agent update convergence",
-		"Self-hosted commercial opt-in posture",
-		"Windows signing decision: Authenticode through SignPath is the mandatory signing backend",
+		"This changelog describes the `v"+version+"` release candidate compared with stable `v"+previous+"`",
+		"Canonical resource monitoring policy with pause and resume controls",
+		"An optional exact-SHA external amd64 preflight ahead of hosted release workflow dispatch",
+		"Configuration export and import require dedicated, expiring, principal- and organization-bound transfer authorization",
+		"Windows signing decision: the standing prerelease path publishes exact-SHA, checksum, and detached-signature verified Windows agents without Authenticode; stable `v"+stableTarget+"` restores mandatory SignPath signing",
 		"Mobile decision: `existing-mobile-build-compatible`",
-		"iOS build 12 is distributed through the TestFlight public beta link",
-		"Android versionCode 9 remains on Play open testing",
-		"No public store rollout is part of this candidate",
+		"iOS build `12` and Android versionCode `9` remain compatible",
+		"no companion upload or public store rollout is required",
 	)
 	assertFileContainsAll(t, repoFile("docs", "RELEASE_NOTES.md"),
 		"docs/releases/RELEASE_NOTES_v"+version+".md",
@@ -709,7 +704,8 @@ func TestCurrentSupportPrereleasePacketTracksInstallMetadata(t *testing.T) {
 		"This support prerelease keeps `rollback_version=v"+previous+"`, publishes a versioned public GitHub prerelease plus versioned Docker and Helm artifacts, and does not move stable/latest install pointers or stable semver aliases.",
 		"For the active support prerelease `v"+version+"` cut, the repo-root compose default and `scripts/install-docker.sh` fallback must both pin `"+version+"` until the next governed stable cut moves them forward.",
 		"The `v"+version+"` server cut is classified `existing-mobile-build-compatible`.",
-		"The changes since RC9 preserve the checked-in mobile API, Relay, pairing, approval, push, authentication, and onboarding contracts; no additional companion upload or public store rollout is part of RC11.",
+		"Pulse Mobile 1.0.0 iOS build 12 and Android versionCode 9 remain distributed to the existing beta cohort; no companion upload or public mobile-store rollout is part of this candidate.",
+		"The prerelease Windows path retains exact-SHA, checksum, and detached-signature verification without Authenticode; stable `v"+stableTarget+"` restores mandatory SignPath signing unless a new version-bound decision is recorded.",
 	)
 }
 
