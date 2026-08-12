@@ -487,6 +487,10 @@ upgrade, update, release, or artifact-selection behavior.
    Worker startup must compare the complete `go`-prefixed toolchain identity
    from `go.mod` with `go env GOVERSION` so a formatting mismatch cannot reject
    an otherwise exact toolchain or conceal a real version drift.
+   Race-instrumented Go builds must place `GOTMPDIR` under the worker's
+   persistent run directory and remove that bounded scratch directory on exit;
+   a small WSL `/tmp` tmpfs must not turn release qualification into a false
+   product failure.
    The rehearsal diagnostic spec is opt-in by design, so both the hosted
    rehearsal and its worker profile must set `PULSE_E2E_DIAGNOSTIC=1`; invoking
    that spec while leaving it skipped is not browser proof.
