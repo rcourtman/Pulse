@@ -27,6 +27,15 @@ Setting `PROXY_AUTH_ROLE_HEADER` turns on role gating. From then on admin access
 
 If you intentionally want every proxy-authenticated user to be an admin, leave `PROXY_AUTH_ROLE_HEADER` unset and protect Pulse entirely at the proxy/IdP layer.
 
+## ⚠️ Header Trust Boundary
+
+Pulse trusts these headers completely — they *are* the identity and the privilege decision. Two deployment requirements make that safe, and both are yours to enforce:
+
+1. **Your proxy must _replace_ these headers, never append to them.** On every request the proxy has to discard any client-supplied copy of `X-Proxy-Secret`, your user header, and your role header, then set its own. Pulse reads the **first** value of a repeated header, so a client-supplied `X-Proxy-Roles: admin` that arrives ahead of your proxy's value wins — and because the proxy supplies the shared secret itself, the client never needs to know it. The examples below use nginx `proxy_set_header` and Traefik `customRequestHeaders`, which replace; be careful with anything that adds a header rather than setting it.
+2. **Pulse must not be reachable except through the proxy.** Anyone who can connect directly and knows `PROXY_AUTH_SECRET` can assert any username and any role. Bind Pulse to the proxy's network or to localhost.
+
+Neither of these can be enforced from inside Pulse: a forged header and a genuine one are indistinguishable once they arrive.
+
 ## 📦 Examples
 
 ### Authentik (with Traefik)
