@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 )
 
@@ -391,5 +392,71 @@ func TestIssue1477ConfigOnlyMountsSurviveIntoContainerDisks(t *testing.T) {
 	}
 	if archive.Device != "tank:subvol-106-disk-1" || archive.Type != "mp0" {
 		t.Fatalf("config-only mount must keep device and mp key, got %+v", archive)
+	}
+}
+
+// The efficient cluster/resources path must apply the host agent's node-local
+// pct df data the same way the per-node fallback path does. Before the #1477
+// fix it skipped that enrichment entirely, so cluster-served installs never
+// surfaced per-mount usage regardless of a healthy linked agent.
+func TestBuildContainerFromClusterResource_AppliesAgentLXCFilesystems(t *testing.T) {
+	monitor := newTestMonitor(t)
+	monitor.state.UpdateNodesForInstance("cluster-a", []models.Node{{
+		ID:       "cluster-a-pve-a",
+		Name:     "pve-a",
+		Instance: "cluster-a",
+		Status:   "online",
+	}})
+
+	now := time.Now()
+	monitor.applyAgentLXCFilesystems("cluster-a-pve-a", "agent-1", &agentshost.ProxmoxLXCInventory{
+		Containers: []agentshost.ProxmoxLXCContainer{{
+			VMID: 202,
+			Name: "cache-ct",
+			Disks: []agentshost.Disk{
+				{Device: "local:202/vm-202-disk-0.raw", Mountpoint: "/", Type: "rootfs", TotalBytes: 32 << 30, UsedBytes: 8 << 30, FreeBytes: 24 << 30, Usage: 25},
+				{Device: "/mnt/tank/cache", Mountpoint: "/data", Type: "mp0", TotalBytes: 100 << 30, UsedBytes: 50 << 30, FreeBytes: 50 << 30, Usage: 50},
+			},
+		}},
+		CollectedAt: now.UTC(),
+	}, now, 30)
+
+	client := &stubPVEClientLXCStatus{
+		containerStatus: &proxmox.Container{Status: "running"},
+	}
+	resource := proxmox.ClusterResource{
+		Type:    "lxc",
+		Node:    "pve-a",
+		Name:    "cache-ct",
+		Status:  "running",
+		VMID:    202,
+		MaxCPU:  2,
+		MaxMem:  4096,
+		Mem:     2048,
+		MaxDisk: 32 << 30,
+		Disk:    8 << 30,
+	}
+
+	container, _, _, _, ok := monitor.buildContainerFromClusterResource(
+		context.Background(),
+		"cluster-a",
+		resource,
+		client,
+		map[int]bool{},
+	)
+	if !ok {
+		t.Fatal("expected container to be built")
+	}
+	if len(container.Disks) != 2 {
+		t.Fatalf("expected 2 disks from agent pct df enrichment, got %d: %+v", len(container.Disks), container.Disks)
+	}
+	var dataMount *models.Disk
+	for i := range container.Disks {
+		if container.Disks[i].Mountpoint == "/data" {
+			dataMount = &container.Disks[i]
+		}
+	}
+	if dataMount == nil || dataMount.Total != 100<<30 || dataMount.Used != 50<<30 {
+		t.Fatalf("expected /data mount with real usage from agent data, got %+v", container.Disks)
 	}
 }

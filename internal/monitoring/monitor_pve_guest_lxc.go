@@ -179,6 +179,12 @@ func (m *Monitor) buildContainerFromClusterResource(
 	}
 
 	m.enrichContainerMetadata(ctx, client, instanceName, res.Node, &container, statusSnapshot)
+	// The per-node fallback path applies node-local pct df data after metadata
+	// enrichment (monitor_polling_containers.go); the efficient cluster/resources
+	// path must do the same or installs served by it never surface the host
+	// agent's per-mount usage and fall back to config-listed mounts with
+	// unknown usage (#1477).
+	m.enrichContainerWithAgentLXCFilesystems(instanceName, res.Node, &container, sampleTime)
 
 	// For non-running containers, zero out resource usage metrics to prevent false alerts.
 	// Proxmox may report stale or residual metrics for stopped containers.
