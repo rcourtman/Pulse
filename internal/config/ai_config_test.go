@@ -1294,6 +1294,38 @@ func TestAIConfig_AlertTriggersInvestigation(t *testing.T) {
 	}
 }
 
+func TestAIConfig_GetDiscoveryAIAnalysisTimeout(t *testing.T) {
+	tests := []struct {
+		name     string
+		config   *AIConfig
+		expected time.Duration
+	}{
+		{
+			name:     "Unset keeps the tighter discovery default",
+			config:   &AIConfig{},
+			expected: 45 * time.Second,
+		},
+		{
+			name:     "Explicit request timeout wins for slow local models",
+			config:   &AIConfig{RequestTimeoutSeconds: 600},
+			expected: 600 * time.Second,
+		},
+		{
+			name:     "Explicit request timeout below the default is honored",
+			config:   &AIConfig{RequestTimeoutSeconds: 10},
+			expected: 10 * time.Second,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if duration := tt.config.GetDiscoveryAIAnalysisTimeout(); duration != tt.expected {
+				t.Errorf("expected %v, got %v", tt.expected, duration)
+			}
+		})
+	}
+}
+
 func TestAIConfig_GetRequestTimeout(t *testing.T) {
 	tests := []struct {
 		name     string

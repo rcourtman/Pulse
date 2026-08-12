@@ -964,6 +964,21 @@ func (c *AIConfig) GetRequestTimeout() time.Duration {
 	return 300 * time.Second // 5 minutes default
 }
 
+// DefaultDiscoveryAIAnalysisTimeout is the per-analysis deadline discovery
+// applies to each AI call when no explicit request timeout is configured.
+const DefaultDiscoveryAIAnalysisTimeout = 45 * time.Second
+
+// GetDiscoveryAIAnalysisTimeout returns the deadline for a single discovery AI
+// analysis call. Discovery keeps a tighter default than GetRequestTimeout so a
+// stalled model can't hang a scan, but an explicitly configured request timeout
+// wins - slow local models (e.g. Ollama) need the larger budget.
+func (c *AIConfig) GetDiscoveryAIAnalysisTimeout() time.Duration {
+	if c.RequestTimeoutSeconds > 0 {
+		return time.Duration(c.RequestTimeoutSeconds) * time.Second
+	}
+	return DefaultDiscoveryAIAnalysisTimeout
+}
+
 // GetControlLevel returns the AI control level, defaulting to read_only if not set.
 func (c *AIConfig) GetControlLevel() string {
 	if c.ControlLevel == "" {
