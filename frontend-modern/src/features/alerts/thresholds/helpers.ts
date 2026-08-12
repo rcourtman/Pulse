@@ -20,6 +20,25 @@ export const pmgColumn = (key: keyof PMGThresholdDefaults, label: string) => ({
   normalized: normalizeThresholdLabel(label),
 });
 
+// Keeps a warning/critical pair consistent after a single-field edit by
+// adjusting the field the user did NOT touch. The sanitizers clamp the warning
+// value down when it exceeds critical, which silently rewrote the number the
+// user just typed (a 32-day backup warning collapsed back to the 14-day
+// critical default, #1126). Raising the counterpart instead preserves the
+// typed value and stays visible in the form before saving.
+export const reconcileWarningCriticalEdit = (
+  prev: { warning: number; critical: number },
+  next: { warning: number; critical: number },
+): { warning: number; critical: number } => {
+  const warningChanged = next.warning !== prev.warning;
+  const criticalChanged = next.critical !== prev.critical;
+  if (next.critical <= 0 || next.warning <= next.critical) return next;
+  if (warningChanged && !criticalChanged) return { warning: next.warning, critical: next.warning };
+  if (criticalChanged && !warningChanged)
+    return { warning: next.critical, critical: next.critical };
+  return next;
+};
+
 export const normalizeDockerIgnoredInput = (value: string): string[] =>
   value
     .split('\n')

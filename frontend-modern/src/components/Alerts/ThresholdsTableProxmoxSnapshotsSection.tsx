@@ -3,7 +3,10 @@ import Camera from 'lucide-solid/icons/camera';
 
 import { ResourceTable } from './ResourceTable';
 import { CollapsibleSection } from './Thresholds/sections/CollapsibleSection';
-import { formatMetricValue } from '@/features/alerts/thresholds/helpers';
+import {
+  formatMetricValue,
+  reconcileWarningCriticalEdit,
+} from '@/features/alerts/thresholds/helpers';
 import type { ThresholdsTableSectionProps } from '@/features/alerts/thresholds/thresholdsTableSectionProps';
 
 export function ThresholdsTableProxmoxSnapshotsSection(props: ThresholdsTableSectionProps) {
@@ -49,24 +52,44 @@ export function ThresholdsTableProxmoxSnapshotsSection(props: ThresholdsTableSec
                   typeof value === 'function'
                     ? value(currentRecord)
                     : { ...currentRecord, ...value };
+                const days = reconcileWarningCriticalEdit(
+                  {
+                    warning: currentRecord['warning days'],
+                    critical: currentRecord['critical days'],
+                  },
+                  {
+                    warning:
+                      typeof nextRecord['warning days'] === 'number'
+                        ? nextRecord['warning days']
+                        : currentRecord['warning days'],
+                    critical:
+                      typeof nextRecord['critical days'] === 'number'
+                        ? nextRecord['critical days']
+                        : currentRecord['critical days'],
+                  },
+                );
+                const sizes = reconcileWarningCriticalEdit(
+                  {
+                    warning: currentRecord.warningSizeGiB,
+                    critical: currentRecord.criticalSizeGiB,
+                  },
+                  {
+                    warning:
+                      typeof nextRecord.warningSizeGiB === 'number'
+                        ? nextRecord.warningSizeGiB
+                        : currentRecord.warningSizeGiB,
+                    critical:
+                      typeof nextRecord.criticalSizeGiB === 'number'
+                        ? nextRecord.criticalSizeGiB
+                        : currentRecord.criticalSizeGiB,
+                  },
+                );
                 return {
                   ...prev,
-                  warningDays:
-                    typeof nextRecord['warning days'] === 'number'
-                      ? nextRecord['warning days']
-                      : prev.warningDays,
-                  criticalDays:
-                    typeof nextRecord['critical days'] === 'number'
-                      ? nextRecord['critical days']
-                      : prev.criticalDays,
-                  warningSizeGiB:
-                    typeof nextRecord.warningSizeGiB === 'number'
-                      ? nextRecord.warningSizeGiB
-                      : prev.warningSizeGiB,
-                  criticalSizeGiB:
-                    typeof nextRecord.criticalSizeGiB === 'number'
-                      ? nextRecord.criticalSizeGiB
-                      : prev.criticalSizeGiB,
+                  warningDays: days.warning,
+                  criticalDays: days.critical,
+                  warningSizeGiB: sizes.warning,
+                  criticalSizeGiB: sizes.critical,
                 };
               });
             }}

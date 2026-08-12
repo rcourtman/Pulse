@@ -319,6 +319,13 @@ tabs. The thresholds platform IA is platform-shaped: Proxmox, Docker,
 Kubernetes, TrueNAS, vSphere, PBS, PMG, and Systems. Frontend primitives own
 the chip, reset, "+ Filter", and route-backed shell pattern; alerts must not
 replace that with page-local search/tab chrome or legacy neutral buckets.
+Threshold edit semantics under `frontend-modern/src/features/alerts/thresholds/`
+also stay alerts-owned: the override mutation hooks write sparse enabled-only
+backup/snapshot overrides that inherit global thresholds at evaluation time,
+and the warning/critical pair reconciliation in the thresholds helpers adjusts
+the untouched field on a conflicting single-field edit. Primitives must not
+absorb those persistence or validation rules into shared form/table chrome
+(#1126).
 PlatformTableToolbar may accept compact consumer-owned context through its
 shared leading-control rail when the context is actionable for the inventory
 immediately below it. Consumers must use that extension point for local

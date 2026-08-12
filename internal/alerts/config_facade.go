@@ -97,4 +97,11 @@ func ensureValidHysteresis(threshold *HysteresisThreshold, metricName string) {
 func normalizeSnapshotDefaults(config *AlertConfig) { alertconfig.NormalizeSnapshotDefaults(config) }
 func normalizeBackupDefaults(config *AlertConfig)   { alertconfig.NormalizeBackupDefaults(config) }
 
+// NormalizeRecoveryOverrides converts per-guest backup/snapshot overrides that
+// are exact threshold copies of the current global defaults into sparse
+// enabled-only overrides so they track future global edits (#1126).
+func NormalizeRecoveryOverrides(config *AlertConfig) {
+	alertconfig.NormalizeRecoveryOverrides(config)
+}
+
 func validateQuietHoursTimezone(config *AlertConfig) { alertconfig.ValidateQuietHoursTimezone(config) }

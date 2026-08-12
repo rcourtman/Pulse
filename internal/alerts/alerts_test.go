@@ -19954,3 +19954,211 @@ func TestDockerContainerOverrideLegacyIDKeyStillHonoured(t *testing.T) {
 		t.Fatalf("expected legacy ID-keyed override to still disable container alerts")
 	}
 }
+
+func backupTestFixtures(now time.Time, ageDays int) (
+	[]recovery.ProtectionRollup,
+	map[string]GuestLookup,
+	map[string][]GuestLookup,
+	string,
+) {
+	rollups := []recovery.ProtectionRollup{
+		{
+			RollupID: "res:vm:proxmox:inst:node:100",
+			SubjectRef: &recovery.ExternalRef{
+				Type:      "proxmox-vm",
+				Namespace: "inst",
+				Name:      "app-server",
+				ID:        "inst:node:100",
+				Class:     "node",
+			},
+			LastSuccessAt: ptrTime(now.Add(-time.Duration(ageDays) * 24 * time.Hour)),
+			LastOutcome:   recovery.OutcomeSuccess,
+			Providers:     []recovery.Provider{recovery.ProviderProxmoxPVE},
+		},
+	}
+	key := BuildGuestKey("inst", "node", 100)
+	guestsByKey := map[string]GuestLookup{
+		key: {
+			ResourceID: "inst:node:100",
+			Name:       "app-server",
+			Instance:   "inst",
+			Node:       "node",
+			Type:       "qemu",
+			VMID:       100,
+		},
+	}
+	guestsByVMID := map[string][]GuestLookup{"100": {guestsByKey[key]}}
+	return rollups, guestsByKey, guestsByVMID, key
+}
+
+// A sparse enabled-only override must inherit the global thresholds instead of
+// zeroing them out (#1126).
+func TestGuestBackupOverrideInheritsGlobalThresholds(t *testing.T) {
+	m := newTestManager(t)
+	m.ClearActiveAlerts()
+
+	cfg := m.GetConfig()
+	cfg.Enabled = true
+	cfg.BackupDefaults = BackupAlertConfig{
+		Enabled:      true,
+		WarningDays:  32,
+		CriticalDays: 45,
+	}
+	cfg.Overrides = map[string]ThresholdConfig{
+		"inst:node:100": {Backup: &BackupAlertConfig{Enabled: true}},
+	}
+	m.UpdateConfig(cfg)
+
+	now := time.Now()
+	rollups, guestsByKey, guestsByVMID, key := backupTestFixtures(now, 10)
+
+	m.CheckBackups(rollups, guestsByKey, guestsByVMID)
+	m.mu.RLock()
+	_, exists := m.activeAlerts["backup-age-"+sanitizeAlertKey(key)]
+	m.mu.RUnlock()
+	if exists {
+		t.Fatalf("10-day-old backup alerted despite inherited 32-day warning threshold")
+	}
+
+	rollups, guestsByKey, guestsByVMID, key = backupTestFixtures(now, 33)
+	m.CheckBackups(rollups, guestsByKey, guestsByVMID)
+	m.mu.RLock()
+	alert, exists := testLookupActiveAlert(t, m, "backup-age-"+sanitizeAlertKey(key))
+	m.mu.RUnlock()
+	if !exists {
+		t.Fatalf("expected warning alert at inherited 32-day threshold")
+	}
+	if alert.Level != AlertLevelWarning {
+		t.Fatalf("expected warning alert, got %s", alert.Level)
+	}
+}
+
+// findBackupOverride returns the single backup override in the config,
+// regardless of the storage key normalizeOverrides settled on.
+func findBackupOverride(t *testing.T, m *Manager) BackupAlertConfig {
+	t.Helper()
+	for _, override := range m.GetConfig().Overrides {
+		if override.Backup != nil {
+			return *override.Backup
+		}
+	}
+	t.Fatalf("no backup override found in config")
+	return BackupAlertConfig{}
+}
+
+// An override that is an exact threshold copy of the current globals is a
+// frozen artifact of the legacy toggle. It must be rewritten to sparse so a
+// later global threshold change applies to the guest (#1126).
+func TestFrozenBackupOverrideMigratesToSparse(t *testing.T) {
+	m := newTestManager(t)
+	m.ClearActiveAlerts()
+
+	cfg := m.GetConfig()
+	cfg.Enabled = true
+	cfg.BackupDefaults = BackupAlertConfig{
+		Enabled:      true,
+		WarningDays:  7,
+		CriticalDays: 14,
+		FreshHours:   24,
+		StaleHours:   72,
+	}
+	cfg.Overrides = map[string]ThresholdConfig{
+		"inst:node:100": {
+			Backup: &BackupAlertConfig{
+				Enabled:      true,
+				WarningDays:  7,
+				CriticalDays: 14,
+				FreshHours:   24,
+				StaleHours:   72,
+			},
+		},
+	}
+	m.UpdateConfig(cfg)
+
+	migrated := findBackupOverride(t, m)
+	if !migrated.Enabled {
+		t.Fatalf("expected enabled sparse backup override, got %+v", migrated)
+	}
+	if migrated.WarningDays != 0 || migrated.CriticalDays != 0 {
+		t.Fatalf("frozen copy not migrated to sparse: %+v", migrated)
+	}
+
+	// Raising the global warning threshold must now take effect for the guest.
+	cfg = m.GetConfig()
+	cfg.BackupDefaults.WarningDays = 32
+	cfg.BackupDefaults.CriticalDays = 45
+	m.UpdateConfig(cfg)
+
+	rollups, guestsByKey, guestsByVMID, key := backupTestFixtures(time.Now(), 10)
+	m.CheckBackups(rollups, guestsByKey, guestsByVMID)
+	m.mu.RLock()
+	_, exists := m.activeAlerts["backup-age-"+sanitizeAlertKey(key)]
+	m.mu.RUnlock()
+	if exists {
+		t.Fatalf("10-day-old backup alerted at stale frozen 7-day threshold after global raised to 32")
+	}
+}
+
+// Overrides whose thresholds differ from the globals are deliberate and must
+// survive migration and win at evaluation.
+func TestDeliberateBackupOverridePreserved(t *testing.T) {
+	m := newTestManager(t)
+	m.ClearActiveAlerts()
+
+	cfg := m.GetConfig()
+	cfg.Enabled = true
+	cfg.BackupDefaults = BackupAlertConfig{
+		Enabled:      true,
+		WarningDays:  32,
+		CriticalDays: 45,
+	}
+	cfg.Overrides = map[string]ThresholdConfig{
+		"inst:node:100": {
+			Backup: &BackupAlertConfig{
+				Enabled:      true,
+				WarningDays:  7,
+				CriticalDays: 10,
+			},
+		},
+	}
+	m.UpdateConfig(cfg)
+
+	kept := findBackupOverride(t, m)
+	if kept.WarningDays != 7 || kept.CriticalDays != 10 {
+		t.Fatalf("deliberate override rewritten: %+v", kept)
+	}
+
+	rollups, guestsByKey, guestsByVMID, key := backupTestFixtures(time.Now(), 11)
+	m.CheckBackups(rollups, guestsByKey, guestsByVMID)
+	m.mu.RLock()
+	alert, exists := testLookupActiveAlert(t, m, "backup-age-"+sanitizeAlertKey(key))
+	m.mu.RUnlock()
+	if !exists {
+		t.Fatalf("expected critical alert at deliberate 10-day override threshold")
+	}
+	if alert.Level != AlertLevelCritical {
+		t.Fatalf("expected critical alert, got %s", alert.Level)
+	}
+}
+
+func TestMergeSnapshotOverrideInheritsZeroFields(t *testing.T) {
+	defaults := SnapshotAlertConfig{
+		Enabled:         true,
+		WarningDays:     20,
+		CriticalDays:    30,
+		WarningSizeGiB:  50,
+		CriticalSizeGiB: 100,
+	}
+	merged := mergeSnapshotOverride(defaults, SnapshotAlertConfig{Enabled: true})
+	if merged.WarningDays != 20 || merged.CriticalDays != 30 {
+		t.Fatalf("sparse snapshot override did not inherit day thresholds: %+v", merged)
+	}
+	if merged.WarningSizeGiB != 50 || merged.CriticalSizeGiB != 100 {
+		t.Fatalf("sparse snapshot override did not inherit size thresholds: %+v", merged)
+	}
+
+	explicit := mergeSnapshotOverride(defaults, SnapshotAlertConfig{Enabled: true, WarningDays: 5})
+	if explicit.WarningDays != 5 || explicit.CriticalDays != 30 {
+		t.Fatalf("explicit snapshot override field lost: %+v", explicit)
+	}
+}

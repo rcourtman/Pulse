@@ -10,7 +10,10 @@ import {
   DEFAULT_BACKUP_FRESH_HOURS,
   DEFAULT_BACKUP_STALE_HOURS,
 } from '@/features/alerts/thresholds/constants';
-import { formatMetricValue } from '@/features/alerts/thresholds/helpers';
+import {
+  formatMetricValue,
+  reconcileWarningCriticalEdit,
+} from '@/features/alerts/thresholds/helpers';
 import type { ThresholdsTableSectionProps } from '@/features/alerts/thresholds/thresholdsTableSectionProps';
 
 export function ThresholdsTableProxmoxBackupsSection(props: ThresholdsTableSectionProps) {
@@ -56,6 +59,22 @@ export function ThresholdsTableProxmoxBackupsSection(props: ThresholdsTableSecti
                   typeof value === 'function'
                     ? value(currentRecord)
                     : { ...currentRecord, ...value };
+                const days = reconcileWarningCriticalEdit(
+                  {
+                    warning: currentRecord['warning days'],
+                    critical: currentRecord['critical days'],
+                  },
+                  {
+                    warning:
+                      typeof nextRecord['warning days'] === 'number'
+                        ? nextRecord['warning days']
+                        : currentRecord['warning days'],
+                    critical:
+                      typeof nextRecord['critical days'] === 'number'
+                        ? nextRecord['critical days']
+                        : currentRecord['critical days'],
+                  },
+                );
                 return {
                   ...prev,
                   freshHours:
@@ -66,14 +85,8 @@ export function ThresholdsTableProxmoxBackupsSection(props: ThresholdsTableSecti
                     typeof nextRecord['stale hours'] === 'number'
                       ? nextRecord['stale hours']
                       : prev.staleHours,
-                  warningDays:
-                    typeof nextRecord['warning days'] === 'number'
-                      ? nextRecord['warning days']
-                      : prev.warningDays,
-                  criticalDays:
-                    typeof nextRecord['critical days'] === 'number'
-                      ? nextRecord['critical days']
-                      : prev.criticalDays,
+                  warningDays: days.warning,
+                  criticalDays: days.critical,
                 };
               });
             }}

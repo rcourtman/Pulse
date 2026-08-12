@@ -1,22 +1,22 @@
 {
   "version": 1,
-  "base_sha": "cea33b8ee29255035d7d248704b80428761085c6",
-  "verified_at": "2026-08-11T19:40:09Z",
+  "base_sha": "1243cde4971a70007ac5f867593da76f19698e22",
+  "verified_at": "2026-08-12T05:34:19Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Workloads/diskListModel.ts",
-    "frontend-modern/src/components/Workloads/stackedDiskBarModel.ts",
-    "frontend-modern/src/features/standalone/agentMachineTableModel.ts",
-    "frontend-modern/src/utils/format.ts"
+    "frontend-modern/src/components/Alerts/ThresholdsTableProxmoxBackupsSection.tsx",
+    "frontend-modern/src/components/Alerts/ThresholdsTableProxmoxSnapshotsSection.tsx",
+    "frontend-modern/src/features/alerts/thresholds/helpers.ts",
+    "frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsOverrideMutations.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Workloads/diskListModel.ts": "82dd17c7d9ba7c5ee103db375d11748df245ecf843ab56505f9e4fa6d21f0b81",
-    "frontend-modern/src/components/Workloads/stackedDiskBarModel.ts": "a72196fdc5c75bdd40ad5c45f1934e06d05ebdd4a89f68f6e932a12f97383b78",
-    "frontend-modern/src/features/standalone/agentMachineTableModel.ts": "fe5a0b14cc9324ac9d6197295a6f201fe59c6d22fd66437b22aeb4b567b316cf",
-    "frontend-modern/src/utils/format.ts": "8c09d25938796573232752d5e326055712c784dc906731f110188804a09b2114"
+    "frontend-modern/src/components/Alerts/ThresholdsTableProxmoxBackupsSection.tsx": "cebf62372258700510ff8f9a912bbf51df2c7fafbbc263de12e52353aaf0d335",
+    "frontend-modern/src/components/Alerts/ThresholdsTableProxmoxSnapshotsSection.tsx": "705c40d5b57090e551d56eeef5a9e04fa007a43f5d6a78c34033e5d6472a5ffc",
+    "frontend-modern/src/features/alerts/thresholds/helpers.ts": "b3da861fb86315e87beeade0376871bf4cf9dbeb14bd53d13055584a98866abb",
+    "frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsOverrideMutations.ts": "1e917cd27216674aa58c038b9715f7621668bcc157a97e1b4f0e6ac1b606e0f8"
   },
   "routes": [
-    "/proxmox"
+    "/alerts/thresholds/proxmox"
   ],
   "viewports": [
     {
@@ -24,20 +24,24 @@
       "height": 800
     },
     {
-      "width": 768,
-      "height": 900
+      "width": 375,
+      "height": 812
     }
   ],
   "states": [
-    "mock-mode LXC edge-proxy-01 with a measured rootfs plus a config-only mount (/srv/archive, usage -1, total 20 GiB) in the shared workloads table",
-    "workloads row disk cell: single measured bar (37% target), no fabricated 0% mini-slot for the config-only mount, at both viewports",
-    "row disk tooltip: Disk Breakdown lists / at 37% (21.9 GB/59.0 GB) and /srv/archive as — with ?/20.0 GB",
-    "guest drawer Filesystems block: rootfs card 21.9 GB/59.0 GB 37% ROOTFS and /srv/archive card ?/20.0 GB — MP0 at both viewports"
+    "Backups section global defaults row at factory 7/14 warning/critical days",
+    "Backups global defaults row after warning-days edit to 32 (critical auto-raised to 32, warning preserved)",
+    "Backups global defaults row after critical-days edit to 45 (consistent 32/45 pair untouched)",
+    "Backups global defaults row after critical-days edit to 10 below warning (warning lowered to 10/10)",
+    "Narrow 375px card layout of the same Backups global defaults row with the warning-days edit applied",
+    "All edits discarded via reload before saving; live dev alert config unchanged"
   ],
   "interactions": [
-    "searched the Proxmox workloads table for edge-proxy-01 at 1280x800",
-    "hovered the row disk cell to open the Disk Breakdown tooltip and read both entries",
-    "clicked the row to expand the guest drawer and read the Filesystems block",
-    "resized to 768x900, reloaded /proxmox, re-filtered to edge-proxy-01, re-opened the drawer and re-read the disk cell and Filesystems block"
+    "Logged in as admin and opened Alerts > Thresholds > Proxmox",
+    "Edited Backups global Warning Days from 7 to 32 and confirmed the value stayed 32 with Critical Days raised to 32 instead of the old silent 14 clamp",
+    "Edited Critical Days to 45 and confirmed the 32/45 pair was left untouched",
+    "Edited Critical Days to 10 and confirmed Warning Days lowered with it to 10/10",
+    "Repeated the Warning Days 32 edit at 375px mobile viewport and confirmed identical 32/32 behavior in the card layout",
+    "Reloaded without saving after each pass so no threshold change persisted to the dev backend"
   ]
 }

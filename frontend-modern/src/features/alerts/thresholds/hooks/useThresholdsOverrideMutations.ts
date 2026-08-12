@@ -322,7 +322,15 @@ export function useThresholdsOverrideMutations({
     const { storageId } = getOverridePersistenceIdentity(resource);
     const existingOverride = findOverrideForResource(props.overrides(), resource);
     const previousRaw = findRawOverrideConfigForResource(props.rawOverridesConfig(), resource);
-    const baseConfig = existingOverride?.backup || props.backupDefaults();
+    // Zero-valued thresholds inherit the global defaults at evaluation time,
+    // so a toggle-created override stores only the enabled flag. Copying the
+    // globals here would freeze their current values into the override and
+    // silently detach the guest from later global edits (#1126).
+    const baseConfig = existingOverride?.backup ?? {
+      enabled: props.backupDefaults().enabled,
+      warningDays: 0,
+      criticalDays: 0,
+    };
     const newBackup = {
       ...baseConfig,
       enabled: forceState !== undefined ? forceState : !baseConfig.enabled,
@@ -361,7 +369,13 @@ export function useThresholdsOverrideMutations({
     const { storageId } = getOverridePersistenceIdentity(resource);
     const existingOverride = findOverrideForResource(props.overrides(), resource);
     const previousRaw = findRawOverrideConfigForResource(props.rawOverridesConfig(), resource);
-    const baseConfig = existingOverride?.snapshot || props.snapshotDefaults();
+    // Sparse for the same reason as toggleBackup: zero thresholds inherit the
+    // globals at evaluation time instead of freezing a copy (#1126).
+    const baseConfig = existingOverride?.snapshot ?? {
+      enabled: props.snapshotDefaults().enabled,
+      warningDays: 0,
+      criticalDays: 0,
+    };
     const newSnapshot = {
       ...baseConfig,
       enabled: forceState !== undefined ? forceState : !baseConfig.enabled,

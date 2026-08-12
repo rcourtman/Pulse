@@ -3,6 +3,7 @@ import {
   normalizeThresholdLabel,
   normalizeDockerIgnoredInput,
   formatMetricValue,
+  reconcileWarningCriticalEdit,
 } from '@/features/alerts/thresholds/helpers';
 
 describe('alerts thresholds helpers', () => {
@@ -130,6 +131,32 @@ describe('alerts thresholds helpers', () => {
 
     it('returns string for unknown metric', () => {
       expect(formatMetricValue('unknown', 123)).toBe('123');
+    });
+  });
+
+  describe('reconcileWarningCriticalEdit', () => {
+    it('raises critical when the warning edit exceeds it', () => {
+      expect(
+        reconcileWarningCriticalEdit({ warning: 7, critical: 14 }, { warning: 32, critical: 14 }),
+      ).toEqual({ warning: 32, critical: 32 });
+    });
+
+    it('lowers warning when the critical edit drops below it', () => {
+      expect(
+        reconcileWarningCriticalEdit({ warning: 32, critical: 45 }, { warning: 32, critical: 10 }),
+      ).toEqual({ warning: 10, critical: 10 });
+    });
+
+    it('leaves consistent pairs untouched', () => {
+      expect(
+        reconcileWarningCriticalEdit({ warning: 7, critical: 14 }, { warning: 10, critical: 14 }),
+      ).toEqual({ warning: 10, critical: 14 });
+    });
+
+    it('allows warning-only configurations when critical is unset', () => {
+      expect(
+        reconcileWarningCriticalEdit({ warning: 7, critical: 0 }, { warning: 32, critical: 0 }),
+      ).toEqual({ warning: 32, critical: 0 });
     });
   });
 });

@@ -211,6 +211,42 @@ func NormalizeSnapshotDefaults(config *AlertConfig) {
 	}
 }
 
+// NormalizeRecoveryOverrides rewrites per-guest backup/snapshot overrides whose
+// threshold values are exact copies of the current global defaults into sparse
+// overrides that carry only the enabled flag. The legacy per-guest toggle
+// persisted a full copy of the globals just to flip enabled, freezing the
+// threshold values so later global edits silently stopped applying to those
+// guests (#1126). Zero-valued fields inherit the global default at evaluation
+// time, so the rewrite is behavior-preserving at the moment it runs and lets
+// the override track future global changes. Overrides whose thresholds differ
+// from the current globals are deliberate per-guest values and are left alone.
+func NormalizeRecoveryOverrides(config *AlertConfig) {
+	for id, override := range config.Overrides {
+		changed := false
+		if b := override.Backup; b != nil {
+			if b.WarningDays == config.BackupDefaults.WarningDays &&
+				b.CriticalDays == config.BackupDefaults.CriticalDays &&
+				b.FreshHours == config.BackupDefaults.FreshHours &&
+				b.StaleHours == config.BackupDefaults.StaleHours {
+				override.Backup = &BackupAlertConfig{Enabled: b.Enabled}
+				changed = true
+			}
+		}
+		if s := override.Snapshot; s != nil {
+			if s.WarningDays == config.SnapshotDefaults.WarningDays &&
+				s.CriticalDays == config.SnapshotDefaults.CriticalDays &&
+				s.WarningSizeGiB == config.SnapshotDefaults.WarningSizeGiB &&
+				s.CriticalSizeGiB == config.SnapshotDefaults.CriticalSizeGiB {
+				override.Snapshot = &SnapshotAlertConfig{Enabled: s.Enabled}
+				changed = true
+			}
+		}
+		if changed {
+			config.Overrides[id] = override
+		}
+	}
+}
+
 func NormalizeBackupDefaults(config *AlertConfig) {
 	if config.BackupDefaults.WarningDays < 0 {
 		config.BackupDefaults.WarningDays = 0

@@ -912,6 +912,8 @@ func normalizeAlertDefaults(config *alerts.AlertConfig) {
 	}
 
 	config.DockerIgnoredContainerPrefixes = alerts.NormalizeDockerIgnoredPrefixes(config.DockerIgnoredContainerPrefixes)
+
+	alerts.NormalizeRecoveryOverrides(config)
 }
 
 // SaveAlertConfig saves alert configuration to file

@@ -169,4 +169,108 @@ describe('useThresholdsOverrideMutations', () => {
       },
     });
   });
+
+  it('toggleBackup writes a sparse enabled-only override instead of freezing the globals', () => {
+    const overrideSignal = createSignal<any[]>([]);
+    const { props, rawOverridesConfig } = buildTableProps(overrideSignal);
+    const guestResource: TableResource = {
+      id: 'cluster-a:node-2:100',
+      name: 'db-01',
+      type: 'guest',
+      resourceType: 'VM',
+      vmid: 100,
+      node: 'node-2',
+      instance: 'cluster-a',
+      defaults: { cpu: 80 },
+      thresholds: { cpu: 80 },
+    };
+
+    const { result } = renderHook(() =>
+      useThresholdsOverrideMutations({
+        props,
+        resources: {
+          nodesWithOverrides: () => [],
+          agentsWithOverrides: () => [],
+          agentDisksWithOverrides: () => [],
+          dockerHostsWithOverrides: () => [],
+          guestsFlat: () => [guestResource],
+          dockerContainersFlat: () => [],
+          pbsServersWithOverrides: () => [],
+          pmgServersWithOverrides: () => [],
+          storageWithOverrides: () => [],
+        },
+        editingThresholds: () => ({}),
+        editingNote: () => '',
+        bulkEditIds: () => [],
+        cancelEdit: vi.fn(),
+      }),
+    );
+
+    result.toggleBackup(guestResource.id, true);
+
+    // Zero-valued thresholds inherit the globals at evaluation time. A copy of
+    // the global 7/14 here would freeze those values into the override (#1126).
+    const rawEntries = Object.values(rawOverridesConfig());
+    expect(rawEntries).toHaveLength(1);
+    expect(rawEntries[0].backup).toEqual({
+      enabled: true,
+      warningDays: 0,
+      criticalDays: 0,
+    });
+  });
+
+  it('toggleSnapshot preserves explicit override thresholds while flipping enabled', () => {
+    const overrideSignal = createSignal<any[]>([
+      {
+        id: 'cluster-a:node-2:100',
+        name: 'db-01',
+        type: 'guest',
+        thresholds: {},
+        snapshot: { enabled: false, warningDays: 5, criticalDays: 9 },
+      },
+    ]);
+    const { props, rawOverridesConfig } = buildTableProps(overrideSignal);
+    const guestResource: TableResource = {
+      id: 'cluster-a:node-2:100',
+      name: 'db-01',
+      type: 'guest',
+      resourceType: 'VM',
+      vmid: 100,
+      node: 'node-2',
+      instance: 'cluster-a',
+      defaults: { cpu: 80 },
+      thresholds: { cpu: 80 },
+    };
+
+    const { result } = renderHook(() =>
+      useThresholdsOverrideMutations({
+        props,
+        resources: {
+          nodesWithOverrides: () => [],
+          agentsWithOverrides: () => [],
+          agentDisksWithOverrides: () => [],
+          dockerHostsWithOverrides: () => [],
+          guestsFlat: () => [guestResource],
+          dockerContainersFlat: () => [],
+          pbsServersWithOverrides: () => [],
+          pmgServersWithOverrides: () => [],
+          storageWithOverrides: () => [],
+        },
+        editingThresholds: () => ({}),
+        editingNote: () => '',
+        bulkEditIds: () => [],
+        cancelEdit: vi.fn(),
+      }),
+    );
+
+    result.toggleSnapshot(guestResource.id);
+
+    const rawEntries = Object.values(rawOverridesConfig());
+    expect(rawEntries).toHaveLength(1);
+    expect(rawEntries[0].snapshot).toEqual({
+      enabled: true,
+      warningDays: 5,
+      criticalDays: 9,
+    });
+  });
 });

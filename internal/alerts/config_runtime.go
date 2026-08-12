@@ -31,6 +31,7 @@ func (m *Manager) UpdateConfig(config AlertConfig) {
 	alertconfig.NormalizePBSDefaults(&config)
 	alertconfig.NormalizeSnapshotDefaults(&config)
 	alertconfig.NormalizeBackupDefaults(&config)
+	alertconfig.NormalizeRecoveryOverrides(&config)
 	alertconfig.NormalizeNodeDefaults(&config)
 	alertconfig.NormalizeAgentDefaults(&config)
 	alertconfig.NormalizeKubernetesDefaults(&config)

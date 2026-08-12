@@ -38,10 +38,53 @@ func backupIgnoreVMID(vmID string, ignoreList []string) bool {
 	return false
 }
 
+// mergeSnapshotOverride resolves a per-guest snapshot override against the
+// global defaults. Overrides written by the per-guest toggle carry only the
+// enabled flag, so zero-valued thresholds inherit the global value; explicit
+// non-zero values win (#1126).
+func mergeSnapshotOverride(defaults SnapshotAlertConfig, override SnapshotAlertConfig) SnapshotAlertConfig {
+	merged := override
+	if merged.WarningDays <= 0 {
+		merged.WarningDays = defaults.WarningDays
+	}
+	if merged.CriticalDays <= 0 {
+		merged.CriticalDays = defaults.CriticalDays
+	}
+	if merged.WarningSizeGiB <= 0 {
+		merged.WarningSizeGiB = defaults.WarningSizeGiB
+	}
+	if merged.CriticalSizeGiB <= 0 {
+		merged.CriticalSizeGiB = defaults.CriticalSizeGiB
+	}
+	return merged
+}
+
+// mergeBackupOverride is the backup counterpart of mergeSnapshotOverride.
+// AlertOrphaned and IgnoreVMIDs are instance-wide filters, so the globals
+// always win for those regardless of what a stale override carries.
+func mergeBackupOverride(defaults BackupAlertConfig, override BackupAlertConfig) BackupAlertConfig {
+	merged := override
+	if merged.WarningDays <= 0 {
+		merged.WarningDays = defaults.WarningDays
+	}
+	if merged.CriticalDays <= 0 {
+		merged.CriticalDays = defaults.CriticalDays
+	}
+	if merged.FreshHours <= 0 {
+		merged.FreshHours = defaults.FreshHours
+	}
+	if merged.StaleHours <= 0 {
+		merged.StaleHours = defaults.StaleHours
+	}
+	merged.AlertOrphaned = defaults.AlertOrphaned
+	merged.IgnoreVMIDs = defaults.IgnoreVMIDs
+	return merged
+}
+
 func (m *Manager) resolvedSnapshotAlertConfigNoLock(thresholds ThresholdConfig) SnapshotAlertConfig {
 	cfg := m.config.SnapshotDefaults
 	if thresholds.Snapshot != nil {
-		cfg = *thresholds.Snapshot
+		cfg = mergeSnapshotOverride(cfg, *thresholds.Snapshot)
 	}
 	return cfg
 }
@@ -49,7 +92,7 @@ func (m *Manager) resolvedSnapshotAlertConfigNoLock(thresholds ThresholdConfig) 
 func (m *Manager) resolvedBackupAlertConfigNoLock(thresholds ThresholdConfig) BackupAlertConfig {
 	cfg := m.config.BackupDefaults
 	if thresholds.Backup != nil {
-		cfg = *thresholds.Backup
+		cfg = mergeBackupOverride(cfg, *thresholds.Backup)
 	}
 	if cfg.AlertOrphaned == nil {
 		alertOrphaned := true
@@ -355,7 +398,7 @@ func (m *Manager) CheckSnapshotsForInstance(instanceName string, snapshots []mod
 
 		currentSnapshotCfg := snapshotCfg
 		if gh.Snapshot != nil {
-			currentSnapshotCfg = *gh.Snapshot
+			currentSnapshotCfg = mergeSnapshotOverride(snapshotCfg, *gh.Snapshot)
 		}
 
 		if !currentSnapshotCfg.Enabled {
@@ -799,7 +842,7 @@ func (m *Manager) CheckBackupsWithInventory(
 				continue
 			}
 			if gh.Backup != nil {
-				currentBackupCfg = *gh.Backup
+				currentBackupCfg = mergeBackupOverride(backupCfg, *gh.Backup)
 			}
 		}
 

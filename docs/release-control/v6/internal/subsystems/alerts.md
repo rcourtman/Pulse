@@ -816,6 +816,28 @@ evaluation, backup rollup age evaluation, backup inventory readiness, PVE
 template subject matching, namespace disambiguation, and snapshot/backup active
 alert cleanup; future backup or snapshot alert behavior should extend that
 owner rather than expanding the central Manager file.
+Per-guest backup and snapshot overrides are sparse, not frozen copies. A
+zero-valued threshold field in an override (`warningDays`, `criticalDays`,
+`freshHours`, `staleHours`, and the snapshot size pair) inherits the current
+global default at evaluation time through the merge helpers in
+`internal/alerts/backup_snapshot.go`; explicit non-zero values win, and
+`alertOrphaned` plus `ignoreVMIDs` always resolve from the globals because they
+are instance-wide filters. `NormalizeRecoveryOverrides` in
+`internal/alerts/config/normalize.go` (called from `UpdateConfig` in
+`internal/alerts/config_runtime.go` and from the shared persistence
+normalization in `internal/config/persistence.go`) rewrites stored overrides
+whose threshold tuple exactly matches the current globals into sparse
+enabled-only form. Those full copies were artifacts of the legacy per-guest
+toggle, and the equality condition makes the rewrite behavior-preserving at
+the moment it runs while letting the guest track later global edits (#1126).
+Overrides whose thresholds differ from the current globals are deliberate
+per-guest values and must never be rewritten.
+`TestGuestBackupOverrideInheritsGlobalThresholds`,
+`TestFrozenBackupOverrideMigratesToSparse`,
+`TestDeliberateBackupOverridePreserved`, and
+`TestMergeSnapshotOverrideInheritsZeroFields` in
+`internal/alerts/alerts_test.go` pin the merge, migration, and preservation
+behaviors.
 Proxmox disk health alert evaluation now lives in
 `internal/alerts/disk_health.go`. That file owns Proxmox disk canonical
 identity, disk health assessment alerts, known-firmware health suppression, and
@@ -1107,6 +1129,21 @@ override toggles now route through
 while powered-off/connectivity state transitions plus alert-removal side
 effects now route through
 `frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsAvailabilityMutations.ts`.
+The backup/snapshot override toggles in that mutations owner write sparse
+enabled-only overrides (zero-valued threshold fields) rather than copying the
+current global defaults into the override, because zero-valued fields inherit
+the globals at evaluation time and a copied value freezes the guest against
+later global edits (#1126). Toggling a guest that already carries explicit
+override thresholds must preserve those values while flipping enabled.
+The Backups and Snapshots global-defaults editors in
+`frontend-modern/src/components/Alerts/ThresholdsTableProxmoxBackupsSection.tsx`
+and
+`frontend-modern/src/components/Alerts/ThresholdsTableProxmoxSnapshotsSection.tsx`
+reconcile warning/critical pairs through `reconcileWarningCriticalEdit` in
+`frontend-modern/src/features/alerts/thresholds/helpers.ts`: a single-field
+edit that creates a conflict adjusts the field the user did not touch, so a
+32-day warning edit raises critical alongside it instead of being silently
+clamped back down by the sanitizers before save.
 That same thresholds host-data boundary now treats top-level TrueNAS appliances
 as canonical `agent` resources with `platformType: 'truenas'`. System-disk
 group headers must use agent-owned header metadata instead of guest/node-
