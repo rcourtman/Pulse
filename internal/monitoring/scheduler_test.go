@@ -2360,3 +2360,92 @@ func TestLastScheduled_Found(t *testing.T) {
 		t.Errorf("expected instance name pbs1, got %s", task.InstanceName)
 	}
 }
+
+// TestBuildPlanRepeatedPassesKeepPendingSlot reproduces the monitor's planning
+// feedback loop: every poll tick rebuilds the plan from LastScheduled, which
+// reports the previously planned NextRun. Re-adding an interval to a pending
+// slot that has not elapsed compounds NextRun ahead of wall-clock faster than
+// time passes, so once the adaptive interval stretches beyond the tick cadence
+// the instance is never due again and API polling starves permanently (#1437).
+func TestBuildPlanRepeatedPassesKeepPendingSlot(t *testing.T) {
+	selector := mockIntervalSelector{interval: 60 * time.Second}
+	scheduler := NewAdaptiveScheduler(DefaultSchedulerConfig(), mockStalenessSource{}, selector, &mockTaskEnqueuer{})
+
+	start := time.Now()
+	descriptorAt := func(now time.Time) []InstanceDescriptor {
+		desc := InstanceDescriptor{Name: "pve-1", Type: InstanceTypePVE}
+		if last, ok := scheduler.LastScheduled(InstanceTypePVE, "pve-1"); ok {
+			desc.LastScheduled = last.NextRun
+			desc.LastInterval = last.Interval
+		}
+		return []InstanceDescriptor{desc}
+	}
+
+	// First pass schedules an immediate run, planning the next slot 60s out.
+	first := scheduler.BuildPlan(start, descriptorAt(start), 0)
+	if len(first) != 1 {
+		t.Fatalf("expected one task, got %d", len(first))
+	}
+	pending := start.Add(60 * time.Second)
+
+	// Re-plan every 10 seconds while the pending slot has not elapsed, exactly
+	// like the monitor's poll tick does. The slot must hold still.
+	for tick := 1; tick <= 5; tick++ {
+		now := start.Add(time.Duration(tick) * 10 * time.Second)
+		tasks := scheduler.BuildPlan(now, descriptorAt(now), 0)
+		if len(tasks) != 1 {
+			t.Fatalf("tick %d: expected one task, got %d", tick, len(tasks))
+		}
+		if tasks[0].NextRun.After(pending) {
+			t.Fatalf("tick %d: pending slot drifted from %s to %s, planning passes compound NextRun past wall-clock",
+				tick, pending.Format(time.RFC3339), tasks[0].NextRun.Format(time.RFC3339))
+		}
+	}
+
+	// Once the pending slot elapses, the next pass advances exactly one interval.
+	after := pending.Add(5 * time.Second)
+	tasks := scheduler.BuildPlan(after, descriptorAt(after), 0)
+	want := pending.Add(60 * time.Second)
+	if !tasks[0].NextRun.Equal(want) {
+		t.Fatalf("elapsed slot advanced to %s, want %s", tasks[0].NextRun.Format(time.RFC3339), want.Format(time.RFC3339))
+	}
+}
+
+// TestBuildPlanPendingSlotTightensWhenIntervalShrinks pins the responsiveness
+// side of the pending-slot rule: when staleness drives the selected interval
+// below the remaining wait, the plan moves the run earlier instead of sitting
+// out the rest of a long stretched slot.
+func TestBuildPlanPendingSlotTightensWhenIntervalShrinks(t *testing.T) {
+	selector := &settableIntervalSelector{interval: 5 * time.Minute}
+	scheduler := NewAdaptiveScheduler(DefaultSchedulerConfig(), mockStalenessSource{}, selector, &mockTaskEnqueuer{})
+
+	start := time.Now()
+	descriptorAt := func() []InstanceDescriptor {
+		desc := InstanceDescriptor{Name: "pve-1", Type: InstanceTypePVE}
+		if last, ok := scheduler.LastScheduled(InstanceTypePVE, "pve-1"); ok {
+			desc.LastScheduled = last.NextRun
+			desc.LastInterval = last.Interval
+		}
+		return []InstanceDescriptor{desc}
+	}
+
+	scheduler.BuildPlan(start, descriptorAt(), 0)
+	now := start.Add(10 * time.Second)
+	scheduler.BuildPlan(now, descriptorAt(), 0)
+
+	selector.interval = 10 * time.Second
+	now = start.Add(20 * time.Second)
+	tasks := scheduler.BuildPlan(now, descriptorAt(), 0)
+	want := now.Add(10 * time.Second)
+	if tasks[0].NextRun.After(want) {
+		t.Fatalf("shrunk interval left the run at %s, want no later than %s", tasks[0].NextRun.Format(time.RFC3339), want.Format(time.RFC3339))
+	}
+}
+
+type settableIntervalSelector struct {
+	interval time.Duration
+}
+
+func (s *settableIntervalSelector) SelectInterval(req IntervalRequest) time.Duration {
+	return s.interval
+}

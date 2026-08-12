@@ -204,7 +204,21 @@ func (s *AdaptiveScheduler) BuildPlan(now time.Time, inventory []InstanceDescrip
 
 		nextRun := now
 		if !lastScheduled.IsZero() {
-			nextRun = lastScheduled.Add(nextInterval)
+			if lastScheduled.After(now) {
+				// The previously planned run has not elapsed yet. Planning
+				// passes run every poll tick, so re-adding an interval here
+				// compounds NextRun ahead of wall-clock faster than time
+				// passes, and once the adaptive interval stretches beyond the
+				// tick cadence the instance is never due again (#1437). Keep
+				// the pending slot, tightening it only when the freshly
+				// selected interval now justifies an earlier run.
+				nextRun = lastScheduled
+				if candidate := now.Add(nextInterval); candidate.Before(nextRun) {
+					nextRun = candidate
+				}
+			} else {
+				nextRun = lastScheduled.Add(nextInterval)
+			}
 		} else if !inst.LastSuccess.IsZero() {
 			nextRun = inst.LastSuccess.Add(nextInterval)
 		}
