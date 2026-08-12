@@ -97,6 +97,7 @@ import reportingStateSource from '../useReportingPanelState.ts?raw';
 import ssoProvidersPanelSource from '../SSOProvidersPanel.tsx?raw';
 import ssoProvidersStateSource from '../useSSOProvidersState.ts?raw';
 import useInfrastructureInstallStateSource from '../useInfrastructureInstallState.tsx?raw';
+import useInfrastructureSettingsStateSource from '../useInfrastructureSettingsState.ts?raw';
 import infrastructureOnboardingPresentationSource from '../../../utils/infrastructureOnboardingPresentation.ts?raw';
 import selfHostedBillingPresentationSource from '../selfHostedBillingPresentation.ts?raw';
 import systemSettingsPresentationSource from '../../../utils/systemSettingsPresentation.ts?raw';
@@ -396,6 +397,19 @@ describe('settings architecture guardrails', () => {
     // so gating it would take personal settings away from every non-admin.
     const generalNavBlock = settingsNavCatalogSource.match(/id: 'system-general',[\s\S]*?\n {6}},/);
     expect(generalNavBlock?.[0]).not.toContain('requiredCapability');
+  });
+
+  it('keeps viewer sessions on the runtime-display settings projection when infrastructure read is denied', () => {
+    // system-general stays ungated (previous test), so a session without
+    // infrastructureRead still renders the General panel. The system-settings
+    // state must therefore still initialize on mount — it degrades to the
+    // /api/runtime/display projection internally when the admin payload 403s.
+    // Returning before that init is what left issue #1601's viewers reading
+    // "Realtime (10s)" while the server polled at the configured cadence.
+    const gatedBranch = useInfrastructureSettingsStateSource.match(
+      /if \(!canReadInfrastructure\(\)\) \{[\s\S]*?\n {6}\}/,
+    );
+    expect(gatedBranch?.[0]).toContain('await initializeSystemSettingsState();');
   });
 
   it('keeps the external-agent (MCP) connector setup findable from sidebar search', () => {

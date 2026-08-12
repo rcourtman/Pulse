@@ -22,6 +22,11 @@ type RuntimeDisplayResponse struct {
 	DisableDockerUpdateActions bool   `json:"disableDockerUpdateActions"`
 	TelemetryEnabled           bool   `json:"telemetryEnabled"`
 	ReduceProUpsellNoise       bool   `json:"reduceProUpsellNoise"`
+	// PVEPollingInterval is the effective PVE polling cadence in seconds. The
+	// Settings shell renders it read-only for viewers; without it the
+	// Monitoring Cadence card falls back to the Realtime preset and misreports
+	// how often the server actually polls.
+	PVEPollingInterval int `json:"pvePollingInterval"`
 }
 
 // HandleGetRuntimeDisplay returns the effective display defaults needed by an
@@ -40,6 +45,12 @@ func (h *SystemSettingsHandler) HandleGetRuntimeDisplay(w http.ResponseWriter, r
 		// telemetry payload.
 		response.DisableDockerUpdateActions = h.config.DisableDockerUpdateActions
 		response.TelemetryEnabled = h.config.TelemetryEnabled
+		// config carries the effective interval for every role: persisted
+		// settings are applied to it at startup unless PVE_POLLING_INTERVAL
+		// wins, and runtime saves mutate it. HandleGetSystemSettings serves
+		// exactly this value to admins, so serving it here keeps both roles
+		// reading the same number.
+		response.PVEPollingInterval = int(h.config.PVEPollingInterval.Seconds())
 	}
 
 	if h == nil || h.persistence == nil {
@@ -62,6 +73,12 @@ func (h *SystemSettingsHandler) HandleGetRuntimeDisplay(w http.ResponseWriter, r
 		}
 		if settings.TelemetryEnabled != nil && (h.config == nil || (!h.config.EnvOverrides["telemetryEnabled"] && !h.config.EnvOverrides["PULSE_TELEMETRY"])) {
 			response.TelemetryEnabled = *settings.TelemetryEnabled
+		}
+		// Unlike the booleans above, persisted state is only a fallback for a
+		// missing runtime config, never an override of it — config is already
+		// the effective value.
+		if response.PVEPollingInterval <= 0 && settings.PVEPollingInterval > 0 {
+			response.PVEPollingInterval = settings.PVEPollingInterval
 		}
 	}
 

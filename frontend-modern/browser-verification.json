@@ -1,27 +1,25 @@
 {
   "version": 1,
-  "base_sha": "1243cde4971a70007ac5f867593da76f19698e22",
-  "verified_at": "2026-08-12T05:34:19Z",
+  "base_sha": "3adeb77d60620cdcc4c71431685725384bdc562a",
+  "verified_at": "2026-08-12T08:19:01Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Alerts/ThresholdsTableProxmoxBackupsSection.tsx",
-    "frontend-modern/src/components/Alerts/ThresholdsTableProxmoxSnapshotsSection.tsx",
-    "frontend-modern/src/features/alerts/thresholds/helpers.ts",
-    "frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsOverrideMutations.ts"
+    "frontend-modern/src/api/settings.ts",
+    "frontend-modern/src/components/Settings/useInfrastructureSettingsState.ts",
+    "frontend-modern/src/components/Settings/useSystemSettingsState.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Alerts/ThresholdsTableProxmoxBackupsSection.tsx": "cebf62372258700510ff8f9a912bbf51df2c7fafbbc263de12e52353aaf0d335",
-    "frontend-modern/src/components/Alerts/ThresholdsTableProxmoxSnapshotsSection.tsx": "705c40d5b57090e551d56eeef5a9e04fa007a43f5d6a78c34033e5d6472a5ffc",
-    "frontend-modern/src/features/alerts/thresholds/helpers.ts": "b3da861fb86315e87beeade0376871bf4cf9dbeb14bd53d13055584a98866abb",
-    "frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsOverrideMutations.ts": "1e917cd27216674aa58c038b9715f7621668bcc157a97e1b4f0e6ac1b606e0f8"
+    "frontend-modern/src/api/settings.ts": "cb95289d5df7cd9332cc78573a5c6052f8968cc0fbb2d66c15c8ddc49f44ab62",
+    "frontend-modern/src/components/Settings/useInfrastructureSettingsState.ts": "528b32af6b1c777ed87f5dd2d5b15b531f830c520b0f624acfc5a2d75ad3e314",
+    "frontend-modern/src/components/Settings/useSystemSettingsState.ts": "acb66acc4a0254a6816564713f65a1ed5cf723eb526e4960076b4c84335e2c09"
   },
   "routes": [
-    "/alerts/thresholds/proxmox"
+    "/settings/system-general"
   ],
   "viewports": [
     {
       "width": 1280,
-      "height": 800
+      "height": 720
     },
     {
       "width": 375,
@@ -29,19 +27,21 @@
     }
   ],
   "states": [
-    "Backups section global defaults row at factory 7/14 warning/critical days",
-    "Backups global defaults row after warning-days edit to 32 (critical auto-raised to 32, warning preserved)",
-    "Backups global defaults row after critical-days edit to 45 (consistent 32/45 pair untouched)",
-    "Backups global defaults row after critical-days edit to 10 below warning (warning lowered to 10/10)",
-    "Narrow 375px card layout of the same Backups global defaults row with the warning-days edit applied",
-    "All edits discarded via reload before saving; live dev alert config unchanged"
+    "Admin session Monitoring Cadence card at the fresh-install Realtime (10s) default",
+    "Admin card after selecting the Low (60s) preset and saving (GET /api/system/settings confirmed pvePollingInterval 60)",
+    "Non-admin session (persisted session cookie whose user no longer matches the configured admin) with GET /api/system/settings returning 403 while GET /api/runtime/display returned pvePollingInterval 60: card showed Current cadence: 60 seconds with Low (60s) pressed instead of the old Realtime fallback",
+    "Admin card after switching to Custom 45s and saving (GET /api/system/settings confirmed 45)",
+    "Non-admin card after reload showing Current cadence: 45 seconds with Custom pressed and 45 in the custom input",
+    "Same non-admin Custom 45s state re-exercised at the 375px mobile viewport",
+    "Admin session reload showing Custom 45s restored through the refactored preset-resolution path"
   ],
   "interactions": [
-    "Logged in as admin and opened Alerts > Thresholds > Proxmox",
-    "Edited Backups global Warning Days from 7 to 32 and confirmed the value stayed 32 with Critical Days raised to 32 instead of the old silent 14 clamp",
-    "Edited Critical Days to 45 and confirmed the 32/45 pair was left untouched",
-    "Edited Critical Days to 10 and confirmed Warning Days lowered with it to 10/10",
-    "Repeated the Warning Days 32 edit at 375px mobile viewport and confirmed identical 32/32 behavior in the card layout",
-    "Reloaded without saving after each pass so no threshold change persisted to the dev backend"
+    "Built the sidecar backend and ran it as a scratch instance; logged in as admin on the pulse-1601-admin Vite frontend",
+    "Selected Low (60s) on the Monitoring Cadence card and saved; verified the effective interval via the settings and runtime-display APIs",
+    "Restarted the backend with a different configured admin username so the persisted browser session became a genuine non-admin session (settings 403, security-status capabilities all false)",
+    "Reloaded /settings/system-general in that non-admin session and confirmed the cadence card rendered the server's real 60s interval from the runtime-display projection",
+    "Logged in as the new admin in a separate cookie jar, set a non-preset Custom 45s cadence, and saved",
+    "Reloaded the non-admin session and confirmed Custom 45s displayed, then repeated the check at the 375px mobile viewport",
+    "Reloaded the admin session to confirm the shared preset-resolution refactor still renders the saved Custom 45s state"
   ]
 }

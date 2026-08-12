@@ -143,6 +143,12 @@ export function useInfrastructureSettingsState({
       // runs; /api/security/status is readable by any session.
       await loadSecurityStatus();
       if (!canReadInfrastructure()) {
+        // Sessions without infrastructure read still render the Settings
+        // shell, and the system-settings state degrades to the viewer-safe
+        // runtime display projection on its own (it handles the admin 403
+        // internally). Skipping it here left viewers staring at defaults —
+        // issue #1601's "Realtime (10s)" cadence misreport.
+        await initializeSystemSettingsState();
         return;
       }
       await new Promise((resolve) => setTimeout(resolve, 50));

@@ -9198,8 +9198,8 @@ case honest against live 403s on `/api/config/nodes` and `/api/system/settings`.
 `internal/api/router_routes_registration.go`, uses `RequireAuth` plus
 `monitoring:read`, matching the sibling `/api/runtime/branding` route. Its
 explicit `RuntimeDisplayResponse` whitelist contains only `theme`,
-`fullWidthMode`, `disableDockerUpdateActions`, `telemetryEnabled`, and
-`reduceProUpsellNoise`.
+`fullWidthMode`, `disableDockerUpdateActions`, `telemetryEnabled`,
+`reduceProUpsellNoise`, and `pvePollingInterval`.
 
 Authenticated app bootstrap needs those values for every role. It must not read
 them from `GET /api/system/settings`, whose `RequireAdmin` plus `settings:read`
@@ -9213,18 +9213,33 @@ effective boolean only: it lets a read-only General panel reflect the
 operator's global privacy choice, but it never exposes the telemetry preview,
 rotating install ID, environment overrides, or any other admin setting.
 
+`pvePollingInterval` is the effective PVE polling cadence in seconds, sourced
+from runtime config exactly as the admin settings route serves it (persisted
+value applied at startup, `PVE_POLLING_INTERVAL` override winning, runtime
+saves reflected), with the persisted value only a fallback when runtime config
+is absent. It exists so a read-only Monitoring Cadence card reports what the
+server actually does instead of the frontend's Realtime default — the
+issue #1601 misreport — and it carries no other polling, discovery, or
+scheduling configuration.
+
 When the General settings state owner receives the expected 403 from the admin
 settings route, it must fall back to this narrow runtime projection for those
-two global booleans and synchronize the shared Docker-action store. It must not
-retry through a broader route or replace an operator-disabled telemetry value
-with the frontend default.
+two global booleans plus the effective polling cadence and synchronize the
+shared Docker-action store. It must not retry through a broader route, replace
+an operator-disabled telemetry value with the frontend default, or leave the
+cadence presentation on the Realtime preset when the projection supplies the
+real interval. The Settings workspace must run this initialization for every
+session shape, including sessions without `infrastructureRead`, because the
+General panel stays reachable for them.
 
 `TestContract_RuntimeDisplayServesPresentationValuesWithoutAdmin` pins a viewer
 receiving 200 from the runtime route while still receiving 403 from the admin
 route. `TestHandleGetRuntimeDisplay_PublishesOnlyPresentationFields` pins the
-serialized whitelist, the frontend settings/API tests pin the read-only
-fallback and effective boolean values, and the frontend bootstrap tests pin that
-`useAppRuntimeState` never calls `getSystemSettings()`.
+serialized whitelist, `TestHandleGetRuntimeDisplay_UsesEffectivePVEPollingInterval`
+and `TestRuntimeDisplayCadenceProjectionStaysNarrow` pin the effective-cadence
+precedence and its narrow projection, the frontend settings/API tests pin the
+read-only fallback and effective values, and the frontend bootstrap tests pin
+that `useAppRuntimeState` never calls `getSystemSettings()`.
 
 ### Security status names every admin-only Settings panel capability
 

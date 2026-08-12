@@ -1244,6 +1244,15 @@ viewers render container updates read-only. This is API/settings presentation
 only: it neither disables image-update detection nor changes agent update,
 registration, profile, command, enrollment, or fleet-control authority.
 
+The Settings workspace mount in
+`frontend-modern/src/components/Settings/useInfrastructureSettingsState.ts`
+still gates node, discovery, TrueNAS, and VMware loading on
+`infrastructureRead`, but it must run the system-settings state initialization
+for sessions without that capability too — that path degrades to the
+viewer-safe runtime-display projection and carries no infrastructure,
+connection, or agent-lifecycle reads, so skipping it only breaks read-only
+presentation (the issue #1601 cadence misreport) without protecting anything.
+
 Manual scoped Patrol work that reaches `internal/api/ai_handlers.go` (such as an
 alert-initiated targeted Patrol check via `POST /api/ai/patrol/run`) is
 investigation-only over agent-reporting resources: it must not alter agent

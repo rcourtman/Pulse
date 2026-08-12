@@ -179,6 +179,8 @@ export interface RuntimeDisplayResponse {
   disableDockerUpdateActions?: boolean;
   telemetryEnabled?: boolean;
   reduceProUpsellNoise?: boolean;
+  /** Effective PVE polling cadence in seconds. */
+  pvePollingInterval?: number;
 }
 
 export class SettingsAPI {

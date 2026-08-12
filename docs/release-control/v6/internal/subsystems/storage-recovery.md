@@ -199,10 +199,13 @@ states do not change the underlying storage evidence or active lifecycle.
 ## Extension Points
 
 The authenticated runtime-display projection under shared `internal/api/` may
-publish effective Docker-action visibility and outbound-telemetry booleans to
-read-only viewers. Those presentation/privacy values are not backup evidence,
-storage health, recovery readiness, restore scope, or remediation authority,
-and storage/recovery consumers must not infer any of those states from them.
+publish effective Docker-action visibility and outbound-telemetry booleans,
+plus the effective PVE polling cadence in seconds, to read-only viewers. Those
+presentation values are not backup evidence, storage health, recovery
+readiness, restore scope, or remediation authority — the cadence integer in
+particular says nothing about backup polling, which stays on the admin-only
+settings payload — and storage/recovery consumers must not infer any of those
+states from them.
 
 Agent-token validation added to `internal/api/connections_aggregator.go` and
 its runtime input assembly in `internal/api/connections_alerts.go` is

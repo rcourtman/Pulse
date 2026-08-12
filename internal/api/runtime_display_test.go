@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 )
@@ -55,7 +56,12 @@ func TestHandleGetRuntimeDisplay_ProjectsPersistedPresentationValues(t *testing.
 	handler := newRuntimeDisplayHandler(t, &config.Config{}, settings)
 	got, _ := fetchRuntimeDisplay(t, handler)
 
-	want := RuntimeDisplayResponse{Theme: "dark", FullWidthMode: true, ReduceProUpsellNoise: true}
+	want := RuntimeDisplayResponse{
+		Theme:                "dark",
+		FullWidthMode:        true,
+		ReduceProUpsellNoise: true,
+		PVEPollingInterval:   config.DefaultSystemSettings().PVEPollingInterval,
+	}
 	if got != want {
 		t.Fatalf("runtime display = %+v, want %+v", got, want)
 	}
@@ -78,6 +84,7 @@ func TestHandleGetRuntimeDisplay_PublishesOnlyPresentationFields(t *testing.T) {
 		"disableDockerUpdateActions": {},
 		"telemetryEnabled":           {},
 		"reduceProUpsellNoise":       {},
+		"pvePollingInterval":         {},
 	}
 	for key := range raw {
 		if _, ok := allowed[key]; !ok {
@@ -123,6 +130,39 @@ func TestHandleGetRuntimeDisplay_UsesEffectiveTelemetrySetting(t *testing.T) {
 
 	if got.TelemetryEnabled {
 		t.Fatal("telemetryEnabled = true, want the effective config override to win")
+	}
+}
+
+// The user-visible failure behind issue #1601: a viewer's Monitoring Cadence
+// card claimed Realtime (10s) while the server polled at the operator's slower
+// configured interval. The runtime config is the effective value, so it must
+// win over the persisted settings file.
+func TestHandleGetRuntimeDisplay_UsesEffectivePVEPollingInterval(t *testing.T) {
+	settings := config.DefaultSystemSettings()
+	settings.PVEPollingInterval = 60
+
+	handler := newRuntimeDisplayHandler(t, &config.Config{
+		PVEPollingInterval: 30 * time.Second,
+		EnvOverrides: map[string]bool{
+			"PVE_POLLING_INTERVAL": true,
+		},
+	}, settings)
+	got, _ := fetchRuntimeDisplay(t, handler)
+
+	if got.PVEPollingInterval != 30 {
+		t.Fatalf("pvePollingInterval = %d, want the effective config value 30", got.PVEPollingInterval)
+	}
+}
+
+func TestHandleGetRuntimeDisplay_FallsBackToPersistedPVEPollingInterval(t *testing.T) {
+	settings := config.DefaultSystemSettings()
+	settings.PVEPollingInterval = 300
+
+	handler := newRuntimeDisplayHandler(t, &config.Config{}, settings)
+	got, _ := fetchRuntimeDisplay(t, handler)
+
+	if got.PVEPollingInterval != 300 {
+		t.Fatalf("pvePollingInterval = %d, want persisted fallback 300", got.PVEPollingInterval)
 	}
 }
 

@@ -320,6 +320,11 @@ the `white_label` branding entitlement.
    reverting to the frontend's enabled default. The same response may carry
    the effective Docker-action display boolean because both values are needed
    to render read-only global state; this does not widen settings write access.
+   The projection may likewise carry the effective PVE polling cadence in
+   seconds so the read-only Monitoring Cadence card stops misreporting the
+   Realtime default (issue #1601); that single integer is presentation state,
+   not a channel for any other admin-only polling, discovery, or override
+   configuration, and consuming it grants no settings write access.
    Relay runtime access through `internal/api/router.go` must stay behind the
    existing protected route and API-token gates. Testable router seams may
    expose relay status to onboarding validation, but they must not broaden

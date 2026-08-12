@@ -175,6 +175,46 @@ describe('useSystemSettingsState branch coverage', () => {
       expect(mocks.updateDockerUpdateActionsSettingMock).toHaveBeenCalledWith(true);
       dispose();
     });
+
+    it('shows the effective monitoring cadence when admin settings are forbidden', async () => {
+      mocks.getSystemSettingsMock.mockRejectedValueOnce(new Error('Admin privileges required'));
+      mocks.getRuntimeDisplayMock.mockResolvedValueOnce({ pvePollingInterval: 60 });
+      const { hookState, dispose } = mountHook();
+
+      await hookState.initializeSystemSettingsState();
+      await flushAsync();
+
+      expect(hookState.pvePollingInterval()).toBe(60);
+      expect(hookState.pvePollingSelection()).toBe(60);
+      dispose();
+    });
+
+    it('maps a non-preset cadence to the custom selection in the viewer fallback', async () => {
+      mocks.getSystemSettingsMock.mockRejectedValueOnce(new Error('Admin privileges required'));
+      mocks.getRuntimeDisplayMock.mockResolvedValueOnce({ pvePollingInterval: 45 });
+      const { hookState, dispose } = mountHook();
+
+      await hookState.initializeSystemSettingsState();
+      await flushAsync();
+
+      expect(hookState.pvePollingInterval()).toBe(45);
+      expect(hookState.pvePollingSelection()).toBe('custom');
+      expect(hookState.pvePollingCustomSeconds()).toBe(45);
+      dispose();
+    });
+
+    it('keeps the cadence default when the runtime display omits the interval', async () => {
+      mocks.getSystemSettingsMock.mockRejectedValueOnce(new Error('Admin privileges required'));
+      mocks.getRuntimeDisplayMock.mockResolvedValueOnce({});
+      const { hookState, dispose } = mountHook();
+
+      await hookState.initializeSystemSettingsState();
+      await flushAsync();
+
+      expect(hookState.pvePollingInterval()).toBe(10);
+      expect(hookState.pvePollingSelection()).toBe(10);
+      dispose();
+    });
   });
 
   describe.each([

@@ -24160,6 +24160,7 @@ func TestContract_RuntimeDisplayServesPresentationValuesWithoutAdmin(t *testing.
 	settings.DisableDockerUpdateActions = true
 	telemetryEnabled := false
 	settings.TelemetryEnabled = &telemetryEnabled
+	settings.PVEPollingInterval = 300
 	if err := persistence.SaveSystemSettings(*settings); err != nil {
 		t.Fatalf("save system settings: %v", err)
 	}
@@ -24199,6 +24200,9 @@ func TestContract_RuntimeDisplayServesPresentationValuesWithoutAdmin(t *testing.
 	}
 	if display.TelemetryEnabled {
 		t.Fatal("telemetryEnabled = true, want false")
+	}
+	if display.PVEPollingInterval != 300 {
+		t.Fatalf("pvePollingInterval = %d, want 300", display.PVEPollingInterval)
 	}
 }
 

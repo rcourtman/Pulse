@@ -249,6 +249,28 @@ func TestRuntimeDisplayPublishesOnlyEffectiveTelemetryState(t *testing.T) {
 	}
 }
 
+// The monitoring cadence rides the same session-tier projection as the
+// telemetry state. Publishing it must not drag the admin-only settings
+// payload's neighbours along with it.
+func TestRuntimeDisplayCadenceProjectionStaysNarrow(t *testing.T) {
+	settings := config.DefaultSystemSettings()
+	settings.PVEPollingInterval = 45
+	handler := newRuntimeDisplayHandler(t, &config.Config{}, settings)
+
+	display, raw := fetchRuntimeDisplay(t, handler)
+	if display.PVEPollingInterval != 45 {
+		t.Fatalf("pvePollingInterval = %d, want 45", display.PVEPollingInterval)
+	}
+	if _, ok := raw["pvePollingInterval"]; !ok {
+		t.Fatal("runtime display omitted pvePollingInterval")
+	}
+	for _, adminKey := range []string{"envOverrides", "discoveryConfig", "allowedOrigins", "backupPollingInterval", "publicURL"} {
+		if _, ok := raw[adminKey]; ok {
+			t.Fatalf("runtime display exposed admin-only %q", adminKey)
+		}
+	}
+}
+
 func TestTelemetryPreview_ReturnsCurrentPayload(t *testing.T) {
 	tempDir := t.TempDir()
 	cfg := &config.Config{

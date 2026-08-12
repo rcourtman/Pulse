@@ -110,26 +110,29 @@ export function useSystemSettingsState({
     telemetryPreview() ? JSON.stringify(telemetryPreview()!.payload, null, 2) : '';
   const telemetryPreviewEnabled = () => telemetryPreview()?.enabled ?? telemetryEnabled();
 
+  const applyPVEPollingSeconds = (rawSeconds: number) => {
+    const clamped = Math.min(
+      PVE_POLLING_MAX_SECONDS,
+      Math.max(PVE_POLLING_MIN_SECONDS, Math.round(rawSeconds)),
+    );
+    setPVEPollingInterval(clamped);
+    const presetMatch = PVE_POLLING_PRESETS.find((opt) => opt.value === clamped);
+    if (presetMatch) {
+      setPVEPollingSelection(presetMatch.value);
+    } else {
+      setPVEPollingSelection('custom');
+      setPVEPollingCustomSeconds(clamped);
+    }
+  };
+
   const initializeSystemSettingsState = async () => {
     try {
       const systemSettings = await SettingsAPI.getSystemSettings();
-      const rawPVESecs =
+      applyPVEPollingSeconds(
         typeof systemSettings.pvePollingInterval === 'number'
-          ? Math.round(systemSettings.pvePollingInterval)
-          : PVE_POLLING_MIN_SECONDS;
-      const clampedPVESecs = Math.min(
-        PVE_POLLING_MAX_SECONDS,
-        Math.max(PVE_POLLING_MIN_SECONDS, rawPVESecs),
+          ? systemSettings.pvePollingInterval
+          : PVE_POLLING_MIN_SECONDS,
       );
-
-      setPVEPollingInterval(clampedPVESecs);
-      const presetMatch = PVE_POLLING_PRESETS.find((opt) => opt.value === clampedPVESecs);
-      if (presetMatch) {
-        setPVEPollingSelection(presetMatch.value);
-      } else {
-        setPVEPollingSelection('custom');
-        setPVEPollingCustomSeconds(clampedPVESecs);
-      }
 
       setAllowedOrigins(systemSettings.allowedOrigins ?? '');
       setDiscoveryEnabled(systemSettings.discoveryEnabled ?? false);
@@ -189,6 +192,14 @@ export function useSystemSettingsState({
         setDisableDockerUpdateActions(dockerActionsDisabled);
         updateDockerUpdateActionsSetting(dockerActionsDisabled);
         setTelemetryEnabled(runtimeDisplay.telemetryEnabled ?? true);
+        // Without this, the Monitoring Cadence card shows the Realtime (10s)
+        // default instead of the interval the server actually polls at.
+        if (
+          typeof runtimeDisplay.pvePollingInterval === 'number' &&
+          runtimeDisplay.pvePollingInterval > 0
+        ) {
+          applyPVEPollingSeconds(runtimeDisplay.pvePollingInterval);
+        }
       } catch (runtimeDisplayError) {
         logger.warn('Failed to load read-only runtime settings', runtimeDisplayError);
       }

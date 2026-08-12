@@ -217,6 +217,7 @@ describe('SettingsAPI', () => {
         disableDockerUpdateActions: true,
         telemetryEnabled: false,
         reduceProUpsellNoise: false,
+        pvePollingInterval: 60,
       };
       vi.mocked(apiFetchJSON).mockResolvedValueOnce(display);
 
