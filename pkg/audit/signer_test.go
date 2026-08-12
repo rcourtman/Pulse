@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -218,9 +219,9 @@ func TestSignerSign(t *testing.T) {
 
 	sig := signer.Sign(event)
 
-	// Signature should be hex-encoded (64 characters for SHA256)
-	if len(sig) != 64 {
-		t.Errorf("Expected signature length 64, got %d", len(sig))
+	// The envelope identifies v2 and carries a 64-character SHA-256 MAC.
+	if len(sig) != len("v2:")+64 || !strings.HasPrefix(sig, "v2:") {
+		t.Errorf("Expected v2 signature envelope, got %q", sig)
 	}
 
 	// Same event should produce same signature
@@ -288,6 +289,36 @@ func TestSignerVerify(t *testing.T) {
 	}
 }
 
+func TestSignerRejectsFieldBoundaryShiftForgery(t *testing.T) {
+	signer, err := NewSignerWithKey([]byte("0123456789abcdef0123456789abcdef"))
+	if err != nil {
+		t.Fatalf("NewSignerWithKey: %v", err)
+	}
+
+	original := Event{
+		ID:        "boundary-shift",
+		Timestamp: time.Unix(1_725_555_555, 0).UTC(),
+		EventType: "security",
+		User:      "alert|system",
+		IP:        "127.0.0.1",
+		Path:      "/api/audit",
+		Success:   true,
+		Details:   "detected",
+	}
+	forged := original
+	forged.EventType = "security|alert"
+	forged.User = "system"
+
+	original.Signature = signer.Sign(original)
+	if original.Signature == signer.Sign(forged) {
+		t.Fatal("distinct persisted tuples produced the same signature")
+	}
+	forged.Signature = original.Signature
+	if signer.Verify(forged) {
+		t.Fatal("signature verified after moving a delimiter between fields")
+	}
+}
+
 func TestSignerVerifyAcceptsLegacyProCanonicalForms(t *testing.T) {
 	signer, err := NewSignerWithKey([]byte("0123456789abcdef0123456789abcdef"))
 	if err != nil {
@@ -304,6 +335,10 @@ func TestSignerVerifyAcceptsLegacyProCanonicalForms(t *testing.T) {
 		Details:   "legacy",
 	}
 
+	event.Signature = signer.signCanonical(signer.legacyZeroOneCanonicalForm(event))
+	if !signer.Verify(event) {
+		t.Fatal("last unversioned zero/one signature did not verify")
+	}
 	event.Signature = signer.signCanonical(signer.legacyUnixCanonicalForm(event))
 	if !signer.Verify(event) {
 		t.Fatal("current Pro Unix/boolean signature did not verify")
