@@ -2433,3 +2433,160 @@ func TestService_DiscoverResource_ReturnsUpgradedCachedDiscovery(t *testing.T) {
 		t.Fatalf("expected cleaned AI reasoning without legacy URL note, got %q", got.AIReasoning)
 	}
 }
+
+// Regression: a host identity that forked onto a "<base>-<hex>" spelling (an
+// agent re-enrolling under a new token against an existing record) stored its
+// discovery under the forked host ID, while the PVE node kept reporting the base
+// agent UUID as its linked agent. The store matches TargetID byte-for-byte, so
+// the resource drawer's list-by-agent call returned an empty 200 and the
+// Discovery tab reported "no saved discovery run" for a host it had analyzed.
+func TestService_ListDiscoveriesByTarget_ResolvesForkedHostIdentity(t *testing.T) {
+	const baseAgentID = "342f337b-d2a9-4316-a998-d09a2abe3e8f"
+	const forkedAgentID = baseAgentID + "-bffd0339"
+
+	store, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewStore error: %v", err)
+	}
+	store.crypto = nil
+
+	service := NewService(store, nil, DefaultConfig())
+	service.SetReadState(readStateFromSnapshot(StateSnapshot{
+		Hosts: []Host{{ID: forkedAgentID, Hostname: "nova.biz", Status: "online"}},
+		Nodes: []Node{{ID: "node-nova", Name: "nova", LinkedAgentID: baseAgentID}},
+	}))
+
+	discovery := &ResourceDiscovery{
+		ID:           MakeResourceID(ResourceTypeAgent, forkedAgentID, forkedAgentID),
+		ResourceType: ResourceTypeAgent,
+		TargetID:     forkedAgentID,
+		ResourceID:   forkedAgentID,
+		Hostname:     "nova.biz",
+		ServiceType:  "proxmox",
+	}
+	if err := store.Save(discovery); err != nil {
+		t.Fatalf("Save error: %v", err)
+	}
+
+	got, err := service.ListDiscoveriesByTarget(baseAgentID)
+	if err != nil {
+		t.Fatalf("ListDiscoveriesByTarget error: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("expected 1 discovery for base agent ID, got %d", len(got))
+	}
+	if got[0].TargetID != forkedAgentID {
+		t.Fatalf("TargetID = %q, want %q", got[0].TargetID, forkedAgentID)
+	}
+
+	// The forked spelling must keep working, as must the single-record path.
+	if direct, err := service.ListDiscoveriesByTarget(forkedAgentID); err != nil || len(direct) != 1 {
+		t.Fatalf("ListDiscoveriesByTarget(forked) = %d discoveries, err %v; want 1, nil", len(direct), err)
+	}
+	byResource, err := service.GetDiscoveryByResource(ResourceTypeAgent, baseAgentID, baseAgentID)
+	if err != nil {
+		t.Fatalf("GetDiscoveryByResource error: %v", err)
+	}
+	if byResource == nil || byResource.TargetID != forkedAgentID {
+		t.Fatalf("GetDiscoveryByResource returned %#v, want the forked record", byResource)
+	}
+}
+
+// A base longer than 40 characters is truncated before the next fork suffix is
+// appended, so a twice-forked identity carries a partial suffix then a full one.
+func TestService_ListDiscoveriesByTarget_ResolvesTwiceForkedHostIdentity(t *testing.T) {
+	const baseAgentID = "ea79df24-0d3b-453f-8ce0-cc08e2b96f86"
+	const forkedAgentID = baseAgentID + "-d3b-83adbde6"
+
+	store, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewStore error: %v", err)
+	}
+	store.crypto = nil
+
+	service := NewService(store, nil, DefaultConfig())
+	service.SetReadState(readStateFromSnapshot(StateSnapshot{
+		Hosts: []Host{{ID: forkedAgentID, Hostname: "luna.vp.diskiller.net", Status: "online"}},
+	}))
+
+	if err := store.Save(&ResourceDiscovery{
+		ID:           MakeResourceID(ResourceTypeAgent, forkedAgentID, forkedAgentID),
+		ResourceType: ResourceTypeAgent,
+		TargetID:     forkedAgentID,
+		ResourceID:   forkedAgentID,
+		Hostname:     "luna.vp.diskiller.net",
+		ServiceType:  "proxmox",
+	}); err != nil {
+		t.Fatalf("Save error: %v", err)
+	}
+
+	got, err := service.ListDiscoveriesByTarget(baseAgentID)
+	if err != nil {
+		t.Fatalf("ListDiscoveriesByTarget error: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("expected 1 discovery for twice-forked identity, got %d", len(got))
+	}
+}
+
+// Target expansion must not sweep in unrelated hosts that merely share a prefix,
+// and must stay quiet when no snapshot is available.
+func TestService_EquivalentDiscoveryTargetIDs_Bounds(t *testing.T) {
+	const baseAgentID = "342f337b-d2a9-4316-a998-d09a2abe3e8f"
+
+	service := NewService(nil, nil, DefaultConfig())
+	if got := service.equivalentDiscoveryTargetIDs(baseAgentID); len(got) != 1 || got[0] != baseAgentID {
+		t.Fatalf("without a snapshot, expected only the requested ID, got %#v", got)
+	}
+	if got := service.equivalentDiscoveryTargetIDs("   "); got != nil {
+		t.Fatalf("expected nil for a blank target, got %#v", got)
+	}
+
+	service.SetReadState(readStateFromSnapshot(StateSnapshot{
+		Hosts: []Host{
+			{ID: baseAgentID + "-bffd0339", Hostname: "nova.biz", Status: "online"},
+			{ID: baseAgentID + "-replica", Hostname: "clone.biz", Status: "online"},
+			{ID: "unrelated-agent", Hostname: "other.biz", Status: "online"},
+		},
+	}))
+
+	got := service.equivalentDiscoveryTargetIDs(baseAgentID)
+	for _, unwanted := range []string{baseAgentID + "-replica", "unrelated-agent"} {
+		for _, id := range got {
+			if id == unwanted {
+				t.Fatalf("expansion pulled in %q: %#v", unwanted, got)
+			}
+		}
+	}
+	var sawFork bool
+	for _, id := range got {
+		if id == baseAgentID+"-bffd0339" {
+			sawFork = true
+		}
+	}
+	if !sawFork {
+		t.Fatalf("expansion missed the hex-suffixed fork: %#v", got)
+	}
+}
+
+func TestIsForkedHostIdentity(t *testing.T) {
+	const base = "342f337b-d2a9-4316-a998-d09a2abe3e8f"
+	tests := []struct {
+		candidate string
+		want      bool
+	}{
+		{base + "-bffd0339", true},
+		{base + "-d3b-83adbde6", true},
+		{base, false},
+		{base + "-replica", false},
+		{base + "-", false},
+		{base + "-bffd0339-", false},
+		{"other-" + base, false},
+		{"", false},
+	}
+	for _, tt := range tests {
+		if got := isForkedHostIdentity(tt.candidate, base); got != tt.want {
+			t.Errorf("isForkedHostIdentity(%q, base) = %v, want %v", tt.candidate, got, tt.want)
+		}
+	}
+}
