@@ -6,12 +6,14 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -22,6 +24,22 @@ import (
 type Signer struct {
 	key []byte // 32-byte HMAC signing key
 }
+
+const (
+	signatureV2Prefix = "v2:"
+	canonicalV2Domain = "pulse.audit.event\x00v2\x00"
+)
+
+// SignatureVersion identifies the representation authenticated by a signature.
+// Legacy signatures remain verifiable for historical compatibility, but their
+// delimiter-separated representation does not protect field boundaries.
+type SignatureVersion string
+
+const (
+	SignatureVersionUnknown SignatureVersion = "unknown"
+	SignatureVersionLegacy  SignatureVersion = "legacy"
+	SignatureVersionV2      SignatureVersion = "v2"
+)
 
 // CryptoEncryptor interface for encrypting/decrypting the signing key.
 // This matches the methods from internal/crypto.CryptoManager.
@@ -114,48 +132,131 @@ func loadAuditSigningKey(cryptoMgr CryptoEncryptor, data []byte) ([]byte, bool, 
 	return nil, false, fmt.Errorf("failed to decrypt audit signing key: %w", err)
 }
 
-// Sign computes an HMAC-SHA256 signature over the event's canonical form.
-// Returns hex-encoded signature, or empty string if signing is disabled.
+// Sign computes an HMAC-SHA256 signature over the injective v2 representation.
+// The version prefix is persisted with the hex-encoded MAC so verification can
+// select exactly one representation without downgrade fallback.
 func (s *Signer) Sign(event Event) string {
 	if s.key == nil {
 		return ""
 	}
 
-	canonical := s.canonicalForm(event)
-	mac := hmac.New(sha256.New, s.key)
-	mac.Write([]byte(canonical))
-	return hex.EncodeToString(mac.Sum(nil))
+	return signatureV2Prefix + hex.EncodeToString(s.mac(s.canonicalV2Form(event)))
 }
 
-// Verify checks if the event's signature matches its content.
-// Returns true if the signature is valid, false if invalid or signing is disabled.
+// Verify checks if the event's signature matches its content. A true result for
+// SignatureVersionLegacy confirms only a historical delimiter-based MAC; call
+// DetectSignatureVersion when the stronger v2 boundary guarantee matters.
+// Returns false for invalid, unknown, malformed, or disabled signatures.
 func (s *Signer) Verify(event Event) bool {
 	if s.key == nil || event.Signature == "" {
 		return false
 	}
 
-	for _, canonical := range []string{
-		s.canonicalForm(event),
-		s.legacyUnixCanonicalForm(event),
-		s.legacyTimeCanonicalForm(event),
-	} {
-		expected := s.signCanonical(canonical)
-		if hmac.Equal([]byte(expected), []byte(event.Signature)) {
-			return true
+	switch DetectSignatureVersion(event.Signature) {
+	case SignatureVersionV2:
+		provided, err := hex.DecodeString(strings.TrimPrefix(event.Signature, signatureV2Prefix))
+		if err != nil || len(provided) != sha256.Size {
+			return false
 		}
+		return hmac.Equal(s.mac(s.canonicalV2Form(event)), provided)
+	case SignatureVersionLegacy:
+		provided, err := hex.DecodeString(event.Signature)
+		if err != nil || len(provided) != sha256.Size {
+			return false
+		}
+		// These three unversioned encodings were emitted by historical Pulse
+		// releases. They are intentionally confined to the legacy dispatch arm:
+		// a v2-prefixed signature is never retried here.
+		for _, canonical := range []string{
+			s.legacyZeroOneCanonicalForm(event),
+			s.legacyUnixCanonicalForm(event),
+			s.legacyTimeCanonicalForm(event),
+		} {
+			if hmac.Equal(s.mac([]byte(canonical)), provided) {
+				return true
+			}
+		}
+		return false
+	default:
+		return false
 	}
-	return false
+}
+
+// DetectSignatureVersion classifies only well-formed signature envelopes.
+// Unprefixed 64-digit hexadecimal MACs are historical. Any prefix other than
+// v2, or any malformed/truncated MAC, is unknown and must fail closed.
+func DetectSignatureVersion(signature string) SignatureVersion {
+	if strings.HasPrefix(signature, signatureV2Prefix) {
+		if isSHA256Hex(signature[len(signatureV2Prefix):]) {
+			return SignatureVersionV2
+		}
+		return SignatureVersionUnknown
+	}
+	if strings.Contains(signature, ":") {
+		return SignatureVersionUnknown
+	}
+	if isSHA256Hex(signature) {
+		return SignatureVersionLegacy
+	}
+	return SignatureVersionUnknown
+}
+
+func isSHA256Hex(value string) bool {
+	if len(value) != hex.EncodedLen(sha256.Size) {
+		return false
+	}
+	decoded, err := hex.DecodeString(value)
+	return err == nil && len(decoded) == sha256.Size
+}
+
+func (s *Signer) mac(message []byte) []byte {
+	mac := hmac.New(sha256.New, s.key)
+	_, _ = mac.Write(message)
+	return mac.Sum(nil)
+}
+
+// canonicalV2Form is an injective representation of the exact SQLite tuple:
+// domain || len(ID) || ID || int64 Unix seconds || len(EventType) || EventType
+// || len(User) || User || len(IP) || IP || len(Path) || Path || Success byte
+// || len(Details) || Details. Integers and uint64 byte lengths are big-endian;
+// strings are their unmodified UTF-8 bytes. SQLite persists timestamps as Unix
+// seconds, so sub-second time data is deliberately outside the signed tuple.
+func (s *Signer) canonicalV2Form(event Event) []byte {
+	var canonical bytes.Buffer
+	canonical.WriteString(canonicalV2Domain)
+	writeLengthPrefixedString(&canonical, event.ID)
+
+	var timestamp [8]byte
+	binary.BigEndian.PutUint64(timestamp[:], uint64(event.Timestamp.Unix()))
+	canonical.Write(timestamp[:])
+
+	writeLengthPrefixedString(&canonical, event.EventType)
+	writeLengthPrefixedString(&canonical, event.User)
+	writeLengthPrefixedString(&canonical, event.IP)
+	writeLengthPrefixedString(&canonical, event.Path)
+	if event.Success {
+		canonical.WriteByte(1)
+	} else {
+		canonical.WriteByte(0)
+	}
+	writeLengthPrefixedString(&canonical, event.Details)
+	return canonical.Bytes()
+}
+
+func writeLengthPrefixedString(dst *bytes.Buffer, value string) {
+	var length [8]byte
+	binary.BigEndian.PutUint64(length[:], uint64(len(value)))
+	dst.Write(length[:])
+	dst.WriteString(value)
 }
 
 func (s *Signer) signCanonical(canonical string) string {
-	mac := hmac.New(sha256.New, s.key)
-	mac.Write([]byte(canonical))
-	return hex.EncodeToString(mac.Sum(nil))
+	return hex.EncodeToString(s.mac([]byte(canonical)))
 }
 
-// canonicalForm creates a deterministic string representation of an event for signing.
-// Format: ID|Timestamp(Unix)|EventType|User|IP|Path|Success(0/1)|Details
-func (s *Signer) canonicalForm(event Event) string {
+// legacyZeroOneCanonicalForm is the last unversioned representation emitted
+// before v2. It is ambiguous when string values contain pipe characters.
+func (s *Signer) legacyZeroOneCanonicalForm(event Event) string {
 	success := "0"
 	if event.Success {
 		success = "1"

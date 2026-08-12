@@ -956,9 +956,19 @@ retain persistent-reader and signature-verification capabilities. Retention
 `0` is an explicit keep-forever setting, persisted retention is restored at
 startup, the configured cleanup cadence is preserved across the enterprise
 configuration seam, and cleanup must tolerate concurrent writers without
-exposing partial results. Existing core and Pro signing keys remain valid through upgrade, and
-legacy Pro signature encodings remain verifiable while all new writes use the
-canonical signed event representation.
+exposing partial results. Existing core and Pro signing keys remain valid
+through upgrade. Every new global and tenant SQLite row must carry a
+self-identifying `v2:` HMAC-SHA256 signature over the domain-separated,
+length-prefixed persisted tuple (ID, Unix-second timestamp, event type, user,
+IP, path, success, and details). Arbitrary string bytes, including pipes,
+empty values, Unicode, and newlines, must retain injective field boundaries.
+Verification dispatches by the signature envelope: unknown or malformed
+versions fail closed, and a v2 signature is never retried against a historical
+representation. Unprefixed 64-hex signatures remain explicitly identifiable
+as legacy and may verify against the three previously accepted encodings for
+read/export compatibility, but that result proves only the historical MAC and
+must not be represented as providing v2 boundary integrity. Startup and reads
+must not rewrite or re-sign those historical rows.
 That shared token-management boundary now also includes
 `frontend-modern/src/utils/apiTokenPresentation.ts`, so API-token load,
 generate, and revoke errors stay on one governed customer-facing wording path
