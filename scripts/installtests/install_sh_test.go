@@ -3393,10 +3393,10 @@ func TestSetupUpdateCommandFailsWhenInstallerDownloadFails(t *testing.T) {
 	if err := os.WriteFile(bashrcPath, []byte(""), 0644); err != nil {
 		t.Fatalf("write bashrc: %v", err)
 	}
-	if err := os.WriteFile(curlPath, []byte("#!/usr/bin/env bash\nexit 22\n"), 0755); err != nil {
+	if err := os.WriteFile(curlPath, []byte("#!/bin/sh\nexit 22\n"), 0755); err != nil {
 		t.Fatalf("write curl stub: %v", err)
 	}
-	if err := os.WriteFile(fakeBashPath, []byte("#!/usr/bin/env bash\ncat >/dev/null\nexit 0\n"), 0755); err != nil {
+	if err := os.WriteFile(fakeBashPath, []byte("#!/bin/sh\ncat >/dev/null\nexit 0\n"), 0755); err != nil {
 		t.Fatalf("write bash stub: %v", err)
 	}
 
