@@ -483,3 +483,48 @@ func TestClusterClient_GetNodes_PermanentFailure(t *testing.T) {
 		t.Errorf("expected nil nodes on error, got %v", nodes)
 	}
 }
+
+func TestRecoverUnhealthyNodesRecordsFailureReasons(t *testing.T) {
+	// Server that always rejects with an auth error so recovery cannot succeed.
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnauthorized)
+		fmt.Fprint(w, `{"data":null}`)
+	}))
+	defer server.Close()
+
+	cfg := ClientConfig{
+		Host:       server.URL,
+		TokenName:  "pulse@pve!token",
+		TokenValue: "sometokenvalue",
+		VerifySSL:  false,
+		Timeout:    2 * time.Second,
+	}
+
+	// Single endpoint skips the initial health check, keeping the test deterministic.
+	cc := NewClusterClient("test-cluster", cfg, []string{server.URL}, nil)
+
+	cc.mu.Lock()
+	cc.nodeHealth[server.URL] = false
+	delete(cc.lastHealthCheck, server.URL)
+	cc.mu.Unlock()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	cc.recoverUnhealthyNodes(ctx)
+
+	health := cc.GetHealthStatusWithErrors()
+	status, ok := health[server.URL]
+	if !ok {
+		t.Fatalf("expected health entry for %s, got %+v", server.URL, health)
+	}
+	if status.Healthy {
+		t.Fatal("expected endpoint to remain unhealthy after failed recovery")
+	}
+	if status.LastError == "" {
+		t.Fatal("expected failed recovery to record a failure reason in LastError")
+	}
+	if status.LastError != "Authentication failed - check API token or credentials" {
+		t.Fatalf("expected sanitized auth failure reason, got %q", status.LastError)
+	}
+}

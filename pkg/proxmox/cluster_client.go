@@ -711,6 +711,18 @@ func (cc *ClusterClient) recoverUnhealthyNodes(ctx context.Context) {
 	var wg sync.WaitGroup
 	recoveredEndpoints := make(chan string, len(unhealthyEndpoints))
 
+	var failureMu sync.Mutex
+	failureReasons := make(map[string]string, len(unhealthyEndpoints))
+	recordFailure := func(ep string, err error) {
+		sanitized := sanitizeEndpointError(err.Error())
+		failureMu.Lock()
+		failureReasons[ep] = sanitized
+		failureMu.Unlock()
+		cc.mu.Lock()
+		cc.lastError[ep] = sanitized
+		cc.mu.Unlock()
+	}
+
 	for _, endpoint := range unhealthyEndpoints {
 		wg.Add(1)
 		go func(ep string) {
@@ -731,6 +743,7 @@ func (cc *ClusterClient) recoverUnhealthyNodes(ctx context.Context) {
 
 			testClient, err := NewClient(cfg)
 			if err != nil {
+				recordFailure(ep, err)
 				log.Debug().
 					Str("cluster", cc.name).
 					Str("endpoint", ep).
@@ -779,6 +792,7 @@ func (cc *ClusterClient) recoverUnhealthyNodes(ctx context.Context) {
 						Msg("Recovered unhealthy cluster node")
 				}
 			} else {
+				recordFailure(ep, err)
 				log.Debug().
 					Str("cluster", cc.name).
 					Str("endpoint", ep).
@@ -808,10 +822,22 @@ func (cc *ClusterClient) recoverUnhealthyNodes(ctx context.Context) {
 			Int("attempted", len(unhealthyEndpoints)).
 			Msg("Cluster endpoint recovery completed")
 	} else if len(unhealthyEndpoints) > 0 {
+		// Include the per-endpoint failure reasons: without them this summary
+		// is the only non-debug signal and leaves operators guessing whether
+		// the cause is DNS, TLS, auth, or routing. Refs: #1665
+		failureMu.Lock()
+		reasons := make([]string, 0, len(failureReasons))
+		for _, ep := range unhealthyEndpoints {
+			if reason, ok := failureReasons[ep]; ok {
+				reasons = append(reasons, ep+": "+reason)
+			}
+		}
+		failureMu.Unlock()
 		log.Warn().
 			Str("cluster", cc.name).
 			Int("attempted", len(unhealthyEndpoints)).
 			Strs("failedEndpoints", unhealthyEndpoints).
+			Strs("failureReasons", reasons).
 			Msg("No endpoints recovered - cluster may be unreachable from Pulse server")
 	}
 }

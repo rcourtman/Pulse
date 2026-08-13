@@ -273,6 +273,19 @@ func TestClusterEndpointEffectiveURL(t *testing.T) {
 		t.Fatalf("override IP preference = %q, want %q", got, "https://192.168.1.10:8006")
 	}
 
+	// #1665: an explicit override must win under verifySSL too, even without a
+	// per-endpoint fingerprint. The hostname-for-TLS preference only applies to
+	// auto-discovered addresses.
+	if got := clusterEndpointEffectiveURL(endpoint, true, false); got != "https://192.168.1.10:8006" {
+		t.Fatalf("override under verifySSL = %q, want %q", got, "https://192.168.1.10:8006")
+	}
+
+	// An override may be a hostname with a port, not just an IP.
+	endpoint.IPOverride = "pve2.internal:9006"
+	if got := clusterEndpointEffectiveURL(endpoint, true, false); got != "https://pve2.internal:9006" {
+		t.Fatalf("hostname override = %q, want %q", got, "https://pve2.internal:9006")
+	}
+
 	// #1199: a cluster-level fingerprint (passed as hasFingerprint=true) must NOT
 	// force IP routing for a member endpoint that has no per-endpoint fingerprint;
 	// hostname routing must be preserved so TLS validation still works.

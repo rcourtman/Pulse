@@ -127,6 +127,15 @@ func ensureClusterEndpointURL(raw string) string {
 }
 
 func clusterEndpointEffectiveURL(endpoint config.ClusterEndpoint, verifySSL bool, _ bool) string {
+	// An explicit connection address override is the operator telling Pulse
+	// which address reaches this member, so it wins in every TLS mode. The
+	// hostname preference below is a heuristic for auto-discovered addresses
+	// only: letting it displace an explicit override leaves the member
+	// undialable with no sign the override was ignored. Refs: #1665
+	if override := strings.TrimSpace(endpoint.IPOverride); override != "" {
+		return ensureClusterEndpointURL(override)
+	}
+
 	// A fingerprint only applies to the specific endpoint it was captured from.
 	// The primary node's (cluster-level) fingerprint must not be treated as valid
 	// for every cluster member, otherwise we route to per-node IPs while pinning
@@ -136,21 +145,18 @@ func clusterEndpointEffectiveURL(endpoint config.ClusterEndpoint, verifySSL bool
 	hasEndpointFingerprint := strings.TrimSpace(endpoint.Fingerprint) != ""
 	requiresHostnameForTLS := verifySSL && !hasEndpointFingerprint
 
-	// Use EffectiveIP() which prefers user-specified IPOverride over auto-discovered IP
-	effectiveIP := endpoint.EffectiveIP()
-
 	if requiresHostnameForTLS {
 		// Prefer hostname for proper TLS certificate validation
 		if endpoint.Host != "" {
 			return ensureClusterEndpointURL(endpoint.Host)
 		}
-		if effectiveIP != "" {
-			return ensureClusterEndpointURL(effectiveIP)
+		if endpoint.IP != "" {
+			return ensureClusterEndpointURL(endpoint.IP)
 		}
 	} else {
 		// Prefer IP address to avoid excessive DNS lookups
-		if effectiveIP != "" {
-			return ensureClusterEndpointURL(effectiveIP)
+		if endpoint.IP != "" {
+			return ensureClusterEndpointURL(endpoint.IP)
 		}
 		if endpoint.Host != "" {
 			return ensureClusterEndpointURL(endpoint.Host)
