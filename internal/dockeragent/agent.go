@@ -48,18 +48,22 @@ type Config struct {
 	ServerFingerprint   string
 	DisableAutoUpdate   bool
 	DisableUpdateChecks bool // Disable Docker image update detection (registry checks)
-	Targets             []TargetConfig
-	ContainerStates     []string
-	SwarmScope          string
-	Runtime             string
-	IncludeServices     bool
-	IncludeTasks        bool
-	IncludeContainers   bool
-	CollectDiskMetrics  bool
-	DiskExclude         []string // Mount points or path prefixes to exclude from disk monitoring
-	DiskInclude         []string // Devices or mount points to opt into monitoring despite automatic filtering
-	LogLevel            zerolog.Level
-	Logger              *zerolog.Logger
+	// DisableRegistryCredentials keeps update checks from reading the host's
+	// Docker credential store (config.json auths and credential helpers), so
+	// private-registry checks fall back to anonymous-only behavior.
+	DisableRegistryCredentials bool
+	Targets                    []TargetConfig
+	ContainerStates            []string
+	SwarmScope                 string
+	Runtime                    string
+	IncludeServices            bool
+	IncludeTasks               bool
+	IncludeContainers          bool
+	CollectDiskMetrics         bool
+	DiskExclude                []string // Mount points or path prefixes to exclude from disk monitoring
+	DiskInclude                []string // Devices or mount points to opt into monitoring despite automatic filtering
+	LogLevel                   zerolog.Level
+	Logger                     *zerolog.Logger
 }
 
 var allowedContainerStates = map[string]string{
@@ -364,6 +368,8 @@ func New(cfg Config) (*Agent, error) {
 		registryChecker:    newRegistryCheckerWithConfig(*logger, !cfg.DisableUpdateChecks),
 	}
 
+	agent.registryChecker.credentials = registryCredentialSourceForConfig(cfg, *logger)
+
 	for _, state := range stateFilters {
 		agent.allowedStates[state] = struct{}{}
 	}
@@ -371,6 +377,15 @@ func New(cfg Config) (*Agent, error) {
 	agent.ensureAsyncLifecycle()
 
 	return agent, nil
+}
+
+// registryCredentialSourceForConfig returns the host credential source update
+// checks should use, or nil when the operator disabled credential reads.
+func registryCredentialSourceForConfig(cfg Config, logger zerolog.Logger) registryCredentialSource {
+	if cfg.DisableRegistryCredentials {
+		return nil
+	}
+	return newDockerConfigCredentials(logger)
 }
 
 func normalizeTargets(raw []TargetConfig) ([]TargetConfig, error) {

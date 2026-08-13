@@ -1712,3 +1712,16 @@ func TestBuildReportForwardsExplicitDiskIncludesAndExcludes(t *testing.T) {
 		t.Fatalf("disk includes = %q, want /mnt/containers", got)
 	}
 }
+
+func TestRegistryCredentialSourceForConfig(t *testing.T) {
+	logger := zerolog.Nop()
+
+	source := registryCredentialSourceForConfig(Config{}, logger)
+	if _, ok := source.(*dockerConfigCredentials); !ok {
+		t.Fatalf("expected host Docker credential source by default, got %T", source)
+	}
+
+	if disabled := registryCredentialSourceForConfig(Config{DisableRegistryCredentials: true}, logger); disabled != nil {
+		t.Fatalf("expected nil credential source when disabled, got %T", disabled)
+	}
+}

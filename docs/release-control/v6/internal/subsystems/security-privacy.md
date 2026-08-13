@@ -525,6 +525,24 @@ the `white_label` branding entitlement.
 	    not expose redo-stack internals, provider reasoning, raw tool output,
 	    model-only handoff text, approval payload internals, environment data, or
 	    command-bearing fix details.
+12. Change host registry-credential use for Docker / Podman update detection
+    through `cmd/pulse-agent/main.go`,
+    `internal/dockeragent/registry_credentials.go`, `docs/UNIFIED_AGENT.md`,
+    and `docs/DOCKER.md` together. Update detection may read the host's own
+    Docker / Podman credential store (`config.json` auths entries,
+    `credsStore`/`credHelpers` credential helpers, and Podman's `auth.json`)
+    to authenticate digest checks against private registries, and that read
+    is an explicit local operator boundary: resolved credentials are
+    presented only to the registry or the token endpoint it names, must
+    never be sent to the Pulse server, logged, or embedded in reported check
+    errors, and credential helper output must stay out of returned error
+    surfaces. Credential helper names must be validated before the agent
+    executes `docker-credential-<name> get`, helper execution stays
+    time-bounded with capped output, and `--disable-registry-credentials` /
+    `PULSE_DISABLE_REGISTRY_CREDENTIALS` must keep detection anonymous-only
+    without reading the store or executing helpers. Remote profile
+    configuration has no key for this boundary and must not gain one that
+    can re-enable credential reads a local operator disabled.
 
 ## Forbidden Paths
 

@@ -449,29 +449,30 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 	var dockerAgent RunnableCloser
 	if cfg.EnableDocker {
 		dockerCfg := dockeragent.Config{
-			PulseURL:            cfg.PulseURL,
-			APIToken:            cfg.APIToken,
-			Interval:            cfg.Interval,
-			HostnameOverride:    cfg.HostnameOverride,
-			AgentID:             cfg.AgentID,
-			AgentType:           "unified",
-			AgentVersion:        Version,
-			InsecureSkipVerify:  cfg.InsecureSkipVerify,
-			CACertPath:          cfg.CACertPath,
-			ServerFingerprint:   cfg.ServerFingerprint,
-			DisableAutoUpdate:   cfg.DisableAutoUpdate,
-			DisableUpdateChecks: cfg.DisableDockerUpdateChecks,
-			Runtime:             cfg.DockerRuntime,
-			LogLevel:            cfg.LogLevel,
-			Logger:              &logger,
-			SwarmScope:          "node",
-			IncludeContainers:   true,
-			IncludeServices:     true,
-			IncludeTasks:        true,
-			CollectDiskMetrics:  false,
-			DiskExclude:         cfg.DiskExclude,
-			DiskInclude:         cfg.DiskInclude,
-			Targets:             dockerReportTargets(cfg),
+			PulseURL:                   cfg.PulseURL,
+			APIToken:                   cfg.APIToken,
+			Interval:                   cfg.Interval,
+			HostnameOverride:           cfg.HostnameOverride,
+			AgentID:                    cfg.AgentID,
+			AgentType:                  "unified",
+			AgentVersion:               Version,
+			InsecureSkipVerify:         cfg.InsecureSkipVerify,
+			CACertPath:                 cfg.CACertPath,
+			ServerFingerprint:          cfg.ServerFingerprint,
+			DisableAutoUpdate:          cfg.DisableAutoUpdate,
+			DisableUpdateChecks:        cfg.DisableDockerUpdateChecks,
+			DisableRegistryCredentials: cfg.DisableRegistryCredentials,
+			Runtime:                    cfg.DockerRuntime,
+			LogLevel:                   cfg.LogLevel,
+			Logger:                     &logger,
+			SwarmScope:                 "node",
+			IncludeContainers:          true,
+			IncludeServices:            true,
+			IncludeTasks:               true,
+			CollectDiskMetrics:         false,
+			DiskExclude:                cfg.DiskExclude,
+			DiskInclude:                cfg.DiskInclude,
+			Targets:                    dockerReportTargets(cfg),
 		}
 
 		dockerAgent, err = newDockerAgent(dockerCfg)
@@ -842,9 +843,10 @@ type Config struct {
 	ProxmoxType              string // "pve", "pbs", or "" for auto-detect
 
 	// Auto-update
-	DisableAutoUpdate         bool
-	DisableDockerUpdateChecks bool   // Disable Docker image update detection
-	DockerRuntime             string // Force Docker / Podman runtime: docker, podman, or auto
+	DisableAutoUpdate          bool
+	DisableDockerUpdateChecks  bool   // Disable Docker image update detection
+	DisableRegistryCredentials bool   // Do not read host Docker credentials for registry update checks
+	DockerRuntime              string // Force Docker / Podman runtime: docker, podman, or auto
 
 	// Security
 	EnableCommands bool // Enable Pulse command execution for Patrol actions and Proxmox LXC Docker inventory (disabled by default)
@@ -974,6 +976,7 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 	envProxmoxType := strings.TrimSpace(getenv("PULSE_PROXMOX_TYPE"))
 	envDisableAutoUpdate := strings.TrimSpace(getenv("PULSE_DISABLE_AUTO_UPDATE"))
 	envDisableDockerUpdateChecks := strings.TrimSpace(getenv("PULSE_DISABLE_DOCKER_UPDATE_CHECKS"))
+	envDisableRegistryCredentials := strings.TrimSpace(getenv("PULSE_DISABLE_REGISTRY_CREDENTIALS"))
 	envDockerRuntime := strings.TrimSpace(getenv("PULSE_DOCKER_RUNTIME"))
 	envEnableCommands := strings.TrimSpace(getenv("PULSE_ENABLE_COMMANDS"))
 	envDisableCommands := strings.TrimSpace(getenv("PULSE_DISABLE_COMMANDS")) // deprecated
@@ -1062,6 +1065,7 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 	proxmoxTypeFlag := fs.String("proxmox-type", envProxmoxType, "Proxmox type: pve or pbs (auto-detected if not specified)")
 	disableAutoUpdateFlag := fs.Bool("disable-auto-update", utils.ParseBool(envDisableAutoUpdate), "Disable automatic updates")
 	disableDockerUpdateChecksFlag := fs.Bool("disable-docker-update-checks", utils.ParseBool(envDisableDockerUpdateChecks), "Disable Docker image update detection (avoids Docker Hub rate limits)")
+	disableRegistryCredentialsFlag := fs.Bool("disable-registry-credentials", utils.ParseBool(envDisableRegistryCredentials), "Do not read host Docker credentials (config.json / credential helpers) for registry update checks")
 	dockerRuntimeFlag := fs.String("docker-runtime", envDockerRuntime, "Docker / Podman runtime: auto, docker, or podman (default: auto)")
 	enableCommandsFlag := fs.Bool("enable-commands", utils.ParseBool(envEnableCommands), "Enable Pulse command execution for Patrol actions and Proxmox LXC Docker inventory (disabled by default)")
 	disableCommandsFlag := fs.Bool("disable-commands", false, "[DEPRECATED] Commands are now disabled by default; use --enable-commands to enable")
@@ -1190,49 +1194,50 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 	}
 
 	return Config{
-		PulseURL:                  pulseURL,
-		APIToken:                  token,
-		Interval:                  interval,
-		HostnameOverride:          strings.TrimSpace(*hostnameFlag),
-		AgentID:                   strings.TrimSpace(*agentIDFlag),
-		AgentIDFile:               agentIDFile,
-		Tags:                      tags,
-		InsecureSkipVerify:        *insecureFlag,
-		AllowPlaintextHTTP:        *allowPlaintextHTTPFlag,
-		CACertPath:                strings.TrimSpace(*caCertFlag),
-		ServerFingerprint:         strings.TrimSpace(*serverFingerprintFlag),
-		ObserversFile:             strings.TrimSpace(*observersFileFlag),
-		Observers:                 observers,
-		CustomSensorsFile:         strings.TrimSpace(*customSensorsFileFlag),
-		DeploySSHUser:             deploySSHUser,
-		LogLevel:                  logLevel,
-		LogFile:                   strings.TrimSpace(*logFileFlag),
-		EnableHost:                *enableHostFlag,
-		EnableDocker:              *enableDockerFlag,
-		DockerConfigured:          dockerConfigured,
-		DockerExplicitlyDisabled:  dockerExplicitlyDisabled,
-		EnableKubernetes:          *enableKubernetesFlag,
-		EnableProxmox:             *enableProxmoxFlag,
-		ProxmoxType:               strings.TrimSpace(*proxmoxTypeFlag),
-		DisableAutoUpdate:         *disableAutoUpdateFlag,
-		DisableDockerUpdateChecks: *disableDockerUpdateChecksFlag,
-		DockerRuntime:             dockerRuntime,
-		EnableCommands:            resolveEnableCommands(*enableCommandsFlag, *disableCommandsFlag, envEnableCommands, envDisableCommands),
-		Enroll:                    *enrollFlag,
-		HealthAddr:                strings.TrimSpace(*healthAddrFlag),
-		KubeconfigPath:            strings.TrimSpace(*kubeconfigFlag),
-		KubeContext:               strings.TrimSpace(*kubeContextFlag),
-		KubeIncludeNamespaces:     kubeIncludeNamespaces,
-		KubeExcludeNamespaces:     kubeExcludeNamespaces,
-		KubeIncludeAllPods:        *kubeIncludeAllPodsFlag,
-		KubeIncludeAllDeployments: *kubeIncludeAllDeploymentsFlag,
-		KubeMaxPods:               kubeMaxPods,
-		StateDir:                  stateDir,
-		DiskExclude:               diskExclude,
-		DiskInclude:               diskInclude,
-		ReportIP:                  strings.TrimSpace(*reportIPFlag),
-		DisableCeph:               *disableCephFlag,
-		SelfTest:                  *selfTest,
+		PulseURL:                   pulseURL,
+		APIToken:                   token,
+		Interval:                   interval,
+		HostnameOverride:           strings.TrimSpace(*hostnameFlag),
+		AgentID:                    strings.TrimSpace(*agentIDFlag),
+		AgentIDFile:                agentIDFile,
+		Tags:                       tags,
+		InsecureSkipVerify:         *insecureFlag,
+		AllowPlaintextHTTP:         *allowPlaintextHTTPFlag,
+		CACertPath:                 strings.TrimSpace(*caCertFlag),
+		ServerFingerprint:          strings.TrimSpace(*serverFingerprintFlag),
+		ObserversFile:              strings.TrimSpace(*observersFileFlag),
+		Observers:                  observers,
+		CustomSensorsFile:          strings.TrimSpace(*customSensorsFileFlag),
+		DeploySSHUser:              deploySSHUser,
+		LogLevel:                   logLevel,
+		LogFile:                    strings.TrimSpace(*logFileFlag),
+		EnableHost:                 *enableHostFlag,
+		EnableDocker:               *enableDockerFlag,
+		DockerConfigured:           dockerConfigured,
+		DockerExplicitlyDisabled:   dockerExplicitlyDisabled,
+		EnableKubernetes:           *enableKubernetesFlag,
+		EnableProxmox:              *enableProxmoxFlag,
+		ProxmoxType:                strings.TrimSpace(*proxmoxTypeFlag),
+		DisableAutoUpdate:          *disableAutoUpdateFlag,
+		DisableDockerUpdateChecks:  *disableDockerUpdateChecksFlag,
+		DisableRegistryCredentials: *disableRegistryCredentialsFlag,
+		DockerRuntime:              dockerRuntime,
+		EnableCommands:             resolveEnableCommands(*enableCommandsFlag, *disableCommandsFlag, envEnableCommands, envDisableCommands),
+		Enroll:                     *enrollFlag,
+		HealthAddr:                 strings.TrimSpace(*healthAddrFlag),
+		KubeconfigPath:             strings.TrimSpace(*kubeconfigFlag),
+		KubeContext:                strings.TrimSpace(*kubeContextFlag),
+		KubeIncludeNamespaces:      kubeIncludeNamespaces,
+		KubeExcludeNamespaces:      kubeExcludeNamespaces,
+		KubeIncludeAllPods:         *kubeIncludeAllPodsFlag,
+		KubeIncludeAllDeployments:  *kubeIncludeAllDeploymentsFlag,
+		KubeMaxPods:                kubeMaxPods,
+		StateDir:                   stateDir,
+		DiskExclude:                diskExclude,
+		DiskInclude:                diskInclude,
+		ReportIP:                   strings.TrimSpace(*reportIPFlag),
+		DisableCeph:                *disableCephFlag,
+		SelfTest:                   *selfTest,
 	}, nil
 }
 

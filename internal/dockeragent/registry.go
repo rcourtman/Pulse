@@ -20,8 +20,11 @@ import (
 type RegistryChecker struct {
 	httpClient *http.Client
 	cache      *digestCache
-	logger     zerolog.Logger
-	mu         sync.RWMutex
+	// credentials optionally resolves host Docker credentials so private
+	// registries can be checked; nil keeps every lookup anonymous.
+	credentials registryCredentialSource
+	logger      zerolog.Logger
+	mu          sync.RWMutex
 
 	// Configuration
 	enabled       bool
@@ -293,34 +296,39 @@ func (r *RegistryChecker) digestsDiffer(current, latest string) bool {
 // fetchDigest retrieves the digest for an image from the registry.
 // Returns the resolved platform-specific digest AND the raw HEAD digest (which might be a manifest list).
 func (r *RegistryChecker) fetchDigest(ctx context.Context, registry, repository, tag, arch, goos, variant string) (string, string, error) {
+	creds := r.lookupCredentials(ctx, registry)
+
 	// Get auth token if needed
-	token, err := r.getAuthToken(ctx, registry, repository)
+	token, tokenUsedCreds, err := r.getScopedAuthToken(ctx, registry, repository, creds)
 	if err != nil {
 		return "", "", fmt.Errorf("auth: %w", err)
+	}
+	authorization := ""
+	if token != "" {
+		authorization = "Bearer " + token
 	}
 
 	// Construct the manifest URL
 	manifestURL := fmt.Sprintf("https://%s/v2/%s/manifests/%s", registry, repository, tag)
 
-	resp, err := r.headManifest(ctx, manifestURL, token)
+	resp, err := r.headManifest(ctx, manifestURL, authorization)
 	if err != nil {
 		return "", "", err
 	}
 
-	if resp.StatusCode == http.StatusUnauthorized && token == "" {
+	if resp.StatusCode == http.StatusUnauthorized {
 		// Registries without a hardcoded token endpoint (lscr.io, quay.io, ...)
-		// advertise it in the WWW-Authenticate Bearer challenge. Negotiate a
-		// pull token and retry once.
+		// advertise it in the WWW-Authenticate challenge. Negotiate a pull
+		// token (with host credentials when the store has them) or answer a
+		// Basic challenge directly, and retry once.
 		challenge := resp.Header.Get("Www-Authenticate")
-		resp.Body.Close()
-		negotiated, negErr := r.tokenFromChallenge(ctx, challenge, repository)
-		if negErr != nil {
-			return "", "", fmt.Errorf("authentication required")
-		}
-		token = negotiated
-		resp, err = r.headManifest(ctx, manifestURL, token)
-		if err != nil {
-			return "", "", err
+		if retryAuthorization, ok := r.retryAuthorization(ctx, challenge, repository, token, tokenUsedCreds, creds); ok {
+			resp.Body.Close()
+			authorization = retryAuthorization
+			resp, err = r.headManifest(ctx, manifestURL, authorization)
+			if err != nil {
+				return "", "", err
+			}
 		}
 	}
 	defer resp.Body.Close()
@@ -356,7 +364,7 @@ func (r *RegistryChecker) fetchDigest(ctx context.Context, registry, repository,
 		if closeErr := resp.Body.Close(); closeErr != nil {
 			r.logger.Debug().Err(closeErr).Msg("Failed to close registry HEAD response")
 		}
-		manifestDigest, manifestContentType, manifestBody, err := r.fetchManifest(ctx, manifestURL, token)
+		manifestDigest, manifestContentType, manifestBody, err := r.fetchManifest(ctx, manifestURL, authorization)
 		if err != nil {
 			return "", "", err
 		}
@@ -383,7 +391,7 @@ func (r *RegistryChecker) fetchDigest(ctx context.Context, registry, repository,
 	// identify an index on HEAD but omit its digest need the GET fallback above
 	// to preserve both values.
 	if isManifestList && arch != "" && goos != "" {
-		resolved, err := r.resolveManifestList(ctx, registry, repository, tag, arch, goos, variant, token)
+		resolved, err := r.resolveManifestList(ctx, registry, repository, tag, arch, goos, variant, authorization)
 		return resolved, digest, err
 	}
 
@@ -393,12 +401,12 @@ func (r *RegistryChecker) fetchDigest(ctx context.Context, registry, repository,
 // fetchManifest retrieves a manifest body when a registry accepts HEAD but
 // omits the digest headers. The digest of the exact response body is a valid
 // fallback under the registry content-addressing contract.
-func (r *RegistryChecker) fetchManifest(ctx context.Context, manifestURL, token string) (string, string, []byte, error) {
+func (r *RegistryChecker) fetchManifest(ctx context.Context, manifestURL, authorization string) (string, string, []byte, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, manifestURL, nil)
 	if err != nil {
 		return "", "", nil, fmt.Errorf("create manifest request: %w", err)
 	}
-	r.setManifestRequestHeaders(req, token)
+	r.setManifestRequestHeaders(req, authorization)
 
 	resp, err := r.httpClient.Do(req)
 	if err != nil {
@@ -431,13 +439,13 @@ func (r *RegistryChecker) fetchManifest(ctx context.Context, manifestURL, token 
 }
 
 // headManifest issues a manifest HEAD request with the multi-arch Accept set.
-func (r *RegistryChecker) headManifest(ctx context.Context, manifestURL, token string) (*http.Response, error) {
+func (r *RegistryChecker) headManifest(ctx context.Context, manifestURL, authorization string) (*http.Response, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodHead, manifestURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
 
-	r.setManifestRequestHeaders(req, token)
+	r.setManifestRequestHeaders(req, authorization)
 
 	resp, err := r.httpClient.Do(req)
 	if err != nil {
@@ -446,7 +454,9 @@ func (r *RegistryChecker) headManifest(ctx context.Context, manifestURL, token s
 	return resp, nil
 }
 
-func (r *RegistryChecker) setManifestRequestHeaders(req *http.Request, token string) {
+// setManifestRequestHeaders applies the multi-arch Accept set and an optional
+// full Authorization header value ("Bearer ..." or "Basic ...").
+func (r *RegistryChecker) setManifestRequestHeaders(req *http.Request, authorization string) {
 	req.Header.Set("Accept", strings.Join([]string{
 		"application/vnd.docker.distribution.manifest.list.v2+json",
 		"application/vnd.docker.distribution.manifest.v2+json",
@@ -454,35 +464,55 @@ func (r *RegistryChecker) setManifestRequestHeaders(req *http.Request, token str
 		"application/vnd.oci.image.index.v1+json",
 	}, ", "))
 
-	if token != "" {
-		req.Header.Set("Authorization", "Bearer "+token)
+	if authorization != "" {
+		req.Header.Set("Authorization", authorization)
 	}
 }
 
-// tokenFromChallenge negotiates an anonymous pull token from the token
-// endpoint named in a registry's WWW-Authenticate Bearer challenge
-// (Docker registry v2 token auth).
-func (r *RegistryChecker) tokenFromChallenge(ctx context.Context, challenge, repository string) (string, error) {
+// retryAuthorization derives the Authorization value for the single retry
+// after an unauthorized manifest HEAD. Bearer challenges are negotiated at
+// the advertised token endpoint (anonymously, as before, or with host
+// credentials when the store has them); Basic challenges are answered
+// directly from host credentials. It returns false when no retry could do
+// better than the attempt that already failed.
+func (r *RegistryChecker) retryAuthorization(ctx context.Context, challenge, repository, token string, tokenUsedCreds bool, creds *registryCredential) (string, bool) {
+	scheme := strings.ToLower(strings.TrimSpace(challenge))
+	switch {
+	case strings.HasPrefix(scheme, "basic"):
+		if creds == nil || creds.IdentityToken {
+			return "", false
+		}
+		return creds.authorizationHeader(), true
+	case strings.HasPrefix(scheme, "bearer"):
+		if token != "" && (creds == nil || tokenUsedCreds) {
+			// The failed attempt already carried our best token; negotiating
+			// the same one again cannot succeed.
+			return "", false
+		}
+		negotiated, err := r.tokenFromChallenge(ctx, challenge, repository, creds)
+		if err != nil {
+			return "", false
+		}
+		return "Bearer " + negotiated, true
+	default:
+		return "", false
+	}
+}
+
+// tokenFromChallenge negotiates a pull token from the token endpoint named in
+// a registry's WWW-Authenticate Bearer challenge (Docker registry v2 token
+// auth), anonymously or with host credentials.
+func (r *RegistryChecker) tokenFromChallenge(ctx context.Context, challenge, repository string, creds *registryCredential) (string, error) {
 	params := parseBearerChallenge(challenge)
 	realm := params["realm"]
 	if realm == "" {
 		return "", fmt.Errorf("no bearer challenge")
 	}
-	realmURL, err := url.Parse(realm)
-	if err != nil || realmURL.Scheme != "https" {
-		return "", fmt.Errorf("invalid token realm")
-	}
-	query := realmURL.Query()
-	if service := params["service"]; service != "" {
-		query.Set("service", service)
-	}
 	scope := params["scope"]
 	if scope == "" {
 		scope = fmt.Sprintf("repository:%s:pull", repository)
 	}
-	query.Set("scope", scope)
-	realmURL.RawQuery = query.Encode()
-	return r.fetchAuthToken(ctx, realmURL.String())
+	return r.authorizeToken(ctx, realm, params["service"], scope, creds)
 }
 
 // parseBearerChallenge extracts the key="value" parameters from a
@@ -504,7 +534,7 @@ func parseBearerChallenge(header string) map[string]string {
 }
 
 // resolveManifestList fetches the manifest list and finds the matching digest for the architecture.
-func (r *RegistryChecker) resolveManifestList(ctx context.Context, registry, repository, tag, arch, goos, variant, token string) (string, error) {
+func (r *RegistryChecker) resolveManifestList(ctx context.Context, registry, repository, tag, arch, goos, variant, authorization string) (string, error) {
 	manifestURL := fmt.Sprintf("https://%s/v2/%s/manifests/%s", registry, repository, tag)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, manifestURL, nil)
@@ -512,16 +542,7 @@ func (r *RegistryChecker) resolveManifestList(ctx context.Context, registry, rep
 		return "", fmt.Errorf("create list request: %w", err)
 	}
 
-	req.Header.Set("Accept", strings.Join([]string{
-		"application/vnd.docker.distribution.manifest.list.v2+json",
-		"application/vnd.docker.distribution.manifest.v2+json",
-		"application/vnd.oci.image.manifest.v1+json",
-		"application/vnd.oci.image.index.v1+json",
-	}, ", "))
-
-	if token != "" {
-		req.Header.Set("Authorization", "Bearer "+token)
-	}
+	r.setManifestRequestHeaders(req, authorization)
 
 	resp, err := r.httpClient.Do(req)
 	if err != nil {
@@ -576,29 +597,112 @@ type manifestPlatform struct {
 
 // getAuthToken retrieves an auth token for the registry.
 func (r *RegistryChecker) getAuthToken(ctx context.Context, registry, repository string) (string, error) {
-	// Docker Hub requires auth token even for public images
-	if registry == "registry-1.docker.io" {
-		tokenURL := fmt.Sprintf("https://auth.docker.io/token?service=registry.docker.io&scope=repository:%s:pull", repository)
-		return r.fetchAuthToken(ctx, tokenURL)
-	}
-
-	// GitHub Container Registry (ghcr.io) requires auth token for public images
-	if registry == "ghcr.io" {
-		tokenURL := fmt.Sprintf("https://ghcr.io/token?service=ghcr.io&scope=repository:%s:pull", repository)
-		return r.fetchAuthToken(ctx, tokenURL)
-	}
-
-	// For other registries, try anonymous access first
-	return "", nil
+	token, _, err := r.getScopedAuthToken(ctx, registry, repository, r.lookupCredentials(ctx, registry))
+	return token, err
 }
 
-// fetchAuthToken fetches an auth token from a token endpoint.
+// getScopedAuthToken negotiates a pull token for registries with hardcoded
+// token endpoints. It also reports whether the returned token actually
+// carried the supplied credentials, so the 401 retry can tell a fresh
+// credentialed attempt apart from replaying one that already failed.
+func (r *RegistryChecker) getScopedAuthToken(ctx context.Context, registry, repository string, creds *registryCredential) (string, bool, error) {
+	var realm, service string
+	switch registry {
+	// Docker Hub and ghcr.io require a token even for public images.
+	case "registry-1.docker.io":
+		realm, service = "https://auth.docker.io/token", "registry.docker.io"
+	case "ghcr.io":
+		realm, service = "https://ghcr.io/token", "ghcr.io"
+	default:
+		// For other registries, try anonymous access first.
+		return "", false, nil
+	}
+
+	if creds != nil {
+		token, err := r.authorizeToken(ctx, realm, service, fmt.Sprintf("repository:%s:pull", repository), creds)
+		if err == nil {
+			return token, true, nil
+		}
+		// A stale login must not break checks that used to work anonymously.
+		r.logger.Debug().Str("registry", registry).Err(err).Msg("Credentialed token negotiation failed; retrying anonymously")
+	}
+
+	tokenURL := fmt.Sprintf("%s?service=%s&scope=repository:%s:pull", realm, service, repository)
+	token, err := r.fetchAuthToken(ctx, tokenURL)
+	return token, false, err
+}
+
+// authorizeToken requests a pull token from a token endpoint, attaching Basic
+// credentials or exchanging an identity token when host credentials exist.
+func (r *RegistryChecker) authorizeToken(ctx context.Context, realm, service, scope string, creds *registryCredential) (string, error) {
+	realmURL, err := url.Parse(realm)
+	if err != nil || realmURL.Scheme != "https" {
+		return "", fmt.Errorf("invalid token realm")
+	}
+
+	if creds != nil && creds.IdentityToken {
+		return r.exchangeIdentityToken(ctx, realmURL.String(), service, scope, creds)
+	}
+
+	query := realmURL.Query()
+	if service != "" {
+		query.Set("service", service)
+	}
+	query.Set("scope", scope)
+	realmURL.RawQuery = query.Encode()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, realmURL.String(), nil)
+	if err != nil {
+		return "", fmt.Errorf("create token request: %w", err)
+	}
+	if creds != nil {
+		req.SetBasicAuth(creds.Username, creds.Secret)
+	}
+	return r.doTokenRequest(req)
+}
+
+// exchangeIdentityToken swaps an OAuth identity token (docker-credential
+// helper logins that return Username "<token>", for example Azure ACR) for a
+// pull token via the refresh-token grant of the registry token endpoint.
+func (r *RegistryChecker) exchangeIdentityToken(ctx context.Context, realm, service, scope string, creds *registryCredential) (string, error) {
+	form := url.Values{}
+	form.Set("grant_type", "refresh_token")
+	form.Set("refresh_token", creds.Secret)
+	form.Set("client_id", "pulse-agent")
+	if service != "" {
+		form.Set("service", service)
+	}
+	form.Set("scope", scope)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, realm, strings.NewReader(form.Encode()))
+	if err != nil {
+		return "", fmt.Errorf("create token request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	return r.doTokenRequest(req)
+}
+
+// lookupCredentials resolves host Docker credentials for a registry. It
+// returns nil when no source is wired, the registry has no stored login, or
+// resolution fails; the check then proceeds anonymously as before.
+func (r *RegistryChecker) lookupCredentials(ctx context.Context, registry string) *registryCredential {
+	if r.credentials == nil {
+		return nil
+	}
+	return r.credentials.Lookup(ctx, registry)
+}
+
+// fetchAuthToken fetches an auth token anonymously from a token endpoint.
 func (r *RegistryChecker) fetchAuthToken(ctx context.Context, tokenURL string) (string, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, tokenURL, nil)
 	if err != nil {
 		return "", fmt.Errorf("create token request: %w", err)
 	}
+	return r.doTokenRequest(req)
+}
 
+// doTokenRequest executes a token-endpoint request and decodes the token.
+func (r *RegistryChecker) doTokenRequest(req *http.Request) (string, error) {
 	resp, err := r.httpClient.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("send token request: %w", err)

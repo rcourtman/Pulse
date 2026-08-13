@@ -2796,6 +2796,29 @@ feeds the enclosing report back into command execution. The API and monitoring
 contracts continue to own host command admission, command TTL expiry, and UI
 in-flight projection.
 
+### Registry update checks may use host Docker credentials, host-locally only
+
+Automatic and manual Docker / Podman update detection may authenticate to a
+registry with the host's own Docker credential store — `config.json` `auths`
+entries, configured `credsStore`/`credHelpers` credential helpers, and
+Podman's `auth.json`, honoring the `REGISTRY_AUTH_FILE` and `DOCKER_CONFIG`
+overrides — so containers from private registries get real digest checks
+instead of a permanent "authentication required" failure. Resolved
+credentials are presented only to the registry itself or the token endpoint
+it names: Basic auth on Bearer token negotiation (including the hardcoded
+Docker Hub and ghcr.io endpoints), a direct Basic answer to a Basic
+challenge, and the OAuth refresh-token grant for identity-token logins.
+Credentials must never be reported to the Pulse server, logged, or embedded
+in check errors, and credential helper output must stay out of returned
+error surfaces. Helper names are validated against a strict pattern before
+the agent executes `docker-credential-<name> get`, helper execution is
+time-bounded with capped output, and lookups are cached in memory for five
+minutes. A stale or rejected login falls back to the anonymous path so
+checks that used to work anonymously keep working, and
+`--disable-registry-credentials` / `PULSE_DISABLE_REGISTRY_CREDENTIALS`
+keeps detection anonymous-only without reading the store or executing
+helpers.
+
 ### Governed action readiness remains outside agent lifecycle authority
 
 The canonical Actions lifecycle may ask an executor-owned

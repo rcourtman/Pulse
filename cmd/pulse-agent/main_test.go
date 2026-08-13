@@ -2454,3 +2454,39 @@ func TestWireUpdaterHooksNudgesUpdaterOnNewerAckVersion(t *testing.T) {
 	cancel()
 	<-done
 }
+
+func TestLoadConfigRegistryCredentialOptOut(t *testing.T) {
+	t.Run("default keeps host credential reads enabled", func(t *testing.T) {
+		cfg, err := loadConfig([]string{"-token", "test-token"}, func(string) string { return "" })
+		if err != nil {
+			t.Fatal(err)
+		}
+		if cfg.DisableRegistryCredentials {
+			t.Error("expected registry credential reads enabled by default")
+		}
+	})
+
+	t.Run("env opt-out", func(t *testing.T) {
+		env := map[string]string{
+			"PULSE_TOKEN":                        "test-token",
+			"PULSE_DISABLE_REGISTRY_CREDENTIALS": "true",
+		}
+		cfg, err := loadConfig([]string{}, func(s string) string { return env[s] })
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !cfg.DisableRegistryCredentials {
+			t.Error("expected PULSE_DISABLE_REGISTRY_CREDENTIALS to disable credential reads")
+		}
+	})
+
+	t.Run("flag opt-out", func(t *testing.T) {
+		cfg, err := loadConfig([]string{"-token", "test-token", "-disable-registry-credentials"}, func(string) string { return "" })
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !cfg.DisableRegistryCredentials {
+			t.Error("expected --disable-registry-credentials to disable credential reads")
+		}
+	})
+}
