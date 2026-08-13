@@ -206,7 +206,38 @@ type smartctlJSON struct {
 		} `json:"current"`
 	} `json:"ata_sct_status"`
 	NVMeSmartHealthInformationLog *nvmeSmartHealthInformationLogJSON `json:"nvme_smart_health_information_log"`
-	PowerMode                     string                             `json:"power_mode"`
+	PowerMode                     smartctlPowerModeJSON              `json:"power_mode"`
+}
+
+// smartctlPowerModeJSON absorbs every shape smartctl has used for the JSON
+// power_mode field. smartmontools 7.5 introduced it as an object,
+// {"ata_value": 255, "name": "ACTIVE or IDLE"}, emitted whenever the -n
+// guard runs CHECK POWER MODE — which is every rotational-disk probe here.
+// Decoding it into a plain string failed json.Unmarshal for the whole
+// document, so healthy output from spinning disks degraded to the lossy text
+// fallback and was dropped as "no usable SMART data" (discussion #1690). The
+// decoder never propagates an error: an unrecognized future shape must cost
+// only this field, never the document.
+type smartctlPowerModeJSON struct {
+	Name     string `json:"name"`
+	ATAValue int    `json:"ata_value"`
+}
+
+func (p *smartctlPowerModeJSON) UnmarshalJSON(data []byte) error {
+	var object struct {
+		Name     string `json:"name"`
+		ATAValue int    `json:"ata_value"`
+	}
+	if err := json.Unmarshal(data, &object); err == nil {
+		p.Name = object.Name
+		p.ATAValue = object.ATAValue
+		return nil
+	}
+	var name string
+	if err := json.Unmarshal(data, &name); err == nil {
+		p.Name = name
+	}
+	return nil
 }
 
 type smartTextFallback struct {
@@ -1862,7 +1893,7 @@ func parseSMARTOutput(output []byte, target smartctlTarget) (*DiskSMART, error) 
 		Model:       smartData.ModelName,
 		Serial:      smartData.SerialNumber,
 		Type:        detectDiskType(smartData),
-		Standby:     isStandbyPowerMode(smartData.PowerMode),
+		Standby:     isStandbyPowerMode(smartData.PowerMode.Name),
 		LastUpdated: timeNow(),
 		Collection:  &diskinventory.CollectionStatus{},
 	}
@@ -2044,8 +2075,12 @@ func parseSMARTTextFallback(text string) smartTextFallback {
 			}
 		case strings.HasPrefix(lower, "serial number:"):
 			fallback.Serial = strings.TrimSpace(line[len("Serial Number:"):])
-		case strings.Contains(lower, "device is in standby mode"),
+		case strings.Contains(lower, "device is in standby"),
+			strings.Contains(lower, "device is in sleep"),
 			strings.Contains(lower, "standby (os)"):
+			// "device is in standby" deliberately drops the " mode" suffix:
+			// smartctl names EPC states STANDBY_Y / STANDBY (OS), and the
+			// suffixed match silently missed both (discussion #1690).
 			fallback.Standby = true
 		case strings.HasPrefix(lower, "smart overall-health self-assessment test result:"):
 			fallback.Health = parseSMARTHealthText(line)

@@ -423,7 +423,7 @@ func TestParseSMARTOutputStandbyPowerMode(t *testing.T) {
 	payload := smartctlJSON{
 		ModelName:    "WDC WD40EFRX",
 		SerialNumber: "WD-123",
-		PowerMode:    "STANDBY",
+		PowerMode:    smartctlPowerModeJSON{Name: "STANDBY"},
 	}
 	payload.Device.Protocol = "ATA"
 
