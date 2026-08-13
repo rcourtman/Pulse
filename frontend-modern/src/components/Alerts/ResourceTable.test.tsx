@@ -1536,6 +1536,44 @@ describe('ResourceTable', () => {
 
       expect(screen.getByText('Production Web Server')).toBeInTheDocument();
     });
+
+    it('renders backup as a toggle badge in the card layout, not a number input', () => {
+      // Routing backup through the numeric editor persisted {trigger, clear}
+      // into the backup block, which the backend reads as an all-zero
+      // disabled config (#1126).
+      const onToggleBackup = vi.fn();
+      const props = makeProps({
+        resources: [makeResource({ id: 'vm-1', name: 'Mobile VM', backup: { enabled: true } })],
+        columns: ['CPU %', 'Backup'],
+        onToggleBackup,
+      });
+      render(() => <ResourceTable {...props} />);
+
+      const badge = screen.getByTestId('status-badge');
+      expect(badge.title).toContain('Backup alerts enabled');
+      fireEvent.click(badge);
+      expect(onToggleBackup).toHaveBeenCalledWith('vm-1');
+    });
+
+    it('keeps backup and snapshot out of the numeric editor while editing in the card layout', () => {
+      const onToggleSnapshot = vi.fn();
+      const props = makeProps({
+        resources: [makeResource({ id: 'vm-1', name: 'Mobile VM', snapshot: { enabled: false } })],
+        columns: ['CPU %', 'Snapshot'],
+        editingId: () => 'vm-1',
+        editingThresholds: () => ({ cpu: 80 }),
+        onToggleSnapshot,
+      });
+      render(() => <ResourceTable {...props} />);
+
+      // Only the CPU metric may offer a number input; snapshot stays a badge.
+      expect(screen.getAllByRole('spinbutton')).toHaveLength(1);
+      const badge = screen.getByTitle(
+        'Snapshot alerts disabled. Click to enable for this resource.',
+      );
+      fireEvent.click(badge);
+      expect(onToggleSnapshot).toHaveBeenCalledWith('vm-1');
+    });
   });
 
   describe('delay settings', () => {

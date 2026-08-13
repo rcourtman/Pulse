@@ -385,6 +385,37 @@ export function AlertResourceTableMobile(props: AlertResourceTableMobileProps) {
                           const metric = normalizeAlertResourceMetricKey(column);
                           if (!alertResourceSupportsMetric(resource.type, metric)) return null;
 
+                          // Backup and snapshot carry day-based configs, not
+                          // trigger/clear thresholds. Routing them through the
+                          // numeric editor persisted {trigger, clear} into the
+                          // backup block, which the backend reads as an all-zero
+                          // disabled config (#1126). Render the same on/off
+                          // toggle the desktop rows use instead.
+                          if (metric === 'backup' || metric === 'snapshot') {
+                            const config =
+                              metric === 'backup' ? resource.backup : resource.snapshot;
+                            const onToggle =
+                              metric === 'backup'
+                                ? props.table.onToggleBackup
+                                : props.table.onToggleSnapshot;
+                            if (!onToggle) return null;
+                            const titlePrefix = metric === 'backup' ? 'Backup' : 'Snapshot';
+
+                            return (
+                              <div class="flex justify-between items-center p-1.5 bg-surface-alt rounded">
+                                <span class="text-[10px] uppercase font-bold tracking-wider">
+                                  {column}
+                                </span>
+                                <StatusBadge
+                                  isEnabled={config?.enabled ?? true}
+                                  onToggle={() => onToggle(resource.id)}
+                                  titleEnabled={`${titlePrefix} alerts enabled. Click to disable for this resource.`}
+                                  titleDisabled={`${titlePrefix} alerts disabled. Click to enable for this resource.`}
+                                />
+                              </div>
+                            );
+                          }
+
                           const isDisabled = () => isAlertResourceMetricOff(thresholds()?.[metric]);
                           const inheritedDefault = () => resource.defaults?.[metric];
                           const bounds = getAlertResourceMetricBounds(metric);

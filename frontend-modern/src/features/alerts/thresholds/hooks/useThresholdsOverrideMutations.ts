@@ -114,6 +114,11 @@ export function useThresholdsOverrideMutations({
     const overrideThresholds: Record<string, number> = {};
 
     Object.keys(editedThresholdMap).forEach((key) => {
+      // Backup and snapshot are day-based config blocks managed by their
+      // dedicated toggles. A numeric entry here would persist {trigger, clear}
+      // into the block, which the backend reads as an all-zero disabled
+      // config (#1126), so they must never pass through as thresholds.
+      if (key === 'backup' || key === 'snapshot') return;
       const editedValue = editedThresholdMap[key];
       const defaultValue = defaultThresholds[key];
       if (editedValue !== undefined && editedValue !== defaultValue) {
@@ -236,6 +241,9 @@ export function useThresholdsOverrideMutations({
       };
 
       Object.keys(thresholds).forEach((key) => {
+        // Same guard as saveEdit: backup/snapshot are config blocks, not
+        // trigger/clear thresholds (#1126).
+        if (key === 'backup' || key === 'snapshot') return;
         if (thresholds[key] !== undefined) {
           const value = thresholds[key];
           if (value === defaultThresholds[key]) {

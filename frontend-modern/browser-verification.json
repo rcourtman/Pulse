@@ -1,36 +1,40 @@
 {
   "version": 1,
-  "base_sha": "14a3b8b5af276dc6d33a18098d8b80d1a131340f",
-  "verified_at": "2026-08-13T22:14:37Z",
+  "base_sha": "a7646e5f86098b014476669fdc8105a692c22780",
+  "verified_at": "2026-08-13T22:56:10Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Workloads/useGuestRowState.ts"
+    "frontend-modern/src/components/Alerts/AlertResourceTableMobile.tsx",
+    "frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsOverrideMutations.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Workloads/useGuestRowState.ts": "51a68fb1a49eabd172482ae2f3e3087763aa772ddfe4d183b74e41838628433a"
+    "frontend-modern/src/components/Alerts/AlertResourceTableMobile.tsx": "6596f8b71c9cefb759d72751e4c5eeaf48292cd7fd90b3cc3a3f2026f59baf82",
+    "frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsOverrideMutations.ts": "6db0718b9139daa8f98a41dc0d254bf3889b138ded7b3ac9a2ffa761ab3de70e"
   },
   "routes": [
-    "/vmware/overview"
+    "/alerts/thresholds"
   ],
   "viewports": [
     {
-      "width": 1440,
-      "height": 1000
+      "width": 1280,
+      "height": 900
     },
     {
-      "width": 768,
+      "width": 700,
       "height": 900
     }
   ],
   "states": [
-    "vSphere overview with the provider-unsupported Backup column hidden",
-    "vSphere overview with the Backup column explicitly enabled",
-    "vSphere overview reloaded with the enabled Backup preference persisted"
+    "VMs & Containers section expanded in the card layout at 700px with Backup and Snapshot rendered as toggle badges (Disabled) instead of number inputs",
+    "guest card edit mode (cold-archive-01) showing numeric inputs with On toggles for CPU/Memory/Disk while Backup and Snapshot remain toggle badges with no number input",
+    "unsaved-changes banner after toggling a backup badge, then discarded",
+    "1280px desktop viewport still using the card layout for the 14-column guests section, badges rendering identically"
   ],
   "interactions": [
-    "Opened View preferences and expanded the column chooser",
-    "Enabled Backup and confirmed all 18 vSphere VM rows rendered an unavailable dash without a red warning",
-    "Reloaded the overview and confirmed the persisted Backup column retained unavailable rather than no-backup semantics",
-    "Restored the default hidden Backup column preference"
+    "expanded the VMs & Containers group",
+    "entered per-guest edit mode via Edit thresholds button",
+    "clicked a Backup toggle badge in card view mode and confirmed it flipped to enabled and staged unsaved changes",
+    "clicked Discard to clear the staged change",
+    "checked console errors (only pre-existing WebSocket reconnect noise from the absent 7655 backend)"
   ]
 }

@@ -170,6 +170,116 @@ describe('useThresholdsOverrideMutations', () => {
     });
   });
 
+  it('saveEdit never persists staged backup/snapshot numbers as trigger/clear blocks', () => {
+    const overrideSignal = createSignal<any[]>([]);
+    const { props, rawOverridesConfig } = buildTableProps(overrideSignal);
+    // The card layout used to stage backup/snapshot as numeric metrics; a
+    // {trigger, clear} block under those keys reads back as an all-zero
+    // disabled config on the backend (#1126).
+    const [editingThresholds] = createSignal<Record<string, number | undefined>>({
+      cpu: 95,
+      backup: 11,
+      snapshot: 12,
+    });
+    const guestResource: TableResource = {
+      id: 'cluster-a:node-2:100',
+      name: 'db-01',
+      type: 'guest',
+      resourceType: 'VM',
+      vmid: 100,
+      node: 'node-2',
+      instance: 'cluster-a',
+      defaults: { cpu: 80 },
+      thresholds: { cpu: 80 },
+    };
+
+    const { result } = renderHook(() =>
+      useThresholdsOverrideMutations({
+        props,
+        resources: {
+          nodesWithOverrides: () => [],
+          agentsWithOverrides: () => [],
+          agentDisksWithOverrides: () => [],
+          dockerHostsWithOverrides: () => [],
+          guestsFlat: () => [guestResource],
+          dockerContainersFlat: () => [],
+          pbsServersWithOverrides: () => [],
+          pmgServersWithOverrides: () => [],
+          storageWithOverrides: () => [],
+        },
+        editingThresholds,
+        editingNote: () => '',
+        bulkEditIds: () => [],
+        cancelEdit: vi.fn(),
+      }),
+    );
+
+    result.saveEdit('cluster-a:node-2:100');
+
+    expect(overrideSignal[0]()).toEqual([
+      expect.objectContaining({
+        id: 'guest:cluster-a:100',
+        thresholds: { cpu: 95 },
+      }),
+    ]);
+    expect(rawOverridesConfig()).toEqual({
+      'guest:cluster-a:100': {
+        cpu: {
+          clear: 90,
+          trigger: 95,
+        },
+      },
+    });
+  });
+
+  it('handleSaveBulkEdit ignores backup/snapshot keys in the staged thresholds', () => {
+    const overrideSignal = createSignal<any[]>([]);
+    const { props, rawOverridesConfig } = buildTableProps(overrideSignal);
+    const guestResource: TableResource = {
+      id: 'cluster-a:node-2:100',
+      name: 'db-01',
+      type: 'guest',
+      resourceType: 'VM',
+      vmid: 100,
+      node: 'node-2',
+      instance: 'cluster-a',
+      defaults: { cpu: 80 },
+      thresholds: {},
+    };
+
+    const { result } = renderHook(() =>
+      useThresholdsOverrideMutations({
+        props,
+        resources: {
+          nodesWithOverrides: () => [],
+          agentsWithOverrides: () => [],
+          agentDisksWithOverrides: () => [],
+          dockerHostsWithOverrides: () => [],
+          guestsFlat: () => [],
+          dockerContainersFlat: () => [],
+          pbsServersWithOverrides: () => [],
+          pmgServersWithOverrides: () => [],
+          storageWithOverrides: () => [guestResource],
+        },
+        editingThresholds: () => ({}),
+        editingNote: () => '',
+        bulkEditIds: () => [guestResource.id],
+        cancelEdit: vi.fn(),
+      }),
+    );
+
+    result.handleSaveBulkEdit({ cpu: 90, backup: 11, snapshot: 12 });
+
+    expect(rawOverridesConfig()).toEqual({
+      'guest:cluster-a:100': {
+        cpu: {
+          clear: 85,
+          trigger: 90,
+        },
+      },
+    });
+  });
+
   it('toggleBackup writes a sparse enabled-only override instead of freezing the globals', () => {
     const overrideSignal = createSignal<any[]>([]);
     const { props, rawOverridesConfig } = buildTableProps(overrideSignal);
