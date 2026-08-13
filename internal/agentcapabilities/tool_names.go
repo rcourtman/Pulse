@@ -34,6 +34,10 @@ const (
 	PatrolAssessFindingToolName  = "patrol_assess_finding"
 	PatrolReportFindingToolName  = "patrol_report_finding"
 	PatrolResolveFindingToolName = "patrol_resolve_finding"
+	// PatrolProposeObserverToolName is the Patrol-detection-only monitor
+	// builder boundary. The model may author a bounded observer proposal, but
+	// core owns its identity, digest, validation, installation, and health.
+	PatrolProposeObserverToolName = "patrol_propose_observer"
 	// PatrolProposeActionToolName is the side-effect-free typed action
 	// proposal capture for Patrol investigations. Mutation-none: it
 	// records a validated proposal in the request-local capture sink;

@@ -60,6 +60,11 @@ class AIRuntimeDocsPolicyTest(unittest.TestCase):
         self.assertIn("Every active finding shown or returned to a Patrol run", content)
         self.assertIn("Silence is not an all-clear signal", normalized_content)
         self.assertIn("### The Patrol attention queue", content)
+        self.assertIn("### Operational objectives and model-authored observers", content)
+        self.assertIn("Patrol objectives retain an operator's desired outcome", normalized_content)
+        self.assertIn("`patrol_propose_observer`", content)
+        self.assertIn("The proposal boundary is intentionally not an execution boundary", normalized_content)
+        self.assertIn("Coverage remains `uncovered` until a core-owned validator", normalized_content)
         self.assertIn(
             "it cannot create lifecycle truth, invent action authority, or hide uncertainty",
             normalized_content,

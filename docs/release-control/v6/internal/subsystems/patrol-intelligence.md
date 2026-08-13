@@ -128,14 +128,21 @@ with bounded provenance and rollback; app-named integration code is an
 optimization only when repeated evidence justifies productizing it, never a
 prerequisite for a new objective.
 
-The first canonical runtime slice is implemented by
-`internal/ai/patrol_objectives.go` and `internal/api/patrol_objectives.go`.
-It provides encrypted retained intent, optimistic revisions, resource scoping,
-model seed projection, and the core-owned observer state machine. The public API
-deliberately cannot attach an observer or author coverage. The monitor-building,
-validation, sandbox installation, event delivery, and redesign executor remains
-an extension of this lifecycle; until one records a healthy installed observer,
-the saved objective truthfully remains uncovered.
+The canonical retained-intent and proposal slices are implemented by
+`internal/ai/patrol_objectives.go`, `internal/ai/patrol_observer_builder.go`,
+`internal/ai/tools/tools_patrol.go`, and `internal/api/patrol_objectives.go`.
+They provide encrypted retained intent, optimistic revisions, resource scoping,
+model seed projection, the core-owned observer state machine, and the
+Patrol-detection-only `patrol_propose_observer` builder. The model supplies a
+bounded canonical-JSON probe proposal, measurable interpretation, wake evidence,
+declared requirements, and one trigger kind; core supplies identity, version,
+read-only posture, digest, encrypted persistence, and the `proposed` state. The
+artifact is excluded from public objective reads and later prompt seeds. The
+public API cannot attach an observer or author coverage, and the model-facing
+tool cannot validate, install, execute, lease, or advance its proposal. Sandbox
+validation, installation, event delivery, health leasing, and redesign
+execution remain extensions of this lifecycle; until they record a healthy
+installed observer, the saved objective truthfully remains uncovered.
 
 Desktop Autopilot activation consumes the server-owned acknowledgement
 contract through `frontend-modern/src/api/patrol.ts` and

@@ -98,6 +98,34 @@ type PatrolFindingCreator interface {
 	GetActiveFindings(resourceID, minSeverity string) []PatrolFindingInfo
 }
 
+// PatrolObserverProposer is attached only for a first-party Patrol detection
+// run. It accepts model-authored observer artifacts at proposed state; it does
+// not grant validation, installation, execution, or infrastructure mutation.
+type PatrolObserverProposer interface {
+	ProposeObserver(input PatrolObserverProposalInput) (PatrolObserverProposalResult, error)
+}
+
+type PatrolObserverProposalInput struct {
+	ObjectiveID      string
+	ExpectedRevision uint64
+	Interpretation   string
+	TriggerKind      string
+	ProbeJSON        string
+	WakeEvidence     string
+	RequirementsJSON string
+}
+
+type PatrolObserverProposalResult struct {
+	ObjectiveID    string `json:"objective_id"`
+	Revision       uint64 `json:"revision"`
+	ObserverID     string `json:"observer_id"`
+	Version        uint64 `json:"observer_version"`
+	State          string `json:"state"`
+	ArtifactDigest string `json:"artifact_digest"`
+	CoverageState  string `json:"coverage_state"`
+	CoverageReason string `json:"coverage_reason"`
+}
+
 // PatrolFindingAssessor is the additive explicit-verdict extension implemented
 // by the current Patrol adapter. Keeping it separate preserves compatibility
 // with narrow test and extension adapters that only implement legacy finding
@@ -620,8 +648,10 @@ type PulseToolExecutor struct {
 
 	// Patrol finding creator — set only during a patrol run, nil otherwise.
 	// Enables patrol_report_finding, patrol_resolve_finding, patrol_get_findings tools.
-	patrolFindingCreatorMu sync.RWMutex
-	patrolFindingCreator   PatrolFindingCreator
+	patrolFindingCreatorMu   sync.RWMutex
+	patrolFindingCreator     PatrolFindingCreator
+	patrolObserverProposerMu sync.RWMutex
+	patrolObserverProposer   PatrolObserverProposer
 
 	// Report-narration providers, used by pulse_summarize when the
 	// per-tenant AI service is configured. Absent values cause the tool
@@ -780,6 +810,7 @@ func (e *PulseToolExecutor) Clone() *PulseToolExecutor {
 		registry:                    e.registry,
 	}
 	clone.patrolFindingCreator = e.GetPatrolFindingCreator()
+	clone.patrolObserverProposer = e.GetPatrolObserverProposer()
 	return clone
 }
 
@@ -1036,6 +1067,18 @@ func (e *PulseToolExecutor) GetPatrolFindingCreator() PatrolFindingCreator {
 	return e.patrolFindingCreator
 }
 
+func (e *PulseToolExecutor) SetPatrolObserverProposer(proposer PatrolObserverProposer) {
+	e.patrolObserverProposerMu.Lock()
+	e.patrolObserverProposer = proposer
+	e.patrolObserverProposerMu.Unlock()
+}
+
+func (e *PulseToolExecutor) GetPatrolObserverProposer() PatrolObserverProposer {
+	e.patrolObserverProposerMu.RLock()
+	defer e.patrolObserverProposerMu.RUnlock()
+	return e.patrolObserverProposer
+}
+
 // GetResolvedContext returns the current resolved context (may be nil)
 func (e *PulseToolExecutor) GetResolvedContext() ResolvedContextProvider {
 	return e.resolvedContext
@@ -1128,6 +1171,8 @@ func (e *PulseToolExecutor) isToolAvailable(name string) bool {
 	case agentcapabilities.PatrolReportFindingToolName, agentcapabilities.PatrolAssessFindingToolName, agentcapabilities.PatrolResolveFindingToolName, agentcapabilities.PatrolGetFindingsToolName:
 		// Always available when registered; handler checks patrolFindingCreator at runtime
 		return e.GetPatrolFindingCreator() != nil
+	case agentcapabilities.PatrolProposeObserverToolName:
+		return e.GetPatrolObserverProposer() != nil
 	case agentcapabilities.PatrolProposeActionToolName, agentcapabilities.PatrolActionCapabilitiesToolName:
 		// These investigation-only tools share the request-local proposal
 		// capture: it supplies both trusted correlation and the tenant-bound

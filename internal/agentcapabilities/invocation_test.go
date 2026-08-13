@@ -97,6 +97,8 @@ func TestCanonicalDescriptorsPinSafetyCriticalClassifications(t *testing.T) {
 		InvocationClass{Kind: ToolCallKindRead, Mutation: MutationNone})
 	assertClass(PatrolProposeActionToolName, map[string]interface{}{"resource_id": "vm:42"},
 		InvocationClass{Kind: ToolCallKindRead, Mutation: MutationNone})
+	assertClass(PatrolProposeObserverToolName, map[string]interface{}{"objective_id": "objective-1"},
+		InvocationClass{Kind: ToolCallKindWrite, Mutation: MutationPulseState})
 }
 
 func TestInvocationClassValidationRejectsOpenVocabulary(t *testing.T) {

@@ -1,9 +1,11 @@
 package ai
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -19,13 +21,19 @@ import (
 )
 
 const (
-	patrolObjectiveDocumentVersion = 1
-	MaxPatrolObjectives            = 256
-	MaxActivePatrolObjectives      = 64
-	MaxPatrolObjectiveBriefBytes   = 2 * 1024
-	MaxPatrolObjectiveContextBytes = 4 * 1024
-	MaxPatrolObjectiveResourceIDs  = 64
-	MaxPatrolObserverTriggerKinds  = 8
+	patrolObjectiveDocumentVersion       = 1
+	MaxPatrolObjectives                  = 256
+	MaxActivePatrolObjectives            = 64
+	MaxPatrolObjectiveBriefBytes         = 2 * 1024
+	MaxPatrolObjectiveContextBytes       = 4 * 1024
+	MaxPatrolObjectiveResourceIDs        = 64
+	MaxPatrolObserverTriggerKinds        = 8
+	MaxPatrolObserverInterpretationBytes = 4 * 1024
+	MaxPatrolObserverWakeEvidenceBytes   = 4 * 1024
+	MaxPatrolObserverProbeBytes          = 16 * 1024
+	MaxPatrolObserverRequirementsBytes   = 8 * 1024
+	maxPatrolObserverJSONDepth           = 12
+	maxPatrolObserverJSONNodes           = 512
 )
 
 var (
@@ -89,6 +97,35 @@ type PatrolObserverRecord struct {
 	FailureCode    string                      `json:"failure_code,omitempty"`
 	CreatedAt      time.Time                   `json:"created_at"`
 	UpdatedAt      time.Time                   `json:"updated_at"`
+	// Artifact is encrypted at rest with the objective document and is never
+	// projected through objectiveForRead. It is model-authored proposal input,
+	// not trusted executable code; only the future core validator/installer may
+	// consume it.
+	Artifact *PatrolObserverArtifact `json:"artifact,omitempty"`
+}
+
+const PatrolObserverArtifactFormatV1 = "pulse-observer-proposal/v1"
+
+// PatrolObserverArtifact is the durable, versioned output of the model-facing
+// observer builder. Probe and Requirements are bounded canonical JSON objects
+// so later validator generations can evolve without treating prose as already
+// executable authority.
+type PatrolObserverArtifact struct {
+	Format         string          `json:"format"`
+	Interpretation string          `json:"interpretation"`
+	Probe          json.RawMessage `json:"probe"`
+	WakeEvidence   string          `json:"wake_evidence"`
+	Requirements   json.RawMessage `json:"requirements"`
+}
+
+type ProposePatrolObserverInput struct {
+	ExpectedRevision uint64
+	Interpretation   string
+	TriggerKinds     []PatrolObserverTriggerKind
+	ProbeJSON        string
+	WakeEvidence     string
+	RequirementsJSON string
+	Actor            string
 }
 
 type PatrolObjectiveCoverage struct {
@@ -388,6 +425,99 @@ func (s *PatrolObjectiveStore) Delete(id string, expectedRevision uint64) error 
 	return nil
 }
 
+// ProposeObserver records a model-authored observer artifact at the only
+// lifecycle state a model may create: proposed. Core owns identity, version,
+// digest, read-only posture, and every later transition. This method never
+// validates, installs, or leases an observer and therefore never claims
+// coverage merely because the model produced a plausible plan.
+func (s *PatrolObjectiveStore) ProposeObserver(id string, input ProposePatrolObserverInput, now time.Time) (PatrolObjective, error) {
+	if s == nil {
+		return PatrolObjective{}, fmt.Errorf("%w: store unavailable", ErrPatrolObjectiveInvalid)
+	}
+	id = strings.TrimSpace(id)
+	now = normalizePatrolObjectiveTime(now)
+	if input.ExpectedRevision == 0 {
+		return PatrolObjective{}, fmt.Errorf("%w: expected revision is required", ErrPatrolObjectiveInvalid)
+	}
+	current, ok := s.Get(id, now)
+	if !ok {
+		return PatrolObjective{}, ErrPatrolObjectiveNotFound
+	}
+	if current.Revision != input.ExpectedRevision {
+		return PatrolObjective{}, ErrPatrolObjectiveConflict
+	}
+	if current.Status != PatrolObjectiveActive {
+		return PatrolObjective{}, fmt.Errorf("%w: observer proposals require an active objective", ErrPatrolObjectiveInvalid)
+	}
+	if current.Observer != nil && current.Observer.State != PatrolObserverDisabled {
+		return PatrolObjective{}, fmt.Errorf("%w: an existing observer cannot be displaced by a proposal", ErrPatrolObjectiveInvalid)
+	}
+
+	interpretation, err := normalizePatrolObjectiveText(input.Interpretation, MaxPatrolObserverInterpretationBytes, false)
+	if err != nil {
+		return PatrolObjective{}, fmt.Errorf("%w: interpretation %v", ErrPatrolObjectiveInvalid, err)
+	}
+	wakeEvidence, err := normalizePatrolObjectiveText(input.WakeEvidence, MaxPatrolObserverWakeEvidenceBytes, false)
+	if err != nil {
+		return PatrolObjective{}, fmt.Errorf("%w: wake evidence %v", ErrPatrolObjectiveInvalid, err)
+	}
+	triggerKinds, err := normalizePatrolObserverTriggerKinds(input.TriggerKinds)
+	if err != nil {
+		return PatrolObjective{}, err
+	}
+	probe, err := normalizePatrolObserverJSONObject(input.ProbeJSON, MaxPatrolObserverProbeBytes, "probe")
+	if err != nil {
+		return PatrolObjective{}, err
+	}
+	requirements, err := normalizePatrolObserverJSONObject(input.RequirementsJSON, MaxPatrolObserverRequirementsBytes, "requirements")
+	if err != nil {
+		return PatrolObjective{}, err
+	}
+	artifact := &PatrolObserverArtifact{
+		Format:         PatrolObserverArtifactFormatV1,
+		Interpretation: interpretation,
+		Probe:          probe,
+		WakeEvidence:   wakeEvidence,
+		Requirements:   requirements,
+	}
+	digest, err := patrolObserverArtifactDigest(artifact)
+	if err != nil {
+		return PatrolObjective{}, err
+	}
+	observerID := "observer-" + uuid.NewString()
+	version := uint64(1)
+	if current.Observer != nil {
+		observerID = current.Observer.ID
+		version = current.Observer.Version + 1
+	}
+	return s.RecordObserver(id, input.ExpectedRevision, PatrolObserverRecord{
+		ID:             observerID,
+		Version:        version,
+		State:          PatrolObserverProposed,
+		ArtifactDigest: digest,
+		TriggerKinds:   triggerKinds,
+		ReadOnly:       true,
+		Artifact:       artifact,
+	}, input.Actor, now)
+}
+
+// GetObserverArtifact is an internal validator/installer seam. The public
+// objective read model intentionally strips this data so model-authored probe
+// material and declared secret/filesystem requirements do not leak through the
+// settings API or back into later prompts as trusted instructions.
+func (s *PatrolObjectiveStore) GetObserverArtifact(id string) (PatrolObserverArtifact, bool) {
+	if s == nil {
+		return PatrolObserverArtifact{}, false
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	objective, ok := s.objectives[strings.TrimSpace(id)]
+	if !ok || objective == nil || objective.Observer == nil || objective.Observer.Artifact == nil {
+		return PatrolObserverArtifact{}, false
+	}
+	return *clonePatrolObserverArtifact(objective.Observer.Artifact), true
+}
+
 // RecordObserver persists a core-owned observer lifecycle transition. Public
 // objective clients cannot call this method through HTTP. A future constrained
 // monitor builder and installer must use it only after validating the observer
@@ -502,6 +632,9 @@ func (s *PatrolObjectiveStore) persistLocked(objectives map[string]*PatrolObject
 
 func objectiveForRead(objective *PatrolObjective, now time.Time) PatrolObjective {
 	copy := clonePatrolObjective(objective)
+	if copy != nil && copy.Observer != nil {
+		copy.Observer.Artifact = nil
+	}
 	copy.Coverage = derivePatrolObjectiveCoverage(copy, now)
 	return *copy
 }
@@ -675,6 +808,21 @@ func normalizePatrolObserver(observer PatrolObserverRecord, now time.Time) (Patr
 	}
 	if !isPatrolArtifactDigest(observer.ArtifactDigest) {
 		return PatrolObserverRecord{}, fmt.Errorf("%w: observer artifact digest must be sha256", ErrPatrolObjectiveInvalid)
+	}
+	observer.Artifact = clonePatrolObserverArtifact(observer.Artifact)
+	if observer.Artifact != nil {
+		artifact, err := normalizePatrolObserverArtifact(observer.Artifact)
+		if err != nil {
+			return PatrolObserverRecord{}, err
+		}
+		observer.Artifact = artifact
+		digest, err := patrolObserverArtifactDigest(observer.Artifact)
+		if err != nil {
+			return PatrolObserverRecord{}, err
+		}
+		if digest != observer.ArtifactDigest {
+			return PatrolObserverRecord{}, fmt.Errorf("%w: observer artifact digest mismatch", ErrPatrolObjectiveInvalid)
+		}
 	}
 	triggerKinds, err := normalizePatrolObserverTriggerKinds(observer.TriggerKinds)
 	if err != nil {
@@ -892,7 +1040,126 @@ func clonePatrolObserver(observer *PatrolObserverRecord) *PatrolObserverRecord {
 	copy.TriggerKinds = append([]PatrolObserverTriggerKind{}, observer.TriggerKinds...)
 	copy.ValidUntil = clonePatrolTime(observer.ValidUntil)
 	copy.LastEvidenceAt = clonePatrolTime(observer.LastEvidenceAt)
+	copy.Artifact = clonePatrolObserverArtifact(observer.Artifact)
 	return &copy
+}
+
+func clonePatrolObserverArtifact(artifact *PatrolObserverArtifact) *PatrolObserverArtifact {
+	if artifact == nil {
+		return nil
+	}
+	copy := *artifact
+	copy.Probe = append(json.RawMessage(nil), artifact.Probe...)
+	copy.Requirements = append(json.RawMessage(nil), artifact.Requirements...)
+	return &copy
+}
+
+func normalizePatrolObserverJSONObject(raw string, maxBytes int, field string) (json.RawMessage, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil, fmt.Errorf("%w: observer %s is required", ErrPatrolObjectiveInvalid, field)
+	}
+	if len(raw) > maxBytes {
+		return nil, fmt.Errorf("%w: observer %s exceeds %d bytes", ErrPatrolObjectiveInvalid, field, maxBytes)
+	}
+	decoder := json.NewDecoder(strings.NewReader(raw))
+	decoder.UseNumber()
+	var value interface{}
+	if err := decoder.Decode(&value); err != nil {
+		return nil, fmt.Errorf("%w: observer %s must be a JSON object: %v", ErrPatrolObjectiveInvalid, field, err)
+	}
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		return nil, fmt.Errorf("%w: observer %s must contain one JSON object", ErrPatrolObjectiveInvalid, field)
+	}
+	if _, ok := value.(map[string]interface{}); !ok {
+		return nil, fmt.Errorf("%w: observer %s must be a JSON object", ErrPatrolObjectiveInvalid, field)
+	}
+	nodes := 0
+	if err := validatePatrolObserverJSONShape(value, 0, &nodes); err != nil {
+		return nil, fmt.Errorf("%w: observer %s %v", ErrPatrolObjectiveInvalid, field, err)
+	}
+	canonical, err := json.Marshal(value)
+	if err != nil {
+		return nil, fmt.Errorf("%w: encode observer %s: %v", ErrPatrolObjectiveInvalid, field, err)
+	}
+	return canonical, nil
+}
+
+func validatePatrolObserverJSONShape(value interface{}, depth int, nodes *int) error {
+	if depth > maxPatrolObserverJSONDepth {
+		return errors.New("exceeds maximum JSON depth")
+	}
+	*nodes++
+	if *nodes > maxPatrolObserverJSONNodes {
+		return errors.New("exceeds maximum JSON nodes")
+	}
+	switch typed := value.(type) {
+	case map[string]interface{}:
+		for key, child := range typed {
+			if strings.TrimSpace(key) == "" || len(key) > 128 || containsUnsafePatrolText(key) {
+				return errors.New("contains an invalid JSON key")
+			}
+			if err := validatePatrolObserverJSONShape(child, depth+1, nodes); err != nil {
+				return err
+			}
+		}
+	case []interface{}:
+		for _, child := range typed {
+			if err := validatePatrolObserverJSONShape(child, depth+1, nodes); err != nil {
+				return err
+			}
+		}
+	case string:
+		if len(typed) > MaxPatrolObserverProbeBytes || containsUnsafePatrolText(typed) {
+			return errors.New("contains an invalid JSON string")
+		}
+	case nil, bool, json.Number:
+		return nil
+	default:
+		return errors.New("contains an unsupported JSON value")
+	}
+	return nil
+}
+
+func patrolObserverArtifactDigest(artifact *PatrolObserverArtifact) (string, error) {
+	if artifact == nil || artifact.Format != PatrolObserverArtifactFormatV1 {
+		return "", fmt.Errorf("%w: unsupported observer artifact format", ErrPatrolObjectiveInvalid)
+	}
+	data, err := json.Marshal(artifact)
+	if err != nil {
+		return "", fmt.Errorf("%w: encode observer artifact: %v", ErrPatrolObjectiveInvalid, err)
+	}
+	sum := sha256.Sum256(data)
+	return fmt.Sprintf("sha256:%x", sum[:]), nil
+}
+
+func normalizePatrolObserverArtifact(artifact *PatrolObserverArtifact) (*PatrolObserverArtifact, error) {
+	if artifact == nil || artifact.Format != PatrolObserverArtifactFormatV1 {
+		return nil, fmt.Errorf("%w: unsupported observer artifact format", ErrPatrolObjectiveInvalid)
+	}
+	interpretation, err := normalizePatrolObjectiveText(artifact.Interpretation, MaxPatrolObserverInterpretationBytes, false)
+	if err != nil {
+		return nil, fmt.Errorf("%w: observer interpretation %v", ErrPatrolObjectiveInvalid, err)
+	}
+	wakeEvidence, err := normalizePatrolObjectiveText(artifact.WakeEvidence, MaxPatrolObserverWakeEvidenceBytes, false)
+	if err != nil {
+		return nil, fmt.Errorf("%w: observer wake evidence %v", ErrPatrolObjectiveInvalid, err)
+	}
+	probe, err := normalizePatrolObserverJSONObject(string(artifact.Probe), MaxPatrolObserverProbeBytes, "probe")
+	if err != nil {
+		return nil, err
+	}
+	requirements, err := normalizePatrolObserverJSONObject(string(artifact.Requirements), MaxPatrolObserverRequirementsBytes, "requirements")
+	if err != nil {
+		return nil, err
+	}
+	return &PatrolObserverArtifact{
+		Format:         PatrolObserverArtifactFormatV1,
+		Interpretation: interpretation,
+		Probe:          probe,
+		WakeEvidence:   wakeEvidence,
+		Requirements:   requirements,
+	}, nil
 }
 
 func clonePatrolTime(value *time.Time) *time.Time {
@@ -949,7 +1216,7 @@ func (p *PatrolService) seedPatrolObjectives(effectiveScopeIDs []string, scoped 
 			}
 			scopeLabel = strings.Join(quotedIDs, ", ")
 		}
-		line := fmt.Sprintf("- Objective %s [%s; scope: %s]: %q", objective.ID, objective.Coverage.State, scopeLabel, objective.Brief)
+		line := fmt.Sprintf("- Objective %s [revision: %d; coverage: %s/%s; scope: %s]: %q", objective.ID, objective.Revision, objective.Coverage.State, objective.Coverage.ReasonCode, scopeLabel, objective.Brief)
 		if objective.OptionalContext != "" {
 			line += fmt.Sprintf(" Optional context: %q", objective.OptionalContext)
 		}

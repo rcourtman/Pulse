@@ -92,6 +92,103 @@ func TestPatrolObjectiveStorePersistsEncrypted(t *testing.T) {
 	}
 }
 
+func TestPatrolObjectiveStoreProposesEncryptedObserverWithoutClaimingCoverage(t *testing.T) {
+	dataDir := t.TempDir()
+	store, err := NewPatrolObjectiveStore(dataDir)
+	if err != nil {
+		t.Fatalf("new persistent store: %v", err)
+	}
+	now := time.Date(2026, 8, 14, 0, 0, 0, 0, time.UTC)
+	objective, err := store.Create(CreatePatrolObjectiveInput{Brief: "Keep camera streams available"}, now)
+	if err != nil {
+		t.Fatalf("create objective: %v", err)
+	}
+	objective, err = store.ProposeObserver(objective.ID, ProposePatrolObserverInput{
+		ExpectedRevision: objective.Revision,
+		Interpretation:   "Wake Patrol when a camera changes from reachable to unreachable.",
+		TriggerKinds:     []PatrolObserverTriggerKind{PatrolObserverTriggerEvent},
+		ProbeJSON:        `{ "outputs": {"unhealthy": "camera unreachable"}, "source": "canonical resource events" }`,
+		WakeEvidence:     "A scoped camera resource transitions to unreachable.",
+		RequirementsJSON: `{ "network": [], "filesystem": [], "secrets": [], "runtime": "pulse" }`,
+		Actor:            "patrol:model",
+	}, now.Add(time.Minute))
+	if err != nil {
+		t.Fatalf("propose observer: %v", err)
+	}
+	if objective.Observer == nil || objective.Observer.State != PatrolObserverProposed || !objective.Observer.ReadOnly {
+		t.Fatalf("observer proposal = %+v", objective.Observer)
+	}
+	if objective.Observer.Artifact != nil {
+		t.Fatal("public objective read leaked model-authored observer artifact")
+	}
+	if objective.Coverage.State != PatrolObjectiveUncovered || objective.Coverage.ReasonCode != "observer_proposed" {
+		t.Fatalf("proposal coverage = %+v", objective.Coverage)
+	}
+	if _, err := store.ProposeObserver(objective.ID, ProposePatrolObserverInput{
+		ExpectedRevision: objective.Revision,
+		Interpretation:   "Replace the proposal without a core lifecycle decision.",
+		TriggerKinds:     []PatrolObserverTriggerKind{PatrolObserverTriggerEvent},
+		ProbeJSON:        `{}`,
+		WakeEvidence:     "Any camera failure.",
+		RequirementsJSON: `{}`,
+	}, now.Add(90*time.Second)); !errorsIsPatrolObjectiveInvalid(err) {
+		t.Fatalf("proposal displacement error = %v", err)
+	}
+	artifact, ok := store.GetObserverArtifact(objective.ID)
+	if !ok || artifact.Format != PatrolObserverArtifactFormatV1 || !strings.Contains(string(artifact.Probe), "canonical resource events") {
+		t.Fatalf("internal observer artifact = %+v, found=%v", artifact, ok)
+	}
+
+	ciphertext, err := os.ReadFile(filepath.Join(dataDir, "ai_patrol_objectives.enc"))
+	if err != nil {
+		t.Fatalf("read encrypted objective file: %v", err)
+	}
+	if strings.Contains(string(ciphertext), "canonical resource events") {
+		t.Fatal("observer artifact was persisted in plaintext")
+	}
+	reloaded, err := NewPatrolObjectiveStore(dataDir)
+	if err != nil {
+		t.Fatalf("reload objective store: %v", err)
+	}
+	reloadedArtifact, ok := reloaded.GetObserverArtifact(objective.ID)
+	if !ok || !strings.Contains(string(reloadedArtifact.Probe), "canonical resource events") {
+		t.Fatalf("reloaded artifact = %+v, found=%v", reloadedArtifact, ok)
+	}
+	public, ok := reloaded.Get(objective.ID, now.Add(2*time.Minute))
+	if !ok || public.Observer == nil || public.Observer.Artifact != nil || public.Coverage.ReasonCode != "observer_proposed" {
+		t.Fatalf("reloaded public objective = %+v, found=%v", public, ok)
+	}
+}
+
+func TestPatrolObjectiveStoreRejectsInvalidObserverProposalArtifact(t *testing.T) {
+	store := NewInMemoryPatrolObjectiveStore()
+	now := time.Now().UTC()
+	objective, err := store.Create(CreatePatrolObjectiveInput{Brief: "Keep playback smooth"}, now)
+	if err != nil {
+		t.Fatalf("create objective: %v", err)
+	}
+	base := ProposePatrolObserverInput{
+		ExpectedRevision: objective.Revision,
+		Interpretation:   "Detect sustained playback buffering.",
+		TriggerKinds:     []PatrolObserverTriggerKind{PatrolObserverTriggerEvent},
+		WakeEvidence:     "Playback enters a buffering state.",
+		RequirementsJSON: `{}`,
+	}
+	base.ProbeJSON = `[]`
+	if _, err := store.ProposeObserver(objective.ID, base, now); !errorsIsPatrolObjectiveInvalid(err) {
+		t.Fatalf("array probe error = %v", err)
+	}
+	base.ProbeJSON = `{"source":"events"} trailing`
+	if _, err := store.ProposeObserver(objective.ID, base, now); !errorsIsPatrolObjectiveInvalid(err) {
+		t.Fatalf("trailing probe error = %v", err)
+	}
+	base.ProbeJSON = `{"source":"events"}`
+	base.ExpectedRevision++
+	if _, err := store.ProposeObserver(objective.ID, base, now); err != ErrPatrolObjectiveConflict {
+		t.Fatalf("stale proposal error = %v, want conflict", err)
+	}
+}
+
 func TestPatrolObjectiveStoreRejectsPlaintextPersistence(t *testing.T) {
 	dataDir := t.TempDir()
 	if _, err := NewPatrolObjectiveStore(dataDir); err != nil {
@@ -158,6 +255,16 @@ func TestPatrolObserverLifecycleDerivesCoverageFromHealthLease(t *testing.T) {
 	if !found || stale.Coverage.State != PatrolObjectiveDegraded || stale.Coverage.ReasonCode != "observer_stale" {
 		t.Fatalf("stale coverage = %+v, found=%v", stale.Coverage, found)
 	}
+	if _, err := store.ProposeObserver(objective.ID, ProposePatrolObserverInput{
+		ExpectedRevision: objective.Revision,
+		Interpretation:   "Replace the active observer.",
+		TriggerKinds:     []PatrolObserverTriggerKind{PatrolObserverTriggerEvent},
+		ProbeJSON:        `{}`,
+		WakeEvidence:     "Any failure.",
+		RequirementsJSON: `{}`,
+	}, now.Add(4*time.Minute)); !errorsIsPatrolObjectiveInvalid(err) {
+		t.Fatalf("active observer displacement error = %v", err)
+	}
 }
 
 func TestPatrolObserverRejectsUnvalidatedInstallAndWritableArtifact(t *testing.T) {
@@ -214,7 +321,7 @@ func TestPatrolSeedObjectivesRespectsScopedResourcesAndCoverageCaveat(t *testing
 	if strings.Contains(seed, "Keep playback smooth") {
 		t.Fatalf("scoped seed included unrelated objective:\n%s", seed)
 	}
-	if !strings.Contains(seed, "No durable observer has been installed") || !strings.Contains(seed, "not scripts or tool instructions") {
+	if !strings.Contains(seed, "coverage: uncovered/observer_missing") || !strings.Contains(seed, "revision: 1") || !strings.Contains(seed, "No durable observer has been installed") || !strings.Contains(seed, "not scripts or tool instructions") {
 		t.Fatalf("seed omitted trust boundary:\n%s", seed)
 	}
 }

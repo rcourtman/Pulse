@@ -35,6 +35,17 @@ type mockPatrolFindingCreator struct {
 	checked bool
 }
 
+type mockPatrolObserverProposer struct {
+	input  PatrolObserverProposalInput
+	result PatrolObserverProposalResult
+	err    error
+}
+
+func (m *mockPatrolObserverProposer) ProposeObserver(input PatrolObserverProposalInput) (PatrolObserverProposalResult, error) {
+	m.input = input
+	return m.result, m.err
+}
+
 func (m *mockPatrolFindingCreator) AssessFinding(input PatrolFindingAssessmentInput) error {
 	m.assessCalls = append(m.assessCalls, input)
 	if m.assessFindingFunc != nil {
@@ -763,7 +774,7 @@ func TestPatrolToolsRegistered(t *testing.T) {
 	var reportTool Tool
 	var getFindingsTool Tool
 	for _, tool := range tools {
-		if tool.Name == "patrol_report_finding" || tool.Name == "patrol_assess_finding" || tool.Name == "patrol_resolve_finding" || tool.Name == "patrol_get_findings" {
+		if tool.Name == "patrol_report_finding" || tool.Name == "patrol_assess_finding" || tool.Name == "patrol_resolve_finding" || tool.Name == "patrol_get_findings" || tool.Name == "patrol_propose_observer" {
 			found[tool.Name] = true
 		}
 		if tool.Name == "patrol_resolve_finding" {
@@ -781,6 +792,7 @@ func TestPatrolToolsRegistered(t *testing.T) {
 	assert.True(t, found["patrol_assess_finding"], "patrol_assess_finding should be registered")
 	assert.True(t, found["patrol_resolve_finding"], "patrol_resolve_finding should be registered")
 	assert.True(t, found["patrol_get_findings"], "patrol_get_findings should be registered")
+	assert.True(t, found["patrol_propose_observer"], "patrol_propose_observer should be registered")
 	require.NotEmpty(t, resolveTool.Name)
 	assert.Contains(t, resolveTool.InputSchema.Required, agentcapabilities.FindingIDArgumentName)
 	assert.Contains(t, resolveTool.InputSchema.Required, agentcapabilities.ReasonArgumentName)
@@ -815,15 +827,46 @@ func TestPatrolToolsAvailability(t *testing.T) {
 	assert.False(t, exec.isToolAvailable("patrol_assess_finding"))
 	assert.False(t, exec.isToolAvailable("patrol_resolve_finding"))
 	assert.False(t, exec.isToolAvailable("patrol_get_findings"))
+	assert.False(t, exec.isToolAvailable("patrol_propose_observer"))
 
 	// Set creator
 	exec.SetPatrolFindingCreator(&mockPatrolFindingCreator{})
+	exec.SetPatrolObserverProposer(&mockPatrolObserverProposer{})
 
 	// Now they should be available
 	assert.True(t, exec.isToolAvailable("patrol_report_finding"))
 	assert.True(t, exec.isToolAvailable("patrol_assess_finding"))
 	assert.True(t, exec.isToolAvailable("patrol_resolve_finding"))
 	assert.True(t, exec.isToolAvailable("patrol_get_findings"))
+	assert.True(t, exec.isToolAvailable("patrol_propose_observer"))
+}
+
+func TestPatrolProposeObserverRecordsProposalWithoutInstallation(t *testing.T) {
+	proposer := &mockPatrolObserverProposer{result: PatrolObserverProposalResult{
+		ObjectiveID: "objective-1", Revision: 2, ObserverID: "observer-1", Version: 1,
+		State: "proposed", ArtifactDigest: "sha256:abc", CoverageState: "uncovered", CoverageReason: "observer_proposed",
+	}}
+	exec := NewPulseToolExecutor(ExecutorConfig{})
+	exec.ApplyExecutionProfile(ProfilePatrolDetection)
+	exec.SetPatrolObserverProposer(proposer)
+	result, err := exec.ExecuteTool(context.Background(), agentcapabilities.PatrolProposeObserverToolName, map[string]interface{}{
+		"objective_id": "objective-1", "expected_revision": float64(1),
+		"interpretation": "Detect buffering", "trigger_kind": "event",
+		"probe_json":    `{"source":"playback-events"}`,
+		"wake_evidence": "buffering begins", "requirements_json": `{}`,
+	})
+	if err != nil {
+		t.Fatalf("execute proposal tool: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("proposal tool returned error: %s", extractText(result))
+	}
+	if proposer.input.ObjectiveID != "objective-1" || proposer.input.ExpectedRevision != 1 || proposer.input.TriggerKind != "event" {
+		t.Fatalf("proposal input = %+v", proposer.input)
+	}
+	if text := extractText(result); !strings.Contains(text, `"state":"proposed"`) || !strings.Contains(text, `"coverage_state":"uncovered"`) {
+		t.Fatalf("proposal result = %s", text)
+	}
 }
 
 // --- Helper ---

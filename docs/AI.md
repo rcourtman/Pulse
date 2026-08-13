@@ -96,6 +96,26 @@ model-reported findings ── validated, deduplicated, stored
 MaybeInvestigateFinding() ── model investigation + governed fix planning/execution
 ```
 
+### Operational objectives and model-authored observers
+
+Patrol objectives retain an operator's desired outcome—for example, “keep
+camera streams available”—instead of requiring the operator or Pulse to encode
+every application-specific check. Active objectives are included as
+value-oriented context in applicable Patrol runs. When an objective has no
+observer, the configured model can use `patrol_propose_observer` to translate
+that outcome into a bounded, versioned read-only observer proposal using the
+estate context and tools available on that installation.
+
+The proposal boundary is intentionally not an execution boundary. Pulse owns
+the observer identity, revision, SHA-256 digest, encrypted local persistence,
+declared trigger kind, and read-only posture. A model cannot mark its proposal
+validated, install it, give it action authority, or claim that monitoring is
+active. Coverage remains `uncovered` until a core-owned validator, sandbox
+installer, runtime, and health lease have actually accepted the artifact. This
+keeps the intelligence in the model while keeping continuity and authority in
+Pulse—and avoids calling a model repeatedly when a future cheap local observer
+can handle the steady-state signal.
+
 ### The Patrol attention queue
 
 The first thing Patrol shows is **Needs attention**, a single operator queue

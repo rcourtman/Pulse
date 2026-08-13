@@ -715,6 +715,29 @@ func TestTelemetryPrivacyDocsDisclosePseudonymousIdentityAndIPHandling(t *testin
 	}
 }
 
+func TestTelemetryPrivacyDocsKeepObserverProposalContentLocal(t *testing.T) {
+	for _, relativePath := range []string{
+		filepath.Join("..", "..", "docs", "PRIVACY.md"),
+		filepath.Join("..", "..", "frontend-modern", "public", "docs", "PRIVACY.md"),
+	} {
+		raw, err := os.ReadFile(relativePath)
+		if err != nil {
+			t.Fatalf("read %s: %v", relativePath, err)
+		}
+		content := string(raw)
+		for _, required := range []string{
+			"model-authored observer proposal",
+			"encrypts that artifact with the retained objective",
+			"excludes it from public objective reads and later prompt seeds",
+			"does not include its content in usage telemetry or audit messages",
+		} {
+			if !strings.Contains(content, required) {
+				t.Errorf("%s must disclose %q", relativePath, required)
+			}
+		}
+	}
+}
+
 func TestRepositoryDoesNotClaimTelemetryIsAnonymous(t *testing.T) {
 	repoRoot := filepath.Clean(filepath.Join("..", ".."))
 	anonymousTelemetryClaimPattern := regexp.MustCompile(`(?i)\banonymous\b[^\n]{0,120}\btelemetry\b|\btelemetry\b[^\n]{0,120}\banonymous\b`)

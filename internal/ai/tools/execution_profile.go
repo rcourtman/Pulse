@@ -22,9 +22,9 @@ const (
 	ProfileInteractiveAssistant ExecutionProfile = iota
 	// ProfilePatrolDetection is the scheduled Patrol detection posture:
 	// non-interactive, no infrastructure mutations, and Pulse-state
-	// mutations restricted to the finding lifecycle tools
+	// mutations restricted to the finding lifecycle and observer-proposal tools
 	// (patrol_report_finding / patrol_assess_finding /
-	// patrol_resolve_finding).
+	// patrol_resolve_finding / patrol_propose_observer).
 	ProfilePatrolDetection
 	// ProfilePatrolInvestigation is the Patrol investigation posture:
 	// non-interactive and structurally read-only - no infrastructure and
@@ -62,9 +62,10 @@ func (p ExecutionProfile) NonInteractive() bool {
 // writes, which detection has no business performing.
 func patrolDetectionPulseStateAllowlist() map[string]bool {
 	return map[string]bool{
-		agentcapabilities.PatrolAssessFindingToolName:  true,
-		agentcapabilities.PatrolReportFindingToolName:  true,
-		agentcapabilities.PatrolResolveFindingToolName: true,
+		agentcapabilities.PatrolAssessFindingToolName:   true,
+		agentcapabilities.PatrolProposeObserverToolName: true,
+		agentcapabilities.PatrolReportFindingToolName:   true,
+		agentcapabilities.PatrolResolveFindingToolName:  true,
 	}
 }
 

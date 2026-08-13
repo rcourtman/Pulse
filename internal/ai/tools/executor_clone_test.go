@@ -4,6 +4,7 @@ import "testing"
 
 func TestPulseToolExecutorCloneIsolatesSessionState(t *testing.T) {
 	creator := &mockPatrolFindingCreator{}
+	proposer := &mockPatrolObserverProposer{}
 	resolved := &mockResolvedContext{}
 
 	original := NewPulseToolExecutor(ExecutorConfig{})
@@ -11,6 +12,7 @@ func TestPulseToolExecutorCloneIsolatesSessionState(t *testing.T) {
 	original.SetOrgID("tenant-a")
 	original.SetResolvedContext(resolved)
 	original.SetPatrolFindingCreator(creator)
+	original.SetPatrolObserverProposer(proposer)
 	original.protectedGuests = []string{"101"}
 
 	clone := original.Clone()
@@ -25,6 +27,9 @@ func TestPulseToolExecutorCloneIsolatesSessionState(t *testing.T) {
 	}
 	if clone.GetPatrolFindingCreator() != creator {
 		t.Fatal("Clone() should retain patrol creator availability for the new run")
+	}
+	if clone.GetPatrolObserverProposer() != proposer {
+		t.Fatal("Clone() should retain patrol observer proposer availability for the new run")
 	}
 	if clone.targetType != original.targetType || clone.targetID != original.targetID || clone.isAutonomous != original.isAutonomous {
 		t.Fatalf("Clone() lost base execution context: got %q/%q/%v", clone.targetType, clone.targetID, clone.isAutonomous)

@@ -2,7 +2,11 @@ package tools
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"math"
+	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
@@ -216,6 +220,144 @@ Returns a list of active findings with their IDs, severity, resource, and title.
 			Summary:         "Reads active patrol findings for deduplication and investigation context.",
 		},
 	})
+
+	// patrol_propose_observer — the model authors a bounded artifact, while
+	// core retains all lifecycle authority. A successful call is intentionally
+	// still uncovered until a separate validator and installer accept it.
+	e.registry.registerBuiltin(RegisteredTool{
+		Definition: Tool{
+			Name: agentcapabilities.PatrolProposeObserverToolName,
+			Description: `Propose a durable read-only observer for an active operator objective that is currently missing coverage.
+
+Use this only when the objective context says observer_missing, or when current evidence clearly requires a new observer version. Translate the operator's outcome into the smallest useful local observer without hard-coding an application into Pulse. The probe_json and requirements_json fields must each be one bounded JSON object. Describe what a future constrained runtime should observe; do not include mutation commands, credentials, or secret values.
+
+This tool records only a versioned proposed artifact. It does not validate, install, execute, or claim coverage. Core owns the observer ID, version, SHA-256 digest, read-only posture, sandboxing, installation, health lease, and any later transition.
+
+Returns the proposed observer identity and the truthful uncovered coverage reason.`,
+			InputSchema: InputSchema{
+				Type: "object",
+				Properties: map[string]PropertySchema{
+					"objective_id": {
+						Type:        "string",
+						Description: "Objective ID exactly as shown in Operator Objectives",
+					},
+					"expected_revision": {
+						Type:        "number",
+						Description: "Current objective revision exactly as shown in Operator Objectives",
+					},
+					"interpretation": {
+						Type:        "string",
+						Description: "Concise measurable interpretation of the operator's desired outcome",
+					},
+					"trigger_kind": {
+						Type:        "string",
+						Description: "Cheapest appropriate local wake source; interval means a bounded local probe, never repeated model polling",
+						Enum:        []string{"event", "webhook", "log", "file", "socket", "api", "interval"},
+					},
+					"probe_json": {
+						Type:        "string",
+						Description: "One JSON object describing the read-only probe, signal extraction, and health/failure outputs. It is proposal material, not executable authority.",
+					},
+					"wake_evidence": {
+						Type:        "string",
+						Description: "Concrete evidence transition that should wake Patrol for model reasoning",
+					},
+					"requirements_json": {
+						Type:        "string",
+						Description: "One JSON object declaring network, filesystem, secret-reference, runtime, timeout, and resource-budget requirements. Use empty arrays/objects when none; never include secret values.",
+					},
+				},
+				Required: []string{"objective_id", "expected_revision", "interpretation", "trigger_kind", "probe_json", "wake_evidence", "requirements_json"},
+			},
+		},
+		Handler: handlePatrolProposeObserver,
+		Governance: ToolGovernance{
+			ActionMode:      ToolActionWrite,
+			ApprovalPolicy:  ToolApprovalScopeOnly,
+			ApprovalSummary: "patrol-only; records a non-executable observer proposal",
+			Summary:         "Records a bounded model-authored observer proposal without installing or executing it.",
+		},
+	})
+}
+
+func handlePatrolProposeObserver(_ context.Context, e *PulseToolExecutor, args map[string]interface{}) (CallToolResult, error) {
+	proposer := e.GetPatrolObserverProposer()
+	if proposer == nil {
+		return NewTextResult("patrol_propose_observer is only available during a Patrol detection run with an objective store."), nil
+	}
+	objectiveID, _ := args["objective_id"].(string)
+	interpretation, _ := args["interpretation"].(string)
+	triggerKind, _ := args["trigger_kind"].(string)
+	probeJSON, _ := args["probe_json"].(string)
+	wakeEvidence, _ := args["wake_evidence"].(string)
+	requirementsJSON, _ := args["requirements_json"].(string)
+	objectiveID = strings.TrimSpace(objectiveID)
+	interpretation = strings.TrimSpace(interpretation)
+	triggerKind = strings.ToLower(strings.TrimSpace(triggerKind))
+	probeJSON = strings.TrimSpace(probeJSON)
+	wakeEvidence = strings.TrimSpace(wakeEvidence)
+	requirementsJSON = strings.TrimSpace(requirementsJSON)
+	expectedRevision, revisionOK := patrolObserverExpectedRevision(args["expected_revision"])
+
+	missing := make([]string, 0, 7)
+	for name, value := range map[string]string{
+		"objective_id": objectiveID, "interpretation": interpretation,
+		"trigger_kind": triggerKind, "probe_json": probeJSON,
+		"wake_evidence": wakeEvidence, "requirements_json": requirementsJSON,
+	} {
+		if value == "" {
+			missing = append(missing, name)
+		}
+	}
+	if !revisionOK {
+		missing = append(missing, "expected_revision")
+	}
+	if len(missing) > 0 {
+		sort.Strings(missing)
+		return NewErrorResult(fmt.Errorf("missing or invalid required fields: %s", strings.Join(missing, ", "))), nil
+	}
+	validTrigger := map[string]bool{"event": true, "webhook": true, "log": true, "file": true, "socket": true, "api": true, "interval": true}
+	if !validTrigger[triggerKind] {
+		return NewErrorResult(fmt.Errorf("invalid trigger_kind %q", triggerKind)), nil
+	}
+
+	result, err := proposer.ProposeObserver(PatrolObserverProposalInput{
+		ObjectiveID: objectiveID, ExpectedRevision: expectedRevision,
+		Interpretation: interpretation, TriggerKind: triggerKind,
+		ProbeJSON: probeJSON, WakeEvidence: wakeEvidence,
+		RequirementsJSON: requirementsJSON,
+	})
+	if err != nil {
+		return NewErrorResult(fmt.Errorf("failed to propose observer: %w", err)), nil
+	}
+	return NewJSONResult(map[string]interface{}{
+		"ok": true, "objective_id": result.ObjectiveID, "revision": result.Revision,
+		"observer_id": result.ObserverID, "observer_version": result.Version,
+		"state": result.State, "artifact_digest": result.ArtifactDigest,
+		"coverage_state": result.CoverageState, "coverage_reason": result.CoverageReason,
+	}), nil
+}
+
+func patrolObserverExpectedRevision(value interface{}) (uint64, bool) {
+	switch typed := value.(type) {
+	case float64:
+		if typed <= 0 || typed != math.Trunc(typed) || typed > float64(^uint64(0)) {
+			return 0, false
+		}
+		return uint64(typed), true
+	case int:
+		if typed <= 0 {
+			return 0, false
+		}
+		return uint64(typed), true
+	case uint64:
+		return typed, typed > 0
+	case json.Number:
+		parsed, err := strconv.ParseUint(string(typed), 10, 64)
+		return parsed, err == nil && parsed > 0
+	default:
+		return 0, false
+	}
 }
 
 func handlePatrolAssessFinding(_ context.Context, e *PulseToolExecutor, args map[string]interface{}) (CallToolResult, error) {

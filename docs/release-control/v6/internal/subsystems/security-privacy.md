@@ -58,6 +58,14 @@ counts. When Patrol is enabled, applicable active objective text becomes part
 of the context sent to the configured AI provider under the same local-provider
 and non-local provider-bound resource-policy redaction rules as other Patrol
 context. Merely saving an objective makes no outbound model request.
+When a configured provider returns an observer proposal through the first-party
+Patrol builder, the bounded probe and requirements artifact is persisted only
+inside the same encrypted objective document. Public objective reads and later
+Patrol prompt seeds omit the artifact, and telemetry/audit surfaces remain
+content-free. The proposal is not executable and carries no infrastructure
+mutation authority; any future validator or installer must preserve this
+confidentiality boundary while enforcing declared secret references rather
+than accepting secret values.
 
 ## Canonical Files
 

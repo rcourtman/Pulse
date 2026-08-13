@@ -53,6 +53,7 @@ func TestPulseIntelligenceToolNameConstants(t *testing.T) {
 		"PatrolAssessFindingToolName":        PatrolAssessFindingToolName,
 		"PatrolReportFindingToolName":        PatrolReportFindingToolName,
 		"PatrolResolveFindingToolName":       PatrolResolveFindingToolName,
+		"PatrolProposeObserverToolName":      PatrolProposeObserverToolName,
 	}
 	want := map[string]string{
 		"PulseQueryToolName":                 "pulse_query",
@@ -85,6 +86,7 @@ func TestPulseIntelligenceToolNameConstants(t *testing.T) {
 		"PatrolAssessFindingToolName":        "patrol_assess_finding",
 		"PatrolReportFindingToolName":        "patrol_report_finding",
 		"PatrolResolveFindingToolName":       "patrol_resolve_finding",
+		"PatrolProposeObserverToolName":      "patrol_propose_observer",
 	}
 
 	for name, got := range tests {
@@ -132,6 +134,7 @@ func TestClassifyToolCallUsesSharedSafetyClassification(t *testing.T) {
 		{name: "patrol findings read", toolName: "patrol_get_findings", want: ToolCallKindRead},
 		{name: "patrol finding assessment", toolName: "patrol_assess_finding", want: ToolCallKindWrite},
 		{name: "patrol report writes", toolName: "patrol_report_finding", want: ToolCallKindWrite},
+		{name: "patrol observer proposals write", toolName: "patrol_propose_observer", want: ToolCallKindWrite},
 		{name: "unknown defaults write", toolName: "future_tool", want: ToolCallKindWrite},
 		{name: "generic action read", toolName: "future_tool", args: map[string]interface{}{"action": "inspect"}, want: ToolCallKindRead},
 		{name: "generic operation write", toolName: "future_tool", args: map[string]interface{}{"operation": "delete"}, want: ToolCallKindWrite},

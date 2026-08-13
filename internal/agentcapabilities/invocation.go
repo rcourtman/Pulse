@@ -232,6 +232,7 @@ var registryInvocationDescriptors = map[string]InvocationDescriptor{
 	PatrolActionCapabilitiesToolName: staticClass(ToolCallKindRead, MutationNone),
 	PatrolReportFindingToolName:      staticClass(ToolCallKindWrite, MutationPulseState),
 	PatrolResolveFindingToolName:     staticClass(ToolCallKindWrite, MutationPulseState),
+	PatrolProposeObserverToolName:    staticClass(ToolCallKindWrite, MutationPulseState),
 }
 
 // Clone returns a deep copy of the descriptor so callers can never

@@ -4403,7 +4403,12 @@ declarations must also reuse that API identity contract: every registry
 `Tool.Definition.Name`, including `pulse_summarize` and Patrol runtime tools,
 must come from `internal/agentcapabilities/tool_names.go` so MCP and future
 external-agent adapters project the same tool identities that Assistant
-executes. The manifest-backed MCP
+executes. A canonical native name and invocation descriptor do not by themselves
+publish an external capability: the first-party `patrol_propose_observer` name
+is classified as a Pulse-state write for runtime enforcement but remains absent
+from the authenticated objective API and every manifest surface tool allowlist.
+External publication still requires an explicit manifest capability, governed
+route, schema, and surface-contract decision. The manifest-backed MCP
 tool server must receive the whole manifest and derive its surface-specific
 tool projection, execution allowlist, and initialize surface-contract
 instructions from that single value; adapters must not pass only a capability

@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
 )
@@ -37,6 +38,31 @@ func TestPatrolObjectivesHTTPContractAndOptimisticRevision(t *testing.T) {
 	if created.Observer != nil {
 		t.Fatalf("public create unexpectedly accepted an observer: %+v", created.Observer)
 	}
+	store := handler.patrolObjectiveStore(createRequest)
+	if store == nil {
+		t.Fatal("objective store unavailable in handler test")
+	}
+	proposed, err := store.ProposeObserver(created.ID, ai.ProposePatrolObserverInput{
+		ExpectedRevision: created.Revision,
+		Interpretation:   "Detect playback buffering from local events.",
+		TriggerKinds:     []ai.PatrolObserverTriggerKind{ai.PatrolObserverTriggerEvent},
+		ProbeJSON:        `{"source":"private playback event details"}`,
+		WakeEvidence:     "Playback begins buffering.",
+		RequirementsJSON: `{"secrets":["reference-only"]}`,
+	}, time.Now().UTC())
+	if err != nil {
+		t.Fatalf("propose internal observer: %v", err)
+	}
+	detailRequest := httptest.NewRequest(http.MethodGet, "/api/ai/patrol/objectives/"+created.ID, nil)
+	detailResponse := httptest.NewRecorder()
+	handler.HandlePatrolObjective(detailResponse, detailRequest)
+	if detailResponse.Code != http.StatusOK {
+		t.Fatalf("detail status = %d, body=%s", detailResponse.Code, detailResponse.Body.String())
+	}
+	if strings.Contains(detailResponse.Body.String(), "private playback event details") || strings.Contains(detailResponse.Body.String(), `"artifact"`) {
+		t.Fatalf("public objective response leaked observer artifact: %s", detailResponse.Body.String())
+	}
+	created = proposed
 
 	listRequest := httptest.NewRequest(http.MethodGet, "/api/ai/patrol/objectives", nil)
 	listResponse := httptest.NewRecorder()
@@ -50,7 +76,7 @@ func TestPatrolObjectivesHTTPContractAndOptimisticRevision(t *testing.T) {
 	if err := json.Unmarshal(listResponse.Body.Bytes(), &listed); err != nil {
 		t.Fatalf("decode objective list: %v", err)
 	}
-	if len(listed.Objectives) != 1 || listed.Objectives[0].ID != created.ID {
+	if len(listed.Objectives) != 1 || listed.Objectives[0].ID != created.ID || listed.Objectives[0].Observer == nil || listed.Objectives[0].Observer.Artifact != nil {
 		t.Fatalf("listed objectives = %+v", listed.Objectives)
 	}
 
@@ -65,7 +91,7 @@ func TestPatrolObjectivesHTTPContractAndOptimisticRevision(t *testing.T) {
 	if err := json.Unmarshal(patchResponse.Body.Bytes(), &updated); err != nil {
 		t.Fatalf("decode updated objective: %v", err)
 	}
-	if updated.Revision != 2 || updated.Status != ai.PatrolObjectivePaused || updated.Coverage.ReasonCode != "objective_paused" {
+	if updated.Revision != created.Revision+1 || updated.Status != ai.PatrolObjectivePaused || updated.Coverage.ReasonCode != "objective_paused" {
 		t.Fatalf("updated objective = %+v", updated)
 	}
 

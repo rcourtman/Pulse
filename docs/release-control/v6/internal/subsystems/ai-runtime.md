@@ -417,6 +417,20 @@ trigger kinds, version, state transitions, and machine failure code are
 validated and persisted by core. Observer authority never includes an
 infrastructure mutation capability.
 
+During the first-party Patrol detection profile only, the core may attach the
+objective store through the narrow `patrol_propose_observer` tool adapter. The
+model must address an active objective at its current optimistic revision and
+provide a bounded measurable interpretation, one declared trigger kind,
+canonical-JSON probe proposal, wake evidence, and canonical-JSON requirements.
+Core—not model arguments—assigns observer identity and version, forces read-only
+posture and `proposed` state, computes the SHA-256 artifact digest, and persists
+the artifact inside the encrypted objective document. Public objective reads
+and later Patrol seed context omit artifact contents. The detection profile
+permits this Pulse-state proposal write explicitly; interactive Assistant and
+Patrol investigation profiles do not. A successful proposal remains
+`uncovered/observer_proposed`: this tool has no validator, installer, execution,
+health-lease, or infrastructure-action authority.
+
 ## Canonical Files
 
 1. `internal/ai/`
