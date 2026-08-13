@@ -63,6 +63,7 @@ type PatrolObserverState string
 
 const (
 	PatrolObserverProposed  PatrolObserverState = "proposed"
+	PatrolObserverRejected  PatrolObserverState = "rejected"
 	PatrolObserverValidated PatrolObserverState = "validated"
 	PatrolObserverInstalled PatrolObserverState = "installed"
 	PatrolObserverDegraded  PatrolObserverState = "degraded"
@@ -99,7 +100,7 @@ type PatrolObserverRecord struct {
 	UpdatedAt      time.Time                   `json:"updated_at"`
 	// Artifact is encrypted at rest with the objective document and is never
 	// projected through objectiveForRead. It is model-authored proposal input,
-	// not trusted executable code; only the future core validator/installer may
+	// not trusted executable code; only the core validator/installer may
 	// consume it.
 	Artifact *PatrolObserverArtifact `json:"artifact,omitempty"`
 }
@@ -126,6 +127,14 @@ type ProposePatrolObserverInput struct {
 	WakeEvidence     string
 	RequirementsJSON string
 	Actor            string
+}
+
+type patrolObserverHealthUpdate struct {
+	ObjectiveID string
+	ObserverID  string
+	Version     uint64
+	ValidUntil  time.Time
+	EvidenceAt  time.Time
 }
 
 type PatrolObjectiveCoverage struct {
@@ -357,6 +366,7 @@ func (s *PatrolObjectiveStore) Update(id string, input UpdatePatrolObjectiveInpu
 		return PatrolObjective{}, ErrPatrolObjectiveConflict
 	}
 	updated := clonePatrolObjective(current)
+	intentChanged := input.Brief != nil || input.OptionalContext != nil || input.ResourceIDs != nil
 	if input.Brief != nil {
 		brief, err := normalizePatrolObjectiveText(*input.Brief, MaxPatrolObjectiveBriefBytes, false)
 		if err != nil {
@@ -386,6 +396,15 @@ func (s *PatrolObjectiveStore) Update(id string, input UpdatePatrolObjectiveInpu
 			return PatrolObjective{}, ErrPatrolObjectiveLimit
 		}
 		updated.Status = *input.Status
+	}
+	// An observer is evidence for the exact retained intent it was designed
+	// against. Editing that intent invalidates the lease fail-closed; Patrol may
+	// propose a new version after reasoning over the revised brief and scope.
+	if intentChanged && updated.Observer != nil && updated.Observer.State != PatrolObserverDisabled {
+		updated.Observer.State = PatrolObserverDisabled
+		updated.Observer.ValidUntil = nil
+		updated.Observer.FailureCode = ""
+		updated.Observer.UpdatedAt = now
 	}
 	updated.UpdatedBy = normalizePatrolObjectiveActor(input.Actor)
 	updated.UpdatedAt = now
@@ -449,7 +468,7 @@ func (s *PatrolObjectiveStore) ProposeObserver(id string, input ProposePatrolObs
 	if current.Status != PatrolObjectiveActive {
 		return PatrolObjective{}, fmt.Errorf("%w: observer proposals require an active objective", ErrPatrolObjectiveInvalid)
 	}
-	if current.Observer != nil && current.Observer.State != PatrolObserverDisabled {
+	if current.Observer != nil && current.Observer.State != PatrolObserverDisabled && current.Observer.State != PatrolObserverRejected && current.Observer.State != PatrolObserverDegraded {
 		return PatrolObjective{}, fmt.Errorf("%w: an existing observer cannot be displaced by a proposal", ErrPatrolObjectiveInvalid)
 	}
 
@@ -519,8 +538,8 @@ func (s *PatrolObjectiveStore) GetObserverArtifact(id string) (PatrolObserverArt
 }
 
 // RecordObserver persists a core-owned observer lifecycle transition. Public
-// objective clients cannot call this method through HTTP. A future constrained
-// monitor builder and installer must use it only after validating the observer
+// objective clients cannot call this method through HTTP. The constrained
+// monitor builder and installer use it only after validating the observer
 // artifact, declared read-only posture, triggers, and health lease.
 func (s *PatrolObjectiveStore) RecordObserver(id string, expectedRevision uint64, observer PatrolObserverRecord, actor string, now time.Time) (PatrolObjective, error) {
 	if s == nil {
@@ -564,6 +583,55 @@ func (s *PatrolObjectiveStore) RecordObserver(id string, expectedRevision uint64
 	}
 	s.objectives = next
 	return objectiveForRead(updated, now), nil
+}
+
+// RefreshObserverHealthBatch renews installed observer leases in one atomic
+// persistence transaction without changing operator-authored revisions.
+// Runtime heartbeats must not create optimistic-concurrency conflicts or one
+// encrypted document rewrite per observer.
+func (s *PatrolObjectiveStore) RefreshObserverHealthBatch(updates []patrolObserverHealthUpdate, now time.Time) (int, error) {
+	if s == nil {
+		return 0, fmt.Errorf("%w: store unavailable", ErrPatrolObjectiveInvalid)
+	}
+	now = normalizePatrolObjectiveTime(now)
+	if len(updates) == 0 {
+		return 0, nil
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	next := clonePatrolObjectiveMap(s.objectives)
+	refreshed := 0
+	seen := make(map[string]struct{}, len(updates))
+	for _, update := range updates {
+		objectiveID := strings.TrimSpace(update.ObjectiveID)
+		observerID := strings.TrimSpace(update.ObserverID)
+		validUntil := update.ValidUntil.UTC()
+		evidenceAt := update.EvidenceAt.UTC()
+		if objectiveID == "" || observerID == "" || update.Version == 0 || !validUntil.After(now) || evidenceAt.After(now.Add(time.Minute)) {
+			return 0, fmt.Errorf("%w: invalid observer health lease", ErrPatrolObjectiveInvalid)
+		}
+		if _, duplicate := seen[objectiveID]; duplicate {
+			return 0, fmt.Errorf("%w: duplicate observer health lease", ErrPatrolObjectiveInvalid)
+		}
+		seen[objectiveID] = struct{}{}
+		current, ok := next[objectiveID]
+		if !ok || current.Status != PatrolObjectiveActive || current.Observer == nil || current.Observer.ID != observerID || current.Observer.Version != update.Version || current.Observer.State != PatrolObserverInstalled {
+			continue
+		}
+		current.Observer.ValidUntil = &validUntil
+		current.Observer.LastEvidenceAt = &evidenceAt
+		current.Observer.UpdatedAt = now
+		refreshed++
+	}
+	if refreshed == 0 {
+		return 0, nil
+	}
+	if err := s.persistLocked(next); err != nil {
+		return 0, err
+	}
+	s.objectives = next
+	return refreshed, nil
 }
 
 func (s *PatrolObjectiveStore) persistLocked(objectives map[string]*PatrolObjective) error {
@@ -664,6 +732,13 @@ func derivePatrolObjectiveCoverage(objective *PatrolObjective, now time.Time) Pa
 		coverage.State = PatrolObjectiveUncovered
 		coverage.ReasonCode = "observer_proposed"
 		coverage.Summary = "An observer has been proposed but not validated or installed."
+	case PatrolObserverRejected:
+		coverage.State = PatrolObjectiveUncovered
+		coverage.ReasonCode = observer.FailureCode
+		if coverage.ReasonCode == "" {
+			coverage.ReasonCode = "observer_rejected"
+		}
+		coverage.Summary = "The proposed observer could not be validated for the local runtime."
 	case PatrolObserverValidated:
 		coverage.State = PatrolObjectiveUncovered
 		coverage.ReasonCode = "observer_not_installed"
@@ -832,10 +907,10 @@ func normalizePatrolObserver(observer PatrolObserverRecord, now time.Time) (Patr
 	if observer.FailureCode != "" && !isPatrolMachineCode(observer.FailureCode) {
 		return PatrolObserverRecord{}, fmt.Errorf("%w: invalid observer failure code", ErrPatrolObjectiveInvalid)
 	}
-	if observer.State == PatrolObserverDegraded && observer.FailureCode == "" {
-		return PatrolObserverRecord{}, fmt.Errorf("%w: degraded observer requires a failure code", ErrPatrolObjectiveInvalid)
+	if (observer.State == PatrolObserverDegraded || observer.State == PatrolObserverRejected) && observer.FailureCode == "" {
+		return PatrolObserverRecord{}, fmt.Errorf("%w: rejected or degraded observer requires a failure code", ErrPatrolObjectiveInvalid)
 	}
-	if observer.State != PatrolObserverDegraded {
+	if observer.State != PatrolObserverDegraded && observer.State != PatrolObserverRejected {
 		observer.FailureCode = ""
 	}
 	observer.ValidUntil = clonePatrolTime(observer.ValidUntil)
@@ -876,7 +951,8 @@ func validatePatrolObserverTransition(current *PatrolObserverRecord, next Patrol
 		return fmt.Errorf("%w: observer identity and artifact are immutable within a version", ErrPatrolObjectiveInvalid)
 	}
 	allowed := map[PatrolObserverState]map[PatrolObserverState]bool{
-		PatrolObserverProposed:  {PatrolObserverProposed: true, PatrolObserverValidated: true, PatrolObserverDisabled: true},
+		PatrolObserverProposed:  {PatrolObserverProposed: true, PatrolObserverRejected: true, PatrolObserverValidated: true, PatrolObserverDisabled: true},
+		PatrolObserverRejected:  {PatrolObserverRejected: true, PatrolObserverValidated: true, PatrolObserverDisabled: true},
 		PatrolObserverValidated: {PatrolObserverValidated: true, PatrolObserverInstalled: true, PatrolObserverDegraded: true, PatrolObserverDisabled: true},
 		PatrolObserverInstalled: {PatrolObserverInstalled: true, PatrolObserverDegraded: true, PatrolObserverDisabled: true},
 		PatrolObserverDegraded:  {PatrolObserverDegraded: true, PatrolObserverInstalled: true, PatrolObserverDisabled: true},
@@ -919,7 +995,7 @@ func isPatrolObjectiveStatus(status PatrolObjectiveStatus) bool {
 
 func isPatrolObserverState(state PatrolObserverState) bool {
 	switch state {
-	case PatrolObserverProposed, PatrolObserverValidated, PatrolObserverInstalled, PatrolObserverDegraded, PatrolObserverDisabled:
+	case PatrolObserverProposed, PatrolObserverRejected, PatrolObserverValidated, PatrolObserverInstalled, PatrolObserverDegraded, PatrolObserverDisabled:
 		return true
 	default:
 		return false

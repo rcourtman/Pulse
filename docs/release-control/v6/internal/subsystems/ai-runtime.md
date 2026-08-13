@@ -6970,3 +6970,30 @@ Governed Patrol fixes are delivered through the approved-action pipeline and
 are already counted there (`pulse_intelligence_approved_action_*`), which is the
 signal to read for remediation activity. Existing persisted history files that
 still contain `auto_fix_count` load cleanly; the unknown key is ignored.
+
+### Model-authored observers have a core-owned local execution floor
+
+`internal/ai/patrol_observer_runtime.go` owns the first executable observer ABI
+for retained Patrol objectives. The model may author the predicate, but it
+cannot author executable code or advance lifecycle authority. Core strictly
+decodes `pulse-resource-state/v1`, requires explicit canonical resource scope,
+an interval trigger, an empty external-requirements object, one canonical
+`status` predicate, a 10-to-300-second local sample interval, and a bounded
+consecutive-failure window. Unknown fields and unsupported runtimes, triggers,
+requirements, paths, operators, or values fail closed and persist a safe
+machine reason in the `rejected` state while coverage remains uncovered.
+
+Accepted observers transition through proposed, validated, and installed under
+core authority. They evaluate Pulse's canonical `ReadState` status locally,
+falling back to the existing Patrol snapshot only where canonical read state is
+unavailable. Health leasing is persisted without changing the operator
+objective revision, with all leases due in one sweep committed in one atomic
+encrypted-document transaction. A failure transition queues one scoped
+`objective_evidence` check through the existing TriggerManager, so the model
+wakes for reasoning only after local evidence crosses the declared window and
+does not become the polling loop. The observer remains read-only and cannot
+enter infrastructure mutation; any later response still uses the canonical
+capability, autonomy, approval, dispatch, audit, and verification kernel.
+Changing the retained brief, optional context, or resource scope disables the
+installed observer and clears its lease; coverage cannot survive a semantic
+change to the intent it was designed to protect.

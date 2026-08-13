@@ -229,7 +229,9 @@ Returns a list of active findings with their IDs, severity, resource, and title.
 			Name: agentcapabilities.PatrolProposeObserverToolName,
 			Description: `Propose a durable read-only observer for an active operator objective that is currently missing coverage.
 
-Use this only when the objective context says observer_missing, or when current evidence clearly requires a new observer version. Translate the operator's outcome into the smallest useful local observer without hard-coding an application into Pulse. The probe_json and requirements_json fields must each be one bounded JSON object. Describe what a future constrained runtime should observe; do not include mutation commands, credentials, or secret values.
+Use this only when the objective context says observer_missing, or when current evidence clearly requires a new observer version. Translate the operator's outcome into the smallest useful local observer without hard-coding an application into Pulse. The probe_json and requirements_json fields must each be one bounded JSON object. Do not include mutation commands, credentials, or secret values.
+
+Core can currently install one generic local ABI for objectives scoped to canonical Pulse resources: trigger_kind must be interval, requirements_json must be {}, and probe_json must be exactly {"runtime":"pulse-resource-state/v1","path":"status","operator":"equals","value":"online","sample_interval_seconds":30,"wake_after_consecutive_failures":2}. The operator may be equals or not_equals; value may be online, offline, warning, or unknown; interval is 10-300 seconds and the failure window is 1-10 samples. Use this ABI when canonical resource status is a truthful interpretation. If the outcome needs an app API, event, log, file, socket, network, filesystem, secret, or richer signal, describe that honest proposal instead; core will retain it with an explicit unsupported validation reason rather than pretending it is active.
 
 This tool records only a versioned proposed artifact. It does not validate, install, execute, or claim coverage. Core owns the observer ID, version, SHA-256 digest, read-only posture, sandboxing, installation, health lease, and any later transition.
 
@@ -256,7 +258,7 @@ Returns the proposed observer identity and the truthful uncovered coverage reaso
 					},
 					"probe_json": {
 						Type:        "string",
-						Description: "One JSON object describing the read-only probe, signal extraction, and health/failure outputs. It is proposal material, not executable authority.",
+						Description: "One JSON object describing the read-only probe. Use the documented pulse-resource-state/v1 ABI exactly when canonical resource status is sufficient; otherwise provide an honest bounded proposal for future capability validation.",
 					},
 					"wake_evidence": {
 						Type:        "string",
@@ -264,7 +266,7 @@ Returns the proposed observer identity and the truthful uncovered coverage reaso
 					},
 					"requirements_json": {
 						Type:        "string",
-						Description: "One JSON object declaring network, filesystem, secret-reference, runtime, timeout, and resource-budget requirements. Use empty arrays/objects when none; never include secret values.",
+						Description: "One JSON object declaring external requirements. Use {} for the installable pulse-resource-state/v1 ABI. Never include secret values.",
 					},
 				},
 				Required: []string{"objective_id", "expected_revision", "interpretation", "trigger_kind", "probe_json", "wake_evidence", "requirements_json"},

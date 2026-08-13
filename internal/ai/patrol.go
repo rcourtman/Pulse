@@ -469,6 +469,7 @@ type PatrolService struct {
 	config              PatrolConfig
 	findings            *FindingsStore
 	objectiveStore      *PatrolObjectiveStore
+	observerRuntime     *patrolObserverRuntime
 	knowledgeStore      *knowledge.Store        // For per-resource notes in patrol context
 	discoveryStore      *servicediscovery.Store // For AI-discovered infrastructure context
 	guestProber         GuestProber             // For pre-patrol guest reachability checks
@@ -733,5 +734,6 @@ func NewPatrolService(aiService *Service, stateProvider StateProvider) *PatrolSe
 	p.aptWorkflowWatcher = newAPTWorkflowWatcher()
 	p.proxmoxGuestLifecycleWatcher = newProxmoxGuestLifecycleWatcher(p.loadProxmoxGuestActionAudits)
 	p.pdmAlertBridge = newPDMAlertBridge(newPDMAlertSourceFromEnv())
+	p.observerRuntime = newPatrolObserverRuntime()
 	return p
 }

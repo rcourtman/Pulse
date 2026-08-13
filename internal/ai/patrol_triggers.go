@@ -44,6 +44,7 @@ func BackgroundAutomationEventTriggerBlock() PatrolEventTriggerBlock {
 const (
 	triggerPriorityManual       = 100 // User-initiated patrols run first
 	triggerPriorityAlertFired   = 80  // New alerts are high priority
+	triggerPriorityObjective    = 70  // Retained-objective evidence needs prompt investigation
 	triggerPriorityAnomaly      = 60  // Anomaly detection is medium-high
 	triggerPriorityAlertCleared = 40  // Cleared alerts are lower priority
 	triggerPriorityUserAction   = 30  // User finding actions
@@ -51,16 +52,17 @@ const (
 )
 
 const (
-	TriggerReasonScheduled       TriggerReason = "scheduled"      // Regular interval trigger
-	TriggerReasonManual          TriggerReason = "manual"         // User-initiated patrol
-	TriggerReasonAlertFired      TriggerReason = "alert_fired"    // New alert triggered
-	TriggerReasonAlertCleared    TriggerReason = "alert_cleared"  // Alert was resolved
-	TriggerReasonAlertFlapping   TriggerReason = "alert_flapping" // Alert flapping detected and suppressed
-	TriggerReasonAnomalyDetected TriggerReason = "anomaly"        // Baseline breach detected
-	TriggerReasonUserAction      TriggerReason = "user_action"    // User dismissed/snoozed finding
-	TriggerReasonConfigChanged   TriggerReason = "config_changed" // System configuration changed
-	TriggerReasonStartup         TriggerReason = "startup"        // Service startup
-	TriggerReasonVerification    TriggerReason = "verification"   // Post-fix verification
+	TriggerReasonScheduled         TriggerReason = "scheduled"          // Regular interval trigger
+	TriggerReasonManual            TriggerReason = "manual"             // User-initiated patrol
+	TriggerReasonAlertFired        TriggerReason = "alert_fired"        // New alert triggered
+	TriggerReasonAlertCleared      TriggerReason = "alert_cleared"      // Alert was resolved
+	TriggerReasonAlertFlapping     TriggerReason = "alert_flapping"     // Alert flapping detected and suppressed
+	TriggerReasonAnomalyDetected   TriggerReason = "anomaly"            // Baseline breach detected
+	TriggerReasonUserAction        TriggerReason = "user_action"        // User dismissed/snoozed finding
+	TriggerReasonConfigChanged     TriggerReason = "config_changed"     // System configuration changed
+	TriggerReasonStartup           TriggerReason = "startup"            // Service startup
+	TriggerReasonVerification      TriggerReason = "verification"       // Post-fix verification
+	TriggerReasonObjectiveEvidence TriggerReason = "objective_evidence" // Local observer detected an objective breach
 )
 
 // PatrolScope defines the scope of a patrol run
@@ -423,7 +425,7 @@ func (tm *TriggerManager) SetEventTriggersEnabled(enabled bool) {
 // (alerts firing/clearing, anomaly detection) as opposed to user-initiated or scheduled triggers.
 func isEventDrivenTrigger(reason TriggerReason) bool {
 	switch reason {
-	case TriggerReasonAlertFired, TriggerReasonAlertCleared, TriggerReasonAlertFlapping, TriggerReasonAnomalyDetected:
+	case TriggerReasonAlertFired, TriggerReasonAlertCleared, TriggerReasonAlertFlapping, TriggerReasonAnomalyDetected, TriggerReasonObjectiveEvidence:
 		return true
 	default:
 		return false

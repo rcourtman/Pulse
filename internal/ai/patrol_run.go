@@ -50,6 +50,7 @@ func (p *PatrolService) Start(ctx context.Context) {
 
 	go p.patrolLoop(ctx)
 	go p.remindSweepLoop(ctx)
+	go p.objectiveObserverLoop(ctx)
 }
 
 // Stop stops the patrol service. It signals the patrol loop to exit, then

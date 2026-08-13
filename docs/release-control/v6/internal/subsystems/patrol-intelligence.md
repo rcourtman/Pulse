@@ -128,9 +128,10 @@ with bounded provenance and rollback; app-named integration code is an
 optimization only when repeated evidence justifies productizing it, never a
 prerequisite for a new objective.
 
-The canonical retained-intent and proposal slices are implemented by
+The canonical retained-intent, proposal, and first local execution slices are implemented by
 `internal/ai/patrol_objectives.go`, `internal/ai/patrol_observer_builder.go`,
-`internal/ai/tools/tools_patrol.go`, and `internal/api/patrol_objectives.go`.
+`internal/ai/patrol_observer_runtime.go`, `internal/ai/tools/tools_patrol.go`, and
+`internal/api/patrol_objectives.go`.
 They provide encrypted retained intent, optimistic revisions, resource scoping,
 model seed projection, the core-owned observer state machine, and the
 Patrol-detection-only `patrol_propose_observer` builder. The model supplies a
@@ -139,10 +140,34 @@ declared requirements, and one trigger kind; core supplies identity, version,
 read-only posture, digest, encrypted persistence, and the `proposed` state. The
 artifact is excluded from public objective reads and later prompt seeds. The
 public API cannot attach an observer or author coverage, and the model-facing
-tool cannot validate, install, execute, lease, or advance its proposal. Sandbox
-validation, installation, event delivery, health leasing, and redesign
-execution remain extensions of this lifecycle; until they record a healthy
-installed observer, the saved objective truthfully remains uncovered.
+tool cannot validate, install, execute, lease, or advance its proposal.
+
+Core currently validates and installs one generic declarative ABI,
+`pulse-resource-state/v1`, for an objective with explicit canonical resource
+scope. It compares the canonical resource `status` with a bounded `equals` or
+`not_equals` predicate at a 10-to-300-second local interval, requires an empty
+external-requirements object, rejects unknown JSON fields, arbitrary code,
+network, filesystem, and secret requirements, and wakes the model only after a
+bounded consecutive-failure window. The installer is sandboxed by construction:
+it registers typed data, not a process or script. Its runtime persists a
+renewable health lease without incrementing the operator objective revision,
+batches every due lease in a sweep into one encrypted persistence transaction,
+and queues one scoped `objective_evidence` Patrol check on the transition into
+failure rather than repeatedly polling a model. Observer health and observed
+outcome remain separate: a healthy observer may report that its objective is
+currently breached. Editing the retained brief, optional context, or resource
+scope disables the existing observer and clears its lease, because an artifact
+validated against old intent cannot remain proof of coverage for new intent.
+
+Unsupported trigger or probe designs transition to `rejected` with an explicit
+machine validation reason and uncovered coverage. A rejected or degraded
+version may be replaced by a new model proposal, while core may reconsider an
+unchanged rejected artifact after a runtime upgrade. Richer event, webhook, log,
+file, socket, API, network, filesystem, secret-backed, and non-status signal
+runtimes remain extensions of the same lifecycle. They must add a constrained
+capability and validator rather than executing proposal JSON generically; until
+such a runtime records a healthy installed observer, the saved objective
+truthfully remains uncovered.
 
 Desktop Autopilot activation consumes the server-owned acknowledgement
 contract through `frontend-modern/src/api/patrol.ts` and
