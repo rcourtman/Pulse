@@ -964,6 +964,17 @@ func (c *AIConfig) GetRequestTimeout() time.Duration {
 	return 300 * time.Second // 5 minutes default
 }
 
+// GetDiscoveryAIAnalysisTimeout returns the deadline for a single discovery AI
+// analysis call. It is the configured AI request timeout, including its 300s
+// default: the settings UI advertises that value as applying to discovery and
+// omits the field when it already matches, so a lower discovery-only default
+// would time out scans on installations that display 300s and cannot correct
+// it by saving. The discovery services keep their own 45s fallback for
+// construction without an AI configuration.
+func (c *AIConfig) GetDiscoveryAIAnalysisTimeout() time.Duration {
+	return c.GetRequestTimeout()
+}
+
 // GetControlLevel returns the AI control level, defaulting to read_only if not set.
 func (c *AIConfig) GetControlLevel() string {
 	if c.ControlLevel == "" {

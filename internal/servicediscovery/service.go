@@ -520,6 +520,28 @@ func (s *Service) SetInterval(interval time.Duration) {
 	}
 }
 
+// SetAIAnalysisTimeout updates the per-analysis AI deadline. Takes effect on
+// the next analysis call. Non-positive values are ignored.
+func (s *Service) SetAIAnalysisTimeout(timeout time.Duration) {
+	if s == nil || timeout <= 0 {
+		return
+	}
+	s.mu.Lock()
+	changed := s.aiAnalysisTimeout != timeout
+	s.aiAnalysisTimeout = timeout
+	s.mu.Unlock()
+	if changed {
+		log.Info().Dur("ai_analysis_timeout", timeout).Msg("Discovery AI analysis timeout updated")
+	}
+}
+
+// analysisTimeout returns the current per-analysis AI deadline.
+func (s *Service) analysisTimeout() time.Duration {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.aiAnalysisTimeout
+}
+
 // needsDeepScan determines if a discovery result needs a deep scan based on quality.
 // Returns true if the discovery is incomplete or low-confidence.
 func (s *Service) needsDeepScan(discovery *ResourceDiscovery) bool {
@@ -1649,7 +1671,8 @@ func (s *Service) analyzeDockerContainer(ctx context.Context, analyzer AIAnalyze
 		// Build prompt for AI analysis
 		prompt := s.buildMetadataAnalysisPrompt(c, host)
 
-		analyzeCtx, cancel := context.WithTimeout(ctx, s.aiAnalysisTimeout)
+		timeout := s.analysisTimeout()
+		analyzeCtx, cancel := context.WithTimeout(ctx, timeout)
 		defer cancel()
 
 		response, err := analyzer.AnalyzeForDiscovery(analyzeCtx, prompt)
@@ -1658,7 +1681,7 @@ func (s *Service) analyzeDockerContainer(ctx context.Context, analyzer AIAnalyze
 				log.Warn().
 					Err(err).
 					Str("container", c.Name).
-					Dur("timeout", s.aiAnalysisTimeout).
+					Dur("timeout", timeout).
 					Msg("AI metadata analysis timed out")
 				return nil
 			}
@@ -1934,13 +1957,14 @@ func (s *Service) DiscoverResource(ctx context.Context, req DiscoveryRequest) (*
 			PercentComplete: 75,
 		})
 
-		analyzeCtx, cancel := context.WithTimeout(ctx, s.aiAnalysisTimeout)
+		timeout := s.analysisTimeout()
+		analyzeCtx, cancel := context.WithTimeout(ctx, timeout)
 		defer cancel()
 
 		response, err := analyzer.AnalyzeForDiscovery(analyzeCtx, prompt)
 		if err != nil {
 			if errors.Is(err, context.DeadlineExceeded) {
-				inProg.err = fmt.Errorf("AI analysis timed out after %s", s.aiAnalysisTimeout)
+				inProg.err = fmt.Errorf("AI analysis timed out after %s", timeout)
 				return nil, inProg.err
 			}
 			inProg.err = fmt.Errorf("AI analysis failed: %w", err)

@@ -875,6 +875,28 @@ func TestService_DefaultsAndSetAnalyzer(t *testing.T) {
 	}
 }
 
+func TestService_SetAIAnalysisTimeout(t *testing.T) {
+	service := NewService(nil, nil, Config{})
+	if got := service.analysisTimeout(); got != 45*time.Second {
+		t.Fatalf("default analysisTimeout = %v, want 45s", got)
+	}
+
+	service.SetAIAnalysisTimeout(10 * time.Minute)
+	if got := service.analysisTimeout(); got != 10*time.Minute {
+		t.Fatalf("analysisTimeout = %v, want 10m", got)
+	}
+	if got := service.GetStatusSnapshot().AIAnalysisTimeout; got != "10m0s" {
+		t.Fatalf("status AIAnalysisTimeout = %q, want 10m0s", got)
+	}
+
+	// Non-positive values must not clobber a configured timeout.
+	service.SetAIAnalysisTimeout(0)
+	service.SetAIAnalysisTimeout(-time.Second)
+	if got := service.analysisTimeout(); got != 10*time.Minute {
+		t.Fatalf("analysisTimeout = %v after invalid updates, want 10m", got)
+	}
+}
+
 func TestService_AnalyzeDockerContainer_AITimeout(t *testing.T) {
 	store, err := NewStore(t.TempDir())
 	if err != nil {

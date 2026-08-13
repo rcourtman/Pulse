@@ -298,7 +298,7 @@ func (s *Service) SetInterval(interval time.Duration) {
 	cfg := normalizeConfig(Config{
 		Interval:          interval,
 		CacheExpiry:       s.cacheExpiry,
-		AIAnalysisTimeout: s.aiAnalysisTimeout,
+		AIAnalysisTimeout: s.analysisTimeout(),
 	})
 
 	s.mu.Lock()
@@ -314,6 +314,28 @@ func (s *Service) SetInterval(interval time.Duration) {
 			log.Debug().Dur("interval", cfg.Interval).Msg("Infrastructure discovery interval updated (pending)")
 		}
 	}
+}
+
+// SetAIAnalysisTimeout updates the per-analysis AI deadline. Takes effect on
+// the next analysis call. Non-positive values are ignored.
+func (s *Service) SetAIAnalysisTimeout(timeout time.Duration) {
+	if s == nil || timeout <= 0 {
+		return
+	}
+	s.mu.Lock()
+	changed := s.aiAnalysisTimeout != timeout
+	s.aiAnalysisTimeout = timeout
+	s.mu.Unlock()
+	if changed {
+		log.Info().Dur("ai_analysis_timeout", timeout).Msg("Infrastructure discovery AI analysis timeout updated")
+	}
+}
+
+// analysisTimeout returns the current per-analysis AI deadline.
+func (s *Service) analysisTimeout() time.Duration {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.aiAnalysisTimeout
 }
 
 // Stop stops the background discovery service.
@@ -568,7 +590,8 @@ func (s *Service) analyzeContainer(ctx context.Context, analyzer AIAnalyzer, c *
 		}
 
 		// Call AI with a per-request timeout so a stalled model call can't hang discovery.
-		analyzeCtx, cancel := context.WithTimeout(ctx, s.aiAnalysisTimeout)
+		timeout := s.analysisTimeout()
+		analyzeCtx, cancel := context.WithTimeout(ctx, timeout)
 		defer cancel()
 
 		response, err := analyzer.AnalyzeForDiscovery(analyzeCtx, prompt)
@@ -578,7 +601,7 @@ func (s *Service) analyzeContainer(ctx context.Context, analyzer AIAnalyzer, c *
 					Err(err).
 					Str("container", cName).
 					Str("image", cImage).
-					Dur("timeout", s.aiAnalysisTimeout).
+					Dur("timeout", timeout).
 					Msg("AI analysis timed out for container")
 				return nil
 			}

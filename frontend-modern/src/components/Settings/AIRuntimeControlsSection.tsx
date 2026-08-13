@@ -252,7 +252,8 @@ export const AIProviderRuntimeControlsSection: Component<AIRuntimeControlsSectio
           </Show>
         </div>
         <p class="text-[10px] text-muted ml-1">
-          Increase for slower Ollama hardware (default: 300s / 5 min)
+          Applies to chat, patrol, and discovery AI calls. Increase for slower Ollama hardware
+          (default: 300s / 5 min)
         </p>
       </div>
     </div>

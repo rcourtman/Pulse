@@ -589,6 +589,7 @@ func (s *Service) initInfraDiscoveryServiceLocked() {
 		if interval := s.cfg.GetDiscoveryInterval(); interval > 0 {
 			discoveryCfg.Interval = interval
 		}
+		discoveryCfg.AIAnalysisTimeout = s.cfg.GetDiscoveryAIAnalysisTimeout()
 	}
 
 	s.infraDiscoveryService = infradiscovery.NewService(
@@ -626,6 +627,7 @@ func (s *Service) initDiscoveryServiceLocked() {
 		commandScanningEnabled = s.cfg.Enabled && s.cfg.IsDiscoveryEnabled() && s.provider != nil
 		backgroundScanningEnabled = commandScanningEnabled && !BackgroundAutomationDisabledForDev()
 		discoveryCfg.CommandScanning = commandScanningEnabled
+		discoveryCfg.AIAnalysisTimeout = s.cfg.GetDiscoveryAIAnalysisTimeout()
 	}
 
 	s.discoveryService = servicediscovery.NewService(
@@ -915,6 +917,7 @@ func (s *Service) updateInfraDiscoverySettings(cfg *config.AIConfig) {
 	enabled := s.IsEnabled() && cfg.IsDiscoveryEnabled()
 	backgroundEnabled := enabled && !BackgroundAutomationDisabledForDev()
 	interval := cfg.GetDiscoveryInterval()
+	s.infraDiscoveryService.SetAIAnalysisTimeout(cfg.GetDiscoveryAIAnalysisTimeout())
 
 	if backgroundEnabled && interval > 0 {
 		s.infraDiscoveryService.SetInterval(interval)
@@ -942,6 +945,7 @@ func (s *Service) updateDiscoverySettings(cfg *config.AIConfig) {
 	backgroundEnabled := enabled && !BackgroundAutomationDisabledForDev()
 	interval := cfg.GetDiscoveryInterval()
 	s.discoveryService.SetCommandScanningEnabled(enabled)
+	s.discoveryService.SetAIAnalysisTimeout(cfg.GetDiscoveryAIAnalysisTimeout())
 
 	if backgroundEnabled && interval > 0 {
 		// Update interval and ensure service is running
