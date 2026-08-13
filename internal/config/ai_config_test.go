@@ -1301,9 +1301,11 @@ func TestAIConfig_GetDiscoveryAIAnalysisTimeout(t *testing.T) {
 		expected time.Duration
 	}{
 		{
-			name:     "Unset keeps the tighter discovery default",
+			// Zero is omitted from the settings response and the UI displays
+			// (and may never re-submit) 300s, so discovery must agree with it.
+			name:     "Unset matches the advertised request timeout default",
 			config:   &AIConfig{},
-			expected: 45 * time.Second,
+			expected: 300 * time.Second,
 		},
 		{
 			name:     "Explicit request timeout wins for slow local models",
