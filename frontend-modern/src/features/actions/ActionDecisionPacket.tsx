@@ -236,7 +236,7 @@ export const ActionDecisionPacket: Component<{
               <div class="text-xs font-semibold uppercase tracking-wide text-muted">Execution</div>
               <div class="mt-1 font-semibold">
                 {truth().execution.status === 'not_run'
-                  ? 'Did not run'
+                  ? 'Skipped before execution'
                   : formatActionName(truth().execution.status)}
               </div>
               <Show when={truth().execution.reasonCode}>

@@ -144,6 +144,7 @@ func ValidateDockerContainerLifecycleResultPayload(result *DockerContainerLifecy
 	result.RequestDigest = strings.TrimSpace(result.RequestDigest)
 	result.ContainerID = strings.ToLower(strings.TrimSpace(result.ContainerID))
 	result.ExecutionPhase = strings.TrimSpace(result.ExecutionPhase)
+	result.ReasonCode = strings.TrimSpace(result.ReasonCode)
 	result.Error = strings.TrimSpace(result.Error)
 	if result.RequestID == "" || len(result.RequestID) > maxRequestIDLength || result.ActionID == "" || len(result.ActionID) > maxRequestIDLength {
 		return fmt.Errorf("invalid docker lifecycle result identity")
@@ -159,6 +160,12 @@ func ValidateDockerContainerLifecycleResultPayload(result *DockerContainerLifecy
 	}
 	if len(result.Error) > 1024 || result.Before.RestartCount < 0 || result.After.RestartCount < 0 {
 		return fmt.Errorf("docker lifecycle result exceeds bounded contract")
+	}
+	if result.ReasonCode != "" && !IsActionRefusalReasonCode(result.ReasonCode) {
+		return fmt.Errorf("invalid docker lifecycle refusal reason code")
+	}
+	if result.ReasonCode != "" && result.MutationStarted {
+		return fmt.Errorf("docker lifecycle refusal reason conflicts with mutation state")
 	}
 	for _, snapshot := range []DockerContainerLifecycleSnapshot{result.Before, result.After} {
 		if snapshot.ContainerID != "" && !dockerContainerIDPattern.MatchString(strings.ToLower(strings.TrimSpace(snapshot.ContainerID))) {

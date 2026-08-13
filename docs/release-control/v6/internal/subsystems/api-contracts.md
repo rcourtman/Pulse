@@ -2198,11 +2198,15 @@ a new API state machine, queue contract, or verification-accounting field.
    endpoint keeps calling plain `Plan`, so an HTTP request body can never
    claim a first-party origin. Enterprise still has no decision or execution
    method. After planning, core may auto-authorize only when the capability's
-   declared eligibility, the persisted resource capability allowlist and
-   optional recurring window, `NeverAutoRemediate`, and the tenant's effective
-   Patrol mode all allow it. Assisted mode admits only `low_risk`; unlocked full
-   mode may also admit `elevated`; monitor, approval, dry-run-only, MFA, missing,
-   and unknown policy fail closed. Automatic admission is lifecycle-owned:
+   declared eligibility and the tenant's effective Patrol mode allow it, the
+   resource is not locked by `NeverAutoRemediate`, and any persisted resource
+   capability limit or recurring window admits it. Absence of a resource
+   policy inherits those tenant and capability bounds; an enabled per-resource
+   capability/window policy may only narrow them, and `NeverAutoRemediate`
+   remains the explicit opt-out. Assisted mode admits only `low_risk`; unlocked full
+   mode may also admit `elevated`; monitor, approval, dry-run-only, MFA, and a
+   missing or unknown tenant policy fail closed. Automatic admission is
+   lifecycle-owned:
    `ExecuteUnderPolicy` re-reads the complete tenant, capability, resource,
    window, unlock, license, and emergency-stop posture under the shared policy
    admission coordinator, binds it to a typed versioned lease, then persists
@@ -2211,10 +2215,11 @@ a new API state machine, queue contract, or verification-accounting field.
    Lazy initialization of that shared coordinator must be concurrency-safe:
    simultaneous first policy writers on one lifecycle service must converge on
    one coordinator and cannot enter parallel admission or mutation sections.
-   Missing, malformed, stale, unreadable, or revoked policy records a stable
+   Malformed, stale, unreadable, or revoked policy records a stable
    refused-before-dispatch failure with no executor call. Human approval stays
-   a distinct path: automatic-mode, allowlist, and recurring-window changes do
-   not revoke a human decision, while plan drift, `NeverAutoRemediate`, and the
+   a distinct path: automatic-mode, resource-limit, and recurring-window
+   changes do not revoke a human decision, while plan drift,
+   `NeverAutoRemediate`, and the
    action emergency stop remain universal. The executing transition is the
    admission linearization point; a later emergency stop is best-effort
    cancellation and never claims rollback. Proposals
@@ -9096,6 +9101,14 @@ together: `type Ping struct` in `internal/telemetry/telemetry.go`, the
 Retired columns stay in the live receiver database rather than being dropped:
 migrations only add, the columns hold real rows from the schema-v6 window, and
 nothing writes them once the receiver struct loses the fields.
+### Telemetry payload parity spans three surfaces at schema v8
+
+Schema v8 preserves the same three-surface parity requirement and adds
+content-free approved-action refusal counters for target change, prerequisite
+failure, and invalid typed contracts. These counters partition agent-side
+pre-mutation refusals that previously accumulated in `other`; no raw error,
+command, target, resource identifier, or action payload is exported.
+
 ### Per-tenant resource stores are released on offboarding and shutdown
 
 `ResourceHandlers.getStore` opens a SQLite handle per org and caches it for the

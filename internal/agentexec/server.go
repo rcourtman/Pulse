@@ -621,6 +621,7 @@ func validateHostUpdateResultPayload(result *HostUpdateResultPayload) error {
 	}
 	result.RequestID = strings.TrimSpace(result.RequestID)
 	result.Verification = strings.TrimSpace(result.Verification)
+	result.ReasonCode = strings.TrimSpace(result.ReasonCode)
 	if result.RequestID == "" || len(result.RequestID) > maxRequestIDLength {
 		return fmt.Errorf("invalid request id")
 	}
@@ -646,6 +647,12 @@ func validateHostUpdateResultPayload(result *HostUpdateResultPayload) error {
 	}
 	if len(result.Error) > 1024 {
 		return fmt.Errorf("host update error exceeds bounded limit")
+	}
+	if result.ReasonCode != "" && !IsActionRefusalReasonCode(result.ReasonCode) {
+		return fmt.Errorf("invalid host update refusal reason code")
+	}
+	if result.ReasonCode != "" && (result.MutationStarted || result.Success) {
+		return fmt.Errorf("host update refusal reason conflicts with execution state")
 	}
 	return nil
 }
@@ -695,6 +702,7 @@ func validateHostStorageCleanupResultPayload(result *HostStorageCleanupResultPay
 	}
 	result.RequestID = strings.TrimSpace(result.RequestID)
 	result.Verification = strings.TrimSpace(result.Verification)
+	result.ReasonCode = strings.TrimSpace(result.ReasonCode)
 	if result.RequestID == "" || len(result.RequestID) > maxRequestIDLength {
 		return fmt.Errorf("invalid request id")
 	}
@@ -714,7 +722,11 @@ func validateHostStorageCleanupResultPayload(result *HostStorageCleanupResultPay
 		if !result.Success || !result.After.Supported || result.After.Provider != "apt-package-cache" || result.After.Error != "" || result.After.Fingerprint == "" {
 			return fmt.Errorf("verified storage cleanup lacks a valid postcondition")
 		}
-		if result.Before.ReclaimableBytes <= 0 || result.ReclaimedBytes <= 0 || result.After.ReclaimableBytes >= result.Before.ReclaimableBytes || result.ReclaimedBytes != result.Before.ReclaimableBytes-result.After.ReclaimableBytes {
+		if result.Before.ReclaimableBytes == 0 {
+			if result.After.ReclaimableBytes != 0 || result.ReclaimedBytes != 0 {
+				return fmt.Errorf("already-satisfied storage cleanup has inconsistent byte counts")
+			}
+		} else if result.ReclaimedBytes <= 0 || result.After.ReclaimableBytes >= result.Before.ReclaimableBytes || result.ReclaimedBytes != result.Before.ReclaimableBytes-result.After.ReclaimableBytes {
 			return fmt.Errorf("verified storage cleanup did not reclaim reported bytes")
 		}
 	case HostStorageCleanupVerificationFailed, HostStorageCleanupVerificationInconclusive:
@@ -723,6 +735,12 @@ func validateHostStorageCleanupResultPayload(result *HostStorageCleanupResultPay
 	}
 	if len(result.Error) > 1024 {
 		return fmt.Errorf("host storage cleanup error exceeds bounded limit")
+	}
+	if result.ReasonCode != "" && !IsActionRefusalReasonCode(result.ReasonCode) {
+		return fmt.Errorf("invalid host storage cleanup refusal reason code")
+	}
+	if result.ReasonCode != "" && (result.MutationStarted || result.Success) {
+		return fmt.Errorf("host storage cleanup refusal reason conflicts with execution state")
 	}
 	return nil
 }

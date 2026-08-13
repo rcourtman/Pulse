@@ -1765,10 +1765,11 @@ they cannot supply requester identity, origin, approval policy, capability
 catalog entries, or verification outcome. Legacy command-shaped investigation
 history is never exposed as an executable payload in desktop or mobile review.
 Core-owned Patrol policy authorization is additive to that boundary, not a new
-caller grant. It requires an eligible capability, an explicit persisted
-per-resource capability allowlist (and any configured recurring window), an
-effective tenant Patrol mode that admits the eligibility class, and an absent
-Never-auto-remediate lock. Missing or unknown state denies automatic execution.
+caller grant. It requires an eligible capability, an effective tenant Patrol
+mode that admits the eligibility class, and an absent Never-auto-remediate
+lock. An absent or empty per-resource policy inherits those server-owned global
+bounds; an enabled per-resource capability limit and recurring window can only
+narrow them. Unreadable or malformed state denies automatic execution.
 The policy actor/method are server-stamped and cannot be supplied by the model,
 enterprise orchestrator, browser, relay, or action-proposal payload.
 
@@ -2057,9 +2058,11 @@ actor, and every audit row read stay on the install.
 
 ### Telemetry ingestion matches the released sender while storage stays compatible
 
-The active outbound contract remains schema v7. The draft schema-v8
-`business_estate` field was reverted before release and must not remain in the
-license server's accepted ping struct merely because a private receiver build
+The active outbound contract is schema v8. It adds content-free approved-action
+refusal counters for target change, prerequisite failure, and invalid typed
+contract so agent-side pre-mutation failures no longer collapse into `other`.
+The earlier draft schema-v8 `business_estate` field was reverted and must not
+remain in the license server's accepted ping struct merely because a private receiver build
 and database migration briefly carried it. Existing deployed databases need no
 destructive column migration, while new databases do not recreate the retired
 column. Incoming draft-field values are ignored and can never enter adoption

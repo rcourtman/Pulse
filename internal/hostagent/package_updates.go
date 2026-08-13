@@ -113,12 +113,14 @@ func (m *packageUpdateManager) Apply(ctx context.Context, req agentexec.HostUpda
 
 	if strings.TrimSpace(req.Operation) != agentexec.HostUpdateOperationInstall {
 		result.Verification = agentexec.HostUpdateVerificationInconclusive
+		result.ReasonCode = agentexec.ActionRefusalContractInvalid
 		result.Error = "unsupported typed host update operation"
 		return result
 	}
 	release, err := m.lease.acquire(ctx)
 	if err != nil {
 		result.Verification = agentexec.HostUpdateVerificationInconclusive
+		result.ReasonCode = agentexec.ActionRefusalPackageManagerBusy
 		result.Error = "package manager lease unavailable"
 		return result
 	}
@@ -132,6 +134,7 @@ func (m *packageUpdateManager) Apply(ctx context.Context, req agentexec.HostUpda
 		result.Before = probe
 		result.After = probe
 		result.Verification = agentexec.HostUpdateVerificationInconclusive
+		result.ReasonCode = agentexec.ActionRefusalCapabilityUnavailable
 		result.Error = "host package updates are not supported by this agent"
 		return result
 	}
@@ -143,6 +146,7 @@ func (m *packageUpdateManager) Apply(ctx context.Context, req agentexec.HostUpda
 		result.After = probe
 		result.HealthChecked, result.PackageManagerHealthy = m.checkPackageManagerHealth(ctx)
 		result.Verification = agentexec.HostUpdateVerificationInconclusive
+		result.ReasonCode = agentexec.ActionRefusalPackageIndexRefreshFailed
 		result.Error = "package index refresh failed"
 		return result
 	}
@@ -153,6 +157,7 @@ func (m *packageUpdateManager) Apply(ctx context.Context, req agentexec.HostUpda
 		result.After = before
 		result.HealthChecked, result.PackageManagerHealthy = m.checkPackageManagerHealth(ctx)
 		result.Verification = agentexec.HostUpdateVerificationInconclusive
+		result.ReasonCode = agentexec.ActionRefusalPackagePreflightFailed
 		result.Error = "package update preflight failed"
 		return result
 	}
@@ -160,6 +165,7 @@ func (m *packageUpdateManager) Apply(ctx context.Context, req agentexec.HostUpda
 		result.After = before
 		result.HealthChecked, result.PackageManagerHealthy = m.checkPackageManagerHealth(ctx)
 		result.Verification = agentexec.HostUpdateVerificationInconclusive
+		result.ReasonCode = agentexec.ActionRefusalPackageInventoryChanged
 		result.Error = "package update inventory changed; replan required"
 		return result
 	}
@@ -168,6 +174,7 @@ func (m *packageUpdateManager) Apply(ctx context.Context, req agentexec.HostUpda
 		result.HealthChecked, result.PackageManagerHealthy = m.checkPackageManagerHealth(ctx)
 		if !result.HealthChecked || !result.PackageManagerHealthy {
 			result.Verification = agentexec.HostUpdateVerificationInconclusive
+			result.ReasonCode = agentexec.ActionRefusalPackageManagerUnhealthy
 			result.Error = "package manager health could not be established"
 			return result
 		}
@@ -181,6 +188,7 @@ func (m *packageUpdateManager) Apply(ctx context.Context, req agentexec.HostUpda
 		result.After = before
 		result.ExecutionPhase = agentexec.HostUpdatePhasePreflight
 		result.Verification = agentexec.HostUpdateVerificationInconclusive
+		result.ReasonCode = agentexec.ActionRefusalPackageManagerUnhealthy
 		result.Error = "package manager health check refused installation"
 		return result
 	}

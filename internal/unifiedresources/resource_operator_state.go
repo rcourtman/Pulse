@@ -52,9 +52,11 @@ type AutoRemediationWindow struct {
 	EndMinute   int    `json:"endMinute"`
 }
 
-// AutoRemediationPolicy is the operator's explicit per-resource allowlist.
-// Tenant Patrol mode and capability eligibility are independent upper bounds:
-// this record can only narrow them. Disabled or empty policy fails closed.
+// AutoRemediationPolicy is an optional per-resource narrowing policy. Tenant
+// Patrol mode and capability eligibility are the default authority; an empty
+// policy inherits those global bounds. When enabled, this policy narrows
+// automatic execution to the named capabilities and optional daily window.
+// NeverAutoRemediate remains the explicit resource-wide opt-out.
 type AutoRemediationPolicy struct {
 	Enabled         bool                   `json:"enabled"`
 	CapabilityNames []string               `json:"capabilityNames"`
@@ -132,10 +134,10 @@ type ResourceOperatorState struct {
 	// operator must clear the flag to allow remediation.
 	NeverAutoRemediate bool `json:"neverAutoRemediate"`
 
-	// AutoRemediationPolicy explicitly opts this resource and named
-	// capabilities into policy authorization. It never overrides
-	// NeverAutoRemediate, capability eligibility, tenant mode, MFA, dry-run,
-	// or any execution-time safety gate.
+	// AutoRemediationPolicy optionally narrows automatic execution for this
+	// resource. An empty policy follows the tenant Patrol mode. It never
+	// overrides NeverAutoRemediate, capability eligibility, tenant mode, MFA,
+	// dry-run, or any execution-time safety gate.
 	AutoRemediationPolicy AutoRemediationPolicy `json:"autoRemediationPolicy"`
 
 	// MaintenanceStartAt and MaintenanceEndAt define a time-bounded
@@ -350,13 +352,19 @@ func ValidateAutoRemediationPolicy(policy AutoRemediationPolicy) error {
 	return nil
 }
 
-// AllowsAutoRemediationAt evaluates only the explicit per-resource scope.
-// Tenant mode, capability class, and lifecycle gates remain separate checks.
+// AllowsAutoRemediationAt evaluates the optional per-resource narrowing scope.
+// An empty policy inherits the tenant mode and capability class. An explicit
+// policy must allow the capability and current time. Resource-wide locks and
+// retirement always win.
 func (s ResourceOperatorState) AllowsAutoRemediationAt(capabilityName string, now time.Time) bool {
-	if s.NeverAutoRemediate {
+	s = NormalizeResourceOperatorState(s)
+	if s.BlocksRemediation() {
 		return false
 	}
 	policy := NormalizeAutoRemediationPolicy(s.AutoRemediationPolicy)
+	if !policy.Enabled && len(policy.CapabilityNames) == 0 && policy.Window == nil {
+		return true
+	}
 	if !policy.Enabled {
 		return false
 	}

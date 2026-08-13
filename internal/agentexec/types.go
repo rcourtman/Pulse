@@ -205,6 +205,7 @@ type DockerContainerLifecycleResultPayload struct {
 	ReadbackRan       bool                             `json:"readback_ran"`
 	Before            DockerContainerLifecycleSnapshot `json:"before"`
 	After             DockerContainerLifecycleSnapshot `json:"after"`
+	ReasonCode        string                           `json:"reason_code,omitempty"`
 	Error             string                           `json:"error,omitempty"`
 	Duration          int64                            `json:"duration_ms"`
 }
@@ -258,6 +259,7 @@ type DockerContainerUpdateResultPayload struct {
 	RollbackAttempted bool                             `json:"rollback_attempted"`
 	RolledBack        bool                             `json:"rolled_back"`
 	After             DockerContainerLifecycleSnapshot `json:"after"`
+	ReasonCode        string                           `json:"reason_code,omitempty"`
 	Error             string                           `json:"error,omitempty"`
 	Duration          int64                            `json:"duration_ms"`
 }
@@ -331,6 +333,7 @@ type HostUpdateResultPayload struct {
 	PackageManagerHealthy bool                      `json:"package_manager_healthy"`
 	RecoveryRequired      bool                      `json:"recovery_required"`
 	Verification          string                    `json:"verification"`
+	ReasonCode            string                    `json:"reason_code,omitempty"`
 	Error                 string                    `json:"error,omitempty"`
 	Duration              int64                     `json:"duration_ms"`
 }
@@ -387,6 +390,7 @@ type HostStorageCleanupResultPayload struct {
 	After           HostStorageCleanupSnapshot `json:"after"`
 	ReclaimedBytes  int64                      `json:"reclaimed_bytes"`
 	Verification    string                     `json:"verification"`
+	ReasonCode      string                     `json:"reason_code,omitempty"`
 	Error           string                     `json:"error,omitempty"`
 	Duration        int64                      `json:"duration_ms"`
 }
@@ -397,6 +401,43 @@ const (
 	HostStorageCleanupPhaseVerify    = "verify"
 	HostStorageCleanupPhaseComplete  = "complete"
 )
+
+// Stable pre-mutation refusal codes cross the Unified Agent boundary without
+// exposing command output, package names, paths, or provider error text. The
+// server uses these codes for operator presentation and aggregate telemetry;
+// model reasoning continues to consume the typed capability catalog rather
+// than a hard-coded diagnostic tree.
+const (
+	ActionRefusalContractInvalid             = "action_contract_invalid"
+	ActionRefusalCapabilityUnavailable       = "agent_capability_unavailable"
+	ActionRefusalTargetInspectionUnavailable = "target_inspection_unavailable"
+	ActionRefusalTargetStateChanged          = "target_state_changed"
+	ActionRefusalTargetPreconditionFailed    = "target_precondition_failed"
+	ActionRefusalPackageManagerBusy          = "package_manager_busy"
+	ActionRefusalPackageIndexRefreshFailed   = "package_index_refresh_failed"
+	ActionRefusalPackagePreflightFailed      = "package_preflight_failed"
+	ActionRefusalPackageInventoryChanged     = "package_inventory_changed"
+	ActionRefusalPackageManagerUnhealthy     = "package_manager_unhealthy"
+	ActionRefusalCleanupPreflightFailed      = "cleanup_preflight_failed"
+	ActionRefusalCleanupInventoryChanged     = "cleanup_inventory_changed"
+)
+
+// IsActionRefusalReasonCode validates the bounded machine-code shape accepted
+// from an agent result. It intentionally validates shape rather than a closed
+// enum so a newer agent can report a new safe category to an older server.
+func IsActionRefusalReasonCode(code string) bool {
+	code = strings.TrimSpace(code)
+	if len(code) == 0 || len(code) > 64 {
+		return false
+	}
+	for _, r := range code {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '_' {
+			continue
+		}
+		return false
+	}
+	return true
+}
 
 // ConnectedAgent represents an agent connected via WebSocket
 type ConnectedAgent struct {

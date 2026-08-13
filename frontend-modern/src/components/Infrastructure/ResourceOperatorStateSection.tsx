@@ -701,10 +701,11 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
         <div class="space-y-3 border-t border-border-subtle pt-3" aria-label="Automatic actions">
           <div class="flex items-start justify-between gap-3">
             <div class="min-w-0 flex-1">
-              <label class="text-sm font-medium text-base-content">Automatic actions</label>
+              <label class="text-sm font-medium text-base-content">Automatic action limits</label>
               <p class="mt-0.5 text-[11px] leading-tight text-muted">
-                Choose exactly which actions Patrol may run on this resource. Your Patrol mode, live
-                safety checks, remediation locks, and verification still apply.
+                This resource follows your Patrol mode by default. Turn this on only to limit
+                automatic work to selected actions or daily hours. Live safety checks and
+                verification always apply.
               </p>
             </div>
             <Toggle
@@ -716,7 +717,9 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
 
           <Show when={autoRemediationEnabled()}>
             <fieldset class="space-y-2 rounded border border-border bg-surface-alt/40 px-3 py-2.5">
-              <legend class="px-1 text-xs font-semibold text-base-content">Allowed actions</legend>
+              <legend class="px-1 text-xs font-semibold text-base-content">
+                Actions allowed by this limit
+              </legend>
               <For each={eligibleAutoCapabilities()}>
                 {(capability) => (
                   <label class="flex items-start gap-2 text-xs text-base-content">

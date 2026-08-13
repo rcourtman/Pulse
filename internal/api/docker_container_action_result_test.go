@@ -39,6 +39,26 @@ func TestDockerContainerExecutionResultDerivesTruthOnlyFromFacts(t *testing.T) {
 	}
 }
 
+func TestDockerContainerExecutionResultPreservesTypedPreflightRefusal(t *testing.T) {
+	now := time.Now().UTC()
+	facts := dockerResultFacts(now, false, false, false, true)
+	facts.ReasonCode = agentexec.ActionRefusalTargetStateChanged
+	result, err := dockerContainerExecutionResult(
+		"app-container:fixture",
+		"agent-1",
+		agentexec.DockerContainerLifecyclePayload{Operation: agentexec.DockerContainerOperationRestart},
+		facts,
+		nil,
+		now,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := result.ActionResultV2.Execution.ReasonCode; got != agentexec.ActionRefusalTargetStateChanged {
+		t.Fatalf("execution reason = %q, want %q", got, agentexec.ActionRefusalTargetStateChanged)
+	}
+}
+
 func TestDockerContainerExecutionResultStaleReadbackIsInconclusive(t *testing.T) {
 	now := time.Now().UTC()
 	facts := dockerResultFacts(now.Add(-time.Hour), true, true, true, true)

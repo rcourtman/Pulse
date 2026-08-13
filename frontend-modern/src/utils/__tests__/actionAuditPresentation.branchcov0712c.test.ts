@@ -80,14 +80,14 @@ describe('getActionAuditResultPresentation — actionResultV2 execution truth pa
     });
   });
 
-  it('maps a not_run execution to the neutral "did not run" badge and collapses whitespace summary to undefined', () => {
+  it('maps a not_run execution to a neutral pre-execution skip and collapses whitespace summary to undefined', () => {
     // `truth.summary?.trim()` -> '' -> `|| undefined` (trim-to-empty falsy arm).
     const presentation = getActionAuditResultPresentation(
       auditWithExecutionTruth({ status: 'not_run', summary: '   ' }),
     );
     expect(presentation).toStrictEqual({
-      kind: 'failure',
-      label: 'Execution did not run',
+      kind: 'refusal',
+      label: 'Skipped before execution',
       detail: undefined,
       reasonLabel: undefined,
       className: 'border-border bg-surface text-base-content',

@@ -140,7 +140,7 @@ describe('ActionDecisionPacket', () => {
       'not_run',
       'not_attempted',
       'none',
-      'Did not run',
+      'Skipped before execution',
       'Outcome not verified',
       'Source: No evidence source',
     ],

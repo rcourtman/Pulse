@@ -337,12 +337,18 @@ func TestGetPulseIntelligenceActionTelemetry_AttributesApprovedActionFailureCaus
 	if got.ApprovedActionRefusalsPlanStale30d != 1 ||
 		got.ApprovedActionRefusalsPolicy30d != 0 ||
 		got.ApprovedActionRefusalsCapability30d != 0 ||
+		got.ApprovedActionRefusalsTargetChanged30d != 0 ||
+		got.ApprovedActionRefusalsPrerequisite30d != 0 ||
+		got.ApprovedActionRefusalsContract30d != 0 ||
 		got.ApprovedActionRefusalsOther30d != 0 {
 		t.Fatalf(
-			"refusal categories = %d/%d/%d/%d, want 1/0/0/0",
+			"refusal categories = %d/%d/%d/%d/%d/%d/%d, want 1/0/0/0/0/0/0",
 			got.ApprovedActionRefusalsPlanStale30d,
 			got.ApprovedActionRefusalsPolicy30d,
 			got.ApprovedActionRefusalsCapability30d,
+			got.ApprovedActionRefusalsTargetChanged30d,
+			got.ApprovedActionRefusalsPrerequisite30d,
+			got.ApprovedActionRefusalsContract30d,
 			got.ApprovedActionRefusalsOther30d,
 		)
 	}
@@ -435,15 +441,27 @@ func TestGetPulseIntelligenceActionTelemetry_LastFailureReasonUsesCanonicalReaso
 
 func TestPulseIntelligenceApprovedActionRefusalCategory(t *testing.T) {
 	tests := map[string]string{
-		"plan_drift":                   "plan_stale",
-		"action_plan_expired":          "plan_stale",
-		"action_replan_required":       "plan_stale",
-		"resource_remediation_locked":  "policy",
-		"policy_authorization_expired": "policy",
-		"action_emergency_stop":        "policy",
-		"action_dry_run_only":          "capability",
-		"action_execution_unavailable": "capability",
-		"future_reason":                "other",
+		"plan_drift":                    "plan_stale",
+		"action_plan_expired":           "plan_stale",
+		"action_replan_required":        "plan_stale",
+		"resource_remediation_locked":   "policy",
+		"policy_authorization_expired":  "policy",
+		"action_emergency_stop":         "policy",
+		"action_dry_run_only":           "capability",
+		"action_execution_unavailable":  "capability",
+		"agent_capability_unavailable":  "capability",
+		"target_state_changed":          "target_changed",
+		"target_precondition_failed":    "target_changed",
+		"package_inventory_changed":     "target_changed",
+		"cleanup_inventory_changed":     "target_changed",
+		"target_inspection_unavailable": "prerequisite",
+		"package_manager_busy":          "prerequisite",
+		"package_index_refresh_failed":  "prerequisite",
+		"package_preflight_failed":      "prerequisite",
+		"package_manager_unhealthy":     "prerequisite",
+		"cleanup_preflight_failed":      "prerequisite",
+		"action_contract_invalid":       "contract",
+		"future_reason":                 "other",
 	}
 	for reason, want := range tests {
 		if got := pulseIntelligenceApprovedActionRefusalCategory(reason); got != want {

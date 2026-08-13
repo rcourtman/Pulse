@@ -57,7 +57,7 @@ func TestHostUpdatePartialTruthProjectsPhaseHealthRemainingAndRecovery(t *testin
 				t.Fatalf("valid typed result rejected: %v", err)
 			}
 			summary := hostUpdateResultSummary(tc.payload)
-			result, err := hostAPTExecutionResult("agent:host-1", "agent-1", agentexec.HostUpdateOperationInstall, summary, tc.payload.Success, tc.payload.MutationStarted, tc.payload.Verification, true, true, tc.payload.HealthChecked, tc.payload.PackageManagerHealthy, tc.payload.RecoveryRequired, tc.payload.Before.CheckedAt, tc.payload.After.CheckedAt, now, now)
+			result, err := hostAPTExecutionResult("agent:host-1", "agent-1", agentexec.HostUpdateOperationInstall, summary, tc.payload.ReasonCode, tc.payload.Success, tc.payload.MutationStarted, tc.payload.Verification, true, true, tc.payload.HealthChecked, tc.payload.PackageManagerHealthy, tc.payload.RecoveryRequired, tc.payload.Before.CheckedAt, tc.payload.After.CheckedAt, now, now)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -107,7 +107,7 @@ func TestHostStorageCleanupPartialTruthIsNonRollbackableAndRequiresRescan(t *tes
 				t.Fatal(err)
 			}
 			summary := hostStorageCleanupResultSummary(payload)
-			result, err := hostAPTExecutionResult("agent:host-cleanup", "agent-1", agentexec.HostStorageCleanupOperationPackageCache, summary, payload.Success, true, payload.Verification, true, false, false, false, false, payload.Before.CheckedAt, payload.After.CheckedAt, now, now)
+			result, err := hostAPTExecutionResult("agent:host-cleanup", "agent-1", agentexec.HostStorageCleanupOperationPackageCache, summary, payload.ReasonCode, payload.Success, true, payload.Verification, true, false, false, false, false, payload.Before.CheckedAt, payload.After.CheckedAt, now, now)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -164,7 +164,7 @@ func TestHostAPTActionTruthRedactsRawAgentAndPackageDetail(t *testing.T) {
 		After:        agentexec.HostPackageUpdateSnapshot{PendingCount: 1, Packages: []agentexec.HostPackageUpdate{{Name: "private-package"}}, Error: "stderr /private/cache/path", CheckedAt: now},
 		Verification: agentexec.HostUpdateVerificationInconclusive, Error: "raw stderr token secret",
 	}
-	result, err := hostAPTExecutionResult("agent:host", "agent", agentexec.HostUpdateOperationInstall, hostUpdateResultSummary(payload), false, true, payload.Verification, true, true, false, false, true, payload.Before.CheckedAt, payload.After.CheckedAt, now, now)
+	result, err := hostAPTExecutionResult("agent:host", "agent", agentexec.HostUpdateOperationInstall, hostUpdateResultSummary(payload), payload.ReasonCode, false, true, payload.Verification, true, true, false, false, true, payload.Before.CheckedAt, payload.After.CheckedAt, now, now)
 	if err != nil {
 		t.Fatal(err)
 	}

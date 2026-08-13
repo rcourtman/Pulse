@@ -267,9 +267,7 @@ func (b *patrolActionBroker) loadPatrolActionPolicyInputs(ctx context.Context, p
 		}
 	}
 	inputs.resourceState, inputs.resourceFound, inputs.resourceErr = b.lifecycle().ResourceOperatorState(b.orgID, proposal.ResourceID)
-	if inputs.resourceFound {
-		inputs.resourceState = unified.NormalizeResourceOperatorState(inputs.resourceState)
-	}
+	inputs.resourceState = unified.NormalizeResourceOperatorState(inputs.resourceState)
 	return inputs
 }
 
@@ -311,7 +309,7 @@ func evaluatePatrolActionPolicy(inputs patrolActionPolicyInputs, orgID string, p
 		evaluation.err = inputs.resourceErr
 		return evaluation
 	}
-	if !inputs.tenantLoaded || inputs.capability == nil || !inputs.resourceFound || inputs.snapshot.EmergencyStop {
+	if !inputs.tenantLoaded || inputs.capability == nil || inputs.snapshot.EmergencyStop {
 		return evaluation
 	}
 	capability := *inputs.capability
@@ -357,11 +355,11 @@ func tenantPolicyReasonCodes(snapshot PatrolActionPolicySnapshot) []unified.Acti
 
 func resourcePolicyReasonCodes(state unified.ResourceOperatorState, capabilityName string, now time.Time) []unified.ActionPolicyReasonCode {
 	reasons := make([]unified.ActionPolicyReasonCode, 0, 3)
-	if state.NeverAutoRemediate {
+	if state.BlocksRemediation() {
 		reasons = append(reasons, unified.PolicyReasonResourceNeverAuto)
 	}
 	policy := unified.NormalizeAutoRemediationPolicy(state.AutoRemediationPolicy)
-	allowed := false
+	allowed := !policy.Enabled && len(policy.CapabilityNames) == 0 && policy.Window == nil
 	for _, name := range policy.CapabilityNames {
 		if name == strings.TrimSpace(capabilityName) {
 			allowed = policy.Enabled
@@ -402,9 +400,6 @@ func (b *patrolActionBroker) policyAuthorizationLease(ctx context.Context, propo
 	}
 	if inputs.capability == nil {
 		return unified.ActionPolicyAuthorizationLease{}, "", unified.ErrActionPolicyAuthorizationRevoked
-	}
-	if !inputs.resourceFound {
-		return unified.ActionPolicyAuthorizationLease{}, "", unified.ErrActionPolicyAuthorizationInvalid
 	}
 	capability := *inputs.capability
 	state := inputs.resourceState

@@ -291,8 +291,8 @@ export const getActionAuditResultPresentation = (
           'border-red-200 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-300',
       },
       not_run: {
-        kind: 'failure' as const,
-        label: 'Execution did not run',
+        kind: 'refusal' as const,
+        label: 'Skipped before execution',
         className: 'border-border bg-surface text-base-content',
       },
       inconclusive: {

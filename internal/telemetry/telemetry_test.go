@@ -427,7 +427,10 @@ func TestApplySnapshot(t *testing.T) {
 			PulseIntelligenceApprovedActionRefusalsPlanStale30d:            4,
 			PulseIntelligenceApprovedActionRefusalsPolicy30d:               5,
 			PulseIntelligenceApprovedActionRefusalsCapability30d:           6,
-			PulseIntelligenceApprovedActionRefusalsOther30d:                7,
+			PulseIntelligenceApprovedActionRefusalsTargetChanged30d:        7,
+			PulseIntelligenceApprovedActionRefusalsPrerequisite30d:         8,
+			PulseIntelligenceApprovedActionRefusalsContract30d:             9,
+			PulseIntelligenceApprovedActionRefusalsOther30d:                10,
 			PulseIntelligenceVerifiedFindingResolutions30d:                 8,
 		}
 	}
@@ -535,7 +538,10 @@ func TestApplySnapshot(t *testing.T) {
 		ping.PulseIntelligenceApprovedActionRefusalsPlanStale30d != 4 ||
 		ping.PulseIntelligenceApprovedActionRefusalsPolicy30d != 5 ||
 		ping.PulseIntelligenceApprovedActionRefusalsCapability30d != 6 ||
-		ping.PulseIntelligenceApprovedActionRefusalsOther30d != 7 ||
+		ping.PulseIntelligenceApprovedActionRefusalsTargetChanged30d != 7 ||
+		ping.PulseIntelligenceApprovedActionRefusalsPrerequisite30d != 8 ||
+		ping.PulseIntelligenceApprovedActionRefusalsContract30d != 9 ||
+		ping.PulseIntelligenceApprovedActionRefusalsOther30d != 10 ||
 		ping.PulseIntelligenceVerifiedFindingResolutions30d != 8 {
 		t.Fatalf("Pulse Intelligence counters not applied: %#v", ping)
 	}

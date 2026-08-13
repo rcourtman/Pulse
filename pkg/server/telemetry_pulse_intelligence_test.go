@@ -110,19 +110,22 @@ func TestApplyPulseIntelligenceTelemetrySnapshot_AggregatesContentFreeLoopCounts
 
 	snap := telemetry.Snapshot{PaidLicense: true}
 	actions := telemetry.PulseIntelligenceActionSnapshot{
-		ActionPlans30d:                      4,
-		ApprovalRequests30d:                 2,
-		RejectedActionDecisions30d:          1,
-		ApprovedActionDecisions30d:          1,
-		ApprovedActionAttempts30d:           1,
-		ApprovedActionSuccesses30d:          1,
-		ApprovedActionInFlight30d:           2,
-		ApprovedActionUnclassified30d:       3,
-		ApprovedActionRefusalsPlanStale30d:  4,
-		ApprovedActionRefusalsPolicy30d:     5,
-		ApprovedActionRefusalsCapability30d: 6,
-		ApprovedActionRefusalsOther30d:      7,
-		VerifiedFindingResolutions30d:       1,
+		ActionPlans30d:                         4,
+		ApprovalRequests30d:                    2,
+		RejectedActionDecisions30d:             1,
+		ApprovedActionDecisions30d:             1,
+		ApprovedActionAttempts30d:              1,
+		ApprovedActionSuccesses30d:             1,
+		ApprovedActionInFlight30d:              2,
+		ApprovedActionUnclassified30d:          3,
+		ApprovedActionRefusalsPlanStale30d:     4,
+		ApprovedActionRefusalsPolicy30d:        5,
+		ApprovedActionRefusalsCapability30d:    6,
+		ApprovedActionRefusalsTargetChanged30d: 7,
+		ApprovedActionRefusalsPrerequisite30d:  8,
+		ApprovedActionRefusalsContract30d:      9,
+		ApprovedActionRefusalsOther30d:         10,
+		VerifiedFindingResolutions30d:          1,
 	}
 	applyPulseIntelligenceTelemetrySnapshot(&snap, persistence, cfg, actions, now)
 
@@ -178,7 +181,10 @@ func TestApplyPulseIntelligenceTelemetrySnapshot_AggregatesContentFreeLoopCounts
 		snap.PulseIntelligenceApprovedActionRefusalsPlanStale30d != 4 ||
 		snap.PulseIntelligenceApprovedActionRefusalsPolicy30d != 5 ||
 		snap.PulseIntelligenceApprovedActionRefusalsCapability30d != 6 ||
-		snap.PulseIntelligenceApprovedActionRefusalsOther30d != 7 ||
+		snap.PulseIntelligenceApprovedActionRefusalsTargetChanged30d != 7 ||
+		snap.PulseIntelligenceApprovedActionRefusalsPrerequisite30d != 8 ||
+		snap.PulseIntelligenceApprovedActionRefusalsContract30d != 9 ||
+		snap.PulseIntelligenceApprovedActionRefusalsOther30d != 10 ||
 		snap.PulseIntelligenceVerifiedFindingResolutions30d != 1 {
 		t.Fatalf("action telemetry counters were not copied: %#v", snap)
 	}

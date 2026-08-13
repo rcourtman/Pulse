@@ -68,11 +68,13 @@ func (c *CommandClient) runDockerContainerUpdate(ctx context.Context, payload ag
 
 	if err := agentexec.ValidateDockerContainerUpdatePayload(&payload); err != nil {
 		c.logger.Warn().Err(err).Str("request_id", payload.RequestID).Msg("Docker update preflight refused: invalid payload")
+		result.ReasonCode = agentexec.ActionRefusalContractInvalid
 		result.Error = "typed container update preflight refused"
 		return result
 	}
 	if c.dockerUpdater == nil {
 		c.logger.Warn().Str("request_id", payload.RequestID).Msg("Docker update refused: no docker module bridge wired")
+		result.ReasonCode = agentexec.ActionRefusalCapabilityUnavailable
 		result.Error = "docker module is not available on this agent"
 		return result
 	}
@@ -82,6 +84,7 @@ func (c *CommandClient) runDockerContainerUpdate(ctx context.Context, payload ag
 	outcome, err := c.dockerUpdater.TypedContainerUpdate(ctx, payload.Runtime, payload.ContainerID, payload.ExpectedImageDigest, progress)
 	if err != nil {
 		c.logger.Warn().Err(err).Str("request_id", payload.RequestID).Str("container_id", payload.ContainerID).Msg("Docker update refused before mutation")
+		result.ReasonCode = agentexec.ActionRefusalTargetPreconditionFailed
 		result.Error = boundDockerUpdateError(err.Error())
 		return result
 	}

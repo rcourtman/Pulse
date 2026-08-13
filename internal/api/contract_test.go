@@ -21363,7 +21363,7 @@ func TestContract_HostUpdatesUseTypedFingerprintBoundAgentOperation(t *testing.T
 		"beforeBound := result.Before.InventoryHash == resource.Agent.PackageUpdates.InventoryHash",
 		"agentexec.ValidateHostUpdateResultForRequestAt(req, *result, receivedAt)",
 		"receivedAt := e.currentTime()",
-		"hostAPTExecutionResult(record.Request.ResourceID, agentID, agentexec.HostUpdateOperationInstall, output, result.Success, result.MutationStarted, result.Verification, beforeBound, true, result.HealthChecked, result.PackageManagerHealthy, result.RecoveryRequired, result.Before.CheckedAt, result.After.CheckedAt, receivedAt, receivedAt)",
+		"hostAPTExecutionResult(record.Request.ResourceID, agentID, agentexec.HostUpdateOperationInstall, output, result.ReasonCode, result.Success, result.MutationStarted, result.Verification, beforeBound, true, result.HealthChecked, result.PackageManagerHealthy, result.RecoveryRequired, result.Before.CheckedAt, result.After.CheckedAt, receivedAt, receivedAt)",
 		"query.Record.TerminalAt, receivedAt)",
 	} {
 		if !strings.Contains(executorSrc, snippet) {
@@ -21441,7 +21441,7 @@ func TestContract_HostStorageCleanupIsTypedFingerprintBoundAndPathFree(t *testin
 		"agentexec.ValidateHostStorageCleanupResultForRequestAt(req, *result, receivedAt)",
 		"hostStorageCleanupResultSummary(*result)",
 		"receivedAt := e.currentTime()",
-		"hostAPTExecutionResult(record.Request.ResourceID, resource.Agent.AgentID, agentexec.HostStorageCleanupOperationPackageCache, output, result.Success, result.MutationStarted, result.Verification, beforeBound, false, false, false, false, result.Before.CheckedAt, result.After.CheckedAt, receivedAt, receivedAt)",
+		"hostAPTExecutionResult(record.Request.ResourceID, resource.Agent.AgentID, agentexec.HostStorageCleanupOperationPackageCache, output, result.ReasonCode, result.Success, result.MutationStarted, result.Verification, beforeBound, false, false, false, false, result.Before.CheckedAt, result.After.CheckedAt, receivedAt, receivedAt)",
 		"query.Record.TerminalAt, receivedAt)",
 	} {
 		if !strings.Contains(executorSrc, snippet) {

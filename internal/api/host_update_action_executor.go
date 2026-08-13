@@ -126,7 +126,7 @@ func (e hostUpdateActionExecutor) ExecuteAction(ctx context.Context, record unif
 
 	output := hostUpdateResultSummary(*result)
 	beforeBound := result.Before.InventoryHash == resource.Agent.PackageUpdates.InventoryHash
-	return hostAPTExecutionResult(record.Request.ResourceID, agentID, agentexec.HostUpdateOperationInstall, output, result.Success, result.MutationStarted, result.Verification, beforeBound, true, result.HealthChecked, result.PackageManagerHealthy, result.RecoveryRequired, result.Before.CheckedAt, result.After.CheckedAt, receivedAt, receivedAt)
+	return hostAPTExecutionResult(record.Request.ResourceID, agentID, agentexec.HostUpdateOperationInstall, output, result.ReasonCode, result.Success, result.MutationStarted, result.Verification, beforeBound, true, result.HealthChecked, result.PackageManagerHealthy, result.RecoveryRequired, result.Before.CheckedAt, result.After.CheckedAt, receivedAt, receivedAt)
 }
 
 func (e hostUpdateActionExecutor) ReconcileActionDispatch(ctx context.Context, record unified.ActionAuditRecord, attempt unified.ActionDispatchAttempt) (*unified.ExecutionResult, unified.ActionDispatchReceipt, bool, error) {
@@ -162,7 +162,7 @@ func (e hostUpdateActionExecutor) ReconcileActionDispatch(ctx context.Context, r
 		return nil, unified.ActionDispatchReceipt{}, false, err
 	}
 	output := hostUpdateResultSummary(result)
-	execution, buildErr := hostAPTExecutionResult(record.Request.ResourceID, attempt.AgentID, attempt.OperationKind, output, result.Success, result.MutationStarted, result.Verification, true, true, result.HealthChecked, result.PackageManagerHealthy, result.RecoveryRequired, result.Before.CheckedAt, result.After.CheckedAt, query.Record.TerminalAt, receivedAt)
+	execution, buildErr := hostAPTExecutionResult(record.Request.ResourceID, attempt.AgentID, attempt.OperationKind, output, result.ReasonCode, result.Success, result.MutationStarted, result.Verification, true, true, result.HealthChecked, result.PackageManagerHealthy, result.RecoveryRequired, result.Before.CheckedAt, result.After.CheckedAt, query.Record.TerminalAt, receivedAt)
 	if buildErr != nil {
 		return nil, unified.ActionDispatchReceipt{}, false, buildErr
 	}

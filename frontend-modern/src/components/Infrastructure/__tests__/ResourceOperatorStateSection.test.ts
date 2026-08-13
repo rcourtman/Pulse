@@ -44,8 +44,9 @@ describe('ResourceOperatorStateSection', () => {
     expect(sectionSource).toContain('setNote');
   });
 
-  it('requires explicit capability scope and preserves the backend eligibility ceiling', () => {
-    expect(sectionSource).toContain('Automatic actions');
+  it('presents resource action policy as an optional limit on global Patrol autonomy', () => {
+    expect(sectionSource).toContain('Automatic action limits');
+    expect(sectionSource).toContain('follows your Patrol mode by default');
     expect(sectionSource).toContain("capability.autoAuthorization !== 'never'");
     expect(sectionSource).toContain('Select at least one eligible capability.');
     expect(sectionSource).toContain('Restrict to daily hours');

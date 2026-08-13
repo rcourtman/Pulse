@@ -1950,10 +1950,13 @@ downstream finding-suppression and severity-weighting logic has a stable
 contract to honor. `ValidateResourceOperatorState` rejects malformed
 records with a stable `ErrResourceOperatorStateInvalid` sentinel
 (empty canonical id, partial maintenance window, end ≤ start, unknown
-criticality, enabled automatic-action policy without a capability allowlist,
+criticality, enabled automatic-action limit without a capability allowlist,
 unknown timezone, or invalid recurring-window minute). The automatic-action
-policy is opt-in and names exact capability IDs; its optional daily IANA-timezone
-window may cross midnight. `NeverAutoRemediate` always wins. Capability-owned
+policy is an optional per-resource narrowing control: an empty policy inherits
+the tenant Patrol mode and capability eligibility, while an enabled policy
+names the only capability IDs allowed automatically on that resource and may
+add a daily IANA-timezone window that crosses midnight. `NeverAutoRemediate`
+is the explicit per-resource opt-out and always wins. Capability-owned
 `ResourceCapability.AutoAuthorization` independently declares whether a
 capability is never eligible, low-risk eligible, or elevated eligible; it does
 not lower `MinimumApprovalLevel`. The first eligible vertical is Docker/Podman
@@ -1975,7 +1978,7 @@ persisting the server-owned policy approval and typed
 `ActionPolicyAuthorizationLease` in the same transaction. Memory and SQLite
 implement identical semantics. The lease binds org/action/resource/capability,
 plan and capability-policy hashes, safety and approval floors, tenant
-mode/license/unlock version, resource allowlist/window/Never version, expiry,
+mode/license/unlock version, optional resource limit/window/Never version, expiry,
 and digest. A policy approval without that lease is historical-only and cannot
 admit a nonterminal action after restart.
 The same
@@ -1997,9 +2000,11 @@ controls, the drawer offers automatic actions only for backend-advertised
 eligible capabilities. The operator-state section itself remains available for
 every canonical resource id, including stopped containers and resources with
 no auto-authorizable capability; only the automatic-actions subsection is
-capability-gated. Enabling it requires selecting exact capabilities and
-may add a recurring daily time/timezone window; copy must state that this is a
-resource allowlist and that the tenant Patrol mode remains the upper bound.
+capability-gated. By default the resource follows the tenant Patrol mode.
+Enabling the optional limit requires selecting exact capabilities and may add a
+recurring daily time/timezone window; copy must state that the control narrows
+the tenant mode, while `NeverAutoRemediate` disables automatic action for the
+resource.
 The UI must never infer eligibility from capability names, severity, or the
 human approval floor.
 

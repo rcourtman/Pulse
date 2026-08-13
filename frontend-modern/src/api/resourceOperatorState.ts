@@ -47,7 +47,7 @@ export interface ResourceOperatorState {
    * record with `resource_remediation_locked:` prefix on the error.
    */
   neverAutoRemediate: boolean;
-  /** Explicit capability allowlist; tenant mode and backend eligibility remain upper bounds. */
+  /** Optional narrowing policy; an empty policy inherits the tenant Patrol mode. */
   autoRemediationPolicy?: AutoRemediationPolicy;
   /**
    * Maintenance window — when present and `now` falls within it, all

@@ -100,11 +100,13 @@ func (m *storageCleanupManager) Apply(ctx context.Context, req agentexec.HostSto
 	defer func() { result.Duration = time.Since(startedAt).Milliseconds() }()
 
 	if strings.TrimSpace(req.Operation) != agentexec.HostStorageCleanupOperationPackageCache {
+		result.ReasonCode = agentexec.ActionRefusalContractInvalid
 		result.Error = "unsupported typed host storage cleanup operation"
 		return result
 	}
 	release, err := m.lease.acquire(ctx)
 	if err != nil {
+		result.ReasonCode = agentexec.ActionRefusalPackageManagerBusy
 		result.Error = "package manager lease unavailable"
 		return result
 	}
@@ -117,22 +119,27 @@ func (m *storageCleanupManager) Apply(ctx context.Context, req agentexec.HostSto
 	result.Before = before
 	if !before.Supported {
 		result.After = before
+		result.ReasonCode = agentexec.ActionRefusalCapabilityUnavailable
 		result.Error = "host package-cache cleanup is not supported by this agent"
 		return result
 	}
 	if before.Error != "" {
 		result.After = before
+		result.ReasonCode = agentexec.ActionRefusalCleanupPreflightFailed
 		result.Error = "package cache cleanup preflight failed"
 		return result
 	}
 	if before.Fingerprint != strings.TrimSpace(req.ExpectedFingerprint) {
 		result.After = before
+		result.ReasonCode = agentexec.ActionRefusalCleanupInventoryChanged
 		result.Error = "package cache inventory changed; replan required"
 		return result
 	}
 	if before.ReclaimableBytes <= 0 {
 		result.After = before
-		result.Error = "package cache is already empty; replan required"
+		result.Success = true
+		result.ExecutionPhase = agentexec.HostStorageCleanupPhaseComplete
+		result.Verification = agentexec.HostStorageCleanupVerificationVerified
 		return result
 	}
 

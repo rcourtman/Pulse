@@ -5612,6 +5612,15 @@ originally authorized expected value when validating the admitted request
 digest. The generic receipt store continues to bind completion and replay to
 the exact admitted attempt/action/operation/digest/agent identity, while the
 drift observation records why mutation was refused and replan is required.
+Typed APT, storage-cleanup, and Docker result payloads carry an optional bounded
+`reason_code` for pre-mutation refusal. Codes distinguish invalid contracts,
+missing agent capabilities, target drift, unavailable inspection, package
+manager contention or health, and bounded preflight failure without exposing
+stderr, commands, paths, package names, or provider text. Older agents may omit
+the field and remain valid; the server projects that legacy absence to
+`preflight_refused`. A refusal code cannot accompany a started mutation or a
+successful result. An already-empty package cache is a verified no-op success,
+because the requested postcondition is already satisfied.
 Callback loss and a reopened server store reconcile both APT actions by query
 only; the original typed dispatch is never resent. Legacy APT v1 terminal
 payloads that predate additive package-manager health facts remain

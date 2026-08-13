@@ -9,14 +9,14 @@ import (
 	unified "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
-func hostAPTExecutionResult(resourceID, agentID, operation, output string, success, mutationStarted bool, verification string, beforeStateBound, packageManagerHealthRequired, healthChecked, packageManagerHealthy, recoveryRequired bool, beforeObservedAt, afterObservedAt, observationBoundaryAt, receivedAt time.Time) (*unified.ExecutionResult, error) {
+func hostAPTExecutionResult(resourceID, agentID, operation, output, refusalReasonCode string, success, mutationStarted bool, verification string, beforeStateBound, packageManagerHealthRequired, healthChecked, packageManagerHealthy, recoveryRequired bool, beforeObservedAt, afterObservedAt, observationBoundaryAt, receivedAt time.Time) (*unified.ExecutionResult, error) {
 	output = strings.TrimSpace(output)
 	execution := unified.ActionExecutionTruth{Status: unified.ActionExecutionSucceeded, Summary: output}
 	if !success {
 		if mutationStarted {
 			execution = unified.ActionExecutionTruth{Status: unified.ActionExecutionInconclusive, ReasonCode: "possible_partial_effect", Summary: output}
 		} else {
-			execution = unified.ActionExecutionTruth{Status: unified.ActionExecutionNotRun, ReasonCode: "preflight_refused", Summary: output}
+			execution = unified.ActionExecutionTruth{Status: unified.ActionExecutionNotRun, ReasonCode: actionPreflightReasonCode(refusalReasonCode), Summary: output}
 		}
 	}
 

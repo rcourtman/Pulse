@@ -134,6 +134,12 @@ func accumulatePulseIntelligenceApprovedActionOutcomes(snapshot *telemetry.Pulse
 				snapshot.ApprovedActionRefusalsPolicy30d++
 			case "capability":
 				snapshot.ApprovedActionRefusalsCapability30d++
+			case "target_changed":
+				snapshot.ApprovedActionRefusalsTargetChanged30d++
+			case "prerequisite":
+				snapshot.ApprovedActionRefusalsPrerequisite30d++
+			case "contract":
+				snapshot.ApprovedActionRefusalsContract30d++
 			default:
 				snapshot.ApprovedActionRefusalsOther30d++
 			}
@@ -189,8 +195,15 @@ func pulseIntelligenceApprovedActionRefusalCategory(reason string) string {
 	case "resource_remediation_locked", "policy_authorization_expired",
 		"policy_authorization_invalid", "policy_authorization_revoked", "action_emergency_stop":
 		return "policy"
-	case "action_dry_run_only", "action_execution_unavailable":
+	case "action_dry_run_only", "action_execution_unavailable", "agent_capability_unavailable":
 		return "capability"
+	case "target_state_changed", "target_precondition_failed", "package_inventory_changed", "cleanup_inventory_changed":
+		return "target_changed"
+	case "target_inspection_unavailable", "package_manager_busy", "package_index_refresh_failed",
+		"package_preflight_failed", "package_manager_unhealthy", "cleanup_preflight_failed":
+		return "prerequisite"
+	case "action_contract_invalid":
+		return "contract"
 	default:
 		return "other"
 	}

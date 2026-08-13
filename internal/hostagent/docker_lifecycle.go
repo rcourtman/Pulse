@@ -45,16 +45,19 @@ func (m *localDockerLifecycleManager) Apply(ctx context.Context, req agentexec.D
 	}
 	defer func() { result.Duration = time.Since(started).Milliseconds() }()
 	if err := agentexec.ValidateDockerContainerLifecyclePayload(&req); err != nil {
+		result.ReasonCode = agentexec.ActionRefusalContractInvalid
 		result.Error = "typed container lifecycle preflight refused"
 		return result
 	}
 	before, err := m.inspect(ctx, req.Runtime, req.ContainerID)
 	result.Before = before
 	if err != nil {
+		result.ReasonCode = agentexec.ActionRefusalTargetInspectionUnavailable
 		result.Error = "container preflight inspect unavailable"
 		return result
 	}
 	if !dockerLifecycleBeforeMatches(req, before) {
+		result.ReasonCode = agentexec.ActionRefusalTargetStateChanged
 		result.Error = "container preflight state no longer matches the request"
 		return result
 	}

@@ -56,6 +56,22 @@ func TestResourceOperatorStateAllowsAutoRemediationInsideDailyWindow(t *testing.
 	}
 }
 
+func TestResourceOperatorStateInheritsGlobalAutonomyWithoutOverrides(t *testing.T) {
+	now := time.Date(2026, 8, 13, 12, 0, 0, 0, time.UTC)
+	if !(ResourceOperatorState{}).AllowsAutoRemediationAt("restart", now) {
+		t.Fatal("an empty resource policy must inherit the tenant Patrol mode")
+	}
+	if (ResourceOperatorState{NeverAutoRemediate: true}).AllowsAutoRemediationAt("restart", now) {
+		t.Fatal("the explicit resource opt-out must override inherited autonomy")
+	}
+	if (ResourceOperatorState{LifecycleState: LifecycleStateRetired}).AllowsAutoRemediationAt("restart", now) {
+		t.Fatal("retired resources must not inherit automatic remediation")
+	}
+	if (ResourceOperatorState{AutoRemediationPolicy: AutoRemediationPolicy{CapabilityNames: []string{"restart"}}}).AllowsAutoRemediationAt("restart", now) {
+		t.Fatal("an explicitly disabled narrowing policy must deny its configured scope")
+	}
+}
+
 func TestAutoRemediationPolicySQLiteRoundTrip(t *testing.T) {
 	store, err := NewSQLiteResourceStore(t.TempDir(), "default")
 	if err != nil {

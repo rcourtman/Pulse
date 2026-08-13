@@ -121,7 +121,7 @@ func (e hostStorageCleanupActionExecutor) ExecuteAction(ctx context.Context, rec
 
 	output := hostStorageCleanupResultSummary(*result)
 	beforeBound := result.Before.Fingerprint == resource.Agent.StorageCleanup.Fingerprint
-	return hostAPTExecutionResult(record.Request.ResourceID, resource.Agent.AgentID, agentexec.HostStorageCleanupOperationPackageCache, output, result.Success, result.MutationStarted, result.Verification, beforeBound, false, false, false, false, result.Before.CheckedAt, result.After.CheckedAt, receivedAt, receivedAt)
+	return hostAPTExecutionResult(record.Request.ResourceID, resource.Agent.AgentID, agentexec.HostStorageCleanupOperationPackageCache, output, result.ReasonCode, result.Success, result.MutationStarted, result.Verification, beforeBound, false, false, false, false, result.Before.CheckedAt, result.After.CheckedAt, receivedAt, receivedAt)
 }
 
 func (e hostStorageCleanupActionExecutor) ReconcileActionDispatch(ctx context.Context, record unified.ActionAuditRecord, attempt unified.ActionDispatchAttempt) (*unified.ExecutionResult, unified.ActionDispatchReceipt, bool, error) {
@@ -157,7 +157,7 @@ func (e hostStorageCleanupActionExecutor) ReconcileActionDispatch(ctx context.Co
 		return nil, unified.ActionDispatchReceipt{}, false, err
 	}
 	output := hostStorageCleanupResultSummary(result)
-	execution, buildErr := hostAPTExecutionResult(record.Request.ResourceID, attempt.AgentID, attempt.OperationKind, output, result.Success, result.MutationStarted, result.Verification, true, false, false, false, false, result.Before.CheckedAt, result.After.CheckedAt, query.Record.TerminalAt, receivedAt)
+	execution, buildErr := hostAPTExecutionResult(record.Request.ResourceID, attempt.AgentID, attempt.OperationKind, output, result.ReasonCode, result.Success, result.MutationStarted, result.Verification, true, false, false, false, false, result.Before.CheckedAt, result.After.CheckedAt, query.Record.TerminalAt, receivedAt)
 	if buildErr != nil {
 		return nil, unified.ActionDispatchReceipt{}, false, buildErr
 	}

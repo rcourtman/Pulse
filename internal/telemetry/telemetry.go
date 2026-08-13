@@ -147,7 +147,10 @@ const (
 	// count measured background write volume; neither discriminated an install
 	// that uses audit logging from one that merely has it. Reaching a
 	// license-gated audit read does.
-	TelemetrySchemaVersion = 7
+	// Schema v8 splits agent-side pre-mutation refusals into target-change,
+	// prerequisite, and invalid-contract categories so the legacy "other"
+	// bucket no longer hides actionable product failures.
+	TelemetrySchemaVersion = 8
 )
 
 type installIDRecord struct {
@@ -328,18 +331,21 @@ type Ping struct {
 	// Cause-coded approved-action failure counters. Together with successes
 	// and still-in-flight attempts these partition the attempt count, so the
 	// attempt/success gap is attributable without exporting action content.
-	PulseIntelligenceApprovedActionFailuresPreDispatch30d int    `json:"pulse_intelligence_approved_action_failures_pre_dispatch_30d"`
-	PulseIntelligenceApprovedActionFailuresExecution30d   int    `json:"pulse_intelligence_approved_action_failures_execution_30d"`
-	PulseIntelligenceApprovedActionFailuresUnverified30d  int    `json:"pulse_intelligence_approved_action_failures_unverified_30d"`
-	PulseIntelligenceApprovedActionStuckExecuting30d      int    `json:"pulse_intelligence_approved_action_stuck_executing_30d"`
-	PulseIntelligenceApprovedActionInFlight30d            int    `json:"pulse_intelligence_approved_action_in_flight_30d"`
-	PulseIntelligenceApprovedActionUnclassified30d        int    `json:"pulse_intelligence_approved_action_unclassified_30d"`
-	PulseIntelligenceApprovedActionRefusalsPlanStale30d   int    `json:"pulse_intelligence_approved_action_refusals_plan_stale_30d"`
-	PulseIntelligenceApprovedActionRefusalsPolicy30d      int    `json:"pulse_intelligence_approved_action_refusals_policy_30d"`
-	PulseIntelligenceApprovedActionRefusalsCapability30d  int    `json:"pulse_intelligence_approved_action_refusals_capability_30d"`
-	PulseIntelligenceApprovedActionRefusalsOther30d       int    `json:"pulse_intelligence_approved_action_refusals_other_30d"`
-	PulseIntelligenceVerifiedFindingResolutions30d        int    `json:"pulse_intelligence_verified_finding_resolutions_30d"`
-	PulseIntelligenceApprovedActionLastFailureReason30d   string `json:"pulse_intelligence_approved_action_last_failure_reason_30d,omitempty"`
+	PulseIntelligenceApprovedActionFailuresPreDispatch30d   int    `json:"pulse_intelligence_approved_action_failures_pre_dispatch_30d"`
+	PulseIntelligenceApprovedActionFailuresExecution30d     int    `json:"pulse_intelligence_approved_action_failures_execution_30d"`
+	PulseIntelligenceApprovedActionFailuresUnverified30d    int    `json:"pulse_intelligence_approved_action_failures_unverified_30d"`
+	PulseIntelligenceApprovedActionStuckExecuting30d        int    `json:"pulse_intelligence_approved_action_stuck_executing_30d"`
+	PulseIntelligenceApprovedActionInFlight30d              int    `json:"pulse_intelligence_approved_action_in_flight_30d"`
+	PulseIntelligenceApprovedActionUnclassified30d          int    `json:"pulse_intelligence_approved_action_unclassified_30d"`
+	PulseIntelligenceApprovedActionRefusalsPlanStale30d     int    `json:"pulse_intelligence_approved_action_refusals_plan_stale_30d"`
+	PulseIntelligenceApprovedActionRefusalsPolicy30d        int    `json:"pulse_intelligence_approved_action_refusals_policy_30d"`
+	PulseIntelligenceApprovedActionRefusalsCapability30d    int    `json:"pulse_intelligence_approved_action_refusals_capability_30d"`
+	PulseIntelligenceApprovedActionRefusalsTargetChanged30d int    `json:"pulse_intelligence_approved_action_refusals_target_changed_30d"`
+	PulseIntelligenceApprovedActionRefusalsPrerequisite30d  int    `json:"pulse_intelligence_approved_action_refusals_prerequisite_30d"`
+	PulseIntelligenceApprovedActionRefusalsContract30d      int    `json:"pulse_intelligence_approved_action_refusals_contract_30d"`
+	PulseIntelligenceApprovedActionRefusalsOther30d         int    `json:"pulse_intelligence_approved_action_refusals_other_30d"`
+	PulseIntelligenceVerifiedFindingResolutions30d          int    `json:"pulse_intelligence_verified_finding_resolutions_30d"`
+	PulseIntelligenceApprovedActionLastFailureReason30d     string `json:"pulse_intelligence_approved_action_last_failure_reason_30d,omitempty"`
 }
 
 // Snapshot holds the dynamic state gathered at ping time.
@@ -474,6 +480,9 @@ type Snapshot struct {
 	PulseIntelligenceApprovedActionRefusalsPlanStale30d            int
 	PulseIntelligenceApprovedActionRefusalsPolicy30d               int
 	PulseIntelligenceApprovedActionRefusalsCapability30d           int
+	PulseIntelligenceApprovedActionRefusalsTargetChanged30d        int
+	PulseIntelligenceApprovedActionRefusalsPrerequisite30d         int
+	PulseIntelligenceApprovedActionRefusalsContract30d             int
 	PulseIntelligenceApprovedActionRefusalsOther30d                int
 	PulseIntelligenceVerifiedFindingResolutions30d                 int
 	PulseIntelligenceApprovedActionLastFailureReason30d            string
@@ -513,10 +522,13 @@ type PulseIntelligenceActionSnapshot struct {
 	ApprovedActionUnclassified30d int
 	// The refusal category counters partition ApprovedActionFailuresPreDispatch30d
 	// into stable, content-free operator diagnostics.
-	ApprovedActionRefusalsPlanStale30d  int
-	ApprovedActionRefusalsPolicy30d     int
-	ApprovedActionRefusalsCapability30d int
-	ApprovedActionRefusalsOther30d      int
+	ApprovedActionRefusalsPlanStale30d     int
+	ApprovedActionRefusalsPolicy30d        int
+	ApprovedActionRefusalsCapability30d    int
+	ApprovedActionRefusalsTargetChanged30d int
+	ApprovedActionRefusalsPrerequisite30d  int
+	ApprovedActionRefusalsContract30d      int
+	ApprovedActionRefusalsOther30d         int
 	// VerifiedFindingResolutions30d counts completed, approved Patrol-origin
 	// actions whose postcondition was independently confirmed. No finding or
 	// action identity leaves the runtime.
@@ -1063,6 +1075,9 @@ func applySnapshot(base Ping, fn SnapshotFunc) Ping {
 	ping.PulseIntelligenceApprovedActionRefusalsPlanStale30d = s.PulseIntelligenceApprovedActionRefusalsPlanStale30d
 	ping.PulseIntelligenceApprovedActionRefusalsPolicy30d = s.PulseIntelligenceApprovedActionRefusalsPolicy30d
 	ping.PulseIntelligenceApprovedActionRefusalsCapability30d = s.PulseIntelligenceApprovedActionRefusalsCapability30d
+	ping.PulseIntelligenceApprovedActionRefusalsTargetChanged30d = s.PulseIntelligenceApprovedActionRefusalsTargetChanged30d
+	ping.PulseIntelligenceApprovedActionRefusalsPrerequisite30d = s.PulseIntelligenceApprovedActionRefusalsPrerequisite30d
+	ping.PulseIntelligenceApprovedActionRefusalsContract30d = s.PulseIntelligenceApprovedActionRefusalsContract30d
 	ping.PulseIntelligenceApprovedActionRefusalsOther30d = s.PulseIntelligenceApprovedActionRefusalsOther30d
 	ping.PulseIntelligenceVerifiedFindingResolutions30d = s.PulseIntelligenceVerifiedFindingResolutions30d
 	ping.PulseIntelligenceApprovedActionLastFailureReason30d = s.PulseIntelligenceApprovedActionLastFailureReason30d

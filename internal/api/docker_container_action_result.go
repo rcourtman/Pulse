@@ -12,7 +12,7 @@ import (
 
 func dockerContainerExecutionResult(resourceID, agentID string, req agentexec.DockerContainerLifecyclePayload, facts agentexec.DockerContainerLifecycleResultPayload, independent *dockerContainerPostconditionObservation, receivedAt time.Time) (*unified.ExecutionResult, error) {
 	summary := dockerContainerFactSummary(facts)
-	execution := unified.ActionExecutionTruth{Status: unified.ActionExecutionNotRun, ReasonCode: "preflight_refused", Summary: summary}
+	execution := unified.ActionExecutionTruth{Status: unified.ActionExecutionNotRun, ReasonCode: actionPreflightReasonCode(facts.ReasonCode), Summary: summary}
 	if facts.MutationCompleted {
 		execution = unified.ActionExecutionTruth{Status: unified.ActionExecutionSucceeded, Summary: summary}
 	} else if facts.MutationStarted {
@@ -88,7 +88,7 @@ func dockerContainerExecutionResult(resourceID, agentID string, req agentexec.Do
 
 func dockerContainerUpdateExecutionResult(resourceID, agentID string, facts agentexec.DockerContainerUpdateResultPayload, independent *dockerContainerPostconditionObservation, receivedAt time.Time) (*unified.ExecutionResult, error) {
 	summary := dockerContainerUpdateFactSummary(facts)
-	execution := unified.ActionExecutionTruth{Status: unified.ActionExecutionNotRun, ReasonCode: "preflight_refused", Summary: summary}
+	execution := unified.ActionExecutionTruth{Status: unified.ActionExecutionNotRun, ReasonCode: actionPreflightReasonCode(facts.ReasonCode), Summary: summary}
 	if facts.MutationCompleted {
 		execution = unified.ActionExecutionTruth{Status: unified.ActionExecutionSucceeded, Summary: summary}
 	} else if facts.MutationStarted {
@@ -203,6 +203,16 @@ func dockerContainerUpdateFactSummary(facts agentexec.DockerContainerUpdateResul
 		summary += "; error=" + errText
 	}
 	return summary
+}
+
+// actionPreflightReasonCode preserves typed agent refusals while retaining the
+// legacy aggregate for older agents that do not yet send a reason_code.
+func actionPreflightReasonCode(reasonCode string) string {
+	reasonCode = strings.TrimSpace(reasonCode)
+	if agentexec.IsActionRefusalReasonCode(reasonCode) {
+		return reasonCode
+	}
+	return "preflight_refused"
 }
 
 func shortDockerDigest(digest string) string {

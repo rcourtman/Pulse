@@ -22,6 +22,43 @@ func TestHostStorageCleanupPayloadIsClosedAndSelectorFree(t *testing.T) {
 	}
 }
 
+func TestActionRefusalReasonCodeContractAndAlreadySatisfiedCleanup(t *testing.T) {
+	for _, code := range []string{
+		ActionRefusalTargetStateChanged,
+		ActionRefusalPackageManagerBusy,
+		ActionRefusalContractInvalid,
+	} {
+		if !IsActionRefusalReasonCode(code) {
+			t.Fatalf("stable refusal code %q was rejected", code)
+		}
+	}
+	for _, code := range []string{"", "Target Changed", strings.Repeat("a", 65)} {
+		if IsActionRefusalReasonCode(code) {
+			t.Fatalf("unsafe refusal code %q was accepted", code)
+		}
+	}
+
+	now := time.Now().UTC()
+	result := HostStorageCleanupResultPayload{
+		RequestID: "attempt-1", ActionID: "action-1", Success: true,
+		ExecutionPhase: HostStorageCleanupPhaseComplete,
+		Verification:   HostStorageCleanupVerificationVerified,
+		Before: HostStorageCleanupSnapshot{
+			Supported: true, Provider: "apt-package-cache", Fingerprint: "sha256:" + strings.Repeat("a", 64), CheckedAt: now,
+		},
+		After: HostStorageCleanupSnapshot{
+			Supported: true, Provider: "apt-package-cache", Fingerprint: "sha256:" + strings.Repeat("a", 64), CheckedAt: now,
+		},
+	}
+	if err := ValidateHostStorageCleanupResultPayload(&result); err != nil {
+		t.Fatalf("already-satisfied cleanup should be a verified no-op: %v", err)
+	}
+	result.ReasonCode = ActionRefusalCleanupPreflightFailed
+	if err := ValidateHostStorageCleanupResultPayload(&result); err == nil {
+		t.Fatal("a successful result carried a refusal reason")
+	}
+}
+
 func allowAllTestTokens(string, string, string) bool { return true }
 
 func TestNewServerRequiresValidateToken(t *testing.T) {

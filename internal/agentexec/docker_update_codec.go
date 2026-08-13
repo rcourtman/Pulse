@@ -130,6 +130,7 @@ func ValidateDockerContainerUpdateResultPayload(result *DockerContainerUpdateRes
 	result.NewImageDigest = strings.TrimSpace(result.NewImageDigest)
 	result.BackupContainer = strings.TrimSpace(result.BackupContainer)
 	result.ExecutionPhase = strings.TrimSpace(result.ExecutionPhase)
+	result.ReasonCode = strings.TrimSpace(result.ReasonCode)
 	result.Error = strings.TrimSpace(result.Error)
 	if result.RequestID == "" || len(result.RequestID) > maxRequestIDLength || result.ActionID == "" || len(result.ActionID) > maxRequestIDLength {
 		return fmt.Errorf("invalid docker update result identity")
@@ -148,6 +149,12 @@ func ValidateDockerContainerUpdateResultPayload(result *DockerContainerUpdateRes
 	}
 	if len(result.Error) > 1024 || len(result.ContainerName) > maxDockerContainerNameLength || len(result.BackupContainer) > maxDockerContainerNameLength {
 		return fmt.Errorf("docker update result exceeds bounded contract")
+	}
+	if result.ReasonCode != "" && !IsActionRefusalReasonCode(result.ReasonCode) {
+		return fmt.Errorf("invalid docker update refusal reason code")
+	}
+	if result.ReasonCode != "" && result.MutationStarted {
+		return fmt.Errorf("docker update refusal reason conflicts with mutation state")
 	}
 	if len(result.OldImageDigest) > maxDockerImageDigestLength || len(result.NewImageDigest) > maxDockerImageDigestLength {
 		return fmt.Errorf("docker update result digest exceeds bounded contract")

@@ -442,7 +442,7 @@ func TestPatrolActionBrokerCapabilitiesCatalog(t *testing.T) {
 	}
 }
 
-func TestPatrolActionBrokerAutoAuthorizesOnlyExplicitScopedEligibleCapability(t *testing.T) {
+func TestPatrolActionBrokerOptionalResourceScopeStillAuthorizesEligibleCapability(t *testing.T) {
 	h, executor := newPatrolBrokerTestHandlers(t, unified.ApprovalAdmin)
 	store, err := h.getStore("default")
 	if err != nil {
@@ -488,6 +488,33 @@ func TestPatrolActionBrokerAutoAuthorizesOnlyExplicitScopedEligibleCapability(t 
 	}
 	if executor.calls != 1 {
 		t.Fatalf("replay executor calls = %d, want 1", executor.calls)
+	}
+}
+
+func TestPatrolActionBrokerGlobalAutonomyDoesNotRequirePerResourceOptIn(t *testing.T) {
+	tests := []struct {
+		name        string
+		eligibility unified.ActionAutoAuthorizationClass
+		snapshot    PatrolActionPolicySnapshot
+	}{
+		{name: "assisted low risk", eligibility: unified.AutoAuthorizeLowRisk, snapshot: PatrolActionPolicySnapshot{EffectiveAutonomyLevel: "assisted"}},
+		{name: "unlocked full elevated", eligibility: unified.AutoAuthorizeElevated, snapshot: PatrolActionPolicySnapshot{EffectiveAutonomyLevel: "full", FullModeUnlocked: true}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			h, executor := newPatrolBrokerTestHandlersWithEligibility(t, unified.ApprovalAdmin, tc.eligibility)
+			broker := NewPatrolActionBroker("default", h, func(context.Context, string) (PatrolActionPolicySnapshot, error) {
+				return tc.snapshot, nil
+			})
+
+			disposition, err := broker.Submit(context.Background(), patrolTestProposal())
+			if err != nil {
+				t.Fatalf("Submit: %v", err)
+			}
+			if disposition.State != string(unified.ActionStateCompleted) || executor.calls != 1 {
+				t.Fatalf("global autonomy did not execute without a resource override: disposition=%#v calls=%d", disposition, executor.calls)
+			}
+		})
 	}
 }
 

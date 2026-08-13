@@ -68,6 +68,66 @@ sources, and retains the note as operator context.
 
 ## Extension Points
 
+### Model-authored operational objectives
+
+Patrol's long-term operator contract is a retained operations brief, not a
+catalog of application-specific automations and not repeated model polling. An
+operator may describe an outcome such as keeping media playback free of
+buffering or keeping camera streams available. Pulse must not hard-code every
+application, API, log format, event source, or remedy implied by those examples.
+The model owns investigating the environment and designing the smallest useful
+observer from the tools and evidence actually available there.
+
+The brief is deliberately value- and outcome-oriented. The operator should not
+need to prescribe metrics, polling intervals, implementation steps, or a guessed
+root cause. The model derives a measurable interpretation and observer plan from
+the brief and current environment, exposes that translation for correction, and
+may revise the implementation as evidence changes while preserving the brief's
+intent. More implementation detail is accepted as optional context, not treated
+as a script that displaces model reasoning.
+
+Pulse's durable advantage in this loop is operational context and trusted
+reach, not a competing hard-coded intelligence layer. The canonical resource
+graph, live metrics, history, relationships, changes, findings, operator intent,
+local observers, governed capabilities, outcome evidence, and prior attempts
+form one compact estate state that an improving model can use immediately. A
+Patrol feature should therefore improve context, continuity, access, or trust;
+logic whose only value is reproducing reasoning the model can perform from that
+state should not become a permanent product subsystem.
+
+MCP may be the model-facing transport for this compact estate state and its
+governed tools, including stateless request/response implementations, but it is
+an adapter rather than Patrol's control plane. Protocol statelessness must not
+erase product continuity: Pulse owns and persists the objective, canonical
+resource graph, observer artifacts and health, evidence history, permissions,
+action lifecycle, verification, and audit record. Each model request can be
+self-contained while resolving those durable records through canonical Pulse
+contracts. No Patrol workflow may depend on an MCP session as its memory,
+scheduler, event queue, or source of authorization, and the underlying contracts
+must remain usable by first-party UI, API, CLI, and future model transports.
+
+The corresponding execution boundary is a constrained monitor-building tool,
+not arbitrary mutation authority. The model may propose a versioned local
+observer bundle: event, webhook, log, file, socket, API, or bounded-interval
+triggers; a probe artifact and digest; declared network, filesystem, secret,
+runtime, and resource requirements; health and failure outputs; resource
+budgets; and the evidence that should wake Patrol. Core validates, tests,
+sandboxes, installs, updates, disables, and audits that bundle. An observer is
+read-only by construction and cannot acquire infrastructure-action authority;
+any response to its findings still goes through the canonical capability,
+autonomy, approval, dispatch, and verification kernel.
+
+After installation, the cheap local observer runs continuously or on events and
+the model wakes only for objective creation, observer redesign, an evidence
+transition, or a finding that needs reasoning. A timer may be one generated
+trigger when no event source exists, but it runs the local probe rather than
+calling a model on every interval. Objective status must distinguish covered,
+degraded, and uncovered monitoring so Patrol never claims protection merely
+because an instruction was saved. Generated observers are durable artifacts
+with bounded provenance and rollback; app-named integration code is an
+optimization only when repeated evidence justifies productizing it, never a
+prerequisite for a new objective.
+
 Desktop Autopilot activation consumes the server-owned acknowledgement
 contract through `frontend-modern/src/api/patrol.ts` and
 `PatrolAutopilotAcknowledgementDialog.tsx`. The UI displays requested versus
