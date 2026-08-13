@@ -1,4 +1,4 @@
-import { useLocation } from '@solidjs/router';
+import { A, useLocation } from '@solidjs/router';
 import {
   createEffect,
   createMemo,
@@ -46,6 +46,7 @@ import {
 import { aiChatStore } from '@/stores/aiChat';
 import { patrolAttentionStore } from '@/stores/patrolAttention';
 import {
+  ALERT_THRESHOLDS_PATH,
   buildPatrolAttentionPath,
   buildStandalonePath,
   buildWorkloadsRouteSearch,
@@ -67,7 +68,7 @@ const FILTERS: Array<{ id: AttentionFilter; label: string }> = [
   { id: 'resolved', label: 'Recent resolved' },
 ];
 
-export function PatrolAttentionWorkbench() {
+export function PatrolAttentionWorkbench(props: { onOpenFindings?: () => void } = {}) {
   const location = useLocation();
   const [selectedItemId, setSelectedItemId] = createSignal('');
   const [actionDetail, setActionDetail] = createSignal<ActionDetailResponse | null>(null);
@@ -306,6 +307,7 @@ export function PatrolAttentionWorkbench() {
                 changeLifecycle(() => suppressPatrolAttention(itemId, reason, expiresAt))
               }
               onUnsuppress={(itemId) => changeLifecycle(() => unsuppressPatrolAttention(itemId))}
+              onOpenFindings={props.onOpenFindings}
             />
           </div>
         </Show>
@@ -466,6 +468,7 @@ function AttentionDetail(props: {
   onUnacknowledge: (itemId: string) => Promise<void>;
   onSuppress: (itemId: string, reason: string, expiresAt: string) => Promise<void>;
   onUnsuppress: (itemId: string) => Promise<void>;
+  onOpenFindings?: () => void;
 }) {
   const detail = () => props.detail;
   const item = () => detail()?.item;
@@ -597,6 +600,7 @@ function AttentionDetail(props: {
               onUnacknowledge={props.onUnacknowledge}
               onSuppress={props.onSuppress}
               onUnsuppress={props.onUnsuppress}
+              onOpenFindings={props.onOpenFindings}
             />
 
             <DetailSection title="Affected resource">
@@ -810,6 +814,7 @@ function AttentionLifecycleControls(props: {
   onUnacknowledge: (itemId: string) => Promise<void>;
   onSuppress: (itemId: string, reason: string, expiresAt: string) => Promise<void>;
   onUnsuppress: (itemId: string) => Promise<void>;
+  onOpenFindings?: () => void;
 }) {
   const [showSuppression, setShowSuppression] = createSignal(false);
   const [reason, setReason] = createSignal('');
@@ -975,6 +980,30 @@ function AttentionLifecycleControls(props: {
             {props.error}
           </p>
         </Show>
+        <div class="mt-3 border-t border-border-subtle pt-3 text-xs leading-5 text-muted">
+          <p>These controls cover only this occurrence, and suppression always expires.</p>
+          <p class="mt-1">
+            For a permanent change,{' '}
+            <A
+              href={ALERT_THRESHOLDS_PATH}
+              class="font-medium text-blue-700 hover:underline dark:text-blue-300"
+            >
+              adjust alert thresholds
+            </A>{' '}
+            to change or turn off this alert for the affected resource
+            <Show when={props.onOpenFindings} fallback=".">
+              , or{' '}
+              <button
+                type="button"
+                class="font-medium text-blue-700 hover:underline dark:text-blue-300"
+                onClick={() => props.onOpenFindings?.()}
+              >
+                review Patrol findings
+              </button>{' '}
+              to mark a finding as expected so Patrol stops raising it.
+            </Show>
+          </p>
+        </div>
       </div>
     </DetailSection>
   );

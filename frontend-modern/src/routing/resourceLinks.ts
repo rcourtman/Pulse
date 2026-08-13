@@ -41,6 +41,7 @@ export const TRUENAS_PATH = '/truenas';
 export const TRUENAS_DEFAULT_TAB = 'overview';
 export const VMWARE_PATH = '/vmware';
 export const VMWARE_DEFAULT_TAB = 'overview';
+export const ALERT_THRESHOLDS_PATH = '/alerts/thresholds';
 export const PMG_THRESHOLDS_PATH = '/alerts/thresholds/mail-gateway';
 export const PATROL_PATH = '/patrol';
 export const PATROL_ATTENTION_QUERY_PARAM = 'attention';

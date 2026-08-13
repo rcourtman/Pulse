@@ -194,7 +194,7 @@ describe('PatrolAttentionWorkbench', () => {
   const renderWorkbench = () =>
     render(() => (
       <Router>
-        <Route path="/patrol" component={PatrolAttentionWorkbench} />
+        <Route path="/patrol" component={() => <PatrolAttentionWorkbench />} />
       </Router>
     ));
 
@@ -469,6 +469,56 @@ describe('PatrolAttentionWorkbench', () => {
     });
     expect(await screen.findByText(/Suppressed by operator/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Return to active attention' })).toBeInTheDocument();
+  });
+
+  it('points lifecycle users at the durable threshold and finding controls', async () => {
+    const active = item();
+    apiMocks.getList.mockResolvedValue(
+      listResponse([active], summary({ activeCount: 1, openCount: 1, calm: false })),
+    );
+    apiMocks.getDetail.mockResolvedValue(detail(active));
+    const onOpenFindings = vi.fn();
+    render(() => (
+      <Router>
+        <Route path="/patrol" component={() => <PatrolAttentionWorkbench onOpenFindings={onOpenFindings} />} />
+      </Router>
+    ));
+
+    fireEvent.click(
+      await screen.findByRole('button', {
+        name: 'Open Disk pressure on Database VM',
+      }),
+    );
+
+    expect(
+      await screen.findByText(/These controls cover only this occurrence/i),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'adjust alert thresholds' })).toHaveAttribute(
+      'href',
+      '/alerts/thresholds',
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'review Patrol findings' }));
+    expect(onOpenFindings).toHaveBeenCalledTimes(1);
+  });
+
+  it('omits the findings pointer when no findings surface is wired', async () => {
+    const active = item();
+    apiMocks.getList.mockResolvedValue(
+      listResponse([active], summary({ activeCount: 1, openCount: 1, calm: false })),
+    );
+    apiMocks.getDetail.mockResolvedValue(detail(active));
+    renderWorkbench();
+
+    fireEvent.click(
+      await screen.findByRole('button', {
+        name: 'Open Disk pressure on Database VM',
+      }),
+    );
+
+    expect(
+      await screen.findByText(/These controls cover only this occurrence/i),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'review Patrol findings' })).not.toBeInTheDocument();
   });
 
   it('opens the canonical governed action review from an eligible attention item', async () => {

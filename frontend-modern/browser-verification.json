@@ -1,25 +1,27 @@
 {
   "version": 1,
-  "base_sha": "3adeb77d60620cdcc4c71431685725384bdc562a",
-  "verified_at": "2026-08-12T08:19:01Z",
+  "base_sha": "929c03b4906590fa12b7d7ce1d63e81ab384854b",
+  "verified_at": "2026-08-13T20:53:32Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/api/settings.ts",
-    "frontend-modern/src/components/Settings/useInfrastructureSettingsState.ts",
-    "frontend-modern/src/components/Settings/useSystemSettingsState.ts"
+    "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx",
+    "frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx",
+    "frontend-modern/src/features/patrol/__tests__/PatrolAttentionWorkbench.test.tsx",
+    "frontend-modern/src/routing/resourceLinks.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/api/settings.ts": "cb95289d5df7cd9332cc78573a5c6052f8968cc0fbb2d66c15c8ddc49f44ab62",
-    "frontend-modern/src/components/Settings/useInfrastructureSettingsState.ts": "528b32af6b1c777ed87f5dd2d5b15b531f830c520b0f624acfc5a2d75ad3e314",
-    "frontend-modern/src/components/Settings/useSystemSettingsState.ts": "acb66acc4a0254a6816564713f65a1ed5cf723eb526e4960076b4c84335e2c09"
+    "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx": "34d7d90cfb0a0a6405346115393688a8db89be602e4112512a61fce7f17237f2",
+    "frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx": "396357b7930259e4be0947e97264d5311956c118295c10d0daaa2f59be89e44c",
+    "frontend-modern/src/features/patrol/__tests__/PatrolAttentionWorkbench.test.tsx": "d809cd5ee80973042e8c703e746a392ee0235d3868a0177ff8e874c87d7b811e",
+    "frontend-modern/src/routing/resourceLinks.ts": "9b44383c2061a6ec4f2e49a124be766a2d7294862dd32f3343bde1199e690030"
   },
   "routes": [
-    "/settings/system-general"
+    "/patrol"
   ],
   "viewports": [
     {
-      "width": 1280,
-      "height": 720
+      "width": 1311,
+      "height": 1234
     },
     {
       "width": 375,
@@ -27,21 +29,16 @@
     }
   ],
   "states": [
-    "Admin session Monitoring Cadence card at the fresh-install Realtime (10s) default",
-    "Admin card after selecting the Low (60s) preset and saving (GET /api/system/settings confirmed pvePollingInterval 60)",
-    "Non-admin session (persisted session cookie whose user no longer matches the configured admin) with GET /api/system/settings returning 403 while GET /api/runtime/display returned pvePollingInterval 60: card showed Current cadence: 60 seconds with Low (60s) pressed instead of the old Realtime fallback",
-    "Admin card after switching to Custom 45s and saving (GET /api/system/settings confirmed 45)",
-    "Non-admin card after reload showing Current cadence: 45 seconds with Custom pressed and 45 in the custom input",
-    "Same non-admin Custom 45s state re-exercised at the 375px mobile viewport",
-    "Admin session reload showing Custom 45s restored through the refactored preset-resolution path"
+    "Needs attention list with 10 active mock items",
+    "Attention detail open with Lifecycle controls and the new durable-options guidance",
+    "Findings disclosure collapsed with '5 open' badge on the summary",
+    "Findings disclosure expanded showing the Open work findings list",
+    "Expanded finding Manage menu listing Remember as expected and dismiss actions"
   ],
   "interactions": [
-    "Built the sidecar backend and ran it as a scratch instance; logged in as admin on the pulse-1601-admin Vite frontend",
-    "Selected Low (60s) on the Monitoring Cadence card and saved; verified the effective interval via the settings and runtime-display APIs",
-    "Restarted the backend with a different configured admin username so the persisted browser session became a genuine non-admin session (settings 403, security-status capabilities all false)",
-    "Reloaded /settings/system-general in that non-admin session and confirmed the cadence card rendered the server's real 60s interval from the runtime-display projection",
-    "Logged in as the new admin in a separate cookie jar, set a non-preset Custom 45s cadence, and saved",
-    "Reloaded the non-admin session and confirmed Custom 45s displayed, then repeated the check at the 375px mobile viewport",
-    "Reloaded the admin session to confirm the shared preset-resolution refactor still renders the saved Custom 45s state"
+    "Clicked an attention item to open the detail panel (desktop and 375px mobile)",
+    "Verified 'adjust alert thresholds' renders as a link with href /alerts/thresholds",
+    "Clicked 'review Patrol findings' on both viewports: disclosure opened and scrolled into view",
+    "Expanded a finding row and opened its Manage menu to confirm Remember as expected is reachable"
   ]
 }
