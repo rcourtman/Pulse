@@ -641,6 +641,10 @@ func TestCurrentSupportPrereleasePacketTracksInstallMetadata(t *testing.T) {
 	if !ok {
 		t.Fatalf("current prerelease %q has no stable target", version)
 	}
+	previousCandidate, ok := previousPrereleaseVersion(version)
+	if !ok {
+		t.Fatalf("current support prerelease %q has no previous candidate", version)
+	}
 
 	releaseNotesPath := repoFile("docs", "releases", "RELEASE_NOTES_v"+version+".md")
 	changelogPath := repoFile("docs", "releases", "V6_CHANGELOG_v"+version+".md")
@@ -649,11 +653,11 @@ func TestCurrentSupportPrereleasePacketTracksInstallMetadata(t *testing.T) {
 		"`v"+version+"` is a release candidate",
 		"## Highlights",
 		"stable `v"+previous+"`",
-		"Canonical resource monitoring policy and operator-state controls",
-		"Configuration transfer endpoints require a dedicated authorization envelope",
-		"The release triggers now run portable exact-SHA qualification",
+		"Private-registry update checks now use the Docker or Podman login already on the agent host",
+		"smartmontools 7.5 power-mode objects no longer discard SMART data from guarded rotational-disk probes",
+		"Registry credentials remain on the monitored host and are presented only to the registry or its advertised token endpoint",
 		"The rollback target is `v"+previous+"`",
-		"Pulse Mobile `1.0.0` iOS build `12` and Android versionCode `9` remain compatible",
+		"The changes since `v"+previousCandidate+"` do not alter mobile, Relay, onboarding, or mobile-facing API contracts",
 		"Windows Unified Agent binaries in this prerelease retain exact-SHA, checksum, and detached-signature verification but are not Authenticode-signed",
 		"Stable `v"+stableTarget+"` still requires the normal SignPath Authenticode lane",
 		"Paid Pulse Pro, Relay, and eligible legacy customers should continue to use the private download page",
@@ -663,13 +667,13 @@ func TestCurrentSupportPrereleasePacketTracksInstallMetadata(t *testing.T) {
 		"Previous stable: `v"+previous+"`",
 		"Rollback target: `v"+previous+"`",
 		"Promotion path: exact-SHA single-build release candidate from `main`",
-		"This changelog describes the `v"+version+"` release candidate compared with stable `v"+previous+"`",
-		"Canonical resource monitoring policy with pause and resume controls",
-		"An optional exact-SHA external amd64 preflight ahead of hosted release workflow dispatch",
-		"Configuration export and import require dedicated, expiring, principal- and organization-bound transfer authorization",
+		"This changelog describes the changes since `v"+previousCandidate+"`",
+		"Host-local registry credential discovery for Docker and Podman update checks",
+		"smartmontools 7.5 may encode guarded-probe `power_mode` as an object",
+		"Registry credentials remain host-local",
 		"Windows signing decision: the standing prerelease path publishes exact-SHA, checksum, and detached-signature verified Windows agents without Authenticode; stable `v"+stableTarget+"` restores mandatory SignPath signing",
-		"Mobile decision: `existing-mobile-build-compatible`",
-		"iOS build `12` and Android versionCode `9` remain compatible",
+		"Mobile decision: `no-mobile-impact`",
+		"changes since `v"+previousCandidate+"` do not modify mobile, Relay, onboarding, or mobile-facing API contracts",
 		"no companion upload or public store rollout is required",
 	)
 	assertFileContainsAll(t, repoFile("docs", "RELEASE_NOTES.md"),
@@ -703,8 +707,7 @@ func TestCurrentSupportPrereleasePacketTracksInstallMetadata(t *testing.T) {
 		"The active support prerelease `v"+version+"` cut sets the repo-root `VERSION`, repo-root `docker-compose.yml` image default, `scripts/install-docker.sh` fallback, and Helm chart release metadata to the same `"+version+"` release version.",
 		"This support prerelease keeps `rollback_version=v"+previous+"`, publishes a versioned public GitHub prerelease plus versioned Docker and Helm artifacts, and does not move stable/latest install pointers or stable semver aliases.",
 		"For the active support prerelease `v"+version+"` cut, the repo-root compose default and `scripts/install-docker.sh` fallback must both pin `"+version+"` until the next governed stable cut moves them forward.",
-		"The `v"+version+"` server cut is classified `existing-mobile-build-compatible`.",
-		"Pulse Mobile 1.0.0 iOS build 12 and Android versionCode 9 remain distributed to the existing beta cohort; no companion upload or public mobile-store rollout is part of this candidate.",
+		"The changes since `v"+previousCandidate+"` do not touch mobile, Relay, onboarding, or mobile-facing API contracts, so the server cut is classified `no-mobile-impact`; no companion upload or public mobile-store rollout is part of this candidate.",
 		"The prerelease Windows path retains exact-SHA, checksum, and detached-signature verification without Authenticode; stable `v"+stableTarget+"` restores mandatory SignPath signing unless a new version-bound decision is recorded.",
 	)
 }

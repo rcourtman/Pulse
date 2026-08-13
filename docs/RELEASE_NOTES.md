@@ -7,8 +7,8 @@ For historical v4 notes that previously lived in this repo, see:
 `docs/releases/RELEASE_NOTES_v4.md`
 
 For the current v6 support release candidate packet, see:
-- `docs/releases/RELEASE_NOTES_v6.2.2-rc.1.md`
-- `docs/releases/V6_CHANGELOG_v6.2.2-rc.1.md`
+- `docs/releases/RELEASE_NOTES_v6.2.2-rc.2.md`
+- `docs/releases/V6_CHANGELOG_v6.2.2-rc.2.md`
 
 For the current stable v6 packet, see:
 - `docs/releases/RELEASE_NOTES_v6.2.1.md`
@@ -19,6 +19,8 @@ For earlier stable v6.2 packets, see:
 - `docs/releases/V6_CHANGELOG_v6.2.0.md`
 
 For historical v6.2 support release candidate packets, see:
+- `docs/releases/RELEASE_NOTES_v6.2.2-rc.1.md`
+- `docs/releases/V6_CHANGELOG_v6.2.2-rc.1.md`
 - `docs/releases/RELEASE_NOTES_v6.2.0-rc.11.md`
 - `docs/releases/V6_CHANGELOG_v6.2.0-rc.11.md`
 - `docs/releases/RELEASE_NOTES_v6.2.0-rc.10.md`

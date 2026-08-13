@@ -1447,26 +1447,30 @@ diagnostics. The same release workflow also executes the generated self-signed
 and custom-CA Windows installer commands through Windows PowerShell 5.1 before
 release assembly, so the first HTTPS fetch is release proof rather than a
 string-shape assertion.
-The active support prerelease `v6.2.2-rc.1` cut sets the repo-root `VERSION`,
+The active support prerelease `v6.2.2-rc.2` cut sets the repo-root `VERSION`,
 repo-root `docker-compose.yml` image default, `scripts/install-docker.sh`
-fallback, and Helm chart release metadata to the same `6.2.2-rc.1` release
-version. It follows stable `v6.2.1`, uses `rollback_version=v6.2.1`, and keeps
-stable/latest pointers on `v6.2.1`. This candidate packages the accumulated
-security, monitoring-scale, resource-policy, agent, Relay, alerting, update,
-and release-qualification work since the prior stable cut. The mobile decision
-is `existing-mobile-build-compatible`: Pulse Mobile 1.0.0 iOS build 12 and
-Android versionCode 9 remain compatible because CONNECT notification
-preferences are optional and legacy frames preserve default push behavior.
-The `v6.2.2-rc.1` server cut is classified
-`existing-mobile-build-compatible`. Pulse Mobile 1.0.0 iOS build 12 and Android
-versionCode 9 remain distributed to the existing beta cohort; no companion
-upload or public mobile-store rollout is part of this candidate.
+fallback, and Helm chart release metadata to the same `6.2.2-rc.2` release
+version. It follows stable `v6.2.1`, supersedes `v6.2.2-rc.1`, uses
+`rollback_version=v6.2.1`, and keeps stable/latest pointers on `v6.2.1`. This
+candidate retains the complete first-candidate packet and adds host-local
+Docker/Podman registry credentials for private-image update checks plus
+smartmontools 7.5 `power_mode` object decoding for guarded rotational-disk
+probes. The changes since `v6.2.2-rc.1` do not touch mobile, Relay, onboarding,
+or mobile-facing API contracts, so the server cut is classified
+`no-mobile-impact`; no companion upload or public mobile-store rollout is part
+of this candidate.
 The prerelease Windows path retains exact-SHA, checksum, and detached-signature
 verification without Authenticode; stable `v6.2.2` restores mandatory SignPath
 signing unless a new version-bound decision is recorded.
 This support prerelease keeps `rollback_version=v6.2.1`, publishes a versioned
 public GitHub prerelease plus versioned Docker and Helm artifacts, and does not
 move stable/latest install pointers or stable semver aliases.
+
+The preceding `v6.2.2-rc.1` candidate used the same support-prerelease path and
+rollback target. It established the cumulative security, monitoring-scale,
+resource-policy, agent, Relay, alerting, update, and release-qualification
+packet and recorded the then-relevant existing-mobile-build compatibility
+decision for Pulse Mobile 1.0.0 iOS build 12 and Android versionCode 9.
 
 The preceding stable `v6.2.1` cut sets the repo-root `VERSION`, repo-root
 `docker-compose.yml` image default, `scripts/install-docker.sh` fallback, and
@@ -1726,8 +1730,8 @@ For the active stable `v6.1.2` cut, the repo-root compose default and
 `scripts/install-docker.sh` fallback must both pin `6.1.2` whenever the
 governed `VERSION` is that stable cut. The stable promotion guard remains in
 force and rejects leftover `-rc.` defaults.
-For the active support prerelease `v6.2.2-rc.1` cut, the repo-root compose
-default and `scripts/install-docker.sh` fallback must both pin `6.2.2-rc.1`
+For the active support prerelease `v6.2.2-rc.2` cut, the repo-root compose
+default and `scripts/install-docker.sh` fallback must both pin `6.2.2-rc.2`
 until the next governed stable cut moves them forward. Each new release moves
 these two pins together with the repo-root `VERSION` and the Helm chart metadata
 in the same commit; a cut that leaves any of the four on a superseded value is a
