@@ -480,7 +480,10 @@ describe('PatrolAttentionWorkbench', () => {
     const onOpenFindings = vi.fn();
     render(() => (
       <Router>
-        <Route path="/patrol" component={() => <PatrolAttentionWorkbench onOpenFindings={onOpenFindings} />} />
+        <Route
+          path="/patrol"
+          component={() => <PatrolAttentionWorkbench onOpenFindings={onOpenFindings} />}
+        />
       </Router>
     ));
 
@@ -518,7 +521,9 @@ describe('PatrolAttentionWorkbench', () => {
     expect(
       await screen.findByText(/These controls cover only this occurrence/i),
     ).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'review Patrol findings' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'review Patrol findings' }),
+    ).not.toBeInTheDocument();
   });
 
   it('opens the canonical governed action review from an eligible attention item', async () => {
