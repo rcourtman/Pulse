@@ -4650,6 +4650,7 @@
         "frontend-modern/scripts/shared-template-registry.json",
         "frontend-modern/src/components/CommercialMigrationBanner.tsx",
         "frontend-modern/src/components/GitHubStarBanner.tsx",
+        "frontend-modern/src/components/Infrastructure/resourceDetailDrawerMetricsHistoryModel.ts",
         "frontend-modern/src/components/Login.tsx",
         "frontend-modern/src/components/Settings/AgentIntegrationsPanel.tsx",
         "frontend-modern/src/components/Settings/AIChatMaintenanceSection.tsx",
@@ -4716,6 +4717,8 @@
         "frontend-modern/src/components/SetupWizard/SetupCompletionPreview.tsx",
         "frontend-modern/src/components/SetupWizard/SetupWizard.tsx",
         "frontend-modern/src/components/Toast/Toast.tsx",
+        "frontend-modern/src/components/Workloads/nodeDrawerModel.ts",
+        "frontend-modern/src/features/docker/dockerHostDrawerModel.ts",
         "frontend-modern/src/features/platformPage/PlatformOutdatedAgentNotice.tsx",
         "frontend-modern/src/features/platformPage/PlatformOutdatedSensorSetupNotice.tsx",
         "frontend-modern/src/features/platformPage/PlatformResourceDetailTableRow.tsx",
@@ -5252,6 +5255,24 @@
             "test_prefixes": [],
             "exact_files": [
               "frontend-modern/src/components/shared/__tests__/PulseDataGrid.test.tsx"
+            ]
+          },
+          {
+            "id": "host-metrics-history",
+            "label": "shared host metrics history proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/components/Infrastructure/resourceDetailDrawerMetricsHistoryModel.ts",
+              "frontend-modern/src/components/Workloads/nodeDrawerModel.ts",
+              "frontend-modern/src/features/docker/dockerHostDrawerModel.ts"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/components/Infrastructure/__tests__/resourceDetailDrawerMetricsHistoryModel.branchcov0712.test.ts",
+              "frontend-modern/src/components/shared/SharedPrimitives.guardrails.test.ts",
+              "frontend-modern/src/components/Workloads/__tests__/nodeDrawerModel.branchcov0713.test.ts",
+              "frontend-modern/src/features/docker/__tests__/dockerHostDrawerModel.test.ts"
             ]
           },
           {

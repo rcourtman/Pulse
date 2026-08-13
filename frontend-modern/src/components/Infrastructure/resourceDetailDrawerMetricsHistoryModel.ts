@@ -1,4 +1,5 @@
 import type { ResourceType as MetricsHistoryResourceType } from '@/api/charts';
+import { HOST_METRICS_HISTORY_GROUPS } from '@/components/shared/hostMetricsHistoryModel';
 import type { GuestDrawerHistoryTarget } from '@/components/Workloads/guestDrawerModel';
 import {
   GUEST_DRAWER_HISTORY_GROUPS,
@@ -50,7 +51,6 @@ export const getResourceGPUTemperatureCelsius = (resource: Resource): number | u
   });
 
 const GPU_HISTORY_GROUPS: GuestDrawerHistoryGroupConfig[] = [
-  ...GUEST_DRAWER_HISTORY_GROUPS,
   {
     id: 'gpu-utilization',
     label: 'GPU Utilization',
@@ -70,10 +70,14 @@ const GPU_HISTORY_GROUPS: GuestDrawerHistoryGroupConfig[] = [
 
 export const getResourceMetricsHistoryGroups = (
   resource: Resource,
-): GuestDrawerHistoryGroupConfig[] =>
-  (resource.agent?.sensors?.gpu?.length ?? 0) > 0
-    ? GPU_HISTORY_GROUPS
-    : GUEST_DRAWER_HISTORY_GROUPS;
+): GuestDrawerHistoryGroupConfig[] => {
+  const target = getResourceMetricsHistoryTarget(resource);
+  const baseGroups =
+    target?.resourceType === 'agent' ? HOST_METRICS_HISTORY_GROUPS : GUEST_DRAWER_HISTORY_GROUPS;
+  return (resource.agent?.sensors?.gpu?.length ?? 0) > 0
+    ? [...baseGroups, ...GPU_HISTORY_GROUPS]
+    : baseGroups;
+};
 
 export const getResourceMetricsHistoryTarget = (
   resource: Resource,
@@ -114,6 +118,7 @@ export const getResourceMetricsHistoryFallbackMetrics = (
     netout: finiteMetric(resource.network?.txBytes),
     diskread: finiteMetric(resource.diskIO?.readRate),
     diskwrite: finiteMetric(resource.diskIO?.writeRate),
+    temperature: finiteMetric(resource.temperature),
     gpu: getResourceGPUUtilizationPercent(resource),
     gpu_memory: getResourceGPUMemoryPercent(resource),
     gpu_temperature: getResourceGPUTemperatureCelsius(resource),

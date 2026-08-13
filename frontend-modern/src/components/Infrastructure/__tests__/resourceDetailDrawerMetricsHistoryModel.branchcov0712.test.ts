@@ -129,6 +129,7 @@ describe('getResourceMetricsHistoryFallbackMetrics branch coverage', () => {
       netout: 2000,
       diskread: 3000,
       diskwrite: 4000,
+      temperature: undefined,
       gpu: undefined,
       gpu_memory: undefined,
       gpu_temperature: undefined,
@@ -147,6 +148,7 @@ describe('getResourceMetricsHistoryFallbackMetrics branch coverage', () => {
       netout: undefined,
       diskread: undefined,
       diskwrite: undefined,
+      temperature: undefined,
       gpu: undefined,
       gpu_memory: undefined,
       gpu_temperature: undefined,
@@ -214,6 +216,7 @@ describe('getResourceMetricsHistoryFallbackMetrics branch coverage', () => {
       netout: undefined,
       diskread: undefined,
       diskwrite: undefined,
+      temperature: undefined,
       gpu: undefined,
       gpu_memory: undefined,
       gpu_temperature: undefined,
@@ -250,8 +253,37 @@ describe('getResourceMetricsHistoryFallbackMetrics branch coverage', () => {
     expect(metrics.gpu_memory).toBe(87.5);
     expect(metrics.gpu_temperature).toBe(70);
     expect(getResourceMetricsHistoryGroups(resource).map((group) => group.id)).toEqual(
-      expect.arrayContaining(['gpu-utilization', 'gpu-thermal']),
+      expect.arrayContaining(['thermals', 'gpu-utilization', 'gpu-thermal']),
     );
+  });
+
+  it('uses canonical host groups and current CPU temperature for an Unraid machine', () => {
+    const resource = baseResource({
+      platformType: 'unraid',
+      temperature: 57.5,
+    });
+
+    expect(getResourceMetricsHistoryGroups(resource).map((group) => group.id)).toEqual([
+      'utilization',
+      'network',
+      'disk-io',
+      'thermals',
+    ]);
+    expect(getResourceMetricsHistoryFallbackMetrics(resource).temperature).toBe(57.5);
+  });
+
+  it('keeps workload history groups free of host-only thermals', () => {
+    const resource = baseResource({
+      type: 'vm',
+      metricsTarget: { resourceType: 'vm', resourceId: 'vm-101' },
+      temperature: 44,
+    });
+
+    expect(getResourceMetricsHistoryGroups(resource).map((group) => group.id)).toEqual([
+      'utilization',
+      'network',
+      'disk-io',
+    ]);
   });
 
   it('emits the memory ternary FALSE arm as undefined when memory is explicitly absent but disk is present', () => {

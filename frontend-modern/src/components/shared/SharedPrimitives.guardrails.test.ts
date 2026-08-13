@@ -45,6 +45,7 @@ import historyChartOverlaySource from '@/components/shared/HistoryChartOverlay.t
 import historyChartSource from '@/components/shared/HistoryChart.tsx?raw';
 import historyChartModelSource from '@/components/shared/historyChartModel.ts?raw';
 import historyChartTooltipSource from '@/components/shared/HistoryChartTooltip.tsx?raw';
+import { HOST_METRICS_HISTORY_GROUPS } from '@/components/shared/hostMetricsHistoryModel';
 import horizontalRailVisibilityModelSource from '@/components/shared/horizontalRailVisibilityModel.ts?raw';
 import mobileNavBarSource from '@/components/shared/MobileNavBar.tsx?raw';
 import mobileNavBarModelSource from '@/components/shared/mobileNavBarModel.ts?raw';
@@ -326,6 +327,20 @@ const frontendIndexCssSource = readFileSync(join(process.cwd(), 'src/index.css')
 const readFrontendSource = (path: string) => readFileSync(join(process.cwd(), path), 'utf8');
 
 describe('shared primitive guardrails', () => {
+  it('keeps one canonical agent-host metric history group catalog', () => {
+    expect(HOST_METRICS_HISTORY_GROUPS.map((group) => group.id)).toEqual([
+      'utilization',
+      'network',
+      'disk-io',
+      'thermals',
+    ]);
+    expect(HOST_METRICS_HISTORY_GROUPS.at(-1)).toMatchObject({
+      label: 'Thermals',
+      unit: 'C',
+      series: [{ metric: 'temperature', label: 'CPU', unit: 'C' }],
+    });
+  });
+
   it('limits raw Table composition inside shared primitives to the canonical allowlist', () => {
     const sharedRuntimeEntries = Object.entries(sharedSources).filter(
       ([path]) => !path.endsWith('.test.tsx') && !path.endsWith('.guardrails.test.ts'),

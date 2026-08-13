@@ -66,6 +66,9 @@ puts the same machine on two surfaces that do not share an identity.
 ## Canonical Files
 
 1. `frontend-modern/src/components/shared/`
+   1a. `frontend-modern/src/components/Infrastructure/resourceDetailDrawerMetricsHistoryModel.ts`
+   1b. `frontend-modern/src/components/Workloads/nodeDrawerModel.ts`
+   1c. `frontend-modern/src/features/docker/dockerHostDrawerModel.ts`
 2. `frontend-modern/src/components/Settings/Settings.tsx`
 3. `frontend-modern/src/components/Settings/SettingsDialogs.tsx`
 4. `frontend-modern/src/components/Settings/SettingsPageShell.tsx`
@@ -5888,10 +5891,18 @@ when at least one current machine has finite utilization evidence, so estates
 without GPU telemetry do not carry an empty default column or an inert toggle.
 
 The shared resource drawer keeps `GuestDrawerHistory` as the sole history
-renderer. Resources with typed GPU sensors may extend its normal groups with
-core utilization, VRAM pressure, and GPU temperature series and provide current
-typed readings as initial fallbacks. Resources without GPU sensors retain the
-default history groups unchanged. Rendered table proof belongs in
+renderer. Agent-backed hosts, including standalone Unraid machines, Proxmox
+nodes, and Docker/Podman hosts, consume the single
+`frontend-modern/src/components/shared/hostMetricsHistoryModel.ts`
+`HOST_METRICS_HISTORY_GROUPS` catalog so CPU temperature history cannot drift
+out of one host surface while remaining on another. Host resources provide the
+current canonical CPU temperature as the initial fallback; SMART disk
+temperature history remains on the physical-disk resource rather than being
+mislabelled as host CPU temperature. Resources with typed GPU sensors extend
+the applicable host groups with core utilization, VRAM pressure, and GPU
+temperature series and provide current typed readings as initial fallbacks.
+Non-host workloads retain the default workload history groups unchanged.
+Rendered table proof belongs in
 `frontend-modern/src/features/standalone/__tests__/AgentsMachinesTable.test.tsx`;
 drawer grouping and fallback proof belongs in
 `frontend-modern/src/components/Infrastructure/__tests__/resourceDetailDrawerMetricsHistoryModel.branchcov0712.test.ts`.
