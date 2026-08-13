@@ -1,43 +1,36 @@
 {
   "version": 1,
-  "base_sha": "8165eb1066893b0fd9900e11e837d7b50aa52d92",
-  "verified_at": "2026-08-13T21:54:10Z",
+  "base_sha": "14a3b8b5af276dc6d33a18098d8b80d1a131340f",
+  "verified_at": "2026-08-13T22:14:37Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Infrastructure/resourceDetailDrawerMetricsHistoryModel.ts",
-    "frontend-modern/src/components/Workloads/nodeDrawerModel.ts",
-    "frontend-modern/src/components/shared/hostMetricsHistoryModel.ts",
-    "frontend-modern/src/features/docker/dockerHostDrawerModel.ts"
+    "frontend-modern/src/components/Workloads/useGuestRowState.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Infrastructure/resourceDetailDrawerMetricsHistoryModel.ts": "042cf5d1d89777930a9e34e15601c6a12743e453e0910641b7be809447737026",
-    "frontend-modern/src/components/Workloads/nodeDrawerModel.ts": "834acdaffc82c14cc1744284bd5353905caa69cf6293775f192f2c086daef232",
-    "frontend-modern/src/components/shared/hostMetricsHistoryModel.ts": "ff383009e76ebe461c0a2169fc706016b718dabdb31263dbfe152f74391e7eeb",
-    "frontend-modern/src/features/docker/dockerHostDrawerModel.ts": "ca67650d119f275d8eb584902a754342ab92dc79851187e500cb751d048e8a10"
+    "frontend-modern/src/components/Workloads/useGuestRowState.ts": "51a68fb1a49eabd172482ae2f3e3087763aa772ddfe4d183b74e41838628433a"
   },
   "routes": [
-    "/standalone/machines"
+    "/vmware/overview"
   ],
   "viewports": [
     {
-      "width": 1280,
-      "height": 720
+      "width": 1440,
+      "height": 1000
     },
     {
-      "width": 390,
-      "height": 844
+      "width": 768,
+      "height": 900
     }
   ],
   "states": [
-    "Machines list with agent-backed rows collapsed",
-    "Apollo-114 resource drawer open on Overview",
-    "History selected at 24 hours with populated utilization, network I/O, disk I/O, and CPU thermals charts",
-    "History selected at 1 hour in the narrow layout with the thermal chart scrolled into view"
+    "vSphere overview with the provider-unsupported Backup column hidden",
+    "vSphere overview with the Backup column explicitly enabled",
+    "vSphere overview reloaded with the enabled Backup preference persisted"
   ],
   "interactions": [
-    "Navigated to Machines and expanded Apollo-114",
-    "Selected the resource History tab",
-    "Changed the history range from 24 hours to 1 hour",
-    "Scrolled the narrow drawer through all four stacked charts and inspected the thermal chart pixels"
+    "Opened View preferences and expanded the column chooser",
+    "Enabled Backup and confirmed all 18 vSphere VM rows rendered an unavailable dash without a red warning",
+    "Reloaded the overview and confirmed the persisted Backup column retained unavailable rather than no-backup semantics",
+    "Restored the default hidden Backup column preference"
   ]
 }

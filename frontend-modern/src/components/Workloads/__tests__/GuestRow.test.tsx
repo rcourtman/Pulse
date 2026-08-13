@@ -1435,6 +1435,38 @@ describe('backup column', () => {
     expect(badge?.classList.contains('text-red-700')).toBe(true);
   });
 
+  it('does not infer a backup failure for a vSphere VM when the column is hidden', () => {
+    const { container } = renderGuestRow({
+      guest: makeGuest({
+        type: 'vm',
+        workloadType: 'vm',
+        platformType: 'vmware-vsphere',
+        platformScopes: ['vmware-vsphere'],
+        lastBackup: 0,
+      }),
+      visibleColumnIds: ['name'],
+    });
+
+    expect(container.querySelector('[title="No backup found"]')).toBeNull();
+    expect(container.querySelector('[aria-label^="Backup status:"]')).toBeNull();
+  });
+
+  it('renders backup status as unavailable for a vSphere VM when the column is visible', () => {
+    const { container } = renderGuestRow({
+      guest: makeGuest({
+        type: 'vm',
+        workloadType: 'vm',
+        platformType: 'vmware-vsphere',
+        platformScopes: ['vmware-vsphere'],
+        lastBackup: 0,
+      }),
+      visibleColumnIds: ['name', 'backup'],
+    });
+
+    expect(container.querySelector('[aria-label^="Backup status:"]')).toBeNull();
+    expect(screen.getAllByText('—').length).toBeGreaterThan(0);
+  });
+
   it('shows dash for app-container workloads (no backup support)', () => {
     renderGuestRow({
       guest: makeGuest({ type: 'app-container', workloadType: 'app-container' }),

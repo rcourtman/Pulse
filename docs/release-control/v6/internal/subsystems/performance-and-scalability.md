@@ -561,7 +561,14 @@ change may globally weaken the Task 03 lifecycle-state idempotency invariant.
     the shared `getBackupInfo` / `workloadGuestPresentation` vocabulary:
     existing stale or overdue backups stay amber, while red is reserved for a
     supported guest with no recorded backup. The compact row must not infer a
-    red failure state from a fixed backup age.
+    red failure state from a fixed backup age. Backup support must be derived
+    from the row's canonical platform scopes before classifying an absent
+    scalar: `proxmox-pve` rows may consume the current `lastBackup` contract,
+    while API-backed providers without that contract, including
+    `vmware-vsphere`, render no compact warning and an unavailable cell rather
+    than converting missing evidence into "never backed up." Legacy workload
+    rows without platform metadata retain the Proxmox-compatible behavior at
+    the migration boundary.
 11. Extend workload drawer derivations and runtime wiring through `frontend-modern/src/components/Workloads/guestDrawerModel.ts` and `frontend-modern/src/components/Workloads/useGuestDrawerState.ts`, and extend drawer overview rendering through `frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx`, rather than rebuilding canonical guest identity, discovery routing, or drawer-local normalization inside `frontend-modern/src/components/Workloads/GuestDrawer.tsx`
     Drawer history charts belong to `frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx`.
     History cards must let the plot area stretch to the card height instead of
