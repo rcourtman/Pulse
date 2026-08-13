@@ -154,6 +154,7 @@ type APIResource = {
     managedObjectId?: string;
     powerState?: string;
     guestOsFamily?: string;
+    cpuCount?: number;
     tags?: ResourceVMwareTag[];
   };
   discoveryTarget?: {
@@ -280,12 +281,29 @@ const normalizeWorkloadStatus = (status?: string | null): string => {
 
 const resolveWorkloadType = resolveWorkloadTypeFromString;
 
+const finiteMetricNumber = (value: unknown): number | undefined =>
+  typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+
+const firstFiniteMetricNumber = (...values: unknown[]): number | undefined => {
+  for (const value of values) {
+    const finite = finiteMetricNumber(value);
+    if (finite !== undefined) return finite;
+  }
+  return undefined;
+};
+
+const hasMetricValue = (metric?: APIMetricValue): boolean =>
+  firstFiniteMetricNumber(metric?.percent, metric?.value, metric?.used, metric?.total) !==
+  undefined;
+
 const buildMetric = (metric?: APIMetricValue) => {
-  const total = metric?.total ?? 0;
-  const used = metric?.used ?? 0;
+  const total = finiteMetricNumber(metric?.total) ?? 0;
+  const used = finiteMetricNumber(metric?.used) ?? 0;
   const free =
     metric?.total !== undefined && metric?.used !== undefined ? Math.max(0, total - used) : 0;
-  const usage = metric?.percent ?? metric?.value ?? (total > 0 ? (used / total) * 100 : 0);
+  const usage =
+    firstFiniteMetricNumber(metric?.percent, metric?.value) ??
+    (total > 0 ? (used / total) * 100 : 0);
   return { total, used, free, usage };
 };
 
@@ -299,9 +317,9 @@ const mapNetworkInterfaces = (interfaces?: APINetworkInterface[]) =>
   }));
 
 const toIsoString = (value?: string): string => {
-  if (!value) return new Date().toISOString();
+  if (!value) return '';
   const parsed = Date.parse(value);
-  if (Number.isNaN(parsed)) return new Date().toISOString();
+  if (Number.isNaN(parsed)) return '';
   return new Date(parsed).toISOString();
 };
 
@@ -439,7 +457,27 @@ const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
           : rawDisplayId
         : undefined;
 
-  const cpuPercent = resource.metrics?.cpu?.percent ?? resource.metrics?.cpu?.value ?? 0;
+  const cpuPercent =
+    firstFiniteMetricNumber(resource.metrics?.cpu?.percent, resource.metrics?.cpu?.value) ?? 0;
+  const cpuAvailable = hasMetricValue(resource.metrics?.cpu);
+  const memoryAvailable = hasMetricValue(resource.metrics?.memory);
+  const diskAvailable = hasMetricValue(resource.metrics?.disk);
+  const networkIOAvailable =
+    hasMetricValue(resource.metrics?.netIn) || hasMetricValue(resource.metrics?.netOut);
+  const diskIOAvailable =
+    hasMetricValue(resource.metrics?.diskRead) || hasMetricValue(resource.metrics?.diskWrite);
+  const uptime = firstFiniteMetricNumber(
+    resource.proxmox?.uptime,
+    resource.agent?.uptimeSeconds,
+    resource.docker?.uptimeSeconds,
+    resource.kubernetes?.uptimeSeconds,
+    resource.uptime,
+  );
+  const cpuCount = firstFiniteMetricNumber(
+    resource.proxmox?.cpus,
+    resource.virtualMachine?.vcpus,
+    resource.vmware?.cpuCount,
+  );
 
   const appContainerRuntimeId =
     workloadType === 'app-container' ? (resource.docker?.containerId || '').trim() : '';
@@ -492,12 +530,13 @@ const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
             ? 'pod'
             : 'app-container',
     cpu: getWorkloadCPUFraction(cpuPercent),
-    cpus: resource.proxmox?.cpus ?? resource.virtualMachine?.vcpus ?? 1,
+    cpus: cpuCount !== undefined && cpuCount > 0 ? cpuCount : 0,
     memory: (() => {
       const base = buildMetric(resource.metrics?.memory);
       const cache = resource.proxmox?.memoryCache ?? 0;
       return {
         ...base,
+        usageUnavailable: !memoryAvailable,
         // buildMetric derives free as total-used (available); carve the
         // reclaimable cache back out so free means truly-free pages.
         free: Math.max(0, base.free - cache),
@@ -521,22 +560,15 @@ const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
     osName: resource.agent?.osName ?? resource.proxmox?.osName ?? resource.vmware?.guestOsFamily,
     osVersion: resource.agent?.osVersion ?? resource.proxmox?.osVersion,
     agentVersion: resource.agent?.agentVersion,
+    agentKind: resource.agent?.agentVersion ? 'pulse' : undefined,
     networkInterfaces: mapNetworkInterfaces(resource.agent?.networkInterfaces),
-    networkIn: resource.metrics?.netIn?.value ?? 0,
-    networkOut: resource.metrics?.netOut?.value ?? 0,
-    diskRead: resource.metrics?.diskRead?.value ?? 0,
-    diskWrite: resource.metrics?.diskWrite?.value ?? 0,
-    uptime:
-      resource.proxmox?.uptime ??
-      resource.agent?.uptimeSeconds ??
-      resource.docker?.uptimeSeconds ??
-      resource.kubernetes?.uptimeSeconds ??
-      // Canonical Resource.Uptime is the universal fallback — vSphere's
-      // adapter populates only this field (no platform-specific
-      // vmware.uptime carve-out), so the chain has to land here for VMware
-      // VMs to surface uptime in the workloads table.
-      resource.uptime ??
-      0,
+    networkIn: finiteMetricNumber(resource.metrics?.netIn?.value) ?? 0,
+    networkOut: finiteMetricNumber(resource.metrics?.netOut?.value) ?? 0,
+    diskRead: finiteMetricNumber(resource.metrics?.diskRead?.value) ?? 0,
+    diskWrite: finiteMetricNumber(resource.metrics?.diskWrite?.value) ?? 0,
+    // Zero can be a real API value for a newly started workload. The
+    // availability facet below distinguishes that from no uptime observation.
+    uptime: uptime ?? 0,
     template: resource.proxmox?.template ?? false,
     lastBackup: (() => {
       if (!resource.proxmox?.lastBackup) return 0;
@@ -596,6 +628,14 @@ const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
     kubernetesClusterId: workloadType === 'pod' ? resource.kubernetes?.clusterId : undefined,
     platformType,
     platformScopes,
+    telemetryAvailability: {
+      cpu: cpuAvailable,
+      memory: memoryAvailable,
+      disk: diskAvailable,
+      networkIO: networkIOAvailable,
+      diskIO: diskIOAvailable,
+      uptime: uptime !== undefined,
+    },
     discoveryTarget,
     discoveryReadiness: resource.discoveryReadiness,
     vmware:

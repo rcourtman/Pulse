@@ -185,6 +185,7 @@ type Connection struct {
 	agentID                 string
 	agentTokenID            string
 	commandChannelConnected *bool
+	inventoryCompleteness   *RuntimeInventoryCompleteness
 }
 
 type ConnectionSystemComponentRole string

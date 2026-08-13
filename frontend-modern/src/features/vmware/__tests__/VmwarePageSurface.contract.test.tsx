@@ -7,6 +7,7 @@ const mockUseUnifiedResources = vi.fn();
 const mockPathname = vi.hoisted(() => vi.fn(() => '/vmware/overview'));
 const mockVersionInfo = vi.hoisted(() => vi.fn());
 const mockGetGlobalTimeline = vi.hoisted(() => vi.fn());
+const mockListInventorySources = vi.hoisted(() => vi.fn());
 
 const makeResource = (resource: Partial<Resource> & Pick<Resource, 'id' | 'type'>): Resource =>
   ({
@@ -46,6 +47,12 @@ vi.mock('@/stores/updates', () => ({
 vi.mock('@/api/resources', () => ({
   ResourceAPI: {
     getGlobalTimeline: (...args: unknown[]) => mockGetGlobalTimeline(...args),
+  },
+}));
+
+vi.mock('@/api/runtimeInventorySources', () => ({
+  RuntimeInventorySourcesAPI: {
+    list: (...args: unknown[]) => mockListInventorySources(...args),
   },
 }));
 
@@ -118,6 +125,7 @@ describe('VmwarePageSurface contract', () => {
     mockPathname.mockReturnValue('/vmware/overview');
     mockVersionInfo.mockReturnValue(null);
     mockGetGlobalTimeline.mockResolvedValue({ recentChanges: [] });
+    mockListInventorySources.mockResolvedValue({ sources: [] });
     setResources([]);
   });
 
@@ -211,5 +219,38 @@ describe('VmwarePageSurface contract', () => {
     render(() => <VmwarePageSurface />);
 
     expect(screen.queryByTestId('platform-outdated-agent-notice')).not.toBeInTheDocument();
+  });
+
+  it('surfaces viewer-safe vCenter collection completeness diagnostics', async () => {
+    mockListInventorySources.mockResolvedValue({
+      sources: [
+        {
+          type: 'vmware',
+          name: 'Production vCenter',
+          state: 'active',
+          surfaces: ['vms'],
+          completeness: {
+            state: 'degraded',
+            issueCount: 3,
+            issues: [{ stage: 'tags', category: 'permission', occurrences: 3 }],
+          },
+        },
+      ],
+    });
+    setResources([
+      makeResource({
+        id: 'esxi-host-1',
+        type: 'agent',
+        vmware: { entityType: 'host', managedObjectId: 'host-1' },
+      }),
+    ]);
+
+    render(() => <VmwarePageSurface />);
+
+    const notice = await screen.findByTestId('vmware-inventory-completeness-notice');
+    expect(notice).toHaveTextContent('Some vSphere inventory details are incomplete');
+    expect(notice).toHaveTextContent(
+      'Production vCenter: the last successful collection reported 3 optional read issues.',
+    );
   });
 });

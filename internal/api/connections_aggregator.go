@@ -362,7 +362,39 @@ func buildVMwareConnection(
 		Capabilities: ConnectionCapabilities{SupportsPause: true, SupportsScope: true, SupportsTest: true},
 	}, now)
 	conn.Fleet.CredentialHealth = connectionFleetCredentialHealth(conn, connectionPasswordCredentialKind(inst.Username, inst.Password), nil, nil, now)
+	if summary, ok := summaries[strings.TrimSpace(inst.ID)]; ok {
+		conn.inventoryCompleteness = runtimeVMwareInventoryCompleteness(summary.Observed)
+	}
 	return conn
+}
+
+func runtimeVMwareInventoryCompleteness(observed *monitoring.VMwareConnectionObservedSummary) *RuntimeInventoryCompleteness {
+	if observed == nil || !observed.Degraded {
+		return nil
+	}
+	issues := make([]RuntimeInventoryCompletenessIssue, 0, len(observed.Issues))
+	derivedIssueCount := 0
+	for _, issue := range observed.Issues {
+		occurrences := issue.Occurrences
+		if occurrences < 1 {
+			occurrences = 1
+		}
+		derivedIssueCount += occurrences
+		issues = append(issues, RuntimeInventoryCompletenessIssue{
+			Stage:       strings.TrimSpace(issue.Stage),
+			Category:    strings.TrimSpace(issue.Category),
+			Occurrences: occurrences,
+		})
+	}
+	issueCount := observed.IssueCount
+	if issueCount < derivedIssueCount {
+		issueCount = derivedIssueCount
+	}
+	return &RuntimeInventoryCompleteness{
+		State:      "degraded",
+		IssueCount: issueCount,
+		Issues:     issues,
+	}
 }
 
 func buildTrueNASConnection(

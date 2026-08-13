@@ -28,7 +28,7 @@ export const getDockerHostDrawerHistoryTarget = (
   return { resourceType: 'agent', resourceId };
 };
 
-export const getDockerHostDrawerHistoryFallbackMetrics = (
+export const getDockerHostDrawerCurrentMetrics = (
   host: Resource,
 ): Record<string, number | undefined> => {
   const finite = (value: number | undefined): number | undefined =>

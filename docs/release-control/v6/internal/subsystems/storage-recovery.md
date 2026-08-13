@@ -5173,7 +5173,10 @@ The projection filters coverage to workload labels (`vms`, containers, pods,
 and Kubernetes) before serialization. Storage and backup labels, source
 addresses, stable connection IDs, raw error text, credential state objects, and
 all administrative configuration remain absent by construction. The
-api-contracts contract owns the authoritative four-field payload and
+optional VMware completeness summary may identify degraded inventory stages by
+category and count, but it carries no raw message and is not backup
+completeness, protection damage, snapshot failure, restore readiness, or
+recovery evidence. The api-contracts contract owns the authoritative payload and
 authorization proof.
 
 ### RBAC identity metadata and deprovisioning preserve storage boundaries

@@ -6211,14 +6211,17 @@ payload and authorization proof.
 
 The authenticated `GET /api/runtime/inventory-sources` monitoring projection
 derives cached source health through the shared connection aggregator but is not
-an agent enumeration, enrollment, update, or command route. Its four-field wire
-type carries only source `type`, operator-facing `name`, normalized blocking
-`state`, and workload-only `surfaces`.
+an agent enumeration, enrollment, update, or command route. Its base wire type
+carries only source `type`, operator-facing `name`, normalized lifecycle
+`state`, and workload-only `surfaces`. An optional VMware completeness summary
+may carry only degraded state, aggregate count, and bounded stage/category/
+occurrence tuples for otherwise-successful inventory reads.
 
 It has no stable connection or agent ID, token binding, address, report IP,
 hostname identity object, operating-system, kernel or architecture fact, agent
 version, update or module state, command-session state, commands-enabled value,
-fleet policy, or credential-health object. The handler deliberately skips the
+fleet policy, credential-health object, raw enrichment error, or affected
+entity identity. The handler deliberately skips the
 command-session enrichment used by the administrative ledger. Agent reporting,
 registration, update, and command authority remain unchanged, and the
 fully-populated projection test fails if any of those lifecycle facts cross the

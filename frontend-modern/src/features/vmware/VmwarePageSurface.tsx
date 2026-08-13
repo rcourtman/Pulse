@@ -1,5 +1,6 @@
 import { useLocation } from '@solidjs/router';
-import { Show, createMemo, createResource, type Accessor } from 'solid-js';
+import { For, Show, createMemo, createResource, type Accessor } from 'solid-js';
+import AlertTriangle from 'lucide-solid/icons/triangle-alert';
 import { buildInfrastructureAgentUpdatesPath } from '@/components/Settings/infrastructureWorkspaceModel';
 import { getPlatformIcon } from '@/features/platformPage/platformIcon';
 import { PlatformOutdatedAgentNotice } from '@/features/platformPage/PlatformOutdatedAgentNotice';
@@ -8,7 +9,12 @@ import {
   formatAgentVersionDisplay,
 } from '@/features/platformPage/agentVersion';
 import { ResourceAPI } from '@/api/resources';
+import {
+  RuntimeInventorySourcesAPI,
+  type RuntimeInventorySource,
+} from '@/api/runtimeInventorySources';
 import { useUnifiedResources } from '@/hooks/useUnifiedResources';
+import { createNonSuspendingQuery } from '@/hooks/createNonSuspendingQuery';
 import { updateStore } from '@/stores/updates';
 import {
   PlatformErrorState,
@@ -18,7 +24,10 @@ import {
 } from '@/features/platformPage/sharedPlatformPage';
 import { WorkloadsFilter } from '@/components/Workloads/WorkloadsFilter';
 import { WorkloadsSurface } from '@/components/Workloads/WorkloadsSurface';
-import { useWorkloadsState } from '@/components/Workloads/useWorkloadsState';
+import {
+  useWorkloadsState,
+  type WorkloadsInventorySourcesQuery,
+} from '@/components/Workloads/useWorkloadsState';
 import {
   DEFAULT_WORKLOADS_METRIC_DISPLAY_MODE,
   type WorkloadsStatusOption,
@@ -53,6 +62,7 @@ const VALID_TABS = new Set<VmwarePageTabId>(VMWARE_TAB_SPECS.map((tab) => tab.id
 
 const VMWARE_PLATFORM_FILTER = 'vmware-vsphere';
 const VMWARE_WORKLOAD_STATUS_STORAGE_SCOPE = 'vmware';
+const VMWARE_INVENTORY_SOURCES_POLL_MS = 15_000;
 const VMWARE_WORKLOAD_COLUMN_VISIBILITY_SCOPE = 'vmware-vms';
 // Backup column on the workload table is driven exclusively by Proxmox
 // vzdump / PBS data (`resource.proxmox.lastBackup` in useWorkloads).
@@ -80,12 +90,78 @@ const VMWARE_WORKLOAD_STATUS_OPTIONS: readonly WorkloadsStatusOption[] = [
 const VmwareIcon = getPlatformIcon('vmware');
 const vmwareIcon = () => <VmwareIcon class="h-6 w-6 text-slate-400" />;
 
+function VmwareInventoryCompletenessNotice(props: {
+  error: unknown;
+  onRetry: () => void;
+  sources: RuntimeInventorySource[];
+}) {
+  const degradedSources = createMemo(() =>
+    props.sources.filter(
+      (source) => source.type === 'vmware' && source.completeness?.state === 'degraded',
+    ),
+  );
+
+  return (
+    <Show when={props.error || degradedSources().length > 0}>
+      <div
+        class="rounded-sm border border-amber-300 bg-amber-50/70 px-3 py-2.5 text-sm text-amber-950 dark:border-amber-900/70 dark:bg-amber-950/20 dark:text-amber-100"
+        data-testid="vmware-inventory-completeness-notice"
+      >
+        <div class="flex items-start gap-2">
+          <AlertTriangle class="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+          <div class="min-w-0 flex-1 space-y-1">
+            <p class="font-semibold">
+              {props.error
+                ? 'vSphere inventory completeness is unavailable'
+                : 'Some vSphere inventory details are incomplete'}
+            </p>
+            <Show
+              when={!props.error}
+              fallback={
+                <p class="text-xs leading-5 text-amber-800 dark:text-amber-200">
+                  Pulse could not read collection diagnostics, so this page cannot confirm that the
+                  current vCenter inventory is complete.{' '}
+                  <button class="font-semibold underline" type="button" onClick={props.onRetry}>
+                    Retry
+                  </button>
+                </p>
+              }
+            >
+              <ul class="space-y-1 text-xs leading-5 text-amber-800 dark:text-amber-200">
+                <For each={degradedSources()}>
+                  {(source) => (
+                    <li>
+                      {source.name}: the last successful collection reported{' '}
+                      {source.completeness?.issueCount ?? 0}{' '}
+                      {(source.completeness?.issueCount ?? 0) === 1
+                        ? 'optional read issue'
+                        : 'optional read issues'}
+                      . Affected details may be absent from this page.
+                    </li>
+                  )}
+                </For>
+              </ul>
+            </Show>
+          </div>
+        </div>
+      </div>
+    </Show>
+  );
+}
+
 export function VmwarePageSurface() {
   const location = useLocation();
   const { resources, loading, error, refetch } = useUnifiedResources({
     query: VMWARE_RESOURCE_QUERY,
     cacheKey: 'vmware-workspace',
     initialHydration: 'prefer-ws-then-rest',
+  });
+  const inventorySources = createNonSuspendingQuery({
+    source: () => 'enabled',
+    fetcher: () => RuntimeInventorySourcesAPI.list(),
+    initialValue: { sources: [] },
+    cacheKey: (key) => `workloads-inventory-sources:${key}`,
+    pollMs: VMWARE_INVENTORY_SOURCES_POLL_MS,
   });
   const requestedTab = createMemo<VmwarePageTabId>(() => {
     const segment = location.pathname.split('/').filter(Boolean)[1] as VmwarePageTabId | undefined;
@@ -166,6 +242,11 @@ export function VmwarePageSurface() {
             />
           }
         >
+          <VmwareInventoryCompletenessNotice
+            error={inventorySources.error()}
+            onRetry={() => void inventorySources.refetch()}
+            sources={inventorySources.value().sources ?? []}
+          />
           <Show
             when={model().resources.length > 0}
             fallback={
@@ -193,6 +274,7 @@ export function VmwarePageSurface() {
                 setMetricDisplayMode={setMetricDisplayMode}
                 metricHistoryRange={metricHistoryRange}
                 setMetricHistoryRange={setMetricHistoryRange}
+                inventorySourcesQuery={inventorySources}
               />
             </Show>
             <Show when={activeTab() === 'storage'}>
@@ -263,6 +345,7 @@ interface VmwareOverviewProps {
   setMetricDisplayMode: (value: WorkloadsMetricDisplayMode) => void;
   metricHistoryRange: Accessor<WorkloadTableMetricHistoryRange>;
   setMetricHistoryRange: (value: WorkloadTableMetricHistoryRange) => void;
+  inventorySourcesQuery: WorkloadsInventorySourcesQuery;
 }
 
 function VmwareOverview(props: VmwareOverviewProps) {
@@ -278,6 +361,7 @@ function VmwareOverview(props: VmwareOverviewProps) {
     columnVisibilityStorageScope: VMWARE_WORKLOAD_COLUMN_VISIBILITY_SCOPE,
     additionalDefaultHiddenColumnIds: [...VMWARE_WORKLOAD_DEFAULT_HIDDEN_COLUMN_IDS],
     compactGroupHeaders: true,
+    inventorySourcesQuery: props.inventorySourcesQuery,
     groupNodeDrawerMode: 'disabled',
     metricDisplayMode: props.metricDisplayMode,
     onMetricDisplayModeChange: props.setMetricDisplayMode,

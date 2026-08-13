@@ -3,7 +3,19 @@ import { apiFetchJSON } from '@/utils/apiClient';
 export type RuntimeInventorySourceType = 'pve' | 'vmware' | 'docker' | 'kubernetes';
 
 export type RuntimeInventorySourceState =
-  'paused' | 'pending' | 'stale' | 'unauthorized' | 'unreachable';
+  'active' | 'paused' | 'pending' | 'stale' | 'unauthorized' | 'unreachable';
+
+export interface RuntimeInventoryCompletenessIssue {
+  stage?: string;
+  category?: string;
+  occurrences?: number;
+}
+
+export interface RuntimeInventoryCompleteness {
+  state: 'degraded';
+  issueCount: number;
+  issues?: RuntimeInventoryCompletenessIssue[];
+}
 
 /**
  * Complete viewer-safe wire shape returned by GET /api/runtime/inventory-sources.
@@ -14,6 +26,7 @@ export interface RuntimeInventorySource {
   name: string;
   state: RuntimeInventorySourceState;
   surfaces: string[];
+  completeness?: RuntimeInventoryCompleteness;
 }
 
 export interface RuntimeInventorySourcesResponse {

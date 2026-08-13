@@ -103,6 +103,9 @@ export function GuestRow(props: GuestRowProps) {
   const cpuPercent = createMemo(() => getWorkloadCPUPercent(props.guest.cpu) ?? 0);
   const metricDisplayMode = createMemo(() => props.metricDisplayMode ?? 'bars');
   const isSparklineMode = createMemo(() => metricDisplayMode() === 'sparklines');
+  const telemetryAvailable = (
+    metric: keyof NonNullable<WorkloadGuest['telemetryAvailability']>,
+  ): boolean => props.guest.telemetryAvailability?.[metric] ?? true;
   const isHostMemoryBasis = createMemo(() => props.memoryDisplayBasis === 'host');
   const hostMemoryTotal = createMemo(() => {
     const total = props.parentMemoryTotal;
@@ -113,6 +116,7 @@ export function GuestRow(props: GuestRowProps) {
   );
   const memoryDisplayUnavailable = createMemo(
     () =>
+      !telemetryAvailable('memory') ||
       props.guest.memory?.usageUnavailable === true ||
       (isHostMemoryBasis() && hostMemoryTotal() <= 0),
   );
@@ -347,27 +351,32 @@ export function GuestRow(props: GuestRowProps) {
         <Show when={isColVisible('cpu')}>
           <td class="px-1.5 sm:px-2 py-0.5 align-middle" data-workload-col="cpu">
             <Show
-              when={isSparklineMode()}
-              fallback={
-                <div class="h-4">
-                  <EnhancedCPUBar
-                    usage={cpuPercent()}
-                    cores={isMobile() ? undefined : props.guest.cpus}
-                    resourceId={metricsKey()}
-                    anomaly={cpuAnomaly()}
-                    thresholds={cpuThresholds()}
-                  />
-                </div>
-              }
+              when={telemetryAvailable('cpu')}
+              fallback={<div class="text-center text-xs text-slate-400">—</div>}
             >
-              {renderMetricSparkline(
-                'cpu',
-                formatMetricPercent(cpuPercent()),
-                `${props.guest.name} CPU history`,
-                '%',
-                'inline',
-                formatMetricPercent,
-              )}
+              <Show
+                when={isSparklineMode()}
+                fallback={
+                  <div class="h-4">
+                    <EnhancedCPUBar
+                      usage={cpuPercent()}
+                      cores={isMobile() ? undefined : props.guest.cpus || undefined}
+                      resourceId={metricsKey()}
+                      anomaly={cpuAnomaly()}
+                      thresholds={cpuThresholds()}
+                    />
+                  </div>
+                }
+              >
+                {renderMetricSparkline(
+                  'cpu',
+                  formatMetricPercent(cpuPercent()),
+                  `${props.guest.name} CPU history`,
+                  '%',
+                  'inline',
+                  formatMetricPercent,
+                )}
+              </Show>
             </Show>
           </td>
         </Show>
@@ -498,7 +507,7 @@ export function GuestRow(props: GuestRowProps) {
           <td class="px-1.5 sm:px-2 py-0.5 align-middle">
             <div class="flex justify-center">
               <Show
-                when={isRunning()}
+                when={isRunning() && telemetryAvailable('uptime')}
                 fallback={
                   <span class="text-xs text-slate-400" aria-hidden="true">
                     —
@@ -705,7 +714,9 @@ export function GuestRow(props: GuestRowProps) {
             <Show when={isSparklineMode()}>
               {renderMetricSparkline(
                 'netIo',
-                isRunning() ? `${formatSpeed(networkIn())} / ${formatSpeed(networkOut())}` : '—',
+                isRunning() && telemetryAvailable('networkIO')
+                  ? `${formatSpeed(networkIn())} / ${formatSpeed(networkOut())}`
+                  : '—',
                 `${props.guest.name} network I/O history`,
                 'B/s',
                 'tooltip',
@@ -714,7 +725,7 @@ export function GuestRow(props: GuestRowProps) {
             </Show>
             <Show when={!isSparklineMode()}>
               <Show
-                when={isRunning()}
+                when={isRunning() && telemetryAvailable('networkIO')}
                 fallback={
                   <div class="text-center">
                     <span class="text-xs text-slate-400" aria-hidden="true">
@@ -758,7 +769,9 @@ export function GuestRow(props: GuestRowProps) {
             <Show when={isSparklineMode()}>
               {renderMetricSparkline(
                 'diskIo',
-                isRunning() ? `${formatSpeed(diskRead())} / ${formatSpeed(diskWrite())}` : '—',
+                isRunning() && telemetryAvailable('diskIO')
+                  ? `${formatSpeed(diskRead())} / ${formatSpeed(diskWrite())}`
+                  : '—',
                 `${props.guest.name} disk I/O history`,
                 'B/s',
                 'tooltip',
@@ -767,7 +780,7 @@ export function GuestRow(props: GuestRowProps) {
             </Show>
             <Show when={!isSparklineMode()}>
               <Show
-                when={isRunning()}
+                when={isRunning() && telemetryAvailable('diskIO')}
                 fallback={
                   <div class="text-center">
                     <span class="text-xs text-slate-400" aria-hidden="true">

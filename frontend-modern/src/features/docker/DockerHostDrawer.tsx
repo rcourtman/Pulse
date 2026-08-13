@@ -18,7 +18,7 @@ import { asTrimmedString } from '@/utils/stringUtils';
 import { DockerHostDrawerOverview } from './DockerHostDrawerOverview';
 import {
   DOCKER_HOST_DRAWER_HISTORY_GROUPS,
-  getDockerHostDrawerHistoryFallbackMetrics,
+  getDockerHostDrawerCurrentMetrics,
   getDockerHostDrawerHistoryTarget,
 } from './dockerHostDrawerModel';
 
@@ -39,7 +39,7 @@ export const DockerHostDrawer: Component<DockerHostDrawerProps> = (props) => {
   const headingId = () => `docker-host-drawer-heading-${props.host.id}`;
   const displayName = createMemo(() => asTrimmedString(props.host.name) || props.host.id);
   const historyTarget = createMemo(() => getDockerHostDrawerHistoryTarget(props.host));
-  const fallbackMetrics = createMemo(() => getDockerHostDrawerHistoryFallbackMetrics(props.host));
+  const currentMetrics = createMemo(() => getDockerHostDrawerCurrentMetrics(props.host));
   const discoveryConfig = createMemo(() => toDiscoveryConfig(props.host));
   const headerIndicator = createMemo(() => getSimpleStatusIndicator(props.host.status));
 
@@ -83,7 +83,7 @@ export const DockerHostDrawer: Component<DockerHostDrawerProps> = (props) => {
 
       <div class={activeTab() === 'history' ? '' : 'hidden'} style={{ 'overflow-anchor': 'none' }}>
         <GuestDrawerHistory
-          fallbackMetrics={fallbackMetrics()}
+          currentMetrics={currentMetrics()}
           groups={DOCKER_HOST_DRAWER_HISTORY_GROUPS}
           range={historyRange()}
           target={historyTarget()}

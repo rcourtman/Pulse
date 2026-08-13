@@ -258,6 +258,60 @@ describe('GuestRow', () => {
       expect(cpuBar.dataset.usage).toBe('75');
     });
 
+    it('renders unknown canonical telemetry as unavailable instead of reported zero', () => {
+      renderGuestRow({
+        guest: makeGuest({
+          cpu: 0,
+          networkIn: 0,
+          networkOut: 0,
+          diskRead: 0,
+          diskWrite: 0,
+          uptime: 0,
+          telemetryAvailability: {
+            cpu: false,
+            memory: false,
+            disk: false,
+            networkIO: false,
+            diskIO: false,
+            uptime: false,
+          },
+        }),
+        visibleColumnIds: ['name', 'cpu', 'memory', 'netIo', 'diskIo', 'uptime'],
+      });
+
+      expect(screen.queryByTestId('cpu-bar')).toBeNull();
+      expect(screen.getByTestId('memory-bar')).toHaveAttribute('data-unavailable', 'true');
+      expect(screen.queryByText('0 B/s')).toBeNull();
+      expect(screen.queryByText('0s')).toBeNull();
+      expect(screen.getAllByText('—').length).toBeGreaterThanOrEqual(4);
+    });
+
+    it('keeps API-reported zero telemetry visible as a real value', () => {
+      renderGuestRow({
+        guest: makeGuest({
+          cpu: 0,
+          networkIn: 0,
+          networkOut: 0,
+          diskRead: 0,
+          diskWrite: 0,
+          uptime: 0,
+          telemetryAvailability: {
+            cpu: true,
+            memory: true,
+            disk: true,
+            networkIO: true,
+            diskIO: true,
+            uptime: true,
+          },
+        }),
+        visibleColumnIds: ['name', 'cpu', 'netIo', 'diskIo', 'uptime'],
+      });
+
+      expect(screen.getByTestId('cpu-bar')).toHaveAttribute('data-usage', '0');
+      expect(screen.getAllByText('0 B/s')).toHaveLength(4);
+      expect(screen.getByText('0s')).toBeTruthy();
+    });
+
     it.each([1, 4, 8])(
       'does not renormalize authoritative guest CPU by %i allocated cores',
       (cpus) => {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  getResourceMetricsHistoryFallbackMetrics,
+  getResourceMetricsHistoryCurrentMetrics,
   getResourceMetricsHistoryGroups,
   getResourceMetricsHistoryTarget,
 } from '@/components/Infrastructure/resourceDetailDrawerMetricsHistoryModel';
@@ -109,7 +109,7 @@ describe('getResourceMetricsHistoryTarget branch coverage', () => {
   });
 });
 
-describe('getResourceMetricsHistoryFallbackMetrics branch coverage', () => {
+describe('getResourceMetricsHistoryCurrentMetrics branch coverage', () => {
   it('returns every metric as a finite number when the resource is fully populated', () => {
     // All finiteMetric calls take the "finite number -> return value" arm;
     // memory/disk ternaries take the TRUE arm and getMemoryPercent/getDiskPercent
@@ -121,7 +121,7 @@ describe('getResourceMetricsHistoryFallbackMetrics branch coverage', () => {
       network: { rxBytes: 1000, txBytes: 2000 },
       diskIO: { readRate: 3000, writeRate: 4000 },
     });
-    expect(getResourceMetricsHistoryFallbackMetrics(resource)).toStrictEqual({
+    expect(getResourceMetricsHistoryCurrentMetrics(resource)).toStrictEqual({
       cpu: 12.5,
       memory: 30, // (30 / 100) * 100
       disk: 40, // (80 / 200) * 100
@@ -140,7 +140,7 @@ describe('getResourceMetricsHistoryFallbackMetrics branch coverage', () => {
     // Every optional chain short-circuits to undefined; memory/disk ternaries
     // take the FALSE arm because `resource.memory`/`resource.disk` are falsy.
     const resource = baseResource({});
-    expect(getResourceMetricsHistoryFallbackMetrics(resource)).toStrictEqual({
+    expect(getResourceMetricsHistoryCurrentMetrics(resource)).toStrictEqual({
       cpu: undefined,
       memory: undefined,
       disk: undefined,
@@ -158,37 +158,37 @@ describe('getResourceMetricsHistoryFallbackMetrics branch coverage', () => {
   it('uses memory.current when total/used are absent', () => {
     // getMemoryPercent: `memory.total && memory.used` is falsy -> returns current.
     const resource = baseResource({ memory: { current: 45.5 } });
-    expect(getResourceMetricsHistoryFallbackMetrics(resource).memory).toBe(45.5);
+    expect(getResourceMetricsHistoryCurrentMetrics(resource).memory).toBe(45.5);
   });
 
   it('uses disk.current when total/used are absent', () => {
     // getDiskPercent: `disk.total && disk.used` is falsy -> returns current.
     const resource = baseResource({ disk: { current: 67 } });
-    expect(getResourceMetricsHistoryFallbackMetrics(resource).disk).toBe(67);
+    expect(getResourceMetricsHistoryCurrentMetrics(resource).disk).toBe(67);
   });
 
   it('coerces a NaN memory.current to undefined via finiteMetric', () => {
     // getMemoryPercent returns NaN; finiteMetric: typeof === 'number' but
     // Number.isFinite is FALSE -> undefined.
     const resource = baseResource({ memory: { current: Number.NaN } });
-    expect(getResourceMetricsHistoryFallbackMetrics(resource).memory).toBeUndefined();
+    expect(getResourceMetricsHistoryCurrentMetrics(resource).memory).toBeUndefined();
   });
 
   it('coerces a NaN disk.current to undefined via finiteMetric', () => {
     const resource = baseResource({ disk: { current: Number.NaN } });
-    expect(getResourceMetricsHistoryFallbackMetrics(resource).disk).toBeUndefined();
+    expect(getResourceMetricsHistoryCurrentMetrics(resource).disk).toBeUndefined();
   });
 
   it('coerces an Infinity cpu.current to undefined via finiteMetric', () => {
     const resource = baseResource({
       cpu: { current: Number.POSITIVE_INFINITY },
     });
-    expect(getResourceMetricsHistoryFallbackMetrics(resource).cpu).toBeUndefined();
+    expect(getResourceMetricsHistoryCurrentMetrics(resource).cpu).toBeUndefined();
   });
 
   it('coerces a NaN cpu.current to undefined via finiteMetric', () => {
     const resource = baseResource({ cpu: { current: Number.NaN } });
-    expect(getResourceMetricsHistoryFallbackMetrics(resource).cpu).toBeUndefined();
+    expect(getResourceMetricsHistoryCurrentMetrics(resource).cpu).toBeUndefined();
   });
 
   it('coerces a non-number cpu.current (malformed payload) to undefined', () => {
@@ -197,7 +197,7 @@ describe('getResourceMetricsHistoryFallbackMetrics branch coverage', () => {
     const resource = baseResource({
       cpu: { current: 'busy' as unknown as number },
     });
-    expect(getResourceMetricsHistoryFallbackMetrics(resource).cpu).toBeUndefined();
+    expect(getResourceMetricsHistoryCurrentMetrics(resource).cpu).toBeUndefined();
   });
 
   it('coerces non-finite network and diskIO rates to undefined', () => {
@@ -208,7 +208,7 @@ describe('getResourceMetricsHistoryFallbackMetrics branch coverage', () => {
         writeRate: Number.NaN,
       },
     });
-    expect(getResourceMetricsHistoryFallbackMetrics(resource)).toStrictEqual({
+    expect(getResourceMetricsHistoryCurrentMetrics(resource)).toStrictEqual({
       cpu: undefined,
       memory: undefined,
       disk: undefined,
@@ -248,7 +248,7 @@ describe('getResourceMetricsHistoryFallbackMetrics branch coverage', () => {
       },
     });
 
-    const metrics = getResourceMetricsHistoryFallbackMetrics(resource);
+    const metrics = getResourceMetricsHistoryCurrentMetrics(resource);
     expect(metrics.gpu).toBe(80);
     expect(metrics.gpu_memory).toBe(87.5);
     expect(metrics.gpu_temperature).toBe(70);
@@ -269,7 +269,7 @@ describe('getResourceMetricsHistoryFallbackMetrics branch coverage', () => {
       'disk-io',
       'thermals',
     ]);
-    expect(getResourceMetricsHistoryFallbackMetrics(resource).temperature).toBe(57.5);
+    expect(getResourceMetricsHistoryCurrentMetrics(resource).temperature).toBe(57.5);
   });
 
   it('keeps workload history groups free of host-only thermals', () => {
@@ -290,7 +290,7 @@ describe('getResourceMetricsHistoryFallbackMetrics branch coverage', () => {
     // Mixes a present disk (TRUE arm) with an absent memory (FALSE arm) to prove
     // the two ternaries are evaluated independently.
     const resource = baseResource({ disk: { current: 18 } });
-    const result = getResourceMetricsHistoryFallbackMetrics(resource);
+    const result = getResourceMetricsHistoryCurrentMetrics(resource);
     expect(result.memory).toBeUndefined();
     expect(result.disk).toBe(18);
   });

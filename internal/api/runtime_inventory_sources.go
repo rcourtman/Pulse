@@ -30,8 +30,9 @@ var runtimeInventoryBlockingStates = map[ConnectionState]struct{}{
 }
 
 // RuntimeInventorySource is the complete monitoring-tier wire shape for one
-// enabled source currently blocking workload inventory. It is deliberately a
-// standalone whitelist rather than a serialized or embedded Connection.
+// enabled source currently blocking workload inventory or reporting degraded
+// collection completeness. It is deliberately a standalone whitelist rather
+// than a serialized or embedded Connection.
 //
 // Name is the operator-facing source label needed to identify the problem.
 // State is normalized to unauthorized when any cached credential signal says
@@ -39,10 +40,26 @@ var runtimeInventoryBlockingStates = map[ConnectionState]struct{}{
 // No source locator, stable connection ID, raw error, timestamp, agent identity,
 // fleet policy, capability, credential, or mutation field can cross this type.
 type RuntimeInventorySource struct {
-	Type     ConnectionType  `json:"type"`
-	Name     string          `json:"name"`
-	State    ConnectionState `json:"state"`
-	Surfaces []string        `json:"surfaces"`
+	Type         ConnectionType                `json:"type"`
+	Name         string                        `json:"name"`
+	State        ConnectionState               `json:"state"`
+	Surfaces     []string                      `json:"surfaces"`
+	Completeness *RuntimeInventoryCompleteness `json:"completeness,omitempty"`
+}
+
+// RuntimeInventoryCompleteness is a viewer-safe summary of optional inventory
+// reads that failed during an otherwise successful collection. Raw errors,
+// entity identifiers, endpoints, and credentials never cross this boundary.
+type RuntimeInventoryCompleteness struct {
+	State      string                              `json:"state"`
+	IssueCount int                                 `json:"issueCount"`
+	Issues     []RuntimeInventoryCompletenessIssue `json:"issues,omitempty"`
+}
+
+type RuntimeInventoryCompletenessIssue struct {
+	Stage       string `json:"stage,omitempty"`
+	Category    string `json:"category,omitempty"`
+	Occurrences int    `json:"occurrences,omitempty"`
 }
 
 type RuntimeInventorySourcesResponse struct {
@@ -118,15 +135,16 @@ func runtimeInventorySources(connections []Connection) []RuntimeInventorySource 
 		if runtimeInventorySourceCredentialsInvalid(connection) {
 			state = ConnectionStateUnauthorized
 		}
-		if _, blocking := runtimeInventoryBlockingStates[state]; !blocking {
+		if _, blocking := runtimeInventoryBlockingStates[state]; !blocking && connection.inventoryCompleteness == nil {
 			continue
 		}
 
 		sources = append(sources, RuntimeInventorySource{
-			Type:     connection.Type,
-			Name:     connection.Name,
-			State:    state,
-			Surfaces: surfaces,
+			Type:         connection.Type,
+			Name:         connection.Name,
+			State:        state,
+			Surfaces:     surfaces,
+			Completeness: connection.inventoryCompleteness,
 		})
 	}
 

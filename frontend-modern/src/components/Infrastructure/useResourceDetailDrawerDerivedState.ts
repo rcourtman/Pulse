@@ -61,7 +61,7 @@ import {
   hasRuntimeOperationalContext as buildHasRuntimeOperationalContext,
 } from './resourceDetailDrawerOperationalModel';
 import {
-  getResourceMetricsHistoryFallbackMetrics,
+  getResourceMetricsHistoryCurrentMetrics,
   getResourceMetricsHistoryGroups,
   getResourceMetricsHistoryTarget,
   resourceSupportsMetricsHistory,
@@ -344,8 +344,8 @@ export const useResourceDetailDrawerDerivedState = (
   const hasKubernetesDetails = createMemo(() => kubernetesDetailSections().length > 0);
   const kubernetesDetailsSummary = createMemo(() => buildKubernetesDetailsSummary(resource));
   const metricsHistoryTarget = createMemo(() => getResourceMetricsHistoryTarget(resource));
-  const metricsHistoryFallbackMetrics = createMemo(() =>
-    getResourceMetricsHistoryFallbackMetrics(resource),
+  const metricsHistoryCurrentMetrics = createMemo(() =>
+    getResourceMetricsHistoryCurrentMetrics(resource),
   );
   const metricsHistoryGroups = createMemo(() => getResourceMetricsHistoryGroups(resource));
   const hasMetricsHistory = createMemo(() => resourceSupportsMetricsHistory(resource));
@@ -478,7 +478,7 @@ export const useResourceDetailDrawerDerivedState = (
     hasServiceDetails,
     serviceDetailsSummary,
     metricsHistoryTarget,
-    metricsHistoryFallbackMetrics,
+    metricsHistoryCurrentMetrics,
     metricsHistoryGroups,
     hasMetricsHistory,
     hasDiscoveryTab,

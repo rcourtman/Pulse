@@ -32,6 +32,7 @@ import {
 } from './workloadTopology';
 import {
   getGuestDrawerAgentLabel,
+  getGuestDrawerAgentHeading,
   getGuestDrawerAgentTitle,
   getGuestDrawerBackupPresentation,
   GUEST_DRAWER_HISTORY_DEFAULT_RANGE,
@@ -89,6 +90,7 @@ export function useGuestDrawerState(props: GuestDrawerProps) {
   });
   const hasOsInfo = createMemo(() => hasGuestDrawerOsInfo(props.guest));
   const agentLabel = createMemo(() => getGuestDrawerAgentLabel(props.guest));
+  const agentHeading = createMemo(() => getGuestDrawerAgentHeading(props.guest));
   const agentTitle = createMemo(() => getGuestDrawerAgentTitle(props.guest));
   const hasAgentInfo = createMemo(() => agentLabel().length > 0);
   const hasWorkloadActionAgent = createMemo(() => hasExplicitWorkloadActionAgent(props.guest));
@@ -199,6 +201,7 @@ export function useGuestDrawerState(props: GuestDrawerProps) {
 
   return {
     activeTab,
+    agentHeading,
     agentLabel,
     agentTitle,
     backupPresentation,

@@ -1140,6 +1140,42 @@ func TestBuildConnections_VMwareAndTrueNASEnabledFlag(t *testing.T) {
 	}
 }
 
+func TestBuildConnections_VMwareProjectsSanitizedInventoryCompleteness(t *testing.T) {
+	in := aggregatorInputs{
+		vmwareInstances: []config.VMwareVCenterInstance{{
+			ID: "vc1", Name: "vc", Host: "vc.lan", Enabled: true, MonitorVMs: true,
+		}},
+		vmwareSummaries: map[string]monitoring.VMwareConnectionSummary{
+			"vc1": {
+				Observed: &monitoring.VMwareConnectionObservedSummary{
+					Degraded: true,
+					Issues: []monitoring.VMwareConnectionObservedIssue{{
+						Stage:    "guest-details",
+						Category: "permission",
+						Message:  "vm-42 at https://vcenter.secret.local/sdk denied",
+					}},
+				},
+			},
+		},
+		now: time.Now(),
+	}
+
+	var vmwareConnection Connection
+	for _, connection := range buildConnections(in) {
+		if connection.Type == ConnectionTypeVMware {
+			vmwareConnection = connection
+			break
+		}
+	}
+	completeness := vmwareConnection.inventoryCompleteness
+	if completeness == nil || completeness.State != "degraded" || completeness.IssueCount != 1 {
+		t.Fatalf("inventory completeness = %#v", completeness)
+	}
+	if len(completeness.Issues) != 1 || completeness.Issues[0].Stage != "guest-details" || completeness.Issues[0].Category != "permission" {
+		t.Fatalf("inventory issues = %#v", completeness.Issues)
+	}
+}
+
 func TestBuildConnections_PlatformPollerSummariesDriveRuntimeState(t *testing.T) {
 	now := time.Now().UTC()
 	vmwareSuccess := now.Add(-40 * time.Second)

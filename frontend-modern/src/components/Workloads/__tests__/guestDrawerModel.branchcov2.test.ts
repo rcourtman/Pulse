@@ -8,7 +8,7 @@ import {
   getGuestDrawerAgentLabel,
   getGuestDrawerAgentTitle,
   getGuestDrawerBackupPresentation,
-  getGuestDrawerHistoryFallbackMetrics,
+  getGuestDrawerCurrentMetrics,
   getGuestDrawerHistoryRangeBounds,
   getGuestDrawerHistoryScale,
   getGuestDrawerHistoryTarget,
@@ -76,7 +76,7 @@ describe('guestDrawerModel (branch coverage)', () => {
     });
   });
 
-  describe('getGuestDrawerHistoryFallbackMetrics', () => {
+  describe('getGuestDrawerCurrentMetrics', () => {
     it('scales the canonical workload cpu ratio by 100 and returns finite metric values', () => {
       const guest = makeGuest({
         cpu: 1.0,
@@ -87,7 +87,7 @@ describe('guestDrawerModel (branch coverage)', () => {
         diskRead: 10,
         diskWrite: 5,
       });
-      expect(getGuestDrawerHistoryFallbackMetrics(guest)).toStrictEqual({
+      expect(getGuestDrawerCurrentMetrics(guest)).toStrictEqual({
         cpu: 100,
         memory: 0.4,
         disk: 0.3,
@@ -99,27 +99,25 @@ describe('guestDrawerModel (branch coverage)', () => {
     });
 
     it('uses the same ratio contract above 100 percent', () => {
-      expect(getGuestDrawerHistoryFallbackMetrics(makeGuest({ cpu: 2.0 })).cpu).toBe(200);
+      expect(getGuestDrawerCurrentMetrics(makeGuest({ cpu: 2.0 })).cpu).toBe(200);
     });
 
     it('treats the cpu boundary of exactly 1.5 as a ratio (150)', () => {
-      expect(getGuestDrawerHistoryFallbackMetrics(makeGuest({ cpu: 1.5 })).cpu).toBe(150);
+      expect(getGuestDrawerCurrentMetrics(makeGuest({ cpu: 1.5 })).cpu).toBe(150);
     });
 
     it('drops cpu when it is a non-finite number', () => {
-      expect(
-        getGuestDrawerHistoryFallbackMetrics(makeGuest({ cpu: Number.NaN })).cpu,
-      ).toBeUndefined();
+      expect(getGuestDrawerCurrentMetrics(makeGuest({ cpu: Number.NaN })).cpu).toBeUndefined();
     });
 
     it('drops cpu when it is not a number (typeof guard)', () => {
       expect(
-        getGuestDrawerHistoryFallbackMetrics(makeGuest({ cpu: 'busy' as unknown as number })).cpu,
+        getGuestDrawerCurrentMetrics(makeGuest({ cpu: 'busy' as unknown as number })).cpu,
       ).toBeUndefined();
     });
 
     it('drops memory/disk when those objects are absent (optional-chain arm)', () => {
-      const result = getGuestDrawerHistoryFallbackMetrics(
+      const result = getGuestDrawerCurrentMetrics(
         makeGuest({
           memory: undefined as unknown as WorkloadGuest['memory'],
           disk: undefined as unknown as WorkloadGuest['disk'],
@@ -130,7 +128,7 @@ describe('guestDrawerModel (branch coverage)', () => {
     });
 
     it('does not synthesize a history point from unavailable live memory', () => {
-      const result = getGuestDrawerHistoryFallbackMetrics(
+      const result = getGuestDrawerCurrentMetrics(
         makeGuest({
           memory: {
             total: 8192,
@@ -145,7 +143,7 @@ describe('guestDrawerModel (branch coverage)', () => {
     });
 
     it('drops a non-finite network value via the finite() guard', () => {
-      const result = getGuestDrawerHistoryFallbackMetrics(
+      const result = getGuestDrawerCurrentMetrics(
         makeGuest({ networkIn: Number.POSITIVE_INFINITY }),
       );
       expect(result.netin).toBeUndefined();

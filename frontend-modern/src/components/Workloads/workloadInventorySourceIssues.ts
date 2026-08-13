@@ -38,6 +38,7 @@ const CONNECTION_TYPE_LABELS: Record<RuntimeInventorySourceType, string> = {
 };
 
 const STATE_RANK: Record<RuntimeInventorySourceState, number> = {
+  active: 0,
   paused: 1,
   pending: 2,
   stale: 3,

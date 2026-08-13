@@ -62,6 +62,60 @@ func TestRuntimeInventorySourcesProjectsOnlyBlockingWorkloadCoverage(t *testing.
 	}
 }
 
+func TestRuntimeInventorySourcesProjectsDegradedCompletenessWithoutRawErrors(t *testing.T) {
+	sources := runtimeInventorySources([]Connection{{
+		Type:     ConnectionTypeVMware,
+		Name:     "Production vCenter",
+		State:    ConnectionStateActive,
+		Enabled:  true,
+		Surfaces: []string{"vms"},
+		inventoryCompleteness: &RuntimeInventoryCompleteness{
+			State:      "degraded",
+			IssueCount: 3,
+			Issues: []RuntimeInventoryCompletenessIssue{{
+				Stage:       "tags",
+				Category:    "permission",
+				Occurrences: 3,
+			}},
+		},
+	}})
+
+	if len(sources) != 1 {
+		t.Fatalf("sources = %d, want 1", len(sources))
+	}
+	if sources[0].State != ConnectionStateActive || sources[0].Completeness == nil {
+		t.Fatalf("source = %#v, want active source with degraded completeness", sources[0])
+	}
+	if sources[0].Completeness.IssueCount != 3 || sources[0].Completeness.Issues[0].Stage != "tags" {
+		t.Fatalf("completeness = %#v", sources[0].Completeness)
+	}
+}
+
+func TestRuntimeVMwareInventoryCompletenessDropsMessagesAndEntityIdentity(t *testing.T) {
+	completeness := runtimeVMwareInventoryCompleteness(&monitoring.VMwareConnectionObservedSummary{
+		Degraded:   true,
+		IssueCount: 1,
+		Issues: []monitoring.VMwareConnectionObservedIssue{{
+			Stage:       "guest-details",
+			Category:    "permission",
+			Message:     "vm-42 at https://vcenter.secret.local/sdk denied",
+			Occurrences: 1,
+		}},
+	})
+	if completeness == nil {
+		t.Fatal("expected degraded completeness")
+	}
+	payload, err := json.Marshal(completeness)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	for _, forbidden := range []string{"vm-42", "vcenter.secret.local", "denied"} {
+		if strings.Contains(string(payload), forbidden) {
+			t.Fatalf("completeness leaked %q: %s", forbidden, payload)
+		}
+	}
+}
+
 func TestRuntimeInventorySourcesNormalizesCredentialFailureWithoutPublishingFleet(t *testing.T) {
 	expiredAt := time.Now().UTC().Add(-time.Hour)
 	sources := runtimeInventorySources([]Connection{

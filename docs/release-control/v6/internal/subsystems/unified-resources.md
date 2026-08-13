@@ -63,6 +63,12 @@ metric object exists, so `/api/resources`, `/api/state`, websocket resources,
 history, alerts, and UI adapters never need to interpret `null` as either idle
 or unknown. Unified resources must not infer validity from the numeric guest
 compatibility field alone.
+Resource and workload drawer consumers preserve the same evidence boundary:
+current CPU, memory, disk, network, and disk-I/O observations may be shown as
+current values, but only samples returned by the canonical history endpoint may
+form a historical series. Drawer adapters must not manufacture prior samples
+from a current snapshot, and must retain explicit metric absence independently
+from a valid reported zero.
 Proxmox node inventory continuity is monitoring-authored and
 unified-resource-consumed. A powered-off or temporarily unreachable cluster
 member must remain one canonical `agent` resource while monitoring still

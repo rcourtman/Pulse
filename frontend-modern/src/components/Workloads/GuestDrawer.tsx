@@ -13,7 +13,7 @@ import { DrawerSubjectHeading } from '@/components/shared/DrawerSubjectHeading';
 import { DiscoveryReadinessBadge } from '@/components/shared/DiscoveryReadinessBadge';
 import { Subtabs, type SubtabOption } from '@/components/shared/Subtabs';
 import { getSimpleStatusIndicator } from '@/utils/status';
-import { getGuestDrawerHistoryFallbackMetrics, type GuestDrawerProps } from './guestDrawerModel';
+import { getGuestDrawerCurrentMetrics, type GuestDrawerProps } from './guestDrawerModel';
 import { useGuestDrawerState } from './useGuestDrawerState';
 import { GuestDrawerHistory, GuestDrawerHistoryRangeSelect } from './GuestDrawerHistory';
 import { GuestDrawerOverview } from './GuestDrawerOverview';
@@ -21,6 +21,7 @@ import { GuestDrawerOverview } from './GuestDrawerOverview';
 export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
   const {
     activeTab,
+    agentHeading,
     agentLabel,
     agentTitle,
     agentContextCopied,
@@ -58,9 +59,7 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
     workloadActionAgentTitle,
   } = useGuestDrawerState(props);
   const headingId = () => `guest-drawer-heading-${guestId()}`;
-  const historyFallbackMetrics = createMemo(() =>
-    getGuestDrawerHistoryFallbackMetrics(props.guest),
-  );
+  const historyCurrentMetrics = createMemo(() => getGuestDrawerCurrentMetrics(props.guest));
 
   const headerIndicator = createMemo(() => getSimpleStatusIndicator(props.guest.status));
 
@@ -136,6 +135,7 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
           guest={props.guest}
           guestId={guestId()}
           guestOsSummary={guestOsSummary()}
+          agentHeading={agentHeading()}
           agentLabel={agentLabel()}
           agentTitle={agentTitle()}
           hasAgentInfo={hasAgentInfo()}
@@ -164,7 +164,7 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
           <GuestDrawerHistory
             target={historyTarget()}
             range={historyRange()}
-            fallbackMetrics={historyFallbackMetrics()}
+            currentMetrics={historyCurrentMetrics()}
           />
         </div>
       )}

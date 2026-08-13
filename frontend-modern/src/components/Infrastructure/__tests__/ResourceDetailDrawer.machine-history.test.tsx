@@ -7,15 +7,15 @@ vi.mock('@/components/Workloads/GuestDrawerHistory', () => ({
   GuestDrawerHistory: (props: {
     target: { resourceType: string; resourceId: string } | null;
     range: string;
-    fallbackMetrics?: Record<string, number | undefined>;
+    currentMetrics?: Record<string, number | undefined>;
   }) => (
     <div
       data-testid="machine-history"
       data-resource-type={props.target?.resourceType}
       data-resource-id={props.target?.resourceId}
       data-range={props.range}
-      data-cpu={props.fallbackMetrics?.cpu}
-      data-netin={props.fallbackMetrics?.netin}
+      data-cpu={props.currentMetrics?.cpu}
+      data-netin={props.currentMetrics?.netin}
     />
   ),
   GuestDrawerHistoryRangeSelect: (props: {

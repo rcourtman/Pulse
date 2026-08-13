@@ -21,8 +21,6 @@ export const getNodeDrawerHistoryTarget = (node: Node): NodeDrawerHistoryTarget 
   return { resourceType: 'agent', resourceId };
 };
 
-export const getNodeDrawerHistoryFallbackMetrics = (
-  node: Node,
-): Record<string, number | undefined> => ({
+export const getNodeDrawerCurrentMetrics = (node: Node): Record<string, number | undefined> => ({
   temperature: getCpuTemperature(node.temperature) ?? undefined,
 });

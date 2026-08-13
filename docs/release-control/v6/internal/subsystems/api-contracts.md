@@ -9309,10 +9309,13 @@ same narrow response. `GET /api/connections` remains unchanged behind
 `RequireAdmin` plus `settings:read` and continues to be the only connection
 configuration and fleet ledger.
 
-The response envelope is `{"sources": [...]}` and every source has exactly four
-fields: operator-facing `type` and `name`, normalized blocking `state`, and a
-`surfaces` array containing only effective workload coverage. The backend drops
-healthy, disabled, non-workload, and coverage-free connections before the wire;
+The response envelope is `{"sources": [...]}` and every source has four base
+fields: operator-facing `type` and `name`, normalized lifecycle `state`, and a
+`surfaces` array containing only effective workload coverage. A VMware source
+whose otherwise-successful poll reported optional enrichment failures may add
+`completeness={state:"degraded",issueCount,issues}`; each issue is limited to
+stage, category, and occurrence count. The backend drops healthy sources with
+no completeness issue, disabled, non-workload, and coverage-free connections before the wire;
 resolves configured scope over declared surfaces; removes storage and backup
 coverage; and normalizes cached invalid or expired credential health to
 `state="unauthorized"`. There is no privileged variant.
@@ -9320,9 +9323,12 @@ coverage; and normalizes cached invalid or expired credential health to
 The whitelist intentionally has no connection ID, address, host alias, raw
 state reason or error, timestamp, source origin, agent identity, version or
 module, fleet policy or credential-health object, capability, credential,
-configuration, or mutation field.
-`TestRuntimeInventorySourceWireShapeIsAnExactWhitelist` fails if the Go wire
-type grows, while
+configuration, raw enrichment message, affected entity identity, or mutation
+field. `RuntimeInventoryCompleteness` is an explicit second whitelist rather
+than a serialized VMware observed summary.
+`TestRuntimeInventorySourceWireShapeIsAnExactWhitelist` fails if the base Go
+wire type grows, while the completeness projection test proves raw messages,
+entity IDs, and endpoints cannot cross the optional diagnostic shape, and
 `TestRuntimeInventorySourcesOmitAdministrativeAndSensitiveFacts` projects a
 fully populated administrative record and proves those values cannot travel.
 The route-authorization test proves the exact viewer 200 / ledger 403 pairing,

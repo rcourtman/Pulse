@@ -496,6 +496,27 @@ describe('GuestDrawer', () => {
       expect(screen.queryByText('Open related infrastructure')).toBeNull();
     });
 
+    it('shows current readings without fabricating history points', async () => {
+      chartsApiMocks.getMetricsHistory.mockResolvedValue({
+        resourceType: 'vm',
+        resourceId: 'inst1:node1:100',
+        range: '24h',
+        start: 0,
+        end: 0,
+        metrics: {},
+        source: 'store',
+      });
+      render(() => <GuestDrawer guest={makeGuest({ cpu: 0.25 })} onClose={vi.fn()} />);
+
+      await fireEvent.click(screen.getByText('History'));
+      await waitFor(() => expect(chartsApiMocks.getMetricsHistory).toHaveBeenCalled());
+
+      const utilizationChart = screen.getAllByTestId('guest-history-group-chart')[0];
+      expect(utilizationChart).toHaveTextContent('CPU25.0%');
+      expect(utilizationChart).toHaveTextContent('Collecting history');
+      expect(utilizationChart.querySelector('path')).toBeNull();
+    });
+
     it('updates grouped metric header values on History chart hover', async () => {
       render(() => <GuestDrawer guest={makeGuest()} onClose={vi.fn()} />);
 
@@ -625,6 +646,19 @@ describe('GuestDrawer', () => {
       ));
       expect(screen.getByText('Guest agent')).toBeInTheDocument();
       expect(screen.getByText('QEMU 5.2.0')).toBeInTheDocument();
+    });
+
+    it('identifies an API-mapped in-guest Pulse Agent without calling it QEMU', () => {
+      render(() => (
+        <GuestDrawer
+          guest={makeGuest({ agentVersion: '6.2.0', agentKind: 'pulse' })}
+          onClose={vi.fn()}
+        />
+      ));
+
+      expect(screen.getByText('Pulse Agent')).toBeInTheDocument();
+      expect(screen.getByText('Pulse 6.2.0')).toHaveAttribute('title', 'Pulse Agent 6.2.0');
+      expect(screen.queryByText(/QEMU/)).toBeNull();
     });
 
     it('shows plain agent version for containers', () => {

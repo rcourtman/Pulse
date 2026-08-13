@@ -12,6 +12,7 @@ import { FormSelect } from '@/components/shared/FormSelect';
 import { filterSelectClass } from '@/components/shared/FilterToolbar';
 import {
   HISTORY_CHART_RANGES,
+  formatHistoryChartTooltipValue,
   formatHistoryChartTimeLabel,
 } from '@/components/shared/historyChartModel';
 import { createNonSuspendingQuery } from '@/hooks/createNonSuspendingQuery';
@@ -30,7 +31,7 @@ import {
 } from './guestDrawerModel';
 
 interface GuestDrawerHistoryProps {
-  fallbackMetrics?: Record<string, number | null | undefined>;
+  currentMetrics?: Record<string, number | null | undefined>;
   groups?: GuestDrawerHistoryGroupConfig[];
   range: HistoryTimeRange;
   target: GuestDrawerHistoryTarget | null;
@@ -48,6 +49,7 @@ interface GuestDrawerHistoryQueryKey {
 }
 
 interface GuestDrawerHistoryGroupChartProps {
+  currentMetrics?: Record<string, number | null | undefined>;
   group: GuestDrawerHistoryGroupConfig;
   loading: boolean;
   metrics: Record<string, AggregatedMetricPoint[] | undefined>;
@@ -189,32 +191,6 @@ const findClosestGuestDrawerHistoryPoint = (
   return closest;
 };
 
-const buildFallbackHistoryPoints = (value: number): AggregatedMetricPoint[] => {
-  if (!Number.isFinite(value)) return [];
-  const end = Date.now();
-  return [
-    { timestamp: end - 60_000, value, min: value, max: value },
-    { timestamp: end, value, min: value, max: value },
-  ];
-};
-
-const mergeFallbackHistoryMetrics = (
-  metrics: Record<string, AggregatedMetricPoint[] | undefined>,
-  fallbackMetrics: Record<string, number | null | undefined> | undefined,
-): Record<string, AggregatedMetricPoint[] | undefined> => {
-  if (!fallbackMetrics) return metrics;
-
-  let next: Record<string, AggregatedMetricPoint[] | undefined> | null = null;
-  for (const [metric, value] of Object.entries(fallbackMetrics)) {
-    if (typeof value !== 'number' || !Number.isFinite(value)) continue;
-    const existing = metrics[metric] ?? [];
-    if (existing.length >= 2) continue;
-    next ??= { ...metrics };
-    next[metric] = buildFallbackHistoryPoints(value);
-  }
-  return next ?? metrics;
-};
-
 const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps> = (props) => {
   const [hoverTimestamp, setHoverTimestamp] = createSignal<number | null>(null);
   const series = createMemo(() =>
@@ -256,9 +232,16 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
   const displaySeries = createMemo(() =>
     series().map((item) => {
       const hovered = hoveredByMetric().get(item.metric);
+      const currentValue = props.currentMetrics?.[item.metric];
       return {
         ...item,
-        displayPoints: hovered ? [hovered.point] : item.points,
+        valueLabel: hovered
+          ? getGuestDrawerHistoryValueLabel([hovered.point], item.unit)
+          : item.points.length > 0
+            ? getGuestDrawerHistoryValueLabel(item.points, item.unit)
+            : typeof currentValue === 'number' && Number.isFinite(currentValue)
+              ? formatHistoryChartTooltipValue(currentValue, item.unit)
+              : '-',
       };
     }),
   );
@@ -314,7 +297,7 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
                   <circle cx="5" cy="5" r="4" fill={item.color} />
                 </svg>
                 <span class="font-medium text-base-content">{item.label}</span>
-                <span>{getGuestDrawerHistoryValueLabel(item.displayPoints, item.unit)}</span>
+                <span>{item.valueLabel}</span>
               </span>
             )}
           </For>
@@ -459,9 +442,6 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
   });
 
   const metrics = createMemo(() => historyQuery.value().metrics ?? {});
-  const displayMetrics = createMemo(() =>
-    mergeFallbackHistoryMetrics(metrics(), props.fallbackMetrics),
-  );
   const groups = createMemo(() => props.groups ?? GUEST_DRAWER_HISTORY_GROUPS);
   const errorText = createMemo(() => (historyQuery.error() ? 'Failed to load history data' : ''));
 
@@ -494,7 +474,8 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
                   <GuestDrawerHistoryGroupChart
                     group={group}
                     loading={historyQuery.loading() && !historyQuery.resolvedOnce()}
-                    metrics={displayMetrics()}
+                    metrics={metrics()}
+                    currentMetrics={props.currentMetrics}
                     range={props.range}
                   />
                 )}

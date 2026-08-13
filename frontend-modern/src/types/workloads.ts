@@ -10,6 +10,15 @@ export type WorkloadType = 'vm' | 'system-container' | 'app-container' | 'pod';
 export type WorkloadContainerViewMode = 'container' | 'system-container' | 'app-container';
 export type ViewMode = 'all' | 'vm' | WorkloadContainerViewMode | 'pod';
 
+export interface WorkloadTelemetryAvailability {
+  cpu: boolean;
+  memory: boolean;
+  disk: boolean;
+  networkIO: boolean;
+  diskIO: boolean;
+  uptime: boolean;
+}
+
 export type WorkloadGuest = (VM | Container) & {
   workloadType?: WorkloadType;
   /** Canonical unified-resource health, kept separate from runtime power state in `status`. */
@@ -27,9 +36,17 @@ export type WorkloadGuest = (VM | Container) & {
   // Canonical platform-page membership. A runtime workload may belong to more
   // than one platform scope, e.g. Docker inside a Proxmox LXC.
   platformScopes?: string[];
+  /**
+   * Records which values were actually present on the unified-resource API.
+   * A reported zero is available; an absent field is not. Legacy callers that
+   * do not supply this facet retain their existing presentation.
+   */
+  telemetryAvailability?: WorkloadTelemetryAvailability;
   // For app-container workloads, this is underlying runtime telemetry
   // ("docker", "podman", etc.), not the owning platform.
   containerRuntime?: string;
+  /** Identifies the producer of agentVersion instead of inferring it from VM type. */
+  agentKind?: 'pulse' | 'qemu-guest';
   updateStatus?: DockerContainerUpdateStatus;
   // Server-evaluated capability refusals from the unified resource. The
   // update button reads this to disable itself with the refusal reason

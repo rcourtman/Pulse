@@ -62,29 +62,27 @@ export interface GuestDrawerBackupPresentation {
 
 export const isGuestDrawerVM = (guest: Guest): guest is VM => resolveWorkloadType(guest) === 'vm';
 
-// Fallback current-value metrics for the guest drawer's history charts.
-// Mirrors `getNodeDrawerHistoryFallbackMetrics` — supplies a single
-// finite value per metric so `mergeFallbackHistoryMetrics` can synthesize
-// a flat 2-point line, replacing the "Collecting history" placeholder
-// when the metrics-store hasn't yet accumulated 2+ samples for that
-// resource within the selected range. Keys must match the `metric`
-// strings declared in `GUEST_DRAWER_HISTORY_GROUPS`.
-export const getGuestDrawerHistoryFallbackMetrics = (
-  guest: Guest,
-): Record<string, number | undefined> => {
-  const cpuPercent = getWorkloadCPUPercent(guest.cpu);
-  const memUsage = guest.memory?.usageUnavailable ? undefined : guest.memory?.usage;
-  const diskUsage = guest.disk?.usage;
+// Current-value metrics displayed beside history legends while the metrics
+// store is still accumulating samples. These values never become chart points:
+// a current reading is not evidence of a historical trend.
+export const getGuestDrawerCurrentMetrics = (guest: Guest): Record<string, number | undefined> => {
+  const availability = guest.telemetryAvailability;
+  const available = (metric: keyof NonNullable<Guest['telemetryAvailability']>): boolean =>
+    availability?.[metric] ?? true;
+  const cpuPercent = available('cpu') ? getWorkloadCPUPercent(guest.cpu) : undefined;
+  const memUsage =
+    available('memory') && !guest.memory?.usageUnavailable ? guest.memory?.usage : undefined;
+  const diskUsage = available('disk') ? guest.disk?.usage : undefined;
   const finite = (value: number | undefined): number | undefined =>
     typeof value === 'number' && Number.isFinite(value) ? value : undefined;
   return {
     cpu: finite(cpuPercent),
     memory: finite(memUsage),
     disk: finite(diskUsage),
-    netin: finite(guest.networkIn),
-    netout: finite(guest.networkOut),
-    diskread: finite(guest.diskRead),
-    diskwrite: finite(guest.diskWrite),
+    netin: available('networkIO') ? finite(guest.networkIn) : undefined,
+    netout: available('networkIO') ? finite(guest.networkOut) : undefined,
+    diskread: available('diskIO') ? finite(guest.diskRead) : undefined,
+    diskwrite: available('diskIO') ? finite(guest.diskWrite) : undefined,
   };
 };
 
@@ -275,14 +273,25 @@ export const hasGuestDrawerOsInfo = (guest: Guest): boolean =>
 export const getGuestDrawerAgentLabel = (guest: Guest): string => {
   const version = (guest.agentVersion || '').trim();
   if (!version) return '';
-  return isGuestDrawerVM(guest) ? `QEMU ${version}` : version;
+  if (guest.agentKind === 'pulse') return `Pulse ${version}`;
+  return guest.agentKind === 'qemu-guest' ||
+    (guest.agentKind === undefined && isGuestDrawerVM(guest))
+    ? `QEMU ${version}`
+    : version;
 };
 
 export const getGuestDrawerAgentTitle = (guest: Guest): string => {
   const version = (guest.agentVersion || '').trim();
   if (!version) return '';
-  return isGuestDrawerVM(guest) ? `QEMU guest agent ${version}` : version;
+  if (guest.agentKind === 'pulse') return `Pulse Agent ${version}`;
+  return guest.agentKind === 'qemu-guest' ||
+    (guest.agentKind === undefined && isGuestDrawerVM(guest))
+    ? `QEMU guest agent ${version}`
+    : version;
 };
+
+export const getGuestDrawerAgentHeading = (guest: Guest): string =>
+  guest.agentKind === 'pulse' ? 'Pulse Agent' : 'Guest agent';
 
 export interface GuestDrawerMemoryRow {
   label: string;

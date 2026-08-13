@@ -107,7 +107,7 @@ export const getResourceMetricsHistoryTarget = (
 export const resourceSupportsMetricsHistory = (resource: Resource): boolean =>
   getResourceMetricsHistoryTarget(resource) !== null;
 
-export const getResourceMetricsHistoryFallbackMetrics = (
+export const getResourceMetricsHistoryCurrentMetrics = (
   resource: Resource,
 ): Record<string, number | undefined> => {
   return {

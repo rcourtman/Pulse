@@ -1,18 +1,52 @@
 {
   "version": 1,
-  "base_sha": "a7646e5f86098b014476669fdc8105a692c22780",
-  "verified_at": "2026-08-13T22:56:10Z",
+  "base_sha": "903b579f8aa24e90ee00c4cac6f7aa8393f69584",
+  "verified_at": "2026-08-13T23:13:56Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Alerts/AlertResourceTableMobile.tsx",
-    "frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsOverrideMutations.ts"
+    "frontend-modern/src/api/runtimeInventorySources.ts",
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawer.tsx",
+    "frontend-modern/src/components/Infrastructure/resourceDetailDrawerMetricsHistoryModel.ts",
+    "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDerivedState.ts",
+    "frontend-modern/src/components/Workloads/GuestDrawer.tsx",
+    "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx",
+    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx",
+    "frontend-modern/src/components/Workloads/GuestRow.tsx",
+    "frontend-modern/src/components/Workloads/NodeDrawer.tsx",
+    "frontend-modern/src/components/Workloads/guestDrawerModel.ts",
+    "frontend-modern/src/components/Workloads/nodeDrawerModel.ts",
+    "frontend-modern/src/components/Workloads/useGuestDrawerState.ts",
+    "frontend-modern/src/components/Workloads/useWorkloadsState.ts",
+    "frontend-modern/src/components/Workloads/workloadInventorySourceIssues.ts",
+    "frontend-modern/src/features/docker/DockerHostDrawer.tsx",
+    "frontend-modern/src/features/docker/dockerHostDrawerModel.ts",
+    "frontend-modern/src/features/vmware/VmwarePageSurface.tsx",
+    "frontend-modern/src/hooks/useWorkloads.ts",
+    "frontend-modern/src/types/workloads.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Alerts/AlertResourceTableMobile.tsx": "6596f8b71c9cefb759d72751e4c5eeaf48292cd7fd90b3cc3a3f2026f59baf82",
-    "frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsOverrideMutations.ts": "6db0718b9139daa8f98a41dc0d254bf3889b138ded7b3ac9a2ffa761ab3de70e"
+    "frontend-modern/src/api/runtimeInventorySources.ts": "c14c416bc12ff77f53aa7623a774e00129e813771e9e8bbcd295ca5698615f2c",
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawer.tsx": "effbe9e1a206e6fc4aeb8d0f4f45c4ebe15d983fc6e98db5285f9cf623ea654b",
+    "frontend-modern/src/components/Infrastructure/resourceDetailDrawerMetricsHistoryModel.ts": "b21cbb340be34ee833503eab8bcdbc8a75e14e9bbc8bd6e0be8c1d8aa5d26cf1",
+    "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDerivedState.ts": "4ae7d3a10b0850edd6193ccd2002275fb623deed8948c0dbbb2cd3055381e927",
+    "frontend-modern/src/components/Workloads/GuestDrawer.tsx": "f6de7da0928440d8edaacd34adc64de70577c88056cdaf88b409a91cc1954663",
+    "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx": "a4f0c6e11a51b37f6f8fc5602ae7fb22f58b4217426c5cb1cf57e49936a92073",
+    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx": "30e2a4f60244a0a07017562bef58d1d735f03a7ddba72f49586ccbf86387a4fb",
+    "frontend-modern/src/components/Workloads/GuestRow.tsx": "8db3148e7711f6bcdce117c4c58b75ebf214717056a034273a39d90475cac337",
+    "frontend-modern/src/components/Workloads/NodeDrawer.tsx": "9bdb7203eb698b7705914357b45245f17252aa135ef5b94eec331396fc04ec82",
+    "frontend-modern/src/components/Workloads/guestDrawerModel.ts": "18058d98f8909893e4b2e62c7aae569ed1e57c1dd8432f7a1efeaf6edc8c270f",
+    "frontend-modern/src/components/Workloads/nodeDrawerModel.ts": "5ba1927c2f050b26d67a6998f34cabbddba9fa79df98ec1e2ecc9b311633eeaa",
+    "frontend-modern/src/components/Workloads/useGuestDrawerState.ts": "dc0578bd3ea010412673a821291e6bd77a5fb229cb67e3493d4c4842af5e0345",
+    "frontend-modern/src/components/Workloads/useWorkloadsState.ts": "487eed98aba85f2dad8f504694ebf24c8faff861eeb19d729c741cb5cc3367b5",
+    "frontend-modern/src/components/Workloads/workloadInventorySourceIssues.ts": "abe71a344a7ff660e62b1cde6cafac72567e485827c08481003567ed3e7c3363",
+    "frontend-modern/src/features/docker/DockerHostDrawer.tsx": "e1d36317c1cefa262cfec544e8220608d53dd2fb546d8e058fa26caa5c0012d5",
+    "frontend-modern/src/features/docker/dockerHostDrawerModel.ts": "7162841abb5e5061cf89342d265c8e170243ddf41477985da350e85126eea594",
+    "frontend-modern/src/features/vmware/VmwarePageSurface.tsx": "2e44e78339c0bbd17dc1d2d75a8beef934393d79f72a105b54a25d3a0cbe84cb",
+    "frontend-modern/src/hooks/useWorkloads.ts": "856b6e05e39f0188b371878cc5361fe72f4a05b77b8505b00e0f19d3fedcfd46",
+    "frontend-modern/src/types/workloads.ts": "d3d5958364ebb71740ceee7fb804dd54594297d0a1f173556450772fcefc252c"
   },
   "routes": [
-    "/alerts/thresholds"
+    "/vmware/overview"
   ],
   "viewports": [
     {
@@ -25,16 +59,16 @@
     }
   ],
   "states": [
-    "VMs & Containers section expanded in the card layout at 700px with Backup and Snapshot rendered as toggle badges (Disabled) instead of number inputs",
-    "guest card edit mode (cold-archive-01) showing numeric inputs with On toggles for CPU/Memory/Disk while Backup and Snapshot remain toggle badges with no number input",
-    "unsaved-changes banner after toggling a backup badge, then discarded",
-    "1280px desktop viewport still using the card layout for the 14-column guests section, badges rendering identically"
+    "desktop vSphere host and workload tables without unsupported backup status columns or failure icons, with API-backed VM CPU allocation values visible",
+    "etl-batch-01 guest drawer overview showing the explicitly identified Pulse Agent presentation",
+    "etl-batch-01 history tab showing current readings alongside Collecting history with no fabricated chart geometry",
+    "700px compact vSphere tables with no horizontal body overflow or unsupported backup artifacts"
   ],
   "interactions": [
-    "expanded the VMs & Containers group",
-    "entered per-guest edit mode via Edit thresholds button",
-    "clicked a Backup toggle badge in card view mode and confirmed it flipped to enabled and staged unsaved changes",
-    "clicked Discard to clear the staged change",
-    "checked console errors (only pre-existing WebSocket reconnect noise from the absent 7655 backend)"
+    "expanded etl-batch-01 and opened its guest drawer",
+    "switched the guest drawer to History",
+    "inspected all three history chart groups and confirmed zero SVG trend paths while no stored samples were available",
+    "verified the desktop and 700px layouts had no console errors",
+    "verified the 700px document scroll width matched the viewport width"
   ]
 }

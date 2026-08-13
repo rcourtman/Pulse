@@ -120,6 +120,14 @@ export interface WorkloadsSurfaceProps {
   additionalDefaultHiddenColumnIds?: string[];
   columnLabelOverrides?: Partial<Record<string, string>>;
   groupLabelBadges?: Record<string, WorkloadGroupLabelBadge>;
+  /** Lets an owning platform page share one viewer-safe source-health poll. */
+  inventorySourcesQuery?: WorkloadsInventorySourcesQuery;
+}
+
+export interface WorkloadsInventorySourcesQuery {
+  error: Accessor<unknown>;
+  refetch: (options?: { background?: boolean }) => Promise<RuntimeInventorySourcesResponse>;
+  value: Accessor<RuntimeInventorySourcesResponse>;
 }
 
 export type WorkloadSortKey = WorkloadsSortKey;
@@ -148,8 +156,10 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
     cacheKey: 'workloads-infrastructure-sources',
     enabled: workloadsEnabled,
   });
-  const inventorySourcesResourceKey = createMemo(() => (workloadsEnabled() ? 'enabled' : null));
-  const inventorySourcesSnapshot = createNonSuspendingQuery<
+  const inventorySourcesResourceKey = createMemo(() =>
+    workloadsEnabled() && !props.inventorySourcesQuery ? 'enabled' : null,
+  );
+  const ownedInventorySourcesSnapshot = createNonSuspendingQuery<
     RuntimeInventorySourcesResponse,
     string
   >({
@@ -158,6 +168,7 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
     initialValue: EMPTY_INVENTORY_SOURCES_RESPONSE,
     cacheKey: (key) => `workloads-inventory-sources:${key}`,
   });
+  const inventorySourcesSnapshot = props.inventorySourcesQuery ?? ownedInventorySourcesSnapshot;
 
   const dedupeGuests = (guests: WorkloadGuest[]): WorkloadGuest[] => {
     const seen = new Set<string>();
@@ -386,7 +397,7 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
     alertsActivation.getMetricThresholds('node', 'temperature', nodeOverrideIdCandidates(node));
 
   createEffect(() => {
-    if (!workloadsEnabled()) return;
+    if (!workloadsEnabled() || props.inventorySourcesQuery) return;
     const handle = window.setInterval(() => {
       void inventorySourcesSnapshot.refetch({ background: true });
     }, WORKLOADS_INVENTORY_SOURCES_POLL_INTERVAL_MS);

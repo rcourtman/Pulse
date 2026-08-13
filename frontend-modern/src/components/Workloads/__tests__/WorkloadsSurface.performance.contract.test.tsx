@@ -1533,7 +1533,8 @@ describe('Workloads performance contract', () => {
       expect(guestDrawerHistorySource).toContain('data-testid="guest-history-range-control"');
       expect(guestDrawerHistorySource).toContain('h-7 min-h-11 py-0 text-[11px] sm:min-h-0');
       expect(guestDrawerHistorySource).toContain('onPointerMove={handleHoverMove}');
-      expect(guestDrawerHistorySource).toContain('fallbackMetrics');
+      expect(guestDrawerHistorySource).toContain('currentMetrics');
+      expect(guestDrawerHistorySource).not.toContain('buildFallbackHistoryPoints');
       expect(guestDrawerHistorySource).toContain('props.groups ?? GUEST_DRAWER_HISTORY_GROUPS');
       expect(guestDrawerHistorySource).toContain('flex min-h-[154px] flex-col');
       expect(guestDrawerHistorySource).toContain('relative min-h-24 flex-1');
@@ -1545,8 +1546,8 @@ describe('Workloads performance contract', () => {
       expect(nodeDrawerOverviewSource).toContain('Telemetry');
       expect(nodeDrawerOverviewSource).toContain('Thermals');
       expect(nodeDrawerOverviewSource).toContain('InfoCardFrame');
-      expect(nodeDrawerModelSource).toContain("id: 'thermals'");
-      expect(nodeDrawerModelSource).toContain("metric: 'temperature'");
+      expect(nodeDrawerModelSource).toContain('HOST_METRICS_HISTORY_GROUPS');
+      expect(nodeDrawerModelSource).not.toContain("id: 'thermals'");
       expect(workloadPanelSource).toContain('NodeDrawer');
       expect(workloadPanelSource).toContain('data-inline-node-detail-for');
       expect(workloadPanelSource).toContain('const selectedGuestId = props.selectedGuestId()');

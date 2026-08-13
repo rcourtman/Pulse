@@ -20,6 +20,7 @@ import resourceDetailDrawerVmwareModelSource from '@/components/Infrastructure/r
 import resourceDetailDrawerTrueNASModelSource from '@/components/Infrastructure/resourceDetailDrawerTrueNASModel.ts?raw';
 import resourceDetailDrawerDockerActionsStateSource from '@/components/Infrastructure/useResourceDetailDrawerDockerActionsState.ts?raw';
 import resourceDetailDrawerStateSource from '@/components/Infrastructure/useResourceDetailDrawerState.ts?raw';
+import guestDrawerHistorySource from '@/components/Workloads/GuestDrawerHistory.tsx?raw';
 import actionAuditApiSource from '@/api/actionAudit.ts?raw';
 import actionAuditPresentationSource from '@/utils/actionAuditPresentation.ts?raw';
 import type { Resource } from '@/types/resource';
@@ -139,6 +140,12 @@ const baseResource = (overrides: Partial<Resource>): Resource => ({
 });
 
 describe('ResourceDetailDrawer change history section', () => {
+  it('keeps current readings separate from stored history samples', () => {
+    expect(guestDrawerHistorySource).toContain('currentMetrics');
+    expect(guestDrawerHistorySource).toContain('Collecting history');
+    expect(guestDrawerHistorySource).not.toContain('buildFallbackHistoryPoints');
+  });
+
   it('keeps discovery context presentation separate from discovery runtime ownership', () => {
     expect(discoveryTabSource).toContain('useDiscoveryTabState');
     expect(discoveryTabStateSource).toContain('export function useDiscoveryTabState');

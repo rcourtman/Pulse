@@ -197,7 +197,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                 <GuestDrawerHistory
                   target={target()}
                   range={drawer.metricsHistoryRange()}
-                  fallbackMetrics={drawer.metricsHistoryFallbackMetrics()}
+                  currentMetrics={drawer.metricsHistoryCurrentMetrics()}
                   groups={drawer.metricsHistoryGroups()}
                 />
               </div>

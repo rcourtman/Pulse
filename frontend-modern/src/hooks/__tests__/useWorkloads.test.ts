@@ -585,6 +585,91 @@ describe('useWorkloads', () => {
     dispose();
   });
 
+  it('preserves API telemetry absence separately from reported zero values on every platform', async () => {
+    apiFetchJSONMock.mockResolvedValueOnce({
+      data: [
+        {
+          id: 'vmware-vm-unknown-telemetry',
+          type: 'vm',
+          name: 'unknown-telemetry',
+          status: 'online',
+          lastSeen: 'not-a-timestamp',
+          sources: ['vmware'],
+          metrics: {},
+          agent: { agentVersion: '6.2.0' },
+          vmware: {
+            managedObjectId: 'vm-903',
+            powerState: 'poweredOn',
+            cpuCount: 8,
+          },
+        },
+        {
+          id: 'docker-container-zero-telemetry',
+          type: 'app-container',
+          name: 'zero-telemetry',
+          status: 'running',
+          lastSeen: '2026-08-13T10:00:00Z',
+          sources: ['docker'],
+          uptime: 0,
+          metrics: {
+            cpu: { percent: 0 },
+            memory: { used: 0, total: 1024, percent: 0 },
+            disk: { used: 0, total: 2048, percent: 0 },
+            netIn: { value: 0 },
+            netOut: { value: 0 },
+            diskRead: { value: 0 },
+            diskWrite: { value: 0 },
+          },
+          docker: { containerId: 'zero', runtime: 'docker', uptimeSeconds: 0 },
+        },
+      ],
+      meta: { totalPages: 1 },
+    });
+
+    let dispose = () => {};
+    let result: ReturnType<UseWorkloadsModule['useWorkloads']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      const [enabled] = createSignal(true);
+      result = useWorkloads(enabled);
+    });
+
+    await waitForWorkloadCount(() => result!.workloads().length, 2);
+    const byName = new Map(result!.workloads().map((workload) => [workload.name, workload]));
+
+    expect(byName.get('unknown-telemetry')).toMatchObject({
+      cpus: 8,
+      agentKind: 'pulse',
+      lastSeen: '',
+      telemetryAvailability: {
+        cpu: false,
+        memory: false,
+        disk: false,
+        networkIO: false,
+        diskIO: false,
+        uptime: false,
+      },
+    });
+    expect(byName.get('zero-telemetry')).toMatchObject({
+      cpu: 0,
+      networkIn: 0,
+      networkOut: 0,
+      diskRead: 0,
+      diskWrite: 0,
+      uptime: 0,
+      telemetryAvailability: {
+        cpu: true,
+        memory: true,
+        disk: true,
+        networkIO: true,
+        diskIO: true,
+        uptime: true,
+      },
+    });
+
+    dispose();
+  });
+
   it('renders vSphere row tags from the vCenter facet, never the provenance keyword set', async () => {
     // `Resource.Tags` on vSphere is a mixed keyword set: adapter provenance
     // strings (kept so resource search and the `?tags=` filter keep matching)

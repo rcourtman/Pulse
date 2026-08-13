@@ -2,10 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { Node, Temperature } from '@/types/api';
 
-import {
-  getNodeDrawerHistoryFallbackMetrics,
-  getNodeDrawerHistoryTarget,
-} from '../nodeDrawerModel';
+import { getNodeDrawerCurrentMetrics, getNodeDrawerHistoryTarget } from '../nodeDrawerModel';
 
 const makeNode = (overrides: Partial<Node> = {}): Node => ({
   id: 'agent:pve-node-1',
@@ -155,11 +152,11 @@ describe('nodeDrawerModel (branch coverage 0713)', () => {
     });
   });
 
-  describe('getNodeDrawerHistoryFallbackMetrics', () => {
+  describe('getNodeDrawerCurrentMetrics', () => {
     it('returns temperature: undefined for an empty temperature object', () => {
       // temperature?.available on {} -> undefined -> !undefined === true -> null -> ?? undefined.
       const node = makeNode({ temperature: {} as unknown as Temperature });
-      expect(getNodeDrawerHistoryFallbackMetrics(node)).toStrictEqual({
+      expect(getNodeDrawerCurrentMetrics(node)).toStrictEqual({
         temperature: undefined,
       });
     });
@@ -173,7 +170,7 @@ describe('nodeDrawerModel (branch coverage 0713)', () => {
           cpuMax: undefined,
         }),
       });
-      expect(getNodeDrawerHistoryFallbackMetrics(node)).toStrictEqual({
+      expect(getNodeDrawerCurrentMetrics(node)).toStrictEqual({
         temperature: 50,
       });
     });
@@ -190,7 +187,7 @@ describe('nodeDrawerModel (branch coverage 0713)', () => {
           ],
         }),
       });
-      expect(getNodeDrawerHistoryFallbackMetrics(node)).toStrictEqual({
+      expect(getNodeDrawerCurrentMetrics(node)).toStrictEqual({
         temperature: 95,
       });
     });
@@ -208,7 +205,7 @@ describe('nodeDrawerModel (branch coverage 0713)', () => {
           ],
         }),
       });
-      expect(getNodeDrawerHistoryFallbackMetrics(node)).toStrictEqual({
+      expect(getNodeDrawerCurrentMetrics(node)).toStrictEqual({
         temperature: 88,
       });
     });
@@ -218,7 +215,7 @@ describe('nodeDrawerModel (branch coverage 0713)', () => {
       const node = makeNode({
         temperature: makeTemp({ cpuPackage: undefined, cpuMax: undefined, cores: [] }),
       });
-      expect(getNodeDrawerHistoryFallbackMetrics(node)).toStrictEqual({
+      expect(getNodeDrawerCurrentMetrics(node)).toStrictEqual({
         temperature: undefined,
       });
     });
@@ -228,7 +225,7 @@ describe('nodeDrawerModel (branch coverage 0713)', () => {
       const node = makeNode({
         temperature: makeTemp({ cpuPackage: Number.MAX_VALUE, cpuMax: undefined }),
       });
-      expect(getNodeDrawerHistoryFallbackMetrics(node)).toStrictEqual({
+      expect(getNodeDrawerCurrentMetrics(node)).toStrictEqual({
         temperature: Number.MAX_VALUE,
       });
     });
@@ -238,7 +235,7 @@ describe('nodeDrawerModel (branch coverage 0713)', () => {
       const node = makeNode({
         temperature: makeTemp({ cpuPackage: undefined, cpuMax: 68 }),
       });
-      expect(getNodeDrawerHistoryFallbackMetrics(node)).toStrictEqual({
+      expect(getNodeDrawerCurrentMetrics(node)).toStrictEqual({
         temperature: 68,
       });
     });
@@ -248,7 +245,7 @@ describe('nodeDrawerModel (branch coverage 0713)', () => {
       const node = makeNode({
         temperature: makeTemp({ cpuPackage: 42, cpuMax: undefined }),
       });
-      const result = getNodeDrawerHistoryFallbackMetrics(node);
+      const result = getNodeDrawerCurrentMetrics(node);
       expect(Object.keys(result)).toEqual(['temperature']);
       expect(result.temperature).toBe(42);
     });

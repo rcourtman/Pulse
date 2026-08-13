@@ -29,6 +29,7 @@ interface GuestDrawerOverviewProps {
   guest: GuestDrawerProps['guest'];
   guestId: string;
   guestOsSummary: string;
+  agentHeading: string;
   agentLabel: string;
   agentTitle: string;
   hasAgentInfo: boolean;
@@ -137,7 +138,13 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
                 <span class="font-medium text-base-content">{props.guest.cpus}</span>
               </div>
             </Show>
-            <Show when={props.guest.uptime > 0}>
+            <Show
+              when={
+                props.guest.telemetryAvailability
+                  ? props.guest.telemetryAvailability.uptime
+                  : props.guest.uptime > 0
+              }
+            >
               <div class="flex items-center justify-between">
                 <span class="text-muted">Uptime</span>
                 <span class="font-medium text-base-content">
@@ -153,7 +160,7 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
             </Show>
             <Show when={props.hasAgentInfo}>
               <div class="flex items-center justify-between">
-                <span class="text-muted">Guest agent</span>
+                <span class="text-muted">{props.agentHeading}</span>
                 <span class="font-medium text-base-content truncate ml-2" title={props.agentTitle}>
                   {props.agentLabel}
                 </span>

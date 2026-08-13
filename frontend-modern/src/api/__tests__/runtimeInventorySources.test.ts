@@ -21,6 +21,11 @@ describe('RuntimeInventorySourcesAPI', () => {
           name: 'Primary vCenter',
           state: 'unreachable',
           surfaces: ['vms'],
+          completeness: {
+            state: 'degraded',
+            issueCount: 2,
+            issues: [{ stage: 'tags', category: 'permission', occurrences: 2 }],
+          },
         },
       ],
     });
@@ -32,6 +37,11 @@ describe('RuntimeInventorySourcesAPI', () => {
           name: 'Primary vCenter',
           state: 'unreachable',
           surfaces: ['vms'],
+          completeness: {
+            state: 'degraded',
+            issueCount: 2,
+            issues: [{ stage: 'tags', category: 'permission', occurrences: 2 }],
+          },
         },
       ],
     });

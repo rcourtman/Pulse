@@ -4,7 +4,7 @@ import type { Resource } from '@/types/resource';
 
 import {
   DOCKER_HOST_DRAWER_HISTORY_GROUPS,
-  getDockerHostDrawerHistoryFallbackMetrics,
+  getDockerHostDrawerCurrentMetrics,
   getDockerHostDrawerHistoryTarget,
 } from '../dockerHostDrawerModel';
 
@@ -118,42 +118,42 @@ describe('dockerHostDrawerModel', () => {
     });
   });
 
-  describe('getDockerHostDrawerHistoryFallbackMetrics', () => {
+  describe('getDockerHostDrawerCurrentMetrics', () => {
     it('returns the host temperature when it is a finite number', () => {
-      expect(getDockerHostDrawerHistoryFallbackMetrics(makeHost({ temperature: 42 }))).toEqual({
+      expect(getDockerHostDrawerCurrentMetrics(makeHost({ temperature: 42 }))).toEqual({
         temperature: 42,
       });
     });
 
     it('falls back to docker.temperature when host temperature is absent', () => {
-      expect(
-        getDockerHostDrawerHistoryFallbackMetrics(makeHost({ docker: { temperature: 51 } })),
-      ).toEqual({ temperature: 51 });
+      expect(getDockerHostDrawerCurrentMetrics(makeHost({ docker: { temperature: 51 } }))).toEqual({
+        temperature: 51,
+      });
     });
 
     it('prefers host temperature over docker.temperature', () => {
       expect(
-        getDockerHostDrawerHistoryFallbackMetrics(
+        getDockerHostDrawerCurrentMetrics(
           makeHost({ temperature: 10, docker: { temperature: 99 } }),
         ),
       ).toEqual({ temperature: 10 });
     });
 
     it('keeps zero as a valid temperature (boundary)', () => {
-      expect(getDockerHostDrawerHistoryFallbackMetrics(makeHost({ temperature: 0 }))).toEqual({
+      expect(getDockerHostDrawerCurrentMetrics(makeHost({ temperature: 0 }))).toEqual({
         temperature: 0,
       });
     });
 
     it('keeps a finite negative temperature', () => {
-      expect(getDockerHostDrawerHistoryFallbackMetrics(makeHost({ temperature: -5 }))).toEqual({
+      expect(getDockerHostDrawerCurrentMetrics(makeHost({ temperature: -5 }))).toEqual({
         temperature: -5,
       });
     });
 
     it('rejects NaN on the host temperature and falls through to docker', () => {
       expect(
-        getDockerHostDrawerHistoryFallbackMetrics(
+        getDockerHostDrawerCurrentMetrics(
           makeHost({ temperature: Number.NaN, docker: { temperature: 33 } }),
         ),
       ).toEqual({ temperature: 33 });
@@ -161,33 +161,29 @@ describe('dockerHostDrawerModel', () => {
 
     it('rejects Infinity and -Infinity on the host temperature', () => {
       expect(
-        getDockerHostDrawerHistoryFallbackMetrics(
-          makeHost({ temperature: Number.POSITIVE_INFINITY }),
-        ),
+        getDockerHostDrawerCurrentMetrics(makeHost({ temperature: Number.POSITIVE_INFINITY })),
       ).toEqual({ temperature: undefined });
       expect(
-        getDockerHostDrawerHistoryFallbackMetrics(
-          makeHost({ temperature: Number.NEGATIVE_INFINITY }),
-        ),
+        getDockerHostDrawerCurrentMetrics(makeHost({ temperature: Number.NEGATIVE_INFINITY })),
       ).toEqual({ temperature: undefined });
     });
 
     it('returns undefined when both host and docker temperatures are non-finite', () => {
       expect(
-        getDockerHostDrawerHistoryFallbackMetrics(
+        getDockerHostDrawerCurrentMetrics(
           makeHost({ temperature: Number.NaN, docker: { temperature: Number.POSITIVE_INFINITY } }),
         ),
       ).toEqual({ temperature: undefined });
     });
 
     it('returns undefined when neither temperature source is present', () => {
-      expect(getDockerHostDrawerHistoryFallbackMetrics(makeHost())).toEqual({
+      expect(getDockerHostDrawerCurrentMetrics(makeHost())).toEqual({
         temperature: undefined,
       });
     });
 
     it('always returns exactly one temperature key', () => {
-      const metrics = getDockerHostDrawerHistoryFallbackMetrics(makeHost({ temperature: 7 }));
+      const metrics = getDockerHostDrawerCurrentMetrics(makeHost({ temperature: 7 }));
       expect(Object.keys(metrics)).toEqual(['temperature']);
     });
   });

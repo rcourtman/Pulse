@@ -273,6 +273,13 @@ change may globally weaken the Task 03 lifecycle-state idempotency invariant.
    `docker.uptimeSeconds`, `kubernetes.uptimeSeconds`); platforms whose
    adapters only populate the canonical field — vSphere is the working
    example — would otherwise render blank uptime cells for every row.
+   That mapper must preserve observation presence separately from the numeric
+   fallback required by the legacy `VM | Container` shape. `0` is a real
+   reported CPU, capacity, I/O, or uptime value; an absent or non-finite API
+   field is unavailable and must render as such. The mapper records that fact
+   once on `WorkloadGuest.telemetryAvailability`, never substitutes wall-clock
+   time for an absent `lastSeen`, and reads vSphere CPU allocation from
+   `VMware.CPUCount` before declaring the count unknown.
    Workload guest rows may compose the shared saved web-interface adjacent
    launch control from `frontend-primitives`, but row rendering must receive
    any saved URL from already-loaded row metadata and must not add per-row
@@ -500,8 +507,8 @@ change may globally weaken the Task 03 lifecycle-state idempotency invariant.
    scope must be applied before deriving host, Kubernetes context/namespace,
    and container runtime facet options so embedded pages do not pay for or
    display unrelated platform options.
-   Workloads source-health messaging must derive from the canonical
-   `/api/connections` ledger through
+   Workloads source-health messaging must derive from the viewer-safe
+   `/api/runtime/inventory-sources` projection through
    `frontend-modern/src/components/Workloads/workloadInventorySourceIssues.ts`.
    Platform-owned embedded Workloads surfaces must scope those source-health
    issues to the forced platform before rendering an empty inventory state, and
@@ -530,6 +537,14 @@ change may globally weaken the Task 03 lifecycle-state idempotency invariant.
    pending, or paused, but it must not fabricate VM/container rows from host
    telemetry or hide source blockers just because another source still has
    workload rows.
+   The same projection may include an active VMware source only when its last
+   otherwise-successful refresh reported degraded optional enrichment. That
+   completeness record is a strict whitelist of stage, category, occurrence,
+   and aggregate count; raw messages, entity identifiers, endpoints, and
+   credentials remain private. The vSphere page shares this single bounded
+   poll with its embedded Workloads state and must say when displayed inventory
+   may be incomplete rather than treating omitted enrichment as a healthy
+   empty result.
    The retired dashboard overview route must not return as a hot-path
    orientation shortcut. First-viewport system count, health, source coverage,
    and freshness now belong to the provider-first platform landing surface and
@@ -571,6 +586,11 @@ change may globally weaken the Task 03 lifecycle-state idempotency invariant.
     the migration boundary.
 11. Extend workload drawer derivations and runtime wiring through `frontend-modern/src/components/Workloads/guestDrawerModel.ts` and `frontend-modern/src/components/Workloads/useGuestDrawerState.ts`, and extend drawer overview rendering through `frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx`, rather than rebuilding canonical guest identity, discovery routing, or drawer-local normalization inside `frontend-modern/src/components/Workloads/GuestDrawer.tsx`
     Drawer history charts belong to `frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx`.
+    A current metric may remain visible in a chart legend while history is
+    accumulating, but it must never be expanded into synthetic timestamps or a
+    flat line. Fewer than two stored points remains `Collecting history` and
+    only metrics-store samples may contribute chart geometry, bounds, or hover
+    inspection.
     History cards must let the plot area stretch to the card height instead of
     pinning the SVG wrapper to a fixed short height, so guest and node drawer
     history cards do not leave unused card space when headers have different
@@ -1137,8 +1157,9 @@ node-context metric, not a universal Workloads table column, and the node detail
 drawer may add one compact `Thermals` history group beside utilization and I/O
 only after a grouped node row is selected. Host-agent CPU temperature must be
 persisted into the same metrics-store history stream as other agent metrics,
-with current node temperature used only as drawer-local fallback while history
-is still accumulating.
+with current node temperature displayed only as a drawer-local current reading
+while history is still accumulating; it must not become a synthetic history
+point.
 Standalone agent thermal pressure follows a compact table-and-drawer rule:
 platform tables may show a short pressure status such as `Nominal` or
 `Constrained` in the existing temperature cell when no positive Celsius reading
@@ -2381,10 +2402,13 @@ interval refetch.
 
 The server work remains one cached `buildConnections` aggregation with no
 probing, persistence, grouped-system construction, or command-session
-enrichment. It filters healthy, disabled, non-workload, and coverage-free rows
-before serialization, so the response is no larger than the actionable banner
-input. Client presentation is a single pass over that bounded list and performs
-no per-source fetch or detail lookup.
+enrichment. It filters disabled, coverage-free, and healthy sources with no
+collection-completeness issue before serialization, so the response is no
+larger than actionable blocker or degraded-completeness input. Client
+presentation is a single pass over that bounded list and performs no per-source
+fetch or detail lookup. Platform pages that need the same snapshot must inject
+the owning query into embedded Workloads state so they do not create a second
+poll.
 
 ### Resource policy reads stay outside the Workloads hot path
 
