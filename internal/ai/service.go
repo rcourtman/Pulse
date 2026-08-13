@@ -246,6 +246,7 @@ type Service struct {
 	resourceExportStore      unifiedresources.ResourceStore
 	resourceExportStoreOrgID string
 	patrolAutopilotPolicy    func() unifiedresources.PatrolAutopilotServerPolicy
+	patrolObjectiveStore     *PatrolObjectiveStore
 	patrolService            *PatrolService        // Background AI monitoring service
 	metadataProvider         MetadataProvider      // Enables AI to update resource URLs
 	incidentStore            *memory.IncidentStore // Alert-scoped investigation memory; not the canonical durable resource history
@@ -334,6 +335,7 @@ func NewService(persistence *config.ConfigPersistence, agentServer AgentServer) 
 	var knowledgeStore *knowledge.Store
 	var discoveryStore *servicediscovery.Store
 	costStore := cost.NewStore(cost.DefaultMaxDays)
+	objectiveStore := NewInMemoryPatrolObjectiveStore()
 	if persistence != nil {
 		var err error
 		knowledgeStore, err = knowledge.NewStore(persistence.DataDir())
@@ -348,16 +350,22 @@ func NewService(persistence *config.ConfigPersistence, agentServer AgentServer) 
 		if err != nil {
 			log.Warn().Err(err).Msg("failed to initialize discovery store")
 		}
+		objectiveStore, err = NewPatrolObjectiveStore(persistence.DataDir())
+		if err != nil {
+			objectiveStore = nil
+			log.Error().Err(err).Msg("failed to initialize encrypted Patrol objective store")
+		}
 	}
 
 	svc := &Service{
-		orgID:          "default",
-		persistence:    persistence,
-		agentServer:    agentServer,
-		policy:         agentexec.DefaultPolicy(),
-		knowledgeStore: knowledgeStore,
-		discoveryStore: discoveryStore,
-		costStore:      costStore,
+		orgID:                "default",
+		persistence:          persistence,
+		agentServer:          agentServer,
+		policy:               agentexec.DefaultPolicy(),
+		knowledgeStore:       knowledgeStore,
+		discoveryStore:       discoveryStore,
+		costStore:            costStore,
+		patrolObjectiveStore: objectiveStore,
 		limits: executionLimits{
 			chatSlots:   make(chan struct{}, 4),
 			patrolSlots: make(chan struct{}, 1),
@@ -559,6 +567,7 @@ func (s *Service) initPatrolServiceLocked() {
 	}
 
 	s.patrolService = NewPatrolService(s, s.stateProvider)
+	s.patrolService.SetObjectiveStore(s.patrolObjectiveStore)
 	if s.knowledgeStore != nil {
 		s.patrolService.SetKnowledgeStore(s.knowledgeStore)
 	}
@@ -699,6 +708,15 @@ func (s *Service) GetPatrolService() *PatrolService {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.patrolService
+}
+
+// GetPatrolObjectiveStore returns the organization-scoped durable operator
+// objective store. It exists independently from a running Patrol service so an
+// operator can retain intent while provider or infrastructure setup is offline.
+func (s *Service) GetPatrolObjectiveStore() *PatrolObjectiveStore {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.patrolObjectiveStore
 }
 
 // SetChatService sets the chat service for investigation orchestrator

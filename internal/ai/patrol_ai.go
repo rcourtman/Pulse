@@ -1492,6 +1492,7 @@ func (p *PatrolService) buildTriageSeedSectionsState(
 	sections := []seedSection{
 		// P0 — always include.
 		{priority: 0, name: "triage_overview", content: formatTriageOverviewSection(triage)},
+		{priority: 0, name: "operator_objectives", content: p.seedPatrolObjectives(sortedScopedIDs(seedSet), scope != nil, now)},
 		{priority: 0, name: "findings", content: findingsCtx},
 		{priority: 0, name: "health_alerts", content: p.seedHealthAndAlertsState(snap, seedSet, cfg, now)},
 		{priority: 0, name: "scope", content: buildScopeSection(scope, sortedScopedIDs(seedSet))},
@@ -1540,6 +1541,7 @@ func (p *PatrolService) buildSeedSectionsState(snap patrolRuntimeState, scope *P
 
 	sections := []seedSection{
 		// P0 — always include.
+		{priority: 0, name: "operator_objectives", content: p.seedPatrolObjectives(effectiveScopeIDs, scope != nil, now)},
 		{priority: 0, name: "findings", content: findingsCtx},
 		{priority: 0, name: "health_alerts", content: p.seedHealthAndAlertsState(snap, scopedSet, cfg, now)},
 		{priority: 0, name: "scope", content: buildScopeSection(scope, effectiveScopeIDs)},

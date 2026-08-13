@@ -1131,6 +1131,22 @@ Runs a focused investigation for an alert payload (used by the UI).
 - `GET /api/ai/patrol/status`
 - `GET /api/ai/patrol/findings`
 - `DELETE /api/ai/patrol/findings` (clear all findings)
+- `GET /api/ai/patrol/objectives`
+- `POST /api/ai/patrol/objectives`
+- `GET /api/ai/patrol/objectives/{id}`
+- `PATCH /api/ai/patrol/objectives/{id}`
+- `DELETE /api/ai/patrol/objectives/{id}?revision={revision}`
+  - Objective writes accept an outcome-oriented `brief`, optional
+    `optional_context`, and optional canonical `resource_ids`. `PATCH` also
+    accepts `status` (`active`, `paused`, or `archived`) and requires the
+    current `revision` in its JSON body.
+  - Responses include server-derived `coverage` (`covered`, `degraded`, or
+    `uncovered`) and observer lifecycle state. Clients cannot submit either
+    field or mark an objective covered. A saved objective remains uncovered
+    until core records a validated, installed read-only observer with a live
+    health lease.
+  - Reads and writes require `ai:execute`. Stale writes return
+    `409 patrol_objective_revision_conflict`.
 - `GET /api/ai/patrol/history`
 - `GET /api/ai/patrol/runs`
 - `GET /api/ai/patrol/stream` (Pro)

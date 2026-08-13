@@ -1244,3 +1244,28 @@ func TestHandleForcePatrol_ScopedRequestBypassesFullRunCadenceGate(t *testing.T)
 		t.Fatalf("full response = %s, want patrol_rate_limited", fullRec.Body.String())
 	}
 }
+
+func TestPatrolObjectiveAPIContractKeepsCoverageServerOwned(t *testing.T) {
+	handler, _, _, _ := setupAIHandlerWithPatrol(t)
+
+	createReq := newLoopbackRequest(http.MethodPost, "/api/ai/patrol/objectives", strings.NewReader(`{"brief":"Keep cameras online","resource_ids":["camera-1"]}`))
+	createRec := httptest.NewRecorder()
+	handler.HandlePatrolObjectives(createRec, createReq)
+	if createRec.Code != http.StatusCreated {
+		t.Fatalf("create status = %d, body=%s", createRec.Code, createRec.Body.String())
+	}
+	var objective ai.PatrolObjective
+	if err := json.Unmarshal(createRec.Body.Bytes(), &objective); err != nil {
+		t.Fatalf("decode objective: %v", err)
+	}
+	if objective.Coverage.State != ai.PatrolObjectiveUncovered || objective.Coverage.ReasonCode != "observer_missing" {
+		t.Fatalf("new objective coverage = %+v", objective.Coverage)
+	}
+
+	forgedReq := newLoopbackRequest(http.MethodPost, "/api/ai/patrol/objectives", strings.NewReader(`{"brief":"Keep cameras online","coverage":{"state":"covered"}}`))
+	forgedRec := httptest.NewRecorder()
+	handler.HandlePatrolObjectives(forgedRec, forgedReq)
+	if forgedRec.Code != http.StatusBadRequest {
+		t.Fatalf("forged coverage status = %d, body=%s", forgedRec.Code, forgedRec.Body.String())
+	}
+}

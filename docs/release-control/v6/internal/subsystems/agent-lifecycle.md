@@ -1741,6 +1741,13 @@ the intentionally sparse public response.
 4. Keep shared agent-side TLS identity fail-closed across `cmd/pulse-agent/main.go`, `internal/hostagent/`, `internal/agentupdate/`, `internal/remoteconfig/client.go`, and `internal/agenttls/config.go`. Self-signed deployments may use a canonical pinned Pulse server certificate fingerprint, but lifecycle transport must route that pin through reporting, enrollment, command websocket, remote-config, and self-update clients instead of widening `PULSE_INSECURE_SKIP_VERIFY` into a blanket MITM carve-out. A configured custom CA bundle is part of that same trust boundary: if the bundle is unreadable or invalid, lifecycle transport must refuse the connection path rather than silently downgrading back to system roots.
 5. Keep release-grade updater trust fail-closed across `internal/agentupdate/`, `internal/dockeragent/`, and the shared `internal/api/unified_agent.go` download helpers. When release builds embed trusted update signing keys, published agent binaries and installer assets must carry detached `.sig` plus `.sshsig` sidecars; updater/runtime paths must require `X-Signature-Ed25519` in addition to `X-Checksum-Sha256`, and installer-owned download flows must require the matching base64-encoded `X-Signature-SSHSIG`, instead of silently downgrading to checksum-only trust.
 6. Keep shared `internal/api/` helper edits isolated from agent lifecycle semantics: Patrol-specific status transport or alert-trigger wiring changes in shared handlers must not bleed into auto-register, installer, or fleet-control behavior unless this contract moves in the same slice.
+   The same isolation rule applies to retained Patrol objective routes under
+   `internal/api/`: objective briefs, resource scope, optimistic revisions,
+   derived observer coverage, and observer-health state are AI/runtime plus
+   API-contract facts. Agent lifecycle surfaces must not reinterpret an
+   objective or observer record as agent enrollment, install state, command
+   connectivity, profile assignment, update readiness, setup-token scope, or
+   infrastructure mutation authority.
    Commercial migration startup behavior in
    `internal/api/licensing_handlers.go` and `internal/api/licensing_bridge.go`
    remains a cloud-paid/API concern. Suppressing synthetic mock-license

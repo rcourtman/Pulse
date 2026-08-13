@@ -128,6 +128,15 @@ with bounded provenance and rollback; app-named integration code is an
 optimization only when repeated evidence justifies productizing it, never a
 prerequisite for a new objective.
 
+The first canonical runtime slice is implemented by
+`internal/ai/patrol_objectives.go` and `internal/api/patrol_objectives.go`.
+It provides encrypted retained intent, optimistic revisions, resource scoping,
+model seed projection, and the core-owned observer state machine. The public API
+deliberately cannot attach an observer or author coverage. The monitor-building,
+validation, sandbox installation, event delivery, and redesign executor remains
+an extension of this lifecycle; until one records a healthy installed observer,
+the saved objective truthfully remains uncovered.
+
 Desktop Autopilot activation consumes the server-owned acknowledgement
 contract through `frontend-modern/src/api/patrol.ts` and
 `PatrolAutopilotAcknowledgementDialog.tsx`. The UI displays requested versus

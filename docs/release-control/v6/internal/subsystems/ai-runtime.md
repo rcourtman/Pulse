@@ -395,9 +395,32 @@ batch, and it retains parallel execution for independent reads and independent
 finding writes. This makes the existing read-before-write guard deterministic
 without requiring the model to understand an internal goroutine schedule.
 
+Patrol operational objectives are durable organization-scoped operator intent,
+not prompts that exist only for one provider session. Core persists the brief,
+optional context, canonical resource scope, lifecycle revision, and internal
+observer record in `ai_patrol_objectives.enc` under the tenant data directory;
+the file must decrypt successfully before any objective is loaded. Active
+objectives are added to full and scoped Patrol seed context as desired outcomes,
+not as trusted scripts or tool instructions. Scoped runs receive global
+objectives plus only objectives whose canonical resource IDs intersect the
+effective scope. Provider-bound resource-policy sanitization remains the final
+transport boundary for the resulting context.
+
+Objective coverage is core-derived. Saving intent starts `uncovered`; neither a
+client nor a model may write `covered`. Coverage becomes `covered` only for an
+internally recorded, read-only observer that traversed
+`proposed -> validated -> installed` and holds an unexpired health lease. A
+missing lease, expired lease, or observer failure is `degraded`; paused,
+archived, missing, proposed, validated-but-uninstalled, and disabled observers
+are `uncovered`. Observer artifact identity, SHA-256 digest, declared bounded
+trigger kinds, version, state transitions, and machine failure code are
+validated and persisted by core. Observer authority never includes an
+infrastructure mutation capability.
+
 ## Canonical Files
 
 1. `internal/ai/`
+   1g. `internal/ai/patrol_objectives.go`
    1e. `internal/ai/attention.go`
    1f. `internal/ai/patrol_metrics.go`
    1a. `cmd/pulse-mcp/main.go`

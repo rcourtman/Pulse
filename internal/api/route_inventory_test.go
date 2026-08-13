@@ -626,6 +626,8 @@ var allRouteAllowlist = []string{
 	"/api/ai/patrol/status",
 	"/api/ai/patrol/stream",
 	"/api/ai/patrol/findings",
+	"/api/ai/patrol/objectives",
+	"/api/ai/patrol/objectives/",
 	"/api/ai/patrol/attention",
 	"/api/ai/patrol/attention/",
 	"/api/ai/patrol/history",

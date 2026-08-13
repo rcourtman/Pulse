@@ -48,6 +48,17 @@ configuration. It may override Pulse's automatic filesystem suppression only;
 it must not override a matching operator exclusion or introduce remote
 authority to expand the reported filesystem set silently.
 
+Retained Patrol objective briefs and optional context are operator-authored AI
+content. They are encrypted at rest in the organization-scoped Pulse data
+directory and loading fails closed if decryption fails. Audit and telemetry
+records must not contain the brief, optional context, observer artifact,
+resource identifiers, or health evidence. Audit records may include the
+objective ID; usage telemetry may include only content-free aggregate lifecycle
+counts. When Patrol is enabled, applicable active objective text becomes part
+of the context sent to the configured AI provider under the same local-provider
+and non-local provider-bound resource-policy redaction rules as other Patrol
+context. Merely saving an objective makes no outbound model request.
+
 ## Canonical Files
 
 1. `SECURITY.md`

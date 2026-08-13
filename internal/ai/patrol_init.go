@@ -382,6 +382,22 @@ func (p *PatrolService) GetThresholds() PatrolThresholds {
 	return p.thresholds
 }
 
+// SetObjectiveStore attaches the durable operator-intent store. Objective
+// state is read-only from the Patrol loop; create/update/delete ownership stays
+// on the authenticated API, and observer state stays on the constrained core
+// monitor-builder/installer boundary.
+func (p *PatrolService) SetObjectiveStore(store *PatrolObjectiveStore) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.objectiveStore = store
+}
+
+func (p *PatrolService) GetObjectiveStore() *PatrolObjectiveStore {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.objectiveStore
+}
+
 // SetFindingsPersistence enables findings persistence (load from and save to disk)
 // This should be called before Start() to load any existing findings
 func (p *PatrolService) SetFindingsPersistence(persistence FindingsPersistence) error {

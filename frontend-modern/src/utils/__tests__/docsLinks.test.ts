@@ -153,6 +153,21 @@ describe('docsLinks', () => {
     expect(importContract).toContain('settings:write');
   });
 
+  it('ships the truthful Patrol objective API contract', () => {
+    const apiReference = readFileSync(path.join(repoRoot, 'docs', 'API.md'), 'utf8');
+    const shippedAPIReference = readFileSync(
+      path.join(frontendRoot, 'public', 'docs', 'API.md'),
+      'utf8',
+    );
+
+    expect(shippedAPIReference).toBe(apiReference);
+    expect(apiReference).toContain('`POST /api/ai/patrol/objectives`');
+    expect(apiReference).toContain('`PATCH /api/ai/patrol/objectives/{id}`');
+    expect(apiReference).toContain('Clients cannot submit either');
+    expect(apiReference).toContain('validated, installed read-only observer with a live');
+    expect(apiReference).toContain('`409 patrol_objective_revision_conflict`');
+  });
+
   it('routes runtime docs links through shipped local docs instead of GitHub main', () => {
     expect(apiAccessPanelSource).toContain('API_TOKEN_SCOPES_DOC_URL');
     expect(apiAccessPanelSource).not.toContain(

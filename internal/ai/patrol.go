@@ -468,6 +468,7 @@ type PatrolService struct {
 	thresholdProvider   ThresholdProvider
 	config              PatrolConfig
 	findings            *FindingsStore
+	objectiveStore      *PatrolObjectiveStore
 	knowledgeStore      *knowledge.Store        // For per-resource notes in patrol context
 	discoveryStore      *servicediscovery.Store // For AI-discovered infrastructure context
 	guestProber         GuestProber             // For pre-patrol guest reachability checks

@@ -1177,6 +1177,11 @@ recovery scope, or a storage/recovery-owned secret source.
     hosted diagnostics do not collapse into false free-tier behavior.
 19. Preserve shipped local security-doc guidance in shared `internal/api/` config/setup helpers so storage- and recovery-adjacent transport surfaces do not reintroduce GitHub `main` security links when the running build already serves its own local security documentation route.
 20. Keep shared `internal/api/` Patrol transport and alert-trigger edits feature-isolated: Patrol-specific recency fields, callback fan-out, or alert-bridge wiring changes must not leak into recovery queries, storage links, or recovery-adjacent install/setup flows unless this contract changes in the same slice.
+    Retained Patrol objective routes follow the same adjacency rule. A brief,
+    canonical resource scope, observer lifecycle, or derived coverage state is
+    AI/runtime plus API-contract context; storage and recovery consumers must not
+    treat it as backup evidence, restore coverage, storage health, recovery-point
+    identity, restore authority, or proof that a protected-system observer exists.
     The same adjacency rule applies to AI settings transport in `internal/api/ai_handlers.go`: provider auth state, masked-secret payload fields, provider-test model selection, safe provider preflight diagnostics, and legacy Anthropic OAuth cleanup fields remain AI/runtime plus API-contract concerns and must not be absorbed into storage/recovery transport ownership just because those handlers live under the shared backend API tree. Storage/recovery-adjacent consumers may preserve or clear legacy OAuth tokens only through the shared AI settings owner; they must not treat stored OAuth tokens or `auth_method=oauth` as recovery capability, provider readiness, restore authority, or an AI-backed storage support signal.
     Patrol readiness labels on the same settings payload, including the
     user-facing Patrol control label for the stable `configuration` check ID,

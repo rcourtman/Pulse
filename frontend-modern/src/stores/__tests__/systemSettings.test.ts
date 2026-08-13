@@ -117,6 +117,9 @@ describe('systemSettings store', () => {
     expect(privacyDoc).toContain('rows older than **90 days** are purged automatically');
     expect(privacyDoc).toContain('uses request IP addresses transiently for abuse/rate limiting');
     expect(privacyDoc).toContain('Reset ID');
+    expect(privacyDoc).toContain('active Patrol objective briefs');
+    expect(privacyDoc).toContain('encrypted at rest in the local organization data directory');
+    expect(privacyDoc).toContain('objective text is not included in Pulse usage telemetry');
     expect(privacyDoc).toContain('Pulse Intelligence Patrol control completed operations loop 30d');
     expect(privacyDoc).toContain(
       'Pulse Intelligence Patrol control paid resolved operations loop 30d',

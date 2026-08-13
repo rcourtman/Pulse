@@ -53,6 +53,16 @@ reopen path for a dismissed Patrol finding. It removes the finding-backed
 suppression row, preserves the operator note, clears dismissal state in both
 the Patrol and unified stores, and returns not-found when the row is not
 currently dismissed or suppressed.
+`GET` and `POST /api/ai/patrol/objectives` plus `GET`, `PATCH`, and `DELETE`
+on `/api/ai/patrol/objectives/{id}` are the authenticated `ai:execute` contract
+for retained Patrol intent. The write payload accepts a bounded outcome brief,
+optional bounded context, and optional canonical resource IDs; updates and
+deletes require the current non-zero revision and stale writes return the stable
+`409 patrol_objective_revision_conflict` envelope. The response includes
+server-derived `coverage` and the internal observer lifecycle for honest status,
+but public request schemas do not accept either field. Unknown fields, trailing
+JSON, over-limit bodies, unsupported statuses, and malformed scope entries fail
+closed. Objective text is never copied into audit messages.
 Physical-disk payloads preserve optional SMART counter presence, including
 explicit zero values, and expose provider vendor metadata without converting
 missing data into health. Unified-resource clients may request bounded server
@@ -202,6 +212,7 @@ continues to mint and quote the enrollment token.
 78. `frontend-modern/src/api/aiChat.ts`
     69a. `frontend-modern/src/api/aiChatDevStreamFixture.ts`
 79. `frontend-modern/src/api/patrol.ts`
+    79a. `internal/api/patrol_objectives.go`
 80. `frontend-modern/src/api/generated/aiChatEvents.ts`
 81. `internal/api/agent_exec_token_binding.go`
     72a. `cmd/pulse-mcp/main.go`
