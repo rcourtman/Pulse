@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 	"github.com/rs/zerolog/log"
 )
 
@@ -77,6 +78,10 @@ type PatrolScope struct {
 	Reason TriggerReason
 	// Context provides additional information about the trigger
 	Context string
+	// ObjectiveContext carries the exact retained objective and local evidence
+	// that caused an objective_evidence run. It is model context only and grants
+	// no mutation or approval authority.
+	ObjectiveContext *aicontracts.PatrolObjectiveContext
 	// Priority indicates relative urgency (higher = more urgent)
 	Priority int
 	// AlertIdentifier is the canonical ID of the alert that triggered this patrol (if applicable)
@@ -492,7 +497,7 @@ func (tm *TriggerManager) TriggerPatrol(scope PatrolScope) bool {
 
 	// Check for duplicate triggers (same reason and resources)
 	for i := range tm.pendingTriggers {
-		if tm.pendingTriggers[i].Reason == scope.Reason && slicesEqual(tm.pendingTriggers[i].ResourceIDs, scope.ResourceIDs) {
+		if patrolTriggersEquivalent(tm.pendingTriggers[i], scope) {
 			// Update priority if new trigger is higher priority
 			if scope.Priority > tm.pendingTriggers[i].Priority {
 				tm.pendingTriggers[i].Priority = scope.Priority
@@ -518,6 +523,22 @@ func (tm *TriggerManager) TriggerPatrol(scope PatrolScope) bool {
 		Msg("Patrol trigger queued")
 
 	return true
+}
+
+func patrolTriggersEquivalent(left, right PatrolScope) bool {
+	if left.Reason != right.Reason || !slicesEqual(left.ResourceIDs, right.ResourceIDs) {
+		return false
+	}
+	if left.Reason != TriggerReasonObjectiveEvidence {
+		return true
+	}
+	if left.ObjectiveContext == nil || right.ObjectiveContext == nil {
+		return left.ObjectiveContext == nil && right.ObjectiveContext == nil
+	}
+	return left.ObjectiveContext.ObjectiveID == right.ObjectiveContext.ObjectiveID &&
+		left.ObjectiveContext.Revision == right.ObjectiveContext.Revision &&
+		left.ObjectiveContext.ObserverID == right.ObjectiveContext.ObserverID &&
+		left.ObjectiveContext.ObserverVersion == right.ObjectiveContext.ObserverVersion
 }
 
 // cleanupOldEvents removes events outside the event window

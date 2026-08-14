@@ -63,6 +63,13 @@ server-derived `coverage` and the internal observer lifecycle for honest status,
 but public request schemas do not accept either field. Unknown fields, trailing
 JSON, over-limit bodies, unsupported statuses, and malformed scope entries fail
 closed. Objective text is never copied into audit messages.
+Objective-triggered Patrol run and finding payloads retain an optional
+`objective_context` snapshot containing the exact objective/observer identity,
+revision, bounded desired-outcome text, affected canonical resources, local
+evidence, and observation time. This snapshot is model and audit context only;
+it is not an API-supplied approval, tool choice, policy factor, or execution
+credential. Older persisted runs and findings without the additive field remain
+valid.
 Physical-disk payloads preserve optional SMART counter presence, including
 explicit zero values, and expose provider vendor metadata without converting
 missing data into health. Unified-resource clients may request bounded server
@@ -4255,7 +4262,10 @@ APT output, and agent error text remain outside model context.
 
 `aicontracts.Finding` (the shape Patrol hands the investigation
 orchestrator) carries optional `OperatorContext` and
-`OperationalMemory` projections. The router-side wire-up populates
+`OperationalMemory` and `ObjectiveContext` projections. `ObjectiveContext`
+preserves the retained outcome and local observer evidence that caused an
+objective-triggered Watch assessment, including across persistence and
+re-investigation, without carrying mutation authority. The router-side wire-up populates
 the operator-state projection with `NeverAutoRemediate` alongside
 `IntentionallyOffline` and the maintenance-window block, and the
 investigation runtime in `internal/ai/patrol_findings.go` attaches

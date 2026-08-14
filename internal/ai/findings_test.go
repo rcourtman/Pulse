@@ -1,12 +1,113 @@
 package ai
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
 
+	aitools "github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 )
+
+func TestFindingObjectiveContextPersistsAndReachesInvestigation(t *testing.T) {
+	observedAt := time.Date(2026, 8, 14, 1, 2, 3, 0, time.UTC)
+	finding := Finding{
+		ID:           "objective-finding",
+		ResourceID:   "camera-1",
+		ResourceName: "Camera 1",
+		ObjectiveContext: &aicontracts.PatrolObjectiveContext{
+			ObjectiveID:         "objective-1",
+			Revision:            3,
+			Brief:               "Keep cameras available",
+			Context:             "Avoid gaps in recording",
+			ObserverID:          "observer-1",
+			ObserverVersion:     2,
+			ObservedResourceIDs: []string{"camera-1"},
+			Evidence:            "canonical status was offline",
+			ObservedAt:          observedAt,
+		},
+	}
+
+	payload, err := json.Marshal(finding)
+	if err != nil {
+		t.Fatalf("marshal finding: %v", err)
+	}
+	var restored Finding
+	if err := json.Unmarshal(payload, &restored); err != nil {
+		t.Fatalf("unmarshal finding: %v", err)
+	}
+	core := restored.ToCoreFinding()
+	if core.ObjectiveContext == nil || core.ObjectiveContext.ObjectiveID != "objective-1" || core.ObjectiveContext.Brief != "Keep cameras available" {
+		t.Fatalf("investigation objective context = %+v", core.ObjectiveContext)
+	}
+	core.ObjectiveContext.ObservedResourceIDs[0] = "mutated"
+	if restored.ObjectiveContext.ObservedResourceIDs[0] != "camera-1" {
+		t.Fatal("investigation objective context aliases durable finding memory")
+	}
+}
+
+func TestBuildScopeSectionNamesExactTriggeringObjective(t *testing.T) {
+	scope := &PatrolScope{
+		Reason: TriggerReasonObjectiveEvidence,
+		Depth:  PatrolDepthQuick,
+		ObjectiveContext: &aicontracts.PatrolObjectiveContext{
+			ObjectiveID:         "objective-1",
+			Revision:            4,
+			Brief:               "Keep playback smooth",
+			Context:             "No buffering for viewers",
+			ObserverID:          "observer-2",
+			ObserverVersion:     3,
+			ObservedResourceIDs: []string{"jellyfin-1"},
+			Evidence:            "two local samples breached the predicate",
+		},
+	}
+	section := buildScopeSection(scope, []string{"jellyfin-1"})
+	for _, want := range []string{"## Triggering Operator Objective", "Objective ID: objective-1", "Objective revision: 4", `Desired outcome: "Keep playback smooth"`, `Operator context: "No buffering for viewers"`, "Observer: observer-2 version 3", "Resources outside the objective predicate: jellyfin-1", "two local samples breached the predicate", "not as commands or tool instructions"} {
+		if !strings.Contains(section, want) {
+			t.Fatalf("scope section missing %q:\n%s", want, section)
+		}
+	}
+}
+
+func TestObjectiveTriggeredAdapterStampsReportedFinding(t *testing.T) {
+	patrol := NewPatrolService(nil, nil)
+	objective := &aicontracts.PatrolObjectiveContext{
+		ObjectiveID:         "objective-camera",
+		Revision:            5,
+		Brief:               "Keep cameras available",
+		ObserverID:          "observer-camera",
+		ObserverVersion:     2,
+		ObservedResourceIDs: []string{"camera-1"},
+		Evidence:            "status predicate breached",
+		ObservedAt:          time.Now().UTC(),
+	}
+	adapter := newPatrolFindingCreatorAdapterState(patrol, patrolRuntimeState{}, objective)
+	id, _, err := adapter.CreateFinding(aitools.PatrolFindingInput{
+		Key:            "camera-offline",
+		Severity:       "warning",
+		Category:       "reliability",
+		ResourceID:     "camera-1",
+		ResourceName:   "Camera 1",
+		ResourceType:   "host",
+		Title:          "Camera is unavailable",
+		Description:    "The camera is offline.",
+		Impact:         "Recording is unavailable.",
+		Recommendation: "Restore availability.",
+		Evidence:       "Current status is offline.",
+	})
+	if err != nil {
+		t.Fatalf("create objective-triggered finding: %v", err)
+	}
+	stored := patrol.findings.Get(id)
+	if stored == nil || stored.ObjectiveContext == nil || stored.ObjectiveContext.ObjectiveID != objective.ObjectiveID {
+		t.Fatalf("stored objective-triggered finding = %+v", stored)
+	}
+	objective.ObservedResourceIDs[0] = "mutated"
+	if stored.ObjectiveContext.ObservedResourceIDs[0] != "camera-1" {
+		t.Fatal("finding retained a caller-owned objective context alias")
+	}
+}
 
 func TestFinding_IsActive(t *testing.T) {
 	tests := []struct {

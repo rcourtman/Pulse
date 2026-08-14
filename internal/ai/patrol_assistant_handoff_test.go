@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/chat"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 )
 
 func TestBuildPatrolRunAssistantHandoffUsesBackendSafeRunContext(t *testing.T) {
@@ -18,16 +19,23 @@ func TestBuildPatrolRunAssistantHandoffUsesBackendSafeRunContext(t *testing.T) {
 		TriggerReason:             "alert_fired",
 		EffectiveScopeResourceIDs: []string{"vm-100"},
 		ScopeResourceTypes:        []string{"vm"},
-		ResourcesChecked:          1,
-		GuestsChecked:             1,
-		FindingsSummary:           "Runtime failure prevented analysis.",
-		FindingIDs:                []string{},
-		ErrorCount:                1,
-		ErrorSummary:              "Selected model does not support Patrol tools",
-		ErrorDetail:               `API error: No endpoints found that support the provided tool_choice value. Authorization: Bearer sk-live-secret`,
-		Status:                    "error",
-		ToolCallCount:             1,
-		AIAnalysis:                `<｜DSML｜trace>provider trace</｜DSML｜trace>Visible runtime summary. {"api_key":"sk-json-secret"}`,
+		ObjectiveContext: &aicontracts.PatrolObjectiveContext{
+			ObjectiveID:         "objective-availability",
+			Revision:            2,
+			Brief:               "Keep the service available",
+			ObservedResourceIDs: []string{"vm-100"},
+			ObservedAt:          time.Date(2026, 5, 7, 11, 59, 0, 0, time.UTC),
+		},
+		ResourcesChecked: 1,
+		GuestsChecked:    1,
+		FindingsSummary:  "Runtime failure prevented analysis.",
+		FindingIDs:       []string{},
+		ErrorCount:       1,
+		ErrorSummary:     "Selected model does not support Patrol tools",
+		ErrorDetail:      `API error: No endpoints found that support the provided tool_choice value. Authorization: Bearer sk-live-secret`,
+		Status:           "error",
+		ToolCallCount:    1,
+		AIAnalysis:       `<｜DSML｜trace>provider trace</｜DSML｜trace>Visible runtime summary. {"api_key":"sk-json-secret"}`,
 	}
 
 	handoff := BuildPatrolRunAssistantHandoff(run)
@@ -51,6 +59,7 @@ func TestBuildPatrolRunAssistantHandoffUsesBackendSafeRunContext(t *testing.T) {
 		"Run ID: run-runtime-error",
 		"Run Type: Targeted check",
 		"Trigger: Alert fired",
+		`Triggering Objective: objective-availability revision 2; desired outcome "Keep the service available"; 1 resource(s) outside the local predicate; observed 2026-05-07T11:59:00Z`,
 		"Runtime Failure: Selected model does not support Patrol tools",
 		"no tool-capable endpoint",
 		"Patrol Analysis: Visible runtime summary.",

@@ -6,6 +6,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 )
 
 // --- TriggerManager construction ---
@@ -34,6 +36,29 @@ func TestNewTriggerManager_Defaults(t *testing.T) {
 	}
 	if tm.busyThreshold != 5 {
 		t.Errorf("expected busyThreshold 5, got %d", tm.busyThreshold)
+	}
+}
+
+func TestTriggerManagerDoesNotMergeDistinctObjectivesOnSameResource(t *testing.T) {
+	tm := NewTriggerManager(TriggerManagerConfig{MaxPendingTriggers: 10})
+	base := PatrolScope{
+		Reason:      TriggerReasonObjectiveEvidence,
+		ResourceIDs: []string{"camera-1"},
+		Priority:    triggerPriorityObjective,
+	}
+	first := base
+	first.ObjectiveContext = &aicontracts.PatrolObjectiveContext{ObjectiveID: "keep-camera-online", Revision: 1, ObserverID: "observer-1", ObserverVersion: 1}
+	second := base
+	second.ObjectiveContext = &aicontracts.PatrolObjectiveContext{ObjectiveID: "keep-recording-current", Revision: 1, ObserverID: "observer-2", ObserverVersion: 1}
+
+	if !tm.TriggerPatrol(first) || !tm.TriggerPatrol(second) {
+		t.Fatal("distinct objective trigger was rejected")
+	}
+	if got := tm.GetPendingCount(); got != 2 {
+		t.Fatalf("distinct objective triggers on one resource were conflated; pending=%d", got)
+	}
+	if !tm.TriggerPatrol(first) || tm.GetPendingCount() != 2 {
+		t.Fatal("an exact repeated objective trigger should merge")
 	}
 }
 

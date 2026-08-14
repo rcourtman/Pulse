@@ -134,6 +134,23 @@ func TestPatrolObserverRuntimeWakesModelOnlyAfterLocalFailureWindow(t *testing.T
 	if got := tm.GetPendingCount(); got != 1 {
 		t.Fatalf("observer did not queue one Patrol wake after failure window; pending=%d", got)
 	}
+	queued := tm.pendingTriggers[0]
+	if queued.ObjectiveContext == nil {
+		t.Fatal("observer wake discarded the triggering objective context")
+	}
+	currentObjective, found := store.Get(objective.ID, now.Add(11*time.Second))
+	if !found {
+		t.Fatal("triggering objective disappeared from store")
+	}
+	if queued.ObjectiveContext.ObjectiveID != currentObjective.ID || queued.ObjectiveContext.Revision != currentObjective.Revision || queued.ObjectiveContext.Brief != currentObjective.Brief {
+		t.Fatalf("queued objective context = %+v, want exact objective %+v", queued.ObjectiveContext, currentObjective)
+	}
+	if queued.ObjectiveContext.ObserverID != currentObjective.Observer.ID || queued.ObjectiveContext.ObserverVersion != currentObjective.Observer.Version {
+		t.Fatalf("queued observer binding = %+v, want %s/%d", queued.ObjectiveContext, currentObjective.Observer.ID, currentObjective.Observer.Version)
+	}
+	if len(queued.ObjectiveContext.ObservedResourceIDs) != 1 || queued.ObjectiveContext.ObservedResourceIDs[0] != "camera-1" || !strings.Contains(queued.ObjectiveContext.Evidence, "2 consecutive local samples") {
+		t.Fatalf("queued objective evidence = %+v", queued.ObjectiveContext)
+	}
 	patrol.processObjectiveObservers(now.Add(21 * time.Second))
 	if got := tm.GetPendingCount(); got != 1 {
 		t.Fatalf("observer repeated wake while failure remained active; pending=%d", got)
@@ -142,6 +159,60 @@ func TestPatrolObserverRuntimeWakesModelOnlyAfterLocalFailureWindow(t *testing.T
 	if got.Coverage.State != PatrolObjectiveCovered {
 		t.Fatalf("runtime health and objective outcome were conflated: %+v", got.Coverage)
 	}
+}
+
+func TestPatrolObserverRuntimeRetriesOnlyUntilDurableObjectiveRunSucceeds(t *testing.T) {
+	now := time.Date(2026, 8, 14, 2, 0, 0, 0, time.UTC)
+	store := NewInMemoryPatrolObjectiveStore()
+	objective := createInstallablePatrolObserver(t, store, now, "camera-1")
+	patrol := NewPatrolService(nil, mockPatrolStateProvider{state: models.StateSnapshot{
+		Hosts: []models.Host{{ID: "camera-1", Hostname: "camera-1", Status: "offline"}},
+	}})
+	patrol.SetObjectiveStore(store)
+	tm := NewTriggerManager(TriggerManagerConfig{MaxPendingTriggers: 10})
+	patrol.SetTriggerManager(tm)
+
+	patrol.processObjectiveObservers(now.Add(time.Second))
+	firstWakeAt := now.Add(11 * time.Second)
+	patrol.processObjectiveObservers(firstWakeAt)
+	if tm.GetPendingCount() != 1 {
+		t.Fatal("initial objective wake was not queued")
+	}
+	clearPendingPatrolTriggers(tm)
+
+	retryAt := firstWakeAt.Add(patrolObserverWakeRetryInterval + time.Second)
+	patrol.processObjectiveObservers(retryAt)
+	if tm.GetPendingCount() != 1 {
+		t.Fatal("unacknowledged objective wake was not retried after bounded interval")
+	}
+	retried := tm.pendingTriggers[0]
+	clearPendingPatrolTriggers(tm)
+
+	patrol.runHistoryStore.Add(PatrolRunRecord{
+		ID:               "objective-run-success",
+		StartedAt:        retryAt,
+		CompletedAt:      retryAt.Add(time.Second),
+		Type:             "scoped",
+		TriggerReason:    string(TriggerReasonObjectiveEvidence),
+		Status:           "issues_found",
+		FindingIDs:       []string{"camera-offline"},
+		ObjectiveContext: clonePatrolObjectiveContext(retried.ObjectiveContext),
+	})
+	patrol.processObjectiveObservers(retryAt.Add(patrolObserverWakeRetryInterval + time.Second))
+	if tm.GetPendingCount() != 0 {
+		t.Fatal("observer retried after a successful durable objective run acknowledged delivery")
+	}
+
+	current, found := store.Get(objective.ID, retryAt)
+	if !found || !patrol.objectiveWakeDelivered(current, retryAt) {
+		t.Fatal("successful run was not recognized as exact objective delivery")
+	}
+}
+
+func clearPendingPatrolTriggers(tm *TriggerManager) {
+	tm.mu.Lock()
+	tm.pendingTriggers = nil
+	tm.mu.Unlock()
 }
 
 func TestValidatePatrolObserverArtifactRejectsUnknownExecutableFields(t *testing.T) {

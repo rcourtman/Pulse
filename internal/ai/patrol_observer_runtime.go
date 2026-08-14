@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 	"github.com/rs/zerolog/log"
 )
 
@@ -24,6 +25,7 @@ const (
 	patrolObserverMinLease               = 2 * time.Minute
 	patrolObserverMaxLease               = 30 * time.Minute
 	patrolObserverMaxConsecutiveFailures = 10
+	patrolObserverWakeRetryInterval      = 15 * time.Minute
 )
 
 type patrolResourceStateProbe struct {
@@ -43,6 +45,8 @@ type patrolObserverExecution struct {
 	nextDue             time.Time
 	consecutiveFailures int
 	wakeEmitted         bool
+	lastWakeAt          time.Time
+	deliveryConfirmed   bool
 }
 
 type patrolObserverRuntime struct {
@@ -268,12 +272,27 @@ func (p *PatrolService) evaluateObjectiveObserver(runtime *patrolObserverRuntime
 	if len(failing) == 0 {
 		execution.consecutiveFailures = 0
 		execution.wakeEmitted = false
+		execution.lastWakeAt = time.Time{}
+		execution.deliveryConfirmed = false
 	} else {
 		execution.consecutiveFailures++
 	}
-	shouldWake := len(failing) > 0 && execution.consecutiveFailures >= probe.WakeAfterConsecutiveFailures && !execution.wakeEmitted
 	runtime.executions[key] = execution
 	runtime.mu.Unlock()
+
+	if len(failing) > 0 && execution.wakeEmitted && !execution.deliveryConfirmed &&
+		p.objectiveWakeDelivered(objective, execution.lastWakeAt) {
+		runtime.mu.Lock()
+		latest := runtime.executions[key]
+		if latest.lastWakeAt.Equal(execution.lastWakeAt) {
+			latest.deliveryConfirmed = true
+			runtime.executions[key] = latest
+			execution = latest
+		}
+		runtime.mu.Unlock()
+	}
+	shouldWake := len(failing) > 0 && execution.consecutiveFailures >= probe.WakeAfterConsecutiveFailures &&
+		(!execution.wakeEmitted || (!execution.deliveryConfirmed && now.Sub(execution.lastWakeAt) >= patrolObserverWakeRetryInterval))
 
 	leaseDuration := 3 * interval
 	if leaseDuration < patrolObserverMinLease {
@@ -297,12 +316,27 @@ func (p *PatrolService) evaluateObjectiveObserver(runtime *patrolObserverRuntime
 		return healthUpdate
 	}
 	sort.Strings(failing)
+	evidence := fmt.Sprintf(
+		"Canonical resource status did not satisfy %s %s for %d of %d scoped resources after %d consecutive local samples.",
+		probe.Operator, probe.Value, len(failing), len(objective.Scope.ResourceIDs), execution.consecutiveFailures,
+	)
 	scope := PatrolScope{
 		ResourceIDs: failing,
 		Depth:       PatrolDepthQuick,
 		Reason:      TriggerReasonObjectiveEvidence,
 		Priority:    triggerPriorityObjective,
 		Context:     fmt.Sprintf("Local observer %s for objective %s detected %d of %d scoped resources outside its canonical status predicate.", observer.ID, objective.ID, len(failing), len(objective.Scope.ResourceIDs)),
+		ObjectiveContext: &aicontracts.PatrolObjectiveContext{
+			ObjectiveID:         objective.ID,
+			Revision:            objective.Revision,
+			Brief:               objective.Brief,
+			Context:             objective.OptionalContext,
+			ObserverID:          observer.ID,
+			ObserverVersion:     observer.Version,
+			ObservedResourceIDs: append([]string(nil), failing...),
+			Evidence:            evidence,
+			ObservedAt:          now,
+		},
 	}
 	p.mu.RLock()
 	tm := p.triggerManager
@@ -312,11 +346,33 @@ func (p *PatrolService) evaluateObjectiveObserver(runtime *patrolObserverRuntime
 		runtime.mu.Lock()
 		execution = runtime.executions[key]
 		execution.wakeEmitted = true
+		execution.lastWakeAt = now
+		execution.deliveryConfirmed = false
 		runtime.executions[key] = execution
 		runtime.mu.Unlock()
 		log.Info().Str("objective_id", objective.ID).Int("affected_resources", len(failing)).Msg("Patrol objective observer queued an evidence-triggered check")
 	}
 	return healthUpdate
+}
+
+func (p *PatrolService) objectiveWakeDelivered(objective PatrolObjective, lastWakeAt time.Time) bool {
+	if p == nil || lastWakeAt.IsZero() || objective.Observer == nil || p.runHistoryStore == nil {
+		return false
+	}
+	for _, run := range p.runHistoryStore.GetAll() {
+		if run.CompletedAt.Before(lastWakeAt) || run.ErrorCount > 0 || strings.EqualFold(strings.TrimSpace(run.Status), "error") {
+			continue
+		}
+		context := run.ObjectiveContext
+		if context == nil {
+			continue
+		}
+		if context.ObjectiveID == objective.ID && context.Revision == objective.Revision &&
+			context.ObserverID == objective.Observer.ID && context.ObserverVersion == objective.Observer.Version {
+			return true
+		}
+	}
+	return false
 }
 
 func patrolRuntimeCanonicalStatuses(state patrolRuntimeState) map[string]unifiedresources.ResourceStatus {

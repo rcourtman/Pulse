@@ -94,6 +94,28 @@ type Finding struct {
 	// without it having to query the findings store separately. nil
 	// when there is no prior history (fresh finding).
 	OperationalMemory *FindingOperationalMemory `json:"operational_memory,omitempty"`
+
+	// ObjectiveContext identifies the retained operator outcome whose local
+	// observer caused this finding to be assessed. It is a bounded snapshot of
+	// intent and evidence, not executable instruction or action authority. nil
+	// for findings discovered by scheduled, manual, alert, or anomaly checks.
+	ObjectiveContext *PatrolObjectiveContext `json:"objective_context,omitempty"`
+}
+
+// PatrolObjectiveContext is the investigation-facing snapshot of a retained
+// Patrol objective and the local evidence that woke the model. Core authors
+// identity and evidence fields; Brief and Context are operator-authored data.
+// The action lifecycle still independently enforces policy and authority.
+type PatrolObjectiveContext struct {
+	ObjectiveID         string    `json:"objective_id"`
+	Revision            uint64    `json:"revision"`
+	Brief               string    `json:"brief"`
+	Context             string    `json:"context,omitempty"`
+	ObserverID          string    `json:"observer_id"`
+	ObserverVersion     uint64    `json:"observer_version"`
+	ObservedResourceIDs []string  `json:"observed_resource_ids"`
+	Evidence            string    `json:"evidence"`
+	ObservedAt          time.Time `json:"observed_at"`
 }
 
 // FindingOperatorContext is the orchestrator-facing projection of

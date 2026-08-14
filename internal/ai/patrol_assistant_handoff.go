@@ -57,6 +57,7 @@ func buildPatrolRunAssistantContext(run PatrolRunRecord, runType, status, runtim
 		formatPatrolRunContextLine("Timing", patrolRunTimingSummary(run)),
 		formatPatrolRunContextLine("Coverage", patrolRunCoverageSummary(run)),
 		formatPatrolRunContextLine("Scope", patrolRunScopeSummary(run)),
+		formatPatrolRunContextLine("Triggering Objective", patrolRunObjectiveSummary(run)),
 		formatPatrolRunContextLine("Findings Snapshot", patrolRunFindingsSnapshot(run)),
 		formatPatrolRunContextLine("Outcomes", patrolRunOutcomeSummary(run)),
 		formatPatrolRunContextLine("Runtime Failure", runtimeFailure),
@@ -74,6 +75,24 @@ func buildPatrolRunAssistantContext(run PatrolRunRecord, runType, status, runtim
 		}
 	}
 	return strings.Join(filtered, "\n")
+}
+
+func patrolRunObjectiveSummary(run PatrolRunRecord) string {
+	objective := run.ObjectiveContext
+	if objective == nil || strings.TrimSpace(objective.ObjectiveID) == "" {
+		return ""
+	}
+	parts := []string{
+		fmt.Sprintf("%s revision %d", strings.TrimSpace(objective.ObjectiveID), objective.Revision),
+		"desired outcome " + fmt.Sprintf("%q", truncatePatrolRunContextText(objective.Brief, 240)),
+	}
+	if len(objective.ObservedResourceIDs) > 0 {
+		parts = append(parts, fmt.Sprintf("%d resource(s) outside the local predicate", len(objective.ObservedResourceIDs)))
+	}
+	if !objective.ObservedAt.IsZero() {
+		parts = append(parts, "observed "+objective.ObservedAt.UTC().Format(time.RFC3339))
+	}
+	return strings.Join(parts, "; ")
 }
 
 func patrolRunAssistantHandoffResources(run PatrolRunRecord) []chat.HandoffResource {

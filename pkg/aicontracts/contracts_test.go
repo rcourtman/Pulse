@@ -6,9 +6,50 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 )
+
+func TestFindingObjectiveContextIsAdditiveBoundedIntentOnly(t *testing.T) {
+	finding := Finding{
+		ID: "finding-1",
+		ObjectiveContext: &PatrolObjectiveContext{
+			ObjectiveID:         "objective-1",
+			Revision:            3,
+			Brief:               "Keep cameras available",
+			Context:             "Avoid recording gaps",
+			ObserverID:          "observer-1",
+			ObserverVersion:     2,
+			ObservedResourceIDs: []string{"camera-1"},
+			Evidence:            "local status predicate breached",
+			ObservedAt:          time.Date(2026, 8, 14, 2, 0, 0, 0, time.UTC),
+		},
+	}
+	payload, err := json.Marshal(finding)
+	if err != nil {
+		t.Fatalf("marshal finding objective context: %v", err)
+	}
+	text := string(payload)
+	for _, want := range []string{`"objective_context":{`, `"objective_id":"objective-1"`, `"revision":3`, `"brief":"Keep cameras available"`, `"observer_id":"observer-1"`, `"observed_resource_ids":["camera-1"]`, `"evidence":"local status predicate breached"`} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("objective context wire shape missing %s: %s", want, text)
+		}
+	}
+	for _, forbidden := range []string{`"command"`, `"capability_name"`, `"params"`, `"approval"`, `"autonomy"`, `"plan_hash"`} {
+		if strings.Contains(text, forbidden) {
+			t.Fatalf("objective context must not carry authority field %s: %s", forbidden, text)
+		}
+	}
+
+	empty, err := json.Marshal(Finding{ID: "legacy-finding"})
+	if err != nil {
+		t.Fatalf("marshal legacy finding: %v", err)
+	}
+	if strings.Contains(string(empty), `"objective_context"`) {
+		t.Fatalf("absent objective context must remain omitted for legacy findings: %s", empty)
+	}
+}
 
 func TestEmptyOrchestratorMessage_UsesCanonicalEmptyCollections(t *testing.T) {
 	payload, err := json.Marshal(EmptyOrchestratorMessage())

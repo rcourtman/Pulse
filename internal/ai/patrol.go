@@ -120,21 +120,22 @@ type PatrolFindingAssessment struct {
 
 // PatrolRunRecord represents a single patrol check run
 type PatrolRunRecord struct {
-	ID                        string        `json:"id"`
-	Source                    string        `json:"source,omitempty"`
-	StartedAt                 time.Time     `json:"started_at"`
-	CompletedAt               time.Time     `json:"completed_at"`
-	Duration                  time.Duration `json:"-"`
-	DurationMs                int64         `json:"duration_ms"`
-	Type                      string        `json:"type"` // Always "patrol" now (kept for backwards compat)
-	TriggerReason             string        `json:"trigger_reason,omitempty"`
-	ScopeResourceIDs          []string      `json:"scope_resource_ids,omitempty"`
-	EffectiveScopeResourceIDs []string      `json:"effective_scope_resource_ids,omitempty"`
-	ScopeResourceTypes        []string      `json:"scope_resource_types,omitempty"`
-	ScopeContext              string        `json:"scope_context,omitempty"`
-	AlertIdentifier           string        `json:"alert_identifier,omitempty"`
-	FindingID                 string        `json:"finding_id,omitempty"`
-	ResourcesChecked          int           `json:"resources_checked"`
+	ID                        string                              `json:"id"`
+	Source                    string                              `json:"source,omitempty"`
+	StartedAt                 time.Time                           `json:"started_at"`
+	CompletedAt               time.Time                           `json:"completed_at"`
+	Duration                  time.Duration                       `json:"-"`
+	DurationMs                int64                               `json:"duration_ms"`
+	Type                      string                              `json:"type"` // Always "patrol" now (kept for backwards compat)
+	TriggerReason             string                              `json:"trigger_reason,omitempty"`
+	ScopeResourceIDs          []string                            `json:"scope_resource_ids,omitempty"`
+	EffectiveScopeResourceIDs []string                            `json:"effective_scope_resource_ids,omitempty"`
+	ScopeResourceTypes        []string                            `json:"scope_resource_types,omitempty"`
+	ScopeContext              string                              `json:"scope_context,omitempty"`
+	ObjectiveContext          *aicontracts.PatrolObjectiveContext `json:"objective_context,omitempty"`
+	AlertIdentifier           string                              `json:"alert_identifier,omitempty"`
+	FindingID                 string                              `json:"finding_id,omitempty"`
+	ResourcesChecked          int                                 `json:"resources_checked"`
 	// Breakdown by resource type
 	NodesChecked      int `json:"nodes_checked"`
 	GuestsChecked     int `json:"guests_checked"`
@@ -170,47 +171,48 @@ type PatrolRunRecord struct {
 }
 
 type patrolRunRecordJSON struct {
-	ID                        string                    `json:"id"`
-	Source                    string                    `json:"source,omitempty"`
-	StartedAt                 time.Time                 `json:"started_at"`
-	CompletedAt               time.Time                 `json:"completed_at"`
-	DurationMs                int64                     `json:"duration_ms"`
-	Type                      string                    `json:"type"`
-	TriggerReason             string                    `json:"trigger_reason,omitempty"`
-	ScopeResourceIDs          *[]string                 `json:"scope_resource_ids,omitempty"`
-	EffectiveScopeResourceIDs *[]string                 `json:"effective_scope_resource_ids,omitempty"`
-	ScopeResourceTypes        *[]string                 `json:"scope_resource_types,omitempty"`
-	ScopeContext              string                    `json:"scope_context,omitempty"`
-	AlertIdentifier           string                    `json:"alert_identifier,omitempty"`
-	FindingID                 string                    `json:"finding_id,omitempty"`
-	ResourcesChecked          int                       `json:"resources_checked"`
-	NodesChecked              int                       `json:"nodes_checked"`
-	GuestsChecked             int                       `json:"guests_checked"`
-	DockerChecked             int                       `json:"docker_checked"`
-	StorageChecked            int                       `json:"storage_checked"`
-	HostsChecked              int                       `json:"hosts_checked"`
-	TrueNASChecked            int                       `json:"truenas_checked"`
-	PBSChecked                int                       `json:"pbs_checked"`
-	PMGChecked                int                       `json:"pmg_checked"`
-	KubernetesChecked         int                       `json:"kubernetes_checked"`
-	NewFindings               int                       `json:"new_findings"`
-	ExistingFindings          int                       `json:"existing_findings"`
-	RejectedFindings          int                       `json:"rejected_findings"`
-	ResolvedFindings          int                       `json:"resolved_findings"`
-	FindingsSummary           string                    `json:"findings_summary"`
-	FindingIDs                []string                  `json:"finding_ids"`
-	FindingAssessments        []PatrolFindingAssessment `json:"finding_assessments,omitempty"`
-	ErrorCount                int                       `json:"error_count"`
-	Status                    string                    `json:"status"`
-	ErrorSummary              string                    `json:"error_summary,omitempty"`
-	ErrorDetail               string                    `json:"error_detail,omitempty"`
-	TriageFlags               int                       `json:"triage_flags"`
-	TriageSkippedLLM          bool                      `json:"triage_skipped_llm,omitempty"`
-	AIAnalysis                string                    `json:"ai_analysis,omitempty"`
-	InputTokens               int                       `json:"input_tokens,omitempty"`
-	OutputTokens              int                       `json:"output_tokens,omitempty"`
-	ToolCalls                 []ToolCallRecord          `json:"tool_calls,omitempty"`
-	ToolCallCount             int                       `json:"tool_call_count"`
+	ID                        string                              `json:"id"`
+	Source                    string                              `json:"source,omitempty"`
+	StartedAt                 time.Time                           `json:"started_at"`
+	CompletedAt               time.Time                           `json:"completed_at"`
+	DurationMs                int64                               `json:"duration_ms"`
+	Type                      string                              `json:"type"`
+	TriggerReason             string                              `json:"trigger_reason,omitempty"`
+	ScopeResourceIDs          *[]string                           `json:"scope_resource_ids,omitempty"`
+	EffectiveScopeResourceIDs *[]string                           `json:"effective_scope_resource_ids,omitempty"`
+	ScopeResourceTypes        *[]string                           `json:"scope_resource_types,omitempty"`
+	ScopeContext              string                              `json:"scope_context,omitempty"`
+	ObjectiveContext          *aicontracts.PatrolObjectiveContext `json:"objective_context,omitempty"`
+	AlertIdentifier           string                              `json:"alert_identifier,omitempty"`
+	FindingID                 string                              `json:"finding_id,omitempty"`
+	ResourcesChecked          int                                 `json:"resources_checked"`
+	NodesChecked              int                                 `json:"nodes_checked"`
+	GuestsChecked             int                                 `json:"guests_checked"`
+	DockerChecked             int                                 `json:"docker_checked"`
+	StorageChecked            int                                 `json:"storage_checked"`
+	HostsChecked              int                                 `json:"hosts_checked"`
+	TrueNASChecked            int                                 `json:"truenas_checked"`
+	PBSChecked                int                                 `json:"pbs_checked"`
+	PMGChecked                int                                 `json:"pmg_checked"`
+	KubernetesChecked         int                                 `json:"kubernetes_checked"`
+	NewFindings               int                                 `json:"new_findings"`
+	ExistingFindings          int                                 `json:"existing_findings"`
+	RejectedFindings          int                                 `json:"rejected_findings"`
+	ResolvedFindings          int                                 `json:"resolved_findings"`
+	FindingsSummary           string                              `json:"findings_summary"`
+	FindingIDs                []string                            `json:"finding_ids"`
+	FindingAssessments        []PatrolFindingAssessment           `json:"finding_assessments,omitempty"`
+	ErrorCount                int                                 `json:"error_count"`
+	Status                    string                              `json:"status"`
+	ErrorSummary              string                              `json:"error_summary,omitempty"`
+	ErrorDetail               string                              `json:"error_detail,omitempty"`
+	TriageFlags               int                                 `json:"triage_flags"`
+	TriageSkippedLLM          bool                                `json:"triage_skipped_llm,omitempty"`
+	AIAnalysis                string                              `json:"ai_analysis,omitempty"`
+	InputTokens               int                                 `json:"input_tokens,omitempty"`
+	OutputTokens              int                                 `json:"output_tokens,omitempty"`
+	ToolCalls                 []ToolCallRecord                    `json:"tool_calls,omitempty"`
+	ToolCallCount             int                                 `json:"tool_call_count"`
 }
 
 func canonicalPatrolAlertIdentifier(alertIdentifier string) string {
@@ -244,6 +246,7 @@ func normalizePatrolRunRecord(record PatrolRunRecord) PatrolRunRecord {
 	record.AlertIdentifier = canonicalPatrolAlertIdentifier(record.AlertIdentifier)
 	record.FindingIDs = canonicalPatrolFindingIDs(record.FindingIDs)
 	record.FindingAssessments = append([]PatrolFindingAssessment(nil), record.FindingAssessments...)
+	record.ObjectiveContext = clonePatrolObjectiveContext(record.ObjectiveContext)
 	record.ErrorSummary = strings.TrimSpace(redactPatrolRuntimeFailureDetail(record.ErrorSummary))
 	if strings.TrimSpace(record.ErrorDetail) != "" {
 		record.ErrorDetail = truncateString(summarizePatrolRuntimeFailureDetail(record.ErrorDetail, false), patrolRuntimeFailureDetailLimit)
@@ -311,6 +314,7 @@ func (r PatrolRunRecord) MarshalJSON() ([]byte, error) {
 		EffectiveScopeResourceIDs: marshalOptionalPatrolStringSlice(normalized.EffectiveScopeResourceIDs),
 		ScopeResourceTypes:        marshalOptionalPatrolStringSlice(normalized.ScopeResourceTypes),
 		ScopeContext:              normalized.ScopeContext,
+		ObjectiveContext:          normalized.ObjectiveContext,
 		AlertIdentifier:           normalized.AlertIdentifier,
 		FindingID:                 normalized.FindingID,
 		ResourcesChecked:          normalized.ResourcesChecked,
@@ -363,6 +367,7 @@ func (r *PatrolRunRecord) UnmarshalJSON(data []byte) error {
 		EffectiveScopeResourceIDs: unmarshalOptionalPatrolStringSlice(payload.EffectiveScopeResourceIDs),
 		ScopeResourceTypes:        unmarshalOptionalPatrolStringSlice(payload.ScopeResourceTypes),
 		ScopeContext:              payload.ScopeContext,
+		ObjectiveContext:          payload.ObjectiveContext,
 		AlertIdentifier:           canonicalPatrolAlertIdentifier(payload.AlertIdentifier),
 		FindingID:                 payload.FindingID,
 		ResourcesChecked:          payload.ResourcesChecked,

@@ -431,6 +431,21 @@ Patrol investigation profiles do not. A successful proposal remains
 `uncovered/observer_proposed`: this tool has no validator, installer, execution,
 health-lease, or infrastructure-action authority.
 
+An observer wake must preserve the exact retained objective rather than
+degrading it into a generic resource alert. `PatrolScope.ObjectiveContext`
+carries the core-authored objective/observer identity, current objective
+revision, local observation time, affected canonical resource IDs, and bounded
+evidence together with the operator-authored brief and optional context. The
+TriggerManager includes objective and observer identity in duplicate detection,
+so two objectives on the same resource cannot be silently conflated. Watch
+renders that exact snapshot as desired-outcome context, stamps it durably on
+every finding created or refreshed by the run, and projects it through
+`aicontracts.Finding` into Pro investigation. The Pro prompt quotes and bounds
+operator-authored objective text as data, asks the model to determine what the
+outcome requires from current evidence, and explicitly grants no tool choice,
+mutation, approval, or policy authority. This is the retained-intent seam from
+cheap local detection into model-owned diagnosis and governed action.
+
 ## Canonical Files
 
 1. `internal/ai/`
@@ -6991,9 +7006,23 @@ objective revision, with all leases due in one sweep committed in one atomic
 encrypted-document transaction. A failure transition queues one scoped
 `objective_evidence` check through the existing TriggerManager, so the model
 wakes for reasoning only after local evidence crosses the declared window and
-does not become the polling loop. The observer remains read-only and cannot
-enter infrastructure mutation; any later response still uses the canonical
-capability, autonomy, approval, dispatch, audit, and verification kernel.
+does not become the polling loop. That check carries the exact objective
+identity, revision, brief, optional context, observer identity, affected
+resources, observation time, and local evidence through Watch into the durable
+finding and the Pro investigation prompt. Duplicate queueing is scoped by
+objective and observer identity as well as resources; two retained outcomes on
+the same resource remain two distinct reasons to wake. Operator text stays
+bounded quoted context and never becomes executable instruction. The observer
+remains read-only and cannot enter infrastructure mutation; any later response
+still uses the canonical capability, autonomy, approval, dispatch, audit, and
+verification kernel. Queue acceptance is not delivery acknowledgement: while
+the predicate remains breached, the observer retries an unacknowledged wake no
+more than once per fifteen minutes. Only a durable, error-free Patrol run bound
+to the exact objective revision and observer version confirms delivery. A
+provider outage, runtime refusal, scope failure, restart, or dropped queue item
+therefore cannot turn one accepted enqueue into permanent silence, while a
+completed Watch assessment prevents repeated model polling until the predicate
+recovers and breaches again.
 Changing the retained brief, optional context, or resource scope disables the
 installed observer and clears its lease; coverage cannot survive a semantic
 change to the intent it was designed to protect.

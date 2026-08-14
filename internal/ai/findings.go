@@ -243,6 +243,10 @@ type Finding struct {
 	// model prose and surfaced as a first-class urgency signal. Nil when no
 	// trend applies or the finding predates forecast stamping.
 	CapacityForecast *CapacityForecast `json:"capacity_forecast,omitempty"`
+	// ObjectiveContext is the most recent retained operator objective whose
+	// local evidence caused this finding to be assessed. It is durable context
+	// for investigation, not action or approval authority.
+	ObjectiveContext *aicontracts.PatrolObjectiveContext `json:"objective_context,omitempty"`
 }
 
 // findingJSON is the marshal mirror of Finding: identical fields, but
@@ -252,48 +256,49 @@ type Finding struct {
 //
 //nolint:dupl // deliberate marshal-mirror twin of Finding
 type findingJSON struct {
-	ID                         string                           `json:"id"`
-	Key                        string                           `json:"key,omitempty"`
-	Severity                   FindingSeverity                  `json:"severity"`
-	Category                   FindingCategory                  `json:"category"`
-	ResourceID                 string                           `json:"resource_id"`
-	ResourceName               string                           `json:"resource_name"`
-	ResourceType               string                           `json:"resource_type"`
-	ResourceCriticality        string                           `json:"resource_criticality,omitempty"`
-	Node                       string                           `json:"node,omitempty"`
-	Title                      string                           `json:"title"`
-	Description                string                           `json:"description"`
-	Impact                     string                           `json:"impact,omitempty"`
-	PreviousResolvedFixSummary string                           `json:"previous_resolved_fix_summary,omitempty"`
-	Recommendation             string                           `json:"recommendation,omitempty"`
-	Evidence                   string                           `json:"evidence,omitempty"`
-	Source                     string                           `json:"source,omitempty"`
-	FailureCause               string                           `json:"failure_cause,omitempty"`
-	DetectedAt                 time.Time                        `json:"detected_at"`
-	LastSeenAt                 time.Time                        `json:"last_seen_at"`
-	ResolvedAt                 *time.Time                       `json:"resolved_at,omitempty"`
-	AutoResolved               bool                             `json:"auto_resolved"`
-	ResolveReason              string                           `json:"resolve_reason,omitempty"`
-	AcknowledgedAt             *time.Time                       `json:"acknowledged_at,omitempty"`
-	SnoozedUntil               *time.Time                       `json:"snoozed_until,omitempty"`
-	AlertIdentifier            string                           `json:"alert_identifier,omitempty"`
-	DismissedReason            string                           `json:"dismissed_reason,omitempty"`
-	UserNote                   string                           `json:"user_note,omitempty"`
-	TimesRaised                int                              `json:"times_raised"`
-	Suppressed                 bool                             `json:"suppressed"`
-	RemindAt                   *time.Time                       `json:"remind_at,omitempty"`
-	RemindCount                int                              `json:"remind_count,omitempty"`
-	InvestigationSessionID     string                           `json:"investigation_session_id,omitempty"`
-	InvestigationStatus        string                           `json:"investigation_status,omitempty"`
-	InvestigationOutcome       string                           `json:"investigation_outcome,omitempty"`
-	LastInvestigatedAt         *time.Time                       `json:"last_investigated_at,omitempty"`
-	InvestigationAttempts      int                              `json:"investigation_attempts"`
-	InvestigationRecord        *aicontracts.InvestigationRecord `json:"investigation_record,omitempty"`
-	LoopState                  string                           `json:"loop_state,omitempty"`
-	Lifecycle                  []FindingLifecycleEvent          `json:"lifecycle,omitempty"`
-	RegressionCount            int                              `json:"regression_count,omitempty"`
-	LastRegressionAt           *time.Time                       `json:"last_regression_at,omitempty"`
-	CapacityForecast           *CapacityForecast                `json:"capacity_forecast,omitempty"`
+	ID                         string                              `json:"id"`
+	Key                        string                              `json:"key,omitempty"`
+	Severity                   FindingSeverity                     `json:"severity"`
+	Category                   FindingCategory                     `json:"category"`
+	ResourceID                 string                              `json:"resource_id"`
+	ResourceName               string                              `json:"resource_name"`
+	ResourceType               string                              `json:"resource_type"`
+	ResourceCriticality        string                              `json:"resource_criticality,omitempty"`
+	Node                       string                              `json:"node,omitempty"`
+	Title                      string                              `json:"title"`
+	Description                string                              `json:"description"`
+	Impact                     string                              `json:"impact,omitempty"`
+	PreviousResolvedFixSummary string                              `json:"previous_resolved_fix_summary,omitempty"`
+	Recommendation             string                              `json:"recommendation,omitempty"`
+	Evidence                   string                              `json:"evidence,omitempty"`
+	Source                     string                              `json:"source,omitempty"`
+	FailureCause               string                              `json:"failure_cause,omitempty"`
+	DetectedAt                 time.Time                           `json:"detected_at"`
+	LastSeenAt                 time.Time                           `json:"last_seen_at"`
+	ResolvedAt                 *time.Time                          `json:"resolved_at,omitempty"`
+	AutoResolved               bool                                `json:"auto_resolved"`
+	ResolveReason              string                              `json:"resolve_reason,omitempty"`
+	AcknowledgedAt             *time.Time                          `json:"acknowledged_at,omitempty"`
+	SnoozedUntil               *time.Time                          `json:"snoozed_until,omitempty"`
+	AlertIdentifier            string                              `json:"alert_identifier,omitempty"`
+	DismissedReason            string                              `json:"dismissed_reason,omitempty"`
+	UserNote                   string                              `json:"user_note,omitempty"`
+	TimesRaised                int                                 `json:"times_raised"`
+	Suppressed                 bool                                `json:"suppressed"`
+	RemindAt                   *time.Time                          `json:"remind_at,omitempty"`
+	RemindCount                int                                 `json:"remind_count,omitempty"`
+	InvestigationSessionID     string                              `json:"investigation_session_id,omitempty"`
+	InvestigationStatus        string                              `json:"investigation_status,omitempty"`
+	InvestigationOutcome       string                              `json:"investigation_outcome,omitempty"`
+	LastInvestigatedAt         *time.Time                          `json:"last_investigated_at,omitempty"`
+	InvestigationAttempts      int                                 `json:"investigation_attempts"`
+	InvestigationRecord        *aicontracts.InvestigationRecord    `json:"investigation_record,omitempty"`
+	LoopState                  string                              `json:"loop_state,omitempty"`
+	Lifecycle                  []FindingLifecycleEvent             `json:"lifecycle,omitempty"`
+	RegressionCount            int                                 `json:"regression_count,omitempty"`
+	LastRegressionAt           *time.Time                          `json:"last_regression_at,omitempty"`
+	CapacityForecast           *CapacityForecast                   `json:"capacity_forecast,omitempty"`
+	ObjectiveContext           *aicontracts.PatrolObjectiveContext `json:"objective_context,omitempty"`
 }
 
 func (f Finding) MarshalJSON() ([]byte, error) {
@@ -341,6 +346,7 @@ func (f Finding) MarshalJSON() ([]byte, error) {
 		RegressionCount:            f.RegressionCount,
 		LastRegressionAt:           f.LastRegressionAt,
 		CapacityForecast:           f.CapacityForecast,
+		ObjectiveContext:           clonePatrolObjectiveContext(f.ObjectiveContext),
 	})
 }
 
@@ -393,6 +399,7 @@ func (f *Finding) UnmarshalJSON(data []byte) error {
 		RegressionCount:            payload.RegressionCount,
 		LastRegressionAt:           payload.LastRegressionAt,
 		CapacityForecast:           payload.CapacityForecast,
+		ObjectiveContext:           clonePatrolObjectiveContext(payload.ObjectiveContext),
 	}
 	return nil
 }
@@ -691,6 +698,7 @@ func (f *Finding) ToCoreFinding() *InvestigationFinding {
 		InvestigationOutcome:   f.InvestigationOutcome,
 		LastInvestigatedAt:     f.LastInvestigatedAt,
 		InvestigationAttempts:  f.InvestigationAttempts,
+		ObjectiveContext:       clonePatrolObjectiveContext(f.ObjectiveContext),
 	}
 
 	// Populate operational memory from fields the internal Finding
@@ -709,6 +717,15 @@ func (f *Finding) ToCoreFinding() *InvestigationFinding {
 	}
 
 	return core
+}
+
+func clonePatrolObjectiveContext(value *aicontracts.PatrolObjectiveContext) *aicontracts.PatrolObjectiveContext {
+	if value == nil {
+		return nil
+	}
+	clone := *value
+	clone.ObservedResourceIDs = append([]string(nil), value.ObservedResourceIDs...)
+	return &clone
 }
 
 // Getter methods for aicontracts.OrchestratorAIFinding interface
@@ -1894,6 +1911,9 @@ func (s *FindingsStore) Add(f *Finding) bool {
 		existing.Impact = f.Impact
 		existing.Recommendation = f.Recommendation
 		existing.Evidence = f.Evidence
+		if f.ObjectiveContext != nil {
+			existing.ObjectiveContext = clonePatrolObjectiveContext(f.ObjectiveContext)
+		}
 		existing.Title = f.Title // Update title in case LLM phrased it better
 		existing.Severity = f.Severity
 		existing.TimesRaised++ // Track recurrence

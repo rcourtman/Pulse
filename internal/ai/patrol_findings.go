@@ -483,6 +483,7 @@ type chatServiceExecutorAccessor interface {
 type patrolFindingCreatorAdapter struct {
 	patrol            *PatrolService
 	snap              patrolRuntimeState
+	objectiveContext  *aicontracts.PatrolObjectiveContext
 	findingsMu        sync.Mutex
 	findings          []*Finding
 	assessments       []PatrolFindingAssessment
@@ -492,10 +493,15 @@ type patrolFindingCreatorAdapter struct {
 	checkedFindings   bool
 }
 
-func newPatrolFindingCreatorAdapterState(p *PatrolService, snap patrolRuntimeState) *patrolFindingCreatorAdapter {
+func newPatrolFindingCreatorAdapterState(p *PatrolService, snap patrolRuntimeState, objectiveContexts ...*aicontracts.PatrolObjectiveContext) *patrolFindingCreatorAdapter {
+	var objectiveContext *aicontracts.PatrolObjectiveContext
+	if len(objectiveContexts) > 0 {
+		objectiveContext = objectiveContexts[0]
+	}
 	return &patrolFindingCreatorAdapter{
-		patrol: p,
-		snap:   snap,
+		patrol:           p,
+		snap:             snap,
+		objectiveContext: clonePatrolObjectiveContext(objectiveContext),
 	}
 }
 
@@ -543,19 +549,20 @@ func (a *patrolFindingCreatorAdapter) CreateFinding(input tools.PatrolFindingInp
 	id := generateFindingID(input.ResourceID, string(cat), normalizedKey)
 
 	finding := &Finding{
-		ID:             id,
-		Key:            normalizedKey,
-		Severity:       sev,
-		Category:       cat,
-		ResourceID:     input.ResourceID,
-		ResourceName:   input.ResourceName,
-		ResourceType:   input.ResourceType,
-		Title:          input.Title,
-		Description:    input.Description,
-		Impact:         input.Impact,
-		Recommendation: input.Recommendation,
-		Evidence:       input.Evidence,
-		Source:         "ai-analysis",
+		ID:               id,
+		Key:              normalizedKey,
+		Severity:         sev,
+		Category:         cat,
+		ResourceID:       input.ResourceID,
+		ResourceName:     input.ResourceName,
+		ResourceType:     input.ResourceType,
+		Title:            input.Title,
+		Description:      input.Description,
+		Impact:           input.Impact,
+		Recommendation:   input.Recommendation,
+		Evidence:         input.Evidence,
+		Source:           "ai-analysis",
+		ObjectiveContext: clonePatrolObjectiveContext(a.objectiveContext),
 	}
 
 	// Inline validation: check if finding is actionable against current metrics
@@ -663,6 +670,9 @@ func (a *patrolFindingCreatorAdapter) AssessFinding(input tools.PatrolFindingAss
 	case "present":
 		refreshed := *finding
 		refreshed.Evidence = assessment.Evidence
+		if a.objectiveContext != nil {
+			refreshed.ObjectiveContext = clonePatrolObjectiveContext(a.objectiveContext)
+		}
 		if a.patrol.recordFinding(&refreshed) {
 			return fmt.Errorf("finding %s unexpectedly became a new finding during assessment", assessment.FindingID)
 		}

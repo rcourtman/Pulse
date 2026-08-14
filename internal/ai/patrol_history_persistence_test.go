@@ -13,6 +13,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/mockruntime"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 )
 
 // mockPatrolHistoryPersistence implements PatrolHistoryPersistence for testing
@@ -265,6 +266,45 @@ func TestPatrolHistoryPersistenceAdapter_NormalizesAlertIdentity(t *testing.T) {
 	}
 	if loaded[0].AlertIdentifier != "instance:node:100::metric/cpu" {
 		t.Fatalf("expected canonical alert identifier after load, got %q", loaded[0].AlertIdentifier)
+	}
+}
+
+func TestPatrolHistoryPersistenceAdapterRetainsObjectiveTriggeredAllClear(t *testing.T) {
+	tmp := t.TempDir()
+	adapter := NewPatrolHistoryPersistenceAdapter(config.NewConfigPersistence(tmp))
+	observedAt := time.Date(2026, 8, 14, 2, 0, 0, 0, time.UTC)
+	run := PatrolRunRecord{
+		ID:            "objective-run",
+		StartedAt:     observedAt,
+		CompletedAt:   observedAt.Add(time.Second),
+		Type:          "scoped",
+		TriggerReason: string(TriggerReasonObjectiveEvidence),
+		Status:        "healthy",
+		FindingIDs:    []string{},
+		ObjectiveContext: &aicontracts.PatrolObjectiveContext{
+			ObjectiveID:         "objective-1",
+			Revision:            3,
+			Brief:               "Keep playback smooth",
+			ObserverID:          "observer-1",
+			ObserverVersion:     2,
+			ObservedResourceIDs: []string{"jellyfin-1"},
+			Evidence:            "local predicate breached",
+			ObservedAt:          observedAt,
+		},
+	}
+	if err := adapter.SavePatrolRunHistory([]PatrolRunRecord{run}); err != nil {
+		t.Fatalf("save objective run: %v", err)
+	}
+	loaded, err := adapter.LoadPatrolRunHistory()
+	if err != nil {
+		t.Fatalf("load objective run: %v", err)
+	}
+	if len(loaded) != 1 || loaded[0].ObjectiveContext == nil || loaded[0].ObjectiveContext.ObjectiveID != "objective-1" || loaded[0].ObjectiveContext.Brief != "Keep playback smooth" {
+		t.Fatalf("persisted objective run = %+v", loaded)
+	}
+	loaded[0].ObjectiveContext.ObservedResourceIDs[0] = "mutated"
+	if run.ObjectiveContext.ObservedResourceIDs[0] != "jellyfin-1" {
+		t.Fatal("persisted objective run aliases caller memory")
 	}
 }
 
