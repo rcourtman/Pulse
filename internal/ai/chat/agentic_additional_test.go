@@ -428,6 +428,33 @@ func TestPatrolFindingLifecycleContinuationRequestNarrowsWatchTools(t *testing.T
 	}
 }
 
+func TestFilterRepeatedPatrolFindingLifecycleCallsPreservesDistinctDecisions(t *testing.T) {
+	first := providers.ToolCall{ID: "report-a", Name: agentcapabilities.PatrolReportFindingToolName, Input: map[string]interface{}{
+		"key": "health-a", "resource_id": "app-container-a",
+	}}
+	repeated := first
+	repeated.ID = "report-a-repeated"
+	second := providers.ToolCall{ID: "report-b", Name: agentcapabilities.PatrolReportFindingToolName, Input: map[string]interface{}{
+		"key": "health-b", "resource_id": "app-container-b",
+	}}
+	read := providers.ToolCall{ID: "query", Name: agentcapabilities.PulseQueryToolName, Input: map[string]interface{}{"action": "fleet"}}
+
+	filtered, suppressed := filterRepeatedPatrolFindingLifecycleCalls([]providers.ToolCall{first, repeated, second, read}, nil)
+	if len(filtered) != 3 || filtered[0].ID != first.ID || filtered[1].ID != second.ID || filtered[2].ID != read.ID {
+		t.Fatalf("filtered calls = %+v, want first report, distinct report, and read", filtered)
+	}
+	if len(suppressed) != 1 || suppressed[0].ID != repeated.ID {
+		t.Fatalf("suppressed calls = %+v, want exact repeated report only", suppressed)
+	}
+
+	filtered, suppressed = filterRepeatedPatrolFindingLifecycleCalls([]providers.ToolCall{first, second}, map[string]struct{}{
+		toolCallKey(first.Name, first.Input): {},
+	})
+	if len(filtered) != 1 || filtered[0].ID != second.ID || len(suppressed) != 1 || suppressed[0].ID != first.ID {
+		t.Fatalf("accepted-call filtering = filtered:%+v suppressed:%+v", filtered, suppressed)
+	}
+}
+
 func TestAgenticLoopRemovesPatrolFindingsReadAfterSuccess(t *testing.T) {
 	provider := &stubStreamingProvider{}
 	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
@@ -996,6 +1023,106 @@ func TestAgenticLoopAllowsSequentialIndependentWatchFindings(t *testing.T) {
 		t.Fatalf("created findings = %+v, want both independent resources exactly once", creator.created)
 	}
 	if len(result) == 0 || result[len(result)-1].Content != "Two independent unhealthy containers were recorded." {
+		t.Fatalf("final result = %+v", result)
+	}
+}
+
+func TestAgenticLoopSuppressesExactRepeatedAcceptedPatrolReport(t *testing.T) {
+	provider := &stubStreamingProvider{}
+	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
+	executor.ApplyExecutionProfile(tools.ProfilePatrolDetection)
+	creator := &repairTestPatrolFindingCreator{}
+	executor.SetPatrolFindingCreator(creator)
+	loop := NewAgenticLoop(provider, executor, "full Patrol prompt")
+	loop.SetExecutionProfile(tools.ProfilePatrolDetection)
+	loop.SetMaxTurns(4)
+
+	reportInput := map[string]interface{}{
+		"key":            "restart-loop",
+		"severity":       "warning",
+		"category":       "reliability",
+		"resource_id":    "app-container-worker",
+		"resource_name":  "worker",
+		"resource_type":  "app-container",
+		"title":          "Container restart count exceeds threshold",
+		"description":    "Provider reported four restarts while the container remained running.",
+		"recommendation": "Inspect the restart pattern and recent exit logs.",
+		"evidence":       "Provider state reports four restarts.",
+	}
+
+	providerCalls := 0
+	provider.chatStream = func(_ context.Context, req providers.ChatRequest, callback providers.StreamCallback) error {
+		providerCalls++
+		switch providerCalls {
+		case 1:
+			call := providers.ToolCall{ID: "get-findings", Name: agentcapabilities.PatrolGetFindingsToolName, Input: map[string]interface{}{}}
+			callback(providers.StreamEvent{Type: "tool_start", Data: providers.ToolStartEvent{ID: call.ID, Name: call.Name, Input: call.Input}})
+			callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{ToolCalls: []providers.ToolCall{call}}})
+		case 2:
+			call := providers.ToolCall{ID: "report-first", Name: agentcapabilities.PatrolReportFindingToolName, Input: reportInput}
+			callback(providers.StreamEvent{Type: "tool_start", Data: providers.ToolStartEvent{ID: call.ID, Name: call.Name, Input: call.Input}})
+			callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{ToolCalls: []providers.ToolCall{call}}})
+		case 3:
+			if req.System != patrolFindingLifecycleContinuationSystemPrompt {
+				t.Fatalf("repeat request system = %q, want lifecycle continuation", req.System)
+			}
+			call := providers.ToolCall{ID: "report-repeated", Name: agentcapabilities.PatrolReportFindingToolName, Input: reportInput}
+			callback(providers.StreamEvent{Type: "tool_start", Data: providers.ToolStartEvent{ID: call.ID, Name: call.Name, Input: call.Input}})
+			callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{ToolCalls: []providers.ToolCall{call}}})
+		case 4:
+			if len(req.Tools) != 0 {
+				t.Fatalf("final summary unexpectedly offered tools: %+v", req.Tools)
+			}
+			callback(providers.StreamEvent{Type: "content", Data: providers.ContentEvent{Text: "The restart issue was recorded once."}})
+			callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{}})
+		default:
+			t.Fatalf("unexpected provider call %d", providerCalls)
+		}
+		return nil
+	}
+
+	available := []providers.Tool{
+		{Name: agentcapabilities.PatrolGetFindingsToolName},
+		{Name: agentcapabilities.PatrolReportFindingToolName},
+		{Name: agentcapabilities.PatrolAssessFindingToolName},
+	}
+	var reportStarts, reportEnds int
+	result, err := loop.ExecuteWithTools(context.Background(), "repeated-accepted-report", []Message{{Role: "user", Content: "check worker"}}, available, func(event StreamEvent) {
+		switch event.Type {
+		case "tool_start":
+			var data ToolStartData
+			if err := json.Unmarshal(event.Data, &data); err != nil {
+				t.Fatalf("decode tool_start: %v", err)
+			}
+			if data.Name == agentcapabilities.PatrolReportFindingToolName {
+				reportStarts++
+			}
+		case "tool_end":
+			var data ToolEndData
+			if err := json.Unmarshal(event.Data, &data); err != nil {
+				t.Fatalf("decode tool_end: %v", err)
+			}
+			if data.Name == agentcapabilities.PatrolReportFindingToolName {
+				reportEnds++
+			}
+		}
+	})
+	if err != nil {
+		t.Fatalf("repeated accepted report run failed: %v", err)
+	}
+	if providerCalls != 4 {
+		t.Fatalf("provider calls = %d, want read, report, absorbed repeat, summary", providerCalls)
+	}
+	if reportStarts != 1 || reportEnds != 1 {
+		t.Fatalf("canonical report events = starts:%d ends:%d, want exactly one pair", reportStarts, reportEnds)
+	}
+	if len(creator.created) != 1 || creator.created[0].ResourceID != "app-container-worker" {
+		t.Fatalf("created findings = %+v, want one canonical report", creator.created)
+	}
+	if loop.GetTotalToolCalls() != 2 {
+		t.Fatalf("effective tool calls = %d, want findings read plus one report", loop.GetTotalToolCalls())
+	}
+	if len(result) == 0 || result[len(result)-1].Content != "The restart issue was recorded once." {
 		t.Fatalf("final result = %+v", result)
 	}
 }

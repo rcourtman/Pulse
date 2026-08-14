@@ -143,6 +143,16 @@ finding heartbeat unchanged. The active-findings snapshot is likewise a
 one-shot Watch capability: after the first successful `patrol_get_findings`,
 the model no longer receives that tool in subsequent turns and must reuse the
 accepted result.
+The provider-neutral Watch orchestration boundary also collapses an exact
+repeat of a finding lifecycle name and canonical arguments before it becomes a
+second canonical tool invocation. This applies to repeated calls in one
+provider batch and to calls repeated after an accepted lifecycle result. It
+does not collapse calls with different arguments, so the model can still
+report causally independent incidents sequentially. Lifecycle stream starts
+are delayed until the complete provider batch is normalized, preventing a
+suppressed retry from appearing as a second action in Patrol history or the
+browser. The finding adapter remains independently idempotent as the durable
+write boundary.
 Patrol reports one operator-facing finding per causal incident. Symptoms that
 share a causal chain are grouped on the user-facing degraded resource with
 dependency evidence and honest uncertainty in the same finding; causally
@@ -7234,9 +7244,12 @@ target. Deleted-resource reconciliation still uses the full current global
 state, and the synthetic Patrol runtime finding retains its existing special
 handling.
 
-Every provider tool call from the main pass, evaluation pass, and assessment
-sweep is merged into the one durable Patrol run trace, including raw provider
-arguments, failed calls, and bounded outputs. Qualification and operator
-forensics therefore see the complete model-owned decision path; a follow-up
-cannot hide a duplicate findings read or a failed lifecycle write in an
-ephemeral callback.
+Every provider tool call admitted by the orchestration boundary from the main
+pass, evaluation pass, and assessment sweep is merged into the one durable
+Patrol run trace, including raw provider arguments, failed calls, and bounded
+outputs. Qualification and operator forensics therefore see the complete
+canonical model-owned decision path; a follow-up cannot hide a duplicate
+findings read or a failed lifecycle write in an ephemeral callback. Exact
+finding-lifecycle retries suppressed before canonical invocation are runtime
+loop-control decisions rather than tool executions and do not create a second
+tool-start/tool-end pair.

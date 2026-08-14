@@ -386,6 +386,45 @@ func isPatrolFindingLifecycleWrite(toolName string) bool {
 	}
 }
 
+// filterRepeatedPatrolFindingLifecycleCalls keeps exact lifecycle retries from
+// becoming a second canonical tool invocation. Models occasionally repeat an
+// already accepted report or assessment on the next bounded completion turn,
+// even though the accepted result is present in context. The finding adapter
+// is independently idempotent, but admitting the retry still creates noisy
+// execution history and wastes a tool decision.
+//
+// Calls that differ in name or canonical arguments remain model-owned and are
+// preserved, so sequential reports for independent incidents still work. An
+// exact duplicate inside one provider batch is also collapsed to its first
+// call; a failed first call must be corrected on the bounded repair turn with
+// different arguments rather than retried unchanged.
+func filterRepeatedPatrolFindingLifecycleCalls(toolCalls []providers.ToolCall, accepted map[string]struct{}) ([]providers.ToolCall, []providers.ToolCall) {
+	if len(toolCalls) == 0 {
+		return toolCalls, nil
+	}
+
+	filtered := make([]providers.ToolCall, 0, len(toolCalls))
+	suppressed := make([]providers.ToolCall, 0)
+	seenThisTurn := make(map[string]struct{})
+	for _, tc := range toolCalls {
+		if !isPatrolFindingLifecycleWrite(tc.Name) {
+			filtered = append(filtered, tc)
+			continue
+		}
+
+		key := toolCallKey(tc.Name, tc.Input)
+		_, alreadyAccepted := accepted[key]
+		_, alreadySeen := seenThisTurn[key]
+		if alreadyAccepted || alreadySeen {
+			suppressed = append(suppressed, tc)
+			continue
+		}
+		seenThisTurn[key] = struct{}{}
+		filtered = append(filtered, tc)
+	}
+	return filtered, suppressed
+}
+
 func containsPatrolFindingReport(toolCalls []providers.ToolCall) bool {
 	for _, tc := range toolCalls {
 		if strings.TrimSpace(tc.Name) == agentcapabilities.PatrolReportFindingToolName {
@@ -851,6 +890,7 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 	investigationProposalCompleted := false
 	acceptedFindingReports := 0
 	patrolFindingsReadCompleted := false
+	acceptedPatrolLifecycleCallKeys := make(map[string]struct{})
 
 	// Loop detection: track identical tool calls (name + serialized input).
 	// After maxIdenticalCalls identical invocations, the next one is blocked.
@@ -1225,6 +1265,13 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 						if data.Name == pulseQuestionToolName {
 							return
 						}
+						// Finding lifecycle starts are delayed until the complete provider
+						// batch is normalized. This lets the orchestration boundary absorb
+						// exact same-turn or already-accepted retries without presenting a
+						// second canonical tool invocation to Patrol history or the UI.
+						if isPatrolFindingLifecycleWrite(data.Name) {
+							return
+						}
 						key := toolStartKey(data.ID, data.Name)
 						if len(data.Input) == 0 {
 							if key != "" && !toolStartMapHas(visibleToolStarts, data.ID, data.Name) && !toolStartMapHas(suppressedToolStarts, data.ID, data.Name) {
@@ -1251,6 +1298,9 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 				case "tool_progress":
 					if data, ok := event.Data.(providers.ToolProgressEvent); ok {
 						if data.Name == pulseQuestionToolName {
+							return
+						}
+						if isPatrolFindingLifecycleWrite(data.Name) {
 							return
 						}
 						if toolStartMapHas(suppressedToolStarts, data.ID, data.Name) {
@@ -1407,6 +1457,17 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 				Int("stripped_tool_calls", len(toolCalls)).
 				Msg("[AgenticLoop] Model returned tool calls after tools were omitted — stripping them")
 			toolCalls = nil
+		}
+		if isPatrolDetectionExecution(a.currentExecutionProfile()) && len(toolCalls) > 0 {
+			var suppressed []providers.ToolCall
+			toolCalls, suppressed = filterRepeatedPatrolFindingLifecycleCalls(toolCalls, acceptedPatrolLifecycleCallKeys)
+			for _, tc := range suppressed {
+				log.Info().
+					Str("tool", tc.Name).
+					Str("id", tc.ID).
+					Str("session_id", sessionID).
+					Msg("[AgenticLoop] Suppressed repeated Patrol finding lifecycle intent before canonical invocation")
+			}
 		}
 		a.totalToolCalls += len(toolCalls)
 
@@ -2091,6 +2152,7 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 					patrolFindingLifecycleFailedThisTurn = true
 				} else {
 					patrolFindingLifecycleSucceededThisTurn = true
+					acceptedPatrolLifecycleCallKeys[toolCallKey(tc.Name, tc.Input)] = struct{}{}
 				}
 			}
 
