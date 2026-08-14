@@ -6988,20 +6988,34 @@ still contain `auto_fix_count` load cleanly; the unknown key is ignored.
 
 ### Model-authored observers have a core-owned local execution floor
 
-`internal/ai/patrol_observer_runtime.go` owns the first executable observer ABI
-for retained Patrol objectives. The model may author the predicate, but it
-cannot author executable code or advance lifecycle authority. Core strictly
-decodes `pulse-resource-state/v1`, requires explicit canonical resource scope,
-an interval trigger, an empty external-requirements object, one canonical
-`status` predicate, a 10-to-300-second local sample interval, and a bounded
-consecutive-failure window. Unknown fields and unsupported runtimes, triggers,
-requirements, paths, operators, or values fail closed and persist a safe
-machine reason in the `rejected` state while coverage remains uncovered.
+`internal/ai/patrol_observer_runtime.go` owns the executable observer ABIs for
+retained Patrol objectives. The model may author the meaning and predicate, but
+it cannot author executable code, network authority, or lifecycle authority.
+Core strictly decodes `pulse-resource-state/v1` for canonical resource status
+and `pulse-availability-state/v1` for the outcome of an existing canonical
+agentless availability target. Both require explicit canonical resource scope,
+an interval trigger, an empty external-requirements object, a 10-to-300-second
+local sample interval, and a bounded consecutive-failure window. The
+availability ABI accepts only an exact canonical target ID and
+`probe_outcome`; it never accepts a URL, address, header, credential, request
+body, or secret. Before installation, core proves that the target exists, is
+enabled, and belongs to the objective's resource scope. Missing, disabled,
+deleted, or cross-scope targets fail closed with typed observer reasons rather
+than being interpreted as objective failure. Unknown fields and unsupported
+runtimes, triggers, requirements, paths, operators, or values also fail closed
+and persist a safe machine reason in the `rejected` or `degraded` state while
+coverage remains truthful.
 
 Accepted observers transition through proposed, validated, and installed under
-core authority. They evaluate Pulse's canonical `ReadState` status locally,
-falling back to the existing Patrol snapshot only where canonical read state is
-unavailable. Health leasing is persisted without changing the operator
+core authority. Resource observers evaluate Pulse's canonical `ReadState`
+status locally, falling back to the existing Patrol snapshot only where
+canonical read state is unavailable. Availability observers reuse the
+canonical observations already collected by Pulse or a selected host agent;
+they do not create a second poller and never invoke a model on the sampling
+interval. Applicable canonical target IDs and current outcomes are included as
+bounded quoted data beside the retained objective so the model can compose the
+generic ABI without inventing infrastructure authority. Health leasing is
+persisted without changing the operator
 objective revision, with all leases due in one sweep committed in one atomic
 encrypted-document transaction. A failure transition queues one scoped
 `objective_evidence` check through the existing TriggerManager, so the model

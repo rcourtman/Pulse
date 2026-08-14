@@ -18,7 +18,8 @@ import (
 )
 
 const (
-	patrolObserverRuntimeFormat          = "pulse-resource-state/v1"
+	patrolObserverResourceStateFormat    = "pulse-resource-state/v1"
+	patrolObserverAvailabilityFormat     = "pulse-availability-state/v1"
 	patrolObserverSweepInterval          = 5 * time.Second
 	patrolObserverMinSampleInterval      = 10 * time.Second
 	patrolObserverMaxSampleInterval      = 5 * time.Minute
@@ -35,6 +36,26 @@ type patrolResourceStateProbe struct {
 	Value                        string `json:"value"`
 	SampleIntervalSeconds        int    `json:"sample_interval_seconds"`
 	WakeAfterConsecutiveFailures int    `json:"wake_after_consecutive_failures"`
+}
+
+type patrolAvailabilityStateProbe struct {
+	Runtime                      string `json:"runtime"`
+	TargetID                     string `json:"target_id"`
+	Path                         string `json:"path"`
+	Operator                     string `json:"operator"`
+	Value                        string `json:"value"`
+	SampleIntervalSeconds        int    `json:"sample_interval_seconds"`
+	WakeAfterConsecutiveFailures int    `json:"wake_after_consecutive_failures"`
+}
+
+type patrolValidatedObserverProbe struct {
+	runtime                      string
+	targetID                     string
+	path                         string
+	operator                     string
+	value                        string
+	sampleIntervalSeconds        int
+	wakeAfterConsecutiveFailures int
 }
 
 type patrolObserverValidationError struct{ code string }
@@ -123,6 +144,11 @@ func (p *PatrolService) reconcileObjectiveObserver(store *PatrolObjectiveStore, 
 		p.recordObserverValidationFailure(store, objective, validationErr.code, now)
 		return nil
 	}
+	state := p.currentPatrolRuntimeState()
+	if bindingErr := validatePatrolObserverBinding(objective, probe, state); bindingErr != nil {
+		p.recordObserverValidationFailure(store, objective, bindingErr.code, now)
+		return nil
+	}
 
 	for objective.Observer != nil && (objective.Observer.State == PatrolObserverProposed || objective.Observer.State == PatrolObserverRejected || objective.Observer.State == PatrolObserverValidated || objective.Observer.State == PatrolObserverDegraded) {
 		next := *clonePatrolObserver(objective.Observer)
@@ -156,7 +182,7 @@ func (p *PatrolService) reconcileObjectiveObserver(store *PatrolObjectiveStore, 
 	if objective.Observer == nil || (objective.Observer.State != PatrolObserverInstalled && objective.Observer.State != PatrolObserverDegraded) {
 		return nil
 	}
-	return p.evaluateObjectiveObserver(runtime, objective, probe, now)
+	return p.evaluateObjectiveObserver(runtime, objective, probe, state, now)
 }
 
 func (p *PatrolService) recordObserverValidationFailure(store *PatrolObjectiveStore, objective PatrolObjective, code string, now time.Time) {
@@ -180,9 +206,9 @@ func (p *PatrolService) recordObserverValidationFailure(store *PatrolObjectiveSt
 	}
 }
 
-func validatePatrolObserverArtifact(objective PatrolObjective, artifact PatrolObserverArtifact) (patrolResourceStateProbe, *patrolObserverValidationError) {
-	fail := func(code string) (patrolResourceStateProbe, *patrolObserverValidationError) {
-		return patrolResourceStateProbe{}, &patrolObserverValidationError{code: code}
+func validatePatrolObserverArtifact(objective PatrolObjective, artifact PatrolObserverArtifact) (patrolValidatedObserverProbe, *patrolObserverValidationError) {
+	fail := func(code string) (patrolValidatedObserverProbe, *patrolObserverValidationError) {
+		return patrolValidatedObserverProbe{}, &patrolObserverValidationError{code: code}
 	}
 	if objective.Observer == nil || !objective.Observer.ReadOnly {
 		return fail("observer_not_read_only")
@@ -200,33 +226,92 @@ func validatePatrolObserverArtifact(objective PatrolObjective, artifact PatrolOb
 	if len(requirements) != 0 {
 		return fail("observer_requirements_unsupported")
 	}
-	var probe patrolResourceStateProbe
-	if err := decodeStrictJSONObject(artifact.Probe, &probe); err != nil {
+	var envelope struct {
+		Runtime string `json:"runtime"`
+	}
+	if err := json.Unmarshal(artifact.Probe, &envelope); err != nil {
 		return fail("observer_probe_invalid")
 	}
-	if probe.Runtime != patrolObserverRuntimeFormat {
+	var probe patrolValidatedObserverProbe
+	switch strings.TrimSpace(envelope.Runtime) {
+	case patrolObserverResourceStateFormat:
+		var decoded patrolResourceStateProbe
+		if err := decodeStrictJSONObject(artifact.Probe, &decoded); err != nil {
+			return fail("observer_probe_invalid")
+		}
+		probe = patrolValidatedObserverProbe{
+			runtime: decoded.Runtime, path: decoded.Path, operator: decoded.Operator,
+			value: decoded.Value, sampleIntervalSeconds: decoded.SampleIntervalSeconds,
+			wakeAfterConsecutiveFailures: decoded.WakeAfterConsecutiveFailures,
+		}
+		if probe.path != "status" {
+			return fail("observer_path_unsupported")
+		}
+		switch unifiedresources.ResourceStatus(strings.ToLower(strings.TrimSpace(probe.value))) {
+		case unifiedresources.StatusOnline, unifiedresources.StatusOffline, unifiedresources.StatusWarning, unifiedresources.StatusUnknown:
+			probe.value = strings.ToLower(strings.TrimSpace(probe.value))
+		default:
+			return fail("observer_value_unsupported")
+		}
+	case patrolObserverAvailabilityFormat:
+		var decoded patrolAvailabilityStateProbe
+		if err := decodeStrictJSONObject(artifact.Probe, &decoded); err != nil {
+			return fail("observer_probe_invalid")
+		}
+		probe = patrolValidatedObserverProbe{
+			runtime: decoded.Runtime, targetID: strings.TrimSpace(decoded.TargetID), path: decoded.Path,
+			operator: decoded.Operator, value: strings.ToLower(strings.TrimSpace(decoded.Value)),
+			sampleIntervalSeconds:        decoded.SampleIntervalSeconds,
+			wakeAfterConsecutiveFailures: decoded.WakeAfterConsecutiveFailures,
+		}
+		if probe.targetID == "" {
+			return fail("observer_availability_target_required")
+		}
+		if probe.path != "probe_outcome" {
+			return fail("observer_path_unsupported")
+		}
+		switch probe.value {
+		case "reachable", "unreachable", "indeterminate":
+		default:
+			return fail("observer_value_unsupported")
+		}
+	default:
 		return fail("observer_runtime_unsupported")
 	}
-	if probe.Path != "status" {
-		return fail("observer_path_unsupported")
-	}
-	if probe.Operator != "equals" && probe.Operator != "not_equals" {
+	if probe.operator != "equals" && probe.operator != "not_equals" {
 		return fail("observer_operator_unsupported")
 	}
-	switch unifiedresources.ResourceStatus(strings.ToLower(strings.TrimSpace(probe.Value))) {
-	case unifiedresources.StatusOnline, unifiedresources.StatusOffline, unifiedresources.StatusWarning, unifiedresources.StatusUnknown:
-		probe.Value = strings.ToLower(strings.TrimSpace(probe.Value))
-	default:
-		return fail("observer_value_unsupported")
-	}
-	interval := time.Duration(probe.SampleIntervalSeconds) * time.Second
+	interval := time.Duration(probe.sampleIntervalSeconds) * time.Second
 	if interval < patrolObserverMinSampleInterval || interval > patrolObserverMaxSampleInterval {
 		return fail("observer_interval_out_of_bounds")
 	}
-	if probe.WakeAfterConsecutiveFailures < 1 || probe.WakeAfterConsecutiveFailures > patrolObserverMaxConsecutiveFailures {
+	if probe.wakeAfterConsecutiveFailures < 1 || probe.wakeAfterConsecutiveFailures > patrolObserverMaxConsecutiveFailures {
 		return fail("observer_failure_window_out_of_bounds")
 	}
 	return probe, nil
+}
+
+func validatePatrolObserverBinding(objective PatrolObjective, probe patrolValidatedObserverProbe, state patrolRuntimeState) *patrolObserverValidationError {
+	if probe.runtime != patrolObserverAvailabilityFormat {
+		return nil
+	}
+	check, ownerID, found := patrolAvailabilityCheckByTarget(state, probe.targetID)
+	if !found {
+		return &patrolObserverValidationError{code: "observer_availability_target_missing"}
+	}
+	if !check.Enabled {
+		return &patrolObserverValidationError{code: "observer_availability_target_disabled"}
+	}
+	scope := make(map[string]struct{}, len(objective.Scope.ResourceIDs))
+	for _, resourceID := range objective.Scope.ResourceIDs {
+		scope[canonicalPatrolScopeToken(resourceID)] = struct{}{}
+	}
+	_, ownerInScope := scope[canonicalPatrolScopeToken(ownerID)]
+	_, linkedInScope := scope[canonicalPatrolScopeToken(check.LinkedResourceID)]
+	if !ownerInScope && !linkedInScope {
+		return &patrolObserverValidationError{code: "observer_availability_target_out_of_scope"}
+	}
+	return nil
 }
 
 func decodeStrictJSONObject(data []byte, target interface{}) error {
@@ -241,7 +326,7 @@ func decodeStrictJSONObject(data []byte, target interface{}) error {
 	return nil
 }
 
-func (p *PatrolService) evaluateObjectiveObserver(runtime *patrolObserverRuntime, objective PatrolObjective, probe patrolResourceStateProbe, now time.Time) *patrolObserverHealthUpdate {
+func (p *PatrolService) evaluateObjectiveObserver(runtime *patrolObserverRuntime, objective PatrolObjective, probe patrolValidatedObserverProbe, state patrolRuntimeState, now time.Time) *patrolObserverHealthUpdate {
 	observer := objective.Observer
 	key := fmt.Sprintf("%s/%d", observer.ID, observer.Version)
 	runtime.mu.Lock()
@@ -250,20 +335,31 @@ func (p *PatrolService) evaluateObjectiveObserver(runtime *patrolObserverRuntime
 		runtime.mu.Unlock()
 		return nil
 	}
-	interval := time.Duration(probe.SampleIntervalSeconds) * time.Second
+	interval := time.Duration(probe.sampleIntervalSeconds) * time.Second
 	execution.nextDue = now.Add(interval)
 	runtime.mu.Unlock()
 
-	statuses := patrolRuntimeCanonicalStatuses(p.currentPatrolRuntimeState())
 	failing := make([]string, 0)
-	for _, resourceID := range objective.Scope.ResourceIDs {
-		status, exists := statuses[canonicalPatrolScopeToken(resourceID)]
-		matched := exists && string(status) == probe.Value
-		if probe.Operator == "not_equals" {
-			matched = exists && string(status) != probe.Value
+	if probe.runtime == patrolObserverAvailabilityFormat {
+		check, ownerID, exists := patrolAvailabilityCheckByTarget(state, probe.targetID)
+		matched := exists && check.LastChecked != nil && strings.EqualFold(check.ProbeOutcome, probe.value)
+		if probe.operator == "not_equals" {
+			matched = exists && check.LastChecked != nil && !strings.EqualFold(check.ProbeOutcome, probe.value)
 		}
 		if !matched {
-			failing = append(failing, resourceID)
+			failing = append(failing, ownerID)
+		}
+	} else {
+		statuses := patrolRuntimeCanonicalStatuses(state)
+		for _, resourceID := range objective.Scope.ResourceIDs {
+			status, exists := statuses[canonicalPatrolScopeToken(resourceID)]
+			matched := exists && string(status) == probe.value
+			if probe.operator == "not_equals" {
+				matched = exists && string(status) != probe.value
+			}
+			if !matched {
+				failing = append(failing, resourceID)
+			}
 		}
 	}
 
@@ -291,7 +387,7 @@ func (p *PatrolService) evaluateObjectiveObserver(runtime *patrolObserverRuntime
 		}
 		runtime.mu.Unlock()
 	}
-	shouldWake := len(failing) > 0 && execution.consecutiveFailures >= probe.WakeAfterConsecutiveFailures &&
+	shouldWake := len(failing) > 0 && execution.consecutiveFailures >= probe.wakeAfterConsecutiveFailures &&
 		(!execution.wakeEmitted || (!execution.deliveryConfirmed && now.Sub(execution.lastWakeAt) >= patrolObserverWakeRetryInterval))
 
 	leaseDuration := 3 * interval
@@ -316,10 +412,7 @@ func (p *PatrolService) evaluateObjectiveObserver(runtime *patrolObserverRuntime
 		return healthUpdate
 	}
 	sort.Strings(failing)
-	evidence := fmt.Sprintf(
-		"Canonical resource status did not satisfy %s %s for %d of %d scoped resources after %d consecutive local samples.",
-		probe.Operator, probe.Value, len(failing), len(objective.Scope.ResourceIDs), execution.consecutiveFailures,
-	)
+	evidence := patrolObserverEvidence(probe, failing, len(objective.Scope.ResourceIDs), execution.consecutiveFailures)
 	scope := PatrolScope{
 		ResourceIDs: failing,
 		Depth:       PatrolDepthQuick,
@@ -353,6 +446,34 @@ func (p *PatrolService) evaluateObjectiveObserver(runtime *patrolObserverRuntime
 		log.Info().Str("objective_id", objective.ID).Int("affected_resources", len(failing)).Msg("Patrol objective observer queued an evidence-triggered check")
 	}
 	return healthUpdate
+}
+
+func patrolObserverEvidence(probe patrolValidatedObserverProbe, failing []string, scopedResources, consecutiveFailures int) string {
+	if probe.runtime == patrolObserverAvailabilityFormat {
+		return fmt.Sprintf(
+			"Canonical availability target %s did not satisfy %s %s after %d consecutive local samples.",
+			probe.targetID, probe.operator, probe.value, consecutiveFailures,
+		)
+	}
+	return fmt.Sprintf(
+		"Canonical resource status did not satisfy %s %s for %d of %d scoped resources after %d consecutive local samples.",
+		probe.operator, probe.value, len(failing), scopedResources, consecutiveFailures,
+	)
+}
+
+func patrolAvailabilityCheckByTarget(state patrolRuntimeState, targetID string) (unifiedresources.AvailabilityData, string, bool) {
+	targetID = strings.TrimSpace(targetID)
+	if targetID == "" || state.unifiedResourceProvider == nil {
+		return unifiedresources.AvailabilityData{}, "", false
+	}
+	for _, resource := range state.unifiedResourceProvider.GetAll() {
+		for _, check := range unifiedresources.AvailabilityChecksForResource(resource) {
+			if strings.TrimSpace(check.TargetID) == targetID {
+				return check, resource.ID, true
+			}
+		}
+	}
+	return unifiedresources.AvailabilityData{}, "", false
 }
 
 func (p *PatrolService) objectiveWakeDelivered(objective PatrolObjective, lastWakeAt time.Time) bool {

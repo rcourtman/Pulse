@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 func createInstallablePatrolObserver(t *testing.T, store *PatrolObjectiveStore, now time.Time, resourceIDs ...string) PatrolObjective {
@@ -112,6 +113,121 @@ func TestPatrolObserverRuntimeRecordsExplicitUnsupportedValidationReason(t *test
 	}
 	if revised.Observer == nil || revised.Observer.Version != got.Observer.Version+1 || revised.Observer.State != PatrolObserverProposed {
 		t.Fatalf("replacement proposal = %+v", revised.Observer)
+	}
+}
+
+func TestPatrolAvailabilityObserverUsesCanonicalScopedTargetAndWakesOnOutcomeBreach(t *testing.T) {
+	now := time.Date(2026, 8, 14, 3, 0, 0, 0, time.UTC)
+	store := NewInMemoryPatrolObjectiveStore()
+	objective, err := store.Create(CreatePatrolObjectiveInput{
+		Brief:       "Keep the front cameras reachable",
+		ResourceIDs: []string{"frigate-1"},
+	}, now)
+	if err != nil {
+		t.Fatalf("create objective: %v", err)
+	}
+	objective, err = store.ProposeObserver(objective.ID, ProposePatrolObserverInput{
+		ExpectedRevision: objective.Revision,
+		Interpretation:   "The existing camera availability check remains reachable.",
+		TriggerKinds:     []PatrolObserverTriggerKind{PatrolObserverTriggerInterval},
+		ProbeJSON:        `{"runtime":"pulse-availability-state/v1","target_id":"camera-front-http","path":"probe_outcome","operator":"equals","value":"reachable","sample_interval_seconds":10,"wake_after_consecutive_failures":2}`,
+		WakeEvidence:     "The canonical camera endpoint is not reachable twice.",
+		RequirementsJSON: `{}`,
+	}, now)
+	if err != nil {
+		t.Fatalf("propose availability observer: %v", err)
+	}
+
+	checkedAt := now
+	outcome := "reachable"
+	provider := &mockUnifiedResourceProvider{getAllFunc: func() []unifiedresources.Resource {
+		return []unifiedresources.Resource{{
+			ID: "frigate-1", Type: unifiedresources.ResourceTypeAppContainer,
+			AvailabilityChecks: []unifiedresources.AvailabilityData{{
+				TargetID: "camera-front-http", LinkedResourceID: "frigate-1", Enabled: true,
+				ProbeOutcome: outcome, LastChecked: &checkedAt,
+			}},
+		}}
+	}}
+	patrol := NewPatrolService(nil, nil)
+	patrol.SetObjectiveStore(store)
+	patrol.SetUnifiedResourceProvider(provider)
+	tm := NewTriggerManager(TriggerManagerConfig{MaxPendingTriggers: 10})
+	patrol.SetTriggerManager(tm)
+
+	patrol.processObjectiveObservers(now.Add(time.Second))
+	installed, _ := store.Get(objective.ID, now.Add(time.Second))
+	if installed.Observer == nil || installed.Observer.State != PatrolObserverInstalled || installed.Coverage.State != PatrolObjectiveCovered {
+		t.Fatalf("availability observer was not installed: observer=%+v coverage=%+v", installed.Observer, installed.Coverage)
+	}
+	if tm.GetPendingCount() != 0 {
+		t.Fatal("reachable availability target woke Patrol")
+	}
+
+	outcome = "unreachable"
+	checkedAt = now.Add(11 * time.Second)
+	patrol.processObjectiveObservers(now.Add(11 * time.Second))
+	patrol.processObjectiveObservers(now.Add(21 * time.Second))
+	if tm.GetPendingCount() != 1 {
+		t.Fatalf("availability breach did not wake Patrol once; pending=%d", tm.GetPendingCount())
+	}
+	queued := tm.pendingTriggers[0]
+	if queued.ObjectiveContext == nil || len(queued.ObjectiveContext.ObservedResourceIDs) != 1 || queued.ObjectiveContext.ObservedResourceIDs[0] != "frigate-1" {
+		t.Fatalf("availability wake lost canonical owner context: %+v", queued.ObjectiveContext)
+	}
+	if !strings.Contains(queued.ObjectiveContext.Evidence, "camera-front-http") || !strings.Contains(queued.ObjectiveContext.Evidence, "equals reachable") {
+		t.Fatalf("availability wake evidence = %q", queued.ObjectiveContext.Evidence)
+	}
+}
+
+func TestPatrolAvailabilityObserverBindingFailsClosed(t *testing.T) {
+	now := time.Date(2026, 8, 14, 3, 0, 0, 0, time.UTC)
+	checkedAt := now
+	for _, test := range []struct {
+		name       string
+		resourceID string
+		targetID   string
+		enabled    bool
+		wantCode   string
+	}{
+		{name: "missing", resourceID: "camera-1", targetID: "different-target", enabled: true, wantCode: "observer_availability_target_missing"},
+		{name: "disabled", resourceID: "camera-1", targetID: "camera-http", enabled: false, wantCode: "observer_availability_target_disabled"},
+		{name: "out of scope", resourceID: "camera-2", targetID: "camera-http", enabled: true, wantCode: "observer_availability_target_out_of_scope"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			store := NewInMemoryPatrolObjectiveStore()
+			objective, err := store.Create(CreatePatrolObjectiveInput{Brief: "Keep camera online", ResourceIDs: []string{"camera-1"}}, now)
+			if err != nil {
+				t.Fatalf("create objective: %v", err)
+			}
+			objective, err = store.ProposeObserver(objective.ID, ProposePatrolObserverInput{
+				ExpectedRevision: objective.Revision,
+				Interpretation:   "Keep the endpoint reachable.",
+				TriggerKinds:     []PatrolObserverTriggerKind{PatrolObserverTriggerInterval},
+				ProbeJSON:        `{"runtime":"pulse-availability-state/v1","target_id":"camera-http","path":"probe_outcome","operator":"equals","value":"reachable","sample_interval_seconds":30,"wake_after_consecutive_failures":2}`,
+				WakeEvidence:     "Endpoint reachability breached.", RequirementsJSON: `{}`,
+			}, now)
+			if err != nil {
+				t.Fatalf("propose observer: %v", err)
+			}
+			provider := &mockUnifiedResourceProvider{getAllFunc: func() []unifiedresources.Resource {
+				return []unifiedresources.Resource{{
+					ID: test.resourceID,
+					AvailabilityChecks: []unifiedresources.AvailabilityData{{
+						TargetID: test.targetID, Enabled: test.enabled, ProbeOutcome: "reachable", LastChecked: &checkedAt,
+					}},
+				}}
+			}}
+			patrol := NewPatrolService(nil, nil)
+			patrol.SetObjectiveStore(store)
+			patrol.SetUnifiedResourceProvider(provider)
+			patrol.processObjectiveObservers(now.Add(time.Second))
+
+			got, _ := store.Get(objective.ID, now.Add(time.Second))
+			if got.Observer == nil || got.Observer.State != PatrolObserverRejected || got.Observer.FailureCode != test.wantCode {
+				t.Fatalf("binding result = %+v, want rejected/%s", got.Observer, test.wantCode)
+			}
+		})
 	}
 }
 
@@ -224,6 +340,31 @@ func TestValidatePatrolObserverArtifactRejectsUnknownExecutableFields(t *testing
 	_, err := validatePatrolObserverArtifact(objective, artifact)
 	if err == nil || err.code != "observer_probe_invalid" {
 		t.Fatalf("unknown executable field validation error = %v", err)
+	}
+}
+
+func TestValidatePatrolAvailabilityObserverRejectsModelSuppliedNetworkAuthority(t *testing.T) {
+	now := time.Now().UTC()
+	store := NewInMemoryPatrolObjectiveStore()
+	objective, err := store.Create(CreatePatrolObjectiveInput{Brief: "Keep camera reachable", ResourceIDs: []string{"camera-1"}}, now)
+	if err != nil {
+		t.Fatalf("create objective: %v", err)
+	}
+	objective, err = store.ProposeObserver(objective.ID, ProposePatrolObserverInput{
+		ExpectedRevision: objective.Revision,
+		Interpretation:   "Keep the endpoint reachable.",
+		TriggerKinds:     []PatrolObserverTriggerKind{PatrolObserverTriggerInterval},
+		ProbeJSON:        `{"runtime":"pulse-availability-state/v1","target_id":"camera-http","path":"probe_outcome","operator":"equals","value":"reachable","sample_interval_seconds":30,"wake_after_consecutive_failures":2}`,
+		WakeEvidence:     "Endpoint reachability breached.", RequirementsJSON: `{}`,
+	}, now)
+	if err != nil {
+		t.Fatalf("propose observer: %v", err)
+	}
+	artifact, _ := store.GetObserverArtifact(objective.ID)
+	artifact.Probe = []byte(`{"runtime":"pulse-availability-state/v1","target_id":"camera-http","path":"probe_outcome","operator":"equals","value":"reachable","sample_interval_seconds":30,"wake_after_consecutive_failures":2,"url":"http://169.254.169.254/latest/meta-data"}`)
+	_, validationErr := validatePatrolObserverArtifact(objective, artifact)
+	if validationErr == nil || validationErr.code != "observer_probe_invalid" {
+		t.Fatalf("model-supplied URL validation error = %v", validationErr)
 	}
 }
 

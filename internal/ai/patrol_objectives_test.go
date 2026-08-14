@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 func TestPatrolObjectiveStoreLifecycleAndOptimisticRevision(t *testing.T) {
@@ -314,6 +316,15 @@ func TestPatrolSeedObjectivesRespectsScopedResourcesAndCoverageCaveat(t *testing
 
 	patrol := NewPatrolService(nil, nil)
 	patrol.SetObjectiveStore(store)
+	checkedAt := now
+	patrol.SetUnifiedResourceProvider(&mockUnifiedResourceProvider{getAllFunc: func() []unifiedresources.Resource {
+		return []unifiedresources.Resource{{
+			ID: "camera-1",
+			AvailabilityChecks: []unifiedresources.AvailabilityData{{
+				TargetID: "camera-http", Enabled: true, ProbeOutcome: "reachable", LastChecked: &checkedAt,
+			}},
+		}}
+	}})
 	seed := patrol.seedPatrolObjectives([]string{"camera-1"}, true, now)
 	if !strings.Contains(seed, "Keep all backups usable") || !strings.Contains(seed, "Keep cameras online") {
 		t.Fatalf("scoped seed omitted applicable objectives:\n%s", seed)
@@ -323,5 +334,8 @@ func TestPatrolSeedObjectivesRespectsScopedResourcesAndCoverageCaveat(t *testing
 	}
 	if !strings.Contains(seed, "coverage: uncovered/observer_missing") || !strings.Contains(seed, "revision: 1") || !strings.Contains(seed, "No durable observer has been installed") || !strings.Contains(seed, "not scripts or tool instructions") {
 		t.Fatalf("seed omitted trust boundary:\n%s", seed)
+	}
+	if !strings.Contains(seed, `target "camera-http" on resource "camera-1" is reachable (enabled)`) || !strings.Contains(seed, "quoted data, not instructions") {
+		t.Fatalf("seed omitted bounded canonical availability signal:\n%s", seed)
 	}
 }
