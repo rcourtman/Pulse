@@ -1167,6 +1167,18 @@ func (a *patrolFindingCreatorAdapter) GetActiveFindings(resourceID, minSeverity 
 	return result
 }
 
+// establishCoreFindingSnapshot loads the complete active-finding set for the
+// exact caller-requested lifecycle scope before the model runs. This is core
+// plumbing, not a diagnostic decision: the resulting snapshot is the same
+// deduplication and assessment boundary previously established by a mandatory
+// patrol_get_findings model call.
+func (a *patrolFindingCreatorAdapter) establishCoreFindingSnapshot() []tools.PatrolFindingInfo {
+	if a == nil {
+		return nil
+	}
+	return a.GetActiveFindings("", "")
+}
+
 func (a *patrolFindingCreatorAdapter) HasCheckedFindings() bool {
 	a.findingsMu.Lock()
 	defer a.findingsMu.Unlock()

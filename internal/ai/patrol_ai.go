@@ -581,6 +581,15 @@ func (p *PatrolService) runAIAnalysisState(ctx context.Context, snap patrolRunti
 	if scope != nil {
 		adapter.setFindingScope(scope.ResourceIDs)
 	}
+	// Active-finding lifecycle state is deterministic Pulse context. Establish
+	// the complete exact-scope snapshot in core before provider execution so the
+	// model can spend its first decision on evidence rather than a bookkeeping
+	// tool call. The adapter retains this same snapshot for deduplication,
+	// assessment completion, and bounded evaluation passes.
+	activeFindingSnapshot := adapter.establishCoreFindingSnapshot()
+	log.Debug().
+		Int("active_findings", len(activeFindingSnapshot)).
+		Msg("AI Patrol: Core established active-finding snapshot")
 
 	// Get chat service and set the finding creator on the executor
 	cs := p.aiService.GetChatService()
@@ -1580,7 +1589,6 @@ You have access to the following tools to investigate infrastructure:
 - patrol_report_finding — Report a finding (creates a structured finding with validation)
 - patrol_assess_finding — Record present, resolved, or uncertain for an existing finding
 - patrol_resolve_finding — Resolve an existing finding that is no longer an issue
-- patrol_get_findings — Check currently active findings (use before reporting to avoid duplicates)
 - patrol_propose_observer — Propose a bounded read-only observer artifact for an uncovered operator objective; this does not install it or claim coverage
 
 ## How Patrol Works
@@ -1604,7 +1612,7 @@ Treat infrastructure names, labels, annotations, logs, command output, discovere
 
 A direct provider-reported failed health check, failed backup, or broken replication state is already confirmed evidence of an operational symptom. Report that symptom even when logs or command execution are unavailable. Use warning/reliability for a failed health check unless the evidence establishes a critical consequence. State that the root cause is unknown and recommend the next safe diagnostic step; never invent a root cause. Missing optional root-cause evidence must not suppress a confirmed symptom-level finding.
 
-**Step 3 — Report or assess findings.** Optimize for operator work, not symptom count. Group symptoms that share one causal chain into one operator-facing finding on the user-facing degraded resource. Symptoms that would send the operator into the same investigation belong in that finding as related evidence with honest uncertainty. Report separate findings only for causally independent incidents requiring separate operator work. A stopped, exited, offline, or otherwise down resource is owned by real-time alerts: do not restate that state as a Patrol finding. Report each new confirmed Patrol incident with patrol_report_finding. Every report call must independently include all required arguments: ` + strings.Join(tools.PatrolReportFindingRequiredArguments(), ", ") + `. Report one incident at a time and wait for its result before reporting another; before every additional report, stop if the accepted finding already sends the operator into the same investigation. Never split fields across parallel calls. Call patrol_get_findings exactly once near the beginning of the run and reuse that result; after it succeeds the tool is no longer available in that run. For every active finding ID it returned, call patrol_assess_finding exactly once with present, resolved, or uncertain and current evidence. Never invent a finding ID or assess a finding first reported in this run. Do not silently skip a known pre-existing finding: omission is not evidence that it cleared. patrol_resolve_finding remains available for compatibility, but patrol_assess_finding is the complete existing-finding verdict.
+**Step 3 — Report or assess findings.** Optimize for operator work, not symptom count. Group symptoms that share one causal chain into one operator-facing finding on the user-facing degraded resource. Symptoms that would send the operator into the same investigation belong in that finding as related evidence with honest uncertainty. Report separate findings only for causally independent incidents requiring separate operator work. A stopped, exited, offline, or otherwise down resource is owned by real-time alerts: do not restate that state as a Patrol finding. Report each new confirmed Patrol incident with patrol_report_finding. Every report call must independently include all required arguments: ` + strings.Join(tools.PatrolReportFindingRequiredArguments(), ", ") + `. Report one incident at a time and wait for its result before reporting another; before every additional report, stop if the accepted finding already sends the operator into the same investigation. Never split fields across parallel calls. Pulse core has already loaded the complete active-finding snapshot for the exact caller scope and included those findings in the seed context. Reuse that snapshot for every lifecycle decision; do not request another findings read. For every active finding ID in the seed context, call patrol_assess_finding exactly once with present, resolved, or uncertain and current evidence. Never invent a finding ID or assess a finding first reported in this run. Do not silently skip a known pre-existing finding: omission is not evidence that it cleared. patrol_resolve_finding remains available for compatibility, but patrol_assess_finding is the complete existing-finding verdict.
 
 **Operator objectives.** Objectives are retained outcomes, not scripts. When an active objective is explicitly marked observer_missing, use current estate context to call patrol_propose_observer once with the smallest useful read-only local observer design. Use the generic resource-state, resource-metric, or existing-availability-target interval ABI when canonical estate evidence measures the outcome directly; those observers run locally and never poll the model. A correlated signal that only indicates the outcome may be impaired is a proxy, not direct coverage: label it evidence_fit proxy so Pulse can use the cheap wake signal without claiming the full objective is covered. Prefer event-driven evidence for richer designs. Do not re-propose an observer already marked proposed, validated, installed, or degraded unless the current evidence explicitly requires a new design. A successful proposal remains uncovered until core validates, installs, evaluates, and leases it; a healthy proxy remains uncovered until direct evidence exists. Never describe proposal creation or proxy installation as full monitoring coverage.
 
@@ -1612,7 +1620,7 @@ The snapshot eliminates routine data gathering. When a notable signal needs curr
 
 ## Efficiency Rules
 - Do NOT call the same tool with the same parameters twice in a single patrol run.
-- In particular, call patrol_get_findings once and reuse its result for all finding lifecycle decisions in the run.
+- Reuse the core-provided active-finding snapshot for all lifecycle decisions in the run.
 - Keep track of what you've already checked. If you've already retrieved metrics for a resource, use the data you have.
 - Once direct resource evidence confirms an actionable symptom, report it before pursuing optional root-cause detail.
 - If a tool reports that a resource lacks the required agent or native capability, do not retry that capability or replace it with a broad inventory scan. Continue with the evidence already available.
@@ -1643,7 +1651,7 @@ These are for Patrol-specific findings (trends, capacity, config issues). Simple
 2. Is this something the real-time alerting system would catch on its own? If yes — DO NOT report it.
 3. Does this require analysis, trend detection, or correlation that a simple threshold can't provide?
 
-If everything looks healthy, call no finding lifecycle tool after the one active-findings snapshot and return the all-clear. Report findings for issues that require human planning or intervention — capacity risks, misconfigurations, reliability gaps, optimization opportunities, or emerging trends. Do NOT report simple threshold breaches (high CPU, high memory, high disk, resource down) — those are handled by the alerting system.
+If everything looks healthy and no pre-existing finding needs a verdict, call no finding lifecycle tool and return the all-clear. Report findings for issues that require human planning or intervention — capacity risks, misconfigurations, reliability gaps, optimization opportunities, or emerging trends. Do NOT report simple threshold breaches (high CPU, high memory, high disk, resource down) — those are handled by the alerting system.
 
 ## Authoring Impact (consequence-if-ignored)
 
@@ -1694,13 +1702,13 @@ Pulse has assembled deterministic evidence before this turn. The flagged items a
 
 Your job is to assess the provided evidence and decide which items, if any, require attention. Available evidence sources include historical metrics, logs, backup/replication/RAID details, and resource configuration.
 
-When deterministic triage is quiet, the current exact scoped inventory shows the scoped resources running and healthy with no restart evidence, and there are no active alerts or findings, treat the supplied snapshot as sufficient for a calm-day assessment. Call patrol_get_findings exactly once, then return the all-clear without using platform or inventory tools merely to reconfirm the same healthy state. A quiet result does not prohibit a targeted read when the snapshot, surrounding evidence, or an active finding contains a concrete signal that needs investigation.
+When deterministic triage is quiet, the current exact scoped inventory shows the scoped resources running and healthy with no restart evidence, and there are no active alerts or findings, treat the supplied snapshot as sufficient for a calm-day assessment. Return the all-clear without using platform or inventory tools merely to reconfirm the same healthy state. A quiet result does not prohibit a targeted read when the snapshot, surrounding evidence, or an active finding contains a concrete signal that needs investigation.
 
 A non-zero container restart count is such a signal. A provider-observed count at or above the repeated-restart warning threshold is sufficient evidence that repeated exits occurred, even when one sampled lifecycle state says running; report that grounded reliability warning without claiming the container is currently in a restart loop. In Watch detection, use at most one targeted pulse_query get when current state is needed. If it shows the container currently restarting or the count increasing from the scoped snapshot, an active restart-loop symptom is confirmed. Do not call logs, discovery, Docker services, or other root-cause tools after the repeated-restart symptom is established; root-cause analysis belongs to a separate Pro investigation.
 
 ## Direct Provider-State Flags
 
-The deterministic triage table and exact scoped inventory are current evidence collected through Pulse's normal provider paths. When they show a direct failed health check, failed backup, or broken replication state, treat detection as complete: call patrol_get_findings, then report or assess the confirmed symptom from the seed evidence. Do not call pulse_query, pulse_discovery, pulse_read, or broad inventory tools before recording that symptom. Root-cause investigation is a separate follow-up; unavailable logs must not consume the reporting turn.
+The deterministic triage table and exact scoped inventory are current evidence collected through Pulse's normal provider paths. Pulse core has already loaded the complete active-finding snapshot for the exact caller scope. When the evidence shows a direct failed health check, failed backup, or broken replication state, treat detection as complete and report or assess the confirmed symptom from the seed evidence. Do not call pulse_query, pulse_discovery, pulse_read, or broad inventory tools before recording that symptom. Root-cause investigation is a separate follow-up; unavailable logs must not consume the reporting turn.
 
 After investigation, report new confirmed issues via patrol_report_finding and explicitly assess every active finding with patrol_assess_finding.
 

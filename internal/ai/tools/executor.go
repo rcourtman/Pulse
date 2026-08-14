@@ -180,10 +180,19 @@ type PatrolFindingAssessmentInput struct {
 	Reason    string `json:"reason"`
 }
 
-// PatrolFindingsChecker tracks whether a patrol run has queried existing findings.
-// Tools can use this to enforce calling patrol_get_findings before reporting or resolving.
+// PatrolFindingsChecker tracks whether Patrol core or a patrol run has loaded
+// existing findings. Tools use this to prevent lifecycle writes from bypassing
+// the deduplication and assessment snapshot.
 type PatrolFindingsChecker interface {
 	HasCheckedFindings() bool
+}
+
+// PatrolCompleteFindingsChecker distinguishes a complete exact-scope snapshot
+// from a filtered findings read. Patrol core establishes this snapshot before
+// a detection model runs so the provider does not have to perform deterministic
+// lifecycle bookkeeping before it can make an evidence-owned decision.
+type PatrolCompleteFindingsChecker interface {
+	HasCompleteFindingSnapshot() bool
 }
 
 // PatrolFindingInput contains the structured parameters the LLM passes
@@ -1102,6 +1111,18 @@ func (e *PulseToolExecutor) GetPatrolFindingCreator() PatrolFindingCreator {
 	e.patrolFindingCreatorMu.RLock()
 	defer e.patrolFindingCreatorMu.RUnlock()
 	return e.patrolFindingCreator
+}
+
+// PatrolFindingSnapshotEstablished reports whether the current Patrol adapter
+// has loaded the complete active-finding set for the exact run scope. Cloned
+// executors intentionally share the run adapter, so this remains true at the
+// provider boundary without copying lifecycle state.
+func (e *PulseToolExecutor) PatrolFindingSnapshotEstablished() bool {
+	if e == nil {
+		return false
+	}
+	checker, ok := e.GetPatrolFindingCreator().(PatrolCompleteFindingsChecker)
+	return ok && checker.HasCompleteFindingSnapshot()
 }
 
 func (e *PulseToolExecutor) SetPatrolObserverProposer(proposer PatrolObserverProposer) {

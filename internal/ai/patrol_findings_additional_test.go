@@ -1027,6 +1027,12 @@ func TestPatrolFindingCreatorAdapter_ResolveFindingAndChecks(t *testing.T) {
 	if !adapter.HasCompleteFindingSnapshot() {
 		t.Fatal("expected unfiltered finding read to establish the complete snapshot")
 	}
+
+	adapter = newPatrolFindingCreatorAdapterState(ps, patrolRuntimeStateForTest(ps, models.StateSnapshot{}))
+	_ = adapter.establishCoreFindingSnapshot()
+	if !adapter.HasCheckedFindings() || !adapter.HasCompleteFindingSnapshot() {
+		t.Fatal("expected core-owned finding load to establish the complete lifecycle snapshot")
+	}
 }
 
 func TestPatrolFindingCreatorAdapter_GetActiveFindings_UsesScopedRuntimeState(t *testing.T) {

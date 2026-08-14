@@ -503,6 +503,66 @@ func TestAgenticLoopRemovesPatrolFindingsReadAfterSuccess(t *testing.T) {
 	}
 }
 
+func TestAgenticLoopUsesCorePatrolFindingSnapshotOnFirstTurn(t *testing.T) {
+	provider := &stubStreamingProvider{}
+	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
+	executor.ApplyExecutionProfile(tools.ProfilePatrolDetection)
+	creator := &repairTestPatrolFindingCreator{}
+	creator.GetActiveFindings("", "")
+	executor.SetPatrolFindingCreator(creator)
+	loop := NewAgenticLoop(provider, executor, "full Patrol prompt")
+	loop.SetExecutionProfile(tools.ProfilePatrolDetection)
+	loop.SetMaxTurns(3)
+
+	providerCalls := 0
+	provider.chatStream = func(_ context.Context, req providers.ChatRequest, callback providers.StreamCallback) error {
+		providerCalls++
+		switch providerCalls {
+		case 1:
+			if hasProviderTool(req.Tools, agentcapabilities.PatrolGetFindingsToolName) {
+				t.Fatalf("core-owned snapshot left patrol_get_findings on the first provider request: %+v", req.Tools)
+			}
+			if !hasProviderTool(req.Tools, agentcapabilities.PatrolReportFindingToolName) {
+				t.Fatalf("core-owned snapshot removed finding report authority: %+v", req.Tools)
+			}
+			call := providers.ToolCall{ID: "report-restart", Name: agentcapabilities.PatrolReportFindingToolName, Input: map[string]interface{}{
+				"key":            "restart-loop",
+				"severity":       "warning",
+				"category":       "reliability",
+				"resource_id":    "app-container-api",
+				"resource_name":  "api",
+				"resource_type":  "app-container",
+				"title":          "API repeatedly restarts",
+				"description":    "Current state confirms repeated container exits.",
+				"recommendation": "Inspect the container exit reason and verify stable uptime after correction.",
+				"evidence":       "Provider state reports six restarts and the container currently restarting.",
+			}}
+			callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{ToolCalls: []providers.ToolCall{call}}})
+		case 2:
+			callback(providers.StreamEvent{Type: "content", Data: providers.ContentEvent{Text: "One reliability finding reported."}})
+			callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{}})
+		default:
+			t.Fatalf("unexpected provider call %d", providerCalls)
+		}
+		return nil
+	}
+
+	available := []providers.Tool{
+		{Name: agentcapabilities.PatrolGetFindingsToolName},
+		{Name: agentcapabilities.PatrolReportFindingToolName},
+	}
+	result, err := loop.ExecuteWithTools(context.Background(), "core-findings-snapshot", []Message{{Role: "user", Content: "assess the restart evidence"}}, available, func(StreamEvent) {})
+	if err != nil {
+		t.Fatalf("Watch run failed: %v", err)
+	}
+	if providerCalls != 2 || len(creator.created) != 1 {
+		t.Fatalf("provider calls=%d created=%+v, want one accepted report and one summary turn", providerCalls, creator.created)
+	}
+	if len(result) == 0 || result[len(result)-1].Content != "One reliability finding reported." {
+		t.Fatalf("unexpected result: %+v", result)
+	}
+}
+
 func TestPatrolFindingLifecycleRepairRequestAllowsOnlyRejectedCallRepair(t *testing.T) {
 	req := providers.ChatRequest{
 		System:     "full Patrol prompt",
@@ -685,8 +745,9 @@ type stubStreamingProvider struct {
 }
 
 type repairTestPatrolFindingCreator struct {
-	checked bool
-	created []tools.PatrolFindingInput
+	checked  bool
+	complete bool
+	created  []tools.PatrolFindingInput
 }
 
 type orderedPatrolFindingCreator struct {
@@ -731,12 +792,18 @@ func (c *repairTestPatrolFindingCreator) CreateFinding(input tools.PatrolFinding
 
 func (c *repairTestPatrolFindingCreator) ResolveFinding(string, string) error { return nil }
 
-func (c *repairTestPatrolFindingCreator) GetActiveFindings(string, string) []tools.PatrolFindingInfo {
+func (c *repairTestPatrolFindingCreator) GetActiveFindings(resourceID, minSeverity string) []tools.PatrolFindingInfo {
 	c.checked = true
+	if strings.TrimSpace(resourceID) == "" {
+		minimum := strings.ToLower(strings.TrimSpace(minSeverity))
+		c.complete = minimum == "" || minimum == "info"
+	}
 	return nil
 }
 
 func (c *repairTestPatrolFindingCreator) HasCheckedFindings() bool { return c.checked }
+
+func (c *repairTestPatrolFindingCreator) HasCompleteFindingSnapshot() bool { return c.complete }
 
 func (s *stubStreamingProvider) Chat(ctx context.Context, req providers.ChatRequest) (*providers.ChatResponse, error) {
 	return &providers.ChatResponse{Content: "ok"}, nil

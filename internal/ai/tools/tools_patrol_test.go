@@ -32,7 +32,8 @@ type mockPatrolFindingCreator struct {
 		MinSeverity string
 	}
 
-	checked bool
+	checked  bool
+	complete bool
 }
 
 type mockPatrolObserverProposer struct {
@@ -79,6 +80,10 @@ func (m *mockPatrolFindingCreator) GetActiveFindings(resourceID, minSeverity str
 		MinSeverity string
 	}{resourceID, minSeverity})
 	m.checked = true
+	if strings.TrimSpace(resourceID) == "" {
+		minimum := strings.ToLower(strings.TrimSpace(minSeverity))
+		m.complete = minimum == "" || minimum == "info"
+	}
 	if m.getActiveFn != nil {
 		return m.getActiveFn(resourceID, minSeverity)
 	}
@@ -87,6 +92,10 @@ func (m *mockPatrolFindingCreator) GetActiveFindings(resourceID, minSeverity str
 
 func (m *mockPatrolFindingCreator) HasCheckedFindings() bool {
 	return m.checked
+}
+
+func (m *mockPatrolFindingCreator) HasCompleteFindingSnapshot() bool {
+	return m.complete
 }
 
 // --- Helper to create executor with patrol creator ---
@@ -817,10 +826,14 @@ func TestSetPatrolFindingCreator(t *testing.T) {
 	creator := &mockPatrolFindingCreator{}
 	exec.SetPatrolFindingCreator(creator)
 	assert.NotNil(t, exec.GetPatrolFindingCreator())
+	assert.False(t, exec.PatrolFindingSnapshotEstablished())
+	creator.GetActiveFindings("", "")
+	assert.True(t, exec.PatrolFindingSnapshotEstablished())
 
 	// Clear it
 	exec.SetPatrolFindingCreator(nil)
 	assert.Nil(t, exec.GetPatrolFindingCreator())
+	assert.False(t, exec.PatrolFindingSnapshotEstablished())
 }
 
 func TestPulseAlertsFindingsSatisfiesPatrolDuplicateCheck(t *testing.T) {

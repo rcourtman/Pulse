@@ -98,12 +98,15 @@ not fabricate one. Scoped
 triage seed context contains both deterministic flags and the explicitly scoped
 resource inventory, including exact app-container health, rather than reducing
 the model's evidence to whichever resources the deterministic pass happened to
-flag. A direct provider-state triage flag is a Watch detection stop condition:
-the model checks active findings and records the confirmed symptom from seed
-evidence before any query, discovery, log, or broad inventory call; root-cause
-investigation is a separate follow-up. Quick scoped checks have a strict
-four-turn model budget: active-finding inspection, report or assessment, one
-bounded fallback turn, and a final Watch decision turn. That final turn exposes
+flag. Before provider execution, Patrol core loads the complete active-finding
+snapshot for the exact caller-requested lifecycle scope and binds it to the run
+adapter; the seed context presents those same active findings to the model. A
+direct provider-state triage flag is a Watch detection stop condition: the
+model records the confirmed symptom from seed evidence before any query,
+discovery, log, or broad inventory call; root-cause investigation is a separate
+follow-up. Quick scoped checks have a strict four-turn model budget: evidence
+decision, report or assessment, one bounded fallback turn, and a final Watch
+decision turn. That final turn exposes
 only `patrol_report_finding` and `patrol_assess_finding`, uses a bounded system
 instruction that forbids further investigation and treats infrastructure data
 as untrusted, and still permits a healthy all-clear without forcing a write.
@@ -139,10 +142,13 @@ The same run may not turn its own accepted report into a recurrence by
 re-reporting the stable finding ID. A repeated same-run report returns a
 successful typed no-op (`applied=false`, `reason=finding_reported_this_run`),
 does not call the finding store again, and leaves `TimesRaised` and the
-finding heartbeat unchanged. The active-findings snapshot is likewise a
-one-shot Watch capability: after the first successful `patrol_get_findings`,
-the model no longer receives that tool in subsequent turns and must reuse the
-accepted result.
+finding heartbeat unchanged. Active-finding loading is core-owned lifecycle
+plumbing, not a model-owned diagnostic decision. When the complete snapshot is
+already established on the run adapter, `patrol_get_findings` is removed from
+the first and all subsequent provider turns and the model reuses the exact
+snapshot in seed context. Narrow compatibility adapters that do not establish a
+core snapshot retain the legacy one-shot behavior: after the first successful
+read, the tool is removed.
 The provider-neutral Watch orchestration boundary also collapses an exact
 repeat of a finding lifecycle name and canonical arguments before it becomes a
 second canonical tool invocation. This applies to repeated calls in one
@@ -6432,10 +6438,12 @@ schema must not incur a failed tool call because the executor used a narrower
 legacy type switch.
 Scoped Patrol prompt context must describe canonical/source IDs and aliases as
 identity aliases, not count each value as a distinct infrastructure resource.
-The exact scoped inventory is the authoritative resource set. Patrol must call
-`patrol_get_findings` once near the beginning of a run and reuse that snapshot
-for all lifecycle decisions, avoiding duplicate reads and their extra provider
-turns on both healthy and faulted runs.
+The exact scoped inventory is the authoritative resource set. Patrol core must
+load the complete exact-scope active-finding snapshot before provider execution
+and the model must reuse the seeded result for all lifecycle decisions. The
+normal Watch provider manifest omits `patrol_get_findings`, avoiding a
+deterministic bookkeeping call and its extra or failed provider turn on both
+healthy and faulted runs.
 On a quiet deterministic triage with a current exact scoped inventory showing
 the scoped resources running and healthy, no container restart evidence, and no
 active alerts or findings, the model uses the supplied snapshot as sufficient
@@ -6478,16 +6486,17 @@ verification step is a valid recommendation when remediation is not yet
 justified; impact remains optional so the contract never pressures the model
 to fabricate a consequence. Providers that omit either grounding field must
 receive a tool error and no partial finding may be persisted.
-The Patrol detection provider manifest exposes exactly one finding-lifecycle
-read: `patrol_get_findings`. The general `pulse_alerts` surface remains
+The normal Patrol detection provider manifest exposes no finding-lifecycle
+read: core has already established and seeded the exact-scope snapshot before
+the first provider request. `patrol_get_findings` remains a registered internal
+compatibility capability for narrow adapters and tests that cannot preload the
+snapshot, where it is one-shot. The general `pulse_alerts` surface remains
 available to interactive Assistant sessions but is withheld from Patrol even
 when every monitored subsystem is enabled. This prevents a provider from
-combining the lifecycle tool name with the Alerts action schema, keeps the
-mandatory duplicate check unambiguous, and avoids spending a failed provider
-turn on an overlapping read contract. The Patrol adapter returns only findings
-inside the run's resolved caller-requested finding scope, never dismissed
-history or context-only dependency records from the broader effective evidence
-scope.
+combining overlapping lifecycle and Alerts read contracts. The Patrol adapter
+returns only findings inside the run's resolved caller-requested finding scope,
+never dismissed history or context-only dependency records from the broader
+effective evidence scope.
 The provider schema is also the source of truth for the required-argument
 checklist rendered into Patrol's normal and bounded final-decision prompts.
 Every report call must be independently complete, including parallel calls for
@@ -7206,12 +7215,13 @@ change to the intent it was designed to protect.
 ### Patrol follow-up passes are exact-scope, least-manifest continuations
 
 Patrol's main Watch pass retains the full governed detection-profile manifest
-so the selected model owns evidence gathering and diagnosis. Bounded
-continuations do not repeat that broad manifest: the unmatched-signal
-evaluation pass receives only `patrol_report_finding` after the main pass has
-established one complete, unfiltered `patrol_get_findings` snapshot; when no
-complete snapshot exists it receives only `patrol_get_findings` plus
-`patrol_report_finding`. The assessment-completion sweep receives only
+so the selected model owns evidence gathering and diagnosis, minus the
+core-satisfied active-finding read. Bounded continuations do not repeat that
+broad manifest: the unmatched-signal evaluation pass receives only
+`patrol_report_finding` after core has established the complete exact-scope
+active-finding snapshot; narrow compatibility paths without a complete snapshot
+receive only `patrol_get_findings` plus `patrol_report_finding`. The
+assessment-completion sweep receives only
 `patrol_assess_finding`. These are structured call-site allowlists applied
 after profile projection and may only reduce authority. An unavailable or
 unknown requested tool fails closed. Prompt text never selects the manifest.

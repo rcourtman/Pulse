@@ -889,7 +889,11 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 	toolBlockedLastTurn := false              // When true, request final text after budget/loop block
 	investigationProposalCompleted := false
 	acceptedFindingReports := 0
-	patrolFindingsReadCompleted := false
+	// Patrol core normally establishes the exact-scope active-finding snapshot
+	// before the provider is invoked. Legacy/narrow adapters can still expose a
+	// one-shot model read, but the normal detection path must not make the model
+	// perform deterministic lifecycle bookkeeping.
+	patrolFindingsReadCompleted := a.executor != nil && a.executor.PatrolFindingSnapshotEstablished()
 	acceptedPatrolLifecycleCallKeys := make(map[string]struct{})
 
 	// Loop detection: track identical tool calls (name + serialized input).
