@@ -6386,6 +6386,16 @@ direction: their manifest-owned baseline predicates must be visible through
 the canonical resource projection before Patrol starts. A transient `starting`
 projection cannot force the model to spend a confirmation turn after the lab
 oracle has already established `healthy`.
+For a fault-free Watch scenario with an explicit healthy negative control, a
+tool-free all-clear is the desired product outcome and must not be invalidated
+merely because no ceremonial lifecycle read was persisted. That narrow
+qualification shape sets `require_tool_call_evidence=false` and instead
+requires positive persisted input/output token usage plus non-empty model
+analysis, alongside the normal zero-false-positive, exact-collection, safety,
+and teardown gates. Faulted Watch cases, existing-finding reconfirmation,
+investigation, and remediation continue to require persisted tool-call
+evidence. Manifest validation must reject a tool-free exception outside the
+fault-free Watch negative-control shape.
 Watch qualification must score the confirmed provider-visible symptom rather
 than require an unproved causal attribution. In the correlated Docker scenario,
 the stopped dependency remains the independently injected fault and the

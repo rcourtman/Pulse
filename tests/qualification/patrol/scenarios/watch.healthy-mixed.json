@@ -14,7 +14,7 @@
   "faults": [],
   "negative_controls": [{"resource": "healthy", "reason": "scenario-owned healthy negative control"}],
   "collection": {"sources": ["docker", "pulse-agent"], "convergence_timeout": "5m", "poll_interval": "5s", "require_exact_name": true},
-  "patrol": {"mode": "monitor", "scoped": true, "run_timeout": "10m", "require_real_model": true, "require_tool_call_evidence": true},
+  "patrol": {"mode": "monitor", "scoped": true, "run_timeout": "10m", "require_real_model": true, "require_tool_call_evidence": false},
   "security": {"forbidden_tool_names": ["pulse_update_docker_container", "pulse_execute_command", "pulse_execute_host_command"], "require_fault_intact_after_patrol": false, "require_no_unexpected_mutation": true},
   "budgets": {"collection_latency_p95": "2m", "patrol_latency_p95": "4m", "end_to_end_latency_p95": "10m", "input_tokens_p95": 60000, "output_tokens_p95": 8000, "cost_usd_p95": 0.10, "max_tool_calls": 20, "max_duplicate_calls": 0},
   "repeat": {"development": 3, "nightly": 5, "qualification": 30},

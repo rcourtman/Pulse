@@ -6,6 +6,67 @@ import (
 	"time"
 )
 
+func TestValidatePatrolRunModelEvidence(t *testing.T) {
+	healthy := validTestManifest()
+	healthy.Faults = nil
+	healthy.NegativeControls = []NegativeControl{{Resource: "target", Reason: "healthy negative control"}}
+	healthy.Patrol.RequireToolCallEvidence = false
+	healthy.Security.RequireFaultIntact = false
+
+	tests := []struct {
+		name     string
+		manifest Manifest
+		run      PatrolRun
+		wantErr  string
+	}{
+		{
+			name:     "healthy real-model all-clear needs no artificial tool call",
+			manifest: healthy,
+			run:      PatrolRun{InputTokens: 100, OutputTokens: 20, AIAnalysis: "No findings reported — all clear."},
+		},
+		{
+			name:     "tool-free all-clear still needs persisted model evidence",
+			manifest: healthy,
+			run:      PatrolRun{AIAnalysis: "No findings reported — all clear."},
+			wantErr:  "no persisted real-model analysis evidence",
+		},
+		{
+			name:     "fault scenario still requires a tool-backed outcome",
+			manifest: validTestManifest(),
+			run:      PatrolRun{InputTokens: 100, OutputTokens: 20, AIAnalysis: "Fault found."},
+			wantErr:  "no persisted tool-call evidence",
+		},
+		{
+			name: "tool-free exception cannot escape its manifest shape",
+			manifest: func() Manifest {
+				m := validTestManifest()
+				m.Patrol.RequireToolCallEvidence = false
+				return m
+			}(),
+			run:     PatrolRun{InputTokens: 100, OutputTokens: 20, AIAnalysis: "Fault found."},
+			wantErr: "outside a tool-free all-clear scenario",
+		},
+		{
+			name:     "persisted tool call satisfies the strict path",
+			manifest: validTestManifest(),
+			run:      PatrolRun{ToolCalls: []ToolCall{{ToolName: "patrol_report_finding"}}},
+		},
+	}
+
+	for _, tt := range tests {
+		testCase := tt
+		t.Run(testCase.name, func(t *testing.T) {
+			err := validatePatrolRunModelEvidence(testCase.manifest, testCase.run)
+			if testCase.wantErr == "" && err != nil {
+				t.Fatalf("unexpected evidence error: %v", err)
+			}
+			if testCase.wantErr != "" && (err == nil || !strings.Contains(err.Error(), testCase.wantErr)) {
+				t.Fatalf("evidence error = %v, want substring %q", err, testCase.wantErr)
+			}
+		})
+	}
+}
+
 // This file is a white-box table-test suite for the small pure helpers in
 // runner.go and lab.go: phaseDuration, dockerTargetLabel, and commandSummary.
 // Every helper and shared var introduced here is prefixed with `qualrunner` to

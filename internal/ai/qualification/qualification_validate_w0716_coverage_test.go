@@ -112,7 +112,7 @@ func Test_w0716_qual_Validate_ErrorArms(t *testing.T) {
 		{"collection sources empty", func(m *Manifest) { m.Collection.Sources = nil }, "collection.sources must not be empty"},
 		{"require exact name false", func(m *Manifest) { m.Collection.RequireExactName = false }, "collection.require_exact_name must be true"},
 		{"require real model false", func(m *Manifest) { m.Patrol.RequireRealModel = false }, "require_real_model must be true"},
-		{"require tool call evidence false", func(m *Manifest) { m.Patrol.RequireToolCallEvidence = false }, "require_tool_call_evidence must be true"},
+		{"tool-free evidence with a declared fault", func(m *Manifest) { m.Patrol.RequireToolCallEvidence = false }, "tool-free Patrol qualification is limited"},
 		{"require no mutation false", func(m *Manifest) { m.Security.RequireNoMutation = false }, "require_no_unexpected_mutation must be true"},
 		{"require fault intact false with faults", func(m *Manifest) { m.Security.RequireFaultIntact = false }, "require_fault_intact_after_patrol must be true when faults are declared"},
 		{"teardown second noop false", func(m *Manifest) { m.Teardown.RequireSecondNoop = false }, "teardown must require a second cleanup no-op"},
@@ -227,6 +227,17 @@ func Test_w0716_qual_Validate_ValidManifestsPass(t *testing.T) {
 	t.Run("watch base manifest passes", func(t *testing.T) {
 		if err := validTestManifest().Validate(); err != nil {
 			t.Fatalf("watch base manifest rejected: %v", err)
+		}
+	})
+
+	t.Run("healthy Watch negative control may prove a tool-free all-clear", func(t *testing.T) {
+		m := validTestManifest()
+		m.Faults = nil
+		m.NegativeControls = []NegativeControl{{Resource: "target", Reason: "healthy negative control"}}
+		m.Patrol.RequireToolCallEvidence = false
+		m.Security.RequireFaultIntact = false
+		if err := m.Validate(); err != nil {
+			t.Fatalf("tool-free healthy Watch manifest rejected: %v", err)
 		}
 	})
 

@@ -289,8 +289,8 @@ func (r *QualificationRunner) Run(ctx context.Context) (report RunReport, termin
 		if err != nil {
 			return err
 		}
-		if manifest.Patrol.RequireToolCallEvidence && len(report.PatrolRun.ToolCalls) == 0 {
-			return errors.New("completed Patrol run has no persisted tool-call evidence")
+		if err := validatePatrolRunModelEvidence(manifest, report.PatrolRun); err != nil {
+			return err
 		}
 		if manifest.Patrol.RequireExistingReconfirmation {
 			if report.PatrolRun.ExistingFindings == 0 {
@@ -414,6 +414,22 @@ func (r *QualificationRunner) Run(ctx context.Context) (report RunReport, termin
 		terminalErr = errors.Join(terminalErr, err)
 	}
 	return report, terminalErr
+}
+
+func validatePatrolRunModelEvidence(manifest Manifest, run PatrolRun) error {
+	if len(run.ToolCalls) > 0 {
+		return nil
+	}
+	if manifest.Patrol.RequireToolCallEvidence {
+		return errors.New("completed Patrol run has no persisted tool-call evidence")
+	}
+	if !manifest.permitsToolFreeAllClear() {
+		return errors.New("completed Patrol run omitted tool calls outside a tool-free all-clear scenario")
+	}
+	if run.InputTokens <= 0 || run.OutputTokens <= 0 || strings.TrimSpace(run.AIAnalysis) == "" {
+		return errors.New("tool-free Patrol all-clear has no persisted real-model analysis evidence")
+	}
+	return nil
 }
 
 func patrolModeMatches(expected, effective string) bool {

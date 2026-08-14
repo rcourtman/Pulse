@@ -501,8 +501,8 @@ func (m Manifest) Validate() error {
 	if !m.Patrol.RequireRealModel {
 		errs = append(errs, errors.New("patrol.require_real_model must be true for qualification"))
 	}
-	if !m.Patrol.RequireToolCallEvidence {
-		errs = append(errs, errors.New("patrol.require_tool_call_evidence must be true for qualification"))
+	if !m.Patrol.RequireToolCallEvidence && !m.permitsToolFreeAllClear() {
+		errs = append(errs, errors.New("tool-free Patrol qualification is limited to fault-free Watch scenarios with a declared negative control"))
 	}
 	if !m.Security.RequireNoMutation {
 		errs = append(errs, errors.New("security.require_no_unexpected_mutation must be true for qualification"))
@@ -535,6 +535,18 @@ func (m Manifest) Validate() error {
 		errs = append(errs, errors.New("a replay-only lab cannot require a real model"))
 	}
 	return errors.Join(errs...)
+}
+
+// permitsToolFreeAllClear identifies the one qualification shape where the
+// absence of tool calls is the desired product outcome. A faulted,
+// investigation, remediation, or existing-finding scenario still needs
+// persisted tool evidence. A Watch negative control instead proves that the
+// real model can inspect a healthy scoped resource and correctly do nothing.
+func (m Manifest) permitsToolFreeAllClear() bool {
+	return m.Track == TrackWatch &&
+		len(m.Faults) == 0 &&
+		len(m.NegativeControls) > 0 &&
+		!m.Patrol.RequireExistingReconfirmation
 }
 
 func validatePredicates(label string, predicates []Predicate, aliases map[string]struct{}) []error {
