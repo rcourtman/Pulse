@@ -543,6 +543,8 @@ type DockerHostTopology struct {
 	CanExecute     bool                     `json:"can_execute"` // True if commands can be executed on this host
 	Containers     []DockerContainerSummary `json:"containers"`
 	ContainerCount int                      `json:"container_count"`
+	ReturnedCount  int                      `json:"returned_container_count"`
+	Truncated      bool                     `json:"containers_truncated"`
 	RunningCount   int                      `json:"running_count"`
 }
 

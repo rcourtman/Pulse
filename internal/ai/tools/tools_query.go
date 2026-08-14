@@ -2237,7 +2237,7 @@ func (e *PulseToolExecutor) registerQueryTools() {
 					},
 					"limit": {
 						Type:        "integer",
-						Description: "Maximum number of results (default: 100)",
+						Description: "Maximum number of results (default: 100). For topology, this is the fallback cap for every omitted max_* field; an explicit max_* field takes precedence.",
 					},
 					"offset": {
 						Type:        "integer",
@@ -4467,6 +4467,8 @@ func BuildTopologyResponseFromReadState(rs unifiedresources.ReadState, options T
 				CanExecute:               hasAgent && options.ControlEnabled,
 				Containers:               containers,
 				ContainerCount:           len(hostContainers),
+				ReturnedCount:            len(containers),
+				Truncated:                len(containers) < len(hostContainers),
 				RunningCount:             runningCount,
 			})
 		}
@@ -4679,11 +4681,34 @@ func (e *PulseToolExecutor) executeGetTopology(_ context.Context, args map[strin
 	_, maxK8sNodesProvided := args["max_k8s_nodes_per_cluster"]
 	_, maxK8sDeploymentsProvided := args["max_k8s_deployments_per_cluster"]
 	_, maxK8sPodsProvided := args["max_k8s_pods_per_cluster"]
+	topologyLimit := intArg(args, "limit", 0)
+	_, topologyLimitProvided := args["limit"]
+	if topologyLimit <= 0 {
+		topologyLimitProvided = false
+	}
 
 	if !summaryProvided {
 		summaryOnly = false
 	}
 	if !summaryOnly {
+		// `limit` is the shared query bound the model naturally reaches for.
+		// Honor it for topology whenever a more precise max_* bound was not
+		// provided, rather than silently falling back to five nested resources.
+		applySharedLimit := func(value *int, provided *bool) {
+			if topologyLimitProvided && !*provided {
+				*value = topologyLimit
+				*provided = true
+			}
+		}
+		applySharedLimit(&maxProxmoxNodes, &maxProxmoxNodesProvided)
+		applySharedLimit(&maxVMsPerNode, &maxVMsProvided)
+		applySharedLimit(&maxContainersPerNode, &maxContainersProvided)
+		applySharedLimit(&maxDockerHosts, &maxDockerHostsProvided)
+		applySharedLimit(&maxDockerContainersPerHost, &maxDockerContainersProvided)
+		applySharedLimit(&maxK8sClusters, &maxK8sClustersProvided)
+		applySharedLimit(&maxK8sNodesPerCluster, &maxK8sNodesProvided)
+		applySharedLimit(&maxK8sDeploymentsPerCluster, &maxK8sDeploymentsProvided)
+		applySharedLimit(&maxK8sPodsPerCluster, &maxK8sPodsProvided)
 		if !maxProxmoxNodesProvided {
 			maxProxmoxNodes = defaultMaxTopologyNodes
 		}

@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -638,6 +639,55 @@ func TestExecuteGetTopology_UsesCanonicalMaxProxmoxNodesInput(t *testing.T) {
 	}
 	if len(topology.Proxmox.Nodes) != 1 {
 		t.Fatalf("expected one proxmox node after max_proxmox_nodes cap, got %+v", topology.Proxmox.Nodes)
+	}
+}
+
+func TestExecuteGetTopologyHonorsSharedLimitAndDisclosesDockerTruncation(t *testing.T) {
+	containers := make([]models.DockerContainer, 8)
+	for i := range containers {
+		containers[i] = models.DockerContainer{
+			ID:    fmt.Sprintf("container-%d", i),
+			Name:  fmt.Sprintf("service-%d", i),
+			State: "running",
+		}
+	}
+	executor := NewPulseToolExecutor(ExecutorConfig{StateProvider: &mockStateProvider{state: models.StateSnapshot{
+		DockerHosts: []models.DockerHost{{ID: "host-1", Hostname: "docker-1", Containers: containers}},
+	}}})
+
+	tests := []struct {
+		name          string
+		args          map[string]interface{}
+		wantReturned  int
+		wantTruncated bool
+	}{
+		{name: "default topology remains bounded and explicit", args: map[string]interface{}{"include": "app-containers"}, wantReturned: 5, wantTruncated: true},
+		{name: "shared limit expands topology", args: map[string]interface{}{"include": "app-containers", "limit": 20}, wantReturned: 8, wantTruncated: false},
+		{name: "explicit docker cap takes precedence", args: map[string]interface{}{"include": "app-containers", "limit": 20, "max_docker_containers_per_host": 3}, wantReturned: 3, wantTruncated: true},
+	}
+
+	for _, tt := range tests {
+		testCase := tt
+		t.Run(testCase.name, func(t *testing.T) {
+			result, err := executor.executeGetTopology(context.Background(), testCase.args)
+			if err != nil {
+				t.Fatalf("execute topology: %v", err)
+			}
+			var topology TopologyResponse
+			if err := json.Unmarshal([]byte(result.Content[0].Text), &topology); err != nil {
+				t.Fatalf("decode topology: %v", err)
+			}
+			if len(topology.Docker.Hosts) != 1 {
+				t.Fatalf("docker hosts = %d, want 1", len(topology.Docker.Hosts))
+			}
+			host := topology.Docker.Hosts[0]
+			if len(host.Containers) != testCase.wantReturned || host.ReturnedCount != testCase.wantReturned || host.Truncated != testCase.wantTruncated {
+				t.Fatalf("topology host = %+v, want returned=%d truncated=%t", host, testCase.wantReturned, testCase.wantTruncated)
+			}
+			if host.ContainerCount != len(containers) {
+				t.Fatalf("container_count = %d, want %d", host.ContainerCount, len(containers))
+			}
+		})
 	}
 }
 

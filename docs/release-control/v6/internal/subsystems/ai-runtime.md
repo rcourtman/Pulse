@@ -4521,6 +4521,16 @@ Otherwise a model can faithfully copy Pulse-provided evidence into a Patrol
 finding and still mis-link that finding to a source record instead of the
 canonical resource selected by the operator or scorer.
 
+The shared `pulse_query` limit is authoritative for topology as well as list
+and search. When a topology call supplies `limit` without a more precise
+`max_*` bound, the executor applies that limit to each included nested
+collection rather than silently reverting to its smaller default. Explicit
+`max_*` values still take precedence. Every Docker host topology result exposes
+both the total and returned container counts plus an explicit truncation flag,
+so a model can distinguish complete topology evidence from a bounded preview
+and continue with a larger bound or paginated list instead of inventing a root
+cause from missing resources.
+
 When the model runs tools but returns no final narrative, the deterministic
 fallback summary (`buildAutomaticFallbackSummary` in
 `internal/ai/chat/agentic_final.go`) must read as a clean operator message, not a
