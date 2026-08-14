@@ -624,6 +624,9 @@ func TestAgenticLoopRecoversTruncatedPatrolDecisionWithGovernedFindingTurn(t *te
 	if !strings.Contains(recoveryRequest.System, "previous model turn exhausted its output budget") {
 		t.Fatalf("recovery prompt = %q", recoveryRequest.System)
 	}
+	if recoveryRequest.MaxTokens != patrolDetectionRecoveryAllowance {
+		t.Fatalf("recovery MaxTokens = %d, want %d within the existing run budget", recoveryRequest.MaxTokens, patrolDetectionRecoveryAllowance)
+	}
 	var persisted strings.Builder
 	for _, message := range result {
 		if message.Role == "assistant" {

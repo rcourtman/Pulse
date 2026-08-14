@@ -1125,6 +1125,9 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 			}
 		}
 		applyExecutionInferenceAllowance(&req, a.currentExecutionProfile(), patrolSummaryOnlyTurn, a.totalOutputTokens)
+		if patrolOutputLimitRecoveryTurn {
+			applyPatrolOutputLimitRecoveryAllowance(&req, a.totalOutputTokens)
+		}
 
 		// Pre-request context validation: catch overflow from message history growth.
 		// Phase 2 handles first-turn overflow via seed budget; this catches

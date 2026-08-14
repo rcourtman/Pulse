@@ -11,6 +11,7 @@ const (
 	// preventing a concise check from inheriting a provider's unbounded default.
 	patrolDetectionRunOutputAllowance  = 7_000
 	patrolDetectionTurnOutputAllowance = 2_048
+	patrolDetectionRecoveryAllowance   = 4_096
 	patrolDetectionSummaryAllowance    = 1_024
 	patrolDetectionMinimumAllowance    = 512
 )
@@ -24,6 +25,23 @@ func applyExecutionInferenceAllowance(req *providers.ChatRequest, profile tools.
 	if summaryOnly {
 		allowance = patrolDetectionSummaryAllowance
 	}
+	if remaining := patrolDetectionRunOutputAllowance - outputTokensUsed; remaining < allowance {
+		allowance = remaining
+	}
+	if allowance < patrolDetectionMinimumAllowance {
+		allowance = patrolDetectionMinimumAllowance
+	}
+
+	req.MaxTokens = allowance
+	req.ReasoningEffort = providers.ReasoningEffortLow
+}
+
+func applyPatrolOutputLimitRecoveryAllowance(req *providers.ChatRequest, outputTokensUsed int) {
+	if req == nil {
+		return
+	}
+
+	allowance := patrolDetectionRecoveryAllowance
 	if remaining := patrolDetectionRunOutputAllowance - outputTokensUsed; remaining < allowance {
 		allowance = remaining
 	}

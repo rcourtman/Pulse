@@ -3405,6 +3405,11 @@ Qualification floor: Patrol model launch and product-claim qualification must us
    container ID or substitute a display name after `pulse_query` returns a
    canonical `app-container` ID; cross-tool identity translation is an AI
    runtime responsibility.
+   The investigation seed must therefore label the finding's display name,
+   canonical resource ID, and resource type as separate fields and state the
+   tool-schema rule explicitly: `resource_id` receives the canonical ID, while
+   a display name is used only by arguments documented as names or queries.
+   Human-readable prompt formatting must not make those identities ambiguous.
    Investigation action-catalog and proposal tools inherit that identity
    boundary in both directions: an exact, uniquely resolved Docker provider
    coordinate may be translated back to its canonical `app-container` target,
@@ -7285,8 +7290,11 @@ A Watch provider turn that stops because its output-token allowance was
 exhausted is not a completed finding decision. Core preserves the partial turn
 only as model context, excludes its unfinished prose from the durable Patrol
 summary, and offers one bounded retry containing only the governed finding
-report and assessment tools. A second token-limited turn fails the run closed;
-it can never be interpreted or published as an all-clear.
+report and assessment tools. That retry may use a larger per-turn allowance
+from the same fixed run-level output budget so reasoning-heavy models can reach
+the structured decision without increasing the run's total spend. A second
+token-limited turn fails the run closed; it can never be interpreted or
+published as an all-clear.
 
 Every provider tool call admitted by the orchestration boundary from the main
 pass, evaluation pass, and assessment sweep is merged into the one durable
