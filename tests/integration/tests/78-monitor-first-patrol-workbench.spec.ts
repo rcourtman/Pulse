@@ -659,7 +659,7 @@ test.describe("Monitor-first Patrol workbench browser contract", () => {
     ).toBeVisible();
     await expect(
       desktopNav.getByRole("tab", {
-        name: "Patrol: 1 active attention item",
+        name: /Patrol: 1 (?:action awaits approval|active attention item)/,
       }),
     ).toBeVisible();
     await expect(
@@ -714,9 +714,9 @@ test.describe("Monitor-first Patrol workbench browser contract", () => {
       page.getByRole("heading", { level: 1, name: "Patrol" }),
     ).toBeVisible();
     await expect(
-      page.getByRole("heading", { level: 2, name: "Needs attention" }),
+      page.getByRole("heading", { level: 2, name: "Needs you" }),
     ).toBeVisible();
-    await expect(page.getByText("Nothing needs your attention")).toBeVisible();
+    await expect(page.getByText("Nothing needs you right now")).toBeVisible();
     await expect(
       page.getByRole("list", { name: "Patrol protection posture" }),
     ).toHaveCount(0);
@@ -760,7 +760,7 @@ test.describe("Monitor-first Patrol workbench browser contract", () => {
     await page.getByRole("tab", { name: /Patrol/ }).click();
     await expect(page).toHaveURL(/\/patrol$/);
     await expect(
-      page.getByRole("heading", { level: 2, name: "Needs attention" }),
+      page.getByRole("heading", { level: 2, name: "Needs you" }),
     ).toBeVisible();
     await expect(
       page.getByRole("list", { name: "Patrol attention items" }),
@@ -883,9 +883,8 @@ test.describe("Monitor-first Patrol workbench browser contract", () => {
       page.getByRole("heading", { level: 1, name: "Patrol" }),
     ).toBeVisible();
     await page
-      .getByText("Patrol checks, investigations, and run history", {
-        exact: true,
-      })
+      .locator("summary")
+      .filter({ hasText: "Operational records and run history" })
       .click();
     await expect(
       page.getByText("Operating system updates need review").first(),
@@ -931,9 +930,8 @@ test.describe("Monitor-first Patrol workbench browser contract", () => {
     );
     await page.reload({ waitUntil: "domcontentloaded" });
     await page
-      .getByText("Patrol checks, investigations, and run history", {
-        exact: true,
-      })
+      .locator("summary")
+      .filter({ hasText: "Operational records and run history" })
       .click();
     const cleanupTitle = page
       .getByText("Downloaded package data is using needed space")
@@ -990,9 +988,8 @@ test.describe("Monitor-first Patrol workbench browser contract", () => {
     );
     await page.reload({ waitUntil: "domcontentloaded" });
     await page
-      .getByText("Patrol checks, investigations, and run history", {
-        exact: true,
-      })
+      .locator("summary")
+      .filter({ hasText: "Operational records and run history" })
       .click();
     await page.getByRole("button", { name: "Resolved", exact: true }).click();
     const resolvedTitle = page

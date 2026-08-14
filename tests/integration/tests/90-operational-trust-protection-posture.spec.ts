@@ -68,7 +68,7 @@ test.describe("Operational trust protection posture", () => {
     const detailRow = coverageTable.locator("[data-inline-detail-for]").first();
     await expect(detailRow).toBeVisible();
     await expect(detailRow).toContainText(
-      /Protected:|Attention:|Unprotected:|Unknown:/,
+      /Protected:|Needs attention:|Unprotected:|Unknown:/,
     );
     await expect(detailRow).toContainText(
       /Restore evidence|No restore evidence has been discovered/,

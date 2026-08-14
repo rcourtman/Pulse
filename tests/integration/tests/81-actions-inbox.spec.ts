@@ -361,6 +361,8 @@ const routeActionFixtures = async (
       new URL(route.request().url()).pathname.split("/").pop() || "",
     );
     const audit = all.find((candidate) => candidate.id === id);
+    const hasDeliveryRecord =
+      audit && audit.state !== "planned" && audit.state !== "pending_approval";
     await route.fulfill({
       status: audit ? 200 : 404,
       contentType: "application/json",
@@ -369,20 +371,37 @@ const routeActionFixtures = async (
           ? {
               audit,
               events: [],
-              attempt: {
-                id: `${id}-attempt`,
-                actionId: id,
-                state: "receipt_recorded",
-                createdAt: audit.createdAt,
-                updatedAt: audit.updatedAt,
-                dispatchCount: 1,
+              readiness: {
+                ready: audit.state === "planned" || audit.state === "pending_approval",
+                code:
+                  audit.state === "planned" || audit.state === "pending_approval"
+                    ? "ready"
+                    : "action_not_actionable",
+                message:
+                  audit.state === "planned" || audit.state === "pending_approval"
+                    ? "Action is ready for approval and dispatch."
+                    : "This action is no longer open for approval or dispatch.",
+                refreshable: false,
+                checkedAt: audit.updatedAt,
               },
-              receipt: {
-                attemptId: `${id}-attempt`,
-                actionId: id,
-                transportRequestId: `${id}-transport`,
-                receivedAt: "2026-07-12T10:05:00Z",
-              },
+              ...(hasDeliveryRecord
+                ? {
+                    attempt: {
+                      id: `${id}-attempt`,
+                      actionId: id,
+                      state: "receipt_recorded",
+                      createdAt: audit.createdAt,
+                      updatedAt: audit.updatedAt,
+                      dispatchCount: 1,
+                    },
+                    receipt: {
+                      attemptId: `${id}-attempt`,
+                      actionId: id,
+                      transportRequestId: `${id}-transport`,
+                      receivedAt: "2026-07-12T10:05:00Z",
+                    },
+                  }
+                : {}),
             }
           : { error: "not found" },
       ),
@@ -390,7 +409,7 @@ const routeActionFixtures = async (
   });
 };
 
-test("Actions inbox exposes the canonical decision packet and durable calm history", async ({
+test("Activity history exposes the canonical decision packet and durable calm history", async ({
   page,
 }, testInfo) => {
   await page.route("**/api/actions?*", async (route) => {
@@ -409,14 +428,31 @@ test("Actions inbox exposes the canonical decision packet and durable calm histo
     route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify({ audit: action, events: [] }),
+      body: JSON.stringify({
+        audit: action,
+        events: [],
+        readiness: {
+          ready: true,
+          code: "ready",
+          message: "Action is ready for approval and dispatch.",
+          refreshable: false,
+          checkedAt: action.updatedAt,
+        },
+      }),
     }),
   );
   await page.goto("/actions?action=action-1", {
     waitUntil: "domcontentloaded",
   });
-  await expect(page.getByRole("heading", { name: "Actions" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Activity history" }),
+  ).toBeVisible();
   await expect(page.getByRole("dialog", { name: "Restart" })).toBeVisible();
+  await expect(
+    page.getByRole("dialog", { name: "Restart" }).getByRole("button", {
+      name: "Approve",
+    }),
+  ).toBeVisible();
   await page.getByRole("button", { name: "Close action review" }).click();
   await expect(page).toHaveURL(/\/actions$/);
   await expect(

@@ -2,21 +2,6 @@ import { expect, test, type Page, type Route } from "@playwright/test";
 
 type AttentionMode = "active" | "calm" | "failed";
 
-async function selectAttentionState(page: Page, label: string, value: string) {
-  const queue = page.getByRole("region", { name: "Needs attention" });
-  const segmentedChoice = queue.getByRole("button", {
-    name: label,
-    exact: true,
-  });
-  if (await segmentedChoice.isVisible()) {
-    await segmentedChoice.click();
-    return;
-  }
-  await queue
-    .getByRole("combobox", { name: "Attention state" })
-    .selectOption(value);
-}
-
 test.beforeEach(async ({ page }) => {
   const pageErrors: string[] = [];
   const consoleErrors: string[] = [];
@@ -689,7 +674,7 @@ test("starts from the normal monitor shell and reaches the canonical attention q
 
   const patrolNavigation = testInfo.project.name.startsWith("mobile-")
     ? page
-        .getByRole("tablist", { name: "Mobile navigation" })
+        .getByRole("navigation", { name: "Mobile navigation" })
         .getByRole("button", { name: /Patrol/ })
     : page
         .getByRole("tab", { name: /Patrol/ })
@@ -698,7 +683,7 @@ test("starts from the normal monitor shell and reaches the canonical attention q
 
   await expect(page).toHaveURL(/\/patrol/);
   await expect(
-    page.getByRole("region", { name: "Needs attention" }),
+    page.getByRole("region", { name: "Needs you" }),
   ).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Open CPU pressure on pve-main" }),
@@ -718,8 +703,8 @@ test("makes active operational work primary and preserves the evidence boundary"
       }),
     ),
   ).toBeVisible();
-  const queue = page.getByRole("region", { name: "Needs attention" });
-  await expect(queue.getByLabel("2 active attention items")).toBeVisible();
+  const queue = page.getByRole("region", { name: "Needs you" });
+  await expect(queue.getByLabel("2 decisions need you")).toBeVisible();
   await expect(
     queue.getByText(
       "CPU has remained above the configured threshold for two collection cycles.",
@@ -732,28 +717,6 @@ test("makes active operational work primary and preserves the evidence boundary"
   await expect(
     page.getByRole("button", { name: "Explain with Assistant" }),
   ).toHaveCount(0);
-
-  await selectAttentionState(page, "Acknowledged 1", "acknowledged");
-  await expect(
-    queue.getByText("Memory pressure acknowledged on pve-lab"),
-  ).toBeVisible();
-  await selectAttentionState(page, "Suppressed 1", "suppressed");
-  await expect(
-    queue.getByText("Maintenance alert suppressed on pve-maintenance"),
-  ).toBeVisible();
-  await selectAttentionState(page, "Stale or unknown 1", "stale_unknown");
-  await expect(
-    queue.getByText("Connection state unknown for pve-edge"),
-  ).toBeVisible();
-  await expect(queue.getByText("Evidence incomplete")).toBeVisible();
-  await expect(queue.getByText(/timing unavailable/)).toHaveCount(0);
-  await expect(queue.getByText("Protection Unknown")).toHaveCount(0);
-  await expect(queue.getByText("Unknown / Partial")).toHaveCount(0);
-  await selectAttentionState(page, "Recent resolved 1", "resolved");
-  await expect(
-    queue.getByText("Storage pressure resolved on pve-recovered"),
-  ).toBeVisible();
-  await selectAttentionState(page, "Active 2", "active");
 
   const itemButton = queue.getByRole("button", {
     name: "Open CPU pressure on pve-main",
@@ -873,10 +836,10 @@ test("shows calm only with current coverage and never converts failure into heal
   const fixture = await mockAttention(page, "calm");
   await page.goto("/patrol", { waitUntil: "domcontentloaded" });
 
-  await expect(page.getByText("Nothing needs your attention")).toBeVisible();
+  await expect(page.getByText("Nothing needs you right now")).toBeVisible();
   await expect(
     page.getByText(
-      "The current operational lifecycle evaluation has no active items.",
+      "The current operational evaluation has no active items.",
       {
         exact: false,
       },
@@ -1263,6 +1226,16 @@ async function mockGovernedAttentionAction(
       body: JSON.stringify({
         audit,
         events: [],
+        readiness: {
+          ready: actionState !== "completed",
+          code: actionState === "completed" ? "action_not_actionable" : "ready",
+          message:
+            actionState === "completed"
+              ? "This action is already complete."
+              : "The target is feasible and ready for approval.",
+          refreshable: actionState !== "completed",
+          checkedAt: evaluatedAt,
+        },
         ...(actionState === "completed"
           ? {
               attempt: {

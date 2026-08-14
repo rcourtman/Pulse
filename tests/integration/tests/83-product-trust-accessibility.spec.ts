@@ -16,11 +16,11 @@ const test = base.extend<{}, WorkerFixtures>({
   }, { scope: "worker" }],
 });
 
-test("Actions remains named, keyboard reachable, and free of horizontal overflow at phone width", async ({ page }, testInfo) => {
+test("Activity history remains named, keyboard reachable, and free of horizontal overflow at phone width", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.route("**/api/actions?*", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ view: "pending", actions: [], count: 0 }) }));
   await page.goto("/actions", { waitUntil: "domcontentloaded" });
-  await expect(page.getByRole("heading", { name: "Actions", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Activity history", exact: true })).toBeVisible();
   await expect(page.getByRole("tablist", { name: "Action views" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Refresh actions" })).toBeVisible();
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);

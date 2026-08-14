@@ -587,7 +587,7 @@ test.describe("Patrol runtime-state browser contract", () => {
     await expect(page.getByText("Patrol paused").first()).toBeVisible();
     await expect(page.getByText(PATROL_BLOCK_REASON).first()).toBeVisible();
     await expect(
-      page.getByRole("button", { name: "Run Patrol" }),
+      page.getByRole("button", { name: "Check now" }),
     ).toBeDisabled();
     await expect(page.getByText(/Patrol quickstart/i)).toHaveCount(0);
     await expect(page.getByText("Health A · 100/100")).toHaveCount(0);
@@ -631,7 +631,7 @@ test.describe("Patrol runtime-state browser contract", () => {
 
     await page.goto("/patrol", { waitUntil: "domcontentloaded" });
 
-    const runButton = page.getByRole("button", { name: "Run Patrol" });
+    const runButton = page.getByRole("button", { name: "Check now" });
     await expect(runButton).toBeEnabled();
     await runButton.click();
 
@@ -801,6 +801,7 @@ test.describe("Patrol runtime-state browser contract", () => {
 
     await page.goto("/patrol", { waitUntil: "domcontentloaded" });
 
+    await page.getByText("How Patrol operates", { exact: true }).click();
     const modeGroup = page.getByRole("group", { name: "Patrol mode" });
     await expect(modeGroup).toBeVisible();
     await expect(

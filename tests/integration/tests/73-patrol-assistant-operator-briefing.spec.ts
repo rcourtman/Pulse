@@ -605,9 +605,8 @@ test.describe("Patrol Assistant operator briefing", () => {
 
     await page.goto("/patrol", { waitUntil: "domcontentloaded" });
     await page
-      .getByText("Patrol checks, investigations, and run history", {
-        exact: true,
-      })
+      .locator("summary")
+      .filter({ hasText: "Operational records and run history" })
       .click();
 
     await page.getByText("High CPU usage").click();
@@ -745,9 +744,8 @@ test.describe("Patrol Assistant operator briefing", () => {
     includePendingApproval = false;
     await page.reload({ waitUntil: "domcontentloaded" });
     await page
-      .getByText("Patrol checks, investigations, and run history", {
-        exact: true,
-      })
+      .locator("summary")
+      .filter({ hasText: "Operational records and run history" })
       .click();
     const queuedFindingTitle = page.getByText("High CPU usage").first();
     await expect(queuedFindingTitle).toBeVisible();
@@ -779,9 +777,8 @@ test.describe("Patrol Assistant operator briefing", () => {
     includeInvestigationProposedFix = true;
     await page.reload({ waitUntil: "domcontentloaded" });
     await page
-      .getByText("Patrol checks, investigations, and run history", {
-        exact: true,
-      })
+      .locator("summary")
+      .filter({ hasText: "Operational records and run history" })
       .click();
     const expiredFindingTitle = page.getByText("High CPU usage").first();
     await expect(expiredFindingTitle).toBeVisible();

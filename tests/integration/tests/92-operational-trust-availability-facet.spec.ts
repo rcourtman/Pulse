@@ -64,7 +64,7 @@ async function routeResources(page: Page, resources: RouteResource[]) {
   // Keep the fixture authoritative: an empty mocked socket makes the
   // websocket-first resource hook fall back to the routed REST snapshot
   // without accepting a live backend frame.
-  await page.routeWebSocket("**/ws", () => {});
+  await page.routeWebSocket("**/ws*", () => {});
   await page.route("**/api/resources**", async (route) => {
     const requestUrl = new URL(route.request().url());
     if (requestUrl.pathname !== "/api/resources") {
@@ -587,10 +587,12 @@ test.describe("Operational trust availability resource facet", () => {
 
     await page.goto("/patrol", { waitUntil: "domcontentloaded" });
 
-    const queue = page.getByRole("region", { name: "Needs attention" });
+    const queue = page.getByRole("region", { name: "Needs you" });
     await expect(queue).toBeVisible({ timeout: 30_000 });
     await expect(
-      page.getByRole("tab", { name: "Patrol: 1 active attention item" }),
+      page.getByRole("tab", {
+        name: /Patrol: 1 (?:action awaits approval|active attention item)/,
+      }),
     ).toBeVisible();
     await expect(queue.getByText(item.plainLanguageSummary)).toBeVisible();
 
