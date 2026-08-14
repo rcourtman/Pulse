@@ -227,6 +227,13 @@ Persisted Patrol run analysis is a display-safe summary, not an unchecked raw
 model transcript. Infrastructure status and actions-taken text in run history
 must be reconciled from the accepted structured Patrol result: accepted
 findings, resolved finding IDs, run errors, and user-visible finding counts.
+For a scoped run, the persisted status and findings summary count only active
+findings reported or explicitly assessed by that run. Related hosts, agents,
+and other supporting resources may remain in the effective diagnostic context,
+but their unrelated findings cannot make an exact-target all-clear appear
+unhealthy. A tool-free Watch negative control is valid only when its persisted
+status, canonical summary, finding counts, and finding IDs all agree that the
+run was healthy.
 Rejected, failed, or attempted tool calls must not appear as actions taken, and
 healthy/no-finding runs must not claim that an unaccepted
 `patrol_report_finding` action occurred. Backup/PBS seed context must preserve

@@ -429,6 +429,16 @@ func validatePatrolRunModelEvidence(manifest Manifest, run PatrolRun) error {
 	if run.InputTokens <= 0 || run.OutputTokens <= 0 || strings.TrimSpace(run.AIAnalysis) == "" {
 		return errors.New("tool-free Patrol all-clear has no persisted real-model analysis evidence")
 	}
+	if !strings.EqualFold(strings.TrimSpace(run.Status), "healthy") ||
+		!strings.EqualFold(strings.TrimSpace(run.FindingsSummary), "All healthy") ||
+		run.NewFindings != 0 || run.ExistingFindings != 0 || run.RejectedFindings != 0 ||
+		run.ResolvedFindings != 0 || len(run.FindingIDs) != 0 {
+		return fmt.Errorf(
+			"tool-free Patrol all-clear contradicts persisted run outcome: status=%s summary=%q new=%d existing=%d rejected=%d resolved=%d finding_ids=%d",
+			run.Status, run.FindingsSummary, run.NewFindings, run.ExistingFindings,
+			run.RejectedFindings, run.ResolvedFindings, len(run.FindingIDs),
+		)
+	}
 	return nil
 }
 

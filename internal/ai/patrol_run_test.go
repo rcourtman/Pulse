@@ -134,14 +134,13 @@ func TestRunScopedPatrolPersistsZeroMatchFailure(t *testing.T) {
 	}
 }
 
-func TestPatrolFindingSummaryForStateExcludesOutOfScopeFindings(t *testing.T) {
-	state := newPatrolRuntimeState(models.StateSnapshot{VMs: []models.VM{{ID: "vm-in", Name: "inside", VMID: 1}}})
-	summary := patrolFindingSummaryForState([]*Finding{
-		{ID: "in", ResourceID: "vm-in", Severity: FindingSeverityWarning},
-		{ID: "out", ResourceID: "vm-out", Severity: FindingSeverityCritical},
-	}, state)
-	if summary.Warning != 1 || summary.Critical != 0 {
-		t.Fatalf("scoped summary = %+v, want one warning and no critical findings", summary)
+func TestPatrolFindingSummaryForRunExcludesSupportingResourceFindings(t *testing.T) {
+	summary := patrolFindingSummaryForRun([]*Finding{
+		{ID: "run-owned", ResourceID: "container-target", Severity: FindingSeverityWarning},
+		{ID: "supporting-context", ResourceID: "agent-host", Severity: FindingSeverityCritical},
+	}, []string{"run-owned"})
+	if summary.Warning != 1 || summary.Critical != 0 || summary.Total != 1 {
+		t.Fatalf("run summary = %+v, want one run-owned warning and no supporting-resource finding", summary)
 	}
 }
 

@@ -838,13 +838,19 @@ func (p *PatrolService) runPatrolWithTriggerStart(ctx context.Context, trigger T
 	p.dispatchPatrolInvestigations(runStats.aiAnalysis)
 }
 
-func patrolFindingSummaryForState(findings []*Finding, state patrolRuntimeState) FindingsSummary {
-	known := patrolRuntimeKnownResources(state)
+func patrolFindingSummaryForRun(findings []*Finding, findingIDs []string) FindingsSummary {
+	owned := make(map[string]bool, len(findingIDs))
+	for _, findingID := range findingIDs {
+		if findingID = strings.TrimSpace(findingID); findingID != "" {
+			owned[findingID] = true
+		}
+	}
 	var summary FindingsSummary
 	for _, finding := range findings {
-		if finding == nil || (len(known) > 0 && !known[finding.ResourceID] && !known[finding.ResourceName]) {
+		if finding == nil || !owned[finding.ID] {
 			continue
 		}
+		summary.Total++
 		switch finding.Severity {
 		case FindingSeverityCritical:
 			summary.Critical++
@@ -1150,10 +1156,11 @@ func (p *PatrolService) runScopedPatrolWithStart(ctx context.Context, scope Patr
 	duration := time.Since(start)
 	completedAt := time.Now()
 
-	// Build a scope-owned findings summary. Findings on unrelated fleet
-	// resources must never make this targeted run appear unhealthy, nor may
-	// their absence make the scoped result look complete.
-	summary := patrolFindingSummaryForState(p.findings.GetActive(FindingSeverityWarning), filteredState)
+	// Build a run-owned findings summary. Supporting resources included in the
+	// effective scope provide diagnostic context, but an unrelated finding on
+	// one of those resources must not make this targeted run appear unhealthy.
+	runFindingIDs := patrolRunFindingIDs(runStats.findingIDs, assessmentsForRun(runStats.aiAnalysis))
+	summary := patrolFindingSummaryForRun(p.findings.GetActive(FindingSeverityWarning), runFindingIDs)
 	var findingsSummaryStr string
 	var status string
 	totalActive := summary.Critical + summary.Warning
@@ -1219,7 +1226,7 @@ func (p *PatrolService) runScopedPatrolWithStart(ctx context.Context, scope Patr
 		RejectedFindings:          runStats.rejectedFindings,
 		ResolvedFindings:          resolvedFindings,
 		FindingsSummary:           findingsSummaryStr,
-		FindingIDs:                patrolRunFindingIDs(runStats.findingIDs, assessmentsForRun(runStats.aiAnalysis)),
+		FindingIDs:                runFindingIDs,
 		ErrorCount:                runStats.errors,
 		Status:                    status,
 		ErrorSummary:              runStats.errorSummary,

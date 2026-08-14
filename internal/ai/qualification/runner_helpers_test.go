@@ -22,13 +22,25 @@ func TestValidatePatrolRunModelEvidence(t *testing.T) {
 		{
 			name:     "healthy real-model all-clear needs no artificial tool call",
 			manifest: healthy,
-			run:      PatrolRun{InputTokens: 100, OutputTokens: 20, AIAnalysis: "No findings reported — all clear."},
+			run:      PatrolRun{InputTokens: 100, OutputTokens: 20, AIAnalysis: "No findings reported — all clear.", Status: "healthy", FindingsSummary: "All healthy"},
 		},
 		{
 			name:     "tool-free all-clear still needs persisted model evidence",
 			manifest: healthy,
 			run:      PatrolRun{AIAnalysis: "No findings reported — all clear."},
 			wantErr:  "no persisted real-model analysis evidence",
+		},
+		{
+			name:     "tool-free all-clear rejects contradictory issue status",
+			manifest: healthy,
+			run:      PatrolRun{InputTokens: 100, OutputTokens: 20, AIAnalysis: "No findings reported — all clear.", Status: "issues_found", FindingsSummary: "1 warning"},
+			wantErr:  "contradicts persisted run outcome",
+		},
+		{
+			name:     "tool-free all-clear rejects hidden run-owned finding",
+			manifest: healthy,
+			run:      PatrolRun{InputTokens: 100, OutputTokens: 20, AIAnalysis: "No findings reported — all clear.", Status: "healthy", FindingsSummary: "All healthy", FindingIDs: []string{"finding-1"}},
+			wantErr:  "contradicts persisted run outcome",
 		},
 		{
 			name:     "fault scenario still requires a tool-backed outcome",
