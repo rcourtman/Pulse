@@ -135,6 +135,22 @@ as authoritative and returns a successful typed no-op (`applied=false`,
 `reason=new_finding_reported_this_run`). No `present`, `uncertain`, or
 `resolved` assessment is persisted and the new finding is not refreshed,
 downgraded, or resolved.
+The same run may not turn its own accepted report into a recurrence by
+re-reporting the stable finding ID. A repeated same-run report returns a
+successful typed no-op (`applied=false`, `reason=finding_reported_this_run`),
+does not call the finding store again, and leaves `TimesRaised` and the
+finding heartbeat unchanged. The active-findings snapshot is likewise a
+one-shot Watch capability: after the first successful `patrol_get_findings`,
+the model no longer receives that tool in subsequent turns and must reuse the
+accepted result.
+Patrol reports one operator-facing finding per causal incident. Symptoms that
+share a causal chain are grouped on the user-facing degraded resource with
+dependency evidence and honest uncertainty in the same finding; causally
+independent incidents remain separate. Finding authoring accepts only warning
+and critical severities, and lower-priority or healthy observations remain
+summary prose rather than rejected lifecycle writes. Multi-incident Watch
+runs record one complete report at a time so provider turns cannot split
+required fields across parallel calls.
 Investigation and interactive profiles retain a tool-free final summary; a
 Watch finding write at the deadline is followed only by the existing bounded
 summary path. A capability-unavailable

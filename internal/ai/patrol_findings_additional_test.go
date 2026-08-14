@@ -1575,6 +1575,16 @@ func TestPatrolFindingAdapterDistinguishesSameRunCreationFromExistingRereport(t 
 	if err != nil || !isNew {
 		t.Fatalf("first report = (%q, %t, %v), want a new finding", findingID, isNew, err)
 	}
+	beforeDuplicate := ps.findings.Get(findingID)
+	duplicateID, duplicateIsNew, duplicateErr := firstRun.CreateFinding(input)
+	var alreadyReported *tools.PatrolFindingAlreadyReportedError
+	if !errors.As(duplicateErr, &alreadyReported) || alreadyReported.FindingID != findingID || duplicateID != findingID || !duplicateIsNew {
+		t.Fatalf("same-run duplicate report = (%q, %t, %v), want typed already-reported outcome for %q", duplicateID, duplicateIsNew, duplicateErr, findingID)
+	}
+	afterDuplicate := ps.findings.Get(findingID)
+	if beforeDuplicate == nil || afterDuplicate == nil || afterDuplicate.TimesRaised != beforeDuplicate.TimesRaised || !afterDuplicate.LastSeenAt.Equal(beforeDuplicate.LastSeenAt) {
+		t.Fatalf("same-run duplicate mutated finding: before=%+v after=%+v", beforeDuplicate, afterDuplicate)
+	}
 	// This models a findings read racing with or following the accepted report.
 	// The new finding may be returned, but it is not an existing-finding verdict
 	// candidate in the run that created it.

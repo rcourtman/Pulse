@@ -20,8 +20,19 @@ func TestEvalPromptBuilders(t *testing.T) {
 		t.Fatalf("expected eval system prompt to include tool instructions")
 	}
 	patrolPrompt := (&PatrolService{}).getPatrolSystemPrompt()
-	if !strings.Contains(patrolPrompt, strings.Join(tools.PatrolReportFindingRequiredArguments(), ", ")) || !strings.Contains(patrolPrompt, "reporting several findings in parallel") {
-		t.Fatalf("expected Patrol prompt to require independently complete report calls")
+	for _, required := range []string{
+		strings.Join(tools.PatrolReportFindingRequiredArguments(), ", "),
+		"one operator-facing finding on the user-facing degraded resource",
+		"Report one incident at a time",
+		"Only **critical** and **warning** are valid finding severities",
+		"without calling patrol_report_finding",
+	} {
+		if !strings.Contains(patrolPrompt, required) {
+			t.Fatalf("expected Patrol prompt to contain %q", required)
+		}
+	}
+	if strings.Contains(patrolPrompt, "**info**") || strings.Contains(patrolPrompt, "**watch**") {
+		t.Fatalf("Patrol prompt advertises finding severities rejected by the tool schema")
 	}
 
 	signals := []DetectedSignal{

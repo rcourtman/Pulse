@@ -595,6 +595,9 @@ func (a *patrolFindingCreatorAdapter) CreateFinding(input tools.PatrolFindingInp
 
 	// Generate stable ID
 	id := generateFindingID(input.ResourceID, string(cat), normalizedKey)
+	if a.isNewFindingID(id) {
+		return id, true, &tools.PatrolFindingAlreadyReportedError{FindingID: id}
+	}
 
 	finding := &Finding{
 		ID:               id,

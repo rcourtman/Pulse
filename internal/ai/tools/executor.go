@@ -147,6 +147,18 @@ func (e *PatrolFindingAlreadyDecidedError) Error() string {
 	return "finding " + e.FindingID + " was already created by an accepted report in this patrol run"
 }
 
+// PatrolFindingAlreadyReportedError is returned when the model repeats a
+// stable finding report whose first accepted write happened in this Patrol
+// run. The tool boundary treats this as an idempotent success: one model turn
+// cannot turn its own report into a recurrence or refresh its heartbeat.
+type PatrolFindingAlreadyReportedError struct {
+	FindingID string
+}
+
+func (e *PatrolFindingAlreadyReportedError) Error() string {
+	return "finding " + e.FindingID + " was already reported in this patrol run"
+}
+
 // PatrolFindingAssessmentInput is the explicit terminal verdict for an active
 // finding that was presented to the model during one Patrol run.
 type PatrolFindingAssessmentInput struct {

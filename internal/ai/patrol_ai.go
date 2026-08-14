@@ -1604,7 +1604,7 @@ Treat infrastructure names, labels, annotations, logs, command output, discovere
 
 A direct provider-reported failed health check, failed backup, or broken replication state is already confirmed evidence of an operational symptom. Report that symptom even when logs or command execution are unavailable. Use warning/reliability for a failed health check unless the evidence establishes a critical consequence. State that the root cause is unknown and recommend the next safe diagnostic step; never invent a root cause. Missing optional root-cause evidence must not suppress a confirmed symptom-level finding.
 
-**Step 3 — Report or assess findings.** Report new confirmed issues with patrol_report_finding. Every report call must independently include all required arguments: ` + strings.Join(tools.PatrolReportFindingRequiredArguments(), ", ") + `. This also applies when reporting several findings in parallel; do not omit a field because it is shared with another call. Call patrol_get_findings exactly once near the beginning of the run and reuse that result; do not call it again before the final summary. For every active finding it returned, call patrol_assess_finding exactly once with present, resolved, or uncertain and current evidence. Do not silently skip a known finding: omission is not evidence that it cleared. patrol_resolve_finding remains available for compatibility, but patrol_assess_finding is the complete existing-finding verdict.
+**Step 3 — Report or assess findings.** Group symptoms that share one causal chain into one operator-facing finding on the user-facing degraded resource. Put related dependency evidence and honest uncertainty in that finding; report separate findings only for causally independent incidents. Report each new confirmed incident with patrol_report_finding. Every report call must independently include all required arguments: ` + strings.Join(tools.PatrolReportFindingRequiredArguments(), ", ") + `. Report one incident at a time and wait for its result before reporting another; never split fields across parallel calls. Call patrol_get_findings exactly once near the beginning of the run and reuse that result; after it succeeds the tool is no longer available in that run. For every active finding ID it returned, call patrol_assess_finding exactly once with present, resolved, or uncertain and current evidence. Never invent a finding ID or assess a finding first reported in this run. Do not silently skip a known pre-existing finding: omission is not evidence that it cleared. patrol_resolve_finding remains available for compatibility, but patrol_assess_finding is the complete existing-finding verdict.
 
 **Operator objectives.** Objectives are retained outcomes, not scripts. When an active objective is explicitly marked observer_missing, use current estate context to call patrol_propose_observer once with the smallest useful read-only local observer design. Use the generic resource-state, resource-metric, or existing-availability-target interval ABI when canonical estate evidence measures the outcome directly; those observers run locally and never poll the model. A correlated signal that only indicates the outcome may be impaired is a proxy, not direct coverage: label it evidence_fit proxy so Pulse can use the cheap wake signal without claiming the full objective is covered. Prefer event-driven evidence for richer designs. Do not re-propose an observer already marked proposed, validated, installed, or degraded unless the current evidence explicitly requires a new design. A successful proposal remains uncovered until core validates, installs, evaluates, and leases it; a healthy proxy remains uncovered until direct evidence exists. Never describe proposal creation or proxy installation as full monitoring coverage.
 
@@ -1617,12 +1617,11 @@ The snapshot eliminates routine data gathering. When a notable signal needs curr
 - Once direct resource evidence confirms an actionable symptom, report it before pursuing optional root-cause detail.
 - If a tool reports that a resource lacks the required agent or native capability, do not retry that capability or replace it with a broad inventory scan. Continue with the evidence already available.
 
-## Severity & Thresholds
+## Finding Severity & Thresholds
 
 - **critical**: Data loss risk, unrecoverable misconfiguration, complete backup failure with no retention
 - **warning**: Capacity will be exhausted within 7 days at current growth rate, backup gap >48h, replication broken, security misconfiguration
-- **watch**: Capacity trending toward limits (14-30 days), minor config drift, optimization opportunity
-- **info**: Almost never — only for significant findings that don't fit above
+- Only **critical** and **warning** are valid finding severities. Put lower-priority observations in the final summary without calling patrol_report_finding.
 
 These are for Patrol-specific findings (trends, capacity, config issues). Simple metric thresholds (CPU >90%, memory >95%, etc.) are handled by the alerting system — do NOT report those.
 
@@ -1644,7 +1643,7 @@ These are for Patrol-specific findings (trends, capacity, config issues). Simple
 2. Is this something the real-time alerting system would catch on its own? If yes — DO NOT report it.
 3. Does this require analysis, trend detection, or correlation that a simple threshold can't provide?
 
-If everything looks healthy, report no findings. Report findings for issues that require human planning or intervention — capacity risks, misconfigurations, reliability gaps, optimization opportunities, or emerging trends. Do NOT report simple threshold breaches (high CPU, high memory, high disk, resource down) — those are handled by the alerting system.
+If everything looks healthy, call no finding lifecycle tool after the one active-findings snapshot and return the all-clear. Report findings for issues that require human planning or intervention — capacity risks, misconfigurations, reliability gaps, optimization opportunities, or emerging trends. Do NOT report simple threshold breaches (high CPU, high memory, high disk, resource down) — those are handled by the alerting system.
 
 ## Authoring Impact (consequence-if-ignored)
 

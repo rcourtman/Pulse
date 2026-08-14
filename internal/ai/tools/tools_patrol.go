@@ -42,7 +42,8 @@ func (e *PulseToolExecutor) registerPatrolTools() {
 			Description: fmt.Sprintf(`Report an infrastructure finding discovered during patrol investigation.
 
 Call this tool to create a structured finding after you have gathered sufficient evidence. A provider-reported failed health check, failed backup, or broken replication state is sufficient evidence for the confirmed symptom even when optional logs or command execution are unavailable. Use warning/reliability for a failed health check unless the evidence establishes a critical consequence. Report the symptom and state that its root cause is unknown; do not fabricate a cause or suppress the finding while searching for one.
-Every call must independently include all required arguments: %s. This also applies when reporting several findings in parallel; do not omit a field because it is shared with another call.
+Every call must independently include all required arguments: %s. Report one causal incident at a time and wait for its result before reporting another; never split fields across parallel calls.
+Group symptoms that share one causal chain into one operator-facing finding on the user-facing degraded resource. Include related dependency evidence and honest uncertainty in that finding. Create separate findings only for causally independent incidents.
 Every finding must include concrete evidence and a safe, actionable recommendation grounded in that evidence. The recommendation may be a bounded investigation or verification step when remediation is not yet justified; never claim that an action was taken or verified when it was not.
 The finding will be validated against current metrics and deduplicated automatically.
 
@@ -561,6 +562,16 @@ func handlePatrolReportFinding(_ context.Context, e *PulseToolExecutor, args map
 
 	findingID, isNew, err := creator.CreateFinding(input)
 	if err != nil {
+		var alreadyReported *PatrolFindingAlreadyReportedError
+		if errors.As(err, &alreadyReported) {
+			return NewJSONResult(map[string]interface{}{
+				"ok":                                    true,
+				agentcapabilities.FindingIDArgumentName: alreadyReported.FindingID,
+				"is_new":                                true,
+				"applied":                               false,
+				"reason":                                "finding_reported_this_run",
+			}), nil
+		}
 		return NewErrorResult(fmt.Errorf("failed to create finding: %w", err)), nil
 	}
 

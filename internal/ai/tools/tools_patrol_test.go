@@ -136,6 +136,27 @@ func TestHandlePatrolReportFinding_RequiresGetFindings(t *testing.T) {
 	assert.Contains(t, text, "patrol_get_findings")
 }
 
+func TestHandlePatrolReportFinding_AcknowledgesSameRunDuplicateAsNoOp(t *testing.T) {
+	creator := &mockPatrolFindingCreator{
+		createFindingFunc: func(PatrolFindingInput) (string, bool, error) {
+			return "finding-new", true, &PatrolFindingAlreadyReportedError{FindingID: "finding-new"}
+		},
+		checked: true,
+	}
+	exec := newPatrolTestExecutor(creator)
+	result, err := handlePatrolReportFinding(context.Background(), exec, validReportArgs())
+	require.NoError(t, err)
+
+	var parsed map[string]interface{}
+	require.NoError(t, json.Unmarshal([]byte(extractText(result)), &parsed))
+	assert.Equal(t, true, parsed["ok"])
+	assert.Equal(t, false, parsed["applied"])
+	assert.Equal(t, true, parsed["is_new"])
+	assert.Equal(t, "finding_reported_this_run", parsed["reason"])
+	assert.Equal(t, "finding-new", parsed[agentcapabilities.FindingIDArgumentName])
+	require.Len(t, creator.createCalls, 1)
+}
+
 func TestHandlePatrolReportFinding_ValidInput(t *testing.T) {
 	creator := &mockPatrolFindingCreator{checked: true}
 	exec := newPatrolTestExecutor(creator)

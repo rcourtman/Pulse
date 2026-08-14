@@ -35,6 +35,21 @@ func TestRequiresOrderedPatrolFindingLifecycleExecution(t *testing.T) {
 	}
 }
 
+func TestWithoutProviderToolRemovesOnlyNamedCapability(t *testing.T) {
+	available := []providers.Tool{
+		{Name: agentcapabilities.PatrolGetFindingsToolName},
+		{Name: agentcapabilities.PatrolReportFindingToolName},
+		{Name: "pulse_query"},
+	}
+	filtered := withoutProviderTool(available, agentcapabilities.PatrolGetFindingsToolName)
+	if len(filtered) != 2 || filtered[0].Name != agentcapabilities.PatrolReportFindingToolName || filtered[1].Name != "pulse_query" {
+		t.Fatalf("filtered tools = %+v", filtered)
+	}
+	if len(available) != 3 {
+		t.Fatalf("source tool projection was mutated: %+v", available)
+	}
+}
+
 func TestAgenticLoop_Setters(t *testing.T) {
 	loop := &AgenticLoop{}
 	loop.SetMaxTurns(7)
@@ -364,8 +379,13 @@ func TestPatrolFinalFindingDecisionRequestNarrowsWatchTools(t *testing.T) {
 	if !strings.Contains(req.System, "concrete evidence") || !strings.Contains(req.System, "safe, actionable recommendation") {
 		t.Fatalf("final decision prompt does not require a grounded actionable finding: %q", req.System)
 	}
-	if !strings.Contains(req.System, strings.Join(tools.PatrolReportFindingRequiredArguments(), ", ")) || !strings.Contains(req.System, "reporting several findings in parallel") {
+	if !strings.Contains(req.System, strings.Join(tools.PatrolReportFindingRequiredArguments(), ", ")) || !strings.Contains(req.System, "Report one incident at a time") {
 		t.Fatalf("final decision prompt does not require independently complete report calls: %q", req.System)
+	}
+	for _, required := range []string{"one operator-facing finding", "causally independent incidents", "Never invent an ID", "without calling a finding tool"} {
+		if !strings.Contains(req.System, required) {
+			t.Fatalf("final decision prompt missing %q: %s", required, req.System)
+		}
 	}
 	if req.ToolChoice != nil {
 		t.Fatalf("final decision request must remain model-owned, got choice %+v", req.ToolChoice)
@@ -398,13 +418,61 @@ func TestPatrolFindingLifecycleContinuationRequestNarrowsWatchTools(t *testing.T
 	if req.System != patrolFindingLifecycleContinuationSystemPrompt {
 		t.Fatalf("continuation system prompt = %q", req.System)
 	}
-	for _, required := range []string{"Accepted lifecycle results are authoritative", "do not repeat them", "another operational symptom", "Do not investigate further"} {
+	for _, required := range []string{"Accepted lifecycle results are authoritative", "do not repeat or assess", "another independent operational incident", "one operator-facing finding", "Do not investigate further"} {
 		if !strings.Contains(req.System, required) {
 			t.Fatalf("continuation prompt missing %q: %s", required, req.System)
 		}
 	}
 	if len(req.Tools) != 2 || req.Tools[0].Name != agentcapabilities.PatrolReportFindingToolName || req.Tools[1].Name != agentcapabilities.PatrolAssessFindingToolName {
 		t.Fatalf("continuation tools = %+v, want report and assess only", req.Tools)
+	}
+}
+
+func TestAgenticLoopRemovesPatrolFindingsReadAfterSuccess(t *testing.T) {
+	provider := &stubStreamingProvider{}
+	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
+	executor.ApplyExecutionProfile(tools.ProfilePatrolDetection)
+	creator := &repairTestPatrolFindingCreator{}
+	executor.SetPatrolFindingCreator(creator)
+	loop := NewAgenticLoop(provider, executor, "full Patrol prompt")
+	loop.SetExecutionProfile(tools.ProfilePatrolDetection)
+	loop.SetMaxTurns(4)
+
+	providerCalls := 0
+	provider.chatStream = func(_ context.Context, req providers.ChatRequest, callback providers.StreamCallback) error {
+		providerCalls++
+		switch providerCalls {
+		case 1:
+			if !hasProviderTool(req.Tools, agentcapabilities.PatrolGetFindingsToolName) {
+				t.Fatalf("initial request omitted active-findings snapshot: %+v", req.Tools)
+			}
+			call := providers.ToolCall{ID: "get-findings", Name: agentcapabilities.PatrolGetFindingsToolName, Input: map[string]interface{}{}}
+			callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{ToolCalls: []providers.ToolCall{call}}})
+		case 2:
+			if hasProviderTool(req.Tools, agentcapabilities.PatrolGetFindingsToolName) {
+				t.Fatalf("successful one-shot active-findings read remained available: %+v", req.Tools)
+			}
+			if !hasProviderTool(req.Tools, agentcapabilities.PatrolReportFindingToolName) {
+				t.Fatalf("unrelated Watch capabilities were removed: %+v", req.Tools)
+			}
+			callback(providers.StreamEvent{Type: "content", Data: providers.ContentEvent{Text: "All clear."}})
+			callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{}})
+		default:
+			t.Fatalf("unexpected provider call %d", providerCalls)
+		}
+		return nil
+	}
+
+	available := []providers.Tool{
+		{Name: agentcapabilities.PatrolGetFindingsToolName},
+		{Name: agentcapabilities.PatrolReportFindingToolName},
+	}
+	result, err := loop.ExecuteWithTools(context.Background(), "one-shot-findings-read", []Message{{Role: "user", Content: "check this healthy resource"}}, available, func(StreamEvent) {})
+	if err != nil {
+		t.Fatalf("Watch run failed: %v", err)
+	}
+	if providerCalls != 2 || len(result) == 0 || result[len(result)-1].Content != "All clear." {
+		t.Fatalf("provider calls=%d result=%+v", providerCalls, result)
 	}
 }
 
