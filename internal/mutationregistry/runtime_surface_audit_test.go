@@ -173,6 +173,8 @@ func TestTransportCommandCatalogsResolveToRegistry(t *testing.T) {
 		"MsgTypeDockerContainerLifecycle": {Role: TransportRoleMutationRequest, MutationID: "transport.agent.docker-container-lifecycle", DurableAuthorityID: "resource.docker.container-lifecycle"},
 		"MsgTypeDockerContainerUpdate":    {Role: TransportRoleMutationRequest, MutationID: "transport.agent.docker-container-update", DurableAuthorityID: "resource.docker.container-update"},
 		"MsgTypeOperationQuery":           {Role: TransportRoleOperationQuery},
+		"MsgTypeActionPreflight":          {Role: TransportRoleOperationQuery},
+		"MsgTypeActionPreflightResult":    {Role: TransportRoleOperationResult},
 		"MsgTypeDeployPreflight":          {Role: TransportRoleAdministrativeRequest, MutationID: "transport.agent.deploy-preflight"},
 		"MsgTypeDeployInstall":            {Role: TransportRoleAdministrativeRequest, MutationID: "transport.agent.deploy-install"},
 		"MsgTypeDeployCancelJob":          {Role: TransportRoleAdministrativeRequest, MutationID: "transport.agent.deploy-cancel"},

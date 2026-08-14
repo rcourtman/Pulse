@@ -1095,71 +1095,45 @@ func patrolRuntimeCanonicalStatuses(state patrolRuntimeState) map[string]unified
 			}
 		}
 	}
-	if rs := state.readState; rs != nil {
-		for _, v := range rs.VMs() {
-			add(v.Status(), v.ID(), v.SourceID())
-		}
-		for _, v := range rs.Containers() {
-			add(v.Status(), v.ID(), v.SourceID())
-		}
-		for _, v := range rs.Nodes() {
-			add(v.Status(), v.ID(), v.SourceID())
-		}
-		for _, v := range rs.Hosts() {
-			add(v.Status(), v.ID())
-		}
-		for _, v := range rs.DockerHosts() {
-			add(v.Status(), v.ID(), v.HostSourceID())
-		}
-		for _, v := range rs.DockerContainers() {
-			add(v.Status(), v.ID(), v.ContainerID())
-		}
-		for _, v := range rs.StoragePools() {
-			add(v.Status(), v.ID(), v.SourceID())
-		}
-		for _, v := range rs.PhysicalDisks() {
-			add(v.Status(), v.ID())
-		}
-		for _, v := range rs.PBSInstances() {
-			add(v.Status(), v.ID())
-		}
-		for _, v := range rs.PMGInstances() {
-			add(v.Status(), v.ID())
-		}
-		for _, v := range rs.K8sClusters() {
-			add(v.Status(), v.ID())
-		}
+	if state.readState == nil {
+		state = state.withDerivedProviders()
+	}
+	rs := state.readState
+	if rs == nil {
 		return result
 	}
-	for _, v := range state.VMs {
-		add(normalizePatrolResourceStatus(v.Status), v.ID)
+	for _, v := range rs.VMs() {
+		add(v.Status(), v.ID(), v.SourceID())
 	}
-	for _, v := range state.Containers {
-		add(normalizePatrolResourceStatus(v.Status), v.ID)
+	for _, v := range rs.Containers() {
+		add(v.Status(), v.ID(), v.SourceID())
 	}
-	for _, v := range state.Nodes {
-		add(normalizePatrolResourceStatus(v.Status), v.ID)
+	for _, v := range rs.Nodes() {
+		add(v.Status(), v.ID(), v.SourceID())
 	}
-	for _, v := range state.Hosts {
-		add(normalizePatrolResourceStatus(v.Status), v.ID)
+	for _, v := range rs.Hosts() {
+		add(v.Status(), v.ID())
 	}
-	for _, v := range state.DockerHosts {
-		add(normalizePatrolResourceStatus(v.Status), v.ID)
-		for _, container := range v.Containers {
-			add(normalizePatrolResourceStatus(container.State), container.ID)
-		}
+	for _, v := range rs.DockerHosts() {
+		add(v.Status(), v.ID(), v.HostSourceID())
 	}
-	for _, v := range state.Storage {
-		add(normalizePatrolResourceStatus(v.Status), v.ID)
+	for _, v := range rs.DockerContainers() {
+		add(v.Status(), v.ID(), v.ContainerID())
 	}
-	for _, v := range state.PBSInstances {
-		add(normalizePatrolResourceStatus(v.Status), v.ID)
+	for _, v := range rs.StoragePools() {
+		add(v.Status(), v.ID(), v.SourceID())
 	}
-	for _, v := range state.PMGInstances {
-		add(normalizePatrolResourceStatus(v.Status), v.ID)
+	for _, v := range rs.PhysicalDisks() {
+		add(v.Status(), v.ID())
 	}
-	for _, v := range state.KubernetesClusters {
-		add(normalizePatrolResourceStatus(v.Status), v.ID)
+	for _, v := range rs.PBSInstances() {
+		add(v.Status(), v.ID())
+	}
+	for _, v := range rs.PMGInstances() {
+		add(v.Status(), v.ID())
+	}
+	for _, v := range rs.K8sClusters() {
+		add(v.Status(), v.ID())
 	}
 	return result
 }
