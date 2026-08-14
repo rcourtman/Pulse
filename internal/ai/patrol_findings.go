@@ -511,14 +511,16 @@ type patrolFindingCreatorAdapter struct {
 	// resources must not silently join the finding lifecycle. A targeted Watch
 	// of one workload should not refresh an unrelated host finding merely
 	// because Pulse supplied the host as supporting evidence.
-	findingScope      map[string]bool
-	findingsMu        sync.Mutex
-	findings          []*Finding
-	assessments       []PatrolFindingAssessment
-	queriedFindingIDs []string
-	resolvedIDs       []string
-	rejectedCount     int
-	checkedFindings   bool
+	findingScope            map[string]bool
+	findingsMu              sync.Mutex
+	findings                []*Finding
+	assessments             []PatrolFindingAssessment
+	queriedFindingIDs       []string
+	queriedFindings         []tools.PatrolFindingInfo
+	resolvedIDs             []string
+	rejectedCount           int
+	checkedFindings         bool
+	completeFindingSnapshot bool
 }
 
 func (a *patrolFindingCreatorAdapter) setFindingScope(resourceIDs []string) {
@@ -1031,6 +1033,12 @@ func (a *patrolFindingCreatorAdapter) ResolveFinding(findingID, reason string) e
 func (a *patrolFindingCreatorAdapter) GetActiveFindings(resourceID, minSeverity string) []tools.PatrolFindingInfo {
 	a.findingsMu.Lock()
 	a.checkedFindings = true
+	if strings.TrimSpace(resourceID) == "" {
+		minimum := strings.ToLower(strings.TrimSpace(minSeverity))
+		if minimum == "" || minimum == "info" {
+			a.completeFindingSnapshot = true
+		}
+	}
 	a.findingsMu.Unlock()
 
 	var minSev FindingSeverity
@@ -1054,7 +1062,7 @@ func (a *patrolFindingCreatorAdapter) GetActiveFindings(resourceID, minSeverity 
 		if !a.findingInCurrentScope(f) {
 			continue
 		}
-		result = append(result, tools.PatrolFindingInfo{
+		info := tools.PatrolFindingInfo{
 			ID:           f.ID,
 			Key:          f.Key,
 			Severity:     string(f.Severity),
@@ -1065,7 +1073,8 @@ func (a *patrolFindingCreatorAdapter) GetActiveFindings(resourceID, minSeverity 
 			Title:        f.Title,
 			Description:  f.Description,
 			DetectedAt:   f.DetectedAt.Format("2006-01-02 15:04"),
-		})
+		}
+		result = append(result, info)
 		a.findingsMu.Lock()
 		seen := false
 		for _, findingID := range a.queriedFindingIDs {
@@ -1076,6 +1085,7 @@ func (a *patrolFindingCreatorAdapter) GetActiveFindings(resourceID, minSeverity 
 		}
 		if !seen {
 			a.queriedFindingIDs = append(a.queriedFindingIDs, f.ID)
+			a.queriedFindings = append(a.queriedFindings, info)
 		}
 		a.findingsMu.Unlock()
 	}
@@ -1086,6 +1096,15 @@ func (a *patrolFindingCreatorAdapter) HasCheckedFindings() bool {
 	a.findingsMu.Lock()
 	defer a.findingsMu.Unlock()
 	return a.checkedFindings
+}
+
+func (a *patrolFindingCreatorAdapter) HasCompleteFindingSnapshot() bool {
+	if a == nil {
+		return false
+	}
+	a.findingsMu.Lock()
+	defer a.findingsMu.Unlock()
+	return a.completeFindingSnapshot
 }
 
 // getCollectedFindings returns all findings created during this patrol run.
@@ -1147,6 +1166,17 @@ func (a *patrolFindingCreatorAdapter) getQueriedFindingIDs() []string {
 	defer a.findingsMu.Unlock()
 	result := make([]string, len(a.queriedFindingIDs))
 	copy(result, a.queriedFindingIDs)
+	return result
+}
+
+func (a *patrolFindingCreatorAdapter) getQueriedFindings() []tools.PatrolFindingInfo {
+	if a == nil {
+		return nil
+	}
+	a.findingsMu.Lock()
+	defer a.findingsMu.Unlock()
+	result := make([]tools.PatrolFindingInfo, len(a.queriedFindings))
+	copy(result, a.queriedFindings)
 	return result
 }
 

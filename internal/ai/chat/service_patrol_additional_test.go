@@ -242,6 +242,23 @@ func TestService_ExecutePatrolStream_Success(t *testing.T) {
 	}
 }
 
+func TestRestrictPatrolProviderToolsFailsClosed(t *testing.T) {
+	available := []providers.Tool{
+		{Name: agentcapabilities.PatrolGetFindingsToolName},
+		{Name: agentcapabilities.PatrolReportFindingToolName},
+	}
+	filtered, err := restrictPatrolProviderTools(available, []string{agentcapabilities.PatrolReportFindingToolName})
+	if err != nil || len(filtered) != 1 || filtered[0].Name != agentcapabilities.PatrolReportFindingToolName {
+		t.Fatalf("restricted tools = %+v, err=%v; want report-finding only", filtered, err)
+	}
+	if _, err := restrictPatrolProviderTools(available, []string{"not-a-profile-tool"}); err == nil || !strings.Contains(err.Error(), "not-a-profile-tool") {
+		t.Fatalf("expected unavailable allowed tool to fail closed, got %v", err)
+	}
+	if _, err := restrictPatrolProviderTools(available, []string{""}); err == nil {
+		t.Fatal("expected blank allowed tool to fail closed")
+	}
+}
+
 func TestServiceExecutePatrolStreamReturnsPartialTokenCountsOnError(t *testing.T) {
 	store, err := NewSessionStore(t.TempDir())
 	if err != nil {

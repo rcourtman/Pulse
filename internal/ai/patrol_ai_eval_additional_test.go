@@ -2,17 +2,20 @@ package ai
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 )
 
 func TestEvalPromptBuilders(t *testing.T) {
-	systemPrompt := buildEvalSystemPrompt()
+	systemPrompt := buildEvalSystemPrompt(false)
 	if !strings.Contains(systemPrompt, "patrol_report_finding") || !strings.Contains(systemPrompt, "patrol_get_findings") {
 		t.Fatalf("expected eval system prompt to include tool instructions")
 	}
@@ -33,7 +36,7 @@ func TestEvalPromptBuilders(t *testing.T) {
 			Evidence:          "cpu=99%",
 		},
 	}
-	userPrompt := buildEvalUserPrompt(signals)
+	userPrompt := buildEvalUserPrompt(signals, nil)
 	if !strings.Contains(userPrompt, "Signal 1") || !strings.Contains(userPrompt, "CPU high") || !strings.Contains(userPrompt, "cpu=99%") {
 		t.Fatalf("unexpected eval user prompt: %s", userPrompt)
 	}
@@ -105,8 +108,10 @@ func TestRunEvaluationPass(t *testing.T) {
 
 	persistence := config.NewConfigPersistence(t.TempDir())
 	svc := NewService(persistence, nil)
+	var captured PatrolExecuteRequest
 	mockCS := &patrolMockChatService{
 		executePatrolStreamFunc: func(ctx context.Context, req PatrolExecuteRequest, callback ChatStreamCallback) (*PatrolStreamResponse, error) {
+			captured = req
 			return &PatrolStreamResponse{Content: "ok", InputTokens: 10, OutputTokens: 20}, nil
 		},
 	}
@@ -119,6 +124,37 @@ func TestRunEvaluationPass(t *testing.T) {
 	}
 	if resp == nil || resp.InputTokens != 10 || resp.OutputTokens != 20 {
 		t.Fatalf("unexpected evaluation response: %+v", resp)
+	}
+	wantTools := []string{agentcapabilities.PatrolGetFindingsToolName, agentcapabilities.PatrolReportFindingToolName}
+	if !reflect.DeepEqual(captured.AllowedToolNames, wantTools) {
+		t.Fatalf("evaluation tools = %v, want %v", captured.AllowedToolNames, wantTools)
+	}
+}
+
+func TestRunEvaluationPassReusesEstablishedFindingSnapshot(t *testing.T) {
+	persistence := config.NewConfigPersistence(t.TempDir())
+	svc := NewService(persistence, nil)
+	var captured PatrolExecuteRequest
+	svc.SetChatService(&patrolMockChatService{
+		executePatrolStreamFunc: func(ctx context.Context, req PatrolExecuteRequest, callback ChatStreamCallback) (*PatrolStreamResponse, error) {
+			captured = req
+			return &PatrolStreamResponse{}, nil
+		},
+	})
+	adapter := &patrolFindingCreatorAdapter{
+		checkedFindings:         true,
+		completeFindingSnapshot: true,
+		queriedFindings:         []tools.PatrolFindingInfo{{ID: "finding-1", Title: "Existing", ResourceID: "node-1"}},
+	}
+	ps := NewPatrolService(svc, nil)
+	if _, err := ps.runEvaluationPass(context.Background(), adapter, []DetectedSignal{{SignalType: SignalHighCPU}}, "patrol-run-eval"); err != nil {
+		t.Fatalf("run evaluation: %v", err)
+	}
+	if !reflect.DeepEqual(captured.AllowedToolNames, []string{agentcapabilities.PatrolReportFindingToolName}) {
+		t.Fatalf("evaluation tools = %v, want report only", captured.AllowedToolNames)
+	}
+	if !strings.Contains(captured.Prompt, "finding-1") || !strings.Contains(captured.SystemPrompt, "already included") {
+		t.Fatalf("evaluation did not reuse established snapshot: system=%q prompt=%q", captured.SystemPrompt, captured.Prompt)
 	}
 }
 
@@ -138,8 +174,8 @@ func TestRunEvaluationPassRecordsPartialUsageOnStreamError(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected evaluation error")
 	}
-	if resp != nil {
-		t.Fatalf("expected no response on evaluation error, got %+v", resp)
+	if resp == nil || resp.InputTokens != 11 || resp.OutputTokens != 7 {
+		t.Fatalf("expected partial response on evaluation error, got %+v", resp)
 	}
 	events := svc.ListCostEvents(1)
 	if len(events) != 1 {
@@ -147,5 +183,23 @@ func TestRunEvaluationPassRecordsPartialUsageOnStreamError(t *testing.T) {
 	}
 	if events[0].Provider != "mock" || events[0].RequestModel != "mock:patrol" || events[0].UseCase != "patrol" || events[0].InputTokens != 11 || events[0].OutputTokens != 7 {
 		t.Fatalf("unexpected partial usage event: %+v", events[0])
+	}
+}
+
+func TestPatrolFollowupTraceCollectorCapturesRawInputAndFailures(t *testing.T) {
+	collector := newPatrolFollowupTraceCollector("evaluation")
+	start, _ := json.Marshal(map[string]any{
+		"id": "call-1", "name": agentcapabilities.PatrolReportFindingToolName,
+		"input": "normalized", "raw_input": `{"resource_id":"node-1"}`,
+	})
+	end, _ := json.Marshal(map[string]any{
+		"id": "call-1", "name": agentcapabilities.PatrolReportFindingToolName,
+		"output": "rejected", "success": false,
+	})
+	collector.callback(ChatStreamEvent{Type: "tool_start", Data: start})
+	collector.callback(ChatStreamEvent{Type: "tool_end", Data: end})
+	records := collector.records()
+	if len(records) != 1 || records[0].ID != "evaluation/call-1" || records[0].Input != `{"resource_id":"node-1"}` || records[0].Output != "rejected" || records[0].Success {
+		t.Fatalf("unexpected follow-up trace: %+v", records)
 	}
 }

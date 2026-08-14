@@ -9465,3 +9465,14 @@ the canonical and shipped API references describe the same scope and tenant
 rules. `config_transfer_authorization_test.go`, the contract ratchet in
 `contract_test.go`, and the shipped-doc assertions in `docsLinks.test.ts` pin
 the boundary and its published shape.
+
+### Internal Patrol bridge preserves bounded follow-up authority
+
+`internal/api/chat_service_adapter.go` forwards the AI runtime's structured
+`allowed_tool_names` field across the internal Patrol-to-chat boundary without
+deriving it from prompts or widening it. The chat service applies the list only
+after the Patrol detection profile has projected its canonical tool manifest;
+the list can remove tools but cannot add one, and unknown names fail closed.
+This is an internal execution contract, not a new HTTP field or client-granted
+capability. Existing Patrol routes, authorization, tenant binding, payloads,
+and action approval semantics are unchanged.

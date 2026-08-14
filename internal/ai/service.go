@@ -200,12 +200,13 @@ type ChatToolResult = agentcapabilities.ProviderToolResult
 
 // PatrolExecuteRequest represents a patrol execution request via the chat service
 type PatrolExecuteRequest struct {
-	Prompt       string `json:"prompt"`
-	SystemPrompt string `json:"system_prompt"`
-	SessionID    string `json:"session_id,omitempty"`
-	ExecutionID  string `json:"execution_id,omitempty"`
-	UseCase      string `json:"use_case"` // "patrol" — for model selection
-	MaxTurns     int    `json:"max_turns,omitempty"`
+	Prompt           string   `json:"prompt"`
+	SystemPrompt     string   `json:"system_prompt"`
+	SessionID        string   `json:"session_id,omitempty"`
+	ExecutionID      string   `json:"execution_id,omitempty"`
+	UseCase          string   `json:"use_case"` // "patrol" — for model selection
+	MaxTurns         int      `json:"max_turns,omitempty"`
+	AllowedToolNames []string `json:"allowed_tool_names,omitempty"`
 }
 
 // QuickAnalysisRequest represents a lightweight single-turn analysis request.
@@ -226,6 +227,9 @@ type PatrolStreamResponse struct {
 	Content      string `json:"content"`
 	InputTokens  int    `json:"input_tokens"`
 	OutputTokens int    `json:"output_tokens"`
+	// ToolCalls carries calls observed by bounded Patrol follow-up passes so
+	// the parent run's durable audit contains every provider action.
+	ToolCalls []ToolCallRecord `json:"tool_calls,omitempty"`
 }
 
 // Service orchestrates AI interactions

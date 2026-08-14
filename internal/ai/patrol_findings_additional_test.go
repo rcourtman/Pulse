@@ -1020,6 +1020,13 @@ func TestPatrolFindingCreatorAdapter_ResolveFindingAndChecks(t *testing.T) {
 	if !adapter.HasCheckedFindings() {
 		t.Fatal("expected HasCheckedFindings to be true after GetActiveFindings")
 	}
+	if adapter.HasCompleteFindingSnapshot() {
+		t.Fatal("expected severity-filtered finding read not to count as a complete snapshot")
+	}
+	_ = adapter.GetActiveFindings("", "")
+	if !adapter.HasCompleteFindingSnapshot() {
+		t.Fatal("expected unfiltered finding read to establish the complete snapshot")
+	}
 }
 
 func TestPatrolFindingCreatorAdapter_GetActiveFindings_UsesScopedRuntimeState(t *testing.T) {

@@ -34,14 +34,7 @@ func (a *chatServiceAdapter) ExecuteStream(ctx context.Context, req ai.ChatExecu
 }
 
 func (a *chatServiceAdapter) ExecutePatrolStream(ctx context.Context, req ai.PatrolExecuteRequest, callback ai.ChatStreamCallback) (*ai.PatrolStreamResponse, error) {
-	resp, err := a.svc.ExecutePatrolStream(ctx, chat.PatrolRequest{
-		Prompt:       req.Prompt,
-		SystemPrompt: req.SystemPrompt,
-		SessionID:    req.SessionID,
-		ExecutionID:  req.ExecutionID,
-		UseCase:      req.UseCase,
-		MaxTurns:     req.MaxTurns,
-	}, adaptCallback(callback))
+	resp, err := a.svc.ExecutePatrolStream(ctx, adaptPatrolExecuteRequest(req), adaptCallback(callback))
 	if err != nil {
 		if resp != nil {
 			return &ai.PatrolStreamResponse{
@@ -57,6 +50,18 @@ func (a *chatServiceAdapter) ExecutePatrolStream(ctx context.Context, req ai.Pat
 		InputTokens:  resp.InputTokens,
 		OutputTokens: resp.OutputTokens,
 	}, nil
+}
+
+func adaptPatrolExecuteRequest(req ai.PatrolExecuteRequest) chat.PatrolRequest {
+	return chat.PatrolRequest{
+		Prompt:           req.Prompt,
+		SystemPrompt:     req.SystemPrompt,
+		SessionID:        req.SessionID,
+		ExecutionID:      req.ExecutionID,
+		UseCase:          req.UseCase,
+		MaxTurns:         req.MaxTurns,
+		AllowedToolNames: append([]string(nil), req.AllowedToolNames...),
+	}
 }
 
 //nolint:dupl // mirrors orchestratorChatAdapter.GetMessages: same source messages mapped onto a deliberately separate output contract that may diverge

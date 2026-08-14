@@ -2,9 +2,11 @@ package ai
 
 import (
 	"context"
+	"reflect"
 	"strings"
 	"testing"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 )
 
@@ -78,6 +80,9 @@ func TestRunAssessmentSweepFilesRequest(t *testing.T) {
 	}
 	if captured.MaxTurns != 3 {
 		t.Fatalf("expected maxTurns len(pending)+2=3, got %d", captured.MaxTurns)
+	}
+	if !reflect.DeepEqual(captured.AllowedToolNames, []string{agentcapabilities.PatrolAssessFindingToolName}) {
+		t.Fatalf("assessment tools = %v, want assess only", captured.AllowedToolNames)
 	}
 	if !strings.Contains(captured.Prompt, "0e7c5dbb86bdebe9") {
 		t.Fatalf("expected prompt to list the missing finding id")

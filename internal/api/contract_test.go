@@ -67,6 +67,32 @@ import (
 	tmock "github.com/stretchr/testify/mock"
 )
 
+func TestContractPatrolInternalBridgePreservesBoundedToolAuthority(t *testing.T) {
+	allowed := []string{
+		agentcapabilities.PatrolGetFindingsToolName,
+		agentcapabilities.PatrolReportFindingToolName,
+	}
+	got := adaptPatrolExecuteRequest(ai.PatrolExecuteRequest{
+		Prompt:           "evaluate",
+		SystemPrompt:     "bounded",
+		SessionID:        "patrol-eval",
+		ExecutionID:      "run-1",
+		UseCase:          "patrol",
+		MaxTurns:         5,
+		AllowedToolNames: allowed,
+	})
+	if got.Prompt != "evaluate" || got.SystemPrompt != "bounded" || got.SessionID != "patrol-eval" || got.ExecutionID != "run-1" || got.UseCase != "patrol" || got.MaxTurns != 5 {
+		t.Fatalf("Patrol bridge lost execution metadata: %+v", got)
+	}
+	if !reflect.DeepEqual(got.AllowedToolNames, allowed) {
+		t.Fatalf("Patrol bridge allowed tools = %v, want %v", got.AllowedToolNames, allowed)
+	}
+	allowed[0] = "mutated-after-adaptation"
+	if got.AllowedToolNames[0] != agentcapabilities.PatrolGetFindingsToolName {
+		t.Fatalf("Patrol bridge retained caller-owned allowlist storage: %v", got.AllowedToolNames)
+	}
+}
+
 func TestContract_ConfigTransferRoutesUseCanonicalPreHandlerAuthorization(t *testing.T) {
 	routesSource, err := os.ReadFile(filepath.Clean("router_routes_registration.go"))
 	if err != nil {

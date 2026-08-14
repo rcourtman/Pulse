@@ -755,6 +755,51 @@ func TestSeedFindingsAndContext_ScopedPatrolSkipsOutOfScopeFindingsWithoutResolv
 	}
 }
 
+func TestSeedFindingsAndContext_DependencyEvidenceDoesNotJoinExactFindingLifecycle(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+	now := time.Now().Add(-time.Hour)
+	workload := &Finding{
+		ID: "workload-finding", ResourceID: "workload-1", ResourceName: "workload-1",
+		Title: "Workload unhealthy", Severity: FindingSeverityWarning, Category: FindingCategoryReliability,
+		DetectedAt: now, LastSeenAt: now,
+	}
+	host := &Finding{
+		ID: "host-finding", ResourceID: "host-1", ResourceName: "host-1",
+		Title: "Host packages pending", Severity: FindingSeverityWarning, Category: FindingCategoryGeneral,
+		DetectedAt: now, LastSeenAt: now,
+	}
+	dismissedHost := &Finding{
+		ID: "dismissed-host-finding", ResourceID: "host-1", ResourceName: "host-1",
+		Title: "Dismissed host issue", Severity: FindingSeverityWatch, Category: FindingCategoryGeneral,
+		DetectedAt: now, LastSeenAt: now,
+	}
+	ps.findings.Add(workload)
+	ps.findings.Add(host)
+	ps.findings.Add(dismissedHost)
+	ps.findings.Dismiss(dismissedHost.ID, "expected_behavior", "dependency-only feedback")
+
+	workloadView := ur.NewNodeView(&ur.Resource{ID: "workload-1", Name: "workload-1"})
+	hostView := ur.NewNodeView(&ur.Resource{ID: "host-1", Name: "host-1"})
+	state := &mockReadState{nodes: []*ur.NodeView{&workloadView, &hostView}}
+	ps.SetReadState(state)
+	effective := newPatrolRuntimeState(models.StateSnapshot{Nodes: []models.Node{
+		{ID: "workload-1", Name: "workload-1"},
+		{ID: "host-1", Name: "host-1"},
+	}})
+	effective.readState = state
+
+	output, seeded := ps.seedFindingsAndContextState(&PatrolScope{ResourceIDs: []string{"workload-1"}}, effective)
+	if len(seeded) != 1 || seeded[0] != workload.ID {
+		t.Fatalf("seeded findings = %v, want exact caller-scope finding only", seeded)
+	}
+	if !strings.Contains(output, workload.Title) || strings.Contains(output, host.Title) || strings.Contains(output, dismissedHost.Title) {
+		t.Fatalf("dependency finding lifecycle leaked into exact scope: %s", output)
+	}
+	if host.ResolvedAt != nil {
+		t.Fatalf("dependency finding was incorrectly resolved: %v", host.ResolvedAt)
+	}
+}
+
 func TestSeedFindingsAndContext_KeepsSyntheticPatrolServiceFindings(t *testing.T) {
 	ps := NewPatrolService(nil, nil)
 

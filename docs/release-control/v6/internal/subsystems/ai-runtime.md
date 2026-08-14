@@ -7153,3 +7153,32 @@ recovers and breaches again.
 Changing the retained brief, optional context, or resource scope disables the
 installed observer and clears its lease; coverage cannot survive a semantic
 change to the intent it was designed to protect.
+
+### Patrol follow-up passes are exact-scope, least-manifest continuations
+
+Patrol's main Watch pass retains the full governed detection-profile manifest
+so the selected model owns evidence gathering and diagnosis. Bounded
+continuations do not repeat that broad manifest: the unmatched-signal
+evaluation pass receives only `patrol_report_finding` after the main pass has
+established one complete, unfiltered `patrol_get_findings` snapshot; when no
+complete snapshot exists it receives only `patrol_get_findings` plus
+`patrol_report_finding`. The assessment-completion sweep receives only
+`patrol_assess_finding`. These are structured call-site allowlists applied
+after profile projection and may only reduce authority. An unavailable or
+unknown requested tool fails closed. Prompt text never selects the manifest.
+
+An explicitly scoped Watch may carry related hosts or dependencies in its
+effective runtime snapshot as model evidence, but active, dismissed, and
+snoozed finding lifecycle context is seeded from the exact caller-requested
+resource identities. A dependency finding cannot therefore be refreshed or
+forced into an assessment merely because its resource helped explain the
+target. Deleted-resource reconciliation still uses the full current global
+state, and the synthetic Patrol runtime finding retains its existing special
+handling.
+
+Every provider tool call from the main pass, evaluation pass, and assessment
+sweep is merged into the one durable Patrol run trace, including raw provider
+arguments, failed calls, and bounded outputs. Qualification and operator
+forensics therefore see the complete model-owned decision path; a follow-up
+cannot hide a duplicate findings read or a failed lifecycle write in an
+ephemeral callback.

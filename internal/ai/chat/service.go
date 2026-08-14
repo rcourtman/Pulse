@@ -2783,12 +2783,13 @@ func (s *Service) hydrateHandoffResources(sessionID string, handoffResources []H
 
 // PatrolRequest represents a patrol execution request within the chat service
 type PatrolRequest struct {
-	Prompt       string `json:"prompt"`
-	SystemPrompt string `json:"system_prompt"`
-	SessionID    string `json:"session_id,omitempty"`
-	ExecutionID  string `json:"execution_id,omitempty"`
-	UseCase      string `json:"use_case"`
-	MaxTurns     int    `json:"max_turns,omitempty"`
+	Prompt           string   `json:"prompt"`
+	SystemPrompt     string   `json:"system_prompt"`
+	SessionID        string   `json:"session_id,omitempty"`
+	ExecutionID      string   `json:"execution_id,omitempty"`
+	UseCase          string   `json:"use_case"`
+	MaxTurns         int      `json:"max_turns,omitempty"`
+	AllowedToolNames []string `json:"allowed_tool_names,omitempty"`
 }
 
 // PatrolResponse contains the results of a patrol execution
@@ -2928,6 +2929,10 @@ func (s *Service) ExecutePatrolStream(ctx context.Context, req PatrolRequest, ca
 	// Get governed tools for the Patrol run, projected from the same
 	// effective executor that will run them under the detection profile.
 	filteredTools := s.toolsForExecutor(executor, false)
+	filteredTools, err = restrictPatrolProviderTools(filteredTools, req.AllowedToolNames)
+	if err != nil {
+		return nil, err
+	}
 
 	// Run the agentic loop
 	resultMessages, err := tempLoop.ExecuteWithTools(ctx, session.ID, messages, filteredTools, callback)
@@ -2990,6 +2995,42 @@ func (s *Service) ExecutePatrolStream(ctx context.Context, req PatrolRequest, ca
 		InputTokens:  tempLoop.GetTotalInputTokens(),
 		OutputTokens: tempLoop.GetTotalOutputTokens(),
 	}, nil
+}
+
+// restrictPatrolProviderTools applies a structured, call-site-owned authority
+// reduction after the Patrol execution profile has projected its governed
+// manifest. It can never add authority, and an unknown requested tool fails
+// closed rather than silently producing an incomplete follow-up pass.
+func restrictPatrolProviderTools(providerTools []providers.Tool, allowedNames []string) ([]providers.Tool, error) {
+	if len(allowedNames) == 0 {
+		return providerTools, nil
+	}
+
+	allowed := make(map[string]bool, len(allowedNames))
+	for _, name := range allowedNames {
+		name = strings.TrimSpace(name)
+		if name == "" {
+			return nil, fmt.Errorf("patrol allowed tool name must not be empty")
+		}
+		allowed[name] = true
+	}
+
+	filtered := make([]providers.Tool, 0, len(allowed))
+	for _, tool := range providerTools {
+		if allowed[tool.Name] {
+			filtered = append(filtered, tool)
+			delete(allowed, tool.Name)
+		}
+	}
+	if len(allowed) > 0 {
+		missing := make([]string, 0, len(allowed))
+		for name := range allowed {
+			missing = append(missing, name)
+		}
+		sort.Strings(missing)
+		return nil, fmt.Errorf("patrol allowed tools unavailable after profile projection: %s", strings.Join(missing, ", "))
+	}
+	return filtered, nil
 }
 
 // createProviderForModel creates a streaming provider for a specific model string (provider:model format).

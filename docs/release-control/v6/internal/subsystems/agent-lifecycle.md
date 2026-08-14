@@ -6292,3 +6292,12 @@ organization binding and carry `settings:read` for export or `settings:write`
 for import; tenant browser membership without management authority is denied.
 This boundary neither enrolls nor mutates agent identity, tokens, command
 sessions, fleet policy, or update state.
+
+### Patrol follow-up manifests do not confer agent authority
+
+`internal/api/chat_service_adapter.go` now forwards a structured tool-name
+allowlist for bounded Patrol continuations. This list is AI-runtime metadata
+that can only reduce the already projected detection manifest. It does not
+enroll an agent, select an agent identity, enable commands, grant a command
+session, alter fleet policy, or bypass agent-side preflight and action
+admission. Agent lifecycle and command authority remain unchanged.

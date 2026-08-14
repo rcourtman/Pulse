@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/baseline"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/chat"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/correlation"
@@ -930,11 +931,14 @@ func (p *PatrolService) runAIAnalysisState(ctx context.Context, snap patrolRunti
 				Msg("AI Patrol: Unmatched signals found, running evaluation pass")
 
 			evalResp, evalErr := p.runEvaluationPass(ctx, adapter, unmatchedSignals, executionID)
+			if evalResp != nil {
+				inputTokens += evalResp.InputTokens
+				outputTokens += evalResp.OutputTokens
+				collectedToolCalls = append(collectedToolCalls, evalResp.ToolCalls...)
+			}
 			if evalErr != nil {
 				log.Warn().Err(evalErr).Msg("AI Patrol: Evaluation pass failed")
 			} else if evalResp != nil {
-				inputTokens += evalResp.InputTokens
-				outputTokens += evalResp.OutputTokens
 				log.Info().
 					Int("eval_input_tokens", evalResp.InputTokens).
 					Int("eval_output_tokens", evalResp.OutputTokens).
@@ -967,11 +971,14 @@ func (p *PatrolService) runAIAnalysisState(ctx context.Context, snap patrolRunti
 			Msg("AI Patrol: Verdicts missing after main pass, running assessment sweep")
 
 		sweepResp, sweepErr := p.runAssessmentSweep(ctx, missing, executionID)
+		if sweepResp != nil {
+			inputTokens += sweepResp.InputTokens
+			outputTokens += sweepResp.OutputTokens
+			collectedToolCalls = append(collectedToolCalls, sweepResp.ToolCalls...)
+		}
 		if sweepErr != nil {
 			log.Warn().Err(sweepErr).Msg("AI Patrol: Assessment sweep failed")
 		} else if sweepResp != nil {
-			inputTokens += sweepResp.InputTokens
-			outputTokens += sweepResp.OutputTokens
 			remaining := patrolMissingAssessmentIDs(buildAnalysisResult(finalContent, collectedToolCalls, inputTokens, outputTokens))
 			log.Info().
 				Int("swept", len(missing)-len(remaining)).
@@ -1060,6 +1067,136 @@ func triageFlagsToDetectedSignals(flags []TriageFlag) []DetectedSignal {
 	return signals
 }
 
+// patrolFollowupTraceCollector captures the same provider tool lifecycle used
+// by the main pass for bounded evaluation and assessment calls. Keeping these
+// calls in the parent run record makes qualification and operator forensics
+// reflect the entire model-owned decision path, including failed calls.
+type patrolFollowupTraceCollector struct {
+	mu           sync.Mutex
+	prefix       string
+	pending      map[string]ToolCallRecord
+	pendingOrder []string
+	completed    []ToolCallRecord
+	anonCounter  int
+}
+
+func newPatrolFollowupTraceCollector(prefix string) *patrolFollowupTraceCollector {
+	return &patrolFollowupTraceCollector{
+		prefix:  strings.Trim(strings.TrimSpace(prefix), "/"),
+		pending: make(map[string]ToolCallRecord),
+	}
+}
+
+func (c *patrolFollowupTraceCollector) scopedID(id string) string {
+	id = strings.TrimSpace(id)
+	if c == nil || c.prefix == "" || id == "" {
+		return id
+	}
+	return c.prefix + "/" + id
+}
+
+func (c *patrolFollowupTraceCollector) callback(event ChatStreamEvent) {
+	if c == nil || (event.Type != "tool_start" && event.Type != "tool_end") {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	switch event.Type {
+	case "tool_start":
+		var data struct {
+			ID       string `json:"id"`
+			Name     string `json:"name"`
+			Input    string `json:"input"`
+			RawInput string `json:"raw_input"`
+		}
+		if json.Unmarshal(event.Data, &data) != nil {
+			return
+		}
+		if data.ID == "" {
+			c.anonCounter++
+			data.ID = fmt.Sprintf("anon-%d", c.anonCounter)
+		}
+		data.ID = c.scopedID(data.ID)
+		input := data.Input
+		if data.RawInput != "" {
+			input = data.RawInput
+		}
+		c.pendingOrder = append(c.pendingOrder, data.ID)
+		c.pending[data.ID] = ToolCallRecord{
+			ID:        data.ID,
+			ToolName:  data.Name,
+			Input:     truncateString(input, MaxToolInputSize),
+			StartTime: time.Now().UnixMilli(),
+		}
+	case "tool_end":
+		var data struct {
+			ID       string `json:"id"`
+			Name     string `json:"name"`
+			Input    string `json:"input"`
+			RawInput string `json:"raw_input"`
+			Output   string `json:"output"`
+			Success  bool   `json:"success"`
+		}
+		if json.Unmarshal(event.Data, &data) != nil {
+			return
+		}
+		if data.ID == "" {
+			if len(c.pendingOrder) > 0 {
+				data.ID = c.pendingOrder[0]
+				c.pendingOrder = c.pendingOrder[1:]
+			} else {
+				c.anonCounter++
+				data.ID = c.scopedID(fmt.Sprintf("anon-end-%d", c.anonCounter))
+			}
+		} else {
+			data.ID = c.scopedID(data.ID)
+			for i, id := range c.pendingOrder {
+				if id == data.ID {
+					c.pendingOrder = append(c.pendingOrder[:i], c.pendingOrder[i+1:]...)
+					break
+				}
+			}
+		}
+
+		now := time.Now().UnixMilli()
+		input := data.Input
+		if data.RawInput != "" {
+			input = data.RawInput
+		}
+		if call, ok := c.pending[data.ID]; ok {
+			if input != "" {
+				call.Input = truncateString(input, MaxToolInputSize)
+			}
+			call.Output = truncateString(data.Output, MaxToolOutputSize)
+			call.Success = data.Success
+			call.EndTime = now
+			call.Duration = now - call.StartTime
+			c.completed = append(c.completed, call)
+			delete(c.pending, data.ID)
+			return
+		}
+		c.completed = append(c.completed, ToolCallRecord{
+			ID:        data.ID,
+			ToolName:  data.Name,
+			Input:     truncateString(input, MaxToolInputSize),
+			Output:    truncateString(data.Output, MaxToolOutputSize),
+			Success:   data.Success,
+			StartTime: now,
+			EndTime:   now,
+		})
+	}
+}
+
+func (c *patrolFollowupTraceCollector) records() []ToolCallRecord {
+	if c == nil {
+		return nil
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return append([]ToolCallRecord(nil), c.completed...)
+}
+
 // runAssessmentSweep runs a bounded follow-up model pass that files the
 // patrol_assess_finding verdicts the main pass left missing. Uncertain is an
 // accepted verdict, so the pass asks for an honest call on the presented
@@ -1089,6 +1226,7 @@ func (p *PatrolService) runAssessmentSweep(ctx context.Context, missingIDs []str
 		maxTurns = 12
 	}
 
+	trace := newPatrolFollowupTraceCollector("assessment")
 	resp, err := cs.ExecutePatrolStream(ctx, PatrolExecuteRequest{
 		Prompt:       buildAssessmentSweepUserPrompt(pending),
 		SystemPrompt: buildAssessmentSweepSystemPrompt(),
@@ -1096,11 +1234,13 @@ func (p *PatrolService) runAssessmentSweep(ctx context.Context, missingIDs []str
 		ExecutionID:  executionID,
 		UseCase:      "patrol",
 		MaxTurns:     maxTurns,
-	}, func(event ChatStreamEvent) {
-		// Not streamed to the frontend — verdicts land via the adapter.
-	})
+		AllowedToolNames: []string{
+			agentcapabilities.PatrolAssessFindingToolName,
+		},
+	}, trace.callback)
 
 	if resp != nil {
+		resp.ToolCalls = trace.records()
 		p.recordPatrolUsage(resp.InputTokens, resp.OutputTokens)
 	}
 	if err != nil {
@@ -1204,31 +1344,43 @@ func (p *PatrolService) runEvaluationPass(ctx context.Context, adapter *patrolFi
 		return nil, fmt.Errorf("patrol evaluation skipped: %w", err)
 	}
 
-	systemPrompt := buildEvalSystemPrompt()
-	userPrompt := buildEvalUserPrompt(unmatchedSignals)
+	findingsSnapshotEstablished := adapter != nil && adapter.HasCompleteFindingSnapshot()
+	var queriedFindings []tools.PatrolFindingInfo
+	allowedToolNames := []string{
+		agentcapabilities.PatrolGetFindingsToolName,
+		agentcapabilities.PatrolReportFindingToolName,
+	}
+	if findingsSnapshotEstablished {
+		queriedFindings = adapter.getQueriedFindings()
+		allowedToolNames = []string{agentcapabilities.PatrolReportFindingToolName}
+	}
+	systemPrompt := buildEvalSystemPrompt(findingsSnapshotEstablished)
+	userPrompt := buildEvalUserPrompt(unmatchedSignals, queriedFindings)
 
 	log.Info().
 		Int("unmatched_signals", len(unmatchedSignals)).
 		Msg("AI Patrol: Running evaluation pass for unmatched signals")
 
+	trace := newPatrolFollowupTraceCollector("evaluation")
 	resp, err := cs.ExecutePatrolStream(ctx, PatrolExecuteRequest{
-		Prompt:       userPrompt,
-		SystemPrompt: systemPrompt,
-		SessionID:    "patrol-eval",
-		ExecutionID:  executionID,
-		UseCase:      "patrol",
-		MaxTurns:     5,
-	}, func(event ChatStreamEvent) {
-		// Minimal callback — we don't stream eval pass to the frontend
-		// but findings are still created via the adapter
-	})
+		Prompt:           userPrompt,
+		SystemPrompt:     systemPrompt,
+		SessionID:        "patrol-eval",
+		ExecutionID:      executionID,
+		UseCase:          "patrol",
+		MaxTurns:         5,
+		AllowedToolNames: allowedToolNames,
+	}, trace.callback)
+	if resp != nil {
+		resp.ToolCalls = trace.records()
+	}
 
 	if err != nil {
 		if resp != nil {
 			p.recordPatrolUsage(resp.InputTokens, resp.OutputTokens)
 		}
 		log.Warn().Err(err).Msg("AI Patrol: Evaluation pass failed")
-		return nil, err
+		return resp, err
 	}
 
 	log.Info().
@@ -1285,7 +1437,23 @@ func (p *PatrolService) recordPatrolUsage(inputTokens, outputTokens int) {
 }
 
 // buildEvalSystemPrompt returns the system prompt for the evaluation pass.
-func buildEvalSystemPrompt() string {
+func buildEvalSystemPrompt(findingsSnapshotEstablished bool) string {
+	if findingsSnapshotEstablished {
+		return `You are a patrol evaluation agent reviewing infrastructure signals that were
+detected but not reported as findings.
+
+Tool: patrol_report_finding
+
+The active-finding snapshot from this run is already included below. Reuse it; do not request another findings read.
+
+Instructions:
+1. For each signal below, determine if it is a genuine issue requiring attention.
+2. If yes and not already covered by the supplied snapshot, call patrol_report_finding with complete details.
+3. If not actionable or already covered by an existing finding, skip it.
+4. Do NOT investigate further — use only the evidence provided below.
+
+When reporting, set ` + "`impact`" + ` to the concrete consequence-if-ignored — name the affected workloads, jobs, or recovery windows. Leave it empty rather than fabricating one if the consequence is genuinely unknown.`
+	}
 	return `You are a patrol evaluation agent reviewing infrastructure signals that were
 detected but not reported as findings.
 
@@ -1302,10 +1470,22 @@ When reporting, set ` + "`impact`" + ` to the concrete consequence-if-ignored �
 }
 
 // buildEvalUserPrompt formats the unmatched signals into a user prompt for the evaluation pass.
-func buildEvalUserPrompt(signals []DetectedSignal) string {
+func buildEvalUserPrompt(signals []DetectedSignal, existingFindings []tools.PatrolFindingInfo) string {
 	var sb strings.Builder
 	sb.WriteString("The following infrastructure signals were detected during patrol but were not reported as findings.\n")
 	sb.WriteString("Review each one and report genuine issues using patrol_report_finding.\n\n")
+	if existingFindings != nil {
+		sb.WriteString("# Active-finding snapshot already read in this patrol run\n")
+		if len(existingFindings) == 0 {
+			sb.WriteString("No active findings were returned for the exact caller scope.\n\n")
+		} else {
+			for _, finding := range existingFindings {
+				sb.WriteString(fmt.Sprintf("- [%s] %s on %s (resource ID: %s, severity: %s, category: %s)\n",
+					finding.ID, finding.Title, finding.ResourceName, finding.ResourceID, finding.Severity, finding.Category))
+			}
+			sb.WriteString("\n")
+		}
+	}
 
 	for i, s := range signals {
 		sb.WriteString(fmt.Sprintf("## Signal %d: %s\n", i+1, s.SignalType))
@@ -4111,6 +4291,21 @@ func (p *PatrolService) seedFindingsAndContextState(scope *PatrolScope, snap pat
 
 	scopedResources := patrolRuntimeKnownResources(snap)
 	stateHasScopedResources := len(scopedResources) > 0
+	// The effective runtime snapshot intentionally includes dependency context
+	// (for example a workload's host). Finding lifecycle is narrower: an
+	// explicitly scoped run may refresh only the caller-requested identities.
+	// Dependency resources remain model evidence, but their findings are not
+	// seeded, refreshed, assessed, or injected as dismissed feedback.
+	findingLifecycleResources := scopedResources
+	if scope != nil && len(scope.ResourceIDs) > 0 {
+		findingLifecycleResources = make(map[string]bool, len(scope.ResourceIDs))
+		for _, resourceID := range scope.ResourceIDs {
+			if resourceID = strings.TrimSpace(resourceID); resourceID != "" {
+				findingLifecycleResources[resourceID] = true
+			}
+		}
+		stateHasScopedResources = true
+	}
 	globalResources := scopedResources
 	current := p.currentPatrolRuntimeState()
 	globalResources = patrolRuntimeKnownResources(current)
@@ -4124,7 +4319,7 @@ func (p *PatrolService) seedFindingsAndContextState(scope *PatrolScope, snap pat
 		sb.WriteString("Verify whether these findings are still valid. Resolve any that are no longer issues.\n\n")
 		for _, f := range activeFindings {
 			usesSyntheticRuntimeResource := patrolFindingUsesSyntheticRuntimeResource(f)
-			inScopedState := usesSyntheticRuntimeResource || !stateHasScopedResources || scopedResources[f.ResourceID] || scopedResources[f.ResourceName]
+			inScopedState := usesSyntheticRuntimeResource || !stateHasScopedResources || findingLifecycleResources[f.ResourceID] || findingLifecycleResources[f.ResourceName]
 			inGlobalState := usesSyntheticRuntimeResource || !stateHasGlobalResources || globalResources[f.ResourceID] || globalResources[f.ResourceName]
 
 			// Auto-resolve findings only when the resource is gone from the full current state.
@@ -4161,7 +4356,7 @@ func (p *PatrolService) seedFindingsAndContextState(scope *PatrolScope, snap pat
 	}
 
 	// --- Dismissed/Snoozed Findings ---
-	feedbackContext := p.findings.GetDismissedForContextForResources(scopedResources)
+	feedbackContext := p.findings.GetDismissedForContextForResources(findingLifecycleResources)
 	if feedbackContext != "" {
 		sb.WriteString("# User Feedback on Previous Findings\n")
 		sb.WriteString("Do NOT re-raise findings the user has dismissed or snoozed.\n\n")
