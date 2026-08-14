@@ -1977,6 +1977,13 @@ tracks the durable inbox/detail, policy provenance, dispatch, and
 `frontend-modern/src/api/patrol.ts` owns Autopilot acknowledgement create,
 activation, effective-mode, and revocation consumption. These mirrors must use
 backend JSON names and closed enums rather than frontend authority dialects.
+The same client owns the retained-objective list/create/update/delete mirror for
+`/api/ai/patrol/objectives`. Objective writes carry optimistic revisions and
+may author only the bounded brief, optional context, resource IDs, and status;
+coverage and observer artifacts remain server-owned. Successful active create
+or material update requests immediately ask the tenant Patrol service to plan
+coverage, while the HTTP response remains the durable objective truth and does
+not claim that queue acceptance means coverage.
 The route-backed Actions review consumes an exact typed action id through its
 browser query state and resolves lifecycle state from `GET /api/actions/{id}`;
 Patrol may link to that identity but must not infer Open versus History from

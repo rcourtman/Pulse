@@ -99,6 +99,46 @@ export type InvestigationOutcome =
   | 'fix_verification_failed'
   | 'fix_verification_unknown';
 export type PatrolAutonomyLevel = 'monitor' | 'approval' | 'assisted' | 'full';
+export type PatrolObjectiveStatus = 'active' | 'paused' | 'archived';
+export type PatrolObjectiveCoverageState = 'covered' | 'degraded' | 'uncovered';
+
+export interface PatrolObjectiveCoverage {
+  state: PatrolObjectiveCoverageState;
+  reason_code: string;
+  summary: string;
+  observer_id?: string;
+  observer_version?: number;
+  valid_until?: string;
+  last_evidence_at?: string;
+}
+
+export interface PatrolObjective {
+  id: string;
+  brief: string;
+  optional_context?: string;
+  scope: { resource_ids: string[] };
+  status: PatrolObjectiveStatus;
+  coverage: PatrolObjectiveCoverage;
+  revision: number;
+  created_by?: string;
+  updated_by?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PatrolObjectiveCreate {
+  brief: string;
+  optional_context?: string;
+  resource_ids?: string[];
+}
+
+export interface PatrolObjectiveUpdate {
+  revision: number;
+  brief?: string;
+  optional_context?: string;
+  resource_ids?: string[];
+  status?: PatrolObjectiveStatus;
+}
 
 export type PatrolAutopilotStatusCode =
   | 'active'
@@ -141,6 +181,44 @@ export interface PatrolAutopilotStatus {
   expiresAt?: string;
   acceptedScope: string[];
   acceptedLimits: PatrolAutopilotAcceptedLimits;
+}
+
+export async function getPatrolObjectives(): Promise<PatrolObjective[]> {
+  const response = await apiFetchJSON<{ objectives?: PatrolObjective[] }>(
+    '/api/ai/patrol/objectives',
+  );
+  return arrayOrEmpty(response.objectives);
+}
+
+export async function createPatrolObjective(
+  input: PatrolObjectiveCreate,
+): Promise<PatrolObjective> {
+  return apiFetchJSON<PatrolObjective>('/api/ai/patrol/objectives', {
+    method: 'POST',
+    body: JSON.stringify(input),
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
+
+export async function updatePatrolObjective(
+  objectiveId: string,
+  input: PatrolObjectiveUpdate,
+): Promise<PatrolObjective> {
+  return apiFetchJSON<PatrolObjective>(
+    `/api/ai/patrol/objectives/${encodeURIComponent(objectiveId)}`,
+    {
+      method: 'PATCH',
+      body: JSON.stringify(input),
+      headers: { 'Content-Type': 'application/json' },
+    },
+  );
+}
+
+export async function deletePatrolObjective(objectiveId: string, revision: number): Promise<void> {
+  await apiFetchJSON<void>(
+    `/api/ai/patrol/objectives/${encodeURIComponent(objectiveId)}?revision=${encodeURIComponent(String(revision))}`,
+    { method: 'DELETE' },
+  );
 }
 
 export interface PatrolAutonomySettings {

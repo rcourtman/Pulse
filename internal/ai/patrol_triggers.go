@@ -63,6 +63,7 @@ const (
 	TriggerReasonConfigChanged     TriggerReason = "config_changed"     // System configuration changed
 	TriggerReasonStartup           TriggerReason = "startup"            // Service startup
 	TriggerReasonVerification      TriggerReason = "verification"       // Post-fix verification
+	TriggerReasonObjectiveChanged  TriggerReason = "objective_changed"  // Operator created or materially changed a retained objective
 	TriggerReasonObjectiveEvidence TriggerReason = "objective_evidence" // Local observer detected an objective breach
 )
 
@@ -529,7 +530,7 @@ func patrolTriggersEquivalent(left, right PatrolScope) bool {
 	if left.Reason != right.Reason || !slicesEqual(left.ResourceIDs, right.ResourceIDs) {
 		return false
 	}
-	if left.Reason != TriggerReasonObjectiveEvidence {
+	if left.Reason != TriggerReasonObjectiveEvidence && left.Reason != TriggerReasonObjectiveChanged {
 		return true
 	}
 	if left.ObjectiveContext == nil || right.ObjectiveContext == nil {

@@ -2146,6 +2146,14 @@ capability over storage or recovery data.
 
 ## Current State
 
+### Retained Patrol objectives do not create recovery authority
+
+The shared `internal/api` retained-objective endpoints may scope an outcome to
+storage or recovery resources and queue read-only observer planning, but saving
+an objective does not create backup, snapshot, prune, restore, deletion, or
+filesystem authority. Any response to observer evidence still uses the
+canonical governed action and verification path.
+
 ### Provider-neutral libvirt VM facts are observation-only
 
 The shared unified-resource type now includes a provider-neutral

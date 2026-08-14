@@ -2654,6 +2654,15 @@ verification.
 
 ## Current State
 
+### Patrol objectives reuse the shared dialog, button, badge, and resource picker contracts
+
+The Patrol retained-objective surface composes the existing shared `Dialog`,
+`Button`, `MetadataBadge`, and `ResourcePicker` primitives. It does not add a
+Patrol-only overlay, selector, badge vocabulary, or focus model. The modal keeps
+the standard backdrop, Escape, focus trap/return, bounded viewport, scrolling,
+and responsive footer behavior while the feature owns only objective-specific
+copy and orchestration.
+
 ### System member rows are source-type aware
 
 The Infrastructure source manager's member composition primitives now label

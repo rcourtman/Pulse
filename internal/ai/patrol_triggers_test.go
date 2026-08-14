@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 )
 
@@ -59,6 +60,47 @@ func TestTriggerManagerDoesNotMergeDistinctObjectivesOnSameResource(t *testing.T
 	}
 	if !tm.TriggerPatrol(first) || tm.GetPendingCount() != 2 {
 		t.Fatal("an exact repeated objective trigger should merge")
+	}
+}
+
+func TestQueueObjectiveCoverageCarriesExactIntentAndExpandsEstateScope(t *testing.T) {
+	tm := NewTriggerManager(TriggerManagerConfig{MaxPendingTriggers: 10})
+	patrol := NewPatrolService(nil, nil)
+	patrol.SetTriggerManager(tm)
+	patrol.SetUnifiedResourceProvider(&mockUnifiedResourceProvider{getAllFunc: func() []unifiedresources.Resource {
+		return []unifiedresources.Resource{{ID: "node-2"}, {ID: "node-1"}, {ID: "node-1"}}
+	}})
+	objective := PatrolObjective{
+		ID: "objective-1", Revision: 7, Brief: "Keep playback smooth",
+		OptionalContext: "Prefer event evidence", Status: PatrolObjectiveActive,
+	}
+
+	if !patrol.QueueObjectiveCoverage(objective) {
+		t.Fatal("objective coverage planning was not queued")
+	}
+	if tm.GetPendingCount() != 1 {
+		t.Fatalf("pending objective plans = %d, want 1", tm.GetPendingCount())
+	}
+	queued := tm.pendingTriggers[0]
+	if queued.Reason != TriggerReasonObjectiveChanged || queued.ObjectiveContext == nil {
+		t.Fatalf("queued scope = %+v", queued)
+	}
+	if !slicesEqual(queued.ResourceIDs, []string{"node-1", "node-2"}) {
+		t.Fatalf("expanded resource IDs = %v", queued.ResourceIDs)
+	}
+	if queued.ObjectiveContext.ObjectiveID != objective.ID || queued.ObjectiveContext.Revision != objective.Revision || queued.ObjectiveContext.Brief != objective.Brief || queued.ObjectiveContext.Context != objective.OptionalContext {
+		t.Fatalf("queued objective context = %+v", queued.ObjectiveContext)
+	}
+
+	revised := objective
+	revised.Revision++
+	if !patrol.QueueObjectiveCoverage(revised) || tm.GetPendingCount() != 2 {
+		t.Fatal("materially revised objective was incorrectly merged with stale planning work")
+	}
+	paused := objective
+	paused.Status = PatrolObjectivePaused
+	if patrol.QueueObjectiveCoverage(paused) {
+		t.Fatal("paused objective queued coverage work")
 	}
 }
 

@@ -21,6 +21,7 @@ PATROL_PAGE_AND_STATE_EXACT_FILES = [
     "frontend-modern/src/components/Brand/__tests__/PulsePatrolLogo.test.tsx",
     "frontend-modern/src/features/patrol/__tests__/PatrolAttentionWorkbench.test.tsx",
     "frontend-modern/src/features/patrol/__tests__/PatrolIntelligenceHeader.test.ts",
+    "frontend-modern/src/features/patrol/__tests__/PatrolObjectivesPanel.test.tsx",
     "frontend-modern/src/features/patrol/__tests__/patrolControlPresentation.test.ts",
     "frontend-modern/src/features/patrol/__tests__/patrolInvestigationContextModel.test.ts",
     "frontend-modern/src/features/patrol/__tests__/patrolRunAcceptance.test.ts",

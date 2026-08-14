@@ -4,6 +4,7 @@ package ai
 
 import (
 	"context"
+	"sort"
 	"strings"
 	"time"
 
@@ -396,6 +397,60 @@ func (p *PatrolService) GetObjectiveStore() *PatrolObjectiveStore {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 	return p.objectiveStore
+}
+
+// QueueObjectiveCoverage asks Patrol to translate a retained operator outcome
+// into the smallest truthful local observer it can support. The objective text
+// is context, never execution authority. An estate-wide objective is expanded
+// to the current canonical unified-resource IDs so it follows the same scoped,
+// rate-limited path as every other objective-planning run.
+func (p *PatrolService) QueueObjectiveCoverage(objective PatrolObjective) bool {
+	if p == nil || objective.Status != PatrolObjectiveActive {
+		return false
+	}
+	resourceIDs := append([]string(nil), objective.Scope.ResourceIDs...)
+	if len(resourceIDs) == 0 {
+		p.mu.RLock()
+		provider := p.unifiedResourceProvider
+		p.mu.RUnlock()
+		if provider != nil {
+			seen := make(map[string]struct{})
+			for _, resource := range provider.GetAll() {
+				id := strings.TrimSpace(resource.ID)
+				if id == "" {
+					continue
+				}
+				if _, exists := seen[id]; exists {
+					continue
+				}
+				seen[id] = struct{}{}
+				resourceIDs = append(resourceIDs, id)
+			}
+			sort.Strings(resourceIDs)
+		}
+	}
+	if len(resourceIDs) == 0 {
+		return false
+	}
+	p.mu.RLock()
+	tm := p.triggerManager
+	p.mu.RUnlock()
+	if tm == nil {
+		return false
+	}
+	return tm.TriggerPatrol(PatrolScope{
+		ResourceIDs: resourceIDs,
+		Depth:       PatrolDepthQuick,
+		Reason:      TriggerReasonObjectiveChanged,
+		Priority:    triggerPriorityObjective,
+		Context:     "An operator retained or changed an outcome. Design and propose the smallest truthful local observer for it; do not claim coverage until core installs and leases the observer.",
+		ObjectiveContext: &aicontracts.PatrolObjectiveContext{
+			ObjectiveID: objective.ID,
+			Revision:    objective.Revision,
+			Brief:       objective.Brief,
+			Context:     objective.OptionalContext,
+		},
+	})
 }
 
 // SetFindingsPersistence enables findings persistence (load from and save to disk)

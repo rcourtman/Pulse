@@ -69,6 +69,7 @@ func (h *AISettingsHandler) HandlePatrolObjectives(w http.ResponseWriter, r *htt
 			return
 		}
 		LogAuditEventForTenant(GetOrgID(r.Context()), "patrol_objective_created", auth.GetUser(r.Context()), GetClientIP(r), r.URL.Path, true, "Created Patrol objective "+objective.ID)
+		h.queuePatrolObjectiveCoverage(r, objective)
 		writePatrolObjectiveJSON(w, http.StatusCreated, objective)
 	default:
 		w.Header().Set("Allow", "GET, POST")
@@ -115,6 +116,7 @@ func (h *AISettingsHandler) HandlePatrolObjective(w http.ResponseWriter, r *http
 			return
 		}
 		LogAuditEventForTenant(GetOrgID(r.Context()), "patrol_objective_updated", auth.GetUser(r.Context()), GetClientIP(r), r.URL.Path, true, "Updated Patrol objective "+objective.ID)
+		h.queuePatrolObjectiveCoverage(r, objective)
 		writePatrolObjectiveJSON(w, http.StatusOK, objective)
 	case http.MethodDelete:
 		revision, err := strconv.ParseUint(strings.TrimSpace(r.URL.Query().Get("revision")), 10, 64)
@@ -131,6 +133,19 @@ func (h *AISettingsHandler) HandlePatrolObjective(w http.ResponseWriter, r *http
 	default:
 		w.Header().Set("Allow", "GET, PATCH, DELETE")
 		writeJSONError(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed")
+	}
+}
+
+func (h *AISettingsHandler) queuePatrolObjectiveCoverage(r *http.Request, objective ai.PatrolObjective) {
+	if h == nil || r == nil || objective.Status != ai.PatrolObjectiveActive || objective.Coverage.State == ai.PatrolObjectiveCovered {
+		return
+	}
+	service := h.GetAIService(r.Context())
+	if service == nil {
+		return
+	}
+	if patrol := service.GetPatrolService(); patrol != nil {
+		patrol.QueueObjectiveCoverage(objective)
 	}
 }
 

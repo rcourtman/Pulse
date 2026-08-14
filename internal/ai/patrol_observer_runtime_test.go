@@ -1,11 +1,14 @@
 package ai
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/servicediscovery"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
@@ -228,6 +231,262 @@ func TestPatrolAvailabilityObserverBindingFailsClosed(t *testing.T) {
 				t.Fatalf("binding result = %+v, want rejected/%s", got.Observer, test.wantCode)
 			}
 		})
+	}
+}
+
+func TestPatrolResourceMetricObserverWakesOnFreshThresholdBreach(t *testing.T) {
+	now := time.Date(2026, 8, 14, 4, 0, 0, 0, time.UTC)
+	store := NewInMemoryPatrolObjectiveStore()
+	objective, err := store.Create(CreatePatrolObjectiveInput{
+		Brief: "Keep this node cool", ResourceIDs: []string{"node-1"},
+	}, now)
+	if err != nil {
+		t.Fatalf("create objective: %v", err)
+	}
+	objective, err = store.ProposeObserver(objective.ID, ProposePatrolObserverInput{
+		ExpectedRevision: objective.Revision,
+		Interpretation:   "The canonical node temperature remains below 75 Celsius.",
+		TriggerKinds:     []PatrolObserverTriggerKind{PatrolObserverTriggerInterval},
+		ProbeJSON:        `{"runtime":"pulse-resource-metric/v1","metric":"temperature_celsius","operator":"less_than","threshold":75,"sample_interval_seconds":10,"wake_after_consecutive_failures":2,"max_evidence_age_seconds":60}`,
+		WakeEvidence:     "Fresh temperature evidence is at or above 75 Celsius twice.",
+		RequirementsJSON: `{}`,
+	}, now)
+	if err != nil {
+		t.Fatalf("propose metric observer: %v", err)
+	}
+	temperature := 82.5
+	provider := &mockUnifiedResourceProvider{getAllFunc: func() []unifiedresources.Resource {
+		return []unifiedresources.Resource{{
+			ID: "node-1", LastSeen: now.Add(20 * time.Second), Temperature: &temperature,
+		}}
+	}}
+	patrol := NewPatrolService(nil, nil)
+	patrol.SetObjectiveStore(store)
+	patrol.SetUnifiedResourceProvider(provider)
+	tm := NewTriggerManager(TriggerManagerConfig{MaxPendingTriggers: 10})
+	patrol.SetTriggerManager(tm)
+
+	patrol.processObjectiveObservers(now.Add(time.Second))
+	patrol.processObjectiveObservers(now.Add(11 * time.Second))
+	if tm.GetPendingCount() != 1 {
+		t.Fatalf("metric breach did not wake Patrol once; pending=%d", tm.GetPendingCount())
+	}
+	queued := tm.pendingTriggers[0]
+	if queued.ObjectiveContext == nil || !strings.Contains(queued.ObjectiveContext.Evidence, "temperature_celsius") || !strings.Contains(queued.ObjectiveContext.Evidence, "node-1=82.50") {
+		t.Fatalf("metric evidence = %+v", queued.ObjectiveContext)
+	}
+}
+
+func TestPatrolEstateWideObjectiveUsesCurrentCanonicalResourceSet(t *testing.T) {
+	now := time.Date(2026, 8, 14, 4, 30, 0, 0, time.UTC)
+	store := NewInMemoryPatrolObjectiveStore()
+	objective, err := store.Create(CreatePatrolObjectiveInput{Brief: "Keep disk use below 85 percent"}, now)
+	if err != nil {
+		t.Fatalf("create estate objective: %v", err)
+	}
+	objective, err = store.ProposeObserver(objective.ID, ProposePatrolObserverInput{
+		ExpectedRevision: objective.Revision, Interpretation: "Every current canonical resource with disk telemetry stays below 85 percent.",
+		TriggerKinds: []PatrolObserverTriggerKind{PatrolObserverTriggerInterval},
+		ProbeJSON:    `{"runtime":"pulse-resource-metric/v1","metric":"disk_percent","operator":"less_than","threshold":85,"sample_interval_seconds":10,"wake_after_consecutive_failures":1,"max_evidence_age_seconds":60}`,
+		WakeEvidence: "A current resource breaches the disk objective.", RequirementsJSON: `{}`,
+	}, now)
+	if err != nil {
+		t.Fatalf("propose observer: %v", err)
+	}
+	disk := &unifiedresources.MetricValue{Percent: 40}
+	provider := &mockUnifiedResourceProvider{getAllFunc: func() []unifiedresources.Resource {
+		return []unifiedresources.Resource{{ID: "node-1", LastSeen: now.Add(time.Second), Metrics: &unifiedresources.ResourceMetrics{Disk: disk}}}
+	}}
+	patrol := NewPatrolService(nil, nil)
+	patrol.SetObjectiveStore(store)
+	patrol.SetUnifiedResourceProvider(provider)
+	tm := NewTriggerManager(TriggerManagerConfig{MaxPendingTriggers: 10})
+	patrol.SetTriggerManager(tm)
+	patrol.processObjectiveObservers(now.Add(time.Second))
+	installed, _ := store.Get(objective.ID, now.Add(time.Second))
+	if installed.Coverage.State != PatrolObjectiveCovered {
+		t.Fatalf("estate-wide objective coverage = %+v", installed.Coverage)
+	}
+	disk.Percent = 90
+	patrol.processObjectiveObservers(now.Add(11 * time.Second))
+	if tm.GetPendingCount() != 1 || tm.pendingTriggers[0].ObjectiveContext == nil || len(tm.pendingTriggers[0].ObjectiveContext.ObservedResourceIDs) != 1 || tm.pendingTriggers[0].ObjectiveContext.ObservedResourceIDs[0] != "node-1" {
+		t.Fatalf("estate-wide breach did not bind the current canonical resource: %+v", tm.pendingTriggers)
+	}
+}
+
+func TestPatrolResourceMetricObserverFailsClosedForStaleOrMissingEvidence(t *testing.T) {
+	now := time.Date(2026, 8, 14, 4, 0, 0, 0, time.UTC)
+	for _, test := range []struct {
+		name       string
+		resource   unifiedresources.Resource
+		wantDetail string
+	}{
+		{name: "stale", resource: unifiedresources.Resource{ID: "node-1", LastSeen: now.Add(-10 * time.Minute), Metrics: &unifiedresources.ResourceMetrics{Disk: &unifiedresources.MetricValue{Percent: 20}}}, wantDetail: "metric_stale"},
+		{name: "missing", resource: unifiedresources.Resource{ID: "node-1", LastSeen: now}, wantDetail: "metric_missing"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			store := NewInMemoryPatrolObjectiveStore()
+			objective, err := store.Create(CreatePatrolObjectiveInput{Brief: "Keep disk below 85 percent", ResourceIDs: []string{"node-1"}}, now)
+			if err != nil {
+				t.Fatalf("create objective: %v", err)
+			}
+			objective, err = store.ProposeObserver(objective.ID, ProposePatrolObserverInput{
+				ExpectedRevision: objective.Revision, Interpretation: "Disk remains below 85 percent.",
+				TriggerKinds: []PatrolObserverTriggerKind{PatrolObserverTriggerInterval},
+				ProbeJSON:    `{"runtime":"pulse-resource-metric/v1","metric":"disk_percent","operator":"less_than","threshold":85,"sample_interval_seconds":10,"wake_after_consecutive_failures":1,"max_evidence_age_seconds":60}`,
+				WakeEvidence: "Disk metric is high or unavailable.", RequirementsJSON: `{}`,
+			}, now)
+			if err != nil {
+				t.Fatalf("propose observer: %v", err)
+			}
+			patrol := NewPatrolService(nil, nil)
+			patrol.SetObjectiveStore(store)
+			patrol.SetUnifiedResourceProvider(&mockUnifiedResourceProvider{getAllFunc: func() []unifiedresources.Resource { return []unifiedresources.Resource{test.resource} }})
+			tm := NewTriggerManager(TriggerManagerConfig{MaxPendingTriggers: 10})
+			patrol.SetTriggerManager(tm)
+			patrol.processObjectiveObservers(now.Add(time.Second))
+			if tm.GetPendingCount() != 1 || tm.pendingTriggers[0].ObjectiveContext == nil || !strings.Contains(tm.pendingTriggers[0].ObjectiveContext.Evidence, test.wantDetail) {
+				t.Fatalf("fail-closed evidence = %+v", tm.pendingTriggers)
+			}
+		})
+	}
+}
+
+func TestValidatePatrolResourceMetricObserverRejectsUnsafeBounds(t *testing.T) {
+	now := time.Now().UTC()
+	store := NewInMemoryPatrolObjectiveStore()
+	objective, err := store.Create(CreatePatrolObjectiveInput{Brief: "Keep node cool", ResourceIDs: []string{"node-1"}}, now)
+	if err != nil {
+		t.Fatalf("create objective: %v", err)
+	}
+	objective, err = store.ProposeObserver(objective.ID, ProposePatrolObserverInput{
+		ExpectedRevision: objective.Revision, Interpretation: "Temperature stays safe.",
+		TriggerKinds: []PatrolObserverTriggerKind{PatrolObserverTriggerInterval},
+		ProbeJSON:    `{"runtime":"pulse-resource-metric/v1","metric":"temperature_celsius","operator":"less_than","threshold":1000,"sample_interval_seconds":10,"wake_after_consecutive_failures":2,"max_evidence_age_seconds":60}`,
+		WakeEvidence: "Temperature is high.", RequirementsJSON: `{}`,
+	}, now)
+	if err != nil {
+		t.Fatalf("propose observer: %v", err)
+	}
+	artifact, _ := store.GetObserverArtifact(objective.ID)
+	_, validationErr := validatePatrolObserverArtifact(objective, artifact)
+	if validationErr == nil || validationErr.code != "observer_threshold_out_of_bounds" {
+		t.Fatalf("threshold validation error = %v", validationErr)
+	}
+}
+
+func TestPatrolHTTPJSONObserverUsesScopedDiscoveryOriginSecretReferenceAndWakes(t *testing.T) {
+	requestObserved := make(chan struct{}, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/stats" || r.URL.Query().Get("window") != "active" {
+			t.Errorf("request target = %s", r.URL.String())
+		}
+		if r.Header.Get("X-Api-Key") != "stored-secret" {
+			t.Errorf("resolved auth header = %q", r.Header.Get("X-Api-Key"))
+		}
+		requestObserved <- struct{}{}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"playback":{"buffering_sessions":1}}`))
+	}))
+	defer server.Close()
+
+	discoveryStore, err := servicediscovery.NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("create discovery store: %v", err)
+	}
+	if err := discoveryStore.Save(&servicediscovery.ResourceDiscovery{
+		ID: "system-container:node1:101", ResourceType: servicediscovery.ResourceTypeSystemContainer,
+		ResourceID: "101", TargetID: "node1", SuggestedURL: server.URL + "/ignored-base",
+		UserSecrets: map[string]string{"jellyfin_api_key": "stored-secret"},
+	}); err != nil {
+		t.Fatalf("save discovery: %v", err)
+	}
+
+	now := time.Now().UTC()
+	store := NewInMemoryPatrolObjectiveStore()
+	objective, err := store.Create(CreatePatrolObjectiveInput{Brief: "Keep Jellyfin playback from buffering", ResourceIDs: []string{"101"}}, now)
+	if err != nil {
+		t.Fatalf("create objective: %v", err)
+	}
+	objective, err = store.ProposeObserver(objective.ID, ProposePatrolObserverInput{
+		ExpectedRevision: objective.Revision, Interpretation: "No active playback session is buffering.",
+		TriggerKinds: []PatrolObserverTriggerKind{PatrolObserverTriggerInterval},
+		ProbeJSON:    `{"runtime":"pulse-http-json/v1","discovery_id":"system-container:node1:101","request_path":"/api/stats?window=active","json_pointer":"/playback/buffering_sessions","operator":"less_than","expected":1,"auth":{"header_name":"X-Api-Key","secret_ref":"jellyfin_api_key"},"timeout_seconds":2,"sample_interval_seconds":10,"wake_after_consecutive_failures":1}`,
+		WakeEvidence: "The local service API reports one or more buffering sessions.", RequirementsJSON: `{}`,
+	}, now)
+	if err != nil {
+		t.Fatalf("propose HTTP JSON observer: %v", err)
+	}
+	patrol := NewPatrolService(nil, nil)
+	patrol.SetObjectiveStore(store)
+	patrol.SetDiscoveryStore(discoveryStore)
+	tm := NewTriggerManager(TriggerManagerConfig{MaxPendingTriggers: 10})
+	patrol.SetTriggerManager(tm)
+	patrol.processObjectiveObservers(now.Add(time.Second))
+
+	select {
+	case <-requestObserved:
+	case <-time.After(3 * time.Second):
+		t.Fatal("HTTP JSON observer did not execute")
+	}
+	deadline := time.Now().Add(2 * time.Second)
+	for tm.GetPendingCount() != 1 && time.Now().Before(deadline) {
+		time.Sleep(5 * time.Millisecond)
+	}
+	if tm.GetPendingCount() != 1 {
+		t.Fatalf("HTTP JSON breach did not wake Patrol; pending=%d", tm.GetPendingCount())
+	}
+	queued := tm.pendingTriggers[0]
+	if queued.ObjectiveContext == nil || !strings.Contains(queued.ObjectiveContext.Evidence, "buffering_sessions") || !strings.Contains(queued.ObjectiveContext.Evidence, "actual_1") {
+		t.Fatalf("HTTP JSON objective evidence = %+v", queued.ObjectiveContext)
+	}
+	installed, _ := store.Get(objective.ID, time.Now().UTC())
+	if installed.Observer == nil || installed.Observer.State != PatrolObserverInstalled || installed.Coverage.State != PatrolObjectiveCovered {
+		t.Fatalf("HTTP observer coverage = %+v / %+v", installed.Observer, installed.Coverage)
+	}
+}
+
+func TestValidatePatrolHTTPJSONObserverRejectsNetworkAuthorityAndScopeEscapes(t *testing.T) {
+	now := time.Now().UTC()
+	store := NewInMemoryPatrolObjectiveStore()
+	objective, err := store.Create(CreatePatrolObjectiveInput{Brief: "Keep service healthy", ResourceIDs: []string{"101"}}, now)
+	if err != nil {
+		t.Fatalf("create objective: %v", err)
+	}
+	objective, err = store.ProposeObserver(objective.ID, ProposePatrolObserverInput{
+		ExpectedRevision: objective.Revision, Interpretation: "Service health is true.",
+		TriggerKinds: []PatrolObserverTriggerKind{PatrolObserverTriggerInterval},
+		ProbeJSON:    `{"runtime":"pulse-http-json/v1","discovery_id":"system-container:node1:102","request_path":"//169.254.169.254/latest/meta-data","json_pointer":"/healthy","operator":"equals","expected":true,"timeout_seconds":2,"sample_interval_seconds":10,"wake_after_consecutive_failures":1}`,
+		WakeEvidence: "Health is false.", RequirementsJSON: `{}`,
+	}, now)
+	if err != nil {
+		t.Fatalf("propose observer: %v", err)
+	}
+	artifact, _ := store.GetObserverArtifact(objective.ID)
+	_, validationErr := validatePatrolObserverArtifact(objective, artifact)
+	if validationErr == nil || validationErr.code != "observer_http_path_invalid" {
+		t.Fatalf("model-supplied network authority validation = %v", validationErr)
+	}
+
+	artifact.Probe = []byte(`{"runtime":"pulse-http-json/v1","discovery_id":"system-container:node1:102","request_path":"/api/health","json_pointer":"/healthy","operator":"equals","expected":true,"timeout_seconds":2,"sample_interval_seconds":10,"wake_after_consecutive_failures":1}`)
+	probe, validationErr := validatePatrolObserverArtifact(objective, artifact)
+	if validationErr != nil {
+		t.Fatalf("valid HTTP artifact rejected before binding: %v", validationErr)
+	}
+	discoveryStore, err := servicediscovery.NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("create discovery store: %v", err)
+	}
+	if err := discoveryStore.Save(&servicediscovery.ResourceDiscovery{
+		ID: "system-container:node1:102", ResourceType: servicediscovery.ResourceTypeSystemContainer,
+		ResourceID: "102", TargetID: "node1", SuggestedURL: "http://127.0.0.1:8080",
+	}); err != nil {
+		t.Fatalf("save discovery: %v", err)
+	}
+	patrol := NewPatrolService(nil, nil)
+	patrol.SetDiscoveryStore(discoveryStore)
+	if bindingErr := patrol.validatePatrolObserverBinding(objective, probe, patrolRuntimeState{}); bindingErr == nil || bindingErr.code != "observer_discovery_out_of_scope" {
+		t.Fatalf("out-of-scope discovery binding = %v", bindingErr)
 	}
 }
 

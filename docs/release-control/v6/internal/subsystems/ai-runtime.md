@@ -6990,10 +6990,19 @@ still contain `auto_fix_count` load cleanly; the unknown key is ignored.
 
 `internal/ai/patrol_observer_runtime.go` owns the executable observer ABIs for
 retained Patrol objectives. The model may author the meaning and predicate, but
-it cannot author executable code, network authority, or lifecycle authority.
+it cannot author executable code, an HTTP origin, secret values, mutation
+authority, or lifecycle authority.
 Core strictly decodes `pulse-resource-state/v1` for canonical resource status
 and `pulse-availability-state/v1` for the outcome of an existing canonical
-agentless availability target. Both require explicit canonical resource scope,
+agentless availability target. `pulse-resource-metric/v1` adds bounded
+comparisons over fresh canonical CPU, memory, disk, and temperature evidence.
+`pulse-http-json/v1` adds bounded concurrent GET-only JSON-pointer assertions
+whose origin and optional authentication value are resolved from an exact
+in-scope encrypted discovery record. It accepts a relative path and a secret
+reference name, never an origin or credential value; restricted outbound HTTP
+blocks metadata/link-local targets and cross-origin redirects, while timeout
+and response size are capped. The ABIs require canonical resource scope (with
+estate-wide objectives dynamically expanded through unified resources),
 an interval trigger, an empty external-requirements object, a 10-to-300-second
 local sample interval, and a bounded consecutive-failure window. The
 availability ABI accepts only an exact canonical target ID and
@@ -7005,6 +7014,13 @@ than being interpreted as objective failure. Unknown fields and unsupported
 runtimes, triggers, requirements, paths, operators, or values also fail closed
 and persist a safe machine reason in the `rejected` or `degraded` state while
 coverage remains truthful.
+
+Creating or materially changing an active retained objective queues one
+`objective_changed` scoped run carrying its exact ID, revision, brief and
+optional context. Distinct objectives never deduplicate together; estate-wide
+objectives expand to current canonical resource IDs before the run. This wakes
+the model once to design coverage rather than waiting for the next scheduled
+Patrol cycle.
 
 Accepted observers transition through proposed, validated, and installed under
 core authority. Resource observers evaluate Pulse's canonical `ReadState`

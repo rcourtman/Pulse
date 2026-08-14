@@ -148,6 +148,10 @@ vi.mock('@/api/patrol', () => ({
   updatePatrolAutonomySettings: (...args: unknown[]) => updatePatrolAutonomySettingsMock(...args),
   triggerPatrolRun: (...args: unknown[]) => triggerPatrolRunMock(...args),
   getPatrolRunHistory: (...args: unknown[]) => getPatrolRunHistoryMock(...args),
+  getPatrolObjectives: vi.fn().mockResolvedValue([]),
+  createPatrolObjective: vi.fn(),
+  updatePatrolObjective: vi.fn(),
+  deletePatrolObjective: vi.fn(),
 }));
 
 vi.mock('@/api/ai', () => ({
@@ -170,6 +174,11 @@ vi.mock('@/api/aiChat', () => ({
 
 vi.mock('@/utils/apiClient', () => ({
   apiFetchJSON: (...args: unknown[]) => apiFetchJSONMock(...args),
+  getOrgID: () => '',
+}));
+
+vi.mock('@/hooks/useResources', () => ({
+  useResources: () => ({ resources: () => [] }),
 }));
 
 vi.mock('@/stores/license', () => ({

@@ -6,6 +6,7 @@ import { PatrolIntelligenceHeader } from './PatrolIntelligenceHeader';
 import { PatrolIntelligenceBanners } from './PatrolIntelligenceBanners';
 import { PatrolIntelligenceWorkspace } from './PatrolIntelligenceWorkspace';
 import { PatrolAttentionWorkbench } from './PatrolAttentionWorkbench';
+import { PatrolObjectivesPanel } from './PatrolObjectivesPanel';
 
 export function PatrolIntelligenceSurface() {
   const state = usePatrolIntelligenceState();
@@ -24,6 +25,7 @@ export function PatrolIntelligenceSurface() {
     <div class="space-y-6">
       <PatrolIntelligenceHeader state={state} />
       <PatrolIntelligenceBanners state={state} />
+      <PatrolObjectivesPanel />
       <PatrolAttentionWorkbench onOpenFindings={openFindings} />
 
       <details

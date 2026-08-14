@@ -66,6 +66,9 @@ content-free. The proposal is not executable and carries no infrastructure
 mutation authority; any future validator or installer must preserve this
 confidentiality boundary while enforcing declared secret references rather
 than accepting secret values.
+The canonical and shipped privacy documents must state this retained-data and
+telemetry boundary explicitly and remain byte-for-byte synchronized, so the
+promise visible inside the product cannot drift from the repository policy.
 
 ## Canonical Files
 

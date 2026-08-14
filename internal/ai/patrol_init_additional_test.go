@@ -10,6 +10,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/knowledge"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/servicediscovery"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 )
 
 type mockLearningProvider struct{}
@@ -148,6 +149,42 @@ func TestTruncateScopeContext(t *testing.T) {
 	}
 	if !strings.HasSuffix(truncateScopeContext("long-value", 6), "...") {
 		t.Fatalf("expected ellipsis for truncated context")
+	}
+}
+
+func TestSeedObjectiveCredentialReferencesExposesNamesWithoutValues(t *testing.T) {
+	discoveryStore, err := servicediscovery.NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("create discovery store: %v", err)
+	}
+	if err := discoveryStore.Save(&servicediscovery.ResourceDiscovery{
+		ID:           "system-container:node1:101",
+		ResourceType: servicediscovery.ResourceTypeSystemContainer,
+		ResourceID:   "101",
+		TargetID:     "node1",
+		UserSecrets: map[string]string{
+			"jellyfin_api_key": "must-never-reach-the-model",
+			"session_token":    "also-private",
+		},
+	}); err != nil {
+		t.Fatalf("save discovery: %v", err)
+	}
+
+	ps := NewPatrolService(nil, nil)
+	ps.SetDiscoveryStore(discoveryStore)
+	seed := ps.seedObjectiveCredentialReferences(&PatrolScope{
+		ResourceIDs:      []string{"101"},
+		ObjectiveContext: &aicontracts.PatrolObjectiveContext{ObjectiveID: "objective-1"},
+	})
+	for _, expected := range []string{"system-container:node1:101", "jellyfin_api_key", "session_token", "Values are never model-visible"} {
+		if !strings.Contains(seed, expected) {
+			t.Fatalf("credential reference seed missing %q: %s", expected, seed)
+		}
+	}
+	for _, secretValue := range []string{"must-never-reach-the-model", "also-private"} {
+		if strings.Contains(seed, secretValue) {
+			t.Fatalf("credential value leaked into seed: %q", secretValue)
+		}
 	}
 }
 

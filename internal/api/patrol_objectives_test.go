@@ -14,6 +14,9 @@ import (
 
 func TestPatrolObjectivesHTTPContractAndOptimisticRevision(t *testing.T) {
 	handler := NewAISettingsHandler(nil, nil, nil)
+	handler.SetUnifiedResourceProvider(stubUnifiedResourceProvider{})
+	triggerManager := ai.NewTriggerManager(ai.TriggerManagerConfig{MaxPendingTriggers: 10})
+	handler.GetAIService(t.Context()).GetPatrolService().SetTriggerManager(triggerManager)
 
 	createRequest := httptest.NewRequest(http.MethodPost, "/api/ai/patrol/objectives", strings.NewReader(`{
 		"brief":"Keep Jellyfin playback smooth",
@@ -37,6 +40,10 @@ func TestPatrolObjectivesHTTPContractAndOptimisticRevision(t *testing.T) {
 	}
 	if created.Observer != nil {
 		t.Fatalf("public create unexpectedly accepted an observer: %+v", created.Observer)
+	}
+	patrol := handler.GetAIService(createRequest.Context()).GetPatrolService()
+	if patrol == nil || patrol.GetTriggerManager() == nil || patrol.GetTriggerManager().GetPendingCount() != 1 {
+		t.Fatal("created objective did not immediately queue one coverage-planning Patrol run")
 	}
 	store := handler.patrolObjectiveStore(createRequest)
 	if store == nil {

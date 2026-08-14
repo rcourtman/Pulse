@@ -2548,6 +2548,14 @@ Agent` secondary handoff against the live setup wizard instead of relying
 
 ## Current State
 
+### Retained Patrol objectives do not expand agent lifecycle authority
+
+The shared `internal/api` retained-objective endpoints can queue read-only
+Patrol coverage planning, but they cannot enroll, upgrade, restart, revoke, or
+otherwise mutate an agent. Metric and application observers consume canonical
+reported/discovered evidence; any later repair still crosses the existing
+agent capability, preflight, approval, dispatch, and verification boundaries.
+
 ### Local command and REST custom metrics are a bounded reporting module
 
 The host agent now accepts an optional private version-1 YAML file through

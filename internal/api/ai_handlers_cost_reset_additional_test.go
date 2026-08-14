@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 )
@@ -143,10 +144,6 @@ func TestHandleResetAICostHistory_NoUsageFile(t *testing.T) {
 func TestHandleResetAICostHistory_BackupRenameFail(t *testing.T) {
 	t.Parallel()
 
-	if os.Getuid() == 0 {
-		t.Skip("cannot test permission errors as root")
-	}
-
 	tmp := t.TempDir()
 	cfg := &config.Config{DataPath: tmp}
 	persistence := config.NewConfigPersistence(tmp)
@@ -157,13 +154,16 @@ func TestHandleResetAICostHistory_BackupRenameFail(t *testing.T) {
 		t.Fatalf("write usage file: %v", err)
 	}
 
-	// Make the directory read-only so os.Rename fails.
-	if err := os.Chmod(tmp, 0555); err != nil {
-		t.Fatalf("chmod: %v", err)
+	// Occupy the timestamped backup destinations with directories. Renaming a
+	// file over a directory fails deterministically on every supported platform,
+	// unlike permission-bit tests on privileged or ACL-backed filesystems.
+	now := time.Now().UTC()
+	for offset := -2; offset <= 5; offset++ {
+		backupPath := usagePath + ".bak-" + now.Add(time.Duration(offset)*time.Second).Format("20060102-150405")
+		if err := os.Mkdir(backupPath, 0755); err != nil {
+			t.Fatalf("occupy backup path: %v", err)
+		}
 	}
-	t.Cleanup(func() {
-		_ = os.Chmod(tmp, 0755) // restore so TempDir cleanup works
-	})
 
 	handler := newTestAISettingsHandler(cfg, persistence, nil)
 

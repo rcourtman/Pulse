@@ -106,6 +106,10 @@ describe('systemSettings store', () => {
 
   it('documents telemetry retention and field-level rationale in the privacy doc', () => {
     const privacyDoc = readFileSync(path.join(repoRoot, 'docs', 'PRIVACY.md'), 'utf8');
+    const shippedPrivacyDoc = readFileSync(
+      path.join(frontendRoot, 'public', 'docs', 'PRIVACY.md'),
+      'utf8',
+    );
 
     expect(privacyDoc).toContain('## Usage Data');
     expect(privacyDoc).toContain('Pulse has one outbound usage-data scope');
@@ -127,6 +131,7 @@ describe('systemSettings store', () => {
     expect(privacyDoc).not.toContain('completed-work proof');
     expect(privacyDoc).not.toContain('resolved-work proof');
     expect(privacyDoc).not.toContain('governed-operation proof');
+    expect(shippedPrivacyDoc).toBe(privacyDoc);
   });
 
   it('keeps internal commercial compatibility switches out of public configuration docs', () => {

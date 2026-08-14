@@ -61,6 +61,7 @@ sources, and retains the note as operator context.
 33. `frontend-modern/src/stores/patrolAttention.ts`
 34. `tests/integration/tests/91-operational-trust-attention-workbench.spec.ts`
 35. `frontend-modern/src/api/patrolAttention.ts`
+36. `frontend-modern/src/features/patrol/PatrolObjectivesPanel.tsx`
 
 ## Shared Boundaries
 
@@ -142,14 +143,25 @@ artifact is excluded from public objective reads and later prompt seeds. The
 public API cannot attach an observer or author coverage, and the model-facing
 tool cannot validate, install, execute, lease, or advance its proposal.
 
-Core currently validates and installs one generic declarative ABI,
-`pulse-resource-state/v1`, for an objective with explicit canonical resource
-scope. It compares the canonical resource `status` with a bounded `equals` or
-`not_equals` predicate at a 10-to-300-second local interval, requires an empty
-external-requirements object, rejects unknown JSON fields, arbitrary code,
-network, filesystem, and secret requirements, and wakes the model only after a
-bounded consecutive-failure window. The installer is sandboxed by construction:
-it registers typed data, not a process or script. Its runtime persists a
+Core validates and installs four generic declarative ABIs. `pulse-resource-state/v1`
+compares canonical resource status; `pulse-resource-metric/v1` compares fresh
+canonical CPU, memory, disk, or temperature telemetry; and
+`pulse-availability-state/v1` consumes an existing enabled canonical target.
+`pulse-http-json/v1` performs a bounded GET and typed JSON-pointer assertion
+against an exact in-scope discovery's core-owned Suggested Web URL. The model
+may supply only the relative path, selector, predicate, bounded timing, and an
+optional encrypted-discovery secret reference; it cannot supply an origin,
+credential value, request body, redirect authority, or executable code. Core
+includes only the names of credential references from scoped discovery records
+in objective-planning model context; encrypted values never enter the prompt.
+Core limits concurrency, timeout and response size, blocks metadata/link-local
+targets and cross-origin redirects, and fails closed when discovery, scope,
+freshness, telemetry, secret reference, or response evidence is missing.
+All ABIs use a 10-to-300-second local interval, an empty external-requirements
+object, strict unknown-field rejection, and a bounded consecutive-failure
+window. Estate-wide objectives bind to the current canonical unified-resource
+set at evaluation time. The installer is sandboxed by construction: it
+registers typed data, not a process or script. Its runtime persists a
 renewable health lease without incrementing the operator objective revision,
 batches every due lease in a sweep into one encrypted persistence transaction,
 and queues one scoped `objective_evidence` Patrol check on the transition into
@@ -158,6 +170,13 @@ outcome remain separate: a healthy observer may report that its objective is
 currently breached. Editing the retained brief, optional context, or resource
 scope disables the existing observer and clears its lease, because an artifact
 validated against old intent cannot remain proof of coverage for new intent.
+
+Creating or materially updating an active objective queues an immediate,
+objective-identity-deduplicated coverage-planning Patrol run. The first-party
+`PatrolObjectivesPanel` exposes one outcome statement, optional context and
+optional resource scope, then shows the server-owned covered, degraded, or
+uncovered truth with pause, resume, edit, and delete controls. Saving text is
+never presented as equivalent to active protection.
 
 Unsupported trigger or probe designs transition to `rejected` with an explicit
 machine validation reason and uncovered coverage. A rejected or degraded

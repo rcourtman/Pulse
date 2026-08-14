@@ -88,7 +88,7 @@ describe('ResourceOperatorStateSection render with capabilityNames: null', () =>
     // The automatic-actions block renders (the resource has an eligible
     // capability) with its toggle off and no phantom selection derived
     // from the null allowlist.
-    expect(screen.getByText('Automatic actions')).toBeTruthy();
+    expect(screen.getByLabelText('Automatic actions')).toBeTruthy();
     expect(screen.queryByText('Allowed actions')).toBeNull();
   });
 });

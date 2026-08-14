@@ -18,6 +18,10 @@ import {
   createPatrolAutopilotAcknowledgement,
   revokePatrolAutopilotAcknowledgement,
   updatePatrolAutonomySettings,
+  getPatrolObjectives,
+  createPatrolObjective,
+  updatePatrolObjective,
+  deletePatrolObjective,
   type Finding as PatrolFinding,
 } from '@/api/patrol';
 import { apiFetchJSON } from '@/utils/apiClient';
@@ -28,6 +32,32 @@ describe('patrol api', () => {
   beforeEach(() => {
     apiFetchJSONMock.mockReset();
     apiFetchJSONMock.mockResolvedValue([] as any);
+  });
+
+  it('uses the retained-objective contract with encoded identities and revisions', async () => {
+    apiFetchJSONMock.mockResolvedValueOnce({ objectives: [] } as any);
+    await expect(getPatrolObjectives()).resolves.toEqual([]);
+    expect(apiFetchJSONMock).toHaveBeenLastCalledWith('/api/ai/patrol/objectives');
+
+    await createPatrolObjective({ brief: 'Keep cameras available', resource_ids: ['camera-1'] });
+    expect(apiFetchJSONMock).toHaveBeenLastCalledWith('/api/ai/patrol/objectives', {
+      method: 'POST',
+      body: JSON.stringify({ brief: 'Keep cameras available', resource_ids: ['camera-1'] }),
+      headers: { 'Content-Type': 'application/json' },
+    });
+
+    await updatePatrolObjective('objective/one', { revision: 4, status: 'paused' });
+    expect(apiFetchJSONMock).toHaveBeenLastCalledWith('/api/ai/patrol/objectives/objective%2Fone', {
+      method: 'PATCH',
+      body: JSON.stringify({ revision: 4, status: 'paused' }),
+      headers: { 'Content-Type': 'application/json' },
+    });
+
+    await deletePatrolObjective('objective/one', 5);
+    expect(apiFetchJSONMock).toHaveBeenLastCalledWith(
+      '/api/ai/patrol/objectives/objective%2Fone?revision=5',
+      { method: 'DELETE' },
+    );
   });
 
   it('uses server acknowledgement and activation endpoints for Autopilot', async () => {
