@@ -1022,7 +1022,7 @@ func triageFlagsForDecisionFloor(flags []TriageFlag) []TriageFlag {
 			}
 		}
 	}
-	for _, category := range []string{"health", "backup", "connectivity", "anomaly"} {
+	for _, category := range []string{"health", "reliability", "backup", "connectivity", "anomaly"} {
 		appendCategory(category)
 	}
 	return selected
@@ -1043,7 +1043,7 @@ func triageFlagsToDetectedSignals(flags []TriageFlag) []DetectedSignal {
 
 		category := strings.ToLower(strings.TrimSpace(flag.Category))
 		switch category {
-		case "performance", "capacity", "backup":
+		case "performance", "capacity", "reliability", "backup":
 			// Already canonical finding categories.
 		case "health", "connectivity":
 			category = string(FindingCategoryReliability)

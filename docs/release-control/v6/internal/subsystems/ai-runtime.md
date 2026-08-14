@@ -6444,17 +6444,18 @@ symptom is established; causal analysis belongs to the separate Pro
 investigation track. Quiet triage is not a deterministic replacement for
 model-owned assessment.
 High-confidence deterministic lifecycle flags must nevertheless retain a
-model-owned decision opportunity before Watch completes. Health, backup,
-connectivity, and learned-anomaly candidates join the existing unmatched signal
-evaluation floor after the main agentic pass; ordinary CPU, memory, and disk
-threshold crossings stay with Pulse alerting and do not trigger a duplicate
-Patrol decision pass. Candidates already covered by a model-authored finding
-are skipped, while at most twenty remaining candidates, prioritized with direct
-lifecycle failures before learned anomalies, receive one bounded evidence-only
-model pass. Pulse must not translate a flag directly into a finding or choose
-remediation; this floor exists only so unrelated existing-finding lifecycle
-work or a provider's sequential tool calls cannot silently consume the sole
-decision opportunity for a confirmed scoped symptom.
+model-owned decision opportunity before Watch completes. Health, reliability
+(including provider-confirmed repeated restarts), backup, connectivity, and
+learned-anomaly candidates join the existing unmatched signal evaluation floor
+after the main agentic pass; ordinary CPU, memory, and disk threshold crossings
+stay with Pulse alerting and do not trigger a duplicate Patrol decision pass.
+Candidates already covered by a model-authored finding are skipped, while at
+most twenty remaining candidates, prioritized with direct lifecycle failures
+before learned anomalies, receive one bounded evidence-only model pass. Pulse
+must not translate a flag directly into a finding or choose remediation; this
+floor exists only so unrelated existing-finding lifecycle work, a provider's
+sequential tool calls, or a tool-free conclusion cannot silently consume the
+sole decision opportunity for a confirmed scoped symptom.
 Model-authored structured findings remain concise for continuous operation:
 description uses at most three short sentences, impact one sentence, evidence
 three concrete facts, and recommendation two short sentences, without

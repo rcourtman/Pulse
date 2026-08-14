@@ -58,6 +58,7 @@ func TestEvalPromptBuilders(t *testing.T) {
 func TestTriageFlagsToDetectedSignalsPreservesModelOwnedCandidates(t *testing.T) {
 	flags := []TriageFlag{
 		{ResourceID: "app-1", ResourceName: "api", ResourceType: "app-container", Category: "health", Severity: "warning", Reason: "health check is unhealthy"},
+		{ResourceID: "app-2", ResourceName: "worker", ResourceType: "app-container", Category: "reliability", Severity: "warning", Reason: "provider reported five restarts"},
 		{ResourceID: "node-1", ResourceName: "node", ResourceType: "node", Category: "connectivity", Severity: "critical", Reason: "node is unreachable"},
 		{ResourceID: "vm-1", ResourceName: "db", ResourceType: "vm", Category: "anomaly", Metric: "memory", Severity: "watch", Reason: "memory differs from baseline"},
 		{ResourceID: "storage-1", ResourceName: "pool", ResourceType: "storage", Category: "anomaly", Metric: "usage", Severity: "warning", Reason: "usage growth differs from baseline"},
@@ -66,10 +67,10 @@ func TestTriageFlagsToDetectedSignalsPreservesModelOwnedCandidates(t *testing.T)
 	}
 
 	signals := triageFlagsToDetectedSignals(flags)
-	if len(signals) != 5 {
-		t.Fatalf("signal count = %d, want 5: %+v", len(signals), signals)
+	if len(signals) != 6 {
+		t.Fatalf("signal count = %d, want 6: %+v", len(signals), signals)
 	}
-	wantCategories := []string{"reliability", "reliability", "performance", "capacity", "general"}
+	wantCategories := []string{"reliability", "reliability", "reliability", "performance", "capacity", "general"}
 	for i, wantCategory := range wantCategories {
 		if signals[i].Category != wantCategory {
 			t.Fatalf("signal %d category = %q, want %q", i, signals[i].Category, wantCategory)
@@ -88,15 +89,16 @@ func TestTriageFlagsForDecisionFloorPrioritizesLifecycleEvidence(t *testing.T) {
 		{ResourceID: "metric", Category: "performance", Reason: "ordinary threshold crossing"},
 		{ResourceID: "anomaly", Category: "anomaly", Reason: "learned anomaly"},
 		{ResourceID: "health", Category: "health", Reason: "failed health check"},
+		{ResourceID: "restart", Category: "reliability", Reason: "provider reported five restarts"},
 		{ResourceID: "backup", Category: "backup", Reason: "backup failed"},
 		{ResourceID: "network", Category: "connectivity", Reason: "endpoint unreachable"},
 	}
 
 	selected := triageFlagsForDecisionFloor(flags)
-	if len(selected) != 4 {
-		t.Fatalf("selected = %+v, want four lifecycle/anomaly candidates", selected)
+	if len(selected) != 5 {
+		t.Fatalf("selected = %+v, want five lifecycle/anomaly candidates", selected)
 	}
-	wantIDs := []string{"health", "backup", "network", "anomaly"}
+	wantIDs := []string{"health", "restart", "backup", "network", "anomaly"}
 	for i, wantID := range wantIDs {
 		if selected[i].ResourceID != wantID {
 			t.Fatalf("selected[%d] = %q, want %q", i, selected[i].ResourceID, wantID)
