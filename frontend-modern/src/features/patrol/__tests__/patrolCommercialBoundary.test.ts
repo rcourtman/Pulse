@@ -11,17 +11,13 @@ describe('patrol commercial boundary', () => {
     expect(patrolIntelligenceBannersSource).toContain('!state.showBlockedBanner()');
     expect(patrolIntelligenceBannersSource).toContain('!state.shouldShowPatrolSetupOnly()');
     expect(patrolIntelligenceHeaderSource).toContain('presentationPolicyHidesUpgradePrompts');
-    expect(patrolIntelligenceHeaderSource).toContain('presentationPolicyHidesCommercialSurfaces');
     expect(patrolIntelligenceHeaderSource).toContain('!presentationPolicyHidesUpgradePrompts()');
-    expect(patrolIntelligenceHeaderSource).toContain('!commercialSurfacesHidden()');
     expect(patrolIntelligenceHeaderSource).toContain('state.autoFixLocked()');
     expect(patrolIntelligenceHeaderSource).toContain(
       "autonomyAvailability().kind === 'runtime_locked'",
     );
-    expect(patrolIntelligenceHeaderSource).toContain('showAutonomyPlanBillingAction');
-    expect(patrolIntelligenceHeaderSource).toContain(
-      "autonomyAvailability().kind === 'plan_locked'",
-    );
+    expect(patrolIntelligenceHeaderSource).toContain('commercialSurfacesHidden: true');
+    expect(patrolIntelligenceHeaderSource).not.toContain('showAutonomyPlanBillingAction');
     expect(patrolAutonomyAvailabilitySource).toContain('Plans & Billing');
     expect(patrolAutonomyAvailabilitySource).toContain('input.upgradePromptsHidden');
     expect(patrolIntelligenceHeaderSource).toContain('getPatrolAutonomyAvailabilityPresentation');
@@ -36,7 +32,8 @@ describe('patrol commercial boundary', () => {
     expect(patrolIntelligenceHeaderSource).toContain(
       '<Show when={shouldShowAutonomyActionColumn()}>',
     );
-    expect(patrolIntelligenceHeaderSource).toContain('showProBadge');
+    expect(patrolIntelligenceHeaderSource).not.toContain('showProBadge');
+    expect(patrolIntelligenceHeaderSource).not.toContain('Plans & Billing');
     expect(patrolIntelligenceHeaderSource).not.toContain('const isProLocked = () =>');
     expect(patrolIntelligenceHeaderSource).not.toContain('requires Pulse Pro');
   });

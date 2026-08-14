@@ -20,7 +20,6 @@ import ShieldOffIcon from 'lucide-solid/icons/shield-off';
 import SparklesIcon from 'lucide-solid/icons/sparkles';
 import XIcon from 'lucide-solid/icons/x';
 import type {
-  AttentionFilter,
   AttentionActionOffer,
   AttentionItem,
   AttentionItemDetail,
@@ -34,7 +33,6 @@ import {
 } from '@/api/patrolAttention';
 import { ResourceActionsAPI } from '@/api/resourceActions';
 import { Button, ButtonLink } from '@/components/shared/Button';
-import { LabeledFilterToggleGroup } from '@/components/shared/FilterToolbar';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 import { MetadataBadge, type MetadataBadgeTone } from '@/components/shared/MetadataBadge';
 import { ActionReviewDialog } from '@/features/actions/ActionReviewDialog';
@@ -56,19 +54,23 @@ import type { EvidenceEnvelope } from '@/types/operationalTrust';
 import type { ActionDetailResponse } from '@/types/actionAudit';
 import { getAlertResourceIncidentAcknowledgedByLabel } from '@/utils/alertIncidentPresentation';
 import { formatRelativeTime } from '@/utils/format';
+import type { PatrolAutonomyLevel } from '@/api/patrol';
+import {
+  partitionPatrolAttention,
+  PATROL_AUTONOMY_EXPERIENCE,
+  type PatrolAttentionDecision,
+} from './patrolHomePresentation';
 
 const PRIMARY_EVIDENCE_LIMIT = 3;
+const PRIMARY_DECISION_LIMIT = 5;
 
-const FILTERS: Array<{ id: AttentionFilter; label: string }> = [
-  { id: 'active', label: 'Active' },
-  { id: 'open', label: 'Open' },
-  { id: 'acknowledged', label: 'Acknowledged' },
-  { id: 'suppressed', label: 'Suppressed' },
-  { id: 'stale_unknown', label: 'Stale or unknown' },
-  { id: 'resolved', label: 'Recent resolved' },
-];
-
-export function PatrolAttentionWorkbench(props: { onOpenFindings?: () => void } = {}) {
+export function PatrolAttentionWorkbench(
+  props: {
+    autonomyLevel?: PatrolAutonomyLevel;
+    autonomyLocked?: boolean;
+    onOpenFindings?: () => void;
+  } = {},
+) {
   const location = useLocation();
   const [selectedItemId, setSelectedItemId] = createSignal('');
   const [actionDetail, setActionDetail] = createSignal<ActionDetailResponse | null>(null);
@@ -76,40 +78,28 @@ export function PatrolAttentionWorkbench(props: { onOpenFindings?: () => void } 
   const [actionError, setActionError] = createSignal('');
   const [lifecycleBusy, setLifecycleBusy] = createSignal(false);
   const [lifecycleError, setLifecycleError] = createSignal('');
+  const [showAllDecisions, setShowAllDecisions] = createSignal(false);
   const itemButtons = new Map<string, HTMLButtonElement>();
   let detailPanel: HTMLDivElement | undefined;
   let actionTrigger: HTMLButtonElement | undefined;
 
   const selectedDetail = () => patrolAttentionStore.selectedDetail();
   const summary = () => patrolAttentionStore.summary();
-  const filterCount = (filter: AttentionFilter): number | undefined => {
-    const value = summary();
-    if (!value) return undefined;
-    switch (filter) {
-      case 'active':
-        return value.activeCount;
-      case 'open':
-        return value.openCount;
-      case 'acknowledged':
-        return value.acknowledgedCount;
-      case 'suppressed':
-        return value.suppressedCount;
-      case 'stale_unknown':
-        return value.uncertainCount;
-      case 'resolved':
-        return value.resolvedCount;
-      default:
-        return undefined;
-    }
-  };
-  const attentionFilterOptions = createMemo(() =>
-    FILTERS.map((option) => {
-      const count = filterCount(option.id);
-      return {
-        value: option.id,
-        label: count === undefined ? option.label : `${option.label} ${count}`,
-      };
-    }),
+  const effectiveAutonomyLevel = createMemo<PatrolAutonomyLevel>(() =>
+    props.autonomyLocked ? 'monitor' : (props.autonomyLevel ?? 'monitor'),
+  );
+  const autonomyExperience = createMemo(() => PATROL_AUTONOMY_EXPERIENCE[effectiveAutonomyLevel()]);
+  const attention = createMemo(() =>
+    partitionPatrolAttention(
+      patrolAttentionStore.items(),
+      props.autonomyLevel ?? 'monitor',
+      props.autonomyLocked ?? false,
+    ),
+  );
+  const visibleDecisions = createMemo(() =>
+    showAllDecisions()
+      ? attention().needsUser
+      : attention().needsUser.slice(0, PRIMARY_DECISION_LIMIT),
   );
 
   const loadCurrentFilter = () => patrolAttentionStore.load(patrolAttentionStore.filter());
@@ -132,10 +122,6 @@ export function PatrolAttentionWorkbench(props: { onOpenFindings?: () => void } 
     replaceAttentionLocation('');
     void patrolAttentionStore.select(null);
     queueMicrotask(() => itemButtons.get(previous)?.focus());
-  };
-  const changeFilter = (filter: AttentionFilter) => {
-    closeDetail();
-    void patrolAttentionStore.load(filter);
   };
   const reviewAction = async (
     item: AttentionItem,
@@ -205,6 +191,7 @@ export function PatrolAttentionWorkbench(props: { onOpenFindings?: () => void } 
     const deepLinkedItem = parsePatrolAttentionItemId(location.search);
     const currentItem = untrack(selectedItemId);
     if (deepLinkedItem && deepLinkedItem !== currentItem) {
+      setShowAllDecisions(true);
       setSelectedItemId(deepLinkedItem);
       void patrolAttentionStore.select(deepLinkedItem);
       scrollDetailIntoView();
@@ -214,10 +201,9 @@ export function PatrolAttentionWorkbench(props: { onOpenFindings?: () => void } 
     }
   });
 
-  const activeCountLabel = createMemo(() => {
-    const count = summary()?.activeCount;
-    if (count === undefined) return 'Attention count unavailable';
-    return `${count} active attention ${count === 1 ? 'item' : 'items'}`;
+  const decisionCountLabel = createMemo(() => {
+    const count = attention().needsUser.length;
+    return `${count} ${count === 1 ? 'decision needs' : 'decisions need'} you`;
   });
 
   return (
@@ -230,22 +216,21 @@ export function PatrolAttentionWorkbench(props: { onOpenFindings?: () => void } 
           <div class="min-w-0">
             <div class="flex flex-wrap items-center gap-2">
               <h2 id="patrol-attention-heading" class="text-base font-semibold text-base-content">
-                Needs attention
+                Needs you
               </h2>
               <Show when={summary()}>
                 <MetadataBadge
-                  tone={(summary()?.activeCount ?? 0) > 0 ? 'warning' : 'success'}
+                  tone={attention().needsUser.length > 0 ? 'warning' : 'success'}
                   size="sm"
                   shape="rounded"
-                  aria-label={activeCountLabel()}
+                  aria-label={decisionCountLabel()}
                 >
-                  {summary()?.activeCount ?? 0}
+                  {attention().needsUser.length}
                 </MetadataBadge>
               </Show>
             </div>
             <p class="mt-1 max-w-3xl text-sm leading-5 text-muted">
-              Current operational issues, ordered by urgency, affected resources, protection
-              concern, evidence quality, and age.
+              {autonomyExperience().needsYouDescription}
             </p>
           </div>
           <Button
@@ -263,17 +248,13 @@ export function PatrolAttentionWorkbench(props: { onOpenFindings?: () => void } 
             Refresh
           </Button>
         </div>
-
-        <div class="mt-4">
-          <LabeledFilterToggleGroup
-            id="patrol-attention-state"
-            label="Attention state"
-            value={patrolAttentionStore.filter()}
-            onChange={(value) => changeFilter(value as AttentionFilter)}
-            options={attentionFilterOptions()}
-            selectClass="min-w-[11rem]"
-          />
-        </div>
+        <Show when={attention().quiet.length > 0}>
+          <p class="mt-3 rounded-md border border-border-subtle bg-surface-alt/40 px-3 py-2 text-xs leading-5 text-muted">
+            {attention().quiet.length} other current{' '}
+            {attention().quiet.length === 1 ? 'issue does' : 'issues do'} not require a decision.{' '}
+            {autonomyExperience().quietWorkDescription}
+          </p>
+        </Show>
       </div>
 
       <div
@@ -283,6 +264,7 @@ export function PatrolAttentionWorkbench(props: { onOpenFindings?: () => void } 
           class={`min-w-0 ${selectedItemId() ? 'border-b border-border lg:border-b-0 lg:border-r' : ''}`}
         >
           <AttentionList
+            decisions={visibleDecisions()}
             selectedItemId={selectedItemId()}
             itemButtons={itemButtons}
             onSelect={selectItem}
@@ -312,6 +294,19 @@ export function PatrolAttentionWorkbench(props: { onOpenFindings?: () => void } 
           </div>
         </Show>
       </div>
+      <Show when={attention().needsUser.length > PRIMARY_DECISION_LIMIT}>
+        <div class="border-t border-border px-4 py-3 text-center sm:px-5">
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => setShowAllDecisions((current) => !current)}
+          >
+            {showAllDecisions()
+              ? 'Show fewer decisions'
+              : `Show all ${attention().needsUser.length} decisions`}
+          </Button>
+        </div>
+      </Show>
       <ActionReviewDialog
         detail={actionDetail()}
         onClose={closeActionReview}
@@ -329,6 +324,7 @@ function replaceAttentionLocation(itemId: string) {
 }
 
 function AttentionList(props: {
+  decisions: PatrolAttentionDecision[];
   selectedItemId: string;
   itemButtons: Map<string, HTMLButtonElement>;
   onSelect: (itemId: string) => void;
@@ -351,7 +347,7 @@ function AttentionList(props: {
       </Show>
 
       <Show
-        when={!patrolAttentionStore.loading() || patrolAttentionStore.items().length > 0}
+        when={!patrolAttentionStore.loading() || props.decisions.length > 0}
         fallback={
           <div class="flex min-h-40 items-center justify-center gap-2 text-sm text-muted">
             <LoadingSpinner size="sm" />
@@ -359,52 +355,63 @@ function AttentionList(props: {
           </div>
         }
       >
-        <Show when={patrolAttentionStore.items().length > 0} fallback={<AttentionEmptyState />}>
+        <Show
+          when={props.decisions.length > 0}
+          fallback={<AttentionEmptyState hasQuietWork={patrolAttentionStore.items().length > 0} />}
+        >
           <ul class="divide-y divide-border" aria-label="Patrol attention items">
-            <For each={patrolAttentionStore.items()}>
-              {(item) => (
-                <li>
-                  <button
-                    ref={(element) => props.itemButtons.set(item.id, element)}
-                    type="button"
-                    class={`w-full px-4 py-3 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 sm:px-5 ${
-                      props.selectedItemId === item.id
-                        ? 'bg-blue-50/80 dark:bg-blue-950/30'
-                        : 'hover:bg-surface-hover'
-                    }`}
-                    aria-pressed={props.selectedItemId === item.id}
-                    aria-label={`Open ${item.title}`}
-                    onClick={() => props.onSelect(item.id)}
-                  >
-                    <div class="flex min-w-0 items-start gap-3">
-                      <SeverityMarker item={item} />
-                      <div class="min-w-0 flex-1">
-                        <div class="flex min-w-0 flex-wrap items-center gap-2">
-                          <span class="truncate text-sm font-semibold text-base-content">
-                            {item.title}
-                          </span>
-                          <StateBadge item={item} />
+            <For each={props.decisions}>
+              {(decision) => {
+                const item = decision.item;
+                return (
+                  <li>
+                    <button
+                      ref={(element) => props.itemButtons.set(item.id, element)}
+                      type="button"
+                      class={`w-full px-4 py-3 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 sm:px-5 ${
+                        props.selectedItemId === item.id
+                          ? 'bg-blue-50/80 dark:bg-blue-950/30'
+                          : 'hover:bg-surface-hover'
+                      }`}
+                      aria-pressed={props.selectedItemId === item.id}
+                      aria-label={`Open ${item.title}`}
+                      onClick={() => props.onSelect(item.id)}
+                    >
+                      <div class="flex min-w-0 items-start gap-3">
+                        <SeverityMarker item={item} />
+                        <div class="min-w-0 flex-1">
+                          <div class="flex min-w-0 flex-wrap items-center gap-2">
+                            <span class="truncate text-sm font-semibold text-base-content">
+                              {item.title}
+                            </span>
+                            <StateBadge item={item} />
+                          </div>
+                          <p class="mt-1 line-clamp-2 text-xs leading-5 text-muted">
+                            {item.plainLanguageSummary}
+                          </p>
+                          <p class="mt-1 text-xs font-medium leading-5 text-amber-700 dark:text-amber-300">
+                            {decision.reason}
+                          </p>
+                          <div class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted">
+                            <span class="truncate font-medium text-base-content">
+                              {item.subjectResourceName}
+                            </span>
+                            <EvidenceLabel item={item} />
+                            <ProtectionLabel item={item} />
+                            <span>
+                              {formatRelativeTime(item.firstObservedAt, { compact: true })}
+                            </span>
+                          </div>
                         </div>
-                        <p class="mt-1 line-clamp-2 text-xs leading-5 text-muted">
-                          {item.plainLanguageSummary}
-                        </p>
-                        <div class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted">
-                          <span class="truncate font-medium text-base-content">
-                            {item.subjectResourceName}
-                          </span>
-                          <EvidenceLabel item={item} />
-                          <ProtectionLabel item={item} />
-                          <span>{formatRelativeTime(item.firstObservedAt, { compact: true })}</span>
-                        </div>
+                        <ChevronRightIcon
+                          class="mt-1 h-4 w-4 shrink-0 text-muted"
+                          aria-hidden="true"
+                        />
                       </div>
-                      <ChevronRightIcon
-                        class="mt-1 h-4 w-4 shrink-0 text-muted"
-                        aria-hidden="true"
-                      />
-                    </div>
-                  </button>
-                </li>
-              )}
+                    </button>
+                  </li>
+                );
+              }}
             </For>
           </ul>
         </Show>
@@ -413,7 +420,7 @@ function AttentionList(props: {
   );
 }
 
-function AttentionEmptyState() {
+function AttentionEmptyState(props: { hasQuietWork: boolean }) {
   const summary = () => patrolAttentionStore.summary();
   const activeFilter = () => patrolAttentionStore.filter() === 'active';
   const trustworthyCalm = () =>
@@ -425,7 +432,7 @@ function AttentionEmptyState() {
   return (
     <div class="flex min-h-52 flex-col items-center justify-center px-6 py-10 text-center">
       <Show
-        when={trustworthyCalm()}
+        when={trustworthyCalm() || props.hasQuietWork}
         fallback={
           <>
             <ClockIcon class="h-8 w-8 text-muted" aria-hidden="true" />
@@ -439,9 +446,11 @@ function AttentionEmptyState() {
         }
       >
         <CheckCircleIcon class="h-9 w-9 text-emerald-500" aria-hidden="true" />
-        <h3 class="mt-3 text-sm font-semibold text-base-content">Nothing needs your attention</h3>
+        <h3 class="mt-3 text-sm font-semibold text-base-content">Nothing needs you right now</h3>
         <p class="mt-1 max-w-md text-xs leading-5 text-muted">
-          The current operational lifecycle evaluation has no active items.
+          {props.hasQuietWork
+            ? 'Patrol can continue with the current issues under this mode.'
+            : 'The current operational evaluation has no active items.'}
           <Show when={summary()?.evaluatedAt}>
             {(evaluatedAt) => ` Checked ${formatRelativeTime(evaluatedAt(), { compact: true })}.`}
           </Show>

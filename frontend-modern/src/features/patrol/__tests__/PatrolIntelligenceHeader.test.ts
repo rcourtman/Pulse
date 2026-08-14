@@ -69,7 +69,7 @@ describe('PatrolIntelligenceHeader', () => {
     expect(headerSource).toContain('Open Patrol settings');
     expect(headerSource).toContain("settingsTabPath('system-ai-patrol')");
     expect(headerSource).not.toContain('Patrol schedule and model settings');
-    expect(headerSource).toContain('Run Patrol');
+    expect(headerSource).toContain('Check now');
   });
 
   it('turns provider-blocked manual run controls into setup actions', () => {
@@ -92,7 +92,9 @@ describe('PatrolIntelligenceHeader', () => {
   });
 
   it('keeps primary Patrol actions touch-sized on phones without inflating desktop chrome', () => {
-    expect(headerSource).toContain('flex min-h-11 items-center gap-2 rounded-md bg-blue-600');
+    expect(headerSource).toContain(
+      'flex min-h-11 items-center gap-2 rounded-md border border-border bg-surface',
+    );
     expect(headerSource).toContain(
       'flex min-h-11 items-center gap-2 rounded-md border border-border',
     );
@@ -228,10 +230,10 @@ describe('PatrolIntelligenceHeader', () => {
         external: false,
       },
     });
-    expect(headerSource).toContain('showAutonomyPlanBillingAction');
-    expect(headerSource).toContain("autonomyAvailability().kind === 'plan_locked'");
-    expect(headerSource).toContain('CreditCardIcon');
-    expect(headerSource).toContain('{autonomyAvailability().actionLabel}');
+    expect(headerSource).toContain('commercialSurfacesHidden: true');
+    expect(headerSource).not.toContain('showAutonomyPlanBillingAction');
+    expect(headerSource).not.toContain('CreditCardIcon');
+    expect(headerSource).not.toContain('Plans & Billing');
 
     const hiddenUpgradePresentation = getPatrolAutonomyAvailabilityPresentation({
       autoFixLocked: true,

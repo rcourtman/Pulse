@@ -771,6 +771,13 @@ Feature surfaces under `frontend-modern/src/features/` may own product-specific
 assessment semantics, but they must keep those semantics in their governed
 presentation helpers and render them inside the shared neutral Pulse surface
 language rather than introducing page-local verdict bands or nested cards.
+The Patrol operator home composes the shared `PageHeader`, `Button`, `Toggle`,
+`MetadataBadge`, native disclosure, dialog, and neutral bordered-surface
+patterns. Patrol owns the meaning and order of background posture, objectives,
+genuine decisions, verified receipts, and secondary operational records; the
+shared primitive boundary owns keyboard focus, touch targets, responsive
+stacking, and visual consistency. Plan-locked paid-mode discovery is not a
+daily-page primitive and must not be added beside the effective mode.
 For Patrol, that includes the Open work description: it may use concise
 row-level guidance such as review evidence, approve a change, inspect automatic
 actions, or review verification results, but it must remain descriptive copy

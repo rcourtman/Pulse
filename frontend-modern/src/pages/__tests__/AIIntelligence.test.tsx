@@ -693,12 +693,9 @@ describe('AIIntelligence entitlement gating', () => {
     expect(patrolControl.queryByRole('button', { name: 'Ask first Pro' })).toBeNull();
     expect(patrolControl.queryByRole('button', { name: 'Safe auto-fix Pro' })).toBeNull();
     expect(patrolControl.queryByRole('button', { name: 'Autopilot Pro' })).toBeNull();
-    expect(screen.getByRole('link', { name: 'Plans & Billing' })).toHaveAttribute(
-      'href',
-      SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_HREF,
-    );
+    expect(screen.queryByRole('link', { name: 'Plans & Billing' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'View plans' })).not.toBeInTheDocument();
-    expect(operationsLoopAnchor?.parentElement).toBe(patrolControlAnchor);
+    expect(patrolControlAnchor).toContainElement(operationsLoopAnchor);
     expect(screen.queryByTestId('patrol-current-work')).not.toBeInTheDocument();
     expect(screen.getByText('Current Patrol issues appear here.')).toBeInTheDocument();
     expect(
@@ -711,7 +708,7 @@ describe('AIIntelligence entitlement gating', () => {
     expect(screen.queryByText('Duty trail')).not.toBeInTheDocument();
     expect(screen.queryByText('External agents')).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Pulse MCP' })).not.toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: 'Run Patrol' }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole('button', { name: 'Check now' }).length).toBeGreaterThan(0);
   });
 
   it('consumes Patrol control route handoffs without loading legacy loop status', async () => {
@@ -809,7 +806,7 @@ describe('AIIntelligence entitlement gating', () => {
     });
     expect(providerSettingsLinks.length).toBeGreaterThan(0);
     expect(providerSettingsLinks[0]).toHaveAttribute('href', '/settings/pulse-intelligence/patrol');
-    expect(screen.queryByRole('button', { name: /Run Patrol/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Check now/i })).not.toBeInTheDocument();
     expect(triggerPatrolRunMock).not.toHaveBeenCalled();
   });
 
@@ -843,7 +840,7 @@ describe('AIIntelligence entitlement gating', () => {
       expect(screen.getByText('Patrol model warning')).toBeInTheDocument();
     });
     expect(screen.queryByText('Patrol readiness warning')).not.toBeInTheDocument();
-    const runButtons = screen.getAllByRole('button', { name: /Run Patrol/i });
+    const runButtons = screen.getAllByRole('button', { name: /Check now/i });
     for (const button of runButtons) {
       expect(button).not.toBeDisabled();
     }
@@ -863,7 +860,7 @@ describe('AIIntelligence entitlement gating', () => {
 
     getCorrelationsMock.mockImplementation(() => new Promise(() => {}));
 
-    fireEvent.click(screen.getAllByRole('button', { name: /Run Patrol/i })[0]);
+    fireEvent.click(screen.getAllByRole('button', { name: /Check now/i })[0]);
 
     await waitFor(() => {
       expect(triggerPatrolRunMock).toHaveBeenCalled();
@@ -888,7 +885,7 @@ describe('AIIntelligence entitlement gating', () => {
       expect(screen.getByRole('heading', { name: 'Open work' })).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getAllByRole('button', { name: /Run Patrol/i })[0]);
+    fireEvent.click(screen.getAllByRole('button', { name: /Check now/i })[0]);
 
     await waitFor(() => {
       expect(notificationErrorMock).toHaveBeenCalledWith(
@@ -909,7 +906,7 @@ describe('AIIntelligence entitlement gating', () => {
     expect(screen.queryByText('Patrol setup warning')).not.toBeInTheDocument();
     expect(screen.queryByText('Patrol readiness issue')).not.toBeInTheDocument();
     expect(screen.queryByText('Patrol readiness warning')).not.toBeInTheDocument();
-    for (const button of screen.getAllByRole('button', { name: /Run Patrol/i })) {
+    for (const button of screen.getAllByRole('button', { name: /Check now/i })) {
       expect(button).not.toBeDisabled();
     }
   });
@@ -1073,10 +1070,7 @@ describe('AIIntelligence entitlement gating', () => {
     expect(screen.queryByRole('button', { name: 'Ask first Pro' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Safe auto-fix Pro' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Autopilot Pro' })).toBeNull();
-    expect(screen.getByRole('link', { name: 'Plans & Billing' })).toHaveAttribute(
-      'href',
-      SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_HREF,
-    );
+    expect(screen.queryByRole('link', { name: 'Plans & Billing' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'View plans' })).not.toBeInTheDocument();
     expect(screen.queryByText('Unlock Patrol mode')).not.toBeInTheDocument();
     expect(screen.queryByText('More Patrol modes')).not.toBeInTheDocument();
@@ -1540,7 +1534,9 @@ describe('AIIntelligence entitlement gating', () => {
 
     await waitFor(() => {
       expect(getPatrolStatusMock).toHaveBeenCalled();
-      expect(screen.getByText('Patrol enabled')).toBeInTheDocument();
+      expect(
+        screen.getByRole('heading', { name: 'Patrol is looking after your infrastructure' }),
+      ).toBeInTheDocument();
     });
 
     expect(screen.queryByText('Patrol quickstart exhausted')).not.toBeInTheDocument();
@@ -1614,7 +1610,9 @@ describe('AIIntelligence entitlement gating', () => {
 
     await waitFor(() => {
       expect(getPatrolStatusMock).toHaveBeenCalled();
-      expect(screen.getByText('Patrol enabled')).toBeInTheDocument();
+      expect(
+        screen.getByRole('heading', { name: 'Patrol is looking after your infrastructure' }),
+      ).toBeInTheDocument();
     });
 
     expect(screen.queryByText(/Patrol quickstart/i)).not.toBeInTheDocument();
@@ -1899,7 +1897,7 @@ describe('AIIntelligence entitlement gating', () => {
     expect(screen.queryByText('Runtime issue')).not.toBeInTheDocument();
     expect(screen.queryByText(/regressed \d+×/)).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Runtime issue/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Run Patrol' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Check now' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Open Patrol settings' })).not.toBeInTheDocument();
     expect(screen.queryByText(/Automation:/)).not.toBeInTheDocument();
     const patrolControlAnchor = document.getElementById(PATROL_CONTROL_ANCHOR);
@@ -1929,7 +1927,8 @@ describe('AIIntelligence entitlement gating', () => {
     expect(screen.queryByTestId('patrol-status-bar')).not.toBeInTheDocument();
 
     expect(screen.queryByRole('heading', { name: 'Open work' })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Active' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Needs you' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Active' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'All' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Resolved' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Details' })).not.toBeInTheDocument();

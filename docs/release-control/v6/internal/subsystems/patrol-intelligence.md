@@ -15,9 +15,10 @@
 
 ## Purpose
 
-Own the Patrol intelligence route shell, feature surface, local state
-orchestration, findings and approval presentation, run-history rendering, and
-Patrol-specific presentation helpers.
+Own the Patrol intelligence route shell, outcome-first feature surface, local
+state orchestration, genuine-decision presentation, verified-work receipts,
+findings and approval presentation, run-history rendering, and Patrol-specific
+presentation helpers.
 The centralized Findings surface loads full history for its All and Resolved
 filters, keeps saved operator notes editable and clearable, and offers
 `Reopen finding` only on dismissed findings. Reopening removes the
@@ -62,12 +63,48 @@ sources, and retains the note as operator context.
 34. `tests/integration/tests/91-operational-trust-attention-workbench.spec.ts`
 35. `frontend-modern/src/api/patrolAttention.ts`
 36. `frontend-modern/src/features/patrol/PatrolObjectivesPanel.tsx`
+37. `frontend-modern/src/features/patrol/patrolHomePresentation.ts`
+38. `frontend-modern/src/features/patrol/PatrolRecentWorkPanel.tsx`
 
 ## Shared Boundaries
 
 1. `frontend-modern/src/api/patrolAttention.ts` shared with `api-contracts`: the Patrol attention client is both the Patrol read-model transport and a canonical typed API boundary.
 
 ## Extension Points
+
+### Quiet operator home
+
+The first-party Patrol page is an outcome and exception surface, not a mirror of
+the internal lifecycle. Its primary order is the effective background posture,
+the outcomes Patrol is looking after, work that genuinely needs the operator,
+and concise recent receipts. Investigation internals, lifecycle filters, raw
+findings, checks, and run history remain available as secondary operational
+records without competing with those four questions.
+
+`patrolHomePresentation.ts` owns the deterministic projection from effective
+autonomy and typed attention evidence into `needs user` versus `can continue`
+work. Watch-only and ask-first modes keep current active issues operator-visible.
+Safe-auto-fix and Autopilot may keep an issue quiet only when evidence is fresh
+and complete and at least one eligible governed action can proceed without a
+new approval. Unknown or stale evidence, failed or unknown verification,
+ineligible or absent actions, policy denial, and outstanding approval remain
+interruptions. This is presentation of existing authority, never a new grant of
+authority or a bypass around planning, feasibility, approval, dispatch, and
+verification.
+
+The `Recently handled` surface is proof-constrained. It may render a receipt
+only for a resolved attention record whose verification state is `succeeded`,
+and it describes the resolved record rather than inferring which offered action
+ran. Pending, failed, unknown, or unavailable verification must never be styled
+as handled work. Objective summary language similarly counts protection only
+from active objectives whose server-authored coverage state is `covered`.
+
+The effective autonomy label and plain-language consequence stay visible, but
+the four-level selector is a secondary disclosure. A plan-locked daily operator
+surface shows the effective watch-only experience without advertising paid
+modes or Plans & Billing; a wrong-runtime capability block may still expose its
+direct runtime repair action. Mobile must reach protected outcomes and genuine
+decisions without first traversing configuration or commercial chrome.
 
 ### Model-authored operational objectives
 

@@ -204,14 +204,16 @@ describe('PatrolAttentionWorkbench', () => {
     renderWorkbench();
 
     expect(
-      await screen.findByRole('heading', { name: 'Nothing needs your attention' }),
+      await screen.findByRole('heading', { name: 'Nothing needs you right now' }),
     ).toBeInTheDocument();
-    expect(screen.getByText(/current operational lifecycle evaluation/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/current operational evaluation has no active items/i),
+    ).toBeInTheDocument();
     expect(screen.queryByText(/trust score/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/auto-resolved/i)).not.toBeInTheDocument();
   });
 
-  it('keeps the fixed attention states available through one responsive shared control', async () => {
+  it('keeps lifecycle filters out of the primary decision surface', async () => {
     const attentionSummary = summary({
       activeCount: 1,
       openCount: 1,
@@ -224,26 +226,75 @@ describe('PatrolAttentionWorkbench', () => {
     apiMocks.getList.mockResolvedValue(listResponse([item()], attentionSummary));
     renderWorkbench();
 
-    const activeButton = await screen.findByRole('button', { name: 'Active 1' });
-    const stateGroup = screen.getByRole('group', { name: 'Attention state' });
-    expect(stateGroup).toHaveClass('hidden', 'xl:inline-flex');
-    expect(activeButton).toHaveAttribute('aria-pressed', 'true');
+    expect(await screen.findByRole('heading', { name: 'Needs you' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Open Disk pressure on Database VM' }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: 'Attention state' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: 'Attention state' })).not.toBeInTheDocument();
+    expect(apiMocks.getList).toHaveBeenCalledWith('active');
+  });
 
-    const stateSelect = screen.getByRole('combobox', { name: 'Attention state' });
-    expect(stateSelect.parentElement).toHaveClass('xl:hidden');
-    expect(stateSelect).toHaveValue('active');
-    expect(within(stateSelect).getByRole('option', { name: 'Recent resolved 5' })).toHaveValue(
-      'resolved',
+  it('does not interrupt assisted mode for safe eligible work', async () => {
+    const safeWork = item({
+      availableActions: [
+        {
+          targetResourceId: 'pve:vm:101',
+          capability: 'cleanup_disk',
+          kind: 'cleanup',
+          label: 'Clean safe temporary files',
+          mode: 'execute',
+          risk: 'low',
+          approval: 'not-required',
+          eligibility: 'eligible',
+          reasons: [],
+          evidenceIds: ['evidence-1'],
+          expectedPostcondition: 'Disk use returns below the warning threshold.',
+          verificationPolicy: 'disk-pressure',
+          requiresApproval: false,
+        },
+      ],
+      verificationState: 'pending',
+    });
+    apiMocks.getList.mockResolvedValue(
+      listResponse([safeWork], summary({ activeCount: 1, openCount: 1, calm: false })),
     );
 
-    fireEvent.change(stateSelect, { target: { value: 'resolved' } });
+    render(() => (
+      <Router>
+        <Route
+          path="/patrol"
+          component={() => (
+            <PatrolAttentionWorkbench autonomyLevel="assisted" autonomyLocked={false} />
+          )}
+        />
+      </Router>
+    ));
 
-    await waitFor(() => expect(apiMocks.getList).toHaveBeenLastCalledWith('resolved'));
-    expect(stateSelect).toHaveValue('resolved');
-    expect(screen.getByRole('button', { name: 'Recent resolved 5' })).toHaveAttribute(
-      'aria-pressed',
-      'true',
+    expect(
+      await screen.findByRole('heading', { name: 'Nothing needs you right now' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/1 other current issue does not require a decision/i),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Open Disk pressure/ })).not.toBeInTheDocument();
+  });
+
+  it('keeps a long decision queue compact until the operator asks for all of it', async () => {
+    const decisions = Array.from({ length: 7 }, (_, index) =>
+      item({ id: `record-${index + 1}`, title: `Decision ${index + 1}` }),
     );
+    apiMocks.getList.mockResolvedValue(
+      listResponse(decisions, summary({ activeCount: 7, openCount: 7, calm: false })),
+    );
+    renderWorkbench();
+
+    const showAll = await screen.findByRole('button', { name: 'Show all 7 decisions' });
+    expect(screen.getAllByRole('button', { name: /Open Decision/ })).toHaveLength(5);
+
+    fireEvent.click(showAll);
+    expect(screen.getAllByRole('button', { name: /Open Decision/ })).toHaveLength(7);
+    expect(screen.getByRole('button', { name: 'Show fewer decisions' })).toBeInTheDocument();
   });
 
   it('opens deepest typed evidence, protection, and timeline detail from one queue item', async () => {
@@ -371,7 +422,7 @@ describe('PatrolAttentionWorkbench', () => {
     });
     expect(screen.getByText(/protection context is incomplete/i)).toBeInTheDocument();
     expect(
-      screen.queryByRole('heading', { name: 'Nothing needs your attention' }),
+      screen.queryByRole('heading', { name: 'Nothing needs you right now' }),
     ).not.toBeInTheDocument();
   });
 

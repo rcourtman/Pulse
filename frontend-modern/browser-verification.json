@@ -1,25 +1,29 @@
 {
   "version": 1,
-  "base_sha": "6f09bc46768e809ec882f4c8c6782fae1e2ab710",
-  "verified_at": "2026-08-14T02:02:23Z",
+  "base_sha": "e5cad4c2c34529c0b15d8c32b8d1e53d0ddd84ad",
+  "verified_at": "2026-08-14T08:26:04Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/api/patrol.ts",
+    "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx",
+    "frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx",
     "frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx",
-    "frontend-modern/src/features/patrol/PatrolObjectivesPanel.tsx"
+    "frontend-modern/src/features/patrol/PatrolObjectivesPanel.tsx",
+    "frontend-modern/src/features/patrol/PatrolRecentWorkPanel.tsx",
+    "frontend-modern/src/features/patrol/patrolHomePresentation.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/api/patrol.ts": "59e86aab6a4eb168de3563589cccb912d0ed6c275054d55544620598ab690496",
-    "frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx": "8a0e42b07fa23cfd1a9c308986cff36bfe377dc2c1d2d84d0286af06709489b1",
-    "frontend-modern/src/features/patrol/PatrolObjectivesPanel.tsx": "44856c28de9cc1bb81900517876791666cb5e86fdde3e3dd759617a691c99b44"
+    "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx": "01f1010536c0b1551a09fa5634c9714cb771f10a37b274ae068aa1bbd3860b59",
+    "frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx": "41aa54fdf6d23ceb0019455e2a112b47d0164cf2e1dd36abc45f8faf47bc77e9",
+    "frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx": "780a27fcab535413b8446c5ec89637f98c08af1d8b57f77157028e499ad6b4d4",
+    "frontend-modern/src/features/patrol/PatrolObjectivesPanel.tsx": "8a68062a24352ac46384030bd267f1143572588ff36f061ec0cbed3c03555da4",
+    "frontend-modern/src/features/patrol/PatrolRecentWorkPanel.tsx": "6d2cf91943e49db10cd94c6639390297ddaff170ebf136b6c48e991cd14c134d",
+    "frontend-modern/src/features/patrol/patrolHomePresentation.ts": "18799e39f1bd4cdeaf93e494f4b84fc898aef356b111b030687885cbfdbd478b"
   },
-  "routes": [
-    "/patrol"
-  ],
+  "routes": ["/patrol"],
   "viewports": [
     {
       "width": 1440,
-      "height": 900
+      "height": 1000
     },
     {
       "width": 390,
@@ -27,23 +31,22 @@
     }
   ],
   "states": [
-    "initial loading and empty objective list",
-    "add-objective dialog open and closed",
-    "resource-scoped objective with disabled submit until an outcome is entered",
-    "persisted objective after reload with truthful uncovered coverage",
-    "paused and resumed objective states",
-    "edit-objective dialog kept open across background polling",
-    "clean empty state after objective deletion",
-    "desktop and narrow layouts without horizontal overflow, clipping, or console errors"
+    "watch-only background posture with effective autonomy consequence and no commercial upgrade action",
+    "empty objective list with honest zero-protection summary",
+    "ten genuine user decisions compacted to five initial rows",
+    "verified-receipt empty state without implying successful work",
+    "autonomy disclosure expanded",
+    "objective creation dialog open and dismissed",
+    "typed attention detail open and closed with evidence, protection, and timeline",
+    "desktop and narrow layouts without horizontal overflow"
   ],
   "interactions": [
-    "opened the add-objective dialog, selected a real resource, entered an outcome, and saved it",
-    "reloaded the Patrol route and confirmed the objective persisted",
-    "paused and resumed the objective",
-    "opened the edit dialog and confirmed polling did not dismiss or overwrite it",
-    "dismissed dialogs with Escape and confirmed focus returned to the triggering control",
-    "confirmed body scrolling locked while the narrow dialog was open and unlocked on dismissal",
-    "deleted the temporary objective and confirmed the empty state returned",
-    "verified document scroll width matched the 390px viewport"
+    "expanded the secondary How Patrol operates disclosure and confirmed Watch only without Plans & Billing",
+    "opened the add-objective dialog, inspected the outcome-first form, cancelled it, and dismissed it with Escape",
+    "confirmed objective-dialog focus returned to Add objective after Escape",
+    "opened the deepest attention detail and inspected lifecycle, evidence, protection, timeline, and resource actions",
+    "closed attention detail and confirmed focus returned to the originating decision row",
+    "expanded all ten decisions, collapsed back to five, and confirmed the compact queue counts",
+    "verified document width matched both 1440px and 390px viewports"
   ]
 }

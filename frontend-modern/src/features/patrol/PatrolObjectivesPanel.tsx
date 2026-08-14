@@ -20,6 +20,7 @@ import {
 import { useResources } from '@/hooks/useResources';
 import { getPreferredInfrastructureDisplayName } from '@/utils/resourceIdentity';
 import { showError, showSuccess } from '@/utils/toast';
+import { getPatrolObjectiveProtectionSummary } from './patrolHomePresentation';
 
 const coveragePresentation = (
   state: PatrolObjectiveCoverageState,
@@ -55,6 +56,7 @@ export const PatrolObjectivesPanel: Component = () => {
   const resourceById = createMemo(
     () => new Map(resources().map((resource) => [resource.id, resource])),
   );
+  const protectionSummary = createMemo(() => getPatrolObjectiveProtectionSummary(objectives()));
 
   const loadObjectives = async (quiet = false) => {
     if (!quiet) setLoading(true);
@@ -195,7 +197,7 @@ export const PatrolObjectivesPanel: Component = () => {
       <div class="flex flex-col gap-3 border-b border-border px-4 py-4 sm:flex-row sm:items-start sm:justify-between sm:px-5">
         <div>
           <h2 id="patrol-objectives-title" class="text-base font-semibold text-base-content">
-            What Patrol should keep true
+            What Patrol is looking after
           </h2>
           <p class="mt-1 max-w-3xl text-sm text-muted">
             Describe the outcome. Patrol chooses a cheap local signal, wakes the model only when
@@ -224,6 +226,28 @@ export const PatrolObjectivesPanel: Component = () => {
               </div>
             }
           >
+            <div
+              class={`mb-4 rounded-lg border px-4 py-3 ${
+                protectionSummary().tone === 'success'
+                  ? 'border-emerald-200 bg-emerald-50/70 dark:border-emerald-900 dark:bg-emerald-950/20'
+                  : protectionSummary().tone === 'warning'
+                    ? 'border-amber-200 bg-amber-50/70 dark:border-amber-900 dark:bg-amber-950/20'
+                    : 'border-border-subtle bg-surface-alt/40'
+              }`}
+              aria-live="polite"
+            >
+              <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <p class="text-sm font-semibold text-base-content">
+                  {protectionSummary().headline}
+                </p>
+                <Show when={protectionSummary().paused > 0}>
+                  <MetadataBadge tone="neutral" size="xs" shape="rounded">
+                    {protectionSummary().paused} paused
+                  </MetadataBadge>
+                </Show>
+              </div>
+              <p class="mt-1 text-xs leading-5 text-muted">{protectionSummary().detail}</p>
+            </div>
             <Show
               when={objectives().length > 0}
               fallback={

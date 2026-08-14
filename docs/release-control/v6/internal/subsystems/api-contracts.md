@@ -7378,6 +7378,17 @@ The frontend Patrol history clients in `frontend-modern/src/api/patrol.ts`
 must mirror that normalization before sending the request: invalid and
 non-positive caller input collapses back to the client default of `30`, and
 oversized requests clamp to the backend maximum of `100`.
+The outcome-first Patrol home consumes the existing typed attention contract;
+it does not create a second server lifecycle. `GET /api/ai/patrol/attention`
+with `filter=active` remains the source for current typed evidence and governed
+action offers, while `filter=resolved` supplies receipt candidates. Frontend
+presentation may call a resolved item handled only when the API-authored
+`state` is `resolved` and `verificationState` is `succeeded`; it must preserve
+pending, failed, unknown, and unavailable verification as non-receipts. The
+frontend may use action eligibility and approval fields to decide whether an
+item needs another operator decision under the effective autonomy level, but
+that projection grants no action authority and cannot override server planning,
+policy, approval, dispatch, or verification.
 Patrol run detail access for selected-history UX must now resolve a canonical
 single-run contract at `/api/ai/patrol/runs/{id}` instead of probing bounded
 history pages and hoping the target run is still inside a recent window; the

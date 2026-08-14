@@ -7,6 +7,7 @@ import { PatrolIntelligenceBanners } from './PatrolIntelligenceBanners';
 import { PatrolIntelligenceWorkspace } from './PatrolIntelligenceWorkspace';
 import { PatrolAttentionWorkbench } from './PatrolAttentionWorkbench';
 import { PatrolObjectivesPanel } from './PatrolObjectivesPanel';
+import { PatrolRecentWorkPanel } from './PatrolRecentWorkPanel';
 
 export function PatrolIntelligenceSurface() {
   const state = usePatrolIntelligenceState();
@@ -26,7 +27,12 @@ export function PatrolIntelligenceSurface() {
       <PatrolIntelligenceHeader state={state} />
       <PatrolIntelligenceBanners state={state} />
       <PatrolObjectivesPanel />
-      <PatrolAttentionWorkbench onOpenFindings={openFindings} />
+      <PatrolAttentionWorkbench
+        autonomyLevel={state.autonomyLevel()}
+        autonomyLocked={state.autoFixLocked()}
+        onOpenFindings={openFindings}
+      />
+      <PatrolRecentWorkPanel />
 
       <details
         class="rounded-lg border border-border bg-surface"
@@ -38,7 +44,7 @@ export function PatrolIntelligenceSurface() {
           class="cursor-pointer px-4 py-3 text-sm font-medium text-base-content focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 sm:px-5"
         >
           <span class="inline-flex flex-wrap items-center gap-2">
-            Patrol checks, investigations, and run history
+            Operational records and run history
             <Show when={openWorkCount() > 0}>
               <MetadataBadge
                 tone="info"
