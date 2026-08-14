@@ -6272,7 +6272,10 @@ than silently borrowing a direct-provider family price. Reviewed OpenRouter
 routes use exact model IDs and model-specific review dates from the public
 OpenRouter Models API; aliases, fast variants, routers, and other unreviewed
 routes remain unknown and therefore fail any non-zero qualification cost
-budget until their actual route price is explicitly recorded. Live scoring
+budget until their actual route price is explicitly recorded. An exact
+OpenRouter `:free` route may be recorded at zero only after that route's public
+catalog entry is reviewed; the suffix alone never makes other free aliases
+known. Live scoring
 uses the provider resolved by Patrol readiness, even when the configured
 OpenRouter model is an unprefixed slash route such as
 `anthropic/claude-sonnet-5`; scorer replay persists and reuses that resolved

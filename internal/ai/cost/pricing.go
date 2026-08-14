@@ -63,12 +63,13 @@ var providerPrices = map[string][]modelPrice{
 	},
 	"openrouter": {
 		// OpenRouter model-catalog list prices, checked from the public Models API
-		// (https://openrouter.ai/api/v1/model/:author/:slug) on 2026-07-14.
+		// (https://openrouter.ai/api/v1/models) on the per-route review date.
 		// Keep these route-specific: OpenRouter aliases, variants, and provider
 		// routing can have different prices and must remain unknown until reviewed.
 		flatPriceAsOf("anthropic/claude-opus-4.8", 5.00, 25.00, "2026-07-14"),
 		flatPriceAsOf("anthropic/claude-sonnet-5", 2.00, 10.00, "2026-07-14"),
 		flatPriceAsOf("deepseek/deepseek-v4-flash", 0.09, 0.18, "2026-07-14"),
+		flatPriceAsOf("nvidia/nemotron-3-super-120b-a12b:free", 0, 0, "2026-08-14"),
 	},
 	"gemini": {
 		// Gemini Developer API standard paid-tier pricing, checked from
