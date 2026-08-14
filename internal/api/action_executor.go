@@ -102,6 +102,10 @@ type actionAgentCommander interface {
 	IsAgentConnected(agentID string) bool
 }
 
+type actionPreflightAgentCommander interface {
+	PreflightAction(context.Context, string, agentexec.ActionPreflightPayload) (*agentexec.ActionPreflightResultPayload, error)
+}
+
 type scopedActionAgentCommander interface {
 	IsAgentConnectedForOrganization(organizationID, agentID string) bool
 	GetAgentForHostForOrganization(organizationID, hostname string) (string, bool)
@@ -296,6 +300,65 @@ func (e routedActionExecutor) CheckActionAvailable(ctx context.Context, req unif
 		return unified.ResourceActionReadiness{}
 	}
 	return checker.CheckActionAvailable(ctx, req, resource)
+}
+
+func (e routedActionExecutor) CheckActionFeasible(ctx context.Context, actionID string, req unified.ActionRequest, resource unified.Resource) unified.ResourceActionReadiness {
+	capability, ok := resourceCapabilityByName(resource.Capabilities, req.CapabilityName)
+	if !ok || strings.TrimSpace(capability.InternalHandler) == "" {
+		return unified.ResourceActionReadiness{}
+	}
+	executor := e.byHandler[strings.TrimSpace(capability.InternalHandler)]
+	if executor == nil {
+		return unified.ResourceActionReadiness{}
+	}
+	checker, ok := executor.(interface {
+		CheckActionFeasible(context.Context, string, unified.ActionRequest, unified.Resource) unified.ResourceActionReadiness
+	})
+	if !ok {
+		return unified.ResourceActionReadiness{}
+	}
+	return checker.CheckActionFeasible(ctx, actionID, req, resource)
+}
+
+func actionPreflightReadiness(capability string, result *agentexec.ActionPreflightResultPayload, err error) unified.ResourceActionReadiness {
+	readiness := unified.ResourceActionReadiness{Name: strings.TrimSpace(capability), Available: false}
+	if err != nil || result == nil {
+		readiness.ReasonCode = "agent_preflight_unavailable"
+		readiness.Reason = "Pulse could not confirm that the exact operation is currently feasible on the target agent."
+		return readiness
+	}
+	if result.Feasible {
+		readiness.Available = true
+		return readiness
+	}
+	readiness.ReasonCode = strings.TrimSpace(result.ReasonCode)
+	switch readiness.ReasonCode {
+	case agentexec.ActionRefusalCapabilityUnavailable:
+		readiness.Reason = "The target agent no longer exposes the required operation."
+	case agentexec.ActionRefusalTargetInspectionUnavailable:
+		readiness.Reason = "The target agent could not inspect the resource safely."
+	case agentexec.ActionRefusalTargetStateChanged:
+		readiness.Reason = "The target state changed after this action was planned. Refresh the plan before approving it."
+	case agentexec.ActionRefusalTargetPreconditionFailed:
+		readiness.Reason = "The target no longer satisfies the operation's local preconditions. Refresh the plan before approving it."
+	case agentexec.ActionRefusalPackageManagerBusy:
+		readiness.Reason = "The host package manager is busy. Retry readiness after the current package operation finishes."
+	case agentexec.ActionRefusalPackagePreflightFailed:
+		readiness.Reason = "The target agent could not inspect package update feasibility safely."
+	case agentexec.ActionRefusalPackageInventoryChanged:
+		readiness.Reason = "The package inventory changed after this action was planned. Refresh the plan before approving it."
+	case agentexec.ActionRefusalPackageManagerUnhealthy:
+		readiness.Reason = "The host package manager needs recovery before updates can run safely."
+	case agentexec.ActionRefusalCleanupPreflightFailed:
+		readiness.Reason = "The target agent could not inspect package-cache cleanup feasibility safely."
+	case agentexec.ActionRefusalCleanupInventoryChanged:
+		readiness.Reason = "The package-cache inventory changed after this action was planned. Refresh the plan before approving it."
+	case agentexec.ActionRefusalContractInvalid:
+		readiness.Reason = "The exact operation contract is no longer valid. Refresh the plan before approving it."
+	default:
+		readiness.Reason = "The target agent refused the operation during its read-only feasibility check."
+	}
+	return readiness
 }
 
 func (e routedActionExecutor) executorForAction(ctx context.Context, req unified.ActionRequest) (ActionExecutor, error) {

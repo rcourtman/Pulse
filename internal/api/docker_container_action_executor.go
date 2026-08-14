@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/rcourtman/pulse-go-rewrite/internal/actionlifecycle"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/safety"
@@ -344,6 +345,45 @@ func (e dockerContainerActionExecutor) CheckActionAvailable(ctx context.Context,
 		return unavailableDockerActionReadiness(operation, "operation_receipt_unsupported", "The Pulse agent on this host cannot run reviewed actions: it is on an older version, or its durable state directory is unavailable. Update the agent, or check the agent logs if it is already current, then retry.")
 	}
 	return readiness
+}
+
+func (e dockerContainerActionExecutor) CheckActionFeasible(ctx context.Context, actionID string, req unified.ActionRequest, resource unified.Resource) unified.ResourceActionReadiness {
+	if readiness := e.CheckActionAvailable(ctx, req, resource); readiness.Name == "" || !readiness.Available {
+		return readiness
+	}
+	commander, ok := e.agents.(actionPreflightAgentCommander)
+	if !ok {
+		return unified.ResourceActionReadiness{}
+	}
+	runtime, err := dockerContainerRuntime(resource)
+	if err != nil {
+		return actionPreflightReadiness(req.CapabilityName, nil, err)
+	}
+	agentID, err := e.connectedDockerCommandAgentID(ctx, resource)
+	if err != nil {
+		return actionPreflightReadiness(req.CapabilityName, nil, err)
+	}
+	requestID := uuid.NewString()
+	preflight := agentexec.ActionPreflightPayload{RequestID: requestID, ProtocolVersion: agentexec.ActionPreflightProtocolVersion}
+	if isDockerContainerUpdateOperation(req.CapabilityName) {
+		typed, bindErr := dockerContainerUpdateRequest(requestID, actionID, runtime, resource)
+		if bindErr != nil {
+			return actionPreflightReadiness(req.CapabilityName, nil, bindErr)
+		}
+		preflight.DockerUpdate = &typed
+	} else {
+		operation, operationErr := dockerAgentLifecycleOperation(req.CapabilityName)
+		if operationErr != nil {
+			return actionPreflightReadiness(req.CapabilityName, nil, operationErr)
+		}
+		typed := dockerContainerLifecycleRequest(requestID, actionID, operation, runtime, resource)
+		if bindErr := agentexec.BindDockerContainerLifecyclePayload(&typed); bindErr != nil {
+			return actionPreflightReadiness(req.CapabilityName, nil, bindErr)
+		}
+		preflight.DockerLifecycle = &typed
+	}
+	result, err := commander.PreflightAction(agentCommandContext(ctx), agentID, preflight)
+	return actionPreflightReadiness(req.CapabilityName, result, err)
 }
 
 func (e dockerContainerActionExecutor) currentDockerContainerResource(ctx context.Context, resourceID, operation string) (unified.Resource, error) {

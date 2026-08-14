@@ -696,6 +696,59 @@ func TestExecuteHostUpdateRoundTripUsesTypedCommandFreeEnvelope(t *testing.T) {
 	}
 }
 
+func TestActionPreflightRoundTripIsReadOnlyAndDigestBound(t *testing.T) {
+	s := NewServer(allowAllTestTokens)
+	ts := newWSServer(t, s)
+	defer ts.Close()
+	conn, _, err := dialAgentExecWebSocket(t, ts.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	wsWriteMessage(t, conn, mustNewMessage(t, MsgTypeAgentRegister, "", AgentRegisterPayload{
+		AgentID: "preflight-agent", Hostname: "host1", Version: "6", Platform: "linux", Token: "any",
+		OperationReceiptVersion: operationreceipt.ProtocolVersion, ActionPreflightVersion: ActionPreflightProtocolVersion,
+	}))
+	_ = wsReadRegisteredPayload(t, conn)
+	req := boundHostUpdatePreflight(t)
+	agentErr := make(chan error, 1)
+	go func() {
+		msg, readErr := wsReadRawMessageWithTimeout(conn, 2*time.Second)
+		if readErr != nil {
+			agentErr <- readErr
+			return
+		}
+		if msg.Type != MsgTypeActionPreflight || msg.Payload == nil || bytes.Contains(*msg.Payload, []byte(`"command"`)) {
+			agentErr <- fmt.Errorf("unexpected preflight envelope: %#v", msg)
+			return
+		}
+		payload, decodeErr := DecodeActionPreflightPayload(*msg.Payload)
+		if decodeErr != nil {
+			agentErr <- decodeErr
+			return
+		}
+		operation, version, digest := ActionPreflightBinding(payload)
+		result := ActionPreflightResultPayload{
+			RequestID: payload.RequestID, ProtocolVersion: payload.ProtocolVersion,
+			Operation: operation, OperationVersion: version, RequestDigest: digest,
+			ReasonCode: ActionRefusalPackageManagerUnhealthy, CheckedAt: time.Now().UTC(),
+		}
+		agentErr <- conn.WriteJSON(mustNewMessage(t, MsgTypeActionPreflightResult, payload.RequestID, result))
+	}()
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	result, err := s.PreflightAction(ctx, "preflight-agent", req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Feasible || result.ReasonCode != ActionRefusalPackageManagerUnhealthy {
+		t.Fatalf("result=%#v", result)
+	}
+	if err := <-agentErr; err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestValidateHostUpdatePayloadRejectsOpenEndedAuthority(t *testing.T) {
 	for _, req := range []HostUpdatePayload{
 		{RequestID: "r1", ActionID: "a1", Operation: "run_command", ExpectedInventoryHash: "sha256:" + strings.Repeat("a", 64)},

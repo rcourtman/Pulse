@@ -21,6 +21,10 @@ type DockerContainerUpdater interface {
 	TypedContainerUpdate(ctx context.Context, runtime, containerID, expectedImageDigest string, progress func(string)) (agentexec.DockerContainerUpdateOutcome, error)
 }
 
+type DockerContainerUpdatePreflighter interface {
+	TypedContainerUpdatePreflight(ctx context.Context, runtime, containerID, expectedImageDigest string) error
+}
+
 func (c *CommandClient) handleDockerContainerUpdate(ctx context.Context, conn *websocket.Conn, payload agentexec.DockerContainerUpdatePayload) {
 	identity := agentexec.DockerContainerUpdateOperationIdentity(c.agentID, payload)
 	record, admitted, err := c.admitOperation(identity)
@@ -84,7 +88,7 @@ func (c *CommandClient) runDockerContainerUpdate(ctx context.Context, payload ag
 	outcome, err := c.dockerUpdater.TypedContainerUpdate(ctx, payload.Runtime, payload.ContainerID, payload.ExpectedImageDigest, progress)
 	if err != nil {
 		c.logger.Warn().Err(err).Str("request_id", payload.RequestID).Str("container_id", payload.ContainerID).Msg("Docker update refused before mutation")
-		result.ReasonCode = agentexec.ActionRefusalTargetPreconditionFailed
+		result.ReasonCode = agentexec.ActionPreflightReasonCode(err, agentexec.ActionRefusalTargetPreconditionFailed)
 		result.Error = boundDockerUpdateError(err.Error())
 		return result
 	}

@@ -29,6 +29,23 @@ type fakeHostUpdateAgent struct {
 	queries           []operationreceipt.Identity
 }
 
+type preflightHostUpdateAgent struct {
+	*fakeHostUpdateAgent
+	feasible   bool
+	reasonCode string
+	preflights []agentexec.ActionPreflightPayload
+}
+
+func (f *preflightHostUpdateAgent) PreflightAction(_ context.Context, _ string, req agentexec.ActionPreflightPayload) (*agentexec.ActionPreflightResultPayload, error) {
+	f.preflights = append(f.preflights, req)
+	operation, version, digest := agentexec.ActionPreflightBinding(req)
+	return &agentexec.ActionPreflightResultPayload{
+		RequestID: req.RequestID, ProtocolVersion: req.ProtocolVersion,
+		Operation: operation, OperationVersion: version, RequestDigest: digest,
+		Feasible: f.feasible, ReasonCode: f.reasonCode, CheckedAt: time.Now().UTC(),
+	}, nil
+}
+
 func (f *fakeHostUpdateAgent) QueryAgentOperation(_ context.Context, _ string, identity operationreceipt.Identity) (operationreceipt.QueryResult, error) {
 	f.queries = append(f.queries, identity)
 	return f.queryResult, f.queryErr
@@ -111,6 +128,26 @@ func TestHostUpdateActionExecutorDispatchesTypedOperationAndProjectsVerification
 	request := agents.requests[0]
 	if request.ActionID != "action-host-update" || request.RequestID != "action-host-update.dispatch.1" || request.Operation != agentexec.HostUpdateOperationInstall || request.ExpectedInventoryHash != testHostPackageInventoryHash || request.Timeout != 900 {
 		t.Fatalf("typed request = %#v", request)
+	}
+}
+
+func TestHostUpdateActionFeasibilityReturnsAgentRefusalBeforeApproval(t *testing.T) {
+	now := time.Now().UTC()
+	h := NewResourceHandlers(&config.Config{DataPath: t.TempDir()})
+	resource := hostUpdateActionResource(now)
+	h.SetStateProvider(resourceUnifiedSeedProvider{snapshot: models.StateSnapshot{LastUpdate: now}, resources: []unified.Resource{resource}})
+	agents := &preflightHostUpdateAgent{
+		fakeHostUpdateAgent: &fakeHostUpdateAgent{connected: true},
+		reasonCode:          agentexec.ActionRefusalPackageManagerUnhealthy,
+	}
+	executor := newHostUpdateActionExecutor(h, agents).(hostUpdateActionExecutor)
+	readiness := executor.CheckActionFeasible(context.Background(), "action-preflight", unified.ActionRequest{CapabilityName: hostPackageUpdateCapability}, resource)
+	if readiness.Available || readiness.ReasonCode != agentexec.ActionRefusalPackageManagerUnhealthy || len(agents.preflights) != 1 {
+		t.Fatalf("readiness=%#v preflights=%d", readiness, len(agents.preflights))
+	}
+	typed := agents.preflights[0].HostUpdate
+	if typed == nil || typed.ActionID != "action-preflight" || typed.ExpectedInventoryHash != testHostPackageInventoryHash {
+		t.Fatalf("typed preflight=%#v", typed)
 	}
 }
 

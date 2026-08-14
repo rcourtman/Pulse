@@ -108,6 +108,38 @@ func TestPackageUpdateManagerApplyUsesClosedAPTCommandCatalogAndVerifies(t *test
 	}
 }
 
+func TestPackageUpdatePreflightRefusesUnhealthyManagerWithoutMutation(t *testing.T) {
+	pending := "Inst openssl [1.0] (1.1 repo [amd64])\n"
+	m := newPackageUpdateManager("linux", newPackageManagerLease())
+	m.lookPath = func(name string) (string, error) { return "/usr/bin/" + name, nil }
+	m.stat = func(string) (os.FileInfo, error) { return nil, os.ErrNotExist }
+	var calls [][]string
+	m.run = func(_ context.Context, _ []string, name string, args ...string) packageUpdateCommandResult {
+		calls = append(calls, append([]string{name}, args...))
+		if name == "apt-get" && strings.Contains(strings.Join(args, " "), "-s") {
+			return packageUpdateCommandResult{stdout: pending}
+		}
+		if name == "dpkg" {
+			return packageUpdateCommandResult{stdout: "packages require configuration"}
+		}
+		t.Fatalf("unexpected mutating command: %s %v", name, args)
+		return packageUpdateCommandResult{}
+	}
+	req := agentexec.HostUpdatePayload{RequestID: "preflight-1", ActionID: "action-1", Operation: agentexec.HostUpdateOperationInstall, ExpectedInventoryHash: aptUpgradeInventoryHash(pending)}
+	if err := agentexec.BindHostUpdatePayload(&req); err != nil {
+		t.Fatal(err)
+	}
+	feasible, reason := m.Preflight(context.Background(), req)
+	if feasible || reason != agentexec.ActionRefusalPackageManagerUnhealthy {
+		t.Fatalf("feasible=%t reason=%q calls=%#v", feasible, reason, calls)
+	}
+	for _, call := range calls {
+		if len(call) > 1 && (call[1] == "update" || call[1] == "upgrade" || call[1] == "clean") {
+			t.Fatalf("preflight mutated package state: %#v", calls)
+		}
+	}
+}
+
 func TestPackageUpdateManagerFailsClosedWhenRefreshFails(t *testing.T) {
 	m := newPackageUpdateManager("linux", newPackageManagerLease())
 	m.lookPath = func(string) (string, error) { return "/usr/bin/apt-get", nil }

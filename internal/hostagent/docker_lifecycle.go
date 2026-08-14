@@ -86,6 +86,20 @@ func (m *localDockerLifecycleManager) Apply(ctx context.Context, req agentexec.D
 	return result
 }
 
+func (m *localDockerLifecycleManager) Preflight(ctx context.Context, req agentexec.DockerContainerLifecyclePayload) (bool, string) {
+	if err := agentexec.ValidateDockerContainerLifecyclePayload(&req); err != nil {
+		return false, agentexec.ActionRefusalContractInvalid
+	}
+	before, err := m.inspect(ctx, req.Runtime, req.ContainerID)
+	if err != nil {
+		return false, agentexec.ActionRefusalTargetInspectionUnavailable
+	}
+	if !dockerLifecycleBeforeMatches(req, before) {
+		return false, agentexec.ActionRefusalTargetStateChanged
+	}
+	return true, ""
+}
+
 func (m *localDockerLifecycleManager) command(ctx context.Context, runtime string, args ...string) ([]byte, error) {
 	if m == nil || m.run == nil {
 		return nil, fmt.Errorf("container runtime command runner unavailable")

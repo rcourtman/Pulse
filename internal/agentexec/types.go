@@ -19,6 +19,7 @@ const (
 	MsgTypeHostUpdateResult               MessageType = "host_update_result"
 	MsgTypeDockerContainerLifecycleResult MessageType = "docker_container_lifecycle_result"
 	MsgTypeDockerContainerUpdateResult    MessageType = "docker_container_update_result"
+	MsgTypeActionPreflightResult          MessageType = "action_preflight_result"
 	MsgTypeOperationQueryResult           MessageType = "agent_operation_query_result"
 
 	// Server -> Agent messages
@@ -30,6 +31,7 @@ const (
 	MsgTypeHostUpdate               MessageType = "host_update"
 	MsgTypeDockerContainerLifecycle MessageType = "docker_container_lifecycle"
 	MsgTypeDockerContainerUpdate    MessageType = "docker_container_update"
+	MsgTypeActionPreflight          MessageType = "action_preflight"
 	MsgTypeOperationQuery           MessageType = "agent_operation_query"
 	MsgTypeDeployPreflight          MessageType = "deploy_preflight"
 	MsgTypeDeployInstall            MessageType = "deploy_install"
@@ -92,6 +94,7 @@ type AgentRegisterPayload struct {
 	Tags                    []string `json:"tags,omitempty"`
 	Token                   string   `json:"token"` // API token for authentication
 	OperationReceiptVersion int      `json:"operation_receipt_version,omitempty"`
+	ActionPreflightVersion  int      `json:"action_preflight_version,omitempty"`
 }
 
 // RegisteredPayload is sent by server after successful registration
@@ -395,6 +398,32 @@ type HostStorageCleanupResultPayload struct {
 	Duration        int64                      `json:"duration_ms"`
 }
 
+// ActionPreflightPayload carries exactly one already-bound typed operation to
+// the Unified Agent for a read-only feasibility decision. It grants no durable
+// dispatch authority and must never enter the operation receipt store.
+type ActionPreflightPayload struct {
+	RequestID       string                           `json:"request_id"`
+	ProtocolVersion int                              `json:"protocol_version"`
+	HostUpdate      *HostUpdatePayload               `json:"host_update,omitempty"`
+	StorageCleanup  *HostStorageCleanupPayload       `json:"storage_cleanup,omitempty"`
+	DockerLifecycle *DockerContainerLifecyclePayload `json:"docker_lifecycle,omitempty"`
+	DockerUpdate    *DockerContainerUpdatePayload    `json:"docker_update,omitempty"`
+}
+
+// ActionPreflightResultPayload is bounded agent evidence about the exact
+// operation digest. No provider output, paths, package names, or command text
+// cross this boundary.
+type ActionPreflightResultPayload struct {
+	RequestID        string    `json:"request_id"`
+	ProtocolVersion  int       `json:"protocol_version"`
+	Operation        string    `json:"operation"`
+	OperationVersion int       `json:"operation_version"`
+	RequestDigest    string    `json:"request_digest"`
+	Feasible         bool      `json:"feasible"`
+	ReasonCode       string    `json:"reason_code,omitempty"`
+	CheckedAt        time.Time `json:"checked_at"`
+}
+
 const (
 	HostStorageCleanupPhasePreflight = "preflight"
 	HostStorageCleanupPhaseClean     = "clean"
@@ -450,6 +479,7 @@ type ConnectedAgent struct {
 	Tags                    []string
 	ConnectedAt             time.Time
 	OperationReceiptVersion int
+	ActionPreflightVersion  int
 }
 
 // --- Deploy protocol payloads ---

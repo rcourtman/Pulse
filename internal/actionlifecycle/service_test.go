@@ -883,11 +883,12 @@ func TestQueuedPolicyActionRevalidatesAfterSQLiteRestart(t *testing.T) {
 }
 
 type stubExecutor struct {
-	result    *unified.ExecutionResult
-	err       error
-	calls     int
-	received  unified.ActionAuditRecord
-	readiness *unified.ResourceActionReadiness
+	result      *unified.ExecutionResult
+	err         error
+	calls       int
+	received    unified.ActionAuditRecord
+	readiness   *unified.ResourceActionReadiness
+	feasibility *unified.ResourceActionReadiness
 }
 
 type reconcilingExecutor struct {
@@ -969,6 +970,13 @@ func (s *stubExecutor) CheckActionAvailable(_ context.Context, _ unified.ActionR
 		return unified.ResourceActionReadiness{}
 	}
 	return *s.readiness
+}
+
+func (s *stubExecutor) CheckActionFeasible(_ context.Context, _ string, _ unified.ActionRequest, _ unified.Resource) unified.ResourceActionReadiness {
+	if s.feasibility == nil {
+		return unified.ResourceActionReadiness{}
+	}
+	return *s.feasibility
 }
 
 type serviceEnv struct {
@@ -1179,6 +1187,24 @@ func TestPlanAvailabilityRefusalPersistsNothing(t *testing.T) {
 	}
 }
 
+func TestPlanAgentFeasibilityRefusalPersistsNothing(t *testing.T) {
+	now := time.Now().UTC()
+	env := newServiceEnv(t, testResource(now, unified.ApprovalAdmin))
+	env.executor.feasibility = &unified.ResourceActionReadiness{
+		Name: "restart", Available: false, ReasonCode: "target_state_changed",
+		Reason: "The target changed before approval.",
+	}
+	_, err := env.service.Plan(context.Background(), "default", restartRequest(), testActionActor("requester", "default"))
+	var refused *AvailabilityRefusedError
+	if !errors.As(err, &refused) || refused.Readiness.ReasonCode != "target_state_changed" {
+		t.Fatalf("error=%v refused=%#v", err, refused)
+	}
+	audits, queryErr := env.store.GetActionAudits("vm:42", time.Time{}, 10)
+	if queryErr != nil || len(audits) != 0 {
+		t.Fatalf("audits=%#v err=%v", audits, queryErr)
+	}
+}
+
 func TestDecideApprovesPendingAction(t *testing.T) {
 	now := time.Now().UTC()
 	env := newServiceEnv(t, testResource(now, unified.ApprovalAdmin))
@@ -1244,6 +1270,27 @@ func TestApprovalRequiresCurrentReadinessButRejectionRemainsAvailable(t *testing
 	rejected, err := env.service.Decide(context.Background(), "default", plan.ActionID, rejection)
 	if err != nil || rejected.State != unified.ActionStateRejected {
 		t.Fatalf("rejected=%#v err=%v", rejected, err)
+	}
+}
+
+func TestApprovalRechecksAgentFeasibilityBeforePersistingDecision(t *testing.T) {
+	now := time.Now().UTC()
+	env := newServiceEnv(t, testResource(now, unified.ApprovalAdmin))
+	plan, err := env.service.Plan(context.Background(), "default", restartRequest(), testActionActor("requester", "default"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	env.executor.feasibility = &unified.ResourceActionReadiness{
+		Name: "restart", Available: false, ReasonCode: "target_state_changed",
+		Reason: "The target changed after planning.",
+	}
+	decision := testActionDecision(t, env.service, "default", plan.ActionID, unified.ActionApprovalRecord{Actor: "operator", Outcome: unified.OutcomeApproved})
+	if _, err := env.service.Decide(context.Background(), "default", plan.ActionID, decision); !errors.Is(err, unified.ErrActionExecutionUnavailable) {
+		t.Fatalf("approval error=%v", err)
+	}
+	current := mustActionRecord(t, env.service, plan.ActionID)
+	if current.State != unified.ActionStatePending || len(current.Approvals) != 0 {
+		t.Fatalf("refused approval mutated record: %#v", current)
 	}
 }
 

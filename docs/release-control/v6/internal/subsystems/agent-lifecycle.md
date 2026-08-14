@@ -888,6 +888,20 @@ the fixed `/var/cache/apt/archives` scan, bounded entry/byte limits, and sole
 inspection failure, command failure, and unconfirmed reclaimed bytes all fail
 closed. The envelope has no command, path, package selector, arbitrary
 argument, installed-package removal, or reboot authority.
+Before a concrete Docker lifecycle/update, host update, or package-cache
+cleanup action is persisted for approval, the current Unified Agent may be
+asked to evaluate the exact already-bound operation through the versioned
+`action_preflight` protocol. That request is read-only, carries exactly one
+closed typed envelope and its action-bound request digest, and never enters the
+durable operation-receipt store. The result is limited to feasibility, the
+same bounded refusal-code vocabulary, the exact operation binding, and a fresh
+agent timestamp. It cannot approve, admit, reserve, execute, or verify a
+mutation. Current agents advertise protocol version 1 at registration; a
+server with the transport but an older connected agent fails concrete
+feasibility closed, while internal executors that predate the optional
+transport retain their compatibility path. Dispatch still repeats all local
+preconditions after durable admission because preflight evidence is not a
+lease and target state may race after approval.
 Proxmox VM and LXC lifecycle affordances follow the same adjacent boundary:
 lifecycle and fleet surfaces may consume backend-advertised `start`,
 `shutdown`, `reboot`, and `stop` capabilities and typed `actionReadiness`, but

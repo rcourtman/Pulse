@@ -678,6 +678,12 @@ fingerprint-bound `install_os_updates` operation after canonical lifecycle
 approval. Storage/recovery consumers may observe its redacted audit outcome and
 reboot-required fact as context, but must not treat package installation as
 storage maintenance, recovery evidence, or a storage-owned mutation path.
+The adjacent `action_preflight` request for a package update or package-cache
+cleanup is API/action-lifecycle and agent-transport readiness evidence only.
+Storage/recovery may display its bounded refusal reason but must not treat that
+read-only exact-digest check as storage repair, cleanup execution, recovery
+proof, a reservation on package-manager state, or authority to bypass the
+second precondition check at durable dispatch.
 The API-owned `internal/api/host_storage_cleanup_action_executor.go` is a
 narrow exception only in product purpose, not ownership: it may reclaim the
 fixed APT package cache through the canonical action lifecycle when the cache's

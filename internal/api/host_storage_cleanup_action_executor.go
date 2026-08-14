@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/rcourtman/pulse-go-rewrite/internal/actionlifecycle"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/operationreceipt"
@@ -75,6 +76,26 @@ func (e hostStorageCleanupActionExecutor) CheckActionAvailable(ctx context.Conte
 		}
 	}
 	return unified.ResourceActionReadiness{Name: hostStorageCleanupCapability, Available: true}
+}
+
+func (e hostStorageCleanupActionExecutor) CheckActionFeasible(ctx context.Context, actionID string, req unified.ActionRequest, resource unified.Resource) unified.ResourceActionReadiness {
+	if readiness := e.CheckActionAvailable(ctx, req, resource); readiness.Name == "" || !readiness.Available {
+		return readiness
+	}
+	commander, ok := e.agents.(actionPreflightAgentCommander)
+	if !ok {
+		return unified.ResourceActionReadiness{}
+	}
+	typed := agentexec.HostStorageCleanupPayload{
+		RequestID: uuid.NewString(), ActionID: strings.TrimSpace(actionID), Operation: agentexec.HostStorageCleanupOperationPackageCache,
+		ExpectedFingerprint: resource.Agent.StorageCleanup.Fingerprint,
+	}
+	if err := agentexec.BindHostStorageCleanupPayload(&typed); err != nil {
+		return actionPreflightReadiness(req.CapabilityName, nil, err)
+	}
+	preflight := agentexec.ActionPreflightPayload{RequestID: typed.RequestID, ProtocolVersion: agentexec.ActionPreflightProtocolVersion, StorageCleanup: &typed}
+	result, err := commander.PreflightAction(agentCommandContext(ctx), resource.Agent.AgentID, preflight)
+	return actionPreflightReadiness(req.CapabilityName, result, err)
 }
 
 func (e hostStorageCleanupActionExecutor) ExecuteAction(ctx context.Context, record unified.ActionAuditRecord) (*unified.ExecutionResult, error) {

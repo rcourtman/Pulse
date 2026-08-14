@@ -69,6 +69,34 @@ func (m *packageUpdateManager) Snapshot(ctx context.Context, force bool) agentex
 	return m.snapshotLocked(ctx, force)
 }
 
+func (m *packageUpdateManager) Preflight(ctx context.Context, req agentexec.HostUpdatePayload) (bool, string) {
+	if err := agentexec.ValidateHostUpdatePayload(&req); err != nil {
+		return false, agentexec.ActionRefusalContractInvalid
+	}
+	release, err := m.lease.acquire(ctx)
+	if err != nil {
+		return false, agentexec.ActionRefusalPackageManagerBusy
+	}
+	defer release()
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	snapshot := m.snapshotLocked(ctx, true)
+	if !snapshot.Supported {
+		return false, agentexec.ActionRefusalCapabilityUnavailable
+	}
+	if snapshot.Error != "" {
+		return false, agentexec.ActionRefusalPackagePreflightFailed
+	}
+	if snapshot.InventoryHash != strings.TrimSpace(req.ExpectedInventoryHash) {
+		return false, agentexec.ActionRefusalPackageInventoryChanged
+	}
+	checked, healthy := m.checkPackageManagerHealth(ctx)
+	if !checked || !healthy {
+		return false, agentexec.ActionRefusalPackageManagerUnhealthy
+	}
+	return true, ""
+}
+
 func (m *packageUpdateManager) snapshotLocked(ctx context.Context, force bool) agentexec.HostPackageUpdateSnapshot {
 	now := m.currentTime()
 	if !force && m.cached != nil && now.Sub(m.cached.CheckedAt) < m.cacheTTL {

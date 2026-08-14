@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/rcourtman/pulse-go-rewrite/internal/actionlifecycle"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/operationreceipt"
@@ -80,6 +81,26 @@ func (e hostUpdateActionExecutor) CheckActionAvailable(ctx context.Context, req 
 		}
 	}
 	return unified.ResourceActionReadiness{Name: hostPackageUpdateCapability, Available: true}
+}
+
+func (e hostUpdateActionExecutor) CheckActionFeasible(ctx context.Context, actionID string, req unified.ActionRequest, resource unified.Resource) unified.ResourceActionReadiness {
+	if readiness := e.CheckActionAvailable(ctx, req, resource); readiness.Name == "" || !readiness.Available {
+		return readiness
+	}
+	commander, ok := e.agents.(actionPreflightAgentCommander)
+	if !ok {
+		return unified.ResourceActionReadiness{}
+	}
+	typed := agentexec.HostUpdatePayload{
+		RequestID: uuid.NewString(), ActionID: strings.TrimSpace(actionID), Operation: agentexec.HostUpdateOperationInstall,
+		ExpectedInventoryHash: resource.Agent.PackageUpdates.InventoryHash,
+	}
+	if err := agentexec.BindHostUpdatePayload(&typed); err != nil {
+		return actionPreflightReadiness(req.CapabilityName, nil, err)
+	}
+	preflight := agentexec.ActionPreflightPayload{RequestID: typed.RequestID, ProtocolVersion: agentexec.ActionPreflightProtocolVersion, HostUpdate: &typed}
+	result, err := commander.PreflightAction(agentCommandContext(ctx), resource.Agent.AgentID, preflight)
+	return actionPreflightReadiness(req.CapabilityName, result, err)
 }
 
 func (e hostUpdateActionExecutor) ExecuteAction(ctx context.Context, record unified.ActionAuditRecord) (*unified.ExecutionResult, error) {

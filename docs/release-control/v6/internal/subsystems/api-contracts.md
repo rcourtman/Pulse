@@ -2305,6 +2305,17 @@ a new API state machine, queue contract, or verification-accounting field.
    uses that hook for command-agent connectivity and runtime posture; browser
    controls may consume advertised capabilities, but must not replace this
    check with direct shell, SSH, provider, or agent-command calls.
+   Concrete action feasibility is a separate lifecycle gate from cheap
+   capability availability. `AvailabilityChecker` remains safe for bulk
+   `/api/resources` projection; the optional `FeasibilityChecker` runs only
+   for a specific action during planning and again before approval/dispatch,
+   where it may ask the current Unified Agent to perform the versioned,
+   read-only `action_preflight` for the exact action-bound operation digest.
+   An infeasible, stale, mismatched, timed-out, or unsupported agent result
+   returns the same `409 action_execution_unavailable` contract and cannot
+   persist an approval or enter `executing`. The preflight result is readiness
+   evidence only, never approval, dispatch authority, durable receipt,
+   execution success, or verification.
    Docker / Podman lifecycle execution resolves the command WebSocket by the
    Docker reporting agent ID first, then by canonical Docker host name when the
    runtime source ID differs from the command-agent registration ID. Once
@@ -4063,16 +4074,19 @@ count only non-integration-backed hosts as registered agents.
 `POST /api/actions/{actionId}/execute` routes through the transport-independent
 Actions lifecycle, which revalidates the approved plan against the current
 canonical resource and then asks the optional executor-owned
-`AvailabilityChecker` for live readiness before entering `executing`, creating
-a dispatch attempt, or calling the executor. The same gate applies to
+`AvailabilityChecker` for cheap live readiness and the optional
+`FeasibilityChecker` for exact agent-local preflight before entering
+`executing`, creating a dispatch attempt, or calling the executor. The same gates apply to
 `ExecuteUnderPolicy`, so an automatic broker cannot bypass it. A resource that
 disappears remains `action_plan_drift`; an explicitly unavailable capability
 returns HTTP `409` with shared code `action_execution_unavailable` and bounded
 `resourceId`, `capabilityName`, `reasonCode`, and `reason` details. Pulse
 persists a terminal failed/no-effect audit and lifecycle event and publishes
-the normal completion notification. Executors without the optional checker,
+the normal completion notification. Executors without either optional checker,
 and checkers returning an empty readiness result, preserve the existing
-compatibility path. Registry or readiness-check infrastructure failures remain
+compatibility path. A current executor whose agent supports the feasibility
+transport fails closed when the connected agent cannot answer it. Registry or
+readiness-check infrastructure failures remain
 nonterminal internal errors rather than false permanent refusals.
 
 The public Patrol investigation boundary now carries independent

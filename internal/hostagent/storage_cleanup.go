@@ -60,6 +60,30 @@ func (m *storageCleanupManager) Snapshot(ctx context.Context, force bool) agente
 	return m.snapshotLocked(force)
 }
 
+func (m *storageCleanupManager) Preflight(ctx context.Context, req agentexec.HostStorageCleanupPayload) (bool, string) {
+	if err := agentexec.ValidateHostStorageCleanupPayload(&req); err != nil {
+		return false, agentexec.ActionRefusalContractInvalid
+	}
+	release, err := m.lease.acquire(ctx)
+	if err != nil {
+		return false, agentexec.ActionRefusalPackageManagerBusy
+	}
+	defer release()
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	snapshot := m.snapshotLocked(true)
+	if !snapshot.Supported {
+		return false, agentexec.ActionRefusalCapabilityUnavailable
+	}
+	if snapshot.Error != "" {
+		return false, agentexec.ActionRefusalCleanupPreflightFailed
+	}
+	if snapshot.Fingerprint != strings.TrimSpace(req.ExpectedFingerprint) {
+		return false, agentexec.ActionRefusalCleanupInventoryChanged
+	}
+	return true, ""
+}
+
 func (m *storageCleanupManager) snapshotLocked(force bool) agentexec.HostStorageCleanupSnapshot {
 	now := m.currentTime()
 	if !force && m.cached != nil && now.Sub(m.cached.CheckedAt) < m.cacheTTL {

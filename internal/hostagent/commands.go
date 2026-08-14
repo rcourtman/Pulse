@@ -194,6 +194,8 @@ const (
 	msgTypeDockerContainerLifecycleResult messageType = "docker_container_lifecycle_result"
 	msgTypeDockerContainerUpdate          messageType = "docker_container_update"
 	msgTypeDockerContainerUpdateResult    messageType = "docker_container_update_result"
+	msgTypeActionPreflight                messageType = "action_preflight"
+	msgTypeActionPreflightResult          messageType = "action_preflight_result"
 	msgTypeOperationQuery                 messageType = "agent_operation_query"
 	msgTypeOperationQueryResult           messageType = "agent_operation_query_result"
 	msgTypeDeployPreflight                messageType = "deploy_preflight"
@@ -217,6 +219,7 @@ type registerPayload struct {
 	Tags                    []string `json:"tags,omitempty"`
 	Token                   string   `json:"token"`
 	OperationReceiptVersion int      `json:"operation_receipt_version,omitempty"`
+	ActionPreflightVersion  int      `json:"action_preflight_version,omitempty"`
 }
 
 type registeredPayload struct {
@@ -442,6 +445,7 @@ func (c *CommandClient) sendRegistration(conn *websocket.Conn) error {
 		Platform:                c.platform,
 		Token:                   c.apiToken,
 		OperationReceiptVersion: c.operationReceiptVersion(),
+		ActionPreflightVersion:  agentexec.ActionPreflightProtocolVersion,
 	})
 	if err != nil {
 		return fmt.Errorf("marshal registration payload: %w", err)
@@ -571,6 +575,14 @@ func (c *CommandClient) handleMessages(ctx context.Context, conn *websocket.Conn
 			}
 			go c.handleHostUpdate(ctx, conn, payload)
 
+		case msgTypeActionPreflight:
+			payload, err := agentexec.DecodeActionPreflightPayload(msg.Payload)
+			if err != nil {
+				c.logger.Warn().Err(err).Msg("Dropping invalid action preflight request")
+				continue
+			}
+			go c.handleActionPreflight(ctx, conn, payload)
+
 		case msgTypeHostStorageCleanup:
 			payload, err := agentexec.DecodeHostStorageCleanupPayload(msg.Payload)
 			if err != nil {
@@ -651,6 +663,76 @@ func (c *CommandClient) handleHostUpdate(ctx context.Context, conn *websocket.Co
 		result = c.packageUpdates.Apply(updateCtx, payload)
 	}
 	completeHostAPTOperation(c, conn, identity, sanitizeHostUpdateReceipt(result), agentexec.HostUpdateReceiptKind, payload.RequestID, "Failed to persist host update terminal receipt", c.sendHostUpdateResult)
+}
+
+func (c *CommandClient) handleActionPreflight(ctx context.Context, conn *websocket.Conn, payload agentexec.ActionPreflightPayload) {
+	operation, version, digest := agentexec.ActionPreflightBinding(payload)
+	result := agentexec.ActionPreflightResultPayload{
+		RequestID: payload.RequestID, ProtocolVersion: payload.ProtocolVersion,
+		Operation: operation, OperationVersion: version, RequestDigest: digest,
+		CheckedAt: time.Now().UTC(),
+	}
+	preflightCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+	switch {
+	case payload.HostUpdate != nil:
+		result.Feasible, result.ReasonCode = c.preflightHostUpdate(preflightCtx, *payload.HostUpdate)
+	case payload.StorageCleanup != nil:
+		result.Feasible, result.ReasonCode = c.preflightStorageCleanup(preflightCtx, *payload.StorageCleanup)
+	case payload.DockerLifecycle != nil:
+		result.Feasible, result.ReasonCode = c.preflightDockerLifecycle(preflightCtx, *payload.DockerLifecycle)
+	case payload.DockerUpdate != nil:
+		result.Feasible, result.ReasonCode = c.preflightDockerUpdate(preflightCtx, *payload.DockerUpdate)
+	default:
+		result.ReasonCode = agentexec.ActionRefusalContractInvalid
+	}
+	result.CheckedAt = time.Now().UTC()
+	encoded, err := json.Marshal(result)
+	if err != nil {
+		return
+	}
+	msg := wsMessage{Type: msgTypeActionPreflightResult, ID: result.RequestID, Timestamp: time.Now(), Payload: encoded}
+	c.connMu.Lock()
+	err = conn.WriteJSON(msg)
+	c.connMu.Unlock()
+	if err != nil {
+		c.logger.Debug().Err(err).Str("request_id", result.RequestID).Msg("Failed to send action preflight result")
+	}
+}
+
+func (c *CommandClient) preflightHostUpdate(ctx context.Context, payload agentexec.HostUpdatePayload) (bool, string) {
+	if c.packageUpdates == nil {
+		return false, agentexec.ActionRefusalCapabilityUnavailable
+	}
+	return c.packageUpdates.Preflight(ctx, payload)
+}
+
+func (c *CommandClient) preflightStorageCleanup(ctx context.Context, payload agentexec.HostStorageCleanupPayload) (bool, string) {
+	if c.storageCleanup == nil {
+		return false, agentexec.ActionRefusalCapabilityUnavailable
+	}
+	return c.storageCleanup.Preflight(ctx, payload)
+}
+
+func (c *CommandClient) preflightDockerLifecycle(ctx context.Context, payload agentexec.DockerContainerLifecyclePayload) (bool, string) {
+	preflighter, ok := c.dockerLifecycle.(interface {
+		Preflight(context.Context, agentexec.DockerContainerLifecyclePayload) (bool, string)
+	})
+	if !ok || preflighter == nil {
+		return false, agentexec.ActionRefusalCapabilityUnavailable
+	}
+	return preflighter.Preflight(ctx, payload)
+}
+
+func (c *CommandClient) preflightDockerUpdate(ctx context.Context, payload agentexec.DockerContainerUpdatePayload) (bool, string) {
+	preflighter, ok := c.dockerUpdater.(DockerContainerUpdatePreflighter)
+	if !ok || preflighter == nil {
+		return false, agentexec.ActionRefusalCapabilityUnavailable
+	}
+	if err := preflighter.TypedContainerUpdatePreflight(ctx, payload.Runtime, payload.ContainerID, payload.ExpectedImageDigest); err != nil {
+		return false, agentexec.ActionPreflightReasonCode(err, agentexec.ActionRefusalTargetPreconditionFailed)
+	}
+	return true, ""
 }
 
 // beginHostAPTOperation runs the shared durable admission prefix of the typed

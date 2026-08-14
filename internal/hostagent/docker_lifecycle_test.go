@@ -76,6 +76,25 @@ func TestDockerLifecycleManagerStaleBeforeStateIsTripleZero(t *testing.T) {
 	}
 }
 
+func TestDockerLifecyclePreflightRefusesStateDriftWithoutMutation(t *testing.T) {
+	t.Setenv("DOCKER_CONTEXT", "")
+	before := time.Now().UTC().Add(-time.Minute)
+	mutations := 0
+	manager := &localDockerLifecycleManager{now: time.Now, run: func(_ context.Context, _ string, args ...string) ([]byte, error) {
+		if len(args) > 0 && args[0] == "restart" {
+			mutations++
+		}
+		if len(args) > 2 && strings.Contains(args[2], ".State") {
+			return []byte(fmt.Sprintf(`{"Status":"exited","Running":false,"StartedAt":%q}`, before.Format(time.RFC3339Nano))), nil
+		}
+		return []byte("0"), nil
+	}}
+	feasible, reason := manager.Preflight(context.Background(), dockerLifecycleTestRequest(t, before))
+	if feasible || reason != agentexec.ActionRefusalTargetStateChanged || mutations != 0 {
+		t.Fatalf("feasible=%t reason=%q mutations=%d", feasible, reason, mutations)
+	}
+}
+
 func TestDockerLifecycleManagerFailedInspectIsTripleZero(t *testing.T) {
 	t.Setenv("DOCKER_CONTEXT", "")
 	manager := &localDockerLifecycleManager{now: time.Now, run: func(context.Context, string, ...string) ([]byte, error) {

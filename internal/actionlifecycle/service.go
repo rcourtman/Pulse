@@ -46,6 +46,14 @@ type AvailabilityChecker interface {
 	CheckActionAvailable(ctx context.Context, req unified.ActionRequest, resource unified.Resource) unified.ResourceActionReadiness
 }
 
+// FeasibilityChecker is the trust-critical, operation-specific counterpart to
+// AvailabilityChecker. Availability is cheap enough for resource projection;
+// feasibility may perform bounded remote reads and is called only while
+// planning, approving, or dispatching a concrete action.
+type FeasibilityChecker interface {
+	CheckActionFeasible(ctx context.Context, actionID string, req unified.ActionRequest, resource unified.Resource) unified.ResourceActionReadiness
+}
+
 // RefreshPlanner reconstructs broker-owned planning inputs for a replacement
 // plan. Public/operator actions use the lifecycle default; first-party
 // brokers use this hook to re-evaluate current policy factors without letting
@@ -471,6 +479,13 @@ func (s *Service) PlanWithOptions(ctx context.Context, orgID string, req unified
 				ResourceID:     req.ResourceID,
 				CapabilityName: req.CapabilityName,
 				Readiness:      readiness,
+			}
+		}
+	}
+	if checker, ok := s.Executor.(FeasibilityChecker); ok {
+		if readiness := checker.CheckActionFeasible(ctx, plan.ActionID, req, *resource); readiness.Name != "" && !readiness.Available {
+			return unified.ActionPlan{}, &AvailabilityRefusedError{
+				ResourceID: req.ResourceID, CapabilityName: req.CapabilityName, Readiness: readiness,
 			}
 		}
 	}
@@ -1600,8 +1615,9 @@ const (
 // the optional executor-owned readiness checker immediately before admission.
 // An absent checker or an empty readiness result preserves compatibility.
 func (s *Service) ValidateExecutionAvailable(ctx context.Context, orgID string, record unified.ActionAuditRecord) error {
-	checker, ok := s.Executor.(AvailabilityChecker)
-	if !ok {
+	availability, hasAvailability := s.Executor.(AvailabilityChecker)
+	feasibility, hasFeasibility := s.Executor.(FeasibilityChecker)
+	if !hasAvailability && !hasFeasibility {
 		return nil
 	}
 	normalized, err := unified.NormalizeActionAuditRecord(record)
@@ -1616,18 +1632,30 @@ func (s *Service) ValidateExecutionAvailable(ctx context.Context, orgID string, 
 	if !ok || resource == nil {
 		return fmt.Errorf("%w: resource %q is no longer present", unified.ErrActionPlanDrift, normalized.Request.ResourceID)
 	}
-	readiness := checker.CheckActionAvailable(ctx, normalized.Request, *resource)
+	readiness := unified.ResourceActionReadiness{}
+	if hasAvailability {
+		readiness = availability.CheckActionAvailable(ctx, normalized.Request, *resource)
+	}
 	readiness.Name = strings.TrimSpace(readiness.Name)
 	readiness.ReasonCode = boundedActionAvailabilityText(readiness.ReasonCode, actionAvailabilityReasonCodeMaxRunes)
 	readiness.Reason = boundedActionAvailabilityText(readiness.Reason, actionAvailabilityReasonMaxRunes)
-	if readiness.Name == "" || readiness.Available {
-		return nil
+	if readiness.Name != "" && !readiness.Available {
+		return &AvailabilityRefusedError{
+			ResourceID: normalized.Request.ResourceID, CapabilityName: normalized.Request.CapabilityName, Readiness: readiness,
+		}
 	}
-	return &AvailabilityRefusedError{
-		ResourceID:     normalized.Request.ResourceID,
-		CapabilityName: normalized.Request.CapabilityName,
-		Readiness:      readiness,
+	if hasFeasibility {
+		readiness = feasibility.CheckActionFeasible(ctx, normalized.ID, normalized.Request, *resource)
+		readiness.Name = strings.TrimSpace(readiness.Name)
+		readiness.ReasonCode = boundedActionAvailabilityText(readiness.ReasonCode, actionAvailabilityReasonCodeMaxRunes)
+		readiness.Reason = boundedActionAvailabilityText(readiness.Reason, actionAvailabilityReasonMaxRunes)
+		if readiness.Name != "" && !readiness.Available {
+			return &AvailabilityRefusedError{
+				ResourceID: normalized.Request.ResourceID, CapabilityName: normalized.Request.CapabilityName, Readiness: readiness,
+			}
+		}
 	}
+	return nil
 }
 
 func boundedActionAvailabilityText(value string, maxRunes int) string {

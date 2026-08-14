@@ -21211,6 +21211,23 @@ func TestContract_ResourceActionReadinessPayloadShape(t *testing.T) {
 	}
 }
 
+func TestContract_ActionPreflightRefusalProjectsStableReadiness(t *testing.T) {
+	result := &agentexec.ActionPreflightResultPayload{
+		Feasible:   false,
+		ReasonCode: agentexec.ActionRefusalPackageManagerUnhealthy,
+	}
+	readiness := actionPreflightReadiness(hostPackageUpdateCapability, result, nil)
+	if readiness.Name != hostPackageUpdateCapability || readiness.Available || readiness.ReasonCode != agentexec.ActionRefusalPackageManagerUnhealthy {
+		t.Fatalf("readiness=%#v", readiness)
+	}
+	if readiness.Reason != "The host package manager needs recovery before updates can run safely." {
+		t.Fatalf("operator reason=%q", readiness.Reason)
+	}
+	if strings.Contains(strings.ToLower(readiness.Reason), "apt-get") || strings.Contains(strings.ToLower(readiness.Reason), "dpkg") {
+		t.Fatalf("readiness leaked agent command detail: %q", readiness.Reason)
+	}
+}
+
 func TestContract_DockerLifecycleActionsResolveCommandAgentAndDispatchOneTypedOperation(t *testing.T) {
 	source, err := os.ReadFile("docker_container_action_executor.go")
 	if err != nil {

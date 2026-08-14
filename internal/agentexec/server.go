@@ -68,6 +68,7 @@ type Server struct {
 	pendingHostUpdates               map[string]chan HostUpdateResultPayload         // scoped request key -> typed host-update response
 	pendingDockerContainerLifecycles map[string]chan DockerContainerLifecycleResultPayload
 	pendingDockerContainerUpdates    map[string]chan DockerContainerUpdateResultPayload
+	pendingActionPreflights          map[string]chan ActionPreflightResultPayload
 	pendingHostOperations            map[string]pendingHostOperation // scoped request key -> exact typed APT operation/query identity
 	pendingOperationQueries          map[string]pendingOperationQuery
 	deploySubs                       map[string]chan DeployProgressPayload // deploySubKey(agentID, jobID) -> progress subscriber
@@ -195,6 +196,7 @@ func NewServerWithAdmissionValidator(admit AgentRegistrationValidator, validateS
 		pendingHostUpdates:               make(map[string]chan HostUpdateResultPayload),
 		pendingDockerContainerLifecycles: make(map[string]chan DockerContainerLifecycleResultPayload),
 		pendingDockerContainerUpdates:    make(map[string]chan DockerContainerUpdateResultPayload),
+		pendingActionPreflights:          make(map[string]chan ActionPreflightResultPayload),
 		pendingHostOperations:            make(map[string]pendingHostOperation),
 		pendingOperationQueries:          make(map[string]pendingOperationQuery),
 		deploySubs:                       make(map[string]chan DeployProgressPayload),
@@ -974,6 +976,7 @@ func (s *Server) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 			Tags:                    reg.Tags,
 			ConnectedAt:             time.Now(),
 			OperationReceiptVersion: reg.OperationReceiptVersion,
+			ActionPreflightVersion:  reg.ActionPreflightVersion,
 		},
 		admission:        admission,
 		sessionKey:       agentSessionKey(admission.OrganizationID, admission.AgentID),
@@ -1241,6 +1244,23 @@ func (s *Server) readLoop(ac *agentConn) {
 				case ch <- result:
 				default:
 					log.Warn().Str("agent_id", ac.agent.AgentID).Str("request_id", result.RequestID).Msg("Host update result channel full, dropping")
+				}
+			}
+
+		case MsgTypeActionPreflightResult:
+			result, decodeErr := DecodeActionPreflightResultPayload(msg.Payload)
+			if decodeErr != nil {
+				log.Warn().Err(decodeErr).Str("agent_id", ac.agent.AgentID).Msg("Dropping invalid action preflight result")
+				continue
+			}
+			s.mu.RLock()
+			ch, ok := s.pendingActionPreflights[pendingRequestKey(connectionSessionKey(ac), result.RequestID)]
+			s.mu.RUnlock()
+			if ok {
+				select {
+				case ch <- result:
+				default:
+					log.Warn().Str("agent_id", ac.agent.AgentID).Str("request_id", result.RequestID).Msg("Action preflight result channel full, dropping")
 				}
 			}
 
@@ -1773,6 +1793,72 @@ func (s *Server) ExecuteHostUpdate(ctx context.Context, agentID string, req Host
 		msgType: MsgTypeHostUpdate, label: "host update",
 		pending: s.pendingHostUpdates, validateResult: ValidateHostUpdateResultForRequestAt,
 	})
+}
+
+// PreflightAction asks the current Unified Agent to evaluate the exact typed
+// operation without admitting a durable operation or starting a mutation.
+func (s *Server) PreflightAction(ctx context.Context, agentID string, req ActionPreflightPayload) (*ActionPreflightResultPayload, error) {
+	if s == nil {
+		return nil, fmt.Errorf("agent execution server is unavailable")
+	}
+	agentID = strings.TrimSpace(agentID)
+	if agentID == "" {
+		return nil, fmt.Errorf("agent id is required")
+	}
+	if strings.TrimSpace(req.RequestID) == "" {
+		req.RequestID = uuid.NewString()
+	}
+	if err := ValidateActionPreflightPayload(&req); err != nil {
+		return nil, err
+	}
+	ac, ok := s.connectionForContext(ctx, agentID)
+	if !ok {
+		return nil, fmt.Errorf("agent %s not connected", agentID)
+	}
+	if ac.agent.ActionPreflightVersion != ActionPreflightProtocolVersion {
+		return nil, fmt.Errorf("agent does not support action preflight protocol")
+	}
+	ch := make(chan ActionPreflightResultPayload, 1)
+	key := pendingRequestKey(connectionSessionKey(ac), req.RequestID)
+	s.mu.Lock()
+	if _, exists := s.pendingActionPreflights[key]; exists {
+		s.mu.Unlock()
+		return nil, fmt.Errorf("action preflight request %q is already pending", req.RequestID)
+	}
+	s.pendingActionPreflights[key] = ch
+	s.mu.Unlock()
+	defer func() {
+		s.mu.Lock()
+		delete(s.pendingActionPreflights, key)
+		s.mu.Unlock()
+	}()
+	msg, err := NewMessage(MsgTypeActionPreflight, req.RequestID, req)
+	if err != nil {
+		return nil, err
+	}
+	ac.writeMu.Lock()
+	err = s.sendMessage(ac.conn, msg)
+	ac.writeMu.Unlock()
+	if err != nil {
+		return nil, fmt.Errorf("failed to send action preflight request: %w", err)
+	}
+	timer := time.NewTimer(20 * time.Second)
+	defer timer.Stop()
+	select {
+	case result := <-ch:
+		if err := ValidateActionPreflightResultForRequest(req, result, s.currentTime()); err != nil {
+			return nil, fmt.Errorf("action preflight result validation failed: %w", err)
+		}
+		return &result, nil
+	case <-timer.C:
+		return nil, fmt.Errorf("action preflight timed out")
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case <-ac.done:
+		return nil, fmt.Errorf("agent %s disconnected before action preflight result", agentID)
+	case <-s.shutdown:
+		return nil, errServerShuttingDown
+	}
 }
 
 // ExecuteHostStorageCleanup dispatches the closed package-cache cleanup

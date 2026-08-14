@@ -117,6 +117,26 @@ func TestStorageCleanupManagerRefusesFingerprintDriftBeforeMutation(t *testing.T
 	}
 }
 
+func TestStorageCleanupPreflightRefusesFingerprintDriftWithoutClean(t *testing.T) {
+	manager := newStorageCleanupManager("linux", newPackageManagerLease())
+	manager.lookPath = func(string) (string, error) { return "/usr/bin/apt-get", nil }
+	manager.scan = func() (agentexec.HostStorageCleanupSnapshot, error) {
+		return agentexec.HostStorageCleanupSnapshot{Fingerprint: "sha256:" + strings.Repeat("b", 64), ReclaimableBytes: 400}, nil
+	}
+	manager.run = func(context.Context, []string, string, ...string) packageUpdateCommandResult {
+		t.Fatal("read-only preflight must not invoke apt-get clean")
+		return packageUpdateCommandResult{}
+	}
+	req := agentexec.HostStorageCleanupPayload{RequestID: "preflight-1", ActionID: "action-1", Operation: agentexec.HostStorageCleanupOperationPackageCache, ExpectedFingerprint: "sha256:" + strings.Repeat("a", 64)}
+	if err := agentexec.BindHostStorageCleanupPayload(&req); err != nil {
+		t.Fatal(err)
+	}
+	feasible, reason := manager.Preflight(context.Background(), req)
+	if feasible || reason != agentexec.ActionRefusalCleanupInventoryChanged {
+		t.Fatalf("feasible=%t reason=%q", feasible, reason)
+	}
+}
+
 func TestStorageCleanupManagerFailurePhasesPreserveMeasuredEffect(t *testing.T) {
 	before := agentexec.HostStorageCleanupSnapshot{Supported: true, Provider: "apt-package-cache", Fingerprint: "sha256:" + strings.Repeat("a", 64), ReclaimableBytes: 400, CheckedAt: time.Now().UTC().Add(-time.Second)}
 	for _, tc := range []struct {
