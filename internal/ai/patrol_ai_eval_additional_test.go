@@ -23,6 +23,8 @@ func TestEvalPromptBuilders(t *testing.T) {
 	for _, required := range []string{
 		strings.Join(tools.PatrolReportFindingRequiredArguments(), ", "),
 		"one operator-facing finding on the user-facing degraded resource",
+		"Optimize for operator work, not symptom count",
+		"owned by real-time alerts",
 		"Report one incident at a time",
 		"Only **critical** and **warning** are valid finding severities",
 		"without calling patrol_report_finding",

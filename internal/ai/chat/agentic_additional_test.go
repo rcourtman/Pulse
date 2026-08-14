@@ -418,7 +418,7 @@ func TestPatrolFindingLifecycleContinuationRequestNarrowsWatchTools(t *testing.T
 	if req.System != patrolFindingLifecycleContinuationSystemPrompt {
 		t.Fatalf("continuation system prompt = %q", req.System)
 	}
-	for _, required := range []string{"Accepted lifecycle results are authoritative", "do not repeat or assess", "another independent operational incident", "one operator-facing finding", "Do not investigate further"} {
+	for _, required := range []string{"Accepted lifecycle results are authoritative", "do not repeat or assess", "Optimize for operator work", "owned by real-time alerts", "causally independent operational incident", "Do not investigate further"} {
 		if !strings.Contains(req.System, required) {
 			t.Fatalf("continuation prompt missing %q: %s", required, req.System)
 		}

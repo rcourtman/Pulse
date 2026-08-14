@@ -151,6 +151,17 @@ and critical severities, and lower-priority or healthy observations remain
 summary prose rather than rejected lifecycle writes. Multi-incident Watch
 runs record one complete report at a time so provider turns cannot split
 required fields across parallel calls.
+Resource-down state remains owned by Pulse's real-time alerts rather than
+becoming duplicate Patrol work. When a report merely restates that a current
+app container is stopped, exited, dead, or offline, the adapter returns a
+successful typed no-op (`applied=false`,
+`reason=alert_owned_resource_state`) and persists no finding. A distinct
+downstream degradation or deeper reliability issue remains reportable. The
+boundary classifies the proposed issue by its required stable key rather than
+free-form prose, so evidence that a deeper issue also stopped the container
+does not hide that issue. This lets causal incidents retain one user-facing
+Patrol finding even when a provider tries to file the alert-owned dependency
+state separately.
 Investigation and interactive profiles retain a tool-free final summary; a
 Watch finding write at the deadline is followed only by the existing bounded
 summary path. A capability-unavailable

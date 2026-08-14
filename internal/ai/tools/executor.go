@@ -159,6 +159,18 @@ func (e *PatrolFindingAlreadyReportedError) Error() string {
 	return "finding " + e.FindingID + " was already reported in this patrol run"
 }
 
+// PatrolFindingOwnedByAlertsError is returned when a proposed finding merely
+// restates a current resource-down condition that Pulse's real-time alerting
+// layer already owns. The tool boundary acknowledges the model decision as an
+// idempotent no-op so it cannot create duplicate operator work.
+type PatrolFindingOwnedByAlertsError struct {
+	FindingID string
+}
+
+func (e *PatrolFindingOwnedByAlertsError) Error() string {
+	return "finding " + e.FindingID + " restates resource state owned by real-time alerts"
+}
+
 // PatrolFindingAssessmentInput is the explicit terminal verdict for an active
 // finding that was presented to the model during one Patrol run.
 type PatrolFindingAssessmentInput struct {

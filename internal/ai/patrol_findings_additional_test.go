@@ -1628,3 +1628,53 @@ func TestPatrolFindingAdapterDistinguishesSameRunCreationFromExistingRereport(t 
 		t.Fatalf("re-reported existing finding missing assessments = %v, want [%s]", missing, findingID)
 	}
 }
+
+func TestPatrolFindingAdapterTreatsStoppedContainerStateAsAlertOwned(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+	state := newPatrolRuntimeState(models.StateSnapshot{
+		DockerHosts: []models.DockerHost{{
+			ID: "docker-host-1",
+			Containers: []models.DockerContainer{
+				{ID: "dependency", Name: "database", State: "exited", Health: "unhealthy"},
+				{ID: "client", Name: "jellyfin", State: "running", Health: "unhealthy"},
+			},
+		}},
+	})
+	adapter := newPatrolFindingCreatorAdapterState(ps, state)
+	adapter.setFindingScope([]string{"dependency", "client"})
+
+	alertOwned := tools.PatrolFindingInput{
+		ResourceID: "dependency", ResourceName: "database", ResourceType: "app-container",
+		Key: "container-exited-unhealthy", Severity: "warning", Category: "reliability",
+		Title: "Container exited with unhealthy status", Description: "The dependency container is exited and not running.",
+		Recommendation: "Inspect why it exited.", Evidence: "Current provider state is exited and unhealthy.",
+	}
+	findingID, isNew, err := adapter.CreateFinding(alertOwned)
+	var ownedByAlerts *tools.PatrolFindingOwnedByAlertsError
+	if !errors.As(err, &ownedByAlerts) || ownedByAlerts.FindingID != findingID || isNew {
+		t.Fatalf("alert-owned report = (%q, %t, %v), want typed no-op", findingID, isNew, err)
+	}
+	if stored := ps.findings.Get(findingID); stored != nil || len(adapter.getReportedFindingIDs()) != 0 {
+		t.Fatalf("alert-owned report was persisted: stored=%+v reported=%v", stored, adapter.getReportedFindingIDs())
+	}
+
+	deeperIssue := alertOwned
+	deeperIssue.Key = "oom-killed"
+	deeperIssue.Title = "Container stopped after an out-of-memory kill"
+	deeperIssue.Description = "The runtime recorded a distinct out-of-memory termination."
+	deeperIssue.Evidence = "Provider state records OOMKilled=true."
+	if _, created, createErr := adapter.CreateFinding(deeperIssue); createErr != nil || !created {
+		t.Fatalf("deeper stopped-container issue = (%t, %v), want accepted finding", created, createErr)
+	}
+
+	downstream := alertOwned
+	downstream.ResourceID = "client"
+	downstream.ResourceName = "jellyfin"
+	downstream.Key = "playback-health-degraded"
+	downstream.Title = "Playback service health check is failing"
+	downstream.Description = "The running playback service is unhealthy."
+	downstream.Evidence = "Current provider state is running and unhealthy."
+	if _, created, createErr := adapter.CreateFinding(downstream); createErr != nil || !created {
+		t.Fatalf("distinct downstream degradation = (%t, %v), want accepted finding", created, createErr)
+	}
+}

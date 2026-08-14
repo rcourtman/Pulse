@@ -615,6 +615,9 @@ func (a *patrolFindingCreatorAdapter) CreateFinding(input tools.PatrolFindingInp
 		Source:           "ai-analysis",
 		ObjectiveContext: clonePatrolObjectiveContext(a.objectiveContext),
 	}
+	if a.findingOwnedByAlerts(finding) {
+		return id, false, &tools.PatrolFindingOwnedByAlertsError{FindingID: id}
+	}
 
 	// Inline validation: check if finding is actionable against current metrics
 	if !a.isActionable(finding) {
@@ -660,6 +663,43 @@ func (a *patrolFindingCreatorAdapter) CreateFinding(input tools.PatrolFindingInp
 	}
 
 	return id, isNew, nil
+}
+
+func (a *patrolFindingCreatorAdapter) findingOwnedByAlerts(finding *Finding) bool {
+	if finding == nil || finding.ResourceType != "app-container" || finding.Category != FindingCategoryReliability {
+		return false
+	}
+
+	state := ""
+	for _, row := range patrolAppContainerRows(a.snap, nil) {
+		if row.id == finding.ResourceID || row.name == finding.ResourceID || row.name == finding.ResourceName {
+			state = strings.ToLower(strings.TrimSpace(row.status))
+			break
+		}
+	}
+	switch state {
+	case "exited", "stopped", "dead", "offline":
+	default:
+		return false
+	}
+
+	// The stable key is the finding's machine-readable classification. Keep
+	// this boundary deterministic and deliberately avoid scanning prose:
+	// deeper issues often mention that a container stopped in their evidence,
+	// but keys such as oom-killed or invalid-configuration describe separate
+	// operator work and must remain reportable.
+	keyParts := strings.FieldsFunc(normalizeFindingKey(finding.Key), func(r rune) bool { return r == '-' })
+	for i, part := range keyParts {
+		switch part {
+		case "exited", "stopped", "dead", "offline", "unavailable", "down":
+			return true
+		case "not":
+			if i+1 < len(keyParts) && keyParts[i+1] == "running" {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func (a *patrolFindingCreatorAdapter) findingInCurrentScope(finding *Finding) bool {

@@ -42,8 +42,9 @@ func (e *PulseToolExecutor) registerPatrolTools() {
 			Description: fmt.Sprintf(`Report an infrastructure finding discovered during patrol investigation.
 
 Call this tool to create a structured finding after you have gathered sufficient evidence. A provider-reported failed health check, failed backup, or broken replication state is sufficient evidence for the confirmed symptom even when optional logs or command execution are unavailable. Use warning/reliability for a failed health check unless the evidence establishes a critical consequence. Report the symptom and state that its root cause is unknown; do not fabricate a cause or suppress the finding while searching for one.
-Every call must independently include all required arguments: %s. Report one causal incident at a time and wait for its result before reporting another; never split fields across parallel calls.
+Every call must independently include all required arguments: %s. Report one causal incident at a time and wait for its result before reporting another; never split fields across parallel calls or attempt reporting several findings in parallel.
 Group symptoms that share one causal chain into one operator-facing finding on the user-facing degraded resource. Include related dependency evidence and honest uncertainty in that finding. Create separate findings only for causally independent incidents.
+Do not report a stopped, exited, offline, or otherwise down resource merely to restate its current state; real-time alerts own that condition. Report a distinct downstream degradation or deeper reliability issue only when the evidence establishes one.
 Every finding must include concrete evidence and a safe, actionable recommendation grounded in that evidence. The recommendation may be a bounded investigation or verification step when remediation is not yet justified; never claim that an action was taken or verified when it was not.
 The finding will be validated against current metrics and deduplicated automatically.
 
@@ -570,6 +571,16 @@ func handlePatrolReportFinding(_ context.Context, e *PulseToolExecutor, args map
 				"is_new":                                true,
 				"applied":                               false,
 				"reason":                                "finding_reported_this_run",
+			}), nil
+		}
+		var ownedByAlerts *PatrolFindingOwnedByAlertsError
+		if errors.As(err, &ownedByAlerts) {
+			return NewJSONResult(map[string]interface{}{
+				"ok":                                    true,
+				agentcapabilities.FindingIDArgumentName: ownedByAlerts.FindingID,
+				"is_new":                                false,
+				"applied":                               false,
+				"reason":                                "alert_owned_resource_state",
 			}), nil
 		}
 		return NewErrorResult(fmt.Errorf("failed to create finding: %w", err)), nil

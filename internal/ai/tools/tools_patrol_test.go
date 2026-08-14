@@ -157,6 +157,26 @@ func TestHandlePatrolReportFinding_AcknowledgesSameRunDuplicateAsNoOp(t *testing
 	require.Len(t, creator.createCalls, 1)
 }
 
+func TestHandlePatrolReportFinding_AcknowledgesAlertOwnedStateAsNoOp(t *testing.T) {
+	creator := &mockPatrolFindingCreator{
+		createFindingFunc: func(PatrolFindingInput) (string, bool, error) {
+			return "finding-alert-owned", false, &PatrolFindingOwnedByAlertsError{FindingID: "finding-alert-owned"}
+		},
+		checked: true,
+	}
+	exec := newPatrolTestExecutor(creator)
+	result, err := handlePatrolReportFinding(context.Background(), exec, validReportArgs())
+	require.NoError(t, err)
+
+	var parsed map[string]interface{}
+	require.NoError(t, json.Unmarshal([]byte(extractText(result)), &parsed))
+	assert.Equal(t, true, parsed["ok"])
+	assert.Equal(t, false, parsed["applied"])
+	assert.Equal(t, false, parsed["is_new"])
+	assert.Equal(t, "alert_owned_resource_state", parsed["reason"])
+	assert.Equal(t, "finding-alert-owned", parsed[agentcapabilities.FindingIDArgumentName])
+}
+
 func TestHandlePatrolReportFinding_ValidInput(t *testing.T) {
 	creator := &mockPatrolFindingCreator{checked: true}
 	exec := newPatrolTestExecutor(creator)
@@ -866,6 +886,7 @@ func TestPatrolToolsRegistered(t *testing.T) {
 	assert.Contains(t, reportTool.Description, "safe, actionable recommendation")
 	assert.Equal(t, PatrolReportFindingRequiredArguments(), reportTool.InputSchema.Required)
 	assert.Contains(t, reportTool.Description, strings.Join(PatrolReportFindingRequiredArguments(), ", "))
+	assert.Contains(t, reportTool.Description, "real-time alerts own that condition")
 	assert.Contains(t, reportTool.Description, "reporting several findings in parallel")
 	assert.Contains(t, reportTool.InputSchema.Required, "recommendation")
 	assert.Contains(t, reportTool.InputSchema.Required, "evidence")
