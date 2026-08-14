@@ -135,6 +135,18 @@ type PatrolFindingAssessor interface {
 	AssessFinding(input PatrolFindingAssessmentInput) error
 }
 
+// PatrolFindingAlreadyDecidedError is returned when the model tries to assess
+// a finding whose accepted report already created it in the same Patrol run.
+// The tool boundary treats this typed condition as an idempotent no-op rather
+// than a failed call: the report is the authoritative new-issue verdict.
+type PatrolFindingAlreadyDecidedError struct {
+	FindingID string
+}
+
+func (e *PatrolFindingAlreadyDecidedError) Error() string {
+	return "finding " + e.FindingID + " was already created by an accepted report in this patrol run"
+}
+
 // PatrolFindingAssessmentInput is the explicit terminal verdict for an active
 // finding that was presented to the model during one Patrol run.
 type PatrolFindingAssessmentInput struct {

@@ -503,6 +503,30 @@ func TestHandlePatrolAssessFinding_AcceptsExplicitVerdicts(t *testing.T) {
 	}
 }
 
+func TestHandlePatrolAssessFinding_AcknowledgesSameRunNewFindingAsNoOp(t *testing.T) {
+	creator := &mockPatrolFindingCreator{
+		assessFindingFunc: func(input PatrolFindingAssessmentInput) error {
+			return &PatrolFindingAlreadyDecidedError{FindingID: input.FindingID}
+		},
+		checked: true,
+	}
+	exec := newPatrolTestExecutor(creator)
+	result, err := handlePatrolAssessFinding(context.Background(), exec, map[string]interface{}{
+		agentcapabilities.FindingIDArgumentName: "finding-new",
+		"verdict":                               "uncertain",
+		"evidence":                              "same evidence",
+		agentcapabilities.ReasonArgumentName:    "already reported",
+	})
+	require.NoError(t, err)
+
+	var parsed map[string]interface{}
+	require.NoError(t, json.Unmarshal([]byte(extractText(result)), &parsed))
+	assert.Equal(t, true, parsed["ok"])
+	assert.Equal(t, false, parsed["applied"])
+	assert.Equal(t, "new_finding_reported_this_run", parsed["reason"])
+	assert.Equal(t, "finding-new", parsed[agentcapabilities.FindingIDArgumentName])
+}
+
 func TestHandlePatrolAssessFinding_RejectsIncompleteOrInvalidVerdict(t *testing.T) {
 	creator := &mockPatrolFindingCreator{checked: true}
 	exec := newPatrolTestExecutor(creator)

@@ -699,6 +699,17 @@ func (a *patrolFindingCreatorAdapter) trackNewFindingID(findingID string) {
 	a.newFindingIDs = append(a.newFindingIDs, findingID)
 }
 
+func (a *patrolFindingCreatorAdapter) isNewFindingID(findingID string) bool {
+	a.findingsMu.Lock()
+	defer a.findingsMu.Unlock()
+	for _, newFindingID := range a.newFindingIDs {
+		if newFindingID == findingID {
+			return true
+		}
+	}
+	return false
+}
+
 // AssessFinding records the model's explicit terminal verdict for an existing
 // finding in this run. Present refreshes the durable finding heartbeat and
 // current evidence, resolved delegates to the existing fail-closed verifier,
@@ -715,6 +726,9 @@ func (a *patrolFindingCreatorAdapter) AssessFinding(input tools.PatrolFindingAss
 	}
 	if !a.findingInCurrentScope(finding) {
 		return fmt.Errorf("finding %s is outside the current patrol scope", input.FindingID)
+	}
+	if a.isNewFindingID(finding.ID) {
+		return &tools.PatrolFindingAlreadyDecidedError{FindingID: finding.ID}
 	}
 
 	verdict := strings.ToLower(strings.TrimSpace(input.Verdict))

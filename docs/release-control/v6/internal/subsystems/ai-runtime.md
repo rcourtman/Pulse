@@ -129,6 +129,12 @@ run are already complete structured new-issue outcomes and never join that
 run's assessment sweep, even if a concurrent or later `patrol_get_findings`
 call observes them. Re-reported pre-existing findings remain subject to the
 existing-finding verdict contract.
+If the main provider pass nevertheless calls `patrol_assess_finding` for a
+finding first created by its accepted report, the adapter preserves the report
+as authoritative and returns a successful typed no-op (`applied=false`,
+`reason=new_finding_reported_this_run`). No `present`, `uncertain`, or
+`resolved` assessment is persisted and the new finding is not refreshed,
+downgraded, or resolved.
 Investigation and interactive profiles retain a tool-free final summary; a
 Watch finding write at the deadline is followed only by the existing bounded
 summary path. A capability-unavailable

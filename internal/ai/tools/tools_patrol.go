@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"sort"
@@ -423,12 +424,23 @@ func handlePatrolAssessFinding(_ context.Context, e *PulseToolExecutor, args map
 		return NewErrorResult(fmt.Errorf("patrol finding adapter does not support explicit assessments")), nil
 	}
 	if err := assessor.AssessFinding(input); err != nil {
+		var alreadyDecided *PatrolFindingAlreadyDecidedError
+		if errors.As(err, &alreadyDecided) {
+			return NewJSONResult(map[string]interface{}{
+				"ok":                                    true,
+				agentcapabilities.FindingIDArgumentName: alreadyDecided.FindingID,
+				"verdict":                               verdict,
+				"applied":                               false,
+				"reason":                                "new_finding_reported_this_run",
+			}), nil
+		}
 		return NewErrorResult(fmt.Errorf("failed to assess finding: %w", err)), nil
 	}
 	return NewJSONResult(map[string]interface{}{
 		"ok":                                    true,
 		agentcapabilities.FindingIDArgumentName: findingID,
 		"verdict":                               verdict,
+		"applied":                               true,
 	}), nil
 }
 

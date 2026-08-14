@@ -1587,6 +1587,20 @@ func TestPatrolFindingAdapterDistinguishesSameRunCreationFromExistingRereport(t 
 	if missing := patrolMissingAssessmentIDs(firstResult); len(missing) != 0 {
 		t.Fatalf("same-run new finding unexpectedly needs assessment: %v", missing)
 	}
+	beforeNoOp := ps.findings.Get(findingID)
+	for _, verdict := range []string{"present", "uncertain", "resolved"} {
+		err := firstRun.AssessFinding(tools.PatrolFindingAssessmentInput{
+			FindingID: findingID, Verdict: verdict, Evidence: "same-run evidence", Reason: "same-run report is authoritative",
+		})
+		var alreadyDecided *tools.PatrolFindingAlreadyDecidedError
+		if !errors.As(err, &alreadyDecided) || alreadyDecided.FindingID != findingID {
+			t.Fatalf("same-run %s assessment error = %v, want typed already-decided outcome", verdict, err)
+		}
+	}
+	afterNoOp := ps.findings.Get(findingID)
+	if len(firstRun.getAssessments()) != 0 || afterNoOp == nil || !afterNoOp.IsActive() || afterNoOp.TimesRaised != beforeNoOp.TimesRaised {
+		t.Fatalf("same-run assessment mutated new finding: before=%+v after=%+v assessments=%+v", beforeNoOp, afterNoOp, firstRun.getAssessments())
+	}
 
 	secondRun := newPatrolFindingCreatorAdapterState(ps, patrolRuntimeState{})
 	secondRun.GetActiveFindings("", "")
