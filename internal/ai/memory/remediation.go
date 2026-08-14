@@ -98,8 +98,6 @@ func NewRemediationLog(cfg RemediationLogConfig) *RemediationLog {
 // Log records a remediation action
 func (r *RemediationLog) Log(record RemediationRecord) error {
 	r.mu.Lock()
-	defer r.mu.Unlock()
-
 	if record.ID == "" {
 		record.ID = generateRecordID()
 	}
@@ -109,13 +107,14 @@ func (r *RemediationLog) Log(record RemediationRecord) error {
 
 	r.records = append(r.records, record)
 	r.trimRecords()
+	r.mu.Unlock()
 
-	// Persist asynchronously
-	go func() {
-		if err := r.saveToDisk(); err != nil {
-			log.Warn().Err(err).Msg("failed to save remediation log")
-		}
-	}()
+	// Persist before returning. A fire-and-forget goroutine here could still
+	// be writing after the owner tears down the data dir, and dropped the
+	// newest record on process exit.
+	if err := r.saveToDisk(); err != nil {
+		log.Warn().Err(err).Msg("failed to save remediation log")
+	}
 
 	return nil
 }
@@ -380,8 +379,7 @@ func (r *RemediationLog) GetByID(id string) (*RemediationRecord, bool) {
 // MarkRolledBack marks a remediation record as rolled back.
 func (r *RemediationLog) MarkRolledBack(id, rollbackID, username string) error {
 	r.mu.Lock()
-	defer r.mu.Unlock()
-
+	found := false
 	for i := range r.records {
 		if r.records[i].ID == id {
 			if r.records[i].Rollback == nil {
@@ -392,18 +390,21 @@ func (r *RemediationLog) MarkRolledBack(id, rollbackID, username string) error {
 			r.records[i].Rollback.RolledBackAt = &now
 			r.records[i].Rollback.RolledBackBy = username
 			r.records[i].Rollback.RollbackID = rollbackID
-
-			// Persist
-			go func() {
-				if err := r.saveToDisk(); err != nil {
-					log.Warn().Err(err).Msg("failed to save remediation log after rollback")
-				}
-			}()
-
-			return nil
+			found = true
+			break
 		}
 	}
-	return fmt.Errorf("remediation record not found: %s", id)
+	r.mu.Unlock()
+
+	if !found {
+		return fmt.Errorf("remediation record not found: %s", id)
+	}
+
+	// Persist before returning, matching Log.
+	if err := r.saveToDisk(); err != nil {
+		log.Warn().Err(err).Msg("failed to save remediation log after rollback")
+	}
+	return nil
 }
 
 // GetRollbackable returns remediations that can be rolled back.
