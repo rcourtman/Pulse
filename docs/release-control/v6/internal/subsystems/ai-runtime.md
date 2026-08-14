@@ -7166,6 +7166,18 @@ complete snapshot exists it receives only `patrol_get_findings` plus
 `patrol_assess_finding`. These are structured call-site allowlists applied
 after profile projection and may only reduce authority. An unavailable or
 unknown requested tool fails closed. Prompt text never selects the manifest.
+Each Patrol invocation, including the main pass and both continuations, receives
+a fresh infrastructure workflow FSM and resolved-resource context. Its stable
+session ID remains a forensic-log key only and cannot carry a prior run's read
+authority, resource alias, validated target, or unfinished verification state
+into the next call.
+While that fresh FSM is resolving, Patrol state-only writes bypass the generic
+infrastructure read-before-write gate because their server-owned run adapters
+already validate exact finding scope, active finding identity, complete
+findings-read preconditions, or exact objective revision. The exception is
+limited to the Patrol detection profile and resolving state; infrastructure
+writes remain blocked, and a preceding infrastructure write's verification
+state can never be bypassed by a finding lifecycle call.
 
 An explicitly scoped Watch may carry related hosts or dependencies in its
 effective runtime snapshot as model evidence, but active, dismissed, and

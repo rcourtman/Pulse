@@ -268,10 +268,17 @@ func TestApplySuccessfulToolFSM_ObserverProposalDoesNotRequireInfrastructureVeri
 	}
 }
 
-func TestPatrolObserverProposalUsesOnlyCoreValidatedDetectionTarget(t *testing.T) {
+func TestPatrolStateWritesUseOnlyCoreValidatedDetectionTarget(t *testing.T) {
 	fsm := NewSessionFSM()
-	if !patrolWriteHasCoreValidatedTarget(tools.ProfilePatrolDetection, fsm, agentcapabilities.PatrolProposeObserverToolName) {
-		t.Fatal("expected detection objective proposal to use its core-validated target")
+	for _, toolName := range []string{
+		agentcapabilities.PatrolReportFindingToolName,
+		agentcapabilities.PatrolAssessFindingToolName,
+		agentcapabilities.PatrolResolveFindingToolName,
+		agentcapabilities.PatrolProposeObserverToolName,
+	} {
+		if !patrolWriteHasCoreValidatedTarget(tools.ProfilePatrolDetection, fsm, toolName) {
+			t.Fatalf("expected %s to use its core-validated Patrol target", toolName)
+		}
 	}
 	for _, test := range []struct {
 		profile  tools.ExecutionProfile
@@ -281,7 +288,7 @@ func TestPatrolObserverProposalUsesOnlyCoreValidatedDetectionTarget(t *testing.T
 		{tools.ProfilePatrolInvestigation, StateResolving, agentcapabilities.PatrolProposeObserverToolName},
 		{tools.ProfileInteractiveAssistant, StateResolving, agentcapabilities.PatrolProposeObserverToolName},
 		{tools.ProfilePatrolDetection, StateVerifying, agentcapabilities.PatrolProposeObserverToolName},
-		{tools.ProfilePatrolDetection, StateResolving, agentcapabilities.PatrolReportFindingToolName},
+		{tools.ProfilePatrolDetection, StateVerifying, agentcapabilities.PatrolReportFindingToolName},
 		{tools.ProfilePatrolDetection, StateResolving, agentcapabilities.PulseControlToolName},
 	} {
 		fsm.State = test.state

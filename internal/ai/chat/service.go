@@ -2882,14 +2882,19 @@ func (s *Service) ExecutePatrolStream(ctx context.Context, req PatrolRequest, ca
 		return nil, fmt.Errorf("failed to ensure patrol session: %w", err)
 	}
 
-	// Set resolved context on executor (same as ExecuteStream does)
+	// Patrol's shared session ID is only a forensic log key. Resource resolution
+	// is invocation-scoped so an earlier Watch cannot leak aliases or validated
+	// action targets into a later run that happens to reuse the same ID.
 	if executor != nil {
-		resolvedCtx := sessions.GetResolvedContext(session.ID)
+		resolvedCtx := NewResolvedContext(session.ID)
 		executor.SetResolvedContext(resolvedCtx)
 	}
 
-	// Set session FSM
-	sessionFSM := sessions.GetSessionFSM(session.ID)
+	// Patrol invocations are stateless investigations. Their session ID is a
+	// forensic log key, not a workflow-state boundary: reusing its FSM would
+	// let a prior run's read or unfinished infrastructure verification alter the
+	// next run's authority. Each invocation therefore starts from a fresh FSM.
+	sessionFSM := NewSessionFSM()
 	tempLoop.SetSessionFSM(sessionFSM)
 
 	// Create a fresh knowledge accumulator for this patrol run.

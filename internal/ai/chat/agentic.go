@@ -416,19 +416,20 @@ func applySuccessfulToolFSM(fsm *SessionFSM, toolKind ToolKind, toolName string)
 	return false
 }
 
-// patrolWriteHasCoreValidatedTarget reports the one Patrol state-only write
-// whose target is already established by server-authored run context. An
-// objective-planning run carries the exact objective ID and optimistic
-// revision, and the proposal store validates both atomically. Requiring an
-// unrelated read before that write adds no target safety and can strand quiet
-// scoped runs that have no other evidence call to make.
+// patrolWriteHasCoreValidatedTarget reports Patrol state-only writes whose
+// target is validated by the server-owned run adapter. Finding lifecycle
+// adapters enforce the exact run scope, active finding identity, and complete
+// findings-read precondition; objective proposals validate the exact objective
+// ID and optimistic revision atomically. Requiring an unrelated infrastructure
+// read before these writes adds no target safety and can strand bounded Patrol
+// continuations that intentionally expose no read tool.
 //
 // This exception is intentionally limited to RESOLVING. It never permits a
-// proposal to bypass verification of a preceding infrastructure write.
+// state-only call to bypass verification of a preceding infrastructure write.
 func patrolWriteHasCoreValidatedTarget(profile tools.ExecutionProfile, fsm *SessionFSM, toolName string) bool {
 	return profile == tools.ProfilePatrolDetection &&
 		fsm != nil && fsm.State == StateResolving &&
-		strings.TrimSpace(toolName) == agentcapabilities.PatrolProposeObserverToolName
+		isPatrolStateOnlyWrite(toolName)
 }
 
 func appendFSMVerificationPrompt(messages []providers.Message, prompt string) []providers.Message {

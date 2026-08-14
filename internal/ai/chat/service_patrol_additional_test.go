@@ -25,6 +25,25 @@ func (m mockKnowledgeStore) GetKnowledge(resourceID, category string) []tools.Kn
 	return nil
 }
 
+type patrolReportRecorder struct {
+	checked bool
+	inputs  []tools.PatrolFindingInput
+}
+
+func (r *patrolReportRecorder) CreateFinding(input tools.PatrolFindingInput) (string, bool, error) {
+	r.inputs = append(r.inputs, input)
+	return "finding-runtime-boundary", true, nil
+}
+
+func (r *patrolReportRecorder) ResolveFinding(string, string) error { return nil }
+
+func (r *patrolReportRecorder) GetActiveFindings(string, string) []tools.PatrolFindingInfo {
+	r.checked = true
+	return nil
+}
+
+func (r *patrolReportRecorder) HasCheckedFindings() bool { return r.checked }
+
 type mockStreamingProvider struct {
 	chatStreamFunc func(ctx context.Context, req providers.ChatRequest, callback providers.StreamCallback) error
 	lastRequest    providers.ChatRequest
@@ -239,6 +258,84 @@ func TestService_ExecutePatrolStream_Success(t *testing.T) {
 	}
 	if len(msgs) < 2 {
 		t.Fatalf("expected at least 2 messages saved, got %d", len(msgs))
+	}
+}
+
+func TestService_ExecutePatrolStream_UsesFreshFSMAndAcceptsCoreValidatedFindingWrite(t *testing.T) {
+	store, err := NewSessionStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("failed to create session store: %v", err)
+	}
+	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
+	recorder := &patrolReportRecorder{checked: true}
+	executor.SetPatrolFindingCreator(recorder)
+
+	// A previous invocation may have ended while verifying an infrastructure
+	// write. The shared session ID is only a forensic key for Patrol and must not
+	// carry that workflow state into this bounded continuation.
+	staleFSM := store.GetSessionFSM("patrol-eval")
+	staleFSM.State = StateVerifying
+	staleFSM.WroteThisEpisode = true
+	staleFSM.ReadAfterWrite = false
+
+	service := &Service{
+		started:  true,
+		sessions: store,
+		executor: executor,
+		cfg:      &config.AIConfig{PatrolModel: "mock:model"},
+	}
+	providerCalls := 0
+	service.providerFactory = func(string) (providers.StreamingProvider, error) {
+		return &mockStreamingProvider{chatStreamFunc: func(_ context.Context, _ providers.ChatRequest, callback providers.StreamCallback) error {
+			providerCalls++
+			if providerCalls == 1 {
+				callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{
+					InputTokens: 10,
+					ToolCalls: []providers.ToolCall{{
+						ID:   "report-1",
+						Name: agentcapabilities.PatrolReportFindingToolName,
+						Input: map[string]interface{}{
+							"key":            "service-unhealthy",
+							"severity":       "warning",
+							"category":       "reliability",
+							"resource_id":    "app/service-a",
+							"resource_name":  "service-a",
+							"resource_type":  "app-container",
+							"title":          "Service health check is failing",
+							"description":    "The current health signal is unhealthy.",
+							"recommendation": "Inspect the bounded health-check failure and verify recovery.",
+							"evidence":       "Current container health status is unhealthy.",
+						},
+					}},
+				}})
+				return nil
+			}
+			callback(providers.StreamEvent{Type: "content", Data: providers.ContentEvent{Text: "Finding recorded."}})
+			callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{InputTokens: 4, OutputTokens: 2}})
+			return nil
+		}}, nil
+	}
+
+	resp, err := service.ExecutePatrolStream(context.Background(), PatrolRequest{
+		Prompt:           "Record the validated signal.",
+		SessionID:        "patrol-eval",
+		MaxTurns:         3,
+		AllowedToolNames: []string{agentcapabilities.PatrolReportFindingToolName},
+	}, func(StreamEvent) {})
+	if err != nil {
+		t.Fatalf("ExecutePatrolStream failed: %v", err)
+	}
+	if resp == nil || !strings.Contains(resp.Content, "Finding recorded") {
+		t.Fatalf("unexpected patrol response: %+v", resp)
+	}
+	if len(recorder.inputs) != 1 || recorder.inputs[0].ResourceID != "app/service-a" {
+		t.Fatalf("finding writes = %+v, want one exact scoped resource", recorder.inputs)
+	}
+	if providerCalls != 2 {
+		t.Fatalf("provider calls = %d, want report plus bounded summary", providerCalls)
+	}
+	if staleFSM.State != StateVerifying || staleFSM.ReadAfterWrite {
+		t.Fatalf("Patrol invocation mutated persisted forensic-session FSM: %+v", staleFSM)
 	}
 }
 
