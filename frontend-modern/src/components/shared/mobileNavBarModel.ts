@@ -16,7 +16,7 @@ export type MobileNavBarPrimaryTab = {
 };
 
 export type MobileNavBarUtilityTab = {
-  id: 'alerts' | 'actions' | 'ai' | 'settings';
+  id: 'alerts' | 'ai' | 'settings';
   label: string;
   route: string;
   tooltip: string;
@@ -53,12 +53,8 @@ const MOBILE_NAV_PRIMARY_PRIORITY = [
   'standalone',
 ] as const;
 
-const MOBILE_NAV_UTILITY_PRIORITY = ['alerts', 'actions', 'ai', 'settings'] as const;
-const MOBILE_NAV_FIXED_UTILITY_IDS = new Set<MobileNavBarUtilityTab['id']>([
-  'alerts',
-  'actions',
-  'ai',
-]);
+const MOBILE_NAV_UTILITY_PRIORITY = ['alerts', 'ai', 'settings'] as const;
+const MOBILE_NAV_FIXED_UTILITY_IDS = new Set<MobileNavBarUtilityTab['id']>(['alerts', 'ai']);
 
 export function buildOrderedMobileNavTabs<T extends { id: string }>(
   tabs: T[],
@@ -94,7 +90,7 @@ export function buildOrderedMobileNavUtilityTabs(
 
 /**
  * Keep the bottom bar to five predictable targets at most: the primary
- * infrastructure destination, the three daily operations destinations, and
+ * infrastructure destination, the two daily operations destinations, and
  * More. Every other admitted platform and utility remains available in More.
  */
 export function buildMobileNavBarLayout(

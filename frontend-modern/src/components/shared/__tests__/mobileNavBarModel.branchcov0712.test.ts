@@ -114,22 +114,22 @@ describe('mobileNavBarModel.branchcov2', () => {
 
     it('uses countLabel when count > 0 (countLabel ?? right-side fallback NOT taken)', () => {
       const tab = makeUtilityTab({
-        id: 'actions',
-        label: 'Actions',
+        id: 'ai',
+        label: 'Patrol',
         count: 12,
         countLabel: '12 pending',
       });
-      expect(getMobileNavTabAriaLabel(tab)).toBe('Actions: 12 pending');
+      expect(getMobileNavTabAriaLabel(tab)).toBe('Patrol: 12 pending');
     });
 
     it('synthesizes "N items" when countLabel is absent (countLabel ?? right arm)', () => {
       const tab = makeUtilityTab({
-        id: 'actions',
-        label: 'Actions',
+        id: 'ai',
+        label: 'Patrol',
         count: 12,
         countLabel: undefined,
       });
-      expect(getMobileNavTabAriaLabel(tab)).toBe('Actions: 12 items');
+      expect(getMobileNavTabAriaLabel(tab)).toBe('Patrol: 12 items');
     });
 
     it('returns the bare label for an alerts tab whose breakdown is all zeros (parts.length === 0 arm)', () => {
@@ -225,7 +225,6 @@ describe('mobileNavBarModel.branchcov2', () => {
         [
           makeUtilityTab({ id: 'settings' }),
           makeUtilityTab({ id: 'ai' }),
-          makeUtilityTab({ id: 'actions' }),
           makeUtilityTab({ id: 'alerts' }),
         ],
       );
@@ -233,7 +232,6 @@ describe('mobileNavBarModel.branchcov2', () => {
       expect(layout.fixedDestinations.map((destination) => destination.tab.id)).toEqual([
         'proxmox',
         'alerts',
-        'actions',
         'ai',
       ]);
       expect(layout.overflowDestinations.map((destination) => destination.tab.id)).toEqual([

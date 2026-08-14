@@ -28,12 +28,23 @@ function setViewportWidth(width: number) {
 const patrolAttentionMockState = vi.hoisted(() => ({
   activeCount: 0,
 }));
+const actionInboxMockState = vi.hoisted(() => ({
+  pendingActionCount: 0,
+}));
 
 vi.mock('@/stores/patrolAttention', () => ({
   patrolAttentionStore: {
     summary: () => ({
       activeCount: patrolAttentionMockState.activeCount,
     }),
+  },
+}));
+
+vi.mock('@/stores/actionInbox', () => ({
+  actionInboxStore: {
+    get pendingActionCount() {
+      return actionInboxMockState.pendingActionCount;
+    },
   },
 }));
 
@@ -118,6 +129,7 @@ const renderLayout = (
       <Route path="/proxmox/overview" component={LayoutRoute} />
       <Route path="/docker/overview" component={LayoutRoute} />
       <Route path="/alerts" component={LayoutRoute} />
+      <Route path="/actions" component={LayoutRoute} />
     </Router>
   ));
 };
@@ -128,6 +140,7 @@ describe('AppLayout navigation icons', () => {
     window.history.replaceState({}, '', '/settings/infrastructure');
     resetPrimaryNavigationRouteMemory();
     patrolAttentionMockState.activeCount = 0;
+    actionInboxMockState.pendingActionCount = 0;
     clearRuntimeBranding();
     aiChatStore.close();
     aiChatStore.setEnabled(true);
@@ -160,7 +173,7 @@ describe('AppLayout navigation icons', () => {
     expect(systemGroup).toBeTruthy();
 
     const desktopTabs = within(systemGroup as HTMLElement).getAllByRole('tab');
-    expect(desktopTabs).toHaveLength(4);
+    expect(desktopTabs).toHaveLength(3);
     desktopTabs.forEach((tab) => {
       expect(tab.querySelector('svg')).toBeTruthy();
     });
@@ -177,7 +190,7 @@ describe('AppLayout navigation icons', () => {
     expect(within(systemGroup as HTMLElement).queryByRole('tab', { name: 'Patrol P' })).toBeNull();
 
     const mobileNav = screen.getByRole('navigation', { name: 'Mobile navigation' });
-    ['alerts', 'actions', 'ai'].forEach((tabId) => {
+    ['alerts', 'ai'].forEach((tabId) => {
       const button = mobileNav.querySelector<HTMLElement>(`[data-tab-id="${tabId}"]`);
       expect(button).toBeTruthy();
       expect(button?.querySelector('svg')).toBeTruthy();
@@ -217,6 +230,26 @@ describe('AppLayout navigation icons', () => {
     expect(mobilePatrolTab).toHaveTextContent('Patrol');
     expect(mobilePatrolTab).toHaveTextContent('2');
     expect(within(mobileNav).queryByText('Needs Attention')).toBeNull();
+  });
+
+  it('routes universal pending operations and the subordinate activity route through Patrol', () => {
+    actionInboxMockState.pendingActionCount = 3;
+    renderLayout([], '/actions');
+
+    const desktopNav = screen.getByRole('tablist', { name: 'Primary navigation' });
+    const systemGroup = desktopNav.querySelector('[aria-label="System"]');
+    expect(systemGroup).toBeTruthy();
+    const patrolTab = within(systemGroup as HTMLElement).getByRole('tab', {
+      name: 'Patrol: 3 actions await approval',
+    });
+    expect(patrolTab.className).toContain('text-blue-600');
+    expect(within(systemGroup as HTMLElement).queryByRole('tab', { name: 'Actions' })).toBeNull();
+
+    const mobileNav = screen.getByRole('navigation', { name: 'Mobile navigation' });
+    expect(
+      within(mobileNav).getByRole('button', { name: 'Patrol: 3 actions await approval' }),
+    ).toHaveAttribute('aria-current', 'page');
+    expect(document.title).toContain('Activity history');
   });
 
   it('shows platform and runtime lens tabs with supported infrastructure evidence', () => {

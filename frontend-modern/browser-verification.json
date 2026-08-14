@@ -1,22 +1,25 @@
 {
   "version": 1,
-  "base_sha": "772ff3087d60ac9ee9b69ddf42bcc76a8eae5be0",
-  "verified_at": "2026-08-14T11:45:19Z",
+  "base_sha": "48fac73ff020491c1731c281d0c69b874c27f71b",
+  "verified_at": "2026-08-14T12:03:35Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/shared/useDialogState.ts",
-    "frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx",
-    "frontend-modern/src/features/patrol/PatrolObjectivesPanel.tsx",
-    "frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts"
+    "frontend-modern/src/AppLayout.tsx",
+    "frontend-modern/src/components/shared/mobileNavBarModel.ts",
+    "frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx",
+    "frontend-modern/src/pages/Actions.tsx",
+    "frontend-modern/src/utils/assistantPageContext.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/shared/useDialogState.ts": "3566700d8a8e72f3962204f12096912b84fb3bf089a4b181c1d9326ba85a1306",
-    "frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx": "272c6cb9c975cb346aa96082e804ad2eb08419d7ab2157429b901ba8b2f67a94",
-    "frontend-modern/src/features/patrol/PatrolObjectivesPanel.tsx": "ba86e9637aca3abd63de515d5e98a8881ddfc4ed7b308aaa651926fa5eb48db9",
-    "frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts": "24ac4a67d8e97bc39867238c34b2cf4deede69ccf671eef1ffc47c739a25db4a"
+    "frontend-modern/src/AppLayout.tsx": "91e6aa7723872ec61437da7d3851fe82be89e707f53c66a3c3ff74fa7851671a",
+    "frontend-modern/src/components/shared/mobileNavBarModel.ts": "bccadf7522c9e7affa06ecebd816c8963295bd40ce2ac122a022d3662e1a5e7d",
+    "frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx": "b6eaffbb9aa1e0b9e69a5245d0e2e4bce5b9c88df353d207db095189df6e82c1",
+    "frontend-modern/src/pages/Actions.tsx": "878397bb4571fc714684e35474acc6a60220498b4ac256c4bd57f39e41533ba5",
+    "frontend-modern/src/utils/assistantPageContext.ts": "7943a778ee4d4e1fb56c0a09778fffc8402d528da2e336713b1ff93e110acf6f"
   },
   "routes": [
-    "/patrol"
+    "/patrol",
+    "/actions"
   ],
   "viewports": [
     {
@@ -29,21 +32,18 @@
     }
   ],
   "states": [
-    "Watch only with direct objective shown as Watching in background",
-    "Watch only with Jellyfin and Frigate proxy objectives shown as Useful signal only",
-    "objective creation dialog open with the outcome textarea focused",
-    "Autopilot acknowledgement modal before and after acknowledgement checkbox",
-    "Autopilot active with canonical server state and no year-one expiry",
-    "Autopilot revoked and Patrol returned to Watch only",
-    "narrow Patrol layout with no horizontal overflow"
+    "Patrol desktop navigation with one pending universal action",
+    "Patrol Activity history handoff with pending-review badge",
+    "Activity history open queue with Patrol selected in desktop navigation",
+    "Activity history open queue with Patrol selected in mobile navigation",
+    "Patrol and Activity history at 390 pixels without horizontal overflow"
   ],
   "interactions": [
-    "opened Add objective and confirmed autofocus",
-    "closed objective dialog with Escape and confirmed focus return",
-    "opened Autopilot acknowledgement and enabled activation with the acknowledgement checkbox",
-    "activated Autopilot through the real UI and confirmed the server-derived mode",
-    "revoked Autopilot through the real UI",
-    "switched Patrol back to Watch only",
-    "resized to 390 by 844 and confirmed body and document scroll widths stayed at 390"
+    "opened Activity history from the Patrol page",
+    "confirmed the stable /actions route and Activity history browser title",
+    "confirmed no Actions destination exists in desktop or mobile navigation",
+    "confirmed Patrol remains selected while Activity history is open",
+    "returned to Patrol through mobile navigation",
+    "resized to 390 by 844 and confirmed document width stayed at 390"
   ]
 }

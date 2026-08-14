@@ -14,6 +14,7 @@ import {
   SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_HREF,
 } from '@/utils/pricingHandoff';
 import patrolIntelligenceHeaderSource from '@/features/patrol/PatrolIntelligenceHeader.tsx?raw';
+import patrolIntelligenceSurfaceSource from '@/features/patrol/PatrolIntelligenceSurface.tsx?raw';
 import patrolIntelligenceStateSource from '@/features/patrol/usePatrolIntelligenceState.ts?raw';
 import { AGENT_PATROL_CONTROL_STATUS_PATH } from '@/api/agentCapabilities';
 
@@ -547,6 +548,9 @@ describe('AIIntelligence entitlement gating', () => {
     expect(patrolIntelligenceHeaderSource).not.toContain('Sync page data');
     expect(patrolIntelligenceHeaderSource).not.toContain('animate-spin');
     expect(patrolIntelligenceHeaderSource).not.toContain('Refresh Patrol');
+    expect(patrolIntelligenceSurfaceSource).toContain('Activity history');
+    expect(patrolIntelligenceSurfaceSource).toContain('href="/actions"');
+    expect(patrolIntelligenceSurfaceSource).toContain('Open activity history');
   });
 
   it('keeps the advanced Patrol settings drawer out of the old save-spinner path', () => {

@@ -525,11 +525,14 @@ describe('App architecture', () => {
     expect(appLayoutSource).not.toContain("'/operations', '/patrol', '/ai'");
     expect(appLayoutSource).toContain("route: '/patrol',");
     expect(appLayoutSource).toContain("label: 'Patrol'");
+    expect(appLayoutSource).not.toContain("id: 'actions',");
+    expect(appLayoutSource).not.toContain("label: 'Actions',");
+    expect(appLayoutSource).toContain("return active === 'actions' ? 'ai' : active;");
     expect(appLayoutSource).toContain(
       "tooltip: 'Review active operational attention and recent Patrol checks'",
     );
     expect(appLayoutSource).toContain('const patrolAttentionCount = createMemo(');
-    expect(appLayoutSource).toContain('countLabel: patrolAttentionCountLabel()');
+    expect(appLayoutSource).toContain('countLabel: patrolNavigationCountLabel()');
     expect(appLayoutSource).not.toContain("label: 'Needs Attention'");
     expect(appLayoutSource).not.toContain("route: '/operations',");
     expect(appLayoutSource).not.toContain('props.connected()');
@@ -716,7 +719,7 @@ describe('App architecture', () => {
     expect(runtimeHomeSource).not.toContain('aiIntelligenceStore');
     expect(runtimeHomeSource).not.toContain('patrolOpenWork');
     expect(appLayoutSource).toContain("label: 'Patrol'");
-    expect(appLayoutSource).toContain('countLabel: patrolAttentionCountLabel()');
+    expect(appLayoutSource).toContain('countLabel: patrolNavigationCountLabel()');
   });
 
   it('keeps licensed application branding inside the authenticated shell bootstrap', () => {

@@ -605,11 +605,14 @@ or other self-hosted uncapped continuity plans.
 
 ## Extension Points
 
-The authenticated app shell exposes `/actions` as a global utility route on
-desktop and responsive navigation. `App.tsx` and `AppLayout.tsx` only provide
-route/navigation ownership; action authority and result truth remain in the
-unified-resources and api-contracts projections. Navigation proof is owned by
-the App/AppLayout, routing, and desktop Actions journey tests.
+The authenticated app shell keeps `/actions` as the stable global Activity
+history route, reached from Patrol rather than exposed as a peer desktop or
+responsive utility tab. `App.tsx` and `AppLayout.tsx` only provide route and
+navigation ownership: Patrol remains selected while Activity history is open,
+and action authority and result truth remain in the unified-resources and
+api-contracts projections. This information-architecture choice is independent
+of hosted entitlement, billing, and acquisition state. Navigation proof is
+owned by the App/AppLayout, routing, and desktop Actions journey tests.
 
 1. Add or change limits through `pkg/licensing/`
 2. Add or change hosted entitlement issuance through `internal/cloudcp/entitlements/service.go`
@@ -973,7 +976,10 @@ the App/AppLayout, routing, and desktop Actions journey tests.
     destination remains `Patrol` over the same `/patrol` route; it must not
     alter hosted org bootstrap, entitlement loading, or commercial posture
     loading. A Patrol open-work badge in that shell may consume only the
-    existing Patrol findings and live-approval read model after authentication;
+    existing Patrol findings and durable action-inbox pending count after
+    authentication. The subordinate `/actions` Activity history route keeps
+    Patrol selected in primary chrome and must not reappear as a commercial or
+    peer utility destination;
     it must not read hosted billing state, trigger commercial-posture loading,
     affect organization visibility, or become an upgrade/acquisition cue.
     The same primary platform navigation must remember the last in-tab route

@@ -3178,6 +3178,14 @@ query...`, and `Reading storage...` before streamed tool arguments are
    standalone, but `frontend-modern/src/AppLayout.tsx` must treat them as
    decorative inside tabs so the announced tab name comes from product chrome
    and meaningful badge text rather than icon title duplication. Scoped
+   governed-operation history is subordinate to Patrol in that chrome:
+   `/actions` remains a stable route and Assistant page context, but it must not
+   render as a peer utility tab. While that route is open, the shell keeps
+   Patrol selected so the user remains inside one operational workspace; this
+   navigation relationship must not merge Activity history state into
+   Assistant drawer state or allow the drawer to become an alternate action
+   review client.
+   Scoped
    approval handoffs sourced from Patrol, active alerts, or alert incident
    timelines must render as source-named investigation handoffs in the drawer
    instead of generic dashboard briefs. Source-owned handoff helpers may attach

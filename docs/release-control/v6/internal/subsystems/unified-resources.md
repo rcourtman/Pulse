@@ -785,15 +785,20 @@ container inventory table.
     activity must not infer related resources in the frontend.
 ## Extension Points
 
-The desktop Product Trust projection is owned at
-`frontend-modern/src/features/actions/` with the route shell in
-`frontend-modern/src/pages/Actions.tsx`. It must consume durable
+The global Product Trust projection is owned at
+`frontend-modern/src/features/actions/` with the stable `/actions` route shell
+in `frontend-modern/src/pages/Actions.tsx`, presented to users as `Activity
+history`. Patrol is the primary operational home and may expose a compact
+pending-count handoff into this route, but the ledger must not reappear as a
+peer top-level utility tab and Patrol must not duplicate its rows or controls.
+The route must consume durable
 `ActionAuditRecord.plan.policyDecision` and `result.actionResultV2` without
 deriving policy authority or collapsing execution, verification, and recovery
 into one outcome. Docker lifecycle controls may create a canonical plan and
 open this shared review, but may not auto-approve, auto-execute, or use a
 second-click local confirmation. Proof is owned by the colocated action tests,
-`DockerNativeTables.test.tsx`, and desktop journeys 81 and 83.
+the routing and app-shell tests, `DockerNativeTables.test.tsx`, and desktop
+journeys 81 and 83.
 Patrol findings may retain bounded action status and safety context, but exact
 typed action ids hand off to the route-backed Actions review through
 `frontend-modern/src/features/actions/actionRouting.ts`. The `action` query

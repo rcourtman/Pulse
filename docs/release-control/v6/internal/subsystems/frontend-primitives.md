@@ -5710,6 +5710,15 @@ the matching Open or History subtab from server-authored lifecycle state, and
 removes the query when the dialog closes. Feature pages may summarize action
 context, but they must not recreate approve, reject, run, progress, or outcome
 controls outside the shared Actions review.
+The Actions ledger is no longer a peer top-level navigation destination.
+Patrol is the primary operations home and exposes the ledger as `Activity
+history`, including a pending-review count and a route-backed handoff. The
+canonical `/actions` route remains stable for exact action deep links and
+universal audit records originating from Patrol, Assistant, MCP, or manual
+controls. While that subordinate route is open, desktop and mobile navigation
+keep Patrol selected and the browser title identifies `Activity history`;
+removing the standalone navigation entry must not remove the shared review
+dialog, route, API client, or durable action identity.
 
 ### Protection posture presentation boundary
 

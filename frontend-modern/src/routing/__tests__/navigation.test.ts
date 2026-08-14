@@ -21,13 +21,18 @@ describe('navigation routing helpers', () => {
     expect(getActiveTabForPath('/ceph')).toBeNull();
     expect(getActiveTabForPath('/recovery')).toBeNull();
     expect(getActiveTabForPath('/alerts/open')).toBe('alerts');
-    expect(getActiveTabForPath('/actions')).toBe('actions');
-    expect(getActiveTabForPath('/actions/history')).toBe('actions');
     expect(getActiveTabForPath('/patrol')).toBe('ai');
     expect(getActiveTabForPath('/ai')).toBeNull();
     expect(getActiveTabForPath('/operations')).toBeNull();
     expect(getActiveTabForPath('/operations/diagnostics')).toBeNull();
     expect(getActiveTabForPath('/operations/logs')).toBeNull();
     expect(getActiveTabForPath('/settings/security')).toBe('settings');
+  });
+
+  it('keeps Activity history as a stable subordinate route identity', () => {
+    // AppLayout presents this route beneath Patrol, while route identity stays
+    // distinct for the page title, Assistant context, and durable action review.
+    expect(getActiveTabForPath('/actions')).toBe('actions');
+    expect(getActiveTabForPath('/actions/history')).toBe('actions');
   });
 });

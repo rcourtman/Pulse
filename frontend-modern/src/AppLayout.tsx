@@ -3,7 +3,6 @@ import { Portal } from 'solid-js/web';
 import type { JSX } from 'solid-js';
 import { useLocation, useNavigate } from '@solidjs/router';
 import BellIcon from 'lucide-solid/icons/bell';
-import ListChecksIcon from 'lucide-solid/icons/list-checks';
 import SettingsIcon from 'lucide-solid/icons/settings';
 import Maximize2Icon from 'lucide-solid/icons/maximize-2';
 import Minimize2Icon from 'lucide-solid/icons/minimize-2';
@@ -298,7 +297,7 @@ export function AppLayout(props: AppLayoutProps) {
     vmware: 'vSphere',
     standalone: 'Machines',
     alerts: 'Alerts',
-    actions: 'Actions',
+    actions: 'Activity history',
     ai: 'Patrol',
     settings: 'Settings',
   };
@@ -440,8 +439,12 @@ export function AppLayout(props: AppLayoutProps) {
     clearHeaderHideTimeout();
   });
 
-  const getActiveTabDesktop = () => getActiveTabForPath(location.pathname);
-  const getActiveTabMobile = () => getActiveTabForPath(location.pathname);
+  const getNavigationActiveTab = () => {
+    const active = getActiveTabForPath(location.pathname);
+    return active === 'actions' ? 'ai' : active;
+  };
+  const getActiveTabDesktop = getNavigationActiveTab;
+  const getActiveTabMobile = getNavigationActiveTab;
   const assistantPageContext = createMemo(() => getAssistantPageContext(location.pathname));
   const openAssistantFromLauncher = () => {
     restoreAssistantLauncherFocus = true;
@@ -482,6 +485,12 @@ export function AppLayout(props: AppLayoutProps) {
     if (count <= 0) return undefined;
     return `${count} active attention ${count === 1 ? 'item' : 'items'}`;
   });
+  const patrolNavigationCount = createMemo(
+    () => (actionApprovalBadge()?.count ?? patrolAttentionCount()) || undefined,
+  );
+  const patrolNavigationCountLabel = createMemo(
+    () => actionApprovalBadge()?.label ?? patrolAttentionCountLabel(),
+  );
 
   // Platform/runtime nav is resource-admitted. A platform or runtime lens only
   // appears when the support manifest says the surface is supported and the
@@ -591,24 +600,13 @@ export function AppLayout(props: AppLayoutProps) {
         icon: BellIcon,
       },
       {
-        id: 'actions',
-        label: 'Actions',
-        route: '/actions',
-        tooltip: 'Review proposed changes and verified outcomes',
-        badge: null,
-        count: actionApprovalBadge()?.count,
-        countLabel: actionApprovalBadge()?.label,
-        breakdown: undefined,
-        icon: ListChecksIcon,
-      },
-      {
         id: 'ai',
         label: 'Patrol',
         route: '/patrol',
         tooltip: 'Review active operational attention and recent Patrol checks',
         badge: null,
-        count: patrolAttentionCount() > 0 ? patrolAttentionCount() : undefined,
-        countLabel: patrolAttentionCountLabel(),
+        count: patrolNavigationCount(),
+        countLabel: patrolNavigationCountLabel(),
         breakdown: undefined,
         icon: PulsePatrolLogo,
       },

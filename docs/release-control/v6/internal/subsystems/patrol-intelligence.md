@@ -596,6 +596,12 @@ attention`, `approval needed`, `outcome verified`, `no active work`) instead
    verification needed, failed fix, or setup attention, but it must not expose
    generic `detected`, `review finding`, raw loop-state, investigation-status,
    investigation-outcome, or confidence badges on the default Patrol page.
+   Patrol is also the daily entry point for governed operations that did not
+   originate in Patrol. Its compact `Activity history` handoff exposes the
+   universal pending-review count and opens the canonical action ledger without
+   copying ledger rows or action controls into Patrol. The ledger remains an
+   auditable subordinate route, not a second top-level inbox; `/actions` deep
+   links stay stable and keep Patrol selected in shared navigation.
    Patrol approval and remediation actions own approval, denial, reapproval,
    review, and Assistant handoff semantics, but their visible action chrome must
    compose the shared `Button` primitive for success, warning-solid, primary,
