@@ -563,6 +563,117 @@ func TestAgenticLoopUsesCorePatrolFindingSnapshotOnFirstTurn(t *testing.T) {
 	}
 }
 
+func TestAgenticLoopRecoversTruncatedPatrolDecisionWithGovernedFindingTurn(t *testing.T) {
+	provider := &stubStreamingProvider{}
+	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
+	executor.ApplyExecutionProfile(tools.ProfilePatrolDetection)
+	creator := &repairTestPatrolFindingCreator{}
+	creator.GetActiveFindings("", "")
+	executor.SetPatrolFindingCreator(creator)
+	loop := NewAgenticLoop(provider, executor, "full Patrol prompt")
+	loop.SetExecutionProfile(tools.ProfilePatrolDetection)
+	loop.SetMaxTurns(3)
+
+	providerCalls := 0
+	var recoveryRequest providers.ChatRequest
+	provider.chatStream = func(_ context.Context, req providers.ChatRequest, callback providers.StreamCallback) error {
+		providerCalls++
+		switch providerCalls {
+		case 1:
+			callback(providers.StreamEvent{Type: "content", Data: providers.ContentEvent{Text: "The unhealthy container is a confirmed incident. I should report it, but first I will restate all of my reasoning..."}})
+			callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{StopReason: "length", InputTokens: 1000, OutputTokens: patrolDetectionTurnOutputAllowance}})
+		case 2:
+			recoveryRequest = req
+			call := providers.ToolCall{ID: "report-health", Name: agentcapabilities.PatrolReportFindingToolName, Input: map[string]interface{}{
+				"key":            "container-health-failed",
+				"severity":       "warning",
+				"category":       "reliability",
+				"resource_id":    "app-container-api",
+				"resource_name":  "api",
+				"resource_type":  "app-container",
+				"title":          "API health check is failing",
+				"description":    "The container is running but its current health check is unhealthy.",
+				"recommendation": "Inspect the health endpoint and recent container logs.",
+				"evidence":       "Provider state reports the running container as unhealthy.",
+			}}
+			callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{StopReason: "tool_use", ToolCalls: []providers.ToolCall{call}, InputTokens: 900, OutputTokens: 200}})
+		case 3:
+			callback(providers.StreamEvent{Type: "content", Data: providers.ContentEvent{Text: "One reliability finding reported."}})
+			callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{StopReason: "end_turn", InputTokens: 500, OutputTokens: 20}})
+		default:
+			t.Fatalf("unexpected provider call %d", providerCalls)
+		}
+		return nil
+	}
+
+	available := []providers.Tool{
+		{Name: agentcapabilities.PulseQueryToolName},
+		{Name: agentcapabilities.PatrolReportFindingToolName},
+		{Name: agentcapabilities.PatrolAssessFindingToolName},
+	}
+	result, err := loop.ExecuteWithTools(context.Background(), "truncated-watch-decision", []Message{{Role: "user", Content: "Assess the unhealthy container."}}, available, func(StreamEvent) {})
+	if err != nil {
+		t.Fatalf("Watch recovery failed: %v", err)
+	}
+	if providerCalls != 3 || len(creator.created) != 1 {
+		t.Fatalf("provider calls=%d created=%+v, want one recovery report and one summary", providerCalls, creator.created)
+	}
+	if len(recoveryRequest.Tools) != 2 || hasProviderTool(recoveryRequest.Tools, agentcapabilities.PulseQueryToolName) {
+		t.Fatalf("recovery tools = %+v, want only finding decisions", recoveryRequest.Tools)
+	}
+	if !strings.Contains(recoveryRequest.System, "previous model turn exhausted its output budget") {
+		t.Fatalf("recovery prompt = %q", recoveryRequest.System)
+	}
+	var persisted strings.Builder
+	for _, message := range result {
+		if message.Role == "assistant" {
+			persisted.WriteString(message.Content)
+		}
+	}
+	if strings.Contains(persisted.String(), "restate all of my reasoning") || !strings.Contains(persisted.String(), "One reliability finding reported.") {
+		t.Fatalf("persisted Patrol analysis = %q", persisted.String())
+	}
+}
+
+func TestAgenticLoopFailsClosedAfterRepeatedTruncatedPatrolDecision(t *testing.T) {
+	provider := &stubStreamingProvider{}
+	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
+	executor.ApplyExecutionProfile(tools.ProfilePatrolDetection)
+	loop := NewAgenticLoop(provider, executor, "full Patrol prompt")
+	loop.SetExecutionProfile(tools.ProfilePatrolDetection)
+	loop.SetMaxTurns(1)
+
+	providerCalls := 0
+	provider.chatStream = func(_ context.Context, req providers.ChatRequest, callback providers.StreamCallback) error {
+		providerCalls++
+		if providerCalls == 2 {
+			if len(req.Tools) != 2 || !strings.Contains(req.System, "output budget") {
+				t.Fatalf("second request was not bounded decision recovery: %+v", req)
+			}
+		}
+		callback(providers.StreamEvent{Type: "content", Data: providers.ContentEvent{Text: "unfinished"}})
+		callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{StopReason: map[int]string{1: "length", 2: "max_tokens"}[providerCalls], OutputTokens: patrolDetectionTurnOutputAllowance}})
+		return nil
+	}
+
+	available := []providers.Tool{
+		{Name: agentcapabilities.PatrolReportFindingToolName},
+		{Name: agentcapabilities.PatrolAssessFindingToolName},
+	}
+	result, err := loop.ExecuteWithTools(context.Background(), "twice-truncated-watch-decision", []Message{{Role: "user", Content: "Assess the resource."}}, available, func(StreamEvent) {})
+	if err == nil || !strings.Contains(err.Error(), "exhausted its output budget twice") {
+		t.Fatalf("error = %v, want fail-closed output-budget error", err)
+	}
+	if providerCalls != 2 {
+		t.Fatalf("provider calls = %d, want one bounded retry", providerCalls)
+	}
+	for _, message := range result {
+		if message.Role == "assistant" && strings.TrimSpace(message.Content) != "" {
+			t.Fatalf("truncated content leaked into Patrol result: %+v", result)
+		}
+	}
+}
+
 func TestPatrolFindingLifecycleRepairRequestAllowsOnlyRejectedCallRepair(t *testing.T) {
 	req := providers.ChatRequest{
 		System:     "full Patrol prompt",

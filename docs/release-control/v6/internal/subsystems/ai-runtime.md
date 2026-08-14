@@ -7281,6 +7281,13 @@ target. Deleted-resource reconciliation still uses the full current global
 state, and the synthetic Patrol runtime finding retains its existing special
 handling.
 
+A Watch provider turn that stops because its output-token allowance was
+exhausted is not a completed finding decision. Core preserves the partial turn
+only as model context, excludes its unfinished prose from the durable Patrol
+summary, and offers one bounded retry containing only the governed finding
+report and assessment tools. A second token-limited turn fails the run closed;
+it can never be interpreted or published as an all-clear.
+
 Every provider tool call admitted by the orchestration boundary from the main
 pass, evaluation pass, and assessment sweep is merged into the one durable
 Patrol run trace, including raw provider arguments, failed calls, and bounded
