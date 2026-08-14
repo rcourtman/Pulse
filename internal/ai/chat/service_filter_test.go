@@ -17,6 +17,8 @@ func TestFilterToolsForPatrol_ConfigFlags(t *testing.T) {
 
 	tools := []providers.Tool{
 		{Name: "pulse_query"},
+		{Name: "pulse_alerts"},
+		{Name: "patrol_get_findings"},
 		{Name: "pulse_docker"},
 		{Name: "pulse_storage"},
 		{Name: "pulse_kubernetes"},
@@ -40,6 +42,12 @@ func TestFilterToolsForPatrol_ConfigFlags(t *testing.T) {
 	if !hasToolName(filtered, "pulse_query") {
 		t.Fatalf("expected pulse_query to remain included")
 	}
+	if hasToolName(filtered, "pulse_alerts") {
+		t.Fatalf("expected interactive pulse_alerts to be excluded from the Patrol manifest")
+	}
+	if !hasToolName(filtered, "patrol_get_findings") {
+		t.Fatalf("expected canonical patrol_get_findings to remain included")
+	}
 }
 
 func TestFilterToolsForPatrol_DockerDisabled(t *testing.T) {
@@ -51,6 +59,8 @@ func TestFilterToolsForPatrol_DockerDisabled(t *testing.T) {
 	}
 	tools := []providers.Tool{
 		{Name: "pulse_query"},
+		{Name: "pulse_alerts"},
+		{Name: "patrol_get_findings"},
 		{Name: "pulse_docker"},
 		{Name: "pulse_storage"},
 	}
@@ -97,6 +107,8 @@ func TestFilterToolsForPatrol_AllEnabled(t *testing.T) {
 	}
 	tools := []providers.Tool{
 		{Name: "pulse_query"},
+		{Name: "pulse_alerts"},
+		{Name: "patrol_get_findings"},
 		{Name: "pulse_docker"},
 		{Name: "pulse_storage"},
 		{Name: "pulse_kubernetes"},
@@ -105,10 +117,13 @@ func TestFilterToolsForPatrol_AllEnabled(t *testing.T) {
 
 	filtered := svc.filterToolsForPatrol(tools)
 
-	for _, name := range []string{"pulse_query", "pulse_docker", "pulse_storage", "pulse_kubernetes", "pulse_pmg"} {
+	for _, name := range []string{"pulse_query", "patrol_get_findings", "pulse_docker", "pulse_storage", "pulse_kubernetes", "pulse_pmg"} {
 		if !hasToolName(filtered, name) {
 			t.Fatalf("expected %s to be included", name)
 		}
+	}
+	if hasToolName(filtered, "pulse_alerts") {
+		t.Fatalf("expected pulse_alerts to remain Assistant-only when every Patrol subsystem is enabled")
 	}
 }
 

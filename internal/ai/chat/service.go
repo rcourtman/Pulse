@@ -4385,6 +4385,13 @@ func (s *Service) filterToolsForPatrol(providerTools []providers.Tool) []provide
 	filtered := make([]providers.Tool, 0, len(providerTools))
 	for _, tool := range providerTools {
 		switch tool.Name {
+		case agentcapabilities.PulseAlertsToolName:
+			// Patrol has one canonical finding-lifecycle read. Offering the
+			// interactive Alerts surface beside patrol_get_findings gives the
+			// provider two overlapping schemas and lets it combine the tool name
+			// from one with the arguments from the other. Keep pulse_alerts on the
+			// Assistant profile and expose only the lifecycle-native read here.
+			continue
 		case agentcapabilities.PulseDockerToolName:
 			if !includeDocker {
 				continue

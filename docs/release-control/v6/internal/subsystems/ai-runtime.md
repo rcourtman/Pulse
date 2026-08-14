@@ -6429,13 +6429,16 @@ verification step is a valid recommendation when remediation is not yet
 justified; impact remains optional so the contract never pressures the model
 to fabricate a consequence. Providers that omit either grounding field must
 receive a tool error and no partial finding may be persisted.
-During a first-party Patrol run, the general model-facing
-`pulse_alerts(action=findings)` spelling is a scoped alias for the same active
-finding snapshot as `patrol_get_findings` and satisfies the duplicate-check
-precondition. The adapter may return only findings inside the run's resolved
-caller-requested finding scope, never dismissed history or context-only
-dependency records from the broader effective evidence scope. This keeps
-ordinary model tool choice composable without weakening the lifecycle gate.
+The Patrol detection provider manifest exposes exactly one finding-lifecycle
+read: `patrol_get_findings`. The general `pulse_alerts` surface remains
+available to interactive Assistant sessions but is withheld from Patrol even
+when every monitored subsystem is enabled. This prevents a provider from
+combining the lifecycle tool name with the Alerts action schema, keeps the
+mandatory duplicate check unambiguous, and avoids spending a failed provider
+turn on an overlapping read contract. The Patrol adapter returns only findings
+inside the run's resolved caller-requested finding scope, never dismissed
+history or context-only dependency records from the broader effective evidence
+scope.
 The provider schema is also the source of truth for the required-argument
 checklist rendered into Patrol's normal and bounded final-decision prompts.
 Every report call must be independently complete, including parallel calls for
