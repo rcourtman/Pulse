@@ -43,7 +43,7 @@ func (s *stubDiscoveryProvider) GetDiscoveryByResource(resourceType, targetID, r
 }
 
 func (s *stubDiscoveryProvider) ListDiscoveries() ([]*ResourceDiscoveryInfo, error) {
-	return nil, nil
+	return s.listResp, s.listErr
 }
 
 func (s *stubDiscoveryProvider) ListDiscoveriesByType(resourceType string) ([]*ResourceDiscoveryInfo, error) {
@@ -253,6 +253,39 @@ func TestExecuteGetDiscovery_TargetIDRequired(t *testing.T) {
 	assert.NoError(t, err)
 	assert.True(t, result.IsError)
 	assert.Contains(t, result.Content[0].Text, "target_id is required")
+}
+
+func TestExecuteGetDiscovery_ExactCanonicalAppContainerIDInfersTarget(t *testing.T) {
+	const canonicalID = "app-container-e5593f5074d6cd7f"
+	const providerID = "container-provider-id"
+	provider := &stubDiscoveryProvider{getResp: &ResourceDiscoveryInfo{
+		ID:           "docker:agent-1:" + providerID,
+		ResourceType: "docker",
+		ResourceID:   providerID,
+		TargetID:     "agent-1",
+		Hostname:     "docker-host-1",
+	}}
+	exec := NewPulseToolExecutor(ExecutorConfig{
+		DiscoveryProvider: provider,
+		UnifiedResourceProvider: &stubUnifiedResourceProvider{resources: []unifiedresources.Resource{{
+			ID:   canonicalID,
+			Type: unifiedresources.ResourceTypeAppContainer,
+			Name: "worker",
+			Docker: &unifiedresources.DockerData{
+				AgentID:     "agent-1",
+				ContainerID: providerID,
+			},
+		}}},
+	})
+
+	result, err := exec.executeGetDiscovery(context.Background(), map[string]interface{}{
+		"resource_type": "app-container",
+		"resource_id":   canonicalID,
+	})
+	assert.NoError(t, err)
+	assert.False(t, result.IsError, result.Content[0].Text)
+	assert.Equal(t, "agent-1", provider.lastGetTargetID)
+	assert.Equal(t, providerID, provider.lastGetResourceID)
 }
 
 func TestIsUnsupportedDiscoveryLegacyResourceTypeToken(t *testing.T) {
@@ -557,6 +590,36 @@ func TestExecuteRunDiscovery_ForcesFreshDiscovery(t *testing.T) {
 	assert.NoError(t, json.Unmarshal([]byte(result.Content[0].Text), &payload))
 	assert.Equal(t, true, payload["refreshed"])
 	assert.Equal(t, "PostgreSQL", payload["service_name"])
+}
+
+func TestExecuteDiscovery_TargetlessGetUsesBoundedList(t *testing.T) {
+	provider := &stubDiscoveryProvider{listResp: []*ResourceDiscoveryInfo{{
+		ID: "vm:node1:101", ResourceType: "vm", ResourceID: "101", TargetID: "node1", Hostname: "vm-101",
+	}}}
+	exec := NewPulseToolExecutor(ExecutorConfig{DiscoveryProvider: provider})
+
+	result, err := exec.executeDiscovery(context.Background(), map[string]interface{}{
+		"action": "get",
+		"limit":  1,
+	})
+	assert.NoError(t, err)
+	assert.False(t, result.IsError)
+
+	var payload map[string]interface{}
+	assert.NoError(t, json.Unmarshal([]byte(result.Content[0].Text), &payload))
+	assert.Equal(t, float64(1), payload["total"])
+}
+
+func TestExecuteDiscovery_PartialGetStillFailsClosed(t *testing.T) {
+	exec := NewPulseToolExecutor(ExecutorConfig{DiscoveryProvider: &stubDiscoveryProvider{}})
+
+	result, err := exec.executeDiscovery(context.Background(), map[string]interface{}{
+		"action":      "get",
+		"resource_id": "101",
+	})
+	assert.NoError(t, err)
+	assert.True(t, result.IsError)
+	assert.Contains(t, result.Content[0].Text, "resource_type is required")
 }
 
 func TestExecuteListDiscoveries_FiltersByTargetID(t *testing.T) {

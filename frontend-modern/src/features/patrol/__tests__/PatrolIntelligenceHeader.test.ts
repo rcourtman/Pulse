@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   PATROL_AUTONOMY_POLICY_PRESENTATION,
+  getPatrolAutopilotExpiry,
   getPatrolConfigurationFailureInlineDetails,
 } from '../PatrolIntelligenceHeader';
 import {
@@ -17,6 +18,15 @@ const headerSource = readFileSync(
 );
 
 describe('PatrolIntelligenceHeader', () => {
+  it('does not present the server zero-time sentinel as an Autopilot expiry', () => {
+    expect(getPatrolAutopilotExpiry('0001-01-01T00:00:00Z')).toBeNull();
+    expect(getPatrolAutopilotExpiry('not-a-date')).toBeNull();
+    expect(getPatrolAutopilotExpiry(undefined)).toBeNull();
+    expect(getPatrolAutopilotExpiry('2026-12-31T12:00:00Z')?.toISOString()).toBe(
+      '2026-12-31T12:00:00.000Z',
+    );
+  });
+
   it('keeps Patrol mode readiness context visible inline', () => {
     expect(
       getPatrolConfigurationFailureInlineDetails({

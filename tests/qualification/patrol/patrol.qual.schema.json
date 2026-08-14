@@ -107,7 +107,7 @@
       "properties": {
         "action_target": {"type": "string"},
         "expected_capabilities": {"type": "array", "minItems": 1, "items": {"type": "string"}},
-        "decision": {"enum": ["observe", "reject", "approve_execute"]},
+        "decision": {"enum": ["observe", "reject", "approve_execute", "await_autonomous"]},
         "decision_reason": {"type": "string"},
         "action_timeout": {"type": "string"},
         "require_exact_origin": {"type": "boolean"},

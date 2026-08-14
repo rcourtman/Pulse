@@ -220,8 +220,12 @@ func matchesAppContainerActionReference(resource unified.Resource, reference str
 	}
 	for _, host := range []string{resource.Docker.AgentID, resource.Docker.HostSourceID, resource.Docker.Hostname} {
 		host = strings.TrimSpace(host)
-		if host != "" && strings.EqualFold(reference, "docker:"+host+":"+providerID) {
-			return true
+		if host != "" {
+			for _, prefix := range []string{"docker:", "app-container:"} {
+				if strings.EqualFold(reference, prefix+host+":"+providerID) {
+					return true
+				}
+			}
 		}
 	}
 	return false

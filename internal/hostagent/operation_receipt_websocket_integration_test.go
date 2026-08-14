@@ -180,6 +180,10 @@ type countingDockerLifecycleManager struct {
 	calls int
 }
 
+func (m *countingDockerLifecycleManager) Preflight(context.Context, agentexec.DockerContainerLifecyclePayload) (bool, string) {
+	return true, ""
+}
+
 func (m *countingDockerLifecycleManager) Apply(_ context.Context, req agentexec.DockerContainerLifecyclePayload) agentexec.DockerContainerLifecycleResultPayload {
 	m.mu.Lock()
 	m.calls++

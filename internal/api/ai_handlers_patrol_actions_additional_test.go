@@ -1029,6 +1029,39 @@ func TestHandleForcePatrolRejectsDuplicateAfterSynchronousAcceptance(t *testing.
 	}
 }
 
+func TestHandleForcePatrolRejectsBusyScopedRequestInsteadOfAcknowledgingDroppedWork(t *testing.T) {
+	handler, patrol, _, _ := setupAIHandlerWithPatrol(t)
+	seedReadyAnthropicPatrolRuntime(t, handler)
+	handler.defaultAIService.SetStateProvider(&scopedPatrolStateProvider{state: models.StateSnapshot{
+		VMs: []models.VM{{ID: "vm-101", Name: "web", VMID: 101}},
+	}})
+	setUnexportedField(t, patrol, "runInProgress", true)
+	setUnexportedField(t, patrol, "currentRunID", "run-active")
+	setUnexportedField(t, patrol, "runStartedAt", time.Now())
+
+	req := newLoopbackRequest(
+		http.MethodPost,
+		"/api/ai/patrol/run",
+		bytes.NewReader([]byte(`{"resource_ids":["vm-101"]}`)),
+	)
+	rec := httptest.NewRecorder()
+	handler.HandleForcePatrol(rec, req)
+
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("status = %d, want 409: %s", rec.Code, rec.Body.String())
+	}
+	var payload APIError
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode error payload: %v", err)
+	}
+	if payload.Code != "patrol_already_running" {
+		t.Fatalf("code = %q, want patrol_already_running", payload.Code)
+	}
+	if payload.Details["current_run_id"] != "run-active" {
+		t.Fatalf("current_run_id = %q, want run-active", payload.Details["current_run_id"])
+	}
+}
+
 func TestHandleForcePatrol_BlocksNotReadyPatrolModel(t *testing.T) {
 	handler, _, _, _ := setupAIHandlerWithPatrol(t)
 

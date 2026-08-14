@@ -374,7 +374,7 @@ type InvestigationConfig struct {
 
 // DefaultInvestigationConfig returns the default investigation configuration.
 func DefaultInvestigationConfig() InvestigationConfig {
-	const defaultEvidenceCalls = 15
+	const defaultEvidenceCalls = 10
 	return InvestigationConfig{
 		MaxTurns:                InvestigationModelTurnLimit(defaultEvidenceCalls),
 		MaxEvidenceCalls:        defaultEvidenceCalls,
@@ -392,7 +392,7 @@ func DefaultInvestigationConfig() InvestigationConfig {
 // a safety ceiling, not a target for how long an investigation should run.
 func InvestigationModelTurnLimit(maxEvidenceCalls int) int {
 	if maxEvidenceCalls <= 0 {
-		maxEvidenceCalls = 15
+		maxEvidenceCalls = 10
 	}
 	return maxEvidenceCalls + 2
 }

@@ -110,6 +110,7 @@ const [correlationsState, setCorrelationsState] =
 const getPatrolStatusMock = vi.fn();
 const getPatrolAutonomySettingsMock = vi.fn();
 const updatePatrolAutonomySettingsMock = vi.fn();
+const createPatrolAutopilotAcknowledgementMock = vi.fn();
 const triggerPatrolRunMock = vi.fn();
 const getPatrolRunHistoryMock = vi.fn();
 const apiFetchJSONMock = vi.fn();
@@ -146,6 +147,9 @@ vi.mock('@/api/patrol', () => ({
   getPatrolStatus: (...args: unknown[]) => getPatrolStatusMock(...args),
   getPatrolAutonomySettings: (...args: unknown[]) => getPatrolAutonomySettingsMock(...args),
   updatePatrolAutonomySettings: (...args: unknown[]) => updatePatrolAutonomySettingsMock(...args),
+  createPatrolAutopilotAcknowledgement: (...args: unknown[]) =>
+    createPatrolAutopilotAcknowledgementMock(...args),
+  revokePatrolAutopilotAcknowledgement: vi.fn(),
   triggerPatrolRun: (...args: unknown[]) => triggerPatrolRunMock(...args),
   getPatrolRunHistory: (...args: unknown[]) => getPatrolRunHistoryMock(...args),
   getPatrolObjectives: vi.fn().mockResolvedValue([]),
@@ -556,6 +560,7 @@ describe('AIIntelligence entitlement gating', () => {
     getPatrolStatusMock.mockReset();
     getPatrolAutonomySettingsMock.mockReset();
     updatePatrolAutonomySettingsMock.mockReset();
+    createPatrolAutopilotAcknowledgementMock.mockReset();
     triggerPatrolRunMock.mockReset();
     getPatrolRunHistoryMock.mockReset();
     apiFetchJSONMock.mockReset();
@@ -585,6 +590,15 @@ describe('AIIntelligence entitlement gating', () => {
     getPatrolAutonomySettingsMock.mockResolvedValue(defaultPatrolAutonomySettings());
     updatePatrolAutonomySettingsMock.mockResolvedValue({
       settings: defaultPatrolAutonomySettings(),
+    });
+    createPatrolAutopilotAcknowledgementMock.mockResolvedValue({
+      created: true,
+      acknowledgement: {
+        ...defaultPatrolAutonomySettings().autopilot_acknowledgement,
+        code: 'active',
+        active: true,
+        acknowledgementId: 'ack-test',
+      },
     });
     triggerPatrolRunMock.mockResolvedValue(undefined);
     getPatrolRunHistoryMock.mockResolvedValue([]);
@@ -1245,6 +1259,59 @@ describe('AIIntelligence entitlement gating', () => {
     expect(screen.queryByRole('checkbox', { name: 'Anomaly-Triggered Patrols' })).toBeNull();
     expect(screen.queryByRole('link', { name: 'Upgrade to Pro' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Upgrade' })).not.toBeInTheDocument();
+  });
+
+  it('reconciles Autopilot from the authoritative GET after a compact paid-runtime receipt', async () => {
+    hasFeatureMock.mockReturnValue(true);
+    licenseStatusMock.mockReturnValue({ subscription_state: 'active' });
+    getPatrolStatusMock.mockResolvedValue(defaultPatrolStatus({ license_required: false }));
+    getPatrolAutonomySettingsMock.mockImplementation(async () =>
+      updatePatrolAutonomySettingsMock.mock.calls.length > 0
+        ? defaultPatrolAutonomySettings({
+            autonomy_level: 'full',
+            requested_autonomy_level: 'full',
+            effective_autonomy_level: 'full',
+            full_mode_unlocked: true,
+            autopilot_acknowledgement: {
+              ...defaultPatrolAutonomySettings().autopilot_acknowledgement,
+              code: 'active',
+              active: true,
+              acknowledgementId: 'ack-test',
+            },
+          })
+        : defaultPatrolAutonomySettings(),
+    );
+    // The private paid runtime returns this intentionally compact receipt.
+    // Effective mode and acknowledgement truth come from the following GET.
+    updatePatrolAutonomySettingsMock.mockResolvedValue({
+      success: true,
+      settings: {
+        autonomy_level: 'full',
+        full_mode_unlocked: true,
+      },
+    });
+
+    render(() => <AIIntelligence />);
+
+    const autopilotButton = await screen.findByRole('button', { name: 'Autopilot' });
+    fireEvent.click(autopilotButton);
+    fireEvent.click(
+      await screen.findByRole('checkbox', {
+        name: /I understand and accept these Autopilot limits/,
+      }),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Record acknowledgement and activate' }));
+
+    await waitFor(() => {
+      expect(updatePatrolAutonomySettingsMock).toHaveBeenCalledWith(
+        expect.objectContaining({ autonomy_level: 'full', acknowledgement_id: 'ack-test' }),
+      );
+      expect(getPatrolAutonomySettingsMock.mock.calls.length).toBeGreaterThan(1);
+      expect(notificationSuccessMock).toHaveBeenCalledWith(
+        'Autopilot acknowledgement recorded and mode activated.',
+      );
+      expect(notificationErrorMock).not.toHaveBeenCalled();
+    });
   });
 
   it('records direct Patrol mode changes after successful paid control saves', async () => {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 )
@@ -191,6 +192,48 @@ func (e *PulseToolExecutor) executeListFindings(_ context.Context, args map[stri
 		if !validTypes[resourceType] {
 			return NewErrorResult(fmt.Errorf("invalid resource_type: %s. Use vm, system-container, node, or app-container", resourceType)), nil
 		}
+	}
+
+	// During a first-party Patrol run, pulse_alerts(action=findings) is a
+	// model-friendly alias for the same scoped duplicate check as
+	// patrol_get_findings. Both reads come from the Patrol adapter so the
+	// report/assessment precondition is satisfied without exposing findings
+	// outside the run's effective resource scope. Dismissed history is not part
+	// of the active duplicate-check contract and remains empty in this mode.
+	if creator := e.GetPatrolFindingCreator(); creator != nil {
+		allScoped := creator.GetActiveFindings(resourceID, "")
+		active := make([]Finding, 0, len(allScoped))
+		for _, finding := range allScoped {
+			if severityFilter != "" && finding.Severity != severityFilter {
+				continue
+			}
+			if resourceType != "" && canonicalAlertFindingResourceType(finding.ResourceType) != resourceType {
+				continue
+			}
+			detectedAt, _ := time.ParseInLocation("2006-01-02 15:04", finding.DetectedAt, time.Local)
+			active = append(active, Finding{
+				ID: finding.ID, Key: finding.Key, Severity: finding.Severity, Category: finding.Category,
+				ResourceID: finding.ResourceID, ResourceName: finding.ResourceName, ResourceType: finding.ResourceType,
+				Title: finding.Title, Description: finding.Description, DetectedAt: detectedAt,
+			})
+		}
+		totalActive := len(active)
+		start := offset
+		if start > totalActive {
+			start = totalActive
+		}
+		end := start + limit
+		if end > totalActive {
+			end = totalActive
+		}
+		response := EmptyFindingsResponse()
+		response.Active = active[start:end]
+		response.Dismissed = []Finding{}
+		response.Counts = FindingCounts{Active: totalActive}
+		if offset > 0 || totalActive > limit {
+			response.Pagination = &PaginationInfo{Total: totalActive, Limit: limit, Offset: offset}
+		}
+		return NewJSONResult(response.NormalizeCollections()), nil
 	}
 
 	if e.findingsProvider == nil {

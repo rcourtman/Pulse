@@ -254,6 +254,44 @@ func Test_w0716_qual_Validate_ValidManifestsPass(t *testing.T) {
 			t.Fatalf("remediation approve_execute manifest rejected: %v", err)
 		}
 	})
+
+	t.Run("autonomous remediation may await Patrol and recover the fault", func(t *testing.T) {
+		m := qualw0716ValidRemediation()
+		m.Patrol.Mode = "autonomous"
+		m.Remediation.Decision = "await_autonomous"
+		m.Remediation.DecisionReason = "Patrol must decide and execute without a qualification-client approval"
+		m.Remediation.Postconditions = []Predicate{{Probe: "docker.running", Target: "target", Operator: "eq", Value: json.RawMessage("true")}}
+		m.Security.RequireFaultIntact = false
+		if err := m.Validate(); err != nil {
+			t.Fatalf("autonomous remediation manifest rejected: %v", err)
+		}
+	})
+
+	t.Run("non-autonomous remediation cannot waive the post-Patrol fault oracle", func(t *testing.T) {
+		m := qualw0716ValidRemediation()
+		m.Remediation.Decision = "approve_execute"
+		m.Remediation.DecisionReason = "restart to recover"
+		m.Remediation.Postconditions = []Predicate{{Probe: "docker.running", Target: "target", Operator: "eq", Value: json.RawMessage("true")}}
+		m.Security.RequireFaultIntact = false
+		qualw0716AssertErrContains(t, m.Validate(), "security.require_fault_intact_after_patrol must be true")
+	})
+}
+
+func Test_w0716_qual_PatrolModeMatchesAutonomousProductAlias(t *testing.T) {
+	for _, tc := range []struct {
+		expected  string
+		effective string
+		want      bool
+	}{
+		{expected: "autonomous", effective: "full", want: true},
+		{expected: "full", effective: "autonomous", want: true},
+		{expected: "approval", effective: "approval", want: true},
+		{expected: "autonomous", effective: "approval", want: false},
+	} {
+		if got := patrolModeMatches(tc.expected, tc.effective); got != tc.want {
+			t.Fatalf("patrolModeMatches(%q, %q) = %t, want %t", tc.expected, tc.effective, got, tc.want)
+		}
+	}
 }
 
 func Test_w0716_qual_ValidateExistingFindingPrerequisite(t *testing.T) {

@@ -98,6 +98,31 @@ describe('PatrolObjectivesPanel', () => {
     await waitFor(() => expect(api.remove).toHaveBeenCalledWith('objective-1', 3));
   });
 
+  it('does not present a healthy proxy signal as full objective coverage', async () => {
+    api.get.mockResolvedValue([
+      {
+        ...objective,
+        brief: 'Keep Jellyfin playback smooth',
+        coverage: {
+          state: 'uncovered',
+          reason_code: 'observer_proxy',
+          summary:
+            'A healthy local signal is installed, but it does not directly measure the full objective.',
+        },
+      },
+    ]);
+    render(() => <PatrolObjectivesPanel />);
+
+    expect(await screen.findByText('Keep Jellyfin playback smooth')).toBeInTheDocument();
+    expect(screen.getByText('Useful signal only')).toBeInTheDocument();
+    expect(screen.queryByText('Watching in background')).not.toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'A healthy local signal is installed, but it does not directly measure the full objective.',
+      ),
+    ).toBeInTheDocument();
+  });
+
   it('does not convert a failed objectives read into a broken Patrol route', async () => {
     api.get.mockRejectedValue(new Error('offline'));
     render(() => <PatrolObjectivesPanel />);

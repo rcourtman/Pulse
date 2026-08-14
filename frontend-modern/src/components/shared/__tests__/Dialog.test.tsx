@@ -110,4 +110,18 @@ describe('Dialog', () => {
     fireEvent.keyDown(document, { key: 'Tab', shiftKey: true });
     expect(last).toHaveFocus();
   });
+
+  it('honors an explicitly requested initial focus target', async () => {
+    render(() => (
+      <Dialog isOpen={true} onClose={() => undefined}>
+        <div class="p-4">
+          <button type="button">Close</button>
+          <textarea aria-label="Outcome" autofocus />
+        </div>
+      </Dialog>
+    ));
+
+    await Promise.resolve();
+    expect(screen.getByRole('textbox', { name: 'Outcome' })).toHaveFocus();
+  });
 });

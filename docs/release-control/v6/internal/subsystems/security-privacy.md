@@ -1501,6 +1501,14 @@ handoff: the executor may use agent command execution only after scope,
 approval/policy, stale-plan, operator-lock, source-freshness, and runtime
 posture checks pass, and it must record redacted audit and verification facts
 instead of exposing raw command text through monitoring-readable surfaces.
+The containerized Unified Agent's daemon bridge does not widen that grant. It
+accepts only the canonical typed lifecycle payload after command admission,
+binds an immutable container id and an allowlisted start/stop/restart operation,
+and exposes no raw daemon request, command text, arbitrary name, or general
+socket capability to the model or server. It reuses the locally configured
+module connection that already collects Docker / Podman inventory; a missing
+or mismatched module fails before mutation, and an ambiguous mutating daemon
+call is never retried automatically.
 Proxmox VM/LXC lifecycle execution is governed by the same privileged action
 handoff: `start`, `shutdown`, `reboot`, and `stop` may use a Proxmox node
 command agent only after the API action scope, approval/policy, stale-plan,

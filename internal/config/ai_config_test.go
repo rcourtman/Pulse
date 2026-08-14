@@ -88,6 +88,17 @@ func TestAIConfigPatrolActionEmergencyStopPersistsExplicitly(t *testing.T) {
 	}
 }
 
+func TestAIConfigPatrolInvestigationBudgetDefaultsToTenEvidenceCalls(t *testing.T) {
+	cfg := NewDefaultAIConfig()
+	if got := cfg.GetPatrolInvestigationBudget(); got != 10 {
+		t.Fatalf("default Patrol investigation budget = %d, want 10 evidence calls", got)
+	}
+	cfg.PatrolInvestigationBudget = 0
+	if got := cfg.GetPatrolInvestigationBudget(); got != DefaultPatrolInvestigationBudget {
+		t.Fatalf("zero persisted budget = %d, want default %d", got, DefaultPatrolInvestigationBudget)
+	}
+}
+
 func TestAIConfig_IsConfigured(t *testing.T) {
 	tests := []struct {
 		name     string

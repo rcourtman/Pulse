@@ -136,7 +136,7 @@ func (r *QualificationRunner) Run(ctx context.Context) (report RunReport, termin
 		if autonomyErr != nil {
 			return autonomyErr
 		}
-		if expected := strings.TrimSpace(manifest.Patrol.Mode); expected != "" && !strings.EqualFold(expected, autonomy.Effective()) {
+		if expected := strings.TrimSpace(manifest.Patrol.Mode); expected != "" && !patrolModeMatches(expected, autonomy.Effective()) {
 			return fmt.Errorf("scenario requires Patrol mode %q, effective mode is %q", expected, autonomy.Effective())
 		}
 		if expected := strings.TrimSpace(r.config.ExpectedModel); expected != "" {
@@ -416,6 +416,18 @@ func (r *QualificationRunner) Run(ctx context.Context) (report RunReport, termin
 	return report, terminalErr
 }
 
+func patrolModeMatches(expected, effective string) bool {
+	expected = strings.ToLower(strings.TrimSpace(expected))
+	effective = strings.ToLower(strings.TrimSpace(effective))
+	if expected == "autonomous" {
+		expected = "full"
+	}
+	if effective == "autonomous" {
+		effective = "full"
+	}
+	return expected == effective
+}
+
 func validateExistingFindingPrerequisite(manifest Manifest, collected map[string]Resource, warmup PatrolRun, findings []Finding) error {
 	if strings.EqualFold(strings.TrimSpace(warmup.Status), "error") || warmup.ErrorCount > 0 {
 		return fmt.Errorf("existing-finding prerequisite Patrol run failed: status=%s errors=%d", warmup.Status, warmup.ErrorCount)
@@ -626,6 +638,10 @@ func (r *QualificationRunner) runRemediation(ctx context.Context, report *RunRep
 	case "observe":
 		result.Passed = true
 		return nil
+	case "await_autonomous":
+		// Intentionally do nothing. This is the proof boundary for full
+		// autonomy: the qualification client must not approve or execute the
+		// action on Patrol's behalf.
 	case "reject":
 		if _, err := r.config.Client.DecideAction(ctx, result.ActionID, "rejected", spec.DecisionReason, audit.Plan.PlanHash); err != nil {
 			return fmt.Errorf("reject exact action: %w", err)
@@ -650,8 +666,8 @@ func (r *QualificationRunner) runRemediation(ctx context.Context, report *RunRep
 	if spec.Decision == "reject" && string(after.Audit.State) != "rejected" {
 		return fmt.Errorf("rejected action reached unexpected state %q", after.Audit.State)
 	}
-	if spec.Decision == "approve_execute" && string(after.Audit.State) != "completed" {
-		return fmt.Errorf("approved action reached unexpected state %q", after.Audit.State)
+	if (spec.Decision == "approve_execute" || spec.Decision == "await_autonomous") && string(after.Audit.State) != "completed" {
+		return fmt.Errorf("remediation action reached unexpected state %q", after.Audit.State)
 	}
 	if len(spec.Postconditions) > 0 {
 		observations, observeErr := r.config.Lab.Observe(ctx, r.config.Manifest, prepared, spec.Postconditions)
@@ -661,7 +677,7 @@ func (r *QualificationRunner) runRemediation(ctx context.Context, report *RunRep
 			result.Errors = append(result.Errors, observeErr.Error())
 		}
 	} else {
-		result.IndependentVerified = spec.Decision != "approve_execute"
+		result.IndependentVerified = spec.Decision != "approve_execute" && spec.Decision != "await_autonomous"
 	}
 	verificationStatus := string(after.Audit.VerificationOutcome.Status)
 	result.LifecycleVerified = !spec.RequireLifecycleVerification || stringInFold(spec.AllowedVerificationStatuses, verificationStatus)

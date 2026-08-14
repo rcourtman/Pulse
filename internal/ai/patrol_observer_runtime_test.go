@@ -23,6 +23,7 @@ func createInstallablePatrolObserver(t *testing.T, store *PatrolObjectiveStore, 
 	}
 	objective, err = store.ProposeObserver(objective.ID, ProposePatrolObserverInput{
 		ExpectedRevision: objective.Revision,
+		EvidenceFit:      PatrolObserverEvidenceFitDirect,
 		Interpretation:   "Every scoped canonical resource remains online.",
 		TriggerKinds:     []PatrolObserverTriggerKind{PatrolObserverTriggerInterval},
 		ProbeJSON:        `{"runtime":"pulse-resource-state/v1","path":"status","operator":"equals","value":"online","sample_interval_seconds":10,"wake_after_consecutive_failures":2}`,
@@ -131,6 +132,7 @@ func TestPatrolAvailabilityObserverUsesCanonicalScopedTargetAndWakesOnOutcomeBre
 	}
 	objective, err = store.ProposeObserver(objective.ID, ProposePatrolObserverInput{
 		ExpectedRevision: objective.Revision,
+		EvidenceFit:      PatrolObserverEvidenceFitDirect,
 		Interpretation:   "The existing camera availability check remains reachable.",
 		TriggerKinds:     []PatrolObserverTriggerKind{PatrolObserverTriggerInterval},
 		ProbeJSON:        `{"runtime":"pulse-availability-state/v1","target_id":"camera-front-http","path":"probe_outcome","operator":"equals","value":"reachable","sample_interval_seconds":10,"wake_after_consecutive_failures":2}`,
@@ -286,6 +288,7 @@ func TestPatrolEstateWideObjectiveUsesCurrentCanonicalResourceSet(t *testing.T) 
 	}
 	objective, err = store.ProposeObserver(objective.ID, ProposePatrolObserverInput{
 		ExpectedRevision: objective.Revision, Interpretation: "Every current canonical resource with disk telemetry stays below 85 percent.",
+		EvidenceFit:  PatrolObserverEvidenceFitDirect,
 		TriggerKinds: []PatrolObserverTriggerKind{PatrolObserverTriggerInterval},
 		ProbeJSON:    `{"runtime":"pulse-resource-metric/v1","metric":"disk_percent","operator":"less_than","threshold":85,"sample_interval_seconds":10,"wake_after_consecutive_failures":1,"max_evidence_age_seconds":60}`,
 		WakeEvidence: "A current resource breaches the disk objective.", RequirementsJSON: `{}`,
@@ -410,6 +413,7 @@ func TestPatrolHTTPJSONObserverUsesScopedDiscoveryOriginSecretReferenceAndWakes(
 	}
 	objective, err = store.ProposeObserver(objective.ID, ProposePatrolObserverInput{
 		ExpectedRevision: objective.Revision, Interpretation: "No active playback session is buffering.",
+		EvidenceFit:  PatrolObserverEvidenceFitDirect,
 		TriggerKinds: []PatrolObserverTriggerKind{PatrolObserverTriggerInterval},
 		ProbeJSON:    `{"runtime":"pulse-http-json/v1","discovery_id":"system-container:node1:101","request_path":"/api/stats?window=active","json_pointer":"/playback/buffering_sessions","operator":"less_than","expected":1,"auth":{"header_name":"X-Api-Key","secret_ref":"jellyfin_api_key"},"timeout_seconds":2,"sample_interval_seconds":10,"wake_after_consecutive_failures":1}`,
 		WakeEvidence: "The local service API reports one or more buffering sessions.", RequirementsJSON: `{}`,

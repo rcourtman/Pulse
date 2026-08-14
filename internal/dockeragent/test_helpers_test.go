@@ -28,6 +28,7 @@ type fakeDockerClient struct {
 	containerInspectFn        func(ctx context.Context, id string) (containertypes.InspectResponse, error)
 	imagePullFn               func(ctx context.Context, ref string, opts dockerImagePullOptions) (io.ReadCloser, error)
 	containerStopFn           func(ctx context.Context, id string, opts dockerContainerStopOptions) error
+	containerRestartFn        func(ctx context.Context, id string, opts dockerContainerRestartOptions) error
 	containerRenameFn         func(ctx context.Context, id, newName string) error
 	containerCreateFn         func(ctx context.Context, config *containertypes.Config, hostConfig *containertypes.HostConfig, networkingConfig *network.NetworkingConfig, platform *v1.Platform, containerName string) (containertypes.CreateResponse, error)
 	networkConnectFn          func(ctx context.Context, netName, containerID string, endpoint *network.EndpointSettings) error
@@ -97,6 +98,13 @@ func (f *fakeDockerClient) ContainerStop(ctx context.Context, id string, opts do
 		return errors.New("unexpected ContainerStop call")
 	}
 	return f.containerStopFn(ctx, id, opts)
+}
+
+func (f *fakeDockerClient) ContainerRestart(ctx context.Context, id string, opts dockerContainerRestartOptions) error {
+	if f.containerRestartFn == nil {
+		return errors.New("unexpected ContainerRestart call")
+	}
+	return f.containerRestartFn(ctx, id, opts)
 }
 
 func (f *fakeDockerClient) ContainerRename(ctx context.Context, id, newName string) error {

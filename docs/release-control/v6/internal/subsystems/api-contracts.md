@@ -63,6 +63,14 @@ server-derived `coverage` and the internal observer lifecycle for honest status,
 but public request schemas do not accept either field. Unknown fields, trailing
 JSON, over-limit bodies, unsupported statuses, and malformed scope entries fail
 closed. Objective text is never copied into audit messages.
+Observer responses include the additive closed `evidence_fit` value, `direct`
+or `proxy`. Only a healthy installed direct observer may produce
+`coverage.state=covered`; a healthy proxy remains
+`uncovered/observer_proxy` with a server-authored explanation. Missing fit on
+older persisted observers is interpreted as proxy, so an upgrade cannot turn a
+weak correlated signal into an implicit protection claim. The model-facing
+proposal tool requires the fit, while objective create/update clients still
+cannot author it.
 Objective-triggered Patrol run and finding payloads retain an optional
 `objective_context` snapshot containing the exact objective/observer identity,
 revision, bounded desired-outcome text, affected canonical resources, local
@@ -1984,6 +1992,8 @@ coverage and observer artifacts remain server-owned. Successful active create
 or material update requests immediately ask the tenant Patrol service to plan
 coverage, while the HTTP response remains the durable objective truth and does
 not claim that queue acceptance means coverage.
+The frontend mirror treats `observer_proxy` as uncovered objective truth and
+may present its useful local signal without translating it into covered state.
 The route-backed Actions review consumes an exact typed action id through its
 browser query state and resolves lifecycle state from `GET /api/actions/{id}`;
 Patrol may link to that identity but must not infer Open versus History from
@@ -3262,8 +3272,14 @@ snapshot before acknowledging the run. Unmatched, ambiguous, or zero-match
 explicit identities return the stable `patrol_scope_unresolved` 422 envelope;
 accepted responses include the requested-to-effective scope resolution. The
 runtime must re-resolve at execution time and persist a failed run if collection
-drift turns the accepted scope into a zero-match race. Clients must not infer a
-successful targeted check from a queued response alone.
+drift turns the accepted scope into a zero-match race. Admission atomically
+reserves the same single execution slot used by unscoped runs before returning
+HTTP success. The response therefore includes `run_id` and `started_at`; a busy
+slot returns the typed `409 patrol_already_running` envelope instead of
+acknowledging work that may be dropped. Qualification clients may retry that
+honest conflict within their scenario timeout. Clients must not infer a
+successful targeted check from admission alone: the named run record remains
+the authoritative analysis outcome.
 
 1. Update contract tests when payloads change, including admin verification endpoints such as `POST /api/ai/patrol/preflight` whose response shape (`tool_call_observed`, `duration_ms`, classified `cause`/`summary`/`recommendation`, plus `recorded_at`/`recorded_at_unix` for the cached snapshot) is part of the canonical Patrol diagnostic surface, the `patrol_preflight` snapshot field on `/api/settings/ai` that hydrates the Check Patrol model panel on page load, the auto-trigger contract on `POST/PUT /api/settings/ai` whose handler dispatches preflight in the background only when the change actually moved Patrol transport so routine saves do not write a new `patrol_preflight` snapshot, the startup-seed contract where `NewAISettingsHandler` dispatches the same async preflight after `LoadConfig()` succeeds so the first `/api/settings/ai` poll after a Pulse restart already carries a populated `patrol_preflight` snapshot, and the GET-symmetry contract where `HandleGetAISettings` includes `patrol_readiness` (with the cached-preflight-augmented `tools` check) on the same response that already carries `patrol_preflight`, so the Patrol page picks up classified preflight evidence on first load instead of only after a save; readiness checks may keep stable machine IDs such as `configuration`, but user-facing labels in this payload must say Patrol mode rather than Patrol configuration, and the settings UI must summarize successful diagnostic snapshots as model readiness instead of rendering raw preflight/tool-call wording
    The same diagnostic payload may inform Patrol page setup banners, but the
@@ -4111,7 +4127,9 @@ separately, so API, audit, qualification, and enterprise consumers no longer
 infer provider turns from tool events. The existing `investigation_budget`
 settings payload remains wire-compatible but is now defined as an evidence-call
 budget; the server derives the model-response safety ceiling and reserves
-terminal proposal/final-summary capacity.
+terminal proposal/final-summary capacity. An absent or zero persisted setting
+uses the shipped ten-call default; explicit values retain the bounded 5–30
+contract.
 
 Unified Agent connections now carry agent-authored lifecycle evidence through
 the shared host model and `/api/connections` contract. The payload may include
@@ -8657,6 +8675,15 @@ version/status metadata without rewriting historical evidence. Stable failure co
 missing, stale, wrong-organization, wrong-actor, expired, revoked, malformed,
 conflicting, and unavailable-store evidence.
 
+Paid adapters may return a compact mutation acknowledgement from `PUT`; it is
+not the canonical effective-state projection. First-party clients must follow
+every successful autonomy write with `GET /api/ai/patrol/autonomy` and render
+that read, including license clamps, unlock state, acknowledgement status, and
+server-derived compatibility fields. They must never dereference optional
+fields from the compact write response or optimistically claim Autopilot is
+active. Consumers treat an absent, malformed, or Go zero-time acknowledgement
+`expiresAt` as unbounded/no expiry rather than displaying a year-one date.
+
 Task 09 APT executors consume Task 10 `ActionResultV2` without local truth
 enums. Host-update `MutationStarted` means the fixed install command began;
 metadata refresh, refreshed-inventory drift, zero-pending state, and pre-install
@@ -8820,9 +8847,12 @@ must also keep a transport/network failure distinct from a structured backend
 rejection.
 
 Scoped targeted checks retain their established scope-resolution response and
-do not claim the unscoped run-slot acceptance fields. All remediation remains
-on the canonical Actions API and lifecycle; accepting Patrol analysis does not
-authorize an alternate execution route.
+now share the same atomic `run_id` / `started_at` admission fields and busy-slot
+conflict as unscoped checks. Background alert, anomaly, and objective triggers
+continue through their bounded internal requeue policy; only explicit manual
+and qualification requests use the synchronous admission contract. All
+remediation remains on the canonical Actions API and lifecycle; accepting
+Patrol analysis does not authorize an alternate execution route.
 `internal/api/ai_handlers_patrol_actions_additional_test.go` proves the
 acceptance and typed-conflict payloads, while
 `frontend-modern/src/features/patrol/__tests__/patrolRunAcceptance.test.ts`

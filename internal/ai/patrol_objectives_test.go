@@ -220,6 +220,7 @@ func TestPatrolObserverLifecycleDerivesCoverageFromHealthLease(t *testing.T) {
 		ArtifactDigest: digest,
 		TriggerKinds:   []PatrolObserverTriggerKind{PatrolObserverTriggerInterval, PatrolObserverTriggerEvent},
 		ReadOnly:       true,
+		EvidenceFit:    PatrolObserverEvidenceFitDirect,
 	}
 	objective, err = store.RecordObserver(objective.ID, objective.Revision, observer, "builder", now.Add(time.Minute))
 	if err != nil {
@@ -266,6 +267,49 @@ func TestPatrolObserverLifecycleDerivesCoverageFromHealthLease(t *testing.T) {
 		RequirementsJSON: `{}`,
 	}, now.Add(4*time.Minute)); !errorsIsPatrolObjectiveInvalid(err) {
 		t.Fatalf("active observer displacement error = %v", err)
+	}
+}
+
+func TestPatrolObserverProxyStaysTruthfullyUncoveredWithHealthyLease(t *testing.T) {
+	store := NewInMemoryPatrolObjectiveStore()
+	now := time.Date(2026, 8, 14, 9, 0, 0, 0, time.UTC)
+	objective, err := store.Create(CreatePatrolObjectiveInput{Brief: "Keep playback smooth"}, now)
+	if err != nil {
+		t.Fatalf("create objective: %v", err)
+	}
+	objective, err = store.ProposeObserver(objective.ID, ProposePatrolObserverInput{
+		ExpectedRevision: objective.Revision,
+		EvidenceFit:      PatrolObserverEvidenceFitProxy,
+		Interpretation:   "Reachability may indicate playback is impaired.",
+		TriggerKinds:     []PatrolObserverTriggerKind{PatrolObserverTriggerInterval},
+		ProbeJSON:        `{"runtime":"pulse-resource-state/v1","path":"status","operator":"equals","value":"online","sample_interval_seconds":30,"wake_after_consecutive_failures":2}`,
+		WakeEvidence:     "The resource is no longer online.",
+		RequirementsJSON: `{}`,
+	}, now)
+	if err != nil {
+		t.Fatalf("propose proxy observer: %v", err)
+	}
+	observer := *objective.Observer
+	observer.State = PatrolObserverValidated
+	objective, err = store.RecordObserver(objective.ID, objective.Revision, observer, "validator", now.Add(time.Second))
+	if err != nil {
+		t.Fatalf("validate proxy observer: %v", err)
+	}
+	observer = *objective.Observer
+	observer.State = PatrolObserverInstalled
+	validUntil := now.Add(5 * time.Minute)
+	evidenceAt := now.Add(2 * time.Second)
+	observer.ValidUntil = &validUntil
+	observer.LastEvidenceAt = &evidenceAt
+	objective, err = store.RecordObserver(objective.ID, objective.Revision, observer, "installer", now.Add(2*time.Second))
+	if err != nil {
+		t.Fatalf("install proxy observer: %v", err)
+	}
+	if objective.Observer == nil || objective.Observer.State != PatrolObserverInstalled || objective.Observer.EvidenceFit != PatrolObserverEvidenceFitProxy {
+		t.Fatalf("installed proxy observer = %+v", objective.Observer)
+	}
+	if objective.Coverage.State != PatrolObjectiveUncovered || objective.Coverage.ReasonCode != "observer_proxy" {
+		t.Fatalf("proxy coverage = %+v", objective.Coverage)
 	}
 }
 

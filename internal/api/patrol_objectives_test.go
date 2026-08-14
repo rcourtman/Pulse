@@ -51,6 +51,7 @@ func TestPatrolObjectivesHTTPContractAndOptimisticRevision(t *testing.T) {
 	}
 	proposed, err := store.ProposeObserver(created.ID, ai.ProposePatrolObserverInput{
 		ExpectedRevision: created.Revision,
+		EvidenceFit:      ai.PatrolObserverEvidenceFitProxy,
 		Interpretation:   "Detect playback buffering from local events.",
 		TriggerKinds:     []ai.PatrolObserverTriggerKind{ai.PatrolObserverTriggerEvent},
 		ProbeJSON:        `{"source":"private playback event details"}`,
@@ -83,7 +84,7 @@ func TestPatrolObjectivesHTTPContractAndOptimisticRevision(t *testing.T) {
 	if err := json.Unmarshal(listResponse.Body.Bytes(), &listed); err != nil {
 		t.Fatalf("decode objective list: %v", err)
 	}
-	if len(listed.Objectives) != 1 || listed.Objectives[0].ID != created.ID || listed.Objectives[0].Observer == nil || listed.Objectives[0].Observer.Artifact != nil {
+	if len(listed.Objectives) != 1 || listed.Objectives[0].ID != created.ID || listed.Objectives[0].Observer == nil || listed.Objectives[0].Observer.Artifact != nil || listed.Objectives[0].Observer.EvidenceFit != ai.PatrolObserverEvidenceFitProxy {
 		t.Fatalf("listed objectives = %+v", listed.Objectives)
 	}
 

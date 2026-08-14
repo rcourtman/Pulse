@@ -53,6 +53,11 @@ export function useDialogState(options: DialogStateOptions): {
     queueMicrotask(() => {
       if (!panelRef) return;
       const focusable = getDialogFocusableElements(panelRef);
+      const requestedInitialFocus = focusable.find((element) => element.hasAttribute('autofocus'));
+      if (requestedInitialFocus) {
+        requestedInitialFocus.focus();
+        return;
+      }
       if (focusable.length > 0) {
         focusable[0].focus();
         return;

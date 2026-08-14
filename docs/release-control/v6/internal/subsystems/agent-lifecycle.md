@@ -835,6 +835,16 @@ lifecycle/update chronology within its bounded skew window and then binds a
 slightly future valid observation to the server receipt boundary for canonical
 evidence. Agent lifecycle consumers must not reject that bounded case, widen
 the skew window, or clamp stale/excessively future evidence into validity.
+Inside a containerized Unified Agent, the closed start/stop/restart command
+must inspect and mutate through the Docker / Podman module's already-connected
+daemon API; it must not depend on a second `docker` or `podman` executable being
+present in the agent image. The host-command bridge exposes only exact-container
+inspect plus the allowlisted start, stop, and restart verbs. Execution remains
+read-before-mutate-read, and a mutation request is sent exactly once: an
+ambiguous daemon transport failure must surface for receipt reconciliation
+rather than being retried and possibly applying the operation twice. Native
+host agents may retain the equivalent CLI implementation as a compatibility
+fallback when no module bridge is configured.
 
 Docker / Podman container image updates are a fourth typed operation on that
 same closed channel, not an extension of the raw command path and not a

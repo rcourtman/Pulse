@@ -862,6 +862,15 @@ func patrolFindingSummaryForState(findings []*Finding, state patrolRuntimeState)
 // runScopedPatrol runs a patrol on a filtered subset of resources.
 // This provides token-efficient analysis for event-driven patrols.
 func (p *PatrolService) runScopedPatrol(ctx context.Context, scope PatrolScope) {
+	p.runScopedPatrolWithStart(ctx, scope, nil, true)
+}
+
+// runScopedPatrolWithStart executes a scoped run either from the background
+// trigger queue or from a reservation accepted synchronously by the manual-run
+// API. Background triggers retain their bounded retry behaviour. A manual
+// reservation is already durable and therefore must either produce a run
+// record or an explicit terminal failure; it is never silently re-queued.
+func (p *PatrolService) runScopedPatrolWithStart(ctx context.Context, scope PatrolScope, acceptedStart *patrolRunStart, retryOnBusy bool) {
 	p.mu.RLock()
 	cfg := p.config
 	breaker := p.circuitBreaker
@@ -870,22 +879,45 @@ func (p *PatrolService) runScopedPatrol(ctx context.Context, scope PatrolScope) 
 	// Demo instances simulate scheduled patrol passes only; event-driven
 	// scoped runs would hit the real provider path.
 	if IsDemoMode() {
+		if acceptedStart != nil {
+			p.recordScopedPatrolScopeFailure(acceptedStart.startedAt, acceptedStart.id, scope,
+				PatrolScopeResolution{RequestedResourceIDs: append([]string(nil), scope.ResourceIDs...)},
+				"Scoped Patrol is unavailable in demo mode",
+				"Pulse accepted the scoped run, but the demo runtime cannot execute event-driven scoped checks.")
+			p.endRun()
+		}
 		return
 	}
 
 	if !cfg.Enabled {
+		if acceptedStart != nil {
+			p.recordScopedPatrolScopeFailure(acceptedStart.startedAt, acceptedStart.id, scope,
+				PatrolScopeResolution{RequestedResourceIDs: append([]string(nil), scope.ResourceIDs...)},
+				"Patrol disabled before scoped execution",
+				"Pulse accepted the scoped run, but Patrol was disabled before execution began.")
+			p.endRun()
+		}
 		return
 	}
 	if reason := strings.TrimSpace(cfg.RuntimeBlockedReason); reason != "" {
+		if acceptedStart != nil {
+			p.recordScopedPatrolScopeFailure(acceptedStart.startedAt, acceptedStart.id, scope,
+				PatrolScopeResolution{RequestedResourceIDs: append([]string(nil), scope.ResourceIDs...)},
+				"Patrol runtime became unavailable",
+				reason)
+			p.endRun()
+		}
 		p.setBlockedReasonWithCause(reason, cfg.RuntimeBlockedCause)
 		log.Info().Str("reason", reason).Str("cause", string(cfg.RuntimeBlockedCause)).Msg("AI Patrol: Skipping scoped run - runtime readiness blocked")
 		return
 	}
 
-	runStart, accepted := p.beginRun("scoped")
-	if !accepted {
-		// Re-queue with backoff if retries remain
-		if scope.RetryCount < scopedPatrolMaxRetries {
+	runStart := acceptedStart
+	if runStart == nil {
+		var accepted bool
+		runStart, accepted = p.beginRun("scoped")
+		// Re-queue background triggers with backoff if retries remain.
+		if !accepted && retryOnBusy && scope.RetryCount < scopedPatrolMaxRetries {
 			scope.RetryCount++
 			backoff := scopedPatrolRetryBackoff1
 			if scope.RetryCount == scopedPatrolMaxRetries {
@@ -900,14 +932,16 @@ func (p *PatrolService) runScopedPatrol(ctx context.Context, scope PatrolScope) 
 					Strs("resources", scope.ResourceIDs).
 					Msg("AI Patrol: Re-queued dropped scoped patrol with backoff")
 			}
-		} else {
+		} else if !accepted && retryOnBusy {
 			GetPatrolMetrics().RecordScopedDroppedFinal()
 			log.Error().
 				Strs("resources", scope.ResourceIDs).
 				Str("reason", string(scope.Reason)).
 				Msg("AI Patrol: Scoped patrol permanently dropped after 2 retries")
 		}
-		return
+		if !accepted {
+			return
+		}
 	}
 	defer p.endRun()
 

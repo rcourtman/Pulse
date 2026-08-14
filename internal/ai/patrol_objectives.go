@@ -83,6 +83,17 @@ const (
 	PatrolObserverTriggerInterval PatrolObserverTriggerKind = "interval"
 )
 
+type PatrolObserverEvidenceFit string
+
+const (
+	// PatrolObserverEvidenceFitDirect means the installed predicate directly
+	// measures the retained objective, rather than merely correlating with it.
+	PatrolObserverEvidenceFitDirect PatrolObserverEvidenceFit = "direct"
+	// PatrolObserverEvidenceFitProxy means the signal is useful for waking
+	// Patrol but cannot honestly claim full objective coverage by itself.
+	PatrolObserverEvidenceFitProxy PatrolObserverEvidenceFit = "proxy"
+)
+
 type PatrolObjectiveScope struct {
 	ResourceIDs []string `json:"resource_ids"`
 }
@@ -94,6 +105,7 @@ type PatrolObserverRecord struct {
 	ArtifactDigest string                      `json:"artifact_digest"`
 	TriggerKinds   []PatrolObserverTriggerKind `json:"trigger_kinds"`
 	ReadOnly       bool                        `json:"read_only"`
+	EvidenceFit    PatrolObserverEvidenceFit   `json:"evidence_fit,omitempty"`
 	ValidUntil     *time.Time                  `json:"valid_until,omitempty"`
 	LastEvidenceAt *time.Time                  `json:"last_evidence_at,omitempty"`
 	FailureCode    string                      `json:"failure_code,omitempty"`
@@ -113,15 +125,17 @@ const PatrolObserverArtifactFormatV1 = "pulse-observer-proposal/v1"
 // so later validator generations can evolve without treating prose as already
 // executable authority.
 type PatrolObserverArtifact struct {
-	Format         string          `json:"format"`
-	Interpretation string          `json:"interpretation"`
-	Probe          json.RawMessage `json:"probe"`
-	WakeEvidence   string          `json:"wake_evidence"`
-	Requirements   json.RawMessage `json:"requirements"`
+	Format         string                    `json:"format"`
+	EvidenceFit    PatrolObserverEvidenceFit `json:"evidence_fit,omitempty"`
+	Interpretation string                    `json:"interpretation"`
+	Probe          json.RawMessage           `json:"probe"`
+	WakeEvidence   string                    `json:"wake_evidence"`
+	Requirements   json.RawMessage           `json:"requirements"`
 }
 
 type ProposePatrolObserverInput struct {
 	ExpectedRevision uint64
+	EvidenceFit      PatrolObserverEvidenceFit
 	Interpretation   string
 	TriggerKinds     []PatrolObserverTriggerKind
 	ProbeJSON        string
@@ -495,6 +509,7 @@ func (s *PatrolObjectiveStore) ProposeObserver(id string, input ProposePatrolObs
 	}
 	artifact := &PatrolObserverArtifact{
 		Format:         PatrolObserverArtifactFormatV1,
+		EvidenceFit:    normalizePatrolObserverEvidenceFit(input.EvidenceFit),
 		Interpretation: interpretation,
 		Probe:          probe,
 		WakeEvidence:   wakeEvidence,
@@ -517,6 +532,7 @@ func (s *PatrolObjectiveStore) ProposeObserver(id string, input ProposePatrolObs
 		ArtifactDigest: digest,
 		TriggerKinds:   triggerKinds,
 		ReadOnly:       true,
+		EvidenceFit:    artifact.EvidenceFit,
 		Artifact:       artifact,
 	}, input.Actor, now)
 }
@@ -754,6 +770,10 @@ func derivePatrolObjectiveCoverage(objective *PatrolObjective, now time.Time) Pa
 			coverage.State = PatrolObjectiveDegraded
 			coverage.ReasonCode = "observer_stale"
 			coverage.Summary = "The observer health lease has expired."
+		case observer.EvidenceFit != PatrolObserverEvidenceFitDirect:
+			coverage.State = PatrolObjectiveUncovered
+			coverage.ReasonCode = "observer_proxy"
+			coverage.Summary = "A healthy local signal is installed, but it does not directly measure the full objective."
 		default:
 			coverage.State = PatrolObjectiveCovered
 			coverage.ReasonCode = "observer_healthy"
@@ -882,6 +902,10 @@ func normalizePatrolObserver(observer PatrolObserverRecord, now time.Time) (Patr
 	if !observer.ReadOnly {
 		return PatrolObserverRecord{}, fmt.Errorf("%w: observers must be read-only", ErrPatrolObjectiveInvalid)
 	}
+	observer.EvidenceFit = normalizePatrolObserverEvidenceFit(observer.EvidenceFit)
+	if !isPatrolObserverEvidenceFit(observer.EvidenceFit) {
+		return PatrolObserverRecord{}, fmt.Errorf("%w: invalid observer evidence fit", ErrPatrolObjectiveInvalid)
+	}
 	if !isPatrolArtifactDigest(observer.ArtifactDigest) {
 		return PatrolObserverRecord{}, fmt.Errorf("%w: observer artifact digest must be sha256", ErrPatrolObjectiveInvalid)
 	}
@@ -892,6 +916,9 @@ func normalizePatrolObserver(observer PatrolObserverRecord, now time.Time) (Patr
 			return PatrolObserverRecord{}, err
 		}
 		observer.Artifact = artifact
+		if artifact.EvidenceFit != "" && observer.EvidenceFit != artifact.EvidenceFit {
+			return PatrolObserverRecord{}, fmt.Errorf("%w: observer evidence fit does not match artifact", ErrPatrolObjectiveInvalid)
+		}
 		digest, err := patrolObserverArtifactDigest(observer.Artifact)
 		if err != nil {
 			return PatrolObserverRecord{}, err
@@ -948,7 +975,7 @@ func validatePatrolObserverTransition(current *PatrolObserverRecord, next Patrol
 		}
 		return nil
 	}
-	if next.Version != current.Version || next.ArtifactDigest != current.ArtifactDigest || !equalPatrolTriggerKinds(next.TriggerKinds, current.TriggerKinds) {
+	if next.Version != current.Version || next.ArtifactDigest != current.ArtifactDigest || next.EvidenceFit != current.EvidenceFit || !equalPatrolTriggerKinds(next.TriggerKinds, current.TriggerKinds) {
 		return fmt.Errorf("%w: observer identity and artifact are immutable within a version", ErrPatrolObjectiveInvalid)
 	}
 	allowed := map[PatrolObserverState]map[PatrolObserverState]bool{
@@ -1006,6 +1033,24 @@ func isPatrolObserverState(state PatrolObserverState) bool {
 func isPatrolObserverTriggerKind(kind PatrolObserverTriggerKind) bool {
 	switch kind {
 	case PatrolObserverTriggerEvent, PatrolObserverTriggerWebhook, PatrolObserverTriggerLog, PatrolObserverTriggerFile, PatrolObserverTriggerSocket, PatrolObserverTriggerAPI, PatrolObserverTriggerInterval:
+		return true
+	default:
+		return false
+	}
+}
+
+func normalizePatrolObserverEvidenceFit(fit PatrolObserverEvidenceFit) PatrolObserverEvidenceFit {
+	if fit == "" {
+		// Pre-field observers are conservatively useful proxies, not proof that a
+		// nuanced retained outcome is fully covered.
+		return PatrolObserverEvidenceFitProxy
+	}
+	return PatrolObserverEvidenceFit(strings.ToLower(strings.TrimSpace(string(fit))))
+}
+
+func isPatrolObserverEvidenceFit(fit PatrolObserverEvidenceFit) bool {
+	switch fit {
+	case PatrolObserverEvidenceFitDirect, PatrolObserverEvidenceFitProxy:
 		return true
 	default:
 		return false
@@ -1232,6 +1277,7 @@ func normalizePatrolObserverArtifact(artifact *PatrolObserverArtifact) (*PatrolO
 	}
 	return &PatrolObserverArtifact{
 		Format:         PatrolObserverArtifactFormatV1,
+		EvidenceFit:    artifact.EvidenceFit,
 		Interpretation: interpretation,
 		Probe:          probe,
 		WakeEvidence:   wakeEvidence,

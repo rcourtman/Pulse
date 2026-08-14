@@ -51,6 +51,19 @@ func TestFindingObjectiveContextIsAdditiveBoundedIntentOnly(t *testing.T) {
 	}
 }
 
+func TestDefaultInvestigationConfigReservesCompletionBeyondTenEvidenceCalls(t *testing.T) {
+	cfg := DefaultInvestigationConfig()
+	if cfg.MaxEvidenceCalls != 10 {
+		t.Fatalf("MaxEvidenceCalls = %d, want 10", cfg.MaxEvidenceCalls)
+	}
+	if cfg.MaxTurns != 12 {
+		t.Fatalf("MaxTurns = %d, want ten evidence calls plus two completion turns", cfg.MaxTurns)
+	}
+	if got := InvestigationModelTurnLimit(0); got != 12 {
+		t.Fatalf("zero-budget model turn limit = %d, want 12", got)
+	}
+}
+
 func TestEmptyOrchestratorMessage_UsesCanonicalEmptyCollections(t *testing.T) {
 	payload, err := json.Marshal(EmptyOrchestratorMessage())
 	if err != nil {

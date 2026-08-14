@@ -101,13 +101,13 @@ func Test_w0716_contracts_NewOrchestratorInvestigationError_PartialFailure(t *te
 func Test_w0716_contracts_DefaultInvestigationConfig_FieldDefaults(t *testing.T) {
 	cfg := DefaultInvestigationConfig()
 
-	// MaxTurns reserves two responses on top of the default 15-call evidence
-	// budget: 15 + 2 = 17.
-	if cfg.MaxTurns != 17 {
-		t.Fatalf("MaxTurns = %d, want 17", cfg.MaxTurns)
+	// MaxTurns reserves two responses on top of the default 10-call evidence
+	// budget: 10 + 2 = 12.
+	if cfg.MaxTurns != 12 {
+		t.Fatalf("MaxTurns = %d, want 12", cfg.MaxTurns)
 	}
-	if cfg.MaxEvidenceCalls != 15 {
-		t.Fatalf("MaxEvidenceCalls = %d, want 15", cfg.MaxEvidenceCalls)
+	if cfg.MaxEvidenceCalls != 10 {
+		t.Fatalf("MaxEvidenceCalls = %d, want 10", cfg.MaxEvidenceCalls)
 	}
 	if cfg.Timeout != 10*time.Minute {
 		t.Fatalf("Timeout = %v, want 10m", cfg.Timeout)
@@ -131,7 +131,7 @@ func Test_w0716_contracts_DefaultInvestigationConfig_FieldDefaults(t *testing.T)
 
 // Test_w0716_contracts_InvestigationModelTurnLimit covers both the positive
 // path (budget + 2) and the <=0 clamp branch, which resets the evidence budget
-// to its default of 15 before adding the two reserved turns.
+// to its default of 10 before adding the two reserved turns.
 func Test_w0716_contracts_InvestigationModelTurnLimit(t *testing.T) {
 	tests := []struct {
 		name             string
@@ -140,8 +140,8 @@ func Test_w0716_contracts_InvestigationModelTurnLimit(t *testing.T) {
 	}{
 		{name: "positive limit adds two reserved turns", maxEvidenceCalls: 15, want: 17},
 		{name: "small positive value honored", maxEvidenceCalls: 3, want: 5},
-		{name: "zero clamps to default budget then adds two", maxEvidenceCalls: 0, want: 17},
-		{name: "negative clamps to default budget then adds two", maxEvidenceCalls: -1, want: 17},
+		{name: "zero clamps to default budget then adds two", maxEvidenceCalls: 0, want: 12},
+		{name: "negative clamps to default budget then adds two", maxEvidenceCalls: -1, want: 12},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

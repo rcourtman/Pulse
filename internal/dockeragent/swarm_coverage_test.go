@@ -12,6 +12,25 @@ import (
 	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
 )
 
+func TestDockerClientContractCarriesTypedContainerRestart(t *testing.T) {
+	called := false
+	client := &fakeDockerClient{containerRestartFn: func(_ context.Context, id string, opts dockerContainerRestartOptions) error {
+		called = true
+		if id != "container-1" || opts.Signal != "SIGTERM" || opts.Timeout == nil || *opts.Timeout != 30 {
+			t.Fatalf("unexpected restart request: id=%q opts=%+v", id, opts)
+		}
+		return nil
+	}}
+	timeout := 30
+	var contract dockerClient = client
+	if err := contract.ContainerRestart(context.Background(), "container-1", dockerContainerRestartOptions{Signal: "SIGTERM", Timeout: &timeout}); err != nil {
+		t.Fatalf("ContainerRestart: %v", err)
+	}
+	if !called {
+		t.Fatal("typed restart request was not forwarded")
+	}
+}
+
 func TestResolvedSwarmScope(t *testing.T) {
 	info := systemtypes.Info{
 		Swarm: swarmtypes.Info{

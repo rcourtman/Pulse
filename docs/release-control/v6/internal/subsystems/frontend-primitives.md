@@ -2669,6 +2669,12 @@ Patrol-only overlay, selector, badge vocabulary, or focus model. The modal keeps
 the standard backdrop, Escape, focus trap/return, bounded viewport, scrolling,
 and responsive footer behavior while the feature owns only objective-specific
 copy and orchestration.
+The same shared metadata badge renders a healthy server-owned proxy observer as
+`Useful signal only` with warning tone. The row keeps the backend explanation
+that the signal does not directly measure the full objective, while only
+server-authored `covered` state may render `Watching in background`. This is a
+presentation of the canonical objective contract, not a frontend inference or
+a new badge primitive.
 
 ### System member rows are source-type aware
 
@@ -5753,6 +5759,13 @@ backend rejection remains distinct from a browser or network failure. Any
 action proposed from that run still hands off to the shared canonical Actions
 review instead of adding approve, execute, or retry-mutation controls to the
 Patrol feature.
+Patrol autonomy controls follow the same server-truth discipline: after any
+successful autonomy PUT, the feature reloads the canonical GET projection
+before rendering the selected mode. Compact paid-runtime acknowledgements are
+not frontend state and missing nested fields in them must not crash the page.
+An absent, malformed, or Go zero-time `expiresAt` value is rendered as no
+expiry; it must never become a year-one locale date. A real bounded future
+expiry remains visible beside the acknowledgement status.
 
 Storage detail primitives render physical-disk collection truth explicitly:
 temporarily unavailable, provider/controller unsupported, and unexpectedly

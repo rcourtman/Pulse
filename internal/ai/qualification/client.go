@@ -599,6 +599,10 @@ func (c *PulseClient) Trigger(ctx context.Context, resourceIDs []string, _ strin
 }
 
 func (c *PulseClient) TriggerAndWait(ctx context.Context, resourceIDs []string, contextText string, timeout time.Duration) (PatrolRun, error) {
+	if timeout <= 0 {
+		timeout = 10 * time.Minute
+	}
+	deadline := time.Now().Add(timeout)
 	before, err := c.Runs(ctx)
 	if err != nil {
 		return PatrolRun{}, err
@@ -607,14 +611,26 @@ func (c *PulseClient) TriggerAndWait(ctx context.Context, resourceIDs []string, 
 	for _, run := range before {
 		known[run.ID] = struct{}{}
 	}
-	triggeredAt := time.Now().UTC()
-	if err := c.Trigger(ctx, resourceIDs, contextText); err != nil {
-		return PatrolRun{}, err
+	var triggeredAt time.Time
+	for {
+		triggeredAt = time.Now().UTC()
+		if triggerErr := c.Trigger(ctx, resourceIDs, contextText); triggerErr == nil {
+			break
+		} else {
+			var apiErr *HTTPError
+			if !errors.As(triggerErr, &apiErr) || apiErr.StatusCode != http.StatusConflict {
+				return PatrolRun{}, triggerErr
+			}
+		}
+		if time.Now().After(deadline) {
+			return PatrolRun{}, errors.New("Patrol remained busy until the qualification run timeout")
+		}
+		select {
+		case <-ctx.Done():
+			return PatrolRun{}, ctx.Err()
+		case <-time.After(2 * time.Second):
+		}
 	}
-	if timeout <= 0 {
-		timeout = 10 * time.Minute
-	}
-	deadline := time.Now().Add(timeout)
 	for {
 		runs, runErr := c.Runs(ctx)
 		if runErr == nil {

@@ -71,6 +71,14 @@ func (e *PulseToolExecutor) executeDiscovery(ctx context.Context, args map[strin
 	action, _ := args["action"].(string)
 	switch action {
 	case "get":
+		// Treat a targetless get as the bounded list operation. Models commonly
+		// express "get discoveries" this way (often with only a limit), and a
+		// safe read should not burn a failed tool turn solely because the verb is
+		// more natural than the schema's list spelling. A partially specified
+		// target still follows the strict get path and fails closed.
+		if discoveryGetHasNoTarget(args) {
+			return e.executeListDiscoveries(ctx, args)
+		}
 		return e.executeGetDiscovery(ctx, args)
 	case "run":
 		return e.executeRunDiscovery(ctx, args)
@@ -79,6 +87,15 @@ func (e *PulseToolExecutor) executeDiscovery(ctx context.Context, args map[strin
 	default:
 		return NewErrorResult(fmt.Errorf("unknown action: %s. Use: get, run, list", action)), nil
 	}
+}
+
+func discoveryGetHasNoTarget(args map[string]interface{}) bool {
+	for _, key := range []string{"resource_type", "resource_id", "target_id"} {
+		if value, _ := args[key].(string); strings.TrimSpace(value) != "" {
+			return false
+		}
+	}
+	return true
 }
 
 // getCommandContext returns information about how to run commands on a resource.
@@ -272,9 +289,6 @@ func (e *PulseToolExecutor) normalizeDiscoveryResourceRequest(args map[string]in
 	if resourceID == "" {
 		return discoveryResourceRequest{}, NewErrorResult(fmt.Errorf("resource_id is required")), false
 	}
-	if targetID == "" {
-		return discoveryResourceRequest{}, NewErrorResult(fmt.Errorf("target_id is required - use the node/agent field from search or get_resource results")), false
-	}
 
 	// App-container identity is canonical at the model boundary, while the
 	// discovery provider is keyed by the runtime's stable container ID. Resolve
@@ -283,12 +297,34 @@ func (e *PulseToolExecutor) normalizeDiscoveryResourceRequest(args map[string]in
 	// app-container resolution and keeps read-only investigation tools
 	// composable when one tool feeds another.
 	if resourceType == "app-container" {
-		if resource, providerID, found := findCanonicalAppContainerResource(e.unifiedResourceProvider, resourceID); found {
+		if targetID == "" && e.unifiedResourceProvider != nil {
+			// A canonical Pulse resource ID is already a complete, unambiguous
+			// identity. Derive the provider coordinate from that exact record so
+			// models can pass one read tool's output directly into another. Do
+			// not infer a target from names or provider-ID prefixes.
+			if resource, found := findCanonicalResourceByID(e.unifiedResourceProvider.GetByType(unifiedresources.ResourceTypeAppContainer), resourceID); found && resource.Docker != nil {
+				providerID := strings.TrimSpace(resource.Docker.ContainerID)
+				inferredTargetID := strings.TrimSpace(resource.Docker.AgentID)
+				if resource.DiscoveryTarget != nil {
+					inferredTargetID = firstNonEmptyString(resource.DiscoveryTarget.AgentID, inferredTargetID)
+				}
+				if providerID != "" && inferredTargetID != "" {
+					resourceID = providerID
+					targetID = inferredTargetID
+					if registration, ok := resolvedAppContainerRegistration(resource); ok {
+						e.registerResolvedResourceWithExplicitAccess(registration)
+					}
+				}
+			}
+		} else if resource, providerID, found := findCanonicalAppContainerResource(e.unifiedResourceProvider, resourceID); found {
 			resourceID = providerID
 			if registration, ok := resolvedAppContainerRegistration(resource); ok {
 				e.registerResolvedResourceWithExplicitAccess(registration)
 			}
 		}
+	}
+	if targetID == "" {
+		return discoveryResourceRequest{}, NewErrorResult(fmt.Errorf("target_id is required - use the node/agent field from search or get_resource results, or pass an exact canonical app-container resource_id")), false
 	}
 
 	// For system-container and VM types, resourceID should be a numeric VMID.

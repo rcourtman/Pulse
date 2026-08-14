@@ -231,6 +231,8 @@ Returns a list of active findings with their IDs, severity, resource, and title.
 
 Use this only when the objective context says observer_missing, or when current evidence clearly requires a new observer version. Translate the operator's outcome into the smallest useful local observer without hard-coding an application into Pulse. The probe_json and requirements_json fields must each be one bounded JSON object. Do not include mutation commands, credentials, or secret values.
 
+Classify evidence_fit as direct only when the predicate itself measures the full retained outcome. Use proxy when the signal is useful for waking Patrol but merely correlates with the outcome or indicates it may be impaired. Reachability, process health, and resource-online state are proxies for richer user outcomes such as smooth playback, successful recording, correctness, or latency unless the retained objective is explicitly availability or online state. When uncertain, choose proxy. A healthy proxy is installed and evaluated locally, but core truthfully keeps the objective uncovered until a direct observer exists.
+
 Core can install four generic local ABIs. All require trigger_kind interval, requirements_json {}, a 10-300 second interval, and a 1-10 sample failure window. Use pulse-resource-state/v1 when canonical resource status is truthful: {"runtime":"pulse-resource-state/v1","path":"status","operator":"equals","value":"online","sample_interval_seconds":30,"wake_after_consecutive_failures":2}; operator may be equals or not_equals and value may be online, offline, warning, or unknown. Use pulse-resource-metric/v1 for canonical resource telemetry: {"runtime":"pulse-resource-metric/v1","metric":"disk_percent","operator":"less_than","threshold":85,"sample_interval_seconds":30,"wake_after_consecutive_failures":2,"max_evidence_age_seconds":180}; metric may be cpu_percent, memory_percent, disk_percent, or temperature_celsius, and operator may be less_than, less_than_or_equals, greater_than, or greater_than_or_equals. Percent thresholds are 0-100, temperatures are -100 to 300 Celsius, and evidence age is bounded from the sample interval through 3600 seconds. Use pulse-availability-state/v1 only for an enabled canonical target ID shown in the objective's local availability signals: {"runtime":"pulse-availability-state/v1","target_id":"the-exact-target-id","path":"probe_outcome","operator":"equals","value":"reachable","sample_interval_seconds":30,"wake_after_consecutive_failures":2}; value may be reachable, unreachable, or indeterminate. Use pulse-http-json/v1 for a bounded read-only assertion against an exact discovery ID and its core-owned Suggested Web URL: {"runtime":"pulse-http-json/v1","discovery_id":"the-exact-discovery-id","request_path":"/api/status","json_pointer":"/healthy","operator":"equals","expected":true,"timeout_seconds":3,"sample_interval_seconds":30,"wake_after_consecutive_failures":2}. request_path must be a same-origin absolute path, JSON pointer follows RFC 6901, and operator may be exists, not_exists, equals, not_equals, or a numeric comparison. If authentication is needed, add only a reference shown in discovery context, for example "auth":{"header_name":"X-Api-Key","secret_ref":"api_key"}; never include its value. Core resolves the origin and secret from encrypted discovery, allows GET only, blocks cross-origin redirects and metadata/link-local targets, caps response size and timeout, and proves the discovery belongs to objective scope. Never invent an ID, origin, or secret reference. If the outcome needs an event, log, file, socket, mutation, unsupported protocol, or richer signal, describe that honest proposal instead; core will retain it with an explicit unsupported validation reason rather than pretending it is active.
 
 This tool records only a versioned proposed artifact. It does not validate, install, execute, or claim coverage. Core owns the observer ID, version, SHA-256 digest, read-only posture, sandboxing, installation, health lease, and any later transition.
@@ -251,6 +253,11 @@ Returns the proposed observer identity and the truthful uncovered coverage reaso
 						Type:        "string",
 						Description: "Concise measurable interpretation of the operator's desired outcome",
 					},
+					"evidence_fit": {
+						Type:        "string",
+						Description: "direct only when this predicate itself measures the full objective; proxy when it is a useful correlated wake signal",
+						Enum:        []string{"direct", "proxy"},
+					},
 					"trigger_kind": {
 						Type:        "string",
 						Description: "Cheapest appropriate local wake source; interval means a bounded local probe, never repeated model polling",
@@ -269,7 +276,7 @@ Returns the proposed observer identity and the truthful uncovered coverage reaso
 						Description: "One JSON object declaring external requirements. Use {} for every currently installable generic ABI. Never include secret values.",
 					},
 				},
-				Required: []string{"objective_id", "expected_revision", "interpretation", "trigger_kind", "probe_json", "wake_evidence", "requirements_json"},
+				Required: []string{"objective_id", "expected_revision", "evidence_fit", "interpretation", "trigger_kind", "probe_json", "wake_evidence", "requirements_json"},
 			},
 		},
 		Handler: handlePatrolProposeObserver,
@@ -288,12 +295,14 @@ func handlePatrolProposeObserver(_ context.Context, e *PulseToolExecutor, args m
 		return NewTextResult("patrol_propose_observer is only available during a Patrol detection run with an objective store."), nil
 	}
 	objectiveID, _ := args["objective_id"].(string)
+	evidenceFit, _ := args["evidence_fit"].(string)
 	interpretation, _ := args["interpretation"].(string)
 	triggerKind, _ := args["trigger_kind"].(string)
 	probeJSON, _ := args["probe_json"].(string)
 	wakeEvidence, _ := args["wake_evidence"].(string)
 	requirementsJSON, _ := args["requirements_json"].(string)
 	objectiveID = strings.TrimSpace(objectiveID)
+	evidenceFit = strings.ToLower(strings.TrimSpace(evidenceFit))
 	interpretation = strings.TrimSpace(interpretation)
 	triggerKind = strings.ToLower(strings.TrimSpace(triggerKind))
 	probeJSON = strings.TrimSpace(probeJSON)
@@ -301,9 +310,9 @@ func handlePatrolProposeObserver(_ context.Context, e *PulseToolExecutor, args m
 	requirementsJSON = strings.TrimSpace(requirementsJSON)
 	expectedRevision, revisionOK := patrolObserverExpectedRevision(args["expected_revision"])
 
-	missing := make([]string, 0, 7)
+	missing := make([]string, 0, 8)
 	for name, value := range map[string]string{
-		"objective_id": objectiveID, "interpretation": interpretation,
+		"objective_id": objectiveID, "evidence_fit": evidenceFit, "interpretation": interpretation,
 		"trigger_kind": triggerKind, "probe_json": probeJSON,
 		"wake_evidence": wakeEvidence, "requirements_json": requirementsJSON,
 	} {
@@ -322,10 +331,13 @@ func handlePatrolProposeObserver(_ context.Context, e *PulseToolExecutor, args m
 	if !validTrigger[triggerKind] {
 		return NewErrorResult(fmt.Errorf("invalid trigger_kind %q", triggerKind)), nil
 	}
+	if evidenceFit != "direct" && evidenceFit != "proxy" {
+		return NewErrorResult(fmt.Errorf("invalid evidence_fit %q", evidenceFit)), nil
+	}
 
 	result, err := proposer.ProposeObserver(PatrolObserverProposalInput{
 		ObjectiveID: objectiveID, ExpectedRevision: expectedRevision,
-		Interpretation: interpretation, TriggerKind: triggerKind,
+		EvidenceFit: evidenceFit, Interpretation: interpretation, TriggerKind: triggerKind,
 		ProbeJSON: probeJSON, WakeEvidence: wakeEvidence,
 		RequirementsJSON: requirementsJSON,
 	})

@@ -279,6 +279,47 @@ func TestActionCapabilitiesCanonicalizeResolvedDockerCoordinate(t *testing.T) {
 	assert.Equal(t, canonicalID, proposal.ResourceID)
 }
 
+func TestActionCapabilitiesCanonicalizePulseReadAppContainerCoordinate(t *testing.T) {
+	const (
+		canonicalID = "app-container-abc123"
+		containerID = "92847aa6ab18fef9fc6e619f5b8350948"
+		hostname    = "pulse-patrol-lab"
+	)
+	catalog := func(_ context.Context, resourceID string) ([]unified.ResourceCapability, error) {
+		if resourceID != canonicalID {
+			return nil, errors.New("resource not found")
+		}
+		return []unified.ResourceCapability{{Name: "restart"}}, nil
+	}
+	provider := &stubUnifiedResourceProvider{resources: []unified.Resource{{
+		ID: canonicalID, Type: unified.ResourceTypeAppContainer,
+		Docker: &unified.DockerData{Hostname: hostname, ContainerID: containerID},
+	}}}
+	capture := NewProposalCapture(ProposalIdentity{}, catalog)
+	exec := NewPulseToolExecutor(ExecutorConfig{UnifiedResourceProvider: provider})
+	exec.ApplyExecutionProfile(ProfilePatrolInvestigation)
+	exec.SetProposalCapture(capture)
+	rawCoordinate := "app-container:" + hostname + ":" + containerID
+
+	result, err := exec.ExecuteInvocation(context.Background(), ToolInvocation{
+		ID: "catalog-pulse-read", Name: agentcapabilities.PatrolActionCapabilitiesToolName,
+		Arguments: map[string]interface{}{"resource_id": rawCoordinate},
+	})
+	require.NoError(t, err)
+	require.NotEmpty(t, result.Content)
+	assert.Contains(t, result.Content[0].Text, `"resource_id":"`+canonicalID+`"`)
+
+	proposalResult := executePropose(t, exec, "proposal-pulse-read", map[string]interface{}{
+		"resource_id": rawCoordinate, "capability_name": "restart", "reason": "restore container health",
+	})
+	assert.Contains(t, proposalResult.Content[0].Text, canonicalID)
+	proposal, failed, outcomeErr := capture.Outcome()
+	require.NoError(t, outcomeErr)
+	require.NotNil(t, proposal)
+	assert.Zero(t, failed)
+	assert.Equal(t, canonicalID, proposal.ResourceID)
+}
+
 func TestActionCapabilitiesDoNotCanonicalizeAmbiguousContainerID(t *testing.T) {
 	const containerID = "shared-container-id"
 	provider := &stubUnifiedResourceProvider{resources: []unified.Resource{

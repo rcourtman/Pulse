@@ -1,29 +1,27 @@
 {
   "version": 1,
-  "base_sha": "e5cad4c2c34529c0b15d8c32b8d1e53d0ddd84ad",
-  "verified_at": "2026-08-14T08:26:04Z",
+  "base_sha": "772ff3087d60ac9ee9b69ddf42bcc76a8eae5be0",
+  "verified_at": "2026-08-14T11:45:19Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx",
+    "frontend-modern/src/components/shared/useDialogState.ts",
     "frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx",
-    "frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx",
     "frontend-modern/src/features/patrol/PatrolObjectivesPanel.tsx",
-    "frontend-modern/src/features/patrol/PatrolRecentWorkPanel.tsx",
-    "frontend-modern/src/features/patrol/patrolHomePresentation.ts"
+    "frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx": "01f1010536c0b1551a09fa5634c9714cb771f10a37b274ae068aa1bbd3860b59",
-    "frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx": "41aa54fdf6d23ceb0019455e2a112b47d0164cf2e1dd36abc45f8faf47bc77e9",
-    "frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx": "780a27fcab535413b8446c5ec89637f98c08af1d8b57f77157028e499ad6b4d4",
-    "frontend-modern/src/features/patrol/PatrolObjectivesPanel.tsx": "8a68062a24352ac46384030bd267f1143572588ff36f061ec0cbed3c03555da4",
-    "frontend-modern/src/features/patrol/PatrolRecentWorkPanel.tsx": "6d2cf91943e49db10cd94c6639390297ddaff170ebf136b6c48e991cd14c134d",
-    "frontend-modern/src/features/patrol/patrolHomePresentation.ts": "18799e39f1bd4cdeaf93e494f4b84fc898aef356b111b030687885cbfdbd478b"
+    "frontend-modern/src/components/shared/useDialogState.ts": "3566700d8a8e72f3962204f12096912b84fb3bf089a4b181c1d9326ba85a1306",
+    "frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx": "272c6cb9c975cb346aa96082e804ad2eb08419d7ab2157429b901ba8b2f67a94",
+    "frontend-modern/src/features/patrol/PatrolObjectivesPanel.tsx": "ba86e9637aca3abd63de515d5e98a8881ddfc4ed7b308aaa651926fa5eb48db9",
+    "frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts": "24ac4a67d8e97bc39867238c34b2cf4deede69ccf671eef1ffc47c739a25db4a"
   },
-  "routes": ["/patrol"],
+  "routes": [
+    "/patrol"
+  ],
   "viewports": [
     {
-      "width": 1440,
-      "height": 1000
+      "width": 1280,
+      "height": 800
     },
     {
       "width": 390,
@@ -31,22 +29,21 @@
     }
   ],
   "states": [
-    "watch-only background posture with effective autonomy consequence and no commercial upgrade action",
-    "empty objective list with honest zero-protection summary",
-    "ten genuine user decisions compacted to five initial rows",
-    "verified-receipt empty state without implying successful work",
-    "autonomy disclosure expanded",
-    "objective creation dialog open and dismissed",
-    "typed attention detail open and closed with evidence, protection, and timeline",
-    "desktop and narrow layouts without horizontal overflow"
+    "Watch only with direct objective shown as Watching in background",
+    "Watch only with Jellyfin and Frigate proxy objectives shown as Useful signal only",
+    "objective creation dialog open with the outcome textarea focused",
+    "Autopilot acknowledgement modal before and after acknowledgement checkbox",
+    "Autopilot active with canonical server state and no year-one expiry",
+    "Autopilot revoked and Patrol returned to Watch only",
+    "narrow Patrol layout with no horizontal overflow"
   ],
   "interactions": [
-    "expanded the secondary How Patrol operates disclosure and confirmed Watch only without Plans & Billing",
-    "opened the add-objective dialog, inspected the outcome-first form, cancelled it, and dismissed it with Escape",
-    "confirmed objective-dialog focus returned to Add objective after Escape",
-    "opened the deepest attention detail and inspected lifecycle, evidence, protection, timeline, and resource actions",
-    "closed attention detail and confirmed focus returned to the originating decision row",
-    "expanded all ten decisions, collapsed back to five, and confirmed the compact queue counts",
-    "verified document width matched both 1440px and 390px viewports"
+    "opened Add objective and confirmed autofocus",
+    "closed objective dialog with Escape and confirmed focus return",
+    "opened Autopilot acknowledgement and enabled activation with the acknowledgement checkbox",
+    "activated Autopilot through the real UI and confirmed the server-derived mode",
+    "revoked Autopilot through the real UI",
+    "switched Patrol back to Watch only",
+    "resized to 390 by 844 and confirmed body and document scroll widths stayed at 390"
   ]
 }

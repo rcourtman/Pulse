@@ -106,6 +106,12 @@ type Config struct {
 	// Docker module is disabled or not yet connected.
 	DockerContainerUpdater DockerContainerUpdater
 
+	// DockerContainerLifecycleOperator bridges typed start, stop, and restart
+	// operations to the already-connected Docker / Podman module. Containerized
+	// unified agents use this API-backed path because the agent image does not
+	// bundle an external docker or podman CLI.
+	DockerContainerLifecycleOperator DockerContainerLifecycleOperator
+
 	newCommandClientFn   func(Config, string, string, string, string) *CommandClient
 	runCommandClientFn   func(*CommandClient, context.Context) error
 	updatedFromVersionFn func() string

@@ -48,8 +48,18 @@ export function getPatrolConfigurationFailureInlineDetails(
   ].filter(isNonEmptyConfigurationDetail);
 }
 
+export function getPatrolAutopilotExpiry(expiresAt?: string | null): Date | null {
+  if (!expiresAt?.trim()) return null;
+  const expiry = new Date(expiresAt);
+  if (!Number.isFinite(expiry.getTime()) || expiry.getUTCFullYear() <= 1) return null;
+  return expiry;
+}
+
 export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState }) {
   const state = props.state;
+  const autopilotExpiry = createMemo(() =>
+    getPatrolAutopilotExpiry(state.autopilotStatus()?.expiresAt),
+  );
   const headerMeta = createMemo(() =>
     getPatrolPageHeaderMeta({
       autonomyLevel: state.autonomyLevel(),
@@ -257,9 +267,8 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
             </span>
             <span class="ml-2 text-muted">
               Active for this identity
-              <Show when={state.autopilotStatus()?.expiresAt}>
-                {' '}
-                until {new Date(state.autopilotStatus()!.expiresAt!).toLocaleString()}
+              <Show when={autopilotExpiry()}>
+                {(expiry) => <> until {expiry().toLocaleString()}</>}
               </Show>
               .
             </span>

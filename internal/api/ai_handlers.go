@@ -6114,11 +6114,23 @@ func (h *AISettingsHandler) HandleForcePatrol(w http.ResponseWriter, r *http.Req
 				})
 			return
 		}
-		go patrol.TriggerScopedPatrol(context.WithoutCancel(r.Context()), scope)
+		acceptance, accepted := patrol.ForceScopedPatrol(r.Context(), scope)
+		if !accepted {
+			status := patrol.GetStatus()
+			details := map[string]string{}
+			if status.CurrentRunID != "" {
+				details["current_run_id"] = status.CurrentRunID
+			}
+			writeErrorResponse(w, http.StatusConflict, "patrol_already_running",
+				"Patrol is already running. Retry this targeted check after the current run completes.", details)
+			return
+		}
 		response := map[string]interface{}{
 			"success":          true,
 			"message":          "Triggered targeted Patrol check",
 			"scope_resolution": resolution,
+			"run_id":           acceptance.RunID,
+			"started_at":       acceptance.StartedAt,
 		}
 		if err := utils.WriteJSONResponse(w, response); err != nil {
 			log.Error().Err(err).Msg("Failed to write scoped patrol response")

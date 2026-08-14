@@ -108,6 +108,7 @@ type PatrolObserverProposer interface {
 type PatrolObserverProposalInput struct {
 	ObjectiveID      string
 	ExpectedRevision uint64
+	EvidenceFit      string
 	Interpretation   string
 	TriggerKind      string
 	ProbeJSON        string

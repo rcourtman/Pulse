@@ -758,6 +758,23 @@ func TestSetPatrolFindingCreator(t *testing.T) {
 	assert.Nil(t, exec.GetPatrolFindingCreator())
 }
 
+func TestPulseAlertsFindingsSatisfiesPatrolDuplicateCheck(t *testing.T) {
+	creator := &mockPatrolFindingCreator{}
+	exec := newPatrolTestExecutor(creator)
+
+	result, err := exec.executeListFindings(context.Background(), map[string]interface{}{
+		"resource_type": "app-container",
+		"limit":         100,
+	})
+	assert.NoError(t, err)
+	assert.False(t, result.IsError)
+	assert.True(t, creator.HasCheckedFindings())
+
+	report, err := handlePatrolReportFinding(context.Background(), exec, validReportArgs())
+	assert.NoError(t, err)
+	assert.False(t, report.IsError)
+}
+
 // --- Tool registration tests ---
 
 func TestPatrolToolsRegistered(t *testing.T) {
@@ -851,7 +868,7 @@ func TestPatrolProposeObserverRecordsProposalWithoutInstallation(t *testing.T) {
 	exec.SetPatrolObserverProposer(proposer)
 	result, err := exec.ExecuteTool(context.Background(), agentcapabilities.PatrolProposeObserverToolName, map[string]interface{}{
 		"objective_id": "objective-1", "expected_revision": float64(1),
-		"interpretation": "Detect buffering", "trigger_kind": "event",
+		"evidence_fit": "proxy", "interpretation": "Detect buffering", "trigger_kind": "event",
 		"probe_json":    `{"source":"playback-events"}`,
 		"wake_evidence": "buffering begins", "requirements_json": `{}`,
 	})
@@ -861,7 +878,7 @@ func TestPatrolProposeObserverRecordsProposalWithoutInstallation(t *testing.T) {
 	if result.IsError {
 		t.Fatalf("proposal tool returned error: %s", extractText(result))
 	}
-	if proposer.input.ObjectiveID != "objective-1" || proposer.input.ExpectedRevision != 1 || proposer.input.TriggerKind != "event" {
+	if proposer.input.ObjectiveID != "objective-1" || proposer.input.ExpectedRevision != 1 || proposer.input.EvidenceFit != "proxy" || proposer.input.TriggerKind != "event" {
 		t.Fatalf("proposal input = %+v", proposer.input)
 	}
 	if text := extractText(result); !strings.Contains(text, `"state":"proposed"`) || !strings.Contains(text, `"coverage_state":"uncovered"`) {

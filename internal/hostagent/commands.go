@@ -155,7 +155,7 @@ func NewCommandClient(cfg Config, agentID, hostname, platform, version string) *
 		commandPolicy:       agentexec.DefaultPolicy(),
 		packageUpdates:      cfg.packageUpdates,
 		storageCleanup:      cfg.storageCleanup,
-		dockerLifecycle:     newLocalDockerLifecycleManager(),
+		dockerLifecycle:     newLocalDockerLifecycleManager(cfg.DockerContainerLifecycleOperator),
 		dockerUpdater:       cfg.DockerContainerUpdater,
 		operationReceipts:   receipts,
 		operationReceiptErr: receiptErr,

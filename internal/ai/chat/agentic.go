@@ -355,10 +355,26 @@ func isKnownGovernedWriteProgress(toolName string, input map[string]interface{},
 	}
 }
 
-// Patrol finding lifecycle calls mutate governed Pulse state, so their
-// invocation classification must remain write. They do not mutate
-// infrastructure, however, and therefore must not put the infrastructure FSM
-// into VERIFYING or satisfy verification for a preceding infrastructure write.
+// Patrol state-only calls mutate governed Pulse state, so their invocation
+// classification must remain write. They do not mutate infrastructure,
+// however, and therefore must not put the infrastructure FSM into VERIFYING or
+// satisfy verification for a preceding infrastructure write.
+//
+// Keep this list deliberately narrow. A newly added write belongs here only
+// when the tool result is the authoritative persisted Pulse record and the
+// call cannot dispatch or authorize an infrastructure mutation.
+func isPatrolStateOnlyWrite(toolName string) bool {
+	switch strings.TrimSpace(toolName) {
+	case agentcapabilities.PatrolReportFindingToolName,
+		agentcapabilities.PatrolAssessFindingToolName,
+		agentcapabilities.PatrolResolveFindingToolName,
+		agentcapabilities.PatrolProposeObserverToolName:
+		return true
+	default:
+		return false
+	}
+}
+
 func isPatrolFindingLifecycleWrite(toolName string) bool {
 	switch strings.TrimSpace(toolName) {
 	case agentcapabilities.PatrolReportFindingToolName,
@@ -393,11 +409,26 @@ func applySuccessfulToolFSM(fsm *SessionFSM, toolKind ToolKind, toolName string)
 	if fsm == nil {
 		return false
 	}
-	if isPatrolFindingLifecycleWrite(toolName) {
+	if isPatrolStateOnlyWrite(toolName) {
 		return true
 	}
 	fsm.OnToolSuccess(toolKind, toolName)
 	return false
+}
+
+// patrolWriteHasCoreValidatedTarget reports the one Patrol state-only write
+// whose target is already established by server-authored run context. An
+// objective-planning run carries the exact objective ID and optimistic
+// revision, and the proposal store validates both atomically. Requiring an
+// unrelated read before that write adds no target safety and can strand quiet
+// scoped runs that have no other evidence call to make.
+//
+// This exception is intentionally limited to RESOLVING. It never permits a
+// proposal to bypass verification of a preceding infrastructure write.
+func patrolWriteHasCoreValidatedTarget(profile tools.ExecutionProfile, fsm *SessionFSM, toolName string) bool {
+	return profile == tools.ProfilePatrolDetection &&
+		fsm != nil && fsm.State == StateResolving &&
+		strings.TrimSpace(toolName) == agentcapabilities.PatrolProposeObserverToolName
 }
 
 func appendFSMVerificationPrompt(messages []providers.Message, prompt string) []providers.Message {
@@ -1804,7 +1835,7 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 				continue
 			}
 
-			if fsm != nil {
+			if fsm != nil && !patrolWriteHasCoreValidatedTarget(a.currentExecutionProfile(), fsm, tc.Name) {
 				if fsmErr := fsm.CanExecuteTool(toolKind, tc.Name); fsmErr != nil {
 					log.Warn().
 						Str("tool", tc.Name).

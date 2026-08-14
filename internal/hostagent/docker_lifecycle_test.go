@@ -19,6 +19,45 @@ import (
 
 const dockerLifecycleTestContainerID = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 
+type stubDockerLifecycleOperator struct {
+	snapshots []agentexec.DockerContainerLifecycleSnapshot
+	mutations []string
+}
+
+func (s *stubDockerLifecycleOperator) InspectDockerContainerLifecycle(context.Context, string, string) (agentexec.DockerContainerLifecycleSnapshot, error) {
+	if len(s.snapshots) == 0 {
+		return agentexec.DockerContainerLifecycleSnapshot{}, fmt.Errorf("unexpected inspect")
+	}
+	snapshot := s.snapshots[0]
+	s.snapshots = s.snapshots[1:]
+	return snapshot, nil
+}
+
+func (s *stubDockerLifecycleOperator) MutateDockerContainerLifecycle(_ context.Context, _, operation, _ string) error {
+	s.mutations = append(s.mutations, operation)
+	return nil
+}
+
+func TestDockerLifecycleManagerUsesConnectedModuleWithoutExternalCLI(t *testing.T) {
+	before := time.Now().UTC().Add(-time.Minute).Truncate(time.Nanosecond)
+	after := before.Add(time.Minute)
+	operator := &stubDockerLifecycleOperator{snapshots: []agentexec.DockerContainerLifecycleSnapshot{
+		{ContainerID: dockerLifecycleTestContainerID, State: "running", Running: true, StartedAt: before, ObservedAt: before},
+		{ContainerID: dockerLifecycleTestContainerID, State: "running", Running: true, StartedAt: after, ObservedAt: after},
+	}}
+	manager := newLocalDockerLifecycleManager(operator)
+	manager.run = func(context.Context, string, ...string) ([]byte, error) {
+		return nil, fmt.Errorf("external runtime CLI must not be called")
+	}
+	result := manager.Apply(context.Background(), dockerLifecycleTestRequest(t, before))
+	if !result.MutationStarted || !result.MutationCompleted || !result.ReadbackRan {
+		t.Fatalf("API-backed lifecycle result = %#v", result)
+	}
+	if len(operator.mutations) != 1 || operator.mutations[0] != "restart" {
+		t.Fatalf("mutations = %v, want one restart", operator.mutations)
+	}
+}
+
 func TestDockerLifecycleManagerRestartPerformsOneMutationAndBoundedReadback(t *testing.T) {
 	t.Setenv("DOCKER_CONTEXT", "")
 	before := time.Now().UTC().Add(-time.Minute).Truncate(time.Nanosecond)

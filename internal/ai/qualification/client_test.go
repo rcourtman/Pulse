@@ -48,6 +48,44 @@ func TestTriggerAndWaitAssociatesExactNewScopedRun(t *testing.T) {
 	}
 }
 
+func TestTriggerAndWaitRetriesHonestBusyAdmission(t *testing.T) {
+	var attempts atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/api/ai/patrol/run":
+			if attempts.Add(1) < 3 {
+				w.WriteHeader(http.StatusConflict)
+				_, _ = w.Write([]byte(`{"code":"patrol_already_running"}`))
+				return
+			}
+			_, _ = w.Write([]byte(`{"success":true,"run_id":"new"}`))
+		case "/api/ai/patrol/runs":
+			if attempts.Load() < 3 {
+				_, _ = w.Write([]byte(`[]`))
+				return
+			}
+			_, _ = w.Write([]byte(`[{"id":"new","started_at":"2099-01-01T00:00:00Z","completed_at":"2099-01-01T00:00:01Z","scope_resource_ids":["r1"]}]`))
+		case "/api/ai/patrol/runs/new":
+			_, _ = w.Write([]byte(`{"id":"new","started_at":"2099-01-01T00:00:00Z","completed_at":"2099-01-01T00:00:01Z","scope_resource_ids":["r1"],"tool_calls":[]}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+	client, err := NewPulseClient(ClientConfig{BaseURL: server.URL, Timeout: 10 * time.Second})
+	if err != nil {
+		t.Fatal(err)
+	}
+	run, err := client.TriggerAndWait(context.Background(), []string{"r1"}, "", 8*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if run.ID != "new" || attempts.Load() != 3 {
+		t.Fatalf("run=%q attempts=%d, want new after 3 admission attempts", run.ID, attempts.Load())
+	}
+}
+
 func TestValidateCollectedScenarioProjectionUsesFaultOracle(t *testing.T) {
 	manifest := validTestManifest()
 	manifest.Faults = []FaultSpec{

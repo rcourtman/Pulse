@@ -25,6 +25,7 @@ func (a *patrolFindingCreatorAdapter) ProposeObserver(input tools.PatrolObserver
 	}
 	objective, err := store.ProposeObserver(input.ObjectiveID, ProposePatrolObserverInput{
 		ExpectedRevision: input.ExpectedRevision,
+		EvidenceFit:      PatrolObserverEvidenceFit(strings.ToLower(strings.TrimSpace(input.EvidenceFit))),
 		Interpretation:   input.Interpretation,
 		TriggerKinds:     []PatrolObserverTriggerKind{triggerKind},
 		ProbeJSON:        input.ProbeJSON,

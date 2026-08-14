@@ -15,7 +15,7 @@ import {
   getPatrolObjectives,
   updatePatrolObjective,
   type PatrolObjective,
-  type PatrolObjectiveCoverageState,
+  type PatrolObjectiveCoverage,
 } from '@/api/patrol';
 import { useResources } from '@/hooks/useResources';
 import { getPreferredInfrastructureDisplayName } from '@/utils/resourceIdentity';
@@ -23,9 +23,12 @@ import { showError, showSuccess } from '@/utils/toast';
 import { getPatrolObjectiveProtectionSummary } from './patrolHomePresentation';
 
 const coveragePresentation = (
-  state: PatrolObjectiveCoverageState,
+  coverage: PatrolObjectiveCoverage,
 ): { label: string; tone: 'success' | 'warning' | 'neutral' } => {
-  switch (state) {
+  if (coverage.reason_code === 'observer_proxy') {
+    return { label: 'Useful signal only', tone: 'warning' };
+  }
+  switch (coverage.state) {
     case 'covered':
       return { label: 'Watching in background', tone: 'success' };
     case 'degraded':
@@ -263,7 +266,7 @@ export const PatrolObjectivesPanel: Component = () => {
               <div class="divide-y divide-border rounded-lg border border-border">
                 <For each={objectives()}>
                   {(objective) => {
-                    const presentation = () => coveragePresentation(objective.coverage.state);
+                    const presentation = () => coveragePresentation(objective.coverage);
                     const scopeLabel = () =>
                       objective.scope.resource_ids.length === 0
                         ? 'Entire estate'

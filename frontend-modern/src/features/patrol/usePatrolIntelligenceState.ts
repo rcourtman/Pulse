@@ -648,15 +648,16 @@ export function usePatrolIntelligenceState() {
     setIsUpdatingAutonomy(true);
 
     try {
-      const response = await updatePatrolAutonomySettings({
+      await updatePatrolAutonomySettings({
         autonomy_level: level,
         investigation_budget: investigationBudget(),
         investigation_timeout_sec: investigationTimeout(),
       });
-      setRequestedAutonomyLevel(response.settings.requested_autonomy_level);
-      setAutonomyLevel(response.settings.effective_autonomy_level);
-      setAutopilotStatus(response.settings.autopilot_acknowledgement);
-      setFullModeUnlocked(response.settings.autopilot_acknowledgement.active);
+      // The paid runtime intentionally returns a compact mutation receipt,
+      // while GET is the authoritative projection of effective mode and the
+      // server-owned Autopilot acknowledgement. Reconcile after every write
+      // instead of assuming both runtime editions return the same envelope.
+      await loadAutonomySettings();
       if (shouldRecordPatrolControlStarter) {
         await recordPatrolControlStarterActivity();
         await loadVisiblePatrolData();
@@ -679,16 +680,13 @@ export function usePatrolIntelligenceState() {
         : `patrol-autopilot-${Date.now()}-${Math.random().toString(16).slice(2)}`;
     try {
       const acknowledgement = await createPatrolAutopilotAcknowledgement(acknowledgementId);
-      const response = await updatePatrolAutonomySettings({
+      await updatePatrolAutonomySettings({
         autonomy_level: 'full',
         acknowledgement_id: acknowledgement.acknowledgement.acknowledgementId || acknowledgementId,
         investigation_budget: investigationBudget(),
         investigation_timeout_sec: investigationTimeout(),
       });
-      setRequestedAutonomyLevel(response.settings.requested_autonomy_level);
-      setAutonomyLevel(response.settings.effective_autonomy_level);
-      setAutopilotStatus(response.settings.autopilot_acknowledgement);
-      setFullModeUnlocked(response.settings.autopilot_acknowledgement.active);
+      await loadAutonomySettings();
       setAutopilotDialogOpen(false);
       await recordPatrolControlStarterActivity();
       await loadVisiblePatrolData();

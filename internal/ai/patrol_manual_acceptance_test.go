@@ -131,3 +131,41 @@ func TestAcceptedManualPatrolRecordsRuntimeStateFailure(t *testing.T) {
 		t.Fatalf("history failure = status %q, errors %d", history[0].Status, history[0].ErrorCount)
 	}
 }
+
+func TestAcceptedManualScopedPatrolOwnsIdentityAndRecordsScopedFailure(t *testing.T) {
+	patrol := NewPatrolService(nil, nil)
+	patrol.SetConfig(PatrolConfig{Enabled: true})
+	scope := PatrolScope{
+		ResourceIDs: []string{"app-container-canary"},
+		Reason:      TriggerReasonManual,
+		Context:     "Manual targeted check",
+	}
+
+	acceptance, accepted := patrol.ForceScopedPatrol(context.Background(), scope)
+	if !accepted || acceptance.RunID == "" || acceptance.StartedAt.IsZero() {
+		t.Fatalf("scoped acceptance = %+v, accepted=%v", acceptance, accepted)
+	}
+
+	deadline := time.Now().Add(2 * time.Second)
+	for patrol.GetStatus().Running && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	if patrol.GetStatus().Running {
+		t.Fatal("manual scoped run did not terminate")
+	}
+
+	history := patrol.GetRunHistory(10)
+	if len(history) != 1 {
+		t.Fatalf("history records = %d, want 1: %+v", len(history), history)
+	}
+	record := history[0]
+	if record.ID != acceptance.RunID || record.Type != "scoped" || record.Status != "error" {
+		t.Fatalf("scoped failure record = %+v", record)
+	}
+	if len(record.ScopeResourceIDs) != 1 || record.ScopeResourceIDs[0] != "app-container-canary" {
+		t.Fatalf("scope resource ids = %v", record.ScopeResourceIDs)
+	}
+	if !patrol.LastSuccessfulFullPatrolAt().IsZero() {
+		t.Fatal("scoped failure must not advance successful full Patrol cadence")
+	}
+}

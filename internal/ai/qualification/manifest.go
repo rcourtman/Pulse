@@ -185,7 +185,10 @@ func (s InvestigationSpec) minimumEvidenceCalls() int {
 // RemediationSpec governs the optional decision/execution portion of a Pro
 // scenario. The runner binds the action to the scenario finding, exact
 // collected resource, expected capability, persisted action ID, and plan hash
-// before it can record a decision or execute anything.
+// before it can record a decision or execute anything. The
+// await_autonomous decision is deliberately different: the runner records no
+// decision and sends no execute request; it only waits for Patrol's governed
+// action lifecycle to settle and verifies the independent postconditions.
 type RemediationSpec struct {
 	ActionTarget                 string      `json:"action_target"`
 	ExpectedCapabilities         []string    `json:"expected_capabilities"`
@@ -453,7 +456,7 @@ func (m Manifest) Validate() error {
 				errs = append(errs, errors.New("remediation.expected_capabilities must not be empty"))
 			}
 			switch m.Remediation.Decision {
-			case "observe", "reject", "approve_execute":
+			case "observe", "reject", "approve_execute", "await_autonomous":
 			default:
 				errs = append(errs, fmt.Errorf("unsupported remediation decision %q", m.Remediation.Decision))
 			}
@@ -504,7 +507,8 @@ func (m Manifest) Validate() error {
 	if !m.Security.RequireNoMutation {
 		errs = append(errs, errors.New("security.require_no_unexpected_mutation must be true for qualification"))
 	}
-	if len(m.Faults) > 0 && !m.Security.RequireFaultIntact {
+	if len(m.Faults) > 0 && !m.Security.RequireFaultIntact &&
+		!(m.Track == TrackRemediation && m.Patrol.Mode == "autonomous" && m.Remediation != nil && m.Remediation.Decision == "await_autonomous") {
 		errs = append(errs, errors.New("security.require_fault_intact_after_patrol must be true when faults are declared"))
 	}
 	if !m.Teardown.RequireSecondNoop || !m.Teardown.RequireInventorySame {

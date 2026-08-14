@@ -472,6 +472,27 @@ func (p *PatrolService) ForcePatrol(ctx context.Context) (PatrolRunAcceptance, b
 	}, true
 }
 
+// ForceScopedPatrol atomically reserves and starts a manual targeted run. It
+// mirrors ForcePatrol's acknowledgement contract: success means the run has a
+// durable identity and owns the single execution slot before the API replies.
+// Callers receive accepted=false while another run owns that slot and can
+// retry without mistaking a dropped best-effort trigger for accepted work.
+func (p *PatrolService) ForceScopedPatrol(ctx context.Context, scope PatrolScope) (PatrolRunAcceptance, bool) {
+	runCtx := context.Background()
+	if ctx != nil {
+		runCtx = context.WithoutCancel(ctx)
+	}
+	runStart, accepted := p.beginRun("scoped")
+	if !accepted {
+		return PatrolRunAcceptance{}, false
+	}
+	go p.runScopedPatrolWithStart(runCtx, scope, runStart, false)
+	return PatrolRunAcceptance{
+		RunID:     runStart.id,
+		StartedAt: runStart.startedAt,
+	}, true
+}
+
 // chatServiceExecutorAccessor is satisfied by *chat.Service, allowing patrol to
 // access the executor without adding GetExecutor to the ChatServiceProvider interface.
 type chatServiceExecutorAccessor interface {

@@ -426,7 +426,8 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 			ModuleStatus:        runtimeStatus.moduleStatuses,
 			Observers:           hostObserverTargets(cfg.Observers),
 
-			DockerContainerUpdater: dockerUpdaterBridge,
+			DockerContainerUpdater:           dockerUpdaterBridge,
+			DockerContainerLifecycleOperator: dockerUpdaterBridge,
 		}
 		wireUpdaterHooks(&hostCfg, updater)
 
@@ -1473,8 +1474,9 @@ func initModuleWithRetry[T any](ctx context.Context, logger *zerolog.Logger, com
 // Docker module comes up (or never does). The host command client holds this
 // bridge for the process lifetime; set installs the module's implementation.
 type lateBoundDockerUpdater struct {
-	mu      sync.RWMutex
-	updater hostagent.DockerContainerUpdater
+	mu        sync.RWMutex
+	updater   hostagent.DockerContainerUpdater
+	lifecycle hostagent.DockerContainerLifecycleOperator
 }
 
 func (b *lateBoundDockerUpdater) set(candidate any) {
@@ -1483,9 +1485,35 @@ func (b *lateBoundDockerUpdater) set(candidate any) {
 		fmt.Fprintf(os.Stderr, "docker update bridge: %T does not implement the typed container updater\n", candidate)
 		return
 	}
+	lifecycle, ok := candidate.(hostagent.DockerContainerLifecycleOperator)
+	if !ok {
+		fmt.Fprintf(os.Stderr, "docker lifecycle bridge: %T does not implement the typed container lifecycle operator\n", candidate)
+		return
+	}
 	b.mu.Lock()
 	b.updater = updater
+	b.lifecycle = lifecycle
 	b.mu.Unlock()
+}
+
+func (b *lateBoundDockerUpdater) InspectDockerContainerLifecycle(ctx context.Context, runtime, containerID string) (agentexec.DockerContainerLifecycleSnapshot, error) {
+	b.mu.RLock()
+	lifecycle := b.lifecycle
+	b.mu.RUnlock()
+	if lifecycle == nil {
+		return agentexec.DockerContainerLifecycleSnapshot{}, fmt.Errorf("docker module is not running on this agent")
+	}
+	return lifecycle.InspectDockerContainerLifecycle(ctx, runtime, containerID)
+}
+
+func (b *lateBoundDockerUpdater) MutateDockerContainerLifecycle(ctx context.Context, runtime, operation, containerID string) error {
+	b.mu.RLock()
+	lifecycle := b.lifecycle
+	b.mu.RUnlock()
+	if lifecycle == nil {
+		return fmt.Errorf("docker module is not running on this agent")
+	}
+	return lifecycle.MutateDockerContainerLifecycle(ctx, runtime, operation, containerID)
 }
 
 func (b *lateBoundDockerUpdater) TypedContainerUpdate(ctx context.Context, runtime, containerID, expectedImageDigest string, progress func(string)) (agentexec.DockerContainerUpdateOutcome, error) {

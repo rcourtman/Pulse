@@ -1599,6 +1599,14 @@ and `internal/dockeragent/swarm.go` must keep Pulse's package-local
 implementation routes through maintained `github.com/moby/moby/api` and
 `github.com/moby/moby/client` modules, so monitoring runtime collection does
 not drift back onto the legacy `github.com/docker/docker` Go module line.
+The Unified Agent may share that maintained, already-connected client through
+a narrow typed lifecycle bridge, but collection remains read-only unless the
+canonical governed command channel invokes the bridge. The bridge may inspect
+one exact container and issue one allowlisted start, stop, or restart; it is not
+a general monitoring mutation API, does not expose the daemon client to model
+tools, and must not retry an ambiguous mutating request. Module absence or a
+runtime mismatch fails closed while ordinary inventory collection continues
+under its existing local configuration and privacy controls.
 That same monitoring owner now also governs restart-safe standalone host
 continuity for monitored-system grouping. `internal/monitoring/monitor_agents.go`
 must persist recent host identity at report time, and

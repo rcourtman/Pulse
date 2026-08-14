@@ -173,8 +173,9 @@ The canonical retained-intent, proposal, and first local execution slices are im
 They provide encrypted retained intent, optimistic revisions, resource scoping,
 model seed projection, the core-owned observer state machine, and the
 Patrol-detection-only `patrol_propose_observer` builder. The model supplies a
-bounded canonical-JSON probe proposal, measurable interpretation, wake evidence,
-declared requirements, and one trigger kind; core supplies identity, version,
+bounded canonical-JSON probe proposal, measurable interpretation, `direct` or
+`proxy` evidence fit, wake evidence, declared requirements, and one trigger
+kind; core supplies identity, version,
 read-only posture, digest, encrypted persistence, and the `proposed` state. The
 artifact is excluded from public objective reads and later prompt seeds. The
 public API cannot attach an observer or author coverage, and the model-facing
@@ -207,13 +208,24 @@ outcome remain separate: a healthy observer may report that its objective is
 currently breached. Editing the retained brief, optional context, or resource
 scope disables the existing observer and clears its lease, because an artifact
 validated against old intent cannot remain proof of coverage for new intent.
+Observer health and semantic fit are also separate. `direct` means the predicate
+itself measures the full retained outcome; `proxy` means the signal is useful
+for waking Patrol but only correlates with that outcome. Core installs and
+leases either safe local signal, but a healthy proxy remains
+`uncovered/observer_proxy` instead of becoming a false protection claim. Missing
+fit on older stored observers defaults conservatively to proxy. This lets the
+model exploit cheap reachability or resource-state signals without pretending
+they prove richer outcomes such as smooth playback or successful recording.
 
 Creating or materially updating an active objective queues an immediate,
 objective-identity-deduplicated coverage-planning Patrol run. The first-party
 `PatrolObjectivesPanel` exposes one outcome statement, optional context and
 optional resource scope, then shows the server-owned covered, degraded, or
 uncovered truth with pause, resume, edit, and delete controls. Saving text is
-never presented as equivalent to active protection.
+never presented as equivalent to active protection. A healthy proxy uses the
+plain-language `Useful signal only` badge and the server explanation that the
+full objective is not directly measured; it must not render as `Watching in
+background` or count toward protected outcomes.
 
 Unsupported trigger or probe designs transition to `rejected` with an explicit
 machine validation reason and uncovered coverage. A rejected or degraded
@@ -568,6 +580,10 @@ attention`, `approval needed`, `outcome verified`, `no active work`) instead
    as automatic alert-triggered work (governed by the `ai-runtime` manual Patrol
    route contract), so the operator still sees a `Targeted check` rather than a
    route-specific label.
+   That request uses synchronous admission rather than the background trigger
+   queue. Success carries a named run; if Patrol is busy the caller receives an
+   explicit already-running conflict and may retry, so a Targeted check can
+   never display accepted while its work was actually dropped.
    Active Patrol finding expansion must stay action-led: description, impact,
    recurrence summary, primary action, Assistant handoff, approval, and manual
    controls are acceptable default content, but raw lifecycle telemetry belongs
@@ -2312,6 +2328,13 @@ accepts either a matching running status or the matching durable run record as
 authoritative. A provider/runtime error record remains a completed accepted run
 outcome. Missing data, refresh failure, backend rejection, and browser/network
 failure remain separate states and copy.
+
+Autonomy writes use the complementary authoritative-read rule. A successful
+`PUT /api/ai/patrol/autonomy` may be only a compact paid-runtime
+acknowledgement, so `usePatrolIntelligenceState.ts` always reloads
+`GET /api/ai/patrol/autonomy` before updating visible control state. The page
+must not read optional nested autonomy fields from the write response or claim
+Autopilot is active before the server-derived effective mode is loaded.
 
 Reconciliation is generation-aware and cancellable. Route changes, retries, or
 superseding starts cancel the old timer; stale completions cannot overwrite the

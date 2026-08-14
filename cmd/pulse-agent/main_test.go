@@ -2300,12 +2300,24 @@ func TestSecureAgentStateDir(t *testing.T) {
 }
 
 type stubTypedContainerUpdater struct {
-	calls int
+	calls              int
+	lifecycleInspects  int
+	lifecycleMutations int
 }
 
 func (s *stubTypedContainerUpdater) TypedContainerUpdate(context.Context, string, string, string, func(string)) (agentexec.DockerContainerUpdateOutcome, error) {
 	s.calls++
 	return agentexec.DockerContainerUpdateOutcome{Success: true}, nil
+}
+
+func (s *stubTypedContainerUpdater) InspectDockerContainerLifecycle(context.Context, string, string) (agentexec.DockerContainerLifecycleSnapshot, error) {
+	s.lifecycleInspects++
+	return agentexec.DockerContainerLifecycleSnapshot{ContainerID: strings.Repeat("a", 64), State: "running", Running: true}, nil
+}
+
+func (s *stubTypedContainerUpdater) MutateDockerContainerLifecycle(context.Context, string, string, string) error {
+	s.lifecycleMutations++
+	return nil
 }
 
 func TestLateBoundDockerUpdaterBridgesModuleWhenItComesUp(t *testing.T) {
@@ -2328,12 +2340,22 @@ func TestLateBoundDockerUpdaterBridgesModuleWhenItComesUp(t *testing.T) {
 	if stub.calls != 1 {
 		t.Fatalf("expected one delegated call, got %d", stub.calls)
 	}
+	if _, err := bridge.InspectDockerContainerLifecycle(context.Background(), "docker", strings.Repeat("a", 64)); err != nil {
+		t.Fatalf("bridge lifecycle inspect refused: %v", err)
+	}
+	if err := bridge.MutateDockerContainerLifecycle(context.Background(), "docker", "restart", strings.Repeat("a", 64)); err != nil {
+		t.Fatalf("bridge lifecycle mutation refused: %v", err)
+	}
+	if stub.lifecycleInspects != 1 || stub.lifecycleMutations != 1 {
+		t.Fatalf("lifecycle calls = inspect %d mutate %d", stub.lifecycleInspects, stub.lifecycleMutations)
+	}
 }
 
 func TestDockerAgentImplementsTypedContainerUpdater(t *testing.T) {
 	// The bridge installs by structural assertion; if the Docker module's
 	// method signature drifts, updates silently refuse at runtime. Pin it.
 	var _ hostagent.DockerContainerUpdater = (*dockeragent.Agent)(nil)
+	var _ hostagent.DockerContainerLifecycleOperator = (*dockeragent.Agent)(nil)
 }
 
 func TestAllowPlaintextHTTPFlagParsesAndDefaultsClosed(t *testing.T) {

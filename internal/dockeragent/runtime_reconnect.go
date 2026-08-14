@@ -80,6 +80,10 @@ func (s *swappableDockerClient) ContainerStop(ctx context.Context, containerID s
 	return s.get().ContainerStop(ctx, containerID, options)
 }
 
+func (s *swappableDockerClient) ContainerRestart(ctx context.Context, containerID string, options dockerContainerRestartOptions) error {
+	return s.get().ContainerRestart(ctx, containerID, options)
+}
+
 func (s *swappableDockerClient) ContainerRename(ctx context.Context, containerID, newName string) error {
 	return s.get().ContainerRename(ctx, containerID, newName)
 }

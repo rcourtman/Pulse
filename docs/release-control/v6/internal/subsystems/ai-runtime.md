@@ -429,7 +429,28 @@ and later Patrol seed context omit artifact contents. The detection profile
 permits this Pulse-state proposal write explicitly; interactive Assistant and
 Patrol investigation profiles do not. A successful proposal remains
 `uncovered/observer_proposed`: this tool has no validator, installer, execution,
-health-lease, or infrastructure-action authority.
+health-lease, or infrastructure-action authority. It remains a governed write
+for invocation policy, but its returned revision and observer identity are the
+authoritative persisted Pulse-state record; like Patrol finding-lifecycle
+writes, it neither enters nor satisfies the infrastructure read-after-write
+FSM. This separation prevents a non-executable proposal from trapping a Watch
+run in a verification loop while preserving mandatory verification after any
+real infrastructure mutation.
+In the detection profile, a scoped objective-planning run may execute
+`patrol_propose_observer` directly from `RESOLVING` because core supplied the
+exact objective identity and current optimistic revision and the store
+revalidates both atomically. That exception does not apply to finding writes,
+interactive or investigation profiles, or `VERIFYING`; an observer proposal
+can never bypass verification owed by a real infrastructure mutation.
+The proposal also carries a closed `evidence_fit` classification. `direct`
+means the predicate itself measures the full retained outcome; `proxy` means it
+is a useful correlated wake signal only. Core validates, installs, evaluates,
+and leases both safe signal types, but `derivePatrolObjectiveCoverage` permits
+only a healthy direct observer to become `covered`. A healthy proxy remains
+`uncovered/observer_proxy`, and a missing fit on an older stored observer is
+normalized conservatively to proxy. Semantic adequacy therefore stays
+model-authored and improves with the model, while the deterministic core owns
+the fail-safe rule that uncertainty cannot become a protection claim.
 
 An observer wake must preserve the exact retained objective rather than
 degrading it into a generic resource alert. `PatrolScope.ObjectiveContext`
@@ -825,14 +846,18 @@ read-only chat demotes Patrol or infrastructure action policy.
 The manual Patrol route is an extension boundary for scoped work. `POST
 /api/ai/patrol/run` (`HandleForcePatrol`) accepts an optional scope body
 (`resource_ids` and/or `resource_types`, plus optional `alert_identifier`,
-`alert_type`, and `context`) to run a manual Targeted check through the same
-`TriggerScopedPatrol` engine and scoped run record as automatic alert-triggered
-work; with no body it keeps the fleet-wide Patrol check. The scoped path must
+and `alert_type`) to run a manual Targeted check through the same scoped engine
+and run record as automatic alert-triggered work; with no body it keeps the
+fleet-wide Patrol check. Client-authored context is rejected. The scoped path must
 reuse the existing scoped engine rather than adding a parallel trigger route,
 honour the same Patrol readiness gate as a full run, bypass the full-run
 cadence gate (targeted checks never consume a manual full-run allowance), and
 carry resource identity only — no command, prompt, or remediation payload —
 while the route keeps requiring admin plus `ai:execute` scope for both shapes.
+Manual scoped admission atomically reserves the single Patrol slot and returns
+its run identity before the provider goroutine starts. If another run owns the
+slot it returns an honest typed conflict; automatic scoped triggers retain
+their bounded internal requeue path.
 
 Pulse Intelligence presents Patrol as the primary first-party operations
 surface. Pulse Assistant is the in-app contextual explanation, approval-card,
@@ -3317,6 +3342,11 @@ Qualification floor: Patrol model launch and product-claim qualification must us
    and the catalog response plus captured proposal must carry that canonical
    target. Unknown or ambiguous references still fail closed. The model is not
    responsible for Pulse's provider-to-canonical identity plumbing.
+   The proposal canonicalizer accepts either that provider coordinate or the
+   equivalent exact Pulse read coordinate
+   `app-container:<host>:<provider-container-id>` when it uniquely identifies
+   the same unified resource. It does not accept a partial ID, display name, or
+   ambiguous host/container pairing.
    Agentic context compaction is also evidence-preserving rather than merely
    size-reducing. When a read tool returns structured safety-relevant state,
    its deterministic knowledge projection must retain the bounded fields needed
@@ -3524,6 +3554,15 @@ resolve canonical/source IDs and unique aliases before collection, reject
    provenance — the `source` that produced it and its `confidence` — alongside
    the fact's category/key/value, so the model can attribute and weight what it
    reports instead of stating untraceable facts. Both are omitted when empty.
+   A targetless `action=get` (including the common `{action:get, limit:N}`
+   form) is a bounded alias for `action=list`; because it requests no specific
+   resource, it must not fail merely on missing resource type. Any partially
+   specified get remains the strict single-resource operation. An exact
+   canonical `app-container` resource ID is itself a complete coordinate: the
+   runtime may derive its target and provider container ID only from the unique
+   unified-resource record. Names, aliases, prefixes, provider IDs, and
+   ambiguous or unknown canonical IDs never authorize that inference and fail
+   closed until an explicit target is supplied.
    When the shared registry blocks a control tool in read-only mode, its
    operator guidance must point to Pulse Intelligence > Provider & Models
    settings and the Pulse Assistant Permissions Control mode, not legacy Pulse
@@ -4101,6 +4140,9 @@ model responses, model-selected tool calls, and evidence-tool calls. The
 operator-facing investigation budget limits evidence calls; core derives a
 separate model-response ceiling with reserved completion capacity, and the
 terminal `patrol_propose_action` call does not consume evidence budget. The
+default budget is ten evidence calls: enough for model-led diagnosis while
+making the shipped qualification ceiling the ordinary product posture instead
+of a lab-only override. Operators may still choose the bounded 5–30 range. The
 investigation execution profile injects an evidence-completion checkpoint,
 then structurally removes evidence tools at exhaustion while retaining only the
 typed proposal route and final prose. This remains model-led: Pulse defines the
@@ -6301,6 +6343,17 @@ requires one match, but scoring must not fail an otherwise exact causal
 diagnosis merely because the model used the provider-visible equivalent rather
 than the injector's verb. These alternatives are fixed in the manifest before
 execution and never inferred from the model response or its tool path.
+An autonomous remediation scenario uses the explicit `await_autonomous`
+decision. It requires effective Full autonomy (the manifest's legacy
+`autonomous` spelling aliases to `full`), and the qualification client sends no
+approval decision and no execute request. It waits for the independently
+created Patrol action to reach its governed terminal lifecycle, then checks the
+required lifecycle-verification state and independent postconditions. The
+separate operator authorization to run a disposable fault scenario permits the
+fault injection only; it is not action approval. Only this exact autonomous
+shape may allow the declared fault to be repaired before the post-Patrol
+observation, while unexpected mutation and inventory-restoration gates remain
+mandatory.
 The canonical `pulse_query` schema and executor must admit the same resource
 types. In particular, `action=get` accepts `docker-host`, returns a governed
 read-only host response when the identity resolves, and returns a successful
@@ -6342,6 +6395,12 @@ verification step is a valid recommendation when remediation is not yet
 justified; impact remains optional so the contract never pressures the model
 to fabricate a consequence. Providers that omit either grounding field must
 receive a tool error and no partial finding may be persisted.
+During a first-party Patrol run, the general model-facing
+`pulse_alerts(action=findings)` spelling is a scoped alias for the same active
+finding snapshot as `patrol_get_findings` and satisfies the duplicate-check
+precondition. The adapter may return only findings inside the run's effective
+resource scope, never dismissed history or out-of-scope records. This keeps
+ordinary model tool choice composable without weakening the lifecycle gate.
 The provider schema is also the source of truth for the required-argument
 checklist rendered into Patrol's normal and bounded final-decision prompts.
 Every report call must be independently complete, including parallel calls for
@@ -6893,7 +6952,7 @@ resource, record, evidence, actor, or provider-instance identity.
 
 ### Trust-gate manual Patrol acceptance
 
-An unscoped manual Patrol run is accepted only after `internal/ai/patrol.go`
+An unscoped or scoped manual Patrol run is accepted only after the runtime
 atomically reserves one execution slot and assigns the run ID and start time.
 That accepted identity is synchronously visible through Patrol status before
 the provider goroutine can emit its first event. A concurrent request therefore

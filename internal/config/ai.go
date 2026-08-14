@@ -126,7 +126,7 @@ type AIConfig struct {
 	PatrolAutopilotRevocations      []unifiedresources.PatrolAutopilotRevocation      `json:"patrol_autopilot_revocations,omitempty"`
 	PatrolAutopilotActivation       *unifiedresources.PatrolAutopilotActivation       `json:"patrol_autopilot_activation,omitempty"`
 	PatrolActionEmergencyStop       bool                                              `json:"patrol_action_emergency_stop"`               // Blocks new human and policy action admission; does not imply rollback
-	PatrolInvestigationBudget       int                                               `json:"patrol_investigation_budget,omitempty"`      // Max evidence calls per investigation (default: 15)
+	PatrolInvestigationBudget       int                                               `json:"patrol_investigation_budget,omitempty"`      // Max evidence calls per investigation (default: 10)
 	PatrolInvestigationTimeoutSec   int                                               `json:"patrol_investigation_timeout_sec,omitempty"` // Max seconds per investigation (default: 300)
 
 	// Discovery settings - controls automatic infrastructure discovery
@@ -178,7 +178,7 @@ const (
 
 // Default patrol investigation settings
 const (
-	DefaultPatrolInvestigationBudget     = 15  // Max turns (tool calls) per investigation
+	DefaultPatrolInvestigationBudget     = 10  // Max evidence calls per investigation
 	DefaultPatrolInvestigationTimeoutSec = 600 // 10 minutes
 	MaxConcurrentInvestigations          = 3   // Max parallel investigations
 	MaxInvestigationAttempts             = 3   // Max retry attempts per finding

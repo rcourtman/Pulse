@@ -2285,6 +2285,11 @@ evidence-call and model-response budgets/counters. Storage and recovery may use
 those values only as investigation cost/load evidence; they do not establish
 storage health, backup completion, recovery-point validity, restore authority,
 or post-action verification.
+That adjacent handler also admits scoped and fleet-wide manual Patrol work
+through one atomic runtime slot and returns the accepted run identity or a
+typed already-running conflict. Storage and recovery may supply a resource as
+investigation scope, but admission is not storage mutation authority, backup
+success, recovery verification, or an alternate recovery queue.
 
 ### Canonical mutation-plane dependency
 

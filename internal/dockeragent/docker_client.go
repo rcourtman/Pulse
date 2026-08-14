@@ -82,6 +82,11 @@ type dockerContainerStartOptions struct {
 	CheckpointDir string
 }
 
+type dockerContainerRestartOptions struct {
+	Signal  string
+	Timeout *int
+}
+
 type dockerContainerRemoveOptions struct {
 	RemoveVolumes bool
 	RemoveLinks   bool
@@ -139,6 +144,7 @@ type dockerClient interface {
 	ContainerInspect(ctx context.Context, containerID string) (containertypes.InspectResponse, error)
 	ImagePull(ctx context.Context, ref string, options dockerImagePullOptions) (io.ReadCloser, error)
 	ContainerStop(ctx context.Context, containerID string, options dockerContainerStopOptions) error
+	ContainerRestart(ctx context.Context, containerID string, options dockerContainerRestartOptions) error
 	ContainerRename(ctx context.Context, containerID, newName string) error
 	ContainerCreate(ctx context.Context, config *containertypes.Config, hostConfig *containertypes.HostConfig, networkingConfig *network.NetworkingConfig, platform *v1.Platform, containerName string) (containertypes.CreateResponse, error)
 	NetworkConnect(ctx context.Context, networkID, containerID string, config *network.EndpointSettings) error
@@ -221,6 +227,14 @@ func (m *mobyDockerClient) ImagePull(ctx context.Context, ref string, _ dockerIm
 
 func (m *mobyDockerClient) ContainerStop(ctx context.Context, containerID string, options dockerContainerStopOptions) error {
 	_, err := m.Client.ContainerStop(ctx, containerID, client.ContainerStopOptions{
+		Signal:  options.Signal,
+		Timeout: options.Timeout,
+	})
+	return err
+}
+
+func (m *mobyDockerClient) ContainerRestart(ctx context.Context, containerID string, options dockerContainerRestartOptions) error {
+	_, err := m.Client.ContainerRestart(ctx, containerID, client.ContainerRestartOptions{
 		Signal:  options.Signal,
 		Timeout: options.Timeout,
 	})

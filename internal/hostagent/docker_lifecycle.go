@@ -18,22 +18,37 @@ var dockerContextNamePattern = regexp.MustCompile(`^[a-zA-Z0-9._-]{1,128}$`)
 
 type dockerLifecycleManager interface {
 	Apply(context.Context, agentexec.DockerContainerLifecyclePayload) agentexec.DockerContainerLifecycleResultPayload
+	Preflight(context.Context, agentexec.DockerContainerLifecyclePayload) (bool, string)
+}
+
+// DockerContainerLifecycleOperator is the narrow bridge from the host command
+// channel to the unified agent's connected Docker / Podman module. It keeps
+// lifecycle execution on the daemon API and avoids requiring a second runtime
+// client executable inside the agent image.
+type DockerContainerLifecycleOperator interface {
+	InspectDockerContainerLifecycle(context.Context, string, string) (agentexec.DockerContainerLifecycleSnapshot, error)
+	MutateDockerContainerLifecycle(context.Context, string, string, string) error
 }
 
 type dockerLifecycleCommandRunner func(context.Context, string, ...string) ([]byte, error)
 
 type localDockerLifecycleManager struct {
-	run dockerLifecycleCommandRunner
-	now func() time.Time
+	run      dockerLifecycleCommandRunner
+	operator DockerContainerLifecycleOperator
+	now      func() time.Time
 }
 
-func newLocalDockerLifecycleManager() *localDockerLifecycleManager {
-	return &localDockerLifecycleManager{
+func newLocalDockerLifecycleManager(operators ...DockerContainerLifecycleOperator) *localDockerLifecycleManager {
+	manager := &localDockerLifecycleManager{
 		run: func(ctx context.Context, name string, args ...string) ([]byte, error) {
 			return exec.CommandContext(ctx, name, args...).CombinedOutput()
 		},
 		now: time.Now,
 	}
+	if len(operators) > 0 {
+		manager.operator = operators[0]
+	}
+	return manager
 }
 
 func (m *localDockerLifecycleManager) Apply(ctx context.Context, req agentexec.DockerContainerLifecyclePayload) (result agentexec.DockerContainerLifecycleResultPayload) {
@@ -65,7 +80,7 @@ func (m *localDockerLifecycleManager) Apply(ctx context.Context, req agentexec.D
 	result.ExecutionPhase = agentexec.DockerContainerPhaseMutate
 	result.MutationStarted = true
 	verb := strings.TrimSuffix(req.Operation, "_container")
-	if _, err := m.command(ctx, req.Runtime, verb, req.ContainerID); err != nil {
+	if err := m.mutate(ctx, req.Runtime, verb, req.ContainerID); err != nil {
 		result.Error = "container lifecycle mutation did not complete"
 		return result
 	}
@@ -118,7 +133,18 @@ func (m *localDockerLifecycleManager) command(ctx context.Context, runtime strin
 	return m.run(ctx, runtime, args...)
 }
 
+func (m *localDockerLifecycleManager) mutate(ctx context.Context, runtime, operation, containerID string) error {
+	if m != nil && m.operator != nil {
+		return m.operator.MutateDockerContainerLifecycle(ctx, runtime, operation, containerID)
+	}
+	_, err := m.command(ctx, runtime, operation, containerID)
+	return err
+}
+
 func (m *localDockerLifecycleManager) inspect(ctx context.Context, runtime, containerID string) (agentexec.DockerContainerLifecycleSnapshot, error) {
+	if m != nil && m.operator != nil {
+		return m.operator.InspectDockerContainerLifecycle(ctx, runtime, containerID)
+	}
 	const format = `{{json .State}}`
 	raw, err := m.command(ctx, runtime, "inspect", "--format", format, containerID)
 	if err != nil {
