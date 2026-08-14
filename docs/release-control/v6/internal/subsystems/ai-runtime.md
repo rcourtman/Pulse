@@ -6313,6 +6313,18 @@ synthetic `ai-service` runtime failure just as a successful full Patrol run
 does, without loosening ordinary scoped finding reconciliation for
 infrastructure issues. A soft-warning preflight where the provider responds but
 the model does not emit a tool call is not sufficient recovery evidence.
+The same selected-route preflight is part of the live Patrol readiness gate,
+not merely settings-page diagnostics. A completed matching billing, quota,
+authentication, connection, unsupported-tool, or timeout failure makes Patrol
+not ready and disables new runs; a matching accepted response without a tool
+call remains a warning; and a matching observed tool call clears a static
+gateway "unverified" warning unless the deeper model-readiness advisor has
+stronger contrary evidence. Preflight evidence must match both provider and
+bare model ID before it can influence runtime status or UI copy. Any Patrol
+transport change clears the cache and advances a generation fence, so an old
+slow check cannot finish later and overwrite evidence for the restored or newly
+selected route. An interrupted check is not provider evidence and must not
+block Patrol by itself.
 Because those findings represent Patrol blindness rather than operator-triaged
 infrastructure noise, the Patrol runtime must also reject manual acknowledge,
 snooze, dismiss, resolve, and suppress actions against synthetic `ai-service`

@@ -69,12 +69,19 @@ type patrolPreflightCache struct {
 	mu         sync.RWMutex
 	result     *PatrolPreflightResult
 	recordedAt time.Time
+	generation uint64
 }
 
 // CachedPatrolPreflight returns the most recent preflight result and the
 // time it was recorded, or nil + zero time if preflight has never run on
 // this Service instance.
 func (s *Service) CachedPatrolPreflight() (*PatrolPreflightResult, time.Time) {
+	if s == nil {
+		return nil, time.Time{}
+	}
+	s.mu.RLock()
+	cfg := s.cfg
+	s.mu.RUnlock()
 	s.patrolPreflightCache.mu.RLock()
 	defer s.patrolPreflightCache.mu.RUnlock()
 	if s.patrolPreflightCache.result == nil {
@@ -82,18 +89,59 @@ func (s *Service) CachedPatrolPreflight() (*PatrolPreflightResult, time.Time) {
 	}
 	// Return a defensive copy so callers can't mutate the cache.
 	clone := *s.patrolPreflightCache.result
+	if cfg != nil && !patrolPreflightMatchesConfig(&clone, cfg) {
+		return nil, time.Time{}
+	}
 	return &clone, s.patrolPreflightCache.recordedAt
 }
 
 // recordPatrolPreflight stores the result in the cache. Called after
 // every RunPatrolToolPreflight invocation so the most recent outcome is
 // always observable, including failures.
-func (s *Service) recordPatrolPreflight(result PatrolPreflightResult, at time.Time) {
+func (s *Service) recordPatrolPreflight(result PatrolPreflightResult, at time.Time, generation uint64) {
+	s.mu.RLock()
+	cfg := s.cfg
+	s.mu.RUnlock()
 	s.patrolPreflightCache.mu.Lock()
 	defer s.patrolPreflightCache.mu.Unlock()
+	if generation != s.patrolPreflightCache.generation || cfg != nil && !patrolPreflightMatchesConfig(&result, cfg) {
+		return
+	}
 	clone := result
 	s.patrolPreflightCache.result = &clone
 	s.patrolPreflightCache.recordedAt = at
+}
+
+func (s *Service) patrolPreflightGeneration() uint64 {
+	s.patrolPreflightCache.mu.RLock()
+	defer s.patrolPreflightCache.mu.RUnlock()
+	return s.patrolPreflightCache.generation
+}
+
+// InvalidatePatrolPreflight clears lightweight route evidence and advances a
+// generation fence. Any in-flight check started against the previous
+// transport can finish, but it cannot overwrite evidence for the new route.
+func (s *Service) InvalidatePatrolPreflight() {
+	if s == nil {
+		return
+	}
+	s.patrolPreflightCache.mu.Lock()
+	s.patrolPreflightCache.result = nil
+	s.patrolPreflightCache.recordedAt = time.Time{}
+	s.patrolPreflightCache.generation++
+	s.patrolPreflightCache.mu.Unlock()
+}
+
+func patrolPreflightMatchesConfig(result *PatrolPreflightResult, cfg *config.AIConfig) bool {
+	if result == nil || cfg == nil {
+		return false
+	}
+	selected := strings.TrimSpace(cfg.GetPatrolModel())
+	if selected == "" {
+		selected = strings.TrimSpace(cfg.GetChatModel())
+	}
+	provider, model := config.ParseModelString(selected)
+	return strings.EqualFold(provider, strings.TrimSpace(result.Provider)) && model == strings.TrimSpace(result.Model)
 }
 
 // TriggerPatrolPreflightAsync runs RunPatrolToolPreflight in the
@@ -103,8 +151,10 @@ func (s *Service) recordPatrolPreflight(result PatrolPreflightResult, at time.Ti
 // patrol_preflight snapshot. RunPatrolToolPreflight owns the route-aware
 // deadline so the asynchronous and manual entrypoints cannot drift.
 func (s *Service) TriggerPatrolPreflightAsync(provider, model string) {
+	s.InvalidatePatrolPreflight()
+	generation := s.patrolPreflightGeneration()
 	go func() {
-		s.RunPatrolToolPreflight(context.Background(), provider, model)
+		s.runPatrolToolPreflight(context.Background(), provider, model, generation)
 	}()
 }
 
@@ -124,6 +174,12 @@ func (s *Service) TriggerPatrolPreflightAsync(provider, model string) {
 // billed-feature-shaped, and should not pollute the AI usage dashboard.
 // This is the only intentional exception to the cost-recording audit.
 func (s *Service) RunPatrolToolPreflight(ctx context.Context, providerName, model string) PatrolPreflightResult {
+	return s.runPatrolToolPreflight(ctx, providerName, model, s.patrolPreflightGeneration())
+}
+
+// cost-recording-exempt: connectivity/tool-call self-test, not user workload;
+// this internal implementation preserves the public preflight exemption.
+func (s *Service) runPatrolToolPreflight(ctx context.Context, providerName, model string, generation uint64) PatrolPreflightResult {
 	started := time.Now()
 
 	s.mu.RLock()
@@ -141,7 +197,7 @@ func (s *Service) RunPatrolToolPreflight(ctx context.Context, providerName, mode
 		result.Title = "Pulse Patrol: Preflight succeeded"
 		result.Summary = "Demo mode simulates Patrol's tool-call check; no provider was contacted"
 		result.DurationMs = time.Since(started).Milliseconds()
-		s.recordPatrolPreflight(result, time.Now())
+		s.recordPatrolPreflight(result, time.Now(), generation)
 		return result
 	}
 
@@ -151,7 +207,7 @@ func (s *Service) RunPatrolToolPreflight(ctx context.Context, providerName, mode
 		result.Summary = "Pulse Intelligence settings could not be loaded"
 		result.Recommendation = "Confirm Pulse settings persistence is healthy, then re-run preflight."
 		result.DurationMs = time.Since(started).Milliseconds()
-		s.recordPatrolPreflight(result, time.Now())
+		s.recordPatrolPreflight(result, time.Now(), generation)
 		return result
 	}
 	if !cfg.Enabled {
@@ -160,7 +216,7 @@ func (s *Service) RunPatrolToolPreflight(ctx context.Context, providerName, mode
 		result.Summary = "Pulse Intelligence is turned off"
 		result.Recommendation = "Turn on Pulse Intelligence on the Provider & Models settings page, then run Check Patrol model again."
 		result.DurationMs = time.Since(started).Milliseconds()
-		s.recordPatrolPreflight(result, time.Now())
+		s.recordPatrolPreflight(result, time.Now(), generation)
 		return result
 	}
 
@@ -174,7 +230,7 @@ func (s *Service) RunPatrolToolPreflight(ctx context.Context, providerName, mode
 		result.Summary = "Patrol has no model selected"
 		result.Recommendation = "Select a Patrol model in Patrol settings. If no models are listed, add a provider API key or an Ollama server on the Provider & Models settings page first."
 		result.DurationMs = time.Since(started).Milliseconds()
-		s.recordPatrolPreflight(result, time.Now())
+		s.recordPatrolPreflight(result, time.Now(), generation)
 		return result
 	}
 
@@ -199,7 +255,7 @@ func (s *Service) RunPatrolToolPreflight(ctx context.Context, providerName, mode
 	if err != nil {
 		applyPatrolPreflightDiagnostic(&result, err)
 		result.DurationMs = time.Since(started).Milliseconds()
-		s.recordPatrolPreflight(result, time.Now())
+		s.recordPatrolPreflight(result, time.Now(), generation)
 		return result
 	}
 
@@ -239,7 +295,7 @@ func (s *Service) RunPatrolToolPreflight(ctx context.Context, providerName, mode
 
 	if err != nil {
 		applyPatrolPreflightDiagnostic(&result, err)
-		s.recordPatrolPreflight(result, time.Now())
+		s.recordPatrolPreflight(result, time.Now(), generation)
 		return result
 	}
 
@@ -249,7 +305,7 @@ func (s *Service) RunPatrolToolPreflight(ctx context.Context, providerName, mode
 		result.Cause = PatrolFailureCauseNone
 		result.Title = "Pulse Patrol: Preflight succeeded"
 		result.Summary = "Provider accepted the preflight request and the model emitted a tool call."
-		s.recordPatrolPreflight(result, time.Now())
+		s.recordPatrolPreflight(result, time.Now(), generation)
 		s.resolvePatrolRuntimeFailureAfterToolPreflight(result)
 		return result
 	}
@@ -262,7 +318,7 @@ func (s *Service) RunPatrolToolPreflight(ctx context.Context, providerName, mode
 	result.Title = "Pulse Patrol: Model did not emit a tool call during preflight"
 	result.Summary = "Provider accepted the preflight request but the model did not emit a tool call. Patrol may still work in practice."
 	result.Recommendation = "Trigger a real Patrol run to confirm tool calling. If that fails, switch to a model with stronger tool-following behaviour."
-	s.recordPatrolPreflight(result, time.Now())
+	s.recordPatrolPreflight(result, time.Now(), generation)
 	return result
 }
 

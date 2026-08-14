@@ -2,6 +2,7 @@ package ai
 
 import (
 	"testing"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 )
@@ -146,6 +147,99 @@ func TestEvaluatePatrolConfigReadiness_AssignsStableCause(t *testing.T) {
 				t.Fatalf("ready = %t, want %t", readiness.Ready, tt.wantReady)
 			}
 		})
+	}
+}
+
+func TestPatrolRuntimeReadinessUsesMatchingPreflightEvidence(t *testing.T) {
+	cfg := config.NewDefaultAIConfig()
+	cfg.Enabled = true
+	cfg.OpenRouterAPIKey = "test-key"
+	cfg.PatrolModel = "openrouter:test/model"
+
+	tests := []struct {
+		name       string
+		preflight  PatrolPreflightResult
+		wantStatus string
+		wantCause  PatrolFailureCause
+		wantReady  bool
+	}{
+		{
+			name: "completed billing failure blocks Patrol",
+			preflight: PatrolPreflightResult{
+				Provider: "openrouter", Model: "test/model",
+				Cause: PatrolFailureCauseProviderBilling, Summary: "Provider billing or quota issue",
+			},
+			wantStatus: PatrolReadinessNotReady,
+			wantCause:  PatrolFailureCauseProviderBilling,
+			wantReady:  false,
+		},
+		{
+			name: "accepted request without a tool remains a warning",
+			preflight: PatrolPreflightResult{
+				Success: true, Provider: "openrouter", Model: "test/model",
+				Cause: PatrolFailureCauseModelToolSupportUnverified, Summary: "The model returned text instead of a tool call.",
+			},
+			wantStatus: PatrolReadinessWarning,
+			wantCause:  PatrolFailureCauseModelToolSupportUnverified,
+			wantReady:  true,
+		},
+		{
+			name: "observed tool call clears the generic gateway warning",
+			preflight: PatrolPreflightResult{
+				Success: true, ToolCallObserved: true, Provider: "openrouter", Model: "test/model",
+			},
+			wantStatus: PatrolReadinessReady,
+			wantCause:  PatrolFailureCauseNone,
+			wantReady:  true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			service := &Service{cfg: cfg}
+			service.recordPatrolPreflight(tt.preflight, time.Now(), service.patrolPreflightGeneration())
+
+			readiness := service.PatrolRuntimeReadiness()
+			if readiness.Status != tt.wantStatus || readiness.Cause != tt.wantCause || readiness.Ready != tt.wantReady {
+				t.Fatalf("readiness = %+v, want status=%q cause=%q ready=%t", readiness, tt.wantStatus, tt.wantCause, tt.wantReady)
+			}
+		})
+	}
+}
+
+func TestPatrolPreflightEvidenceCannotCrossRoutesOrInvalidationGeneration(t *testing.T) {
+	cfg := config.NewDefaultAIConfig()
+	cfg.Enabled = true
+	cfg.OpenRouterAPIKey = "test-key"
+	cfg.PatrolModel = "openrouter:test/model"
+	service := &Service{cfg: cfg}
+
+	staleRoute := PatrolPreflightResult{
+		Provider: "ollama", Model: "qwen3:8b",
+		Cause: PatrolFailureCauseLatencyUnsuitable, Summary: "Local model timed out.",
+	}
+	service.recordPatrolPreflight(staleRoute, time.Now(), service.patrolPreflightGeneration())
+	if cached, _ := service.CachedPatrolPreflight(); cached != nil {
+		t.Fatalf("preflight from another route entered the selected-route cache: %+v", cached)
+	}
+
+	matchingFailure := PatrolPreflightResult{
+		Provider: "openrouter", Model: "test/model",
+		Cause: PatrolFailureCauseProviderBilling, Summary: "Old credentials failed.",
+	}
+	oldGeneration := service.patrolPreflightGeneration()
+	service.InvalidatePatrolPreflight()
+	service.recordPatrolPreflight(matchingFailure, time.Now(), oldGeneration)
+	if cached, _ := service.CachedPatrolPreflight(); cached != nil {
+		t.Fatalf("preflight from an invalidated generation replaced current evidence: %+v", cached)
+	}
+
+	matchingSuccess := PatrolPreflightResult{
+		Success: true, ToolCallObserved: true, Provider: "openrouter", Model: "test/model",
+	}
+	service.recordPatrolPreflight(matchingSuccess, time.Now(), service.patrolPreflightGeneration())
+	if cached, _ := service.CachedPatrolPreflight(); cached == nil || !cached.ToolCallObserved {
+		t.Fatalf("current-generation matching preflight was not cached: %+v", cached)
 	}
 }
 

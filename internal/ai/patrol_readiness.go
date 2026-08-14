@@ -185,6 +185,24 @@ func (s *Service) PatrolRuntimeReadiness() PatrolConfigReadiness {
 	if !base.Ready || cfg == nil {
 		return base
 	}
+	if preflight, _ := s.CachedPatrolPreflight(); preflight != nil {
+		if !preflight.Success {
+			// Cancellation is not evidence about the route. Every completed
+			// failure is: Patrol must not claim it is ready while the exact
+			// selected provider/model cannot pass the lightweight tool check.
+			if preflight.Cause != PatrolFailureCauseInterrupted {
+				cause := preflight.Cause
+				if cause == PatrolFailureCauseNone || cause == "" {
+					cause = PatrolFailureCauseModelToolSupportUnverified
+				}
+				return patrolConfigReadiness(base.Provider, base.Model, PatrolReadinessNotReady, cause, patrolPreflightReadinessSummary(preflight))
+			}
+		} else if !preflight.ToolCallObserved {
+			return patrolConfigReadiness(base.Provider, base.Model, PatrolReadinessWarning, PatrolFailureCauseModelToolSupportUnverified, patrolPreflightReadinessSummary(preflight))
+		} else if base.Cause == PatrolFailureCauseModelToolSupportUnverified {
+			base = patrolConfigReadiness(base.Provider, base.Model, PatrolReadinessReady, PatrolFailureCauseNone, "The selected Patrol model passed the live tool-call check.")
+		}
+	}
 	advisor, _ := s.CachedPatrolModelReadiness()
 	if advisor == nil {
 		return base
@@ -215,4 +233,17 @@ func (s *Service) PatrolRuntimeReadiness() PatrolConfigReadiness {
 		}
 		return patrolConfigReadiness(advisor.Provider, advisor.Model, PatrolReadinessNotReady, cause, suitability.Summary)
 	}
+}
+
+func patrolPreflightReadinessSummary(result *PatrolPreflightResult) string {
+	if result == nil {
+		return "The selected Patrol model has not passed the live tool-call check."
+	}
+	if summary := strings.TrimSpace(result.Summary); summary != "" {
+		return summary
+	}
+	if title := strings.TrimSpace(result.Title); title != "" {
+		return title
+	}
+	return "The selected Patrol model has not passed the live tool-call check."
 }
