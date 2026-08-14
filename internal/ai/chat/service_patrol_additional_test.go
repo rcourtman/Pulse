@@ -286,7 +286,7 @@ func TestService_ExecutePatrolStream_UsesFreshFSMAndAcceptsCoreValidatedFindingW
 	}
 	providerCalls := 0
 	service.providerFactory = func(string) (providers.StreamingProvider, error) {
-		return &mockStreamingProvider{chatStreamFunc: func(_ context.Context, _ providers.ChatRequest, callback providers.StreamCallback) error {
+		return &mockStreamingProvider{chatStreamFunc: func(_ context.Context, req providers.ChatRequest, callback providers.StreamCallback) error {
 			providerCalls++
 			if providerCalls == 1 {
 				callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{
@@ -310,6 +310,9 @@ func TestService_ExecutePatrolStream_UsesFreshFSMAndAcceptsCoreValidatedFindingW
 				}})
 				return nil
 			}
+			if req.System != patrolFindingLifecycleSummarySystemPrompt || len(req.Tools) != 0 || req.ToolChoice != nil {
+				t.Fatalf("post-budget service request = %+v, want tool-free Patrol summary", req)
+			}
 			callback(providers.StreamEvent{Type: "content", Data: providers.ContentEvent{Text: "Finding recorded."}})
 			callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{InputTokens: 4, OutputTokens: 2}})
 			return nil
@@ -317,10 +320,11 @@ func TestService_ExecutePatrolStream_UsesFreshFSMAndAcceptsCoreValidatedFindingW
 	}
 
 	resp, err := service.ExecutePatrolStream(context.Background(), PatrolRequest{
-		Prompt:           "Record the validated signal.",
-		SessionID:        "patrol-eval",
-		MaxTurns:         3,
-		AllowedToolNames: []string{agentcapabilities.PatrolReportFindingToolName},
+		Prompt:            "Record the validated signal.",
+		SessionID:         "patrol-eval",
+		MaxTurns:          3,
+		MaxFindingReports: 1,
+		AllowedToolNames:  []string{agentcapabilities.PatrolReportFindingToolName},
 	}, func(StreamEvent) {})
 	if err != nil {
 		t.Fatalf("ExecutePatrolStream failed: %v", err)

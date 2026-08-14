@@ -7166,6 +7166,13 @@ complete snapshot exists it receives only `patrol_get_findings` plus
 `patrol_assess_finding`. These are structured call-site allowlists applied
 after profile projection and may only reduce authority. An unavailable or
 unknown requested tool fails closed. Prompt text never selects the manifest.
+The evaluation pass also carries a typed successful-report budget equal to the
+number of unmatched signals it was given. Accepted `patrol_report_finding`
+writes consume that budget; once it is exhausted, report authority is removed
+and the next provider turn is a tool-free bounded summary. Capped same-turn
+report batches execute in provider order, and any excess call fails before
+persistence. Ordinary Watch runs carry no report cap, so model-owned discovery
+of an open-ended number of independent problems remains intact.
 Each Patrol invocation, including the main pass and both continuations, receives
 a fresh infrastructure workflow FSM and resolved-resource context. Its stable
 session ID remains a forensic-log key only and cannot carry a prior run's read

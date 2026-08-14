@@ -129,6 +129,9 @@ func TestRunEvaluationPass(t *testing.T) {
 	if !reflect.DeepEqual(captured.AllowedToolNames, wantTools) {
 		t.Fatalf("evaluation tools = %v, want %v", captured.AllowedToolNames, wantTools)
 	}
+	if captured.MaxFindingReports != 1 {
+		t.Fatalf("evaluation finding report budget = %d, want one unmatched signal", captured.MaxFindingReports)
+	}
 }
 
 func TestRunEvaluationPassReusesEstablishedFindingSnapshot(t *testing.T) {
@@ -152,6 +155,9 @@ func TestRunEvaluationPassReusesEstablishedFindingSnapshot(t *testing.T) {
 	}
 	if !reflect.DeepEqual(captured.AllowedToolNames, []string{agentcapabilities.PatrolReportFindingToolName}) {
 		t.Fatalf("evaluation tools = %v, want report only", captured.AllowedToolNames)
+	}
+	if captured.MaxFindingReports != 1 {
+		t.Fatalf("evaluation finding report budget = %d, want one unmatched signal", captured.MaxFindingReports)
 	}
 	if !strings.Contains(captured.Prompt, "finding-1") || !strings.Contains(captured.SystemPrompt, "already included") {
 		t.Fatalf("evaluation did not reuse established snapshot: system=%q prompt=%q", captured.SystemPrompt, captured.Prompt)

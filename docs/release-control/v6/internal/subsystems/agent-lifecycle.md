@@ -6296,8 +6296,9 @@ sessions, fleet policy, or update state.
 ### Patrol follow-up manifests do not confer agent authority
 
 `internal/api/chat_service_adapter.go` now forwards a structured tool-name
-allowlist for bounded Patrol continuations. This list is AI-runtime metadata
-that can only reduce the already projected detection manifest. It does not
+allowlist and successful finding-report cap for bounded Patrol continuations.
+These are AI-runtime metadata that can only reduce the already projected
+detection manifest and model-owned Pulse-state writes. They do not
 enroll an agent, select an agent identity, enable commands, grant a command
 session, alter fleet policy, or bypass agent-side preflight and action
 admission. Agent lifecycle and command authority remain unchanged.

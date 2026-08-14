@@ -107,6 +107,15 @@ func (a *AgenticLoop) SetMaxEvidenceCalls(n int) {
 	a.mu.Unlock()
 }
 
+// SetMaxFindingReports bounds successful patrol_report_finding writes for a
+// focused Patrol invocation. A non-positive value leaves ordinary Watch runs
+// uncapped; evaluator passes set the exact number of unmatched signals.
+func (a *AgenticLoop) SetMaxFindingReports(n int) {
+	a.mu.Lock()
+	a.maxFindingReports = n
+	a.mu.Unlock()
+}
+
 // SetProviderInfo sets the provider/model info for telemetry.
 func (a *AgenticLoop) SetProviderInfo(provider, model string) {
 	a.mu.Lock()

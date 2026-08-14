@@ -45,6 +45,10 @@ func TestAgenticLoop_Setters(t *testing.T) {
 	if loop.maxEvidenceCalls != 5 {
 		t.Fatalf("expected maxEvidenceCalls=5, got %d", loop.maxEvidenceCalls)
 	}
+	loop.SetMaxFindingReports(3)
+	if loop.maxFindingReports != 3 {
+		t.Fatalf("expected maxFindingReports=3, got %d", loop.maxFindingReports)
+	}
 
 	loop.SetProviderInfo("provider", "model")
 	if loop.providerName != "provider" || loop.modelName != "model" {
@@ -925,6 +929,132 @@ func TestAgenticLoopAllowsSequentialIndependentWatchFindings(t *testing.T) {
 	}
 	if len(result) == 0 || result[len(result)-1].Content != "Two independent unhealthy containers were recorded." {
 		t.Fatalf("final result = %+v", result)
+	}
+}
+
+func TestAgenticLoopStopsFindingContinuationAtAcceptedReportBudget(t *testing.T) {
+	provider := &stubStreamingProvider{}
+	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
+	executor.ApplyExecutionProfile(tools.ProfilePatrolDetection)
+	creator := &repairTestPatrolFindingCreator{checked: true}
+	executor.SetPatrolFindingCreator(creator)
+	loop := NewAgenticLoop(provider, executor, "focused Patrol evaluator prompt")
+	loop.SetExecutionProfile(tools.ProfilePatrolDetection)
+	loop.SetMaxTurns(5)
+	loop.SetMaxFindingReports(2)
+
+	report := func(resourceID, resourceName, title string) map[string]interface{} {
+		return map[string]interface{}{
+			"key":            "container-health-failed",
+			"severity":       "warning",
+			"category":       "reliability",
+			"resource_id":    resourceID,
+			"resource_name":  resourceName,
+			"resource_type":  "app-container",
+			"title":          title,
+			"description":    "Container is running but its health check is unhealthy.",
+			"recommendation": "Inspect the health endpoint and recent logs.",
+			"evidence":       "Provider state reports running and unhealthy with zero restarts.",
+		}
+	}
+
+	providerCalls := 0
+	provider.chatStream = func(_ context.Context, req providers.ChatRequest, callback providers.StreamCallback) error {
+		providerCalls++
+		switch providerCalls {
+		case 1:
+			call := providers.ToolCall{ID: "report-api", Name: agentcapabilities.PatrolReportFindingToolName, Input: report("app-container-api", "api", "API health check failing")}
+			callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{ToolCalls: []providers.ToolCall{call}}})
+		case 2:
+			if req.System != patrolFindingLifecycleContinuationSystemPrompt || len(req.Tools) != 1 {
+				t.Fatalf("second evaluator request = %+v, want report-only continuation", req)
+			}
+			call := providers.ToolCall{ID: "report-worker", Name: agentcapabilities.PatrolReportFindingToolName, Input: report("app-container-worker", "worker", "Worker health check failing")}
+			callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{ToolCalls: []providers.ToolCall{call}}})
+		case 3:
+			if req.System != patrolFindingLifecycleSummarySystemPrompt || len(req.Tools) != 0 || req.ToolChoice != nil {
+				t.Fatalf("post-budget evaluator request = %+v, want tool-free bounded summary", req)
+			}
+			callback(providers.StreamEvent{Type: "content", Data: providers.ContentEvent{Text: "Two findings recorded."}})
+			callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{}})
+		default:
+			t.Fatalf("unexpected provider call %d; report authority survived its accepted-write budget", providerCalls)
+		}
+		return nil
+	}
+
+	available := []providers.Tool{{Name: agentcapabilities.PatrolReportFindingToolName}}
+	result, err := loop.ExecuteWithTools(context.Background(), "bounded-finding-evaluator", []Message{{Role: "user", Content: "Evaluate two unmatched signals."}}, available, func(StreamEvent) {})
+	if err != nil {
+		t.Fatalf("bounded finding evaluator failed: %v", err)
+	}
+	if providerCalls != 3 {
+		t.Fatalf("provider calls = %d, want two reports and one summary", providerCalls)
+	}
+	if len(creator.created) != 2 || creator.created[0].ResourceID != "app-container-api" || creator.created[1].ResourceID != "app-container-worker" {
+		t.Fatalf("created findings = %+v, want exactly the two budgeted reports", creator.created)
+	}
+	if len(result) == 0 || result[len(result)-1].Content != "Two findings recorded." {
+		t.Fatalf("final result = %+v", result)
+	}
+}
+
+func TestAgenticLoopRejectsSameTurnFindingReportsBeyondBudget(t *testing.T) {
+	provider := &stubStreamingProvider{}
+	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
+	executor.ApplyExecutionProfile(tools.ProfilePatrolDetection)
+	creator := &repairTestPatrolFindingCreator{checked: true}
+	executor.SetPatrolFindingCreator(creator)
+	loop := NewAgenticLoop(provider, executor, "focused Patrol evaluator prompt")
+	loop.SetExecutionProfile(tools.ProfilePatrolDetection)
+	loop.SetMaxTurns(2)
+	loop.SetMaxFindingReports(1)
+
+	report := func(id string) map[string]interface{} {
+		return map[string]interface{}{
+			"key": "container-health-failed", "severity": "warning", "category": "reliability",
+			"resource_id": id, "resource_name": id, "resource_type": "app-container",
+			"title": "Health check failing", "description": "Current health check is failing.",
+			"recommendation": "Inspect the health endpoint.", "evidence": "Provider reports unhealthy.",
+		}
+	}
+	providerCalls := 0
+	provider.chatStream = func(_ context.Context, req providers.ChatRequest, callback providers.StreamCallback) error {
+		providerCalls++
+		if providerCalls == 1 {
+			callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{ToolCalls: []providers.ToolCall{
+				{ID: "report-accepted", Name: agentcapabilities.PatrolReportFindingToolName, Input: report("app-container-api")},
+				{ID: "report-excess", Name: agentcapabilities.PatrolReportFindingToolName, Input: report("app-container-worker")},
+			}}})
+			return nil
+		}
+		if len(req.Tools) != 0 || req.System != patrolFindingLifecycleSummarySystemPrompt {
+			t.Fatalf("post-budget request = %+v, want tool-free summary", req)
+		}
+		callback(providers.StreamEvent{Type: "content", Data: providers.ContentEvent{Text: "One bounded finding recorded."}})
+		callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{}})
+		return nil
+	}
+
+	var toolEnds []ToolEndData
+	_, err := loop.ExecuteWithTools(context.Background(), "same-turn-report-budget", []Message{{Role: "user", Content: "Evaluate one unmatched signal."}}, []providers.Tool{{Name: agentcapabilities.PatrolReportFindingToolName}}, func(event StreamEvent) {
+		if event.Type != "tool_end" {
+			return
+		}
+		var data ToolEndData
+		if err := json.Unmarshal(event.Data, &data); err != nil {
+			t.Fatalf("decode tool_end: %v", err)
+		}
+		toolEnds = append(toolEnds, data)
+	})
+	if err != nil {
+		t.Fatalf("same-turn report budget run failed: %v", err)
+	}
+	if len(creator.created) != 1 || creator.created[0].ResourceID != "app-container-api" {
+		t.Fatalf("persisted reports = %+v, want only first budgeted call", creator.created)
+	}
+	if len(toolEnds) != 2 || !toolEnds[0].Success || toolEnds[1].Success || !strings.Contains(toolEnds[1].Output, "PATROL_FINDING_REPORT_BUDGET_EXHAUSTED") {
+		t.Fatalf("tool results = %+v, want accepted first report and fail-closed excess", toolEnds)
 	}
 }
 

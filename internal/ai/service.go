@@ -200,13 +200,14 @@ type ChatToolResult = agentcapabilities.ProviderToolResult
 
 // PatrolExecuteRequest represents a patrol execution request via the chat service
 type PatrolExecuteRequest struct {
-	Prompt           string   `json:"prompt"`
-	SystemPrompt     string   `json:"system_prompt"`
-	SessionID        string   `json:"session_id,omitempty"`
-	ExecutionID      string   `json:"execution_id,omitempty"`
-	UseCase          string   `json:"use_case"` // "patrol" — for model selection
-	MaxTurns         int      `json:"max_turns,omitempty"`
-	AllowedToolNames []string `json:"allowed_tool_names,omitempty"`
+	Prompt            string   `json:"prompt"`
+	SystemPrompt      string   `json:"system_prompt"`
+	SessionID         string   `json:"session_id,omitempty"`
+	ExecutionID       string   `json:"execution_id,omitempty"`
+	UseCase           string   `json:"use_case"` // "patrol" — for model selection
+	MaxTurns          int      `json:"max_turns,omitempty"`
+	MaxFindingReports int      `json:"max_finding_reports,omitempty"`
+	AllowedToolNames  []string `json:"allowed_tool_names,omitempty"`
 }
 
 // QuickAnalysisRequest represents a lightweight single-turn analysis request.

@@ -9469,10 +9469,13 @@ the boundary and its published shape.
 ### Internal Patrol bridge preserves bounded follow-up authority
 
 `internal/api/chat_service_adapter.go` forwards the AI runtime's structured
-`allowed_tool_names` field across the internal Patrol-to-chat boundary without
-deriving it from prompts or widening it. The chat service applies the list only
-after the Patrol detection profile has projected its canonical tool manifest;
-the list can remove tools but cannot add one, and unknown names fail closed.
+`allowed_tool_names` and `max_finding_reports` fields across the internal
+Patrol-to-chat boundary without deriving either from prompts or widening them.
+The chat service applies the list only after the Patrol detection profile has
+projected its canonical tool manifest; the list can remove tools but cannot add
+one, and unknown names fail closed. A positive report cap bounds successful
+`patrol_report_finding` persistence for the invocation and removes report
+authority when reached; zero preserves the ordinary uncapped Watch contract.
 This is an internal execution contract, not a new HTTP field or client-granted
 capability. Existing Patrol routes, authorization, tenant binding, payloads,
 and action approval semantics are unchanged.

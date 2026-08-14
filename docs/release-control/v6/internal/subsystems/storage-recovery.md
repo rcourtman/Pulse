@@ -5239,8 +5239,9 @@ and authorized recovery behavior.
 
 ### Patrol follow-up manifests do not confer storage authority
 
-The structured bounded-tool allowlist forwarded by
-`internal/api/chat_service_adapter.go` is an AI-runtime authority reduction.
-It adds no storage, backup, snapshot, restore, retention, or recovery tool and
-cannot turn a detection pass into a mutation path. Storage and recovery state,
-evidence freshness, persistence, and admission contracts remain unchanged.
+The structured bounded-tool allowlist and successful finding-report cap
+forwarded by `internal/api/chat_service_adapter.go` are AI-runtime authority
+reductions. They add no storage, backup, snapshot, restore, retention, or
+recovery tool and cannot turn a detection pass into a mutation path. Storage
+and recovery state, evidence freshness, persistence, and admission contracts
+remain unchanged.

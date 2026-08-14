@@ -386,6 +386,15 @@ func isPatrolFindingLifecycleWrite(toolName string) bool {
 	}
 }
 
+func containsPatrolFindingReport(toolCalls []providers.ToolCall) bool {
+	for _, tc := range toolCalls {
+		if strings.TrimSpace(tc.Name) == agentcapabilities.PatrolReportFindingToolName {
+			return true
+		}
+	}
+	return false
+}
+
 // requiresOrderedPatrolFindingLifecycleExecution identifies a same-turn
 // read-before-write dependency. Independent reads and independent finding
 // writes may still run in parallel, but a lifecycle write cannot race the
@@ -670,6 +679,7 @@ type AgenticLoop struct {
 	baseSystemPrompt  string // Base prompt without mode context
 	maxTurns          int
 	maxEvidenceCalls  int
+	maxFindingReports int
 	orgID             string
 	executionID       string
 	streamIdleTimeout time.Duration
@@ -795,6 +805,7 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 	// before calling ExecuteWithTools, and this avoids races with concurrent sessions.
 	a.mu.Lock()
 	maxTurns := a.maxTurns
+	maxFindingReports := a.maxFindingReports
 	suppressProviderErrorEvents := a.suppressProviderErrorEvents
 	a.aborted[sessionID] = false
 	a.mu.Unlock()
@@ -827,6 +838,7 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 	patrolFindingRepairAttempted := false     // The repair-only extension is bounded to one provider turn
 	toolBlockedLastTurn := false              // When true, request final text after budget/loop block
 	investigationProposalCompleted := false
+	acceptedFindingReports := 0
 
 	// Loop detection: track identical tool calls (name + serialized input).
 	// After maxIdenticalCalls identical invocations, the next one is blocked.
@@ -1953,7 +1965,11 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 			emitWorkflowState(callback, "execute", executeMessage, sessionFSMState(fsm), workflowTool)
 		}
 
-		orderedPatrolLifecycle := requiresOrderedPatrolFindingLifecycleExecution(toolCalls)
+		// A capped evaluator must apply its accepted-report budget between
+		// sibling calls. Keep those batches ordered so a same-turn excess can
+		// never race past the persistence boundary.
+		orderedPatrolLifecycle := requiresOrderedPatrolFindingLifecycleExecution(toolCalls) ||
+			(maxFindingReports > 0 && containsPatrolFindingReport(toolCalls))
 		if len(pendingExec) > 1 && !orderedPatrolLifecycle {
 			log.Info().
 				Int("tool_count", len(pendingExec)).
@@ -1982,8 +1998,22 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 					Msg("[AgenticLoop] Executing ordered Patrol finding lifecycle batch")
 			}
 			for j, pe := range pendingExec {
+				findingReport := strings.TrimSpace(pe.tc.Name) == agentcapabilities.PatrolReportFindingToolName
+				if findingReport &&
+					maxFindingReports > 0 && acceptedFindingReports >= maxFindingReports {
+					execResults[j] = parallelToolResult{Result: agentcapabilities.NewToolJSONResultWithIsError(map[string]interface{}{
+						"error": map[string]interface{}{
+							"code":    "PATROL_FINDING_REPORT_BUDGET_EXHAUSTED",
+							"message": fmt.Sprintf("This evaluation has already accepted its maximum of %d finding reports. Summarize the accepted results without another report call.", maxFindingReports),
+						},
+					}, true)}
+					continue
+				}
 				r, e := a.executeToolSafely(ctx, pe.tc.ID, pe.tc.Name, pe.tc.Input)
 				execResults[j] = parallelToolResult{Result: r, Err: e}
+				if findingReport && e == nil && !r.IsError {
+					acceptedFindingReports++
+				}
 			}
 		}
 
@@ -2293,9 +2323,10 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 		if patrolFindingLifecycleSucceededThisTurn {
 			if a.currentExecutionProfile().NonInteractive() {
 				patrolFindingSummaryPending = true
-				if patrolFindingLifecycleFailedThisTurn && !patrolFindingRepairTurn && !patrolFindingRepairAttempted {
+				reportBudgetExhausted := maxFindingReports > 0 && acceptedFindingReports >= maxFindingReports
+				if patrolFindingLifecycleFailedThisTurn && !reportBudgetExhausted && !patrolFindingRepairTurn && !patrolFindingRepairAttempted {
 					patrolFindingRepairPending = true
-				} else if !patrolFindingRepairTurn {
+				} else if !reportBudgetExhausted && !patrolFindingRepairTurn {
 					patrolFindingContinuationPending = true
 				}
 			} else {

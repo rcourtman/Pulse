@@ -54,13 +54,14 @@ func (a *chatServiceAdapter) ExecutePatrolStream(ctx context.Context, req ai.Pat
 
 func adaptPatrolExecuteRequest(req ai.PatrolExecuteRequest) chat.PatrolRequest {
 	return chat.PatrolRequest{
-		Prompt:           req.Prompt,
-		SystemPrompt:     req.SystemPrompt,
-		SessionID:        req.SessionID,
-		ExecutionID:      req.ExecutionID,
-		UseCase:          req.UseCase,
-		MaxTurns:         req.MaxTurns,
-		AllowedToolNames: append([]string(nil), req.AllowedToolNames...),
+		Prompt:            req.Prompt,
+		SystemPrompt:      req.SystemPrompt,
+		SessionID:         req.SessionID,
+		ExecutionID:       req.ExecutionID,
+		UseCase:           req.UseCase,
+		MaxTurns:          req.MaxTurns,
+		MaxFindingReports: req.MaxFindingReports,
+		AllowedToolNames:  append([]string(nil), req.AllowedToolNames...),
 	}
 }
 

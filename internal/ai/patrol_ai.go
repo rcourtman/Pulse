@@ -1363,13 +1363,14 @@ func (p *PatrolService) runEvaluationPass(ctx context.Context, adapter *patrolFi
 
 	trace := newPatrolFollowupTraceCollector("evaluation")
 	resp, err := cs.ExecutePatrolStream(ctx, PatrolExecuteRequest{
-		Prompt:           userPrompt,
-		SystemPrompt:     systemPrompt,
-		SessionID:        "patrol-eval",
-		ExecutionID:      executionID,
-		UseCase:          "patrol",
-		MaxTurns:         5,
-		AllowedToolNames: allowedToolNames,
+		Prompt:            userPrompt,
+		SystemPrompt:      systemPrompt,
+		SessionID:         "patrol-eval",
+		ExecutionID:       executionID,
+		UseCase:           "patrol",
+		MaxTurns:          5,
+		MaxFindingReports: len(unmatchedSignals),
+		AllowedToolNames:  allowedToolNames,
 	}, trace.callback)
 	if resp != nil {
 		resp.ToolCalls = trace.records()

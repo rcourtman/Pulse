@@ -73,15 +73,16 @@ func TestContractPatrolInternalBridgePreservesBoundedToolAuthority(t *testing.T)
 		agentcapabilities.PatrolReportFindingToolName,
 	}
 	got := adaptPatrolExecuteRequest(ai.PatrolExecuteRequest{
-		Prompt:           "evaluate",
-		SystemPrompt:     "bounded",
-		SessionID:        "patrol-eval",
-		ExecutionID:      "run-1",
-		UseCase:          "patrol",
-		MaxTurns:         5,
-		AllowedToolNames: allowed,
+		Prompt:            "evaluate",
+		SystemPrompt:      "bounded",
+		SessionID:         "patrol-eval",
+		ExecutionID:       "run-1",
+		UseCase:           "patrol",
+		MaxTurns:          5,
+		MaxFindingReports: 2,
+		AllowedToolNames:  allowed,
 	})
-	if got.Prompt != "evaluate" || got.SystemPrompt != "bounded" || got.SessionID != "patrol-eval" || got.ExecutionID != "run-1" || got.UseCase != "patrol" || got.MaxTurns != 5 {
+	if got.Prompt != "evaluate" || got.SystemPrompt != "bounded" || got.SessionID != "patrol-eval" || got.ExecutionID != "run-1" || got.UseCase != "patrol" || got.MaxTurns != 5 || got.MaxFindingReports != 2 {
 		t.Fatalf("Patrol bridge lost execution metadata: %+v", got)
 	}
 	if !reflect.DeepEqual(got.AllowedToolNames, allowed) {

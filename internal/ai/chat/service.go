@@ -2783,13 +2783,14 @@ func (s *Service) hydrateHandoffResources(sessionID string, handoffResources []H
 
 // PatrolRequest represents a patrol execution request within the chat service
 type PatrolRequest struct {
-	Prompt           string   `json:"prompt"`
-	SystemPrompt     string   `json:"system_prompt"`
-	SessionID        string   `json:"session_id,omitempty"`
-	ExecutionID      string   `json:"execution_id,omitempty"`
-	UseCase          string   `json:"use_case"`
-	MaxTurns         int      `json:"max_turns,omitempty"`
-	AllowedToolNames []string `json:"allowed_tool_names,omitempty"`
+	Prompt            string   `json:"prompt"`
+	SystemPrompt      string   `json:"system_prompt"`
+	SessionID         string   `json:"session_id,omitempty"`
+	ExecutionID       string   `json:"execution_id,omitempty"`
+	UseCase           string   `json:"use_case"`
+	MaxTurns          int      `json:"max_turns,omitempty"`
+	MaxFindingReports int      `json:"max_finding_reports,omitempty"`
+	AllowedToolNames  []string `json:"allowed_tool_names,omitempty"`
 }
 
 // PatrolResponse contains the results of a patrol execution
@@ -2864,6 +2865,9 @@ func (s *Service) ExecutePatrolStream(ctx context.Context, req PatrolRequest, ca
 	tempLoop.SetRequestSanitizer(modelboundary.RequestSanitizerForModel(patrolModel, unifiedResourceProvider))
 	if req.MaxTurns > 0 {
 		tempLoop.SetMaxTurns(req.MaxTurns)
+	}
+	if req.MaxFindingReports > 0 {
+		tempLoop.SetMaxFindingReports(req.MaxFindingReports)
 	}
 
 	// Set provider info for telemetry
