@@ -79,8 +79,10 @@ func (m *Manager) lookupDockerContainerOverrideNoLock(hostID, containerName, leg
 	return ThresholdConfig{}, false
 }
 
-// dockerResourceID builds a stable identifier for Docker container alerts.
-func dockerResourceID(hostID, containerID string) string {
+// DockerResourceID builds a stable identifier for Docker container alerts.
+// Patrol scope resolution registers these forms as known aliases so an
+// alert's resource ID resolves to the collected container or host.
+func DockerResourceID(hostID, containerID string) string {
 	hostID = strings.TrimSpace(hostID)
 	containerID = strings.TrimSpace(containerID)
 	if containerID == "" {
@@ -267,7 +269,7 @@ func (m *Manager) CheckDockerHost(host models.DockerHost) {
 	seenUpdateTracking := make(map[string]struct{}, len(host.Containers))
 	for _, container := range host.Containers {
 		containerName := dockerContainerDisplayName(container)
-		resourceID := dockerResourceID(host.ID, container.ID)
+		resourceID := DockerResourceID(host.ID, container.ID)
 		updateTrackingKey := dockerUpdateTrackingKey(host, container)
 
 		if matchesDockerIgnoredPrefix(containerName, container.ID, ignoredPrefixes) {

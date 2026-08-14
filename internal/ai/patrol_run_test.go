@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus/testutil"
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
@@ -82,6 +83,32 @@ func TestResolvePatrolScopeCanonicalIDOutranksAliasCollision(t *testing.T) {
 	filtered := filterPatrolStateByScopeState(state, resolved)
 	if len(filtered.VMs) != 1 || filtered.VMs[0].ID != "vm-canonical" {
 		t.Fatalf("canonical ID selected wrong resource: %+v", filtered.VMs)
+	}
+}
+
+func TestResolvePatrolScopeResolvesDockerAlertResourceIDs(t *testing.T) {
+	snapshot := models.StateSnapshot{DockerHosts: []models.DockerHost{{
+		ID: "nas", Hostname: "nas",
+		Containers: []models.DockerContainer{{ID: "abc123def456", Name: "dockhand-hawser-updater-nas", State: "exited"}},
+	}}}
+	containerAlertID := alerts.DockerResourceID("nas", "abc123def456")
+	hostAlertID := alerts.DockerResourceID("nas", "")
+
+	snapshotState := newPatrolRuntimeState(snapshot)
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestSnapshot(snapshot)
+	readState := newPatrolRuntimeStateWithProviders(snapshot, registry, unifiedresources.NewUnifiedAIAdapter(registry))
+
+	for _, state := range []patrolRuntimeState{snapshotState, readState} {
+		for _, requested := range []string{containerAlertID, hostAlertID} {
+			resolved, resolution := resolvePatrolScopeState(state, PatrolScope{ResourceIDs: []string{requested}})
+			if len(resolution.UnmatchedResourceIDs) != 0 || len(resolution.AmbiguousResourceIDs) != 0 {
+				t.Fatalf("alert resource ID %q did not resolve exactly: %+v", requested, resolution)
+			}
+			if len(resolved.ResourceIDs) == 0 {
+				t.Fatalf("alert resource ID %q resolved to an empty scope", requested)
+			}
+		}
 	}
 }
 

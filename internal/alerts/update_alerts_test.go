@@ -398,7 +398,7 @@ func TestCheckDockerContainerImageUpdatePreservesDelayAcrossHostIDChange(t *test
 	newHost.ID = "docker-host-new"
 	newHost.DisplayName = "New Docker Host"
 
-	oldResourceID := dockerResourceID(oldHost.ID, container.ID)
+	oldResourceID := DockerResourceID(oldHost.ID, container.ID)
 	m.checkDockerContainerImageUpdate(oldHost, container, oldResourceID, "web", "docker-instance", "docker.local")
 
 	firstSeen := time.Now().Add(-25 * time.Hour)
@@ -408,7 +408,7 @@ func TestCheckDockerContainerImageUpdatePreservesDelayAcrossHostIDChange(t *test
 	m.dockerUpdateFirstSeenByIdentity[trackingKey] = firstSeen
 	m.mu.Unlock()
 
-	newResourceID := dockerResourceID(newHost.ID, container.ID)
+	newResourceID := DockerResourceID(newHost.ID, container.ID)
 	m.checkDockerContainerImageUpdate(newHost, container, newResourceID, "web", "docker-instance", "docker.local")
 
 	alertID := "docker-container-update-" + newResourceID
@@ -568,7 +568,7 @@ func TestUpdateConfigClearsDockerContainerUpdateAlertsWhenDisabled(t *testing.T)
 		Name:  "/frontend",
 		Image: "nginx:latest",
 	}
-	resourceID := dockerResourceID(host.ID, container.ID)
+	resourceID := DockerResourceID(host.ID, container.ID)
 	firstSeen := time.Now().Add(-48 * time.Hour)
 	_, canonicalAlertID, trackingKey := seedDockerUpdateAlert(t, m, host, container, resourceID, firstSeen)
 
@@ -606,7 +606,7 @@ func TestUpdateConfigKeepsDockerContainerUpdateAlertsWhenStillEnabled(t *testing
 		Name:  "/api",
 		Image: "ghcr.io/example/api:latest",
 	}
-	resourceID := dockerResourceID(host.ID, container.ID)
+	resourceID := DockerResourceID(host.ID, container.ID)
 	firstSeen := time.Now().Add(-30 * time.Hour)
 	_, canonicalAlertID, trackingKey := seedDockerUpdateAlert(t, m, host, container, resourceID, firstSeen)
 
@@ -652,7 +652,7 @@ func TestEvaluateDockerContainerClearsUpdateAlertWhenOverrideDisabled(t *testing
 		Name:  "/worker",
 		Image: "ghcr.io/example/worker:latest",
 	}
-	resourceID := dockerResourceID(host.ID, container.ID)
+	resourceID := DockerResourceID(host.ID, container.ID)
 	firstSeen := time.Now().Add(-36 * time.Hour)
 	alertID, canonicalAlertID, trackingKey := seedDockerUpdateAlert(t, m, host, container, resourceID, firstSeen)
 

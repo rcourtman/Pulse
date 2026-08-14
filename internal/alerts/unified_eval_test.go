@@ -1257,7 +1257,7 @@ func TestCheckDockerContainerStateAnnotatesCanonicalSpecMetadata(t *testing.T) {
 	m.CheckDockerHost(host)
 	m.CheckDockerHost(host)
 
-	resourceID := dockerResourceID(host.ID, "container-1")
+	resourceID := DockerResourceID(host.ID, "container-1")
 	alert := activeAlert(t, m, "docker-container-state-"+resourceID)
 	if got := alert.Metadata["canonicalAlertKind"]; got != "discrete-state" {
 		t.Fatalf("canonicalAlertKind = %v, want discrete-state", got)

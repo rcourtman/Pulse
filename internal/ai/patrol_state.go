@@ -4,9 +4,22 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
+
+// dockerAlertScopeAlias mirrors the alert subsystem's docker resource IDs
+// ("docker:<host>" and "docker:<host>/<container>") so an alert's resource ID
+// resolves to the patrol runtime record for that host or container (#1699).
+// Returns "" without a host part rather than the shared "docker:unknown"
+// fallback, which would alias unrelated records together.
+func dockerAlertScopeAlias(hostID, containerID string) string {
+	if strings.TrimSpace(hostID) == "" {
+		return ""
+	}
+	return alerts.DockerResourceID(hostID, containerID)
+}
 
 type patrolRuntimeResourceKind string
 
@@ -187,12 +200,12 @@ func patrolVisitRuntimeResources(s patrolRuntimeState, visit func(patrolRuntimeR
 			}
 		}
 		for _, dh := range rs.DockerHosts() {
-			if !emit(patrolRuntimeResourceDockerHost, []string{dh.ID(), dh.HostSourceID()}, dh.Name(), dh.Hostname()) {
+			if !emit(patrolRuntimeResourceDockerHost, []string{dh.ID(), dh.HostSourceID()}, dh.Name(), dh.Hostname(), dockerAlertScopeAlias(dh.HostSourceID(), "")) {
 				return
 			}
 		}
 		for _, dc := range rs.DockerContainers() {
-			if !emit(patrolRuntimeResourceDockerItem, []string{dc.ID(), dc.ContainerID()}, dc.Name()) {
+			if !emit(patrolRuntimeResourceDockerItem, []string{dc.ID(), dc.ContainerID()}, dc.Name(), dockerAlertScopeAlias(dc.HostSourceID(), dc.ContainerID())) {
 				return
 			}
 		}
@@ -238,11 +251,11 @@ func patrolVisitRuntimeResources(s patrolRuntimeState, visit func(patrolRuntimeR
 			}
 		}
 		for _, dh := range s.DockerHosts {
-			if !emit(patrolRuntimeResourceDockerHost, []string{dh.ID}, dh.DisplayName, dh.CustomDisplayName, dh.Hostname) {
+			if !emit(patrolRuntimeResourceDockerHost, []string{dh.ID}, dh.DisplayName, dh.CustomDisplayName, dh.Hostname, dockerAlertScopeAlias(dh.ID, "")) {
 				return
 			}
 			for _, dc := range dh.Containers {
-				if !emit(patrolRuntimeResourceDockerItem, []string{dc.ID}, dc.Name) {
+				if !emit(patrolRuntimeResourceDockerItem, []string{dc.ID}, dc.Name, dockerAlertScopeAlias(dh.ID, dc.ID)) {
 					return
 				}
 			}

@@ -2478,7 +2478,7 @@ func TestCheckDockerHostIgnoresContainersByPrefix(t *testing.T) {
 		Containers:  []models.DockerContainer{container},
 	}
 
-	resourceID := dockerResourceID(host.ID, container.ID)
+	resourceID := DockerResourceID(host.ID, container.ID)
 	alertID := fmt.Sprintf("docker-container-state-%s", resourceID)
 
 	// Run twice to satisfy the confirmation threshold when not ignored
@@ -2517,7 +2517,7 @@ func TestCheckDockerHostContainerCPUUsesCapacityNormalizedPercent(t *testing.T) 
 			CPUPercent: 240,
 		}},
 	}
-	alertID := canonicalMetricStateID(dockerResourceID(host.ID, "container-1"), "cpu")
+	alertID := canonicalMetricStateID(DockerResourceID(host.ID, "container-1"), "cpu")
 
 	m.CheckDockerHost(host)
 	m.mu.RLock()
@@ -2816,7 +2816,7 @@ func TestDockerContainerStateUsesDockerDefaults(t *testing.T) {
 	m.CheckDockerHost(host)
 	m.CheckDockerHost(host)
 
-	resourceID := dockerResourceID(host.ID, container.ID)
+	resourceID := DockerResourceID(host.ID, container.ID)
 	alertID := fmt.Sprintf("docker-container-state-%s", resourceID)
 	alert, exists := testLookupActiveAlert(t, m, alertID)
 	if !exists {
@@ -2849,7 +2849,7 @@ func TestDockerContainerStateRespectsDisableDefault(t *testing.T) {
 	m.CheckDockerHost(host)
 	m.CheckDockerHost(host)
 
-	resourceID := dockerResourceID(host.ID, container.ID)
+	resourceID := DockerResourceID(host.ID, container.ID)
 	alertID := fmt.Sprintf("docker-container-state-%s", resourceID)
 	if testHasActiveAlert(t, m, alertID) {
 		t.Fatalf("did not expect docker container state alert when defaults disable connectivity")
@@ -2879,7 +2879,7 @@ func TestDockerContainerMemoryLimitHysteresis(t *testing.T) {
 
 	m.CheckDockerHost(hostHigh)
 
-	resourceID := dockerResourceID(hostID, containerID)
+	resourceID := DockerResourceID(hostID, containerID)
 	alertID := fmt.Sprintf("docker-container-memory-limit-%s", resourceID)
 	alert, exists := testLookupActiveAlert(t, m, alertID)
 	if !exists {
@@ -2948,7 +2948,7 @@ func TestDockerContainerDiskUsageAlert(t *testing.T) {
 
 	m.CheckDockerHost(host)
 
-	resourceID := dockerResourceID(host.ID, host.Containers[0].ID)
+	resourceID := DockerResourceID(host.ID, host.Containers[0].ID)
 	alertID := canonicalMetricStateID(resourceID, "disk")
 	alert, exists := testLookupActiveAlert(t, m, alertID)
 	if !exists {
@@ -3540,7 +3540,7 @@ func TestCheckDockerHostIgnoredPrefixClearsExistingAlerts(t *testing.T) {
 		Hostname:    "docker-host.local",
 		Containers:  []models.DockerContainer{container},
 	}
-	resourceID := dockerResourceID(host.ID, container.ID)
+	resourceID := DockerResourceID(host.ID, container.ID)
 	stateAlertID := fmt.Sprintf("docker-container-state-%s", resourceID)
 	healthAlertID := fmt.Sprintf("docker-container-health-%s", resourceID)
 	restartAlertID := fmt.Sprintf("docker-container-restart-loop-%s", resourceID)
@@ -3734,8 +3734,8 @@ func TestDockerResourceID(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			// t.Parallel()
 
-			if got := dockerResourceID(tc.hostID, tc.containerID); got != tc.want {
-				t.Fatalf("dockerResourceID(%q, %q) = %q, want %q", tc.hostID, tc.containerID, got, tc.want)
+			if got := DockerResourceID(tc.hostID, tc.containerID); got != tc.want {
+				t.Fatalf("DockerResourceID(%q, %q) = %q, want %q", tc.hostID, tc.containerID, got, tc.want)
 			}
 		})
 	}
@@ -12862,7 +12862,7 @@ func TestDockerContainerHealthAlert(t *testing.T) {
 
 		m.CheckDockerHost(host)
 
-		resourceID := dockerResourceID(host.ID, host.Containers[0].ID)
+		resourceID := DockerResourceID(host.ID, host.Containers[0].ID)
 		alertID := fmt.Sprintf("docker-container-health-%s", resourceID)
 		if testHasActiveAlert(t, m, alertID) {
 			t.Fatal("expected no health alert for healthy container")
@@ -12889,7 +12889,7 @@ func TestDockerContainerHealthAlert(t *testing.T) {
 
 		m.CheckDockerHost(host)
 
-		resourceID := dockerResourceID(host.ID, host.Containers[0].ID)
+		resourceID := DockerResourceID(host.ID, host.Containers[0].ID)
 		alertID := fmt.Sprintf("docker-container-health-%s", resourceID)
 		if testHasActiveAlert(t, m, alertID) {
 			t.Fatal("expected no health alert for container with empty health")
@@ -12916,7 +12916,7 @@ func TestDockerContainerHealthAlert(t *testing.T) {
 
 		m.CheckDockerHost(host)
 
-		resourceID := dockerResourceID(host.ID, host.Containers[0].ID)
+		resourceID := DockerResourceID(host.ID, host.Containers[0].ID)
 		alertID := fmt.Sprintf("docker-container-health-%s", resourceID)
 		if testHasActiveAlert(t, m, alertID) {
 			t.Fatal("expected no health alert for container with none health")
@@ -12943,7 +12943,7 @@ func TestDockerContainerHealthAlert(t *testing.T) {
 
 		m.CheckDockerHost(host)
 
-		resourceID := dockerResourceID(host.ID, host.Containers[0].ID)
+		resourceID := DockerResourceID(host.ID, host.Containers[0].ID)
 		alertID := fmt.Sprintf("docker-container-health-%s", resourceID)
 		if testHasActiveAlert(t, m, alertID) {
 			t.Fatal("expected no health alert for starting container")
@@ -12970,7 +12970,7 @@ func TestDockerContainerHealthAlert(t *testing.T) {
 
 		m.CheckDockerHost(host)
 
-		resourceID := dockerResourceID(host.ID, host.Containers[0].ID)
+		resourceID := DockerResourceID(host.ID, host.Containers[0].ID)
 		alertID := fmt.Sprintf("docker-container-health-%s", resourceID)
 		alert, exists := testLookupActiveAlert(t, m, alertID)
 		if !exists {
@@ -13010,7 +13010,7 @@ func TestDockerContainerHealthAlert(t *testing.T) {
 
 		m.CheckDockerHost(host)
 
-		resourceID := dockerResourceID(host.ID, host.Containers[0].ID)
+		resourceID := DockerResourceID(host.ID, host.Containers[0].ID)
 		alertID := fmt.Sprintf("docker-container-health-%s", resourceID)
 		alert, exists := testLookupActiveAlert(t, m, alertID)
 		if !exists {
@@ -13045,7 +13045,7 @@ func TestDockerContainerHealthAlert(t *testing.T) {
 
 		m.CheckDockerHost(hostUnhealthy)
 
-		resourceID := dockerResourceID(hostID, containerID)
+		resourceID := DockerResourceID(hostID, containerID)
 		alertID := fmt.Sprintf("docker-container-health-%s", resourceID)
 		if !testHasActiveAlert(t, m, alertID) {
 			t.Fatal("expected health alert to be raised")
@@ -13096,7 +13096,7 @@ func TestDockerContainerOOMKillAlert(t *testing.T) {
 
 		m.CheckDockerHost(host)
 
-		resourceID := dockerResourceID(host.ID, host.Containers[0].ID)
+		resourceID := DockerResourceID(host.ID, host.Containers[0].ID)
 		alertID := fmt.Sprintf("docker-container-oom-%s", resourceID)
 		if testHasActiveAlert(t, m, alertID) {
 			t.Fatal("expected no OOM alert for running container")
@@ -13123,7 +13123,7 @@ func TestDockerContainerOOMKillAlert(t *testing.T) {
 
 		m.CheckDockerHost(host)
 
-		resourceID := dockerResourceID(host.ID, host.Containers[0].ID)
+		resourceID := DockerResourceID(host.ID, host.Containers[0].ID)
 		alertID := fmt.Sprintf("docker-container-oom-%s", resourceID)
 		if testHasActiveAlert(t, m, alertID) {
 			t.Fatal("expected no OOM alert for container with exit code 1")
@@ -13147,7 +13147,7 @@ func TestDockerContainerOOMKillAlert(t *testing.T) {
 
 			m.CheckDockerHost(host)
 
-			resourceID := dockerResourceID(host.ID, host.Containers[0].ID)
+			resourceID := DockerResourceID(host.ID, host.Containers[0].ID)
 			if testHasActiveAlert(t, m, fmt.Sprintf("docker-container-oom-%s", resourceID)) {
 				t.Fatal("exit code 137 alone must not create an OOM alert")
 			}
@@ -13177,7 +13177,7 @@ func TestDockerContainerOOMKillAlert(t *testing.T) {
 
 		m.CheckDockerHost(host)
 
-		resourceID := dockerResourceID(host.ID, host.Containers[0].ID)
+		resourceID := DockerResourceID(host.ID, host.Containers[0].ID)
 		alertID := fmt.Sprintf("docker-container-oom-%s", resourceID)
 		alert, exists := testLookupActiveAlert(t, m, alertID)
 		if !exists {
@@ -13221,7 +13221,7 @@ func TestDockerContainerOOMKillAlert(t *testing.T) {
 
 		m.CheckDockerHost(host)
 
-		resourceID := dockerResourceID(host.ID, host.Containers[0].ID)
+		resourceID := DockerResourceID(host.ID, host.Containers[0].ID)
 		alertID := fmt.Sprintf("docker-container-oom-%s", resourceID)
 		alert, exists := testLookupActiveAlert(t, m, alertID)
 		if !exists {
@@ -13257,7 +13257,7 @@ func TestDockerContainerOOMKillAlert(t *testing.T) {
 		// First check - should create alert
 		m.CheckDockerHost(host)
 
-		resourceID := dockerResourceID(hostID, containerID)
+		resourceID := DockerResourceID(hostID, containerID)
 		alertID := fmt.Sprintf("docker-container-oom-%s", resourceID)
 		alert1, exists := testLookupActiveAlert(t, m, alertID)
 		if !exists {
@@ -13302,7 +13302,7 @@ func TestDockerContainerOOMKillAlert(t *testing.T) {
 
 		m.CheckDockerHost(hostOOM)
 
-		resourceID := dockerResourceID(hostID, containerID)
+		resourceID := DockerResourceID(hostID, containerID)
 		alertID := fmt.Sprintf("docker-container-oom-%s", resourceID)
 		if !testHasActiveAlert(t, m, alertID) {
 			t.Fatal("expected OOM alert to be raised")
@@ -13356,7 +13356,7 @@ func TestDockerContainerOOMKillAlert(t *testing.T) {
 
 		m.CheckDockerHost(hostOOM)
 
-		resourceID := dockerResourceID(hostID, containerID)
+		resourceID := DockerResourceID(hostID, containerID)
 		alertID := fmt.Sprintf("docker-container-oom-%s", resourceID)
 		if !testHasActiveAlert(t, m, alertID) {
 			t.Fatal("expected OOM alert to be raised")
@@ -13407,7 +13407,7 @@ func TestDockerContainerRestartLoopAlert(t *testing.T) {
 
 		m.CheckDockerHost(host)
 
-		resourceID := dockerResourceID(host.ID, host.Containers[0].ID)
+		resourceID := DockerResourceID(host.ID, host.Containers[0].ID)
 		alertID := fmt.Sprintf("docker-container-restart-loop-%s", resourceID)
 		if testHasActiveAlert(t, m, alertID) {
 			t.Fatal("expected no restart loop alert on first check (just initializes tracking)")
@@ -13455,7 +13455,7 @@ func TestDockerContainerRestartLoopAlert(t *testing.T) {
 		// Third check - still same restart count
 		m.CheckDockerHost(host)
 
-		resourceID := dockerResourceID(hostID, containerID)
+		resourceID := DockerResourceID(hostID, containerID)
 		alertID := fmt.Sprintf("docker-container-restart-loop-%s", resourceID)
 		if testHasActiveAlert(t, m, alertID) {
 			t.Fatal("expected no restart loop alert for stable container")
@@ -13496,7 +13496,7 @@ func TestDockerContainerRestartLoopAlert(t *testing.T) {
 		host.Containers[0].RestartCount = 3
 		m.CheckDockerHost(host)
 
-		resourceID := dockerResourceID(hostID, containerID)
+		resourceID := DockerResourceID(hostID, containerID)
 		alertID := fmt.Sprintf("docker-container-restart-loop-%s", resourceID)
 		if testHasActiveAlert(t, m, alertID) {
 			t.Fatal("expected no restart loop alert when restarts <= threshold")
@@ -13542,7 +13542,7 @@ func TestDockerContainerRestartLoopAlert(t *testing.T) {
 		host.Containers[0].RestartCount = 4
 		m.CheckDockerHost(host)
 
-		resourceID := dockerResourceID(hostID, containerID)
+		resourceID := DockerResourceID(hostID, containerID)
 		alertID := fmt.Sprintf("docker-container-restart-loop-%s", resourceID)
 		alert, exists := testLookupActiveAlert(t, m, alertID)
 		if !exists {
@@ -13578,7 +13578,7 @@ func TestDockerContainerRestartLoopAlert(t *testing.T) {
 
 		hostID := "host-restart-5"
 		containerID := "container-5"
-		resourceID := dockerResourceID(hostID, containerID)
+		resourceID := DockerResourceID(hostID, containerID)
 
 		// Manually set up a restart loop state
 		m.mu.Lock()
@@ -13658,7 +13658,7 @@ func TestDockerContainerRestartLoopAlert(t *testing.T) {
 		// First check - initializes
 		m.CheckDockerHost(host)
 
-		resourceID := dockerResourceID(hostID, containerID)
+		resourceID := DockerResourceID(hostID, containerID)
 		alertID := fmt.Sprintf("docker-container-restart-loop-%s", resourceID)
 
 		// Restart 1
@@ -13711,7 +13711,7 @@ func TestDockerContainerRestartLoopAlert(t *testing.T) {
 		host.Containers[0].RestartCount = 5
 		m.CheckDockerHost(host)
 
-		resourceID := dockerResourceID(hostID, containerID)
+		resourceID := DockerResourceID(hostID, containerID)
 		alertID := fmt.Sprintf("docker-container-restart-loop-%s", resourceID)
 		alert1, exists := testLookupActiveAlert(t, m, alertID)
 		if !exists {
@@ -19891,7 +19891,7 @@ func TestDockerContainerOverrideSurvivesContainerRecreate(t *testing.T) {
 		}
 	}
 	stateAlertID := func(hostID, containerID string) string {
-		return fmt.Sprintf("docker-container-state-%s", dockerResourceID(hostID, containerID))
+		return fmt.Sprintf("docker-container-state-%s", DockerResourceID(hostID, containerID))
 	}
 
 	// Subtests keep the two managers in separate lifetimes: newTestManager
@@ -19943,13 +19943,13 @@ func TestDockerContainerOverrideLegacyIDKeyStillHonoured(t *testing.T) {
 	}
 
 	m.mu.Lock()
-	m.config.Overrides[dockerResourceID(host.ID, container.ID)] = ThresholdConfig{Disabled: true}
+	m.config.Overrides[DockerResourceID(host.ID, container.ID)] = ThresholdConfig{Disabled: true}
 	m.mu.Unlock()
 
 	m.CheckDockerHost(host)
 	m.CheckDockerHost(host)
 
-	alertID := fmt.Sprintf("docker-container-state-%s", dockerResourceID(host.ID, container.ID))
+	alertID := fmt.Sprintf("docker-container-state-%s", DockerResourceID(host.ID, container.ID))
 	if testHasActiveAlert(t, m, alertID) {
 		t.Fatalf("expected legacy ID-keyed override to still disable container alerts")
 	}

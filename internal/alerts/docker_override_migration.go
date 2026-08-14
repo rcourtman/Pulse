@@ -75,7 +75,7 @@ func MigrateDockerContainerOverrideKeys(config *AlertConfig, resources []unified
 
 		legacyKey := ""
 		if containerID := strings.TrimSpace(resource.Docker.ContainerID); containerID != "" {
-			legacyKey = dockerResourceID(hostID, containerID)
+			legacyKey = DockerResourceID(hostID, containerID)
 			live[legacyKey] = struct{}{}
 		}
 		if legacyKey != "" && legacyKey != stableKey {
