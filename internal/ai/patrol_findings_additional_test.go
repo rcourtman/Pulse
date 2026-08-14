@@ -1556,3 +1556,51 @@ func TestPatrolFindingAdapterSeparatesRequestedLifecycleScopeFromEvidenceScope(t
 		t.Fatalf("context-only finding must be rejected by lifecycle scope, got %v", err)
 	}
 }
+
+func TestPatrolFindingAdapterDistinguishesSameRunCreationFromExistingRereport(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+	input := tools.PatrolFindingInput{
+		ResourceID: "camera-1", ResourceName: "Camera 1", ResourceType: "host",
+		Key: "camera-offline", Severity: "warning", Category: "reliability",
+		Title: "Camera is unavailable", Description: "The camera is offline.",
+		Impact: "Recording is unavailable.", Recommendation: "Restore availability.",
+		Evidence: "Current status is offline.",
+	}
+
+	firstRun := newPatrolFindingCreatorAdapterState(ps, patrolRuntimeState{})
+	if active := firstRun.GetActiveFindings("", ""); len(active) != 0 {
+		t.Fatalf("initial active findings = %+v, want none", active)
+	}
+	findingID, isNew, err := firstRun.CreateFinding(input)
+	if err != nil || !isNew {
+		t.Fatalf("first report = (%q, %t, %v), want a new finding", findingID, isNew, err)
+	}
+	// This models a findings read racing with or following the accepted report.
+	// The new finding may be returned, but it is not an existing-finding verdict
+	// candidate in the run that created it.
+	firstRun.GetActiveFindings("", "")
+	firstResult := &AIAnalysisResult{
+		ReportedIDs:       firstRun.getReportedFindingIDs(),
+		NewFindingIDs:     firstRun.getNewFindingIDs(),
+		QueriedFindingIDs: firstRun.getQueriedFindingIDs(),
+	}
+	if missing := patrolMissingAssessmentIDs(firstResult); len(missing) != 0 {
+		t.Fatalf("same-run new finding unexpectedly needs assessment: %v", missing)
+	}
+
+	secondRun := newPatrolFindingCreatorAdapterState(ps, patrolRuntimeState{})
+	secondRun.GetActiveFindings("", "")
+	reportedID, isNew, err := secondRun.CreateFinding(input)
+	if err != nil || isNew || reportedID != findingID {
+		t.Fatalf("second report = (%q, %t, %v), want existing %q", reportedID, isNew, err, findingID)
+	}
+	secondResult := &AIAnalysisResult{
+		ReportedIDs:       secondRun.getReportedFindingIDs(),
+		NewFindingIDs:     secondRun.getNewFindingIDs(),
+		QueriedFindingIDs: secondRun.getQueriedFindingIDs(),
+	}
+	missing := patrolMissingAssessmentIDs(secondResult)
+	if len(missing) != 1 || missing[0] != findingID {
+		t.Fatalf("re-reported existing finding missing assessments = %v, want [%s]", missing, findingID)
+	}
+}

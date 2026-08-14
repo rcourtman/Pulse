@@ -124,6 +124,11 @@ further investigation and new findings, accepts `uncertain` as a complete
 honest verdict, and is capped at the missing-finding count plus two turns,
 never more than twelve. Verdicts still missing after the sweep keep the
 existing run-level incomplete-assessment error.
+Findings first created by an accepted `patrol_report_finding` in the current
+run are already complete structured new-issue outcomes and never join that
+run's assessment sweep, even if a concurrent or later `patrol_get_findings`
+call observes them. Re-reported pre-existing findings remain subject to the
+existing-finding verdict contract.
 Investigation and interactive profiles retain a tool-free final summary; a
 Watch finding write at the deadline is followed only by the existing bounded
 summary path. A capability-unavailable

@@ -514,6 +514,7 @@ type patrolFindingCreatorAdapter struct {
 	findingScope            map[string]bool
 	findingsMu              sync.Mutex
 	findings                []*Finding
+	newFindingIDs           []string
 	assessments             []PatrolFindingAssessment
 	queriedFindingIDs       []string
 	queriedFindings         []tools.PatrolFindingInfo
@@ -651,6 +652,9 @@ func (a *patrolFindingCreatorAdapter) CreateFinding(input tools.PatrolFindingInp
 
 	// Track for run stats
 	a.trackCollectedFinding(finding)
+	if isNew {
+		a.trackNewFindingID(id)
+	}
 
 	return id, isNew, nil
 }
@@ -679,6 +683,20 @@ func (a *patrolFindingCreatorAdapter) trackCollectedFinding(finding *Finding) {
 		}
 	}
 	a.findings = append(a.findings, finding)
+}
+
+func (a *patrolFindingCreatorAdapter) trackNewFindingID(findingID string) {
+	if findingID == "" {
+		return
+	}
+	a.findingsMu.Lock()
+	defer a.findingsMu.Unlock()
+	for _, existingID := range a.newFindingIDs {
+		if existingID == findingID {
+			return
+		}
+	}
+	a.newFindingIDs = append(a.newFindingIDs, findingID)
 }
 
 // AssessFinding records the model's explicit terminal verdict for an existing
@@ -1132,6 +1150,17 @@ func (a *patrolFindingCreatorAdapter) getReportedFindingIDs() []string {
 		ids[i] = f.ID
 	}
 	return ids
+}
+
+// getNewFindingIDs returns findings whose durable lifecycle began in this run.
+// Re-reported findings are intentionally excluded because they still require
+// an explicit existing-finding verdict.
+func (a *patrolFindingCreatorAdapter) getNewFindingIDs() []string {
+	a.findingsMu.Lock()
+	defer a.findingsMu.Unlock()
+	result := make([]string, len(a.newFindingIDs))
+	copy(result, a.newFindingIDs)
+	return result
 }
 
 // getResolvedIDs returns the IDs of findings explicitly resolved by the LLM this run.

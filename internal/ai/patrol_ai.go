@@ -43,6 +43,7 @@ type AIAnalysisResult struct {
 	OutputTokens      int
 	ToolCalls         []ToolCallRecord          // Tool invocations during this analysis
 	ReportedIDs       []string                  // Finding IDs reported (created/re-reported) this run
+	NewFindingIDs     []string                  // Finding IDs first created during this run
 	ResolvedIDs       []string                  // Finding IDs explicitly resolved by LLM this run
 	Assessments       []PatrolFindingAssessment // Explicit verdicts for existing findings this run
 	SeededFindingIDs  []string                  // Finding IDs that were presented in seed context
@@ -385,7 +386,7 @@ func patrolMissingAssessmentIDs(result *AIAnalysisResult) []string {
 	if result == nil || len(result.SeededFindingIDs)+len(result.QueriedFindingIDs) == 0 {
 		return nil
 	}
-	completed := make(map[string]bool, len(result.Assessments)+len(result.ResolvedIDs))
+	completed := make(map[string]bool, len(result.Assessments)+len(result.ResolvedIDs)+len(result.NewFindingIDs))
 	for _, assessment := range result.Assessments {
 		completed[assessment.FindingID] = true
 	}
@@ -393,6 +394,13 @@ func patrolMissingAssessmentIDs(result *AIAnalysisResult) []string {
 	// the same deterministic verifier, although the assessment tool is the
 	// preferred complete verdict contract.
 	for _, findingID := range result.ResolvedIDs {
+		completed[findingID] = true
+	}
+	// A finding first created during this run is already the model's accepted
+	// structured verdict for that issue. It can appear in a concurrent or later
+	// patrol_get_findings result, but must not be immediately re-litigated by the
+	// existing-finding assessment sweep.
+	for _, findingID := range result.NewFindingIDs {
 		completed[findingID] = true
 	}
 	missing := make([]string, 0)
@@ -804,6 +812,7 @@ func (p *PatrolService) runAIAnalysisState(ctx context.Context, snap patrolRunti
 			OutputTokens:      outputTokens,
 			ToolCalls:         append([]ToolCallRecord(nil), toolCalls...),
 			ReportedIDs:       adapter.getReportedFindingIDs(),
+			NewFindingIDs:     adapter.getNewFindingIDs(),
 			ResolvedIDs:       adapter.getResolvedIDs(),
 			Assessments:       adapter.getAssessments(),
 			SeededFindingIDs:  seededFindingIDs,

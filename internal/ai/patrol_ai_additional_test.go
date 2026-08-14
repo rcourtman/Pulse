@@ -318,13 +318,15 @@ func TestPatrolService_SeedPreviousRun(t *testing.T) {
 
 func TestPatrolMissingAssessmentIDsIncludesSeededAndQueriedFindings(t *testing.T) {
 	result := &AIAnalysisResult{
-		SeededFindingIDs:  []string{"seeded", "resolved-direct", "duplicate"},
-		QueriedFindingIDs: []string{"queried", "duplicate"},
+		SeededFindingIDs:  []string{"seeded", "resolved-direct", "duplicate", "reported-existing"},
+		QueriedFindingIDs: []string{"queried", "duplicate", "new-this-run", "reported-existing"},
+		ReportedIDs:       []string{"new-this-run", "reported-existing"},
+		NewFindingIDs:     []string{"new-this-run"},
 		Assessments:       []PatrolFindingAssessment{{FindingID: "seeded", Verdict: "present"}},
 		ResolvedIDs:       []string{"resolved-direct"},
 	}
 	missing := patrolMissingAssessmentIDs(result)
-	if len(missing) != 2 || missing[0] != "duplicate" || missing[1] != "queried" {
-		t.Fatalf("missing assessments = %v, want [duplicate queried]", missing)
+	if len(missing) != 3 || missing[0] != "duplicate" || missing[1] != "queried" || missing[2] != "reported-existing" {
+		t.Fatalf("missing assessments = %v, want [duplicate queried reported-existing]", missing)
 	}
 }
