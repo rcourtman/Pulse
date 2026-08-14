@@ -6275,7 +6275,9 @@ routes remain unknown and therefore fail any non-zero qualification cost
 budget until their actual route price is explicitly recorded. An exact
 OpenRouter `:free` route may be recorded at zero only after that route's public
 catalog entry is reviewed; the suffix alone never makes other free aliases
-known. Live scoring
+known. The reviewed zero-priced qualification routes are currently
+`nvidia/nemotron-3.5-lightning:free` and
+`nvidia/nemotron-3-super-120b-a12b:free`. Live scoring
 uses the provider resolved by Patrol readiness, even when the configured
 OpenRouter model is an unprefixed slash route such as
 `anthropic/claude-sonnet-5`; scorer replay persists and reuses that resolved

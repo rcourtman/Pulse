@@ -138,18 +138,23 @@ func TestEstimateUSD_OllamaFree(t *testing.T) {
 }
 
 func TestEstimateUSD_ReviewedOpenRouterFreeRoute(t *testing.T) {
-	usd, ok, price := EstimateUSD("openrouter", "nvidia/nemotron-3-super-120b-a12b:free", 1_000_000, 1_000_000)
-	if !ok {
-		t.Fatal("reviewed OpenRouter free-route pricing should be known")
-	}
-	if usd != 0 || price.InputUSDPerMTok != 0 || price.OutputUSDPerMTok != 0 {
-		t.Fatalf("reviewed OpenRouter free route should estimate $0, got usd=%f price=%+v", usd, price)
-	}
-	if price.AsOf != "2026-08-14" {
-		t.Fatalf("reviewed OpenRouter free-route date = %q, want 2026-08-14", price.AsOf)
+	for _, model := range []string{
+		"nvidia/nemotron-3.5-lightning:free",
+		"nvidia/nemotron-3-super-120b-a12b:free",
+	} {
+		usd, ok, price := EstimateUSD("openrouter", model, 1_000_000, 1_000_000)
+		if !ok {
+			t.Fatalf("reviewed OpenRouter free-route pricing should be known for %s", model)
+		}
+		if usd != 0 || price.InputUSDPerMTok != 0 || price.OutputUSDPerMTok != 0 {
+			t.Fatalf("reviewed OpenRouter free route %s should estimate $0, got usd=%f price=%+v", model, usd, price)
+		}
+		if price.AsOf != "2026-08-14" {
+			t.Fatalf("reviewed OpenRouter free-route date for %s = %q, want 2026-08-14", model, price.AsOf)
+		}
 	}
 
-	if _, known, _ := EstimateUSD("openrouter", "nvidia/nemotron-3.5-lightning:free", 1_000, 1_000); known {
+	if _, known, _ := EstimateUSD("openrouter", "openai/gpt-oss-20b:free", 1_000, 1_000); known {
 		t.Fatal("an unreviewed OpenRouter free route must remain unknown")
 	}
 }

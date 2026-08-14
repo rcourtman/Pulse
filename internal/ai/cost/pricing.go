@@ -69,6 +69,7 @@ var providerPrices = map[string][]modelPrice{
 		flatPriceAsOf("anthropic/claude-opus-4.8", 5.00, 25.00, "2026-07-14"),
 		flatPriceAsOf("anthropic/claude-sonnet-5", 2.00, 10.00, "2026-07-14"),
 		flatPriceAsOf("deepseek/deepseek-v4-flash", 0.09, 0.18, "2026-07-14"),
+		flatPriceAsOf("nvidia/nemotron-3.5-lightning:free", 0, 0, "2026-08-14"),
 		flatPriceAsOf("nvidia/nemotron-3-super-120b-a12b:free", 0, 0, "2026-08-14"),
 	},
 	"gemini": {
