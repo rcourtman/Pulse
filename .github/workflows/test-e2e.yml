@@ -36,9 +36,13 @@ permissions:
 
 jobs:
   tier-selection:
-    name: Validate E2E tier selection
-    runs-on: ubuntu-24.04
+    name: Validate E2E tier selection (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2025]
     steps:
       - name: Checkout code
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
@@ -56,7 +60,9 @@ jobs:
 
       - name: Validate stable/probation project accounting
         working-directory: tests/integration
-        run: npm run check:e2e-tiers
+        run: |
+          npm run test:check:e2e-tiers
+          npm run check:e2e-tiers
 
   e2e:
     name: Playwright Core E2E (shard ${{ matrix.shard }}/8)

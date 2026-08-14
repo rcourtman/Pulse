@@ -91,6 +91,8 @@ cd tests/integration
 npm run check:e2e-tiers
 ```
 
+This shell-free command uses the repository-pinned Playwright JavaScript CLI and is validated on native Unix and Windows runners.
+
 The check uses Playwright's own `--list` output, verifies that stable and
 probation are disjoint and exhaustive across every configured project, rejects
 stale/duplicate/overlapping ledger entries, and protects a minimum stable-tier
