@@ -3,6 +3,7 @@ package ai
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -35,6 +36,63 @@ func TestEvalPromptBuilders(t *testing.T) {
 	userPrompt := buildEvalUserPrompt(signals)
 	if !strings.Contains(userPrompt, "Signal 1") || !strings.Contains(userPrompt, "CPU high") || !strings.Contains(userPrompt, "cpu=99%") {
 		t.Fatalf("unexpected eval user prompt: %s", userPrompt)
+	}
+}
+
+func TestTriageFlagsToDetectedSignalsPreservesModelOwnedCandidates(t *testing.T) {
+	flags := []TriageFlag{
+		{ResourceID: "app-1", ResourceName: "api", ResourceType: "app-container", Category: "health", Severity: "warning", Reason: "health check is unhealthy"},
+		{ResourceID: "node-1", ResourceName: "node", ResourceType: "node", Category: "connectivity", Severity: "critical", Reason: "node is unreachable"},
+		{ResourceID: "vm-1", ResourceName: "db", ResourceType: "vm", Category: "anomaly", Metric: "memory", Severity: "watch", Reason: "memory differs from baseline"},
+		{ResourceID: "storage-1", ResourceName: "pool", ResourceType: "storage", Category: "anomaly", Metric: "usage", Severity: "warning", Reason: "usage growth differs from baseline"},
+		{ResourceID: "misc-1", ResourceName: "misc", ResourceType: "agent", Category: "custom", Severity: "watch", Reason: "custom triage evidence"},
+		{Category: "health", Severity: "warning", Reason: "identity-free evidence must be ignored"},
+	}
+
+	signals := triageFlagsToDetectedSignals(flags)
+	if len(signals) != 5 {
+		t.Fatalf("signal count = %d, want 5: %+v", len(signals), signals)
+	}
+	wantCategories := []string{"reliability", "reliability", "performance", "capacity", "general"}
+	for i, wantCategory := range wantCategories {
+		if signals[i].Category != wantCategory {
+			t.Fatalf("signal %d category = %q, want %q", i, signals[i].Category, wantCategory)
+		}
+		if signals[i].Summary != flags[i].Reason || signals[i].Evidence != flags[i].Reason {
+			t.Fatalf("signal %d lost deterministic evidence: %+v", i, signals[i])
+		}
+		if signals[i].ToolCallID != "deterministic-triage" {
+			t.Fatalf("signal %d source = %q, want deterministic-triage", i, signals[i].ToolCallID)
+		}
+	}
+}
+
+func TestTriageFlagsForDecisionFloorPrioritizesLifecycleEvidence(t *testing.T) {
+	flags := []TriageFlag{
+		{ResourceID: "metric", Category: "performance", Reason: "ordinary threshold crossing"},
+		{ResourceID: "anomaly", Category: "anomaly", Reason: "learned anomaly"},
+		{ResourceID: "health", Category: "health", Reason: "failed health check"},
+		{ResourceID: "backup", Category: "backup", Reason: "backup failed"},
+		{ResourceID: "network", Category: "connectivity", Reason: "endpoint unreachable"},
+	}
+
+	selected := triageFlagsForDecisionFloor(flags)
+	if len(selected) != 4 {
+		t.Fatalf("selected = %+v, want four lifecycle/anomaly candidates", selected)
+	}
+	wantIDs := []string{"health", "backup", "network", "anomaly"}
+	for i, wantID := range wantIDs {
+		if selected[i].ResourceID != wantID {
+			t.Fatalf("selected[%d] = %q, want %q", i, selected[i].ResourceID, wantID)
+		}
+	}
+
+	many := make([]TriageFlag, patrolTriageDecisionFloorMaxCandidates+5)
+	for i := range many {
+		many[i] = TriageFlag{ResourceID: fmt.Sprintf("health-%d", i), Category: "health"}
+	}
+	if got := len(triageFlagsForDecisionFloor(many)); got != patrolTriageDecisionFloorMaxCandidates {
+		t.Fatalf("bounded candidate count = %d, want %d", got, patrolTriageDecisionFloorMaxCandidates)
 	}
 }
 

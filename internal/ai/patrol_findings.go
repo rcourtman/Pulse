@@ -502,9 +502,16 @@ type chatServiceExecutorAccessor interface {
 // patrolFindingCreatorAdapter implements tools.PatrolFindingCreator by wrapping
 // the PatrolService's existing FindingsStore and recordFinding method.
 type patrolFindingCreatorAdapter struct {
-	patrol            *PatrolService
-	snap              patrolRuntimeState
-	objectiveContext  *aicontracts.PatrolObjectiveContext
+	patrol           *PatrolService
+	snap             patrolRuntimeState
+	objectiveContext *aicontracts.PatrolObjectiveContext
+	// findingScope is the resolved caller-requested resource identity set for a
+	// scoped run. The runtime snapshot may also contain related parent/host
+	// resources so the model can reason across dependencies, but those context
+	// resources must not silently join the finding lifecycle. A targeted Watch
+	// of one workload should not refresh an unrelated host finding merely
+	// because Pulse supplied the host as supporting evidence.
+	findingScope      map[string]bool
 	findingsMu        sync.Mutex
 	findings          []*Finding
 	assessments       []PatrolFindingAssessment
@@ -512,6 +519,19 @@ type patrolFindingCreatorAdapter struct {
 	resolvedIDs       []string
 	rejectedCount     int
 	checkedFindings   bool
+}
+
+func (a *patrolFindingCreatorAdapter) setFindingScope(resourceIDs []string) {
+	if a == nil {
+		return
+	}
+	scope := make(map[string]bool, len(resourceIDs))
+	for _, resourceID := range resourceIDs {
+		if resourceID = strings.TrimSpace(resourceID); resourceID != "" {
+			scope[resourceID] = true
+		}
+	}
+	a.findingScope = scope
 }
 
 func newPatrolFindingCreatorAdapterState(p *PatrolService, snap patrolRuntimeState, objectiveContexts ...*aicontracts.PatrolObjectiveContext) *patrolFindingCreatorAdapter {
@@ -527,6 +547,10 @@ func newPatrolFindingCreatorAdapterState(p *PatrolService, snap patrolRuntimeSta
 }
 
 func (a *patrolFindingCreatorAdapter) CreateFinding(input tools.PatrolFindingInput) (string, bool, error) {
+	if !a.findingInCurrentScope(&Finding{ResourceID: input.ResourceID, ResourceName: input.ResourceName}) {
+		return "", false, fmt.Errorf("resource %s is outside the requested patrol finding scope", input.ResourceID)
+	}
+
 	// Map severity
 	var sev FindingSeverity
 	switch strings.ToLower(input.Severity) {
@@ -632,6 +656,9 @@ func (a *patrolFindingCreatorAdapter) CreateFinding(input tools.PatrolFindingInp
 func (a *patrolFindingCreatorAdapter) findingInCurrentScope(finding *Finding) bool {
 	if finding == nil {
 		return false
+	}
+	if len(a.findingScope) > 0 {
+		return a.findingScope[finding.ResourceID] || a.findingScope[finding.ResourceName]
 	}
 	scopedResources := patrolRuntimeKnownResources(a.snap)
 	return len(scopedResources) == 0 || scopedResources[finding.ResourceID] || scopedResources[finding.ResourceName]
@@ -922,11 +949,8 @@ func (a *patrolFindingCreatorAdapter) ResolveFinding(findingID, reason string) e
 		return fmt.Errorf("finding %s not found or already resolved", findingID)
 	}
 
-	scopedResources := patrolRuntimeKnownResources(a.snap)
-	if len(scopedResources) > 0 {
-		if !scopedResources[finding.ResourceID] && !scopedResources[finding.ResourceName] {
-			return fmt.Errorf("finding %s is outside the current patrol scope", findingID)
-		}
+	if !a.findingInCurrentScope(finding) {
+		return fmt.Errorf("finding %s is outside the current patrol scope", findingID)
 	}
 
 	// Event/persistent categories (backup, reliability, security, general)
@@ -1022,13 +1046,12 @@ func (a *patrolFindingCreatorAdapter) GetActiveFindings(resourceID, minSeverity 
 	}
 
 	active := a.patrol.findings.GetActive(minSev)
-	scopedResources := patrolRuntimeKnownResources(a.snap)
 	var result []tools.PatrolFindingInfo
 	for _, f := range active {
 		if resourceID != "" && f.ResourceID != resourceID && f.ResourceName != resourceID {
 			continue
 		}
-		if len(scopedResources) > 0 && !scopedResources[f.ResourceID] && !scopedResources[f.ResourceName] {
+		if !a.findingInCurrentScope(f) {
 			continue
 		}
 		result = append(result, tools.PatrolFindingInfo{

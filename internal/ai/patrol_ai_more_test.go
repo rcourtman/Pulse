@@ -442,6 +442,9 @@ func TestRunAIAnalysis_RetriesWithProviderDerivedSeedBudget(t *testing.T) {
 	mockCS := &mockChatService{
 		executor: executor,
 		executePatrolStreamFunc: func(ctx context.Context, req PatrolExecuteRequest, callback ChatStreamCallback) (*PatrolStreamResponse, error) {
+			if req.SessionID == "patrol-eval" {
+				return &PatrolStreamResponse{Content: "no additional findings"}, nil
+			}
 			promptTokens = append(promptTokens, chat.EstimateTokens(req.Prompt))
 			executionIDs = append(executionIDs, req.ExecutionID)
 			if len(promptTokens) == 1 {

@@ -1518,3 +1518,34 @@ func TestPatrolFindingAssessmentAmbiguousFragmentDoesNotResolve(t *testing.T) {
 		t.Fatal("ambiguous fragment matching two findings must not resolve")
 	}
 }
+
+func TestPatrolFindingAdapterSeparatesRequestedLifecycleScopeFromEvidenceScope(t *testing.T) {
+	state := newPatrolRuntimeState(models.StateSnapshot{
+		VMs: []models.VM{
+			{ID: "vm-requested", Name: "requested", VMID: 501},
+			{ID: "vm-context", Name: "context-only", VMID: 502},
+		},
+	})
+	ps := NewPatrolService(nil, nil)
+	for _, finding := range []*Finding{
+		{ID: "requested-finding", Key: "service-unhealthy", Severity: FindingSeverityWarning, Category: FindingCategoryReliability, ResourceID: "vm-requested", ResourceName: "requested", ResourceType: "vm", Title: "Requested workload unhealthy"},
+		{ID: "context-finding", Key: "updates-pending", Severity: FindingSeverityWarning, Category: FindingCategoryReliability, ResourceID: "vm-context", ResourceName: "context-only", ResourceType: "vm", Title: "Context host updates pending"},
+	} {
+		ps.findings.Add(finding)
+	}
+
+	adapter := newPatrolFindingCreatorAdapterState(ps, state)
+	adapter.setFindingScope([]string{"vm-requested"})
+	active := adapter.GetActiveFindings("", "")
+	if len(active) != 1 || active[0].ID != "requested-finding" {
+		t.Fatalf("active findings = %+v, want only requested-finding", active)
+	}
+
+	if _, _, err := adapter.CreateFinding(tools.PatrolFindingInput{
+		ResourceID: "vm-context", ResourceName: "context-only", ResourceType: "vm",
+		Key: "context-new", Severity: "warning", Category: "reliability", Title: "Context-only issue",
+		Description: "context-only evidence", Evidence: "context-only evidence", Recommendation: "review context-only issue",
+	}); err == nil || !strings.Contains(err.Error(), "outside the requested patrol finding scope") {
+		t.Fatalf("context-only finding must be rejected by lifecycle scope, got %v", err)
+	}
+}

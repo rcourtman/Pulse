@@ -569,6 +569,9 @@ func (p *PatrolService) runAIAnalysisState(ctx context.Context, snap patrolRunti
 		objectiveContext = clonePatrolObjectiveContext(scope.ObjectiveContext)
 	}
 	adapter := newPatrolFindingCreatorAdapterState(p, snap, objectiveContext)
+	if scope != nil {
+		adapter.setFindingScope(scope.ResourceIDs)
+	}
 
 	// Get chat service and set the finding creator on the executor
 	cs := p.aiService.GetChatService()
@@ -903,6 +906,13 @@ func (p *PatrolService) runAIAnalysisState(ctx context.Context, snap patrolRunti
 	sigThresholds := SignalThresholdsFromPatrol(p.thresholds)
 	p.mu.RUnlock()
 	detectedSignals := DetectSignals(signalToolCalls, sigThresholds)
+	// The seed's deterministic triage flags are model evidence, not Pulse-owned
+	// findings. Include them in the existing unmatched-signal evaluation floor
+	// so a provider that spends its main lifecycle turns assessing an unrelated
+	// existing finding cannot silently drop a confirmed scoped symptom. The
+	// bounded follow-up still asks the model to accept or reject each candidate;
+	// Pulse does not manufacture the finding or choose remediation.
+	detectedSignals = append(detectedSignals, triageFlagsToDetectedSignals(triageFlagsForDecisionFloor(triageResult.Flags))...)
 
 	// Merge reachability signals from pre-patrol guest probing
 	reachabilitySignals := DetectReachabilitySignals(guestIntel)
@@ -972,6 +982,82 @@ func (p *PatrolService) runAIAnalysisState(ctx context.Context, snap patrolRunti
 
 	// Findings were already created via tool calls — collect them
 	return buildAnalysisResult(finalContent, collectedToolCalls, inputTokens, outputTokens), nil
+}
+
+const patrolTriageDecisionFloorMaxCandidates = 20
+
+func triageFlagsForDecisionFloor(flags []TriageFlag) []TriageFlag {
+	if len(flags) == 0 {
+		return nil
+	}
+
+	// Direct lifecycle failures are more urgent than learned anomalies. Metric
+	// threshold flags are intentionally excluded: Pulse's normal alerting owns
+	// those simple crossings, and forcing a second model pass would create the
+	// duplicate-alert noise Patrol is designed to avoid.
+	selected := make([]TriageFlag, 0, min(len(flags), patrolTriageDecisionFloorMaxCandidates))
+	appendCategory := func(category string) {
+		for _, flag := range flags {
+			if len(selected) == patrolTriageDecisionFloorMaxCandidates {
+				return
+			}
+			if strings.EqualFold(strings.TrimSpace(flag.Category), category) {
+				selected = append(selected, flag)
+			}
+		}
+	}
+	for _, category := range []string{"health", "backup", "connectivity", "anomaly"} {
+		appendCategory(category)
+	}
+	return selected
+}
+
+func triageFlagsToDetectedSignals(flags []TriageFlag) []DetectedSignal {
+	if len(flags) == 0 {
+		return nil
+	}
+
+	signals := make([]DetectedSignal, 0, len(flags))
+	for _, flag := range flags {
+		resourceID := strings.TrimSpace(flag.ResourceID)
+		resourceName := strings.TrimSpace(flag.ResourceName)
+		if resourceID == "" && resourceName == "" {
+			continue
+		}
+
+		category := strings.ToLower(strings.TrimSpace(flag.Category))
+		switch category {
+		case "performance", "capacity", "backup":
+			// Already canonical finding categories.
+		case "health", "connectivity":
+			category = string(FindingCategoryReliability)
+		case "anomaly":
+			switch strings.ToLower(strings.TrimSpace(flag.Metric)) {
+			case "cpu", "memory":
+				category = string(FindingCategoryPerformance)
+			case "disk", "usage", "storage":
+				category = string(FindingCategoryCapacity)
+			default:
+				category = string(FindingCategoryGeneral)
+			}
+		default:
+			category = string(FindingCategoryGeneral)
+		}
+
+		reason := strings.TrimSpace(flag.Reason)
+		signals = append(signals, DetectedSignal{
+			SignalType:        SignalType("triage_" + strings.ToLower(strings.TrimSpace(flag.Category))),
+			ResourceID:        resourceID,
+			ResourceName:      resourceName,
+			ResourceType:      strings.TrimSpace(flag.ResourceType),
+			SuggestedSeverity: strings.ToLower(strings.TrimSpace(flag.Severity)),
+			Category:          category,
+			Summary:           reason,
+			Evidence:          reason,
+			ToolCallID:        "deterministic-triage",
+		})
+	}
+	return signals
 }
 
 // runAssessmentSweep runs a bounded follow-up model pass that files the

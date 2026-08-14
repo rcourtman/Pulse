@@ -3381,7 +3381,16 @@ friction to each safe investigative step. Scoped Patrol must still
 resolve canonical/source IDs and unique aliases before collection, reject
    ambiguous or unmatched API identities synchronously, persist an error run
    for runtime zero-match races, record requested and effective identities,
-   and summarize only findings within the effective scope. Watch may mutate
+   and summarize only findings within the effective scope. A scoped run keeps
+   two deliberately different boundaries: its effective evidence scope may
+   include related hosts, parents, and dependencies for model reasoning, while
+   its finding-lifecycle scope is the exact resolved caller-requested identity
+   set. `patrol_get_findings`, report, assess, and resolve must not refresh or
+   create a finding on a context-only dependency; the model may cite that
+   dependency as evidence for the requested resource and Pro investigation may
+   expand causally after Watch is durable. This prevents a targeted workload
+   check from surfacing an unrelated host finding merely because the host was
+   included as supporting context. Watch may mutate
    only finding lifecycle state; Pro investigation remains structurally
    read-only. A Watch model-reported finding must not dispatch Pro
    investigation from inside the finding tool call: Pulse first persists the
@@ -6396,6 +6405,18 @@ Docker-service, or other root-cause tool calls after the repeated-restart
 symptom is established; causal analysis belongs to the separate Pro
 investigation track. Quiet triage is not a deterministic replacement for
 model-owned assessment.
+High-confidence deterministic lifecycle flags must nevertheless retain a
+model-owned decision opportunity before Watch completes. Health, backup,
+connectivity, and learned-anomaly candidates join the existing unmatched signal
+evaluation floor after the main agentic pass; ordinary CPU, memory, and disk
+threshold crossings stay with Pulse alerting and do not trigger a duplicate
+Patrol decision pass. Candidates already covered by a model-authored finding
+are skipped, while at most twenty remaining candidates, prioritized with direct
+lifecycle failures before learned anomalies, receive one bounded evidence-only
+model pass. Pulse must not translate a flag directly into a finding or choose
+remediation; this floor exists only so unrelated existing-finding lifecycle
+work or a provider's sequential tool calls cannot silently consume the sole
+decision opportunity for a confirmed scoped symptom.
 Model-authored structured findings remain concise for continuous operation:
 description uses at most three short sentences, impact one sentence, evidence
 three concrete facts, and recommendation two short sentences, without
@@ -6411,8 +6432,9 @@ receive a tool error and no partial finding may be persisted.
 During a first-party Patrol run, the general model-facing
 `pulse_alerts(action=findings)` spelling is a scoped alias for the same active
 finding snapshot as `patrol_get_findings` and satisfies the duplicate-check
-precondition. The adapter may return only findings inside the run's effective
-resource scope, never dismissed history or out-of-scope records. This keeps
+precondition. The adapter may return only findings inside the run's resolved
+caller-requested finding scope, never dismissed history or context-only
+dependency records from the broader effective evidence scope. This keeps
 ordinary model tool choice composable without weakening the lifecycle gate.
 The provider schema is also the source of truth for the required-argument
 checklist rendered into Patrol's normal and bounded final-decision prompts.
