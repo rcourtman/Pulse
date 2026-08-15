@@ -4218,9 +4218,14 @@ receive at most 1,024, and the remaining allowance is projected on every
 provider request without aborting the final decision when prior usage runs
 high. Providers with native output limits enforce `max_tokens`; local Codex and
 Claude subscription transports additionally receive a low reasoning-effort
-control. This economy posture is detection-only. Interactive Assistant and Pro
-investigation retain their normal reasoning depth and model-led diagnostic
-freedom. Non-interactive tool-turn prose remains available in provider context
+control. Ollama maps that same provider-neutral hint onto its native `think`
+field: low effort selects the fast non-thinking path for hybrid-thinking
+models, GPT-OSS receives its required named `low` level, and an absent hint
+omits the field so the model keeps its own default. The brief Patrol tool-call
+preflight uses low effort because it verifies protocol transport rather than
+diagnostic depth. This economy posture is detection-only. Interactive
+Assistant and Pro investigation retain their normal reasoning depth and
+model-led diagnostic freedom. Non-interactive tool-turn prose remains available in provider context
 but is not concatenated into the persisted Patrol run analysis; the bounded
 terminal summary is the sole operator conclusion.
 

@@ -284,7 +284,8 @@ func (s *Service) runPatrolToolPreflight(ctx context.Context, providerName, mode
 				},
 			},
 		},
-		MaxTokens: 256,
+		MaxTokens:       256,
+		ReasoningEffort: providers.ReasoningEffortLow,
 	}
 	if parsedProvider == config.AIProviderGemini {
 		req.ToolChoice = &providers.ToolChoice{Type: providers.ToolChoiceRequired}

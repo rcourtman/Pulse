@@ -113,8 +113,12 @@ type ollamaRequest struct {
 	Model    string          `json:"model"`
 	Messages []ollamaMessage `json:"messages"`
 	Stream   bool            `json:"stream"`
-	Options  *ollamaOptions  `json:"options,omitempty"`
-	Tools    []ollamaTool    `json:"tools,omitempty"` // Tool definitions for function calling
+	// Think is separate from sampling options in Ollama's native API. Leave it
+	// absent when callers do not express a reasoning-effort preference so the
+	// selected model keeps its own default behavior.
+	Think   any            `json:"think,omitempty"`
+	Options *ollamaOptions `json:"options,omitempty"`
+	Tools   []ollamaTool   `json:"tools,omitempty"` // Tool definitions for function calling
 	// KeepAlive controls how long Ollama keeps the model loaded after the
 	// request completes. Ollama's default is 5 minutes; without this field
 	// every Pulse Chat call refreshes that 5-minute window, so a single
@@ -124,6 +128,24 @@ type ollamaRequest struct {
 	// after a Patrol burst or one-shot analysis ends. Accepts duration
 	// strings like "30s", "5m", or "0" for immediate unload.
 	KeepAlive any `json:"keep_alive,omitempty"`
+}
+
+// ollamaThinkingForRequest translates Pulse's provider-neutral reasoning hint
+// into Ollama's native think control. For hybrid-thinking models, low effort is
+// the explicit fast/non-thinking path; medium and high retain thinking. GPT-OSS
+// is the exception documented by Ollama: it accepts named effort levels and
+// does not support disabling thinking entirely.
+func ollamaThinkingForRequest(model string, effort ReasoningEffort) any {
+	if !effort.Valid() || effort == "" {
+		return nil
+	}
+	if strings.Contains(strings.ToLower(model), "gpt-oss") {
+		return string(effort)
+	}
+	if effort == ReasoningEffortLow {
+		return false
+	}
+	return true
 }
 
 func ollamaKeepAliveRequestValue(value string) any {
@@ -278,6 +300,7 @@ func (c *OllamaClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 		Model:     model,
 		Messages:  messages,
 		Stream:    false, // Non-streaming for now
+		Think:     ollamaThinkingForRequest(model, req.ReasoningEffort),
 		KeepAlive: ollamaKeepAliveRequestValue(c.keepAlive),
 	}
 
@@ -444,6 +467,7 @@ func (c *OllamaClient) ChatStream(ctx context.Context, req ChatRequest, callback
 		Model:     model,
 		Messages:  messages,
 		Stream:    true, // Enable streaming
+		Think:     ollamaThinkingForRequest(model, req.ReasoningEffort),
 		KeepAlive: ollamaKeepAliveRequestValue(c.keepAlive),
 	}
 

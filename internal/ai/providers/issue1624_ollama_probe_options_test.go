@@ -130,6 +130,76 @@ func TestIssue1624OllamaUnpinnedZeroTemperatureStaysServerDefault(t *testing.T) 
 	}
 }
 
+func TestOllamaReasoningEffortMapsToNativeThinkControl(t *testing.T) {
+	tests := []struct {
+		name   string
+		model  string
+		effort ReasoningEffort
+		want   any
+	}{
+		{name: "model default remains absent", model: "qwen3:8b", want: nil},
+		{name: "qwen low disables thinking", model: "qwen3:8b", effort: ReasoningEffortLow, want: false},
+		{name: "qwen medium retains thinking", model: "qwen3:8b", effort: ReasoningEffortMedium, want: true},
+		{name: "qwen high retains thinking", model: "qwen3:8b", effort: ReasoningEffortHigh, want: true},
+		{name: "gpt oss low uses named level", model: "gpt-oss:20b", effort: ReasoningEffortLow, want: "low"},
+		{name: "gpt oss high uses named level", model: "gpt-oss:20b", effort: ReasoningEffortHigh, want: "high"},
+		{name: "invalid hint stays absent", model: "qwen3:8b", effort: ReasoningEffort("unbounded"), want: nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := ollamaThinkingForRequest(tt.model, tt.effort); got != tt.want {
+				t.Fatalf("ollamaThinkingForRequest(%q, %q) = %#v, want %#v", tt.model, tt.effort, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestOllamaReasoningEffortIsForwardedForChatAndStream(t *testing.T) {
+	t.Run("chat", func(t *testing.T) {
+		var captured []byte
+		server := newCapturingOllamaServer(t,
+			`{"message":{"role":"assistant","content":"ok"},"done":true,"done_reason":"stop"}`,
+			&captured)
+		defer server.Close()
+		client, err := NewOllamaClient("qwen3:8b", server.URL, "", "", 30*time.Second)
+		if err != nil {
+			t.Fatalf("NewOllamaClient: %v", err)
+		}
+		if _, err := client.Chat(context.Background(), ChatRequest{
+			Messages:        []Message{{Role: "user", Content: "probe"}},
+			ReasoningEffort: ReasoningEffortLow,
+		}); err != nil {
+			t.Fatalf("Chat: %v", err)
+		}
+		request := decodeCapturedOllamaRequest(t, captured)
+		if got, present := request["think"]; !present || got != false {
+			t.Fatalf("think = %#v (present=%v), want explicit false", got, present)
+		}
+	})
+
+	t.Run("stream", func(t *testing.T) {
+		var captured []byte
+		server := newCapturingOllamaServer(t,
+			`{"message":{"role":"assistant","content":"ok"},"done":true,"done_reason":"stop"}`+"\n",
+			&captured)
+		defer server.Close()
+		client, err := NewOllamaClient("gpt-oss:20b", server.URL, "", "", 30*time.Second)
+		if err != nil {
+			t.Fatalf("NewOllamaClient: %v", err)
+		}
+		if err := client.ChatStream(context.Background(), ChatRequest{
+			Messages:        []Message{{Role: "user", Content: "probe"}},
+			ReasoningEffort: ReasoningEffortLow,
+		}, func(StreamEvent) {}); err != nil {
+			t.Fatalf("ChatStream: %v", err)
+		}
+		request := decodeCapturedOllamaRequest(t, captured)
+		if got := request["think"]; got != "low" {
+			t.Fatalf("think = %#v, want %q", got, "low")
+		}
+	})
+}
+
 func TestIssue1624OllamaStreamSurfacesLengthDoneReason(t *testing.T) {
 	var captured []byte
 	server := newCapturingOllamaServer(t,
