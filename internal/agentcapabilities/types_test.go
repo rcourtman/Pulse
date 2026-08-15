@@ -2,9 +2,30 @@ package agentcapabilities
 
 import (
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 )
+
+func TestPatrolScopedDetectionDefersOptionalDeepReadsToInvestigation(t *testing.T) {
+	detection, ok := PatrolDetectionToolNamesForResourceTypes([]string{"vm"})
+	if !ok {
+		t.Fatal("vm scope was not recognized")
+	}
+	if slices.Contains(detection, PulseReadToolName) {
+		t.Fatalf("Watch detection surface included optional agent-routed deep read: %v", detection)
+	}
+	for _, required := range []string{PulseQueryToolName, PulseMetricsToolName, PatrolReportFindingToolName, PatrolAssessFindingToolName} {
+		if !slices.Contains(detection, required) {
+			t.Fatalf("VM detection surface missing %q: %v", required, detection)
+		}
+	}
+
+	investigation, ok := PatrolInvestigationToolNamesForResourceTypes([]string{"vm"})
+	if !ok || !slices.Contains(investigation, PulseReadToolName) {
+		t.Fatalf("VM investigation surface lost optional deep-read preference: %v, ok=%v", investigation, ok)
+	}
+}
 
 func TestDefaultApprovalPolicyDescriptionUsesSharedPolicyVocabulary(t *testing.T) {
 	cases := []struct {

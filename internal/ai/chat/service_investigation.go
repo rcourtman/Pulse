@@ -256,9 +256,46 @@ func restrictInvestigationProviderToolsForResourceType(providerTools []providers
 	if !ok {
 		return append([]providers.Tool(nil), providerTools...), nil
 	}
-	filtered, err := restrictPatrolProviderTools(providerTools, scopedNames)
-	if err != nil {
-		return nil, fmt.Errorf("failed to project scoped investigation tools: %w", err)
+
+	// The typed map is a least-manifest ceiling, not a claim that every
+	// deployment has every optional evidence adapter. In particular,
+	// pulse_read exists only when an agent-routed or native log adapter is
+	// available. Intersect evidence with the already-governed runtime profile,
+	// while keeping the investigation-owned proposal boundary mandatory.
+	scoped := make(map[string]bool, len(scopedNames))
+	for _, name := range scopedNames {
+		name = strings.TrimSpace(name)
+		if name == "" {
+			return nil, fmt.Errorf("failed to project scoped investigation tools: scoped tool name must not be empty")
+		}
+		scoped[name] = true
+	}
+
+	filtered := make([]providers.Tool, 0, len(scoped))
+	present := make(map[string]bool, len(scoped))
+	evidenceCount := 0
+	for _, tool := range providerTools {
+		name := strings.TrimSpace(tool.Name)
+		if !scoped[name] {
+			continue
+		}
+		filtered = append(filtered, tool)
+		present[name] = true
+		if isInvestigationEvidenceTool(name) {
+			evidenceCount++
+		}
+	}
+
+	for _, required := range []string{
+		agentcapabilities.PatrolActionCapabilitiesToolName,
+		agentcapabilities.PatrolProposeActionToolName,
+	} {
+		if !present[required] {
+			return nil, fmt.Errorf("failed to project scoped investigation tools: required tool unavailable after profile projection: %s", required)
+		}
+	}
+	if evidenceCount == 0 {
+		return nil, fmt.Errorf("failed to project scoped investigation tools: no evidence tool is available for resource type %q", strings.TrimSpace(resourceType))
 	}
 	return filtered, nil
 }

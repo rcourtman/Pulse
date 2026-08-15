@@ -133,12 +133,15 @@ func TestInvestigationEvidenceBudgetHelpers(t *testing.T) {
 	if isInvestigationEvidenceTool(agentcapabilities.PatrolProposeActionToolName) {
 		t.Fatal("terminal proposal must not consume evidence budget")
 	}
+	if isInvestigationEvidenceTool(agentcapabilities.PatrolActionCapabilitiesToolName) {
+		t.Fatal("capability lookup must not count as infrastructure evidence")
+	}
 	if got := investigationEvidenceCheckpoint(15); got != 8 {
 		t.Fatalf("checkpoint(15) = %d, want 8", got)
 	}
 	evidenceOnly := investigationEvidenceTools(available)
-	if len(evidenceOnly) != 2 || evidenceOnly[0].Name != agentcapabilities.PulseQueryToolName || evidenceOnly[1].Name != agentcapabilities.PatrolActionCapabilitiesToolName {
-		t.Fatalf("evidence tools = %+v, want proposal excluded", evidenceOnly)
+	if len(evidenceOnly) != 1 || evidenceOnly[0].Name != agentcapabilities.PulseQueryToolName {
+		t.Fatalf("evidence tools = %+v, want only infrastructure evidence", evidenceOnly)
 	}
 }
 

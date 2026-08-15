@@ -65,7 +65,9 @@ verification remain core-owned and fail closed.
 An investigation cannot complete or submit a typed action proposal before the
 model has made at least one structured call to an advertised evidence tool.
 Until then, core withholds proposal authority while leaving evidence-tool
-selection model-owned. If the provider returns prose without a tool call, core
+selection model-owned. The side-effect-free action-capability lookup is planning
+metadata, not infrastructure evidence: it neither consumes the evidence budget
+nor satisfies this grounding gate. If the provider returns prose without a tool call, core
 must discard that prose as a durable conclusion and allow one bounded repair
 turn that requires a structured call from the same advertised evidence
 manifest. The repair is generic and carries no platform-, incident-, or
@@ -7374,10 +7376,12 @@ core-satisfied active-finding read. An explicitly scoped Watch whose exact
 resource identity resolves to known canonical resource types receives the
 least evidence manifest for those types plus the detection-owned finding
 lifecycle. `internal/agentcapabilities/patrol_scope_tools.go` owns that mapping:
-generic canonical query/read operations remain available for evidence-led
-cross-resource causality, while unrelated subsystem schemas are removed. The
-mapping consumes only caller-supplied or core-resolved typed scope, never prompt
-text. An empty or unknown type keeps the full governed profile instead of
+canonical query and relevant subsystem reads remain available for evidence-led
+cross-resource causality, while unrelated subsystem schemas are removed. Watch
+does not receive the optional agent-routed `pulse_read` deep-inspection schema;
+root-cause log, file, and bounded exec evidence belongs to the separate finding
+investigation. The mapping consumes only caller-supplied or core-resolved typed
+scope, never prompt text. An empty or unknown type keeps the full governed profile instead of
 guessing and silently blinding Patrol; the allowlist is applied after profile
 projection and therefore can remove tools but cannot add authority.
 
@@ -7447,7 +7451,13 @@ Core uses the same scoped evidence mapping to project generic query/read tools,
 the relevant subsystem evidence tool, and only the investigation-owned
 capability lookup and typed proposal sink. The type is not model-authored and
 cannot add a tool outside the already-projected investigation profile. Unknown
-types keep the full safe investigation profile. This keeps focused Patrol
+types keep the full safe investigation profile. Known types intersect their
+evidence ceiling with tools that are actually available after profile
+projection, so a deployment without an agent-routed or native `pulse_read`
+adapter still investigates from canonical query and subsystem evidence. At
+least one structured evidence tool plus both the capability lookup and proposal
+sink remain mandatory; missing proposal authority or a zero-evidence manifest
+fails before inference. This keeps focused Patrol
 usable with smaller local models without replacing model judgment with a
 diagnostic script or weakening proposal, policy, approval, execution, or
 verification boundaries.

@@ -43,7 +43,12 @@ func applyInvestigationOutputLimitRecoveryRequest(req *providers.ChatRequest, pr
 }
 
 func isInvestigationEvidenceTool(name string) bool {
-	return strings.TrimSpace(name) != agentcapabilities.PatrolProposeActionToolName
+	switch strings.TrimSpace(name) {
+	case "", agentcapabilities.PatrolProposeActionToolName, agentcapabilities.PatrolActionCapabilitiesToolName:
+		return false
+	default:
+		return true
+	}
 }
 
 func investigationEvidenceTools(available []providers.Tool) []providers.Tool {

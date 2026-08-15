@@ -2,6 +2,7 @@ package chat
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
@@ -50,6 +51,64 @@ func TestRestrictInvestigationProviderToolsForResourceType(t *testing.T) {
 	unchanged[0].Name = "mutated"
 	if providerTools[0].Name == "mutated" {
 		t.Fatal("unknown-type fallback aliased the provider manifest")
+	}
+}
+
+func TestRestrictInvestigationProviderToolsAllowsUnavailableOptionalDeepRead(t *testing.T) {
+	providerTools := []providers.Tool{
+		{Name: agentcapabilities.PulseQueryToolName},
+		{Name: agentcapabilities.PulseMetricsToolName},
+		{Name: agentcapabilities.PatrolActionCapabilitiesToolName},
+		{Name: agentcapabilities.PatrolProposeActionToolName},
+	}
+	filtered, err := restrictInvestigationProviderToolsForResourceType(providerTools, "vm")
+	if err != nil {
+		t.Fatalf("restrict VM investigation without agent deep-read adapter: %v", err)
+	}
+	var names []string
+	for _, tool := range filtered {
+		names = append(names, tool.Name)
+	}
+	want := []string{
+		agentcapabilities.PulseQueryToolName,
+		agentcapabilities.PulseMetricsToolName,
+		agentcapabilities.PatrolActionCapabilitiesToolName,
+		agentcapabilities.PatrolProposeActionToolName,
+	}
+	if !reflect.DeepEqual(names, want) {
+		t.Fatalf("VM investigation tools = %v, want %v", names, want)
+	}
+}
+
+func TestRestrictInvestigationProviderToolsRequiresEvidenceAndProposalBoundary(t *testing.T) {
+	tests := []struct {
+		name  string
+		tools []providers.Tool
+		want  string
+	}{
+		{
+			name: "missing proposal sink",
+			tools: []providers.Tool{
+				{Name: agentcapabilities.PulseQueryToolName},
+				{Name: agentcapabilities.PatrolActionCapabilitiesToolName},
+			},
+			want: agentcapabilities.PatrolProposeActionToolName,
+		},
+		{
+			name: "missing evidence",
+			tools: []providers.Tool{
+				{Name: agentcapabilities.PatrolActionCapabilitiesToolName},
+				{Name: agentcapabilities.PatrolProposeActionToolName},
+			},
+			want: "no evidence tool",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, err := restrictInvestigationProviderToolsForResourceType(tc.tools, "vm"); err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("error = %v, want %q", err, tc.want)
+			}
+		})
 	}
 }
 

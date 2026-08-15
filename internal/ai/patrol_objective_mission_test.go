@@ -70,7 +70,6 @@ func TestScopedPatrolUsesCoreResolvedResourceTypeForLeastManifest(t *testing.T) 
 	allowed := patrolAllowedToolNamesForScope(scope)
 	for _, required := range []string{
 		agentcapabilities.PulseQueryToolName,
-		agentcapabilities.PulseReadToolName,
 		agentcapabilities.PulseDockerToolName,
 		agentcapabilities.PatrolReportFindingToolName,
 	} {
@@ -79,6 +78,7 @@ func TestScopedPatrolUsesCoreResolvedResourceTypeForLeastManifest(t *testing.T) 
 		}
 	}
 	for _, forbidden := range []string{
+		agentcapabilities.PulseReadToolName,
 		agentcapabilities.PulseStorageToolName,
 		agentcapabilities.PulseKubernetesToolName,
 		agentcapabilities.PulsePMGToolName,

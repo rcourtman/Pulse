@@ -12,14 +12,21 @@ import "strings"
 // investigation can still follow canonical topology and inspect a causal
 // dependency without receiving every subsystem-specific schema up front.
 func PatrolEvidenceToolNamesForResourceTypes(resourceTypes []string) ([]string, bool) {
+	return patrolEvidenceToolNamesForResourceTypes(resourceTypes, true)
+}
+
+func patrolEvidenceToolNamesForResourceTypes(resourceTypes []string, includeDeepRead bool) ([]string, bool) {
 	if len(resourceTypes) == 0 {
 		return nil, false
 	}
 
-	names := []string{PulseQueryToolName, PulseReadToolName}
+	names := []string{PulseQueryToolName}
 	seen := map[string]bool{
 		PulseQueryToolName: true,
-		PulseReadToolName:  true,
+	}
+	if includeDeepRead {
+		names = append(names, PulseReadToolName)
+		seen[PulseReadToolName] = true
 	}
 	add := func(name string) {
 		if !seen[name] {
@@ -63,7 +70,10 @@ func PatrolEvidenceToolNamesForResourceTypes(resourceTypes []string) ([]string, 
 // surface with the finding lifecycle owned by the detection profile. It may
 // only reduce the already-governed profile manifest.
 func PatrolDetectionToolNamesForResourceTypes(resourceTypes []string) ([]string, bool) {
-	names, ok := PatrolEvidenceToolNamesForResourceTypes(resourceTypes)
+	// Watch owns symptom detection from the canonical seed and provider reads.
+	// Agent-routed file/log/exec inspection belongs to the separate finding
+	// investigation, where runtime availability can be evaluated explicitly.
+	names, ok := patrolEvidenceToolNamesForResourceTypes(resourceTypes, false)
 	if !ok {
 		return nil, false
 	}

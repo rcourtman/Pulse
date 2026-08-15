@@ -57,10 +57,11 @@ func Test_w0716_budget_IsInvestigationEvidenceTool(t *testing.T) {
 	}{
 		{name: "read-only query consumes evidence budget", in: agentcapabilities.PulseQueryToolName, want: true},
 		{name: "arbitrary evidence tool consumes budget", in: "pulse_read", want: true},
+		{name: "capability lookup is planning not evidence", in: agentcapabilities.PatrolActionCapabilitiesToolName, want: false},
 		{name: "terminal proposal does not consume budget", in: agentcapabilities.PatrolProposeActionToolName, want: false},
 		{name: "whitespace-padded proposal still not evidence", in: "  " + agentcapabilities.PatrolProposeActionToolName + "\t", want: false},
-		{name: "empty name treated as evidence tool", in: "", want: true},
-		{name: "only-whitespace name treated as evidence tool", in: "   ", want: true},
+		{name: "empty name is not evidence", in: "", want: false},
+		{name: "only-whitespace name is not evidence", in: "   ", want: false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
