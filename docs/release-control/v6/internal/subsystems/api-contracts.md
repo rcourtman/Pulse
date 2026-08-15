@@ -4159,9 +4159,12 @@ relevant subsystem evidence surface, and the investigation-owned capability
 lookup/proposal tools. It is not a client-selectable execution profile, cannot
 add authority, and is never inferred from prompt text. Empty or unknown types
 retain the full governed investigation profile so an additive resource kind
-cannot silently lose evidence access. Scoped Watch uses the same shared typed
-mapping after exact canonical scope resolution, with detection lifecycle tools
-composed separately from investigation proposal tools.
+cannot silently lose evidence access. That full-profile fallback still fails
+before inference unless it contains at least one evidence tool, the
+side-effect-free capability lookup, and the typed proposal sink; additive type
+compatibility does not bypass the investigation boundary. Scoped Watch uses the
+same shared typed mapping after exact canonical scope resolution, with detection
+lifecycle tools composed separately from investigation proposal tools.
 
 Unified Agent connections now carry agent-authored lifecycle evidence through
 the shared host model and `/api/connections` contract. The payload may include
@@ -9516,7 +9519,9 @@ investigation boundary. Investigations carry their finding `resource_type` over
 the public Pulse/Enterprise orchestrator dependency contract and use the companion
 investigation projection. That projection intersects optional evidence tools
 with the runtime-available governed profile, while requiring at least one
-evidence tool plus the capability lookup and typed proposal sink. The bridge's
+evidence tool plus the capability lookup and typed proposal sink. Unknown and
+empty resource types retain the full governed profile but undergo the same
+mandatory-tool validation before inference. The bridge's
 `evidence_calls` value remains attempted-call budget accounting; the core chat
 runtime separately requires a successful evidence result before it exposes the
 proposal sink or accepts a completed investigation. Failed and policy-blocked

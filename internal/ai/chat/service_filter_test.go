@@ -82,12 +82,14 @@ func TestRestrictInvestigationProviderToolsAllowsUnavailableOptionalDeepRead(t *
 
 func TestRestrictInvestigationProviderToolsRequiresEvidenceAndProposalBoundary(t *testing.T) {
 	tests := []struct {
-		name  string
-		tools []providers.Tool
-		want  string
+		name         string
+		resourceType string
+		tools        []providers.Tool
+		want         string
 	}{
 		{
-			name: "missing proposal sink",
+			name:         "known type missing proposal sink",
+			resourceType: "vm",
 			tools: []providers.Tool{
 				{Name: agentcapabilities.PulseQueryToolName},
 				{Name: agentcapabilities.PatrolActionCapabilitiesToolName},
@@ -95,8 +97,55 @@ func TestRestrictInvestigationProviderToolsRequiresEvidenceAndProposalBoundary(t
 			want: agentcapabilities.PatrolProposeActionToolName,
 		},
 		{
-			name: "missing evidence",
+			name:         "known type missing capability lookup",
+			resourceType: "vm",
 			tools: []providers.Tool{
+				{Name: agentcapabilities.PulseQueryToolName},
+				{Name: agentcapabilities.PatrolProposeActionToolName},
+			},
+			want: agentcapabilities.PatrolActionCapabilitiesToolName,
+		},
+		{
+			name:         "known type missing evidence",
+			resourceType: "vm",
+			tools: []providers.Tool{
+				{Name: agentcapabilities.PatrolActionCapabilitiesToolName},
+				{Name: agentcapabilities.PatrolProposeActionToolName},
+			},
+			want: "no evidence tool",
+		},
+		{
+			name:         "unknown type missing proposal sink",
+			resourceType: "future-resource-kind",
+			tools: []providers.Tool{
+				{Name: agentcapabilities.PulseKnowledgeToolName},
+				{Name: agentcapabilities.PatrolActionCapabilitiesToolName},
+			},
+			want: agentcapabilities.PatrolProposeActionToolName,
+		},
+		{
+			name:         "empty type missing proposal sink",
+			resourceType: "",
+			tools: []providers.Tool{
+				{Name: agentcapabilities.PulseKnowledgeToolName},
+				{Name: agentcapabilities.PatrolActionCapabilitiesToolName},
+			},
+			want: agentcapabilities.PatrolProposeActionToolName,
+		},
+		{
+			name:         "unknown type missing capability lookup",
+			resourceType: "future-resource-kind",
+			tools: []providers.Tool{
+				{Name: agentcapabilities.PulseKnowledgeToolName},
+				{Name: agentcapabilities.PatrolProposeActionToolName},
+			},
+			want: agentcapabilities.PatrolActionCapabilitiesToolName,
+		},
+		{
+			name:         "unknown type missing evidence",
+			resourceType: "future-resource-kind",
+			tools: []providers.Tool{
+				{Name: ""},
 				{Name: agentcapabilities.PatrolActionCapabilitiesToolName},
 				{Name: agentcapabilities.PatrolProposeActionToolName},
 			},
@@ -105,7 +154,7 @@ func TestRestrictInvestigationProviderToolsRequiresEvidenceAndProposalBoundary(t
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			if _, err := restrictInvestigationProviderToolsForResourceType(tc.tools, "vm"); err == nil || !strings.Contains(err.Error(), tc.want) {
+			if _, err := restrictInvestigationProviderToolsForResourceType(tc.tools, tc.resourceType); err == nil || !strings.Contains(err.Error(), tc.want) {
 				t.Fatalf("error = %v, want %q", err, tc.want)
 			}
 		})

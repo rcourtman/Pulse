@@ -7457,13 +7457,16 @@ Core uses the same scoped evidence mapping to project generic query/read tools,
 the relevant subsystem evidence tool, and only the investigation-owned
 capability lookup and typed proposal sink. The type is not model-authored and
 cannot add a tool outside the already-projected investigation profile. Unknown
-types keep the full safe investigation profile. Known types intersect their
-evidence ceiling with tools that are actually available after profile
+types keep the full safe investigation profile, but that fallback is not a
+validation bypass: it must still contain real evidence, the capability lookup,
+and the proposal sink before inference. Known types intersect their evidence
+ceiling with tools that are actually available after profile
 projection, so a deployment without an agent-routed or native `pulse_read`
 adapter still investigates from canonical query and subsystem evidence. At
 least one structured evidence tool plus both the capability lookup and proposal
-sink remain mandatory; missing proposal authority or a zero-evidence manifest
-fails before inference. Runtime completion and proposal authority additionally
+sink remain mandatory for both scoped and full-profile paths; missing proposal
+authority or a zero-evidence manifest fails before inference. Runtime
+completion and proposal authority additionally
 require at least one of those evidence calls to succeed; attempted calls remain
 visible for budget accounting and forensics, but failed or blocked results are
 not grounding. This keeps focused Patrol

@@ -254,7 +254,15 @@ func (s *Service) ExecuteInvestigationStream(ctx context.Context, req Investigat
 func restrictInvestigationProviderToolsForResourceType(providerTools []providers.Tool, resourceType string) ([]providers.Tool, error) {
 	scopedNames, ok := agentcapabilities.PatrolInvestigationToolNamesForResourceTypes([]string{resourceType})
 	if !ok {
-		return append([]providers.Tool(nil), providerTools...), nil
+		// Unknown and additive resource kinds retain the full already-governed
+		// profile so they do not silently lose evidence access. They must still
+		// satisfy the same investigation boundary as a typed projection before
+		// inference begins.
+		filtered := append([]providers.Tool(nil), providerTools...)
+		if err := validateInvestigationProviderTools(filtered, resourceType); err != nil {
+			return nil, err
+		}
+		return filtered, nil
 	}
 
 	// The typed map is a least-manifest ceiling, not a claim that every
@@ -272,32 +280,44 @@ func restrictInvestigationProviderToolsForResourceType(providerTools []providers
 	}
 
 	filtered := make([]providers.Tool, 0, len(scoped))
-	present := make(map[string]bool, len(scoped))
-	evidenceCount := 0
 	for _, tool := range providerTools {
 		name := strings.TrimSpace(tool.Name)
 		if !scoped[name] {
 			continue
 		}
 		filtered = append(filtered, tool)
+	}
+	if err := validateInvestigationProviderTools(filtered, resourceType); err != nil {
+		return nil, err
+	}
+	return filtered, nil
+}
+
+func validateInvestigationProviderTools(providerTools []providers.Tool, resourceType string) error {
+	present := make(map[string]bool, len(providerTools))
+	evidenceCount := 0
+	for _, tool := range providerTools {
+		name := strings.TrimSpace(tool.Name)
+		if name == "" {
+			continue
+		}
 		present[name] = true
 		if isInvestigationEvidenceTool(name) {
 			evidenceCount++
 		}
 	}
-
 	for _, required := range []string{
 		agentcapabilities.PatrolActionCapabilitiesToolName,
 		agentcapabilities.PatrolProposeActionToolName,
 	} {
 		if !present[required] {
-			return nil, fmt.Errorf("failed to project scoped investigation tools: required tool unavailable after profile projection: %s", required)
+			return fmt.Errorf("failed to project investigation tools: required tool unavailable after profile projection: %s", required)
 		}
 	}
 	if evidenceCount == 0 {
-		return nil, fmt.Errorf("failed to project scoped investigation tools: no evidence tool is available for resource type %q", strings.TrimSpace(resourceType))
+		return fmt.Errorf("failed to project investigation tools: no evidence tool is available for resource type %q", strings.TrimSpace(resourceType))
 	}
-	return filtered, nil
+	return nil
 }
 
 // ListInvestigationTools names the tools an investigation run offers,
