@@ -399,12 +399,6 @@ func (p *PatrolService) runPatrolWithTriggerStart(ctx context.Context, trigger T
 	}
 	defer p.endRun()
 
-	// Check if circuit breaker allows LLM calls.
-	llmAllowed := breaker == nil || breaker.Allow()
-	if !llmAllowed {
-		log.Warn().Msg("AI Patrol: Circuit breaker is open (LLM calls blocked)")
-	}
-
 	start := runStart.startedAt
 	runID := runStart.id
 	executionID := uuid.NewString()
@@ -571,8 +565,16 @@ func (p *PatrolService) runPatrolWithTriggerStart(ctx context.Context, trigger T
 		}
 	}
 
-	// Determine if we can run LLM analysis (requires AI service + circuit breaker not open)
+	// Acquire a breaker probe only when this run is actually ready to call the
+	// provider. Early collection/scope exits must not strand a half-open probe.
 	aiServiceEnabled := p.aiService != nil && p.aiService.IsEnabled()
+	llmAllowed := true
+	if aiServiceEnabled && breaker != nil {
+		llmAllowed = breaker.Allow()
+	}
+	if !llmAllowed {
+		log.Warn().Msg("AI Patrol: Circuit breaker is open (LLM calls blocked)")
+	}
 	canRunLLM := aiServiceEnabled && llmAllowed
 
 	// Check if we can run LLM analysis (AI-only patrol)
@@ -809,17 +811,7 @@ func (p *PatrolService) runPatrolWithTriggerStart(ctx context.Context, trigger T
 	// canRunLLM is true only when AI is enabled, licensed, AND breaker allowed.
 	// Use error categorization so non-transient errors (auth failures, insufficient
 	// credits) don't trip the breaker — those won't be fixed by waiting.
-	if breaker != nil && canRunLLM {
-		if runStats.errors > 0 {
-			aiErr := runStats.lastAIError
-			if aiErr == nil {
-				aiErr = fmt.Errorf("patrol completed with %d errors", runStats.errors)
-			}
-			breaker.RecordFailureWithCategory(aiErr, circuit.CategorizeError(aiErr))
-		} else {
-			breaker.RecordSuccess()
-		}
-	}
+	recordPatrolCircuitResult(breaker, canRunLLM, runStats.errors, runStats.lastAIError)
 
 	// Add to history store (handles persistence automatically)
 	p.runHistoryStore.Add(runRecord)
@@ -951,12 +943,6 @@ func (p *PatrolService) runScopedPatrolWithStart(ctx context.Context, scope Patr
 	}
 	defer p.endRun()
 
-	// Check if circuit breaker allows LLM calls.
-	llmAllowed := breaker == nil || breaker.Allow()
-	if !llmAllowed {
-		log.Warn().Msg("AI Patrol: Circuit breaker is open for scoped patrol (LLM calls blocked)")
-	}
-
 	start := runStart.startedAt
 	runID := runStart.id
 	executionID := uuid.NewString()
@@ -979,6 +965,7 @@ func (p *PatrolService) runScopedPatrolWithStart(ctx context.Context, scope Patr
 		triageSkippedLLM  bool
 		findingIDs        []string
 		errors            int
+		lastAIError       error
 		errorSummary      string
 		errorDetail       string
 		aiAnalysis        *AIAnalysisResult
@@ -1087,8 +1074,16 @@ func (p *PatrolService) runScopedPatrolWithStart(ctx context.Context, scope Patr
 	}
 	runStats.resourceCount = resourceCount
 
-	// Determine if we can run LLM analysis
+	// Acquire a breaker probe only after the requested scope has resolved to
+	// real work. This keeps collection-only failures outside provider health.
 	aiServiceEnabled := p.aiService != nil && p.aiService.IsEnabled()
+	llmAllowed := true
+	if aiServiceEnabled && breaker != nil {
+		llmAllowed = breaker.Allow()
+	}
+	if !llmAllowed {
+		log.Warn().Msg("AI Patrol: Circuit breaker is open for scoped patrol (LLM calls blocked)")
+	}
 	canRunLLM := aiServiceEnabled && llmAllowed
 
 	if !canRunLLM {
@@ -1135,6 +1130,7 @@ func (p *PatrolService) runScopedPatrolWithStart(ctx context.Context, scope Patr
 		if aiErr != nil {
 			log.Warn().Err(aiErr).Msg("AI Patrol (scoped): LLM analysis failed")
 			runStats.errors++
+			runStats.lastAIError = aiErr
 			failure := patrolRuntimeFailureFromError(aiErr)
 			runStats.errorSummary = failure.Summary
 			runStats.errorDetail = failure.Detail
@@ -1266,6 +1262,8 @@ func (p *PatrolService) runScopedPatrolWithStart(ctx context.Context, scope Patr
 	p.errorCount = runStats.errors
 	p.mu.Unlock()
 
+	recordPatrolCircuitResult(breaker, canRunLLM, runStats.errors, runStats.lastAIError)
+
 	p.runHistoryStore.Add(runRecord)
 
 	log.Info().
@@ -1279,6 +1277,20 @@ func (p *PatrolService) runScopedPatrolWithStart(ctx context.Context, scope Patr
 		Msg("AI Patrol: Scoped patrol complete")
 
 	p.dispatchPatrolInvestigations(runStats.aiAnalysis)
+}
+
+func recordPatrolCircuitResult(breaker *circuit.Breaker, attempted bool, errorCount int, runErr error) {
+	if breaker == nil || !attempted {
+		return
+	}
+	if errorCount == 0 {
+		breaker.RecordSuccess()
+		return
+	}
+	if runErr == nil {
+		runErr = fmt.Errorf("patrol completed with %d errors", errorCount)
+	}
+	breaker.RecordFailureWithCategory(runErr, circuit.CategorizeError(runErr))
 }
 
 func (p *PatrolService) recordScopedPatrolScopeFailure(start time.Time, runID string, scope PatrolScope, resolution PatrolScopeResolution, summary, detail string) {

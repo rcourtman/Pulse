@@ -217,6 +217,35 @@ func (p *PatrolService) SetCircuitBreaker(breaker *circuit.Breaker) {
 	log.Info().Msg("circuit breaker configured for patrol")
 }
 
+// recoverCircuitBreakerAfterVerifiedPreflight closes stale provider-failure
+// state only after the configured Patrol route has completed a real tool-call
+// round trip. A provider/model setting change by itself is not recovery
+// evidence; the successful preflight is.
+func (p *PatrolService) recoverCircuitBreakerAfterVerifiedPreflight() bool {
+	if p == nil {
+		return false
+	}
+	p.mu.RLock()
+	breaker := p.circuitBreaker
+	p.mu.RUnlock()
+	if breaker == nil {
+		return false
+	}
+
+	wasDegraded := breaker.State() != circuit.StateClosed
+	breaker.Reset()
+
+	p.mu.Lock()
+	if p.lastBlockedCause == PatrolFailureCauseCircuitOpen {
+		p.lastBlockedReason = ""
+		p.lastBlockedCause = PatrolFailureCauseNone
+		p.lastBlockedAt = time.Time{}
+		wasDegraded = true
+	}
+	p.mu.Unlock()
+	return wasDegraded
+}
+
 // SetRemediationEngine sets the governed plan store/executor for model-proposed fixes.
 func (p *PatrolService) SetRemediationEngine(engine aicontracts.RemediationEngine) {
 	p.mu.Lock()

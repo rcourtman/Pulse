@@ -6348,8 +6348,15 @@ a successful preflight with an observed tool call proves the configured
 provider/model currently accepts Patrol's tool-call path. Either must clear the
 synthetic `ai-service` runtime failure just as a successful full Patrol run
 does, without loosening ordinary scoped finding reconciliation for
-infrastructure issues. A soft-warning preflight where the provider responds but
-the model does not emit a tool call is not sufficient recovery evidence.
+infrastructure issues. Full and scoped runs must account for the same circuit
+breaker lease around the actual provider call: successful scoped work records
+success, failed scoped work records its classified provider error, and
+collection or scope failures before inference never acquire a half-open probe.
+A successful current-generation preflight for the exactly configured Patrol
+route also resets stale circuit-open state and its corresponding blocked status,
+because it is direct tool-call recovery evidence. A successful override for a
+different route, a stale preflight generation, or a soft-warning response
+without a tool call cannot reset the configured route's breaker.
 Because the synthetic runtime finding is seeded into scoped runs as Patrol-wide
 health evidence, the run's finding adapter must also expose and accept a
 terminal assessment for that finding even though `ai-service` is not part of

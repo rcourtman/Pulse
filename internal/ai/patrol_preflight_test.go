@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/circuit"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 )
 
@@ -217,6 +218,99 @@ func TestRunPatrolToolPreflight_SuccessResolvesPreviousRuntimeFailure(t *testing
 	}
 	if !finding.IsResolved() {
 		t.Fatalf("expected successful preflight to auto-resolve runtime finding, got resolved_at=%v", finding.ResolvedAt)
+	}
+}
+
+func TestRunPatrolToolPreflight_SuccessRecoversConfiguredRouteCircuit(t *testing.T) {
+	h := newPatrolPreflightTestService(t, "openai:gpt-4o-mini", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":"x","model":"gpt-4o-mini","choices":[{"finish_reason":"tool_calls","message":{"role":"assistant","content":"","tool_calls":[{"id":"1","type":"function","function":{"name":"verify_pulse_patrol","arguments":"{\"ok\":true}"}}]}}]}`))
+	})
+	defer h.close()
+
+	patrol := NewPatrolService(h.svc, nil)
+	h.svc.patrolService = patrol
+	breaker := circuit.NewBreaker("patrol", circuit.Config{
+		FailureThreshold: 1,
+		SuccessThreshold: 1,
+		InitialBackoff:   time.Hour,
+	})
+	breaker.RecordFailure(errors.New("provider unavailable"))
+	patrol.SetCircuitBreaker(breaker)
+	patrol.setBlockedReasonWithCause("circuit breaker is open", PatrolFailureCauseCircuitOpen)
+
+	result := h.svc.RunPatrolToolPreflight(context.Background(), "", "")
+	if !result.Success || !result.ToolCallObserved {
+		t.Fatalf("expected green preflight, got %+v", result)
+	}
+	if breaker.State() != circuit.StateClosed {
+		t.Fatalf("expected configured route circuit to recover, got %s", breaker.State())
+	}
+	status := patrol.GetStatus()
+	if status.BlockedReason != "" || status.BlockedCause != PatrolFailureCauseNone {
+		t.Fatalf("expected stale circuit block to clear, got reason=%q cause=%q", status.BlockedReason, status.BlockedCause)
+	}
+}
+
+func TestRunPatrolToolPreflight_OverrideRouteDoesNotRecoverConfiguredRouteCircuit(t *testing.T) {
+	h := newPatrolPreflightTestService(t, "openai:gpt-4o-mini", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":"x","model":"other-model","choices":[{"finish_reason":"tool_calls","message":{"role":"assistant","content":"","tool_calls":[{"id":"1","type":"function","function":{"name":"verify_pulse_patrol","arguments":"{\"ok\":true}"}}]}}]}`))
+	})
+	defer h.close()
+
+	patrol := NewPatrolService(h.svc, nil)
+	h.svc.patrolService = patrol
+	breaker := circuit.NewBreaker("patrol", circuit.Config{
+		FailureThreshold: 1,
+		SuccessThreshold: 1,
+		InitialBackoff:   time.Hour,
+	})
+	breaker.RecordFailure(errors.New("configured route unavailable"))
+	patrol.SetCircuitBreaker(breaker)
+	patrol.setBlockedReasonWithCause("circuit breaker is open", PatrolFailureCauseCircuitOpen)
+
+	result := h.svc.RunPatrolToolPreflight(context.Background(), config.AIProviderOpenAI, "other-model")
+	if !result.Success || !result.ToolCallObserved {
+		t.Fatalf("expected override route preflight to succeed, got %+v", result)
+	}
+	if breaker.State() != circuit.StateOpen {
+		t.Fatalf("override route must not recover configured route circuit, got %s", breaker.State())
+	}
+	status := patrol.GetStatus()
+	if status.BlockedCause != PatrolFailureCauseCircuitOpen {
+		t.Fatalf("override route must not clear configured route block, got %+v", status)
+	}
+}
+
+func TestRunPatrolToolPreflight_StaleGenerationDoesNotRecoverCircuit(t *testing.T) {
+	h := newPatrolPreflightTestService(t, "openai:gpt-4o-mini", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":"x","model":"gpt-4o-mini","choices":[{"finish_reason":"tool_calls","message":{"role":"assistant","content":"","tool_calls":[{"id":"1","type":"function","function":{"name":"verify_pulse_patrol","arguments":"{\"ok\":true}"}}]}}]}`))
+	})
+	defer h.close()
+
+	patrol := NewPatrolService(h.svc, nil)
+	h.svc.patrolService = patrol
+	breaker := circuit.NewBreaker("patrol", circuit.Config{
+		FailureThreshold: 1,
+		SuccessThreshold: 1,
+		InitialBackoff:   time.Hour,
+	})
+	breaker.RecordFailure(errors.New("configured route unavailable"))
+	patrol.SetCircuitBreaker(breaker)
+	staleGeneration := h.svc.patrolPreflightGeneration()
+	h.svc.InvalidatePatrolPreflight()
+
+	result := h.svc.runPatrolToolPreflight(context.Background(), "", "", staleGeneration)
+	if !result.Success || !result.ToolCallObserved {
+		t.Fatalf("expected stale in-flight check itself to succeed, got %+v", result)
+	}
+	if breaker.State() != circuit.StateOpen {
+		t.Fatalf("stale preflight generation must not recover circuit, got %s", breaker.State())
+	}
+	if cached, _ := h.svc.CachedPatrolPreflight(); cached != nil {
+		t.Fatalf("stale preflight generation must not publish cache evidence, got %+v", cached)
 	}
 }
 

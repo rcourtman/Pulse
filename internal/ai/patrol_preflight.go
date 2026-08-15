@@ -97,19 +97,21 @@ func (s *Service) CachedPatrolPreflight() (*PatrolPreflightResult, time.Time) {
 
 // recordPatrolPreflight stores the result in the cache. Called after
 // every RunPatrolToolPreflight invocation so the most recent outcome is
-// always observable, including failures.
-func (s *Service) recordPatrolPreflight(result PatrolPreflightResult, at time.Time, generation uint64) {
+// always observable, including failures. It returns false when a generation
+// or route fence rejects stale evidence.
+func (s *Service) recordPatrolPreflight(result PatrolPreflightResult, at time.Time, generation uint64) bool {
 	s.mu.RLock()
 	cfg := s.cfg
 	s.mu.RUnlock()
 	s.patrolPreflightCache.mu.Lock()
 	defer s.patrolPreflightCache.mu.Unlock()
 	if generation != s.patrolPreflightCache.generation || cfg != nil && !patrolPreflightMatchesConfig(&result, cfg) {
-		return
+		return false
 	}
 	clone := result
 	s.patrolPreflightCache.result = &clone
 	s.patrolPreflightCache.recordedAt = at
+	return true
 }
 
 func (s *Service) patrolPreflightGeneration() uint64 {
@@ -306,8 +308,9 @@ func (s *Service) runPatrolToolPreflight(ctx context.Context, providerName, mode
 		result.Cause = PatrolFailureCauseNone
 		result.Title = "Pulse Patrol: Preflight succeeded"
 		result.Summary = "Provider accepted the preflight request and the model emitted a tool call."
-		s.recordPatrolPreflight(result, time.Now(), generation)
-		s.resolvePatrolRuntimeFailureAfterToolPreflight(result)
+		if s.recordPatrolPreflight(result, time.Now(), generation) {
+			s.recoverPatrolAfterToolPreflight(result)
+		}
 		return result
 	}
 
@@ -323,7 +326,7 @@ func (s *Service) runPatrolToolPreflight(ctx context.Context, providerName, mode
 	return result
 }
 
-func (s *Service) resolvePatrolRuntimeFailureAfterToolPreflight(result PatrolPreflightResult) bool {
+func (s *Service) recoverPatrolAfterToolPreflight(result PatrolPreflightResult) bool {
 	if s == nil || !result.Success || !result.ToolCallObserved {
 		return false
 	}
@@ -331,7 +334,9 @@ func (s *Service) resolvePatrolRuntimeFailureAfterToolPreflight(result PatrolPre
 	if patrol == nil {
 		return false
 	}
-	return patrol.resolvePatrolRuntimeFailureFinding("patrol_preflight_success")
+	breakerRecovered := patrol.recoverCircuitBreakerAfterVerifiedPreflight()
+	runtimeFindingResolved := patrol.resolvePatrolRuntimeFailureFinding("patrol_preflight_success")
+	return breakerRecovered || runtimeFindingResolved
 }
 
 func applyPatrolPreflightDiagnostic(result *PatrolPreflightResult, err error) {

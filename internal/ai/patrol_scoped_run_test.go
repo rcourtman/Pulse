@@ -2,9 +2,12 @@ package ai
 
 import (
 	"context"
+	"errors"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/circuit"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
@@ -106,6 +109,98 @@ func TestRunScopedPatrol_StoresEffectiveScopeResourceIDs(t *testing.T) {
 	}
 	if containsScopeID(run.EffectiveScopeResourceIDs, "container-2") {
 		t.Fatalf("expected effective scope IDs to exclude unrelated container, got %v", run.EffectiveScopeResourceIDs)
+	}
+}
+
+func TestRunScopedPatrol_RecordsSuccessfulHalfOpenProbe(t *testing.T) {
+	persistence := config.NewConfigPersistence(t.TempDir())
+	svc := NewService(persistence, nil)
+	svc.cfg = &config.AIConfig{Enabled: true, PatrolModel: "mock:model"}
+	svc.provider = &mockProvider{}
+	svc.SetChatService(&mockChatService{
+		executor: tools.NewPulseToolExecutor(tools.ExecutorConfig{}),
+		executePatrolStreamFunc: func(ctx context.Context, req PatrolExecuteRequest, callback ChatStreamCallback) (*PatrolStreamResponse, error) {
+			return &PatrolStreamResponse{Content: "no issues"}, nil
+		},
+	})
+	ps := NewPatrolService(svc, &mockStateProvider{state: models.StateSnapshot{
+		Nodes: []models.Node{{ID: "node-1", Name: "pve-1", Status: "online"}},
+	}})
+	ps.SetConfig(PatrolConfig{Enabled: true, AnalyzeNodes: true})
+	breaker := circuit.NewBreaker("patrol", circuit.Config{
+		FailureThreshold: 1,
+		SuccessThreshold: 1,
+		InitialBackoff:   time.Nanosecond,
+	})
+	breaker.RecordFailure(errors.New("transient provider failure"))
+	ps.SetCircuitBreaker(breaker)
+
+	ps.runScopedPatrol(context.Background(), PatrolScope{
+		ResourceIDs: []string{"node-1"},
+		Reason:      TriggerReasonManual,
+		NoStream:    true,
+	})
+
+	if breaker.State() != circuit.StateClosed {
+		t.Fatalf("successful scoped provider call must close half-open circuit, got %s", breaker.State())
+	}
+	if got := breaker.GetStatus().TotalSuccesses; got != 1 {
+		t.Fatalf("successful scoped provider call recorded %d successes, want 1", got)
+	}
+}
+
+func TestRunScopedPatrol_RecordsProviderFailure(t *testing.T) {
+	persistence := config.NewConfigPersistence(t.TempDir())
+	svc := NewService(persistence, nil)
+	svc.cfg = &config.AIConfig{Enabled: true, PatrolModel: "mock:model"}
+	svc.provider = &mockProvider{}
+	providerErr := errors.New("provider connection reset")
+	svc.SetChatService(&mockChatService{
+		executor: tools.NewPulseToolExecutor(tools.ExecutorConfig{}),
+		executePatrolStreamFunc: func(ctx context.Context, req PatrolExecuteRequest, callback ChatStreamCallback) (*PatrolStreamResponse, error) {
+			return nil, providerErr
+		},
+	})
+	ps := NewPatrolService(svc, &mockStateProvider{state: models.StateSnapshot{
+		Nodes: []models.Node{{ID: "node-1", Name: "pve-1", Status: "online"}},
+	}})
+	ps.SetConfig(PatrolConfig{Enabled: true, AnalyzeNodes: true})
+	breaker := circuit.NewBreaker("patrol", circuit.Config{FailureThreshold: 3})
+	ps.SetCircuitBreaker(breaker)
+
+	ps.runScopedPatrol(context.Background(), PatrolScope{
+		ResourceIDs: []string{"node-1"},
+		Reason:      TriggerReasonManual,
+		NoStream:    true,
+	})
+
+	status := breaker.GetStatus()
+	if status.TotalFailures != 1 || status.ConsecutiveFailures != 1 {
+		t.Fatalf("scoped provider failure was not recorded exactly once: %+v", status)
+	}
+	if !strings.Contains(status.LastError, providerErr.Error()) {
+		t.Fatalf("scoped circuit error = %q, want underlying cause %q", status.LastError, providerErr)
+	}
+}
+
+func TestRunScopedPatrol_EarlyCollectionFailureDoesNotAcquireHalfOpenProbe(t *testing.T) {
+	ps := NewPatrolService(nil, mockPatrolStateProvider{state: models.StateSnapshot{}})
+	ps.SetConfig(PatrolConfig{Enabled: true, AnalyzeNodes: true})
+	breaker := circuit.NewBreaker("patrol", circuit.Config{
+		FailureThreshold: 1,
+		SuccessThreshold: 1,
+		InitialBackoff:   time.Nanosecond,
+	})
+	breaker.RecordFailure(errors.New("transient provider failure"))
+	ps.SetCircuitBreaker(breaker)
+
+	ps.runScopedPatrol(context.Background(), PatrolScope{
+		ResourceIDs: []string{"missing-node"},
+		Reason:      TriggerReasonManual,
+	})
+
+	if breaker.State() != circuit.StateOpen {
+		t.Fatalf("collection-only failure must not acquire a half-open provider probe, got %s", breaker.State())
 	}
 }
 

@@ -2,11 +2,13 @@ package ai
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/circuit"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
@@ -18,6 +20,26 @@ type mockPatrolProvider struct {
 	err      error
 	lastReq  providers.ChatRequest
 	calls    int
+}
+
+func TestRunPatrol_EarlyRuntimeFailureDoesNotAcquireHalfOpenProbe(t *testing.T) {
+	svc := NewService(config.NewConfigPersistence(t.TempDir()), nil)
+	svc.cfg = &config.AIConfig{Enabled: true, PatrolModel: "mock:model"}
+	ps := NewPatrolService(svc, nil)
+	ps.SetConfig(PatrolConfig{Enabled: true, AnalyzeNodes: true})
+	breaker := circuit.NewBreaker("patrol", circuit.Config{
+		FailureThreshold: 1,
+		SuccessThreshold: 1,
+		InitialBackoff:   time.Nanosecond,
+	})
+	breaker.RecordFailure(errors.New("transient provider failure"))
+	ps.SetCircuitBreaker(breaker)
+
+	ps.runPatrolWithTrigger(context.Background(), TriggerReasonManual, nil)
+
+	if breaker.State() != circuit.StateOpen {
+		t.Fatalf("runtime-input failure must not acquire a half-open provider probe, got %s", breaker.State())
+	}
 }
 
 func (m *mockPatrolProvider) Chat(ctx context.Context, req providers.ChatRequest) (*providers.ChatResponse, error) {
