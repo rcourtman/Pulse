@@ -4242,7 +4242,15 @@ then structurally removes evidence tools at exhaustion while retaining only the
 typed proposal route and final prose. This remains model-led: Pulse defines the
 four completion questions (symptom, root cause or uncertainty, affected scope,
 safe next action), not a prescribed diagnostic tool sequence. Structured run
-results and persisted investigation records carry truthful model-turn and
+completion also preserves the action handoff implied by the model's own
+judgment: when the collected evidence supports a safe advertised remediation,
+the model must submit that typed proposal before its final summary instead of
+leaving the same recommendation as inert prose. When evidence is insufficient,
+it concludes with explicit uncertainty and no proposal. Pulse still neither
+selects a diagnostic sequence nor invents a remediation; it ensures that the
+model's supported action decision reaches the canonical policy, approval, and
+execution plane. Structured run results and persisted investigation records
+carry truthful model-turn and
 evidence-call counters. Qualification `max_evidence_calls` gates actual call
 volume independently of `max_tools_used`, which continues to measure distinct
 tool-name diversity; replay falls back to historical evidence IDs only for old

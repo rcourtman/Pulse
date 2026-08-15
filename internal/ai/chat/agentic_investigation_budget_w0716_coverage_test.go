@@ -38,6 +38,17 @@ func Test_w0716_budget_IsPatrolInvestigationExecution(t *testing.T) {
 	}
 }
 
+func TestInvestigationCompletionRequiresSupportedProposalBeforeProse(t *testing.T) {
+	for name, prompt := range map[string]string{
+		"budget exhausted": investigationEvidenceBudgetExhaustedSystemPrompt,
+	} {
+		if !strings.Contains(prompt, "must call patrol_propose_action once") ||
+			!strings.Contains(prompt, "never leave that remediation only as prose") {
+			t.Fatalf("%s prompt must require the governed handoff for a supported remediation: %q", name, prompt)
+		}
+	}
+}
+
 func Test_w0716_budget_IsInvestigationEvidenceTool(t *testing.T) {
 	tests := []struct {
 		name string

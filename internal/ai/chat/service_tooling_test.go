@@ -1020,8 +1020,9 @@ func TestExecutionProfilePromptModes(t *testing.T) {
 	if !strings.Contains(prompt, "EXECUTION MODE: Patrol investigation") {
 		t.Fatalf("investigation profile prompt wrong: %q", prompt)
 	}
-	if !strings.Contains(prompt, "propose a typed action") {
-		t.Fatalf("investigation prompt must direct toward typed proposals, got %q", prompt)
+	if !strings.Contains(prompt, "call patrol_propose_action") ||
+		!strings.Contains(prompt, "Never leave a safe advertised remediation only as prose") {
+		t.Fatalf("investigation prompt must turn supported remediation into a governed proposal, got %q", prompt)
 	}
 }
 

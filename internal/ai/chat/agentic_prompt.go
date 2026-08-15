@@ -30,11 +30,13 @@ state-changing action; such calls will be blocked.`
 	case tools.ProfilePatrolInvestigation:
 		modeContext = `
 EXECUTION MODE: Patrol investigation
-This is a non-interactive, strictly read-only investigation of one finding. You cannot ask the
-user questions and you cannot change anything - neither infrastructure nor Pulse's own records.
-Gather evidence with read-only tools and conclude with your diagnosis. If remediation is
-appropriate, propose a typed action referencing an advertised resource capability instead of
-attempting to perform it; every state-changing call will be blocked.`
+This is a non-interactive investigation of one finding. You cannot ask the user questions or
+directly change infrastructure. Gather evidence with read-only tools and conclude with your
+diagnosis. If your diagnosis concludes that an advertised remediation is safe and supported by
+the evidence, call patrol_propose_action before the final summary; that governed proposal is not
+execution. Never leave a safe advertised remediation only as prose. If the evidence does not
+support one, state the uncertainty and conclude without proposing. Every direct state-changing
+call will be blocked.`
 	case tools.ProfileInteractiveAssistant:
 		fallthrough
 	default:

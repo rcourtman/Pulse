@@ -20,7 +20,7 @@ INVESTIGATION COMPLETION: A typed action proposal has already been accepted for 
 
 const investigationEvidenceBudgetExhaustedSystemPrompt = `
 
-INVESTIGATION COMPLETION: The evidence-call budget is exhausted. No more evidence tools are available. Use the evidence already collected. If it supports a safe advertised remediation and no proposal has been submitted, you may call patrol_propose_action once; otherwise produce the required final summary and state any remaining uncertainty.`
+INVESTIGATION COMPLETION: The evidence-call budget is exhausted. No more evidence tools are available. Use the evidence already collected. If it supports a safe advertised remediation and no proposal has been submitted, you must call patrol_propose_action once before the final summary; never leave that remediation only as prose. Otherwise produce the required final summary and state any remaining uncertainty.`
 
 const investigationOutputLimitRecoverySystemPrompt = `You are Pulse Patrol completing an investigation after the previous final response exhausted its output budget. Do not call tools, repeat the investigation, or narrate your reasoning. Synthesize only the evidence already present in the conversation into the required five sections: Investigation Summary, Root Cause, Affected Resources, Recommendation, and Conclusion. Name causal and affected resources with their exact observed canonical name or ID. If the evidence does not establish root cause, say exactly what remains uncertain. Never invent evidence, actions, verification, or remediation.`
 
@@ -61,14 +61,14 @@ func investigationEvidenceCheckpoint(maxEvidenceCalls int) int {
 
 func maybeInjectInvestigationEvidenceCheckpoint(messages []providers.Message, used, remaining int) bool {
 	return appendInvestigationBudgetMessage(messages, fmt.Sprintf(
-		"[Patrol evidence checkpoint: %d evidence calls used, %d remain. Decide whether the evidence now supports all four completion questions: current symptom, most likely root cause or explicit uncertainty, affected scope, and a safe next action. If it does, conclude now; otherwise spend only targeted calls on a named evidence gap.]",
+		"[Patrol evidence checkpoint: %d evidence calls used, %d remain. Decide whether the evidence now supports all four completion questions: current symptom, most likely root cause or explicit uncertainty, affected scope, and a safe next action. If it does, conclude now; when the safe next action is an advertised remediation, submit it through patrol_propose_action before the final summary instead of leaving it only as prose. Otherwise spend only targeted calls on a named evidence gap.]",
 		used, remaining,
 	), "checkpoint")
 }
 
 func maybeInjectInvestigationEvidenceBudgetWarning(messages []providers.Message, used, remaining int) bool {
 	return appendInvestigationBudgetMessage(messages, fmt.Sprintf(
-		"[Patrol evidence budget: %d evidence calls used, %d remain. Stop exploratory investigation. Use at most the remaining targeted calls, then either submit one supported typed proposal or conclude with the required summary and explicit uncertainty.]",
+		"[Patrol evidence budget: %d evidence calls used, %d remain. Stop exploratory investigation. Use at most the remaining targeted calls. If the evidence supports a safe advertised remediation, submit one typed proposal before the final summary; never leave it only as prose. Otherwise conclude with the required summary and explicit uncertainty.]",
 		used, remaining,
 	), "warning")
 }
