@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/chat"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/circuit"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 )
@@ -618,5 +619,43 @@ func TestRunPatrolToolPreflight_RequestShapeIncludesVerifyTool(t *testing.T) {
 	}
 	if captured["tool_choice"] != nil {
 		t.Fatalf("expected preflight to keep tool selection automatic, got %v", captured["tool_choice"])
+	}
+}
+
+func TestRunPatrolToolPreflight_OllamaUsesLivePatrolContextEnvelope(t *testing.T) {
+	var captured struct {
+		Options struct {
+			NumCtx int `json:"num_ctx"`
+		} `json:"options"`
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/chat" {
+			http.NotFound(w, r)
+			return
+		}
+		if err := json.NewDecoder(r.Body).Decode(&captured); err != nil {
+			t.Errorf("decode Ollama request: %v", err)
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"model":"gpt-oss:20b","done":true,"done_reason":"stop","message":{"role":"assistant","tool_calls":[{"function":{"name":"patrol_verify_tool","arguments":{"ok":true}}}]}}`))
+	}))
+	defer server.Close()
+
+	svc := NewService(config.NewConfigPersistence(t.TempDir()), nil)
+	svc.cfg = &config.AIConfig{
+		Enabled:       true,
+		Model:         "ollama:gpt-oss:20b",
+		PatrolModel:   "ollama:gpt-oss:20b",
+		OllamaBaseURL: server.URL,
+	}
+
+	result := svc.RunPatrolToolPreflight(context.Background(), "", "")
+	if !result.Success || !result.ToolCallObserved {
+		t.Fatalf("preflight result = %+v, want successful tool call", result)
+	}
+	if captured.Options.NumCtx != chat.PatrolProviderMinContextTokens {
+		t.Fatalf("Ollama preflight num_ctx = %d, want %d", captured.Options.NumCtx, chat.PatrolProviderMinContextTokens)
 	}
 }

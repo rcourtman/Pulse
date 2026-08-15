@@ -7467,9 +7467,9 @@ finding to resolved. A failed proposal remains absent from the receipt.
 
 ### Live Patrol uses the context envelope it certifies
 
-Every Watch and Patrol investigation provider request, including bounded
-recovery and final-summary turns, carries a provider-neutral minimum context
-request of 16,384 tokens. Providers without a runtime context control ignore
+Every Patrol tool preflight, Watch, and Patrol investigation provider request,
+including bounded recovery and final-summary turns, carries a provider-neutral
+minimum context request of 16,384 tokens. Providers without a runtime context control ignore
 the hint; Ollama projects it to native `num_ctx`. The Patrol model-readiness
 probe imports this same core-owned value rather than maintaining a second
 qualification-only constant. A model must therefore be exercised and run with
