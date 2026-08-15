@@ -21,8 +21,9 @@ one person can sustain by hand at any reasonable quality bar.
 AI assistance is the reason a solo project can cover that breadth, ship
 frequent releases, and usually turn a reproducible bug report into a fix in
 days rather than months. Refusing these tools would not make Pulse better. It
-would make it slower and buggier. I consider working this way a professional
-obligation, not a shortcut.
+would make it slower and buggier. Used responsibly, these tools help me sustain
+the project's scope and quality. They accelerate the work without removing the
+need for judgment, verification, or accountability.
 
 ## Where it is used
 
@@ -55,9 +56,9 @@ way.
 Pulse is judged the same way all software should be judged, by what it does.
 The test suites, the audit gates that run before anything lands, the release
 candidate process, and the issue tracker history are all public. If you find a
-bug, report it with steps to reproduce and it will get fixed. "This looks
-AI-written" is not a bug report, and style-sniffing a diff or an issue reply
-tells you nothing about whether the code is correct.
+bug, report it with steps to reproduce and it will get fixed. Specific concerns
+about correctness, security, reliability, or maintainability are welcome and
+will be investigated on their merits.
 
 ## From here on
 
@@ -70,10 +71,12 @@ forward.
 
 ## If you object on principle
 
-That is your call, and I am not going to argue anyone out of it. But I am also
-not going to pretend, hedge, or apologise. Nearly every actively developed
-software project you rely on today is built with some level of AI assistance,
-whether its maintainers say so or not. I would rather say so.
+That is your call, and I am not going to argue anyone out of it. This document
+is not intended to persuade everyone, but to make Pulse's development process
+clear enough for users to make an informed decision.
+
+AI assistance is increasingly common in software development, but disclosure
+is inconsistent. I would rather be explicit about how it is used here.
 
 Judge Pulse on what it does on your infrastructure and on the track record in
 the [issue tracker](https://github.com/rcourtman/Pulse/issues). Those are the
