@@ -176,11 +176,3 @@ export function getPatrolObjectiveProtectionSummary(
     tone: 'warning',
   };
 }
-
-export function isVerifiedPatrolReceipt(item: AttentionItem): boolean {
-  return item.state === 'resolved' && item.verificationState === 'succeeded';
-}
-
-export function getVerifiedPatrolReceiptSummary(item: AttentionItem): string {
-  return item.plainLanguageSummary;
-}

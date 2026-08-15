@@ -1,30 +1,25 @@
 {
   "version": 1,
-  "base_sha": "48fac73ff020491c1731c281d0c69b874c27f71b",
-  "verified_at": "2026-08-14T12:03:35Z",
+  "base_sha": "7fb39f65cf25a3fc822f5795abc99dd670e93a48",
+  "verified_at": "2026-08-15T07:42:09Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/AppLayout.tsx",
-    "frontend-modern/src/components/shared/mobileNavBarModel.ts",
-    "frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx",
-    "frontend-modern/src/pages/Actions.tsx",
-    "frontend-modern/src/utils/assistantPageContext.ts"
+    "frontend-modern/src/api/patrolAttention.ts",
+    "frontend-modern/src/features/patrol/PatrolRecentWorkPanel.tsx",
+    "frontend-modern/src/features/patrol/patrolHomePresentation.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/AppLayout.tsx": "91e6aa7723872ec61437da7d3851fe82be89e707f53c66a3c3ff74fa7851671a",
-    "frontend-modern/src/components/shared/mobileNavBarModel.ts": "bccadf7522c9e7affa06ecebd816c8963295bd40ce2ac122a022d3662e1a5e7d",
-    "frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx": "b6eaffbb9aa1e0b9e69a5245d0e2e4bce5b9c88df353d207db095189df6e82c1",
-    "frontend-modern/src/pages/Actions.tsx": "878397bb4571fc714684e35474acc6a60220498b4ac256c4bd57f39e41533ba5",
-    "frontend-modern/src/utils/assistantPageContext.ts": "7943a778ee4d4e1fb56c0a09778fffc8402d528da2e336713b1ff93e110acf6f"
+    "frontend-modern/src/api/patrolAttention.ts": "2038e240e586d096f289e477e05c0acdb9d33eb08fe5791dd8080666a43350df",
+    "frontend-modern/src/features/patrol/PatrolRecentWorkPanel.tsx": "c996100b27f7101a2a64c742ff0c1602cb2017397afad22a3da5e8e768ac8798",
+    "frontend-modern/src/features/patrol/patrolHomePresentation.ts": "41991e1b605df792768237e488edf0d1f8c1190896e5be865dfbd5f24017e9aa"
   },
   "routes": [
-    "/patrol",
-    "/actions"
+    "/patrol"
   ],
   "viewports": [
     {
       "width": 1280,
-      "height": 800
+      "height": 720
     },
     {
       "width": 390,
@@ -32,18 +27,17 @@
     }
   ],
   "states": [
-    "Patrol desktop navigation with one pending universal action",
-    "Patrol Activity history handoff with pending-review badge",
-    "Activity history open queue with Patrol selected in desktop navigation",
-    "Activity history open queue with Patrol selected in mobile navigation",
-    "Patrol and Activity history at 390 pixels without horizontal overflow"
+    "Recently handled populated with six newest server-filtered verified Patrol receipts",
+    "Refresh failure keeps the last truthful receipts visible with an explicit unavailable message",
+    "Refresh recovery clears the error and reloads the same six verified receipts",
+    "Activity history handoff remains adjacent to verified receipts",
+    "Phone-width receipt list wraps verification evidence without horizontal overflow"
   ],
   "interactions": [
-    "opened Activity history from the Patrol page",
-    "confirmed the stable /actions route and Activity history browser title",
-    "confirmed no Actions destination exists in desktop or mobile navigation",
-    "confirmed Patrol remains selected while Activity history is open",
-    "returned to Patrol through mobile navigation",
+    "refreshed the populated Recently handled list",
+    "stopped the disposable server and refreshed to exercise the error state",
+    "confirmed six existing receipts remained visible during the refresh error",
+    "restored the healthy server and refreshed to clear the error",
     "resized to 390 by 844 and confirmed document width stayed at 390"
   ]
 }

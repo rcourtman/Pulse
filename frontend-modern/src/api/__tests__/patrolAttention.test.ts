@@ -10,6 +10,7 @@ import {
   getPatrolAttentionDetail,
   getPatrolAttentionEvidence,
   getPatrolAttentionSummary,
+  getPatrolWorkReceipts,
   planPatrolAttentionAction,
   suppressPatrolAttention,
   unacknowledgePatrolAttention,
@@ -43,6 +44,11 @@ describe('Patrol attention API', () => {
     expect(fetchMock).toHaveBeenLastCalledWith(
       '/api/ai/patrol/attention/record%2Fone/evidence/evidence%2Ftwo',
     );
+  });
+
+  it('uses the server-filtered verified work receipt projection', async () => {
+    await getPatrolWorkReceipts(6);
+    expect(fetchMock).toHaveBeenLastCalledWith('/api/ai/patrol/attention/receipts?limit=6');
   });
 
   it('uses canonical item-scoped lifecycle mutations with bounded suppression input', async () => {

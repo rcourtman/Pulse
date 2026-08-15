@@ -3145,6 +3145,10 @@ func TestActionAuditOriginReaderReturnsLatestTransition(t *testing.T) {
 			if !ok {
 				t.Fatalf("%T does not implement OperationalActionAuditOriginBatchReader", store)
 			}
+			verifiedReader, ok := store.(VerifiedActionAuditOriginReader)
+			if !ok {
+				t.Fatalf("%T does not implement VerifiedActionAuditOriginReader", store)
+			}
 			now := time.Now().UTC()
 			for _, record := range []ActionAuditRecord{
 				{
@@ -3165,6 +3169,25 @@ func TestActionAuditOriginReaderReturnsLatestTransition(t *testing.T) {
 						Surface: "patrol", FindingID: "finding-1", InvestigationID: "inv-1",
 						ProposalID: "prop-new", OperationalRecordID: "operational-1",
 						EvidenceIDs: []string{"evidence-c"},
+					},
+					Result: &ExecutionResult{
+						Success: true,
+						Verification: &ActionVerificationResult{
+							Ran: true, Success: true, RanAt: now,
+						},
+					},
+					VerificationOutcome: VerificationOutcome{Status: VerificationVerified},
+				},
+				{
+					ID: "act-unrelated", CreatedAt: now.Add(time.Second), UpdatedAt: now.Add(time.Second), State: ActionStateCompleted,
+					Request: ActionRequest{RequestID: "prop-unrelated", ResourceID: "vm:99", CapabilityName: "restart", RequestedBy: "operator"},
+					Plan:    ActionPlan{ActionID: "act-unrelated", RequestID: "prop-unrelated", Allowed: true},
+					Origin:  &ActionOrigin{Surface: "assistant"},
+					Result: &ExecutionResult{
+						Success: true,
+						Verification: &ActionVerificationResult{
+							Ran: true, Success: true, RanAt: now.Add(time.Second),
+						},
 					},
 					VerificationOutcome: VerificationOutcome{Status: VerificationVerified},
 				},
@@ -3193,6 +3216,13 @@ func TestActionAuditOriginReaderReturnsLatestTransition(t *testing.T) {
 			)
 			if err != nil || len(batch) != 1 || batch["operational-1"].ID != "act-new" {
 				t.Fatalf("GetLatestActionAuditsByOperationalRecords: batch=%#v err=%v", batch, err)
+			}
+			verified, err := verifiedReader.GetVerifiedActionAuditsByOrigins(
+				[]string{"operational_trust_attention", "patrol"},
+				6,
+			)
+			if err != nil || len(verified) != 1 || verified[0].ID != "act-new" {
+				t.Fatalf("GetVerifiedActionAuditsByOrigins: records=%#v err=%v", verified, err)
 			}
 		})
 	}

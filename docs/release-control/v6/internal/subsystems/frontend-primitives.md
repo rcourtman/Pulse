@@ -778,6 +778,12 @@ genuine decisions, verified receipts, and secondary operational records; the
 shared primitive boundary owns keyboard focus, touch targets, responsive
 stacking, and visual consistency. Plan-locked paid-mode discovery is not a
 daily-page primitive and must not be added beside the effective mode.
+The compact `Recently handled` list consumes server-authored Patrol work
+receipts rather than filtering generic history in the browser. It may format
+the canonical capability name and verification time with shared presentation
+helpers, but it must preserve the server's verified-only membership, evidence
+summary, newest-first order, empty state, and last-truthful-data behavior during
+a refresh error.
 For Patrol, that includes the Open work description: it may use concise
 row-level guidance such as review evidence, approve a change, inspect automatic
 actions, or review verification results, but it must remain descriptive copy

@@ -97,6 +97,26 @@ export interface AttentionEvidenceResponse {
   retained: boolean;
 }
 
+export interface PatrolWorkReceipt {
+  actionId: string;
+  resourceId: string;
+  resourceName: string;
+  resourceType?: string;
+  capabilityName: string;
+  verifiedAt: string;
+  verificationSummary: string;
+  evidenceClass: 'none' | 'agent_attested' | 'independent';
+  originSurface: 'patrol' | 'operational_trust_attention';
+  findingId?: string;
+  operationalRecordId?: string;
+}
+
+export interface PatrolWorkReceiptListResponse {
+  data: PatrolWorkReceipt[];
+  count: number;
+  limit: number;
+}
+
 export interface AttentionMutationResponse {
   success: boolean;
 }
@@ -116,6 +136,13 @@ export async function getPatrolAttention(
 
 export async function getPatrolAttentionSummary(): Promise<AttentionSummary> {
   return apiFetchJSON<AttentionSummary>('/api/ai/patrol/attention/summary');
+}
+
+export async function getPatrolWorkReceipts(limit = 6): Promise<PatrolWorkReceiptListResponse> {
+  const search = new URLSearchParams({ limit: String(limit) });
+  return apiFetchJSON<PatrolWorkReceiptListResponse>(
+    `/api/ai/patrol/attention/receipts?${search.toString()}`,
+  );
 }
 
 export async function getPatrolAttentionDetail(itemId: string): Promise<AttentionItemDetail> {

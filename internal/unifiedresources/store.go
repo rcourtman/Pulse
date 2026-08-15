@@ -112,6 +112,15 @@ type OperationalActionAuditOriginBatchReader interface {
 	GetLatestActionAuditsByOperationalRecords(surface string, operationalRecordIDs []string) (map[string]ActionAuditRecord, error)
 }
 
+// VerifiedActionAuditOriginReader owns the bounded, newest-first projection of
+// actions whose postcondition was actually confirmed. Product surfaces such as
+// Patrol receipts must filter origin and verification before applying their
+// display limit; scanning a generic settled-action page can silently hide real
+// verified work behind unrelated history.
+type VerifiedActionAuditOriginReader interface {
+	GetVerifiedActionAuditsByOrigins(surfaces []string, limit int) ([]ActionAuditRecord, error)
+}
+
 // PendingActionAuditReader owns the indexed operator queue for canonical
 // actions awaiting a decision. Mobile and desktop clients must not reconstruct
 // this queue from the retired command-approval store.
@@ -733,6 +742,13 @@ func (s *SQLiteResourceStore) migrateActionAuditsSchema() error {
 		WHERE json_valid(origin_json)
 	`); err != nil {
 		return fmt.Errorf("create action audit origin operational record index: %w", err)
+	}
+	if _, err := s.db.Exec(`
+		CREATE INDEX IF NOT EXISTS idx_action_audits_origin_verification_updated
+		ON action_audits(json_extract(origin_json, '$.surface'), json_extract(verification_outcome_json, '$.status'), updated_at DESC, created_at DESC)
+		WHERE json_valid(origin_json) AND json_valid(verification_outcome_json)
+	`); err != nil {
+		return fmt.Errorf("create verified action audit origin index: %w", err)
 	}
 	if _, err := s.db.Exec(`
 		CREATE INDEX IF NOT EXISTS idx_action_audits_state_updated
@@ -2432,6 +2448,58 @@ func (s *SQLiteResourceStore) GetLatestActionAuditsByOperationalRecords(
 	return result, nil
 }
 
+func (s *SQLiteResourceStore) GetVerifiedActionAuditsByOrigins(
+	surfaces []string,
+	limit int,
+) ([]ActionAuditRecord, error) {
+	surfaces = uniqueStrings(surfaces)
+	if len(surfaces) == 0 {
+		return []ActionAuditRecord{}, nil
+	}
+	if limit < 1 || limit > 50 {
+		return nil, fmt.Errorf("verified action audit limit must be between 1 and 50")
+	}
+	placeholders := make([]string, len(surfaces))
+	args := make([]any, 0, len(surfaces)+1)
+	for index, surface := range surfaces {
+		placeholders[index] = "?"
+		args = append(args, surface)
+	}
+	args = append(args, string(VerificationVerified), limit)
+	rows, err := s.db.Query(`
+		SELECT id, action_id, request_id, created_at, updated_at, state, decision_revision, request_json, plan_json, approvals_json, result_json, verification_outcome_json, origin_json
+		FROM action_audits
+		WHERE state = 'completed'
+		  AND json_valid(origin_json)
+		  AND json_extract(origin_json, '$.surface') IN (`+strings.Join(placeholders, ",")+`)
+		  AND json_valid(verification_outcome_json)
+		  AND json_extract(verification_outcome_json, '$.status') = ?
+		ORDER BY updated_at DESC, created_at DESC, id ASC
+		LIMIT ?
+	`, args...)
+	if err != nil {
+		return nil, fmt.Errorf("query verified action audits by origin: %w", err)
+	}
+	defer rows.Close()
+	records := make([]ActionAuditRecord, 0, limit)
+	for rows.Next() {
+		record, scanErr := scanActionAuditRecord(rows)
+		if scanErr != nil {
+			return nil, fmt.Errorf("scan verified action audit by origin: %w", scanErr)
+		}
+		truth := CanonicalActionResultV2(record)
+		if truth.Execution.Status != ActionExecutionSucceeded ||
+			truth.Verification.Status != ActionVerificationConfirmed {
+			continue
+		}
+		records = append(records, record)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate verified action audits by origin: %w", err)
+	}
+	return records, nil
+}
+
 func (s *SQLiteResourceStore) GetPendingActionAudits(limit int) ([]ActionAuditRecord, error) {
 	if limit <= 0 || limit > 500 {
 		limit = 100
@@ -3748,6 +3816,53 @@ func (m *MemoryStore) GetLatestActionAuditsByOperationalRecords(
 		}
 	}
 	return result, nil
+}
+
+func (m *MemoryStore) GetVerifiedActionAuditsByOrigins(
+	surfaces []string,
+	limit int,
+) ([]ActionAuditRecord, error) {
+	surfaces = uniqueStrings(surfaces)
+	if len(surfaces) == 0 {
+		return []ActionAuditRecord{}, nil
+	}
+	if limit < 1 || limit > 50 {
+		return nil, fmt.Errorf("verified action audit limit must be between 1 and 50")
+	}
+	wanted := make(map[string]struct{}, len(surfaces))
+	for _, surface := range surfaces {
+		wanted[surface] = struct{}{}
+	}
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	records := make([]ActionAuditRecord, 0, limit)
+	for _, record := range m.actionAudits {
+		if record.State != ActionStateCompleted || record.Origin == nil {
+			continue
+		}
+		if _, found := wanted[strings.TrimSpace(record.Origin.Surface)]; !found {
+			continue
+		}
+		truth := CanonicalActionResultV2(record)
+		if truth.Execution.Status != ActionExecutionSucceeded ||
+			truth.Verification.Status != ActionVerificationConfirmed {
+			continue
+		}
+		records = append(records, cloneActionAuditRecordForRead(record))
+	}
+	sort.SliceStable(records, func(i, j int) bool {
+		if !records[i].UpdatedAt.Equal(records[j].UpdatedAt) {
+			return records[i].UpdatedAt.After(records[j].UpdatedAt)
+		}
+		if !records[i].CreatedAt.Equal(records[j].CreatedAt) {
+			return records[i].CreatedAt.After(records[j].CreatedAt)
+		}
+		return records[i].ID < records[j].ID
+	})
+	if len(records) > limit {
+		records = records[:limit]
+	}
+	return records, nil
 }
 
 func (m *MemoryStore) GetPendingActionAudits(limit int) ([]ActionAuditRecord, error) {

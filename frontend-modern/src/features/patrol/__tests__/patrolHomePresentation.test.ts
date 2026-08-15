@@ -4,8 +4,6 @@ import type { AttentionItem } from '@/api/patrolAttention';
 import {
   getPatrolAttentionDecisionReason,
   getPatrolObjectiveProtectionSummary,
-  getVerifiedPatrolReceiptSummary,
-  isVerifiedPatrolReceipt,
   partitionPatrolAttention,
 } from '../patrolHomePresentation';
 
@@ -145,19 +143,5 @@ describe('patrol home presentation', () => {
       paused: 1,
       tone: 'warning',
     });
-  });
-
-  it('creates receipts only from resolved records with successful verification', () => {
-    const resolved = attentionItem({
-      state: 'resolved',
-      verificationState: 'succeeded',
-      plainLanguageSummary: 'Playback health checks returned to normal.',
-    });
-
-    expect(isVerifiedPatrolReceipt(resolved)).toBe(true);
-    expect(isVerifiedPatrolReceipt(attentionItem({ state: 'resolved' }))).toBe(false);
-    expect(getVerifiedPatrolReceiptSummary(resolved)).toBe(
-      'Playback health checks returned to normal.',
-    );
   });
 });

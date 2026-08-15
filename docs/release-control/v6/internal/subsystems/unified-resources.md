@@ -2446,11 +2446,17 @@ Memory and SQLite preserve the same object through replay and reopen.
 Action audits are the durable source of truth for Patrol action continuity.
 The store exposes optional `ActionAuditOriginReader` and
 `PendingActionAuditReader` capabilities; origin lookup is scoped by org and
-investigation identity, while pending reads are oldest-first. SQLite persists
+investigation identity, while pending reads are oldest-first. The optional
+`VerifiedActionAuditOriginReader` is the canonical receipt source: it applies
+the trusted origin set and confirmed postcondition predicate before the bound,
+returns newest verification first, and never asks a product client to scan a
+generic settled-action page for proof. SQLite persists
 an absent origin as NULL, guards JSON-expression queries and indexes with
 `json_valid(origin_json)`, and keeps dedicated origin/state indexes so an old
-empty or malformed value cannot reject otherwise valid audit rows. Memory and
-SQLite implementations preserve the same ordering and clone semantics.
+empty or malformed value cannot reject otherwise valid audit rows. Its
+origin/verification/update index keeps the receipt read bounded as audit
+history grows. Memory and SQLite implementations preserve the same filtering,
+ordering, and clone semantics.
 Terminal audit persistence derives `VerificationOutcome` from the canonical
 execution result: no verifier is unknown, a configured verifier that did not
 run is unverified, a successful read-back is verified, and a failed read-back

@@ -119,6 +119,7 @@ continues to mint and quote the enrollment token.
 3. `internal/api/discovery_handlers.go`
 4. `internal/api/alerts.go`
    4a. `internal/api/attention_handlers.go`
+   4b. `internal/api/attention_receipts.go`
 5. `internal/api/activity_audit_handlers.go`
    5a. `pkg/extensions/audit_admin.go`
 6. `internal/api/actions.go`
@@ -3833,7 +3834,9 @@ the authoritative analysis outcome.
 `frontend-modern/src/api/patrolAttention.ts` own the typed read transport for
 `GET /api/ai/patrol/attention`,
 `GET /api/ai/patrol/attention/summary`, and
-`GET /api/ai/patrol/attention/{id}`. Read routes require `monitoring:read`,
+`GET /api/ai/patrol/attention/{id}`. The same authenticated transport exposes
+`GET /api/ai/patrol/attention/receipts` as the bounded verified-work projection.
+Read routes require `monitoring:read`,
 and — because the attention workbench supersedes the legacy patrol findings
 routes that mobile devices already used — they equally accept the
 backend-owned `relay:mobile:access` capability and the legacy `ai:execute`
@@ -3846,6 +3849,13 @@ drift back to a single-scope gate: a registered phone carries only
 mobile alert sync on upgrade (v6.1.0-rc.4 regression).
 Lists use bounded pagination with a maximum of 200 records and one bounded
 protection-posture batch. The summary path does not read recovery history.
+Receipt reads are separate from lifecycle pagination: the unified action store
+filters the trusted `patrol` and `operational_trust_attention` origins and a
+canonically confirmed postcondition before applying the requested maximum of
+50, orders by verification update newest first, and returns only bounded
+presentation fields. A client must not scan a generic resolved-attention or
+settled-action page and filter it after pagination, because unrelated history
+can otherwise hide genuine verified work.
 The Patrol workbench may project the summary counts into its fixed lifecycle
 filter labels at either desktop or narrow widths, but changing presentation
 does not create a parallel count or filter vocabulary: every selection still
@@ -7408,10 +7418,11 @@ oversized requests clamp to the backend maximum of `100`.
 The outcome-first Patrol home consumes the existing typed attention contract;
 it does not create a second server lifecycle. `GET /api/ai/patrol/attention`
 with `filter=active` remains the source for current typed evidence and governed
-action offers, while `filter=resolved` supplies receipt candidates. Frontend
-presentation may call a resolved item handled only when the API-authored
-`state` is `resolved` and `verificationState` is `succeeded`; it must preserve
-pending, failed, unknown, and unavailable verification as non-receipts. The
+action offers. `GET /api/ai/patrol/attention/receipts` is the canonical recent
+work source for both autonomous Patrol actions and Operational Trust attention
+actions. It admits only completed execution with a confirmed postcondition and
+therefore never returns pending, failed, contradicted, inconclusive, rejected,
+or unrelated-origin work as a receipt. The
 frontend may use action eligibility and approval fields to decide whether an
 item needs another operator decision under the effective autonomy level, but
 that projection grants no action authority and cannot override server planning,

@@ -13,10 +13,117 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/operationaltrust"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
+
+func TestAttentionHandlersReceiptsUseVerifiedPatrolActionsBeforeLimit(t *testing.T) {
+	now := time.Date(2026, 8, 15, 8, 0, 0, 0, time.UTC)
+	resources := NewResourceHandlers(&config.Config{DataPath: t.TempDir()})
+	store, err := resources.getStore("default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = resources.CloseStores() })
+	for _, record := range []unifiedresources.ActionAuditRecord{
+		attentionReceiptTestRecord("patrol-old", patrolActionOriginSurface, now.Add(-time.Minute), true),
+		attentionReceiptTestRecord("attention-new", operationalTrustActionOriginSurface, now, true),
+		attentionReceiptTestRecord("assistant-newer", "assistant", now.Add(time.Minute), true),
+		attentionReceiptTestRecord("patrol-unverified", patrolActionOriginSurface, now.Add(2*time.Minute), false),
+	} {
+		if err := store.RecordActionAudit(record); err != nil {
+			t.Fatalf("RecordActionAudit(%s): %v", record.ID, err)
+		}
+	}
+	handler := &AttentionHandlers{resources: resources}
+	request := httptest.NewRequest(
+		http.MethodGet,
+		"/api/ai/patrol/attention/receipts?limit=6",
+		nil,
+	)
+	response := httptest.NewRecorder()
+	handler.HandleAttention(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d body=%s", response.Code, response.Body.String())
+	}
+	var payload patrolWorkReceiptListResponse
+	if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload.Count != 2 || payload.Limit != 6 || len(payload.Data) != 2 {
+		t.Fatalf("payload = %#v", payload)
+	}
+	if payload.Data[0].ActionID != "attention-new" ||
+		payload.Data[1].ActionID != "patrol-old" {
+		t.Fatalf("receipt order = %#v", payload.Data)
+	}
+	for _, receipt := range payload.Data {
+		if receipt.VerificationSummary == "" || receipt.EvidenceClass != unifiedresources.ActionEvidenceAgentAttested {
+			t.Fatalf("receipt omitted verification proof: %#v", receipt)
+		}
+	}
+
+	limitedRequest := httptest.NewRequest(
+		http.MethodGet,
+		"/api/ai/patrol/attention/receipts?limit=1",
+		nil,
+	)
+	limitedResponse := httptest.NewRecorder()
+	handler.HandleAttention(limitedResponse, limitedRequest)
+	var limited patrolWorkReceiptListResponse
+	if err := json.Unmarshal(limitedResponse.Body.Bytes(), &limited); err != nil {
+		t.Fatal(err)
+	}
+	if len(limited.Data) != 1 || limited.Data[0].ActionID != "attention-new" {
+		t.Fatalf("limited receipts = %#v", limited.Data)
+	}
+}
+
+func TestAttentionHandlersReceiptsRejectInvalidLimit(t *testing.T) {
+	handler := &AttentionHandlers{}
+	request := httptest.NewRequest(
+		http.MethodGet,
+		"/api/ai/patrol/attention/receipts?limit=51",
+		nil,
+	)
+	response := httptest.NewRecorder()
+	handler.HandleAttention(response, request)
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d body=%s", response.Code, response.Body.String())
+	}
+}
+
+func attentionReceiptTestRecord(
+	id string,
+	surface string,
+	updatedAt time.Time,
+	verified bool,
+) unifiedresources.ActionAuditRecord {
+	verification := &unifiedresources.ActionVerificationResult{
+		Ran: true, Success: verified, RanAt: updatedAt,
+	}
+	outcome := unifiedresources.VerificationOutcome{Status: unifiedresources.VerificationFailed}
+	if verified {
+		outcome = unifiedresources.VerificationOutcome{
+			Status:          unifiedresources.VerificationVerified,
+			EvidenceSummary: "Service healthy after restart.",
+		}
+	}
+	return unifiedresources.ActionAuditRecord{
+		ID: id, CreatedAt: updatedAt.Add(-time.Second), UpdatedAt: updatedAt,
+		State: unifiedresources.ActionStateCompleted,
+		Request: unifiedresources.ActionRequest{
+			RequestID: id + "-request", ResourceID: "app-container:test", CapabilityName: "restart", RequestedBy: "pulse_patrol",
+		},
+		Plan:                unifiedresources.ActionPlan{ActionID: id, RequestID: id + "-request", Allowed: true},
+		Origin:              &unifiedresources.ActionOrigin{Surface: surface, FindingID: id + "-finding"},
+		Result:              &unifiedresources.ExecutionResult{Success: true, Verification: verification},
+		VerificationOutcome: outcome,
+	}
+}
 
 func TestAttentionHandlersListUsesCanonicalCountAndFilters(t *testing.T) {
 	now := time.Date(2026, 7, 19, 6, 0, 0, 0, time.UTC)

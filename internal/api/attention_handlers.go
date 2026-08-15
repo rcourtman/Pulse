@@ -108,6 +108,8 @@ func (h *AttentionHandlers) HandleAttention(w http.ResponseWriter, r *http.Reque
 		h.handleAttentionList(w, r)
 	case path == "/summary":
 		h.handleAttentionSummary(w, r)
+	case path == "/receipts":
+		h.handleAttentionReceipts(w, r)
 	case strings.Contains(path, "/evidence/"):
 		h.handleAttentionEvidence(w, r, path)
 	case strings.HasPrefix(path, "/"):

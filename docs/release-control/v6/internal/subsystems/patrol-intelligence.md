@@ -93,11 +93,16 @@ authority or a bypass around planning, feasibility, approval, dispatch, and
 verification.
 
 The `Recently handled` surface is proof-constrained. It may render a receipt
-only for a resolved attention record whose verification state is `succeeded`,
-and it describes the resolved record rather than inferring which offered action
-ran. Pending, failed, unknown, or unavailable verification must never be styled
-as handled work. Objective summary language similarly counts protection only
-from active objectives whose server-authored coverage state is `covered`.
+only from the server-filtered verified-work endpoint backed by canonical action
+audits. That projection covers both autonomous `patrol` actions and governed
+`operational_trust_attention` actions, applies origin plus confirmed
+postcondition filtering before its display limit, and orders by verification
+time newest first. The browser never reconstructs receipts from a paginated
+resolved-attention or settled-action list. Pending, failed, contradicted,
+inconclusive, rejected, unknown, unavailable, and unrelated-origin work must
+never be styled as handled work. Objective summary language similarly counts
+protection only from active objectives whose server-authored coverage state is
+`covered`.
 
 The effective autonomy label and plain-language consequence stay visible, but
 the four-level selector is a secondary disclosure. A plan-locked daily operator

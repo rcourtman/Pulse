@@ -1,10 +1,10 @@
 import { For, Show, createMemo, createSignal, onCleanup, onMount } from 'solid-js';
 import CheckCircleIcon from 'lucide-solid/icons/circle-check';
 import RefreshIcon from 'lucide-solid/icons/refresh-cw';
-import { getPatrolAttention, type AttentionItem } from '@/api/patrolAttention';
+import { getPatrolWorkReceipts, type PatrolWorkReceipt } from '@/api/patrolAttention';
 import { Button } from '@/components/shared/Button';
+import { formatActionName } from '@/features/actions/actionPresentation';
 import { formatRelativeTime } from '@/utils/format';
-import { getVerifiedPatrolReceiptSummary, isVerifiedPatrolReceipt } from './patrolHomePresentation';
 
 const RECEIPT_LIMIT = 6;
 
@@ -12,17 +12,15 @@ const formatRecentWorkError = (error: unknown): string =>
   error instanceof Error ? error.message : 'Verified work could not be loaded.';
 
 export function PatrolRecentWorkPanel() {
-  const [items, setItems] = createSignal<AttentionItem[]>([]);
+  const [items, setItems] = createSignal<PatrolWorkReceipt[]>([]);
   const [loading, setLoading] = createSignal(true);
   const [error, setError] = createSignal('');
-  const receipts = createMemo(() =>
-    items().filter(isVerifiedPatrolReceipt).slice(0, RECEIPT_LIMIT),
-  );
+  const receipts = createMemo(() => items().slice(0, RECEIPT_LIMIT));
 
   const load = async (quiet = false) => {
     if (!quiet) setLoading(true);
     try {
-      const response = await getPatrolAttention('resolved', 1, 50);
+      const response = await getPatrolWorkReceipts(RECEIPT_LIMIT);
       setItems(response.data);
       setError('');
     } catch (cause) {
@@ -116,15 +114,15 @@ export function PatrolRecentWorkPanel() {
                           Verified
                         </span>
                         <span class="text-xs text-muted">
-                          {formatRelativeTime(item.lastObservedAt, { compact: true })}
+                          {formatRelativeTime(item.verifiedAt, { compact: true })}
                         </span>
                       </div>
-                      <p class="mt-1 text-sm font-semibold text-base-content">{item.title}</p>
-                      <p class="mt-1 text-xs leading-5 text-muted">
-                        {getVerifiedPatrolReceiptSummary(item)}
+                      <p class="mt-1 text-sm font-semibold text-base-content">
+                        {formatActionName(item.capabilityName)} verified
                       </p>
+                      <p class="mt-1 text-xs leading-5 text-muted">{item.verificationSummary}</p>
                       <p class="mt-1 truncate text-xs font-medium text-base-content">
-                        {item.subjectResourceName}
+                        {item.resourceName}
                       </p>
                     </div>
                   </li>
