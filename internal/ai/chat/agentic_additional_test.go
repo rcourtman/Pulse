@@ -638,6 +638,126 @@ func TestAgenticLoopRecoversTruncatedPatrolDecisionWithGovernedFindingTurn(t *te
 	}
 }
 
+type objectiveRecoveryProposer struct {
+	calls []tools.PatrolObserverProposalInput
+}
+
+func (p *objectiveRecoveryProposer) ProposeObserver(input tools.PatrolObserverProposalInput) (tools.PatrolObserverProposalResult, error) {
+	p.calls = append(p.calls, input)
+	return tools.PatrolObserverProposalResult{
+		ObjectiveID: input.ObjectiveID, Revision: input.ExpectedRevision + 1,
+		ObserverID: "observer-recovered", Version: 1, State: "proposed",
+		ArtifactDigest: "sha256:recovered", CoverageState: "uncovered", CoverageReason: "observer_proposed",
+	}, nil
+}
+
+func TestAgenticLoopRecoversTruncatedObjectiveMissionWithProposalOnlyTurn(t *testing.T) {
+	provider := &stubStreamingProvider{}
+	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
+	executor.ApplyExecutionProfile(tools.ProfilePatrolDetection)
+	proposer := &objectiveRecoveryProposer{}
+	executor.SetPatrolObserverProposer(proposer)
+	loop := NewAgenticLoop(provider, executor, "objective mission")
+	loop.SetExecutionProfile(tools.ProfilePatrolDetection)
+	loop.SetMaxTurns(3)
+
+	providerCalls := 0
+	var recoveryRequest providers.ChatRequest
+	var summaryRequest providers.ChatRequest
+	provider.chatStream = func(_ context.Context, req providers.ChatRequest, callback providers.StreamCallback) error {
+		providerCalls++
+		switch providerCalls {
+		case 1:
+			callback(providers.StreamEvent{Type: "content", Data: providers.ContentEvent{Text: "I will carefully consider every possible observer design before deciding..."}})
+			callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{StopReason: "length", InputTokens: 1000, OutputTokens: patrolDetectionTurnOutputAllowance}})
+		case 2:
+			recoveryRequest = req
+			call := providers.ToolCall{ID: "propose-observer", Name: agentcapabilities.PatrolProposeObserverToolName, Input: map[string]interface{}{
+				"objective_id": "objective-1", "expected_revision": float64(1),
+				"evidence_fit": "proxy", "interpretation": "Use reachability as a wake signal", "trigger_kind": "interval",
+				"probe_json":    `{"runtime":"pulse-availability-state/v1","target_id":"availability-1","path":"probe_outcome","operator":"equals","value":"reachable","sample_interval_seconds":30,"wake_after_consecutive_failures":2}`,
+				"wake_evidence": "The endpoint is unreachable twice", "requirements_json": `{}`,
+			}}
+			callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{StopReason: "tool_use", ToolCalls: []providers.ToolCall{call}, InputTokens: 800, OutputTokens: 180}})
+		case 3:
+			summaryRequest = req
+			callback(providers.StreamEvent{Type: "content", Data: providers.ContentEvent{Text: "A bounded proxy observer was proposed for core validation."}})
+			callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{StopReason: "end_turn", InputTokens: 400, OutputTokens: 20}})
+		default:
+			t.Fatalf("unexpected provider call %d", providerCalls)
+		}
+		return nil
+	}
+
+	available := []providers.Tool{{Name: agentcapabilities.PatrolProposeObserverToolName}}
+	result, err := loop.ExecuteWithTools(context.Background(), "truncated-objective-mission", []Message{{Role: "user", Content: "Objective objective-1 revision 1."}}, available, func(StreamEvent) {})
+	if err != nil {
+		t.Fatalf("objective recovery failed: %v", err)
+	}
+	if providerCalls != 3 || len(proposer.calls) != 1 {
+		t.Fatalf("provider calls=%d proposals=%d, want one bounded recovery proposal", providerCalls, len(proposer.calls))
+	}
+	if len(recoveryRequest.Tools) != 1 || recoveryRequest.Tools[0].Name != agentcapabilities.PatrolProposeObserverToolName {
+		t.Fatalf("recovery tools = %+v, want proposal only", recoveryRequest.Tools)
+	}
+	if recoveryRequest.ToolChoice == nil || recoveryRequest.ToolChoice.Type != providers.ToolChoiceRequired {
+		t.Fatalf("recovery tool choice = %+v, want required", recoveryRequest.ToolChoice)
+	}
+	if !strings.Contains(recoveryRequest.System, "previous model turn exhausted its output budget") || strings.Contains(recoveryRequest.System, "finding") {
+		t.Fatalf("recovery prompt = %q", recoveryRequest.System)
+	}
+	if recoveryRequest.MaxTokens != patrolDetectionRecoveryAllowance {
+		t.Fatalf("recovery MaxTokens = %d, want %d", recoveryRequest.MaxTokens, patrolDetectionRecoveryAllowance)
+	}
+	if len(summaryRequest.Tools) != 0 {
+		t.Fatalf("post-proposal tools = %+v, want prose-only completion", summaryRequest.Tools)
+	}
+	var persisted strings.Builder
+	for _, message := range result {
+		if message.Role == "assistant" {
+			persisted.WriteString(message.Content)
+		}
+	}
+	if strings.Contains(persisted.String(), "carefully consider") || !strings.Contains(persisted.String(), "bounded proxy observer") {
+		t.Fatalf("persisted objective result = %q", persisted.String())
+	}
+}
+
+func TestAgenticLoopFailsClosedAfterRepeatedTruncatedObjectiveRecovery(t *testing.T) {
+	provider := &stubStreamingProvider{}
+	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
+	executor.ApplyExecutionProfile(tools.ProfilePatrolDetection)
+	loop := NewAgenticLoop(provider, executor, "objective mission")
+	loop.SetExecutionProfile(tools.ProfilePatrolDetection)
+	loop.SetMaxTurns(1)
+
+	providerCalls := 0
+	provider.chatStream = func(_ context.Context, req providers.ChatRequest, callback providers.StreamCallback) error {
+		providerCalls++
+		if providerCalls == 2 {
+			if len(req.Tools) != 1 || req.Tools[0].Name != agentcapabilities.PatrolProposeObserverToolName || req.ToolChoice == nil {
+				t.Fatalf("second request was not bounded objective recovery: %+v", req)
+			}
+		}
+		callback(providers.StreamEvent{Type: "content", Data: providers.ContentEvent{Text: "unfinished"}})
+		callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{StopReason: map[int]string{1: "length", 2: "max_tokens"}[providerCalls], OutputTokens: patrolDetectionTurnOutputAllowance}})
+		return nil
+	}
+
+	result, err := loop.ExecuteWithTools(context.Background(), "twice-truncated-objective", []Message{{Role: "user", Content: "Objective objective-1 revision 1."}}, []providers.Tool{{Name: agentcapabilities.PatrolProposeObserverToolName}}, func(StreamEvent) {})
+	if err == nil || !strings.Contains(err.Error(), "objective observer proposal") {
+		t.Fatalf("error = %v, want objective-specific fail-closed output-budget error", err)
+	}
+	if providerCalls != 2 {
+		t.Fatalf("provider calls = %d, want one bounded retry", providerCalls)
+	}
+	for _, message := range result {
+		if message.Role == "assistant" && strings.TrimSpace(message.Content) != "" {
+			t.Fatalf("truncated content leaked into objective result: %+v", result)
+		}
+	}
+}
+
 func TestAgenticLoopFailsClosedAfterRepeatedTruncatedPatrolDecision(t *testing.T) {
 	provider := &stubStreamingProvider{}
 	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
