@@ -6313,6 +6313,12 @@ synthetic `ai-service` runtime failure just as a successful full Patrol run
 does, without loosening ordinary scoped finding reconciliation for
 infrastructure issues. A soft-warning preflight where the provider responds but
 the model does not emit a tool call is not sufficient recovery evidence.
+Because the synthetic runtime finding is seeded into scoped runs as Patrol-wide
+health evidence, the run's finding adapter must also expose and accept a
+terminal assessment for that finding even though `ai-service` is not part of
+the caller-requested inventory scope. This is the sole lifecycle-scope
+exception; it does not grant infrastructure action authority, and the existing
+manual-action prohibitions remain in force.
 The same selected-route preflight is part of the live Patrol readiness gate,
 not merely settings-page diagnostics. A completed matching billing, quota,
 authentication, connection, unsupported-tool, or timeout failure makes Patrol

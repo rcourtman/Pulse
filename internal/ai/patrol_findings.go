@@ -706,6 +706,14 @@ func (a *patrolFindingCreatorAdapter) findingInCurrentScope(finding *Finding) bo
 	if finding == nil {
 		return false
 	}
+	// Runtime findings are deliberately seeded into every Patrol run because
+	// they describe Patrol's own ability to observe the requested scope rather
+	// than an inventory resource. Keep lifecycle scope aligned with that seed:
+	// the model may record a terminal assessment, while the existing runtime
+	// finding guards still prohibit manual or infrastructure remediation.
+	if patrolFindingUsesSyntheticRuntimeResource(finding) {
+		return true
+	}
 	if len(a.findingScope) > 0 {
 		return a.findingScope[finding.ResourceID] || a.findingScope[finding.ResourceName]
 	}

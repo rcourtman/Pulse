@@ -1563,6 +1563,38 @@ func TestPatrolFindingAdapterSeparatesRequestedLifecycleScopeFromEvidenceScope(t
 	}
 }
 
+func TestPatrolFindingAdapterCanAssessSeededRuntimeFindingDuringScopedRun(t *testing.T) {
+	state := newPatrolRuntimeState(models.StateSnapshot{
+		VMs: []models.VM{{ID: "vm-requested", Name: "requested", VMID: 501}},
+	})
+	ps := NewPatrolService(nil, nil)
+	runtimeFinding := &Finding{
+		ID: patrolRuntimeFindingKey, Key: patrolRuntimeFindingKey,
+		Severity: FindingSeverityWarning, Category: FindingCategoryReliability,
+		ResourceID: patrolRuntimeResourceID, ResourceName: "Pulse Patrol Service",
+		ResourceType: "service", Title: "Pulse Patrol provider interrupted",
+	}
+	ps.findings.Add(runtimeFinding)
+
+	adapter := newPatrolFindingCreatorAdapterState(ps, state)
+	adapter.setFindingScope([]string{"vm-requested"})
+	active := adapter.GetActiveFindings("", "")
+	if len(active) != 1 || active[0].ID != runtimeFinding.ID {
+		t.Fatalf("active findings = %+v, want seeded Patrol runtime finding", active)
+	}
+	if err := adapter.AssessFinding(tools.PatrolFindingAssessmentInput{
+		FindingID: runtimeFinding.ID, Verdict: "uncertain",
+		Evidence: "the prior provider interruption is not infrastructure evidence",
+		Reason:   "the current scoped run has not completed yet",
+	}); err != nil {
+		t.Fatalf("assess seeded runtime finding in scoped run: %v", err)
+	}
+	assessments := adapter.getAssessments()
+	if len(assessments) != 1 || assessments[0].FindingID != runtimeFinding.ID || assessments[0].Verdict != "uncertain" {
+		t.Fatalf("runtime finding assessments = %+v", assessments)
+	}
+}
+
 func TestPatrolFindingAdapterDistinguishesSameRunCreationFromExistingRereport(t *testing.T) {
 	ps := NewPatrolService(nil, nil)
 	input := tools.PatrolFindingInput{
