@@ -67,9 +67,12 @@ model has received at least one successful structured result from an advertised
 evidence tool. Until then, core withholds proposal authority while leaving
 evidence-tool selection model-owned. Failed, policy-blocked, loop-blocked, and
 otherwise rejected calls still consume the bounded evidence-attempt budget but
-cannot satisfy grounding. If that budget is exhausted without a successful
-result, the run fails closed before proposal or completed-investigation
-persistence. An unset attempt ceiling does not weaken that rule: reaching the
+cannot satisfy grounding. Transport success alone is insufficient: the result
+must contain non-empty evidence content and must not carry the shared legacy or
+structured policy-block/approval markers. If that budget is exhausted without
+a successful result, the run fails closed before proposal or
+completed-investigation persistence. An unset attempt ceiling does not weaken
+that rule: reaching the
 independent model-turn limit with no successful result fails closed before the
 generic final-summary fallback. The side-effect-free action-capability lookup is planning
 metadata, not infrastructure evidence: it neither consumes the evidence budget
@@ -7478,7 +7481,9 @@ authority or a zero-evidence manifest fails before inference. Runtime
 completion and proposal authority additionally
 require at least one of those evidence calls to succeed; attempted calls remain
 visible for budget accounting and forensics, but failed or blocked results are
-not grounding. This keeps focused Patrol
+not grounding. Blank tool results and machine-readable policy or approval
+blocks are also non-grounding even when an adapter fails to set `is_error`.
+This keeps focused Patrol
 usable with smaller local models without replacing model judgment with a
 diagnostic script or weakening proposal, policy, approval, execution, or
 verification boundaries.

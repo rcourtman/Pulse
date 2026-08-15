@@ -10,9 +10,22 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
 )
+
+type policyBlockedEvidenceAgentServer struct{}
+
+func (policyBlockedEvidenceAgentServer) GetConnectedAgents() []agentexec.ConnectedAgent {
+	return []agentexec.ConnectedAgent{{AgentID: "agent-1", Hostname: "host-1"}}
+}
+
+func (policyBlockedEvidenceAgentServer) ExecuteCommand(context.Context, string, agentexec.ExecuteCommandPayload) (*agentexec.CommandResultPayload, error) {
+	return &agentexec.CommandResultPayload{
+		Stdout: agentcapabilities.PolicyBlockedToolMarker("uptime", "blocked by policy"),
+	}, nil
+}
 
 func TestRequiresOrderedPatrolFindingLifecycleExecution(t *testing.T) {
 	tests := []struct {
@@ -156,6 +169,83 @@ func TestInvestigationEvidenceBudgetHelpers(t *testing.T) {
 	evidenceOnly := investigationEvidenceTools(available)
 	if len(evidenceOnly) != 1 || evidenceOnly[0].Name != agentcapabilities.PulseQueryToolName {
 		t.Fatalf("evidence tools = %+v, want only infrastructure evidence", evidenceOnly)
+	}
+}
+
+func TestSuccessfulInvestigationEvidenceResultRejectsEmptyAndBlockedOutcomes(t *testing.T) {
+	policyResponse := agentcapabilities.NewToolJSONResultWithIsError(agentcapabilities.NewToolBlockedError(
+		agentcapabilities.ErrCodePolicyBlocked,
+		"blocked by policy",
+		nil,
+	), false)
+
+	tests := []struct {
+		name    string
+		tool    string
+		content string
+		isError bool
+		want    bool
+	}{
+		{name: "canonical evidence", tool: agentcapabilities.PulseQueryToolName, content: `{"items":[]}`, want: true},
+		{name: "non evidence tool", tool: agentcapabilities.PulseAlertsToolName, content: `{"alerts":[]}`},
+		{name: "error result", tool: agentcapabilities.PulseQueryToolName, content: "query failed", isError: true},
+		{name: "empty result", tool: agentcapabilities.PulseQueryToolName},
+		{name: "whitespace result", tool: agentcapabilities.PulseQueryToolName, content: " \n\t "},
+		{name: "legacy policy block", tool: agentcapabilities.PulseQueryToolName, content: " \n" + agentcapabilities.PolicyBlockedToolMarker("query", "blocked by policy")},
+		{name: "structured policy block", tool: agentcapabilities.PulseQueryToolName, content: agentcapabilities.ToolResultText(policyResponse)},
+		{name: "approval request", tool: agentcapabilities.PulseQueryToolName, content: agentcapabilities.ApprovalRequiredToolMarker("query", "call-1", "approval required", "approval-1", "Approve it.")},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := isSuccessfulInvestigationEvidenceResult(tt.tool, tt.content, tt.isError); got != tt.want {
+				t.Fatalf("isSuccessfulInvestigationEvidenceResult(%q, %q, %v) = %v, want %v", tt.tool, tt.content, tt.isError, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestAgenticLoopPatrolInvestigationPolicyBlockedEvidenceDoesNotUnlockProposal(t *testing.T) {
+	t.Setenv("PULSE_STRICT_RESOLUTION", "false")
+	provider := &stubStreamingProvider{}
+	providerCalls := 0
+	provider.chatStream = func(_ context.Context, req providers.ChatRequest, callback providers.StreamCallback) error {
+		providerCalls++
+		if providerToolIsAdvertised(req.Tools, agentcapabilities.PatrolProposeActionToolName) {
+			t.Fatalf("proposal authority exposed before grounded evidence: %+v", req.Tools)
+		}
+		callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{ToolCalls: []providers.ToolCall{{
+			ID: "policy-blocked-evidence", Name: agentcapabilities.PulseReadToolName,
+			Input: map[string]interface{}{"action": "exec", "command": "uptime", "target_host": "host-1"},
+		}}}})
+		return nil
+	}
+
+	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{AgentServer: policyBlockedEvidenceAgentServer{}})
+	executor.ApplyExecutionProfile(tools.ProfilePatrolInvestigation)
+	loop := NewAgenticLoop(provider, executor, "system")
+	loop.SetExecutionProfile(tools.ProfilePatrolInvestigation)
+	loop.SetMaxEvidenceCalls(1)
+	loop.SetMaxTurns(3)
+
+	result, err := loop.ExecuteWithTools(
+		context.Background(),
+		"policy-blocked-evidence",
+		[]Message{{Role: "user", Content: "investigate"}},
+		[]providers.Tool{{Name: agentcapabilities.PulseReadToolName}, {Name: agentcapabilities.PatrolProposeActionToolName}},
+		func(StreamEvent) {},
+	)
+	if err == nil || !strings.Contains(err.Error(), "without a successful structured evidence result") {
+		t.Fatalf("ExecuteWithTools error = %v, want fail-closed grounding error", err)
+	}
+	if providerCalls != 1 || loop.GetTotalEvidenceCalls() != 1 || loop.successfulEvidenceCalls != 0 {
+		t.Fatalf("provider/evidence counts = %d/%d/%d, want 1/1/0", providerCalls, loop.GetTotalEvidenceCalls(), loop.successfulEvidenceCalls)
+	}
+	if len(result) == 0 || result[len(result)-1].ToolResult == nil {
+		t.Fatalf("policy-blocked evidence result missing from transcript: %+v", result)
+	}
+	blocked := result[len(result)-1].ToolResult
+	if blocked.IsError || !agentcapabilities.HasPolicyBlockedToolMarker(blocked.Content) {
+		t.Fatalf("test requires a transport-success policy block, got %+v", blocked)
 	}
 }
 

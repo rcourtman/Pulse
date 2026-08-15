@@ -2389,6 +2389,8 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 			if firstToolResultText == "" {
 				firstToolResultText = resultText
 			}
+			successfulInvestigationEvidence := isPatrolInvestigationExecution(a.currentExecutionProfile()) &&
+				isSuccessfulInvestigationEvidenceResult(tc.Name, resultText, isError)
 
 			// Track pending recovery for strict resolution blocks
 			// (FSM blocks are tracked above; strict resolution blocks come from the executor)
@@ -2503,7 +2505,7 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 
 			if !isError {
 				anyToolSucceededThisTurn = true
-				if isPatrolInvestigationExecution(a.currentExecutionProfile()) && isInvestigationEvidenceTool(tc.Name) {
+				if successfulInvestigationEvidence {
 					a.successfulEvidenceCalls++
 				}
 				if isPatrolDetectionExecution(a.currentExecutionProfile()) && tc.Name == agentcapabilities.PatrolGetFindingsToolName {

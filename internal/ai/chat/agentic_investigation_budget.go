@@ -2,6 +2,7 @@ package chat
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
@@ -43,6 +44,23 @@ func applyInvestigationOutputLimitRecoveryRequest(req *providers.ChatRequest, pr
 
 func isInvestigationEvidenceTool(name string) bool {
 	return agentcapabilities.IsPatrolInfrastructureEvidenceToolName(name)
+}
+
+func isSuccessfulInvestigationEvidenceResult(name, content string, isError bool) bool {
+	content = strings.TrimSpace(content)
+	if !isInvestigationEvidenceTool(name) || isError || content == "" {
+		return false
+	}
+	if agentcapabilities.HasPolicyBlockedToolMarker(content) || agentcapabilities.HasApprovalRequiredToolMarker(content) {
+		return false
+	}
+	if code, ok := agentcapabilities.ToolResultErrorCode(content); ok {
+		switch code {
+		case agentcapabilities.ErrCodePolicyBlocked, agentcapabilities.ErrCodeApprovalRequired:
+			return false
+		}
+	}
+	return true
 }
 
 func investigationEvidenceTools(available []providers.Tool) []providers.Tool {
