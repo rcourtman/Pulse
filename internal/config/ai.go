@@ -42,6 +42,7 @@ type AIConfig struct {
 	AnthropicAPIKey           string `json:"anthropic_api_key,omitempty"`           // Anthropic API key
 	OpenAIAPIKey              string `json:"openai_api_key,omitempty"`              // OpenAI API key
 	OpenRouterAPIKey          string `json:"openrouter_api_key,omitempty"`          // OpenRouter API key
+	VercelAPIKey              string `json:"vercel_api_key,omitempty"`              // Vercel AI Gateway API key
 	DeepSeekAPIKey            string `json:"deepseek_api_key,omitempty"`            // DeepSeek API key
 	GeminiAPIKey              string `json:"gemini_api_key,omitempty"`              // Google Gemini API key
 	ZaiAPIKey                 string `json:"zai_api_key,omitempty"`                 // Z.ai (Zhipu GLM) API key
@@ -140,6 +141,7 @@ const (
 	AIProviderAnthropic          = "anthropic"
 	AIProviderOpenAI             = "openai"
 	AIProviderOpenRouter         = "openrouter"
+	AIProviderVercel             = "vercel"
 	AIProviderOllama             = "ollama"
 	AIProviderDeepSeek           = "deepseek"
 	AIProviderGemini             = "gemini"
@@ -195,6 +197,7 @@ const (
 	// overrides that policy when the operator saves an explicit value.
 	DefaultOllamaKeepAlive   = ""
 	DefaultOpenRouterBaseURL = "https://openrouter.ai/api/v1"
+	DefaultVercelBaseURL     = "https://ai-gateway.vercel.sh/v1"
 	DefaultDeepSeekBaseURL   = "https://api.deepseek.com"
 	DefaultGeminiBaseURL     = "https://generativelanguage.googleapis.com/v1beta"
 	DefaultZaiBaseURL        = "https://api.z.ai/api/paas/v4"
@@ -431,6 +434,8 @@ func (c *AIConfig) HasProvider(provider string) bool {
 		return strings.TrimSpace(c.OpenAIAPIKey) != "" || IsCustomOpenAICompatibleEndpoint(c.OpenAIBaseURL)
 	case AIProviderOpenRouter:
 		return c.OpenRouterAPIKey != ""
+	case AIProviderVercel:
+		return c.VercelAPIKey != ""
 	case AIProviderDeepSeek:
 		return c.DeepSeekAPIKey != ""
 	case AIProviderGemini:
@@ -512,6 +517,8 @@ func (c *AIConfig) RemoveProvider(provider string) error {
 		c.OpenAIBaseURL = ""
 	case AIProviderOpenRouter:
 		c.OpenRouterAPIKey = ""
+	case AIProviderVercel:
+		c.VercelAPIKey = ""
 	case AIProviderDeepSeek:
 		c.DeepSeekAPIKey = ""
 	case AIProviderGemini:
@@ -592,6 +599,10 @@ func (c *AIConfig) GetAPIKeyForProvider(provider string) string {
 	case AIProviderOpenRouter:
 		if c.OpenRouterAPIKey != "" {
 			return c.OpenRouterAPIKey
+		}
+	case AIProviderVercel:
+		if c.VercelAPIKey != "" {
+			return c.VercelAPIKey
 		}
 	case AIProviderDeepSeek:
 		if c.DeepSeekAPIKey != "" {

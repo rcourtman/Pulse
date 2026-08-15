@@ -149,7 +149,11 @@ type gatewayEquivalentResolver struct {
 var gatewayEquivalentResolvers = []gatewayEquivalentResolver{
 	{
 		gatewayProvider:  config.AIProviderOpenRouter,
-		ownerForProvider: openRouterOwnerForProvider,
+		ownerForProvider: gatewayOwnerForProvider,
+	},
+	{
+		gatewayProvider:  config.AIProviderVercel,
+		ownerForProvider: gatewayOwnerForProvider,
 	},
 }
 
@@ -207,7 +211,7 @@ func (r gatewayEquivalentResolver) resolve(cfg *config.AIConfig, model string) (
 	return candidate, true
 }
 
-func openRouterOwnerForProvider(provider string) string {
+func gatewayOwnerForProvider(provider string) string {
 	switch strings.TrimSpace(provider) {
 	case config.AIProviderAnthropic:
 		return "anthropic"

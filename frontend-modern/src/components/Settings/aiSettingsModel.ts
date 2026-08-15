@@ -12,6 +12,7 @@ export type AIProviderCredentialsFormState = {
   anthropicApiKey: string;
   openaiApiKey: string;
   openrouterApiKey: string;
+  vercelApiKey: string;
   deepseekApiKey: string;
   zaiApiKey: string;
   groqApiKey: string;
@@ -70,6 +71,7 @@ export const AI_PROVIDERS: AIProvider[] = [
   'anthropic',
   'openai',
   'openrouter',
+  'vercel',
   'deepseek',
   'gemini',
   'zai',
@@ -87,6 +89,7 @@ export const AI_SETUP_PROVIDER_OPTIONS: SelectionCardOption<AIProvider>[] = [
   { value: 'anthropic', title: 'Anthropic', description: 'Claude' },
   { value: 'openai', title: 'OpenAI', description: 'ChatGPT' },
   { value: 'openrouter', title: 'OpenRouter', description: 'Gateway' },
+  { value: 'vercel', title: 'Vercel', description: 'AI Gateway' },
   { value: 'deepseek', title: 'DeepSeek', description: 'V4' },
   { value: 'gemini', title: 'Gemini', description: 'Google' },
   { value: 'zai', title: 'Z.ai', description: 'GLM' },
@@ -148,6 +151,19 @@ export const AI_PROVIDER_CONFIGS: AIProviderConfig[] = [
     actionLinkLabel: 'Get API key →',
     actionLinkHref: 'https://openrouter.ai/keys',
     helperText: 'Uses https://openrouter.ai/api/v1 automatically.',
+    clearTitle: 'Clear API key',
+  },
+  {
+    provider: 'vercel',
+    title: 'Vercel AI Gateway',
+    configuredLabel: 'Configured',
+    inputType: 'password',
+    inputField: 'vercelApiKey',
+    placeholder: 'AI Gateway API key',
+    configuredPlaceholder: '••••••••••• (configured)',
+    actionLinkLabel: 'Get API key →',
+    actionLinkHref: 'https://vercel.com/ai-gateway',
+    helperText: 'Uses https://ai-gateway.vercel.sh/v1 automatically.',
     clearTitle: 'Clear API key',
   },
   {
@@ -316,6 +332,7 @@ export const createInitialProviderHealth = (): Record<AIProvider, ProviderHealth
   anthropic: { status: 'not_configured', message: '' },
   openai: { status: 'not_configured', message: '' },
   openrouter: { status: 'not_configured', message: '' },
+  vercel: { status: 'not_configured', message: '' },
   deepseek: { status: 'not_configured', message: '' },
   gemini: { status: 'not_configured', message: '' },
   zai: { status: 'not_configured', message: '' },
@@ -349,6 +366,8 @@ export function isAIProviderConfigured(
       return settings.openai_configured;
     case 'openrouter':
       return settings.openrouter_configured;
+    case 'vercel':
+      return Boolean(settings.vercel_configured);
     case 'deepseek':
       return settings.deepseek_configured;
     case 'gemini':

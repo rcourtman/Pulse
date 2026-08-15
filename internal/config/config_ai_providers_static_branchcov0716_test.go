@@ -79,6 +79,7 @@ func TestBranchCovIsOpenAICompatibleProvider(t *testing.T) {
 		// OpenAI-compatible protocol arm (ok && protocol == openai_compatible).
 		{name: "openai", provider: AIProviderOpenAI, want: true},
 		{name: "openrouter gateway", provider: AIProviderOpenRouter, want: true},
+		{name: "vercel gateway", provider: AIProviderVercel, want: true},
 		{name: "deepseek", provider: AIProviderDeepSeek, want: true},
 		{name: "zai", provider: AIProviderZai, want: true},
 		{name: "groq", provider: AIProviderGroq, want: true},
@@ -237,6 +238,7 @@ func TestBranchCovAIProviderDisplayName(t *testing.T) {
 		// input id.
 		{name: "anthropic display name", provider: AIProviderAnthropic, want: "Anthropic"},
 		{name: "openrouter display name", provider: AIProviderOpenRouter, want: "OpenRouter"},
+		{name: "vercel display name", provider: AIProviderVercel, want: "Vercel AI Gateway"},
 		{name: "zai display name", provider: AIProviderZai, want: "Z.ai"},
 		{name: "codex subscription display name", provider: AIProviderCodexSubscription, want: "Codex subscription (local)"},
 		{name: "retired quickstart keeps display name", provider: AIProviderQuickstart, want: "Pulse hosted quickstart"},

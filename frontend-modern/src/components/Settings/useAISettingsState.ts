@@ -54,6 +54,7 @@ const AI_SETTINGS_PROVIDER_PAYLOAD_FIELDS: Record<AIProvider, string[]> = {
   anthropic: ['anthropic_api_key'],
   openai: ['openai_api_key', 'openai_base_url'],
   openrouter: ['openrouter_api_key'],
+  vercel: ['vercel_api_key'],
   deepseek: ['deepseek_api_key'],
   zai: ['zai_api_key', 'zai_base_url'],
   groq: ['groq_api_key'],
@@ -298,6 +299,7 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
     anthropicApiKey: '',
     openaiApiKey: '',
     openrouterApiKey: '',
+    vercelApiKey: '',
     deepseekApiKey: '',
     zaiApiKey: '',
     groqApiKey: '',
@@ -346,6 +348,7 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
       (current.anthropic_configured ||
         current.openai_configured ||
         current.openrouter_configured ||
+        current.vercel_configured ||
         current.deepseek_configured ||
         current.zai_configured ||
         current.groq_configured ||
@@ -396,6 +399,7 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
         anthropicApiKey: '',
         openaiApiKey: '',
         openrouterApiKey: '',
+        vercelApiKey: '',
         deepseekApiKey: '',
         zaiApiKey: '',
         groqApiKey: '',
@@ -444,6 +448,7 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
       anthropicApiKey: '',
       openaiApiKey: '',
       openrouterApiKey: '',
+      vercelApiKey: '',
       deepseekApiKey: '',
       zaiApiKey: '',
       groqApiKey: '',
@@ -473,6 +478,7 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
     if (data.anthropic_configured) configured.add('anthropic');
     if (data.openai_configured) configured.add('openai');
     if (data.openrouter_configured) configured.add('openrouter');
+    if (data.vercel_configured) configured.add('vercel');
     if (data.deepseek_configured) configured.add('deepseek');
     if (data.gemini_configured) configured.add('gemini');
     if (data.zai_configured) configured.add('zai');
@@ -787,6 +793,12 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
           return;
         }
         payload.openrouter_api_key = setupApiKey().trim();
+      } else if (setupProvider() === 'vercel') {
+        if (!setupApiKey().trim()) {
+          notificationStore.error('Please enter your Vercel AI Gateway API key');
+          return;
+        }
+        payload.vercel_api_key = setupApiKey().trim();
       } else if (setupProvider() === 'deepseek') {
         if (!setupApiKey().trim()) {
           notificationStore.error('Please enter your DeepSeek API key');
@@ -934,6 +946,7 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
           (modelProvider === 'anthropic' && form.anthropicApiKey.trim()) ||
           (modelProvider === 'openai' && (form.openaiApiKey.trim() || form.openaiBaseUrl.trim())) ||
           (modelProvider === 'openrouter' && form.openrouterApiKey.trim()) ||
+          (modelProvider === 'vercel' && form.vercelApiKey.trim()) ||
           (modelProvider === 'deepseek' && form.deepseekApiKey.trim()) ||
           (modelProvider === 'zai' && form.zaiApiKey.trim()) ||
           (modelProvider === 'groq' && form.groqApiKey.trim()) ||
@@ -1024,6 +1037,9 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
       }
       if (form.openrouterApiKey.trim()) {
         payload.openrouter_api_key = form.openrouterApiKey.trim();
+      }
+      if (form.vercelApiKey.trim()) {
+        payload.vercel_api_key = form.vercelApiKey.trim();
       }
       if (form.deepseekApiKey.trim()) {
         payload.deepseek_api_key = form.deepseekApiKey.trim();
@@ -1213,6 +1229,7 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
       current?.anthropic_configured,
       current?.openai_configured,
       current?.openrouter_configured,
+      current?.vercel_configured,
       current?.deepseek_configured,
       current?.zai_configured,
       current?.groq_configured,

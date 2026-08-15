@@ -148,6 +148,7 @@ func stripOpenAICompatibleProviderPrefix(providerName, model string) string {
 	for _, knownPrefix := range []string{
 		"openai:",
 		"openrouter:",
+		"vercel:",
 		"deepseek:",
 		"zai:",
 		"groq:",
@@ -415,8 +416,8 @@ func (c *OpenAIClient) isOpenRouter() bool {
 	return c.Name() == "openrouter" || strings.Contains(c.baseURL, "openrouter.ai")
 }
 
-func (c *OpenAIClient) openRouterReasoning(effort ReasoningEffort) *openAIReasoning {
-	if !c.isOpenRouter() || effort == "" || !effort.Valid() {
+func (c *OpenAIClient) gatewayReasoning(effort ReasoningEffort) *openAIReasoning {
+	if (c.Name() != "vercel" && !c.isOpenRouter()) || effort == "" || !effort.Valid() {
 		return nil
 	}
 	return &openAIReasoning{Effort: effort}
@@ -581,7 +582,7 @@ func (c *OpenAIClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 	openaiReq := openaiRequest{
 		Model:     model,
 		Messages:  messages,
-		Reasoning: c.openRouterReasoning(req.ReasoningEffort),
+		Reasoning: c.gatewayReasoning(req.ReasoningEffort),
 	}
 
 	// max_completion_tokens is required by official OpenAI reasoning models.
@@ -966,7 +967,7 @@ func (c *OpenAIClient) ChatStream(ctx context.Context, req ChatRequest, callback
 	openaiReq := openaiStreamRequest{
 		Model:     model,
 		Messages:  messages,
-		Reasoning: c.openRouterReasoning(req.ReasoningEffort),
+		Reasoning: c.gatewayReasoning(req.ReasoningEffort),
 		Stream:    true,
 	}
 	if c.supportsStreamOptions() {

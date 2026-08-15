@@ -104,6 +104,21 @@ func TestDiscoveryHandlersGetAIProviderInfo(t *testing.T) {
 				Label:    "Cloud (OpenRouter)",
 			},
 		},
+		{
+			name: "vercel discovery model",
+			provider: staticAIConfigProvider{
+				cfg: &config.AIConfig{
+					Enabled:        true,
+					DiscoveryModel: "vercel:anthropic/claude-sonnet-4",
+				},
+			},
+			want: &servicediscovery.AIProviderInfo{
+				Provider: config.AIProviderVercel,
+				Model:    "anthropic/claude-sonnet-4",
+				IsLocal:  false,
+				Label:    "Cloud (Vercel AI Gateway)",
+			},
+		},
 	}
 
 	for _, tt := range tests {

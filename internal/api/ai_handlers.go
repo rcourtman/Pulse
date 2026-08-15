@@ -1840,6 +1840,7 @@ func aiSettingsUpdateTouchesProviderConfig(req AISettingsUpdateRequest) bool {
 		req.AnthropicAPIKey != nil ||
 		req.OpenAIAPIKey != nil ||
 		req.OpenRouterAPIKey != nil ||
+		req.VercelAPIKey != nil ||
 		req.DeepSeekAPIKey != nil ||
 		req.ZaiAPIKey != nil ||
 		req.GroqAPIKey != nil ||
@@ -1857,6 +1858,7 @@ func aiSettingsUpdateTouchesProviderConfig(req AISettingsUpdateRequest) bool {
 		req.ClearAnthropicKey != nil ||
 		req.ClearOpenAIKey != nil ||
 		req.ClearOpenRouterKey != nil ||
+		req.ClearVercelKey != nil ||
 		req.ClearDeepSeekKey != nil ||
 		req.ClearZaiKey != nil ||
 		req.ClearGroqKey != nil ||
@@ -2424,6 +2426,7 @@ type AISettingsResponse struct {
 	AnthropicConfigured       bool                           `json:"anthropic_configured"`      // true if Anthropic API key is set
 	OpenAIConfigured          bool                           `json:"openai_configured"`         // true if OpenAI API key is set
 	OpenRouterConfigured      bool                           `json:"openrouter_configured"`     // true if OpenRouter API key is set
+	VercelConfigured          bool                           `json:"vercel_configured"`         // true if Vercel AI Gateway API key is set
 	DeepSeekConfigured        bool                           `json:"deepseek_configured"`       // true if DeepSeek API key is set
 	GeminiConfigured          bool                           `json:"gemini_configured"`         // true if Gemini API key is set
 	ZaiConfigured             bool                           `json:"zai_configured"`            // true if Z.ai (Zhipu) API key is set
@@ -2604,6 +2607,7 @@ type AISettingsUpdateRequest struct {
 	AnthropicAPIKey           *string `json:"anthropic_api_key,omitempty"`  // Set Anthropic API key
 	OpenAIAPIKey              *string `json:"openai_api_key,omitempty"`     // Set OpenAI API key
 	OpenRouterAPIKey          *string `json:"openrouter_api_key,omitempty"` // Set OpenRouter API key
+	VercelAPIKey              *string `json:"vercel_api_key,omitempty"`     // Set Vercel AI Gateway API key
 	DeepSeekAPIKey            *string `json:"deepseek_api_key,omitempty"`   // Set DeepSeek API key
 	GeminiAPIKey              *string `json:"gemini_api_key,omitempty"`     // Set Gemini API key
 	ZaiAPIKey                 *string `json:"zai_api_key,omitempty"`        // Set Z.ai (Zhipu) API key
@@ -2624,6 +2628,7 @@ type AISettingsUpdateRequest struct {
 	ClearAnthropicKey   *bool `json:"clear_anthropic_key,omitempty"`   // Clear Anthropic API key
 	ClearOpenAIKey      *bool `json:"clear_openai_key,omitempty"`      // Clear OpenAI API key
 	ClearOpenRouterKey  *bool `json:"clear_openrouter_key,omitempty"`  // Clear OpenRouter API key
+	ClearVercelKey      *bool `json:"clear_vercel_key,omitempty"`      // Clear Vercel AI Gateway API key
 	ClearDeepSeekKey    *bool `json:"clear_deepseek_key,omitempty"`    // Clear DeepSeek API key
 	ClearGeminiKey      *bool `json:"clear_gemini_key,omitempty"`      // Clear Gemini API key
 	ClearZaiKey         *bool `json:"clear_zai_key,omitempty"`         // Clear Z.ai (Zhipu) API key
@@ -2763,6 +2768,7 @@ func (h *AISettingsHandler) HandleGetAISettings(w http.ResponseWriter, r *http.R
 		AnthropicConfigured:       settings.HasProvider(config.AIProviderAnthropic),
 		OpenAIConfigured:          settings.HasProvider(config.AIProviderOpenAI),
 		OpenRouterConfigured:      settings.HasProvider(config.AIProviderOpenRouter),
+		VercelConfigured:          settings.HasProvider(config.AIProviderVercel),
 		DeepSeekConfigured:        settings.HasProvider(config.AIProviderDeepSeek),
 		GeminiConfigured:          settings.HasProvider(config.AIProviderGemini),
 		ZaiConfigured:             settings.HasProvider(config.AIProviderZai),
@@ -2904,6 +2910,11 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 		settings.OpenRouterAPIKey = ""
 	} else if req.OpenRouterAPIKey != nil {
 		settings.OpenRouterAPIKey = strings.TrimSpace(*req.OpenRouterAPIKey)
+	}
+	if req.ClearVercelKey != nil && *req.ClearVercelKey {
+		settings.VercelAPIKey = ""
+	} else if req.VercelAPIKey != nil {
+		settings.VercelAPIKey = strings.TrimSpace(*req.VercelAPIKey)
 	}
 	if req.ClearDeepSeekKey != nil && *req.ClearDeepSeekKey {
 		settings.DeepSeekAPIKey = ""
@@ -3318,6 +3329,7 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 		AnthropicConfigured:       settings.HasProvider(config.AIProviderAnthropic),
 		OpenAIConfigured:          settings.HasProvider(config.AIProviderOpenAI),
 		OpenRouterConfigured:      settings.HasProvider(config.AIProviderOpenRouter),
+		VercelConfigured:          settings.HasProvider(config.AIProviderVercel),
 		DeepSeekConfigured:        settings.HasProvider(config.AIProviderDeepSeek),
 		GeminiConfigured:          settings.HasProvider(config.AIProviderGemini),
 		ZaiConfigured:             settings.HasProvider(config.AIProviderZai),

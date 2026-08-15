@@ -117,6 +117,7 @@ const baseSettings = (): AISettingsType => ({
   anthropic_configured: false,
   openai_configured: false,
   openrouter_configured: false,
+  vercel_configured: false,
   deepseek_configured: false,
   gemini_configured: false,
   ollama_configured: false,
