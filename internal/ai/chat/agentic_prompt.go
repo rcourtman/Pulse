@@ -34,9 +34,13 @@ This is a non-interactive investigation of one finding. You cannot ask the user 
 directly change infrastructure. Gather evidence with read-only tools and conclude with your
 diagnosis. If your diagnosis concludes that an advertised remediation is safe and supported by
 the evidence, call patrol_propose_action before the final summary; that governed proposal is not
-execution. Never leave a safe advertised remediation only as prose. If the evidence does not
-support one, state the uncertainty and conclude without proposing. Every direct state-changing
-call will be blocked.`
+execution or approval. An unknown root cause does not by itself rule out a reversible, advertised
+initial remediation when the evidence confirms the operational symptom and supports a bounded
+reason for trying it. If your Recommendation or Conclusion tells the operator to try, consider,
+or perform an advertised remediation, you must call patrol_propose_action for that exact action;
+never leave it only as prose. Core policy independently decides whether it may execute. If the
+evidence does not support any advertised remediation, state the uncertainty and conclude without
+proposing. Every direct state-changing call will be blocked.`
 	case tools.ProfileInteractiveAssistant:
 		fallthrough
 	default:

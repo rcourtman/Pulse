@@ -53,6 +53,15 @@ allowlist; investigation is domain-read-only and may emit at most one
 side-effect-free typed proposal whose correlation identity is server-authored.
 Unknown profiles, actions, aliases, origins, scopes, and mutation
 classifications fail closed.
+An investigation proposal is a request for the canonical policy plane to make
+an execution decision, not execution or approval by the model. When an
+investigation's recommendation or conclusion tells the operator to try,
+consider, or perform an advertised remediation, the model must submit that
+exact remediation through `patrol_propose_action` instead of leaving it only in
+prose. Unknown root cause does not by itself prohibit a reversible, bounded
+initial proposal when evidence confirms the operational symptom; capability
+validation, approval floors, tenant mode, emergency stop, dispatch, and
+verification remain core-owned and fail closed.
 
 Model/tool orchestration is bounded by construction rather than by request
 timeout. The legacy `Service` streaming and non-streaming paths share one

@@ -1021,7 +1021,9 @@ func TestExecutionProfilePromptModes(t *testing.T) {
 		t.Fatalf("investigation profile prompt wrong: %q", prompt)
 	}
 	if !strings.Contains(prompt, "call patrol_propose_action") ||
-		!strings.Contains(prompt, "Never leave a safe advertised remediation only as prose") {
+		!strings.Contains(prompt, "you must call patrol_propose_action for that exact action") ||
+		!strings.Contains(prompt, "Core policy independently decides whether it may execute") ||
+		!strings.Contains(prompt, "unknown root cause does not by itself rule out") {
 		t.Fatalf("investigation prompt must turn supported remediation into a governed proposal, got %q", prompt)
 	}
 }
