@@ -16,10 +16,29 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
+	"github.com/rcourtman/pulse-go-rewrite/internal/updates"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/extensions"
 	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
 )
+
+func TestRunBindsPackagedVersionIdentity(t *testing.T) {
+	previous := updates.BuildVersion
+	t.Cleanup(func() {
+		updates.BuildVersion = previous
+	})
+
+	updates.BuildVersion = "stale-image-version"
+	bindRuntimeVersion(" 6.2.2-patrol.qualification.5cffa5462 ")
+
+	versionInfo, err := updates.GetCurrentVersion()
+	if err != nil {
+		t.Fatalf("get current version: %v", err)
+	}
+	if got, want := versionInfo.Version, "6.2.2-patrol.qualification.5cffa5462"; got != want {
+		t.Fatalf("runtime version = %q, want packaged version %q", got, want)
+	}
+}
 
 func TestAgentIngestHandler(t *testing.T) {
 	var innerCalled bool

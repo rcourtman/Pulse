@@ -29,6 +29,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/telemetry"
+	"github.com/rcourtman/pulse-go-rewrite/internal/updates"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
@@ -139,8 +140,18 @@ func runtimeIdentityForBusinessHooks(h BusinessHooks) pkglicensing.RuntimeIdenti
 	return pkglicensing.CommunityRuntimeIdentity()
 }
 
+func bindRuntimeVersion(version string) {
+	// The server package is also the entry point for wrapper binaries such as
+	// Pulse Pro. Keep the update/version subsystem bound to the version supplied
+	// by the executing binary so /api/version cannot fall back to a VERSION file
+	// inherited from its container image.
+	updates.BuildVersion = strings.TrimSpace(version)
+}
+
 // Run starts the Pulse monitoring server.
 func Run(ctx context.Context, version string) error {
+	bindRuntimeVersion(version)
+
 	// Initialize logger with baseline defaults for early startup logs
 	logging.Init(logging.Config{
 		Format:    "auto",

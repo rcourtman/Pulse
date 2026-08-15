@@ -2239,3 +2239,15 @@ reports that effective policy rather than the environment variable alone, and
 the root and shipped security guides remain byte-for-byte synchronized. The
 router matrix proves that malformed and otherwise valid denied requests read no
 body and perform no export, import, config replacement, or runtime reload.
+
+### Packaged server identity outranks inherited image metadata
+
+`pkg/server.Run` binds the version supplied by the executing binary into the
+canonical update/version subsystem before runtime initialization. Wrapper
+binaries such as Pulse Pro therefore report the same packaged identity through
+`/api/version` that they report through `--version`, even when a derived test
+container inherits a stale `VERSION` file from its base image. The public
+endpoint remains non-secret release metadata; this binding does not expose
+inventory, credentials, update selections, or command authority.
+`TestRunBindsPackagedVersionIdentity` in `pkg/server/server_test.go` pins the
+wrapper-runtime boundary.
