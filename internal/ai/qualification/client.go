@@ -15,11 +15,13 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 )
 
 const subscriptionAgentPreflightEvidenceGrace = 15 * time.Second
+const localProviderPreflightEvidenceGrace = 15 * time.Second
 
 type ClientConfig struct {
 	BaseURL  string
@@ -58,6 +60,8 @@ type AISettings struct {
 	PatrolEnabled             bool                     `json:"patrol_enabled"`
 	CodexSubscriptionEnabled  bool                     `json:"codex_subscription_enabled"`
 	ClaudeSubscriptionEnabled bool                     `json:"claude_subscription_enabled"`
+	OpenAIBaseURL             string                   `json:"openai_base_url"`
+	RequestTimeoutSeconds     int                      `json:"request_timeout_seconds"`
 	ZaiBaseURL                string                   `json:"zai_base_url"`
 	PatrolPreflight           *PatrolPreflightSnapshot `json:"patrol_preflight,omitempty"`
 }
@@ -125,11 +129,22 @@ func (s AISettings) EffectivePatrolModel() string {
 	return strings.TrimSpace(s.Model)
 }
 
-func patrolModelSuiteAcquisitionTimeout(provider string, requested time.Duration) time.Duration {
-	if provider != string(providers.SubscriptionAgentCodex) && provider != string(providers.SubscriptionAgentClaude) {
+func patrolModelSuiteAcquisitionTimeout(provider string, requested time.Duration, settings AISettings) time.Duration {
+	minimum := time.Duration(0)
+	configuredLocalTimeout := (&config.AIConfig{RequestTimeoutSeconds: settings.RequestTimeoutSeconds}).GetRequestTimeout()
+	switch provider {
+	case string(providers.SubscriptionAgentCodex), string(providers.SubscriptionAgentClaude):
+		minimum = providers.SubscriptionAgentMinimumRequestTimeout + subscriptionAgentPreflightEvidenceGrace
+	case "ollama":
+		minimum = configuredLocalTimeout + localProviderPreflightEvidenceGrace
+	case "openai":
+		if config.IsCustomOpenAICompatibleEndpoint(settings.OpenAIBaseURL) {
+			minimum = configuredLocalTimeout + localProviderPreflightEvidenceGrace
+		}
+	}
+	if minimum <= 0 {
 		return requested
 	}
-	minimum := providers.SubscriptionAgentMinimumRequestTimeout + subscriptionAgentPreflightEvidenceGrace
 	if requested < minimum {
 		return minimum
 	}
@@ -382,7 +397,7 @@ func (c *PulseClient) AcquirePatrolModelSuite(ctx context.Context, model string,
 	if provider == "" || bareModel == "" {
 		return nil, fmt.Errorf("Patrol qualification requires a concrete provider:model route, got %q", target)
 	}
-	timeout = patrolModelSuiteAcquisitionTimeout(provider, timeout)
+	timeout = patrolModelSuiteAcquisitionTimeout(provider, timeout, before)
 
 	routeChanged := before.EffectivePatrolModel() != target ||
 		(provider == "codex-subscription" && !before.CodexSubscriptionEnabled) ||

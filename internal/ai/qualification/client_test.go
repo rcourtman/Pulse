@@ -274,18 +274,35 @@ func TestAcquirePatrolModelSuitePinsOneRouteAndUsesFreshAsyncPreflight(t *testin
 
 func TestPatrolModelSuiteAcquisitionTimeoutIsRouteAware(t *testing.T) {
 	requested := 45 * time.Second
-	if got := patrolModelSuiteAcquisitionTimeout("openai", requested); got != requested {
+	if got := patrolModelSuiteAcquisitionTimeout("openai", requested, AISettings{}); got != requested {
 		t.Fatalf("API route acquisition timeout = %s, want %s", got, requested)
 	}
 	wantSubscription := 2*time.Minute + subscriptionAgentPreflightEvidenceGrace
 	for _, provider := range []string{"codex-subscription", "claude-subscription"} {
-		if got := patrolModelSuiteAcquisitionTimeout(provider, requested); got != wantSubscription {
+		if got := patrolModelSuiteAcquisitionTimeout(provider, requested, AISettings{}); got != wantSubscription {
 			t.Fatalf("%s acquisition timeout = %s, want %s", provider, got, wantSubscription)
 		}
 	}
+	wantLocal := 5*time.Minute + localProviderPreflightEvidenceGrace
+	localSettings := AISettings{RequestTimeoutSeconds: 300}
+	if got := patrolModelSuiteAcquisitionTimeout("ollama", requested, localSettings); got != wantLocal {
+		t.Fatalf("Ollama acquisition timeout = %s, want %s", got, wantLocal)
+	}
+	if got := patrolModelSuiteAcquisitionTimeout("ollama", requested, AISettings{}); got != wantLocal {
+		t.Fatalf("default Ollama acquisition timeout = %s, want %s", got, wantLocal)
+	}
+	customOpenAI := localSettings
+	customOpenAI.OpenAIBaseURL = "http://llama.internal:8080/v1"
+	if got := patrolModelSuiteAcquisitionTimeout("openai", requested, customOpenAI); got != wantLocal {
+		t.Fatalf("custom OpenAI acquisition timeout = %s, want %s", got, wantLocal)
+	}
 	longer := 4 * time.Minute
-	if got := patrolModelSuiteAcquisitionTimeout("claude-subscription", longer); got != longer {
+	if got := patrolModelSuiteAcquisitionTimeout("claude-subscription", longer, AISettings{}); got != longer {
 		t.Fatalf("long configured acquisition timeout = %s, want %s", got, longer)
+	}
+	longerLocal := 6 * time.Minute
+	if got := patrolModelSuiteAcquisitionTimeout("ollama", longerLocal, localSettings); got != longerLocal {
+		t.Fatalf("long local acquisition timeout = %s, want %s", got, longerLocal)
 	}
 }
 

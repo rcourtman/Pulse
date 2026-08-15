@@ -323,22 +323,26 @@ On 2026-07-20, the disposable Windows CLI harness was exercised on an RTX 3070
 | State | Result |
 |---|---|
 | First-ever disk/GPU cold request | completed in 40.056 seconds; model load was 19.923 seconds and initial prompt evaluation was 20.122 seconds |
-| First-ever cold Patrol preflight | correctly classified `provider_connection` at the preflight-specific 30.002-second diagnostic deadline |
+| First-ever cold Patrol preflight (historical 30-second policy) | correctly classified `provider_connection` at the then-current 30.002-second diagnostic deadline |
 | Memory-cold streamed request after OS cache warmup | first provider event at 13.892 seconds |
 | Memory-cold Patrol preflight, three independent unloads | passed with native tool calls in 15.695, 15.953, and 15.556 seconds |
 | Warm Patrol preflight | four native-tool-call passes: 10.536 seconds initially, then 2.501, 2.028, and 1.943 seconds |
 
-The 30-second preflight is a configuration diagnostic and is deliberately
-shorter than the normal Patrol provider request bound. The initial preflight
-failure therefore remains a provider/runtime result, not evidence that the
-accepted manual run failed to start. The deterministic browser regression
-matrix above supplies exact 0/15/30/60-second acceptance coverage; this live
-run proves the selected local model and representative hardware actually
-exercise both the roughly-15-second and 30–60-second cold-start classes.
+That first-ever cold result records the historical 30-second policy. Current
+Ollama and custom OpenAI-compatible preflights use the configured provider
+request timeout so a permitted cold local-model load is not misclassified at a
+hosted-provider deadline. The deterministic browser regression matrix above
+supplies exact 0/15/30/60-second acceptance coverage; this live run proves the
+selected local model and representative hardware actually exercise both the
+roughly-15-second and 30–60-second cold-start classes.
 
 `live-suite` selects every checked-in scenario for the requested track. The
 remediation track still requires `--authorize-remediation`; selecting the
-track does not broaden mutation authority.
+track does not broaden mutation authority. Suite acquisition waits through the
+selected route's complete preflight deadline plus bounded cache-publication
+grace before restoring a temporary model override. Hosted API routes keep the
+short acquisition bound; local subscription, Ollama, and custom
+OpenAI-compatible routes keep their longer route-aware bound.
 
 An SSH Docker host is allowed only for a manifest-approved shared lab:
 

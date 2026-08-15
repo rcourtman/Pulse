@@ -386,11 +386,13 @@ the configured request timeout and prompt/output size limits, with a two-minute
 minimum request allowance for local subscription turns. Patrol tool-call
 preflight owns one route-aware outer deadline: API providers retain the
 30-second budget, while local subscription agents receive a bounded two-minute
-budget for CLI startup and complete structured-output assembly. A caller's
-earlier cancellation still wins. Qualification waits through that complete
-subscription-agent deadline plus bounded cache-publication grace before it may
-classify missing fresh preflight evidence; its shorter API-provider wait must
-not truncate a healthy local CLI turn. The native provider boundary accepts the
+budget for CLI startup and complete structured-output assembly, and Ollama or a
+custom OpenAI-compatible endpoint receives the configured provider request
+timeout for cold local-model loading. A caller's earlier cancellation still
+wins. Qualification waits through the applicable local-provider deadline plus
+bounded cache-publication grace before it may classify missing fresh preflight
+evidence; its shorter hosted API-provider wait must not truncate a healthy
+local CLI or local-model turn. The native provider boundary accepts the
 canonical qualified Pulse model identity from shared callers, strips only its
 own subscription-provider prefix before CLI execution, and rejects foreign
 provider prefixes rather than forwarding an invalid or cross-provider model
@@ -873,7 +875,11 @@ for one explicit track, but it must acquire and freshly preflight one exact
 provider/model route before provisioning any scenario, retain that route for
 every repetition, and restore it once after the complete suite. Scenario
 runners assert the leased route and must not rewrite model settings or trigger
-their own provider preflights. A fresh suite preflight failure aborts setup once
+their own provider preflights. The suite acquisition deadline must mirror the
+runtime's route-aware preflight deadline, including the configured request
+timeout for Ollama and custom OpenAI-compatible endpoints, plus bounded cache
+publication grace; it must not restore a changed route while a permitted cold
+local-model preflight is still running. A fresh suite preflight failure aborts setup once
 as qualification-infrastructure evidence; cached failure state must never be
 recounted as multiple model or scenario failures without independent provider
 invocations. `live-suite` must retain the existing live-fault and separate
