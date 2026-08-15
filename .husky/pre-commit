@@ -67,6 +67,12 @@ staged_files_match() {
     printf '%s\n' "$STAGED_FILES" | grep -qE "$1"
 }
 
+# Normalize staged source before any guard hashes or audits it. The browser
+# verification receipt binds to exact frontend bytes, so formatting after its
+# guard can produce a commit that passed locally but correctly fails in CI.
+python3 scripts/release_control/format_staged_go.py
+python3 scripts/release_control/format_staged_frontend.py
+
 echo "Running browser verification guard..."
 python3 scripts/release_control/browser_verification_guard.py
 
@@ -156,14 +162,6 @@ echo "Skipping remaining governance checks (no staged governance, Go, repoctl, o
 else
 echo "Governance files not present, skipping governance checks."
 fi
-
-
-# Run Go formatting
-python3 scripts/release_control/format_staged_go.py
-
-# Run frontend formatting (prettier over staged frontend-modern/src files,
-# index-directly like the Go formatter; skips if prettier is not installed)
-python3 scripts/release_control/format_staged_frontend.py
 
 # Run Go linting (if golangci-lint is available)
 if command -v golangci-lint >/dev/null 2>&1; then

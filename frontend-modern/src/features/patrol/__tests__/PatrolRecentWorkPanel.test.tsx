@@ -20,7 +20,6 @@ const receipt = (overrides: Partial<PatrolWorkReceipt> = {}): PatrolWorkReceipt 
   resourceName: 'Jellyfin',
   capabilityName: 'restart',
   verifiedAt: '2026-08-14T07:05:00Z',
-  verificationSummary: 'Playback recovered.',
   evidenceClass: 'agent_attested',
   originSurface: 'patrol',
   findingId: 'finding-1',
@@ -42,10 +41,30 @@ describe('PatrolRecentWorkPanel', () => {
 
     render(() => <PatrolRecentWorkPanel />);
 
-    expect(await screen.findByText('Playback recovered.')).toBeInTheDocument();
+    expect(await screen.findByText('Confirmed by executing agent')).toBeInTheDocument();
     expect(screen.getAllByText('Verified')).toHaveLength(1);
-    expect(screen.getByText('Restart verified')).toBeInTheDocument();
+    expect(screen.getByText('Restart completed')).toBeInTheDocument();
+    expect(screen.getByText('Jellyfin')).toBeInTheDocument();
     expect(apiMocks.getReceipts).toHaveBeenCalledWith(6);
+  });
+
+  it('turns a retired opaque resource id into a calm resource label', async () => {
+    apiMocks.getReceipts.mockResolvedValue(
+      response([
+        receipt({
+          resourceId: 'app-container-4c19e723fbfae98b',
+          resourceName: 'app-container-4c19e723fbfae98b',
+          evidenceClass: 'independent',
+        }),
+      ]),
+    );
+
+    render(() => <PatrolRecentWorkPanel />);
+
+    expect(await screen.findByText('App container')).toBeInTheDocument();
+    expect(screen.getByText(/…fae98b/)).toBeInTheDocument();
+    expect(screen.getByText('Confirmed by independent observer')).toBeInTheDocument();
+    expect(screen.queryByText('app-container-4c19e723fbfae98b')).not.toBeInTheDocument();
   });
 
   it('does not imply successful work when there is no verified receipt', async () => {
@@ -64,12 +83,12 @@ describe('PatrolRecentWorkPanel', () => {
     apiMocks.getReceipts.mockRejectedValueOnce(new Error('relay unavailable'));
 
     render(() => <PatrolRecentWorkPanel />);
-    await screen.findByText('Playback recovered.');
+    await screen.findByText('Confirmed by executing agent');
     document.dispatchEvent(new Event('visibilitychange'));
 
     await waitFor(() =>
       expect(screen.getByText('Verified work is unavailable')).toBeInTheDocument(),
     );
-    expect(screen.getByText('Playback recovered.')).toBeInTheDocument();
+    expect(screen.getByText('Confirmed by executing agent')).toBeInTheDocument();
   });
 });

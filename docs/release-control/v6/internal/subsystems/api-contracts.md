@@ -7422,7 +7422,10 @@ action offers. `GET /api/ai/patrol/attention/receipts` is the canonical recent
 work source for both autonomous Patrol actions and Operational Trust attention
 actions. It admits only completed execution with a confirmed postcondition and
 therefore never returns pending, failed, contradicted, inconclusive, rejected,
-or unrelated-origin work as a receipt. The
+or unrelated-origin work as a receipt. The compact payload carries the action,
+resource reference, verification time, and evidence class; raw executor and
+readback summaries remain on the full action-audit contract instead of leaking
+transport-shaped detail into the quiet Patrol home. The
 frontend may use action eligibility and approval fields to decide whether an
 item needs another operator decision under the effective autonomy level, but
 that projection grants no action authority and cannot override server planning,

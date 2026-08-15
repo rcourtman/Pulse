@@ -538,6 +538,8 @@ Local formatter steps must also stay scoped to staged files so the hook does not
 mutate unrelated dirty worktree state.
 When formatting staged Go files, the formatter must operate on staged blobs in
 the git index rather than rewriting the whole repo or restaging whole files.
+Formatters must run before any staged-content audit that hashes or otherwise
+binds evidence to exact bytes, including the browser verification guard.
 
 For runtime subsystem changes, the same commit must now include:
 

@@ -3,7 +3,11 @@ import CheckCircleIcon from 'lucide-solid/icons/circle-check';
 import RefreshIcon from 'lucide-solid/icons/refresh-cw';
 import { getPatrolWorkReceipts, type PatrolWorkReceipt } from '@/api/patrolAttention';
 import { Button } from '@/components/shared/Button';
-import { formatActionName } from '@/features/actions/actionPresentation';
+import {
+  formatActionName,
+  getActionResourcePresentation,
+  verificationTruthLabel,
+} from '@/features/actions/actionPresentation';
 import { formatRelativeTime } from '@/utils/format';
 
 const RECEIPT_LIMIT = 6;
@@ -102,31 +106,49 @@ export function PatrolRecentWorkPanel() {
           >
             <ol class="divide-y divide-border" aria-label="Verified Patrol receipts">
               <For each={receipts()}>
-                {(item) => (
-                  <li class="flex items-start gap-3 px-4 py-3 sm:px-5">
-                    <CheckCircleIcon
-                      class="mt-0.5 h-5 w-5 shrink-0 text-emerald-500"
-                      aria-hidden="true"
-                    />
-                    <div class="min-w-0 flex-1">
-                      <div class="flex flex-wrap items-center gap-x-2 gap-y-1">
-                        <span class="text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
-                          Verified
-                        </span>
-                        <span class="text-xs text-muted">
-                          {formatRelativeTime(item.verifiedAt, { compact: true })}
-                        </span>
+                {(item) => {
+                  const resolvedName = item.resourceName.trim();
+                  const resource = getActionResourcePresentation(
+                    item.resourceId,
+                    resolvedName && resolvedName !== item.resourceId.trim()
+                      ? {
+                          id: item.resourceId,
+                          name: resolvedName,
+                          type: item.resourceType ?? '',
+                        }
+                      : undefined,
+                  );
+                  return (
+                    <li class="flex items-start gap-3 px-4 py-3 sm:px-5">
+                      <CheckCircleIcon
+                        class="mt-0.5 h-5 w-5 shrink-0 text-emerald-500"
+                        aria-hidden="true"
+                      />
+                      <div class="min-w-0 flex-1">
+                        <div class="flex flex-wrap items-center gap-x-2 gap-y-1">
+                          <span class="text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
+                            Verified
+                          </span>
+                          <span class="text-xs text-muted">
+                            {formatRelativeTime(item.verifiedAt, { compact: true })}
+                          </span>
+                        </div>
+                        <p class="mt-1 text-sm font-semibold text-base-content">
+                          {formatActionName(item.capabilityName)} completed
+                        </p>
+                        <p class="mt-1 text-xs leading-5 text-muted">
+                          {verificationTruthLabel('confirmed', item.evidenceClass)}
+                        </p>
+                        <p class="mt-1 truncate text-xs font-medium text-base-content">
+                          {resource.label}
+                          <Show when={resource.detail}>
+                            {(detail) => <span class="text-muted"> · {detail()}</span>}
+                          </Show>
+                        </p>
                       </div>
-                      <p class="mt-1 text-sm font-semibold text-base-content">
-                        {formatActionName(item.capabilityName)} verified
-                      </p>
-                      <p class="mt-1 text-xs leading-5 text-muted">{item.verificationSummary}</p>
-                      <p class="mt-1 truncate text-xs font-medium text-base-content">
-                        {item.resourceName}
-                      </p>
-                    </div>
-                  </li>
-                )}
+                    </li>
+                  );
+                }}
               </For>
             </ol>
           </Show>

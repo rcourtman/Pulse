@@ -24,6 +24,7 @@ from repo_file_io import strip_local_git_env
 BASE_SHA = "a" * 40
 CHANGED_PATH = "frontend-modern/src/components/Example.tsx"
 CONTENT_SHA = "c" * 64
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 def valid_receipt() -> dict:
@@ -45,6 +46,14 @@ def valid_receipt() -> dict:
 
 
 class BrowserVerificationGuardTest(unittest.TestCase):
+    def test_pre_commit_formats_frontend_before_validating_receipt_hashes(self) -> None:
+        hook = (REPO_ROOT / ".husky" / "pre-commit").read_text(encoding="utf-8")
+
+        formatter = hook.index("python3 scripts/release_control/format_staged_frontend.py")
+        guard = hook.index("python3 scripts/release_control/browser_verification_guard.py")
+
+        self.assertLess(formatter, guard)
+
     def test_blocks_frontend_change_when_receipt_is_not_in_commit(self) -> None:
         with (
             patch("sys.stdin", StringIO(CHANGED_PATH + "\n")),

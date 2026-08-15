@@ -781,9 +781,11 @@ daily-page primitive and must not be added beside the effective mode.
 The compact `Recently handled` list consumes server-authored Patrol work
 receipts rather than filtering generic history in the browser. It may format
 the canonical capability name and verification time with shared presentation
-helpers, but it must preserve the server's verified-only membership, evidence
-summary, newest-first order, empty state, and last-truthful-data behavior during
-a refresh error.
+helpers, and it reuses the action resource presenter for durable resources that
+have left the live registry. It must preserve the server's verified-only
+membership, evidence class, newest-first order, empty state, and
+last-truthful-data behavior during a refresh error. Raw executor verification
+summaries stay in Activity history rather than becoming quiet-home copy.
 For Patrol, that includes the Open work description: it may use concise
 row-level guidance such as review evidence, approve a change, inspect automatic
 actions, or review verification results, but it must remain descriptive copy

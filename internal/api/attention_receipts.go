@@ -28,7 +28,6 @@ type patrolWorkReceipt struct {
 	ResourceType        unifiedresources.ResourceType        `json:"resourceType,omitempty"`
 	CapabilityName      string                               `json:"capabilityName"`
 	VerifiedAt          time.Time                            `json:"verifiedAt"`
-	VerificationSummary string                               `json:"verificationSummary"`
 	EvidenceClass       unifiedresources.ActionEvidenceClass `json:"evidenceClass"`
 	OriginSurface       string                               `json:"originSurface"`
 	FindingID           string                               `json:"findingId,omitempty"`
@@ -129,13 +128,6 @@ func projectPatrolWorkReceipt(
 	if resourceName == "" {
 		resourceName = resourceID
 	}
-	summary := strings.TrimSpace(truth.Verification.Summary)
-	if summary == "" {
-		summary = strings.TrimSpace(record.VerificationOutcome.EvidenceSummary)
-	}
-	if summary == "" {
-		summary = "Patrol confirmed the expected outcome after the change."
-	}
 	return patrolWorkReceipt{
 		ActionID:            record.ID,
 		ResourceID:          resourceID,
@@ -143,7 +135,6 @@ func projectPatrolWorkReceipt(
 		ResourceType:        resourceType,
 		CapabilityName:      strings.TrimSpace(record.Request.CapabilityName),
 		VerifiedAt:          record.UpdatedAt.UTC(),
-		VerificationSummary: summary,
 		EvidenceClass:       truth.Verification.EvidenceClass,
 		OriginSurface:       originSurface,
 		FindingID:           strings.TrimSpace(record.Origin.FindingID),

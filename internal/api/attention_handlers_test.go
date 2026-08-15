@@ -61,9 +61,18 @@ func TestAttentionHandlersReceiptsUseVerifiedPatrolActionsBeforeLimit(t *testing
 		t.Fatalf("receipt order = %#v", payload.Data)
 	}
 	for _, receipt := range payload.Data {
-		if receipt.VerificationSummary == "" || receipt.EvidenceClass != unifiedresources.ActionEvidenceAgentAttested {
+		if receipt.EvidenceClass != unifiedresources.ActionEvidenceAgentAttested {
 			t.Fatalf("receipt omitted verification proof: %#v", receipt)
 		}
+	}
+	var wirePayload struct {
+		Data []map[string]any `json:"data"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &wirePayload); err != nil {
+		t.Fatal(err)
+	}
+	if _, found := wirePayload.Data[0]["verificationSummary"]; found {
+		t.Fatalf("compact receipt leaked executor verification summary: %#v", wirePayload.Data[0])
 	}
 
 	limitedRequest := httptest.NewRequest(

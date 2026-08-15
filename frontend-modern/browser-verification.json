@@ -1,17 +1,15 @@
 {
   "version": 1,
-  "base_sha": "7fb39f65cf25a3fc822f5795abc99dd670e93a48",
-  "verified_at": "2026-08-15T07:42:09Z",
+  "base_sha": "d3a345bd66d635b59427cdfb06bd030a053daded",
+  "verified_at": "2026-08-15T09:17:52Z",
   "result": "passed",
   "changed_paths": [
     "frontend-modern/src/api/patrolAttention.ts",
-    "frontend-modern/src/features/patrol/PatrolRecentWorkPanel.tsx",
-    "frontend-modern/src/features/patrol/patrolHomePresentation.ts"
+    "frontend-modern/src/features/patrol/PatrolRecentWorkPanel.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/api/patrolAttention.ts": "2038e240e586d096f289e477e05c0acdb9d33eb08fe5791dd8080666a43350df",
-    "frontend-modern/src/features/patrol/PatrolRecentWorkPanel.tsx": "c996100b27f7101a2a64c742ff0c1602cb2017397afad22a3da5e8e768ac8798",
-    "frontend-modern/src/features/patrol/patrolHomePresentation.ts": "41991e1b605df792768237e488edf0d1f8c1190896e5be865dfbd5f24017e9aa"
+    "frontend-modern/src/api/patrolAttention.ts": "035e201a4c9a67c230f67004113b632c8e9ee82edf36bea0acaf86d5b9725b0e",
+    "frontend-modern/src/features/patrol/PatrolRecentWorkPanel.tsx": "b62d2cd4ccd5c2da4442a54d04863047f667fa5f076975046d3c2a0dc15e560e"
   },
   "routes": [
     "/patrol"
@@ -27,14 +25,16 @@
     }
   ],
   "states": [
-    "Recently handled populated with six newest server-filtered verified Patrol receipts",
+    "Recently handled populated with six newest server-filtered verified Patrol receipts in calm operator language",
+    "Raw executor lifecycle telemetry and full opaque resource ids are absent from the compact receipt list",
+    "Executing-agent and independent-observer trust labels render from the canonical evidence class",
     "Refresh failure keeps the last truthful receipts visible with an explicit unavailable message",
     "Refresh recovery clears the error and reloads the same six verified receipts",
     "Activity history handoff remains adjacent to verified receipts",
-    "Phone-width receipt list wraps verification evidence without horizontal overflow"
+    "Phone-width receipt list stays within the 390-pixel document width"
   ],
   "interactions": [
-    "refreshed the populated Recently handled list",
+    "refreshed the populated Recently handled list and confirmed compact action, trust, and resource presentation",
     "stopped the disposable server and refreshed to exercise the error state",
     "confirmed six existing receipts remained visible during the refresh error",
     "restored the healthy server and refreshed to clear the error",

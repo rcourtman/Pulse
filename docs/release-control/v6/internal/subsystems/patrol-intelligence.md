@@ -103,6 +103,10 @@ inconclusive, rejected, unknown, unavailable, and unrelated-origin work must
 never be styled as handled work. Objective summary language similarly counts
 protection only from active objectives whose server-authored coverage state is
 `covered`.
+Compact receipts present only the verified action, verification trust class,
+time, and shared resource identity. Raw executor and readback summaries remain
+available in Activity history; they must not be copied into the quiet Patrol
+home or force an operator to interpret transport and lifecycle telemetry.
 
 The effective autonomy label and plain-language consequence stay visible, but
 the four-level selector is a secondary disclosure. A plan-locked daily operator

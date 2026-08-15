@@ -104,7 +104,6 @@ export interface PatrolWorkReceipt {
   resourceType?: string;
   capabilityName: string;
   verifiedAt: string;
-  verificationSummary: string;
   evidenceClass: 'none' | 'agent_attested' | 'independent';
   originSurface: 'patrol' | 'operational_trust_attention';
   findingId?: string;
