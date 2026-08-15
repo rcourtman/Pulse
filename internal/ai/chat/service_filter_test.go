@@ -142,10 +142,13 @@ func TestRestrictInvestigationProviderToolsRequiresEvidenceAndProposalBoundary(t
 			want: agentcapabilities.PatrolActionCapabilitiesToolName,
 		},
 		{
-			name:         "unknown type missing evidence",
+			name:         "unknown type has only derived context",
 			resourceType: "future-resource-kind",
 			tools: []providers.Tool{
-				{Name: ""},
+				{Name: agentcapabilities.PulseAlertsToolName},
+				{Name: agentcapabilities.PulseKnowledgeToolName},
+				{Name: agentcapabilities.PulseSummarizeToolName},
+				{Name: agentcapabilities.PatrolGetFindingsToolName},
 				{Name: agentcapabilities.PatrolActionCapabilitiesToolName},
 				{Name: agentcapabilities.PatrolProposeActionToolName},
 			},

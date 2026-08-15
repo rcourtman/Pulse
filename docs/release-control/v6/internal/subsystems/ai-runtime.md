@@ -73,7 +73,13 @@ persistence. An unset attempt ceiling does not weaken that rule: reaching the
 independent model-turn limit with no successful result fails closed before the
 generic final-summary fallback. The side-effect-free action-capability lookup is planning
 metadata, not infrastructure evidence: it neither consumes the evidence budget
-nor satisfies this grounding gate. If the provider returns prose without a tool call, core
+nor satisfies this grounding gate. The shared
+`agentcapabilities.IsPatrolInfrastructureEvidenceToolName` vocabulary admits
+only canonical query, discovery, metrics, storage, Docker, Kubernetes, deep-read,
+and PMG observations. Alert/finding state, retained knowledge, and generated
+summaries may help interpret evidence but cannot consume the evidence budget,
+satisfy grounding, or unlock proposal authority by themselves. If the provider
+returns prose without a tool call, core
 must discard that prose as a durable conclusion and allow one bounded repair
 turn that requires a successful structured result from the same advertised evidence
 manifest. The repair is generic and carries no platform-, incident-, or
@@ -7458,8 +7464,11 @@ the relevant subsystem evidence tool, and only the investigation-owned
 capability lookup and typed proposal sink. The type is not model-authored and
 cannot add a tool outside the already-projected investigation profile. Unknown
 types keep the full safe investigation profile, but that fallback is not a
-validation bypass: it must still contain real evidence, the capability lookup,
-and the proposal sink before inference. Known types intersect their evidence
+validation bypass: it must still contain a tool from the shared closed
+infrastructure-evidence vocabulary, the capability lookup, and the proposal
+sink before inference. Synthesis, retained knowledge, alert/finding state, and
+planning tools do not satisfy that requirement. Known types intersect their
+evidence
 ceiling with tools that are actually available after profile
 projection, so a deployment without an agent-routed or native `pulse_read`
 adapter still investigates from canonical query and subsystem evidence. At

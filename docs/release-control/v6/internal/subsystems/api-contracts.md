@@ -4160,7 +4160,8 @@ lookup/proposal tools. It is not a client-selectable execution profile, cannot
 add authority, and is never inferred from prompt text. Empty or unknown types
 retain the full governed investigation profile so an additive resource kind
 cannot silently lose evidence access. That full-profile fallback still fails
-before inference unless it contains at least one evidence tool, the
+before inference unless it contains at least one tool from the shared closed
+infrastructure-evidence vocabulary, the
 side-effect-free capability lookup, and the typed proposal sink; additive type
 compatibility does not bypass the investigation boundary. Scoped Watch uses the
 same shared typed mapping after exact canonical scope resolution, with detection
@@ -9521,7 +9522,10 @@ investigation projection. That projection intersects optional evidence tools
 with the runtime-available governed profile, while requiring at least one
 evidence tool plus the capability lookup and typed proposal sink. Unknown and
 empty resource types retain the full governed profile but undergo the same
-mandatory-tool validation before inference. The bridge's
+mandatory-tool validation before inference. The shared evidence classifier
+accepts only canonical query, discovery, metrics, storage, Docker, Kubernetes,
+deep-read, and PMG observations; alert/finding reads, knowledge, summaries, and
+proposal planning cannot satisfy the bridge's grounding requirement. The bridge's
 `evidence_calls` value remains attempted-call budget accounting; the core chat
 runtime separately requires a successful evidence result before it exposes the
 proposal sink or accepts a completed investigation. Failed and policy-blocked

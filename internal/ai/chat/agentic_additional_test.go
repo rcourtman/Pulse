@@ -120,6 +120,10 @@ func TestPatrolDetectionInferenceAllowanceDoesNotConstrainInvestigation(t *testi
 func TestInvestigationEvidenceBudgetHelpers(t *testing.T) {
 	available := []providers.Tool{
 		{Name: agentcapabilities.PulseQueryToolName},
+		{Name: agentcapabilities.PulseAlertsToolName},
+		{Name: agentcapabilities.PulseKnowledgeToolName},
+		{Name: agentcapabilities.PulseSummarizeToolName},
+		{Name: agentcapabilities.PatrolGetFindingsToolName},
 		{Name: agentcapabilities.PatrolProposeActionToolName},
 		{Name: agentcapabilities.PatrolActionCapabilitiesToolName},
 	}
@@ -135,6 +139,16 @@ func TestInvestigationEvidenceBudgetHelpers(t *testing.T) {
 	}
 	if isInvestigationEvidenceTool(agentcapabilities.PatrolActionCapabilitiesToolName) {
 		t.Fatal("capability lookup must not count as infrastructure evidence")
+	}
+	for _, name := range []string{
+		agentcapabilities.PulseAlertsToolName,
+		agentcapabilities.PulseKnowledgeToolName,
+		agentcapabilities.PulseSummarizeToolName,
+		agentcapabilities.PatrolGetFindingsToolName,
+	} {
+		if isInvestigationEvidenceTool(name) {
+			t.Fatalf("derived context tool %q must not count as infrastructure evidence", name)
+		}
 	}
 	if got := investigationEvidenceCheckpoint(15); got != 8 {
 		t.Fatalf("checkpoint(15) = %d, want 8", got)

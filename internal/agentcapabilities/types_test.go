@@ -27,6 +27,37 @@ func TestPatrolScopedDetectionDefersOptionalDeepReadsToInvestigation(t *testing.
 	}
 }
 
+func TestPatrolInfrastructureEvidenceToolVocabularyExcludesDerivedContext(t *testing.T) {
+	for _, name := range []string{
+		PulseQueryToolName,
+		PulseDiscoveryToolName,
+		PulseMetricsToolName,
+		PulseStorageToolName,
+		PulseDockerToolName,
+		PulseKubernetesToolName,
+		PulseReadToolName,
+		PulsePMGToolName,
+	} {
+		if !IsPatrolInfrastructureEvidenceToolName(name) {
+			t.Fatalf("canonical infrastructure evidence tool %q was not classified as evidence", name)
+		}
+	}
+
+	for _, name := range []string{
+		"",
+		PulseAlertsToolName,
+		PulseKnowledgeToolName,
+		PulseSummarizeToolName,
+		PatrolGetFindingsToolName,
+		PatrolActionCapabilitiesToolName,
+		PatrolProposeActionToolName,
+	} {
+		if IsPatrolInfrastructureEvidenceToolName(name) {
+			t.Fatalf("derived or planning tool %q was classified as infrastructure evidence", name)
+		}
+	}
+}
+
 func TestDefaultApprovalPolicyDescriptionUsesSharedPolicyVocabulary(t *testing.T) {
 	cases := []struct {
 		policy ApprovalPolicy

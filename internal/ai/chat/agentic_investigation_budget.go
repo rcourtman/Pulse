@@ -2,7 +2,6 @@ package chat
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
@@ -43,12 +42,7 @@ func applyInvestigationOutputLimitRecoveryRequest(req *providers.ChatRequest, pr
 }
 
 func isInvestigationEvidenceTool(name string) bool {
-	switch strings.TrimSpace(name) {
-	case "", agentcapabilities.PatrolProposeActionToolName, agentcapabilities.PatrolActionCapabilitiesToolName:
-		return false
-	default:
-		return true
-	}
+	return agentcapabilities.IsPatrolInfrastructureEvidenceToolName(name)
 }
 
 func investigationEvidenceTools(available []providers.Tool) []providers.Tool {

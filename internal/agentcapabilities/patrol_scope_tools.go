@@ -2,6 +2,28 @@ package agentcapabilities
 
 import "strings"
 
+// IsPatrolInfrastructureEvidenceToolName reports whether a provider tool can
+// return fresh canonical or provider-observed infrastructure evidence for a
+// Patrol investigation. Planning, synthesis, retained knowledge, and finding
+// lifecycle reads are deliberately outside this closed vocabulary: they may
+// help explain evidence, but cannot satisfy the grounding gate or unlock a
+// typed remediation proposal by themselves.
+func IsPatrolInfrastructureEvidenceToolName(name string) bool {
+	switch strings.TrimSpace(name) {
+	case PulseQueryToolName,
+		PulseDiscoveryToolName,
+		PulseMetricsToolName,
+		PulseStorageToolName,
+		PulseDockerToolName,
+		PulseKubernetesToolName,
+		PulseReadToolName,
+		PulsePMGToolName:
+		return true
+	default:
+		return false
+	}
+}
+
 // PatrolEvidenceToolNamesForResourceTypes returns the smallest useful
 // read-only evidence surface for an exact, core-resolved Patrol resource
 // scope. The bool is false when the scope is empty or contains an unknown
