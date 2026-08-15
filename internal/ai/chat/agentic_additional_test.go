@@ -1843,6 +1843,87 @@ func TestBuildAutomaticFallbackSummary_UsesToolNamesNotCallIDsOrRawOutput(t *tes
 	}
 }
 
+func TestBuildAutomaticFallbackSummary_InvestigationUsesGroundedReceipt(t *testing.T) {
+	summary := buildAutomaticFallbackSummary([]Message{
+		{
+			Role: "user",
+			Content: `You are investigating a finding from Pulse Patrol.
+
+## Finding Details
+- **Title**: Container health check reported unhealthy while running
+- **Severity**: warning
+- **Category**: reliability
+- **Resource display name**: inventory-api
+- **Canonical resource ID**: app-container-123
+- **Resource type**: app-container
+- **Description**: The container is running, but its health check is unhealthy.
+
+## Evidence Completion Contract`,
+		},
+		{Role: "assistant", ToolCalls: []ToolCall{
+			{ID: "call-query", Name: "pulse_query", Input: map[string]interface{}{"resource_id": "app-container-123"}},
+			{ID: "call-proposal", Name: "patrol_propose_action", Input: map[string]interface{}{
+				"resource_id":     "app-container-123",
+				"capability_name": "restart",
+			}},
+		}},
+		{Role: "user", ToolResult: &ToolResult{ToolUseID: "call-query", Content: `{"private_raw_output":"must not leak"}`}},
+		{Role: "user", ToolResult: &ToolResult{ToolUseID: "call-proposal", Content: `{"ok":true}`}},
+	})
+
+	for _, want := range []string{
+		"### Investigation Summary",
+		"health check reported unhealthy",
+		"### Root Cause",
+		"inventory-api",
+		"app-container-123",
+		"governed restart proposal",
+		"### Conclusion",
+		"NEEDS_ATTENTION:",
+		"No resolution is being inferred",
+	} {
+		if !strings.Contains(summary, want) {
+			t.Fatalf("grounded fallback missing %q:\n%s", want, summary)
+		}
+	}
+	for _, forbidden := range []string{"private_raw_output", "must not leak", "Ask me again"} {
+		if strings.Contains(summary, forbidden) {
+			t.Fatalf("grounded fallback leaked or deferred with %q:\n%s", forbidden, summary)
+		}
+	}
+}
+
+func TestBuildAutomaticFallbackSummary_InvestigationDoesNotTreatFailedProposalAsRecorded(t *testing.T) {
+	summary := buildAutomaticFallbackSummary([]Message{
+		{Role: "user", Content: `## Finding Details
+- **Title**: Disk is filling up
+- **Severity**: warning
+- **Category**: capacity
+- **Resource display name**: storage-a
+- **Canonical resource ID**: storage-123
+- **Resource type**: storage
+- **Description**: Free space is below the configured threshold.
+
+## Evidence Completion Contract`},
+		{Role: "assistant", ToolCalls: []ToolCall{{
+			ID:   "call-proposal",
+			Name: "patrol_propose_action",
+			Input: map[string]interface{}{
+				"resource_id":     "storage-123",
+				"capability_name": "delete",
+			},
+		}}},
+		{Role: "user", ToolResult: &ToolResult{ToolUseID: "call-proposal", Content: "policy refused", IsError: true}},
+	})
+
+	if strings.Contains(summary, "governed delete proposal was recorded") {
+		t.Fatalf("failed proposal must not be presented as recorded:\n%s", summary)
+	}
+	if !strings.Contains(summary, "nothing was authorized by this fallback") {
+		t.Fatalf("failed proposal fallback must stay fail-closed:\n%s", summary)
+	}
+}
+
 func TestExecuteToolSafely_RecoversPanic(t *testing.T) {
 	exec := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
 	exec.RegisterTool(tools.RegisteredTool{

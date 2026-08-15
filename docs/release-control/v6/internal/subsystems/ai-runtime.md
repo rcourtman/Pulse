@@ -7405,3 +7405,16 @@ findings read or a failed lifecycle write in an ephemeral callback. Exact
 finding-lifecycle retries suppressed before canonical invocation are runtime
 loop-control decisions rather than tool executions and do not create a second
 tool-start/tool-end pair.
+
+### Patrol investigation fallback summaries remain evidence-grounded
+
+When a provider completes an investigation tool loop but fails to emit the
+final narrative, `internal/ai/chat/agentic_final.go` must not replace the
+operator's evidence with a generic retry request. The deterministic fallback
+projects only bounded finding fields from the core-authored investigation
+handoff plus successful tool identities. It names the recorded symptom and
+canonical affected resource, distinguishes missing narrative from confirmed
+root cause, discloses failed tool-call count without treating failures as
+evidence, and describes a successful typed proposal only as a governed
+proposal. It never dumps raw tool output, infers execution, or upgrades the
+finding to resolved. A failed proposal remains absent from the receipt.

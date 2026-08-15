@@ -194,15 +194,19 @@ func buildAutomaticFallbackSummary(resultMessages []Message) string {
 	// Resolve provider tool-call ids to the real tool name so the summary names
 	// the checks (query, metrics, ...) instead of leaking raw `call_…` ids.
 	idToName := make(map[string]string)
+	idToCall := make(map[string]ToolCall)
 	for _, msg := range resultMessages {
 		for _, call := range msg.ToolCalls {
 			id := strings.TrimSpace(call.ID)
 			name := strings.TrimSpace(call.Name)
 			if id != "" && name != "" {
 				idToName[id] = name
+				idToCall[id] = call
 			}
 		}
 	}
+
+	var proposal *automaticFallbackProposal
 
 	for _, msg := range resultMessages {
 		if msg.ToolResult == nil {
@@ -213,8 +217,14 @@ func buildAutomaticFallbackSummary(resultMessages []Message) string {
 			continue
 		}
 		successCount++
-		if name := fallbackToolDisplayName(msg.ToolResult.ToolUseID, idToName); name != "" {
+		name := fallbackToolDisplayName(msg.ToolResult.ToolUseID, idToName)
+		if name != "" {
 			toolCounts[name]++
+		}
+		if strings.EqualFold(name, "patrol_propose_action") {
+			if call, ok := idToCall[strings.TrimSpace(msg.ToolResult.ToolUseID)]; ok {
+				proposal = automaticFallbackProposalFromToolCall(call)
+			}
 		}
 	}
 
@@ -250,6 +260,10 @@ func buildAutomaticFallbackSummary(resultMessages []Message) string {
 		toolList = strings.Join(names, ", ")
 	}
 
+	if finding, ok := automaticFallbackFindingFromMessages(resultMessages); ok {
+		return buildInvestigationFallbackSummary(finding, proposal, successCount, errorCount, toolList)
+	}
+
 	checkWord := "checks"
 	if successCount == 1 {
 		checkWord = "check"
@@ -266,6 +280,170 @@ func buildAutomaticFallbackSummary(resultMessages []Message) string {
 		summary += fmt.Sprintf(" %d tool %s occurred during the run.", errorCount, errWord)
 	}
 	return summary
+}
+
+type automaticFallbackFinding struct {
+	Title        string
+	Severity     string
+	Category     string
+	ResourceName string
+	ResourceID   string
+	ResourceType string
+	Description  string
+}
+
+type automaticFallbackProposal struct {
+	CapabilityName string
+	ResourceID     string
+}
+
+func automaticFallbackFindingFromMessages(resultMessages []Message) (automaticFallbackFinding, bool) {
+	for i := len(resultMessages) - 1; i >= 0; i-- {
+		msg := resultMessages[i]
+		if msg.Role != "user" || msg.ToolResult != nil {
+			continue
+		}
+		if finding, ok := parseAutomaticFallbackFinding(msg.Content); ok {
+			return finding, true
+		}
+	}
+	return automaticFallbackFinding{}, false
+}
+
+func parseAutomaticFallbackFinding(prompt string) (automaticFallbackFinding, bool) {
+	const sectionHeader = "## Finding Details"
+	sectionStart := strings.Index(prompt, sectionHeader)
+	if sectionStart < 0 {
+		return automaticFallbackFinding{}, false
+	}
+
+	finding := automaticFallbackFinding{}
+	for _, rawLine := range strings.Split(prompt[sectionStart+len(sectionHeader):], "\n") {
+		line := strings.TrimSpace(rawLine)
+		if strings.HasPrefix(line, "## ") {
+			break
+		}
+		value := func(label string) (string, bool) {
+			prefix := "- **" + label + "**:"
+			if !strings.HasPrefix(line, prefix) {
+				return "", false
+			}
+			return automaticFallbackFact(strings.TrimSpace(strings.TrimPrefix(line, prefix))), true
+		}
+		if v, ok := value("Title"); ok && finding.Title == "" {
+			finding.Title = v
+		} else if v, ok := value("Severity"); ok && finding.Severity == "" {
+			finding.Severity = v
+		} else if v, ok := value("Category"); ok && finding.Category == "" {
+			finding.Category = v
+		} else if v, ok := value("Resource display name"); ok && finding.ResourceName == "" {
+			finding.ResourceName = v
+		} else if v, ok := value("Canonical resource ID"); ok && finding.ResourceID == "" {
+			finding.ResourceID = v
+		} else if v, ok := value("Resource type"); ok && finding.ResourceType == "" {
+			finding.ResourceType = v
+		} else if v, ok := value("Description"); ok && finding.Description == "" {
+			finding.Description = v
+		}
+	}
+
+	if finding.Title == "" || finding.ResourceID == "" {
+		return automaticFallbackFinding{}, false
+	}
+	return finding, true
+}
+
+func automaticFallbackFact(value string) string {
+	value = cleanToolCallArtifacts(value)
+	value = strings.Join(strings.Fields(value), " ")
+	const maxRunes = 320
+	runes := []rune(value)
+	if len(runes) > maxRunes {
+		value = string(runes[:maxRunes-1]) + "…"
+	}
+	return value
+}
+
+func automaticFallbackProposalFromToolCall(call ToolCall) *automaticFallbackProposal {
+	capabilityName, _ := call.Input["capability_name"].(string)
+	resourceID, _ := call.Input["resource_id"].(string)
+	capabilityName = automaticFallbackFact(capabilityName)
+	resourceID = automaticFallbackFact(resourceID)
+	if capabilityName == "" || resourceID == "" {
+		return nil
+	}
+	return &automaticFallbackProposal{CapabilityName: capabilityName, ResourceID: resourceID}
+}
+
+func buildInvestigationFallbackSummary(finding automaticFallbackFinding, proposal *automaticFallbackProposal, successCount, errorCount int, toolList string) string {
+	resourceName := finding.ResourceName
+	if resourceName == "" {
+		resourceName = finding.ResourceID
+	}
+	resourceDetails := finding.ResourceID
+	if finding.ResourceType != "" {
+		resourceDetails += "; " + finding.ResourceType
+	}
+
+	checkWord := "tool calls"
+	if successCount == 1 {
+		checkWord = "tool call"
+	}
+	errorNote := ""
+	if errorCount > 0 {
+		errorWord := "errors"
+		if errorCount == 1 {
+			errorWord = "error"
+		}
+		errorNote = fmt.Sprintf(" %d tool %s were also recorded; they are not being treated as evidence.", errorCount, errorWord)
+	}
+
+	symptom := finding.Description
+	if symptom == "" {
+		symptom = finding.Title
+	}
+	classification := ""
+	if finding.Severity != "" || finding.Category != "" {
+		classification = strings.Trim(strings.Join([]string{finding.Severity, finding.Category}, " / "), " / ")
+		if classification != "" {
+			classification = " Classification: " + classification + "."
+		}
+	}
+
+	recommendation := "Review the recorded evidence before choosing a manual next step."
+	proposalConclusion := "No governed action proposal was recorded, so nothing was authorized by this fallback."
+	if proposal != nil {
+		recommendation = fmt.Sprintf("A governed %s proposal was recorded for %s. Core policy—not this fallback—decides whether it needs approval or may run automatically.", proposal.CapabilityName, proposal.ResourceID)
+		proposalConclusion = "The proposal remains traceable through its governed action receipt; this fallback does not infer execution or resolution."
+	}
+
+	return fmt.Sprintf(`### Investigation Summary
+Patrol investigated %s on %s. It completed %d successful %s using %s.%s The model did not return a final narrative, so this deterministic receipt uses only the recorded finding and successful tool outcomes.
+
+### Root Cause
+Patrol cannot claim a confirmed root cause without the missing final narrative. The recorded symptom was: %s%s
+
+### Affected Resources
+- %s (%s)
+
+### Recommendation
+%s
+
+### Conclusion
+NEEDS_ATTENTION: %s No resolution is being inferred.`,
+		finding.Title,
+		resourceName,
+		successCount,
+		checkWord,
+		toolList,
+		errorNote,
+		symptom,
+		classification,
+		resourceName,
+		resourceDetails,
+		recommendation,
+		proposalConclusion,
+	)
 }
 
 // fallbackToolDisplayName resolves an operator-facing tool name for the
