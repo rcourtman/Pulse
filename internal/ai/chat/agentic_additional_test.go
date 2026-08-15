@@ -723,6 +723,21 @@ func TestAgenticLoopRecoversTruncatedObjectiveMissionWithProposalOnlyTurn(t *tes
 	}
 }
 
+func TestPatrolObjectiveOutputLimitRecoveryRejectsMixedWatchTools(t *testing.T) {
+	req := providers.ChatRequest{System: "normal Watch"}
+	available := []providers.Tool{
+		{Name: agentcapabilities.PatrolProposeObserverToolName},
+		{Name: agentcapabilities.PatrolReportFindingToolName},
+		{Name: agentcapabilities.PatrolAssessFindingToolName},
+	}
+	if applyPatrolObjectiveOutputLimitRecoveryRequest(&req, tools.ProfilePatrolDetection, available) {
+		t.Fatal("normal Watch projection was misclassified as an objective-only mission")
+	}
+	if req.System != "normal Watch" || req.ToolChoice != nil {
+		t.Fatalf("rejected mixed projection mutated request: %+v", req)
+	}
+}
+
 func TestAgenticLoopFailsClosedAfterRepeatedTruncatedObjectiveRecovery(t *testing.T) {
 	provider := &stubStreamingProvider{}
 	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{})

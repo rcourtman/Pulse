@@ -7272,8 +7272,10 @@ design when necessary, but an unrelated global finding or redundant inventory
 search cannot consume the mission or leave a healthy run that never attempted
 observer design. If that model-owned turn reaches its output limit before the
 proposal call, core discards the partial prose and permits one bounded recovery
-turn with only `patrol_propose_observer`, required tool choice, and the remaining
-fixed run-level token budget. An accepted proposal then closes tool authority;
+turn only when the provider projection is exactly the single
+`patrol_propose_observer` capability, with required tool choice and the remaining
+fixed run-level token budget. Merely having that capability registered beside
+normal Watch tools cannot select this path. An accepted proposal then closes tool authority;
 the optional completion turn is prose-only so it cannot duplicate the handoff.
 A second truncated turn fails the objective mission closed.
 

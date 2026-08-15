@@ -562,19 +562,15 @@ func applyPatrolObjectiveOutputLimitRecoveryRequest(req *providers.ChatRequest, 
 		return false
 	}
 
-	var proposalTool *providers.Tool
-	for i := range availableTools {
-		if strings.TrimSpace(availableTools[i].Name) == agentcapabilities.PatrolProposeObserverToolName {
-			tool := availableTools[i]
-			proposalTool = &tool
-			break
-		}
-	}
-	if proposalTool == nil {
+	// The proposal capability is also registered in a normal Watch run when an
+	// objective store exists. Only the dedicated objective mission projects it
+	// as the entire tool set, so exact cardinality is part of the authority
+	// boundary rather than a convenience check.
+	if len(availableTools) != 1 || strings.TrimSpace(availableTools[0].Name) != agentcapabilities.PatrolProposeObserverToolName {
 		return false
 	}
 
-	req.Tools = []providers.Tool{*proposalTool}
+	req.Tools = []providers.Tool{availableTools[0]}
 	req.ToolChoice = &providers.ToolChoice{Type: providers.ToolChoiceRequired}
 	req.System = patrolObjectiveOutputLimitRecoverySystemPrompt
 	return true
