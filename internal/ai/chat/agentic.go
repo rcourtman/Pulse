@@ -524,6 +524,26 @@ func withoutProviderTool(providerTools []providers.Tool, toolName string) []prov
 	return filtered
 }
 
+func advertisedProviderToolNames(providerTools []providers.Tool) []string {
+	names := make([]string, 0, len(providerTools))
+	for _, tool := range providerTools {
+		if name := strings.TrimSpace(tool.Name); name != "" {
+			names = append(names, name)
+		}
+	}
+	return names
+}
+
+func providerToolIsAdvertised(providerTools []providers.Tool, toolName string) bool {
+	toolName = strings.TrimSpace(toolName)
+	for _, tool := range providerTools {
+		if strings.TrimSpace(tool.Name) == toolName {
+			return true
+		}
+	}
+	return false
+}
+
 // applyPatrolFinalFindingDecisionRequest preserves one final model-owned
 // decision opportunity for Watch runs that used their earlier turns gathering
 // evidence. It deliberately narrows the provider projection to the two
@@ -2066,6 +2086,30 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 				Str("tool", tc.Name).
 				Str("id", tc.ID).
 				Msg("Pre-checking tool call")
+
+			// Validate against the exact manifest sent on this turn before any
+			// safety classification. Some local providers accept a function name
+			// invented from an action/operation enum. Treating that unknown name as
+			// a write produces a misleading FSM refusal and can make the model chase
+			// a mutation path that never existed.
+			if a.currentExecutionProfile().NonInteractive() && !providerToolIsAdvertised(req.Tools, tc.Name) {
+				availableNames := advertisedProviderToolNames(req.Tools)
+				unknownMsg := fmt.Sprintf(
+					"TOOL_NOT_ADVERTISED: %q was not offered on this turn. Tool function names are exact. Choose one of: %s. Put action or operation values inside that tool's arguments; do not use them as function names.",
+					strings.TrimSpace(tc.Name), strings.Join(availableNames, ", "),
+				)
+				log.Warn().
+					Str("tool", tc.Name).
+					Strs("advertised_tools", availableNames).
+					Str("session_id", sessionID).
+					Msg("[AgenticLoop] Rejected provider tool name outside exact turn manifest")
+				emitToolStartIfNeeded(tc)
+				emitToolEndEvent(callback, tc.ID, tc.Name, tc.Input, unknownMsg, false)
+				projection := newProviderToolResultContextProjection(tc.ID, unknownMsg, true)
+				resultMessages = append(resultMessages, Message{ID: uuid.New().String(), Role: "user", Timestamp: time.Now(), ToolResult: &projection.Transcript})
+				providerMessages = append(providerMessages, providers.Message{Role: "user", ToolResult: &projection.Model})
+				continue
+			}
 
 			// === FSM ENFORCEMENT GATE 1: Check if tool is allowed in current state ===
 			toolKind := ClassifyToolCall(tc.Name, tc.Input)

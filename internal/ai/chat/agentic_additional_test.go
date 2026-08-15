@@ -234,6 +234,65 @@ func TestAgenticLoopPatrolInvestigationFailsClosedAfterToolFreeRepair(t *testing
 	}
 }
 
+func TestAgenticLoopPatrolInvestigationRejectsUnadvertisedToolBeforeFSM(t *testing.T) {
+	provider := &stubStreamingProvider{}
+	var requests []providers.ChatRequest
+	turn := 0
+	provider.chatStream = func(_ context.Context, req providers.ChatRequest, callback providers.StreamCallback) error {
+		requests = append(requests, req)
+		turn++
+		switch turn {
+		case 1:
+			callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{ToolCalls: []providers.ToolCall{{ID: "invented", Name: "container_state", Input: map[string]interface{}{"resource_id": "container-1"}}}}})
+		case 2:
+			callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{ToolCalls: []providers.ToolCall{{ID: "evidence", Name: agentcapabilities.PulseQueryToolName, Input: map[string]interface{}{"query": "containers"}}}}})
+		default:
+			callback(providers.StreamEvent{Type: "content", Data: providers.ContentEvent{Text: "grounded conclusion"}})
+			callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{}})
+		}
+		return nil
+	}
+
+	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
+	executor.ApplyExecutionProfile(tools.ProfilePatrolInvestigation)
+	loop := NewAgenticLoop(provider, executor, "system")
+	loop.SetExecutionProfile(tools.ProfilePatrolInvestigation)
+	loop.SetSessionFSM(NewSessionFSM())
+	loop.SetMaxTurns(4)
+
+	var rejected ToolEndData
+	result, err := loop.ExecuteWithTools(
+		context.Background(),
+		"unknown-tool-repair",
+		[]Message{{Role: "user", Content: "investigate"}},
+		[]providers.Tool{{Name: agentcapabilities.PulseQueryToolName}, {Name: agentcapabilities.PatrolProposeActionToolName}},
+		func(event StreamEvent) {
+			if event.Type != "tool_end" {
+				return
+			}
+			var candidate ToolEndData
+			if json.Unmarshal(event.Data, &candidate) == nil && candidate.ID == "invented" {
+				rejected = candidate
+			}
+		},
+	)
+	if err != nil {
+		t.Fatalf("ExecuteWithTools: %v", err)
+	}
+	if rejected.Success || !strings.Contains(rejected.Output, "TOOL_NOT_ADVERTISED") || strings.Contains(rejected.Output, "FSM blocked") {
+		t.Fatalf("unknown tool result = %+v, want exact-manifest rejection before FSM", rejected)
+	}
+	if !strings.Contains(rejected.Output, agentcapabilities.PulseQueryToolName) || strings.Contains(rejected.Output, agentcapabilities.PatrolProposeActionToolName) {
+		t.Fatalf("unknown tool correction did not use exact turn manifest: %q", rejected.Output)
+	}
+	if loop.GetTotalEvidenceCalls() != 1 {
+		t.Fatalf("evidence calls = %d, want only the advertised call counted", loop.GetTotalEvidenceCalls())
+	}
+	if len(requests) != 3 || len(result) == 0 || result[len(result)-1].Content != "grounded conclusion" {
+		t.Fatalf("repair did not reach grounded conclusion: requests=%d result=%+v", len(requests), result)
+	}
+}
+
 func TestAgenticLoopPatrolInvestigationEnforcesEvidenceBudget(t *testing.T) {
 	provider := &stubStreamingProvider{}
 	var requests []providers.ChatRequest

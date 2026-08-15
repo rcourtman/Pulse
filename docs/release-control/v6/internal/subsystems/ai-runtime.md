@@ -71,6 +71,13 @@ turn that requires a structured call from the same advertised evidence
 manifest. The repair is generic and carries no platform-, incident-, or
 model-specific diagnosis. A second tool-free response fails the investigation
 closed instead of recording narrated or simulated tool use as completed work.
+Provider-returned function names must also match the exact tool manifest sent
+on that turn before read/write classification or execution. A name invented
+from an action or operation enum is rejected as `TOOL_NOT_ADVERTISED`, receives
+the exact advertised-name set for one model-owned correction, does not consume
+the investigation evidence budget, and must never be misreported as an FSM
+mutation refusal. Unknown functions remain non-executable and are never
+heuristically mapped onto a capability.
 
 Model/tool orchestration is bounded by construction rather than by request
 timeout. The legacy `Service` streaming and non-streaming paths share one
