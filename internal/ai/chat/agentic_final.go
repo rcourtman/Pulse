@@ -82,6 +82,7 @@ func (a *AgenticLoop) ensureFinalTextResponseWithSystemPrompt(
 		// provider-specific tool_choice transport fields.
 	}
 	applyExecutionInferenceAllowance(&summaryReq, a.currentExecutionProfile(), true, a.totalOutputTokens)
+	applyExecutionRuntimeEnvelope(&summaryReq, a.currentExecutionProfile())
 	a.mu.Lock()
 	requestSanitizer := a.requestSanitizer
 	a.mu.Unlock()

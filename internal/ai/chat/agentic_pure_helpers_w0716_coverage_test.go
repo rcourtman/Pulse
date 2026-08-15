@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
 )
 
@@ -510,6 +511,27 @@ func Test_w0716_agentic_SetExecutionProfile(t *testing.T) {
 		}()
 		loop.SetExecutionProfile(tools.ExecutionProfile(99))
 	})
+}
+
+func TestPatrolExecutionRuntimeEnvelopeMatchesReadinessContextFloor(t *testing.T) {
+	for _, profile := range []tools.ExecutionProfile{
+		tools.ProfilePatrolDetection,
+		tools.ProfilePatrolInvestigation,
+	} {
+		req := &providers.ChatRequest{}
+		applyExecutionRuntimeEnvelope(req, profile)
+		if req.MinContextTokens != PatrolProviderMinContextTokens {
+			t.Fatalf("profile %d MinContextTokens = %d, want %d", profile, req.MinContextTokens, PatrolProviderMinContextTokens)
+		}
+	}
+
+	interactive := &providers.ChatRequest{MinContextTokens: 4_096}
+	applyExecutionRuntimeEnvelope(interactive, tools.ProfileInteractiveAssistant)
+	if interactive.MinContextTokens != 4_096 {
+		t.Fatalf("interactive context request changed to %d", interactive.MinContextTokens)
+	}
+
+	applyExecutionRuntimeEnvelope(nil, tools.ProfilePatrolDetection)
 }
 
 type strErr string

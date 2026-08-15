@@ -248,6 +248,9 @@ func TestService_ExecutePatrolStream_Success(t *testing.T) {
 	if mockProvider.lastRequest.StreamIdleTimeout != patrolProviderStreamIdleTimeout {
 		t.Fatalf("stream_idle_timeout=%s want %s", mockProvider.lastRequest.StreamIdleTimeout, patrolProviderStreamIdleTimeout)
 	}
+	if mockProvider.lastRequest.MinContextTokens != PatrolProviderMinContextTokens {
+		t.Fatalf("min_context_tokens=%d want %d", mockProvider.lastRequest.MinContextTokens, PatrolProviderMinContextTokens)
+	}
 	if doneCount != 1 {
 		t.Fatalf("expected done event to be emitted")
 	}

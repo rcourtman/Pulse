@@ -14,7 +14,22 @@ const (
 	patrolDetectionRecoveryAllowance   = 4_096
 	patrolDetectionSummaryAllowance    = 1_024
 	patrolDetectionMinimumAllowance    = 512
+
+	// PatrolProviderMinContextTokens is the minimum runtime context requested
+	// for every Watch and investigation model turn. The readiness probe uses
+	// the same value: certifying a model with a larger Ollama num_ctx than the
+	// live loop would silently truncate the production prompt and tool schemas.
+	PatrolProviderMinContextTokens = 16_384
 )
+
+func applyExecutionRuntimeEnvelope(req *providers.ChatRequest, profile tools.ExecutionProfile) {
+	if req == nil {
+		return
+	}
+	if profile == tools.ProfilePatrolDetection || profile == tools.ProfilePatrolInvestigation {
+		req.MinContextTokens = PatrolProviderMinContextTokens
+	}
+}
 
 func applyExecutionInferenceAllowance(req *providers.ChatRequest, profile tools.ExecutionProfile, summaryOnly bool, outputTokensUsed int) {
 	if req == nil || profile != tools.ProfilePatrolDetection {

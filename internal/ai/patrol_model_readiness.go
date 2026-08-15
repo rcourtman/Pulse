@@ -52,7 +52,7 @@ const (
 	// schemas and generation budget; without an explicit num_ctx Ollama runs
 	// at its server default (typically 4096) and silently truncates the
 	// prompt, capping context quality regardless of the model (#1624).
-	patrolReadinessProbeContextTokens = 16384
+	patrolReadinessProbeContextTokens = chat.PatrolProviderMinContextTokens
 
 	// patrolReadinessProbeMaxTokens caps probe generation. Thinking models
 	// (qwen3) spend reasoning tokens against this budget before emitting the

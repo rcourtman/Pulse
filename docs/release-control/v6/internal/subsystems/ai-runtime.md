@@ -7464,3 +7464,17 @@ root cause, discloses failed tool-call count without treating failures as
 evidence, and describes a successful typed proposal only as a governed
 proposal. It never dumps raw tool output, infers execution, or upgrades the
 finding to resolved. A failed proposal remains absent from the receipt.
+
+### Live Patrol uses the context envelope it certifies
+
+Every Watch and Patrol investigation provider request, including bounded
+recovery and final-summary turns, carries a provider-neutral minimum context
+request of 16,384 tokens. Providers without a runtime context control ignore
+the hint; Ollama projects it to native `num_ctx`. The Patrol model-readiness
+probe imports this same core-owned value rather than maintaining a second
+qualification-only constant. A model must therefore be exercised and run with
+the same minimum context envelope: Pulse must never certify tool use with a
+large probe context and then silently truncate live infrastructure context or
+governed tool schemas at Ollama's smaller server default. Output-token and
+reasoning allowances remain separately bounded and do not expand mutation
+authority.

@@ -180,6 +180,11 @@ func TestAgenticLoopPatrolInvestigationRepairsToolFreeStart(t *testing.T) {
 	if len(requests) != 3 {
 		t.Fatalf("provider requests = %d, want 3", len(requests))
 	}
+	for i, req := range requests {
+		if req.MinContextTokens != PatrolProviderMinContextTokens {
+			t.Fatalf("request %d MinContextTokens = %d, want %d", i, req.MinContextTokens, PatrolProviderMinContextTokens)
+		}
+	}
 	for _, requestIndex := range []int{0, 1} {
 		for _, tool := range requests[requestIndex].Tools {
 			if tool.Name == agentcapabilities.PatrolProposeActionToolName {
