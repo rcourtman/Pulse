@@ -1035,6 +1035,10 @@ func (p *PatrolService) runScopedPatrolWithStart(ctx context.Context, scope Patr
 	if cfg.AnalyzePMG {
 		resourceCount += resourceCounts.pmg
 	}
+	// Canonical resource kinds without a legacy snapshot projection are still
+	// real scoped work. They are admitted only through exact unified-resource
+	// matching and remain available to the objective seed and governed tools.
+	resourceCount += resourceCounts.unified
 
 	if resourceCount == 0 {
 		log.Debug().
@@ -1752,6 +1756,36 @@ func collectPatrolScopedKubernetesClusters(clusters []models.KubernetesCluster, 
 	return filtered, ids
 }
 
+func patrolUnifiedResourceIdentity(resource unifiedresources.Resource) ([]string, []string) {
+	ids := []string{resource.ID}
+	aliases := []string{resource.Name}
+	if resource.Canonical != nil {
+		ids = append(ids, resource.Canonical.PrimaryID)
+		ids = append(ids, resource.Canonical.SupersededIDs...)
+		aliases = append(aliases, resource.Canonical.DisplayName, resource.Canonical.Hostname)
+		aliases = append(aliases, resource.Canonical.Aliases...)
+	}
+	ids = append(ids, resource.SupersededCanonicalIDs...)
+	return ids, aliases
+}
+
+func collectPatrolScopedUnifiedResources(provider UnifiedResourceProvider, matcher patrolScopeMatcher) ([]unifiedresources.Resource, []string) {
+	if provider == nil {
+		return nil, nil
+	}
+	filtered := make([]unifiedresources.Resource, 0)
+	ids := make([]string, 0)
+	for _, resource := range provider.GetAll() {
+		resourceIDs, aliases := patrolUnifiedResourceIdentity(resource)
+		if !matcher.matchesType(string(resource.Type)) || !matcher.matchesResource(resourceIDs, aliases...) {
+			continue
+		}
+		filtered = append(filtered, resource)
+		ids = append(ids, resourceIDs...)
+	}
+	return filtered, ids
+}
+
 func patrolKubernetesScopeName(k models.KubernetesCluster) string {
 	clusterName := k.CustomDisplayName
 	if clusterName == "" {
@@ -1904,9 +1938,18 @@ func filterPatrolStateByScopeState(snap patrolRuntimeState, scope PatrolScope) p
 	filterState.filtered.KubernetesClusters = filteredK8sClusters
 	filterState.includeResourceID(k8sClusterIDs...)
 
+	// Preserve exact canonical resources that have no StateSnapshot projection
+	// (notably availability network endpoints). Rebuilding the provider only
+	// from snapshot fields made valid objective scopes disappear before the
+	// model could propose a local observer. The scoped provider is still built
+	// from the exact matcher result, so unrelated resources cannot enter model
+	// context.
+	filteredUnified, unifiedIDs := collectPatrolScopedUnifiedResources(snap.unifiedResourceProvider, matcher)
+	filterState.includeResourceID(unifiedIDs...)
+
 	copyScopedPatrolMetadata(&filterState.filtered, snap, filterState.includedResourceIDs, filterState.includedGuestVMIDs)
 
-	return filterState.filtered.withDerivedProviders()
+	return filterState.filtered.withDerivedProvidersAndResources(filteredUnified)
 }
 
 func (p *PatrolService) filterStateByScopeState(snap patrolRuntimeState, scope PatrolScope) patrolRuntimeState {

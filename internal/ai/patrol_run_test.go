@@ -54,6 +54,62 @@ func TestResolvePatrolScopeExpandsCanonicalUnifiedIDToSourceResource(t *testing.
 	}
 }
 
+func TestResolvePatrolScopePreservesCanonicalAvailabilityEndpoint(t *testing.T) {
+	now := time.Now().UTC()
+	endpoint := unifiedresources.Resource{
+		ID:       "network-endpoint-jellyfin",
+		Name:     "Jellyfin",
+		Type:     unifiedresources.ResourceTypeNetworkEndpoint,
+		Status:   unifiedresources.StatusOnline,
+		LastSeen: now,
+		Sources:  []unifiedresources.DataSource{unifiedresources.SourceAvailability},
+		Availability: &unifiedresources.AvailabilityData{
+			TargetID: "jellyfin-check", Enabled: true, ProbeOutcome: "reachable",
+		},
+		Canonical: &unifiedresources.CanonicalIdentity{
+			DisplayName: "Jellyfin playback endpoint",
+			Aliases:     []string{"jellyfin.local"},
+		},
+	}
+	unrelated := unifiedresources.Resource{
+		ID: "network-endpoint-unrelated", Name: "Unrelated", Type: unifiedresources.ResourceTypeNetworkEndpoint,
+		Status: unifiedresources.StatusOnline, LastSeen: now,
+	}
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestResources([]unifiedresources.Resource{endpoint, unrelated})
+	state := newPatrolRuntimeStateWithProviders(
+		models.EmptyStateSnapshot(), registry, unifiedresources.NewUnifiedAIAdapter(registry),
+	)
+
+	resolved, resolution := resolvePatrolScopeState(state, PatrolScope{ResourceIDs: []string{endpoint.ID}})
+	if len(resolution.UnmatchedResourceIDs) != 0 || len(resolution.AmbiguousResourceIDs) != 0 {
+		t.Fatalf("canonical availability endpoint did not resolve exactly: %+v", resolution)
+	}
+	filtered := filterPatrolStateByScopeState(state, resolved)
+	resources := filtered.unifiedResourceProvider.GetAll()
+	if len(resources) != 1 || resources[0].ID != endpoint.ID {
+		t.Fatalf("scoped provider resources = %+v, want only %q", resources, endpoint.ID)
+	}
+	checks := unifiedresources.AvailabilityChecksForResource(resources[0])
+	if len(checks) != 1 || checks[0].TargetID != "jellyfin-check" || checks[0].ProbeOutcome != "reachable" {
+		t.Fatalf("availability evidence was not preserved: %+v", checks)
+	}
+	effectiveContainsEndpoint := false
+	for _, id := range resolution.EffectiveResourceIDs {
+		if id == endpoint.ID {
+			effectiveContainsEndpoint = true
+			break
+		}
+	}
+	if !effectiveContainsEndpoint {
+		t.Fatalf("effective scope = %v, want canonical endpoint %q", resolution.EffectiveResourceIDs, endpoint.ID)
+	}
+	counts := patrolRuntimeCountResources(filtered)
+	if counts.unified != 1 || counts.total() != 1 {
+		t.Fatalf("canonical endpoint counts = %#v, want one unified resource", counts)
+	}
+}
+
 func TestResolvePatrolScopeRejectsUnmatchedAndAmbiguousAliases(t *testing.T) {
 	state := newPatrolRuntimeState(models.StateSnapshot{VMs: []models.VM{
 		{ID: "vm-1", Name: "duplicate", VMID: 1},

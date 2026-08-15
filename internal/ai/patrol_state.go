@@ -36,6 +36,11 @@ const (
 	patrolRuntimeResourcePMG          patrolRuntimeResourceKind = "pmg"
 	patrolRuntimeResourceK8sCluster   patrolRuntimeResourceKind = "k8s-cluster"
 	patrolRuntimeResourcePhysicalDisk patrolRuntimeResourceKind = "physical-disk"
+	// patrolRuntimeResourceUnified covers canonical resource kinds that do not
+	// yet have a legacy StateSnapshot projection (for example availability
+	// network endpoints). These resources remain exact-ID scoped and are
+	// supplied to Patrol through the unified-resource provider only.
+	patrolRuntimeResourceUnified patrolRuntimeResourceKind = "unified-resource"
 )
 
 type patrolRuntimeResourceRecord struct {
@@ -125,8 +130,15 @@ func (s patrolRuntimeState) resourceSnapshot() models.StateSnapshot {
 }
 
 func (s patrolRuntimeState) withDerivedProviders() patrolRuntimeState {
+	return s.withDerivedProvidersAndResources(nil)
+}
+
+func (s patrolRuntimeState) withDerivedProvidersAndResources(resources []unifiedresources.Resource) patrolRuntimeState {
 	registry := unifiedresources.NewRegistry(nil)
 	registry.IngestSnapshot(s.resourceSnapshot())
+	if len(resources) > 0 {
+		registry.IngestResources(resources)
+	}
 	s.readState = registry
 	s.unifiedResourceProvider = unifiedresources.NewUnifiedAIAdapter(registry)
 	return s
@@ -168,8 +180,17 @@ func (p *PatrolService) patrolRuntimeStateForSnapshot(snapshot models.StateSnaps
 }
 
 func patrolVisitRuntimeResources(s patrolRuntimeState, visit func(patrolRuntimeResourceRecord) bool) {
+	emittedIDs := make(map[string]struct{})
 	emit := func(kind patrolRuntimeResourceKind, ids []string, aliases ...string) bool {
-		return visit(patrolRuntimeResourceRecord{kind: kind, ids: ids, aliases: aliases})
+		if !visit(patrolRuntimeResourceRecord{kind: kind, ids: ids, aliases: aliases}) {
+			return false
+		}
+		for _, id := range ids {
+			if token := canonicalPatrolScopeToken(id); token != "" {
+				emittedIDs[token] = struct{}{}
+			}
+		}
+		return true
 	}
 	hostResourceKind := func(platform string) patrolRuntimeResourceKind {
 		if strings.EqualFold(strings.TrimSpace(platform), "truenas") {
@@ -293,6 +314,15 @@ func patrolVisitRuntimeResources(s patrolRuntimeState, visit func(patrolRuntimeR
 				aliases = append(aliases, disk.PhysicalDisk.Model)
 			}
 			if !emit(patrolRuntimeResourcePhysicalDisk, ids, aliases...) {
+				return
+			}
+		}
+		for _, resource := range s.unifiedResourceProvider.GetAll() {
+			if _, alreadyEmitted := emittedIDs[canonicalPatrolScopeToken(resource.ID)]; alreadyEmitted {
+				continue
+			}
+			ids, aliases := patrolUnifiedResourceIdentity(resource)
+			if !emit(patrolRuntimeResourceUnified, ids, aliases...) {
 				return
 			}
 		}
@@ -559,10 +589,11 @@ type patrolRuntimeResourceCounts struct {
 	pbs        int
 	pmg        int
 	kubernetes int
+	unified    int
 }
 
 func (c patrolRuntimeResourceCounts) total() int {
-	return c.nodes + c.guests + c.docker + c.storage + c.hosts + c.truenas + c.pbs + c.pmg + c.kubernetes
+	return c.nodes + c.guests + c.docker + c.storage + c.hosts + c.truenas + c.pbs + c.pmg + c.kubernetes + c.unified
 }
 
 func patrolRuntimeCountResources(s patrolRuntimeState) patrolRuntimeResourceCounts {
@@ -587,6 +618,8 @@ func patrolRuntimeCountResources(s patrolRuntimeState) patrolRuntimeResourceCoun
 			counts.pmg++
 		case patrolRuntimeResourceK8sCluster:
 			counts.kubernetes++
+		case patrolRuntimeResourceUnified:
+			counts.unified++
 		}
 		return true
 	})

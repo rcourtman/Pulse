@@ -7257,6 +7257,16 @@ objectives expand to current canonical resource IDs before the run. This wakes
 the model once to design coverage rather than waiting for the next scheduled
 Patrol cycle.
 
+Scoped Patrol identity resolution includes exact canonical unified resources
+that have no legacy `StateSnapshot` projection, including standalone
+availability `network-endpoint` resources. The scoped runtime rebuild retains
+only provider resources matched by the resolved ID/type set, preserves their
+canonical availability evidence, and counts them as real scoped work. It does
+not fall back to an unfiltered provider or relax exact/unique identity rules.
+An objective attached to an availability endpoint can therefore reach the
+model-authored observer planner without exposing unrelated estate resources or
+failing before the already-supported availability observer ABI is evaluated.
+
 Accepted observers transition through proposed, validated, and installed under
 core authority. Resource observers evaluate Pulse's canonical `ReadState`
 status locally, falling back to the existing Patrol snapshot only where
