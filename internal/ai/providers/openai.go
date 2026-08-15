@@ -243,13 +243,18 @@ func (c *OpenAIClient) Name() string {
 
 // openaiRequest is the request body for the OpenAI API
 type openaiRequest struct {
-	Model               string          `json:"model"`
-	Messages            []openaiMessage `json:"messages"`
-	MaxTokens           int             `json:"max_tokens,omitempty"`            // Legacy parameter for older models
-	MaxCompletionTokens int             `json:"max_completion_tokens,omitempty"` // For o1/o3 models
-	Temperature         float64         `json:"temperature,omitempty"`
-	Tools               []openaiTool    `json:"tools,omitempty"`
-	ToolChoice          interface{}     `json:"tool_choice,omitempty"` // "none", "required", or provider-specific choices
+	Model               string           `json:"model"`
+	Messages            []openaiMessage  `json:"messages"`
+	MaxTokens           int              `json:"max_tokens,omitempty"`            // Legacy parameter for older models
+	MaxCompletionTokens int              `json:"max_completion_tokens,omitempty"` // For o1/o3 models
+	Reasoning           *openAIReasoning `json:"reasoning,omitempty"`             // OpenRouter native reasoning control
+	Temperature         float64          `json:"temperature,omitempty"`
+	Tools               []openaiTool     `json:"tools,omitempty"`
+	ToolChoice          interface{}      `json:"tool_choice,omitempty"` // "none", "required", or provider-specific choices
+}
+
+type openAIReasoning struct {
+	Effort ReasoningEffort `json:"effort"`
 }
 
 // openaiTool represents a function tool in OpenAI format
@@ -410,6 +415,13 @@ func (c *OpenAIClient) isOpenRouter() bool {
 	return c.Name() == "openrouter" || strings.Contains(c.baseURL, "openrouter.ai")
 }
 
+func (c *OpenAIClient) openRouterReasoning(effort ReasoningEffort) *openAIReasoning {
+	if !c.isOpenRouter() || effort == "" || !effort.Valid() {
+		return nil
+	}
+	return &openAIReasoning{Effort: effort}
+}
+
 func (c *OpenAIClient) usesOfficialOpenAIEndpoint() bool {
 	if c.Name() != "openai" {
 		return false
@@ -567,8 +579,9 @@ func (c *OpenAIClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 
 	// Build request
 	openaiReq := openaiRequest{
-		Model:    model,
-		Messages: messages,
+		Model:     model,
+		Messages:  messages,
+		Reasoning: c.openRouterReasoning(req.ReasoningEffort),
 	}
 
 	// max_completion_tokens is required by official OpenAI reasoning models.
@@ -822,15 +835,16 @@ func (c *OpenAIClient) SupportsThinking(model string) bool {
 
 // openaiStreamRequest extends openaiRequest with streaming field
 type openaiStreamRequest struct {
-	Model               string          `json:"model"`
-	Messages            []openaiMessage `json:"messages"`
-	MaxTokens           int             `json:"max_tokens,omitempty"`
-	MaxCompletionTokens int             `json:"max_completion_tokens,omitempty"`
-	Temperature         float64         `json:"temperature,omitempty"`
-	Tools               []openaiTool    `json:"tools,omitempty"`
-	ToolChoice          interface{}     `json:"tool_choice,omitempty"`
-	Stream              bool            `json:"stream"`
-	StreamOptions       *streamOptions  `json:"stream_options,omitempty"`
+	Model               string           `json:"model"`
+	Messages            []openaiMessage  `json:"messages"`
+	MaxTokens           int              `json:"max_tokens,omitempty"`
+	MaxCompletionTokens int              `json:"max_completion_tokens,omitempty"`
+	Reasoning           *openAIReasoning `json:"reasoning,omitempty"`
+	Temperature         float64          `json:"temperature,omitempty"`
+	Tools               []openaiTool     `json:"tools,omitempty"`
+	ToolChoice          interface{}      `json:"tool_choice,omitempty"`
+	Stream              bool             `json:"stream"`
+	StreamOptions       *streamOptions   `json:"stream_options,omitempty"`
 }
 
 type streamOptions struct {
@@ -950,9 +964,10 @@ func (c *OpenAIClient) ChatStream(ctx context.Context, req ChatRequest, callback
 	}
 
 	openaiReq := openaiStreamRequest{
-		Model:    model,
-		Messages: messages,
-		Stream:   true,
+		Model:     model,
+		Messages:  messages,
+		Reasoning: c.openRouterReasoning(req.ReasoningEffort),
+		Stream:    true,
 	}
 	if c.supportsStreamOptions() {
 		openaiReq.StreamOptions = &streamOptions{IncludeUsage: true}

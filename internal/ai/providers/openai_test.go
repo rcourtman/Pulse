@@ -473,6 +473,35 @@ func TestOpenAIClient_ChatStream_OpenRouterDefaultsCompletionBudget(t *testing.T
 	assert.Zero(t, captured.MaxTokens)
 }
 
+func TestOpenAIClient_ChatStream_OpenRouterSerializesReasoningEffort(t *testing.T) {
+	var captured openaiStreamRequest
+	client := NewOpenAICompatibleClient("openrouter", "sk-test", "openrouter:qwen/qwen3.5-plus", "https://openrouter.ai/api/v1", 0)
+	client.streamClient = &http.Client{
+		Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+			if err := json.NewDecoder(r.Body).Decode(&captured); err != nil {
+				return nil, err
+			}
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Header:     http.Header{"Content-Type": []string{"text/event-stream"}},
+				Body: io.NopCloser(strings.NewReader(
+					"data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}]}\n" +
+						"data: [DONE]\n",
+				)),
+			}, nil
+		}),
+	}
+
+	err := client.ChatStream(context.Background(), ChatRequest{
+		Messages:        []Message{{Role: "user", Content: "Propose the observer."}},
+		ReasoningEffort: ReasoningEffortLow,
+	}, func(StreamEvent) {})
+
+	require.NoError(t, err)
+	require.NotNil(t, captured.Reasoning)
+	assert.Equal(t, ReasoningEffortLow, captured.Reasoning.Effort)
+}
+
 func TestOpenAIClient_ChatStream_OpenAIDoesNotDefaultCompletionBudget(t *testing.T) {
 	var captured openaiStreamRequest
 	client := NewOpenAIClient("sk-test", "gpt-4", "https://api.openai.com/v1", 0)
@@ -528,6 +557,67 @@ func TestOpenAIClient_Chat_OpenRouterDefaultsCompletionBudget(t *testing.T) {
 	assert.Equal(t, "ok", resp.Content)
 	assert.Equal(t, openrouterDefaultMaxCompletionTokens, captured.MaxCompletionTokens)
 	assert.Zero(t, captured.MaxTokens)
+}
+
+func TestOpenAIClient_Chat_OpenRouterSerializesReasoningEffort(t *testing.T) {
+	var captured openaiRequest
+	client := NewOpenAICompatibleClient("openrouter", "sk-test", "openrouter:qwen/qwen3.5-plus", "https://openrouter.ai/api/v1", 0)
+	client.client = &http.Client{
+		Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+			if err := json.NewDecoder(r.Body).Decode(&captured); err != nil {
+				return nil, err
+			}
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Header:     http.Header{"Content-Type": []string{"application/json"}},
+				Body: io.NopCloser(strings.NewReader(
+					`{"id":"chatcmpl-1","model":"qwen/qwen3.5-plus","choices":[{"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}]}`,
+				)),
+			}, nil
+		}),
+	}
+
+	resp, err := client.Chat(context.Background(), ChatRequest{
+		Messages:        []Message{{Role: "user", Content: "Propose the observer."}},
+		ReasoningEffort: ReasoningEffortLow,
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, "ok", resp.Content)
+	require.NotNil(t, captured.Reasoning)
+	assert.Equal(t, ReasoningEffortLow, captured.Reasoning.Effort)
+}
+
+func TestOpenAIClient_Chat_NonOpenRouterOmitsReasoningEffort(t *testing.T) {
+	var captured openaiRequest
+	client := NewOpenAIClient("sk-test", "gpt-4", "https://api.openai.com/v1", 0)
+	client.client = &http.Client{
+		Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+			if err := json.NewDecoder(r.Body).Decode(&captured); err != nil {
+				return nil, err
+			}
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Header:     http.Header{"Content-Type": []string{"application/json"}},
+				Body: io.NopCloser(strings.NewReader(
+					`{"id":"chatcmpl-1","model":"gpt-4","choices":[{"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}]}`,
+				)),
+			}, nil
+		}),
+	}
+
+	_, err := client.Chat(context.Background(), ChatRequest{
+		Messages:        []Message{{Role: "user", Content: "Hi"}},
+		ReasoningEffort: ReasoningEffortLow,
+	})
+
+	require.NoError(t, err)
+	assert.Nil(t, captured.Reasoning)
+}
+
+func TestOpenAIClient_OpenRouterOmitsInvalidReasoningEffort(t *testing.T) {
+	client := NewOpenAICompatibleClient("openrouter", "sk-test", "qwen/qwen3.5-plus", "https://openrouter.ai/api/v1", 0)
+	assert.Nil(t, client.openRouterReasoning(ReasoningEffort("unbounded")))
 }
 
 func TestOpenAIClient_Chat_KeepsReasoningOutOfVisibleContent(t *testing.T) {

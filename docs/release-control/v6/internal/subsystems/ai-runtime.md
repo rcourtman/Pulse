@@ -4238,6 +4238,15 @@ model-led diagnostic freedom. Non-interactive tool-turn prose remains available 
 but is not concatenated into the persisted Patrol run analysis; the bounded
 terminal summary is the sole operator conclusion.
 
+OpenRouter is part of that provider-neutral reasoning-control boundary. When a
+runtime request declares low, medium, or high `ReasoningEffort`, both streaming
+and non-streaming OpenRouter transports must serialize the gateway-native
+`reasoning.effort` request object. An absent or invalid hint must omit the
+object, and non-OpenRouter OpenAI-compatible endpoints must not receive this
+OpenRouter-specific shape. This is required for bounded Patrol recovery turns:
+raising the output allowance without constraining reasoning can consume the
+entire allowance before a required observer or action proposal is emitted.
+
 Patrol Pro investigation now separates three previously conflated quantities:
 model responses, model-selected tool calls, and evidence-tool calls. The
 operator-facing investigation budget limits evidence calls; core derives a
