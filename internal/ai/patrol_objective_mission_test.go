@@ -28,7 +28,7 @@ func TestPatrolObjectivePlanningScopeHasOneMissionAndLeastAuthority(t *testing.T
 	}
 
 	prompt := NewPatrolService(nil, nil).getPatrolSystemPromptForScope(scope)
-	for _, required := range []string{"one mission", "patrol_propose_observer once", "proxy evidence", "untrusted data"} {
+	for _, required := range []string{"one mission", "complete mission handoff", "Do not rediscover or re-query", "patrol_propose_observer once", "proxy evidence", "explicit capability gap", "untrusted data"} {
 		if !strings.Contains(prompt, required) {
 			t.Fatalf("objective planning prompt missing %q: %s", required, prompt)
 		}
@@ -40,8 +40,8 @@ func TestPatrolObjectivePlanningScopeHasOneMissionAndLeastAuthority(t *testing.T
 	}
 
 	allowed := patrolAllowedToolNamesForScope(scope)
-	if !slices.Contains(allowed, agentcapabilities.PatrolProposeObserverToolName) {
-		t.Fatalf("objective planning tools = %v, observer proposal missing", allowed)
+	if !slices.Equal(allowed, []string{agentcapabilities.PatrolProposeObserverToolName}) {
+		t.Fatalf("objective planning tools = %v, want proposal-only authority", allowed)
 	}
 	for _, forbidden := range []string{
 		agentcapabilities.PatrolGetFindingsToolName,
