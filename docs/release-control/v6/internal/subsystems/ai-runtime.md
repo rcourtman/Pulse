@@ -62,6 +62,15 @@ prose. Unknown root cause does not by itself prohibit a reversible, bounded
 initial proposal when evidence confirms the operational symptom; capability
 validation, approval floors, tenant mode, emergency stop, dispatch, and
 verification remain core-owned and fail closed.
+An investigation cannot complete or submit a typed action proposal before the
+model has made at least one structured call to an advertised evidence tool.
+Until then, core withholds proposal authority while leaving evidence-tool
+selection model-owned. If the provider returns prose without a tool call, core
+must discard that prose as a durable conclusion and allow one bounded repair
+turn that requires a structured call from the same advertised evidence
+manifest. The repair is generic and carries no platform-, incident-, or
+model-specific diagnosis. A second tool-free response fails the investigation
+closed instead of recording narrated or simulated tool use as completed work.
 
 Model/tool orchestration is bounded by construction rather than by request
 timeout. The legacy `Service` streaming and non-streaming paths share one

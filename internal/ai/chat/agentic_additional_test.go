@@ -136,6 +136,102 @@ func TestInvestigationEvidenceBudgetHelpers(t *testing.T) {
 	if got := investigationEvidenceCheckpoint(15); got != 8 {
 		t.Fatalf("checkpoint(15) = %d, want 8", got)
 	}
+	evidenceOnly := investigationEvidenceTools(available)
+	if len(evidenceOnly) != 2 || evidenceOnly[0].Name != agentcapabilities.PulseQueryToolName || evidenceOnly[1].Name != agentcapabilities.PatrolActionCapabilitiesToolName {
+		t.Fatalf("evidence tools = %+v, want proposal excluded", evidenceOnly)
+	}
+}
+
+func TestAgenticLoopPatrolInvestigationRepairsToolFreeStart(t *testing.T) {
+	provider := &stubStreamingProvider{}
+	var requests []providers.ChatRequest
+	turn := 0
+	provider.chatStream = func(_ context.Context, req providers.ChatRequest, callback providers.StreamCallback) error {
+		requests = append(requests, req)
+		turn++
+		switch turn {
+		case 1:
+			callback(providers.StreamEvent{Type: "content", Data: providers.ContentEvent{Text: "I will now call a made-up tool in prose."}})
+			callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{}})
+		case 2:
+			callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{ToolCalls: []providers.ToolCall{{ID: "evidence", Name: agentcapabilities.PulseQueryToolName, Input: map[string]interface{}{"query": "containers"}}}}})
+		default:
+			callback(providers.StreamEvent{Type: "content", Data: providers.ContentEvent{Text: "grounded conclusion"}})
+			callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{}})
+		}
+		return nil
+	}
+
+	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
+	executor.ApplyExecutionProfile(tools.ProfilePatrolInvestigation)
+	loop := NewAgenticLoop(provider, executor, "system")
+	loop.SetExecutionProfile(tools.ProfilePatrolInvestigation)
+	loop.SetMaxTurns(3)
+
+	available := []providers.Tool{
+		{Name: agentcapabilities.PulseQueryToolName},
+		{Name: agentcapabilities.PatrolActionCapabilitiesToolName},
+		{Name: agentcapabilities.PatrolProposeActionToolName},
+	}
+	result, err := loop.ExecuteWithTools(context.Background(), "grounding-repair", []Message{{Role: "user", Content: "investigate"}}, available, func(StreamEvent) {})
+	if err != nil {
+		t.Fatalf("ExecuteWithTools: %v", err)
+	}
+	if len(requests) != 3 {
+		t.Fatalf("provider requests = %d, want 3", len(requests))
+	}
+	for _, requestIndex := range []int{0, 1} {
+		for _, tool := range requests[requestIndex].Tools {
+			if tool.Name == agentcapabilities.PatrolProposeActionToolName {
+				t.Fatalf("request %d offered an ungrounded proposal: %+v", requestIndex, requests[requestIndex].Tools)
+			}
+		}
+	}
+	if requests[1].ToolChoice == nil || requests[1].ToolChoice.Type != providers.ToolChoiceRequired {
+		t.Fatalf("repair tool choice = %+v, want required", requests[1].ToolChoice)
+	}
+	if !strings.Contains(requests[1].System, "cannot accept a completed investigation") {
+		t.Fatalf("repair system prompt missing grounding contract: %q", requests[1].System)
+	}
+	if loop.GetTotalEvidenceCalls() != 1 {
+		t.Fatalf("evidence calls = %d, want 1", loop.GetTotalEvidenceCalls())
+	}
+	if len(result) == 0 || result[0].Content != "" || result[len(result)-1].Content != "grounded conclusion" {
+		t.Fatalf("durable result retained ungrounded prose or lost conclusion: %+v", result)
+	}
+}
+
+func TestAgenticLoopPatrolInvestigationFailsClosedAfterToolFreeRepair(t *testing.T) {
+	provider := &stubStreamingProvider{}
+	var requests []providers.ChatRequest
+	provider.chatStream = func(_ context.Context, req providers.ChatRequest, callback providers.StreamCallback) error {
+		requests = append(requests, req)
+		callback(providers.StreamEvent{Type: "content", Data: providers.ContentEvent{Text: "I would inspect this later."}})
+		callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{}})
+		return nil
+	}
+
+	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
+	executor.ApplyExecutionProfile(tools.ProfilePatrolInvestigation)
+	loop := NewAgenticLoop(provider, executor, "system")
+	loop.SetExecutionProfile(tools.ProfilePatrolInvestigation)
+	loop.SetMaxTurns(1)
+
+	result, err := loop.ExecuteWithTools(context.Background(), "grounding-fail-closed", []Message{{Role: "user", Content: "investigate"}}, []providers.Tool{{Name: agentcapabilities.PulseQueryToolName}}, func(StreamEvent) {})
+	if err == nil || !strings.Contains(err.Error(), "completed twice without a structured evidence tool call") {
+		t.Fatalf("ExecuteWithTools error = %v, want fail-closed grounding error", err)
+	}
+	if len(requests) != 2 {
+		t.Fatalf("provider requests = %d, want one bounded repair", len(requests))
+	}
+	if requests[1].ToolChoice == nil || requests[1].ToolChoice.Type != providers.ToolChoiceRequired {
+		t.Fatalf("repair tool choice = %+v, want required", requests[1].ToolChoice)
+	}
+	for _, msg := range result {
+		if strings.TrimSpace(msg.Content) != "" {
+			t.Fatalf("ungrounded prose escaped into durable result: %+v", result)
+		}
+	}
 }
 
 func TestAgenticLoopPatrolInvestigationEnforcesEvidenceBudget(t *testing.T) {
@@ -2095,9 +2191,9 @@ func TestAgenticLoop_DoesNotRetryAfterPartialEvents(t *testing.T) {
 func TestAgenticLoop_RetriesIncompleteNonInteractiveStreamAfterPartialEvent(t *testing.T) {
 	provider := &stubStreamingProvider{}
 	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
-	executor.ApplyExecutionProfile(tools.ProfilePatrolInvestigation)
+	executor.ApplyExecutionProfile(tools.ProfilePatrolDetection)
 	loop := NewAgenticLoop(provider, executor, "investigation prompt")
-	loop.SetExecutionProfile(tools.ProfilePatrolInvestigation)
+	loop.SetExecutionProfile(tools.ProfilePatrolDetection)
 
 	callCount := 0
 	provider.chatStream = func(_ context.Context, _ providers.ChatRequest, callback providers.StreamCallback) error {
@@ -2138,6 +2234,7 @@ func TestAgenticLoop_RecoversTruncatedInvestigationConclusionFromExistingEvidenc
 	loop := NewAgenticLoop(provider, executor, "full investigation prompt")
 	loop.SetExecutionProfile(tools.ProfilePatrolInvestigation)
 	loop.SetMaxTurns(1)
+	loop.totalEvidenceCalls = 1
 
 	providerCalls := 0
 	var recoveryRequest providers.ChatRequest

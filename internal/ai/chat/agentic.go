@@ -929,6 +929,8 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 	patrolOutputLimitRecoveryAttempted := false
 	investigationOutputLimitRecoveryPending := false // A truncated investigation conclusion needs one evidence-only retry
 	investigationOutputLimitRecoveryAttempted := false
+	investigationEvidenceStartRepairPending := false // A tool-free investigation start gets one structured evidence retry
+	investigationEvidenceStartRepairAttempted := false
 	toolBlockedLastTurn := false // When true, request final text after budget/loop block
 	investigationProposalCompleted := false
 	acceptedFindingReports := 0
@@ -970,7 +972,8 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 	for turn < maxTurns ||
 		(patrolFindingRepairPending && !patrolFindingRepairAttempted) ||
 		(patrolOutputLimitRecoveryPending && !patrolOutputLimitRecoveryAttempted) ||
-		(investigationOutputLimitRecoveryPending && !investigationOutputLimitRecoveryAttempted) {
+		(investigationOutputLimitRecoveryPending && !investigationOutputLimitRecoveryAttempted) ||
+		(investigationEvidenceStartRepairPending && !investigationEvidenceStartRepairAttempted) {
 		// === CONTEXT COMPACTION: Compact old tool results to prevent context blowout ===
 		if turn > 0 {
 			compactOldToolResults(providerMessages, currentTurnStartIndex, compactionKeepTurns, compactionMinChars, a.knowledgeAccumulator)
@@ -1056,6 +1059,7 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 		patrolFindingContinuationTurn := false
 		patrolOutputLimitRecoveryTurn := false
 		investigationOutputLimitRecoveryTurn := false
+		investigationEvidenceStartRepairTurn := false
 		if patrolFindingRepairPending && !patrolFindingRepairAttempted {
 			if applyPatrolFindingLifecycleRepairRequest(&req, a.currentExecutionProfile(), tools) {
 				patrolFindingRepairTurn = true
@@ -1104,6 +1108,18 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 				Str("session_id", sessionID).
 				Msg("[AgenticLoop] Investigation output limit reached — retrying one evidence-only conclusion turn")
 		}
+		if !patrolFindingRepairTurn && !patrolOutputLimitRecoveryTurn && !investigationOutputLimitRecoveryTurn && investigationEvidenceStartRepairPending && !investigationEvidenceStartRepairAttempted {
+			if !applyInvestigationEvidenceStartRepairRequest(&req, a.currentExecutionProfile(), tools) {
+				return resultMessages, fmt.Errorf("Patrol investigation requires grounded evidence, but no evidence tools are available")
+			}
+			investigationEvidenceStartRepairTurn = true
+			investigationEvidenceStartRepairPending = false
+			investigationEvidenceStartRepairAttempted = true
+			log.Warn().
+				Int("turn", turn).
+				Str("session_id", sessionID).
+				Msg("[AgenticLoop] Investigation returned prose before evidence — requiring one structured evidence call")
+		}
 		if !patrolFindingRepairTurn && !patrolOutputLimitRecoveryTurn && shouldOfferPatrolFindingLifecycleContinuation(patrolFindingContinuationPending, writeCompletedLastTurn, toolBlockedLastTurn) {
 			if applyPatrolFindingLifecycleContinuationRequest(&req, a.currentExecutionProfile(), tools) {
 				patrolFindingContinuationTurn = true
@@ -1116,7 +1132,7 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 				patrolFindingContinuationPending = false
 			}
 		}
-		if !patrolFindingRepairTurn && !patrolOutputLimitRecoveryTurn && !patrolFindingContinuationTurn && shouldOfferFinalPatrolFindingDecision(turn, maxTurns, patrolFindingSummaryPending, writeCompletedLastTurn, toolBlockedLastTurn) {
+		if !patrolFindingRepairTurn && !patrolOutputLimitRecoveryTurn && !patrolFindingContinuationTurn && !investigationEvidenceStartRepairTurn && shouldOfferFinalPatrolFindingDecision(turn, maxTurns, patrolFindingSummaryPending, writeCompletedLastTurn, toolBlockedLastTurn) {
 			// Watch detection gives the model one final, tightly scoped chance to
 			// persist the conclusion it reached from earlier evidence. Other
 			// profiles keep the historical tool-free final response.
@@ -1165,7 +1181,7 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 				Str("session_id", sessionID).
 				Msg("[AgenticLoop] Tool calls blocked last turn — omitting tools for final response")
 		}
-		if isPatrolInvestigationExecution(a.currentExecutionProfile()) && !investigationOutputLimitRecoveryTurn {
+		if isPatrolInvestigationExecution(a.currentExecutionProfile()) && !investigationOutputLimitRecoveryTurn && !investigationEvidenceStartRepairTurn {
 			switch {
 			case investigationProposalCompleted:
 				req.Tools = nil
@@ -1175,6 +1191,10 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 				req.Tools = investigationTerminalTools(tools)
 				textOnlySafetyBrake = len(req.Tools) == 0
 				req.System += investigationEvidenceBudgetExhaustedSystemPrompt
+			case a.totalEvidenceCalls == 0:
+				// A proposal cannot be grounded before any evidence capability has
+				// actually been invoked. Keep the model free to choose the best read.
+				req.Tools = investigationEvidenceTools(tools)
 			}
 		}
 		applyExecutionInferenceAllowance(&req, a.currentExecutionProfile(), patrolSummaryOnlyTurn, a.totalOutputTokens)
@@ -1674,6 +1694,21 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 					return resultMessages, fmt.Errorf("Patrol investigation exhausted its output budget twice before completing its conclusion (last stop reason %q)", stopReason)
 				}
 				investigationOutputLimitRecoveryPending = true
+				turn++
+				continue
+			}
+
+			if isPatrolInvestigationExecution(a.currentExecutionProfile()) && a.totalEvidenceCalls == 0 {
+				// Prose about intended tool use is not evidence. Preserve it only in
+				// provider context for one bounded correction turn, never as the
+				// durable investigation conclusion.
+				if len(resultMessages) > 0 {
+					resultMessages[len(resultMessages)-1].Content = ""
+				}
+				if investigationEvidenceStartRepairAttempted {
+					return resultMessages, fmt.Errorf("Patrol investigation completed twice without a structured evidence tool call")
+				}
+				investigationEvidenceStartRepairPending = true
 				turn++
 				continue
 			}

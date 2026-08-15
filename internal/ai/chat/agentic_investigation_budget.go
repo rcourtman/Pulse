@@ -18,6 +18,10 @@ const investigationProposalCompletedSystemPrompt = `
 
 INVESTIGATION COMPLETION: A typed action proposal has already been accepted for this run. Do not call more tools. Produce the required investigation summary from the evidence already collected and state that the proposal is pending governed policy or operator handling; never claim that it executed.`
 
+const investigationEvidenceStartRepairSystemPrompt = `
+
+INVESTIGATION GROUNDING: Pulse cannot accept a completed investigation until you make at least one structured call to an advertised evidence tool. Choose the most relevant available tool and arguments from the exact finding and resource identity already supplied. Call the tool now through the structured tool interface. Do not narrate, simulate, or place a hypothetical tool call in prose.`
+
 const investigationEvidenceBudgetExhaustedSystemPrompt = `
 
 INVESTIGATION COMPLETION: The evidence-call budget is exhausted. No more evidence tools are available. Use the evidence already collected. If it supports a safe advertised remediation and no proposal has been submitted, you must call patrol_propose_action once before the final summary; never leave that remediation only as prose. Otherwise produce the required final summary and state any remaining uncertainty.`
@@ -40,6 +44,30 @@ func applyInvestigationOutputLimitRecoveryRequest(req *providers.ChatRequest, pr
 
 func isInvestigationEvidenceTool(name string) bool {
 	return strings.TrimSpace(name) != agentcapabilities.PatrolProposeActionToolName
+}
+
+func investigationEvidenceTools(available []providers.Tool) []providers.Tool {
+	filtered := make([]providers.Tool, 0, len(available))
+	for _, tool := range available {
+		if isInvestigationEvidenceTool(tool.Name) {
+			filtered = append(filtered, tool)
+		}
+	}
+	return filtered
+}
+
+func applyInvestigationEvidenceStartRepairRequest(req *providers.ChatRequest, profile aitools.ExecutionProfile, available []providers.Tool) bool {
+	if req == nil || !isPatrolInvestigationExecution(profile) {
+		return false
+	}
+	evidenceTools := investigationEvidenceTools(available)
+	if len(evidenceTools) == 0 {
+		return false
+	}
+	req.Tools = evidenceTools
+	req.ToolChoice = &providers.ToolChoice{Type: providers.ToolChoiceRequired}
+	req.System += investigationEvidenceStartRepairSystemPrompt
+	return true
 }
 
 func investigationTerminalTools(available []providers.Tool) []providers.Tool {
