@@ -1,11 +1,57 @@
 package chat
 
 import (
+	"reflect"
 	"testing"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 )
+
+func TestRestrictInvestigationProviderToolsForResourceType(t *testing.T) {
+	providerTools := []providers.Tool{
+		{Name: agentcapabilities.PulseQueryToolName},
+		{Name: agentcapabilities.PulseMetricsToolName},
+		{Name: agentcapabilities.PulseStorageToolName},
+		{Name: agentcapabilities.PulseDockerToolName},
+		{Name: agentcapabilities.PulseKubernetesToolName},
+		{Name: agentcapabilities.PulseReadToolName},
+		{Name: agentcapabilities.PulseKnowledgeToolName},
+		{Name: agentcapabilities.PatrolActionCapabilitiesToolName},
+		{Name: agentcapabilities.PatrolProposeActionToolName},
+	}
+	filtered, err := restrictInvestigationProviderToolsForResourceType(providerTools, "app-container")
+	if err != nil {
+		t.Fatalf("restrict Docker investigation: %v", err)
+	}
+	var names []string
+	for _, tool := range filtered {
+		names = append(names, tool.Name)
+	}
+	want := []string{
+		agentcapabilities.PulseQueryToolName,
+		agentcapabilities.PulseDockerToolName,
+		agentcapabilities.PulseReadToolName,
+		agentcapabilities.PatrolActionCapabilitiesToolName,
+		agentcapabilities.PatrolProposeActionToolName,
+	}
+	if !reflect.DeepEqual(names, want) {
+		t.Fatalf("Docker investigation tools = %v, want %v", names, want)
+	}
+
+	unchanged, err := restrictInvestigationProviderToolsForResourceType(providerTools, "future-resource-kind")
+	if err != nil {
+		t.Fatalf("unknown resource type: %v", err)
+	}
+	if !reflect.DeepEqual(unchanged, providerTools) {
+		t.Fatalf("unknown resource type changed governed profile: %v", unchanged)
+	}
+	unchanged[0].Name = "mutated"
+	if providerTools[0].Name == "mutated" {
+		t.Fatal("unknown-type fallback aliased the provider manifest")
+	}
+}
 
 func TestFilterToolsForPatrol_ConfigFlags(t *testing.T) {
 	svc := &Service{

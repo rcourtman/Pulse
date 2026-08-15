@@ -1415,6 +1415,7 @@ payload shape change when the portal presents compact client rows.
 44. `internal/agentcapabilities/markdown.go` shared with `ai-runtime`: the Pulse Intelligence manifest Markdown projection, including manifest-owned capability titles, surface-filtered Pulse MCP tool/error inventories, and prompt labels, is both the canonical API/agent documentation projection and the AI runtime onboarding projection for Assistant-compatible external-agent surfaces.
 45. `internal/agentcapabilities/mcp.go` shared with `ai-runtime`: the Pulse Intelligence MCP protocol version, JSON-RPC, method dispatch, method payload, surface-tool-contract-gated initialize operating-instruction and capability advertisement payload, manifest surface-filtered tools/list and tools/call execution bridge, manifest surface-gated resources/list and resources/read bridge, manifest-owned and surface-affordance-gated workflow prompt projection, protocol wire aliases, resource and prompt handler gates, and notification projection collectively define the external-agent adapter wire contract over the shared Pulse Intelligence tool core; MCP initialize, tools/call execution, resource list/read projection, and prompt list/get projection must enter through manifest-owned surface and workflow-prompt contracts so raw capability slices cannot bypass the published external-adapter contract.
 46. `internal/agentcapabilities/mcp_adapter.go` shared with `ai-runtime`: the Pulse MCP adapter setup contract defaults and normalization are both the canonical API manifest setup projection and the AI runtime onboarding contract for Assistant-compatible external-agent surfaces.
+47. `internal/agentcapabilities/patrol_scope_tools.go` shared with `ai-runtime`: the typed Patrol resource-scope evidence mapping is both the AI runtime least-manifest projection contract and the canonical API/agent vocabulary that keeps scoped Watch and investigation tool reductions aligned across the Pulse and enterprise boundary.
 47. `internal/agentcapabilities/projection.go` shared with `ai-runtime`: the agent capability external-tool projection helper, normalized manifest-owned surface tool contract resolution and tools-affordance gating, manifest-owned resource-context route and argument vocabulary, operator-state capability and route vocabulary, finding workflow capability and lifecycle argument vocabulary including resolution and dismissal notes, governed action capability, route, and argument vocabulary, manifest-owned tool title and outputSchema projection, structured Pulse capability _meta, and shared tool behavior hints are both the canonical API manifest projection contract and the AI runtime adapter projection for Pulse Assistant and MCP-facing agent tools, with MCP annotation and metadata wire names confined to adapter-edge aliases.
 48. `internal/agentcapabilities/provider_tool_artifacts.go` shared with `ai-runtime`: the provider tool-call artifact detector and streaming tool-name prefix splitter are both the Assistant stream-sanitization boundary and the shared external-adapter leak guard for provider-native tool-call markup that escaped the structured channel.
 49. `internal/agentcapabilities/schema.go` shared with `ai-runtime`: the agent capability input schema contract is both the canonical API manifest schema envelope and the AI runtime structured tool-schema, governance-aware provider-projection with neutral behavior hints and Pulse governance metadata, offered-tool governance extraction for Assistant prompt policy, manifest-affordance-gated Assistant provider-surface composition, manifest raw-schema to Assistant provider-schema projection for capability tools, legacy native Assistant utility provider aliases and schemas, provider-call normalization, provider-result context projection, Assistant-native interaction provider-tool declaration, and live Assistant execution-normalization contract for Pulse Assistant and MCP-facing agent tools.
@@ -4149,6 +4150,18 @@ budget; the server derives the model-response safety ceiling and reserves
 terminal proposal/final-summary capacity. An absent or zero persisted setting
 uses the shipped ten-call default; explicit values retain the bounded 5–30
 contract.
+
+The same boundary carries the finding's canonical `resource_type` as trusted
+orchestrator metadata. Core consumes it only through
+`internal/agentcapabilities/patrol_scope_tools.go` to reduce the already
+governed investigation provider manifest to generic cross-resource reads, the
+relevant subsystem evidence surface, and the investigation-owned capability
+lookup/proposal tools. It is not a client-selectable execution profile, cannot
+add authority, and is never inferred from prompt text. Empty or unknown types
+retain the full governed investigation profile so an additive resource kind
+cannot silently lose evidence access. Scoped Watch uses the same shared typed
+mapping after exact canonical scope resolution, with detection lifecycle tools
+composed separately from investigation proposal tools.
 
 Unified Agent connections now carry agent-authored lifecycle evidence through
 the shared host model and `/api/connections` contract. The payload may include
@@ -9493,3 +9506,13 @@ authority when reached; zero preserves the ordinary uncapped Watch contract.
 This is an internal execution contract, not a new HTTP field or client-granted
 capability. Existing Patrol routes, authorization, tenant binding, payloads,
 and action approval semantics are unchanged.
+
+Exact scoped Watch runs may now populate that internal allowlist from the
+core-resolved canonical resource type set. The shared
+`agentcapabilities.PatrolDetectionToolNamesForResourceTypes` mapping retains
+generic query/read evidence and only the relevant subsystem and detection
+lifecycle schemas. Investigations carry their finding `resource_type` over the
+public Pulse/Enterprise orchestrator dependency contract and use the companion
+investigation projection. Both paths are reductions after execution-profile
+projection; neither external clients nor model output can select or widen the
+surface.

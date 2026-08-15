@@ -2199,6 +2199,7 @@ func (a *orchestratorChatAdapter) ExecuteInvestigationStream(ctx context.Context
 		MaxTurns:         req.MaxTurns,
 		MaxEvidenceCalls: req.MaxEvidenceCalls,
 		ExecutionID:      req.ExecutionID,
+		ResourceType:     req.ResourceType,
 		Identity: tools.ProposalIdentity{
 			ProposalID:      req.ProposalID,
 			FindingID:       req.FindingID,

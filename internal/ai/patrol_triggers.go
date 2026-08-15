@@ -104,6 +104,10 @@ type PatrolScope struct {
 	// prevents an authoritative ID from subsequently matching a different
 	// resource whose display alias happens to contain the same string.
 	resolvedIdentityOnly bool
+	// resolvedResourceTypes is the core-derived type set for exact resource-ID
+	// scopes. It is used only to reduce the provider tool manifest; it never
+	// broadens collection scope or mutation authority.
+	resolvedResourceTypes []string
 }
 
 // PatrolScopeResolution records how caller-supplied identities map onto the

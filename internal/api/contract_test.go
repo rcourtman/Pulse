@@ -1074,6 +1074,7 @@ func TestContract_AssistantFindingContextUsesModelOnlyHandoff(t *testing.T) {
 		"catalog: h.proposalCatalogFor(orgID)",
 		"func (a *orchestratorChatAdapter) ExecuteInvestigationStream(",
 		"MaxEvidenceCalls: req.MaxEvidenceCalls",
+		"ResourceType:     req.ResourceType",
 		"ModelTurns:             runResult.ModelTurns",
 		"EvidenceCalls:          runResult.EvidenceCalls",
 	} {

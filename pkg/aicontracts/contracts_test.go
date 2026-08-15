@@ -418,7 +418,7 @@ func TestInvestigationResultCarriesStructuredProposal(t *testing.T) {
 
 func TestInvestigationBudgetSeparatesEvidenceCallsFromModelTurns(t *testing.T) {
 	requestType := reflect.TypeOf(OrchestratorInvestigationRequest{})
-	for _, name := range []string{"MaxTurns", "MaxEvidenceCalls"} {
+	for _, name := range []string{"MaxTurns", "MaxEvidenceCalls", "ResourceType"} {
 		if _, ok := requestType.FieldByName(name); !ok {
 			t.Fatalf("investigation request missing %s", name)
 		}

@@ -612,6 +612,14 @@
       ]
     },
     {
+	  "path": "internal/agentcapabilities/patrol_scope_tools.go",
+	  "rationale": "the typed Patrol resource-scope evidence mapping is both the AI runtime least-manifest projection contract and the canonical API/agent vocabulary that keeps scoped Watch and investigation tool reductions aligned across the Pulse and enterprise boundary",
+	  "subsystems": [
+		"ai-runtime",
+		"api-contracts"
+	  ]
+	},
+	{
       "path": "internal/agentcapabilities/projection.go",
       "rationale": "the agent capability external-tool projection helper, normalized manifest-owned surface tool contract resolution and tools-affordance gating, manifest-owned resource-context route and argument vocabulary, operator-state capability and route vocabulary, finding workflow capability and lifecycle argument vocabulary including resolution and dismissal notes, governed action capability, route, and argument vocabulary, manifest-owned tool title and outputSchema projection, structured Pulse capability _meta, and shared tool behavior hints are both the canonical API manifest projection contract and the AI runtime adapter projection for Pulse Assistant and MCP-facing agent tools, with MCP annotation and metadata wire names confined to adapter-edge aliases",
       "subsystems": [

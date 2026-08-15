@@ -61,6 +61,35 @@ func TestPatrolObjectivePlanningScopeHasOneMissionAndLeastAuthority(t *testing.T
 	}
 }
 
+func TestScopedPatrolUsesCoreResolvedResourceTypeForLeastManifest(t *testing.T) {
+	scope := &PatrolScope{
+		Reason:                TriggerReasonManual,
+		ResourceIDs:           []string{"container-1"},
+		resolvedResourceTypes: []string{"app-container"},
+	}
+	allowed := patrolAllowedToolNamesForScope(scope)
+	for _, required := range []string{
+		agentcapabilities.PulseQueryToolName,
+		agentcapabilities.PulseReadToolName,
+		agentcapabilities.PulseDockerToolName,
+		agentcapabilities.PatrolReportFindingToolName,
+	} {
+		if !slices.Contains(allowed, required) {
+			t.Fatalf("scoped detection tools missing %q: %v", required, allowed)
+		}
+	}
+	for _, forbidden := range []string{
+		agentcapabilities.PulseStorageToolName,
+		agentcapabilities.PulseKubernetesToolName,
+		agentcapabilities.PulsePMGToolName,
+		agentcapabilities.PatrolProposeActionToolName,
+	} {
+		if slices.Contains(allowed, forbidden) {
+			t.Fatalf("scoped detection tools included %q: %v", forbidden, allowed)
+		}
+	}
+}
+
 func TestPatrolObjectivePlanningSeedExcludesGlobalFindingLifecycle(t *testing.T) {
 	patrol := NewPatrolService(nil, nil)
 	patrol.findings.Add(&Finding{

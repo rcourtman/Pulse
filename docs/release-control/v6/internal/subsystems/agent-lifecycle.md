@@ -6302,3 +6302,11 @@ detection manifest and model-owned Pulse-state writes. They do not
 enroll an agent, select an agent identity, enable commands, grant a command
 session, alter fleet policy, or bypass agent-side preflight and action
 admission. Agent lifecycle and command authority remain unchanged.
+
+Exact scoped Watch and investigation requests may also carry a core-resolved
+canonical resource type through the shared AI handler boundary. The type only
+selects a smaller read-only provider-tool projection after the Patrol profile
+has been applied; it cannot select an agent, add an agent-routed tool, establish
+a command session, or bypass capability, feasibility, policy, approval,
+dispatch, receipt, and verification gates. Unknown types retain the existing
+governed Patrol profile rather than guessing at agent authority.

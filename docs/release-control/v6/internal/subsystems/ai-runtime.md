@@ -653,6 +653,7 @@ cheap local detection into model-owned diagnosis and governed action.
 18. `internal/agentcapabilities/markdown.go` shared with `api-contracts`: the Pulse Intelligence manifest Markdown projection, including manifest-owned capability titles, surface-filtered Pulse MCP tool/error inventories, and prompt labels, is both the canonical API/agent documentation projection and the AI runtime onboarding projection for Assistant-compatible external-agent surfaces.
 19. `internal/agentcapabilities/mcp.go` shared with `api-contracts`: the Pulse Intelligence MCP protocol version, JSON-RPC, method dispatch, method payload, surface-tool-contract-gated initialize operating-instruction and capability advertisement payload, manifest surface-filtered tools/list and tools/call execution bridge, manifest surface-gated resources/list and resources/read bridge, manifest-owned and surface-affordance-gated workflow prompt projection, protocol wire aliases, resource and prompt handler gates, and notification projection collectively define the external-agent adapter wire contract over the shared Pulse Intelligence tool core; MCP initialize, tools/call execution, resource list/read projection, and prompt list/get projection must enter through manifest-owned surface and workflow-prompt contracts so raw capability slices cannot bypass the published external-adapter contract.
 20. `internal/agentcapabilities/mcp_adapter.go` shared with `api-contracts`: the Pulse MCP adapter setup contract defaults and normalization are both the canonical API manifest setup projection and the AI runtime onboarding contract for Assistant-compatible external-agent surfaces.
+21. `internal/agentcapabilities/patrol_scope_tools.go` shared with `api-contracts`: the typed Patrol resource-scope evidence mapping is both the AI runtime least-manifest projection contract and the canonical API/agent vocabulary that keeps scoped Watch and investigation tool reductions aligned across the Pulse and enterprise boundary.
 21. `internal/agentcapabilities/projection.go` shared with `api-contracts`: the agent capability external-tool projection helper, normalized manifest-owned surface tool contract resolution and tools-affordance gating, manifest-owned resource-context route and argument vocabulary, operator-state capability and route vocabulary, finding workflow capability and lifecycle argument vocabulary including resolution and dismissal notes, governed action capability, route, and argument vocabulary, manifest-owned tool title and outputSchema projection, structured Pulse capability _meta, and shared tool behavior hints are both the canonical API manifest projection contract and the AI runtime adapter projection for Pulse Assistant and MCP-facing agent tools, with MCP annotation and metadata wire names confined to adapter-edge aliases.
 22. `internal/agentcapabilities/provider_tool_artifacts.go` shared with `api-contracts`: the provider tool-call artifact detector and streaming tool-name prefix splitter are both the Assistant stream-sanitization boundary and the shared external-adapter leak guard for provider-native tool-call markup that escaped the structured channel.
 23. `internal/agentcapabilities/schema.go` shared with `api-contracts`: the agent capability input schema contract is both the canonical API manifest schema envelope and the AI runtime structured tool-schema, governance-aware provider-projection with neutral behavior hints and Pulse governance metadata, offered-tool governance extraction for Assistant prompt policy, manifest-affordance-gated Assistant provider-surface composition, manifest raw-schema to Assistant provider-schema projection for capability tools, legacy native Assistant utility provider aliases and schemas, provider-call normalization, provider-result context projection, Assistant-native interaction provider-tool declaration, and live Assistant execution-normalization contract for Pulse Assistant and MCP-facing agent tools.
@@ -7367,10 +7368,21 @@ change to the intent it was designed to protect.
 
 ### Patrol follow-up passes are exact-scope, least-manifest continuations
 
-Patrol's main Watch pass retains the full governed detection-profile manifest
+An unscoped Patrol Watch retains the full governed detection-profile manifest
 so the selected model owns evidence gathering and diagnosis, minus the
-core-satisfied active-finding read. Bounded continuations do not repeat that
-broad manifest: the unmatched-signal evaluation pass receives only
+core-satisfied active-finding read. An explicitly scoped Watch whose exact
+resource identity resolves to known canonical resource types receives the
+least evidence manifest for those types plus the detection-owned finding
+lifecycle. `internal/agentcapabilities/patrol_scope_tools.go` owns that mapping:
+generic canonical query/read operations remain available for evidence-led
+cross-resource causality, while unrelated subsystem schemas are removed. The
+mapping consumes only caller-supplied or core-resolved typed scope, never prompt
+text. An empty or unknown type keeps the full governed profile instead of
+guessing and silently blinding Patrol; the allowlist is applied after profile
+projection and therefore can remove tools but cannot add authority.
+
+Bounded continuations do not repeat either main-pass manifest: the
+unmatched-signal evaluation pass receives only
 `patrol_report_finding` after core has established the complete exact-scope
 active-finding snapshot; narrow compatibility paths without a complete snapshot
 receive only `patrol_get_findings` plus `patrol_report_finding`. The
@@ -7428,6 +7440,17 @@ findings read or a failed lifecycle write in an ephemeral callback. Exact
 finding-lifecycle retries suppressed before canonical invocation are runtime
 loop-control decisions rather than tool executions and do not create a second
 tool-start/tool-end pair.
+
+An investigation carries the finding's trusted canonical `resource_type`
+through `pkg/aicontracts/orchestrator_deps.go` into the core-owned chat runtime.
+Core uses the same scoped evidence mapping to project generic query/read tools,
+the relevant subsystem evidence tool, and only the investigation-owned
+capability lookup and typed proposal sink. The type is not model-authored and
+cannot add a tool outside the already-projected investigation profile. Unknown
+types keep the full safe investigation profile. This keeps focused Patrol
+usable with smaller local models without replacing model judgment with a
+diagnostic script or weakening proposal, policy, approval, execution, or
+verification boundaries.
 
 ### Patrol investigation fallback summaries remain evidence-grounded
 

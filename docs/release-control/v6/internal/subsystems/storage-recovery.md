@@ -5245,3 +5245,11 @@ reductions. They add no storage, backup, snapshot, restore, retention, or
 recovery tool and cannot turn a detection pass into a mutation path. Storage
 and recovery state, evidence freshness, persistence, and admission contracts
 remain unchanged.
+
+The shared AI handler may also forward the finding's canonical resource type
+so core can reduce a scoped Watch or investigation to relevant read-only
+evidence tools. That typed reduction cannot add a storage/recovery capability
+outside the already-projected Patrol profile and grants no plan, approval,
+execution, retention, cleanup, restore, or verification authority. An unknown
+resource type keeps the normal governed profile instead of inferring storage
+authority from prompt text.

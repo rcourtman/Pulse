@@ -44,9 +44,10 @@ const (
 )
 
 type patrolRuntimeResourceRecord struct {
-	kind    patrolRuntimeResourceKind
-	ids     []string
-	aliases []string
+	kind         patrolRuntimeResourceKind
+	resourceType string
+	ids          []string
+	aliases      []string
 }
 
 // patrolRuntimeState is the patrol subsystem's internal runtime state contract.
@@ -181,8 +182,11 @@ func (p *PatrolService) patrolRuntimeStateForSnapshot(snapshot models.StateSnaps
 
 func patrolVisitRuntimeResources(s patrolRuntimeState, visit func(patrolRuntimeResourceRecord) bool) {
 	emittedIDs := make(map[string]struct{})
-	emit := func(kind patrolRuntimeResourceKind, ids []string, aliases ...string) bool {
-		if !visit(patrolRuntimeResourceRecord{kind: kind, ids: ids, aliases: aliases}) {
+	emitTyped := func(kind patrolRuntimeResourceKind, resourceType string, ids []string, aliases ...string) bool {
+		if resourceType == "" {
+			resourceType = canonicalPatrolRuntimeResourceType(kind)
+		}
+		if !visit(patrolRuntimeResourceRecord{kind: kind, resourceType: resourceType, ids: ids, aliases: aliases}) {
 			return false
 		}
 		for _, id := range ids {
@@ -191,6 +195,9 @@ func patrolVisitRuntimeResources(s patrolRuntimeState, visit func(patrolRuntimeR
 			}
 		}
 		return true
+	}
+	emit := func(kind patrolRuntimeResourceKind, ids []string, aliases ...string) bool {
+		return emitTyped(kind, "", ids, aliases...)
 	}
 	hostResourceKind := func(platform string) patrolRuntimeResourceKind {
 		if strings.EqualFold(strings.TrimSpace(platform), "truenas") {
@@ -322,7 +329,7 @@ func patrolVisitRuntimeResources(s patrolRuntimeState, visit func(patrolRuntimeR
 				continue
 			}
 			ids, aliases := patrolUnifiedResourceIdentity(resource)
-			if !emit(patrolRuntimeResourceUnified, ids, aliases...) {
+			if !emitTyped(patrolRuntimeResourceUnified, string(resource.Type), ids, aliases...) {
 				return
 			}
 		}
@@ -466,10 +473,33 @@ func canonicalPatrolScopeToken(value string) string {
 	return strings.ToLower(strings.TrimSpace(value))
 }
 
+func canonicalPatrolRuntimeResourceType(kind patrolRuntimeResourceKind) string {
+	switch kind {
+	case patrolRuntimeResourceContainer:
+		return "system-container"
+	case patrolRuntimeResourceDockerItem:
+		return "app-container"
+	case patrolRuntimeResourcePhysicalDisk:
+		return "physical-disk"
+	case patrolRuntimeResourceHost:
+		return "agent"
+	case patrolRuntimeResourceTrueNAS:
+		return "truenas"
+	case patrolRuntimeResourceUnified:
+		return ""
+	default:
+		return string(kind)
+	}
+}
+
 // resolvePatrolScopeState expands canonical unified IDs, source IDs, and
 // unique known aliases onto the complete identity set for the matching Patrol
 // runtime record. It never fuzzy-matches and refuses ambiguous aliases.
 func resolvePatrolScopeState(state patrolRuntimeState, scope PatrolScope) (PatrolScope, PatrolScopeResolution) {
+	// Recompute private type evidence from the current runtime snapshot on every
+	// resolution pass; callers may synchronously pre-resolve and the accepted run
+	// resolves again to close collection races.
+	scope.resolvedResourceTypes = nil
 	resolution := PatrolScopeResolution{}
 	for _, requested := range scope.ResourceIDs {
 		if requested = strings.TrimSpace(requested); requested != "" {
@@ -483,16 +513,18 @@ func resolvePatrolScopeState(state patrolRuntimeState, scope PatrolScope) (Patro
 	}
 
 	type identityRecord struct {
-		ids         []string
-		aliases     []string
-		idTokens    map[string]bool
-		aliasTokens map[string]bool
+		ids          []string
+		aliases      []string
+		resourceType string
+		idTokens     map[string]bool
+		aliasTokens  map[string]bool
 	}
 	records := make([]identityRecord, 0)
 	patrolVisitRuntimeResources(state, func(record patrolRuntimeResourceRecord) bool {
 		candidate := identityRecord{
 			ids: append([]string(nil), record.ids...), aliases: append([]string(nil), record.aliases...),
-			idTokens: make(map[string]bool), aliasTokens: make(map[string]bool),
+			resourceType: record.resourceType,
+			idTokens:     make(map[string]bool), aliasTokens: make(map[string]bool),
 		}
 		for _, value := range record.ids {
 			if token := canonicalPatrolScopeToken(value); token != "" {
@@ -513,6 +545,7 @@ func resolvePatrolScopeState(state patrolRuntimeState, scope PatrolScope) (Patro
 	expanded := make([]string, 0, len(scope.ResourceIDs))
 	seenExpanded := make(map[string]bool)
 	seenResolved := make(map[string]bool)
+	seenResolvedTypes := make(map[string]bool)
 	addExpanded := func(value string) {
 		value = strings.TrimSpace(value)
 		if value != "" && !seenExpanded[value] {
@@ -525,6 +558,13 @@ func resolvePatrolScopeState(state patrolRuntimeState, scope PatrolScope) (Patro
 		if value != "" && !seenResolved[value] {
 			seenResolved[value] = true
 			resolution.ResolvedResourceIDs = append(resolution.ResolvedResourceIDs, value)
+		}
+	}
+	addResolvedType := func(value string) {
+		value = strings.TrimSpace(value)
+		if value != "" && !seenResolvedTypes[value] {
+			seenResolvedTypes[value] = true
+			scope.resolvedResourceTypes = append(scope.resolvedResourceTypes, value)
 		}
 	}
 	for _, requested := range resolution.RequestedResourceIDs {
@@ -552,6 +592,7 @@ func resolvePatrolScopeState(state patrolRuntimeState, scope PatrolScope) (Patro
 				addExpanded(id)
 				addResolved(id)
 			}
+			addResolvedType(matches[0].resourceType)
 		default:
 			resolution.AmbiguousResourceIDs = append(resolution.AmbiguousResourceIDs, requested)
 		}
@@ -563,6 +604,7 @@ func resolvePatrolScopeState(state patrolRuntimeState, scope PatrolScope) (Patro
 		resolution.EffectiveResourceIDs = patrolRuntimeSortedResourceIDs(filtered)
 	}
 	sort.Strings(resolution.ResolvedResourceIDs)
+	sort.Strings(scope.resolvedResourceTypes)
 	sort.Strings(resolution.EffectiveResourceIDs)
 	sort.Strings(resolution.UnmatchedResourceIDs)
 	sort.Strings(resolution.AmbiguousResourceIDs)

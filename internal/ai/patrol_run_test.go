@@ -52,6 +52,9 @@ func TestResolvePatrolScopeExpandsCanonicalUnifiedIDToSourceResource(t *testing.
 	if len(resolution.EffectiveResourceIDs) == 0 {
 		t.Fatalf("expected effective resource IDs, got %+v", resolution)
 	}
+	if len(resolved.resolvedResourceTypes) != 1 || resolved.resolvedResourceTypes[0] != "vm" {
+		t.Fatalf("resolved resource types = %v, want [vm]", resolved.resolvedResourceTypes)
+	}
 }
 
 func TestResolvePatrolScopePreservesCanonicalAvailabilityEndpoint(t *testing.T) {
@@ -108,6 +111,9 @@ func TestResolvePatrolScopePreservesCanonicalAvailabilityEndpoint(t *testing.T) 
 	if counts.unified != 1 || counts.total() != 1 {
 		t.Fatalf("canonical endpoint counts = %#v, want one unified resource", counts)
 	}
+	if len(resolved.resolvedResourceTypes) != 1 || resolved.resolvedResourceTypes[0] != "network-endpoint" {
+		t.Fatalf("resolved endpoint types = %v, want [network-endpoint]", resolved.resolvedResourceTypes)
+	}
 }
 
 func TestResolvePatrolScopeRejectsUnmatchedAndAmbiguousAliases(t *testing.T) {
@@ -156,13 +162,19 @@ func TestResolvePatrolScopeResolvesDockerAlertResourceIDs(t *testing.T) {
 	readState := newPatrolRuntimeStateWithProviders(snapshot, registry, unifiedresources.NewUnifiedAIAdapter(registry))
 
 	for _, state := range []patrolRuntimeState{snapshotState, readState} {
-		for _, requested := range []string{containerAlertID, hostAlertID} {
-			resolved, resolution := resolvePatrolScopeState(state, PatrolScope{ResourceIDs: []string{requested}})
+		for _, tc := range []struct {
+			requested    string
+			resourceType string
+		}{{containerAlertID, "app-container"}, {hostAlertID, "docker-host"}} {
+			resolved, resolution := resolvePatrolScopeState(state, PatrolScope{ResourceIDs: []string{tc.requested}})
 			if len(resolution.UnmatchedResourceIDs) != 0 || len(resolution.AmbiguousResourceIDs) != 0 {
-				t.Fatalf("alert resource ID %q did not resolve exactly: %+v", requested, resolution)
+				t.Fatalf("alert resource ID %q did not resolve exactly: %+v", tc.requested, resolution)
 			}
 			if len(resolved.ResourceIDs) == 0 {
-				t.Fatalf("alert resource ID %q resolved to an empty scope", requested)
+				t.Fatalf("alert resource ID %q resolved to an empty scope", tc.requested)
+			}
+			if len(resolved.resolvedResourceTypes) != 1 || resolved.resolvedResourceTypes[0] != tc.resourceType {
+				t.Fatalf("alert resource ID %q resolved types = %v, want [%s]", tc.requested, resolved.resolvedResourceTypes, tc.resourceType)
 			}
 		}
 	}

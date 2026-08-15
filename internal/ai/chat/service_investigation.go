@@ -8,7 +8,9 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/modelboundary"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
 	"github.com/rs/zerolog/log"
 )
@@ -25,6 +27,9 @@ type InvestigationRunRequest struct {
 	MaxTurns         int
 	MaxEvidenceCalls int
 	ExecutionID      string
+	// ResourceType is trusted finding metadata used only for least-manifest
+	// projection. Unknown types retain the normal governed profile.
+	ResourceType string
 	// Identity is the trusted correlation identity injected into any
 	// captured proposal.
 	Identity tools.ProposalIdentity
@@ -201,7 +206,12 @@ func (s *Service) ExecuteInvestigationStream(ctx context.Context, req Investigat
 	// Investigation runs are stateless like Patrol detection: only this
 	// run's prompt is loaded; the session is a forensic log.
 	messages := []Message{userMsg}
-	filteredTools := s.toolsForExecutor(executor, false)
+	filteredTools, err := restrictInvestigationProviderToolsForResourceType(
+		s.toolsForExecutor(executor, false), req.ResourceType,
+	)
+	if err != nil {
+		return nil, err
+	}
 
 	resultMessages, runErr := loop.ExecuteWithTools(ctx, session.ID, messages, filteredTools, callback)
 	for _, msg := range resultMessages {
@@ -239,6 +249,18 @@ func (s *Service) ExecuteInvestigationStream(ctx context.Context, req Investigat
 		return result, NewInvestigationRunError(runErr, proposalErr)
 	}
 	return result, nil
+}
+
+func restrictInvestigationProviderToolsForResourceType(providerTools []providers.Tool, resourceType string) ([]providers.Tool, error) {
+	scopedNames, ok := agentcapabilities.PatrolInvestigationToolNamesForResourceTypes([]string{resourceType})
+	if !ok {
+		return append([]providers.Tool(nil), providerTools...), nil
+	}
+	filtered, err := restrictPatrolProviderTools(providerTools, scopedNames)
+	if err != nil {
+		return nil, fmt.Errorf("failed to project scoped investigation tools: %w", err)
+	}
+	return filtered, nil
 }
 
 // ListInvestigationTools names the tools an investigation run offers,

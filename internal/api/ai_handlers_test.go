@@ -69,6 +69,14 @@ func TestAIHandlersUseSafeRemediationCommercialCopy(t *testing.T) {
 	}
 }
 
+func TestOrchestratorChatAdapterCarriesTypedInvestigationScope(t *testing.T) {
+	source, err := os.ReadFile("ai_handlers.go")
+	require.NoError(t, err)
+	text := string(source)
+	require.Contains(t, text, "ResourceType:     req.ResourceType")
+	require.NotContains(t, text, "ResourceType:     req.Prompt")
+}
+
 func TestAISettingsHandler_AnthropicOAuthSetupFailsClosed(t *testing.T) {
 	handler := &AISettingsHandler{}
 

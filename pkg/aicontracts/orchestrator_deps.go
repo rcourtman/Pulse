@@ -39,16 +39,19 @@ type OrchestratorChatService interface {
 // identity is injected here by the orchestrator from trusted context; the
 // model's proposal tool schema never carries it.
 type OrchestratorInvestigationRequest struct {
-	SessionID        string   `json:"session_id,omitempty"`
-	Prompt           string   `json:"prompt"`
-	SystemPrompt     string   `json:"system_prompt,omitempty"`
-	MaxTurns         int      `json:"max_turns,omitempty"`
-	MaxEvidenceCalls int      `json:"max_evidence_calls,omitempty"`
-	ExecutionID      string   `json:"execution_id,omitempty"`
-	ProposalID       string   `json:"proposal_id"`
-	FindingID        string   `json:"finding_id"`
-	InvestigationID  string   `json:"investigation_id"`
-	EvidenceIDs      []string `json:"evidence_ids,omitempty"`
+	SessionID        string `json:"session_id,omitempty"`
+	Prompt           string `json:"prompt"`
+	SystemPrompt     string `json:"system_prompt,omitempty"`
+	MaxTurns         int    `json:"max_turns,omitempty"`
+	MaxEvidenceCalls int    `json:"max_evidence_calls,omitempty"`
+	ExecutionID      string `json:"execution_id,omitempty"`
+	ProposalID       string `json:"proposal_id"`
+	FindingID        string `json:"finding_id"`
+	InvestigationID  string `json:"investigation_id"`
+	// ResourceType is trusted finding metadata used by core only to reduce the
+	// investigation tool manifest. It cannot add tools or mutation authority.
+	ResourceType string   `json:"resource_type,omitempty"`
+	EvidenceIDs  []string `json:"evidence_ids,omitempty"`
 }
 
 // OrchestratorInvestigationResult is the structured outcome of one

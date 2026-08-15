@@ -1748,12 +1748,21 @@ Do not investigate, report, resolve, or assess any other Patrol finding. Finding
 }
 
 func patrolAllowedToolNamesForScope(scope *PatrolScope) []string {
-	if !isPatrolObjectivePlanningScope(scope) {
+	if isPatrolObjectivePlanningScope(scope) {
+		return []string{
+			agentcapabilities.PatrolProposeObserverToolName,
+		}
+	}
+	if scope == nil {
 		return nil
 	}
-	return []string{
-		agentcapabilities.PatrolProposeObserverToolName,
+	resourceTypes := append([]string(nil), scope.ResourceTypes...)
+	resourceTypes = append(resourceTypes, scope.resolvedResourceTypes...)
+	allowed, ok := agentcapabilities.PatrolDetectionToolNamesForResourceTypes(resourceTypes)
+	if !ok {
+		return nil
 	}
+	return allowed
 }
 
 // seedIntelligence holds pre-computed intelligence data used by multiple seed context sections.
