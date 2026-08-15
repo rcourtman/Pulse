@@ -7257,6 +7257,17 @@ objectives expand to current canonical resource IDs before the run. This wakes
 the model once to design coverage rather than waiting for the next scheduled
 Patrol cycle.
 
+That `objective_changed` invocation is a dedicated observer-design mission,
+not a shortened global Watch pass. Core omits active and dismissed finding
+lifecycle context, withholds finding report/assessment/resolution authority,
+and skips the unmatched-signal and assessment continuations. The model keeps
+the governed read tools it may need plus `patrol_propose_observer`, while a
+mission-specific system instruction makes the exact retained outcome its sole
+task. This is a least-authority boundary rather than application-specific
+intelligence: the model still chooses the useful signal and interpretation,
+but an unrelated global finding cannot consume the objective's bounded turns
+or leave a healthy run that never attempted observer design.
+
 Scoped Patrol identity resolution includes exact canonical unified resources
 that have no legacy `StateSnapshot` projection, including standalone
 availability `network-endpoint` resources. The scoped runtime rebuild retains
