@@ -6359,6 +6359,16 @@ short default stall bound. A compatible provider pausing between streamed
 reasoning and its next tool-call chunk must not invalidate an otherwise live
 Patrol run, while a genuinely stalled stream must still terminate within the
 Patrol run budget.
+Non-interactive Patrol turns may replay one provider stream that closes before
+its completion marker, even when the provider emitted a partial fragment,
+because no tool call or durable turn exists until the terminal marker arrives.
+Interactive Assistant turns retain the no-replay rule after visible output.
+When a Patrol investigation has already gathered its evidence but its final
+tool-free response reaches the provider output limit, core must discard the
+partial conclusion and allow one bounded, tool-free, low-reasoning synthesis
+turn over the existing transcript. That recovery may only produce the required
+investigation sections; it cannot gather more evidence or reopen mutation
+authority, and a second truncation fails the investigation closed.
 Qualification scoring must keep synthetic Patrol runtime findings on the
 `ai-service` resource separate from model-authored infrastructure findings.
 Provider/runtime failure remains an unconditional qualification hard failure,
@@ -6374,7 +6384,8 @@ OpenRouter `:free` route may be recorded at zero only after that route's public
 catalog entry is reviewed; the suffix alone never makes other free aliases
 known. The reviewed zero-priced qualification routes are currently
 `nvidia/nemotron-3.5-lightning:free` and
-`nvidia/nemotron-3-super-120b-a12b:free`. Live scoring
+`nvidia/nemotron-3-super-120b-a12b:free` (reviewed 2026-08-14), plus
+`nvidia/nemotron-3-ultra-550b-a55b:free` (reviewed 2026-08-15). Live scoring
 uses the provider resolved by Patrol readiness, even when the configured
 OpenRouter model is an unprefixed slash route such as
 `anthropic/claude-sonnet-5`; scorer replay persists and reuses that resolved

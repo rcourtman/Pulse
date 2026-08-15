@@ -138,9 +138,10 @@ func TestEstimateUSD_OllamaFree(t *testing.T) {
 }
 
 func TestEstimateUSD_ReviewedOpenRouterFreeRoute(t *testing.T) {
-	for _, model := range []string{
-		"nvidia/nemotron-3.5-lightning:free",
-		"nvidia/nemotron-3-super-120b-a12b:free",
+	for model, wantAsOf := range map[string]string{
+		"nvidia/nemotron-3.5-lightning:free":     "2026-08-14",
+		"nvidia/nemotron-3-super-120b-a12b:free": "2026-08-14",
+		"nvidia/nemotron-3-ultra-550b-a55b:free": "2026-08-15",
 	} {
 		usd, ok, price := EstimateUSD("openrouter", model, 1_000_000, 1_000_000)
 		if !ok {
@@ -149,8 +150,8 @@ func TestEstimateUSD_ReviewedOpenRouterFreeRoute(t *testing.T) {
 		if usd != 0 || price.InputUSDPerMTok != 0 || price.OutputUSDPerMTok != 0 {
 			t.Fatalf("reviewed OpenRouter free route %s should estimate $0, got usd=%f price=%+v", model, usd, price)
 		}
-		if price.AsOf != "2026-08-14" {
-			t.Fatalf("reviewed OpenRouter free-route date for %s = %q, want 2026-08-14", model, price.AsOf)
+		if price.AsOf != wantAsOf {
+			t.Fatalf("reviewed OpenRouter free-route date for %s = %q, want %s", model, price.AsOf, wantAsOf)
 		}
 	}
 

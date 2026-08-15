@@ -61,6 +61,7 @@ func isRetryableProviderStreamError(err error) bool {
 		"temporarily unavailable",
 		"http2: client connection lost",
 		"stream error",
+		"stream ended before completion marker",
 		"upstream",
 		"502",
 		"503",
@@ -900,6 +901,8 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 	patrolFindingRepairAttempted := false     // The repair-only extension is bounded to one provider turn
 	patrolOutputLimitRecoveryPending := false // A truncated Watch decision needs one decision-only retry
 	patrolOutputLimitRecoveryAttempted := false
+	investigationOutputLimitRecoveryPending := false // A truncated investigation conclusion needs one evidence-only retry
+	investigationOutputLimitRecoveryAttempted := false
 	toolBlockedLastTurn := false // When true, request final text after budget/loop block
 	investigationProposalCompleted := false
 	acceptedFindingReports := 0
@@ -940,7 +943,8 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 
 	for turn < maxTurns ||
 		(patrolFindingRepairPending && !patrolFindingRepairAttempted) ||
-		(patrolOutputLimitRecoveryPending && !patrolOutputLimitRecoveryAttempted) {
+		(patrolOutputLimitRecoveryPending && !patrolOutputLimitRecoveryAttempted) ||
+		(investigationOutputLimitRecoveryPending && !investigationOutputLimitRecoveryAttempted) {
 		// === CONTEXT COMPACTION: Compact old tool results to prevent context blowout ===
 		if turn > 0 {
 			compactOldToolResults(providerMessages, currentTurnStartIndex, compactionKeepTurns, compactionMinChars, a.knowledgeAccumulator)
@@ -1025,6 +1029,7 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 		patrolFindingRepairTurn := false
 		patrolFindingContinuationTurn := false
 		patrolOutputLimitRecoveryTurn := false
+		investigationOutputLimitRecoveryTurn := false
 		if patrolFindingRepairPending && !patrolFindingRepairAttempted {
 			if applyPatrolFindingLifecycleRepairRequest(&req, a.currentExecutionProfile(), tools) {
 				patrolFindingRepairTurn = true
@@ -1050,6 +1055,18 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 				Int("turn", turn).
 				Str("session_id", sessionID).
 				Msg("[AgenticLoop] Watch output limit reached — retrying one finding-decision-only turn")
+		}
+		if !patrolFindingRepairTurn && !patrolOutputLimitRecoveryTurn && investigationOutputLimitRecoveryPending && !investigationOutputLimitRecoveryAttempted {
+			if !applyInvestigationOutputLimitRecoveryRequest(&req, a.currentExecutionProfile()) {
+				return resultMessages, fmt.Errorf("Patrol investigation exhausted its output budget before a conclusion, and its evidence-only recovery profile is unavailable")
+			}
+			investigationOutputLimitRecoveryTurn = true
+			investigationOutputLimitRecoveryPending = false
+			investigationOutputLimitRecoveryAttempted = true
+			log.Warn().
+				Int("turn", turn).
+				Str("session_id", sessionID).
+				Msg("[AgenticLoop] Investigation output limit reached — retrying one evidence-only conclusion turn")
 		}
 		if !patrolFindingRepairTurn && !patrolOutputLimitRecoveryTurn && shouldOfferPatrolFindingLifecycleContinuation(patrolFindingContinuationPending, writeCompletedLastTurn, toolBlockedLastTurn) {
 			if applyPatrolFindingLifecycleContinuationRequest(&req, a.currentExecutionProfile(), tools) {
@@ -1112,7 +1129,7 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 				Str("session_id", sessionID).
 				Msg("[AgenticLoop] Tool calls blocked last turn — omitting tools for final response")
 		}
-		if isPatrolInvestigationExecution(a.currentExecutionProfile()) {
+		if isPatrolInvestigationExecution(a.currentExecutionProfile()) && !investigationOutputLimitRecoveryTurn {
 			switch {
 			case investigationProposalCompleted:
 				req.Tools = nil
@@ -1417,7 +1434,14 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 				err = nil
 				break
 			}
-			if attempt < maxProviderAttempts && !attemptEmittedVisibleEvents && isRetryableProviderStreamError(effectiveErr) && ctx.Err() == nil {
+			// Interactive output cannot be retracted once shown, so preserve the
+			// historical no-replay rule after visible events there. A Patrol run is
+			// non-interactive and persists nothing until a terminal marker arrives;
+			// replaying one incomplete stream is therefore safe even if the provider
+			// leaked a partial fragment before closing.
+			canReplayIncompleteNonInteractiveTurn := a.currentExecutionProfile().NonInteractive() &&
+				strings.Contains(strings.ToLower(effectiveErr.Error()), "stream ended before completion marker")
+			if attempt < maxProviderAttempts && (!attemptEmittedVisibleEvents || canReplayIncompleteNonInteractiveTurn) && isRetryableProviderStreamError(effectiveErr) && ctx.Err() == nil {
 				backoff := time.Duration(200*attempt) * time.Millisecond
 				log.Warn().
 					Int("attempt", attempt).
@@ -1591,6 +1615,26 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 					return resultMessages, fmt.Errorf("Patrol model exhausted its output budget twice before completing a finding decision (last stop reason %q)", stopReason)
 				}
 				patrolOutputLimitRecoveryPending = true
+				turn++
+				continue
+			}
+
+			if isPatrolInvestigationExecution(a.currentExecutionProfile()) && isProviderOutputLimitStopReason(stopReason) {
+				// Tool results already in provider context are the authoritative
+				// investigation evidence. Do not persist or replay a truncated
+				// conclusion as if it were evidence, and do not restart diagnosis;
+				// give the model one tool-free synthesis turn.
+				if len(resultMessages) > 0 {
+					resultMessages[len(resultMessages)-1].Content = ""
+				}
+				if len(providerMessages) > 0 {
+					providerMessages[len(providerMessages)-1].Content = ""
+					providerMessages[len(providerMessages)-1].ReasoningContent = ""
+				}
+				if investigationOutputLimitRecoveryAttempted {
+					return resultMessages, fmt.Errorf("Patrol investigation exhausted its output budget twice before completing its conclusion (last stop reason %q)", stopReason)
+				}
+				investigationOutputLimitRecoveryPending = true
 				turn++
 				continue
 			}

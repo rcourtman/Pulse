@@ -71,6 +71,7 @@ var providerPrices = map[string][]modelPrice{
 		flatPriceAsOf("deepseek/deepseek-v4-flash", 0.09, 0.18, "2026-07-14"),
 		flatPriceAsOf("nvidia/nemotron-3.5-lightning:free", 0, 0, "2026-08-14"),
 		flatPriceAsOf("nvidia/nemotron-3-super-120b-a12b:free", 0, 0, "2026-08-14"),
+		flatPriceAsOf("nvidia/nemotron-3-ultra-550b-a55b:free", 0, 0, "2026-08-15"),
 	},
 	"gemini": {
 		// Gemini Developer API standard paid-tier pricing, checked from

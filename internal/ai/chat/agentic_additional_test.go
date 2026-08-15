@@ -1876,6 +1876,133 @@ func TestAgenticLoop_DoesNotRetryAfterPartialEvents(t *testing.T) {
 	}
 }
 
+func TestAgenticLoop_RetriesIncompleteNonInteractiveStreamAfterPartialEvent(t *testing.T) {
+	provider := &stubStreamingProvider{}
+	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
+	executor.ApplyExecutionProfile(tools.ProfilePatrolInvestigation)
+	loop := NewAgenticLoop(provider, executor, "investigation prompt")
+	loop.SetExecutionProfile(tools.ProfilePatrolInvestigation)
+
+	callCount := 0
+	provider.chatStream = func(_ context.Context, _ providers.ChatRequest, callback providers.StreamCallback) error {
+		callCount++
+		if callCount == 1 {
+			callback(providers.StreamEvent{Type: "content", Data: providers.ContentEvent{Text: "partial provider fragment"}})
+			return errors.New("stream ended before completion marker")
+		}
+		callback(providers.StreamEvent{Type: "content", Data: providers.ContentEvent{Text: "complete investigation"}})
+		callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{StopReason: "end_turn"}})
+		return nil
+	}
+
+	var retries int
+	result, err := loop.ExecuteWithTools(context.Background(), "retry-incomplete-investigation", []Message{{Role: "user", Content: "investigate"}}, nil, func(event StreamEvent) {
+		if event.Type == "workflow_state" {
+			var state WorkflowStateData
+			if json.Unmarshal(event.Data, &state) == nil && state.Phase == "provider_retry" {
+				retries++
+			}
+		}
+	})
+	if err != nil {
+		t.Fatalf("expected incomplete non-interactive stream replay to recover, got %v", err)
+	}
+	if callCount != 2 || retries != 1 {
+		t.Fatalf("provider calls=%d retries=%d, want 2 calls and one retry", callCount, retries)
+	}
+	if len(result) != 1 || result[0].Content != "complete investigation" {
+		t.Fatalf("durable result = %+v, want only completed replay", result)
+	}
+}
+
+func TestAgenticLoop_RecoversTruncatedInvestigationConclusionFromExistingEvidence(t *testing.T) {
+	provider := &stubStreamingProvider{}
+	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
+	executor.ApplyExecutionProfile(tools.ProfilePatrolInvestigation)
+	loop := NewAgenticLoop(provider, executor, "full investigation prompt")
+	loop.SetExecutionProfile(tools.ProfilePatrolInvestigation)
+	loop.SetMaxTurns(1)
+
+	providerCalls := 0
+	var recoveryRequest providers.ChatRequest
+	provider.chatStream = func(_ context.Context, req providers.ChatRequest, callback providers.StreamCallback) error {
+		providerCalls++
+		switch providerCalls {
+		case 1:
+			callback(providers.StreamEvent{Type: "content", Data: providers.ContentEvent{Text: "unfinished reasoning"}})
+			callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{StopReason: "length", OutputTokens: 4096}})
+		case 2:
+			recoveryRequest = req
+			callback(providers.StreamEvent{Type: "content", Data: providers.ContentEvent{Text: "### Investigation Summary\nClient is unhealthy.\n\n### Root Cause\nDependency is stopped.\n\n### Affected Resources\nClient.\n\n### Recommendation\nStart dependency.\n\n### Conclusion\nNEEDS_ATTENTION: approval required"}})
+			callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{StopReason: "end_turn", OutputTokens: 120}})
+		default:
+			t.Fatalf("unexpected provider call %d", providerCalls)
+		}
+		return nil
+	}
+
+	result, err := loop.ExecuteWithTools(context.Background(), "truncated-investigation", []Message{{Role: "user", Content: "investigate the unhealthy client"}}, []providers.Tool{{Name: agentcapabilities.PulseQueryToolName}}, func(StreamEvent) {})
+	if err != nil {
+		t.Fatalf("investigation recovery failed: %v", err)
+	}
+	if providerCalls != 2 {
+		t.Fatalf("provider calls=%d, want one bounded recovery", providerCalls)
+	}
+	if len(recoveryRequest.Tools) != 0 || recoveryRequest.ToolChoice != nil {
+		t.Fatalf("recovery request retained tools: %+v", recoveryRequest)
+	}
+	if recoveryRequest.System != investigationOutputLimitRecoverySystemPrompt {
+		t.Fatalf("recovery system prompt = %q", recoveryRequest.System)
+	}
+	if recoveryRequest.MaxTokens != investigationOutputLimitRecoveryAllowance || recoveryRequest.ReasoningEffort != providers.ReasoningEffortLow {
+		t.Fatalf("recovery allowance = %+v", recoveryRequest)
+	}
+	for _, message := range recoveryRequest.Messages {
+		if strings.Contains(message.Content, "unfinished reasoning") || strings.Contains(message.ReasoningContent, "unfinished reasoning") {
+			t.Fatalf("recovery request retained truncated conclusion: %+v", recoveryRequest.Messages)
+		}
+	}
+	var persisted strings.Builder
+	for _, message := range result {
+		if message.Role == "assistant" {
+			persisted.WriteString(message.Content)
+		}
+	}
+	if strings.Contains(persisted.String(), "unfinished reasoning") || !strings.Contains(persisted.String(), "Dependency is stopped") {
+		t.Fatalf("persisted investigation = %q", persisted.String())
+	}
+}
+
+func TestAgenticLoop_FailsClosedWhenInvestigationRecoveryAlsoTruncates(t *testing.T) {
+	provider := &stubStreamingProvider{}
+	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
+	executor.ApplyExecutionProfile(tools.ProfilePatrolInvestigation)
+	loop := NewAgenticLoop(provider, executor, "full investigation prompt")
+	loop.SetExecutionProfile(tools.ProfilePatrolInvestigation)
+	loop.SetMaxTurns(1)
+
+	providerCalls := 0
+	provider.chatStream = func(_ context.Context, _ providers.ChatRequest, callback providers.StreamCallback) error {
+		providerCalls++
+		callback(providers.StreamEvent{Type: "content", Data: providers.ContentEvent{Text: "still incomplete"}})
+		callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{StopReason: "length", OutputTokens: 4096}})
+		return nil
+	}
+
+	result, err := loop.ExecuteWithTools(context.Background(), "twice-truncated-investigation", []Message{{Role: "user", Content: "investigate"}}, nil, func(StreamEvent) {})
+	if err == nil || !strings.Contains(err.Error(), "exhausted its output budget twice") {
+		t.Fatalf("error = %v, want bounded fail-closed error", err)
+	}
+	if providerCalls != 2 {
+		t.Fatalf("provider calls=%d, want one original and one recovery turn", providerCalls)
+	}
+	for _, message := range result {
+		if strings.TrimSpace(message.Content) != "" {
+			t.Fatalf("truncated conclusion leaked into durable result: %+v", result)
+		}
+	}
+}
+
 func TestAgenticLoop_EmitsFallbackErrorEventOnTransportFailure(t *testing.T) {
 	provider := &stubStreamingProvider{}
 	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{})

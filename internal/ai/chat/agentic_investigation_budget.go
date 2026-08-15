@@ -22,6 +22,22 @@ const investigationEvidenceBudgetExhaustedSystemPrompt = `
 
 INVESTIGATION COMPLETION: The evidence-call budget is exhausted. No more evidence tools are available. Use the evidence already collected. If it supports a safe advertised remediation and no proposal has been submitted, you may call patrol_propose_action once; otherwise produce the required final summary and state any remaining uncertainty.`
 
+const investigationOutputLimitRecoverySystemPrompt = `You are Pulse Patrol completing an investigation after the previous final response exhausted its output budget. Do not call tools, repeat the investigation, or narrate your reasoning. Synthesize only the evidence already present in the conversation into the required five sections: Investigation Summary, Root Cause, Affected Resources, Recommendation, and Conclusion. Name causal and affected resources with their exact observed canonical name or ID. If the evidence does not establish root cause, say exactly what remains uncertain. Never invent evidence, actions, verification, or remediation.`
+
+const investigationOutputLimitRecoveryAllowance = 4_096
+
+func applyInvestigationOutputLimitRecoveryRequest(req *providers.ChatRequest, profile aitools.ExecutionProfile) bool {
+	if req == nil || !isPatrolInvestigationExecution(profile) {
+		return false
+	}
+	req.Tools = nil
+	req.ToolChoice = nil
+	req.System = investigationOutputLimitRecoverySystemPrompt
+	req.MaxTokens = investigationOutputLimitRecoveryAllowance
+	req.ReasoningEffort = providers.ReasoningEffortLow
+	return true
+}
+
 func isInvestigationEvidenceTool(name string) bool {
 	return strings.TrimSpace(name) != agentcapabilities.PatrolProposeActionToolName
 }
