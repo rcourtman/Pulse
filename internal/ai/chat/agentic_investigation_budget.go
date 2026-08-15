@@ -20,7 +20,7 @@ INVESTIGATION COMPLETION: A typed action proposal has already been accepted for 
 
 const investigationEvidenceStartRepairSystemPrompt = `
 
-INVESTIGATION GROUNDING: Pulse cannot accept a completed investigation until you make at least one structured call to an advertised evidence tool. Choose the most relevant available tool and arguments from the exact finding and resource identity already supplied. Call the tool now through the structured tool interface. Do not narrate, simulate, or place a hypothetical tool call in prose.`
+INVESTIGATION GROUNDING: Pulse cannot accept a completed investigation until at least one structured call to an advertised evidence tool succeeds. Choose the most relevant available tool and arguments from the exact finding and resource identity already supplied. Call the tool now through the structured tool interface. Do not narrate, simulate, or place a hypothetical tool call in prose. A failed or policy-blocked call is not evidence.`
 
 const investigationEvidenceBudgetExhaustedSystemPrompt = `
 

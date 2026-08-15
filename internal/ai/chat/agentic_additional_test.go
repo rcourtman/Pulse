@@ -157,7 +157,7 @@ func TestAgenticLoopPatrolInvestigationRepairsToolFreeStart(t *testing.T) {
 			callback(providers.StreamEvent{Type: "content", Data: providers.ContentEvent{Text: "I will now call a made-up tool in prose."}})
 			callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{}})
 		case 2:
-			callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{ToolCalls: []providers.ToolCall{{ID: "evidence", Name: agentcapabilities.PulseQueryToolName, Input: map[string]interface{}{"query": "containers"}}}}})
+			callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{ToolCalls: []providers.ToolCall{{ID: "evidence", Name: agentcapabilities.PulseQueryToolName, Input: map[string]interface{}{"action": "search", "query": "containers"}}}}})
 		default:
 			callback(providers.StreamEvent{Type: "content", Data: providers.ContentEvent{Text: "grounded conclusion"}})
 			callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{}})
@@ -165,7 +165,7 @@ func TestAgenticLoopPatrolInvestigationRepairsToolFreeStart(t *testing.T) {
 		return nil
 	}
 
-	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
+	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{StateProvider: &mockStateProvider{}})
 	executor.ApplyExecutionProfile(tools.ProfilePatrolInvestigation)
 	loop := NewAgenticLoop(provider, executor, "system")
 	loop.SetExecutionProfile(tools.ProfilePatrolInvestigation)
@@ -226,7 +226,7 @@ func TestAgenticLoopPatrolInvestigationFailsClosedAfterToolFreeRepair(t *testing
 	loop.SetMaxTurns(1)
 
 	result, err := loop.ExecuteWithTools(context.Background(), "grounding-fail-closed", []Message{{Role: "user", Content: "investigate"}}, []providers.Tool{{Name: agentcapabilities.PulseQueryToolName}}, func(StreamEvent) {})
-	if err == nil || !strings.Contains(err.Error(), "completed twice without a structured evidence tool call") {
+	if err == nil || !strings.Contains(err.Error(), "completed twice without a successful structured evidence result") {
 		t.Fatalf("ExecuteWithTools error = %v, want fail-closed grounding error", err)
 	}
 	if len(requests) != 2 {
@@ -253,7 +253,7 @@ func TestAgenticLoopPatrolInvestigationRejectsUnadvertisedToolBeforeFSM(t *testi
 		case 1:
 			callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{ToolCalls: []providers.ToolCall{{ID: "invented", Name: "container_state", Input: map[string]interface{}{"resource_id": "container-1"}}}}})
 		case 2:
-			callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{ToolCalls: []providers.ToolCall{{ID: "evidence", Name: agentcapabilities.PulseQueryToolName, Input: map[string]interface{}{"query": "containers"}}}}})
+			callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{ToolCalls: []providers.ToolCall{{ID: "evidence", Name: agentcapabilities.PulseQueryToolName, Input: map[string]interface{}{"action": "search", "query": "containers"}}}}})
 		default:
 			callback(providers.StreamEvent{Type: "content", Data: providers.ContentEvent{Text: "grounded conclusion"}})
 			callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{}})
@@ -261,7 +261,7 @@ func TestAgenticLoopPatrolInvestigationRejectsUnadvertisedToolBeforeFSM(t *testi
 		return nil
 	}
 
-	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
+	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{StateProvider: &mockStateProvider{}})
 	executor.ApplyExecutionProfile(tools.ProfilePatrolInvestigation)
 	loop := NewAgenticLoop(provider, executor, "system")
 	loop.SetExecutionProfile(tools.ProfilePatrolInvestigation)
@@ -310,7 +310,7 @@ func TestAgenticLoopPatrolInvestigationEnforcesEvidenceBudget(t *testing.T) {
 		turn++
 		switch turn {
 		case 1:
-			callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{ToolCalls: []providers.ToolCall{{ID: "evidence-1", Name: agentcapabilities.PulseQueryToolName, Input: map[string]interface{}{"query": "containers"}}}}})
+			callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{ToolCalls: []providers.ToolCall{{ID: "evidence-1", Name: agentcapabilities.PulseQueryToolName, Input: map[string]interface{}{"action": "search", "query": "containers"}}}}})
 		case 2:
 			callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{ToolCalls: []providers.ToolCall{{ID: "evidence-2", Name: agentcapabilities.PulseReadToolName, Input: map[string]interface{}{"operation": "resource"}}}}})
 		default:
@@ -320,7 +320,7 @@ func TestAgenticLoopPatrolInvestigationEnforcesEvidenceBudget(t *testing.T) {
 		return nil
 	}
 
-	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
+	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{StateProvider: &mockStateProvider{}})
 	executor.ApplyExecutionProfile(tools.ProfilePatrolInvestigation)
 	loop := NewAgenticLoop(provider, executor, "system")
 	loop.SetExecutionProfile(tools.ProfilePatrolInvestigation)
@@ -356,6 +356,139 @@ func TestAgenticLoopPatrolInvestigationEnforcesEvidenceBudget(t *testing.T) {
 	}
 	if len(result) == 0 || !strings.Contains(result[len(result)-1].Content, "final investigation summary") {
 		t.Fatalf("final result = %+v", result)
+	}
+}
+
+func TestAgenticLoopPatrolInvestigationFailedEvidenceDoesNotUnlockProposal(t *testing.T) {
+	provider := &stubStreamingProvider{}
+	var requests []providers.ChatRequest
+	turn := 0
+	provider.chatStream = func(_ context.Context, req providers.ChatRequest, callback providers.StreamCallback) error {
+		requests = append(requests, req)
+		turn++
+		switch turn {
+		case 1:
+			callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{ToolCalls: []providers.ToolCall{{
+				ID: "failed-evidence", Name: agentcapabilities.PulseQueryToolName,
+				Input: map[string]interface{}{"action": "unsupported"},
+			}}}})
+		case 2:
+			callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{ToolCalls: []providers.ToolCall{{
+				ID: "successful-evidence", Name: agentcapabilities.PulseQueryToolName,
+				Input: map[string]interface{}{"action": "search", "query": "containers"},
+			}}}})
+		default:
+			callback(providers.StreamEvent{Type: "content", Data: providers.ContentEvent{Text: "grounded conclusion"}})
+			callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{}})
+		}
+		return nil
+	}
+
+	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{StateProvider: &mockStateProvider{}})
+	executor.ApplyExecutionProfile(tools.ProfilePatrolInvestigation)
+	loop := NewAgenticLoop(provider, executor, "system")
+	loop.SetExecutionProfile(tools.ProfilePatrolInvestigation)
+	loop.SetMaxEvidenceCalls(3)
+	loop.SetMaxTurns(4)
+
+	available := []providers.Tool{
+		{Name: agentcapabilities.PulseQueryToolName},
+		{Name: agentcapabilities.PatrolProposeActionToolName},
+	}
+	result, err := loop.ExecuteWithTools(context.Background(), "failed-evidence-repair", []Message{{Role: "user", Content: "investigate"}}, available, func(StreamEvent) {})
+	if err != nil {
+		t.Fatalf("ExecuteWithTools: %v", err)
+	}
+	if len(requests) != 3 {
+		t.Fatalf("provider requests = %d, want 3", len(requests))
+	}
+	for _, requestIndex := range []int{0, 1} {
+		if names := advertisedProviderToolNames(requests[requestIndex].Tools); len(names) != 1 || names[0] != agentcapabilities.PulseQueryToolName {
+			t.Fatalf("request %d tools = %v, want evidence only", requestIndex, names)
+		}
+	}
+	if !providerToolIsAdvertised(requests[2].Tools, agentcapabilities.PatrolProposeActionToolName) {
+		t.Fatalf("successful evidence did not unlock proposal authority: %+v", requests[2].Tools)
+	}
+	if loop.GetTotalEvidenceCalls() != 2 || loop.successfulEvidenceCalls != 1 {
+		t.Fatalf("evidence attempts=%d successes=%d, want 2/1", loop.GetTotalEvidenceCalls(), loop.successfulEvidenceCalls)
+	}
+	if len(result) == 0 || result[len(result)-1].Content != "grounded conclusion" {
+		t.Fatalf("result = %+v, want grounded conclusion", result)
+	}
+}
+
+func TestAgenticLoopPatrolInvestigationFailsClosedWhenEvidenceBudgetHasNoSuccess(t *testing.T) {
+	provider := &stubStreamingProvider{}
+	providerCalls := 0
+	provider.chatStream = func(_ context.Context, req providers.ChatRequest, callback providers.StreamCallback) error {
+		providerCalls++
+		if providerToolIsAdvertised(req.Tools, agentcapabilities.PatrolProposeActionToolName) {
+			t.Fatalf("proposal authority exposed before successful evidence: %+v", req.Tools)
+		}
+		callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{ToolCalls: []providers.ToolCall{{
+			ID: "failed-evidence", Name: agentcapabilities.PulseQueryToolName,
+			Input: map[string]interface{}{"action": "unsupported"},
+		}}}})
+		return nil
+	}
+
+	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{StateProvider: &mockStateProvider{}})
+	executor.ApplyExecutionProfile(tools.ProfilePatrolInvestigation)
+	loop := NewAgenticLoop(provider, executor, "system")
+	loop.SetExecutionProfile(tools.ProfilePatrolInvestigation)
+	loop.SetMaxEvidenceCalls(1)
+	loop.SetMaxTurns(3)
+
+	result, err := loop.ExecuteWithTools(
+		context.Background(),
+		"failed-evidence-budget",
+		[]Message{{Role: "user", Content: "investigate"}},
+		[]providers.Tool{{Name: agentcapabilities.PulseQueryToolName}, {Name: agentcapabilities.PatrolProposeActionToolName}},
+		func(StreamEvent) {},
+	)
+	if err == nil || !strings.Contains(err.Error(), "exhausted its evidence-call budget without a successful structured evidence result") {
+		t.Fatalf("ExecuteWithTools error = %v, want failed-grounding budget error", err)
+	}
+	if providerCalls != 1 {
+		t.Fatalf("provider calls = %d, want fail closed immediately after exhausted attempt", providerCalls)
+	}
+	if loop.GetTotalEvidenceCalls() != 1 || loop.successfulEvidenceCalls != 0 {
+		t.Fatalf("evidence attempts=%d successes=%d, want 1/0", loop.GetTotalEvidenceCalls(), loop.successfulEvidenceCalls)
+	}
+	if len(result) == 0 || result[len(result)-1].ToolResult == nil || !result[len(result)-1].ToolResult.IsError {
+		t.Fatalf("failed evidence result was not preserved: %+v", result)
+	}
+}
+
+func TestAgenticLoopPatrolInvestigationTurnLimitCannotBypassSuccessfulEvidence(t *testing.T) {
+	provider := &stubStreamingProvider{}
+	provider.chatStream = func(_ context.Context, _ providers.ChatRequest, callback providers.StreamCallback) error {
+		callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{ToolCalls: []providers.ToolCall{{
+			ID: "failed-evidence", Name: agentcapabilities.PulseQueryToolName,
+			Input: map[string]interface{}{"action": "unsupported"},
+		}}}})
+		return nil
+	}
+
+	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{StateProvider: &mockStateProvider{}})
+	executor.ApplyExecutionProfile(tools.ProfilePatrolInvestigation)
+	loop := NewAgenticLoop(provider, executor, "system")
+	loop.SetExecutionProfile(tools.ProfilePatrolInvestigation)
+	loop.SetMaxTurns(1)
+
+	result, err := loop.ExecuteWithTools(
+		context.Background(),
+		"failed-evidence-turn-limit",
+		[]Message{{Role: "user", Content: "investigate"}},
+		[]providers.Tool{{Name: agentcapabilities.PulseQueryToolName}},
+		func(StreamEvent) {},
+	)
+	if err == nil || !strings.Contains(err.Error(), "reached its model-turn limit without a successful structured evidence result") {
+		t.Fatalf("ExecuteWithTools error = %v, want failed-grounding turn-limit error", err)
+	}
+	if len(result) == 0 || result[len(result)-1].ToolResult == nil || !result[len(result)-1].ToolResult.IsError {
+		t.Fatalf("failed evidence result was not preserved: %+v", result)
 	}
 }
 
@@ -2302,6 +2435,7 @@ func TestAgenticLoop_RecoversTruncatedInvestigationConclusionFromExistingEvidenc
 	loop.SetExecutionProfile(tools.ProfilePatrolInvestigation)
 	loop.SetMaxTurns(1)
 	loop.totalEvidenceCalls = 1
+	loop.successfulEvidenceCalls = 1
 
 	providerCalls := 0
 	var recoveryRequest providers.ChatRequest

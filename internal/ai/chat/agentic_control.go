@@ -192,8 +192,9 @@ func (a *AgenticLoop) GetTotalModelTurns() int {
 	return a.totalModelTurns
 }
 
-// GetTotalEvidenceCalls returns model-selected Patrol investigation calls
-// other than the terminal typed action proposal.
+// GetTotalEvidenceCalls returns attempted model-selected Patrol investigation
+// evidence calls. Failed and policy-blocked calls consume this budget but do
+// not satisfy the separate successful-evidence grounding gate.
 func (a *AgenticLoop) GetTotalEvidenceCalls() int {
 	return a.totalEvidenceCalls
 }

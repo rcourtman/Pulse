@@ -801,11 +801,12 @@ type AgenticLoop struct {
 	modelName    string
 
 	// Token accumulation across all turns
-	totalInputTokens   int
-	totalOutputTokens  int
-	totalToolCalls     int
-	totalModelTurns    int
-	totalEvidenceCalls int
+	totalInputTokens        int
+	totalOutputTokens       int
+	totalToolCalls          int
+	totalModelTurns         int
+	totalEvidenceCalls      int
+	successfulEvidenceCalls int
 
 	// State for ongoing executions
 	mu             sync.Mutex
@@ -1208,12 +1209,17 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 				textOnlySafetyBrake = true
 				req.System += investigationProposalCompletedSystemPrompt
 			case a.maxEvidenceCalls > 0 && a.totalEvidenceCalls >= a.maxEvidenceCalls:
-				req.Tools = investigationTerminalTools(tools)
+				if a.successfulEvidenceCalls > 0 {
+					req.Tools = investigationTerminalTools(tools)
+				} else {
+					req.Tools = nil
+				}
 				textOnlySafetyBrake = len(req.Tools) == 0
 				req.System += investigationEvidenceBudgetExhaustedSystemPrompt
-			case a.totalEvidenceCalls == 0:
+			case a.successfulEvidenceCalls == 0:
 				// A proposal cannot be grounded before any evidence capability has
-				// actually been invoked. Keep the model free to choose the best read.
+				// returned a successful result. Failed and policy-blocked attempts still
+				// consume budget, but cannot unlock proposal authority.
 				req.Tools = investigationEvidenceTools(tools)
 			}
 		}
@@ -1719,15 +1725,18 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 				continue
 			}
 
-			if isPatrolInvestigationExecution(a.currentExecutionProfile()) && a.totalEvidenceCalls == 0 {
+			if isPatrolInvestigationExecution(a.currentExecutionProfile()) && a.successfulEvidenceCalls == 0 {
 				// Prose about intended tool use is not evidence. Preserve it only in
 				// provider context for one bounded correction turn, never as the
 				// durable investigation conclusion.
 				if len(resultMessages) > 0 {
 					resultMessages[len(resultMessages)-1].Content = ""
 				}
+				if a.maxEvidenceCalls > 0 && a.totalEvidenceCalls >= a.maxEvidenceCalls {
+					return resultMessages, fmt.Errorf("Patrol investigation exhausted its evidence-call budget without a successful structured evidence result")
+				}
 				if investigationEvidenceStartRepairAttempted {
-					return resultMessages, fmt.Errorf("Patrol investigation completed twice without a structured evidence tool call")
+					return resultMessages, fmt.Errorf("Patrol investigation completed twice without a successful structured evidence result")
 				}
 				investigationEvidenceStartRepairPending = true
 				turn++
@@ -2494,6 +2503,9 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 
 			if !isError {
 				anyToolSucceededThisTurn = true
+				if isPatrolInvestigationExecution(a.currentExecutionProfile()) && isInvestigationEvidenceTool(tc.Name) {
+					a.successfulEvidenceCalls++
+				}
 				if isPatrolDetectionExecution(a.currentExecutionProfile()) && tc.Name == agentcapabilities.PatrolGetFindingsToolName {
 					patrolFindingsReadCompleted = true
 				}
@@ -2622,6 +2634,9 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 					investigationBudgetWarningFired = true
 				}
 			}
+			if a.totalEvidenceCalls >= a.maxEvidenceCalls && a.successfulEvidenceCalls == 0 {
+				return resultMessages, fmt.Errorf("Patrol investigation exhausted its evidence-call budget without a successful structured evidence result")
+			}
 		}
 
 		if patrolFindingLifecycleCompletedThisTurn < patrolFindingLifecycleCallsThisTurn {
@@ -2708,6 +2723,9 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 	}
 
 	log.Warn().Int("max_turns", maxTurns).Str("session_id", sessionID).Msg("agentic loop hit max turns limit")
+	if isPatrolInvestigationExecution(a.currentExecutionProfile()) && a.successfulEvidenceCalls == 0 {
+		return resultMessages, fmt.Errorf("Patrol investigation reached its model-turn limit without a successful structured evidence result")
+	}
 	if patrolFindingSummaryPending {
 		resultMessages = a.ensureFinalTextResponseWithSystemPrompt(ctx, sessionID, resultMessages, providerMessages, callback, patrolFindingLifecycleSummarySystemPrompt)
 	} else {

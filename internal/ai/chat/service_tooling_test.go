@@ -1208,6 +1208,7 @@ func TestInvestigationLoopRedactsProposalParamsEverywhereDurable(t *testing.T) {
 	loop := NewAgenticLoop(provider, exec, "base prompt")
 	loop.SetExecutionProfile(tools.ProfilePatrolInvestigation)
 	loop.totalEvidenceCalls = 1
+	loop.successfulEvidenceCalls = 1
 
 	var streamedRawParam bool
 	messages, err := loop.ExecuteWithTools(

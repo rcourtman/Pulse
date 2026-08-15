@@ -63,13 +63,19 @@ initial proposal when evidence confirms the operational symptom; capability
 validation, approval floors, tenant mode, emergency stop, dispatch, and
 verification remain core-owned and fail closed.
 An investigation cannot complete or submit a typed action proposal before the
-model has made at least one structured call to an advertised evidence tool.
-Until then, core withholds proposal authority while leaving evidence-tool
-selection model-owned. The side-effect-free action-capability lookup is planning
+model has received at least one successful structured result from an advertised
+evidence tool. Until then, core withholds proposal authority while leaving
+evidence-tool selection model-owned. Failed, policy-blocked, loop-blocked, and
+otherwise rejected calls still consume the bounded evidence-attempt budget but
+cannot satisfy grounding. If that budget is exhausted without a successful
+result, the run fails closed before proposal or completed-investigation
+persistence. An unset attempt ceiling does not weaken that rule: reaching the
+independent model-turn limit with no successful result fails closed before the
+generic final-summary fallback. The side-effect-free action-capability lookup is planning
 metadata, not infrastructure evidence: it neither consumes the evidence budget
 nor satisfies this grounding gate. If the provider returns prose without a tool call, core
 must discard that prose as a durable conclusion and allow one bounded repair
-turn that requires a structured call from the same advertised evidence
+turn that requires a successful structured result from the same advertised evidence
 manifest. The repair is generic and carries no platform-, incident-, or
 model-specific diagnosis. A second tool-free response fails the investigation
 closed instead of recording narrated or simulated tool use as completed work.
@@ -7457,7 +7463,10 @@ projection, so a deployment without an agent-routed or native `pulse_read`
 adapter still investigates from canonical query and subsystem evidence. At
 least one structured evidence tool plus both the capability lookup and proposal
 sink remain mandatory; missing proposal authority or a zero-evidence manifest
-fails before inference. This keeps focused Patrol
+fails before inference. Runtime completion and proposal authority additionally
+require at least one of those evidence calls to succeed; attempted calls remain
+visible for budget accounting and forensics, but failed or blocked results are
+not grounding. This keeps focused Patrol
 usable with smaller local models without replacing model judgment with a
 diagnostic script or weakening proposal, policy, approval, execution, or
 verification boundaries.

@@ -9516,6 +9516,11 @@ investigation boundary. Investigations carry their finding `resource_type` over
 the public Pulse/Enterprise orchestrator dependency contract and use the companion
 investigation projection. That projection intersects optional evidence tools
 with the runtime-available governed profile, while requiring at least one
-evidence tool plus the capability lookup and typed proposal sink. Both paths
-are reductions after execution-profile projection; neither external clients nor
-model output can select or widen the surface.
+evidence tool plus the capability lookup and typed proposal sink. The bridge's
+`evidence_calls` value remains attempted-call budget accounting; the core chat
+runtime separately requires a successful evidence result before it exposes the
+proposal sink or accepts a completed investigation. Failed and policy-blocked
+calls consume budget without becoming evidence, and exhausting the budget with
+no success fails the run closed. Both paths are reductions after
+execution-profile projection; neither external clients nor model output can
+select or widen the surface.
