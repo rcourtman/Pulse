@@ -8,6 +8,8 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/http/httptrace"
+	"net/textproto"
 	"strconv"
 	"strings"
 	"testing"
@@ -327,24 +329,76 @@ func TestWithGzipFlushOnEventStreamStaysIdentity(t *testing.T) {
 }
 
 func TestWithGzipPreservesStatusAndEmptyBodies(t *testing.T) {
+	for _, status := range []int{
+		http.StatusNoContent,
+		http.StatusResetContent,
+		http.StatusNotModified,
+	} {
+		t.Run(http.StatusText(status), func(t *testing.T) {
+			handler := withGzip(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(status)
+			}))
+
+			req := httptest.NewRequest(http.MethodDelete, "/api/thing", nil)
+			req.Header.Set("Accept-Encoding", "gzip")
+			rec := httptest.NewRecorder()
+			handler.ServeHTTP(rec, req)
+
+			if rec.Code != status {
+				t.Fatalf("status = %d, want %d", rec.Code, status)
+			}
+			if got := rec.Header().Get("Content-Encoding"); got != "" {
+				t.Fatalf("Content-Encoding = %q, want empty for %d", got, status)
+			}
+			if rec.Body.Len() != 0 {
+				t.Fatalf("%d grew a %d-byte body", status, rec.Body.Len())
+			}
+		})
+	}
+}
+
+func TestWithGzipDefersDecisionPastInformationalResponse(t *testing.T) {
+	payload := strings.Repeat(`{"status":"ready"}`, 256)
 	handler := withGzip(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusEarlyHints)
 		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusNoContent)
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(payload))
 	}))
+	server := httptest.NewServer(handler)
+	defer server.Close()
 
-	req := httptest.NewRequest(http.MethodDelete, "/api/thing", nil)
-	req.Header.Set("Accept-Encoding", "gzip")
-	rec := httptest.NewRecorder()
-	handler.ServeHTTP(rec, req)
+	request, err := http.NewRequest(http.MethodGet, server.URL, nil)
+	if err != nil {
+		t.Fatalf("build request: %v", err)
+	}
+	request.Header.Set("Accept-Encoding", "gzip")
+	var informationalStatuses []int
+	request = request.WithContext(httptrace.WithClientTrace(request.Context(), &httptrace.ClientTrace{
+		Got1xxResponse: func(code int, _ textproto.MIMEHeader) error {
+			informationalStatuses = append(informationalStatuses, code)
+			return nil
+		},
+	}))
+	client := &http.Client{Transport: &http.Transport{DisableCompression: true}}
+	response, err := client.Do(request)
+	if err != nil {
+		t.Fatalf("request: %v", err)
+	}
+	defer response.Body.Close()
 
-	if rec.Code != http.StatusNoContent {
-		t.Fatalf("status = %d, want 204", rec.Code)
+	if len(informationalStatuses) != 1 || informationalStatuses[0] != http.StatusEarlyHints {
+		t.Fatalf("informational statuses = %v, want [103]", informationalStatuses)
 	}
-	if got := rec.Header().Get("Content-Encoding"); got != "" {
-		t.Fatalf("Content-Encoding = %q, want empty for 204", got)
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", response.StatusCode)
 	}
-	if rec.Body.Len() != 0 {
-		t.Fatalf("204 grew a %d-byte body", rec.Body.Len())
+	if got := response.Header.Get("Content-Encoding"); got != "gzip" {
+		t.Fatalf("Content-Encoding = %q, want gzip on final response", got)
+	}
+	if decoded := gunzipBody(t, response.Body); decoded != payload {
+		t.Fatalf("decompressed body does not match payload")
 	}
 }
 

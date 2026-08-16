@@ -169,7 +169,10 @@ type gzipResponseWriter struct {
 }
 
 func (w *gzipResponseWriter) decide(status int) {
-	if w.decided {
+	if w.decided || status >= 100 && status < 200 {
+		// Informational responses do not select the representation for the final
+		// response. Keep the decision open so a later 2xx-5xx status can use the
+		// headers and body semantics the handler establishes for that response.
 		return
 	}
 	w.decided = true
@@ -177,7 +180,7 @@ func (w *gzipResponseWriter) decide(status int) {
 	header := w.Header()
 	header.Add("Vary", "Accept-Encoding")
 
-	if status == http.StatusNoContent || status == http.StatusNotModified {
+	if status == http.StatusNoContent || status == http.StatusResetContent || status == http.StatusNotModified {
 		return
 	}
 	if header.Get("Content-Encoding") != "" {
