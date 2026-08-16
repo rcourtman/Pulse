@@ -9,6 +9,8 @@ import (
 	"math"
 	"math/big"
 	"net/netip"
+	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -567,6 +569,10 @@ func (a *Agent) collectContainer(ctx context.Context, summary containertypes.Sum
 	if inspect.State.Health != nil {
 		health = string(inspect.State.Health.Status)
 	}
+	healthcheckTargets := []string(nil)
+	if inspect.Config != nil && inspect.Config.Healthcheck != nil {
+		healthcheckTargets = extractHealthcheckTargets(inspect.Config.Healthcheck.Test)
+	}
 
 	ports := make([]agentsdocker.ContainerPort, len(summary.Ports))
 	for i, port := range summary.Ports {
@@ -641,6 +647,7 @@ func (a *Agent) collectContainer(ctx context.Context, summary containertypes.Sum
 		State:               string(summary.State),
 		Status:              summary.Status,
 		Health:              health,
+		HealthcheckTargets:  healthcheckTargets,
 		CPUPercent:          cpuPercent,
 		MemoryUsageBytes:    memUsage,
 		MemoryLimitBytes:    memLimit,
@@ -730,6 +737,50 @@ func (a *Agent) collectContainer(ctx context.Context, summary containertypes.Sum
 	}
 
 	return container, nil
+}
+
+var (
+	healthcheckURLPattern    = regexp.MustCompile(`(?i)https?://[^\s'"<>]+`)
+	healthcheckTargetPattern = regexp.MustCompile(`(?i)^[a-z0-9][a-z0-9._-]{0,252}$`)
+)
+
+// extractHealthcheckTargets derives only secret-free URL hostnames from a
+// container health check. Raw health-check command text can contain paths,
+// query strings, credentials, or environment expansion and must never cross
+// the agent reporting boundary.
+func extractHealthcheckTargets(test []string) []string {
+	const maxTargets = 16
+	seen := make(map[string]struct{})
+	targets := make([]string, 0)
+	for _, part := range test {
+		for _, candidate := range healthcheckURLPattern.FindAllString(part, -1) {
+			if len(candidate) > 2048 {
+				continue
+			}
+			parsed, err := url.Parse(candidate)
+			if err != nil {
+				continue
+			}
+			target := strings.ToLower(strings.TrimSpace(parsed.Hostname()))
+			if address, err := netip.ParseAddr(target); err == nil {
+				target = address.String()
+			} else if !healthcheckTargetPattern.MatchString(target) {
+				continue
+			}
+			if _, exists := seen[target]; exists {
+				continue
+			}
+			seen[target] = struct{}{}
+			targets = append(targets, target)
+			if len(targets) == maxTargets {
+				return targets
+			}
+		}
+	}
+	if len(targets) == 0 {
+		return nil
+	}
+	return targets
 }
 
 // getImageRepoDigest retrieves the RepoDigest for an image and its platform details.

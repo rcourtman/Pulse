@@ -68,7 +68,11 @@ func TestCloneHostAndZFSPoolIsolateZFSDatasets(t *testing.T) {
 
 func TestCloneDockerContainer_PreservesIndependentOOMEvidence(t *testing.T) {
 	oomKilled := false
-	src := DockerContainer{ID: "container-1", OOMKilled: &oomKilled}
+	src := DockerContainer{
+		ID:                 "container-1",
+		HealthcheckTargets: []string{"dependency-service"},
+		OOMKilled:          &oomKilled,
+	}
 
 	got := cloneDockerContainer(src)
 	if got.OOMKilled == nil || *got.OOMKilled {
@@ -77,6 +81,10 @@ func TestCloneDockerContainer_PreservesIndependentOOMEvidence(t *testing.T) {
 	oomKilled = true
 	if *got.OOMKilled {
 		t.Fatal("cloned Docker container must own its OOM evidence value")
+	}
+	got.HealthcheckTargets[0] = "mutated"
+	if src.HealthcheckTargets[0] != "dependency-service" {
+		t.Fatal("cloned Docker container must own its health-check targets")
 	}
 }
 

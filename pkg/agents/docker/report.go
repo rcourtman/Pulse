@@ -73,6 +73,7 @@ type Container struct {
 	State               string             `json:"state"`
 	Status              string             `json:"status"`
 	Health              string             `json:"health,omitempty"`
+	HealthcheckTargets  []string           `json:"healthcheckTargets,omitempty"`
 	CPUPercent          float64            `json:"cpuPercent"`
 	MemoryUsageBytes    int64              `json:"memoryUsageBytes"`
 	MemoryLimitBytes    int64              `json:"memoryLimitBytes"`

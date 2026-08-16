@@ -278,6 +278,7 @@ func TestApplyDockerReportIncludesContainerDiskDetails(t *testing.T) {
 			{
 				ID:                  "ctr-1",
 				Name:                "app",
+				HealthcheckTargets:  []string{"dependency-service"},
 				OOMKilled:           &oomKilled,
 				WritableLayerBytes:  512 * 1024 * 1024,
 				RootFilesystemBytes: 2 * 1024 * 1024 * 1024,
@@ -319,6 +320,10 @@ func TestApplyDockerReportIncludesContainerDiskDetails(t *testing.T) {
 	oomKilled = true
 	if *container.OOMKilled {
 		t.Fatal("expected monitoring state to own an independent OOM evidence value")
+	}
+	report.Containers[0].HealthcheckTargets[0] = "mutated"
+	if container.HealthcheckTargets[0] != "dependency-service" {
+		t.Fatal("expected monitoring state to own an independent health-check target slice")
 	}
 	if container.WritableLayerBytes != 512*1024*1024 {
 		t.Fatalf("expected writable layer bytes to match, got %d", container.WritableLayerBytes)

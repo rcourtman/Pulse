@@ -607,6 +607,11 @@ cleanup so readers cannot retain orphaned runtime or alert projections.
    collector must set it to the exact Docker inspect boolean even when false;
    report ingest and model conversion must clone and preserve the pointer so
    concurrent state replacement cannot alter previously accepted evidence.
+   Container health-check dependency targets must likewise come from the
+   inspected runtime configuration, but monitoring accepts only the agent's
+   bounded, normalized URL hostname projection. Ingest must preserve an
+   independent copy through `models.DockerContainer`; raw health-check command,
+   path, query, credential, and environment text is outside the report model.
 8. Add or change Proxmox Ceph compatibility payload decoding through `pkg/proxmox/ceph.go`
 9. Add or change Proxmox ZFS compatibility payload decoding and vdev-role normalization through `pkg/proxmox/zfs.go`
 10. Add or change mock chart synthesis, seeded history continuity, or mock-owned

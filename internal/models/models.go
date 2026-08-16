@@ -1104,6 +1104,7 @@ type DockerContainer struct {
 	State               string                       `json:"state"`
 	Status              string                       `json:"status"`
 	Health              string                       `json:"health,omitempty"`
+	HealthcheckTargets  []string                     `json:"healthcheckTargets,omitempty"`
 	CPUPercent          float64                      `json:"cpuPercent"`
 	CPUCapacityPercent  float64                      `json:"cpuCapacityPercent,omitempty"`
 	MemoryUsage         int64                        `json:"memoryUsageBytes"`
@@ -1132,6 +1133,9 @@ type DockerContainer struct {
 }
 
 func (c DockerContainer) NormalizeCollections() DockerContainer {
+	if c.HealthcheckTargets == nil {
+		c.HealthcheckTargets = []string{}
+	}
 	if c.Ports == nil {
 		c.Ports = []DockerContainerPort{}
 	}

@@ -563,6 +563,7 @@ func addDockerFacts(facts *[]Fact, resource unified.Resource, observedAt *time.T
 	addAgentContextCountFact(facts, "Images", resource.Docker.ImageCount, agentContextSourceUnifiedResource, agentContextTrustRuntimeObserved, observedAt)
 	addAgentContextFact(facts, "Container state", resource.Docker.ContainerState, agentContextSourceUnifiedResource, agentContextTrustRuntimeObserved, observedAt)
 	addAgentContextFact(facts, "Container health", resource.Docker.Health, agentContextSourceUnifiedResource, agentContextTrustRuntimeObserved, observedAt)
+	addAgentContextFact(facts, "Health-check targets", formatDockerHealthcheckTargets(resource.Docker.HealthcheckTargets, policy), agentContextSourceUnifiedResource, agentContextTrustDiscovered, observedAt)
 	if resource.Docker.RestartCount > 0 {
 		addAgentContextFact(facts, "Restart count", fmt.Sprintf("%d", resource.Docker.RestartCount), agentContextSourceUnifiedResource, agentContextTrustRuntimeObserved, observedAt)
 	}
@@ -578,6 +579,20 @@ func addDockerFacts(facts *[]Fact, resource unified.Resource, observedAt *time.T
 	if resource.Docker.UpdateStatus != nil {
 		addAgentContextFact(facts, "Container image update", fmt.Sprintf("available=%t", resource.Docker.UpdateStatus.UpdateAvailable), agentContextSourceUnifiedResource, agentContextTrustRuntimeObserved, timePtrIfSet(resource.Docker.UpdateStatus.LastChecked))
 	}
+}
+
+func formatDockerHealthcheckTargets(targets []string, policy *unified.ResourcePolicy) string {
+	if len(targets) == 0 {
+		return ""
+	}
+	formatted := make([]string, 0, len(targets))
+	for _, target := range targets {
+		value := unified.ResourcePolicyRedactedValue(target, policy, unified.ResourceRedactionHostname, unified.ResourceRedactionAlias)
+		if value != "" {
+			formatted = append(formatted, value)
+		}
+	}
+	return strings.Join(formatted, ", ")
 }
 
 func addKubernetesFacts(facts *[]Fact, resource unified.Resource, observedAt *time.Time) {

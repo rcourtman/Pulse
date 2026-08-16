@@ -84,6 +84,12 @@ Docker / Podman report sizing is a two-dimensional transport contract:
 decoded JSON byte ceilings, derives the 80% early-warning boundaries, and
 generates the operator-facing limit description consumed by server ingress
 and every supported `pulse-agent` release target built from this source.
+Docker health-check dependency evidence follows the same report boundary.
+The agent may derive a bounded list of normalized URL hostnames from the
+runtime-authored health-check test, but raw health-check commands, URL paths,
+queries, credentials, and environment expansion must never enter the report.
+Those secret-free targets are observational metadata only: they do not grant
+command authority or change container lifecycle admission.
 
 
 An agent's lifecycle operations are scoped to that agent. Installing,

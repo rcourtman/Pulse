@@ -37,6 +37,32 @@ func TestBuildHostSecurityInfoAuthorizationPlugins(t *testing.T) {
 	}
 }
 
+func TestExtractHealthcheckTargetsKeepsOnlyNormalizedURLHosts(t *testing.T) {
+	targets := extractHealthcheckTargets([]string{
+		"CMD-SHELL",
+		"wget -qO- 'http://Dependency-Service:8080/health?token=private' && curl https://user:password@api.internal.example/status",
+		"curl http://dependency-service:9090/duplicate",
+		"curl 'http://[2001:db8::1]:8080/ready'",
+		"printf 'not-a-url secret=value'",
+	})
+
+	want := []string{"dependency-service", "api.internal.example", "2001:db8::1"}
+	if len(targets) != len(want) {
+		t.Fatalf("health-check targets = %#v, want %#v", targets, want)
+	}
+	for i := range want {
+		if targets[i] != want[i] {
+			t.Fatalf("health-check target %d = %q, want %q", i, targets[i], want[i])
+		}
+	}
+	joined := strings.Join(targets, " ")
+	for _, forbidden := range []string{"token", "private", "user", "password", "/health", "/status"} {
+		if strings.Contains(joined, forbidden) {
+			t.Fatalf("health-check targets leaked %q: %q", forbidden, joined)
+		}
+	}
+}
+
 func TestCollectDockerNativeInventory(t *testing.T) {
 	createdAt := time.Date(2026, 5, 24, 8, 0, 0, 0, time.UTC)
 	agent := &Agent{

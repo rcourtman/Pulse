@@ -4446,6 +4446,7 @@ func BuildTopologyResponseFromReadState(rs unifiedresources.ReadState, options T
 						State:                    state,
 						Image:                    container.Image(),
 						Health:                   container.Health(),
+						HealthcheckTargets:       container.HealthcheckTargets(),
 					})
 				}
 			}

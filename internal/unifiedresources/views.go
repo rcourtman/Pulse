@@ -3901,6 +3901,13 @@ func (v DockerContainerView) Health() string {
 	return v.r.Docker.Health
 }
 
+func (v DockerContainerView) HealthcheckTargets() []string {
+	if v.r == nil || v.r.Docker == nil {
+		return nil
+	}
+	return append([]string(nil), v.r.Docker.HealthcheckTargets...)
+}
+
 func (v DockerContainerView) RestartCount() int {
 	if v.r == nil || v.r.Docker == nil {
 		return 0

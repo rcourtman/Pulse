@@ -52,8 +52,9 @@ func TestBuildResourceContextSectionsAppliesRedactionTrustAndFreshness(t *testin
 		},
 	}
 	resource.Docker = &unified.DockerData{
-		Image:          "registry.internal/finance-db:latest",
-		ContainerState: "running",
+		Image:              "registry.internal/finance-db:latest",
+		ContainerState:     "running",
+		HealthcheckTargets: []string{"finance-db.internal"},
 		Ports: []unified.DockerPortMeta{
 			{PublicPort: 8123, PrivatePort: 8123, Protocol: "tcp"},
 		},
@@ -90,6 +91,11 @@ func TestBuildResourceContextSectionsAppliesRedactionTrustAndFreshness(t *testin
 		PendingApprovalCount: 1,
 		RecentActionCount:    3,
 	})
+	docker := requireSection(t, sections, "runtime")
+	healthcheckTargets := requireFact(t, docker, "Health-check targets")
+	if !healthcheckTargets.Redacted || healthcheckTargets.Value != unified.ResourcePolicyRedactedLabel {
+		t.Fatalf("health-check targets fact = %#v, want policy-redacted hostname evidence", healthcheckTargets)
+	}
 
 	identity := requireSection(t, sections, "identity")
 	if identity.Source != agentContextSourceUnifiedResource || identity.TrustTier != agentContextTrustPulseAuthored {

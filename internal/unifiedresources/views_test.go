@@ -1291,10 +1291,11 @@ func TestView_DockerContainerViewMetricsTargetAccessor(t *testing.T) {
 			ResourceID:   "nextcloud-web-1",
 		},
 		Docker: &DockerData{
-			ContainerID:    "nextcloud",
-			Image:          "docker.io/library/nextcloud:29.0.7",
-			ContainerState: "running",
-			OOMKilled:      &oomKilled,
+			ContainerID:        "nextcloud",
+			Image:              "docker.io/library/nextcloud:29.0.7",
+			ContainerState:     "running",
+			HealthcheckTargets: []string{"postgres.internal"},
+			OOMKilled:          &oomKilled,
 		},
 	}
 
@@ -1323,6 +1324,15 @@ func TestView_DockerContainerViewMetricsTargetAccessor(t *testing.T) {
 	*oom = true
 	if got := v.OOMKilled(); got == nil || *got {
 		t.Fatalf("expected cloned OOM evidence, got %v", got)
+	}
+
+	targets := v.HealthcheckTargets()
+	if len(targets) != 1 || targets[0] != "postgres.internal" {
+		t.Fatalf("health-check targets = %v, want postgres.internal", targets)
+	}
+	targets[0] = "mutated"
+	if got := v.HealthcheckTargets(); len(got) != 1 || got[0] != "postgres.internal" {
+		t.Fatalf("expected cloned health-check targets, got %v", got)
 	}
 }
 

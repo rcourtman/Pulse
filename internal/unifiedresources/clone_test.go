@@ -592,8 +592,9 @@ func TestCloneDockerData_Nil(t *testing.T) {
 
 func TestCloneDockerData_LabelsAndPortsIsolation(t *testing.T) {
 	original := &DockerData{
-		ContainerID: "abc123",
-		Labels:      map[string]string{"env": "prod"},
+		ContainerID:        "abc123",
+		HealthcheckTargets: []string{"database.internal"},
+		Labels:             map[string]string{"env": "prod"},
 		Ports: []DockerPortMeta{
 			{PrivatePort: 8080, Protocol: "tcp"},
 		},
@@ -608,6 +609,11 @@ func TestCloneDockerData_LabelsAndPortsIsolation(t *testing.T) {
 	cloned.Ports[0].PublicPort = 9999
 	if original.Ports[0].PublicPort == 9999 {
 		t.Error("mutating cloned Ports should not affect original")
+	}
+
+	cloned.HealthcheckTargets[0] = "changed.internal"
+	if original.HealthcheckTargets[0] != "database.internal" {
+		t.Error("mutating cloned HealthcheckTargets should not affect original")
 	}
 }
 

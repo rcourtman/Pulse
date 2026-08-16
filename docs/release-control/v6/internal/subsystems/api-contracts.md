@@ -4812,7 +4812,10 @@ copy/export consumers: they may expose bounded Pulse-authored or
 Pulse-observed runtime/discovery, topology, safety, policy, and recent-change
 facts, but must not expose raw command output, provider config, environment
 values, unbounded metadata maps, bind-mount paths, label values, or secret-like
-capability parameters.
+capability parameters. Docker runtime sections may expose normalized hostnames
+derived from health-check URL targets as bounded topology facts. They must apply
+the resource policy to each hostname independently and must never carry the raw
+health-check command, URL path, query, user information, or environment values.
 The shape is intentionally narrower than the full internal types
 so agents see a stable agent-paradigm contract, decoupled from
 internal type evolution.

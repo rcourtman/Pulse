@@ -4633,6 +4633,13 @@ so a model can distinguish complete topology evidence from a bounded preview
 and continue with a larger bound or paginated list instead of inventing a root
 cause from missing resources.
 
+Docker container topology and resource context must also expose the canonical
+resource's bounded `healthcheck_targets` hostname list when present. Patrol may
+use a target that matches another exact container name to test a causal
+dependency chain, but the target remains untrusted observational evidence and
+never grants tool or action authority. The AI boundary must not receive the raw
+health-check command, URL path, query, credentials, or environment expansion.
+
 When the model runs tools but returns no final narrative, the deterministic
 fallback summary (`buildAutomaticFallbackSummary` in
 `internal/ai/chat/agentic_final.go`) must read as a clean operator message, not a

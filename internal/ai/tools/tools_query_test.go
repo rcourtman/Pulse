@@ -518,7 +518,7 @@ func TestExecuteListInfrastructureAndTopology(t *testing.T) {
 				Hostname:    "h1",
 				DisplayName: "Host 1",
 				Containers: []models.DockerContainer{
-					{ID: "c1", Name: "nginx", State: "running", Image: "nginx"},
+					{ID: "c1", Name: "nginx", State: "running", Image: "nginx", HealthcheckTargets: []string{"database.internal"}},
 				},
 			},
 		},
@@ -560,6 +560,11 @@ func TestExecuteListInfrastructureAndTopology(t *testing.T) {
 	}
 	if topology.Summary.TotalVMs != 1 || len(topology.Proxmox.Nodes) == 0 {
 		t.Fatalf("unexpected topology: %+v", topology)
+	}
+	if len(topology.Docker.Hosts) != 1 || len(topology.Docker.Hosts[0].Containers) != 1 ||
+		len(topology.Docker.Hosts[0].Containers[0].HealthcheckTargets) != 1 ||
+		topology.Docker.Hosts[0].Containers[0].HealthcheckTargets[0] != "database.internal" {
+		t.Fatalf("Docker topology lost health-check dependency targets: %+v", topology.Docker)
 	}
 }
 

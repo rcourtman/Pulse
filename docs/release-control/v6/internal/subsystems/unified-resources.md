@@ -697,6 +697,12 @@ code 137 into a positive classification; typed Docker views must return an
 independent copy of that value. Frontend detail summaries and
 Docker page search consume those backend-authored fields before falling back to
 legacy labels.
+`DockerData.HealthcheckTargets` is the canonical secret-free dependency hint
+for container health checks. The adapter, clone, and typed Docker container
+view must preserve independent copies, while consumers treat each hostname as
+untrusted observational topology evidence rather than command, discovery, or
+action authority. Raw health-check command text never belongs in the unified
+resource contract.
 Docker host duplicate-identity evidence is monitoring-authored and rides
 `DockerData.IdentityConflict` unchanged: the adapter, resource clone, and
 typed `DockerHostView` accessor must each hand out an independent copy so

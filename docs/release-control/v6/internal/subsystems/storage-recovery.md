@@ -1477,12 +1477,14 @@ recovery scope, or a storage/recovery-owned secret source.
     only; they must not reinterpret it as backup freshness, recovery
     point recency, or protection cadence.
     Docker / Podman `DockerData` container lifecycle, Podman metadata, and
-    cumulative block I/O totals, including nullable runtime-authored OOM state,
-    remain unified-resource runtime context.
+    cumulative block I/O totals, including nullable runtime-authored OOM state
+    and secret-free health-check target hostnames, remain unified-resource
+    runtime context.
     Storage and recovery may use those fields only as workload description
     when linking to an owning runtime/platform page; they must not reinterpret
-    container block I/O totals as backup throughput, recovery-point evidence,
-    protection cadence, or storage-health ownership.
+    health-check targets as protection topology, or container block I/O totals
+    as backup throughput, recovery-point evidence, protection cadence, or
+    storage-health ownership.
 30. Keep VMware placement, cluster service state, guest-detail, VM snapshot-tree, VM virtual-hardware configuration, VMware Tools, VM hardware Ethernet, VM hardware disk, and network enrichment descriptive on that same shared unified-resource contract. When `internal/vmware/provider.go`, `internal/unifiedresources/types.go`, and `frontend-modern/src/hooks/useUnifiedResources.ts` project datacenter, cluster, `vmware.clusterHaEnabled`, `vmware.clusterDrsEnabled`, folder, runtime-host, datastore-attachment, guest-hostname, guest-IP, `vmware.currentSnapshotId`, `vmware.snapshotTree`, snapshot creation/state/quiesce/current markers, child snapshot metadata, `vmware.hardware`, virtual hardware version, hardware upgrade policy/version/status/error, boot type/order/retry/setup-mode flags, CPU cores-per-socket and hot-add/remove flags, memory hot-add settings, `vmware.tools`, Tools run state, version status, version number/string, install type, upgrade policy, auto-update support, install-attempt count, guest reboot requests, `vmware.networkAdapters`, adapter MAC address/type, backing network id/name, backing type, connection state, start-connected / guest-control flags, `vmware.virtualDisks`, virtual disk label/type, IDE/SCSI/SATA/NVMe placement, VMDK path, backing type, datastore name, capacity, `vmware.networkType`, `vmware.networkHostNames`, `vmware.networkVmNames`, or `vmware.tags` onto canonical VMware `agent` / `vm` / `storage` / `network` resources, storage and recovery may use that detail for labeling, navigation, and VM investigation context only; they must not promote those topology, cluster-service, guest, snapshot-tree, virtual-hardware, VMware Tools, vNIC, virtual disk, tag, or network fields into recovery ownership, restore targeting, protection grouping, compliance scoring, or a VMware-local recovery taxonomy without a separately governed slice.
     `vmware.tags` is the sharpest case of that boundary, because vCenter tag
     vocabularies routinely read like backup policy — an operator-authored

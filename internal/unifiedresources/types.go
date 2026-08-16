@@ -1126,6 +1126,7 @@ type DockerData struct {
 	// Container-specific fields (populated when Resource.Type == ResourceTypeAppContainer)
 	ContainerState     string                      `json:"containerState,omitempty"`
 	Health             string                      `json:"health,omitempty"`
+	HealthcheckTargets []string                    `json:"healthcheckTargets,omitempty"`
 	RestartCount       int                         `json:"restartCount,omitempty"`
 	ExitCode           int                         `json:"exitCode,omitempty"`
 	OOMKilled          *bool                       `json:"oomKilled,omitempty"`

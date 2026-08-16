@@ -651,9 +651,10 @@ func TestApplyDockerReportRefreshesUnifiedReadStateWithoutBroadcast(t *testing.T
 			TotalMemoryBytes: 8 << 30,
 		},
 		Containers: []agentsdocker.Container{{
-			ID:    "headless-container-id",
-			Name:  "headless-canary-container",
-			State: "running",
+			ID:                 "headless-container-id",
+			Name:               "headless-canary-container",
+			State:              "running",
+			HealthcheckTargets: []string{"dependency-service"},
 		}},
 		Timestamp: time.Now().UTC(),
 	}, nil)
@@ -676,6 +677,10 @@ func TestApplyDockerReportRefreshesUnifiedReadStateWithoutBroadcast(t *testing.T
 	for _, container := range adapter.DockerContainers() {
 		if container != nil && container.Name() == "headless-canary-container" {
 			foundContainer = true
+			targets := container.HealthcheckTargets()
+			if len(targets) != 1 || targets[0] != "dependency-service" {
+				t.Fatalf("canonical health-check targets = %v, want dependency-service", targets)
+			}
 			break
 		}
 	}

@@ -317,11 +317,12 @@ func (s DockerHostSummary) NormalizeCollections() DockerHostSummary {
 // DockerContainerSummary is a summarized Docker container
 type DockerContainerSummary struct {
 	GovernedResourceMetadata
-	ID     string `json:"id"`
-	Name   string `json:"name"`
-	State  string `json:"state"`
-	Image  string `json:"image"`
-	Health string `json:"health,omitempty"`
+	ID                 string   `json:"id"`
+	Name               string   `json:"name"`
+	State              string   `json:"state"`
+	Image              string   `json:"image"`
+	Health             string   `json:"health,omitempty"`
+	HealthcheckTargets []string `json:"healthcheck_targets,omitempty"`
 }
 
 // AppContainerSummary is a summarized canonical app container for list responses.
