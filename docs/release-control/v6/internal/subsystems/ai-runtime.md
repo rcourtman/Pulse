@@ -7537,3 +7537,10 @@ strict last-message payload only after both have passed transport validation.
 Qualification may therefore require positive input/output usage for a
 tool-free real-model all-clear without falsely rejecting Codex subscription
 runs whose analysis and healthy outcome were durably persisted.
+
+Investigation evidence checkpoints keep the finding resource as an anchor,
+not a fence. When a cross-resource cause remains plausible, empty logs or a
+policy-blocked deep-read attempt cannot justify an unknown-root-cause
+conclusion or remediation proposal on the symptom alone; the remaining
+read-only budget must prioritize canonical query, discovery, or topology
+evidence for at least one plausible causal peer or dependency.

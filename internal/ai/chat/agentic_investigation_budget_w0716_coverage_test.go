@@ -232,7 +232,7 @@ func Test_w0716_budget_MaybeInjectInvestigationEvidenceCheckpoint(t *testing.T) 
 		if !strings.Contains(got, "raw-evidence") {
 			t.Fatalf("original content must be preserved, got %q", got)
 		}
-		for _, want := range []string{"4 evidence calls used", "3 remain", "checkpoint", "completion questions"} {
+		for _, want := range []string{"4 evidence calls used", "3 remain", "checkpoint", "completion questions", "plausible causal peer or dependency", "Empty logs or a blocked deep-read path"} {
 			if !strings.Contains(got, want) {
 				t.Fatalf("checkpoint content missing %q: %q", want, got)
 			}
@@ -269,7 +269,7 @@ func Test_w0716_budget_MaybeInjectInvestigationEvidenceBudgetWarning(t *testing.
 			t.Fatalf("earlier result must be untouched, got %q", msgs[0].ToolResult.Content)
 		}
 		got := msgs[1].ToolResult.Content
-		for _, want := range []string{"9 evidence calls used", "1 remain", "budget", "Stop exploratory investigation", "typed proposal"} {
+		for _, want := range []string{"9 evidence calls used", "1 remain", "budget", "Stop exploratory investigation", "causal peer or dependency", "typed proposal"} {
 			if !strings.Contains(got, want) {
 				t.Fatalf("warning content missing %q: %q", want, got)
 			}
