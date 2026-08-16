@@ -1,17 +1,17 @@
 {
   "version": 1,
-  "base_sha": "205df735c7b3864a89cc54d5254f520500f27cfc",
-  "verified_at": "2026-08-16T10:32:00Z",
+  "base_sha": "20cd89dcc6db28184ec3083880484dcd35e15970",
+  "verified_at": "2026-08-16T09:34:36Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/stores/websocket.ts"
+    "frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/stores/websocket.ts": "9d50b11d050466742e592ae74d678b4c6d694495b7e78f805f3a54183dce033b"
+    "frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx": "2b2d9fe3abd53a3855d9a60f77f358e10bfd45828a146f98198e5baf06e3dac2"
   },
   "routes": [
-    "/",
-    "/proxmox"
+    "/settings/infrastructure",
+    "/settings/infrastructure?add=agent"
   ],
   "viewports": [
     {
@@ -24,14 +24,15 @@
     }
   ],
   "states": [
-    "authenticated shell loaded via admin bypass on the 7655 dev backend through the pulse-sidecar-preview proxy",
-    "Proxmox overview rendering live node and workload data at desktop viewport",
-    "Proxmox overview rendering nodes and workloads at mobile viewport after reload",
-    "REST fallback active because the preview proxy cannot carry WebSocket upgrades (known sidecar-preview limitation)"
+    "authenticated local development shell with Infrastructure settings loaded",
+    "Add infrastructure source picker and host installer dialog at desktop width",
+    "generic agent onboarding guidance at desktop and narrow widths",
+    "Proxmox API-first recommendation with the revised punctuation and no em dash"
   ],
   "interactions": [
-    "verified the Vite-served websocket.ts module carries MAX_INBOUND_WEBSOCKET_MESSAGE_BYTES = 32 * 1024 * 1024",
-    "confirmed the backend accepts a ws upgrade advertising max_message_bytes=33554432 with HTTP 101 via direct handshake against port 7655",
-    "reloaded after viewport resize so responsive table staging re-ran"
+    "opened Settings and waited for the Infrastructure workspace to finish loading",
+    "opened Add infrastructure and selected Install Pulse Agent",
+    "opened the generic agent onboarding route and read the complete API-first Proxmox guidance",
+    "confirmed the revised sentence reads No root agent is required for normal platform inventory and metrics"
   ]
 }

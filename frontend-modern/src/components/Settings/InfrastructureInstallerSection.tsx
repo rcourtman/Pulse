@@ -52,7 +52,7 @@ const INSTALLER_FOCUS_PRESENTATION: Record<
       'Install the agent for host-local, Docker, or Kubernetes telemetry. API-backed platforms such as Proxmox start under Platform connections.',
     recommendationTitle: 'Recommended install model',
     recommendationDetail:
-      'Pulse Agent is a low-overhead background service. It collects node-local telemetry such as CPU, memory, disks, network I/O, temperatures, SMART disk health, services, Docker, and Kubernetes. For Proxmox, start with a dedicated read-only or narrowly scoped API token; no root agent is required for normal platform inventory and metrics. Add the agent only to nodes that need host-local augmentation. Use Availability checks for ping-only or agentless device monitoring.',
+      'Pulse Agent is a low-overhead background service. It collects node-local telemetry such as CPU, memory, disks, network I/O, temperatures, SMART disk health, services, Docker, and Kubernetes. For Proxmox, start with a dedicated read-only or narrowly scoped API token. No root agent is required for normal platform inventory and metrics. Add the agent only to nodes that need host-local augmentation. Use Availability checks for ping-only or agentless device monitoring.',
     preferredProfile: 'auto',
     platforms: ALL_AGENT_PLATFORMS,
   },

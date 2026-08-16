@@ -211,7 +211,7 @@ describe('infrastructure operations model', () => {
       'Adding Proxmox? Start with the API connection.',
     );
     expect(infrastructureInstallerSectionSource).toContain(
-      'no root agent is required for normal platform inventory and metrics',
+      'No root agent is required for normal platform inventory and metrics',
     );
     expect(infrastructureInstallerSectionSource).toContain(
       "buildInfrastructureOnboardingPath('pve')",

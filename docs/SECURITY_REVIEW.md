@@ -7,10 +7,10 @@ reproducible starting point and makes the intended trust boundaries explicit.
 Before reviewing the code, read:
 
 - [Production Deployment and Security](PRODUCTION_SECURITY.md) for the
-  least-privilege deployment model and operational checklist;
-- the canonical [Security Policy](../SECURITY.md) for reporting and hardening;
+  least-privilege deployment model and operational checklist.
+- The canonical [Security Policy](../SECURITY.md) for reporting and hardening.
 - [Agent Security](AGENT_SECURITY.md) for root privilege, command execution,
-  guest access, and update verification;
+  guest access, and update verification.
 - [Installation](INSTALL.md) for the signed, version-pinned server installer.
 
 ## Suggested review boundaries
@@ -115,7 +115,7 @@ Starting points:
 
 Review behavior under concurrent reads and writes, stale data, partial platform
 responses, retention, and large resource sets. Pulse includes simulated
-500-node API and metrics-store regression coverage; treat that as reproducible
+500-node API and metrics-store regression coverage. Treat that as reproducible
 engineering evidence, not as a production certification.
 
 Starting points:
