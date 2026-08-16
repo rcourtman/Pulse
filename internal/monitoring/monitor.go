@@ -2046,19 +2046,21 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 
 		case <-broadcastTicker.C:
 			// Broadcast current state regardless of polling status
-			// Use GetState() instead of m.state.GetSnapshot() to respect mock mode
-			state := m.GetState()
-			log.Info().
-				Int("nodes", len(state.Nodes)).
-				Int("vms", len(state.VMs)).
-				Int("containers", len(state.Containers)).
-				Int("hosts", len(state.Hosts)).
-				Int("pbs", len(state.PBSInstances)).
-				Int("pbsBackups", len(state.Backups.PBS)).
-				Int("physicalDisks", len(state.PhysicalDisks)).
-				Msg("Broadcasting state update (ticker)")
 			if !currentStateBroadcasterHasSubscribers(wsHub, m.GetOrgID()) {
 				continue
+			}
+			if logging.IsLevelEnabled(zerolog.DebugLevel) {
+				// Use GetState() instead of m.state.GetSnapshot() to respect mock mode
+				state := m.GetState()
+				log.Debug().
+					Int("nodes", len(state.Nodes)).
+					Int("vms", len(state.VMs)).
+					Int("containers", len(state.Containers)).
+					Int("hosts", len(state.Hosts)).
+					Int("pbs", len(state.PBSInstances)).
+					Int("pbsBackups", len(state.Backups.PBS)).
+					Int("physicalDisks", len(state.PhysicalDisks)).
+					Msg("Broadcasting state update (ticker)")
 			}
 			m.broadcastCurrentState(wsHub)
 
@@ -2127,15 +2129,35 @@ func (m *Monitor) startTaskWorkers(ctx context.Context, workers int) {
 	if m.taskQueue == nil {
 		return
 	}
+	workers = resolveTaskWorkerCount(workers)
+	for i := 0; i < workers; i++ {
+		go m.taskWorker(ctx, i)
+	}
+}
+
+// resolveTaskWorkerCount applies the default clamp of [1, 10] to the
+// client-derived worker count. POLL_TASK_WORKERS overrides both the count and
+// the cap for estates whose instance count outgrows the default pool; the
+// override is bounded at 128 so a typo cannot fork an unbounded goroutine
+// herd against the monitored APIs. Workers are I/O-bound, so the override
+// spends sockets against monitored hosts, not local CPU.
+func resolveTaskWorkerCount(workers int) int {
+	if override := parseNonNegativeIntEnv("POLL_TASK_WORKERS", 0); override > 0 {
+		if override > 128 {
+			override = 128
+		}
+		log.Info().
+			Int("workers", override).
+			Msg("Poll task worker count overridden by POLL_TASK_WORKERS")
+		return override
+	}
 	if workers < 1 {
 		workers = 1
 	}
 	if workers > 10 {
 		workers = 10
 	}
-	for i := 0; i < workers; i++ {
-		go m.taskWorker(ctx, i)
-	}
+	return workers
 }
 
 func (m *Monitor) taskWorker(ctx context.Context, id int) {
