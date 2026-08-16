@@ -206,6 +206,22 @@ describe('infrastructure operations model', () => {
     expect(autoProfile?.description).toContain('every detected PVE / PBS service');
   });
 
+  it('keeps generic host onboarding explicit about the API-first Proxmox path', () => {
+    expect(infrastructureInstallerSectionSource).toContain(
+      'Adding Proxmox? Start with the API connection.',
+    );
+    expect(infrastructureInstallerSectionSource).toContain(
+      'no root agent is required for normal platform inventory and metrics',
+    );
+    expect(infrastructureInstallerSectionSource).toContain(
+      "buildInfrastructureOnboardingPath('pve')",
+    );
+    expect(infrastructureInstallerSectionSource).toContain(
+      "buildInfrastructureOnboardingPath('pbs')",
+    );
+    expect(infrastructureInstallerSectionSource).toContain('/docs/PRODUCTION_SECURITY');
+  });
+
   it('keeps the Docker install profile aligned with the shared Docker and Podman label', () => {
     const dockerProfile = INSTALL_PROFILE_OPTIONS.find((option) => option.value === 'docker');
 
@@ -252,7 +268,7 @@ describe('infrastructure operations model', () => {
       'Pulse Agent is a low-overhead background service.',
     );
     expect(infrastructureInstallerSectionSource).toContain(
-      'Machines in Pulse are systems with the agent installed',
+      'API-backed platforms such as Proxmox start under Platform connections.',
     );
     expect(infrastructureInstallerSectionSource).toContain(
       'Use Availability checks for ping-only or agentless device monitoring.',
@@ -262,9 +278,9 @@ describe('infrastructure operations model', () => {
       'before asking for administrator privileges',
     );
     expect(infrastructureInstallerSectionSource).toContain(
-      'For Proxmox clusters, keep the cluster API',
+      'For Proxmox, start with a dedicated read-only or narrowly scoped API token',
     );
-    expect(infrastructureInstallerSectionSource).toContain('host-level');
+    expect(infrastructureInstallerSectionSource).toContain('host-local');
     expect(infrastructureInstallerSectionSource).toContain('augmentation.');
     expect(infrastructureInstallerSectionSource).toContain('Installation commands');
     expect(infrastructureInstallerSectionSource).toContain(

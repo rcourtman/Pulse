@@ -6165,6 +6165,25 @@ it is read from the purchase-start query, validated, and passed to the
 license-server portal handoff. No agent enrollment, report, ack, or update
 route reads or emits it, and the agent-facing payload shapes are unchanged.
 
+### Generic host onboarding preserves API-first Proxmox setup
+
+`frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx`
+now makes the least-privilege Proxmox choice visible before an operator copies
+a host-agent command. The generic host installer remains canonical for
+host-local, Docker, and Kubernetes telemetry, but it routes PVE and PBS users
+to the existing platform-connection flows first and states that normal
+Proxmox inventory and metrics do not require a root agent. The root agent stays
+an explicit augmentation for SMART, temperatures, and host-local storage
+detail. `ConnectionEditor` also reconciles its selected credential slot when a
+direct onboarding route changes in place, so following the PVE or PBS link from
+the already-mounted agent dialog replaces the agent installer with the matching
+API credential form instead of changing only the dialog title. This adds no
+enrollment, token, command, report, discovery, or update authority and does not
+replace the existing PVE or PBS setup handlers. Source guards in
+`InfrastructureOperationsModel.test.tsx` and `ConnectionEditor.test.tsx` pin
+the API-first copy, both canonical onboarding routes, and the reactive
+credential-slot handoff.
+
 ### Platform connection panel state waits on the infrastructure capability
 
 `Settings.tsx` constructs `useInfrastructureSettingsState` for every settings

@@ -175,3 +175,11 @@ and measure their own workload.
 Pulse is intended to be the operational monitoring layer for the platforms it
 supports. It is not a SIEM, a general log-ingestion platform, or a substitute
 for an organization's incident escalation and change-control process.
+
+## Independent review
+
+Pulse does not currently claim an independent security certification. The
+[Independent Security Review Scope](SECURITY_REVIEW.md) maps the main trust
+boundaries to source files, tests, reproducible baseline commands, and the
+private disclosure channel so external reviewers can evaluate concrete
+behavior rather than marketing claims.

@@ -17,6 +17,7 @@ import {
   type InfrastructureCommandSection,
   type InstallProfile,
 } from './infrastructureOperationsModel';
+import { buildInfrastructureOnboardingPath } from './infrastructureWorkspaceModel';
 import { useInfrastructureOperationsContext } from './useInfrastructureOperationsState';
 
 export type InfrastructureInstallerFocus =
@@ -48,10 +49,10 @@ const INSTALLER_FOCUS_PRESENTATION: Record<
   agent: {
     title: 'Install on a host',
     description:
-      'Start here to add the first system you want Pulse to monitor, then expand into Docker, Kubernetes, Proxmox, and related infrastructure.',
+      'Install the agent for host-local, Docker, or Kubernetes telemetry. API-backed platforms such as Proxmox start under Platform connections.',
     recommendationTitle: 'Recommended install model',
     recommendationDetail:
-      'Pulse Agent is a low-overhead background service. Machines in Pulse are systems with the agent installed and reporting full node-local telemetry such as CPU, memory, disks, network I/O, temperatures, SMART disk health, services, Docker, or Kubernetes coverage. Use Availability checks for ping-only or agentless device monitoring. For Proxmox clusters, keep the cluster API connection for platform inventory and add the agent to each node for host-level augmentation.',
+      'Pulse Agent is a low-overhead background service. It collects node-local telemetry such as CPU, memory, disks, network I/O, temperatures, SMART disk health, services, Docker, and Kubernetes. For Proxmox, start with a dedicated read-only or narrowly scoped API token; no root agent is required for normal platform inventory and metrics. Add the agent only to nodes that need host-local augmentation. Use Availability checks for ping-only or agentless device monitoring.',
     preferredProfile: 'auto',
     platforms: ALL_AGENT_PLATFORMS,
   },
@@ -246,6 +247,41 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
             {presentation().recommendationDetail}
           </p>
         </div>
+
+        <Show when={focus() === 'agent'}>
+          <div
+            data-testid="proxmox-api-first-guidance"
+            class="rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-950 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-50"
+          >
+            <p class="font-semibold">Adding Proxmox? Start with the API connection.</p>
+            <p class="mt-1 text-xs text-blue-800 dark:text-blue-200">
+              Pulse can monitor normal PVE and PBS inventory, guests, storage, utilization, and
+              status without installing software as root on the Proxmox host. Add a host agent later
+              only for telemetry the API cannot provide, such as SMART, temperatures, and host-local
+              storage detail.
+            </p>
+            <div class="mt-2 flex flex-wrap gap-x-4 gap-y-2 text-xs font-medium">
+              <a
+                href={buildInfrastructureOnboardingPath('pve')}
+                class="text-blue-700 underline decoration-blue-300 underline-offset-2 hover:text-blue-900 dark:text-blue-200 dark:hover:text-white"
+              >
+                Connect Proxmox VE through the API
+              </a>
+              <a
+                href={buildInfrastructureOnboardingPath('pbs')}
+                class="text-blue-700 underline decoration-blue-300 underline-offset-2 hover:text-blue-900 dark:text-blue-200 dark:hover:text-white"
+              >
+                Connect PBS through the API
+              </a>
+              <a
+                href="/docs/PRODUCTION_SECURITY"
+                class="text-blue-700 underline decoration-blue-300 underline-offset-2 hover:text-blue-900 dark:text-blue-200 dark:hover:text-white"
+              >
+                Review the production security model
+              </a>
+            </div>
+          </div>
+        </Show>
 
         <Show when={focus() === 'docker'}>
           <div class="rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-950 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-50">

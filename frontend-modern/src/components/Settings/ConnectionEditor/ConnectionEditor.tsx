@@ -1,4 +1,4 @@
-import { Component, For, type JSX, Show, createMemo, createSignal } from 'solid-js';
+import { Component, For, type JSX, Show, createEffect, createMemo, createSignal } from 'solid-js';
 import type { ConnectionType, ProbeCandidate } from '@/api/connections';
 import { AddressProbeStep } from './AddressProbeStep';
 import {
@@ -53,6 +53,13 @@ export const ConnectionEditor: Component<ConnectionEditorProps> = (props) => {
   const activeType = () => selectedType();
   const showCredentialSlot = () => activeType() !== null;
   const autoDetectLabels = createMemo(() => getInfrastructureAutoDetectLabels());
+
+  createEffect(() => {
+    const routeType = props.initialType ?? null;
+    const routeCandidate = props.initialCandidate ?? null;
+    setSelectedType(routeType);
+    setSelectedCandidate(routeCandidate);
+  });
 
   const chooseCandidate = (candidate: ProbeCandidate) => {
     if (props.onSelectCandidate) {

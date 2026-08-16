@@ -1,18 +1,19 @@
 {
   "version": 1,
-  "base_sha": "d3a345bd66d635b59427cdfb06bd030a053daded",
-  "verified_at": "2026-08-15T09:17:52Z",
+  "base_sha": "effcf2d50c076310c36aba0876a69b3178587e10",
+  "verified_at": "2026-08-16T09:16:52Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/api/patrolAttention.ts",
-    "frontend-modern/src/features/patrol/PatrolRecentWorkPanel.tsx"
+    "frontend-modern/src/components/Settings/ConnectionEditor/ConnectionEditor.tsx",
+    "frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/api/patrolAttention.ts": "035e201a4c9a67c230f67004113b632c8e9ee82edf36bea0acaf86d5b9725b0e",
-    "frontend-modern/src/features/patrol/PatrolRecentWorkPanel.tsx": "b62d2cd4ccd5c2da4442a54d04863047f667fa5f076975046d3c2a0dc15e560e"
+    "frontend-modern/src/components/Settings/ConnectionEditor/ConnectionEditor.tsx": "1c6289caaad0230b2a1e3301235c701c760182f203dc0af7170972b8a11768e8",
+    "frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx": "8007a0da1ef3140cc32174dea3bf52857aa351441d0011f862c3fd27b83649a2"
   },
   "routes": [
-    "/patrol"
+    "/settings/infrastructure?add=agent",
+    "/settings/infrastructure?add=pve"
   ],
   "viewports": [
     {
@@ -25,19 +26,16 @@
     }
   ],
   "states": [
-    "Recently handled populated with six newest server-filtered verified Patrol receipts in calm operator language",
-    "Raw executor lifecycle telemetry and full opaque resource ids are absent from the compact receipt list",
-    "Executing-agent and independent-observer trust labels render from the canonical evidence class",
-    "Refresh failure keeps the last truthful receipts visible with an explicit unavailable message",
-    "Refresh recovery clears the error and reloads the same six verified receipts",
-    "Activity history handoff remains adjacent to verified receipts",
-    "Phone-width receipt list stays within the 390-pixel document width"
+    "Agent installer explains that Proxmox inventory and metrics start with a narrowly scoped API token and do not require a root agent",
+    "API-first guidance links to PVE, PBS, and the production security model before the install-token step",
+    "PVE route displays the API credential form with API Token selected and the least-privilege API inventory explanation",
+    "Desktop dialogs remain within the 1280-pixel document width",
+    "Phone-width agent and PVE dialogs remain within the 390-pixel document width"
   ],
   "interactions": [
-    "refreshed the populated Recently handled list and confirmed compact action, trust, and resource presentation",
-    "stopped the disposable server and refreshed to exercise the error state",
-    "confirmed six existing receipts remained visible during the refresh error",
-    "restored the healthy server and refreshed to clear the error",
-    "resized to 390 by 844 and confirmed document width stayed at 390"
+    "opened the generic Pulse Agent onboarding route and inspected the API-first guidance",
+    "followed Connect Proxmox VE through the API and confirmed the mounted dialog retargeted from the agent installer to the PVE credential form",
+    "repeated the agent-to-PVE handoff at 390 by 844 and confirmed the API inventory and root-boundary copy remained visible",
+    "confirmed document and dialog widths at desktop and phone viewports without horizontal overflow"
   ]
 }

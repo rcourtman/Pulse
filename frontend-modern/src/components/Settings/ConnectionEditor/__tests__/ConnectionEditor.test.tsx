@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
-import { ConnectionsAPI, type ProbeResponse } from '@/api/connections';
+import { createSignal } from 'solid-js';
+import { ConnectionsAPI, type ConnectionType, type ProbeResponse } from '@/api/connections';
 import { ConnectionEditor } from '../ConnectionEditor';
 
 const connectionsApiMock = vi.hoisted(() => ({
@@ -172,6 +173,23 @@ describe('ConnectionEditor', () => {
 
     await waitFor(() => expect(screen.getByTestId('slot').textContent).toBe('slot:truenas'));
     expect(screen.queryByRole('button', { name: /probe api endpoint/i })).not.toBeInTheDocument();
+  });
+
+  it('retargets the credential slot when a direct route changes type', async () => {
+    const [initialType, setInitialType] = createSignal<ConnectionType>('agent');
+    const renderSlot = vi.fn((props) => <div data-testid="slot">slot:{props.type}</div>);
+
+    render(() => (
+      <ConnectionEditor
+        initialType={initialType()}
+        renderCredentialSlot={renderSlot}
+        onClose={() => {}}
+      />
+    ));
+
+    expect(screen.getByTestId('slot').textContent).toBe('slot:agent');
+    setInitialType('pve');
+    await waitFor(() => expect(screen.getByTestId('slot').textContent).toBe('slot:pve'));
   });
 
   it('skips probe setup when an initialType is supplied in edit mode', () => {
