@@ -1346,9 +1346,11 @@ func (p *PatrolService) dispatchPatrolInvestigations(result *AIAnalysisResult) {
 // and pbs-job-failed is NOT backup-failed; mapping those would point the
 // verifier at the wrong resource model.
 var findingKeyAliases = map[string]string{
+	"app-container-unhealthy":       "health-check-failed",
 	"container-health-check-failed": "health-check-failed",
 	"container-health-failed":       "health-check-failed",
 	"container-health-failing":      "health-check-failed",
+	"container-health-unhealthy":    "health-check-failed",
 	"container-unhealthy":           "health-check-failed",
 	"failing-health-check":          "health-check-failed",
 	"health-check-failing":          "health-check-failed",

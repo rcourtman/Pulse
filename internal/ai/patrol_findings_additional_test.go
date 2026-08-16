@@ -1734,14 +1734,16 @@ func TestPatrolFindingAdapterCanonicalizesContainerHealthKeyVariantsAcrossRuns(t
 		t.Fatalf("first report = (%q, %t, %v), want a new finding", findingID, isNew, err)
 	}
 
-	secondInput := firstInput
-	secondInput.Key = "container-health-failing"
-	secondInput.Title = "Container health is failing while running"
-	secondRun := newPatrolFindingCreatorAdapterState(ps, patrolRuntimeState{})
-	secondRun.GetActiveFindings("", "")
-	reportedID, secondIsNew, err := secondRun.CreateFinding(secondInput)
-	if err != nil || secondIsNew || reportedID != findingID {
-		t.Fatalf("variant report = (%q, %t, %v), want existing %q", reportedID, secondIsNew, err, findingID)
+	for _, variant := range []string{"container-health-failing", "app-container-unhealthy", "container-health-unhealthy"} {
+		secondInput := firstInput
+		secondInput.Key = variant
+		secondInput.Title = "Container health is failing while running"
+		secondRun := newPatrolFindingCreatorAdapterState(ps, patrolRuntimeState{})
+		secondRun.GetActiveFindings("", "")
+		reportedID, secondIsNew, err := secondRun.CreateFinding(secondInput)
+		if err != nil || secondIsNew || reportedID != findingID {
+			t.Fatalf("variant %q report = (%q, %t, %v), want existing %q", variant, reportedID, secondIsNew, err, findingID)
+		}
 	}
 	if active := ps.findings.GetActive(FindingSeverityInfo); len(active) != 1 || active[0].ID != findingID || active[0].Key != "health-check-failed" {
 		t.Fatalf("active findings = %+v, want one canonical health-check finding", active)
