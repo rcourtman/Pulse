@@ -120,6 +120,11 @@ type ResourceRegistry struct {
 	cachedK8sDeployments   []*K8sDeploymentView
 	cachedWorkload         []*WorkloadView
 	cachedInfra            []*InfrastructureView
+	// cachedSourceTargets inverts bySource (resource ID -> its source
+	// entries) so metrics-target resolution is O(own entries) instead of a
+	// scan over every mapping. Rebuilt with the views; valid only while
+	// viewsDirty is false, like every other cached field above.
+	cachedSourceTargets map[string][]SourceTarget
 }
 
 // NewRegistry creates a new registry using the provided store for overrides.
@@ -1455,6 +1460,23 @@ func (rr *ResourceRegistry) metricsTargetForResourceLocked(resourceID string) *M
 		return nil
 	}
 
+	// The inverse index shares the view-cache lifecycle: every bySource
+	// mutation runs inside a batch update that ends with viewsDirty = true,
+	// so a clean flag means the index still matches the mappings. While
+	// dirty, fall back to the legacy full scan.
+	var sourceTargets []SourceTarget
+	if !rr.viewsDirty && rr.cachedSourceTargets != nil {
+		sourceTargets = rr.cachedSourceTargets[resourceID]
+	} else {
+		sourceTargets = rr.collectSourceTargetsLocked(resourceID, resource.Type)
+	}
+
+	return rr.metricsTargetFromSourceTargets(resource, sourceTargets)
+}
+
+// collectSourceTargetsLocked is the legacy O(all mappings) scan for one
+// resource, used only while the cached inverse index is invalid.
+func (rr *ResourceRegistry) collectSourceTargetsLocked(resourceID string, resourceType ResourceType) []SourceTarget {
 	sourceTargets := make([]SourceTarget, 0)
 	for source, mapping := range rr.bySource {
 		for sourceID, mappedID := range mapping {
@@ -1464,15 +1486,36 @@ func (rr *ResourceRegistry) metricsTargetForResourceLocked(resourceID string) *M
 			sourceTargets = append(sourceTargets, SourceTarget{
 				Source:      source,
 				SourceID:    sourceID,
+				CandidateID: rr.sourceSpecificID(resourceType, source, sourceID),
+			})
+		}
+	}
+	return sourceTargets
+}
+
+// buildSourceTargetsIndexLocked inverts every bySource mapping in one pass.
+func (rr *ResourceRegistry) buildSourceTargetsIndexLocked() map[string][]SourceTarget {
+	index := make(map[string][]SourceTarget, len(rr.resources))
+	for source, mapping := range rr.bySource {
+		for sourceID, mappedID := range mapping {
+			resource := rr.resources[mappedID]
+			if resource == nil {
+				continue
+			}
+			index[mappedID] = append(index[mappedID], SourceTarget{
+				Source:      source,
+				SourceID:    sourceID,
 				CandidateID: rr.sourceSpecificID(resource.Type, source, sourceID),
 			})
 		}
 	}
+	return index
+}
 
+func (rr *ResourceRegistry) metricsTargetFromSourceTargets(resource *Resource, sourceTargets []SourceTarget) *MetricsTarget {
 	if target := BuildMetricsTarget(*resource, sourceTargets); target != nil {
 		return target
 	}
-
 	return cloneMetricsTarget(resource.MetricsTarget)
 }
 
@@ -4343,17 +4386,21 @@ func (rr *ResourceRegistry) proxmoxNodeParentIDFromResourcesLocked(instance, clu
 	bestID := ""
 	bestScore := -1
 	for id, resource := range rr.resources {
-		if resource == nil {
+		if resource == nil || resource.Proxmox == nil {
+			continue
+		}
+		// Type and node-name checks run before the ID canonicalization:
+		// in a large estate almost every entry is a guest, and this scan
+		// runs per guest, so per-entry string work here is the difference
+		// between a cheap pass and an O(n^2) allocation storm.
+		if CanonicalResourceType(resource.Type) != ResourceTypeAgent {
+			continue
+		}
+		if !strings.EqualFold(strings.TrimSpace(resource.Proxmox.NodeName), nodeName) {
 			continue
 		}
 		candidateID := CanonicalResourceID(strings.TrimSpace(id))
 		if candidateID == "" || candidateID == excludeID {
-			continue
-		}
-		if CanonicalResourceType(resource.Type) != ResourceTypeAgent || resource.Proxmox == nil {
-			continue
-		}
-		if !strings.EqualFold(strings.TrimSpace(resource.Proxmox.NodeName), nodeName) {
 			continue
 		}
 		score := proxmoxNodeParentScopeScore(instance, clusterName, resource.Proxmox)
@@ -5404,9 +5451,15 @@ func (rr *ResourceRegistry) rebuildViews() {
 	rr.cachedWorkload = nil
 	rr.cachedInfra = nil
 
+	// One O(mappings) pass instead of a per-resource scan over every
+	// mapping: at thousands of resources the difference is seconds of
+	// write-lock hold time per rebuild.
+	sourceTargetsIndex := rr.buildSourceTargetsIndexLocked()
+	rr.cachedSourceTargets = sourceTargetsIndex
+
 	for _, r := range rr.resources {
 		viewResource := cloneResourcePtr(r)
-		viewResource.MetricsTarget = rr.metricsTargetForResourceLocked(r.ID)
+		viewResource.MetricsTarget = rr.metricsTargetFromSourceTargets(r, sourceTargetsIndex[r.ID])
 		switch r.Type {
 		case ResourceTypeVM:
 			v := NewVMView(viewResource)
