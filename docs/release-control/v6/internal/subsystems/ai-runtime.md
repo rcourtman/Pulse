@@ -67,7 +67,11 @@ evidence plus an advertised restart is sufficient to submit that governed
 proposal unless evidence identifies a restart-specific hazard. Empty logs,
 approval-blocked deeper inspection, or an unknown root cause do not substitute
 for such a hazard and must not cause Patrol to pre-empt the policy/operator
-decision by withholding the proposal.
+decision by withholding the proposal. This permission does not relax causal
+evidence ordering: when a cross-resource cause remains plausible, Patrol must
+test at least one plausible peer or dependency through canonical query,
+discovery, or topology evidence before proposing against the symptom resource
+or concluding that root cause is unknown.
 An investigation cannot complete or submit a typed action proposal before the
 model has received at least one successful structured result from an advertised
 evidence tool. Until then, core withholds proposal authority while leaving
