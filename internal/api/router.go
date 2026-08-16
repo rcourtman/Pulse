@@ -3091,27 +3091,38 @@ func (r *Router) StartAIChat(ctx context.Context) {
 		return
 	}
 
-	// Ensure default-org chat service has org-scoped dependencies wired.
+	r.wireAIChatRuntimeAfterStart()
+}
+
+// wireAIChatRuntimeAfterStart applies the dependencies that require a live
+// chat service. Settings-driven hot enablement and provider restarts must use
+// the same wiring path as cold startup; otherwise Patrol detection can run
+// while investigation remains unavailable until the whole server restarts.
+func (r *Router) wireAIChatRuntimeAfterStart() {
+	if r == nil || r.aiHandler == nil {
+		return
+	}
+
 	defaultOrgCtx := context.WithValue(context.Background(), OrgIDContextKey, "default")
+	if !r.aiHandler.IsRunning(defaultOrgCtx) {
+		return
+	}
 	if service := r.aiHandler.GetService(defaultOrgCtx); service != nil {
 		r.wireAIChatDependenciesForService(defaultOrgCtx, service)
 	}
 
-	// Wire up investigation orchestrator now that chat service is ready
-	// This must happen after Start() because the orchestrator needs the chat service
+	// Investigation orchestration depends on the live chat service and must be
+	// rebuilt after both first enablement and an in-process provider restart.
 	if r.aiSettingsHandler != nil {
 		r.aiSettingsHandler.WireOrchestratorAfterChatStart()
-	}
-
-	// Wire circuit breaker for patrol if AI is running
-	if r.aiHandler != nil && r.aiHandler.IsRunning(defaultOrgCtx) {
-		if r.aiSettingsHandler != nil {
-			if patrolSvc := r.aiSettingsHandler.GetAIService(defaultOrgCtx).GetPatrolService(); patrolSvc != nil {
-				// Wire circuit breaker for resilient AI API calls
-				if breaker := r.aiSettingsHandler.GetCircuitBreakerForOrg("default"); breaker != nil {
-					patrolSvc.SetCircuitBreaker(breaker)
-					log.Info().Msg("AI patrol circuit breaker wired")
-				}
+		aiService := r.aiSettingsHandler.GetAIService(defaultOrgCtx)
+		if aiService == nil {
+			return
+		}
+		if patrolSvc := aiService.GetPatrolService(); patrolSvc != nil {
+			if breaker := r.aiSettingsHandler.GetCircuitBreakerForOrg("default"); breaker != nil {
+				patrolSvc.SetCircuitBreaker(breaker)
+				log.Info().Msg("AI patrol circuit breaker wired")
 			}
 		}
 	}
@@ -3789,6 +3800,7 @@ func (r *Router) RestartAIChat(ctx context.Context) {
 		if err := r.aiHandler.Restart(ctx); err != nil {
 			log.Error().Err(err).Msg("Failed to restart AI chat service")
 		} else {
+			r.wireAIChatRuntimeAfterStart()
 			log.Info().Msg("AI chat service restarted with new configuration")
 		}
 	}

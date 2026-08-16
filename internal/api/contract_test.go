@@ -94,6 +94,28 @@ func TestContractPatrolInternalBridgePreservesBoundedToolAuthority(t *testing.T)
 	}
 }
 
+func TestContractAIChatRestartReappliesLiveRuntimeWiring(t *testing.T) {
+	mockSvc := &MockAIService{}
+	mockSvc.On("Restart", tmock.Anything, tmock.Anything).Return(nil)
+	mockSvc.On("IsRunning").Return(true)
+
+	handler := &AIHandler{}
+	setUnexportedField(t, handler, "defaultService", mockSvc)
+	initializerCalls := 0
+	handler.SetServiceInitializer(func(context.Context, AIService) {
+		initializerCalls++
+	})
+	initializerCalls = 0
+
+	router := &Router{aiHandler: handler}
+	router.RestartAIChat(context.Background())
+
+	if initializerCalls == 0 {
+		t.Fatal("expected successful chat restart to reapply live runtime wiring")
+	}
+	mockSvc.AssertExpectations(t)
+}
+
 func TestContract_ConfigTransferRoutesUseCanonicalPreHandlerAuthorization(t *testing.T) {
 	routesSource, err := os.ReadFile(filepath.Clean("router_routes_registration.go"))
 	if err != nil {

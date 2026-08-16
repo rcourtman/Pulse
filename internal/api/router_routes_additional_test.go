@@ -526,6 +526,7 @@ func TestRouterAIChatControl(t *testing.T) {
 		mockSvc := &MockAIService{}
 		mockSvc.On("Stop", mock.Anything).Return(nil)
 		mockSvc.On("Restart", mock.Anything, mock.Anything).Return(nil)
+		mockSvc.On("IsRunning").Return(true)
 
 		handler := &AIHandler{}
 		setUnexportedField(t, handler, "defaultService", mockSvc)
