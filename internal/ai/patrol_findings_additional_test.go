@@ -1734,7 +1734,7 @@ func TestPatrolFindingAdapterCanonicalizesContainerHealthKeyVariantsAcrossRuns(t
 		t.Fatalf("first report = (%q, %t, %v), want a new finding", findingID, isNew, err)
 	}
 
-	for _, variant := range []string{"container-health-failing", "app-container-unhealthy", "container-health-unhealthy"} {
+	for _, variant := range []string{"container-health-failing", "app-container-unhealthy", "app-container-health-check-failed", "container-health-unhealthy"} {
 		secondInput := firstInput
 		secondInput.Key = variant
 		secondInput.Title = "Container health is failing while running"
