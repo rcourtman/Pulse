@@ -448,11 +448,17 @@ func TestReconcileStaleFindings_VerificationCapDefersExcessCandidates(t *testing
 
 func TestNormalizeFindingKey_CanonicalAliases(t *testing.T) {
 	cases := map[string]string{
-		"high-cpu":     "cpu-high",
-		"High_Memory":  "memory-high",
-		"high disk":    "disk-high",
-		"cpu-high":     "cpu-high",
-		"backup-stale": "backup-stale",
+		"high-cpu":                      "cpu-high",
+		"High_Memory":                   "memory-high",
+		"high disk":                     "disk-high",
+		"cpu-high":                      "cpu-high",
+		"backup-stale":                  "backup-stale",
+		"container-health-failing":      "health-check-failed",
+		"container-health-check-failed": "health-check-failed",
+		"healthcheck-failed":            "health-check-failed",
+		"failing-health-check":          "health-check-failed",
+		"container-unhealthy":           "health-check-failed",
+		"unhealthy-container":           "health-check-failed",
 		// Non-aliased keys pass through normalization unchanged.
 		"pbs-job-failed": "pbs-job-failed",
 	}

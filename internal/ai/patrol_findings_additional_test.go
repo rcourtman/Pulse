@@ -1718,6 +1718,36 @@ func TestPatrolFindingAdapterDistinguishesSameRunCreationFromExistingRereport(t 
 	}
 }
 
+func TestPatrolFindingAdapterCanonicalizesContainerHealthKeyVariantsAcrossRuns(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+	firstInput := tools.PatrolFindingInput{
+		ResourceID: "app-container-1", ResourceName: "api", ResourceType: "app-container",
+		Key: "health-check-failed", Severity: "warning", Category: "reliability",
+		Title: "Container health check is failing", Description: "The container is unhealthy.",
+		Impact: "Requests may fail.", Recommendation: "Inspect the health check.",
+		Evidence: "Current provider health is unhealthy.",
+	}
+
+	firstRun := newPatrolFindingCreatorAdapterState(ps, patrolRuntimeState{})
+	findingID, isNew, err := firstRun.CreateFinding(firstInput)
+	if err != nil || !isNew {
+		t.Fatalf("first report = (%q, %t, %v), want a new finding", findingID, isNew, err)
+	}
+
+	secondInput := firstInput
+	secondInput.Key = "container-health-failing"
+	secondInput.Title = "Container health is failing while running"
+	secondRun := newPatrolFindingCreatorAdapterState(ps, patrolRuntimeState{})
+	secondRun.GetActiveFindings("", "")
+	reportedID, secondIsNew, err := secondRun.CreateFinding(secondInput)
+	if err != nil || secondIsNew || reportedID != findingID {
+		t.Fatalf("variant report = (%q, %t, %v), want existing %q", reportedID, secondIsNew, err, findingID)
+	}
+	if active := ps.findings.GetActive(FindingSeverityInfo); len(active) != 1 || active[0].ID != findingID || active[0].Key != "health-check-failed" {
+		t.Fatalf("active findings = %+v, want one canonical health-check finding", active)
+	}
+}
+
 func TestPatrolFindingAdapterTreatsStoppedContainerStateAsAlertOwned(t *testing.T) {
 	ps := NewPatrolService(nil, nil)
 	state := newPatrolRuntimeState(models.StateSnapshot{
