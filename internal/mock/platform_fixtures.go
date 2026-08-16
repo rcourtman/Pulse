@@ -229,6 +229,11 @@ func (g FixtureGraph) UnifiedResourceSnapshot() ([]unifiedresources.Resource, ti
 	}
 
 	resources := registry.List()
+	// Force one view-cache build before resolving targets: on a freshly
+	// ingested registry the caches are dirty and every MetricsTarget call
+	// would fall back to a scan over all source mappings, which at demo
+	// scale turns this loop quadratic.
+	registry.VMs()
 	for i := range resources {
 		if target := registry.MetricsTarget(resources[i].ID); target != nil {
 			resources[i].MetricsTarget = target
