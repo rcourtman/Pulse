@@ -210,6 +210,17 @@ func (c *SubscriptionAgentClient) TestConnection(ctx context.Context) error {
 }
 
 func (c *SubscriptionAgentClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse, error) {
+	// Subscription CLIs buffer a complete structured turn before Pulse can emit
+	// the first provider event. For that transport, an inter-chunk idle budget
+	// is necessarily a complete-turn idle budget. Preserve the caller's tighter
+	// Patrol deadline instead of letting the client's configured (and normally
+	// longer) process timeout keep a silent local agent alive.
+	if req.StreamIdleTimeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, req.StreamIdleTimeout)
+		defer cancel()
+	}
+
 	model := c.model
 	if strings.TrimSpace(req.Model) != "" {
 		model = req.Model

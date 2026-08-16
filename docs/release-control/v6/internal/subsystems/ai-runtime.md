@@ -259,7 +259,11 @@ authority but does not force an immediate text-only conclusion. Watch retains
 bounded report and assessment tools so a provider that emits independent
 findings sequentially can finish the remaining structured decisions without
 restarting collection; accepted lifecycle results are authoritative and may
-not be repeated. A tool-free response ends that completion phase, while the
+not be repeated. That optional continuation gets one provider attempt. If it
+fails after an accepted lifecycle write, Watch preserves the durable result and
+returns control to the deterministic unmatched-signal evaluation pass instead
+of failing the whole run or replaying the stalled continuation. A tool-free
+response ends that completion phase, while the
 existing max-turn fallback still produces bounded text-only summary prose when
 the final allowed turn contains a write. When a real infrastructure write does
 require another verification turn, the internal verification constraint is
@@ -451,7 +455,11 @@ provider-neutral tool loop can execute anything. The normal registry, profile, a
 resource, action, and verification contracts remain the only infrastructure
 authority. Calls are serialized per local subscription agent and bounded by
 the configured request timeout and prompt/output size limits, with a two-minute
-minimum request allowance for local subscription turns. Patrol tool-call
+minimum configured request allowance for local subscription turns. Because the
+CLI response is buffered and cannot expose intermediate chunks, a positive
+provider `StreamIdleTimeout` is an earlier complete-turn deadline for this
+transport; the configured minimum must not override that caller-owned Patrol
+stall budget. Patrol tool-call
 preflight owns one route-aware outer deadline: API providers retain the
 30-second budget, while local subscription agents receive a bounded two-minute
 budget for CLI startup and complete structured-output assembly, and Ollama or a

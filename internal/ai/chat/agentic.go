@@ -990,7 +990,9 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 	investigationBudgetWarningFired := false
 	consecutiveToolOnlyTurns := 0
 	consecutiveAllErrorTurns := 0
+	patrolContinuationProviderFailed := false
 
+agenticLoop:
 	for turn < maxTurns ||
 		(patrolFindingRepairPending && !patrolFindingRepairAttempted) ||
 		(patrolOutputLimitRecoveryPending && !patrolOutputLimitRecoveryAttempted) ||
@@ -1361,6 +1363,13 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 		}
 
 		maxProviderAttempts := 2
+		if patrolFindingContinuationTurn {
+			// This is an optional, decision-only continuation after at least one
+			// finding lifecycle write already succeeded. A deterministic unmatched-
+			// signal pass follows the main loop, so replaying a stalled continuation
+			// only delays that stronger recovery path and can breach Watch latency.
+			maxProviderAttempts = 1
+		}
 		err := error(nil)
 		for attempt := 1; attempt <= maxProviderAttempts; attempt++ {
 			attemptSawDone := false
@@ -1588,6 +1597,14 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 			Msg("[AgenticLoop] provider.ChatStream returned")
 
 		if err != nil {
+			if patrolFindingContinuationTurn && patrolFindingSummaryPending {
+				log.Warn().
+					Err(err).
+					Str("session_id", sessionID).
+					Msg("[AgenticLoop] Patrol finding continuation failed after an accepted lifecycle write — deferring remaining decisions to deterministic evaluation")
+				patrolContinuationProviderFailed = true
+				break agenticLoop
+			}
 			log.Error().
 				Err(err).
 				Str("session_id", sessionID).
@@ -2743,7 +2760,9 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 		turn++
 	}
 
-	log.Warn().Int("max_turns", maxTurns).Str("session_id", sessionID).Msg("agentic loop hit max turns limit")
+	if !patrolContinuationProviderFailed {
+		log.Warn().Int("max_turns", maxTurns).Str("session_id", sessionID).Msg("agentic loop hit max turns limit")
+	}
 	if isPatrolInvestigationExecution(a.currentExecutionProfile()) && a.successfulEvidenceCalls == 0 {
 		return resultMessages, fmt.Errorf("Patrol investigation reached its model-turn limit without a successful structured evidence result")
 	}

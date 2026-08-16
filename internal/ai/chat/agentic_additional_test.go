@@ -1743,6 +1743,78 @@ func TestAgenticLoopAllowsSequentialIndependentWatchFindings(t *testing.T) {
 	}
 }
 
+func TestAgenticLoopDefersFailedWatchContinuationToDeterministicEvaluation(t *testing.T) {
+	provider := &stubStreamingProvider{}
+	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
+	executor.ApplyExecutionProfile(tools.ProfilePatrolDetection)
+	creator := &repairTestPatrolFindingCreator{}
+	executor.SetPatrolFindingCreator(creator)
+	loop := NewAgenticLoop(provider, executor, "full Patrol prompt")
+	loop.SetExecutionProfile(tools.ProfilePatrolDetection)
+	loop.SetMaxTurns(3)
+
+	reportInput := map[string]interface{}{
+		"key":            "container-health-failed",
+		"severity":       "warning",
+		"category":       "reliability",
+		"resource_id":    "app-container-api",
+		"resource_name":  "api",
+		"resource_type":  "app-container",
+		"title":          "API health check failing",
+		"description":    "The API container is running but its health check is unhealthy.",
+		"recommendation": "Inspect the health endpoint and recent logs.",
+		"evidence":       "Provider state reports running and unhealthy with zero restarts.",
+	}
+
+	providerCalls := 0
+	provider.chatStream = func(_ context.Context, req providers.ChatRequest, callback providers.StreamCallback) error {
+		providerCalls++
+		switch providerCalls {
+		case 1:
+			call := providers.ToolCall{ID: "get-findings", Name: agentcapabilities.PatrolGetFindingsToolName, Input: map[string]interface{}{}}
+			callback(providers.StreamEvent{Type: "tool_start", Data: providers.ToolStartEvent{ID: call.ID, Name: call.Name, Input: call.Input}})
+			callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{ToolCalls: []providers.ToolCall{call}}})
+		case 2:
+			call := providers.ToolCall{ID: "report-api", Name: agentcapabilities.PatrolReportFindingToolName, Input: reportInput}
+			callback(providers.StreamEvent{Type: "tool_start", Data: providers.ToolStartEvent{ID: call.ID, Name: call.Name, Input: call.Input}})
+			callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{ToolCalls: []providers.ToolCall{call}}})
+		case 3:
+			if req.System != patrolFindingLifecycleContinuationSystemPrompt {
+				t.Fatalf("continuation system prompt = %q", req.System)
+			}
+			return context.DeadlineExceeded
+		case 4:
+			if req.System != patrolFindingLifecycleSummarySystemPrompt || len(req.Tools) != 0 {
+				t.Fatalf("fallback summary request = %+v", req)
+			}
+			callback(providers.StreamEvent{Type: "content", Data: providers.ContentEvent{Text: "One finding was recorded; remaining signals will be evaluated."}})
+			callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{}})
+		default:
+			t.Fatalf("unexpected provider call %d", providerCalls)
+		}
+		return nil
+	}
+
+	available := []providers.Tool{
+		{Name: agentcapabilities.PatrolGetFindingsToolName},
+		{Name: agentcapabilities.PatrolReportFindingToolName},
+		{Name: agentcapabilities.PatrolAssessFindingToolName},
+	}
+	result, err := loop.ExecuteWithTools(context.Background(), "failed-watch-continuation", []Message{{Role: "user", Content: "check both containers"}}, available, func(StreamEvent) {})
+	if err != nil {
+		t.Fatalf("accepted finding should survive optional continuation failure: %v", err)
+	}
+	if providerCalls != 4 {
+		t.Fatalf("provider calls = %d, want read, report, one continuation attempt, bounded summary", providerCalls)
+	}
+	if len(creator.created) != 1 || creator.created[0].ResourceID != "app-container-api" {
+		t.Fatalf("created findings = %+v, want accepted API finding preserved", creator.created)
+	}
+	if len(result) == 0 || result[len(result)-1].Content != "One finding was recorded; remaining signals will be evaluated." {
+		t.Fatalf("final result = %+v", result)
+	}
+}
+
 func TestAgenticLoopSuppressesExactRepeatedAcceptedPatrolReport(t *testing.T) {
 	provider := &stubStreamingProvider{}
 	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
