@@ -99,6 +99,14 @@ type MetricsProvider interface {
 	GetMonitoredResourceIDs() []string // Returns all resource IDs being monitored
 }
 
+// BatchMetricsProvider is an optional MetricsProvider extension. recordSample
+// asks for metrics once per monitored resource every tick; a provider whose
+// per-ID lookup scans all resources turns that into an O(n^2) tick, so when
+// this is implemented the recorder fetches the whole batch in one pass.
+type BatchMetricsProvider interface {
+	GetCurrentMetricsBatch() map[string]map[string]float64
+}
+
 // IncidentRecorder captures high-frequency metrics during incidents
 type IncidentRecorder struct {
 	mu sync.RWMutex
@@ -280,6 +288,24 @@ func (r *IncidentRecorder) recordSample() {
 	now := time.Now()
 	shouldSave := false
 
+	// One pass over the provider when it supports batching; the per-ID
+	// fallback preserves behavior for providers that do not. A missing batch
+	// entry maps to the empty metrics the per-ID method returns for unknown
+	// IDs.
+	var metricsBatch map[string]map[string]float64
+	if batchProvider, ok := r.provider.(BatchMetricsProvider); ok {
+		metricsBatch = batchProvider.GetCurrentMetricsBatch()
+	}
+	currentMetrics := func(resourceID string) (map[string]float64, error) {
+		if metricsBatch != nil {
+			if metrics, ok := metricsBatch[resourceID]; ok {
+				return metrics, nil
+			}
+			return map[string]float64{}, nil
+		}
+		return r.provider.GetCurrentMetrics(resourceID)
+	}
+
 	// Record for active windows
 	for _, window := range r.activeWindows {
 		if window.Status != IncidentWindowStatusRecording {
@@ -306,7 +332,7 @@ func (r *IncidentRecorder) recordSample() {
 		}
 
 		// Get metrics
-		metrics, err := r.provider.GetCurrentMetrics(window.ResourceID)
+		metrics, err := currentMetrics(window.ResourceID)
 		if err != nil {
 			log.Debug().
 				Str("window_id", window.ID).
@@ -328,7 +354,7 @@ func (r *IncidentRecorder) recordSample() {
 	bufferCutoff := now.Add(-r.config.PreIncidentWindow)
 
 	for _, resourceID := range monitoredResources {
-		metrics, err := r.provider.GetCurrentMetrics(resourceID)
+		metrics, err := currentMetrics(resourceID)
 		if err != nil {
 			log.Debug().
 				Str("resource_id", resourceID).

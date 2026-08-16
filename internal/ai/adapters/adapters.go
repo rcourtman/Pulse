@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -116,6 +117,64 @@ func (a *MetricsAdapter) GetMonitoredResourceIDs() []string {
 	return ids
 }
 
+// GetCurrentMetricsBatch returns current metrics for every resource
+// GetCurrentMetrics can resolve, in one pass over the views, keyed by every
+// ID form GetCurrentMetrics matches (unified ID, source ID, VMID string,
+// name). The per-ID method scans all views per call, so a sampler asking for
+// thousands of resources per tick must use this instead: first-key-wins
+// mirrors the per-ID method's VM -> container -> node -> storage precedence.
+func (a *MetricsAdapter) GetCurrentMetricsBatch() map[string]map[string]float64 {
+	out := make(map[string]map[string]float64)
+	put := func(metrics map[string]float64, keys ...string) {
+		for _, key := range keys {
+			if key == "" {
+				continue
+			}
+			if _, exists := out[key]; !exists {
+				out[key] = metrics
+			}
+		}
+	}
+
+	for _, vm := range a.readState.VMs() {
+		put(map[string]float64{
+			"cpu":       vm.CPUPercent(),
+			"memory":    vm.MemoryPercent(),
+			"disk":      vm.DiskPercent(),
+			"netin":     vm.NetIn(),
+			"netout":    vm.NetOut(),
+			"diskread":  vm.DiskRead(),
+			"diskwrite": vm.DiskWrite(),
+		}, vm.ID(), vm.SourceID(), strconv.Itoa(vm.VMID()))
+	}
+	for _, ct := range a.readState.Containers() {
+		put(map[string]float64{
+			"cpu":       ct.CPUPercent(),
+			"memory":    ct.MemoryPercent(),
+			"disk":      ct.DiskPercent(),
+			"netin":     ct.NetIn(),
+			"netout":    ct.NetOut(),
+			"diskread":  ct.DiskRead(),
+			"diskwrite": ct.DiskWrite(),
+		}, ct.ID(), ct.SourceID(), strconv.Itoa(ct.VMID()))
+	}
+	for _, node := range a.readState.Nodes() {
+		put(map[string]float64{
+			"cpu":    node.CPUPercent(),
+			"memory": node.MemoryPercent(),
+			"disk":   node.DiskPercent(),
+		}, node.ID(), node.SourceID(), node.Name())
+	}
+	for _, sp := range a.readState.StoragePools() {
+		put(map[string]float64{
+			"disk":  sp.DiskPercent(),
+			"used":  float64(sp.DiskUsed()),
+			"total": float64(sp.DiskTotal()),
+		}, sp.ID(), sp.SourceID(), sp.Name())
+	}
+	return out
+}
+
 // GetCurrentMetrics returns current metrics for a resource.
 // Matches by unified ID, Proxmox source ID, VMID string, or name.
 // CPU/memory/disk values are normalized to 0-100 percentage scale.
@@ -124,7 +183,7 @@ func (a *MetricsAdapter) GetCurrentMetrics(resourceID string) (map[string]float6
 
 	// Check VMs
 	for _, vm := range a.readState.VMs() {
-		if vm.ID() == resourceID || vm.SourceID() == resourceID || fmt.Sprintf("%d", vm.VMID()) == resourceID {
+		if vm.ID() == resourceID || vm.SourceID() == resourceID || strconv.Itoa(vm.VMID()) == resourceID {
 			metrics["cpu"] = vm.CPUPercent()
 			metrics["memory"] = vm.MemoryPercent()
 			metrics["disk"] = vm.DiskPercent()
@@ -138,7 +197,7 @@ func (a *MetricsAdapter) GetCurrentMetrics(resourceID string) (map[string]float6
 
 	// Check containers
 	for _, ct := range a.readState.Containers() {
-		if ct.ID() == resourceID || ct.SourceID() == resourceID || fmt.Sprintf("%d", ct.VMID()) == resourceID {
+		if ct.ID() == resourceID || ct.SourceID() == resourceID || strconv.Itoa(ct.VMID()) == resourceID {
 			metrics["cpu"] = ct.CPUPercent()
 			metrics["memory"] = ct.MemoryPercent()
 			metrics["disk"] = ct.DiskPercent()
