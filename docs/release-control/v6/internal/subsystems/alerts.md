@@ -583,6 +583,11 @@ incidents. ZFS device alert labels must preserve raw device names such as
 `/dev/sda4`, but must not join pool and device labels with a raw slash because
 device paths can already begin with `/`; browser alert surfaces consume the
 runtime `resourceName` as authored rather than patching storage labels locally.
+ZFS pool and device alerts follow the storage's pool attachment lifecycle. A
+storage checked without an attached ZFS pool must shed any previously raised
+zfs-pool-state, zfs-pool-errors, and zfs-device alerts on that check rather
+than waiting for the stale-alert cleanup, because the health path can only
+clear its own alerts while the attachment exists (#1731).
 Ceph pool storage threshold resolution is also source-alias aware. Storage
 alerts must evaluate the normalized pool storage id while accepting legacy
 `agent:<host>-ceph-pool-<name>` override keys as aliases, so operators do not

@@ -107,6 +107,40 @@ func (m *Manager) CheckStorage(storage models.Storage) {
 	// Check ZFS pool status if this is ZFS storage
 	if storage.ZFSPool != nil {
 		m.checkZFSPoolHealth(storage)
+	} else {
+		m.clearStorageZFSAlerts(storage)
+	}
+}
+
+// clearStorageZFSAlerts removes ZFS pool/device alerts for a storage that no
+// longer carries an attached ZFS pool. checkZFSPoolHealth can only clear its
+// own alerts while the pool stays attached, so a storage whose attachment goes
+// away (a shared storage that was wrongly matched to a node-local pool, or a
+// pool genuinely detached from a storage) would otherwise keep its stale ZFS
+// alerts until the multi-day cleanup (#1731).
+func (m *Manager) clearStorageZFSAlerts(storage models.Storage) {
+	storageID := strings.TrimSpace(storage.ID)
+	if storageID == "" {
+		return
+	}
+	compositePrefix := storageID + "/zfs-pool:"
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for alertID, alert := range m.activeAlerts {
+		if alert == nil {
+			continue
+		}
+		switch alert.Type {
+		case "zfs-pool-state", "zfs-pool-errors", "zfs-device":
+		default:
+			continue
+		}
+		resourceID := strings.TrimSpace(alert.ResourceID)
+		if resourceID != storageID && !strings.HasPrefix(resourceID, compositePrefix) {
+			continue
+		}
+		m.clearAlertNoLock(alertID)
 	}
 }
 

@@ -20162,3 +20162,61 @@ func TestMergeSnapshotOverrideInheritsZeroFields(t *testing.T) {
 		t.Fatalf("explicit snapshot override field lost: %+v", explicit)
 	}
 }
+
+// A storage that stops carrying an attached ZFS pool must shed its ZFS alerts
+// on the next check instead of keeping them until the multi-day cleanup. This
+// is the recovery path for shared storages that were wrongly matched to a
+// node-local pool before the matcher gained its shared-type gate (#1731).
+func TestCheckStorageClearsZFSAlertsWhenPoolDetaches(t *testing.T) {
+	m := newTestManager(t)
+
+	degraded := &models.ZFSPool{
+		Name:  "rpool",
+		State: "DEGRADED",
+		Devices: []models.ZFSDevice{
+			{Name: "sda", State: "ONLINE", ReadErrors: 3},
+		},
+	}
+	storage := models.Storage{
+		ID:       "nfs-share",
+		Name:     "NFS Share",
+		Node:     "pve-node1",
+		Instance: "pve-instance",
+		ZFSPool:  degraded,
+	}
+	m.checkZFSPoolHealth(storage)
+
+	stateAlertID := buildCanonicalStateID("nfs-share/zfs-pool:rpool", "nfs-share/zfs-pool:rpool-state")
+	deviceAlertID := buildCanonicalStateID("nfs-share/zfs-pool:rpool/device:sda", "nfs-share/zfs-pool:rpool/device:sda-health")
+
+	m.mu.RLock()
+	testRequireActiveAlert(t, m, stateAlertID)
+	testRequireActiveAlert(t, m, deviceAlertID)
+	m.mu.RUnlock()
+
+	// An unrelated storage keeps its ZFS alerts.
+	other := storage
+	other.ID = "other-zfs"
+	other.Name = "Other ZFS"
+	m.checkZFSPoolHealth(other)
+
+	storage.ZFSPool = nil
+	m.clearStorageZFSAlerts(storage)
+
+	m.mu.RLock()
+	_, stateExists := testLookupActiveAlert(t, m, stateAlertID)
+	_, deviceExists := testLookupActiveAlert(t, m, deviceAlertID)
+	otherStateID := buildCanonicalStateID("other-zfs/zfs-pool:rpool", "other-zfs/zfs-pool:rpool-state")
+	_, otherExists := testLookupActiveAlert(t, m, otherStateID)
+	m.mu.RUnlock()
+
+	if stateExists {
+		t.Error("expected pool state alert cleared after pool detached")
+	}
+	if deviceExists {
+		t.Error("expected device alert cleared after pool detached")
+	}
+	if !otherExists {
+		t.Error("expected unrelated storage to keep its ZFS alerts")
+	}
+}
