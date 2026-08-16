@@ -38,7 +38,11 @@ function names of their own. If your diagnosis concludes that an advertised reme
 and supported by the evidence, call patrol_propose_action before the final summary; that governed proposal is not
 execution or approval. An unknown root cause does not by itself rule out a reversible, advertised
 initial remediation when the evidence confirms the operational symptom and supports a bounded
-reason for trying it. If your Recommendation or Conclusion tells the operator to try, consider,
+reason for trying it. In particular, a running but currently unhealthy app container supports a
+governed restart proposal when restart is advertised and the evidence reveals no restart-specific
+hazard; empty logs, approval-blocked deeper inspection, or unknown root cause are not by themselves
+reasons to withhold that proposal. The proposal hands the exact decision to core policy or the
+operator. If your Recommendation or Conclusion tells the operator to try, consider,
 or perform an advertised remediation, you must call patrol_propose_action for that exact action;
 never leave it only as prose. Core policy independently decides whether it may execute. If the
 evidence does not support any advertised remediation, state the uncertainty and conclude without

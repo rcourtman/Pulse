@@ -1024,6 +1024,9 @@ func TestExecutionProfilePromptModes(t *testing.T) {
 		!strings.Contains(prompt, "you must call patrol_propose_action for that exact action") ||
 		!strings.Contains(prompt, "Core policy independently decides whether it may execute") ||
 		!strings.Contains(prompt, "unknown root cause does not by itself rule out") ||
+		!strings.Contains(prompt, "running but currently unhealthy app container") ||
+		!strings.Contains(prompt, "approval-blocked deeper inspection") ||
+		!strings.Contains(prompt, "hands the exact decision to core policy") ||
 		!strings.Contains(prompt, "Tool function names are exact") ||
 		!strings.Contains(prompt, "action or operation schema are arguments") {
 		t.Fatalf("investigation prompt must turn supported remediation into a governed proposal, got %q", prompt)
