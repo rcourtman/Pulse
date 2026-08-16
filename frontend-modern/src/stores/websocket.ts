@@ -21,7 +21,11 @@ import {
 import { mergeCanonicalResourceSnapshot } from '@/utils/resourceStateAdapters';
 import { apiFetchJSON } from '@/utils/apiClient';
 
-const MAX_INBOUND_WEBSOCKET_MESSAGE_BYTES = 8 * 1024 * 1024; // 8 MiB
+// Advertised to the server as max_message_bytes on the upgrade request; the
+// server withholds any state frame larger than this and the store recovers
+// over REST. 32 MiB keeps estates several times past the old 8 MiB ceiling on
+// the cheap socket delta path instead of the REST full-state fallback loop.
+const MAX_INBOUND_WEBSOCKET_MESSAGE_BYTES = 32 * 1024 * 1024; // 32 MiB
 const AUTO_REGISTER_NOTIFICATION_FRESH_MS = 2 * 60 * 1000;
 const AUTO_REGISTER_NOTIFICATION_FUTURE_SKEW_MS = 30 * 1000;
 const AUTO_REGISTER_NOTIFICATION_DEDUPE_MS = 10 * 60 * 1000;
@@ -937,7 +941,7 @@ export function createWebSocketStore(url: string) {
         });
         // A dropped frame is almost always the full snapshot: it is the only
         // message that scales with estate size (~2.7 KB per resource, so the
-        // 8 MiB guard trips around 3100 resources). Recover over REST rather
+        // 32 MiB guard trips around 12000 resources). Recover over REST rather
         // than waiting for a baseline-less delta to notice, otherwise the first
         // paint on a large estate is an empty UI.
         oversizedSnapshotObserved = true;

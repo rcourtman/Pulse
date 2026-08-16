@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRoot } from 'solid-js';
 
 // Mirrors MAX_INBOUND_WEBSOCKET_MESSAGE_BYTES in the store under test.
-const MAX_INBOUND_WEBSOCKET_MESSAGE_BYTES = 8 * 1024 * 1024;
+const MAX_INBOUND_WEBSOCKET_MESSAGE_BYTES = 32 * 1024 * 1024;
 
 const apiFetchJSONMock = vi.fn();
 vi.mock('@/utils/apiClient', async (importOriginal) => {

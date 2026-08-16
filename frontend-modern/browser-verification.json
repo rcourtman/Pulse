@@ -1,41 +1,37 @@
 {
   "version": 1,
-  "base_sha": "effcf2d50c076310c36aba0876a69b3178587e10",
-  "verified_at": "2026-08-16T09:16:52Z",
+  "base_sha": "205df735c7b3864a89cc54d5254f520500f27cfc",
+  "verified_at": "2026-08-16T10:32:00Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Settings/ConnectionEditor/ConnectionEditor.tsx",
-    "frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx"
+    "frontend-modern/src/stores/websocket.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Settings/ConnectionEditor/ConnectionEditor.tsx": "1c6289caaad0230b2a1e3301235c701c760182f203dc0af7170972b8a11768e8",
-    "frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx": "8007a0da1ef3140cc32174dea3bf52857aa351441d0011f862c3fd27b83649a2"
+    "frontend-modern/src/stores/websocket.ts": "9d50b11d050466742e592ae74d678b4c6d694495b7e78f805f3a54183dce033b"
   },
   "routes": [
-    "/settings/infrastructure?add=agent",
-    "/settings/infrastructure?add=pve"
+    "/",
+    "/proxmox"
   ],
   "viewports": [
     {
       "width": 1280,
-      "height": 720
+      "height": 800
     },
     {
-      "width": 390,
-      "height": 844
+      "width": 375,
+      "height": 812
     }
   ],
   "states": [
-    "Agent installer explains that Proxmox inventory and metrics start with a narrowly scoped API token and do not require a root agent",
-    "API-first guidance links to PVE, PBS, and the production security model before the install-token step",
-    "PVE route displays the API credential form with API Token selected and the least-privilege API inventory explanation",
-    "Desktop dialogs remain within the 1280-pixel document width",
-    "Phone-width agent and PVE dialogs remain within the 390-pixel document width"
+    "authenticated shell loaded via admin bypass on the 7655 dev backend through the pulse-sidecar-preview proxy",
+    "Proxmox overview rendering live node and workload data at desktop viewport",
+    "Proxmox overview rendering nodes and workloads at mobile viewport after reload",
+    "REST fallback active because the preview proxy cannot carry WebSocket upgrades (known sidecar-preview limitation)"
   ],
   "interactions": [
-    "opened the generic Pulse Agent onboarding route and inspected the API-first guidance",
-    "followed Connect Proxmox VE through the API and confirmed the mounted dialog retargeted from the agent installer to the PVE credential form",
-    "repeated the agent-to-PVE handoff at 390 by 844 and confirmed the API inventory and root-boundary copy remained visible",
-    "confirmed document and dialog widths at desktop and phone viewports without horizontal overflow"
+    "verified the Vite-served websocket.ts module carries MAX_INBOUND_WEBSOCKET_MESSAGE_BYTES = 32 * 1024 * 1024",
+    "confirmed the backend accepts a ws upgrade advertising max_message_bytes=33554432 with HTTP 101 via direct handshake against port 7655",
+    "reloaded after viewport resize so responsive table staging re-ran"
   ]
 }
