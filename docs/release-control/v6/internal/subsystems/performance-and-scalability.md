@@ -142,6 +142,8 @@ start a goroutine, timer, or notification lifecycle per target.
 108. `frontend-modern/src/utils/__tests__/workloads.test.ts`
 109. `frontend-modern/src/utils/searchQuery.ts`
 110. `frontend-modern/src/utils/__tests__/searchQuery.test.ts`
+111. `pkg/server/gzip_middleware.go`
+112. `pkg/server/gzip_middleware_test.go`
 
 ## Shared Boundaries
 
@@ -196,6 +198,13 @@ change may globally weaken the Task 03 lifecycle-state idempotency invariant.
 1. Add performance budgets through SLO or contract tests
 2. Add query-plan guardrails for DB-backed hot paths
 3. Optimize hot paths only when backed by benchmarks or proven query issues
+   Main-listener response compression belongs to
+   `pkg/server/gzip_middleware.go`. Negotiation must combine every
+   `Accept-Encoding` field line, honor strict RFC qvalues and explicit gzip
+   exclusions, and bypass token-valid WebSocket upgrades before wrapping the
+   response writer. Once a successful response advertises gzip, explicit
+   empty bodies must still emit a valid empty gzip member. Regression proof
+   lives in `pkg/server/gzip_middleware_test.go`.
    WebSocket state refreshes on monitor, agent-report, and alert mutation hot
    paths must enqueue coalesced current-state invalidations instead of building
    full frontend-state payloads at every signal. The hub owns delayed
@@ -996,6 +1005,17 @@ without contention or cross-delivery.
    close the owned manager set.
 
 ## Current State
+
+### Large API responses negotiate gzip without corrupting edge cases
+
+The main listener compresses eligible JSON and frontend text assets for
+clients that accept gzip. Negotiation combines repeated header fields,
+supports wildcard acceptance, applies strict three-digit qvalue parsing, and
+lets explicit gzip exclusions override wildcards. WebSocket token lists and
+range requests bypass the wrapper. Explicit empty 200 responses carry a valid
+empty gzip stream whenever `Content-Encoding: gzip` is committed, while
+204/304, SSE, already encoded, small declared, and binary responses stay on
+their identity paths.
 
 ### Libvirt workload projection stays bounded and allocation-local
 

@@ -6396,7 +6396,8 @@
         "frontend-modern/src/utils/workloadsSummaryCache.ts",
         "internal/api/router_bench_test.go",
         "internal/api/slo.go",
-        "internal/api/slo_bench_test.go"
+        "internal/api/slo_bench_test.go",
+        "pkg/server/gzip_middleware.go"
       ],
       "verification": {
         "allow_same_subsystem_tests": false,
@@ -6430,10 +6431,24 @@
           "internal/api/slo_bench_test.go",
           "pkg/metrics/store_bench_test.go",
           "pkg/metrics/store_query_plan_test.go",
-          "pkg/metrics/store_slo_test.go"
+          "pkg/metrics/store_slo_test.go",
+          "pkg/server/gzip_middleware_test.go"
         ],
         "require_explicit_path_policy_coverage": true,
         "path_policies": [
+          {
+            "id": "main-listener-response-compression",
+            "label": "main-listener response compression proof",
+            "match_prefixes": [],
+            "match_files": [
+              "pkg/server/gzip_middleware.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "pkg/server/gzip_middleware_test.go"
+            ]
+          },
           {
             "id": "metrics-store-hot-paths",
             "label": "metrics store hot-path proof",

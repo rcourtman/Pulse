@@ -1,13 +1,19 @@
 package server
 
 import (
+	"bufio"
 	"compress/gzip"
+	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/gorilla/websocket"
+	"github.com/rcourtman/pulse-go-rewrite/internal/api"
 )
 
 func gunzipBody(t *testing.T, body io.Reader) string {
@@ -88,6 +94,36 @@ func TestWithGzipRespectsZeroQualityOptOut(t *testing.T) {
 	}
 }
 
+func TestAcceptsGzipNegotiatesAllHeaderValuesAndStrictQvalues(t *testing.T) {
+	tests := []struct {
+		name   string
+		values []string
+		want   bool
+	}{
+		{name: "zero with three fractional digits", values: []string{"gzip;q=0.000"}, want: false},
+		{name: "case insensitive zero", values: []string{"gzip; Q = 0"}, want: false},
+		{name: "positive fractional quality", values: []string{"br, gzip; q=0.001"}, want: true},
+		{name: "wildcard permits gzip", values: []string{"identity;q=0, *;q=1"}, want: true},
+		{name: "explicit gzip exclusion beats wildcard", values: []string{"*;q=1, gzip;q=0"}, want: false},
+		{name: "second header line permits gzip", values: []string{"identity;q=0", "gzip"}, want: true},
+		{name: "identity only", values: []string{"identity"}, want: false},
+		{name: "invalid precision", values: []string{"gzip;q=0.0000"}, want: false},
+		{name: "invalid value above one", values: []string{"gzip;q=1.001"}, want: false},
+		{name: "missing quality value", values: []string{"gzip;q"}, want: false},
+		{name: "duplicate quality parameter", values: []string{"gzip;q=0;q=1"}, want: false},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/api/state", nil)
+			req.Header["Accept-Encoding"] = append([]string(nil), tc.values...)
+			if got := acceptsGzip(req); got != tc.want {
+				t.Fatalf("acceptsGzip() = %v, want %v for %q", got, tc.want, tc.values)
+			}
+		})
+	}
+}
+
 func TestWithGzipSkipsEventStreams(t *testing.T) {
 	handler := withGzip(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/event-stream")
@@ -126,6 +162,85 @@ func TestWithGzipSkipsWebSocketUpgrades(t *testing.T) {
 
 	if sawWrappedWriter {
 		t.Fatalf("websocket upgrade request received the gzip wrapper; hijacking would fail")
+	}
+}
+
+func TestWithGzipSkipsTokenListWebSocketUpgrades(t *testing.T) {
+	var sawWrappedWriter bool
+	handler := withGzip(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, sawWrappedWriter = w.(*gzipResponseWriter)
+		w.WriteHeader(http.StatusSwitchingProtocols)
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/api/agent/ws", nil)
+	req.Header.Set("Accept-Encoding", "gzip")
+	req.Header.Set("Connection", "keep-alive, Upgrade")
+	req.Header.Set("Upgrade", "websocket, h2c")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if sawWrappedWriter {
+		t.Fatalf("token-list websocket upgrade received the gzip wrapper; hijacking would fail")
+	}
+}
+
+func TestWithGzipTokenListWebSocketHandshakeThroughAPIErrorHandler(t *testing.T) {
+	upgrader := websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }}
+	handler := withGzip(api.ErrorHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		conn, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			t.Errorf("websocket upgrade: %v", err)
+			return
+		}
+		_ = conn.Close()
+	})))
+	server := httptest.NewServer(handler)
+	defer server.Close()
+
+	host := strings.TrimPrefix(server.URL, "http://")
+	conn, err := net.Dial("tcp", host)
+	if err != nil {
+		t.Fatalf("dial test server: %v", err)
+	}
+	defer conn.Close()
+
+	request, err := http.NewRequest(http.MethodGet, server.URL+"/api/agent/ws", nil)
+	if err != nil {
+		t.Fatalf("build request: %v", err)
+	}
+	if _, err := fmt.Fprintf(conn,
+		"GET /api/agent/ws HTTP/1.1\r\nHost: %s\r\nConnection: keep-alive, Upgrade\r\nUpgrade: websocket, h2c\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: MDEyMzQ1Njc4OWFiY2RlZg==\r\nAccept-Encoding: gzip\r\n\r\n",
+		host,
+	); err != nil {
+		t.Fatalf("write handshake: %v", err)
+	}
+
+	response, err := http.ReadResponse(bufio.NewReader(conn), request)
+	if err != nil {
+		t.Fatalf("read handshake: %v", err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusSwitchingProtocols {
+		t.Fatalf("status = %d, want 101", response.StatusCode)
+	}
+}
+
+func TestWithGzipExplicitEmpty200HasValidGzipBody(t *testing.T) {
+	handler := withGzip(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/api/state", nil)
+	req.Header.Set("Accept-Encoding", "gzip")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if got := rec.Header().Get("Content-Encoding"); got != "gzip" {
+		t.Fatalf("Content-Encoding = %q, want gzip", got)
+	}
+	if decoded := gunzipBody(t, rec.Body); decoded != "" {
+		t.Fatalf("decoded empty response = %q, want empty", decoded)
 	}
 }
 

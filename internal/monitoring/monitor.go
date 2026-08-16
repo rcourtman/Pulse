@@ -2046,6 +2046,12 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 
 		case <-broadcastTicker.C:
 			// Broadcast current state regardless of polling status
+			// GetState lazily initializes the mock alert snapshot. Preserve that
+			// fixture maintenance even when no browser is subscribed; production
+			// monitors still avoid the full snapshot build on this fast path.
+			if mock.IsMockEnabled() {
+				_ = m.GetState()
+			}
 			if !currentStateBroadcasterHasSubscribers(wsHub, m.GetOrgID()) {
 				continue
 			}
@@ -2129,26 +2135,78 @@ func (m *Monitor) startTaskWorkers(ctx context.Context, workers int) {
 	if m.taskQueue == nil {
 		return
 	}
+	if limiter := processPollTaskWorkerLimiter(); limiter != nil {
+		// A monitor owns one dispatcher, while the process-wide limiter owns
+		// actual task concurrency. This prevents the override from multiplying
+		// into a full worker pool for every tenant.
+		go m.dispatchTaskWorkers(ctx, limiter)
+		return
+	}
 	workers = resolveTaskWorkerCount(workers)
 	for i := 0; i < workers; i++ {
 		go m.taskWorker(ctx, i)
 	}
 }
 
-// resolveTaskWorkerCount applies the default clamp of [1, 10] to the
-// client-derived worker count. POLL_TASK_WORKERS overrides both the count and
-// the cap for estates whose instance count outgrows the default pool; the
-// override is bounded at 128 so a typo cannot fork an unbounded goroutine
-// herd against the monitored APIs. Workers are I/O-bound, so the override
-// spends sockets against monitored hosts, not local CPU.
-func resolveTaskWorkerCount(workers int) int {
-	if override := parseNonNegativeIntEnv("POLL_TASK_WORKERS", 0); override > 0 {
-		if override > 128 {
-			override = 128
+const maxPollTaskWorkers = 128
+
+type pollTaskWorkerLimiter struct {
+	slots chan struct{}
+}
+
+func newPollTaskWorkerLimiter(limit int) *pollTaskWorkerLimiter {
+	if limit < 1 {
+		limit = 1
+	}
+	return &pollTaskWorkerLimiter{slots: make(chan struct{}, limit)}
+}
+
+func (l *pollTaskWorkerLimiter) acquire(ctx context.Context) bool {
+	select {
+	case l.slots <- struct{}{}:
+		return true
+	case <-ctx.Done():
+		return false
+	}
+}
+
+func (l *pollTaskWorkerLimiter) release() {
+	<-l.slots
+}
+
+var (
+	processPollTaskWorkerLimiterOnce sync.Once
+	processPollTaskWorkerLimit       *pollTaskWorkerLimiter
+)
+
+func processPollTaskWorkerLimiter() *pollTaskWorkerLimiter {
+	processPollTaskWorkerLimiterOnce.Do(func() {
+		override := pollTaskWorkerOverride()
+		if override == 0 {
+			return
 		}
+		processPollTaskWorkerLimit = newPollTaskWorkerLimiter(override)
 		log.Info().
 			Int("workers", override).
-			Msg("Poll task worker count overridden by POLL_TASK_WORKERS")
+			Msg("Poll task worker count overridden process-wide by POLL_TASK_WORKERS")
+	})
+	return processPollTaskWorkerLimit
+}
+
+func pollTaskWorkerOverride() int {
+	override := parseNonNegativeIntEnv("POLL_TASK_WORKERS", 0)
+	if override > maxPollTaskWorkers {
+		return maxPollTaskWorkers
+	}
+	return override
+}
+
+// resolveTaskWorkerCount applies the default clamp of [1, 10] to the
+// client-derived worker count. POLL_TASK_WORKERS is reported here for
+// diagnostics and tests; startTaskWorkers routes that override through the
+// process-wide limiter instead of starting this many workers per monitor.
+func resolveTaskWorkerCount(workers int) int {
+	if override := pollTaskWorkerOverride(); override > 0 {
 		return override
 	}
 	if workers < 1 {
@@ -2158,6 +2216,26 @@ func resolveTaskWorkerCount(workers int) int {
 		workers = 10
 	}
 	return workers
+}
+
+func (m *Monitor) dispatchTaskWorkers(ctx context.Context, limiter *pollTaskWorkerLimiter) {
+	defer recoverFromPanic("taskWorkerDispatcher")
+
+	for {
+		task, ok := m.taskQueue.WaitNext(ctx)
+		if !ok {
+			return
+		}
+		if !limiter.acquire(ctx) {
+			return
+		}
+
+		go func() {
+			defer limiter.release()
+			defer recoverFromPanic(fmt.Sprintf("taskWorker-%s-%s", task.InstanceType, task.InstanceName))
+			m.executeAndRescheduleTask(ctx, task)
+		}()
+	}
 }
 
 func (m *Monitor) taskWorker(ctx context.Context, id int) {
@@ -2175,11 +2253,14 @@ func (m *Monitor) taskWorker(ctx context.Context, id int) {
 			return
 		}
 
-		m.executeScheduledTask(ctx, task)
-
-		m.rescheduleTask(task)
-		m.updateQueueDepthMetric()
+		m.executeAndRescheduleTask(ctx, task)
 	}
+}
+
+func (m *Monitor) executeAndRescheduleTask(ctx context.Context, task ScheduledTask) {
+	m.executeScheduledTask(ctx, task)
+	m.rescheduleTask(task)
+	m.updateQueueDepthMetric()
 }
 
 func derivePollTimeout(cfg *config.Config) time.Duration {

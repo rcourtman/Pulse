@@ -1368,6 +1368,22 @@ func TestMonitoringRuntimeAvoidsLegacyMockPartialHelpers(t *testing.T) {
 	}
 }
 
+func TestBroadcastTickerRefreshesMockAlertsBeforeSubscriberEarlyExit(t *testing.T) {
+	data, err := os.ReadFile("monitor.go")
+	if err != nil {
+		t.Fatalf("read monitor.go: %v", err)
+	}
+	source := string(data)
+	mockRefresh := strings.Index(source, "if mock.IsMockEnabled() {\n\t\t\t\t_ = m.GetState()")
+	subscriberGate := strings.Index(source, "if !currentStateBroadcasterHasSubscribers(wsHub, m.GetOrgID())")
+	if mockRefresh < 0 {
+		t.Fatal("broadcast ticker must preserve GetState's lazy mock alert snapshot refresh")
+	}
+	if subscriberGate < 0 || mockRefresh > subscriberGate {
+		t.Fatal("mock alert snapshot refresh must run before the no-subscriber early exit")
+	}
+}
+
 func TestMockOwnedUnifiedMetricSyncDefersToCanonicalSamplerInMockMode(t *testing.T) {
 	previous := mock.IsMockEnabled()
 	mustSetMockEnabled(t, true)

@@ -677,6 +677,15 @@ cleanup so readers cannot retain orphaned runtime or alert projections.
    lazy current-state broadcast path and let the hub resolve tenant-aware
    frontend state after coalescing; monitor callsites must not build or retain
    full frontend-state snapshots for supersedable broadcast signals.
+   Mock mode is the narrow exception to the no-subscriber fast path:
+   `GetState()` owns lazy fixture alert-snapshot initialization, so the ticker
+   must preserve that maintenance call before its subscriber early-exit while
+   production monitors continue to skip the snapshot build.
+   `POLL_TASK_WORKERS` is a process-wide scheduled-task concurrency ceiling,
+   not a per-monitor pool size. Each monitor may own one queue dispatcher, but
+   all dispatchers must acquire the shared bounded limiter before executing a
+   task so tenant creation and monitor reload cannot multiply the configured
+   value into independent worker herds.
 14. Add or change Proxmox-side LXC Docker detection or inventory through
    `internal/monitoring/docker_detection.go`,
    `internal/monitoring/monitor_pve_guest_poll.go`,
@@ -1055,6 +1064,15 @@ cleanup so readers cannot retain orphaned runtime or alert projections.
 
 
 ## Current State
+
+### Poll task concurrency remains bounded across tenants
+
+Without an override, each monitor retains the established client-derived
+worker clamp of one through ten. With `POLL_TASK_WORKERS`, monitor queues use
+one dispatcher apiece and share a single process limiter capped at 128 active
+tasks. A large tenant count therefore adds only one blocked dispatcher per
+monitor rather than another full override-sized goroutine pool, while a single
+large tenant can still fill the configured I/O concurrency budget.
 
 ### Large Proxmox generations preserve reachability under bounded enrichment
 

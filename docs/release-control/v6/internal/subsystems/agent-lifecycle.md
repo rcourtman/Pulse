@@ -2564,6 +2564,13 @@ Agent` secondary handoff against the live setup wizard instead of relying
 
 ## Current State
 
+### Monitoring task limits do not change lifecycle authority
+
+The monitoring-owned process-wide scheduled-task limiter may bound host and
+availability-agent poll execution across tenants. It does not change lifecycle
+journal hydration, report admission, token binding, removal tombstones, or
+re-enrollment authority in `internal/monitoring/monitor.go`.
+
 ### Retained Patrol objectives do not expand agent lifecycle authority
 
 The shared `internal/api` retained-objective endpoints can queue read-only

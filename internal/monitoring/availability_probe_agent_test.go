@@ -1,6 +1,8 @@
 package monitoring
 
 import (
+	"context"
+	"sync"
 	"testing"
 	"time"
 
@@ -12,6 +14,48 @@ import (
 	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/tlsutil"
 )
+
+func TestPollTaskWorkerLimiterCapsAvailabilityAgentWorkAcrossTenants(t *testing.T) {
+	const (
+		limit   = 4
+		tenants = 12
+	)
+	limiter := newPollTaskWorkerLimiter(limit)
+	ctx := context.Background()
+	entered := make(chan int, tenants)
+	release := make(chan struct{})
+
+	var wg sync.WaitGroup
+	for tenant := 0; tenant < tenants; tenant++ {
+		wg.Add(1)
+		go func(tenant int) {
+			defer wg.Done()
+			if !limiter.acquire(ctx) {
+				t.Errorf("tenant %d failed to acquire limiter", tenant)
+				return
+			}
+			defer limiter.release()
+			entered <- tenant
+			<-release
+		}(tenant)
+	}
+
+	for i := 0; i < limit; i++ {
+		select {
+		case <-entered:
+		case <-time.After(time.Second):
+			t.Fatalf("only %d of %d process-wide slots became available", i, limit)
+		}
+	}
+	select {
+	case tenant := <-entered:
+		t.Fatalf("tenant %d exceeded the process-wide limit of %d", tenant, limit)
+	case <-time.After(25 * time.Millisecond):
+	}
+
+	close(release)
+	wg.Wait()
+}
 
 func newProbeAgentTestMonitor(t *testing.T, targets ...config.AvailabilityTarget) *Monitor {
 	t.Helper()

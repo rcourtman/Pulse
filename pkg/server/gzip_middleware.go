@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+
+	"github.com/gorilla/websocket"
 )
 
 // gzipMinContentLength skips compression for responses that declare a body
@@ -43,7 +45,7 @@ var gzipCompressibleContentTypes = []string{
 // so hijacking and byte-range semantics keep working on the original writer.
 func withGzip(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if strings.EqualFold(r.Header.Get("Upgrade"), "websocket") {
+		if websocket.IsWebSocketUpgrade(r) {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -62,21 +64,97 @@ func withGzip(next http.Handler) http.Handler {
 }
 
 func acceptsGzip(r *http.Request) bool {
-	for _, part := range strings.Split(r.Header.Get("Accept-Encoding"), ",") {
-		encoding := part
-		if idx := strings.IndexByte(encoding, ';'); idx >= 0 {
-			// A quality value of 0 opts the encoding out.
-			params := strings.TrimSpace(encoding[idx+1:])
-			if strings.HasPrefix(params, "q=0") && !strings.HasPrefix(params, "q=0.") {
-				continue
+	values := r.Header.Values("Accept-Encoding")
+	if len(values) == 0 {
+		return false
+	}
+
+	gzipQuality := -1
+	wildcardQuality := -1
+	for _, value := range values {
+		for _, part := range strings.Split(value, ",") {
+			encoding, quality := parseAcceptedEncoding(part)
+			switch encoding {
+			case "gzip":
+				if quality > gzipQuality {
+					gzipQuality = quality
+				}
+			case "*":
+				if quality > wildcardQuality {
+					wildcardQuality = quality
+				}
 			}
-			encoding = encoding[:idx]
-		}
-		if strings.EqualFold(strings.TrimSpace(encoding), "gzip") {
-			return true
 		}
 	}
-	return false
+
+	// An explicit gzip entry overrides the wildcard, including q=0.
+	if gzipQuality >= 0 {
+		return gzipQuality > 0
+	}
+	return wildcardQuality > 0
+}
+
+// parseAcceptedEncoding returns the normalized content-coding and a quality
+// value in thousandths. Invalid qvalues make that entry unacceptable. RFC
+// 9110 permits at most three fractional digits and only zeroes after 1.
+func parseAcceptedEncoding(part string) (string, int) {
+	segments := strings.Split(part, ";")
+	encoding := strings.ToLower(strings.TrimSpace(segments[0]))
+	if encoding == "" {
+		return "", 0
+	}
+
+	quality := 1000
+	sawQuality := false
+	for _, parameter := range segments[1:] {
+		name, value, found := strings.Cut(parameter, "=")
+		if !strings.EqualFold(strings.TrimSpace(name), "q") {
+			continue
+		}
+		if !found || sawQuality {
+			return encoding, 0
+		}
+		sawQuality = true
+		parsed, ok := parseQualityValue(strings.TrimSpace(value))
+		if !ok {
+			return encoding, 0
+		}
+		quality = parsed
+	}
+	return encoding, quality
+}
+
+func parseQualityValue(value string) (int, bool) {
+	whole, fraction, hasFraction := strings.Cut(value, ".")
+	if len(fraction) > 3 {
+		return 0, false
+	}
+	if hasFraction {
+		for _, digit := range fraction {
+			if digit < '0' || digit > '9' {
+				return 0, false
+			}
+		}
+	}
+
+	switch whole {
+	case "0":
+		for len(fraction) < 3 {
+			fraction += "0"
+		}
+		if fraction == "" {
+			return 0, true
+		}
+		quality, err := strconv.Atoi(fraction)
+		return quality, err == nil
+	case "1":
+		if strings.Trim(fraction, "0") != "" {
+			return 0, false
+		}
+		return 1000, true
+	default:
+		return 0, false
+	}
 }
 
 // gzipResponseWriter defers the compress-or-not decision to the first write,
@@ -144,11 +222,7 @@ func (w *gzipResponseWriter) Write(data []byte) (int, error) {
 	if !w.compressing {
 		return w.ResponseWriter.Write(data)
 	}
-	if w.gz == nil {
-		gz := gzipWriterPool.Get().(*gzip.Writer)
-		gz.Reset(w.ResponseWriter)
-		w.gz = gz
-	}
+	w.ensureGzipWriter()
 	return w.gz.Write(data)
 }
 
@@ -161,9 +235,7 @@ func (w *gzipResponseWriter) Flush() {
 		w.decide(http.StatusOK)
 	}
 	if w.compressing && w.gz == nil {
-		gz := gzipWriterPool.Get().(*gzip.Writer)
-		gz.Reset(w.ResponseWriter)
-		w.gz = gz
+		w.ensureGzipWriter()
 	}
 	if w.gz != nil {
 		if err := w.gz.Flush(); err != nil {
@@ -179,7 +251,21 @@ func (w *gzipResponseWriter) Unwrap() http.ResponseWriter {
 	return w.ResponseWriter
 }
 
+func (w *gzipResponseWriter) ensureGzipWriter() {
+	if w.gz != nil {
+		return
+	}
+	gz := gzipWriterPool.Get().(*gzip.Writer)
+	gz.Reset(w.ResponseWriter)
+	w.gz = gz
+}
+
 func (w *gzipResponseWriter) close() {
+	// WriteHeader may select gzip without a subsequent Write. Emit a complete
+	// empty gzip member so Content-Encoding never describes an absent stream.
+	if w.compressing && w.gz == nil {
+		w.ensureGzipWriter()
+	}
 	if w.gz == nil {
 		return
 	}
