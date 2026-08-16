@@ -142,6 +142,16 @@ type agentNodeCandidate struct {
 	resource *Resource
 }
 
+// invalidateSourceTargetsLocked drops the inverse source-target index the
+// moment any bySource mapping mutates. Batch ingests release the registry
+// lock between records and only mark viewsDirty in their epilogue, so
+// without this a reader interleaving mid-batch would be served pre-batch
+// targets from the cache; dropping it sends those readers to the legacy
+// live scan, exactly the freshness the pre-index code had.
+func (rr *ResourceRegistry) invalidateSourceTargetsLocked() {
+	rr.cachedSourceTargets = nil
+}
+
 // NewRegistry creates a new registry using the provided store for overrides.
 func NewRegistry(store ResourceStore) *ResourceRegistry {
 	rr := &ResourceRegistry{
@@ -782,6 +792,7 @@ func (rr *ResourceRegistry) seedSourceMappingsFromResourceLocked(resource *Resou
 	if resource == nil {
 		return
 	}
+	rr.invalidateSourceTargetsLocked()
 
 	sources := make([]DataSource, 0, len(resource.Sources)+len(resource.SourceStatus))
 	seen := make(map[DataSource]struct{}, len(resource.Sources)+len(resource.SourceStatus))
@@ -2602,6 +2613,7 @@ func (rr *ResourceRegistry) ingestKubernetesReplicaSet(cluster models.Kubernetes
 func (rr *ResourceRegistry) ingest(source DataSource, sourceID string, resource Resource, identity ResourceIdentity) string {
 	rr.mu.Lock()
 	defer rr.mu.Unlock()
+	rr.invalidateSourceTargetsLocked()
 	sourceID = normalizeSourceID(sourceID)
 	if sourceID == "" {
 		return ""
@@ -2700,6 +2712,7 @@ func (rr *ResourceRegistry) ingestAvailabilityCheckLocked(
 	resource Resource,
 	identity ResourceIdentity,
 ) string {
+	rr.invalidateSourceTargetsLocked()
 	checkResourceID := rr.sourceSpecificID(resource.Type, SourceAvailability, sourceID)
 	if mappedID := CanonicalResourceID(rr.bySource[SourceAvailability][sourceID]); mappedID != "" {
 		if existing := rr.resources[mappedID]; existing != nil &&
@@ -2858,6 +2871,7 @@ func (rr *ResourceRegistry) mergeLinkedKubernetesNode(
 
 	rr.mu.Lock()
 	defer rr.mu.Unlock()
+	rr.invalidateSourceTargetsLocked()
 
 	existingID := rr.bySource[SourceAgent][linkedAgentSourceID]
 	existing := rr.resources[existingID]
@@ -4178,6 +4192,7 @@ func (rr *ResourceRegistry) mergeResourceData(primary *Resource, other *Resource
 }
 
 func (rr *ResourceRegistry) updateSourceMappings(fromID, toID string) {
+	rr.invalidateSourceTargetsLocked()
 	fromID = CanonicalResourceID(strings.TrimSpace(fromID))
 	toID = CanonicalResourceID(strings.TrimSpace(toID))
 	if fromID == "" || toID == "" || fromID == toID {

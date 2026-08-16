@@ -95,6 +95,37 @@ func TestMetricsTargetIndexMatchesLegacyScan(t *testing.T) {
 	}
 }
 
+// Any bySource mutation must drop the cached inverse index immediately:
+// batch ingests release the lock between records and only mark viewsDirty in
+// their epilogue, so a reader interleaving mid-batch must fall back to the
+// live scan rather than being served pre-batch targets.
+func TestSourceTargetIndexInvalidatesOnIngest(t *testing.T) {
+	rr := sourceTargetsFixtureRegistry()
+
+	rr.VMs()
+	rr.mu.RLock()
+	built := rr.cachedSourceTargets != nil
+	rr.mu.RUnlock()
+	if !built {
+		t.Fatal("view read did not build the source-target index")
+	}
+
+	rr.IngestRecords(SourceAvailability, []IngestRecord{{
+		SourceID: "avail-probe-1",
+		Resource: Resource{Type: ResourceTypeAgent, Name: "probe"},
+	}})
+
+	// The epilogue marks views dirty, but the index must already have been
+	// dropped by the per-record mutation path, not merely masked by the
+	// dirty flag.
+	rr.mu.RLock()
+	stillCached := rr.cachedSourceTargets != nil
+	rr.mu.RUnlock()
+	if stillCached {
+		t.Fatal("bySource mutation left the stale source-target index in place")
+	}
+}
+
 // View-embedded metrics targets must match what the public per-ID API
 // resolves for the same resource.
 func TestRebuiltViewMetricsTargetsMatchPublicAPI(t *testing.T) {
