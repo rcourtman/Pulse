@@ -204,9 +204,11 @@ change may globally weaken the Task 03 lifecycle-state idempotency invariant.
    exclusions, and bypass token-valid WebSocket upgrades before wrapping the
    response writer. Informational responses must leave negotiation open for
    the final response, body-forbidden statuses must not gain compression
-   framing, and once a body-permitted successful response advertises gzip, an
-   explicit empty body must still emit a valid empty gzip member. Regression
-   proof lives in `pkg/server/gzip_middleware_test.go`.
+   framing, and partial responses must preserve the identity representation
+   whose byte positions `Content-Range` describes. Once a body-permitted full
+   response advertises gzip, an explicit empty body must still emit a valid
+   empty gzip member. Regression proof lives in
+   `pkg/server/gzip_middleware_test.go`.
    WebSocket state refreshes on monitor, agent-report, and alert mutation hot
    paths must enqueue coalesced current-state invalidations instead of building
    full frontend-state payloads at every signal. The hub owns delayed
@@ -1016,9 +1018,10 @@ supports wildcard acceptance, applies strict three-digit qvalue parsing, and
 lets explicit gzip exclusions override wildcards. WebSocket token lists and
 range requests bypass the wrapper. Explicit empty 200 responses carry a valid
 empty gzip stream whenever `Content-Encoding: gzip` is committed, while
-informational responses defer negotiation to the final response and 204/205/304,
-SSE, already encoded, small declared, and binary responses stay on their
-identity paths.
+informational responses defer negotiation to the final response and
+204/205/206/304, SSE, already encoded, small declared, and binary responses
+stay on their identity paths. Partial content retains the identity bytes that
+its `Content-Range` describes.
 
 ### Libvirt workload projection stays bounded and allocation-local
 

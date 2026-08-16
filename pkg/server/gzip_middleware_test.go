@@ -358,6 +358,34 @@ func TestWithGzipPreservesStatusAndEmptyBodies(t *testing.T) {
 	}
 }
 
+func TestWithGzipPreservesPartialContentRepresentation(t *testing.T) {
+	payload := strings.Repeat("x", 1024)
+	handler := withGzip(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Range", "bytes 0-1023/2048")
+		w.WriteHeader(http.StatusPartialContent)
+		_, _ = w.Write([]byte(payload))
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/api/export?segment=first", nil)
+	req.Header.Set("Accept-Encoding", "gzip")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusPartialContent {
+		t.Fatalf("status = %d, want 206", rec.Code)
+	}
+	if got := rec.Header().Get("Content-Encoding"); got != "" {
+		t.Fatalf("Content-Encoding = %q, want identity for Content-Range semantics", got)
+	}
+	if got := rec.Header().Get("Content-Range"); got != "bytes 0-1023/2048" {
+		t.Fatalf("Content-Range = %q, want original byte range", got)
+	}
+	if rec.Body.String() != payload {
+		t.Fatalf("partial response body was transformed")
+	}
+}
+
 func TestWithGzipDefersDecisionPastInformationalResponse(t *testing.T) {
 	payload := strings.Repeat(`{"status":"ready"}`, 256)
 	handler := withGzip(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

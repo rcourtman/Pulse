@@ -180,7 +180,8 @@ func (w *gzipResponseWriter) decide(status int) {
 	header := w.Header()
 	header.Add("Vary", "Accept-Encoding")
 
-	if status == http.StatusNoContent || status == http.StatusResetContent || status == http.StatusNotModified {
+	switch status {
+	case http.StatusNoContent, http.StatusResetContent, http.StatusPartialContent, http.StatusNotModified:
 		return
 	}
 	if header.Get("Content-Encoding") != "" {
