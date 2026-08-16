@@ -656,7 +656,7 @@ func Run(ctx context.Context, version string) error {
 	// Create HTTP server with unified configuration
 	srv := &http.Server{
 		Addr:              mainAddr,
-		Handler:           router.Handler(),
+		Handler:           withGzip(router.Handler()),
 		ReadHeaderTimeout: 15 * time.Second,
 		WriteTimeout:      0, // Disabled to support SSE/streaming
 		IdleTimeout:       120 * time.Second,
