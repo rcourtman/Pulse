@@ -138,13 +138,14 @@ func ResolveTopLevelSystems(resources []Resource) TopLevelSystemResolver {
 	for {
 		initialGroups := buildTopLevelSystemResolvedGroups(nodes, parent, groupEvidence)
 		hostOwners, ipOwners := buildTopLevelSystemFallbackOwners(initialGroups)
+		hostFormOwners := buildTopLevelSystemHostFormOwners(initialGroups)
 		attached := false
 
 		for groupRoot, group := range initialGroups {
 			if !group.attachByHost {
 				continue
 			}
-			target, ok := uniqueBetterTopLevelSystemTarget(groupRoot, group, hostOwners, ipOwners, initialGroups)
+			target, ok := uniqueBetterTopLevelSystemTarget(groupRoot, group, hostOwners, ipOwners, hostFormOwners, initialGroups)
 			if !ok {
 				continue
 			}
@@ -426,17 +427,66 @@ func buildTopLevelSystemFallbackOwners(
 	return hostOwners, ipOwners
 }
 
+// buildTopLevelSystemHostFormOwners indexes group roots by every hostname
+// form HostnamesEquivalent can match on (the comparable form and, when it
+// differs, the short form). Two hosts can only be equivalent when they share
+// at least one of these keys, so the index prunes the fallback's candidate
+// scan from every group to the groups that could possibly match. The full
+// pairwise matcher still decides each surviving candidate, so semantics are
+// unchanged.
+func buildTopLevelSystemHostFormOwners(
+	groups map[int]topLevelSystemResolvedGroup,
+) map[string]map[int]struct{} {
+	owners := make(map[string]map[int]struct{})
+	add := func(key string, root int) {
+		if key == "" {
+			return
+		}
+		bucket := owners[key]
+		if bucket == nil {
+			bucket = make(map[int]struct{})
+			owners[key] = bucket
+		}
+		bucket[root] = struct{}{}
+	}
+	for groupRoot, group := range groups {
+		for host := range group.exactHosts {
+			comparable := normalizeComparableHostname(host)
+			if comparable == "" {
+				continue
+			}
+			add(comparable, groupRoot)
+			if short := NormalizeHostname(comparable); short != "" && short != comparable {
+				add(short, groupRoot)
+			}
+		}
+	}
+	return owners
+}
+
 func uniqueBetterTopLevelSystemTarget(
 	groupRoot int,
 	group topLevelSystemResolvedGroup,
 	hostOwners map[string]map[int]struct{},
 	ipOwners map[string]map[int]struct{},
+	hostFormOwners map[string]map[int]struct{},
 	groups map[int]topLevelSystemResolvedGroup,
 ) (topLevelSystemFallbackTarget, bool) {
 	targets := make(map[int]topLevelSystemGroupingEvidence)
-	groupRoots := make(map[int]struct{}, len(groups))
-	for root := range groups {
-		groupRoots[root] = struct{}{}
+	candidateRoots := make(map[int]struct{})
+	for host := range group.exactHosts {
+		comparable := normalizeComparableHostname(host)
+		if comparable == "" {
+			continue
+		}
+		for root := range hostFormOwners[comparable] {
+			candidateRoots[root] = struct{}{}
+		}
+		if short := NormalizeHostname(comparable); short != "" && short != comparable {
+			for root := range hostFormOwners[short] {
+				candidateRoots[root] = struct{}{}
+			}
+		}
 	}
 
 	for _, host := range topLevelSystemSortedSet(group.exactHosts) {
@@ -458,7 +508,7 @@ func uniqueBetterTopLevelSystemTarget(
 			}
 		}
 	}
-	for _, targetRoot := range topLevelSystemSortedRoots(groupRoots) {
+	for _, targetRoot := range topLevelSystemSortedRoots(candidateRoots) {
 		if targetRoot == groupRoot {
 			continue
 		}
