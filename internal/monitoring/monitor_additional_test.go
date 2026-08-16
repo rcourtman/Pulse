@@ -609,3 +609,73 @@ func TestIssue1645ClusterStorageRestrictedToOtherNodes(t *testing.T) {
 		})
 	}
 }
+
+// A node-local ZFS pool must never be attached to inherently shared/remote
+// storage types. On a single-pool node the sole-pool fallback previously
+// attached the pool to every storage in the datacenter config, so one failing
+// device raised a duplicate ZFS alert per NFS/PBS storage (#1731).
+func TestMatchZFSPoolForStorageSkipsInherentlySharedTypes(t *testing.T) {
+	rpool := &models.ZFSPool{Name: "rpool"}
+	singlePool := map[string]*models.ZFSPool{"rpool": rpool}
+
+	sharedStorages := []models.Storage{
+		{Name: "NFS_Qnap_Proxmox_Backup", Type: "nfs", Path: "/mnt/pve/NFS_Qnap_Proxmox_Backup"},
+		{Name: "PBS_01_QNAP", Type: "pbs"},
+		{Name: "smb_share", Type: "cifs", Path: "/mnt/pve/smb_share"},
+		{Name: "ceph_pool", Type: "rbd", Pool: "rpool"},
+		// A name collision with the pool must not override the type gate.
+		{Name: "rpool", Type: "nfs", Path: "/mnt/pve/rpool"},
+	}
+	for _, storage := range sharedStorages {
+		if got := matchZFSPoolForStorage(storage, singlePool); got != nil {
+			t.Fatalf("expected no pool for shared storage %q (type %s), got %q", storage.Name, storage.Type, got.Name)
+		}
+	}
+}
+
+func TestMatchZFSPoolForStorageKeepsLocalMatches(t *testing.T) {
+	rpool := &models.ZFSPool{Name: "rpool"}
+	tank := &models.ZFSPool{Name: "tank"}
+	singlePool := map[string]*models.ZFSPool{"rpool": rpool}
+	multiPool := map[string]*models.ZFSPool{"rpool": rpool, "tank": tank}
+
+	cases := []struct {
+		name    string
+		storage models.Storage
+		pools   map[string]*models.ZFSPool
+		want    *models.ZFSPool
+	}{
+		{
+			name:    "zfspool storage matches by pool dataset prefix",
+			storage: models.Storage{Name: "vm_storage0_01", Type: "zfspool", Pool: "tank/data"},
+			pools:   multiPool,
+			want:    tank,
+		},
+		{
+			name:    "zfspool storage matches by pool name",
+			storage: models.Storage{Name: "local-zfs", Type: "zfspool", Pool: "rpool"},
+			pools:   multiPool,
+			want:    rpool,
+		},
+		{
+			name:    "dir storage on single-pool node keeps sole-pool fallback",
+			storage: models.Storage{Name: "local", Type: "dir", Path: "/var/lib/vz"},
+			pools:   singlePool,
+			want:    rpool,
+		},
+		{
+			name:    "dir storage on multi-pool node stays unmatched",
+			storage: models.Storage{Name: "backup_dir", Type: "dir", Path: "/mnt/backup"},
+			pools:   multiPool,
+			want:    nil,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := matchZFSPoolForStorage(tc.storage, tc.pools); got != tc.want {
+				t.Fatalf("matchZFSPoolForStorage(%q) = %v, want %v", tc.storage.Name, got, tc.want)
+			}
+		})
+	}
+}

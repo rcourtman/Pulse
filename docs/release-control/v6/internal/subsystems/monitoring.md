@@ -930,6 +930,12 @@ cleanup so readers cannot retain orphaned runtime or alert projections.
    and the attached ZFS health model must carry the provider-reported `pool`
    field through to runtime storage snapshots and use it before name/path
    heuristics when matching ZFS pool health on multi-storage hosts.
+   Inherently shared or remote-backed storage types (NFS, CIFS, PBS, RBD, and
+   peers classified by `isInherentlySharedStorageType`) must never be matched
+   to a node-local ZFS pool, including by the single-pool fallback: a
+   node-local pool backs only local-capable storage types, and attaching it
+   more broadly raises one duplicate ZFS device alert per shared storage when
+   a device degrades (#1731).
    That same Proxmox compatibility boundary also owns top-level ZFS vdev-role
    normalization. Provider payload buckets such as `special`, `log`, `cache`,
    and `spares` may omit a concrete health state; `pkg/proxmox/zfs.go` must

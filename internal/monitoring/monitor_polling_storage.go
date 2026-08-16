@@ -84,6 +84,14 @@ func matchZFSPoolForStorage(storage models.Storage, zfsPoolMap map[string]*model
 		return nil
 	}
 
+	// An inherently shared/remote storage (NFS, CIFS, PBS, RBD, ...) is never
+	// backed by a node-local ZFS pool. Without this gate the sole-pool fallback
+	// below attaches the pool to every storage on a single-pool node, so one
+	// degraded device raises a duplicate alert per NFS/PBS storage (#1731).
+	if isInherentlySharedStorageType(storage.Type) {
+		return nil
+	}
+
 	normalizedPools := make(map[string]*models.ZFSPool, len(zfsPoolMap))
 	var solePool *models.ZFSPool
 	for name, pool := range zfsPoolMap {
