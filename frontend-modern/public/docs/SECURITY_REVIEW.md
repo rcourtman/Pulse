@@ -13,6 +13,17 @@ Before reviewing the code, read:
   guest access, and update verification.
 - [Installation](INSTALL.md) for the signed, version-pinned server installer.
 
+## First focused review packet
+
+The [Authentication and Credential Storage Review Packet](security-review/AUTH_CREDENTIAL_REVIEW.md)
+defines a narrow first assessment with explicit attacker capabilities, security
+properties, source boundaries, manual review steps, and a reusable finding
+template. Its baseline can be run with:
+
+```bash
+./scripts/security_review_auth_credentials.sh
+```
+
 ## Suggested review boundaries
 
 ### 1. Authentication, authorization, and tenant isolation
@@ -30,6 +41,7 @@ Starting points:
 - `internal/api/api_token_scope_transport_integration_test.go`
 - `internal/api/middleware_tenant_authorization_test.go`
 - `pkg/auth/`
+- `docs/security-review/AUTH_CREDENTIAL_REVIEW.md`
 
 ### 2. Credential storage and configuration transfer
 

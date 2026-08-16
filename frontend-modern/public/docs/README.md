@@ -65,6 +65,7 @@ Pulse Pro capabilities.
 
 - [Production deployment and security](PRODUCTION_SECURITY.md)
 - [Security review scope](SECURITY_REVIEW.md)
+- [Authentication and credential storage review packet](security-review/AUTH_CREDENTIAL_REVIEW.md)
 - [Security guide](../SECURITY.md)
 - [Privacy and telemetry disclosure](PRIVACY.md)
 - [OIDC and SSO](OIDC.md)
