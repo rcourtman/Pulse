@@ -153,6 +153,18 @@ func (w *gzipResponseWriter) Write(data []byte) (int, error) {
 }
 
 func (w *gzipResponseWriter) Flush() {
+	// A flush commits the response headers (implicit 200), so the
+	// compress-or-not decision must be made now. Deciding later, after the
+	// headers are on the wire, would gzip the body without ever sending
+	// Content-Encoding.
+	if !w.decided {
+		w.decide(http.StatusOK)
+	}
+	if w.compressing && w.gz == nil {
+		gz := gzipWriterPool.Get().(*gzip.Writer)
+		gz.Reset(w.ResponseWriter)
+		w.gz = gz
+	}
 	if w.gz != nil {
 		if err := w.gz.Flush(); err != nil {
 			return

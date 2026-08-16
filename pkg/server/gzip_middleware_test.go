@@ -166,6 +166,51 @@ func TestWithGzipSkipsNonCompressibleContentTypes(t *testing.T) {
 	}
 }
 
+func TestWithGzipFlushBeforeFirstWriteKeepsEncodingCoherent(t *testing.T) {
+	payload := strings.Repeat(`{"tick":1}`, 512)
+	handler := withGzip(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.(http.Flusher).Flush()
+		_, _ = w.Write([]byte(payload))
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/api/stream-ish", nil)
+	req.Header.Set("Accept-Encoding", "gzip")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	// The flush commits the headers, so whatever the headers said must match
+	// the body encoding. Compressing here is fine only because the decision
+	// ran before the flush.
+	if got := rec.Header().Get("Content-Encoding"); got != "gzip" {
+		t.Fatalf("Content-Encoding = %q, want gzip decided at flush time", got)
+	}
+	if decoded := gunzipBody(t, rec.Body); decoded != payload {
+		t.Fatalf("decompressed body does not match payload")
+	}
+}
+
+func TestWithGzipFlushOnEventStreamStaysIdentity(t *testing.T) {
+	handler := withGzip(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.(http.Flusher).Flush()
+		_, _ = w.Write([]byte("data: {\"tick\":1}\n\n"))
+		w.(http.Flusher).Flush()
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/api/ai/chat/stream", nil)
+	req.Header.Set("Accept-Encoding", "gzip")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if got := rec.Header().Get("Content-Encoding"); got != "" {
+		t.Fatalf("Content-Encoding = %q, want empty for flushed SSE", got)
+	}
+	if !strings.HasPrefix(rec.Body.String(), "data:") {
+		t.Fatalf("SSE body altered: %q", rec.Body.String())
+	}
+}
+
 func TestWithGzipPreservesStatusAndEmptyBodies(t *testing.T) {
 	handler := withGzip(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
