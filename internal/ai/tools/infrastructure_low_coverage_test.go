@@ -934,7 +934,7 @@ func TestExecuteListDockerServices(t *testing.T) {
 		"host": "dock1",
 	})
 	require.NoError(t, err)
-	assert.Equal(t, "No Docker services found on host 'dock1'. The host may not be a Swarm manager.", result.Content[0].Text)
+	assert.Equal(t, "No Docker Swarm services found on host 'dock1'. This result covers Swarm services only; it does not mean the host has no ordinary Docker containers or container dependencies. Use pulse_query topology or search to inspect those resources. The host may not be a Swarm manager.", result.Content[0].Text)
 
 	state.DockerHosts[0].Services = []models.DockerService{
 		{ID: "svc1", Name: "web", Stack: "stack1", DesiredTasks: 1, RunningTasks: 1},

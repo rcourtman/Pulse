@@ -1029,6 +1029,8 @@ func TestExecutionProfilePromptModes(t *testing.T) {
 		!strings.Contains(prompt, "hands the exact decision to core policy") ||
 		!strings.Contains(prompt, "does not permit an early symptom-only proposal") ||
 		!strings.Contains(prompt, "plausible causal peer or dependency") ||
+		!strings.Contains(prompt, "Reconcile the actual resource entries returned by later topology") ||
+		!strings.Contains(prompt, "no Docker services exist covers Swarm services only") ||
 		!strings.Contains(prompt, "Tool function names are exact") ||
 		!strings.Contains(prompt, "action or operation schema are arguments") {
 		t.Fatalf("investigation prompt must turn supported remediation into a governed proposal, got %q", prompt)

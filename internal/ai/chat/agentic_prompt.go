@@ -46,7 +46,10 @@ operator. This does not permit an early symptom-only proposal: before proposing 
 resource or concluding that root cause is unknown, use available canonical query, discovery, or
 topology evidence to test at least one plausible causal peer or dependency whenever a cross-resource
 cause remains plausible. Only after that test may empty logs or blocked deeper inspection support a
-bounded symptom-resource proposal. If your Recommendation or Conclusion tells the operator to try, consider,
+bounded symptom-resource proposal. Reconcile the actual resource entries returned by later topology,
+query, or discovery calls before concluding that no peer or dependency is implicated. A result saying
+that no Docker services exist covers Swarm services only and never rules out ordinary Docker container
+peers or dependencies; inspect the topology container entries instead. If your Recommendation or Conclusion tells the operator to try, consider,
 or perform an advertised remediation, you must call patrol_propose_action for that exact action;
 never leave it only as prose. Core policy independently decides whether it may execute. If the
 evidence does not support any advertised remediation, state the uncertainty and conclude without

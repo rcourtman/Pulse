@@ -71,7 +71,12 @@ decision by withholding the proposal. This permission does not relax causal
 evidence ordering: when a cross-resource cause remains plausible, Patrol must
 test at least one plausible peer or dependency through canonical query,
 discovery, or topology evidence before proposing against the symptom resource
-or concluding that root cause is unknown.
+or concluding that root cause is unknown. Investigation reasoning must
+reconcile the concrete resource entries in later topology/query/discovery
+results before asserting that no peer is implicated. The Docker `services`
+operation is explicitly Swarm-only: an empty service list never proves the
+absence of ordinary Docker containers or container dependencies, and its tool
+result must direct the model to topology or search for that evidence.
 An investigation cannot complete or submit a typed action proposal before the
 model has received at least one successful structured result from an advertised
 evidence tool. Until then, core withholds proposal authority while leaving
@@ -7553,4 +7558,7 @@ not a fence. When a cross-resource cause remains plausible, empty logs or a
 policy-blocked deep-read attempt cannot justify an unknown-root-cause
 conclusion or remediation proposal on the symptom alone; the remaining
 read-only budget must prioritize canonical query, discovery, or topology
-evidence for at least one plausible causal peer or dependency.
+evidence for at least one plausible causal peer or dependency. Later
+topology/query/discovery resource entries take precedence over an earlier
+empty Docker Swarm-service result when determining whether a container peer is
+implicated.

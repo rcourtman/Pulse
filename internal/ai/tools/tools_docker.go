@@ -776,7 +776,7 @@ func (e *PulseToolExecutor) executeListDockerServices(_ context.Context, args ma
 		if host.ID() == hostArg || host.Hostname() == hostArg {
 			services := host.Services()
 			if len(services) == 0 {
-				return NewTextResult(fmt.Sprintf("No Docker services found on host '%s'. The host may not be a Swarm manager.", host.Hostname())), nil
+				return NewTextResult(fmt.Sprintf("No Docker Swarm services found on host '%s'. This result covers Swarm services only; it does not mean the host has no ordinary Docker containers or container dependencies. Use pulse_query topology or search to inspect those resources. The host may not be a Swarm manager.", host.Hostname())), nil
 			}
 
 			var summaries []DockerServiceSummary
