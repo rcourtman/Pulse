@@ -1138,6 +1138,57 @@ func TestPatrolFindingCreatorAdapter_ResolveFinding_RejectsOutOfScopeFinding(t *
 	}
 }
 
+func TestPatrolFindingCreatorAdapter_ResolveFinding_RejectsContradictoryContainerHealth(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+	finding := &Finding{
+		ID:           "container-health-active",
+		Key:          "health-check-failed",
+		Severity:     FindingSeverityWarning,
+		Category:     FindingCategoryReliability,
+		ResourceID:   "app-1",
+		ResourceName: "web",
+		ResourceType: "app-container",
+		Title:        "Container health check is failing",
+		Description:  "The provider health check is unhealthy",
+		DetectedAt:   time.Now().Add(-time.Hour),
+		LastSeenAt:   time.Now().Add(-time.Hour),
+	}
+	ps.findings.Add(finding)
+
+	unhealthy := newPatrolRuntimeState(models.StateSnapshot{
+		DockerHosts: []models.DockerHost{{
+			ID: "docker-host-1",
+			Containers: []models.DockerContainer{{
+				ID: "app-1", Name: "web", State: "running", Health: "unhealthy",
+			}},
+		}},
+	})
+	adapter := newPatrolFindingCreatorAdapterState(ps, unhealthy)
+	err := adapter.ResolveFinding(finding.ID, "model claimed the issue cleared")
+	if err == nil || !strings.Contains(err.Error(), "still reports container health unhealthy") {
+		t.Fatalf("contradictory resolution error = %v", err)
+	}
+	if stored := ps.findings.Get(finding.ID); stored == nil || stored.IsResolved() {
+		t.Fatalf("contradictory provider state must keep finding active: %+v", stored)
+	}
+
+	healthy := newPatrolRuntimeState(models.StateSnapshot{
+		DockerHosts: []models.DockerHost{{
+			ID: "docker-host-1",
+			Containers: []models.DockerContainer{{
+				ID: "app-1", Name: "web", State: "running", Health: "healthy",
+			}},
+		}},
+	})
+	adapter = newPatrolFindingCreatorAdapterState(ps, healthy)
+	if err := adapter.ResolveFinding(finding.ID, "provider health is now healthy"); err != nil {
+		t.Fatalf("healthy provider state should permit lifecycle resolution: %v", err)
+	}
+	if stored := ps.findings.Get(finding.ID); stored == nil || !stored.IsResolved() {
+		t.Fatalf("healthy provider state did not resolve finding: %+v", stored)
+	}
+}
+
 func TestPatrolService_GetAllFindingsIncludingResolved_IncludesResolvedAndDismissedSortsActiveFirst(t *testing.T) {
 	// GetAllFindingsIncludingResolved is the audit-trail accessor used by the
 	// Patrol UI's Resolved tab. Until it landed, the trust strip credited

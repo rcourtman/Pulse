@@ -454,6 +454,11 @@ func TestPatrolDetectionProfileEnforcesAllowlistedPulseState(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, result.Content)
 	assert.NotContains(t, result.Content[0].Text, "Invocation blocked")
+	text = executeBlockedText(t, exec, agentcapabilities.PatrolResolveFindingToolName, map[string]interface{}{
+		agentcapabilities.FindingIDArgumentName: "finding-1",
+		agentcapabilities.ReasonArgumentName:    "claimed resolved",
+	})
+	assert.Contains(t, text, "Invocation blocked")
 
 	// Projection agrees: alerts offers only its read subactions.
 	for _, tool := range exec.registry.ListTools(exec.invocationPolicy()) {

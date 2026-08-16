@@ -20,6 +20,9 @@ func TestPatrolScopedDetectionDefersOptionalDeepReadsToInvestigation(t *testing.
 			t.Fatalf("VM detection surface missing %q: %v", required, detection)
 		}
 	}
+	if slices.Contains(detection, PatrolResolveFindingToolName) {
+		t.Fatalf("Watch detection surface exposed the legacy direct resolver: %v", detection)
+	}
 
 	investigation, ok := PatrolInvestigationToolNamesForResourceTypes([]string{"vm"})
 	if !ok || !slices.Contains(investigation, PulseReadToolName) {

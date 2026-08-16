@@ -320,6 +320,7 @@ while [ "$#" -gt 0 ]; do
   if [ "$1" = "--output-last-message" ]; then
     shift
     printf '%s' '{"content":"","stop_reason":"tool_use","tool_calls":[{"id":"c1","name":"get_node_status","input":{"node":"tower"}}]}' > "$1"
+	printf '%s\n' '{"type":"turn.completed","usage":{"input_tokens":21,"cached_input_tokens":8,"output_tokens":5}}'
     exit 0
   fi
   shift
@@ -411,6 +412,9 @@ printf '%s' '{"structured_output":{"content":"healthy","stop_reason":"end_turn",
 	if response.Model != "gpt-5.6-luna" {
 		t.Fatalf("Codex response model = %q, want bare CLI model", response.Model)
 	}
+	if response.InputTokens != 21 || response.OutputTokens != 5 {
+		t.Fatalf("Codex response usage = %d/%d, want 21/5", response.InputTokens, response.OutputTokens)
+	}
 	var streamEvents []StreamEvent
 	if err := codex.ChatStream(ctx, ChatRequest{ReasoningEffort: ReasoningEffortLow, Tools: []Tool{{Name: "get_node_status"}}, ToolChoice: &ToolChoice{Type: ToolChoiceRequired}}, func(event StreamEvent) {
 		streamEvents = append(streamEvents, event)
@@ -425,7 +429,7 @@ printf '%s' '{"structured_output":{"content":"healthy","stop_reason":"end_turn",
 		t.Fatalf("Codex tool_start = %#v", streamEvents[0].Data)
 	}
 	done, ok := streamEvents[1].Data.(DoneEvent)
-	if !ok || done.StopReason != "tool_use" || len(done.ToolCalls) != 1 {
+	if !ok || done.StopReason != "tool_use" || len(done.ToolCalls) != 1 || done.InputTokens != 21 || done.OutputTokens != 5 {
 		t.Fatalf("Codex done = %#v", streamEvents[1].Data)
 	}
 
@@ -439,6 +443,19 @@ printf '%s' '{"structured_output":{"content":"healthy","stop_reason":"end_turn",
 	}
 	if response.Content != "healthy" || response.InputTokens != 12 || response.OutputTokens != 3 {
 		t.Fatalf("Claude response = %#v", response)
+	}
+}
+
+func TestDecodeCodexSubscriptionAgentUsageUsesTerminalCompletedTurn(t *testing.T) {
+	raw := []byte(strings.Join([]string{
+		`{"type":"thread.started","thread_id":"thread-1"}`,
+		`{"type":"turn.completed","usage":{"input_tokens":11,"cached_input_tokens":3,"output_tokens":4}}`,
+		`not-json`,
+		`{"type":"turn.completed","usage":{"input_tokens":19,"cached_input_tokens":7,"output_tokens":6}}`,
+	}, "\n"))
+	inputTokens, outputTokens := decodeCodexSubscriptionAgentUsage(raw)
+	if inputTokens != 19 || outputTokens != 6 {
+		t.Fatalf("Codex usage = %d/%d, want terminal 19/6", inputTokens, outputTokens)
 	}
 }
 

@@ -103,7 +103,6 @@ func PatrolDetectionToolNamesForResourceTypes(resourceTypes []string) ([]string,
 		PatrolGetFindingsToolName,
 		PatrolReportFindingToolName,
 		PatrolAssessFindingToolName,
-		PatrolResolveFindingToolName,
 	), true
 }
 

@@ -24,7 +24,8 @@ const (
 	// non-interactive, no infrastructure mutations, and Pulse-state
 	// mutations restricted to the finding lifecycle and observer-proposal tools
 	// (patrol_report_finding / patrol_assess_finding /
-	// patrol_resolve_finding / patrol_propose_observer).
+	// patrol_propose_observer). The legacy direct-resolve alias is deliberately
+	// absent: all existing-finding closure crosses the assessed lifecycle.
 	ProfilePatrolDetection
 	// ProfilePatrolInvestigation is the Patrol investigation posture:
 	// non-interactive and structurally read-only - no infrastructure and
@@ -65,7 +66,6 @@ func patrolDetectionPulseStateAllowlist() map[string]bool {
 		agentcapabilities.PatrolAssessFindingToolName:   true,
 		agentcapabilities.PatrolProposeObserverToolName: true,
 		agentcapabilities.PatrolReportFindingToolName:   true,
-		agentcapabilities.PatrolResolveFindingToolName:  true,
 	}
 }
 

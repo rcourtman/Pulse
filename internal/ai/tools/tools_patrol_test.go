@@ -885,9 +885,20 @@ func TestPatrolToolsRegistered(t *testing.T) {
 
 	assert.True(t, found["patrol_report_finding"], "patrol_report_finding should be registered")
 	assert.True(t, found["patrol_assess_finding"], "patrol_assess_finding should be registered")
-	assert.True(t, found["patrol_resolve_finding"], "patrol_resolve_finding should be registered")
+	assert.False(t, found["patrol_resolve_finding"], "legacy direct resolve must not be projected into Patrol detection")
 	assert.True(t, found["patrol_get_findings"], "patrol_get_findings should be registered")
 	assert.True(t, found["patrol_propose_observer"], "patrol_propose_observer should be registered")
+	for _, tool := range exec.registry.ListTools(InvocationPolicy{
+		ControlLevel: ControlLevelControlled,
+		PulseStateAllowlist: map[string]bool{
+			agentcapabilities.PatrolResolveFindingToolName: true,
+		},
+		Profile: ProfileInteractiveAssistant,
+	}) {
+		if tool.Name == agentcapabilities.PatrolResolveFindingToolName {
+			resolveTool = tool
+		}
+	}
 	require.NotEmpty(t, resolveTool.Name)
 	assert.Contains(t, resolveTool.InputSchema.Required, agentcapabilities.FindingIDArgumentName)
 	assert.Contains(t, resolveTool.InputSchema.Required, agentcapabilities.ReasonArgumentName)

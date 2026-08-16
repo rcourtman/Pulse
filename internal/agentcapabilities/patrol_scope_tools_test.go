@@ -47,10 +47,13 @@ func TestPatrolScopedToolProjectionComposesProfileOwnedTools(t *testing.T) {
 	if !ok {
 		t.Fatal("network-endpoint scope was not recognized")
 	}
-	for _, required := range []string{PulseQueryToolName, PulseDiscoveryToolName, PatrolGetFindingsToolName, PatrolReportFindingToolName, PatrolAssessFindingToolName, PatrolResolveFindingToolName} {
+	for _, required := range []string{PulseQueryToolName, PulseDiscoveryToolName, PatrolGetFindingsToolName, PatrolReportFindingToolName, PatrolAssessFindingToolName} {
 		if !slices.Contains(detection, required) {
 			t.Fatalf("detection surface missing %q: %v", required, detection)
 		}
+	}
+	if slices.Contains(detection, PatrolResolveFindingToolName) {
+		t.Fatalf("detection surface exposed the legacy direct resolver: %v", detection)
 	}
 	if slices.Contains(detection, PulseReadToolName) {
 		t.Fatalf("detection surface included optional deep-read authority: %v", detection)

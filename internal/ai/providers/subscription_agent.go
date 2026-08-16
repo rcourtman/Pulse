@@ -100,6 +100,14 @@ type claudeStreamEvent struct {
 	} `json:"message"`
 }
 
+type codexStreamEvent struct {
+	Type  string `json:"type"`
+	Usage struct {
+		InputTokens  int `json:"input_tokens"`
+		OutputTokens int `json:"output_tokens"`
+	} `json:"usage"`
+}
+
 type subscriptionAgentCommandError struct {
 	command        string
 	cause          error
@@ -239,6 +247,7 @@ func (c *SubscriptionAgentClient) Chat(ctx context.Context, req ChatRequest) (*C
 	defer os.RemoveAll(workdir)
 
 	var raw []byte
+	var codexEvents []byte
 	switch c.agent {
 	case SubscriptionAgentCodex:
 		prompt := append([]byte(subscriptionAgentControlPrompt+"\n\n"), requestPrompt...)
@@ -250,10 +259,9 @@ func (c *SubscriptionAgentClient) Chat(ctx context.Context, req ChatRequest) (*C
 		args := []string{"exec", "--json", "--ephemeral", "--ignore-user-config", "--ignore-rules", "--skip-git-repo-check", "--sandbox", "read-only", "--config", `web_search="disabled"`, "--config", `shell_environment_policy.inherit="none"`, "--config", `shell_environment_policy.set.PATH="/usr/bin:/bin"`}
 		args = append(args, effortArgs...)
 		args = append(args, "--model", c.model, "--output-schema", schemaPath, "--output-last-message", outputPath, "-")
-		var events []byte
-		events, err = c.run(ctx, "codex", args, prompt, workdir)
+		codexEvents, err = c.run(ctx, "codex", args, prompt, workdir)
 		if err == nil {
-			err = rejectCodexAgentToolActivity(events)
+			err = rejectCodexAgentToolActivity(codexEvents)
 		}
 		if err == nil {
 			raw, err = os.ReadFile(outputPath)
@@ -287,8 +295,31 @@ func (c *SubscriptionAgentClient) Chat(ctx context.Context, req ChatRequest) (*C
 	if err := validateSubscriptionAgentTurn(req, &turn); err != nil {
 		return nil, err
 	}
+	if c.agent == SubscriptionAgentCodex {
+		turn.InputTokens, turn.OutputTokens = decodeCodexSubscriptionAgentUsage(codexEvents)
+	}
 	response := ChatResponse{Content: turn.Content, Model: c.model, StopReason: turn.StopReason, ToolCalls: turn.ProviderToolCalls, InputTokens: turn.InputTokens, OutputTokens: turn.OutputTokens}
 	return response.NormalizeCollectionsPtr(), nil
+}
+
+// decodeCodexSubscriptionAgentUsage retains the usage receipt emitted by
+// `codex exec --json`. The structured last-message file intentionally contains
+// only Pulse's strict assistant-turn schema, so usage must be joined from the
+// terminal turn.completed event instead of being model-authored fields.
+func decodeCodexSubscriptionAgentUsage(raw []byte) (inputTokens, outputTokens int) {
+	for _, line := range bytes.Split(raw, []byte{'\n'}) {
+		line = bytes.TrimSpace(line)
+		if len(line) == 0 {
+			continue
+		}
+		var event codexStreamEvent
+		if err := json.Unmarshal(line, &event); err != nil || event.Type != "turn.completed" {
+			continue
+		}
+		inputTokens = event.Usage.InputTokens
+		outputTokens = event.Usage.OutputTokens
+	}
+	return inputTokens, outputTokens
 }
 
 func subscriptionAgentReasoningEffortArgs(agent SubscriptionAgent, effort ReasoningEffort) ([]string, error) {

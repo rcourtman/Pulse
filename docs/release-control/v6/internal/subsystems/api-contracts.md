@@ -9515,8 +9515,11 @@ Exact scoped Watch runs may now populate that internal allowlist from the
 core-resolved canonical resource type set. The shared
 `agentcapabilities.PatrolDetectionToolNamesForResourceTypes` mapping retains
 canonical query evidence and only the relevant subsystem and detection
-lifecycle schemas; optional agent-routed deep reads are deferred to the
-investigation boundary. Investigations carry their finding `resource_type` over
+lifecycle schemas. That mapping exposes `patrol_assess_finding` as the only
+existing-finding verdict path and omits the legacy direct
+`patrol_resolve_finding` compatibility handler, matching the detection
+execution profile's fail-closed projection. Optional agent-routed deep reads
+are deferred to the investigation boundary. Investigations carry their finding `resource_type` over
 the public Pulse/Enterprise orchestrator dependency contract and use the companion
 investigation projection. That projection intersects optional evidence tools
 with the runtime-available governed profile, while requiring at least one

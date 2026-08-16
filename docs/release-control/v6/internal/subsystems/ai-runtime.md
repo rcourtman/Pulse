@@ -7514,3 +7514,26 @@ large probe context and then silently truncate live infrastructure context or
 governed tool schemas at Ollama's smaller server default. Output-token and
 reasoning allowances remain separately bounded and do not expand mutation
 authority.
+
+### Watch lifecycle closure and subscription receipts fail closed
+
+Watch exposes one existing-finding lifecycle contract to the selected model:
+`patrol_assess_finding` with an explicit `present`, `resolved`, or `uncertain`
+verdict. The legacy `patrol_resolve_finding` handler remains registered only as
+a compatibility boundary for older internal callers; the Patrol detection
+profile neither projects nor executes it. Scoped Watch manifests derive from
+the same shared detection-tool vocabulary, so resource-type minimization cannot
+reintroduce that compatibility handler after profile projection. A resolved assessment still crosses
+the same server-owned verification boundary. In particular, a health finding
+for an app container cannot close while the exact current Patrol snapshot
+continues to report a non-healthy provider health value, even if model prose or
+the selected tool claims otherwise.
+
+Local subscription transports retain provider-owned usage receipts without
+making token fields part of the model-authored structured turn. Claude usage
+comes from its terminal result envelope. Codex usage comes from the terminal
+`turn.completed` event emitted by `codex exec --json` and is joined to the
+strict last-message payload only after both have passed transport validation.
+Qualification may therefore require positive input/output usage for a
+tool-free real-model all-clear without falsely rejecting Codex subscription
+runs whose analysis and healthy outcome were durably persisted.

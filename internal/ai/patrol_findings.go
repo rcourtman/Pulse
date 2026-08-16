@@ -1038,6 +1038,28 @@ func (a *patrolFindingCreatorAdapter) ResolveFinding(findingID, reason string) e
 		return fmt.Errorf("finding %s is outside the current patrol scope", findingID)
 	}
 
+	// A model-owned lifecycle verdict must not override contradictory current
+	// provider state. Container health is already present in the exact Patrol
+	// snapshot and needs no heuristic verifier or model interpretation: when a
+	// health finding's resource still reports a non-healthy value, closure is
+	// false and must fail before any durable mutation. This also protects the
+	// legacy direct-resolve compatibility handler if an older caller reaches it.
+	if findingDescribesAppContainerHealth(finding) {
+		for _, row := range patrolAppContainerRows(a.snap, nil) {
+			if row.id != finding.ResourceID && row.name != finding.ResourceID && row.name != finding.ResourceName {
+				continue
+			}
+			health := strings.ToLower(strings.TrimSpace(row.health))
+			if health != "" && health != "healthy" {
+				return fmt.Errorf(
+					"cannot resolve %s: current provider state still reports container health %s",
+					findingID, health,
+				)
+			}
+			break
+		}
+	}
+
 	// Event/persistent categories (backup, reliability, security, general)
 	// must not be auto-resolved on absence — see the contract at
 	// findings.go:CategorySupportsStaleAutoResolve. Before today's gate,
@@ -1111,6 +1133,18 @@ func (a *patrolFindingCreatorAdapter) ResolveFinding(findingID, reason string) e
 		Str("reason", reason).
 		Msg("AI Patrol: Finding resolved via patrol tool")
 	return nil
+}
+
+func findingDescribesAppContainerHealth(finding *Finding) bool {
+	if finding == nil || finding.ResourceType != "app-container" {
+		return false
+	}
+	classification := strings.ToLower(strings.Join([]string{
+		finding.Key,
+		finding.Title,
+		finding.Description,
+	}, " "))
+	return strings.Contains(classification, "health")
 }
 
 func (a *patrolFindingCreatorAdapter) GetActiveFindings(resourceID, minSeverity string) []tools.PatrolFindingInfo {
