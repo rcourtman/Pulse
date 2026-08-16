@@ -169,7 +169,7 @@ func TestOverridePatrolModelTemporarilyEnablesAndRestoresSubscriptionRoute(t *te
 		w.Header().Set("Content-Type", "application/json")
 		switch {
 		case r.Method == http.MethodGet && r.URL.Path == "/api/settings/ai":
-			_, _ = w.Write([]byte(`{"enabled":true,"model":"ollama:qwen3:8b","patrol_model":"ollama:qwen3:8b","codex_subscription_enabled":false}`))
+			_, _ = w.Write([]byte(`{"enabled":false,"model":"ollama:qwen3:8b","patrol_model":"ollama:qwen3:8b","codex_subscription_enabled":false}`))
 		case r.Method == http.MethodPut && r.URL.Path == "/api/settings/ai/update":
 			var body map[string]any
 			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
@@ -193,10 +193,10 @@ func TestOverridePatrolModelTemporarilyEnablesAndRestoresSubscriptionRoute(t *te
 	if err := restore(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	if len(requests) != 2 || requests[0]["codex_subscription_enabled"] != true || requests[0]["patrol_model"] != "codex-subscription:gpt-5.6-luna" {
+	if len(requests) != 2 || requests[0]["enabled"] != true || requests[0]["codex_subscription_enabled"] != true || requests[0]["patrol_model"] != "codex-subscription:gpt-5.6-luna" {
 		t.Fatalf("override request = %#v", requests)
 	}
-	if requests[1]["codex_subscription_enabled"] != false || requests[1]["patrol_model"] != "ollama:qwen3:8b" {
+	if requests[1]["enabled"] != false || requests[1]["codex_subscription_enabled"] != false || requests[1]["patrol_model"] != "ollama:qwen3:8b" {
 		t.Fatalf("restore request = %#v", requests[1])
 	}
 }
@@ -204,6 +204,7 @@ func TestOverridePatrolModelTemporarilyEnablesAndRestoresSubscriptionRoute(t *te
 func TestAcquirePatrolModelSuitePinsOneRouteAndUsesFreshAsyncPreflight(t *testing.T) {
 	currentModel := "ollama:qwen3:8b"
 	codexEnabled := false
+	assistantEnabled := false
 	preflight := map[string]any{
 		"success": true, "provider": "ollama", "model": "qwen3:8b", "tool_call_observed": true,
 		"summary": "old preflight", "recorded_at_unix": int64(100),
@@ -215,7 +216,7 @@ func TestAcquirePatrolModelSuitePinsOneRouteAndUsesFreshAsyncPreflight(t *testin
 		switch {
 		case r.Method == http.MethodGet && r.URL.Path == "/api/settings/ai":
 			_ = json.NewEncoder(w).Encode(map[string]any{
-				"enabled": true, "model": "ollama:qwen3:8b", "patrol_model": currentModel,
+				"enabled": assistantEnabled, "model": "ollama:qwen3:8b", "patrol_model": currentModel,
 				"patrol_enabled": true, "codex_subscription_enabled": codexEnabled,
 				"patrol_preflight": preflight,
 			})
@@ -231,7 +232,10 @@ func TestAcquirePatrolModelSuitePinsOneRouteAndUsesFreshAsyncPreflight(t *testin
 			if value, ok := body["codex_subscription_enabled"].(bool); ok {
 				codexEnabled = value
 			}
-			if currentModel == "codex-subscription:gpt-5.6-sol" {
+			if value, ok := body["enabled"].(bool); ok {
+				assistantEnabled = value
+			}
+			if assistantEnabled && currentModel == "codex-subscription:gpt-5.6-sol" {
 				preflight = map[string]any{
 					"success": true, "provider": "codex-subscription", "model": "gpt-5.6-sol", "tool_call_observed": true,
 					"summary": "tool calling verified", "recorded_at_unix": int64(200),
@@ -267,8 +271,11 @@ func TestAcquirePatrolModelSuitePinsOneRouteAndUsesFreshAsyncPreflight(t *testin
 	if err := lease.Close(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	if len(updates) != 2 || updates[1]["patrol_model"] != "ollama:qwen3:8b" || updates[1]["codex_subscription_enabled"] != false {
+	if len(updates) != 2 || updates[1]["enabled"] != false || updates[1]["patrol_model"] != "ollama:qwen3:8b" || updates[1]["codex_subscription_enabled"] != false {
 		t.Fatalf("route updates after close = %#v", updates)
+	}
+	if assistantEnabled {
+		t.Fatal("suite close did not restore disabled Pulse Intelligence state")
 	}
 }
 

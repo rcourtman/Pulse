@@ -348,6 +348,10 @@ func (c *PulseClient) OverridePatrolModel(ctx context.Context, model string) (fu
 	provider, _ := splitModel(model)
 	payload := make(map[string]any)
 	restorePayload := make(map[string]any)
+	if !settings.Enabled {
+		payload["enabled"] = true
+		restorePayload["enabled"] = settings.Enabled
+	}
 	if previous != model {
 		payload["patrol_model"] = model
 		restorePayload["patrol_model"] = previous
@@ -399,7 +403,7 @@ func (c *PulseClient) AcquirePatrolModelSuite(ctx context.Context, model string,
 	}
 	timeout = patrolModelSuiteAcquisitionTimeout(provider, timeout, before)
 
-	routeChanged := before.EffectivePatrolModel() != target ||
+	routeChanged := !before.Enabled || before.EffectivePatrolModel() != target ||
 		(provider == "codex-subscription" && !before.CodexSubscriptionEnabled) ||
 		(provider == "claude-subscription" && !before.ClaudeSubscriptionEnabled)
 	previousPreflightUnix := int64(0)
@@ -422,7 +426,7 @@ func (c *PulseClient) AcquirePatrolModelSuite(ctx context.Context, model string,
 		}
 	}
 
-	restore, err := c.OverridePatrolModel(ctx, model)
+	restore, err := c.OverridePatrolModel(ctx, target)
 	if err != nil {
 		return nil, err
 	}

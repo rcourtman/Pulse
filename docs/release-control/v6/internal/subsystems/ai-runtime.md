@@ -952,7 +952,11 @@ for one explicit track, but it must acquire and freshly preflight one exact
 provider/model route before provisioning any scenario, retain that route for
 every repetition, and restore it once after the complete suite. Scenario
 runners assert the leased route and must not rewrite model settings or trigger
-their own provider preflights. The suite acquisition deadline must mirror the
+their own provider preflights. On a fresh or intentionally disabled install,
+the suite lease must temporarily enable Pulse Intelligence in the same atomic
+route update so its route-specific preflight can run, then restore the original
+enabled state together with the model and subscription settings when the suite
+closes. The suite acquisition deadline must mirror the
 runtime's route-aware preflight deadline, including the configured request
 timeout for Ollama and custom OpenAI-compatible endpoints, plus bounded cache
 publication grace; it must not restore a changed route while a permitted cold
