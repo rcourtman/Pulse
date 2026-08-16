@@ -125,6 +125,21 @@ type ResourceRegistry struct {
 	// scan over every mapping. Rebuilt with the views; valid only while
 	// viewsDirty is false, like every other cached field above.
 	cachedSourceTargets map[string][]SourceTarget
+
+	// agentNodeScanIndex buckets agent resources by lowercased node name for
+	// the duration of one buildChildCounts pass, where the agent-parent
+	// fallback would otherwise scan every resource once per guest. Only that
+	// pass sets it; nil means callers take the full scan. Bucket membership
+	// is fixed for the pass (Type and NodeName are never mutated mid-pass)
+	// while scores stay live through the shared pointers.
+	agentNodeScanIndex map[string][]agentNodeCandidate
+}
+
+// agentNodeCandidate pairs a resources-map key with its entry so the indexed
+// fallback scan sees exactly what the full scan's iteration sees.
+type agentNodeCandidate struct {
+	id       string
+	resource *Resource
 }
 
 // NewRegistry creates a new registry using the provided store for overrides.
@@ -4385,33 +4400,48 @@ func (rr *ResourceRegistry) proxmoxNodeParentIDFromResourcesLocked(instance, clu
 	excludeID = CanonicalResourceID(strings.TrimSpace(excludeID))
 	bestID := ""
 	bestScore := -1
-	for id, resource := range rr.resources {
+
+	// Selection is order-independent (best score, smallest ID tie-break), so
+	// walking a node-name bucket equals walking every resource.
+	consider := func(id string, resource *Resource) {
 		if resource == nil || resource.Proxmox == nil {
-			continue
+			return
 		}
 		// Type and node-name checks run before the ID canonicalization:
 		// in a large estate almost every entry is a guest, and this scan
 		// runs per guest, so per-entry string work here is the difference
 		// between a cheap pass and an O(n^2) allocation storm.
 		if CanonicalResourceType(resource.Type) != ResourceTypeAgent {
-			continue
+			return
 		}
 		if !strings.EqualFold(strings.TrimSpace(resource.Proxmox.NodeName), nodeName) {
-			continue
+			return
 		}
 		candidateID := CanonicalResourceID(strings.TrimSpace(id))
 		if candidateID == "" || candidateID == excludeID {
-			continue
+			return
 		}
 		score := proxmoxNodeParentScopeScore(instance, clusterName, resource.Proxmox)
 		if score < 0 {
-			continue
+			return
 		}
 		score += proxmoxNodeParentAgentScore(resource)
 		if score > bestScore || (score == bestScore && (bestID == "" || candidateID < bestID)) {
 			bestID = candidateID
 			bestScore = score
 		}
+	}
+
+	if rr.agentNodeScanIndex != nil {
+		// buildChildCounts is mid-pass: only this node's agent candidates
+		// can match, so skip the full walk.
+		for _, candidate := range rr.agentNodeScanIndex[strings.ToLower(nodeName)] {
+			consider(candidate.id, candidate.resource)
+		}
+		return bestID
+	}
+	for id, resource := range rr.resources {
+		consider(id, resource)
 	}
 	return bestID
 }
@@ -4459,6 +4489,22 @@ func proxmoxNodeParentScopeScore(instance, clusterName string, parent *ProxmoxDa
 }
 
 func (rr *ResourceRegistry) buildChildCounts() {
+	// The parent-resolution loop below may hit the agent fallback scan once
+	// per guest. Bucketing agents by node name up front turns each of those
+	// scans into a lookup over that node's few candidates.
+	rr.agentNodeScanIndex = make(map[string][]agentNodeCandidate)
+	for id, r := range rr.resources {
+		if r == nil || r.Proxmox == nil || CanonicalResourceType(r.Type) != ResourceTypeAgent {
+			continue
+		}
+		nodeName := strings.ToLower(strings.TrimSpace(r.Proxmox.NodeName))
+		if nodeName == "" {
+			continue
+		}
+		rr.agentNodeScanIndex[nodeName] = append(rr.agentNodeScanIndex[nodeName], agentNodeCandidate{id: id, resource: r})
+	}
+	defer func() { rr.agentNodeScanIndex = nil }()
+
 	// ChildCount and ParentName are derived fields. Clear prior values before
 	// recomputing to prevent stale state after re-parenting or parent removal.
 	for _, r := range rr.resources {
