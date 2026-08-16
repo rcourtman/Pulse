@@ -29,6 +29,7 @@ func (rr *ResourceRegistry) associatePBSHostAgentResources(
 
 	rr.mu.Lock()
 	defer rr.mu.Unlock()
+	rr.invalidateSourceTargetsLocked()
 
 	if rr.bySource[SourcePBS] == nil {
 		rr.bySource[SourcePBS] = make(map[string]string)

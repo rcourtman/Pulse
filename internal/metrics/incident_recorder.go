@@ -301,8 +301,11 @@ func (r *IncidentRecorder) recordSample() {
 			if metrics, ok := metricsBatch[resourceID]; ok {
 				return metrics, nil
 			}
-			return map[string]float64{}, nil
 		}
+		// A batch that lacks the ID must not change per-provider semantics:
+		// fall through so providers that error or synthesize for unknown IDs
+		// keep doing exactly that. Misses are the rare path, so the batch
+		// still absorbs the per-tick fan-out.
 		return r.provider.GetCurrentMetrics(resourceID)
 	}
 
