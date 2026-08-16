@@ -2630,6 +2630,48 @@ func TestTenantMonitorWiresOrgIdentityIntoNotifications(t *testing.T) {
 	}
 }
 
+func TestDefaultOrgMonitorSharesCanonicalRuntimeTokenInventory(t *testing.T) {
+	dataDir := t.TempDir()
+	baseCfg := &config.Config{DataPath: dataDir, ConfigPath: dataDir}
+	mtm := NewMultiTenantMonitor(baseCfg, config.NewMultiTenantPersistence(dataDir), nil)
+	t.Cleanup(mtm.Stop)
+
+	monitor, err := mtm.GetMonitor("default")
+	if err != nil {
+		t.Fatalf("GetMonitor(default) error = %v", err)
+	}
+	if monitor.GetConfig() != baseCfg {
+		t.Fatal("default monitor must retain the canonical server config pointer")
+	}
+
+	now := time.Now().UTC()
+	config.Mu.Lock()
+	baseCfg.APITokens = []config.APITokenRecord{{
+		ID:        "fresh-agent-token",
+		Name:      "Fresh agent token",
+		CreatedAt: now,
+		Scopes:    []string{config.ScopeAgentExec},
+	}}
+	config.Mu.Unlock()
+	monitor.mu.Lock()
+	monitor.state.Hosts = []models.Host{{
+		ID:              "agent-fresh-token",
+		Hostname:        "fresh-token-host",
+		Status:          "online",
+		LastSeen:        now,
+		AgentVersion:    "6.2.2",
+		TokenID:         "fresh-agent-token",
+		CommandsEnabled: true,
+	}}
+	monitor.mu.Unlock()
+
+	diagnostics := monitor.GetAgentFleetDiagnostics("6.2.2", now)
+	agent := requireAgentDiagnostic(t, diagnostics, "agent-agent-fresh-token")
+	if diagnosticHasAnyReason(agent.Reasons, AgentFleetReasonCredentialMissing, AgentFleetReasonExecScopeMissing) {
+		t.Fatalf("fresh canonical token was diagnosed as unavailable: %+v", agent.Reasons)
+	}
+}
+
 // Instance-wide notification settings (webhook security allowlist, public
 // URL) propagate through ForEachMonitor; it must visit every live tenant
 // monitor so no org's manager is left observing stale security settings.

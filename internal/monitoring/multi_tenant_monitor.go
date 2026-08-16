@@ -184,10 +184,15 @@ func (mtm *MultiTenantMonitor) GetMonitor(orgID string) (*Monitor, error) {
 	log.Info().Str("org_id", orgID).Msg("initializing tenant monitor")
 
 	// 1. Load Tenant Config
-	// Deep copy the base config to ensure tenant isolation.
-	// Each tenant gets its own independent config that won't share
-	// credential slices or other mutable state with other tenants.
-	tenantConfig := mtm.baseConfig.DeepCopy()
+	// The default org is the primary runtime and must retain the canonical
+	// configuration pointer owned by the server. Runtime auth mutations such as
+	// freshly minted agent tokens need to become visible to monitoring-backed
+	// diagnostics immediately. Non-default tenants remain isolated deep copies
+	// so their mutable state and credentials cannot alias the primary runtime.
+	tenantConfig := mtm.baseConfig
+	if orgID != "default" {
+		tenantConfig = mtm.baseConfig.DeepCopy()
+	}
 
 	// Clear inherited credentials - tenants must load their own
 	// This prevents credential leakage between tenants

@@ -2726,6 +2726,13 @@ would mutate. Distinct rows are retained so Agent Doctor does not disguise two
 installations as one healthy machine. Mock mode has no authoritative token
 inventory for its synthetic hosts and therefore must not turn fixture token IDs
 into missing-credential incidents.
+
+The default-org monitor retains the canonical server configuration pointer
+rather than a tenant-isolation copy, so tokens minted after startup become part
+of that current inventory immediately and cannot produce a false
+`agent_credential_missing` diagnosis. `MultiTenantMonitor` deep-copies only
+non-default tenant configuration; those tenant copies remain isolated from the
+primary runtime's mutable token state.
 `internal/fleethealth/agent_test.go` and
 `internal/monitoring/agent_fleet_doctor_test.go` are the focused runtime proofs.
 
