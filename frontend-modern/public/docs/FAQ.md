@@ -94,6 +94,17 @@ If you do not run the agent, Pulse can collect temperatures over SSH. When the a
 
 ## 🔐 Security & Access
 
+### Does Pulse need root access on every Proxmox host?
+
+No. Start with a dedicated read-only or narrowly scoped Proxmox API token; that
+provides normal inventory, status, utilization, guest, and storage monitoring
+without installing Pulse on the hypervisor. The optional Linux agent runs as
+`root` by default when you need host-local telemetry such as SMART,
+temperatures, mdadm, or full mount details. Agent commands and network
+discovery are disabled by default. See
+[Production Deployment and Security](PRODUCTION_SECURITY.md) for the full
+trust boundary and rollout checklist.
+
 ### I forgot my password. How do I reset it?
 **Docker**:
 ```bash
@@ -144,6 +155,15 @@ Pulse defaults to same-origin only. If you access the API from a different domai
 
 ### High memory usage?
 If you are storing long history windows, reduce metrics retention (see [METRICS_HISTORY.md](METRICS_HISTORY.md)). Also confirm your polling intervals match your environment size.
+
+### Can Pulse monitor 50 or more Proxmox hosts?
+
+Pulse has automated API and metrics-store load coverage for a simulated
+500-node estate, including 2,500 VMs and concurrent readers and writers. That
+is regression evidence rather than a universal production certification:
+retention, polling, storage latency, integrations, and guest count all affect
+real capacity. Stage a large rollout and measure it using the checklist in
+[Production Deployment and Security](PRODUCTION_SECURITY.md#production-rollout-checklist).
 
 ---
 

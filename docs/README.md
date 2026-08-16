@@ -8,6 +8,9 @@ product identifiers remain untranslated in localized guides.
 
 - [Install Pulse](INSTALL.md) — signed Proxmox/Linux installation, Docker,
   Docker Compose, Kubernetes, and first-run setup.
+- [Production deployment and security](PRODUCTION_SECURITY.md) —
+  least-privilege Proxmox setup, root-agent boundaries, discovery, supply-chain
+  verification, plan limits, scale evidence, and a rollout checklist.
 - [Upgrade from Pulse v5](UPGRADE_v6.md) — migration prerequisites, rollback,
   agent continuity, and post-upgrade checks.
 - [Configure Pulse](CONFIGURATION.md) — authentication, notifications,
@@ -60,6 +63,7 @@ Pulse Pro capabilities.
 
 ## Security, privacy, and access
 
+- [Production deployment and security](PRODUCTION_SECURITY.md)
 - [Security guide](../SECURITY.md)
 - [Privacy and telemetry disclosure](PRIVACY.md)
 - [OIDC and SSO](OIDC.md)

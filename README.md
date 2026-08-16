@@ -133,6 +133,7 @@ volume. See the [runtime-aligned capability reference](docs/PULSE_PRO.md) and
 ## Documentation
 
 - [Install and deployment](docs/INSTALL.md)
+- [Production deployment and security](docs/PRODUCTION_SECURITY.md)
 - [Upgrade from Pulse v5](docs/UPGRADE_v6.md)
 - [Configuration](docs/CONFIGURATION.md)
 - [Platform and agent guides](docs/README.md#platforms-and-agents)
