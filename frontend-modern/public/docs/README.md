@@ -64,7 +64,7 @@ Pulse Pro capabilities.
 ## Security, privacy, and access
 
 - [Production deployment and security](PRODUCTION_SECURITY.md)
-- [Independent security review scope](SECURITY_REVIEW.md)
+- [Security review scope](SECURITY_REVIEW.md)
 - [Security guide](../SECURITY.md)
 - [Privacy and telemetry disclosure](PRIVACY.md)
 - [OIDC and SSO](OIDC.md)

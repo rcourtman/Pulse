@@ -1,4 +1,4 @@
-# Independent Security Review Scope
+# Security Review Scope
 
 Pulse does not currently claim an independent security certification or a
 third-party penetration-test attestation. This page gives reviewers a concrete,
