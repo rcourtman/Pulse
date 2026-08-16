@@ -2,6 +2,7 @@ package chat
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -223,16 +224,29 @@ func (s *Service) ExecuteInvestigationStream(ctx context.Context, req Investigat
 		}
 	}
 
+	proposal, failedAttempts, proposalErr := capture.Outcome()
 	var contentBuilder strings.Builder
 	for _, msg := range resultMessages {
 		if msg.Role == "assistant" && msg.Content != "" {
 			contentBuilder.WriteString(msg.Content)
 		}
 	}
-
-	proposal, failedAttempts, proposalErr := capture.Outcome()
+	content := contentBuilder.String()
+	if runErr == nil && proposalErr == nil && proposal != nil {
+		grounded, addition := groundInvestigationConclusionInProposal(content, &investigationProposalBasis{
+			TargetResourceID: proposal.ResourceID,
+			CausalResourceID: proposal.CausalResourceID,
+			CapabilityName:   proposal.CapabilityName,
+			Reason:           proposal.Reason,
+		})
+		content = grounded
+		if addition != "" {
+			data, _ := json.Marshal(ContentData{Text: addition})
+			callback(StreamEvent{Type: "content", Data: data})
+		}
+	}
 	result := &InvestigationRunResult{
-		Content:                contentBuilder.String(),
+		Content:                content,
 		Proposal:               proposal,
 		FailedProposalAttempts: failedAttempts,
 		InputTokens:            loop.GetTotalInputTokens(),

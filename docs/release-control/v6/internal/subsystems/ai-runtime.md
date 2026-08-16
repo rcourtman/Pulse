@@ -77,6 +77,17 @@ results before asserting that no peer is implicated. The Docker `services`
 operation is explicitly Swarm-only: an empty service list never proves the
 absence of ordinary Docker containers or container dependencies, and its tool
 result must direct the model to topology or search for that evidence.
+Every accepted investigation proposal carries two separately typed resource
+identities: the action target and the exact canonical causal resource
+established by collected evidence. They may be equal, but a cross-resource
+diagnosis must preserve the peer or dependency as the causal identity and the
+proposal reason must preserve its observed state and causal chain. The
+tool-free completion turn receives that accepted record as an evidence
+checkpoint. Before persistence, core reconciles the Root Cause section against
+the checkpoint and restores the exact causal identity and recorded basis if the
+provider's final prose omits or downgrades them. This reconciliation adds no new
+model claim and grants no action authority; it prevents the narrative from
+contradicting the already accepted, evidence-bound proposal record.
 An investigation cannot complete or submit a typed action proposal before the
 model has received at least one successful structured result from an advertised
 evidence tool. Until then, core withholds proposal authority while leaving

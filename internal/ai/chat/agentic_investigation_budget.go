@@ -14,9 +14,121 @@ func isPatrolInvestigationExecution(profile aitools.ExecutionProfile) bool {
 	return profile == aitools.ProfilePatrolInvestigation
 }
 
-const investigationProposalCompletedSystemPrompt = `
+type investigationProposalBasis struct {
+	TargetResourceID string
+	CausalResourceID string
+	CapabilityName   string
+	Reason           string
+}
+
+func investigationProposalBasisFromToolCall(call providers.ToolCall) *investigationProposalBasis {
+	if call.Name != agentcapabilities.PatrolProposeActionToolName {
+		return nil
+	}
+	stringInput := func(key string) string {
+		value, _ := call.Input[key].(string)
+		return strings.TrimSpace(value)
+	}
+	basis := &investigationProposalBasis{
+		TargetResourceID: stringInput("resource_id"),
+		CausalResourceID: stringInput("causal_resource_id"),
+		CapabilityName:   stringInput("capability_name"),
+		Reason:           stringInput("reason"),
+	}
+	if basis.TargetResourceID == "" || basis.CausalResourceID == "" || basis.CapabilityName == "" || basis.Reason == "" {
+		return nil
+	}
+	return basis
+}
+
+func investigationProposalCompletionSystemPrompt(basis *investigationProposalBasis) string {
+	prompt := `
 
 INVESTIGATION COMPLETION: A typed action proposal has already been accepted for this run. Do not call more tools. Produce the required investigation summary from the evidence already collected and state that the proposal is pending governed policy or operator handling; never claim that it executed.`
+	if basis == nil {
+		return prompt
+	}
+	return prompt + fmt.Sprintf(`
+
+ACCEPTED PROPOSAL EVIDENCE CHECKPOINT: The governed proposal record identifies causal resource %q, action target %q, capability %q, and this exact recorded basis: %q. Preserve the causal resource identity and recorded basis in the Root Cause section, distinguish the action target in Affected Resources, and do not contradict or downgrade facts already used to justify the accepted proposal.`, basis.CausalResourceID, basis.TargetResourceID, basis.CapabilityName, basis.Reason)
+}
+
+// groundInvestigationConclusionInProposal makes the typed proposal record the
+// terminal source of truth for facts the model already committed as its action
+// rationale. Provider prose remains free-form, but it cannot omit the exact
+// causal identity or rationale after Patrol has accepted them structurally.
+func groundInvestigationConclusionInProposal(content string, basis *investigationProposalBasis) (string, string) {
+	if basis == nil || strings.TrimSpace(content) == "" {
+		return content, ""
+	}
+	reason := strings.Join(strings.Fields(basis.Reason), " ")
+	checkpoint := fmt.Sprintf("Proposal evidence checkpoint: causal resource `%s`; recorded basis: %s", basis.CausalResourceID, reason)
+	rootCause := markdownInvestigationSection(content, "Root Cause")
+	if strings.Contains(strings.ToLower(rootCause), strings.ToLower(basis.CausalResourceID)) &&
+		strings.Contains(strings.ToLower(rootCause), strings.ToLower(reason)) {
+		return content, ""
+	}
+	grounded, ok := appendToMarkdownInvestigationSection(content, "Root Cause", checkpoint)
+	if !ok {
+		separator := "\n\n"
+		if strings.TrimSpace(content) == "" {
+			separator = ""
+		}
+		addition := separator + "### Root Cause\n" + checkpoint
+		return content + addition, addition
+	}
+	return grounded, "\n\n" + checkpoint
+}
+
+func markdownInvestigationSection(content, heading string) string {
+	lines := strings.Split(content, "\n")
+	start := -1
+	for index, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if start < 0 {
+			if strings.EqualFold(trimmed, "### "+heading) {
+				start = index + 1
+			}
+			continue
+		}
+		if strings.HasPrefix(trimmed, "### ") {
+			return strings.Join(lines[start:index], "\n")
+		}
+	}
+	if start >= 0 {
+		return strings.Join(lines[start:], "\n")
+	}
+	return ""
+}
+
+func appendToMarkdownInvestigationSection(content, heading, addition string) (string, bool) {
+	lines := strings.Split(content, "\n")
+	start := -1
+	insertAt := len(lines)
+	for index, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if start < 0 {
+			if strings.EqualFold(trimmed, "### "+heading) {
+				start = index + 1
+			}
+			continue
+		}
+		if strings.HasPrefix(trimmed, "### ") {
+			insertAt = index
+			break
+		}
+	}
+	if start < 0 {
+		return content, false
+	}
+	prefix := append([]string(nil), lines[:insertAt]...)
+	for len(prefix) > 0 && strings.TrimSpace(prefix[len(prefix)-1]) == "" {
+		prefix = prefix[:len(prefix)-1]
+	}
+	prefix = append(prefix, "", addition, "")
+	prefix = append(prefix, lines[insertAt:]...)
+	return strings.Join(prefix, "\n"), true
+}
 
 const investigationEvidenceStartRepairSystemPrompt = `
 

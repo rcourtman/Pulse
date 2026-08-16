@@ -48,10 +48,11 @@ func newInvestigationExecutor(t *testing.T, capture *ProposalCapture) *PulseTool
 
 func proposeArgs() map[string]interface{} {
 	return map[string]interface{}{
-		"resource_id":     "vm:42",
-		"capability_name": "restart",
-		"params":          map[string]interface{}{"mode": "graceful"},
-		"reason":          "recover the stalled web tier",
+		"resource_id":        "vm:42",
+		"causal_resource_id": "vm:42",
+		"capability_name":    "restart",
+		"params":             map[string]interface{}{"mode": "graceful"},
+		"reason":             "recover the stalled web tier",
 	}
 }
 
@@ -267,9 +268,10 @@ func TestActionCapabilitiesCanonicalizeResolvedDockerCoordinate(t *testing.T) {
 	assert.Contains(t, result.Content[0].Text, `"name":"start"`)
 
 	proposalResult := executePropose(t, exec, "proposal-docker", map[string]interface{}{
-		"resource_id":     rawCoordinate,
-		"capability_name": "start",
-		"reason":          "restore the stopped worker",
+		"resource_id":        rawCoordinate,
+		"causal_resource_id": rawCoordinate,
+		"capability_name":    "start",
+		"reason":             "restore the stopped worker",
 	})
 	assert.Contains(t, proposalResult.Content[0].Text, canonicalID)
 	proposal, failed, outcomeErr := capture.Outcome()
@@ -310,7 +312,7 @@ func TestActionCapabilitiesCanonicalizePulseReadAppContainerCoordinate(t *testin
 	assert.Contains(t, result.Content[0].Text, `"resource_id":"`+canonicalID+`"`)
 
 	proposalResult := executePropose(t, exec, "proposal-pulse-read", map[string]interface{}{
-		"resource_id": rawCoordinate, "capability_name": "restart", "reason": "restore container health",
+		"resource_id": rawCoordinate, "causal_resource_id": rawCoordinate, "capability_name": "restart", "reason": "restore container health",
 	})
 	assert.Contains(t, proposalResult.Content[0].Text, canonicalID)
 	proposal, failed, outcomeErr := capture.Outcome()
@@ -363,6 +365,7 @@ func TestProposalExposureProjectorRedactsParams(t *testing.T) {
 	redacted := agentcapabilities.RedactToolCallArgumentsForExposure(agentcapabilities.PatrolProposeActionToolName, args)
 	assert.Equal(t, agentcapabilities.RedactedProposalParamsMarker, redacted["params"])
 	assert.Equal(t, "vm:42", redacted["resource_id"])
+	assert.Equal(t, "vm:42", redacted["causal_resource_id"])
 	// The transient map used for provider continuation and validation is
 	// untouched.
 	if _, ok := args["params"].(map[string]interface{}); !ok {
@@ -383,7 +386,7 @@ func TestCapturedProposalIsImmuneToCallerMutation(t *testing.T) {
 	args := proposeArgs()
 	params := args["params"].(map[string]interface{})
 
-	require.NoError(t, capture.Submit("call-a", "vm:42", "restart", "recover", params))
+	require.NoError(t, capture.Submit("call-a", "vm:42", "vm:42", "restart", "recover", params))
 
 	// Mutating the caller's map after validation must not change the
 	// actionable proposal (or its fingerprint identity).
@@ -455,9 +458,10 @@ func TestProposeActionSchemaExposesOnlyModelAuthoredFields(t *testing.T) {
 			continue
 		}
 		assert.ElementsMatch(t,
-			[]string{"resource_id", "capability_name", "params", "reason"},
+			[]string{"resource_id", "causal_resource_id", "capability_name", "params", "reason"},
 			mapKeys(tool.InputSchema.Properties),
 		)
+		assert.Contains(t, tool.InputSchema.Required, "causal_resource_id")
 		return
 	}
 	t.Fatal("patrol_propose_action missing from investigation projection")

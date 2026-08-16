@@ -954,6 +954,7 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 	investigationEvidenceStartRepairAttempted := false
 	toolBlockedLastTurn := false // When true, request final text after budget/loop block
 	investigationProposalCompleted := false
+	var acceptedInvestigationProposalBasis *investigationProposalBasis
 	acceptedFindingReports := 0
 	// Patrol core normally establishes the exact-scope active-finding snapshot
 	// before the provider is invoked. Legacy/narrow adapters can still expose a
@@ -1207,7 +1208,7 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 			case investigationProposalCompleted:
 				req.Tools = nil
 				textOnlySafetyBrake = true
-				req.System += investigationProposalCompletedSystemPrompt
+				req.System += investigationProposalCompletionSystemPrompt(acceptedInvestigationProposalBasis)
 			case a.maxEvidenceCalls > 0 && a.totalEvidenceCalls >= a.maxEvidenceCalls:
 				if a.successfulEvidenceCalls > 0 {
 					req.Tools = investigationTerminalTools(tools)
@@ -1741,6 +1742,23 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 				investigationEvidenceStartRepairPending = true
 				turn++
 				continue
+			}
+
+			if isPatrolInvestigationExecution(a.currentExecutionProfile()) && investigationProposalCompleted && acceptedInvestigationProposalBasis != nil {
+				grounded, addition := groundInvestigationConclusionInProposal(assistantMsg.Content, acceptedInvestigationProposalBasis)
+				if grounded != assistantMsg.Content {
+					assistantMsg.Content = grounded
+					resultMessages[len(resultMessages)-1].Content = grounded
+					providerMessages[len(providerMessages)-1].Content = grounded
+					if addition != "" {
+						jsonData, _ := json.Marshal(ContentData{Text: addition})
+						callback(StreamEvent{Type: "content", Data: jsonData})
+					}
+					log.Warn().
+						Str("session_id", sessionID).
+						Str("causal_resource_id", acceptedInvestigationProposalBasis.CausalResourceID).
+						Msg("[AgenticLoop] Restored accepted proposal evidence checkpoint in investigation conclusion")
+				}
 			}
 
 			// === FSM ENFORCEMENT GATE 2: Check if final answer is allowed ===
@@ -2519,6 +2537,7 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 				}
 				if isPatrolInvestigationExecution(a.currentExecutionProfile()) && tc.Name == agentcapabilities.PatrolProposeActionToolName {
 					investigationProposalCompleted = true
+					acceptedInvestigationProposalBasis = investigationProposalBasisFromToolCall(tc)
 				}
 			}
 

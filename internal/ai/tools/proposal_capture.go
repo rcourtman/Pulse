@@ -57,12 +57,18 @@ type ProposalIdentity struct {
 
 // CapturedProposal is one validated typed action proposal.
 type CapturedProposal struct {
-	InvocationID   string
-	Identity       ProposalIdentity
-	ResourceID     string
-	CapabilityName string
-	Params         map[string]interface{}
-	Reason         string
+	InvocationID string
+	Identity     ProposalIdentity
+	ResourceID   string
+	// CausalResourceID is the exact canonical resource whose observed state
+	// established the remediation rationale. It may equal ResourceID when the
+	// affected/action target is also causal. Keeping this identity in the typed
+	// proposal prevents the terminal narrative from collapsing a cross-resource
+	// diagnosis back onto the symptom resource.
+	CausalResourceID string
+	CapabilityName   string
+	Params           map[string]interface{}
+	Reason           string
 }
 
 // ProposalCatalog resolves a resource's advertised capabilities for
@@ -156,13 +162,14 @@ func cloneParams(params map[string]interface{}) (map[string]interface{}, error) 
 	return clone, nil
 }
 
-func proposalFingerprint(resourceID, capabilityName, reason string, params map[string]interface{}) (string, error) {
+func proposalFingerprint(resourceID, causalResourceID, capabilityName, reason string, params map[string]interface{}) (string, error) {
 	payload := struct {
-		ResourceID     string                 `json:"resourceId"`
-		CapabilityName string                 `json:"capabilityName"`
-		Reason         string                 `json:"reason"`
-		Params         map[string]interface{} `json:"params"`
-	}{resourceID, capabilityName, reason, params}
+		ResourceID       string                 `json:"resourceId"`
+		CausalResourceID string                 `json:"causalResourceId"`
+		CapabilityName   string                 `json:"capabilityName"`
+		Reason           string                 `json:"reason"`
+		Params           map[string]interface{} `json:"params"`
+	}{resourceID, causalResourceID, capabilityName, reason, params}
 	encoded, err := json.Marshal(payload)
 	if err != nil {
 		return "", fmt.Errorf("proposal payload is not fingerprintable")
@@ -189,7 +196,7 @@ func (c *ProposalCapture) RecordFailedAttempt() {
 //   - distinct ID, valid payload: terminal ambiguity, capture invalidated
 //     (concurrent execution makes "first" nondeterministic, so neither
 //     call wins).
-func (c *ProposalCapture) Submit(invocationID, resourceID, capabilityName, reason string, params map[string]interface{}) error {
+func (c *ProposalCapture) Submit(invocationID, resourceID, causalResourceID, capabilityName, reason string, params map[string]interface{}) error {
 	invocationID = strings.TrimSpace(invocationID)
 	if invocationID == "" {
 		c.mu.Lock()
@@ -204,7 +211,7 @@ func (c *ProposalCapture) Submit(invocationID, resourceID, capabilityName, reaso
 		c.mu.Unlock()
 		return cloneErr
 	}
-	fingerprint, fingerprintErr := proposalFingerprint(resourceID, capabilityName, reason, params)
+	fingerprint, fingerprintErr := proposalFingerprint(resourceID, causalResourceID, capabilityName, reason, params)
 	if fingerprintErr != nil {
 		c.mu.Lock()
 		c.failedAttempts++
@@ -223,12 +230,13 @@ func (c *ProposalCapture) Submit(invocationID, resourceID, capabilityName, reaso
 		c.state = proposalCaptureHeld
 		c.fingerprint = fingerprint
 		c.proposal = &CapturedProposal{
-			InvocationID:   invocationID,
-			Identity:       c.identity.clone(),
-			ResourceID:     resourceID,
-			CapabilityName: capabilityName,
-			Params:         params,
-			Reason:         reason,
+			InvocationID:     invocationID,
+			Identity:         c.identity.clone(),
+			ResourceID:       resourceID,
+			CausalResourceID: causalResourceID,
+			CapabilityName:   capabilityName,
+			Params:           params,
+			Reason:           reason,
 		}
 		return nil
 	default: // proposalCaptureHeld

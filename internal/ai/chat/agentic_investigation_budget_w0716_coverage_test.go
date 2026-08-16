@@ -49,6 +49,53 @@ func TestInvestigationCompletionRequiresSupportedProposalBeforeProse(t *testing.
 	}
 }
 
+func TestInvestigationProposalCompletionCarriesTypedCausalCheckpoint(t *testing.T) {
+	call := providers.ToolCall{
+		Name: agentcapabilities.PatrolProposeActionToolName,
+		Input: map[string]interface{}{
+			"resource_id":        "app-container-client",
+			"causal_resource_id": "app-container-dependency",
+			"capability_name":    "restart",
+			"reason":             "app-container-dependency is exited and the client health check is failing",
+		},
+	}
+	basis := investigationProposalBasisFromToolCall(call)
+	if basis == nil || basis.CausalResourceID != "app-container-dependency" {
+		t.Fatalf("proposal basis = %#v, want exact causal resource", basis)
+	}
+	prompt := investigationProposalCompletionSystemPrompt(basis)
+	for _, want := range []string{"app-container-dependency", "app-container-client", "is exited", "Root Cause"} {
+		if !strings.Contains(prompt, want) {
+			t.Fatalf("completion prompt missing %q: %s", want, prompt)
+		}
+	}
+}
+
+func TestGroundInvestigationConclusionInProposalRestoresOmittedCausalEvidence(t *testing.T) {
+	basis := &investigationProposalBasis{
+		TargetResourceID: "app-container-client",
+		CausalResourceID: "app-container-dependency",
+		CapabilityName:   "restart",
+		Reason:           "app-container-dependency is exited and its client is unhealthy",
+	}
+	content := "### Investigation Summary\nClient health is failing.\n\n### Root Cause\nThe precise dependency state is unknown.\n\n### Affected Resources\n`app-container-client`.\n\n### Recommendation\nRestart proposal pending.\n\n### Conclusion\nNEEDS_ATTENTION: pending."
+	grounded, addition := groundInvestigationConclusionInProposal(content, basis)
+	rootCause := markdownInvestigationSection(grounded, "Root Cause")
+	for _, want := range []string{"app-container-dependency", "is exited", "recorded basis"} {
+		if !strings.Contains(rootCause, want) {
+			t.Fatalf("grounded Root Cause missing %q:\n%s", want, grounded)
+		}
+	}
+	if addition == "" {
+		t.Fatal("expected a stream-visible grounding addition")
+	}
+
+	again, duplicate := groundInvestigationConclusionInProposal(grounded, basis)
+	if again != grounded || duplicate != "" {
+		t.Fatalf("grounding must be idempotent; duplicate=%q\n%s", duplicate, again)
+	}
+}
+
 func Test_w0716_budget_IsInvestigationEvidenceTool(t *testing.T) {
 	tests := []struct {
 		name string

@@ -48,6 +48,8 @@ func (e *PulseToolExecutor) registerProposeTools() {
 
 Reference an advertised resource capability (see the resource's capability catalog) and fill only its declared parameters. Never place secrets in params - sensitive parameters are supplied by an operator at approval time.
 
+Identify the exact canonical causal resource established by the collected evidence. This may equal the action target, but when a dependency or peer caused the finding it must name that different resource. The reason must preserve the causal resource's observed state and explain the causal chain.
+
 Submit at most one proposal per investigation. If no safe remediation exists, conclude without proposing.`,
 			InputSchema: InputSchema{
 				Type: "object",
@@ -60,6 +62,10 @@ Submit at most one proposal per investigation. If no safe remediation exists, co
 						Type:        "string",
 						Description: "Advertised capability name on that resource",
 					},
+					"causal_resource_id": {
+						Type:        "string",
+						Description: "Exact canonical resource ID whose observed state establishes the remediation rationale; may equal resource_id",
+					},
 					"params": {
 						Type:        "object",
 						Description: "Values for the capability's declared parameters (non-sensitive only)",
@@ -69,7 +75,7 @@ Submit at most one proposal per investigation. If no safe remediation exists, co
 						Description: "Why this action remediates the finding",
 					},
 				},
-				Required: []string{"resource_id", "capability_name", "reason"},
+				Required: []string{"resource_id", "causal_resource_id", "capability_name", "reason"},
 			},
 		},
 		Handler: func(ctx context.Context, exec *PulseToolExecutor, args map[string]interface{}) (CallToolResult, error) {
@@ -151,15 +157,16 @@ func (e *PulseToolExecutor) executeProposeAction(ctx context.Context, args map[s
 	}
 
 	resourceID := e.canonicalProposalResourceID(stringArg(args, "resource_id"))
+	causalResourceID := e.canonicalProposalResourceID(stringArg(args, "causal_resource_id"))
 	capabilityName := strings.TrimSpace(stringArg(args, "capability_name"))
 	reason := strings.TrimSpace(stringArg(args, "reason"))
 	params, _ := args["params"].(map[string]interface{})
 	if params == nil {
 		params = map[string]interface{}{}
 	}
-	if resourceID == "" || capabilityName == "" || reason == "" {
+	if resourceID == "" || causalResourceID == "" || capabilityName == "" || reason == "" {
 		capture.RecordFailedAttempt()
-		return NewErrorResult(fmt.Errorf("resource_id, capability_name, and reason are required")), nil
+		return NewErrorResult(fmt.Errorf("resource_id, causal_resource_id, capability_name, and reason are required")), nil
 	}
 
 	if err := validateProposalAgainstCatalog(ctx, capture.catalog, resourceID, capabilityName, params); err != nil {
@@ -167,7 +174,7 @@ func (e *PulseToolExecutor) executeProposeAction(ctx context.Context, args map[s
 		return NewErrorResult(err), nil
 	}
 
-	if err := capture.Submit(InvocationIDFromContext(ctx), resourceID, capabilityName, reason, params); err != nil {
+	if err := capture.Submit(InvocationIDFromContext(ctx), resourceID, causalResourceID, capabilityName, reason, params); err != nil {
 		return NewErrorResult(err), nil
 	}
 	return NewTextResult(fmt.Sprintf(

@@ -1172,10 +1172,11 @@ func TestInvestigationLoopRedactsProposalParamsEverywhereDurable(t *testing.T) {
 					ID:   "p-1",
 					Name: agentcapabilities.PatrolProposeActionToolName,
 					Input: map[string]interface{}{
-						"resource_id":     "vm:42",
-						"capability_name": "restart",
-						"params":          map[string]interface{}{"mode": "graceful"},
-						"reason":          "recover the stalled web tier",
+						"resource_id":        "vm:42",
+						"causal_resource_id": "vm:dependency",
+						"capability_name":    "restart",
+						"params":             map[string]interface{}{"mode": "graceful"},
+						"reason":             "vm:dependency is stopped, stalling the web tier",
 					},
 				}},
 			}})
@@ -1193,7 +1194,7 @@ func TestInvestigationLoopRedactsProposalParamsEverywhereDurable(t *testing.T) {
 				}
 			}
 		}
-		callback(providers.StreamEvent{Type: "content", Data: providers.ContentEvent{Text: "diagnosis: restart proposed"}})
+		callback(providers.StreamEvent{Type: "content", Data: providers.ContentEvent{Text: "### Investigation Summary\nRestart proposed.\n\n### Root Cause\nDependency failure.\n\n### Affected Resources\n`vm:42`.\n\n### Recommendation\nRestart pending.\n\n### Conclusion\nNEEDS_ATTENTION: pending."}})
 		callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{}})
 		return nil
 	}
@@ -1260,6 +1261,9 @@ func TestInvestigationLoopRedactsProposalParamsEverywhereDurable(t *testing.T) {
 	}
 	if proposal == nil || proposal.Params["mode"] != "graceful" || proposal.Identity.FindingID != "f-9" || proposal.InvocationID != "p-1" {
 		t.Fatalf("captured proposal = %#v", proposal)
+	}
+	if proposal.CausalResourceID != "vm:dependency" {
+		t.Fatalf("captured causal resource = %q, want vm:dependency", proposal.CausalResourceID)
 	}
 }
 
