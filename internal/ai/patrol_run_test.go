@@ -423,9 +423,27 @@ func TestFilterStateByScope_DockerHost(t *testing.T) {
 				ID:       "dh1",
 				Hostname: "docker-host-1",
 				Containers: []models.DockerContainer{
-					{ID: "c1", Name: "web"},
+					{
+						ID:       "c1",
+						Name:     "web",
+						Image:    "example/web:latest",
+						Networks: []models.DockerContainerNetworkLink{{Name: "frontend"}},
+						Mounts:   []models.DockerContainerMount{{Type: "volume", Name: "web-data"}},
+					},
 					{ID: "c2", Name: "db"},
 				},
+				Images:   []models.DockerImage{{ID: "sha256:web", RepoTags: []string{"example/web:latest"}}, {ID: "sha256:db", RepoTags: []string{"example/db:latest"}}},
+				Volumes:  []models.DockerVolume{{Name: "web-data"}, {Name: "db-data"}},
+				Networks: []models.DockerNetwork{{ID: "network-frontend", Name: "frontend"}, {ID: "network-backend", Name: "backend"}},
+				Services: []models.DockerService{{ID: "service-web", Name: "web"}},
+				Tasks:    []models.DockerTask{{ID: "task-web", ContainerID: "c1"}},
+				Nodes:    []models.DockerNode{{ID: "node-1", Hostname: "docker-host-1"}},
+				Secrets:  []models.DockerSecret{{ID: "secret-web", Name: "web-secret"}},
+				Configs:  []models.DockerConfig{{ID: "config-web", Name: "web-config"}},
+				StorageUsage: &models.DockerStorageUsage{
+					Images: models.DockerStorageUsageBucket{TotalCount: 2},
+				},
+				Swarm: &models.DockerSwarmInfo{LocalState: "active"},
 			},
 		},
 	}
@@ -474,6 +492,26 @@ func TestFilterStateByScope_DockerContainerOnly(t *testing.T) {
 	}
 	if filtered.DockerHosts[0].Containers[0].ID != "c1" {
 		t.Errorf("expected container c1, got %s", filtered.DockerHosts[0].Containers[0].ID)
+	}
+	filteredHost := filtered.DockerHosts[0]
+	if len(filteredHost.Images) != 0 || len(filteredHost.Volumes) != 0 || len(filteredHost.Networks) != 0 ||
+		len(filteredHost.Services) != 0 || len(filteredHost.Tasks) != 0 || len(filteredHost.Nodes) != 0 ||
+		len(filteredHost.Secrets) != 0 || len(filteredHost.Configs) != 0 || filteredHost.StorageUsage != nil || filteredHost.Swarm != nil {
+		t.Fatalf("container scope retained unrelated host inventory: %+v", filteredHost)
+	}
+	for _, resourceType := range []unifiedresources.ResourceType{
+		unifiedresources.ResourceTypeDockerImage,
+		unifiedresources.ResourceTypeDockerVolume,
+		unifiedresources.ResourceTypeDockerNetwork,
+		unifiedresources.ResourceTypeDockerService,
+		unifiedresources.ResourceTypeDockerTask,
+		unifiedresources.ResourceTypeDockerSwarmNode,
+		unifiedresources.ResourceTypeDockerSecret,
+		unifiedresources.ResourceTypeDockerConfig,
+	} {
+		if got := len(filtered.unifiedResourceProvider.GetByType(resourceType)); got != 0 {
+			t.Fatalf("container scope retained %d unrelated %s resources", got, resourceType)
+		}
 	}
 }
 

@@ -3538,7 +3538,13 @@ resolve canonical/source IDs and unique aliases before collection, reject
    two deliberately different boundaries: its effective evidence scope may
    include related hosts, parents, and dependencies for model reasoning, while
    its finding-lifecycle scope is the exact resolved caller-requested identity
-   set. `patrol_get_findings`, report, assess, and resolve must not refresh or
+   set. An exact app-container scope retains its Docker host as the transport
+   parent and retains the selected container's embedded image, mount, and
+   network-attachment evidence, but it must not re-ingest the host's complete
+   image, volume, network, or Swarm child inventory into the scoped provider.
+   Those unrelated host children are neither dependencies of the selected
+   workload nor permission to turn a targeted check into a host-wide scan.
+   `patrol_get_findings`, report, assess, and resolve must not refresh or
    create a finding on a context-only dependency; the model may cite that
    dependency as evidence for the requested resource and Pro investigation may
    expand causally after Watch is durable. This prevents a targeted workload

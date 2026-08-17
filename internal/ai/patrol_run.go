@@ -1507,6 +1507,23 @@ func scopePatrolDockerHost(d models.DockerHost, matcher patrolScopeMatcher) (mod
 	if len(matchedContainers) > 0 {
 		hostCopy := d
 		hostCopy.Containers = matchedContainers
+		// A Docker host is the transport parent for its containers, so the
+		// filtered snapshot must retain the host record. It must not, however,
+		// retain the host's complete child inventory. Re-ingesting that inventory
+		// into the scoped unified-resource provider would turn a request for one
+		// container into every image, volume, network, and Swarm object on the
+		// host. The matched container already carries its own image, mounts, and
+		// network attachments as bounded dependency evidence.
+		hostCopy.Images = nil
+		hostCopy.Volumes = nil
+		hostCopy.Networks = nil
+		hostCopy.Services = nil
+		hostCopy.Tasks = nil
+		hostCopy.Nodes = nil
+		hostCopy.Secrets = nil
+		hostCopy.Configs = nil
+		hostCopy.StorageUsage = nil
+		hostCopy.Swarm = nil
 		included := make([]string, 0, len(matchedContainers))
 		for _, c := range matchedContainers {
 			included = append(included, c.ID)
