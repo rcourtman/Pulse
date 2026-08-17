@@ -1447,16 +1447,17 @@ diagnostics. The same release workflow also executes the generated self-signed
 and custom-CA Windows installer commands through Windows PowerShell 5.1 before
 release assembly, so the first HTTPS fetch is release proof rather than a
 string-shape assertion.
-The active support prerelease `v6.2.2-rc.2` cut sets the repo-root `VERSION`,
+The active support prerelease `v6.2.2-rc.3` cut sets the repo-root `VERSION`,
 repo-root `docker-compose.yml` image default, `scripts/install-docker.sh`
-fallback, and Helm chart release metadata to the same `6.2.2-rc.2` release
-version. It follows stable `v6.2.1`, supersedes `v6.2.2-rc.1`, uses
+fallback, and Helm chart release metadata to the same `6.2.2-rc.3` release
+version. It follows stable `v6.2.1`, supersedes `v6.2.2-rc.2`, uses
 `rollback_version=v6.2.1`, and keeps stable/latest pointers on `v6.2.1`. This
-candidate retains the complete first-candidate packet and adds host-local
-Docker/Podman registry credentials for private-image update checks plus
-smartmontools 7.5 `power_mode` object decoding for guarded rotational-disk
-probes. The changes since `v6.2.2-rc.1` do not touch mobile, Relay, onboarding,
-or mobile-facing API contracts, so the server cut is classified
+candidate retains the complete earlier packet and adds durable scoped Patrol
+objectives, validated read-only observers, verified work receipts, agent action
+preflight with stable refusal codes, large-estate response improvements, and
+monitoring correctness fixes. The changes since `v6.2.2-rc.2` do not require a
+Pulse Mobile client change and preserve the existing mobile, Relay, onboarding,
+and mobile-facing API contracts, so the server cut is classified
 `no-mobile-impact`; no companion upload or public mobile-store rollout is part
 of this candidate.
 The prerelease Windows path retains exact-SHA, checksum, and detached-signature
@@ -1465,6 +1466,11 @@ signing unless a new version-bound decision is recorded.
 This support prerelease keeps `rollback_version=v6.2.1`, publishes a versioned
 public GitHub prerelease plus versioned Docker and Helm artifacts, and does not
 move stable/latest install pointers or stable semver aliases.
+
+The preceding `v6.2.2-rc.2` candidate used the same support-prerelease path and
+rollback target. It added host-local Docker/Podman registry credentials for
+private-image update checks and smartmontools 7.5 `power_mode` object decoding
+for guarded rotational-disk probes while retaining the first-candidate packet.
 
 The preceding `v6.2.2-rc.1` candidate used the same support-prerelease path and
 rollback target. It established the cumulative security, monitoring-scale,
@@ -1730,8 +1736,8 @@ For the active stable `v6.1.2` cut, the repo-root compose default and
 `scripts/install-docker.sh` fallback must both pin `6.1.2` whenever the
 governed `VERSION` is that stable cut. The stable promotion guard remains in
 force and rejects leftover `-rc.` defaults.
-For the active support prerelease `v6.2.2-rc.2` cut, the repo-root compose
-default and `scripts/install-docker.sh` fallback must both pin `6.2.2-rc.2`
+For the active support prerelease `v6.2.2-rc.3` cut, the repo-root compose
+default and `scripts/install-docker.sh` fallback must both pin `6.2.2-rc.3`
 until the next governed stable cut moves them forward. Each new release moves
 these two pins together with the repo-root `VERSION` and the Helm chart metadata
 in the same commit; a cut that leaves any of the four on a superseded value is a
