@@ -7499,6 +7499,16 @@ target. Deleted-resource reconciliation still uses the full current global
 state, and the synthetic Patrol runtime finding retains its existing special
 handling.
 
+Finding creation also validates the provider-authored resource ID and display
+name as one identity pair against the current runtime snapshot. When both
+values resolve uniquely but identify different same-type resources, core
+rejects the report and lets the bounded finding repair turn resubmit a coherent
+canonical pair; it never guesses which value was intended. This prevents one
+incident from being persisted twice when a report copies the ID of an in-scope
+sibling while describing the correct affected resource by name. The existing
+exact-name repair remains limited to unknown ID transcription errors and does
+not redirect a real known resource ID across the finding scope boundary.
+
 A Watch provider turn that stops because its output-token allowance was
 exhausted is not a completed finding decision. Core preserves the partial turn
 only as model context, excludes its unfinished prose from the durable Patrol

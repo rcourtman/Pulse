@@ -550,6 +550,9 @@ func newPatrolFindingCreatorAdapterState(p *PatrolService, snap patrolRuntimeSta
 }
 
 func (a *patrolFindingCreatorAdapter) CreateFinding(input tools.PatrolFindingInput) (string, bool, error) {
+	if err := a.validateFindingResourceIdentity(input); err != nil {
+		return "", false, err
+	}
 	if canonical, repaired := a.canonicalizeUnknownFindingResource(input); repaired {
 		log.Info().
 			Str("submitted_resource_id", input.ResourceID).
@@ -671,6 +674,57 @@ func (a *patrolFindingCreatorAdapter) CreateFinding(input tools.PatrolFindingInp
 	}
 
 	return id, isNew, nil
+}
+
+// validateFindingResourceIdentity rejects a model-authored resource ID/name
+// pair when each value resolves uniquely to a different same-type runtime
+// resource. Either value can be copied incorrectly, so core must not guess
+// which one the provider intended. Returning a validation error lets the
+// bounded finding repair turn submit one coherent canonical identity instead
+// of persisting duplicate incidents against sibling resources.
+func (a *patrolFindingCreatorAdapter) validateFindingResourceIdentity(input tools.PatrolFindingInput) error {
+	if a == nil || strings.TrimSpace(input.ResourceID) == "" || strings.TrimSpace(input.ResourceName) == "" {
+		return nil
+	}
+
+	resourceIDToken := canonicalPatrolScopeToken(input.ResourceID)
+	resourceNameToken := canonicalPatrolScopeToken(input.ResourceName)
+	resourceTypeToken := canonicalPatrolScopeToken(input.ResourceType)
+	idMatches := make([]int, 0, 1)
+	nameMatches := make([]int, 0, 1)
+	recordIndex := 0
+
+	patrolVisitRuntimeResources(a.snap, func(record patrolRuntimeResourceRecord) bool {
+		currentIndex := recordIndex
+		recordIndex++
+		if resourceTypeToken != "" && canonicalPatrolScopeToken(record.resourceType) != resourceTypeToken {
+			return true
+		}
+
+		for _, value := range append(append([]string(nil), record.ids...), record.aliases...) {
+			if canonicalPatrolScopeToken(value) == resourceIDToken {
+				idMatches = append(idMatches, currentIndex)
+				break
+			}
+		}
+		for _, alias := range record.aliases {
+			if canonicalPatrolScopeToken(alias) == resourceNameToken {
+				nameMatches = append(nameMatches, currentIndex)
+				break
+			}
+		}
+		return true
+	})
+
+	if len(idMatches) == 1 && len(nameMatches) == 1 && idMatches[0] != nameMatches[0] {
+		return fmt.Errorf(
+			"resource identity mismatch: resource_id %q and resource_name %q identify different %s resources; submit one canonical ID/name pair",
+			input.ResourceID,
+			input.ResourceName,
+			input.ResourceType,
+		)
+	}
+	return nil
 }
 
 // canonicalizeUnknownFindingResource repairs only a redundant model-authored

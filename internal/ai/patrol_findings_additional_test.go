@@ -1658,6 +1658,40 @@ func TestPatrolFindingAdapterRepairsOnlyUnknownIDsFromUniqueScopedIdentity(t *te
 	}
 }
 
+func TestPatrolFindingAdapterRejectsKnownSiblingIDAndNameMismatch(t *testing.T) {
+	state := newPatrolRuntimeState(models.StateSnapshot{
+		DockerHosts: []models.DockerHost{{
+			ID: "docker-host-1",
+			Containers: []models.DockerContainer{
+				{ID: "app-container-healthy", Name: "control", State: "running", Health: "healthy"},
+				{ID: "app-container-unhealthy", Name: "existing", State: "running", Health: "unhealthy"},
+			},
+		}},
+	})
+	ps := NewPatrolService(nil, nil)
+	adapter := newPatrolFindingCreatorAdapterState(ps, state)
+	adapter.setFindingScope([]string{"app-container-healthy", "app-container-unhealthy"})
+
+	input := tools.PatrolFindingInput{
+		ResourceID: "app-container-healthy", ResourceName: "existing", ResourceType: "app-container",
+		Key: "health-check-failed", Severity: "warning", Category: "reliability",
+		Title: "Container health check is unhealthy", Description: "The existing container is unhealthy.",
+		Impact: "Requests may fail.", Recommendation: "Inspect the health check.",
+		Evidence: "Current provider health for existing is unhealthy.",
+	}
+	if _, isNew, err := adapter.CreateFinding(input); err == nil || isNew || !strings.Contains(err.Error(), "resource identity mismatch") {
+		t.Fatalf("mismatched sibling report = (%t, %v), want identity validation error", isNew, err)
+	}
+	if active := ps.findings.GetActive(FindingSeverityInfo); len(active) != 0 {
+		t.Fatalf("mismatched sibling report persisted findings: %+v", active)
+	}
+
+	input.ResourceID = "app-container-unhealthy"
+	if findingID, isNew, err := adapter.CreateFinding(input); err != nil || !isNew || findingID == "" {
+		t.Fatalf("coherent canonical report = (%q, %t, %v), want new finding", findingID, isNew, err)
+	}
+}
+
 func TestPatrolFindingAdapterCanAssessSeededRuntimeFindingDuringScopedRun(t *testing.T) {
 	state := newPatrolRuntimeState(models.StateSnapshot{
 		VMs: []models.VM{{ID: "vm-requested", Name: "requested", VMID: 501}},
