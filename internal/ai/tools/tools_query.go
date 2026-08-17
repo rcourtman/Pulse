@@ -2151,7 +2151,7 @@ func (e *PulseToolExecutor) registerQueryTools() {
 	e.registry.registerBuiltin(RegisteredTool{
 		Definition: Tool{
 			Name:        agentcapabilities.PulseQueryToolName,
-			Description: `Query and search canonical infrastructure resources. Start here to discover systems, workloads, storage, and disks by name. Actions: search, get, config, topology, list, health.`,
+			Description: `Query and search canonical infrastructure resources. Start here to discover systems, workloads, storage, and disks by name. Actions: search, get, config, topology, list, health. Health returns the connection overview by default, or the canonical resource projection when resource_id is provided.`,
 			InputSchema: InputSchema{
 				Type: "object",
 				Properties: map[string]PropertySchema{
@@ -2171,7 +2171,7 @@ func (e *PulseToolExecutor) registerQueryTools() {
 					},
 					"resource_id": {
 						Type:        "string",
-						Description: "Canonical resource identifier (for action: get, config). Provider-native IDs and names are accepted as lookup aliases, but canonical unified resources are returned with their canonical ID.",
+						Description: "Canonical resource identifier (for action: get, config, or resource-scoped health). Provider-native IDs and names are accepted as lookup aliases, but canonical unified resources are returned with their canonical ID.",
 					},
 					"type": {
 						Type:        "string",
@@ -3612,10 +3612,23 @@ func (e *PulseToolExecutor) executeQuery(ctx context.Context, args map[string]in
 	case "list":
 		return e.executeListInfrastructure(ctx, args)
 	case "health":
-		return e.executeGetConnectionHealth(ctx, args)
+		return e.executeGetHealth(ctx, args)
 	default:
 		return NewErrorResult(fmt.Errorf("unknown action: %s. Use: search, get, config, topology, list, health", action)), nil
 	}
+}
+
+// executeGetHealth preserves the fleet connection-health overview for callers
+// that do not select a resource. Once a resource_id is present, health must be
+// resolved through the same canonical, governed projection as action=get. This
+// prevents a resource-scoped investigation from receiving unrelated aggregate
+// connection counts while retaining backward compatibility for overview calls.
+func (e *PulseToolExecutor) executeGetHealth(ctx context.Context, args map[string]interface{}) (CallToolResult, error) {
+	resourceID, _ := args["resource_id"].(string)
+	if strings.TrimSpace(resourceID) != "" {
+		return e.executeGetResource(ctx, args)
+	}
+	return e.executeGetConnectionHealth(ctx, args)
 }
 
 func (e *PulseToolExecutor) executeListInfrastructure(_ context.Context, args map[string]interface{}) (CallToolResult, error) {
@@ -4971,6 +4984,7 @@ func (e *PulseToolExecutor) executeGetResource(_ context.Context, args map[strin
 			if resource.Docker != nil {
 				response.Image = strings.TrimSpace(resource.Docker.Image)
 				response.Health = strings.TrimSpace(resource.Docker.Health)
+				response.HealthcheckTargets = append([]string{}, resource.Docker.HealthcheckTargets...)
 				response.RestartCount = resource.Docker.RestartCount
 				response.Labels = resource.Docker.Labels
 				if update := resource.Docker.UpdateStatus; update != nil && update.UpdateAvailable {
@@ -5065,6 +5079,7 @@ func (e *PulseToolExecutor) executeGetResource(_ context.Context, args map[strin
 			response.Host = hostName
 			response.Image = container.Image()
 			response.Health = container.Health()
+			response.HealthcheckTargets = container.HealthcheckTargets()
 			response.CPU = ResourceCPU{
 				Percent: container.CPUPercent(),
 			}

@@ -326,6 +326,11 @@ func TestExecuteGetConnectionHealth(t *testing.T) {
 	assert.Equal(t, 2, resp.Total)
 	assert.Equal(t, 1, resp.Connected)
 	assert.Equal(t, 1, resp.Disconnected)
+
+	result, err = exec.executeQuery(ctx, map[string]interface{}{"action": "health"})
+	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal([]byte(result.Content[0].Text), &resp))
+	assert.Equal(t, 2, resp.Total, "health without resource_id must retain the connection overview contract")
 }
 
 func TestConnectionHealthResponseUsesCanonicalEmptyCollections(t *testing.T) {

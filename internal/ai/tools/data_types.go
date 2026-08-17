@@ -662,27 +662,28 @@ type TopologySummary struct {
 // ResourceResponse is returned by pulse_get_resource
 type ResourceResponse struct {
 	GovernedResourceMetadata
-	Type            string            `json:"type"` // "agent", "vm", "system-container", "app-container", "docker-host", "storage"
-	ID              string            `json:"id"`
-	Name            string            `json:"name"`
-	Status          string            `json:"status"`
-	Platform        string            `json:"platform,omitempty"`
-	Node            string            `json:"node,omitempty"`
-	Host            string            `json:"host,omitempty"`
-	CPU             ResourceCPU       `json:"cpu"`
-	Memory          ResourceMemory    `json:"memory"`
-	Disk            *ResourceDisk     `json:"disk,omitempty"`
-	OS              string            `json:"os,omitempty"`
-	Tags            []string          `json:"tags"`
-	Networks        []NetworkInfo     `json:"networks"`
-	Ports           []PortInfo        `json:"ports"`
-	Mounts          []MountInfo       `json:"mounts"`
-	Labels          map[string]string `json:"labels"`
-	LastBackup      *time.Time        `json:"last_backup,omitempty"`
-	Image           string            `json:"image,omitempty"`
-	Health          string            `json:"health,omitempty"`
-	RestartCount    int               `json:"restart_count,omitempty"`
-	UpdateAvailable bool              `json:"update_available,omitempty"`
+	Type               string            `json:"type"` // "agent", "vm", "system-container", "app-container", "docker-host", "storage"
+	ID                 string            `json:"id"`
+	Name               string            `json:"name"`
+	Status             string            `json:"status"`
+	Platform           string            `json:"platform,omitempty"`
+	Node               string            `json:"node,omitempty"`
+	Host               string            `json:"host,omitempty"`
+	CPU                ResourceCPU       `json:"cpu"`
+	Memory             ResourceMemory    `json:"memory"`
+	Disk               *ResourceDisk     `json:"disk,omitempty"`
+	OS                 string            `json:"os,omitempty"`
+	Tags               []string          `json:"tags"`
+	Networks           []NetworkInfo     `json:"networks"`
+	Ports              []PortInfo        `json:"ports"`
+	Mounts             []MountInfo       `json:"mounts"`
+	Labels             map[string]string `json:"labels"`
+	LastBackup         *time.Time        `json:"last_backup,omitempty"`
+	Image              string            `json:"image,omitempty"`
+	Health             string            `json:"health,omitempty"`
+	HealthcheckTargets []string          `json:"healthcheck_targets"`
+	RestartCount       int               `json:"restart_count,omitempty"`
+	UpdateAvailable    bool              `json:"update_available,omitempty"`
 }
 
 func EmptyResourceResponse() ResourceResponse {
@@ -704,6 +705,9 @@ func (r ResourceResponse) NormalizeCollections() ResourceResponse {
 	}
 	if r.Labels == nil {
 		r.Labels = map[string]string{}
+	}
+	if r.HealthcheckTargets == nil {
+		r.HealthcheckTargets = []string{}
 	}
 	for i := range r.Networks {
 		r.Networks[i] = r.Networks[i].NormalizeCollections()

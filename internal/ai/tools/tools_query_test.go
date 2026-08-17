@@ -1215,6 +1215,66 @@ func TestExecuteQuery_AppContainerPreservesCanonicalResourceIDAcrossAliases(t *t
 	}
 }
 
+func TestExecuteQuery_HealthScopesToCanonicalResourceWhenRequested(t *testing.T) {
+	const canonicalID = "app-container-97ba2f28c480ed82"
+	provider := &stubUnifiedResourceProvider{resources: []unifiedresources.Resource{{
+		ID:         canonicalID,
+		Type:       unifiedresources.ResourceTypeAppContainer,
+		Technology: "docker",
+		Name:       "database",
+		Status:     unifiedresources.StatusOffline,
+		ParentName: "colima",
+		Docker: &unifiedresources.DockerData{
+			ContainerID:        strings.Repeat("9", 64),
+			ContainerState:     "exited",
+			Health:             "unhealthy",
+			HealthcheckTargets: []string{"database.internal"},
+			RestartCount:       3,
+		},
+	}}}
+	executor := NewPulseToolExecutor(ExecutorConfig{
+		StateProvider:           &mockStateProvider{state: models.StateSnapshot{}},
+		UnifiedResourceProvider: provider,
+	})
+
+	result, err := executor.executeQuery(context.Background(), map[string]interface{}{
+		"action":      "health",
+		"resource_id": canonicalID,
+	})
+	if err != nil {
+		t.Fatalf("resource-scoped health: %v", err)
+	}
+	var response ResourceResponse
+	if err := json.Unmarshal([]byte(result.Content[0].Text), &response); err != nil {
+		t.Fatalf("decode resource-scoped health response: %v", err)
+	}
+	if response.ID != canonicalID || response.Type != "app-container" || response.Name != "database" {
+		t.Fatalf("resource identity was not preserved: %+v", response)
+	}
+	if response.Status != "exited" || response.Health != "unhealthy" || response.RestartCount != 3 {
+		t.Fatalf("resource health facts were not preserved: %+v", response)
+	}
+	if len(response.HealthcheckTargets) != 1 || response.HealthcheckTargets[0] != "database.internal" {
+		t.Fatalf("health-check dependency targets were not preserved: %+v", response.HealthcheckTargets)
+	}
+
+	result, err = executor.executeQuery(context.Background(), map[string]interface{}{
+		"action":        "health",
+		"resource_type": "app-container",
+		"resource_id":   "missing",
+	})
+	if err != nil {
+		t.Fatalf("unknown resource health: %v", err)
+	}
+	var notFound map[string]interface{}
+	if err := json.Unmarshal([]byte(result.Content[0].Text), &notFound); err != nil {
+		t.Fatalf("decode unknown resource health response: %v", err)
+	}
+	if notFound["error"] != "not_found" || notFound["resource_id"] != "missing" {
+		t.Fatalf("unexpected unknown resource response: %+v", notFound)
+	}
+}
+
 func TestExecuteGetResource_RegistersTrueNASAppContainerForCanonicalControl(t *testing.T) {
 	provider := newTrueNASUnifiedQueryProvider(t)
 	resolved := &mockResolvedContext{

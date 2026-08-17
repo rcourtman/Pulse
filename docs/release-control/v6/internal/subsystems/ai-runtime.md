@@ -7599,3 +7599,13 @@ evidence for at least one plausible causal peer or dependency. Later
 topology/query/discovery resource entries take precedence over an earlier
 empty Docker Swarm-service result when determining whether a container peer is
 implicated.
+
+Resource-scoped investigation health evidence uses the canonical resource
+projection. `pulse_query` with `action=health` and a non-empty `resource_id`
+must resolve through the same governed lookup as `action=get`, including the
+canonical identity, lifecycle status, provider health, restart count, and
+health-check dependency targets available for an app container. It must not
+silently ignore the resource selector and return fleet connection counts.
+Calls without `resource_id` retain the existing aggregate connection-health
+overview for backward compatibility. Provider-native IDs and names remain
+lookup aliases; responses preserve the canonical unified-resource ID.
