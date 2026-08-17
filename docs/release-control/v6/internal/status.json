@@ -2672,6 +2672,11 @@
         },
         {
           "repo": "pulse",
+          "path": "docs/release-control/v6/internal/subsystems/frontend-primitives.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "docs/release-control/v6/internal/subsystems/patrol-intelligence.md",
           "kind": "file"
         },
@@ -7462,7 +7467,7 @@
       "status": "target-met",
       "completion": {
         "state": "complete",
-        "summary": "Monitor-first Patrol operations now has a first-class governed floor: authenticated launch stays on infrastructure monitoring; Patrol owns one contradiction-resistant attention and explain-act-verify workbench over canonical lifecycle, evidence, protection, availability, approval, action, and verification truth; calm states stay honest; and Assistant remains contextual explanation for the selected thing rather than the operations front door.",
+        "summary": "Monitor-first Patrol operations now has a decision-first, responsive governed floor: authenticated launch stays on infrastructure monitoring; current work outranks configuration; Patrol owns one severity-ordered attention and explain-act-verify workbench over canonical lifecycle, evidence, protection, availability, approval, action, and verification truth; objective setup and verified receipts remain compact supporting context; calm states stay honest; and Assistant remains contextual explanation for the selected thing rather than the operations front door.",
         "tracking": []
       },
       "blockers": [],
@@ -7561,7 +7566,37 @@
         },
         {
           "repo": "pulse",
+          "path": "frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/features/patrol/PatrolObjectivesPanel.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/features/patrol/PatrolRecentWorkPanel.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/pages/__tests__/AIIntelligence.test.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/utils/patrolPagePresentation.ts",
           "kind": "file"
         },
         {

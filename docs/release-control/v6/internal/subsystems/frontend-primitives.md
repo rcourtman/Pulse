@@ -773,12 +773,15 @@ presentation helpers and render them inside the shared neutral Pulse surface
 language rather than introducing page-local verdict bands or nested cards.
 The Patrol operator home composes the shared `PageHeader`, `Button`, `Toggle`,
 `MetadataBadge`, native disclosure, dialog, and neutral bordered-surface
-patterns. Patrol owns the meaning and order of background posture, objectives,
-genuine decisions, verified receipts, and secondary operational records; the
+patterns. Patrol owns the meaning and order of background posture, genuine
+decisions, objectives, verified receipts, and secondary operational records; the
 shared primitive boundary owns keyboard focus, touch targets, responsive
 stacking, and visual consistency. Plan-locked paid-mode discovery is not a
 daily-page primitive and must not be added beside the effective mode.
-The compact `Recently handled` list consumes server-authored Patrol work
+Current API-owned decisions must follow the compact posture header and precede
+objective configuration at every viewport; an empty objective state must not
+push current work below the first useful screen. The compact `Verified outcomes`
+list consumes server-authored Patrol work
 receipts rather than filtering generic history in the browser. It may format
 the canonical capability name and verification time with shared presentation
 helpers, and it reuses the action resource presenter for durable resources that
@@ -2600,14 +2603,16 @@ buttons, visible focus, selected-state semantics, focus restoration, narrow
 viewport ordering, and reduced-motion-safe behavior. Detail deep links use
 `frontend-modern/src/routing/resourceLinks.ts` and remain stable across reload.
 
-The default queue may show resource, impact, evidence, protection, next-step,
-and age facts. Provider evidence and lifecycle history belong in selected
-detail, while legacy Patrol analytics belong in collapsed supporting context.
-Unavailable and partial states must use explicit copy rather than success
-styling. Scan rows omit unavailable protection metadata and collapse evidence
-freshness/completeness into one operator phrase; selected detail keeps the typed
-facts with named fields and plain unavailable-state labels rather than raw token
-pairs.
+The default queue shows severity, lifecycle state, plain-language consequence,
+resource, the required review posture, and observation age. It sorts severity
+first, then items with a governed approval or existing action, then newest
+observation, while retaining the server-authored membership. Provider evidence,
+protection posture, lifecycle controls, and history belong in selected detail;
+legacy Patrol analytics belong in collapsed supporting context. Unavailable and
+partial states must use explicit copy rather than success styling. Selected
+detail keeps the typed facts with named fields and plain unavailable-state
+labels rather than raw token pairs. On narrow viewports, selecting a row moves
+and focuses that decision context without horizontal page overflow.
 
 The selected attention detail may compose the shared Actions review for an
 eligible backend-authored offer. The detail owns only the expected

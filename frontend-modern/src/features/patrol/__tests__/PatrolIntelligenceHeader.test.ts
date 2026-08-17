@@ -103,10 +103,10 @@ describe('PatrolIntelligenceHeader', () => {
 
   it('keeps primary Patrol actions touch-sized on phones without inflating desktop chrome', () => {
     expect(headerSource).toContain(
-      'flex min-h-11 items-center gap-2 rounded-md border border-border bg-surface',
+      'flex min-h-11 items-center justify-center gap-2 rounded-md border border-blue-600',
     );
     expect(headerSource).toContain(
-      'flex min-h-11 items-center gap-2 rounded-md border border-border',
+      'flex min-h-11 items-center justify-center gap-2 rounded-md border border-border',
     );
     expect(headerSource).toContain('sm:min-h-0');
   });

@@ -66,7 +66,10 @@ vi.mock('@/features/actions/ActionReviewDialog', async () => {
   };
 });
 
-import { PatrolAttentionWorkbench } from '../PatrolAttentionWorkbench';
+import {
+  PatrolAttentionWorkbench,
+  sortPatrolAttentionDecisions,
+} from '../PatrolAttentionWorkbench';
 import { patrolAttentionStore } from '@/stores/patrolAttention';
 
 const evaluatedAt = '2026-07-19T08:00:00Z';
@@ -226,7 +229,9 @@ describe('PatrolAttentionWorkbench', () => {
     apiMocks.getList.mockResolvedValue(listResponse([item()], attentionSummary));
     renderWorkbench();
 
-    expect(await screen.findByRole('heading', { name: 'Needs you' })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { name: 'Needs your attention' }),
+    ).toBeInTheDocument();
     expect(
       screen.getByRole('button', { name: 'Open Disk pressure on Database VM' }),
     ).toBeInTheDocument();
@@ -295,6 +300,41 @@ describe('PatrolAttentionWorkbench', () => {
     fireEvent.click(showAll);
     expect(screen.getAllByRole('button', { name: /Open Decision/ })).toHaveLength(7);
     expect(screen.getByRole('button', { name: 'Show fewer decisions' })).toBeInTheDocument();
+  });
+
+  it('orders the operator queue by severity, actionable decisions, and freshest evidence', () => {
+    const action = {
+      targetResourceId: 'pve:vm:101',
+      capability: 'expand_disk',
+      kind: 'storage',
+      label: 'Expand disk',
+      mode: 'execute' as const,
+      risk: 'medium',
+      approval: 'required' as const,
+      eligibility: 'eligible' as const,
+      reasons: [],
+      evidenceIds: ['evidence-1'],
+      expectedPostcondition: 'Disk pressure clears.',
+      verificationPolicy: 'disk-pressure',
+      requiresApproval: true,
+    };
+    const decisions = [
+      item({ id: 'warning', severity: 'warning', lastObservedAt: '2026-07-19T09:00:00Z' }),
+      item({ id: 'critical-old', lastObservedAt: '2026-07-19T07:30:00Z' }),
+      item({
+        id: 'critical-action',
+        lastObservedAt: '2026-07-19T07:00:00Z',
+        availableActions: [action],
+      }),
+      item({ id: 'critical-new', lastObservedAt: '2026-07-19T08:30:00Z' }),
+    ].map((attentionItem) => ({ item: attentionItem, reason: 'Review this issue.' }));
+
+    expect(sortPatrolAttentionDecisions(decisions).map((decision) => decision.item.id)).toEqual([
+      'critical-action',
+      'critical-new',
+      'critical-old',
+      'warning',
+    ]);
   });
 
   it('opens deepest typed evidence, protection, and timeline detail from one queue item', async () => {

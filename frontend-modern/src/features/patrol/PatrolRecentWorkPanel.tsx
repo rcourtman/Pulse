@@ -25,7 +25,9 @@ export function PatrolRecentWorkPanel() {
     if (!quiet) setLoading(true);
     try {
       const response = await getPatrolWorkReceipts(RECEIPT_LIMIT);
-      setItems(response.data);
+      // Keep this secondary panel from taking down the primary workbench if an
+      // older server or a partially available endpoint omits its receipts.
+      setItems(Array.isArray(response.data) ? response.data : []);
       setError('');
     } catch (cause) {
       setError(formatRecentWorkError(cause));
@@ -49,16 +51,16 @@ export function PatrolRecentWorkPanel() {
 
   return (
     <section
-      class="overflow-hidden rounded-lg border border-border bg-surface"
+      class="h-full overflow-hidden rounded-lg border border-border bg-surface"
       aria-labelledby="patrol-recent-work-title"
     >
       <div class="flex items-start justify-between gap-3 border-b border-border px-4 py-4 sm:px-5">
         <div>
           <h2 id="patrol-recent-work-title" class="text-base font-semibold text-base-content">
-            Recently handled
+            Verified outcomes
           </h2>
           <p class="mt-1 max-w-3xl text-sm leading-5 text-muted">
-            Concise receipts appear only after Patrol has verified the outcome.
+            Work appears here only after Patrol confirms the expected result.
           </p>
         </div>
         <Button
@@ -94,13 +96,15 @@ export function PatrolRecentWorkPanel() {
           <Show
             when={receipts().length > 0}
             fallback={
-              <div class="px-6 py-8 text-center">
-                <CheckCircleIcon class="mx-auto h-8 w-8 text-muted" aria-hidden="true" />
-                <h3 class="mt-3 text-sm font-semibold text-base-content">No verified work yet</h3>
-                <p class="mx-auto mt-1 max-w-lg text-xs leading-5 text-muted">
-                  Patrol will record a receipt here after an issue is resolved and its expected
-                  outcome is confirmed.
-                </p>
+              <div class="flex min-h-24 items-start gap-3 px-4 py-4 sm:px-5">
+                <CheckCircleIcon class="mt-0.5 h-5 w-5 shrink-0 text-muted" aria-hidden="true" />
+                <div>
+                  <h3 class="text-sm font-semibold text-base-content">No verified outcomes yet</h3>
+                  <p class="mt-1 text-xs leading-5 text-muted">
+                    Patrol records a receipt after an issue is resolved and the expected result is
+                    confirmed.
+                  </p>
+                </div>
               </div>
             }
           >

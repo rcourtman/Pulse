@@ -301,8 +301,8 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
         class="relative z-[200] mb-3"
       />
 
-      <section class="rounded-lg border border-border bg-surface px-4 py-4 shadow-sm sm:px-5">
-        <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+      <section class="overflow-hidden rounded-lg border border-border bg-surface shadow-sm">
+        <div class="flex flex-col gap-4 px-4 py-4 sm:px-5 lg:flex-row lg:items-start lg:justify-between">
           <div class="flex min-w-0 items-start gap-3">
             <div class="pt-0.5">
               <TogglePrimitive
@@ -316,11 +316,9 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
             <div class="min-w-0">
               <div class="flex flex-wrap items-center gap-2">
                 <h2 class="text-sm font-semibold text-base-content">
-                  {state.patrolEnabledLocal()
-                    ? 'Patrol is looking after your infrastructure'
-                    : 'Patrol is off'}
+                  {state.patrolEnabledLocal() ? 'Watching your infrastructure' : 'Patrol is off'}
                 </h2>
-                <span class="rounded-full border border-border-subtle bg-surface-alt px-2 py-0.5 text-xs font-medium text-base-content">
+                <span class="rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-800 dark:border-blue-800 dark:bg-blue-950/50 dark:text-blue-200">
                   {selectedAutonomyExperience().label}
                 </span>
               </div>
@@ -333,41 +331,42 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
                 <p class="mt-1 text-xs leading-5 text-muted">{triggerStatusSummary()}</p>
               </Show>
               <Show when={!state.shouldShowPatrolSetupOnly() && recency().timestamp}>
-                <p class="mt-1 text-xs leading-5 text-muted">
-                  {recency().label}:{' '}
-                  {formatRelativeTime(recency().timestamp, {
-                    compact: true,
-                    emptyText: 'Never',
-                  })}
+                <div class="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs leading-5 text-muted">
+                  <span>
+                    {recency().label}:{' '}
+                    {formatRelativeTime(recency().timestamp, {
+                      compact: true,
+                      emptyText: 'Never',
+                    })}
+                  </span>
                   <Show when={recency().resourcesCheckedLabel}>
-                    {' '}
-                    — {recency().resourcesCheckedLabel}
+                    <span aria-hidden="true">·</span>
+                    <span>{recency().resourcesCheckedLabel}</span>
                   </Show>
                   <Show when={state.patrolStatus()?.next_patrol_at}>
-                    {' '}
-                    ·{' '}
+                    <span aria-hidden="true">·</span>
                     <CountdownTimer
                       targetDate={state.patrolStatus()!.next_patrol_at!}
-                      prefix="Next check: "
+                      prefix="Next check "
                       class="font-variant-numeric tabular-nums"
                     />
                   </Show>
-                </p>
+                </div>
               </Show>
             </div>
           </div>
 
           <Show when={!state.shouldShowPatrolSetupOnly()}>
-            <div class="flex shrink-0 flex-wrap items-center gap-2">
+            <div class="grid w-full shrink-0 grid-cols-2 gap-2 lg:flex lg:w-auto lg:flex-wrap lg:items-center">
               {renderRunControl(
-                'flex min-h-11 items-center gap-2 rounded-md border border-border bg-surface px-3 py-1.5 text-sm font-medium text-base-content shadow-sm transition-colors hover:bg-surface-alt disabled:text-muted sm:min-h-0',
+                'flex min-h-11 items-center justify-center gap-2 rounded-md border border-blue-600 bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-700 disabled:border-border disabled:bg-surface-alt disabled:text-muted sm:min-h-0',
               )}
               <Show when={!runBlockedByProviderSetup()}>
                 <A
                   href={settingsTabPath('system-ai-patrol')}
                   aria-label="Open Patrol settings"
                   title="Open Patrol settings"
-                  class="flex min-h-11 items-center gap-2 rounded-md border border-border px-3 py-1.5 text-sm font-medium text-base-content shadow-sm transition-colors hover:bg-surface-alt sm:min-h-0"
+                  class="flex min-h-11 items-center justify-center gap-2 rounded-md border border-border px-3 py-1.5 text-sm font-medium text-base-content shadow-sm transition-colors hover:bg-surface-alt sm:min-h-0"
                 >
                   <SettingsIcon class="h-4 w-4" />
                   Settings
@@ -377,9 +376,9 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
           </Show>
         </div>
 
-        <details id={PATROL_CONTROL_ANCHOR} class="mt-4 border-t border-border-subtle pt-3">
+        <details id={PATROL_CONTROL_ANCHOR} class="border-t border-border-subtle px-4 py-3 sm:px-5">
           <summary class="min-h-11 cursor-pointer text-sm font-medium text-base-content focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 sm:min-h-0">
-            How Patrol operates
+            Mode and automation
           </summary>
           <div class="pt-3">
             <span id={PATROL_OPERATIONS_LOOP_ANCHOR} class="sr-only" aria-hidden="true" />

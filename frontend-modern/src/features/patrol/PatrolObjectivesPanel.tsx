@@ -200,11 +200,11 @@ export const PatrolObjectivesPanel: Component = () => {
       <div class="flex flex-col gap-3 border-b border-border px-4 py-4 sm:flex-row sm:items-start sm:justify-between sm:px-5">
         <div>
           <h2 id="patrol-objectives-title" class="text-base font-semibold text-base-content">
-            What Patrol is looking after
+            Protected outcomes
           </h2>
-          <p class="mt-1 max-w-3xl text-sm text-muted">
-            Describe the outcome. Patrol chooses a cheap local signal, wakes the model only when
-            evidence changes, and handles any fix according to your Patrol mode.
+          <p class="mt-1 max-w-3xl text-sm leading-5 text-muted">
+            Tell Patrol what must stay true. It builds the smallest useful background signal and
+            reports when the outcome changes.
           </p>
         </div>
         <Button variant="primary" size="sm" onClick={(event) => openCreate(event.currentTarget)}>
@@ -216,7 +216,7 @@ export const PatrolObjectivesPanel: Component = () => {
       <div class="p-4 sm:p-5">
         <Show
           when={!loading()}
-          fallback={<p class="py-6 text-center text-sm text-muted">Loading objectives…</p>}
+          fallback={<p class="py-3 text-sm text-muted">Loading protected outcomes…</p>}
         >
           <Show
             when={!loadError()}
@@ -229,109 +229,111 @@ export const PatrolObjectivesPanel: Component = () => {
               </div>
             }
           >
-            <div
-              class={`mb-4 rounded-lg border px-4 py-3 ${
-                protectionSummary().tone === 'success'
-                  ? 'border-emerald-200 bg-emerald-50/70 dark:border-emerald-900 dark:bg-emerald-950/20'
-                  : protectionSummary().tone === 'warning'
-                    ? 'border-amber-200 bg-amber-50/70 dark:border-amber-900 dark:bg-amber-950/20'
-                    : 'border-border-subtle bg-surface-alt/40'
-              }`}
-              aria-live="polite"
-            >
-              <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
-                <p class="text-sm font-semibold text-base-content">
-                  {protectionSummary().headline}
-                </p>
-                <Show when={protectionSummary().paused > 0}>
-                  <MetadataBadge tone="neutral" size="xs" shape="rounded">
-                    {protectionSummary().paused} paused
-                  </MetadataBadge>
-                </Show>
-              </div>
-              <p class="mt-1 text-xs leading-5 text-muted">{protectionSummary().detail}</p>
-            </div>
             <Show
               when={objectives().length > 0}
               fallback={
-                <div class="rounded-lg border border-dashed border-border px-4 py-8 text-center">
-                  <p class="text-sm font-medium text-base-content">No retained outcomes yet</p>
-                  <p class="mx-auto mt-1 max-w-xl text-sm text-muted">
-                    Try “Keep my cameras available” or “Keep disk use below 85%”. You set the
-                    outcome; Patrol works out how to observe it safely.
+                <div class="flex min-h-24 flex-col justify-center rounded-lg border border-dashed border-border px-4 py-4">
+                  <p class="text-sm font-semibold text-base-content">Choose what matters most</p>
+                  <p class="mt-1 text-xs leading-5 text-muted">
+                    For example, “Keep my cameras available” or “Keep disk use below 85%”. Patrol
+                    works out how to observe it safely.
                   </p>
                 </div>
               }
             >
-              <div class="divide-y divide-border rounded-lg border border-border">
-                <For each={objectives()}>
-                  {(objective) => {
-                    const presentation = () => coveragePresentation(objective.coverage);
-                    const scopeLabel = () =>
-                      objective.scope.resource_ids.length === 0
-                        ? 'Entire estate'
-                        : `${objective.scope.resource_ids.length} selected ${objective.scope.resource_ids.length === 1 ? 'resource' : 'resources'}`;
-                    return (
-                      <article class="flex flex-col gap-3 p-4 lg:flex-row lg:items-start lg:justify-between">
-                        <div class="min-w-0 flex-1">
-                          <div class="flex flex-wrap items-center gap-2">
-                            <h3 class="break-words text-sm font-semibold text-base-content">
-                              {objective.brief}
-                            </h3>
-                            <Show when={objective.status === 'paused'}>
-                              <MetadataBadge tone="neutral" size="xs" shape="rounded">
-                                Paused
+              <>
+                <div
+                  class={`mb-4 rounded-lg border px-4 py-3 ${
+                    protectionSummary().tone === 'success'
+                      ? 'border-emerald-200 bg-emerald-50/70 dark:border-emerald-900 dark:bg-emerald-950/20'
+                      : protectionSummary().tone === 'warning'
+                        ? 'border-amber-200 bg-amber-50/70 dark:border-amber-900 dark:bg-amber-950/20'
+                        : 'border-border-subtle bg-surface-alt/40'
+                  }`}
+                  aria-live="polite"
+                >
+                  <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+                    <p class="text-sm font-semibold text-base-content">
+                      {protectionSummary().headline}
+                    </p>
+                    <Show when={protectionSummary().paused > 0}>
+                      <MetadataBadge tone="neutral" size="xs" shape="rounded">
+                        {protectionSummary().paused} paused
+                      </MetadataBadge>
+                    </Show>
+                  </div>
+                  <p class="mt-1 text-xs leading-5 text-muted">{protectionSummary().detail}</p>
+                </div>
+                <div class="divide-y divide-border rounded-lg border border-border">
+                  <For each={objectives()}>
+                    {(objective) => {
+                      const presentation = () => coveragePresentation(objective.coverage);
+                      const scopeLabel = () =>
+                        objective.scope.resource_ids.length === 0
+                          ? 'Entire estate'
+                          : `${objective.scope.resource_ids.length} selected ${objective.scope.resource_ids.length === 1 ? 'resource' : 'resources'}`;
+                      return (
+                        <article class="flex flex-col gap-3 p-4 lg:flex-row lg:items-start lg:justify-between">
+                          <div class="min-w-0 flex-1">
+                            <div class="flex flex-wrap items-center gap-2">
+                              <h3 class="break-words text-sm font-semibold text-base-content">
+                                {objective.brief}
+                              </h3>
+                              <Show when={objective.status === 'paused'}>
+                                <MetadataBadge tone="neutral" size="xs" shape="rounded">
+                                  Paused
+                                </MetadataBadge>
+                              </Show>
+                              <MetadataBadge tone={presentation().tone} size="xs" shape="rounded">
+                                {presentation().label}
                               </MetadataBadge>
-                            </Show>
-                            <MetadataBadge tone={presentation().tone} size="xs" shape="rounded">
-                              {presentation().label}
-                            </MetadataBadge>
+                            </div>
+                            <p class="mt-1 text-sm text-muted">{objective.coverage.summary}</p>
+                            <p class="mt-2 text-xs text-muted">{scopeLabel()}</p>
                           </div>
-                          <p class="mt-1 text-sm text-muted">{objective.coverage.summary}</p>
-                          <p class="mt-2 text-xs text-muted">{scopeLabel()}</p>
-                        </div>
-                        <div class="flex flex-wrap items-center gap-2">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            disabled={mutatingId() === objective.id}
-                            onClick={() =>
-                              void setObjectiveStatus(
-                                objective,
-                                objective.status === 'paused' ? 'active' : 'paused',
-                              )
-                            }
-                          >
-                            {objective.status === 'paused' ? (
-                              <PlayIcon class="mr-2 h-4 w-4" />
-                            ) : (
-                              <PauseIcon class="mr-2 h-4 w-4" />
-                            )}
-                            {objective.status === 'paused' ? 'Resume' : 'Pause'}
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={(event) => openEdit(objective, event.currentTarget)}
-                          >
-                            <PencilIcon class="mr-2 h-4 w-4" />
-                            Edit
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            disabled={mutatingId() === objective.id}
-                            onClick={() => void removeObjective(objective)}
-                          >
-                            <TrashIcon class="mr-2 h-4 w-4" />
-                            Delete
-                          </Button>
-                        </div>
-                      </article>
-                    );
-                  }}
-                </For>
-              </div>
+                          <div class="flex flex-wrap items-center gap-2">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              disabled={mutatingId() === objective.id}
+                              onClick={() =>
+                                void setObjectiveStatus(
+                                  objective,
+                                  objective.status === 'paused' ? 'active' : 'paused',
+                                )
+                              }
+                            >
+                              {objective.status === 'paused' ? (
+                                <PlayIcon class="mr-2 h-4 w-4" />
+                              ) : (
+                                <PauseIcon class="mr-2 h-4 w-4" />
+                              )}
+                              {objective.status === 'paused' ? 'Resume' : 'Pause'}
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={(event) => openEdit(objective, event.currentTarget)}
+                            >
+                              <PencilIcon class="mr-2 h-4 w-4" />
+                              Edit
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              disabled={mutatingId() === objective.id}
+                              onClick={() => void removeObjective(objective)}
+                            >
+                              <TrashIcon class="mr-2 h-4 w-4" />
+                              Delete
+                            </Button>
+                          </div>
+                        </article>
+                      );
+                    }}
+                  </For>
+                </div>
+              </>
             </Show>
           </Show>
         </Show>

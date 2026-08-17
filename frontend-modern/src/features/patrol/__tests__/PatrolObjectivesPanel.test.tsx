@@ -53,7 +53,7 @@ describe('PatrolObjectivesPanel', () => {
 
   it('creates an abstract estate-wide objective from one simple statement', async () => {
     render(() => <PatrolObjectivesPanel />);
-    expect(await screen.findByText('No retained outcomes yet')).toBeInTheDocument();
+    expect(await screen.findByText('Choose what matters most')).toBeInTheDocument();
 
     fireEvent.click(screen.getAllByRole('button', { name: 'Add objective' }).at(-1)!);
     const outcome = screen.getByLabelText('What should Patrol keep true?');

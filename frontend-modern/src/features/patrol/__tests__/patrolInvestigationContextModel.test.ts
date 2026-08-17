@@ -1525,9 +1525,9 @@ describe('Patrol page header IA framing', () => {
     const { getPatrolPageHeaderMeta, PATROL_PAGE_DESCRIPTION, PATROL_PAGE_TITLE_TOOLTIP } =
       await import('@/utils/patrolPagePresentation');
     expect(PATROL_PAGE_DESCRIPTION).toBe(
-      'Patrol checks your infrastructure, explains what it found, follows your mode before acting, and records the result.',
+      'Patrol detects operational issues, brings forward the next decision, and records only verified outcomes.',
     );
-    expect(PATROL_PAGE_DESCRIPTION).toContain('follows your mode before acting');
+    expect(PATROL_PAGE_DESCRIPTION).toContain('verified outcomes');
     expect(PATROL_PAGE_TITLE_TOOLTIP).toBe(PATROL_PAGE_DESCRIPTION);
     expect(getPatrolPageHeaderMeta()).toMatchObject({
       title: 'Patrol',
@@ -1536,8 +1536,8 @@ describe('Patrol page header IA framing', () => {
     });
     expect(getPatrolPageHeaderMeta({ autonomyLocked: true })).toMatchObject({
       title: 'Patrol',
-      description: 'Patrol checks your infrastructure and shows current issues.',
-      titleTooltip: 'Patrol checks your infrastructure and shows current issues.',
+      description: 'Continuous infrastructure checks, with every decision kept in your hands.',
+      titleTooltip: 'Continuous infrastructure checks, with every decision kept in your hands.',
     });
   });
 });

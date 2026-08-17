@@ -64,6 +64,35 @@ import {
 const PRIMARY_EVIDENCE_LIMIT = 3;
 const PRIMARY_DECISION_LIMIT = 5;
 
+const SEVERITY_PRIORITY: Record<AttentionItem['severity'], number> = {
+  critical: 0,
+  warning: 1,
+  info: 2,
+  unknown: 3,
+};
+
+export function sortPatrolAttentionDecisions(
+  decisions: PatrolAttentionDecision[],
+): PatrolAttentionDecision[] {
+  return [...decisions].sort((left, right) => {
+    const severityDelta =
+      SEVERITY_PRIORITY[left.item.severity] - SEVERITY_PRIORITY[right.item.severity];
+    if (severityDelta !== 0) return severityDelta;
+
+    const leftActionable = left.item.availableActions.some(
+      (action) => action.approval === 'required' || action.requiresApproval || action.actionId,
+    );
+    const rightActionable = right.item.availableActions.some(
+      (action) => action.approval === 'required' || action.requiresApproval || action.actionId,
+    );
+    if (leftActionable !== rightActionable) return leftActionable ? -1 : 1;
+
+    return (
+      new Date(right.item.lastObservedAt).getTime() - new Date(left.item.lastObservedAt).getTime()
+    );
+  });
+}
+
 export function PatrolAttentionWorkbench(
   props: {
     autonomyLevel?: PatrolAutonomyLevel;
@@ -98,8 +127,8 @@ export function PatrolAttentionWorkbench(
   );
   const visibleDecisions = createMemo(() =>
     showAllDecisions()
-      ? attention().needsUser
-      : attention().needsUser.slice(0, PRIMARY_DECISION_LIMIT),
+      ? sortPatrolAttentionDecisions(attention().needsUser)
+      : sortPatrolAttentionDecisions(attention().needsUser).slice(0, PRIMARY_DECISION_LIMIT),
   );
 
   const loadCurrentFilter = () => patrolAttentionStore.load(patrolAttentionStore.filter());
@@ -107,6 +136,7 @@ export function PatrolAttentionWorkbench(
     queueMicrotask(() => {
       if (window.matchMedia?.('(max-width: 1023px)').matches) {
         detailPanel?.scrollIntoView?.({ block: 'start' });
+        detailPanel?.focus?.({ preventScroll: true });
       }
     });
   };
@@ -203,7 +233,7 @@ export function PatrolAttentionWorkbench(
 
   const decisionCountLabel = createMemo(() => {
     const count = attention().needsUser.length;
-    return `${count} ${count === 1 ? 'decision needs' : 'decisions need'} you`;
+    return `${count} ${count === 1 ? 'item requires' : 'items require'} review`;
   });
 
   return (
@@ -216,7 +246,7 @@ export function PatrolAttentionWorkbench(
           <div class="min-w-0">
             <div class="flex flex-wrap items-center gap-2">
               <h2 id="patrol-attention-heading" class="text-base font-semibold text-base-content">
-                Needs you
+                Needs your attention
               </h2>
               <Show when={summary()}>
                 <MetadataBadge
@@ -225,7 +255,7 @@ export function PatrolAttentionWorkbench(
                   shape="rounded"
                   aria-label={decisionCountLabel()}
                 >
-                  {attention().needsUser.length}
+                  {attention().needsUser.length} to review
                 </MetadataBadge>
               </Show>
             </div>
@@ -258,10 +288,10 @@ export function PatrolAttentionWorkbench(
       </div>
 
       <div
-        class={`grid min-w-0 ${selectedItemId() ? 'lg:grid-cols-[minmax(18rem,0.8fr)_minmax(0,1.2fr)]' : ''}`}
+        class={`grid min-w-0 ${selectedItemId() ? 'lg:grid-cols-[minmax(20rem,0.82fr)_minmax(0,1.18fr)]' : ''}`}
       >
         <div
-          class={`min-w-0 ${selectedItemId() ? 'border-b border-border lg:border-b-0 lg:border-r' : ''}`}
+          class={`min-w-0 ${selectedItemId() ? 'border-b border-border lg:max-h-[48rem] lg:overflow-y-auto lg:border-b-0 lg:border-r' : ''}`}
         >
           <AttentionList
             decisions={visibleDecisions()}
@@ -271,7 +301,11 @@ export function PatrolAttentionWorkbench(
           />
         </div>
         <Show when={selectedItemId()}>
-          <div ref={detailPanel} class="order-first min-w-0 scroll-mt-4 lg:order-none">
+          <div
+            ref={detailPanel}
+            tabindex="-1"
+            class="order-first min-w-0 scroll-mt-4 lg:order-none lg:max-h-[48rem] lg:overflow-y-auto"
+          >
             <AttentionDetail
               detail={selectedDetail()}
               loading={patrolAttentionStore.detailLoading()}
@@ -363,6 +397,19 @@ function AttentionList(props: {
             <For each={props.decisions}>
               {(decision) => {
                 const item = decision.item;
+                const decisionLabel = () => {
+                  if (
+                    item.availableActions.some(
+                      (action) => action.approval === 'required' || action.requiresApproval,
+                    )
+                  ) {
+                    return 'Approval needed';
+                  }
+                  if (item.verificationState === 'failed' || item.verificationState === 'unknown') {
+                    return 'Verify result';
+                  }
+                  return 'Review';
+                };
                 return (
                   <li>
                     <button
@@ -378,10 +425,12 @@ function AttentionList(props: {
                       onClick={() => props.onSelect(item.id)}
                     >
                       <div class="flex min-w-0 items-start gap-3">
-                        <SeverityMarker item={item} />
                         <div class="min-w-0 flex-1">
                           <div class="flex min-w-0 flex-wrap items-center gap-2">
-                            <span class="truncate text-sm font-semibold text-base-content">
+                            <MetadataBadge tone={severityTone(item)} size="xs" shape="rounded">
+                              {formatLabel(item.severity)}
+                            </MetadataBadge>
+                            <span class="min-w-0 flex-1 truncate text-sm font-semibold text-base-content">
                               {item.title}
                             </span>
                             <StateBadge item={item} />
@@ -389,17 +438,18 @@ function AttentionList(props: {
                           <p class="mt-1 line-clamp-2 text-xs leading-5 text-muted">
                             {item.plainLanguageSummary}
                           </p>
-                          <p class="mt-1 text-xs font-medium leading-5 text-amber-700 dark:text-amber-300">
-                            {decision.reason}
-                          </p>
                           <div class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted">
+                            <span
+                              class="font-semibold text-amber-700 dark:text-amber-300"
+                              title={decision.reason}
+                            >
+                              {decisionLabel()}
+                            </span>
                             <span class="truncate font-medium text-base-content">
                               {item.subjectResourceName}
                             </span>
-                            <EvidenceLabel item={item} />
-                            <ProtectionLabel item={item} />
                             <span>
-                              {formatRelativeTime(item.firstObservedAt, { compact: true })}
+                              Last seen {formatRelativeTime(item.lastObservedAt, { compact: true })}
                             </span>
                           </div>
                         </div>
@@ -563,7 +613,7 @@ function AttentionDetail(props: {
       <div class="flex items-start justify-between gap-3 border-b border-border px-4 py-3 sm:px-5">
         <div class="min-w-0">
           <p class="text-[11px] font-semibold uppercase tracking-wider text-muted">
-            Attention detail
+            Decision context
           </p>
           <h3 id="attention-detail-title" class="mt-1 text-sm font-semibold text-base-content">
             {item()?.title ?? 'Loading attention item'}
@@ -600,17 +650,6 @@ function AttentionDetail(props: {
                 {loaded().item.plainLanguageSummary}
               </p>
             </section>
-
-            <AttentionLifecycleControls
-              detail={loaded()}
-              busy={props.lifecycleBusy}
-              error={props.lifecycleError}
-              onAcknowledge={props.onAcknowledge}
-              onUnacknowledge={props.onUnacknowledge}
-              onSuppress={props.onSuppress}
-              onUnsuppress={props.onUnsuppress}
-              onOpenFindings={props.onOpenFindings}
-            />
 
             <DetailSection title="Affected resource">
               <p class="text-sm font-medium text-base-content">
@@ -681,6 +720,17 @@ function AttentionDetail(props: {
                 </DetailSection>
               )}
             </Show>
+
+            <AttentionLifecycleControls
+              detail={loaded()}
+              busy={props.lifecycleBusy}
+              error={props.lifecycleError}
+              onAcknowledge={props.onAcknowledge}
+              onUnacknowledge={props.onUnacknowledge}
+              onSuppress={props.onSuppress}
+              onUnsuppress={props.onUnsuppress}
+              onOpenFindings={props.onOpenFindings}
+            />
 
             <DetailSection title="Evidence">
               <Show
@@ -1098,26 +1148,17 @@ function EvidenceObservation(props: { evidence: EvidenceEnvelope }) {
   );
 }
 
-function SeverityMarker(props: { item: AttentionItem }) {
-  const classes = () => {
-    switch (props.item.severity) {
-      case 'critical':
-        return 'bg-red-500';
-      case 'warning':
-        return 'bg-amber-500';
-      case 'info':
-        return 'bg-blue-500';
-      default:
-        return 'bg-slate-400';
-    }
-  };
-  return (
-    <span
-      class={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${classes()}`}
-      title={`${formatLabel(props.item.severity)} severity`}
-      aria-hidden="true"
-    />
-  );
+function severityTone(item: AttentionItem): MetadataBadgeTone {
+  switch (item.severity) {
+    case 'critical':
+      return 'danger';
+    case 'warning':
+      return 'warning';
+    case 'info':
+      return 'info';
+    default:
+      return 'muted';
+  }
 }
 
 function StateBadge(props: { item: AttentionItem }) {

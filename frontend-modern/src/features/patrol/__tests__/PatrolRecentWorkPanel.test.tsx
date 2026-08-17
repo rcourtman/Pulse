@@ -73,7 +73,7 @@ describe('PatrolRecentWorkPanel', () => {
     render(() => <PatrolRecentWorkPanel />);
 
     expect(
-      await screen.findByRole('heading', { name: 'No verified work yet' }),
+      await screen.findByRole('heading', { name: 'No verified outcomes yet' }),
     ).toBeInTheDocument();
     expect(screen.queryByText('Verified')).not.toBeInTheDocument();
   });

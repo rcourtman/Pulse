@@ -36,7 +36,7 @@ test("Autopilot records a versioned server acknowledgement before effective full
     await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, settings: { autonomy_level: active ? "full" : "monitor", requested_autonomy_level: active ? "full" : "monitor", effective_autonomy_level: active ? "full" : "monitor", full_mode_unlocked: active, autopilot_acknowledgement: status, investigation_budget: 15, investigation_timeout_sec: 300 }, autonomy_level: active ? "full" : "monitor", requested_autonomy_level: active ? "full" : "monitor", effective_autonomy_level: active ? "full" : "monitor", full_mode_unlocked: active, autopilot_acknowledgement: status, investigation_budget: 15, investigation_timeout_sec: 300 }) });
   });
   await page.goto("/patrol", { waitUntil: "domcontentloaded" });
-  await page.getByText("How Patrol operates", { exact: true }).click();
+  await page.getByText("Mode and automation", { exact: true }).click();
   await page.getByRole("button", { name: "Autopilot" }).click();
   await expect(page.getByRole("dialog", { name: "Activate Autopilot" })).toBeVisible();
   const activate = page.getByRole("button", { name: "Record acknowledgement and activate" });

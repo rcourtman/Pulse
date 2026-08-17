@@ -801,7 +801,7 @@ test.describe("Patrol runtime-state browser contract", () => {
 
     await page.goto("/patrol", { waitUntil: "domcontentloaded" });
 
-    await page.getByText("How Patrol operates", { exact: true }).click();
+    await page.getByText("Mode and automation", { exact: true }).click();
     const modeGroup = page.getByRole("group", { name: "Patrol mode" });
     await expect(modeGroup).toBeVisible();
     await expect(

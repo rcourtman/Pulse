@@ -15,24 +15,24 @@ describe('patrolPagePresentation', () => {
     // users learn the full operations-loop model.
     expect(PATROL_PAGE_TITLE).toBe('Patrol');
     expect(PATROL_PAGE_DESCRIPTION).toBe(
-      'Patrol checks your infrastructure, explains what it found, follows your mode before acting, and records the result.',
+      'Patrol detects operational issues, brings forward the next decision, and records only verified outcomes.',
     );
     expect(PATROL_PAGE_TITLE_TOOLTIP).toBe(PATROL_PAGE_DESCRIPTION);
     expect(getPatrolPageHeaderMeta()).toEqual({
       title: 'Patrol',
       description:
-        'Patrol checks your infrastructure, explains what it found, follows your mode before acting, and records the result.',
+        'Patrol detects operational issues, brings forward the next decision, and records only verified outcomes.',
       titleTooltip:
-        'Patrol checks your infrastructure, explains what it found, follows your mode before acting, and records the result.',
+        'Patrol detects operational issues, brings forward the next decision, and records only verified outcomes.',
     });
   });
 
   it('separates locked watch-only capability from Pro Watch only mode', () => {
     expect(PATROL_PAGE_WATCH_ONLY_DESCRIPTION).toBe(
-      'Patrol checks your infrastructure and shows current issues.',
+      'Continuous infrastructure checks, with every decision kept in your hands.',
     );
     expect(PATROL_PAGE_MONITOR_DESCRIPTION).toBe(
-      'Watch only: Patrol checks infrastructure and reports issues only.',
+      'Watch only: Patrol checks your estate and brings every current issue to you.',
     );
     expect(getPatrolPageHeaderMeta({ autonomyLocked: true })).toEqual({
       title: 'Patrol',

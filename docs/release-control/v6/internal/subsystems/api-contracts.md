@@ -2512,6 +2512,16 @@ a new API state machine, queue contract, or verification-accounting field.
    instance-scoped style.
 8. Route unified-agent installer and binary download headers through `internal/api/unified_agent.go` and `internal/api/contract_test.go` together. Unified-agent BINARY downloads must keep the canonical `X-Checksum-Sha256` plus `X-Signature-Ed25519` contract for updater clients whether the binary is served locally or proxied from the matching GitHub release, instead of leaving callers to infer trust from source location alone. The served install-script endpoints (GET /install.sh and /install.ps1) are governed differently and have NO GitHub fallback at all: they serve the locally bundled AGENT installer or fail closed with 503. The agent installer is a per-build artifact bundled into every release tarball and Docker image, not a release asset, so the endpoint must never fetch the top-level GitHub install.sh release asset (the SERVER installer, which rejects the agent wizard's --url / --token-file, issue #1470). It attaches the base64-encoded `X-Signature-SSHSIG` header when the local detached signatures are present and omits it when they are not; a present-but-unsigned local agent installer is still served, because the agent install path (curl piped into bash) does not verify these headers, so correctness of the served script outranks signature presence.
 9. Route canonical AI intelligence summary and resource-intelligence reads through `frontend-modern/src/api/ai.ts`, `frontend-modern/src/stores/aiIntelligence.ts`, `frontend-modern/src/stores/aiIntelligenceSummaryModel.ts`, `frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts`, `frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx`, the Patrol-owned section files under `frontend-modern/src/features/patrol/`, `frontend-modern/src/pages/AIIntelligence.tsx`, `internal/api/ai_handlers.go`, and `internal/api/contract_test.go` together so the store normalization owner, runtime hook, feature shell, Current work workspace, section owners, route shell, and backend payload stay aligned on one governed surface, including the canonical recent-changes slice
+   and the decision-first Patrol projection boundary, where API-owned active
+   attention and pending decisions render before retained-objective setup,
+   verified receipts, and operational history without introducing a new API
+   status, severity, or workflow dialect. The browser may order the canonical
+   attention projection by severity, then actionable review posture, then
+   observation recency, but it must preserve every API-owned lifecycle,
+   evidence, protection, action, and verification fact in selected detail.
+   Secondary receipt responses that are absent or incomplete may degrade to an
+   unavailable or empty supporting panel; they must not unmount the current
+   attention workbench or convert missing receipts into successful work
    while keeping the universal governed-operation ledger as one subordinate
    handoff rather than a second Patrol implementation: the surface may show
    the durable action inbox's content-free pending count and link to

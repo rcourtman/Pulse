@@ -548,9 +548,21 @@ describe('AIIntelligence entitlement gating', () => {
     expect(patrolIntelligenceHeaderSource).not.toContain('Sync page data');
     expect(patrolIntelligenceHeaderSource).not.toContain('animate-spin');
     expect(patrolIntelligenceHeaderSource).not.toContain('Refresh Patrol');
-    expect(patrolIntelligenceSurfaceSource).toContain('Activity history');
+    expect(patrolIntelligenceSurfaceSource).toContain('Review and history');
     expect(patrolIntelligenceSurfaceSource).toContain('href="/actions"');
-    expect(patrolIntelligenceSurfaceSource).toContain('Open activity history');
+    expect(patrolIntelligenceSurfaceSource).toContain('Actions and approvals');
+  });
+
+  it('keeps active decisions ahead of objective configuration and historical review', () => {
+    const attentionIndex = patrolIntelligenceSurfaceSource.indexOf('<PatrolAttentionWorkbench');
+    const objectivesIndex = patrolIntelligenceSurfaceSource.indexOf('<PatrolObjectivesPanel');
+    const verifiedOutcomesIndex = patrolIntelligenceSurfaceSource.indexOf('<PatrolRecentWorkPanel');
+    const historyIndex = patrolIntelligenceSurfaceSource.indexOf('Review and history');
+
+    expect(attentionIndex).toBeGreaterThan(-1);
+    expect(objectivesIndex).toBeGreaterThan(attentionIndex);
+    expect(verifiedOutcomesIndex).toBeGreaterThan(attentionIndex);
+    expect(historyIndex).toBeGreaterThan(verifiedOutcomesIndex);
   });
 
   it('keeps the advanced Patrol settings drawer out of the old save-spinner path', () => {
@@ -680,11 +692,11 @@ describe('AIIntelligence entitlement gating', () => {
     });
 
     expect(
-      screen.getByText('Patrol checks your infrastructure and shows current issues.'),
+      screen.getByText('Continuous infrastructure checks, with every decision kept in your hands.'),
     ).toBeInTheDocument();
     expect(
       screen.queryByText(
-        'Patrol checks your infrastructure, explains what it found, follows your mode before acting, and records the result.',
+        'Patrol detects operational issues, brings forward the next decision, and records only verified outcomes.',
       ),
     ).not.toBeInTheDocument();
     const patrolControlAnchor = document.getElementById(PATROL_CONTROL_ANCHOR);
@@ -1606,7 +1618,7 @@ describe('AIIntelligence entitlement gating', () => {
     await waitFor(() => {
       expect(getPatrolStatusMock).toHaveBeenCalled();
       expect(
-        screen.getByRole('heading', { name: 'Patrol is looking after your infrastructure' }),
+        screen.getByRole('heading', { name: 'Watching your infrastructure' }),
       ).toBeInTheDocument();
     });
 
@@ -1682,7 +1694,7 @@ describe('AIIntelligence entitlement gating', () => {
     await waitFor(() => {
       expect(getPatrolStatusMock).toHaveBeenCalled();
       expect(
-        screen.getByRole('heading', { name: 'Patrol is looking after your infrastructure' }),
+        screen.getByRole('heading', { name: 'Watching your infrastructure' }),
       ).toBeInTheDocument();
     });
 
@@ -1998,7 +2010,7 @@ describe('AIIntelligence entitlement gating', () => {
     expect(screen.queryByTestId('patrol-status-bar')).not.toBeInTheDocument();
 
     expect(screen.queryByRole('heading', { name: 'Open work' })).not.toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Needs you' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Needs your attention' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Active' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'All' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Resolved' })).not.toBeInTheDocument();

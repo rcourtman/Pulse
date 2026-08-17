@@ -11,23 +11,22 @@ export interface PatrolAutonomyExperience {
 export const PATROL_AUTONOMY_EXPERIENCE: Record<PatrolAutonomyLevel, PatrolAutonomyExperience> = {
   monitor: {
     label: 'Watch only',
-    summary: 'Patrol watches your infrastructure. You decide what happens next.',
-    needsYouDescription:
-      'Patrol reports current issues here because Watch only never makes infrastructure changes.',
+    summary: 'Patrol checks continuously and keeps every infrastructure decision with you.',
+    needsYouDescription: 'Every current issue stays in your queue for review in Watch only mode.',
     quietWorkDescription: 'Patrol continues watching these issues without making changes.',
   },
   approval: {
     label: 'Ask first',
     summary: 'Patrol investigates and prepares fixes, then waits for your approval.',
     needsYouDescription:
-      'These issues need your decision before Patrol can make a change or close the loop.',
+      'These issues are waiting for a decision or approval before work can continue.',
     quietWorkDescription: 'Patrol continues investigating while it waits for the decisions above.',
   },
   assisted: {
     label: 'Safe auto-fix',
     summary: 'Patrol handles policy-allowed safe work and asks when risk or evidence needs you.',
     needsYouDescription:
-      'Patrol only interrupts when policy, risk, missing evidence, or verification requires your decision.',
+      'This queue contains only work blocked by policy, risk, missing evidence, or verification.',
     quietWorkDescription:
       'Other current issues can proceed within the safe auto-fix policy without a decision from you.',
   },
@@ -35,8 +34,7 @@ export const PATROL_AUTONOMY_EXPERIENCE: Record<PatrolAutonomyLevel, PatrolAuton
     label: 'Autopilot',
     summary:
       'Patrol handles allowed work in the background and interrupts only when it cannot proceed safely.',
-    needsYouDescription:
-      'Patrol only interrupts when it is blocked, lacks trustworthy evidence, or still requires approval.',
+    needsYouDescription: 'This queue contains only work Patrol cannot complete safely without you.',
     quietWorkDescription:
       'Other current issues do not require a decision under Autopilot and remain visible in Alerts.',
   },

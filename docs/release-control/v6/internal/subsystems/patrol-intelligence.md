@@ -76,10 +76,15 @@ sources, and retains the note as operator context.
 
 The first-party Patrol page is an outcome and exception surface, not a mirror of
 the internal lifecycle. Its primary order is the effective background posture,
-the outcomes Patrol is looking after, work that genuinely needs the operator,
-and concise recent receipts. Investigation internals, lifecycle filters, raw
-findings, checks, and run history remain available as secondary operational
-records without competing with those four questions.
+work that genuinely needs the operator, the outcomes Patrol is looking after,
+and concise recent receipts. Active work must outrank objective configuration
+on the daily-use route, especially on a narrow viewport; an empty objectives
+surface cannot push current decisions below the first useful screen.
+Investigation internals, lifecycle filters, raw findings, checks, and run
+history remain available as secondary operational records without competing
+with those four questions. Action review/audit and finding/run records use one
+subordinate `Review and history` handoff area so the page does not present
+several competing history concepts.
 
 `patrolHomePresentation.ts` owns the deterministic projection from effective
 autonomy and typed attention evidence into `needs user` versus `can continue`
@@ -1198,6 +1203,28 @@ The durable decision and proof record is
 `internal/records/operational-trust-governed-docker-restart-2026-07-19.md`.
 
 ## Current State
+
+The Patrol 2.0 frontend now uses a decision-first information hierarchy. The
+compact command header owns enabled posture, effective mode, last/next check
+context, manual check, settings, and the secondary mode disclosure. The typed
+attention workbench is the first substantial page surface on desktop and
+mobile. Protected objectives and proof-constrained verified outcomes follow as
+supporting continuity surfaces; empty objectives and empty receipts stay
+compact instead of consuming the prime viewport. Universal governed actions
+and Patrol-specific finding/run records are exposed together through the
+subordinate `Review and history` handoff area.
+
+The attention queue orders genuine operator decisions by severity, actionable
+approval/review state, and latest observation time. Rows expose the severity
+word, lifecycle state, bounded consequence, affected resource, decision label,
+and freshness without repeating full mode-policy prose on every item. Selecting
+an item opens one responsive decision context: the current summary, affected
+resource, impact and recommended next step precede governed action review;
+occurrence acknowledgement/suppression, evidence, protection posture, timeline,
+resource navigation, and contextual Assistant explanation remain available
+without displacing the primary decision. Narrow selection scrolls and focuses
+that context before the queue so keyboard and screen-reader users do not have
+to traverse the list again.
 
 The active Patrol queue now uses compact severity-accented rows for
 prioritisation and a single focused review panel for the selected issue. The

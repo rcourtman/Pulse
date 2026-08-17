@@ -683,7 +683,7 @@ test("starts from the normal monitor shell and reaches the canonical attention q
 
   await expect(page).toHaveURL(/\/patrol/);
   await expect(
-    page.getByRole("region", { name: "Needs you" }),
+    page.getByRole("region", { name: "Needs your attention" }),
   ).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Open CPU pressure on pve-main" }),
@@ -703,17 +703,16 @@ test("makes active operational work primary and preserves the evidence boundary"
       }),
     ),
   ).toBeVisible();
-  const queue = page.getByRole("region", { name: "Needs you" });
-  await expect(queue.getByLabel("2 decisions need you")).toBeVisible();
+  const queue = page.getByRole("region", { name: "Needs your attention" });
+  await expect(queue.getByLabel("2 items require review")).toBeVisible();
   await expect(
     queue.getByText(
       "CPU has remained above the configured threshold for two collection cycles.",
     ),
   ).toBeVisible();
-  await expect(queue.getByText("Evidence current").first()).toBeVisible();
-  await expect(
-    queue.getByText("Protection needs attention").first(),
-  ).toBeVisible();
+  const attentionList = queue.getByRole("list", { name: "Patrol attention items" });
+  await expect(attentionList.getByText("Evidence current")).toHaveCount(0);
+  await expect(attentionList.getByText("Protection needs attention")).toHaveCount(0);
   await expect(
     page.getByRole("button", { name: "Explain with Assistant" }),
   ).toHaveCount(0);

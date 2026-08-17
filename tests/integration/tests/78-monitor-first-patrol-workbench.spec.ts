@@ -714,7 +714,7 @@ test.describe("Monitor-first Patrol workbench browser contract", () => {
       page.getByRole("heading", { level: 1, name: "Patrol" }),
     ).toBeVisible();
     await expect(
-      page.getByRole("heading", { level: 2, name: "Needs you" }),
+      page.getByRole("heading", { level: 2, name: "Needs your attention" }),
     ).toBeVisible();
     await expect(page.getByText("Nothing needs you right now")).toBeVisible();
     await expect(
@@ -760,7 +760,7 @@ test.describe("Monitor-first Patrol workbench browser contract", () => {
     await page.getByRole("tab", { name: /Patrol/ }).click();
     await expect(page).toHaveURL(/\/patrol$/);
     await expect(
-      page.getByRole("heading", { level: 2, name: "Needs you" }),
+      page.getByRole("heading", { level: 2, name: "Needs your attention" }),
     ).toBeVisible();
     await expect(
       page.getByRole("list", { name: "Patrol attention items" }),
@@ -882,10 +882,7 @@ test.describe("Monitor-first Patrol workbench browser contract", () => {
     await expect(
       page.getByRole("heading", { level: 1, name: "Patrol" }),
     ).toBeVisible();
-    await page
-      .locator("summary")
-      .filter({ hasText: "Operational records and run history" })
-      .click();
+    await page.getByRole("button", { name: /Findings and run records/ }).click();
     await expect(
       page.getByText("Operating system updates need review").first(),
     ).toBeVisible();
@@ -929,10 +926,7 @@ test.describe("Monitor-first Patrol workbench browser contract", () => {
       }),
     );
     await page.reload({ waitUntil: "domcontentloaded" });
-    await page
-      .locator("summary")
-      .filter({ hasText: "Operational records and run history" })
-      .click();
+    await page.getByRole("button", { name: /Findings and run records/ }).click();
     const cleanupTitle = page
       .getByText("Downloaded package data is using needed space")
       .first();
@@ -987,10 +981,7 @@ test.describe("Monitor-first Patrol workbench browser contract", () => {
       }),
     );
     await page.reload({ waitUntil: "domcontentloaded" });
-    await page
-      .locator("summary")
-      .filter({ hasText: "Operational records and run history" })
-      .click();
+    await page.getByRole("button", { name: /Findings and run records/ }).click();
     await page.getByRole("button", { name: "Resolved", exact: true }).click();
     const resolvedTitle = page
       .getByText("Operating system updates confirmed complete")
