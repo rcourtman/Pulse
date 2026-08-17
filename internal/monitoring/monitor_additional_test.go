@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	unifiedresources "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
@@ -677,5 +678,97 @@ func TestMatchZFSPoolForStorageKeepsLocalMatches(t *testing.T) {
 				t.Fatalf("matchZFSPoolForStorage(%q) = %v, want %v", tc.storage.Name, got, tc.want)
 			}
 		})
+	}
+}
+
+// A per-resource grace override saved through the intent policy UI is keyed by
+// the unified registry resource ID. For a pulse-agent merged with its Proxmox
+// node the alert evaluator references the host as "agent:{hostID}", so the
+// override only applies when that reference resolves back to the same merged
+// resource the UI saved against (#1497).
+func TestMergedProxmoxHostAgentGraceOverrideHoldsCPUAlert(t *testing.T) {
+	host := models.Host{
+		ID:              "host-uuid-1",
+		Hostname:        "proxmox2",
+		MachineID:       "machine-abc",
+		LinkedNodeID:    "node/proxmox2",
+		Platform:        "linux",
+		Status:          "online",
+		CPUUsage:        95,
+		CPUCount:        8,
+		IntervalSeconds: 30,
+		LastSeen:        time.Now(),
+	}
+	node := models.Node{
+		ID:            "node/proxmox2",
+		Name:          "proxmox2",
+		Instance:      "pve",
+		Status:        "online",
+		LinkedAgentID: "host-uuid-1",
+	}
+
+	newAdapter := func() (*unifiedresources.MonitorAdapter, unifiedresources.Resource) {
+		adapter := unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil))
+		adapter.PopulateFromSnapshot(models.StateSnapshot{
+			Nodes: []models.Node{node},
+			Hosts: []models.Host{host},
+		})
+		for _, resource := range adapter.GetAll() {
+			if resource.Agent != nil && resource.Proxmox != nil {
+				return adapter, resource
+			}
+		}
+		t.Fatal("expected node+agent snapshot to merge into one resource")
+		return nil, unifiedresources.Resource{}
+	}
+
+	newManager := func(adapter *unifiedresources.MonitorAdapter) *alerts.Manager {
+		manager := alerts.NewManagerWithDataDir(t.TempDir())
+		t.Cleanup(manager.Stop)
+		cfg := manager.GetConfig()
+		// Normalization restores absent keys to the 5s default, but an
+		// explicit zero survives, and zero legacy delay makes the assertion
+		// discriminating: no override means the alert fires on first check.
+		cfg.TimeThresholds = map[string]int{"agent": 0}
+		cfg.MetricTimeThresholds = nil
+		manager.UpdateConfig(cfg)
+		monitor := &Monitor{alertManager: manager}
+		monitor.installOperatorIntentResolver(adapter)
+		return manager
+	}
+
+	hostCPUAlert := func(manager *alerts.Manager) *alerts.Alert {
+		for _, alert := range manager.GetActiveAlerts() {
+			if alert.ResourceID == "agent:host-uuid-1" && alert.Type == "cpu" {
+				found := alert
+				return &found
+			}
+		}
+		return nil
+	}
+
+	// Control: without an override the CPU alert fires on the first check,
+	// proving the fixture actually triggers.
+	controlAdapter, _ := newAdapter()
+	control := newManager(controlAdapter)
+	control.CheckHost(host)
+	if hostCPUAlert(control) == nil {
+		t.Fatal("control manager without override should raise the CPU alert immediately")
+	}
+
+	adapter, merged := newAdapter()
+	manager := newManager(adapter)
+	grace := 600
+	document := alerts.NewAlertIntentPolicyDocument()
+	document.Resources = map[string]map[string]alerts.AlertIntentRule{
+		merged.ID: {"metric.cpu": {GraceSeconds: &grace}},
+	}
+	if err := manager.LoadIntentPolicies(document); err != nil {
+		t.Fatalf("LoadIntentPolicies: %v", err)
+	}
+
+	manager.CheckHost(host)
+	if alert := hostCPUAlert(manager); alert != nil {
+		t.Fatalf("CPU alert fired immediately despite 600s per-resource grace override on %q: %+v", merged.ID, alert)
 	}
 }

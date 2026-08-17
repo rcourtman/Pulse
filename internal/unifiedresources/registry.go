@@ -558,6 +558,7 @@ func (rr *ResourceRegistry) ingestSnapshot(snapshot models.StateSnapshot, thresh
 	rr.refreshStoragePostureLocked()
 	rr.refreshIncidentRollupsLocked()
 	rr.buildChildCounts()
+	rr.refreshCanonicalIdentitiesLocked()
 	rr.markStaleLocked(time.Now().UTC(), thresholds)
 	rr.viewsDirty = true
 	rr.mu.Unlock()
@@ -604,6 +605,7 @@ func (rr *ResourceRegistry) IngestRecords(source DataSource, records []IngestRec
 	rr.refreshStoragePostureLocked()
 	rr.refreshIncidentRollupsLocked()
 	rr.buildChildCounts()
+	rr.refreshCanonicalIdentitiesLocked()
 	rr.viewsDirty = true
 	rr.mu.Unlock()
 }
@@ -783,6 +785,7 @@ func (rr *ResourceRegistry) ingestResources(resources []Resource, thresholds map
 	rr.refreshStoragePostureLocked()
 	rr.refreshIncidentRollupsLocked()
 	rr.buildChildCounts()
+	rr.refreshCanonicalIdentitiesLocked()
 	rr.markStaleLocked(time.Now().UTC(), thresholds)
 	rr.viewsDirty = true
 	rr.mu.Unlock()
@@ -4556,6 +4559,19 @@ func (rr *ResourceRegistry) buildChildCounts() {
 				}
 			}
 		}
+	}
+}
+
+// refreshCanonicalIdentitiesLocked recomputes the derived canonical identity
+// on every stored resource. Read paths refresh identity on each clone, but
+// reference resolution (GetByReference → canonical alias matching) reads the
+// stored entries directly, so ingest must leave the derived block populated or
+// prefixed refs like "agent:{hostID}" never resolve and per-resource alert
+// policies silently fall back to factory (#1497). Runs after links and merges
+// settle so alias sets reflect the fully assembled resource.
+func (rr *ResourceRegistry) refreshCanonicalIdentitiesLocked() {
+	for _, resource := range rr.resources {
+		RefreshCanonicalIdentity(resource)
 	}
 }
 
