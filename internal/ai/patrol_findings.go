@@ -1446,6 +1446,30 @@ var findingKeyAliases = map[string]string{
 	"unhealthy-container":               "health-check-failed",
 }
 
+func isContainerHealthFailureKey(key string) bool {
+	hasHealth := false
+	hasContainerOrCheck := false
+	hasFailure := false
+	for _, token := range strings.Split(key, "-") {
+		switch token {
+		case "app", "docker":
+			// Bounded resource-family modifiers.
+		case "container", "check":
+			hasContainerOrCheck = true
+		case "healthcheck":
+			hasHealth = true
+			hasContainerOrCheck = true
+		case "health":
+			hasHealth = true
+		case "failed", "failing", "failure", "unhealthy":
+			hasFailure = true
+		default:
+			return false
+		}
+	}
+	return hasHealth && hasContainerOrCheck && hasFailure
+}
+
 func normalizeFindingKey(key string) string {
 	if key == "" {
 		return ""
@@ -1463,6 +1487,9 @@ func normalizeFindingKey(key string) string {
 		}
 	}
 	normalized := strings.Trim(b.String(), "-")
+	if isContainerHealthFailureKey(normalized) {
+		return "health-check-failed"
+	}
 	if canonical, ok := findingKeyAliases[normalized]; ok {
 		return canonical
 	}

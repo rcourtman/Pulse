@@ -458,12 +458,18 @@ func TestNormalizeFindingKey_CanonicalAliases(t *testing.T) {
 		"container-health-failing":          "health-check-failed",
 		"container-health-check-failed":     "health-check-failed",
 		"container-health-unhealthy":        "health-check-failed",
+		"health-check-unhealthy":            "health-check-failed",
+		"unhealthy-health-check":            "health-check-failed",
+		"docker-health-check-failure":       "health-check-failed",
 		"healthcheck-failed":                "health-check-failed",
 		"failing-health-check":              "health-check-failed",
 		"container-unhealthy":               "health-check-failed",
 		"unhealthy-container":               "health-check-failed",
 		// Non-aliased keys pass through normalization unchanged.
-		"pbs-job-failed": "pbs-job-failed",
+		"pbs-job-failed":            "pbs-job-failed",
+		"host-health-unhealthy":     "host-health-unhealthy",
+		"container-health-degraded": "container-health-degraded",
+		"health-check-timeout":      "health-check-timeout",
 	}
 	for in, want := range cases {
 		if got := normalizeFindingKey(in); got != want {
