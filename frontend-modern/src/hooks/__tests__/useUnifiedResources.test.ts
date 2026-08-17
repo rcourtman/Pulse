@@ -528,6 +528,56 @@ describe('useUnifiedResources', () => {
     dispose();
   });
 
+  it('requests the pages after the first concurrently instead of one round trip at a time', async () => {
+    const releasePage = new Map<number, () => void>();
+    const requestedPages: number[] = [];
+
+    apiFetchMock.mockImplementation((url: string) => {
+      const page = Number(new URLSearchParams(url.split('?')[1] ?? '').get('page') ?? '1');
+      requestedPages.push(page);
+      const response = {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          data: [{ ...v2Resource, id: `resource-page-${page}`, name: `resource-page-${page}` }],
+          meta: { totalPages: 3 },
+        }),
+      };
+      if (page === 1) {
+        return Promise.resolve(response);
+      }
+      return new Promise((resolve) => {
+        releasePage.set(page, () => resolve(response));
+      });
+    });
+
+    let dispose = () => {};
+    let result: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      result = useUnifiedResources({
+        query: 'type=vm',
+        cacheKey: 'first-paint-page-fanout',
+      });
+    });
+
+    for (let i = 0; i < 10 && requestedPages.length < 3; i += 1) {
+      await flushAsync();
+    }
+
+    // Walking the pages serially would still be blocked on page 2 here, so
+    // page 3 would not have been requested yet.
+    expect(requestedPages).toEqual([1, 2, 3]);
+
+    releasePage.get(2)?.();
+    releasePage.get(3)?.();
+
+    await waitForResourceCount(() => result!.resources().length, 3);
+    expect(result!.resources()).toHaveLength(3);
+
+    dispose();
+  });
+
   it('prefers websocket initial hydration over an immediate REST fetch for dashboard snapshots', async () => {
     setWsConnected(false);
     setWsInitialDataReceived(false);

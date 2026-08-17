@@ -1105,29 +1105,54 @@ const seedUnifiedResourcesCacheFromAllResources = (
   return entry;
 };
 
+const fetchUnifiedResourcesPage = async (
+  normalizedQuery: string,
+  page: number,
+): Promise<ReturnType<typeof resolveResourcesPayload>> => {
+  const response = await apiFetch(buildUnifiedResourcesUrl(normalizedQuery, page), {
+    cache: 'no-store',
+  });
+  if (!response.ok) {
+    const message = await readAPIErrorMessage(
+      response,
+      `Failed to fetch unified resources (HTTP ${response.status})`,
+    );
+    throw new Error(message);
+  }
+
+  const payload = (await response.json()) as APIListResponse | APIResource[];
+  return resolveResourcesPayload(payload);
+};
+
 async function fetchUnifiedResources(query: string): Promise<UnifiedResourcesSnapshot> {
   const normalizedQuery = normalizeUnifiedResourcesQuery(query);
+
+  // Only the first page has to be fetched before we know how many there are.
+  // Every page after it is independent, so fan them out instead of walking them
+  // nose-to-tail: a serial walk costs a full round trip per page before the
+  // first paint can happen, which is seconds of blank screen on any estate
+  // larger than one page. The outer loop repeats only when the estate grew a
+  // page while the fan-out was in flight, preserving the previous
+  // keep-walking-while-totalPages-grows behaviour.
+  const pages = [await fetchUnifiedResourcesPage(normalizedQuery, 1)];
+  let totalPages = pages[0].totalPages;
+
+  while (pages.length < totalPages) {
+    const firstMissingPage = pages.length + 1;
+    const fetched = await Promise.all(
+      Array.from({ length: totalPages - pages.length }, (_, index) =>
+        fetchUnifiedResourcesPage(normalizedQuery, firstMissingPage + index),
+      ),
+    );
+    pages.push(...fetched);
+    totalPages = fetched.reduce((max, resolved) => Math.max(max, resolved.totalPages), totalPages);
+  }
+
   const allRawResources: APIResource[] = [];
   let policyPosture: ResourcePolicyPostureSummary | null = null;
-  let totalPages = 1;
-
-  for (let page = 1; page <= totalPages; page += 1) {
-    const response = await apiFetch(buildUnifiedResourcesUrl(normalizedQuery, page), {
-      cache: 'no-store',
-    });
-    if (!response.ok) {
-      const message = await readAPIErrorMessage(
-        response,
-        `Failed to fetch unified resources (HTTP ${response.status})`,
-      );
-      throw new Error(message);
-    }
-
-    const payload = (await response.json()) as APIListResponse | APIResource[];
-    const resolved = resolveResourcesPayload(payload);
+  for (const resolved of pages) {
     allRawResources.push(...resolved.data);
     policyPosture = policyPosture ?? resolved.policyPosture;
-    totalPages = Math.max(totalPages, resolved.totalPages);
   }
 
   return {

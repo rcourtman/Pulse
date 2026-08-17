@@ -1,38 +1,50 @@
 {
   "version": 1,
-  "base_sha": "20cd89dcc6db28184ec3083880484dcd35e15970",
-  "verified_at": "2026-08-16T09:34:36Z",
+  "base_sha": "2c59fb742ee410213f62be8eb611e3603e8069cc",
+  "verified_at": "2026-08-17T21:45:00Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx"
+    "frontend-modern/src/hooks/useUnifiedResources.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx": "2b2d9fe3abd53a3855d9a60f77f358e10bfd45828a146f98198e5baf06e3dac2"
+    "frontend-modern/src/hooks/useUnifiedResources.ts": "8e10f917cbe741695f79c7580f6e21a1d04370a9e30af0ef7c314460a0272374"
   },
   "routes": [
-    "/settings/infrastructure",
-    "/settings/infrastructure?add=agent"
+    "/login",
+    "/",
+    "/?platform=proxmox&tab=storage",
+    "/?platform=proxmox&tab=backups"
   ],
   "viewports": [
     {
-      "width": 1280,
-      "height": 800
+      "width": 1440,
+      "height": 900
     },
     {
-      "width": 375,
-      "height": 812
+      "width": 390,
+      "height": 844
     }
   ],
   "states": [
-    "authenticated local development shell with Infrastructure settings loaded",
-    "Add infrastructure source picker and host installer dialog at desktop width",
-    "generic agent onboarding guidance at desktop and narrow widths",
-    "Proxmox API-first recommendation with the revised punctuation and no em dash"
+    "signed-out login form",
+    "post-sign-in loading state before the first canonical snapshot lands",
+    "Proxmox overview populated from a 209-resource estate spanning 3 unified resource pages",
+    "node row expanded to its guest children",
+    "guest table filtered by a search term",
+    "Proxmox Storage sub-tab populated",
+    "Proxmox Backups sub-tab populated",
+    "Proxmox overview at 390x844 with a row expanded"
   ],
   "interactions": [
-    "opened Settings and waited for the Infrastructure workspace to finish loading",
-    "opened Add infrastructure and selected Install Pulse Agent",
-    "opened the generic agent onboarding route and read the complete API-first Proxmox guidance",
-    "confirmed the revised sentence reads No root agent is required for normal platform inventory and metrics"
+    "signed in with the demo credentials and watched the unified resource pagination in the network waterfall",
+    "confirmed pages 2 and 3 are requested in the same tick after page 1 resolves, rather than one round trip at a time",
+    "clicked a node row to expand its guests (79 rows to 80)",
+    "typed 'backup' into the guest search field and confirmed the table narrowed to 9 rows",
+    "cleared the search field and confirmed the full table returned",
+    "opened the Proxmox Storage sub-tab",
+    "opened the Proxmox Backups sub-tab",
+    "resized to 390x844 and confirmed 79 rows still render",
+    "expanded a row at 390x844 (79 rows to 80)",
+    "searched 'backup' at 390x844 and confirmed the table narrowed to 9 rows"
   ]
 }
