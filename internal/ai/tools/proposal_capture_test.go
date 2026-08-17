@@ -146,6 +146,60 @@ func TestFailedAttemptsWithoutSuccessAreATypedError(t *testing.T) {
 	assert.Equal(t, 0, failed)
 }
 
+func TestProposalRejectsCausalResourceContradictedByObservedHealthDependency(t *testing.T) {
+	catalog := func(_ context.Context, resourceID string) ([]unified.ResourceCapability, error) {
+		switch resourceID {
+		case "app-container-client", "app-container-dependency":
+			return []unified.ResourceCapability{{Name: "restart", MinimumApprovalLevel: unified.ApprovalAdmin}}, nil
+		default:
+			return nil, nil
+		}
+	}
+	capture := NewProposalCapture(ProposalIdentity{InvestigationID: "inv-1"}, catalog)
+	exec := newInvestigationExecutor(t, capture)
+
+	exec.RecordProposalEvidence(agentcapabilities.PulseQueryToolName, `{
+		"id":"app-container-client",
+		"name":"client",
+		"status":"running",
+		"health":"unhealthy",
+		"healthcheck_targets":["dependency"]
+	}`)
+	exec.RecordProposalEvidence(agentcapabilities.PulseQueryToolName, `{
+		"docker":{"hosts":[{"containers":[
+			{"id":"app-container-client","name":"client","state":"running","health":"unhealthy","healthcheck_targets":["dependency"]},
+			{"id":"app-container-dependency","name":"dependency","state":"exited","health":"unhealthy"}
+		]}]}
+	}`)
+
+	wrong := map[string]interface{}{
+		"resource_id":        "app-container-client",
+		"causal_resource_id": "app-container-client",
+		"capability_name":    "restart",
+		"reason":             "restart the unhealthy client",
+	}
+	rejected := executePropose(t, exec, "call-wrong", wrong)
+	assert.True(t, rejected.IsError)
+	assert.Contains(t, rejected.Content[0].Text, "app-container-dependency")
+	assert.Contains(t, rejected.Content[0].Text, `status "exited"`)
+
+	corrected := map[string]interface{}{
+		"resource_id":        "app-container-dependency",
+		"causal_resource_id": "app-container-dependency",
+		"capability_name":    "restart",
+		"reason":             "restart the exited dependency required by the unhealthy client",
+	}
+	accepted := executePropose(t, exec, "call-corrected", corrected)
+	assert.False(t, accepted.IsError)
+
+	proposal, failed, err := capture.Outcome()
+	require.NoError(t, err)
+	require.NotNil(t, proposal)
+	assert.Equal(t, "app-container-dependency", proposal.ResourceID)
+	assert.Equal(t, "app-container-dependency", proposal.CausalResourceID)
+	assert.Equal(t, 1, failed)
+}
+
 func TestSensitiveProposalParamsRejectedWithoutEcho(t *testing.T) {
 	capture := NewProposalCapture(ProposalIdentity{}, testProposalCatalog())
 	exec := newInvestigationExecutor(t, capture)

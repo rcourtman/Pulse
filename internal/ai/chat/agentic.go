@@ -2426,6 +2426,9 @@ agenticLoop:
 			}
 			successfulInvestigationEvidence := isPatrolInvestigationExecution(a.currentExecutionProfile()) &&
 				isSuccessfulInvestigationEvidenceResult(tc.Name, resultText, isError)
+			if successfulInvestigationEvidence && a.executor != nil {
+				a.executor.RecordProposalEvidence(tc.Name, resultText)
+			}
 
 			// Track pending recovery for strict resolution blocks
 			// (FSM blocks are tracked above; strict resolution blocks come from the executor)

@@ -82,6 +82,14 @@ identities: the action target and the exact canonical causal resource
 established by collected evidence. They may be equal, but a cross-resource
 diagnosis must preserve the peer or dependency as the causal identity and the
 proposal reason must preserve its observed state and causal chain. The
+request-local proposal boundary retains a minimal canonical resource graph from
+successful structured query results (resource ID, name, state, and health-check
+targets only). When that graph uniquely resolves a claimed causal resource's
+health-check target to a different unavailable resource, a proposal that still
+names the affected resource as causal is rejected before capture and returned
+to the investigation for correction. Ambiguous names and non-structured or
+failed evidence never create a causal assertion; core must not guess among
+possible resources or retain arbitrary log text at this boundary. The
 tool-free completion turn receives that accepted record as an evidence
 checkpoint. Before persistence, core reconciles the Root Cause section against
 the checkpoint and restores the exact causal identity and recorded basis if the

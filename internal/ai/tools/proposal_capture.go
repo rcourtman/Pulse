@@ -11,6 +11,7 @@ import (
 	"sync"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/actionplanner"
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 	unified "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
@@ -113,6 +114,14 @@ type ProposalCapture struct {
 	proposal       *CapturedProposal
 	fingerprint    string
 	failedAttempts int
+	evidence       map[string]proposalEvidenceResource
+}
+
+type proposalEvidenceResource struct {
+	ID                 string
+	Name               string
+	Status             string
+	HealthcheckTargets []string
 }
 
 func (i ProposalIdentity) clone() ProposalIdentity {
@@ -124,7 +133,119 @@ func (i ProposalIdentity) clone() ProposalIdentity {
 // capability catalog used for validation. The identity is deep-cloned so
 // later caller-side mutation cannot alter captured correlation.
 func NewProposalCapture(identity ProposalIdentity, catalog ProposalCatalog) *ProposalCapture {
-	return &ProposalCapture{identity: identity.clone(), catalog: catalog}
+	return &ProposalCapture{
+		identity: identity.clone(),
+		catalog:  catalog,
+		evidence: make(map[string]proposalEvidenceResource),
+	}
+}
+
+// RecordEvidence retains only the small canonical resource graph needed to
+// validate a later causal-resource claim. Raw evidence and arbitrary log text
+// are never retained here. The graph is populated from successful structured
+// query results after the model has observed them, so proposal validation can
+// reject a conclusion that contradicts the investigation's own evidence.
+func (c *ProposalCapture) RecordEvidence(toolName, content string) {
+	if c == nil || strings.TrimSpace(toolName) != agentcapabilities.PulseQueryToolName {
+		return
+	}
+	var decoded interface{}
+	if err := json.Unmarshal([]byte(content), &decoded); err != nil {
+		return
+	}
+	observed := make([]proposalEvidenceResource, 0)
+	collectProposalEvidenceResources(decoded, &observed)
+	if len(observed) == 0 {
+		return
+	}
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.evidence == nil {
+		c.evidence = make(map[string]proposalEvidenceResource)
+	}
+	for _, resource := range observed {
+		resource.ID = unified.CanonicalResourceID(resource.ID)
+		resource.Name = strings.TrimSpace(resource.Name)
+		if resource.ID == "" || resource.Name == "" {
+			continue
+		}
+		previous := c.evidence[resource.ID]
+		if resource.Status == "" {
+			resource.Status = previous.Status
+		}
+		if len(resource.HealthcheckTargets) == 0 {
+			resource.HealthcheckTargets = previous.HealthcheckTargets
+		}
+		c.evidence[resource.ID] = resource
+	}
+}
+
+func collectProposalEvidenceResources(value interface{}, resources *[]proposalEvidenceResource) {
+	switch typed := value.(type) {
+	case []interface{}:
+		for _, item := range typed {
+			collectProposalEvidenceResources(item, resources)
+		}
+	case map[string]interface{}:
+		id, _ := typed["id"].(string)
+		name, _ := typed["name"].(string)
+		if strings.TrimSpace(id) != "" && strings.TrimSpace(name) != "" {
+			status, _ := typed["status"].(string)
+			if strings.TrimSpace(status) == "" {
+				status, _ = typed["state"].(string)
+			}
+			resource := proposalEvidenceResource{ID: id, Name: name, Status: strings.TrimSpace(status)}
+			if targets, ok := typed["healthcheck_targets"].([]interface{}); ok {
+				for _, target := range targets {
+					if text, ok := target.(string); ok && strings.TrimSpace(text) != "" {
+						resource.HealthcheckTargets = append(resource.HealthcheckTargets, strings.TrimSpace(text))
+					}
+				}
+			}
+			*resources = append(*resources, resource)
+		}
+		for _, child := range typed {
+			collectProposalEvidenceResources(child, resources)
+		}
+	}
+}
+
+func proposalEvidenceUnavailable(status string) bool {
+	switch strings.ToLower(strings.TrimSpace(status)) {
+	case "dead", "exited", "failed", "inactive", "not running", "offline", "stopped":
+		return true
+	default:
+		return false
+	}
+}
+
+func (c *ProposalCapture) validateCausalResource(causalResourceID string) error {
+	causalResourceID = unified.CanonicalResourceID(causalResourceID)
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	claimed, ok := c.evidence[causalResourceID]
+	if !ok || len(claimed.HealthcheckTargets) == 0 {
+		return nil
+	}
+	for _, target := range claimed.HealthcheckTargets {
+		matches := make([]proposalEvidenceResource, 0, 1)
+		for _, candidate := range c.evidence {
+			if strings.EqualFold(candidate.Name, target) {
+				matches = append(matches, candidate)
+			}
+		}
+		if len(matches) != 1 || !proposalEvidenceUnavailable(matches[0].Status) {
+			continue
+		}
+		dependency := matches[0]
+		return fmt.Errorf(
+			"causal_resource_id %q conflicts with collected canonical evidence: health-check target %q is resource %q with status %q; investigate the implicated dependency and use its advertised capabilities before proposing bounded recovery on the affected resource",
+			causalResourceID, target, dependency.ID, dependency.Status,
+		)
+	}
+	return nil
 }
 
 // Capabilities resolves the current advertised action contract for a

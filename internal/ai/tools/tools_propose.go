@@ -168,6 +168,10 @@ func (e *PulseToolExecutor) executeProposeAction(ctx context.Context, args map[s
 		capture.RecordFailedAttempt()
 		return NewErrorResult(fmt.Errorf("resource_id, causal_resource_id, capability_name, and reason are required")), nil
 	}
+	if err := capture.validateCausalResource(causalResourceID); err != nil {
+		capture.RecordFailedAttempt()
+		return NewErrorResult(err), nil
+	}
 
 	if err := validateProposalAgainstCatalog(ctx, capture.catalog, resourceID, capabilityName, params); err != nil {
 		capture.RecordFailedAttempt()
@@ -248,4 +252,13 @@ func stringArg(args map[string]interface{}, key string) string {
 // clones share the sink deliberately so one run has exactly one capture.
 func (e *PulseToolExecutor) SetProposalCapture(capture *ProposalCapture) {
 	e.proposalCapture = capture
+}
+
+// RecordProposalEvidence updates the request-local proposal validator with a
+// successful structured evidence result. It is a no-op outside investigations.
+func (e *PulseToolExecutor) RecordProposalEvidence(toolName, content string) {
+	if e == nil || e.proposalCapture == nil {
+		return
+	}
+	e.proposalCapture.RecordEvidence(toolName, content)
 }
