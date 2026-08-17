@@ -551,6 +551,11 @@ func commandConfigAllowedForToken(record *config.APITokenRecord, host models.Hos
 		return true
 	}
 	if !record.HasScope(config.ScopeAgentExec) {
+		log.Warn().
+			Str("token_id", record.ID).
+			Str("agent_id", host.ID).
+			Str("hostname", host.Hostname).
+			Msg("Suppressing enabled remote commands for agent: token missing required scope agent:exec")
 		return false
 	}
 
@@ -558,7 +563,23 @@ func commandConfigAllowedForToken(record *config.APITokenRecord, host models.Hos
 	// commands are enabled when its channel registration would be rejected
 	// strands the host on "Remote control blocked" (the agent reports
 	// CommandsEnabled=true forever while no channel can be admitted).
-	return evaluateAgentExecBinding(record, host.ID, host.Hostname).admit
+	if !evaluateAgentExecBinding(record, host.ID, host.Hostname).admit {
+		// This gate runs before the agent ever attempts command-channel
+		// registration, so without a log here a refused binding leaves no
+		// trace anywhere: the agent never learns commands were requested and
+		// the channel rejection warnings never fire (#1728).
+		log.Warn().
+			Str("token_id", record.ID).
+			Str("agent_id", host.ID).
+			Str("hostname", host.Hostname).
+			Str("bound_agent_id", strings.TrimSpace(record.Metadata["bound_agent_id"])).
+			Str("bound_hostname", strings.TrimSpace(record.Metadata["bound_hostname"])).
+			Str("install_type", strings.TrimSpace(record.Metadata["install_type"])).
+			Str("issued_via", strings.TrimSpace(record.Metadata["issued_via"])).
+			Msg("Suppressing enabled remote commands for agent: exec binding would reject this token and agent identity")
+		return false
+	}
+	return true
 }
 
 func (h *UnifiedAgentHandlers) ensureAgentTokenMatch(w http.ResponseWriter, r *http.Request, agentID string) bool {
