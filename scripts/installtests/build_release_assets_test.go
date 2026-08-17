@@ -628,7 +628,7 @@ func TestCurrentStableMinorReleasePacketTracksInstallMetadata(t *testing.T) {
 	)
 }
 
-func TestCurrentSupportPrereleasePacketTracksInstallMetadata(t *testing.T) {
+func TestCurrentPrereleasePacketTracksInstallMetadata(t *testing.T) {
 	version := currentReleaseVersion(t)
 	if !isPrereleaseVersion(version) {
 		t.Skip("current release is stable")
@@ -641,9 +641,9 @@ func TestCurrentSupportPrereleasePacketTracksInstallMetadata(t *testing.T) {
 	if !ok {
 		t.Fatalf("current prerelease %q has no stable target", version)
 	}
-	previousCandidate, ok := previousPrereleaseVersion(version)
+	comparisonVersion, ok := previousPrereleaseVersion(version)
 	if !ok {
-		t.Fatalf("current support prerelease %q has no previous candidate", version)
+		comparisonVersion = previous
 	}
 
 	releaseNotesPath := repoFile("docs", "releases", "RELEASE_NOTES_v"+version+".md")
@@ -658,7 +658,7 @@ func TestCurrentSupportPrereleasePacketTracksInstallMetadata(t *testing.T) {
 		"Action refusal telemetry now classifies target changes, prerequisites, contract failures",
 		"Subscription-backed turns now complete their idle timeout promptly",
 		"The rollback target is `v"+previous+"`",
-		"The changes since `v"+previousCandidate+"` do not require a Pulse Mobile client change",
+		"The changes since `v"+comparisonVersion+"` do not require a Pulse Mobile client change",
 		"preserve the existing mobile, Relay, onboarding, and mobile-facing API contracts",
 		"Windows Unified Agent binaries in this prerelease retain exact-SHA, checksum, and detached-signature verification but are not Authenticode-signed",
 		"Stable `v"+stableTarget+"` still requires the normal SignPath Authenticode lane",
@@ -669,24 +669,24 @@ func TestCurrentSupportPrereleasePacketTracksInstallMetadata(t *testing.T) {
 		"Previous stable: `v"+previous+"`",
 		"Rollback target: `v"+previous+"`",
 		"Promotion path: exact-SHA single-build release candidate from `main`",
-		"This changelog describes the changes since `v"+previousCandidate+"`",
+		"This changelog describes the changes since `v"+comparisonVersion+"`",
 		"Durable, scoped Patrol objectives and validated read-only observer missions",
 		"Typed Unified Agent action preflight for supported host and Docker operations",
 		"Stable pre-mutation refusal codes and fleet telemetry buckets",
 		"Windows signing decision: the standing prerelease path publishes exact-SHA, checksum, and detached-signature verified Windows agents without Authenticode; stable `v"+stableTarget+"` restores mandatory SignPath signing",
 		"Mobile decision: `no-mobile-impact`",
-		"changes since `v"+previousCandidate+"` preserve the existing mobile, Relay, onboarding, and mobile-facing API contracts",
+		"changes since `v"+comparisonVersion+"` preserve the existing mobile, Relay, onboarding, and mobile-facing API contracts",
 		"no companion upload or public store rollout is required",
 	)
 	assertFileContainsAll(t, repoFile("docs", "RELEASE_NOTES.md"),
 		"docs/releases/RELEASE_NOTES_v"+version+".md",
 		"docs/releases/V6_CHANGELOG_v"+version+".md",
-		"current v6 support release candidate packet",
+		"current v6 release candidate packet",
 	)
 	assertFileContainsAll(t, repoFile("docs", "UPGRADE_v6.md"),
 		"docs/releases/RELEASE_NOTES_v"+version+".md",
 		"docs/releases/V6_CHANGELOG_v"+version+".md",
-		"current v6 support release candidate packet",
+		"current v6 release candidate packet",
 	)
 	assertFileContainsAll(t, repoFile("deploy", "helm", "pulse", "Chart.yaml"),
 		"version: "+version,
@@ -706,10 +706,10 @@ func TestCurrentSupportPrereleasePacketTracksInstallMetadata(t *testing.T) {
 		`CANONICAL_DEFAULT_PULSE_VERSION="`+version+`"`,
 	)
 	assertFileContainsAllNormalized(t, repoFile("docs", "release-control", "v6", "internal", "subsystems", "deployment-installability.md"),
-		"The active support prerelease `v"+version+"` cut sets the repo-root `VERSION`, repo-root `docker-compose.yml` image default, `scripts/install-docker.sh` fallback, and Helm chart release metadata to the same `"+version+"` release version.",
-		"This support prerelease keeps `rollback_version=v"+previous+"`, publishes a versioned public GitHub prerelease plus versioned Docker and Helm artifacts, and does not move stable/latest install pointers or stable semver aliases.",
-		"For the active support prerelease `v"+version+"` cut, the repo-root compose default and `scripts/install-docker.sh` fallback must both pin `"+version+"` until the next governed stable cut moves them forward.",
-		"The changes since `v"+previousCandidate+"` do not require a Pulse Mobile client change and preserve the existing mobile, Relay, onboarding, and mobile-facing API contracts, so the server cut is classified `no-mobile-impact`; no companion upload or public mobile-store rollout is part of this candidate.",
+		"The active prerelease `v"+version+"` cut sets the repo-root `VERSION`, repo-root `docker-compose.yml` image default, `scripts/install-docker.sh` fallback, and Helm chart release metadata to the same `"+version+"` release version.",
+		"This prerelease keeps `rollback_version=v"+previous+"`, publishes a versioned public GitHub prerelease plus versioned Docker and Helm artifacts, and does not move stable/latest install pointers or stable semver aliases.",
+		"For the active prerelease `v"+version+"` cut, the repo-root compose default and `scripts/install-docker.sh` fallback must both pin `"+version+"` until the next governed stable cut moves them forward.",
+		"The changes since `v"+comparisonVersion+"` do not require a Pulse Mobile client change and preserve the existing mobile, Relay, onboarding, and mobile-facing API contracts, so the server cut is classified `no-mobile-impact`; no companion upload or public mobile-store rollout is part of this candidate.",
 		"The prerelease Windows path retains exact-SHA, checksum, and detached-signature verification without Authenticode; stable `v"+stableTarget+"` restores mandatory SignPath signing unless a new version-bound decision is recorded.",
 	)
 }

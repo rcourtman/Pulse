@@ -1,7 +1,7 @@
-# Pulse v6.2.2-rc.3
+# Pulse v6.3.0-rc.1
 
-_This changelog describes the changes since `v6.2.2-rc.2`.
-`v6.2.2-rc.3` remains a prerelease and rolls back to stable `v6.2.1`._
+_This changelog describes the changes since `v6.2.1`.
+`v6.3.0-rc.1` is a prerelease and rolls back to stable `v6.2.1`._
 
 ## Added
 
@@ -50,8 +50,8 @@ _This changelog describes the changes since `v6.2.2-rc.2`.
 
 ## Release Metadata
 
-- Version: `v6.2.2-rc.3`
-- Previous candidate: `v6.2.2-rc.2`
+- Version: `v6.3.0-rc.1`
+- Previous release: `v6.2.1`
 - Previous stable: `v6.2.1`
 - Rollback target: `v6.2.1`
 - Rollback command: `./scripts/install.sh --version v6.2.1`
@@ -59,7 +59,7 @@ _This changelog describes the changes since `v6.2.2-rc.2`.
   published as a support prerelease without moving stable or latest pointers
 - Windows signing decision: the standing prerelease path publishes exact-SHA,
   checksum, and detached-signature verified Windows agents without
-  Authenticode; stable `v6.2.2` restores mandatory SignPath signing
-- Mobile decision: `no-mobile-impact`; changes since `v6.2.2-rc.2` preserve the
+  Authenticode; stable `v6.3.0` restores mandatory SignPath signing
+- Mobile decision: `no-mobile-impact`; changes since `v6.2.1` preserve the
   existing mobile, Relay, onboarding, and mobile-facing API contracts, and no
   companion upload or public store rollout is required

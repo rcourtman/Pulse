@@ -139,6 +139,7 @@ func TestPreviousStableForPrereleaseVersionCrossesMinorBoundaries(t *testing.T) 
 		{version: "6.2.2-rc.1", want: "6.2.1"},
 		{version: "6.2.2-rc.2", want: "6.2.1"},
 		{version: "6.2.2-rc.3", want: "6.2.1"},
+		{version: "6.3.0-rc.1", want: "6.2.1"},
 	}
 
 	for _, test := range tests {
@@ -336,7 +337,7 @@ func TestInstallDockerProofTracksStableMinorContract(t *testing.T) {
 	)
 }
 
-func TestInstallDockerProofTracksSupportPrereleaseContract(t *testing.T) {
+func TestInstallDockerProofTracksPrereleaseContract(t *testing.T) {
 	version := currentReleaseVersion(t)
 	if !isPrereleaseVersion(version) {
 		t.Skip("current release is stable")
@@ -349,17 +350,17 @@ func TestInstallDockerProofTracksSupportPrereleaseContract(t *testing.T) {
 	if !ok {
 		t.Fatalf("current prerelease %q has no stable target", version)
 	}
-	previousCandidate, ok := previousPrereleaseVersion(version)
+	comparisonVersion, ok := previousPrereleaseVersion(version)
 	if !ok {
-		t.Fatalf("current support prerelease %q has no previous candidate", version)
+		comparisonVersion = previous
 	}
 
 	assertFileContainsAllNormalized(t, repoFile("docs", "release-control", "v6", "internal", "subsystems", "deployment-installability.md"),
-		"The active support prerelease `v"+version+"` cut sets the repo-root `VERSION`, repo-root `docker-compose.yml` image default, `scripts/install-docker.sh` fallback, and Helm chart release metadata to the same `"+version+"` release version.",
-		"This support prerelease keeps `rollback_version=v"+previous+"`, publishes a versioned public GitHub prerelease plus versioned Docker and Helm artifacts, and does not move stable/latest install pointers or stable semver aliases.",
-		"The changes since `v"+previousCandidate+"` do not require a Pulse Mobile client change and preserve the existing mobile, Relay, onboarding, and mobile-facing API contracts, so the server cut is classified `no-mobile-impact`; no companion upload or public mobile-store rollout is part of this candidate.",
+		"The active prerelease `v"+version+"` cut sets the repo-root `VERSION`, repo-root `docker-compose.yml` image default, `scripts/install-docker.sh` fallback, and Helm chart release metadata to the same `"+version+"` release version.",
+		"This prerelease keeps `rollback_version=v"+previous+"`, publishes a versioned public GitHub prerelease plus versioned Docker and Helm artifacts, and does not move stable/latest install pointers or stable semver aliases.",
+		"The changes since `v"+comparisonVersion+"` do not require a Pulse Mobile client change and preserve the existing mobile, Relay, onboarding, and mobile-facing API contracts, so the server cut is classified `no-mobile-impact`; no companion upload or public mobile-store rollout is part of this candidate.",
 		"The prerelease Windows path retains exact-SHA, checksum, and detached-signature verification without Authenticode; stable `v"+stableTarget+"` restores mandatory SignPath signing unless a new version-bound decision is recorded.",
-		"For the active support prerelease `v"+version+"` cut, the repo-root compose default and `scripts/install-docker.sh` fallback must both pin `"+version+"` until the next governed stable cut moves them forward.",
+		"For the active prerelease `v"+version+"` cut, the repo-root compose default and `scripts/install-docker.sh` fallback must both pin `"+version+"` until the next governed stable cut moves them forward.",
 	)
 }
 

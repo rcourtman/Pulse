@@ -1,10 +1,9 @@
-# Pulse v6.2.2-rc.3 Release Notes
+# Pulse v6.3.0-rc.1 Release Notes
 
-`v6.2.2-rc.3` is a release candidate for the next Pulse v6 patch. It follows
-stable `v6.2.1` and supersedes `v6.2.2-rc.2`. This candidate includes the
-complete earlier packet and introduces the Patrol v2 operating model, guarded
-agent action preflight, large-estate response improvements, and monitoring
-correctness fixes.
+`v6.3.0-rc.1` is a release candidate for the next Pulse v6 minor release and
+the first candidate in the 6.3 line. It follows stable `v6.2.1` and introduces
+the Patrol v2 operating model, guarded agent action preflight, large-estate
+response improvements, and monitoring correctness fixes.
 
 ## Highlights
 
@@ -73,7 +72,7 @@ correctness fixes.
 
 ## Upgrade Notes
 
-Use the normal v6 install or update flow for `v6.2.2-rc.3` only when you are
+Use the normal v6 install or update flow for `v6.3.0-rc.1` only when you are
 comfortable testing a release candidate. The rollback target is `v6.2.1`.
 
 The exact rollback reinstall command is:
@@ -82,14 +81,14 @@ The exact rollback reinstall command is:
 ./scripts/install.sh --version v6.2.1
 ```
 
-The changes since `v6.2.2-rc.2` do not require a Pulse Mobile client change and
+The changes since `v6.2.1` do not require a Pulse Mobile client change and
 preserve the existing mobile, Relay, onboarding, and mobile-facing API
 contracts. No companion mobile build upload or public mobile-store rollout is
 part of this candidate.
 
 Windows Unified Agent binaries in this prerelease retain exact-SHA, checksum,
 and detached-signature verification but are not Authenticode-signed, so Windows
-may display an Unknown Publisher warning. Stable `v6.2.2` still requires the
+may display an Unknown Publisher warning. Stable `v6.3.0` still requires the
 normal SignPath Authenticode lane unless a separate version-bound owner decision
 is recorded.
 
