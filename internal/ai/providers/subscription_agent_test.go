@@ -64,14 +64,16 @@ exit 0
 	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 
 	client := NewSubscriptionAgentClient(SubscriptionAgentCodex, "gpt-5.6-luna", 3*time.Minute)
+	idleTimeout := 50 * time.Millisecond
 	started := time.Now()
-	_, err := client.Chat(context.Background(), ChatRequest{StreamIdleTimeout: 50 * time.Millisecond})
+	_, err := client.Chat(context.Background(), ChatRequest{StreamIdleTimeout: idleTimeout})
 	elapsed := time.Since(started)
 	if err == nil || !strings.Contains(err.Error(), "context deadline exceeded") {
 		t.Fatalf("buffered turn error = %v, want stream-idle deadline", err)
 	}
-	if elapsed >= time.Second {
-		t.Fatalf("buffered turn ignored 50ms stream-idle deadline; elapsed=%s", elapsed)
+	cleanupCeiling := idleTimeout + subscriptionAgentCommandWaitDelay + 700*time.Millisecond
+	if elapsed >= cleanupCeiling {
+		t.Fatalf("buffered turn exceeded stream-idle cleanup ceiling %s; elapsed=%s", cleanupCeiling, elapsed)
 	}
 }
 

@@ -656,6 +656,7 @@ func TestCurrentSupportPrereleasePacketTracksInstallMetadata(t *testing.T) {
 		"Patrol now works from durable outcomes, scoped investigations",
 		"Read-only observers extend Patrol coverage between full model investigations",
 		"Action refusal telemetry now classifies target changes, prerequisites, contract failures",
+		"Subscription-backed turns now complete their idle timeout promptly",
 		"The rollback target is `v"+previous+"`",
 		"The changes since `v"+previousCandidate+"` do not require a Pulse Mobile client change",
 		"preserve the existing mobile, Relay, onboarding, and mobile-facing API contracts",

@@ -1455,7 +1455,9 @@ version. It follows stable `v6.2.1`, supersedes `v6.2.2-rc.2`, uses
 candidate retains the complete earlier packet and adds durable scoped Patrol
 objectives, validated read-only observers, verified work receipts, agent action
 preflight with stable refusal codes, large-estate response improvements, and
-monitoring correctness fixes. The changes since `v6.2.2-rc.2` do not require a
+monitoring correctness fixes. Subscription-backed Patrol turns also bound
+command cleanup after an idle deadline so descendant-held output pipes cannot
+extend the caller-owned stall budget. The changes since `v6.2.2-rc.2` do not require a
 Pulse Mobile client change and preserve the existing mobile, Relay, onboarding,
 and mobile-facing API contracts, so the server cut is classified
 `no-mobile-impact`; no companion upload or public mobile-store rollout is part

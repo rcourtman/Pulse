@@ -44,6 +44,8 @@ correctness fixes.
   repeated large-estate scans.
 - OpenRouter, Ollama, and subscription-backed Patrol routes handle reasoning
   limits, readiness checks, deadlines, and continuation latency more reliably.
+- Subscription-backed turns now complete their idle timeout promptly even when
+  a canceled CLI descendant still holds an inherited output pipe open.
 
 ## Fixed
 

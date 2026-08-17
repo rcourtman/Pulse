@@ -467,7 +467,10 @@ minimum configured request allowance for local subscription turns. Because the
 CLI response is buffered and cannot expose intermediate chunks, a positive
 provider `StreamIdleTimeout` is an earlier complete-turn deadline for this
 transport; the configured minimum must not override that caller-owned Patrol
-stall budget. Patrol tool-call
+stall budget. Command cleanup after cancellation or process exit is also
+bounded: a subscription CLI descendant that inherits an output pipe must not
+extend the caller-owned deadline until that descendant exits independently.
+Patrol tool-call
 preflight owns one route-aware outer deadline: API providers retain the
 30-second budget, while local subscription agents receive a bounded two-minute
 budget for CLI startup and complete structured-output assembly, and Ollama or a

@@ -31,6 +31,11 @@ const (
 	// Caller cancellation still wins, and Patrol preflight applies its own
 	// route-aware outer deadline.
 	SubscriptionAgentMinimumRequestTimeout = 2 * time.Minute
+	// subscriptionAgentCommandWaitDelay bounds cleanup after cancellation or
+	// process exit. Subscription CLIs may spawn descendants that inherit output
+	// pipes; without a wait delay those descendants can extend a completed
+	// context deadline until they close the pipes themselves.
+	subscriptionAgentCommandWaitDelay = 250 * time.Millisecond
 
 	maxSubscriptionAgentPromptBytes = 4 << 20
 	maxSubscriptionAgentOutputBytes = 8 << 20
@@ -424,6 +429,7 @@ func (c *SubscriptionAgentClient) run(ctx context.Context, name string, args []s
 	stdout := cappedBuffer{maxBytes: maxSubscriptionAgentOutputBytes}
 	stderr := cappedBuffer{maxBytes: maxSubscriptionAgentOutputBytes}
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
+	cmd.WaitDelay = subscriptionAgentCommandWaitDelay
 	if err := cmd.Run(); err != nil {
 		if ctx.Err() != nil {
 			return nil, fmt.Errorf("%s subscription agent timed out: %w", name, ctx.Err())

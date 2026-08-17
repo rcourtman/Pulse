@@ -23,6 +23,8 @@ _This changelog describes the changes since `v6.2.2-rc.2`.
   large-estate polling and resource correlation use bounded or indexed paths.
 - Runtime version identity is bound to the packaged binary rather than a stale
   source-tree value.
+- Buffered subscription CLI turns cannot extend a caller-owned idle deadline
+  while a canceled descendant keeps an inherited output pipe open.
 
 ## Fixed
 
