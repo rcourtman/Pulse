@@ -1379,19 +1379,39 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
   const hasWsInitialHydrationSnapshot = () =>
     wsStore.connected() && wsStore.initialDataReceived() && Array.isArray(wsStore.state.resources);
 
+  // Holding the canonical fetch back only pays off for routes that would
+  // otherwise never issue it. `prefer-ws-then-rest` routes always follow their
+  // websocket paint with a REST revalidation, so delaying the fetch does not
+  // save a request, it only postpones the canonical snapshot and leaves the
+  // route blank whenever the websocket snapshot is slower than the wait. That
+  // is worst on the largest estates, where the initial websocket frame is
+  // biggest and the blank screen hurts most, so those routes race the two
+  // transports instead and paint from whichever arrives first.
+  const initialHydrationFallbackDelayMs = revalidatesRestAfterWsInitialHydration
+    ? 0
+    : UNIFIED_RESOURCES_WS_INITIAL_HYDRATION_WAIT_MS;
+
+  const runInitialHydrationFallback = () => {
+    if (cacheEntry.hasSnapshot || wsStore.initialDataReceived()) {
+      return;
+    }
+    void runRefetch({ source: 'initial' }).catch((err) => {
+      logger.warn('[useUnifiedResources] Failed deferred initial refresh', err);
+    });
+  };
+
   const scheduleInitialHydrationFallback = () => {
     if (initialHydrationHandle !== undefined) {
       return;
     }
+    if (initialHydrationFallbackDelayMs === 0) {
+      runInitialHydrationFallback();
+      return;
+    }
     initialHydrationHandle = setTimeout(() => {
       initialHydrationHandle = undefined;
-      if (cacheEntry.hasSnapshot || wsStore.initialDataReceived()) {
-        return;
-      }
-      void runRefetch({ source: 'initial' }).catch((err) => {
-        logger.warn('[useUnifiedResources] Failed deferred initial refresh', err);
-      });
-    }, UNIFIED_RESOURCES_WS_INITIAL_HYDRATION_WAIT_MS);
+      runInitialHydrationFallback();
+    }, initialHydrationFallbackDelayMs);
   };
 
   const scheduleRefetch = () => {

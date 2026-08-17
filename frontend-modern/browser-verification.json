@@ -1,19 +1,24 @@
 {
   "version": 1,
-  "base_sha": "2c59fb742ee410213f62be8eb611e3603e8069cc",
-  "verified_at": "2026-08-17T21:45:00Z",
+  "base_sha": "8e32afa1856cce6defecf8e3596d76cdf1113147",
+  "verified_at": "2026-08-17T22:05:00Z",
   "result": "passed",
   "changed_paths": [
     "frontend-modern/src/hooks/useUnifiedResources.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/hooks/useUnifiedResources.ts": "8e10f917cbe741695f79c7580f6e21a1d04370a9e30af0ef7c314460a0272374"
+    "frontend-modern/src/hooks/useUnifiedResources.ts": "a2c8ba30cd723792c3c9c7a8b7485d11ec496c50ad2888069325e9fc08f765a8"
   },
   "routes": [
     "/login",
     "/",
     "/?platform=proxmox&tab=storage",
-    "/?platform=proxmox&tab=backups"
+    "/?platform=proxmox&tab=backups",
+    "/?platform=proxmox&tab=ceph",
+    "/?platform=docker",
+    "/?platform=kubernetes",
+    "/?platform=truenas",
+    "/?platform=vsphere"
   ],
   "viewports": [
     {
@@ -27,24 +32,26 @@
   ],
   "states": [
     "signed-out login form",
-    "post-sign-in loading state before the first canonical snapshot lands",
-    "Proxmox overview populated from a 209-resource estate spanning 3 unified resource pages",
+    "post-sign-in loading state before the first snapshot lands",
+    "Proxmox overview populated with 79 rows against a 209-resource estate",
     "node row expanded to its guest children",
     "guest table filtered by a search term",
-    "Proxmox Storage sub-tab populated",
-    "Proxmox Backups sub-tab populated",
-    "Proxmox overview at 390x844 with a row expanded"
+    "Proxmox Storage, Backups and Ceph sub-tabs populated",
+    "Docker (80 rows), Kubernetes (180 rows), TrueNAS (3 rows) and vSphere (32 rows) platform pages populated",
+    "realtime transport connected, websocket snapshot racing the canonical fetch",
+    "realtime transport unavailable, canonical fetch as the only path to first paint",
+    "Proxmox overview at 390x844 with a row expanded and filtered"
   ],
   "interactions": [
-    "signed in with the demo credentials and watched the unified resource pagination in the network waterfall",
-    "confirmed pages 2 and 3 are requested in the same tick after page 1 resolves, rather than one round trip at a time",
+    "signed in and confirmed the canonical fetch is no longer held behind the websocket hydration wait",
+    "measured first paint on a production bundle with the realtime transport unavailable: 5083-6384ms before, 3349-4860ms after",
+    "confirmed the bootstrap-to-canonical-fetch gap fell from 1720-1882ms to 519-613ms",
     "clicked a node row to expand its guests (79 rows to 80)",
     "typed 'backup' into the guest search field and confirmed the table narrowed to 9 rows",
     "cleared the search field and confirmed the full table returned",
-    "opened the Proxmox Storage sub-tab",
-    "opened the Proxmox Backups sub-tab",
-    "resized to 390x844 and confirmed 79 rows still render",
-    "expanded a row at 390x844 (79 rows to 80)",
-    "searched 'backup' at 390x844 and confirmed the table narrowed to 9 rows"
+    "opened the Proxmox Storage, Backups and Ceph sub-tabs and returned to Overview",
+    "switched through the Docker, Kubernetes, TrueNAS and vSphere platform tabs and back to Proxmox, confirming each renders its own rows",
+    "repeated the whole pass with the websocket connected and again with it unavailable, with identical row counts and no console errors on the connected run",
+    "resized to 390x844, expanded a row (79 rows to 80) and filtered to 9 rows"
   ]
 }

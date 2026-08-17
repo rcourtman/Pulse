@@ -578,6 +578,56 @@ describe('useUnifiedResources', () => {
     dispose();
   });
 
+  it('does not hold the canonical fetch behind the websocket wait on prefer-ws-then-rest routes', async () => {
+    setWsConnected(false);
+    setWsInitialDataReceived(false);
+    setWsState('resources', []);
+
+    let dispose = () => {};
+    let result: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      result = useUnifiedResources({
+        query: 'type=vm',
+        cacheKey: 'prefer-ws-then-rest-no-wait',
+        initialHydration: 'prefer-ws-then-rest',
+      });
+    });
+
+    // No timer advance here on purpose: these routes revalidate over REST
+    // anyway, so the canonical fetch must not sit behind the hydration wait.
+    await flushAsync();
+    await flushAsync();
+    expect(apiFetchMock).toHaveBeenCalled();
+
+    await waitForResourceCount(() => result!.resources().length, 1);
+    expect(result!.loading()).toBe(false);
+
+    dispose();
+  });
+
+  it('still waits for the websocket snapshot on prefer-ws routes', async () => {
+    setWsConnected(false);
+    setWsInitialDataReceived(false);
+    setWsState('resources', []);
+
+    let dispose = () => {};
+    createRoot((d) => {
+      dispose = d;
+      useUnifiedResources({
+        query: '',
+        cacheKey: 'prefer-ws-still-waits',
+        initialHydration: 'prefer-ws',
+      });
+    });
+
+    await flushAsync();
+    await flushAsync();
+    expect(apiFetchMock).not.toHaveBeenCalled();
+
+    dispose();
+  });
+
   it('prefers websocket initial hydration over an immediate REST fetch for dashboard snapshots', async () => {
     setWsConnected(false);
     setWsInitialDataReceived(false);
