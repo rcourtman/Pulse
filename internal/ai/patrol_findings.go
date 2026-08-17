@@ -550,6 +550,14 @@ func newPatrolFindingCreatorAdapterState(p *PatrolService, snap patrolRuntimeSta
 }
 
 func (a *patrolFindingCreatorAdapter) CreateFinding(input tools.PatrolFindingInput) (string, bool, error) {
+	if canonical, repaired := a.canonicalizeUnknownFindingResource(input); repaired {
+		log.Info().
+			Str("submitted_resource_id", input.ResourceID).
+			Str("canonical_resource_id", canonical.ResourceID).
+			Str("resource_type", canonical.ResourceType).
+			Msg("AI Patrol: Repaired unknown finding resource ID from exact scoped identity")
+		input = canonical
+	}
 	if !a.findingInCurrentScope(&Finding{ResourceID: input.ResourceID, ResourceName: input.ResourceName}) {
 		return "", false, fmt.Errorf("resource %s is outside the requested patrol finding scope", input.ResourceID)
 	}
@@ -663,6 +671,82 @@ func (a *patrolFindingCreatorAdapter) CreateFinding(input tools.PatrolFindingInp
 	}
 
 	return id, isNew, nil
+}
+
+// canonicalizeUnknownFindingResource repairs only a redundant model-authored
+// ID transcription error. The submitted ID must match no current resource,
+// while the exact submitted name must resolve to one same-type runtime record
+// that is already admitted to the finding lifecycle scope. A real out-of-scope
+// ID, an ambiguous name, or a type mismatch remains rejected. This preserves
+// the scope boundary without making stable finding identity depend on perfect
+// copying of a long canonical handle.
+func (a *patrolFindingCreatorAdapter) canonicalizeUnknownFindingResource(input tools.PatrolFindingInput) (tools.PatrolFindingInput, bool) {
+	if a == nil || strings.TrimSpace(input.ResourceID) == "" || strings.TrimSpace(input.ResourceName) == "" {
+		return input, false
+	}
+	if a.findingInCurrentScope(&Finding{ResourceID: input.ResourceID, ResourceName: input.ResourceName}) {
+		return input, false
+	}
+
+	resourceIDToken := canonicalPatrolScopeToken(input.ResourceID)
+	resourceNameToken := canonicalPatrolScopeToken(input.ResourceName)
+	resourceTypeToken := canonicalPatrolScopeToken(input.ResourceType)
+	type match struct {
+		canonicalID string
+	}
+	matches := make([]match, 0, 1)
+	submittedIDKnown := false
+	nameMatchCount := 0
+
+	patrolVisitRuntimeResources(a.snap, func(record patrolRuntimeResourceRecord) bool {
+		for _, value := range append(append([]string(nil), record.ids...), record.aliases...) {
+			if canonicalPatrolScopeToken(value) == resourceIDToken {
+				submittedIDKnown = true
+			}
+		}
+		if resourceTypeToken != "" && canonicalPatrolScopeToken(record.resourceType) != resourceTypeToken {
+			return true
+		}
+
+		nameMatches := false
+		for _, alias := range record.aliases {
+			if canonicalPatrolScopeToken(alias) == resourceNameToken {
+				nameMatches = true
+				break
+			}
+		}
+		if !nameMatches {
+			return true
+		}
+		nameMatchCount++
+
+		recordInScope := len(a.findingScope) == 0
+		canonicalID := ""
+		for _, id := range record.ids {
+			id = strings.TrimSpace(id)
+			if id == "" {
+				continue
+			}
+			if canonicalID == "" {
+				canonicalID = id
+			}
+			if a.findingScope[id] {
+				recordInScope = true
+				canonicalID = id
+				break
+			}
+		}
+		if recordInScope && canonicalID != "" {
+			matches = append(matches, match{canonicalID: canonicalID})
+		}
+		return true
+	})
+
+	if submittedIDKnown || nameMatchCount != 1 || len(matches) != 1 {
+		return input, false
+	}
+	input.ResourceID = matches[0].canonicalID
+	return input, true
 }
 
 func (a *patrolFindingCreatorAdapter) findingOwnedByAlerts(finding *Finding) bool {

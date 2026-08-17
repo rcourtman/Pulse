@@ -7609,3 +7609,13 @@ silently ignore the resource selector and return fleet connection counts.
 Calls without `resource_id` retain the existing aggregate connection-health
 overview for backward compatibility. Provider-native IDs and names remain
 lookup aliases; responses preserve the canonical unified-resource ID.
+
+Patrol finding creation keeps scope authoritative while tolerating a bounded
+redundant-ID transcription error. When a model submits a `resource_id` that
+matches no current runtime identity, core may replace it only when the exact
+`resource_name` uniquely identifies a same-type runtime record already admitted
+to the requested finding lifecycle scope. The canonical ID from that record
+then owns deduplication and persistence. A submitted ID that identifies any
+real out-of-scope resource, an ambiguous name, a type mismatch, or a name that
+does not resolve inside the lifecycle scope remains rejected. No fuzzy name or
+ID matching is permitted at this boundary.

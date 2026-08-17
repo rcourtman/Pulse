@@ -1614,6 +1614,50 @@ func TestPatrolFindingAdapterSeparatesRequestedLifecycleScopeFromEvidenceScope(t
 	}
 }
 
+func TestPatrolFindingAdapterRepairsOnlyUnknownIDsFromUniqueScopedIdentity(t *testing.T) {
+	state := newPatrolRuntimeState(models.StateSnapshot{
+		Nodes: []models.Node{
+			{ID: "node-requested", Name: "requested", Status: "online"},
+			{ID: "node-context", Name: "context-only", Status: "online"},
+		},
+	})
+	adapter := newPatrolFindingCreatorAdapterState(NewPatrolService(nil, nil), state)
+	adapter.setFindingScope([]string{"node-requested"})
+
+	input := tools.PatrolFindingInput{
+		ResourceID: "node-reques7ed", ResourceName: "requested", ResourceType: "node",
+	}
+	repaired, ok := adapter.canonicalizeUnknownFindingResource(input)
+	if !ok || repaired.ResourceID != "node-requested" {
+		t.Fatalf("unknown transcription error repair = (%+v, %t), want canonical node-requested", repaired, ok)
+	}
+
+	input.ResourceID = "node-context"
+	if got, ok := adapter.canonicalizeUnknownFindingResource(input); ok || got.ResourceID != "node-context" {
+		t.Fatalf("real out-of-scope ID must not be redirected by a scoped name: (%+v, %t)", got, ok)
+	}
+
+	input.ResourceID = "node-reques7ed"
+	input.ResourceType = "vm"
+	if _, ok := adapter.canonicalizeUnknownFindingResource(input); ok {
+		t.Fatal("resource type mismatch must not be repaired")
+	}
+
+	ambiguousState := newPatrolRuntimeState(models.StateSnapshot{
+		Nodes: []models.Node{
+			{ID: "node-a", Name: "duplicate", Status: "online"},
+			{ID: "node-b", Name: "duplicate", Status: "online"},
+		},
+	})
+	ambiguous := newPatrolFindingCreatorAdapterState(NewPatrolService(nil, nil), ambiguousState)
+	ambiguous.setFindingScope([]string{"node-a"})
+	if _, ok := ambiguous.canonicalizeUnknownFindingResource(tools.PatrolFindingInput{
+		ResourceID: "node-typo", ResourceName: "duplicate", ResourceType: "node",
+	}); ok {
+		t.Fatal("ambiguous exact names must not be repaired even when only one record is in scope")
+	}
+}
+
 func TestPatrolFindingAdapterCanAssessSeededRuntimeFindingDuringScopedRun(t *testing.T) {
 	state := newPatrolRuntimeState(models.StateSnapshot{
 		VMs: []models.VM{{ID: "vm-requested", Name: "requested", VMID: 501}},
