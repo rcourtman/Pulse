@@ -8717,6 +8717,9 @@ boolean, the current expected versioned contract, and the selected record's
 version/status metadata without rewriting historical evidence. Stable failure codes distinguish
 missing, stale, wrong-organization, wrong-actor, expired, revoked, malformed,
 conflicting, and unavailable-store evidence.
+The full-mode acknowledgement gate consumes `acknowledgement_id` before strict
+paid-handler decoding but must preserve omitted investigation budget and timeout
+fields as omitted; a mode-only activation cannot reset existing controls.
 
 Paid adapters may return a compact mutation acknowledgement from `PUT`; it is
 not the canonical effective-state projection. First-party clients must follow

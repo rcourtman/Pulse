@@ -290,6 +290,49 @@ func TestPatrolAutopilotActivationForwardsStrictDecodableBody(t *testing.T) {
 	}
 }
 
+func TestPatrolAutopilotActivationPreservesOmittedInvestigationControls(t *testing.T) {
+	now := time.Date(2026, 8, 17, 18, 0, 0, 0, time.UTC)
+	handler, _ := newPatrolAutopilotTestHandler(t, "org-a", &now)
+
+	created := createPatrolAutopilotAcknowledgement(t, handler, "org-a", "alice", "session-partial", "ack-partial-001")
+	if created.Code != http.StatusCreated {
+		t.Fatalf("create status=%d body=%s", created.Code, created.Body.String())
+	}
+
+	activate := patrolAutopilotSessionRequest(t, http.MethodPut, "/api/ai/patrol/autonomy", `{"autonomy_level":"full","acknowledgement_id":"ack-partial-001"}`, "org-a", "alice", "session-partial")
+	rec := httptest.NewRecorder()
+	handler.GatePatrolAutonomyUpdate(func(w http.ResponseWriter, gated *http.Request) {
+		body, err := io.ReadAll(gated.Body)
+		if err != nil {
+			t.Fatalf("read gated body: %v", err)
+		}
+		if strings.Contains(string(body), "investigation_budget") || strings.Contains(string(body), "investigation_timeout_sec") {
+			t.Fatalf("gated body fabricated omitted investigation controls: %s", body)
+		}
+		var downstream struct {
+			AutonomyLevel           string `json:"autonomy_level"`
+			FullModeUnlocked        *bool  `json:"full_mode_unlocked,omitempty"`
+			InvestigationBudget     *int   `json:"investigation_budget,omitempty"`
+			InvestigationTimeoutSec *int   `json:"investigation_timeout_sec,omitempty"`
+		}
+		dec := json.NewDecoder(bytes.NewReader(body))
+		dec.DisallowUnknownFields()
+		if err := dec.Decode(&downstream); err != nil {
+			t.Fatalf("gated body fails strict decode: %v body=%s", err, body)
+		}
+		if downstream.AutonomyLevel != string(config.PatrolAutonomyFull) || downstream.FullModeUnlocked == nil || !*downstream.FullModeUnlocked {
+			t.Fatalf("gated body lost activation shape: %s", body)
+		}
+		if downstream.InvestigationBudget != nil || downstream.InvestigationTimeoutSec != nil {
+			t.Fatalf("gated body changed omitted controls: %#v", downstream)
+		}
+		w.WriteHeader(http.StatusOK)
+	})(rec, activate)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("gate status=%d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestPatrolAutopilotLowerModeDoesNotCreateOrRefreshAcknowledgement(t *testing.T) {
 	now := time.Date(2026, 7, 11, 20, 0, 0, 0, time.UTC)
 	handler, persistence := newPatrolAutopilotTestHandler(t, "org-a", &now)

@@ -7982,6 +7982,18 @@ type PatrolAutonomySettings struct {
 	InvestigationTimeoutSec int    `json:"investigation_timeout_sec"` // Max seconds per investigation (60-1800)
 }
 
+// patrolAutonomyGateSettings preserves whether optional investigation controls
+// were present while the full-mode gate consumes acknowledgement_id. The paid
+// handler owns partial-update semantics and must not receive fabricated zeroes
+// for fields the caller omitted.
+type patrolAutonomyGateSettings struct {
+	AutonomyLevel           string `json:"autonomy_level"`
+	FullModeUnlocked        *bool  `json:"full_mode_unlocked,omitempty"`
+	AcknowledgementID       string `json:"acknowledgement_id,omitempty"`
+	InvestigationBudget     *int   `json:"investigation_budget,omitempty"`
+	InvestigationTimeoutSec *int   `json:"investigation_timeout_sec,omitempty"`
+}
+
 // PatrolAutonomyResponse represents the patrol autonomy configuration for API responses
 // Uses plain bool for FullModeUnlocked since responses always include the actual value
 type PatrolAutonomyResponse struct {
@@ -8259,7 +8271,7 @@ func (h *AISettingsHandler) GatePatrolAutonomyUpdate(next http.HandlerFunc) http
 			writeErrorResponse(w, http.StatusBadRequest, "invalid_request", "Invalid Patrol autonomy request", nil)
 			return
 		}
-		var settings PatrolAutonomySettings
+		var settings patrolAutonomyGateSettings
 		if err := decodeStrictPatrolAutopilotJSONBytes(body, &settings); err != nil {
 			writeErrorResponse(w, http.StatusBadRequest, "invalid_request", "Invalid Patrol autonomy request", nil)
 			return

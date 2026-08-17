@@ -7117,6 +7117,9 @@ admission through the existing Task 04 policy-mutation coordinator. The API
 handler and every tenant AI service share the same injected server clock and
 current-version provider, so a newly supported contract cannot activate at the
 API boundary while remaining stale in the runtime that enforces Patrol mode.
+When that API gate consumes an acknowledgement and normalizes the downstream
+paid-handler request, it must preserve omitted investigation budget and timeout
+fields as omitted so a mode-only activation cannot reset existing controls.
 
 The accepted limits promise only policy allowlisting, emergency-stop and
 approval-floor enforcement, reconciliation when supported, disclosed evidence

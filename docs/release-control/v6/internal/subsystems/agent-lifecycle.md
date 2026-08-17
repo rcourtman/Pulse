@@ -5604,6 +5604,9 @@ Task 08 actor/RBAC/approval boundary, Task 07 dispatch contract, and Task 10
 two-axis result contract. API tokens are ineligible for the human Autopilot
 acknowledgement even where an owner-bound token remains compatible with an
 authenticated action capability.
+Consuming that acknowledgement at the API gate changes only the effective
+tenant Patrol mode: omitted investigation budget and timeout controls remain
+unchanged and cannot be synthesized as zero-valued lifecycle authority.
 
 ### Task 07 generic durable agent-operation receipts and Task 09 APT adapter
 
