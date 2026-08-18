@@ -68,6 +68,7 @@ import {
 
 const PRIMARY_EVIDENCE_LIMIT = 3;
 const PRIMARY_DECISION_LIMIT = 5;
+type PatrolAttentionView = 'inbox' | 'handled';
 
 const normalizeComparableCopy = (value?: string | null) =>
   (value ?? '')
@@ -145,6 +146,7 @@ export function PatrolAttentionWorkbench(
   const [lifecycleBusy, setLifecycleBusy] = createSignal(false);
   const [lifecycleError, setLifecycleError] = createSignal('');
   const [reviewNotice, setReviewNotice] = createSignal('');
+  const [attentionView, setAttentionView] = createSignal<PatrolAttentionView>('inbox');
   const [reviewOrder, setReviewOrder] = createSignal<string[]>([]);
   const [showAllDecisions, setShowAllDecisions] = createSignal(false);
   const itemButtons = new Map<string, HTMLButtonElement>();
@@ -157,12 +159,19 @@ export function PatrolAttentionWorkbench(
     props.autonomyLocked ? 'monitor' : (props.autonomyLevel ?? 'monitor'),
   );
   const autonomyExperience = createMemo(() => PATROL_AUTONOMY_EXPERIENCE[effectiveAutonomyLevel()]);
+  const handledCount = createMemo(
+    () => (summary()?.acknowledgedCount ?? 0) + (summary()?.suppressedCount ?? 0),
+  );
   const attention = createMemo(() => {
     const items = patrolAttentionStore.items();
+    const visibleItems =
+      attentionView() === 'handled'
+        ? items.filter((item) => item.state === 'acknowledged' || item.state === 'suppressed')
+        : items;
     return partitionPatrolAttention(
-      Array.isArray(items) ? items : [],
-      props.autonomyLevel ?? 'monitor',
-      props.autonomyLocked ?? false,
+      Array.isArray(visibleItems) ? visibleItems : [],
+      attentionView() === 'handled' ? 'monitor' : (props.autonomyLevel ?? 'monitor'),
+      attentionView() === 'handled' ? true : (props.autonomyLocked ?? false),
     );
   });
   const sortedDecisions = createMemo(() => sortPatrolAttentionDecisions(attention().needsUser));
@@ -199,6 +208,10 @@ export function PatrolAttentionWorkbench(
   const briefingHeadline = createMemo(() => {
     if (patrolAttentionStore.loading() && !summary()) return 'Building your current briefing';
     const count = attention().needsUser.length;
+    if (attentionView() === 'handled') {
+      if (count === 0) return 'No reviewed or suppressed issues';
+      return `${count} reviewed or suppressed ${count === 1 ? 'issue' : 'issues'}`;
+    }
     if (count === 0) return 'No decisions are waiting';
     return `${count} ${count === 1 ? 'decision needs' : 'decisions need'} you`;
   });
@@ -230,6 +243,16 @@ export function PatrolAttentionWorkbench(
     replaceAttentionLocation('');
     void patrolAttentionStore.select(null);
     queueMicrotask(() => itemButtons.get(previous)?.focus());
+  };
+  const switchAttentionView = (nextView: PatrolAttentionView) => {
+    setAttentionView(nextView);
+    setReviewNotice('');
+    setReviewOrder([]);
+    setShowAllDecisions(false);
+    setSelectedItemId('');
+    replaceAttentionLocation('');
+    void patrolAttentionStore.select(null);
+    void patrolAttentionStore.load(nextView === 'handled' ? 'all' : 'active');
   };
   const reviewAction = async (
     item: AttentionItem,
@@ -283,16 +306,20 @@ export function PatrolAttentionWorkbench(
     setLifecycleError('');
     try {
       await operation();
-      await patrolAttentionStore.load(patrolAttentionStore.filter());
+      await patrolAttentionStore.load(attentionView() === 'handled' ? 'all' : 'active');
       if (options.advanceAfter) {
         const remaining = orderedDecisions();
         const next =
           remaining.find((decision) => decision.item.id === nextCandidateId) ?? remaining[0];
         const successLabel = options.successLabel ?? 'Decision updated';
         setReviewNotice(
-          remaining.length > 0
-            ? `${successLabel}. ${remaining.length} ${remaining.length === 1 ? 'decision remains' : 'decisions remain'}.`
-            : `${successLabel}. Your decision inbox is clear.`,
+          attentionView() === 'handled'
+            ? remaining.length > 0
+              ? `${successLabel}. ${remaining.length} ${remaining.length === 1 ? 'handled issue remains' : 'handled issues remain'}.`
+              : `${successLabel}. No other handled issues remain.`
+            : remaining.length > 0
+              ? `${successLabel}. ${remaining.length} ${remaining.length === 1 ? 'decision remains' : 'decisions remain'}.`
+              : `${successLabel}. Your decision inbox is clear.`,
         );
         if (next) {
           selectItem(next.item.id, true);
@@ -351,12 +378,16 @@ export function PatrolAttentionWorkbench(
             </h2>
             <Show when={attention().needsUser.length === 0}>
               <p class="mt-1 text-sm leading-5 text-muted">
-                {autonomyExperience().needsYouDescription}
+                {attentionView() === 'handled'
+                  ? 'Issues stay here until they return to the inbox or resolve.'
+                  : autonomyExperience().needsYouDescription}
               </p>
             </Show>
           </div>
           <div class="flex flex-wrap items-center gap-2 sm:justify-end">
-            <Show when={!selectedItemId() && highestPriorityDecision()}>
+            <Show
+              when={attentionView() === 'inbox' && !selectedItemId() && highestPriorityDecision()}
+            >
               {(decision) => (
                 <Button
                   variant="primary"
@@ -368,6 +399,26 @@ export function PatrolAttentionWorkbench(
                   <ChevronRightIcon class="h-4 w-4" aria-hidden="true" />
                 </Button>
               )}
+            </Show>
+            <Show
+              when={attentionView() === 'inbox' && handledCount() > 0}
+              fallback={
+                <Show when={attentionView() === 'handled'}>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    class="gap-1.5"
+                    onClick={() => switchAttentionView('inbox')}
+                  >
+                    <ArrowLeftIcon class="h-4 w-4" aria-hidden="true" />
+                    Back to decision inbox
+                  </Button>
+                </Show>
+              }
+            >
+              <Button variant="secondary" size="sm" onClick={() => switchAttentionView('handled')}>
+                Reviewed and suppressed ({handledCount()})
+              </Button>
             </Show>
             <Show when={(props.pendingActionCount ?? 0) > 0}>
               <ButtonLink href="/actions" variant="secondary" size="sm" class="gap-1.5">
@@ -392,7 +443,7 @@ export function PatrolAttentionWorkbench(
             </Button>
           </div>
         </div>
-        <Show when={attention().quiet.length > 0}>
+        <Show when={attentionView() === 'inbox' && attention().quiet.length > 0}>
           <p class="mt-3 text-xs leading-5 text-muted">
             {attention().quiet.length} other current{' '}
             {attention().quiet.length === 1 ? 'issue is' : 'issues are'} continuing without a
@@ -408,7 +459,16 @@ export function PatrolAttentionWorkbench(
             class="flex items-center gap-2 border-b border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-200 sm:px-6"
           >
             <CheckCircleIcon class="h-4 w-4 shrink-0" aria-hidden="true" />
-            {notice()}
+            <span>{notice()}</span>
+            <Show when={attentionView() === 'inbox' && handledCount() > 0}>
+              <button
+                type="button"
+                class="ml-auto shrink-0 underline underline-offset-2 hover:no-underline focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600"
+                onClick={() => switchAttentionView('handled')}
+              >
+                Review handled issues
+              </button>
+            </Show>
           </div>
         )}
       </Show>
@@ -424,6 +484,7 @@ export function PatrolAttentionWorkbench(
             selectedItemId={selectedItemId()}
             itemButtons={itemButtons}
             onSelect={selectItem}
+            view={attentionView()}
           />
           <Show when={attention().needsUser.length > PRIMARY_DECISION_LIMIT}>
             <div class="border-t border-border px-4 py-3 text-center sm:px-5">
@@ -458,6 +519,7 @@ export function PatrolAttentionWorkbench(
                 selectedDecisionIndex() >= 0 ? selectedDecisionIndex() + 1 : undefined
               }
               queueCount={() => orderedDecisions().length}
+              queueLabel={attentionView() === 'handled' ? 'Handled issue' : 'Decision'}
               canPrevious={() => Boolean(previousDecision())}
               canNext={() => Boolean(nextDecision())}
               onPrevious={() => {
@@ -475,7 +537,10 @@ export function PatrolAttentionWorkbench(
                 })
               }
               onUnacknowledge={(itemId) =>
-                changeLifecycle(() => unacknowledgePatrolAttention(itemId))
+                changeLifecycle(() => unacknowledgePatrolAttention(itemId), {
+                  advanceAfter: attentionView() === 'handled',
+                  successLabel: 'Returned to decision inbox',
+                })
               }
               onSuppress={(itemId, reason, expiresAt) =>
                 changeLifecycle(() => suppressPatrolAttention(itemId, reason, expiresAt), {
@@ -483,7 +548,12 @@ export function PatrolAttentionWorkbench(
                   successLabel: 'Suppressed temporarily',
                 })
               }
-              onUnsuppress={(itemId) => changeLifecycle(() => unsuppressPatrolAttention(itemId))}
+              onUnsuppress={(itemId) =>
+                changeLifecycle(() => unsuppressPatrolAttention(itemId), {
+                  advanceAfter: attentionView() === 'handled',
+                  successLabel: 'Returned to decision inbox',
+                })
+              }
               onOpenFindings={props.onOpenFindings}
             />
           </div>
@@ -510,6 +580,7 @@ function AttentionList(props: {
   selectedItemId: string;
   itemButtons: Map<string, HTMLButtonElement>;
   onSelect: (itemId: string) => void;
+  view: PatrolAttentionView;
 }) {
   const hasQuietWork = () => {
     const items = patrolAttentionStore.items();
@@ -547,9 +618,21 @@ function AttentionList(props: {
       >
         <Show
           when={props.decisions.length > 0}
-          fallback={<AttentionEmptyState hasQuietWork={hasQuietWork()} />}
+          fallback={
+            <AttentionEmptyState
+              hasQuietWork={props.view === 'inbox' && hasQuietWork()}
+              view={props.view}
+            />
+          }
         >
-          <ul class="divide-y divide-border" aria-label="Patrol attention items">
+          <ul
+            class="divide-y divide-border"
+            aria-label={
+              props.view === 'handled'
+                ? 'Reviewed and suppressed Patrol items'
+                : 'Patrol attention items'
+            }
+          >
             <For each={props.decisions}>
               {(decision) => {
                 const item = decision.item;
@@ -591,6 +674,11 @@ function AttentionList(props: {
                             <MetadataBadge tone={severityTone(item)} size="xs" shape="rounded">
                               {formatLabel(item.severity)}
                             </MetadataBadge>
+                            <Show when={props.view === 'handled'}>
+                              <MetadataBadge tone="neutral" size="xs" shape="rounded">
+                                {item.state === 'acknowledged' ? 'Reviewed' : 'Suppressed'}
+                              </MetadataBadge>
+                            </Show>
                             <span class="min-w-0 flex-1 truncate text-sm font-semibold text-base-content">
                               {displayTitle()}
                             </span>
@@ -636,7 +724,7 @@ function AttentionList(props: {
   );
 }
 
-function AttentionEmptyState(props: { hasQuietWork: boolean }) {
+function AttentionEmptyState(props: { hasQuietWork: boolean; view: PatrolAttentionView }) {
   const summary = () => patrolAttentionStore.summary();
   const activeFilter = () => patrolAttentionStore.filter() === 'active';
   const trustworthyCalm = () =>
@@ -651,30 +739,44 @@ function AttentionEmptyState(props: { hasQuietWork: boolean }) {
       class="flex min-h-52 flex-col items-center justify-center px-6 py-10 text-center"
     >
       <Show
-        when={trustworthyCalm() || props.hasQuietWork}
+        when={props.view === 'inbox'}
         fallback={
           <>
-            <ClockIcon class="h-8 w-8 text-muted" aria-hidden="true" />
-            <h3 class="mt-3 text-sm font-semibold text-base-content">No items in this view</h3>
+            <CheckCircleIcon class="h-9 w-9 text-emerald-500" aria-hidden="true" />
+            <h3 class="mt-3 text-sm font-semibold text-base-content">Handled issues appear here</h3>
             <p class="mt-1 max-w-md text-xs leading-5 text-muted">
-              {summary()?.coverageState === 'partial'
-                ? 'The Inbox is empty, but protection context is incomplete. Pulse is not treating that gap as proof of health.'
-                : 'Refresh the Inbox to check the current evaluation.'}
+              Issues you handle from the decision inbox will remain available here until they return
+              to the inbox or resolve.
             </p>
           </>
         }
       >
-        <CheckCircleIcon class="h-9 w-9 text-emerald-500" aria-hidden="true" />
-        <h3 class="mt-3 text-sm font-semibold text-base-content">Nothing needs you right now</h3>
-        <p class="mt-1 max-w-md text-xs leading-5 text-muted">
-          {props.hasQuietWork
-            ? 'Patrol can continue with the current issues under this mode.'
-            : 'The current operational evaluation has no active items.'}
-          <Show when={summary()?.evaluatedAt}>
-            {' Checked '}
-            {formatRelativeTime(summary()!.evaluatedAt, { compact: true })}.
-          </Show>
-        </p>
+        <Show
+          when={trustworthyCalm() || props.hasQuietWork}
+          fallback={
+            <>
+              <ClockIcon class="h-8 w-8 text-muted" aria-hidden="true" />
+              <h3 class="mt-3 text-sm font-semibold text-base-content">No items in this view</h3>
+              <p class="mt-1 max-w-md text-xs leading-5 text-muted">
+                {summary()?.coverageState === 'partial'
+                  ? 'The Inbox is empty, but protection context is incomplete. Pulse is not treating that gap as proof of health.'
+                  : 'Refresh the Inbox to check the current evaluation.'}
+              </p>
+            </>
+          }
+        >
+          <CheckCircleIcon class="h-9 w-9 text-emerald-500" aria-hidden="true" />
+          <h3 class="mt-3 text-sm font-semibold text-base-content">Nothing needs you right now</h3>
+          <p class="mt-1 max-w-md text-xs leading-5 text-muted">
+            {props.hasQuietWork
+              ? 'Patrol can continue with the current issues under this mode.'
+              : 'The current operational evaluation has no active items.'}
+            <Show when={summary()?.evaluatedAt}>
+              {' Checked '}
+              {formatRelativeTime(summary()!.evaluatedAt, { compact: true })}.
+            </Show>
+          </p>
+        </Show>
       </Show>
     </div>
   );
@@ -695,6 +797,7 @@ function AttentionDetail(props: {
   lifecycleError: string;
   queuePosition: Accessor<number | undefined>;
   queueCount: Accessor<number>;
+  queueLabel: 'Decision' | 'Handled issue';
   canPrevious: Accessor<boolean>;
   canNext: Accessor<boolean>;
   onPrevious: () => void;
@@ -795,23 +898,27 @@ function AttentionDetail(props: {
           <button
             type="button"
             class="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded px-2 text-sm font-medium text-muted hover:bg-surface-hover hover:text-base-content focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 lg:hidden"
-            aria-label="Back to attention list"
+            aria-label={
+              props.queueLabel === 'Handled issue'
+                ? 'Back to handled issues'
+                : 'Back to attention list'
+            }
             onClick={props.onClose}
           >
             <ArrowLeftIcon class="h-4 w-4" aria-hidden="true" />
             Back to list
           </button>
           <p class="text-[11px] font-semibold uppercase tracking-wider text-muted">
-            <Show when={props.queuePosition()} fallback="Decision context">
-              Decision {props.queuePosition()} of {props.queueCount()}
+            <Show when={props.queuePosition()} fallback={`${props.queueLabel} context`}>
+              {props.queueLabel} {props.queuePosition()} of {props.queueCount()}
             </Show>
           </p>
           <div class="hidden items-center gap-1 lg:flex">
             <button
               type="button"
               class="inline-flex h-8 w-8 items-center justify-center rounded text-muted hover:bg-surface-hover hover:text-base-content focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-35"
-              aria-label="Previous decision"
-              title="Previous decision"
+              aria-label={`Previous ${props.queueLabel.toLocaleLowerCase()}`}
+              title={`Previous ${props.queueLabel.toLocaleLowerCase()}`}
               disabled={!props.canPrevious()}
               onClick={props.onPrevious}
             >
@@ -820,8 +927,8 @@ function AttentionDetail(props: {
             <button
               type="button"
               class="inline-flex h-8 w-8 items-center justify-center rounded text-muted hover:bg-surface-hover hover:text-base-content focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-35"
-              aria-label="Next decision"
-              title="Next decision"
+              aria-label={`Next ${props.queueLabel.toLocaleLowerCase()}`}
+              title={`Next ${props.queueLabel.toLocaleLowerCase()}`}
               disabled={!props.canNext()}
               onClick={props.onNext}
             >
@@ -860,7 +967,7 @@ function AttentionDetail(props: {
               disabled={!props.canNext()}
               onClick={props.onNext}
             >
-              Next decision
+              Next issue
               <ChevronRightIcon class="h-4 w-4" aria-hidden="true" />
             </Button>
           </div>
@@ -1309,8 +1416,9 @@ function AttentionLifecycleControls(props: {
           </summary>
           <div class="pb-1">
             <p>
-              Mark reviewed removes this occurrence from today's decision inbox while keeping its
-              record. Suppression hides it only until the selected return time.
+              Mark reviewed removes this occurrence from the decision inbox until it resolves or you
+              return it to open. Suppression hides it only until the selected return time. Both
+              remain available under Reviewed and suppressed.
             </p>
             <p class="mt-1">
               For a permanent change,{' '}

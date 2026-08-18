@@ -530,20 +530,37 @@ describe('PatrolAttentionWorkbench', () => {
   it('marks an item reviewed and advances through the decision queue', async () => {
     const active = item();
     const next = item({ id: 'record-2', title: 'Database replication is delayed' });
-    apiMocks.getList
-      .mockResolvedValueOnce(
-        listResponse([active, next], summary({ activeCount: 2, openCount: 2, calm: false })),
-      )
-      .mockResolvedValue(
-        listResponse(
-          [next],
-          summary({ activeCount: 1, openCount: 1, acknowledgedCount: 1, calm: false }),
-        ),
+    const reviewed = item({ state: 'acknowledged' });
+    let isReviewed = false;
+    apiMocks.getList.mockImplementation((filter: string) => {
+      if (!isReviewed) {
+        return Promise.resolve(
+          listResponse([active, next], summary({ activeCount: 2, openCount: 2, calm: false })),
+        );
+      }
+      const responseSummary = summary({
+        activeCount: 1,
+        openCount: 1,
+        acknowledgedCount: 1,
+        calm: false,
+      });
+      return Promise.resolve(
+        filter === 'all'
+          ? listResponse([reviewed, next], responseSummary)
+          : listResponse([next], responseSummary),
       );
+    });
     apiMocks.getDetail.mockImplementation((itemId: string) =>
-      Promise.resolve(detail(itemId === active.id ? active : next)),
+      Promise.resolve(detail(itemId === active.id ? (isReviewed ? reviewed : active) : next)),
     );
-    apiMocks.acknowledge.mockResolvedValue({ success: true });
+    apiMocks.acknowledge.mockImplementation(() => {
+      isReviewed = true;
+      return Promise.resolve({ success: true });
+    });
+    apiMocks.unacknowledge.mockImplementation(() => {
+      isReviewed = false;
+      return Promise.resolve({ success: true });
+    });
     renderWorkbench();
 
     fireEvent.click(
@@ -578,6 +595,28 @@ describe('PatrolAttentionWorkbench', () => {
       await screen.findByRole('complementary', { name: 'Database replication is delayed' }),
     ).toBeInTheDocument();
     expect(window.location.search).toBe('?attention=record-2');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Review handled issues' }));
+    expect(
+      await screen.findByRole('heading', { name: '1 reviewed or suppressed issue' }),
+    ).toBeInTheDocument();
+    expect(apiMocks.getList).toHaveBeenLastCalledWith('all');
+    expect(screen.getByText('Reviewed', { exact: true })).toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Open Database VM · Disk pressure',
+      }),
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Return to decision inbox' }));
+
+    await waitFor(() => expect(apiMocks.unacknowledge).toHaveBeenCalledWith('record-1'));
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      'Returned to decision inbox. No other handled issues remain.',
+    );
+    expect(
+      screen.getByRole('heading', { name: 'No reviewed or suppressed issues' }),
+    ).toBeInTheDocument();
   });
 
   it('requires an explicit reason and bounded duration before temporary suppression', async () => {
@@ -641,6 +680,7 @@ describe('PatrolAttentionWorkbench', () => {
     expect(await screen.findByRole('status')).toHaveTextContent(
       'Suppressed temporarily. Your decision inbox is clear.',
     );
+    expect(screen.getByRole('button', { name: 'Review handled issues' })).toBeInTheDocument();
     expect(
       await screen.findByRole('heading', { name: 'Nothing needs you right now' }),
     ).toBeInTheDocument();
@@ -668,7 +708,10 @@ describe('PatrolAttentionWorkbench', () => {
       }),
     );
 
-    expect(await screen.findByText(/Mark reviewed removes this occurrence/i)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/Mark reviewed removes this occurrence from the decision inbox/i),
+    ).toHaveTextContent(/until it resolves or you return it to open/i);
+    expect(screen.queryByText(/today's decision inbox/i)).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'adjust alert thresholds' })).toHaveAttribute(
       'href',
       '/alerts/thresholds',

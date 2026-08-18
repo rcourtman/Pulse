@@ -1,19 +1,15 @@
 {
   "version": 1,
-  "base_sha": "bcea56db970cd59f2f703584dc3ad2c88bc40910",
-  "verified_at": "2026-08-18T12:14:30Z",
+  "base_sha": "2eeb643afe3f9b4e4762d536081467014fffbda1",
+  "verified_at": "2026-08-18T14:02:44Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/features/actions/ActionReviewDialog.tsx",
-    "frontend-modern/src/features/actions/actionPresentation.ts",
-    "frontend-modern/src/types/actionAudit.ts"
+    "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/actions/ActionReviewDialog.tsx": "5e489d440ce9b1e9f106a543a79b09d0b4d73aed65c9757688efa39b2d6fa833",
-    "frontend-modern/src/features/actions/actionPresentation.ts": "776904de782fb0e208f28de7eb6e7d8ea9ac8746c3b2fa1cd7ee9b6ff1bcb985",
-    "frontend-modern/src/types/actionAudit.ts": "435934beca93e8683ec5177e051b8a8d06f2d3eb4fb09a082e4ead30282bbc32"
+    "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx": "b15a41c788a4b197cadc8e5087f307ba0acec1457dd78e98ca739bef161bc1e0"
   },
-  "routes": ["/actions", "/patrol"],
+  "routes": ["/patrol"],
   "viewports": [
     {
       "width": 1280,
@@ -25,17 +21,23 @@
     }
   ],
   "states": [
-    "Actions Open queue with Patrol-origin records and a selected governed review",
-    "Older Patrol action review with an honest Open Patrol fallback and no record-specific claim",
-    "Patrol Inbox opened with a canonical encoded attention record selected in the detail workspace",
-    "Mobile action review with the Patrol return control visible above the decision packet",
-    "Mobile Patrol exact-record selection with the intended decision detail visible"
+    "Decision inbox before and after reviewing an issue",
+    "Expanded lifecycle explanation with corrected Mark reviewed behavior",
+    "Review success notice with the handled-items shortcut",
+    "Reviewed and suppressed list with distinct Reviewed and Suppressed badges",
+    "Selected reviewed item in the desktop split workspace",
+    "Selected reviewed item in the mobile detail workspace",
+    "Handled-items empty state after restoration",
+    "Restored decision visible in the active inbox"
   ],
   "interactions": [
-    "Opened a Patrol-origin action from the live Actions queue and used Open Patrol to return to the Patrol Inbox",
-    "Navigated through the canonical encoded attention route and confirmed it selected the exact operational record",
-    "Repeated the selected action review and exact Patrol selection at a 390 by 844 viewport",
-    "Verified the mobile dialog remained within the viewport and document width equalled the 390-pixel viewport",
-    "Confirmed the final browser diagnostics contained no warning or error entries"
+    "Opened a current decision and expanded More ways to manage this issue",
+    "Marked the decision reviewed and confirmed automatic advancement plus remaining-work feedback",
+    "Opened Reviewed and suppressed from the success notice and selected the reviewed record",
+    "Returned the reviewed record to the decision inbox and confirmed it reappeared",
+    "Suppressed a decision with an explicit reason and bounded return time",
+    "Opened the suppressed record from Reviewed and suppressed and returned it to active attention",
+    "Repeated the handled-record selection at 390 by 844 and confirmed document width remained 390 pixels",
+    "Verified handled-item keyboard labels and confirmed the final browser diagnostics had no warnings or errors"
   ]
 }
