@@ -20220,3 +20220,119 @@ func TestCheckStorageClearsZFSAlertsWhenPoolDetaches(t *testing.T) {
 		t.Error("expected unrelated storage to keep its ZFS alerts")
 	}
 }
+
+// The flapping cooldown is a promise Pulse makes to the operator: the flapping
+// postmortem finding tells them notifications were suppressed for
+// FlappingCooldownMinutes and suggests raising it. These tests pin that the
+// cooldown actually gates dispatch, rather than being recorded and ignored.
+
+func TestFlappingCooldownSuppressesAfterWindowDrains(t *testing.T) {
+	m := newTestManager(t)
+
+	const trackingKey = "cooldown-holds"
+
+	m.mu.Lock()
+	m.config.FlappingEnabled = true
+	m.config.FlappingThreshold = 5
+	m.config.FlappingWindowSeconds = 300
+	m.config.FlappingCooldownMinutes = 15
+
+	// Four prior state changes inside the window; this call is the fifth and
+	// trips the threshold.
+	now := time.Now()
+	for i := 1; i <= 4; i++ {
+		m.flappingHistory[trackingKey] = append(
+			m.flappingHistory[trackingKey],
+			now.Add(-time.Duration(i)*time.Second),
+		)
+	}
+	suppress, justTransitioned := m.checkFlappingLocked(trackingKey)
+	m.mu.Unlock()
+
+	if !suppress || !justTransitioned {
+		t.Fatalf("expected the threshold breach to suppress and transition, got suppress=%v justTransitioned=%v", suppress, justTransitioned)
+	}
+
+	// Drain the sliding window so the count alone would no longer suppress.
+	// The cooldown is still running, so dispatch must stay suppressed.
+	m.mu.Lock()
+	m.flappingHistory[trackingKey] = nil
+	suppressDuringCooldown, transitionedAgain := m.checkFlappingLocked(trackingKey)
+	cooldownEnd, stillRecorded := m.suppressedUntil[trackingKey]
+	m.mu.Unlock()
+
+	if !suppressDuringCooldown {
+		t.Error("expected the cooldown to keep suppressing once the sliding window drained")
+	}
+	if transitionedAgain {
+		t.Error("expected no second transition while the same cooldown is running")
+	}
+	if !stillRecorded || !cooldownEnd.After(time.Now()) {
+		t.Error("expected the cooldown deadline to remain in the future")
+	}
+}
+
+func TestFlappingCooldownReleasesAndCanReArm(t *testing.T) {
+	m := newTestManager(t)
+
+	const trackingKey = "cooldown-releases"
+
+	m.mu.Lock()
+	m.config.FlappingEnabled = true
+	m.config.FlappingThreshold = 3
+	m.config.FlappingWindowSeconds = 300
+	m.config.FlappingCooldownMinutes = 15
+
+	// An episode whose cooldown has already elapsed.
+	m.flappingActive[trackingKey] = true
+	m.suppressedUntil[trackingKey] = time.Now().Add(-time.Minute)
+
+	// A lone state change after the cooldown expires must get through.
+	suppress, _ := m.checkFlappingLocked(trackingKey)
+	latchCleared := !m.flappingActive[trackingKey]
+	m.mu.Unlock()
+
+	if suppress {
+		t.Error("expected dispatch once the cooldown has been served and the resource is quiet")
+	}
+	if !latchCleared {
+		t.Error("expected the flapping latch to clear so a later episode can open a fresh cooldown")
+	}
+
+	// A fresh episode must be able to arm a new cooldown, which the permanently
+	// latched flappingActive flag previously prevented.
+	m.mu.Lock()
+	now := time.Now()
+	for i := 1; i <= 3; i++ {
+		m.flappingHistory[trackingKey] = append(
+			m.flappingHistory[trackingKey],
+			now.Add(-time.Duration(i)*time.Second),
+		)
+	}
+	suppressAgain, transitionedAgain := m.checkFlappingLocked(trackingKey)
+	_, rearmed := m.suppressedUntil[trackingKey]
+	m.mu.Unlock()
+
+	if !suppressAgain || !transitionedAgain {
+		t.Errorf("expected a later episode to suppress and transition again, got suppress=%v justTransitioned=%v", suppressAgain, transitionedAgain)
+	}
+	if !rearmed {
+		t.Error("expected a fresh cooldown deadline for the later episode")
+	}
+}
+
+func TestFlappingDisabledIgnoresCooldown(t *testing.T) {
+	m := newTestManager(t)
+
+	const trackingKey = "flapping-off"
+
+	m.mu.Lock()
+	m.config.FlappingEnabled = false
+	m.suppressedUntil[trackingKey] = time.Now().Add(15 * time.Minute)
+	suppress, justTransitioned := m.checkFlappingLocked(trackingKey)
+	m.mu.Unlock()
+
+	if suppress || justTransitioned {
+		t.Errorf("expected disabled flapping detection to suppress nothing, got suppress=%v justTransitioned=%v", suppress, justTransitioned)
+	}
+}

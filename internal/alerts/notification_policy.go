@@ -87,6 +87,26 @@ func (m *Manager) checkFlappingLocked(trackingKey string) (suppress bool, justTr
 	now := time.Now()
 	windowDuration := time.Duration(m.config.FlappingWindowSeconds) * time.Second
 
+	// Honour an active cooldown before anything else. The cooldown recorded
+	// below used to be write-only on this path: suppression was decided purely
+	// by the sliding-window count, so it ended the moment the count dipped
+	// under the threshold instead of holding for FlappingCooldownMinutes. A
+	// resource oscillating just under the threshold rate was therefore never
+	// damped at all, while the flapping postmortem told the operator that
+	// notifications had been suppressed for the configured cooldown and
+	// suggested raising a value that changed nothing.
+	if until, cooling := m.suppressedUntil[trackingKey]; cooling {
+		if now.Before(until) {
+			return true, false
+		}
+		// The cooldown has been served. Clear the latch so a later episode can
+		// open a fresh one; flappingActive is otherwise only ever set to true,
+		// which would leave every subsequent episode with no cooldown at all.
+		delete(m.suppressedUntil, trackingKey)
+		delete(m.flappingActive, trackingKey)
+		delete(m.flappingHistory, trackingKey)
+	}
+
 	// Record this state change
 	m.flappingHistory[trackingKey] = append(m.flappingHistory[trackingKey], now)
 
