@@ -211,7 +211,11 @@ export function ProxmoxCoverageTable(props: {
               />
               <Show when={columnVisible('pbs')}>
                 <SortableHead
-                  label={layoutMode() === 'expanded' ? 'PBS' : 'PBS snapshot'}
+                  label={
+                    layoutMode() === 'compact' || layoutMode() === 'expanded'
+                      ? 'PBS'
+                      : 'PBS snapshot'
+                  }
                   sortKey="pbs"
                   currentSort={props.sortKey}
                   direction={props.sortDirection}
@@ -222,7 +226,7 @@ export function ProxmoxCoverageTable(props: {
               </Show>
               <Show when={columnVisible('archive')}>
                 <SortableHead
-                  label="PVE file"
+                  label={layoutMode() === 'compact' ? 'PVE' : 'PVE file'}
                   sortKey="archive"
                   currentSort={props.sortKey}
                   direction={props.sortDirection}
@@ -233,7 +237,11 @@ export function ProxmoxCoverageTable(props: {
               </Show>
               <Show when={columnVisible('snapshot')}>
                 <SortableHead
-                  label={layoutMode() === 'expanded' ? 'Snapshot' : 'Guest snapshot'}
+                  label={
+                    layoutMode() === 'compact' || layoutMode() === 'expanded'
+                      ? 'Guest'
+                      : 'Guest snapshot'
+                  }
                   sortKey="snapshot"
                   currentSort={props.sortKey}
                   direction={props.sortDirection}

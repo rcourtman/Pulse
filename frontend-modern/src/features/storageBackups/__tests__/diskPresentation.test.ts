@@ -147,6 +147,16 @@ describe('diskPresentation', () => {
     expect(isPhysicalDiskColumnVisible('operational', 'device')).toBe(false);
     expect(isPhysicalDiskColumnVisible('expanded', 'role')).toBe(true);
     expect(isPhysicalDiskColumnVisible('expanded', 'device')).toBe(false);
+    expect(
+      ['disk', 'host', 'health', 'life', 'temp', 'size'].every((column) =>
+        isPhysicalDiskColumnVisible(
+          'compact',
+          column as 'disk' | 'host' | 'health' | 'life' | 'temp' | 'size',
+        ),
+      ),
+    ).toBe(true);
+    expect(getPhysicalDiskColumnWidthPercent('compact', 'disk')).toBe(33);
+    expect(getPhysicalDiskColumnWidthPercent('compact', 'size')).toBe(14);
     expect(getPhysicalDiskColumnWidthPercent('operational', 'life')).toBe(9);
     expect(getPhysicalDiskColumnWidthPercent('compact', 'device')).toBe(0);
   });

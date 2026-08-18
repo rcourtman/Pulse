@@ -19,6 +19,7 @@ import {
   PlatformTableTemperatureValue,
   PlatformTableToolbar,
   PlatformTableEmptyState,
+  PlatformResponsiveTableLabel,
   createPlatformTableFilterState,
   createPlatformTableSortState,
   filterPlatformResources,
@@ -213,7 +214,7 @@ export const TrueNASSystemsTable: Component<{
                   kind="name"
                   sort={sort}
                   sortKey="system"
-                  class="md:w-[17%]"
+                  class="platform-table-mobile-w-30 md:w-[17%]"
                 >
                   System
                 </PlatformSortableTableHead>
@@ -221,7 +222,7 @@ export const TrueNASSystemsTable: Component<{
                   kind="metric-bar"
                   sort={sort}
                   sortKey="cpu"
-                  class="md:w-[10%]"
+                  class="w-[17%] md:w-[10%]"
                 >
                   CPU
                 </PlatformSortableTableHead>
@@ -229,15 +230,15 @@ export const TrueNASSystemsTable: Component<{
                   kind="metric-bar"
                   sort={sort}
                   sortKey="memory"
-                  class="md:w-[10%]"
+                  class="w-[17%] md:w-[10%]"
                 >
-                  Memory
+                  <PlatformResponsiveTableLabel compact="Mem" full="Memory" />
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead
                   kind="metric-bar"
                   sort={sort}
                   sortKey="capacity"
-                  class="md:w-[13%]"
+                  class="w-[20%] md:w-[13%]"
                 >
                   Capacity
                 </PlatformSortableTableHead>
@@ -245,9 +246,9 @@ export const TrueNASSystemsTable: Component<{
                   kind="numeric-value"
                   sort={sort}
                   sortKey="temp"
-                  class="hidden sm:table-cell md:w-[6%]"
+                  class="w-[16%] md:w-[6%]"
                 >
-                  Temp
+                  <PlatformResponsiveTableLabel compact="°C" full="Temp" />
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead
                   kind="text"
@@ -431,7 +432,7 @@ export const TrueNASSystemsTable: Component<{
                             </span>
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content sm:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                           >
                             <PlatformTableTemperatureValue value={system.temperature} />
                           </TableCell>

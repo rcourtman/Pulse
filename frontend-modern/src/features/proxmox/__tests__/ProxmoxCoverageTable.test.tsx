@@ -93,7 +93,7 @@ describe('ProxmoxCoverageTable column visibility', () => {
     expect(document.body.textContent).not.toContain('Node pve1');
   });
 
-  it('keeps the operator answer visible and folds identity context into compact rows', () => {
+  it('keeps posture and provider evidence visible in compact rows', () => {
     render(() => (
       <ProxmoxCoverageTable
         rows={[row]}
@@ -114,11 +114,8 @@ describe('ProxmoxCoverageTable column visibility', () => {
       />
     ));
 
-    expect(headerTexts()).toEqual(['Workload', 'Posture', 'Age', 'Job']);
+    expect(headerTexts()).toEqual(['Workload', 'Posture', 'Age', 'PBS', 'PVE', 'Guest', 'Job']);
     expect(document.body.textContent).toContain('VM 100 · pve1');
-    expect(document.body.textContent).not.toContain('PBS snapshot');
-    expect(document.body.textContent).not.toContain('PVE file');
-    expect(document.body.textContent).not.toContain('Guest snapshot');
   });
 
   it('keeps provider evidence in the workload drill-down instead of every table row', () => {

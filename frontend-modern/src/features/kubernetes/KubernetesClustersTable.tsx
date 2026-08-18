@@ -16,6 +16,7 @@ import {
   PlatformTableMetricFallback,
   PlatformTableToolbar,
   PlatformTableEmptyState,
+  PlatformResponsiveTableLabel,
   createPlatformTableFilterState,
   createPlatformTableSortState,
   formatPlatformTableTextValue,
@@ -178,7 +179,7 @@ export const KubernetesClustersTable: Component<{
                   kind="name"
                   sort={sort}
                   sortKey="cluster"
-                  class="md:w-[17%]"
+                  class="platform-table-mobile-w-30 md:w-[17%]"
                 >
                   Cluster
                 </PlatformSortableTableHead>
@@ -194,15 +195,15 @@ export const KubernetesClustersTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="version"
-                  class="hidden md:table-cell md:w-[10%]"
+                  class="w-[15%] md:w-[10%]"
                 >
-                  Version
+                  <PlatformResponsiveTableLabel compact="Ver" full="Version" />
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead
                   kind="numeric-value"
                   sort={sort}
                   sortKey="nodes"
-                  class="md:w-[8%]"
+                  class="w-[12%] md:w-[8%]"
                 >
                   Nodes
                 </PlatformSortableTableHead>
@@ -210,7 +211,7 @@ export const KubernetesClustersTable: Component<{
                   kind="numeric-value"
                   sort={sort}
                   sortKey="pods"
-                  class="hidden md:table-cell md:w-[8%]"
+                  class="w-[12%] md:w-[8%]"
                 >
                   Pods
                 </PlatformSortableTableHead>
@@ -226,7 +227,7 @@ export const KubernetesClustersTable: Component<{
                   kind="metric-bar"
                   sort={sort}
                   sortKey="cpu"
-                  class="md:w-[15%]"
+                  class="w-[15%] md:w-[15%]"
                 >
                   CPU
                 </PlatformSortableTableHead>
@@ -234,9 +235,9 @@ export const KubernetesClustersTable: Component<{
                   kind="metric-bar"
                   sort={sort}
                   sortKey="memory"
-                  class="md:w-[15%]"
+                  class="w-[16%] md:w-[15%]"
                 >
-                  Memory
+                  <PlatformResponsiveTableLabel compact="Mem" full="Memory" />
                 </PlatformSortableTableHead>
               </>
             }
@@ -349,7 +350,7 @@ export const KubernetesClustersTable: Component<{
                             {context()}
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} hidden font-mono text-[11px] text-base-content md:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('text')} font-mono text-[11px] text-base-content`}
                           >
                             <span class="inline-flex items-center rounded bg-surface-alt px-1.5 py-0.5 font-mono text-[10px] text-base-content">
                               {version()}
@@ -365,7 +366,7 @@ export const KubernetesClustersTable: Component<{
                             />
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content md:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                           >
                             <PlatformTableCountRatioValue
                               current={counts().pods.total - counts().pods.attention}

@@ -42,6 +42,26 @@ import { ProxmoxCephClusterDrawer } from './ProxmoxCephClusterDrawer';
 
 type CephStatusFilter = 'all' | 'healthy' | 'warning' | 'critical';
 
+export type CephPhoneColumn = 'cluster' | 'health' | 'quorum' | 'osds' | 'pools' | 'capacity';
+
+export const CEPH_PHONE_COLUMNS: readonly CephPhoneColumn[] = [
+  'cluster',
+  'health',
+  'quorum',
+  'osds',
+  'pools',
+  'capacity',
+];
+
+export const CEPH_PHONE_COLUMN_WIDTHS: Readonly<Record<CephPhoneColumn, number>> = {
+  cluster: 31,
+  health: 14,
+  quorum: 13,
+  osds: 14,
+  pools: 14,
+  capacity: 14,
+};
+
 const STATUS_FILTER_OPTIONS: PlatformTableFilterOption<CephStatusFilter>[] = [
   { value: 'all', label: 'All' },
   {
@@ -226,14 +246,15 @@ export const ProxmoxCephTable: Component<{
   const layout = createMemo(() =>
     getPlatformTableContainerLayout(observedWidth.width() ?? 1920, [520, 720, 960, 1200]),
   );
-  const showBasic = createMemo(() => layout() !== 'compact');
+  // Quorum and pool count are high-value health context even on phones.
+  const showQuorumAndPools = createMemo(() => true);
   const showOperational = createMemo(() => ['operational', 'expanded', 'full'].includes(layout()));
   const showDetail = createMemo(() => ['expanded', 'full'].includes(layout()));
   const showFsid = createMemo(() => layout() === 'full');
   const visibleColumnCount = createMemo(
     () =>
       4 +
-      Number(showBasic()) * 2 +
+      Number(showQuorumAndPools()) * 2 +
       Number(showOperational()) * 2 +
       Number(showDetail()) +
       Number(showFsid()),
@@ -275,6 +296,20 @@ export const ProxmoxCephTable: Component<{
         >
           <PlatformTableShell
             tableClass="min-w-[0px] table-fixed text-xs"
+            colgroup={
+              <Show when={layout() === 'compact'}>
+                <colgroup>
+                  <For each={CEPH_PHONE_COLUMNS}>
+                    {(column) => (
+                      <col
+                        style={{ width: `${CEPH_PHONE_COLUMN_WIDTHS[column]}%` }}
+                        data-proxmox-ceph-column={column}
+                      />
+                    )}
+                  </For>
+                </colgroup>
+              </Show>
+            }
             header={
               <>
                 <TableHead class={getPlatformTableHeadClassForKind('name')}>Cluster</TableHead>
@@ -282,9 +317,9 @@ export const ProxmoxCephTable: Component<{
                 <Show when={showFsid()}>
                   <TableHead class={getPlatformTableHeadClassForKind('text')}>FSID</TableHead>
                 </Show>
-                <Show when={showBasic()}>
+                <Show when={showQuorumAndPools()}>
                   <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
-                    Quorum
+                    {layout() === 'compact' ? 'Qrm' : 'Quorum'}
                   </TableHead>
                 </Show>
                 <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
@@ -295,7 +330,7 @@ export const ProxmoxCephTable: Component<{
                     PGs
                   </TableHead>
                 </Show>
-                <Show when={showBasic()}>
+                <Show when={showQuorumAndPools()}>
                   <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
                     Pools
                   </TableHead>
@@ -376,7 +411,7 @@ export const ProxmoxCephTable: Component<{
                               </span>
                             </TableCell>
                           </Show>
-                          <Show when={showBasic()}>
+                          <Show when={showQuorumAndPools()}>
                             <TableCell
                               class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                             >
@@ -400,7 +435,7 @@ export const ProxmoxCephTable: Component<{
                               </Show>
                             </TableCell>
                           </Show>
-                          <Show when={showBasic()}>
+                          <Show when={showQuorumAndPools()}>
                             <TableCell
                               class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                             >

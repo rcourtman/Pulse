@@ -24,6 +24,27 @@ import { PlatformResourceDetailToggleButton } from '@/features/platformPage/Plat
 import type { Resource } from '@/types/resource';
 import { ProxmoxMailGatewayDrawer } from './ProxmoxMailGatewayDrawer';
 
+export type MailGatewayPhoneColumn =
+  'instance' | 'nodes' | 'uptime' | 'mail' | 'queue' | 'deferred';
+
+export const MAIL_GATEWAY_PHONE_COLUMNS: readonly MailGatewayPhoneColumn[] = [
+  'instance',
+  'nodes',
+  'uptime',
+  'mail',
+  'queue',
+  'deferred',
+];
+
+export const MAIL_GATEWAY_PHONE_COLUMN_WIDTHS: Readonly<Record<MailGatewayPhoneColumn, number>> = {
+  instance: 30,
+  nodes: 12,
+  uptime: 16,
+  mail: 14,
+  queue: 14,
+  deferred: 14,
+};
+
 // Proxmox Mail Gateway instances are mail-flow / quarantine appliances.
 // The generic infrastructure table renders dashes for Disk I/O / Uptime
 // / Temperature (PMG only exposes uptime, which we project now) and
@@ -47,14 +68,16 @@ export const ProxmoxMailGatewayTable: Component<{
   const layout = createMemo(() =>
     getPlatformTableContainerLayout(observedWidth.width() ?? 1920, [520, 720, 960, 1200]),
   );
-  const showBasic = createMemo(() => layout() !== 'compact');
+  // Node count and uptime provide useful fleet context on phones alongside
+  // the mail-flow counters, so keep them in the base mobile projection.
+  const showNodesAndUptime = createMemo(() => true);
   const showOperational = createMemo(() => ['operational', 'expanded', 'full'].includes(layout()));
   const showVirus = createMemo(() => ['expanded', 'full'].includes(layout()));
   const showVersion = createMemo(() => layout() === 'full');
   const visibleColumnCount = createMemo(
     () =>
       4 +
-      Number(showBasic()) * 2 +
+      Number(showNodesAndUptime()) * 2 +
       Number(showOperational()) * 2 +
       Number(showVirus()) +
       Number(showVersion()),
@@ -91,22 +114,36 @@ export const ProxmoxMailGatewayTable: Component<{
         >
           <PlatformTableShell
             tableClass="min-w-[0px] table-fixed text-xs"
+            colgroup={
+              <Show when={layout() === 'compact'}>
+                <colgroup>
+                  <For each={MAIL_GATEWAY_PHONE_COLUMNS}>
+                    {(column) => (
+                      <col
+                        style={{ width: `${MAIL_GATEWAY_PHONE_COLUMN_WIDTHS[column]}%` }}
+                        data-proxmox-mail-column={column}
+                      />
+                    )}
+                  </For>
+                </colgroup>
+              </Show>
+            }
             header={
               <>
                 <TableHead class={getPlatformTableHeadClassForKind('name')}>Instance</TableHead>
                 <Show when={showVersion()}>
                   <TableHead class={getPlatformTableHeadClassForKind('text')}>Version</TableHead>
                 </Show>
-                <Show when={showBasic()}>
+                <Show when={showNodesAndUptime()}>
                   <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
                     Nodes
                   </TableHead>
                   <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
-                    Uptime
+                    {layout() === 'compact' ? 'Age' : 'Uptime'}
                   </TableHead>
                 </Show>
                 <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
-                  Mail in
+                  {layout() === 'compact' ? 'In' : 'Mail in'}
                 </TableHead>
                 <Show when={showOperational()}>
                   <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
@@ -124,10 +161,10 @@ export const ProxmoxMailGatewayTable: Component<{
                   </TableHead>
                 </Show>
                 <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
-                  Queue
+                  {layout() === 'compact' ? 'Q' : 'Queue'}
                 </TableHead>
                 <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
-                  Deferred
+                  {layout() === 'compact' ? 'Def' : 'Deferred'}
                 </TableHead>
               </>
             }
@@ -177,7 +214,7 @@ export const ProxmoxMailGatewayTable: Component<{
                               {version()}
                             </TableCell>
                           </Show>
-                          <Show when={showBasic()}>
+                          <Show when={showNodesAndUptime()}>
                             <TableCell
                               class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                             >

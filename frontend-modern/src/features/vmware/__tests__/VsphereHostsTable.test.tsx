@@ -53,6 +53,26 @@ afterEach(() => {
 });
 
 describe('VsphereHostsTable', () => {
+  it('keeps power, VM count, and uptime in the phone column set', () => {
+    const { container } = render(() => (
+      <VsphereHostsTable
+        hosts={[makeHost({ id: 'host-1' })]}
+        scope={[makeHost({ id: 'host-1' })]}
+        emptyIcon={<span />}
+        emptyTitle="No hosts"
+        emptyDescription="No hosts"
+        showToolbar={false}
+      />
+    ));
+
+    const headers = [...container.querySelectorAll('thead th')];
+    expect(headers.find((header) => header.textContent?.includes('Host'))).toHaveClass(
+      'platform-table-mobile-w-30',
+    );
+    expect(headers.find((header) => header.textContent?.includes('Power'))).toHaveClass('w-[12%]');
+    expect(headers.find((header) => header.textContent?.includes('Up'))).toHaveClass('w-[16%]');
+  });
+
   it('treats an impaired vSphere source as degraded for the row indicator and health filter', async () => {
     const healthy = makeHost({ id: 'host-healthy', name: 'esxi-healthy.lab.local' });
     const impaired = makeHost({

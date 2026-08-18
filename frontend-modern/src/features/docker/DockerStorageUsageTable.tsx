@@ -5,6 +5,7 @@ import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
 import {
   PLATFORM_HEALTH_FILTER_OPTIONS,
+  PlatformResponsiveTableLabel,
   PlatformTableEmptyState,
   PlatformTableToolbar,
   createPlatformTableFilterState,
@@ -107,7 +108,9 @@ export const DockerStorageUsageTable: Component<{
             tableClass="min-w-full table-fixed text-xs md:min-w-[1080px]"
             header={
               <>
-                <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[22%]`}>
+                <TableHead
+                  class={`${getPlatformTableHeadClassForKind('name')} platform-table-mobile-w-30 md:w-[22%]`}
+                >
                   Host
                 </TableHead>
                 <TableHead
@@ -118,17 +121,17 @@ export const DockerStorageUsageTable: Component<{
                 <TableHead
                   class={`${getPlatformTableHeadClassForKind('numeric-value')} md:w-[19%]`}
                 >
-                  Containers
+                  <PlatformResponsiveTableLabel compact="Ctrs" full="Containers" />
                 </TableHead>
                 <TableHead
-                  class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden md:table-cell md:w-[20%]`}
+                  class={`${getPlatformTableHeadClassForKind('numeric-value')} sm:hidden md:table-cell md:w-[20%]`}
                 >
-                  Volumes
+                  <PlatformResponsiveTableLabel compact="Vols" full="Volumes" />
                 </TableHead>
                 <TableHead
-                  class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden md:table-cell md:w-[20%]`}
+                  class={`${getPlatformTableHeadClassForKind('numeric-value')} sm:hidden md:table-cell md:w-[20%]`}
                 >
-                  Build Cache
+                  <PlatformResponsiveTableLabel compact="Cache" full="Build Cache" />
                 </TableHead>
               </>
             }
@@ -164,12 +167,12 @@ export const DockerStorageUsageTable: Component<{
                           {bucketValue(host.docker?.containersUsage)}
                         </TableCell>
                         <TableCell
-                          class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content md:table-cell`}
+                          class={`${getPlatformTableCellClassForKind('numeric-value')} sm:hidden text-base-content md:table-cell`}
                         >
                           {bucketValue(host.docker?.volumesUsage)}
                         </TableCell>
                         <TableCell
-                          class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content md:table-cell`}
+                          class={`${getPlatformTableCellClassForKind('numeric-value')} sm:hidden text-base-content md:table-cell`}
                         >
                           {bucketValue(host.docker?.buildCacheUsage)}
                         </TableCell>

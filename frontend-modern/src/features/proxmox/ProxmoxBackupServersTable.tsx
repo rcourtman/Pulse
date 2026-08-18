@@ -237,7 +237,13 @@ export function ProxmoxBackupServersTable(props: {
                         class={`${getPlatformTableCellClassForKind('name')} text-base-content truncate font-medium`}
                       >
                         <div class="min-w-0 truncate">{row.serverName}</div>
-                        <Show when={layoutMode() === 'compact' && row.datastore}>
+                        <Show
+                          when={
+                            layoutMode() === 'compact' &&
+                            !columnVisible('datastore') &&
+                            row.datastore
+                          }
+                        >
                           {(datastore) => (
                             <div class="min-w-0 truncate font-mono text-[10px] font-normal text-muted">
                               {datastore().name}

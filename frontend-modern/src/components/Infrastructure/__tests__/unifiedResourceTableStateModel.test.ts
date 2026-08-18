@@ -129,8 +129,8 @@ describe('unifiedResourceTableStateModel', () => {
     const wideColumns = getUnifiedResourceTableColumnPresentations('wide');
 
     expect(getUnifiedResourceTableShellClass('mobile')).toContain('table-fixed');
-    expect(getUnifiedResourceTableShellClass('mobile')).toContain('min-w-[640px]');
-    expect(getUnifiedResourceTableShellClass('mobile')).toContain('sm:min-w-full');
+    expect(getUnifiedResourceTableShellClass('mobile')).toContain('min-w-full');
+    expect(getUnifiedResourceTableShellClass('mobile')).not.toContain('min-w-[640px]');
     expect(getUnifiedResourceTableShellClass('compact')).toContain('min-w-[640px]');
     expect(getUnifiedResourceTableShellClass('wide')).toContain('min-w-[640px]');
     expect(getUnifiedResourceTableShellClass('wide')).not.toContain('min-w-[max-content]');
@@ -138,8 +138,10 @@ describe('unifiedResourceTableStateModel', () => {
     // floor inside the shared horizontal-scroll shell. Wider modes keep all
     // host columns visible while compressing their tracks before any
     // lower-priority columns are dropped.
-    expect(mobileColumns.resourceColumn.width).toBe('40%');
-    expect(mobileColumns.metricColumn.width).toBe('20%');
+    expect(mobileColumns.resourceColumn.width).toBe('34%');
+    expect(mobileColumns.metricColumn.width).toBe('14%');
+    expect(mobileColumns.ioColumn.width).toBe('12%');
+    expect(mobileColumns.uptimeColumn.width).toBe('12%');
     expect(mobileColumns.serviceResourceColumn.width).toBe('28%');
     expect(mobileColumns.serviceSourceColumn.width).toBe('10%');
     expect(mobileColumns.serviceCountColumn.width).toBe('11%');

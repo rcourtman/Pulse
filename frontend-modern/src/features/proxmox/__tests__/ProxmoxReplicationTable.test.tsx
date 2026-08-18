@@ -1,7 +1,11 @@
 import { cleanup, render, screen } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ReplicationJob } from '@/types/api';
-import { ProxmoxReplicationTable } from '../ProxmoxReplicationTable';
+import {
+  ProxmoxReplicationTable,
+  REPLICATION_PHONE_COLUMNS,
+  REPLICATION_PHONE_COLUMN_WIDTHS,
+} from '../ProxmoxReplicationTable';
 
 const replicationJob = (overrides: Partial<ReplicationJob> = {}): ReplicationJob => ({
   id: 'replication-100',
@@ -26,6 +30,25 @@ afterEach(() => {
 });
 
 describe('ProxmoxReplicationTable', () => {
+  it('keeps identity, route, and both sync horizons visible on phones', () => {
+    expect(REPLICATION_PHONE_COLUMNS).toEqual([
+      'status',
+      'job',
+      'guest',
+      'route',
+      'lastSync',
+      'nextSync',
+    ]);
+    expect(REPLICATION_PHONE_COLUMN_WIDTHS).toEqual({
+      status: 17,
+      job: 13,
+      guest: 26,
+      route: 19,
+      lastSync: 13,
+      nextSync: 12,
+    });
+  });
+
   it('renders replication duration cells through the shared duration format', () => {
     vi.spyOn(Date, 'now').mockReturnValue(1_700_000_300_000);
 

@@ -1933,11 +1933,14 @@ and viewport-sync plus selected-row reveal behavior now live in
 so future hot-path table-state changes must not fold selector derivation,
 layout policy, and scroll coordination back into one mixed owner or the render
 shell.
-The same shared layout policy now preserves a 640-pixel mobile table floor for
-the prioritized identity and metric columns. That width remains class-based
-and contained by the frontend-primitives `Table` overflow shell, so phone
-layouts gain legible tracks without reintroducing document-level overflow,
-inline sizing maps, or extra hot-path measurement state.
+The same shared layout policy now treats the phone branch as a zero-overflow
+fixed-width table rather than preserving a 640-pixel intrinsic floor. The
+shared state model must select one bounded identity track plus five to seven
+source-relevant health or activity tracks, normalize those widths to the
+available container, and keep the document and table shell at scroll-width
+parity. That denser phone projection remains pure model/class work: it must not
+add row-time measurement, duplicate tables, viewport listeners, or per-row
+responsive signals to the infrastructure hot path.
 That same hot-path boundary now also owns CSP-safe table sizing. Infrastructure
 host, PBS, and PMG table shells must take their layout and column sizing from
 the shared presentation owner in

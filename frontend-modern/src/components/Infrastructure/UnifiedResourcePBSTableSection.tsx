@@ -47,6 +47,8 @@ export const UnifiedResourcePBSTableSection: Component<UnifiedResourcePBSTableSe
   props,
 ) => {
   const { table, tableProps } = props;
+  const isServiceMobileColumnVisible = (priority: 'primary' | 'secondary') =>
+    table.isMobile() || table.isServiceVisible(priority);
 
   return (
     <Show when={table.sortedPBSResources().length > 0}>
@@ -63,14 +65,14 @@ export const UnifiedResourcePBSTableSection: Component<UnifiedResourcePBSTableSe
               {table.headerLabels().resource}
             </TableHead>
             <TableHead
-              classList={{ hidden: !table.isServiceVisible('primary') }}
+              classList={{ hidden: !isServiceMobileColumnVisible('primary') }}
               class={table.serviceCountColumn().className}
               width={table.serviceCountColumn().width}
             >
               {table.headerLabels().datastores}
             </TableHead>
             <TableHead
-              classList={{ hidden: !table.isServiceVisible('secondary') }}
+              classList={{ hidden: !isServiceMobileColumnVisible('secondary') }}
               class={table.serviceCountColumn().className}
               width={table.serviceCountColumn().width}
             >
@@ -83,7 +85,7 @@ export const UnifiedResourcePBSTableSection: Component<UnifiedResourcePBSTableSe
               {table.headerLabels().health}
             </TableHead>
             <TableHead
-              classList={{ hidden: !table.isServiceVisible('secondary') }}
+              classList={{ hidden: !isServiceMobileColumnVisible('secondary') }}
               class={table.serviceSourceColumn().className}
               width={table.serviceSourceColumn().width}
             >
@@ -210,7 +212,7 @@ export const UnifiedResourcePBSTableSection: Component<UnifiedResourcePBSTableSe
                       </div>
                     </TableCell>
 
-                    <TableCell classList={{ hidden: !table.isServiceVisible('primary') }}>
+                    <TableCell classList={{ hidden: !isServiceMobileColumnVisible('primary') }}>
                       <div class="flex justify-center">
                         <Show
                           when={pbsRow()?.datastores != null}
@@ -225,7 +227,7 @@ export const UnifiedResourcePBSTableSection: Component<UnifiedResourcePBSTableSe
                       </div>
                     </TableCell>
 
-                    <TableCell classList={{ hidden: !table.isServiceVisible('secondary') }}>
+                    <TableCell classList={{ hidden: !isServiceMobileColumnVisible('secondary') }}>
                       <div class="flex justify-center">
                         <Show
                           when={pbsRow()?.activity}
@@ -267,7 +269,7 @@ export const UnifiedResourcePBSTableSection: Component<UnifiedResourcePBSTableSe
                       </div>
                     </TableCell>
 
-                    <TableCell classList={{ hidden: !table.isServiceVisible('secondary') }}>
+                    <TableCell classList={{ hidden: !isServiceMobileColumnVisible('secondary') }}>
                       <UnifiedResourceSourceBadgeCell
                         unifiedBadges={systemBadges()}
                         platformBadge={platformBadge()}

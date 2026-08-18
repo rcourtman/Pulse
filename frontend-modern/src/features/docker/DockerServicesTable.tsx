@@ -199,7 +199,7 @@ export const DockerServicesTable: Component<{
                   kind="name"
                   sort={sort}
                   sortKey="service"
-                  class="md:w-[16%]"
+                  class="platform-table-mobile-w-30 w-[28%] md:w-[16%]"
                 >
                   Service
                 </PlatformSortableTableHead>
@@ -223,7 +223,7 @@ export const DockerServicesTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="mode"
-                  class="hidden sm:table-cell md:w-[8%]"
+                  class="w-[14%] md:w-[8%]"
                 >
                   Mode
                 </PlatformSortableTableHead>
@@ -231,7 +231,7 @@ export const DockerServicesTable: Component<{
                   kind="numeric-value"
                   sort={sort}
                   sortKey="desired"
-                  class="md:w-[8%]"
+                  class="w-[14%] md:w-[8%]"
                 >
                   Desired
                 </PlatformSortableTableHead>
@@ -239,7 +239,7 @@ export const DockerServicesTable: Component<{
                   kind="numeric-value"
                   sort={sort}
                   sortKey="running"
-                  class="md:w-[8%]"
+                  class="w-[14%] md:w-[8%]"
                 >
                   Running
                 </PlatformSortableTableHead>
@@ -247,7 +247,7 @@ export const DockerServicesTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="update"
-                  class="hidden sm:table-cell md:w-[12%]"
+                  class="w-[15%] md:w-[12%]"
                 >
                   Update
                 </PlatformSortableTableHead>
@@ -262,7 +262,7 @@ export const DockerServicesTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="host"
-                  class="hidden sm:table-cell md:w-[10%]"
+                  class="w-[15%] md:w-[10%]"
                 >
                   Host
                 </PlatformSortableTableHead>
@@ -309,7 +309,7 @@ export const DockerServicesTable: Component<{
                           </span>
                         </TableCell>
                         <TableCell
-                          class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content sm:table-cell`}
+                          class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                         >
                           {mode()}
                         </TableCell>
@@ -324,7 +324,7 @@ export const DockerServicesTable: Component<{
                           <PlatformTableNumberValue value={service.docker?.runningTasks ?? 0} />
                         </TableCell>
                         <TableCell
-                          class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content sm:table-cell`}
+                          class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                         >
                           <span class="truncate inline-block max-w-[10rem]" title={update().title}>
                             {update().label}
@@ -338,7 +338,7 @@ export const DockerServicesTable: Component<{
                           </span>
                         </TableCell>
                         <TableCell
-                          class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content sm:table-cell`}
+                          class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                         >
                           {host()}
                         </TableCell>

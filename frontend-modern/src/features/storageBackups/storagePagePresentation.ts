@@ -31,7 +31,9 @@ const STORAGE_POOL_VISIBLE_COLUMNS: Record<
   StoragePoolTableLayoutMode,
   readonly StoragePoolTableColumnId[]
 > = {
-  compact: ['name', 'state', 'usage'],
+  // Phone tables should answer identity, health, topology, placement,
+  // protection, and capacity without requiring a horizontal rail.
+  compact: ['name', 'state', 'type', 'host', 'protection', 'usage'],
   operational: ['name', 'state', 'host', 'protection', 'usage'],
   full: ['name', 'state', 'type', 'host', 'protection', 'usage', 'growth'],
 };
@@ -40,7 +42,7 @@ const STORAGE_POOL_COLUMN_WIDTHS: Record<
   StoragePoolTableLayoutMode,
   Partial<Record<StoragePoolTableColumnId, number>>
 > = {
-  compact: { name: 39, state: 28, usage: 33 },
+  compact: { name: 33, state: 16, type: 12, host: 15, protection: 12, usage: 12 },
   operational: { name: 29, state: 20, host: 15, protection: 15, usage: 21 },
   full: { name: 20, state: 14, type: 10, host: 12, protection: 13, usage: 20, growth: 11 },
 };

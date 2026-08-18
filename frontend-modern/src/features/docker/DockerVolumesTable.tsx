@@ -138,7 +138,7 @@ export const DockerVolumesTable: Component<DockerNativeTableProps> = (props) => 
                   kind="name"
                   sort={sort}
                   sortKey="volume"
-                  class="md:w-[22%]"
+                  class="platform-table-mobile-w-30 md:w-[22%]"
                 >
                   Volume
                 </PlatformSortableTableHead>
@@ -170,7 +170,7 @@ export const DockerVolumesTable: Component<DockerNativeTableProps> = (props) => 
                   kind="numeric-value"
                   sort={sort}
                   sortKey="refs"
-                  class="hidden md:table-cell md:w-[8%]"
+                  class="sm:hidden md:table-cell md:w-[8%]"
                 >
                   Refs
                 </PlatformSortableTableHead>
@@ -178,7 +178,7 @@ export const DockerVolumesTable: Component<DockerNativeTableProps> = (props) => 
                   kind="text"
                   sort={sort}
                   sortKey="created"
-                  class="hidden md:table-cell md:w-[14%]"
+                  class="sm:hidden md:table-cell md:w-[14%]"
                 >
                   Created
                 </PlatformSortableTableHead>
@@ -231,17 +231,17 @@ export const DockerVolumesTable: Component<DockerNativeTableProps> = (props) => 
                             {dockerTextValue(resource.docker?.scope)}
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} sm:hidden text-base-content md:table-cell`}
                           >
                             {dockerByteValue(resource.docker?.sizeBytes)}
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content md:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                           >
                             {dockerNumberValue(resource.docker?.refCount)}
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('text')} sm:hidden text-base-content md:table-cell`}
                           >
                             <span
                               class="inline-block max-w-[12rem] truncate"

@@ -2,7 +2,11 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-li
 import { afterEach, describe, expect, it } from 'vitest';
 
 import type { Resource } from '@/types/resource';
-import { ProxmoxCephTable } from '../ProxmoxCephTable';
+import {
+  CEPH_PHONE_COLUMNS,
+  CEPH_PHONE_COLUMN_WIDTHS,
+  ProxmoxCephTable,
+} from '../ProxmoxCephTable';
 
 const makeCluster = (id: string): Resource => ({
   id,
@@ -31,6 +35,25 @@ const makeCluster = (id: string): Resource => ({
 afterEach(cleanup);
 
 describe('ProxmoxCephTable', () => {
+  it('keeps the phone projection dense and identity-led', () => {
+    expect(CEPH_PHONE_COLUMNS).toEqual([
+      'cluster',
+      'health',
+      'quorum',
+      'osds',
+      'pools',
+      'capacity',
+    ]);
+    expect(CEPH_PHONE_COLUMN_WIDTHS).toEqual({
+      cluster: 31,
+      health: 14,
+      quorum: 13,
+      osds: 14,
+      pools: 14,
+      capacity: 14,
+    });
+  });
+
   it('returns focus to the cluster disclosure after closing an auto-opened detail', async () => {
     render(() => (
       <ProxmoxCephTable

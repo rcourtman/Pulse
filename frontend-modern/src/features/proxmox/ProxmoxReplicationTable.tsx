@@ -43,18 +43,37 @@ type ReplicationColumn =
   | 'fails'
   | 'error';
 
+export const REPLICATION_PHONE_COLUMNS: readonly ReplicationColumn[] = [
+  'status',
+  'job',
+  'guest',
+  'route',
+  'lastSync',
+  'nextSync',
+];
+
+export const REPLICATION_PHONE_COLUMN_WIDTHS: Readonly<Partial<Record<ReplicationColumn, number>>> =
+  {
+    status: 17,
+    job: 13,
+    guest: 26,
+    route: 19,
+    lastSync: 13,
+    nextSync: 12,
+  };
+
 const REPLICATION_COLUMN_WIDTH_CLASS: Record<
   PlatformTableContainerLayout,
   Record<ReplicationColumn, string>
 > = {
   compact: {
-    status: 'w-[20%]',
-    job: 'w-0',
-    guest: 'w-[40%]',
-    route: 'w-[20%]',
+    status: 'w-[17%]',
+    job: 'w-[13%]',
+    guest: 'w-[26%]',
+    route: 'w-[19%]',
     schedule: 'w-0',
-    lastSync: 'w-[20%]',
-    nextSync: 'w-0',
+    lastSync: 'w-[13%]',
+    nextSync: 'w-[12%]',
     duration: 'w-0',
     fails: 'w-0',
     error: 'w-0',
@@ -268,8 +287,8 @@ export const ProxmoxReplicationTable: Component<{
   const layout = createMemo(() =>
     getPlatformTableContainerLayout(observedWidth.width() ?? 1920, [520, 720, 960, 1200]),
   );
-  const showJob = createMemo(() => layout() !== 'compact');
-  const showNext = createMemo(() => layout() !== 'compact');
+  const showJob = createMemo(() => true);
+  const showNext = createMemo(() => true);
   const showOperational = createMemo(() => ['operational', 'expanded', 'full'].includes(layout()));
   const showError = createMemo(() => ['expanded', 'full'].includes(layout()));
   const columnWidthClass = (column: ReplicationColumn) =>
@@ -334,6 +353,20 @@ export const ProxmoxReplicationTable: Component<{
             >
               <PlatformTableShell
                 tableClass="min-w-[0px] table-fixed text-xs"
+                colgroup={
+                  <Show when={layout() === 'compact'}>
+                    <colgroup>
+                      <For each={REPLICATION_PHONE_COLUMNS}>
+                        {(column) => (
+                          <col
+                            style={{ width: `${REPLICATION_PHONE_COLUMN_WIDTHS[column]}%` }}
+                            data-proxmox-replication-column={column}
+                          />
+                        )}
+                      </For>
+                    </colgroup>
+                  </Show>
+                }
                 header={
                   <>
                     <TableHead
@@ -369,13 +402,13 @@ export const ProxmoxReplicationTable: Component<{
                     <TableHead
                       class={`${getPlatformTableHeadClassForKind('numeric-value')} ${columnWidthClass('lastSync')}`}
                     >
-                      Last sync
+                      {layout() === 'compact' ? 'Last' : 'Last sync'}
                     </TableHead>
                     <Show when={showNext()}>
                       <TableHead
                         class={`${getPlatformTableHeadClassForKind('numeric-value')} ${columnWidthClass('nextSync')}`}
                       >
-                        Next sync
+                        {layout() === 'compact' ? 'Next' : 'Next sync'}
                       </TableHead>
                     </Show>
                     <Show when={showOperational()}>

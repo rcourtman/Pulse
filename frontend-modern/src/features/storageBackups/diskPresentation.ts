@@ -126,7 +126,9 @@ const PHYSICAL_DISK_VISIBLE_COLUMNS: Record<
   PhysicalDiskTableLayoutMode,
   readonly PhysicalDiskTableColumnId[]
 > = {
-  compact: ['disk', 'health', 'size'],
+  // Keep the phone view useful at a glance: identity, placement, health,
+  // endurance, temperature, and capacity all fit without horizontal scroll.
+  compact: ['disk', 'host', 'health', 'life', 'temp', 'size'],
   basic: ['disk', 'host', 'health', 'temp', 'size'],
   operational: ['disk', 'host', 'parent', 'health', 'life', 'temp', 'size'],
   expanded: ['disk', 'host', 'role', 'parent', 'health', 'life', 'temp', 'size'],
@@ -137,7 +139,7 @@ const PHYSICAL_DISK_COLUMN_WIDTHS: Record<
   PhysicalDiskTableLayoutMode,
   Partial<Record<PhysicalDiskTableColumnId, number>>
 > = {
-  compact: { disk: 47, health: 29, size: 24 },
+  compact: { disk: 33, host: 15, health: 18, life: 10, temp: 10, size: 14 },
   basic: { disk: 33, host: 17, health: 22, temp: 12, size: 16 },
   operational: { disk: 25, host: 12, parent: 15, health: 17, life: 9, temp: 9, size: 13 },
   expanded: { disk: 22, host: 10, role: 9, parent: 14, health: 15, life: 8, temp: 8, size: 14 },

@@ -11,9 +11,9 @@ describe('dockerContainerTableModel', () => {
     const columns = getDockerContainerVisibleColumnsForLayout('phone', true, true, true);
     const ids = columns.map((column) => column.id);
 
-    expect(ids).toEqual(['container', 'state', 'cpu', 'memory']);
+    expect(ids).toEqual(['container', 'state', 'cpu', 'memory', 'restarts', 'updates']);
     expect(getDockerContainerColumnWidthStyle('container', 'phone', ids)).toEqual({
-      width: '50%',
+      width: '32%',
     });
   });
 
@@ -21,13 +21,13 @@ describe('dockerContainerTableModel', () => {
     const columns = getDockerContainerVisibleColumnsForLayout('mobile', true, true, true);
     const ids = columns.map((column) => column.id);
 
-    expect(ids).toEqual(['container', 'state', 'cpu', 'memory', 'updates', 'actions']);
+    expect(ids).toEqual(['container', 'state', 'cpu', 'memory', 'restarts', 'updates', 'actions']);
     expect(getDockerContainerTableMinWidthClass()).toBe('min-w-full');
     expect(getDockerContainerColumnWidthStyle('container', 'mobile', ids)).toEqual({
-      width: '26.3158%',
+      width: '30%',
     });
     expect(getDockerContainerColumnWidthStyle('memory', 'mobile', ids)).toEqual({
-      width: '18.4211%',
+      width: '16%',
     });
   });
 

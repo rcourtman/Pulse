@@ -146,6 +146,24 @@ afterEach(() => {
 });
 
 describe('AgentsMachinesTable', () => {
+  it('keeps disk and last-seen telemetry in the phone column set', () => {
+    const { container } = render(() => (
+      <AgentsMachinesTable
+        resources={[resource({ id: 'tower', name: 'Tower' })]}
+        emptyIcon={emptyIcon}
+        emptyTitle="No machines"
+        emptyDescription="Install Pulse Agent."
+      />
+    ));
+
+    const headers = [...container.querySelectorAll('thead th')];
+    expect(headers.find((header) => header.textContent?.includes('Machine'))).toHaveClass(
+      'w-[30%]',
+    );
+    expect(headers.find((header) => header.textContent?.includes('Disk'))).toHaveClass('w-[15%]');
+    expect(headers.find((header) => header.textContent?.includes('Seen'))).toHaveClass('w-[15%]');
+  });
+
   it('delegates controlled filter resets once to the route owner', () => {
     const onExternalSearchChange = vi.fn();
     const onExternalStatusChange = vi.fn();
@@ -197,7 +215,7 @@ describe('AgentsMachinesTable', () => {
     expect(screen.queryByRole('button', { name: 'Sort by GPU' })).not.toBeInTheDocument();
   });
 
-  it('prioritizes machine identity over disk usage on narrow screens', () => {
+  it('keeps identity primary while exposing disk and recency on narrow screens', () => {
     render(() => (
       <AgentsMachinesTable
         resources={[resource({ id: 'tower', name: 'Tower' })]}
@@ -210,10 +228,11 @@ describe('AgentsMachinesTable', () => {
     const machineHead = screen.getByRole('button', { name: 'Sort by Machine' }).closest('th');
     const diskHead = screen.getByRole('button', { name: 'Sort by Disk' }).closest('th');
 
-    expect(machineHead).toHaveClass('w-[52%]', 'sm:w-[28%]');
-    expect(diskHead).toHaveClass('hidden', 'sm:table-cell');
+    expect(machineHead).toHaveClass('platform-table-mobile-w-30', 'w-[30%]', 'sm:w-[28%]');
+    expect(diskHead).toHaveClass('w-[15%]', 'sm:w-[20%]');
+    expect(diskHead).not.toHaveClass('hidden');
     expect(screen.getByRole('button', { name: 'Sort by CPU' }).closest('th')).toHaveClass(
-      'w-[18%]',
+      'w-[15%]',
       'sm:w-[20%]',
     );
   });

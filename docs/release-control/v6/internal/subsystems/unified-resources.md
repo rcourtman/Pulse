@@ -356,10 +356,13 @@ table frame is frontend-primitives-owned. Docker / Podman, Kubernetes, Proxmox,
 Standalone, TrueNAS, and vSphere platform tables own source-specific row fields,
 filter semantics, drawer handoffs, and resource projections, while
 `PlatformTableShell` owns the shared table card, header row, and body frame.
-That shell also owns the responsive minimum-width composition: source tables
-may declare their desktop breakpoint floors, while the shared shell removes
-the redundant `min-w-full` minimum that would otherwise squeeze phone-width
-names and metrics below the canonical readable-column floor.
+That shell also owns responsive width composition. Source tables may declare
+desktop breakpoint floors, but the phone branch must fit its selected columns
+inside the available container without a horizontal rail. Each unified-resource
+consumer selects five to seven high-value source fields when they exist, keeps
+identity near one third of the width, and uses shared compact-label and phone
+width classes so the remaining tracks stay readable. No global reveal rule may
+override those source-specific priorities.
 Future platform tables must keep that split: row data and platform semantics
 stay in the unified-resource consumer, and the repeated table shell stays in the
 shared frontend primitive.
@@ -1215,11 +1218,12 @@ AI-only summary payloads, or page-local heuristics.
     and `frontend-modern/src/components/Infrastructure/unifiedResourceTableStateModel.ts`
     owns the column-priority breakpoints for host and service infrastructure
     rows. When the app shell leaves tablet-sized space during live resize, the
-    table hides lower-priority metadata first, then preserves a readable
-    640-pixel floor for the remaining identity and health columns inside the
-    shared table scroll shell. The document must not overflow, but the table
-    must not compress the prioritized mobile columns until resource names and
-    metric headings become ambiguous.
+    table hides lower-priority metadata first. At phone width, the state model
+    must remove the old 640-pixel floor, preserve identity at roughly one third
+    of the table, and allocate the remaining width across the bounded
+    source-relevant health and activity columns. Both the document and table
+    shell must remain free of horizontal overflow; desktop and tablet stages
+    retain their existing complete column contracts.
 15. Keep shared policy-posture framing on the unified-resource card owner.
     `frontend-modern/src/components/Infrastructure/ResourcePolicySummary.tsx`
     may accept caller-owned subtitle or resource-count wording when Patrol or
@@ -3201,11 +3205,12 @@ and viewport reveal plus scroll synchronization now route through
 `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableViewportSync.ts`,
 so the shared consumer model is no longer interleaving selector derivation,
 layout policy, and DOM viewport coordination inside one mixed state boundary.
-The mobile shell class from that shared state model now keeps a 640-pixel
-minimum table width below the small-screen breakpoint while restoring
-`min-w-full` above it. This retains the prioritized mobile column set without
-forcing those columns into unreadable tracks, and the existing shared `Table`
-overflow owner contains the horizontal scroll locally.
+The mobile shell class from that shared state model now uses `min-w-full` for
+the phone stage and restores the existing wider-stage floor above it. Mobile
+column weights must sum to the available table width, retain the prioritized
+identity and operational set, and avoid both local and document-level
+horizontal scrolling. This is a phone projection only; wider stages keep the
+established desktop distribution.
 That same unified-resource consumer contract now also owns CSP-safe table
 presentation for infrastructure rows. Host, PBS, and PMG table sections must
 consume the shared column presentation owner and render canonical table sizing

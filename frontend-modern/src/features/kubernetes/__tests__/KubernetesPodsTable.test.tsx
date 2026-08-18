@@ -27,6 +27,25 @@ afterEach(() => {
 });
 
 describe('KubernetesPodsTable', () => {
+  it('keeps placement and age visible in the phone column set', () => {
+    const { container } = render(() => (
+      <KubernetesPodsTable
+        resources={[makeResource({ id: 'checkout-api' })]}
+        emptyIcon={<span />}
+        emptyTitle="No pods"
+        emptyDescription="No pods"
+        showToolbar={false}
+      />
+    ));
+
+    const headers = [...container.querySelectorAll('thead th')];
+    expect(headers.find((header) => header.textContent?.includes('Pod'))).toHaveClass(
+      'platform-table-mobile-w-30',
+    );
+    expect(headers.find((header) => header.textContent?.includes('Age'))).toHaveClass('w-[8%]');
+    expect(headers.find((header) => header.textContent?.includes('Scope'))).toHaveClass('w-[15%]');
+  });
+
   it('renders native Pod status, container readiness, ownership, and placement fields', () => {
     render(() => (
       <KubernetesPodsTable

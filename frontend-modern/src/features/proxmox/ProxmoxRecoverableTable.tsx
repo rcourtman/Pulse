@@ -232,7 +232,7 @@ export function ProxmoxRecoverableTable(props: {
               />
               <Show when={columnVisible('location')}>
                 <SortableHead
-                  label="Location"
+                  label={layoutMode() === 'compact' ? 'Loc' : 'Location'}
                   sortKey="location"
                   currentSort={props.sortKey}
                   direction={props.sortDirection}

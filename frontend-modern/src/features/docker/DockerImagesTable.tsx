@@ -138,7 +138,7 @@ export const DockerImagesTable: Component<
                   kind="name"
                   sort={sort}
                   sortKey="image"
-                  class="md:w-[30%]"
+                  class="platform-table-mobile-w-30 md:w-[30%]"
                 >
                   Image
                 </PlatformSortableTableHead>
@@ -154,7 +154,7 @@ export const DockerImagesTable: Component<
                   kind="text"
                   sort={sort}
                   sortKey="usedBy"
-                  class="hidden sm:table-cell md:w-[24%]"
+                  class="md:w-[24%]"
                 >
                   Used by
                 </PlatformSortableTableHead>
@@ -162,7 +162,7 @@ export const DockerImagesTable: Component<
                   kind="numeric-value"
                   sort={sort}
                   sortKey="size"
-                  class="hidden sm:table-cell md:w-[12%]"
+                  class="md:w-[12%]"
                 >
                   Size
                 </PlatformSortableTableHead>
@@ -215,7 +215,7 @@ export const DockerImagesTable: Component<
                             {dockerHostName(resource)}
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content sm:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                           >
                             <span
                               class="inline-block max-w-[20rem] truncate"
@@ -225,7 +225,7 @@ export const DockerImagesTable: Component<
                             </span>
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content sm:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                           >
                             {dockerByteValue(resource.docker?.sizeBytes)}
                           </TableCell>

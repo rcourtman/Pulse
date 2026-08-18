@@ -285,7 +285,7 @@ const buildUnifiedResourceTableColumnPresentation = (
 export const getUnifiedResourceTableShellClass = (
   layoutMode: UnifiedResourceTableLayoutMode,
 ): string =>
-  `table-fixed min-w-[640px] sm:min-w-full${
+  `table-fixed ${layoutMode === 'mobile' ? 'min-w-full' : 'min-w-[640px] sm:min-w-full'}${
     layoutMode === 'wide' ? '' : ' text-[11px] sm:text-xs'
   }`;
 
@@ -362,17 +362,17 @@ export const getUnifiedResourceTableColumnPresentations = (
   layoutWidth?: number,
 ): UnifiedResourceTableColumnPresentations => {
   if (layoutMode === 'mobile') {
-    // Mobile widths are percentages so visible columns fill the viewport
-    // without horizontal scroll. Hidden columns keep placeholder widths that
-    // never render.
+    // Mobile widths are percentages so the prioritized host columns fill the
+    // viewport without horizontal scroll. Hidden columns keep placeholder
+    // widths that never render.
     return {
-      resourceColumn: buildUnifiedResourceTableColumnPresentation('', '40%'),
+      resourceColumn: buildUnifiedResourceTableColumnPresentation('', '34%'),
       serviceResourceColumn: buildUnifiedResourceTableColumnPresentation('', '28%'),
-      metricColumn: buildUnifiedResourceTableColumnPresentation('', '20%'),
-      ioColumn: buildUnifiedResourceTableColumnPresentation('', '20%'),
+      metricColumn: buildUnifiedResourceTableColumnPresentation('', '14%'),
+      ioColumn: buildUnifiedResourceTableColumnPresentation('', '12%'),
       sourceColumn: buildUnifiedResourceTableColumnPresentation('', '20%'),
       serviceSourceColumn: buildUnifiedResourceTableColumnPresentation('', '10%'),
-      uptimeColumn: buildUnifiedResourceTableColumnPresentation('', '8%'),
+      uptimeColumn: buildUnifiedResourceTableColumnPresentation('', '12%'),
       tempColumn: buildUnifiedResourceTableColumnPresentation('', '15%'),
       serviceCountColumn: buildUnifiedResourceTableColumnPresentation('', '11%'),
       serviceQueueColumn: buildUnifiedResourceTableColumnPresentation('', '8%'),

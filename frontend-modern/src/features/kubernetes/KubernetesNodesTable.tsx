@@ -17,6 +17,7 @@ import {
   PlatformTableEmptyState,
   PlatformTableShell,
   PlatformTableToolbar,
+  PlatformResponsiveTableLabel,
   createPlatformTableFilterState,
   createPlatformTableSortState,
   formatPlatformTableBytesValue,
@@ -202,7 +203,7 @@ export const KubernetesNodesTable: Component<{
                   kind="name"
                   sort={sort}
                   sortKey="node"
-                  class="md:w-[15%]"
+                  class="platform-table-mobile-w-30 md:w-[15%]"
                 >
                   Node
                 </PlatformSortableTableHead>
@@ -210,7 +211,7 @@ export const KubernetesNodesTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="cluster"
-                  class="hidden sm:table-cell md:w-[10%]"
+                  class="w-[14%] md:w-[10%]"
                 >
                   Cluster
                 </PlatformSortableTableHead>
@@ -218,9 +219,9 @@ export const KubernetesNodesTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="roles"
-                  class="hidden sm:table-cell md:w-[10%]"
+                  class="w-[14%] md:w-[10%]"
                 >
-                  Roles
+                  <PlatformResponsiveTableLabel compact="Role" full="Roles" />
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead
                   kind="text"
@@ -242,7 +243,7 @@ export const KubernetesNodesTable: Component<{
                   kind="metric-bar"
                   sort={sort}
                   sortKey="cpu"
-                  class="md:w-[11%]"
+                  class="w-[14%] md:w-[11%]"
                 >
                   CPU
                 </PlatformSortableTableHead>
@@ -250,9 +251,9 @@ export const KubernetesNodesTable: Component<{
                   kind="metric-bar"
                   sort={sort}
                   sortKey="memory"
-                  class="md:w-[11%]"
+                  class="w-[14%] md:w-[11%]"
                 >
-                  Memory
+                  <PlatformResponsiveTableLabel compact="Mem" full="Memory" />
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead
                   kind="numeric-value"
@@ -266,9 +267,9 @@ export const KubernetesNodesTable: Component<{
                   kind="numeric-value"
                   sort={sort}
                   sortKey="capacity"
-                  class="hidden sm:table-cell md:w-[14%]"
+                  class="w-[14%] md:w-[14%]"
                 >
-                  Capacity
+                  <PlatformResponsiveTableLabel compact="Cap" full="Capacity" />
                 </PlatformSortableTableHead>
               </>
             }
@@ -366,12 +367,12 @@ export const KubernetesNodesTable: Component<{
                             </div>
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content sm:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                           >
                             {cluster()}
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content sm:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                           >
                             {formatRoles(meta()?.roles)}
                           </TableCell>
@@ -421,7 +422,7 @@ export const KubernetesNodesTable: Component<{
                             {formatPlatformTableUptimeValue(node.uptime)}
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content tabular-nums sm:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content tabular-nums`}
                           >
                             <span class="md:hidden">{compactCapacityLabel()}</span>
                             <span class="hidden md:inline">{capacityLabel()}</span>

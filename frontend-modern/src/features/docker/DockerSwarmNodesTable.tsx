@@ -142,7 +142,7 @@ export const DockerSwarmNodesTable: Component<DockerNativeTableProps> = (props) 
                   kind="name"
                   sort={sort}
                   sortKey="node"
-                  class="md:w-[20%]"
+                  class="platform-table-mobile-w-30 w-[32%] md:w-[20%]"
                 >
                   Node
                 </PlatformSortableTableHead>
@@ -150,7 +150,7 @@ export const DockerSwarmNodesTable: Component<DockerNativeTableProps> = (props) 
                   kind="text"
                   sort={sort}
                   sortKey="role"
-                  class="md:w-[10%]"
+                  class="w-[13%] md:w-[10%]"
                 >
                   Role
                 </PlatformSortableTableHead>
@@ -158,7 +158,7 @@ export const DockerSwarmNodesTable: Component<DockerNativeTableProps> = (props) 
                   kind="text"
                   sort={sort}
                   sortKey="availability"
-                  class="md:w-[12%]"
+                  class="w-[14%] md:w-[12%]"
                 >
                   <PlatformResponsiveTableLabel compact="Avail" full="Availability" />
                 </PlatformSortableTableHead>
@@ -166,7 +166,7 @@ export const DockerSwarmNodesTable: Component<DockerNativeTableProps> = (props) 
                   kind="text"
                   sort={sort}
                   sortKey="reachability"
-                  class="md:w-[14%]"
+                  class="w-[16%] md:w-[14%]"
                 >
                   Reachability
                 </PlatformSortableTableHead>
@@ -182,7 +182,7 @@ export const DockerSwarmNodesTable: Component<DockerNativeTableProps> = (props) 
                   kind="numeric-value"
                   sort={sort}
                   sortKey="cpus"
-                  class="hidden md:table-cell md:w-[8%]"
+                  class="w-[12%] sm:hidden md:table-cell md:w-[8%]"
                 >
                   CPUs
                 </PlatformSortableTableHead>
@@ -190,7 +190,7 @@ export const DockerSwarmNodesTable: Component<DockerNativeTableProps> = (props) 
                   kind="numeric-value"
                   sort={sort}
                   sortKey="memory"
-                  class="hidden sm:table-cell md:w-[10%]"
+                  class="w-[13%] md:w-[10%]"
                 >
                   <PlatformResponsiveTableLabel compact="Mem" full="Memory" />
                 </PlatformSortableTableHead>
@@ -245,12 +245,12 @@ export const DockerSwarmNodesTable: Component<DockerNativeTableProps> = (props) 
                           )}
                         </TableCell>
                         <TableCell
-                          class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content md:table-cell`}
+                          class={`${getPlatformTableCellClassForKind('numeric-value')} sm:hidden text-base-content md:table-cell`}
                         >
                           {dockerCpuValue(resource.docker?.nanoCpus)}
                         </TableCell>
                         <TableCell
-                          class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content sm:table-cell`}
+                          class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                         >
                           {dockerByteValue(resource.docker?.memoryBytes)}
                         </TableCell>

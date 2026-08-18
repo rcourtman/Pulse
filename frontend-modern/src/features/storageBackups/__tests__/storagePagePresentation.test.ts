@@ -50,6 +50,10 @@ describe('storagePagePresentation', () => {
     expect(isStoragePoolColumnVisible('operational', 'host')).toBe(true);
     expect(isStoragePoolColumnVisible('operational', 'growth')).toBe(false);
     expect(getStoragePoolColumnWidthPercent('operational', 'usage')).toBe(21);
-    expect(getStoragePoolColumnWidthPercent('compact', 'host')).toBe(0);
+    expect(isStoragePoolColumnVisible('compact', 'host')).toBe(true);
+    expect(isStoragePoolColumnVisible('compact', 'protection')).toBe(true);
+    expect(getStoragePoolColumnWidthPercent('compact', 'name')).toBe(33);
+    expect(getStoragePoolColumnWidthPercent('compact', 'usage')).toBe(12);
+    expect(getStoragePoolColumnWidthPercent('compact', 'growth')).toBe(0);
   });
 });

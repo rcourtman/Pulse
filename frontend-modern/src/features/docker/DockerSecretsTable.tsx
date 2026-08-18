@@ -111,7 +111,7 @@ export const DockerSecretsTable: Component<DockerNativeTableProps> = (props) => 
                   kind="name"
                   sort={sort}
                   sortKey="secret"
-                  class="md:w-[24%]"
+                  class="platform-table-mobile-w-30 md:w-[24%]"
                 >
                   Secret
                 </PlatformSortableTableHead>
@@ -127,7 +127,7 @@ export const DockerSecretsTable: Component<DockerNativeTableProps> = (props) => 
                   kind="text"
                   sort={sort}
                   sortKey="template"
-                  class="hidden md:table-cell md:w-[14%]"
+                  class="sm:hidden md:table-cell md:w-[14%]"
                 >
                   Template
                 </PlatformSortableTableHead>
@@ -135,7 +135,7 @@ export const DockerSecretsTable: Component<DockerNativeTableProps> = (props) => 
                   kind="text"
                   sort={sort}
                   sortKey="created"
-                  class="hidden md:table-cell md:w-[14%]"
+                  class="md:w-[14%]"
                 >
                   Created
                 </PlatformSortableTableHead>
@@ -168,12 +168,12 @@ export const DockerSecretsTable: Component<DockerNativeTableProps> = (props) => 
                         {dockerTextValue(resource.docker?.driver)}
                       </TableCell>
                       <TableCell
-                        class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
+                        class={`${getPlatformTableCellClassForKind('text')} sm:hidden text-base-content md:table-cell`}
                       >
                         {dockerTextValue(resource.docker?.templatingDriver)}
                       </TableCell>
                       <TableCell
-                        class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
+                        class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                       >
                         <span
                           class="inline-block max-w-[12rem] truncate"

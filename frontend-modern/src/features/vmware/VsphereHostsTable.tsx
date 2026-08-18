@@ -23,6 +23,7 @@ import {
   PlatformTableEmptyState,
   PlatformTableShell,
   PlatformTableToolbar,
+  PlatformResponsiveTableLabel,
   createPlatformTableFilterState,
   createPlatformTableSortState,
   filterPlatformResources,
@@ -209,7 +210,7 @@ export const VsphereHostsTable: Component<{
                   kind="name"
                   sort={sort}
                   sortKey="host"
-                  class="md:w-[15%]"
+                  class="platform-table-mobile-w-30 md:w-[15%]"
                 >
                   Host
                 </PlatformSortableTableHead>
@@ -241,7 +242,7 @@ export const VsphereHostsTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="power"
-                  class="hidden md:table-cell md:w-[7%]"
+                  class="w-[12%] md:w-[7%]"
                 >
                   Power
                 </PlatformSortableTableHead>
@@ -249,7 +250,7 @@ export const VsphereHostsTable: Component<{
                   kind="metric-bar"
                   sort={sort}
                   sortKey="cpu"
-                  class="md:w-[12%]"
+                  class="w-[15%] md:w-[12%]"
                 >
                   CPU
                 </PlatformSortableTableHead>
@@ -257,9 +258,9 @@ export const VsphereHostsTable: Component<{
                   kind="metric-bar"
                   sort={sort}
                   sortKey="memory"
-                  class="md:w-[13%]"
+                  class="w-[15%] md:w-[13%]"
                 >
-                  Memory
+                  <PlatformResponsiveTableLabel compact="Mem" full="Memory" />
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead
                   kind="numeric-value"
@@ -273,7 +274,7 @@ export const VsphereHostsTable: Component<{
                   kind="numeric-value"
                   sort={sort}
                   sortKey="vms"
-                  class="md:w-[4%]"
+                  class="w-[12%] md:w-[4%]"
                 >
                   VMs
                 </PlatformSortableTableHead>
@@ -281,9 +282,9 @@ export const VsphereHostsTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="uptime"
-                  class="hidden md:table-cell md:w-[6%]"
+                  class="w-[16%] md:w-[6%]"
                 >
-                  Uptime
+                  <PlatformResponsiveTableLabel compact="Up" full="Uptime" />
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead
                   kind="text"
@@ -400,7 +401,7 @@ export const VsphereHostsTable: Component<{
                             <span class="block truncate">{cluster()}</span>
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} hidden md:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                           >
                             <div class="flex items-center gap-2">
                               <StatusDot
@@ -453,7 +454,7 @@ export const VsphereHostsTable: Component<{
                             {vmCount()}
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell whitespace-nowrap`}
+                            class={`${getPlatformTableCellClassForKind('text')} text-base-content whitespace-nowrap`}
                             title={uptimeFull()}
                           >
                             {uptimeLabel()}

@@ -57,6 +57,29 @@ afterEach(() => {
 });
 
 describe('KubernetesNodesTable', () => {
+  it('keeps identity near one-third width while exposing cluster, role, and capacity on phones', () => {
+    const { container } = render(() => (
+      <KubernetesNodesTable
+        resources={[makeNodeResource()]}
+        emptyIcon={<span />}
+        emptyTitle="No nodes"
+        emptyDescription="No nodes"
+        showToolbar={false}
+      />
+    ));
+
+    const headers = [...container.querySelectorAll('thead th')];
+    expect(headers.find((header) => header.textContent?.includes('Node'))).toHaveClass(
+      'platform-table-mobile-w-30',
+    );
+    expect(headers.find((header) => header.textContent?.includes('Cluster'))).toHaveClass(
+      'w-[14%]',
+    );
+    expect(headers.find((header) => header.textContent?.includes('Capacity'))).toHaveClass(
+      'w-[14%]',
+    );
+  });
+
   it('keeps node identity inert and launches its web interface without expanding the row', () => {
     const node = makeNodeResource({ customUrl: 'https://worker-01.internal' });
 

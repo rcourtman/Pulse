@@ -109,7 +109,7 @@ export const DockerConfigsTable: Component<DockerNativeTableProps> = (props) => 
                   kind="name"
                   sort={sort}
                   sortKey="config"
-                  class="md:w-[28%]"
+                  class="platform-table-mobile-w-30 md:w-[28%]"
                 >
                   Config
                 </PlatformSortableTableHead>
@@ -125,14 +125,14 @@ export const DockerConfigsTable: Component<DockerNativeTableProps> = (props) => 
                   kind="text"
                   sort={sort}
                   sortKey="created"
-                  class="hidden md:table-cell md:w-[16%]"
+                  class="sm:hidden md:table-cell md:w-[16%]"
                 >
                   Created
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead
                   kind="text"
                   sort={sort}
-                  class="hidden md:table-cell md:w-[24%]"
+                  class="sm:hidden md:table-cell md:w-[24%]"
                 >
                   Labels
                 </PlatformSortableTableHead>
@@ -158,7 +158,7 @@ export const DockerConfigsTable: Component<DockerNativeTableProps> = (props) => 
                         {dockerTextValue(resource.docker?.templatingDriver)}
                       </TableCell>
                       <TableCell
-                        class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
+                        class={`${getPlatformTableCellClassForKind('text')} sm:hidden text-base-content md:table-cell`}
                       >
                         <span
                           class="inline-block max-w-[14rem] truncate"
@@ -168,7 +168,7 @@ export const DockerConfigsTable: Component<DockerNativeTableProps> = (props) => 
                         </span>
                       </TableCell>
                       <TableCell
-                        class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
+                        class={`${getPlatformTableCellClassForKind('text')} sm:hidden text-base-content md:table-cell`}
                       >
                         <span
                           class="inline-block max-w-[22rem] truncate"

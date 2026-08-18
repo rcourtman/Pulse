@@ -1053,16 +1053,16 @@ const agentRemovalIdFor = (machine: Resource): string => {
 const machineColumnWidthClass = (columnId: AgentMachineColumnId): string => {
   switch (columnId) {
     case 'machine':
-      return 'w-[52%] sm:w-[28%] md:w-[15%]';
+      return 'platform-table-mobile-w-30 w-[30%] sm:w-[28%] md:w-[15%]';
     case 'system':
       return 'hidden md:table-cell md:w-[12%]';
     case 'agent':
       return 'hidden md:table-cell md:w-[6%]';
     case 'cpu':
     case 'memory':
-      return 'w-[18%] sm:w-[20%] md:w-[8%]';
+      return 'w-[15%] sm:w-[20%] md:w-[8%]';
     case 'disk':
-      return 'hidden sm:table-cell sm:w-[20%] md:w-[8%]';
+      return 'w-[15%] sm:w-[20%] md:w-[8%]';
     case 'gpu':
       return 'hidden md:table-cell md:w-[8%]';
     case 'network':
@@ -1072,7 +1072,7 @@ const machineColumnWidthClass = (columnId: AgentMachineColumnId): string => {
     case 'temp':
       return 'hidden md:table-cell md:w-[5%]';
     case 'lastSeen':
-      return 'hidden lg:table-cell lg:w-[6%]';
+      return 'w-[15%] lg:w-[6%]';
     case 'ip':
       return 'agent-machine-address-column hidden xl:table-cell xl:w-[8%]';
     case 'raid':
@@ -1082,7 +1082,7 @@ const machineColumnWidthClass = (columnId: AgentMachineColumnId): string => {
     case 'kernel':
       return 'hidden xl:table-cell xl:w-[10%]';
     case 'actions':
-      return 'w-[12%] md:w-[4%]';
+      return 'w-[10%] md:w-[4%]';
   }
 };
 

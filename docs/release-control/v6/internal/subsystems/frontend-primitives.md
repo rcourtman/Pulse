@@ -1083,14 +1083,21 @@ not a replacement status card, CTA band, or page-local nested card.
    an existing panel/card frame must use the shared `frame="flush"` mode rather
    than caller-local border overrides, horizontal-scroll wrappers, or negative
    margin compensation.
-   Dense platform tables must also preserve readable columns at phone widths.
-   `PlatformTableShell` owns the responsive minimum-width policy, preserves any
-   explicit base floor declared by the feature table, and otherwise applies
-   the shared platform minimum before breakpoint-specific widths take over. Its
-   class composition removes a consumer's redundant `min-w-full` token because
-   the shared `Table` already fills the available width and that second
-   minimum would override the phone-width floor, squeezing names and metrics
-   into unreadable slivers.
+   Dense platform tables must also preserve useful operational context at phone
+   widths. `PlatformTableShell` owns the responsive minimum-width policy,
+   preserves any explicit base floor declared by the feature table, and
+   otherwise applies the shared zero-width platform minimum before
+   breakpoint-specific widths take over. Its class composition removes a
+   consumer's redundant `min-w-full` token because the shared `Table` already
+   fills the available width and that second minimum would override the
+   phone-width policy. Platform consumers must explicitly select five to seven
+   high-value phone columns when that many meaningful fields exist, keep the
+   identity column near one third of the available width, use the shared compact
+   label and column-width classes, and preserve the fuller tablet and desktop
+   presentation. They must not rely on a global rule that reveals every hidden
+   column: phone priority remains source-specific because state, capacity,
+   freshness, and recovery posture do not carry equal value for every resource
+   type.
    Narrow viewports keep document-level overflow contained by `Table` and
    scroll the table itself. The shared scroll shell owns inline-size and paint
    containment plus horizontal overscroll containment so a readable table

@@ -151,7 +151,7 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                 {table.headerLabels().disk} {table.renderSortIndicator('disk')}
               </TableHead>
               <TableHead
-                classList={{ hidden: table.isMobile() || !table.isVisible('secondary') }}
+                classList={{ hidden: !table.isMobile() && !table.isVisible('secondary') }}
                 class={table.ioColumn().className}
                 width={table.ioColumn().width}
                 onClick={() => table.handleSort('network')}
@@ -175,7 +175,7 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                 {table.headerLabels().source} {table.renderSortIndicator('source')}
               </TableHead>
               <TableHead
-                classList={{ hidden: table.isMobile() || !table.isVisible('supplementary') }}
+                classList={{ hidden: !table.isMobile() && !table.isVisible('supplementary') }}
                 class={table.uptimeColumn().className}
                 width={table.uptimeColumn().width}
                 onClick={() => table.handleSort('uptime')}
@@ -546,7 +546,7 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                       </TableCell>
 
                       <TableCell
-                        classList={{ hidden: table.isMobile() || !table.isVisible('secondary') }}
+                        classList={{ hidden: !table.isMobile() && !table.isVisible('secondary') }}
                       >
                         <Show
                           when={resource.network}
@@ -698,7 +698,7 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
 
                       <TableCell
                         classList={{
-                          hidden: table.isMobile() || !table.isVisible('supplementary'),
+                          hidden: !table.isMobile() && !table.isVisible('supplementary'),
                         }}
                       >
                         <div class="flex justify-center">

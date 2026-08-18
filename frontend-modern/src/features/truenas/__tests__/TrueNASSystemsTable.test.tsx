@@ -46,6 +46,28 @@ afterEach(() => {
 });
 
 describe('TrueNASSystemsTable', () => {
+  it('keeps capacity and temperature in the phone column set', () => {
+    const { container } = render(() => (
+      <TrueNASSystemsTable
+        systems={[makeSystem({ id: 'nas-1' })]}
+        scope={[makeSystem({ id: 'nas-1' })]}
+        emptyIcon={<span />}
+        emptyTitle="No systems"
+        emptyDescription="No systems"
+        showToolbar={false}
+      />
+    ));
+
+    const headers = [...container.querySelectorAll('thead th')];
+    expect(headers.find((header) => header.textContent?.includes('System'))).toHaveClass(
+      'platform-table-mobile-w-30',
+    );
+    expect(headers.find((header) => header.textContent?.includes('Capacity'))).toHaveClass(
+      'w-[20%]',
+    );
+    expect(headers.find((header) => header.textContent?.includes('°C'))).toHaveClass('w-[16%]');
+  });
+
   it('treats an impaired TrueNAS source as degraded for the row indicator and health filter', async () => {
     const healthy = makeSystem({ id: 'truenas-healthy', name: 'truenas-healthy' });
     const impaired = makeSystem({

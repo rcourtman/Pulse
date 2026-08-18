@@ -282,52 +282,60 @@ describe('platform overview layout guardrails', () => {
     expect(dockerHostsTableSource).toContain('md:w-[10%]');
   });
 
-  it('prioritizes Docker phone decisions and restores context at the basic table tier', () => {
-    expect(dockerImagesTableSource).toMatch(
-      /sortKey="size"[\s\S]{0,120}?class="hidden sm:table-cell md:w-\[12%\]"/,
+  it('keeps Docker phone tables dense with explicit shared identity sizing', () => {
+    for (const source of [
+      dockerAlertsTableSource,
+      dockerConfigsTableSource,
+      dockerHostsTableSource,
+      dockerImagesTableSource,
+      dockerVolumesTableSource,
+      dockerNetworksTableSource,
+      dockerStorageUsageTableSource,
+      dockerSwarmNodesTableSource,
+      dockerServicesTableSource,
+      dockerTasksTableSource,
+      dockerSecretsTableSource,
+    ]) {
+      expect(source).toContain('platform-table-mobile-w-30');
+    }
+    expect(dockerImagesTableSource).toMatch(/sortKey="size"[\s\S]{0,120}?class="md:w-\[12%\]"/);
+    expect(dockerServicesTableSource).toMatch(
+      /sortKey="mode"[\s\S]{0,120}?class="w-\[14%\] md:w-\[8%\]"/,
     );
     expect(dockerServicesTableSource).toMatch(
-      /sortKey="mode"[\s\S]{0,120}?class="hidden sm:table-cell md:w-\[8%\]"/,
+      /sortKey="update"[\s\S]{0,120}?class="w-\[15%\] md:w-\[12%\]"/,
     );
-    expect(dockerServicesTableSource).toMatch(/sortKey="desired"[\s\S]{0,120}?class="md:w-\[8%\]"/);
-    expect(dockerServicesTableSource).toMatch(
-      /sortKey="update"[\s\S]{0,120}?class="hidden sm:table-cell md:w-\[12%\]"/,
-    );
-    expect(dockerTasksTableSource).toMatch(
-      /sortKey="service"[\s\S]{0,120}?class="hidden sm:table-cell md:w-\[18%\]"/,
-    );
-    expect(dockerTasksTableSource).toMatch(
-      /sortKey="node"[\s\S]{0,120}?class="hidden sm:table-cell md:w-\[16%\]"/,
+    expect(dockerTasksTableSource).toMatch(/sortKey="service"[\s\S]{0,120}?class="md:w-\[18%\]"/);
+    expect(dockerTasksTableSource).toMatch(/sortKey="node"[\s\S]{0,120}?class="md:w-\[16%\]"/);
+    expect(dockerSwarmNodesTableSource).toMatch(
+      /sortKey="reachability"[\s\S]{0,120}?class="w-\[16%\] md:w-\[14%\]"/,
     );
     expect(dockerSwarmNodesTableSource).toMatch(
-      /sortKey="reachability"[\s\S]{0,120}?class="md:w-\[14%\]"/,
-    );
-    expect(dockerSwarmNodesTableSource).toMatch(
-      /sortKey="memory"[\s\S]{0,120}?class="hidden sm:table-cell md:w-\[10%\]"/,
+      /sortKey="memory"[\s\S]{0,120}?class="w-\[13%\] md:w-\[10%\]"/,
     );
   });
 
-  it('keeps Kubernetes phone identity readable and restores scope at the basic table tier', () => {
+  it('keeps Kubernetes phone identity readable while exposing operational context', () => {
     expect(kubernetesClustersTableSource).toContain(
       '-my-3 inline-flex min-h-11 items-center truncate',
     );
     expect(kubernetesNodesTableSource).toMatch(
-      /sortKey="roles"[\s\S]{0,120}?class="hidden sm:table-cell md:w-\[10%\]"/,
+      /sortKey="roles"[\s\S]{0,120}?class="w-\[14%\] md:w-\[10%\]"/,
     );
     expect(kubernetesNodesTableSource).toMatch(
-      /sortKey="capacity"[\s\S]{0,120}?class="hidden sm:table-cell md:w-\[14%\]"/,
+      /sortKey="capacity"[\s\S]{0,120}?class="w-\[14%\] md:w-\[14%\]"/,
     );
     expect(kubernetesDeploymentsTableSource).toMatch(
-      /sortKey="namespace"[\s\S]{0,120}?class="hidden sm:table-cell md:w-\[20%\]"/,
+      /sortKey="namespace"[\s\S]{0,120}?class="w-\[15%\] md:w-\[20%\]"/,
     );
     expect(kubernetesPodsTableSource).toMatch(
-      /sortKey="scope"[\s\S]{0,120}?class="hidden sm:table-cell md:w-\[13%\]"/,
+      /sortKey="scope"[\s\S]{0,120}?class="w-\[15%\] md:w-\[13%\]"/,
     );
     expect(kubernetesPodsTableSource).toMatch(
-      /sortKey="node"[\s\S]{0,120}?class="hidden sm:table-cell md:w-\[13%\]"/,
+      /sortKey="node"[\s\S]{0,120}?class="w-\[15%\] md:w-\[13%\]"/,
     );
     expect(kubernetesServicesTableSource).toMatch(
-      /sortKey="scope"[\s\S]{0,120}?class="hidden sm:table-cell md:w-\[15%\]"/,
+      /sortKey="scope"[\s\S]{0,120}?class="w-\[15%\] md:w-\[15%\]"/,
     );
     expect(kubernetesNetworkingTableSource).toMatch(
       /sortKey="scope"[\s\S]{0,120}?class="hidden sm:table-cell md:w-\[14%\]"/,

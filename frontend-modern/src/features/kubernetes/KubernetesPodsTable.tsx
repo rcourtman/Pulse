@@ -205,14 +205,19 @@ export const KubernetesPodsTable: Component<{
             tableClass="min-w-full table-fixed text-xs md:min-w-[1240px]"
             header={
               <>
-                <PlatformSortableTableHead kind="name" sort={sort} sortKey="pod" class="md:w-[20%]">
+                <PlatformSortableTableHead
+                  kind="name"
+                  sort={sort}
+                  sortKey="pod"
+                  class="platform-table-mobile-w-30 md:w-[20%]"
+                >
                   Pod
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead
                   kind="text"
                   sort={sort}
                   sortKey="scope"
-                  class="hidden sm:table-cell md:w-[13%]"
+                  class="w-[15%] md:w-[13%]"
                 >
                   Scope
                 </PlatformSortableTableHead>
@@ -220,7 +225,7 @@ export const KubernetesPodsTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="node"
-                  class="hidden sm:table-cell md:w-[13%]"
+                  class="w-[15%] md:w-[13%]"
                 >
                   Node
                 </PlatformSortableTableHead>
@@ -228,7 +233,7 @@ export const KubernetesPodsTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="status"
-                  class="md:w-[8%]"
+                  class="w-[12%] md:w-[8%]"
                 >
                   Status
                 </PlatformSortableTableHead>
@@ -236,7 +241,7 @@ export const KubernetesPodsTable: Component<{
                   kind="numeric-value"
                   sort={sort}
                   sortKey="ready"
-                  class="md:w-[7%]"
+                  class="w-[10%] md:w-[7%]"
                 >
                   Ready
                 </PlatformSortableTableHead>
@@ -244,7 +249,7 @@ export const KubernetesPodsTable: Component<{
                   kind="numeric-value"
                   sort={sort}
                   sortKey="restarts"
-                  class="md:w-[8%]"
+                  class="w-[10%] md:w-[8%]"
                 >
                   Restarts
                 </PlatformSortableTableHead>
@@ -268,7 +273,7 @@ export const KubernetesPodsTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="age"
-                  class="hidden md:table-cell md:w-[4%]"
+                  class="w-[8%] md:w-[4%]"
                 >
                   Age
                 </PlatformSortableTableHead>
@@ -322,14 +327,14 @@ export const KubernetesPodsTable: Component<{
                             </div>
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content sm:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                           >
                             <span class="block max-w-full truncate" title={scope()}>
                               {scope()}
                             </span>
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content sm:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                           >
                             <span class="block max-w-full truncate" title={node()}>
                               {node()}
@@ -370,7 +375,7 @@ export const KubernetesPodsTable: Component<{
                             </span>
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                           >
                             {age()}
                           </TableCell>

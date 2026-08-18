@@ -1907,7 +1907,7 @@ must not treat starter
    is likewise API/AI-owned transport: storage and recovery may consume the
    resulting incident context, but must not define storage-local approval
    argument keys or bypass the shared `internal/agentcapabilities` helper.
-5. Keep recovery history table width budgeting derived from the canonical column specs in `frontend-modern/src/utils/recoveryTablePresentation.ts`, not from raw visible-column counts, so normalized subject labels and optional column sets cannot drift the right-edge badges and controls off-screen
+5. Keep recovery history table width budgeting derived from the canonical column specs in `frontend-modern/src/utils/recoveryTablePresentation.ts`, not from raw visible-column counts, so normalized subject labels and optional column sets cannot drift the right-edge badges and controls off-screen. Storage-pool, physical-disk, backup-server, coverage, and recoverable-artifact compact models must follow the same source-owned budgeting rule: expose the five to seven highest-value phone fields when the source provides them, keep identity near one third, use compact labels for narrow evidence fields, and normalize the selected tracks to the container without a horizontal rail. Desktop column sets and storage/recovery evidence semantics must remain unchanged.
 6. Keep at least one browser-level desktop recovery proof in the governed `recovery-product-surface` policy so right-edge column visibility and wrapper-fit regressions are caught at rendered layout time instead of only through unit-level width math
 7. Keep the retired dashboard route from becoming a passive no-resources
    compatibility shell. First-session handoff now belongs to Infrastructure

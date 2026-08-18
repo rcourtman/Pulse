@@ -18,6 +18,7 @@ import { buildMetricKeyForUnifiedResource } from '@/utils/metricsKeys';
 import {
   PLATFORM_HEALTH_FILTER_OPTIONS,
   PlatformSortableTableHead,
+  PlatformResponsiveTableLabel,
   PlatformTableMetricFallback,
   PlatformTableEmptyState,
   PlatformTableTemperatureValue,
@@ -238,13 +239,14 @@ export const DockerHostsTable: Component<{
                     Desktop widths balance the three bar-metric columns (CPU /
                     Memory / Disk) against the short-content columns so the
                     bars aren't squeezed by table-fixed's equal split. Mobile
-                    widths (w-[40%], w-[20%]) are unchanged.
+                    widths keep host identity at roughly one-third while
+                    reserving room for all six operational phone fields.
                   */}
                 <PlatformSortableTableHead
                   kind="name"
                   sort={sort}
                   sortKey="host"
-                  class="w-[40%] md:w-[13%]"
+                  class="platform-table-mobile-w-30 w-[34%] md:w-[13%]"
                 >
                   Host
                 </PlatformSortableTableHead>
@@ -276,7 +278,7 @@ export const DockerHostsTable: Component<{
                   kind="metric-bar"
                   sort={sort}
                   sortKey="cpu"
-                  class="w-[20%] md:w-[14%]"
+                  class="w-[14%] md:w-[14%]"
                 >
                   CPU
                 </PlatformSortableTableHead>
@@ -284,7 +286,7 @@ export const DockerHostsTable: Component<{
                   kind="metric-bar"
                   sort={sort}
                   sortKey="memory"
-                  class="w-[20%] md:w-[14%]"
+                  class="w-[14%] md:w-[14%]"
                 >
                   <span class="md:hidden">Mem</span>
                   <span class="hidden md:inline">Memory</span>
@@ -293,7 +295,7 @@ export const DockerHostsTable: Component<{
                   kind="metric-bar"
                   sort={sort}
                   sortKey="disk"
-                  class="w-[20%] md:w-[14%]"
+                  class="w-[14%] md:w-[14%]"
                 >
                   Disk
                 </PlatformSortableTableHead>
@@ -301,17 +303,17 @@ export const DockerHostsTable: Component<{
                   kind="numeric-value"
                   sort={sort}
                   sortKey="uptime"
-                  class="hidden md:table-cell md:w-[6%]"
+                  class="w-[12%] sm:hidden md:table-cell md:w-[6%]"
                 >
-                  Uptime
+                  <PlatformResponsiveTableLabel compact="Up" full="Uptime" />
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead
                   kind="numeric-value"
                   sort={sort}
                   sortKey="temp"
-                  class="hidden md:table-cell md:w-[6%]"
+                  class="w-[16%] sm:hidden md:table-cell md:w-[6%]"
                 >
-                  Temp
+                  <PlatformResponsiveTableLabel compact="Temp" full="Temp" />
                 </PlatformSortableTableHead>
                 <Show when={showSwarmColumn()}>
                   <PlatformSortableTableHead
@@ -497,12 +499,12 @@ export const DockerHostsTable: Component<{
                             </Show>
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content md:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} sm:hidden text-base-content md:table-cell`}
                           >
                             {formatPlatformTableUptimeValue(host.uptime ?? docker()?.uptimeSeconds)}
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content md:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} sm:hidden text-base-content md:table-cell`}
                           >
                             <PlatformTableTemperatureValue
                               value={host.temperature ?? docker()?.temperature}
