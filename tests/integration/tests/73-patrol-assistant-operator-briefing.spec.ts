@@ -604,7 +604,10 @@ test.describe("Patrol Assistant operator briefing", () => {
     });
 
     await page.goto("/patrol", { waitUntil: "domcontentloaded" });
-    await page.getByRole("button", { name: /Findings and run records/ }).click();
+    await page.getByRole("tab", { name: "Activity", exact: true }).click();
+    await page
+      .getByRole("button", { name: /Findings and run records/ })
+      .click();
 
     await page.getByText("High CPU usage").click();
     const findingReview = page.locator(
@@ -740,7 +743,10 @@ test.describe("Patrol Assistant operator briefing", () => {
 
     includePendingApproval = false;
     await page.reload({ waitUntil: "domcontentloaded" });
-    await page.getByRole("button", { name: /Findings and run records/ }).click();
+    await page.getByRole("tab", { name: "Activity", exact: true }).click();
+    await page
+      .getByRole("button", { name: /Findings and run records/ })
+      .click();
     const queuedFindingTitle = page.getByText("High CPU usage").first();
     await expect(queuedFindingTitle).toBeVisible();
     await queuedFindingTitle.click();
@@ -770,14 +776,19 @@ test.describe("Patrol Assistant operator briefing", () => {
     includeUnifiedInvestigationRecord = false;
     includeInvestigationProposedFix = true;
     await page.reload({ waitUntil: "domcontentloaded" });
-    await page.getByRole("button", { name: /Findings and run records/ }).click();
+    await page.getByRole("tab", { name: "Activity", exact: true }).click();
+    await page
+      .getByRole("button", { name: /Findings and run records/ })
+      .click();
     const expiredFindingTitle = page.getByText("High CPU usage").first();
     await expect(expiredFindingTitle).toBeVisible();
     await expiredFindingTitle.click();
     const expiredFinding = page.locator(
       "#finding-finding-operator-briefing-details",
     );
-    await expect(expiredFinding.getByText("Action details unavailable")).toBeVisible();
+    await expect(
+      expiredFinding.getByText("Action details unavailable"),
+    ).toBeVisible();
     await expiredFinding.getByText("Manage", { exact: true }).click();
     await expiredFinding
       .getByRole("button", { name: "Open in Assistant" })

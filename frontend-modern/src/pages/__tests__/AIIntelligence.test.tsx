@@ -535,6 +535,13 @@ const defaultOperationsLoopStatus = (overrides: Record<string, unknown> = {}) =>
   ...overrides,
 });
 
+async function openPatrolActivityMode() {
+  await waitFor(() => {
+    expect(screen.getByRole('tab', { name: 'Activity' })).toBeInTheDocument();
+  });
+  fireEvent.click(screen.getByRole('tab', { name: 'Activity' }));
+}
+
 describe('AIIntelligence entitlement gating', () => {
   it('keeps Patrol page data sync bounded without making it a primary action', () => {
     expect(patrolIntelligenceStateSource).toContain('PATROL_REFRESH_TIMEOUT_MS');
@@ -729,7 +736,9 @@ describe('AIIntelligence entitlement gating', () => {
     expect(screen.queryByRole('link', { name: 'View plans' })).not.toBeInTheDocument();
     expect(patrolControlAnchor).toContainElement(operationsLoopAnchor);
     expect(screen.queryByTestId('patrol-current-work')).not.toBeInTheDocument();
-    expect(screen.getByText('Current Patrol issues appear here.')).toBeInTheDocument();
+    expect(screen.queryByText('Current Patrol issues appear here.')).not.toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Inbox' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('region', { name: 'Patrol decision inbox' })).toBeInTheDocument();
     expect(
       screen.queryByText('Issues Patrol found. Infrastructure stays unchanged.'),
     ).not.toBeInTheDocument();
@@ -887,7 +896,7 @@ describe('AIIntelligence entitlement gating', () => {
     render(() => <AIIntelligence />);
 
     await waitFor(() => {
-      expect(screen.getByRole('heading', { name: 'Open work' })).toBeInTheDocument();
+      expect(screen.getAllByRole('button', { name: /Check now/i }).length).toBeGreaterThan(0);
     });
 
     getCorrelationsMock.mockImplementation(() => new Promise(() => {}));
@@ -914,7 +923,7 @@ describe('AIIntelligence entitlement gating', () => {
     render(() => <AIIntelligence />);
 
     await waitFor(() => {
-      expect(screen.getByRole('heading', { name: 'Open work' })).toBeInTheDocument();
+      expect(screen.getAllByRole('button', { name: /Check now/i }).length).toBeGreaterThan(0);
     });
 
     fireEvent.click(screen.getAllByRole('button', { name: /Check now/i })[0]);
@@ -1063,6 +1072,7 @@ describe('AIIntelligence entitlement gating', () => {
     expect(screen.queryByText('VM 200')).not.toBeInTheDocument();
     expect(screen.queryByText('Disk Full → Restart')).not.toBeInTheDocument();
 
+    await openPatrolActivityMode();
     fireEvent.click(screen.getByRole('button', { name: 'History' }));
     await waitFor(() => {
       expect(screen.getByRole('heading', { name: 'Patrol history' })).toBeInTheDocument();
@@ -1494,7 +1504,7 @@ describe('AIIntelligence entitlement gating', () => {
 
     await waitFor(() => {
       expect(screen.getByRole('heading', { name: 'Patrol' })).toBeInTheDocument();
-      expect(screen.getByText('Open work')).toBeInTheDocument();
+      expect(screen.getByRole('region', { name: 'Patrol decision inbox' })).toBeInTheDocument();
     });
 
     expect(screen.queryByText('Loading view...')).not.toBeInTheDocument();
@@ -1514,7 +1524,7 @@ describe('AIIntelligence entitlement gating', () => {
     await waitFor(() => {
       expect(screen.getByRole('heading', { name: 'Patrol' })).toBeInTheDocument();
       expect(screen.getByText('Patrol could not refresh')).toBeInTheDocument();
-      expect(screen.getByText('Open work')).toBeInTheDocument();
+      expect(screen.getByRole('region', { name: 'Patrol decision inbox' })).toBeInTheDocument();
     });
 
     expect(screen.queryByText('Loading view...')).not.toBeInTheDocument();
@@ -1785,6 +1795,7 @@ describe('AIIntelligence entitlement gating', () => {
     };
 
     render(() => <AIIntelligence />);
+    await openPatrolActivityMode();
 
     await waitFor(() => {
       expect(screen.getByText('Open work')).toBeInTheDocument();
@@ -2012,7 +2023,7 @@ describe('AIIntelligence entitlement gating', () => {
     expect(screen.queryByTestId('patrol-status-bar')).not.toBeInTheDocument();
 
     expect(screen.queryByRole('heading', { name: 'Open work' })).not.toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Needs your attention' })).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Patrol decision inbox' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Active' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'All' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Resolved' })).not.toBeInTheDocument();
@@ -2061,7 +2072,7 @@ describe('AIIntelligence entitlement gating', () => {
     await waitFor(() => {
       expect(screen.getByText('Patrol model issue')).toBeInTheDocument();
     });
-    expect(screen.getByRole('heading', { name: 'Open work' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Patrol decision inbox' })).toBeInTheDocument();
     const providerActions = screen.getAllByRole('link', { name: /Check Patrol model/i });
     expect(providerActions.length).toBeGreaterThan(0);
     expect(providerActions[0]).toHaveAttribute('href', '/settings/pulse-intelligence/patrol');
@@ -2378,6 +2389,7 @@ describe('AIIntelligence entitlement gating', () => {
     };
 
     render(() => <AIIntelligence />);
+    await openPatrolActivityMode();
 
     await waitFor(() => {
       expect(getPatrolStatusMock).toHaveBeenCalled();
@@ -2444,6 +2456,7 @@ describe('AIIntelligence entitlement gating', () => {
     };
 
     render(() => <AIIntelligence />);
+    await openPatrolActivityMode();
 
     await waitFor(() => {
       expect(getPatrolStatusMock).toHaveBeenCalled();
@@ -2513,6 +2526,7 @@ describe('AIIntelligence entitlement gating', () => {
     };
 
     render(() => <AIIntelligence />);
+    await openPatrolActivityMode();
 
     await waitFor(() => {
       expect(getPatrolStatusMock).toHaveBeenCalled();
@@ -2574,6 +2588,7 @@ describe('AIIntelligence entitlement gating', () => {
     };
 
     render(() => <AIIntelligence />);
+    await openPatrolActivityMode();
 
     await waitFor(() => {
       expect(getPatrolStatusMock).toHaveBeenCalled();

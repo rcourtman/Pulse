@@ -1,26 +1,22 @@
 {
   "version": 1,
-  "base_sha": "0da7092991898ca4b125f75cd7dacf9d492b7126",
-  "verified_at": "2026-08-18T10:05:00Z",
+  "base_sha": "e1427e66f8614d0fea90d62d7f785f93595fdae1",
+  "verified_at": "2026-08-18T09:24:31Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/useAppRuntimeState.ts"
+    "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx",
+    "frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx",
+    "frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/useAppRuntimeState.ts": "311d1b7c6a97b94830311650b4efe5ee5cf57215c903e9835be70441a62836dd"
+    "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx": "770c7eaecf23026916fa48198fe5220be6db076fbd30a7351e250d2cbeec9fb4",
+    "frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx": "f147df3ec75a27fb5d06b6cf9e8f487b02d93af1630c8d7fb0fd3688b264a3dc",
+    "frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx": "4a3d400d59c42a48b0488ef0a4b0026f39326e1cbfc44d19528198bfd84030e1"
   },
-  "routes": [
-    "/login",
-    "/",
-    "/proxmox/overview",
-    "/docker/overview",
-    "/kubernetes/overview",
-    "/truenas/overview",
-    "/vsphere/overview"
-  ],
+  "routes": ["/patrol"],
   "viewports": [
     {
-      "width": 1440,
+      "width": 1280,
       "height": 900
     },
     {
@@ -29,25 +25,18 @@
     }
   ],
   "states": [
-    "signed-out login form",
-    "authenticated shell against a backend that reports the platformAdmission facet",
-    "navigation resolved with all six primary platform tabs",
-    "backend stopped mid-session, shell showing a disconnected socket",
-    "backend restored and the socket reconnected",
-    "Docker, Kubernetes, TrueNAS and vSphere platform pages populated",
-    "shell at 390x844 with the Proxmox table rendered"
+    "Default live Inbox with 12 ranked decisions, one critical item, and one governed approval waiting; Protection, verified outcomes, and history absent from the canvas",
+    "Protection mode with retained-objective setup only and no decision queue or activity surface",
+    "Activity mode with verified outcomes and the subordinate actions, findings, and run-record handoffs",
+    "Desktop selected-decision split with persistent queue, current position, previous/next navigation, and governed lifecycle, evidence, protection, resource, and Assistant context",
+    "390x844 selected-decision master/detail state with the queue hidden, Back to list, queue position, and touch-sized navigation",
+    "Current-coverage calm state, transport failure state, and attached availability failure without synthetic health"
   ],
   "interactions": [
-    "signed in and confirmed admission is read once from a one-resource request",
-    "idled 20 seconds with live runtime state and confirmed no further admission requests, so the steady state polls nothing",
-    "stopped the backend mid-session, watched the shell report a disconnected socket, restarted it, and confirmed admission was refetched once on reconnect",
-    "confirmed navigation still listed every platform tab after the reconnect cycle",
-    "switched to the Docker tab and confirmed 80 rows",
-    "switched to the Kubernetes tab and confirmed 180 rows",
-    "switched to the TrueNAS tab and confirmed 3 rows",
-    "switched to the vSphere tab and confirmed 32 rows",
-    "returned to the Proxmox tab and confirmed 79 rows",
-    "resized to 390x844 and confirmed the Proxmox table still renders 79 rows",
-    "confirmed zero console or page errors across the pass"
+    "Used the live in-app Browser to inspect the final Inbox, Protection, Activity, and selected-decision split against current backend data",
+    "Exercised the workspace tabs and confirmed only the selected panel is present while stable Patrol route and API truth are retained",
+    "Verified automatic advancement after Mark reviewed, bounded suppression feedback, inbox focus restoration, deep-link reload, and no horizontal overflow",
+    "Passed the complete 18-scenario attention-workbench matrix across Chromium, mobile Chrome, and mobile Safari; the two corrected exact-name checks were rerun across all three engines",
+    "Passed all eight affected Assistant, monitor-first, and attached-availability journeys in Chromium"
   ]
 }

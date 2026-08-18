@@ -587,7 +587,7 @@ test.describe("Operational trust availability resource facet", () => {
 
     await page.goto("/patrol", { waitUntil: "domcontentloaded" });
 
-    const queue = page.getByRole("region", { name: "Needs your attention" });
+    const queue = page.getByRole("region", { name: "Patrol decision inbox" });
     await expect(queue).toBeVisible({ timeout: 30_000 });
     await expect(
       page.getByRole("tab", {

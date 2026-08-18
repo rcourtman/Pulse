@@ -230,16 +230,17 @@ describe('PatrolAttentionWorkbench', () => {
     renderWorkbench();
 
     expect(
-      await screen.findByRole('heading', { name: 'Needs your attention' }),
+      await screen.findByRole('heading', { name: '1 decision needs you' }),
     ).toBeInTheDocument();
-    expect(screen.getByText('1 decision needs you')).toBeInTheDocument();
-    expect(screen.getByText("Today's Patrol briefing")).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Decision inbox' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Start review' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Review this decision' })).toBeInTheDocument();
     expect(
       screen.getByRole('button', { name: 'Open Disk pressure on Database VM' }),
     ).toBeInTheDocument();
+    expect(screen.queryByText("Today's Patrol briefing")).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Decision inbox' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Review this decision' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Open', { exact: true })).not.toBeInTheDocument();
+    expect(screen.queryByText('Review', { exact: true })).not.toBeInTheDocument();
     expect(screen.queryByRole('group', { name: 'Attention state' })).not.toBeInTheDocument();
     expect(screen.queryByRole('combobox', { name: 'Attention state' })).not.toBeInTheDocument();
     expect(apiMocks.getList).toHaveBeenCalledWith('active');

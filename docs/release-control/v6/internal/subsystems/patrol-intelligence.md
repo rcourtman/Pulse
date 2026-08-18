@@ -75,16 +75,16 @@ sources, and retains the note as operator context.
 ### Quiet operator home
 
 The first-party Patrol page is an outcome and exception surface, not a mirror of
-the internal lifecycle. Its primary order is the effective background posture,
-work that genuinely needs the operator, the outcomes Patrol is looking after,
-and concise recent receipts. Active work must outrank objective configuration
-on the daily-use route, especially on a narrow viewport; an empty objectives
-surface cannot push current decisions below the first useful screen.
-Investigation internals, lifecycle filters, raw findings, checks, and run
-history remain available as secondary operational records without competing
-with those four questions. Action review/audit and finding/run records use one
-subordinate `Review and history` handoff area so the page does not present
-several competing history concepts.
+the internal lifecycle. After the effective background posture it exposes three
+mutually exclusive operator modes: `Inbox`, `Protection`, and `Activity`.
+`Inbox` is the default and mounts only genuine operator decisions;
+`Protection` owns retained objectives; `Activity` owns verified receipts plus
+the subordinate action-audit and finding/run-record handoffs. Active decisions,
+objective configuration, receipts, and operational records must not all render
+at once. Investigation internals, lifecycle filters, raw findings, checks, and
+run history remain deliberately available without competing with the daily
+decision queue. The mode selector is keyboard navigable and retains the stable
+Patrol route rather than inventing API filters or lifecycle states.
 
 `patrolHomePresentation.ts` owns the deterministic projection from effective
 autonomy and typed attention evidence into `needs user` versus `can continue`
@@ -1204,15 +1204,16 @@ The durable decision and proof record is
 
 ## Current State
 
-The Patrol 2.0 frontend now uses a decision-first information hierarchy. The
-compact command header owns enabled posture, effective mode, last/next check
-context, manual check, settings, and the secondary mode disclosure. The typed
-attention workbench is the first substantial page surface on desktop and
-mobile. Protected objectives and proof-constrained verified outcomes follow as
-supporting continuity surfaces; empty objectives and empty receipts stay
-compact instead of consuming the prime viewport. Universal governed actions
-and Patrol-specific finding/run records are exposed together through the
-subordinate `Review and history` handoff area.
+The Patrol 2.0 frontend now uses a one-task-at-a-time, decision-first
+information hierarchy. The compact, borderless command row owns enabled
+posture, effective mode, last/next check context, manual check, settings, and
+the secondary mode disclosure without presenting a second primary CTA card.
+The typed attention workbench is the only substantial default page surface on
+desktop and mobile. `Protection` deliberately swaps in retained objectives;
+`Activity` swaps in proof-constrained verified outcomes and the subordinate
+`Review and history` handoff for universal governed actions and Patrol-specific
+finding/run records. Empty continuity surfaces therefore never share the prime
+viewport with current decisions.
 
 The page introduction states the operator job—find the decision, choose the
 next step, and retain a verified record—rather than repeating the command
@@ -1224,17 +1225,18 @@ does not merge governed action records into the attention list or invent an
 attention count; the queue and approval inbox retain their separate canonical
 projections.
 
-The default loaded state is a daily briefing rather than an unframed list. It
-states how many current decisions need the operator, shows the current loaded
-critical-decision and separately canonical approval counts, explains the queue
-ordering, and offers one `Start review` action for the highest-priority item.
-On wide layouts the inbox and a recommended first-decision preview occupy a
-persistent two-pane workspace before selection; selection replaces the preview
-with the full governed context without hiding the inbox. On narrow layouts the
-selected context intentionally replaces the list until `Back to list`, making
-Patrol a true master/detail workflow instead of stacking the detail above a
-second full queue. The command header remains compact so the briefing and first
-decision enter the initial viewport.
+The default loaded state is a full-width decision inbox with one headline that
+states how many current decisions need the operator, one short explanation of
+the ordering, one `Start review` action for the highest-priority item, the
+canonical pending-approval handoff when needed, and refresh. It must not repeat
+the same facts as a metric strip, generic row state, generic `Review` label, or
+empty recommended-item preview. A two-pane workspace appears only after the
+operator selects or deep-links a decision; wide layouts retain the inbox beside
+the full governed context. On narrow layouts the selected context intentionally
+replaces the list until `Back to list`, making Patrol a true master/detail
+workflow instead of stacking the detail above a second full queue. The command
+row remains compact and visually secondary so the inbox and first decisions
+enter the initial viewport.
 
 Selecting the first item starts a bounded review session over the loaded
 decision order. The selected context shows its current position and exposes
@@ -1249,10 +1251,12 @@ that the occurrence will return at the chosen time. Clearing the final item
 returns to the calm inbox with an honest completion announcement.
 
 The attention queue orders genuine operator decisions by severity, actionable
-approval/review state, and latest observation time. Rows expose the severity
-word, lifecycle state, bounded consequence, affected resource, decision label,
-and freshness without repeating full mode-policy prose on every item. Selecting
-an item opens one responsive decision context: the current summary, affected
+approval/review state, and latest observation time. Collapsed rows expose the
+severity word, bounded consequence, affected resource, and freshness; only
+exceptional approval-needed or verification-result work adds another label.
+Lifecycle state remains selected-detail truth instead of a repeated `Open`
+badge, and ordinary queue membership is not restated as `Review` on every row.
+Selecting an item opens one responsive decision context: the current summary, affected
 resource, impact and recommended next step precede governed action review;
 occurrence acknowledgement/suppression, evidence, protection posture, timeline,
 resource navigation, and contextual Assistant explanation remain available

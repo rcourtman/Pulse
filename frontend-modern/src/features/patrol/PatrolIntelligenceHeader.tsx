@@ -301,8 +301,8 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
         class="relative z-[200] mb-3"
       />
 
-      <section class="overflow-hidden rounded-lg border border-border bg-surface shadow-sm">
-        <div class="flex flex-col gap-3 px-4 py-3 sm:px-5 lg:flex-row lg:items-center lg:justify-between">
+      <section class="border-y border-border">
+        <div class="flex flex-col gap-3 px-1 py-2 sm:px-2 lg:flex-row lg:items-center lg:justify-between">
           <div class="flex min-w-0 items-start gap-3">
             <div class="pt-0.5">
               <TogglePrimitive
@@ -359,14 +359,14 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
           <Show when={!state.shouldShowPatrolSetupOnly()}>
             <div class="grid w-full shrink-0 grid-cols-2 gap-2 lg:flex lg:w-auto lg:flex-wrap lg:items-center">
               {renderRunControl(
-                'flex min-h-11 items-center justify-center gap-2 rounded-md border border-blue-600 bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-700 disabled:border-border disabled:bg-surface-alt disabled:text-muted sm:min-h-0',
+                'flex min-h-11 items-center justify-center gap-2 rounded-md border border-border bg-surface px-3 py-1.5 text-sm font-medium text-base-content transition-colors hover:bg-surface-hover disabled:bg-surface-alt disabled:text-muted sm:min-h-0',
               )}
               <Show when={!runBlockedByProviderSetup()}>
                 <A
                   href={settingsTabPath('system-ai-patrol')}
                   aria-label="Open Patrol settings"
                   title="Open Patrol settings"
-                  class="flex min-h-11 items-center justify-center gap-2 rounded-md border border-border px-3 py-1.5 text-sm font-medium text-base-content shadow-sm transition-colors hover:bg-surface-alt sm:min-h-0"
+                  class="flex min-h-11 items-center justify-center gap-2 rounded-md border border-transparent px-3 py-1.5 text-sm font-medium text-muted transition-colors hover:bg-surface-hover hover:text-base-content sm:min-h-0"
                 >
                   <SettingsIcon class="h-4 w-4" />
                   Settings
@@ -376,8 +376,8 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
           </Show>
         </div>
 
-        <details id={PATROL_CONTROL_ANCHOR} class="border-t border-border-subtle px-4 py-2 sm:px-5">
-          <summary class="min-h-11 cursor-pointer text-sm font-medium text-base-content focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 sm:min-h-0">
+        <details id={PATROL_CONTROL_ANCHOR} class="border-t border-border-subtle px-1 py-1 sm:px-2">
+          <summary class="min-h-11 cursor-pointer text-xs font-medium text-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 sm:min-h-0">
             Mode and automation
           </summary>
           <div class="pt-3">

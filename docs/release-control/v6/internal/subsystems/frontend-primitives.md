@@ -772,16 +772,17 @@ assessment semantics, but they must keep those semantics in their governed
 presentation helpers and render them inside the shared neutral Pulse surface
 language rather than introducing page-local verdict bands or nested cards.
 The Patrol operator home composes the shared `PageHeader`, `Button`, `Toggle`,
-`MetadataBadge`, native disclosure, dialog, and neutral bordered-surface
-patterns. Patrol owns the meaning and order of background posture, genuine
-decisions, objectives, verified receipts, and secondary operational records; the
-shared primitive boundary owns keyboard focus, touch targets, responsive
-stacking, and visual consistency. Plan-locked paid-mode discovery is not a
+`MetadataBadge`, native disclosure, dialog, tab, and neutral bordered-surface
+patterns. Patrol owns the meaning of background posture and the mutually
+exclusive `Inbox`, `Protection`, and `Activity` modes; the shared primitive
+boundary owns visible selection, Arrow/Home/End keyboard movement, roving tab
+focus, touch targets, responsive stacking, and visual consistency. Only the
+selected mode's panel is rendered. Plan-locked paid-mode discovery is not a
 daily-page primitive and must not be added beside the effective mode.
-Current API-owned decisions must follow the compact posture header and precede
-objective configuration at every viewport; an empty objective state must not
-push current work below the first useful screen. The compact `Verified outcomes`
-list consumes server-authored Patrol work
+Current API-owned decisions must follow the compact posture row in the default
+Inbox at every viewport. Objective configuration and verified/history surfaces
+belong to their explicit modes rather than following the queue on the same
+canvas. The compact `Verified outcomes` list consumes server-authored Patrol work
 receipts rather than filtering generic history in the browser. It may format
 the canonical capability name and verification time with shared presentation
 helpers, and it reuses the action resource presenter for durable resources that

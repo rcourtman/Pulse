@@ -686,32 +686,60 @@ async function mockAttention(
 
 test("starts from the normal monitor shell and reaches the canonical attention queue", async ({
   page,
-}, testInfo) => {
+}) => {
   await mockAttention(page, "active");
   await page.goto("/", { waitUntil: "domcontentloaded" });
 
-  const patrolNavigation = testInfo.project.name.startsWith("mobile-")
-    ? page
-        .getByRole("navigation", { name: "Mobile navigation" })
-        .getByRole("button", { name: /Patrol/ })
-    : page
-        .getByRole("tab", { name: /Patrol/ })
-        .or(page.getByRole("link", { name: /Patrol/ }));
+  const patrolNavigation =
+    (page.viewportSize()?.width ?? 1280) < 1024
+      ? page
+          .getByRole("navigation", { name: "Mobile navigation" })
+          .getByRole("button", { name: /Patrol/ })
+      : page
+          .getByRole("tab", { name: /Patrol/ })
+          .or(page.getByRole("link", { name: /Patrol/ }));
   await patrolNavigation.click();
 
   await expect(page).toHaveURL(/\/patrol/);
   await expect(
-    page.getByRole("region", { name: "Needs your attention" }),
+    page.getByRole("region", { name: "Patrol decision inbox" }),
   ).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Open CPU pressure on pve-main" }),
   ).toBeVisible();
-  await expect(page.getByText("2 decisions need you")).toBeVisible();
-  if (!testInfo.project.name.startsWith("mobile-")) {
-    await expect(
-      page.getByRole("button", { name: "Review this decision" }),
-    ).toBeVisible();
-  }
+  await expect(
+    page.getByRole("tab", { name: "Inbox", exact: true }),
+  ).toHaveAttribute("aria-selected", "true");
+  await expect(
+    page.getByRole("heading", { name: "Protected outcomes", exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("heading", { name: "Verified outcomes", exact: true }),
+  ).toHaveCount(0);
+
+  await page.getByRole("tab", { name: "Protection", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Protected outcomes", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("region", { name: "Patrol decision inbox" }),
+  ).toHaveCount(0);
+
+  await page.getByRole("tab", { name: "Activity", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Verified outcomes", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Review and history", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Protected outcomes", exact: true }),
+  ).toHaveCount(0);
+
+  await page.getByRole("tab", { name: "Inbox", exact: true }).click();
+  await expect(
+    page.getByRole("region", { name: "Patrol decision inbox" }),
+  ).toBeVisible();
 });
 
 test("makes active operational work primary and preserves the evidence boundary", async ({
@@ -727,8 +755,7 @@ test("makes active operational work primary and preserves the evidence boundary"
       }),
     ),
   ).toBeVisible();
-  const queue = page.getByRole("region", { name: "Needs your attention" });
-  await expect(queue.getByLabel("2 items require review")).toBeVisible();
+  const queue = page.getByRole("region", { name: "Patrol decision inbox" });
   const attentionList = queue.getByRole("list", {
     name: "Patrol attention items",
   });

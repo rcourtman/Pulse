@@ -2519,6 +2519,12 @@ a new API state machine, queue contract, or verification-accounting field.
    attention projection by severity, then actionable review posture, then
    observation recency, but it must preserve every API-owned lifecycle,
    evidence, protection, action, and verification fact in selected detail.
+   The first-party `Inbox`, `Protection`, and `Activity` modes are a mutually
+   exclusive presentation boundary, not API query modes: Inbox consumes the
+   canonical attention projection, Protection consumes retained objectives,
+   and Activity consumes verified receipts plus existing action/finding/run
+   records. Switching panels must not rewrite membership, merge counts, invent
+   lifecycle state, or refetch one dataset as though it represented another.
    Secondary receipt responses that are absent or incomplete may degrade to an
    unavailable or empty supporting panel; they must not unmount the current
    attention workbench or convert missing receipts into successful work
