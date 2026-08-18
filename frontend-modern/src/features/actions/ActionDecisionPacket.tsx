@@ -6,6 +6,7 @@ import {
   formatEvidenceClass,
   formatPolicyAuthority,
   formatPolicyReason,
+  getActionOriginLabel,
   getActionResourcePresentation,
   verificationTruthLabel,
 } from './actionPresentation';
@@ -19,6 +20,7 @@ export const ActionDecisionPacket: Component<{
   const result = () => props.audit.result?.actionResultV2;
   const apt = () => getAPTActionPresentation(props.audit);
   const firstEvidence = () => result()?.verification.evidence?.[0];
+  const originLabel = () => getActionOriginLabel(props.audit.origin);
   const resource = createMemo(() =>
     getActionResourcePresentation(props.audit.request.resourceId, props.audit.resource),
   );
@@ -57,6 +59,14 @@ export const ActionDecisionPacket: Component<{
             <dt class="text-muted">Reason</dt>
             <dd>{props.audit.request.reason}</dd>
           </div>
+          <Show when={originLabel()}>
+            {(label) => (
+              <div>
+                <dt class="text-muted">Origin</dt>
+                <dd class="font-medium">{label()}</dd>
+              </div>
+            )}
+          </Show>
           <Show when={props.audit.plan.preflight?.currentState}>
             <div>
               <dt class="text-muted">Current state</dt>

@@ -23,6 +23,7 @@ import { ActionReviewDialog } from '@/features/actions/ActionReviewDialog';
 import { ACTION_REVIEW_QUERY_PARAM, parseActionReviewId } from '@/features/actions/actionRouting';
 import {
   formatActionName,
+  getActionOriginLabel,
   getActionInboxStatePresentation,
   getActionResourcePresentation,
   getActionsWatchOnlyEmptyState,
@@ -256,6 +257,7 @@ export function Actions() {
                 const resource = () =>
                   getActionResourcePresentation(action.request.resourceId, action.resource);
                 const title = () => formatActionName(action.request.capabilityName);
+                const originLabel = () => getActionOriginLabel(action.origin);
                 return (
                   <li>
                     <button
@@ -275,6 +277,13 @@ export function Actions() {
                             >
                               {state().label}
                             </MetadataBadge>
+                            <Show when={originLabel()}>
+                              {(label) => (
+                                <MetadataBadge tone="info" size="xs" shape="rounded">
+                                  {label()}
+                                </MetadataBadge>
+                              )}
+                            </Show>
                             <span class="truncate text-sm font-semibold text-base-content">
                               {title()}
                             </span>

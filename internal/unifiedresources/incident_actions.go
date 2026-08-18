@@ -11,6 +11,7 @@ const (
 
 func IncidentActionForResource(resource *Resource, incident ResourceIncident, category string) (string, string) {
 	baseType := resourceBaseType(resource)
+	storageResource := isStorageIncidentResource(baseType)
 	switch incident.Code {
 	case "zfs_pool_state":
 		if incident.Severity == storagehealth.RiskCritical {
@@ -55,7 +56,7 @@ func IncidentActionForResource(resource *Resource, incident ResourceIncident, ca
 		}
 		return IncidentUrgencyToday, "Investigate disk health and schedule replacement if degradation continues"
 	case IncidentCategoryAvailability:
-		if baseType == ResourceTypeAgent || baseType == ResourceTypeVM {
+		if !storageResource {
 			if incident.Severity == storagehealth.RiskCritical {
 				return IncidentUrgencyNow, "Restore resource availability immediately"
 			}
@@ -71,7 +72,7 @@ func IncidentActionForResource(resource *Resource, incident ResourceIncident, ca
 		}
 		return IncidentUrgencyToday, "Confirm whether the app should be running, then start it or suppress the alert for intentional downtime"
 	default:
-		if baseType == ResourceTypeAgent || baseType == ResourceTypeVM {
+		if !storageResource {
 			if incident.Severity == storagehealth.RiskCritical {
 				return IncidentUrgencyToday, "Investigate resource health immediately"
 			}
@@ -81,5 +82,18 @@ func IncidentActionForResource(resource *Resource, incident ResourceIncident, ca
 			return IncidentUrgencyToday, "Investigate storage health immediately"
 		}
 		return IncidentUrgencyPlan, "Review storage health and plan corrective action"
+	}
+}
+
+func isStorageIncidentResource(resourceType ResourceType) bool {
+	switch resourceType {
+	case ResourceTypeStorage,
+		ResourceTypePhysicalDisk,
+		ResourceTypeNetworkShare,
+		ResourceTypePBS,
+		ResourceTypeCeph:
+		return true
+	default:
+		return false
 	}
 }

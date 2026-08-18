@@ -204,7 +204,7 @@ describe('PatrolAttentionWorkbench', () => {
     ));
 
   it('renders a plain trustworthy calm state without a proof strip', async () => {
-    const calm = summary();
+    const calm = summary({ evaluatedAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString() });
     apiMocks.getList.mockResolvedValue(listResponse([], calm));
     renderWorkbench();
 
@@ -216,6 +216,17 @@ describe('PatrolAttentionWorkbench', () => {
     ).toBeInTheDocument();
     expect(screen.queryByText(/trust score/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/auto-resolved/i)).not.toBeInTheDocument();
+
+    expect(screen.getByText(/Checked 1d ago/i)).toBeInTheDocument();
+    apiMocks.getList.mockResolvedValue(
+      listResponse(
+        [],
+        summary({ evaluatedAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString() }),
+      ),
+    );
+    await patrolAttentionStore.load('active');
+
+    await waitFor(() => expect(screen.getByText(/Checked 10d ago/i)).toBeInTheDocument());
   });
 
   it('keeps lifecycle filters out of the primary decision surface', async () => {
@@ -529,7 +540,9 @@ describe('PatrolAttentionWorkbench', () => {
           summary({ activeCount: 1, openCount: 1, acknowledgedCount: 1, calm: false }),
         ),
       );
-    apiMocks.getDetail.mockResolvedValueOnce(detail(active)).mockResolvedValue(detail(next));
+    apiMocks.getDetail.mockImplementation((itemId: string) =>
+      Promise.resolve(detail(itemId === active.id ? active : next)),
+    );
     apiMocks.acknowledge.mockResolvedValue({ success: true });
     renderWorkbench();
 
@@ -541,6 +554,20 @@ describe('PatrolAttentionWorkbench', () => {
     expect(await screen.findByText('Decision 1 of 2')).toBeInTheDocument();
     expect(screen.getByTitle('Previous decision')).toBeDisabled();
     expect(screen.getByTitle('Next decision')).toBeEnabled();
+
+    fireEvent.click(screen.getByTitle('Next decision'));
+    expect(
+      await screen.findByRole('complementary', { name: 'Database replication is delayed' }),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Decision 2 of 2')).toBeInTheDocument();
+    expect(screen.getByTitle('Previous decision')).toBeEnabled();
+    expect(screen.getByTitle('Next decision')).toBeDisabled();
+
+    fireEvent.click(screen.getByTitle('Previous decision'));
+    expect(
+      await screen.findByRole('complementary', { name: 'Database VM · Disk pressure' }),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Decision 1 of 2')).toBeInTheDocument();
     fireEvent.click(await screen.findByRole('button', { name: 'Mark reviewed' }));
 
     await waitFor(() => expect(apiMocks.acknowledge).toHaveBeenCalledWith('record-1'));
@@ -732,6 +759,8 @@ describe('PatrolAttentionWorkbench', () => {
     const currentTrigger = await screen.findByRole('button', { name: 'Review action' });
     expect(currentTrigger).not.toBe(trigger);
     expect(screen.getByText(/recorded the action result below/i)).toBeInTheDocument();
+    expect(screen.getByText(/action postcondition was confirmed/i)).toBeInTheDocument();
+    expect(screen.queryByText(/container is healthy/i)).not.toBeInTheDocument();
     expect(
       screen.queryByText(/explicit review and approval before Pulse sends anything/i),
     ).not.toBeInTheDocument();

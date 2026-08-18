@@ -2079,7 +2079,7 @@ describe('AIIntelligence entitlement gating', () => {
     expect(screen.queryByRole('link', { name: 'Open Patrol settings' })).not.toBeInTheDocument();
   });
 
-  it('does not repeat stale coverage caveats after a successful full patrol verified resources', async () => {
+  it('does not repeat stale coverage caveats after a successful full patrol checked resources', async () => {
     hasFeatureMock.mockReturnValue(true);
     licenseStatusMock.mockReturnValue({ subscription_state: 'active' });
     getPatrolStatusMock.mockResolvedValue(
@@ -2188,7 +2188,7 @@ describe('AIIntelligence entitlement gating', () => {
     render(() => <AIIntelligence />);
 
     await waitFor(() => {
-      expect(screen.getByText(/verified 58 resources/i)).toBeInTheDocument();
+      expect(screen.getByText(/checked 58 resources/i)).toBeInTheDocument();
     });
     expect(
       screen.queryByText(/1 warning issue · 2 past regressions · health score 85\/100/),

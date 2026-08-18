@@ -242,6 +242,66 @@ func TestProjectAttentionItemsProducesCurrentCalmEvaluation(t *testing.T) {
 	}
 }
 
+func TestAttentionTitleProducesHumanReadableLabels(t *testing.T) {
+	tests := []struct {
+		name         string
+		alertType    string
+		message      string
+		resourceName string
+		want         string
+	}{
+		{
+			name:         "VMware alarm uses the actual alarm",
+			alertType:    "storage-incident",
+			message:      "Datastore datastore-202 has VMware alarm Datastore latency above threshold (yellow). Affects 2 dependent resources",
+			resourceName: "archive-tier",
+			want:         "Datastore latency above threshold on archive-tier",
+		},
+		{
+			name:         "VMware host status uses product language",
+			alertType:    "resource-incident",
+			message:      "Host has VMware overall status yellow",
+			resourceName: "esxi-07.lab.local",
+			want:         "VMware host health on esxi-07.lab.local",
+		},
+		{
+			name:         "generic incident avoids incident placeholder",
+			alertType:    "resource_incident",
+			message:      "A monitored resource needs attention",
+			resourceName: "router-1",
+			want:         "Infrastructure issue on router-1",
+		},
+		{
+			name:         "Ceph incident names the degraded placement group",
+			alertType:    "resource-incident",
+			message:      "1 PG degraded",
+			resourceName: "Mock Cluster Ceph",
+			want:         "Ceph placement groups degraded on Mock Cluster Ceph",
+		},
+		{
+			name:         "acronyms stay readable",
+			alertType:    "high_cpu_and_zfs_io",
+			resourceName: "database-1",
+			want:         "High CPU and ZFS I/O on database-1",
+		},
+		{
+			name:         "one-word disk type states what is measured",
+			alertType:    "disk",
+			resourceName: "pve1",
+			want:         "Disk usage on pve1",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got := attentionTitle(alerts.Alert{Type: test.alertType, Message: test.message}, test.resourceName)
+			if got != test.want {
+				t.Fatalf("attentionTitle() = %q, want %q", got, test.want)
+			}
+		})
+	}
+}
+
 func attentionTestAlert(
 	id string,
 	state operationaltrust.OperationalState,

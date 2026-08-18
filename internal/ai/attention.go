@@ -478,11 +478,73 @@ func attentionTitle(alert alerts.Alert, resourceName string) string {
 	if alertType == "" {
 		return "Issue on " + resourceName
 	}
+	if incidentTitle := attentionIncidentTitle(alertType, alert.Message); incidentTitle != "" {
+		return incidentTitle + " on " + resourceName
+	}
+	switch strings.ToLower(alertType) {
+	case "usage":
+		if strings.EqualFold(attentionResourceType(alert), "storage") {
+			return "Storage usage on " + resourceName
+		}
+		return "Resource usage on " + resourceName
+	case "cpu":
+		return "CPU usage on " + resourceName
+	case "disk":
+		return "Disk usage on " + resourceName
+	case "memory":
+		return "Memory usage on " + resourceName
+	}
 	words := strings.Fields(strings.NewReplacer("-", " ", "_", " ").Replace(alertType))
 	for i := range words {
-		words[i] = strings.ToUpper(words[i][:1]) + words[i][1:]
+		word := strings.ToLower(words[i])
+		switch word {
+		case "api", "cpu", "dns", "ip", "vm", "zfs":
+			words[i] = strings.ToUpper(word)
+		case "io":
+			words[i] = "I/O"
+		default:
+			words[i] = word
+			if i == 0 {
+				words[i] = strings.ToUpper(word[:1]) + word[1:]
+			}
+		}
 	}
 	return strings.Join(words, " ") + " on " + resourceName
+}
+
+func attentionIncidentTitle(alertType, message string) string {
+	normalizedType := strings.NewReplacer("-", "_", " ", "_").Replace(
+		strings.ToLower(strings.TrimSpace(alertType)),
+	)
+	if normalizedType != "resource_incident" && normalizedType != "storage_incident" {
+		return ""
+	}
+	if strings.Contains(strings.ToLower(message), "pg degraded") {
+		return "Ceph placement groups degraded"
+	}
+
+	const vmwareAlarmMarker = " has VMware alarm "
+	if markerIndex := strings.Index(message, vmwareAlarmMarker); markerIndex >= 0 {
+		issue := strings.TrimSpace(message[markerIndex+len(vmwareAlarmMarker):])
+		for _, suffix := range []string{" (", ". Affects "} {
+			if suffixIndex := strings.Index(issue, suffix); suffixIndex >= 0 {
+				issue = issue[:suffixIndex]
+			}
+		}
+		if issue = strings.TrimSpace(strings.TrimSuffix(issue, ".")); issue != "" {
+			return issue
+		}
+	}
+	if strings.Contains(message, " has VMware overall status ") {
+		if normalizedType == "storage_incident" {
+			return "VMware datastore health"
+		}
+		return "VMware host health"
+	}
+	if normalizedType == "storage_incident" {
+		return "Storage issue"
+	}
+	return "Infrastructure issue"
 }
 
 func attentionResourceType(alert alerts.Alert) string {

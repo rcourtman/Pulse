@@ -1,25 +1,29 @@
 {
   "version": 1,
-  "base_sha": "95c253c4860d704dfdc8b3d743b482182d749fff",
-  "verified_at": "2026-08-18T10:49:01Z",
+  "base_sha": "ac4116e09b85055e281aee3895ba65012e747215",
+  "verified_at": "2026-08-18T11:35:39Z",
   "result": "passed",
   "changed_paths": [
+    "frontend-modern/src/features/actions/ActionDecisionPacket.tsx",
+    "frontend-modern/src/features/actions/actionPresentation.ts",
     "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx",
-    "frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx",
     "frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx",
-    "frontend-modern/src/features/patrol/PatrolObjectivesPanel.tsx"
+    "frontend-modern/src/pages/Actions.tsx",
+    "frontend-modern/src/utils/patrolSummaryPresentation.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx": "42d0e595053546270727bcfe57de37b1f9c6e4c721a2bbc6175335136a4e03b2",
-    "frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx": "eeaecb901bac67f4b2ba2c442a5f669be50ee2a1bb01928340eef4d83da5532d",
-    "frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx": "90a0e1b7b7b75567a6c026d4d6c115b82d06c1f86412f971c0c8989a60562471",
-    "frontend-modern/src/features/patrol/PatrolObjectivesPanel.tsx": "fc03c1905afae9aaa684aecd759cd6e409eee5fb987abcdee5e2c83d850352d1"
+    "frontend-modern/src/features/actions/ActionDecisionPacket.tsx": "4bd177108ab987198c977d1c763a0ca21293d665b71520364eb168a312ac0ac0",
+    "frontend-modern/src/features/actions/actionPresentation.ts": "924734c195777644da82dfe4190eaa18ba4491d75ad67204b3bb39bd9f3eb1c8",
+    "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx": "8b28588b1117a87a7c22944b29446a9b6944abf402b5ea162bbe88635e8a8f35",
+    "frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx": "edb3703a3f28c562fa16b8762c8907651504d8aff0ae006a130c2d3a3afe98be",
+    "frontend-modern/src/pages/Actions.tsx": "7649d29a5a32650265fd745c07eab2e5c42f397a2e0a6da3b5563170daade9dd",
+    "frontend-modern/src/utils/patrolSummaryPresentation.ts": "22416045104e977f1a8ec7995a32a5c5943ae98a02d5bbae5aed0bab29ed2330"
   },
-  "routes": ["/patrol"],
+  "routes": ["/patrol", "/actions"],
   "viewports": [
     {
-      "width": 1440,
-      "height": 900
+      "width": 1280,
+      "height": 720
     },
     {
       "width": 390,
@@ -27,20 +31,20 @@
     }
   ],
   "states": [
-    "Inbox default queue with resource-first decision titles and no selected detail",
-    "Inbox selected decision with compact trust metadata and evidence collapsed",
-    "Inbox selected decision with evidence, protection, and timeline expanded",
-    "Protection empty state with starter outcomes",
-    "Protection create-objective dialog prefilled from a starter outcome",
-    "Activity with verified outcomes, Actions handoff, and Patrol records disclosure",
-    "Watch-only header with its mode explanation and no empty automation disclosure"
+    "Patrol Inbox default queue with canonical checked-resource recency and human-readable incident titles",
+    "Patrol selected decision at the first and second live queue positions on desktop and mobile",
+    "Patrol selected detail with latest-observation age, lifecycle controls, and evidence disclosure collapsed",
+    "Activity with verified outcomes, separate Actions and Patrol-record handoffs, and no collapsed border artifact",
+    "Expanded Patrol records with explicit raw-record versus Inbox-decision relationship copy",
+    "Actions Open queue with Patrol origin badges and the route selected in desktop and mobile navigation",
+    "Actions governed review with Patrol origin repeated in the decision packet"
   ],
   "interactions": [
-    "Used the live in-app Browser to switch between Inbox, Protection, and Activity",
-    "Selected the highest-priority decision and confirmed Assistant, Copy ID, Open resource, lifecycle controls, and progressive disclosure",
-    "Expanded Evidence and history and confirmed the latest evidence, older-observation reveal, protection posture, and timeline",
-    "Used a Protection starter outcome and confirmed the objective dialog opened with the chosen brief prefilled",
-    "Used Claude Code Playwright verification at desktop and phone widths to inspect layout, focus visibility, copy, console output, and dialog behaviour",
-    "Confirmed there are no user-visible semicolons or em dashes and no console errors at either viewport"
+    "Used the live in-app Browser to start review and move from Decision 1 to Decision 2 at desktop and 390-pixel phone widths",
+    "Confirmed previous and next controls, resource-first titles, latest-observation age, and neutral action verification framing",
+    "Opened Activity, inspected the collapsed handoffs, expanded Patrol records, and confirmed decision/history separation",
+    "Opened Actions from Patrol, inspected From Patrol badges, and opened a governed action review to confirm its Origin field",
+    "Verified the mobile document and body widths equal the 390-pixel viewport with no horizontal overflow",
+    "Confirmed the final stable Patrol and Actions pass produced no new console warnings or errors"
   ]
 }

@@ -1246,7 +1246,9 @@ keeps the canonical resource identifier behind a copy affordance, suppresses
 impact text that merely repeats the summary, and groups evidence, protection,
 and lifecycle history behind one deliberate disclosure. Occurrence controls
 remain visible, while durable threshold and finding-management guidance is
-secondary disclosure. This is progressive presentation of the same typed
+secondary disclosure. Selected metadata includes the latest observation age,
+and action-result wording remains capability-neutral rather than assuming every
+offer is a restart or container operation. This is progressive presentation of the same typed
 record, not a loss of evidence or lifecycle truth.
 
 Plan-locked Watch-only installs do not render an empty mode disclosure after
@@ -1256,13 +1258,17 @@ choice controls. The empty Protection mode offers bounded example outcomes
 that prefill the existing objective form without creating an objective until
 the operator reviews and submits it. Activity keeps Actions and Patrol records
 as separate subordinate handoffs, but the Patrol-record handoff does not expose
-the legacy findings count beside the canonical decision count.
+the legacy findings count beside the canonical decision count. Its supporting
+copy explicitly distinguishes raw finding/run history from Inbox decisions, and
+its collapsed container must not leave a decorative border artifact behind.
 
 Selecting the first item starts a bounded review session over the loaded
 decision order. The selected context shows its current position and exposes
 previous/next navigation on desktop and mobile; deterministic identity breaks
 otherwise equal priority ties so polling cannot reshuffle equal decisions
-arbitrarily. The session retains its review order while fresh list responses
+arbitrarily. Position copy is a live projection of the selected identity and
+loaded queue length, not a one-time string captured when detail first mounts.
+The session retains its review order while fresh list responses
 remove settled items and append genuinely new work. Acknowledging an occurrence
 is presented as `Mark reviewed`: on success the item leaves the active inbox,
 Patrol announces the remaining decision count, and advances to the next current
@@ -2238,11 +2244,12 @@ signal from the most recent completed run via
 `PatrolRecencyPresentation.resourcesChecked`, populated by
 `getPatrolRecencyPresentation` from
 `PatrolRunRecord.resources_checked`. The render reads "Last full
-patrol: 3m ago — verified 47 resources" so operators see both
+patrol: 3m ago — checked 47 resources" so operators see both
 temporal recency and coverage in one line. The field stays optional
 (omitted when zero) so a degenerate run that completed without
-checking any resources does not render a misleading "verified 0
-resources" line.
+checking any resources does not render a misleading "checked 0
+resources" line. Coverage never uses `verified`, which is reserved for
+confirmed action outcomes rather than inventory traversal.
 The expanded finding card must also expose a "Copy summary" action
 that produces a paste-ready Markdown summary of the finding (severity,
 title, resource header, description, impact, recommendation,

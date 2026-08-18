@@ -517,10 +517,13 @@ function AttentionList(props: {
   };
 
   return (
-    <div aria-live="polite">
+    <div>
       <Show when={patrolAttentionStore.error()}>
         {(message) => (
-          <div class="m-4 flex items-start gap-3 rounded-md border border-red-200 bg-red-50 p-4 text-red-800 dark:border-red-900 dark:bg-red-950/30 dark:text-red-200">
+          <div
+            role="alert"
+            class="m-4 flex items-start gap-3 rounded-md border border-red-200 bg-red-50 p-4 text-red-800 dark:border-red-900 dark:bg-red-950/30 dark:text-red-200"
+          >
             <AlertTriangleIcon class="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
             <div>
               <h3 class="text-sm font-semibold">Patrol attention is unavailable</h3>
@@ -643,7 +646,10 @@ function AttentionEmptyState(props: { hasQuietWork: boolean }) {
     !patrolAttentionStore.error();
 
   return (
-    <div class="flex min-h-52 flex-col items-center justify-center px-6 py-10 text-center">
+    <div
+      aria-live="polite"
+      class="flex min-h-52 flex-col items-center justify-center px-6 py-10 text-center"
+    >
       <Show
         when={trustworthyCalm() || props.hasQuietWork}
         fallback={
@@ -652,8 +658,8 @@ function AttentionEmptyState(props: { hasQuietWork: boolean }) {
             <h3 class="mt-3 text-sm font-semibold text-base-content">No items in this view</h3>
             <p class="mt-1 max-w-md text-xs leading-5 text-muted">
               {summary()?.coverageState === 'partial'
-                ? 'The lifecycle queue is empty, but protection context is incomplete. Pulse is not treating that gap as proof of health.'
-                : 'Choose another lifecycle filter or refresh the current evaluation.'}
+                ? 'The Inbox is empty, but protection context is incomplete. Pulse is not treating that gap as proof of health.'
+                : 'Refresh the Inbox to check the current evaluation.'}
             </p>
           </>
         }
@@ -665,7 +671,8 @@ function AttentionEmptyState(props: { hasQuietWork: boolean }) {
             ? 'Patrol can continue with the current issues under this mode.'
             : 'The current operational evaluation has no active items.'}
           <Show when={summary()?.evaluatedAt}>
-            {(evaluatedAt) => ` Checked ${formatRelativeTime(evaluatedAt(), { compact: true })}.`}
+            {' Checked '}
+            {formatRelativeTime(summary()!.evaluatedAt, { compact: true })}.
           </Show>
         </p>
       </Show>
@@ -796,7 +803,7 @@ function AttentionDetail(props: {
           </button>
           <p class="text-[11px] font-semibold uppercase tracking-wider text-muted">
             <Show when={props.queuePosition()} fallback="Decision context">
-              {(position) => `Decision ${position()} of ${props.queueCount()}`}
+              Decision {props.queuePosition()} of {props.queueCount()}
             </Show>
           </p>
           <div class="hidden items-center gap-1 lg:flex">
@@ -878,6 +885,10 @@ function AttentionDetail(props: {
                 <EvidenceLabel item={loaded().item} detail />
                 <span aria-hidden="true">·</span>
                 <ProtectionLabel item={loaded().item} detail />
+                <span aria-hidden="true">·</span>
+                <span>
+                  Last seen {formatRelativeTime(loaded().item.lastObservedAt, { compact: true })}
+                </span>
               </div>
               <p class="mt-3 text-sm leading-6 text-base-content">
                 {loaded().item.plainLanguageSummary}
@@ -1335,11 +1346,11 @@ function ActionVerificationMessage(props: { state: AttentionItem['verificationSt
       case 'pending':
         return 'The action is awaiting a decision, execution, or verification.';
       case 'succeeded':
-        return 'The restart postcondition was confirmed. This issue stays open until fresh health evidence shows the container is healthy.';
+        return 'The action postcondition was confirmed. This issue stays open until fresh health evidence confirms recovery.';
       case 'failed':
-        return 'The restart did not satisfy its postcondition. The issue remains open.';
+        return 'The action did not satisfy its postcondition. The issue remains open.';
       case 'unknown':
-        return 'Pulse could not conclusively verify the restart. The issue remains open.';
+        return 'Pulse could not conclusively verify the action. The issue remains open.';
       default:
         return '';
     }

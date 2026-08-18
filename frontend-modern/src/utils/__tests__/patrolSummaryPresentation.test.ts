@@ -837,7 +837,7 @@ describe('getPatrolSummaryPresentation', () => {
     });
   });
 
-  it('labels completed Patrol recency as the last check', () => {
+  it('labels completed Patrol recency as the last check without claiming verified outcomes', () => {
     expect(
       getPatrolRecencyPresentation({
         runs: [
@@ -875,7 +875,7 @@ describe('getPatrolSummaryPresentation', () => {
       label: 'Last check',
       timestamp: '2026-03-12T09:57:00Z',
       resourcesChecked: 58,
-      resourcesCheckedLabel: 'verified 58 resources',
+      resourcesCheckedLabel: 'checked 58 resources',
     });
   });
 

@@ -1,4 +1,5 @@
 import type {
+  ActionAuditOrigin,
   ActionAuditRecord,
   ActionResourceReference,
   ActionAuditState,
@@ -19,6 +20,24 @@ export const formatActionName = (value: string): string =>
           .replace(/[._-]+/g, ' ')
           .trim()
           .replace(/\b\w/g, (letter) => letter.toUpperCase());
+
+export const getActionOriginLabel = (origin?: ActionAuditOrigin): string | undefined => {
+  const surface = origin?.surface.trim().toLowerCase();
+  if (!surface) return undefined;
+  if (
+    surface === 'operational_trust_attention' ||
+    surface === 'patrol_control' ||
+    surface === 'pulse_patrol' ||
+    surface === 'patrol'
+  ) {
+    return 'From Patrol';
+  }
+  if (surface === 'pulse_assistant' || surface === 'assistant' || surface === 'chat') {
+    return 'From Assistant';
+  }
+  if (surface === 'mcp' || surface === 'pulse_mcp') return 'From MCP';
+  return 'From Pulse';
+};
 
 export interface ActionInboxStatePresentation {
   accentClass: string;

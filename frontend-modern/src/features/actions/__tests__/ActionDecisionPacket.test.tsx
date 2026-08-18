@@ -19,6 +19,12 @@ const audit: ActionAuditRecord = {
     requestedBy: 'ui:docker-page',
   },
   resource: { id: 'docker:container:edge', name: 'Edge proxy', type: 'app-container' },
+  origin: {
+    surface: 'operational_trust_attention',
+    findingId: 'finding-1',
+    investigationId: 'investigation-1',
+    proposalId: 'proposal-1',
+  },
   plan: {
     actionId: 'action-1',
     requestId: 'request-1',
@@ -85,6 +91,8 @@ describe('ActionDecisionPacket', () => {
     render(() => <ActionDecisionPacket audit={audit} />);
     expect(screen.getByText('Edge proxy')).toBeInTheDocument();
     expect(screen.getByText('docker:container:edge')).toBeInTheDocument();
+    expect(screen.getByText('Origin')).toBeInTheDocument();
+    expect(screen.getByText('From Patrol')).toBeInTheDocument();
     expect(screen.getByText('Policy evidence')).toBeInTheDocument();
     expect(screen.getByText(/2 authorities checked at planning/)).toBeInTheDocument();
     expect(screen.getByText('Capability safety policy')).not.toBeVisible();

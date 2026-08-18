@@ -2653,7 +2653,13 @@ announces the remaining count and advances to the next current item, and the
 final settled item returns to the calm inbox. Lifecycle copy must explain that
 review removes one occurrence from today's inbox while suppression is bounded;
 generic backend verbs must not leave the user guessing whether the alert was
-resolved, hidden permanently, or merely recorded as seen.
+resolved, hidden permanently, or merely recorded as seen. Both the position
+label and calm evaluation age are reactive text nodes so detail navigation and
+refresh cannot leave their first-render values frozen. The selected metadata
+keeps latest-observation age visible, action verification copy stays generic
+across capabilities, and the list itself is not a broad live region; only
+errors, calm/empty transitions, and explicit completion announcements receive
+scoped assistive announcement semantics.
 
 The selected attention detail may compose the shared Actions review for an
 eligible backend-authored offer. The detail owns only the expected
@@ -5772,7 +5778,10 @@ universal audit records originating from Patrol, Assistant, MCP, or manual
 controls. While that route is open, desktop and mobile navigation select
 Actions and the browser title identifies `Actions`. The first-class navigation
 entry composes the existing shared review dialog, route, API client, and durable
-action identity rather than creating another action client.
+action identity rather than creating another action client. When the trusted
+audit origin is present, both the queue row and decision packet show bounded
+product attribution such as `From Patrol`; unknown first-party surfaces fall
+back to `From Pulse`, and absent origin remains absent rather than guessed.
 
 ### Protection posture presentation boundary
 

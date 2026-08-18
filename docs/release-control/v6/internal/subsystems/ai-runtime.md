@@ -4223,7 +4223,12 @@ projection over alert-owned operational records, transition timelines,
 evidence envelopes, and recovery-owned protection postures. It may order,
 filter, paginate, summarize, and shape selected Assistant context, but it must
 not create a second writable lifecycle or infer a healthy state when lifecycle
-coverage is unavailable. `internal/ai/patrol_metrics.go` exports only
+coverage is unavailable. The projection also owns customer-facing attention
+titles: provider alarm messages yield their bounded alarm subject, generic
+resource/storage incident types become plain issue language, and known
+acronyms such as CPU, ZFS, and I/O retain their canonical casing. Clients must
+not receive machine-title-cased placeholders such as `Resource Incident` and
+repair them independently. `internal/ai/patrol_metrics.go` exports only
 low-cardinality lifecycle-state counts, queue age, acknowledgement time, and
 calm-evaluation age; raw resource IDs are forbidden as metric labels.
 

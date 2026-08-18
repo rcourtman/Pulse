@@ -1695,7 +1695,10 @@ served clones. Proof: `TestClonedResourcesPreservePlatformAdmission` and
     `migrateActionAuditsSchema`) and round-tripped through
     `scanActionAuditRecord`. Origin identifies which internal surface
     proposed the action (e.g. Patrol) so decisions and terminal outcomes
-    can be reconciled back onto that surface's records. It is set only by
+    can be reconciled back onto that surface's records. The Actions queue and
+    decision packet render that trusted surface as bounded product copy such as
+    `From Patrol`; they do not expose an internal surface token or invent a
+    return link when origin metadata lacks a canonical route. It is set only by
     in-process planning callers through the action lifecycle service's
     plan options; the public `POST /api/actions/plan` body must never be
     able to claim a first-party origin. `NormalizeActionOrigin` trims
@@ -1720,6 +1723,11 @@ served clones. Proof: `TestClonedResourcesPreservePlatformAdmission` and
     `TestSQLiteStoreActionAuditOriginRoundTrip`,
     `TestSQLiteActionAuditOriginOperationalRecordReader`, and the matching
     memory/batch reader tests in `internal/unifiedresources/store_test.go`.
+    Incident next-step fallback follows the same canonical resource boundary:
+    storage guidance is reserved for storage, physical-disk, network-share,
+    PBS, and Ceph resources. Network and every other non-storage type receive
+    neutral resource-health guidance rather than being misclassified as
+    storage merely because they are not a host or VM.
 27. Keep API-added TrueNAS systems keyed by the configured connection,
     never by snapshot-reported identity. `systemSourceID` in
     `internal/truenas/provider.go` scopes the system source ID (and every

@@ -3924,7 +3924,10 @@ next selection from the refreshed typed membership. It must not optimistically
 author lifecycle state, keep acknowledged/suppressed records in the active
 inbox, or turn review progress into a second queue API. Newly returned active
 items may be appended to the in-progress review session without changing their
-server-authored identity or trust fields.
+server-authored identity or trust fields. Visible queue position and calm-state
+evaluation age must remain reactive to those refreshed typed projections; a
+client must not capture either accessor as mount-time copy and then display a
+stale position or evaluation timestamp.
 
 Lifecycle read failure returns a typed unavailable response and never a
 synthetic zero or calm state. Protection lookup failure may return lifecycle

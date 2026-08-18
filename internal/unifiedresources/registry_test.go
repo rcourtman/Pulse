@@ -6175,3 +6175,25 @@ func TestRegistryResourcesReportPlatformAdmission(t *testing.T) {
 		t.Fatalf("no other platform should be admitted, got %+v", admission)
 	}
 }
+
+func TestIncidentActionFallbackKeepsNetworkAndStorageGuidanceDistinct(t *testing.T) {
+	warning := ResourceIncident{Code: "generic", Severity: storagehealth.RiskWarning}
+
+	_, networkAction := IncidentActionForResource(
+		&Resource{ID: "network-1", Type: ResourceTypeNetwork},
+		warning,
+		IncidentCategoryHealth,
+	)
+	if networkAction != "Review resource health and plan corrective action" {
+		t.Fatalf("network action = %q, want neutral resource guidance", networkAction)
+	}
+
+	_, storageAction := IncidentActionForResource(
+		&Resource{ID: "storage-1", Type: ResourceTypeStorage},
+		warning,
+		IncidentCategoryHealth,
+	)
+	if storageAction != "Review storage health and plan corrective action" {
+		t.Fatalf("storage action = %q, want storage guidance", storageAction)
+	}
+}

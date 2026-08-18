@@ -1106,7 +1106,7 @@ describe('getPatrolRecencyPresentation — timestamp fallback logic', () => {
 });
 
 describe('getPatrolRecencyPresentation — resourcesCheckedLabel', () => {
-  it('uses "verified 1 resource" (singular) for a successful full run with one resource', () => {
+  it('uses "checked 1 resource" (singular) for a successful full run with one resource', () => {
     expect(
       getPatrolRecencyPresentation({
         runs: [
@@ -1122,7 +1122,7 @@ describe('getPatrolRecencyPresentation — resourcesCheckedLabel', () => {
       label: 'Last check',
       timestamp: '2026-07-10T09:05:00Z',
       resourcesChecked: 1,
-      resourcesCheckedLabel: 'verified 1 resource',
+      resourcesCheckedLabel: 'checked 1 resource',
     });
   });
 

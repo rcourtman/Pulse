@@ -514,8 +514,7 @@ function formatRecencyResourcesCheckedLabel(run: PatrolRunRecord): string | unde
     return undefined;
   }
 
-  const verb = isFullPatrolRun(run) && !hasRunErrors(run) ? 'verified' : 'checked';
-  return `${verb} ${resourcesChecked} resource${resourcesChecked === 1 ? '' : 's'}`;
+  return `checked ${resourcesChecked} resource${resourcesChecked === 1 ? '' : 's'}`;
 }
 
 export function getPatrolAssessmentPresentation(args: {

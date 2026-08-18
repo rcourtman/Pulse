@@ -195,7 +195,7 @@ export function PatrolIntelligenceSurface() {
             ref={findingsPanel}
             id="patrol-operational-records"
             tabindex="-1"
-            class="rounded-lg border border-border bg-surface"
+            class={`rounded-lg bg-surface ${findingsOpen() ? 'border border-border' : 'border-0'}`}
             open={findingsOpen()}
             onToggle={(event) => setFindingsOpen(event.currentTarget.open)}
           >
@@ -203,6 +203,10 @@ export function PatrolIntelligenceSurface() {
             <div
               class={`space-y-4 border-t border-border p-4 sm:p-5 ${!state.patrolEnabledLocal() ? 'opacity-50 pointer-events-none' : ''}`}
             >
+              <p class="text-xs leading-5 text-muted">
+                Patrol records keep raw check findings and run history. The Inbox separately lists
+                items that currently need a decision.
+              </p>
               <PatrolIntelligenceWorkspace state={state} />
             </div>
           </details>
