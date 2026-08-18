@@ -1,17 +1,17 @@
 {
   "version": 1,
-  "base_sha": "6372b28862022ecb7e94968fa6fa7c3292160ed4",
-  "verified_at": "2026-08-18T06:29:12Z",
+  "base_sha": "c6cafa6e2588050bc6acd8f3a224144a8523c9f9",
+  "verified_at": "2026-08-18T06:45:34Z",
   "result": "passed",
   "changed_paths": [
     "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx",
-    "frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx",
-    "frontend-modern/src/utils/patrolPagePresentation.ts"
+    "frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx",
+    "frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx": "2e50d9c6ca55c62f326c07b243e5682fda8da8af1b88a3077583e6478d4499bc",
-    "frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx": "32d7dcb618987e5843175a4870a5e5a7ac1aba8442f2dfff881d4e0fcea1e886",
-    "frontend-modern/src/utils/patrolPagePresentation.ts": "f8a011a2348b78cb837a5d92fb65bad1ffb6aab837cbbccc84927ec69d0cea29"
+    "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx": "84e4631c4b2c651667a9bdd4b612eee6a96b053df6ac72293789f3b957868760",
+    "frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx": "242e527ff6379f7d38a5f0649a551c49426b2ef4bc4b8efa20ecae0b85bd7d2b",
+    "frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx": "79701a9a23208d1bb6f4c1711a0aa64b12ff3b5ad12f65a8448b2de0e5e3c3aa"
   },
   "routes": [
     "/patrol"
@@ -19,7 +19,7 @@
   "viewports": [
     {
       "width": 1280,
-      "height": 800
+      "height": 720
     },
     {
       "width": 390,
@@ -27,15 +27,17 @@
     }
   ],
   "states": [
-    "Live Watch only Patrol page with 12 attention decisions and one governed approval waiting",
-    "Selected critical attention item with typed decision context, lifecycle, evidence, protection, timeline, resource, and Assistant handoff",
-    "Narrow selected-detail layout with explicit Back to list navigation and no horizontal overflow",
-    "Current-coverage calm state and attention transport failure state without synthetic health"
+    "Live Watch only daily briefing with 15 current decisions, one critical item, and one governed approval waiting",
+    "Desktop start state with the compact Patrol toolbar, priority-ordered inbox, and recommended first-decision preview in the initial viewport",
+    "Selected critical item in the persistent desktop inbox-and-context workspace",
+    "Narrow master/detail state with the inbox hidden until explicit Back to list navigation",
+    "Current-coverage calm state, transport failure state, and attached availability failure without synthetic health"
   ],
   "interactions": [
-    "Used the live in-app Browser to confirm the operator-job introduction and Review 1 approval handoff beside Refresh",
-    "Opened a critical Docker decision and inspected the responsive master-detail hierarchy and governed controls",
-    "Ran the Patrol attention workbench journey across Chromium, mobile Chrome, and mobile Safari; 18 checks passed after updating the breakpoint-specific close selector",
-    "Verified the 390x844 Back to list path clears the deep link, restores focus to the originating row, survives reload, and does not overflow"
+    "Used the live in-app Browser to inspect the complete briefing start state and confirm current-work counters, Start review, approval handoff, inbox, and recommended next case",
+    "Activated Start review and inspected the selected desktop context with lifecycle, evidence, protection, resource, and Assistant controls",
+    "Passed all 18 attention-workbench scenarios across Chromium, mobile Chrome, and mobile Safari",
+    "Verified at 390x844 that selection hides the inbox, Back to list restores it and row focus, the deep link survives reload, and the page does not overflow",
+    "Passed the seven monitor-first and attached-availability browser scenarios in Chromium"
   ]
 }

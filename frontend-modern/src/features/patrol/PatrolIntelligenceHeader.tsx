@@ -302,7 +302,7 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
       />
 
       <section class="overflow-hidden rounded-lg border border-border bg-surface shadow-sm">
-        <div class="flex flex-col gap-4 px-4 py-4 sm:px-5 lg:flex-row lg:items-start lg:justify-between">
+        <div class="flex flex-col gap-3 px-4 py-3 sm:px-5 lg:flex-row lg:items-center lg:justify-between">
           <div class="flex min-w-0 items-start gap-3">
             <div class="pt-0.5">
               <TogglePrimitive
@@ -322,16 +322,16 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
                   {selectedAutonomyExperience().label}
                 </span>
               </div>
-              <p class="mt-1 max-w-3xl text-sm leading-5 text-muted">
-                {state.patrolEnabledLocal()
-                  ? selectedAutonomyExperience().summary
-                  : 'Turn Patrol on when you want it to watch your estate in the background.'}
-              </p>
+              <Show when={!state.patrolEnabledLocal()}>
+                <p class="mt-1 max-w-3xl text-sm leading-5 text-muted">
+                  Turn Patrol on when you want it to watch your estate in the background.
+                </p>
+              </Show>
               <Show when={!state.shouldShowPatrolSetupOnly() && triggerStatusSummary()}>
                 <p class="mt-1 text-xs leading-5 text-muted">{triggerStatusSummary()}</p>
               </Show>
               <Show when={!state.shouldShowPatrolSetupOnly() && recency().timestamp}>
-                <div class="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs leading-5 text-muted">
+                <div class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs leading-5 text-muted">
                   <span>
                     {recency().label}:{' '}
                     {formatRelativeTime(recency().timestamp, {
@@ -376,7 +376,7 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
           </Show>
         </div>
 
-        <details id={PATROL_CONTROL_ANCHOR} class="border-t border-border-subtle px-4 py-3 sm:px-5">
+        <details id={PATROL_CONTROL_ANCHOR} class="border-t border-border-subtle px-4 py-2 sm:px-5">
           <summary class="min-h-11 cursor-pointer text-sm font-medium text-base-content focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 sm:min-h-0">
             Mode and automation
           </summary>

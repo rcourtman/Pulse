@@ -28,7 +28,7 @@ export function PatrolIntelligenceSurface() {
   };
 
   return (
-    <div class="space-y-5 lg:space-y-6">
+    <div class="space-y-4 lg:space-y-5">
       <PatrolIntelligenceHeader state={state} />
       <PatrolIntelligenceBanners state={state} />
       <PatrolAttentionWorkbench

@@ -232,6 +232,11 @@ describe('PatrolAttentionWorkbench', () => {
     expect(
       await screen.findByRole('heading', { name: 'Needs your attention' }),
     ).toBeInTheDocument();
+    expect(screen.getByText('1 decision needs you')).toBeInTheDocument();
+    expect(screen.getByText("Today's Patrol briefing")).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Decision inbox' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Start review' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Review this decision' })).toBeInTheDocument();
     expect(
       screen.getByRole('button', { name: 'Open Disk pressure on Database VM' }),
     ).toBeInTheDocument();
@@ -300,7 +305,9 @@ describe('PatrolAttentionWorkbench', () => {
       await screen.findByRole('heading', { name: 'Nothing needs you right now' }),
     ).toBeInTheDocument();
     expect(
-      screen.getByText(/1 other current issue does not require a decision/i),
+      screen.getByText(
+        /1 other current issue is continuing without a decision under Safe auto-fix/i,
+      ),
     ).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Open Disk pressure/ })).not.toBeInTheDocument();
   });

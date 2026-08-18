@@ -128,11 +128,20 @@ export function PatrolAttentionWorkbench(
       props.autonomyLocked ?? false,
     ),
   );
+  const sortedDecisions = createMemo(() => sortPatrolAttentionDecisions(attention().needsUser));
   const visibleDecisions = createMemo(() =>
-    showAllDecisions()
-      ? sortPatrolAttentionDecisions(attention().needsUser)
-      : sortPatrolAttentionDecisions(attention().needsUser).slice(0, PRIMARY_DECISION_LIMIT),
+    showAllDecisions() ? sortedDecisions() : sortedDecisions().slice(0, PRIMARY_DECISION_LIMIT),
   );
+  const highestPriorityDecision = createMemo(() => sortedDecisions()[0]);
+  const criticalDecisionCount = createMemo(
+    () => attention().needsUser.filter((decision) => decision.item.severity === 'critical').length,
+  );
+  const briefingHeadline = createMemo(() => {
+    if (patrolAttentionStore.loading() && !summary()) return 'Building your current briefing';
+    const count = attention().needsUser.length;
+    if (count === 0) return 'No decisions are waiting';
+    return `${count} ${count === 1 ? 'decision needs' : 'decisions need'} you`;
+  });
 
   const loadCurrentFilter = () => patrolAttentionStore.load(patrolAttentionStore.filter());
   const scrollDetailIntoView = () => {
@@ -242,81 +251,185 @@ export function PatrolAttentionWorkbench(
   return (
     <section
       aria-labelledby="patrol-attention-heading"
-      class="overflow-hidden rounded-lg border border-border bg-surface shadow-sm"
+      class="overflow-hidden rounded-xl border border-border bg-surface shadow-sm"
     >
-      <div class="border-b border-border px-4 py-4 sm:px-5">
-        <div class="flex flex-wrap items-start justify-between gap-3">
-          <div class="min-w-0">
-            <div class="flex flex-wrap items-center gap-2">
-              <h2 id="patrol-attention-heading" class="text-base font-semibold text-base-content">
-                Needs your attention
-              </h2>
-              <Show when={summary()}>
-                <MetadataBadge
-                  tone={attention().needsUser.length > 0 ? 'warning' : 'success'}
-                  size="sm"
-                  shape="rounded"
-                  aria-label={decisionCountLabel()}
-                >
-                  {attention().needsUser.length} to review
-                </MetadataBadge>
-              </Show>
-            </div>
-            <p class="mt-1 max-w-3xl text-sm leading-5 text-muted">
-              {autonomyExperience().needsYouDescription}
+      <div class="border-b border-border bg-blue-50/50 px-4 py-5 dark:bg-blue-950/20 sm:px-6 sm:py-6">
+        <div class="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+          <div class="min-w-0 flex-1">
+            <p class="text-[11px] font-semibold uppercase tracking-[0.16em] text-blue-700 dark:text-blue-300">
+              Today's Patrol briefing
+            </p>
+            <h2
+              id="patrol-attention-heading"
+              class="mt-2 text-base font-semibold text-base-content"
+            >
+              Needs your attention
+            </h2>
+            <p class="mt-1 text-2xl font-semibold tracking-tight text-base-content sm:text-3xl">
+              {briefingHeadline()}
+            </p>
+            <p class="mt-2 max-w-3xl text-sm leading-6 text-muted">
+              {attention().needsUser.length > 0
+                ? 'Patrol has already ordered the queue by severity, actionability, and the freshest evidence.'
+                : autonomyExperience().needsYouDescription}
             </p>
           </div>
-          <div class="flex flex-wrap items-center gap-2">
-            <Show when={(props.pendingActionCount ?? 0) > 0}>
-              <ButtonLink href="/actions" variant="primary" size="sm" class="gap-1.5">
-                <ClipboardCheckIcon class="h-4 w-4" aria-hidden="true" />
-                Review {props.pendingActionCount}{' '}
-                {props.pendingActionCount === 1 ? 'approval' : 'approvals'}
-              </ButtonLink>
+          <div class="w-full lg:w-[32rem]">
+            <div class="flex flex-wrap items-center gap-2 lg:justify-end">
+              <Show when={!selectedItemId() && highestPriorityDecision()}>
+                {(decision) => (
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    class="gap-1.5"
+                    onClick={() => selectItem(decision().item.id)}
+                  >
+                    Start review
+                    <ChevronRightIcon class="h-4 w-4" aria-hidden="true" />
+                  </Button>
+                )}
+              </Show>
+              <Show when={(props.pendingActionCount ?? 0) > 0}>
+                <ButtonLink href="/actions" variant="secondary" size="sm" class="gap-1.5">
+                  <ClipboardCheckIcon class="h-4 w-4" aria-hidden="true" />
+                  Review {props.pendingActionCount}{' '}
+                  {props.pendingActionCount === 1 ? 'approval' : 'approvals'}
+                </ButtonLink>
+              </Show>
+              <Button
+                variant="ghost"
+                size="sm"
+                class="gap-1.5"
+                onClick={() => void loadCurrentFilter()}
+                disabled={patrolAttentionStore.loading()}
+                aria-label="Refresh Patrol attention"
+              >
+                <RefreshIcon
+                  class={`h-4 w-4 ${patrolAttentionStore.loading() ? 'motion-safe:animate-spin' : ''}`}
+                  aria-hidden="true"
+                />
+                Refresh
+              </Button>
+            </div>
+            <Show when={summary()}>
+              <div
+                class="mt-4 grid grid-cols-3 overflow-hidden rounded-lg border border-border bg-surface/80 shadow-sm"
+                aria-label={decisionCountLabel()}
+              >
+                <div class="px-3 py-3 sm:px-4">
+                  <span class="block text-xl font-semibold text-red-700 dark:text-red-300">
+                    {criticalDecisionCount()}
+                  </span>
+                  <span class="mt-0.5 block text-[11px] font-medium uppercase tracking-wide text-muted">
+                    Critical
+                  </span>
+                </div>
+                <div class="border-l border-border px-3 py-3 sm:px-4">
+                  <span class="block text-xl font-semibold text-base-content">
+                    {attention().needsUser.length}
+                  </span>
+                  <span class="mt-0.5 block text-[11px] font-medium uppercase tracking-wide text-muted">
+                    Decisions
+                  </span>
+                </div>
+                <div class="border-l border-border px-3 py-3 sm:px-4">
+                  <span class="block text-xl font-semibold text-amber-700 dark:text-amber-300">
+                    {props.pendingActionCount ?? 0}
+                  </span>
+                  <span class="mt-0.5 block text-[11px] font-medium uppercase tracking-wide text-muted">
+                    Approvals
+                  </span>
+                </div>
+              </div>
             </Show>
-            <Button
-              variant="secondary"
-              size="sm"
-              class="gap-1.5"
-              onClick={() => void loadCurrentFilter()}
-              disabled={patrolAttentionStore.loading()}
-              aria-label="Refresh Patrol attention"
-            >
-              <RefreshIcon
-                class={`h-4 w-4 ${patrolAttentionStore.loading() ? 'motion-safe:animate-spin' : ''}`}
-                aria-hidden="true"
-              />
-              Refresh
-            </Button>
           </div>
         </div>
         <Show when={attention().quiet.length > 0}>
-          <p class="mt-3 rounded-md border border-border-subtle bg-surface-alt/40 px-3 py-2 text-xs leading-5 text-muted">
+          <p class="mt-3 text-xs leading-5 text-muted">
             {attention().quiet.length} other current{' '}
-            {attention().quiet.length === 1 ? 'issue does' : 'issues do'} not require a decision.{' '}
-            {autonomyExperience().quietWorkDescription}
+            {attention().quiet.length === 1 ? 'issue is' : 'issues are'} continuing without a
+            decision under {autonomyExperience().label}.
           </p>
         </Show>
       </div>
 
       <div
-        class={`grid min-w-0 ${selectedItemId() ? 'lg:grid-cols-[minmax(20rem,0.82fr)_minmax(0,1.18fr)]' : ''}`}
+        class={`grid min-w-0 ${attention().needsUser.length > 0 ? 'lg:grid-cols-[minmax(20rem,0.78fr)_minmax(0,1.22fr)]' : ''}`}
       >
         <div
-          class={`min-w-0 ${selectedItemId() ? 'border-b border-border lg:max-h-[48rem] lg:overflow-y-auto lg:border-b-0 lg:border-r' : ''}`}
+          class={`min-w-0 ${selectedItemId() ? 'hidden lg:block' : ''} ${attention().needsUser.length > 0 ? 'lg:max-h-[52rem] lg:overflow-y-auto lg:border-r lg:border-border' : ''}`}
         >
+          <Show when={attention().needsUser.length > 0}>
+            <div class="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-border bg-surface/95 px-4 py-3 backdrop-blur sm:px-5">
+              <div>
+                <h3 class="text-sm font-semibold text-base-content">Decision inbox</h3>
+                <p class="mt-0.5 text-[11px] text-muted">Highest priority first</p>
+              </div>
+              <MetadataBadge tone="neutral" size="xs" shape="rounded">
+                {attention().needsUser.length} open
+              </MetadataBadge>
+            </div>
+          </Show>
           <AttentionList
             decisions={visibleDecisions()}
             selectedItemId={selectedItemId()}
             itemButtons={itemButtons}
             onSelect={selectItem}
           />
+          <Show when={attention().needsUser.length > PRIMARY_DECISION_LIMIT}>
+            <div class="border-t border-border px-4 py-3 text-center sm:px-5">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setShowAllDecisions((current) => !current)}
+              >
+                {showAllDecisions()
+                  ? 'Show fewer decisions'
+                  : `Show all ${attention().needsUser.length} decisions`}
+              </Button>
+            </div>
+          </Show>
         </div>
-        <Show when={selectedItemId()}>
+        <Show
+          when={selectedItemId()}
+          fallback={
+            <Show when={highestPriorityDecision()}>
+              {(decision) => (
+                <div class="hidden min-h-[30rem] flex-col items-start justify-start bg-surface-alt/20 px-8 py-8 text-left lg:flex">
+                  <span class="inline-flex h-12 w-12 items-center justify-center rounded-xl border border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-300">
+                    <SparklesIcon class="h-5 w-5" aria-hidden="true" />
+                  </span>
+                  <p class="mt-5 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">
+                    Start here
+                  </p>
+                  <h3 class="mt-2 max-w-lg text-lg font-semibold text-base-content">
+                    {decision().item.title}
+                  </h3>
+                  <p class="mt-2 max-w-lg text-sm leading-6 text-muted">
+                    {decision().item.plainLanguageSummary}
+                  </p>
+                  <Button
+                    variant="primary"
+                    size="md"
+                    class="mt-5 gap-2"
+                    onClick={() => selectItem(decision().item.id)}
+                  >
+                    Review this decision
+                    <ChevronRightIcon class="h-4 w-4" aria-hidden="true" />
+                  </Button>
+                  <p class="mt-4 max-w-md text-xs leading-5 text-muted">
+                    Patrol chose this from severity, available action, and evidence recency. It will
+                    not make a change from this screen without the governed action flow.
+                  </p>
+                </div>
+              )}
+            </Show>
+          }
+        >
           <div
             ref={detailPanel}
             tabindex="-1"
-            class="order-first min-w-0 scroll-mt-4 lg:order-none lg:max-h-[48rem] lg:overflow-y-auto"
+            class="order-first min-w-0 scroll-mt-4 lg:order-none lg:max-h-[52rem] lg:overflow-y-auto"
           >
             <AttentionDetail
               detail={selectedDetail()}
@@ -340,19 +453,6 @@ export function PatrolAttentionWorkbench(
           </div>
         </Show>
       </div>
-      <Show when={attention().needsUser.length > PRIMARY_DECISION_LIMIT}>
-        <div class="border-t border-border px-4 py-3 text-center sm:px-5">
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => setShowAllDecisions((current) => !current)}
-          >
-            {showAllDecisions()
-              ? 'Show fewer decisions'
-              : `Show all ${attention().needsUser.length} decisions`}
-          </Button>
-        </div>
-      </Show>
       <ActionReviewDialog
         detail={actionDetail()}
         onClose={closeActionReview}

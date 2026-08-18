@@ -2620,6 +2620,16 @@ governed work, the attention header may render a primary `/actions` handoff
 beside its secondary refresh action. That handoff displays the action count but
 does not combine it with the attention badge or list membership.
 
+The attention shell uses one responsive master/detail primitive. Its daily
+briefing owns the operator headline, three compact current-work counters, and a
+single highest-priority start action. Desktop keeps the decision inbox visible
+beside either the recommended-first-decision preview or selected detail; mobile
+hides the inbox while detail is selected and restores it before returning focus
+to the source row. Empty preview space must contain the recommended decision and
+an explicit review action near the top of the pane rather than vertically
+centering content below the initial viewport. The Patrol enabled/mode/check
+toolbar stays compact and does not repeat the page-level value sentence.
+
 The selected attention detail may compose the shared Actions review for an
 eligible backend-authored offer. The detail owns only the expected
 postcondition, explicit-review warning, verification summary, and one review

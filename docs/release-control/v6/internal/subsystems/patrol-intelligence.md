@@ -1224,6 +1224,18 @@ does not merge governed action records into the attention list or invent an
 attention count; the queue and approval inbox retain their separate canonical
 projections.
 
+The default loaded state is a daily briefing rather than an unframed list. It
+states how many current decisions need the operator, shows the current loaded
+critical-decision and separately canonical approval counts, explains the queue
+ordering, and offers one `Start review` action for the highest-priority item.
+On wide layouts the inbox and a recommended first-decision preview occupy a
+persistent two-pane workspace before selection; selection replaces the preview
+with the full governed context without hiding the inbox. On narrow layouts the
+selected context intentionally replaces the list until `Back to list`, making
+Patrol a true master/detail workflow instead of stacking the detail above a
+second full queue. The command header remains compact so the briefing and first
+decision enter the initial viewport.
+
 The attention queue orders genuine operator decisions by severity, actionable
 approval/review state, and latest observation time. Rows expose the severity
 word, lifecycle state, bounded consequence, affected resource, decision label,

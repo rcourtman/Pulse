@@ -3892,6 +3892,12 @@ to `/actions`. That count remains governed-action inbox metadata: it must not be
 added to the attention summary, used to manufacture an attention row, or imply
 that a specific attention record owns the pending action without a typed action
 reference.
+The briefing may derive severity and decision counters only from the current
+typed attention-list membership returned by that request; it must not treat
+those presentation counters as a new API summary, combine them with the action
+count, or use them to strengthen the server-authored lifecycle assessment. The
+recommended first decision is likewise a sort over returned membership, never
+a client-authored severity or action-eligibility inference.
 Likewise, the frontend may reduce typed evidence freshness/completeness and
 protection state into plain scan-row language or omit unavailable row metadata,
 provided selected detail continues to expose the typed facts. Presentation

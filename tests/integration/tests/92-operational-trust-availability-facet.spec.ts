@@ -594,7 +594,11 @@ test.describe("Operational trust availability resource facet", () => {
         name: /Patrol: 1 (?:action awaits approval|active attention item)/,
       }),
     ).toBeVisible();
-    await expect(queue.getByText(item.plainLanguageSummary)).toBeVisible();
+    await expect(
+      queue
+        .getByRole("list", { name: "Patrol attention items" })
+        .getByText(item.plainLanguageSummary),
+    ).toBeVisible();
 
     const detailResponsePromise = page.waitForResponse((response) => {
       const requestUrl = new URL(response.url());
