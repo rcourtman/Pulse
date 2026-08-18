@@ -779,6 +779,20 @@ describe('App architecture', () => {
     expect(appLayoutSource).toContain('countLabel: patrolNavigationCountLabel()');
   });
 
+  it('drops platform admission when the tenant changes', () => {
+    const switchStart = appRuntimeStateSource.indexOf('const handleOrgSwitch');
+    expect(switchStart).toBeGreaterThan(-1);
+    const orgSwitch = appRuntimeStateSource.slice(switchStart, switchStart + 1200);
+
+    // Admission is tenant-scoped. Carrying the outgoing tenant's answer across
+    // a switch would render their platform tabs to the incoming tenant, so it
+    // is cleared before the replacement is requested.
+    const clearIndex = orgSwitch.indexOf('setPlatformAdmission(null)');
+    const refetchIndex = orgSwitch.indexOf('loadPlatformAdmission()');
+    expect(clearIndex).toBeGreaterThan(-1);
+    expect(refetchIndex).toBeGreaterThan(clearIndex);
+  });
+
   it('keeps licensed application branding inside the authenticated shell bootstrap', () => {
     // Asserted on the bootstrap's contents rather than one formatted line, so
     // a prettier line-wrap cannot read as branding leaving the bootstrap.

@@ -72,6 +72,7 @@ describe('useAppRuntimeState', () => {
   let applyServerModeMock: ReturnType<typeof vi.fn>;
   let updateRuntimeDisplayFromResponseMock: ReturnType<typeof vi.fn>;
   let markSystemSettingsLoadedWithDefaultsMock: ReturnType<typeof vi.fn>;
+  let apiFetchJSONMock: ReturnType<typeof vi.fn>;
   let websocketState: State;
   let websocketConnected: boolean;
   let websocketReconnecting: boolean;
@@ -104,6 +105,23 @@ describe('useAppRuntimeState', () => {
         return new Response('{}', { status: 200 });
       }
       throw new Error(`Unhandled apiFetch URL: ${url}`);
+    });
+    apiFetchJSONMock = vi.fn(async (url: string) => {
+      if (url.startsWith('/api/resources')) {
+        return {
+          aggregations: {
+            platformAdmission: {
+              proxmox: true,
+              docker: false,
+              kubernetes: false,
+              truenas: false,
+              vmware: false,
+              standalone: false,
+            },
+          },
+        };
+      }
+      throw new Error(`Unhandled apiFetchJSON URL: ${url}`);
     });
     orgsListMock = vi.fn().mockResolvedValue([{ id: 'acme', displayName: 'Acme' }]);
     loadLicenseStatusMock = vi.fn().mockResolvedValue(undefined);
@@ -176,6 +194,7 @@ describe('useAppRuntimeState', () => {
 
     vi.doMock('@/utils/apiClient', () => ({
       apiFetch: apiFetchMock,
+      apiFetchJSON: apiFetchJSONMock,
       getOrgID: getOrgIDMock,
       hasAuth: hasStoredAuthSessionMock,
       setOrgID: setOrgIDMock,
@@ -723,6 +742,104 @@ describe('useAppRuntimeState', () => {
 
     await waitFor(() => {
       expect(loadCommercialPostureMock).toHaveBeenCalledOnce();
+    });
+
+    dispose();
+  });
+
+  it('reads platform admission from the canonical resource contract during bootstrap', async () => {
+    const { dispose, hookState } = mountHook();
+
+    await waitFor(() => {
+      expect(hookState.platformAdmission()).not.toBeNull();
+    });
+
+    // A one-resource request answers it: navigation must not need an
+    // estate-sized payload to know which platform pages exist.
+    expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/resources?page=1&limit=1');
+    expect(hookState.platformAdmission()).toMatchObject({ proxmox: true, standalone: false });
+
+    dispose();
+  });
+
+  it('rejects a partial admission payload rather than hiding platforms', async () => {
+    apiFetchJSONMock.mockResolvedValue({
+      aggregations: { platformAdmission: { proxmox: true, docker: false } },
+    });
+    const { dispose, hookState } = mountHook();
+
+    await waitFor(() => {
+      expect(apiFetchJSONMock).toHaveBeenCalled();
+    });
+    await flushAsync();
+
+    // A missing flag would read as a hidden platform, which is
+    // indistinguishable from a real absence, so the facet is discarded.
+    expect(hookState.platformAdmission()).toBeNull();
+
+    dispose();
+  });
+
+  it('drops the previous tenant admission when the organization changes', async () => {
+    isMultiTenantEnabledMock.mockReturnValue(true);
+    const { dispose, hookState } = mountHook();
+
+    await waitFor(() => {
+      expect(hookState.platformAdmission()).not.toBeNull();
+    });
+
+    apiFetchJSONMock.mockImplementation(async () => ({
+      aggregations: {
+        platformAdmission: {
+          proxmox: false,
+          docker: true,
+          kubernetes: false,
+          truenas: false,
+          vmware: false,
+          standalone: false,
+        },
+      },
+    }));
+
+    await waitFor(() => {
+      expect(hookState.organizations().some((org) => org.id === 'acme')).toBe(true);
+    });
+
+    // Switch to whichever tenant is not already active, so this exercises a
+    // real switch rather than the no-op early return.
+    const nextOrg = hookState.activeOrgID() === 'acme' ? 'default' : 'acme';
+    hookState.handleOrgSwitch(nextOrg);
+
+    // Cleared synchronously, before the replacement can arrive: anything that
+    // renders between the switch and the refetch must not see the outgoing
+    // tenant's platform tabs.
+    expect(hookState.platformAdmission()).toBeNull();
+
+    await waitFor(() => {
+      expect(hookState.platformAdmission()).toMatchObject({ docker: true, proxmox: false });
+    });
+
+    dispose();
+  });
+
+  it('refreshes admission when the websocket reconnects', async () => {
+    const eventsModule = await import('@/stores/events');
+    const { dispose } = mountHook();
+
+    await waitFor(() => {
+      expect(apiFetchJSONMock).toHaveBeenCalled();
+    });
+
+    const reconnectHandler = (eventsModule.eventBus.on as ReturnType<typeof vi.fn>).mock.calls.find(
+      ([event]) => event === 'websocket_reconnected',
+    )?.[1] as (() => void) | undefined;
+    expect(reconnectHandler).toBeTypeOf('function');
+
+    const before = apiFetchJSONMock.mock.calls.length;
+    // The estate can gain or lose a platform while the socket is down.
+    reconnectHandler!();
+    await waitFor(() => {
+      expect(apiFetchJSONMock.mock.calls.length).toBeGreaterThan(before);
     });
 
     dispose();

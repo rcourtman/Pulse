@@ -513,6 +513,11 @@ export const useAppRuntimeState = () => {
     setSelectedOrgID(target);
     setActiveOrgID(target);
     setBootstrapState(null);
+    // Drop the previous tenant's admission before anything can render from it:
+    // a stale facet here would show the other tenant's platform tabs until the
+    // new runtime state arrives.
+    setPlatformAdmission(null);
+    void loadPlatformAdmission();
     eventBus.emit('org_switched', target);
 
     try {
@@ -675,6 +680,8 @@ export const useAppRuntimeState = () => {
       logger.info('WebSocket reconnected, refreshing alert configuration');
       void alertsActivation.refreshConfig();
       void alertsActivation.refreshActiveAlerts();
+      // The estate can gain or lose a platform while the socket is down.
+      void loadPlatformAdmission();
     };
 
     const handleOrganizationsChanged = () => {

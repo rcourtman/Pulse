@@ -982,6 +982,13 @@ a larger estate makes the runtime payload slower to build and transfer, and
 navigation must not wait on it. Live runtime state remains authoritative for
 navigation once it has arrived.
 
+### Admission refresh is event-driven
+
+Platform admission is refreshed on the events that can invalidate it, an
+organization switch and a websocket reconnect, and MUST NOT be polled. Live
+runtime state is authoritative once it arrives and already tracks the estate,
+so a steady-state session makes no admission requests at all.
+
 ## Forbidden Paths
 
 1. Speculative micro-optimizations without evidence

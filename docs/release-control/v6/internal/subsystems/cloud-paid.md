@@ -1223,6 +1223,14 @@ resource contract, which is tenant-scoped, so a tenant sees exactly the
 platform pages its own estate admits. Navigation MUST NOT be derived from a
 cross-tenant or unscoped resource set.
 
+### Tenant switch drops platform admission
+
+Platform admission is tenant-scoped. On an organization switch the shell MUST
+clear its admission answer before requesting the incoming tenant's, so no
+render between the switch and the new answer can show the outgoing tenant's
+platform tabs. Proof: `drops platform admission when the tenant changes` in
+`frontend-modern/src/__tests__/App.architecture.test.ts`.
+
 ## Forbidden Paths
 
 1. New ad hoc plan names in runtime or UI
