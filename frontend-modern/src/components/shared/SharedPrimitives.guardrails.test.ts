@@ -7276,6 +7276,18 @@ describe('shared primitive guardrails', () => {
     expect(sharedPlatformPageSource).toContain('props.tabs.length > 1');
     expect(sharedPlatformPageSource).toContain('href={tab.path}');
     expect(sharedPlatformPageSource).toContain('border-b-2');
+    expect(sharedPlatformPageSource).toContain('overflow-x-auto pl-0');
+    expect(sharedPlatformPageSource).toContain("canScrollRight() ? 'pr-10' : 'pr-0'");
+    expect(sharedPlatformPageSource).not.toContain('overflow-x-auto px-10');
+    expect(sharedPlatformPageSource).toContain('export const getPlatformTableRowClass');
+    expect(sharedPlatformPageSource).toContain(
+      'export const PLATFORM_TABLE_NARROW_IDENTITY_WIDTH_PERCENT = 40',
+    );
+    expect(proxmoxNodesTableSource).toContain("usesCondensedIdentity() ? '[&>a]:hidden' : ''");
+    expect(proxmoxNodesTableSource).toContain(
+      "layoutMode() === 'narrow' && nativeNodeName().length",
+    );
+    expect(proxmoxReplicationTableSource).toContain('getPlatformTableRowClass()');
     expect(horizontalRailVisibilityModelSource).toContain(
       'export function getHorizontalRailScrollLeft',
     );

@@ -3,8 +3,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ReplicationJob } from '@/types/api';
 import {
   ProxmoxReplicationTable,
-  REPLICATION_PHONE_COLUMNS,
-  REPLICATION_PHONE_COLUMN_WIDTHS,
+  REPLICATION_MOBILE_COLUMNS,
+  REPLICATION_MOBILE_COLUMN_WIDTHS,
+  compactReplicationNextSyncText,
+  formatMobileReplicationGuestLabel,
 } from '../ProxmoxReplicationTable';
 
 const replicationJob = (overrides: Partial<ReplicationJob> = {}): ReplicationJob => ({
@@ -30,23 +32,24 @@ afterEach(() => {
 });
 
 describe('ProxmoxReplicationTable', () => {
-  it('keeps identity, route, and both sync horizons visible on phones', () => {
-    expect(REPLICATION_PHONE_COLUMNS).toEqual([
+  it('uses five readable columns and compact time direction across phone widths', () => {
+    expect(REPLICATION_MOBILE_COLUMNS).toEqual([
       'guest',
       'status',
-      'job',
       'route',
       'lastSync',
       'nextSync',
     ]);
-    expect(REPLICATION_PHONE_COLUMN_WIDTHS).toEqual({
-      status: 15,
-      job: 12,
-      guest: 30,
-      route: 18,
-      lastSync: 13,
-      nextSync: 12,
+    expect(REPLICATION_MOBILE_COLUMN_WIDTHS).toEqual({
+      guest: 40,
+      status: 16,
+      route: 22,
+      lastSync: 9,
+      nextSync: 13,
     });
+    expect(compactReplicationNextSyncText('34m overdue', 'overdue')).toBe('-34m');
+    expect(compactReplicationNextSyncText('in 8m', 'normal')).toBe('8m');
+    expect(formatMobileReplicationGuestLabel(replicationJob())).toBe('100 web');
   });
 
   it('renders replication duration cells through the shared duration format', () => {
@@ -64,6 +67,7 @@ describe('ProxmoxReplicationTable', () => {
     ));
 
     expect(screen.getByText('100 (web)')).toBeInTheDocument();
+    expect(screen.getByText('100 (web)').closest('tr')).toHaveClass('h-8');
     expect(screen.getByText('2m 5s')).toBeInTheDocument();
   });
 

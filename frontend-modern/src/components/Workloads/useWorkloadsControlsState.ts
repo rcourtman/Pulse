@@ -96,7 +96,9 @@ export function useWorkloadsControlsState(options: WorkloadsControlsStateOptions
       ? getWorkloadTableLayoutModeForContainer(measuredWidth)
       : getWorkloadTableLayoutMode(breakpoint.width());
   });
-  const isMobile = createMemo(() => workloadTableLayoutMode() === 'mobile');
+  const isMobile = createMemo(() =>
+    ['narrow', 'phone', 'mobile'].includes(workloadTableLayoutMode()),
+  );
   const [isSearchLocked, setIsSearchLocked] = createSignal(false);
 
   const updateSearchParam = (mutate: (params: URLSearchParams) => void): void => {

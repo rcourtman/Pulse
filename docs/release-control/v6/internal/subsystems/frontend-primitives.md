@@ -394,7 +394,10 @@ alignment classes, or ad hoc report-category coercion. Platform tabs are
 responsively scrollable within that shared shell. When the rail overflows, the
 primitive must expose focusable, labeled previous/next controls and keep their
 availability synchronized with the rail position so hidden workflows remain
-discoverable without widening the document or requiring precision swipes.
+discoverable without widening the document or requiring precision swipes. At
+the leading edge, the first tab must begin flush with the rail instead of
+reserving an empty previous-control slot; trailing space may be reserved only
+while the next-control affordance is actually present.
 Platform tabs are
 feature-owned consumers of canonical resource payloads: Docker page model
 helpers may prefer backend-authored `DockerData` stack and Podman metadata for
@@ -1094,12 +1097,22 @@ not a replacement status card, CTA band, or page-local nested card.
    high-value phone columns when that many meaningful fields exist, keep the
    identity column at the canonical 30 percent of the available width, use the
    shared compact label and column-width classes, and preserve the fuller tablet
-   and desktop presentation. `PlatformTableShell` marks every owned table with
-   the shared `platform-table` class; direct Workloads and Storage consumers and
-   nested provider detail tables must apply that same marker so the phone
-   contract cannot vary by rendering path. They must not rely on a global rule
-   that reveals every hidden
-   column: phone priority remains source-specific because state, capacity,
+   and desktop presentation. Below a 360-pixel content width, the shared narrow
+   layout must retain five high-value columns, promote identity to 40 percent,
+   and remove the lowest-priority context columns rather than shrinking names
+   and metric values into illegible fragments. `PlatformTableShell` marks every
+   owned table with the shared `platform-table` class; direct Workloads and
+   Storage consumers and nested provider detail tables must apply that same
+   marker so the phone contract cannot vary by rendering path. Text-only
+   operational rows must use `getPlatformTableRowClass` so the absence of
+   buttons, badges, or progress bars does not collapse them below the canonical
+   compact scanning rhythm. Mobile truncation may rely on a full-value row
+   detail only when that row actually has a keyboard- and touch-operable
+   disclosure; a non-expandable identity cell must otherwise expose its
+   complete value without requiring hover. Default data rows stay single-line
+   so scan density and row rhythm are not traded for automatic text wrapping.
+   They must not rely on a global rule that reveals
+   every hidden column: phone priority remains source-specific because state, capacity,
    freshness, and recovery posture do not carry equal value for every resource
    type.
    Narrow viewports keep document-level overflow contained by `Table` and

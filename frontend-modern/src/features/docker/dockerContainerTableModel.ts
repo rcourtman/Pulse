@@ -4,6 +4,7 @@ import type { WorkloadTableLayoutMode } from '@/components/Workloads/guestRowMod
 import type { PlatformTableColumnKind } from '@/features/platformPage/columnAlignment';
 import {
   getPlatformTableWeightedColumnWidthStyle,
+  PLATFORM_TABLE_NARROW_IDENTITY_WIDTH_PERCENT,
   PLATFORM_TABLE_PHONE_IDENTITY_WIDTH_PERCENT,
 } from '@/features/platformPage/sharedPlatformPage';
 
@@ -53,23 +54,24 @@ export const getDockerContainerSortKey = (
     : undefined;
 
 const DOCKER_CONTAINER_TABLE_LAYOUT_ORDER: Record<WorkloadTableLayoutMode, number> = {
-  phone: 0,
-  mobile: 1,
-  tablet: 2,
-  compact: 3,
-  wide: 4,
+  narrow: 0,
+  phone: 1,
+  mobile: 2,
+  tablet: 3,
+  compact: 4,
+  wide: 5,
 };
 
 const DOCKER_CONTAINER_COLUMN_MIN_LAYOUT: Record<
   DockerContainerTableColumnId,
   WorkloadTableLayoutMode
 > = {
-  container: 'phone',
-  state: 'phone',
-  cpu: 'phone',
-  memory: 'phone',
+  container: 'narrow',
+  state: 'narrow',
+  cpu: 'narrow',
+  memory: 'narrow',
   restarts: 'phone',
-  updates: 'phone',
+  updates: 'narrow',
   actions: 'mobile',
   host: 'tablet',
   image: 'compact',
@@ -115,6 +117,13 @@ const DOCKER_CONTAINER_RESPONSIVE_WIDTHS: Record<
   Exclude<WorkloadTableLayoutMode, 'wide'>,
   Partial<Record<DockerContainerTableColumnId, number>>
 > = {
+  narrow: {
+    container: 40,
+    state: 15,
+    cpu: 15,
+    memory: 17,
+    updates: 13,
+  },
   phone: {
     container: 32,
     state: 13,
@@ -188,9 +197,11 @@ export const getDockerContainerColumnWidthStyle = (
     columnId,
     weights,
     visibleColumnIds,
-    layoutMode === 'phone' || layoutMode === 'mobile'
-      ? { columnId: 'container', widthPercent: PLATFORM_TABLE_PHONE_IDENTITY_WIDTH_PERCENT }
-      : undefined,
+    layoutMode === 'narrow'
+      ? { columnId: 'container', widthPercent: PLATFORM_TABLE_NARROW_IDENTITY_WIDTH_PERCENT }
+      : layoutMode === 'phone' || layoutMode === 'mobile'
+        ? { columnId: 'container', widthPercent: PLATFORM_TABLE_PHONE_IDENTITY_WIDTH_PERCENT }
+        : undefined,
   );
 };
 

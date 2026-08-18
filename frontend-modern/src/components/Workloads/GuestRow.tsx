@@ -104,7 +104,13 @@ export function GuestRow(props: GuestRowProps) {
   const metricDisplayMode = createMemo(() => props.metricDisplayMode ?? 'bars');
   const isSparklineMode = createMemo(() => metricDisplayMode() === 'sparklines');
   const usesCompactTableLayout = createMemo(
-    () => props.workloadTableLayoutMode === 'phone' || props.workloadTableLayoutMode === 'mobile',
+    () =>
+      props.workloadTableLayoutMode === 'narrow' ||
+      props.workloadTableLayoutMode === 'phone' ||
+      props.workloadTableLayoutMode === 'mobile',
+  );
+  const usesCondensedIdentity = createMemo(
+    () => props.workloadTableLayoutMode === 'narrow' || props.workloadTableLayoutMode === 'phone',
   );
   const telemetryAvailable = (
     metric: keyof NonNullable<WorkloadGuest['telemetryAvailability']>,
@@ -228,7 +234,7 @@ export function GuestRow(props: GuestRowProps) {
                 <ResourceNameWithWebInterfaceLink
                   name={props.guest.name}
                   url={customUrl()}
-                  class="min-w-0"
+                  class={`min-w-0 ${usesCondensedIdentity() ? '[&>a]:hidden' : ''}`}
                   nameClass="truncate text-[11px] font-medium text-base-content select-none"
                 />
                 {/* Show backup indicator in name cell only if backup column is hidden */}

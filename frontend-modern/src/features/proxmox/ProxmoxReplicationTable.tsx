@@ -9,10 +9,12 @@ import {
   PlatformTableToolbar,
   PlatformErrorState,
   PlatformTableDurationValue,
+  formatPlatformTableRelativeTimeValue,
   PlatformTableRelativeTimeValue,
   getPlatformTableCellClassForKind,
   getPlatformTableContainerLayout,
   getPlatformTableHeadClassForKind,
+  getPlatformTableRowClass,
   type PlatformTableContainerLayout,
   type PlatformTableFilterOption,
   PlatformTableEmptyState,
@@ -43,24 +45,23 @@ type ReplicationColumn =
   | 'fails'
   | 'error';
 
-export const REPLICATION_PHONE_COLUMNS: readonly ReplicationColumn[] = [
+export const REPLICATION_MOBILE_COLUMNS: readonly ReplicationColumn[] = [
   'guest',
   'status',
-  'job',
   'route',
   'lastSync',
   'nextSync',
 ];
 
-export const REPLICATION_PHONE_COLUMN_WIDTHS: Readonly<Partial<Record<ReplicationColumn, number>>> =
-  {
-    status: 15,
-    job: 12,
-    guest: 30,
-    route: 18,
-    lastSync: 13,
-    nextSync: 12,
-  };
+export const REPLICATION_MOBILE_COLUMN_WIDTHS: Readonly<
+  Partial<Record<ReplicationColumn, number>>
+> = {
+  guest: 40,
+  status: 16,
+  route: 22,
+  lastSync: 9,
+  nextSync: 13,
+};
 
 const REPLICATION_COLUMN_WIDTH_CLASS: Record<
   PlatformTableContainerLayout,
@@ -195,6 +196,13 @@ function formatGuestLabel(job: ReplicationJob): string {
   return '—';
 }
 
+export function formatMobileReplicationGuestLabel(job: ReplicationJob): string {
+  const guestId = job.guestId ?? 0;
+  const name = (job.guestName ?? '').trim();
+  if (guestId && name) return `${guestId} ${name}`;
+  return formatGuestLabel(job);
+}
+
 function syncTimeValue(job: ReplicationJob): number | string | undefined {
   if (job.lastSyncUnix && job.lastSyncUnix > 0) {
     return job.lastSyncUnix * 1000;
@@ -236,6 +244,11 @@ function nextSyncFor(job: ReplicationJob): { text: string; tone: NextSyncTone } 
   return { text: `in ${Math.floor(minutes / 60)}h ${minutes % 60}m`, tone: 'normal' };
 }
 
+export const compactReplicationNextSyncText = (text: string, tone: NextSyncTone): string => {
+  if (tone === 'overdue') return `-${text.replace(/ overdue$/, '')}`;
+  return text.replace(/^in /, '');
+};
+
 export async function fetchReplicationJobs(): Promise<ReplicationJob[]> {
   const response = await apiFetch('/api/replication/jobs?platform=proxmox-pve');
   if (!response.ok) {
@@ -257,6 +270,7 @@ export const ProxmoxReplicationTable: Component<{
 }> = (props) => {
   const [search, setSearch] = createSignal('');
   const [status, setStatus] = createSignal<ReplicationStatusFilter>('all');
+  const [expandedJobKey, setExpandedJobKey] = createSignal<string | null>(null);
 
   const filtered = createMemo(() => {
     const term = search().trim().toLowerCase();
@@ -287,12 +301,20 @@ export const ProxmoxReplicationTable: Component<{
   const layout = createMemo(() =>
     getPlatformTableContainerLayout(observedWidth.width() ?? 1920, [520, 720, 960, 1200]),
   );
-  const showJob = createMemo(() => true);
+  const canRevealDetails = createMemo(() => layout() === 'compact');
+  const mobilePaddingClass = () => (canRevealDetails() ? '!px-1' : '');
+  const mobileHeadClass = () => (canRevealDetails() ? '!px-1 !text-[9px]' : '');
+  const showJob = createMemo(() => !canRevealDetails());
   const showNext = createMemo(() => true);
   const showOperational = createMemo(() => ['operational', 'expanded', 'full'].includes(layout()));
   const showError = createMemo(() => ['expanded', 'full'].includes(layout()));
   const columnWidthClass = (column: ReplicationColumn) =>
-    REPLICATION_COLUMN_WIDTH_CLASS[layout()][column];
+    canRevealDetails() ? '' : REPLICATION_COLUMN_WIDTH_CLASS[layout()][column];
+  const visibleColumnCount = createMemo(() => {
+    if (layout() === 'compact') return REPLICATION_MOBILE_COLUMNS.length;
+    if (layout() === 'basic') return 6;
+    return showError() ? 10 : 9;
+  });
 
   return (
     <Show
@@ -356,10 +378,10 @@ export const ProxmoxReplicationTable: Component<{
                 colgroup={
                   <Show when={layout() === 'compact'}>
                     <colgroup>
-                      <For each={REPLICATION_PHONE_COLUMNS}>
+                      <For each={REPLICATION_MOBILE_COLUMNS}>
                         {(column) => (
                           <col
-                            style={{ width: `${REPLICATION_PHONE_COLUMN_WIDTHS[column]}%` }}
+                            style={{ width: `${REPLICATION_MOBILE_COLUMN_WIDTHS[column]}%` }}
                             data-proxmox-replication-column={column}
                           />
                         )}
@@ -370,24 +392,24 @@ export const ProxmoxReplicationTable: Component<{
                 header={
                   <>
                     <TableHead
-                      class={`${getPlatformTableHeadClassForKind('name')} ${columnWidthClass('guest')}`}
+                      class={`${getPlatformTableHeadClassForKind('name')} ${columnWidthClass('guest')} ${mobileHeadClass()}`}
                     >
                       Guest
                     </TableHead>
                     <TableHead
-                      class={`${getPlatformTableHeadClassForKind('text')} ${columnWidthClass('status')}`}
+                      class={`${getPlatformTableHeadClassForKind('text')} ${columnWidthClass('status')} ${mobileHeadClass()}`}
                     >
-                      Status
+                      {canRevealDetails() ? 'State' : 'Status'}
                     </TableHead>
                     <Show when={showJob()}>
                       <TableHead
-                        class={`${getPlatformTableHeadClassForKind('text')} ${columnWidthClass('job')}`}
+                        class={`${getPlatformTableHeadClassForKind('text')} ${columnWidthClass('job')} ${mobileHeadClass()}`}
                       >
                         Job
                       </TableHead>
                     </Show>
                     <TableHead
-                      class={`${getPlatformTableHeadClassForKind('text')} ${columnWidthClass('route')}`}
+                      class={`${getPlatformTableHeadClassForKind('text')} ${columnWidthClass('route')} ${mobileHeadClass()}`}
                       title="Source → target"
                     >
                       Route
@@ -400,13 +422,13 @@ export const ProxmoxReplicationTable: Component<{
                       </TableHead>
                     </Show>
                     <TableHead
-                      class={`${getPlatformTableHeadClassForKind('numeric-value')} ${columnWidthClass('lastSync')}`}
+                      class={`${getPlatformTableHeadClassForKind('numeric-value')} ${columnWidthClass('lastSync')} ${mobileHeadClass()}`}
                     >
                       {layout() === 'compact' ? 'Last' : 'Last sync'}
                     </TableHead>
                     <Show when={showNext()}>
                       <TableHead
-                        class={`${getPlatformTableHeadClassForKind('numeric-value')} ${columnWidthClass('nextSync')}`}
+                        class={`${getPlatformTableHeadClassForKind('numeric-value')} ${columnWidthClass('nextSync')} ${mobileHeadClass()}`}
                       >
                         {layout() === 'compact' ? 'Next' : 'Next sync'}
                       </TableHead>
@@ -435,107 +457,203 @@ export const ProxmoxReplicationTable: Component<{
                 body={
                   <>
                     <For each={filtered()}>
-                      {(job) => {
+                      {(job, index) => {
                         const classification = classifyJob(job);
                         const ind = indicatorFor(classification);
                         const next = nextSyncFor(job);
                         const sourceNode = (job.sourceNode ?? '').trim() || '—';
                         const targetNode = (job.targetNode ?? '').trim() || '—';
+                        const guestLabel = formatGuestLabel(job);
+                        const jobKey = `${job.id}:${job.jobId}:${job.guestId ?? index()}`;
+                        const detailRowId = `replication-job-detail-${index()}`;
+                        const isExpanded = () => canRevealDetails() && expandedJobKey() === jobKey;
+                        const toggleDetails = () => {
+                          if (!canRevealDetails()) return;
+                          setExpandedJobKey(isExpanded() ? null : jobKey);
+                        };
                         return (
-                          <TableRow class="hover:bg-surface-hover">
-                            <TableCell
-                              class={`${getPlatformTableCellClassForKind('name')} text-base-content`}
+                          <>
+                            <TableRow
+                              class={`${getPlatformTableRowClass()} ${canRevealDetails() ? 'cursor-pointer' : ''}`}
+                              aria-controls={isExpanded() ? detailRowId : undefined}
+                              aria-expanded={
+                                canRevealDetails() ? (isExpanded() ? 'true' : 'false') : undefined
+                              }
+                              onClick={toggleDetails}
+                              onKeyDown={(event) => {
+                                if (
+                                  !canRevealDetails() ||
+                                  (event.key !== 'Enter' && event.key !== ' ')
+                                ) {
+                                  return;
+                                }
+                                event.preventDefault();
+                                toggleDetails();
+                              }}
+                              tabIndex={canRevealDetails() ? 0 : undefined}
                             >
-                              {formatGuestLabel(job)}
-                            </TableCell>
-                            <TableCell class={getPlatformTableCellClassForKind('text')}>
-                              <div class="flex items-center gap-2">
-                                <StatusDot
-                                  size="sm"
-                                  variant={ind.variant}
-                                  title={ind.label}
-                                  ariaHidden
-                                />
-                                <span class={`text-[11px] font-medium ${ind.tone}`}>
-                                  {ind.label}
+                              <TableCell
+                                class={`${getPlatformTableCellClassForKind('name')} text-base-content ${mobilePaddingClass()}`}
+                                title={guestLabel}
+                              >
+                                <span
+                                  class={`block truncate ${canRevealDetails() ? 'text-[10px]' : ''}`}
+                                >
+                                  {canRevealDetails()
+                                    ? formatMobileReplicationGuestLabel(job)
+                                    : guestLabel}
                                 </span>
-                              </div>
-                            </TableCell>
-                            <Show when={showJob()}>
-                              <TableCell
-                                class={`${getPlatformTableCellClassForKind('text')} text-base-content font-mono text-[11px]`}
-                              >
-                                <span title={job.id}>{job.jobId || job.id}</span>
-                              </TableCell>
-                            </Show>
-                            <TableCell
-                              class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
-                            >
-                              <span class="inline-flex items-center gap-1 font-mono text-[11px]">
-                                <span>{sourceNode}</span>
-                                <ArrowRightIcon class="h-3 w-3 text-muted" aria-hidden="true" />
-                                <span>{targetNode}</span>
-                              </span>
-                            </TableCell>
-                            <Show when={showOperational()}>
-                              <TableCell
-                                class={`${getPlatformTableCellClassForKind('text')} text-base-content font-mono text-[11px]`}
-                              >
-                                {job.schedule || '—'}
-                              </TableCell>
-                            </Show>
-                            <TableCell
-                              class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
-                            >
-                              <PlatformTableRelativeTimeValue value={syncTimeValue(job)} />
-                            </TableCell>
-                            <Show when={showNext()}>
-                              <TableCell
-                                class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
-                              >
-                                <span class={NEXT_SYNC_TONE_CLASS[next.tone]}>{next.text}</span>
-                              </TableCell>
-                            </Show>
-                            <Show when={showOperational()}>
-                              <TableCell
-                                class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
-                              >
-                                <PlatformTableDurationValue
-                                  seconds={job.lastSyncDurationSeconds}
-                                  fallbackText={job.lastSyncDurationHuman}
-                                />
                               </TableCell>
                               <TableCell
-                                class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content tabular-nums`}
+                                class={`${getPlatformTableCellClassForKind('text')} ${mobilePaddingClass()}`}
+                              >
+                                <div
+                                  class={`flex items-center ${canRevealDetails() ? 'gap-0' : 'gap-2'}`}
+                                >
+                                  <Show when={!canRevealDetails()}>
+                                    <StatusDot
+                                      size="sm"
+                                      variant={ind.variant}
+                                      title={ind.label}
+                                      ariaHidden
+                                    />
+                                  </Show>
+                                  <span
+                                    class={`${canRevealDetails() ? 'text-[10px]' : 'text-[11px]'} font-medium ${ind.tone}`}
+                                  >
+                                    {ind.label}
+                                  </span>
+                                </div>
+                              </TableCell>
+                              <Show when={showJob()}>
+                                <TableCell
+                                  class={`${getPlatformTableCellClassForKind('text')} text-base-content font-mono text-[11px] ${mobilePaddingClass()}`}
+                                >
+                                  <span title={job.id}>{job.jobId || job.id}</span>
+                                </TableCell>
+                              </Show>
+                              <TableCell
+                                class={`${getPlatformTableCellClassForKind('text')} text-base-content ${mobilePaddingClass()}`}
                               >
                                 <Show
-                                  when={(job.failCount ?? 0) > 0}
-                                  fallback={<span class="text-muted">0</span>}
+                                  when={canRevealDetails()}
+                                  fallback={
+                                    <span class="inline-flex items-center gap-1 font-mono text-[11px]">
+                                      <span>{sourceNode}</span>
+                                      <ArrowRightIcon
+                                        class="h-3 w-3 text-muted"
+                                        aria-hidden="true"
+                                      />
+                                      <span>{targetNode}</span>
+                                    </span>
+                                  }
                                 >
-                                  <span class="text-red-600 dark:text-red-300 font-semibold">
-                                    {job.failCount}
+                                  <span class="font-mono text-[10px]">
+                                    {sourceNode}→{targetNode}
                                   </span>
                                 </Show>
                               </TableCell>
-                            </Show>
-                            <Show when={showError()}>
+                              <Show when={showOperational()}>
+                                <TableCell
+                                  class={`${getPlatformTableCellClassForKind('text')} text-base-content font-mono text-[11px]`}
+                                >
+                                  {job.schedule || '—'}
+                                </TableCell>
+                              </Show>
                               <TableCell
-                                class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                                class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content ${mobilePaddingClass()}`}
                               >
                                 <Show
-                                  when={!!job.error?.trim()}
-                                  fallback={<span class="text-muted">—</span>}
+                                  when={canRevealDetails()}
+                                  fallback={
+                                    <PlatformTableRelativeTimeValue value={syncTimeValue(job)} />
+                                  }
+                                >
+                                  <span class="tabular-nums text-[10px]">
+                                    {formatPlatformTableRelativeTimeValue(
+                                      syncTimeValue(job),
+                                    ).replace(/ ago$/, '')}
+                                  </span>
+                                </Show>
+                              </TableCell>
+                              <Show when={showNext()}>
+                                <TableCell
+                                  class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content ${mobilePaddingClass()}`}
                                 >
                                   <span
-                                    class="inline-block max-w-[18rem] truncate text-red-600 dark:text-red-300"
-                                    title={job.error ?? ''}
+                                    class={`${NEXT_SYNC_TONE_CLASS[next.tone]} ${canRevealDetails() ? 'text-[10px]' : ''}`}
                                   >
-                                    {job.error}
+                                    {canRevealDetails()
+                                      ? compactReplicationNextSyncText(next.text, next.tone)
+                                      : next.text}
                                   </span>
-                                </Show>
-                              </TableCell>
+                                </TableCell>
+                              </Show>
+                              <Show when={showOperational()}>
+                                <TableCell
+                                  class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
+                                >
+                                  <PlatformTableDurationValue
+                                    seconds={job.lastSyncDurationSeconds}
+                                    fallbackText={job.lastSyncDurationHuman}
+                                  />
+                                </TableCell>
+                                <TableCell
+                                  class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content tabular-nums`}
+                                >
+                                  <Show
+                                    when={(job.failCount ?? 0) > 0}
+                                    fallback={<span class="text-muted">0</span>}
+                                  >
+                                    <span class="text-red-600 dark:text-red-300 font-semibold">
+                                      {job.failCount}
+                                    </span>
+                                  </Show>
+                                </TableCell>
+                              </Show>
+                              <Show when={showError()}>
+                                <TableCell
+                                  class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                                >
+                                  <Show
+                                    when={!!job.error?.trim()}
+                                    fallback={<span class="text-muted">—</span>}
+                                  >
+                                    <span
+                                      class="inline-block max-w-[18rem] truncate text-red-600 dark:text-red-300"
+                                      title={job.error ?? ''}
+                                    >
+                                      {job.error}
+                                    </span>
+                                  </Show>
+                                </TableCell>
+                              </Show>
+                            </TableRow>
+                            <Show when={isExpanded()}>
+                              <TableRow
+                                id={detailRowId}
+                                class="bg-surface-alt/60 hover:bg-surface-alt/60"
+                              >
+                                <TableCell
+                                  colSpan={visibleColumnCount()}
+                                  class="!whitespace-normal !px-2 !py-2"
+                                >
+                                  <dl class="grid grid-cols-[auto_minmax(0,1fr)] gap-x-2 gap-y-1 text-[10px] leading-4">
+                                    <dt class="font-semibold text-muted">Guest</dt>
+                                    <dd class="break-all text-base-content">{guestLabel}</dd>
+                                    <dt class="font-semibold text-muted">Job</dt>
+                                    <dd class="break-all font-mono text-base-content">
+                                      {job.jobId || job.id}
+                                    </dd>
+                                    <dt class="font-semibold text-muted">Route</dt>
+                                    <dd class="font-mono text-base-content">
+                                      {sourceNode} → {targetNode}
+                                    </dd>
+                                  </dl>
+                                </TableCell>
+                              </TableRow>
                             </Show>
-                          </TableRow>
+                          </>
                         );
                       }}
                     </For>

@@ -5,6 +5,7 @@ import type { Disk } from '@/types/api';
 import type { Resource } from '@/types/resource';
 import type { MetricDisplayThresholds } from '@/utils/metricThresholds';
 import { DockerHostsTable } from '../DockerHostsTable';
+import dockerHostsTableSource from '../DockerHostsTable.tsx?raw';
 
 const formatThresholds = (thresholds?: MetricDisplayThresholds | null): string =>
   thresholds ? `${thresholds.warning}/${thresholds.critical}` : '';
@@ -127,6 +128,13 @@ afterEach(() => {
 });
 
 describe('DockerHostsTable', () => {
+  it('keeps five readable host fields below 360 pixels without wrapped metadata rows', () => {
+    expect(dockerHostsTableSource).toContain('w-[40%] min-[360px]:w-[34%]');
+    expect(dockerHostsTableSource).toContain('hidden min-[360px]:table-cell min-[360px]:w-[16%]');
+    expect(dockerHostsTableSource).toContain('class="max-[359px]:hidden"');
+    expect(dockerHostsTableSource).not.toContain('md:hidden" title={badge().title');
+  });
+
   it('renders Docker hosts with a single-line Version column and shared metric bars', () => {
     render(() => (
       <DockerHostsTable

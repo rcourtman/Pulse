@@ -261,9 +261,14 @@ export const ProxmoxNodesTable: Component<{
           <For each={visibleColumns()}>
             {(column) => (
               <PlatformSortableTableHead kind={column.kind} sort={sort} sortKey={column.id}>
-                {(layoutMode() === 'phone' || layoutMode() === 'mobile') && column.id === 'memory'
+                {(layoutMode() === 'narrow' ||
+                  layoutMode() === 'phone' ||
+                  layoutMode() === 'mobile') &&
+                column.id === 'memory'
                   ? 'Mem'
-                  : (layoutMode() === 'phone' || layoutMode() === 'mobile') &&
+                  : (layoutMode() === 'narrow' ||
+                        layoutMode() === 'phone' ||
+                        layoutMode() === 'mobile') &&
                       column.id === 'uptime'
                     ? 'Age'
                     : column.label}
@@ -276,6 +281,10 @@ export const ProxmoxNodesTable: Component<{
             {(node) => {
               const name = () => asTrimmedString(node.name) || node.id;
               const nativeNodeName = () => asTrimmedString(node.proxmox?.nodeName) ?? '';
+              const visibleNodeLabel = () =>
+                layoutMode() === 'narrow' && nativeNodeName().length > 0
+                  ? nativeNodeName()
+                  : name();
               const showNativeNodeName = () =>
                 layoutMode() === 'phone' &&
                 nativeNodeName().length > 0 &&
@@ -319,7 +328,9 @@ export const ProxmoxNodesTable: Component<{
               });
               const isOnline = createMemo(() => availabilityLabel() === 'Online');
               const usesCompactMetrics = () =>
-                layoutMode() === 'phone' || layoutMode() === 'mobile';
+                layoutMode() === 'narrow' || layoutMode() === 'phone' || layoutMode() === 'mobile';
+              const usesCondensedIdentity = () =>
+                layoutMode() === 'narrow' || layoutMode() === 'phone';
               const uptime = () =>
                 formatNodeUptime(isOnline() ? node.uptime : undefined, usesCompactMetrics());
               const fullUptime = () => formatNodeUptime(isOnline() ? node.uptime : undefined).label;
@@ -387,7 +398,9 @@ export const ProxmoxNodesTable: Component<{
                   case 'node':
                     return (
                       <TableCell class={getPlatformTableCellClassForKind(column.kind)}>
-                        <div class="flex min-w-0 items-center gap-2">
+                        <div
+                          class={`flex min-w-0 items-center ${usesCondensedIdentity() ? 'gap-1' : 'gap-2'}`}
+                        >
                           <PlatformResourceDetailToggleButton
                             expanded={isSelected()}
                             resourceLabel={name()}
@@ -404,10 +417,12 @@ export const ProxmoxNodesTable: Component<{
                             <ResourceNameWithWebInterfaceLink
                               name={name()}
                               url={externalUrl()}
-                              class="min-w-0"
+                              class={`min-w-0 ${usesCondensedIdentity() ? '[&>a]:hidden' : ''}`}
                               nameClass="truncate font-semibold text-base-content"
                               title={`Open ${name()} web interface`}
-                            />
+                            >
+                              {visibleNodeLabel()}
+                            </ResourceNameWithWebInterfaceLink>
                             <Show when={showNativeNodeName()}>
                               <span class="-mt-0.5 truncate text-[10px] text-muted">
                                 {nativeNodeName()}

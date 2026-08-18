@@ -71,6 +71,7 @@ export function WorkloadTableHeader(props: WorkloadTableHeaderProps) {
             const isSorted = () => sortKeyForCol && props.sortKey() === sortKeyForCol;
             const usesCompactHeader = () =>
               props.isMobile() ||
+              props.workloadTableLayoutMode() === 'narrow' ||
               props.workloadTableLayoutMode() === 'phone' ||
               props.workloadTableLayoutMode() === 'mobile';
             const label = () =>

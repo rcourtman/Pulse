@@ -7,6 +7,17 @@ import {
 } from '../dockerContainerTableModel';
 
 describe('dockerContainerTableModel', () => {
+  it('keeps five readable container signals in ultra-narrow containers', () => {
+    const columns = getDockerContainerVisibleColumnsForLayout('narrow', true, true, true);
+    const ids = columns.map((column) => column.id);
+
+    expect(ids).toEqual(['container', 'state', 'cpu', 'memory', 'updates']);
+    expect(getDockerContainerColumnWidthStyle('container', 'narrow', ids)).toEqual({
+      width: '40%',
+    });
+    expect(getDockerContainerColumnWidthStyle('cpu', 'narrow', ids)).toEqual({ width: '15%' });
+  });
+
   it('keeps phone rows focused on container identity and live health signals', () => {
     const columns = getDockerContainerVisibleColumnsForLayout('phone', true, true, true);
     const ids = columns.map((column) => column.id);

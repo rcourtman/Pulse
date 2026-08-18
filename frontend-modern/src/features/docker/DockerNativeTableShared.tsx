@@ -87,7 +87,7 @@ export const DockerResourceNameCell: Component<{
         <ResourceNameWithWebInterfaceLink
           name={name()}
           url={props.resource.customUrl}
-          class="min-w-0"
+          class="min-w-0 max-[359px]:[&>a]:hidden"
           nameClass="truncate font-semibold text-base-content"
         />
       </div>

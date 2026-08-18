@@ -3,6 +3,7 @@ import type { JSX } from 'solid-js';
 import type { ColumnDef } from '@/hooks/useColumnVisibility';
 import type { SummaryGroupMemberInteractionState } from '@/components/shared/summaryCardInteraction';
 import {
+  PLATFORM_TABLE_NARROW_IDENTITY_WIDTH_PERCENT,
   getPlatformTableWeightedColumnWidthStyle,
   PLATFORM_TABLE_PHONE_IDENTITY_WIDTH_PERCENT,
 } from '@/features/platformPage/sharedPlatformPage';
@@ -15,8 +16,9 @@ import type {
 import type { NestedWorkloadContext } from './nestedWorkloadContext';
 import type { WorkloadsMemoryDisplayBasis } from './workloadsFilterModel';
 
-export type WorkloadTableLayoutMode = 'phone' | 'mobile' | 'tablet' | 'compact' | 'wide';
+export type WorkloadTableLayoutMode = 'narrow' | 'phone' | 'mobile' | 'tablet' | 'compact' | 'wide';
 
+export const WORKLOAD_TABLE_NARROW_LAYOUT_WIDTH = 360;
 export const WORKLOAD_TABLE_PHONE_LAYOUT_WIDTH = 480;
 export const WORKLOAD_TABLE_MOBILE_LAYOUT_WIDTH = 768;
 export const WORKLOAD_TABLE_TABLET_LAYOUT_WIDTH = 900;
@@ -27,33 +29,35 @@ export const WORKLOAD_TABLE_TABLET_LAYOUT_WIDTH = 900;
 // relying on horizontal scroll, so wide waits until the shell can actually
 // hold the full set.
 export const WORKLOAD_TABLE_WIDE_LAYOUT_WIDTH = 1536;
+export const WORKLOAD_TABLE_CONTAINER_NARROW_WIDTH = 360;
 export const WORKLOAD_TABLE_CONTAINER_PHONE_WIDTH = 440;
 export const WORKLOAD_TABLE_CONTAINER_MOBILE_WIDTH = 720;
 export const WORKLOAD_TABLE_CONTAINER_TABLET_WIDTH = 900;
 export const WORKLOAD_TABLE_CONTAINER_WIDE_WIDTH = 1440;
 
 const WORKLOAD_TABLE_LAYOUT_ORDER: Record<WorkloadTableLayoutMode, number> = {
-  phone: 0,
-  mobile: 1,
-  tablet: 2,
-  compact: 3,
-  wide: 4,
+  narrow: 0,
+  phone: 1,
+  mobile: 2,
+  tablet: 3,
+  compact: 4,
+  wide: 5,
 };
 
 const WORKLOAD_COLUMN_MIN_LAYOUT: Record<string, WorkloadTableLayoutMode> = {
-  name: 'phone',
+  name: 'narrow',
   availability: 'phone',
   runtime: 'tablet',
-  cpu: 'phone',
-  memory: 'phone',
+  cpu: 'narrow',
+  memory: 'narrow',
   // Phone rows retain the compact operational scan: workload kind, all three
   // capacity metrics, and age. The percentage model below preserves a useful
   // identity track without hiding those signals behind row expansion.
-  disk: 'phone',
+  disk: 'narrow',
   type: 'phone',
   info: 'phone',
   vmid: 'tablet',
-  uptime: 'phone',
+  uptime: 'narrow',
   backup: 'compact',
   image: 'compact',
   namespace: 'compact',
@@ -445,6 +449,13 @@ const GUEST_COLUMN_RESPONSIVE_WEIGHTS: Record<
   Exclude<WorkloadTableLayoutMode, 'wide'>,
   Record<string, number>
 > = {
+  narrow: {
+    name: 40,
+    cpu: 16,
+    memory: 16,
+    disk: 16,
+    uptime: 12,
+  },
   phone: {
     name: 33,
     availability: 5,
@@ -509,9 +520,11 @@ const getResponsiveColumnOverride = (
     columnId,
     weights,
     activeIds,
-    layoutMode === 'phone' || layoutMode === 'mobile'
-      ? { columnId: 'name', widthPercent: PLATFORM_TABLE_PHONE_IDENTITY_WIDTH_PERCENT }
-      : undefined,
+    layoutMode === 'narrow'
+      ? { columnId: 'name', widthPercent: PLATFORM_TABLE_NARROW_IDENTITY_WIDTH_PERCENT }
+      : layoutMode === 'phone' || layoutMode === 'mobile'
+        ? { columnId: 'name', widthPercent: PLATFORM_TABLE_PHONE_IDENTITY_WIDTH_PERCENT }
+        : undefined,
   );
   return typeof style.width === 'string' ? percentageColumn(style.width) : undefined;
 };
@@ -571,6 +584,7 @@ export const getGuestColumnWidthStyle = (
 };
 
 export const getWorkloadTableLayoutMode = (width: number): WorkloadTableLayoutMode => {
+  if (!Number.isFinite(width) || width < WORKLOAD_TABLE_NARROW_LAYOUT_WIDTH) return 'narrow';
   if (!Number.isFinite(width) || width < WORKLOAD_TABLE_PHONE_LAYOUT_WIDTH) return 'phone';
   if (width < WORKLOAD_TABLE_MOBILE_LAYOUT_WIDTH) return 'mobile';
   if (width < WORKLOAD_TABLE_TABLET_LAYOUT_WIDTH) return 'tablet';
@@ -579,6 +593,7 @@ export const getWorkloadTableLayoutMode = (width: number): WorkloadTableLayoutMo
 };
 
 export const getWorkloadTableLayoutModeForContainer = (width: number): WorkloadTableLayoutMode => {
+  if (!Number.isFinite(width) || width < WORKLOAD_TABLE_CONTAINER_NARROW_WIDTH) return 'narrow';
   if (!Number.isFinite(width) || width < WORKLOAD_TABLE_CONTAINER_PHONE_WIDTH) return 'phone';
   if (width < WORKLOAD_TABLE_CONTAINER_MOBILE_WIDTH) return 'mobile';
   if (width < WORKLOAD_TABLE_CONTAINER_TABLET_WIDTH) return 'tablet';

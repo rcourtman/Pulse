@@ -571,6 +571,10 @@ change may globally weaken the Task 03 lifecycle-state idempotency invariant.
 8. Render workload row identity directly from the shared canonical workload helper so row selection, hover, and fallback metadata lookup stay aligned with the same workload contract
 9. Format infrastructure sensor labels through the shared `frontend-modern/src/utils/textPresentation.ts` presentation helper instead of maintaining a local title-casing implementation in `frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts`
 10. Extend workload row contract and per-row hot-path derivations through `frontend-modern/src/components/Workloads/guestRowModel.tsx` and `frontend-modern/src/components/Workloads/useGuestRowState.ts`, and extend tooltip-backed row cell presentation through `frontend-modern/src/components/Workloads/GuestRowCells.tsx`, rather than rebuilding column metadata, row identity, cell tooltips, or anomaly correlation inside `frontend-modern/src/components/Workloads/GuestRow.tsx`
+    Ultra-narrow workload presentation belongs in the existing layout and
+    column model: below 360 pixels it keeps five identity/health columns with a
+    40-percent identity track. It must not add per-row measurement, viewport
+    listeners, or render-time column discovery to the Workloads hot path.
     Workload runtime badges must consume the shared resource badge
     presentation helper rather than carrying local neutral chip classes, so
     Docker, Podman, and future container runtimes keep the same identity tones

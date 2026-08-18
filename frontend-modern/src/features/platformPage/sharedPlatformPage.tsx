@@ -139,7 +139,9 @@ export function PlatformSectionTabs<TabId extends string>(props: {
           ref={(element) => {
             tabListRef = element;
           }}
-          class="flex min-w-0 scroll-px-10 items-center gap-1 overflow-x-auto px-10 scrollbar-hide sm:scroll-px-0 sm:px-0"
+          class={`flex min-w-0 items-center gap-1 overflow-x-auto pl-0 scrollbar-hide sm:pr-0 ${
+            canScrollRight() ? 'pr-10' : 'pr-0'
+          }`}
           aria-label={props.ariaLabel}
         >
           <For each={props.tabs}>
@@ -239,6 +241,7 @@ export const PLATFORM_TABLE_HEADER_ROW_CLASS = 'bg-surface-alt text-muted border
 export const PLATFORM_TABLE_BODY_CLASS = 'divide-y divide-border';
 export const PLATFORM_TABLE_CLASS = 'platform-table';
 export const PLATFORM_TABLE_PHONE_IDENTITY_WIDTH_PERCENT = 30;
+export const PLATFORM_TABLE_NARROW_IDENTITY_WIDTH_PERCENT = 40;
 // Responsive platform tables already decide which columns remain useful at
 // each breakpoint. A shared 48rem floor defeated that work by forcing a
 // horizontal rail even when the visible columns could fit the real container.
@@ -322,6 +325,10 @@ export const getPlatformTableHeadClassForKind = (kind: PlatformTableColumnKind):
 
 export const getPlatformTableCellClassForKind = (kind: PlatformTableColumnKind): string =>
   getPlatformTableCellClass(getPlatformColumnAlign(kind));
+
+// Text-only rows otherwise collapse below the scanning rhythm established by
+// platform rows with buttons, badges, or progress bars.
+export const getPlatformTableRowClass = (): string => 'h-8';
 
 export function PlatformResponsiveTableLabel(props: { compact: string; full: string }) {
   return (

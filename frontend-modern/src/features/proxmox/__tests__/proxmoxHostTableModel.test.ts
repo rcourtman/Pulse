@@ -8,6 +8,17 @@ import {
 } from '../proxmoxHostTableModel';
 
 describe('proxmoxHostTableModel', () => {
+  it('keeps five legible identity and health columns in ultra-narrow containers', () => {
+    const columns = getProxmoxHostVisibleColumnsForLayout('narrow');
+    const ids = columns.map((column) => column.id);
+
+    expect(ids).toEqual(['node', 'cpu', 'memory', 'disk', 'uptime']);
+    expect(getProxmoxHostTableMinWidthClass('narrow')).toBe('min-w-[0px]');
+    expect(getProxmoxHostColumnWidthStyle('node', 'narrow', ids)).toEqual({ width: '40%' });
+    expect(getProxmoxHostColumnWidthStyle('cpu', 'narrow', ids)).toEqual({ width: '15%' });
+    expect(getProxmoxHostColumnWidthStyle('uptime', 'narrow', ids)).toEqual({ width: '15%' });
+  });
+
   it('shows the full operational metric track at phone width', () => {
     const columns = getProxmoxHostVisibleColumnsForLayout('phone');
     const ids = columns.map((column) => column.id);
@@ -83,6 +94,8 @@ describe('proxmoxHostTableModel', () => {
   });
 
   it('chooses host columns from available container width', () => {
+    expect(getProxmoxHostTableLayoutModeForContainer(359)).toBe('narrow');
+    expect(getProxmoxHostTableLayoutModeForContainer(360)).toBe('phone');
     expect(getProxmoxHostTableLayoutModeForContainer(439)).toBe('phone');
     expect(getProxmoxHostTableLayoutModeForContainer(440)).toBe('mobile');
     expect(getProxmoxHostTableLayoutModeForContainer(799)).toBe('mobile');

@@ -4,6 +4,7 @@ import type { WorkloadTableLayoutMode } from '@/components/Workloads/guestRowMod
 import type { PlatformTableColumnKind } from '@/features/platformPage/columnAlignment';
 import {
   getPlatformTableWeightedColumnWidthStyle,
+  PLATFORM_TABLE_NARROW_IDENTITY_WIDTH_PERCENT,
   PLATFORM_TABLE_PHONE_IDENTITY_WIDTH_PERCENT,
 } from '@/features/platformPage/sharedPlatformPage';
 
@@ -17,20 +18,21 @@ export type ProxmoxHostTableColumn = {
 };
 
 const HOST_TABLE_LAYOUT_ORDER: Record<WorkloadTableLayoutMode, number> = {
-  phone: 0,
-  mobile: 1,
-  tablet: 2,
-  compact: 3,
-  wide: 4,
+  narrow: 0,
+  phone: 1,
+  mobile: 2,
+  tablet: 3,
+  compact: 4,
+  wide: 5,
 };
 
 const HOST_COLUMN_MIN_LAYOUT: Record<ProxmoxHostTableColumnId, WorkloadTableLayoutMode> = {
-  node: 'phone',
-  cpu: 'phone',
-  memory: 'phone',
-  disk: 'phone',
+  node: 'narrow',
+  cpu: 'narrow',
+  memory: 'narrow',
+  disk: 'narrow',
   temp: 'phone',
-  uptime: 'phone',
+  uptime: 'narrow',
   cluster: 'tablet',
   vms: 'compact',
   cts: 'compact',
@@ -60,6 +62,13 @@ const HOST_COLUMN_RESPONSIVE_WEIGHTS: Record<
   Exclude<WorkloadTableLayoutMode, 'wide'>,
   Partial<Record<ProxmoxHostTableColumnId, number>>
 > = {
+  narrow: {
+    node: 40,
+    cpu: 15,
+    memory: 15,
+    disk: 15,
+    uptime: 15,
+  },
   phone: {
     node: 32,
     cpu: 13,
@@ -101,6 +110,7 @@ const HOST_COLUMN_RESPONSIVE_WEIGHTS: Record<
 export const getProxmoxHostTableLayoutModeForContainer = (
   width: number,
 ): WorkloadTableLayoutMode => {
+  if (Number.isFinite(width) && width < 360) return 'narrow';
   if (Number.isFinite(width) && width < 440) return 'phone';
   if (!Number.isFinite(width) || width < 800) return 'mobile';
   if (width < 1040) return 'tablet';
@@ -147,9 +157,11 @@ export const getProxmoxHostColumnWidthStyle = (
     columnId,
     weights,
     visibleColumnIds,
-    layoutMode === 'phone' || layoutMode === 'mobile'
-      ? { columnId: 'node', widthPercent: PLATFORM_TABLE_PHONE_IDENTITY_WIDTH_PERCENT }
-      : undefined,
+    layoutMode === 'narrow'
+      ? { columnId: 'node', widthPercent: PLATFORM_TABLE_NARROW_IDENTITY_WIDTH_PERCENT }
+      : layoutMode === 'phone' || layoutMode === 'mobile'
+        ? { columnId: 'node', widthPercent: PLATFORM_TABLE_PHONE_IDENTITY_WIDTH_PERCENT }
+        : undefined,
   );
 };
 
@@ -160,7 +172,9 @@ export const getProxmoxHostColumnWidthStyle = (
 export const getProxmoxHostTableMinWidthClass = (
   layoutMode: WorkloadTableLayoutMode,
 ): 'min-w-[0px]' | 'min-w-[50rem]' | 'min-w-[64rem]' | 'min-w-[1240px]' => {
-  if (layoutMode === 'phone' || layoutMode === 'mobile') return 'min-w-[0px]';
+  if (layoutMode === 'narrow' || layoutMode === 'phone' || layoutMode === 'mobile') {
+    return 'min-w-[0px]';
+  }
   if (layoutMode === 'tablet') return 'min-w-[50rem]';
   if (layoutMode === 'compact') return 'min-w-[64rem]';
   return 'min-w-[1240px]';

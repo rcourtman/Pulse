@@ -108,6 +108,9 @@ describe('PlatformSectionTabs', () => {
     const navigation = screen.getByRole('navigation', { name: 'TrueNAS sections' });
     expect(navigation).toHaveClass('overflow-x-auto');
     expect(navigation).toHaveClass('scrollbar-hide');
+    expect(navigation).toHaveClass('pl-0');
+    expect(navigation).toHaveClass('pr-0');
+    expect(navigation).not.toHaveClass('px-10');
     expect(navigation).not.toHaveClass('flex-wrap');
     expect(within(navigation).getByRole('link', { name: 'Overview' })).toHaveAttribute(
       'href',
@@ -155,6 +158,8 @@ describe('PlatformSectionTabs', () => {
     const scrollRight = await screen.findByRole('button', {
       name: 'Example sections: scroll right',
     });
+    expect(navigation).toHaveClass('pl-0');
+    expect(navigation).toHaveClass('pr-10');
     expect(
       screen.queryByRole('button', { name: 'Example sections: scroll left' }),
     ).not.toBeInTheDocument();
@@ -167,6 +172,7 @@ describe('PlatformSectionTabs', () => {
     expect(
       await screen.findByRole('button', { name: 'Example sections: scroll left' }),
     ).toBeInTheDocument();
+    expect(navigation).toHaveClass('pl-0');
   });
 
   it('keeps the active destination visible when the tab rail narrows', async () => {

@@ -926,6 +926,22 @@ describe('GuestRow', () => {
       expect(container.querySelector('td[data-workload-col="link"]')).toBeNull();
     });
 
+    it.each(['narrow', 'phone'] as const)(
+      'prioritizes the workload name over the adjacent web link in %s rows',
+      (workloadTableLayoutMode) => {
+        const { container } = renderGuestRow({
+          guest: makeGuest(),
+          customUrl: 'https://example.com',
+          visibleColumnIds: ['name'],
+          workloadTableLayoutMode,
+        });
+
+        expect(container.querySelector('a[href="https://example.com"]')?.parentElement).toHaveClass(
+          '[&>a]:hidden',
+        );
+      },
+    );
+
     it('does not render a trailing infrastructure fallback link when no customUrl is set', () => {
       const { container } = renderGuestRow({
         guest: makeGuest(),
@@ -1104,11 +1120,35 @@ describe('GUEST_COLUMNS', () => {
 
   it('derives normalized tablet and compact widths from the visible workload columns', () => {
     const allModeColumns = GUEST_COLUMNS.filter((column) => VIEW_MODE_COLUMNS.all!.has(column.id));
+    const narrowColumns = getWorkloadVisibleColumnsForLayout(allModeColumns, 'narrow');
     const phoneColumns = getWorkloadVisibleColumnsForLayout(allModeColumns, 'phone');
     const mobileColumns = getWorkloadVisibleColumnsForLayout(allModeColumns, 'mobile');
     const tabletColumns = getWorkloadVisibleColumnsForLayout(allModeColumns, 'tablet');
     const compactColumns = getWorkloadVisibleColumnsForLayout(allModeColumns, 'compact');
 
+    expect(narrowColumns.map((column) => column.id)).toEqual([
+      'name',
+      'cpu',
+      'memory',
+      'disk',
+      'uptime',
+    ]);
+    expect(
+      getGuestColumnWidthStyle(
+        'name',
+        true,
+        'narrow',
+        narrowColumns.map((column) => column.id),
+      ),
+    ).toEqual({ width: '40%' });
+    expect(
+      getGuestColumnWidthStyle(
+        'cpu',
+        true,
+        'narrow',
+        narrowColumns.map((column) => column.id),
+      ),
+    ).toEqual({ width: '16%' });
     expect(phoneColumns.map((column) => column.id)).toEqual([
       'name',
       'availability',
@@ -1209,6 +1249,8 @@ describe('GUEST_COLUMNS', () => {
   });
 
   it('maps workload table layout modes to viewport width stages', () => {
+    expect(getWorkloadTableLayoutMode(359)).toBe('narrow');
+    expect(getWorkloadTableLayoutMode(360)).toBe('phone');
     expect(getWorkloadTableLayoutMode(479)).toBe('phone');
     expect(getWorkloadTableLayoutMode(480)).toBe('mobile');
     expect(getWorkloadTableLayoutMode(767)).toBe('mobile');
@@ -1223,6 +1265,8 @@ describe('GUEST_COLUMNS', () => {
   });
 
   it('maps workload table layout modes to the actual table container', () => {
+    expect(getWorkloadTableLayoutModeForContainer(359)).toBe('narrow');
+    expect(getWorkloadTableLayoutModeForContainer(360)).toBe('phone');
     expect(getWorkloadTableLayoutModeForContainer(439)).toBe('phone');
     expect(getWorkloadTableLayoutModeForContainer(440)).toBe('mobile');
     expect(getWorkloadTableLayoutModeForContainer(719)).toBe('mobile');

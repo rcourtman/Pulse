@@ -453,6 +453,19 @@ and the relative weights for those columns, while dense platform table
 rendering must use `getPlatformTableWeightedColumnWidthStyle` for
 visible-column percentage normalization, zero-width fallback, and stable
 percentage formatting instead of declaring local width-percent helpers.
+Workload, Proxmox host, Docker host, and Docker container consumers must enter the shared
+`narrow` layout below a 360-pixel content width: identity receives 40 percent,
+five high-value identity/health columns remain, and lower-priority type, ID,
+temperature, restart, or availability context returns at the ordinary phone
+stage instead of making the retained values unreadable.
+`ProxmoxReplicationTable` must also compose the frontend-primitives-owned
+`getPlatformTableRowClass` for its text-only job rows so its five-column phone
+projection retains the shared platform scanning rhythm instead of collapsing
+to the intrinsic text height. That phone projection keeps the
+guest identity on one line and makes every row keyboard- and touch-operable so
+the complete guest identity and job context are available through an explicit
+detail disclosure rather than hover-only title text. Compact status, route,
+last-sync, and next-sync values must remain fully visible in the scanning row.
 Optional numeric table cells follow the same split: unified-resource consumers
 own which count or replica field is meaningful, whether the domain should
 zero-default an absent scheduler/service/inventory count, whether a
