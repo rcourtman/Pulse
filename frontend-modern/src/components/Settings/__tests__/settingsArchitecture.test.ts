@@ -1682,6 +1682,9 @@ describe('settings architecture guardrails', () => {
     expect(nodeModalStatusFooterSource).toContain('props.saveDisabled');
     expect(nodeModalStateSource).toContain("enableCommands: type === 'pve'");
     expect(nodeModalStateSource).toContain('data.setupMode !==');
+    // The typed connection name rides the setup bootstrap request so the
+    // one-time setup token can carry it into auto-registration naming.
+    expect(nodeModalStateSource).toContain('name: formData().name?.trim() || undefined');
 
     expect(vmwareCredentialSlotSource).toContain('TlsVerificationWarningBanner');
     expect(vmwareCredentialSlotSource).toContain('subject="this vCenter connection"');

@@ -182,6 +182,48 @@ func TestHandleSetupScriptURL(t *testing.T) {
 	}
 }
 
+func TestHandleSetupScriptURL_StoresDesiredNameOnSetupToken(t *testing.T) {
+	tempDir := t.TempDir()
+	cfg := &config.Config{
+		FrontendPort: 8080,
+		PublicURL:    "https://pulse.example.com",
+	}
+	cfg.DataPath = tempDir
+	handler := newTestConfigHandlers(t, cfg)
+
+	body, err := json.Marshal(map[string]interface{}{
+		"type": "pve",
+		"host": "pve1.local",
+		"name": "  enacon  ",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/setup/url", bytes.NewBuffer(body))
+	req.Host = "127.0.0.1:8080"
+	w := httptest.NewRecorder()
+
+	handler.HandleSetupScriptURL(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d, body=%s", w.Code, http.StatusOK, w.Body.String())
+	}
+
+	handler.codeMutex.Lock()
+	defer handler.codeMutex.Unlock()
+	if len(handler.setupTokens) != 1 {
+		t.Fatalf("expected 1 setup token stored, got %d", len(handler.setupTokens))
+	}
+	for _, record := range handler.setupTokens {
+		// The typed connection name is trimmed and rides the setup token so
+		// auto-registration can honor it.
+		if record.DesiredName != "enacon" {
+			t.Fatalf("DesiredName = %q, want %q", record.DesiredName, "enacon")
+		}
+	}
+}
+
 func TestHandleSetupScriptURL_RejectsTrailingJSON(t *testing.T) {
 	tempDir := t.TempDir()
 	cfg := &config.Config{DataPath: tempDir}

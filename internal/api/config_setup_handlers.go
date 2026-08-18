@@ -647,6 +647,25 @@ type setupScriptURLRequest struct {
 	Type        string `json:"type"`
 	Host        string `json:"host"`
 	BackupPerms bool   `json:"backupPerms"`
+	// Name is the optional connection name the user typed in the add dialog.
+	// It rides the setup token so the auto-registration that the setup script
+	// triggers can name the connection what the user asked for, rather than
+	// deriving it from the node's hostname.
+	Name string `json:"name,omitempty"`
+}
+
+// setupDesiredNameContextKey carries the user's typed connection name from
+// setup-token validation to the auto-registration path within one request.
+type setupDesiredNameContextKey struct{}
+
+func setupDesiredNameFromContext(ctx context.Context) string {
+	if ctx == nil {
+		return ""
+	}
+	if name, ok := ctx.Value(setupDesiredNameContextKey{}).(string); ok {
+		return strings.TrimSpace(name)
+	}
+	return ""
 }
 
 // generateSetupTokenRecord generates a secure hex token that satisfies sanitizeSetupAuthToken.
@@ -691,6 +710,7 @@ func (h *ConfigHandlers) handleSetupScriptURL(w http.ResponseWriter, r *http.Req
 	}
 	req.Type = strings.TrimSpace(req.Type)
 	req.Host = strings.TrimSpace(req.Host)
+	req.Name = strings.TrimSpace(req.Name)
 	if !isCanonicalAutoRegisterType(req.Type) {
 		http.Error(w, "type must be 'pve' or 'pbs'", http.StatusBadRequest)
 		return
@@ -719,11 +739,12 @@ func (h *ConfigHandlers) handleSetupScriptURL(w http.ResponseWriter, r *http.Req
 	expiry := time.Now().Add(5 * time.Minute)
 	h.codeMutex.Lock()
 	h.setupTokens[tokenHash] = &SetupTokenRecord{
-		ExpiresAt: expiry,
-		Used:      false,
-		NodeType:  req.Type,
-		Host:      req.Host,
-		OrgID:     GetOrgID(r.Context()),
+		ExpiresAt:   expiry,
+		Used:        false,
+		NodeType:    req.Type,
+		Host:        req.Host,
+		OrgID:       GetOrgID(r.Context()),
+		DesiredName: req.Name,
 	}
 	h.codeMutex.Unlock()
 
@@ -1871,6 +1892,11 @@ func (h *ConfigHandlers) handleAutoRegister(w http.ResponseWriter, r *http.Reque
 				graceExpiry := recentSetupTokenGraceExpiry(setupTokenRecord, time.Now())
 				h.recentSetupTokens[tokenHash] = buildRecentSetupTokenRecord(setupTokenRecord, graceExpiry)
 				authenticated = true
+				// Carry the name the user typed in the add dialog to the
+				// registration path, same transport as the token's OrgID.
+				if trimmed := strings.TrimSpace(setupTokenRecord.DesiredName); trimmed != "" {
+					r = r.WithContext(context.WithValue(r.Context(), setupDesiredNameContextKey{}, trimmed))
+				}
 				log.Info().
 					Str("type", req.Type).
 					Str("host", req.Host).
@@ -2161,10 +2187,17 @@ func (h *ConfigHandlers) handleCanonicalAutoRegister(w http.ResponseWriter, r *h
 		candidateHosts: candidateHosts,
 	}
 
-	// Add the node to configuration
+	// Add the node to configuration. A name typed in the add dialog rides the
+	// setup token as the desired name and wins over the node's own hostname;
+	// the dedup/adoption identity below still matches on serverName so
+	// renaming cannot fork an existing connection.
+	connectionName := serverName
+	if desired := setupDesiredNameFromContext(r.Context()); desired != "" {
+		connectionName = desired
+	}
 	created := false
 	if req.Type == "pve" {
-		pveDisplayName := h.disambiguateNodeName(r.Context(), serverName, host, "pve")
+		pveDisplayName := h.disambiguateNodeName(r.Context(), connectionName, host, "pve")
 		pveNode := config.PVEInstance{
 			Name:              pveDisplayName,
 			Host:              host,
@@ -2217,7 +2250,7 @@ func (h *ConfigHandlers) handleCanonicalAutoRegister(w http.ResponseWriter, r *h
 			created = true
 		}
 	} else if req.Type == "pbs" {
-		pbsDisplayName := h.disambiguateNodeName(r.Context(), serverName, host, "pbs")
+		pbsDisplayName := h.disambiguateNodeName(r.Context(), connectionName, host, "pbs")
 		pbsNode := config.PBSInstance{
 			Name:              pbsDisplayName,
 			Host:              host,

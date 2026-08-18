@@ -247,6 +247,117 @@ func TestHandleAutoRegisterAcceptsWithSetupToken(t *testing.T) {
 	}
 }
 
+func TestHandleAutoRegisterUsesSetupTokenDesiredName(t *testing.T) {
+	stubAutoRegisterNetworkDeps(t)
+
+	tempDir := t.TempDir()
+	t.Setenv("PULSE_DATA_DIR", tempDir)
+
+	cfg := &config.Config{
+		DataPath:   tempDir,
+		ConfigPath: tempDir,
+	}
+
+	handler := newTestConfigHandlers(t, cfg)
+
+	const tokenValue = "TEMP-TOKEN-NAMED"
+	tokenHash := internalauth.HashAPIToken(tokenValue)
+	handler.codeMutex.Lock()
+	handler.setupTokens[tokenHash] = &SetupTokenRecord{
+		ExpiresAt:   time.Now().Add(5 * time.Minute),
+		NodeType:    "pve",
+		DesiredName: "enacon",
+	}
+	handler.codeMutex.Unlock()
+
+	reqBody := AutoRegisterRequest{
+		Type:       "pve",
+		Host:       "https://pve01.local:8006",
+		TokenID:    "pulse-monitor@pve!pulse-pve01-local",
+		TokenValue: "secret-token",
+		ServerName: "pve01.local",
+		AuthToken:  tokenValue,
+		Source:     "script",
+	}
+
+	body, err := json.Marshal(reqBody)
+	if err != nil {
+		t.Fatalf("failed to marshal request: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/auto-register", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+
+	handler.HandleAutoRegister(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d, body=%s", rec.Code, rec.Body.String())
+	}
+
+	if len(cfg.PVEInstances) != 1 {
+		t.Fatalf("expected 1 PVE instance stored, got %d", len(cfg.PVEInstances))
+	}
+	// The name the user typed in the add dialog rides the setup token and
+	// wins over the node's self-reported hostname.
+	if cfg.PVEInstances[0].Name != "enacon" {
+		t.Fatalf("name = %q, want the setup token's desired name %q", cfg.PVEInstances[0].Name, "enacon")
+	}
+}
+
+func TestHandleAutoRegisterKeepsHostnameNameWithoutDesiredName(t *testing.T) {
+	stubAutoRegisterNetworkDeps(t)
+
+	tempDir := t.TempDir()
+	t.Setenv("PULSE_DATA_DIR", tempDir)
+
+	cfg := &config.Config{
+		DataPath:   tempDir,
+		ConfigPath: tempDir,
+	}
+
+	handler := newTestConfigHandlers(t, cfg)
+
+	const tokenValue = "TEMP-TOKEN-UNNAMED"
+	tokenHash := internalauth.HashAPIToken(tokenValue)
+	handler.codeMutex.Lock()
+	handler.setupTokens[tokenHash] = &SetupTokenRecord{
+		ExpiresAt: time.Now().Add(5 * time.Minute),
+		NodeType:  "pve",
+	}
+	handler.codeMutex.Unlock()
+
+	reqBody := AutoRegisterRequest{
+		Type:       "pve",
+		Host:       "https://pve01.local:8006",
+		TokenID:    "pulse-monitor@pve!pulse-pve01-local",
+		TokenValue: "secret-token",
+		ServerName: "pve01.local",
+		AuthToken:  tokenValue,
+		Source:     "script",
+	}
+
+	body, err := json.Marshal(reqBody)
+	if err != nil {
+		t.Fatalf("failed to marshal request: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/auto-register", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+
+	handler.HandleAutoRegister(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d, body=%s", rec.Code, rec.Body.String())
+	}
+
+	if len(cfg.PVEInstances) != 1 {
+		t.Fatalf("expected 1 PVE instance stored, got %d", len(cfg.PVEInstances))
+	}
+	if cfg.PVEInstances[0].Name != "pve01.local" {
+		t.Fatalf("name = %q, want hostname-derived default %q", cfg.PVEInstances[0].Name, "pve01.local")
+	}
+}
+
 func TestHandleAutoUnregisterAcceptsRecentSetupTokenAndRemovesMatchingPVEInstance(t *testing.T) {
 	tempDir := t.TempDir()
 	t.Setenv("PULSE_DATA_DIR", tempDir)

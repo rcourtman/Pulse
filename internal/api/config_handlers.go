@@ -180,6 +180,10 @@ type SetupTokenRecord struct {
 	NodeType  string // "pve" or "pbs"
 	Host      string // The host URL for validation
 	OrgID     string // Organization ID creating this code
+	// DesiredName carries the connection name the user typed in the add
+	// dialog, so auto-registration can honor it instead of falling back to
+	// the node's own hostname.
+	DesiredName string
 }
 
 // RecentSetupTokenRecord preserves minimal identity metadata for the short

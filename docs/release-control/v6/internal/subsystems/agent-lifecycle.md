@@ -549,6 +549,14 @@ update, profile rollout, command reachability, or fleet-control authority.
     that runtime, not a control-plane token, agent profile, or cross-client
     ingest path.
 21. `internal/api/config_setup_handlers.go` shared with `api-contracts`: auto-register and setup handlers are both an agent lifecycle control surface and a canonical API payload contract boundary.
+    Assisted-setup naming is lifecycle-owned bootstrap state: the connection
+    name typed in the add dialog travels on the one-time setup token
+    (`SetupTokenRecord.DesiredName`) rather than through the node-side script,
+    and the setup-token-authenticated auto-register completion names a newly
+    created connection from that carried value, falling back to the node's
+    self-reported hostname only when no name was typed. Dedup and
+    cluster-member adoption identity remain hostname/candidate based so the
+    carried name cannot fork or rotate an existing registration.
 22. `internal/api/setup_script_render.go` shared with `api-contracts`, `storage-recovery`: the generated Proxmox setup-script is a shared boundary across agent lifecycle (forced-command keys, install/uninstall edits), API contracts (rendered token shape and encoded rerun URL), and storage/recovery (backup visibility grants, Pulse-managed temperature SSH keys, and SMART disk-temperature collection).
     PBS setup-script auto-registration remains lifecycle-owned bootstrap
     transport: rendered scripts must post registration payloads to the canonical

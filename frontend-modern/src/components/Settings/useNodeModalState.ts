@@ -108,7 +108,7 @@ export const useNodeModalState = (props: NodeModalProps) => {
   };
 
   const quickSetupCacheKey = (type: 'pve' | 'pbs', backupPerms: boolean) =>
-    `${type}:${backupPerms ? 'backup' : 'standard'}:${formData().host?.trim() ?? ''}`;
+    `${type}:${backupPerms ? 'backup' : 'standard'}:${formData().host?.trim() ?? ''}:${formData().name?.trim() ?? ''}`;
 
   const loadQuickSetupBootstrap = async (
     type: 'pve' | 'pbs',
@@ -133,6 +133,7 @@ export const useNodeModalState = (props: NodeModalProps) => {
       type,
       host,
       backupPerms,
+      name: formData().name?.trim() || undefined,
     });
     setQuickSetupBootstrap({ cacheKey, response });
     setQuickSetupTokenHint(response.tokenHint);

@@ -383,6 +383,40 @@ describe('NodesAPI', () => {
       expect(result).not.toHaveProperty('setupToken');
     });
 
+    it('sends the typed connection name so the setup token can carry it into auto-registration', async () => {
+      vi.mocked(apiFetchJSON).mockResolvedValueOnce({
+        type: 'pve',
+        host: 'https://pve.example:8006',
+        url: 'https://pulse.example/api/setup-script?type=pve',
+        downloadURL: 'https://pulse.example/api/setup-script?type=pve&setup_token=setup-token-123',
+        scriptFileName: 'pulse-setup-pve.sh',
+        command: 'curl pve ...',
+        setupToken: 'setup-token-123',
+        tokenHint: 'set…123',
+        expires: 1_900_000_000,
+      });
+
+      await NodesAPI.getProxmoxSetupCommand({
+        type: 'pve',
+        host: 'pve.example',
+        backupPerms: false,
+        name: 'enacon',
+      });
+
+      expect(apiFetchJSON).toHaveBeenCalledWith(
+        '/api/setup-script-url',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({
+            type: 'pve',
+            host: 'pve.example',
+            backupPerms: false,
+            name: 'enacon',
+          }),
+        }),
+      );
+    });
+
     it('normalizes the canonical setup-script-url response fields', async () => {
       vi.mocked(apiFetchJSON).mockResolvedValueOnce({
         type: ' pve ',

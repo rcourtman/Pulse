@@ -1,15 +1,15 @@
 {
   "version": 1,
-  "base_sha": "6ffc6b4f3a90af4c6486d90c916b37b73f1b736b",
-  "verified_at": "2026-08-18T17:05:00Z",
+  "base_sha": "006d5da1c7881a43bdfbb7357b6a7a84395ebb8b",
+  "verified_at": "2026-08-18T18:22:00Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx",
+    "frontend-modern/src/api/nodes.ts",
     "frontend-modern/src/components/Settings/useNodeModalState.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx": "5532561552c342d17d4688cfcc7b0cd5af835b1e9276778d00303e9372f2eba5",
-    "frontend-modern/src/components/Settings/useNodeModalState.ts": "9b9957cf5760896b748ced54b0bb30612ab10e84bda45a527be3758bb228247c"
+    "frontend-modern/src/api/nodes.ts": "fb258752aafdb6ec0be631732512b131196c51a890c6f2d4c050992c4c800a36",
+    "frontend-modern/src/components/Settings/useNodeModalState.ts": "bd3124418c5f6006205d2a0056fc7d93666f7aaf20dda7aa861fb199d76cf5ba"
   },
   "routes": [
     "/settings/infrastructure"
@@ -25,21 +25,18 @@
     }
   ],
   "states": [
-    "Add Proxmox VE dialog with name, endpoint, and password auth filled; connection saved (201) and listed",
-    "Manage dialog populated from saved config (name, user, SSL, collection scope)",
-    "Manage dialog mid-edit while a refresh_nodes-triggered loadNodes delivered changed server data (user field changed server-side): typed rename preserved, dialog not remounted, background sync skipped",
-    "Manage dialog reopened after cancel: fresh server state (changed user) synced into the form",
-    "Manage dialog after Save changes: rename persisted server-side and shown in dialog title",
-    "Mobile 375x812 Manage dialog: form renders, typed edit survives refresh_nodes"
+    "Add Proxmox VE dialog on the Connect via API path with Node Name enacon and an endpoint URL typed",
+    "Setup command generated: POST /api/setup-script-url returned 200 with the setup token after the copy-command action",
+    "Auto-registration completed against the isolated backend using that setup token with serverName pve01: connection created and listed as enacon, not pve01",
+    "Connected systems list showing the enacon connection under Proxmox VE",
+    "Mobile 375x812 Add Proxmox VE dialog with the Node Name field typed into"
   ],
   "interactions": [
-    "typed node name and endpoint URL in the add dialog",
-    "switched auth mode to Username & Password and submitted Add node",
-    "opened Manage from the connected systems list",
-    "typed a rename into Node Name mid-edit (input events)",
-    "changed the node's user via PUT /api/config/nodes/pve-0 and emitted refresh_nodes to force loadNodes while editing",
-    "cancelled and reopened the Manage dialog",
-    "clicked Save changes and confirmed the rename via GET /api/config/nodes",
-    "repeated the mid-edit refresh check at the mobile viewport"
+    "opened Add infrastructure and picked Proxmox VE",
+    "typed the connection name and endpoint URL (input events)",
+    "triggered the copy-command action that requests /api/setup-script-url with the typed name",
+    "read the response setup token and completed POST /api/auto-register with it (simulated node-side script) with a different self-reported hostname",
+    "confirmed via GET /api/config/nodes and the connected systems list that the connection took the typed name",
+    "repeated the dialog and name typing at the mobile viewport"
   ]
 }

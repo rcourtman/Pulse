@@ -1766,6 +1766,15 @@ payload shape change when the portal presents compact client rows.
     match the primary configured endpoint may still drive disconnected-source
     repair.
     That same contract now owns stale-marker verification as well: setup-token-authenticated `checkRegistration` requests may omit token completion fields and must answer `{registered:boolean}` from canonical candidate-host matching so runtime repair can distinguish real registrations from stale local marker files without rotating tokens first.
+    That same contract owns user-chosen connection naming for assisted setup:
+    `/api/setup-script-url` accepts an optional `name` field (the connection
+    name typed in the add dialog), stores it on the one-time setup token, and
+    the setup-token-authenticated `/api/auto-register` completion must name a
+    newly created connection with that carried name instead of the node's
+    self-reported hostname. Identity matching for dedup and cluster-member
+    adoption stays on the reported server name and candidate hosts, so a
+    user-chosen name can never fork an existing connection, and an empty or
+    absent `name` preserves the hostname-derived default.
     That same shared boundary owns the install-token bootstrap type rule: the
     one-shot Proxmox source-creation grant carried by agent-install tokens
     accepts either a matching declared `install_type` of `pve`/`pbs` or a

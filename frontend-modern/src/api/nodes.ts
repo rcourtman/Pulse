@@ -301,6 +301,9 @@ export class NodesAPI {
     type: 'pve' | 'pbs';
     host: string;
     backupPerms: boolean;
+    // Optional connection name typed in the add dialog; rides the setup token
+    // so the auto-registration triggered by the script keeps this name.
+    name?: string;
   }): Promise<ProxmoxSetupCommandResponse> {
     const response = await apiFetchJSON<RawProxmoxSetupCommandResponse>('/api/setup-script-url', {
       method: 'POST',
