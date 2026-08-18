@@ -574,14 +574,18 @@ func diagnoseAgentCredential(subject agentFleetSubject, inventory agentFleetToke
 			Code:     AgentFleetReasonCredentialExpired,
 			Severity: AgentFleetStatusCritical,
 			Message:  "The credential last used by this agent has expired and can no longer authenticate.",
-			Evidence: []string{"Credential status: expired"},
+			Evidence: []string{"Credential status: expired", "Credential id: " + tokenID},
 		}}
 	}
+	// The judged id is the token record UUID this host row last reported
+	// with, not secret material. Without it an operator cannot tell which
+	// credential the verdict is about, so a host that re-enrolled onto a
+	// fresh token but left a stale row behind reads as a live outage (#1730).
 	return []AgentFleetDiagnosticReason{{
 		Code:     AgentFleetReasonCredentialMissing,
 		Severity: AgentFleetStatusCritical,
 		Message:  "The credential last used by this agent no longer exists on this Pulse server.",
-		Evidence: []string{"Credential status: missing or revoked"},
+		Evidence: []string{"Credential status: missing or revoked", "Credential id: " + tokenID},
 	}}
 }
 

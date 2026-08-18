@@ -82,6 +82,22 @@ func TestAgentFleetDiagnosticsDetectsMissingAndExpiredCredentials(t *testing.T) 
 			if agent.Status != AgentFleetStatusCritical {
 				t.Fatalf("status = %q, want %q", agent.Status, AgentFleetStatusCritical)
 			}
+			// The verdict must name the credential it judged, or an operator
+			// cannot map it onto the token list to spot a stale host row.
+			foundJudgedID := false
+			for _, reason := range agent.Reasons {
+				if reason.Code != test.wantReason {
+					continue
+				}
+				for _, evidence := range reason.Evidence {
+					if evidence == "Credential id: "+test.tokenID {
+						foundJudgedID = true
+					}
+				}
+			}
+			if !foundJudgedID {
+				t.Fatalf("credential reason evidence does not name judged token id %q: %#v", test.tokenID, agent.Reasons)
+			}
 			if !hasSupportedRepair(agent, AgentFleetActionRepairAuthentication) {
 				t.Fatalf("expected safe authentication repair action: %#v", agent.RepairActions)
 			}
