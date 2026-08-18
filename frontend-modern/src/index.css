@@ -453,7 +453,12 @@
 
   @media (max-width: 640px) {
     .pulse-shell {
-      padding-inline: 0.5rem;
+      max-width: 100%;
+      padding-inline: 0.375rem;
+    }
+
+    .pulse-shell--full-width {
+      --pulse-shell-padding-inline: 0.375rem;
     }
   }
 
@@ -469,7 +474,43 @@
 
   @media (max-width: 640px) {
     .pulse-panel {
-      padding: 0.5rem;
+      padding: 0.375rem;
+    }
+
+    /* Phone layouts keep the same hierarchy while spending less of the first
+       viewport on repeated whitespace. Primary navigation and row expand
+       controls retain 44px touch targets; the surrounding shell is tightened. */
+    .pulse-panel [data-page-header] + * {
+      margin-top: 0.75rem !important;
+    }
+
+    .pulse-wide-data-surface.space-y-3 > :not([hidden]) ~ :not([hidden]),
+    .pulse-wide-data-surface.space-y-4 > :not([hidden]) ~ :not([hidden]) {
+      margin-top: 0.5rem;
+    }
+
+    .pulse-wide-data-surface .table-scroll-shell > .table-fixed tbody td,
+    .pulse-wide-data-surface .table-scroll-shell > .table-fixed tbody .workload-row > td {
+      padding-top: 0;
+      padding-bottom: 0;
+    }
+
+    .pulse-wide-data-surface .grouped-table-row > td > div {
+      column-gap: 0.375rem;
+      row-gap: 0.25rem;
+    }
+
+    .pulse-footer {
+      display: flex;
+      min-height: 2rem;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: center;
+      column-gap: 0.5rem;
+    }
+
+    .pulse-footer > div {
+      display: contents;
     }
   }
 
@@ -1100,8 +1141,8 @@ body,
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
-.pb-safe-or-20 {
-  padding-bottom: max(5rem, env(safe-area-inset-bottom, 5rem));
+.pb-safe-or-16 {
+  padding-bottom: max(4rem, env(safe-area-inset-bottom, 4rem));
 }
 
 /* Login page animations */

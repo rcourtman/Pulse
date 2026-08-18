@@ -728,7 +728,7 @@ export function AppLayout(props: AppLayoutProps) {
 
   return (
     <div
-      class={`pulse-shell ${layoutStore.isFullWidth() || kioskMode() ? 'pulse-shell--full-width' : ''} ${!kioskMode() ? 'pb-safe-or-20 xl:pb-0' : ''}`}
+      class={`pulse-shell ${layoutStore.isFullWidth() || kioskMode() ? 'pulse-shell--full-width' : ''} ${!kioskMode() ? 'pb-safe-or-16 xl:pb-0' : ''}`}
     >
       {/* Skip-to-content link: visually hidden until focused, then
           appears as a button at the top-left. Lets keyboard users
@@ -760,7 +760,7 @@ export function AppLayout(props: AppLayoutProps) {
         />
       </Show>
       <div
-        class={`header mb-3 flex items-center gap-2 ${
+        class={`header mb-2 flex items-center gap-2 sm:mb-3 ${
           kioskMode()
             ? 'fixed top-0 left-0 right-0 z-50 justify-end bg-surface shadow-sm'
             : 'justify-between sm:grid sm:grid-cols-[1fr_auto_1fr] sm:items-center sm:gap-0'
@@ -994,7 +994,7 @@ export function AppLayout(props: AppLayoutProps) {
 
       <main
         id="main"
-        class="tab-content block bg-surface rounded-b rounded-tr rounded-tl shadow mb-2"
+        class="tab-content mb-1 block rounded-b rounded-tl rounded-tr bg-surface shadow sm:mb-2"
       >
         <div class="pulse-panel">
           <Suspense fallback={<div class="p-6 text-sm text-muted">Loading view...</div>}>
@@ -1014,21 +1014,21 @@ export function AppLayout(props: AppLayoutProps) {
       </Show>
 
       <Show when={!kioskMode()}>
-        <footer class="px-4 py-4 text-xs leading-relaxed text-muted">
+        <footer class="pulse-footer px-2 py-2 text-xs leading-relaxed text-muted sm:px-4 sm:py-4">
           <div class="text-center">
             <span>Pulse | Version: </span>
             <a
               href="https://github.com/rcourtman/Pulse/releases"
               target="_blank"
               rel="noopener noreferrer"
-              class="inline-flex min-h-10 sm:min-h-9 items-center break-all rounded px-1 py-1 text-blue-600 dark:text-blue-400 hover:underline"
+              class="inline-flex min-h-8 items-center break-all rounded px-1 py-1 text-blue-600 hover:underline dark:text-blue-400 sm:min-h-9"
             >
               {props.versionInfo()?.version || 'loading...'}
             </a>
             {props.versionInfo()?.isDevelopment && ' (Development)'}
             {props.versionInfo()?.isDocker && ' - Docker'}
           </div>
-          <div class="mt-1 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-center">
+          <div class="mt-0.5 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-center sm:mt-1">
             <Show when={props.lastUpdateText()}>
               <>
                 <span>Last refresh: {props.lastUpdateText()}</span>
@@ -1040,7 +1040,7 @@ export function AppLayout(props: AppLayoutProps) {
             <Show when={isPro()}>
               <a
                 href={`mailto:support@pulserelay.pro?subject=${encodeURIComponent(`Support Request - Pulse ${props.versionInfo()?.version || ''}`)}`}
-                class="inline-flex min-h-10 sm:min-h-9 items-center rounded px-1 py-1 text-blue-600 dark:text-blue-400 hover:underline"
+                class="inline-flex min-h-8 items-center rounded px-1 py-1 text-blue-600 hover:underline dark:text-blue-400 sm:min-h-9"
               >
                 Get Support
               </a>

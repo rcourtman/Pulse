@@ -118,7 +118,7 @@ export const FilterBar: Component<FilterBarProps> = (props) => {
   return (
     <Card
       padding="sm"
-      class="filter-bar mb-4"
+      class="filter-bar mb-2 sm:mb-4"
       role={props.role as JSX.AriaAttributes['role']}
       aria-label={props.ariaLabel}
     >

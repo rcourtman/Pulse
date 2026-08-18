@@ -168,6 +168,12 @@ describe('AppLayout navigation icons', () => {
   it('renders fresh utility icons for both desktop and mobile navigation trees', () => {
     const { container } = renderLayout();
 
+    expect(container.querySelector('.pulse-shell')).toHaveClass('pb-safe-or-16');
+    expect(container.querySelector('.pulse-shell')).not.toHaveClass('pb-safe-or-20');
+    expect(container.querySelector('.header')).toHaveClass('mb-2', 'sm:mb-3');
+    expect(container.querySelector('main')).toHaveClass('mb-1', 'sm:mb-2');
+    expect(container.querySelector('footer')).toHaveClass('pulse-footer', 'px-2', 'sm:px-4');
+
     const desktopNav = screen.getByRole('tablist', { name: 'Primary navigation' });
     const systemGroup = desktopNav.querySelector('[aria-label="System"]');
     expect(systemGroup).toBeTruthy();

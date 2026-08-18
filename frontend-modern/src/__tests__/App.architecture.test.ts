@@ -530,7 +530,11 @@ describe('App architecture', () => {
     expect(appLayoutSource).toContain('pulse-brand-lockup');
     expect(appLayoutSource).toContain('animate-pulse-brand');
     expect(appLayoutSource).toContain('pulse-brand-wordmark');
-    expect(appLayoutSource).toContain("'pb-safe-or-20 xl:pb-0'");
+    expect(appLayoutSource).toContain("'pb-safe-or-16 xl:pb-0'");
+    expect(appStylesSource).toContain('.pb-safe-or-16');
+    expect(appStylesSource).toContain('.pulse-shell--full-width');
+    expect(appStylesSource).toContain('.pulse-wide-data-surface.space-y-3');
+    expect(appStylesSource).toContain('.pulse-footer > div');
     expect(appLayoutSource).toContain('tabs mb-2 hidden xl:flex');
     expect(appLayoutSource).toContain('xl:px-2 2xl:px-3');
     expect(appLayoutSource).toContain('gap-1 2xl:gap-1.5');

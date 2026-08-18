@@ -55,14 +55,14 @@ export function PageHeader(props: PageHeaderProps) {
     <Show when={!kioskMode()}>
       <div
         data-page-header=""
-        class={`flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between ${local.class ?? ''}`.trim()}
+        class={`flex flex-row items-start justify-between gap-2 sm:gap-4 ${local.class ?? ''}`.trim()}
         {...rest}
       >
         <div class="min-w-0">
           <div class="flex items-center gap-3">
             <h1
               id={local.id}
-              class={`text-2xl font-bold tracking-tight text-base-content ${local.titleClass ?? ''}`.trim()}
+              class={`text-xl font-bold tracking-tight text-base-content sm:text-2xl ${local.titleClass ?? ''}`.trim()}
             >
               {local.title}
             </h1>
@@ -73,7 +73,7 @@ export function PageHeader(props: PageHeaderProps) {
           </Show>
         </div>
         <Show when={local.actions}>
-          <div class="w-full sm:w-auto">{local.actions}</div>
+          <div class="w-auto shrink-0">{local.actions}</div>
         </Show>
       </div>
     </Show>

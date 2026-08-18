@@ -169,7 +169,7 @@ export function MobileNavBar(props: MobileNavBarProps) {
         </div>
       </Show>
 
-      <div data-mobile-nav-rail="fixed" class="flex min-w-0 items-stretch gap-0.5 px-1 py-1.5">
+      <div data-mobile-nav-rail="fixed" class="flex min-w-0 items-stretch gap-0.5 px-1 py-1">
         <For each={mobileNav.fixedDestinations()}>
           {(destination) => {
             const active = () => isMobileNavDestinationActive(destination, props.activeTab());
