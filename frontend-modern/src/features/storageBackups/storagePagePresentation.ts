@@ -1,4 +1,5 @@
 import type { StorageSortKey } from './storageModelCore';
+import type { PlatformTableColumnKind } from '@/features/platformPage/columnAlignment';
 
 export type StorageViewOption = {
   value: 'pools' | 'disks';
@@ -15,6 +16,7 @@ export type StoragePoolTableColumn = {
   sortKey: StorageSortKey;
   className: string;
   colClassName: string;
+  kind: PlatformTableColumnKind;
 };
 
 export type StoragePoolTableLayoutMode = 'compact' | 'operational' | 'full';
@@ -42,7 +44,7 @@ const STORAGE_POOL_COLUMN_WIDTHS: Record<
   StoragePoolTableLayoutMode,
   Partial<Record<StoragePoolTableColumnId, number>>
 > = {
-  compact: { name: 33, state: 16, type: 12, host: 15, protection: 12, usage: 12 },
+  compact: { name: 30, state: 16, type: 13, host: 16, protection: 12, usage: 13 },
   operational: { name: 29, state: 20, host: 15, protection: 15, usage: 21 },
   full: { name: 20, state: 14, type: 10, host: 12, protection: 13, usage: 20, growth: 11 },
 };
@@ -58,7 +60,7 @@ export const getStoragePoolColumnWidthPercent = (
 ): number => STORAGE_POOL_COLUMN_WIDTHS[layout][columnId] ?? 0;
 
 const STORAGE_POOL_TABLE_HEADER_CLASS =
-  'overflow-hidden text-ellipsis whitespace-nowrap px-1 sm:px-1.5 lg:px-2 py-0.5 text-left text-[10px] sm:text-[11px] lg:text-xs font-medium uppercase tracking-wider';
+  'overflow-hidden text-ellipsis whitespace-nowrap text-[10px] sm:text-[11px] lg:text-xs uppercase tracking-wider';
 
 export const STORAGE_VIEW_OPTIONS: readonly StorageViewOption[] = [
   { value: 'pools', label: 'Storage' },
@@ -75,6 +77,7 @@ export const getStoragePoolTableColumns = (
     sortKey: 'name',
     className: STORAGE_POOL_TABLE_HEADER_CLASS,
     colClassName: '',
+    kind: 'name',
   },
   {
     id: 'state',
@@ -83,6 +86,7 @@ export const getStoragePoolTableColumns = (
     sortKey: 'state',
     className: STORAGE_POOL_TABLE_HEADER_CLASS,
     colClassName: '',
+    kind: 'text',
   },
   {
     id: 'type',
@@ -91,6 +95,7 @@ export const getStoragePoolTableColumns = (
     sortKey: 'type',
     className: STORAGE_POOL_TABLE_HEADER_CLASS,
     colClassName: '',
+    kind: 'text',
   },
   {
     id: 'host',
@@ -99,6 +104,7 @@ export const getStoragePoolTableColumns = (
     sortKey: 'host',
     className: STORAGE_POOL_TABLE_HEADER_CLASS,
     colClassName: '',
+    kind: 'text',
   },
   {
     id: 'protection',
@@ -107,6 +113,7 @@ export const getStoragePoolTableColumns = (
     sortKey: 'protection',
     className: STORAGE_POOL_TABLE_HEADER_CLASS,
     colClassName: '',
+    kind: 'badge',
   },
   {
     id: 'usage',
@@ -115,6 +122,7 @@ export const getStoragePoolTableColumns = (
     sortKey: 'usage',
     className: STORAGE_POOL_TABLE_HEADER_CLASS,
     colClassName: '',
+    kind: 'metric-bar',
   },
   {
     id: 'growth',
@@ -123,13 +131,14 @@ export const getStoragePoolTableColumns = (
     sortKey: 'growth',
     className: STORAGE_POOL_TABLE_HEADER_CLASS,
     colClassName: '',
+    kind: 'numeric-value',
   },
 ];
 export const STORAGE_CONTENT_CARD_BODY_CLASS = 'p-2';
 
 export const STORAGE_POOLS_EMPTY_STATE_CLASS = 'p-6 text-sm text-muted';
 export const STORAGE_POOLS_LOADING_STATE_CLASS = 'p-6 text-sm text-muted';
-export const STORAGE_POOLS_TABLE_CLASS = 'w-full table-fixed text-xs';
+export const STORAGE_POOLS_TABLE_CLASS = 'platform-table w-full table-fixed text-xs';
 export const STORAGE_POOLS_HEADER_ROW_CLASS = 'bg-surface-alt text-muted border-b border-border';
 export const STORAGE_POOLS_BODY_CLASS = 'divide-y divide-border';
 

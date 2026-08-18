@@ -2,6 +2,10 @@ import type { JSX } from 'solid-js';
 
 import type { ColumnDef } from '@/hooks/useColumnVisibility';
 import type { SummaryGroupMemberInteractionState } from '@/components/shared/summaryCardInteraction';
+import {
+  getPlatformTableWeightedColumnWidthStyle,
+  PLATFORM_TABLE_PHONE_IDENTITY_WIDTH_PERCENT,
+} from '@/features/platformPage/sharedPlatformPage';
 import type { WorkloadGuest, ViewMode } from '@/types/workloads';
 import { createVisibleCanonicalTypeColumn } from '@/utils/typeColumnDefinition';
 import type {
@@ -435,8 +439,6 @@ const percentageColumn = (width: string): GuestColumnWidthOverride => ({
   maxWidth: width,
 });
 
-const formatPercentage = (value: number): string => `${Number(value.toFixed(4))}%`;
-
 // Responsive weights are normalized against the currently visible column set.
 // That keeps each workload view mode full-width without assuming one fixed set.
 const GUEST_COLUMN_RESPONSIVE_WEIGHTS: Record<
@@ -500,14 +502,18 @@ const getResponsiveColumnOverride = (
   if (layoutMode === 'wide') return undefined;
 
   const weights = GUEST_COLUMN_RESPONSIVE_WEIGHTS[layoutMode];
-  const columnWeight = weights[columnId];
-  if (!columnWeight) return undefined;
+  if (!weights[columnId]) return undefined;
 
   const activeIds = visibleColumnIds?.length ? visibleColumnIds : Object.keys(weights);
-  const totalWeight = activeIds.reduce((total, id) => total + (weights[id] ?? 0), 0);
-  if (totalWeight <= 0) return undefined;
-
-  return percentageColumn(formatPercentage((columnWeight / totalWeight) * 100));
+  const style = getPlatformTableWeightedColumnWidthStyle(
+    columnId,
+    weights,
+    activeIds,
+    layoutMode === 'phone' || layoutMode === 'mobile'
+      ? { columnId: 'name', widthPercent: PLATFORM_TABLE_PHONE_IDENTITY_WIDTH_PERCENT }
+      : undefined,
+  );
+  return typeof style.width === 'string' ? percentageColumn(style.width) : undefined;
 };
 
 const getGuestColumnSizing = (

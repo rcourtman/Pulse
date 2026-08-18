@@ -2,7 +2,10 @@ import type { JSX } from 'solid-js';
 
 import type { WorkloadTableLayoutMode } from '@/components/Workloads/guestRowModel';
 import type { PlatformTableColumnKind } from '@/features/platformPage/columnAlignment';
-import { getPlatformTableWeightedColumnWidthStyle } from '@/features/platformPage/sharedPlatformPage';
+import {
+  getPlatformTableWeightedColumnWidthStyle,
+  PLATFORM_TABLE_PHONE_IDENTITY_WIDTH_PERCENT,
+} from '@/features/platformPage/sharedPlatformPage';
 
 export type DockerContainerTableColumnId =
   | 'container'
@@ -181,7 +184,14 @@ export const getDockerContainerColumnWidthStyle = (
     layoutMode === 'wide'
       ? DOCKER_CONTAINER_DESKTOP_WIDTHS
       : DOCKER_CONTAINER_RESPONSIVE_WIDTHS[layoutMode];
-  return getPlatformTableWeightedColumnWidthStyle(columnId, weights, visibleColumnIds);
+  return getPlatformTableWeightedColumnWidthStyle(
+    columnId,
+    weights,
+    visibleColumnIds,
+    layoutMode === 'phone' || layoutMode === 'mobile'
+      ? { columnId: 'container', widthPercent: PLATFORM_TABLE_PHONE_IDENTITY_WIDTH_PERCENT }
+      : undefined,
+  );
 };
 
 // The Docker container table already has a row detail drawer for forensic

@@ -173,7 +173,7 @@ export const VsphereNetworksTable: Component<{
                   kind="name"
                   sort={sort}
                   sortKey="network"
-                  class="w-[80%] sm:w-[45%] md:w-[24%]"
+                  class="platform-table-mobile-w-30 md:w-[24%]"
                 >
                   Network
                 </PlatformSortableTableHead>
@@ -181,14 +181,14 @@ export const VsphereNetworksTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="type"
-                  class="hidden sm:table-cell sm:w-[35%] md:w-[13%]"
+                  class="platform-table-mobile-w-15 md:w-[13%]"
                 >
                   Type
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead
                   kind="text"
                   sort={sort}
-                  class="hidden sm:table-cell md:w-[18%]"
+                  class="platform-table-mobile-w-20 md:w-[18%]"
                 >
                   Hosts
                 </PlatformSortableTableHead>
@@ -196,7 +196,7 @@ export const VsphereNetworksTable: Component<{
                   kind="numeric-value"
                   sort={sort}
                   sortKey="vms"
-                  class="w-[20%] md:w-[7%]"
+                  class="platform-table-mobile-w-15 md:w-[7%]"
                 >
                   VMs
                 </PlatformSortableTableHead>
@@ -211,7 +211,7 @@ export const VsphereNetworksTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="datacenter"
-                  class="hidden md:table-cell md:w-[12%]"
+                  class="platform-table-mobile-w-20 md:w-[12%]"
                 >
                   Datacenter
                 </PlatformSortableTableHead>
@@ -269,14 +269,14 @@ export const VsphereNetworksTable: Component<{
                             </div>
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} hidden sm:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                           >
                             <span class="font-mono text-[11px] text-base-content">
                               {networkType(network)}
                             </span>
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content sm:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                             title={hosts().title}
                           >
                             <span class="block truncate">{hosts().label}</span>
@@ -293,7 +293,7 @@ export const VsphereNetworksTable: Component<{
                             <span class="block truncate">{vms().label}</span>
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                             title={datacenter()}
                           >
                             <span class="block truncate">{datacenter()}</span>

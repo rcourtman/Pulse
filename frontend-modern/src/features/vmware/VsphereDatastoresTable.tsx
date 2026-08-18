@@ -197,25 +197,30 @@ export const VsphereDatastoresTable: Component<{
                   kind="name"
                   sort={sort}
                   sortKey="datastore"
-                  class="md:w-[21%]"
+                  class="platform-table-mobile-w-30 md:w-[21%]"
                 >
                   Datastore
                 </PlatformSortableTableHead>
-                <PlatformSortableTableHead kind="text" sort={sort} sortKey="type" class="md:w-[9%]">
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  sortKey="type"
+                  class="platform-table-mobile-w-15 md:w-[9%]"
+                >
                   Type
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead
                   kind="metric-bar"
                   sort={sort}
                   sortKey="capacity"
-                  class="md:w-[18%]"
+                  class="platform-table-mobile-w-25 md:w-[18%]"
                 >
                   Capacity
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead
                   kind="text"
                   sort={sort}
-                  class="hidden sm:table-cell md:w-[14%]"
+                  class="platform-table-mobile-w-15 md:w-[14%]"
                 >
                   Hosts
                 </PlatformSortableTableHead>
@@ -223,7 +228,7 @@ export const VsphereDatastoresTable: Component<{
                   kind="numeric-value"
                   sort={sort}
                   sortKey="vms"
-                  class="hidden sm:table-cell md:w-[7%]"
+                  class="platform-table-mobile-w-15 md:w-[7%]"
                 >
                   VMs
                 </PlatformSortableTableHead>
@@ -309,13 +314,13 @@ export const VsphereDatastoresTable: Component<{
                             </Show>
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content sm:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                             title={hosts().title}
                           >
                             <span class="block truncate">{hosts().label}</span>
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content tabular-nums sm:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content tabular-nums`}
                           >
                             {consumerCount(datastore)}
                           </TableCell>

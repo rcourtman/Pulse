@@ -64,6 +64,15 @@ describe('TrueNASStorageTopologyTable', () => {
       '[data-truenas-storage-row="dataset:dataset-photos"]',
     );
     const rawRow = container.querySelector('[data-truenas-storage-row="dataset:dataset-raw"]');
+    const headers = [...container.querySelectorAll('thead th')];
+
+    expect(headers[0]).toHaveClass('platform-table-name-column', 'platform-table-mobile-w-30');
+    expect(headers[1]).toHaveClass('platform-table-mobile-w-15');
+    expect(headers[1]).not.toHaveClass('hidden');
+    expect(headers[2]).toHaveClass('platform-table-mobile-w-25');
+    expect(headers[3]).toHaveClass('platform-table-mobile-w-15');
+    expect(headers[3]).not.toHaveClass('hidden');
+    expect(headers[5]).toHaveClass('platform-table-mobile-w-15');
 
     expect(mediaRow).toHaveAttribute('data-truenas-storage-depth', '1');
     expect(photosRow).toHaveAttribute('data-truenas-storage-depth', '2');

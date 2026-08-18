@@ -306,7 +306,7 @@ export const VsphereActivityTable: Component<{
                   kind="name"
                   sort={sort}
                   sortKey="resource"
-                  class="md:w-[20%]"
+                  class="platform-table-mobile-w-30 md:w-[20%]"
                 >
                   Resource
                 </PlatformSortableTableHead>
@@ -314,7 +314,7 @@ export const VsphereActivityTable: Component<{
                   kind="badge"
                   sort={sort}
                   sortKey="type"
-                  class="md:w-[8%]"
+                  class="platform-table-mobile-w-15 md:w-[8%]"
                 >
                   Type
                 </PlatformSortableTableHead>
@@ -322,7 +322,7 @@ export const VsphereActivityTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="activity"
-                  class="md:w-[34%]"
+                  class="platform-table-mobile-w-25 md:w-[34%]"
                 >
                   Activity
                 </PlatformSortableTableHead>
@@ -330,7 +330,7 @@ export const VsphereActivityTable: Component<{
                   kind="badge"
                   sort={sort}
                   sortKey="state"
-                  class="md:w-[10%]"
+                  class="platform-table-mobile-w-15 md:w-[10%]"
                 >
                   State
                 </PlatformSortableTableHead>
@@ -354,7 +354,7 @@ export const VsphereActivityTable: Component<{
                   kind="numeric-value"
                   sort={sort}
                   sortKey="when"
-                  class="hidden xl:table-cell md:w-[8%]"
+                  class="platform-table-mobile-w-15 md:w-[8%]"
                 >
                   When
                 </PlatformSortableTableHead>
@@ -446,7 +446,7 @@ export const VsphereActivityTable: Component<{
                             </span>
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content xl:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                           >
                             <PlatformTableDateTimeValue
                               value={activity.occurredAt || activity.observedAt}

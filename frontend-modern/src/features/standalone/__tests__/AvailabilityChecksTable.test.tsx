@@ -72,6 +72,21 @@ describe('AvailabilityChecksTable', () => {
     expect(screen.getByText('7 ms')).toBeInTheDocument();
   });
 
+  it('keeps five high-value columns visible in the shared phone layout', () => {
+    const { container } = renderTable([availabilityResource()]);
+    const headers = [...container.querySelectorAll('thead th')];
+
+    expect(headers).toHaveLength(8);
+    expect(headers[0]).toHaveClass('platform-table-name-column', 'platform-table-mobile-w-30');
+    expect(headers[1]).toHaveClass('platform-table-mobile-w-15');
+    expect(headers[1]).not.toHaveClass('hidden');
+    expect(headers[2]).toHaveClass('platform-table-mobile-w-25');
+    expect(headers[2]).not.toHaveClass('hidden');
+    expect(headers[3]).toHaveClass('platform-table-mobile-w-15');
+    expect(headers[4]).toHaveClass('platform-table-mobile-w-15');
+    expect(headers[4]).not.toHaveClass('hidden');
+  });
+
   it('places failing checks before healthy checks by default', () => {
     const view = renderTable([
       availabilityResource({ id: 'healthy', name: 'Healthy', displayName: 'Healthy' }),

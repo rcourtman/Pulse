@@ -239,21 +239,29 @@ export const KubernetesPolicyTable: Component<{
             tableClass="min-w-full table-fixed text-xs md:min-w-[1180px]"
             header={
               <>
-                <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[17%]`}>
+                <TableHead
+                  class={`${getPlatformTableHeadClassForKind('name')} platform-table-mobile-w-30 md:w-[17%]`}
+                >
                   Resource
                 </TableHead>
-                <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[14%]`}>
+                <TableHead
+                  class={`${getPlatformTableHeadClassForKind('text')} platform-table-mobile-w-15 md:w-[14%]`}
+                >
                   Kind
                 </TableHead>
                 <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} hidden sm:table-cell md:w-[15%]`}
+                  class={`${getPlatformTableHeadClassForKind('text')} platform-table-mobile-w-15 md:w-[15%]`}
                 >
                   Scope
                 </TableHead>
-                <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[15%]`}>
+                <TableHead
+                  class={`${getPlatformTableHeadClassForKind('text')} platform-table-mobile-w-20 md:w-[15%]`}
+                >
                   <PlatformResponsiveTableLabel compact="Policy" full="Policy shape" />
                 </TableHead>
-                <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[16%]`}>
+                <TableHead
+                  class={`${getPlatformTableHeadClassForKind('text')} platform-table-mobile-w-20 md:w-[16%]`}
+                >
                   <PlatformResponsiveTableLabel compact="Limits" full="Spec / limits" />
                 </TableHead>
                 <TableHead
@@ -318,7 +326,7 @@ export const KubernetesPolicyTable: Component<{
                             {policyKind(resource)}
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content sm:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                           >
                             <span class="inline-block max-w-[13rem] truncate" title={scope()}>
                               {scope()}

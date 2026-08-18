@@ -73,7 +73,7 @@ export function WorkloadsTable(props: WorkloadsTableProps) {
       >
         <Table
           wrapperRef={props.setTableWrapperRef}
-          class={`workload-table table-fixed ${props.isMobile() ? `workload-table--mobile ${WORKLOAD_TABLE_MOBILE_MIN_WIDTH_CLASS}` : 'workload-table--desktop min-w-full'}`}
+          class={`platform-table workload-table table-fixed ${props.isMobile() ? `workload-table--mobile ${WORKLOAD_TABLE_MOBILE_MIN_WIDTH_CLASS}` : 'workload-table--desktop min-w-full'}`}
         >
           <colgroup>
             <For each={props.workloadTableVisibleColumns()}>

@@ -237,6 +237,8 @@ export const getPlatformTableContainerLayout = (
 export const PLATFORM_TABLE_CARD_CLASS = 'rounded-md';
 export const PLATFORM_TABLE_HEADER_ROW_CLASS = 'bg-surface-alt text-muted border-b border-border';
 export const PLATFORM_TABLE_BODY_CLASS = 'divide-y divide-border';
+export const PLATFORM_TABLE_CLASS = 'platform-table';
+export const PLATFORM_TABLE_PHONE_IDENTITY_WIDTH_PERCENT = 30;
 // Responsive platform tables already decide which columns remain useful at
 // each breakpoint. A shared 48rem floor defeated that work by forcing a
 // horizontal rail even when the visible columns could fit the real container.
@@ -265,7 +267,9 @@ export function getPlatformTableClass(tableClass?: string): string {
     )
     .join(' ');
 
-  return `${getPlatformTableResponsiveMinWidthClass(tableClass)} ${featureClasses}`.trim();
+  return [PLATFORM_TABLE_CLASS, getPlatformTableResponsiveMinWidthClass(tableClass), featureClasses]
+    .filter(Boolean)
+    .join(' ');
 }
 
 export type PlatformTableShellProps = {
@@ -699,8 +703,27 @@ export const getPlatformTableWeightedColumnWidthStyle = <ColumnId extends string
   columnId: ColumnId,
   weights: Partial<Record<ColumnId, number>>,
   visibleColumnIds: readonly ColumnId[],
+  anchor?: {
+    columnId: ColumnId;
+    widthPercent: number;
+  },
 ): JSX.CSSProperties => {
   const columnWeight = weights[columnId] ?? 0;
+  const anchorIsVisible = anchor !== undefined && visibleColumnIds.includes(anchor.columnId);
+  if (anchorIsVisible) {
+    const anchorWidth = Math.min(100, Math.max(0, anchor.widthPercent));
+    if (columnId === anchor.columnId) {
+      return { width: formatPlatformTableWidthPercentage(anchorWidth) };
+    }
+
+    const remainingWeight = visibleColumnIds.reduce(
+      (total, id) => total + (id === anchor.columnId ? 0 : (weights[id] ?? 0)),
+      0,
+    );
+    const width = remainingWeight > 0 ? (columnWeight / remainingWeight) * (100 - anchorWidth) : 0;
+    return { width: formatPlatformTableWidthPercentage(width) };
+  }
+
   const totalWeight = visibleColumnIds.reduce((total, id) => total + (weights[id] ?? 0), 0);
   const width = totalWeight > 0 ? (columnWeight / totalWeight) * 100 : 0;
 

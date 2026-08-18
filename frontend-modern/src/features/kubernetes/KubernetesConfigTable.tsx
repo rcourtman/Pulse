@@ -258,7 +258,7 @@ export const KubernetesConfigTable: Component<{
                   kind="name"
                   sort={sort}
                   sortKey="resource"
-                  class="md:w-[18%]"
+                  class="platform-table-mobile-w-30 md:w-[18%]"
                 >
                   Resource
                 </PlatformSortableTableHead>
@@ -266,7 +266,7 @@ export const KubernetesConfigTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="kind"
-                  class="md:w-[13%]"
+                  class="platform-table-mobile-w-15 md:w-[13%]"
                 >
                   Kind
                 </PlatformSortableTableHead>
@@ -274,7 +274,7 @@ export const KubernetesConfigTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="scope"
-                  class="hidden sm:table-cell md:w-[16%]"
+                  class="platform-table-mobile-w-20 md:w-[16%]"
                 >
                   Scope
                 </PlatformSortableTableHead>
@@ -282,11 +282,15 @@ export const KubernetesConfigTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="lifecycle"
-                  class="md:w-[16%]"
+                  class="platform-table-mobile-w-20 md:w-[16%]"
                 >
                   <PlatformResponsiveTableLabel compact="Status" full="Lifecycle / trust" />
                 </PlatformSortableTableHead>
-                <PlatformSortableTableHead kind="text" sort={sort} class="md:w-[14%]">
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  class="platform-table-mobile-w-15 md:w-[14%]"
+                >
                   <PlatformResponsiveTableLabel compact="Data" full="Data shape" />
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead
@@ -356,7 +360,7 @@ export const KubernetesConfigTable: Component<{
                             {kind()}
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content sm:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                           >
                             <span class="inline-block max-w-[13rem] truncate" title={scope()}>
                               {scope()}

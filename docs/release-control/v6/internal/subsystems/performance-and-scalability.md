@@ -1935,7 +1935,7 @@ layout policy, and scroll coordination back into one mixed owner or the render
 shell.
 The same shared layout policy now treats the phone branch as a zero-overflow
 fixed-width table rather than preserving a 640-pixel intrinsic floor. The
-shared state model must select one bounded identity track plus five to seven
+shared state model must select one identity track fixed at 30 percent plus five to seven
 source-relevant health or activity tracks, normalize those widths to the
 available container, and keep the document and table shell at scroll-width
 parity. That denser phone projection remains pure model/class work: it must not

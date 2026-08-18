@@ -1092,9 +1092,13 @@ not a replacement status card, CTA band, or page-local nested card.
    fills the available width and that second minimum would override the
    phone-width policy. Platform consumers must explicitly select five to seven
    high-value phone columns when that many meaningful fields exist, keep the
-   identity column near one third of the available width, use the shared compact
-   label and column-width classes, and preserve the fuller tablet and desktop
-   presentation. They must not rely on a global rule that reveals every hidden
+   identity column at the canonical 30 percent of the available width, use the
+   shared compact label and column-width classes, and preserve the fuller tablet
+   and desktop presentation. `PlatformTableShell` marks every owned table with
+   the shared `platform-table` class; direct Workloads and Storage consumers and
+   nested provider detail tables must apply that same marker so the phone
+   contract cannot vary by rendering path. They must not rely on a global rule
+   that reveals every hidden
    column: phone priority remains source-specific because state, capacity,
    freshness, and recovery posture do not carry equal value for every resource
    type.

@@ -204,14 +204,19 @@ export const TrueNASVirtualMachinesTable: Component<{
             tableClass="min-w-full table-fixed text-xs md:min-w-[960px]"
             header={
               <>
-                <PlatformSortableTableHead kind="name" sort={sort} sortKey="vm" class="md:w-[22%]">
+                <PlatformSortableTableHead
+                  kind="name"
+                  sort={sort}
+                  sortKey="vm"
+                  class="platform-table-mobile-w-30 md:w-[22%]"
+                >
                   VM
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead
                   kind="badge"
                   sort={sort}
                   sortKey="state"
-                  class="md:w-[10%]"
+                  class="platform-table-mobile-w-15 md:w-[10%]"
                 >
                   State
                 </PlatformSortableTableHead>
@@ -219,7 +224,7 @@ export const TrueNASVirtualMachinesTable: Component<{
                   kind="numeric-value"
                   sort={sort}
                   sortKey="cpu"
-                  class="md:w-[10%]"
+                  class="platform-table-mobile-w-15 md:w-[10%]"
                 >
                   CPU
                 </PlatformSortableTableHead>
@@ -227,7 +232,7 @@ export const TrueNASVirtualMachinesTable: Component<{
                   kind="numeric-value"
                   sort={sort}
                   sortKey="memory"
-                  class="md:w-[10%]"
+                  class="platform-table-mobile-w-15 md:w-[10%]"
                 >
                   Memory
                 </PlatformSortableTableHead>
@@ -235,7 +240,7 @@ export const TrueNASVirtualMachinesTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="boot"
-                  class="hidden md:table-cell md:w-[11%]"
+                  class="platform-table-mobile-w-25 md:w-[11%]"
                 >
                   Boot
                 </PlatformSortableTableHead>
@@ -326,7 +331,7 @@ export const TrueNASVirtualMachinesTable: Component<{
                             {formatPlatformTableBytesValue(vm()?.memoryBytes, '-')}
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                           >
                             {vm()?.bootloader || '-'}
                           </TableCell>

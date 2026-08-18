@@ -103,12 +103,12 @@ describe('getPlatformTableResponsiveMinWidthClass', () => {
   });
 
   it('removes the conflicting full-width minimum when composing table classes', () => {
-    expect(getPlatformTableClass()).toBe('min-w-[0px]');
+    expect(getPlatformTableClass()).toBe('platform-table min-w-[0px]');
     expect(getPlatformTableClass('min-w-full table-fixed text-xs md:min-w-[1120px]')).toBe(
-      'min-w-[0px] table-fixed text-xs',
+      'platform-table min-w-[0px] table-fixed text-xs',
     );
     expect(getPlatformTableClass('min-w-full min-w-[850px] table-fixed md:min-w-[1320px]')).toBe(
-      'min-w-[850px] table-fixed',
+      'platform-table min-w-[850px] table-fixed',
     );
   });
 });
@@ -709,6 +709,19 @@ describe('getPlatformTableWeightedColumnWidthStyle', () => {
 
   it('returns a zero width when no visible weighted columns are present', () => {
     expect(getPlatformTableWeightedColumnWidthStyle('node', {}, [])).toEqual({ width: '0%' });
+  });
+
+  it('pins the phone identity track and normalizes the remaining visible columns', () => {
+    const weights = { name: 40, cpu: 20, memory: 20, disk: 20 };
+    const visibleColumnIds = ['name', 'cpu', 'memory', 'disk'] as const;
+    const anchor = { columnId: 'name' as const, widthPercent: 30 };
+
+    expect(
+      getPlatformTableWeightedColumnWidthStyle('name', weights, visibleColumnIds, anchor),
+    ).toEqual({ width: '30%' });
+    expect(
+      getPlatformTableWeightedColumnWidthStyle('cpu', weights, visibleColumnIds, anchor),
+    ).toEqual({ width: '23.3333%' });
   });
 });
 

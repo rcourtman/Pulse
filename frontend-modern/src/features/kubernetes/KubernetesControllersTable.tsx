@@ -285,7 +285,7 @@ export const KubernetesControllersTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="kind"
-                  class="platform-table-mobile-w-25 md:w-[9%]"
+                  class="platform-table-mobile-w-15 md:w-[9%]"
                 >
                   Kind
                 </PlatformSortableTableHead>
@@ -301,7 +301,7 @@ export const KubernetesControllersTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="target"
-                  class="hidden sm:table-cell md:w-[12%]"
+                  class="platform-table-mobile-w-20 md:w-[12%]"
                 >
                   Target
                 </PlatformSortableTableHead>
@@ -403,7 +403,7 @@ export const KubernetesControllersTable: Component<{
                             </span>
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content sm:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                           >
                             <span class="inline-block max-w-[12rem] truncate" title={target()}>
                               {target()}

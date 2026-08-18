@@ -46,8 +46,8 @@ describe('Proxmox backups responsive table presentation', () => {
       'used',
       'backups',
     ]);
-    expect(getBackupServerColumnWidthStyle('server', 'compact')).toEqual({ width: '31%' });
-    expect(getBackupServerColumnWidthStyle('used', 'compact')).toEqual({ width: '22%' });
+    expect(getBackupServerColumnWidthStyle('server', 'compact')).toEqual({ width: '30%' });
+    expect(getBackupServerColumnWidthStyle('used', 'compact')).toEqual({ width: '22.3188%' });
     expect(ids(getBackupServerColumns('basic'))).toEqual([
       'server',
       'status',
@@ -85,7 +85,7 @@ describe('Proxmox backups responsive table presentation', () => {
         ids(getCoverageColumns('compact', everySource)),
       ),
     ).toEqual({
-      width: '28%',
+      width: '30%',
     });
     expect(ids(getCoverageColumns('operational', everySource))).toEqual([
       'workload',

@@ -251,7 +251,7 @@ export const TrueNASServicesTable: Component<{
                   kind="name"
                   sort={sort}
                   sortKey="service"
-                  class="md:w-[24%]"
+                  class="platform-table-mobile-w-30 md:w-[24%]"
                 >
                   Service
                 </PlatformSortableTableHead>
@@ -259,7 +259,7 @@ export const TrueNASServicesTable: Component<{
                   kind="badge"
                   sort={sort}
                   sortKey="state"
-                  class="md:w-[14%]"
+                  class="platform-table-mobile-w-15 md:w-[14%]"
                 >
                   State
                 </PlatformSortableTableHead>
@@ -267,7 +267,7 @@ export const TrueNASServicesTable: Component<{
                   kind="badge"
                   sort={sort}
                   sortKey="boot"
-                  class="md:w-[14%]"
+                  class="platform-table-mobile-w-15 md:w-[14%]"
                 >
                   Boot
                 </PlatformSortableTableHead>
@@ -275,7 +275,7 @@ export const TrueNASServicesTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="pids"
-                  class="hidden sm:table-cell md:w-[20%]"
+                  class="platform-table-mobile-w-15 md:w-[20%]"
                 >
                   PIDs
                 </PlatformSortableTableHead>
@@ -283,7 +283,7 @@ export const TrueNASServicesTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="system"
-                  class="md:w-[28%]"
+                  class="platform-table-mobile-w-25 md:w-[28%]"
                 >
                   System
                 </PlatformSortableTableHead>
@@ -344,7 +344,7 @@ export const TrueNASServicesTable: Component<{
                             </span>
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} hidden sm:table-cell`}
+                            class={getPlatformTableCellClassForKind('text')}
                             title={pids().title || undefined}
                           >
                             <span class="tabular-nums text-base-content">{pids().label}</span>

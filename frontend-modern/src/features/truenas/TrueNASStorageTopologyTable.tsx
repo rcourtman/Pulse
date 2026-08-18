@@ -342,7 +342,7 @@ export const TrueNASStorageTopologyTable: Component<{
                   kind="name"
                   sort={sort}
                   sortKey="resource"
-                  class="w-[47%] md:w-[32%]"
+                  class="platform-table-mobile-w-30 md:w-[32%]"
                 >
                   Resource
                 </PlatformSortableTableHead>
@@ -350,7 +350,7 @@ export const TrueNASStorageTopologyTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="kind"
-                  class="hidden sm:table-cell md:w-[10%]"
+                  class="platform-table-mobile-w-15 md:w-[10%]"
                 >
                   Kind
                 </PlatformSortableTableHead>
@@ -358,7 +358,7 @@ export const TrueNASStorageTopologyTable: Component<{
                   kind="metric-bar"
                   sort={sort}
                   sortKey="usage"
-                  class="w-[28%] md:w-[28%]"
+                  class="platform-table-mobile-w-25 md:w-[28%]"
                 >
                   <PlatformResponsiveTableLabel compact="Usage" full="Usage / Size" />
                 </PlatformSortableTableHead>
@@ -366,7 +366,7 @@ export const TrueNASStorageTopologyTable: Component<{
                   kind="numeric-value"
                   sort={sort}
                   sortKey="disks"
-                  class="hidden sm:table-cell md:w-[8%]"
+                  class="platform-table-mobile-w-15 md:w-[8%]"
                 >
                   Disks
                 </PlatformSortableTableHead>
@@ -382,7 +382,7 @@ export const TrueNASStorageTopologyTable: Component<{
                   kind="badge"
                   sort={sort}
                   sortKey="health"
-                  class="w-[25%] md:w-[14%]"
+                  class="platform-table-mobile-w-15 md:w-[14%]"
                 >
                   Health
                 </PlatformSortableTableHead>
@@ -423,7 +423,7 @@ export const TrueNASStorageTopologyTable: Component<{
                             />
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} hidden sm:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('text')} table-cell`}
                           >
                             <span class="text-base-content">{kindLabel(row.kind)}</span>
                           </TableCell>
@@ -431,7 +431,7 @@ export const TrueNASStorageTopologyTable: Component<{
                             <CapacityCell row={row} />
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content sm:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                           >
                             <PlatformTableNumberValue
                               value={row.kind === 'pool' ? row.counts.disks : undefined}

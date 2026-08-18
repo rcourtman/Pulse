@@ -1315,11 +1315,14 @@ describe('shared primitive guardrails', () => {
     expect(frontendIndexCssSource).toContain('container-type: inline-size');
     expect(frontendIndexCssSource).toContain('contain: paint');
     expect(frontendIndexCssSource).toContain('overscroll-behavior-x: contain');
+    expect(frontendIndexCssSource).toContain(
+      '.table-scroll-shell > .table-fixed.platform-table th.platform-table-name-column',
+    );
     expect(frontendIndexCssSource).toContain('th.truenas-app-name-column');
     expect(frontendIndexCssSource).toContain('th.truenas-app-containers-column');
     expect(frontendIndexCssSource).toContain('th.truenas-app-updates-column');
-    expect(frontendIndexCssSource).toContain('th.kubernetes-service-name-column');
-    expect(frontendIndexCssSource).toContain('th.kubernetes-network-name-column');
+    expect(frontendIndexCssSource).not.toContain('th.kubernetes-service-name-column');
+    expect(frontendIndexCssSource).not.toContain('th.kubernetes-network-name-column');
     expect(tableSource).toContain('w-full border-collapse text-left whitespace-nowrap');
     expect(tableCardSource).toContain('TABLE_CARD_FRAME_CLASS');
     expect(tableCardSource).toContain('overflow-hidden');

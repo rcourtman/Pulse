@@ -3,6 +3,7 @@ import ArrowDownIcon from 'lucide-solid/icons/arrow-down';
 import ArrowUpIcon from 'lucide-solid/icons/arrow-up';
 import ArrowUpDownIcon from 'lucide-solid/icons/arrow-up-down';
 import { Table, TableBody, TableHead, TableHeader, TableRow } from '@/components/shared/Table';
+import { getPlatformTableHeadClassForKind } from '@/features/platformPage/sharedPlatformPage';
 import {
   getStoragePoolColumnWidthPercent,
   getStoragePoolTableColumns,
@@ -145,7 +146,11 @@ export const StoragePoolsTable: Component<StoragePoolsTableProps> = (props) => {
                 <For each={getStoragePoolTableColumns(props.storageGrowthColumnLabel)}>
                   {(column) => (
                     <TableHead
-                      class={columnClass(column.className, column.id, 'table-cell')}
+                      class={columnClass(
+                        `${getPlatformTableHeadClassForKind(column.kind)} ${column.className}`,
+                        column.id,
+                        'table-cell',
+                      )}
                       data-storage-column={column.id}
                       aria-label={column.label}
                       aria-sort={

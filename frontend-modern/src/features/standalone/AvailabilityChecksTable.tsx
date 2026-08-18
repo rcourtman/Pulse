@@ -7,6 +7,7 @@ import { StatusDot } from '@/components/shared/StatusDot';
 import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
 import {
   PLATFORM_HEALTH_FILTER_OPTIONS,
+  PlatformResponsiveTableLabel,
   PlatformTableDurationValue,
   PlatformTableEmptyState,
   PlatformTableRelativeTimeValue,
@@ -134,28 +135,30 @@ export const AvailabilityChecksTable: Component<{
             tableClass="min-w-full table-fixed text-xs md:min-w-[900px]"
             header={
               <>
-                <TableHead class={`${getPlatformTableHeadClassForKind('name')} w-[42%] md:w-[20%]`}>
+                <TableHead
+                  class={`${getPlatformTableHeadClassForKind('name')} platform-table-mobile-w-30 md:w-[20%]`}
+                >
                   Check
                 </TableHead>
                 <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[12%]`}
+                  class={`${getPlatformTableHeadClassForKind('text')} platform-table-mobile-w-15 md:w-[12%]`}
                 >
                   Method
                 </TableHead>
                 <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[22%]`}
+                  class={`${getPlatformTableHeadClassForKind('text')} platform-table-mobile-w-25 md:w-[22%]`}
                 >
                   Target
                 </TableHead>
                 <TableHead
-                  class={`${getPlatformTableHeadClassForKind('numeric-value')} w-[28%] md:w-[12%]`}
+                  class={`${getPlatformTableHeadClassForKind('numeric-value')} platform-table-mobile-w-15 md:w-[12%]`}
                 >
                   Result
                 </TableHead>
                 <TableHead
-                  class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden md:table-cell md:w-[10%]`}
+                  class={`${getPlatformTableHeadClassForKind('numeric-value')} platform-table-mobile-w-15 md:w-[10%]`}
                 >
-                  Checked
+                  <PlatformResponsiveTableLabel compact="Seen" full="Checked" />
                 </TableHead>
                 <TableHead
                   class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden lg:table-cell lg:w-[10%]`}
@@ -196,9 +199,7 @@ export const AvailabilityChecksTable: Component<{
                         data-availability-check-row={check.id}
                         class="text-[11px] sm:text-xs"
                       >
-                        <TableCell
-                          class={`${getPlatformTableCellClassForKind('name')} w-[42%] md:w-auto`}
-                        >
+                        <TableCell class={getPlatformTableCellClassForKind('name')}>
                           <div class="flex min-w-0 items-center gap-2">
                             <StatusDot
                               size="sm"
@@ -213,24 +214,21 @@ export const AvailabilityChecksTable: Component<{
                               {check.name}
                             </span>
                           </div>
-                          <span class="mt-0.5 block truncate pl-5 text-[9px] text-muted sm:text-[10px] md:hidden">
-                            {method()} · {target()}
-                          </span>
                         </TableCell>
                         <TableCell
-                          class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
+                          class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                         >
                           {method()}
                         </TableCell>
                         <TableCell
-                          class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
+                          class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                         >
                           <span class="block truncate" title={target()}>
                             {target()}
                           </span>
                         </TableCell>
                         <TableCell
-                          class={`${getPlatformTableCellClassForKind('numeric-value')} w-[28%] text-base-content md:w-auto`}
+                          class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                         >
                           <span class={probe()?.toneClassName ?? ''} title={probe()?.detailLabel}>
                             {result()}
@@ -250,7 +248,7 @@ export const AvailabilityChecksTable: Component<{
                           </Show>
                         </TableCell>
                         <TableCell
-                          class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content md:table-cell`}
+                          class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                         >
                           <PlatformTableRelativeTimeValue
                             value={availability()?.lastChecked}

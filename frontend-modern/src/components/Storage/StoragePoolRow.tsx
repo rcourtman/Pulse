@@ -31,6 +31,7 @@ import {
   type StoragePoolTableLayoutMode,
 } from '@/features/storageBackups/storagePagePresentation';
 import type { SummaryGroupMemberInteractionState } from '@/components/shared/summaryCardInteraction';
+import { getPlatformTableCellClassForKind } from '@/features/platformPage/sharedPlatformPage';
 import { EnhancedStorageBar } from './EnhancedStorageBar';
 import { StoragePoolDetail } from './StoragePoolDetail';
 import {
@@ -87,7 +88,10 @@ export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
         {...props.alertDataAttrs}
       >
         <td
-          class={columnClass(STORAGE_POOL_ROW_NAME_CELL_CLASS, 'name')}
+          class={columnClass(
+            `${STORAGE_POOL_ROW_NAME_CELL_CLASS} ${getPlatformTableCellClassForKind('name')}`,
+            'name',
+          )}
           data-storage-column="name"
         >
           <div class="flex min-w-0 items-center gap-1.5">
@@ -106,7 +110,10 @@ export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
         </td>
 
         <td
-          class={columnClass(STORAGE_POOL_ROW_ISSUE_CELL_CLASS, 'state')}
+          class={columnClass(
+            `${STORAGE_POOL_ROW_ISSUE_CELL_CLASS} ${getPlatformTableCellClassForKind('text')}`,
+            'state',
+          )}
           data-storage-column="state"
         >
           <Show
@@ -123,7 +130,10 @@ export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
         </td>
 
         <td
-          class={columnClass(STORAGE_POOL_ROW_TYPE_CELL_CLASS, 'type')}
+          class={columnClass(
+            `${STORAGE_POOL_ROW_TYPE_CELL_CLASS} ${getPlatformTableCellClassForKind('text')}`,
+            'type',
+          )}
           data-storage-column="type"
         >
           <span class={STORAGE_POOL_ROW_TEXT_TRUNCATE_CLASS} title={row().topologyLabel}>
@@ -132,7 +142,10 @@ export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
         </td>
 
         <td
-          class={columnClass(STORAGE_POOL_ROW_HOST_CELL_CLASS, 'host')}
+          class={columnClass(
+            `${STORAGE_POOL_ROW_HOST_CELL_CLASS} ${getPlatformTableCellClassForKind('text')}`,
+            'host',
+          )}
           data-storage-column="host"
         >
           <span class={STORAGE_POOL_ROW_TEXT_TRUNCATE_CLASS} title={row().hostLabel}>
@@ -141,7 +154,10 @@ export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
         </td>
 
         <td
-          class={columnClass(STORAGE_POOL_ROW_PROTECTION_CELL_CLASS, 'protection')}
+          class={columnClass(
+            `${STORAGE_POOL_ROW_PROTECTION_CELL_CLASS} ${getPlatformTableCellClassForKind('badge')}`,
+            'protection',
+          )}
           data-storage-column="protection"
         >
           <Show
@@ -158,7 +174,10 @@ export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
         </td>
 
         <td
-          class={columnClass(STORAGE_POOL_ROW_USAGE_CELL_CLASS, 'usage')}
+          class={columnClass(
+            `${STORAGE_POOL_ROW_USAGE_CELL_CLASS} ${getPlatformTableCellClassForKind('metric-bar')}`,
+            'usage',
+          )}
           data-storage-column="usage"
         >
           <Show
@@ -179,7 +198,10 @@ export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
         </td>
 
         <td
-          class={columnClass(STORAGE_POOL_ROW_GROWTH_CELL_CLASS, 'growth')}
+          class={columnClass(
+            `${STORAGE_POOL_ROW_GROWTH_CELL_CLASS} ${getPlatformTableCellClassForKind('numeric-value')}`,
+            'growth',
+          )}
           data-storage-column="growth"
         >
           <span

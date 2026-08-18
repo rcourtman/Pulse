@@ -45,8 +45,8 @@ describe('ProxmoxCephTable', () => {
       'capacity',
     ]);
     expect(CEPH_PHONE_COLUMN_WIDTHS).toEqual({
-      cluster: 31,
-      health: 14,
+      cluster: 30,
+      health: 15,
       quorum: 13,
       osds: 14,
       pools: 14,

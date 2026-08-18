@@ -44,9 +44,9 @@ type ReplicationColumn =
   | 'error';
 
 export const REPLICATION_PHONE_COLUMNS: readonly ReplicationColumn[] = [
+  'guest',
   'status',
   'job',
-  'guest',
   'route',
   'lastSync',
   'nextSync',
@@ -54,10 +54,10 @@ export const REPLICATION_PHONE_COLUMNS: readonly ReplicationColumn[] = [
 
 export const REPLICATION_PHONE_COLUMN_WIDTHS: Readonly<Partial<Record<ReplicationColumn, number>>> =
   {
-    status: 17,
-    job: 13,
-    guest: 26,
-    route: 19,
+    status: 15,
+    job: 12,
+    guest: 30,
+    route: 18,
     lastSync: 13,
     nextSync: 12,
   };
@@ -67,10 +67,10 @@ const REPLICATION_COLUMN_WIDTH_CLASS: Record<
   Record<ReplicationColumn, string>
 > = {
   compact: {
-    status: 'w-[17%]',
-    job: 'w-[13%]',
-    guest: 'w-[26%]',
-    route: 'w-[19%]',
+    status: 'w-[15%]',
+    job: 'w-[12%]',
+    guest: 'w-[30%]',
+    route: 'w-[18%]',
     schedule: 'w-0',
     lastSync: 'w-[13%]',
     nextSync: 'w-[12%]',
@@ -370,6 +370,11 @@ export const ProxmoxReplicationTable: Component<{
                 header={
                   <>
                     <TableHead
+                      class={`${getPlatformTableHeadClassForKind('name')} ${columnWidthClass('guest')}`}
+                    >
+                      Guest
+                    </TableHead>
+                    <TableHead
                       class={`${getPlatformTableHeadClassForKind('text')} ${columnWidthClass('status')}`}
                     >
                       Status
@@ -381,11 +386,6 @@ export const ProxmoxReplicationTable: Component<{
                         Job
                       </TableHead>
                     </Show>
-                    <TableHead
-                      class={`${getPlatformTableHeadClassForKind('name')} ${columnWidthClass('guest')}`}
-                    >
-                      Guest
-                    </TableHead>
                     <TableHead
                       class={`${getPlatformTableHeadClassForKind('text')} ${columnWidthClass('route')}`}
                       title="Source → target"
@@ -443,6 +443,11 @@ export const ProxmoxReplicationTable: Component<{
                         const targetNode = (job.targetNode ?? '').trim() || '—';
                         return (
                           <TableRow class="hover:bg-surface-hover">
+                            <TableCell
+                              class={`${getPlatformTableCellClassForKind('name')} text-base-content`}
+                            >
+                              {formatGuestLabel(job)}
+                            </TableCell>
                             <TableCell class={getPlatformTableCellClassForKind('text')}>
                               <div class="flex items-center gap-2">
                                 <StatusDot
@@ -463,11 +468,6 @@ export const ProxmoxReplicationTable: Component<{
                                 <span title={job.id}>{job.jobId || job.id}</span>
                               </TableCell>
                             </Show>
-                            <TableCell
-                              class={`${getPlatformTableCellClassForKind('name')} text-base-content`}
-                            >
-                              {formatGuestLabel(job)}
-                            </TableCell>
                             <TableCell
                               class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                             >

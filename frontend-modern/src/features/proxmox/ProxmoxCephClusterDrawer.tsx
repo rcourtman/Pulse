@@ -160,7 +160,7 @@ export const ProxmoxCephClusterDrawer: Component<{
             when={pools().length > 0}
             fallback={<p class="text-xs text-muted">No pools reported.</p>}
           >
-            <Table class="min-w-0 table-fixed text-xs">
+            <Table class="platform-table min-w-0 table-fixed text-xs">
               <TableHeader>
                 <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
                   <TableHead class={getPlatformTableHeadClassForKind('name')}>Pool</TableHead>
@@ -233,7 +233,7 @@ export const ProxmoxCephClusterDrawer: Component<{
             when={services().length > 0}
             fallback={<p class="text-xs text-muted">No services reported.</p>}
           >
-            <Table class="min-w-0 table-fixed text-xs">
+            <Table class="platform-table min-w-0 table-fixed text-xs">
               <TableHeader>
                 <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
                   <TableHead class={getPlatformTableHeadClassForKind('name')}>Service</TableHead>

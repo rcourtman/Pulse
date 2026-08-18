@@ -1,7 +1,10 @@
 import type { JSX } from 'solid-js';
 
 import type { PlatformTableColumnKind } from '@/features/platformPage/columnAlignment';
-import { getPlatformTableWeightedColumnWidthStyle } from '@/features/platformPage/sharedPlatformPage';
+import {
+  getPlatformTableWeightedColumnWidthStyle,
+  PLATFORM_TABLE_PHONE_IDENTITY_WIDTH_PERCENT,
+} from '@/features/platformPage/sharedPlatformPage';
 
 export type ProxmoxBackupsTableLayoutMode =
   'compact' | 'basic' | 'operational' | 'expanded' | 'full';
@@ -151,6 +154,9 @@ export const getBackupServerColumnWidthStyle = (
     columnId,
     BACKUP_SERVER_WEIGHTS[layout],
     BACKUP_SERVER_VISIBLE[layout],
+    layout === 'compact' || layout === 'basic'
+      ? { columnId: 'server', widthPercent: PLATFORM_TABLE_PHONE_IDENTITY_WIDTH_PERCENT }
+      : undefined,
   );
 
 export const COVERAGE_COLUMNS: readonly BackupTableColumn<CoverageColumnId>[] = [
@@ -244,7 +250,14 @@ export const getCoverageColumnWidthStyle = (
   layout: ProxmoxBackupsTableLayoutMode,
   visibleColumnIds: readonly CoverageColumnId[],
 ): JSX.CSSProperties =>
-  getPlatformTableWeightedColumnWidthStyle(columnId, COVERAGE_WEIGHTS[layout], visibleColumnIds);
+  getPlatformTableWeightedColumnWidthStyle(
+    columnId,
+    COVERAGE_WEIGHTS[layout],
+    visibleColumnIds,
+    layout === 'compact' || layout === 'basic'
+      ? { columnId: 'workload', widthPercent: PLATFORM_TABLE_PHONE_IDENTITY_WIDTH_PERCENT }
+      : undefined,
+  );
 
 export const RECOVERABLE_COLUMNS: readonly BackupTableColumn<RecoverableColumnId>[] = [
   { id: 'workload', label: 'Workload', kind: 'name' },
@@ -321,6 +334,9 @@ export const getRecoverableColumnWidthStyle = (
     columnId,
     RECOVERABLE_WEIGHTS[layout],
     RECOVERABLE_VISIBLE[layout],
+    layout === 'compact' || layout === 'basic'
+      ? { columnId: 'workload', widthPercent: PLATFORM_TABLE_PHONE_IDENTITY_WIDTH_PERCENT }
+      : undefined,
   );
 
 export const isCompactBackupIdentityLayout = (layout: ProxmoxBackupsTableLayoutMode): boolean =>

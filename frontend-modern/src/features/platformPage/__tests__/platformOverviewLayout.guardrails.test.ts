@@ -338,32 +338,32 @@ describe('platform overview layout guardrails', () => {
       /sortKey="scope"[\s\S]{0,120}?class="w-\[15%\] md:w-\[15%\]"/,
     );
     expect(kubernetesNetworkingTableSource).toMatch(
-      /sortKey="scope"[\s\S]{0,120}?class="hidden sm:table-cell md:w-\[14%\]"/,
+      /sortKey="scope"[\s\S]{0,120}?class="platform-table-mobile-w-20 md:w-\[14%\]"/,
     );
     expect(kubernetesStorageTableSource).toMatch(
-      /sortKey="class"[\s\S]{0,120}?class="hidden sm:table-cell md:w-\[10%\]"/,
+      /sortKey="class"[\s\S]{0,120}?class="platform-table-mobile-w-20 md:w-\[10%\]"/,
     );
     expect(kubernetesConfigTableSource).toMatch(
-      /sortKey="scope"[\s\S]{0,120}?class="hidden sm:table-cell md:w-\[16%\]"/,
+      /sortKey="scope"[\s\S]{0,120}?class="platform-table-mobile-w-20 md:w-\[16%\]"/,
     );
     expect(kubernetesPolicyTableSource).toContain(
-      "getPlatformTableHeadClassForKind('text')} hidden sm:table-cell md:w-[15%]",
+      "getPlatformTableHeadClassForKind('text')} platform-table-mobile-w-15 md:w-[15%]",
     );
   });
 
   it('keeps remaining platform phone identity and actions usable', () => {
     expect(truenasStorageTopologyTableSource).toMatch(
-      /sortKey="kind"[\s\S]{0,120}?class="hidden sm:table-cell md:w-\[10%\]"/,
+      /sortKey="kind"[\s\S]{0,120}?class="platform-table-mobile-w-15 md:w-\[10%\]"/,
     );
     expect(truenasStorageTopologyTableSource).toContain("return 'pl-6 sm:pl-11'");
     expect(truenasStorageTopologyTableSource).toMatch(
-      /sortKey="resource"[\s\S]{0,120}?class="w-\[47%\] md:w-\[32%\]"/,
+      /sortKey="resource"[\s\S]{0,120}?class="platform-table-mobile-w-30 md:w-\[32%\]"/,
     );
     expect(vsphereNetworksTableSource).toMatch(
-      /sortKey="network"[\s\S]{0,120}?class="w-\[80%\] sm:w-\[45%\] md:w-\[24%\]"/,
+      /sortKey="network"[\s\S]{0,120}?class="platform-table-mobile-w-30 md:w-\[24%\]"/,
     );
     expect(vsphereNetworksTableSource).toMatch(
-      /sortKey="type"[\s\S]{0,120}?class="hidden sm:table-cell sm:w-\[35%\] md:w-\[13%\]"/,
+      /sortKey="type"[\s\S]{0,120}?class="platform-table-mobile-w-15 md:w-\[13%\]"/,
     );
     expect(agentsMachinesTableSource).toContain('class="min-h-11 min-w-11 sm:min-h-0 sm:min-w-0"');
     expect(agentsMachinesTableSource).toContain(
@@ -400,7 +400,8 @@ describe('platform overview layout guardrails', () => {
     expect(dockerPageSurfaceSource).toContain('<DockerVolumesTable');
     expect(dockerPageSurfaceSource).toContain('<DockerNetworksTable');
     expect(dockerNetworksTableSource).toContain('DOCKER_NETWORK_COLUMN_WIDTH_CLASS');
-    expect(dockerNetworksTableSource).toContain("attached: 'w-[35%]'");
+    expect(dockerNetworksTableSource).toContain("attached: 'w-[25%]'");
+    expect(dockerNetworksTableSource).toContain("driver: 'w-[15%]'");
     expect(dockerNetworksTableSource).toContain("attention: 'w-[15%]'");
     expect(dockerPageSurfaceSource).not.toContain('<WorkloadsSurface');
     expect(dockerPageSurfaceSource).toContain('<DockerSwarmNodesTable');
@@ -476,7 +477,7 @@ describe('platform overview layout guardrails', () => {
     expect(vmwarePageSurfaceSource).toContain('<VsphereDatastoresTable');
     expect(vmwarePageSurfaceSource).toContain('<VsphereNetworksTable');
     expect(vsphereNetworksTableSource).toMatch(
-      /sortKey="vms"[\s\S]{0,120}?class="w-\[20%\] md:w-\[7%\]"/,
+      /sortKey="vms"[\s\S]{0,120}?class="platform-table-mobile-w-15 md:w-\[7%\]"/,
     );
     expect(vmwarePageSurfaceSource).toContain('<VsphereActivityTable');
     expect(vmwarePageSurfaceSource).not.toContain('<StorageSurface');

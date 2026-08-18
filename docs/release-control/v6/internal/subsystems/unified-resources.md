@@ -359,8 +359,8 @@ filter semantics, drawer handoffs, and resource projections, while
 That shell also owns responsive width composition. Source tables may declare
 desktop breakpoint floors, but the phone branch must fit its selected columns
 inside the available container without a horizontal rail. Each unified-resource
-consumer selects five to seven high-value source fields when they exist, keeps
-identity near one third of the width, and uses shared compact-label and phone
+consumer selects five to seven high-value source fields when they exist, fixes
+identity at 30 percent of the width, and uses shared compact-label and phone
 width classes so the remaining tracks stay readable. No global reveal rule may
 override those source-specific priorities.
 Future platform tables must keep that split: row data and platform semantics
@@ -1219,7 +1219,7 @@ AI-only summary payloads, or page-local heuristics.
     owns the column-priority breakpoints for host and service infrastructure
     rows. When the app shell leaves tablet-sized space during live resize, the
     table hides lower-priority metadata first. At phone width, the state model
-    must remove the old 640-pixel floor, preserve identity at roughly one third
+    must remove the old 640-pixel floor, preserve identity at exactly 30 percent
     of the table, and allocate the remaining width across the bounded
     source-relevant health and activity columns. Both the document and table
     shell must remain free of horizontal overflow; desktop and tablet stages

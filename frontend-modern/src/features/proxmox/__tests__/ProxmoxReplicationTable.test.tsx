@@ -32,18 +32,18 @@ afterEach(() => {
 describe('ProxmoxReplicationTable', () => {
   it('keeps identity, route, and both sync horizons visible on phones', () => {
     expect(REPLICATION_PHONE_COLUMNS).toEqual([
+      'guest',
       'status',
       'job',
-      'guest',
       'route',
       'lastSync',
       'nextSync',
     ]);
     expect(REPLICATION_PHONE_COLUMN_WIDTHS).toEqual({
-      status: 17,
-      job: 13,
-      guest: 26,
-      route: 19,
+      status: 15,
+      job: 12,
+      guest: 30,
+      route: 18,
       lastSync: 13,
       nextSync: 12,
     });

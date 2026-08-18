@@ -182,14 +182,14 @@ export const KubernetesAutoscalingTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="target"
-                  class="platform-table-mobile-w-30 md:w-[18%]"
+                  class="platform-table-mobile-w-20 md:w-[18%]"
                 >
                   Target
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead
                   kind="text"
                   sort={sort}
-                  class="hidden sm:table-cell md:w-[10%]"
+                  class="platform-table-mobile-w-20 md:w-[10%]"
                 >
                   Bounds
                 </PlatformSortableTableHead>
@@ -283,7 +283,7 @@ export const KubernetesAutoscalingTable: Component<{
                             </span>
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content sm:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                           >
                             {bounds(resource)}
                           </TableCell>

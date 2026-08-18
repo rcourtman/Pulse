@@ -165,19 +165,23 @@ export const TrueNASAlertsTable: Component<{
                 <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[20%]`}>
                   Resource
                 </TableHead>
-                <TableHead class={`${getPlatformTableHeadClassForKind('badge')} md:w-[10%]`}>
+                <TableHead
+                  class={`${getPlatformTableHeadClassForKind('badge')} platform-table-mobile-w-15 md:w-[10%]`}
+                >
                   Severity
                 </TableHead>
-                <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[32%]`}>
+                <TableHead
+                  class={`${getPlatformTableHeadClassForKind('text')} platform-table-mobile-w-25 md:w-[32%]`}
+                >
                   Alert
                 </TableHead>
                 <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[13%]`}
+                  class={`${getPlatformTableHeadClassForKind('text')} platform-table-mobile-w-15 md:w-[13%]`}
                 >
                   Source
                 </TableHead>
                 <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} hidden lg:table-cell md:w-[10%]`}
+                  class={`${getPlatformTableHeadClassForKind('numeric-value')} platform-table-mobile-w-15 md:w-[10%]`}
                 >
                   Started
                 </TableHead>
@@ -251,9 +255,7 @@ export const TrueNASAlertsTable: Component<{
                               {incident.label}
                             </span>
                           </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} hidden md:table-cell`}
-                          >
+                          <TableCell class={`${getPlatformTableCellClassForKind('text')}`}>
                             <span class="block truncate" title={incident.code}>
                               {formatPlatformAlertCode(incident.code, 'truenas')}
                             </span>
@@ -262,7 +264,7 @@ export const TrueNASAlertsTable: Component<{
                             </span>
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content lg:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                           >
                             {formatPlatformAlertStartedAt(incident.startedAt)}
                           </TableCell>

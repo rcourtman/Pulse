@@ -55,26 +55,26 @@ const DOCKER_NETWORK_COLUMN_WIDTH_CLASS: Record<
 > = {
   compact: {
     network: 'w-[30%]',
-    attached: 'w-[34%]',
-    attention: 'w-[18%]',
-    subnet: 'w-[18%]',
-    driver: 'w-0',
+    attached: 'w-[25%]',
+    attention: 'w-[15%]',
+    subnet: 'w-[15%]',
+    driver: 'w-[15%]',
     host: 'w-0',
   },
   basic: {
-    network: 'w-[38%]',
-    attached: 'w-[42%]',
-    attention: 'w-[20%]',
-    subnet: 'w-0',
-    driver: 'w-0',
+    network: 'w-[30%]',
+    attached: 'w-[25%]',
+    attention: 'w-[15%]',
+    subnet: 'w-[15%]',
+    driver: 'w-[15%]',
     host: 'w-0',
   },
   operational: {
     network: 'w-[25%]',
-    attached: 'w-[35%]',
+    attached: 'w-[30%]',
     attention: 'w-[15%]',
-    subnet: 'w-[25%]',
-    driver: 'w-0',
+    subnet: 'w-[20%]',
+    driver: 'w-[10%]',
     host: 'w-0',
   },
   expanded: {
@@ -415,8 +415,8 @@ export const DockerNetworksTable: Component<DockerNetworksTableProps> = (props) 
   const layout = createMemo(() =>
     getPlatformTableContainerLayout(observedWidth.width() ?? 1920, [480, 720, 960, 1200]),
   );
-  const showSubnet = createMemo(() => layout() !== 'basic');
-  const showDriver = createMemo(() => ['expanded', 'full'].includes(layout()));
+  const showSubnet = () => true;
+  const showDriver = () => true;
   const showHost = createMemo(() => layout() === 'full');
   const columnWidthClass = (column: DockerNetworkColumn) =>
     DOCKER_NETWORK_COLUMN_WIDTH_CLASS[layout()][column];

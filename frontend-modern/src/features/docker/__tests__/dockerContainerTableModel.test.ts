@@ -13,7 +13,7 @@ describe('dockerContainerTableModel', () => {
 
     expect(ids).toEqual(['container', 'state', 'cpu', 'memory', 'restarts', 'updates']);
     expect(getDockerContainerColumnWidthStyle('container', 'phone', ids)).toEqual({
-      width: '32%',
+      width: '30%',
     });
   });
 

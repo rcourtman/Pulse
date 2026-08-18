@@ -54,8 +54,8 @@ export const CEPH_PHONE_COLUMNS: readonly CephPhoneColumn[] = [
 ];
 
 export const CEPH_PHONE_COLUMN_WIDTHS: Readonly<Record<CephPhoneColumn, number>> = {
-  cluster: 31,
-  health: 14,
+  cluster: 30,
+  health: 15,
   quorum: 13,
   osds: 14,
   pools: 14,

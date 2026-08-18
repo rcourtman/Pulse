@@ -4,6 +4,7 @@ import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
 import { asTrimmedString } from '@/utils/stringUtils';
 import {
   PLATFORM_HEALTH_FILTER_OPTIONS,
+  PlatformResponsiveTableLabel,
   PlatformTableEmptyState,
   PlatformTableNumberValue,
   PlatformTableRelativeTimeValue,
@@ -105,7 +106,9 @@ export const KubernetesEventsTable: Component<{
             tableClass="min-w-full table-fixed text-xs md:min-w-[1180px]"
             header={
               <>
-                <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[16%]`}>
+                <TableHead
+                  class={`${getPlatformTableHeadClassForKind('name')} platform-table-mobile-w-30 md:w-[16%]`}
+                >
                   Event
                 </TableHead>
                 <TableHead
@@ -113,24 +116,30 @@ export const KubernetesEventsTable: Component<{
                 >
                   Scope
                 </TableHead>
-                <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[10%]`}>
+                <TableHead
+                  class={`${getPlatformTableHeadClassForKind('text')} platform-table-mobile-w-15 md:w-[10%]`}
+                >
                   Type
                 </TableHead>
-                <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[14%]`}>
+                <TableHead
+                  class={`${getPlatformTableHeadClassForKind('text')} platform-table-mobile-w-15 md:w-[14%]`}
+                >
                   Reason
                 </TableHead>
                 <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} hidden sm:table-cell md:w-[15%]`}
+                  class={`${getPlatformTableHeadClassForKind('text')} platform-table-mobile-w-20 md:w-[15%]`}
                 >
                   Object
                 </TableHead>
-                <TableHead class={`${getPlatformTableHeadClassForKind('numeric-value')} md:w-[7%]`}>
+                <TableHead
+                  class={`${getPlatformTableHeadClassForKind('numeric-value')} platform-table-mobile-w-10 md:w-[7%]`}
+                >
                   Count
                 </TableHead>
                 <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[13%]`}
+                  class={`${getPlatformTableHeadClassForKind('numeric-value')} platform-table-mobile-w-10 md:w-[13%]`}
                 >
-                  Observed
+                  <PlatformResponsiveTableLabel compact="Seen" full="Observed" />
                 </TableHead>
                 <TableHead
                   class={`${getPlatformTableHeadClassForKind('text')} hidden sm:table-cell md:w-[10%]`}
@@ -206,7 +215,7 @@ export const KubernetesEventsTable: Component<{
                             </span>
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content sm:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                           >
                             <span
                               class="inline-block max-w-[13rem] truncate"
@@ -221,7 +230,7 @@ export const KubernetesEventsTable: Component<{
                             <PlatformTableNumberValue value={resource.kubernetes?.count} />
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                           >
                             <span
                               class="inline-block max-w-[12rem] truncate"

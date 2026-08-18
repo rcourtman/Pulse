@@ -2,7 +2,10 @@ import type { JSX } from 'solid-js';
 
 import type { WorkloadTableLayoutMode } from '@/components/Workloads/guestRowModel';
 import type { PlatformTableColumnKind } from '@/features/platformPage/columnAlignment';
-import { getPlatformTableWeightedColumnWidthStyle } from '@/features/platformPage/sharedPlatformPage';
+import {
+  getPlatformTableWeightedColumnWidthStyle,
+  PLATFORM_TABLE_PHONE_IDENTITY_WIDTH_PERCENT,
+} from '@/features/platformPage/sharedPlatformPage';
 
 export type ProxmoxHostTableColumnId =
   'node' | 'version' | 'uptime' | 'cpu' | 'memory' | 'disk' | 'temp' | 'vms' | 'cts' | 'cluster';
@@ -140,7 +143,14 @@ export const getProxmoxHostColumnWidthStyle = (
 ): JSX.CSSProperties => {
   const weights =
     layoutMode === 'wide' ? HOST_COLUMN_DESKTOP_WIDTHS : HOST_COLUMN_RESPONSIVE_WEIGHTS[layoutMode];
-  return getPlatformTableWeightedColumnWidthStyle(columnId, weights, visibleColumnIds);
+  return getPlatformTableWeightedColumnWidthStyle(
+    columnId,
+    weights,
+    visibleColumnIds,
+    layoutMode === 'phone' || layoutMode === 'mobile'
+      ? { columnId: 'node', widthPercent: PLATFORM_TABLE_PHONE_IDENTITY_WIDTH_PERCENT }
+      : undefined,
+  );
 };
 
 // The compact identity-plus-metrics layout is deliberately percentage based,

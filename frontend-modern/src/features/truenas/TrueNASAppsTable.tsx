@@ -245,7 +245,7 @@ export const TrueNASAppsTable: Component<{
                   kind="name"
                   sort={sort}
                   sortKey="app"
-                  class="truenas-app-name-column md:w-[17%]"
+                  class="platform-table-mobile-w-30 truenas-app-name-column md:w-[17%]"
                 >
                   App
                 </PlatformSortableTableHead>
@@ -261,7 +261,7 @@ export const TrueNASAppsTable: Component<{
                   kind="metric-bar"
                   sort={sort}
                   sortKey="cpu"
-                  class="truenas-app-cpu-column md:w-[9%]"
+                  class="platform-table-mobile-w-15 truenas-app-cpu-column md:w-[9%]"
                 >
                   CPU
                 </PlatformSortableTableHead>
@@ -269,7 +269,7 @@ export const TrueNASAppsTable: Component<{
                   kind="metric-bar"
                   sort={sort}
                   sortKey="memory"
-                  class="truenas-app-memory-column md:w-[12%]"
+                  class="platform-table-mobile-w-20 truenas-app-memory-column md:w-[12%]"
                 >
                   Memory
                 </PlatformSortableTableHead>
@@ -277,7 +277,7 @@ export const TrueNASAppsTable: Component<{
                   kind="numeric-value"
                   sort={sort}
                   sortKey="containers"
-                  class="truenas-app-containers-column hidden sm:table-cell md:w-[12%]"
+                  class="platform-table-mobile-w-15 truenas-app-containers-column md:w-[12%]"
                 >
                   Containers
                 </PlatformSortableTableHead>
@@ -299,7 +299,7 @@ export const TrueNASAppsTable: Component<{
                   kind="badge"
                   sort={sort}
                   sortKey="updates"
-                  class="truenas-app-updates-column md:w-[10%]"
+                  class="platform-table-mobile-w-20 truenas-app-updates-column md:w-[10%]"
                 >
                   <PlatformResponsiveTableLabel compact="Upd." full="Updates" />
                 </PlatformSortableTableHead>
@@ -414,7 +414,7 @@ export const TrueNASAppsTable: Component<{
                             </Show>
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} hidden sm:table-cell tabular-nums`}
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} tabular-nums`}
                           >
                             {appContainerCount(app()) || '-'}
                           </TableCell>

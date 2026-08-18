@@ -272,7 +272,7 @@ export const KubernetesStorageTable: Component<{
                   kind="name"
                   sort={sort}
                   sortKey="resource"
-                  class="md:w-[19%]"
+                  class="platform-table-mobile-w-30 md:w-[19%]"
                 >
                   Resource
                 </PlatformSortableTableHead>
@@ -280,7 +280,7 @@ export const KubernetesStorageTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="kind"
-                  class="md:w-[10%]"
+                  class="platform-table-mobile-w-15 md:w-[10%]"
                 >
                   Kind
                 </PlatformSortableTableHead>
@@ -296,7 +296,7 @@ export const KubernetesStorageTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="phase"
-                  class="md:w-[14%]"
+                  class="platform-table-mobile-w-20 md:w-[14%]"
                 >
                   <PlatformResponsiveTableLabel compact="State" full="Binding / phase" />
                 </PlatformSortableTableHead>
@@ -304,7 +304,7 @@ export const KubernetesStorageTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="class"
-                  class="hidden sm:table-cell md:w-[10%]"
+                  class="platform-table-mobile-w-20 md:w-[10%]"
                 >
                   Class
                 </PlatformSortableTableHead>
@@ -312,7 +312,7 @@ export const KubernetesStorageTable: Component<{
                   kind="numeric-value"
                   sort={sort}
                   sortKey="size"
-                  class="md:w-[8%]"
+                  class="platform-table-mobile-w-15 md:w-[8%]"
                 >
                   Size
                 </PlatformSortableTableHead>
@@ -394,7 +394,7 @@ export const KubernetesStorageTable: Component<{
                             {bindingOrPhase(resource)}
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content sm:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                           >
                             {storageClass(resource)}
                           </TableCell>

@@ -173,17 +173,23 @@ export const VsphereAlertsTable: Component<{
             tableClass="min-w-full table-fixed text-xs md:min-w-[1040px]"
             header={
               <>
-                <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[20%]`}>
+                <TableHead
+                  class={`${getPlatformTableHeadClassForKind('name')} platform-table-mobile-w-30 md:w-[20%]`}
+                >
                   Resource
                 </TableHead>
-                <TableHead class={`${getPlatformTableHeadClassForKind('badge')} md:w-[10%]`}>
+                <TableHead
+                  class={`${getPlatformTableHeadClassForKind('badge')} platform-table-mobile-w-15 md:w-[10%]`}
+                >
                   Severity
                 </TableHead>
-                <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[34%]`}>
+                <TableHead
+                  class={`${getPlatformTableHeadClassForKind('text')} platform-table-mobile-w-25 md:w-[34%]`}
+                >
                   Signal
                 </TableHead>
                 <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[14%]`}
+                  class={`${getPlatformTableHeadClassForKind('text')} platform-table-mobile-w-15 md:w-[14%]`}
                 >
                   vCenter
                 </TableHead>
@@ -193,7 +199,7 @@ export const VsphereAlertsTable: Component<{
                   Entity
                 </TableHead>
                 <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} hidden xl:table-cell md:w-[10%]`}
+                  class={`${getPlatformTableHeadClassForKind('numeric-value')} platform-table-mobile-w-15 md:w-[10%]`}
                 >
                   Started
                 </TableHead>
@@ -260,9 +266,7 @@ export const VsphereAlertsTable: Component<{
                               {incident.label}
                             </span>
                           </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} hidden md:table-cell`}
-                          >
+                          <TableCell class={getPlatformTableCellClassForKind('text')}>
                             <span
                               class="block truncate text-base-content"
                               title={meta()?.connectionName || meta()?.vcenterHost}
@@ -284,7 +288,7 @@ export const VsphereAlertsTable: Component<{
                             </span>
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content xl:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                           >
                             {formatPlatformAlertStartedAt(incident.startedAt)}
                           </TableCell>

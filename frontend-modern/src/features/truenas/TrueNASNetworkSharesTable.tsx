@@ -186,7 +186,7 @@ export const TrueNASNetworkSharesTable: Component<{
                   kind="name"
                   sort={sort}
                   sortKey="share"
-                  class="md:w-[23%]"
+                  class="platform-table-mobile-w-30 md:w-[23%]"
                 >
                   Share
                 </PlatformSortableTableHead>
@@ -194,7 +194,7 @@ export const TrueNASNetworkSharesTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="protocol"
-                  class="md:w-[11%]"
+                  class="platform-table-mobile-w-15 md:w-[11%]"
                 >
                   Protocol
                 </PlatformSortableTableHead>
@@ -202,11 +202,15 @@ export const TrueNASNetworkSharesTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="path"
-                  class="hidden md:table-cell md:w-[27%]"
+                  class="platform-table-mobile-w-25 md:w-[27%]"
                 >
                   Path
                 </PlatformSortableTableHead>
-                <PlatformSortableTableHead kind="text" sort={sort} class="md:w-[19%]">
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  class="platform-table-mobile-w-15 md:w-[19%]"
+                >
                   Access
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead
@@ -220,7 +224,7 @@ export const TrueNASNetworkSharesTable: Component<{
                   kind="badge"
                   sort={sort}
                   sortKey="state"
-                  class="md:w-[7%]"
+                  class="platform-table-mobile-w-15 md:w-[7%]"
                 >
                   State
                 </PlatformSortableTableHead>
@@ -284,7 +288,7 @@ export const TrueNASNetworkSharesTable: Component<{
                             </span>
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                           >
                             <span
                               class="block truncate font-mono text-[11px]"

@@ -210,7 +210,7 @@ export const KubernetesNetworkingTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="kind"
-                  class="kubernetes-network-kind-column md:w-[12%]"
+                  class="kubernetes-network-kind-column platform-table-mobile-w-15 md:w-[12%]"
                 >
                   Kind
                 </PlatformSortableTableHead>
@@ -218,7 +218,7 @@ export const KubernetesNetworkingTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="scope"
-                  class="hidden sm:table-cell md:w-[14%]"
+                  class="platform-table-mobile-w-20 md:w-[14%]"
                 >
                   Scope
                 </PlatformSortableTableHead>
@@ -226,7 +226,7 @@ export const KubernetesNetworkingTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="typeClass"
-                  class="kubernetes-network-class-column md:w-[12%]"
+                  class="kubernetes-network-class-column platform-table-mobile-w-15 md:w-[12%]"
                 >
                   <PlatformResponsiveTableLabel compact="Class" full="Type / class" />
                 </PlatformSortableTableHead>
@@ -240,7 +240,7 @@ export const KubernetesNetworkingTable: Component<{
                 <PlatformSortableTableHead
                   kind="text"
                   sort={sort}
-                  class="kubernetes-network-ports-column md:w-[12%]"
+                  class="kubernetes-network-ports-column platform-table-mobile-w-20 md:w-[12%]"
                 >
                   Ports
                 </PlatformSortableTableHead>
@@ -305,7 +305,7 @@ export const KubernetesNetworkingTable: Component<{
                             {networkKind(resource)}
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content sm:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                           >
                             <span class="inline-block max-w-[12rem] truncate" title={scope()}>
                               {scope()}
