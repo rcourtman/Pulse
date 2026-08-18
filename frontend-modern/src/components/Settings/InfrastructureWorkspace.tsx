@@ -374,7 +374,12 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
 
   const renderNodeSlot = (
     type: 'pve' | 'pbs' | 'pmg',
-    editingNode?: NodeConfigWithStatus | null,
+    // Accessor rather than value: the editing target refreshes whenever the
+    // configured-nodes list reloads, and reading it here would make the whole
+    // slot's JSX expression track that signal and remount the editor (wiping
+    // in-progress form input). The accessor defers the read to the prop
+    // getter, so refreshed node objects flow into the mounted editor instead.
+    editingNode?: (() => NodeConfigWithStatus | null) | null,
     editingRow?: Connection | null,
     prefillNode?: Partial<NodeConfig>,
     importCandidate?: NodeImportPlanCandidate | null,
@@ -384,7 +389,7 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
       <NodeCredentialSlot
         nodeType={type}
         settings={props}
-        editingNode={editingNode ?? null}
+        editingNode={editingNode?.() ?? null}
         prefillNode={prefillNode}
         importCandidate={importCandidate ?? null}
         onCancel={editingRow ? closeEditFlow : closeAddFlow}
@@ -702,19 +707,27 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
         case 'pve':
         case 'pbs':
         case 'pmg': {
-          const editableNode = findEditableNode(connection);
-          if (!editableNode) {
-            return (
-              <div
-                role="alert"
-                class="rounded-md border border-rose-300 bg-rose-50 px-4 py-3 text-sm text-rose-800 dark:border-rose-900 dark:bg-rose-950 dark:text-rose-200"
-              >
-                Couldn't find the saved configuration for {connection.name}. It may have already
-                been removed.
-              </div>
-            );
-          }
-          return renderNodeSlot(context.type, editableNode, connection);
+          // Non-keyed Show: node-list refreshes replace the matched object on
+          // every reload, and a keyed (or eagerly computed) branch would
+          // remount the editor each time, resetting unsaved form input. Only
+          // the node disappearing entirely swaps to the fallback.
+          const nodeType = context.type;
+          return (
+            <Show
+              when={findEditableNode(connection)}
+              fallback={
+                <div
+                  role="alert"
+                  class="rounded-md border border-rose-300 bg-rose-50 px-4 py-3 text-sm text-rose-800 dark:border-rose-900 dark:bg-rose-950 dark:text-rose-200"
+                >
+                  Couldn't find the saved configuration for {connection.name}. It may have already
+                  been removed.
+                </div>
+              }
+            >
+              {(editableNode) => renderNodeSlot(nodeType, editableNode, connection)}
+            </Show>
+          );
         }
         case 'vmware': {
           const vmware = findEditableVMware(connection);

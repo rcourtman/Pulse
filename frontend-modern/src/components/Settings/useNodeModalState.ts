@@ -200,6 +200,12 @@ export const useNodeModalState = (props: NodeModalProps) => {
   let previousResetKey: number | undefined;
   let previousNodeType: string | undefined;
   let previousFormSourceSignature: string | null = null;
+  let previousFormSourceIdentity: string | null = null;
+  // Once the user has typed into the form, background refreshes of the editing
+  // target (poll cycles, adoption progress) must not rebuild formData and wipe
+  // their unsaved input. Only an explicit reset or a different editing target
+  // may resync after that point.
+  let formEditedByUser = false;
 
   createEffect(() => {
     const key = props.resetKey;
@@ -214,6 +220,8 @@ export const useNodeModalState = (props: NodeModalProps) => {
       clearQuickSetupState();
       setTestResult(null);
       previousFormSourceSignature = null;
+      previousFormSourceIdentity = null;
+      formEditedByUser = false;
       return;
     }
 
@@ -223,6 +231,8 @@ export const useNodeModalState = (props: NodeModalProps) => {
       clearQuickSetupState();
       setTestResult(null);
       previousFormSourceSignature = null;
+      previousFormSourceIdentity = null;
+      formEditedByUser = false;
       return;
     }
     previousNodeType = nodeType;
@@ -232,6 +242,8 @@ export const useNodeModalState = (props: NodeModalProps) => {
       clearQuickSetupState();
       setTestResult(null);
       previousFormSourceSignature = null;
+      previousFormSourceIdentity = null;
+      formEditedByUser = false;
     }
   });
 
@@ -239,6 +251,18 @@ export const useNodeModalState = (props: NodeModalProps) => {
     const node = props.editingNode ?? props.prefillNode;
     if (!node || node.type !== props.nodeType) {
       previousFormSourceSignature = null;
+      previousFormSourceIdentity = null;
+      return;
+    }
+
+    // Identify the editing target independently of its polled content, so a
+    // refreshed snapshot of the same node counts as the same target while a
+    // genuinely different node still resyncs the form.
+    const formSourceIdentity = `${node.type}:${('id' in node && node.id) || `${node.name ?? ''}|${node.host ?? ''}`}`;
+    if (formSourceIdentity !== previousFormSourceIdentity) {
+      previousFormSourceIdentity = formSourceIdentity;
+      formEditedByUser = false;
+    } else if (formEditedByUser) {
       return;
     }
 
@@ -422,6 +446,7 @@ export const useNodeModalState = (props: NodeModalProps) => {
   };
 
   const updateField = (field: string, value: string | boolean | number) => {
+    formEditedByUser = true;
     if (field === 'host' && typeof value === 'string') {
       setFormData((prev) => {
         const next = { ...prev, host: value };
@@ -450,6 +475,7 @@ export const useNodeModalState = (props: NodeModalProps) => {
   };
 
   const updateClusterEndpointOverride = (nodeName: string, value: string) => {
+    formEditedByUser = true;
     setFormData((prev) => ({
       ...prev,
       clusterEndpointOverrides: { ...prev.clusterEndpointOverrides, [nodeName]: value },
@@ -457,6 +483,7 @@ export const useNodeModalState = (props: NodeModalProps) => {
   };
 
   const updateClusterNodeDisplayName = (nodeIdentity: string, value: string) => {
+    formEditedByUser = true;
     setFormData((prev) => ({
       ...prev,
       clusterNodeDisplayNames: { ...prev.clusterNodeDisplayNames, [nodeIdentity]: value },
