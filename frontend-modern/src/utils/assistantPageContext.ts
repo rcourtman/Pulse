@@ -12,7 +12,7 @@ export interface AssistantPageContextPresentation {
 
 const VIEW_LABELS: Record<Exclude<ActiveAppTabId, null>, string> = {
   alerts: 'Alerts',
-  actions: 'Activity history',
+  actions: 'Actions',
   ai: 'Patrol',
   docker: 'Docker',
   kubernetes: 'Kubernetes',

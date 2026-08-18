@@ -372,13 +372,17 @@ const routeActionFixtures = async (
               audit,
               events: [],
               readiness: {
-                ready: audit.state === "planned" || audit.state === "pending_approval",
+                ready:
+                  audit.state === "planned" ||
+                  audit.state === "pending_approval",
                 code:
-                  audit.state === "planned" || audit.state === "pending_approval"
+                  audit.state === "planned" ||
+                  audit.state === "pending_approval"
                     ? "ready"
                     : "action_not_actionable",
                 message:
-                  audit.state === "planned" || audit.state === "pending_approval"
+                  audit.state === "planned" ||
+                  audit.state === "pending_approval"
                     ? "Action is ready for approval and dispatch."
                     : "This action is no longer open for approval or dispatch.",
                 refreshable: false,
@@ -409,7 +413,7 @@ const routeActionFixtures = async (
   });
 };
 
-test("Activity history exposes the canonical decision packet and durable calm history", async ({
+test("Actions exposes the canonical decision packet and durable calm history", async ({
   page,
 }, testInfo) => {
   await page.route("**/api/actions?*", async (route) => {
@@ -444,9 +448,7 @@ test("Activity history exposes the canonical decision packet and durable calm hi
   await page.goto("/actions?action=action-1", {
     waitUntil: "domcontentloaded",
   });
-  await expect(
-    page.getByRole("heading", { name: "Activity history" }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Actions" })).toBeVisible();
   await expect(page.getByRole("dialog", { name: "Restart" })).toBeVisible();
   await expect(
     page.getByRole("dialog", { name: "Restart" }).getByRole("button", {

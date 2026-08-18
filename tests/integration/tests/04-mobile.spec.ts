@@ -56,6 +56,7 @@ const CANONICAL_MOBILE_SURFACE_ROUTES = [
   "/alerts/schedule",
   "/alerts/history",
   "/patrol",
+  "/actions",
 ] as const;
 
 const gotoMobileRoute = async (

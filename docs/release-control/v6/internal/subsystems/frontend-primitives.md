@@ -795,7 +795,7 @@ helpers, and it reuses the action resource presenter for durable resources that
 have left the live registry. It must preserve the server's verified-only
 membership, evidence class, newest-first order, empty state, and
 last-truthful-data behavior during a refresh error. Raw executor verification
-summaries stay in Activity history rather than becoming quiet-home copy.
+summaries stay in Actions history rather than becoming quiet-home copy.
 For Patrol, that includes the Open work description: it may use concise
 row-level guidance such as review evidence, approve a change, inspect automatic
 actions, or review verification results, but it must remain descriptive copy
@@ -5754,15 +5754,15 @@ the matching Open or History subtab from server-authored lifecycle state, and
 removes the query when the dialog closes. Feature pages may summarize action
 context, but they must not recreate approve, reject, run, progress, or outcome
 controls outside the shared Actions review.
-The Actions ledger is no longer a peer top-level navigation destination.
-Patrol is the primary operations home and exposes the ledger as `Activity
-history`, including a pending-review count and a route-backed handoff. The
-canonical `/actions` route remains stable for exact action deep links and
+The Actions ledger is a peer top-level navigation destination. Patrol remains
+the primary detection and investigation home and may expose a route-backed
+Actions handoff, but Actions owns its pending-approval count and selected state.
+The canonical `/actions` route remains stable for exact action deep links and
 universal audit records originating from Patrol, Assistant, MCP, or manual
-controls. While that subordinate route is open, desktop and mobile navigation
-keep Patrol selected and the browser title identifies `Activity history`;
-removing the standalone navigation entry must not remove the shared review
-dialog, route, API client, or durable action identity.
+controls. While that route is open, desktop and mobile navigation select
+Actions and the browser title identifies `Actions`. The first-class navigation
+entry composes the existing shared review dialog, route, API client, and durable
+action identity rather than creating another action client.
 
 ### Protection posture presentation boundary
 

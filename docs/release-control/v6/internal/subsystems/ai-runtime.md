@@ -3332,18 +3332,16 @@ query...`, and `Reading storage...` before streamed tool arguments are
    cache for assistant context and suggestions, but it must not reopen
    `useResources()` or trigger a second unfiltered `all-resources` REST fetch
    just because the drawer component is present in the app shell.
-   The same app-shell boundary keeps Patrol/Assistant utility navigation
+   The same app-shell boundary keeps Patrol/Assistant/Actions utility navigation
    accessible-name safe: labelled icon SVGs may remain meaningful when rendered
    standalone, but `frontend-modern/src/AppLayout.tsx` must treat them as
    decorative inside tabs so the announced tab name comes from product chrome
-   and meaningful badge text rather than icon title duplication. Scoped
-   governed-operation history is subordinate to Patrol in that chrome:
-   `/actions` remains a stable route and Assistant page context, but it must not
-   render as a peer utility tab. While that route is open, the shell keeps
-   Patrol selected so the user remains inside one operational workspace; this
-   navigation relationship must not merge Activity history state into
-   Assistant drawer state or allow the drawer to become an alternate action
-   review client.
+   and meaningful badge text rather than icon title duplication. Global
+   governed operations use the peer `/actions` utility destination and stable
+   Assistant page context. Actions owns its selected state and pending-approval
+   badge while Patrol owns only its operational-attention count. This
+   navigation relationship must not merge Actions state into Assistant drawer
+   state or allow the drawer to become an alternate action review client.
    Scoped
    approval handoffs sourced from Patrol, active alerts, or alert incident
    timelines must render as source-named investigation handoffs in the drawer

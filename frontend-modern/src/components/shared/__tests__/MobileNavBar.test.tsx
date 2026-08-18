@@ -95,6 +95,7 @@ describe('MobileNavBar', () => {
         ]}
         utilityTabs={() => [
           makeUtility('settings', 'Settings'),
+          makeUtility('actions', 'Actions'),
           makeUtility('ai', 'Patrol'),
           makeUtility('alerts', 'Alerts'),
         ]}
@@ -109,7 +110,7 @@ describe('MobileNavBar', () => {
       Array.from(fixedRail?.querySelectorAll('button[data-tab-id]') ?? []).map((button) =>
         button.getAttribute('data-tab-id'),
       ),
-    ).toEqual(['proxmox', 'alerts', 'ai', 'more']);
+    ).toEqual(['proxmox', 'alerts', 'ai', 'actions', 'more']);
 
     const more = screen.getByRole('button', { name: 'More navigation' });
     expect(more).toHaveAttribute('aria-haspopup', 'menu');

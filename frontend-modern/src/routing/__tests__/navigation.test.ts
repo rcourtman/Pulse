@@ -29,9 +29,7 @@ describe('navigation routing helpers', () => {
     expect(getActiveTabForPath('/settings/security')).toBe('settings');
   });
 
-  it('keeps Activity history as a stable subordinate route identity', () => {
-    // AppLayout presents this route beneath Patrol, while route identity stays
-    // distinct for the page title, Assistant context, and durable action review.
+  it('keeps Actions as a stable first-class route identity', () => {
     expect(getActiveTabForPath('/actions')).toBe('actions');
     expect(getActiveTabForPath('/actions/history')).toBe('actions');
   });

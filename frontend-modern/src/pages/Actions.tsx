@@ -139,8 +139,8 @@ export function Actions() {
   return (
     <div class="space-y-6">
       <PageHeader
-        title="Activity history"
-        description="Review every governed operation, approval, execution result, and verified outcome."
+        title="Actions"
+        description="Review approvals, run ready work, and see what happened."
         actions={
           <Button
             variant="ghost"

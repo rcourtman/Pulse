@@ -551,17 +551,16 @@ finding or approval is handled. Browser presentation labels the route `Patrol`
 and may label the default queue `Open work`, but those labels are chrome over
 this existing status/finding/approval contract; they are not new API fields,
 prompt payloads, or alternate current-work schemas.
-Shell navigation may derive a content-free `Patrol` open-work count from the
-existing Patrol findings endpoint and durable action-inbox pending count. When
-there are pending governed actions, the shell badge prioritizes that universal
-approval count and label; otherwise it may show the active Patrol finding
-count. This is presentation over existing read models, not a new API route or
-status field. It must not include finding IDs, approval IDs, resource names,
-commands, prompt text, or model output in visible chrome, and must not replace
-the detail-owning Patrol findings, durable action inbox, approval, run-history,
-or status routes. The Patrol surface may expose a compact `Activity history`
-handoff with the same count, but the durable `/actions` route continues to own
-the complete record list and review controls.
+Shell navigation may derive separate content-free counts from the existing read
+models. The `Patrol` badge may show the active Patrol finding count, while the
+peer `Actions` badge may show the durable action-inbox pending-approval count.
+This is presentation over existing read models, not a new API route or status
+field. It must not include finding IDs, approval IDs, resource names, commands,
+prompt text, or model output in visible chrome, and must not replace the
+detail-owning Patrol findings, durable action inbox, approval, run-history, or
+status routes. The Patrol surface may expose a compact Actions handoff, but the
+durable `/actions` route continues to own the complete record list and review
+controls.
 The authenticated `GET /api/agent/patrol-control/status` projection exposes the same content-free starter evidence as count-only fields
 (`operationsLoopStarterCount`, `assistantOperationsLoopStarterCount`,
 `patrolOperationsLoopStarterCount`,

@@ -224,6 +224,7 @@ describe('mobileNavBarModel.branchcov2', () => {
         [makePrimaryTab('standalone'), makePrimaryTab('docker'), makePrimaryTab('proxmox')],
         [
           makeUtilityTab({ id: 'settings' }),
+          makeUtilityTab({ id: 'actions' }),
           makeUtilityTab({ id: 'ai' }),
           makeUtilityTab({ id: 'alerts' }),
         ],
@@ -233,6 +234,7 @@ describe('mobileNavBarModel.branchcov2', () => {
         'proxmox',
         'alerts',
         'ai',
+        'actions',
       ]);
       expect(layout.overflowDestinations.map((destination) => destination.tab.id)).toEqual([
         'docker',

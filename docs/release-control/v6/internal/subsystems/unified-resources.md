@@ -793,11 +793,12 @@ container inventory table.
 
 The global Product Trust projection is owned at
 `frontend-modern/src/features/actions/` with the stable `/actions` route shell
-in `frontend-modern/src/pages/Actions.tsx`, presented to users as `Activity
-history`. Patrol is the primary operational home and may expose a compact
-pending-count handoff into this route, but the ledger must not reappear as a
-peer top-level utility tab and Patrol must not duplicate its rows or controls.
-The route must consume durable
+in `frontend-modern/src/pages/Actions.tsx`, presented to users as `Actions`.
+The ledger is a peer top-level utility destination with its own selected state
+and durable pending-approval count. Patrol remains the primary detection and
+investigation home and may expose a compact handoff into this route, but it must
+not duplicate ledger rows, action controls, or the Actions approval badge. The
+route must consume durable
 `ActionAuditRecord.plan.policyDecision` and `result.actionResultV2` without
 deriving policy authority or collapsing execution, verification, and recovery
 into one outcome. Docker lifecycle controls may create a canonical plan and

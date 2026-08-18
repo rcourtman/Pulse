@@ -3,6 +3,7 @@ import { Portal } from 'solid-js/web';
 import type { JSX } from 'solid-js';
 import { useLocation, useNavigate } from '@solidjs/router';
 import BellIcon from 'lucide-solid/icons/bell';
+import ListChecksIcon from 'lucide-solid/icons/list-checks';
 import SettingsIcon from 'lucide-solid/icons/settings';
 import Maximize2Icon from 'lucide-solid/icons/maximize-2';
 import Minimize2Icon from 'lucide-solid/icons/minimize-2';
@@ -297,7 +298,7 @@ export function AppLayout(props: AppLayoutProps) {
     vmware: 'vSphere',
     standalone: 'Machines',
     alerts: 'Alerts',
-    actions: 'Activity history',
+    actions: 'Actions',
     ai: 'Patrol',
     settings: 'Settings',
   };
@@ -439,10 +440,7 @@ export function AppLayout(props: AppLayoutProps) {
     clearHeaderHideTimeout();
   });
 
-  const getNavigationActiveTab = () => {
-    const active = getActiveTabForPath(location.pathname);
-    return active === 'actions' ? 'ai' : active;
-  };
+  const getNavigationActiveTab = () => getActiveTabForPath(location.pathname);
   const getActiveTabDesktop = getNavigationActiveTab;
   const getActiveTabMobile = getNavigationActiveTab;
   const assistantPageContext = createMemo(() => getAssistantPageContext(location.pathname));
@@ -485,12 +483,6 @@ export function AppLayout(props: AppLayoutProps) {
     if (count <= 0) return undefined;
     return `${count} active attention ${count === 1 ? 'item' : 'items'}`;
   });
-  const patrolNavigationCount = createMemo(
-    () => (actionApprovalBadge()?.count ?? patrolAttentionCount()) || undefined,
-  );
-  const patrolNavigationCountLabel = createMemo(
-    () => actionApprovalBadge()?.label ?? patrolAttentionCountLabel(),
-  );
 
   // Platform/runtime nav is resource-admitted. A platform or runtime lens only
   // appears when the support manifest says the surface is supported and the
@@ -605,10 +597,21 @@ export function AppLayout(props: AppLayoutProps) {
         route: '/patrol',
         tooltip: 'Review active operational attention and recent Patrol checks',
         badge: null,
-        count: patrolNavigationCount(),
-        countLabel: patrolNavigationCountLabel(),
+        count: patrolAttentionCount() || undefined,
+        countLabel: patrolAttentionCountLabel(),
         breakdown: undefined,
         icon: PulsePatrolLogo,
+      },
+      {
+        id: 'actions',
+        label: 'Actions',
+        route: '/actions',
+        tooltip: 'Review approvals, run ready work, and see recorded outcomes',
+        badge: null,
+        count: actionApprovalBadge()?.count,
+        countLabel: actionApprovalBadge()?.label,
+        breakdown: undefined,
+        icon: ListChecksIcon,
       },
     ];
 

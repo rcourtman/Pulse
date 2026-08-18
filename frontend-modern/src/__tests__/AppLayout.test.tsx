@@ -173,7 +173,7 @@ describe('AppLayout navigation icons', () => {
     expect(systemGroup).toBeTruthy();
 
     const desktopTabs = within(systemGroup as HTMLElement).getAllByRole('tab');
-    expect(desktopTabs).toHaveLength(3);
+    expect(desktopTabs).toHaveLength(4);
     desktopTabs.forEach((tab) => {
       expect(tab.querySelector('svg')).toBeTruthy();
     });
@@ -190,7 +190,7 @@ describe('AppLayout navigation icons', () => {
     expect(within(systemGroup as HTMLElement).queryByRole('tab', { name: 'Patrol P' })).toBeNull();
 
     const mobileNav = screen.getByRole('navigation', { name: 'Mobile navigation' });
-    ['alerts', 'ai'].forEach((tabId) => {
+    ['alerts', 'ai', 'actions'].forEach((tabId) => {
       const button = mobileNav.querySelector<HTMLElement>(`[data-tab-id="${tabId}"]`);
       expect(button).toBeTruthy();
       expect(button?.querySelector('svg')).toBeTruthy();
@@ -232,24 +232,24 @@ describe('AppLayout navigation icons', () => {
     expect(within(mobileNav).queryByText('Needs Attention')).toBeNull();
   });
 
-  it('routes universal pending operations and the subordinate activity route through Patrol', () => {
+  it('gives Actions its own navigation state and approval count', () => {
     actionInboxMockState.pendingActionCount = 3;
     renderLayout([], '/actions');
 
     const desktopNav = screen.getByRole('tablist', { name: 'Primary navigation' });
     const systemGroup = desktopNav.querySelector('[aria-label="System"]');
     expect(systemGroup).toBeTruthy();
-    const patrolTab = within(systemGroup as HTMLElement).getByRole('tab', {
-      name: 'Patrol: 3 actions await approval',
+    const actionsTab = within(systemGroup as HTMLElement).getByRole('tab', {
+      name: 'Actions: 3 actions await approval',
     });
-    expect(patrolTab.className).toContain('text-blue-600');
-    expect(within(systemGroup as HTMLElement).queryByRole('tab', { name: 'Actions' })).toBeNull();
+    expect(actionsTab.className).toContain('text-blue-600');
+    expect(within(systemGroup as HTMLElement).getByRole('tab', { name: 'Patrol' })).toBeTruthy();
 
     const mobileNav = screen.getByRole('navigation', { name: 'Mobile navigation' });
     expect(
-      within(mobileNav).getByRole('button', { name: 'Patrol: 3 actions await approval' }),
+      within(mobileNav).getByRole('button', { name: 'Actions: 3 actions await approval' }),
     ).toHaveAttribute('aria-current', 'page');
-    expect(document.title).toContain('Activity history');
+    expect(document.title).toContain('Actions');
   });
 
   it('shows platform and runtime lens tabs with supported infrastructure evidence', () => {
