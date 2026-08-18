@@ -1,7 +1,7 @@
-# Pulse v6.3.0-rc.2
+# Pulse v6.3.0-rc.3
 
-_This changelog describes the changes since `v6.3.0-rc.1` and carries forward
-the complete cumulative 6.3 packet since stable `v6.2.1`. `v6.3.0-rc.2` is a
+_This changelog describes the changes since `v6.3.0-rc.2` and carries forward
+the complete cumulative 6.3 packet since stable `v6.2.1`. `v6.3.0-rc.3` is a
 prerelease and rolls back to stable `v6.2.1`._
 
 ## Added
@@ -16,6 +16,9 @@ prerelease and rolls back to stable `v6.2.1`._
   changes, prerequisites, contract failures, capability limits, policy, and
   stale plans.
 - Production security guidance and a reusable security-review evidence packet.
+- System-scoped alerts, so Pulse can report a fault in itself rather than only
+  in a monitored resource. Broken notification delivery is the first, raised as
+  an ordinary alert so it reaches the alert list and navigation badge.
 
 ## Changed
 
@@ -54,6 +57,16 @@ prerelease and rolls back to stable `v6.2.1`._
   member addressing, and discovery-analysis timeout handling now use canonical
   runtime facts.
 - Informational and bodyless HTTP responses remain valid when gzip is enabled.
+- The notifications surface states when alert delivery is paused, including
+  that a passing test send does not prove live alerts are getting through.
+  Configured destinations were previously silent with no indication.
+- Degraded notification delivery is reported on the alerts overview instead of
+  only on the destinations configuration tab.
+- The flapping cooldown now suppresses for its configured duration. It was
+  recorded and never read, so suppression ended as soon as the sliding window
+  drained and a resource oscillating just under the threshold was never damped.
+- Mobile tables keep narrow values readable, preserve compact replication
+  values, and use a consistent density across platform surfaces.
 
 ## Security
 
@@ -66,7 +79,7 @@ prerelease and rolls back to stable `v6.2.1`._
 
 ## Release Metadata
 
-- Version: `v6.3.0-rc.2`
+- Version: `v6.3.0-rc.3`
 - Previous release: `v6.2.1`
 - Previous stable: `v6.2.1`
 - Rollback target: `v6.2.1`
@@ -76,6 +89,6 @@ prerelease and rolls back to stable `v6.2.1`._
 - Windows signing decision: the standing prerelease path publishes exact-SHA,
   checksum, and detached-signature verified Windows agents without
   Authenticode; stable `v6.3.0` restores mandatory SignPath signing
-- Mobile decision: `no-mobile-impact`; changes since `v6.3.0-rc.1` preserve the
+- Mobile decision: `no-mobile-impact`; changes since `v6.3.0-rc.2` preserve the
   existing mobile, Relay, onboarding, and mobile-facing API contracts, and no
   companion upload or public store rollout is required

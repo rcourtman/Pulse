@@ -1,12 +1,15 @@
-# Pulse v6.3.0-rc.2 Release Notes
+# Pulse v6.3.0-rc.3 Release Notes
 
-`v6.3.0-rc.2` is a release candidate for the next Pulse v6 minor release and
-the first published candidate in the 6.3 line. An earlier `rc.1` publication
-did not complete, so this cut uses a fresh immutable version for the advanced
-`main` branch. It follows stable
-`v6.2.1` and introduces the Patrol v2 operating model, a first-class Actions
-workspace, guarded agent action preflight, large-estate response improvements,
-and monitoring correctness fixes.
+`v6.3.0-rc.3` is a release candidate for the next Pulse v6 minor release,
+following `v6.3.0-rc.2` in the 6.3 line and stable `v6.2.1`. It carries the
+Patrol v2 operating model, a first-class Actions workspace, guarded agent
+action preflight, large-estate response improvements, and monitoring
+correctness fixes.
+
+This candidate adds a group of alert-delivery repairs. Production telemetry
+showed installs with a configured notification destination that had never
+delivered anything and had no way to find out, because the channel that would
+carry such a warning is the one that had failed.
 
 ## Highlights
 
@@ -16,6 +19,13 @@ and monitoring correctness fixes.
   without granting mutation authority.
 - Approved actions gain agent preflight and stable refusal telemetry; large
   installations gain compressed APIs and indexed lookups.
+- Pulse now raises an alert about itself when notification delivery is failing,
+  so a dead notification channel is visible in the alert list and navigation
+  badge rather than only on a configuration tab.
+- The notifications surface says when delivery is paused, and says plainly that
+  a successful test send does not prove live alerts are getting through.
+- The alert flapping cooldown now suppresses for its configured duration
+  instead of ending as soon as the measurement window drained.
 
 ## Added
 
@@ -95,7 +105,7 @@ and monitoring correctness fixes.
 
 ## Upgrade Notes
 
-Use the normal v6 install or update flow for `v6.3.0-rc.2` only when you are
+Use the normal v6 install or update flow for `v6.3.0-rc.3` only when you are
 comfortable testing a release candidate. The rollback target is `v6.2.1`.
 
 The exact rollback reinstall command is:
@@ -104,7 +114,7 @@ The exact rollback reinstall command is:
 ./scripts/install.sh --version v6.2.1
 ```
 
-The changes since `v6.3.0-rc.1` do not require a Pulse Mobile client change
+The changes since `v6.3.0-rc.2` do not require a Pulse Mobile client change
 and preserve the existing mobile, Relay, onboarding, and mobile-facing API
 contracts. No companion mobile build upload or public mobile-store rollout is
 part of this candidate.
