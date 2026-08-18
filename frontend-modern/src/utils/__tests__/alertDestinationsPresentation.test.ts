@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  getAlertDestinationsDeliveryPausedActionLabel,
+  getAlertDestinationsDeliveryPausedDescription,
+  getAlertDestinationsDeliveryPausedTitle,
   ALERT_DESTINATIONS_CONFIG_LOAD_ERROR,
   ALERT_DESTINATIONS_PUSH_GATE_MESSAGE,
   ALERT_DESTINATIONS_PUSH_GATE_TITLE,
@@ -160,5 +163,28 @@ describe('alertDestinationsPresentation', () => {
       }),
     ).toContain('could not verify the notification queue');
     expect(getAlertDestinationsDeliveryRefreshLabel()).toBe('Refresh delivery status');
+  });
+});
+
+describe('alert destinations delivery paused copy', () => {
+  it('names the consequence and the test-send caveat for every paused reason', () => {
+    expect(getAlertDestinationsDeliveryPausedTitle()).toBe('Notifications are paused');
+    expect(getAlertDestinationsDeliveryPausedActionLabel()).toBe('Turn on delivery');
+
+    for (const reason of ['detection_off', 'not_activated', 'snoozed'] as const) {
+      const description = getAlertDestinationsDeliveryPausedDescription(reason);
+      // The whole point of the card: say that nothing reaches the destinations,
+      // and that a passing test is not evidence delivery works.
+      expect(description).toContain('none of them will be sent to the destinations below');
+      expect(description).toContain('Test messages bypass the pause');
+    }
+
+    expect(getAlertDestinationsDeliveryPausedDescription('detection_off')).toContain(
+      'Alerts are switched off',
+    );
+    expect(getAlertDestinationsDeliveryPausedDescription('snoozed')).toContain('snoozed');
+    expect(getAlertDestinationsDeliveryPausedDescription('not_activated')).toContain(
+      'has not been turned on for this install yet',
+    );
   });
 });

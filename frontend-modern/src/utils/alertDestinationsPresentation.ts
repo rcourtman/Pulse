@@ -198,3 +198,34 @@ export function getAlertDestinationsDeliveryHealthDescription(input: {
 export function getAlertDestinationsDeliveryRefreshLabel() {
   return ALERT_DESTINATIONS_DELIVERY_REFRESH_LABEL;
 }
+
+const ALERT_DESTINATIONS_DELIVERY_PAUSED_TITLE = 'Notifications are paused';
+const ALERT_DESTINATIONS_DELIVERY_PAUSED_ACTION = 'Turn on delivery';
+
+export type AlertDestinationsDeliveryPausedReason = 'detection_off' | 'not_activated' | 'snoozed';
+
+export function getAlertDestinationsDeliveryPausedTitle() {
+  return ALERT_DESTINATIONS_DELIVERY_PAUSED_TITLE;
+}
+
+export function getAlertDestinationsDeliveryPausedActionLabel() {
+  return ALERT_DESTINATIONS_DELIVERY_PAUSED_ACTION;
+}
+
+// Describes why nothing configured on this page will actually reach anyone.
+// The test-send caveat is deliberate: test messages bypass the delivery pause,
+// so a successful test is not evidence that live alerts are getting through.
+export function getAlertDestinationsDeliveryPausedDescription(
+  reason: AlertDestinationsDeliveryPausedReason,
+) {
+  const consequence =
+    'Pulse is still detecting alerts, but none of them will be sent to the destinations below. Test messages bypass the pause, so a successful test does not mean live alerts are getting through.';
+
+  if (reason === 'detection_off') {
+    return `Alerts are switched off in the alert configuration. ${consequence}`;
+  }
+  if (reason === 'snoozed') {
+    return `Notification delivery is snoozed. ${consequence}`;
+  }
+  return `Notification delivery has not been turned on for this install yet. ${consequence}`;
+}

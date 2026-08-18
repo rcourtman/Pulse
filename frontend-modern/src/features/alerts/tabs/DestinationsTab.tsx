@@ -1,9 +1,13 @@
-import { Show } from 'solid-js';
+import { createMemo, createSignal, Show } from 'solid-js';
 import { hasFeature } from '@/stores/license';
 import { getUpgradeActionDestination } from '@/stores/licenseCommercial';
 import { presentationPolicyHidesUpgradePrompts } from '@/stores/sessionPresentationPolicy';
+import { useAlertsActivation } from '@/stores/alertsActivation';
+import { logger } from '@/utils/logger';
+import type { AlertDestinationsDeliveryPausedReason } from '@/utils/alertDestinationsPresentation';
 import { AlertAppriseDestinationsSection } from '../AlertAppriseDestinationsSection';
 import { AlertDeliveryHealthCard } from '../AlertDeliveryHealthCard';
+import { AlertDeliveryPausedCard } from '../AlertDeliveryPausedCard';
 import { AlertDestinationsLoadErrorCard } from '../AlertDestinationsLoadErrorCard';
 import { AlertDestinationsLoadingState } from '../AlertDestinationsLoadingState';
 import { AlertEmailDestinationsSection } from '../AlertEmailDestinationsSection';
@@ -22,10 +26,53 @@ export interface DestinationsTabProps extends AlertDestinationsTabStateProps {
 
 export function DestinationsTab(props: DestinationsTabProps) {
   const state = useAlertDestinationsTabState(props);
+  const alertsActivation = useAlertsActivation();
+  const [activating, setActivating] = createSignal(false);
+
+  // Destinations configured here are inert while delivery is gated off, so the
+  // pause has to be visible on this surface rather than only on the overview.
+  const pausedReason = createMemo<AlertDestinationsDeliveryPausedReason | null>(() => {
+    // Until the alert config resolves, activation state is null and would read
+    // as paused; staying quiet avoids a false warning on every tab open.
+    if (!alertsActivation.config() || alertsActivation.activationState() === null) {
+      return null;
+    }
+    if (alertsActivation.notificationDeliveryEnabled()) {
+      return null;
+    }
+    if (!alertsActivation.detectionEnabled()) {
+      return 'detection_off';
+    }
+    return alertsActivation.activationState() === 'snoozed' ? 'snoozed' : 'not_activated';
+  });
+
+  const handleActivate = async () => {
+    if (activating()) {
+      return;
+    }
+    setActivating(true);
+    try {
+      await alertsActivation.activate();
+    } catch (error) {
+      logger.error('Failed to activate notification delivery from destinations tab', error);
+    } finally {
+      setActivating(false);
+    }
+  };
 
   return (
     <div class="flex w-full max-w-full flex-col gap-6 md:gap-8">
       <Show when={!state.isLoading()} fallback={<AlertDestinationsLoadingState />}>
+        <Show when={pausedReason()}>
+          {(reason) => (
+            <AlertDeliveryPausedCard
+              reason={reason()}
+              activating={activating()}
+              onActivate={() => void handleActivate()}
+            />
+          )}
+        </Show>
+
         <Show
           when={
             state.deliveryHealthUnavailable() || state.deliveryHealth()?.queue.status === 'degraded'
