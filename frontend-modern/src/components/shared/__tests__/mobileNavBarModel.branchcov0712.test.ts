@@ -219,7 +219,7 @@ describe('mobileNavBarModel.branchcov2', () => {
   });
 
   describe('buildMobileNavBarLayout', () => {
-    it('keeps one priority-ordered platform and daily operations fixed', () => {
+    it('keeps platforms in a dedicated switcher and daily operations fixed', () => {
       const layout = buildMobileNavBarLayout(
         [makePrimaryTab('standalone'), makePrimaryTab('docker'), makePrimaryTab('proxmox')],
         [
@@ -230,20 +230,20 @@ describe('mobileNavBarModel.branchcov2', () => {
         ],
       );
 
-      expect(layout.fixedDestinations.map((destination) => destination.tab.id)).toEqual([
+      expect(layout.platformDestinations.map((destination) => destination.tab.id)).toEqual([
         'proxmox',
+        'docker',
+        'standalone',
+      ]);
+      expect(layout.fixedDestinations.map((destination) => destination.tab.id)).toEqual([
         'alerts',
         'ai',
         'actions',
       ]);
       expect(layout.overflowDestinations.map((destination) => destination.tab.id)).toEqual([
-        'docker',
-        'standalone',
         'settings',
       ]);
       expect(layout.overflowDestinations.map((destination) => destination.kind)).toEqual([
-        'primary',
-        'primary',
         'utility',
       ]);
     });
@@ -254,8 +254,10 @@ describe('mobileNavBarModel.branchcov2', () => {
         [makeUtilityTab({ id: 'alerts' }), makeUtilityTab({ id: 'ai' })],
       );
 
-      expect(layout.fixedDestinations.map((destination) => destination.tab.id)).toEqual([
+      expect(layout.platformDestinations.map((destination) => destination.tab.id)).toEqual([
         'proxmox',
+      ]);
+      expect(layout.fixedDestinations.map((destination) => destination.tab.id)).toEqual([
         'alerts',
         'ai',
       ]);

@@ -4055,20 +4055,24 @@ lookups or DOM listener lifecycle back into the shared shell.
 The shared mobile nav now follows that same owner split.
 `frontend-modern/src/components/shared/MobileNavBar.tsx` stays the render
 shell, `frontend-modern/src/components/shared/useMobileNavBarState.ts` owns
-fade signals, scroll and resize listeners, active-tab centering, and click
-handoff lifecycle, and
+the mutually exclusive platform/overflow menu state, keyboard focus return,
+outside-click dismissal, last-active-platform continuity, and click handoff
+lifecycle, and
 `frontend-modern/src/components/shared/mobileNavBarModel.ts` owns platform and
-utility tab ordering, alert badge counts, fade-state derivation, and tab
+utility tab ordering, the dedicated platform-switcher projection, alert badge
+counts, and tab
 button class policy. Future mobile-nav work should extend those owners instead
 of pushing tab-order or DOM lifecycle logic back into the shared shell. With
 support/admin controls moved under Settings, that utility ordering must no longer
 reserve a standalone `operations` slot; alerts, Patrol, and Settings are the
 remaining authenticated utility tabs.
-The platform rail is the only horizontally scrolling region in that shell.
-Alerts, Patrol, and Settings stay pinned in a separate utility rail so primary
-platform breadth cannot push those global destinations beyond the phone
-viewport, while active-platform centering and fade state remain scoped to the
-primary rail.
+Platform switching is a first-level mobile action. The first bottom-rail slot
+must show the current or most recently active platform and open the dedicated
+platform menu containing every evidence-admitted platform; platform choices
+must not be buried in the generic More menu. Alerts, Patrol, and Actions remain
+pinned daily-operation destinations. More is reserved for secondary utilities
+such as Settings, keeping the bottom rail to five predictable targets without
+making infrastructure switching a two-level navigation task.
 The shared command palette now follows that same owner split.
 `frontend-modern/src/components/shared/CommandPaletteModal.tsx` stays the
 render shell, `frontend-modern/src/components/shared/useCommandPaletteState.ts`

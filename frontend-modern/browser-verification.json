@@ -1,39 +1,45 @@
 {
   "version": 1,
   "result": "passed",
-  "verified_at": "2026-08-18T19:01:00Z",
-  "base_sha": "9bec2a52b518ac6164652574962ea078d82df330",
+  "verified_at": "2026-08-18T19:14:48Z",
+  "base_sha": "4be10526b653815389996d3d0e99fe582c648dc0",
   "changed_paths": [
-    "frontend-modern/src/features/alerts/AlertDeliveryPausedCard.tsx",
-    "frontend-modern/src/features/alerts/tabs/DestinationsTab.tsx",
-    "frontend-modern/src/utils/alertDestinationsPresentation.ts"
+    "frontend-modern/src/components/shared/MobileNavBar.tsx",
+    "frontend-modern/src/components/shared/mobileNavBarModel.ts",
+    "frontend-modern/src/components/shared/useMobileNavBarState.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/alerts/AlertDeliveryPausedCard.tsx": "24ba381b7ee24247c53707d2fb5e311d8add2a43b8ba30bd1780e5bbf66d539b",
-    "frontend-modern/src/features/alerts/tabs/DestinationsTab.tsx": "8f448e48aef2bf10286a8c175a6091e9706dcf9990b6fb9ccc2651f6dbbd7acf",
-    "frontend-modern/src/utils/alertDestinationsPresentation.ts": "40432ae601f5916d957113aa33c2c4597eaf1ea014e2bf1a90b5e91f275992c5"
+    "frontend-modern/src/components/shared/MobileNavBar.tsx": "94d38c6497660a31c2d9ea2ab8b7b1fcf07c58402b4b75f638753e028b665f38",
+    "frontend-modern/src/components/shared/mobileNavBarModel.ts": "f1ef527cb91657d748e26ed37dfa9d1b8527469837cd1838d5f41c53b13ea5db",
+    "frontend-modern/src/components/shared/useMobileNavBarState.ts": "b9f7d406e7c7d11c1c4d9c6655e13c4abf3cc2c1b1f6f55808dafa77b36b31ce"
   },
   "routes": [
-    "/alerts/notifications",
-    "/alerts/overview"
-  ],
-  "states": [
-    "activationState=pending_review: paused card renders above the Email notifications section",
-    "activationState=active: paused card is absent",
-    "alert config not yet loaded: no card rendered, so no false warning flash on tab open"
-  ],
-  "interactions": [
-    "clicked 'Turn on delivery' on /alerts/notifications; card cleared and the overview header moved to 'Notifications enabled'",
-    "restored activation via the overview toggle; card returned and the backend reported pending_review again"
+    "/proxmox/overview",
+    "/proxmox/replication",
+    "/docker/overview"
   ],
   "viewports": [
     {
-      "width": 1280,
-      "height": 800
+      "width": 1440,
+      "height": 1000
     },
     {
-      "width": 375,
-      "height": 812
+      "width": 390,
+      "height": 844
     }
+  ],
+  "states": [
+    "Mobile bottom navigation with Proxmox active and the dedicated platform switcher closed",
+    "Platform switcher open with Proxmox, Docker, Kubernetes, TrueNAS, vSphere, and Machines visible",
+    "Docker active after direct selection from the platform switcher",
+    "More menu open with Settings as its only secondary utility",
+    "Desktop primary navigation visible with the mobile bottom navigation hidden"
+  ],
+  "interactions": [
+    "opened the first-slot platform switcher from Proxmox",
+    "selected Docker and verified navigation to /docker/overview plus the current-platform label",
+    "opened More and verified that no platform destinations remain in its utility menu",
+    "selected Proxmox from the platform switcher",
+    "exercised ArrowDown, arrow traversal, Home, End, Escape focus return, and outside-click dismissal in component tests"
   ]
 }

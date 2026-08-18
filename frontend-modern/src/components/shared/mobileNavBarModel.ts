@@ -35,11 +35,13 @@ export type MobileNavBarProps = {
   onUtilityClick: (tab: MobileNavBarUtilityTab) => void;
 };
 
+export type MobileNavBarPrimaryDestination = { kind: 'primary'; tab: MobileNavBarPrimaryTab };
+export type MobileNavBarUtilityDestination = { kind: 'utility'; tab: MobileNavBarUtilityTab };
 export type MobileNavBarDestination =
-  | { kind: 'primary'; tab: MobileNavBarPrimaryTab }
-  | { kind: 'utility'; tab: MobileNavBarUtilityTab };
+  MobileNavBarPrimaryDestination | MobileNavBarUtilityDestination;
 
 export type MobileNavBarLayout = {
+  platformDestinations: MobileNavBarPrimaryDestination[];
   fixedDestinations: MobileNavBarDestination[];
   overflowDestinations: MobileNavBarDestination[];
 };
@@ -93,9 +95,10 @@ export function buildOrderedMobileNavUtilityTabs(
 }
 
 /**
- * Keep the bottom bar to five predictable targets at most: the primary
- * infrastructure destination, the three daily operations destinations, and
- * More. Every other admitted platform and utility remains available in More.
+ * Keep the bottom bar to five predictable targets at most: a dedicated
+ * platform switcher, the three daily operations destinations, and More for
+ * secondary utilities. Platform choice is primary navigation and must never
+ * be buried in the generic overflow menu.
  */
 export function buildMobileNavBarLayout(
   primaryTabs: MobileNavBarPrimaryTab[],
@@ -103,24 +106,22 @@ export function buildMobileNavBarLayout(
 ): MobileNavBarLayout {
   const orderedPrimaryTabs = buildOrderedMobileNavPrimaryTabs(primaryTabs);
   const orderedUtilityTabs = buildOrderedMobileNavUtilityTabs(utilityTabs);
-  const fixedPrimaryTabs = orderedPrimaryTabs.slice(0, 1);
   const fixedUtilityTabs = orderedUtilityTabs.filter((tab) =>
     MOBILE_NAV_FIXED_UTILITY_IDS.has(tab.id),
   );
 
   return {
-    fixedDestinations: [
-      ...fixedPrimaryTabs.map((tab): MobileNavBarDestination => ({ kind: 'primary', tab })),
-      ...fixedUtilityTabs.map((tab): MobileNavBarDestination => ({ kind: 'utility', tab })),
-    ],
-    overflowDestinations: [
-      ...orderedPrimaryTabs
-        .slice(1)
-        .map((tab): MobileNavBarDestination => ({ kind: 'primary', tab })),
-      ...orderedUtilityTabs
-        .filter((tab) => !MOBILE_NAV_FIXED_UTILITY_IDS.has(tab.id))
-        .map((tab): MobileNavBarDestination => ({ kind: 'utility', tab })),
-    ],
+    platformDestinations: orderedPrimaryTabs.map((tab): MobileNavBarPrimaryDestination => ({
+      kind: 'primary',
+      tab,
+    })),
+    fixedDestinations: fixedUtilityTabs.map((tab): MobileNavBarDestination => ({
+      kind: 'utility',
+      tab,
+    })),
+    overflowDestinations: orderedUtilityTabs
+      .filter((tab) => !MOBILE_NAV_FIXED_UTILITY_IDS.has(tab.id))
+      .map((tab): MobileNavBarDestination => ({ kind: 'utility', tab })),
   };
 }
 

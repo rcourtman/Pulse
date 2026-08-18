@@ -293,6 +293,17 @@ describe('AppLayout navigation icons', () => {
     expect(
       within(infrastructureGroup as HTMLElement).getByRole('tab', { name: 'vSphere' }),
     ).toBeTruthy();
+
+    const mobileNav = screen.getByRole('navigation', { name: 'Mobile navigation' });
+    fireEvent.click(
+      within(mobileNav).getByRole('button', { name: 'Switch platform, current Proxmox' }),
+    );
+    const platformMenu = screen.getByRole('menu', { name: 'Switch platform' });
+    expect(
+      within(platformMenu)
+        .getAllByRole('menuitem')
+        .map((item) => item.getAttribute('data-tab-id')),
+    ).toEqual(['proxmox', 'docker', 'vmware', 'standalone']);
   });
 
   it('does not expose cached platform evidence before navigation admission resolves', () => {

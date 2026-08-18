@@ -15,21 +15,19 @@ export type {
 } from './mobileNavBarModel';
 
 export function useMobileNavBarState(props: MobileNavBarProps) {
-  const [isOverflowOpen, setIsOverflowOpen] = createSignal(false);
+  const [openMenu, setOpenMenu] = createSignal<'platform' | 'overflow' | null>(null);
+  const [lastPrimaryTabId, setLastPrimaryTabId] = createSignal<string | null>(null);
+  const [platformTriggerRef, setPlatformTriggerRef] = createSignal<HTMLButtonElement>();
+  const [platformMenuRef, setPlatformMenuRef] = createSignal<HTMLDivElement>();
   const [overflowTriggerRef, setOverflowTriggerRef] = createSignal<HTMLButtonElement>();
   const [overflowMenuRef, setOverflowMenuRef] = createSignal<HTMLDivElement>();
 
   const layout = createMemo(() =>
     buildMobileNavBarLayout(props.primaryTabs(), props.utilityTabs()),
   );
+  const platformDestinations = createMemo(() => layout().platformDestinations);
   const fixedDestinations = createMemo(() => layout().fixedDestinations);
   const overflowDestinations = createMemo(() => layout().overflowDestinations);
-  const overflowPrimaryDestinations = createMemo(() =>
-    overflowDestinations().filter(
-      (destination): destination is Extract<MobileNavBarDestination, { kind: 'primary' }> =>
-        destination.kind === 'primary',
-    ),
-  );
   const overflowUtilityDestinations = createMemo(() =>
     overflowDestinations().filter(
       (destination): destination is Extract<MobileNavBarDestination, { kind: 'utility' }> =>
@@ -41,13 +39,29 @@ export function useMobileNavBarState(props: MobileNavBarProps) {
       isMobileNavDestinationActive(destination, props.activeTab()),
     ),
   );
+  const platformIsActive = createMemo(() =>
+    platformDestinations().some((destination) =>
+      isMobileNavDestinationActive(destination, props.activeTab()),
+    ),
+  );
+  const activePlatformDestination = createMemo(() => {
+    const destinations = platformDestinations();
+    return (
+      destinations.find((destination) => destination.tab.id === props.activeTab()) ??
+      destinations.find((destination) => destination.tab.id === lastPrimaryTabId()) ??
+      destinations[0]
+    );
+  });
 
-  const overflowMenuItems = () =>
-    Array.from(overflowMenuRef()?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]') ?? []);
+  const activeMenuRef = () => (openMenu() === 'platform' ? platformMenuRef() : overflowMenuRef());
+  const activeTriggerRef = () =>
+    openMenu() === 'platform' ? platformTriggerRef() : overflowTriggerRef();
+  const activeMenuItems = () =>
+    Array.from(activeMenuRef()?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]') ?? []);
 
-  const focusOverflowItem = (target: 'active' | 'first' | 'last') => {
+  const focusMenuItem = (target: 'active' | 'first' | 'last') => {
     queueMicrotask(() => {
-      const items = overflowMenuItems();
+      const items = activeMenuItems();
       if (items.length === 0) return;
       const item =
         target === 'last'
@@ -59,25 +73,29 @@ export function useMobileNavBarState(props: MobileNavBarProps) {
     });
   };
 
-  const openOverflow = (focusTarget: 'active' | 'first' | 'last' = 'active') => {
-    setIsOverflowOpen(true);
-    focusOverflowItem(focusTarget);
+  const openNavigationMenu = (
+    menu: 'platform' | 'overflow',
+    focusTarget: 'active' | 'first' | 'last' = 'active',
+  ) => {
+    setOpenMenu(menu);
+    focusMenuItem(focusTarget);
   };
 
-  const closeOverflow = (restoreFocus = false) => {
-    setIsOverflowOpen(false);
+  const closeNavigationMenus = (restoreFocus = false) => {
+    const trigger = activeTriggerRef();
+    setOpenMenu(null);
     if (restoreFocus) {
-      queueMicrotask(() => overflowTriggerRef()?.focus());
+      queueMicrotask(() => trigger?.focus());
     }
   };
 
   createEffect(() => {
-    if (!isOverflowOpen()) return;
+    if (!openMenu()) return;
 
     const handlePointerDown = (event: PointerEvent) => {
       const target = event.target as Node;
-      if (overflowMenuRef()?.contains(target) || overflowTriggerRef()?.contains(target)) return;
-      closeOverflow();
+      if (activeMenuRef()?.contains(target) || activeTriggerRef()?.contains(target)) return;
+      closeNavigationMenus();
     };
     document.addEventListener('pointerdown', handlePointerDown);
     onCleanup(() => document.removeEventListener('pointerdown', handlePointerDown));
@@ -86,9 +104,12 @@ export function useMobileNavBarState(props: MobileNavBarProps) {
   let previousActiveTab = props.activeTab();
   createEffect(() => {
     const activeTab = props.activeTab();
+    if (platformDestinations().some((destination) => destination.tab.id === activeTab)) {
+      setLastPrimaryTabId(activeTab);
+    }
     if (activeTab === previousActiveTab) return;
     previousActiveTab = activeTab;
-    closeOverflow();
+    closeNavigationMenus();
   });
 
   const handlePrimaryClick = (tab: MobileNavBarPrimaryTab) => {
@@ -100,7 +121,7 @@ export function useMobileNavBarState(props: MobileNavBarProps) {
   };
 
   const handleDestinationClick = (destination: MobileNavBarDestination) => {
-    closeOverflow();
+    closeNavigationMenus();
     if (destination.kind === 'primary') {
       handlePrimaryClick(destination.tab);
       return;
@@ -108,33 +129,52 @@ export function useMobileNavBarState(props: MobileNavBarProps) {
     handleUtilityClick(destination.tab);
   };
 
-  const handleOverflowTriggerClick = () => {
-    if (isOverflowOpen()) {
-      closeOverflow();
+  const handlePlatformTriggerClick = () => {
+    if (platformDestinations().length === 1) {
+      const destination = platformDestinations()[0];
+      if (destination) handleDestinationClick(destination);
       return;
     }
-    openOverflow();
+    if (openMenu() === 'platform') {
+      closeNavigationMenus();
+      return;
+    }
+    openNavigationMenu('platform');
+  };
+
+  const handlePlatformTriggerKeyDown = (event: KeyboardEvent) => {
+    if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+    event.preventDefault();
+    openNavigationMenu('platform', event.key === 'ArrowUp' ? 'last' : 'first');
+  };
+
+  const handleOverflowTriggerClick = () => {
+    if (openMenu() === 'overflow') {
+      closeNavigationMenus();
+      return;
+    }
+    openNavigationMenu('overflow');
   };
 
   const handleOverflowTriggerKeyDown = (event: KeyboardEvent) => {
     if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
     event.preventDefault();
-    openOverflow(event.key === 'ArrowUp' ? 'last' : 'first');
+    openNavigationMenu('overflow', event.key === 'ArrowUp' ? 'last' : 'first');
   };
 
-  const handleOverflowMenuKeyDown = (event: KeyboardEvent) => {
+  const handleNavigationMenuKeyDown = (event: KeyboardEvent) => {
     if (event.key === 'Escape') {
       event.preventDefault();
-      closeOverflow(true);
+      closeNavigationMenus(true);
       return;
     }
     if (event.key === 'Tab') {
-      closeOverflow();
+      closeNavigationMenus();
       return;
     }
     if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
 
-    const items = overflowMenuItems();
+    const items = activeMenuItems();
     if (items.length === 0) return;
     event.preventDefault();
     const currentIndex = items.indexOf(document.activeElement as HTMLButtonElement);
@@ -150,17 +190,25 @@ export function useMobileNavBarState(props: MobileNavBarProps) {
   };
 
   return {
-    closeOverflow,
+    activePlatformDestination,
+    closeOverflow: closeNavigationMenus,
     fixedDestinations,
     handleDestinationClick,
-    handleOverflowMenuKeyDown,
+    handleOverflowMenuKeyDown: handleNavigationMenuKeyDown,
     handleOverflowTriggerClick,
     handleOverflowTriggerKeyDown,
-    isOverflowOpen,
+    handlePlatformMenuKeyDown: handleNavigationMenuKeyDown,
+    handlePlatformTriggerClick,
+    handlePlatformTriggerKeyDown,
+    isOverflowOpen: () => openMenu() === 'overflow',
+    isPlatformMenuOpen: () => openMenu() === 'platform',
     overflowDestinations,
     overflowIsActive,
-    overflowPrimaryDestinations,
     overflowUtilityDestinations,
+    platformDestinations,
+    platformIsActive,
+    setPlatformMenuRef,
+    setPlatformTriggerRef,
     setOverflowMenuRef,
     setOverflowTriggerRef,
   };

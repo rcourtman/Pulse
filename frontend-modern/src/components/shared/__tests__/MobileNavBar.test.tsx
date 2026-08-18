@@ -85,7 +85,7 @@ describe('MobileNavBar', () => {
     expect(mobileNavBarModelSource).not.toContain("'recovery'");
   });
 
-  it('renders one platform and the daily operations set with every other route in More', async () => {
+  it('renders a dedicated platform switcher and keeps More for secondary utilities', async () => {
     const { container } = render(() => (
       <MobileNavBar
         activeTab={() => 'standalone'}
@@ -112,30 +112,44 @@ describe('MobileNavBar', () => {
       Array.from(fixedRail?.querySelectorAll('button[data-tab-id]') ?? []).map((button) =>
         button.getAttribute('data-tab-id'),
       ),
-    ).toEqual(['proxmox', 'alerts', 'ai', 'actions', 'more']);
+    ).toEqual(['platform-switcher', 'alerts', 'ai', 'actions', 'more']);
+
+    const platformSwitcher = screen.getByRole('button', {
+      name: 'Switch platform, current Machines',
+    });
+    expect(platformSwitcher).toHaveAttribute('aria-haspopup', 'menu');
+    expect(platformSwitcher).toHaveAttribute('aria-expanded', 'false');
+    expect(platformSwitcher).toHaveAttribute('aria-current', 'page');
+    fireEvent.click(platformSwitcher);
+
+    const platformMenu = await screen.findByRole('menu', { name: 'Switch platform' });
+    expect(platformSwitcher).toHaveAttribute('aria-expanded', 'true');
+    expect(
+      within(platformMenu)
+        .getAllByRole('menuitem')
+        .map((item) => item.getAttribute('data-tab-id')),
+    ).toEqual(['proxmox', 'standalone']);
+    expect(within(platformMenu).getByRole('menuitem', { name: 'Machines' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
 
     const more = screen.getByRole('button', { name: 'More navigation' });
     expect(more).toHaveAttribute('aria-haspopup', 'menu');
     expect(more).toHaveAttribute('aria-expanded', 'false');
-    expect(more).toHaveAttribute('aria-current', 'page');
     fireEvent.click(more);
 
     const menu = await screen.findByRole('menu', { name: 'More navigation destinations' });
     expect(more).toHaveAttribute('aria-expanded', 'true');
-    expect(within(menu).getByRole('group', { name: 'Infrastructure' })).toBeInTheDocument();
+    expect(within(menu).queryByRole('group', { name: 'Infrastructure' })).toBeNull();
     expect(within(menu).getByRole('group', { name: 'Pulse' })).toBeInTheDocument();
     expect(
       within(menu)
         .getAllByRole('menuitem')
         .map((item) => item.getAttribute('data-tab-id')),
-    ).toEqual(['standalone', 'settings']);
-    expect(within(menu).getByRole('menuitem', { name: 'Machines' })).toHaveAttribute(
-      'aria-current',
-      'page',
-    );
+    ).toEqual(['settings']);
 
-    const fixedProxmox = fixedRail?.querySelector('[data-tab-id="proxmox"]');
-    expect(fixedProxmox).toHaveClass('min-h-10', 'gap-0', 'py-0.5', 'text-[9px]');
+    expect(platformSwitcher).toHaveClass('min-h-10', 'gap-0', 'py-0.5', 'text-[9px]');
   });
 
   it('preserves route callbacks for fixed and overflow destinations', async () => {
@@ -159,15 +173,18 @@ describe('MobileNavBar', () => {
       expect.objectContaining({ id: 'alerts', route: '/alerts' }),
     );
 
-    const more = screen.getByRole('button', { name: 'More navigation' });
-    fireEvent.click(more);
-    const menu = await screen.findByRole('menu');
-    fireEvent.click(within(menu).getByRole('menuitem', { name: 'Machines' }));
+    const platformSwitcher = screen.getByRole('button', {
+      name: 'Switch platform, current Proxmox',
+    });
+    fireEvent.click(platformSwitcher);
+    const platformMenu = await screen.findByRole('menu', { name: 'Switch platform' });
+    fireEvent.click(within(platformMenu).getByRole('menuitem', { name: 'Machines' }));
     expect(onPrimaryClick).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'standalone', route: '/standalone/overview' }),
     );
     expect(screen.queryByRole('menu')).toBeNull();
 
+    const more = screen.getByRole('button', { name: 'More navigation' });
     fireEvent.click(more);
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Settings' }));
     expect(onUtilityClick).toHaveBeenCalledWith(
@@ -205,12 +222,16 @@ describe('MobileNavBar', () => {
     ).toHaveTextContent('Patrol2');
     expect(within(nav).queryByRole('button', { name: 'Pulse Patrol Patrol' })).toBeNull();
 
-    fireEvent.click(within(nav).getByRole('button', { name: 'More navigation' }));
-    const menu = await screen.findByRole('menu');
+    fireEvent.click(within(nav).getByRole('button', { name: 'Switch platform, current Proxmox' }));
+    const menu = await screen.findByRole('menu', { name: 'Switch platform' });
     expect(within(menu).getByRole('menuitem', { name: /Machines/ })).toHaveTextContent(
       'MachinesSetup',
     );
-    expect(within(menu).getByRole('menuitem', { name: 'Settings' })).toBeInTheDocument();
+    fireEvent.click(within(nav).getByRole('button', { name: 'More navigation' }));
+    const utilityMenu = await screen.findByRole('menu', {
+      name: 'More navigation destinations',
+    });
+    expect(within(utilityMenu).getByRole('menuitem', { name: 'Settings' })).toBeInTheDocument();
   });
 
   it('supports menu arrow keys, Escape focus return, and outside dismissal', async () => {
@@ -227,10 +248,12 @@ describe('MobileNavBar', () => {
       />
     ));
 
-    const more = screen.getByRole('button', { name: 'More navigation' });
-    more.focus();
-    fireEvent.keyDown(more, { key: 'ArrowDown' });
-    const menu = await screen.findByRole('menu');
+    const platformSwitcher = screen.getByRole('button', {
+      name: 'Switch platform, current Proxmox',
+    });
+    platformSwitcher.focus();
+    fireEvent.keyDown(platformSwitcher, { key: 'ArrowDown' });
+    const menu = await screen.findByRole('menu', { name: 'Switch platform' });
     const items = within(menu).getAllByRole('menuitem');
     await waitFor(() => expect(items[0]).toHaveFocus());
 
@@ -242,10 +265,11 @@ describe('MobileNavBar', () => {
     expect(items[1]).toHaveFocus();
     fireEvent.keyDown(items[1], { key: 'Escape' });
     await waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
-    expect(more).toHaveFocus();
+    expect(platformSwitcher).toHaveFocus();
 
+    const more = screen.getByRole('button', { name: 'More navigation' });
     fireEvent.click(more);
-    await screen.findByRole('menu');
+    await screen.findByRole('menu', { name: 'More navigation destinations' });
     fireEvent.pointerDown(document.body);
     await waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
   });

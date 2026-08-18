@@ -1,4 +1,5 @@
 import { For, Show } from 'solid-js';
+import ChevronsUpDownIcon from 'lucide-solid/icons/chevrons-up-down';
 import EllipsisIcon from 'lucide-solid/icons/ellipsis';
 import { type MobileNavBarProps, useMobileNavBarState } from './useMobileNavBarState';
 import {
@@ -18,6 +19,7 @@ export type {
 } from './mobileNavBarModel';
 
 const MOBILE_NAV_OVERFLOW_ID = 'mobile-navigation-overflow';
+const MOBILE_NAV_PLATFORM_SWITCHER_ID = 'mobile-navigation-platform-switcher';
 
 function MobileNavDestinationContent(props: {
   destination: MobileNavBarDestination;
@@ -159,17 +161,67 @@ export function MobileNavBar(props: MobileNavBarProps) {
           class="absolute inset-x-2 bottom-full mb-2 max-h-[70vh] overflow-y-auto rounded-lg border border-border bg-surface p-1 shadow-xl"
         >
           {renderOverflowGroup({
-            label: 'Infrastructure',
-            destinations: mobileNav.overflowPrimaryDestinations,
-          })}
-          {renderOverflowGroup({
             label: 'Pulse',
             destinations: mobileNav.overflowUtilityDestinations,
           })}
         </div>
       </Show>
 
+      <Show when={mobileNav.isPlatformMenuOpen()}>
+        <div
+          id={MOBILE_NAV_PLATFORM_SWITCHER_ID}
+          ref={mobileNav.setPlatformMenuRef}
+          role="menu"
+          aria-label="Switch platform"
+          onKeyDown={mobileNav.handlePlatformMenuKeyDown}
+          class="absolute inset-x-2 bottom-full mb-2 max-h-[70vh] overflow-y-auto rounded-lg border border-border bg-surface p-1 shadow-xl"
+        >
+          {renderOverflowGroup({
+            label: 'Infrastructure',
+            destinations: mobileNav.platformDestinations,
+          })}
+        </div>
+      </Show>
+
       <div data-mobile-nav-rail="fixed" class="flex min-w-0 items-stretch gap-0.5 px-0.5 py-0.5">
+        <Show when={mobileNav.activePlatformDestination()}>
+          {(destination) => {
+            const canSwitch = () => mobileNav.platformDestinations().length > 1;
+            const currentLabel = () => destination().tab.label;
+
+            return (
+              <button
+                ref={mobileNav.setPlatformTriggerRef}
+                type="button"
+                data-tab-id="platform-switcher"
+                data-mobile-nav-destination="platform-switcher"
+                aria-label={
+                  canSwitch() ? `Switch platform, current ${currentLabel()}` : currentLabel()
+                }
+                aria-haspopup={canSwitch() ? 'menu' : undefined}
+                aria-expanded={canSwitch() ? mobileNav.isPlatformMenuOpen() : undefined}
+                aria-controls={canSwitch() ? MOBILE_NAV_PLATFORM_SWITCHER_ID : undefined}
+                aria-current={mobileNav.platformIsActive() ? 'page' : undefined}
+                onClick={mobileNav.handlePlatformTriggerClick}
+                onKeyDown={mobileNav.handlePlatformTriggerKeyDown}
+                title={canSwitch() ? 'Switch platform' : destination().tab.tooltip}
+                class={getMobileNavTabButtonClass({
+                  active: mobileNav.platformIsActive(),
+                  enabled: destination().tab.enabled,
+                })}
+              >
+                <MobileNavDestinationContent destination={destination()} iconClass={tabIconClass} />
+                <Show when={canSwitch()}>
+                  <ChevronsUpDownIcon
+                    aria-hidden="true"
+                    class="absolute right-1 top-1 h-2.5 w-2.5 text-muted"
+                  />
+                </Show>
+              </button>
+            );
+          }}
+        </Show>
+
         <For each={mobileNav.fixedDestinations()}>
           {(destination) => {
             const active = () => isMobileNavDestinationActive(destination, props.activeTab());
