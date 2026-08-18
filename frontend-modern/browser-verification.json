@@ -1,25 +1,29 @@
 {
   "version": 1,
-  "base_sha": "c6cafa6e2588050bc6acd8f3a224144a8523c9f9",
-  "verified_at": "2026-08-18T06:45:34Z",
+  "base_sha": "ebba3c493bb4713c0954a620ed4b247c84b8d1ba",
+  "verified_at": "2026-08-18T09:22:00Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx",
-    "frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx",
-    "frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx"
+    "frontend-modern/src/App.tsx",
+    "frontend-modern/src/useAppRuntimeState.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx": "84e4631c4b2c651667a9bdd4b612eee6a96b053df6ac72293789f3b957868760",
-    "frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx": "242e527ff6379f7d38a5f0649a551c49426b2ef4bc4b8efa20ecae0b85bd7d2b",
-    "frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx": "79701a9a23208d1bb6f4c1711a0aa64b12ff3b5ad12f65a8448b2de0e5e3c3aa"
+    "frontend-modern/src/App.tsx": "15989cbf87c43fac8fe0701fe29adda0ff8a3642e1a8eff7925102c61a1ca8dd",
+    "frontend-modern/src/useAppRuntimeState.ts": "cbed5848e77a1b0b01c82c59e651bc8e7598b74d95dcdc308ff4974d437aca68"
   },
   "routes": [
-    "/patrol"
+    "/login",
+    "/",
+    "/proxmox/overview",
+    "/docker/overview",
+    "/kubernetes/overview",
+    "/truenas/overview",
+    "/vsphere/overview"
   ],
   "viewports": [
     {
-      "width": 1280,
-      "height": 720
+      "width": 1440,
+      "height": 900
     },
     {
       "width": 390,
@@ -27,17 +31,23 @@
     }
   ],
   "states": [
-    "Live Watch only daily briefing with 15 current decisions, one critical item, and one governed approval waiting",
-    "Desktop start state with the compact Patrol toolbar, priority-ordered inbox, and recommended first-decision preview in the initial viewport",
-    "Selected critical item in the persistent desktop inbox-and-context workspace",
-    "Narrow master/detail state with the inbox hidden until explicit Back to list navigation",
-    "Current-coverage calm state, transport failure state, and attached availability failure without synthetic health"
+    "signed-out login form",
+    "authenticated shell against a backend that reports the platformAdmission facet",
+    "platform navigation resolved with all six primary tabs present (Proxmox, Docker, Kubernetes, TrueNAS, vSphere, Machines)",
+    "Proxmox overview populated from a 658-resource estate",
+    "Docker, Kubernetes, TrueNAS and vSphere platform pages populated",
+    "shell at 390x844 with the Proxmox table rendered"
   ],
   "interactions": [
-    "Used the live in-app Browser to inspect the complete briefing start state and confirm current-work counters, Start review, approval handoff, inbox, and recommended next case",
-    "Activated Start review and inspected the selected desktop context with lifecycle, evidence, protection, resource, and Assistant controls",
-    "Passed all 18 attention-workbench scenarios across Chromium, mobile Chrome, and mobile Safari",
-    "Verified at 390x844 that selection hides the inbox, Back to list restores it and row focus, the deep link survives reload, and the page does not overflow",
-    "Passed the seven monitor-first and attached-availability browser scenarios in Chromium"
+    "signed in and confirmed navigation resolves with every platform tab the estate admits, against a backend built from the commit that publishes the facet",
+    "confirmed the shell reads admission from a 2172-byte /api/resources?page=1&limit=1 response rather than the 314KB /api/state payload",
+    "confirmed the shipped facet equals the client classifier over the same 658-resource estate, so the handover between the two sources is not visible",
+    "switched to the Docker tab and confirmed 80 rows",
+    "switched to the Kubernetes tab and confirmed 180 rows",
+    "switched to the TrueNAS tab and confirmed 3 rows",
+    "switched to the vSphere tab and confirmed 32 rows",
+    "returned to the Proxmox tab and confirmed 79 rows",
+    "resized to 390x844 and confirmed the Proxmox table still renders 79 rows",
+    "confirmed zero console or page errors across the whole pass"
   ]
 }

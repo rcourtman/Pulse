@@ -1216,6 +1216,13 @@ hands-on Patrol modes, issue investigation, verified fixes, and longer history`.
     hints; it must never expose a grant, the global Relay feed credential, or
     another commercial subject's event data.
 
+### Tenant shell navigation admission
+
+The authenticated shell bootstrap reads platform admission from the canonical
+resource contract, which is tenant-scoped, so a tenant sees exactly the
+platform pages its own estate admits. Navigation MUST NOT be derived from a
+cross-tenant or unscoped resource set.
+
 ## Forbidden Paths
 
 1. New ad hoc plan names in runtime or UI

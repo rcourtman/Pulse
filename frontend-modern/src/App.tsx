@@ -132,15 +132,29 @@ const PRIMARY_INFRASTRUCTURE_ROUTE_BY_ID: Record<PrimaryPlatformNavId, string> =
 export function resolvePlatformNavigationAdmission(
   resources: readonly Resource[],
   runtimeStateResolved: boolean,
+  platformAdmission?: PlatformNavigationVisibility | null,
 ): {
   resolved: boolean;
   visibility: PlatformNavigationVisibility;
 } {
+  // The canonical resource contract reports which platform pages the estate
+  // admits, so navigation can resolve from a one-resource request instead of
+  // waiting for an estate-sized runtime payload to arrive and classifying it
+  // here. Once that payload does arrive it stays authoritative, because it
+  // tracks the live estate; the two agree by construction, so the handover is
+  // not visible. Servers that do not report the facet keep the old behaviour.
+  if (runtimeStateResolved) {
+    return {
+      resolved: true,
+      visibility: buildPrimaryPlatformNavigationVisibility(resources),
+    };
+  }
+  if (platformAdmission) {
+    return { resolved: true, visibility: platformAdmission };
+  }
   return {
-    resolved: runtimeStateResolved,
-    visibility: runtimeStateResolved
-      ? buildPrimaryPlatformNavigationVisibility(resources)
-      : createEmptyPlatformNavigationVisibility(),
+    resolved: false,
+    visibility: createEmptyPlatformNavigationVisibility(),
   };
 }
 
@@ -321,6 +335,7 @@ function App() {
       resolvePlatformNavigationAdmission(
         runtime.state().resources || [],
         runtime.runtimeStateResolved(),
+        runtime.platformAdmission(),
       ),
     );
     const platformNavigationResolved = () => platformNavigationAdmission().resolved;

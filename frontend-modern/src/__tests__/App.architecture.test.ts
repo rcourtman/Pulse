@@ -102,6 +102,63 @@ describe('App platform navigation admission', () => {
     }
   });
 
+  it('resolves navigation from the canonical admission facet before runtime state arrives', () => {
+    // The facet is what lets the shell render navigation without first
+    // downloading and classifying an estate-sized runtime payload.
+    const admission = resolvePlatformNavigationAdmission([], false, {
+      proxmox: true,
+      docker: false,
+      kubernetes: false,
+      truenas: true,
+      vmware: false,
+      standalone: false,
+    });
+
+    expect(admission.resolved).toBe(true);
+    expect(admission.visibility).toMatchObject({ proxmox: true, truenas: true, standalone: false });
+  });
+
+  it('does not admit the standalone page for a provider-owned estate', () => {
+    // A TrueNAS or Proxmox host reports through the agent source, so a
+    // count-based derivation would show a Machines tab for an estate that has
+    // no Pulse agent in it. The facet reports ownership, so this stays hidden.
+    const admission = resolvePlatformNavigationAdmission([], false, {
+      proxmox: false,
+      docker: false,
+      kubernetes: false,
+      truenas: true,
+      vmware: false,
+      standalone: false,
+    });
+
+    expect(admission.visibility.standalone).toBe(false);
+    expect(getDefaultWorkspaceRoute(admission.visibility, true)).toBe('/truenas/overview');
+  });
+
+  it('keeps live runtime state authoritative once it arrives', () => {
+    // The estate can gain a platform after the facet was read, so the live
+    // payload wins rather than freezing navigation at the bootstrap answer.
+    const staleFacet = {
+      proxmox: false,
+      docker: false,
+      kubernetes: false,
+      truenas: false,
+      vmware: false,
+      standalone: false,
+    };
+    const admission = resolvePlatformNavigationAdmission(authenticatedResources, true, staleFacet);
+
+    expect(admission.resolved).toBe(true);
+    expect(admission.visibility).toMatchObject({ docker: true, truenas: true, standalone: true });
+  });
+
+  it('stays unresolved when neither the facet nor runtime state is available', () => {
+    const admission = resolvePlatformNavigationAdmission([], false, null);
+
+    expect(admission.resolved).toBe(false);
+    expect(Object.values(admission.visibility)).toEqual([false, false, false, false, false, false]);
+  });
+
   it('resolves an authenticated empty estate without inventing platform visibility', () => {
     const admission = resolvePlatformNavigationAdmission([], true);
 
@@ -723,9 +780,19 @@ describe('App architecture', () => {
   });
 
   it('keeps licensed application branding inside the authenticated shell bootstrap', () => {
-    expect(appRuntimeStateSource).toContain(
-      'await Promise.all([loadRuntimeDisplayAndLayout(), loadRuntimeBranding()]);',
-    );
+    // Asserted on the bootstrap's contents rather than one formatted line, so
+    // a prettier line-wrap cannot read as branding leaving the bootstrap.
+    const authenticatedBootstrap = appRuntimeStateSource
+      .slice(appRuntimeStateSource.indexOf('await Promise.all(['))
+      .slice(
+        0,
+        appRuntimeStateSource
+          .slice(appRuntimeStateSource.indexOf('await Promise.all(['))
+          .indexOf(']);') + 3,
+      );
+    expect(authenticatedBootstrap).toContain('loadRuntimeDisplayAndLayout()');
+    expect(authenticatedBootstrap).toContain('loadRuntimeBranding()');
+    expect(authenticatedBootstrap).toContain('loadPlatformAdmission()');
     expect(appLayoutSource).toContain("import { runtimeBranding } from '@/stores/systemSettings';");
     expect(appLayoutSource).toContain(
       "const browserBrandName = createMemo(() => customBrandName() || 'Pulse');",

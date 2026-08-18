@@ -9,6 +9,11 @@ import {
 } from 'solid-js';
 import { getGlobalWebSocketStore } from '@/stores/websocket-global';
 import { logger } from '@/utils/logger';
+import { apiFetchJSON } from '@/utils/apiClient';
+import {
+  PRIMARY_PLATFORM_NAV_IDS,
+  type PlatformNavigationVisibility,
+} from '@/features/platformNavigation/platformNavigationModel';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 import type { VersionInfo } from '@/api/updates';
 import type { Organization } from '@/api/orgs';
@@ -222,6 +227,11 @@ export const useAppRuntimeState = () => {
   } | null>(null);
   const [wsStore, setWsStore] = createSignal<EnhancedStore | null>(null);
   const [bootstrapState, setBootstrapState] = createSignal<State | null>(null);
+  // Which primary platform pages this estate admits, as reported by the
+  // canonical resource contract. Null means the server did not report it, in
+  // which case navigation falls back to classifying the runtime state payload.
+  const [platformAdmission, setPlatformAdmission] =
+    createSignal<PlatformNavigationVisibility | null>(null);
   const [backendHealthy, setBackendHealthy] = createSignal(false);
   const runtimeStateResolved = (): boolean => {
     const store = wsStore();
@@ -315,6 +325,31 @@ export const useAppRuntimeState = () => {
     }
   };
 
+  const normalizePlatformAdmission = (value: unknown): PlatformNavigationVisibility | null => {
+    if (!isRecord(value)) return null;
+    const flags = PRIMARY_PLATFORM_NAV_IDS.map((navId) => [navId, value[navId]] as const);
+    // Partial payloads are rejected outright: a missing flag would read as a
+    // hidden platform, which is indistinguishable from a real absence.
+    if (flags.some(([, flag]) => typeof flag !== 'boolean')) return null;
+    return Object.fromEntries(flags) as PlatformNavigationVisibility;
+  };
+
+  const loadPlatformAdmission = async () => {
+    try {
+      // One resource is enough: the aggregations describe the whole set, so
+      // this resolves navigation without reading an estate-sized payload.
+      const payload = await apiFetchJSON<{ aggregations?: { platformAdmission?: unknown } }>(
+        '/api/resources?page=1&limit=1',
+      );
+      setPlatformAdmission(normalizePlatformAdmission(payload?.aggregations?.platformAdmission));
+    } catch (error) {
+      // Older servers do not report the facet; navigation keeps its previous
+      // behaviour rather than hiding platforms the estate really has.
+      logger.debug('[useAppRuntimeState] platform admission unavailable', error);
+      setPlatformAdmission(null);
+    }
+  };
+
   const loadRuntimeDisplayAndLayout = async () => {
     try {
       // Bootstrap runs for every authenticated role. Read only the explicit
@@ -373,7 +408,11 @@ export const useAppRuntimeState = () => {
     await loadOrganizations();
     setWsStore(acquireWsStore());
     setBackendHealthy(true);
-    await Promise.all([loadRuntimeDisplayAndLayout(), loadRuntimeBranding()]);
+    await Promise.all([
+      loadRuntimeDisplayAndLayout(),
+      loadRuntimeBranding(),
+      loadPlatformAdmission(),
+    ]);
     // Shared commercial posture stays off ordinary self-hosted app shells.
     if (!presentationPolicyHidesUpgradePrompts()) {
       void loadCommercialPosture();
@@ -839,6 +878,7 @@ export const useAppRuntimeState = () => {
     proxyAuthInfo,
     state,
     runtimeStateResolved,
+    platformAdmission,
     connected,
     backendHealthy,
     connectionStatus,

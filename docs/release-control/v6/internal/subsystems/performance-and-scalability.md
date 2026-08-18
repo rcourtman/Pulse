@@ -972,6 +972,16 @@ shell clickable behind another overlay.
     input; `suppressPlatformFilter` drops the now-redundant Platform chip
     from the rendered toolbar so the user never sees a removable lock.
 
+### Navigation resolves from a bounded request
+
+The app shell MUST resolve which platform pages exist from the
+`platformAdmission` facet on the canonical resource aggregations, which is
+answerable from a one-resource request, rather than by classifying an
+estate-sized runtime payload. Admission cost MUST NOT scale with estate size:
+a larger estate makes the runtime payload slower to build and transfer, and
+navigation must not wait on it. Live runtime state remains authoritative for
+navigation once it has arrived.
+
 ## Forbidden Paths
 
 1. Speculative micro-optimizations without evidence

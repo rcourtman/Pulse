@@ -3450,6 +3450,13 @@ query...`, and `Reading storage...` before streamed tool arguments are
     launcher visibility, or shared keyboard handling in
     `frontend-modern/src/AppLayout.tsx`.
 
+### Platform navigation admission
+
+Surfaces hosted in the app shell MUST take platform navigation visibility from
+the shell's resolved admission rather than re-deriving it from a full-state
+payload or a resource count. Admission is per-resource ownership evidence and
+has a single definition in the canonical resource contract.
+
 ## Forbidden Paths
 
 1. Leaving new `internal/ai/` runtime entry points unowned under broad architecture or generic API ownership

@@ -1758,6 +1758,13 @@ Pulse-managed host in its own right. Admission is resolved by
 `unifiedresources.BuildPlatformAdmission`; storage surfaces MUST NOT infer
 host ownership from the `agent` source count.
 
+### TrueNAS navigation visibility
+
+The TrueNAS platform page is admitted by the `platformAdmission` facet on the
+canonical resource aggregations. A TrueNAS host admits the TrueNAS page and not
+the standalone page, and the shell MUST take that answer from the facet rather
+than inferring it from an agent-source count in a runtime payload.
+
 ## Forbidden Paths
 
 1. Reintroducing storage or recovery product logic as ad hoc dashboard-only summaries without a canonical page-surface owner
