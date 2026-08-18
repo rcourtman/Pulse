@@ -8,6 +8,7 @@ import {
   compactReplicationNextSyncText,
   formatMobileReplicationGuestLabel,
 } from '../ProxmoxReplicationTable';
+import replicationTableSource from '../ProxmoxReplicationTable.tsx?raw';
 
 const replicationJob = (overrides: Partial<ReplicationJob> = {}): ReplicationJob => ({
   id: 'replication-100',
@@ -43,13 +44,17 @@ describe('ProxmoxReplicationTable', () => {
     expect(REPLICATION_MOBILE_COLUMN_WIDTHS).toEqual({
       guest: 40,
       status: 16,
-      route: 22,
-      lastSync: 9,
+      route: 21.5,
+      lastSync: 9.5,
       nextSync: 13,
     });
     expect(compactReplicationNextSyncText('34m overdue', 'overdue')).toBe('-34m');
     expect(compactReplicationNextSyncText('in 8m', 'normal')).toBe('8m');
     expect(formatMobileReplicationGuestLabel(replicationJob())).toBe('100 web');
+  });
+
+  it('removes phone tracking and excess padding from the tight last-sync column', () => {
+    expect(replicationTableSource).toContain('![padding-inline:2px] !tracking-normal');
   });
 
   it('renders replication duration cells through the shared duration format', () => {

@@ -58,8 +58,8 @@ export const REPLICATION_MOBILE_COLUMN_WIDTHS: Readonly<
 > = {
   guest: 40,
   status: 16,
-  route: 22,
-  lastSync: 9,
+  route: 21.5,
+  lastSync: 9.5,
   nextSync: 13,
 };
 
@@ -304,6 +304,8 @@ export const ProxmoxReplicationTable: Component<{
   const canRevealDetails = createMemo(() => layout() === 'compact');
   const mobilePaddingClass = () => (canRevealDetails() ? '!px-1' : '');
   const mobileHeadClass = () => (canRevealDetails() ? '!px-1 !text-[9px]' : '');
+  const mobileLastSyncClass = () =>
+    canRevealDetails() ? '![padding-inline:2px] !tracking-normal' : '';
   const showJob = createMemo(() => !canRevealDetails());
   const showNext = createMemo(() => true);
   const showOperational = createMemo(() => ['operational', 'expanded', 'full'].includes(layout()));
@@ -422,9 +424,9 @@ export const ProxmoxReplicationTable: Component<{
                       </TableHead>
                     </Show>
                     <TableHead
-                      class={`${getPlatformTableHeadClassForKind('numeric-value')} ${columnWidthClass('lastSync')} ${mobileHeadClass()}`}
+                      class={`${getPlatformTableHeadClassForKind('numeric-value')} ${columnWidthClass('lastSync')} ${mobileHeadClass()} ${mobileLastSyncClass()}`}
                     >
-                      {layout() === 'compact' ? 'Last' : 'Last sync'}
+                      {layout() === 'compact' ? 'Ago' : 'Last sync'}
                     </TableHead>
                     <Show when={showNext()}>
                       <TableHead
@@ -561,7 +563,7 @@ export const ProxmoxReplicationTable: Component<{
                                 </TableCell>
                               </Show>
                               <TableCell
-                                class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content ${mobilePaddingClass()}`}
+                                class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content ${mobilePaddingClass()} ${mobileLastSyncClass()}`}
                               >
                                 <Show
                                   when={canRevealDetails()}

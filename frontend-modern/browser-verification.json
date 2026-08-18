@@ -1,38 +1,16 @@
 {
   "version": 1,
   "result": "passed",
-  "verified_at": "2026-08-18T19:58:12Z",
-  "base_sha": "9ba62be3033d5ed326c55bac7304e47683ea3e11",
+  "verified_at": "2026-08-18T20:07:40Z",
+  "base_sha": "c68be0041285192fbb726de06d770834a914df5c",
   "changed_paths": [
-    "frontend-modern/src/components/Workloads/GuestRow.tsx",
-    "frontend-modern/src/components/Workloads/WorkloadTableHeader.tsx",
-    "frontend-modern/src/components/Workloads/guestRowModel.tsx",
-    "frontend-modern/src/components/Workloads/useWorkloadsControlsState.ts",
-    "frontend-modern/src/features/docker/DockerHostsTable.tsx",
-    "frontend-modern/src/features/docker/DockerNativeTableShared.tsx",
-    "frontend-modern/src/features/docker/dockerContainerTableModel.ts",
-    "frontend-modern/src/features/platformPage/sharedPlatformPage.tsx",
-    "frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx",
-    "frontend-modern/src/features/proxmox/ProxmoxReplicationTable.tsx",
-    "frontend-modern/src/features/proxmox/proxmoxHostTableModel.ts"
+    "frontend-modern/src/features/proxmox/ProxmoxReplicationTable.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Workloads/GuestRow.tsx": "012be1639b4cd68b0a1e08f912bac125024795433e9ddc17d1c0f6e0adbdf732",
-    "frontend-modern/src/components/Workloads/WorkloadTableHeader.tsx": "5a6489738cf5e5422ba015a4f97450b734270ed0d8bf68a8b713760fd0d98153",
-    "frontend-modern/src/components/Workloads/guestRowModel.tsx": "718a01cc0567e90f08ea4b4c3d98d70fd350fe45c3e587ef233f425db2011279",
-    "frontend-modern/src/components/Workloads/useWorkloadsControlsState.ts": "f94bfc204f366f7fb644d4b162c0ff18192493aebbf28f843e978d7fc73ffbe9",
-    "frontend-modern/src/features/docker/DockerHostsTable.tsx": "b9ba1e7cce85d15c63de1191fd979fd2fb8097c506ad884fd9ca2c0fbca51348",
-    "frontend-modern/src/features/docker/DockerNativeTableShared.tsx": "f9f6f064c4089fc86277561431cda5ca96daff0dc0e3aef08a40d7fae7bf8903",
-    "frontend-modern/src/features/docker/dockerContainerTableModel.ts": "e05dda8e13765526322bde8d9c09f02e369b132e14fece0162d063c1968df80f",
-    "frontend-modern/src/features/platformPage/sharedPlatformPage.tsx": "0d6d76222bf096713285926373a362bda62222c550f8c5d4060d80c54e9964a8",
-    "frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx": "e62a369d083a581dacb1906477c4351c0bf3f92221138f8e23baa2780e31a54e",
-    "frontend-modern/src/features/proxmox/ProxmoxReplicationTable.tsx": "04249616c146d3f768661b09adc323b703a310af10a96e8223103838c54d1680",
-    "frontend-modern/src/features/proxmox/proxmoxHostTableModel.ts": "7e6e79f3bab5faba79b18fd9a8dcee8c7bb20054f8d27ed3c51754ce9c028f9c"
+    "frontend-modern/src/features/proxmox/ProxmoxReplicationTable.tsx": "c5444bd33145c7b06dcfd5767b055c747f24a7c0c582bd38c835c49c0116139e"
   },
   "routes": [
-    "/proxmox/overview",
-    "/proxmox/replication",
-    "/docker/overview"
+    "/proxmox/replication"
   ],
   "viewports": [
     {
@@ -49,17 +27,14 @@
     }
   ],
   "states": [
-    "Platform tab rails start flush at the leading edge and reserve trailing space only while the next control is present",
-    "Proxmox overview shows five readable host and workload fields at 320 pixels and restores Type, ID, and Temperature at 390 pixels",
-    "Replication shows five single-line priority fields throughout phone widths with complete route and time values",
-    "Docker hosts show Host, CPU, Memory, Disk, and Uptime at 320 pixels without wrapped OS metadata",
-    "Desktop Proxmox and Docker tables retain their full column sets and primary navigation"
+    "Replication retains its full desktop column set",
+    "Replication uses five single-line priority columns across phone widths",
+    "Guest, State, Route, Ago, and Next headers render without clipping at 320 and 390 pixels",
+    "Two-digit minute values in Ago and signed overdue values in Next render without horizontal overflow"
   ],
   "interactions": [
-    "used the Proxmox tab rail next and previous controls at 320 pixels",
-    "expanded and collapsed a replication row at 320 and 390 pixels to verify touch access to the complete guest, job, and route values",
-    "opened Proxmox host and workload disclosures to confirm truncated identities remain touch-accessible",
-    "switched from Proxmox to Docker through the dedicated mobile platform switcher",
-    "verified the Docker host and container rows retain keyboard- and touch-operable detail disclosures"
+    "expanded and collapsed a replication row to confirm full guest, job, and route detail remains touch-accessible",
+    "measured every compact header and first-row cell and confirmed clientWidth equals scrollWidth at 320 pixels",
+    "repeated compact header fit measurements at 390 pixels"
   ]
 }
