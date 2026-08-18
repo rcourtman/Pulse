@@ -1,13 +1,15 @@
-import { createSignal, onCleanup, createEffect } from 'solid-js';
+import { createSignal, onCleanup, createEffect, onMount, Show } from 'solid-js';
 import { useLocation } from '@solidjs/router';
 
 import type { Alert } from '@/types/api';
 
+import { AlertDeliveryHealthCard } from './AlertDeliveryHealthCard';
 import { AlertOverviewActiveAlertsSection } from './AlertOverviewActiveAlertsSection';
 import { AlertOverviewStatsCards } from './AlertOverviewStatsCards';
 import type { Override } from './types';
 import { useAlertIncidentTimelineState } from './useAlertIncidentTimelineState';
 import { useAlertOverviewState } from './useAlertOverviewState';
+import { useNotificationDeliveryHealth } from './useNotificationDeliveryHealth';
 
 export function OverviewTab(props: {
   overrides: Override[];
@@ -29,6 +31,13 @@ export function OverviewTab(props: {
     updateAlert: props.updateAlert,
   });
   const timelineState = useAlertIncidentTimelineState();
+  // A destination that stopped delivering is invisible by nature: the failure
+  // is the channel that would have reported it. Surface it on the tab people
+  // actually open, not only on the destinations config tab.
+  const deliveryHealthState = useNotificationDeliveryHealth();
+  onMount(() => {
+    void deliveryHealthState.loadDeliveryHealth();
+  });
 
   const scrollToAlertHash = () => {
     const hash = location.hash;
@@ -69,6 +78,14 @@ export function OverviewTab(props: {
 
   return (
     <div class="space-y-4 sm:space-y-6">
+      <Show when={deliveryHealthState.deliveryNeedsAttention()}>
+        <AlertDeliveryHealthCard
+          health={deliveryHealthState.deliveryHealth()?.queue ?? null}
+          unavailable={deliveryHealthState.deliveryHealthUnavailable()}
+          refreshing={deliveryHealthState.refreshingDeliveryHealth()}
+          onRefresh={() => void deliveryHealthState.loadDeliveryHealth()}
+        />
+      </Show>
       <AlertOverviewStatsCards state={overviewState} />
       <AlertOverviewActiveAlertsSection
         state={overviewState}

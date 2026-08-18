@@ -73,11 +73,7 @@ export function DestinationsTab(props: DestinationsTabProps) {
           )}
         </Show>
 
-        <Show
-          when={
-            state.deliveryHealthUnavailable() || state.deliveryHealth()?.queue.status === 'degraded'
-          }
-        >
+        <Show when={state.deliveryNeedsAttention()}>
           <AlertDeliveryHealthCard
             health={state.deliveryHealth()?.queue ?? null}
             unavailable={state.deliveryHealthUnavailable()}

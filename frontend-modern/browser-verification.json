@@ -1,45 +1,41 @@
 {
   "version": 1,
   "result": "passed",
-  "verified_at": "2026-08-18T19:14:48Z",
-  "base_sha": "4be10526b653815389996d3d0e99fe582c648dc0",
+  "verified_at": "2026-08-18T19:20:22Z",
+  "base_sha": "7879862c24a9657707f8a963f2bf70d1c50ed32c",
   "changed_paths": [
-    "frontend-modern/src/components/shared/MobileNavBar.tsx",
-    "frontend-modern/src/components/shared/mobileNavBarModel.ts",
-    "frontend-modern/src/components/shared/useMobileNavBarState.ts"
+    "frontend-modern/src/features/alerts/OverviewTab.tsx",
+    "frontend-modern/src/features/alerts/tabs/DestinationsTab.tsx",
+    "frontend-modern/src/features/alerts/useAlertDestinationsTabState.ts",
+    "frontend-modern/src/features/alerts/useNotificationDeliveryHealth.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/shared/MobileNavBar.tsx": "94d38c6497660a31c2d9ea2ab8b7b1fcf07c58402b4b75f638753e028b665f38",
-    "frontend-modern/src/components/shared/mobileNavBarModel.ts": "f1ef527cb91657d748e26ed37dfa9d1b8527469837cd1838d5f41c53b13ea5db",
-    "frontend-modern/src/components/shared/useMobileNavBarState.ts": "b9f7d406e7c7d11c1c4d9c6655e13c4abf3cc2c1b1f6f55808dafa77b36b31ce"
+    "frontend-modern/src/features/alerts/OverviewTab.tsx": "a96d21aed9960769a7fbdf8fcdd3ebbd64890749c4afab2259cd11df97a92653",
+    "frontend-modern/src/features/alerts/tabs/DestinationsTab.tsx": "eb85b628ea48e3e399d8613fa0511638d62f66b4b1f0e2a12d7127901dede711",
+    "frontend-modern/src/features/alerts/useAlertDestinationsTabState.ts": "76046151c145a681b0bf098d50be3c7a8d5fa89d80304fc014bd8f6fb79025b3",
+    "frontend-modern/src/features/alerts/useNotificationDeliveryHealth.ts": "092df36398945a9436017c070adf5f5a9e0a439017bed4069ee48abcfa7117fb"
   },
   "routes": [
-    "/proxmox/overview",
-    "/proxmox/replication",
-    "/docker/overview"
+    "/alerts/overview",
+    "/alerts/notifications"
+  ],
+  "states": [
+    "healthy queue: no delivery warning on the alerts overview",
+    "degraded queue: warning renders above the overview stat cards, naming the dominant failure class",
+    "before the first health load resolves: nothing rendered, so no warning flash"
+  ],
+  "interactions": [
+    "loaded /alerts/overview against a healthy queue and confirmed the overview stays clean",
+    "served a degraded notification health payload and re-entered /alerts/overview; the delivery warning appeared with its refresh control"
   ],
   "viewports": [
     {
-      "width": 1440,
-      "height": 1000
+      "width": 1280,
+      "height": 800
     },
     {
-      "width": 390,
-      "height": 844
+      "width": 375,
+      "height": 812
     }
-  ],
-  "states": [
-    "Mobile bottom navigation with Proxmox active and the dedicated platform switcher closed",
-    "Platform switcher open with Proxmox, Docker, Kubernetes, TrueNAS, vSphere, and Machines visible",
-    "Docker active after direct selection from the platform switcher",
-    "More menu open with Settings as its only secondary utility",
-    "Desktop primary navigation visible with the mobile bottom navigation hidden"
-  ],
-  "interactions": [
-    "opened the first-slot platform switcher from Proxmox",
-    "selected Docker and verified navigation to /docker/overview plus the current-platform label",
-    "opened More and verified that no platform destinations remain in its utility menu",
-    "selected Proxmox from the platform switcher",
-    "exercised ArrowDown, arrow traversal, Home, End, Escape focus return, and outside-click dismissal in component tests"
   ]
 }
