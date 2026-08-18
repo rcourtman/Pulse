@@ -54,6 +54,24 @@ describe('ResourceMonitoringPolicyAction', () => {
     });
   });
 
+  it('renders the policy menu through a body portal so scroll containers cannot clip it', () => {
+    operatorStateMock.get.mockResolvedValue(null);
+    render(() => (
+      <ResourceMonitoringPolicyAction
+        resourceId="vm:101"
+        resourceName="legacy-lxc"
+        resourceType="system-container"
+      />
+    ));
+
+    const trigger = screen.getByText('Monitoring');
+    fireEvent.click(trigger);
+    const menu = screen.getByRole('menu');
+    expect(trigger.parentElement?.contains(menu)).toBe(false);
+    expect(document.body.contains(menu)).toBe(true);
+    expect(menu.className).toContain('fixed');
+  });
+
   it('retires provider inventory without changing its previous monitoring mode', async () => {
     operatorStateMock.get.mockResolvedValue({
       canonicalId: 'vm:101',

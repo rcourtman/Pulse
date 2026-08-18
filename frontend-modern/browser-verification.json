@@ -1,29 +1,16 @@
 {
   "version": 1,
-  "base_sha": "3f32148b50c460320349fbadff5652ba5a8f4391",
-  "verified_at": "2026-08-17T22:38:49Z",
+  "base_sha": "316657b5e859850e98b0db15ec5c42fa5696f561",
+  "verified_at": "2026-08-18T05:59:05Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx",
-    "frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx",
-    "frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx",
-    "frontend-modern/src/features/patrol/PatrolObjectivesPanel.tsx",
-    "frontend-modern/src/features/patrol/PatrolRecentWorkPanel.tsx",
-    "frontend-modern/src/features/patrol/patrolHomePresentation.ts",
-    "frontend-modern/src/utils/patrolPagePresentation.ts"
+    "frontend-modern/src/features/alerts/ResourceMonitoringPolicyAction.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx": "e9b9bf575863cfabb7b9f25818792882093313441c375c20174f8ccb695d749b",
-    "frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx": "9adbd9fd4c9b5ae1e22c768a8034c570d5bc3b5f382bae002afffd82798022f0",
-    "frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx": "b974431efa5fc4e4c7b8837d8678f99708ed63b22d268c76d9cf1409df56c64e",
-    "frontend-modern/src/features/patrol/PatrolObjectivesPanel.tsx": "c9dc90ac77b57dc69718beed2ada4b47127a92900b229a5ae3e8dbf389c2461d",
-    "frontend-modern/src/features/patrol/PatrolRecentWorkPanel.tsx": "b9fea954dc881a07d0bc97ec1401fefd5777aaef623bf7c1ce07f96d5f5b033b",
-    "frontend-modern/src/features/patrol/patrolHomePresentation.ts": "724ca2540acad8ab5b154008ce4c066bd84f1e4354c5da3198c5b580f2f9c38b",
-    "frontend-modern/src/utils/patrolPagePresentation.ts": "142505e839feed425ae0163adda1bf829d5b71075abf684898012f990f0f6326"
+    "frontend-modern/src/features/alerts/ResourceMonitoringPolicyAction.tsx": "14082de06f6135b3442a941b1edc3768f6d2f42ae71ff3c9810cd7b6f18b3cdb"
   },
   "routes": [
-    "/patrol",
-    "/patrol?attention=<attention-id>"
+    "/alerts"
   ],
   "viewports": [
     {
@@ -36,21 +23,15 @@
     }
   ],
   "states": [
-    "Watch only with 12 current attention items and one governed action awaiting approval",
-    "decision queue before selection with critical items sorted ahead of warnings",
-    "selected attention item with impact, recommended next step, lifecycle controls and evidence",
-    "empty protected-outcomes setup state",
-    "empty verified-outcomes receipt state",
-    "collapsed mode-and-automation disclosure",
-    "collapsed findings-and-run-records disclosure",
-    "mobile queue and selected decision context"
+    "Active Alerts list on the Alerts overview with 12 mock alerts",
+    "Monitoring policy menu open on the last visible alert card, previously the clipped case",
+    "Menu measured fully on-screen at both viewports via getBoundingClientRect against window.innerWidth/innerHeight",
+    "Menu closed after outside pointerdown"
   ],
   "interactions": [
-    "opened Patrol from the authenticated runtime and confirmed current work precedes outcome configuration and history",
-    "selected the highest-severity attention item and confirmed the decision-context route state",
-    "confirmed the selected mobile decision scrolls into view and receives keyboard focus",
-    "confirmed the 390px layout has no horizontal page overflow",
-    "confirmed the primary Check now and secondary Settings controls remain visible at both viewports",
-    "confirmed Actions and approvals and Findings and run records remain available as subordinate review paths"
+    "Clicked the last alert card's Monitoring trigger at 1280x720, menu portaled to body, rect top 427 bottom 712 fully on-screen, screenshot shows all four choices incl. Retire from monitoring floating over subsequent cards",
+    "Clicked the last alert card's Monitoring trigger at 390x844, rect top 551 bottom 836 fully on-screen",
+    "Dispatched outside pointerdown, menu closed",
+    "vitest ResourceMonitoringPolicyAction 3 tests pass incl. new body-portal assertion, tsc --noEmit clean"
   ]
 }
