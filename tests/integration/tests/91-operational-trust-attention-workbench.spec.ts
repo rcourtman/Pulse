@@ -787,9 +787,11 @@ test("makes active operational work primary and preserves the evidence boundary"
     detailPanel.getByRole("button", { name: "Acknowledge" }),
   ).toBeVisible();
 
-  await detailPanel
-    .getByRole("button", { name: "Close attention detail" })
-    .click();
+  const closeDetailButton =
+    (page.viewportSize()?.width ?? 1280) < 1024
+      ? detailPanel.getByRole("button", { name: "Back to attention list" })
+      : detailPanel.getByRole("button", { name: "Close attention detail" });
+  await closeDetailButton.click();
   await expect(itemButton).toBeFocused();
   await expect(page).not.toHaveURL(/attention=/);
 });
@@ -816,12 +818,22 @@ test("puts the selected detail in view on a phone without page overflow", async 
       "Open the node and verify which workload is consuming CPU before making changes.",
     ),
   ).toBeVisible();
+  const backToList = detailPanel.getByRole("button", {
+    name: "Back to attention list",
+  });
+  await expect(backToList).toBeVisible();
   const overflows = await page.evaluate(
     () =>
       document.documentElement.scrollWidth >
       document.documentElement.clientWidth,
   );
   expect(overflows).toBeFalsy();
+
+  await backToList.click();
+  await expect(itemButton).toBeFocused();
+  await expect(page).not.toHaveURL(/attention=/);
+
+  await itemButton.click();
 
   await page.reload({ waitUntil: "domcontentloaded" });
   await expect(

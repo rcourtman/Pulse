@@ -3886,6 +3886,12 @@ The Patrol workbench may project the summary counts into its fixed lifecycle
 filter labels at either desktop or narrow widths, but changing presentation
 does not create a parallel count or filter vocabulary: every selection still
 uses the canonical `AttentionFilter` request and the returned list summary.
+The frontend may also place the separately loaded canonical
+`GET /api/actions/pending` count beside the attention header as a direct handoff
+to `/actions`. That count remains governed-action inbox metadata: it must not be
+added to the attention summary, used to manufacture an attention row, or imply
+that a specific attention record owns the pending action without a typed action
+reference.
 Likewise, the frontend may reduce typed evidence freshness/completeness and
 protection state into plain scan-row language or omit unavailable row metadata,
 provided selected detail continues to expose the typed facts. Presentation

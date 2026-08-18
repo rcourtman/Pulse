@@ -240,6 +240,26 @@ describe('PatrolAttentionWorkbench', () => {
     expect(apiMocks.getList).toHaveBeenCalledWith('active');
   });
 
+  it('surfaces pending governed approvals beside current Patrol decisions', async () => {
+    const attentionSummary = summary({ activeCount: 1, openCount: 1, calm: false });
+    apiMocks.getList.mockResolvedValue(listResponse([item()], attentionSummary));
+
+    render(() => (
+      <Router>
+        <Route
+          path="/patrol"
+          component={() => <PatrolAttentionWorkbench pendingActionCount={2} />}
+        />
+      </Router>
+    ));
+
+    expect(await screen.findByRole('link', { name: 'Review 2 approvals' })).toHaveAttribute(
+      'href',
+      '/actions',
+    );
+    expect(screen.getByRole('button', { name: 'Refresh Patrol attention' })).toBeInTheDocument();
+  });
+
   it('does not interrupt assisted mode for safe eligible work', async () => {
     const safeWork = item({
       availableActions: [
@@ -360,8 +380,11 @@ describe('PatrolAttentionWorkbench', () => {
     expect(within(detailRegion).getByText('Proxmox VE')).toBeInTheDocument();
     expect(within(detailRegion).getByText('Observing to Open')).toBeInTheDocument();
     expect(
+      within(detailRegion).getByRole('button', { name: 'Back to attention list' }),
+    ).toHaveTextContent('Back to list');
+    expect(
       within(detailRegion).getByRole('button', { name: 'Close attention detail' }),
-    ).toHaveClass('h-11', 'w-11', 'sm:h-6', 'sm:w-6');
+    ).toHaveClass('hidden', 'lg:inline-flex');
     expect(within(detailRegion).getByRole('button', { name: 'Acknowledge' })).toHaveClass(
       'min-h-11',
       'sm:min-h-0',

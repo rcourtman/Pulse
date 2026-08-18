@@ -1517,7 +1517,7 @@ describe('Patrol page header IA framing', () => {
     expect(workspaceSource).not.toContain('aria-label="Patrol trust summary"');
   });
 
-  it('names the proactive trust loop on the canonical Patrol surface when control is available', async () => {
+  it('names the operator job on the canonical Patrol surface when control is available', async () => {
     // The Patrol page header is the most visible piece of operator-facing
     // copy on the canonical Patrol surface. The IA framing must keep the
     // product boundary clear without turning the page header into a
@@ -1525,9 +1525,9 @@ describe('Patrol page header IA framing', () => {
     const { getPatrolPageHeaderMeta, PATROL_PAGE_DESCRIPTION, PATROL_PAGE_TITLE_TOOLTIP } =
       await import('@/utils/patrolPagePresentation');
     expect(PATROL_PAGE_DESCRIPTION).toBe(
-      'Patrol detects operational issues, brings forward the next decision, and records only verified outcomes.',
+      'See what needs a decision, choose the next step, and keep a verified record.',
     );
-    expect(PATROL_PAGE_DESCRIPTION).toContain('verified outcomes');
+    expect(PATROL_PAGE_DESCRIPTION).toContain('verified record');
     expect(PATROL_PAGE_TITLE_TOOLTIP).toBe(PATROL_PAGE_DESCRIPTION);
     expect(getPatrolPageHeaderMeta()).toMatchObject({
       title: 'Patrol',
@@ -1536,8 +1536,8 @@ describe('Patrol page header IA framing', () => {
     });
     expect(getPatrolPageHeaderMeta({ autonomyLocked: true })).toMatchObject({
       title: 'Patrol',
-      description: 'Continuous infrastructure checks, with every decision kept in your hands.',
-      titleTooltip: 'Continuous infrastructure checks, with every decision kept in your hands.',
+      description: PATROL_PAGE_DESCRIPTION,
+      titleTooltip: PATROL_PAGE_DESCRIPTION,
     });
   });
 });

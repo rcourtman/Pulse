@@ -1214,6 +1214,16 @@ compact instead of consuming the prime viewport. Universal governed actions
 and Patrol-specific finding/run records are exposed together through the
 subordinate `Review and history` handoff area.
 
+The page introduction states the operator job—find the decision, choose the
+next step, and retain a verified record—rather than repeating the command
+header's monitoring posture. A non-zero canonical pending-action count is
+current operator work, so the attention header must expose a direct
+`/actions` approval-review handoff beside refresh instead of requiring the
+operator to discover it only in history or navigation chrome. That handoff
+does not merge governed action records into the attention list or invent an
+attention count; the queue and approval inbox retain their separate canonical
+projections.
+
 The attention queue orders genuine operator decisions by severity, actionable
 approval/review state, and latest observation time. Rows expose the severity
 word, lifecycle state, bounded consequence, affected resource, decision label,
@@ -1224,7 +1234,10 @@ occurrence acknowledgement/suppression, evidence, protection posture, timeline,
 resource navigation, and contextual Assistant explanation remain available
 without displacing the primary decision. Narrow selection scrolls and focuses
 that context before the queue so keyboard and screen-reader users do not have
-to traverse the list again.
+to traverse the list again. At widths where the detail replaces the queue's
+reading position, its visible close affordance is an explicit `Back to list`
+control; wide layouts retain the compact close icon. Both controls clear the
+deep link and restore focus to the originating queue row.
 
 The active Patrol queue now uses compact severity-accented rows for
 prioritisation and a single focused review panel for the selected issue. The

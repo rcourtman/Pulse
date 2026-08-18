@@ -10,8 +10,10 @@ import {
   untrack,
 } from 'solid-js';
 import AlertTriangleIcon from 'lucide-solid/icons/triangle-alert';
+import ArrowLeftIcon from 'lucide-solid/icons/arrow-left';
 import CheckCircleIcon from 'lucide-solid/icons/circle-check';
 import ChevronRightIcon from 'lucide-solid/icons/chevron-right';
+import ClipboardCheckIcon from 'lucide-solid/icons/clipboard-check';
 import ClockIcon from 'lucide-solid/icons/clock';
 import ExternalLinkIcon from 'lucide-solid/icons/external-link';
 import RefreshIcon from 'lucide-solid/icons/refresh-cw';
@@ -97,6 +99,7 @@ export function PatrolAttentionWorkbench(
   props: {
     autonomyLevel?: PatrolAutonomyLevel;
     autonomyLocked?: boolean;
+    pendingActionCount?: number;
     onOpenFindings?: () => void;
   } = {},
 ) {
@@ -263,20 +266,29 @@ export function PatrolAttentionWorkbench(
               {autonomyExperience().needsYouDescription}
             </p>
           </div>
-          <Button
-            variant="secondary"
-            size="sm"
-            class="gap-1.5"
-            onClick={() => void loadCurrentFilter()}
-            disabled={patrolAttentionStore.loading()}
-            aria-label="Refresh Patrol attention"
-          >
-            <RefreshIcon
-              class={`h-4 w-4 ${patrolAttentionStore.loading() ? 'motion-safe:animate-spin' : ''}`}
-              aria-hidden="true"
-            />
-            Refresh
-          </Button>
+          <div class="flex flex-wrap items-center gap-2">
+            <Show when={(props.pendingActionCount ?? 0) > 0}>
+              <ButtonLink href="/actions" variant="primary" size="sm" class="gap-1.5">
+                <ClipboardCheckIcon class="h-4 w-4" aria-hidden="true" />
+                Review {props.pendingActionCount}{' '}
+                {props.pendingActionCount === 1 ? 'approval' : 'approvals'}
+              </ButtonLink>
+            </Show>
+            <Button
+              variant="secondary"
+              size="sm"
+              class="gap-1.5"
+              onClick={() => void loadCurrentFilter()}
+              disabled={patrolAttentionStore.loading()}
+              aria-label="Refresh Patrol attention"
+            >
+              <RefreshIcon
+                class={`h-4 w-4 ${patrolAttentionStore.loading() ? 'motion-safe:animate-spin' : ''}`}
+                aria-hidden="true"
+              />
+              Refresh
+            </Button>
+          </div>
         </div>
         <Show when={attention().quiet.length > 0}>
           <p class="mt-3 rounded-md border border-border-subtle bg-surface-alt/40 px-3 py-2 text-xs leading-5 text-muted">
@@ -621,7 +633,16 @@ function AttentionDetail(props: {
         </div>
         <button
           type="button"
-          class="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded text-muted hover:bg-surface-hover hover:text-base-content focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 sm:h-6 sm:w-6"
+          class="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded px-3 text-sm font-medium text-muted hover:bg-surface-hover hover:text-base-content focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 lg:hidden"
+          aria-label="Back to attention list"
+          onClick={props.onClose}
+        >
+          <ArrowLeftIcon class="h-4 w-4" aria-hidden="true" />
+          Back to list
+        </button>
+        <button
+          type="button"
+          class="hidden h-6 w-6 shrink-0 items-center justify-center rounded text-muted hover:bg-surface-hover hover:text-base-content focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 lg:inline-flex"
           aria-label="Close attention detail"
           onClick={props.onClose}
         >

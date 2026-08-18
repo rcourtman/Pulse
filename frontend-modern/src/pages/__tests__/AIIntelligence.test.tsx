@@ -692,7 +692,9 @@ describe('AIIntelligence entitlement gating', () => {
     });
 
     expect(
-      screen.getByText('Continuous infrastructure checks, with every decision kept in your hands.'),
+      screen.getByText(
+        'See what needs a decision, choose the next step, and keep a verified record.',
+      ),
     ).toBeInTheDocument();
     expect(
       screen.queryByText(

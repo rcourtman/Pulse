@@ -2612,7 +2612,13 @@ legacy Patrol analytics belong in collapsed supporting context. Unavailable and
 partial states must use explicit copy rather than success styling. Selected
 detail keeps the typed facts with named fields and plain unavailable-state
 labels rather than raw token pairs. On narrow viewports, selecting a row moves
-and focuses that decision context without horizontal page overflow.
+and focuses that decision context without horizontal page overflow. The narrow
+detail header uses a visible `Back to list` button, while the compact close-icon
+button is wide-layout-only; either path clears the attention deep link and
+restores focus to the source row. When the shared action inbox reports pending
+governed work, the attention header may render a primary `/actions` handoff
+beside its secondary refresh action. That handoff displays the action count but
+does not combine it with the attention badge or list membership.
 
 The selected attention detail may compose the shared Actions review for an
 eligible backend-authored offer. The detail owns only the expected

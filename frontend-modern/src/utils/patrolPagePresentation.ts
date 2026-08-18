@@ -3,13 +3,13 @@ import type { PatrolAutonomyLevel } from '@/api/patrol';
 export const PATROL_PAGE_TITLE = 'Patrol';
 
 export const PATROL_PAGE_WATCH_ONLY_DESCRIPTION =
-  'Continuous infrastructure checks, with every decision kept in your hands.';
+  'See what needs a decision, choose the next step, and keep a verified record.';
 
 export const PATROL_PAGE_MONITOR_DESCRIPTION =
   'Watch only: Patrol checks your estate and brings every current issue to you.';
 
 export const PATROL_PAGE_DESCRIPTION =
-  'Patrol detects operational issues, brings forward the next decision, and records only verified outcomes.';
+  'See what needs a decision, choose the next step, and keep a verified record.';
 export const PATROL_PAGE_TITLE_TOOLTIP = PATROL_PAGE_DESCRIPTION;
 
 export interface PatrolPageHeaderMetaInput {

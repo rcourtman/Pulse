@@ -34,6 +34,7 @@ export function PatrolIntelligenceSurface() {
       <PatrolAttentionWorkbench
         autonomyLevel={state.autonomyLevel()}
         autonomyLocked={state.autoFixLocked()}
+        pendingActionCount={actionInboxStore.pendingActionCount}
         onOpenFindings={openFindings}
       />
 
