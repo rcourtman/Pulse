@@ -205,11 +205,36 @@ func (m *Manager) defaultThresholdsForResourceType(typeKey string) ThresholdConf
 // resolveThresholdOverride applies an exact resource-ID override onto an existing base config.
 // Callers must hold m.mu when reading config through this helper.
 func (m *Manager) resolveThresholdOverride(base ThresholdConfig, resourceID string) ThresholdConfig {
-	if override, exists := m.config.Overrides[resourceID]; exists {
+	if override, exists := m.thresholdOverrideForResourceNoLock(resourceID); exists {
 		return m.applyThresholdOverride(base, override)
 	}
 
 	return base
+}
+
+// thresholdOverrideForResourceNoLock looks up a stored threshold override by
+// exact resource ID first, then under the canonical unified registry identity
+// for that ID. The thresholds UI stores overrides keyed by registry resource
+// IDs while the engine check paths look up legacy monitor IDs, so without the
+// translation a per-resource override on an API-only PVE node saves, displays
+// as Custom, and silently never applies (#1738). Callers must hold m.mu.
+func (m *Manager) thresholdOverrideForResourceNoLock(resourceID string) (ThresholdConfig, bool) {
+	if override, exists := m.config.Overrides[resourceID]; exists {
+		return override, true
+	}
+	if m.resourceIntentResolver == nil {
+		return ThresholdConfig{}, false
+	}
+	canonicalID, ok := m.resourceIntentResolver(resourceID)
+	if !ok {
+		return ThresholdConfig{}, false
+	}
+	canonicalID = strings.TrimSpace(canonicalID)
+	if canonicalID == "" || canonicalID == resourceID {
+		return ThresholdConfig{}, false
+	}
+	override, exists := m.config.Overrides[canonicalID]
+	return override, exists
 }
 
 // resolveGuestThresholdOverride applies the shared guest override lookup onto an existing base config.

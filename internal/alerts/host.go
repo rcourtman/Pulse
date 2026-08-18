@@ -83,13 +83,13 @@ func (m *Manager) resolveHostThresholdsNoLock(hostID, linkedNodeID, linkedVMID, 
 // resolveHostThresholdsNoLock's precedence. Callers must hold m.mu.
 func (m *Manager) hostThresholdOverrideNoLock(hostID, linkedNodeID, linkedVMID, linkedContainerID string) (ThresholdConfig, bool) {
 	if hostID = strings.TrimSpace(hostID); hostID != "" {
-		if override, exists := m.config.Overrides[hostID]; exists {
+		if override, exists := m.thresholdOverrideForResourceNoLock(hostID); exists {
 			return override, true
 		}
 	}
 
 	if linkedNodeID = strings.TrimSpace(linkedNodeID); linkedNodeID != "" {
-		if override, exists := m.config.Overrides[linkedNodeID]; exists {
+		if override, exists := m.thresholdOverrideForResourceNoLock(linkedNodeID); exists {
 			return override, true
 		}
 	}

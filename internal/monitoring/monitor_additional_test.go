@@ -772,3 +772,89 @@ func TestMergedProxmoxHostAgentGraceOverrideHoldsCPUAlert(t *testing.T) {
 		t.Fatalf("CPU alert fired immediately despite 600s per-resource grace override on %q: %+v", merged.ID, alert)
 	}
 }
+
+func TestNodeThresholdOverrideStoredUnderRegistryIDApplies(t *testing.T) {
+	node := models.Node{
+		ID:          "mock-cluster-pve1",
+		Name:        "pve1",
+		Instance:    "mock-cluster",
+		Status:      "online",
+		Type:        "node",
+		CPU:         0.10,
+		Memory:      models.Memory{Total: 16 << 30, Used: 10 << 30, Free: 6 << 30, Usage: 60},
+		LoadAverage: []float64{},
+	}
+
+	newAdapter := func() (*unifiedresources.MonitorAdapter, string) {
+		adapter := unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil))
+		adapter.PopulateFromSnapshot(models.StateSnapshot{Nodes: []models.Node{node}})
+		for _, resource := range adapter.GetAll() {
+			if resource.Proxmox != nil {
+				return adapter, resource.ID
+			}
+		}
+		t.Fatal("expected node snapshot to produce a registry resource with a Proxmox facet")
+		return nil, ""
+	}
+
+	overrideFor := func(registryID string) map[string]alerts.ThresholdConfig {
+		return map[string]alerts.ThresholdConfig{
+			registryID: {Memory: &alerts.HysteresisThreshold{Trigger: 50, Clear: 45}},
+		}
+	}
+
+	newManager := func(overrides map[string]alerts.ThresholdConfig) *alerts.Manager {
+		manager := alerts.NewManagerWithDataDir(t.TempDir())
+		t.Cleanup(manager.Stop)
+		cfg := manager.GetConfig()
+		cfg.TimeThresholds = map[string]int{"node": 0}
+		cfg.MetricTimeThresholds = nil
+		cfg.Overrides = overrides
+		manager.UpdateConfig(cfg)
+		return manager
+	}
+
+	memoryAlert := func(manager *alerts.Manager) *alerts.Alert {
+		for _, alert := range manager.GetActiveAlerts() {
+			if alert.ResourceID == node.ID && alert.Type == "memory" {
+				found := alert
+				return &found
+			}
+		}
+		return nil
+	}
+
+	// Control 1: without the override, the 60% sample stays below the node
+	// default, so the fixture cannot fire on defaults alone.
+	controlAdapter, _ := newAdapter()
+	control := newManager(nil)
+	monitorControl := &Monitor{alertManager: control}
+	monitorControl.installOperatorIntentResolver(controlAdapter)
+	control.CheckNode(node)
+	if alert := memoryAlert(control); alert != nil {
+		t.Fatalf("control without override fired a memory alert: %+v", alert)
+	}
+
+	// Control 2: the override stored under the registry ID with no registry
+	// resolver installed never resolves, which is the reported divergence
+	// (#1738): the UI shows Custom while the engine evaluates defaults.
+	_, registryID := newAdapter()
+	unresolved := newManager(overrideFor(registryID))
+	unresolved.CheckNode(node)
+	if alert := memoryAlert(unresolved); alert != nil {
+		t.Fatalf("manager without registry resolver applied a registry-keyed override: %+v", alert)
+	}
+
+	adapter, registryID2 := newAdapter()
+	manager := newManager(overrideFor(registryID2))
+	monitor := &Monitor{alertManager: manager}
+	monitor.installOperatorIntentResolver(adapter)
+	manager.CheckNode(node)
+	alert := memoryAlert(manager)
+	if alert == nil {
+		t.Fatalf("memory alert did not fire despite 50%% override stored under registry ID %q", registryID2)
+	}
+	if alert.Threshold != 50 {
+		t.Fatalf("alert threshold = %v, want 50", alert.Threshold)
+	}
+}
