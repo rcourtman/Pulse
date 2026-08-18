@@ -20336,3 +20336,121 @@ func TestFlappingDisabledIgnoresCooldown(t *testing.T) {
 		t.Errorf("expected disabled flapping detection to suppress nothing, got suppress=%v justTransitioned=%v", suppress, justTransitioned)
 	}
 }
+
+// System-scoped alerts report on Pulse itself. The point of routing them
+// through the alert pipeline is that they reach the alert list and badge even
+// when notification delivery is the thing that is broken, so these pin the
+// identity, the idempotence that keeps a timer-driven raise from storming, and
+// the clear path.
+
+func TestRaiseSystemAlertIsIdempotentForAnUnchangedCondition(t *testing.T) {
+	m := newTestManager(t)
+
+	input := SystemAlertInput{
+		Type:    NotificationDeliveryAlertType,
+		Level:   AlertLevelWarning,
+		Message: "Notifications are not being delivered.",
+	}
+
+	if raised := m.RaiseSystemAlert(input); !raised {
+		t.Fatal("expected the first raise to report a new system alert")
+	}
+	// A condition re-evaluated on a timer must not notify again.
+	if raised := m.RaiseSystemAlert(input); raised {
+		t.Error("expected an unchanged re-raise to report no change")
+	}
+
+	active := m.GetActiveAlerts()
+	var found *Alert
+	for i := range active {
+		if active[i].ID == SystemAlertID(NotificationDeliveryAlertType) {
+			if found != nil {
+				t.Fatal("expected exactly one system alert, found a duplicate")
+			}
+			alert := active[i]
+			found = &alert
+		}
+	}
+	if found == nil {
+		t.Fatal("expected the system alert to be standing")
+	}
+	if found.ResourceName != SystemAlertResourceName {
+		t.Errorf("ResourceName = %q, want %q", found.ResourceName, SystemAlertResourceName)
+	}
+	if found.ResourceID != "" {
+		t.Errorf("expected no resource id on a system alert, got %q", found.ResourceID)
+	}
+	if !IsSystemAlert(found) {
+		t.Error("expected IsSystemAlert to recognise the alert")
+	}
+	if marker, _ := found.Metadata["systemAlert"].(bool); !marker {
+		t.Error("expected the systemAlert metadata marker to be set")
+	}
+}
+
+func TestRaiseSystemAlertReportsAChangedCondition(t *testing.T) {
+	m := newTestManager(t)
+
+	m.RaiseSystemAlert(SystemAlertInput{
+		Type:    NotificationDeliveryAlertType,
+		Level:   AlertLevelWarning,
+		Message: "Notifications are not being delivered.",
+	})
+
+	changed := m.RaiseSystemAlert(SystemAlertInput{
+		Type:    NotificationDeliveryAlertType,
+		Level:   AlertLevelCritical,
+		Message: "Notifications are not being delivered.",
+	})
+	if !changed {
+		t.Error("expected an escalation in level to report a change")
+	}
+
+	active := m.GetActiveAlerts()
+	count := 0
+	for i := range active {
+		if active[i].ID == SystemAlertID(NotificationDeliveryAlertType) {
+			count++
+			if active[i].Level != AlertLevelCritical {
+				t.Errorf("Level = %q, want %q", active[i].Level, AlertLevelCritical)
+			}
+		}
+	}
+	if count != 1 {
+		t.Errorf("expected the escalation to update one alert, found %d", count)
+	}
+}
+
+func TestClearSystemAlertRemovesItAndIsSafeWhenAbsent(t *testing.T) {
+	m := newTestManager(t)
+
+	if cleared := m.ClearSystemAlert(NotificationDeliveryAlertType); cleared {
+		t.Error("expected clearing an absent system alert to be a no-op")
+	}
+
+	m.RaiseSystemAlert(SystemAlertInput{
+		Type:    NotificationDeliveryAlertType,
+		Level:   AlertLevelWarning,
+		Message: "Notifications are not being delivered.",
+	})
+	if cleared := m.ClearSystemAlert(NotificationDeliveryAlertType); !cleared {
+		t.Fatal("expected the standing system alert to clear")
+	}
+
+	for _, alert := range m.GetActiveAlerts() {
+		if alert.ID == SystemAlertID(NotificationDeliveryAlertType) {
+			t.Fatal("expected the system alert to be gone from active alerts")
+		}
+	}
+}
+
+func TestSystemAlertIDRejectsAnEmptyType(t *testing.T) {
+	m := newTestManager(t)
+
+	if id := SystemAlertID("  "); id != "" {
+		t.Errorf("SystemAlertID(blank) = %q, want empty", id)
+	}
+	if raised := m.RaiseSystemAlert(SystemAlertInput{Type: " "}); raised {
+		t.Error("expected a blank system alert type to raise nothing")
+	}
+}

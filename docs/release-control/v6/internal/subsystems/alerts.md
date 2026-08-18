@@ -242,6 +242,7 @@ default construction path still restores.
 74. `internal/operationaltrust/contracts.go`
 75. `internal/alerts/operational_contract.go`
 76. `internal/alerts/issue1497_test.go`
+77. `internal/alerts/system_alert.go`
 
 ## Shared Boundaries
 
@@ -348,6 +349,21 @@ transition references recovery evidence separate from its trigger evidence.
     calls, and when the `relay` feature is absent it gates through the shared
     `FeatureGateSection` and upgrade-navigation contract, rendering no upgrade
     call-to-action when prompt suppression applies.
+11. Add or change system-scoped alerts through
+    `internal/alerts/system_alert.go`. A system-scoped alert reports on Pulse
+    itself rather than on a monitored resource, for conditions the operator
+    cannot observe from outside the product. Notification delivery is the
+    founding case: the channel that would carry the warning is the thing that
+    failed, so the alert list and navigation badge are the only escalation
+    path that does not depend on delivery working. System alerts carry the
+    stable `pulse-system-` identity prefix, set no `ResourceID` so
+    resource-linked affordances are skipped rather than pointed at nothing,
+    and stamp `systemAlert` metadata. Raising must stay idempotent for an
+    unchanged condition so a timer-driven evaluator cannot become a
+    notification storm; only a change of level or message re-notifies. New
+    system alert types must be raised through this helper rather than by
+    constructing bare alerts, so identity and the idempotence guarantee stay
+    in one place.
 
 ## Forbidden Paths
 
