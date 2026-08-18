@@ -15,17 +15,10 @@ carry such a warning is the one that had failed.
 
 - Patrol guides operators through one ranked decision at a time; Actions now
   has its own primary review workspace.
-- Read-only observers extend Patrol coverage between full model investigations
-  without granting mutation authority.
+- Pulse now raises an alert when its own notification delivery fails, says when
+  delivery is paused, and honours the flapping cooldown.
 - Approved actions gain agent preflight and stable refusal telemetry; large
   installations gain compressed APIs and indexed lookups.
-- Pulse now raises an alert about itself when notification delivery is failing,
-  so a dead notification channel is visible in the alert list and navigation
-  badge rather than only on a configuration tab.
-- The notifications surface says when delivery is paused, and says plainly that
-  a successful test send does not prove live alerts are getting through.
-- The alert flapping cooldown now suppresses for its configured duration
-  instead of ending as soon as the measurement window drained.
 
 ## Added
 
