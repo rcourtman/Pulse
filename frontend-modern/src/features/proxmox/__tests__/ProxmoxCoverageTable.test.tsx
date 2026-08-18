@@ -114,8 +114,9 @@ describe('ProxmoxCoverageTable column visibility', () => {
       />
     ));
 
-    expect(headerTexts()).toEqual(['Workload', 'Posture', 'Age', 'PBS', 'PVE', 'Guest', 'Job']);
-    expect(document.body.textContent).toContain('VM 100 · pve1');
+    expect(headerTexts()).toEqual(['Workload', 'Posture', 'Age', 'PBS', 'Job']);
+    expect(document.body.textContent).toContain('Prot.');
+    expect(document.body.textContent).not.toContain('VM 100 · pve1');
   });
 
   it('keeps provider evidence in the workload drill-down instead of every table row', () => {

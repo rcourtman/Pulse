@@ -97,7 +97,7 @@ export const PHYSICAL_DISK_EMPTY_REQUIREMENTS_NOTE_CLASS =
 const PHYSICAL_DISK_TABLE_HEADER_CLASS =
   'overflow-hidden text-ellipsis whitespace-nowrap px-1 sm:px-1.5 lg:px-2 py-0.5 text-left text-[10px] sm:text-[11px] lg:text-xs font-medium uppercase tracking-wider';
 
-export const PHYSICAL_DISK_TABLE_CLASS = 'w-full table-fixed text-xs';
+export const PHYSICAL_DISK_TABLE_CLASS = 'platform-table w-full table-fixed text-xs';
 export const PHYSICAL_DISK_TABLE_HEADER_ROW_CLASS =
   'border-b border-border bg-surface-alt text-muted';
 export const PHYSICAL_DISK_TABLE_BODY_CLASS = 'divide-y divide-border';
@@ -107,7 +107,8 @@ export const PHYSICAL_DISK_TABLE_ROW_HOVER_CLASS = 'hover:bg-surface-hover';
 export const PHYSICAL_DISK_TABLE_ROW_STYLE = { height: '32px' } as const;
 export const PHYSICAL_DISK_DETAIL_ROW_CELL_CLASS =
   'border-b border-border-subtle bg-surface-alt px-4 py-4 shadow-inner';
-export type PhysicalDiskTableLayoutMode = 'compact' | 'basic' | 'operational' | 'expanded' | 'full';
+export type PhysicalDiskTableLayoutMode =
+  'narrow' | 'compact' | 'basic' | 'operational' | 'expanded' | 'full';
 
 export const getPhysicalDiskTableLayoutModeForContainer = (
   containerWidth: number,
@@ -116,6 +117,7 @@ export const getPhysicalDiskTableLayoutModeForContainer = (
   if (containerWidth >= 900) return 'expanded';
   if (containerWidth >= 650) return 'operational';
   if (containerWidth >= 520) return 'basic';
+  if (containerWidth > 0 && containerWidth < 360) return 'narrow';
   return 'compact';
 };
 
@@ -126,6 +128,10 @@ const PHYSICAL_DISK_VISIBLE_COLUMNS: Record<
   PhysicalDiskTableLayoutMode,
   readonly PhysicalDiskTableColumnId[]
 > = {
+  // Endurance is available in the expanded disk detail. At the narrowest
+  // phone width, keep identity, placement, immediate health, temperature,
+  // and capacity readable on one line.
+  narrow: ['disk', 'host', 'health', 'temp', 'size'],
   // Keep the phone view useful at a glance: identity, placement, health,
   // endurance, temperature, and capacity all fit without horizontal scroll.
   compact: ['disk', 'host', 'health', 'life', 'temp', 'size'],
@@ -139,6 +145,7 @@ const PHYSICAL_DISK_COLUMN_WIDTHS: Record<
   PhysicalDiskTableLayoutMode,
   Partial<Record<PhysicalDiskTableColumnId, number>>
 > = {
+  narrow: { disk: 40, host: 15, health: 20, temp: 10, size: 15 },
   compact: { disk: 33, host: 15, health: 18, life: 10, temp: 10, size: 14 },
   basic: { disk: 33, host: 17, health: 22, temp: 12, size: 16 },
   operational: { disk: 25, host: 12, parent: 15, health: 17, life: 9, temp: 9, size: 13 },

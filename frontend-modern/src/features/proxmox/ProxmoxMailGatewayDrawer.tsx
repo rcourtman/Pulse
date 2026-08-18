@@ -19,6 +19,7 @@ import {
   formatPlatformTableUptimeValue,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
+  PlatformResponsiveTableLabel,
   PlatformTableNumberValue,
 } from '@/features/platformPage/sharedPlatformPage';
 import type { StatusIndicatorVariant } from '@/utils/status';
@@ -470,30 +471,38 @@ export const ProxmoxMailGatewayDrawer: Component<{
                 when={nodes().length > 0}
                 fallback={<p class="text-xs text-muted">No cluster nodes reported.</p>}
               >
-                <Table class="min-w-0 table-fixed text-xs">
+                <Table class="platform-table min-w-0 table-fixed text-xs">
                   <TableHeader>
                     <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
-                      <TableHead class={getPlatformTableHeadClassForKind('name')}>Node</TableHead>
                       <TableHead
-                        class={`${getPlatformTableHeadClassForKind('text')} hidden sm:table-cell`}
+                        class={`${getPlatformTableHeadClassForKind('name')} platform-table-mobile-w-30 md:w-[24%]`}
+                      >
+                        Node
+                      </TableHead>
+                      <TableHead
+                        class={`${getPlatformTableHeadClassForKind('text')} platform-table-mobile-w-15 md:w-[14%]`}
                       >
                         Role
                       </TableHead>
                       <TableHead
-                        class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden sm:table-cell`}
+                        class={`${getPlatformTableHeadClassForKind('numeric-value')} platform-table-mobile-w-15 md:w-[16%]`}
                       >
-                        Uptime
+                        <PlatformResponsiveTableLabel compact="Up" full="Uptime" />
                       </TableHead>
                       <TableHead
-                        class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden sm:table-cell`}
+                        class={`${getPlatformTableHeadClassForKind('numeric-value')} platform-table-mobile-w-15 md:w-[16%]`}
                       >
-                        Load
+                        <PlatformResponsiveTableLabel compact="Ld" full="Load" />
                       </TableHead>
-                      <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
-                        Queue
+                      <TableHead
+                        class={`${getPlatformTableHeadClassForKind('numeric-value')} platform-table-mobile-w-15 md:w-[15%]`}
+                      >
+                        <PlatformResponsiveTableLabel compact="Q" full="Queue" />
                       </TableHead>
-                      <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
-                        Oldest
+                      <TableHead
+                        class={`${getPlatformTableHeadClassForKind('numeric-value')} platform-table-mobile-w-10 platform-table-narrow-hidden md:w-[15%]`}
+                      >
+                        <PlatformResponsiveTableLabel compact="Old" full="Oldest" />
                       </TableHead>
                     </TableRow>
                   </TableHeader>
@@ -518,17 +527,17 @@ export const ProxmoxMailGatewayDrawer: Component<{
                               </div>
                             </TableCell>
                             <TableCell
-                              class={`${getPlatformTableCellClassForKind('text')} hidden text-[11px] text-base-content sm:table-cell`}
+                              class={`${getPlatformTableCellClassForKind('text')} text-[11px] text-base-content`}
                             >
                               {asTrimmedString(node.role) || '—'}
                             </TableCell>
                             <TableCell
-                              class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content sm:table-cell`}
+                              class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                             >
                               {formatPlatformTableUptimeValue(node.uptime)}
                             </TableCell>
                             <TableCell
-                              class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-[11px] text-base-content tabular-nums sm:table-cell`}
+                              class={`${getPlatformTableCellClassForKind('numeric-value')} text-[11px] text-base-content tabular-nums`}
                             >
                               {asTrimmedString(node.loadAvg) || '—'}
                             </TableCell>
@@ -549,7 +558,7 @@ export const ProxmoxMailGatewayDrawer: Component<{
                               </span>
                             </TableCell>
                             <TableCell
-                              class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
+                              class={`${getPlatformTableCellClassForKind('numeric-value')} platform-table-narrow-hidden text-base-content`}
                             >
                               {node.queueStatus?.oldestAge
                                 ? formatAge(node.queueStatus.oldestAge)
@@ -577,23 +586,31 @@ export const ProxmoxMailGatewayDrawer: Component<{
                 when={topDomains().length > 0}
                 fallback={<p class="text-xs text-muted">No domain stats reported.</p>}
               >
-                <Table class="min-w-0 table-fixed text-xs">
+                <Table class="platform-table min-w-0 table-fixed text-xs">
                   <TableHeader>
                     <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
-                      <TableHead class={getPlatformTableHeadClassForKind('name')}>Domain</TableHead>
-                      <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
+                      <TableHead
+                        class={`${getPlatformTableHeadClassForKind('name')} platform-table-mobile-w-30 md:w-[28%]`}
+                      >
+                        Domain
+                      </TableHead>
+                      <TableHead
+                        class={`${getPlatformTableHeadClassForKind('numeric-value')} platform-table-mobile-w-15 md:w-[14%]`}
+                      >
                         Mail
                       </TableHead>
-                      <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
+                      <TableHead
+                        class={`${getPlatformTableHeadClassForKind('numeric-value')} platform-table-mobile-w-15 md:w-[14%]`}
+                      >
                         Spam
                       </TableHead>
                       <TableHead
-                        class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden sm:table-cell`}
+                        class={`${getPlatformTableHeadClassForKind('numeric-value')} platform-table-mobile-w-15 md:w-[14%]`}
                       >
                         Virus
                       </TableHead>
                       <TableHead
-                        class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden sm:table-cell`}
+                        class={`${getPlatformTableHeadClassForKind('numeric-value')} platform-table-mobile-w-15 md:w-[30%]`}
                       >
                         Bytes
                       </TableHead>
@@ -627,7 +644,7 @@ export const ProxmoxMailGatewayDrawer: Component<{
                             />
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content sm:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                           >
                             <PlatformTableNumberValue
                               value={domain.virusCount}
@@ -635,7 +652,7 @@ export const ProxmoxMailGatewayDrawer: Component<{
                             />
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-muted tabular-nums sm:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-muted tabular-nums`}
                           >
                             {domain.bytes && domain.bytes > 0 ? formatBytes(domain.bytes) : '—'}
                           </TableCell>

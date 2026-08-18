@@ -246,7 +246,7 @@ export const DockerHostsTable: Component<{
                   kind="name"
                   sort={sort}
                   sortKey="host"
-                  class="w-[40%] min-[360px]:w-[34%] md:w-[13%]"
+                  class="platform-table-mobile-w-30 md:w-[13%]"
                 >
                   Host
                 </PlatformSortableTableHead>
@@ -278,7 +278,7 @@ export const DockerHostsTable: Component<{
                   kind="metric-bar"
                   sort={sort}
                   sortKey="cpu"
-                  class="w-[15%] min-[360px]:w-[13%] md:w-[14%]"
+                  class="platform-table-mobile-w-15 w-[15%] min-[360px]:w-[13%] md:w-[14%]"
                 >
                   CPU
                 </PlatformSortableTableHead>
@@ -286,7 +286,7 @@ export const DockerHostsTable: Component<{
                   kind="metric-bar"
                   sort={sort}
                   sortKey="memory"
-                  class="w-[15%] min-[360px]:w-[13%] md:w-[14%]"
+                  class="platform-table-mobile-w-15 w-[15%] min-[360px]:w-[13%] md:w-[14%]"
                 >
                   <span class="md:hidden">Mem</span>
                   <span class="hidden md:inline">Memory</span>
@@ -295,7 +295,7 @@ export const DockerHostsTable: Component<{
                   kind="metric-bar"
                   sort={sort}
                   sortKey="disk"
-                  class="w-[15%] min-[360px]:w-[13%] md:w-[14%]"
+                  class="platform-table-mobile-w-15 w-[15%] min-[360px]:w-[13%] md:w-[14%]"
                 >
                   Disk
                 </PlatformSortableTableHead>
@@ -303,7 +303,7 @@ export const DockerHostsTable: Component<{
                   kind="numeric-value"
                   sort={sort}
                   sortKey="uptime"
-                  class="w-[15%] min-[360px]:w-[11%] sm:hidden md:table-cell md:w-[6%]"
+                  class="platform-table-mobile-w-20 w-[20%] min-[360px]:w-[11%] sm:hidden md:table-cell md:w-[6%]"
                 >
                   <PlatformResponsiveTableLabel compact="Up" full="Uptime" />
                 </PlatformSortableTableHead>
@@ -311,7 +311,7 @@ export const DockerHostsTable: Component<{
                   kind="numeric-value"
                   sort={sort}
                   sortKey="temp"
-                  class="hidden min-[360px]:table-cell min-[360px]:w-[16%] md:table-cell md:w-[6%]"
+                  class="platform-table-narrow-hidden hidden min-[360px]:table-cell min-[360px]:w-[16%] md:table-cell md:w-[6%]"
                 >
                   <PlatformResponsiveTableLabel compact="Temp" full="Temp" />
                 </PlatformSortableTableHead>
@@ -488,7 +488,7 @@ export const DockerHostsTable: Component<{
                             {formatPlatformTableUptimeValue(host.uptime ?? docker()?.uptimeSeconds)}
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content min-[360px]:table-cell md:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} platform-table-narrow-hidden hidden text-base-content min-[360px]:table-cell md:table-cell`}
                           >
                             <PlatformTableTemperatureValue
                               value={host.temperature ?? docker()?.temperature}

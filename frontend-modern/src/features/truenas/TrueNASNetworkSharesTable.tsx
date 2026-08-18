@@ -4,6 +4,7 @@ import { TableCell, TableRow } from '@/components/shared/Table';
 import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
 import {
+  PlatformResponsiveTableLabel,
   PlatformSortableTableHead,
   PlatformTableEmptyState,
   PlatformTableToolbar,
@@ -196,7 +197,7 @@ export const TrueNASNetworkSharesTable: Component<{
                   sortKey="protocol"
                   class="platform-table-mobile-w-15 md:w-[11%]"
                 >
-                  Protocol
+                  <PlatformResponsiveTableLabel compact="Proto" full="Protocol" />
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead
                   kind="text"
@@ -211,7 +212,7 @@ export const TrueNASNetworkSharesTable: Component<{
                   sort={sort}
                   class="platform-table-mobile-w-15 md:w-[19%]"
                 >
-                  Access
+                  <PlatformResponsiveTableLabel compact="ACL" full="Access" />
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead
                   kind="text"

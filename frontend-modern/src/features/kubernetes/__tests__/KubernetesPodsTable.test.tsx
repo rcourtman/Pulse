@@ -42,8 +42,12 @@ describe('KubernetesPodsTable', () => {
     expect(headers.find((header) => header.textContent?.includes('Pod'))).toHaveClass(
       'platform-table-mobile-w-30',
     );
-    expect(headers.find((header) => header.textContent?.includes('Age'))).toHaveClass('w-[8%]');
-    expect(headers.find((header) => header.textContent?.includes('Scope'))).toHaveClass('w-[15%]');
+    expect(headers.find((header) => header.textContent?.includes('Age'))).toHaveClass(
+      'platform-table-mobile-w-10',
+    );
+    expect(headers.find((header) => header.textContent?.includes('Scope'))).toHaveClass(
+      'platform-table-mobile-w-15',
+    );
   });
 
   it('renders native Pod status, container readiness, ownership, and placement fields', () => {

@@ -271,7 +271,7 @@ export const TrueNASAppsTable: Component<{
                   sortKey="memory"
                   class="platform-table-mobile-w-20 truenas-app-memory-column md:w-[12%]"
                 >
-                  Memory
+                  <PlatformResponsiveTableLabel compact="Mem" full="Memory" />
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead
                   kind="numeric-value"
@@ -279,7 +279,7 @@ export const TrueNASAppsTable: Component<{
                   sortKey="containers"
                   class="platform-table-mobile-w-15 truenas-app-containers-column md:w-[12%]"
                 >
-                  Containers
+                  <PlatformResponsiveTableLabel compact="Ctrs" full="Containers" />
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead
                   kind="text"

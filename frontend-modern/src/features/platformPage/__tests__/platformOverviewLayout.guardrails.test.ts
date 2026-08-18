@@ -259,22 +259,17 @@ describe('platform overview layout guardrails', () => {
   });
 
   it('keeps Mail Gateway drawer tables prioritized for narrow inline details', () => {
-    expect(proxmoxMailGatewayDrawerSource).toContain('min-w-0 table-fixed text-xs');
-    expect(proxmoxMailGatewayDrawerSource).toMatch(
-      /hidden sm:table-cell[^>]*>\s*Role\s*<\/TableHead>/,
+    expect(proxmoxMailGatewayDrawerSource).toContain('platform-table min-w-0 table-fixed text-xs');
+    expect(proxmoxMailGatewayDrawerSource).toContain(
+      'platform-table-mobile-w-10 platform-table-narrow-hidden md:w-[15%]',
     );
-    expect(proxmoxMailGatewayDrawerSource).toMatch(
-      /hidden sm:table-cell[^>]*>\s*Uptime\s*<\/TableHead>/,
+    expect(proxmoxMailGatewayDrawerSource).toContain(
+      '<PlatformResponsiveTableLabel compact="Up" full="Uptime" />',
     );
-    expect(proxmoxMailGatewayDrawerSource).toMatch(
-      /hidden sm:table-cell[^>]*>\s*Load\s*<\/TableHead>/,
+    expect(proxmoxMailGatewayDrawerSource).toContain(
+      '<PlatformResponsiveTableLabel compact="Ld" full="Load" />',
     );
-    expect(proxmoxMailGatewayDrawerSource).toMatch(
-      /hidden sm:table-cell[^>]*>\s*Virus\s*<\/TableHead>/,
-    );
-    expect(proxmoxMailGatewayDrawerSource).toMatch(
-      /hidden sm:table-cell[^>]*>\s*Bytes\s*<\/TableHead>/,
-    );
+    expect(proxmoxMailGatewayDrawerSource).toContain('platform-table-mobile-w-15 md:w-[30%]');
   });
 
   it('keeps Docker host optional Swarm column wide enough for its header', () => {
@@ -298,20 +293,26 @@ describe('platform overview layout guardrails', () => {
     ]) {
       expect(source).toContain('platform-table-mobile-w-30');
     }
-    expect(dockerImagesTableSource).toMatch(/sortKey="size"[\s\S]{0,120}?class="md:w-\[12%\]"/);
-    expect(dockerServicesTableSource).toMatch(
-      /sortKey="mode"[\s\S]{0,120}?class="w-\[14%\] md:w-\[8%\]"/,
+    expect(dockerImagesTableSource).toMatch(
+      /sortKey="size"[\s\S]{0,120}?class="platform-table-mobile-w-15 md:w-\[12%\]"/,
     );
     expect(dockerServicesTableSource).toMatch(
-      /sortKey="update"[\s\S]{0,120}?class="w-\[15%\] md:w-\[12%\]"/,
+      /sortKey="mode"[\s\S]{0,120}?class="platform-table-mobile-w-10 w-\[10%\] md:w-\[8%\]"/,
     );
-    expect(dockerTasksTableSource).toMatch(/sortKey="service"[\s\S]{0,120}?class="md:w-\[18%\]"/);
-    expect(dockerTasksTableSource).toMatch(/sortKey="node"[\s\S]{0,120}?class="md:w-\[16%\]"/);
-    expect(dockerSwarmNodesTableSource).toMatch(
-      /sortKey="reachability"[\s\S]{0,120}?class="w-\[16%\] md:w-\[14%\]"/,
+    expect(dockerServicesTableSource).toMatch(
+      /sortKey="update"[\s\S]{0,120}?class="platform-table-mobile-w-15 w-\[15%\] md:w-\[12%\]"/,
+    );
+    expect(dockerTasksTableSource).toMatch(
+      /sortKey="service"[\s\S]{0,120}?class="platform-table-mobile-w-15 md:w-\[18%\]"/,
+    );
+    expect(dockerTasksTableSource).toMatch(
+      /sortKey="node"[\s\S]{0,120}?class="platform-table-mobile-w-15 md:w-\[16%\]"/,
     );
     expect(dockerSwarmNodesTableSource).toMatch(
-      /sortKey="memory"[\s\S]{0,120}?class="w-\[13%\] md:w-\[10%\]"/,
+      /sortKey="reachability"[\s\S]{0,120}?class="platform-table-mobile-w-15 w-\[15%\] md:w-\[14%\]"/,
+    );
+    expect(dockerSwarmNodesTableSource).toMatch(
+      /sortKey="memory"[\s\S]{0,120}?class="platform-table-mobile-w-15 w-\[15%\] md:w-\[10%\]"/,
     );
   });
 
@@ -320,22 +321,22 @@ describe('platform overview layout guardrails', () => {
       '-my-3 inline-flex min-h-11 items-center truncate',
     );
     expect(kubernetesNodesTableSource).toMatch(
-      /sortKey="roles"[\s\S]{0,120}?class="w-\[14%\] md:w-\[10%\]"/,
+      /sortKey="roles"[\s\S]{0,160}?class="platform-table-mobile-w-15 platform-table-narrow-hidden md:w-\[10%\]"/,
     );
     expect(kubernetesNodesTableSource).toMatch(
-      /sortKey="capacity"[\s\S]{0,120}?class="w-\[14%\] md:w-\[14%\]"/,
+      /sortKey="capacity"[\s\S]{0,120}?class="platform-table-mobile-w-10 md:w-\[14%\]"/,
     );
     expect(kubernetesDeploymentsTableSource).toMatch(
-      /sortKey="namespace"[\s\S]{0,120}?class="w-\[15%\] md:w-\[20%\]"/,
+      /sortKey="namespace"[\s\S]{0,120}?class="platform-table-mobile-w-15 md:w-\[20%\]"/,
     );
     expect(kubernetesPodsTableSource).toMatch(
-      /sortKey="scope"[\s\S]{0,120}?class="w-\[15%\] md:w-\[13%\]"/,
+      /sortKey="scope"[\s\S]{0,120}?class="platform-table-mobile-w-15 md:w-\[13%\]"/,
     );
     expect(kubernetesPodsTableSource).toMatch(
-      /sortKey="node"[\s\S]{0,120}?class="w-\[15%\] md:w-\[13%\]"/,
+      /sortKey="node"[\s\S]{0,120}?class="platform-table-mobile-w-15 md:w-\[13%\]"/,
     );
     expect(kubernetesServicesTableSource).toMatch(
-      /sortKey="scope"[\s\S]{0,120}?class="w-\[15%\] md:w-\[15%\]"/,
+      /sortKey="scope"[\s\S]{0,120}?class="platform-table-mobile-w-15 md:w-\[15%\]"/,
     );
     expect(kubernetesNetworkingTableSource).toMatch(
       /sortKey="scope"[\s\S]{0,120}?class="platform-table-mobile-w-20 md:w-\[14%\]"/,
@@ -559,7 +560,9 @@ describe('platform overview layout guardrails', () => {
       /<span class="md:hidden">\s*<PlatformTablePercentValue value={storagePercent\(\)} \/>\s*<\/span>/,
     );
     expect(vsphereHostsTableSource).toMatch(/kind="name"[\s\S]{0,200}?Host/);
-    expect(vsphereHostsTableSource).toMatch(/kind="numeric-value"[\s\S]{0,200}?VMs/);
+    expect(vsphereHostsTableSource).toMatch(
+      /kind="numeric-value"[\s\S]{0,240}?<PlatformResponsiveTableLabel compact="#" full="VMs" \/>/,
+    );
     expect(vsphereHostsTableSource).toContain('hidden md:table-cell');
     // AgentsMachinesTable uses a column-config pattern: kind helpers are
     // applied dynamically in the table render, with labels living in the

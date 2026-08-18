@@ -242,7 +242,7 @@ export const VsphereHostsTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="power"
-                  class="w-[12%] md:w-[7%]"
+                  class="platform-table-mobile-w-10 platform-table-narrow-hidden w-[12%] md:w-[7%]"
                 >
                   Power
                 </PlatformSortableTableHead>
@@ -250,7 +250,7 @@ export const VsphereHostsTable: Component<{
                   kind="metric-bar"
                   sort={sort}
                   sortKey="cpu"
-                  class="w-[15%] md:w-[12%]"
+                  class="platform-table-mobile-w-15 w-[15%] md:w-[12%]"
                 >
                   CPU
                 </PlatformSortableTableHead>
@@ -258,7 +258,7 @@ export const VsphereHostsTable: Component<{
                   kind="metric-bar"
                   sort={sort}
                   sortKey="memory"
-                  class="w-[15%] md:w-[13%]"
+                  class="platform-table-mobile-w-15 w-[15%] md:w-[13%]"
                 >
                   <PlatformResponsiveTableLabel compact="Mem" full="Memory" />
                 </PlatformSortableTableHead>
@@ -274,15 +274,15 @@ export const VsphereHostsTable: Component<{
                   kind="numeric-value"
                   sort={sort}
                   sortKey="vms"
-                  class="w-[12%] md:w-[4%]"
+                  class="platform-table-mobile-w-10 w-[12%] md:w-[4%]"
                 >
-                  VMs
+                  <PlatformResponsiveTableLabel compact="#" full="VMs" />
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead
                   kind="text"
                   sort={sort}
                   sortKey="uptime"
-                  class="w-[16%] md:w-[6%]"
+                  class="platform-table-mobile-w-20 w-[16%] md:w-[6%]"
                 >
                   <PlatformResponsiveTableLabel compact="Up" full="Uptime" />
                 </PlatformSortableTableHead>
@@ -401,7 +401,7 @@ export const VsphereHostsTable: Component<{
                             <span class="block truncate">{cluster()}</span>
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                            class={`${getPlatformTableCellClassForKind('text')} platform-table-narrow-hidden text-base-content`}
                           >
                             <div class="flex items-center gap-2">
                               <StatusDot

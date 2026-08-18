@@ -5,6 +5,7 @@ import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
 import {
   PlatformTableEmptyState,
   PlatformTableToolbar,
+  PlatformResponsiveTableLabel,
   createPlatformTableFilterState,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
@@ -162,13 +163,15 @@ export const TrueNASAlertsTable: Component<{
             tableClass="min-w-full table-fixed text-xs md:min-w-[960px]"
             header={
               <>
-                <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[20%]`}>
+                <TableHead
+                  class={`${getPlatformTableHeadClassForKind('name')} platform-table-mobile-w-30 md:w-[20%]`}
+                >
                   Resource
                 </TableHead>
                 <TableHead
                   class={`${getPlatformTableHeadClassForKind('badge')} platform-table-mobile-w-15 md:w-[10%]`}
                 >
-                  Severity
+                  <PlatformResponsiveTableLabel compact="Sev" full="Severity" />
                 </TableHead>
                 <TableHead
                   class={`${getPlatformTableHeadClassForKind('text')} platform-table-mobile-w-25 md:w-[32%]`}
@@ -178,12 +181,12 @@ export const TrueNASAlertsTable: Component<{
                 <TableHead
                   class={`${getPlatformTableHeadClassForKind('text')} platform-table-mobile-w-15 md:w-[13%]`}
                 >
-                  Source
+                  <PlatformResponsiveTableLabel compact="Src" full="Source" />
                 </TableHead>
                 <TableHead
                   class={`${getPlatformTableHeadClassForKind('numeric-value')} platform-table-mobile-w-15 md:w-[10%]`}
                 >
-                  Started
+                  <PlatformResponsiveTableLabel compact="Age" full="Started" />
                 </TableHead>
                 <TableHead
                   class={`${getPlatformTableHeadClassForKind('text')} hidden xl:table-cell md:w-[15%]`}

@@ -43,6 +43,9 @@ describe('storagePagePresentation', () => {
   });
 
   it('selects pool layouts from the rendered table width', () => {
+    expect(getStoragePoolTableLayoutModeForContainer(0)).toBe('compact');
+    expect(getStoragePoolTableLayoutModeForContainer(359)).toBe('narrow');
+    expect(getStoragePoolTableLayoutModeForContainer(360)).toBe('compact');
     expect(getStoragePoolTableLayoutModeForContainer(559)).toBe('compact');
     expect(getStoragePoolTableLayoutModeForContainer(560)).toBe('operational');
     expect(getStoragePoolTableLayoutModeForContainer(1_039)).toBe('operational');
@@ -55,5 +58,9 @@ describe('storagePagePresentation', () => {
     expect(getStoragePoolColumnWidthPercent('compact', 'name')).toBe(30);
     expect(getStoragePoolColumnWidthPercent('compact', 'usage')).toBe(13);
     expect(getStoragePoolColumnWidthPercent('compact', 'growth')).toBe(0);
+    expect(isStoragePoolColumnVisible('narrow', 'type')).toBe(false);
+    expect(isStoragePoolColumnVisible('narrow', 'protection')).toBe(true);
+    expect(getStoragePoolColumnWidthPercent('narrow', 'name')).toBe(40);
+    expect(getStoragePoolColumnWidthPercent('narrow', 'usage')).toBe(15);
   });
 });

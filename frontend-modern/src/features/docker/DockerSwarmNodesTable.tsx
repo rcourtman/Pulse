@@ -1,5 +1,6 @@
 import { For, Show, createMemo, type Component } from 'solid-js';
 import { TableCell, TableRow } from '@/components/shared/Table';
+import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
 import { asTrimmedString } from '@/utils/stringUtils';
 import {
   PLATFORM_HEALTH_FILTER_OPTIONS,
@@ -14,6 +15,12 @@ import {
   type PlatformTableSortValue,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
+  PlatformResourceDetailToggleButton,
+  createPlatformResourceDetailState,
+  getPlatformResourceDetailRowClass,
+} from '@/features/platformPage/PlatformResourceDetailTableRow';
+import {
+  DockerNativeDetailPanel,
   DockerResourceNameCell,
   dockerByteValue,
   dockerCpuValue,
@@ -96,6 +103,7 @@ export const DockerSwarmNodesTable: Component<DockerNativeTableProps> = (props) 
       getDockerSwarmNodeSortValue,
     ),
   );
+  const drawer = createPlatformResourceDetailState({ idPrefix: 'docker-swarm-node-detail' });
 
   return (
     <Show
@@ -150,7 +158,7 @@ export const DockerSwarmNodesTable: Component<DockerNativeTableProps> = (props) 
                   kind="text"
                   sort={sort}
                   sortKey="role"
-                  class="w-[13%] md:w-[10%]"
+                  class="platform-table-mobile-w-15 w-[15%] md:w-[10%]"
                 >
                   Role
                 </PlatformSortableTableHead>
@@ -158,7 +166,7 @@ export const DockerSwarmNodesTable: Component<DockerNativeTableProps> = (props) 
                   kind="text"
                   sort={sort}
                   sortKey="availability"
-                  class="w-[14%] md:w-[12%]"
+                  class="platform-table-mobile-w-15 w-[15%] md:w-[12%]"
                 >
                   <PlatformResponsiveTableLabel compact="Avail" full="Availability" />
                 </PlatformSortableTableHead>
@@ -166,7 +174,7 @@ export const DockerSwarmNodesTable: Component<DockerNativeTableProps> = (props) 
                   kind="text"
                   sort={sort}
                   sortKey="reachability"
-                  class="w-[16%] md:w-[14%]"
+                  class="platform-table-mobile-w-15 w-[15%] md:w-[14%]"
                 >
                   Reachability
                 </PlatformSortableTableHead>
@@ -182,7 +190,7 @@ export const DockerSwarmNodesTable: Component<DockerNativeTableProps> = (props) 
                   kind="numeric-value"
                   sort={sort}
                   sortKey="cpus"
-                  class="w-[12%] sm:hidden md:table-cell md:w-[8%]"
+                  class="platform-table-narrow-hidden w-[12%] sm:hidden md:table-cell md:w-[8%]"
                 >
                   CPUs
                 </PlatformSortableTableHead>
@@ -190,7 +198,7 @@ export const DockerSwarmNodesTable: Component<DockerNativeTableProps> = (props) 
                   kind="numeric-value"
                   sort={sort}
                   sortKey="memory"
-                  class="w-[13%] md:w-[10%]"
+                  class="platform-table-mobile-w-15 w-[15%] md:w-[10%]"
                 >
                   <PlatformResponsiveTableLabel compact="Mem" full="Memory" />
                 </PlatformSortableTableHead>
@@ -213,55 +221,103 @@ export const DockerSwarmNodesTable: Component<DockerNativeTableProps> = (props) 
                         resource.docker?.leader ? 'leader' : resource.docker?.managerReachability,
                       );
 
+                    const detailRowId = () => drawer.detailRowId(resource);
+                    const isExpanded = () => drawer.isExpanded(resource);
                     return (
-                      <TableRow
-                        class="text-[11px] sm:text-xs"
-                        data-docker-swarm-node-row={resource.id}
-                      >
-                        <DockerResourceNameCell
-                          resource={resource}
-                          indicator={mapDockerSwarmNodeStatus(resource)}
-                        />
-                        <TableCell
-                          class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                      <>
+                        <TableRow
+                          class={`${getPlatformResourceDetailRowClass(isExpanded())} text-[11px] sm:text-xs`}
+                          aria-controls={isExpanded() ? detailRowId() : undefined}
+                          aria-expanded={isExpanded() ? 'true' : 'false'}
+                          data-docker-swarm-node-row={resource.id}
+                          onClick={() => drawer.toggle(resource)}
+                          onKeyDown={drawer.handleActivationKey(resource)}
+                          tabIndex={0}
                         >
-                          {dockerTextValue(resource.docker?.nodeRole)}
-                        </TableCell>
-                        <TableCell
-                          class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
-                        >
-                          {dockerTextValue(resource.docker?.availability)}
-                        </TableCell>
-                        <TableCell
-                          class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
-                        >
-                          {managerReachability()}
-                        </TableCell>
-                        <TableCell
-                          class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
-                        >
-                          {dockerTextValue(
-                            resource.docker?.engineVersion || resource.docker?.runtimeVersion,
-                          )}
-                        </TableCell>
-                        <TableCell
-                          class={`${getPlatformTableCellClassForKind('numeric-value')} sm:hidden text-base-content md:table-cell`}
-                        >
-                          {dockerCpuValue(resource.docker?.nanoCpus)}
-                        </TableCell>
-                        <TableCell
-                          class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
-                        >
-                          {dockerByteValue(resource.docker?.memoryBytes)}
-                        </TableCell>
-                        <TableCell
-                          class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content sm:table-cell`}
-                        >
-                          {dockerTextValue(
-                            resource.docker?.address || resource.docker?.managerAddress,
-                          )}
-                        </TableCell>
-                      </TableRow>
+                          <DockerResourceNameCell
+                            resource={resource}
+                            indicator={mapDockerSwarmNodeStatus(resource)}
+                            detailToggle={
+                              <PlatformResourceDetailToggleButton
+                                expanded={isExpanded()}
+                                resourceLabel={dockerResourceName(resource)}
+                                controlsId={detailRowId()}
+                                onToggle={() => drawer.toggle(resource)}
+                              />
+                            }
+                          />
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                          >
+                            {dockerTextValue(resource.docker?.nodeRole)}
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                          >
+                            {dockerTextValue(resource.docker?.availability)}
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                          >
+                            {managerReachability()}
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
+                          >
+                            {dockerTextValue(
+                              resource.docker?.engineVersion || resource.docker?.runtimeVersion,
+                            )}
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} platform-table-narrow-hidden sm:hidden text-base-content md:table-cell`}
+                          >
+                            {dockerCpuValue(resource.docker?.nanoCpus)}
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
+                          >
+                            {dockerByteValue(resource.docker?.memoryBytes)}
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content sm:table-cell`}
+                          >
+                            {dockerTextValue(
+                              resource.docker?.address || resource.docker?.managerAddress,
+                            )}
+                          </TableCell>
+                        </TableRow>
+                        <Show when={isExpanded()}>
+                          <InlineDetailTableRow
+                            cellId={detailRowId()}
+                            colspan={8}
+                            data-inline-docker-swarm-node-detail-for={resource.id}
+                          >
+                            <DockerNativeDetailPanel
+                              title={dockerResourceName(resource)}
+                              fields={[
+                                ['Role', dockerTextValue(resource.docker?.nodeRole)],
+                                ['Availability', dockerTextValue(resource.docker?.availability)],
+                                ['Reachability', managerReachability()],
+                                [
+                                  'Engine',
+                                  dockerTextValue(
+                                    resource.docker?.engineVersion ||
+                                      resource.docker?.runtimeVersion,
+                                  ),
+                                ],
+                                ['CPUs', dockerCpuValue(resource.docker?.nanoCpus)],
+                                ['Memory', dockerByteValue(resource.docker?.memoryBytes)],
+                                [
+                                  'Address',
+                                  dockerTextValue(
+                                    resource.docker?.address || resource.docker?.managerAddress,
+                                  ),
+                                ],
+                              ]}
+                            />
+                          </InlineDetailTableRow>
+                        </Show>
+                      </>
                     );
                   }}
                 </For>

@@ -146,7 +146,7 @@ export const DockerImagesTable: Component<
                   kind="text"
                   sort={sort}
                   sortKey="host"
-                  class="md:w-[18%]"
+                  class="platform-table-mobile-w-15 md:w-[18%]"
                 >
                   Host
                 </PlatformSortableTableHead>
@@ -154,7 +154,7 @@ export const DockerImagesTable: Component<
                   kind="text"
                   sort={sort}
                   sortKey="usedBy"
-                  class="md:w-[24%]"
+                  class="platform-table-mobile-w-15 md:w-[24%]"
                 >
                   Used by
                 </PlatformSortableTableHead>
@@ -162,7 +162,7 @@ export const DockerImagesTable: Component<
                   kind="numeric-value"
                   sort={sort}
                   sortKey="size"
-                  class="md:w-[12%]"
+                  class="platform-table-mobile-w-15 md:w-[12%]"
                 >
                   Size
                 </PlatformSortableTableHead>
@@ -170,7 +170,7 @@ export const DockerImagesTable: Component<
                   kind="badge"
                   sort={sort}
                   sortKey="update"
-                  class="md:w-[16%]"
+                  class="platform-table-mobile-w-15 md:w-[16%]"
                 >
                   <PlatformResponsiveTableLabel compact="Update" full="Update check" />
                 </PlatformSortableTableHead>

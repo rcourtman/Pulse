@@ -1318,6 +1318,9 @@ describe('shared primitive guardrails', () => {
     expect(frontendIndexCssSource).toContain(
       '.table-scroll-shell > .table-fixed.platform-table th.platform-table-name-column',
     );
+    expect(frontendIndexCssSource).toContain('@container (max-width: 22.499rem)');
+    expect(frontendIndexCssSource).toContain('platform-table-narrow-hidden');
+    expect(frontendIndexCssSource).not.toContain('white-space: normal;\n    -webkit-box-orient');
     expect(frontendIndexCssSource).toContain('th.truenas-app-name-column');
     expect(frontendIndexCssSource).toContain('th.truenas-app-containers-column');
     expect(frontendIndexCssSource).toContain('th.truenas-app-updates-column');

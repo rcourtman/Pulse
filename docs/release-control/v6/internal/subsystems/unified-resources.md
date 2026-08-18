@@ -362,7 +362,12 @@ inside the available container without a horizontal rail. Each unified-resource
 consumer selects five to seven high-value source fields when they exist, fixes
 identity at 30 percent of the width, and uses shared compact-label and phone
 width classes so the remaining tracks stay readable. No global reveal rule may
-override those source-specific priorities.
+override those source-specific priorities. Below 360 pixels of content width,
+consumers use `platform-table-narrow-hidden` to demote only their lowest-value
+field while the shared shell promotes identity to 40 percent and retains five
+readable fields. Provider tables must keep summary rows single-line and may
+truncate a value only when the row exposes its complete source value through a
+touch- and keyboard-operable inline detail disclosure.
 Future platform tables must keep that split: row data and platform semantics
 stay in the unified-resource consumer, and the repeated table shell stays in the
 shared frontend primitive.
@@ -3224,6 +3229,16 @@ column weights must sum to the available table width, retain the prioritized
 identity and operational set, and avoid both local and document-level
 horizontal scrolling. This is a phone projection only; wider stages keep the
 established desktop distribution.
+The native provider rollout now applies the same projection to Proxmox backup,
+coverage, recoverable, Ceph, Mail Gateway, and replication rows; Docker native
+and Swarm inventories; Kubernetes native inventories; TrueNAS systems and
+workflows; vSphere hosts and workflows; and Standalone machines. The shared
+`platform-table-narrow-hidden` marker keeps the less-than-360-pixel stage at
+five source-selected fields with a 40-percent identity track, while the normal
+phone stage retains five to seven fields. Docker rows whose full timestamps,
+labels, image references, or placement values cannot fit now expose those
+values in the same touch- and keyboard-operable inline detail pattern used by
+the other platform tables rather than relying on hover titles.
 That same unified-resource consumer contract now also owns CSP-safe table
 presentation for infrastructure rows. Host, PBS, and PMG table sections must
 consume the shared column presentation owner and render canonical table sizing

@@ -211,7 +211,7 @@ export function ProxmoxRecoverableTable(props: {
                 direction={props.sortDirection}
                 onSort={props.onSort}
                 align="left"
-                headClass={getPlatformTableHeadClassForKind('name')}
+                headClass={`${getPlatformTableHeadClassForKind('name')} platform-table-mobile-w-30`}
               />
               <Show when={columnVisible('type')}>
                 <TableHead class={getPlatformTableHeadClassForKind('text')}>Type</TableHead>

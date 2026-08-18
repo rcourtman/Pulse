@@ -1060,9 +1060,9 @@ const machineColumnWidthClass = (columnId: AgentMachineColumnId): string => {
       return 'hidden md:table-cell md:w-[6%]';
     case 'cpu':
     case 'memory':
-      return 'w-[15%] sm:w-[20%] md:w-[8%]';
+      return 'platform-table-mobile-w-15 w-[15%] sm:w-[20%] md:w-[8%]';
     case 'disk':
-      return 'w-[15%] sm:w-[20%] md:w-[8%]';
+      return 'platform-table-mobile-w-15 w-[15%] sm:w-[20%] md:w-[8%]';
     case 'gpu':
       return 'hidden md:table-cell md:w-[8%]';
     case 'network':
@@ -1072,7 +1072,7 @@ const machineColumnWidthClass = (columnId: AgentMachineColumnId): string => {
     case 'temp':
       return 'hidden md:table-cell md:w-[5%]';
     case 'lastSeen':
-      return 'w-[15%] lg:w-[6%]';
+      return 'platform-table-mobile-w-15 w-[15%] lg:w-[6%]';
     case 'ip':
       return 'agent-machine-address-column hidden xl:table-cell xl:w-[8%]';
     case 'raid':
@@ -1082,7 +1082,7 @@ const machineColumnWidthClass = (columnId: AgentMachineColumnId): string => {
     case 'kernel':
       return 'hidden xl:table-cell xl:w-[10%]';
     case 'actions':
-      return 'w-[10%] md:w-[4%]';
+      return 'platform-table-narrow-hidden w-[10%] md:w-[4%]';
   }
 };
 
@@ -1628,7 +1628,7 @@ export const AgentsMachinesTable: Component<{
                               when={machineSubtitle()}
                               fallback={
                                 <span
-                                  class="mt-0.5 block truncate pl-10 text-[9px] text-muted sm:text-[10px] md:hidden"
+                                  class="mt-0.5 hidden truncate pl-10 text-[9px] text-muted sm:text-[10px] md:block"
                                   title={systemLabel()}
                                 >
                                   {systemLabel()}
@@ -1637,7 +1637,7 @@ export const AgentsMachinesTable: Component<{
                             >
                               {(subtitle) => (
                                 <span
-                                  class="mt-0.5 block truncate pl-10 text-[9px] text-muted sm:text-[10px]"
+                                  class="mt-0.5 hidden truncate pl-10 text-[9px] text-muted sm:text-[10px] md:block"
                                   title={subtitle()}
                                 >
                                   {subtitle()}

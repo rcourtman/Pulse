@@ -6,6 +6,7 @@ import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
 import {
   PlatformSortableTableHead,
+  PlatformResponsiveTableLabel,
   PlatformTableEmptyState,
   PlatformTableToolbar,
   createPlatformTableFilterState,
@@ -213,7 +214,7 @@ export const VsphereNetworksTable: Component<{
                   sortKey="datacenter"
                   class="platform-table-mobile-w-20 md:w-[12%]"
                 >
-                  Datacenter
+                  <PlatformResponsiveTableLabel compact="DC" full="Datacenter" />
                 </PlatformSortableTableHead>
               </>
             }

@@ -1,7 +1,8 @@
-import { For, Show, type Component } from 'solid-js';
+import { For, Show, createSignal, type Component } from 'solid-js';
 import XIcon from 'lucide-solid/icons/x';
 import { Card } from '@/components/shared/Card';
 import { DrawerSubjectHeading } from '@/components/shared/DrawerSubjectHeading';
+import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
 import { ProgressBar } from '@/components/shared/ProgressBar';
 import { StatusDot } from '@/components/shared/StatusDot';
 import {
@@ -22,6 +23,7 @@ import {
   PlatformResponsiveTableLabel,
   PlatformTableNumberValue,
 } from '@/features/platformPage/sharedPlatformPage';
+import { PlatformResourceDetailToggleButton } from '@/features/platformPage/PlatformResourceDetailTableRow';
 import type { StatusIndicatorVariant } from '@/utils/status';
 import { formatBytes } from '@/utils/format';
 import { getMetricColorClass } from '@/utils/metricThresholds';
@@ -89,7 +91,7 @@ function PoolUsageBar(props: { percent: number }) {
   return (
     <ProgressBar
       value={clamped}
-      class="h-4 w-full min-w-[3.5rem] max-w-32"
+      class="h-4 w-full min-w-0 max-w-32 md:min-w-[3.5rem]"
       fillClass={capacityToneFor(clamped)}
       label={
         <span class="absolute inset-0 flex items-center justify-center text-[10px] font-semibold text-base-content leading-none tabular-nums">
@@ -113,6 +115,7 @@ export const ProxmoxCephClusterDrawer: Component<{
   const usagePercent = () => props.cluster.disk?.current ?? 0;
   const fsid = () => asTrimmedString(meta()?.fsid) || '—';
   const headingId = () => `proxmox-ceph-cluster-drawer-heading-${props.cluster.id}`;
+  const [expandedPoolKey, setExpandedPoolKey] = createSignal<string | null>(null);
 
   return (
     <section class="space-y-3" aria-labelledby={headingId()}>
@@ -163,59 +166,143 @@ export const ProxmoxCephClusterDrawer: Component<{
             <Table class="platform-table min-w-0 table-fixed text-xs">
               <TableHeader>
                 <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
-                  <TableHead class={getPlatformTableHeadClassForKind('name')}>Pool</TableHead>
-                  <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
-                    Objects
+                  <TableHead
+                    class={`${getPlatformTableHeadClassForKind('name')} platform-table-mobile-w-30 md:w-[24%]`}
+                  >
+                    Pool
                   </TableHead>
                   <TableHead
-                    class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden sm:table-cell`}
+                    class={`${getPlatformTableHeadClassForKind('numeric-value')} platform-table-mobile-w-15 md:w-[16%]`}
                   >
-                    Stored
+                    <PlatformResponsiveTableLabel compact="Obj" full="Objects" />
                   </TableHead>
                   <TableHead
-                    class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden sm:table-cell`}
+                    class={`${getPlatformTableHeadClassForKind('numeric-value')} platform-table-mobile-w-20 md:w-[20%]`}
                   >
-                    Avail
+                    <PlatformResponsiveTableLabel compact="Store" full="Stored" />
                   </TableHead>
-                  <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
+                  <TableHead
+                    class={`${getPlatformTableHeadClassForKind('numeric-value')} platform-table-mobile-w-20 md:w-[20%]`}
+                  >
+                    <PlatformResponsiveTableLabel compact="Avail" full="Available" />
+                  </TableHead>
+                  <TableHead
+                    class={`${getPlatformTableHeadClassForKind('numeric-value')} platform-table-mobile-w-15 md:w-[20%]`}
+                  >
                     Used
                   </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody class={PLATFORM_TABLE_BODY_CLASS}>
                 <For each={pools()}>
-                  {(pool) => (
-                    <TableRow>
-                      <TableCell
-                        class={`${getPlatformTableCellClassForKind('name')} font-medium text-base-content`}
-                      >
-                        {pool.name || '—'}
-                      </TableCell>
-                      <TableCell
-                        class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
-                      >
-                        <PlatformTableNumberValue
-                          value={pool.objects}
-                          format={formatPlatformTableIntegerValue}
-                        />
-                      </TableCell>
-                      <TableCell
-                        class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content tabular-nums sm:table-cell`}
-                      >
-                        {formatBytes(pool.storedBytes)}
-                      </TableCell>
-                      <TableCell
-                        class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-muted tabular-nums sm:table-cell`}
-                      >
-                        {formatBytes(pool.availableBytes)}
-                      </TableCell>
-                      <TableCell class={getPlatformTableCellClassForKind('numeric-value')}>
-                        <div class="flex items-center justify-end">
-                          <PoolUsageBar percent={pool.percentUsed} />
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  )}
+                  {(pool, index) => {
+                    const poolKey = () => pool.name || `pool-${index()}`;
+                    const isExpanded = () => expandedPoolKey() === poolKey();
+                    const detailRowId = () =>
+                      `proxmox-ceph-pool-detail-${props.cluster.id}-${index()}`;
+                    const toggle = () =>
+                      setExpandedPoolKey((current) => (current === poolKey() ? null : poolKey()));
+                    return (
+                      <>
+                        <TableRow
+                          class="cursor-pointer"
+                          aria-controls={isExpanded() ? detailRowId() : undefined}
+                          aria-expanded={isExpanded()}
+                          onClick={toggle}
+                          onKeyDown={(event) => {
+                            if (event.key !== 'Enter' && event.key !== ' ') return;
+                            event.preventDefault();
+                            toggle();
+                          }}
+                          tabIndex={0}
+                        >
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('name')} font-medium text-base-content`}
+                          >
+                            <div class="flex min-w-0 items-center gap-1">
+                              <PlatformResourceDetailToggleButton
+                                expanded={isExpanded()}
+                                resourceLabel={pool.name || 'pool'}
+                                controlsId={detailRowId()}
+                                onToggle={toggle}
+                              />
+                              <span class="truncate" title={pool.name || '—'}>
+                                {pool.name || '—'}
+                              </span>
+                            </div>
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
+                          >
+                            <PlatformTableNumberValue
+                              value={pool.objects}
+                              format={formatPlatformTableIntegerValue}
+                            />
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content tabular-nums`}
+                          >
+                            {formatBytes(pool.storedBytes)}
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-muted tabular-nums`}
+                          >
+                            {formatBytes(pool.availableBytes)}
+                          </TableCell>
+                          <TableCell class={getPlatformTableCellClassForKind('numeric-value')}>
+                            <div class="flex items-center justify-end">
+                              <PoolUsageBar percent={pool.percentUsed} />
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                        <Show when={isExpanded()}>
+                          <InlineDetailTableRow
+                            cellId={detailRowId()}
+                            colspan={5}
+                            data-inline-proxmox-ceph-pool-detail-for={poolKey()}
+                          >
+                            <dl class="grid gap-x-4 gap-y-2 text-[11px] sm:grid-cols-2">
+                              <div class="sm:col-span-2 text-xs font-semibold text-base-content">
+                                {pool.name || 'Pool'}
+                              </div>
+                              <div>
+                                <dt class="text-[10px] font-medium uppercase tracking-wide text-muted">
+                                  Objects
+                                </dt>
+                                <dd class="font-mono text-base-content">
+                                  {formatPlatformTableIntegerValue(pool.objects)}
+                                </dd>
+                              </div>
+                              <div>
+                                <dt class="text-[10px] font-medium uppercase tracking-wide text-muted">
+                                  Stored
+                                </dt>
+                                <dd class="font-mono text-base-content">
+                                  {formatBytes(pool.storedBytes)}
+                                </dd>
+                              </div>
+                              <div>
+                                <dt class="text-[10px] font-medium uppercase tracking-wide text-muted">
+                                  Available
+                                </dt>
+                                <dd class="font-mono text-base-content">
+                                  {formatBytes(pool.availableBytes)}
+                                </dd>
+                              </div>
+                              <div>
+                                <dt class="text-[10px] font-medium uppercase tracking-wide text-muted">
+                                  Used
+                                </dt>
+                                <dd class="font-mono text-base-content">
+                                  {formatPlatformTablePercentValue(pool.percentUsed)}
+                                </dd>
+                              </div>
+                            </dl>
+                          </InlineDetailTableRow>
+                        </Show>
+                      </>
+                    );
+                  }}
                 </For>
               </TableBody>
             </Table>

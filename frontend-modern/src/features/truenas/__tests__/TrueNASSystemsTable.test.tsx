@@ -63,9 +63,11 @@ describe('TrueNASSystemsTable', () => {
       'platform-table-mobile-w-30',
     );
     expect(headers.find((header) => header.textContent?.includes('Capacity'))).toHaveClass(
-      'w-[20%]',
+      'platform-table-mobile-w-20',
     );
-    expect(headers.find((header) => header.textContent?.includes('°C'))).toHaveClass('w-[16%]');
+    expect(headers.find((header) => header.textContent?.includes('°C'))).toHaveClass(
+      'platform-table-mobile-w-15',
+    );
   });
 
   it('treats an impaired TrueNAS source as degraded for the row indicator and health filter', async () => {

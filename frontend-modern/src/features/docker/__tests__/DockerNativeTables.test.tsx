@@ -1474,10 +1474,8 @@ describe('Docker native tables', () => {
     expect(screen.getByText('Build Cache')).toBeInTheDocument();
     expect(screen.getByPlaceholderText('Search storage usage')).toBeInTheDocument();
     expect(screen.getByText('edge-01')).toBeInTheDocument();
-    expect(screen.getByText('2.00 GB')).toBeInTheDocument();
-    expect(screen.getByText('6 total, 4 active, 512 MB reclaimable')).toBeInTheDocument();
-    expect(screen.getByText('5.00 GB')).toBeInTheDocument();
-    expect(screen.getByText('4 total, 1 active, 4.00 GB reclaimable')).toBeInTheDocument();
+    expect(screen.getByText('2.00 GB · 4/6')).toBeInTheDocument();
+    expect(screen.getByText('5.00 GB · 1/4')).toBeInTheDocument();
     expect(document.querySelector('[data-docker-storage-row="host-1"]')).not.toBeNull();
   });
 
@@ -1626,5 +1624,13 @@ describe('Docker native tables', () => {
     expect(screen.getByText('golang')).toBeInTheDocument();
     expect(screen.getByText('stack=edge')).toBeInTheDocument();
     expect(screen.getByText('manager-1')).toBeInTheDocument();
+
+    const configRow = document.querySelector<HTMLElement>('[data-docker-config-row="config-1"]');
+    expect(configRow).not.toBeNull();
+    fireEvent.keyDown(configRow!, { key: 'Enter' });
+    expect(configRow).toHaveAttribute('aria-expanded', 'true');
+    expect(
+      document.querySelector('[data-inline-docker-config-detail-for="config-1"]'),
+    ).not.toBeNull();
   });
 });

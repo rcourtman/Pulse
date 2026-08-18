@@ -1,5 +1,6 @@
 import { For, Show, createMemo, type Component } from 'solid-js';
 import { TableCell, TableRow } from '@/components/shared/Table';
+import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
 import { asTrimmedString } from '@/utils/stringUtils';
 import {
   PLATFORM_HEALTH_FILTER_OPTIONS,
@@ -14,6 +15,12 @@ import {
   type PlatformTableSortValue,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
+  PlatformResourceDetailToggleButton,
+  createPlatformResourceDetailState,
+  getPlatformResourceDetailRowClass,
+} from '@/features/platformPage/PlatformResourceDetailTableRow';
+import {
+  DockerNativeDetailPanel,
   DockerResourceNameCell,
   dockerHostName,
   dockerLabelsSummary,
@@ -63,6 +70,7 @@ export const DockerConfigsTable: Component<DockerNativeTableProps> = (props) => 
   const sortedRows = createMemo(() =>
     sort.sortRows(tableState.filtered(), getDockerConfigSortValue),
   );
+  const drawer = createPlatformResourceDetailState({ idPrefix: 'docker-config-detail' });
 
   return (
     <Show
@@ -117,7 +125,7 @@ export const DockerConfigsTable: Component<DockerNativeTableProps> = (props) => 
                   kind="text"
                   sort={sort}
                   sortKey="template"
-                  class="md:w-[16%]"
+                  class="platform-table-mobile-w-15 md:w-[16%]"
                 >
                   Template
                 </PlatformSortableTableHead>
@@ -125,14 +133,14 @@ export const DockerConfigsTable: Component<DockerNativeTableProps> = (props) => 
                   kind="text"
                   sort={sort}
                   sortKey="created"
-                  class="sm:hidden md:table-cell md:w-[16%]"
+                  class="platform-table-mobile-w-15 md:w-[16%]"
                 >
                   Created
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead
                   kind="text"
                   sort={sort}
-                  class="sm:hidden md:table-cell md:w-[24%]"
+                  class="platform-table-mobile-w-15 md:w-[24%]"
                 >
                   Labels
                 </PlatformSortableTableHead>
@@ -140,7 +148,7 @@ export const DockerConfigsTable: Component<DockerNativeTableProps> = (props) => 
                   kind="text"
                   sort={sort}
                   sortKey="host"
-                  class="md:w-[16%]"
+                  class="platform-table-mobile-w-15 md:w-[16%]"
                 >
                   Host
                 </PlatformSortableTableHead>
@@ -149,41 +157,82 @@ export const DockerConfigsTable: Component<DockerNativeTableProps> = (props) => 
             body={
               <>
                 <For each={sortedRows()}>
-                  {(resource) => (
-                    <TableRow class="text-[11px] sm:text-xs" data-docker-config-row={resource.id}>
-                      <DockerResourceNameCell resource={resource} />
-                      <TableCell
-                        class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
-                      >
-                        {dockerTextValue(resource.docker?.templatingDriver)}
-                      </TableCell>
-                      <TableCell
-                        class={`${getPlatformTableCellClassForKind('text')} sm:hidden text-base-content md:table-cell`}
-                      >
-                        <span
-                          class="inline-block max-w-[14rem] truncate"
-                          title={dockerTextValue(resource.docker?.objectCreatedAt)}
+                  {(resource) => {
+                    const detailRowId = () => drawer.detailRowId(resource);
+                    const isExpanded = () => drawer.isExpanded(resource);
+                    return (
+                      <>
+                        <TableRow
+                          class={`${getPlatformResourceDetailRowClass(isExpanded())} text-[11px] sm:text-xs`}
+                          aria-controls={isExpanded() ? detailRowId() : undefined}
+                          aria-expanded={isExpanded() ? 'true' : 'false'}
+                          data-docker-config-row={resource.id}
+                          onClick={() => drawer.toggle(resource)}
+                          onKeyDown={drawer.handleActivationKey(resource)}
+                          tabIndex={0}
                         >
-                          {dockerTextValue(resource.docker?.objectCreatedAt)}
-                        </span>
-                      </TableCell>
-                      <TableCell
-                        class={`${getPlatformTableCellClassForKind('text')} sm:hidden text-base-content md:table-cell`}
-                      >
-                        <span
-                          class="inline-block max-w-[22rem] truncate"
-                          title={dockerLabelsSummary(resource.docker?.labels)}
-                        >
-                          {dockerLabelsSummary(resource.docker?.labels)}
-                        </span>
-                      </TableCell>
-                      <TableCell
-                        class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
-                      >
-                        {dockerHostName(resource)}
-                      </TableCell>
-                    </TableRow>
-                  )}
+                          <DockerResourceNameCell
+                            resource={resource}
+                            detailToggle={
+                              <PlatformResourceDetailToggleButton
+                                expanded={isExpanded()}
+                                resourceLabel={dockerResourceName(resource)}
+                                controlsId={detailRowId()}
+                                onToggle={() => drawer.toggle(resource)}
+                              />
+                            }
+                          />
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                          >
+                            {dockerTextValue(resource.docker?.templatingDriver)}
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                          >
+                            <span
+                              class="inline-block max-w-[14rem] truncate"
+                              title={dockerTextValue(resource.docker?.objectCreatedAt)}
+                            >
+                              {dockerTextValue(resource.docker?.objectCreatedAt)}
+                            </span>
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                          >
+                            <span
+                              class="inline-block max-w-[22rem] truncate"
+                              title={dockerLabelsSummary(resource.docker?.labels)}
+                            >
+                              {dockerLabelsSummary(resource.docker?.labels)}
+                            </span>
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                          >
+                            {dockerHostName(resource)}
+                          </TableCell>
+                        </TableRow>
+                        <Show when={isExpanded()}>
+                          <InlineDetailTableRow
+                            cellId={detailRowId()}
+                            colspan={5}
+                            data-inline-docker-config-detail-for={resource.id}
+                          >
+                            <DockerNativeDetailPanel
+                              title={dockerResourceName(resource)}
+                              fields={[
+                                ['Template', dockerTextValue(resource.docker?.templatingDriver)],
+                                ['Created', dockerTextValue(resource.docker?.objectCreatedAt)],
+                                ['Labels', dockerLabelsSummary(resource.docker?.labels)],
+                                ['Host', dockerHostName(resource)],
+                              ]}
+                            />
+                          </InlineDetailTableRow>
+                        </Show>
+                      </>
+                    );
+                  }}
                 </For>
               </>
             }

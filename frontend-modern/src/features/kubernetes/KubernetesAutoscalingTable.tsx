@@ -166,7 +166,7 @@ export const KubernetesAutoscalingTable: Component<{
                   kind="name"
                   sort={sort}
                   sortKey="autoscaler"
-                  class="md:w-[20%]"
+                  class="platform-table-mobile-w-30 md:w-[20%]"
                 >
                   Autoscaler
                 </PlatformSortableTableHead>

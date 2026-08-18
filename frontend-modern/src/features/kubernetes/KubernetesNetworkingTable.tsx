@@ -202,7 +202,7 @@ export const KubernetesNetworkingTable: Component<{
                   kind="name"
                   sort={sort}
                   sortKey="resource"
-                  class="kubernetes-network-name-column md:w-[19%]"
+                  class="kubernetes-network-name-column platform-table-mobile-w-30 md:w-[19%]"
                 >
                   Resource
                 </PlatformSortableTableHead>
@@ -228,7 +228,7 @@ export const KubernetesNetworkingTable: Component<{
                   sortKey="typeClass"
                   class="kubernetes-network-class-column platform-table-mobile-w-15 md:w-[12%]"
                 >
-                  <PlatformResponsiveTableLabel compact="Class" full="Type / class" />
+                  <PlatformResponsiveTableLabel compact="Cls" full="Type / class" />
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead
                   kind="text"

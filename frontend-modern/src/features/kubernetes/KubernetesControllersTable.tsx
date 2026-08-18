@@ -277,7 +277,7 @@ export const KubernetesControllersTable: Component<{
                   kind="name"
                   sort={sort}
                   sortKey="controller"
-                  class="md:w-[18%]"
+                  class="platform-table-mobile-w-30 md:w-[18%]"
                 >
                   Controller
                 </PlatformSortableTableHead>

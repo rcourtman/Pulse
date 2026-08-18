@@ -217,7 +217,7 @@ export const KubernetesPodsTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="scope"
-                  class="w-[15%] md:w-[13%]"
+                  class="platform-table-mobile-w-15 md:w-[13%]"
                 >
                   Scope
                 </PlatformSortableTableHead>
@@ -225,7 +225,7 @@ export const KubernetesPodsTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="node"
-                  class="w-[15%] md:w-[13%]"
+                  class="platform-table-mobile-w-15 md:w-[13%]"
                 >
                   Node
                 </PlatformSortableTableHead>
@@ -233,7 +233,7 @@ export const KubernetesPodsTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="status"
-                  class="w-[12%] md:w-[8%]"
+                  class="platform-table-mobile-w-10 md:w-[8%]"
                 >
                   Status
                 </PlatformSortableTableHead>
@@ -241,7 +241,7 @@ export const KubernetesPodsTable: Component<{
                   kind="numeric-value"
                   sort={sort}
                   sortKey="ready"
-                  class="w-[10%] md:w-[7%]"
+                  class="platform-table-mobile-w-10 md:w-[7%]"
                 >
                   Ready
                 </PlatformSortableTableHead>
@@ -249,7 +249,7 @@ export const KubernetesPodsTable: Component<{
                   kind="numeric-value"
                   sort={sort}
                   sortKey="restarts"
-                  class="w-[10%] md:w-[8%]"
+                  class="platform-table-mobile-w-10 md:w-[8%] platform-table-narrow-hidden"
                 >
                   Restarts
                 </PlatformSortableTableHead>
@@ -273,7 +273,7 @@ export const KubernetesPodsTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="age"
-                  class="w-[8%] md:w-[4%]"
+                  class="platform-table-mobile-w-10 md:w-[4%] platform-table-narrow-hidden"
                 >
                   Age
                 </PlatformSortableTableHead>
@@ -356,7 +356,7 @@ export const KubernetesPodsTable: Component<{
                             {readySummary(resource)}
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content platform-table-narrow-hidden`}
                           >
                             <PlatformTableNumberValue value={restartCount(resource)} />
                           </TableCell>
@@ -375,7 +375,7 @@ export const KubernetesPodsTable: Component<{
                             </span>
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                            class={`${getPlatformTableCellClassForKind('text')} text-base-content platform-table-narrow-hidden`}
                           >
                             {age()}
                           </TableCell>

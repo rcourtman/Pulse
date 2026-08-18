@@ -1913,6 +1913,12 @@ must not treat starter
    resulting incident context, but must not define storage-local approval
    argument keys or bypass the shared `internal/agentcapabilities` helper.
 5. Keep recovery history table width budgeting derived from the canonical column specs in `frontend-modern/src/utils/recoveryTablePresentation.ts`, not from raw visible-column counts, so normalized subject labels and optional column sets cannot drift the right-edge badges and controls off-screen. Storage-pool, physical-disk, backup-server, coverage, and recoverable-artifact compact models must follow the same source-owned budgeting rule: expose the five to seven highest-value phone fields when the source provides them, fix identity at the shared 30-percent track, use compact labels for narrow evidence fields, and normalize the selected tracks to the container without a horizontal rail. Desktop column sets and storage/recovery evidence semantics must remain unchanged.
+   Below 360 pixels of content width, those models must retain five fields,
+   promote identity to 40 percent, and demote the lowest-priority field through
+   the shared `platform-table-narrow-hidden`/source-owned layout contract.
+   Summary rows remain single-line; any truncated backup, datastore, workload,
+   or topology value must be recoverable through a touch- and
+   keyboard-operable inline detail rather than a hover-only title.
 6. Keep at least one browser-level desktop recovery proof in the governed `recovery-product-surface` policy so right-edge column visibility and wrapper-fit regressions are caught at rendered layout time instead of only through unit-level width math
 7. Keep the retired dashboard route from becoming a passive no-resources
    compatibility shell. First-session handoff now belongs to Infrastructure
@@ -3206,6 +3212,15 @@ must likewise come from `frontend-modern/src/features/storageBackups/diskPresent
 storage pages must not reintroduce local `All Roles`, `All Groups`, or
 `NVME Disk` strings that drift away from the shared filter-label and hardware
 acronym presentation contract.
+The direct Storage pool and physical-disk projections now join the same native
+platform phone contract as Proxmox recovery tables. Their source-owned
+presentation models enter a dedicated `narrow` layout below 360 pixels, retain
+five operational fields, promote identity to 40 percent, and leave the normal
+phone and desktop evidence sets unchanged. Proxmox backup-server, coverage,
+recoverable, Ceph, and Mail Gateway tables use the same five-field narrow stage
+and inline full-value disclosure, so recovery semantics no longer vary by
+whether the table is reached through a provider page or the direct Storage
+surface.
 That same storage ownership also includes the physical-disk detail identity
 contract in `frontend-modern/src/components/Storage/` and
 `frontend-modern/src/features/storageBackups/`: historical disk charts must

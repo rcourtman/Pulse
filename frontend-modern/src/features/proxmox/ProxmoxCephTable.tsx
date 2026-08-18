@@ -20,6 +20,7 @@ import {
   getPlatformTableCellClassForKind,
   getPlatformTableContainerLayout,
   getPlatformTableHeadClassForKind,
+  PlatformResponsiveTableLabel,
   type PlatformTableFilterOption,
   PlatformTableEmptyState,
   PlatformTableShell,
@@ -53,6 +54,14 @@ export const CEPH_PHONE_COLUMNS: readonly CephPhoneColumn[] = [
   'capacity',
 ];
 
+export const CEPH_NARROW_COLUMNS: readonly CephPhoneColumn[] = [
+  'cluster',
+  'health',
+  'osds',
+  'pools',
+  'capacity',
+];
+
 export const CEPH_PHONE_COLUMN_WIDTHS: Readonly<Record<CephPhoneColumn, number>> = {
   cluster: 30,
   health: 15,
@@ -60,6 +69,15 @@ export const CEPH_PHONE_COLUMN_WIDTHS: Readonly<Record<CephPhoneColumn, number>>
   osds: 14,
   pools: 14,
   capacity: 14,
+};
+
+export const CEPH_NARROW_COLUMN_WIDTHS: Readonly<Record<CephPhoneColumn, number>> = {
+  cluster: 40,
+  health: 15,
+  quorum: 0,
+  osds: 15,
+  pools: 15,
+  capacity: 15,
 };
 
 const STATUS_FILTER_OPTIONS: PlatformTableFilterOption<CephStatusFilter>[] = [
@@ -246,15 +264,21 @@ export const ProxmoxCephTable: Component<{
   const layout = createMemo(() =>
     getPlatformTableContainerLayout(observedWidth.width() ?? 1920, [520, 720, 960, 1200]),
   );
+  const isNarrowPhone = createMemo(() => {
+    const width = observedWidth.width();
+    return typeof width === 'number' && width > 0 && width < 360;
+  });
   // Quorum and pool count are high-value health context even on phones.
-  const showQuorumAndPools = createMemo(() => true);
+  const showQuorum = createMemo(() => !isNarrowPhone());
+  const showPools = createMemo(() => true);
   const showOperational = createMemo(() => ['operational', 'expanded', 'full'].includes(layout()));
   const showDetail = createMemo(() => ['expanded', 'full'].includes(layout()));
   const showFsid = createMemo(() => layout() === 'full');
   const visibleColumnCount = createMemo(
     () =>
       4 +
-      Number(showQuorumAndPools()) * 2 +
+      Number(showQuorum()) +
+      Number(showPools()) +
       Number(showOperational()) * 2 +
       Number(showDetail()) +
       Number(showFsid()),
@@ -299,10 +323,16 @@ export const ProxmoxCephTable: Component<{
             colgroup={
               <Show when={layout() === 'compact'}>
                 <colgroup>
-                  <For each={CEPH_PHONE_COLUMNS}>
+                  <For each={isNarrowPhone() ? CEPH_NARROW_COLUMNS : CEPH_PHONE_COLUMNS}>
                     {(column) => (
                       <col
-                        style={{ width: `${CEPH_PHONE_COLUMN_WIDTHS[column]}%` }}
+                        style={{
+                          width: `${
+                            (isNarrowPhone()
+                              ? CEPH_NARROW_COLUMN_WIDTHS
+                              : CEPH_PHONE_COLUMN_WIDTHS)[column]
+                          }%`,
+                        }}
                         data-proxmox-ceph-column={column}
                       />
                     )}
@@ -312,17 +342,29 @@ export const ProxmoxCephTable: Component<{
             }
             header={
               <>
-                <TableHead class={getPlatformTableHeadClassForKind('name')}>Cluster</TableHead>
-                <TableHead class={getPlatformTableHeadClassForKind('text')}>Health</TableHead>
+                <TableHead
+                  class={`${getPlatformTableHeadClassForKind('name')} platform-table-mobile-w-30 md:w-[18%]`}
+                >
+                  Cluster
+                </TableHead>
+                <TableHead
+                  class={`${getPlatformTableHeadClassForKind('text')} platform-table-mobile-w-15 md:w-[12%]`}
+                >
+                  Health
+                </TableHead>
                 <Show when={showFsid()}>
                   <TableHead class={getPlatformTableHeadClassForKind('text')}>FSID</TableHead>
                 </Show>
-                <Show when={showQuorumAndPools()}>
-                  <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
-                    {layout() === 'compact' ? 'Qrm' : 'Quorum'}
+                <Show when={showQuorum()}>
+                  <TableHead
+                    class={`${getPlatformTableHeadClassForKind('numeric-value')} platform-table-mobile-w-10 md:w-[13%] platform-table-narrow-hidden`}
+                  >
+                    <PlatformResponsiveTableLabel compact="Qrm" full="Quorum" />
                   </TableHead>
                 </Show>
-                <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
+                <TableHead
+                  class={`${getPlatformTableHeadClassForKind('numeric-value')} platform-table-mobile-w-15 md:w-[13%]`}
+                >
                   OSDs
                 </TableHead>
                 <Show when={showOperational()}>
@@ -330,12 +372,16 @@ export const ProxmoxCephTable: Component<{
                     PGs
                   </TableHead>
                 </Show>
-                <Show when={showQuorumAndPools()}>
-                  <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
+                <Show when={showPools()}>
+                  <TableHead
+                    class={`${getPlatformTableHeadClassForKind('numeric-value')} platform-table-mobile-w-15 md:w-[14%]`}
+                  >
                     Pools
                   </TableHead>
                 </Show>
-                <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
+                <TableHead
+                  class={`${getPlatformTableHeadClassForKind('numeric-value')} platform-table-mobile-w-15 md:w-[14%]`}
+                >
                   Capacity
                 </TableHead>
                 <Show when={showOperational()}>
@@ -362,8 +408,14 @@ export const ProxmoxCephTable: Component<{
                             isOpen() ? 'bg-surface-hover' : ''
                           }`}
                           onClick={() => toggleSelected(cluster.id)}
+                          onKeyDown={(event) => {
+                            if (event.key !== 'Enter' && event.key !== ' ') return;
+                            event.preventDefault();
+                            toggleSelected(cluster.id);
+                          }}
                           aria-controls={isOpen() ? detailRowId() : undefined}
                           aria-expanded={isOpen()}
+                          tabIndex={0}
                         >
                           <TableCell class={getPlatformTableCellClassForKind('name')}>
                             <div class="flex items-center gap-2 min-w-0">
@@ -379,7 +431,7 @@ export const ProxmoxCephTable: Component<{
                             </div>
                             <Show when={cluster.platformId}>
                               <div
-                                class="text-[10px] text-muted font-mono truncate"
+                                class="hidden text-[10px] text-muted font-mono truncate md:block"
                                 title={cluster.platformId}
                               >
                                 {cluster.platformId}
@@ -397,7 +449,7 @@ export const ProxmoxCephTable: Component<{
                               <span class={`text-[11px] font-medium ${ind.tone}`}>{ind.label}</span>
                             </div>
                             <Show when={!!cluster.ceph?.healthStatus}>
-                              <div class="text-[10px] text-muted font-mono">
+                              <div class="hidden text-[10px] text-muted font-mono md:block">
                                 {cluster.ceph?.healthStatus}
                               </div>
                             </Show>
@@ -411,9 +463,9 @@ export const ProxmoxCephTable: Component<{
                               </span>
                             </TableCell>
                           </Show>
-                          <Show when={showQuorumAndPools()}>
+                          <Show when={showQuorum()}>
                             <TableCell
-                              class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
+                              class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content platform-table-narrow-hidden`}
                             >
                               {quorumLabel(cluster.ceph)}
                             </TableCell>
@@ -435,7 +487,7 @@ export const ProxmoxCephTable: Component<{
                               </Show>
                             </TableCell>
                           </Show>
-                          <Show when={showQuorumAndPools()}>
+                          <Show when={showPools()}>
                             <TableCell
                               class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                             >

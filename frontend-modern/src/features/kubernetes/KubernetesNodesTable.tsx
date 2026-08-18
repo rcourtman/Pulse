@@ -211,15 +211,15 @@ export const KubernetesNodesTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="cluster"
-                  class="w-[14%] md:w-[10%]"
+                  class="platform-table-mobile-w-15 md:w-[10%]"
                 >
-                  Cluster
+                  <PlatformResponsiveTableLabel compact="Clus" full="Cluster" />
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead
                   kind="text"
                   sort={sort}
                   sortKey="roles"
-                  class="w-[14%] md:w-[10%]"
+                  class="platform-table-mobile-w-15 platform-table-narrow-hidden md:w-[10%]"
                 >
                   <PlatformResponsiveTableLabel compact="Role" full="Roles" />
                 </PlatformSortableTableHead>
@@ -243,7 +243,7 @@ export const KubernetesNodesTable: Component<{
                   kind="metric-bar"
                   sort={sort}
                   sortKey="cpu"
-                  class="w-[14%] md:w-[11%]"
+                  class="platform-table-mobile-w-15 md:w-[11%]"
                 >
                   CPU
                 </PlatformSortableTableHead>
@@ -251,7 +251,7 @@ export const KubernetesNodesTable: Component<{
                   kind="metric-bar"
                   sort={sort}
                   sortKey="memory"
-                  class="w-[14%] md:w-[11%]"
+                  class="platform-table-mobile-w-15 md:w-[11%]"
                 >
                   <PlatformResponsiveTableLabel compact="Mem" full="Memory" />
                 </PlatformSortableTableHead>
@@ -267,7 +267,7 @@ export const KubernetesNodesTable: Component<{
                   kind="numeric-value"
                   sort={sort}
                   sortKey="capacity"
-                  class="w-[14%] md:w-[14%]"
+                  class="platform-table-mobile-w-10 md:w-[14%]"
                 >
                   <PlatformResponsiveTableLabel compact="Cap" full="Capacity" />
                 </PlatformSortableTableHead>
@@ -372,7 +372,7 @@ export const KubernetesNodesTable: Component<{
                             {cluster()}
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                            class={`${getPlatformTableCellClassForKind('text')} text-base-content platform-table-narrow-hidden`}
                           >
                             {formatRoles(meta()?.roles)}
                           </TableCell>

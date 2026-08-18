@@ -46,8 +46,8 @@ describe('Proxmox backups responsive table presentation', () => {
       'used',
       'backups',
     ]);
-    expect(getBackupServerColumnWidthStyle('server', 'compact')).toEqual({ width: '30%' });
-    expect(getBackupServerColumnWidthStyle('used', 'compact')).toEqual({ width: '22.3188%' });
+    expect(getBackupServerColumnWidthStyle('server', 'compact')).toEqual({ width: '40%' });
+    expect(getBackupServerColumnWidthStyle('used', 'compact')).toEqual({ width: '20%' });
     expect(ids(getBackupServerColumns('basic'))).toEqual([
       'server',
       'status',
@@ -74,8 +74,6 @@ describe('Proxmox backups responsive table presentation', () => {
       'posture',
       'latest',
       'pbs',
-      'archive',
-      'snapshot',
       'task',
     ]);
     expect(
@@ -85,7 +83,7 @@ describe('Proxmox backups responsive table presentation', () => {
         ids(getCoverageColumns('compact', everySource)),
       ),
     ).toEqual({
-      width: '30%',
+      width: '40%',
     });
     expect(ids(getCoverageColumns('operational', everySource))).toEqual([
       'workload',
@@ -128,10 +126,9 @@ describe('Proxmox backups responsive table presentation', () => {
       'source',
       'location',
       'created',
-      'size',
       'state',
     ]);
-    expect(getRecoverableColumnWidthStyle('workload', 'compact')).toEqual({ width: '30%' });
+    expect(getRecoverableColumnWidthStyle('workload', 'compact')).toEqual({ width: '40%' });
     expect(ids(getRecoverableColumns('basic'))).toEqual([
       'workload',
       'source',

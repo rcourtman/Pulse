@@ -222,7 +222,7 @@ export const TrueNASSystemsTable: Component<{
                   kind="metric-bar"
                   sort={sort}
                   sortKey="cpu"
-                  class="w-[17%] md:w-[10%]"
+                  class="platform-table-mobile-w-15 md:w-[10%]"
                 >
                   CPU
                 </PlatformSortableTableHead>
@@ -230,7 +230,7 @@ export const TrueNASSystemsTable: Component<{
                   kind="metric-bar"
                   sort={sort}
                   sortKey="memory"
-                  class="w-[17%] md:w-[10%]"
+                  class="platform-table-mobile-w-20 md:w-[10%]"
                 >
                   <PlatformResponsiveTableLabel compact="Mem" full="Memory" />
                 </PlatformSortableTableHead>
@@ -238,15 +238,15 @@ export const TrueNASSystemsTable: Component<{
                   kind="metric-bar"
                   sort={sort}
                   sortKey="capacity"
-                  class="w-[20%] md:w-[13%]"
+                  class="platform-table-mobile-w-20 md:w-[13%]"
                 >
-                  Capacity
+                  <PlatformResponsiveTableLabel compact="Cap" full="Capacity" />
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead
                   kind="numeric-value"
                   sort={sort}
                   sortKey="temp"
-                  class="w-[16%] md:w-[6%]"
+                  class="platform-table-mobile-w-15 md:w-[6%]"
                 >
                   <PlatformResponsiveTableLabel compact="°C" full="Temp" />
                 </PlatformSortableTableHead>

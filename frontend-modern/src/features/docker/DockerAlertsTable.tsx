@@ -165,25 +165,27 @@ export const DockerAlertsTable: Component<{
                   Resource
                 </TableHead>
                 <TableHead
-                  class={`${getPlatformTableHeadClassForKind('badge')} w-[14%] md:w-[10%]`}
+                  class={`${getPlatformTableHeadClassForKind('badge')} platform-table-mobile-w-15 w-[15%] md:w-[10%]`}
                 >
                   Severity
                 </TableHead>
-                <TableHead class={`${getPlatformTableHeadClassForKind('text')} w-[30%] md:w-[34%]`}>
+                <TableHead
+                  class={`${getPlatformTableHeadClassForKind('text')} platform-table-mobile-w-20 w-[25%] md:w-[34%]`}
+                >
                   Alert
                 </TableHead>
                 <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} w-[16%] sm:hidden md:table-cell md:w-[14%]`}
+                  class={`${getPlatformTableHeadClassForKind('text')} platform-table-mobile-w-15 w-[15%] md:w-[14%]`}
                 >
                   Host
                 </TableHead>
                 <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} w-[12%] sm:hidden lg:table-cell md:w-[10%]`}
+                  class={`${getPlatformTableHeadClassForKind('text')} platform-table-mobile-w-10 w-[15%] md:w-[10%]`}
                 >
                   Started
                 </TableHead>
                 <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} hidden xl:table-cell md:w-[10%]`}
+                  class={`${getPlatformTableHeadClassForKind('text')} platform-table-narrow-hidden hidden xl:table-cell md:w-[10%]`}
                 >
                   Action
                 </TableHead>
@@ -250,9 +252,7 @@ export const DockerAlertsTable: Component<{
                               {incident.label}
                             </span>
                           </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} sm:hidden md:table-cell`}
-                          >
+                          <TableCell class={`${getPlatformTableCellClassForKind('text')}`}>
                             <span
                               class="block truncate text-base-content"
                               title={docker()?.hostname || docker()?.swarm?.clusterName}
@@ -265,12 +265,12 @@ export const DockerAlertsTable: Component<{
                             </span>
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} sm:hidden text-base-content lg:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                           >
                             {formatPlatformAlertStartedAt(incident.startedAt)}
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content xl:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('text')} platform-table-narrow-hidden hidden text-base-content xl:table-cell`}
                           >
                             <span class="block truncate" title={incident.action}>
                               {incident.action}

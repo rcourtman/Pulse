@@ -1100,7 +1100,12 @@ not a replacement status card, CTA band, or page-local nested card.
    and desktop presentation. Below a 360-pixel content width, the shared narrow
    layout must retain five high-value columns, promote identity to 40 percent,
    and remove the lowest-priority context columns rather than shrinking names
-   and metric values into illegible fragments. `PlatformTableShell` marks every
+   and metric values into illegible fragments. Consumers mark only that
+   source-specific demotion with `platform-table-narrow-hidden`; the shared
+   container rule then applies the same 40-percent identity/five-column stage
+   across provider tables, direct Storage tables, and nested provider detail
+   tables without a global reveal or page-local media-query exception.
+   `PlatformTableShell` marks every
    owned table with the shared `platform-table` class; direct Workloads and
    Storage consumers and nested provider detail tables must apply that same
    marker so the phone contract cannot vary by rendering path. Text-only
@@ -3768,6 +3773,14 @@ must preserve the owner split:
 frontend-primitives owns the repeated `PlatformTableShell` frame and guardrail
 registry, while platform and unified-resource consumers own the source-specific
 row fields, drawers, and resource semantics.
+The rendered phone contract now applies consistently to Proxmox, Docker,
+Kubernetes, TrueNAS, vSphere, Standalone, and direct Storage data tables. At
+less than 360 pixels of content width, the shared `platform-table` container
+rule gives identity 40 percent and hides only consumer-marked
+`platform-table-narrow-hidden` cells; ordinary phone widths retain the richer
+five-to-seven-column projection. Summary rows remain single-line, and any
+value that must truncate is backed by a touch- and keyboard-operable inline
+detail row that exposes the complete value.
 Standalone Pulse Agent and Availability consumers may compose one compact
 status summary directly above that shared table frame. The consumer owns the
 already-loaded resource counts, freshness-aware attention ordering, and

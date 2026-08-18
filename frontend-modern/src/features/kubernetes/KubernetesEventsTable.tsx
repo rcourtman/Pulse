@@ -124,7 +124,7 @@ export const KubernetesEventsTable: Component<{
                 <TableHead
                   class={`${getPlatformTableHeadClassForKind('text')} platform-table-mobile-w-15 md:w-[14%]`}
                 >
-                  Reason
+                  <PlatformResponsiveTableLabel compact="Why" full="Reason" />
                 </TableHead>
                 <TableHead
                   class={`${getPlatformTableHeadClassForKind('text')} platform-table-mobile-w-20 md:w-[15%]`}
@@ -132,7 +132,7 @@ export const KubernetesEventsTable: Component<{
                   Object
                 </TableHead>
                 <TableHead
-                  class={`${getPlatformTableHeadClassForKind('numeric-value')} platform-table-mobile-w-10 md:w-[7%]`}
+                  class={`${getPlatformTableHeadClassForKind('numeric-value')} platform-table-mobile-w-10 md:w-[7%] platform-table-narrow-hidden`}
                 >
                   Count
                 </TableHead>
@@ -225,7 +225,7 @@ export const KubernetesEventsTable: Component<{
                             </span>
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content platform-table-narrow-hidden`}
                           >
                             <PlatformTableNumberValue value={resource.kubernetes?.count} />
                           </TableCell>

@@ -1,6 +1,7 @@
 import { For, Show, createMemo, createSignal, type Component, type JSX } from 'solid-js';
 import ArrowRightIcon from 'lucide-solid/icons/arrow-right';
 import { filterChipStatusDot } from '@/components/shared/FilterBar';
+import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
 import { StatusDot } from '@/components/shared/StatusDot';
 import type { StatusIndicatorVariant } from '@/utils/status';
 import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
@@ -632,28 +633,26 @@ export const ProxmoxReplicationTable: Component<{
                               </Show>
                             </TableRow>
                             <Show when={isExpanded()}>
-                              <TableRow
-                                id={detailRowId}
+                              <InlineDetailTableRow
+                                cellId={detailRowId}
+                                colspan={visibleColumnCount()}
                                 class="bg-surface-alt/60 hover:bg-surface-alt/60"
+                                cellClass="!whitespace-normal"
+                                contentClass="px-2 py-2"
                               >
-                                <TableCell
-                                  colSpan={visibleColumnCount()}
-                                  class="!whitespace-normal !px-2 !py-2"
-                                >
-                                  <dl class="grid grid-cols-[auto_minmax(0,1fr)] gap-x-2 gap-y-1 text-[10px] leading-4">
-                                    <dt class="font-semibold text-muted">Guest</dt>
-                                    <dd class="break-all text-base-content">{guestLabel}</dd>
-                                    <dt class="font-semibold text-muted">Job</dt>
-                                    <dd class="break-all font-mono text-base-content">
-                                      {job.jobId || job.id}
-                                    </dd>
-                                    <dt class="font-semibold text-muted">Route</dt>
-                                    <dd class="font-mono text-base-content">
-                                      {sourceNode} → {targetNode}
-                                    </dd>
-                                  </dl>
-                                </TableCell>
-                              </TableRow>
+                                <dl class="grid grid-cols-[auto_minmax(0,1fr)] gap-x-2 gap-y-1 text-[10px] leading-4">
+                                  <dt class="font-semibold text-muted">Guest</dt>
+                                  <dd class="break-all text-base-content">{guestLabel}</dd>
+                                  <dt class="font-semibold text-muted">Job</dt>
+                                  <dd class="break-all font-mono text-base-content">
+                                    {job.jobId || job.id}
+                                  </dd>
+                                  <dt class="font-semibold text-muted">Route</dt>
+                                  <dd class="font-mono text-base-content">
+                                    {sourceNode} → {targetNode}
+                                  </dd>
+                                </dl>
+                              </InlineDetailTableRow>
                             </Show>
                           </>
                         );

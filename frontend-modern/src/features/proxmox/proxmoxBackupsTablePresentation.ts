@@ -3,6 +3,7 @@ import type { JSX } from 'solid-js';
 import type { PlatformTableColumnKind } from '@/features/platformPage/columnAlignment';
 import {
   getPlatformTableWeightedColumnWidthStyle,
+  PLATFORM_TABLE_NARROW_IDENTITY_WIDTH_PERCENT,
   PLATFORM_TABLE_PHONE_IDENTITY_WIDTH_PERCENT,
 } from '@/features/platformPage/sharedPlatformPage';
 
@@ -104,7 +105,7 @@ const BACKUP_SERVER_WEIGHTS: Record<
   ProxmoxBackupsTableLayoutMode,
   Partial<Record<BackupServerColumnId, number>>
 > = {
-  compact: { server: 31, status: 14, datastore: 20, used: 22, backups: 13 },
+  compact: { server: 40, status: 15, datastore: 15, used: 20, backups: 10 },
   basic: { server: 24, status: 14, datastore: 20, used: 28, backups: 14 },
   operational: {
     server: 20,
@@ -155,7 +156,13 @@ export const getBackupServerColumnWidthStyle = (
     BACKUP_SERVER_WEIGHTS[layout],
     BACKUP_SERVER_VISIBLE[layout],
     layout === 'compact' || layout === 'basic'
-      ? { columnId: 'server', widthPercent: PLATFORM_TABLE_PHONE_IDENTITY_WIDTH_PERCENT }
+      ? {
+          columnId: 'server',
+          widthPercent:
+            layout === 'compact'
+              ? PLATFORM_TABLE_NARROW_IDENTITY_WIDTH_PERCENT
+              : PLATFORM_TABLE_PHONE_IDENTITY_WIDTH_PERCENT,
+        }
       : undefined,
   );
 
@@ -175,8 +182,9 @@ export const COVERAGE_COLUMNS: readonly BackupTableColumn<CoverageColumnId>[] = 
 const COVERAGE_VISIBLE: Record<ProxmoxBackupsTableLayoutMode, readonly CoverageColumnId[]> = {
   // On narrow surfaces answer: which workload, what posture, how recent is the
   // newest restore point, and did the latest task succeed? Provider-by-provider
-  // evidence is progressive detail; target identity folds beneath the name.
-  compact: ['workload', 'posture', 'latest', 'pbs', 'archive', 'snapshot', 'task'],
+  // evidence is progressive detail in the expansion row; target identity folds
+  // beneath the name so the scan stays legible at 320px.
+  compact: ['workload', 'posture', 'latest', 'pbs', 'task'],
   basic: ['workload', 'node', 'posture', 'latest', 'task'],
   operational: ['workload', 'type', 'node', 'posture', 'latest', 'task'],
   expanded: ['workload', 'type', 'node', 'posture', 'latest', 'pbs', 'archive', 'snapshot', 'task'],
@@ -187,15 +195,7 @@ const COVERAGE_WEIGHTS: Record<
   ProxmoxBackupsTableLayoutMode,
   Partial<Record<CoverageColumnId, number>>
 > = {
-  compact: {
-    workload: 28,
-    posture: 14,
-    latest: 13,
-    pbs: 12,
-    archive: 11,
-    snapshot: 12,
-    task: 10,
-  },
+  compact: { workload: 40, posture: 18, latest: 16, pbs: 16, task: 10 },
   basic: { workload: 31, node: 18, posture: 19, latest: 20, task: 12 },
   operational: { workload: 28, type: 9, node: 14, posture: 17, latest: 17, task: 15 },
   expanded: {
@@ -255,7 +255,13 @@ export const getCoverageColumnWidthStyle = (
     COVERAGE_WEIGHTS[layout],
     visibleColumnIds,
     layout === 'compact' || layout === 'basic'
-      ? { columnId: 'workload', widthPercent: PLATFORM_TABLE_PHONE_IDENTITY_WIDTH_PERCENT }
+      ? {
+          columnId: 'workload',
+          widthPercent:
+            layout === 'compact'
+              ? PLATFORM_TABLE_NARROW_IDENTITY_WIDTH_PERCENT
+              : PLATFORM_TABLE_PHONE_IDENTITY_WIDTH_PERCENT,
+        }
       : undefined,
   );
 
@@ -272,9 +278,10 @@ export const RECOVERABLE_COLUMNS: readonly BackupTableColumn<RecoverableColumnId
 ];
 
 const RECOVERABLE_VISIBLE: Record<ProxmoxBackupsTableLayoutMode, readonly RecoverableColumnId[]> = {
-  // A recovery-point feed starts with identity, source, age, and verification.
-  // Location, size, and verbose details progressively return with usable room.
-  compact: ['workload', 'source', 'location', 'created', 'size', 'state'],
+  // A recovery-point feed starts with identity, source, location, age, and
+  // verification. Size and verbose details progressively return with usable
+  // room; the full values remain available through their title affordance.
+  compact: ['workload', 'source', 'location', 'created', 'state'],
   basic: ['workload', 'source', 'location', 'created', 'state'],
   operational: ['workload', 'type', 'source', 'location', 'created', 'size', 'state'],
   expanded: ['workload', 'type', 'targetId', 'source', 'location', 'created', 'size', 'state'],
@@ -285,7 +292,7 @@ const RECOVERABLE_WEIGHTS: Record<
   ProxmoxBackupsTableLayoutMode,
   Partial<Record<RecoverableColumnId, number>>
 > = {
-  compact: { workload: 30, source: 14, location: 16, created: 14, size: 13, state: 13 },
+  compact: { workload: 40, source: 15, location: 20, created: 15, state: 10 },
   basic: { workload: 28, source: 14, location: 23, created: 18, state: 17 },
   operational: {
     workload: 24,
@@ -335,7 +342,13 @@ export const getRecoverableColumnWidthStyle = (
     RECOVERABLE_WEIGHTS[layout],
     RECOVERABLE_VISIBLE[layout],
     layout === 'compact' || layout === 'basic'
-      ? { columnId: 'workload', widthPercent: PLATFORM_TABLE_PHONE_IDENTITY_WIDTH_PERCENT }
+      ? {
+          columnId: 'workload',
+          widthPercent:
+            layout === 'compact'
+              ? PLATFORM_TABLE_NARROW_IDENTITY_WIDTH_PERCENT
+              : PLATFORM_TABLE_PHONE_IDENTITY_WIDTH_PERCENT,
+        }
       : undefined,
   );
 

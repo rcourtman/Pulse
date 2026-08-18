@@ -1,4 +1,4 @@
-import { type Component, type JSX } from 'solid-js';
+import { For, type Component, type JSX } from 'solid-js';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { TableCell } from '@/components/shared/Table';
 import { ResourceNameWithWebInterfaceLink } from '@/components/shared/WebInterfaceLink';
@@ -94,3 +94,20 @@ export const DockerResourceNameCell: Component<{
     </TableCell>
   );
 };
+
+export const DockerNativeDetailPanel: Component<{
+  title: string;
+  fields: readonly (readonly [string, string])[];
+}> = (props) => (
+  <dl class="grid gap-x-4 gap-y-2 text-[11px] sm:grid-cols-2">
+    <div class="sm:col-span-2 text-xs font-semibold text-base-content">{props.title}</div>
+    <For each={props.fields}>
+      {(field) => (
+        <div class="min-w-0">
+          <dt class="text-[10px] font-medium uppercase tracking-wide text-muted">{field[0]}</dt>
+          <dd class="break-words font-mono text-base-content">{field[1] || '—'}</dd>
+        </div>
+      )}
+    </For>
+  </dl>
+);

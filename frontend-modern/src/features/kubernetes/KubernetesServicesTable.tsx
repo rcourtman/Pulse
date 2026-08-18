@@ -168,7 +168,7 @@ export const KubernetesServicesTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="scope"
-                  class="w-[15%] md:w-[15%]"
+                  class="platform-table-mobile-w-15 md:w-[15%]"
                 >
                   Scope
                 </PlatformSortableTableHead>
@@ -176,25 +176,29 @@ export const KubernetesServicesTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="type"
-                  class="w-[15%] kubernetes-service-type-column md:w-[11%]"
+                  class="platform-table-mobile-w-15 kubernetes-service-type-column md:w-[11%]"
                 >
-                  Type
+                  <PlatformResponsiveTableLabel compact="Typ" full="Type" />
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead
                   kind="text"
                   sort={sort}
                   sortKey="clusterIp"
-                  class="w-[15%] kubernetes-service-ip-column md:w-[13%]"
+                  class="platform-table-mobile-w-15 kubernetes-service-ip-column md:w-[13%]"
                 >
                   <PlatformResponsiveTableLabel compact="IP" full="Cluster IP" />
                 </PlatformSortableTableHead>
-                <PlatformSortableTableHead kind="text" sort={sort} class="w-[10%] md:w-[13%]">
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  class="platform-table-mobile-w-10 md:w-[13%] platform-table-narrow-hidden"
+                >
                   <PlatformResponsiveTableLabel compact="Ext IP" full="External IPs" />
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead
                   kind="text"
                   sort={sort}
-                  class="w-[15%] kubernetes-service-ports-column md:w-[16%]"
+                  class="platform-table-mobile-w-15 kubernetes-service-ports-column md:w-[16%]"
                 >
                   Ports
                 </PlatformSortableTableHead>
@@ -275,7 +279,7 @@ export const KubernetesServicesTable: Component<{
                             {clusterIp()}
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                            class={`${getPlatformTableCellClassForKind('text')} text-base-content platform-table-narrow-hidden`}
                           >
                             <span
                               class="inline-block max-w-[12rem] truncate"

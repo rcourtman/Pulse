@@ -182,7 +182,7 @@ export const KubernetesDeploymentsTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="namespace"
-                  class="w-[15%] md:w-[20%]"
+                  class="platform-table-mobile-w-15 md:w-[20%]"
                 >
                   Namespace
                 </PlatformSortableTableHead>
@@ -198,7 +198,7 @@ export const KubernetesDeploymentsTable: Component<{
                   kind="numeric-value"
                   sort={sort}
                   sortKey="desired"
-                  class="w-[9%] md:w-[8%]"
+                  class="platform-table-mobile-w-10 md:w-[8%]"
                 >
                   <PlatformResponsiveTableLabel compact="Des" full="Desired" />
                 </PlatformSortableTableHead>
@@ -206,7 +206,7 @@ export const KubernetesDeploymentsTable: Component<{
                   kind="numeric-value"
                   sort={sort}
                   sortKey="updated"
-                  class="w-[9%] md:w-[8%]"
+                  class="platform-table-mobile-w-10 md:w-[8%] platform-table-narrow-hidden"
                 >
                   <PlatformResponsiveTableLabel compact="Upd" full="Updated" />
                 </PlatformSortableTableHead>
@@ -214,7 +214,7 @@ export const KubernetesDeploymentsTable: Component<{
                   kind="numeric-value"
                   sort={sort}
                   sortKey="ready"
-                  class="w-[13%] md:w-[7%]"
+                  class="platform-table-mobile-w-15 md:w-[7%]"
                 >
                   <PlatformResponsiveTableLabel compact="Rdy" full="Ready" />
                 </PlatformSortableTableHead>
@@ -222,7 +222,7 @@ export const KubernetesDeploymentsTable: Component<{
                   kind="numeric-value"
                   sort={sort}
                   sortKey="available"
-                  class="w-[13%] md:w-[9%]"
+                  class="platform-table-mobile-w-10 md:w-[9%]"
                 >
                   <PlatformResponsiveTableLabel compact="Avail" full="Available" />
                 </PlatformSortableTableHead>
@@ -230,7 +230,7 @@ export const KubernetesDeploymentsTable: Component<{
                   kind="numeric-value"
                   sort={sort}
                   sortKey="age"
-                  class="w-[11%] md:w-[6%]"
+                  class="platform-table-mobile-w-10 md:w-[6%] platform-table-narrow-hidden"
                 >
                   Age
                 </PlatformSortableTableHead>
@@ -297,7 +297,7 @@ export const KubernetesDeploymentsTable: Component<{
                             />
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content platform-table-narrow-hidden`}
                           >
                             <PlatformTableNumberValue
                               value={deployment.kubernetes?.updatedReplicas ?? 0}
@@ -321,7 +321,7 @@ export const KubernetesDeploymentsTable: Component<{
                             />
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content platform-table-narrow-hidden`}
                           >
                             <span title={deployment.kubernetes?.createdAt || ''}>
                               <PlatformTableRelativeTimeValue

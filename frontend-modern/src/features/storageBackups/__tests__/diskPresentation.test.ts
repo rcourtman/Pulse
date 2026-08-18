@@ -111,7 +111,7 @@ describe('diskPresentation', () => {
 
   it('returns critical presentation for failed disks', () => {
     expect(PHYSICAL_DISK_EMPTY_CARD_CLASS).toBe('text-center');
-    expect(PHYSICAL_DISK_TABLE_CLASS).toBe('w-full table-fixed text-xs');
+    expect(PHYSICAL_DISK_TABLE_CLASS).toBe('platform-table w-full table-fixed text-xs');
     expect(PHYSICAL_DISK_TABLE_ROW_HOVER_CLASS).toContain('hover:bg-surface-hover');
     expect(PHYSICAL_DISK_HEADER_DISK_CLASS).toContain('uppercase');
     expect(PHYSICAL_DISK_HEADER_DEVICE_CLASS).toContain('uppercase');
@@ -135,6 +135,9 @@ describe('diskPresentation', () => {
   });
 
   it('selects operator-priority disk layouts from the rendered table width', () => {
+    expect(getPhysicalDiskTableLayoutModeForContainer(0)).toBe('compact');
+    expect(getPhysicalDiskTableLayoutModeForContainer(359)).toBe('narrow');
+    expect(getPhysicalDiskTableLayoutModeForContainer(360)).toBe('compact');
     expect(getPhysicalDiskTableLayoutModeForContainer(519)).toBe('compact');
     expect(getPhysicalDiskTableLayoutModeForContainer(520)).toBe('basic');
     expect(getPhysicalDiskTableLayoutModeForContainer(649)).toBe('basic');
@@ -159,6 +162,10 @@ describe('diskPresentation', () => {
     expect(getPhysicalDiskColumnWidthPercent('compact', 'size')).toBe(14);
     expect(getPhysicalDiskColumnWidthPercent('operational', 'life')).toBe(9);
     expect(getPhysicalDiskColumnWidthPercent('compact', 'device')).toBe(0);
+    expect(isPhysicalDiskColumnVisible('narrow', 'life')).toBe(false);
+    expect(isPhysicalDiskColumnVisible('narrow', 'temp')).toBe(true);
+    expect(getPhysicalDiskColumnWidthPercent('narrow', 'disk')).toBe(40);
+    expect(getPhysicalDiskColumnWidthPercent('narrow', 'size')).toBe(15);
   });
 
   it('detects SMART warnings from counters', () => {

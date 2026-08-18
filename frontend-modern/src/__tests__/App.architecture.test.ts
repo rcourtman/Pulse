@@ -217,6 +217,17 @@ describe('App architecture', () => {
     );
   });
 
+  it('keeps narrow platform tables readable through the global app-shell contract', () => {
+    expect(appStylesSource).toContain('@container (max-width: 22.499rem)');
+    expect(appStylesSource).toContain(
+      '.table-scroll-shell > .table-fixed.platform-table th.platform-table-name-column',
+    );
+    expect(appStylesSource).toContain('width: 40%;');
+    expect(appStylesSource).toContain(':is(th, td).platform-table-narrow-hidden');
+    expect(appStylesSource).toContain('display: none;');
+    expect(appStylesSource).not.toContain('white-space: normal;\n    -webkit-box-orient');
+  });
+
   it('keeps native form and browser autofill paint on semantic theme tokens', () => {
     expect(appStylesSource).toContain('color-scheme: light');
     expect(appStylesSource).toContain('color-scheme: dark');

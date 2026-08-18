@@ -11,6 +11,7 @@ import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
 import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
 import {
   PlatformTableEmptyState,
+  PlatformResponsiveTableLabel,
   PlatformTableToolbar,
   createPlatformTableFilterState,
   getPlatformTableCellClassForKind,
@@ -181,7 +182,7 @@ export const VsphereAlertsTable: Component<{
                 <TableHead
                   class={`${getPlatformTableHeadClassForKind('badge')} platform-table-mobile-w-15 md:w-[10%]`}
                 >
-                  Severity
+                  <PlatformResponsiveTableLabel compact="Sev" full="Severity" />
                 </TableHead>
                 <TableHead
                   class={`${getPlatformTableHeadClassForKind('text')} platform-table-mobile-w-25 md:w-[34%]`}
@@ -191,7 +192,7 @@ export const VsphereAlertsTable: Component<{
                 <TableHead
                   class={`${getPlatformTableHeadClassForKind('text')} platform-table-mobile-w-15 md:w-[14%]`}
                 >
-                  vCenter
+                  <PlatformResponsiveTableLabel compact="VC" full="vCenter" />
                 </TableHead>
                 <TableHead
                   class={`${getPlatformTableHeadClassForKind('text')} hidden lg:table-cell md:w-[12%]`}
@@ -201,7 +202,7 @@ export const VsphereAlertsTable: Component<{
                 <TableHead
                   class={`${getPlatformTableHeadClassForKind('numeric-value')} platform-table-mobile-w-15 md:w-[10%]`}
                 >
-                  Started
+                  <PlatformResponsiveTableLabel compact="Age" full="Started" />
                 </TableHead>
               </>
             }

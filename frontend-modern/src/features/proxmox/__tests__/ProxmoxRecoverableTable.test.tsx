@@ -49,7 +49,7 @@ const renderTable = (layoutWidth: number) =>
 afterEach(cleanup);
 
 describe('ProxmoxRecoverableTable responsive columns', () => {
-  it('keeps source, location, size, recovery age, and state visible in compact containers', () => {
+  it('keeps source, location, recovery age, and state visible in compact containers', () => {
     renderTable(330);
 
     expect([...document.querySelectorAll('thead th')].map((th) => th.textContent?.trim())).toEqual([
@@ -57,7 +57,6 @@ describe('ProxmoxRecoverableTable responsive columns', () => {
       'Via',
       'Loc',
       'Age',
-      'Size',
       'State',
     ]);
     expect(document.body.textContent).toContain('VM 100');

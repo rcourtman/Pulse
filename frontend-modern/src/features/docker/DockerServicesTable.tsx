@@ -1,6 +1,7 @@
 import { For, Show, createMemo, type Component, type JSX } from 'solid-js';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { TableCell, TableRow } from '@/components/shared/Table';
+import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
 import { asTrimmedString } from '@/utils/stringUtils';
 import {
   PLATFORM_HEALTH_FILTER_OPTIONS,
@@ -14,6 +15,12 @@ import {
   PlatformTableShell,
   type PlatformTableSortValue,
 } from '@/features/platformPage/sharedPlatformPage';
+import {
+  PlatformResourceDetailToggleButton,
+  createPlatformResourceDetailState,
+  getPlatformResourceDetailRowClass,
+} from '@/features/platformPage/PlatformResourceDetailTableRow';
+import { DockerNativeDetailPanel } from './DockerNativeTableShared';
 import type { Resource } from '@/types/resource';
 import {
   compareDockerServices,
@@ -136,6 +143,7 @@ export const DockerServicesTable: Component<{
       getDockerServiceSortValue,
     ),
   );
+  const drawer = createPlatformResourceDetailState({ idPrefix: 'docker-service-detail' });
 
   const hasFilteredSourceRows = () => (props.sourceCount ?? props.resources.length) > 0;
 
@@ -207,7 +215,7 @@ export const DockerServicesTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="stack"
-                  class="hidden md:table-cell md:w-[9%]"
+                  class="platform-table-narrow-hidden hidden md:table-cell md:w-[9%]"
                 >
                   Stack
                 </PlatformSortableTableHead>
@@ -215,7 +223,7 @@ export const DockerServicesTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="image"
-                  class="hidden md:table-cell md:w-[19%]"
+                  class="platform-table-mobile-w-20 md:w-[19%]"
                 >
                   Image
                 </PlatformSortableTableHead>
@@ -223,7 +231,7 @@ export const DockerServicesTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="mode"
-                  class="w-[14%] md:w-[8%]"
+                  class="platform-table-mobile-w-10 w-[10%] md:w-[8%]"
                 >
                   Mode
                 </PlatformSortableTableHead>
@@ -231,7 +239,7 @@ export const DockerServicesTable: Component<{
                   kind="numeric-value"
                   sort={sort}
                   sortKey="desired"
-                  class="w-[14%] md:w-[8%]"
+                  class="platform-table-narrow-hidden platform-table-mobile-w-10 w-[10%] md:w-[8%]"
                 >
                   Desired
                 </PlatformSortableTableHead>
@@ -239,7 +247,7 @@ export const DockerServicesTable: Component<{
                   kind="numeric-value"
                   sort={sort}
                   sortKey="running"
-                  class="w-[14%] md:w-[8%]"
+                  class="platform-table-mobile-w-10 w-[10%] md:w-[8%]"
                 >
                   Running
                 </PlatformSortableTableHead>
@@ -247,14 +255,14 @@ export const DockerServicesTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="update"
-                  class="w-[15%] md:w-[12%]"
+                  class="platform-table-mobile-w-15 w-[15%] md:w-[12%]"
                 >
                   Update
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead
                   kind="text"
                   sort={sort}
-                  class="hidden md:table-cell md:w-[14%]"
+                  class="platform-table-narrow-hidden hidden md:table-cell md:w-[14%]"
                 >
                   Ports
                 </PlatformSortableTableHead>
@@ -262,7 +270,7 @@ export const DockerServicesTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="host"
-                  class="w-[15%] md:w-[10%]"
+                  class="platform-table-narrow-hidden platform-table-mobile-w-10 w-[10%] md:w-[10%]"
                 >
                   Host
                 </PlatformSortableTableHead>
@@ -279,70 +287,112 @@ export const DockerServicesTable: Component<{
                     const host = () => asTrimmedString(service.docker?.hostname) || '—';
                     const indicator = () => mapDockerServiceStatus(service);
                     const update = () => formatServiceUpdate(service.docker?.serviceUpdate);
+                    const detailRowId = () => drawer.detailRowId(service);
+                    const isExpanded = () => drawer.isExpanded(service);
                     return (
-                      <TableRow class="text-[11px] sm:text-xs" data-docker-service-row={service.id}>
-                        <TableCell class={getPlatformTableCellClassForKind('name')}>
-                          <div class="flex min-w-0 items-center gap-2">
-                            <StatusDot
-                              size="sm"
-                              variant={indicator().variant}
-                              title={indicator().label}
-                              ariaHidden
-                            />
-                            <span class="truncate font-semibold text-base-content" title={name()}>
-                              {name()}
+                      <>
+                        <TableRow
+                          class={`${getPlatformResourceDetailRowClass(isExpanded())} text-[11px] sm:text-xs`}
+                          aria-controls={isExpanded() ? detailRowId() : undefined}
+                          aria-expanded={isExpanded() ? 'true' : 'false'}
+                          data-docker-service-row={service.id}
+                          onClick={() => drawer.toggle(service)}
+                          onKeyDown={drawer.handleActivationKey(service)}
+                          tabIndex={0}
+                        >
+                          <TableCell class={getPlatformTableCellClassForKind('name')}>
+                            <div class="flex min-w-0 items-center gap-2">
+                              <PlatformResourceDetailToggleButton
+                                expanded={isExpanded()}
+                                resourceLabel={name()}
+                                controlsId={detailRowId()}
+                                onToggle={() => drawer.toggle(service)}
+                              />
+                              <StatusDot
+                                size="sm"
+                                variant={indicator().variant}
+                                title={indicator().label}
+                                ariaHidden
+                              />
+                              <span class="truncate font-semibold text-base-content" title={name()}>
+                                {name()}
+                              </span>
+                            </div>
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('text')} platform-table-narrow-hidden hidden text-base-content md:table-cell`}
+                          >
+                            <span class="truncate inline-block max-w-[8rem]" title={stack()}>
+                              {stack()}
                             </span>
-                          </div>
-                        </TableCell>
-                        <TableCell
-                          class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
-                        >
-                          <span class="truncate inline-block max-w-[8rem]" title={stack()}>
-                            {stack()}
-                          </span>
-                        </TableCell>
-                        <TableCell
-                          class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
-                        >
-                          <span class="truncate inline-block max-w-[18rem]" title={image()}>
-                            {image()}
-                          </span>
-                        </TableCell>
-                        <TableCell
-                          class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
-                        >
-                          {mode()}
-                        </TableCell>
-                        <TableCell
-                          class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
-                        >
-                          <PlatformTableNumberValue value={service.docker?.desiredTasks ?? 0} />
-                        </TableCell>
-                        <TableCell
-                          class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
-                        >
-                          <PlatformTableNumberValue value={service.docker?.runningTasks ?? 0} />
-                        </TableCell>
-                        <TableCell
-                          class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
-                        >
-                          <span class="truncate inline-block max-w-[10rem]" title={update().title}>
-                            {update().label}
-                          </span>
-                        </TableCell>
-                        <TableCell
-                          class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
-                        >
-                          <span class="font-mono text-[11px]" title={formatPorts(service.docker)}>
-                            {formatPorts(service.docker)}
-                          </span>
-                        </TableCell>
-                        <TableCell
-                          class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
-                        >
-                          {host()}
-                        </TableCell>
-                      </TableRow>
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('text')} text-base-content md:table-cell`}
+                          >
+                            <span class="truncate inline-block max-w-[18rem]" title={image()}>
+                              {image()}
+                            </span>
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                          >
+                            {mode()}
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} platform-table-narrow-hidden text-base-content`}
+                          >
+                            <PlatformTableNumberValue value={service.docker?.desiredTasks ?? 0} />
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
+                          >
+                            <PlatformTableNumberValue value={service.docker?.runningTasks ?? 0} />
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                          >
+                            <span
+                              class="truncate inline-block max-w-[10rem]"
+                              title={update().title}
+                            >
+                              {update().label}
+                            </span>
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('text')} platform-table-narrow-hidden hidden text-base-content md:table-cell`}
+                          >
+                            <span class="font-mono text-[11px]" title={formatPorts(service.docker)}>
+                              {formatPorts(service.docker)}
+                            </span>
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('text')} platform-table-narrow-hidden text-base-content`}
+                          >
+                            {host()}
+                          </TableCell>
+                        </TableRow>
+                        <Show when={isExpanded()}>
+                          <InlineDetailTableRow
+                            cellId={detailRowId()}
+                            colspan={9}
+                            data-inline-docker-service-detail-for={service.id}
+                          >
+                            <DockerNativeDetailPanel
+                              title={name()}
+                              fields={[
+                                ['Stack', stack()],
+                                ['Image', image()],
+                                ['Mode', mode()],
+                                ['Desired', String(service.docker?.desiredTasks ?? 0)],
+                                ['Running', String(service.docker?.runningTasks ?? 0)],
+                                ['Update', update().title || update().label],
+                                ['Ports', formatPorts(service.docker)],
+                                ['Host', host()],
+                              ]}
+                            />
+                          </InlineDetailTableRow>
+                        </Show>
+                      </>
                     );
                   }}
                 </For>

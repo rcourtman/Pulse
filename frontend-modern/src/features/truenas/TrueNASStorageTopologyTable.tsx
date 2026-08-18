@@ -384,7 +384,7 @@ export const TrueNASStorageTopologyTable: Component<{
                   sortKey="health"
                   class="platform-table-mobile-w-15 md:w-[14%]"
                 >
-                  Health
+                  <PlatformResponsiveTableLabel compact="H" full="Health" />
                 </PlatformSortableTableHead>
               </>
             }

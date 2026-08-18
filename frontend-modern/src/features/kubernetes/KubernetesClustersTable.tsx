@@ -195,7 +195,7 @@ export const KubernetesClustersTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="version"
-                  class="w-[15%] md:w-[10%]"
+                  class="platform-table-mobile-w-15 md:w-[10%]"
                 >
                   <PlatformResponsiveTableLabel compact="Ver" full="Version" />
                 </PlatformSortableTableHead>
@@ -203,7 +203,7 @@ export const KubernetesClustersTable: Component<{
                   kind="numeric-value"
                   sort={sort}
                   sortKey="nodes"
-                  class="w-[12%] md:w-[8%]"
+                  class="platform-table-mobile-w-10 md:w-[8%]"
                 >
                   Nodes
                 </PlatformSortableTableHead>
@@ -211,7 +211,7 @@ export const KubernetesClustersTable: Component<{
                   kind="numeric-value"
                   sort={sort}
                   sortKey="pods"
-                  class="w-[12%] md:w-[8%]"
+                  class="platform-table-mobile-w-10 md:w-[8%] platform-table-narrow-hidden"
                 >
                   Pods
                 </PlatformSortableTableHead>
@@ -227,7 +227,7 @@ export const KubernetesClustersTable: Component<{
                   kind="metric-bar"
                   sort={sort}
                   sortKey="cpu"
-                  class="w-[15%] md:w-[15%]"
+                  class="platform-table-mobile-w-15 md:w-[15%]"
                 >
                   CPU
                 </PlatformSortableTableHead>
@@ -235,7 +235,7 @@ export const KubernetesClustersTable: Component<{
                   kind="metric-bar"
                   sort={sort}
                   sortKey="memory"
-                  class="w-[16%] md:w-[15%]"
+                  class="platform-table-mobile-w-20 md:w-[15%]"
                 >
                   <PlatformResponsiveTableLabel compact="Mem" full="Memory" />
                 </PlatformSortableTableHead>
@@ -366,7 +366,7 @@ export const KubernetesClustersTable: Component<{
                             />
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content platform-table-narrow-hidden`}
                           >
                             <PlatformTableCountRatioValue
                               current={counts().pods.total - counts().pods.attention}

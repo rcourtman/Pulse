@@ -7,6 +7,7 @@ import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
 import {
   PlatformSortableTableHead,
+  PlatformResponsiveTableLabel,
   PlatformTableEmptyState,
   PlatformTableMetricFallback,
   PlatformTableToolbar,
@@ -215,14 +216,14 @@ export const VsphereDatastoresTable: Component<{
                   sortKey="capacity"
                   class="platform-table-mobile-w-25 md:w-[18%]"
                 >
-                  Capacity
+                  <PlatformResponsiveTableLabel compact="Cap" full="Capacity" />
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead
                   kind="text"
                   sort={sort}
                   class="platform-table-mobile-w-15 md:w-[14%]"
                 >
-                  Hosts
+                  <PlatformResponsiveTableLabel compact="H" full="Hosts" />
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead
                   kind="numeric-value"
@@ -230,7 +231,7 @@ export const VsphereDatastoresTable: Component<{
                   sortKey="vms"
                   class="platform-table-mobile-w-15 md:w-[7%]"
                 >
-                  VMs
+                  <PlatformResponsiveTableLabel compact="#" full="VMs" />
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead
                   kind="text"

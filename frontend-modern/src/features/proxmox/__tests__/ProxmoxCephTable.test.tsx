@@ -5,6 +5,8 @@ import type { Resource } from '@/types/resource';
 import {
   CEPH_PHONE_COLUMNS,
   CEPH_PHONE_COLUMN_WIDTHS,
+  CEPH_NARROW_COLUMNS,
+  CEPH_NARROW_COLUMN_WIDTHS,
   ProxmoxCephTable,
 } from '../ProxmoxCephTable';
 
@@ -27,7 +29,15 @@ const makeCluster = (id: string): Resource => ({
     numOsdsUp: 4,
     numOsdsIn: 4,
     numPGs: 128,
-    pools: [],
+    pools: [
+      {
+        name: 'rbd-primary',
+        storedBytes: 32_212_254_720,
+        availableBytes: 20_079_751_168,
+        objects: 1_764_309,
+        percentUsed: 59.2,
+      },
+    ],
     services: [],
   },
 });
@@ -54,6 +64,13 @@ describe('ProxmoxCephTable', () => {
     });
   });
 
+  it('uses a five-column identity-led projection below 360px', () => {
+    expect(CEPH_NARROW_COLUMNS).toEqual(['cluster', 'health', 'osds', 'pools', 'capacity']);
+    expect(
+      CEPH_NARROW_COLUMNS.reduce((total, column) => total + CEPH_NARROW_COLUMN_WIDTHS[column], 0),
+    ).toBe(100);
+  });
+
   it('returns focus to the cluster disclosure after closing an auto-opened detail', async () => {
     render(() => (
       <ProxmoxCephTable
@@ -71,6 +88,27 @@ describe('ProxmoxCephTable', () => {
 
     await waitFor(() => expect(disclosure).toHaveFocus());
     expect(disclosure).toHaveAccessibleName('Expand details for ceph-main');
+  });
+
+  it('exposes complete nested pool values by touch and keyboard', async () => {
+    render(() => (
+      <ProxmoxCephTable
+        resources={[makeCluster('ceph-main')]}
+        emptyIcon={<span />}
+        emptyTitle="No Ceph clusters"
+        emptyDescription="No clusters"
+      />
+    ));
+
+    const disclosure = screen.getByRole('button', { name: 'Expand details for rbd-primary' });
+    await fireEvent.click(disclosure);
+
+    const detail = document.querySelector('[data-inline-proxmox-ceph-pool-detail-for]');
+    expect(detail).toHaveTextContent('1,764,309');
+    expect(detail).toHaveTextContent('59.2%');
+
+    await fireEvent.keyDown(disclosure.closest('tr')!, { key: 'Enter' });
+    expect(document.querySelector('[data-inline-proxmox-ceph-pool-detail-for]')).toBeNull();
   });
 
   it('returns focus to the disclosure for a cluster opened by the user', async () => {

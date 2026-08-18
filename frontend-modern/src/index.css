@@ -1084,18 +1084,17 @@ body,
   }
 }
 
-/* Long identities may use a second line on the narrowest supported phones,
-   but they keep the same shared 30% track as every other platform table. */
-@container (max-width: 23.999rem) {
-  .table-scroll-shell > .table-fixed.platform-table td:first-child .truenas-app-name-value,
-  .table-scroll-shell > .table-fixed.platform-table td:first-child .kubernetes-service-name-value,
-  .table-scroll-shell > .table-fixed.platform-table td:first-child .kubernetes-network-name-value {
-    display: -webkit-box;
-    overflow: hidden;
-    overflow-wrap: anywhere;
-    white-space: normal;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
+/* At the narrowest supported phone width, spend the extra identity space once
+   at the shared boundary. Source tables still choose which lower-priority
+   field disappears; the shell only guarantees that the surviving identity
+   remains a single readable scan target. */
+@container (max-width: 22.499rem) {
+  .table-scroll-shell > .table-fixed.platform-table th.platform-table-name-column {
+    width: 40%;
+  }
+
+  .table-scroll-shell > .table-fixed.platform-table :is(th, td).platform-table-narrow-hidden {
+    display: none;
   }
 }
 

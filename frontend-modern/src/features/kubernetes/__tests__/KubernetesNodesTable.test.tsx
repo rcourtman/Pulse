@@ -73,10 +73,13 @@ describe('KubernetesNodesTable', () => {
       'platform-table-mobile-w-30',
     );
     expect(headers.find((header) => header.textContent?.includes('Cluster'))).toHaveClass(
-      'w-[14%]',
+      'platform-table-mobile-w-15',
     );
     expect(headers.find((header) => header.textContent?.includes('Capacity'))).toHaveClass(
-      'w-[14%]',
+      'platform-table-mobile-w-10',
+    );
+    expect(headers.find((header) => header.textContent?.includes('Role'))).toHaveClass(
+      'platform-table-narrow-hidden',
     );
   });
 

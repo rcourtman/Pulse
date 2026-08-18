@@ -146,7 +146,7 @@ export const DockerVolumesTable: Component<DockerNativeTableProps> = (props) => 
                   kind="text"
                   sort={sort}
                   sortKey="driver"
-                  class="md:w-[12%]"
+                  class="platform-table-mobile-w-15 md:w-[12%]"
                 >
                   Driver
                 </PlatformSortableTableHead>
@@ -154,7 +154,7 @@ export const DockerVolumesTable: Component<DockerNativeTableProps> = (props) => 
                   kind="text"
                   sort={sort}
                   sortKey="scope"
-                  class="hidden md:table-cell md:w-[10%]"
+                  class="platform-table-mobile-w-10 platform-table-narrow-hidden md:w-[10%]"
                 >
                   Scope
                 </PlatformSortableTableHead>
@@ -162,7 +162,7 @@ export const DockerVolumesTable: Component<DockerNativeTableProps> = (props) => 
                   kind="numeric-value"
                   sort={sort}
                   sortKey="size"
-                  class="md:w-[10%]"
+                  class="platform-table-mobile-w-15 md:w-[10%]"
                 >
                   Size
                 </PlatformSortableTableHead>
@@ -170,7 +170,7 @@ export const DockerVolumesTable: Component<DockerNativeTableProps> = (props) => 
                   kind="numeric-value"
                   sort={sort}
                   sortKey="refs"
-                  class="sm:hidden md:table-cell md:w-[8%]"
+                  class="platform-table-mobile-w-15 md:w-[8%]"
                 >
                   Refs
                 </PlatformSortableTableHead>
@@ -178,7 +178,7 @@ export const DockerVolumesTable: Component<DockerNativeTableProps> = (props) => 
                   kind="text"
                   sort={sort}
                   sortKey="created"
-                  class="sm:hidden md:table-cell md:w-[14%]"
+                  class="platform-table-mobile-w-15 md:w-[14%]"
                 >
                   Created
                 </PlatformSortableTableHead>
@@ -226,12 +226,12 @@ export const DockerVolumesTable: Component<DockerNativeTableProps> = (props) => 
                             {dockerTextValue(resource.docker?.driver)}
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('text')} platform-table-narrow-hidden hidden text-base-content md:table-cell`}
                           >
                             {dockerTextValue(resource.docker?.scope)}
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} sm:hidden text-base-content md:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                           >
                             {dockerByteValue(resource.docker?.sizeBytes)}
                           </TableCell>
@@ -241,7 +241,7 @@ export const DockerVolumesTable: Component<DockerNativeTableProps> = (props) => 
                             {dockerNumberValue(resource.docker?.refCount)}
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} sm:hidden text-base-content md:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                           >
                             <span
                               class="inline-block max-w-[12rem] truncate"

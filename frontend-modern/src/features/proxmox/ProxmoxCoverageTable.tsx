@@ -33,7 +33,6 @@ import {
   getCoverageColumns,
   getCoverageColumnWidthStyle,
   getCoverageLayoutForContainer,
-  isCompactBackupIdentityLayout,
   isCoverageEvidenceColumnVisible,
   type CoverageColumnId,
 } from './proxmoxBackupsTablePresentation';
@@ -57,6 +56,23 @@ const statusWordToneClass = (variant: StatusIndicatorVariant): string => {
   if (variant === 'danger') return 'text-red-600 dark:text-red-300';
   if (variant === 'warning') return 'text-amber-600 dark:text-amber-300';
   return 'text-base-content';
+};
+
+const compactPostureLabel = (posture: WorkloadCoverageRow['posture']): string => {
+  switch (posture) {
+    case 'protected':
+      return 'Prot.';
+    case 'attention':
+      return 'Attn.';
+    case 'unprotected':
+      return 'Unprot.';
+    case 'checking':
+      return 'Check';
+    case 'not-evaluated':
+      return 'N/A';
+    default:
+      return 'Unknown';
+  }
 };
 
 const taskWordVariant = (label: string): StatusIndicatorVariant => {
@@ -178,7 +194,7 @@ export function ProxmoxCoverageTable(props: {
                 direction={props.sortDirection}
                 onSort={props.onSort}
                 align="left"
-                headClass={getPlatformTableHeadClassForKind('name')}
+                headClass={`${getPlatformTableHeadClassForKind('name')} platform-table-mobile-w-30`}
               />
               <Show when={columnVisible('type')}>
                 <TableHead class={getPlatformTableHeadClassForKind('text')}>Type</TableHead>
@@ -290,15 +306,6 @@ export function ProxmoxCoverageTable(props: {
                               <div class="truncate font-semibold">
                                 {row.workload.name || row.workload.label}
                               </div>
-                              <Show when={isCompactBackupIdentityLayout(layoutMode())}>
-                                <div class="truncate text-[10px] font-normal text-muted">
-                                  {row.workload.typeLabel}
-                                  <Show when={row.workload.vmid}> {row.workload.vmid}</Show>
-                                  <Show when={layoutMode() === 'compact' && row.workload.node}>
-                                    {(node) => <> · {node()}</>}
-                                  </Show>
-                                </div>
-                              </Show>
                             </div>
                           </div>
                         </TableCell>
@@ -349,7 +356,12 @@ export function ProxmoxCoverageTable(props: {
                                 coveragePostureVariant(row.posture),
                               )}`}
                             >
-                              {getWorkloadRecoveryPostureLabel(row.posture)}
+                              <Show
+                                when={layoutMode() === 'compact'}
+                                fallback={getWorkloadRecoveryPostureLabel(row.posture)}
+                              >
+                                {compactPostureLabel(row.posture)}
+                              </Show>
                             </span>
                           </div>
                         </TableCell>
@@ -469,6 +481,24 @@ export function ProxmoxCoverageTable(props: {
                           colspan={columnCount()}
                           data-inline-detail-for={row.key}
                         >
+                          <div class="mb-2 grid grid-cols-2 gap-x-3 gap-y-1 rounded-md border border-border-subtle bg-surface px-2 py-1.5 text-[11px] sm:grid-cols-4">
+                            <span>
+                              <span class="font-medium text-base-content">Type:</span>{' '}
+                              <span class="text-muted">{row.workload.typeLabel}</span>
+                            </span>
+                            <span>
+                              <span class="font-medium text-base-content">Target:</span>{' '}
+                              <span class="font-mono text-muted">{row.workload.vmid || '—'}</span>
+                            </span>
+                            <span>
+                              <span class="font-medium text-base-content">Node:</span>{' '}
+                              <span class="text-muted">{row.workload.node || '—'}</span>
+                            </span>
+                            <span>
+                              <span class="font-medium text-base-content">Workload:</span>{' '}
+                              <span class="text-muted">{row.workload.label}</span>
+                            </span>
+                          </div>
                           <div class="mb-2 rounded-md border border-border-subtle bg-surface px-2 py-1.5 text-[11px] text-base-content">
                             <span class="font-medium">
                               {getWorkloadRecoveryPostureLabel(row.posture)}:
