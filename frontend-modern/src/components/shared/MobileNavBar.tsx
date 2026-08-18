@@ -95,7 +95,7 @@ function MobileNavDestinationContent(props: {
 
 export function MobileNavBar(props: MobileNavBarProps) {
   const mobileNav = useMobileNavBarState(props);
-  const tabIconClass = 'h-4 w-4 shrink-0';
+  const tabIconClass = 'h-3.5 w-3.5 shrink-0';
   const overflowHasBadge = () =>
     mobileNav.overflowDestinations().some(mobileNavDestinationHasBadge);
 
@@ -169,7 +169,7 @@ export function MobileNavBar(props: MobileNavBarProps) {
         </div>
       </Show>
 
-      <div data-mobile-nav-rail="fixed" class="flex min-w-0 items-stretch gap-0.5 px-1 py-1">
+      <div data-mobile-nav-rail="fixed" class="flex min-w-0 items-stretch gap-0.5 px-0.5 py-0.5">
         <For each={mobileNav.fixedDestinations()}>
           {(destination) => {
             const active = () => isMobileNavDestinationActive(destination, props.activeTab());

@@ -559,7 +559,7 @@ function App() {
                         {/* Main content area - shrinks when AI panel is open, scrolls independently */}
                         <div
                           ref={setAppScrollShellRef}
-                          class={`app-scroll-shell isolate flex-1 min-w-0 overflow-y-scroll bg-base text-base-content font-sans py-2 sm:py-6 transition-all duration-300`}
+                          class={`app-scroll-shell isolate flex-1 min-w-0 overflow-y-scroll bg-base text-base-content font-sans py-1 sm:py-6 transition-all duration-300`}
                         >
                           <AppLayout
                             connectionStatus={runtime.connectionStatus}

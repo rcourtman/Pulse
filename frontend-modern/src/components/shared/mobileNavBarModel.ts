@@ -177,7 +177,7 @@ export function getMobileNavTabButtonClass(options: {
   active: boolean;
   enabled?: boolean;
 }): string {
-  return `relative flex min-h-11 min-w-0 flex-1 select-none flex-col items-center justify-center gap-0.5 rounded-md px-1 py-0.5 text-[10px] font-medium transition-colors ${
+  return `relative flex min-h-10 min-w-0 flex-1 select-none flex-col items-center justify-center gap-0 rounded-md px-1 py-0.5 text-[9px] font-medium transition-colors ${
     options.active ? 'bg-blue-50 text-blue-700 dark:bg-blue-900 dark:text-blue-300' : 'text-muted'
   } ${options.enabled === false ? 'opacity-70' : ''}`.trim();
 }

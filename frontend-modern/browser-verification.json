@@ -1,36 +1,32 @@
 {
   "version": 1,
-  "base_sha": "e7cc3f4b675ec6b2fa891ef24fce4c86961964a0",
-  "verified_at": "2026-08-18T14:27:09Z",
+  "base_sha": "6ca27721ef6c00836bab7e169654692bbd1ed16e",
+  "verified_at": "2026-08-18T15:17:29Z",
   "result": "passed",
   "changed_paths": [
     "frontend-modern/src/App.tsx",
     "frontend-modern/src/AppLayout.tsx",
-    "frontend-modern/src/components/shared/FilterBar/FilterBar.tsx",
     "frontend-modern/src/components/shared/MobileNavBar.tsx",
-    "frontend-modern/src/components/shared/PageHeader.tsx",
     "frontend-modern/src/components/shared/Subtabs.tsx",
+    "frontend-modern/src/components/shared/SummaryRowActionButton.tsx",
     "frontend-modern/src/components/shared/mobileNavBarModel.ts",
+    "frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx",
     "frontend-modern/src/index.css"
   ],
   "content_sha256": {
-    "frontend-modern/src/App.tsx": "b418b30988f1e68a224537dc5ed8fe10f3101768e43ab33187391bd98c893c95",
-    "frontend-modern/src/AppLayout.tsx": "e19e6f92589f9c0f4ff27bba7822b855455d31bf3d8e9b503c90fba7c5e14e41",
-    "frontend-modern/src/components/shared/FilterBar/FilterBar.tsx": "18fb27ef3561fbc2303e8cbdf531f39b936f7e42aa164a607e83bd0382463cf7",
-    "frontend-modern/src/components/shared/MobileNavBar.tsx": "9d6e12106df9ab0d5e6bce1f8e552b11473e07f9ca857569ee423959cc5e4c91",
-    "frontend-modern/src/components/shared/PageHeader.tsx": "428d4c02380ba13a38d1ee7404c56b538562df904aecb66f11786ef0dbb8d259",
-    "frontend-modern/src/components/shared/Subtabs.tsx": "0d28e6c1a134ad0d63658c66e4114a96b6820a331c0a8df432d60acdc17569e2",
-    "frontend-modern/src/components/shared/mobileNavBarModel.ts": "039dfee662f5834cb183511a646758fd627a95ef2ffdcc5b808ef7c20190ab30",
-    "frontend-modern/src/index.css": "05dc7a4a5741172dd3bc2397c4268f01813b531a1dad43998b5d604d3d170108"
+    "frontend-modern/src/App.tsx": "2f8ec39abd969c9abc995105eccb9513a83dca9744d8c003d5b5e8cf0a69eec5",
+    "frontend-modern/src/AppLayout.tsx": "9c4ffef00d4d09f76b744fdb43c961c09436b2a1620607e48721eed3a848f44e",
+    "frontend-modern/src/components/shared/MobileNavBar.tsx": "a39ff906f6be2f35f3c6894615811e6e0566d068d7ac5ec89f14c0cb01d40751",
+    "frontend-modern/src/components/shared/Subtabs.tsx": "277d29d71d710382bb72cbe80791133bd9093e7529d525319d42e52adf7668ad",
+    "frontend-modern/src/components/shared/SummaryRowActionButton.tsx": "527c6226dd12a7b2e37167787db50c62c7de414658a163f6c316077bfaa2a862",
+    "frontend-modern/src/components/shared/mobileNavBarModel.ts": "fd6614f3cb8d90776fba51c04b887f152e2e88952f149b9b5eacc1e848dccd14",
+    "frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx": "7b8a9a56e4b31833d18c713a692a75148d786233a7a16c2339167517f7ad78a0",
+    "frontend-modern/src/index.css": "6e775ca1cba645cac91b1fffc6c9680fe898d24d29398919e095870d8559f8fa"
   },
   "routes": [
     "/proxmox/overview",
-    "/proxmox/storage",
     "/alerts/overview",
-    "/patrol",
-    "/actions",
-    "/settings/infrastructure",
-    "/docker/overview"
+    "/actions"
   ],
   "viewports": [
     {
@@ -47,22 +43,21 @@
     }
   ],
   "states": [
-    "Desktop Alerts overview with the full navigation shell and loaded alert content",
-    "Phone Proxmox overview with compact node, group, and workload rows",
+    "Desktop Alerts overview with the full navigation shell and loaded content",
+    "Phone Proxmox overview with 37-pixel node and workload rows",
+    "Phone Proxmox overview with the redundant Nodes card title removed",
     "Phone Proxmox filter controls in closed and expanded states",
     "Phone Proxmox node details in collapsed and expanded states",
-    "Phone Actions, Patrol, Settings infrastructure, and Docker overview pages",
-    "Phone settings loading and loaded states",
-    "Phone mobile-navigation overflow menu in closed and expanded states",
-    "Phone-width page headers with actions at 390 and wrapped title stress coverage at 320 pixels"
+    "Phone Actions page with compact page header and 44-pixel navigation rail",
+    "Phone Alerts overview with compact page header"
   ],
   "interactions": [
     "Opened and closed the Proxmox filter controls at 390 by 844",
     "Expanded and collapsed a Proxmox node detail row at 390 by 844",
-    "Navigated from Proxmox Overview to Storage through the compact subtab rail",
-    "Opened the mobile More menu, dismissed it with Escape, and confirmed focus returned to More navigation",
-    "Opened the mobile More menu and navigated to Docker overview",
-    "Confirmed document width matched viewport width on operational routes at 390 and 320 pixels",
-    "Confirmed the desktop mobile rail remained hidden and the Alerts overview loaded without horizontal overflow at 1440 by 900"
+    "Confirmed twelve host and workload rows remained visible in a 320 by 740 viewport",
+    "Confirmed document width matched viewport width at 390 and 320 pixels",
+    "Confirmed shared compact headers and navigation remained overflow-free on Actions and Alerts",
+    "Confirmed the desktop mobile rail remained hidden and Alerts retained its desktop geometry at 1440 by 900",
+    "Confirmed final browser diagnostics contained no warnings or errors"
   ]
 }

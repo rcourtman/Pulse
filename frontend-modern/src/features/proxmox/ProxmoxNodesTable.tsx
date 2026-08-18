@@ -237,6 +237,7 @@ export const ProxmoxNodesTable: Component<{
     >
       <PlatformTableShell
         title="Nodes"
+        cardClass="proxmox-nodes-card"
         tableClass={`${getProxmoxHostTableMinWidthClass(layoutMode())} table-fixed text-xs`}
         colgroup={
           <colgroup>

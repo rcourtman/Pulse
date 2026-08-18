@@ -16,8 +16,8 @@ describe('SummaryRowActionButton', () => {
     ));
 
     const button = screen.getByRole('button', { name: 'Collapse alpha' });
-    expect(button).toHaveClass('h-11');
-    expect(button).toHaveClass('w-11');
+    expect(button).toHaveClass('h-9');
+    expect(button).toHaveClass('w-9');
     expect(button).toHaveClass('sm:h-6');
     expect(button).toHaveClass('sm:w-6');
     expect(button).toHaveAttribute('aria-expanded', 'true');

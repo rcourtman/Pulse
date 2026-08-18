@@ -22,13 +22,14 @@ describe('Subtabs', () => {
     const tablist = screen.getByRole('tablist', { name: 'Resource detail sections' });
     expect(tablist).toHaveClass('overflow-x-auto');
     expect(tablist).toHaveClass('scrollbar-hide');
-    expect(tablist).toHaveClass('gap-4', 'sm:gap-6');
+    expect(tablist).toHaveClass('gap-3', 'sm:gap-6');
     expect(tablist).not.toHaveClass('flex-wrap');
 
     const historyTab = within(tablist).getByRole('tab', { name: 'History' });
     expect(historyTab).toHaveAttribute('aria-selected', 'true');
     expect(historyTab).toHaveClass('shrink-0');
     expect(historyTab).toHaveClass('whitespace-nowrap');
+    expect(historyTab).toHaveClass('min-h-9', 'text-xs', 'sm:min-h-10', 'sm:text-sm');
   });
 
   it('scrolls a newly selected tab into view', async () => {

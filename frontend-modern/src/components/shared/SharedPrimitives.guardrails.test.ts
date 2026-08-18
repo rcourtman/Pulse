@@ -8444,9 +8444,9 @@ describe('shared primitive guardrails', () => {
   it('keeps shared navigation and row actions usable at phone widths', () => {
     expect(subtabsSource).toContain('overflow-x-auto');
     expect(subtabsSource).toContain('whitespace-nowrap');
-    expect(subtabsSource).toContain('min-h-11');
+    expect(subtabsSource).toContain('min-h-9');
     expect(subtabsSource).toContain('sm:min-h-10');
-    expect(summaryRowActionButtonSource).toContain('h-11 w-11');
+    expect(summaryRowActionButtonSource).toContain('h-9 w-9');
     expect(searchFieldSource).toContain('min-h-11');
     expect(filterToolbarSource).toContain('min-h-11');
     expect(inlineDetailTableRowSource).toContain('max-w-[calc(100vw-3.5rem)]');

@@ -454,11 +454,11 @@
   @media (max-width: 640px) {
     .pulse-shell {
       max-width: 100%;
-      padding-inline: 0.375rem;
+      padding-inline: 0.25rem;
     }
 
     .pulse-shell--full-width {
-      --pulse-shell-padding-inline: 0.375rem;
+      --pulse-shell-padding-inline: 0.25rem;
     }
   }
 
@@ -474,19 +474,48 @@
 
   @media (max-width: 640px) {
     .pulse-panel {
-      padding: 0.375rem;
+      padding: 0.25rem;
     }
 
-    /* Phone layouts keep the same hierarchy while spending less of the first
-       viewport on repeated whitespace. Primary navigation and row expand
-       controls retain 44px touch targets; the surrounding shell is tightened. */
+    /* Phone layouts use an explicit compact operating mode. Controls remain
+       above the WCAG 2.2 minimum while table geometry and repeated chrome are
+       reduced enough to expose materially more live infrastructure at once. */
     .pulse-panel [data-page-header] + * {
-      margin-top: 0.75rem !important;
+      margin-top: 0.5rem !important;
     }
 
     .pulse-wide-data-surface.space-y-3 > :not([hidden]) ~ :not([hidden]),
     .pulse-wide-data-surface.space-y-4 > :not([hidden]) ~ :not([hidden]) {
-      margin-top: 0.5rem;
+      margin-top: 0.375rem;
+    }
+
+    .filter-bar {
+      margin-bottom: 0.375rem;
+      padding: 0.25rem;
+    }
+
+    .filter-bar > div {
+      gap: 0.25rem;
+    }
+
+    .filter-bar > div > div:first-child {
+      gap: 0.25rem;
+    }
+
+    .filter-bar input {
+      min-height: 2.25rem;
+      padding-top: 0.25rem;
+      padding-bottom: 0.25rem;
+      font-size: 0.75rem;
+    }
+
+    .filter-bar > div > div:first-child button {
+      height: 2.25rem;
+      min-height: 2.25rem;
+    }
+
+    .proxmox-nodes-card > :first-child {
+      display: none;
     }
 
     .pulse-wide-data-surface .table-scroll-shell > .table-fixed tbody td,
@@ -495,9 +524,29 @@
       padding-bottom: 0;
     }
 
+    .pulse-wide-data-surface .table-scroll-shell > .table-fixed th {
+      padding-top: 0.1875rem;
+      padding-bottom: 0.1875rem;
+      line-height: 1rem;
+    }
+
+    .pulse-wide-data-surface .host-row,
+    .pulse-wide-data-surface .workload-row {
+      height: 2.25rem;
+    }
+
+    .pulse-wide-data-surface .host-row > td:first-child > div,
+    .pulse-wide-data-surface .workload-row [data-workload-col='name'] > div {
+      gap: 0.25rem;
+    }
+
     .pulse-wide-data-surface .grouped-table-row > td > div {
       column-gap: 0.375rem;
       row-gap: 0.25rem;
+    }
+
+    .pulse-wide-data-surface .grouped-table-row {
+      height: 1.75rem;
     }
 
     .pulse-footer {
@@ -1141,8 +1190,8 @@ body,
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
-.pb-safe-or-16 {
-  padding-bottom: max(4rem, env(safe-area-inset-bottom, 4rem));
+.pb-safe-or-14 {
+  padding-bottom: max(3.5rem, env(safe-area-inset-bottom, 3.5rem));
 }
 
 /* Login page animations */

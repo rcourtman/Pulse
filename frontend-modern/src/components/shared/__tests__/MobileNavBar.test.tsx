@@ -106,8 +106,8 @@ describe('MobileNavBar', () => {
 
     const fixedRail = container.querySelector('[data-mobile-nav-rail="fixed"]');
     expect(fixedRail).toBeTruthy();
-    expect(fixedRail).toHaveClass('py-1');
-    expect(fixedRail).not.toHaveClass('py-1.5');
+    expect(fixedRail).toHaveClass('px-0.5', 'py-0.5');
+    expect(fixedRail).not.toHaveClass('py-1');
     expect(
       Array.from(fixedRail?.querySelectorAll('button[data-tab-id]') ?? []).map((button) =>
         button.getAttribute('data-tab-id'),
@@ -135,7 +135,7 @@ describe('MobileNavBar', () => {
     );
 
     const fixedProxmox = fixedRail?.querySelector('[data-tab-id="proxmox"]');
-    expect(fixedProxmox).toHaveClass('min-h-11', 'gap-0.5', 'py-0.5', 'text-[10px]');
+    expect(fixedProxmox).toHaveClass('min-h-10', 'gap-0', 'py-0.5', 'text-[9px]');
   });
 
   it('preserves route callbacks for fixed and overflow destinations', async () => {

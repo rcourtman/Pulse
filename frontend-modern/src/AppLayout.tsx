@@ -728,7 +728,7 @@ export function AppLayout(props: AppLayoutProps) {
 
   return (
     <div
-      class={`pulse-shell ${layoutStore.isFullWidth() || kioskMode() ? 'pulse-shell--full-width' : ''} ${!kioskMode() ? 'pb-safe-or-16 xl:pb-0' : ''}`}
+      class={`pulse-shell ${layoutStore.isFullWidth() || kioskMode() ? 'pulse-shell--full-width' : ''} ${!kioskMode() ? 'pb-safe-or-14 xl:pb-0' : ''}`}
     >
       {/* Skip-to-content link: visually hidden until focused, then
           appears as a button at the top-left. Lets keyboard users
@@ -760,7 +760,7 @@ export function AppLayout(props: AppLayoutProps) {
         />
       </Show>
       <div
-        class={`header mb-2 flex items-center gap-2 sm:mb-3 ${
+        class={`header mb-1 flex items-center gap-1 sm:mb-3 sm:gap-2 ${
           kioskMode()
             ? 'fixed top-0 left-0 right-0 z-50 justify-end bg-surface shadow-sm'
             : 'justify-between sm:grid sm:grid-cols-[1fr_auto_1fr] sm:items-center sm:gap-0'
@@ -798,9 +798,9 @@ export function AppLayout(props: AppLayoutProps) {
         }}
       >
         <Show when={!kioskMode()}>
-          <div class="flex items-center gap-2 sm:flex-initial sm:gap-2 sm:col-start-2 sm:col-end-3 sm:justify-self-center">
+          <div class="flex items-center gap-1.5 sm:col-start-2 sm:col-end-3 sm:flex-initial sm:justify-self-center sm:gap-2">
             <div
-              class={`pulse-brand-lockup flex items-center gap-2 ${!customBrandLogo() && brandMotionActive() ? 'animate-pulse-brand' : ''}`}
+              class={`pulse-brand-lockup flex items-center gap-1.5 sm:gap-2 ${!customBrandLogo() && brandMotionActive() ? 'animate-pulse-brand' : ''}`}
               data-testid="pulse-brand-lockup"
             >
               <Show when={customBrandLogo()} fallback={<PulseBrandMark class="h-5 w-5" />}>
@@ -814,7 +814,7 @@ export function AppLayout(props: AppLayoutProps) {
                 )}
               </Show>
               <Show when={customBrandName() || !customBrandLogo()}>
-                <span class="pulse-brand-wordmark text-lg font-medium text-base-content">
+                <span class="pulse-brand-wordmark text-base font-medium text-base-content sm:text-lg">
                   {customBrandName() || 'Pulse'}
                 </span>
               </Show>
@@ -827,13 +827,13 @@ export function AppLayout(props: AppLayoutProps) {
           </div>
         </Show>
         <div
-          class={`header-controls flex items-center gap-2 ${kioskMode() ? '' : 'justify-end sm:col-start-3 sm:col-end-4 sm:w-auto sm:justify-end sm:justify-self-end'}`}
+          class={`header-controls flex items-center gap-1 sm:gap-2 ${kioskMode() ? '' : 'justify-end sm:col-start-3 sm:col-end-4 sm:w-auto sm:justify-end sm:justify-self-end'}`}
         >
           <Show when={assistantLauncherVisible() && viewport.isBelow('lg')}>
             {renderAssistantLauncher(AI_CHAT_MOBILE_LAUNCHER_BUTTON_CLASS)}
           </Show>
           <Show when={props.hasAuth() && !props.needsAuth()}>
-            <div class="flex items-center gap-2">
+            <div class="flex items-center gap-1 sm:gap-2">
               <Show when={props.showOrgSwitcher()}>
                 <OrgSwitcher
                   orgs={props.organizations()}
@@ -845,7 +845,7 @@ export function AppLayout(props: AppLayoutProps) {
               <button
                 type="button"
                 onClick={toggleKioskMode}
-                class={`group relative flex h-11 w-11 items-center justify-center rounded-full text-xs transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 sm:h-10 sm:w-10 ${
+                class={`group relative flex h-9 w-9 items-center justify-center rounded-full text-xs transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 sm:h-10 sm:w-10 ${
                   kioskMode()
                     ? 'bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-900 dark:text-blue-300 dark:hover:bg-blue-800'
                     : 'bg-surface-hover text-base-content hover:bg-border'
@@ -868,7 +868,7 @@ export function AppLayout(props: AppLayoutProps) {
               <button
                 type="button"
                 onClick={props.handleLogout}
-                class="group relative flex h-11 w-11 items-center justify-center rounded-full bg-surface-hover text-xs text-base-content transition hover:bg-border focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 sm:h-10 sm:w-10"
+                class="group relative flex h-9 w-9 items-center justify-center rounded-full bg-surface-hover text-xs text-base-content transition hover:bg-border focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 sm:h-10 sm:w-10"
                 title="Logout"
                 aria-label="Logout"
               >
