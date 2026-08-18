@@ -195,6 +195,12 @@ describe('ActionAuditAPI', () => {
         name: 'Edge proxy',
         type: 'app-container',
       },
+      origin: {
+        surface: 'operational_trust_attention',
+        findingId: 'finding-1',
+        operationalRecordId: 'record/one',
+        evidenceIds: ['evidence-1'],
+      },
       plan: {
         actionId: 'action/one',
         requestId: 'request-1',
@@ -251,6 +257,12 @@ describe('ActionAuditAPI', () => {
       id: 'docker:container:web',
       name: 'Edge proxy',
       type: 'app-container',
+    });
+    expect(detail.audit.origin).toEqual({
+      surface: 'operational_trust_attention',
+      findingId: 'finding-1',
+      operationalRecordId: 'record/one',
+      evidenceIds: ['evidence-1'],
     });
     expect(detail.audit.request).not.toHaveProperty('resourceName');
     expect(detail.readOnly).toBe(true);

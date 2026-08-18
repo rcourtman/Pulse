@@ -1697,9 +1697,12 @@ served clones. Proof: `TestClonedResourcesPreservePlatformAdmission` and
     proposed the action (e.g. Patrol) so decisions and terminal outcomes
     can be reconciled back onto that surface's records. The Actions queue and
     decision packet render that trusted surface as bounded product copy such as
-    `From Patrol`; they do not expose an internal surface token or invent a
-    return link when origin metadata lacks a canonical route. It is set only by
-    in-process planning callers through the action lifecycle service's
+    `From Patrol`. A Patrol action carrying the trusted `operationalRecordId`
+    exposes an exact return link through the canonical route-backed attention
+    selection. Older Patrol actions without that identifier may return to the
+    Patrol home but do not claim an exact record link. Internal surface tokens
+    remain hidden. Origin is set only by in-process planning callers through
+    the action lifecycle service's
     plan options; the public `POST /api/actions/plan` body must never be
     able to claim a first-party origin. `NormalizeActionOrigin` trims
     fields, sorts and deduplicates evidence IDs, and collapses an all-empty

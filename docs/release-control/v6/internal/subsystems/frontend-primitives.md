@@ -5781,7 +5781,13 @@ entry composes the existing shared review dialog, route, API client, and durable
 action identity rather than creating another action client. When the trusted
 audit origin is present, both the queue row and decision packet show bounded
 product attribution such as `From Patrol`; unknown first-party surfaces fall
-back to `From Pulse`, and absent origin remains absent rather than guessed.
+back to `From Pulse`, and absent origin remains absent rather than guessed. The
+shared action review also exposes `Open Patrol record` only when a Patrol origin
+carries its canonical `operationalRecordId`; the link targets the existing
+route-backed Patrol attention selection and never derives identity from display
+copy, resource IDs, finding IDs, or action reasons. Older correlated Patrol
+actions may expose `Open Patrol` to the Patrol home, but never label that
+fallback as a record-specific return.
 
 ### Protection posture presentation boundary
 

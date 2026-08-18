@@ -1,13 +1,18 @@
 import { Show, createEffect, createMemo, createSignal, onCleanup, type Component } from 'solid-js';
 import XIcon from 'lucide-solid/icons/x';
+import ArrowUpRightIcon from 'lucide-solid/icons/arrow-up-right';
 import { ResourceActionsAPI } from '@/api/resourceActions';
-import { Button } from '@/components/shared/Button';
+import { Button, ButtonLink } from '@/components/shared/Button';
 import { Dialog } from '@/components/shared/Dialog';
 import { notificationStore } from '@/stores/notifications';
 import { presentationPolicyIsReadOnly } from '@/stores/sessionPresentationPolicy';
 import type { ActionDetailResponse } from '@/types/actionAudit';
 import { ActionDecisionPacket } from './ActionDecisionPacket';
-import { formatActionName, getActionResourcePresentation } from './actionPresentation';
+import {
+  formatActionName,
+  getActionOriginDestination,
+  getActionResourcePresentation,
+} from './actionPresentation';
 import { getAPTActionPresentation } from './aptActionPresentation';
 
 export const ActionReviewDialog: Component<{
@@ -19,6 +24,7 @@ export const ActionReviewDialog: Component<{
   const [error, setError] = createSignal('');
   const [clock, setClock] = createSignal(Date.now());
   const audit = () => props.detail?.audit;
+  const originDestination = () => getActionOriginDestination(audit()?.origin);
   const resource = createMemo(() => {
     const record = audit();
     return record
@@ -245,6 +251,19 @@ export const ActionReviewDialog: Component<{
                   {resource().label}
                   <Show when={resource().detail}> · {resource().detail}</Show>
                 </p>
+                <Show when={originDestination()}>
+                  {(destination) => (
+                    <ButtonLink
+                      href={destination().href}
+                      variant="ghost"
+                      size="xs"
+                      class="mt-2 -ml-2.5 gap-1.5"
+                    >
+                      {destination().exact ? 'Open Patrol record' : 'Open Patrol'}
+                      <ArrowUpRightIcon class="h-3.5 w-3.5" aria-hidden="true" />
+                    </ButtonLink>
+                  )}
+                </Show>
               </div>
               <Button
                 variant="ghost"

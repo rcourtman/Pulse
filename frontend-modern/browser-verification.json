@@ -1,25 +1,19 @@
 {
   "version": 1,
-  "base_sha": "ac4116e09b85055e281aee3895ba65012e747215",
-  "verified_at": "2026-08-18T11:35:39Z",
+  "base_sha": "bcea56db970cd59f2f703584dc3ad2c88bc40910",
+  "verified_at": "2026-08-18T12:14:30Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/features/actions/ActionDecisionPacket.tsx",
+    "frontend-modern/src/features/actions/ActionReviewDialog.tsx",
     "frontend-modern/src/features/actions/actionPresentation.ts",
-    "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx",
-    "frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx",
-    "frontend-modern/src/pages/Actions.tsx",
-    "frontend-modern/src/utils/patrolSummaryPresentation.ts"
+    "frontend-modern/src/types/actionAudit.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/actions/ActionDecisionPacket.tsx": "4bd177108ab987198c977d1c763a0ca21293d665b71520364eb168a312ac0ac0",
-    "frontend-modern/src/features/actions/actionPresentation.ts": "924734c195777644da82dfe4190eaa18ba4491d75ad67204b3bb39bd9f3eb1c8",
-    "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx": "8b28588b1117a87a7c22944b29446a9b6944abf402b5ea162bbe88635e8a8f35",
-    "frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx": "edb3703a3f28c562fa16b8762c8907651504d8aff0ae006a130c2d3a3afe98be",
-    "frontend-modern/src/pages/Actions.tsx": "7649d29a5a32650265fd745c07eab2e5c42f397a2e0a6da3b5563170daade9dd",
-    "frontend-modern/src/utils/patrolSummaryPresentation.ts": "22416045104e977f1a8ec7995a32a5c5943ae98a02d5bbae5aed0bab29ed2330"
+    "frontend-modern/src/features/actions/ActionReviewDialog.tsx": "5e489d440ce9b1e9f106a543a79b09d0b4d73aed65c9757688efa39b2d6fa833",
+    "frontend-modern/src/features/actions/actionPresentation.ts": "776904de782fb0e208f28de7eb6e7d8ea9ac8746c3b2fa1cd7ee9b6ff1bcb985",
+    "frontend-modern/src/types/actionAudit.ts": "435934beca93e8683ec5177e051b8a8d06f2d3eb4fb09a082e4ead30282bbc32"
   },
-  "routes": ["/patrol", "/actions"],
+  "routes": ["/actions", "/patrol"],
   "viewports": [
     {
       "width": 1280,
@@ -31,20 +25,17 @@
     }
   ],
   "states": [
-    "Patrol Inbox default queue with canonical checked-resource recency and human-readable incident titles",
-    "Patrol selected decision at the first and second live queue positions on desktop and mobile",
-    "Patrol selected detail with latest-observation age, lifecycle controls, and evidence disclosure collapsed",
-    "Activity with verified outcomes, separate Actions and Patrol-record handoffs, and no collapsed border artifact",
-    "Expanded Patrol records with explicit raw-record versus Inbox-decision relationship copy",
-    "Actions Open queue with Patrol origin badges and the route selected in desktop and mobile navigation",
-    "Actions governed review with Patrol origin repeated in the decision packet"
+    "Actions Open queue with Patrol-origin records and a selected governed review",
+    "Older Patrol action review with an honest Open Patrol fallback and no record-specific claim",
+    "Patrol Inbox opened with a canonical encoded attention record selected in the detail workspace",
+    "Mobile action review with the Patrol return control visible above the decision packet",
+    "Mobile Patrol exact-record selection with the intended decision detail visible"
   ],
   "interactions": [
-    "Used the live in-app Browser to start review and move from Decision 1 to Decision 2 at desktop and 390-pixel phone widths",
-    "Confirmed previous and next controls, resource-first titles, latest-observation age, and neutral action verification framing",
-    "Opened Activity, inspected the collapsed handoffs, expanded Patrol records, and confirmed decision/history separation",
-    "Opened Actions from Patrol, inspected From Patrol badges, and opened a governed action review to confirm its Origin field",
-    "Verified the mobile document and body widths equal the 390-pixel viewport with no horizontal overflow",
-    "Confirmed the final stable Patrol and Actions pass produced no new console warnings or errors"
+    "Opened a Patrol-origin action from the live Actions queue and used Open Patrol to return to the Patrol Inbox",
+    "Navigated through the canonical encoded attention route and confirmed it selected the exact operational record",
+    "Repeated the selected action review and exact Patrol selection at a 390 by 844 viewport",
+    "Verified the mobile dialog remained within the viewport and document width equalled the 390-pixel viewport",
+    "Confirmed the final browser diagnostics contained no warning or error entries"
   ]
 }

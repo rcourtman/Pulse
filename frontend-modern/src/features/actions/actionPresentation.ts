@@ -8,6 +8,7 @@ import type {
   ActionPolicyReasonCode,
   ActionVerificationTruthStatus,
 } from '@/types/actionAudit';
+import { buildPatrolAttentionPath, PATROL_PATH } from '@/routing/resourceLinks';
 import type { MetadataBadgeTone } from '@/components/shared/MetadataBadge';
 import type { UpgradeDestination } from '@/utils/upgradeNavigation';
 
@@ -21,22 +22,39 @@ export const formatActionName = (value: string): string =>
           .trim()
           .replace(/\b\w/g, (letter) => letter.toUpperCase());
 
+const getActionOriginSurface = (origin?: ActionAuditOrigin): string =>
+  origin?.surface.trim().toLowerCase() ?? '';
+
+const isPatrolActionOrigin = (surface: string): boolean =>
+  surface === 'operational_trust_attention' ||
+  surface === 'patrol_control' ||
+  surface === 'pulse_patrol' ||
+  surface === 'patrol';
+
 export const getActionOriginLabel = (origin?: ActionAuditOrigin): string | undefined => {
-  const surface = origin?.surface.trim().toLowerCase();
+  const surface = getActionOriginSurface(origin);
   if (!surface) return undefined;
-  if (
-    surface === 'operational_trust_attention' ||
-    surface === 'patrol_control' ||
-    surface === 'pulse_patrol' ||
-    surface === 'patrol'
-  ) {
-    return 'From Patrol';
-  }
+  if (isPatrolActionOrigin(surface)) return 'From Patrol';
   if (surface === 'pulse_assistant' || surface === 'assistant' || surface === 'chat') {
     return 'From Assistant';
   }
   if (surface === 'mcp' || surface === 'pulse_mcp') return 'From MCP';
   return 'From Pulse';
+};
+
+export interface ActionOriginDestination {
+  href: string;
+  exact: boolean;
+}
+
+export const getActionOriginDestination = (
+  origin?: ActionAuditOrigin,
+): ActionOriginDestination | undefined => {
+  if (!isPatrolActionOrigin(getActionOriginSurface(origin))) return undefined;
+  const operationalRecordId = origin?.operationalRecordId?.trim();
+  return operationalRecordId
+    ? { href: buildPatrolAttentionPath(operationalRecordId), exact: true }
+    : { href: PATROL_PATH, exact: false };
 };
 
 export interface ActionInboxStatePresentation {

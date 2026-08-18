@@ -1,4 +1,5 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
+import { Route, Router } from '@solidjs/router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ResourceActionsAPI } from '@/api/resourceActions';
 import { syncSessionPresentationPolicy } from '@/stores/sessionPresentationPolicy';
@@ -114,6 +115,51 @@ const detail = (audit: ActionAuditRecord): ActionDetailResponse => ({
 });
 
 describe('ActionReviewDialog trust gates', () => {
+  it('links a trusted Patrol action back to its exact operational record', () => {
+    const audit = makeAudit('resolved', '2099-01-01T00:00:00Z');
+    audit.origin = {
+      surface: 'operational_trust_attention',
+      operationalRecordId: 'record/one',
+    };
+    render(() => (
+      <Router>
+        <Route
+          path="*"
+          component={() => <ActionReviewDialog detail={detail(audit)} onClose={vi.fn()} />}
+        />
+      </Router>
+    ));
+    expect(screen.getByRole('link', { name: 'Open Patrol record' })).toHaveAttribute(
+      'href',
+      '/patrol?attention=record%2Fone',
+    );
+  });
+
+  it('returns older Patrol actions to Patrol without claiming an exact record link', () => {
+    const audit = makeAudit('resolved', '2099-01-01T00:00:00Z');
+    audit.origin = { surface: 'operational_trust_attention' };
+    render(() => (
+      <Router>
+        <Route
+          path="*"
+          component={() => <ActionReviewDialog detail={detail(audit)} onClose={vi.fn()} />}
+        />
+      </Router>
+    ));
+    expect(screen.getByRole('link', { name: 'Open Patrol' })).toHaveAttribute('href', '/patrol');
+    expect(screen.queryByRole('link', { name: 'Open Patrol record' })).not.toBeInTheDocument();
+  });
+
+  it('does not treat another origin surface as Patrol even when it carries a record id', () => {
+    const audit = makeAudit('resolved', '2099-01-01T00:00:00Z');
+    audit.origin = {
+      surface: 'pulse_assistant',
+      operationalRecordId: 'record/one',
+    };
+    render(() => <ActionReviewDialog detail={detail(audit)} onClose={vi.fn()} />);
+    expect(screen.queryByRole('link', { name: 'Open Patrol record' })).not.toBeInTheDocument();
+  });
+
   it('offers no approve or run control for legacy provenance', () => {
     render(() => (
       <ActionReviewDialog

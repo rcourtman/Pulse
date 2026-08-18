@@ -2292,6 +2292,11 @@ a new API state machine, queue contract, or verification-accounting field.
    the lifecycle normalizes and de-duplicates them before persistence. Model
    output cannot mint this audit provenance, and the IDs grant no planning,
    approval, or execution authority.
+   The frontend action-audit contract projects every broker-owned origin
+   correlation field, including `operationalRecordId` and `evidenceIds`, without
+   treating either as operator-authored data. Consumers may build an exact
+   Patrol return route from `operationalRecordId` only for a recognized Patrol
+   surface; absence of that field remains an unavailable return route.
    Authority proof: `TestContract_PatrolActionBrokerKeepsPolicyExecutionCoreOwned` in
    `internal/api/contract_test.go`.
    The proposal enters that broker from the investigation-only

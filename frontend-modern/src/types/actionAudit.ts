@@ -283,6 +283,8 @@ export interface ActionAuditOrigin {
   findingId?: string;
   investigationId?: string;
   proposalId?: string;
+  operationalRecordId?: string;
+  evidenceIds?: string[];
 }
 
 export interface PatrolActionReference {

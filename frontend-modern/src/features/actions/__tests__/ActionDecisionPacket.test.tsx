@@ -24,6 +24,8 @@ const audit: ActionAuditRecord = {
     findingId: 'finding-1',
     investigationId: 'investigation-1',
     proposalId: 'proposal-1',
+    operationalRecordId: 'record/one',
+    evidenceIds: ['evidence-1'],
   },
   plan: {
     actionId: 'action-1',
