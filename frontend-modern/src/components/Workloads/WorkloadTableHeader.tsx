@@ -31,6 +31,8 @@ export const getWorkloadColumnHeaderLabel = (
 ): string => {
   if (compact && columnId === 'availability') return 'Up';
   if (compact && columnId === 'memory') return 'Mem';
+  if (compact && columnId === 'info') return 'ID';
+  if (compact && columnId === 'uptime') return 'Age';
   return columnId === 'memory' && memoryDisplayBasis === 'host'
     ? `${defaultLabel} · Host`
     : defaultLabel;
@@ -67,12 +69,16 @@ export function WorkloadTableHeader(props: WorkloadTableHeaderProps) {
             const sortKeyForCol = col.sortKey as WorkloadSortKey | undefined;
             const isSortable = !!sortKeyForCol;
             const isSorted = () => sortKeyForCol && props.sortKey() === sortKeyForCol;
+            const usesCompactHeader = () =>
+              props.isMobile() ||
+              props.workloadTableLayoutMode() === 'phone' ||
+              props.workloadTableLayoutMode() === 'mobile';
             const label = () =>
               getWorkloadColumnHeaderLabel(
                 col.id,
                 col.label,
                 props.workloadMemoryDisplayBasis(),
-                props.isMobile(),
+                usesCompactHeader(),
               );
 
             return (
@@ -97,7 +103,7 @@ export function WorkloadTableHeader(props: WorkloadTableHeaderProps) {
                 }
               >
                 <div class={`flex min-h-[14px] items-center gap-0.5 ${alignClasses().flexJustify}`}>
-                  {col.icon ? (
+                  {col.icon && !(usesCompactHeader() && col.id === 'uptime') ? (
                     <>
                       <span class="flex items-center" aria-hidden="true">
                         {col.icon}

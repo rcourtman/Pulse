@@ -1091,14 +1091,14 @@ describe('GUEST_COLUMNS', () => {
 
   it('derives mobile overrides from the canonical guest column model', () => {
     expect(getGuestColumnStyle('name', true)).toEqual({
-      width: '62%',
-      'max-width': '62%',
+      width: '33%',
+      'max-width': '33%',
     });
     expect(getGuestColumnStyle('cpu', true)).toEqual({
-      width: '15%',
-      'max-width': '15%',
+      width: '11%',
+      'max-width': '11%',
     });
-    expect(getGuestColumnWidthStyle('name', true)).toEqual({ width: '62%' });
+    expect(getGuestColumnWidthStyle('name', true)).toEqual({ width: '33%' });
     expect(getGuestColumnWidthStyle('diskIo', true)).toEqual({ width: '170px' });
   });
 
@@ -1112,15 +1112,22 @@ describe('GUEST_COLUMNS', () => {
     expect(phoneColumns.map((column) => column.id)).toEqual([
       'name',
       'availability',
+      'type',
+      'info',
       'cpu',
       'memory',
+      'disk',
+      'uptime',
     ]);
     expect(mobileColumns.map((column) => column.id)).toEqual([
       'name',
       'availability',
+      'type',
+      'info',
       'cpu',
       'memory',
       'disk',
+      'uptime',
     ]);
     expect(tabletColumns.map((column) => column.id)).toEqual([
       'name',
@@ -1130,6 +1137,7 @@ describe('GUEST_COLUMNS', () => {
       'cpu',
       'memory',
       'disk',
+      'uptime',
     ]);
     expect(compactColumns.map((column) => column.id)).toEqual([
       'name',

@@ -74,12 +74,15 @@ import {
 // metricDisplayMode signal so the hosts table swaps to MetricMiniSparkline
 // whenever the user flips the toggle.
 
-const formatNodeUptime = (seconds: number | undefined): { label: string; warn: boolean } => {
+const formatNodeUptime = (
+  seconds: number | undefined,
+  compact = false,
+): { label: string; warn: boolean } => {
   if (!seconds || seconds <= 0) return { label: '—', warn: false };
   // Full "26d 4h" precision matches v5 and the guest rows below; <1h keeps
   // the v5 "recently restarted" highlight.
   return {
-    label: formatPlatformTableUptimeValue(seconds, { compact: false }),
+    label: formatPlatformTableUptimeValue(seconds, { compact }),
     warn: seconds < 3_600,
   };
 };
@@ -260,7 +263,10 @@ export const ProxmoxNodesTable: Component<{
               <PlatformSortableTableHead kind={column.kind} sort={sort} sortKey={column.id}>
                 {(layoutMode() === 'phone' || layoutMode() === 'mobile') && column.id === 'memory'
                   ? 'Mem'
-                  : column.label}
+                  : (layoutMode() === 'phone' || layoutMode() === 'mobile') &&
+                      column.id === 'uptime'
+                    ? 'Age'
+                    : column.label}
               </PlatformSortableTableHead>
             )}
           </For>
@@ -312,7 +318,11 @@ export const ProxmoxNodesTable: Component<{
                 return 'Online';
               });
               const isOnline = createMemo(() => availabilityLabel() === 'Online');
-              const uptime = () => formatNodeUptime(isOnline() ? node.uptime : undefined);
+              const usesCompactMetrics = () =>
+                layoutMode() === 'phone' || layoutMode() === 'mobile';
+              const uptime = () =>
+                formatNodeUptime(isOnline() ? node.uptime : undefined, usesCompactMetrics());
+              const fullUptime = () => formatNodeUptime(isOnline() ? node.uptime : undefined).label;
               const metricsKey = () => buildMetricKeyForUnifiedResource(node);
               const temperature = () => node.temperature;
               const alertResourceIds = () => hostOverrideIdCandidates(node);
@@ -442,6 +452,7 @@ export const ProxmoxNodesTable: Component<{
                             ? 'text-orange-600 dark:text-orange-400'
                             : 'text-base-content'
                         }`}
+                        title={usesCompactMetrics() ? fullUptime() : undefined}
                       >
                         {uptime().label}
                       </TableCell>
@@ -527,7 +538,11 @@ export const ProxmoxNodesTable: Component<{
                             fallback={
                               <StackedDiskBar
                                 mode={
-                                  (node.agent?.disks?.length ?? 0) > 1 ? 'vertical-bars' : undefined
+                                  usesCompactMetrics()
+                                    ? 'aggregate'
+                                    : (node.agent?.disks?.length ?? 0) > 1
+                                      ? 'vertical-bars'
+                                      : undefined
                                 }
                                 disks={normalizeDiskArray(node.agent?.disks)}
                                 aggregateDisk={aggregateDisk()}

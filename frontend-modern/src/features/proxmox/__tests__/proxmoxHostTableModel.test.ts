@@ -8,25 +8,30 @@ import {
 } from '../proxmoxHostTableModel';
 
 describe('proxmoxHostTableModel', () => {
-  it('reserves phone space for an identifying node label and the two fastest health signals', () => {
+  it('shows the full operational metric track at phone width', () => {
     const columns = getProxmoxHostVisibleColumnsForLayout('phone');
     const ids = columns.map((column) => column.id);
 
-    expect(ids).toEqual(['node', 'cpu', 'memory']);
+    expect(ids).toEqual(['node', 'cpu', 'memory', 'disk', 'temp', 'uptime']);
     expect(getProxmoxHostTableMinWidthClass('phone')).toBe('min-w-[0px]');
-    expect(getProxmoxHostColumnWidthStyle('node', 'phone', ids)).toEqual({ width: '60%' });
+    expect(getProxmoxHostColumnWidthStyle('node', 'phone', ids)).toEqual({ width: '32%' });
+    expect(getProxmoxHostColumnWidthStyle('disk', 'phone', ids)).toEqual({ width: '13%' });
+    expect(getProxmoxHostColumnWidthStyle('temp', 'phone', ids)).toEqual({ width: '15%' });
+    expect(getProxmoxHostColumnWidthStyle('uptime', 'phone', ids)).toEqual({ width: '14%' });
   });
 
   it('prioritizes live utilization columns in the mobile host table', () => {
     const columns = getProxmoxHostVisibleColumnsForLayout('mobile');
     const ids = columns.map((column) => column.id);
 
-    expect(ids).toEqual(['node', 'cpu', 'memory', 'disk']);
+    expect(ids).toEqual(['node', 'cpu', 'memory', 'disk', 'temp', 'uptime']);
     expect(getProxmoxHostTableMinWidthClass('mobile')).toBe('min-w-[0px]');
-    expect(getProxmoxHostColumnWidthStyle('node', 'mobile', ids)).toEqual({ width: '40%' });
-    expect(getProxmoxHostColumnWidthStyle('cpu', 'mobile', ids)).toEqual({ width: '20%' });
-    expect(getProxmoxHostColumnWidthStyle('memory', 'mobile', ids)).toEqual({ width: '20%' });
-    expect(getProxmoxHostColumnWidthStyle('disk', 'mobile', ids)).toEqual({ width: '20%' });
+    expect(getProxmoxHostColumnWidthStyle('node', 'mobile', ids)).toEqual({ width: '32%' });
+    expect(getProxmoxHostColumnWidthStyle('cpu', 'mobile', ids)).toEqual({ width: '13%' });
+    expect(getProxmoxHostColumnWidthStyle('memory', 'mobile', ids)).toEqual({ width: '13%' });
+    expect(getProxmoxHostColumnWidthStyle('disk', 'mobile', ids)).toEqual({ width: '13%' });
+    expect(getProxmoxHostColumnWidthStyle('temp', 'mobile', ids)).toEqual({ width: '15%' });
+    expect(getProxmoxHostColumnWidthStyle('uptime', 'mobile', ids)).toEqual({ width: '14%' });
   });
 
   it('adds operational context before inventory metadata on tablet', () => {

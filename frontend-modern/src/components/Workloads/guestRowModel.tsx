@@ -42,15 +42,14 @@ const WORKLOAD_COLUMN_MIN_LAYOUT: Record<string, WorkloadTableLayoutMode> = {
   runtime: 'tablet',
   cpu: 'phone',
   memory: 'phone',
-  // A phone-width row needs enough identity space to distinguish similarly
-  // named workloads. Disk remains available in the row details and returns in
-  // the wider mobile layout; keeping it beside CPU and memory on phones reduced the
-  // name to a handful of characters once the status and backup cues rendered.
-  disk: 'mobile',
-  type: 'tablet',
-  info: 'tablet',
+  // Phone rows retain the compact operational scan: workload kind, all three
+  // capacity metrics, and age. The percentage model below preserves a useful
+  // identity track without hiding those signals behind row expansion.
+  disk: 'phone',
+  type: 'phone',
+  info: 'phone',
   vmid: 'tablet',
-  uptime: 'compact',
+  uptime: 'phone',
   backup: 'compact',
   image: 'compact',
   namespace: 'compact',
@@ -445,20 +444,24 @@ const GUEST_COLUMN_RESPONSIVE_WEIGHTS: Record<
   Record<string, number>
 > = {
   phone: {
-    // Identity is the primary mobile task. Availability stays visible because
-    // it can disagree with runtime health, while CPU and memory retain useful
-    // bar widths. Disk rejoins this set at the wider-mobile breakpoint above.
-    name: 62,
-    availability: 8,
-    cpu: 15,
-    memory: 15,
+    name: 33,
+    availability: 5,
+    type: 7,
+    info: 9,
+    cpu: 11,
+    memory: 11,
+    disk: 11,
+    uptime: 13,
   },
   mobile: {
-    name: 40,
-    availability: 8,
-    cpu: 17,
-    memory: 18,
-    disk: 17,
+    name: 33,
+    availability: 5,
+    type: 7,
+    info: 9,
+    cpu: 11,
+    memory: 11,
+    disk: 11,
+    uptime: 13,
   },
   tablet: {
     name: 30,

@@ -103,6 +103,9 @@ export function GuestRow(props: GuestRowProps) {
   const cpuPercent = createMemo(() => getWorkloadCPUPercent(props.guest.cpu) ?? 0);
   const metricDisplayMode = createMemo(() => props.metricDisplayMode ?? 'bars');
   const isSparklineMode = createMemo(() => metricDisplayMode() === 'sparklines');
+  const usesCompactTableLayout = createMemo(
+    () => props.workloadTableLayoutMode === 'phone' || props.workloadTableLayoutMode === 'mobile',
+  );
   const telemetryAvailable = (
     metric: keyof NonNullable<WorkloadGuest['telemetryAvailability']>,
   ): boolean => props.guest.telemetryAvailability?.[metric] ?? true;
@@ -309,7 +312,7 @@ export function GuestRow(props: GuestRowProps) {
 
         {/* Info - merged identifier (VMID / image / namespace) for mixed-type views */}
         <Show when={isColVisible('info')}>
-          <td class="px-1.5 sm:px-2 py-0.5 align-middle">
+          <td class="px-0.5 py-0.5 align-middle sm:px-2">
             <div class="flex justify-center text-xs text-muted whitespace-nowrap">
               <Show
                 when={infoValue()}
@@ -471,6 +474,7 @@ export function GuestRow(props: GuestRowProps) {
                 }
               >
                 <StackedDiskBar
+                  mode={usesCompactTableLayout() ? 'aggregate' : undefined}
                   disks={props.guest.disks}
                   aggregateDisk={props.guest.disk}
                   anomaly={diskAnomaly()}
@@ -517,7 +521,10 @@ export function GuestRow(props: GuestRowProps) {
                 <span
                   class={`text-xs whitespace-nowrap ${props.guest.uptime > 0 && props.guest.uptime < 3600 ? 'text-orange-500' : 'text-muted'}`}
                 >
-                  <Show when={isMobile()} fallback={formatUptime(props.guest.uptime)}>
+                  <Show
+                    when={isMobile() || usesCompactTableLayout()}
+                    fallback={formatUptime(props.guest.uptime)}
+                  >
                     {formatUptime(props.guest.uptime, true)}
                   </Show>
                 </span>

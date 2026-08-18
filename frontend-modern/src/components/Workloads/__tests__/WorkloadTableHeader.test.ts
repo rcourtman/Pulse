@@ -18,5 +18,7 @@ describe('getWorkloadColumnHeaderLabel', () => {
   it('uses compact labels for narrow operational columns', () => {
     expect(getWorkloadColumnHeaderLabel('availability', 'Avail', 'guest', true)).toBe('Up');
     expect(getWorkloadColumnHeaderLabel('memory', 'Mem', 'host', true)).toBe('Mem');
+    expect(getWorkloadColumnHeaderLabel('info', 'Info', 'guest', true)).toBe('ID');
+    expect(getWorkloadColumnHeaderLabel('uptime', 'Uptime', 'guest', true)).toBe('Age');
   });
 });

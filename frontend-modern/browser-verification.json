@@ -1,32 +1,24 @@
 {
   "version": 1,
-  "base_sha": "6ca27721ef6c00836bab7e169654692bbd1ed16e",
-  "verified_at": "2026-08-18T15:17:29Z",
+  "base_sha": "61bc4b25eb506848eee4303bbf888e71b57a1c17",
+  "verified_at": "2026-08-18T15:50:10Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/App.tsx",
-    "frontend-modern/src/AppLayout.tsx",
-    "frontend-modern/src/components/shared/MobileNavBar.tsx",
-    "frontend-modern/src/components/shared/Subtabs.tsx",
-    "frontend-modern/src/components/shared/SummaryRowActionButton.tsx",
-    "frontend-modern/src/components/shared/mobileNavBarModel.ts",
+    "frontend-modern/src/components/Workloads/GuestRow.tsx",
+    "frontend-modern/src/components/Workloads/WorkloadTableHeader.tsx",
+    "frontend-modern/src/components/Workloads/guestRowModel.tsx",
     "frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx",
-    "frontend-modern/src/index.css"
+    "frontend-modern/src/features/proxmox/proxmoxHostTableModel.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/App.tsx": "2f8ec39abd969c9abc995105eccb9513a83dca9744d8c003d5b5e8cf0a69eec5",
-    "frontend-modern/src/AppLayout.tsx": "9c4ffef00d4d09f76b744fdb43c961c09436b2a1620607e48721eed3a848f44e",
-    "frontend-modern/src/components/shared/MobileNavBar.tsx": "a39ff906f6be2f35f3c6894615811e6e0566d068d7ac5ec89f14c0cb01d40751",
-    "frontend-modern/src/components/shared/Subtabs.tsx": "277d29d71d710382bb72cbe80791133bd9093e7529d525319d42e52adf7668ad",
-    "frontend-modern/src/components/shared/SummaryRowActionButton.tsx": "527c6226dd12a7b2e37167787db50c62c7de414658a163f6c316077bfaa2a862",
-    "frontend-modern/src/components/shared/mobileNavBarModel.ts": "fd6614f3cb8d90776fba51c04b887f152e2e88952f149b9b5eacc1e848dccd14",
-    "frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx": "7b8a9a56e4b31833d18c713a692a75148d786233a7a16c2339167517f7ad78a0",
-    "frontend-modern/src/index.css": "6e775ca1cba645cac91b1fffc6c9680fe898d24d29398919e095870d8559f8fa"
+    "frontend-modern/src/components/Workloads/GuestRow.tsx": "a8cf5d799db11989dd055ad119a66ac2bee52f003c0c28009bc0f47b9fc5386e",
+    "frontend-modern/src/components/Workloads/WorkloadTableHeader.tsx": "7e64ac79b0fb3bf6c5784201c880ae5812a6203609b634e0ed02f7af513f3858",
+    "frontend-modern/src/components/Workloads/guestRowModel.tsx": "cb5165bc48fe29bf227a1fdcae3ecc11fcf93d3c761f3d283d2a5e67a95de620",
+    "frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx": "59651f69ad19690750fc6e2235c9ed57d6b86c016b2d753eb2f60f9b752be62e",
+    "frontend-modern/src/features/proxmox/proxmoxHostTableModel.ts": "bd00307cdbf654f4b7968fddd114877e313974879f43734cecb67e2b5f4a909e"
   },
   "routes": [
-    "/proxmox/overview",
-    "/alerts/overview",
-    "/actions"
+    "/proxmox/overview"
   ],
   "viewports": [
     {
@@ -36,28 +28,20 @@
     {
       "width": 390,
       "height": 844
-    },
-    {
-      "width": 320,
-      "height": 740
     }
   ],
   "states": [
-    "Desktop Alerts overview with the full navigation shell and loaded content",
-    "Phone Proxmox overview with 37-pixel node and workload rows",
-    "Phone Proxmox overview with the redundant Nodes card title removed",
-    "Phone Proxmox filter controls in closed and expanded states",
-    "Phone Proxmox node details in collapsed and expanded states",
-    "Phone Actions page with compact page header and 44-pixel navigation rail",
-    "Phone Alerts overview with compact page header"
+    "Narrow Proxmox overview with node and workload tables fully loaded",
+    "Node rows showing CPU, memory, aggregate disk, temperature, and age",
+    "Workload rows showing type, ID, CPU, memory, aggregate disk, and age"
   ],
   "interactions": [
-    "Opened and closed the Proxmox filter controls at 390 by 844",
-    "Expanded and collapsed a Proxmox node detail row at 390 by 844",
-    "Confirmed twelve host and workload rows remained visible in a 320 by 740 viewport",
-    "Confirmed document width matched viewport width at 390 and 320 pixels",
-    "Confirmed shared compact headers and navigation remained overflow-free on Actions and Alerts",
-    "Confirmed the desktop mobile rail remained hidden and Alerts retained its desktop geometry at 1440 by 900",
-    "Confirmed final browser diagnostics contained no warnings or errors"
+    "Reloaded the active Proxmox overview after each responsive column change",
+    "Confirmed host headers render Node, CPU, Mem, Disk, Temp, and Age",
+    "Confirmed workload headers render Name, Type, ID, CPU, Mem, Disk, and Age",
+    "Confirmed multi-disk workloads use a readable aggregate percentage at phone width",
+    "Confirmed both tables fit the 390-pixel viewport without document-level horizontal overflow",
+    "Confirmed the full desktop node and workload column sets remain visible without horizontal overflow at 1440 by 900",
+    "Captured the final narrow mobile rendering as pulse-mobile-final-density.png"
   ]
 }
