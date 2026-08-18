@@ -15,8 +15,8 @@ carry such a warning is the one that had failed.
 
 - Patrol guides operators through one ranked decision at a time; Actions now
   has its own primary review workspace.
-- Pulse now raises an alert when its own notification delivery fails, says when
-  delivery is paused, and honours the flapping cooldown.
+- Read-only observers extend Patrol coverage between full model investigations
+  without granting mutation authority.
 - Approved actions gain agent preflight and stable refusal telemetry; large
   installations gain compressed APIs and indexed lookups.
 
@@ -85,6 +85,18 @@ carry such a warning is the one that had failed.
 - vSphere backup status, agent thermal history, explicit cluster-member address
   overrides, and discovery-analysis request timeouts now reflect their actual
   runtime state.
+- The notifications surface now states when alert delivery is paused, and that
+  a passing test send does not prove live alerts are getting through. Test
+  sends bypass the delivery pause, so a configured destination could look
+  healthy while every real alert was dropped before it reached the queue.
+- Degraded notification delivery is reported on the alerts overview rather than
+  only on the destinations configuration tab, and Pulse raises an alert about
+  its own delivery when it fails, so a dead notification channel is visible
+  where a channel failure cannot announce itself.
+- The alert flapping cooldown now suppresses for its configured duration. The
+  cooldown was recorded and never read, so suppression ended as soon as the
+  measurement window drained and a resource oscillating just under the
+  threshold was never damped at all.
 
 ## Security
 
