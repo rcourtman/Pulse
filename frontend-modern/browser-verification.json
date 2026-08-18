@@ -1,29 +1,21 @@
 {
   "version": 1,
-  "base_sha": "ebba3c493bb4713c0954a620ed4b247c84b8d1ba",
-  "verified_at": "2026-08-18T09:22:00Z",
+  "base_sha": "4606b3183657cdf2d7265cc693783c5ea78a2e93",
+  "verified_at": "2026-08-18T08:26:52Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/App.tsx",
-    "frontend-modern/src/useAppRuntimeState.ts"
+    "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/App.tsx": "15989cbf87c43fac8fe0701fe29adda0ff8a3642e1a8eff7925102c61a1ca8dd",
-    "frontend-modern/src/useAppRuntimeState.ts": "cbed5848e77a1b0b01c82c59e651bc8e7598b74d95dcdc308ff4974d437aca68"
+    "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx": "1799240120152766ef46fd16dabf1f8ac1fbccb8118d1d550a1f9b2df4a766c5"
   },
   "routes": [
-    "/login",
-    "/",
-    "/proxmox/overview",
-    "/docker/overview",
-    "/kubernetes/overview",
-    "/truenas/overview",
-    "/vsphere/overview"
+    "/patrol"
   ],
   "viewports": [
     {
-      "width": 1440,
-      "height": 900
+      "width": 1280,
+      "height": 720
     },
     {
       "width": 390,
@@ -31,23 +23,17 @@
     }
   ],
   "states": [
-    "signed-out login form",
-    "authenticated shell against a backend that reports the platformAdmission facet",
-    "platform navigation resolved with all six primary tabs present (Proxmox, Docker, Kubernetes, TrueNAS, vSphere, Machines)",
-    "Proxmox overview populated from a 658-resource estate",
-    "Docker, Kubernetes, TrueNAS and vSphere platform pages populated",
-    "shell at 390x844 with the Proxmox table rendered"
+    "Live Watch only daily briefing with 12 current decisions, one critical item, and one governed approval waiting",
+    "Desktop guided-review state with the persistent inbox, current queue position, previous/next controls, and selected governed context",
+    "Narrow guided-review state with Back to list, current queue position, touch-sized previous/next controls, and the inbox hidden",
+    "Reviewed and temporarily suppressed completion paths with automatic next-decision selection and explicit remaining-work feedback",
+    "Current-coverage calm state, transport failure state, and attached availability failure without synthetic health"
   ],
   "interactions": [
-    "signed in and confirmed navigation resolves with every platform tab the estate admits, against a backend built from the commit that publishes the facet",
-    "confirmed the shell reads admission from a 2172-byte /api/resources?page=1&limit=1 response rather than the 314KB /api/state payload",
-    "confirmed the shipped facet equals the client classifier over the same 658-resource estate, so the handover between the two sources is not visible",
-    "switched to the Docker tab and confirmed 80 rows",
-    "switched to the Kubernetes tab and confirmed 180 rows",
-    "switched to the TrueNAS tab and confirmed 3 rows",
-    "switched to the vSphere tab and confirmed 32 rows",
-    "returned to the Proxmox tab and confirmed 79 rows",
-    "resized to 390x844 and confirmed the Proxmox table still renders 79 rows",
-    "confirmed zero console or page errors across the whole pass"
+    "Used the live in-app Browser to inspect the selected desktop review context and exercise identity-stable previous/next navigation without mutating live lifecycle data",
+    "Verified the 390x844 selected-detail layout with a visible queue position, Back to list, and touch-sized previous/next controls above lifecycle actions",
+    "Passed all 18 attention-workbench scenarios across Chromium, mobile Chrome, and mobile Safari",
+    "Verified automatic advancement after Mark reviewed, bounded suppression completion feedback, inbox focus restoration, deep-link reload, and no horizontal overflow",
+    "Passed the seven monitor-first and attached-availability browser scenarios in Chromium"
   ]
 }

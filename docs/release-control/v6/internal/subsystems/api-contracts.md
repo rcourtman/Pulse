@@ -3902,6 +3902,15 @@ Likewise, the frontend may reduce typed evidence freshness/completeness and
 protection state into plain scan-row language or omit unavailable row metadata,
 provided selected detail continues to expose the typed facts. Presentation
 copy must not rewrite transport values or synthesize a stronger trust state.
+The frontend review loop may retain the current returned item identities as a
+session order for previous/next navigation. After a successful acknowledge or
+bounded suppression mutation it must reload the canonical `active` list,
+remove only items absent from that response, and derive the remaining count and
+next selection from the refreshed typed membership. It must not optimistically
+author lifecycle state, keep acknowledged/suppressed records in the active
+inbox, or turn review progress into a second queue API. Newly returned active
+items may be appended to the in-progress review session without changing their
+server-authored identity or trust fields.
 
 Lifecycle read failure returns a typed unavailable response and never a
 synthetic zero or calm state. Protection lookup failure may return lifecycle

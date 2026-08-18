@@ -355,7 +355,7 @@ async function mockAttention(
   });
   const currentSummary = () => ({
     ...activeSummary,
-    activeCount: primaryState === "suppressed" ? 1 : 2,
+    activeCount: primaryState === "open" ? 2 : 1,
     openCount: primaryState === "open" ? 1 : 0,
     acknowledgedCount: primaryState === "acknowledged" ? 2 : 1,
     suppressedCount: primaryState === "suppressed" ? 2 : 1,
@@ -606,10 +606,28 @@ async function mockAttention(
     }
 
     if (!url.pathname.endsWith("/attention")) {
+      const isUncertainDetail =
+        url.pathname.includes(encodeURIComponent(uncertainAttentionItem.id)) ||
+        url.pathname.includes(uncertainAttentionItem.id);
       await route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify(primaryDetail()),
+        body: JSON.stringify(
+          isUncertainDetail
+            ? {
+                ...detail,
+                item: uncertainAttentionItem,
+                operationalRecord: {
+                  ...detail.operationalRecord,
+                  id: uncertainAttentionItem.operationalRecordId,
+                  subjectResourceId: uncertainAttentionItem.subjectResourceId,
+                  state: "unknown",
+                  severity: "warning",
+                },
+                evidence: [],
+              }
+            : primaryDetail(),
+        ),
       });
       return;
     }
@@ -628,9 +646,9 @@ async function mockAttention(
                 ? [suppressedAttentionItem]
                 : filter === "resolved"
                   ? [resolvedAttentionItem]
-                  : primaryState === "suppressed"
-                    ? [uncertainAttentionItem]
-                    : [primaryItem(), uncertainAttentionItem];
+                  : primaryState === "open"
+                    ? [primaryItem(), uncertainAttentionItem]
+                    : [uncertainAttentionItem];
     await route.fulfill({
       status: 200,
       contentType: "application/json",
@@ -720,7 +738,9 @@ test("makes active operational work primary and preserves the evidence boundary"
     ),
   ).toBeVisible();
   await expect(attentionList.getByText("Evidence current")).toHaveCount(0);
-  await expect(attentionList.getByText("Protection needs attention")).toHaveCount(0);
+  await expect(
+    attentionList.getByText("Protection needs attention"),
+  ).toHaveCount(0);
   await expect(
     page.getByRole("button", { name: "Explain with Assistant" }),
   ).toHaveCount(0);
@@ -761,46 +781,35 @@ test("makes active operational work primary and preserves the evidence boundary"
     new RegExp(`attention=${encodeURIComponent(attentionID)}`),
   );
 
-  await detailPanel.getByRole("button", { name: "Acknowledge" }).click();
+  await expect(detailPanel.getByText("Decision 1 of 2")).toBeVisible();
+  await detailPanel.getByRole("button", { name: "Mark reviewed" }).click();
+  await expect(queue.getByRole("status")).toContainText(
+    "Marked reviewed. 1 decision remains.",
+  );
   await expect(
-    detailPanel.getByText(/Acknowledged by operator/i),
+    queue.getByRole("complementary", {
+      name: "Connection state unknown for pve-edge",
+    }),
   ).toBeVisible();
   await expect(
-    detailPanel.getByRole("button", { name: "Return to open" }),
-  ).toBeVisible();
+    attentionList.getByRole("button", {
+      name: "Open CPU pressure on pve-main",
+    }),
+  ).toHaveCount(0);
 
-  await detailPanel
-    .getByRole("button", { name: "Suppress temporarily" })
-    .click();
-  await detailPanel
-    .getByRole("textbox", {
-      name: "Why is this safe to hide from active attention?",
-    })
-    .fill("Planned host maintenance");
-  await detailPanel
-    .getByRole("combobox", {
-      name: "Return it to active attention after",
-    })
-    .selectOption(String(60 * 60 * 1000));
-  await detailPanel
-    .getByRole("button", { name: "Suppress temporarily" })
-    .click();
-  await expect(
-    detailPanel.getByText(/Suppressed by operator: Planned host maintenance/i),
-  ).toBeVisible();
-  await detailPanel
-    .getByRole("button", { name: "Return to active attention" })
-    .click();
-  await expect(
-    detailPanel.getByRole("button", { name: "Acknowledge" }),
-  ).toBeVisible();
-
+  const advancedDetail = queue.getByRole("complementary", {
+    name: "Connection state unknown for pve-edge",
+  });
   const closeDetailButton =
     (page.viewportSize()?.width ?? 1280) < 1024
-      ? detailPanel.getByRole("button", { name: "Back to attention list" })
-      : detailPanel.getByRole("button", { name: "Close attention detail" });
+      ? advancedDetail.getByRole("button", { name: "Back to attention list" })
+      : advancedDetail.getByRole("button", { name: "Close attention detail" });
   await closeDetailButton.click();
-  await expect(itemButton).toBeFocused();
+  await expect(
+    attentionList.getByRole("button", {
+      name: "Open Connection state unknown for pve-edge",
+    }),
+  ).toBeFocused();
   await expect(page).not.toHaveURL(/attention=/);
 });
 
@@ -831,6 +840,16 @@ test("puts the selected detail in view on a phone without page overflow", async 
     name: "Back to attention list",
   });
   await expect(backToList).toBeVisible();
+  await expect(detailPanel.getByText("Decision 1 of 2")).toBeVisible();
+  const mobileReviewNavigation = detailPanel.locator(
+    '[aria-label="Review queue navigation"]',
+  );
+  await expect(
+    mobileReviewNavigation.getByRole("button", { name: "Previous" }),
+  ).toBeDisabled();
+  await expect(
+    mobileReviewNavigation.getByRole("button", { name: "Next decision" }),
+  ).toBeVisible();
   const overflows = await page.evaluate(
     () =>
       document.documentElement.scrollWidth >
@@ -859,12 +878,9 @@ test("shows calm only with current coverage and never converts failure into heal
 
   await expect(page.getByText("Nothing needs you right now")).toBeVisible();
   await expect(
-    page.getByText(
-      "The current operational evaluation has no active items.",
-      {
-        exact: false,
-      },
-    ),
+    page.getByText("The current operational evaluation has no active items.", {
+      exact: false,
+    }),
   ).toBeVisible();
 
   fixture.setMode("failed");

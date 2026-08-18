@@ -391,8 +391,8 @@ describe('PatrolAttentionWorkbench', () => {
     ).toHaveTextContent('Back to list');
     expect(
       within(detailRegion).getByRole('button', { name: 'Close attention detail' }),
-    ).toHaveClass('hidden', 'lg:inline-flex');
-    expect(within(detailRegion).getByRole('button', { name: 'Acknowledge' })).toHaveClass(
+    ).toHaveClass('h-8', 'w-8');
+    expect(within(detailRegion).getByRole('button', { name: 'Mark reviewed' })).toHaveClass(
       'min-h-11',
       'sm:min-h-0',
     );
@@ -496,25 +496,20 @@ describe('PatrolAttentionWorkbench', () => {
     ).not.toBeInTheDocument();
   });
 
-  it('acknowledges an operational item and refreshes the shared lifecycle projection', async () => {
+  it('marks an item reviewed and advances through the decision queue', async () => {
     const active = item();
-    const acknowledged = item({ state: 'acknowledged' });
-    const acknowledgedDetail = detail(acknowledged);
-    acknowledgedDetail.operationalRecord.acknowledgement = {
-      at: evaluatedAt,
-      by: 'operator',
-    };
+    const next = item({ id: 'record-2', title: 'Database replication is delayed' });
     apiMocks.getList
       .mockResolvedValueOnce(
-        listResponse([active], summary({ activeCount: 1, openCount: 1, calm: false })),
+        listResponse([active, next], summary({ activeCount: 2, openCount: 2, calm: false })),
       )
       .mockResolvedValue(
         listResponse(
-          [acknowledged],
-          summary({ activeCount: 1, acknowledgedCount: 1, calm: false }),
+          [next],
+          summary({ activeCount: 1, openCount: 1, acknowledgedCount: 1, calm: false }),
         ),
       );
-    apiMocks.getDetail.mockResolvedValueOnce(detail(active)).mockResolvedValue(acknowledgedDetail);
+    apiMocks.getDetail.mockResolvedValueOnce(detail(active)).mockResolvedValue(detail(next));
     apiMocks.acknowledge.mockResolvedValue({ success: true });
     renderWorkbench();
 
@@ -523,11 +518,19 @@ describe('PatrolAttentionWorkbench', () => {
         name: 'Open Disk pressure on Database VM',
       }),
     );
-    fireEvent.click(await screen.findByRole('button', { name: 'Acknowledge' }));
+    expect(await screen.findByText('Decision 1 of 2')).toBeInTheDocument();
+    expect(screen.getByTitle('Previous decision')).toBeDisabled();
+    expect(screen.getByTitle('Next decision')).toBeEnabled();
+    fireEvent.click(await screen.findByRole('button', { name: 'Mark reviewed' }));
 
     await waitFor(() => expect(apiMocks.acknowledge).toHaveBeenCalledWith('record-1'));
-    expect(await screen.findByText(/Acknowledged by operator/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Return to open' })).toBeInTheDocument();
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      'Marked reviewed. 1 decision remains.',
+    );
+    expect(
+      await screen.findByRole('complementary', { name: 'Database replication is delayed' }),
+    ).toBeInTheDocument();
+    expect(window.location.search).toBe('?attention=record-2');
   });
 
   it('requires an explicit reason and bounded duration before temporary suppression', async () => {
@@ -545,7 +548,7 @@ describe('PatrolAttentionWorkbench', () => {
         listResponse([active], summary({ activeCount: 1, openCount: 1, calm: false })),
       )
       .mockResolvedValue(
-        listResponse([suppressed], summary({ activeCount: 0, suppressedCount: 1, calm: true })),
+        listResponse([], summary({ activeCount: 0, suppressedCount: 1, calm: true })),
       );
     apiMocks.getDetail.mockResolvedValueOnce(detail(active)).mockResolvedValue(suppressedDetail);
     apiMocks.suppress.mockResolvedValue({ success: true });
@@ -588,8 +591,12 @@ describe('PatrolAttentionWorkbench', () => {
         expect.any(String),
       );
     });
-    expect(await screen.findByText(/Suppressed by operator/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Return to active attention' })).toBeInTheDocument();
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      'Suppressed temporarily. Your decision inbox is clear.',
+    );
+    expect(
+      await screen.findByRole('heading', { name: 'Nothing needs you right now' }),
+    ).toBeInTheDocument();
   });
 
   it('points lifecycle users at the durable threshold and finding controls', async () => {
@@ -614,9 +621,7 @@ describe('PatrolAttentionWorkbench', () => {
       }),
     );
 
-    expect(
-      await screen.findByText(/These controls cover only this occurrence/i),
-    ).toBeInTheDocument();
+    expect(await screen.findByText(/Mark reviewed removes this occurrence/i)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'adjust alert thresholds' })).toHaveAttribute(
       'href',
       '/alerts/thresholds',
@@ -639,9 +644,7 @@ describe('PatrolAttentionWorkbench', () => {
       }),
     );
 
-    expect(
-      await screen.findByText(/These controls cover only this occurrence/i),
-    ).toBeInTheDocument();
+    expect(await screen.findByText(/Mark reviewed removes this occurrence/i)).toBeInTheDocument();
     expect(
       screen.queryByRole('button', { name: 'review Patrol findings' }),
     ).not.toBeInTheDocument();

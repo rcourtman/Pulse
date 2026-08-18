@@ -1,5 +1,6 @@
 import { A, useLocation } from '@solidjs/router';
 import {
+  type Accessor,
   createEffect,
   createMemo,
   createSignal,
@@ -12,6 +13,7 @@ import {
 import AlertTriangleIcon from 'lucide-solid/icons/triangle-alert';
 import ArrowLeftIcon from 'lucide-solid/icons/arrow-left';
 import CheckCircleIcon from 'lucide-solid/icons/circle-check';
+import ChevronLeftIcon from 'lucide-solid/icons/chevron-left';
 import ChevronRightIcon from 'lucide-solid/icons/chevron-right';
 import ClipboardCheckIcon from 'lucide-solid/icons/clipboard-check';
 import ClockIcon from 'lucide-solid/icons/clock';
@@ -89,9 +91,11 @@ export function sortPatrolAttentionDecisions(
     );
     if (leftActionable !== rightActionable) return leftActionable ? -1 : 1;
 
-    return (
-      new Date(right.item.lastObservedAt).getTime() - new Date(left.item.lastObservedAt).getTime()
-    );
+    const recencyDelta =
+      new Date(right.item.lastObservedAt).getTime() - new Date(left.item.lastObservedAt).getTime();
+    if (recencyDelta !== 0) return recencyDelta;
+
+    return left.item.id.localeCompare(right.item.id);
   });
 }
 
@@ -110,6 +114,8 @@ export function PatrolAttentionWorkbench(
   const [actionError, setActionError] = createSignal('');
   const [lifecycleBusy, setLifecycleBusy] = createSignal(false);
   const [lifecycleError, setLifecycleError] = createSignal('');
+  const [reviewNotice, setReviewNotice] = createSignal('');
+  const [reviewOrder, setReviewOrder] = createSignal<string[]>([]);
   const [showAllDecisions, setShowAllDecisions] = createSignal(false);
   const itemButtons = new Map<string, HTMLButtonElement>();
   let detailPanel: HTMLDivElement | undefined;
@@ -129,10 +135,36 @@ export function PatrolAttentionWorkbench(
     ),
   );
   const sortedDecisions = createMemo(() => sortPatrolAttentionDecisions(attention().needsUser));
+  const orderedDecisions = createMemo(() => {
+    const current = sortedDecisions();
+    const order = reviewOrder();
+    if (order.length === 0) return current;
+
+    const byId = new Map(current.map((decision) => [decision.item.id, decision]));
+    const knownIds = new Set(order);
+    return [
+      ...order.flatMap((itemId) => {
+        const decision = byId.get(itemId);
+        return decision ? [decision] : [];
+      }),
+      ...current.filter((decision) => !knownIds.has(decision.item.id)),
+    ];
+  });
   const visibleDecisions = createMemo(() =>
-    showAllDecisions() ? sortedDecisions() : sortedDecisions().slice(0, PRIMARY_DECISION_LIMIT),
+    showAllDecisions() ? orderedDecisions() : orderedDecisions().slice(0, PRIMARY_DECISION_LIMIT),
   );
-  const highestPriorityDecision = createMemo(() => sortedDecisions()[0]);
+  const highestPriorityDecision = createMemo(() => orderedDecisions()[0]);
+  const selectedDecisionIndex = createMemo(() =>
+    orderedDecisions().findIndex((decision) => decision.item.id === selectedItemId()),
+  );
+  const previousDecision = createMemo(() => {
+    const index = selectedDecisionIndex();
+    return index > 0 ? orderedDecisions()[index - 1] : undefined;
+  });
+  const nextDecision = createMemo(() => {
+    const index = selectedDecisionIndex();
+    return index >= 0 ? orderedDecisions()[index + 1] : undefined;
+  });
   const criticalDecisionCount = createMemo(
     () => attention().needsUser.filter((decision) => decision.item.severity === 'critical').length,
   );
@@ -146,13 +178,18 @@ export function PatrolAttentionWorkbench(
   const loadCurrentFilter = () => patrolAttentionStore.load(patrolAttentionStore.filter());
   const scrollDetailIntoView = () => {
     queueMicrotask(() => {
+      detailPanel?.scrollTo?.({ top: 0 });
       if (window.matchMedia?.('(max-width: 1023px)').matches) {
         detailPanel?.scrollIntoView?.({ block: 'start' });
         detailPanel?.focus?.({ preventScroll: true });
       }
     });
   };
-  const selectItem = (itemId: string) => {
+  const selectItem = (itemId: string, preserveNotice = false) => {
+    if (!preserveNotice) setReviewNotice('');
+    if (reviewOrder().length === 0) {
+      setReviewOrder(sortedDecisions().map((decision) => decision.item.id));
+    }
     setSelectedItemId(itemId);
     replaceAttentionLocation(itemId);
     void patrolAttentionStore.select(itemId);
@@ -160,6 +197,7 @@ export function PatrolAttentionWorkbench(
   };
   const closeDetail = () => {
     const previous = selectedItemId();
+    setReviewOrder([]);
     setSelectedItemId('');
     replaceAttentionLocation('');
     void patrolAttentionStore.select(null);
@@ -203,17 +241,39 @@ export function PatrolAttentionWorkbench(
       patrolAttentionStore.load(patrolAttentionStore.filter()),
     ]);
   };
-  const changeLifecycle = async (operation: () => Promise<unknown>) => {
+  const changeLifecycle = async (
+    operation: () => Promise<unknown>,
+    options: { advanceAfter?: boolean; successLabel?: string } = {},
+  ) => {
     if (lifecycleBusy()) return;
+    const selected = selectedItemId();
+    const queueBefore = orderedDecisions();
+    const selectedIndex = queueBefore.findIndex((decision) => decision.item.id === selected);
+    const nextCandidateId =
+      queueBefore[selectedIndex + 1]?.item.id ?? queueBefore[selectedIndex - 1]?.item.id ?? '';
     setLifecycleBusy(true);
     setLifecycleError('');
     try {
       await operation();
-      const selected = selectedItemId();
-      await Promise.all([
-        selected ? patrolAttentionStore.select(selected) : Promise.resolve(),
-        patrolAttentionStore.load(patrolAttentionStore.filter()),
-      ]);
+      await patrolAttentionStore.load(patrolAttentionStore.filter());
+      if (options.advanceAfter) {
+        const remaining = orderedDecisions();
+        const next =
+          remaining.find((decision) => decision.item.id === nextCandidateId) ?? remaining[0];
+        const successLabel = options.successLabel ?? 'Decision updated';
+        setReviewNotice(
+          remaining.length > 0
+            ? `${successLabel}. ${remaining.length} ${remaining.length === 1 ? 'decision remains' : 'decisions remain'}.`
+            : `${successLabel}. Your decision inbox is clear.`,
+        );
+        if (next) {
+          selectItem(next.item.id, true);
+        } else {
+          closeDetail();
+        }
+      } else if (selected) {
+        await patrolAttentionStore.select(selected);
+      }
     } catch (cause) {
       setLifecycleError(
         cause instanceof Error ? cause.message : 'The lifecycle change could not be saved.',
@@ -238,8 +298,15 @@ export function PatrolAttentionWorkbench(
       void patrolAttentionStore.select(deepLinkedItem);
       scrollDetailIntoView();
     } else if (!deepLinkedItem && currentItem) {
+      setReviewOrder([]);
       setSelectedItemId('');
       void patrolAttentionStore.select(null);
+    }
+  });
+
+  createEffect(() => {
+    if (selectedItemId() && sortedDecisions().length > 0 && reviewOrder().length === 0) {
+      setReviewOrder(sortedDecisions().map((decision) => decision.item.id));
     }
   });
 
@@ -353,6 +420,18 @@ export function PatrolAttentionWorkbench(
         </Show>
       </div>
 
+      <Show when={reviewNotice()}>
+        {(notice) => (
+          <div
+            role="status"
+            class="flex items-center gap-2 border-b border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-200 sm:px-6"
+          >
+            <CheckCircleIcon class="h-4 w-4 shrink-0" aria-hidden="true" />
+            {notice()}
+          </div>
+        )}
+      </Show>
+
       <div
         class={`grid min-w-0 ${attention().needsUser.length > 0 ? 'lg:grid-cols-[minmax(20rem,0.78fr)_minmax(0,1.22fr)]' : ''}`}
       >
@@ -440,12 +519,34 @@ export function PatrolAttentionWorkbench(
               onReviewAction={reviewAction}
               lifecycleBusy={lifecycleBusy()}
               lifecycleError={lifecycleError()}
-              onAcknowledge={(itemId) => changeLifecycle(() => acknowledgePatrolAttention(itemId))}
+              queuePosition={() =>
+                selectedDecisionIndex() >= 0 ? selectedDecisionIndex() + 1 : undefined
+              }
+              queueCount={() => orderedDecisions().length}
+              canPrevious={() => Boolean(previousDecision())}
+              canNext={() => Boolean(nextDecision())}
+              onPrevious={() => {
+                const previous = previousDecision();
+                if (previous) selectItem(previous.item.id);
+              }}
+              onNext={() => {
+                const next = nextDecision();
+                if (next) selectItem(next.item.id);
+              }}
+              onAcknowledge={(itemId) =>
+                changeLifecycle(() => acknowledgePatrolAttention(itemId), {
+                  advanceAfter: true,
+                  successLabel: 'Marked reviewed',
+                })
+              }
               onUnacknowledge={(itemId) =>
                 changeLifecycle(() => unacknowledgePatrolAttention(itemId))
               }
               onSuppress={(itemId, reason, expiresAt) =>
-                changeLifecycle(() => suppressPatrolAttention(itemId, reason, expiresAt))
+                changeLifecycle(() => suppressPatrolAttention(itemId, reason, expiresAt), {
+                  advanceAfter: true,
+                  successLabel: 'Suppressed temporarily',
+                })
               }
               onUnsuppress={(itemId) => changeLifecycle(() => unsuppressPatrolAttention(itemId))}
               onOpenFindings={props.onOpenFindings}
@@ -635,6 +736,12 @@ function AttentionDetail(props: {
   ) => void;
   lifecycleBusy: boolean;
   lifecycleError: string;
+  queuePosition: Accessor<number | undefined>;
+  queueCount: Accessor<number>;
+  canPrevious: Accessor<boolean>;
+  canNext: Accessor<boolean>;
+  onPrevious: () => void;
+  onNext: () => void;
   onAcknowledge: (itemId: string) => Promise<void>;
   onUnacknowledge: (itemId: string) => Promise<void>;
   onSuppress: (itemId: string, reason: string, expiresAt: string) => Promise<void>;
@@ -722,32 +829,81 @@ function AttentionDetail(props: {
       aria-labelledby="attention-detail-title"
       aria-busy={props.loading}
     >
-      <div class="flex items-start justify-between gap-3 border-b border-border px-4 py-3 sm:px-5">
-        <div class="min-w-0">
+      <div class="sticky top-0 z-20 border-b border-border bg-surface/95 px-4 py-3 backdrop-blur sm:px-5">
+        <div class="flex items-center justify-between gap-3">
+          <button
+            type="button"
+            class="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded px-2 text-sm font-medium text-muted hover:bg-surface-hover hover:text-base-content focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 lg:hidden"
+            aria-label="Back to attention list"
+            onClick={props.onClose}
+          >
+            <ArrowLeftIcon class="h-4 w-4" aria-hidden="true" />
+            Back to list
+          </button>
           <p class="text-[11px] font-semibold uppercase tracking-wider text-muted">
-            Decision context
+            <Show when={props.queuePosition()} fallback="Decision context">
+              {(position) => `Decision ${position()} of ${props.queueCount()}`}
+            </Show>
           </p>
-          <h3 id="attention-detail-title" class="mt-1 text-sm font-semibold text-base-content">
-            {item()?.title ?? 'Loading attention item'}
-          </h3>
+          <div class="hidden items-center gap-1 lg:flex">
+            <button
+              type="button"
+              class="inline-flex h-8 w-8 items-center justify-center rounded text-muted hover:bg-surface-hover hover:text-base-content focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-35"
+              aria-label="Previous decision"
+              title="Previous decision"
+              disabled={!props.canPrevious()}
+              onClick={props.onPrevious}
+            >
+              <ChevronLeftIcon class="h-4 w-4" aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              class="inline-flex h-8 w-8 items-center justify-center rounded text-muted hover:bg-surface-hover hover:text-base-content focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-35"
+              aria-label="Next decision"
+              title="Next decision"
+              disabled={!props.canNext()}
+              onClick={props.onNext}
+            >
+              <ChevronRightIcon class="h-4 w-4" aria-hidden="true" />
+            </button>
+            <span class="mx-1 h-4 w-px bg-border" aria-hidden="true" />
+            <button
+              type="button"
+              class="inline-flex h-8 w-8 items-center justify-center rounded text-muted hover:bg-surface-hover hover:text-base-content focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              aria-label="Close attention detail"
+              onClick={props.onClose}
+            >
+              <XIcon class="h-4 w-4" aria-hidden="true" />
+            </button>
+          </div>
         </div>
-        <button
-          type="button"
-          class="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded px-3 text-sm font-medium text-muted hover:bg-surface-hover hover:text-base-content focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 lg:hidden"
-          aria-label="Back to attention list"
-          onClick={props.onClose}
-        >
-          <ArrowLeftIcon class="h-4 w-4" aria-hidden="true" />
-          Back to list
-        </button>
-        <button
-          type="button"
-          class="hidden h-6 w-6 shrink-0 items-center justify-center rounded text-muted hover:bg-surface-hover hover:text-base-content focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 lg:inline-flex"
-          aria-label="Close attention detail"
-          onClick={props.onClose}
-        >
-          <XIcon class="h-4 w-4" aria-hidden="true" />
-        </button>
+        <h3 id="attention-detail-title" class="mt-1 text-sm font-semibold text-base-content">
+          {item()?.title ?? 'Loading attention item'}
+        </h3>
+        <Show when={props.queuePosition() && props.queueCount() > 1}>
+          <div class="mt-3 grid grid-cols-2 gap-2 lg:hidden" aria-label="Review queue navigation">
+            <Button
+              variant="secondary"
+              size="sm"
+              class="min-h-11 gap-1.5"
+              disabled={!props.canPrevious()}
+              onClick={props.onPrevious}
+            >
+              <ChevronLeftIcon class="h-4 w-4" aria-hidden="true" />
+              Previous
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              class="min-h-11 gap-1.5"
+              disabled={!props.canNext()}
+              onClick={props.onNext}
+            >
+              Next decision
+              <ChevronRightIcon class="h-4 w-4" aria-hidden="true" />
+            </Button>
+          </div>
+        </Show>
       </div>
 
       <Show
@@ -1053,7 +1209,7 @@ function AttentionLifecycleControls(props: {
               isLoading={props.busy}
               onClick={() => void props.onAcknowledge(props.detail.item.id)}
             >
-              Acknowledge
+              Mark reviewed
             </Button>
           </Show>
           <Show when={state() === 'acknowledged'}>
@@ -1064,7 +1220,7 @@ function AttentionLifecycleControls(props: {
               isLoading={props.busy}
               onClick={() => void props.onUnacknowledge(props.detail.item.id)}
             >
-              Return to open
+              Return to decision inbox
             </Button>
           </Show>
           <Show when={state() === 'suppressed'}>
@@ -1161,7 +1317,10 @@ function AttentionLifecycleControls(props: {
           </p>
         </Show>
         <div class="mt-3 border-t border-border-subtle pt-3 text-xs leading-5 text-muted">
-          <p>These controls cover only this occurrence, and suppression always expires.</p>
+          <p>
+            Mark reviewed removes this occurrence from today's decision inbox while keeping its
+            record. Suppression hides it only until the selected return time.
+          </p>
           <p class="mt-1">
             For a permanent change,{' '}
             <A

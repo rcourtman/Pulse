@@ -2629,6 +2629,14 @@ to the source row. Empty preview space must contain the recommended decision and
 an explicit review action near the top of the pane rather than vertically
 centering content below the initial viewport. The Patrol enabled/mode/check
 toolbar stays compact and does not repeat the page-level value sentence.
+Once review starts, the same master/detail primitive exposes a live queue
+position plus previous/next controls at both breakpoints. Its order stays
+identity-stable for the selected session, successful acknowledge or suppression
+announces the remaining count and advances to the next current item, and the
+final settled item returns to the calm inbox. Lifecycle copy must explain that
+review removes one occurrence from today's inbox while suppression is bounded;
+generic backend verbs must not leave the user guessing whether the alert was
+resolved, hidden permanently, or merely recorded as seen.
 
 The selected attention detail may compose the shared Actions review for an
 eligible backend-authored offer. The detail owns only the expected

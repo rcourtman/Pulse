@@ -1236,6 +1236,18 @@ Patrol a true master/detail workflow instead of stacking the detail above a
 second full queue. The command header remains compact so the briefing and first
 decision enter the initial viewport.
 
+Selecting the first item starts a bounded review session over the loaded
+decision order. The selected context shows its current position and exposes
+previous/next navigation on desktop and mobile; deterministic identity breaks
+otherwise equal priority ties so polling cannot reshuffle equal decisions
+arbitrarily. The session retains its review order while fresh list responses
+remove settled items and append genuinely new work. Acknowledging an occurrence
+is presented as `Mark reviewed`: on success the item leaves the active inbox,
+Patrol announces the remaining decision count, and advances to the next current
+item. Temporary suppression uses the same advancement loop and explicitly says
+that the occurrence will return at the chosen time. Clearing the final item
+returns to the calm inbox with an honest completion announcement.
+
 The attention queue orders genuine operator decisions by severity, actionable
 approval/review state, and latest observation time. Rows expose the severity
 word, lifecycle state, bounded consequence, affected resource, decision label,
