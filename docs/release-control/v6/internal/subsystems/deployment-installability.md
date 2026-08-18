@@ -1447,27 +1447,35 @@ diagnostics. The same release workflow also executes the generated self-signed
 and custom-CA Windows installer commands through Windows PowerShell 5.1 before
 release assembly, so the first HTTPS fetch is release proof rather than a
 string-shape assertion.
-The active prerelease `v6.3.0-rc.1` cut sets the repo-root `VERSION`,
+The active prerelease `v6.3.0-rc.2` cut sets the repo-root `VERSION`,
 repo-root `docker-compose.yml` image default, `scripts/install-docker.sh`
-fallback, and Helm chart release metadata to the same `6.3.0-rc.1` release
-version. It follows stable `v6.2.1`, opens the 6.3 candidate line, uses
+fallback, and Helm chart release metadata to the same `6.3.0-rc.2` release
+version. It follows stable `v6.2.1`, opens the published 6.3 candidate line, uses
 `rollback_version=v6.2.1`, and keeps stable/latest pointers on `v6.2.1`. This
 candidate establishes the new minor-release packet with durable scoped Patrol
 objectives, validated read-only observers, verified work receipts, agent action
 preflight with stable refusal codes, large-estate response improvements, and
-monitoring correctness fixes. Subscription-backed Patrol turns also bound
-command cleanup after an idle deadline so descendant-held output pipes cannot
-extend the caller-owned stall budget. The changes since `v6.2.1` do not require a
-Pulse Mobile client change and preserve the existing mobile, Relay, onboarding,
-and mobile-facing API contracts, so the server cut is classified
-`no-mobile-impact`; no companion upload or public mobile-store rollout is part
-of this candidate.
+monitoring correctness fixes. The advanced branch also carries the decision-first
+Patrol inbox, first-class Actions workspace, canonical platform-admission
+projection, and bounded concurrent unified-resource hydration. Subscription-backed
+Patrol turns bound command cleanup after an idle deadline so descendant-held
+output pipes cannot extend the caller-owned stall budget. The changes since
+`v6.3.0-rc.1` do not require a Pulse Mobile client change and preserve the
+existing mobile, Relay, onboarding, and mobile-facing API contracts, so the
+server cut is classified `no-mobile-impact`; no companion upload or public
+mobile-store rollout is part of this candidate.
 The prerelease Windows path retains exact-SHA, checksum, and detached-signature
 verification without Authenticode; stable `v6.3.0` restores mandatory SignPath
 signing unless a new version-bound decision is recorded.
 This prerelease keeps `rollback_version=v6.2.1`, publishes a versioned
 public GitHub prerelease plus versioned Docker and Helm artifacts, and does not
 move stable/latest install pointers or stable semver aliases.
+
+The preceding `v6.3.0-rc.1` publication attempt was quarantined before the
+GitHub release commit point when its exact private Pro staging run was
+cancelled. No GitHub release or remote git tag remains. Because `main` advanced
+materially after that attempt, the next dispatch uses `v6.3.0-rc.2` rather than
+retargeting the earlier version to a different exact SHA.
 
 The preceding `v6.2.2-rc.2` candidate used the same support-prerelease path and
 rollback target. It added host-local Docker/Podman registry credentials for
@@ -1738,8 +1746,8 @@ For the active stable `v6.1.2` cut, the repo-root compose default and
 `scripts/install-docker.sh` fallback must both pin `6.1.2` whenever the
 governed `VERSION` is that stable cut. The stable promotion guard remains in
 force and rejects leftover `-rc.` defaults.
-For the active prerelease `v6.3.0-rc.1` cut, the repo-root compose default and
-`scripts/install-docker.sh` fallback must both pin `6.3.0-rc.1`
+For the active prerelease `v6.3.0-rc.2` cut, the repo-root compose default and
+`scripts/install-docker.sh` fallback must both pin `6.3.0-rc.2`
 until the next governed stable cut moves them forward. Each new release moves
 these two pins together with the repo-root `VERSION` and the Helm chart metadata
 in the same commit; a cut that leaves any of the four on a superseded value is a

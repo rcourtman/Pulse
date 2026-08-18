@@ -1,14 +1,17 @@
-# Pulse v6.3.0-rc.1 Release Notes
+# Pulse v6.3.0-rc.2 Release Notes
 
-`v6.3.0-rc.1` is a release candidate for the next Pulse v6 minor release and
-the first candidate in the 6.3 line. It follows stable `v6.2.1` and introduces
-the Patrol v2 operating model, guarded agent action preflight, large-estate
-response improvements, and monitoring correctness fixes.
+`v6.3.0-rc.2` is a release candidate for the next Pulse v6 minor release and
+the first published candidate in the 6.3 line. An earlier `rc.1` publication
+did not complete, so this cut uses a fresh immutable version for the advanced
+`main` branch. It follows stable
+`v6.2.1` and introduces the Patrol v2 operating model, a first-class Actions
+workspace, guarded agent action preflight, large-estate response improvements,
+and monitoring correctness fixes.
 
 ## Highlights
 
-- Patrol now works from durable outcomes, scoped investigations, and recent
-  verified-work receipts.
+- Patrol guides operators through one ranked decision at a time; Actions now
+  has its own primary review workspace.
 - Read-only observers extend Patrol coverage between full model investigations
   without granting mutation authority.
 - Approved actions gain agent preflight and stable refusal telemetry; large
@@ -22,12 +25,18 @@ response improvements, and monitoring correctness fixes.
   read-only checks, and kept separate from action authority.
 - Verified Patrol work receipts and clearer navigation between findings,
   objectives, attention items, and governed actions.
+- A persistent decision workspace with explicit decision origin, review
+  progress, next-item navigation, and automatic advancement after a decision.
+- A canonical platform-admission facet projected on unified resources so
+  supported onboarding and runtime modes stay consistent across the product.
 - Unified Agent preflight contracts for package updates, package-cache cleanup,
   and Docker lifecycle or update operations.
 - Production security deployment guidance and a focused security-review packet.
 
 ## Improved
 
+- Patrol now works from durable outcomes, scoped investigations, and verified
+  work receipts instead of treating the chat stream as operational state.
 - Patrol investigations preserve objective and resource intent across retries,
   provider interruptions, chat restarts, truncated responses, and retained
   objective runs.
@@ -35,6 +44,14 @@ response improvements, and monitoring correctness fixes.
   canonicalized and validated before Patrol writes or acts on them.
 - Autonomous execution remains bounded by advertised capabilities, explicit
   policy, agent preflight, current target state, and post-action verification.
+- Patrol separates its Inbox, Protection, and Activity modes, removes duplicate
+  counters and generic state, and keeps Assistant focused on explaining the
+  selected item rather than acting as the operations front door.
+- Authenticated startup no longer pulls the full legacy state payload. Unified
+  resource pages load concurrently after the first page and no longer wait for
+  WebSocket hydration before beginning the canonical fetch.
+- Actions and Patrol identify whether a decision originated from a finding,
+  alert, objective, or explicit operator request, making review context clearer.
 - Action refusal telemetry now classifies target changes, prerequisites,
   contract failures, capability limits, policy decisions, and stale plans
   instead of collapsing the new agent reason codes into the catch-all bucket.
@@ -52,6 +69,12 @@ response improvements, and monitoring correctness fixes.
   or unsupported findings and proposals as successful investigation output.
 - Enabling full AI mode or restarting the chat provider now preserves and
   rewires Patrol controls and investigation dependencies.
+- Platform-admission state stays current across tenant changes, reconnects,
+  shell navigation, and canonical resource aggregation.
+- Agent Doctor names the judged credential in verdict evidence, and agents
+  warn when the server overrides a presented agent identity.
+- Alert threshold overrides resolve through canonical registry identity, and
+  the monitoring-policy menu no longer clips inside alert cards.
 - Docker health-check dependencies and app-container scope now remain attached
   to the correct canonical findings.
 - Stale ZFS alerts clear when storage loses its pool attachment, and node-local
@@ -72,7 +95,7 @@ response improvements, and monitoring correctness fixes.
 
 ## Upgrade Notes
 
-Use the normal v6 install or update flow for `v6.3.0-rc.1` only when you are
+Use the normal v6 install or update flow for `v6.3.0-rc.2` only when you are
 comfortable testing a release candidate. The rollback target is `v6.2.1`.
 
 The exact rollback reinstall command is:
@@ -81,8 +104,8 @@ The exact rollback reinstall command is:
 ./scripts/install.sh --version v6.2.1
 ```
 
-The changes since `v6.2.1` do not require a Pulse Mobile client change and
-preserve the existing mobile, Relay, onboarding, and mobile-facing API
+The changes since `v6.3.0-rc.1` do not require a Pulse Mobile client change
+and preserve the existing mobile, Relay, onboarding, and mobile-facing API
 contracts. No companion mobile build upload or public mobile-store rollout is
 part of this candidate.
 
