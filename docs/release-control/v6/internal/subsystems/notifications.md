@@ -44,6 +44,7 @@ group headings, and HTML-escape every resource, message, and category field.
 7. `internal/operationaltrust/contracts.go`
 8. `internal/api/notification_queue.go`
 9. `internal/notifications/tag_routing.go`
+10. `internal/notifications/delivery_health.go`
 
 ## Shared Boundaries
 
@@ -57,6 +58,16 @@ group headings, and HTML-escape every resource, message, and category field.
 1. Add or change provider delivery, queue processing, or retry behavior through `internal/notifications/`
 2. Add or change notification-management request or response handling through `internal/api/notifications.go`
 3. Add or change notification-management frontend transport through `frontend-modern/src/api/notifications.ts`
+4. Add or change the delivery-health verdict through
+   `internal/notifications/delivery_health.go`. `ClassifyQueueHealth` is the
+   single rule for whether configured destinations are reaching anyone, and it
+   lives beside the queue that produces the counts so consumers cannot each
+   carry their own copy. Only terminal failed or dead-letter outcomes count as
+   unhealthy; recoverable retry attempts do not. A queue that cannot be read
+   reports `unavailable` and never `healthy`, because an unreadable queue must
+   not be mistaken for successful delivery. `internal/api/notifications.go`
+   delegates to this rule rather than reimplementing it, and `monitoring`
+   consumes it to raise the notification-delivery system alert.
 
 ## Forbidden Paths
 

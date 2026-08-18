@@ -497,6 +497,7 @@ cleanup so readers cannot retain orphaned runtime or alert projections.
 62. `internal/monitoring/kubernetes_metadata_migration.go`
 62a. `internal/monitoring/monitor_xcpng.go`
 63. `internal/monitoring/metadata_stores.go`
+64. `internal/monitoring/system_alerts.go`
 63a. `internal/config/docker_metadata.go`
 63b. `internal/config/guest_metadata.go`
 
@@ -921,6 +922,21 @@ cleanup so readers cannot retain orphaned runtime or alert projections.
     cancellation, timeout, and network failures remain transient and retry on
     the next polling call. Concurrent callers must share one in-flight `/nodes`
     request so immediate retry does not create a request storm.
+21. Add or change system-alert evaluation through
+    `internal/monitoring/system_alerts.go`. Monitoring holds both the
+    notification manager and the alert manager, so it is where a condition
+    about Pulse itself becomes an alert. The founding case is notification
+    delivery: a destination that has stopped delivering cannot announce itself
+    through a notification, so the alert list and navigation badge are the only
+    escalation path left. The verdict must come from
+    `notifications.ClassifyQueueHealth` rather than a local rule, and the
+    result must be raised through `alerts.RaiseSystemAlert` so identity and
+    idempotence stay owned by the alerts subsystem. Evaluation runs on the poll
+    ticker and must stay throttled well below the polling cadence, because
+    reading queue health costs a database query. New Monitor struct fields
+    added for this must fit the existing field alignment column: a longer name
+    makes gofmt re-pad the whole block and breaks the canonical guardrail tests
+    that pin those declarations verbatim.
 
 ## Forbidden Paths
 

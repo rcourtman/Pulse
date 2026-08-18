@@ -1107,6 +1107,7 @@ type Monitor struct {
 	connectionsSnapshotLister  func() []alerts.ConnectionSnapshot // returns platform connection snapshots for the connection-degraded check
 	incidentStore              *memory.IncidentStore
 	notificationMgr            *notifications.NotificationManager
+	lastDeliveryHealthCheck    time.Time // throttles the notification-delivery system alert evaluation; guarded by mu
 	configPersist              *config.ConfigPersistence
 	discoveryService           *discovery.Service                         // Background discovery service
 	activePollCount            int32                                      // Number of active polling operations
@@ -2027,6 +2028,7 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 			m.cleanupTrackingMaps(now)
 			m.cleanupMetricsHistory()
 			m.cleanupRateTracker(now)
+			m.evaluateNotificationDelivery(now)
 			if mock.IsMockEnabled() {
 				// In mock mode, keep synthetic alerts fresh
 				go m.checkMockAlerts()

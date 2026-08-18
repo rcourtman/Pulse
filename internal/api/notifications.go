@@ -903,18 +903,12 @@ func (h *NotificationHandlers) GetNotificationHealth(w http.ResponseWriter, r *h
 	json.NewEncoder(w).Encode(health)
 }
 
+// classifyNotificationQueueHealth delegates to the canonical rule in
+// internal/notifications so this endpoint and the monitoring loop that raises
+// the notification-delivery system alert cannot drift apart.
 func classifyNotificationQueueHealth(stats map[string]int) (bool, int, []string) {
-	failed := stats[string(notifications.QueueStatusFailed)]
-	deadLetter := stats[string(notifications.QueueStatusDLQ)]
-	reasonCodes := make([]string, 0, 2)
-	if failed > 0 {
-		reasonCodes = append(reasonCodes, "retained_failed_deliveries")
-	}
-	if deadLetter > 0 {
-		reasonCodes = append(reasonCodes, "retained_dead_letter_deliveries")
-	}
-	attentionRequired := failed + deadLetter
-	return attentionRequired == 0, attentionRequired, reasonCodes
+	health := notifications.ClassifyQueueHealth(stats)
+	return health.Healthy, health.AttentionRequired, health.ReasonCodes
 }
 
 func countEnabledWebhooks(webhooks []notifications.WebhookConfig) int {
