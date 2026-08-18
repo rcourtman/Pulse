@@ -176,7 +176,10 @@ export const getDockerContainerVisibleColumnsForLayout = (
   return DOCKER_CONTAINER_COLUMNS.filter((column) => {
     if (column.id === 'runtime' && !includeRuntime) return false;
     if (column.id === 'restarts' && !includeRestarts) return false;
-    if (column.id === 'state' && !includeState) return false;
+    // Ultra-narrow rows still need five stable scan fields. Keep the explicit
+    // state label there even when every current row is running; wider layouts
+    // may continue to remove the otherwise repetitive column.
+    if (column.id === 'state' && !includeState && layoutMode !== 'narrow') return false;
     return (
       DOCKER_CONTAINER_TABLE_LAYOUT_ORDER[DOCKER_CONTAINER_COLUMN_MIN_LAYOUT[column.id]] <=
       layoutRank

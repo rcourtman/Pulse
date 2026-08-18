@@ -132,7 +132,8 @@ describe('DockerHostsTable', () => {
     expect(dockerHostsTableSource).toContain('platform-table-mobile-w-30');
     expect(dockerHostsTableSource).toContain('platform-table-narrow-hidden');
     expect(dockerHostsTableSource).toContain('hidden min-[360px]:table-cell min-[360px]:w-[16%]');
-    expect(dockerHostsTableSource).toContain('class="max-[359px]:hidden"');
+    expect(dockerHostsTableSource).not.toContain('class="max-[359px]:hidden"');
+    expect(dockerHostsTableSource).not.toContain('max-[359px]:[&>a]:hidden');
     expect(dockerHostsTableSource).not.toContain('md:hidden" title={badge().title');
   });
 

@@ -19,6 +19,13 @@ import {
   type PlatformResourceStatusFilter,
   PlatformTableShell,
 } from '@/features/platformPage/sharedPlatformPage';
+import {
+  PlatformResourceDetailTableRow,
+  PlatformResourceDetailToggleButton,
+  createPlatformResourceDetailState,
+  createPlatformResourceLabelResolver,
+  getPlatformResourceDetailRowClass,
+} from '@/features/platformPage/PlatformResourceDetailTableRow';
 import type { Resource, ResourceAvailabilityMeta } from '@/types/resource';
 import {
   getAvailabilityProbeEndpointLabel,
@@ -77,6 +84,8 @@ export const AvailabilityChecksTable: Component<{
       }),
   });
   const orderedChecks = createMemo(() => sortStandaloneResourcesByAttention(tableState.filtered()));
+  const drawer = createPlatformResourceDetailState({ idPrefix: 'availability-check-detail' });
+  const resolveResourceLabel = createPlatformResourceLabelResolver(() => props.resources);
 
   return (
     <Show
@@ -193,89 +202,112 @@ export const AvailabilityChecksTable: Component<{
                         props.probeAgentOptions ?? [],
                         availability()?.probeAgentId,
                       );
+                    const detailRowId = () => drawer.detailRowId(check);
+                    const isExpanded = () => drawer.isExpanded(check);
 
                     return (
-                      <TableRow
-                        data-availability-check-row={check.id}
-                        class="text-[11px] sm:text-xs"
-                      >
-                        <TableCell class={getPlatformTableCellClassForKind('name')}>
-                          <div class="flex min-w-0 items-center gap-2">
-                            <StatusDot
-                              size="sm"
-                              variant={indicator().variant}
-                              title={indicator().label}
-                              ariaHidden
-                            />
-                            <span
-                              class="truncate font-semibold text-base-content"
-                              title={check.name}
-                            >
-                              {check.name}
-                            </span>
-                          </div>
-                        </TableCell>
-                        <TableCell
-                          class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                      <>
+                        <TableRow
+                          data-availability-check-row={check.id}
+                          class={`${getPlatformResourceDetailRowClass(isExpanded())} text-[11px] sm:text-xs`}
+                          aria-controls={isExpanded() ? detailRowId() : undefined}
+                          aria-expanded={isExpanded() ? 'true' : 'false'}
+                          onClick={() => drawer.toggle(check)}
+                          onKeyDown={drawer.handleActivationKey(check)}
+                          tabIndex={0}
                         >
-                          {method()}
-                        </TableCell>
-                        <TableCell
-                          class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
-                        >
-                          <span class="block truncate" title={target()}>
-                            {target()}
-                          </span>
-                        </TableCell>
-                        <TableCell
-                          class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
-                        >
-                          <span class={probe()?.toneClassName ?? ''} title={probe()?.detailLabel}>
-                            {result()}
-                          </span>
-                          <Show when={probeSource()}>
-                            {(sourceLabel) => (
-                              <MetadataBadge
-                                tone="muted"
-                                size="xs"
-                                appearance="outline"
-                                class="mt-0.5 flex"
-                                data-availability-probe-source={availability()?.probeAgentId}
+                          <TableCell class={getPlatformTableCellClassForKind('name')}>
+                            <div class="flex min-w-0 items-center gap-2">
+                              <PlatformResourceDetailToggleButton
+                                expanded={isExpanded()}
+                                resourceLabel={check.name}
+                                controlsId={detailRowId()}
+                                onToggle={() => drawer.toggle(check)}
+                              />
+                              <StatusDot
+                                size="sm"
+                                variant={indicator().variant}
+                                title={indicator().label}
+                                ariaHidden
+                              />
+                              <span
+                                class="truncate font-semibold text-base-content"
+                                title={check.name}
                               >
-                                {sourceLabel()}
-                              </MetadataBadge>
-                            )}
-                          </Show>
-                        </TableCell>
-                        <TableCell
-                          class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
-                        >
-                          <PlatformTableRelativeTimeValue
-                            value={availability()?.lastChecked}
-                            emptyText="Not checked"
-                          />
-                        </TableCell>
-                        <TableCell
-                          class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content lg:table-cell`}
-                        >
-                          <PlatformTableRelativeTimeValue
-                            value={availability()?.lastSuccess}
-                            emptyText="Never"
-                          />
-                        </TableCell>
-                        <TableCell
-                          class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content lg:table-cell`}
-                        >
-                          {formatFailures(availability())}
-                        </TableCell>
-                        <TableCell
-                          class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content lg:table-cell`}
-                        >
-                          <PlatformTableDurationValue
-                            seconds={availability()?.pollIntervalSeconds}
-                          />
-                        </TableCell>
-                      </TableRow>
+                                {check.name}
+                              </span>
+                            </div>
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                          >
+                            {method()}
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                          >
+                            <span class="block truncate" title={target()}>
+                              {target()}
+                            </span>
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
+                          >
+                            <span class={probe()?.toneClassName ?? ''} title={probe()?.detailLabel}>
+                              {result()}
+                            </span>
+                            <Show when={probeSource()}>
+                              {(sourceLabel) => (
+                                <MetadataBadge
+                                  tone="muted"
+                                  size="xs"
+                                  appearance="outline"
+                                  class="mt-0.5 flex"
+                                  data-availability-probe-source={availability()?.probeAgentId}
+                                >
+                                  {sourceLabel()}
+                                </MetadataBadge>
+                              )}
+                            </Show>
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
+                          >
+                            <PlatformTableRelativeTimeValue
+                              value={availability()?.lastChecked}
+                              emptyText="Not checked"
+                            />
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content lg:table-cell`}
+                          >
+                            <PlatformTableRelativeTimeValue
+                              value={availability()?.lastSuccess}
+                              emptyText="Never"
+                            />
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content lg:table-cell`}
+                          >
+                            {formatFailures(availability())}
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content lg:table-cell`}
+                          >
+                            <PlatformTableDurationValue
+                              seconds={availability()?.pollIntervalSeconds}
+                            />
+                          </TableCell>
+                        </TableRow>
+                        <PlatformResourceDetailTableRow
+                          resource={check}
+                          open={isExpanded()}
+                          detailRowId={detailRowId()}
+                          colSpan={8}
+                          resolveResourceLabel={resolveResourceLabel}
+                          onClose={() => drawer.close(check)}
+                        />
+                      </>
                     );
                   }}
                 </For>

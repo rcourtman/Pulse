@@ -18,6 +18,14 @@ describe('dockerContainerTableModel', () => {
     expect(getDockerContainerColumnWidthStyle('cpu', 'narrow', ids)).toEqual({ width: '15%' });
   });
 
+  it('keeps the five-field narrow projection stable when every container is running', () => {
+    const ids = getDockerContainerVisibleColumnsForLayout('narrow', true, false, false).map(
+      (column) => column.id,
+    );
+
+    expect(ids).toEqual(['container', 'state', 'cpu', 'memory', 'updates']);
+  });
+
   it('keeps phone rows focused on container identity and live health signals', () => {
     const columns = getDockerContainerVisibleColumnsForLayout('phone', true, true, true);
     const ids = columns.map((column) => column.id);

@@ -403,7 +403,6 @@ export const DockerHostsTable: Component<{
                                 expanded={isSelected()}
                                 resourceLabel={name()}
                                 controlsId={detailRowId()}
-                                class="max-[359px]:hidden"
                                 onToggle={toggleDrawer}
                               />
                               <StatusDot
@@ -415,7 +414,7 @@ export const DockerHostsTable: Component<{
                               <ResourceNameWithWebInterfaceLink
                                 name={name()}
                                 url={customUrl()}
-                                class="min-w-0 max-[359px]:[&>a]:hidden"
+                                class="min-w-0"
                                 nameClass="truncate font-semibold text-base-content"
                               />
                             </div>

@@ -1,5 +1,5 @@
 import { Route, Router } from '@solidjs/router';
-import { cleanup, render, screen } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Resource } from '@/types/resource';
 import type { ProbeAgentOption } from '@/utils/availabilityProbeAgents';
@@ -85,6 +85,21 @@ describe('AvailabilityChecksTable', () => {
     expect(headers[3]).toHaveClass('platform-table-mobile-w-15');
     expect(headers[4]).toHaveClass('platform-table-mobile-w-15');
     expect(headers[4]).not.toHaveClass('hidden');
+  });
+
+  it('exposes complete availability details from the compact summary row', () => {
+    const { container } = renderTable([availabilityResource()]);
+    const row = container.querySelector('[data-availability-check-row]');
+
+    expect(row).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.click(screen.getByRole('button', { name: 'Expand details for MQTT power meter' }));
+
+    expect(row).toHaveAttribute('aria-expanded', 'true');
+    expect(
+      container.querySelector(
+        '[data-inline-platform-resource-detail-for="availability:mock-availability-mqtt-meter"]',
+      ),
+    ).not.toBeNull();
   });
 
   it('places failing checks before healthy checks by default', () => {
