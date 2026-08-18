@@ -1,22 +1,27 @@
 {
   "version": 1,
-  "base_sha": "e1427e66f8614d0fea90d62d7f785f93595fdae1",
-  "verified_at": "2026-08-18T09:24:31Z",
+  "base_sha": "ed5d983e8e028d43c35bbb45e6cae7a3fe3cf1bf",
+  "verified_at": "2026-08-18T11:20:00Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx",
-    "frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx",
-    "frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx"
+    "frontend-modern/src/useAppRuntimeState.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx": "770c7eaecf23026916fa48198fe5220be6db076fbd30a7351e250d2cbeec9fb4",
-    "frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx": "f147df3ec75a27fb5d06b6cf9e8f487b02d93af1630c8d7fb0fd3688b264a3dc",
-    "frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx": "4a3d400d59c42a48b0488ef0a4b0026f39326e1cbfc44d19528198bfd84030e1"
+    "frontend-modern/src/useAppRuntimeState.ts": "eae9b60896cf6f8b816d77e8316afc72e47b9a44f7eed532dedf2def1b5aeeb6"
   },
-  "routes": ["/patrol"],
+  "routes": [
+    "/login",
+    "/",
+    "/proxmox/overview",
+    "/docker/overview",
+    "/kubernetes/overview",
+    "/truenas/overview",
+    "/vsphere/overview",
+    "/settings/infrastructure"
+  ],
   "viewports": [
     {
-      "width": 1280,
+      "width": 1440,
       "height": 900
     },
     {
@@ -25,18 +30,25 @@
     }
   ],
   "states": [
-    "Default live Inbox with 12 ranked decisions, one critical item, and one governed approval waiting; Protection, verified outcomes, and history absent from the canvas",
-    "Protection mode with retained-objective setup only and no decision queue or activity surface",
-    "Activity mode with verified outcomes and the subordinate actions, findings, and run-record handoffs",
-    "Desktop selected-decision split with persistent queue, current position, previous/next navigation, and governed lifecycle, evidence, protection, resource, and Assistant context",
-    "390x844 selected-decision master/detail state with the queue hidden, Back to list, queue position, and touch-sized navigation",
-    "Current-coverage calm state, transport failure state, and attached availability failure without synthetic health"
+    "signed-out login form",
+    "authenticated shell on a populated estate, all six platform tabs present",
+    "Docker, Kubernetes, TrueNAS and vSphere platform pages populated",
+    "authenticated shell on an estate with zero resources",
+    "empty estate landing on /settings/infrastructure with no platform tabs in the navigation landmark",
+    "populated and empty estates both at 390x844"
   ],
   "interactions": [
-    "Used the live in-app Browser to inspect the final Inbox, Protection, Activity, and selected-decision split against current backend data",
-    "Exercised the workspace tabs and confirmed only the selected panel is present while stable Patrol route and API truth are retained",
-    "Verified automatic advancement after Mark reviewed, bounded suppression feedback, inbox focus restoration, deep-link reload, and no horizontal overflow",
-    "Passed the complete 18-scenario attention-workbench matrix across Chromium, mobile Chrome, and mobile Safari; the two corrected exact-name checks were rerun across all three engines",
-    "Passed all eight affected Assistant, monitor-first, and attached-availability journeys in Chromium"
+    "signed in against a backend built from this change and confirmed the shell issues one /api/state/summary probe and zero /api/state requests",
+    "confirmed navigation resolved from the admission facet with all six platform tabs and landed on /proxmox/overview",
+    "switched to the Docker tab and confirmed 80 rows",
+    "switched to the Kubernetes tab and confirmed 180 rows",
+    "switched to the TrueNAS tab and confirmed 3 rows",
+    "switched to the vSphere tab and confirmed 32 rows",
+    "returned to the Proxmox tab and confirmed 79 rows",
+    "signed in against a second backend with an empty estate and confirmed the navigation landmark contains no platform tabs at all, rather than a stale or hidden set",
+    "confirmed the empty estate routes to /settings/infrastructure, which is the no-platform destination",
+    "confirmed the empty estate also issues zero /api/state requests",
+    "resized both estates to 390x844 and confirmed the populated one still renders 79 rows and the empty one renders none",
+    "confirmed zero console or page errors on both estates"
   ]
 }

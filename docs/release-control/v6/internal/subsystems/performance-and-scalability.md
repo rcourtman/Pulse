@@ -989,6 +989,17 @@ organization switch and a websocket reconnect, and MUST NOT be polled. Live
 runtime state is authoritative once it arrives and already tracks the estate,
 so a steady-state session makes no admission requests at all.
 
+### The shell bootstrap is estate-independent
+
+The authenticated shell bootstrap MUST NOT fetch an estate-sized payload. It
+probes the session with `/api/state/summary` and resolves navigation from the
+platform admission facet, so sign-in cost does not scale with estate size and
+the websocket is not held behind a full-state build.
+
+`/api/state` remains the recovery path for a snapshot too large for a
+websocket frame and MUST keep returning the full resource set. It is not a
+bootstrap surface, and the shell MUST NOT call it.
+
 ## Forbidden Paths
 
 1. Speculative micro-optimizations without evidence

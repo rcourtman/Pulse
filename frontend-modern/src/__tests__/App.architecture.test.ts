@@ -656,7 +656,10 @@ describe('App architecture', () => {
       'const beginAuthenticatedRuntime = async (): Promise<boolean> => {',
     );
     expect(appRuntimeStateSource).toContain('if (!(await loadAuthenticatedBootstrapState())) {');
-    expect(appRuntimeStateSource.match(/apiFetch\('\/api\/state'/g)).toHaveLength(1);
+    // The bootstrap probes the session once, and never through the full state
+    // payload: `/api/state` stays the oversized-snapshot recovery path only.
+    expect(appRuntimeStateSource.match(/apiFetch\('\/api\/state\/summary'/g)).toHaveLength(1);
+    expect(appRuntimeStateSource).not.toContain("apiFetch('/api/state',");
     expect(appRuntimeStateSource).toContain('SettingsAPI.getRuntimeDisplay()');
     expect(appRuntimeStateSource).not.toContain('SettingsAPI.getSystemSettings');
     expect(appRuntimeStateSource).toContain(

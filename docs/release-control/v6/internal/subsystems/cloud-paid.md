@@ -1231,6 +1231,13 @@ render between the switch and the new answer can show the outgoing tenant's
 platform tabs. Proof: `drops platform admission when the tenant changes` in
 `frontend-modern/src/__tests__/App.architecture.test.ts`.
 
+### Tenant shell bootstrap payload
+
+The tenant shell bootstrap probes the session through `/api/state/summary`,
+which carries the same auth and monitoring-read scope checks as the full state
+endpoint. A tenant's sign-in therefore costs the same regardless of how large
+its estate is, and no estate data crosses the bootstrap.
+
 ## Forbidden Paths
 
 1. New ad hoc plan names in runtime or UI

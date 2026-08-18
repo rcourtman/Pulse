@@ -95,6 +95,12 @@ describe('useAppRuntimeState', () => {
     });
 
     apiFetchMock = vi.fn(async (url: string) => {
+      if (url === '/api/state/summary') {
+        return new Response(
+          JSON.stringify({ activeAlerts: 0, nodes: 0, vms: 0, containers: 0, dockerHosts: [] }),
+          { status: 200 },
+        );
+      }
       if (url === '/api/security/status') {
         return new Response(JSON.stringify({ hasAuthentication: true }), { status: 200 });
       }
@@ -380,6 +386,12 @@ describe('useAppRuntimeState', () => {
   it('syncs demo mode from security status session capabilities during bootstrap', async () => {
     isMultiTenantEnabledMock.mockReturnValue(true);
     apiFetchMock.mockImplementation(async (url: string) => {
+      if (url === '/api/state/summary') {
+        return new Response(
+          JSON.stringify({ activeAlerts: 0, nodes: 0, vms: 0, containers: 0, dockerHosts: [] }),
+          { status: 200 },
+        );
+      }
       if (url === '/api/security/status') {
         return new Response(
           JSON.stringify({
@@ -417,6 +429,12 @@ describe('useAppRuntimeState', () => {
     const principal = 'sso:oidc:test-oidc:stable-principal';
     const bootstrapResource = makeTrueNASResource('truenas-sso');
     apiFetchMock.mockImplementation(async (url: string) => {
+      if (url === '/api/state/summary') {
+        return new Response(
+          JSON.stringify({ activeAlerts: 0, nodes: 0, vms: 0, containers: 0, dockerHosts: [] }),
+          { status: 200 },
+        );
+      }
       if (url === '/api/security/status') {
         return new Response(
           JSON.stringify({
@@ -451,15 +469,19 @@ describe('useAppRuntimeState', () => {
         username: 'alice@example.com',
         logoutURL: '/api/oidc/test-oidc/logout',
       });
-      expect(hookState.state().resources).toEqual([bootstrapResource]);
+      expect(hookState.platformAdmission()).not.toBeNull();
     });
 
     expect(hookState.securityStatus()?.ssoSessionUsername).toBe(principal);
     expect(hookState.hasAuth()).toBe(true);
     expect(hookState.needsAuth()).toBe(false);
     expect(hookState.enhancedStore()?.initialDataReceived()).toBe(false);
-    expect(hookState.runtimeStateResolved()).toBe(true);
-    expect(apiFetchMock.mock.calls.filter(([url]) => url === '/api/state')).toHaveLength(1);
+    // The shell carries no estate before the socket connects; navigation comes
+    // from the admission facet instead of a full-state payload.
+    expect(hookState.state().resources).toEqual([]);
+    expect(hookState.runtimeStateResolved()).toBe(false);
+    expect(apiFetchMock.mock.calls.filter(([url]) => url === '/api/state/summary')).toHaveLength(1);
+    expect(apiFetchMock.mock.calls.filter(([url]) => url === '/api/state')).toHaveLength(0);
 
     dispose();
   });
@@ -467,6 +489,12 @@ describe('useAppRuntimeState', () => {
   it('bootstraps proxy-auth TrueNAS state before websocket data', async () => {
     const bootstrapResource = makeTrueNASResource('truenas-proxy');
     apiFetchMock.mockImplementation(async (url: string) => {
+      if (url === '/api/state/summary') {
+        return new Response(
+          JSON.stringify({ activeAlerts: 0, nodes: 0, vms: 0, containers: 0, dockerHosts: [] }),
+          { status: 200 },
+        );
+      }
       if (url === '/api/security/status') {
         return new Response(
           JSON.stringify({
@@ -496,23 +524,29 @@ describe('useAppRuntimeState', () => {
     const { hookState, dispose } = mountHook();
 
     await waitFor(() => {
-      expect(hookState.state().resources).toEqual([bootstrapResource]);
+      expect(hookState.platformAdmission()).not.toBeNull();
     });
 
+    // No estate before the socket connects; navigation comes from the facet.
+    expect(hookState.state().resources).toEqual([]);
+    expect(hookState.runtimeStateResolved()).toBe(false);
     expect(hookState.proxyAuthInfo()).toEqual({
       username: 'proxy-operator',
       logoutURL: '/proxy/logout',
     });
     expect(hookState.needsAuth()).toBe(false);
     expect(hookState.enhancedStore()?.initialDataReceived()).toBe(false);
-    expect(hookState.runtimeStateResolved()).toBe(true);
-    expect(apiFetchMock.mock.calls.filter(([url]) => url === '/api/state')).toHaveLength(1);
+    expect(apiFetchMock.mock.calls.filter(([url]) => url === '/api/state/summary')).toHaveLength(1);
+    expect(apiFetchMock.mock.calls.filter(([url]) => url === '/api/state')).toHaveLength(0);
 
     dispose();
   });
 
   it('does not start the proxy-auth runtime when protected state rejects the session', async () => {
     apiFetchMock.mockImplementation(async (url: string) => {
+      if (url === '/api/state/summary') {
+        return new Response('{}', { status: 401 });
+      }
       if (url === '/api/security/status') {
         return new Response(
           JSON.stringify({
@@ -538,12 +572,13 @@ describe('useAppRuntimeState', () => {
     expect(hookState.needsAuth()).toBe(true);
     expect(hookState.enhancedStore()).toBeNull();
     expect(orgsListMock).not.toHaveBeenCalled();
-    expect(apiFetchMock.mock.calls.filter(([url]) => url === '/api/state')).toHaveLength(1);
+    expect(apiFetchMock.mock.calls.filter(([url]) => url === '/api/state/summary')).toHaveLength(1);
+    expect(apiFetchMock.mock.calls.filter(([url]) => url === '/api/state')).toHaveLength(0);
 
     dispose();
   });
 
-  it('uses the protected state response as shell state before websocket data arrives', async () => {
+  it('resolves navigation before websocket data without pulling the full state', async () => {
     const bootstrapResource: Resource = {
       id: 'pve-1',
       name: 'pve-1',
@@ -557,6 +592,12 @@ describe('useAppRuntimeState', () => {
       lastSeen: 1_700_000_000_000,
     };
     apiFetchMock.mockImplementation(async (url: string) => {
+      if (url === '/api/state/summary') {
+        return new Response(
+          JSON.stringify({ activeAlerts: 0, nodes: 0, vms: 0, containers: 0, dockerHosts: [] }),
+          { status: 200 },
+        );
+      }
       if (url === '/api/security/status') {
         return new Response(JSON.stringify({ hasAuthentication: true }), { status: 200 });
       }
@@ -578,11 +619,16 @@ describe('useAppRuntimeState', () => {
     const { hookState, dispose } = mountHook();
 
     await waitFor(() => {
-      expect(hookState.state().resources).toEqual([bootstrapResource]);
+      expect(hookState.platformAdmission()).not.toBeNull();
     });
-    expect(hookState.runtimeStateResolved()).toBe(true);
+    // The shell used to render this window from a full-state payload. It now
+    // resolves navigation from the admission facet and holds no estate of its
+    // own until the socket delivers one.
+    expect(hookState.state().resources).toEqual([]);
+    expect(hookState.runtimeStateResolved()).toBe(false);
     expect(hookState.enhancedStore()?.initialDataReceived()).toBe(false);
-    expect(apiFetchMock.mock.calls.filter(([url]) => url === '/api/state')).toHaveLength(1);
+    expect(apiFetchMock.mock.calls.filter(([url]) => url === '/api/state/summary')).toHaveLength(1);
+    expect(apiFetchMock.mock.calls.filter(([url]) => url === '/api/state')).toHaveLength(0);
 
     dispose();
   });
@@ -608,6 +654,12 @@ describe('useAppRuntimeState', () => {
     websocketReconnecting = true;
     websocketInitialDataReceived = false;
     apiFetchMock.mockImplementation(async (url: string) => {
+      if (url === '/api/state/summary') {
+        return new Response(
+          JSON.stringify({ activeAlerts: 0, nodes: 0, vms: 0, containers: 0, dockerHosts: [] }),
+          { status: 200 },
+        );
+      }
       if (url === '/api/security/status') {
         return new Response(
           JSON.stringify({
@@ -637,42 +689,63 @@ describe('useAppRuntimeState', () => {
     expect(hookState.enhancedStore()?.initialDataReceived()).toBe(false);
     expect(hookState.runtimeStateResolved()).toBe(true);
     expect(hookState.state().resources).toEqual([retainedResource]);
-    expect(apiFetchMock.mock.calls.filter(([url]) => url === '/api/state')).toHaveLength(1);
+    expect(apiFetchMock.mock.calls.filter(([url]) => url === '/api/state/summary')).toHaveLength(1);
+    expect(apiFetchMock.mock.calls.filter(([url]) => url === '/api/state')).toHaveLength(0);
 
     dispose();
   });
 
-  it('distinguishes an evidence-free first load from an authenticated empty bootstrap', async () => {
-    let resolveStateResponse: ((response: Response) => void) | undefined;
-    const stateResponse = new Promise<Response>((resolve) => {
-      resolveStateResponse = resolve;
+  it('distinguishes an evidence-free first load from an authenticated empty estate', async () => {
+    // The distinction still matters: an estate with nothing in it must resolve
+    // to "no platform pages", not sit unresolved forever. It is now answered by
+    // the admission facet rather than by a full-state payload arriving.
+    let resolveAdmission: ((value: unknown) => void) | undefined;
+    const pendingAdmission = new Promise((resolve) => {
+      resolveAdmission = resolve;
     });
-    apiFetchMock.mockImplementation(async (url: string) => {
-      if (url === '/api/security/status') {
-        return new Response(JSON.stringify({ hasAuthentication: true }), { status: 200 });
+    apiFetchJSONMock.mockImplementation(async (url: string) => {
+      if (url.startsWith('/api/resources')) {
+        return pendingAdmission;
       }
-      if (url === '/api/state') {
-        return stateResponse;
-      }
-      if (url === '/api/health') {
-        return new Response('{}', { status: 200 });
-      }
-      throw new Error(`Unhandled apiFetch URL: ${url}`);
+      throw new Error(`Unhandled apiFetchJSON URL: ${url}`);
     });
 
     const { hookState, dispose } = mountHook();
 
     await waitFor(() => {
-      expect(apiFetchMock.mock.calls.some(([url]) => url === '/api/state')).toBe(true);
+      expect(apiFetchMock.mock.calls.some(([url]) => url === '/api/state/summary')).toBe(true);
     });
+    // Nothing has answered yet: no estate, and no admission to navigate by.
     expect(hookState.runtimeStateResolved()).toBe(false);
+    expect(hookState.platformAdmission()).toBeNull();
 
-    resolveStateResponse?.(new Response('{}', { status: 200 }));
+    resolveAdmission?.({
+      aggregations: {
+        platformAdmission: {
+          proxmox: false,
+          docker: false,
+          kubernetes: false,
+          truenas: false,
+          vmware: false,
+          standalone: false,
+        },
+      },
+    });
 
     await waitFor(() => {
-      expect(hookState.runtimeStateResolved()).toBe(true);
+      expect(hookState.platformAdmission()).not.toBeNull();
       expect(hookState.isLoading()).toBe(false);
     });
+    // An authenticated empty estate: admitted nothing, which is a resolved
+    // answer rather than an absent one.
+    expect(Object.values(hookState.platformAdmission()!)).toEqual([
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+    ]);
     expect(hookState.state().resources).toEqual([]);
 
     dispose();
@@ -680,6 +753,12 @@ describe('useAppRuntimeState', () => {
 
   it('skips commercial posture bootstrap when upgrade prompts are hidden', async () => {
     apiFetchMock.mockImplementation(async (url: string) => {
+      if (url === '/api/state/summary') {
+        return new Response(
+          JSON.stringify({ activeAlerts: 0, nodes: 0, vms: 0, containers: 0, dockerHosts: [] }),
+          { status: 200 },
+        );
+      }
       if (url === '/api/security/status') {
         return new Response(
           JSON.stringify({
@@ -715,6 +794,12 @@ describe('useAppRuntimeState', () => {
 
   it('loads commercial posture during bootstrap when upgrade prompts are allowed', async () => {
     apiFetchMock.mockImplementation(async (url: string) => {
+      if (url === '/api/state/summary') {
+        return new Response(
+          JSON.stringify({ activeAlerts: 0, nodes: 0, vms: 0, containers: 0, dockerHosts: [] }),
+          { status: 200 },
+        );
+      }
       if (url === '/api/security/status') {
         return new Response(
           JSON.stringify({
@@ -861,7 +946,7 @@ describe('useAppRuntimeState', () => {
     await flushAsync();
     await flushAsync();
 
-    expect(apiFetchMock.mock.calls.some(([url]) => url === '/api/state')).toBe(false);
+    expect(apiFetchMock.mock.calls.some(([url]) => url === '/api/state/summary')).toBe(false);
     expect(hookState.needsAuth()).toBe(true);
 
     dispose();
@@ -876,7 +961,7 @@ describe('useAppRuntimeState', () => {
     await flushAsync();
     await flushAsync();
 
-    expect(apiFetchMock.mock.calls.some(([url]) => url === '/api/state')).toBe(false);
+    expect(apiFetchMock.mock.calls.some(([url]) => url === '/api/state/summary')).toBe(false);
     expect(hookState.needsAuth()).toBe(true);
 
     dispose();
@@ -892,7 +977,7 @@ describe('useAppRuntimeState', () => {
     await flushAsync();
     await flushAsync();
 
-    expect(apiFetchMock.mock.calls.some(([url]) => url === '/api/state')).toBe(true);
+    expect(apiFetchMock.mock.calls.some(([url]) => url === '/api/state/summary')).toBe(true);
 
     dispose();
   });

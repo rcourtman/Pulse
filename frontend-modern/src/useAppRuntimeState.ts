@@ -166,40 +166,6 @@ export const useAppRuntimeState = () => {
     lastUpdate: 0,
     resources: [],
   };
-  const normalizeBootstrapState = (value: unknown): State | null => {
-    if (!isRecord(value)) return null;
-    return {
-      ...fallbackState,
-      ...value,
-      connectedInfrastructure: Array.isArray(value.connectedInfrastructure)
-        ? (value.connectedInfrastructure as State['connectedInfrastructure'])
-        : fallbackState.connectedInfrastructure,
-      metrics: Array.isArray(value.metrics)
-        ? (value.metrics as State['metrics'])
-        : fallbackState.metrics,
-      performance: isRecord(value.performance)
-        ? ({ ...fallbackState.performance, ...value.performance } as State['performance'])
-        : fallbackState.performance,
-      connectionHealth: isRecord(value.connectionHealth)
-        ? (value.connectionHealth as State['connectionHealth'])
-        : fallbackState.connectionHealth,
-      stats: isRecord(value.stats)
-        ? ({ ...fallbackState.stats, ...value.stats } as State['stats'])
-        : fallbackState.stats,
-      activeAlerts: Array.isArray(value.activeAlerts)
-        ? (value.activeAlerts as State['activeAlerts'])
-        : fallbackState.activeAlerts,
-      recentlyResolved: Array.isArray(value.recentlyResolved)
-        ? (value.recentlyResolved as State['recentlyResolved'])
-        : fallbackState.recentlyResolved,
-      lastUpdate:
-        typeof value.lastUpdate === 'number' ? value.lastUpdate : fallbackState.lastUpdate,
-      resources: Array.isArray(value.resources)
-        ? (value.resources as State['resources'])
-        : fallbackState.resources,
-    };
-  };
-
   const hasRuntimeStatePayload = (candidate: State | undefined): boolean => {
     if (!candidate) return false;
     return (
@@ -226,7 +192,6 @@ export const useAppRuntimeState = () => {
     logoutURL?: string;
   } | null>(null);
   const [wsStore, setWsStore] = createSignal<EnhancedStore | null>(null);
-  const [bootstrapState, setBootstrapState] = createSignal<State | null>(null);
   // Which primary platform pages this estate admits, as reported by the
   // canonical resource contract. Null means the server did not report it, in
   // which case navigation falls back to classifying the runtime state payload.
@@ -235,11 +200,10 @@ export const useAppRuntimeState = () => {
   const [backendHealthy, setBackendHealthy] = createSignal(false);
   const runtimeStateResolved = (): boolean => {
     const store = wsStore();
-    return (
-      bootstrapState() !== null ||
-      Boolean(store?.initialDataReceived()) ||
-      hasRuntimeStatePayload(store?.state)
-    );
+    // Deliberately not "some payload arrived": a bootstrap that carried no
+    // resources would still read as resolved and navigation would classify an
+    // empty estate, hiding every platform tab.
+    return Boolean(store?.initialDataReceived()) || hasRuntimeStatePayload(store?.state);
   };
   const state = (): State => {
     const store = wsStore();
@@ -247,7 +211,7 @@ export const useAppRuntimeState = () => {
     if (liveState && (store.initialDataReceived() || hasRuntimeStatePayload(liveState))) {
       return liveState;
     }
-    return bootstrapState() || liveState || fallbackState;
+    return liveState || fallbackState;
   };
   const connected = () => wsStore()?.connected() || false;
   const reconnecting = () => wsStore()?.reconnecting() || false;
@@ -376,26 +340,26 @@ export const useAppRuntimeState = () => {
     aiChatStore.setEnabled(securityData?.sessionCapabilities?.assistantEnabled === true);
   };
 
+  // Probes the session against the same auth and scope checks as `/api/state`
+  // without pulling an estate-sized payload through them. The shell used to
+  // read the full state here purely to find out whether it was authenticated
+  // and to have something to render before the socket connected; navigation now
+  // resolves from the platform admission facet, and everything else the shell
+  // shows comes from the socket. `/api/state` itself is untouched: it is the
+  // recovery path for a snapshot too large for a websocket frame.
   const loadAuthenticatedBootstrapState = async (): Promise<boolean> => {
-    const stateResponse = await apiFetch('/api/state', {
+    const summaryResponse = await apiFetch('/api/state/summary', {
       headers: {
         'X-Requested-With': 'XMLHttpRequest',
         Accept: 'application/json',
       },
     });
 
-    if (stateResponse.status === 401) {
-      setBootstrapState(null);
+    if (summaryResponse.status === 401) {
       setNeedsAuth(true);
       return false;
     }
 
-    const protectedState = await stateResponse
-      .clone()
-      .json()
-      .then(normalizeBootstrapState)
-      .catch(() => null);
-    setBootstrapState(protectedState);
     return true;
   };
 
@@ -512,7 +476,6 @@ export const useAppRuntimeState = () => {
 
     setSelectedOrgID(target);
     setActiveOrgID(target);
-    setBootstrapState(null);
     // Drop the previous tenant's admission before anything can render from it:
     // a stale facet here would show the other tenant's platform tabs until the
     // new runtime state arrives.
@@ -821,7 +784,6 @@ export const useAppRuntimeState = () => {
       }
       aiChatStore.setEnabled(false);
       setHasAuth(false);
-      setBootstrapState(null);
       setNeedsAuth(true);
     } finally {
       setIsLoading(false);
@@ -863,7 +825,6 @@ export const useAppRuntimeState = () => {
     sessionStorage.clear();
     localStorage.setItem('just_logged_out', 'true');
     aiChatStore.setEnabled(false);
-    setBootstrapState(null);
 
     if (wsStore()) {
       setWsStore(null);
