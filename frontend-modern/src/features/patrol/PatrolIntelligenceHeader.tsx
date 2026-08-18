@@ -301,7 +301,7 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
         class="relative z-[200] mb-3"
       />
 
-      <section class="border-y border-border">
+      <section id={PATROL_CONTROL_ANCHOR} class="border-y border-border">
         <div class="flex flex-col gap-3 px-1 py-2 sm:px-2 lg:flex-row lg:items-center lg:justify-between">
           <div class="flex min-w-0 items-start gap-3">
             <div class="pt-0.5">
@@ -329,6 +329,12 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
               </Show>
               <Show when={!state.shouldShowPatrolSetupOnly() && triggerStatusSummary()}>
                 <p class="mt-1 text-xs leading-5 text-muted">{triggerStatusSummary()}</p>
+              </Show>
+              <Show when={!shouldShowAutonomyActionColumn()}>
+                <div class="mt-1 flex flex-wrap items-baseline gap-x-2 text-xs leading-5 text-muted">
+                  <span class="font-semibold text-base-content">Patrol mode</span>
+                  <span>{selectedAutonomyPolicy().detail}</span>
+                </div>
               </Show>
               <Show when={!state.shouldShowPatrolSetupOnly() && recency().timestamp}>
                 <div class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs leading-5 text-muted">
@@ -376,19 +382,21 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
           </Show>
         </div>
 
-        <details id={PATROL_CONTROL_ANCHOR} class="border-t border-border-subtle px-1 py-1 sm:px-2">
-          <summary class="min-h-11 cursor-pointer text-xs font-medium text-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 sm:min-h-0">
-            Mode and automation
-          </summary>
-          <div class="pt-3">
-            <span id={PATROL_OPERATIONS_LOOP_ANCHOR} class="sr-only" aria-hidden="true" />
-            {renderAutonomyPolicyControl({
-              ariaLabel: 'Patrol mode',
-              layoutClass: 'flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between',
-              controlClass: 'w-full lg:w-[34rem]',
-            })}
-          </div>
-        </details>
+        <span id={PATROL_OPERATIONS_LOOP_ANCHOR} class="sr-only" aria-hidden="true" />
+        <Show when={shouldShowAutonomyActionColumn()}>
+          <details class="border-t border-border-subtle px-1 py-1 sm:px-2">
+            <summary class="min-h-11 cursor-pointer text-xs font-medium text-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 sm:min-h-0">
+              Mode and automation
+            </summary>
+            <div class="pt-3">
+              {renderAutonomyPolicyControl({
+                ariaLabel: 'Patrol mode',
+                layoutClass: 'flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between',
+                controlClass: 'w-full lg:w-[34rem]',
+              })}
+            </div>
+          </details>
+        </Show>
       </section>
     </div>
   );

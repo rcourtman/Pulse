@@ -41,6 +41,12 @@ const coveragePresentation = (
 const formatObjectiveError = (error: unknown): string =>
   error instanceof Error ? error.message : 'The objective could not be saved.';
 
+const STARTER_OBJECTIVES = [
+  'Keep my critical services available',
+  'Warn me before storage fills up',
+  'Keep backup protection current',
+] as const;
+
 export const PatrolObjectivesPanel: Component = () => {
   let dialogReturnFocus: HTMLElement | null = null;
   const { resources } = useResources();
@@ -110,9 +116,10 @@ export const PatrolObjectivesPanel: Component = () => {
     restoreDialogFocus();
   };
 
-  const openCreate = (trigger: HTMLElement) => {
+  const openCreate = (trigger: HTMLElement, starterBrief = '') => {
     dialogReturnFocus = trigger;
     resetForm();
+    setBrief(starterBrief);
     setDialogOpen(true);
   };
 
@@ -232,12 +239,26 @@ export const PatrolObjectivesPanel: Component = () => {
             <Show
               when={objectives().length > 0}
               fallback={
-                <div class="flex min-h-24 flex-col justify-center rounded-lg border border-dashed border-border px-4 py-4">
+                <div class="rounded-lg border border-dashed border-border px-4 py-4">
                   <p class="text-sm font-semibold text-base-content">Choose what matters most</p>
-                  <p class="mt-1 text-xs leading-5 text-muted">
-                    For example, “Keep my cameras available” or “Keep disk use below 85%”. Patrol
-                    works out how to observe it safely.
+                  <p class="mt-1 max-w-2xl text-xs leading-5 text-muted">
+                    Start with an outcome. Patrol works out how to observe it safely and tells you
+                    when coverage is ready.
                   </p>
+                  <p class="mt-3 text-xs font-medium text-base-content">Start with</p>
+                  <div class="mt-2 flex flex-wrap gap-2" aria-label="Example protected outcomes">
+                    <For each={STARTER_OBJECTIVES}>
+                      {(starter) => (
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={(event) => openCreate(event.currentTarget, starter)}
+                        >
+                          {starter}
+                        </Button>
+                      )}
+                    </For>
+                  </div>
                 </div>
               }
             >

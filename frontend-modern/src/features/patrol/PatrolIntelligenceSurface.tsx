@@ -4,7 +4,6 @@ import ClipboardCheckIcon from 'lucide-solid/icons/clipboard-check';
 import HistoryIcon from 'lucide-solid/icons/history';
 import { ButtonLink } from '@/components/shared/Button';
 import { MetadataBadge } from '@/components/shared/MetadataBadge';
-import { aiIntelligenceStore } from '@/stores/aiIntelligence';
 import { actionInboxStore } from '@/stores/actionInbox';
 import { usePatrolIntelligenceState } from './usePatrolIntelligenceState';
 import { PatrolIntelligenceHeader } from './PatrolIntelligenceHeader';
@@ -23,7 +22,6 @@ export function PatrolIntelligenceSurface() {
   const [findingsOpen, setFindingsOpen] = createSignal(false);
   const workspaceTabs: Partial<Record<PatrolWorkspaceView, HTMLButtonElement>> = {};
   let findingsPanel: HTMLDetailsElement | undefined;
-  const openWorkCount = () => aiIntelligenceStore.patrolOpenWorkCount;
   const activateView = (view: PatrolWorkspaceView, focus = false) => {
     setActiveView(view);
     if (focus) queueMicrotask(() => workspaceTabs[view]?.focus());
@@ -179,21 +177,9 @@ export function PatrolIntelligenceSurface() {
                     <HistoryIcon class="h-5 w-5" aria-hidden="true" />
                   </span>
                   <span class="min-w-0">
-                    <span class="flex flex-wrap items-center gap-2 text-sm font-semibold text-base-content">
-                      Findings and run records
-                      <Show when={openWorkCount() > 0}>
-                        <MetadataBadge
-                          tone="info"
-                          size="xs"
-                          shape="rounded"
-                          aria-label={`${openWorkCount()} open patrol ${openWorkCount() === 1 ? 'finding' : 'findings'}`}
-                        >
-                          {openWorkCount()} open
-                        </MetadataBadge>
-                      </Show>
-                    </span>
+                    <span class="text-sm font-semibold text-base-content">Patrol records</span>
                     <span class="mt-1 block text-xs font-normal leading-5 text-muted">
-                      Inspect finding detail, check results, and historical runs.
+                      Inspect findings and check history when you need the forensic trail.
                     </span>
                   </span>
                 </span>
@@ -213,7 +199,7 @@ export function PatrolIntelligenceSurface() {
             open={findingsOpen()}
             onToggle={(event) => setFindingsOpen(event.currentTarget.open)}
           >
-            <summary class="sr-only">Findings and run records</summary>
+            <summary class="sr-only">Patrol records</summary>
             <div
               class={`space-y-4 border-t border-border p-4 sm:p-5 ${!state.patrolEnabledLocal() ? 'opacity-50 pointer-events-none' : ''}`}
             >

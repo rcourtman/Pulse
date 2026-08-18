@@ -78,6 +78,15 @@ evidence, and observation time. This snapshot is model and audit context only;
 it is not an API-supplied approval, tool choice, policy factor, or execution
 credential. Older persisted runs and findings without the additive field remain
 valid.
+Patrol attention consumers may derive a resource-first display title from the
+canonical title and `subjectResourceName`, but that presentation must not
+rewrite the retained record or infer a different issue kind. The canonical
+`subjectResourceId` remains the route and copy value even when the browser hides
+the raw identifier from ordinary reading. Browser progressive disclosure may
+collapse evidence, protection posture, and lifecycle history, but it must not
+drop those typed fields or replace their server-authored trust state. Decision,
+finding, and approval counts remain distinct API projections and must not be
+presented as interchangeable totals.
 Physical-disk payloads preserve optional SMART counter presence, including
 explicit zero values, and expose provider vendor metadata without converting
 missing data into health. Unified-resource clients may request bounded server

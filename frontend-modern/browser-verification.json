@@ -1,49 +1,46 @@
 {
   "version": 1,
-  "base_sha": "b396c93785e2e671f29bc295923ab5ad480d579b",
-  "verified_at": "2026-08-18T10:08:58Z",
+  "base_sha": "95c253c4860d704dfdc8b3d743b482182d749fff",
+  "verified_at": "2026-08-18T10:49:01Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/AppLayout.tsx",
-    "frontend-modern/src/components/shared/mobileNavBarModel.ts",
-    "frontend-modern/src/pages/Actions.tsx",
-    "frontend-modern/src/utils/assistantPageContext.ts"
+    "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx",
+    "frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx",
+    "frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx",
+    "frontend-modern/src/features/patrol/PatrolObjectivesPanel.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/AppLayout.tsx": "de3657774c1f5b84297cca22d77f9a9d15956115b2ab4a84a22e0fb3b9e0ba46",
-    "frontend-modern/src/components/shared/mobileNavBarModel.ts": "3560c932d36e645a14508804dd146146e449c83575ab118b567aa3a9d742c903",
-    "frontend-modern/src/pages/Actions.tsx": "2ff95733423f2b2577052328232e0c7f927f3db57f0cbdec2093258fae900375",
-    "frontend-modern/src/utils/assistantPageContext.ts": "bfca19b4e183777ee1535073d48cce92ce31980f4105bab337f33a28538a6a35"
+    "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx": "42d0e595053546270727bcfe57de37b1f9c6e4c721a2bbc6175335136a4e03b2",
+    "frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx": "eeaecb901bac67f4b2ba2c442a5f669be50ee2a1bb01928340eef4d83da5532d",
+    "frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx": "90a0e1b7b7b75567a6c026d4d6c115b82d06c1f86412f971c0c8989a60562471",
+    "frontend-modern/src/features/patrol/PatrolObjectivesPanel.tsx": "fc03c1905afae9aaa684aecd759cd6e409eee5fb987abcdee5e2c83d850352d1"
   },
-  "routes": ["/actions", "/patrol"],
+  "routes": ["/patrol"],
   "viewports": [
     {
-      "width": 1280,
-      "height": 720
+      "width": 1440,
+      "height": 900
     },
     {
       "width": 390,
       "height": 844
-    },
-    {
-      "width": 320,
-      "height": 568
     }
   ],
   "states": [
-    "Actions open queue with the first-class desktop navigation state and pending-approval badge",
-    "Actions history with completed, rejected, and failed outcomes",
-    "Read-only governed action review dialog open and closed",
-    "Patrol and Actions with independent attention and approval badges",
-    "Actions empty state with the fixed mobile navigation destination selected",
-    "Canonical mobile product routes at compact and modern phone widths"
+    "Inbox default queue with resource-first decision titles and no selected detail",
+    "Inbox selected decision with compact trust metadata and evidence collapsed",
+    "Inbox selected decision with evidence, protection, and timeline expanded",
+    "Protection empty state with starter outcomes",
+    "Protection create-objective dialog prefilled from a starter outcome",
+    "Activity with verified outcomes, Actions handoff, and Patrol records disclosure",
+    "Watch-only header with its mode explanation and no empty automation disclosure"
   ],
   "interactions": [
-    "Used the live in-app Browser to navigate from Patrol to Actions through the permanent desktop tab and confirmed the Actions URL, page title, selected state, and Assistant context",
-    "Switched between Open and History and confirmed each Actions list and summary rendered correctly",
-    "Opened and closed the governed action review dialog and confirmed the canonical decision packet remained available",
-    "Confirmed phone-width Actions is directly visible and selected in the fixed bottom rail while Patrol remains unselected",
-    "Passed the mobile Chrome canonical-route overflow sweep at 320x568 and 390x844 with Actions included",
-    "Ran the copy-style audit and confirmed no user-visible semicolons"
+    "Used the live in-app Browser to switch between Inbox, Protection, and Activity",
+    "Selected the highest-priority decision and confirmed Assistant, Copy ID, Open resource, lifecycle controls, and progressive disclosure",
+    "Expanded Evidence and history and confirmed the latest evidence, older-observation reveal, protection posture, and timeline",
+    "Used a Protection starter outcome and confirmed the objective dialog opened with the chosen brief prefilled",
+    "Used Claude Code Playwright verification at desktop and phone widths to inspect layout, focus visibility, copy, console output, and dialog behaviour",
+    "Confirmed there are no user-visible semicolons or em dashes and no console errors at either viewport"
   ]
 }

@@ -1226,8 +1226,8 @@ attention count; the queue and approval inbox retain their separate canonical
 projections.
 
 The default loaded state is a full-width decision inbox with one headline that
-states how many current decisions need the operator, one short explanation of
-the ordering, one `Start review` action for the highest-priority item, the
+states how many current decisions need the operator, one `Start review` action
+for the highest-priority item, the
 canonical pending-approval handoff when needed, and refresh. It must not repeat
 the same facts as a metric strip, generic row state, generic `Review` label, or
 empty recommended-item preview. A two-pane workspace appears only after the
@@ -1237,6 +1237,26 @@ replaces the list until `Back to list`, making Patrol a true master/detail
 workflow instead of stacking the detail above a second full queue. The command
 row remains compact and visually secondary so the inbox and first decisions
 enter the initial viewport.
+
+The default queue now leads generated `kind on resource` titles with the
+resource identity so repeated incident families remain scannable without
+changing the backend record. The selected context keeps the consequence and
+next step primary, moves contextual Assistant explanation beside that summary,
+keeps the canonical resource identifier behind a copy affordance, suppresses
+impact text that merely repeats the summary, and groups evidence, protection,
+and lifecycle history behind one deliberate disclosure. Occurrence controls
+remain visible, while durable threshold and finding-management guidance is
+secondary disclosure. This is progressive presentation of the same typed
+record, not a loss of evidence or lifecycle truth.
+
+Plan-locked Watch-only installs do not render an empty mode disclosure after
+the effective mode is already visible in the compact command row. Runtime-
+locked and configurable installs retain the mode disclosure and its repair or
+choice controls. The empty Protection mode offers bounded example outcomes
+that prefill the existing objective form without creating an objective until
+the operator reviews and submits it. Activity keeps Actions and Patrol records
+as separate subordinate handoffs, but the Patrol-record handoff does not expose
+the legacy findings count beside the canonical decision count.
 
 Selecting the first item starts a bounded review session over the loaded
 decision order. The selected context shows its current position and exposes

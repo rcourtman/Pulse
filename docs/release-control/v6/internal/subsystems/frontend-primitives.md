@@ -796,6 +796,16 @@ have left the live registry. It must preserve the server's verified-only
 membership, evidence class, newest-first order, empty state, and
 last-truthful-data behavior during a refresh error. Raw executor verification
 summaries stay in Actions history rather than becoming quiet-home copy.
+Selected Patrol decisions compose shared `Button`, `ButtonLink`, and
+`CopyValueButton` actions with native disclosures rather than introducing a
+detail-local control vocabulary. The primary reading order is summary,
+contextual Assistant explanation, affected resource, distinct impact, next
+step, and current lifecycle action. Raw canonical resource identifiers remain
+available through the shared copy affordance instead of occupying the reading
+surface. Evidence, protection, and timeline may share one collapsed disclosure
+when all typed detail remains reachable, keyboard-operable, and truthfully
+labelled. Compact actions retain the shared minimum touch target at phone widths
+even when their desktop presentation uses the `xs` or `sm` size.
 For Patrol, that includes the Open work description: it may use concise
 row-level guidance such as review evidence, approve a change, inspect automatic
 actions, or review verification results, but it must remain descriptive copy

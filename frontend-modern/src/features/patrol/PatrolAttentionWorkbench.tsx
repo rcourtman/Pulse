@@ -36,7 +36,7 @@ import {
   unsuppressPatrolAttention,
 } from '@/api/patrolAttention';
 import { ResourceActionsAPI } from '@/api/resourceActions';
-import { Button, ButtonLink } from '@/components/shared/Button';
+import { Button, ButtonLink, CopyValueButton } from '@/components/shared/Button';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 import { MetadataBadge, type MetadataBadgeTone } from '@/components/shared/MetadataBadge';
 import { ActionReviewDialog } from '@/features/actions/ActionReviewDialog';
@@ -58,6 +58,7 @@ import type { EvidenceEnvelope } from '@/types/operationalTrust';
 import type { ActionDetailResponse } from '@/types/actionAudit';
 import { getAlertResourceIncidentAcknowledgedByLabel } from '@/utils/alertIncidentPresentation';
 import { formatRelativeTime } from '@/utils/format';
+import { copyToClipboard } from '@/utils/clipboard';
 import type { PatrolAutonomyLevel } from '@/api/patrol';
 import {
   partitionPatrolAttention,
@@ -67,6 +68,35 @@ import {
 
 const PRIMARY_EVIDENCE_LIMIT = 3;
 const PRIMARY_DECISION_LIMIT = 5;
+
+const normalizeComparableCopy = (value?: string | null) =>
+  (value ?? '')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .replace(/[.!?]+$/g, '')
+    .toLocaleLowerCase();
+
+export function getPatrolDecisionDisplayTitle(item: AttentionItem): string {
+  const title = item.title.trim();
+  const resourceName = item.subjectResourceName.trim();
+  if (!title || !resourceName) return title || resourceName || 'Current issue';
+
+  const suffix = ` on ${resourceName}`;
+  if (title.toLocaleLowerCase().endsWith(suffix.toLocaleLowerCase())) {
+    const issue = title.slice(0, -suffix.length).trim();
+    if (issue) return `${resourceName} · ${issue}`;
+  }
+
+  return title;
+}
+
+export function getDistinctPatrolImpact(item: AttentionItem): string {
+  const impact = item.impact?.trim() ?? '';
+  if (!impact) return '';
+  return normalizeComparableCopy(impact) === normalizeComparableCopy(item.plainLanguageSummary)
+    ? ''
+    : impact;
+}
 
 const SEVERITY_PRIORITY: Record<AttentionItem['severity'], number> = {
   critical: 0,
@@ -319,11 +349,11 @@ export function PatrolAttentionWorkbench(
             <h2 class="text-xl font-semibold tracking-tight text-base-content sm:text-2xl">
               {briefingHeadline()}
             </h2>
-            <p class="mt-1 text-sm leading-5 text-muted">
-              {attention().needsUser.length > 0
-                ? 'Highest priority first, based on severity, actionability, and current evidence.'
-                : autonomyExperience().needsYouDescription}
-            </p>
+            <Show when={attention().needsUser.length === 0}>
+              <p class="mt-1 text-sm leading-5 text-muted">
+                {autonomyExperience().needsYouDescription}
+              </p>
+            </Show>
           </div>
           <div class="flex flex-wrap items-center gap-2 sm:justify-end">
             <Show when={!selectedItemId() && highestPriorityDecision()}>
@@ -520,6 +550,11 @@ function AttentionList(props: {
             <For each={props.decisions}>
               {(decision) => {
                 const item = decision.item;
+                const displayTitle = () => getPatrolDecisionDisplayTitle(item);
+                const titleLeadsWithResource = () =>
+                  displayTitle()
+                    .toLocaleLowerCase()
+                    .startsWith(item.subjectResourceName.trim().toLocaleLowerCase());
                 const decisionLabel = () => {
                   if (
                     item.availableActions.some(
@@ -544,7 +579,7 @@ function AttentionList(props: {
                           : 'hover:bg-surface-hover'
                       }`}
                       aria-pressed={props.selectedItemId === item.id}
-                      aria-label={`Open ${item.title}`}
+                      aria-label={`Open ${displayTitle()}`}
                       onClick={() => props.onSelect(item.id)}
                     >
                       <div class="flex min-w-0 items-start gap-3">
@@ -554,7 +589,7 @@ function AttentionList(props: {
                               {formatLabel(item.severity)}
                             </MetadataBadge>
                             <span class="min-w-0 flex-1 truncate text-sm font-semibold text-base-content">
-                              {item.title}
+                              {displayTitle()}
                             </span>
                           </div>
                           <p class="mt-1 line-clamp-2 text-xs leading-5 text-muted">
@@ -571,9 +606,11 @@ function AttentionList(props: {
                                 </span>
                               )}
                             </Show>
-                            <span class="truncate font-medium text-base-content">
-                              {item.subjectResourceName}
-                            </span>
+                            <Show when={!titleLeadsWithResource()}>
+                              <span class="truncate font-medium text-base-content">
+                                {item.subjectResourceName}
+                              </span>
+                            </Show>
                             <span>
                               Last seen {formatRelativeTime(item.lastObservedAt, { compact: true })}
                             </span>
@@ -661,6 +698,7 @@ function AttentionDetail(props: {
   onUnsuppress: (itemId: string) => Promise<void>;
   onOpenFindings?: () => void;
 }) {
+  const [copiedResourceId, setCopiedResourceId] = createSignal('');
   const detail = () => props.detail;
   const item = () => detail()?.item;
   const orderedEvidence = createMemo(() =>
@@ -735,6 +773,9 @@ function AttentionDetail(props: {
       },
     });
   };
+  const copyResourceId = async (value: string) => {
+    if (await copyToClipboard(value)) setCopiedResourceId(value);
+  };
 
   return (
     <aside
@@ -791,7 +832,7 @@ function AttentionDetail(props: {
           </div>
         </div>
         <h3 id="attention-detail-title" class="mt-1 text-sm font-semibold text-base-content">
-          {item()?.title ?? 'Loading attention item'}
+          {item() ? getPatrolDecisionDisplayTitle(item()!) : 'Loading attention item'}
         </h3>
         <Show when={props.queuePosition() && props.queueCount() > 1}>
           <div class="mt-3 grid grid-cols-2 gap-2 lg:hidden" aria-label="Review queue navigation">
@@ -831,21 +872,55 @@ function AttentionDetail(props: {
         {(loaded) => (
           <div class="space-y-5 px-4 py-4 sm:px-5">
             <section>
-              <div class="flex flex-wrap items-center gap-2">
+              <div class="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
                 <StateBadge item={loaded().item} />
-                <EvidenceLabel item={loaded().item} badge />
-                <ProtectionLabel item={loaded().item} badge />
+                <span aria-hidden="true">·</span>
+                <EvidenceLabel item={loaded().item} detail />
+                <span aria-hidden="true">·</span>
+                <ProtectionLabel item={loaded().item} detail />
               </div>
               <p class="mt-3 text-sm leading-6 text-base-content">
                 {loaded().item.plainLanguageSummary}
               </p>
+              <Show when={aiChatStore.enabled === true}>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  class="mt-2 min-h-11 gap-1.5 px-2 text-blue-700 hover:bg-surface-hover hover:underline dark:text-blue-300 sm:min-h-0"
+                  onClick={openAssistant}
+                >
+                  <SparklesIcon class="h-4 w-4" aria-hidden="true" />
+                  Explain with Assistant
+                </Button>
+              </Show>
             </section>
 
             <DetailSection title="Affected resource">
-              <p class="text-sm font-medium text-base-content">
-                {loaded().item.subjectResourceName}
-              </p>
-              <p class="mt-1 break-all text-xs text-muted">{loaded().item.subjectResourceId}</p>
+              <div class="flex flex-wrap items-center gap-2">
+                <p class="text-sm font-medium text-base-content">
+                  {loaded().item.subjectResourceName}
+                </p>
+                <CopyValueButton
+                  value={loaded().item.subjectResourceId}
+                  copied={copiedResourceId() === loaded().item.subjectResourceId}
+                  onCopyValue={copyResourceId}
+                  label="Copy resource identifier"
+                  variant="ghost"
+                  size="xs"
+                  class="min-h-11 sm:min-h-0"
+                >
+                  <span class="text-xs">Copy ID</span>
+                </CopyValueButton>
+                <ButtonLink
+                  href={resourceHref()}
+                  variant="ghost"
+                  size="xs"
+                  class="min-h-11 gap-1.5 sm:min-h-0"
+                >
+                  <ExternalLinkIcon class="h-4 w-4" aria-hidden="true" />
+                  Open resource
+                </ButtonLink>
+              </div>
               <Show when={loaded().item.relatedResources.length > 0}>
                 <p class="mt-2 text-xs text-muted">
                   {loaded().item.relatedResources.length} related{' '}
@@ -854,17 +929,20 @@ function AttentionDetail(props: {
               </Show>
             </DetailSection>
 
-            <Show when={loaded().item.impact || loaded().item.recommendedNextStep}>
-              <DetailSection title="What to do">
-                <Show when={loaded().item.impact}>
-                  {(impact) => <p class="text-xs leading-5 text-muted">Impact: {impact()}</p>}
-                </Show>
-                <Show when={loaded().item.recommendedNextStep}>
-                  {(nextStep) => (
-                    <p class="mt-2 text-sm font-medium leading-5 text-base-content">{nextStep()}</p>
-                  )}
-                </Show>
-              </DetailSection>
+            <Show when={getDistinctPatrolImpact(loaded().item)}>
+              {(impact) => (
+                <DetailSection title="Why it matters">
+                  <p class="text-xs leading-5 text-muted">{impact()}</p>
+                </DetailSection>
+              )}
+            </Show>
+
+            <Show when={loaded().item.recommendedNextStep}>
+              {(nextStep) => (
+                <DetailSection title="Next step">
+                  <p class="text-sm font-medium leading-5 text-base-content">{nextStep()}</p>
+                </DetailSection>
+              )}
             </Show>
 
             <Show when={loaded().item.availableActions[0]}>
@@ -922,126 +1000,111 @@ function AttentionDetail(props: {
               onOpenFindings={props.onOpenFindings}
             />
 
-            <DetailSection title="Evidence">
-              <Show
-                when={orderedEvidence().length > 0}
-                fallback={
-                  <p class="text-xs leading-5 text-amber-700 dark:text-amber-300">
-                    Evidence detail is unavailable. Pulse has not presented this as confirmed.
-                  </p>
-                }
-              >
-                <Show when={olderEvidence().length > 0}>
-                  <p class="mb-2 text-xs text-muted">
-                    Showing the latest {primaryEvidence().length} of {orderedEvidence().length}{' '}
-                    observations.
-                  </p>
-                </Show>
-                <ul class="space-y-2">
-                  <For each={primaryEvidence()}>
-                    {(evidence) => <EvidenceObservation evidence={evidence} />}
-                  </For>
-                </ul>
-                <Show when={olderEvidence().length > 0}>
-                  <details class="mt-2 rounded-md border border-border-subtle bg-surface-alt/30">
-                    <summary class="flex min-h-11 cursor-pointer items-center px-3 py-2 text-xs font-medium text-base-content focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 sm:min-h-0">
-                      Show {olderEvidence().length} older{' '}
-                      {olderEvidence().length === 1 ? 'observation' : 'observations'}
-                    </summary>
-                    <ul class="space-y-2 border-t border-border-subtle p-2">
-                      <For each={olderEvidence()}>
+            <details class="rounded-lg border border-border-subtle bg-surface-alt/20">
+              <summary class="flex min-h-11 cursor-pointer items-center justify-between gap-3 px-3 py-2 text-sm font-medium text-base-content focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500">
+                <span>Evidence and history</span>
+                <span class="text-xs font-normal text-muted">
+                  {orderedEvidence().length}{' '}
+                  {orderedEvidence().length === 1 ? 'observation' : 'observations'}
+                </span>
+              </summary>
+              <div class="space-y-5 border-t border-border-subtle px-3 py-4">
+                <DetailSection title="Evidence">
+                  <Show
+                    when={orderedEvidence().length > 0}
+                    fallback={
+                      <p class="text-xs leading-5 text-amber-700 dark:text-amber-300">
+                        Evidence detail is unavailable. Pulse has not presented this as confirmed.
+                      </p>
+                    }
+                  >
+                    <ul class="space-y-2">
+                      <For each={primaryEvidence()}>
                         {(evidence) => <EvidenceObservation evidence={evidence} />}
                       </For>
                     </ul>
-                  </details>
-                </Show>
-              </Show>
-            </DetailSection>
-
-            <DetailSection title="Protection">
-              <Show
-                when={loaded().item.protectionPosture}
-                fallback={
-                  <p class="text-xs leading-5 text-muted">
-                    No current protection posture is attached to this resource. This means unknown,
-                    not unprotected.
-                  </p>
-                }
-              >
-                {(posture) => (
-                  <>
-                    <p class="text-xs leading-5 text-muted">{posture().explanation}</p>
-                    <Show when={posture().providerStates.length > 0}>
-                      <ul class="mt-2 space-y-2">
-                        <For each={posture().providerStates}>
-                          {(provider) => (
-                            <li class="rounded-md border border-border-subtle px-3 py-2 text-xs">
-                              <span class="font-medium text-base-content">
-                                {formatProvider(provider.provider)}
-                              </span>
-                              <ProtectionProviderMetadata provider={provider} />
-                            </li>
-                          )}
-                        </For>
-                      </ul>
+                    <Show when={olderEvidence().length > 0}>
+                      <details class="mt-2 rounded-md border border-border-subtle bg-surface-alt/30">
+                        <summary class="flex min-h-11 cursor-pointer items-center px-3 py-2 text-xs font-medium text-base-content focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 sm:min-h-0">
+                          Show {olderEvidence().length} older{' '}
+                          {olderEvidence().length === 1 ? 'observation' : 'observations'}
+                        </summary>
+                        <ul class="space-y-2 border-t border-border-subtle p-2">
+                          <For each={olderEvidence()}>
+                            {(evidence) => <EvidenceObservation evidence={evidence} />}
+                          </For>
+                        </ul>
+                      </details>
                     </Show>
-                  </>
-                )}
-              </Show>
-            </DetailSection>
+                  </Show>
+                </DetailSection>
 
-            <DetailSection title="Timeline">
-              <Show
-                when={loaded().timeline.length > 0}
-                fallback={
-                  <p class="text-xs leading-5 text-muted">
-                    No earlier lifecycle transitions are recorded. This is the first observed state.
-                  </p>
-                }
-              >
-                <ol class="space-y-3">
-                  <For each={loaded().timeline}>
-                    {(transition) => (
-                      <li class="border-l-2 border-border pl-3">
-                        <p class="text-xs font-medium text-base-content">
-                          {formatLabel(transition.from)} to {formatLabel(transition.to)}
-                        </p>
-                        <p class="mt-0.5 text-[11px] text-muted">
-                          {formatRelativeTime(transition.at, { compact: true })} ·{' '}
-                          {formatLabel(transition.cause)}
-                        </p>
-                        <Show when={transition.reason}>
-                          {(reason) => <p class="mt-1 text-xs leading-5 text-muted">{reason()}</p>}
+                <DetailSection title="Protection">
+                  <Show
+                    when={loaded().item.protectionPosture}
+                    fallback={
+                      <p class="text-xs leading-5 text-muted">
+                        No current protection posture is attached to this resource. This means
+                        unknown, not unprotected.
+                      </p>
+                    }
+                  >
+                    {(posture) => (
+                      <>
+                        <p class="text-xs leading-5 text-muted">{posture().explanation}</p>
+                        <Show when={posture().providerStates.length > 0}>
+                          <ul class="mt-2 space-y-2">
+                            <For each={posture().providerStates}>
+                              {(provider) => (
+                                <li class="rounded-md border border-border-subtle px-3 py-2 text-xs">
+                                  <span class="font-medium text-base-content">
+                                    {formatProvider(provider.provider)}
+                                  </span>
+                                  <ProtectionProviderMetadata provider={provider} />
+                                </li>
+                              )}
+                            </For>
+                          </ul>
                         </Show>
-                      </li>
+                      </>
                     )}
-                  </For>
-                </ol>
-              </Show>
-            </DetailSection>
+                  </Show>
+                </DetailSection>
 
-            <div class="flex flex-wrap gap-2 border-t border-border pt-4">
-              <ButtonLink
-                href={resourceHref()}
-                variant="secondary"
-                size="sm"
-                class="min-h-11 gap-1.5 sm:min-h-0"
-              >
-                <ExternalLinkIcon class="h-4 w-4" aria-hidden="true" />
-                Open resource
-              </ButtonLink>
-              <Show when={aiChatStore.enabled === true}>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  class="min-h-11 gap-1.5 sm:min-h-0"
-                  onClick={openAssistant}
-                >
-                  <SparklesIcon class="h-4 w-4" aria-hidden="true" />
-                  Explain with Assistant
-                </Button>
-              </Show>
-            </div>
+                <DetailSection title="Timeline">
+                  <Show
+                    when={loaded().timeline.length > 0}
+                    fallback={
+                      <p class="text-xs leading-5 text-muted">
+                        No earlier lifecycle transitions are recorded. This is the first observed
+                        state.
+                      </p>
+                    }
+                  >
+                    <ol class="space-y-3">
+                      <For each={loaded().timeline}>
+                        {(transition) => (
+                          <li class="border-l-2 border-border pl-3">
+                            <p class="text-xs font-medium text-base-content">
+                              {formatLabel(transition.from)} to {formatLabel(transition.to)}
+                            </p>
+                            <p class="mt-0.5 text-[11px] text-muted">
+                              {formatRelativeTime(transition.at, { compact: true })} ·{' '}
+                              {formatLabel(transition.cause)}
+                            </p>
+                            <Show when={transition.reason}>
+                              {(reason) => (
+                                <p class="mt-1 text-xs leading-5 text-muted">{reason()}</p>
+                              )}
+                            </Show>
+                          </li>
+                        )}
+                      </For>
+                    </ol>
+                  </Show>
+                </DetailSection>
+              </div>
+            </details>
           </div>
         )}
       </Show>
@@ -1229,33 +1292,38 @@ function AttentionLifecycleControls(props: {
             {props.error}
           </p>
         </Show>
-        <div class="mt-3 border-t border-border-subtle pt-3 text-xs leading-5 text-muted">
-          <p>
-            Mark reviewed removes this occurrence from today's decision inbox while keeping its
-            record. Suppression hides it only until the selected return time.
-          </p>
-          <p class="mt-1">
-            For a permanent change,{' '}
-            <A
-              href={ALERT_THRESHOLDS_PATH}
-              class="font-medium text-blue-700 hover:underline dark:text-blue-300"
-            >
-              adjust alert thresholds
-            </A>{' '}
-            to change or turn off this alert for the affected resource
-            <Show when={props.onOpenFindings} fallback=".">
-              , or{' '}
-              <button
-                type="button"
+        <details class="mt-3 border-t border-border-subtle pt-2 text-xs leading-5 text-muted">
+          <summary class="min-h-11 cursor-pointer py-2 font-medium text-base-content focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 sm:min-h-0">
+            More ways to manage this issue
+          </summary>
+          <div class="pb-1">
+            <p>
+              Mark reviewed removes this occurrence from today's decision inbox while keeping its
+              record. Suppression hides it only until the selected return time.
+            </p>
+            <p class="mt-1">
+              For a permanent change,{' '}
+              <A
+                href={ALERT_THRESHOLDS_PATH}
                 class="font-medium text-blue-700 hover:underline dark:text-blue-300"
-                onClick={() => props.onOpenFindings?.()}
               >
-                review Patrol findings
-              </button>{' '}
-              to mark a finding as expected so Patrol stops raising it.
-            </Show>
-          </p>
-        </div>
+                adjust alert thresholds
+              </A>{' '}
+              to change or turn off this alert for the affected resource
+              <Show when={props.onOpenFindings} fallback=".">
+                , or{' '}
+                <button
+                  type="button"
+                  class="font-medium text-blue-700 hover:underline dark:text-blue-300"
+                  onClick={() => props.onOpenFindings?.()}
+                >
+                  review Patrol findings
+                </button>{' '}
+                to mark a finding as expected so Patrol stops raising it.
+              </Show>
+            </p>
+          </div>
+        </details>
       </div>
     </DetailSection>
   );
@@ -1362,7 +1430,7 @@ function StateBadge(props: { item: AttentionItem }) {
   );
 }
 
-function EvidenceLabel(props: { item: AttentionItem; badge?: boolean }) {
+function EvidenceLabel(props: { item: AttentionItem; badge?: boolean; detail?: boolean }) {
   const presentation = () =>
     getPatrolAttentionEvidencePresentation(
       props.item.evidenceFreshness,
@@ -1375,10 +1443,11 @@ function EvidenceLabel(props: { item: AttentionItem; badge?: boolean }) {
       </MetadataBadge>
     );
   }
+  if (props.detail) return <span>{presentation().detailLabel}</span>;
   return <Show when={presentation().rowLabel}>{(label) => <span>{label()}</span>}</Show>;
 }
 
-function ProtectionLabel(props: { item: AttentionItem; badge?: boolean }) {
+function ProtectionLabel(props: { item: AttentionItem; badge?: boolean; detail?: boolean }) {
   const presentation = () =>
     getPatrolAttentionProtectionPresentation(props.item.protectionPosture?.state);
   if (props.badge) {
@@ -1388,6 +1457,7 @@ function ProtectionLabel(props: { item: AttentionItem; badge?: boolean }) {
       </MetadataBadge>
     );
   }
+  if (props.detail) return <span>{presentation().detailLabel}</span>;
   return <Show when={presentation().rowLabel}>{(label) => <span>{label()}</span>}</Show>;
 }
 

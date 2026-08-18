@@ -72,6 +72,18 @@ describe('PatrolObjectivesPanel', () => {
     );
   });
 
+  it('turns a starter outcome into an editable objective draft', async () => {
+    render(() => <PatrolObjectivesPanel />);
+    expect(await screen.findByText('Choose what matters most')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Warn me before storage fills up' }));
+
+    expect(screen.getByRole('dialog', { name: 'Add a Patrol objective' })).toBeInTheDocument();
+    expect(screen.getByLabelText('What should Patrol keep true?')).toHaveValue(
+      'Warn me before storage fills up',
+    );
+  });
+
   it('shows truthful coverage and supports pause, edit, and delete controls', async () => {
     api.get.mockResolvedValue([objective]);
     vi.spyOn(window, 'confirm').mockReturnValue(true);

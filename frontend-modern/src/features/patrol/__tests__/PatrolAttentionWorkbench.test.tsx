@@ -67,6 +67,8 @@ vi.mock('@/features/actions/ActionReviewDialog', async () => {
 });
 
 import {
+  getDistinctPatrolImpact,
+  getPatrolDecisionDisplayTitle,
   PatrolAttentionWorkbench,
   sortPatrolAttentionDecisions,
 } from '../PatrolAttentionWorkbench';
@@ -234,7 +236,7 @@ describe('PatrolAttentionWorkbench', () => {
     ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Start review' })).toBeInTheDocument();
     expect(
-      screen.getByRole('button', { name: 'Open Disk pressure on Database VM' }),
+      screen.getByRole('button', { name: 'Open Database VM · Disk pressure' }),
     ).toBeInTheDocument();
     expect(screen.queryByText("Today's Patrol briefing")).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Decision inbox' })).not.toBeInTheDocument();
@@ -310,7 +312,7 @@ describe('PatrolAttentionWorkbench', () => {
         /1 other current issue is continuing without a decision under Safe auto-fix/i,
       ),
     ).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /Open Disk pressure/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Open Database VM/ })).not.toBeInTheDocument();
   });
 
   it('keeps a long decision queue compact until the operator asks for all of it', async () => {
@@ -365,6 +367,17 @@ describe('PatrolAttentionWorkbench', () => {
     ]);
   });
 
+  it('leads generated decision titles with the resource and removes repeated impact copy', () => {
+    const active = item({
+      plainLanguageSummary: 'The database disk is nearly full.',
+      impact: 'The database disk is nearly full.',
+    });
+
+    expect(getPatrolDecisionDisplayTitle(active)).toBe('Database VM · Disk pressure');
+    expect(getDistinctPatrolImpact(active)).toBe('');
+    expect(getDistinctPatrolImpact(item())).toBe('Writes may fail.');
+  });
+
   it('opens deepest typed evidence, protection, and timeline detail from one queue item', async () => {
     const active = item();
     apiMocks.getList.mockResolvedValue(
@@ -374,14 +387,19 @@ describe('PatrolAttentionWorkbench', () => {
     renderWorkbench();
 
     const openButton = await screen.findByRole('button', {
-      name: 'Open Disk pressure on Database VM',
+      name: 'Open Database VM · Disk pressure',
     });
     fireEvent.click(openButton);
 
     const detailRegion = await screen.findByRole('complementary', {
-      name: 'Disk pressure on Database VM',
+      name: 'Database VM · Disk pressure',
     });
-    expect(within(detailRegion).getByText(/Impact: Writes may fail\./)).toBeInTheDocument();
+    expect(within(detailRegion).getByText('Writes may fail.')).toBeInTheDocument();
+    expect(within(detailRegion).getByText('Evidence and history')).toBeInTheDocument();
+    expect(
+      within(detailRegion).getByRole('button', { name: 'Copy resource identifier' }),
+    ).toBeInTheDocument();
+    expect(within(detailRegion).queryByText('pve:vm:101')).not.toBeInTheDocument();
     expect(
       within(detailRegion).getByText(/latest backup has not been verified/i),
     ).toBeInTheDocument();
@@ -433,7 +451,7 @@ describe('PatrolAttentionWorkbench', () => {
     apiMocks.getDetail.mockResolvedValue(detail(unknownTrust));
     renderWorkbench();
 
-    const row = await screen.findByRole('button', { name: 'Open Disk pressure on Database VM' });
+    const row = await screen.findByRole('button', { name: 'Open Database VM · Disk pressure' });
     expect(within(row).queryByText(/Evidence/)).not.toBeInTheDocument();
     expect(within(row).queryByText(/timing/i)).not.toBeInTheDocument();
     expect(within(row).queryByText('Unknown / Complete')).not.toBeInTheDocument();
@@ -442,7 +460,7 @@ describe('PatrolAttentionWorkbench', () => {
     fireEvent.click(row);
 
     const detailRegion = await screen.findByRole('complementary', {
-      name: 'Disk pressure on Database VM',
+      name: 'Database VM · Disk pressure',
     });
     expect(within(detailRegion).getByText('Evidence recorded')).toBeInTheDocument();
     expect(within(detailRegion).getByText('Protection status unavailable')).toBeInTheDocument();
@@ -469,16 +487,17 @@ describe('PatrolAttentionWorkbench', () => {
 
     fireEvent.click(
       await screen.findByRole('button', {
-        name: 'Open Disk pressure on Database VM',
+        name: 'Open Database VM · Disk pressure',
       }),
     );
 
     const detailRegion = await screen.findByRole('complementary', {
-      name: 'Disk pressure on Database VM',
+      name: 'Database VM · Disk pressure',
     });
+    expect(within(detailRegion).getByText('5 observations')).toBeInTheDocument();
     expect(
-      within(detailRegion).getByText('Showing the latest 3 of 5 observations.'),
-    ).toBeInTheDocument();
+      within(detailRegion).queryByText('Showing the latest 3 of 5 observations.'),
+    ).not.toBeInTheDocument();
     expect(within(detailRegion).getByText('Show 2 older observations')).toBeInTheDocument();
   });
 
@@ -516,7 +535,7 @@ describe('PatrolAttentionWorkbench', () => {
 
     fireEvent.click(
       await screen.findByRole('button', {
-        name: 'Open Disk pressure on Database VM',
+        name: 'Open Database VM · Disk pressure',
       }),
     );
     expect(await screen.findByText('Decision 1 of 2')).toBeInTheDocument();
@@ -557,7 +576,7 @@ describe('PatrolAttentionWorkbench', () => {
 
     fireEvent.click(
       await screen.findByRole('button', {
-        name: 'Open Disk pressure on Database VM',
+        name: 'Open Database VM · Disk pressure',
       }),
     );
     fireEvent.click(await screen.findByRole('button', { name: 'Suppress temporarily' }));
@@ -618,7 +637,7 @@ describe('PatrolAttentionWorkbench', () => {
 
     fireEvent.click(
       await screen.findByRole('button', {
-        name: 'Open Disk pressure on Database VM',
+        name: 'Open Database VM · Disk pressure',
       }),
     );
 
@@ -641,7 +660,7 @@ describe('PatrolAttentionWorkbench', () => {
 
     fireEvent.click(
       await screen.findByRole('button', {
-        name: 'Open Disk pressure on Database VM',
+        name: 'Open Database VM · Disk pressure',
       }),
     );
 
