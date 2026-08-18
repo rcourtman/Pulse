@@ -44,7 +44,7 @@ describe('apiTokenPresentation', () => {
     expect(API_TOKEN_DOCKER_MANAGE_PRESET_LABEL).toBe('Docker / Podman manage');
     expect(API_TOKEN_NAME_PLACEHOLDER).toBe('e.g. Docker / Podman automation');
     expect(API_TOKEN_ACCESS_PANEL_DESCRIPTION).toBe(
-      'Generate scoped tokens for Docker / Podman, system agents, and automation pipelines. Tokens are shown once; store them securely and rotate when infrastructure changes.',
+      'Generate scoped tokens for Docker / Podman, system agents, and automation pipelines. Tokens are shown once. Store them securely and rotate when infrastructure changes.',
     );
     expect(API_TOKEN_DOCKER_REPORT_PRESET_DESCRIPTION).toBe(
       'Permits Docker / Podman agents to stream runtime and container telemetry only.',

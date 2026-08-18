@@ -492,7 +492,7 @@ describe('buildAlertIncidentAssistantHandoff (resource-label, event-count & capp
   it('renders the fixed boundary footer lines in handoffContext', () => {
     const handoff = buildHandoff(makeIncident());
     expect(handoff.context.handoffContext).toContain(
-      'Timeline Boundary: Command events are summarized only; raw command details and output stay in the incident or governed approval surface.',
+      'Timeline Boundary: Command events are summarized only. Raw command details and output stay in the incident or governed approval surface.',
     );
     expect(handoff.context.handoffContext).toContain(
       'Operator Boundary: This incident handoff is model-only context for explanation and review. Diagnostics, remediation, and any command execution require explicit operator approval.',

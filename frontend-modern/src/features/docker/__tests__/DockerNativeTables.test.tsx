@@ -928,7 +928,7 @@ describe('Docker native tables', () => {
     );
     expect(
       screen.getByRole('menuitem', {
-        name: 'Restart unavailable: Docker inventory is stale; refresh inventory before running lifecycle actions.',
+        name: 'Restart unavailable: Docker inventory is stale. Refresh inventory before running lifecycle actions.',
       }),
     ).toBeDisabled();
   });

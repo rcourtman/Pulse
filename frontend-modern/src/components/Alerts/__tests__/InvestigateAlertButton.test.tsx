@@ -330,7 +330,7 @@ describe('InvestigateAlertButton', () => {
           subject: 'Warning cpu on test-vm',
           statusLabel: expect.stringContaining('Warning alert'),
           detailLines: expect.arrayContaining([
-            'Current value 82.5%; threshold 80.0%',
+            'Current value 82.5% · threshold 80.0%',
             'Node: PVE Node 1',
             'Message: CPU usage is high',
           ]),
@@ -394,7 +394,7 @@ describe('InvestigateAlertButton', () => {
       expect(briefing.statusLabel).toContain('Warnung-Warnmeldung');
       expect(briefing.detailLines).toEqual(
         expect.arrayContaining([
-          'Aktueller Wert 82.5%; Schwellwert 80.0%',
+          'Aktueller Wert 82.5% · Schwellwert 80.0%',
           'Knoten: PVE Node 1',
           'Meldung: CPU usage is high',
         ]),

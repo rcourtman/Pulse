@@ -85,7 +85,7 @@ export const ActionReviewDialog: Component<{
     if (!hasCurrentPolicyProvenance())
       return 'This action has no current server policy provenance. Close it and create a new plan before approving or running anything.';
     if (!aptParametersValid())
-      return 'This host-maintenance action contains unexpected operator-selected parameters. Close it and create a new plan; do not approve or run this record.';
+      return 'This host-maintenance action contains unexpected operator-selected parameters. Close it and create a new plan. Do not approve or run this record.';
     if (readiness() && !readiness()!.ready) {
       return [readiness()!.message, readiness()!.remediation].filter(Boolean).join(' ');
     }

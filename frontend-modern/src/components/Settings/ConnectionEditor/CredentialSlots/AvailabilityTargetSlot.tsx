@@ -653,7 +653,7 @@ export const AvailabilityTargetSlot: Component<AvailabilityTargetSlotProps> = (p
             padding="sm"
             description={
               result().outcome === 'indeterminate'
-                ? `No UDP rejection was received in ${result().latencyMillis} ms; the port is open or filtered, not proven reachable.`
+                ? `No UDP rejection was received in ${result().latencyMillis} ms. The port is open or filtered, not proven reachable.`
                 : result().success
                   ? availabilityTestSuccessDescription(result())
                   : result().error || 'Probe failed.'

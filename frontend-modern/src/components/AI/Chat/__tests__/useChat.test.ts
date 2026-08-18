@@ -1642,7 +1642,7 @@ describe('useChat', () => {
         type: 'workflow_state',
         data: {
           phase: 'provider_retry',
-          message: 'Selected route connection failed before any output; retrying.',
+          message: 'Selected route connection failed before any output. Retrying.',
           attempt: 2,
           max_attempts: 2,
           retry_after_ms: 200,
@@ -1653,7 +1653,7 @@ describe('useChat', () => {
       expect(assistant.workflowStatus).toEqual(
         expect.objectContaining({
           phase: 'provider_retry',
-          message: 'Selected route connection failed before any output; retrying.',
+          message: 'Selected route connection failed before any output. Retrying.',
           attempt: 2,
           maxAttempts: 2,
           retryAfterMs: 200,
@@ -1825,7 +1825,7 @@ describe('useChat', () => {
         type: 'workflow_state',
         data: {
           phase: 'stream_idle',
-          message: 'Assistant is still working; waiting for the next stream event.',
+          message: 'Assistant is still working. Waiting for the next stream event.',
         },
       });
 
@@ -1833,7 +1833,7 @@ describe('useChat', () => {
       expect(assistant.workflowStatus).toEqual(
         expect.objectContaining({
           phase: 'stream_idle',
-          message: 'OpenRouter is still working; waiting for more response data.',
+          message: 'OpenRouter is still working. Waiting for more response data.',
           provider: 'openrouter',
           model: 'openrouter:qwen/qwen3.7-plus',
         }),
@@ -1850,7 +1850,7 @@ describe('useChat', () => {
           type: 'workflow_status',
           workflowStatus: expect.objectContaining({
             phase: 'stream_idle',
-            message: 'OpenRouter is still working; waiting for more response data.',
+            message: 'OpenRouter is still working. Waiting for more response data.',
             provider: 'openrouter',
             model: 'openrouter:qwen/qwen3.7-plus',
           }),
@@ -1876,7 +1876,7 @@ describe('useChat', () => {
         type: 'workflow_state',
         data: {
           phase: 'stream_idle',
-          message: 'Assistant is still working; waiting for the next stream event.',
+          message: 'Assistant is still working. Waiting for the next stream event.',
         },
       });
 
@@ -1884,7 +1884,7 @@ describe('useChat', () => {
       expect(assistant.workflowStatus).toEqual(
         expect.objectContaining({
           phase: 'stream_idle',
-          message: 'OpenRouter is still working; waiting for more response data.',
+          message: 'OpenRouter is still working. Waiting for more response data.',
           provider: 'openrouter',
           model: 'openrouter:qwen/qwen3.7-plus',
         }),
@@ -2068,7 +2068,7 @@ describe('useChat', () => {
         type: 'workflow_state',
         data: {
           phase: 'stream_idle',
-          message: 'Assistant is still working; waiting for the next stream event.',
+          message: 'Assistant is still working. Waiting for the next stream event.',
         },
       });
 
@@ -2076,7 +2076,7 @@ describe('useChat', () => {
       expect(assistant.workflowStatus).toEqual(
         expect.objectContaining({
           phase: 'stream_idle',
-          message: 'Assistant is still working; waiting for the next stream event.',
+          message: 'Assistant is still working. Waiting for the next stream event.',
         }),
       );
       expect(assistant.streamEvents).toEqual([
@@ -2084,7 +2084,7 @@ describe('useChat', () => {
           type: 'workflow_status',
           workflowStatus: expect.objectContaining({
             phase: 'stream_idle',
-            message: 'Assistant is still working; waiting for the next stream event.',
+            message: 'Assistant is still working. Waiting for the next stream event.',
           }),
         }),
       ]);

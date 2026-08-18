@@ -118,7 +118,7 @@ export const NodeModalClusterMembersSection: Component<NodeModalClusterMembersSe
         </div>
         <p class={formHelpText}>
           Leave a display name blank to use the native Proxmox name. Connection addresses are also
-          optional; enter an IP or hostname, with a port if it isn't 8006, only when Pulse cannot
+          optional. Enter an IP or hostname, with a port if it isn't 8006, only when Pulse cannot
           reach the discovered address.
         </p>
       </div>

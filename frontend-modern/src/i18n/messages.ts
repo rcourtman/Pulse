@@ -116,7 +116,7 @@ export const EN_MESSAGES = {
   'alerts.assistant.button.full': 'Ask Pulse Assistant about this alert',
   'alerts.assistant.button.text': 'Ask Pulse Assistant',
   'alerts.assistant.detail.currentMetric':
-    'Current value {currentValue}; threshold {thresholdValue}',
+    'Current value {currentValue} · threshold {thresholdValue}',
   'alerts.assistant.detail.message': 'Message: {message}',
   'alerts.assistant.detail.node': 'Node: {node}',
   'alerts.assistant.duration.hoursMinutes': '{hours}h {minutes}m',
@@ -271,7 +271,7 @@ export const EN_MESSAGES = {
   'setup.welcome.placeholder.bootstrapToken': 'Paste your bootstrap token',
   'setup.welcome.success.commandCopied': 'Command copied to clipboard',
   'setup.welcome.telemetryNotice.description':
-    'Outbound usage telemetry is on by default. Pulse sends a delayed startup ping and daily heartbeat with a rotating pseudonymous install ID, release/runtime details, aggregate counts, and feature flags. To disable it before any ping, set PULSE_TELEMETRY=false before starting Pulse; you can also turn it off later in Settings.',
+    'Outbound usage telemetry is on by default. Pulse sends a delayed startup ping and daily heartbeat with a rotating pseudonymous install ID, release/runtime details, aggregate counts, and feature flags. To disable it before any ping, set PULSE_TELEMETRY=false before starting Pulse. You can also turn it off later in Settings.',
   'setup.welcome.telemetryNotice.detailsLink': 'Full details',
   'setup.welcome.telemetryNotice.title': 'Usage telemetry is enabled by default',
   'setup.welcome.tokenHelp.afterVerify':

@@ -54,7 +54,7 @@ export const ALERT_THRESHOLDS_BACKUP_IGNORE_VMIDS_DESCRIPTION =
 export const ALERT_THRESHOLDS_BACKUP_IGNORE_VMIDS_PLACEHOLDER = '100, 200, 10*';
 export const ALERT_THRESHOLDS_DOCKER_IGNORED_PREFIXES_TITLE = 'Ignored container patterns';
 export const ALERT_THRESHOLDS_DOCKER_IGNORED_PREFIXES_DESCRIPTION =
-  'Containers whose name or ID matches any pattern below are skipped for container alerts. A bare entry matches as a prefix; use * as a wildcard (runner-*, *-dev, *staging*). Enter one pattern per line; matching is case-insensitive.';
+  'Containers whose name or ID matches any pattern below are skipped for container alerts. A bare entry matches as a prefix. Use * as a wildcard (runner-*, *-dev, *staging*). Enter one pattern per line. Matching is case-insensitive.';
 export const ALERT_THRESHOLDS_DOCKER_IGNORED_PREFIXES_RESET_LABEL = 'Reset';
 export const ALERT_THRESHOLDS_DOCKER_IGNORED_PREFIXES_PLACEHOLDER = 'runner-';
 export const ALERT_THRESHOLDS_DOCKER_SERVICES_TITLE = 'Swarm service alerts';
@@ -108,7 +108,7 @@ export function getAlertThresholdsHelpBanner() {
     toggleGuidance: 'Use the On/Off control beside a metric to enable or disable its alerts.',
     inheritanceGuidance: 'Resources inherit their group defaults until you save a custom override.',
     bulkGuidance: 'Select multiple resources to apply the same threshold changes in bulk.',
-    collapseHint: 'Resource groups start collapsed; open only the group you need.',
+    collapseHint: 'Resource groups start collapsed. Open only the group you need.',
   } as const;
 }
 

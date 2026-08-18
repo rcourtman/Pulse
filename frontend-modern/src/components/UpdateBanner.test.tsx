@@ -192,7 +192,7 @@ describe('UpdateBanner Proxmox LXC update safety', () => {
 
     expect(await screen.findByRole('button', { name: 'Apply Update' })).toBeInTheDocument();
     expect(
-      screen.getByText(/use Apply Update here; do not use a legacy community 'update' helper/),
+      screen.getByText(/use Apply Update here\. Do not use a legacy community 'update' helper/),
     ).toBeInTheDocument();
     expect(screen.queryByText(/type 'update' in console/)).not.toBeInTheDocument();
 

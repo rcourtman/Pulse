@@ -126,7 +126,7 @@ describe('dockerContainerLifecycleActions', () => {
         resource({ sourceStatus: { docker: { status: 'stale' } } }),
         'restart',
       ),
-    ).toBe('Docker inventory is stale; refresh inventory before running lifecycle actions.');
+    ).toBe('Docker inventory is stale. Refresh inventory before running lifecycle actions.');
 
     expect(
       getDockerContainerLifecycleDisabledReason(

@@ -111,9 +111,9 @@ const credentialLabel = (formData: NodeModalFormData): string => {
     return 'Validate the supplied API token before saving.';
   }
   if (formData.setupMode === 'agent') {
-    return 'Run the Host Telemetry Agent handoff; Pulse will add the source after the agent reports.';
+    return 'Run the Host Telemetry Agent handoff. Pulse will add the source after the agent reports.';
   }
-  return 'Run the API Inventory setup handoff; Pulse will add the source after setup completes.';
+  return 'Run the API Inventory setup handoff. Pulse will add the source after setup completes.';
 };
 
 const coverageLabel = (nodeType: NodeModalNodeType, formData: NodeModalFormData): string => {

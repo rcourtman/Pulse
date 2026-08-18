@@ -52,7 +52,7 @@ describe('AI chat stream event contract', () => {
   it('exposes provider retry metadata on workflow state events', () => {
     const workflow: WorkflowStateData = {
       phase: 'provider_retry',
-      message: 'Selected route connection failed before any output; retrying.',
+      message: 'Selected route connection failed before any output. Retrying.',
       state: 'investigating',
       attempt: 2,
       max_attempts: 2,

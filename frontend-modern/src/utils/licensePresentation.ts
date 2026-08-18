@@ -383,8 +383,8 @@ const getPulseProRuntimeMismatchDetail = (
   entitlements?: Pick<LicenseCommercialEntitlements, 'runtime'> | null,
 ): string =>
   getPulseProRuntimeBuild(entitlements) === 'community'
-    ? `This install reports the community runtime. Open ${PULSE_PRO_DOWNLOAD_URL} with your activation key (starts ppk_live_) and install the private Pulse Pro runtime; if you do not have an activation key, issue one at ${PULSE_PRO_RETRIEVE_LICENSE_URL} with your purchase email. Public GitHub releases and the public Docker image do not include Pro-only runtime hooks.`
-    : `This install is not reporting a Pulse Pro runtime identity. Open ${PULSE_PRO_DOWNLOAD_URL} with your activation key (starts ppk_live_) and install the private Pulse Pro runtime; if you do not have an activation key, issue one at ${PULSE_PRO_RETRIEVE_LICENSE_URL} with your purchase email. Public GitHub releases and the public Docker image do not include Pro-only runtime hooks.`;
+    ? `This install reports the community runtime. Open ${PULSE_PRO_DOWNLOAD_URL} with your activation key (starts ppk_live_) and install the private Pulse Pro runtime. If you do not have an activation key, issue one at ${PULSE_PRO_RETRIEVE_LICENSE_URL} with your purchase email. Public GitHub releases and the public Docker image do not include Pro-only runtime hooks.`
+    : `This install is not reporting a Pulse Pro runtime identity. Open ${PULSE_PRO_DOWNLOAD_URL} with your activation key (starts ppk_live_) and install the private Pulse Pro runtime. If you do not have an activation key, issue one at ${PULSE_PRO_RETRIEVE_LICENSE_URL} with your purchase email. Public GitHub releases and the public Docker image do not include Pro-only runtime hooks.`;
 
 const getPatrolControlAction = ({
   entitlements,
@@ -906,7 +906,7 @@ export const getSelfHostedPlanStatusPresentation = (
           : `This instance has ${actualHistoryDays} days of metric history available.`
         : historyState === 'partial'
           ? `This instance reports ${actualHistoryDays} days of metric history, below the expected ${requiredHistoryDays} days.`
-          : `This instance does not have metric-history access yet; expected ${requiredHistoryDays} days.`,
+          : `This instance does not have metric-history access yet. Expected ${requiredHistoryDays} days.`,
   });
 
   if (planDefinition.tier === 'pro') {
@@ -1067,7 +1067,7 @@ export const getCommercialMigrationNotice = (
         break;
       case 'exchange_connectivity_required':
         body =
-          'Pulse has not been able to reach license.pulserelay.pro for over a day. Paid v6 features require periodic outbound HTTPS to that host. Core monitoring keeps running; paid features stay on Community until connectivity is allowed. See docs/UPGRADE_v6.md for the connectivity policy.';
+          'Pulse has not been able to reach license.pulserelay.pro for over a day. Paid v6 features require periodic outbound HTTPS to that host. Core monitoring keeps running. Paid features stay on Community until connectivity is allowed. See docs/UPGRADE_v6.md for the connectivity policy.';
         break;
       case 'exchange_unavailable':
       default:

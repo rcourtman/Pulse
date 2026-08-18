@@ -1286,7 +1286,7 @@ describe('AISettings provider save failure context', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Check Patrol model' }));
 
     expect(
-      await screen.findByText('Provider connected; Patrol capability not verified'),
+      await screen.findByText('Provider connected. Patrol capability not verified'),
     ).toBeInTheDocument();
     expect(screen.getByText('Evaluation detail')).toBeInTheDocument();
     expect(screen.getByText(/expected exactly one tool call, got 0/)).toBeInTheDocument();

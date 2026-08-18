@@ -347,7 +347,7 @@ export function getNetworkDiscoveryPriorityNotice() {
     items: [
       'Environment variables still override these settings.',
       'Changes made here are saved to system.json immediately.',
-      'Automatic mode can scan every detected interface, including bridge or shared networks; use custom subnets when scope matters.',
+      'Automatic mode can scan every detected interface, including bridge or shared networks. Use custom subnets when scope matters.',
     ],
   } as const;
 }

@@ -182,7 +182,7 @@ describe('formatContextLine (exercised via buildAlertAssistantHandoff)', () => {
     // Briefing's message ternary (alert.message ? ...) also drops the line; with a
     // metric cpu alert only currentMetric + node detailLines remain.
     expect(handoff.context.briefing.detailLines).toEqual([
-      'Current value 82.5%; threshold 80.0%',
+      'Current value 82.5% · threshold 80.0%',
       'Node: PVE Node 1',
     ]);
   });
@@ -191,7 +191,7 @@ describe('formatContextLine (exercised via buildAlertAssistantHandoff)', () => {
     const handoff = buildHandoff({ message: undefined as unknown as string });
     expect(handoff.context.handoffContext).not.toContain('Message:');
     expect(handoff.context.briefing.detailLines).toEqual([
-      'Current value 82.5%; threshold 80.0%',
+      'Current value 82.5% · threshold 80.0%',
       'Node: PVE Node 1',
     ]);
   });
@@ -200,7 +200,7 @@ describe('formatContextLine (exercised via buildAlertAssistantHandoff)', () => {
     const handoff = buildHandoff({ message: '' });
     expect(handoff.context.handoffContext).not.toContain('Message:');
     expect(handoff.context.briefing.detailLines).toEqual([
-      'Current value 82.5%; threshold 80.0%',
+      'Current value 82.5% · threshold 80.0%',
       'Node: PVE Node 1',
     ]);
   });
@@ -285,7 +285,7 @@ describe('buildAlertAssistantHandoff (node-label, metadata-chain & briefing tern
 
   it('keeps the currentMetric detailLine for a metric alert (hasMetricValues true -> briefing ternary true arm)', () => {
     const handoff = buildHandoff({ type: 'cpu', value: 92.5, threshold: 80 });
-    expect(handoff.context.briefing.detailLines).toContain('Current value 92.5%; threshold 80.0%');
+    expect(handoff.context.briefing.detailLines).toContain('Current value 92.5% · threshold 80.0%');
     expect(handoff.context.handoffContext).toContain('Current Value: 92.5%');
     expect(handoff.context.handoffContext).toContain('Threshold: 80.0%');
   });

@@ -127,7 +127,7 @@ describe('dockerContainerLifecycleActions.branchcov2', () => {
             resource({ sourceStatus: { docker: { status: 'offline' } } }),
             'restart',
           ),
-        ).toBe('Docker inventory is offline; refresh inventory before running lifecycle actions.');
+        ).toBe('Docker inventory is offline. Refresh inventory before running lifecycle actions.');
       });
 
       it('blocks on a missing inventory status', () => {
@@ -136,7 +136,7 @@ describe('dockerContainerLifecycleActions.branchcov2', () => {
             resource({ sourceStatus: { docker: { status: 'missing' } } }),
             'restart',
           ),
-        ).toBe('Docker inventory is missing; refresh inventory before running lifecycle actions.');
+        ).toBe('Docker inventory is missing. Refresh inventory before running lifecycle actions.');
       });
 
       it('blocks on an inventory error when the status itself is healthy', () => {

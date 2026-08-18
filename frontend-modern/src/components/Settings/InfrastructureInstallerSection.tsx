@@ -290,7 +290,7 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
               Install the agent on the Proxmox node, not inside every LXC. In advanced options,
               select <span class="font-medium">Proxmox VE node</span> and enable{' '}
               <span class="font-medium">Pulse command execution</span>. Then start Pulse with{' '}
-              <code>PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY=true</code>; optionally restrict it
+              <code>PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY=true</code>. Optionally restrict it
               with <code>PULSE_PROXMOX_GUEST_DOCKER_INVENTORY_VMIDS=101,102</code>. Pulse uses
               bounded <code>pct exec</code> inventory for <code>docker ps</code> and{' '}
               <code>docker stats</code>, skips guests that already have their own agent, and does
@@ -342,7 +342,7 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
                 <span class="mr-2 mt-0.5 text-emerald-500">✓</span>
                 <span>
                   Revoke the token any time from{' '}
-                  <span class="font-medium">Settings → Infrastructure → Tokens</span>; the agent
+                  <span class="font-medium">Settings → Infrastructure → Tokens</span>. The agent
                   stops reporting immediately.
                 </span>
               </li>
@@ -586,7 +586,7 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
                       onChange={(event) => state.setInsecureMode(event.currentTarget.checked)}
                       class="rounded text-blue-600 focus:ring-blue-500"
                     />
-                    Skip TLS certificate verification (self-signed certs; not recommended)
+                    Skip TLS certificate verification (self-signed certs, not recommended)
                   </label>
 
                   <label

@@ -353,7 +353,7 @@ describe('credentialLabel (via plan.credentialLabel and steps[1].detail)', () =>
     );
 
     expect(plan?.credentialLabel).toBe(
-      'Run the Host Telemetry Agent handoff; Pulse will add the source after the agent reports.',
+      'Run the Host Telemetry Agent handoff. Pulse will add the source after the agent reports.',
     );
   });
 
@@ -365,7 +365,7 @@ describe('credentialLabel (via plan.credentialLabel and steps[1].detail)', () =>
     );
 
     expect(plan?.credentialLabel).toBe(
-      'Run the API Inventory setup handoff; Pulse will add the source after setup completes.',
+      'Run the API Inventory setup handoff. Pulse will add the source after setup completes.',
     );
   });
 });

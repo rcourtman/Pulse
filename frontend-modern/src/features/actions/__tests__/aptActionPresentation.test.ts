@@ -119,7 +119,7 @@ describe('APT action presentation', () => {
       expect.arrayContaining([
         { label: 'Updates remaining', value: '0' },
         { label: 'Update system health', value: 'Known healthy' },
-        { label: 'Reboot required', value: 'Yes — fact only; no reboot was authorized' },
+        { label: 'Reboot required', value: 'Yes — fact only. No reboot was authorized' },
       ]),
     );
     expect(presentation?.nextStep).toContain('separate governed action');

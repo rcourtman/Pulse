@@ -254,7 +254,7 @@ describe('getAssistantActiveTurnStatus', () => {
                 type: 'workflow_status',
                 workflowStatus: {
                   phase: 'stream_idle',
-                  message: 'Assistant is still working; waiting for the next stream event.',
+                  message: 'Assistant is still working. Waiting for the next stream event.',
                   startedAt: 2_000,
                 },
                 startedAt: 2_000,
@@ -267,7 +267,7 @@ describe('getAssistantActiveTurnStatus', () => {
       ),
     ).toEqual({
       type: 'thinking',
-      text: 'Assistant is still working; waiting for the next stream event.',
+      text: 'Assistant is still working. Waiting for the next stream event.',
       startedAt: 2_000,
     });
   });
@@ -328,7 +328,7 @@ describe('getAssistantActiveTurnStatus', () => {
       },
       {
         phase: 'provider_retry',
-        message: 'Selected route connection failed before any output; retrying.',
+        message: 'Selected route connection failed before any output. Retrying.',
         attempt: 2,
         maxAttempts: 3,
         retryAfterMs: 3200,
@@ -358,7 +358,7 @@ describe('getAssistantActiveTurnStatus', () => {
       ),
     ).toEqual({
       type: 'retrying',
-      text: 'Selected route connection failed before any output; retrying. · attempt 2/3 · retrying in 3.2s',
+      text: 'Selected route connection failed before any output. Retrying. · attempt 2/3 · retrying in 3.2s',
       startedAt: 1_200,
     });
   });
@@ -366,7 +366,7 @@ describe('getAssistantActiveTurnStatus', () => {
   it('keeps current provider retry liveness ahead of later generic content status', () => {
     const retryStatus = {
       phase: 'provider_retry',
-      message: 'Selected route connection failed before any output; retrying.',
+      message: 'Selected route connection failed before any output. Retrying.',
       attempt: 2,
       maxAttempts: 3,
       retryAfterMs: 3200,
@@ -400,7 +400,7 @@ describe('getAssistantActiveTurnStatus', () => {
       ),
     ).toEqual({
       type: 'retrying',
-      text: 'Selected route connection failed before any output; retrying. · attempt 2/3 · retrying in 2.1s',
+      text: 'Selected route connection failed before any output. Retrying. · attempt 2/3 · retrying in 2.1s',
       startedAt: 1_200,
     });
   });
@@ -419,7 +419,7 @@ describe('getAssistantActiveTurnStatus', () => {
       },
       {
         phase: 'stream_idle',
-        message: 'OpenRouter is still working; waiting for more response data.',
+        message: 'OpenRouter is still working. Waiting for more response data.',
         startedAt: 1_200,
       },
     ];
@@ -446,7 +446,7 @@ describe('getAssistantActiveTurnStatus', () => {
       ),
     ).toEqual({
       type: 'thinking',
-      text: 'OpenRouter is still working; waiting for more response data.',
+      text: 'OpenRouter is still working. Waiting for more response data.',
       startedAt: 1_200,
     });
   });
@@ -454,7 +454,7 @@ describe('getAssistantActiveTurnStatus', () => {
   it('keeps current stream-idle liveness ahead of later generic content status', () => {
     const idleStatus = {
       phase: 'stream_idle',
-      message: 'OpenRouter is still working; waiting for more response data.',
+      message: 'OpenRouter is still working. Waiting for more response data.',
       startedAt: 1_200,
     };
 
@@ -485,7 +485,7 @@ describe('getAssistantActiveTurnStatus', () => {
       ),
     ).toEqual({
       type: 'thinking',
-      text: 'OpenRouter is still working; waiting for more response data.',
+      text: 'OpenRouter is still working. Waiting for more response data.',
       startedAt: 1_200,
     });
   });
@@ -540,7 +540,7 @@ describe('getAssistantActiveTurnStatus', () => {
           assistantMessage({
             workflowStatus: {
               phase: 'provider_retry',
-              message: 'Selected route connection failed before any output; retrying.',
+              message: 'Selected route connection failed before any output. Retrying.',
               attempt: 2,
               maxAttempts: 2,
               retryAfterMs: 200,
@@ -552,7 +552,7 @@ describe('getAssistantActiveTurnStatus', () => {
       ),
     ).toEqual({
       type: 'retrying',
-      text: 'Selected route connection failed before any output; retrying. · attempt 2/2 · retrying in 200ms',
+      text: 'Selected route connection failed before any output. Retrying. · attempt 2/2 · retrying in 200ms',
       startedAt,
     });
   });
@@ -565,7 +565,7 @@ describe('getAssistantActiveTurnStatus', () => {
           assistantMessage({
             workflowStatus: {
               phase: 'provider_retry',
-              message: 'Selected route connection failed before any output; retrying.',
+              message: 'Selected route connection failed before any output. Retrying.',
               attempt: 2,
               maxAttempts: 2,
               retryAfterMs: 3200,
@@ -578,7 +578,7 @@ describe('getAssistantActiveTurnStatus', () => {
       ),
     ).toEqual({
       type: 'retrying',
-      text: 'Selected route connection failed before any output; retrying. · attempt 2/2 · retrying in 1.9s',
+      text: 'Selected route connection failed before any output. Retrying. · attempt 2/2 · retrying in 1.9s',
       startedAt,
     });
   });
@@ -591,7 +591,7 @@ describe('getAssistantActiveTurnStatus', () => {
           assistantMessage({
             workflowStatus: {
               phase: 'provider_retry',
-              message: 'Selected route connection failed before any output; retrying.',
+              message: 'Selected route connection failed before any output. Retrying.',
               attempt: 2,
               maxAttempts: 2,
               retryAfterMs: 3200,
@@ -604,7 +604,7 @@ describe('getAssistantActiveTurnStatus', () => {
       ),
     ).toEqual({
       type: 'retrying',
-      text: 'Selected route connection failed before any output; retrying. · attempt 2/2 · retrying now',
+      text: 'Selected route connection failed before any output. Retrying. · attempt 2/2 · retrying now',
       startedAt,
     });
   });

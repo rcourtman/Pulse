@@ -146,7 +146,7 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                     <p class="text-xs text-blue-800 dark:text-blue-200">
                       <strong>Docker inside Proxmox LXCs:</strong> use this host-agent path instead
                       of installing Pulse Agent in every guest. The copied command enables Pulse
-                      command execution on the Proxmox node; the Pulse server still must be opted in
+                      command execution on the Proxmox node. The Pulse server still must be opted in
                       with{' '}
                       <code class="break-all rounded bg-blue-100 px-1 font-mono dark:bg-blue-900">
                         PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY=true
@@ -283,7 +283,7 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                           await state.copyQuickSetupCommand(
                             'pve',
                             true,
-                            'Command copied to clipboard! Run it on the server; the one-time setup token is already embedded.',
+                            'Command copied to clipboard! Run it on the server. The one-time setup token is already embedded.',
                           );
                         }}
                         class="absolute top-2 right-2 p-1.5 text-slate-400 hover:text-slate-200 bg-surface-hover rounded-md transition-colors"
@@ -754,7 +754,7 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                             await state.copyQuickSetupCommand(
                               'pbs',
                               false,
-                              'Command copied to clipboard! Run it on the server; the one-time setup token is already embedded.',
+                              'Command copied to clipboard! Run it on the server. The one-time setup token is already embedded.',
                             );
                           }}
                           class="absolute top-2 right-2 p-1.5 text-slate-400 hover:text-slate-200 bg-surface-hover rounded-md transition-colors"

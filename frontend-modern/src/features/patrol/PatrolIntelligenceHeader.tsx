@@ -254,8 +254,8 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
           role="status"
           class="mt-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200"
         >
-          Requested {PATROL_AUTONOMY_POLICY_PRESENTATION[state.requestedAutonomyLevel()].label};
-          effective mode is {selectedAutonomyPolicy().label}. Server status:{' '}
+          Requested {PATROL_AUTONOMY_POLICY_PRESENTATION[state.requestedAutonomyLevel()].label}.
+          Effective mode is {selectedAutonomyPolicy().label}. Server status:{' '}
           {state.autopilotStatus()?.code.replace(/_/g, ' ') || 'unavailable'}.
         </div>
       </Show>

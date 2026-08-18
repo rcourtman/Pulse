@@ -550,7 +550,7 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
           <textarea
             value={note()}
             onInput={(e) => setNote(e.currentTarget.value)}
-            placeholder="e.g. Production database; page before rebooting"
+            placeholder="e.g. Production database. Page before rebooting"
             class="mt-1 block min-h-16 w-full resize-y text-xs rounded border border-border bg-surface px-2 py-1.5 text-base-content focus:outline-none focus:ring-1 focus:ring-blue-400 disabled:opacity-50"
             disabled={saving()}
             maxLength={500}

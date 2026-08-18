@@ -21,7 +21,7 @@ export const DE_MESSAGE_OVERRIDES = {
   'alerts.assistant.button.full': 'Pulse Assistant zu dieser Warnmeldung fragen',
   'alerts.assistant.button.text': 'Pulse Assistant fragen',
   'alerts.assistant.detail.currentMetric':
-    'Aktueller Wert {currentValue}; Schwellwert {thresholdValue}',
+    'Aktueller Wert {currentValue} · Schwellwert {thresholdValue}',
   'alerts.assistant.detail.message': 'Meldung: {message}',
   'alerts.assistant.detail.node': 'Knoten: {node}',
   'alerts.assistant.duration.hoursMinutes': '{hours}h {minutes}m',
@@ -235,7 +235,7 @@ export const DE_MESSAGE_OVERRIDES = {
   'setup.security.nextScreen.itemApiToken': 'Ein Admin-API-Token fuer Automatisierung',
   'setup.security.nextScreen.itemCredentials': 'Ihr Benutzername und Passwort',
   'setup.security.nextScreen.saveOnce':
-    'Speichern Sie sie vor dem Fortfahren; sie werden nur einmal angezeigt.',
+    'Speichern Sie sie vor dem Fortfahren. Sie werden nur einmal angezeigt.',
   'setup.security.nextScreen.title': 'Auf dem naechsten Bildschirm',
   'setup.security.passwordMode.autoGenerate': 'Automatisch erzeugen',
   'setup.security.placeholder.password': 'Passwort (mind. 12 Zeichen)',
@@ -285,7 +285,7 @@ export const DE_MESSAGE_OVERRIDES = {
   'setup.welcome.placeholder.bootstrapToken': 'Bootstrap-Token einfuegen',
   'setup.welcome.success.commandCopied': 'Befehl in Zwischenablage kopiert',
   'setup.welcome.telemetryNotice.description':
-    'Ausgehende Nutzungstelemetrie ist standardmaessig aktiviert. Pulse sendet einen verzoegerten Start-Ping und einen taeglichen Heartbeat mit einer rotierenden pseudonymen Installations-ID, Release-/Runtime-Details, aggregierten Zaehlern und Funktionsflags. Um sie vor jedem Ping zu deaktivieren, setzen Sie PULSE_TELEMETRY=false, bevor Sie Pulse starten; spaeter koennen Sie sie auch in den Einstellungen ausschalten.',
+    'Ausgehende Nutzungstelemetrie ist standardmaessig aktiviert. Pulse sendet einen verzoegerten Start-Ping und einen taeglichen Heartbeat mit einer rotierenden pseudonymen Installations-ID, Release-/Runtime-Details, aggregierten Zaehlern und Funktionsflags. Um sie vor jedem Ping zu deaktivieren, setzen Sie PULSE_TELEMETRY=false, bevor Sie Pulse starten. Spaeter koennen Sie sie auch in den Einstellungen ausschalten.',
   'setup.welcome.telemetryNotice.detailsLink': 'Details',
   'setup.welcome.telemetryNotice.title': 'Nutzungstelemetrie ist standardmaessig aktiviert',
   'setup.welcome.tokenHelp.afterVerify':

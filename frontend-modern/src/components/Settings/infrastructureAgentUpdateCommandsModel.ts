@@ -461,7 +461,7 @@ const updaterPresentation = (
       return {
         label: update.autoUpdate
           ? 'Update queued automatically'
-          : 'Update available; manual action required',
+          : 'Update available. Manual action required',
         waiting: needsUpdate && update.autoUpdate,
       };
     case 'idle':
@@ -552,7 +552,7 @@ const doctorTargetFromBinding = (
   let commandBlockedReason: string | undefined;
   if ((needsUpdate || needsCredentialRepair) && hasDuplicateInstallation) {
     commandBlockedReason =
-      'Multiple host-installed Pulse Agents are reporting from this machine. Pulse cannot safely choose a local service; inspect and remove or explicitly update the duplicate installation first.';
+      'Multiple host-installed Pulse Agents are reporting from this machine. Pulse cannot safely choose a local service. Inspect and remove or explicitly update the duplicate installation first.';
   } else if (needsUpdate && !expectedVersion) {
     commandBlockedReason = 'No supported target version is available, so Pulse will not guess.';
   } else if (needsUpdate && !parseAgentVersion(expectedVersion)) {
@@ -832,7 +832,7 @@ export const formatInfrastructureAgentDoctorReport = (
     .map((status) => `${counts[status]} ${DOCTOR_REPORT_STATUS_LABEL[status].toLowerCase()}`);
   const lines: string[] = [
     `Pulse Agent Doctor report (${counts.total} agent${counts.total === 1 ? '' : 's'}${
-      countParts.length > 0 ? `; ${countParts.join(', ')}` : ''
+      countParts.length > 0 ? ` · ${countParts.join(', ')}` : ''
     })`,
   ];
   for (const target of targets) {

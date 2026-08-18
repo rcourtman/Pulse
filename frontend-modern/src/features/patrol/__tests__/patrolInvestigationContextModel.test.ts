@@ -391,7 +391,7 @@ describe('patrolInvestigationContextModel', () => {
       subject: 'Issues detected',
       actionLabel: '1 governed action reference attached',
       safetyNote:
-        'Review action posture in the governed flow; raw command payloads stay out of Assistant.',
+        'Review action posture in the governed flow · raw command payloads stay out of Assistant.',
     });
     expect(JSON.stringify(handoff)).not.toContain('systemctl restart workload.service');
   });
@@ -465,7 +465,7 @@ describe('patrolInvestigationContextModel', () => {
     expect(handoff.context.briefing).toMatchObject({
       actionLabel: 'Discuss Patrol coverage',
       safetyNote:
-        'Assistant can review the coverage evidence; Patrol runs, diagnostics, and remediation remain governed controls.',
+        'Assistant can review the coverage evidence. Patrol runs, diagnostics, and remediation remain governed controls.',
     });
     expect(handoff.context.briefing?.actionHref).toBeUndefined();
     expect(handoff.context.handoffContext).toContain('Assessment: Coverage incomplete');
@@ -621,7 +621,7 @@ describe('patrolInvestigationContextModel', () => {
     expect(handoff.context.briefing).toMatchObject({
       actionLabel: '1 pending governed approval attached',
       safetyNote:
-        'Review approvals in the governed flow; approval policy is attached; dry-run posture is attached; destructive actions remain approval-bound; raw command payloads stay out of Assistant.',
+        'Review approvals in the governed flow · approval policy is attached · dry-run posture is attached · destructive actions remain approval-bound · raw command payloads stay out of Assistant.',
     });
     expect(JSON.stringify(handoff)).not.toContain('systemctl restart workload.service');
   });
@@ -1190,13 +1190,13 @@ describe('patrolInvestigationContextModel', () => {
       statusLabel: 'Completed · Fix Queued · High confidence',
       detailLines: [
         'Backup job saturated CPU.',
-        'Existing action artifact: Restart the workload service; medium risk; 1 command recorded for approval context; destructive action artifact',
+        'Existing action artifact: Restart the workload service · medium risk · 1 command recorded for approval context · destructive action artifact',
       ],
       evidence: ['CPU stayed above 95% for 10 minutes', 'Verified: CPU returned below 50%'],
       actionLabel: undefined,
       commandSummary: '1 command recorded for approval context',
       safetyNote:
-        'Command details stay in approval context; destructive actions require governed approval.',
+        'Command details stay in approval context. Destructive actions require governed approval.',
     });
     expect(JSON.stringify(briefing)).not.toContain('systemctl restart workload.service');
     vi.useRealTimers();
@@ -1249,7 +1249,7 @@ describe('patrolInvestigationContextModel', () => {
     );
     expect(modelContext).toContain('Existing Action Artifact: Restore web service');
     expect(modelContext).toContain(
-      '2 commands recorded for governed plan review; 1 rollback command recorded',
+      '2 commands recorded for governed plan review · 1 rollback command recorded',
     );
     expect(modelContext).toContain('Treat this as approval state, not remediation guidance.');
     expect(modelContext).toContain('Do not assume any Patrol-authored action is correct.');
@@ -1267,10 +1267,10 @@ describe('patrolInvestigationContextModel', () => {
     expect(briefing.evidence).toBeUndefined();
     expect(briefing.actionLabel).toBeUndefined();
     expect(briefing.commandSummary).toBe(
-      '2 commands recorded for governed plan review; 1 rollback command recorded',
+      '2 commands recorded for governed plan review · 1 rollback command recorded',
     );
     expect(briefing.safetyNote).toBe(
-      'Assistant should decide remediation from evidence; command execution requires governed approval.',
+      'Assistant should decide remediation from evidence. Command execution requires governed approval.',
     );
     expect(JSON.stringify(briefing)).not.toContain('systemctl');
   });
@@ -1467,13 +1467,13 @@ describe('patrolInvestigationContextModel', () => {
       subject: 'CPU saturation on node-1',
       statusLabel: 'Fix Queued',
       detailLines: [
-        'Existing action artifact: Restart workload service; target node-1; high risk; 1 command recorded for approval context; destructive action artifact; rationale service is wedged',
+        'Existing action artifact: Restart workload service · target node-1 · high risk · 1 command recorded for approval context · destructive action artifact · rationale service is wedged',
       ],
       evidence: [],
       actionLabel: undefined,
       commandSummary: '1 command recorded for approval context',
       safetyNote:
-        'Command details stay in approval context; destructive actions require governed approval.',
+        'Command details stay in approval context. Destructive actions require governed approval.',
     });
   });
 });

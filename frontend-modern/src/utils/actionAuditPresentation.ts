@@ -353,7 +353,7 @@ export const getActionAuditVerificationOutcomePresentation = (audit: {
               ]
             : [
                 'Confirmation lacks an evidence source',
-                'The record says confirmed but provides no evidence source; do not treat it as independently verified.',
+                'The record says confirmed but provides no evidence source. Do not treat it as independently verified.',
               ],
       contradicted: ['Outcome contradicted', 'Observed evidence contradicted the intended state.'],
       inconclusive: [

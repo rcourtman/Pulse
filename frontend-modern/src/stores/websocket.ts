@@ -289,7 +289,7 @@ export function createWebSocketStore(url: string) {
           const previousAckTime = pending.previousAckTime || '';
           if (serverAckTime === previousAckTime) {
             logger.debug(
-              `Server ack time for alert ${id} unchanged (${serverAckTime}); treating as confirmed`,
+              `Server ack time for alert ${id} unchanged (${serverAckTime}). Treating as confirmed`,
             );
           }
         } else if (alert.acknowledged) {
@@ -695,7 +695,7 @@ export function createWebSocketStore(url: string) {
         // hydration and remain delta-free until a full socket snapshot lands.
         rawServerResources = null;
         oversizedSnapshotObserved = true;
-        logger.warn('Server withheld an oversized state payload; recovering over REST', {
+        logger.warn('Server withheld an oversized state payload. Recovering over REST', {
           supersedes: message.data.supersedes,
           bytes: message.data.bytes,
           maxBytes: message.data.maxBytes,
@@ -873,7 +873,7 @@ export function createWebSocketStore(url: string) {
       // The socket has already proven it cannot deliver this estate's snapshot.
       // `requestData` would just queue another frame the guard drops, which is
       // what left large estates stuck on an empty UI, retrying every 30s.
-      logger.warn('Recovering full state over REST; socket snapshot exceeds the inbound limit');
+      logger.warn('Recovering full state over REST. Socket snapshot exceeds the inbound limit');
       void hydrateFullStateFromREST(connectionId);
       return;
     }
@@ -881,7 +881,7 @@ export function createWebSocketStore(url: string) {
     if (now - lastFullStateRecoveryAt < 30000) return;
     lastFullStateRecoveryAt = now;
 
-    logger.warn('Received resource delta without a full snapshot baseline; requesting full state');
+    logger.warn('Received resource delta without a full snapshot baseline. Requesting full state');
     if (ws && ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify({ type: 'requestData' }));
     }

@@ -64,7 +64,7 @@ const sourceStatusDisabledReason = (
 ): string | undefined => {
   const dockerStatus = normalizeToken(resource.sourceStatus?.docker?.status);
   if (STALE_SOURCE_STATUSES.has(dockerStatus)) {
-    return `${runtimeLabel} inventory is ${dockerStatus}; refresh inventory before running lifecycle actions.`;
+    return `${runtimeLabel} inventory is ${dockerStatus}. Refresh inventory before running lifecycle actions.`;
   }
   const dockerError = asTrimmedString(resource.sourceStatus?.docker?.error);
   if (dockerError) return `${runtimeLabel} inventory is not healthy: ${dockerError}`;

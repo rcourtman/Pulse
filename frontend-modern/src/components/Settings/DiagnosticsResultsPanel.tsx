@@ -191,7 +191,7 @@ export const DiagnosticsResultsPanel: Component<DiagnosticsResultsPanelProps> = 
                       >
                         {(probe) => (
                           <div class="mt-0.5 text-xs text-muted">
-                            Monitor: {pbs.state || (pbs.connected ? 'active' : 'unreachable')}; live
+                            Monitor: {pbs.state || (pbs.connected ? 'active' : 'unreachable')}. Live
                             check: {probe().connected ? 'connected' : 'failed'}
                           </div>
                         )}

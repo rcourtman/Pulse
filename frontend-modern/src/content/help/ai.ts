@@ -13,7 +13,7 @@ export const aiHelpContent: HelpContent[] = [
       '- vLLM / llama.cpp: Self-hosted local inference servers\n' +
       '- Azure OpenAI: Enterprise Azure deployments\n' +
       '- Together, Anyscale, Fireworks: Alternative cloud providers\n\n' +
-      'OpenRouter has a dedicated provider in Pulse; use this field for other OpenAI-compatible endpoints.',
+      'OpenRouter has a dedicated provider in Pulse. Use this field for other OpenAI-compatible endpoints.',
     examples: [
       'http://localhost:8000/v1 (vLLM local)',
       'https://your-resource.openai.azure.com (Azure)',

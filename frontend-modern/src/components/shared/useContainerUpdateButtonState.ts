@@ -170,7 +170,7 @@ export function useContainerUpdateButtonState(props: UpdateButtonProps) {
       markContainerQueued(props.agentId, props.containerId);
       props.onUpdateTriggered?.();
     } else if (state === 'failed') {
-      const message = 'The update action failed; open Actions for the audit trail.';
+      const message = 'The update action failed. Open Actions for the audit trail.';
       setErrorMessage(message);
       markContainerUpdateError(props.agentId, props.containerId, message);
     }

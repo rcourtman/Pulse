@@ -19,7 +19,7 @@ export const API_TOKEN_DOCKER_PODMAN_RUNTIMES_LABEL = `${DOCKER_PODMAN_SOURCE_LA
 export const API_TOKEN_DOCKER_REPORT_PRESET_LABEL = `${DOCKER_PODMAN_SOURCE_LABEL} report`;
 export const API_TOKEN_DOCKER_MANAGE_PRESET_LABEL = `${DOCKER_PODMAN_SOURCE_LABEL} manage`;
 export const API_TOKEN_NAME_PLACEHOLDER = `e.g. ${DOCKER_PODMAN_SOURCE_LABEL} automation`;
-export const API_TOKEN_ACCESS_PANEL_DESCRIPTION = `Generate scoped tokens for ${DOCKER_PODMAN_SOURCE_LABEL}, system agents, and automation pipelines. Tokens are shown once; store them securely and rotate when infrastructure changes.`;
+export const API_TOKEN_ACCESS_PANEL_DESCRIPTION = `Generate scoped tokens for ${DOCKER_PODMAN_SOURCE_LABEL}, system agents, and automation pipelines. Tokens are shown once. Store them securely and rotate when infrastructure changes.`;
 export const API_TOKEN_DOCKER_REPORT_PRESET_DESCRIPTION = `Permits ${DOCKER_PODMAN_SOURCE_LABEL} agents to stream runtime and container telemetry only.`;
 export const API_TOKEN_DOCKER_MANAGE_PRESET_DESCRIPTION = `Extends ${DOCKER_PODMAN_SOURCE_LABEL} reporting with lifecycle actions (restart, stop, etc.).`;
 

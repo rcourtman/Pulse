@@ -826,7 +826,7 @@ describe('AIChat', () => {
       expect(transcriptValue).toContain('fallback transcript body');
       expect(document.activeElement).toBe(transcriptField);
       expect(mockNotificationStore.warning).toHaveBeenCalledWith(
-        'Clipboard blocked; transcript opened for manual copy',
+        'Clipboard blocked. Transcript opened for manual copy',
         4000,
       );
 
@@ -5338,7 +5338,7 @@ describe('AIChat', () => {
           isStreaming: true,
           workflowStatus: {
             phase: 'provider_retry',
-            message: 'Selected route connection failed before any output; retrying.',
+            message: 'Selected route connection failed before any output. Retrying.',
             provider: 'openrouter',
             model: 'openrouter:qwen/qwen3.7-plus',
           },
@@ -5352,7 +5352,7 @@ describe('AIChat', () => {
               type: 'workflow_status',
               workflowStatus: {
                 phase: 'provider_retry',
-                message: 'Selected route connection failed before any output; retrying.',
+                message: 'Selected route connection failed before any output. Retrying.',
                 provider: 'openrouter',
                 model: 'openrouter:qwen/qwen3.7-plus',
               },
@@ -6077,7 +6077,7 @@ describe('AIChat', () => {
           streamEvents: [],
           workflowStatus: {
             phase: 'provider_retry',
-            message: 'Selected route connection failed before any output; retrying.',
+            message: 'Selected route connection failed before any output. Retrying.',
             attempt: 2,
             maxAttempts: 3,
             retryAfterMs: 3200,
@@ -6088,7 +6088,7 @@ describe('AIChat', () => {
       renderChat();
 
       expect(screen.getByLabelText('Assistant active turn status')).toHaveTextContent(
-        'Selected route connection failed before any output; retrying. · attempt 2/3 · retrying in 1.9s',
+        'Selected route connection failed before any output. Retrying. · attempt 2/3 · retrying in 1.9s',
       );
       expect(
         screen

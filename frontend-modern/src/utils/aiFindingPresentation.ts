@@ -1116,7 +1116,7 @@ export const getFindingPatrolWorkflowPresentation = (
     return {
       stage: 'approval',
       label: 'Run approved action',
-      detail: 'The typed action is approved; execution remains a separate operator step.',
+      detail: 'The typed action is approved. Execution remains a separate operator step.',
       tone: 'success',
     };
   }

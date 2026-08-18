@@ -226,7 +226,7 @@ describe('buildPatrolRunAssistantHandoff (residual branches)', () => {
     } as unknown as PatrolRunRecord);
 
     expect(handoff.context.briefing?.evidence?.[0]).toBe(
-      '1 new finding; 1 existing finding; 1 resolved finding; 1 rejected finding; 1 auto-remediation; 1 error',
+      '1 new finding · 1 existing finding · 1 resolved finding · 1 rejected finding · 1 auto-remediation · 1 error',
     );
   });
 
@@ -244,7 +244,7 @@ describe('buildPatrolRunAssistantHandoff (residual branches)', () => {
     } as unknown as PatrolRunRecord);
 
     expect(handoff.context.briefing?.evidence?.[0]).toBe(
-      '2 new findings; 2 existing findings; 2 resolved findings; 2 rejected findings; 2 auto-remediations; 2 errors',
+      '2 new findings · 2 existing findings · 2 resolved findings · 2 rejected findings · 2 auto-remediations · 2 errors',
     );
   });
 

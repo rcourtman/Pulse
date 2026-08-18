@@ -31,7 +31,7 @@ export interface TrueNASCredentialSlotProps {
 const describeTransport = (transport: NonNullable<TrueNASConnection['transport']>): string => {
   let description: string;
   if (transport.mode === 'jsonrpc-websocket') {
-    description = `Transport: JSON-RPC WebSocket${transport.tls ? ' over TLS' : ''}; authentication: ${transport.authMechanism || 'session'}.`;
+    description = `Transport: JSON-RPC WebSocket${transport.tls ? ' over TLS' : ''} · authentication: ${transport.authMechanism || 'session'}.`;
   } else if (transport.mode === 'legacy-rest') {
     description =
       `Transport: legacy REST (${transport.applianceVersion || 'legacy TrueNAS'}). ${transport.legacyReason || ''}`.trim();
@@ -340,7 +340,7 @@ export const TrueNASCredentialSlot: Component<TrueNASCredentialSlotProps> = (pro
 
         <Show when={props.deleteConfirming}>
           <div class="rounded-md border border-border bg-surface-alt px-4 py-3 text-xs text-muted">
-            Removing forgets this connection from Pulse; credentials on the platform itself are
+            Removing forgets this connection from Pulse. Credentials on the platform itself are
             untouched.
           </div>
         </Show>

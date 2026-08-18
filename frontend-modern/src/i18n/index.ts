@@ -93,7 +93,7 @@ function getDeferredLocale(locale: SupportedLocale): DeferredLocale | null {
 
 function handleLocaleCatalogLoadFailure(locale: SupportedLocale, error: unknown): void {
   if (typeof console === 'undefined') return;
-  console.warn(`Unable to load ${locale} locale catalog; falling back to English.`, error);
+  console.warn(`Unable to load ${locale} locale catalog. Falling back to English.`, error);
 }
 
 function scheduleLocaleCatalogLoad(locale: SupportedLocale): void {

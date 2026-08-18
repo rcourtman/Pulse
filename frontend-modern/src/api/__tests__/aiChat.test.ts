@@ -980,7 +980,7 @@ describe('AIChatAPI', () => {
       type: 'workflow_state',
       data: {
         phase: 'provider_retry',
-        message: 'Selected route connection failed before any output; retrying.',
+        message: 'Selected route connection failed before any output. Retrying.',
         provider: 'openrouter',
         model: 'openrouter:deepseek/deepseek-chat',
         attempt: 2,
@@ -1029,7 +1029,7 @@ describe('AIChatAPI', () => {
       type: 'workflow_state',
       data: {
         phase: 'stream_idle',
-        message: 'Assistant is still working; waiting for the next stream event.',
+        message: 'Assistant is still working. Waiting for the next stream event.',
       },
     });
     expect(onEvent.mock.calls[5][0]).toMatchObject({

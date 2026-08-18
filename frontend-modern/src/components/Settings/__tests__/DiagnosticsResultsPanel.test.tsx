@@ -292,6 +292,6 @@ describe('DiagnosticsResultsPanel', () => {
     ));
 
     expect(screen.getByText('pbs-primary')).toBeInTheDocument();
-    expect(screen.getByText('Monitor: unreachable; live check: connected')).toBeInTheDocument();
+    expect(screen.getByText('Monitor: unreachable. Live check: connected')).toBeInTheDocument();
   });
 });

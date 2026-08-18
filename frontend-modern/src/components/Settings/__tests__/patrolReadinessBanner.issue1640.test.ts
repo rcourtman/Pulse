@@ -106,7 +106,7 @@ describe('Patrol readiness banner presentation (#1640)', () => {
     });
     expect(patrolReadinessBannerTone(transportOnly, false)).toBe('warning');
     expect(patrolReadinessBannerHeadline(transportOnly, noStale)).toBe(
-      'Provider connected; Patrol capability not verified',
+      'Provider connected. Patrol capability not verified',
     );
   });
 

@@ -101,7 +101,7 @@ describe('alertThresholdsPresentation', () => {
       inheritanceGuidance:
         'Resources inherit their group defaults until you save a custom override.',
       bulkGuidance: 'Select multiple resources to apply the same threshold changes in bulk.',
-      collapseHint: 'Resource groups start collapsed; open only the group you need.',
+      collapseHint: 'Resource groups start collapsed. Open only the group you need.',
     });
     expect(getAlertThresholdsOverridesPresentation()).toEqual({
       title: 'Custom overrides',
@@ -147,7 +147,7 @@ describe('alertThresholdsPresentation', () => {
     expect(getAlertThresholdsDockerIgnoredPrefixesPresentation()).toEqual({
       title: 'Ignored container patterns',
       description:
-        'Containers whose name or ID matches any pattern below are skipped for container alerts. A bare entry matches as a prefix; use * as a wildcard (runner-*, *-dev, *staging*). Enter one pattern per line; matching is case-insensitive.',
+        'Containers whose name or ID matches any pattern below are skipped for container alerts. A bare entry matches as a prefix. Use * as a wildcard (runner-*, *-dev, *staging*). Enter one pattern per line. Matching is case-insensitive.',
       resetLabel: 'Reset',
       placeholder: 'runner-',
     });

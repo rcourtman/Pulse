@@ -251,7 +251,7 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
                     >
                       {verificationStatus() === 'verified'
                         ? 'Outcome verified'
-                        : 'Execution finished; verification was not conclusive'}
+                        : 'Execution finished. Verification was not conclusive'}
                     </div>
                   </Show>
                   <Show when={currentAction().state === 'failed'}>

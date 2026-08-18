@@ -639,7 +639,7 @@ export const getAgentMachineThermalPressurePresentation = (
     .sort(([left], [right]) => left.localeCompare(right))
     .map(([key, value]) => `${key.replace(/_/g, ' ')} ${Math.round(value)}%`);
   const sourceSummary = source ? ` via ${source}` : '';
-  const limitSummary = limits.length > 0 ? `; limits: ${limits.join(', ')}` : '';
+  const limitSummary = limits.length > 0 ? ` · limits: ${limits.join(', ')}` : '';
 
   return {
     label,

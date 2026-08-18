@@ -48,7 +48,7 @@ describe('alertAssistantHandoffModel', () => {
         subject: 'Warning cpu on app-vm',
         statusLabel: 'Warning alert · Active 5 mins',
         detailLines: [
-          'Current value 82.5%; threshold 80.0%',
+          'Current value 82.5% · threshold 80.0%',
           'Node: PVE Node 1',
           'Message: CPU usage is high',
         ],
@@ -121,6 +121,6 @@ describe('alertAssistantHandoffModel', () => {
     });
 
     const briefing = handoff.context.briefing as { detailLines: string[] };
-    expect(briefing.detailLines).toContain('Current value 92.5%; threshold 80.0%');
+    expect(briefing.detailLines).toContain('Current value 92.5% · threshold 80.0%');
   });
 });

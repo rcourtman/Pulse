@@ -157,7 +157,7 @@ export const NodeModalMonitoringSection: Component<NodeModalMonitoringSectionPro
               <div>
                 <p class="font-medium text-base-content">Monitor physical disk health (SMART)</p>
                 <p class="mt-1 text-xs text-muted">
-                  This will spin up idle HDDs; leave disabled if you rely on drive standby.
+                  This will spin up idle HDDs. Leave disabled if you rely on drive standby.
                 </p>
               </div>
               <TogglePrimitive

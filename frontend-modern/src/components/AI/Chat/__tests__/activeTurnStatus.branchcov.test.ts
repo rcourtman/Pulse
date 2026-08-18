@@ -525,7 +525,7 @@ describe('isFresherStatusCandidate branch coverage', () => {
           isStreaming: true,
           workflowStatus: {
             phase: 'stream_idle',
-            message: 'Still working; waiting for more response data.',
+            message: 'Still working. Waiting for more response data.',
             startedAt: 2_000,
           },
           streamEvents: [
@@ -533,7 +533,7 @@ describe('isFresherStatusCandidate branch coverage', () => {
               type: 'workflow_status',
               workflowStatus: {
                 phase: 'stream_idle',
-                message: 'Still working; waiting for more response data.',
+                message: 'Still working. Waiting for more response data.',
                 startedAt: 2_000,
               },
               startedAt: 2_000,
@@ -546,7 +546,7 @@ describe('isFresherStatusCandidate branch coverage', () => {
       ),
     ).toEqual({
       type: 'thinking',
-      text: 'Still working; waiting for more response data.',
+      text: 'Still working. Waiting for more response data.',
       startedAt: 2_000,
     });
   });

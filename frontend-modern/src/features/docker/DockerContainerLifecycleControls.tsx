@@ -149,7 +149,7 @@ export const DockerContainerLifecycleControls: Component<DockerContainerLifecycl
     const containerName = dockerContainerLifecycleName(props.resource);
     if (disabledReason) return `${label} unavailable: ${disabledReason}`;
     if (planningAction() === action) return `Preparing review for ${action} ${containerName}`;
-    if (lastError()) return `${label} ${containerName}; last error: ${lastError()}`;
+    if (lastError()) return `${label} ${containerName}. Last error: ${lastError()}`;
     return `Review ${action} for ${containerName}`;
   };
 

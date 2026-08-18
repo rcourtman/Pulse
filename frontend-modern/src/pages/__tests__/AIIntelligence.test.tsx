@@ -717,7 +717,7 @@ describe('AIIntelligence entitlement gating', () => {
     expect(patrolControl.getAllByText('Watch only').length).toBeGreaterThan(0);
     expect(
       patrolControl.getByText(
-        'Patrol checks infrastructure and reports issues only; it does not start fixes.',
+        'Patrol checks infrastructure and reports issues only. It does not start fixes.',
       ),
     ).toBeInTheDocument();
     expect(patrolControl.queryByRole('button', { name: 'Limits' })).not.toBeInTheDocument();
@@ -1262,7 +1262,7 @@ describe('AIIntelligence entitlement gating', () => {
     expect(screen.getByRole('button', { name: 'Autopilot' })).not.toBeDisabled();
     expect(
       screen.getByText(
-        'Patrol checks infrastructure and reports issues only; it does not start fixes.',
+        'Patrol checks infrastructure and reports issues only. It does not start fixes.',
       ),
     ).toBeInTheDocument();
     expect(screen.queryByText('Patrol handles')).not.toBeInTheDocument();
@@ -2006,7 +2006,7 @@ describe('AIIntelligence entitlement gating', () => {
     expect(patrolControl.getAllByText('Watch only').length).toBeGreaterThan(0);
     expect(
       patrolControl.getByText(
-        'Patrol checks infrastructure and reports issues only; it does not start fixes.',
+        'Patrol checks infrastructure and reports issues only. It does not start fixes.',
       ),
     ).toBeInTheDocument();
     expect(patrolControl.getByRole('button', { name: 'Ask first' })).not.toBeDisabled();

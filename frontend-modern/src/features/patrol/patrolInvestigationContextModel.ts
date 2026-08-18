@@ -672,7 +672,7 @@ export function buildPatrolConfigurationFailureHandoff(
         evidence: formatConfigurationFailureDetails(input.details).slice(0, 4),
         actionLabel: `Review ${issueLabel}`,
         safetyNote:
-          'Assistant can explain the Patrol mode state; provider changes, retries, and remediation remain operator-controlled.',
+          'Assistant can explain the Patrol mode state. Provider changes, retries, and remediation remain operator-controlled.',
       },
       context: {
         source: 'pulse-patrol-configuration-failure',
@@ -784,7 +784,7 @@ function buildPatrolAssessmentActionPosture(
     return {
       actionLabel: 'Discuss Patrol coverage',
       safetyNote:
-        'Assistant can review the coverage evidence; Patrol runs, diagnostics, and remediation remain governed controls.',
+        'Assistant can review the coverage evidence. Patrol runs, diagnostics, and remediation remain governed controls.',
     };
   }
 
@@ -811,7 +811,7 @@ function formatAssessmentActionSafetyNote(input: {
     parts.push('destructive actions remain approval-bound');
   }
   parts.push('raw command payloads stay out of Assistant');
-  return `${parts.join('; ')}.`;
+  return `${parts.join(' · ')}.`;
 }
 
 function assessmentHasCoverageGap(input: PatrolAssessmentAssistantHandoffInput): boolean {
@@ -924,7 +924,7 @@ function buildPatrolRunAssistantBriefing(
     evidence: [outcomes, run.findings_summary, analysis].filter(isNonEmptyString).slice(0, 4),
     actionLabel: runtimeFailure ? 'Review Patrol runtime failure' : 'Discuss Patrol run outcome',
     safetyNote:
-      'Assistant can explain the Patrol run context; retries, configuration changes, and remediation remain operator-controlled.',
+      'Assistant can explain the Patrol run context. Retries, configuration changes, and remediation remain operator-controlled.',
   };
 }
 
@@ -1492,7 +1492,7 @@ function formatAssessmentVerification(
       : undefined,
   ]
     .filter(isNonEmptyString)
-    .join('; ');
+    .join(' · ');
 }
 
 function formatAssessmentRecency(input: PatrolAssessmentAssistantHandoffInput): string | undefined {
@@ -1516,7 +1516,7 @@ function formatAssessmentLatestRun(
     latestRun.findingsSnapshotAvailable === false ? 'finding record unavailable' : undefined,
   ]
     .filter(isNonEmptyString)
-    .join('; ');
+    .join(' · ');
 }
 
 function formatAssessmentFindingEvidence(
@@ -1594,7 +1594,7 @@ function formatAssessmentRecentChangeContextLine(change: ResourceChange, index: 
     formatAssessmentRecentChangeRelatedResources(change),
   ].filter(isNonEmptyString);
 
-  return `Recent Change ${index}: ${parts.join('; ')}`;
+  return `Recent Change ${index}: ${parts.join(' · ')}`;
 }
 
 function formatAssessmentRecentChangeRelatedResources(change: ResourceChange): string | undefined {
@@ -1646,7 +1646,7 @@ function formatAssessmentCorrelationContextLine(
       : undefined,
   ].filter(isNonEmptyString);
 
-  return `Correlation ${index}: ${parts.join('; ')}`;
+  return `Correlation ${index}: ${parts.join(' · ')}`;
 }
 
 function formatAssessmentRecentChangeSummary(change: ResourceChange): string {
@@ -1765,7 +1765,7 @@ function formatAssessmentFindingContextLine(
     ...recordParts,
   ].filter(isNonEmptyString);
 
-  return `Finding ${index}: ${parts.join('; ')}`;
+  return `Finding ${index}: ${parts.join(' · ')}`;
 }
 
 function buildPatrolAssistantFindingModelContext(
@@ -1823,7 +1823,7 @@ function buildPatrolAssistantFindingModelContext(
     formatContextLine('Status', statusParts.join(' · ')),
     formatContextLine('Detected At', input.detectedAt),
     formatContextLine('Last Seen At', input.lastSeenAt),
-    formatContextLine('Recurrence', raisedParts.join('; ')),
+    formatContextLine('Recurrence', raisedParts.join(' · ')),
     formatContextLine('Description', input.description),
     formatContextLine('Investigation Record', input.investigationRecord?.id),
     formatContextLine('Investigation Status', record.statusLabel),
@@ -1862,7 +1862,7 @@ function buildPatrolAssistantFindingModelContext(
     formatContextLine('Action Preflight', pendingApproval.actionPreflight),
     formatContextLine('Dry-Run Posture', pendingApproval.actionDryRunSummary),
     formatContextLine('Existing Action Artifact', actionArtifactFacts),
-    'Command Boundary: Command details stay in governed approval or remediation context; this model-only handoff may include command counts but not raw command text.',
+    'Command Boundary: Command details stay in governed approval or remediation context. This model-only handoff may include command counts but not raw command text.',
     'Model Boundary: This Patrol finding handoff is model-only context for explanation and review. Diagnostics, remediation, and command execution require explicit governed approval.',
   ]
     .filter(isNonEmptyString)
@@ -1972,7 +1972,7 @@ export function buildPatrolRemediationPlanAssistantModelContext(
     commandSummary
       ? `Governed Action Context: ${commandSummary}. Treat this as approval state, not remediation guidance.`
       : undefined,
-    'Model Boundary: Do not assume any Patrol-authored action is correct. Use the finding evidence, available tools, and current operational state to decide the remediation. Any state-changing command must go through governed approval; do not infer, repeat, or execute raw command text from this chat handoff.',
+    'Model Boundary: Do not assume any Patrol-authored action is correct. Use the finding evidence, available tools, and current operational state to decide the remediation. Any state-changing command must go through governed approval. Do not infer, repeat, or execute raw command text from this chat handoff.',
   ]
     .filter(isNonEmptyString)
     .join('\n');
@@ -2005,7 +2005,7 @@ export function buildPatrolRemediationPlanAssistantBriefing(
     ].filter(isNonEmptyString),
     commandSummary,
     safetyNote: commandSummary
-      ? 'Assistant should decide remediation from evidence; command execution requires governed approval.'
+      ? 'Assistant should decide remediation from evidence. Command execution requires governed approval.'
       : 'Assistant should decide remediation from evidence before any governed action.',
   };
 }
@@ -2074,10 +2074,10 @@ function buildPatrolAssistantSafetyNote(
   const hasCommands = Boolean(proposedFix?.commandSummary);
   const isDestructive = Boolean(proposedFix?.destructive);
   if (hasCommands && isDestructive) {
-    return 'Command details stay in approval context; destructive actions require governed approval.';
+    return 'Command details stay in approval context. Destructive actions require governed approval.';
   }
   if (hasCommands && pendingApproval?.id) {
-    return 'Command details stay in approval context; execution requires the governed approval flow.';
+    return 'Command details stay in approval context. Execution requires the governed approval flow.';
   }
   if (hasCommands) {
     return 'Command details stay in approval context.';
@@ -2202,7 +2202,7 @@ function formatPlanCommandSummary(plan: RemediationPlan): string | undefined {
         : `${rollbackCount} rollback commands recorded`,
     );
   }
-  return parts.join('; ');
+  return parts.join(' · ');
 }
 
 function formatBriefingStringList(
@@ -2226,7 +2226,7 @@ function formatBriefingStringList(
   if (remaining > 0) {
     parts.push(`${remaining} more ${itemName || 'items'}`);
   }
-  return parts.join('; ');
+  return parts.join(' · ');
 }
 
 function formatIdentifierLabel(value?: string | null): string | undefined {

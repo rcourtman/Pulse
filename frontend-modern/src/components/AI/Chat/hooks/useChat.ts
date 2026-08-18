@@ -255,7 +255,7 @@ export function useChat(options: UseChatOptions = {}) {
         message?.workflowStatus?.model?.trim() ||
         message?.model?.trim() ||
         undefined,
-      message: `${getAIProviderDisplayName(provider)} is still working; waiting for more response data.`,
+      message: `${getAIProviderDisplayName(provider)} is still working. Waiting for more response data.`,
     };
   };
 
@@ -1977,7 +1977,7 @@ export function useChat(options: UseChatOptions = {}) {
         clientMessageId: entry.messageId,
       });
       if (!result.accepted) {
-        logger.debug('[useChat] Steer not accepted; follow-up stays queued', {
+        logger.debug('[useChat] Steer not accepted. Follow-up stays queued', {
           reason: result.reason,
         });
         return;
@@ -1988,7 +1988,7 @@ export function useChat(options: UseChatOptions = {}) {
         ),
       );
     } catch (error) {
-      logger.warn('[useChat] Steering attempt failed; follow-up stays queued', error);
+      logger.warn('[useChat] Steering attempt failed. Follow-up stays queued', error);
     }
   };
 

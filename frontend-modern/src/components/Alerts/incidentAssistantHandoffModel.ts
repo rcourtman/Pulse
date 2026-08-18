@@ -150,7 +150,7 @@ function buildIncidentAssistantModelContext({
     formatContextLine('Timeline Summary', eventCountLabel),
     formatContextLine('Message', incident.message),
     ...eventLines,
-    'Timeline Boundary: Command events are summarized only; raw command details and output stay in the incident or governed approval surface.',
+    'Timeline Boundary: Command events are summarized only. Raw command details and output stay in the incident or governed approval surface.',
     'Operator Boundary: This incident handoff is model-only context for explanation and review. Diagnostics, remediation, and any command execution require explicit operator approval.',
   ]
     .filter((line): line is string => Boolean(line))

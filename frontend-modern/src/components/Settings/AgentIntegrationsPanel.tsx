@@ -457,7 +457,7 @@ export const AgentIntegrationsPanel: Component = () => {
                           <p class="text-xs text-muted">
                             These values come from{' '}
                             <code class="font-mono">/api/agent/capabilities</code>. Use them to
-                            build clients against this instance; they do not change Patrol mode.
+                            build clients against this instance. They do not change Patrol mode.
                           </p>
                           <Show when={workflowPrompts().length > 0}>
                             <details class="rounded-md border border-border bg-surface-alt/40 p-3">
@@ -528,7 +528,7 @@ export const AgentIntegrationsPanel: Component = () => {
                                 )}
                               </For>
                               . Use narrower tokens when the client should only perform part of the
-                              allowed work; each capability below shows its required scope.
+                              allowed work. Each capability below shows its required scope.
                             </p>
                           </Show>
                           <Show when={errorCodeSummaries().length > 0}>

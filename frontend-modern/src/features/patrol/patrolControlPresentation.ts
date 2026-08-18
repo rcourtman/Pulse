@@ -20,7 +20,7 @@ export const PATROL_AUTONOMY_POLICY_PRESENTATION: Record<
 > = {
   monitor: {
     label: 'Watch only',
-    detail: 'Patrol checks infrastructure and reports issues only; it does not start fixes.',
+    detail: 'Patrol checks infrastructure and reports issues only. It does not start fixes.',
     compactLabel: 'Watch only',
   },
   approval: {
@@ -31,7 +31,7 @@ export const PATROL_AUTONOMY_POLICY_PRESENTATION: Record<
   assisted: {
     label: 'Safe auto-fix',
     detail:
-      'Patrol can run low- or medium-risk fixes allowed by policy; higher-risk work still asks first.',
+      'Patrol can run low- or medium-risk fixes allowed by policy. Higher-risk work still asks first.',
     compactLabel: 'Safe auto-fix',
   },
   full: {
@@ -464,7 +464,7 @@ export function getPatrolWorkspaceWorkGroups(
       id: 'stale-protection',
       label: 'Coverage stale',
       detail:
-        'Patrol has not completed a fresh full check; run Patrol to refresh current coverage.',
+        'Patrol has not completed a fresh full check. Run Patrol to refresh current coverage.',
       tone: 'warning',
     });
   }
@@ -529,7 +529,7 @@ export function getMonitorContextPatrolProtectionPosture(
     {
       id: 'open-work',
       label: 'No Patrol work waiting',
-      detail: 'Current Patrol findings and approvals stay in Patrol; none are waiting now.',
+      detail: 'Current Patrol findings and approvals stay in Patrol. None are waiting now.',
       tone: healthyTone,
     },
   ];

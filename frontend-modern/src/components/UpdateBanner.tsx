@@ -117,7 +117,7 @@ export function UpdateBanner() {
     switch (deploymentType) {
       case 'proxmoxve':
         return updatePlan()?.canAutoUpdate
-          ? "ProxmoxVE LXC: use Apply Update here; do not use a legacy community 'update' helper"
+          ? "ProxmoxVE LXC: use Apply Update here. Do not use a legacy community 'update' helper"
           : 'ProxmoxVE LXC: use the signed Pulse installer, not a legacy community update helper';
       case 'docker':
         return 'Docker: pull image and recreate container';

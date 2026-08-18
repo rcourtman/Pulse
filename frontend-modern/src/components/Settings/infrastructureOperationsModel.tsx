@@ -317,7 +317,7 @@ export const INSTALL_PROFILE_OPTIONS: InstallProfileOption[] = [
     value: 'proxmox-pve',
     label: 'Proxmox VE node',
     description:
-      'Force Proxmox integration and register as a PVE node. Install on each cluster member for node-local telemetry such as temperatures and SMART data; use this profile plus command execution when Docker inside LXCs should be inventoried from the Proxmox host path.',
+      'Force Proxmox integration and register as a PVE node. Install on each cluster member for node-local telemetry such as temperatures and SMART data. Use this profile plus command execution when Docker inside LXCs should be inventoried from the Proxmox host path.',
     flags: ['--enable-proxmox', '--proxmox-type pve'],
   },
   {
@@ -344,7 +344,7 @@ export const buildCommandsByPlatform = (
         command: unixCommand,
         note: (
           <span>
-            Command auto-escalates with <code>sudo</code> when available; otherwise run from a root
+            Command auto-escalates with <code>sudo</code> when available. Otherwise run from a root
             shell (for example <code>su -</code>). Auto-detects your init system and works on
             Debian, Ubuntu, Proxmox, Fedora, Alpine, Unraid, Synology, and more.
           </span>

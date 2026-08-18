@@ -304,7 +304,7 @@ describe('ActionDecisionPacket', () => {
     ));
     expect(
       within(screen.getByTestId('apt-action-facts')).getByText(
-        'Yes — fact only; no reboot was authorized',
+        'Yes — fact only. No reboot was authorized',
       ),
     ).toBeInTheDocument();
     expect(

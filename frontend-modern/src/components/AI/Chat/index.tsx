@@ -656,7 +656,7 @@ const buildSessionHandoffContext = (session?: ChatSession): AIChatContext | unde
           : `Last known state: ${statusLabel}`
         : undefined,
       safetyNote: isPatrolRun
-        ? 'Patrol run context is review-only; actions still require governed approval.'
+        ? 'Patrol run context is review-only. Actions still require governed approval.'
         : actionCount > 0
           ? 'Detailed command payloads stay in governed approval context.'
           : undefined,
@@ -1919,7 +1919,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
       return;
     }
     setTranscriptCopyFallback({ generatedAt, transcript });
-    notificationStore.warning('Clipboard blocked; transcript opened for manual copy', 4000);
+    notificationStore.warning('Clipboard blocked. Transcript opened for manual copy', 4000);
   };
 
   const copyLastAssistantAnswer = async () => {

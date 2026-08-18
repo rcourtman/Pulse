@@ -909,7 +909,7 @@ const buildProviderRetryFixtureEvents = (model?: string): AIChatStreamEvent[] =>
       type: 'workflow_state',
       data: {
         phase: 'provider_retry',
-        message: 'Selected route connection failed before any output; retrying.',
+        message: 'Selected route connection failed before any output. Retrying.',
         provider: selectedProvider,
         model: selectedModel,
         attempt: 2,
@@ -960,7 +960,7 @@ const buildStreamIdleFixtureEvents = (model?: string): AIChatStreamEvent[] => [
     type: 'workflow_state',
     data: {
       phase: 'stream_idle',
-      message: 'Assistant is still working; waiting for the next stream event.',
+      message: 'Assistant is still working. Waiting for the next stream event.',
     },
   },
   {

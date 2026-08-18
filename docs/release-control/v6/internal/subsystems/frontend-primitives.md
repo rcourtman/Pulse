@@ -322,6 +322,12 @@ The legacy pricing handoff page may also route its visible redirect title and
 manual-link copy through the catalog, but `Pulse Account`, route paths, feature
 keys, query parameters, public URLs, and purchase-return state remain
 machine-stable and untranslated.
+Customer-facing copy must use complete sentences or an intentional visual
+separator such as a middle dot. Semicolons are reserved for machine-facing
+syntax including commands, cookies, encoded data, CSS declarations, and HTML
+entities. `frontend-modern/scripts/copy-style-audit.mjs` enforces that boundary
+across production TypeScript and TSX, and every ordinary product-copy exception
+must be rewritten instead of allowlisted.
 
 Alert thresholds consume the shared FilterBar primitive and route state, while
 the alerts subsystem owns the resource data and platform-specific threshold

@@ -1043,8 +1043,8 @@ describe('collectInfrastructureAgentDoctorTargets (updaterPresentation arms)', (
     expect(updaterFor('update-available', true)).toBe('Update queued automatically');
   });
 
-  it('labels update-available + manual as "Update available; manual action required"', () => {
-    expect(updaterFor('update-available', false)).toBe('Update available; manual action required');
+  it('labels update-available + manual as "Update available. Manual action required"', () => {
+    expect(updaterFor('update-available', false)).toBe('Update available. Manual action required');
   });
 
   it('labels idle + needsUpdate + autoUpdate as "Waiting for the next automatic check"', () => {

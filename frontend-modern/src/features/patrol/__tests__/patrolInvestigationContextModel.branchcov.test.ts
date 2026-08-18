@@ -612,7 +612,7 @@ describe('buildPatrolAssistantFindingBriefing (branch coverage)', () => {
     });
 
     expect(briefing?.safetyNote).toBe(
-      'Command details stay in approval context; execution requires the governed approval flow.',
+      'Command details stay in approval context. Execution requires the governed approval flow.',
     );
   });
 

@@ -65,7 +65,7 @@ describe('patrolControlPresentation branch coverage (set 2)', () => {
           tone: 'warning',
         },
         {
-          detail: 'Current Patrol findings and approvals stay in Patrol; none are waiting now.',
+          detail: 'Current Patrol findings and approvals stay in Patrol. None are waiting now.',
           id: 'open-work',
           label: 'No Patrol work waiting',
           tone: 'warning',
@@ -120,7 +120,7 @@ describe('patrolControlPresentation branch coverage (set 2)', () => {
           tone: 'success',
         },
         {
-          detail: 'Current Patrol findings and approvals stay in Patrol; none are waiting now.',
+          detail: 'Current Patrol findings and approvals stay in Patrol. None are waiting now.',
           id: 'open-work',
           label: 'No Patrol work waiting',
           tone: 'success',
@@ -170,7 +170,7 @@ describe('patrolControlPresentation branch coverage (set 2)', () => {
           tone: 'warning',
         },
         {
-          detail: 'Current Patrol findings and approvals stay in Patrol; none are waiting now.',
+          detail: 'Current Patrol findings and approvals stay in Patrol. None are waiting now.',
           id: 'open-work',
           label: 'No Patrol work waiting',
           tone: 'success',

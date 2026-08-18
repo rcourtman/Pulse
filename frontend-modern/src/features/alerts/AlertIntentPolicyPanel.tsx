@@ -411,7 +411,7 @@ export function AlertIntentPolicyPanel(props: {
                 placeholder="Use inherited behavior"
               />
               <span class={formHelpText}>
-                Blank inherits the existing policy; 0 alerts on the first stopped observation.
+                Blank inherits the existing policy. 0 alerts on the first stopped observation.
               </span>
             </label>
             <label class={formField}>
@@ -539,7 +539,7 @@ export function AlertIntentPolicyPanel(props: {
                   onInput={(event) => setOverrideGrace(event.currentTarget.value)}
                   placeholder="Inherit"
                 />
-                <span class={formHelpText}>Leave blank to inherit; 0 means no wait.</span>
+                <span class={formHelpText}>Leave blank to inherit. 0 means no wait.</span>
               </label>
               <FormSelect
                 label="Operator state override"

@@ -60,7 +60,7 @@ export const TokenRevealDialog: Component = () => {
         const recordName = info.record?.name?.trim() || 'Untitled token';
         const hint =
           info.note ||
-          'Copy this token now; Pulse will not display it again after you close this dialog.';
+          'Copy this token now. Pulse will not display it again after you close this dialog.';
         const tokenHint =
           info.record?.prefix && info.record?.suffix
             ? `${info.record.prefix}…${info.record.suffix}`

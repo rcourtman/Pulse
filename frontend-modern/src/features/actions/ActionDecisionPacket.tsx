@@ -351,7 +351,7 @@ export const ActionDecisionPacket: Component<{
                 : 'Pulse recorded the delivery attempt before sending it.'}
           </p>
           <p class="mt-1 text-sm text-muted">
-            Refreshing or reconnecting re-reads this action record; it does not create another
+            Refreshing or reconnecting re-reads this action record. It does not create another
             action.
           </p>
           <dl class="mt-3 grid gap-3 text-sm sm:grid-cols-2">

@@ -255,7 +255,7 @@ export const VMwareCredentialSlot: Component<VMwareCredentialSlotProps> = (props
 
         <Show when={props.deleteConfirming}>
           <div class="rounded-md border border-border bg-surface-alt px-4 py-3 text-xs text-muted">
-            Removing forgets this connection from Pulse; credentials on the platform itself are
+            Removing forgets this connection from Pulse. Credentials on the platform itself are
             untouched.
           </div>
         </Show>

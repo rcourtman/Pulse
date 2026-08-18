@@ -115,7 +115,7 @@ describe('PatrolIntelligenceHeader', () => {
     expect(PATROL_AUTONOMY_POLICY_PRESENTATION).toEqual({
       monitor: {
         label: 'Watch only',
-        detail: 'Patrol checks infrastructure and reports issues only; it does not start fixes.',
+        detail: 'Patrol checks infrastructure and reports issues only. It does not start fixes.',
         compactLabel: 'Watch only',
       },
       approval: {
@@ -126,7 +126,7 @@ describe('PatrolIntelligenceHeader', () => {
       assisted: {
         label: 'Safe auto-fix',
         detail:
-          'Patrol can run low- or medium-risk fixes allowed by policy; higher-risk work still asks first.',
+          'Patrol can run low- or medium-risk fixes allowed by policy. Higher-risk work still asks first.',
         compactLabel: 'Safe auto-fix',
       },
       full: {

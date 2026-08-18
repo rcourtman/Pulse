@@ -70,7 +70,7 @@ const getUpdateFacts = (summary: string): APTActionPresentationFact[] => {
     { label: 'Recovery required', value: match[5] === 'true' ? 'Yes' : 'No' },
     {
       label: 'Reboot required',
-      value: match[6] === 'true' ? 'Yes — fact only; no reboot was authorized' : 'No',
+      value: match[6] === 'true' ? 'Yes — fact only. No reboot was authorized' : 'No',
     },
   ];
 };

@@ -97,7 +97,7 @@ const getThermalPressurePresentation = (resource: Resource): ThermalPressurePres
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([key, value]) => `${key.replace(/_/g, ' ')} ${Math.round(value)}%`);
   const source = thermalState.source ? ` via ${thermalState.source}` : '';
-  const limitSummary = limits.length > 0 ? `; limits: ${limits.join(', ')}` : '';
+  const limitSummary = limits.length > 0 ? ` · limits: ${limits.join(', ')}` : '';
 
   return {
     label,

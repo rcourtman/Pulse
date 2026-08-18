@@ -20,7 +20,7 @@ export const ES_MESSAGE_OVERRIDES = {
   'alerts.assistant.action.investigate': 'Investigar alerta {alertIdentifier}',
   'alerts.assistant.button.full': 'Preguntar a Pulse Assistant sobre esta alerta',
   'alerts.assistant.button.text': 'Preguntar a Pulse Assistant',
-  'alerts.assistant.detail.currentMetric': 'Valor actual {currentValue}; umbral {thresholdValue}',
+  'alerts.assistant.detail.currentMetric': 'Valor actual {currentValue} · umbral {thresholdValue}',
   'alerts.assistant.detail.message': 'Mensaje: {message}',
   'alerts.assistant.detail.node': 'Nodo: {node}',
   'alerts.assistant.duration.hoursMinutes': '{hours}h {minutes}m',
@@ -156,18 +156,18 @@ export const ES_MESSAGE_OVERRIDES = {
   'setup.completion.credentials.continuation.connected':
     'Infraestructura o Agregar infraestructura.',
   'setup.completion.credentials.description':
-    'Guarda el inicio de sesión de administrador y el token de API antes de salir de esta pantalla; luego continúa en {destination}',
+    'Guarda el inicio de sesión de administrador y el token de API antes de salir de esta pantalla. Luego continúa en {destination}',
   'setup.completion.credentials.passwordLabel': 'Contraseña',
   'setup.completion.credentials.title': 'Credenciales que debes guardar ahora',
   'setup.completion.credentials.usernameLabel': 'Usuario',
   'setup.completion.download.content':
     'Credenciales de Pulse\n==================\nGenerado: {generatedAt}\n\nInicio de sesión web:\n----------\nURL: {baseUrl}\nUsuario: {username}\nContraseña: {password}\n\nToken de API de administrador:\n----------------\n{apiToken}\n\nInfraestructura:\n---------------\n{infrastructureUrl}\n\nUsa Agregar infraestructura para elegir una API de plataforma, Pulse Agent o ambos\npara el primer sistema que Pulse debe supervisar.\n\nGuarda estas credenciales en un lugar seguro.\n',
   'setup.completion.hero.connected.description.agent':
-    'Tu cuenta de administrador está lista y Pulse ya recibe telemetría. Abre Infraestructura para revisar el primer sistema; luego vuelve a Agregar infraestructura cuando quieras otra fuente Pulse Agent o API de plataforma.',
+    'Tu cuenta de administrador está lista y Pulse ya recibe telemetría. Abre Infraestructura para revisar el primer sistema. Luego vuelve a Agregar infraestructura cuando quieras otra fuente Pulse Agent o API de plataforma.',
   'setup.completion.hero.connected.description.api':
-    'Tu cuenta de administrador está lista y Pulse ya recibe telemetría. Abre Infraestructura para revisar el primer sistema; luego vuelve a Agregar infraestructura cuando quieras otra API de plataforma o fuente Pulse Agent.',
+    'Tu cuenta de administrador está lista y Pulse ya recibe telemetría. Abre Infraestructura para revisar el primer sistema. Luego vuelve a Agregar infraestructura cuando quieras otra API de plataforma o fuente Pulse Agent.',
   'setup.completion.hero.connected.description.both':
-    'Tu cuenta de administrador está lista y Pulse ya recibe telemetría. Abre Infraestructura para revisar el primer sistema; luego vuelve a Agregar infraestructura cuando quieras otra API de plataforma, fuente Agent o ambas.',
+    'Tu cuenta de administrador está lista y Pulse ya recibe telemetría. Abre Infraestructura para revisar el primer sistema. Luego vuelve a Agregar infraestructura cuando quieras otra API de plataforma, fuente Agent o ambas.',
   'setup.completion.hero.connected.title': 'Primer sistema supervisado conectado',
   'setup.completion.hero.empty.description':
     'Tu cuenta de administrador está lista. Ahora elige cómo entrará el primer sistema en el modelo unificado de infraestructura: inventario por API de plataforma, telemetría de Pulse Agent o ambos.',
@@ -227,7 +227,7 @@ export const ES_MESSAGE_OVERRIDES = {
   'setup.security.minimumPasswordHelp': 'Mínimo 12 caracteres.',
   'setup.security.nextScreen.itemApiToken': 'Un token de API de administrador para automatización',
   'setup.security.nextScreen.itemCredentials': 'Tu usuario y contraseña',
-  'setup.security.nextScreen.saveOnce': 'Guárdalos antes de continuar; se muestran una sola vez.',
+  'setup.security.nextScreen.saveOnce': 'Guárdalos antes de continuar. Se muestran una sola vez.',
   'setup.security.nextScreen.title': 'En la siguiente pantalla',
   'setup.security.passwordMode.autoGenerate': 'Generar automáticamente',
   'setup.security.placeholder.password': 'Contraseña (mínimo 12 caracteres)',
@@ -277,7 +277,7 @@ export const ES_MESSAGE_OVERRIDES = {
   'setup.welcome.placeholder.bootstrapToken': 'Pega tu token de bootstrap',
   'setup.welcome.success.commandCopied': 'Comando copiado al portapapeles',
   'setup.welcome.telemetryNotice.description':
-    'La telemetría de uso saliente está activada por defecto. Pulse envía un ping de inicio retrasado y un heartbeat diario con un ID de instalación seudónimo rotativo, detalles de versión/runtime, conteos agregados y flags de funciones. Para desactivarla antes de cualquier ping, define PULSE_TELEMETRY=false antes de iniciar Pulse; también puedes desactivarla luego en Ajustes.',
+    'La telemetría de uso saliente está activada por defecto. Pulse envía un ping de inicio retrasado y un heartbeat diario con un ID de instalación seudónimo rotativo, detalles de versión/runtime, conteos agregados y flags de funciones. Para desactivarla antes de cualquier ping, define PULSE_TELEMETRY=false antes de iniciar Pulse. También puedes desactivarla luego en Ajustes.',
   'setup.welcome.telemetryNotice.detailsLink': 'Detalles completos',
   'setup.welcome.telemetryNotice.title': 'La telemetría de uso está activada por defecto',
   'setup.welcome.tokenHelp.afterVerify':

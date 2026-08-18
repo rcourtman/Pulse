@@ -314,7 +314,7 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
               <p class="text-xs leading-5 text-blue-800 dark:text-blue-200">
                 {tokenGatedTargetCount() === 1
                   ? 'One repair needs a fresh scoped agent credential before Pulse can show its command.'
-                  : `${tokenGatedTargetCount()} repairs need separate scoped credentials. Each credential binds to the first agent that uses it; select one installation, generate and run its command, then continue with the next.`}
+                  : `${tokenGatedTargetCount()} repairs need separate scoped credentials. Each credential binds to the first agent that uses it. Select one installation, generate and run its command, then continue with the next.`}
               </p>
             </div>
             <div class="flex flex-col gap-2 sm:flex-row">

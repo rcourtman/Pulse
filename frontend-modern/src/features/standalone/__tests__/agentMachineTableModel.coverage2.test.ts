@@ -466,7 +466,7 @@ describe('agentMachineTableModel coverage2', () => {
         }),
       );
       expect(result?.title).toBe(
-        'Thermal pressure nominal via throttling; limits: cpu package 80%, disk array 90%, gpu hotspot 95%',
+        'Thermal pressure nominal via throttling · limits: cpu package 80%, disk array 90%, gpu hotspot 95%',
       );
     });
   });

@@ -750,7 +750,7 @@ describe('MessageItem', () => {
                 type: 'workflow_status',
                 workflowStatus: {
                   phase: 'provider_retry',
-                  message: 'Selected route connection failed before any output; retrying.',
+                  message: 'Selected route connection failed before any output. Retrying.',
                   attempt: 2,
                   maxAttempts: 3,
                   retryAfterMs: 1200,
@@ -759,7 +759,7 @@ describe('MessageItem', () => {
             ],
             workflowStatus: {
               phase: 'provider_retry',
-              message: 'Selected route connection failed before any output; retrying.',
+              message: 'Selected route connection failed before any output. Retrying.',
               attempt: 2,
               maxAttempts: 3,
               retryAfterMs: 1200,
@@ -786,7 +786,7 @@ describe('MessageItem', () => {
                 type: 'workflow_status',
                 workflowStatus: {
                   phase: 'provider_retry',
-                  message: 'Selected route connection failed before any output; retrying.',
+                  message: 'Selected route connection failed before any output. Retrying.',
                   attempt: 2,
                   maxAttempts: 3,
                   retryAfterMs: 3200,
@@ -796,7 +796,7 @@ describe('MessageItem', () => {
             ],
             workflowStatus: {
               phase: 'provider_retry',
-              message: 'Selected route connection failed before any output; retrying.',
+              message: 'Selected route connection failed before any output. Retrying.',
               attempt: 2,
               maxAttempts: 3,
               retryAfterMs: 3200,
@@ -867,7 +867,7 @@ describe('MessageItem', () => {
         },
         {
           phase: 'provider_retry',
-          message: 'Selected route connection failed before any output; retrying.',
+          message: 'Selected route connection failed before any output. Retrying.',
           attempt: 2,
           maxAttempts: 3,
           retryAfterMs: 3200,

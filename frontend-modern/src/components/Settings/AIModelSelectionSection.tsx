@@ -99,7 +99,7 @@ export const patrolReadinessBannerHeadline = (
   if (result.max_verified_mode === 'approval') return 'Verified for Watch only and Ask first';
   if (result.max_verified_mode === 'monitor') return 'Verified for Watch only';
   if (result.transport_healthy && !result.patrol_capable)
-    return 'Provider connected; Patrol capability not verified';
+    return 'Provider connected. Patrol capability not verified';
   if (result.status === 'warning') return 'Patrol model needs attention';
   return 'Patrol model not verified';
 };

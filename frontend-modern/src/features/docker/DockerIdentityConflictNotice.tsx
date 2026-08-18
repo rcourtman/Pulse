@@ -28,7 +28,7 @@ export function DockerIdentityConflictNotice(props: DockerIdentityConflictNotice
         `Give one of them a fresh machine-id and restart its agent to monitor them separately.`
       );
     }
-    const labels = props.hosts.map(hostLabel).join('; ');
+    const labels = props.hosts.map(hostLabel).join(' · ');
     return (
       `${count()} hosts are each receiving reports from more than one machine. ` +
       `They are likely cloned VMs with the same /etc/machine-id, so their reports overwrite each other. ` +

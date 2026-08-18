@@ -743,7 +743,7 @@ describe('Agent Doctor model', () => {
         }),
       ]);
 
-      expect(report).toContain('Pulse Agent Doctor report (2 agents; 1 critical, 1 healthy)');
+      expect(report).toContain('Pulse Agent Doctor report (2 agents · 1 critical, 1 healthy)');
       expect(report).toContain('host-1 (Machine)');
       expect(report).toContain('  Connection agent:host-1');
       expect(report).toContain('  Status Critical');
@@ -785,7 +785,7 @@ describe('Agent Doctor model', () => {
         }),
       ]);
 
-      expect(report).toContain('Pulse Agent Doctor report (1 agent; 1 critical)');
+      expect(report).toContain('Pulse Agent Doctor report (1 agent · 1 critical)');
       expect(report).not.toContain('Reported agent');
       expect(report).not.toContain('Supported target');
       expect(report).not.toContain('Last seen');
