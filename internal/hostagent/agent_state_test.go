@@ -142,3 +142,38 @@ func TestPersistAgentID_MkdirAllPermissions(t *testing.T) {
 		t.Fatalf("MkdirAll perm = %o, want %o", gotPerm, 0700)
 	}
 }
+
+func TestWarnCanonicalIDMismatch_WarnsOncePerResolvedIdentity(t *testing.T) {
+	var logs []string
+	sink := zerolog.New(writerFunc(func(p []byte) (int, error) {
+		logs = append(logs, string(p))
+		return len(p), nil
+	}))
+
+	a := &Agent{
+		logger:  sink,
+		agentID: "custom-id",
+	}
+
+	a.warnCanonicalIDMismatch("machine-id-1")
+	a.warnCanonicalIDMismatch("machine-id-1")
+	if len(logs) != 1 {
+		t.Fatalf("expected 1 warning for repeated identical mismatch, got %d", len(logs))
+	}
+
+	a.warnCanonicalIDMismatch("machine-id-2")
+	if len(logs) != 2 {
+		t.Fatalf("expected a new warning for a different resolved identity, got %d", len(logs))
+	}
+
+	// Matching identity never warns and resets nothing.
+	a.agentID = "machine-id-2"
+	a.warnCanonicalIDMismatch("machine-id-2")
+	if len(logs) != 2 {
+		t.Fatalf("expected no warning when acknowledged ID matches, got %d", len(logs))
+	}
+}
+
+type writerFunc func(p []byte) (int, error)
+
+func (w writerFunc) Write(p []byte) (int, error) { return w(p) }

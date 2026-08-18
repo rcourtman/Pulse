@@ -181,6 +181,11 @@ type Agent struct {
 	availability           *availabilityProbeModule
 	reportStreamID         string
 	reportSequence         atomic.Uint64
+	// canonicalIDWarned holds the last server-acknowledged agent ID a
+	// mismatch warning was emitted for, so the warning fires once per
+	// resolved identity instead of on every report cycle. Only the
+	// report/enroll ack paths touch it, which run sequentially.
+	canonicalIDWarned string
 	// libreHardwareMonitorEndpoint is an unexported test seam. Production
 	// collection always uses the fixed loopback URL when this is empty.
 	libreHardwareMonitorEndpoint string
@@ -1372,6 +1377,7 @@ func (a *Agent) sendReportToDestination(ctx context.Context, report agentshost.R
 	// Persist the server-acknowledged agent ID so uninstall can deregister.
 	canonicalAgentID := strings.TrimSpace(reportResp.AgentID)
 	if canonicalAgentID != "" {
+		a.warnCanonicalIDMismatch(canonicalAgentID)
 		a.persistAgentID(canonicalAgentID)
 	}
 
@@ -1381,6 +1387,24 @@ func (a *Agent) sendReportToDestination(ctx context.Context, report agentshost.R
 	}
 
 	return nil
+}
+
+// warnCanonicalIDMismatch surfaces the case where the server resolved this
+// agent to a different identity than the one it presented. Host identity
+// continuity deliberately keeps a known machine on its enrolled ID even when
+// the operator passes --agent-id or hand-edits the agent-id state file
+// (#1739), and the acknowledged ID then overwrites that file for uninstall
+// deregistration. Without this warning the override is ignored silently and
+// the file rewrite looks like corruption. Warns once per resolved identity.
+func (a *Agent) warnCanonicalIDMismatch(canonicalAgentID string) {
+	if canonicalAgentID == a.agentID || canonicalAgentID == a.canonicalIDWarned {
+		return
+	}
+	a.canonicalIDWarned = canonicalAgentID
+	a.logger.Warn().
+		Str("presented_agent_id", a.agentID).
+		Str("server_agent_id", canonicalAgentID).
+		Msg("Server resolved this agent to its enrolled identity and the presented agent ID was not adopted. Host identity continuity keeps a known machine on its existing ID. To enroll under a new ID, remove the host in Pulse first, then restart the agent.")
 }
 
 // persistAgentID writes the server-assigned agent ID to the state directory.
