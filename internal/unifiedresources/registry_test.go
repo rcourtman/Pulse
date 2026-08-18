@@ -6140,3 +6140,38 @@ func TestProxmoxGuestKeylessFallsBackToSourceSpecificID(t *testing.T) {
 		t.Fatalf("keyless guest must not declare superseded eras, got %v", vms[0].SupersededCanonicalIDs)
 	}
 }
+
+func TestRegistryResourcesReportPlatformAdmission(t *testing.T) {
+	// Admission is derived from the same registry resources the API serves, so
+	// it must hold for resources that reached the registry through ingest
+	// rather than being hand-built in a test.
+	registry := NewRegistry(nil)
+	registry.IngestResources([]Resource{
+		{
+			ID:      "pulse-host",
+			Type:    ResourceTypeAgent,
+			Name:    "workshop",
+			Sources: []DataSource{SourceAgent},
+			Agent:   &AgentData{},
+		},
+		{
+			ID:      "truenas-host",
+			Type:    ResourceTypeAgent,
+			Name:    "storage",
+			Sources: []DataSource{SourceAgent, SourceTrueNAS},
+			Agent:   &AgentData{},
+			TrueNAS: &TrueNASData{},
+		},
+	})
+
+	admission := BuildPlatformAdmission(registry.List())
+	if !admission.Standalone {
+		t.Fatalf("genuine pulse agent must admit standalone, got %+v", admission)
+	}
+	if !admission.TrueNAS {
+		t.Fatalf("truenas host must admit truenas, got %+v", admission)
+	}
+	if admission.Proxmox || admission.Docker || admission.Kubernetes || admission.VMware {
+		t.Fatalf("no other platform should be admitted, got %+v", admission)
+	}
+}

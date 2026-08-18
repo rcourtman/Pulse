@@ -2379,6 +2379,8 @@ func computeResourceContractStats(resources []unified.Resource) unified.Resource
 			stats.BySource[source]++
 		}
 	}
+	admission := unified.BuildPlatformAdmission(resources)
+	stats.PlatformAdmission = &admission
 	return stats
 }
 

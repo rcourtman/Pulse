@@ -3231,6 +3231,21 @@ a new API state machine, queue contract, or verification-accounting field.
     QEMU guest agent stopped responding; consumers must not reinterpret that
     field as the VM power state.
 
+### Resource list platform admission
+
+`GET /api/resources` publishes `aggregations.platformAdmission`, an object of
+six booleans (`proxmox`, `docker`, `kubernetes`, `truenas`, `vmware`,
+`standalone`) describing which primary platform pages the requested resource
+set admits. The field is always present on a successful list response,
+including for an empty set, where every flag is false.
+
+The field names are the contract: a rename is a navigation regression for any
+consumer that resolves its platform navigation from this facet. Consumers MUST
+read admission from this facet rather than classifying a full-state payload,
+and MUST NOT reconstruct it from `aggregations.bySource`. Proof:
+`TestContract_ResourceListReportsPlatformAdmission` and the wire-shape pin in
+`frontend-modern/src/types/__tests__/resource.test.ts`.
+
 ## Forbidden Paths
 
 1. Handler-local payload shape drift without a contract test

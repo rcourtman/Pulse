@@ -2212,6 +2212,16 @@ the intentionally sparse public response.
     TrueNAS/VMware — reintroducing the per-type Stop-this-surface
     dialog or hard-coding scope to a fixed all-true map is forbidden.
 
+### Agent ownership and platform admission
+
+Agent-typed resources are not automatically Pulse-managed hosts. A host that
+reports through the agent source while carrying provider-owner platform
+evidence (`proxmox-pve`, `proxmox-pbs`, `proxmox-pmg`, `kubernetes`,
+`truenas`, `vmware-vsphere`) belongs to that provider's platform page and MUST
+NOT admit the standalone platform page on its own. The canonical predicate is
+`unifiedresources.IsPulseAgentPlatformResource`; new agent surfaces MUST use it
+rather than testing `type == "agent"` or counting the `agent` source.
+
 ## Forbidden Paths
 
 1. New install or update continuity behavior hidden only inside broad monitoring ownership.

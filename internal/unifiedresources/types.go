@@ -2017,4 +2017,8 @@ type ResourceStats struct {
 	ByStatus      map[ResourceStatus]int        `json:"byStatus"`
 	BySource      map[DataSource]int            `json:"bySource"`
 	PolicyPosture *ResourcePolicyPostureSummary `json:"policyPosture,omitempty"`
+	// PlatformAdmission reports which primary platform pages this set admits,
+	// so the app shell can resolve its navigation from the canonical resource
+	// contract instead of classifying a full-state payload itself.
+	PlatformAdmission *PlatformAdmission `json:"platformAdmission,omitempty"`
 }

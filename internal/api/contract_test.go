@@ -13401,7 +13401,7 @@ func TestContract_TenantResourcesDoNotFallbackToRawSnapshotSeeding(t *testing.T)
 		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
 	}
 
-	const want = `{"data":[],"meta":{"page":1,"limit":50,"total":0,"totalPages":0},"aggregations":{"total":0,"byType":{},"byStatus":{},"bySource":{},"policyPosture":{"totalResources":0,"sensitivityCounts":{},"routingCounts":{},"redactionCounts":{}}}}`
+	const want = `{"data":[],"meta":{"page":1,"limit":50,"total":0,"totalPages":0},"aggregations":{"total":0,"byType":{},"byStatus":{},"bySource":{},"policyPosture":{"totalResources":0,"sensitivityCounts":{},"routingCounts":{},"redactionCounts":{}},"platformAdmission":{"proxmox":false,"docker":false,"kubernetes":false,"truenas":false,"vmware":false,"standalone":false}}}`
 	if got := strings.TrimSpace(rec.Body.String()); got != want {
 		t.Fatalf("tenant resource fallback contract = %s, want %s", got, want)
 	}
@@ -24348,5 +24348,51 @@ func TestContract_AuthorizationRefusalKeepsStatusWhileLoggingAtDebug(t *testing.
 	// The refusal must still be recorded somewhere an operator can find it.
 	if !strings.Contains(output, `"status":403`) {
 		t.Fatalf("refusal left no debug-level trace at all:\n%s", output)
+	}
+}
+
+func TestContract_ResourceListReportsPlatformAdmission(t *testing.T) {
+	now := time.Date(2026, 3, 17, 11, 0, 0, 0, time.UTC)
+	h := newActionTestResourceHandlers(t, &config.Config{DataPath: t.TempDir()})
+	h.SetStateProvider(resourceUnifiedSeedProvider{
+		snapshot: models.StateSnapshot{LastUpdate: now},
+		resources: []unifiedresources.Resource{
+			{
+				ID:       "truenas-host",
+				Type:     unifiedresources.ResourceTypeAgent,
+				Name:     "storage.internal",
+				Status:   unifiedresources.StatusOnline,
+				LastSeen: now,
+				// Reports through the agent source but is owned by TrueNAS, so it
+				// must admit the TrueNAS page and not the standalone one.
+				Sources: []unifiedresources.DataSource{unifiedresources.SourceAgent, unifiedresources.SourceTrueNAS},
+				Agent:   &unifiedresources.AgentData{},
+				TrueNAS: &unifiedresources.TrueNASData{},
+			},
+		},
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/resources?type=agent", nil)
+	rec := httptest.NewRecorder()
+
+	h.HandleListResources(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+
+	var resp ResourcesResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	admission := resp.Aggregations.PlatformAdmission
+	if admission == nil {
+		t.Fatalf("aggregations must carry platformAdmission, got %s", rec.Body.String())
+	}
+	if !admission.TrueNAS {
+		t.Fatalf("expected truenas admission, got %+v", admission)
+	}
+	if admission.Standalone {
+		t.Fatalf("provider-owned agent must not admit the standalone page, got %+v", admission)
 	}
 }

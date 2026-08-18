@@ -1317,6 +1317,28 @@ AI-only summary payloads, or page-local heuristics.
     sortable-table capability (v5.1.36 Docker and Kubernetes tables) that
     the v6 platform rebuild had dropped.
 
+### Platform admission facet
+
+`ResourceStats.PlatformAdmission` reports which primary platform pages an
+estate admits (`proxmox`, `docker`, `kubernetes`, `truenas`, `vmware`,
+`standalone`). It is derived in
+`internal/unifiedresources/platform_admission.go` from each resource's
+canonical platform scopes, so admission has a single definition rather than
+being re-derived by each consumer.
+
+Admission is per-resource evidence and MUST NOT be re-derived from the
+`byType` or `bySource` tallies. A TrueNAS, Proxmox, Kubernetes or vSphere
+host reports through the agent source and carries the `agent` platform
+scope, so a count-based derivation admits the standalone page for an estate
+that contains no Pulse agent at all. Only a resource that is agent-typed,
+carries Pulse agent source evidence, and carries no provider-owner platform
+evidence admits the standalone page; availability checks and network
+endpoints also admit it.
+
+Admission MUST be stable across the registry clone path, because readers are
+served clones. Proof: `TestClonedResourcesPreservePlatformAdmission` and
+`TestRegistryResourcesReportPlatformAdmission`.
+
 ## Forbidden Paths
 
 1. New ad hoc resource-type aliases outside unified resource normalization

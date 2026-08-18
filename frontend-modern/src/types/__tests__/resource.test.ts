@@ -854,4 +854,34 @@ describe('Resource Interface', () => {
     expect(resource.policy?.routing.redact).toContain('hostname');
     expect(resource.aiSafeSummary).toContain('local-only context');
   });
+
+  it('pins the platformAdmission aggregation the resource list contract publishes', () => {
+    // The backend answers which primary platform pages an estate admits, so the
+    // app shell does not have to classify a full-state payload to build its
+    // navigation. This pins the wire shape the shell will read; the field names
+    // are the contract, and a rename here is a navigation regression.
+    const aggregations = {
+      platformAdmission: {
+        proxmox: true,
+        docker: false,
+        kubernetes: false,
+        truenas: true,
+        vmware: false,
+        // A provider-owned host reports through the agent source, so this stays
+        // false unless a genuine Pulse agent or an availability check exists.
+        standalone: false,
+      },
+    };
+
+    expect(Object.keys(aggregations.platformAdmission).sort()).toEqual([
+      'docker',
+      'kubernetes',
+      'proxmox',
+      'standalone',
+      'truenas',
+      'vmware',
+    ]);
+    expect(aggregations.platformAdmission.standalone).toBe(false);
+    expect(aggregations.platformAdmission.truenas).toBe(true);
+  });
 });

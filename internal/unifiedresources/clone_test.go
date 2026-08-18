@@ -852,3 +852,26 @@ func TestCloneResourceIsolatesVirtualMachineFacet(t *testing.T) {
 		t.Fatal("cloned virtual machine facet aliases original")
 	}
 }
+
+func TestClonedResourcesPreservePlatformAdmission(t *testing.T) {
+	// Readers are served clones, so admission must not change as resources pass
+	// through the clone path: a provider-owned host that loses its scopes on
+	// clone would start admitting the standalone platform page.
+	truenasHost := Resource{
+		ID:      "truenas-host",
+		Type:    ResourceTypeAgent,
+		Sources: []DataSource{SourceAgent, SourceTrueNAS},
+		Agent:   &AgentData{},
+		TrueNAS: &TrueNASData{},
+	}
+	RefreshPlatformScopes(&truenasHost)
+
+	original := BuildPlatformAdmission([]Resource{truenasHost})
+	cloned := BuildPlatformAdmission([]Resource{cloneResource(&truenasHost)})
+	if original != cloned {
+		t.Fatalf("admission changed across clone: %+v -> %+v", original, cloned)
+	}
+	if cloned.Standalone {
+		t.Fatalf("provider-owned host must not admit standalone after clone, got %+v", cloned)
+	}
+}

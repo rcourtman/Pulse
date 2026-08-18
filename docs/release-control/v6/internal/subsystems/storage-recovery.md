@@ -1749,6 +1749,15 @@ recovery scope, or a storage/recovery-owned secret source.
     unknown Proxmox guest I/O; they must not reinterpret zero as missing or
     accept a JSON `null` value as recovery, backup, or storage-health evidence.
 
+### TrueNAS hosts and platform admission
+
+A TrueNAS system host is agent-typed and reports through both the agent and
+truenas sources. It admits the TrueNAS platform page and MUST NOT admit the
+standalone platform page, because it is owned by TrueNAS rather than being a
+Pulse-managed host in its own right. Admission is resolved by
+`unifiedresources.BuildPlatformAdmission`; storage surfaces MUST NOT infer
+host ownership from the `agent` source count.
+
 ## Forbidden Paths
 
 1. Reintroducing storage or recovery product logic as ad hoc dashboard-only summaries without a canonical page-surface owner
