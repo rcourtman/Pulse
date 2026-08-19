@@ -1293,7 +1293,7 @@ func TestCheckDockerServiceAnnotatesCanonicalSpecMetadata(t *testing.T) {
 
 	m.CheckDockerHost(host)
 
-	resourceID := dockerServiceResourceID(host.ID, "svc-1", "web")
+	resourceID := DockerServiceResourceID(host.ID, "svc-1", "web")
 	alert := activeAlert(t, m, "docker-service-health-"+resourceID)
 	if got := alert.Metadata["canonicalAlertKind"]; got != "service-gap" {
 		t.Fatalf("canonicalAlertKind = %v, want service-gap", got)
@@ -1333,7 +1333,7 @@ func TestCheckDockerServiceUpdateStateAnnotatesCanonicalSpecMetadata(t *testing.
 
 	m.CheckDockerHost(host)
 
-	resourceID := dockerServiceResourceID(host.ID, "svc-update", "api")
+	resourceID := DockerServiceResourceID(host.ID, "svc-update", "api")
 	alert := activeAlert(t, m, "docker-service-health-"+resourceID)
 	if got := alert.Metadata["canonicalAlertKind"]; got != "discrete-state" {
 		t.Fatalf("canonicalAlertKind = %v, want discrete-state", got)

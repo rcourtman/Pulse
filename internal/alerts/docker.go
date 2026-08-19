@@ -163,7 +163,10 @@ func dockerServiceDisplayName(service models.DockerService) string {
 	return serviceID
 }
 
-func dockerServiceResourceID(hostID, serviceID, serviceName string) string {
+// DockerServiceResourceID builds a stable identifier for Docker Swarm service
+// alerts. Patrol scope resolution registers this form as a known alias on the
+// owning Docker host record so a service alert's resource ID resolves there.
+func DockerServiceResourceID(hostID, serviceID, serviceName string) string {
 	hostID = strings.TrimSpace(hostID)
 	normalizedServiceID := strings.TrimSpace(serviceID)
 	if normalizedServiceID == "" {
@@ -296,7 +299,7 @@ func (m *Manager) CheckDockerHost(host models.DockerHost) {
 	}
 
 	for _, service := range host.Services {
-		resourceID := dockerServiceResourceID(host.ID, service.ID, service.Name)
+		resourceID := DockerServiceResourceID(host.ID, service.ID, service.Name)
 		seen[resourceID] = struct{}{}
 		m.evaluateDockerService(host, service, resourceID)
 	}

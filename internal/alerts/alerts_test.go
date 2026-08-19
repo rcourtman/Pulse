@@ -2573,7 +2573,7 @@ func TestDockerServiceReplicaAlerts(t *testing.T) {
 
 	m.CheckDockerHost(host)
 
-	resourceID := dockerServiceResourceID(host.ID, "svc-1", "web")
+	resourceID := DockerServiceResourceID(host.ID, "svc-1", "web")
 	alertID := fmt.Sprintf("docker-service-health-%s", resourceID)
 	alert, exists := testLookupActiveAlert(t, m, alertID)
 	if !exists {
@@ -2670,7 +2670,7 @@ func TestDockerServiceAlertPreservesLastNotifiedWhenUnchanged(t *testing.T) {
 
 	m.CheckDockerHost(host)
 
-	resourceID := dockerServiceResourceID(host.ID, "svc-1", "web")
+	resourceID := DockerServiceResourceID(host.ID, "svc-1", "web")
 	alertID := fmt.Sprintf("docker-service-health-%s", resourceID)
 	alert, exists := testLookupActiveAlert(t, m, alertID)
 	if !exists {
@@ -2780,7 +2780,7 @@ func TestDockerServiceUpdateStateAlert(t *testing.T) {
 
 	m.CheckDockerHost(host)
 
-	resourceID := dockerServiceResourceID(host.ID, "svc-update", "api")
+	resourceID := DockerServiceResourceID(host.ID, "svc-update", "api")
 	alertID := fmt.Sprintf("docker-service-health-%s", resourceID)
 	alert, exists := testLookupActiveAlert(t, m, alertID)
 	if !exists {
@@ -3056,7 +3056,7 @@ func TestDockerServiceAlertUsesClampedCriticalGap(t *testing.T) {
 
 	m.CheckDockerHost(host)
 
-	resourceID := dockerServiceResourceID(host.ID, "svc-123", "api")
+	resourceID := DockerServiceResourceID(host.ID, "svc-123", "api")
 	alertID := fmt.Sprintf("docker-service-health-%s", resourceID)
 
 	alert, exists := testLookupActiveAlert(t, m, alertID)
@@ -5894,9 +5894,9 @@ func TestDockerServiceResourceID(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// t.Parallel()
-			result := dockerServiceResourceID(tt.hostID, tt.serviceID, tt.serviceName)
+			result := DockerServiceResourceID(tt.hostID, tt.serviceID, tt.serviceName)
 			if result != tt.expected {
-				t.Errorf("dockerServiceResourceID(%q, %q, %q) = %q, want %q",
+				t.Errorf("DockerServiceResourceID(%q, %q, %q) = %q, want %q",
 					tt.hostID, tt.serviceID, tt.serviceName, result, tt.expected)
 			}
 		})

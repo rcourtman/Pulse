@@ -268,7 +268,7 @@ func (m *Manager) applyGlobalOfflineSettingsLocked() {
 
 // dockerAlertResourcePath returns the portion of the alert's resource ID after
 // the "docker:" scheme, matching the IDs built by DockerResourceID and
-// dockerServiceResourceID. Canonical alerts are stored under
+// DockerServiceResourceID. Canonical alerts are stored under
 // "<resourceID>::<specID>" state IDs, so the legacy "docker-container-" /
 // "docker-service-" alert-ID prefixes never match them.
 func dockerAlertResourcePath(alert *Alert) (string, bool) {
