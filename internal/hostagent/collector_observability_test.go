@@ -118,6 +118,14 @@ func TestCollectDeviceSMART_LogsStructuredContextWhenDeviceInStandby(t *testing.
 		execLookPath = origLook
 	})
 
+	// Same host-sysfs leak as TestCollectDeviceSMARTStandby: the -n standby
+	// guard, and therefore the standby meaning of exit status 3, depends on
+	// the probed disk not being a confirmed SSD. Pin it to rotational instead
+	// of reading the runner's own /sys/block/sda/queue/rotational.
+	stubLinuxSysfs(t, []string{"sda"}, map[string]string{
+		"/sys/block/sda/queue/rotational": "1\n",
+	})
+
 	execLookPath = func(string) (string, error) { return "smartctl", nil }
 	smartRunCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		return exec.CommandContext(ctx, "sh", "-c", "exit 3").Output()

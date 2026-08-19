@@ -584,6 +584,16 @@ func TestCollectDeviceSMARTStandby(t *testing.T) {
 		timeNow = origNow
 	})
 
+	// smartctlArgs only sends the -n standby guard for disks that are not
+	// confirmed SSDs, and exit status 3 only means standby when that guard
+	// was sent. Without a stubbed sysfs this reads the *runner's* real
+	// /sys/block/sda/queue/rotational, so the case under test evaporates on
+	// any Linux host whose own /dev/sda is an SSD. Pin the probed disk to
+	// rotational so the guard is always in play.
+	stubLinuxSysfs(t, []string{"sda"}, map[string]string{
+		"/sys/block/sda/queue/rotational": "1\n",
+	})
+
 	fixed := time.Date(2024, 2, 3, 4, 5, 6, 0, time.UTC)
 	timeNow = func() time.Time { return fixed }
 	execLookPath = func(string) (string, error) { return "smartctl", nil }
