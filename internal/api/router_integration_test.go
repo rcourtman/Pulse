@@ -1059,47 +1059,69 @@ func TestServerInfoEndpointReportsDevelopment(t *testing.T) {
 func TestRecoveryPointsEndpointReturnsMockData(t *testing.T) {
 	srv := newIntegrationServer(t)
 
-	res, err := http.Get(srv.server.URL + "/api/recovery/points?limit=500")
-	if err != nil {
-		t.Fatalf("recovery points request failed: %v", err)
-	}
-	defer res.Body.Close()
-
-	if res.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(res.Body)
-		t.Fatalf("unexpected status: got %d want %d; body=%s", res.StatusCode, http.StatusOK, string(body))
-	}
-
-	var payload struct {
+	getPoints := func(t *testing.T, query string) struct {
 		Data []struct {
 			Platform string `json:"platform"`
 		} `json:"data"`
 		Meta struct {
 			Total int `json:"total"`
 		} `json:"meta"`
-	}
-	if err := json.NewDecoder(res.Body).Decode(&payload); err != nil {
-		t.Fatalf("decode recovery points response: %v", err)
-	}
+	} {
+		t.Helper()
 
-	if payload.Meta.Total <= 0 {
-		t.Fatalf("expected meta.total > 0, got %d", payload.Meta.Total)
-	}
-
-	var hasK8s, hasTrueNAS bool
-	for _, p := range payload.Data {
-		switch p.Platform {
-		case "kubernetes":
-			hasK8s = true
-		case "truenas":
-			hasTrueNAS = true
+		res, err := http.Get(srv.server.URL + "/api/recovery/points?" + query)
+		if err != nil {
+			t.Fatalf("recovery points request failed: %v", err)
 		}
+		defer res.Body.Close()
+
+		if res.StatusCode != http.StatusOK {
+			body, _ := io.ReadAll(res.Body)
+			t.Fatalf("unexpected status: got %d want %d; body=%s", res.StatusCode, http.StatusOK, string(body))
+		}
+
+		var payload struct {
+			Data []struct {
+				Platform string `json:"platform"`
+			} `json:"data"`
+			Meta struct {
+				Total int `json:"total"`
+			} `json:"meta"`
+		}
+		if err := json.NewDecoder(res.Body).Decode(&payload); err != nil {
+			t.Fatalf("decode recovery points response: %v", err)
+		}
+		return payload
 	}
-	if !hasK8s {
-		t.Fatalf("expected at least one kubernetes recovery point in response")
+
+	all := getPoints(t, "limit=500")
+	if all.Meta.Total <= 0 {
+		t.Fatalf("expected meta.total > 0, got %d", all.Meta.Total)
 	}
-	if !hasTrueNAS {
-		t.Fatalf("expected at least one truenas recovery point in response")
+	if len(all.Data) == 0 {
+		t.Fatalf("expected the unfiltered page to carry recovery points, got 0")
+	}
+
+	// Ask per platform rather than scanning the unfiltered page. Points come back
+	// newest-completed-first and a page is capped at 500, so a platform that backs
+	// up less often than Proxmox legitimately falls off page one as the estate
+	// grows. Sampling page one would assert estate size, not platform coverage.
+	for _, platform := range []string{"kubernetes", "truenas"} {
+		platform := platform
+		t.Run(platform, func(t *testing.T) {
+			payload := getPoints(t, "platform="+platform+"&limit=500")
+			if payload.Meta.Total <= 0 {
+				t.Fatalf("expected at least one %s recovery point, got meta.total=%d", platform, payload.Meta.Total)
+			}
+			if len(payload.Data) == 0 {
+				t.Fatalf("expected at least one %s recovery point in the response body", platform)
+			}
+			for _, p := range payload.Data {
+				if p.Platform != platform {
+					t.Fatalf("platform filter %q returned a %q point", platform, p.Platform)
+				}
+			}
+		})
 	}
 }
 
