@@ -1,6 +1,5 @@
 import { useLocation } from '@solidjs/router';
 import { Show, createMemo, createResource, type Accessor } from 'solid-js';
-import { StatusDot } from '@/components/shared/StatusDot';
 import StorageSurface from '@/components/Storage/Storage';
 import { WorkloadsFilter } from '@/components/Workloads/WorkloadsFilter';
 import { WorkloadsSurface } from '@/components/Workloads/WorkloadsSurface';
@@ -27,7 +26,7 @@ import {
 import { getPlatformIcon } from '@/features/platformPage/platformIcon';
 import { PlatformOutdatedAgentNotice } from '@/features/platformPage/PlatformOutdatedAgentNotice';
 import { PlatformOutdatedSensorSetupNotice } from '@/features/platformPage/PlatformOutdatedSensorSetupNotice';
-import { PlatformEstateOverview } from '@/features/platformPage/PlatformEstateOverview';
+import { buildProxmoxEstateTopology } from '@/features/platformPage/platformEstateOverviewModel';
 import { collectOutdatedSensorSetupNodes } from '@/features/platformPage/sensorSetup';
 import { usePersistentSignal } from '@/hooks/usePersistentSignal';
 import { useObservedElementWidth } from '@/hooks/useObservedElementWidth';
@@ -205,7 +204,6 @@ export function ProxmoxPageSurface() {
             />
             <Show when={activeTab() === 'overview'}>
               <div class="space-y-4">
-                <PlatformEstateOverview platform="proxmox" resources={model().resources} />
                 <ProxmoxOverview
                   model={model}
                   metricDisplayMode={metricDisplayMode}
@@ -306,7 +304,7 @@ function ProxmoxOverview(props: ProxmoxOverviewProps) {
       workloadsState.surfaceInitialDataReceived() &&
       workloadsState.allGuests().length > 0,
   );
-  const visibleGuestStats = createMemo(() => workloadsState.totalStats());
+  const estateTopology = createMemo(() => buildProxmoxEstateTopology(currentModel().resources));
   const filteredNodes = createMemo(() =>
     filterProxmoxNodesForSearch(
       currentModel().pveNodes,
@@ -336,6 +334,7 @@ function ProxmoxOverview(props: ProxmoxOverviewProps) {
             searchPlaceholder="Search VMs and LXCs by name, VMID, node, or status"
             searchEmptyMessage="Recent Proxmox workload searches appear here."
             statusOptions={PROXMOX_WORKLOAD_STATUS_OPTIONS}
+            inventoryStats={workloadsState.inventoryStats}
             columnVisibility={workloadsState.workloadsFilterColumnVisibility()}
             containerRuntimeFilter={workloadsState.containerRuntimeFilterConfig()}
             hostFilter={workloadsState.hostFilterConfig()}
@@ -366,6 +365,7 @@ function ProxmoxOverview(props: ProxmoxOverviewProps) {
         emptyIcon={<ProxmoxIcon class="h-6 w-6 text-slate-400" />}
         emptyTitle="No Proxmox VE nodes"
         emptyDescription="Proxmox VE nodes appear here once a PVE host reports inventory."
+        topology={estateTopology()}
       />
       <WorkloadsSurface
         state={workloadsState}
@@ -382,39 +382,6 @@ function ProxmoxOverview(props: ProxmoxOverviewProps) {
         emptyStateTitle="No Proxmox workloads"
         emptyStateDescription="Proxmox VMs and LXCs appear here when inventory is available."
       />
-      {/* Keep this orientation strip aligned with the rows the operator can
-          currently see rather than the unfiltered page-wide inventory. */}
-      <Show when={visibleGuestStats().total > 0}>
-        <div
-          class="flex items-center gap-2 rounded border border-border bg-surface-alt px-2 py-1 text-xs text-muted"
-          data-testid="proxmox-guest-totals"
-        >
-          <Show when={visibleGuestStats().running > 0}>
-            <span class="flex items-center gap-1.5">
-              <StatusDot size="xs" variant="success" ariaHidden />
-              {visibleGuestStats().running} running
-            </span>
-          </Show>
-          <Show when={visibleGuestStats().degraded > 0}>
-            <Show when={visibleGuestStats().running > 0}>
-              <span aria-hidden="true">|</span>
-            </Show>
-            <span class="flex items-center gap-1.5">
-              <StatusDot size="xs" variant="warning" ariaHidden />
-              {visibleGuestStats().degraded} attention
-            </span>
-          </Show>
-          <Show when={visibleGuestStats().stopped > 0}>
-            <Show when={visibleGuestStats().running > 0 || visibleGuestStats().degraded > 0}>
-              <span aria-hidden="true">|</span>
-            </Show>
-            <span class="flex items-center gap-1.5">
-              <StatusDot size="xs" variant="danger" ariaHidden />
-              {visibleGuestStats().stopped} stopped
-            </span>
-          </Show>
-        </div>
-      </Show>
     </div>
   );
 }

@@ -17,6 +17,11 @@ import {
 } from '@/components/shared/FilterToolbar';
 import { GroupedTableModeSegmentedControl } from '@/components/shared/GroupedTableModeSegmentedControl';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
+import { usePersistentSignal } from '@/hooks/usePersistentSignal';
+import {
+  PLATFORM_ESTATE_COUNTS_STORAGE_KEY,
+  deserializePlatformEstateCountsVisibility,
+} from '@/features/platformPage/platformEstateOverviewModel';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 import {
   normalizeSourcePlatformQueryValue,
@@ -44,6 +49,11 @@ import { WORKLOAD_STATUS_FILTER_OPTIONS, WORKLOAD_TYPE_OPTIONS } from './workloa
 
 export const WorkloadsFilter: Component<WorkloadsFilterProps> = (props) => {
   const { isMobile } = useBreakpoint();
+  const [inventoryCountsVisible, setInventoryCountsVisible] = usePersistentSignal(
+    PLATFORM_ESTATE_COUNTS_STORAGE_KEY,
+    true,
+    { deserialize: deserializePlatformEstateCountsVisibility },
+  );
 
   const typeValue = () =>
     isContainerWorkloadViewMode(props.viewMode()) ? 'container' : props.viewMode();
@@ -55,6 +65,16 @@ export const WorkloadsFilter: Component<WorkloadsFilterProps> = (props) => {
       forcedPlatform !== 'all' &&
       sourcePlatformScopeMatchesFilter('proxmox-pve', forcedPlatform)
     );
+  };
+
+  const workloadTypeCount = (value: string): number | undefined => {
+    if (!inventoryCountsVisible() || !props.inventoryStats) return undefined;
+    const stats = props.inventoryStats();
+    if (value === 'all') return stats.total;
+    if (value === 'vm') return stats.vms;
+    if (value === 'container') return stats.containers + stats.appContainers;
+    if (value === 'pod') return stats.pods;
+    return undefined;
   };
 
   const workloadTypeOptions = (): FilterSelectOption[] =>
@@ -76,7 +96,18 @@ export const WorkloadsFilter: Component<WorkloadsFilterProps> = (props) => {
               ? BoxesIcon
               : undefined,
       tone: option.value === 'vm' ? 'info' : option.value === 'container' ? 'success' : undefined,
+      count: workloadTypeCount(option.value),
     }));
+
+  const workloadStatusCount = (value: string): number | undefined => {
+    if (!inventoryCountsVisible() || !props.inventoryStats) return undefined;
+    const stats = props.inventoryStats();
+    if (value === 'all') return stats.total;
+    if (value === 'running') return stats.running;
+    if (value === 'degraded') return stats.degraded;
+    if (value === 'stopped') return stats.stopped;
+    return undefined;
+  };
 
   const workloadStatusOptions = (): FilterSelectOption[] =>
     (props.statusOptions ?? WORKLOAD_STATUS_FILTER_OPTIONS).map((option) => ({
@@ -98,6 +129,7 @@ export const WorkloadsFilter: Component<WorkloadsFilterProps> = (props) => {
             : option.value === 'stopped'
               ? 'danger'
               : undefined,
+      count: workloadStatusCount(option.value),
     }));
 
   const runtimeChipLabel = (value: string): string => {
@@ -324,6 +356,23 @@ export const WorkloadsFilter: Component<WorkloadsFilterProps> = (props) => {
                     ariaLabel: 'Host',
                     title: 'Show memory as a percentage of the Proxmox host total',
                   },
+                ]}
+              />
+            </div>
+          </Show>
+
+          <Show when={props.inventoryStats}>
+            <div>
+              <div class="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted">
+                Inventory totals
+              </div>
+              <FilterSegmentedControl
+                aria-label="Inventory totals visibility"
+                value={inventoryCountsVisible() ? 'shown' : 'hidden'}
+                onChange={(value) => setInventoryCountsVisible(value === 'shown')}
+                options={[
+                  { value: 'shown', label: 'Show' },
+                  { value: 'hidden', label: 'Hide' },
                 ]}
               />
             </div>

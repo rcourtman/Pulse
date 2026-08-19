@@ -217,8 +217,7 @@ puts the same machine on two surfaces that do not share an identity.
      131a. `frontend-modern/src/features/platformPage/PlatformResourceDetailTableRow.tsx`
      131b. `frontend-modern/src/features/platformPage/PlatformOutdatedAgentNotice.tsx`
      131c. `frontend-modern/src/features/platformPage/PlatformOutdatedSensorSetupNotice.tsx`
-     131d. `frontend-modern/src/features/platformPage/PlatformEstateOverview.tsx`
-     131e. `frontend-modern/src/features/platformPage/platformEstateOverviewModel.ts`
+     131d. `frontend-modern/src/features/platformPage/platformEstateOverviewModel.ts`
 132. `frontend-modern/src/utils/platformSupportManifest.generated.ts`
 133. `frontend-modern/src/utils/platformSupportManifest.ts`
 134. `frontend-modern/src/utils/sourcePlatformOptions.ts`
@@ -2058,20 +2057,21 @@ default` instead of fusing provider and badge text such as
     grouped-by-host containers view) sort within groups while grouping itself
     stays orthogonal to sort state.
 
-18. Keep estate orientation on one canonical platform primitive. Proxmox,
-    Docker / Podman, Kubernetes, TrueNAS, VMware vSphere, and Standalone
-    Machines overview surfaces must compose
-    `PlatformEstateOverview.tsx` and pass their already-loaded, platform-scoped
-    canonical resource set into `platformEstateOverviewModel.ts`. The model
-    owns metric definitions, actionable-status classification, spotlight
-    priority, bounded spotlight count, and platform workflow destinations; a
-    platform page may not recreate those rules or retain a provider-only
-    summary. The renderer owns the compact responsive metric frame and
-    spotlight presentation. Its single `platformEstateOverviewVisible`
-    preference is global and browser-persisted, so an operator's Hide or Show
-    choice follows them between platform pages and reloads without initiating
-    another resource fetch. Table-local filters and counts remain separate
-    consumer concerns and must not be promoted into a competing overview.
+18. Keep estate orientation inside the canonical controls operators already
+    scan. Large-estate workload totals must flow from the unfiltered shared
+    workload inventory into `WorkloadsFilter.tsx`, through the canonical
+    `FilterBar` / `FilterButtonGroup` option-count contract, so type and status
+    buttons expose their totals without another fetch or a competing metric
+    panel. Provider topology belongs in the existing table header; Proxmox
+    derives cluster and standalone-node context through
+    `platformEstateOverviewModel.ts` and supplies it to `ProxmoxNodesTable.tsx`
+    rather than creating a page-level summary. The existing
+    `platformEstateOverviewVisible` preference now governs these inline totals
+    from the shared View menu, preserving the global browser-persisted choice
+    across platform workload surfaces. Docker / Podman, Kubernetes, TrueNAS,
+    VMware vSphere, and Standalone Machines must continue using their shared
+    `PlatformTableToolbar` counters and table headers; none may add a parallel
+    estate card grid or provider-only spotlight surface.
 
 ## Forbidden Paths
 
@@ -2098,8 +2098,8 @@ default` instead of fusing provider and badge text such as
    Retired aliases must fail route eligibility instead of being kept as
    compatibility redirects.
 8. Platform pages implementing local estate metric cards, operational
-   spotlight classifiers, or separate visibility preferences instead of
-   composing the canonical platform estate overview.
+   spotlight panels, or separate visibility preferences instead of projecting
+   totals into the canonical filter and table-header controls.
 
 ## Completion Obligations
 

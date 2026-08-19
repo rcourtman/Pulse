@@ -403,14 +403,14 @@ Patrol coverage, schedule, finding, and approval state belongs on Patrol-owned
 surfaces or explicit Patrol affordances; Proxmox overview must not treat it as
 backup coverage, restore readiness, PBS verification/protection proof, or a
 replacement for the Proxmox Backups tab and workload Backup column.
-The Proxmox estate-at-a-glance metrics and operational spotlights are likewise
-an adjacent frontend-primitives and unified-resource projection, not backup or
-recovery evidence. `ProxmoxPageSurface` must compose the canonical shared
-platform estate overview with its already-loaded Proxmox resource set rather
-than deriving a Proxmox-only summary. A spotlight may route into the owned
-Storage, Backups, Ceph, or Mail workflows, but it must not imply protection,
-verification, or restore readiness beyond the evidence held by those
-workflow-owned surfaces.
+The Proxmox inline estate totals are likewise an adjacent frontend-primitives
+and unified-resource projection, not backup or recovery evidence.
+`ProxmoxPageSurface` must flow the already-loaded workload inventory into the
+shared workload filter counts and derive cluster/standalone topology through
+`platformEstateOverviewModel.ts` for the existing Nodes header rather than
+creating a Proxmox-only metric or spotlight panel. Those counts must not imply
+protection, verification, or restore readiness beyond the evidence held by the
+workflow-owned Storage, Backups, Ceph, and Mail surfaces.
 Proxmox backup inventory loading and load-failure chrome is likewise a
 frontend-primitives dependency. `ProxmoxBackupsTable` owns the backup API
 queries, recovery model, filters, coverage split, and backup-specific error

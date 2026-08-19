@@ -171,15 +171,17 @@ const proxmoxInlineDetailTableSources = [
 ];
 
 describe('platform overview layout guardrails', () => {
-  it('keeps attention summaries canonical across every platform overview', () => {
+  it('keeps attention summaries canonical without a competing estate panel', () => {
     for (const source of [truenasProtectionTableSource, vsphereAlertsTableSource]) {
       expect(source).toContain('withPlatformAttentionCount');
       expect(source).not.toContain('PlatformAttentionSummary');
     }
     for (const source of overviewSurfaceSources) {
-      expect(source).toContain('PlatformEstateOverview');
+      expect(source).not.toContain('PlatformEstateOverview');
       expect(source).not.toContain('PlatformAttentionSummary');
     }
+    expect(proxmoxPageSurfaceSource).toContain('inventoryStats={workloadsState.inventoryStats}');
+    expect(vmwarePageSurfaceSource).toContain('inventoryStats={workloadsState.inventoryStats}');
   });
 
   it('keeps platform inventory tables on the shared dense table styling contract', () => {

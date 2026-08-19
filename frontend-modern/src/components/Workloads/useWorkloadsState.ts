@@ -27,6 +27,7 @@ import { getCanonicalWorkloadId, resolveWorkloadType } from '@/utils/workloads';
 import { nodeFromResource } from '@/utils/resourceStateAdapters';
 import {
   buildWorkloadSummaryGroupScopeMap,
+  computeWorkloadStats,
   createWorkloadSortComparator,
   filterWorkloads,
   type FilterWorkloadsParams,
@@ -512,11 +513,13 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
     tableBodyRef,
     groupLabelBadges,
   });
+  const inventoryStats = createMemo(() => computeWorkloadStats(allGuests()));
 
   return {
     activeAlerts,
     alertsEnabled,
     allGuests,
+    inventoryStats,
     activeSummaryWorkloadGroupScope,
     activeSummaryWorkloadId,
     clearPinnedSummaryScope,

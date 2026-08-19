@@ -22,6 +22,7 @@ import { MetricMiniSparkline } from '@/components/Workloads/MetricMiniSparkline'
 import { TemperatureGauge } from '@/components/shared/TemperatureGauge';
 import { hostOverrideIdCandidates } from '@/features/alerts/alertOverridesModel';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
+import { usePersistentSignal } from '@/hooks/usePersistentSignal';
 import { TableCell, TableRow } from '@/components/shared/Table';
 import { getSimpleStatusIndicator } from '@/utils/status';
 import { getNodeExternalUrl } from '@/utils/nodes';
@@ -36,6 +37,7 @@ import {
   PlatformTableMetricFallback,
   PlatformTableShell,
   createPlatformTableSortState,
+  formatPlatformTableIntegerValue,
   formatPlatformTablePercentValue,
   formatPlatformTableUptimeValue,
   getPlatformTableFiniteMetric,
@@ -43,6 +45,11 @@ import {
   type PlatformTableSortValue,
 } from '@/features/platformPage/sharedPlatformPage';
 import { PlatformResourceDetailToggleButton } from '@/features/platformPage/PlatformResourceDetailTableRow';
+import {
+  PLATFORM_ESTATE_COUNTS_STORAGE_KEY,
+  deserializePlatformEstateCountsVisibility,
+  type ProxmoxEstateTopology,
+} from '@/features/platformPage/platformEstateOverviewModel';
 import { type WorkloadsMetricDisplayMode } from '@/components/Workloads/workloadsFilterModel';
 import { type WorkloadTableMetricHistoryRange } from '@/components/Workloads/workloadMetricHistoryModel';
 import type { Disk, Node as LegacyNode } from '@/types/api';
@@ -194,8 +201,12 @@ export const ProxmoxNodesTable: Component<{
   emptyIcon: JSX.Element;
   emptyTitle: string;
   emptyDescription: string;
+  topology?: ProxmoxEstateTopology;
 }> = (props) => {
   const breakpoint = useBreakpoint();
+  const [inventoryCountsVisible] = usePersistentSignal(PLATFORM_ESTATE_COUNTS_STORAGE_KEY, true, {
+    deserialize: deserializePlatformEstateCountsVisibility,
+  });
   const { activeAlerts } = useWebSocket();
   const alertsActivation = useAlertsActivation();
   const alertsEnabled = alertsActivation.detectionEnabled;
@@ -239,7 +250,38 @@ export const ProxmoxNodesTable: Component<{
       }
     >
       <PlatformTableShell
-        title="Nodes"
+        title={
+          <span class="inline-flex items-center gap-1.5">
+            Nodes
+            <Show when={inventoryCountsVisible()}>
+              <span class="rounded bg-base/70 px-1.5 text-[10px] tabular-nums text-muted">
+                {formatPlatformTableIntegerValue(props.nodes.length)}
+              </span>
+            </Show>
+          </span>
+        }
+        actions={
+          <Show
+            when={
+              inventoryCountsVisible() &&
+              props.topology &&
+              (props.topology.clusters > 0 || props.topology.standalone > 0)
+            }
+          >
+            <span class="text-[10px] font-medium text-muted">
+              <Show when={props.topology!.clusters > 0}>
+                {formatPlatformTableIntegerValue(props.topology!.clusters)}{' '}
+                {props.topology!.clusters === 1 ? 'cluster' : 'clusters'}
+              </Show>
+              <Show when={props.topology!.clusters > 0 && props.topology!.standalone > 0}>
+                {' · '}
+              </Show>
+              <Show when={props.topology!.standalone > 0}>
+                {formatPlatformTableIntegerValue(props.topology!.standalone)} standalone
+              </Show>
+            </span>
+          </Show>
+        }
         cardClass="proxmox-nodes-card"
         tableClass={`${getProxmoxHostTableMinWidthClass(layoutMode())} table-fixed text-xs`}
         colgroup={

@@ -280,15 +280,13 @@ about the same disk cannot diverge.
 ## Shared Boundaries
 
 Platform estate orientation consumes the same canonical resource projection as
-the platform's tables. Docker / Podman, Kubernetes, TrueNAS, VMware vSphere,
-Standalone Machines, and the storage/recovery-owned Proxmox surface pass their
-already-loaded scoped resource set into the frontend-primitives-owned
-`platformEstateOverviewModel.ts`; pages must not issue a summary fetch, infer
-membership from a second platform heuristic, or locally reinterpret resource
-status, incidents, alerts, or storage pressure. Unified resources owns the
-identity, type, platform membership, status, and evidence fields supplied to
-that shared model. Frontend primitives owns how those fields become the four
-orientation metrics and bounded operational spotlights.
+the platform's tables. Pages must not issue a second summary fetch or create a
+parallel metric-card projection. Unified resources owns identity, type,
+platform membership, and status; frontend primitives owns how the unfiltered
+workload inventory becomes option counts in the shared filter controls. The
+storage/recovery-owned Proxmox surface additionally passes its already-loaded
+resource set through `platformEstateOverviewModel.ts` for cluster and
+standalone-node topology in the existing Nodes table header.
 
 Kubernetes workload presentation is API-native, not generic inventory. Pods,
 Deployments, controllers, and autoscalers render under the `/kubernetes/workloads`

@@ -3,7 +3,6 @@ import { For, Show, createMemo, createResource, type Accessor } from 'solid-js';
 import AlertTriangle from 'lucide-solid/icons/triangle-alert';
 import { buildInfrastructureAgentUpdatesPath } from '@/components/Settings/infrastructureWorkspaceModel';
 import { getPlatformIcon } from '@/features/platformPage/platformIcon';
-import { PlatformEstateOverview } from '@/features/platformPage/PlatformEstateOverview';
 import { PlatformOutdatedAgentNotice } from '@/features/platformPage/PlatformOutdatedAgentNotice';
 import {
   collectOutdatedAgentHosts,
@@ -270,7 +269,6 @@ export function VmwarePageSurface() {
             />
             <Show when={activeTab() === 'overview'}>
               <div class="space-y-4">
-                <PlatformEstateOverview platform="vmware" resources={model().resources} />
                 <VmwareOverview
                   model={model}
                   metricDisplayMode={metricDisplayMode}
@@ -408,6 +406,7 @@ function VmwareOverview(props: VmwareOverviewProps) {
             searchPlaceholder="Search vSphere VMs by name, host, cluster, or status"
             searchEmptyMessage="Recent vSphere workload searches appear here."
             statusOptions={VMWARE_WORKLOAD_STATUS_OPTIONS}
+            inventoryStats={workloadsState.inventoryStats}
             suppressTypeFilter
             columnVisibility={workloadsState.workloadsFilterColumnVisibility()}
             containerRuntimeFilter={workloadsState.containerRuntimeFilterConfig()}

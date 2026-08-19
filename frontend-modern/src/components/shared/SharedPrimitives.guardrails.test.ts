@@ -412,6 +412,9 @@ describe('shared primitive guardrails', () => {
       }>;
     };
     const registeredRule = registry.rules?.find((rule) => rule.id === 'filter-button-group-shell');
+    const estateCountsRule = registry.rules?.find(
+      (rule) => rule.id === 'platform-estate-inline-counts',
+    );
     const registeredGuard = registry.patternGuards?.find(
       (guard) => guard.id === 'filter-button-group-local-segmented-control-styles',
     );
@@ -421,6 +424,14 @@ describe('shared primitive guardrails', () => {
 
     expect(registeredRule?.canonical?.path).toBe('src/components/shared/FilterButtonGroup.tsx');
     expect(registeredRule?.canonical?.export).toBe('FilterButtonGroup');
+    expect(estateCountsRule?.canonical).toEqual({
+      path: 'src/components/Workloads/WorkloadsFilter.tsx',
+      export: 'WorkloadsFilter',
+    });
+    expect(estateCountsRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual([
+      'src/features/proxmox/ProxmoxPageSurface.tsx',
+      'src/features/vmware/VmwarePageSurface.tsx',
+    ]);
     expect(registeredRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual([
       'src/components/Settings/GeneralSettingsPanel.tsx',
       'src/components/Settings/ResourcePicker.tsx',
@@ -488,6 +499,9 @@ describe('shared primitive guardrails', () => {
     expect(filterButtonGroupModelSource).toContain('getFilterButtonGroupButtonClass');
     expect(filterButtonGroupModelSource).toContain('getFilterButtonGroupCompactLabel');
     expect(filterButtonGroupModelSource).toContain("option.label.startsWith('All ')");
+    expect(filterButtonGroupModelSource).toContain('count?: number');
+    expect(workloadsFilterSource).toContain('inventoryStats');
+    expect(workloadsFilterSource).toContain('PLATFORM_ESTATE_COUNTS_STORAGE_KEY');
     expect(generalSettingsPanelSource).toContain('FilterButtonGroup');
     expect(generalSettingsPanelSource.match(/<FilterButtonGroup/g) ?? []).toHaveLength(4);
     expect(generalSettingsPanelSource).toContain('getLocalePreferenceOptions');
@@ -5282,7 +5296,8 @@ describe('shared primitive guardrails', () => {
       expect(source).not.toContain('<MetadataBadge');
     }
 
-    expect(kubernetesPageSurfaceSource).toContain('PlatformAttentionSummary');
+    expect(kubernetesPageSurfaceSource).not.toContain('PlatformAttentionSummary');
+    expect(kubernetesPageSurfaceSource).toContain('attentionCount={workloadAttention()}');
   });
 
   it('keeps platform table empty states on the shared shell template', () => {
@@ -8325,7 +8340,8 @@ describe('shared primitive guardrails', () => {
     expect(filterBarSource).toContain('<ViewOptionsMenu>{props.viewOptions}</ViewOptionsMenu>');
     expect(filterBarSource).toContain('aria-label="Filter actions"');
     expect(sharedPlatformPageSource).toContain('viewOptions?: JSX.Element;');
-    expect(sharedPlatformPageSource).toContain('viewOptions={props.viewOptions}');
+    expect(sharedPlatformPageSource).toContain('{props.viewOptions}');
+    expect(sharedPlatformPageSource).toContain('Inventory totals');
     expect(sharedPlatformPageSource).toContain('showAddFilterLabel={false}');
     expect(sharedPlatformPageSource).toContain('trailingControls={');
     expect(sharedPlatformPageSource).not.toContain('ViewOptionsMenu');

@@ -4,7 +4,6 @@ import { ButtonLink } from '@/components/shared/Button';
 import { buildInfrastructureAgentUpdatesPath } from '@/components/Settings/infrastructureWorkspaceModel';
 import type { FilterDef } from '@/components/shared/FilterBar';
 import { getPlatformIcon } from '@/features/platformPage/platformIcon';
-import { PlatformEstateOverview } from '@/features/platformPage/PlatformEstateOverview';
 import { PlatformOutdatedAgentNotice } from '@/features/platformPage/PlatformOutdatedAgentNotice';
 import {
   collectOutdatedAgentHosts,
@@ -130,7 +129,6 @@ export function KubernetesPageSurface() {
             />
             <Show when={activeTab() === 'overview'}>
               <div class="space-y-4">
-                <PlatformEstateOverview platform="kubernetes" resources={model().resources} />
                 <KubernetesOverview model={model} />
               </div>
             </Show>

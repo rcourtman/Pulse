@@ -17,6 +17,7 @@ import {
 import { EmptyState } from '@/components/shared/EmptyState';
 import { type FilterOption as PlatformTableFilterOption } from '@/components/shared/FilterButtonGroup';
 import { FilterBar, filterChipStatusDot, type FilterDef } from '@/components/shared/FilterBar';
+import { FilterSegmentedControl } from '@/components/shared/FilterToolbar';
 import { MetadataBadge } from '@/components/shared/MetadataBadge';
 import { type SearchInputProps } from '@/components/shared/SearchInput';
 import { Table, TableBody, TableHead, TableHeader, TableRow } from '@/components/shared/Table';
@@ -36,6 +37,10 @@ import {
 import { asTrimmedString } from '@/utils/stringUtils';
 import { formatVmwareClusterServices } from '@/utils/vmwareDisplay';
 import { getPlatformColumnAlign, type PlatformTableColumnKind } from './columnAlignment';
+import {
+  PLATFORM_ESTATE_COUNTS_STORAGE_KEY,
+  deserializePlatformEstateCountsVisibility,
+} from './platformEstateOverviewModel';
 
 export type { PlatformTableFilterOption };
 
@@ -1188,6 +1193,11 @@ export function PlatformTableToolbar<T extends string | number>(props: {
   viewOptions?: JSX.Element;
 }) {
   const { isMobile } = useBreakpoint();
+  const [inventoryCountsVisible, setInventoryCountsVisible] = usePersistentSignal(
+    PLATFORM_ESTATE_COUNTS_STORAGE_KEY,
+    true,
+    { deserialize: deserializePlatformEstateCountsVisibility },
+  );
 
   // Migrated onto the shared FilterBar so every platform table inherits the
   // same combinable-filter UX (chip rail, saved-view scaffolding, mobile
@@ -1238,13 +1248,33 @@ export function PlatformTableToolbar<T extends string | number>(props: {
       showAddFilterLabel={false}
       savedViewsKey={props.savedViewsKey}
       leadingControls={props.leadingControls}
-      viewOptions={props.viewOptions}
+      viewOptions={
+        <>
+          {props.viewOptions}
+          <div>
+            <div class="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted">
+              Inventory totals
+            </div>
+            <FilterSegmentedControl
+              aria-label="Inventory totals visibility"
+              value={inventoryCountsVisible() ? 'shown' : 'hidden'}
+              onChange={(value) => setInventoryCountsVisible(value === 'shown')}
+              options={[
+                { value: 'shown', label: 'Show' },
+                { value: 'hidden', label: 'Hide' },
+              ]}
+            />
+          </div>
+        </>
+      }
       trailingControls={
-        <PlatformResourceCounter
-          visible={props.visible}
-          total={props.total}
-          rowNoun={props.rowNoun}
-        />
+        <Show when={inventoryCountsVisible()}>
+          <PlatformResourceCounter
+            visible={props.visible}
+            total={props.total}
+            rowNoun={props.rowNoun}
+          />
+        </Show>
       }
       showClearAll={() => Boolean(props.hasActiveFilters) || props.search().trim().length > 0}
       onClearAll={props.onResetFilters}

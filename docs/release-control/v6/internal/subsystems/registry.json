@@ -4727,7 +4727,6 @@
         "frontend-modern/src/components/Toast/Toast.tsx",
         "frontend-modern/src/components/Workloads/nodeDrawerModel.ts",
         "frontend-modern/src/features/docker/dockerHostDrawerModel.ts",
-        "frontend-modern/src/features/platformPage/PlatformEstateOverview.tsx",
         "frontend-modern/src/features/platformPage/platformEstateOverviewModel.ts",
         "frontend-modern/src/features/platformPage/PlatformOutdatedAgentNotice.tsx",
         "frontend-modern/src/features/platformPage/PlatformOutdatedSensorSetupNotice.tsx",
@@ -5242,7 +5241,6 @@
             "match_files": [
               "frontend-modern/scripts/shared-template-audit.mjs",
               "frontend-modern/scripts/shared-template-registry.json",
-              "frontend-modern/src/features/platformPage/PlatformEstateOverview.tsx",
               "frontend-modern/src/features/platformPage/platformEstateOverviewModel.ts",
               "frontend-modern/src/features/platformPage/PlatformOutdatedAgentNotice.tsx",
               "frontend-modern/src/features/platformPage/PlatformOutdatedSensorSetupNotice.tsx",
@@ -5253,7 +5251,7 @@
             "test_prefixes": [],
             "exact_files": [
               "frontend-modern/src/components/shared/SharedPrimitives.guardrails.test.ts",
-              "frontend-modern/src/features/platformPage/__tests__/PlatformEstateOverview.test.tsx",
+              "frontend-modern/src/components/Workloads/__tests__/WorkloadsFilter.test.tsx",
               "frontend-modern/src/features/platformPage/__tests__/platformEstateOverviewModel.test.ts",
               "frontend-modern/src/features/platformPage/__tests__/platformOverviewLayout.guardrails.test.ts"
             ]
@@ -7218,6 +7216,7 @@
               "frontend-modern/src/features/proxmox/__tests__/ProxmoxBackupsTable.test.tsx",
               "frontend-modern/src/features/proxmox/__tests__/proxmoxBackupsTableShared.test.tsx",
               "frontend-modern/src/features/proxmox/__tests__/ProxmoxCoverageTable.test.tsx",
+              "frontend-modern/src/features/proxmox/__tests__/ProxmoxPageSurface.contract.test.tsx",
               "tests/integration/tests/90-operational-trust-protection-posture.spec.ts"
             ]
           },

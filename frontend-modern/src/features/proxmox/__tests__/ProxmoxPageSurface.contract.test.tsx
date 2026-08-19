@@ -9,6 +9,7 @@ const mockPathname = vi.hoisted(() => vi.fn(() => '/proxmox/overview'));
 const mockVersionInfo = vi.hoisted(() => vi.fn());
 const mockStorageProps = vi.hoisted(() => vi.fn());
 const mockTotalStats = vi.hoisted(() => vi.fn());
+const mockNodesTableProps = vi.hoisted(() => vi.fn());
 
 const makeResource = (resource: Partial<Resource> & Pick<Resource, 'id' | 'type'>): Resource =>
   ({
@@ -118,9 +119,10 @@ vi.mock('../ProxmoxMailGatewayTable', () => ({
 }));
 
 vi.mock('../ProxmoxNodesTable', () => ({
-  ProxmoxNodesTable: (props: { nodes: Resource[] }) => (
-    <div data-testid="nodes-table" data-rows={props.nodes.length} />
-  ),
+  ProxmoxNodesTable: (props: { nodes: Resource[]; topology?: unknown }) => {
+    mockNodesTableProps(props);
+    return <div data-testid="nodes-table" data-rows={props.nodes.length} />;
+  },
 }));
 
 vi.mock('../ProxmoxReplicationTable', () => ({
@@ -234,7 +236,7 @@ describe('ProxmoxPageSurface contract', () => {
     expect(screen.queryByTestId('platform-outdated-agent-notice')).not.toBeInTheDocument();
   });
 
-  it('renders guest totals from the filtered workload collection', () => {
+  it('folds estate topology into the existing nodes table header contract', () => {
     setResources([
       makeResource({
         id: 'agent:pve-1',
@@ -260,23 +262,13 @@ describe('ProxmoxPageSurface contract', () => {
         proxmox: { nodeName: 'pve-1', vmid: 102 },
       }),
     ]);
-    mockTotalStats.mockReturnValue({
-      total: 1,
-      running: 0,
-      degraded: 0,
-      stopped: 1,
-      vms: 1,
-      containers: 0,
-      appContainers: 0,
-      pods: 0,
-    });
-
     renderSurface();
 
-    const totals = screen.getByTestId('proxmox-guest-totals');
-    expect(totals).not.toHaveTextContent('running');
-    expect(totals).not.toHaveTextContent('attention');
-    expect(totals).toHaveTextContent('1 stopped');
+    expect(mockNodesTableProps).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        topology: { clusters: 1, nodes: 1, standalone: 0 },
+      }),
+    );
   });
 
   it('keeps Patrol coverage off the Proxmox overview', () => {

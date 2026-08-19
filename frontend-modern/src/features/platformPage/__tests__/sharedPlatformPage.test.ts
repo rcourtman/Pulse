@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, within } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createRoot, createSignal } from 'solid-js';
 import type { Resource } from '@/types/resource';
@@ -38,7 +38,10 @@ import {
   type PlatformResourceStatusFilter,
 } from '../sharedPlatformPage';
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  window.localStorage.clear();
+});
 
 describe('withPlatformAttentionCount', () => {
   it('decorates one attention option with a compact accessible count', () => {
@@ -444,7 +447,7 @@ describe('PlatformTableToolbar', () => {
     expect(status()).toBe('all');
   });
 
-  it('owns the View popover while keeping the row counter permanently visible', () => {
+  it('owns the View popover and the shared row-counter visibility preference', () => {
     render(() =>
       PlatformTableToolbar({
         search: () => '',
@@ -472,6 +475,13 @@ describe('PlatformTableToolbar', () => {
     const viewDialog = screen.getByRole('dialog', { name: 'View preferences' });
     expect(viewDialog).toHaveTextContent('Columns');
     expect(viewDialog).not.toContainElement(screen.getByText('2 of 3 rows'));
+
+    const visibility = within(viewDialog).getByRole('group', {
+      name: 'Inventory totals visibility',
+    });
+    fireEvent.click(within(visibility).getByRole('button', { name: 'Hide' }));
+    expect(filterBar).not.toHaveTextContent('2 of 3 rows');
+    expect(window.localStorage.getItem('platformEstateOverviewVisible')).toBe('false');
   });
 
   it('composes consumer context into the canonical toolbar rail', () => {

@@ -15,6 +15,17 @@ export interface WorkloadsStatusOption {
   label: string;
 }
 
+export interface WorkloadsInventoryStats {
+  total: number;
+  running: number;
+  degraded: number;
+  stopped: number;
+  vms: number;
+  containers: number;
+  appContainers: number;
+  pods: number;
+}
+
 export interface WorkloadsFilterSelectOption {
   value: string;
   label: string;
@@ -45,6 +56,7 @@ export interface WorkloadsFilterProps {
   searchPlaceholder?: string;
   searchEmptyMessage?: string;
   statusOptions?: readonly WorkloadsStatusOption[];
+  inventoryStats?: () => WorkloadsInventoryStats;
   columnVisibility?: {
     availableColumns: ColumnDef[];
     isColumnHidden: (id: string) => boolean;
