@@ -17,6 +17,8 @@ import {
   getAlertResourceTableEmptyState,
   getAlertResourceTableMetricOffToggleProps,
   getAlertResourceTableMetricPlaceholder,
+  getAlertResourceTableOfflineStateOrder,
+  getAlertResourceTableOfflineStatePresentation,
   getAlertResourceTableRevertToDefaultsLabel,
 } from '@/utils/alertResourceTablePresentation';
 import {
@@ -34,7 +36,7 @@ import {
   resolveAlertResourceMetricEnableValue,
 } from './alertResourceTableModel';
 import type { Resource } from '@/features/alerts/thresholds/tableTypes';
-import type { ResourceTableProps } from './ResourceTable';
+import type { OfflineState, ResourceTableProps } from './ResourceTable';
 
 interface AlertResourceTableMobileProps {
   table: ResourceTableProps;
@@ -75,6 +77,35 @@ export function AlertResourceTableMobile(props: AlertResourceTableMobileProps) {
   const saveEditing = (resourceId: string) => {
     props.table.onSaveEdit(resourceId);
     props.setActiveMetricInput(null);
+  };
+
+  const nextOfflineState = (state: OfflineState): OfflineState => {
+    const order = getAlertResourceTableOfflineStateOrder();
+    const idx = order.indexOf(state);
+    return order[(idx + 1) % order.length];
+  };
+
+  const renderOfflineStateButton = (
+    state: OfflineState,
+    disabled: boolean,
+    onToggle: () => void,
+  ) => {
+    const config = getAlertResourceTableOfflineStatePresentation(state);
+
+    return (
+      <button
+        type="button"
+        class={`inline-flex min-h-11 items-center justify-center px-2 py-0.5 text-xs font-medium rounded transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-1 sm:min-h-0 ${config.className} ${disabled ? 'opacity-60 cursor-not-allowed pointer-events-none' : ''}`.trim()}
+        disabled={disabled}
+        onClick={() => {
+          if (disabled) return;
+          onToggle();
+        }}
+        title={config.title}
+      >
+        {config.label}
+      </button>
+    );
   };
 
   const MetricValueWithHeat = (metricProps: {
@@ -226,6 +257,54 @@ export function AlertResourceTableMobile(props: AlertResourceTableMobileProps) {
                 );
               }}
             </For>
+            <Show when={props.table.showOfflineAlertsColumn}>
+              <div class="p-2 bg-surface rounded border border-border-subtle flex flex-col gap-1">
+                <span class="text-[10px] uppercase text-slate-500 font-medium">Offline alerts</span>
+                <div class="flex items-center min-h-11 sm:min-h-0">
+                  <Show
+                    when={props.table.onSetGlobalOfflineState}
+                    fallback={
+                      <Show
+                        when={props.table.onToggleGlobalDisableOffline}
+                        fallback={
+                          <span class="text-sm text-slate-400" aria-hidden="true">
+                            -
+                          </span>
+                        }
+                      >
+                        <StatusBadge
+                          isEnabled={!(props.table.globalDisableOfflineFlag?.() ?? false)}
+                          onToggle={() => {
+                            props.table.onToggleGlobalDisableOffline?.();
+                            props.table.setHasUnsavedChanges?.(true);
+                          }}
+                          labelEnabled="On"
+                          labelDisabled="Off"
+                          titleEnabled="Offline alerts currently enabled by default. Click to disable."
+                          titleDisabled="Offline alerts currently disabled by default. Click to enable."
+                        />
+                      </Show>
+                    }
+                  >
+                    {(() => {
+                      const disabledGlobally = props.table.globalDisableFlag?.() ?? false;
+                      const defaultDisabled = props.table.globalDisableOfflineFlag?.() ?? false;
+                      const defaultSeverity = props.table.globalOfflineSeverity ?? 'warning';
+                      const state: OfflineState = defaultDisabled
+                        ? 'off'
+                        : defaultSeverity === 'critical'
+                          ? 'critical'
+                          : 'warning';
+
+                      return renderOfflineStateButton(state, disabledGlobally, () => {
+                        if (disabledGlobally) return;
+                        props.table.onSetGlobalOfflineState?.(nextOfflineState(state));
+                      });
+                    })()}
+                  </Show>
+                </div>
+              </div>
+            </Show>
           </div>
         </Card>
       </Show>
@@ -489,6 +568,70 @@ export function AlertResourceTableMobile(props: AlertResourceTableMobileProps) {
                           );
                         }}
                       </For>
+                      <Show when={props.table.showOfflineAlertsColumn}>
+                        {(() => {
+                          const supportsTriState =
+                            typeof props.table.onSetOfflineState === 'function' &&
+                            (resource.type === 'guest' || resource.type === 'dockerContainer');
+                          if (!supportsTriState && !props.table.onToggleNodeConnectivity) {
+                            return null;
+                          }
+                          const disabledGlobally = () => props.table.globalDisableFlag?.() ?? false;
+
+                          return (
+                            <div class="flex justify-between items-center p-1.5 bg-surface-alt rounded">
+                              <span class="text-[10px] uppercase font-bold tracking-wider">
+                                Offline
+                              </span>
+                              <Show
+                                when={supportsTriState}
+                                fallback={
+                                  <StatusBadge
+                                    isEnabled={
+                                      !(props.table.globalDisableOfflineFlag?.() ?? false) &&
+                                      !resource.disableConnectivity
+                                    }
+                                    disabled={disabledGlobally()}
+                                    onToggle={() => {
+                                      if (disabledGlobally()) return;
+                                      props.table.onToggleNodeConnectivity?.(resource.id);
+                                    }}
+                                    titleEnabled="Offline alerts enabled. Click to disable for this resource."
+                                    titleDisabled="Offline alerts disabled. Click to enable for this resource."
+                                    titleWhenDisabled="Offline alerts controlled globally"
+                                  />
+                                }
+                              >
+                                {(() => {
+                                  const defaultDisabled =
+                                    props.table.globalDisableOfflineFlag?.() ?? false;
+                                  const defaultSeverity =
+                                    props.table.globalOfflineSeverity ?? 'warning';
+
+                                  let state: OfflineState;
+                                  if (resource.disableConnectivity) {
+                                    state = 'off';
+                                  } else if (resource.poweredOffSeverity) {
+                                    state = resource.poweredOffSeverity;
+                                  } else if (defaultDisabled) {
+                                    state = 'off';
+                                  } else {
+                                    state = defaultSeverity === 'critical' ? 'critical' : 'warning';
+                                  }
+
+                                  return renderOfflineStateButton(state, disabledGlobally(), () => {
+                                    if (disabledGlobally()) return;
+                                    props.table.onSetOfflineState?.(
+                                      resource.id,
+                                      nextOfflineState(state),
+                                    );
+                                  });
+                                })()}
+                              </Show>
+                            </div>
+                          );
+                        })()}
+                      </Show>
                     </div>
                   </Card>
                 );

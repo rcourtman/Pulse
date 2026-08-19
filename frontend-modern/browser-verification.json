@@ -1,44 +1,40 @@
 {
   "version": 1,
-  "base_sha": "4f61cc3bfeeca10f9f88d3c7d3e2d15ac45f1734",
-  "verified_at": "2026-08-18T21:16:21Z",
+  "base_sha": "c52d01013808f272fc1b136065f539f63265f8b7",
+  "verified_at": "2026-08-19T05:31:38Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/features/docker/DockerHostsTable.tsx",
-    "frontend-modern/src/features/docker/dockerContainerTableModel.ts",
-    "frontend-modern/src/features/standalone/AvailabilityChecksTable.tsx"
+    "frontend-modern/src/components/Alerts/AlertResourceTableMobile.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/docker/DockerHostsTable.tsx": "dd5796344bfd34d0356e1cef58b6cdd9cf6a6da7383ff4a4853e6e8c68706f4f",
-    "frontend-modern/src/features/docker/dockerContainerTableModel.ts": "48bf66fe7e3bacf6352c48d7ccd568dd337e9d27670da435f30c3caabccf79bc",
-    "frontend-modern/src/features/standalone/AvailabilityChecksTable.tsx": "0ea207d0c931b9aabc9c8b0ab44420fbf8d8c2eff35d17ebc1599065e63d0dd5"
+    "frontend-modern/src/components/Alerts/AlertResourceTableMobile.tsx": "69cfe5813ada84cf2e0187dacdb77acec072aff328ea978ef90821b43cd09edf"
   },
   "routes": [
-    "/docker/overview",
-    "/standalone/availability"
+    "/alerts?tab=thresholds"
   ],
   "viewports": [
     {
-      "width": 1440,
-      "height": 900
+      "width": 1280,
+      "height": 800
     },
     {
-      "width": 390,
-      "height": 844
+      "width": 768,
+      "height": 1024
     },
     {
-      "width": 320,
-      "height": 844
+      "width": 375,
+      "height": 812
     }
   ],
   "states": [
-    "Docker host and container summary rows both expose five readable fields in 37-pixel single-line rows at 320 pixels",
-    "The all-running Docker container state still retains a stable five-field narrow projection instead of collapsing to four columns",
-    "Standalone availability checks expose five readable fields in 37-pixel single-line rows at 320 and 390 pixels",
-    "Docker Overview and standalone availability retain their full desktop column sets without table-shell overflow"
+    "Proxmox tab, Virtualization Hosts group expanded, card layout active at all three viewports against the mock dataset (the nodes section needs a 1216px table, so a 1280px window still renders cards, matching the browser-zoom report in #1738)",
+    "Global Defaults card renders the new Offline alerts tile with the On/Off badge next to the CPU, memory, disk and temp tiles",
+    "Each node card renders the new Offline row with the Enabled/Disabled badge",
+    "Guest cards in VMs & Containers render the tri-state Offline button (Warn label, warning-severity title)"
   ],
   "interactions": [
-    "expanded a standalone availability row by its visible disclosure and confirmed the inline full-value resource detail appeared",
-    "measured both corrected routes at 320, 390, and 1440 pixels and confirmed their table shells remained within their containers"
+    "Clicked a node card Offline badge: Enabled -> Disabled staged an override and raised the Save Changes bar, second click reverted to Enabled via the remove-override path",
+    "Clicked a guest card tri-state Offline button three times: Warn -> Crit -> Off -> Warn, returning to the starting state",
+    "Reloaded without saving and confirmed the badges returned to their persisted states, so no test edits were persisted"
   ]
 }
