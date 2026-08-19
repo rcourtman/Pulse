@@ -325,3 +325,11 @@ test_output.txt
 coverage_summary.txt
 CHANGELOG-DRAFT.md
 .aider*
+
+# Python bytecode
+# Generated whenever the release-control scripts run. scripts/release_control/*
+# ignores the top level, but scripts/release_control/internal/ is deliberately
+# re-included below it, so its cache needs covering explicitly. Repo-wide rule
+# keeps every future Python dir clean too.
+__pycache__/
+*.py[cod]
