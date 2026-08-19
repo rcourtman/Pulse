@@ -301,6 +301,8 @@ describe('MobileNavBar clearance publishing', () => {
         activeTab={() => 'proxmox'}
         primaryTabs={() => [makePrimary('proxmox', 'Proxmox')]}
         utilityTabs={() => [makeUtility('alerts', 'Alerts')]}
+        onPrimaryClick={() => {}}
+        onUtilityClick={() => {}}
       />
     ));
 
