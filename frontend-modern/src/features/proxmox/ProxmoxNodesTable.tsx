@@ -34,7 +34,9 @@ import {
   PlatformSortableTableHead,
   PlatformTableEmptyState,
   PlatformTableMetricFallback,
+  PlatformTablePreviewToggle,
   PlatformTableShell,
+  createPlatformTablePreview,
   createPlatformTableSortState,
   formatPlatformTableIntegerValue,
   formatPlatformTablePercentValue,
@@ -223,6 +225,14 @@ export const ProxmoxNodesTable: Component<{
   const sortedNodes = createMemo(() =>
     sort.sortRows(props.nodes, (node, key) => getHostSortValue(node, props.guests, key)),
   );
+  const previewLimit = createMemo(() =>
+    layoutMode() === 'narrow' || layoutMode() === 'phone' || layoutMode() === 'mobile' ? 4 : 8,
+  );
+  const nodePreview = createPlatformTablePreview({ rows: sortedNodes, limit: previewLimit });
+  const toggleNodePreview = () => {
+    if (nodePreview.expanded()) setSelectedNodeId(null);
+    nodePreview.toggle();
+  };
 
   // Use the same canonical history reader the workloads table uses; cache
   // keys collide so the two readers dedupe their fetches.
@@ -255,26 +265,36 @@ export const ProxmoxNodesTable: Component<{
           </span>
         }
         actions={
-          <Show
-            when={
-              inventoryCountsVisible() &&
-              props.topology &&
-              (props.topology.clusters > 0 || props.topology.standalone > 0)
-            }
-          >
-            <span class="text-[10px] font-medium text-muted">
-              <Show when={props.topology!.clusters > 0}>
-                {formatPlatformTableIntegerValue(props.topology!.clusters)}{' '}
-                {props.topology!.clusters === 1 ? 'cluster' : 'clusters'}
-              </Show>
-              <Show when={props.topology!.clusters > 0 && props.topology!.standalone > 0}>
-                {' / '}
-              </Show>
-              <Show when={props.topology!.standalone > 0}>
-                {formatPlatformTableIntegerValue(props.topology!.standalone)} standalone
-              </Show>
-            </span>
-          </Show>
+          <span class="inline-flex items-center gap-2">
+            <Show
+              when={
+                inventoryCountsVisible() &&
+                props.topology &&
+                (props.topology.clusters > 0 || props.topology.standalone > 0)
+              }
+            >
+              <span class="text-[10px] font-medium text-muted">
+                <Show when={props.topology!.clusters > 0}>
+                  {formatPlatformTableIntegerValue(props.topology!.clusters)}{' '}
+                  {props.topology!.clusters === 1 ? 'cluster' : 'clusters'}
+                </Show>
+                <Show when={props.topology!.clusters > 0 && props.topology!.standalone > 0}>
+                  {' / '}
+                </Show>
+                <Show when={props.topology!.standalone > 0}>
+                  {formatPlatformTableIntegerValue(props.topology!.standalone)} standalone
+                </Show>
+              </span>
+            </Show>
+            <PlatformTablePreviewToggle
+              expanded={nodePreview.expanded()}
+              canExpand={nodePreview.canExpand()}
+              total={props.nodes.length}
+              noun="nodes"
+              showCount={inventoryCountsVisible()}
+              onToggle={toggleNodePreview}
+            />
+          </span>
         }
         cardClass="proxmox-nodes-card"
         tableClass={`${getProxmoxHostTableMinWidthClass(layoutMode())} table-fixed text-xs`}
@@ -313,7 +333,7 @@ export const ProxmoxNodesTable: Component<{
           </For>
         }
         body={
-          <For each={sortedNodes()}>
+          <For each={nodePreview.visibleRows()}>
             {(node) => {
               const name = () => asTrimmedString(node.name) || node.id;
               const nativeNodeName = () => asTrimmedString(node.proxmox?.nodeName) ?? '';

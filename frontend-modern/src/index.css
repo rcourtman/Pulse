@@ -514,10 +514,6 @@
       min-height: 2.25rem;
     }
 
-    .proxmox-nodes-card > :first-child {
-      display: none;
-    }
-
     .pulse-wide-data-surface .table-scroll-shell > .table-fixed tbody td,
     .pulse-wide-data-surface .table-scroll-shell > .table-fixed tbody .workload-row > td {
       padding-top: 0;

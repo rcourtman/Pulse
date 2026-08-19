@@ -500,6 +500,8 @@ describe('shared primitive guardrails', () => {
     expect(filterButtonGroupModelSource).toContain('getFilterButtonGroupCompactLabel');
     expect(filterButtonGroupModelSource).toContain("option.label.startsWith('All ')");
     expect(filterButtonGroupModelSource).toContain('count?: number');
+    expect(filterButtonGroupSource).toContain('items-baseline');
+    expect(filterButtonGroupSource).toContain('text-[11px] font-semibold leading-4 tabular-nums');
     expect(workloadsFilterSource).toContain('inventoryStats');
     expect(workloadsFilterSource).toContain('PLATFORM_ESTATE_COUNTS_STORAGE_KEY');
     expect(generalSettingsPanelSource).toContain('FilterButtonGroup');
@@ -5264,6 +5266,9 @@ describe('shared primitive guardrails', () => {
     expect(sharedPlatformPageSource).toContain('export function getPlatformTableClass');
     expect(sharedPlatformPageSource).toContain("className !== 'min-w-full'");
     expect(sharedPlatformPageSource).toContain('class={getPlatformTableClass(props.tableClass)}');
+    expect(sharedPlatformPageSource).toContain('export function createPlatformTablePreview');
+    expect(sharedPlatformPageSource).toContain('export function PlatformTablePreviewToggle');
+    expect(sharedPlatformPageSource).toContain('aria-expanded={props.expanded}');
 
     for (const [path, source] of [
       ['src/features/docker/DockerHostsTable.tsx', dockerHostsTableSource],

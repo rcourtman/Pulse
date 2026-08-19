@@ -73,31 +73,31 @@ export function FilterButtonGroup<T extends string | number>(props: FilterButton
             >
               {option.leading}
               {Icon && <Icon class={iconClass()} />}
-              <Show
-                when={option.visualLabel}
-                fallback={
-                  filterButtonGroup.variant() === 'prominent' ? (
-                    <span>{option.label}</span>
-                  ) : (
-                    <>
-                      <span class="hidden sm:inline">{option.label}</span>
-                      <span class="sm:hidden">{getFilterButtonGroupCompactLabel(option)}</span>
-                    </>
-                  )
-                }
-              >
-                <span class="inline-flex items-center gap-1.5 whitespace-nowrap">
-                  {renderedLabel()}
-                </span>
-              </Show>
-              <Show when={option.count !== undefined}>
-                <span
-                  class="inline-flex items-center self-center text-[11px] font-semibold leading-none tabular-nums text-base-content/70"
-                  aria-hidden="true"
+              <span class="inline-flex items-baseline gap-1.5 whitespace-nowrap">
+                <Show
+                  when={option.visualLabel}
+                  fallback={
+                    filterButtonGroup.variant() === 'prominent' ? (
+                      <span>{option.label}</span>
+                    ) : (
+                      <>
+                        <span class="hidden sm:inline">{option.label}</span>
+                        <span class="sm:hidden">{getFilterButtonGroupCompactLabel(option)}</span>
+                      </>
+                    )
+                  }
                 >
-                  {option.count!.toLocaleString()}
-                </span>
-              </Show>
+                  <span>{renderedLabel()}</span>
+                </Show>
+                <Show when={option.count !== undefined}>
+                  <span
+                    class="inline-block text-[11px] font-semibold leading-4 tabular-nums text-base-content/70"
+                    aria-hidden="true"
+                  >
+                    {option.count!.toLocaleString()}
+                  </span>
+                </Show>
+              </span>
             </button>
           );
         }}

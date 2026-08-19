@@ -546,7 +546,7 @@ describe('App architecture', () => {
     expect(appStylesSource).toContain('.pulse-shell--full-width');
     expect(appStylesSource).toContain('.pulse-wide-data-surface.space-y-3');
     expect(appStylesSource).toContain('.filter-bar > div > div:first-child button');
-    expect(appStylesSource).toContain('.proxmox-nodes-card > :first-child');
+    expect(appStylesSource).not.toContain('.proxmox-nodes-card > :first-child');
     expect(appStylesSource).toContain('.pulse-wide-data-surface .host-row');
     expect(appStylesSource).toContain('.pulse-footer > div');
     expect(appLayoutSource).toContain('tabs mb-2 hidden xl:flex');

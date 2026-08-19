@@ -2072,8 +2072,18 @@ default` instead of fusing provider and badge text such as
     across platform workload surfaces. A page with adjacent totals, such as
     Proxmox's Nodes header, must own one visibility signal and pass it to both
     the shared filter and table instead of creating independently persisted
-    signals that only synchronize after a reload. Docker / Podman, Kubernetes, TrueNAS,
-    VMware vSphere, and Standalone Machines must continue using their shared
+    signals that only synchronize after a reload. A provider host or node table
+    must render before the workload filter, and the workload filter must sit
+    immediately before the `WorkloadsSurface` it controls. It must never precede
+    a provider table whose rows it does not filter; Proxmox and VMware vSphere
+    use the same host-or-node, workload-controls, workload-table reading order.
+    Large provider inventories use the shared `createPlatformTablePreview` and
+    `PlatformTablePreviewToggle` boundary to keep the controlled workload table
+    in the initial reading flow: Proxmox shows eight node rows by default on
+    larger layouts and four on phone-sized layouts, with an accessible,
+    reversible show-all control in the Nodes header. Expansion is deliberate
+    session state and must not persist a page-burying expanded default.
+    Docker / Podman, Kubernetes, TrueNAS, VMware vSphere, and Standalone Machines must continue using their shared
     `PlatformTableToolbar` counters and table headers; none may add a parallel
     estate card grid or provider-only spotlight surface.
 

@@ -1,46 +1,49 @@
 {
   "version": 1,
-  "base_sha": "66c87fb6e8595af47c360573bb8efa51d46492d1",
-  "verified_at": "2026-08-19T18:57:18Z",
+  "base_sha": "e7de6602f7d43052950fb72d9591ecf154090f10",
+  "verified_at": "2026-08-19T19:07:24Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/AI/Chat/index.tsx",
-    "frontend-modern/src/components/GitHubStarBanner.tsx",
-    "frontend-modern/src/components/shared/MobileNavBar.tsx",
+    "frontend-modern/src/components/shared/FilterButtonGroup.tsx",
+    "frontend-modern/src/features/platformPage/sharedPlatformPage.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx",
     "frontend-modern/src/index.css"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/AI/Chat/index.tsx": "67d3dc20ea1100c3047f27052c35aaa4b1e15a8d2ebeda1022fecae9c772835d",
-    "frontend-modern/src/components/GitHubStarBanner.tsx": "ea65775ad40dc08d54d6e08f6f3c736c545917c11e8e7fbddb71d856afc11d79",
-    "frontend-modern/src/components/shared/MobileNavBar.tsx": "16a6917b7fdc25d77bd9cd6760f132f08a0f13f833ede6d278237e37378549e6",
-    "frontend-modern/src/index.css": "1b195e474bdf5cfa33af971d1a01ed6b7e7e58eb998d823616a292c0ecc6fb1f"
+    "frontend-modern/src/components/shared/FilterButtonGroup.tsx": "4f7c115ad13ad614f5ebb3f73d2c0f7561342e2a6b58b2bde36cf11d828d54ca",
+    "frontend-modern/src/features/platformPage/sharedPlatformPage.tsx": "c946582423cf0f95e3e8f92d676c175a51c2f474be70ed383f882b7ef30e8973",
+    "frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx": "01ea9d0ec46b0cb97870aa145b17fdd1fcc4fd8b3576ffdd21dfd2f4ad50e5c7",
+    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx": "66fd5ef686cd052d37fa59ceacdae524a9274fd12e1f22f4c2be0e1ca80f5ce4",
+    "frontend-modern/src/index.css": "d8fe7b2c49b50003ab493cd37e37bbdd5c637764c1efd23fa20b966550c7ba5f"
   },
   "routes": [
-    "/",
-    "/proxmox"
+    "/proxmox/overview",
+    "/vmware/overview"
   ],
   "viewports": [
     {
-      "width": 375,
-      "height": 812
+      "width": 1440,
+      "height": 900
     },
     {
-      "width": 1280,
-      "height": 800
+      "width": 390,
+      "height": 844
     }
   ],
   "states": [
-    "authenticated mobile 375x812, bottom navigation mounted and measuring 45px, --pulse-mobile-nav-height published as 45px",
-    "authenticated mobile with the Assistant overlay open, backdrop and panel both ending at the bar's top edge",
-    "authenticated desktop 1280x800, bar display:none and the variable published as 0px",
-    "re-verified after rebase onto 66c87fb6e, which reworked the FilterBar and Proxmox estate surfaces on the same route"
+    "Proxmox desktop default bounded node preview with eight rows, visible workload controls, and the workload table in the initial viewport",
+    "Proxmox desktop expanded 32-node estate and restored eight-row collapsed preview",
+    "Proxmox phone default bounded node preview with four rows and the reveal control visible",
+    "Proxmox phone expanded 32-node estate and restored four-row collapsed preview without horizontal overflow",
+    "Proxmox inventory totals shown and hidden across filter counts, Nodes topology, and the node reveal label",
+    "Proxmox and vSphere 12px labels with 11px counts sharing identical 16px line boxes and baselines"
   ],
   "interactions": [
-    "opened the Assistant overlay and measured backdrop bottom 767 against bar top 767, gap 0px, previously a 35px un-dimmed clickable band",
-    "hit-tested 5px above the bar and found the Assistant panel covering it rather than page content",
-    "probed .filter-bottom-nav-aware-panel computed bottom, resolving to 45px on mobile from the shared variable",
-    "probed the star banner class combination at 800px and confirmed md:bottom-4 still wins at 16px",
-    "dispatched a resize event and confirmed the published value republishes from 0px to 45px",
-    "reloaded at 1280x800 and confirmed the bar is display:none with the variable published as 0px"
+    "Expanded and collapsed Show all 32 nodes on desktop and phone",
+    "Switched Proxmox workload status from All to Attention and observed the adjacent workload table change from 150 rendered rows to 21",
+    "Hid and restored Inventory totals from the View menu and confirmed the node reveal label stopped exposing the total while hidden",
+    "Compared the final shared inline count geometry on Proxmox and vSphere",
+    "Cleared the temporary Proxmox status filter and left /proxmox/overview at 1440x900"
   ]
 }

@@ -328,6 +328,18 @@ function ProxmoxOverview(props: ProxmoxOverviewProps) {
 
   return (
     <div ref={overviewWidth.setElement} class="pulse-wide-data-surface space-y-4">
+      <ProxmoxNodesTable
+        nodes={filteredNodes()}
+        guests={currentModel().guests}
+        metricDisplayMode={props.metricDisplayMode}
+        metricHistoryRange={props.metricHistoryRange}
+        layoutWidth={overviewWidth.width}
+        emptyIcon={<ProxmoxIcon class="h-6 w-6 text-slate-400" />}
+        emptyTitle="No Proxmox VE nodes"
+        emptyDescription="Proxmox VE nodes appear here once a PVE host reports inventory."
+        topology={estateTopology()}
+        inventoryCountsVisible={props.inventoryCountsVisible}
+      />
       <Show when={showSharedFilterToolbar()}>
         <div data-summary-clear-ignore>
           <WorkloadsFilter
@@ -371,18 +383,6 @@ function ProxmoxOverview(props: ProxmoxOverviewProps) {
           />
         </div>
       </Show>
-      <ProxmoxNodesTable
-        nodes={filteredNodes()}
-        guests={currentModel().guests}
-        metricDisplayMode={props.metricDisplayMode}
-        metricHistoryRange={props.metricHistoryRange}
-        layoutWidth={overviewWidth.width}
-        emptyIcon={<ProxmoxIcon class="h-6 w-6 text-slate-400" />}
-        emptyTitle="No Proxmox VE nodes"
-        emptyDescription="Proxmox VE nodes appear here once a PVE host reports inventory."
-        topology={estateTopology()}
-        inventoryCountsVisible={props.inventoryCountsVisible}
-      />
       <WorkloadsSurface
         state={workloadsState}
         vms={[]}

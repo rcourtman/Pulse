@@ -86,6 +86,19 @@ const makeNodeResource = (overrides: Partial<Resource> = {}): Resource => ({
   ...overrides,
 });
 
+const makeNodeResources = (count: number): Resource[] =>
+  Array.from({ length: count }, (_, index) =>
+    makeNodeResource({
+      id: `agent:pve-node-${index + 1}`,
+      name: `pve-node-${index + 1}`,
+      displayName: `pve-node-${index + 1}`,
+      proxmox: {
+        clusterName: 'homelab',
+        nodeName: `pve-node-${index + 1}`,
+      },
+    }),
+  );
+
 beforeEach(() => {
   vi.clearAllMocks();
   getMetricThresholdsMock.mockReturnValue({ warning: 80, critical: 85 });
@@ -100,12 +113,54 @@ afterEach(() => {
 });
 
 describe('ProxmoxNodesTable', () => {
+  it('keeps large estates bounded until the operator expands the node preview', () => {
+    render(() => (
+      <ProxmoxNodesTable
+        nodes={makeNodeResources(10)}
+        guests={[]}
+        emptyIcon={<span />}
+        emptyTitle="No Proxmox VE nodes"
+        emptyDescription="No nodes"
+      />
+    ));
+
+    expect(screen.getAllByRole('row')).toHaveLength(9);
+    const showAll = screen.getByRole('button', { name: 'Show all 10 nodes' });
+    expect(showAll).toHaveAttribute('aria-expanded', 'false');
+
+    fireEvent.click(showAll);
+    expect(screen.getAllByRole('row')).toHaveLength(11);
+    expect(screen.getByRole('button', { name: 'Show fewer nodes' })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show fewer nodes' }));
+    expect(screen.getAllByRole('row')).toHaveLength(9);
+  });
+
+  it('keeps the phone preview to four rows with its reveal control available', () => {
+    render(() => (
+      <ProxmoxNodesTable
+        nodes={makeNodeResources(6)}
+        guests={[]}
+        layoutWidth={() => 390}
+        emptyIcon={<span />}
+        emptyTitle="No Proxmox VE nodes"
+        emptyDescription="No nodes"
+      />
+    ));
+
+    expect(screen.getAllByRole('row')).toHaveLength(5);
+    expect(screen.getByRole('button', { name: 'Show all 6 nodes' })).toBeVisible();
+  });
+
   it('hides node and topology totals through the page-owned inventory preference', () => {
     render(() => (
       <ProxmoxNodesTable
-        nodes={[makeNodeResource()]}
+        nodes={makeNodeResources(10)}
         guests={[]}
-        topology={{ nodes: 1, clusters: 1, standalone: 0 }}
+        topology={{ nodes: 10, clusters: 1, standalone: 0 }}
         inventoryCountsVisible={() => false}
         emptyIcon={<span />}
         emptyTitle="No Proxmox VE nodes"
@@ -115,6 +170,8 @@ describe('ProxmoxNodesTable', () => {
 
     expect(screen.getByText('Nodes').parentElement).toHaveTextContent(/^Nodes$/);
     expect(screen.queryByText('1 cluster')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Show all nodes' })).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Show all 10 nodes' })).not.toBeInTheDocument();
   });
 
   it('links each node to its PVE web interface without hijacking the row click', () => {

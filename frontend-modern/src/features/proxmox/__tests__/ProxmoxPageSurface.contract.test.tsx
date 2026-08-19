@@ -3,6 +3,7 @@ import { Route, Router } from '@solidjs/router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Resource } from '@/types/resource';
 import { ProxmoxPageSurface } from '../ProxmoxPageSurface';
+import proxmoxPageSurfaceSource from '../ProxmoxPageSurface.tsx?raw';
 
 const mockUseUnifiedResources = vi.fn();
 const mockPathname = vi.hoisted(() => vi.fn(() => '/proxmox/overview'));
@@ -269,6 +270,16 @@ describe('ProxmoxPageSurface contract', () => {
         topology: { clusters: 1, nodes: 1, standalone: 0 },
       }),
     );
+  });
+
+  it('places workload controls beside the workload table they affect', () => {
+    const nodesTableIndex = proxmoxPageSurfaceSource.indexOf('<ProxmoxNodesTable');
+    const workloadFilterIndex = proxmoxPageSurfaceSource.indexOf('<WorkloadsFilter');
+    const workloadsSurfaceIndex = proxmoxPageSurfaceSource.indexOf('<WorkloadsSurface');
+
+    expect(nodesTableIndex).toBeGreaterThan(-1);
+    expect(workloadFilterIndex).toBeGreaterThan(nodesTableIndex);
+    expect(workloadsSurfaceIndex).toBeGreaterThan(workloadFilterIndex);
   });
 
   it('keeps Patrol coverage off the Proxmox overview', () => {

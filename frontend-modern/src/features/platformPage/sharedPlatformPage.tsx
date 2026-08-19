@@ -1,6 +1,8 @@
 import { A } from '@solidjs/router';
+import ChevronDownIcon from 'lucide-solid/icons/chevron-down';
 import ChevronLeftIcon from 'lucide-solid/icons/chevron-left';
 import ChevronRightIcon from 'lucide-solid/icons/chevron-right';
+import ChevronUpIcon from 'lucide-solid/icons/chevron-up';
 import RotateCcwIcon from 'lucide-solid/icons/rotate-ccw';
 import TriangleAlertIcon from 'lucide-solid/icons/triangle-alert';
 import {
@@ -11,6 +13,7 @@ import {
   createSignal,
   onCleanup,
   onMount,
+  type Accessor,
   type Component,
   type JSX,
 } from 'solid-js';
@@ -303,6 +306,66 @@ export function PlatformTableShell(props: PlatformTableShellProps) {
         <TableBody class={PLATFORM_TABLE_BODY_CLASS}>{props.body}</TableBody>
       </Table>
     </TableCard>
+  );
+}
+
+export function createPlatformTablePreview<Row>(options: {
+  rows: Accessor<readonly Row[]>;
+  limit: Accessor<number>;
+}) {
+  const [expanded, setExpanded] = createSignal(false);
+  const limit = createMemo(() => Math.max(1, Math.trunc(options.limit())));
+  const canExpand = createMemo(() => options.rows().length > limit());
+  const visibleRows = createMemo<readonly Row[]>(() =>
+    expanded() && canExpand() ? options.rows() : options.rows().slice(0, limit()),
+  );
+
+  createEffect(() => {
+    if (!canExpand()) setExpanded(false);
+  });
+
+  return {
+    expanded,
+    canExpand,
+    limit,
+    visibleRows,
+    setExpanded,
+    toggle: () => {
+      if (canExpand()) setExpanded((current) => !current);
+    },
+  };
+}
+
+export function PlatformTablePreviewToggle(props: {
+  expanded: boolean;
+  canExpand: boolean;
+  total: number;
+  noun: string;
+  showCount?: boolean;
+  onToggle: () => void;
+}) {
+  const collapsedLabel = () =>
+    props.showCount === false ? `Show all ${props.noun}` : `Show all ${props.total} ${props.noun}`;
+  const label = () => (props.expanded ? `Show fewer ${props.noun}` : collapsedLabel());
+
+  return (
+    <Show when={props.canExpand}>
+      <button
+        type="button"
+        class="inline-flex min-h-11 min-w-11 items-center justify-center gap-1 rounded px-1.5 text-[11px] font-medium text-muted transition-colors hover:bg-surface-hover hover:text-base-content focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 sm:min-h-8"
+        aria-expanded={props.expanded}
+        aria-label={label()}
+        onClick={props.onToggle}
+      >
+        <span>{label()}</span>
+        <Show
+          when={props.expanded}
+          fallback={<ChevronDownIcon class="h-3.5 w-3.5" aria-hidden="true" />}
+        >
+          <ChevronUpIcon class="h-3.5 w-3.5" aria-hidden="true" />
+        </Show>
+      </button>
+    </Show>
   );
 }
 

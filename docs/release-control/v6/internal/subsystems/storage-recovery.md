@@ -408,7 +408,13 @@ and unified-resource projection, not backup or recovery evidence.
 `ProxmoxPageSurface` must flow the already-loaded workload inventory into the
 shared workload filter counts and derive cluster/standalone topology through
 `platformEstateOverviewModel.ts` for the existing Nodes header rather than
-creating a Proxmox-only metric or spotlight panel. Those counts must not imply
+creating a Proxmox-only metric or spotlight panel. The node inventory may use
+the shared bounded table-preview disclosure so workload controls remain in the
+initial reading flow, but it must retain canonical node ordering and reveal the
+same already-loaded collection rather than changing backup or recovery scope.
+The workload filter belongs immediately before the workload table it controls,
+after the node preview; it must not appear to filter the node table. Those
+counts and layout controls must not imply
 protection, verification, or restore readiness beyond the evidence held by the
 workflow-owned Storage, Backups, Ceph, and Mail surfaces.
 Proxmox backup inventory loading and load-failure chrome is likewise a

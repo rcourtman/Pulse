@@ -80,7 +80,9 @@ describe('FilterButtonGroup', () => {
 
     const button = screen.getByRole('button', { name: 'VMs, 1,234' });
     expect(button).toHaveTextContent('VMs1,234');
-    expect(button.querySelector('[aria-hidden="true"]')).toHaveClass('tabular-nums');
+    const count = button.querySelector('[aria-hidden="true"]');
+    expect(count).toHaveClass('tabular-nums', 'leading-4');
+    expect(count?.parentElement).toHaveClass('items-baseline');
   });
 
   it('blocks disabled option changes in the runtime owner', () => {
