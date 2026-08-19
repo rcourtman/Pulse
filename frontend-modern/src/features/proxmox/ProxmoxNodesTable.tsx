@@ -254,7 +254,7 @@ export const ProxmoxNodesTable: Component<{
           <span class="inline-flex items-center gap-1.5">
             Nodes
             <Show when={inventoryCountsVisible()}>
-              <span class="rounded bg-base/70 px-1.5 text-[10px] tabular-nums text-muted">
+              <span class="font-semibold tabular-nums text-base-content">
                 {formatPlatformTableIntegerValue(props.nodes.length)}
               </span>
             </Show>
@@ -274,7 +274,7 @@ export const ProxmoxNodesTable: Component<{
                 {props.topology!.clusters === 1 ? 'cluster' : 'clusters'}
               </Show>
               <Show when={props.topology!.clusters > 0 && props.topology!.standalone > 0}>
-                {' · '}
+                {' / '}
               </Show>
               <Show when={props.topology!.standalone > 0}>
                 {formatPlatformTableIntegerValue(props.topology!.standalone)} standalone

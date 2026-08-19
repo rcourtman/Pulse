@@ -12,7 +12,6 @@ export interface FilterSelectOption {
   visualLabel?: JSX.Element;
   icon?: (props: { class?: string }) => JSX.Element;
   tone?: FilterButtonGroupOptionTone;
-  count?: number;
 }
 
 export type FilterGroupKey = 'scope' | 'status' | 'properties';

@@ -283,7 +283,8 @@ Platform estate orientation consumes the same canonical resource projection as
 the platform's tables. Pages must not issue a second summary fetch or create a
 parallel metric-card projection. Unified resources owns identity, type,
 platform membership, and status; frontend primitives owns how the unfiltered
-workload inventory becomes option counts in the shared filter controls. The
+workload inventory becomes one canonical estate ribbon adjacent to the shared
+filter surface. The
 storage/recovery-owned Proxmox surface additionally passes its already-loaded
 resource set through `platformEstateOverviewModel.ts` for cluster and
 standalone-node topology in the existing Nodes table header.

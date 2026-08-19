@@ -234,6 +234,25 @@ describe('FilterBar', () => {
     expect(labels.indexOf('Clear filters')).toBeLessThan(labels.indexOf('View'));
   });
 
+  it('keeps desktop utility controls in one right-aligned action cluster', () => {
+    const { container } = renderInRouter(() => (
+      <FilterBar
+        search={search}
+        filters={[inlineTypeFilter(), menuNodeFilter()]}
+        isMobile={() => false}
+        savedViewsKey="test-surface"
+        viewOptions={<span>Density</span>}
+      />
+    ));
+
+    const actionCluster = container.querySelector('[data-filter-action-cluster]');
+    expect(actionCluster).not.toBeNull();
+    expect(actionCluster).toHaveClass('ml-auto', 'justify-end');
+    expect(actionCluster).toContainElement(screen.getByRole('combobox', { name: 'Filter' }));
+    expect(actionCluster).toContainElement(screen.getByRole('button', { name: 'Saved views' }));
+    expect(actionCluster).toContainElement(screen.getByRole('button', { name: 'View' }));
+  });
+
   it('owns View composition while keeping contextual and orientation controls visible', () => {
     render(() => (
       <FilterBar

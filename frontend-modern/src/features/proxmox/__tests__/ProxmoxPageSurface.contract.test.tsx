@@ -10,6 +10,10 @@ const mockVersionInfo = vi.hoisted(() => vi.fn());
 const mockStorageProps = vi.hoisted(() => vi.fn());
 const mockTotalStats = vi.hoisted(() => vi.fn());
 const mockNodesTableProps = vi.hoisted(() => vi.fn());
+const mockWorkloadsFilterProps = vi.hoisted(() => vi.fn());
+const mockSurfaceConnected = vi.hoisted(() => vi.fn(() => false));
+const mockSurfaceInitialDataReceived = vi.hoisted(() => vi.fn(() => false));
+const mockAllGuests = vi.hoisted(() => vi.fn((): unknown[] => []));
 
 const makeResource = (resource: Partial<Resource> & Pick<Resource, 'id' | 'type'>): Resource =>
   ({
@@ -72,7 +76,10 @@ vi.mock('@/components/Storage/Storage', () => ({
 }));
 
 vi.mock('@/components/Workloads/WorkloadsFilter', () => ({
-  WorkloadsFilter: () => <div data-testid="workloads-filter" />,
+  WorkloadsFilter: (props: { inventoryTopology?: () => unknown }) => {
+    mockWorkloadsFilterProps(props);
+    return <div data-testid="workloads-filter" />;
+  },
 }));
 
 vi.mock('@/components/Workloads/WorkloadsSurface', () => ({
@@ -81,9 +88,9 @@ vi.mock('@/components/Workloads/WorkloadsSurface', () => ({
 
 vi.mock('@/components/Workloads/useWorkloadsState', () => ({
   useWorkloadsState: () => ({
-    surfaceConnected: () => false,
-    surfaceInitialDataReceived: () => false,
-    allGuests: () => [],
+    surfaceConnected: mockSurfaceConnected,
+    surfaceInitialDataReceived: mockSurfaceInitialDataReceived,
+    allGuests: mockAllGuests,
     totalStats: mockTotalStats,
     search: () => '',
     setSearch: vi.fn(),
@@ -141,6 +148,9 @@ describe('ProxmoxPageSurface contract', () => {
   beforeEach(() => {
     mockPathname.mockReturnValue('/proxmox/overview');
     mockVersionInfo.mockReturnValue(null);
+    mockSurfaceConnected.mockReturnValue(false);
+    mockSurfaceInitialDataReceived.mockReturnValue(false);
+    mockAllGuests.mockReturnValue([]);
     mockTotalStats.mockReturnValue({
       total: 3,
       running: 1,
@@ -237,6 +247,9 @@ describe('ProxmoxPageSurface contract', () => {
   });
 
   it('folds estate topology into the existing nodes table header contract', () => {
+    mockSurfaceConnected.mockReturnValue(true);
+    mockSurfaceInitialDataReceived.mockReturnValue(true);
+    mockAllGuests.mockReturnValue([{}]);
     setResources([
       makeResource({
         id: 'agent:pve-1',
@@ -269,6 +282,15 @@ describe('ProxmoxPageSurface contract', () => {
         topology: { clusters: 1, nodes: 1, standalone: 0 },
       }),
     );
+
+    const filterProps = mockWorkloadsFilterProps.mock.calls.at(-1)?.[0] as {
+      inventoryTopology?: () => unknown;
+    };
+    expect(filterProps.inventoryTopology?.()).toEqual({
+      clusters: 1,
+      nodes: 1,
+      standalone: 0,
+    });
   });
 
   it('keeps Patrol coverage off the Proxmox overview', () => {

@@ -2057,16 +2057,19 @@ default` instead of fusing provider and badge text such as
     grouped-by-host containers view) sort within groups while grouping itself
     stays orthogonal to sort state.
 
-18. Keep estate orientation inside the canonical controls operators already
-    scan. Large-estate workload totals must flow from the unfiltered shared
-    workload inventory into `WorkloadsFilter.tsx`, through the canonical
-    `FilterBar` / `FilterButtonGroup` option-count contract, so type and status
-    buttons expose their totals without another fetch or a competing metric
-    panel. Provider topology belongs in the existing table header; Proxmox
+18. Keep estate orientation inside the canonical control surface operators
+    already scan. Large-estate workload totals must flow from the unfiltered
+    shared workload inventory into `WorkloadsFilter.tsx`, through the canonical
+    `WorkloadsInventorySummary` composed by `WorkloadsFilter` immediately
+    before the canonical `FilterBar`, so a single glanceable ribbon with
+    labelled primary totals plus workload-mix and health distributions exposes
+    the estate without another fetch, nested count badges, or a metric-card
+    grid. Provider
+    topology belongs in the existing table header; Proxmox
     derives cluster and standalone-node context through
     `platformEstateOverviewModel.ts` and supplies it to `ProxmoxNodesTable.tsx`
     rather than creating a page-level summary. The existing
-    `platformEstateOverviewVisible` preference now governs these inline totals
+    `platformEstateOverviewVisible` preference now governs this overview ribbon
     from the shared View menu, preserving the global browser-persisted choice
     across platform workload surfaces. Docker / Podman, Kubernetes, TrueNAS,
     VMware vSphere, and Standalone Machines must continue using their shared

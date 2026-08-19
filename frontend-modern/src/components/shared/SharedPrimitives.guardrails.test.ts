@@ -412,8 +412,8 @@ describe('shared primitive guardrails', () => {
       }>;
     };
     const registeredRule = registry.rules?.find((rule) => rule.id === 'filter-button-group-shell');
-    const estateCountsRule = registry.rules?.find(
-      (rule) => rule.id === 'platform-estate-inline-counts',
+    const estateSummaryRule = registry.rules?.find(
+      (rule) => rule.id === 'platform-estate-inventory-summary',
     );
     const registeredGuard = registry.patternGuards?.find(
       (guard) => guard.id === 'filter-button-group-local-segmented-control-styles',
@@ -424,13 +424,12 @@ describe('shared primitive guardrails', () => {
 
     expect(registeredRule?.canonical?.path).toBe('src/components/shared/FilterButtonGroup.tsx');
     expect(registeredRule?.canonical?.export).toBe('FilterButtonGroup');
-    expect(estateCountsRule?.canonical).toEqual({
-      path: 'src/components/Workloads/WorkloadsFilter.tsx',
-      export: 'WorkloadsFilter',
+    expect(estateSummaryRule?.canonical).toEqual({
+      path: 'src/components/Workloads/WorkloadsInventorySummary.tsx',
+      export: 'WorkloadsInventorySummary',
     });
-    expect(estateCountsRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual([
-      'src/features/proxmox/ProxmoxPageSurface.tsx',
-      'src/features/vmware/VmwarePageSurface.tsx',
+    expect(estateSummaryRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual([
+      'src/components/Workloads/WorkloadsFilter.tsx',
     ]);
     expect(registeredRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual([
       'src/components/Settings/GeneralSettingsPanel.tsx',
@@ -499,8 +498,8 @@ describe('shared primitive guardrails', () => {
     expect(filterButtonGroupModelSource).toContain('getFilterButtonGroupButtonClass');
     expect(filterButtonGroupModelSource).toContain('getFilterButtonGroupCompactLabel');
     expect(filterButtonGroupModelSource).toContain("option.label.startsWith('All ')");
-    expect(filterButtonGroupModelSource).toContain('count?: number');
     expect(workloadsFilterSource).toContain('inventoryStats');
+    expect(workloadsFilterSource).toContain('WorkloadsInventorySummary');
     expect(workloadsFilterSource).toContain('PLATFORM_ESTATE_COUNTS_STORAGE_KEY');
     expect(generalSettingsPanelSource).toContain('FilterButtonGroup');
     expect(generalSettingsPanelSource.match(/<FilterButtonGroup/g) ?? []).toHaveLength(4);

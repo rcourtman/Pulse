@@ -43,7 +43,6 @@ const InlineFilterControl: Component<{ filter: FilterDef }> = (props) => (
         icon: option.icon,
         tone: option.tone,
         title: option.title,
-        count: option.count,
       }))}
       value={props.filter.value()}
       onChange={props.filter.setValue}
@@ -152,46 +151,45 @@ export const FilterBar: Component<FilterBarProps> = (props) => {
         </Show>
 
         <Show when={showDesktopControlsRow()}>
-          <div class="flex flex-wrap items-center gap-2">
-            <For each={inlineFilters()}>
-              {(filter, index) => (
-                <>
-                  <InlineFilterControl filter={filter} />
-                  <Show when={index() < inlineFilters().length - 1}>
-                    <FilterBarRailDivider />
-                  </Show>
-                </>
-              )}
-            </For>
-            <Show
-              when={
-                inlineFilters().length > 0 &&
-                (hasAddableMenuFilters() || hasSavedViews() || hasAuxiliaryControls())
-              }
-            >
-              <FilterBarRailDivider />
-            </Show>
-            <Show when={hasAddableMenuFilters()}>
-              <AddFilterMenu
-                filters={menuFilters()}
-                showLabel={props.showAddFilterLabel === true}
-              />
-            </Show>
-            <Show when={props.savedViewsKey}>{(key) => <SavedViewsMenu storageKey={key()} />}</Show>
-            <Show when={hasClearableState()}>
-              <FilterBarRailDivider />
-              <FilterBarClearAllButton onClick={clearAll} />
+          <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
+            <Show when={inlineFilters().length > 0}>
+              <div class="flex min-w-0 flex-wrap items-center gap-2">
+                <For each={inlineFilters()}>
+                  {(filter, index) => (
+                    <>
+                      <InlineFilterControl filter={filter} />
+                      <Show when={index() < inlineFilters().length - 1}>
+                        <FilterBarRailDivider />
+                      </Show>
+                    </>
+                  )}
+                </For>
+              </div>
             </Show>
             <Show
               when={
-                (hasAddableMenuFilters() || hasSavedViews() || hasClearableState()) &&
+                hasAddableMenuFilters() ||
+                hasSavedViews() ||
+                hasClearableState() ||
                 hasAuxiliaryControls()
               }
             >
-              <FilterBarRailDivider />
-            </Show>
-            <Show when={hasAuxiliaryControls()}>
-              <div class="inline-flex flex-shrink-0 flex-wrap items-center gap-2">
+              <div
+                class="ml-auto inline-flex flex-shrink-0 flex-wrap items-center justify-end gap-2"
+                data-filter-action-cluster
+              >
+                <Show when={hasAddableMenuFilters()}>
+                  <AddFilterMenu
+                    filters={menuFilters()}
+                    showLabel={props.showAddFilterLabel === true}
+                  />
+                </Show>
+                <Show when={props.savedViewsKey}>
+                  {(key) => <SavedViewsMenu storageKey={key()} />}
+                </Show>
+                <Show when={hasClearableState()}>
+                  <FilterBarClearAllButton onClick={clearAll} />
+                </Show>
                 {props.leadingControls}
                 <Show when={props.viewOptions}>
                   <ViewOptionsMenu>{props.viewOptions}</ViewOptionsMenu>

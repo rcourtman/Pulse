@@ -1,43 +1,29 @@
 {
   "version": 1,
-  "base_sha": "85ddd9f7f98389c05165527f62696c6f344074ee",
-  "verified_at": "2026-08-19T16:51:42Z",
+  "base_sha": "12050efc56de5f53f978b361c0bd2ae9f53071c9",
+  "verified_at": "2026-08-19T17:14:39Z",
   "result": "passed",
   "changed_paths": [
     "frontend-modern/src/components/Workloads/WorkloadsFilter.tsx",
-    "frontend-modern/src/components/Workloads/useWorkloadsState.ts",
+    "frontend-modern/src/components/Workloads/WorkloadsInventorySummary.tsx",
     "frontend-modern/src/components/Workloads/workloadsFilterModel.ts",
     "frontend-modern/src/components/shared/FilterBar/FilterBar.tsx",
+    "frontend-modern/src/components/shared/FilterBar/filterCatalog.ts",
     "frontend-modern/src/components/shared/FilterButtonGroup.tsx",
     "frontend-modern/src/components/shared/filterButtonGroupModel.ts",
-    "frontend-modern/src/features/docker/DockerPageSurface.tsx",
-    "frontend-modern/src/features/kubernetes/KubernetesPageSurface.tsx",
-    "frontend-modern/src/features/platformPage/PlatformEstateOverview.tsx",
-    "frontend-modern/src/features/platformPage/platformEstateOverviewModel.ts",
-    "frontend-modern/src/features/platformPage/sharedPlatformPage.tsx",
     "frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx",
-    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx",
-    "frontend-modern/src/features/standalone/StandalonePageSurface.tsx",
-    "frontend-modern/src/features/truenas/TrueNASPageSurface.tsx",
-    "frontend-modern/src/features/vmware/VmwarePageSurface.tsx"
+    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Workloads/WorkloadsFilter.tsx": "643e50ea4aa6ed89589bb77ce48fc6344ba4a5ed6b2939bba6b4d8e047b78bfd",
-    "frontend-modern/src/components/Workloads/useWorkloadsState.ts": "10f5b232ce7db4cf52d8df0f2d33c29731afcf1544f770aab1183f372763495d",
-    "frontend-modern/src/components/Workloads/workloadsFilterModel.ts": "c68b4193f9b926a468b018e06024fb3212e19b99e0824845076f8ed71bf9c0eb",
-    "frontend-modern/src/components/shared/FilterBar/FilterBar.tsx": "ce8c55f14d1358b2ed92e1970587cb1e671a97ade499d51ec635c8f78d256eda",
-    "frontend-modern/src/components/shared/FilterButtonGroup.tsx": "f573262dda64212a061626b3c7988f3ce2788f18979d523c1f737f6a7efd7a98",
-    "frontend-modern/src/components/shared/filterButtonGroupModel.ts": "06576097404a56f66d6ae0ef23fc913dbff11ceb5833140d00df58ad9711fe41",
-    "frontend-modern/src/features/docker/DockerPageSurface.tsx": "b1f8425708dad88bad3fe58764456250c32e5080dad3c6d04afbe2cba23e4762",
-    "frontend-modern/src/features/kubernetes/KubernetesPageSurface.tsx": "bc66b5a08453771c1f81d6b34c02a0b2e117f1c20e8cc250502a8c9ba846f3c4",
-    "frontend-modern/src/features/platformPage/PlatformEstateOverview.tsx": "deleted",
-    "frontend-modern/src/features/platformPage/platformEstateOverviewModel.ts": "025fe43f28810fbafc7ce439b4e47e40d109559ecfc064b14e11de1bae4505db",
-    "frontend-modern/src/features/platformPage/sharedPlatformPage.tsx": "cd959981f59753727847621228a339c099034fe7b7a61fa2bb32bb6704dd64b3",
-    "frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx": "5897b06f6e728f06d00d731b3675a33688681977bb3d51c76b0a92e21cf4c4bd",
-    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx": "199cac37585598cc8533efd8010bcfa85915f4f7cc29fa5b967198460f70b43d",
-    "frontend-modern/src/features/standalone/StandalonePageSurface.tsx": "70f1f22cd61ed8822aa91cb3bb513fffd794316c6536e00d8bd0403fa9aecbdd",
-    "frontend-modern/src/features/truenas/TrueNASPageSurface.tsx": "c330710f229e6fa04edb12e077a34ea7fafb4edac2adda6c878a77984cde841e",
-    "frontend-modern/src/features/vmware/VmwarePageSurface.tsx": "efd0a33a0c9fa649993811f3dee89666a0ae3df32af5225c69fcc0978811ffb8"
+    "frontend-modern/src/components/Workloads/WorkloadsFilter.tsx": "1e9fa7d4b9679d5f5a1cd2f7c62d7a9d933158452c6731c31cd23b406ff9de78",
+    "frontend-modern/src/components/Workloads/WorkloadsInventorySummary.tsx": "a18190ea5320759f6f15c0392934984e9fbb65d261c2838fe919a06da9814dc9",
+    "frontend-modern/src/components/Workloads/workloadsFilterModel.ts": "8f1b943923c4e5e7f1285ef09d565639ea343b9040d9a99625ec9b44ed265200",
+    "frontend-modern/src/components/shared/FilterBar/FilterBar.tsx": "59e60b5ecd379350de9284a27a739023730d3e2c7ca519962d766d69276c565c",
+    "frontend-modern/src/components/shared/FilterBar/filterCatalog.ts": "6fa670b97179850b445dd8b48198f9e3fbcb564add7f405c70fa5af11ad795fe",
+    "frontend-modern/src/components/shared/FilterButtonGroup.tsx": "0d1b8ab603b2e43986c53354dafebd3a652200479b50ecd2d4d8ffd6281aea96",
+    "frontend-modern/src/components/shared/filterButtonGroupModel.ts": "33408c8af3eece8604647d6cb7133ef675b50adbc983c0451200f35e99bf7075",
+    "frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx": "59e64ba42750c4c2d71e2d1640cc403ded9ce711d376148a823bc0a248c50380",
+    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx": "0003dd53e4f6f4f8ffe4ab5a41f10259d7eef1efcf157e941ec15396de43a24b"
   },
   "routes": [
     "/proxmox/overview",
@@ -52,16 +38,16 @@
     { "width": 390, "height": 844 }
   ],
   "states": [
-    "Large Proxmox workload totals shown inline in the existing Type and Status controls",
-    "Proxmox Nodes header showing 32 nodes, five clusters, and two standalone nodes",
-    "Expanded phone filter rail with all inline totals visible without horizontal page overflow",
-    "Inline totals hidden through View, still hidden after a full reload, then restored",
+    "Large Proxmox estate shown as one glanceable ribbon with 718 workloads, 32 nodes, five clusters, and two standalone nodes",
+    "Explicit workload-mix and health charts with labelled counts above the clean filter controls",
+    "Desktop utility controls wrapping as one right-aligned action cluster",
+    "Phone layout at 390 px with a two-by-two estate total grid, two full-width charts, and no horizontal page overflow",
+    "Estate overview hidden through View and then restored",
     "Docker, Kubernetes, TrueNAS, VMware vSphere, and Standalone overview routes without the retired estate panel"
   ],
   "interactions": [
-    "Expanded the phone Filters control and checked the complete type and status count rows",
-    "Opened View, selected Hide for Inventory totals, and confirmed count badges disappeared",
-    "Reloaded Proxmox and confirmed the hidden choice persisted, then restored Show",
+    "Checked the full estate ribbon and clean collapsed filter control at 390 x 844",
+    "Opened View, selected Hide for Inventory totals, confirmed the ribbon disappeared, then restored Show",
     "Navigated all six platform overview routes and confirmed the shared panel was absent"
   ]
 }

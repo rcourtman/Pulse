@@ -335,6 +335,7 @@ function ProxmoxOverview(props: ProxmoxOverviewProps) {
             searchEmptyMessage="Recent Proxmox workload searches appear here."
             statusOptions={PROXMOX_WORKLOAD_STATUS_OPTIONS}
             inventoryStats={workloadsState.inventoryStats}
+            inventoryTopology={estateTopology}
             columnVisibility={workloadsState.workloadsFilterColumnVisibility()}
             containerRuntimeFilter={workloadsState.containerRuntimeFilterConfig()}
             hostFilter={workloadsState.hostFilterConfig()}

@@ -163,7 +163,7 @@ describe('WorkloadsFilter', () => {
       expect(dialog.getByRole('button', { name: 'List' })).toBeInTheDocument();
     });
 
-    it('folds large-estate totals into the existing type and status controls', () => {
+    it('presents large-estate totals as one glanceable overview instead of nested filter badges', () => {
       render(() => (
         <WorkloadsFilter
           {...makeProps({
@@ -182,18 +182,21 @@ describe('WorkloadsFilter', () => {
         />
       ));
 
+      const overview = screen.getByRole('region', { name: 'Estate overview' });
+      expect(overview).toHaveTextContent('578Workloads');
+      expect(overview).toHaveTextContent('253 VMs');
+      expect(overview).toHaveTextContent('325 LXCs');
       expect(
-        within(inlineFilterGroup('Type')).getByRole('button', { name: 'All, 578' }),
-      ).toHaveTextContent('578');
+        within(overview).getByRole('img', {
+          name: 'Health: 500 running, 12 attention, 66 stopped',
+        }),
+      ).toBeInTheDocument();
       expect(
-        within(inlineFilterGroup('Type')).getByRole('button', { name: 'VMs, 253' }),
-      ).toHaveTextContent('253');
+        within(inlineFilterGroup('Type')).getByRole('button', { name: 'VMs' }),
+      ).not.toHaveTextContent('253');
       expect(
-        within(inlineFilterGroup('Type')).getByRole('button', { name: 'LXCs, 325' }),
-      ).toHaveTextContent('325');
-      expect(
-        within(inlineFilterGroup('Status')).getByRole('button', { name: 'Degraded, 12' }),
-      ).toHaveTextContent('12');
+        within(inlineFilterGroup('Status')).getByRole('button', { name: 'Degraded' }),
+      ).not.toHaveTextContent('12');
     });
 
     it('keeps inventory totals optional through the existing View menu', () => {
@@ -218,9 +221,7 @@ describe('WorkloadsFilter', () => {
       const visibility = dialog.getByRole('group', { name: 'Inventory totals visibility' });
       fireEvent.click(within(visibility).getByRole('button', { name: 'Hide' }));
 
-      expect(
-        within(inlineFilterGroup('Type')).getByRole('button', { name: 'All' }),
-      ).not.toHaveTextContent('578');
+      expect(screen.queryByRole('region', { name: 'Estate overview' })).not.toBeInTheDocument();
       expect(window.localStorage.getItem('platformEstateOverviewVisible')).toBe('false');
     });
 
