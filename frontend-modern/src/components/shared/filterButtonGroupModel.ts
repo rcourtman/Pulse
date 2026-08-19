@@ -10,6 +10,7 @@ export interface FilterOption<T extends string | number> {
   visualLabel?: JSX.Element;
   icon?: (props: { class?: string }) => JSX.Element;
   tone?: FilterButtonGroupOptionTone;
+  count?: number;
   disabled?: boolean;
 }
 

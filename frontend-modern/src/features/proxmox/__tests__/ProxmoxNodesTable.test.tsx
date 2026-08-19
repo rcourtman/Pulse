@@ -100,6 +100,23 @@ afterEach(() => {
 });
 
 describe('ProxmoxNodesTable', () => {
+  it('hides node and topology totals through the page-owned inventory preference', () => {
+    render(() => (
+      <ProxmoxNodesTable
+        nodes={[makeNodeResource()]}
+        guests={[]}
+        topology={{ nodes: 1, clusters: 1, standalone: 0 }}
+        inventoryCountsVisible={() => false}
+        emptyIcon={<span />}
+        emptyTitle="No Proxmox VE nodes"
+        emptyDescription="No nodes"
+      />
+    ));
+
+    expect(screen.getByText('Nodes').parentElement).toHaveTextContent(/^Nodes$/);
+    expect(screen.queryByText('1 cluster')).not.toBeInTheDocument();
+  });
+
   it('links each node to its PVE web interface without hijacking the row click', () => {
     render(() => (
       <ProxmoxNodesTable

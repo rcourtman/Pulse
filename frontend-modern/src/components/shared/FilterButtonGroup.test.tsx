@@ -68,6 +68,21 @@ describe('FilterButtonGroup', () => {
     expect(onChange).toHaveBeenCalledWith('dark');
   });
 
+  it('renders an optional count directly beside its label', () => {
+    render(() => (
+      <FilterButtonGroup
+        options={[{ value: 'vm', label: 'VMs', count: 1234 }]}
+        value="vm"
+        onChange={() => undefined}
+        variant="compact"
+      />
+    ));
+
+    const button = screen.getByRole('button', { name: 'VMs, 1,234' });
+    expect(button).toHaveTextContent('VMs1,234');
+    expect(button.querySelector('[aria-hidden="true"]')).toHaveClass('tabular-nums');
+  });
+
   it('blocks disabled option changes in the runtime owner', () => {
     const onChange = vi.fn();
 

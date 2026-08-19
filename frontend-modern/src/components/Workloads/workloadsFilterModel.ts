@@ -26,12 +26,6 @@ export interface WorkloadsInventoryStats {
   pods: number;
 }
 
-export interface WorkloadsInventoryTopology {
-  nodes: number;
-  clusters: number;
-  standalone: number;
-}
-
 export interface WorkloadsFilterSelectOption {
   value: string;
   label: string;
@@ -63,7 +57,8 @@ export interface WorkloadsFilterProps {
   searchEmptyMessage?: string;
   statusOptions?: readonly WorkloadsStatusOption[];
   inventoryStats?: () => WorkloadsInventoryStats;
-  inventoryTopology?: () => WorkloadsInventoryTopology;
+  inventoryCountsVisible?: () => boolean;
+  setInventoryCountsVisible?: (visible: boolean) => void;
   columnVisibility?: {
     availableColumns: ColumnDef[];
     isColumnHidden: (id: string) => boolean;

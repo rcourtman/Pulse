@@ -46,15 +46,23 @@ import {
   hasActiveWorkloadsFilters,
 } from './workloadsFilterModel';
 import { WORKLOAD_STATUS_FILTER_OPTIONS, WORKLOAD_TYPE_OPTIONS } from './workloadFilterConfigModel';
-import { WorkloadsInventorySummary } from './WorkloadsInventorySummary';
 
 export const WorkloadsFilter: Component<WorkloadsFilterProps> = (props) => {
   const { isMobile } = useBreakpoint();
-  const [inventoryCountsVisible, setInventoryCountsVisible] = usePersistentSignal(
-    PLATFORM_ESTATE_COUNTS_STORAGE_KEY,
-    true,
-    { deserialize: deserializePlatformEstateCountsVisibility },
-  );
+  const persistedInventoryCounts = props.inventoryCountsVisible
+    ? undefined
+    : usePersistentSignal(PLATFORM_ESTATE_COUNTS_STORAGE_KEY, true, {
+        deserialize: deserializePlatformEstateCountsVisibility,
+      });
+  const inventoryCountsVisible = () =>
+    props.inventoryCountsVisible?.() ?? persistedInventoryCounts?.[0]() ?? true;
+  const setInventoryCountsVisible = (visible: boolean) => {
+    if (props.setInventoryCountsVisible) {
+      props.setInventoryCountsVisible(visible);
+      return;
+    }
+    persistedInventoryCounts?.[1](visible);
+  };
 
   const typeValue = () =>
     isContainerWorkloadViewMode(props.viewMode()) ? 'container' : props.viewMode();
@@ -66,6 +74,16 @@ export const WorkloadsFilter: Component<WorkloadsFilterProps> = (props) => {
       forcedPlatform !== 'all' &&
       sourcePlatformScopeMatchesFilter('proxmox-pve', forcedPlatform)
     );
+  };
+
+  const workloadTypeCount = (value: string): number | undefined => {
+    if (!inventoryCountsVisible() || !props.inventoryStats) return undefined;
+    const stats = props.inventoryStats();
+    if (value === 'all') return stats.total;
+    if (value === 'vm') return stats.vms;
+    if (value === 'container') return stats.containers + stats.appContainers;
+    if (value === 'pod') return stats.pods;
+    return undefined;
   };
 
   const workloadTypeOptions = (): FilterSelectOption[] =>
@@ -87,7 +105,18 @@ export const WorkloadsFilter: Component<WorkloadsFilterProps> = (props) => {
               ? BoxesIcon
               : undefined,
       tone: option.value === 'vm' ? 'info' : option.value === 'container' ? 'success' : undefined,
+      count: workloadTypeCount(option.value),
     }));
+
+  const workloadStatusCount = (value: string): number | undefined => {
+    if (!inventoryCountsVisible() || !props.inventoryStats) return undefined;
+    const stats = props.inventoryStats();
+    if (value === 'all') return stats.total;
+    if (value === 'running') return stats.running;
+    if (value === 'degraded') return stats.degraded;
+    if (value === 'stopped') return stats.stopped;
+    return undefined;
+  };
 
   const workloadStatusOptions = (): FilterSelectOption[] =>
     (props.statusOptions ?? WORKLOAD_STATUS_FILTER_OPTIONS).map((option) => ({
@@ -109,6 +138,7 @@ export const WorkloadsFilter: Component<WorkloadsFilterProps> = (props) => {
             : option.value === 'stopped'
               ? 'danger'
               : undefined,
+      count: workloadStatusCount(option.value),
     }));
 
   const runtimeChipLabel = (value: string): string => {
@@ -259,162 +289,153 @@ export const WorkloadsFilter: Component<WorkloadsFilterProps> = (props) => {
   };
 
   return (
-    <>
-      <Show when={inventoryCountsVisible() && props.inventoryStats}>
-        <WorkloadsInventorySummary
-          stats={props.inventoryStats!()}
-          topology={props.inventoryTopology?.()}
-          containerLabel={isProxmoxScope() ? 'LXCs' : 'containers'}
-        />
-      </Show>
-      <FilterBar
-        role="group"
-        ariaLabel={props.ariaLabel ?? 'Workloads filters'}
-        isMobile={isMobile}
-        search={{
-          value: props.search,
-          setValue: props.setSearch,
-          placeholder: props.searchPlaceholder ?? 'Search workloads by name, ID, node, or image',
-          historyKey: STORAGE_KEYS.WORKLOADS_SEARCH_HISTORY,
-          emptyMessage: props.searchEmptyMessage ?? 'Recent workload searches appear here.',
-          onBeforeAutoFocus: props.onBeforeAutoFocus,
-        }}
-        searchTrailing={props.searchTrailing}
-        filters={buildFilters()}
-        showAddFilterLabel={false}
-        savedViewsKey={props.savedViewsKey}
-        leadingControls={
-          props.pinnedSelectionActive?.() && props.onClearPinnedSelection ? (
-            <FilterActionButton
-              aria-label="Clear pinned selection"
-              title="Clear pinned selection"
-              onClick={() => props.onClearPinnedSelection?.()}
-            >
-              <XIcon class="h-3 w-3" />
-              Clear selection
-            </FilterActionButton>
-          ) : undefined
-        }
-        viewOptions={
-          <>
+    <FilterBar
+      role="group"
+      ariaLabel={props.ariaLabel ?? 'Workloads filters'}
+      isMobile={isMobile}
+      search={{
+        value: props.search,
+        setValue: props.setSearch,
+        placeholder: props.searchPlaceholder ?? 'Search workloads by name, ID, node, or image',
+        historyKey: STORAGE_KEYS.WORKLOADS_SEARCH_HISTORY,
+        emptyMessage: props.searchEmptyMessage ?? 'Recent workload searches appear here.',
+        onBeforeAutoFocus: props.onBeforeAutoFocus,
+      }}
+      searchTrailing={props.searchTrailing}
+      filters={buildFilters()}
+      showAddFilterLabel={false}
+      savedViewsKey={props.savedViewsKey}
+      leadingControls={
+        props.pinnedSelectionActive?.() && props.onClearPinnedSelection ? (
+          <FilterActionButton
+            aria-label="Clear pinned selection"
+            title="Clear pinned selection"
+            onClick={() => props.onClearPinnedSelection?.()}
+          >
+            <XIcon class="h-3 w-3" />
+            Clear selection
+          </FilterActionButton>
+        ) : undefined
+      }
+      viewOptions={
+        <>
+          <div>
+            <div class="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted">
+              Layout
+            </div>
+            <GroupedTableModeSegmentedControl
+              value={props.groupingMode()}
+              onChange={props.setGroupingMode}
+            />
+          </div>
+
+          <Show when={props.metricDisplayMode && props.setMetricDisplayMode}>
             <div>
               <div class="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted">
-                Layout
+                Metrics
               </div>
-              <GroupedTableModeSegmentedControl
-                value={props.groupingMode()}
-                onChange={props.setGroupingMode}
+              <MetricDisplayModeSegmentedControl
+                value={props.metricDisplayMode!()}
+                onChange={props.setMetricDisplayMode!}
               />
             </div>
-
-            <Show when={props.metricDisplayMode && props.setMetricDisplayMode}>
-              <div>
-                <div class="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted">
-                  Metrics
-                </div>
-                <MetricDisplayModeSegmentedControl
-                  value={props.metricDisplayMode!()}
-                  onChange={props.setMetricDisplayMode!}
-                />
-              </div>
-            </Show>
-
-            <Show when={props.memoryDisplayBasis && props.setMemoryDisplayBasis}>
-              <div>
-                <div class="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted">
-                  Memory relative to
-                </div>
-                <FilterSegmentedControl
-                  aria-label="Memory percentage basis"
-                  value={props.memoryDisplayBasis!()}
-                  onChange={(value) =>
-                    props.setMemoryDisplayBasis!(value as WorkloadsMemoryDisplayBasis)
-                  }
-                  options={[
-                    {
-                      value: 'guest',
-                      label: 'Guest allocation',
-                      ariaLabel: 'Guest',
-                      title: 'Show memory as a percentage of each guest allocation',
-                    },
-                    {
-                      value: 'host',
-                      label: 'Host capacity',
-                      ariaLabel: 'Host',
-                      title: 'Show memory as a percentage of the Proxmox host total',
-                    },
-                  ]}
-                />
-              </div>
-            </Show>
-
-            <Show when={props.inventoryStats}>
-              <div>
-                <div class="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted">
-                  Inventory totals
-                </div>
-                <FilterSegmentedControl
-                  aria-label="Inventory totals visibility"
-                  value={inventoryCountsVisible() ? 'shown' : 'hidden'}
-                  onChange={(value) => setInventoryCountsVisible(value === 'shown')}
-                  options={[
-                    { value: 'shown', label: 'Show' },
-                    { value: 'hidden', label: 'Hide' },
-                  ]}
-                />
-              </div>
-            </Show>
-
-            <Show when={props.onChartsToggle}>
-              <div>
-                <div class="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted">
-                  Summary
-                </div>
-                <ChartVisibilityToggleButton
-                  class="!inline-flex"
-                  collapsed={props.chartsCollapsed?.() ?? false}
-                  onToggle={() => props.onChartsToggle?.()}
-                />
-              </div>
-            </Show>
-
-            <Show when={props.columnVisibility}>
-              {(visibility) => (
-                <div>
-                  <div class="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted">
-                    Table
-                  </div>
-                  <ColumnPicker
-                    inline
-                    columns={visibility().availableColumns}
-                    isHidden={visibility().isColumnHidden}
-                    onToggle={visibility().onColumnToggle}
-                    onReset={visibility().onColumnReset}
-                    showReset={visibility().showReset}
-                  />
-                </div>
-              )}
-            </Show>
-          </>
-        }
-        trailingControls={
-          <Show
-            when={
-              props.metricDisplayMode?.() === 'sparklines' &&
-              props.metricHistoryRange &&
-              props.setMetricHistoryRange
-            }
-          >
-            <MetricHistoryRangeSegmentedControl
-              label="Trend range"
-              range={props.metricHistoryRange!()}
-              onRangeChange={props.setMetricHistoryRange!}
-            />
           </Show>
-        }
-        onClearAll={handleClearAll}
-        showClearAll={showClearAll}
-      />
-    </>
+
+          <Show when={props.memoryDisplayBasis && props.setMemoryDisplayBasis}>
+            <div>
+              <div class="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted">
+                Memory relative to
+              </div>
+              <FilterSegmentedControl
+                aria-label="Memory percentage basis"
+                value={props.memoryDisplayBasis!()}
+                onChange={(value) =>
+                  props.setMemoryDisplayBasis!(value as WorkloadsMemoryDisplayBasis)
+                }
+                options={[
+                  {
+                    value: 'guest',
+                    label: 'Guest allocation',
+                    ariaLabel: 'Guest',
+                    title: 'Show memory as a percentage of each guest allocation',
+                  },
+                  {
+                    value: 'host',
+                    label: 'Host capacity',
+                    ariaLabel: 'Host',
+                    title: 'Show memory as a percentage of the Proxmox host total',
+                  },
+                ]}
+              />
+            </div>
+          </Show>
+
+          <Show when={props.inventoryStats}>
+            <div>
+              <div class="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted">
+                Inventory totals
+              </div>
+              <FilterSegmentedControl
+                aria-label="Inventory totals visibility"
+                value={inventoryCountsVisible() ? 'shown' : 'hidden'}
+                onChange={(value) => setInventoryCountsVisible(value === 'shown')}
+                options={[
+                  { value: 'shown', label: 'Show' },
+                  { value: 'hidden', label: 'Hide' },
+                ]}
+              />
+            </div>
+          </Show>
+
+          <Show when={props.onChartsToggle}>
+            <div>
+              <div class="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted">
+                Summary
+              </div>
+              <ChartVisibilityToggleButton
+                class="!inline-flex"
+                collapsed={props.chartsCollapsed?.() ?? false}
+                onToggle={() => props.onChartsToggle?.()}
+              />
+            </div>
+          </Show>
+
+          <Show when={props.columnVisibility}>
+            {(visibility) => (
+              <div>
+                <div class="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted">
+                  Table
+                </div>
+                <ColumnPicker
+                  inline
+                  columns={visibility().availableColumns}
+                  isHidden={visibility().isColumnHidden}
+                  onToggle={visibility().onColumnToggle}
+                  onReset={visibility().onColumnReset}
+                  showReset={visibility().showReset}
+                />
+              </div>
+            )}
+          </Show>
+        </>
+      }
+      trailingControls={
+        <Show
+          when={
+            props.metricDisplayMode?.() === 'sparklines' &&
+            props.metricHistoryRange &&
+            props.setMetricHistoryRange
+          }
+        >
+          <MetricHistoryRangeSegmentedControl
+            label="Trend range"
+            range={props.metricHistoryRange!()}
+            onRangeChange={props.setMetricHistoryRange!}
+          />
+        </Show>
+      }
+      onClearAll={handleClearAll}
+      showClearAll={showClearAll}
+    />
   );
 };

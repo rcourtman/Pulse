@@ -22,7 +22,6 @@ import { MetricMiniSparkline } from '@/components/Workloads/MetricMiniSparkline'
 import { TemperatureGauge } from '@/components/shared/TemperatureGauge';
 import { hostOverrideIdCandidates } from '@/features/alerts/alertOverridesModel';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
-import { usePersistentSignal } from '@/hooks/usePersistentSignal';
 import { TableCell, TableRow } from '@/components/shared/Table';
 import { getSimpleStatusIndicator } from '@/utils/status';
 import { getNodeExternalUrl } from '@/utils/nodes';
@@ -45,11 +44,7 @@ import {
   type PlatformTableSortValue,
 } from '@/features/platformPage/sharedPlatformPage';
 import { PlatformResourceDetailToggleButton } from '@/features/platformPage/PlatformResourceDetailTableRow';
-import {
-  PLATFORM_ESTATE_COUNTS_STORAGE_KEY,
-  deserializePlatformEstateCountsVisibility,
-  type ProxmoxEstateTopology,
-} from '@/features/platformPage/platformEstateOverviewModel';
+import { type ProxmoxEstateTopology } from '@/features/platformPage/platformEstateOverviewModel';
 import { type WorkloadsMetricDisplayMode } from '@/components/Workloads/workloadsFilterModel';
 import { type WorkloadTableMetricHistoryRange } from '@/components/Workloads/workloadMetricHistoryModel';
 import type { Disk, Node as LegacyNode } from '@/types/api';
@@ -202,11 +197,10 @@ export const ProxmoxNodesTable: Component<{
   emptyTitle: string;
   emptyDescription: string;
   topology?: ProxmoxEstateTopology;
+  inventoryCountsVisible?: Accessor<boolean>;
 }> = (props) => {
   const breakpoint = useBreakpoint();
-  const [inventoryCountsVisible] = usePersistentSignal(PLATFORM_ESTATE_COUNTS_STORAGE_KEY, true, {
-    deserialize: deserializePlatformEstateCountsVisibility,
-  });
+  const inventoryCountsVisible = () => props.inventoryCountsVisible?.() ?? true;
   const { activeAlerts } = useWebSocket();
   const alertsActivation = useAlertsActivation();
   const alertsEnabled = alertsActivation.detectionEnabled;

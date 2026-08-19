@@ -43,6 +43,7 @@ const InlineFilterControl: Component<{ filter: FilterDef }> = (props) => (
         icon: option.icon,
         tone: option.tone,
         title: option.title,
+        count: option.count,
       }))}
       value={props.filter.value()}
       onChange={props.filter.setValue}

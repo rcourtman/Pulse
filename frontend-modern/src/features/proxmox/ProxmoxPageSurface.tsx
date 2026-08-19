@@ -26,7 +26,11 @@ import {
 import { getPlatformIcon } from '@/features/platformPage/platformIcon';
 import { PlatformOutdatedAgentNotice } from '@/features/platformPage/PlatformOutdatedAgentNotice';
 import { PlatformOutdatedSensorSetupNotice } from '@/features/platformPage/PlatformOutdatedSensorSetupNotice';
-import { buildProxmoxEstateTopology } from '@/features/platformPage/platformEstateOverviewModel';
+import {
+  PLATFORM_ESTATE_COUNTS_STORAGE_KEY,
+  buildProxmoxEstateTopology,
+  deserializePlatformEstateCountsVisibility,
+} from '@/features/platformPage/platformEstateOverviewModel';
 import { collectOutdatedSensorSetupNodes } from '@/features/platformPage/sensorSetup';
 import { usePersistentSignal } from '@/hooks/usePersistentSignal';
 import { useObservedElementWidth } from '@/hooks/useObservedElementWidth';
@@ -156,6 +160,11 @@ export function ProxmoxPageSurface() {
         deserialize: (raw) => (raw === 'host' ? 'host' : 'guest'),
       },
     );
+  const [inventoryCountsVisible, setInventoryCountsVisible] = usePersistentSignal(
+    PLATFORM_ESTATE_COUNTS_STORAGE_KEY,
+    true,
+    { deserialize: deserializePlatformEstateCountsVisibility },
+  );
 
   return (
     <div data-testid="proxmox-page" class="pulse-wide-data-surface space-y-3">
@@ -212,6 +221,8 @@ export function ProxmoxPageSurface() {
                   setMetricHistoryRange={setMetricHistoryRange}
                   memoryDisplayBasis={memoryDisplayBasis}
                   setMemoryDisplayBasis={setMemoryDisplayBasis}
+                  inventoryCountsVisible={inventoryCountsVisible}
+                  setInventoryCountsVisible={setInventoryCountsVisible}
                 />
               </div>
             </Show>
@@ -271,6 +282,8 @@ interface ProxmoxOverviewProps {
   setMetricHistoryRange: (value: WorkloadTableMetricHistoryRange) => void;
   memoryDisplayBasis: Accessor<WorkloadsMemoryDisplayBasis>;
   setMemoryDisplayBasis: (value: WorkloadsMemoryDisplayBasis) => void;
+  inventoryCountsVisible: Accessor<boolean>;
+  setInventoryCountsVisible: (visible: boolean) => void;
 }
 
 function ProxmoxOverview(props: ProxmoxOverviewProps) {
@@ -335,7 +348,8 @@ function ProxmoxOverview(props: ProxmoxOverviewProps) {
             searchEmptyMessage="Recent Proxmox workload searches appear here."
             statusOptions={PROXMOX_WORKLOAD_STATUS_OPTIONS}
             inventoryStats={workloadsState.inventoryStats}
-            inventoryTopology={estateTopology}
+            inventoryCountsVisible={props.inventoryCountsVisible}
+            setInventoryCountsVisible={props.setInventoryCountsVisible}
             columnVisibility={workloadsState.workloadsFilterColumnVisibility()}
             containerRuntimeFilter={workloadsState.containerRuntimeFilterConfig()}
             hostFilter={workloadsState.hostFilterConfig()}
@@ -367,6 +381,7 @@ function ProxmoxOverview(props: ProxmoxOverviewProps) {
         emptyTitle="No Proxmox VE nodes"
         emptyDescription="Proxmox VE nodes appear here once a PVE host reports inventory."
         topology={estateTopology()}
+        inventoryCountsVisible={props.inventoryCountsVisible}
       />
       <WorkloadsSurface
         state={workloadsState}

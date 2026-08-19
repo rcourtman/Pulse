@@ -3195,18 +3195,20 @@
       ]
     },
     {
-      "id": "platform-estate-inventory-summary",
+      "id": "platform-estate-inline-counts",
       "category": "platform-overview",
-      "summary": "Large-estate totals use one glanceable canonical ribbon immediately before the existing filter surface, with labelled primary totals and workload/health distributions instead of nested badges or a metric-card grid; the shared View preference owns visibility.",
+      "summary": "Large-estate totals annotate the existing canonical type/status controls and table headers instead of creating a competing overview panel; the shared View preference owns their visibility.",
       "canonical": {
-        "path": "src/components/Workloads/WorkloadsInventorySummary.tsx",
-        "export": "WorkloadsInventorySummary"
+        "path": "src/components/Workloads/WorkloadsFilter.tsx",
+        "export": "WorkloadsFilter"
       },
-      "requiredConsumers": [{ "path": "src/components/Workloads/WorkloadsFilter.tsx" }],
+      "requiredConsumers": [
+        { "path": "src/features/proxmox/ProxmoxPageSurface.tsx" },
+        { "path": "src/features/vmware/VmwarePageSurface.tsx" }
+      ],
       "proof": [
         "src/components/shared/SharedPrimitives.guardrails.test.ts",
         "src/components/Workloads/__tests__/WorkloadsFilter.test.tsx",
-        "src/components/Workloads/__tests__/WorkloadsInventorySummary.test.tsx",
         "src/features/platformPage/__tests__/platformEstateOverviewModel.test.ts",
         "src/features/platformPage/__tests__/platformOverviewLayout.guardrails.test.ts",
         "scripts/shared-template-audit.mjs"

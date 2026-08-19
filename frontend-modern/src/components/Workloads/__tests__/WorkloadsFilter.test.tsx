@@ -163,7 +163,7 @@ describe('WorkloadsFilter', () => {
       expect(dialog.getByRole('button', { name: 'List' })).toBeInTheDocument();
     });
 
-    it('presents large-estate totals as one glanceable overview instead of nested filter badges', () => {
+    it('lands large-estate totals beside the type and status labels they describe', () => {
       render(() => (
         <WorkloadsFilter
           {...makeProps({
@@ -182,21 +182,18 @@ describe('WorkloadsFilter', () => {
         />
       ));
 
-      const overview = screen.getByRole('region', { name: 'Estate overview' });
-      expect(overview).toHaveTextContent('578Workloads');
-      expect(overview).toHaveTextContent('253 VMs');
-      expect(overview).toHaveTextContent('325 LXCs');
       expect(
-        within(overview).getByRole('img', {
-          name: 'Health: 500 running, 12 attention, 66 stopped',
-        }),
-      ).toBeInTheDocument();
+        within(inlineFilterGroup('Type')).getByRole('button', { name: 'All, 578' }),
+      ).toHaveTextContent('578');
       expect(
-        within(inlineFilterGroup('Type')).getByRole('button', { name: 'VMs' }),
-      ).not.toHaveTextContent('253');
+        within(inlineFilterGroup('Type')).getByRole('button', { name: 'VMs, 253' }),
+      ).toHaveTextContent('253');
       expect(
-        within(inlineFilterGroup('Status')).getByRole('button', { name: 'Degraded' }),
-      ).not.toHaveTextContent('12');
+        within(inlineFilterGroup('Type')).getByRole('button', { name: 'LXCs, 325' }),
+      ).toHaveTextContent('325');
+      expect(
+        within(inlineFilterGroup('Status')).getByRole('button', { name: 'Degraded, 12' }),
+      ).toHaveTextContent('12');
     });
 
     it('keeps inventory totals optional through the existing View menu', () => {
@@ -221,8 +218,46 @@ describe('WorkloadsFilter', () => {
       const visibility = dialog.getByRole('group', { name: 'Inventory totals visibility' });
       fireEvent.click(within(visibility).getByRole('button', { name: 'Hide' }));
 
-      expect(screen.queryByRole('region', { name: 'Estate overview' })).not.toBeInTheDocument();
+      expect(
+        within(inlineFilterGroup('Type')).getByRole('button', { name: 'All' }),
+      ).not.toHaveTextContent('578');
       expect(window.localStorage.getItem('platformEstateOverviewVisible')).toBe('false');
+    });
+
+    it('supports one page-owned visibility signal for filters and adjacent headers', () => {
+      const setInventoryCountsVisible = vi.fn();
+      render(() => (
+        <WorkloadsFilter
+          {...makeProps({
+            inventoryStats: () => ({
+              total: 578,
+              running: 500,
+              degraded: 12,
+              stopped: 66,
+              vms: 253,
+              containers: 325,
+              appContainers: 0,
+              pods: 0,
+            }),
+            inventoryCountsVisible: () => false,
+            setInventoryCountsVisible,
+          })}
+        />
+      ));
+
+      expect(
+        within(inlineFilterGroup('Type')).getByRole('button', { name: 'All' }),
+      ).not.toHaveTextContent('578');
+
+      const dialog = within(openViewPreferences());
+      fireEvent.click(
+        within(dialog.getByRole('group', { name: 'Inventory totals visibility' })).getByRole(
+          'button',
+          { name: 'Show' },
+        ),
+      );
+      expect(setInventoryCountsVisible).toHaveBeenCalledWith(true);
+      expect(window.localStorage.getItem('platformEstateOverviewVisible')).toBeNull();
     });
 
     it('offers a guest/host memory percentage basis when the owning page enables it', () => {

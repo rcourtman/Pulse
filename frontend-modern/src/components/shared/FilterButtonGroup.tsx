@@ -52,7 +52,14 @@ export function FilterButtonGroup<T extends string | number>(props: FilterButton
           return (
             <button
               type="button"
-              aria-label={option.ariaLabel ?? (option.visualLabel ? undefined : option.label)}
+              aria-label={
+                option.ariaLabel ??
+                (option.visualLabel
+                  ? undefined
+                  : option.count === undefined
+                    ? option.label
+                    : `${option.label}, ${option.count.toLocaleString()}`)
+              }
               title={option.title}
               onClick={() => filterButtonGroup.handleOptionClick(option)}
               class={getFilterButtonGroupButtonClass(
@@ -81,6 +88,14 @@ export function FilterButtonGroup<T extends string | number>(props: FilterButton
               >
                 <span class="inline-flex items-center gap-1.5 whitespace-nowrap">
                   {renderedLabel()}
+                </span>
+              </Show>
+              <Show when={option.count !== undefined}>
+                <span
+                  class="inline-flex items-center self-center text-[11px] font-semibold leading-none tabular-nums text-base-content/70"
+                  aria-hidden="true"
+                >
+                  {option.count!.toLocaleString()}
                 </span>
               </Show>
             </button>
