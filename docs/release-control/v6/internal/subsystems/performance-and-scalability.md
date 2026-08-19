@@ -719,6 +719,10 @@ change may globally weaken the Task 03 lifecycle-state idempotency invariant.
     reads the unfiltered guest set so narrowing the table by search or status
     never removes the column.
 18. Extend workload filter active-count, reset semantics, and mobile toolbar state through `frontend-modern/src/components/Workloads/workloadsFilterModel.ts` (defaults, `countActiveWorkloadsFilters`, `hasActiveWorkloadsFilters`) rather than rebuilding filter-local state inside `frontend-modern/src/components/Workloads/WorkloadsFilter.tsx`. Workloads filter presentation now composes the shared `FilterBar` (`frontend-modern/src/components/shared/FilterBar/FilterBar.tsx`) with a per-page `FilterDef[]` catalog rather than the legacy `PageControls` structured control deck. High-frequency Type and Status filters stay in that catalog but render as inline compact segmented controls (`inline: true`), while longer or dynamic scope filters continue through the "+ Filter" menu and chip popovers. The Add filter control inherits FilterBar's compact accessible-only label by default instead of paying for a page-local labelled-field shell. Durable presentation controls pass only their panel content through `FilterBar.viewOptions`; the shared FilterBar owns the single View trigger and popover. Contextual actions use `leadingControls`, while frequently changed analytical orientation such as the active trend range uses `trailingControls`.
+    Desktop filter/action wrap alignment must remain a pure shared flex-layout
+    contract: the parent distributes the two rails while they fit and a wrapped
+    action rail starts at the leading edge. It must not add resize observers,
+    viewport listeners, layout signals, or page-local measurement branches.
     Large-estate option counts must reuse one memoized stats pass over the
     unfiltered workload snapshot from `useWorkloadsState`; type and status
     options read that bounded projection and must not rescan resources during

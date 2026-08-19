@@ -8235,6 +8235,15 @@ describe('shared primitive guardrails', () => {
     expect(filterBarSource).toContain('props.filters.filter(isFilterSet)');
     expect(filterBarSource).toContain('activeCount() > 0');
     expect(filterBarSource).toContain('data-filter-action-cluster');
+    expect(filterBarSource).toContain(
+      'class="flex flex-wrap items-center justify-between gap-x-3 gap-y-2"',
+    );
+    expect(filterBarSource).toContain(
+      'class="inline-flex max-w-full flex-shrink-0 flex-wrap items-center justify-start gap-2"',
+    );
+    expect(filterBarSource).not.toContain(
+      'class="ml-auto inline-flex flex-shrink-0 flex-wrap items-center justify-end gap-2"',
+    );
     expect(filterBarSource).toContain('showAddFilterInMobileActionRow');
     expect(filterBarSource).toContain('showLabel={props.showAddFilterLabel === true}');
     expect(filterBarSource).not.toContain('showLabel={props.showAddFilterLabel !== false}');

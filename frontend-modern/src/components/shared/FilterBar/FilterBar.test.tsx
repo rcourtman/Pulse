@@ -234,7 +234,7 @@ describe('FilterBar', () => {
     expect(labels.indexOf('Clear filters')).toBeLessThan(labels.indexOf('View'));
   });
 
-  it('keeps desktop utility controls in one right-aligned action cluster', () => {
+  it('keeps desktop utilities split on one line and left-aligned after wrapping', () => {
     const { container } = renderInRouter(() => (
       <FilterBar
         search={search}
@@ -246,8 +246,11 @@ describe('FilterBar', () => {
     ));
 
     const actionCluster = container.querySelector('[data-filter-action-cluster]');
+    const controlsRail = actionCluster?.parentElement;
     expect(actionCluster).not.toBeNull();
-    expect(actionCluster).toHaveClass('ml-auto', 'justify-end');
+    expect(controlsRail).toHaveClass('flex-wrap', 'justify-between');
+    expect(actionCluster).toHaveClass('max-w-full', 'justify-start');
+    expect(actionCluster).not.toHaveClass('ml-auto', 'justify-end');
     expect(actionCluster).toContainElement(screen.getByRole('combobox', { name: 'Filter' }));
     expect(actionCluster).toContainElement(screen.getByRole('button', { name: 'Saved views' }));
     expect(actionCluster).toContainElement(screen.getByRole('button', { name: 'View' }));

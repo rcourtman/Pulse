@@ -152,7 +152,7 @@ export const FilterBar: Component<FilterBarProps> = (props) => {
         </Show>
 
         <Show when={showDesktopControlsRow()}>
-          <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
+          <div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
             <Show when={inlineFilters().length > 0}>
               <div class="flex min-w-0 flex-wrap items-center gap-2">
                 <For each={inlineFilters()}>
@@ -176,7 +176,7 @@ export const FilterBar: Component<FilterBarProps> = (props) => {
               }
             >
               <div
-                class="ml-auto inline-flex flex-shrink-0 flex-wrap items-center justify-end gap-2"
+                class="inline-flex max-w-full flex-shrink-0 flex-wrap items-center justify-start gap-2"
                 data-filter-action-cluster
               >
                 <Show when={hasAddableMenuFilters()}>

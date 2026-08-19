@@ -1,22 +1,15 @@
 {
   "version": 1,
-  "base_sha": "e2e8b72baa56b60107fb8bc694a27394cd76c8c6",
-  "verified_at": "2026-08-19T19:21:10Z",
+  "base_sha": "202f3b2f4c57a82dd186b99f17ad6598b9b5c1a2",
+  "verified_at": "2026-08-19T19:30:37Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Workloads/guestRowModel.tsx",
-    "frontend-modern/src/components/Workloads/useWorkloadsControlsState.ts",
-    "frontend-modern/src/components/Workloads/useWorkloadsDerivedState.ts",
-    "frontend-modern/src/components/Workloads/useWorkloadsState.ts"
+    "frontend-modern/src/components/shared/FilterBar/FilterBar.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Workloads/guestRowModel.tsx": "ace9b2dfb177850527b1719792098c33fd7fcf9fd57bb2ac7aacde03b17aae16",
-    "frontend-modern/src/components/Workloads/useWorkloadsControlsState.ts": "f5f5b87a6ebf6d4ad71bfb60bfeeb796b29a7e9a989d111128997efc16c0f8a7",
-    "frontend-modern/src/components/Workloads/useWorkloadsDerivedState.ts": "00d3ce0ed568326f1a6b96c2d9e1efeba84f8abd3df795bc19ad498e6ec55702",
-    "frontend-modern/src/components/Workloads/useWorkloadsState.ts": "9921577a647d6d617ab2b66df7c6b8f35dc93a72ae4273a869e01743a92c414f"
+    "frontend-modern/src/components/shared/FilterBar/FilterBar.tsx": "da32fc05ad316c42040575940da6cc13f7f8534f2c31dcc1985f74d3145b0148"
   },
   "routes": [
-    "/proxmox/overview",
     "/proxmox/overview?type=container"
   ],
   "viewports": [
@@ -25,22 +18,25 @@
       "height": 900
     },
     {
+      "width": 1034,
+      "height": 1234
+    },
+    {
       "width": 390,
       "height": 844
     }
   ],
   "states": [
-    "Proxmox desktop All workload view with the shared mixed-workload column profile",
-    "Proxmox desktop LXCs workload view narrowed to the system-container Name, ID, CPU, Mem, Disk, Uptime, and Backup columns",
-    "Proxmox desktop LXC Columns disclosure without Runtime, Image, Context, or Update choices",
-    "Reloaded Proxmox LXC route preserving the selected type and narrowed column profile",
-    "Proxmox narrow LXC view with the responsive Name, CPU, Mem, Disk, and Age columns",
-    "Desktop and narrow document and table scroll widths equal to their client widths"
+    "Proxmox 1440px desktop filter rail with inline filters on the left and utility actions at the right edge of the same row",
+    "Proxmox 1034px wrapped filter rail with Add filter, Saved, Clear filters, and View beginning at the same left edge as the inline filters",
+    "Proxmox 390px collapsed mobile filter state",
+    "Proxmox 390px expanded mobile filter state with its action rows left-aligned",
+    "Wide, wrapped, and narrow layouts without document-level horizontal overflow"
   ],
   "interactions": [
-    "Switched from All to LXCs and confirmed the column profile narrowed without changing the public type=container URL",
-    "Opened View and its Columns disclosure and confirmed application-container fields were absent",
-    "Dismissed the open View menu with Escape and confirmed focus returned to the View trigger",
-    "Reloaded the selected LXC route and resized between 1440x900 and 390x844 while retaining the corrected profile"
+    "Reloaded the active Proxmox LXC route and waited for the shared workload controls to hydrate",
+    "Resized from the natural 1034x1234 wrapped layout to 1440x900 and confirmed both rails shared one baseline with opposite-edge alignment",
+    "Resized to 390x844, expanded Filters, and confirmed Add filter, Clear filters, Saved, and View retained the mobile leading-edge layout",
+    "Measured the controls rail and action cluster at each responsive state and confirmed the wrapped rail's leading edges matched"
   ]
 }

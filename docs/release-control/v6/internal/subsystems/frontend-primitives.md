@@ -4310,6 +4310,12 @@ active, Add filter remains with the active chips so scope editing stays grouped.
 The mobile action cluster is non-breaking as a unit; orientation readouts such
 as result counts and trend ranges wrap separately so they cannot strand View
 on a line by itself.
+The desktop controls rail keeps inline filters and utility actions at opposite
+edges while both fit on one line. Its wrapping parent owns that split through
+space distribution rather than an auto margin on the action cluster, so a
+wrapped Add filter / Saved / Clear / View row starts at the left edge instead
+of presenting an empty leading column. Feature surfaces must not compensate
+with page-local alignment or width overrides.
 The Add filter select and adjacent action/popover triggers share the canonical
 `filterToolbarControlClass` height. When the Add filter label is visually
 hidden, its `FormSelect` must also omit the labelled group's outer padded/ring
