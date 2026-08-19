@@ -238,6 +238,52 @@ describe('useWorkloadsControlsState', () => {
     });
   });
 
+  it('uses the remaining container subtype for columns when a platform excludes the other subtype', () => {
+    createRoot((dispose) => {
+      try {
+        const [showFilters, setShowFilters] = createSignal(false);
+        const proxmoxState = useWorkloadsControlsState({
+          viewMode: () => 'container' as ViewMode,
+          excludedWorkloadTypes: ['app-container'],
+          showFilters,
+          setShowFilters,
+        });
+
+        const visibleColumnIds = proxmoxState.visibleColumns().map((column) => column.id);
+        expect(visibleColumnIds).toContain('vmid');
+        expect(visibleColumnIds).toContain('backup');
+        expect(visibleColumnIds).not.toContain('runtime');
+        expect(visibleColumnIds).not.toContain('image');
+        expect(visibleColumnIds).not.toContain('context');
+        expect(visibleColumnIds).not.toContain('update');
+      } finally {
+        dispose();
+      }
+    });
+
+    createRoot((dispose) => {
+      try {
+        const [showFilters, setShowFilters] = createSignal(false);
+        const appContainerState = useWorkloadsControlsState({
+          viewMode: () => 'container' as ViewMode,
+          excludedWorkloadTypes: ['system-container'],
+          showFilters,
+          setShowFilters,
+        });
+
+        const visibleColumnIds = appContainerState.visibleColumns().map((column) => column.id);
+        expect(visibleColumnIds).toContain('runtime');
+        expect(visibleColumnIds).toContain('image');
+        expect(visibleColumnIds).toContain('context');
+        expect(visibleColumnIds).toContain('update');
+        expect(visibleColumnIds).not.toContain('vmid');
+        expect(visibleColumnIds).not.toContain('backup');
+      } finally {
+        dispose();
+      }
+    });
+  });
+
   // The Backup column reads only `resource.proxmox.lastBackup`, so scopes that
   // opt into hiding it (vSphere) rendered "None" on every row for anyone whose
   // saved preference predates that default. The one-time migration retires that

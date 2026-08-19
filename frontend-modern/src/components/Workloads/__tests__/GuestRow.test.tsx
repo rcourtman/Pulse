@@ -138,6 +138,7 @@ import {
   getWorkloadTableLayoutMode,
   getWorkloadTableLayoutModeForContainer,
   getWorkloadVisibleColumnsForLayout,
+  resolveWorkloadColumnViewMode,
   type WorkloadIOEmphasis,
 } from '../guestRowModel';
 
@@ -1354,6 +1355,16 @@ describe('VIEW_MODE_COLUMNS', () => {
         expect(cols.has('memory')).toBe(true);
       }
     }
+  });
+
+  it('narrows the combined container column profile when a subtype is excluded', () => {
+    expect(resolveWorkloadColumnViewMode('container', ['app-container'])).toBe('system-container');
+    expect(resolveWorkloadColumnViewMode('container', ['system-container'])).toBe('app-container');
+    expect(resolveWorkloadColumnViewMode('container')).toBe('container');
+    expect(resolveWorkloadColumnViewMode('container', ['system-container', 'app-container'])).toBe(
+      'container',
+    );
+    expect(resolveWorkloadColumnViewMode('vm', ['app-container'])).toBe('vm');
   });
 });
 

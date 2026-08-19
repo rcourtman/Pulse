@@ -7,7 +7,7 @@ import {
   getPlatformTableWeightedColumnWidthStyle,
   PLATFORM_TABLE_PHONE_IDENTITY_WIDTH_PERCENT,
 } from '@/features/platformPage/sharedPlatformPage';
-import type { WorkloadGuest, ViewMode } from '@/types/workloads';
+import type { WorkloadGuest, WorkloadType, ViewMode } from '@/types/workloads';
 import { createVisibleCanonicalTypeColumn } from '@/utils/typeColumnDefinition';
 import type {
   WorkloadMetricHistoryReader,
@@ -704,4 +704,23 @@ export const VIEW_MODE_COLUMNS: Record<ViewMode, Set<string> | null> = {
     'netIo',
   ]),
   pod: new Set(['name', 'cpu', 'memory', 'image', 'namespace', 'context', 'aiContext']),
+};
+
+/**
+ * The public `container` view intentionally covers both system containers and
+ * application containers. Platform-owned surfaces can exclude either subtype;
+ * in that case the column profile must narrow with the same canonical boundary
+ * instead of exposing fields that every remaining row renders empty.
+ */
+export const resolveWorkloadColumnViewMode = (
+  viewMode: ViewMode,
+  excludedWorkloadTypes: readonly WorkloadType[] = [],
+): ViewMode => {
+  if (viewMode !== 'container') return viewMode;
+
+  const includesSystemContainers = !excludedWorkloadTypes.includes('system-container');
+  const includesAppContainers = !excludedWorkloadTypes.includes('app-container');
+
+  if (includesSystemContainers === includesAppContainers) return viewMode;
+  return includesSystemContainers ? 'system-container' : 'app-container';
 };

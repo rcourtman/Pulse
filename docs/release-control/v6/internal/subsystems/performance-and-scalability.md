@@ -252,7 +252,11 @@ change may globally weaken the Task 03 lifecycle-state idempotency invariant.
    `useWorkloadsState` must apply them before dedupe, filter-option
    derivation, summary statistics, and row rendering so a platform overview
    that demotes nested workloads does not carry hidden rows through downstream
-   table state.
+   table state. The shared workload column profile must consume those same
+   exclusions. When the public combined `container` view has only system or
+   application containers remaining, it must resolve to that subtype's
+   canonical column set instead of exposing empty runtime-specific columns;
+   page-local column suppression and duplicate platform schemas are forbidden.
    Responsive workload columns are part of the same table hot-path and
    usability contract. The active width stage must filter both the rendered
    column set and the column picker's available choices; a remembered user

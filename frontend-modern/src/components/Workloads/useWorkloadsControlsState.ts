@@ -7,7 +7,7 @@ import { usePersistentSignal } from '@/hooks/usePersistentSignal';
 import { blurFocusedTypeToSearch } from '@/hooks/useTypeToSearch';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 import { aiChatStore } from '@/stores/aiChat';
-import type { ViewMode } from '@/types/workloads';
+import type { ViewMode, WorkloadType } from '@/types/workloads';
 
 import {
   GUEST_COLUMNS,
@@ -15,6 +15,7 @@ import {
   getWorkloadTableLayoutModeForContainer,
   getWorkloadTableLayoutMode,
   getWorkloadVisibleColumnsForLayout,
+  resolveWorkloadColumnViewMode,
 } from './guestRowModel';
 import {
   DEFAULT_WORKLOADS_SORT_DIRECTION,
@@ -52,6 +53,7 @@ interface WorkloadsControlsStateOptions {
   // empty cell on every row. Omitted means "assume data exists".
   hasAvailabilityData?: Accessor<boolean>;
   columnLabelOverrides?: Partial<Record<string, string>>;
+  excludedWorkloadTypes?: readonly WorkloadType[];
   setShowFilters: (value: boolean | ((current: boolean) => boolean)) => void;
   showFilters: Accessor<boolean>;
   viewMode: Accessor<ViewMode>;
@@ -209,7 +211,11 @@ export function useWorkloadsControlsState(options: WorkloadsControlsStateOptions
   );
 
   const relevantColumns = createMemo(() => {
-    const base = VIEW_MODE_COLUMNS[options.viewMode()];
+    const columnViewMode = resolveWorkloadColumnViewMode(
+      options.viewMode(),
+      options.excludedWorkloadTypes,
+    );
+    const base = VIEW_MODE_COLUMNS[columnViewMode];
     const dropNode = effectiveGroupingMode() === 'grouped';
     const dropAvailability = !hasAvailabilityData();
     if (!base) {

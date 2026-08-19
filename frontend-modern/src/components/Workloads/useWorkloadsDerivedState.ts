@@ -163,6 +163,7 @@ export function useWorkloadsDerivedState(options: WorkloadsWorkloadDerivedStateO
   });
 
   const totalStats = createMemo(() => computeWorkloadStats(filteredGuests()));
+  const inventoryStats = createMemo(() => computeWorkloadStats(options.allGuests()));
   const workloadIOEmphasis = createMemo(() => computeWorkloadIOEmphasis(filteredGuests()));
 
   return {
@@ -171,6 +172,7 @@ export function useWorkloadsDerivedState(options: WorkloadsWorkloadDerivedStateO
     groupedGuests,
     groupedWindowing,
     guestParentNodeMap,
+    inventoryStats,
     nodeByInstance,
     topSpacerHeight,
     totalStats,

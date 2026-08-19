@@ -1078,7 +1078,7 @@ describe('Workloads performance contract', () => {
           nodes={[]}
           useWorkloads
           forcedPlatform="proxmox-pve"
-          forcedViewMode="all"
+          forcedViewMode="container"
           excludedWorkloadTypes={['app-container']}
           showNestedExcludedWorkloads
         />
@@ -1094,6 +1094,12 @@ describe('Workloads performance contract', () => {
       ).toBeNull();
       expect(screen.queryByTestId('nested-workload-context-row')).toBeNull();
       expect(screen.getByTestId('guest-row-nested-cue-pve-lxc')).toHaveTextContent('Docker 1');
+      expect(screen.getByRole('columnheader', { name: 'ID' })).toBeInTheDocument();
+      expect(screen.getByRole('columnheader', { name: 'Backup' })).toBeInTheDocument();
+      expect(screen.queryByRole('columnheader', { name: 'Runtime' })).toBeNull();
+      expect(screen.queryByRole('columnheader', { name: 'Image' })).toBeNull();
+      expect(screen.queryByRole('columnheader', { name: 'Context' })).toBeNull();
+      expect(screen.queryByRole('columnheader', { name: 'Update' })).toBeNull();
 
       fireEvent.click(screen.getByTestId('guest-row-toggle-pve-lxc'));
       expect(await screen.findByTestId('guest-drawer')).toBeInTheDocument();

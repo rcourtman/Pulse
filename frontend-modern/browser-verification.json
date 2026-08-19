@@ -1,25 +1,23 @@
 {
   "version": 1,
-  "base_sha": "e7de6602f7d43052950fb72d9591ecf154090f10",
-  "verified_at": "2026-08-19T19:07:24Z",
+  "base_sha": "e2e8b72baa56b60107fb8bc694a27394cd76c8c6",
+  "verified_at": "2026-08-19T19:21:10Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/shared/FilterButtonGroup.tsx",
-    "frontend-modern/src/features/platformPage/sharedPlatformPage.tsx",
-    "frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx",
-    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx",
-    "frontend-modern/src/index.css"
+    "frontend-modern/src/components/Workloads/guestRowModel.tsx",
+    "frontend-modern/src/components/Workloads/useWorkloadsControlsState.ts",
+    "frontend-modern/src/components/Workloads/useWorkloadsDerivedState.ts",
+    "frontend-modern/src/components/Workloads/useWorkloadsState.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/shared/FilterButtonGroup.tsx": "4f7c115ad13ad614f5ebb3f73d2c0f7561342e2a6b58b2bde36cf11d828d54ca",
-    "frontend-modern/src/features/platformPage/sharedPlatformPage.tsx": "c946582423cf0f95e3e8f92d676c175a51c2f474be70ed383f882b7ef30e8973",
-    "frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx": "01ea9d0ec46b0cb97870aa145b17fdd1fcc4fd8b3576ffdd21dfd2f4ad50e5c7",
-    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx": "66fd5ef686cd052d37fa59ceacdae524a9274fd12e1f22f4c2be0e1ca80f5ce4",
-    "frontend-modern/src/index.css": "d8fe7b2c49b50003ab493cd37e37bbdd5c637764c1efd23fa20b966550c7ba5f"
+    "frontend-modern/src/components/Workloads/guestRowModel.tsx": "ace9b2dfb177850527b1719792098c33fd7fcf9fd57bb2ac7aacde03b17aae16",
+    "frontend-modern/src/components/Workloads/useWorkloadsControlsState.ts": "f5f5b87a6ebf6d4ad71bfb60bfeeb796b29a7e9a989d111128997efc16c0f8a7",
+    "frontend-modern/src/components/Workloads/useWorkloadsDerivedState.ts": "00d3ce0ed568326f1a6b96c2d9e1efeba84f8abd3df795bc19ad498e6ec55702",
+    "frontend-modern/src/components/Workloads/useWorkloadsState.ts": "9921577a647d6d617ab2b66df7c6b8f35dc93a72ae4273a869e01743a92c414f"
   },
   "routes": [
     "/proxmox/overview",
-    "/vmware/overview"
+    "/proxmox/overview?type=container"
   ],
   "viewports": [
     {
@@ -32,18 +30,17 @@
     }
   ],
   "states": [
-    "Proxmox desktop default bounded node preview with eight rows, visible workload controls, and the workload table in the initial viewport",
-    "Proxmox desktop expanded 32-node estate and restored eight-row collapsed preview",
-    "Proxmox phone default bounded node preview with four rows and the reveal control visible",
-    "Proxmox phone expanded 32-node estate and restored four-row collapsed preview without horizontal overflow",
-    "Proxmox inventory totals shown and hidden across filter counts, Nodes topology, and the node reveal label",
-    "Proxmox and vSphere 12px labels with 11px counts sharing identical 16px line boxes and baselines"
+    "Proxmox desktop All workload view with the shared mixed-workload column profile",
+    "Proxmox desktop LXCs workload view narrowed to the system-container Name, ID, CPU, Mem, Disk, Uptime, and Backup columns",
+    "Proxmox desktop LXC Columns disclosure without Runtime, Image, Context, or Update choices",
+    "Reloaded Proxmox LXC route preserving the selected type and narrowed column profile",
+    "Proxmox narrow LXC view with the responsive Name, CPU, Mem, Disk, and Age columns",
+    "Desktop and narrow document and table scroll widths equal to their client widths"
   ],
   "interactions": [
-    "Expanded and collapsed Show all 32 nodes on desktop and phone",
-    "Switched Proxmox workload status from All to Attention and observed the adjacent workload table change from 150 rendered rows to 21",
-    "Hid and restored Inventory totals from the View menu and confirmed the node reveal label stopped exposing the total while hidden",
-    "Compared the final shared inline count geometry on Proxmox and vSphere",
-    "Cleared the temporary Proxmox status filter and left /proxmox/overview at 1440x900"
+    "Switched from All to LXCs and confirmed the column profile narrowed without changing the public type=container URL",
+    "Opened View and its Columns disclosure and confirmed application-container fields were absent",
+    "Dismissed the open View menu with Escape and confirmed focus returned to the View trigger",
+    "Reloaded the selected LXC route and resized between 1440x900 and 390x844 while retaining the corrected profile"
   ]
 }
