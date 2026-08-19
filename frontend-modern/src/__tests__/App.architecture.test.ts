@@ -845,3 +845,46 @@ describe('App architecture', () => {
     expect(appRuntimeStateSource).not.toContain('/api/license/entitlements');
   });
 });
+
+describe('mobile bottom navigation clearance', () => {
+  const NAV_HEIGHT_VARIABLE = '--pulse-mobile-nav-height';
+  // Matches the shape every drifted copy used, spaced or not. The lookbehind
+  // keeps the declared 2.5rem fallback from matching its own guard.
+  const HARDCODED_BAR_HEIGHT = /(?<![\d.])5rem\s*\+\s*env\(\s*safe-area-inset-bottom/;
+
+  function collectFrontendSources(dir: string): Array<{ path: string; source: string }> {
+    return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+      const entryPath = join(dir, entry.name);
+      if (entry.isDirectory()) {
+        return collectFrontendSources(entryPath);
+      }
+      // Only runtime sources matter; a test may quote the old shape in order
+      // to assert against it, as this one does.
+      if (!/\.(css|ts|tsx)$/.test(entry.name)) {
+        return [];
+      }
+      if (entryPath.includes('__tests__') || /\.(test|spec)\./.test(entry.name)) {
+        return [];
+      }
+      return [{ path: entryPath, source: readFileSync(entryPath, 'utf8') }];
+    });
+  }
+
+  it('declares the bar height as a single custom property', () => {
+    expect(appStylesSource).toContain(NAV_HEIGHT_VARIABLE);
+  });
+
+  it('keeps every consumer reading that property instead of its own copy', () => {
+    // The Assistant panel, its backdrop, the star banner and both halves of
+    // the .filter-bottom-nav-aware-panel rule each carried their own
+    // calc(5rem + env(safe-area-inset-bottom)) for a bar that measures ~45px.
+    // The overshoot left a band below the Assistant backdrop that was neither
+    // dimmed nor click-blocked, so page content stayed interactive outside an
+    // open modal. Read the published height rather than adding a sixth copy.
+    const offenders = collectFrontendSources(join(process.cwd(), 'src'))
+      .filter(({ source }) => HARDCODED_BAR_HEIGHT.test(source))
+      .map(({ path }) => path.slice(process.cwd().length + 1));
+
+    expect(offenders).toEqual([]);
+  });
+});

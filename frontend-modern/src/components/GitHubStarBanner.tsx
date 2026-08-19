@@ -116,7 +116,7 @@ export function GitHubStarBanner() {
   return (
     <Show when={showModal()}>
       <section
-        class="fixed left-4 right-20 bottom-[calc(5rem+env(safe-area-inset-bottom,0px))] z-30 max-w-md overflow-hidden rounded-lg border border-border bg-surface text-base-content shadow-xl md:right-auto md:bottom-4"
+        class="fixed left-4 right-20 bottom-[var(--pulse-mobile-nav-height)] z-30 max-w-md overflow-hidden rounded-lg border border-border bg-surface text-base-content shadow-xl md:right-auto md:bottom-4"
         aria-labelledby="github-star-title"
         aria-live="polite"
       >

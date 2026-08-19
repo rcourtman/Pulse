@@ -1,4 +1,4 @@
-import { For, Show } from 'solid-js';
+import { For, Show, onCleanup, onMount } from 'solid-js';
 import ChevronsUpDownIcon from 'lucide-solid/icons/chevrons-up-down';
 import EllipsisIcon from 'lucide-solid/icons/ellipsis';
 import { type MobileNavBarProps, useMobileNavBarState } from './useMobileNavBarState';
@@ -98,6 +98,45 @@ function MobileNavDestinationContent(props: {
 export function MobileNavBar(props: MobileNavBarProps) {
   const mobileNav = useMobileNavBarState(props);
   const tabIconClass = 'h-3.5 w-3.5 shrink-0';
+
+  // This bar's height is content-driven and includes the safe-area inset via
+  // pb-safe, so anything that has to sit on top of it cannot hardcode a value.
+  // Five call sites did, all at 5rem against a bar that measures ~45px, which
+  // left a band below the Assistant backdrop that was neither dimmed nor
+  // click-blocked. Publish the measured height instead and let them read it.
+  // Reports 0 when the bar is hidden at xl, which is the correct clearance
+  // there.
+  let navElement: HTMLElement | undefined;
+  let navObserver: ResizeObserver | undefined;
+  const publishNavHeight = () => {
+    if (!navElement) return;
+    document.documentElement.style.setProperty(
+      '--pulse-mobile-nav-height',
+      `${navElement.offsetHeight}px`,
+    );
+  };
+  // Publish from onMount, not from the ref: Solid runs refs before the node is
+  // in the document, where offsetHeight is 0. Reading it after mount forces
+  // layout and yields the real height, so the first paint is already correct
+  // without waiting for an observer callback.
+  onMount(() => {
+    publishNavHeight();
+    if (typeof ResizeObserver !== 'undefined' && navElement) {
+      navObserver = new ResizeObserver(publishNavHeight);
+      navObserver.observe(navElement);
+    }
+    // The observer covers content-driven height changes, but the bar is
+    // xl:hidden, so crossing that breakpoint swaps between its real height and
+    // 0 via display alone. Observing a display:none element is the least
+    // consistent case across engines, so listen for resize too rather than
+    // leaving a stale clearance behind after a rotation or window drag.
+    window.addEventListener('resize', publishNavHeight);
+  });
+  onCleanup(() => {
+    navObserver?.disconnect();
+    window.removeEventListener('resize', publishNavHeight);
+    document.documentElement.style.removeProperty('--pulse-mobile-nav-height');
+  });
   const overflowHasBadge = () =>
     mobileNav.overflowDestinations().some(mobileNavDestinationHasBadge);
 
@@ -148,6 +187,7 @@ export function MobileNavBar(props: MobileNavBarProps) {
 
   return (
     <nav
+      ref={(element) => (navElement = element)}
       class="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-surface pb-safe xl:hidden"
       aria-label="Mobile navigation"
     >

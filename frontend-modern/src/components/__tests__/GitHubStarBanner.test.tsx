@@ -360,3 +360,19 @@ describe('GitHubStarBanner', () => {
     });
   });
 });
+
+describe('GitHubStarBanner mobile navigation clearance', () => {
+  it('reads the published bottom navigation height', () => {
+    expect(gitHubStarBannerSource).toContain('bottom-[var(--pulse-mobile-nav-height)]');
+  });
+
+  it('does not keep its own copy of the bar height', () => {
+    // This banner was one of five sites hardcoding 5rem for a bar that
+    // measures ~45px. The bar publishes its measured height instead.
+    expect(gitHubStarBannerSource).not.toMatch(/5rem\s*\+\s*env\(safe-area-inset-bottom/);
+  });
+
+  it('keeps its own desktop placement once the bar is gone', () => {
+    expect(gitHubStarBannerSource).toContain('md:bottom-4');
+  });
+});

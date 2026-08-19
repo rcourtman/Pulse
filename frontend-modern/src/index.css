@@ -428,8 +428,8 @@
 
   @media (max-width: 79.999rem) {
     .filter-bottom-nav-aware-panel {
-      bottom: calc(5rem + env(safe-area-inset-bottom)) !important;
-      max-height: calc(100dvh - 6rem - env(safe-area-inset-bottom));
+      bottom: var(--pulse-mobile-nav-height) !important;
+      max-height: calc(100dvh - var(--pulse-mobile-nav-height) - 1rem);
     }
   }
 
@@ -1157,6 +1157,21 @@ body,
 
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
+}
+
+/*
+  Height of the mobile bottom navigation bar. MobileNavBar overwrites this at
+  runtime with its measured height, which already includes the safe-area inset
+  via pb-safe - consumers must NOT add env(safe-area-inset-bottom) on top.
+
+  The declared value is only a pre-measurement fallback, and it deliberately
+  UNDER-estimates. Reserving more than the bar's real height leaves a band
+  between an overlay's backdrop and the bar that is neither dimmed nor
+  click-blocked, which is the defect this variable exists to prevent; reserving
+  slightly less is harmless because the opaque bar paints over it.
+*/
+:root {
+  --pulse-mobile-nav-height: calc(2.5rem + env(safe-area-inset-bottom, 0px));
 }
 
 .pb-safe {

@@ -6185,3 +6185,32 @@ alert surfaces use the same typed monitoring and lifecycle vocabulary and
 provider-ownership presentation helper. They must not create local alert mute,
 archive, or removal state. The menu remains keyboard reachable, uses ordinary
 shared surface and border tokens, and retains usable controls at phone width.
+
+### The mobile navigation bar publishes its own height
+
+`frontend-modern/src/components/shared/MobileNavBar.tsx` is the only owner of
+the bottom navigation bar's height. That height is content-driven and already
+includes the safe-area inset through `pb-safe`, so no consumer may derive it.
+The bar measures itself after mount, publishes the result as the
+`--pulse-mobile-nav-height` custom property on the document element, keeps it
+current through a resize observer and a window resize listener, and removes it
+when the bar unmounts. Measurement happens in `onMount` rather than in the
+element ref, because a ref runs before the node is in the document, where the
+measured height is zero.
+
+Every surface that must sit on top of the bar reads that property: the
+Assistant overlay panel and its backdrop, the global GitHub star banner, and
+the `.filter-bottom-nav-aware-panel` rule in
+`frontend-modern/src/index.css`. Consumers must not add
+`env(safe-area-inset-bottom)` on top of the published value, and must not
+reintroduce a literal bar height. The declared `:root` value is a
+pre-measurement fallback only and deliberately under-estimates: reserving more
+than the bar's real height leaves a band between an overlay's backdrop and the
+bar that is neither dimmed nor click-blocked, while reserving slightly less is
+covered by the opaque bar. Surfaces with their own placement at wider
+viewports, such as the star banner's `md:bottom-4`, keep it.
+
+Proofs live in `frontend-modern/src/components/shared/__tests__/MobileNavBar.test.tsx`,
+`frontend-modern/src/components/__tests__/GitHubStarBanner.test.tsx`, and
+`frontend-modern/src/__tests__/App.architecture.test.ts`, which fails if any
+runtime source reintroduces a literal bar height.

@@ -291,3 +291,48 @@ describe('MobileNavBar', () => {
     });
   });
 });
+
+describe('MobileNavBar clearance publishing', () => {
+  const NAV_HEIGHT_VARIABLE = '--pulse-mobile-nav-height';
+
+  const renderBar = () =>
+    render(() => (
+      <MobileNavBar
+        activeTab={() => 'proxmox'}
+        primaryTabs={() => [makePrimary('proxmox', 'Proxmox')]}
+        utilityTabs={() => [makeUtility('alerts', 'Alerts')]}
+      />
+    ));
+
+  it('publishes its measured height so overlays can clear it', () => {
+    const { unmount } = renderBar();
+
+    // Anything sitting on top of this bar reads the published value rather
+    // than hardcoding one. Five call sites once hardcoded 5rem against a bar
+    // that measures ~45px, leaving a band below the Assistant backdrop that
+    // was neither dimmed nor click-blocked.
+    expect(document.documentElement.style.getPropertyValue(NAV_HEIGHT_VARIABLE)).toMatch(
+      /^\d+(\.\d+)?px$/,
+    );
+
+    unmount();
+  });
+
+  it('stops publishing once the bar is gone', () => {
+    const { unmount } = renderBar();
+    expect(document.documentElement.style.getPropertyValue(NAV_HEIGHT_VARIABLE)).not.toBe('');
+
+    unmount();
+
+    // A stale height would keep reserving space for a bar that is no longer
+    // rendered, so consumers must fall back to the declared default.
+    expect(document.documentElement.style.getPropertyValue(NAV_HEIGHT_VARIABLE)).toBe('');
+  });
+
+  it('measures after mount rather than from the ref', () => {
+    // Solid runs refs before the node is in the document, where offsetHeight
+    // is 0, so publishing from the ref reports a bar of no height.
+    expect(mobileNavBarSource).toContain('onMount(');
+    expect(mobileNavBarSource).not.toMatch(/ref=\{setNavRef\}/);
+  });
+});

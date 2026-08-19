@@ -2265,7 +2265,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
   onCleanup(stopPanelResize);
   const rootClassName = createMemo(() => {
     if (isOverlayLayout()) {
-      return `fixed top-0 right-0 bottom-[calc(5rem+env(safe-area-inset-bottom,0px))] z-50 flex h-auto w-full flex-col bg-surface transition-transform duration-300 sm:w-[560px] sm:max-w-[calc(100vw-1rem)] ${
+      return `fixed top-0 right-0 bottom-[var(--pulse-mobile-nav-height)] z-50 flex h-auto w-full flex-col bg-surface transition-transform duration-300 sm:w-[560px] sm:max-w-[calc(100vw-1rem)] ${
         isOpen()
           ? 'translate-x-0 overflow-visible border-l border-border shadow-2xl'
           : 'translate-x-full overflow-hidden border-l-0'
@@ -4248,7 +4248,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
       <Show when={isOpen() && isOverlayLayout()}>
         <button
           type="button"
-          class="fixed inset-x-0 top-0 bottom-[calc(5rem+env(safe-area-inset-bottom,0px))] z-40 bg-slate-950/45 backdrop-blur-[1px]"
+          class="fixed inset-x-0 top-0 bottom-[var(--pulse-mobile-nav-height)] z-40 bg-slate-950/45 backdrop-blur-[1px]"
           onClick={props.onClose}
           aria-label="Close Pulse Assistant backdrop"
         />

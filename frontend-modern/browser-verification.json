@@ -1,46 +1,46 @@
 {
   "version": 1,
-  "base_sha": "4de1ede6030836d09c1e0a118c26c6413fd9f112",
-  "verified_at": "2026-08-19T18:37:46Z",
+  "base_sha": "66c87fb6e8595af47c360573bb8efa51d46492d1",
+  "verified_at": "2026-08-19T18:57:18Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Workloads/WorkloadsFilter.tsx",
-    "frontend-modern/src/components/Workloads/WorkloadsInventorySummary.tsx",
-    "frontend-modern/src/components/Workloads/workloadsFilterModel.ts",
-    "frontend-modern/src/components/shared/FilterBar/FilterBar.tsx",
-    "frontend-modern/src/components/shared/FilterBar/filterCatalog.ts",
-    "frontend-modern/src/components/shared/FilterButtonGroup.tsx",
-    "frontend-modern/src/components/shared/filterButtonGroupModel.ts",
-    "frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx",
-    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx"
+    "frontend-modern/src/components/AI/Chat/index.tsx",
+    "frontend-modern/src/components/GitHubStarBanner.tsx",
+    "frontend-modern/src/components/shared/MobileNavBar.tsx",
+    "frontend-modern/src/index.css"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Workloads/WorkloadsFilter.tsx": "05dc8ff16997ab1f7663a13b9df71ab8219607466933a46e5f2009f96ec80562",
-    "frontend-modern/src/components/Workloads/WorkloadsInventorySummary.tsx": "deleted",
-    "frontend-modern/src/components/Workloads/workloadsFilterModel.ts": "d2b4e7e74c81ba69e7f9c4003568108f02c0dc8bc9071555a1a46bddb4af3908",
-    "frontend-modern/src/components/shared/FilterBar/FilterBar.tsx": "98f8573ace4b7bf5a8ad5bdf6b33e0b6a75ebaabff83f6cd947c233b5a8b9843",
-    "frontend-modern/src/components/shared/FilterBar/filterCatalog.ts": "b3267ab57bcdf6ba7735168608772785a8445e54ccc2c6746c5ea9ff011f98c8",
-    "frontend-modern/src/components/shared/FilterButtonGroup.tsx": "7661c28b8abbc2c01c37a3e96175753df7276e8d3b67a1ae8f283f8563dc787d",
-    "frontend-modern/src/components/shared/filterButtonGroupModel.ts": "06576097404a56f66d6ae0ef23fc913dbff11ceb5833140d00df58ad9711fe41",
-    "frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx": "29d2892a9b16e926cdafc35372b2ba7f7f8fe38b8099f7bb51d92319a4995f09",
-    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx": "2fd5c8176ea82f7c39dfe1fab8c8500001fd48c37b0fa17118d9febf3853ff0f"
+    "frontend-modern/src/components/AI/Chat/index.tsx": "67d3dc20ea1100c3047f27052c35aaa4b1e15a8d2ebeda1022fecae9c772835d",
+    "frontend-modern/src/components/GitHubStarBanner.tsx": "ea65775ad40dc08d54d6e08f6f3c736c545917c11e8e7fbddb71d856afc11d79",
+    "frontend-modern/src/components/shared/MobileNavBar.tsx": "16a6917b7fdc25d77bd9cd6760f132f08a0f13f833ede6d278237e37378549e6",
+    "frontend-modern/src/index.css": "1b195e474bdf5cfa33af971d1a01ed6b7e7e58eb998d823616a292c0ecc6fb1f"
   },
-  "routes": ["/proxmox/overview", "/vmware/overview"],
+  "routes": [
+    "/",
+    "/proxmox"
+  ],
   "viewports": [
-    { "width": 1440, "height": 900 },
-    { "width": 390, "height": 844 }
+    {
+      "width": 375,
+      "height": 812
+    },
+    {
+      "width": 1280,
+      "height": 800
+    }
   ],
   "states": [
-    "Proxmox type and status totals shown as centred 11px tabular numbers beside their 12px labels",
-    "Proxmox Nodes total and cluster/standalone topology attached to the existing table heading",
-    "Inventory totals hidden from both filter controls and the Nodes heading through one shared preference, then restored",
-    "Selected Attention filter with inline count and clear-filter action",
-    "Phone filter collapsed and expanded at 390px with inline totals and no horizontal page overflow",
-    "vSphere workload status totals rendered through the same shared filter option-count contract"
+    "authenticated mobile 375x812, bottom navigation mounted and measuring 45px, --pulse-mobile-nav-height published as 45px",
+    "authenticated mobile with the Assistant overlay open, backdrop and panel both ending at the bar's top edge",
+    "authenticated desktop 1280x800, bar display:none and the variable published as 0px",
+    "re-verified after rebase onto 66c87fb6e, which reworked the FilterBar and Proxmox estate surfaces on the same route"
   ],
   "interactions": [
-    "Opened View, selected Hide for Inventory totals, confirmed workload and node/topology totals disappeared immediately, then restored Show",
-    "Expanded the phone Filters control and inspected both count-bearing segmented controls",
-    "Navigated from Proxmox to vSphere and confirmed shared workload totals beside provider-specific status labels"
+    "opened the Assistant overlay and measured backdrop bottom 767 against bar top 767, gap 0px, previously a 35px un-dimmed clickable band",
+    "hit-tested 5px above the bar and found the Assistant panel covering it rather than page content",
+    "probed .filter-bottom-nav-aware-panel computed bottom, resolving to 45px on mobile from the shared variable",
+    "probed the star banner class combination at 800px and confirmed md:bottom-4 still wins at 16px",
+    "dispatched a resize event and confirmed the published value republishes from 0px to 45px",
+    "reloaded at 1280x800 and confirmed the bar is display:none with the variable published as 0px"
   ]
 }

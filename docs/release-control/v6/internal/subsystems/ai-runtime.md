@@ -7659,3 +7659,13 @@ then owns deduplication and persistence. A submitted ID that identifies any
 real out-of-scope resource, an ambiguous name, a type mismatch, or a name that
 does not resolve inside the lifecycle scope remains rejected. No fuzzy name or
 ID matching is permitted at this boundary.
+
+The Assistant overlay clears the mobile navigation bar from the published bar
+height rather than a literal of its own. In overlay layout both the panel in
+`frontend-modern/src/components/AI/Chat/index.tsx` and its closing backdrop end
+at `--pulse-mobile-nav-height`, so the dimmed, click-blocking backdrop reaches
+the top edge of the bar with no gap. Reserving more than the bar's real height
+leaves page content visible and interactive below the backdrop while the
+Assistant is open, which is a modal-containment defect rather than a cosmetic
+one. The bar owns that value; see the frontend-primitives contract. Proofs live
+in `frontend-modern/src/components/AI/Chat/__tests__/AIChat.test.tsx`.
