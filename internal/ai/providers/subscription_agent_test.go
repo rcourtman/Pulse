@@ -320,6 +320,20 @@ func TestSubscriptionAgentPromptSeparatesTrustedControlFromInfrastructureData(t 
 	}
 }
 
+// subscriptionAgentTestDeadline scales a test deadline when the race detector
+// is enabled. These subscription-agent tests are hermetic: they shell out to a
+// fake CLI written onto PATH, so the deadline exists to stop a hang, not to
+// assert latency. Race instrumentation plus ~150 packages running in parallel
+// during `make test` starved the 5s budget and produced timeouts that were
+// green 5/5 in isolation, so the deadline was measuring machine contention
+// rather than the code under test.
+func subscriptionAgentTestDeadline(base time.Duration) time.Duration {
+	if raceEnabled {
+		return base * 4
+	}
+	return base
+}
+
 func TestSubscriptionAgentClientsUseStructuredSingleTurnProcess(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("fake subscription CLIs use POSIX shell scripts")
@@ -421,9 +435,9 @@ printf '%s' '{"structured_output":{"content":"healthy","stop_reason":"end_turn",
 	t.Setenv("ANTHROPIC_API_KEY", "must-not-leak")
 	t.Setenv("PULSE_AUTH_SECRET", "must-not-leak")
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), subscriptionAgentTestDeadline(5*time.Second))
 	defer cancel()
-	codex := NewSubscriptionAgentClient(SubscriptionAgentCodex, "gpt-5.6-luna", 3*time.Second)
+	codex := NewSubscriptionAgentClient(SubscriptionAgentCodex, "gpt-5.6-luna", subscriptionAgentTestDeadline(3*time.Second))
 	if err := codex.TestConnection(ctx); err != nil {
 		t.Fatalf("Codex authentication check failed: %v", err)
 	}
@@ -458,7 +472,7 @@ printf '%s' '{"structured_output":{"content":"healthy","stop_reason":"end_turn",
 		t.Fatalf("Codex done = %#v", streamEvents[1].Data)
 	}
 
-	claude := NewSubscriptionAgentClient(SubscriptionAgentClaude, "sonnet", 3*time.Second)
+	claude := NewSubscriptionAgentClient(SubscriptionAgentClaude, "sonnet", subscriptionAgentTestDeadline(3*time.Second))
 	if err := claude.TestConnection(ctx); err != nil {
 		t.Fatalf("Claude authentication check failed: %v", err)
 	}
@@ -508,7 +522,7 @@ printf '%s' '{"structured_output":{"content":"healthy","stop_reason":"end_turn",
 `)
 	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 
-	client := NewSubscriptionAgentClient(SubscriptionAgentClaude, "sonnet", 3*time.Second)
+	client := NewSubscriptionAgentClient(SubscriptionAgentClaude, "sonnet", subscriptionAgentTestDeadline(3*time.Second))
 	var events []StreamEvent
 	if err := client.ChatStream(context.Background(), ChatRequest{}, func(event StreamEvent) {
 		events = append(events, event)
