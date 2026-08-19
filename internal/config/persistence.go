@@ -2653,6 +2653,98 @@ type PatrolRunHistoryData struct {
 	Version   int               `json:"version"`
 	LastSaved time.Time         `json:"last_saved"`
 	Runs      []PatrolRunRecord `json:"runs"`
+
+	// DailyRuns counts completed patrol runs per UTC day. Runs is deliberately
+	// capped for the operator-facing history, so on any install patrolling on a
+	// normal schedule it saturates hours into a thirty-day reporting window and
+	// cannot answer "how often did Patrol actually run". This tally is the
+	// uncapped answer and costs one small integer per retained day.
+	DailyRuns map[string]int `json:"daily_runs,omitempty"`
+	// RunTallyThrough is the newest run observation already folded into
+	// DailyRuns. History is persisted as a full newest-first list on every
+	// debounced save, so the tally advances from this high-water mark rather
+	// than re-counting runs it has already seen.
+	RunTallyThrough time.Time `json:"run_tally_through,omitempty"`
+}
+
+// patrolRunTallyRetentionDays bounds DailyRuns. It exceeds the thirty-day
+// telemetry window by a day so the day the window opens on is still present
+// when the tally is read.
+const patrolRunTallyRetentionDays = 31
+
+// PatrolRunTallyDayKey renders the UTC day key used by PatrolRunHistoryData.DailyRuns.
+func PatrolRunTallyDayKey(at time.Time) string {
+	return at.UTC().Format("2006-01-02")
+}
+
+// patrolRunObservedAt reports when a run should be counted, preferring the
+// completion time and falling back to the start time for runs that never
+// recorded one.
+func patrolRunObservedAt(run PatrolRunRecord) time.Time {
+	if !run.CompletedAt.IsZero() {
+		return run.CompletedAt
+	}
+	return run.StartedAt
+}
+
+// advancePatrolRunTally folds runs newer than the existing high-water mark into
+// the daily tally and prunes days outside the retention window.
+func advancePatrolRunTally(data *PatrolRunHistoryData, runs []PatrolRunRecord, now time.Time) {
+	if data == nil {
+		return
+	}
+	if data.DailyRuns == nil {
+		data.DailyRuns = make(map[string]int, patrolRunTallyRetentionDays)
+	}
+	newest := data.RunTallyThrough
+	for _, run := range runs {
+		observedAt := patrolRunObservedAt(run)
+		if observedAt.IsZero() || !observedAt.After(data.RunTallyThrough) {
+			continue
+		}
+		data.DailyRuns[PatrolRunTallyDayKey(observedAt)]++
+		if observedAt.After(newest) {
+			newest = observedAt
+		}
+	}
+	data.RunTallyThrough = newest
+
+	cutoff := PatrolRunTallyDayKey(now.UTC().AddDate(0, 0, -patrolRunTallyRetentionDays))
+	for day := range data.DailyRuns {
+		if day < cutoff {
+			delete(data.DailyRuns, day)
+		}
+	}
+}
+
+// PatrolRunsSince counts patrol runs observed at or after since. It prefers the
+// uncapped daily tally and falls back to the capped run list, taking whichever
+// is larger so an install that has not yet accumulated a tally never reports
+// fewer runs than it did before the tally existed. The tally is day-granular,
+// so the day containing since is counted whole.
+func (data *PatrolRunHistoryData) PatrolRunsSince(since time.Time) int {
+	if data == nil {
+		return 0
+	}
+	fromHistory := 0
+	for _, run := range data.Runs {
+		observedAt := patrolRunObservedAt(run)
+		if observedAt.IsZero() || observedAt.Before(since) {
+			continue
+		}
+		fromHistory++
+	}
+	fromTally := 0
+	sinceDay := PatrolRunTallyDayKey(since)
+	for day, count := range data.DailyRuns {
+		if day >= sinceDay {
+			fromTally += count
+		}
+	}
+	if fromTally > fromHistory {
+		return fromTally
+	}
+	return fromHistory
 }
 
 // PatrolRunRecord represents a single patrol check run
@@ -3481,13 +3573,20 @@ func (c *ConfigPersistence) LoadWorkflowPromptActivityHistory() (*WorkflowPrompt
 	)
 }
 
-// SavePatrolRunHistory persists patrol run history to disk
+// SavePatrolRunHistory persists patrol run history to disk, carrying the
+// uncapped daily run tally forward across the capped run list it replaces.
 func (c *ConfigPersistence) SavePatrolRunHistory(runs []PatrolRunRecord) error {
+	now := time.Now()
 	data := PatrolRunHistoryData{
 		Version:   1,
-		LastSaved: time.Now(),
+		LastSaved: now,
 		Runs:      runs,
 	}
+	if existing, err := c.LoadPatrolRunHistory(); err == nil && existing != nil {
+		data.DailyRuns = existing.DailyRuns
+		data.RunTallyThrough = existing.RunTallyThrough
+	}
+	advancePatrolRunTally(&data, runs, now)
 	return saveHistoryData(c, c.aiPatrolRunsFile, data, len(runs), "patrol run history", "Patrol run history")
 }
 
@@ -3509,6 +3608,9 @@ func (c *ConfigPersistence) LoadPatrolRunHistory() (*PatrolRunHistoryData, error
 		func(data *PatrolRunHistoryData) {
 			if data.Runs == nil {
 				data.Runs = make([]PatrolRunRecord, 0)
+			}
+			if data.DailyRuns == nil {
+				data.DailyRuns = make(map[string]int)
 			}
 		},
 		func(data *PatrolRunHistoryData) error {

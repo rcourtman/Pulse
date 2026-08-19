@@ -150,7 +150,11 @@ const (
 	// Schema v8 splits agent-side pre-mutation refusals into target-change,
 	// prerequisite, and invalid-contract categories so the legacy "other"
 	// bucket no longer hides actionable product failures.
-	TelemetrySchemaVersion = 8
+	// Schema v9 separates refusals that carried no machine reason code at all
+	// from refusals whose code is simply unrecognised. Agents that predate the
+	// typed refusal contract report the former, and folding them into "other"
+	// made a starved split indistinguishable from a broken one.
+	TelemetrySchemaVersion = 9
 )
 
 type installIDRecord struct {
@@ -343,6 +347,7 @@ type Ping struct {
 	PulseIntelligenceApprovedActionRefusalsTargetChanged30d int    `json:"pulse_intelligence_approved_action_refusals_target_changed_30d"`
 	PulseIntelligenceApprovedActionRefusalsPrerequisite30d  int    `json:"pulse_intelligence_approved_action_refusals_prerequisite_30d"`
 	PulseIntelligenceApprovedActionRefusalsContract30d      int    `json:"pulse_intelligence_approved_action_refusals_contract_30d"`
+	PulseIntelligenceApprovedActionRefusalsUncoded30d       int    `json:"pulse_intelligence_approved_action_refusals_uncoded_30d"`
 	PulseIntelligenceApprovedActionRefusalsOther30d         int    `json:"pulse_intelligence_approved_action_refusals_other_30d"`
 	PulseIntelligenceVerifiedFindingResolutions30d          int    `json:"pulse_intelligence_verified_finding_resolutions_30d"`
 	PulseIntelligenceApprovedActionLastFailureReason30d     string `json:"pulse_intelligence_approved_action_last_failure_reason_30d,omitempty"`
@@ -483,6 +488,7 @@ type Snapshot struct {
 	PulseIntelligenceApprovedActionRefusalsTargetChanged30d        int
 	PulseIntelligenceApprovedActionRefusalsPrerequisite30d         int
 	PulseIntelligenceApprovedActionRefusalsContract30d             int
+	PulseIntelligenceApprovedActionRefusalsUncoded30d              int
 	PulseIntelligenceApprovedActionRefusalsOther30d                int
 	PulseIntelligenceVerifiedFindingResolutions30d                 int
 	PulseIntelligenceApprovedActionLastFailureReason30d            string
@@ -528,7 +534,11 @@ type PulseIntelligenceActionSnapshot struct {
 	ApprovedActionRefusalsTargetChanged30d int
 	ApprovedActionRefusalsPrerequisite30d  int
 	ApprovedActionRefusalsContract30d      int
-	ApprovedActionRefusalsOther30d         int
+	// ApprovedActionRefusalsUncoded30d counts pre-dispatch refusals that
+	// arrived without any machine reason code, which is what an agent older
+	// than the typed refusal contract reports.
+	ApprovedActionRefusalsUncoded30d int
+	ApprovedActionRefusalsOther30d   int
 	// VerifiedFindingResolutions30d counts completed, approved Patrol-origin
 	// actions whose postcondition was independently confirmed. No finding or
 	// action identity leaves the runtime.
@@ -1078,6 +1088,7 @@ func applySnapshot(base Ping, fn SnapshotFunc) Ping {
 	ping.PulseIntelligenceApprovedActionRefusalsTargetChanged30d = s.PulseIntelligenceApprovedActionRefusalsTargetChanged30d
 	ping.PulseIntelligenceApprovedActionRefusalsPrerequisite30d = s.PulseIntelligenceApprovedActionRefusalsPrerequisite30d
 	ping.PulseIntelligenceApprovedActionRefusalsContract30d = s.PulseIntelligenceApprovedActionRefusalsContract30d
+	ping.PulseIntelligenceApprovedActionRefusalsUncoded30d = s.PulseIntelligenceApprovedActionRefusalsUncoded30d
 	ping.PulseIntelligenceApprovedActionRefusalsOther30d = s.PulseIntelligenceApprovedActionRefusalsOther30d
 	ping.PulseIntelligenceVerifiedFindingResolutions30d = s.PulseIntelligenceVerifiedFindingResolutions30d
 	ping.PulseIntelligenceApprovedActionLastFailureReason30d = s.PulseIntelligenceApprovedActionLastFailureReason30d

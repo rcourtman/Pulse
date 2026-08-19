@@ -205,6 +205,11 @@ func dockerContainerUpdateFactSummary(facts agentexec.DockerContainerUpdateResul
 	return summary
 }
 
+// actionRefusalUncoded is the legacy aggregate recorded when a pre-mutation
+// refusal arrives with no machine reason code. Agents older than the typed
+// refusal contract report every refusal this way.
+const actionRefusalUncoded = "preflight_refused"
+
 // actionPreflightReasonCode preserves typed agent refusals while retaining the
 // legacy aggregate for older agents that do not yet send a reason_code.
 func actionPreflightReasonCode(reasonCode string) string {
@@ -212,7 +217,7 @@ func actionPreflightReasonCode(reasonCode string) string {
 	if agentexec.IsActionRefusalReasonCode(reasonCode) {
 		return reasonCode
 	}
-	return "preflight_refused"
+	return actionRefusalUncoded
 }
 
 func shortDockerDigest(digest string) string {

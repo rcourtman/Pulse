@@ -369,6 +369,15 @@ verification stdout, command text, resource IDs, or backup identities. The legac
 the legacy completed/resolved/value `proActivation*` fields mirror the same
 Patrol control outcome classifier as compatibility aliases and do not create a
 second storage/recovery signal.
+
+Persisted Patrol run history carries an uncapped per-UTC-day run tally beside
+its capped newest-first run list. The list is bounded for the operator-facing
+history and saturates within hours on a normally scheduled install, so it
+cannot serve as a run count over a reporting window; the tally advances from a
+persisted high-water mark, is pruned to its retention bound, and is a count of
+runs only. It never records run identity, scope resource IDs, finding IDs,
+evidence, or narrative, and it is not recovery coverage, backup verification,
+or storage-health proof.
 First-party workflow starter activity recorded through shared `internal/api/`
 handlers, including Pro activation entry-point telemetry for the same
 operations-loop prompt, is likewise API/privacy/commercial activation evidence

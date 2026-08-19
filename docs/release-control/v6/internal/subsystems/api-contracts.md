@@ -9312,13 +9312,22 @@ together: `type Ping struct` in `internal/telemetry/telemetry.go`, the
 Retired columns stay in the live receiver database rather than being dropped:
 migrations only add, the columns hold real rows from the schema-v6 window, and
 nothing writes them once the receiver struct loses the fields.
-### Telemetry payload parity spans three surfaces at schema v8
+### Telemetry payload parity spans three surfaces at schema v9
 
-Schema v8 preserves the same three-surface parity requirement and adds
+Schema v8 preserved the same three-surface parity requirement and added
 content-free approved-action refusal counters for target change, prerequisite
 failure, and invalid typed contracts. These counters partition agent-side
 pre-mutation refusals that previously accumulated in `other`; no raw error,
 command, target, resource identifier, or action payload is exported.
+
+Schema v9 adds the content-free `uncoded` refusal counter and completes that
+partition. A pre-dispatch refusal that carries no machine reason code is
+recorded under the legacy `preflight_refused` aggregate, which is what every
+agent older than the typed refusal contract reports, and it must not be counted
+as `other`. `other` means a typed code this server does not recognise, so
+collapsing the two made a partition starved by agent rollout read exactly like
+a partition that is wrong. The `uncoded` counter is a count only; the refusal's
+error text, command, target, and action payload stay on the install.
 
 ### Per-tenant resource stores are released on offboarding and shutdown
 

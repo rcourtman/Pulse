@@ -49,6 +49,7 @@ func applyPulseIntelligenceTelemetrySnapshot(
 	snap.PulseIntelligenceApprovedActionRefusalsTargetChanged30d = actionSnapshot.ApprovedActionRefusalsTargetChanged30d
 	snap.PulseIntelligenceApprovedActionRefusalsPrerequisite30d = actionSnapshot.ApprovedActionRefusalsPrerequisite30d
 	snap.PulseIntelligenceApprovedActionRefusalsContract30d = actionSnapshot.ApprovedActionRefusalsContract30d
+	snap.PulseIntelligenceApprovedActionRefusalsUncoded30d = actionSnapshot.ApprovedActionRefusalsUncoded30d
 	snap.PulseIntelligenceApprovedActionRefusalsOther30d = actionSnapshot.ApprovedActionRefusalsOther30d
 	snap.PulseIntelligenceVerifiedFindingResolutions30d = actionSnapshot.VerifiedFindingResolutions30d
 	snap.PulseIntelligenceApprovedActionLastFailureReason30d = actionSnapshot.ApprovedActionLastFailureReason30d
@@ -224,6 +225,11 @@ func applyPulseIntelligencePatrolRunSnapshot(snap *telemetry.Snapshot, persisten
 	if err != nil || history == nil {
 		return
 	}
+	// Run volume comes from the uncapped daily tally. Counting history.Runs
+	// directly saturates at the operator-facing history cap, which on an install
+	// patrolling on a normal schedule is reached within hours of a thirty-day
+	// window rather than at its end.
+	snap.PulseIntelligencePatrolRuns30d += history.PatrolRunsSince(since)
 	for _, run := range history.Runs {
 		observedAt := run.CompletedAt
 		if observedAt.IsZero() {
@@ -232,7 +238,6 @@ func applyPulseIntelligencePatrolRunSnapshot(snap *telemetry.Snapshot, persisten
 		if observedAt.IsZero() || observedAt.Before(since) {
 			continue
 		}
-		snap.PulseIntelligencePatrolRuns30d++
 		if run.NewFindings > 0 {
 			snap.PulseIntelligencePatrolNewFindings30d += run.NewFindings
 		}

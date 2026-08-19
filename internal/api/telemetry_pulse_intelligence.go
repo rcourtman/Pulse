@@ -140,6 +140,8 @@ func accumulatePulseIntelligenceApprovedActionOutcomes(snapshot *telemetry.Pulse
 				snapshot.ApprovedActionRefusalsPrerequisite30d++
 			case "contract":
 				snapshot.ApprovedActionRefusalsContract30d++
+			case "uncoded":
+				snapshot.ApprovedActionRefusalsUncoded30d++
 			default:
 				snapshot.ApprovedActionRefusalsOther30d++
 			}
@@ -204,6 +206,13 @@ func pulseIntelligenceApprovedActionRefusalCategory(reason string) string {
 		return "prerequisite"
 	case "action_contract_invalid":
 		return "contract"
+	case actionRefusalUncoded, "pre_dispatch_refused":
+		// The refusal carried no machine reason code, so there is nothing to
+		// categorize. This is what an agent older than the typed refusal
+		// contract reports, and it must stay separable from a code this server
+		// simply does not recognise: the first says the split is waiting on
+		// agent rollout, the second says the split is wrong.
+		return "uncoded"
 	default:
 		return "other"
 	}

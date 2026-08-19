@@ -923,7 +923,12 @@ agent timestamp. It cannot approve, admit, reserve, execute, or verify a
 mutation. Current agents advertise protocol version 1 at registration; a
 server with the transport but an older connected agent fails concrete
 feasibility closed, while internal executors that predate the optional
-transport retain their compatibility path. Dispatch still repeats all local
+transport retain their compatibility path. An agent older than the bounded
+refusal-code vocabulary reports pre-mutation refusals with no reason code at
+all. The API layer records those under the `preflight_refused` legacy aggregate
+and aggregate telemetry counts them as `uncoded` rather than `other`, so the
+share of the fleet still awaiting an agent capable of typed refusals stays
+measurable and is never mistaken for a categorization failure. Dispatch still repeats all local
 preconditions after durable admission because preflight evidence is not a
 lease and target state may race after approval.
 Proxmox VM and LXC lifecycle affordances follow the same adjacent boundary:

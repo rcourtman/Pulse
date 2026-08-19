@@ -24396,3 +24396,34 @@ func TestContract_ResourceListReportsPlatformAdmission(t *testing.T) {
 		t.Fatalf("provider-owned agent must not admit the standalone page, got %+v", admission)
 	}
 }
+
+// The schema-v9 approved-action refusal partition must keep an uncoded refusal
+// out of the "other" bucket. `other` means a typed reason code this server does
+// not recognise; a refusal that carried no reason code at all is what every
+// agent older than the typed refusal contract reports, and counting the two
+// together makes a partition starved by agent rollout look like a broken one.
+func TestApprovedActionRefusalPartitionSeparatesUncodedFromOther(t *testing.T) {
+	// An agent result with no reason code lands on the legacy aggregate.
+	if got := actionPreflightReasonCode(""); got != actionRefusalUncoded {
+		t.Fatalf("actionPreflightReasonCode(\"\") = %q, want %q", got, actionRefusalUncoded)
+	}
+	if got := actionPreflightReasonCode("  "); got != actionRefusalUncoded {
+		t.Fatalf("actionPreflightReasonCode(whitespace) = %q, want %q", got, actionRefusalUncoded)
+	}
+	// A typed code from a current agent is preserved rather than aggregated.
+	if got := actionPreflightReasonCode("target_state_changed"); got != "target_state_changed" {
+		t.Fatalf("typed reason code was not preserved, got %q", got)
+	}
+
+	// The legacy aggregate is counted as uncoded, never as other.
+	if got := pulseIntelligenceApprovedActionRefusalCategory(actionRefusalUncoded); got != "uncoded" {
+		t.Fatalf("category(%q) = %q, want uncoded", actionRefusalUncoded, got)
+	}
+	if got := pulseIntelligenceApprovedActionRefusalCategory("pre_dispatch_refused"); got != "uncoded" {
+		t.Fatalf("category(pre_dispatch_refused) = %q, want uncoded", got)
+	}
+	// An unrecognised typed code stays in other, so the two remain separable.
+	if got := pulseIntelligenceApprovedActionRefusalCategory("some_future_typed_code"); got != "other" {
+		t.Fatalf("category(some_future_typed_code) = %q, want other", got)
+	}
+}

@@ -340,15 +340,17 @@ func TestGetPulseIntelligenceActionTelemetry_AttributesApprovedActionFailureCaus
 		got.ApprovedActionRefusalsTargetChanged30d != 0 ||
 		got.ApprovedActionRefusalsPrerequisite30d != 0 ||
 		got.ApprovedActionRefusalsContract30d != 0 ||
+		got.ApprovedActionRefusalsUncoded30d != 0 ||
 		got.ApprovedActionRefusalsOther30d != 0 {
 		t.Fatalf(
-			"refusal categories = %d/%d/%d/%d/%d/%d/%d, want 1/0/0/0/0/0/0",
+			"refusal categories = %d/%d/%d/%d/%d/%d/%d/%d, want 1/0/0/0/0/0/0/0",
 			got.ApprovedActionRefusalsPlanStale30d,
 			got.ApprovedActionRefusalsPolicy30d,
 			got.ApprovedActionRefusalsCapability30d,
 			got.ApprovedActionRefusalsTargetChanged30d,
 			got.ApprovedActionRefusalsPrerequisite30d,
 			got.ApprovedActionRefusalsContract30d,
+			got.ApprovedActionRefusalsUncoded30d,
 			got.ApprovedActionRefusalsOther30d,
 		)
 	}
@@ -461,6 +463,8 @@ func TestPulseIntelligenceApprovedActionRefusalCategory(t *testing.T) {
 		"package_manager_unhealthy":     "prerequisite",
 		"cleanup_preflight_failed":      "prerequisite",
 		"action_contract_invalid":       "contract",
+		"preflight_refused":             "uncoded",
+		"pre_dispatch_refused":          "uncoded",
 		"future_reason":                 "other",
 	}
 	for reason, want := range tests {

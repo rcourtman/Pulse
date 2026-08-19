@@ -1039,3 +1039,34 @@ func TestApplyPulseIntelligenceAdoptionSnapshot_CompleteLoopRequiresIssueEvidenc
 		})
 	}
 }
+
+// Patrol run volume must reflect every run in the window, not the operator
+// history cap the runs are stored under.
+func TestApplyPulseIntelligencePatrolRunSnapshotIgnoresHistoryCap(t *testing.T) {
+	persistence := config.NewConfigPersistence(t.TempDir())
+	now := time.Now().UTC()
+	since := now.AddDate(0, 0, -30)
+
+	const historyCap = 100
+	total := 0
+	runs := make([]config.PatrolRunRecord, 0, historyCap)
+	for at := now.AddDate(0, 0, -2); at.Before(now); at = at.Add(10 * time.Minute) {
+		runs = append([]config.PatrolRunRecord{{ID: at.Format(time.RFC3339Nano), StartedAt: at, CompletedAt: at}}, runs...)
+		if len(runs) > historyCap {
+			runs = runs[:historyCap]
+		}
+		total++
+		if err := persistence.SavePatrolRunHistory(runs); err != nil {
+			t.Fatalf("SavePatrolRunHistory: %v", err)
+		}
+	}
+	if total <= historyCap {
+		t.Fatalf("test needs more runs than the cap, got %d", total)
+	}
+
+	snap := &telemetry.Snapshot{}
+	applyPulseIntelligencePatrolRunSnapshot(snap, persistence, since)
+	if snap.PulseIntelligencePatrolRuns30d != total {
+		t.Fatalf("PulseIntelligencePatrolRuns30d = %d, want %d", snap.PulseIntelligencePatrolRuns30d, total)
+	}
+}
