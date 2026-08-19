@@ -848,6 +848,22 @@ adoption baselines. `scripts/telemetry_adoption_report.py` must emit
 windowed 24h, 72h, and 7d latest-install snapshots that split published
 versions from unpublished or development builds, so RC adoption reads stop
 depending on ad hoc SQL or one-off local helper scripts.
+Target-release activity reads must not attribute a rolling counter already
+present on an install's first heartbeat after upgrade to the target release.
+The first target-version heartbeat in the selected source window is a
+non-attributable baseline; activity
+requires consecutive heartbeats from the same pseudonymous install on the same
+version and is reported as the observed counter increase across those pairs. A
+version departure breaks the comparison chain, so returning to the target
+version starts with another non-attributable observation. Counter decreases
+remain separate because a rolling window or local reset can reduce a value. If
+the latest later heartbeat reports a different version, the report must
+classify that departure as a semantic-version rollback, a forward transition,
+or unclassified development/version drift and must expose aggregate
+destination-version counts without install identifiers. Activity from an
+install whose latest later heartbeat departed the target must remain separate
+from activity on installs still reporting the target version, so a rolled-back
+install cannot supply positive evidence for the currently running cohort.
 Pulse Intelligence derived governed-operation booleans must treat content-free MCP /
 external-agent capability-class counters as external-agent collaboration
 activity, not only the legacy `pulse_intelligence_external_agent_used_30d`
@@ -2109,9 +2125,15 @@ includes the licensed-feature, availability-probe, and updater signals added to
 the released schema, while excluding the retired `business_estate` draft.
 SQLite reduces remote history to one latest-state row plus compact sufficient
 facts per install: first free, first paid, observed signal fields, and signal
-fields observed while free before the first paid posture. This preserves
+fields observed while free before the first paid posture. For an explicitly
+selected target release, those compact facts also include the first and latest
+target-version heartbeat times, consecutive same-version pair counts, the
+first-heartbeat values, and separately accumulated increases and decreases for
+the closed activity-counter projection. This preserves
 latest-state reporting, first-free/first-paid conversion, and all outcome
-cohort membership without sending raw heartbeat history over SSH. The local
+cohort membership while allowing inherited first-heartbeat totals,
+same-version net changes, and later version departures to remain distinct,
+without sending raw heartbeat history over SSH. The local
 fallback must analyze each row once and keep only bounded per-install evidence
 sets and earliest observation times. It must not regroup rows into per-install
 history lists or sort those lists before producing the outcome cohorts and

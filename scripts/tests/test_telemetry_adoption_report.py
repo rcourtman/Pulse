@@ -49,6 +49,22 @@ class TelemetryAdoptionReportTest(unittest.TestCase):
                 "free_signal_fields": [],
             }
         ]
+        first_counts = [0] * len(report.TARGET_RELEASE_ACTIVITY_COUNT_FIELDS)
+        increase_totals = list(first_counts)
+        increase_totals[0] = 2
+        decrease_totals = list(first_counts)
+        target_release_facts = [
+            {
+                "install_id": "a",
+                "heartbeat_count": 2,
+                "same_version_pair_count": 1,
+                "first_received_at": "2026-07-16 23:00:00",
+                "latest_received_at": "2026-07-17 00:00:00",
+                "first_counts": first_counts,
+                "increase_totals": increase_totals,
+                "decrease_totals": decrease_totals,
+            }
+        ]
         stdout = "\n".join(
             [
                 json.dumps(
@@ -75,6 +91,23 @@ class TelemetryAdoptionReportTest(unittest.TestCase):
                 *(
                     json.dumps(
                         {
+                            "t": [
+                                fact["install_id"],
+                                fact["heartbeat_count"],
+                                fact["same_version_pair_count"],
+                                fact["first_received_at"],
+                                fact["latest_received_at"],
+                                fact["first_counts"],
+                                fact["increase_totals"],
+                                fact["decrease_totals"],
+                            ]
+                        }
+                    )
+                    for fact in target_release_facts
+                ),
+                *(
+                    json.dumps(
+                        {
                             "r": [row.get(column) for column in report.REPORT_ROW_COLUMNS]
                         }
                     )
@@ -90,7 +123,12 @@ class TelemetryAdoptionReportTest(unittest.TestCase):
             stderr=b"",
         )
         with mock.patch.object(report.subprocess, "run", return_value=completed) as run_mock:
-            result = report.fetch_rows_remote("pulse-license", "/opt/licenses.sqlite", 30)
+            result = report.fetch_rows_remote(
+                "pulse-license",
+                "/opt/licenses.sqlite",
+                30,
+                target_version="v6.3.0-rc.3",
+            )
         expanded_rows = [
             {column: row.get(column) for column in report.REPORT_ROW_COLUMNS}
             for row in rows
@@ -101,6 +139,7 @@ class TelemetryAdoptionReportTest(unittest.TestCase):
                 "db_stats": db_stats,
                 "rows": expanded_rows,
                 "pulse_intelligence_analysis_facts": analysis_facts,
+                "target_release_analysis_facts": target_release_facts,
             },
         )
         remote_script = run_mock.call_args.kwargs["input"].decode("utf-8")
@@ -108,16 +147,22 @@ class TelemetryAdoptionReportTest(unittest.TestCase):
         self.assertNotIn("SELECT *", remote_script)
         self.assertIn("received_at >= datetime('now', ?)", remote_script)
         self.assertEqual(
-            run_mock.call_args.args[0][-2],
+            run_mock.call_args.args[0][-4],
             ",".join(report.REPORT_ROW_COLUMNS),
         )
         self.assertEqual(
-            run_mock.call_args.args[0][-1],
+            run_mock.call_args.args[0][-3],
             ",".join(report.REPORT_HISTORY_SIGNAL_COLUMNS),
+        )
+        self.assertEqual(run_mock.call_args.args[0][-2], "6.3.0-rc.3")
+        self.assertEqual(
+            run_mock.call_args.args[0][-1],
+            ",".join(report.TARGET_RELEASE_ACTIVITY_COUNT_FIELDS),
         )
         self.assertIn("ROW_NUMBER() OVER (", remote_script)
         self.assertIn("GROUP BY install_id", remote_script)
         self.assertIn("MIN(CASE WHEN paid_license = 0", remote_script)
+        self.assertIn("target_analysis_sql", remote_script)
         compile(remote_script, "<telemetry-remote-fetch>", "exec")
 
     def test_report_projection_and_signal_specs_cover_recent_schema_fields(self) -> None:
@@ -147,6 +192,114 @@ class TelemetryAdoptionReportTest(unittest.TestCase):
             self.assertEqual(specs[field]["group"], "deep")
         self.assertEqual(specs["alert_ai_enabled"]["type"], "bool")
         self.assertEqual(specs["alert_ai_enabled"]["group"], "deep")
+
+    def test_remote_target_release_query_executes_and_emits_compact_pair_deltas(self) -> None:
+        empty_header = gzip.compress(
+            (
+                json.dumps(
+                    {
+                        "db_stats": {},
+                        "row_columns": list(report.REPORT_ROW_COLUMNS),
+                    }
+                )
+                + "\n"
+            ).encode("utf-8")
+        )
+        completed = subprocess.CompletedProcess(
+            args=[],
+            returncode=0,
+            stdout=empty_header,
+            stderr=b"",
+        )
+        with mock.patch.object(report.subprocess, "run", return_value=completed) as run_mock:
+            report.fetch_rows_remote(
+                "pulse-license",
+                "/unused.sqlite",
+                7,
+                target_version="6.3.0-rc.3",
+            )
+        remote_script = run_mock.call_args.kwargs["input"]
+
+        numeric_columns = {
+            "schema_version",
+            "version_is_development",
+            "version_is_published_release",
+            "notification_failures_7d",
+            *(key for key, _ in report.ADOPTION_COUNT_FIELDS),
+            *(key for key, _ in report.FEATURE_BOOL_FIELDS),
+            *(key for key, _ in report.USER_BASE_BOOL_FIELDS),
+            *(key for key, _ in report.USER_BASE_COUNT_FIELDS),
+            *(key for key, _ in report.PULSE_INTELLIGENCE_BOOL_FIELDS),
+            *(key for key, _ in report.PULSE_INTELLIGENCE_COUNT_FIELDS),
+        }
+        column_definitions = ", ".join(
+            f"{column} {'INTEGER' if column in numeric_columns else 'TEXT'}"
+            for column in report.REPORT_ROW_COLUMNS
+        )
+        now = datetime.now(timezone.utc).replace(microsecond=0)
+        rows = [
+            {
+                "install_id": "install-a",
+                "version": "6.3.0-rc.3",
+                "received_at": (now - timedelta(hours=3)).strftime("%Y-%m-%d %H:%M:%S"),
+                "alerts_fired_30d": 4,
+            },
+            {
+                "install_id": "install-a",
+                "version": "6.3.0-rc.3",
+                "received_at": (now - timedelta(hours=2)).strftime("%Y-%m-%d %H:%M:%S"),
+                "alerts_fired_30d": 6,
+            },
+            {
+                "install_id": "install-a",
+                "version": "6.2.1",
+                "received_at": (now - timedelta(hours=1)).strftime("%Y-%m-%d %H:%M:%S"),
+                "alerts_fired_30d": 6,
+            },
+        ]
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db_path = str(Path(temp_dir) / "telemetry.sqlite")
+            conn = sqlite3.connect(db_path)
+            try:
+                conn.execute(f"CREATE TABLE telemetry_pings ({column_definitions})")
+                for row in rows:
+                    columns = ", ".join(row)
+                    placeholders = ", ".join("?" for _ in row)
+                    conn.execute(
+                        f"INSERT INTO telemetry_pings ({columns}) VALUES ({placeholders})",
+                        tuple(row.values()),
+                    )
+                conn.commit()
+            finally:
+                conn.close()
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-",
+                    db_path,
+                    "7",
+                    ",".join(report.REPORT_ROW_COLUMNS),
+                    ",".join(report.REPORT_HISTORY_SIGNAL_COLUMNS),
+                    "6.3.0-rc.3",
+                    ",".join(report.TARGET_RELEASE_ACTIVITY_COUNT_FIELDS),
+                ],
+                input=remote_script,
+                capture_output=True,
+                check=True,
+            )
+
+        records = [
+            json.loads(line)
+            for line in gzip.decompress(result.stdout).decode("utf-8").splitlines()
+        ]
+        target_record = next(record["t"] for record in records if "t" in record)
+        alerts_index = report.TARGET_RELEASE_ACTIVITY_COUNT_FIELDS.index("alerts_fired_30d")
+        self.assertEqual(target_record[1], 2)
+        self.assertEqual(target_record[2], 1)
+        self.assertEqual(target_record[5][alerts_index], 4)
+        self.assertEqual(target_record[6][alerts_index], 2)
+        self.assertEqual(target_record[7][alerts_index], 0)
 
     def test_compact_intelligence_facts_match_full_history_analysis(self) -> None:
         numeric_columns = {
@@ -355,6 +508,157 @@ class TelemetryAdoptionReportTest(unittest.TestCase):
             ),
             "6.2.0-rc.1",
         )
+
+    def test_compare_semver_precedence_orders_rc_stable_and_patch_rollbacks(self) -> None:
+        self.assertLess(report.compare_semver_precedence("6.3.0-rc.2", "6.3.0-rc.3"), 0)
+        self.assertGreater(report.compare_semver_precedence("6.3.0", "6.3.0-rc.3"), 0)
+        self.assertLess(report.compare_semver_precedence("6.2.1", "6.3.0-rc.3"), 0)
+        self.assertEqual(report.compare_semver_precedence("6.3.0+build.2", "6.3.0"), 0)
+
+    def test_target_release_followup_excludes_first_heartbeat_baselines_and_flags_rollbacks(self) -> None:
+        now = datetime(2026, 8, 19, 12, tzinfo=timezone.utc)
+
+        def row(
+            install_id: str,
+            version: str,
+            hour: int,
+            **signals: object,
+        ) -> dict[str, object]:
+            return {
+                "install_id": install_id,
+                "version": version,
+                "platform": "binary",
+                "received_at": now.replace(hour=hour).strftime("%Y-%m-%d %H:%M:%S"),
+                **signals,
+            }
+
+        rows = [
+            row("followup", "6.3.0-rc.2", 7, alerts_fired_30d=38),
+            row(
+                "followup",
+                "6.3.0-rc.3",
+                8,
+                alerts_fired_30d=40,
+                pulse_intelligence_patrol_ai_calls_30d=100,
+            ),
+            row(
+                "followup",
+                "6.3.0-rc.3",
+                10,
+                alerts_fired_30d=43,
+                pulse_intelligence_patrol_ai_calls_30d=100,
+            ),
+            row("baseline-only", "6.3.0-rc.3", 9, alerts_fired_30d=500),
+            row("rollback", "6.3.0-rc.3", 7, pulse_intelligence_patrol_runs_30d=10),
+            row("rollback", "6.3.0-rc.3", 8, pulse_intelligence_patrol_runs_30d=12),
+            row("rollback", "6.2.1", 11, pulse_intelligence_patrol_runs_30d=12),
+            row("forward", "6.3.0-rc.3", 8),
+            row("forward", "6.3.0", 11),
+            row("drift", "6.3.0-rc.3", 8),
+            row("drift", "feature/local-build", 11),
+        ]
+        full_summary = report.summarize_rows(
+            {
+                "latest_ping": rows[-1]["received_at"],
+                "total_rows": len(rows),
+                "total_distinct_installs": 5,
+            },
+            rows,
+            published_versions={"6.2.1", "6.3.0-rc.2", "6.3.0-rc.3", "6.3.0"},
+            target_version="v6.3.0-rc.3",
+            now=now,
+        )
+        summary = full_summary["target_release_followup"]
+
+        self.assertEqual(summary["installs_seen"], 5)
+        self.assertEqual(summary["current_target_installs"], 2)
+        self.assertEqual(summary["same_version_followup_installs"], 2)
+        self.assertEqual(summary["current_target_followup_installs"], 1)
+        self.assertEqual(summary["departed_followup_installs"], 1)
+        self.assertEqual(summary["without_later_same_version_heartbeat"], 3)
+        self.assertEqual(summary["rollback_installs"], 1)
+        self.assertEqual(
+            summary["rollback_transitions"],
+            [{"destination_version": "6.2.1", "installs": 1}],
+        )
+        self.assertEqual(
+            summary["forward_transitions"],
+            [{"destination_version": "6.3.0", "installs": 1}],
+        )
+        self.assertEqual(
+            summary["unclassified_transitions"],
+            [{"destination_version": "0.0.0-feature-local-build", "installs": 1}],
+        )
+
+        signals = {entry["field"]: entry for entry in summary["activity_signals"]}
+        alerts = signals["alerts_fired_30d"]
+        self.assertEqual(alerts["first_heartbeat_baseline_total"], 540)
+        self.assertEqual(alerts["same_version_total_increase"], 3)
+        self.assertEqual(alerts["same_version_increased_installs"], 1)
+        self.assertEqual(alerts["current_target_total_increase"], 3)
+        self.assertEqual(alerts["departed_total_increase"], 0)
+        patrol_calls = signals["pulse_intelligence_patrol_ai_calls_30d"]
+        self.assertEqual(patrol_calls["first_heartbeat_baseline_total"], 100)
+        self.assertEqual(patrol_calls["same_version_total_increase"], 0)
+        self.assertEqual(patrol_calls["same_version_unchanged_installs"], 2)
+        patrol_runs = signals["pulse_intelligence_patrol_runs_30d"]
+        self.assertEqual(patrol_runs["same_version_total_increase"], 2)
+        self.assertEqual(patrol_runs["current_target_total_increase"], 0)
+        self.assertEqual(patrol_runs["departed_total_increase"], 2)
+
+        rendered = report.format_text(full_summary, "rcourtman/Pulse", 7)
+        self.assertIn("Target release follow-up (6.3.0-rc.3):", rendered)
+        self.assertIn("first target-version heartbeat in the source window is baseline only", rendered)
+        self.assertIn("Alerts fired (30d): +3 across 1 install(s)", rendered)
+        self.assertIn("rollback transitions:", rendered)
+        self.assertIn("6.2.1: 1 install(s)", rendered)
+
+    def test_compact_target_release_facts_match_local_one_pass_analysis(self) -> None:
+        rows = [
+            {
+                "install_id": "install-a",
+                "version": "6.3.0-rc.3",
+                "received_at": "2026-08-19 08:00:00",
+                "alerts_fired_30d": 7,
+            },
+            {
+                "install_id": "install-a",
+                "version": "6.3.0-rc.3",
+                "received_at": "2026-08-19 09:00:00",
+                "alerts_fired_30d": 9,
+            },
+            {
+                "install_id": "install-a",
+                "version": "6.2.1",
+                "received_at": "2026-08-19 10:00:00",
+                "alerts_fired_30d": 9,
+            },
+        ]
+        original_parse_received_at = report.parse_received_at
+        with mock.patch.object(
+            report,
+            "parse_received_at",
+            wraps=original_parse_received_at,
+        ) as parse_received_at:
+            local = report.analyze_target_release_rows(
+                rows,
+                {"6.3.0-rc.3", "6.2.1"},
+                "6.3.0-rc.3",
+            )
+        self.assertEqual(parse_received_at.call_count, 3)
+
+        analysis = local["install-a"]
+        facts = [{
+            "install_id": "install-a",
+            "heartbeat_count": analysis.heartbeat_count,
+            "same_version_pair_count": analysis.same_version_pair_count,
+            "first_received_at": analysis.first_received_at.strftime("%Y-%m-%d %H:%M:%S"),
+            "latest_received_at": analysis.latest_received_at.strftime("%Y-%m-%d %H:%M:%S"),
+            "first_counts": list(analysis.first_counts),
+            "increase_totals": list(analysis.increase_totals),
+            "decrease_totals": list(analysis.decrease_totals),
+        }]
+        self.assertEqual(report.analyze_target_release_facts(facts), local)
 
     def test_value_loop_reconciles_schema_v4_action_outcomes_and_refusals(self) -> None:
         now = datetime.now(timezone.utc).replace(microsecond=0)
@@ -2102,7 +2406,8 @@ class TelemetryAdoptionReportTest(unittest.TestCase):
         self.assertIn("Deep telemetry signal sources (7d):", rendered)
         self.assertIn("- Agent hosts: 6.0.0-rc.2: 4 installs, total 18", rendered)
         self.assertIn("- Patrol enabled: 6.0.0-rc.2: 2 installs", rendered)
-        self.assertIn("Target release signal coverage (7d, 6.0.0-rc.6):", rendered)
+        self.assertIn("Target release latest-state signal coverage (7d, 6.0.0-rc.6):", rendered)
+        self.assertIn("latest rolling totals show signal availability, not activity caused by this release", rendered)
         self.assertIn("  - PVE nodes: 55 installs, total 131", rendered)
         self.assertIn("  - AI enabled: 19 installs", rendered)
         self.assertIn("  - Agent hosts, Patrol enabled", rendered)

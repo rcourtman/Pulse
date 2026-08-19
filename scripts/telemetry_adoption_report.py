@@ -998,6 +998,37 @@ REPORT_HISTORY_SIGNAL_COLUMNS = tuple(
         )
     )
 )
+TARGET_RELEASE_ACTIVITY_COUNT_FIELDS = tuple(
+    dict.fromkeys(
+        (
+            "alerts_fired_30d",
+            "alerts_acknowledged_30d",
+            "alerts_resolved_30d",
+            "notification_attempts_7d",
+            "notification_deliveries_7d",
+            "notification_failures_7d",
+            "notification_failures_authentication_7d",
+            "notification_failures_rate_limited_7d",
+            "notification_failures_connectivity_7d",
+            "notification_failures_tls_7d",
+            "notification_failures_configuration_7d",
+            "notification_failures_rejected_7d",
+            "notification_failures_unknown_7d",
+            "audit_reads_30d",
+            "report_schedules_run_30d",
+            "update_attempts_30d",
+            "update_successes_30d",
+            "update_failures_30d",
+            *(key for key, _ in PULSE_INTELLIGENCE_COUNT_FIELDS),
+        )
+    )
+)
+TARGET_RELEASE_ACTIVITY_LABELS = {
+    **{key: label for key, label in USER_BASE_COUNT_FIELDS},
+    **{key: label for key, label in ADOPTION_COUNT_FIELDS},
+    **{key: label for key, label in PULSE_INTELLIGENCE_COUNT_FIELDS},
+    "notification_failures_7d": "Notification failures (7d; schema-dependent semantics)",
+}
 GIT_DESCRIBE_RE = re.compile(
     r"^(?P<base>\d+\.\d+\.\d+(?:-[0-9A-Za-z\.-]+)?)-(?P<count>\d+)-g(?P<sha>[0-9a-fA-F]+)(?P<dirty>-dirty)?$"
 )
@@ -1027,6 +1058,83 @@ class PulseIntelligenceInstallAnalysis:
     free_cohort_keys: frozenset[str]
     signal_groups: frozenset[str]
     free_signal_groups: frozenset[str]
+
+
+@dataclass(frozen=True)
+class TargetReleaseInstallAnalysis:
+    first_received_at: datetime
+    latest_received_at: datetime
+    heartbeat_count: int
+    same_version_pair_count: int
+    first_counts: tuple[int, ...]
+    increase_totals: tuple[int, ...]
+    decrease_totals: tuple[int, ...]
+
+
+@dataclass
+class _TargetReleaseInstallAccumulator:
+    first_received_at: datetime | None = None
+    latest_received_at: datetime | None = None
+    heartbeat_count: int = 0
+    same_version_pair_count: int = 0
+    first_counts: tuple[int, ...] = ()
+    increase_totals: list[int] = field(
+        default_factory=lambda: [0] * len(TARGET_RELEASE_ACTIVITY_COUNT_FIELDS)
+    )
+    decrease_totals: list[int] = field(
+        default_factory=lambda: [0] * len(TARGET_RELEASE_ACTIVITY_COUNT_FIELDS)
+    )
+    adjacent_received_at: datetime | None = None
+    adjacent_is_target: bool = False
+    adjacent_counts: tuple[int, ...] = ()
+
+    def observe(self, row: dict[str, Any], received_at: datetime, is_target: bool) -> None:
+        counts = tuple(
+            parse_optional_nonnegative_int(row.get(field))
+            for field in TARGET_RELEASE_ACTIVITY_COUNT_FIELDS
+        )
+        if is_target:
+            self.heartbeat_count += 1
+            if self.first_received_at is None or received_at < self.first_received_at:
+                self.first_received_at = received_at
+                self.first_counts = counts
+            if self.latest_received_at is None or received_at > self.latest_received_at:
+                self.latest_received_at = received_at
+
+        if (
+            is_target
+            and self.adjacent_is_target
+            and self.adjacent_received_at is not None
+            and received_at != self.adjacent_received_at
+        ):
+            self.same_version_pair_count += 1
+            if received_at > self.adjacent_received_at:
+                earlier_counts, later_counts = self.adjacent_counts, counts
+            else:
+                earlier_counts, later_counts = counts, self.adjacent_counts
+            for index, (earlier, later) in enumerate(zip(earlier_counts, later_counts)):
+                change = later - earlier
+                if change > 0:
+                    self.increase_totals[index] += change
+                elif change < 0:
+                    self.decrease_totals[index] += -change
+
+        self.adjacent_received_at = received_at
+        self.adjacent_is_target = is_target
+        self.adjacent_counts = counts
+
+    def finalize(self) -> TargetReleaseInstallAnalysis:
+        if self.first_received_at is None or self.latest_received_at is None:
+            raise ValueError("target release analysis requires at least one heartbeat")
+        return TargetReleaseInstallAnalysis(
+            first_received_at=self.first_received_at,
+            latest_received_at=self.latest_received_at,
+            heartbeat_count=self.heartbeat_count,
+            same_version_pair_count=self.same_version_pair_count,
+            first_counts=self.first_counts,
+            increase_totals=tuple(self.increase_totals),
+            decrease_totals=tuple(self.decrease_totals),
+        )
 
 
 @dataclass
@@ -1349,6 +1457,45 @@ def normalize_release_tag(tag: str) -> str:
     return version
 
 
+def compare_semver_precedence(left: str, right: str) -> int | None:
+    """Compare SemVer precedence while ignoring build metadata."""
+
+    left_match = SEMVER_RE.match(normalize_release_tag(left))
+    right_match = SEMVER_RE.match(normalize_release_tag(right))
+    if left_match is None or right_match is None:
+        return None
+
+    left_core = tuple(int(left_match.group(name)) for name in ("major", "minor", "patch"))
+    right_core = tuple(int(right_match.group(name)) for name in ("major", "minor", "patch"))
+    if left_core != right_core:
+        return -1 if left_core < right_core else 1
+
+    left_prerelease = left_match.group("prerelease")
+    right_prerelease = right_match.group("prerelease")
+    if left_prerelease is None and right_prerelease is None:
+        return 0
+    if left_prerelease is None:
+        return 1
+    if right_prerelease is None:
+        return -1
+
+    left_identifiers = left_prerelease.split(".")
+    right_identifiers = right_prerelease.split(".")
+    for left_identifier, right_identifier in zip(left_identifiers, right_identifiers):
+        if left_identifier == right_identifier:
+            continue
+        left_numeric = left_identifier.isdigit()
+        right_numeric = right_identifier.isdigit()
+        if left_numeric and right_numeric:
+            return -1 if int(left_identifier) < int(right_identifier) else 1
+        if left_numeric != right_numeric:
+            return -1 if left_numeric else 1
+        return -1 if left_identifier < right_identifier else 1
+    if len(left_identifiers) == len(right_identifiers):
+        return 0
+    return -1 if len(left_identifiers) < len(right_identifiers) else 1
+
+
 def fetch_published_releases(repo: str) -> list[dict[str, Any]]:
     releases: list[dict[str, Any]] = []
     page = 1
@@ -1445,10 +1592,15 @@ def fetch_rows_local(db_path: str, since_days: int) -> dict[str, Any]:
         conn.close()
 
 
-def fetch_rows_remote(ssh_host: str, db_path: str, since_days: int) -> dict[str, Any]:
+def fetch_rows_remote(
+    ssh_host: str,
+    db_path: str,
+    since_days: int,
+    target_version: str | None = None,
+) -> dict[str, Any]:
     # Let SQLite aggregate the history into sufficient per-install evidence.
-    # Only the latest row and compact Pulse Intelligence facts cross the
-    # network, not the full heartbeat history.
+    # Only the latest row and compact per-install facts cross the network, not
+    # the full heartbeat history.
     remote_script = """
 import gzip
 import json
@@ -1459,6 +1611,8 @@ db_path = sys.argv[1]
 since_days = int(sys.argv[2])
 column_names = sys.argv[3].split(",")
 intelligence_columns = sys.argv[4].split(",")
+target_version = sys.argv[5]
+target_activity_columns = sys.argv[6].split(",") if sys.argv[6] else []
 if not column_names or any(
     not name or not name[0].isalpha() or not name.replace("_", "").isalnum()
     for name in column_names
@@ -1469,6 +1623,8 @@ if not intelligence_columns or any(
     for name in intelligence_columns
 ):
     raise ValueError("invalid telemetry history signal projection")
+if any(name not in column_names for name in target_activity_columns):
+    raise ValueError("invalid target release activity projection")
 conn = sqlite3.connect(db_path)
 conn.row_factory = sqlite3.Row
 db_stats_sql = (
@@ -1508,6 +1664,70 @@ analysis_sql = (
     "WHERE received_at >= datetime('now', ?) "
     "GROUP BY install_id"
 )
+target_analysis_sql = None
+if target_version:
+    target_match = "(ordered_version = ? OR ordered_version = ?)"
+    previous_target_match = "(previous_version = ? OR previous_version = ?)"
+    pair_match = previous_target_match + " AND received_at <> previous_received_at"
+    target_selects = [
+        "install_id",
+        "COUNT(*)",
+        "SUM(CASE WHEN " + pair_match + " THEN 1 ELSE 0 END)",
+        "MIN(received_at)",
+        "MAX(received_at)",
+    ]
+    for name in target_activity_columns:
+        target_selects.append(
+            "MAX(CASE WHEN first_rank = 1 THEN COALESCE(" + name + ", 0) END)"
+        )
+        target_selects.append(
+            "SUM(CASE WHEN " + pair_match + " AND " + name + " > previous_" + name +
+            " THEN " + name + " - previous_" + name + " ELSE 0 END)"
+        )
+        target_selects.append(
+            "SUM(CASE WHEN " + pair_match + " AND " + name + " < previous_" + name +
+            " THEN previous_" + name + " - " + name + " ELSE 0 END)"
+        )
+    ordered_columns = [
+        "install_id",
+        "received_at",
+        "rowid AS source_rowid",
+        "TRIM(version) AS ordered_version",
+        *target_activity_columns,
+        "LAG(received_at) OVER install_order AS previous_received_at",
+        "LAG(TRIM(version)) OVER install_order AS previous_version",
+        *(
+            "LAG(COALESCE(" + name + ", 0)) OVER install_order AS previous_" + name
+            for name in target_activity_columns
+        ),
+    ]
+    ordered_output_columns = [
+        "install_id",
+        "received_at",
+        "source_rowid",
+        "ordered_version",
+        *target_activity_columns,
+        "previous_received_at",
+        "previous_version",
+        *("previous_" + name for name in target_activity_columns),
+    ]
+    target_analysis_sql = (
+        "WITH ordered AS ("
+        "SELECT " + ", ".join(ordered_columns) + " "
+        "FROM telemetry_pings "
+        "WHERE received_at >= datetime('now', ?) "
+        "WINDOW install_order AS ("
+        "PARTITION BY install_id ORDER BY received_at ASC, rowid ASC"
+        ")"
+        "), target_rows AS ("
+        "SELECT " + ", ".join(ordered_output_columns) + ", "
+        "ROW_NUMBER() OVER ("
+        "PARTITION BY install_id ORDER BY received_at ASC, source_rowid ASC"
+        ") AS first_rank "
+        "FROM ordered WHERE " + target_match +
+        ") SELECT " + ", ".join(target_selects) + " "
+        "FROM target_rows GROUP BY install_id"
+    )
 output = gzip.GzipFile(fileobj=sys.stdout.buffer, mode="wb", compresslevel=1)
 
 def emit(value):
@@ -1534,6 +1754,32 @@ try:
             row[0], row[1], row[2], first_paid_at,
             signal_fields, free_signal_fields,
         ]})
+    if target_analysis_sql is not None:
+        for row in conn.execute(
+            target_analysis_sql,
+            (
+                cutoff,
+                target_version,
+                "v" + target_version,
+                *(
+                    value
+                    for _ in range(1 + (len(target_activity_columns) * 2))
+                    for value in (target_version, "v" + target_version)
+                ),
+            ),
+        ):
+            first_counts = []
+            increase_totals = []
+            decrease_totals = []
+            for signal_index in range(len(target_activity_columns)):
+                value_index = 5 + (signal_index * 3)
+                first_counts.append(row[value_index])
+                increase_totals.append(row[value_index + 1])
+                decrease_totals.append(row[value_index + 2])
+            emit({"t": [
+                row[0], row[1], row[2], row[3], row[4], first_counts,
+                increase_totals, decrease_totals,
+            ]})
     for row in conn.execute(rows_sql, (cutoff,)):
         emit({"r": list(row)})
 finally:
@@ -1550,6 +1796,8 @@ finally:
             str(since_days),
             ",".join(REPORT_ROW_COLUMNS),
             ",".join(REPORT_HISTORY_SIGNAL_COLUMNS),
+            normalize_release_tag(target_version or ""),
+            ",".join(TARGET_RELEASE_ACTIVITY_COUNT_FIELDS),
         ],
         input=remote_script.encode("utf-8"),
         capture_output=True,
@@ -1569,6 +1817,7 @@ finally:
         raise RuntimeError(f"invalid row schema from remote telemetry fetch on {ssh_host}")
     rows: list[dict[str, Any]] = []
     analysis_facts: list[dict[str, Any]] = []
+    target_release_facts: list[dict[str, Any]] = []
     for line in lines:
         record = json.loads(line)
         if "r" in record:
@@ -1590,12 +1839,29 @@ finally:
                     "free_signal_fields": values[5],
                 }
             )
+        elif "t" in record:
+            values = record["t"]
+            if len(values) != 8:
+                raise RuntimeError(f"invalid target release analysis from remote telemetry fetch on {ssh_host}")
+            target_release_facts.append(
+                {
+                    "install_id": values[0],
+                    "heartbeat_count": values[1],
+                    "same_version_pair_count": values[2],
+                    "first_received_at": values[3],
+                    "latest_received_at": values[4],
+                    "first_counts": values[5],
+                    "increase_totals": values[6],
+                    "decrease_totals": values[7],
+                }
+            )
         else:
             raise RuntimeError(f"invalid record from remote telemetry fetch on {ssh_host}")
     return {
         "db_stats": header["db_stats"],
         "rows": rows,
         "pulse_intelligence_analysis_facts": analysis_facts,
+        "target_release_analysis_facts": target_release_facts,
     }
 
 
@@ -2369,6 +2635,216 @@ def summarize_user_base_signals(
     }
 
 
+def analyze_target_release_rows(
+    rows: Iterable[dict[str, Any]],
+    published_versions: set[str],
+    target_version: str,
+) -> dict[str, TargetReleaseInstallAnalysis]:
+    normalized_target = normalize_release_tag(target_version)
+    accumulators: dict[str, _TargetReleaseInstallAccumulator] = {}
+    for row in rows:
+        install_id = str(row["install_id"])
+        accumulator = accumulators.setdefault(
+            install_id,
+            _TargetReleaseInstallAccumulator(),
+        )
+        accumulator.observe(
+            row,
+            parse_received_at(str(row["received_at"])),
+            classify_row_version(row, published_versions).version == normalized_target,
+        )
+    return {
+        install_id: accumulator.finalize()
+        for install_id, accumulator in accumulators.items()
+        if accumulator.heartbeat_count > 0
+    }
+
+
+def analyze_target_release_facts(
+    facts: Iterable[dict[str, Any]],
+) -> dict[str, TargetReleaseInstallAnalysis]:
+    analyses: dict[str, TargetReleaseInstallAnalysis] = {}
+    expected_count_length = len(TARGET_RELEASE_ACTIVITY_COUNT_FIELDS)
+    for fact in facts:
+        first_counts = tuple(
+            parse_optional_nonnegative_int(value)
+            for value in fact.get("first_counts") or ()
+        )
+        increase_totals = tuple(
+            parse_optional_nonnegative_int(value)
+            for value in fact.get("increase_totals") or ()
+        )
+        decrease_totals = tuple(
+            parse_optional_nonnegative_int(value)
+            for value in fact.get("decrease_totals") or ()
+        )
+        if (
+            len(first_counts) != expected_count_length
+            or len(increase_totals) != expected_count_length
+            or len(decrease_totals) != expected_count_length
+        ):
+            raise ValueError("invalid target release activity fact count projection")
+        analyses[str(fact["install_id"])] = TargetReleaseInstallAnalysis(
+            first_received_at=parse_received_at(str(fact["first_received_at"])),
+            latest_received_at=parse_received_at(str(fact["latest_received_at"])),
+            heartbeat_count=parse_optional_nonnegative_int(fact.get("heartbeat_count")),
+            same_version_pair_count=parse_optional_nonnegative_int(
+                fact.get("same_version_pair_count")
+            ),
+            first_counts=first_counts,
+            increase_totals=increase_totals,
+            decrease_totals=decrease_totals,
+        )
+    return analyses
+
+
+def summarize_target_release_followup(
+    latest_by_install: dict[str, dict[str, Any]],
+    analyses_by_install: dict[str, TargetReleaseInstallAnalysis],
+    published_versions: set[str],
+    target_version: str,
+) -> dict[str, Any]:
+    normalized_target = normalize_release_tag(target_version)
+    target_identity = classify_reported_version(normalized_target, published_versions)
+    analyses = {
+        install_id: analysis
+        for install_id, analysis in analyses_by_install.items()
+        if install_id in latest_by_install
+    }
+    signals = {
+        field: {
+            "field": field,
+            "label": TARGET_RELEASE_ACTIVITY_LABELS[field],
+            "first_heartbeat_baseline_nonzero_installs": 0,
+            "first_heartbeat_baseline_total": 0,
+            "same_version_increased_installs": 0,
+            "same_version_total_increase": 0,
+            "same_version_decreased_installs": 0,
+            "same_version_total_decrease": 0,
+            "same_version_unchanged_installs": 0,
+            "current_target_increased_installs": 0,
+            "current_target_total_increase": 0,
+            "current_target_decreased_installs": 0,
+            "current_target_total_decrease": 0,
+            "departed_increased_installs": 0,
+            "departed_total_increase": 0,
+            "departed_decreased_installs": 0,
+            "departed_total_decrease": 0,
+        }
+        for field in TARGET_RELEASE_ACTIVITY_COUNT_FIELDS
+    }
+    current_target_installs = 0
+    same_version_followup_installs = 0
+    current_target_followup_installs = 0
+    departed_followup_installs = 0
+    without_later_same_version_heartbeat = 0
+    target_heartbeat_rows = 0
+    transition_counts: dict[str, Counter[str]] = {
+        "rollback": Counter(),
+        "forward": Counter(),
+        "unclassified": Counter(),
+    }
+
+    for install_id, analysis in analyses.items():
+        target_heartbeat_rows += analysis.heartbeat_count
+        has_same_version_followup = analysis.same_version_pair_count > 0
+        latest_row = latest_by_install[install_id]
+        latest_identity = classify_row_version(latest_row, published_versions)
+        is_current_target = latest_identity.version == normalized_target
+        if is_current_target:
+            current_target_installs += 1
+        if has_same_version_followup:
+            same_version_followup_installs += 1
+            if is_current_target:
+                current_target_followup_installs += 1
+            else:
+                departed_followup_installs += 1
+        else:
+            without_later_same_version_heartbeat += 1
+
+        for index, field in enumerate(TARGET_RELEASE_ACTIVITY_COUNT_FIELDS):
+            signal = signals[field]
+            first_value = analysis.first_counts[index]
+            if first_value > 0:
+                signal["first_heartbeat_baseline_nonzero_installs"] += 1
+                signal["first_heartbeat_baseline_total"] += first_value
+            if not has_same_version_followup:
+                continue
+            increase = analysis.increase_totals[index]
+            decrease = analysis.decrease_totals[index]
+            if increase > 0:
+                signal["same_version_increased_installs"] += 1
+                signal["same_version_total_increase"] += increase
+                destination = "current_target" if is_current_target else "departed"
+                signal[f"{destination}_increased_installs"] += 1
+                signal[f"{destination}_total_increase"] += increase
+            if decrease > 0:
+                signal["same_version_decreased_installs"] += 1
+                signal["same_version_total_decrease"] += decrease
+                destination = "current_target" if is_current_target else "departed"
+                signal[f"{destination}_decreased_installs"] += 1
+                signal[f"{destination}_total_decrease"] += decrease
+            if increase == 0 and decrease == 0:
+                signal["same_version_unchanged_installs"] += 1
+
+        if is_current_target:
+            continue
+        latest_received_at = parse_received_at(str(latest_row["received_at"]))
+        if latest_received_at <= analysis.latest_received_at:
+            continue
+        transition_kind = "unclassified"
+        if (
+            target_identity.channel in {"stable", "rc", "prerelease"}
+            and latest_identity.channel in {"stable", "rc", "prerelease"}
+            and latest_identity.is_published_release
+        ):
+            comparison = compare_semver_precedence(latest_identity.version, normalized_target)
+            if comparison is not None and comparison < 0:
+                transition_kind = "rollback"
+            elif comparison is not None and comparison > 0:
+                transition_kind = "forward"
+        transition_counts[transition_kind][latest_identity.version] += 1
+
+    def transition_entries(kind: str) -> list[dict[str, Any]]:
+        return counter_entries(transition_counts[kind], "destination_version")
+
+    return {
+        "version": normalized_target,
+        "installs_seen": len(analyses),
+        "target_heartbeat_rows": target_heartbeat_rows,
+        "current_target_installs": current_target_installs,
+        "same_version_followup_installs": same_version_followup_installs,
+        "current_target_followup_installs": current_target_followup_installs,
+        "departed_followup_installs": departed_followup_installs,
+        "without_later_same_version_heartbeat": without_later_same_version_heartbeat,
+        "departed_after_target_installs": sum(
+            sum(counter.values()) for counter in transition_counts.values()
+        ),
+        "rollback_installs": sum(transition_counts["rollback"].values()),
+        "forward_transition_installs": sum(transition_counts["forward"].values()),
+        "unclassified_transition_installs": sum(transition_counts["unclassified"].values()),
+        "rollback_transitions": transition_entries("rollback"),
+        "forward_transitions": transition_entries("forward"),
+        "unclassified_transitions": transition_entries("unclassified"),
+        "activity_signals": list(signals.values()),
+        "interpretation": {
+            "first_heartbeat": (
+                "Rolling counters on the first target-version heartbeat in the source window "
+                "are baseline only and are not attributed to the target release."
+            ),
+            "same_version_change": (
+                "Activity is the observed counter change across consecutive target-version "
+                "heartbeats from the same pseudonymous install; a version departure breaks "
+                "the comparison chain."
+            ),
+            "counter_decrease": (
+                "Decreases are reported separately because rolling windows and local resets can "
+                "reduce a counter; they are never subtracted from observed increases."
+            ),
+        },
+    }
+
+
 def summarize_target_version_coverage(
     latest_by_install: dict[str, dict[str, Any]],
     published_versions: set[str],
@@ -2425,7 +2901,9 @@ def summarize_rows(
     include_mock_fleet: bool = False,
     *,
     now: datetime | None = None,
+    source_window_days: int | None = None,
     pulse_intelligence_analysis_facts: Iterable[dict[str, Any]] | None = None,
+    target_release_analysis_facts: Iterable[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     row_list: list[dict[str, Any]] = []
     mock_fleet_rows = 0
@@ -2455,6 +2933,17 @@ def summarize_rows(
         for install_id, analysis in pulse_intelligence_analysis.items()
         if install_id in latest_by_install
     }
+    target_release_analysis: dict[str, TargetReleaseInstallAnalysis] = {}
+    if target_version:
+        target_release_analysis = (
+            analyze_target_release_facts(target_release_analysis_facts)
+            if target_release_analysis_facts is not None
+            else analyze_target_release_rows(
+                row_list,
+                published_versions,
+                target_version,
+            )
+        )
     latest_install_windows = summarize_latest_install_windows(
         latest_by_install,
         published_versions,
@@ -2462,6 +2951,16 @@ def summarize_rows(
     )
     summary_72h = latest_install_windows["72h"]
     summary_7d = latest_install_windows["7d"]
+    target_release_followup = None
+    if target_version:
+        target_release_followup = summarize_target_release_followup(
+            latest_by_install,
+            target_release_analysis,
+            published_versions,
+            target_version,
+        )
+        if source_window_days is not None:
+            target_release_followup["source_window_days"] = source_window_days
 
     return {
         "db_stats": db_stats,
@@ -2504,6 +3003,7 @@ def summarize_rows(
         )
         if target_version
         else None,
+        "target_release_followup": target_release_followup,
         "active_latest": {
             "active_24h": latest_install_windows["24h"]["active_installs"],
             "active_72h": summary_72h["active_installs"],
@@ -2744,12 +3244,120 @@ def format_text(summary: dict[str, Any], repo: str, since_days: int) -> str:
         else:
             lines.append("  - none")
 
+    target_followup = summary.get("target_release_followup")
+    if target_followup:
+        lines.extend(
+            [
+                "",
+                f"Target release follow-up ({target_followup['version']}):",
+                "- source window: last "
+                f"{target_followup.get('source_window_days', since_days)} day(s)",
+                f"- installs seen on target: {target_followup['installs_seen']}",
+                f"- target heartbeat rows: {target_followup['target_heartbeat_rows']}",
+                f"- latest version still target: {target_followup['current_target_installs']}",
+                "- attribution-ready installs with a later heartbeat on the same version: "
+                f"{target_followup['same_version_followup_installs']}",
+                "  - still running target: "
+                f"{target_followup['current_target_followup_installs']}",
+                "  - later departed target: "
+                f"{target_followup['departed_followup_installs']}",
+                "- installs without a later same-version heartbeat: "
+                f"{target_followup['without_later_same_version_heartbeat']}",
+                "- first target-version heartbeat in the source window is baseline only; its "
+                "rolling counters are excluded from "
+                "target-release activity",
+                "- observed same-version counter increases on installs still running target:",
+            ]
+        )
+        increased_signals = [
+            signal
+            for signal in target_followup.get("activity_signals", [])
+            if signal["current_target_total_increase"] > 0
+        ]
+        if increased_signals:
+            lines.extend(
+                "  - "
+                f"{signal['label']}: +{signal['current_target_total_increase']} across "
+                f"{signal['current_target_increased_installs']} install(s)"
+                for signal in increased_signals
+            )
+        else:
+            lines.append("  - none")
+
+        departed_increased_signals = [
+            signal
+            for signal in target_followup.get("activity_signals", [])
+            if signal["departed_total_increase"] > 0
+        ]
+        lines.append("- same-version counter increases on installs that later departed target:")
+        if departed_increased_signals:
+            lines.extend(
+                "  - "
+                f"{signal['label']}: +{signal['departed_total_increase']} across "
+                f"{signal['departed_increased_installs']} install(s)"
+                for signal in departed_increased_signals
+            )
+        else:
+            lines.append("  - none")
+
+        decreased_signals = [
+            signal
+            for signal in target_followup.get("activity_signals", [])
+            if signal["current_target_total_decrease"] > 0
+        ]
+        lines.append(
+            "- rolling-counter decreases on installs still running target "
+            "(reported separately, never netted against increases):"
+        )
+        if decreased_signals:
+            lines.extend(
+                "  - "
+                f"{signal['label']}: -{signal['current_target_total_decrease']} across "
+                f"{signal['current_target_decreased_installs']} install(s)"
+                for signal in decreased_signals
+            )
+        else:
+            lines.append("  - none")
+
+        departed_decreased_signals = [
+            signal
+            for signal in target_followup.get("activity_signals", [])
+            if signal["departed_total_decrease"] > 0
+        ]
+        lines.append("- rolling-counter decreases on installs that later departed target:")
+        if departed_decreased_signals:
+            lines.extend(
+                "  - "
+                f"{signal['label']}: -{signal['departed_total_decrease']} across "
+                f"{signal['departed_decreased_installs']} install(s)"
+                for signal in departed_decreased_signals
+            )
+        else:
+            lines.append("  - none")
+
+        for key, heading in (
+            ("rollback_transitions", "rollback transitions"),
+            ("forward_transitions", "forward transitions"),
+            ("unclassified_transitions", "unclassified version departures"),
+        ):
+            transitions = target_followup.get(key, [])
+            lines.append(f"- {heading}:")
+            if transitions:
+                lines.extend(
+                    f"  - {entry['destination_version']}: {entry['installs']} install(s)"
+                    for entry in transitions
+                )
+            else:
+                lines.append("  - none")
+
     target_coverage = summary.get("target_release_coverage_7d")
     if target_coverage:
         lines.extend(
             [
                 "",
-                f"Target release signal coverage (7d, {target_coverage['version']}):",
+                f"Target release latest-state signal coverage (7d, {target_coverage['version']}):",
+                "- interpretation: latest rolling totals show signal availability, not activity "
+                "caused by this release",
                 f"- active installs: {target_coverage['active_installs']}",
                 "- platforms:",
             ]
@@ -2812,7 +3420,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument(
         "--target-version",
         help=(
-            "release version to highlight for per-signal coverage; defaults to "
+            "release version to highlight for latest-state coverage and same-version follow-up; defaults to "
             "the latest published stable release, falling back to the latest RC"
         ),
     )
@@ -2842,7 +3450,12 @@ def main(argv: list[str] | None = None) -> int:
     published_versions = {release["version"] for release in published_releases}
     target_version = args.target_version or latest_target_release_version(published_releases)
     source = (
-        fetch_rows_remote(args.ssh_host, args.db_path, args.since_days)
+        fetch_rows_remote(
+            args.ssh_host,
+            args.db_path,
+            args.since_days,
+            target_version=target_version,
+        )
         if args.ssh_host
         else fetch_rows_local(args.db_path, args.since_days)
     )
@@ -2852,8 +3465,12 @@ def main(argv: list[str] | None = None) -> int:
         published_versions,
         target_version=target_version,
         include_mock_fleet=args.include_mock_fleet,
+        source_window_days=args.since_days,
         pulse_intelligence_analysis_facts=source.get(
             "pulse_intelligence_analysis_facts"
+        ),
+        target_release_analysis_facts=source.get(
+            "target_release_analysis_facts"
         ),
     )
 
