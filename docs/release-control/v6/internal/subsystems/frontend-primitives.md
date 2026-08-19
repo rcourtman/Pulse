@@ -1227,7 +1227,11 @@ not a replacement status card, CTA band, or page-local nested card.
    state, and data-window selection for their product surfaces; shared
    primitives and reusable presentation helpers may own viewport-safe chrome,
    focus treatment, pressed-state affordances, and accessible label builders
-   for repeated controls. Recovery timeline columns follow that split:
+   for repeated controls. Estate-sized Proxmox backup tables follow that split:
+   the storage/recovery feature owns its full-set-to-window projection and
+   spacer placement while reusing the canonical `useTableWindowing` math; it
+   must not invent a feature-local pagination or load-more button shell to avoid
+   mounting the complete result set. Recovery timeline columns follow that split:
    storage/recovery owns the range, selected day, chart/table transport
    windows, and bucket data, while the shared frontend boundary owns the
    reusable button focus/selected styling and ARIA wording so columns expose

@@ -2227,17 +2227,20 @@ local demos. `scripts/toggle-mock.sh` must seed the same `PULSE_MOCK_*`
 defaults as `internal/mock.DefaultConfig`, so managed runtime toggles, local
 demo restarts, and CLI mock status all converge on one canonical dataset
 instead of drifting across shell helpers.
-The canonical mock density today targets a mature small-to-mid homelab /
-SMB environment so platform-first pages exercise real table density on
-first boot. Both `mock_default_entries()` in `scripts/toggle-mock.sh`
-and `internal/mock.DefaultConfig` carry the same baseline: 5 Proxmox
-nodes with 6 VMs and 8 LXCs each, 5 Docker hosts with 14 containers
+The canonical Proxmox mock density targets a large public-demo estate so
+platform-first pages exercise multi-cluster grouping and the production
+workload-windowing path on first boot. `mock_default_entries()` in
+`scripts/toggle-mock.sh`, the public demo deployment environment in
+`.github/workflows/update-demo-server.yml`, and `internal/mock.DefaultConfig`
+carry the same baseline: 32 Proxmox nodes with 10 VMs and 8 LXCs each, arranged
+as five six-node clusters plus two standalone nodes; 5 Docker hosts with 14 containers
 each, 4 standalone Pulse-managed hosts, and 3 Kubernetes clusters
 (production + staging + edge) with 5 nodes, 40 pods, and 14
-deployments each. Bumping either side requires bumping the other (and
+deployments each. Bumping any owner requires bumping the others (and
 the matching `scripts/tests/test-toggle-mock.sh` fixtures) so toggle
-CLIs, managed runtime restarts, and the in-binary default never drift
-apart.
+CLIs, managed runtime restarts, public demo convergence, and the in-binary
+default never drift apart. Existing installations with explicit custom
+`PULSE_MOCK_*` values retain those values during legacy-sidecar migration.
 Mock toggles are runtime transitions, not just environment-file edits. A
 successful `scripts/toggle-mock.sh on|off` run must leave the managed browser
 entrypoint serving the requested `/api/system/mock-mode` state through the

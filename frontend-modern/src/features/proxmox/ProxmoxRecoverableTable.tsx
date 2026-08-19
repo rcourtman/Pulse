@@ -33,6 +33,7 @@ import {
   isCompactBackupIdentityLayout,
   type RecoverableColumnId,
 } from './proxmoxBackupsTablePresentation';
+import { useProxmoxBackupTableWindowing } from './useProxmoxBackupTableWindowing';
 
 // Flat recoverable-artifact table. Parent state owns filtering, sorting, and
 // date/source facets; optional day grouping is presentation only.
@@ -42,6 +43,10 @@ interface DayGroup {
   label: string;
   items: RecoverableArtifact[];
 }
+
+type RecoverableTableItem =
+  | { kind: 'day'; key: string; label: string; count: number }
+  | { kind: 'artifact'; key: string; artifact: RecoverableArtifact };
 
 function groupByDay(artifacts: readonly RecoverableArtifact[]): DayGroup[] {
   const groups: DayGroup[] = [];
@@ -88,9 +93,28 @@ export function ProxmoxRecoverableTable(props: {
   const columnVisible = (column: RecoverableColumnId) =>
     visibleColumns().some((candidate) => candidate.id === column);
   const showDayGroups = () => props.groupByDay && props.sortKey() === 'created';
+  const tableItems = createMemo<RecoverableTableItem[]>(() => {
+    if (!showDayGroups()) {
+      return props.artifacts.map((item) => ({
+        kind: 'artifact',
+        key: item.id,
+        artifact: item,
+      }));
+    }
+
+    return groupByDay(props.artifacts).flatMap((group) => [
+      { kind: 'day' as const, key: group.key, label: group.label, count: group.items.length },
+      ...group.items.map((item) => ({
+        kind: 'artifact' as const,
+        key: item.id,
+        artifact: item,
+      })),
+    ]);
+  });
+  const tableWindow = useProxmoxBackupTableWindowing(tableItems);
 
   const renderRow = (artifact: RecoverableArtifact): JSX.Element => (
-    <TableRow class="hover:bg-surface-hover">
+    <TableRow class="hover:bg-surface-hover" data-proxmox-backup-row="recoverable">
       <TableCell class={`${getPlatformTableCellClassForKind('name')} text-base-content`}>
         <div class="min-w-0">
           <div class="truncate font-semibold">
@@ -184,9 +208,13 @@ export function ProxmoxRecoverableTable(props: {
       }
     >
       <div
-        ref={observedWidth.setElement}
+        ref={(element) => {
+          observedWidth.setElement(element);
+          tableWindow.setRootRef(element);
+        }}
         data-proxmox-backups-table="recoverable"
         data-proxmox-backups-layout={layoutMode()}
+        data-proxmox-backups-windowed={tableWindow.isWindowed()}
       >
         <PlatformTableShell
           tableClass="min-w-[0px] table-fixed text-xs"
@@ -279,29 +307,47 @@ export function ProxmoxRecoverableTable(props: {
           }
           body={
             <>
-              <Show
-                when={showDayGroups()}
-                fallback={<For each={props.artifacts}>{(artifact) => renderRow(artifact)}</For>}
-              >
-                <For each={groupByDay(props.artifacts)}>
-                  {(group) => (
-                    <>
-                      <TableRow>
+              <Show when={tableWindow.topSpacerHeight() > 0}>
+                <TableRow aria-hidden="true">
+                  <TableCell
+                    colspan={visibleColumns().length}
+                    class="border-0 p-0"
+                    height={tableWindow.topSpacerHeight()}
+                  />
+                </TableRow>
+              </Show>
+              <For each={tableWindow.visibleItems()}>
+                {(item) => (
+                  <Show
+                    when={item.kind === 'artifact' ? item.artifact : undefined}
+                    fallback={
+                      <TableRow data-proxmox-backup-row="day">
                         {/* Cell-level background is reliable across table layout engines. */}
                         <TableCell
                           colspan={visibleColumns().length}
                           class="border-t border-border bg-surface-alt px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-base-content"
                         >
-                          {group.label}{' '}
+                          {item.kind === 'day' ? item.label : ''}{' '}
                           <span class="ml-2 normal-case tracking-normal text-muted">
-                            {group.items.length} {group.items.length === 1 ? 'backup' : 'backups'}
+                            {item.kind === 'day' ? item.count : 0}{' '}
+                            {item.kind === 'day' && item.count === 1 ? 'backup' : 'backups'}
                           </span>
                         </TableCell>
                       </TableRow>
-                      <For each={group.items}>{(artifact) => renderRow(artifact)}</For>
-                    </>
-                  )}
-                </For>
+                    }
+                  >
+                    {(artifact) => renderRow(artifact())}
+                  </Show>
+                )}
+              </For>
+              <Show when={tableWindow.bottomSpacerHeight() > 0}>
+                <TableRow aria-hidden="true">
+                  <TableCell
+                    colspan={visibleColumns().length}
+                    class="border-0 p-0"
+                    height={tableWindow.bottomSpacerHeight()}
+                  />
+                </TableRow>
               </Show>
             </>
           }

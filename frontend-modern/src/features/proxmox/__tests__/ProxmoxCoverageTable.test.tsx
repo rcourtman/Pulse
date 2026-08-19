@@ -171,4 +171,46 @@ describe('ProxmoxCoverageTable column visibility', () => {
     expect(document.body.textContent).toContain('History Complete');
     expect(document.body.textContent).toContain('Access Sufficient');
   });
+
+  it('windows large coverage result sets while keeping one continuous table', () => {
+    const rows = Array.from({ length: 600 }, (_, index) => ({
+      ...row,
+      key: `w${index}`,
+      workload: {
+        ...row.workload,
+        key: `w${index}`,
+        vmid: String(100 + index),
+        label: `workload-${index}`,
+        name: `workload-${index}`,
+      },
+    })) as WorkloadCoverageRow[];
+
+    render(() => (
+      <ProxmoxCoverageTable
+        rows={rows}
+        hasAnyRows
+        emptyIcon={<span />}
+        emptyTitle=""
+        emptyDescription=""
+        sortKey={(() => 'posture') as Accessor<CoverageSortKey>}
+        sortDirection={() => 'asc'}
+        onSort={() => {}}
+        expandedKeys={new Set<string>()}
+        onToggleExpand={() => {}}
+        showPbsColumn={true}
+        showArchiveColumn={false}
+        showSnapshotColumn={false}
+        showTaskColumn={false}
+        layoutWidth={() => 1_200}
+      />
+    ));
+
+    expect(document.querySelector('[data-proxmox-backups-table="coverage"]')).toHaveAttribute(
+      'data-proxmox-backups-windowed',
+      'true',
+    );
+    expect(document.querySelectorAll('[data-proxmox-backup-row="coverage"]')).toHaveLength(140);
+    expect(document.body.textContent).toContain('workload-0');
+    expect(document.body.textContent).not.toContain('workload-599');
+  });
 });

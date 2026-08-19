@@ -81,4 +81,43 @@ describe('ProxmoxRecoverableTable responsive columns', () => {
     expect(document.body.textContent).toContain('main / pve1');
     expect(document.body.textContent).toContain('5 PBS files');
   });
+
+  it('windows large dated feeds without adding pagination controls', () => {
+    const artifacts = Array.from({ length: 600 }, (_, index) => ({
+      ...artifact,
+      id: `pbs:web:${index}`,
+      nativeId: `vm/${index}/2026-08-04T08:00:00Z`,
+      workload: {
+        ...artifact.workload,
+        key: `vm:${index}`,
+        vmid: String(index),
+        label: `workload-${index}`,
+        name: `workload-${index}`,
+      },
+    }));
+
+    render(() => (
+      <ProxmoxRecoverableTable
+        artifacts={artifacts}
+        hasAnyArtifacts
+        emptyIcon={<span />}
+        emptyTitle=""
+        emptyDescription=""
+        sortKey={(() => 'created') as Accessor<RecoverableSortKey>}
+        sortDirection={() => 'desc'}
+        onSort={() => {}}
+        sizeMaxBytes={artifact.size ?? 0}
+        groupByDay
+        layoutWidth={() => 1_200}
+      />
+    ));
+
+    expect(document.querySelector('[data-proxmox-backups-table="recoverable"]')).toHaveAttribute(
+      'data-proxmox-backups-windowed',
+      'true',
+    );
+    expect(document.querySelectorAll('[data-proxmox-backup-row]')).toHaveLength(140);
+    expect(document.body.textContent).toContain('workload-0');
+    expect(document.body.textContent).not.toContain('workload-599');
+  });
 });

@@ -7085,6 +7085,7 @@
         "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx",
         "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx",
         "frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx",
+        "frontend-modern/src/features/proxmox/useProxmoxBackupTableWindowing.ts",
         "frontend-modern/src/hooks/useProtectionPostures.ts",
         "frontend-modern/src/hooks/useRecoveryPoints.ts",
         "frontend-modern/src/types/recovery.ts",
@@ -7198,7 +7199,8 @@
               "frontend-modern/src/features/proxmox/proxmoxBackupsTableShared.tsx",
               "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx",
               "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx",
-              "frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx"
+              "frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx",
+              "frontend-modern/src/features/proxmox/useProxmoxBackupTableWindowing.ts"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],

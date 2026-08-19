@@ -1723,6 +1723,19 @@ which owns the Workloads table body measurement and the scroll/resize listener
 lifecycle. Future viewport sync changes must extend through that hook rather
 than rebuilding browser-event wiring or table-body geometry reads inside
 `frontend-modern/src/components/Workloads/useWorkloadsDerivedState.ts`.
+The canonical public demo intentionally exercises this production hot path:
+its default Proxmox estate contains 576 guests, crossing the 500-row windowing
+threshold while retaining the hook's 140-row mounted-window budget. The demo
+curation integration proof must assert both the 500-plus guest total and the
+bounded mounted-row count. That same default estate produces more than 500
+backup coverage targets and recoverable artifacts; the coverage and By date
+tables must route through `useProxmoxBackupTableWindowing.ts`, retain full-set
+filter/sort/count semantics, and mount at most 140 row or day-header items
+without pagination chrome. `internal/mock/demo_scenarios_benchmark_test.go`
+records the corresponding graph-build, recurring sampler-update, and unified
+resource projection costs, and the mock storage topology must stay linear in
+node count so a realistic multi-cluster fixture cannot reintroduce quadratic
+projection work.
 The workload guest-row path now follows the same pattern: the render shell
 stays in `frontend-modern/src/components/Workloads/GuestRow.tsx`, tooltip-backed
 cell presentation lives in `frontend-modern/src/components/Workloads/GuestRowCells.tsx`,

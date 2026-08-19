@@ -1802,11 +1802,12 @@ enumerated backup artifact must never mint protected posture. The
 `internal/mock/demo_scenarios_test.go` evaluates those fixtures through the
 production posture engine.
 Mock fixture defaults in `internal/mock/generator.go` (the `DefaultConfig`
-constant) are also part of that mock-runtime contract. They target a
-mature small-to-mid homelab / SMB environment so platform-first pages
-exercise table density, sorting, grouping, drawer behavior, and
-responsive layout out of the box: 5 Proxmox cluster + standalone nodes
-with 6 VMs and 8 LXCs each, 5 Docker/Podman hosts with 14 containers
+constant) are also part of that mock-runtime contract. The Proxmox default is
+an intentionally large public-demo estate so platform-first pages exercise
+multi-cluster navigation, table density, sorting, grouping, drawer behavior,
+responsive layout, and the production workload-windowing threshold out of the
+box: five named six-node Proxmox clusters plus two standalone nodes, with 10
+VMs and 8 LXCs per node (576 guests total), 5 Docker/Podman hosts with 14 containers
 each, 4 standalone Pulse-managed hosts, and 3 Kubernetes clusters
 (Production EU + Staging EU + Development EU; a fourth Edge / k3s
 profile is curated in `demo_scenarios.go` and instantiates when
@@ -1835,10 +1836,22 @@ nondeterministic; explicit curated outage scenarios remain the owner of
 cluster-wide unavailability.
 Bumps to those defaults must keep the
 curated demo scenario's per-node hostname seasoning in
-`demo_scenarios.go` aligned (today: pve1..pve6 with regional labels,
-shared-fabric storage names, and per-node fallback naming) so the
+`demo_scenarios.go` aligned (today: pve1..pve30 distributed across Production
+West, Production East, Core Services, Disaster Recovery, and Edge Sites, plus
+two named standalone nodes, with regional labels, shared-fabric storage names,
+and per-node fallback naming) so the
 broadcast and snapshot views render the same human-readable estate
 regardless of the configured fixture size. The
+clustered storage graph must remain linear in node count: each node may report
+the cluster's bounded primary and offsite PBS targets, while shared NFS, RBD,
+and CephFS pools are emitted once per cluster rather than once per peer. Demo
+backup history likewise keeps two representative recovery points per protected
+guest so a large estate remains realistic without manufacturing an unbounded
+payload. `TestDefaultDemoProxmoxEstateIsLargeMultiClusterAndBounded` guards the
+estate shape and storage bound, while `demo_scenarios_benchmark_test.go`
+records graph-build, sampler-update, and unified-snapshot costs at the default
+density.
+The
 monitor-broadcast equivalence test
 (`TestMonitorBuildBroadcastFrontendStateUsesCanonicalMockUnifiedResources`)
 compares broadcast count against the canonical snapshot count within a

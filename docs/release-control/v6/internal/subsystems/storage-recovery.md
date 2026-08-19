@@ -148,6 +148,7 @@ command remains a bounded onboarding artifact with server-owned token quoting.
 30. `frontend-modern/src/hooks/useProtectionPostures.ts`
 31. `frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx`
 32. `internal/mock/recovery_points.go`
+33. `frontend-modern/src/features/proxmox/useProxmoxBackupTableWindowing.ts`
 
 ## Shared Boundaries
 
@@ -466,7 +467,16 @@ artifact's source visible and must not flatten PBS verification/protection facts
 into PVE archive or snapshot semantics. Workload coverage posture must be
 derived from real recovery evidence and recent task outcomes, including
 explicit uncovered and failed-latest-task states, rather than from source-detail
-row counts alone. PBS server/datastore rows may display backup counts, but the
+row counts alone. Large-estate rendering must preserve that same full result
+set without mounting every row. `useProxmoxBackupTableWindowing.ts` routes both
+the coverage table and dated artifact feed through the shared table-window math
+once the result set crosses 500 items, keeps at most 140 row/header items
+mounted, and preserves continuous scroll height with table spacers. Filtering,
+sorting, health counts, and day-group counts continue to operate over the
+complete client-side result set; windowing must not become pagination, a partial
+count, or a recovery-local `Next` / `Load more` control. Expanded coverage
+evidence remains owned by the visible workload row.
+PBS server/datastore rows may display backup counts, but the
 counts must come from the PBS backup API artifact identity, not from a
 datastore-capacity approximation. The table owns which PBS artifact count is
 meaningful for the backup-health row, while dense integer count presentation

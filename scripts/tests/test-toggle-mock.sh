@@ -210,8 +210,8 @@ test_ensure_mock_env_file_seeds_canonical_demo_defaults() {
   env_contents="${output}"
 
   assert_contains "ensure_mock_env_file seeds mock mode default" "${env_contents}" "PULSE_MOCK_MODE=false"
-  assert_contains "ensure_mock_env_file seeds canonical node count" "${env_contents}" "PULSE_MOCK_NODES=5"
-  assert_contains "ensure_mock_env_file seeds canonical vm count" "${env_contents}" "PULSE_MOCK_VMS_PER_NODE=6"
+  assert_contains "ensure_mock_env_file seeds canonical node count" "${env_contents}" "PULSE_MOCK_NODES=32"
+  assert_contains "ensure_mock_env_file seeds canonical vm count" "${env_contents}" "PULSE_MOCK_VMS_PER_NODE=10"
   assert_contains "ensure_mock_env_file seeds canonical lxc count" "${env_contents}" "PULSE_MOCK_LXCS_PER_NODE=8"
   assert_contains "ensure_mock_env_file seeds canonical docker host count" "${env_contents}" "PULSE_MOCK_DOCKER_HOSTS=5"
   assert_contains "ensure_mock_env_file seeds canonical docker container count" "${env_contents}" "PULSE_MOCK_DOCKER_CONTAINERS=14"
@@ -254,7 +254,7 @@ EOF
 
   assert_contains "ensure_mock_env_file migrates legacy mock mode" "${env_contents}" "PULSE_MOCK_MODE=true"
   assert_contains "ensure_mock_env_file migrates legacy node count" "${env_contents}" "PULSE_MOCK_NODES=9"
-  assert_contains "ensure_mock_env_file still seeds missing defaults" "${env_contents}" "PULSE_MOCK_VMS_PER_NODE=6"
+  assert_contains "ensure_mock_env_file still seeds missing defaults" "${env_contents}" "PULSE_MOCK_VMS_PER_NODE=10"
 }
 
 test_set_mock_mode_does_not_recreate_legacy_sidecars() {

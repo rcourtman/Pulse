@@ -135,33 +135,109 @@ test.describe.serial("Demo scenario curation", () => {
     // split into per-platform surfaces; the curated estate proof follows.
     await page.goto("/proxmox", { waitUntil: "domcontentloaded" });
     await waitForAppRoute(page);
-    await expect(page.getByTestId("proxmox-page")).toBeVisible({ timeout: 60_000 });
+    await expect(page.getByTestId("proxmox-page")).toBeVisible({
+      timeout: 60_000,
+    });
     await expectSomeRowContains(page, "West Production A");
+    await expectSomeRowContains(page, "East Production A");
+    await expectSomeRowContains(page, "Edge Sites A");
+    await expectSomeRowContains(page, "London Edge Standalone");
+    const workloadSearch = page.getByPlaceholder(
+      "Search VMs and LXCs by name, VMID, node, or status",
+    );
+    await workloadSearch.fill("checkout-web-01");
     await expectSomeRowContains(page, "checkout-web-01");
+    await workloadSearch.press("ControlOrMeta+A");
+    await workloadSearch.press("Backspace");
+    await expect(workloadSearch).toHaveValue("");
     await expectNoRowContains(page, "mock-cluster");
+
+    const guestTotals = page.getByTestId("proxmox-guest-totals");
+    await expect(guestTotals).toBeVisible({ timeout: 30_000 });
+    await expect
+      .poll(async () => {
+        const text = (await guestTotals.innerText()).replace(/\s+/g, " ");
+        return Array.from(
+          text.matchAll(/(\d+) (?:running|attention|stopped)/g),
+        ).reduce((total, match) => total + Number(match[1]), 0);
+      })
+      .toBeGreaterThan(500);
+
+    // The authored estate deliberately crosses the shared workload table's
+    // windowing threshold. Fleet scale must not mean mounting every guest row.
+    await expect
+      .poll(() =>
+        page
+          .getByTestId("workloads-table-surface")
+          .locator("tr.workload-row")
+          .count(),
+      )
+      .toBeGreaterThan(0);
+    expect(
+      await page
+        .getByTestId("workloads-table-surface")
+        .locator("tr.workload-row")
+        .count(),
+    ).toBeLessThanOrEqual(140);
 
     await page.goto("/docker", { waitUntil: "domcontentloaded" });
     await waitForAppRoute(page);
-    await expect(page.getByTestId("docker-page")).toBeVisible({ timeout: 60_000 });
+    await expect(page.getByTestId("docker-page")).toBeVisible({
+      timeout: 60_000,
+    });
     await expectSomeRowContains(page, "customer-portal");
     await expectSomeRowContains(page, "backup-coordinator");
 
     await page.goto("/kubernetes", { waitUntil: "domcontentloaded" });
     await waitForAppRoute(page);
-    await expect(page.getByTestId("kubernetes-page")).toBeVisible({ timeout: 60_000 });
-    await expect(page.getByText('Production EU', { exact: true }).first()).toBeVisible({
+    await expect(page.getByTestId("kubernetes-page")).toBeVisible({
+      timeout: 60_000,
+    });
+    await expect(
+      page.getByText("Production EU", { exact: true }).first(),
+    ).toBeVisible({
       timeout: 30_000,
     });
 
     await page.goto("/proxmox/storage", { waitUntil: "domcontentloaded" });
     await waitForAppRoute(page);
-    await expect(page.getByTestId("storage-page")).toBeVisible({ timeout: 60_000 });
+    await expect(page.getByTestId("storage-page")).toBeVisible({
+      timeout: 60_000,
+    });
     await expectSomeRowContains(page, "shared-backup-fabric");
     await expectSomeRowContains(page, "west-a-service-pool");
     await expectNoRowContains(page, "mock-cluster");
 
     await page.goto("/proxmox/backups", { waitUntil: "domcontentloaded" });
     await waitForAppRoute(page);
+    const coverageTable = page.locator(
+      '[data-proxmox-backups-table="coverage"]',
+    );
+    await expect(coverageTable).toHaveAttribute(
+      "data-proxmox-backups-windowed",
+      "true",
+    );
+    expect(
+      await coverageTable
+        .locator('[data-proxmox-backup-row="coverage"]')
+        .count(),
+    ).toBeLessThanOrEqual(140);
+    const backupSearch = page.getByPlaceholder(
+      "Search backups by workload, node, source, or status",
+    );
+    await backupSearch.fill("checkout-web-01");
     await expectSomeRowContains(page, "checkout-web-01");
+    await backupSearch.fill("");
+    await page.getByRole("button", { name: "By date", exact: true }).click();
+    const recoverableTable = page.locator(
+      '[data-proxmox-backups-table="recoverable"]',
+    );
+    await expect(recoverableTable).toHaveAttribute(
+      "data-proxmox-backups-windowed",
+      "true",
+    );
+    expect(
+      await recoverableTable.locator("[data-proxmox-backup-row]").count(),
+    ).toBeLessThanOrEqual(140);
   });
 });

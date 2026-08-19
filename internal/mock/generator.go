@@ -116,14 +116,14 @@ func mockRecoveryChance(meanRecovery time.Duration) float64 {
 	return currentMockUpdateStepSeconds() / meanRecovery.Seconds()
 }
 
-// Default fixture sizes target a mature small-to-mid homelab / SMB
-// environment so platform pages exercise table density, sorting,
-// grouping, drawer behavior, and responsive layout out of the box:
-//   - 5 Proxmox nodes (cluster + standalone) with 6 VMs and 8 LXCs each.
-//     NodeCount stays at 5 to keep the curated demo scenario in
-//     `internal/mock/demo_scenarios.go` (which seasons pve1..pve5 with
-//     regional labels and shared-fabric storage) the single source of
-//     truth for hostname presentation in mock mode.
+// Default fixture sizes target a large, believable mixed estate so platform
+// pages prove fleet-scale grouping, filtering, windowing, drawers, and
+// responsive layout out of the box:
+//   - 32 Proxmox nodes across five six-node clusters plus two standalone
+//     systems, with enough VMs and LXCs to cross the workload table's bounded
+//     row-window threshold. The curated demo scenario in
+//     `internal/mock/demo_scenarios.go` owns the human-facing site, cluster,
+//     workload, and storage story layered over these graph-native fixtures.
 //   - 5 Docker/Podman hosts with 14 containers each
 //   - 4 standalone Pulse-managed hosts
 //   - 3 Kubernetes clusters (production + staging + edge) with 5 nodes,
@@ -131,8 +131,8 @@ func mockRecoveryChance(meanRecovery time.Duration) float64 {
 //     overview, nodes, pods, and deployments tabs all exercise grouped
 //     and flat layouts against a real multi-cluster footprint
 var DefaultConfig = MockConfig{
-	NodeCount:                5,
-	VMsPerNode:               6,
+	NodeCount:                32,
+	VMsPerNode:               10,
 	LXCsPerNode:              8,
 	DockerHostCount:          5,
 	DockerContainersPerHost:  14,
@@ -901,16 +901,16 @@ func generateNodes(config MockConfig) []models.Node {
 	// never controls an allocation size. The normalized count still controls how
 	// many nodes are generated.
 	nodes := make([]models.Node, 0, maxMockNodeCount)
+	clusterNodeCount := mockProxmoxClusteredNodeCount(config.NodeCount)
 
-	// First 5 nodes are part of the cluster
-	clusterNodeCount := 5
-	if config.NodeCount < 5 {
-		clusterNodeCount = config.NodeCount
-	}
-
-	// Generate clustered nodes
+	// Generate clustered nodes in realistic six-node failure domains. Keeping
+	// cluster identity on the generic graph means every downstream fixture
+	// (guests, storage, Ceph, recovery, and unified resources) inherits the same
+	// topology instead of relying on presentation-only demo rewrites.
 	for i := 0; i < clusterNodeCount; i++ {
 		nodeName := fmt.Sprintf("pve%d", i+1)
+		clusterOrdinal := i/mockProxmoxClusterSize + 1
+		clusterName := fmt.Sprintf("mock-cluster-%d", clusterOrdinal)
 		isHighLoad := false
 		for _, n := range config.HighLoadNodes {
 			if n == nodeName {
@@ -920,10 +920,10 @@ func generateNodes(config MockConfig) []models.Node {
 		}
 
 		node := generateNode(nodeName, isHighLoad, config)
-		node.Instance = "mock-cluster" // Part of cluster
+		node.Instance = clusterName
 		node.DisplayName = fmt.Sprintf("%s (%s)", node.Instance, nodeName)
 		node.IsClusterMember = true
-		node.ClusterName = "mock-cluster"
+		node.ClusterName = clusterName
 		// ID format matches real system: instance-nodename
 		node.ID = fmt.Sprintf("%s-%s", node.Instance, nodeName)
 		node.CPU = sampleNaturalMetric("node", node.ID, "cpu", 0.05, 0.85, 1.0, time.Now())
@@ -961,6 +961,33 @@ func generateNodes(config MockConfig) []models.Node {
 	}
 
 	return nodes
+}
+
+const (
+	mockProxmoxClusterSize     = 6
+	maxMockProxmoxClusterCount = 5
+)
+
+// mockProxmoxClusteredNodeCount assigns nodes to complete or useful cluster
+// groups while leaving a one- or two-node tail as standalone infrastructure.
+// Tiny requested estates also stay standalone: calling one or two nodes a
+// cluster makes the fixture less representative, not more.
+func mockProxmoxClusteredNodeCount(nodeCount int) int {
+	if nodeCount < 3 {
+		return 0
+	}
+
+	maxClustered := mockProxmoxClusterSize * maxMockProxmoxClusterCount
+	clustered := nodeCount
+	if clustered > maxClustered {
+		clustered = maxClustered
+	}
+
+	remainder := clustered % mockProxmoxClusterSize
+	if remainder > 0 && remainder < 3 {
+		clustered -= remainder
+	}
+	return clustered
 }
 
 func generateNode(name string, highLoad bool, config MockConfig) models.Node {
@@ -4752,54 +4779,73 @@ func generateStorage(nodes []models.Node) []models.Storage {
 		// noise rather than a curated estate.
 	}
 
-	// Add PBS storage for each node (simulating node-specific PBS namespaces)
-	// In real clusters, each node reports ALL PBS storage entries but with node-specific namespaces
-	// This matches real behavior where each node sees all PBS configurations
-	clusterNodes := []models.Node{}
-	for _, n := range nodes {
-		if n.Instance == "mock-cluster" {
-			clusterNodes = append(clusterNodes, n)
+	clusterNodesByInstance := make(map[string][]models.Node)
+	for _, node := range nodes {
+		if !node.IsClusterMember || strings.TrimSpace(node.Instance) == "" {
+			continue
 		}
+		clusterNodesByInstance[node.Instance] = append(clusterNodesByInstance[node.Instance], node)
 	}
+	clusterInstances := make([]string, 0, len(clusterNodesByInstance))
+	for instance := range clusterNodesByInstance {
+		clusterInstances = append(clusterInstances, instance)
+	}
+	sort.Strings(clusterInstances)
 
-	// Each cluster node reports ALL PBS storage entries (one for each node)
-	for _, node := range clusterNodes {
-		// Each node sees ALL PBS storage configurations
-		for _, pbsTargetNode := range clusterNodes {
-			pbsTotal := int64(950 * 1024 * 1024 * 1024) // ~950GB matching real PBS
-			pbsID := fmt.Sprintf("%s-%s-pbs-%s", node.Instance, node.Name, pbsTargetNode.Name)
-			pbsUsage := SampleMetric("pbsDatastore", pbsID, "usage", now)
-			pbsUsed := int64(float64(pbsTotal) * (pbsUsage / 100.0))
-			storage = append(storage, models.Storage{
-				ID:       pbsID,
-				Name:     fmt.Sprintf("pbs-%s", pbsTargetNode.Name),
-				Node:     node.Name, // The node that reports this storage
-				Instance: node.Instance,
-				Type:     "pbs",
-				Status:   "available",
-				Total:    pbsTotal,
-				Used:     pbsUsed,
-				Free:     pbsTotal - pbsUsed,
-				Usage:    float64(pbsUsed) / float64(pbsTotal) * 100,
-				Content:  "backup",
-				Shared:   true, // PBS storage is shared cluster-wide (all nodes can access it)
-				Enabled:  true,
-				Active:   true,
-				LastSeen: now,
-			})
+	// Every node reports the cluster's two shared PBS storage definitions. This
+	// stays linear in fleet size: the former one-storage-per-target-node shape
+	// grew quadratically and made a large demo look busy for the wrong reason.
+	for _, clusterInstance := range clusterInstances {
+		clusterNodes := clusterNodesByInstance[clusterInstance]
+		sort.Slice(clusterNodes, func(i, j int) bool { return clusterNodes[i].Name < clusterNodes[j].Name })
+		for _, node := range clusterNodes {
+			for storeIndex, storeName := range []string{"pbs-primary", "pbs-offsite"} {
+				pbsTotal := int64(48+storeIndex*16) * 1024 * 1024 * 1024 * 1024
+				pbsID := fmt.Sprintf("%s-%s-%s", node.Instance, node.Name, storeName)
+				pbsUsage := SampleMetric("pbsDatastore", pbsID, "usage", now)
+				pbsUsed := int64(float64(pbsTotal) * (pbsUsage / 100.0))
+				isOffline := node.Status != "online" || node.ConnectionHealth == "offline" || node.Uptime <= 0
+				status := "available"
+				enabled := true
+				active := true
+				lastSeen := now
+				if isOffline {
+					status = "offline"
+					enabled = false
+					active = false
+					pbsUsed = 0
+					pbsUsage = 0
+					lastSeen = now.Add(-10 * time.Minute)
+				}
+				storage = append(storage, models.Storage{
+					ID:       pbsID,
+					Name:     storeName,
+					Node:     node.Name,
+					Instance: node.Instance,
+					Type:     "pbs",
+					Status:   status,
+					Total:    pbsTotal,
+					Used:     pbsUsed,
+					Free:     pbsTotal - pbsUsed,
+					Usage:    pbsUsage,
+					Content:  "backup",
+					Shared:   true,
+					Enabled:  enabled,
+					Active:   active,
+					LastSeen: lastSeen,
+				})
+			}
 		}
-	}
 
-	// Add a shared storage (NFS or CephFS)
-	if len(nodes) > 1 {
-		sharedTotal := int64(10 * 1024 * 1024 * 1024 * 1024) // 10TB
-		sharedUsage := SampleMetric("storage", "shared-storage", "usage", now)
+		sharedTotal := int64(20 * 1024 * 1024 * 1024 * 1024)
+		sharedID := fmt.Sprintf("%s-shared-storage", clusterInstance)
+		sharedUsage := SampleMetric("storage", sharedID, "usage", now)
 		sharedUsed := int64(float64(sharedTotal) * (sharedUsage / 100.0))
 		storage = append(storage, models.Storage{
-			ID:       "shared-storage",
+			ID:       sharedID,
 			Name:     "shared-storage",
-			Node:     "shared", // Shared storage uses "shared" as node per production code
-			Instance: nodes[0].Instance,
+			Node:     "shared",
+			Instance: clusterInstance,
 			Type:     "nfs",
 			Status:   "available",
 			Total:    sharedTotal,
@@ -4812,25 +4858,15 @@ func generateStorage(nodes []models.Node) []models.Storage {
 			Active:   true,
 			LastSeen: now,
 		})
-	}
 
-	// Cluster-wide Ceph storage (RBD + CephFS) so the Proxmox Ceph
-	// surface has real cluster topology to render. Without these, the
-	// canonical Ceph adapter never sees any cephfs/rbd/ceph-typed
-	// storage and skips cluster synthesis entirely.
-	clusterInstance := ""
-	for _, n := range nodes {
-		if n.Instance == "mock-cluster" {
-			clusterInstance = n.Instance
-			break
-		}
-	}
-	if clusterInstance != "" {
+		// Cluster-wide Ceph storage (RBD + CephFS) keeps every PVE failure
+		// domain visible through the canonical Ceph topology surface.
 		cephRbdTotal := int64(48 * 1024 * 1024 * 1024 * 1024) // 48TB raw
-		cephRbdUsage := SampleMetric("storage", "ceph-rbd", "usage", now)
+		cephRbdID := fmt.Sprintf("%s-ceph-rbd", clusterInstance)
+		cephRbdUsage := SampleMetric("storage", cephRbdID, "usage", now)
 		cephRbdUsed := int64(float64(cephRbdTotal) * (cephRbdUsage / 100.0))
 		storage = append(storage, models.Storage{
-			ID:       fmt.Sprintf("%s-ceph-rbd", clusterInstance),
+			ID:       cephRbdID,
 			Name:     "ceph-rbd",
 			Node:     "shared",
 			Instance: clusterInstance,
@@ -4848,10 +4884,11 @@ func generateStorage(nodes []models.Node) []models.Storage {
 		})
 
 		cephFsTotal := int64(24 * 1024 * 1024 * 1024 * 1024) // 24TB
-		cephFsUsage := SampleMetric("storage", "cephfs-data", "usage", now)
+		cephFsID := fmt.Sprintf("%s-cephfs", clusterInstance)
+		cephFsUsage := SampleMetric("storage", cephFsID, "usage", now)
 		cephFsUsed := int64(float64(cephFsTotal) * (cephFsUsage / 100.0))
 		storage = append(storage, models.Storage{
-			ID:       fmt.Sprintf("%s-cephfs", clusterInstance),
+			ID:       cephFsID,
 			Name:     "cephfs-data",
 			Node:     "shared",
 			Instance: clusterInstance,

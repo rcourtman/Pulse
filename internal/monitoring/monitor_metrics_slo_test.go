@@ -67,8 +67,11 @@ func TestStartMockMetricsSampler_PrewarmsDefaultWorkloadChartCaches(t *testing.T
 	})
 
 	cfg := compactMockFixtureConfig()
-	cfg.VMsPerNode = 1
-	cfg.LXCsPerNode = 1
+	// The fixture intentionally varies per-node guest density. Keep the compact
+	// test floor above that variation so every workload family is guaranteed to
+	// exist regardless of whether the single node is clustered or standalone.
+	cfg.VMsPerNode = 4
+	cfg.LXCsPerNode = 4
 	cfg.DockerHostCount = 1
 	cfg.DockerContainersPerHost = 1
 	cfg.K8sClusterCount = 1

@@ -36,6 +36,7 @@ import {
   isCoverageEvidenceColumnVisible,
   type CoverageColumnId,
 } from './proxmoxBackupsTablePresentation';
+import { useProxmoxBackupTableWindowing } from './useProxmoxBackupTableWindowing';
 
 const coveragePostureVariant = (
   posture: WorkloadCoverageRow['posture'],
@@ -148,6 +149,7 @@ export function ProxmoxCoverageTable(props: {
   const pbsSource = getProxmoxBackupSourcePresentation('pbs');
   const archiveSource = getProxmoxBackupSourcePresentation('archive');
   const snapshotSource = getProxmoxBackupSourcePresentation('snapshot');
+  const tableWindow = useProxmoxBackupTableWindowing(() => props.rows);
 
   return (
     <Show
@@ -167,9 +169,13 @@ export function ProxmoxCoverageTable(props: {
       }
     >
       <div
-        ref={observedWidth.setElement}
+        ref={(element) => {
+          observedWidth.setElement(element);
+          tableWindow.setRootRef(element);
+        }}
         data-proxmox-backups-table="coverage"
         data-proxmox-backups-layout={layoutMode()}
+        data-proxmox-backups-windowed={tableWindow.isWindowed()}
       >
         <PlatformTableShell
           tableClass="min-w-[0px] table-fixed text-xs"
@@ -281,7 +287,16 @@ export function ProxmoxCoverageTable(props: {
           }
           body={
             <>
-              <For each={props.rows}>
+              <Show when={tableWindow.topSpacerHeight() > 0}>
+                <TableRow aria-hidden="true">
+                  <TableCell
+                    colspan={columnCount()}
+                    class="border-0 p-0"
+                    height={tableWindow.topSpacerHeight()}
+                  />
+                </TableRow>
+              </Show>
+              <For each={tableWindow.visibleItems()}>
                 {(row) => {
                   const isExpanded = () => props.expandedKeys.has(row.key);
                   const evidence = () =>
@@ -291,7 +306,7 @@ export function ProxmoxCoverageTable(props: {
                   const detailRowId = () => `proxmox-coverage-evidence-${row.key}`;
                   return (
                     <>
-                      <TableRow class="hover:bg-surface-hover">
+                      <TableRow class="hover:bg-surface-hover" data-proxmox-backup-row="coverage">
                         <TableCell
                           class={`${getPlatformTableCellClassForKind('name')} text-base-content`}
                         >
@@ -656,6 +671,15 @@ export function ProxmoxCoverageTable(props: {
                   );
                 }}
               </For>
+              <Show when={tableWindow.bottomSpacerHeight() > 0}>
+                <TableRow aria-hidden="true">
+                  <TableCell
+                    colspan={columnCount()}
+                    class="border-0 p-0"
+                    height={tableWindow.bottomSpacerHeight()}
+                  />
+                </TableRow>
+              </Show>
             </>
           }
         />

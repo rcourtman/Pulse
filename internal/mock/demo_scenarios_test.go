@@ -92,6 +92,71 @@ func TestBuildFixtureGraphAppliesCuratedDemoScenarioAcrossEstate(t *testing.T) {
 	}
 }
 
+func TestDefaultDemoProxmoxEstateIsLargeMultiClusterAndBounded(t *testing.T) {
+	cfg := DefaultConfig
+	cfg.RandomMetrics = false
+
+	now := time.Date(2026, time.April, 1, 12, 0, 0, 0, time.UTC)
+	graph := buildFixtureGraph(cfg, now)
+
+	if got, want := len(graph.State.Nodes), 32; got != want {
+		t.Fatalf("default demo node count = %d, want %d", got, want)
+	}
+
+	clusterCounts := make(map[string]int)
+	standaloneCount := 0
+	for _, node := range graph.State.Nodes {
+		if node.IsClusterMember {
+			clusterCounts[node.ClusterName]++
+			continue
+		}
+		standaloneCount++
+	}
+	wantClusters := []string{
+		"Production West",
+		"Production East",
+		"Core Services",
+		"Disaster Recovery",
+		"Edge Sites",
+	}
+	for _, clusterName := range wantClusters {
+		if got := clusterCounts[clusterName]; got != mockProxmoxClusterSize {
+			t.Fatalf("cluster %q node count = %d, want %d", clusterName, got, mockProxmoxClusterSize)
+		}
+	}
+	if standaloneCount != 2 {
+		t.Fatalf("standalone Proxmox node count = %d, want 2", standaloneCount)
+	}
+
+	guestCount := len(graph.State.VMs) + len(graph.State.Containers)
+	if guestCount <= 500 || guestCount > 700 {
+		t.Fatalf("default demo guest count = %d, want a windowed but bounded estate in (500, 700]", guestCount)
+	}
+
+	// Local storage, two shared PBS definitions per clustered node, and a
+	// bounded cluster-wide NFS/Ceph set must stay linear in the node count.
+	if storageCount := len(graph.State.Storage); storageCount > len(graph.State.Nodes)*5 {
+		t.Fatalf("default demo storage count = %d, exceeds linear fleet budget %d", storageCount, len(graph.State.Nodes)*5)
+	}
+
+	if !nodeDisplayNameExists(graph, "East Production A") ||
+		!nodeDisplayNameExists(graph, "Edge Sites A") ||
+		!nodeDisplayNameExists(graph, "London Edge Standalone") {
+		t.Fatal("expected multi-site and standalone Proxmox display identities")
+	}
+	if !demoProxmoxNodeIsOffline(graph, demoOfflineProxmoxNode) {
+		t.Fatalf("expected curated offline Proxmox node %q", demoOfflineProxmoxNode)
+	}
+	for _, storage := range graph.State.Storage {
+		if !strings.EqualFold(strings.TrimSpace(storage.Node), demoOfflineProxmoxNode) {
+			continue
+		}
+		if !strings.EqualFold(strings.TrimSpace(storage.Status), "offline") || storage.Active || storage.Enabled {
+			t.Fatalf("offline node storage retained live posture: %+v", storage)
+		}
+	}
+}
+
 func TestCuratedDemoProtectionStoriesProduceRepresentativePostures(t *testing.T) {
 	cfg := DefaultConfig
 	cfg.RandomMetrics = false
@@ -479,7 +544,7 @@ func TestFixtureGraphUpdateMetricsRestoresStableDemoInfrastructurePosture(t *tes
 	graph.UpdateMetrics(cfg, later)
 
 	if !hostsMatchCuratedPosture(graph) {
-		t.Fatal("expected demo host agents to restore curated posture (pve5 + prod-euw1-k8s-03 offline) after metric refresh")
+		t.Fatalf("expected demo host agents to restore curated posture (%s + prod-euw1-k8s-03 offline) after metric refresh", demoOfflineProxmoxNode)
 	}
 	if !dockerHostsMatchCuratedPosture(graph) {
 		t.Fatal("expected curated docker hosts to restore posture (one offline) after metric refresh")
@@ -740,7 +805,7 @@ func pmgInstanceExists(graph FixtureGraph, want string) bool {
 func hostsMatchCuratedPosture(graph FixtureGraph) bool {
 	for _, host := range graph.State.Hosts {
 		hostname := strings.ToLower(strings.TrimSpace(host.Hostname))
-		if hostname == "pve5" || hostname == "prod-euw1-k8s-03" {
+		if isDemoOfflineProxmoxNode(hostname) || hostname == "prod-euw1-k8s-03" {
 			if host.Status != "offline" {
 				return false
 			}
@@ -878,24 +943,47 @@ func connectionHealthMatchesCuratedDemoState(graph FixtureGraph) bool {
 
 func firstLegacyMockClusterLeak(graph FixtureGraph) string {
 	for _, node := range graph.State.Nodes {
-		if strings.EqualFold(node.Instance, "mock-cluster") || strings.EqualFold(node.ClusterName, "mock-cluster") {
+		if isLegacyMockClusterName(node.Instance) || isLegacyMockClusterName(node.ClusterName) {
 			return "node:" + firstNonEmptyTrimmed(node.DisplayName, node.Name, node.ID)
 		}
 	}
 	for _, vm := range graph.State.VMs {
-		if strings.EqualFold(vm.Instance, "mock-cluster") {
+		if isLegacyMockClusterName(vm.Instance) {
 			return "vm:" + firstNonEmptyTrimmed(vm.Name, vm.ID)
 		}
 	}
 	for _, container := range graph.State.Containers {
-		if strings.EqualFold(container.Instance, "mock-cluster") {
+		if isLegacyMockClusterName(container.Instance) {
 			return "container:" + firstNonEmptyTrimmed(container.Name, container.ID)
 		}
 	}
 	for _, storage := range graph.State.Storage {
-		if strings.EqualFold(storage.Instance, "mock-cluster") {
+		if isLegacyMockClusterName(storage.Instance) {
 			return "storage:" + firstNonEmptyTrimmed(storage.Name, storage.ID)
 		}
 	}
+	for _, disk := range graph.State.PhysicalDisks {
+		if isLegacyMockClusterName(disk.Instance) {
+			return "physical-disk:" + firstNonEmptyTrimmed(disk.Model, disk.ID)
+		}
+	}
+	for _, cluster := range graph.State.CephClusters {
+		if isLegacyMockClusterName(cluster.Instance) || isLegacyMockClusterName(cluster.Name) {
+			return "ceph:" + firstNonEmptyTrimmed(cluster.Name, cluster.ID)
+		}
+	}
 	return ""
+}
+
+func isLegacyMockClusterName(value string) bool {
+	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(value)), "mock-cluster")
+}
+
+func demoProxmoxNodeIsOffline(graph FixtureGraph, nodeName string) bool {
+	for _, node := range graph.State.Nodes {
+		if strings.EqualFold(strings.TrimSpace(node.Name), strings.TrimSpace(nodeName)) {
+			return strings.EqualFold(strings.TrimSpace(node.Status), "offline")
+		}
+	}
+	return false
 }

@@ -41,6 +41,14 @@ type demoBackupGuest struct {
 	DiskSize int64
 }
 
+type demoProxmoxClusterProfile struct {
+	SourceInstance    string
+	Name              string
+	NodeDisplayPrefix string
+	StoragePrefix     string
+	SharedStorageName string
+}
+
 type demoDockerHostProfile struct {
 	Hostname    string
 	DisplayName string
@@ -274,7 +282,15 @@ var demoKubernetesPodProfiles = []demoKubernetesPodProfile{
 	{Name: "cron-nightly-backfill-28918234", Namespace: "services", NodeIndex: 2, OwnerKind: "Job", OwnerName: "cron-nightly-backfill", Phase: "Pending", Reason: "PodInitializing", Message: "Waiting for scheduled execution window", Container: "cron-nightly-backfill", Image: "ghcr.io/pulse-demo/cron-nightly-backfill:2026.04", ContainerOK: false},
 }
 
-const demoProxmoxClusterName = "Core Fabric"
+var demoProxmoxClusterProfiles = []demoProxmoxClusterProfile{
+	{SourceInstance: "mock-cluster-1", Name: "Production West", NodeDisplayPrefix: "West Production", StoragePrefix: "west", SharedStorageName: "shared-backup-fabric"},
+	{SourceInstance: "mock-cluster-2", Name: "Production East", NodeDisplayPrefix: "East Production", StoragePrefix: "east", SharedStorageName: "east-shared-fabric"},
+	{SourceInstance: "mock-cluster-3", Name: "Core Services", NodeDisplayPrefix: "Core Services", StoragePrefix: "core", SharedStorageName: "core-shared-fabric"},
+	{SourceInstance: "mock-cluster-4", Name: "Disaster Recovery", NodeDisplayPrefix: "Disaster Recovery", StoragePrefix: "dr", SharedStorageName: "dr-shared-fabric"},
+	{SourceInstance: "mock-cluster-5", Name: "Edge Sites", NodeDisplayPrefix: "Edge Sites", StoragePrefix: "edge", SharedStorageName: "edge-shared-fabric"},
+}
+
+const demoOfflineProxmoxNode = "pve22"
 
 func applyDemoScenarioGraph(graph *FixtureGraph, now time.Time) {
 	if graph == nil {
@@ -405,34 +421,29 @@ func applyDemoNodeScenario(state *models.StateSnapshot) {
 		return
 	}
 
-	nodeDisplayNames := []string{
-		"West Production A",
-		"West Production B",
-		"West Production C",
-		"Disaster Recovery A",
-		"Disaster Recovery B",
-	}
 	for i := range state.Nodes {
-		state.Nodes[i].Instance = scenarioClusterAlias(state.Nodes[i].Instance)
-		if state.Nodes[i].IsClusterMember || strings.TrimSpace(state.Nodes[i].ClusterName) != "" {
-			state.Nodes[i].ClusterName = scenarioClusterAlias(state.Nodes[i].ClusterName)
+		node := &state.Nodes[i]
+		sourceInstance := node.Instance
+		node.Instance = scenarioClusterAlias(node.Instance)
+		if node.IsClusterMember || strings.TrimSpace(node.ClusterName) != "" {
+			node.ClusterName = scenarioClusterAlias(node.ClusterName)
 		}
-		if i < len(nodeDisplayNames) {
-			state.Nodes[i].DisplayName = nodeDisplayNames[i]
+		if displayName := demoProxmoxNodeDisplayName(*node, sourceInstance); displayName != "" {
+			node.DisplayName = displayName
 		}
-		if state.Nodes[i].Name == "pve5" {
-			state.Nodes[i].Status = "offline"
-			state.Nodes[i].CPU = 0
-			state.Nodes[i].Memory.Used = 0
-			state.Nodes[i].Memory.Usage = 0
-			state.Nodes[i].Memory.Free = state.Nodes[i].Memory.Total
-			state.Nodes[i].Memory.SwapUsed = 0
-			state.Nodes[i].Disk.Used = 0
-			state.Nodes[i].Disk.Free = state.Nodes[i].Disk.Total
-			state.Nodes[i].Disk.Usage = -1
-			state.Nodes[i].Uptime = 0
-			state.Nodes[i].LoadAverage = []float64{0.0, 0.0, 0.0}
-			state.Nodes[i].ConnectionHealth = "offline"
+		if isDemoOfflineProxmoxNode(node.Name) {
+			node.Status = "offline"
+			node.CPU = 0
+			node.Memory.Used = 0
+			node.Memory.Usage = 0
+			node.Memory.Free = node.Memory.Total
+			node.Memory.SwapUsed = 0
+			node.Disk.Used = 0
+			node.Disk.Free = node.Disk.Total
+			node.Disk.Usage = -1
+			node.Uptime = 0
+			node.LoadAverage = []float64{0.0, 0.0, 0.0}
+			node.ConnectionHealth = "offline"
 		}
 	}
 
@@ -472,7 +483,7 @@ func applyDemoWorkloadScenario(workloads []models.VM, profiles []demoWorkloadPro
 		workloads[i].Instance = scenarioClusterAlias(workloads[i].Instance)
 		workloads[i].Tags = mergeScenarioTags(workloads[i].Tags, profile.Tags)
 		workloads[i].Status = normalizeWorkloadState(profile.ForceState, "running")
-		if workloads[i].Node == "pve5" {
+		if isDemoOfflineProxmoxNode(workloads[i].Node) {
 			workloads[i].Status = "stopped"
 		}
 		if workloads[i].Status == "stopped" {
@@ -512,7 +523,7 @@ func applyDemoContainerScenario(workloads []models.Container, profiles []demoWor
 		workloads[i].Instance = scenarioClusterAlias(workloads[i].Instance)
 		workloads[i].Tags = mergeScenarioTags(workloads[i].Tags, profile.Tags)
 		workloads[i].Status = normalizeWorkloadState(profile.ForceState, "running")
-		if workloads[i].Node == "pve5" {
+		if isDemoOfflineProxmoxNode(workloads[i].Node) {
 			workloads[i].Status = "stopped"
 		}
 		if workloads[i].Status == "stopped" {
@@ -963,7 +974,7 @@ func applyDemoHostScenario(state *models.StateSnapshot, now time.Time) {
 			host.DisplayName = humanizeHostDisplayName(host.Hostname)
 		}
 		hostname := strings.ToLower(strings.TrimSpace(host.Hostname))
-		if hostname == "pve5" || hostname == "prod-euw1-k8s-03" {
+		if isDemoOfflineProxmoxNode(hostname) || hostname == "prod-euw1-k8s-03" {
 			host.Status = "offline"
 			host.CPUUsage = 0
 			host.Memory.Used = 0
@@ -1005,12 +1016,37 @@ func applyDemoStorageScenario(state *models.StateSnapshot, now time.Time) {
 		return
 	}
 
+	offlineNodes := make(map[string]struct{})
+	for _, node := range state.Nodes {
+		if strings.EqualFold(strings.TrimSpace(node.Status), "offline") {
+			offlineNodes[strings.ToLower(strings.TrimSpace(node.Name))] = struct{}{}
+		}
+	}
 	for i := range state.Storage {
 		storage := &state.Storage[i]
 		if name := strings.TrimSpace(storageScenarioAlias(*storage)); name != "" {
 			storage.Name = name
 		}
 		storage.Instance = scenarioClusterAlias(storage.Instance)
+		if _, offline := offlineNodes[strings.ToLower(strings.TrimSpace(storage.Node))]; offline {
+			storage.Status = "offline"
+			storage.Enabled = false
+			storage.Active = false
+			storage.Used = 0
+			storage.Free = storage.Total
+			storage.Usage = 0
+			if !now.IsZero() {
+				storage.LastSeen = now.Add(-10 * time.Minute)
+			}
+		}
+	}
+	for i := range state.PhysicalDisks {
+		state.PhysicalDisks[i].Instance = scenarioClusterAlias(state.PhysicalDisks[i].Instance)
+	}
+	for i := range state.CephClusters {
+		cluster := &state.CephClusters[i]
+		cluster.Instance = scenarioClusterAlias(cluster.Instance)
+		cluster.Name = scenarioClusterAlias(cluster.Name)
 	}
 
 	for i := range state.PBSInstances {
@@ -1240,6 +1276,7 @@ func applyDemoBackupScenario(
 
 	for i := range state.ReplicationJobs {
 		job := &state.ReplicationJobs[i]
+		job.Instance = scenarioClusterAlias(job.Instance)
 		if profile, ok := vmProfiles[job.GuestID]; ok {
 			job.GuestName = profile.Name
 		}
@@ -1350,7 +1387,10 @@ func demoProtectionArtifacts(
 	if baseAge <= 0 {
 		baseAge = 12 * time.Hour
 	}
-	backupAges := []time.Duration{baseAge, baseAge + 24*time.Hour, baseAge + 4*24*time.Hour}
+	// Two evidence-backed recovery points per protected guest are enough to
+	// demonstrate recency and retention without multiplying the public demo's
+	// payload by a third historical copy across a 500+ workload estate.
+	backupAges := []time.Duration{baseAge, baseAge + 4*24*time.Hour}
 	storageBackups := make([]models.StorageBackup, 0, len(backupAges))
 	for index, age := range backupAges {
 		backupAt := now.Add(-age)
@@ -1483,17 +1523,31 @@ func normalizeWorkloadState(preferred, fallback string) string {
 }
 
 func scenarioClusterAlias(name string) string {
-	switch strings.TrimSpace(strings.ToLower(name)) {
-	case "", "standalone":
-		return strings.TrimSpace(name)
-	case "mock-cluster":
-		return demoProxmoxClusterName
-	default:
-		return name
+	trimmed := strings.TrimSpace(name)
+	if trimmed == "" || strings.EqualFold(trimmed, "standalone") {
+		return trimmed
 	}
+	if strings.EqualFold(trimmed, "mock-cluster") {
+		return demoProxmoxClusterProfiles[0].Name
+	}
+	if profile, ok := lookupDemoProxmoxClusterProfile(trimmed); ok {
+		return profile.Name
+	}
+	return name
 }
 
 func storageScenarioAlias(storage models.Storage) string {
+	normalizedName := strings.ToLower(strings.TrimSpace(storage.Name))
+	if profile, ok := lookupDemoProxmoxClusterProfile(storage.Instance); ok {
+		switch normalizedName {
+		case "shared-storage":
+			return profile.SharedStorageName
+		case "pbs-primary":
+			return profile.StoragePrefix + "-backup-primary"
+		case "pbs-offsite":
+			return profile.StoragePrefix + "-backup-offsite"
+		}
+	}
 	return scenarioStorageAliasForNode(storage.Name, storage.Node)
 }
 
@@ -1504,49 +1558,68 @@ func scenarioStorageAliasForNode(name, node string) string {
 	switch normalizedName {
 	case "shared-storage":
 		return "shared-backup-fabric"
-	case "pbs-pve1":
-		return "backup-vault-a"
-	case "pbs-pve2":
-		return "backup-vault-b"
-	case "pbs-pve3":
-		return "backup-vault-c"
 	case "local":
-		switch normalizedNode {
-		case "pve1":
-			return "west-a-iso-library"
-		case "pve2":
-			return "west-b-iso-library"
-		case "pve3":
-			return "west-c-iso-library"
-		case "pve4":
-			return "dr-a-iso-library"
-		case "pve5":
-			return "dr-b-iso-library"
-		case "pve6":
-			return "dr-c-iso-library"
-		default:
-			return fmt.Sprintf("%s-iso-library", normalizedNode)
-		}
+		return fmt.Sprintf("%s-iso-library", demoProxmoxNodeStoragePrefix(normalizedNode))
 	case "local-zfs":
-		switch normalizedNode {
-		case "pve1":
-			return "west-a-service-pool"
-		case "pve2":
-			return "west-b-service-pool"
-		case "pve3":
-			return "west-c-service-pool"
-		case "pve4":
-			return "dr-a-service-pool"
-		case "pve5":
-			return "dr-b-service-pool"
-		case "pve6":
-			return "dr-c-service-pool"
-		default:
-			return fmt.Sprintf("%s-service-pool", normalizedNode)
-		}
+		return fmt.Sprintf("%s-service-pool", demoProxmoxNodeStoragePrefix(normalizedNode))
 	default:
 		return trimmedName
 	}
+}
+
+func lookupDemoProxmoxClusterProfile(sourceInstance string) (demoProxmoxClusterProfile, bool) {
+	for _, profile := range demoProxmoxClusterProfiles {
+		if strings.EqualFold(strings.TrimSpace(sourceInstance), profile.SourceInstance) ||
+			strings.EqualFold(strings.TrimSpace(sourceInstance), profile.Name) {
+			return profile, true
+		}
+	}
+	return demoProxmoxClusterProfile{}, false
+}
+
+func demoProxmoxNodeOrdinal(nodeName string) (int, bool) {
+	normalized := strings.ToLower(strings.TrimSpace(nodeName))
+	if !strings.HasPrefix(normalized, "pve") {
+		return 0, false
+	}
+	ordinal, err := strconv.Atoi(strings.TrimPrefix(normalized, "pve"))
+	return ordinal, err == nil && ordinal > 0
+}
+
+func demoProxmoxNodeDisplayName(node models.Node, sourceInstance string) string {
+	if profile, ok := lookupDemoProxmoxClusterProfile(sourceInstance); ok {
+		ordinal, valid := demoProxmoxNodeOrdinal(node.Name)
+		if !valid {
+			return profile.NodeDisplayPrefix
+		}
+		letter := rune('A' + (ordinal-1)%mockProxmoxClusterSize)
+		return fmt.Sprintf("%s %c", profile.NodeDisplayPrefix, letter)
+	}
+
+	switch strings.ToLower(strings.TrimSpace(node.Name)) {
+	case "standalone1":
+		return "London Edge Standalone"
+	case "standalone2":
+		return "Automation Lab Standalone"
+	default:
+		return humanizeHostDisplayName(node.Name)
+	}
+}
+
+func demoProxmoxNodeStoragePrefix(nodeName string) string {
+	if ordinal, ok := demoProxmoxNodeOrdinal(nodeName); ok {
+		clusterIndex := (ordinal - 1) / mockProxmoxClusterSize
+		if clusterIndex >= 0 && clusterIndex < len(demoProxmoxClusterProfiles) {
+			profile := demoProxmoxClusterProfiles[clusterIndex]
+			letter := rune('a' + (ordinal-1)%mockProxmoxClusterSize)
+			return fmt.Sprintf("%s-%c", profile.StoragePrefix, letter)
+		}
+	}
+	return strings.ReplaceAll(strings.ToLower(strings.TrimSpace(nodeName)), "_", "-")
+}
+
+func isDemoOfflineProxmoxNode(nodeName string) bool {
+	return strings.EqualFold(strings.TrimSpace(nodeName), demoOfflineProxmoxNode)
 }
 
 func defaultDemoVMwareMetrics() *vmware.InventoryMetrics {

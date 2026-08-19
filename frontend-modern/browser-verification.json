@@ -1,34 +1,44 @@
 {
   "version": 1,
-  "base_sha": "2d801e20f32a4320bca2861294021669ea1dfdd3",
-  "verified_at": "2026-08-19T14:41:38Z",
+  "base_sha": "57e08985c37e33dc48e90345afe98c1d7a8f1a31",
+  "verified_at": "2026-08-19T15:24:06Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/features/proxmox/ProxmoxBackupsCoverageStrip.tsx"
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx",
+    "frontend-modern/src/features/proxmox/useProxmoxBackupTableWindowing.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/proxmox/ProxmoxBackupsCoverageStrip.tsx": "ba2d275d1db2a7a9c21d02ab4dac5cd62712d2d641c0cda8c2cf7e7af3ca5483"
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx": "82e2164c3190b49a6540531576b598862ce829b353236cc8df6946e4b3fd917d",
+    "frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx": "ebf464760597dbb92c172e9b51284578f156ddcae574da87c097a9dd7b6381f3",
+    "frontend-modern/src/features/proxmox/useProxmoxBackupTableWindowing.ts": "6e9ba89417d2d664c3a40f0e29922414bbc103e738e9698ea584049c67790fd0"
   },
   "routes": [
+    "/proxmox/overview",
     "/proxmox/backups"
   ],
   "viewports": [
     {
       "width": 1280,
-      "height": 800
+      "height": 720
     },
     {
-      "width": 320,
+      "width": 390,
       "height": 844
     }
   ],
   "states": [
-    "Backup Health coverage strip with live target and restore-point summary, proportional status bar, and legend",
-    "At 320x844 the summary occupies a full-width row directly below the title and starts at the same 21px content inset without an empty auto-margin column",
-    "At 1280x800 the title and summary remain on one baseline with the summary aligned to the right edge"
+    "Large Proxmox overview showing 578 workloads across five named six-node clusters and two standalone nodes with no legacy mock aliases",
+    "Overview workload table capped at 140 mounted rows while preserving the complete fleet totals and exact filtered results",
+    "Backup Coverage showing 581 targets, 1874 restore points, 225 PBS snapshots, and at most 140 mounted rows",
+    "Backup By date view preserving day headings and restore artifacts within the same 140-row mounted window",
+    "Coverage and By date tables at desktop and 390px narrow widths with continuous table geometry and responsive columns"
   ],
   "interactions": [
-    "Reloaded the Backups route after the source change at both verified viewport sizes",
-    "Inspected the rendered title and summary bounding boxes and confirmed narrow left alignment plus preserved desktop right alignment"
+    "Searched the overview for checkout-web-01 and confirmed the exact deep-estate workload appeared in approximately 176ms",
+    "Scrolled through the large overview and backup tables to verify continuous window advancement without pagination or load-more controls",
+    "Switched between Coverage and By date backup views and confirmed each mounted at most 140 rows",
+    "Searched backups for checkout-web-01 and confirmed the exact deep-estate result appeared in approximately 82ms",
+    "Reloaded and inspected overview, backup coverage, and backup date states at 1280x720 and 390x844"
   ]
 }
