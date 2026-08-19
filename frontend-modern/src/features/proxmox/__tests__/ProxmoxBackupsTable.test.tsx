@@ -315,6 +315,10 @@ describe('ProxmoxBackupsTable', () => {
 
     await screen.findAllByText('pbs-docker');
 
+    const healthSummary = screen.getByText(/targets · .*restore points/);
+    expect(healthSummary.parentElement).toHaveClass('w-full', 'sm:ml-auto', 'sm:w-auto');
+    expect(healthSummary.parentElement).not.toHaveClass('ml-auto');
+
     expect(proxmoxBackupsTableSource).toContain(
       "import { FilterSegmentedControl } from '@/components/shared/FilterToolbar';",
     );

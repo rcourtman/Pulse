@@ -473,6 +473,9 @@ meaningful for the backup-health row, while dense integer count presentation
 belongs to `frontend-primitives`: backup count cells must compose
 `PlatformTableNumberValue` with `formatPlatformTableIntegerValue` instead of
 reintroducing local `toLocaleString()` formatting.
+The backup-health coverage strip must keep its aggregate target and restore-point
+context visibly associated with the strip at phone widths; responsive wrapping
+must not leave a reserved empty column between the title and that context.
 The Proxmox Backups toolbar is durable recovery navigation, not transient
 component state. Search, active workspace, node, guest type, source, posture,
 and selected activity day use the canonical `PROXMOX_BACKUPS_QUERY_PARAMS`

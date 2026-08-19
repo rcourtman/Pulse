@@ -4229,6 +4229,10 @@ Its feature owner may clear incompatible hidden facets when the workspace
 changes and may preserve that workspace during a composite reset, but the
 shared `FilterBar` remains the sole owner of Saved, Clear, filter-menu, and
 popover chrome across desktop and narrow layouts.
+`ProxmoxBackupsCoverageStrip` keeps its compact context on the title baseline at
+desktop widths and gives that context a full-width, left-aligned row below the
+title on narrow screens. A wrapped context must not retain an auto margin that
+creates an apparent empty column.
 That surface also keeps asynchronous posture presentation explicit: an
 unresolved canonical posture request uses a neutral `Checking` row state and
 coverage segment, while host and orphan recovery rows without a canonical

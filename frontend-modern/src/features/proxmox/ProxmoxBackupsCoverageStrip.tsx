@@ -40,7 +40,7 @@ export const ProxmoxBackupsCoverageStrip: Component<CoverageStripProps> = (props
           {props.title}
         </div>
         <Show when={props.tail}>
-          <div class="ml-auto text-[11px] text-muted">{props.tail}</div>
+          <div class="w-full text-[11px] text-muted sm:ml-auto sm:w-auto">{props.tail}</div>
         </Show>
       </div>
       <Show
