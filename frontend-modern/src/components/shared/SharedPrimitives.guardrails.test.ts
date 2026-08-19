@@ -297,9 +297,7 @@ import addFilterMenuSource from '@/components/shared/FilterBar/AddFilterMenu.tsx
 import filterCatalogSource from '@/components/shared/FilterBar/filterCatalog.ts?raw';
 import filterBarOptionPresentationSource from '@/components/shared/FilterBar/filterOptionPresentation.tsx?raw';
 import filterBarIndexSource from '@/components/shared/FilterBar/index.ts?raw';
-import savedViewsMenuSource from '@/components/shared/FilterBar/SavedViewsMenu.tsx?raw';
 import viewOptionsMenuSource from '@/components/shared/FilterBar/ViewOptionsMenu.tsx?raw';
-import useSavedViewsSource from '@/components/shared/FilterBar/useSavedViews.ts?raw';
 import storagePageControlsSource from '@/components/Storage/StoragePageControls.tsx?raw';
 import orgSwitcherSource from '@/components/OrgSwitcher.tsx?raw';
 import resourceDetailDrawerOverviewTabSource from '@/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx?raw';
@@ -8191,9 +8189,12 @@ describe('shared primitive guardrails', () => {
     expect(filterBarIndexSource).toContain("export { FilterBar } from './FilterBar';");
     expect(filterBarIndexSource).toContain("export { FilterChip } from './FilterChip';");
     expect(filterBarIndexSource).toContain("export { AddFilterMenu } from './AddFilterMenu';");
-    expect(filterBarIndexSource).toContain("export { SavedViewsMenu } from './SavedViewsMenu';");
     expect(filterBarIndexSource).not.toContain('ViewOptionsMenu');
-    expect(filterBarIndexSource).toContain("export { useSavedViews } from './useSavedViews';");
+    // Saved views were removed: URL-backed filters already make a filtered page
+    // a shareable, bookmarkable link, so the browser's own bookmarks cover the
+    // job the localStorage view library duplicated (worse: no sync, lost on
+    // clearing site data, not shareable).
+    expect(filterBarIndexSource).not.toContain('SavedViews');
     expect(filterBarIndexSource).toContain(
       "export { filterChipStatusDot } from './filterOptionPresentation';",
     );
@@ -8311,31 +8312,11 @@ describe('shared primitive guardrails', () => {
     expect(addFilterMenuSource).not.toContain('Search filters');
     expect(addFilterMenuSource).not.toContain('Search values');
 
-    // Saved views: per-page named filter combos persist to
-    // localStorage under `pulse:filterbar:saved-views:<key>`. The hook owns
-    // storage IO + URL navigation; the menu owns the dropdown chrome.
-    expect(useSavedViewsSource).toContain(
-      "import { useLocation, useNavigate } from '@solidjs/router';",
-    );
-    expect(useSavedViewsSource).toContain("'pulse:filterbar:saved-views:'");
-    expect(useSavedViewsSource).toContain('export interface SavedView');
-    expect(useSavedViewsSource).toContain('saveCurrent');
-    expect(useSavedViewsSource).toContain('removeView');
-    expect(useSavedViewsSource).toContain('applyView');
-    expect(useSavedViewsSource).toContain('navigate(path,');
-    expect(useSavedViewsSource).toContain('writeStored');
-    expect(useSavedViewsSource).toContain('readStored');
     // Hook is robust to malformed localStorage and SSR.
-    expect(useSavedViewsSource).toContain("typeof window === 'undefined'");
-    expect(useSavedViewsSource).toContain('JSON.parse');
-    // saveCurrent must snapshot the full URL search string so saved views
     // capture every URL-synced state (active filter chips AND the page's
     // search query, which every page URL-syncs through `?q=...`). A future
     // refactor that narrows the snapshot to a curated subset would silently
-    // strip search from saved views.
-    expect(useSavedViewsSource).toContain("window.location.search.replace(/^\\?/, '')");
 
-    expect(savedViewsMenuSource).toContain("from './useSavedViews';");
     expect(filterToolbarSource).toContain('export const FilterPopoverTrigger');
     expect(filterToolbarSource).toContain('export const filterBottomNavAwarePanelClass');
     expect(filterToolbarSource).toContain(
@@ -8344,8 +8325,6 @@ describe('shared primitive guardrails', () => {
     expect(viewOptionsMenuSource).toContain('<FilterPopoverTrigger');
     expect(viewOptionsMenuSource).toContain('class="static ml-auto shrink-0 sm:relative sm:ml-0"');
     expect(viewOptionsMenuSource).toContain('filterBottomNavAwarePanelClass');
-    expect(savedViewsMenuSource).toContain('<FilterPopoverTrigger');
-    expect(savedViewsMenuSource).toContain('filterBottomNavAwarePanelClass');
     expect(filterCatalogSource).toContain('leadingControls?: JSX.Element;');
     expect(filterCatalogSource).toContain('viewOptions?: JSX.Element;');
     expect(filterCatalogSource).toContain('trailingControls?: JSX.Element;');
@@ -8363,21 +8342,6 @@ describe('shared primitive guardrails', () => {
       'showClearAll={() => Boolean(props.hasActiveFilters) || props.search().trim().length > 0}',
     );
     expect(sharedPlatformPageSource).toContain('onClearAll={props.onResetFilters}');
-    expect(savedViewsMenuSource).toContain('class="relative shrink-0"');
-    expect(savedViewsMenuSource).toContain('class="h-3.5 w-3.5"');
-    expect(savedViewsMenuSource).toContain('aria-label="Saved views"');
-    expect(savedViewsMenuSource).toContain('aria-haspopup="dialog"');
-    expect(savedViewsMenuSource).toContain('role="dialog"');
-    expect(savedViewsMenuSource).not.toContain('role="menu"');
-    expect(savedViewsMenuSource).not.toContain('role="menuitem"');
-    expect(savedViewsMenuSource).toContain('Save current view as...');
-    expect(savedViewsMenuSource).toContain("event.key === 'Enter'");
-    expect(savedViewsMenuSource).toContain('queueMicrotask(() => nameInputRef?.focus())');
-    expect(savedViewsMenuSource).toContain('queueMicrotask(() => triggerRef?.focus())');
-    expect(savedViewsMenuSource).toContain('for={nameInputId}');
-    expect(savedViewsMenuSource).toContain('class={`${filterBottomNavAwarePanelClass} z-50 p-0`}');
-    expect(savedViewsMenuSource).toContain('opacity-100 transition-opacity');
-    expect(savedViewsMenuSource).toContain('sm:opacity-0');
 
     // FilterBar consumers — each migrated page should declare a catalog of
     // FilterDef entries rather than rendering the labelled-select row from

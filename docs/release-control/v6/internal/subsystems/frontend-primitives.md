@@ -137,8 +137,6 @@ puts the same machine on two surfaces that do not share an identity.
 57. `frontend-modern/src/components/shared/FilterBar/AddFilterMenu.tsx`
 58. `frontend-modern/src/components/shared/FilterBar/filterCatalog.ts`
 59. `frontend-modern/src/components/shared/FilterBar/index.ts`
-    59a. `frontend-modern/src/components/shared/FilterBar/SavedViewsMenu.tsx`
-    59b. `frontend-modern/src/components/shared/FilterBar/useSavedViews.ts`
     59c. `frontend-modern/src/components/shared/FilterBar/filterOptionPresentation.tsx`
 60. `frontend-modern/src/components/shared/TypeColumn.guardrails.test.ts`
 61. `frontend-modern/src/features/` (including Patrol presentation, where Patrol control starter counts are context only even when mirrored through `patrolAutonomy*` compatibility fields, successful direct Patrol control saves may record the content-free `patrol_control` starter only when paid control is available and the effective control posture changes and must then refresh Patrol status, findings, approvals, and run history before the operator waits for polling, legacy `proActivation*` starter aliases must not render a separate proof strip by themselves, Patrol control completed/resolved counts may only project backend-owned terminal proof, current active findings and pending approvals outrank historical completion proof in the primary operator state, selected run history must read as a Patrol run record rather than a findings filter or snapshot workflow, terminal verified/rejected outcomes with no active finding or pending approval must stay history detail without rendering a no-op proof strip, resolved-only issue history must not be promoted into current-work copy or actions, compact recurrence/trust counters must read as historical evidence rather than current issue state, Patrol-owned status/history evidence must keep the assessment visible when the broader intelligence summary is missing, Patrol work-group chips may group current approvals, failed actions, failed checks, recurring active issues, and stale scheduled protection but must not become a separate status/trust/proof strip, the Patrol route and page title must lead with Patrol while the default workspace underneath may use Open work and run history stays a deliberate secondary review surface, setup-only Patrol runtime failures must instead use `Fix Patrol setup` framing with a dedicated setup task and direct provider-settings action while suppressing generic issue-row chips and filter chrome, Patrol must not expose a generic Details/supporting-context panel for nearby activity, related patterns, or policy limits, locked-control copy must state the watch-only boundary in positive capability language by saying Patrol checks infrastructure and shows current issues, avoid repeating the same sentence across the header and control, and avoid repeatedly restating infrastructure-unchanged caveats or relying on disabled controls, compact Pro badges, Limits controls, or manual-review framing, `patrolControlValueState` decides whether a terminal decision is partial review context or verified value proof while `patrolAutonomyValueState` remains a compatibility mirror, legacy `proActivation*` fields are compatibility fallback only, native Patrol state must not load the operations-loop status projection to decide current work, local Patrol state must expose issue-backed `patrolWork*` evidence rather than legacy proof naming, Patrol mode labels remain domain copy that must describe backend-owned risk policy without creating page-local safety thresholds, the selected Patrol mode sentence must state the approval and policy boundary without adding a second limits panel or proof strip, the Patrol schedule and model drawer must stay separate from the always-visible Patrol mode selector instead of duplicating the four control choices or reintroducing save/apply configuration framing, and Patrol header refresh controls must call an explicit operator-refresh handler whose spinning/disabled state is separate from background polling and initial data loads)
@@ -348,7 +346,7 @@ shared leading-control rail when the context is actionable for the inventory
 immediately below it. Consumers must use that extension point for local
 attention counts and review actions instead of introducing a parallel filter
 card or a routine page-wide posture banner; the toolbar continues to own
-responsive placement alongside saved views, View preferences, and row counts.
+responsive placement alongside View preferences and row counts.
 Frequently used leading context remains visible when the mobile filter body is
 collapsed and moves into the canonical action rail when that body is expanded;
 lower-priority trailing orientation controls remain collapsed with the rail.
@@ -1545,7 +1543,7 @@ Agent`), with the plain-language source phrase available through accessible
    autoscaling section beneath it; selecting the active cluster again clears
    that scope. The same URL-backed Cluster facet is available on Workloads,
    Services, and Configuration and composes with the existing namespace,
-   search, and status parameters so saved views, bookmarks, and shared links
+   search, and status parameters so bookmarks and shared links
    retain the complete scope. Changing cluster scope clears namespace scope to
    prevent a namespace from the previous cluster from silently hiding all
    rows. Cluster names remain separate from their external web-interface
@@ -4247,25 +4245,25 @@ affordance, it should extend the FilterBar catalog model or add a new
 registry-backed shared primitive rather than reintroducing a per-page select
 row.
 
-Pages may opt into saved views by passing `savedViewsKey` to
-`FilterBar`. The `useSavedViews` hook owns the localStorage IO + URL
-navigation (`pulse:filterbar:saved-views:<key>`); `SavedViewsMenu` owns
-the dropdown chrome. A "view" is the page's URL query string at save
-time, so saved views double as shareable links: copying the bar URL
-after applying a view gives someone else the exact filtered state.
-Every filter captured by a saved view must therefore be URL-owned before the
-Saved trigger is exposed. The Machines surface uses the canonical
-`STANDALONE_QUERY_PARAMS` query and status keys, delegates one composite reset
-to `StandalonePageSurface`, and supplies the `standalone-machines` saved-view
-scope to `AgentsMachinesTable`; it must not mix a local search signal with a
+FilterBar does not carry a saved-views affordance. The former
+`savedViewsKey` / `useSavedViews` / `SavedViewsMenu` trio persisted named
+query strings to localStorage under `pulse:filterbar:saved-views:<key>`; it
+was removed because a saved view was only ever the page's URL query string,
+which the browser's own bookmarks already capture, sync, search, and share.
+The URL-ownership rule it depended on survives it and is now the primary
+contract: every filter a surface exposes must be URL-owned, so a filtered page
+is a shareable, bookmarkable link. Do not reintroduce an in-app view library;
+extend URL coverage instead. The Machines surface uses the canonical
+`STANDALONE_QUERY_PARAMS` query and status keys and delegates one composite
+reset to `StandalonePageSurface`; it must not mix a local search signal with a
 route-owned status facet or issue consecutive route writes that can resurrect
 one cleared parameter.
-The Proxmox Backups surface follows the same saved-view boundary with
+The Proxmox Backups surface follows the same URL-ownership boundary with
 `PROXMOX_BACKUPS_QUERY_PARAMS`: search, workspace, scope, per-workspace facet,
-and selected activity day are all route-owned before `savedViewsKey` is set.
+and selected activity day are all route-owned.
 Its feature owner may clear incompatible hidden facets when the workspace
 changes and may preserve that workspace during a composite reset, but the
-shared `FilterBar` remains the sole owner of Saved, Clear, filter-menu, and
+shared `FilterBar` remains the sole owner of Clear, filter-menu, and
 popover chrome across desktop and narrow layouts.
 `ProxmoxBackupsCoverageStrip` keeps its compact context on the title baseline at
 desktop widths and gives that context a full-width, left-aligned row below the
@@ -4293,13 +4291,12 @@ panel anchors from the trigger's leading edge on the expanded mobile filter
 rail, where the trigger wraps to the left edge, and returns to trailing-edge
 alignment on desktop so its management actions cannot run past either viewport
 edge.
-Saved Views and View are peer filter-bar popovers and must compose the shared
-`FilterPopoverTrigger`; the shared trigger owns their matching text emphasis,
-icon geometry, disclosure chevron, active state, and button alignment instead
-of allowing each popup wrapper to restyle that contract independently. The
-expanded mobile rail keeps Saved and View together in one action row; when no
-menu-backed filter row is present, contextual Clear filters joins that row
-instead of forcing View onto an isolated line. View takes the row's available
+Filter-bar popovers must compose the shared `FilterPopoverTrigger`; the
+shared trigger owns their matching text emphasis, icon geometry, disclosure
+chevron, active state, and button alignment instead of allowing each popup
+wrapper to restyle that contract independently. When no menu-backed filter row
+is present, contextual Clear filters joins the mobile action row instead of
+forcing View onto an isolated line. View takes the row's available
 trailing space and anchors its panel from the mobile action rail's trailing
 edge, then returns to trigger-relative trailing alignment on desktop; Saved
 keeps its leading-edge mobile anchor.

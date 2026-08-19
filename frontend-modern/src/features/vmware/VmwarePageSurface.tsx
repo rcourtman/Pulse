@@ -390,7 +390,6 @@ function VmwareOverview(props: VmwareOverviewProps) {
       <Show when={showSharedFilterToolbar()}>
         <div data-summary-clear-ignore>
           <WorkloadsFilter
-            savedViewsKey={workloadsState.savedViewsKey()}
             search={workloadsState.search}
             setSearch={workloadsState.setSearch}
             viewMode={workloadsState.viewMode}

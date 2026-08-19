@@ -194,9 +194,9 @@ type SharedToolbarState = {
 };
 
 // Search and status live in the URL, like the namespace scope below, so the
-// whole filter state is shareable and captured by saved views. That is what
-// makes -term exclusions persistent: search `-name`, save it as the default
-// view, and the noisy rows stay hidden on every visit. URL writes replace the
+// whole filter state is shareable and bookmarkable. That is what makes -term
+// exclusions portable: search `-name`, bookmark the resulting URL, and the
+// noisy rows stay hidden every time you open it. URL writes replace the
 // history entry so typing does not pile up back-button states.
 function createKubernetesSharedToolbar(): SharedToolbarState {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -253,9 +253,9 @@ type KubernetesInventoryScope = {
 
 // Cluster and namespace scope for a shared-toolbar Kubernetes tab. The shared
 // toolbar drives several stacked tables at once, so both facets pre-filter every
-// section rather than living on any one table. URL-backed scope is shareable,
-// captured by saved views, and lets the Overview cluster table drive the
-// workload inventory beneath it.
+// section rather than living on any one table. URL-backed scope is shareable and
+// bookmarkable, and lets the Overview cluster table drive the workload
+// inventory beneath it.
 function createKubernetesInventoryScope(
   sections: Accessor<Resource[][]>,
 ): KubernetesInventoryScope {
@@ -406,7 +406,6 @@ function KubernetesWorkloads(props: {
           onStatusChange={toolbar.setStatus}
           statusOptions={PLATFORM_HEALTH_FILTER_OPTIONS}
           filters={scopeFilters()}
-          savedViewsKey="kubernetes-workloads"
           leadingControls={
             <Show when={(props.attentionCount ?? 0) > 0}>
               <div
@@ -522,7 +521,6 @@ function KubernetesServices(props: { model: KubernetesPageModel }) {
           onStatusChange={toolbar.setStatus}
           statusOptions={PLATFORM_HEALTH_FILTER_OPTIONS}
           filters={scope.scopeFilters()}
-          savedViewsKey="kubernetes-services"
           visible={visibleRows()}
           total={totalRows()}
           rowNoun="rows"
@@ -596,7 +594,6 @@ function KubernetesConfiguration(props: { model: KubernetesPageModel }) {
           onStatusChange={toolbar.setStatus}
           statusOptions={PLATFORM_HEALTH_FILTER_OPTIONS}
           filters={scope.scopeFilters()}
-          savedViewsKey="kubernetes-config"
           visible={visibleRows()}
           total={totalRows()}
           rowNoun="rows"

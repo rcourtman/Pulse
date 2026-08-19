@@ -1237,12 +1237,11 @@ export function PlatformTableToolbar<T extends string | number>(props: {
   hasActiveFilters?: boolean;
   onResetFilters?: () => void;
   // Optional scope filters (host / node / namespace / pool ...) appended after
-  // the status facet, plus an optional saved-views storage key. Tables opt into
+  // the status facet. Tables opt into
   // richer combinable filtering without bypassing the shared toolbar; the
   // status facet stays the inline segmented control and scope filters render as
   // chips behind "+ Filter".
   filters?: FilterDef[];
-  savedViewsKey?: string;
   /**
    * Compact consumer-owned context that belongs beside the table controls,
    * such as an attention count with a focused review action.
@@ -1267,7 +1266,7 @@ export function PlatformTableToolbar<T extends string | number>(props: {
   // collapse) instead of a bespoke search + segmented-status row. The public
   // prop surface is unchanged: search passes straight through and the single
   // status facet is modelled as an inline segmented control. Tables that want
-  // additional scope filters or saved views opt in via the FilterBar directly.
+  // additional scope filters opt in via the FilterBar directly.
   const allFilters: FilterDef[] = [
     {
       id: 'status',
@@ -1309,7 +1308,6 @@ export function PlatformTableToolbar<T extends string | number>(props: {
       }}
       filters={allFilters}
       showAddFilterLabel={false}
-      savedViewsKey={props.savedViewsKey}
       leadingControls={props.leadingControls}
       viewOptions={
         <>

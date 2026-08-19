@@ -1,25 +1,78 @@
 {
   "version": 1,
-  "base_sha": "202f3b2f4c57a82dd186b99f17ad6598b9b5c1a2",
-  "verified_at": "2026-08-19T19:30:37Z",
+  "base_sha": "547afd2d17867d1be13797d6308c98284525456c",
+  "verified_at": "2026-08-19T20:01:48Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/shared/FilterBar/FilterBar.tsx"
+    "frontend-modern/src/components/Settings/AuditLogPanel.tsx",
+    "frontend-modern/src/components/Storage/Storage.tsx",
+    "frontend-modern/src/components/Storage/StoragePageControls.tsx",
+    "frontend-modern/src/components/Workloads/WorkloadsFilter.tsx",
+    "frontend-modern/src/components/Workloads/WorkloadsSurface.tsx",
+    "frontend-modern/src/components/Workloads/useWorkloadUrlSync.ts",
+    "frontend-modern/src/components/Workloads/useWorkloadsState.ts",
+    "frontend-modern/src/components/Workloads/workloadsFilterModel.ts",
+    "frontend-modern/src/components/shared/FilterBar/FilterBar.tsx",
+    "frontend-modern/src/components/shared/FilterBar/SavedViewsMenu.tsx",
+    "frontend-modern/src/components/shared/FilterBar/filterCatalog.ts",
+    "frontend-modern/src/components/shared/FilterBar/index.ts",
+    "frontend-modern/src/components/shared/FilterBar/useSavedViews.ts",
+    "frontend-modern/src/features/alerts/AlertHistoryFiltersCard.tsx",
+    "frontend-modern/src/features/docker/DockerContainersTable.tsx",
+    "frontend-modern/src/features/kubernetes/KubernetesPageSurface.tsx",
+    "frontend-modern/src/features/platformPage/sharedPlatformPage.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx",
+    "frontend-modern/src/features/standalone/AgentsMachinesTable.tsx",
+    "frontend-modern/src/features/standalone/StandalonePageSurface.tsx",
+    "frontend-modern/src/features/vmware/VmwarePageSurface.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/shared/FilterBar/FilterBar.tsx": "da32fc05ad316c42040575940da6cc13f7f8534f2c31dcc1985f74d3145b0148"
+    "frontend-modern/src/components/Settings/AuditLogPanel.tsx": "3ec47cffc5921365a789b05fbb9d2a9002974df2a6db1523ae71db061b124801",
+    "frontend-modern/src/components/Storage/Storage.tsx": "8d9a6b3f78b5b8d694a09aee18349f66fec81529f21e47d47053a024ac3dc52c",
+    "frontend-modern/src/components/Storage/StoragePageControls.tsx": "f4c7f06ec6fea2f2e34ded9908f79c90ae55d9bfc96674b8cfbaeb3181cccc2e",
+    "frontend-modern/src/components/Workloads/WorkloadsFilter.tsx": "d639c27b017c6fa96ec431bbe841ebc38e6417d9a6c54a5d9ce32291c7455586",
+    "frontend-modern/src/components/Workloads/WorkloadsSurface.tsx": "3a41bf1bd3bcc7f26e586ee150b40558532b9b2887463ae930ce7f08879ed33a",
+    "frontend-modern/src/components/Workloads/useWorkloadUrlSync.ts": "2e5b0e59bd204299483fe51ccc199859e2fc0f21d8122eb3a879a002bb14d594",
+    "frontend-modern/src/components/Workloads/useWorkloadsState.ts": "f6b491b4ab05333b933f2dfd6bdc099dba005a65e643b7cd7daba71750d3bc73",
+    "frontend-modern/src/components/Workloads/workloadsFilterModel.ts": "2db9b55b63d51ec1c802f5094fedbfcae48a2435370c704ab575611b9e5de393",
+    "frontend-modern/src/components/shared/FilterBar/FilterBar.tsx": "050208432907f3d8792d20cf3b17513cf4c88d161514479904494770c2066f6c",
+    "frontend-modern/src/components/shared/FilterBar/SavedViewsMenu.tsx": "deleted",
+    "frontend-modern/src/components/shared/FilterBar/filterCatalog.ts": "5452714b77d1351e4f85921411a64d4dde7152aa8a2aba2b489a8af7346a4e7c",
+    "frontend-modern/src/components/shared/FilterBar/index.ts": "66d9e1452cc370e8e1e0b7c3675daccf113479c49aff868b236eddadbc699a95",
+    "frontend-modern/src/components/shared/FilterBar/useSavedViews.ts": "deleted",
+    "frontend-modern/src/features/alerts/AlertHistoryFiltersCard.tsx": "2915f7b24d8fed33b184d7fb38235afaec2a1ae5e3c284598891117a2d6045e4",
+    "frontend-modern/src/features/docker/DockerContainersTable.tsx": "d62b73afe8ddf5792b928d8fa550e206ed59be8a0b67d845f23d7a43f039a89c",
+    "frontend-modern/src/features/kubernetes/KubernetesPageSurface.tsx": "a91d94d80d092071eb24e69a291ef0e95882fe3a1059adc2e03b24ee56af3cc8",
+    "frontend-modern/src/features/platformPage/sharedPlatformPage.tsx": "8b1610e0135a310df8146577bfe50a41468dcb9a37bf655580c2838a350b5467",
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx": "6df9928955507b75e589bf4b310cd323f6f3d65a7336dd4e7e604d999a25c2a9",
+    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx": "62fc19b42934d428bf4db2ee652621e1465531d4b16beaae1d90d85bc106f883",
+    "frontend-modern/src/features/standalone/AgentsMachinesTable.tsx": "0aea2cf00d43e3ea87319ac630e71b71a7f9602315bc011164c3e623eba321f6",
+    "frontend-modern/src/features/standalone/StandalonePageSurface.tsx": "f055818ac46f80fe039d6c93c1291e4c657faea1985d59adbf892b307098bf87",
+    "frontend-modern/src/features/vmware/VmwarePageSurface.tsx": "8a7cdbd5d03aa343be626855b6f0bc8b5c86ac6815cfad5db526b0f686335f84"
   },
   "routes": [
-    "/proxmox/overview?type=container"
+    "/proxmox/overview",
+    "/proxmox/overview?status=running",
+    "/proxmox/backups",
+    "/proxmox/storage",
+    "/docker",
+    "/kubernetes",
+    "/kubernetes/workloads",
+    "/kubernetes/services",
+    "/kubernetes/configuration",
+    "/vmware",
+    "/standalone/machines",
+    "/alerts/history"
   ],
   "viewports": [
     {
-      "width": 1440,
+      "width": 1280,
       "height": 900
     },
     {
-      "width": 1034,
-      "height": 1234
+      "width": 1024,
+      "height": 900
     },
     {
       "width": 390,
@@ -27,16 +80,25 @@
     }
   ],
   "states": [
-    "Proxmox 1440px desktop filter rail with inline filters on the left and utility actions at the right edge of the same row",
-    "Proxmox 1034px wrapped filter rail with Add filter, Saved, Clear filters, and View beginning at the same left edge as the inline filters",
-    "Proxmox 390px collapsed mobile filter state",
-    "Proxmox 390px expanded mobile filter state with its action rows left-aligned",
-    "Wide, wrapped, and narrow layouts without document-level horizontal overflow"
+    "desktop 1280x900: action cluster renders Add filter / Clear filters / View with no Saved control and no residual gap",
+    "desktop 1280x900: cluster keeps the rebased justify-between rail and max-w-full justify-start cluster classes from 547afd2d1",
+    "desktop 1024x900: rail wraps and the action cluster left-aligns flush with the rail (cluster left 53px == rail left 53px), which is the wrapped case 547afd2d1 fixes, verified with the Saved control absent",
+    "desktop 1280x900: Proxmox Backups cluster renders Add filter only",
+    "desktop 1280x900: Machines toolbar renders View + machine count only",
+    "mobile 390x844: filter body collapsed shows only search + Filters toggle with its active-count badge",
+    "mobile 390x844: filter body expanded renders the action row without any Saved control",
+    "mobile 390x844: with status=running active, exactly one Clear filters button renders (no duplicate)",
+    "mobile 390x844: /alerts/history has no auxiliary controls so the mobile action row is not rendered at all rather than rendered empty",
+    "no Saved views control on any exercised surface and no pulse:filterbar:saved-views:* localStorage keys remain"
   ],
   "interactions": [
-    "Reloaded the active Proxmox LXC route and waited for the shared workload controls to hydrate",
-    "Resized from the natural 1034x1234 wrapped layout to 1440x900 and confirmed both rails shared one baseline with opposite-edge alignment",
-    "Resized to 390x844, expanded Filters, and confirmed Add filter, Clear filters, Saved, and View retained the mobile leading-edge layout",
-    "Measured the controls rail and action cluster at each responsive state and confirmed the wrapped rail's leading edges matched"
+    "signed in as admin and opened each platform surface",
+    "expanded the mobile filter body via the Filters toggle on /proxmox/overview and /alerts/history",
+    "activated the Running status facet on mobile and confirmed the URL became ?status=running",
+    "confirmed exactly one Clear filters control renders with an active filter on mobile",
+    "reloaded /proxmox/overview?status=running from a bare URL and confirmed the Running facet was restored, which is the bookmark path that replaces saved views",
+    "re-exercised every viewport after rebasing onto 547afd2d1 because that commit changed the same action-cluster alignment classes; measured the wrapped cluster geometry at 1024px rather than re-pinning hashes on an unexercised merge",
+    "scanned each exercised route for a Saved views control and for saved-views localStorage keys, both empty",
+    "checked the console on a fresh tab against this build: no errors"
   ]
 }

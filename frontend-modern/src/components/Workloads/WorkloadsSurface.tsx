@@ -119,7 +119,6 @@ export function WorkloadsSurface(props: WorkloadsSurfaceComponentProps) {
         >
           <div data-summary-clear-ignore>
             <WorkloadsFilter
-              savedViewsKey={state.savedViewsKey()}
               search={state.search}
               setSearch={state.setSearch}
               viewMode={state.viewMode}

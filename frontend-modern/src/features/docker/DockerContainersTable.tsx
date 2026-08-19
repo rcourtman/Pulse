@@ -281,9 +281,9 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
       : getWorkloadTableLayoutModeForContainer(measuredWidth);
   });
   // Search and status live in the URL, like the host scope below, so the
-  // whole filter state is shareable and captured by saved views. That is what
-  // makes exclusions persistent: search `-name`, save it as the default view,
-  // and the containers stay hidden on every visit. URL writes replace the
+  // whole filter state is shareable and bookmarkable. That is what makes
+  // exclusions portable: search `-name`, bookmark the resulting URL, and the
+  // containers stay hidden every time you open it. URL writes replace the
   // history entry so typing does not pile up back-button states.
   const [searchParams, setSearchParams] = useSearchParams();
   const searchFilter = () => {
@@ -731,7 +731,6 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
             onStatusChange={tableState.setStatus}
             statusOptions={PLATFORM_HEALTH_FILTER_OPTIONS}
             filters={scopeFilters()}
-            savedViewsKey="docker-containers"
             visible={scopedRows().length}
             total={tableState.total()}
             rowNoun="containers"

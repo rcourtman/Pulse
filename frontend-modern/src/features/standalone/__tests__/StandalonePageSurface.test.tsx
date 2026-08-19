@@ -19,7 +19,6 @@ const mocks = vi.hoisted(() => ({
       externalStatus?: () => string;
       onExternalStatusChange?: (value: string) => void;
       onResetFilters?: () => void;
-      savedViewsKey?: string;
     }) => <div data-testid="agents-machines-table" data-resource-count={props.resources.length} />,
   ),
   AvailabilityChecksTable: vi.fn((props: { resources: Resource[] }) => (
@@ -168,7 +167,6 @@ describe('StandalonePageSurface', () => {
       { q: null, status: null },
       { replace: true },
     );
-    expect(props?.savedViewsKey).toBe('standalone-machines');
   });
 
   it('keeps overview focused on Pulse Agent machines only', () => {

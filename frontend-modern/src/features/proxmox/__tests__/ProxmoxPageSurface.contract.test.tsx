@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Resource } from '@/types/resource';
 import { ProxmoxPageSurface } from '../ProxmoxPageSurface';
 import proxmoxPageSurfaceSource from '../ProxmoxPageSurface.tsx?raw';
+import proxmoxBackupsTableSource from '../ProxmoxBackupsTable.tsx?raw';
 
 const mockUseUnifiedResources = vi.fn();
 const mockPathname = vi.hoisted(() => vi.fn(() => '/proxmox/overview'));
@@ -270,6 +271,16 @@ describe('ProxmoxPageSurface contract', () => {
         topology: { clusters: 1, nodes: 1, standalone: 0 },
       }),
     );
+  });
+
+  it('keeps Proxmox workload and backup filters free of a saved-views affordance', () => {
+    // Saved views persisted the page's URL query string to localStorage. The
+    // browser's own bookmarks already do that and survive a cleared cache, so
+    // the control was removed; PROXMOX_BACKUPS_QUERY_PARAMS keeps the backup
+    // toolbar URL-owned and therefore still shareable.
+    expect(proxmoxPageSurfaceSource).not.toContain('savedViewsKey');
+    expect(proxmoxBackupsTableSource).not.toContain('savedViewsKey');
+    expect(proxmoxBackupsTableSource).not.toContain('SavedViews');
   });
 
   it('places workload controls beside the workload table they affect', () => {

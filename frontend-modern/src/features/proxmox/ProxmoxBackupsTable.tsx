@@ -715,7 +715,6 @@ export const ProxmoxBackupsTable: Component<{
               placeholder: 'Search backups by workload, node, source, or status',
             }}
             filters={buildBackupsFilters()}
-            savedViewsKey="proxmox-backups"
             showClearAll={hasActiveBackupsFilters}
             onClearAll={resetBackupsFilters}
             searchTrailing={

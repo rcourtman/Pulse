@@ -1172,7 +1172,6 @@ export const AgentsMachinesTable: Component<{
   externalStatus?: () => PlatformResourceStatusFilter;
   onExternalStatusChange?: (value: PlatformResourceStatusFilter) => void;
   onResetFilters?: () => void;
-  savedViewsKey?: string;
 }> = (props) => {
   const [locallyRemovedResourceIds, setLocallyRemovedResourceIds] = createSignal<
     Record<string, boolean>
@@ -1412,7 +1411,6 @@ export const AgentsMachinesTable: Component<{
           status={tableState.status()}
           onStatusChange={tableState.setStatus}
           statusOptions={PLATFORM_HEALTH_FILTER_OPTIONS}
-          savedViewsKey={props.savedViewsKey}
           visible={tableState.visible()}
           total={tableState.total()}
           rowNoun="machines"

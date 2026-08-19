@@ -21,19 +21,6 @@ vi.mock('@/hooks/useBreakpoint', () => ({
   }),
 }));
 
-// Mock @solidjs/router so the saved-views menu can call useNavigate /
-// useLocation outside a Router context. The tests don't exercise navigation.
-vi.mock('@solidjs/router', () => ({
-  useNavigate: () => () => undefined,
-  useLocation: () => ({
-    pathname: '/proxmox/overview',
-    search: '',
-    hash: '',
-    state: null,
-    query: {},
-  }),
-}));
-
 vi.mock('@/components/shared/SearchInput', () => ({
   SearchInput: (props: {
     value: () => string;
@@ -327,7 +314,6 @@ describe('WorkloadsFilter', () => {
       render(() => (
         <WorkloadsFilter
           {...makeProps({
-            savedViewsKey: 'test-workloads',
             pinnedSelectionActive: () => false,
             onClearPinnedSelection: vi.fn(),
             hostFilter: {

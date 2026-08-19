@@ -304,7 +304,6 @@ export const WorkloadsFilter: Component<WorkloadsFilterProps> = (props) => {
       searchTrailing={props.searchTrailing}
       filters={buildFilters()}
       showAddFilterLabel={false}
-      savedViewsKey={props.savedViewsKey}
       leadingControls={
         props.pinnedSelectionActive?.() && props.onClearPinnedSelection ? (
           <FilterActionButton

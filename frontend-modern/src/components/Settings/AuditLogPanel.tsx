@@ -240,7 +240,6 @@ export default function AuditLogPanel() {
             placeholder: 'Filter by user...',
           }}
           filters={buildAuditFilters()}
-          savedViewsKey="audit"
           viewOptions={
             <div>
               <div class="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted">

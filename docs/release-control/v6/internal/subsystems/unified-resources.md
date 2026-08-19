@@ -1319,7 +1319,7 @@ AI-only summary payloads, or page-local heuristics.
     not new unified-resource membership fields. `StandalonePageSurface.tsx`
     owns the `STANDALONE_QUERY_PARAMS` query/status projection and one composite
     reset, while `AgentsMachinesTable.tsx` consumes those controlled values so
-    saved links and saved views cannot diverge from the canonical projected row
+    saved links and bookmarks cannot diverge from the canonical projected row
     set. Those query parameters must only narrow the already-owned agent
     projection; they must not cause provider nodes or availability endpoints to
     enter the Machines membership bucket.

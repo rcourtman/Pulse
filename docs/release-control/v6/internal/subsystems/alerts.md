@@ -430,6 +430,13 @@ can share one resource, `resourceIncidentPanel` carries the originating
 keeps exactly one panel open at a time. Re-triggering the same row closes it,
 matching the neighbouring Timeline toggle.
 
+The alert history filter bar carries no saved-views affordance.
+`AlertHistoryFiltersCard.tsx` must not pass a `savedViewsKey` to the shared
+`FilterBar`; that prop and the localStorage view library behind it were
+removed because a saved view was only ever the page's URL query string, which
+the browser's own bookmarks already capture and share. History narrowing stays
+URL-owned so a filtered history page remains a shareable, bookmarkable link.
+
 Alert history row timestamps render clock time in the viewer's own locale and
 must carry the absolute date and time as a title. The date otherwise lives
 only in the day group header, which scrolls out of sight, and a hardcoded

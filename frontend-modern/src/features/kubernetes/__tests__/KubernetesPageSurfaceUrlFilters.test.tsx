@@ -5,7 +5,7 @@ import type { Resource } from '@/types/resource';
 import { KubernetesPageSurface } from '../KubernetesPageSurface';
 
 // URL-backed shared-toolbar filters: the workloads / services / configuration
-// tabs read search (q) and status from the URL so saved views capture -term
+// tabs read search (q) and status from the URL so bookmarks capture -term
 // exclusions, mirroring the Docker containers table. These tests render the
 // real surface with a real router; only the data hooks are mocked.
 

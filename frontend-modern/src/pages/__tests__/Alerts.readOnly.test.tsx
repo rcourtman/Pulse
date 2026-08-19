@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { Alerts } from '@/pages/Alerts';
 import alertsPageSource from '@/pages/Alerts.tsx?raw';
+import alertHistoryFiltersCardSource from '@/features/alerts/AlertHistoryFiltersCard.tsx?raw';
 
 const navigateSpy = vi.hoisted(() => vi.fn());
 const presentationPolicyIsReadOnlyMock = vi.hoisted(() => vi.fn(() => false));
@@ -116,6 +117,14 @@ describe('Alerts read-only presentation', () => {
   });
 
   afterEach(() => cleanup());
+
+  it('keeps alert history narrowing URL-owned with no saved-views affordance', () => {
+    // Saved views stored the page's URL query string in localStorage. Bookmarks
+    // already do that, and better, so the control was removed; history filters
+    // stay URL-owned and the filtered page remains a shareable link.
+    expect(alertHistoryFiltersCardSource).not.toContain('savedViewsKey');
+    expect(alertHistoryFiltersCardSource).not.toContain('SavedViews');
+  });
 
   it('keeps the mobile tab shell on shared scroll classes instead of inline styles', () => {
     expect(alertsPageSource).toContain('touch-scroll');

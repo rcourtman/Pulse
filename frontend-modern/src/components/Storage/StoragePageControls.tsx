@@ -78,10 +78,8 @@ type StoragePageControlsProps = {
   // Platform-embedded storage tabs use the search box for host/node
   // scoping, matching the platform overview filter contract.
   suppressNodeFilter?: boolean;
-  // Enables the SavedViews menu in the FilterBar. Caller is responsible
   // for picking a key that namespaces views per platform context so
   // saved queries from one platform do not leak into another.
-  savedViewsKey?: string;
 };
 
 export const StoragePageControls: Component<StoragePageControlsProps> = (props) => {
@@ -286,7 +284,6 @@ export const StoragePageControls: Component<StoragePageControlsProps> = (props) 
           role="group"
           ariaLabel={props.filterAriaLabel ?? 'Storage filters'}
           isMobile={isMobile}
-          savedViewsKey={props.savedViewsKey}
           search={{
             value: props.search,
             setValue: props.setSearch,

@@ -107,7 +107,7 @@ describe('useWorkloadsControlsState', () => {
     });
   });
 
-  it('URL-backs free-text search via q so saved views capture -term exclusions', () => {
+  it('URL-backs free-text search via q so bookmarks capture -term exclusions', () => {
     createRoot((dispose) => {
       try {
         const [showFilters, setShowFilters] = createSignal(false);

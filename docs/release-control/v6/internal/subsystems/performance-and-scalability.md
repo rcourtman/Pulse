@@ -1840,14 +1840,14 @@ grouped/list selector instead of reintroducing local `Group By` casing or
 platform-specific cluster wording. Dense workload toolbar variants must keep
 the filter and presentation rails wrap-capable instead of forcing a single
 no-wrap row that clips trailing actions. The workload shell leaves Type,
-Status, dynamic scope, saved views, and contextual `Clear filters` actions on
+Status, dynamic scope, and contextual `Clear filters` actions on
 the primary filter rail. Durable presentation choices — grouped/list mode,
 bars/trends, chart visibility, Guest/Host memory basis, and Columns — pass
 their panel content through `FilterBar.viewOptions` instead of importing or
 wrapping `ViewOptionsMenu` in the workload feature or rendering as equally
 prominent filter toggles. The shared FilterBar owns View composition across
-desktop and mobile layouts, including the mobile action-row placement shared
-with Saved views. Saved, contextual Clear, leading actions, and View stay in
+desktop and mobile layouts, including the mobile action-row placement.
+Contextual Clear, leading actions, and View stay in
 one non-breaking mobile action cluster; trailing analytical controls and result
 counts wrap independently so a narrow toolbar cannot strand View on a line by
 itself or force page-level horizontal overflow. The compact Add filter control

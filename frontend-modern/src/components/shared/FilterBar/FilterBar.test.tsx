@@ -1,18 +1,7 @@
-import { Route, Router } from '@solidjs/router';
 import { cleanup, fireEvent, render, screen, within } from '@solidjs/testing-library';
-import type { JSX } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { FilterBar } from './FilterBar';
 import type { FilterDef } from './filterCatalog';
-
-// SavedViewsMenu URL-backs view application (useNavigate/useLocation), so
-// savedViewsKey renders must sit inside a Router context.
-const renderInRouter = (component: () => JSX.Element) =>
-  render(() => (
-    <Router>
-      <Route path="/" component={component} />
-    </Router>
-  ));
 
 const search = {
   value: () => '',
@@ -122,44 +111,13 @@ describe('FilterBar', () => {
     expect(onClearAll).toHaveBeenCalledTimes(1);
   });
 
-  it('shows saved views in the expanded mobile body when savedViewsKey is set', () => {
-    renderInRouter(() => (
-      <FilterBar
-        search={search}
-        filters={[inlineTypeFilter(), menuNodeFilter()]}
-        isMobile={() => true}
-        savedViewsKey="test-surface"
-      />
-    ));
-
-    expect(screen.queryByRole('button', { name: 'Saved views' })).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Filters' }));
-    expect(screen.getByRole('button', { name: 'Saved views' })).toBeInTheDocument();
-  });
-
-  it('shows saved views on mobile even when every filter is inline', () => {
-    renderInRouter(() => (
-      <FilterBar
-        search={search}
-        filters={[inlineTypeFilter()]}
-        isMobile={() => true}
-        savedViewsKey="test-surface"
-      />
-    ));
-
-    fireEvent.click(screen.getByRole('button', { name: 'Filters' }));
-    expect(screen.getByRole('button', { name: 'Saved views' })).toBeInTheDocument();
-    expect(screen.queryByRole('combobox', { name: 'Filter' })).not.toBeInTheDocument();
-  });
-
-  it('renders a single clear-all on mobile when the saved-views row is shown', () => {
-    renderInRouter(() => (
+  it('renders a single clear-all on mobile when the action row is shown', () => {
+    render(() => (
       <FilterBar
         search={search}
         filters={[inlineTypeFilter(vi.fn(), 'vm')]}
         isMobile={() => true}
-        savedViewsKey="test-surface"
+        viewOptions={<span>Density</span>}
       />
     ));
 
@@ -167,13 +125,12 @@ describe('FilterBar', () => {
     expect(screen.getAllByRole('button', { name: 'Clear filters' })).toHaveLength(1);
   });
 
-  it('keeps Saved, clear filters, and View together in the mobile action rail', () => {
-    renderInRouter(() => (
+  it('keeps clear filters and View together in the mobile action rail', () => {
+    render(() => (
       <FilterBar
         search={search}
         filters={[inlineTypeFilter(vi.fn(), 'vm')]}
         isMobile={() => true}
-        savedViewsKey="test-surface"
         viewOptions={<span>Density</span>}
       />
     ));
@@ -184,21 +141,17 @@ describe('FilterBar', () => {
     const actionCluster = actions.querySelector('[data-filter-action-cluster]');
     expect(actionCluster).not.toBeNull();
     expect(actionCluster).toContainElement(
-      within(actions).getByRole('button', { name: 'Saved views' }),
-    );
-    expect(actionCluster).toContainElement(
       within(actions).getByRole('button', { name: 'Clear filters' }),
     );
     expect(actionCluster).toContainElement(within(actions).getByRole('button', { name: 'View' }));
   });
 
-  it('keeps an otherwise orphaned Add filter with Saved and View on mobile', () => {
-    renderInRouter(() => (
+  it('keeps an otherwise orphaned Add filter with View on mobile', () => {
+    render(() => (
       <FilterBar
         search={search}
         filters={[inlineTypeFilter(), menuNodeFilter()]}
         isMobile={() => true}
-        savedViewsKey="test-surface"
         viewOptions={<span>Density</span>}
       />
     ));
@@ -210,9 +163,6 @@ describe('FilterBar', () => {
     expect(actionCluster).not.toBeNull();
     expect(actionCluster).toContainElement(
       within(actions).getByRole('combobox', { name: 'Filter' }),
-    );
-    expect(actionCluster).toContainElement(
-      within(actions).getByRole('button', { name: 'Saved views' }),
     );
     expect(actionCluster).toContainElement(within(actions).getByRole('button', { name: 'View' }));
   });
@@ -235,12 +185,11 @@ describe('FilterBar', () => {
   });
 
   it('keeps desktop utilities split on one line and left-aligned after wrapping', () => {
-    const { container } = renderInRouter(() => (
+    const { container } = render(() => (
       <FilterBar
         search={search}
         filters={[inlineTypeFilter(), menuNodeFilter()]}
         isMobile={() => false}
-        savedViewsKey="test-surface"
         viewOptions={<span>Density</span>}
       />
     ));
@@ -252,7 +201,6 @@ describe('FilterBar', () => {
     expect(actionCluster).toHaveClass('max-w-full', 'justify-start');
     expect(actionCluster).not.toHaveClass('ml-auto', 'justify-end');
     expect(actionCluster).toContainElement(screen.getByRole('combobox', { name: 'Filter' }));
-    expect(actionCluster).toContainElement(screen.getByRole('button', { name: 'Saved views' }));
     expect(actionCluster).toContainElement(screen.getByRole('button', { name: 'View' }));
   });
 

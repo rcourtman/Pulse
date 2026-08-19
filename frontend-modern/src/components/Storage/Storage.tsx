@@ -101,18 +101,12 @@ const Storage: Component<StorageProps> = (props) => {
     }
   });
 
-  // Namespace saved views per platform context. Every live consumer is a
-  // platform-embedded storage tab that locks source scope via
-  // forcedSourceFilter; views never leak across platforms.
-  const savedViewsKey = `storage-${(props.forcedSourceFilter ?? '').trim().toLowerCase()}`;
-
   return (
     <div ref={setClearSurfaceRootRef} class="space-y-4" data-testid="storage-page">
       <div class="space-y-4" data-testid="storage-interaction-surface">
         <div data-summary-clear-ignore>
           <StoragePageControls
             kioskMode={kioskMode}
-            savedViewsKey={savedViewsKey}
             view={view}
             setView={setView}
             showViewTabs={!props.forcedView}

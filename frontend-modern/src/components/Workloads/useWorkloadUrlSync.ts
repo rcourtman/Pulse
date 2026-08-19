@@ -93,8 +93,8 @@ export function useWorkloadUrlSync(options: WorkloadsWorkloadUrlSyncOptions) {
     const selected = (options.selectedKubernetesNamespace() || '').trim();
     if (!selected) return;
     // While guests haven't loaded the options list is empty; skipping prevents
-    // the cleanup from stripping a perfectly valid URL value (e.g. one applied
-    // from a saved view) before data arrives.
+    // the cleanup from stripping a perfectly valid URL value (e.g. one opened
+    // from a bookmark) before data arrives.
     const candidates = options.kubernetesNamespaceOptions();
     if (candidates.length === 0) return;
     const normalized = selected.toLowerCase();
@@ -110,8 +110,8 @@ export function useWorkloadUrlSync(options: WorkloadsWorkloadUrlSyncOptions) {
     const selected = (options.selectedCluster() || '').trim();
     if (!selected) return;
     // While guests haven't loaded the options list is empty; skipping prevents
-    // the cleanup from stripping a perfectly valid URL value (e.g. one applied
-    // from a saved view) before data arrives.
+    // the cleanup from stripping a perfectly valid URL value (e.g. one opened
+    // from a bookmark) before data arrives.
     const candidates = options.clusterOptions();
     if (candidates.length === 0) return;
     const normalized = selected.toLowerCase();

@@ -356,7 +356,6 @@ export function StandalonePageSurface() {
                     externalStatus={machineStatusFilter}
                     onExternalStatusChange={setMachineStatusFilter}
                     onResetFilters={resetMachineFilters}
-                    savedViewsKey="standalone-machines"
                   />
                 </Show>
               </div>

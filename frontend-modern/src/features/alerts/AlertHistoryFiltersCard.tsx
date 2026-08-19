@@ -60,7 +60,6 @@ export function AlertHistoryFiltersCard(props: AlertHistoryFiltersCardProps) {
       role="group"
       ariaLabel="Alert history filters"
       isMobile={() => props.isMobile}
-      savedViewsKey="alerts-history"
       search={{
         value: props.state.searchTerm,
         setValue: props.state.setSearchTerm,

@@ -513,7 +513,7 @@ The Proxmox Backups toolbar is durable recovery navigation, not transient
 component state. Search, active workspace, node, guest type, source, posture,
 and selected activity day use the canonical `PROXMOX_BACKUPS_QUERY_PARAMS`
 keys in `frontend-modern/src/routing/resourceLinks.ts` so reloads, shared links,
-and `proxmox-backups` saved views restore the same result set. Switching to
+and browser bookmarks restore the same result set. Switching to
 `By date` clears the hidden coverage posture; switching to `Coverage` clears
 the hidden source and selected day in the same route write. Contextual
 `Clear filters` clears every narrowing parameter in one write while retaining

@@ -6,7 +6,6 @@ import { FilterActionButton, FilterMobileToggleButton } from '@/components/share
 import { SearchInput } from '@/components/shared/SearchInput';
 import { AddFilterMenu } from './AddFilterMenu';
 import { FilterChip } from './FilterChip';
-import { SavedViewsMenu } from './SavedViewsMenu';
 import { ViewOptionsMenu } from './ViewOptionsMenu';
 import {
   clearFilter,
@@ -84,18 +83,16 @@ export const FilterBar: Component<FilterBarProps> = (props) => {
   };
   const hasAuxiliaryControls = () =>
     Boolean(props.leadingControls || props.viewOptions || props.trailingControls);
-  const hasSavedViews = () => Boolean(props.savedViewsKey);
   const showDesktopControlsRow = () =>
     !props.isMobile() &&
     (inlineFilters().length > 0 ||
       hasMenuFilters() ||
-      hasSavedViews() ||
       hasAuxiliaryControls() ||
       hasClearableState());
   const showInlineRow = () => props.isMobile() && mobileExpanded() && inlineFilters().length > 0;
   const showDesktopChipRow = () => !props.isMobile() && activeMenuFilters().length > 0;
   const showMobileBody = () => props.isMobile() && mobileExpanded();
-  const showMobileActionRow = () => showMobileBody() && (hasSavedViews() || hasAuxiliaryControls());
+  const showMobileActionRow = () => showMobileBody() && hasAuxiliaryControls();
   const showAddFilterInMobileActionRow = () =>
     showMobileActionRow() &&
     activeMenuFilters().length === 0 &&
@@ -167,14 +164,7 @@ export const FilterBar: Component<FilterBarProps> = (props) => {
                 </For>
               </div>
             </Show>
-            <Show
-              when={
-                hasAddableMenuFilters() ||
-                hasSavedViews() ||
-                hasClearableState() ||
-                hasAuxiliaryControls()
-              }
-            >
+            <Show when={hasAddableMenuFilters() || hasClearableState() || hasAuxiliaryControls()}>
               <div
                 class="inline-flex max-w-full flex-shrink-0 flex-wrap items-center justify-start gap-2"
                 data-filter-action-cluster
@@ -184,9 +174,6 @@ export const FilterBar: Component<FilterBarProps> = (props) => {
                     filters={menuFilters()}
                     showLabel={props.showAddFilterLabel === true}
                   />
-                </Show>
-                <Show when={props.savedViewsKey}>
-                  {(key) => <SavedViewsMenu storageKey={key()} />}
                 </Show>
                 <Show when={hasClearableState()}>
                   <FilterBarClearAllButton onClick={clearAll} />
@@ -239,9 +226,6 @@ export const FilterBar: Component<FilterBarProps> = (props) => {
                   filters={menuFilters()}
                   showLabel={props.showAddFilterLabel === true}
                 />
-              </Show>
-              <Show when={props.savedViewsKey}>
-                {(key) => <SavedViewsMenu storageKey={key()} />}
               </Show>
               <Show when={showClearAllInMobileActionRow()}>
                 <FilterBarClearAllButton onClick={clearAll} />

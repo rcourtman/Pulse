@@ -113,6 +113,13 @@ const settingsRuntimeSources = import.meta.glob(['../*.tsx', '../ConnectionEdito
 }) as Record<string, string>;
 
 describe('settings architecture guardrails', () => {
+  it('keeps the audit log filter bar free of a saved-views affordance', () => {
+    // A saved view was only the page's URL query string; bookmarks already
+    // cover that and survive a new browser, so the control was removed.
+    expect(auditLogPanelSource).not.toContain('savedViewsKey');
+    expect(auditLogPanelSource).not.toContain('SavedViews');
+  });
+
   it('keeps the Proxmox installer TLS override explicit and request-bound', () => {
     expect(nodeModalSetupGuideSectionSource).toContain(
       'Skip TLS certificate verification when downloading the installer and',
