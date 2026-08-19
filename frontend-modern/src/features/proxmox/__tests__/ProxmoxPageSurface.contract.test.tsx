@@ -1,4 +1,5 @@
 import { cleanup, render, screen } from '@solidjs/testing-library';
+import { Route, Router } from '@solidjs/router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Resource } from '@/types/resource';
 import { ProxmoxPageSurface } from '../ProxmoxPageSurface';
@@ -127,6 +128,13 @@ vi.mock('../ProxmoxReplicationTable', () => ({
   fetchReplicationJobs: () => Promise.resolve([]),
 }));
 
+const renderSurface = () =>
+  render(() => (
+    <Router>
+      <Route path="/" component={ProxmoxPageSurface} />
+    </Router>
+  ));
+
 describe('ProxmoxPageSurface contract', () => {
   beforeEach(() => {
     mockPathname.mockReturnValue('/proxmox/overview');
@@ -159,7 +167,7 @@ describe('ProxmoxPageSurface contract', () => {
       }),
     ]);
 
-    render(() => <ProxmoxPageSurface />);
+    renderSurface();
 
     expect(screen.getByTestId('storage-surface')).toBeInTheDocument();
     expect(mockStorageProps).toHaveBeenCalledWith(
@@ -183,7 +191,7 @@ describe('ProxmoxPageSurface contract', () => {
       }),
     ]);
 
-    render(() => <ProxmoxPageSurface />);
+    renderSurface();
 
     expect(screen.getByTestId('platform-section-tabs')).toHaveAttribute('data-active', 'overview');
     expect(screen.getByTestId('nodes-table')).toHaveAttribute('data-rows', '1');
@@ -220,7 +228,7 @@ describe('ProxmoxPageSurface contract', () => {
       }),
     ]);
 
-    render(() => <ProxmoxPageSurface />);
+    renderSurface();
 
     expect(screen.getByTestId('nodes-table')).toHaveAttribute('data-rows', '1');
     expect(screen.queryByTestId('platform-outdated-agent-notice')).not.toBeInTheDocument();
@@ -263,7 +271,7 @@ describe('ProxmoxPageSurface contract', () => {
       pods: 0,
     });
 
-    render(() => <ProxmoxPageSurface />);
+    renderSurface();
 
     const totals = screen.getByTestId('proxmox-guest-totals');
     expect(totals).not.toHaveTextContent('running');
@@ -280,7 +288,7 @@ describe('ProxmoxPageSurface contract', () => {
       }),
     ]);
 
-    render(() => <ProxmoxPageSurface />);
+    renderSurface();
 
     expect(screen.getByTestId('nodes-table')).toHaveAttribute('data-rows', '1');
     expect(screen.queryByRole('list', { name: 'Proxmox Patrol coverage' })).not.toBeInTheDocument();
@@ -293,7 +301,7 @@ describe('ProxmoxPageSurface contract', () => {
   it('does not crash while Proxmox resources hydrate', () => {
     setResourcesSnapshot(undefined, true);
 
-    render(() => <ProxmoxPageSurface />);
+    renderSurface();
 
     expect(screen.getByTestId('platform-table-loading-state')).toBeInTheDocument();
     expect(screen.queryByRole('list', { name: 'Proxmox Patrol coverage' })).not.toBeInTheDocument();
@@ -315,7 +323,7 @@ describe('ProxmoxPageSurface contract', () => {
       }),
     ]);
 
-    render(() => <ProxmoxPageSurface />);
+    renderSurface();
 
     expect(screen.queryByTestId('platform-outdated-agent-notice')).not.toBeInTheDocument();
   });

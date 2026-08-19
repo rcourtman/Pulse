@@ -3,6 +3,7 @@ import { Show, createMemo, createSignal } from 'solid-js';
 import BoxIcon from 'lucide-solid/icons/box';
 import { ButtonLink } from '@/components/shared/Button';
 import { getPlatformIcon } from '@/features/platformPage/platformIcon';
+import { PlatformEstateOverview } from '@/features/platformPage/PlatformEstateOverview';
 import { useUnifiedResources } from '@/hooks/useUnifiedResources';
 import {
   PLATFORM_HEALTH_FILTER_OPTIONS,
@@ -156,14 +157,17 @@ export function DockerPageSurface() {
               actionLabel="Open agent upgrade commands"
             />
             <Show when={activeTab() === 'overview'}>
-              <DockerOverview
-                hosts={model().hosts}
-                hostSourceCount={model().hosts.length}
-                hostFilter={hostFilter()}
-                containers={model().containers}
-                incidents={model().incidents}
-                onLifecycleActionSettled={refreshDockerResources}
-              />
+              <div class="space-y-4">
+                <PlatformEstateOverview platform="docker" resources={model().resources} />
+                <DockerOverview
+                  hosts={model().hosts}
+                  hostSourceCount={model().hosts.length}
+                  hostFilter={hostFilter()}
+                  containers={model().containers}
+                  incidents={model().incidents}
+                  onLifecycleActionSettled={refreshDockerResources}
+                />
+              </div>
             </Show>
             <Show when={activeTab() === 'images'}>
               <DockerImagesTable

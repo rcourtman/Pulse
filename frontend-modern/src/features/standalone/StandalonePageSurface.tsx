@@ -12,6 +12,7 @@ import {
 } from '@/components/Settings/infrastructureWorkspaceModel';
 import { buildAvailabilitySettingsPath } from '@/components/Settings/availabilitySettingsModel';
 import { PlatformOutdatedAgentNotice } from '@/features/platformPage/PlatformOutdatedAgentNotice';
+import { PlatformEstateOverview } from '@/features/platformPage/PlatformEstateOverview';
 import {
   collectOutdatedAgentHosts,
   formatAgentVersionDisplay,
@@ -301,6 +302,7 @@ export function StandalonePageSurface() {
               }
             >
               <div class="space-y-4">
+                <PlatformEstateOverview platform="standalone" resources={resources()} />
                 <HostIdentityConflictNotice hosts={identityConflictHosts()} />
                 <PlatformOutdatedAgentNotice
                   hosts={outdatedAgentHosts()}

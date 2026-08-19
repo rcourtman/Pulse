@@ -3,6 +3,7 @@ import { For, Show, createMemo, createResource, type Accessor } from 'solid-js';
 import AlertTriangle from 'lucide-solid/icons/triangle-alert';
 import { buildInfrastructureAgentUpdatesPath } from '@/components/Settings/infrastructureWorkspaceModel';
 import { getPlatformIcon } from '@/features/platformPage/platformIcon';
+import { PlatformEstateOverview } from '@/features/platformPage/PlatformEstateOverview';
 import { PlatformOutdatedAgentNotice } from '@/features/platformPage/PlatformOutdatedAgentNotice';
 import {
   collectOutdatedAgentHosts,
@@ -268,14 +269,17 @@ export function VmwarePageSurface() {
               subjectPlural="VMs"
             />
             <Show when={activeTab() === 'overview'}>
-              <VmwareOverview
-                model={model}
-                metricDisplayMode={metricDisplayMode}
-                setMetricDisplayMode={setMetricDisplayMode}
-                metricHistoryRange={metricHistoryRange}
-                setMetricHistoryRange={setMetricHistoryRange}
-                inventorySourcesQuery={inventorySources}
-              />
+              <div class="space-y-4">
+                <PlatformEstateOverview platform="vmware" resources={model().resources} />
+                <VmwareOverview
+                  model={model}
+                  metricDisplayMode={metricDisplayMode}
+                  setMetricDisplayMode={setMetricDisplayMode}
+                  metricHistoryRange={metricHistoryRange}
+                  setMetricHistoryRange={setMetricHistoryRange}
+                  inventorySourcesQuery={inventorySources}
+                />
+              </div>
             </Show>
             <Show when={activeTab() === 'storage'}>
               <VsphereDatastoresTable

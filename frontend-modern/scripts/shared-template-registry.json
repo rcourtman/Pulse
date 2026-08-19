@@ -3193,6 +3193,30 @@
         "src/components/shared/SharedPrimitives.guardrails.test.ts",
         "scripts/shared-template-audit.mjs"
       ]
+    },
+    {
+      "id": "platform-estate-overview",
+      "category": "platform-overview",
+      "summary": "Every primary platform overview composes one shared estate metric and operational spotlight surface with one global persisted visibility preference.",
+      "canonical": {
+        "path": "src/features/platformPage/PlatformEstateOverview.tsx",
+        "export": "PlatformEstateOverview"
+      },
+      "requiredConsumers": [
+        { "path": "src/features/docker/DockerPageSurface.tsx" },
+        { "path": "src/features/kubernetes/KubernetesPageSurface.tsx" },
+        { "path": "src/features/proxmox/ProxmoxPageSurface.tsx" },
+        { "path": "src/features/standalone/StandalonePageSurface.tsx" },
+        { "path": "src/features/truenas/TrueNASPageSurface.tsx" },
+        { "path": "src/features/vmware/VmwarePageSurface.tsx" }
+      ],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/features/platformPage/__tests__/PlatformEstateOverview.test.tsx",
+        "src/features/platformPage/__tests__/platformEstateOverviewModel.test.ts",
+        "src/features/platformPage/__tests__/platformOverviewLayout.guardrails.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
     }
   ],
   "patternGuards": [

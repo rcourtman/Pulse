@@ -27,6 +27,7 @@ import {
 import { getPlatformIcon } from '@/features/platformPage/platformIcon';
 import { PlatformOutdatedAgentNotice } from '@/features/platformPage/PlatformOutdatedAgentNotice';
 import { PlatformOutdatedSensorSetupNotice } from '@/features/platformPage/PlatformOutdatedSensorSetupNotice';
+import { PlatformEstateOverview } from '@/features/platformPage/PlatformEstateOverview';
 import { collectOutdatedSensorSetupNodes } from '@/features/platformPage/sensorSetup';
 import { usePersistentSignal } from '@/hooks/usePersistentSignal';
 import { useObservedElementWidth } from '@/hooks/useObservedElementWidth';
@@ -203,15 +204,18 @@ export function ProxmoxPageSurface() {
               actionHref={buildInfrastructureWorkspacePath()}
             />
             <Show when={activeTab() === 'overview'}>
-              <ProxmoxOverview
-                model={model}
-                metricDisplayMode={metricDisplayMode}
-                setMetricDisplayMode={setMetricDisplayMode}
-                metricHistoryRange={metricHistoryRange}
-                setMetricHistoryRange={setMetricHistoryRange}
-                memoryDisplayBasis={memoryDisplayBasis}
-                setMemoryDisplayBasis={setMemoryDisplayBasis}
-              />
+              <div class="space-y-4">
+                <PlatformEstateOverview platform="proxmox" resources={model().resources} />
+                <ProxmoxOverview
+                  model={model}
+                  metricDisplayMode={metricDisplayMode}
+                  setMetricDisplayMode={setMetricDisplayMode}
+                  metricHistoryRange={metricHistoryRange}
+                  setMetricHistoryRange={setMetricHistoryRange}
+                  memoryDisplayBasis={memoryDisplayBasis}
+                  setMemoryDisplayBasis={setMemoryDisplayBasis}
+                />
+              </div>
             </Show>
             <Show when={activeTab() === 'storage'}>
               <StorageSurface

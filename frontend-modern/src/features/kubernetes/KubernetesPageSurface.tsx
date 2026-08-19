@@ -4,7 +4,7 @@ import { ButtonLink } from '@/components/shared/Button';
 import { buildInfrastructureAgentUpdatesPath } from '@/components/Settings/infrastructureWorkspaceModel';
 import type { FilterDef } from '@/components/shared/FilterBar';
 import { getPlatformIcon } from '@/features/platformPage/platformIcon';
-import { PlatformAttentionSummary } from '@/features/platformPage/PlatformAttentionSummary';
+import { PlatformEstateOverview } from '@/features/platformPage/PlatformEstateOverview';
 import { PlatformOutdatedAgentNotice } from '@/features/platformPage/PlatformOutdatedAgentNotice';
 import {
   collectOutdatedAgentHosts,
@@ -129,7 +129,10 @@ export function KubernetesPageSurface() {
               subjectPlural="nodes"
             />
             <Show when={activeTab() === 'overview'}>
-              <KubernetesOverview model={model} />
+              <div class="space-y-4">
+                <PlatformEstateOverview platform="kubernetes" resources={model().resources} />
+                <KubernetesOverview model={model} />
+              </div>
             </Show>
             <Show when={activeTab() === 'nodes'}>
               <KubernetesNodesTable
@@ -631,61 +634,13 @@ function KubernetesConfiguration(props: { model: KubernetesPageModel }) {
 
 function KubernetesOverview(props: KubernetesOverviewProps) {
   const [searchParams, setSearchParams] = useSearchParams();
-  const posture = createMemo(() => buildKubernetesOverviewPosture(props.model()));
-  const workloadAttention = () => posture().podAttention + posture().deploymentAttention;
-  const needsProminentAttention = () =>
-    posture().nodeAttention > 0 || posture().criticalIncidents > 0;
-  const headline = () => {
-    const resources = posture().attentionResources;
-    const signals = posture().attentionSignals;
-    if (resources > 0 && signals > 0) {
-      return `${resources} resource${resources === 1 ? '' : 's'} and ${signals} signal${signals === 1 ? '' : 's'} need review`;
-    }
-    if (resources > 0) {
-      return `${resources} resource${resources === 1 ? '' : 's'} ${resources === 1 ? 'needs' : 'need'} review`;
-    }
-    return `${signals} health signal${signals === 1 ? '' : 's'} ${signals === 1 ? 'needs' : 'need'} review`;
-  };
+  const workloadAttention = createMemo(() => {
+    const posture = buildKubernetesOverviewPosture(props.model());
+    return posture.podAttention + posture.deploymentAttention;
+  });
 
   return (
     <div class="space-y-4">
-      <Show when={needsProminentAttention()}>
-        <PlatformAttentionSummary
-          title="Kubernetes attention"
-          headline={headline()}
-          description="Start with unavailable nodes or critical health signals. Workload inventory remains available below."
-          tone={
-            posture().criticalResources > 0 || posture().criticalIncidents > 0
-              ? 'danger'
-              : 'warning'
-          }
-          metrics={[
-            ...(posture().nodeAttention > 0
-              ? [{ label: 'nodes', value: posture().nodeAttention }]
-              : []),
-            ...(workloadAttention() > 0
-              ? [{ label: 'workloads', value: workloadAttention() }]
-              : []),
-            ...(posture().attentionSignals > 0
-              ? [{ label: 'signals', value: posture().attentionSignals }]
-              : []),
-          ]}
-          actions={
-            <>
-              <Show when={posture().nodeAttention > 0}>
-                <ButtonLink href={buildKubernetesPath('nodes')} variant="secondary" size="sm">
-                  Review nodes
-                </ButtonLink>
-              </Show>
-              <Show when={workloadAttention() > 0}>
-                <ButtonLink href={buildKubernetesPath('workloads')} variant="secondary" size="sm">
-                  Review workloads
-                </ButtonLink>
-              </Show>
-            </>
-          }
-        />
-      </Show>
       <KubernetesClustersTable
         clusters={props.model().clusters}
         scope={props.model().resources}

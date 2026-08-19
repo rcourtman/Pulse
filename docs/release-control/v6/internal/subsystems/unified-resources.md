@@ -274,8 +274,21 @@ about the same disk cannot diverge.
 132. `frontend-modern/src/features/vmware/VsphereAlertsTable.tsx`
 133. `frontend-modern/src/features/vmware/VsphereDatastoresTable.tsx`
 134. `frontend-modern/src/features/vmware/VsphereNetworksTable.tsx`
+135. `frontend-modern/src/features/truenas/TrueNASPageSurface.tsx`
+136. `frontend-modern/src/features/vmware/VmwarePageSurface.tsx`
 
 ## Shared Boundaries
+
+Platform estate orientation consumes the same canonical resource projection as
+the platform's tables. Docker / Podman, Kubernetes, TrueNAS, VMware vSphere,
+Standalone Machines, and the storage/recovery-owned Proxmox surface pass their
+already-loaded scoped resource set into the frontend-primitives-owned
+`platformEstateOverviewModel.ts`; pages must not issue a summary fetch, infer
+membership from a second platform heuristic, or locally reinterpret resource
+status, incidents, alerts, or storage pressure. Unified resources owns the
+identity, type, platform membership, status, and evidence fields supplied to
+that shared model. Frontend primitives owns how those fields become the four
+orientation metrics and bounded operational spotlights.
 
 Kubernetes workload presentation is API-native, not generic inventory. Pods,
 Deployments, controllers, and autoscalers render under the `/kubernetes/workloads`
@@ -1367,6 +1380,8 @@ served clones. Proof: `TestClonedResourcesPreservePlatformAdmission` and
 1. New ad hoc resource-type aliases outside unified resource normalization
 2. New duplicate ID normalization logic outside unified resources
 3. Reintroducing legacy runtime resource contracts as live truth
+4. Platform page-local resource membership or attention rules for estate
+   overview metrics and spotlights
 
 ## Completion Obligations
 

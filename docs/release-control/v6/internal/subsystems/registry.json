@@ -4727,6 +4727,8 @@
         "frontend-modern/src/components/Toast/Toast.tsx",
         "frontend-modern/src/components/Workloads/nodeDrawerModel.ts",
         "frontend-modern/src/features/docker/dockerHostDrawerModel.ts",
+        "frontend-modern/src/features/platformPage/PlatformEstateOverview.tsx",
+        "frontend-modern/src/features/platformPage/platformEstateOverviewModel.ts",
         "frontend-modern/src/features/platformPage/PlatformOutdatedAgentNotice.tsx",
         "frontend-modern/src/features/platformPage/PlatformOutdatedSensorSetupNotice.tsx",
         "frontend-modern/src/features/platformPage/PlatformResourceDetailTableRow.tsx",
@@ -5240,6 +5242,8 @@
             "match_files": [
               "frontend-modern/scripts/shared-template-audit.mjs",
               "frontend-modern/scripts/shared-template-registry.json",
+              "frontend-modern/src/features/platformPage/PlatformEstateOverview.tsx",
+              "frontend-modern/src/features/platformPage/platformEstateOverviewModel.ts",
               "frontend-modern/src/features/platformPage/PlatformOutdatedAgentNotice.tsx",
               "frontend-modern/src/features/platformPage/PlatformOutdatedSensorSetupNotice.tsx",
               "frontend-modern/src/features/platformPage/PlatformResourceDetailTableRow.tsx",
@@ -5248,7 +5252,10 @@
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
-              "frontend-modern/src/components/shared/SharedPrimitives.guardrails.test.ts"
+              "frontend-modern/src/components/shared/SharedPrimitives.guardrails.test.ts",
+              "frontend-modern/src/features/platformPage/__tests__/PlatformEstateOverview.test.tsx",
+              "frontend-modern/src/features/platformPage/__tests__/platformEstateOverviewModel.test.ts",
+              "frontend-modern/src/features/platformPage/__tests__/platformOverviewLayout.guardrails.test.ts"
             ]
           },
           {
@@ -7340,11 +7347,13 @@
         "frontend-modern/src/features/truenas/TrueNASAlertsTable.tsx",
         "frontend-modern/src/features/truenas/TrueNASAppsTable.tsx",
         "frontend-modern/src/features/truenas/TrueNASNetworkSharesTable.tsx",
+        "frontend-modern/src/features/truenas/TrueNASPageSurface.tsx",
         "frontend-modern/src/features/truenas/TrueNASProtectionTable.tsx",
         "frontend-modern/src/features/truenas/TrueNASServicesTable.tsx",
         "frontend-modern/src/features/truenas/TrueNASStorageTopologyTable.tsx",
         "frontend-modern/src/features/truenas/TrueNASSystemsTable.tsx",
         "frontend-modern/src/features/truenas/TrueNASVirtualMachinesTable.tsx",
+        "frontend-modern/src/features/vmware/VmwarePageSurface.tsx",
         "frontend-modern/src/features/vmware/VsphereActivityTable.tsx",
         "frontend-modern/src/features/vmware/VsphereAlertsTable.tsx",
         "frontend-modern/src/features/vmware/VsphereDatastoresTable.tsx",
@@ -7533,11 +7542,13 @@
               "frontend-modern/src/features/truenas/TrueNASAlertsTable.tsx",
               "frontend-modern/src/features/truenas/TrueNASAppsTable.tsx",
               "frontend-modern/src/features/truenas/TrueNASNetworkSharesTable.tsx",
+              "frontend-modern/src/features/truenas/TrueNASPageSurface.tsx",
               "frontend-modern/src/features/truenas/TrueNASProtectionTable.tsx",
               "frontend-modern/src/features/truenas/TrueNASServicesTable.tsx",
               "frontend-modern/src/features/truenas/TrueNASStorageTopologyTable.tsx",
               "frontend-modern/src/features/truenas/TrueNASSystemsTable.tsx",
               "frontend-modern/src/features/truenas/TrueNASVirtualMachinesTable.tsx",
+              "frontend-modern/src/features/vmware/VmwarePageSurface.tsx",
               "frontend-modern/src/features/vmware/VsphereActivityTable.tsx",
               "frontend-modern/src/features/vmware/VsphereAlertsTable.tsx",
               "frontend-modern/src/features/vmware/VsphereDatastoresTable.tsx",

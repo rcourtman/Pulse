@@ -2,6 +2,7 @@ import { useLocation } from '@solidjs/router';
 import { Show, createMemo, type Accessor } from 'solid-js';
 import { buildInfrastructureAgentUpdatesPath } from '@/components/Settings/infrastructureWorkspaceModel';
 import { getPlatformIcon } from '@/features/platformPage/platformIcon';
+import { PlatformEstateOverview } from '@/features/platformPage/PlatformEstateOverview';
 import { PlatformOutdatedAgentNotice } from '@/features/platformPage/PlatformOutdatedAgentNotice';
 import {
   collectOutdatedAgentHosts,
@@ -132,7 +133,10 @@ export function TrueNASPageSurface() {
               actionLabel="Open agent upgrade commands"
             />
             <Show when={activeTab() === 'overview'}>
-              <TrueNASOverview model={model} />
+              <div class="space-y-4">
+                <PlatformEstateOverview platform="truenas" resources={model().resources} />
+                <TrueNASOverview model={model} />
+              </div>
             </Show>
             <Show when={activeTab() === 'storage'}>
               <TrueNASStorage model={model} />
