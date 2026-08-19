@@ -32,11 +32,22 @@ const (
 // identifies the condition; the same Type always maps to the same alert, so
 // repeated raises update one alert rather than accumulating.
 type SystemAlertInput struct {
-	Type     string
-	Level    AlertLevel
-	Message  string
-	Metadata map[string]interface{}
+	Type    string
+	Level   AlertLevel
+	Message string
+	// Fingerprint, when set, identifies the notify-worthy state of the
+	// condition. A re-raise whose level and fingerprint both match the
+	// standing alert refreshes the message and metadata silently, so a
+	// message carrying a moving counter does not notify on every tick.
+	// Callers that leave it empty keep the message itself as the change
+	// signal.
+	Fingerprint string
+	Metadata    map[string]interface{}
 }
+
+// systemAlertFingerprintKey stores the raise fingerprint on the alert metadata
+// so the next raise can compare against it.
+const systemAlertFingerprintKey = "systemAlertFingerprint"
 
 // SystemAlertID returns the stable alert ID for a system alert type.
 func SystemAlertID(alertType string) string {
@@ -78,9 +89,21 @@ func (m *Manager) RaiseSystemAlert(input SystemAlertInput) bool {
 	now := time.Now()
 	existing, exists := m.getActiveAlertNoLock(alertID)
 	if exists && existing != nil {
-		unchanged := existing.Level == level && existing.Message == input.Message
+		unchanged := existing.Level == level
+		if unchanged {
+			existingFingerprint, _ := existing.Metadata[systemAlertFingerprintKey].(string)
+			if input.Fingerprint != "" || existingFingerprint != "" {
+				unchanged = existingFingerprint == input.Fingerprint
+			} else {
+				unchanged = existing.Message == input.Message
+			}
+		}
 		existing.LastSeen = now
 		if unchanged {
+			// Same condition state: keep the presentation current (a message
+			// may carry counters) without treating it as new information.
+			existing.Message = input.Message
+			existing.Metadata = systemAlertMetadata(alertType, input.Fingerprint, input.Metadata)
 			m.setActiveAlertNoLock(alertID, existing)
 			m.mu.Unlock()
 			m.saveActiveAlertsAsync("system-alert-refresh")
@@ -89,7 +112,7 @@ func (m *Manager) RaiseSystemAlert(input SystemAlertInput) bool {
 
 		existing.Level = level
 		existing.Message = input.Message
-		existing.Metadata = systemAlertMetadata(alertType, input.Metadata)
+		existing.Metadata = systemAlertMetadata(alertType, input.Fingerprint, input.Metadata)
 		m.setActiveAlertNoLock(alertID, existing)
 		// dispatchAlert reads flapping and schedule state through the primary
 		// lock, so it must run before the unlock rather than after.
@@ -116,7 +139,7 @@ func (m *Manager) RaiseSystemAlert(input SystemAlertInput) bool {
 		Message:      input.Message,
 		StartTime:    now,
 		LastSeen:     now,
-		Metadata:     systemAlertMetadata(alertType, input.Metadata),
+		Metadata:     systemAlertMetadata(alertType, input.Fingerprint, input.Metadata),
 	}
 
 	m.setActiveAlertNoLock(alertID, alert)
@@ -154,12 +177,15 @@ func (m *Manager) ClearSystemAlert(alertType string) bool {
 // systemAlertMetadata stamps the marker that surfaces use to tell a
 // system-scoped alert apart from a resource alert, without letting a caller
 // overwrite it.
-func systemAlertMetadata(alertType string, extra map[string]interface{}) map[string]interface{} {
-	metadata := make(map[string]interface{}, len(extra)+2)
+func systemAlertMetadata(alertType, fingerprint string, extra map[string]interface{}) map[string]interface{} {
+	metadata := make(map[string]interface{}, len(extra)+3)
 	for key, value := range extra {
 		metadata[key] = value
 	}
 	metadata["systemAlert"] = true
 	metadata["systemAlertType"] = alertType
+	if fingerprint != "" {
+		metadata[systemAlertFingerprintKey] = fingerprint
+	}
 	return metadata
 }

@@ -230,6 +230,13 @@ func shouldPreserveAlertOutsideNodeCleanup(alertID string, alert *Alert) bool {
 	if alert == nil {
 		return true
 	}
+	// System alerts have no node, so the empty-node removal below would
+	// silently delete them every sweep. The delivery-health alert then
+	// re-raised as new on its next evaluation, notifying again each cycle
+	// with no recovery in between (#1721).
+	if IsSystemAlert(alert) {
+		return true
+	}
 	if strings.HasPrefix(alertID, "docker-") || strings.HasPrefix(alert.ResourceID, "docker:") {
 		return true
 	}

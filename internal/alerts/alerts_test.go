@@ -20388,6 +20388,80 @@ func TestRaiseSystemAlertIsIdempotentForAnUnchangedCondition(t *testing.T) {
 	}
 }
 
+func TestRaiseSystemAlertFingerprintKeepsCountDriftSilent(t *testing.T) {
+	m := newTestManager(t)
+
+	if raised := m.RaiseSystemAlert(SystemAlertInput{
+		Type:        NotificationDeliveryAlertType,
+		Level:       AlertLevelWarning,
+		Message:     "11 dead-lettered deliveries gave up.",
+		Fingerprint: "degraded|retained_dead_letter_deliveries",
+	}); !raised {
+		t.Fatal("expected the first raise to report a new system alert")
+	}
+
+	// A moving counter in the message is not new information while the
+	// fingerprint holds: the standing alert must refresh silently.
+	if raised := m.RaiseSystemAlert(SystemAlertInput{
+		Type:        NotificationDeliveryAlertType,
+		Level:       AlertLevelWarning,
+		Message:     "14 dead-lettered deliveries gave up.",
+		Fingerprint: "degraded|retained_dead_letter_deliveries",
+	}); raised {
+		t.Error("expected a count-only drift under an unchanged fingerprint to stay silent")
+	}
+
+	alertID := SystemAlertID(NotificationDeliveryAlertType)
+	var standing *Alert
+	for _, alert := range m.GetActiveAlerts() {
+		if alert.ID == alertID {
+			clone := alert
+			standing = &clone
+		}
+	}
+	if standing == nil {
+		t.Fatal("expected the system alert to be standing")
+	}
+	if standing.Message != "14 dead-lettered deliveries gave up." {
+		t.Errorf("Message = %q, want the refreshed counter text", standing.Message)
+	}
+
+	// A fingerprint change is new information and must notify again.
+	if raised := m.RaiseSystemAlert(SystemAlertInput{
+		Type:        NotificationDeliveryAlertType,
+		Level:       AlertLevelWarning,
+		Message:     "Pulse cannot read the notification queue.",
+		Fingerprint: "unavailable|queue_stats_unavailable",
+	}); !raised {
+		t.Error("expected a fingerprint change to report a change")
+	}
+}
+
+func TestCleanupAlertsForNodesPreservesSystemAlerts(t *testing.T) {
+	m := newTestManager(t)
+
+	m.RaiseSystemAlert(SystemAlertInput{
+		Type:    NotificationDeliveryAlertType,
+		Level:   AlertLevelWarning,
+		Message: "Notifications are not being delivered.",
+	})
+
+	// A system alert has no node, so the empty-node sweep used to delete it
+	// every cycle and the next evaluation re-raised and re-notified (#1721).
+	m.CleanupAlertsForNodes(map[string]bool{"pve1": true})
+
+	alertID := SystemAlertID(NotificationDeliveryAlertType)
+	found := false
+	for _, alert := range m.GetActiveAlerts() {
+		if alert.ID == alertID {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("expected the system alert to survive node cleanup")
+	}
+}
+
 func TestRaiseSystemAlertReportsAChangedCondition(t *testing.T) {
 	m := newTestManager(t)
 

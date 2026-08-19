@@ -2,6 +2,7 @@ package monitoring
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
@@ -54,6 +55,11 @@ func (m *Monitor) evaluateNotificationDelivery(now time.Time) {
 		Type:    alerts.NotificationDeliveryAlertType,
 		Level:   alerts.AlertLevelWarning,
 		Message: notificationDeliveryAlertMessage(health),
+		// The message embeds delivery counts, which move as retained failures
+		// accumulate or expire. Fingerprinting on status and reason codes keeps
+		// the standing alert's text current without re-notifying on every
+		// count tick (#1721).
+		Fingerprint: deliveryHealthFingerprint(health),
 		Metadata: map[string]interface{}{
 			"deliveryStatus":    string(health.Status),
 			"failedDeliveries":  health.Failed,
@@ -62,6 +68,13 @@ func (m *Monitor) evaluateNotificationDelivery(now time.Time) {
 			"reasonCodes":       health.ReasonCodes,
 		},
 	})
+}
+
+// deliveryHealthFingerprint identifies the notify-worthy state of the delivery
+// verdict: which coarse status holds and which failure classes are present.
+// Counts deliberately stay out so their drift does not page.
+func deliveryHealthFingerprint(health notifications.DeliveryHealth) string {
+	return string(health.Status) + "|" + strings.Join(health.ReasonCodes, ",")
 }
 
 // notificationDeliveryAlertMessage says what failed and where to fix it. The

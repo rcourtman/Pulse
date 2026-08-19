@@ -75,6 +75,31 @@ func TestNotificationDeliveryAlertMessageSingularises(t *testing.T) {
 	}
 }
 
+func TestDeliveryHealthFingerprintIgnoresCountDrift(t *testing.T) {
+	base := notifications.ClassifyQueueHealth(map[string]int{
+		string(notifications.QueueStatusDLQ): 11,
+	})
+	drifted := notifications.ClassifyQueueHealth(map[string]int{
+		string(notifications.QueueStatusDLQ): 14,
+	})
+	if deliveryHealthFingerprint(base) != deliveryHealthFingerprint(drifted) {
+		t.Error("expected count drift within one failure class to keep the fingerprint stable")
+	}
+
+	withFailed := notifications.ClassifyQueueHealth(map[string]int{
+		string(notifications.QueueStatusDLQ):    14,
+		string(notifications.QueueStatusFailed): 1,
+	})
+	if deliveryHealthFingerprint(base) == deliveryHealthFingerprint(withFailed) {
+		t.Error("expected a new failure class to change the fingerprint")
+	}
+
+	unavailable := notifications.UnavailableDeliveryHealth()
+	if deliveryHealthFingerprint(base) == deliveryHealthFingerprint(unavailable) {
+		t.Error("expected an unavailable queue to change the fingerprint")
+	}
+}
+
 func TestEvaluateNotificationDeliveryThrottles(t *testing.T) {
 	// The poll ticker runs on the polling cadence, which can be seconds, and
 	// reading queue health costs a SQLite query. A nil notification manager
