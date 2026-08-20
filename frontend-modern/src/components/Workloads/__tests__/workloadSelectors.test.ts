@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { WorkloadGuest } from '@/types/workloads';
+import type { WorkloadGuest, WorkloadType } from '@/types/workloads';
 import {
   computeWorkloadIOEmphasis,
   computeWorkloadStats,
@@ -10,6 +10,7 @@ import {
   getWorkloadGroupLabel,
   buildWorkloadSummaryGroupScopeMap,
   groupWorkloads,
+  selectVisibleWorkloadInventory,
 } from '@/components/Workloads/workloadSelectors';
 import { workloadNodeScopeId } from '@/components/Workloads/workloadTopology';
 
@@ -704,6 +705,87 @@ describe('workloadSelectors', () => {
         appContainers: 1,
         pods: 1,
       });
+    });
+  });
+
+  describe('selectVisibleWorkloadInventory', () => {
+    const noExclusions: ReadonlySet<WorkloadType> = new Set();
+
+    it('returns the input list when no scope or exclusions apply', () => {
+      const guests = [makeGuest(1), makeGuest(2)];
+      expect(
+        selectVisibleWorkloadInventory({ guests, excludedTypes: noExclusions }),
+      ).toBe(guests);
+      expect(
+        selectVisibleWorkloadInventory({
+          guests,
+          excludedTypes: noExclusions,
+          platformScope: 'all',
+        }),
+      ).toBe(guests);
+    });
+
+    it('drops excluded workload types', () => {
+      const vm = makeGuest(1, { type: 'vm', workloadType: 'vm' });
+      const appContainer = makeGuest(2, { type: 'app-container', workloadType: 'app-container' });
+      expect(
+        selectVisibleWorkloadInventory({
+          guests: [vm, appContainer],
+          excludedTypes: new Set<WorkloadType>(['app-container']),
+        }),
+      ).toEqual([vm]);
+    });
+
+    it('scopes the inventory to the forced platform', () => {
+      const pveGuest = makeGuest(1, {
+        type: 'vm',
+        workloadType: 'vm',
+        platformType: 'proxmox-pve',
+        platformScopes: ['proxmox-pve'],
+      });
+      const vsphereGuest = makeGuest(2, {
+        type: 'vm',
+        workloadType: 'vm',
+        platformType: 'vmware-vsphere',
+        platformScopes: ['vmware-vsphere'],
+      });
+
+      expect(
+        selectVisibleWorkloadInventory({
+          guests: [pveGuest, vsphereGuest],
+          excludedTypes: noExclusions,
+          platformScope: 'proxmox-all',
+        }),
+      ).toEqual([pveGuest]);
+    });
+
+    it('keeps a degraded off-platform workload out of platform-page inventory counts', () => {
+      // Regression: the Proxmox page's Attention chip counted a degraded
+      // workload on another platform while the platform-scoped table could
+      // never show it, so clicking Attention rendered "No guests found".
+      const runningPveGuest = makeGuest(1, {
+        type: 'vm',
+        workloadType: 'vm',
+        status: 'running',
+        platformType: 'proxmox-pve',
+        platformScopes: ['proxmox-pve'],
+      });
+      const degradedVsphereGuest = makeGuest(2, {
+        type: 'vm',
+        workloadType: 'vm',
+        status: 'warning',
+        platformType: 'vmware-vsphere',
+        platformScopes: ['vmware-vsphere'],
+      });
+
+      const inventory = selectVisibleWorkloadInventory({
+        guests: [runningPveGuest, degradedVsphereGuest],
+        excludedTypes: noExclusions,
+        platformScope: 'proxmox-all',
+      });
+
+      expect(computeWorkloadStats(inventory).degraded).toBe(0);
+      expect(computeWorkloadStats(inventory).total).toBe(1);
     });
   });
 

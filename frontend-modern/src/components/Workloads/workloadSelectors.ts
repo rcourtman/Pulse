@@ -1,5 +1,5 @@
 import type { Node } from '@/types/api';
-import type { WorkloadGuest, ViewMode } from '@/types/workloads';
+import type { WorkloadGuest, ViewMode, WorkloadType } from '@/types/workloads';
 import type { WorkloadIOEmphasis } from './guestRowModel';
 import { computeIOScale } from '@/components/Infrastructure/infrastructureSelectors';
 import type { SummarySeriesGroupScope } from '@/components/shared/summaryCardInteraction';
@@ -118,6 +118,31 @@ const matchesWorkloadTextSearch = (guest: WorkloadGuest, term: string): boolean 
       (value): value is string | number => typeof value === 'string' || typeof value === 'number',
     )
     .some((value) => String(value).toLowerCase().includes(needle));
+};
+
+export interface SelectVisibleWorkloadInventoryParams {
+  guests: WorkloadGuest[];
+  excludedTypes: ReadonlySet<WorkloadType>;
+  platformScope?: string | null;
+}
+
+// A surface's forced platform (Proxmox, vSphere) is the page's identity, not
+// a user-applied filter, so it scopes the inventory itself: chip counts,
+// search suggestions, and availability detection must describe the same guest
+// set the table can ever render.
+export const selectVisibleWorkloadInventory = ({
+  guests,
+  excludedTypes,
+  platformScope,
+}: SelectVisibleWorkloadInventoryParams): WorkloadGuest[] => {
+  const normalizedScope = normalizeSourcePlatformQueryValue(platformScope);
+  const scopeActive = Boolean(normalizedScope && normalizedScope !== 'all');
+  if (excludedTypes.size === 0 && !scopeActive) return guests;
+  return guests.filter(
+    (guest) =>
+      !excludedTypes.has(resolveWorkloadType(guest)) &&
+      (!scopeActive || workloadMatchesPlatformScope(guest, normalizedScope)),
+  );
 };
 
 export const filterWorkloads = ({

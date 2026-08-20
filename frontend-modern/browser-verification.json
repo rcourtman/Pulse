@@ -1,20 +1,20 @@
 {
   "version": 1,
-  "base_sha": "74873e2b558e4f0984c8edd86e51cd7b9dbac012",
-  "verified_at": "2026-08-20T19:44:49Z",
+  "base_sha": "ba4d48b4e604f31da815de4403afb62322d2694d",
+  "verified_at": "2026-08-20T19:59:00Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/api/agentDiagnostics.ts",
-    "frontend-modern/src/components/Settings/InfrastructureAgentDoctorPage.tsx",
-    "frontend-modern/src/components/Settings/infrastructureAgentUpdateCommandsModel.ts"
+    "frontend-modern/src/components/Workloads/useWorkloadsState.ts",
+    "frontend-modern/src/components/Workloads/workloadSelectors.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/api/agentDiagnostics.ts": "f6ff4e1d6c29a0d141b973618d68263aad8e05a454c048469d0b5e3eb3cbb7ab",
-    "frontend-modern/src/components/Settings/InfrastructureAgentDoctorPage.tsx": "f4334238aea3d20bd1b602b6313555fe9b8855d8e9aa344cd7be3fa8f9b86334",
-    "frontend-modern/src/components/Settings/infrastructureAgentUpdateCommandsModel.ts": "5300b2ad75a3223d520a392df463ce9e9096c8f29cf1c543a60c7327904c58ad"
+    "frontend-modern/src/components/Workloads/useWorkloadsState.ts": "333dcef3a4316afab0fb62514f4741469aaff1bb22477ba80c22c4a7313d982d",
+    "frontend-modern/src/components/Workloads/workloadSelectors.ts": "8b0a8724bfe79bba0b573eb1da5c725adeda1e3e6443f011ba41fd3b786e8a49"
   },
   "routes": [
-    "/settings/infrastructure/agent-doctor"
+    "/proxmox/overview",
+    "/vsphere (via nav tab)",
+    "/kubernetes (via nav tab)"
   ],
   "viewports": [
     {
@@ -27,17 +27,17 @@
     }
   ],
   "states": [
-    "Agent Doctor with a live non-root agent report: the expanded agent row's metadata line reads 'Privilege: least privilege (rcourtman) · SMART helper active', derived end-to-end from a real pulse-agent process (built from this tree) running as an unprivileged user with PULSE_SMARTCTL_PATH set, reporting into the sidecar-built backend",
-    "The agent's 'Needs attention' status comes from genuine unrelated reasons (dev version not comparable to update target, docker module retrying because this Mac has no Docker socket) — the privilege profile itself raises no reason, matching the non-degrading contract",
-    "Mobile viewport 375x812: the privilege line wraps cleanly inside the expanded row with no horizontal overflow (documentElement.scrollWidth == 375); desktop 1280 same check passes",
-    "Backend /api/agents/diagnostics returns privilege {runningAsRoot:false, serviceUser:'rcourtman', smartctlHelper:true} for the reporting agent"
+    "Proxmox Overview chips scoped to platform inventory: All 25 / VMs 10 / LXCs 15 and All 25 / Running 23 / Attention 0 / Stopped 2, matching the nodes table (10 VMs + 15 CTs); pre-fix estate-wide counts (All 55, Attention 1) no longer appear",
+    "Attention filter active on Proxmox Overview: chip count 0 and 'No guests found' empty state are now consistent (count and table read the same platform-scoped set)",
+    "Add filter node dropdown on Proxmox Overview lists only pve1/pve2/pve3 (no off-platform hosts)",
+    "vSphere Overview chips scoped: All 18 / Powered on 18 / Attention 0 / Powered off 0",
+    "Kubernetes Overview still surfaces the Pending cron-nightly-backfill pod as '1 workload needs attention' (the workload whose degraded status previously leaked into the Proxmox Attention chip)",
+    "Mobile viewport (375x812) Proxmox Overview renders nodes table, Filters button with active-count badge, and honest empty state while the persisted Attention filter was active"
   ],
   "interactions": [
-    "Rebuilt the scratch backend and pulse-agent from this tree, started the stack (backend :7811, vite :5487)",
-    "Minted a host-agent install token via POST /api/agent-install-command from the logged-in page and started pulse-agent as the unprivileged rcourtman user with --agent-id least-priv-verify and PULSE_SMARTCTL_PATH set",
-    "Opened Settings > Infrastructure > Agent Doctor, expanded the agent row, and located the rendered privilege line via DOM text walk at 1280x720 and 375x812",
-    "Read /api/agents/diagnostics from the page to confirm the wire payload carries the privilege block",
-    "Receipt hash for infrastructureAgentUpdateCommandsModel.ts re-pinned after the pre-commit prettier pass reformatted the staged blob; the change is formatting-only relative to the exercised content",
-    "Captured the mobile screenshot of the expanded row; stopped the scratch agent and both preview servers afterwards"
+    "Clicked the Attention status chip on Proxmox Overview and observed chip count 0 with the consistent 'No guests found' empty state",
+    "Opened the Add filter dropdown options on Proxmox Overview and read the node list",
+    "Navigated Proxmox -> vSphere -> Kubernetes nav tabs and read each overview's chip counts",
+    "Reset the persisted status filter back to All and confirmed the guest table renders 25 workloads grouped by node"
   ]
 }

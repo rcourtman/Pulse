@@ -23,12 +23,13 @@ import {
   getWorkloadsLoadingState,
   getWorkloadsNoInventoryState,
 } from '@/utils/workloadEmptyStatePresentation';
-import { getCanonicalWorkloadId, resolveWorkloadType } from '@/utils/workloads';
+import { getCanonicalWorkloadId } from '@/utils/workloads';
 import { nodeFromResource } from '@/utils/resourceStateAdapters';
 import {
   buildWorkloadSummaryGroupScopeMap,
   createWorkloadSortComparator,
   filterWorkloads,
+  selectVisibleWorkloadInventory,
   type FilterWorkloadsParams,
 } from './workloadSelectors';
 import {
@@ -186,15 +187,17 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
   const rawGuests = createMemo<WorkloadGuest[]>(() =>
     workloadsEnabled() ? workloads.workloads() : [],
   );
-  const allGuests = createMemo<WorkloadGuest[]>(() => {
-    if (!workloadsEnabled()) return [];
-    const excludedTypes = excludedWorkloadTypeSet();
-    const visibleGuests =
-      excludedTypes.size === 0
-        ? rawGuests()
-        : rawGuests().filter((guest) => !excludedTypes.has(resolveWorkloadType(guest)));
-    return dedupeGuests(visibleGuests);
-  });
+  const allGuests = createMemo<WorkloadGuest[]>(() =>
+    workloadsEnabled()
+      ? dedupeGuests(
+          selectVisibleWorkloadInventory({
+            guests: rawGuests(),
+            excludedTypes: excludedWorkloadTypeSet(),
+            platformScope: props.forcedPlatform,
+          }),
+        )
+      : [],
+  );
   const nestedWorkloadContextByGuestId = createMemo<NestedWorkloadContextByGuestId>(() =>
     props.showNestedExcludedWorkloads
       ? buildNestedWorkloadContextByGuestId({
