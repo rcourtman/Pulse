@@ -2480,9 +2480,16 @@ func (c *ConfigPersistence) SaveAIFindings(findings map[string]*AIFindingRecord)
 // SaveAIFindingsWithSuppression persists AI findings + explicit suppression rules to disk.
 // If suppressionRules is nil, existing suppression rules (if any) are preserved.
 func (c *ConfigPersistence) SaveAIFindingsWithSuppression(findings map[string]*AIFindingRecord, suppressionRules map[string]*AISuppressionRuleRecord) error {
-	// Preserve suppression rules if caller didn't provide them.
+	// Preserve suppression rules if caller didn't provide them. A missing file
+	// loads as empty data with no error, so a load error here is a real read
+	// failure: abort rather than rewrite the file without the user-authored
+	// rules it still holds.
 	if suppressionRules == nil {
-		if existing, err := c.LoadAIFindings(); err == nil && existing != nil && existing.SuppressionRules != nil {
+		existing, err := c.LoadAIFindings()
+		if err != nil {
+			return fmt.Errorf("load existing AI findings to preserve suppression rules: %w", err)
+		}
+		if existing != nil && existing.SuppressionRules != nil {
 			suppressionRules = existing.SuppressionRules
 		}
 	}
@@ -3588,7 +3595,12 @@ func (c *ConfigPersistence) SavePatrolRunHistory(runs []PatrolRunRecord) error {
 		LastSaved: now,
 		Runs:      runs,
 	}
-	if existing, err := c.LoadPatrolRunHistory(); err == nil && existing != nil {
+	// A missing file loads as empty data with no error, so a load error here is
+	// a real read failure. The tally is telemetry, so keep the save — but say
+	// the tally is restarting rather than resetting it silently.
+	if existing, err := c.LoadPatrolRunHistory(); err != nil {
+		log.Warn().Err(err).Str("file", c.aiPatrolRunsFile).Msg("Failed to read existing patrol run history; daily run tally restarts from this save")
+	} else if existing != nil {
 		data.DailyRuns = existing.DailyRuns
 		data.RunTallyThrough = existing.RunTallyThrough
 	}

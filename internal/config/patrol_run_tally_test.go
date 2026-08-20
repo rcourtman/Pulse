@@ -1,6 +1,8 @@
 package config
 
 import (
+	"errors"
+	"strings"
 	"testing"
 	"time"
 )
@@ -95,5 +97,46 @@ func TestPatrolRunTallyPrunesOldDays(t *testing.T) {
 	}
 	if data.DailyRuns[PatrolRunTallyDayKey(now.AddDate(0, 0, -1))] != 3 {
 		t.Fatal("yesterday's tally day was pruned")
+	}
+}
+
+// A failed read of the existing history must not block the save — the tally is
+// telemetry — but the tally reset it causes has to be visible in the log, not
+// silent. (A genuinely missing file loads as empty data with no error, so it
+// never reaches the warning path.)
+func TestPatrolRunTallyReadErrorWarnsAndKeepsSaving(t *testing.T) {
+	p := NewConfigPersistence(t.TempDir())
+	now := time.Now().UTC()
+
+	// Seed history whose tally holds a run that has already fallen off the
+	// capped run list: only a preserved tally would still count it.
+	runA := PatrolRunRecord{ID: "a", StartedAt: now.Add(-2 * time.Hour), CompletedAt: now.Add(-2 * time.Hour)}
+	if err := p.SavePatrolRunHistory([]PatrolRunRecord{runA}); err != nil {
+		t.Fatalf("SavePatrolRunHistory seed: %v", err)
+	}
+
+	logs := captureConfigLogs(t)
+	mfs := &mockFSError{FileSystem: defaultFileSystem{}, readError: errors.New("transient read failure")}
+	p.SetFileSystem(mfs)
+
+	runB := PatrolRunRecord{ID: "b", StartedAt: now.Add(-1 * time.Hour), CompletedAt: now.Add(-1 * time.Hour)}
+	if err := p.SavePatrolRunHistory([]PatrolRunRecord{runB}); err != nil {
+		t.Fatalf("SavePatrolRunHistory with failing read must still save: %v", err)
+	}
+	if !strings.Contains(logs.String(), "daily run tally restarts") {
+		t.Fatalf("no tally-restart warning was logged; logs: %s", logs.String())
+	}
+
+	mfs.readError = nil
+	loaded, err := p.LoadPatrolRunHistory()
+	if err != nil {
+		t.Fatalf("LoadPatrolRunHistory: %v", err)
+	}
+	if len(loaded.Runs) != 1 || loaded.Runs[0].ID != "b" {
+		t.Fatalf("saved runs = %+v, want just run b", loaded.Runs)
+	}
+	// The tally restarted from the saved window: run a is gone, run b counted.
+	if got := loaded.PatrolRunsSince(now.AddDate(0, 0, -30)); got != 1 {
+		t.Fatalf("PatrolRunsSince = %d, want 1 after the tally restart", got)
 	}
 }
