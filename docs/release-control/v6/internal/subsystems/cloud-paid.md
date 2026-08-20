@@ -1181,10 +1181,14 @@ hands-on Patrol modes, issue investigation, verified fixes, and longer history`.
     by the `max_users` license limit (unlimited for Business; newly issued
     Pro licenses may carry a finite `max_users` while previously issued
     licenses keep their unlimited posture), retention, and support, never
-    by gating features away from Pro. The tier stays dormant until the
-    license server issues business plan versions through a governed
-    rollout; no checkout, pricing-model payload, public pricing page, or
-    in-product plan surface may reference Business before that rollout, and
+    by gating features away from Pro. The dormancy gate was lifted by the
+    owner-approved governed rollout recorded in
+    `records/business-tier-launch-2026-08-20.md` ($399/year annual-only,
+    unlimited Business seats, `max_users = 3` carried only by newly issued
+    Pro price ids so previously issued licenses keep their unlimited
+    posture): the license server now sells Business through public checkout
+    and the public pricing-model payload. The 2026-08-08 opt-in
+    presentation posture still governs in-product surfaces, and
     monitored-system volume stays out of the Business plan model per the
     self-hosted commercial boundary above.
     The `max_users` seat limit travels the licensing chain as one named

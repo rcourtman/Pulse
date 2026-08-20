@@ -10551,6 +10551,18 @@
       "lane_ids": [
         "L1"
       ]
+    },
+    {
+      "id": "self-hosted-business-tier-launch",
+      "summary": "The project owner approved launching the dormant self-hosted business tier for public checkout: $399/year annual-only, unlimited seats, 365-day history, next-business-day support target, Pro-identical features per cloud-paid Extension Point 26. Newly issued Pro subscriptions carry a 3-seat max_users limit on new Stripe price ids; previously issued licenses keep their unlimited posture. The 2026-08-08 opt-in presentation posture is unchanged: no proactive in-product surface returns, and Business appears only through the public pricing model payload and checkout. Decision record: records/business-tier-launch-2026-08-20.md; evidence is the 2026-08-18 re-baselined business-estate read (682 estates, 7.77% vs 1.25% paid, 6.2x).",
+      "kind": "release-policy",
+      "decided_at": "2026-08-20",
+      "subsystem_ids": [
+        "cloud-paid"
+      ],
+      "lane_ids": [
+        "L3"
+      ]
     }
   ]
 }

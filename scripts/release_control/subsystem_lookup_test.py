@@ -4072,6 +4072,7 @@ class SubsystemLookupTest(unittest.TestCase):
                 "self-hosted-core-monitoring-free",
                 "self-hosted-commercial-scope-support-contract",
                 "self-hosted-commercial-surfaces-opt-in-posture",
+                "self-hosted-business-tier-launch",
                 "self-hosted-commercial-transition-contract",
                 "self-hosted-paid-extras-packaging",
                 "stable-release-promotion-model",
