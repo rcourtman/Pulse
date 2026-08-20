@@ -92,14 +92,14 @@ describe('VsphereAlertsTable', () => {
     expect(within(firstRow).getByText('host-101')).toBeInTheDocument();
 
     const attentionFilter = screen.getByRole('button', {
-      name: 'Attention, 1 health signal',
+      name: 'Attention, 1',
     });
     expect(attentionFilter).toHaveTextContent('Attention');
     expect(attentionFilter).toHaveTextContent('1');
     await fireEvent.click(attentionFilter);
     expect(document.querySelectorAll('[data-vsphere-alert-row]')).toHaveLength(1);
 
-    await fireEvent.click(screen.getByRole('button', { name: 'All' }));
+    await fireEvent.click(screen.getByRole('button', { name: /^All, \d+$/ }));
     expect(document.querySelectorAll('[data-vsphere-alert-row]')).toHaveLength(2);
 
     const row = screen

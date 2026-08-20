@@ -43,6 +43,7 @@ import {
   getPlatformTableCellClassForKind,
   PlatformTableShell,
   type PlatformTableSortValue,
+  withPlatformStatusCounts,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
   PlatformResourceDetailToggleButton,
@@ -346,11 +347,15 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
       },
     ];
   });
-  const scopedRows = createMemo(() => {
+  const applyHostScope = (rows: Resource[]) => {
     const host = hostFilter();
-    const base = tableState.filtered();
-    return host ? base.filter((resource) => dockerHostName(resource) === host) : base;
-  });
+    return host ? rows.filter((resource) => dockerHostName(resource) === host) : rows;
+  };
+  const scopedRows = createMemo(() => applyHostScope(tableState.filtered()));
+  // The host facet narrows rows after the shared filter state, so chip counts
+  // must apply it too or a scoped view would count other hosts' containers.
+  const countForStatus = (value: DockerResourceStatusFilter): number =>
+    applyHostScope(filterDockerResources(props.resources, tableState.search(), value)).length;
   const hasActiveFilters = () => tableState.hasActiveFilters() || hostFilter() !== '';
   // Reset must clear every URL param in ONE navigation. Consecutive
   // setSearchParams calls each merge against the pre-navigation URL (the
@@ -730,7 +735,7 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
             searchTips={DOCKER_CONTAINER_SEARCH_TIPS}
             status={tableState.status()}
             onStatusChange={tableState.setStatus}
-            statusOptions={PLATFORM_HEALTH_FILTER_OPTIONS}
+            statusOptions={withPlatformStatusCounts(PLATFORM_HEALTH_FILTER_OPTIONS, countForStatus)}
             filters={scopeFilters()}
             visible={scopedRows().length}
             total={tableState.total()}

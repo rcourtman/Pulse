@@ -23,6 +23,7 @@ import {
   type PlatformTableFilterOption,
   type PlatformTableSortValue,
   PlatformTableShell,
+  withPlatformStatusCounts,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
   PlatformResourceDetailToggleButton,
@@ -281,7 +282,10 @@ export const VsphereActivityTable: Component<{
             searchSuggestions={tableState.searchSuggestions}
             status={tableState.status()}
             onStatusChange={tableState.setStatus}
-            statusOptions={VSPHERE_ACTIVITY_STATUS_OPTIONS}
+            statusOptions={withPlatformStatusCounts(
+              VSPHERE_ACTIVITY_STATUS_OPTIONS,
+              tableState.countForStatus,
+            )}
             visible={tableState.visible()}
             total={tableState.total()}
             rowNoun="events"

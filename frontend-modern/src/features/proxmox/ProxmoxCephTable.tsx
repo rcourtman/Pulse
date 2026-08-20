@@ -24,6 +24,7 @@ import {
   type PlatformTableFilterOption,
   PlatformTableEmptyState,
   PlatformTableShell,
+  withPlatformStatusCounts,
 } from '@/features/platformPage/sharedPlatformPage';
 import { PlatformResourceDetailToggleButton } from '@/features/platformPage/PlatformResourceDetailTableRow';
 import { useObservedElementWidth } from '@/hooks/useObservedElementWidth';
@@ -239,9 +240,8 @@ export const ProxmoxCephTable: Component<{
     setSelectedId(null);
   };
 
-  const filtered = createMemo(() => {
+  const filterByStatus = (want: CephStatusFilter) => {
     const split = splitSearchExclusions(search());
-    const want = status();
     return props.resources.filter((cluster) => {
       if (want !== 'all' && classify(cluster) !== want) return false;
       if (!split.needle && split.excludes.length === 0) return true;
@@ -258,7 +258,9 @@ export const ProxmoxCephTable: Component<{
         .toLowerCase();
       return matchesSearchTermSplit(haystack, split);
     });
-  });
+  };
+  const filtered = createMemo(() => filterByStatus(status()));
+  const countForStatus = (value: CephStatusFilter): number => filterByStatus(value).length;
 
   const total = createMemo(() => props.resources.length);
   const visible = createMemo(() => filtered().length);
@@ -308,7 +310,7 @@ export const ProxmoxCephTable: Component<{
           searchSuggestions={searchSuggestions}
           status={status()}
           onStatusChange={setStatus}
-          statusOptions={STATUS_FILTER_OPTIONS}
+          statusOptions={withPlatformStatusCounts(STATUS_FILTER_OPTIONS, countForStatus)}
           visible={visible()}
           total={total()}
           rowNoun="clusters"

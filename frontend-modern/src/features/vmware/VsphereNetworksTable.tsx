@@ -16,6 +16,7 @@ import {
   type PlatformTableFilterOption,
   type PlatformTableSortValue,
   PlatformTableShell,
+  withPlatformStatusCounts,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
   PlatformResourceDetailToggleButton,
@@ -149,7 +150,10 @@ export const VsphereNetworksTable: Component<{
             searchSuggestions={tableState.searchSuggestions}
             status={tableState.status()}
             onStatusChange={tableState.setStatus}
-            statusOptions={VSPHERE_NETWORK_STATUS_OPTIONS}
+            statusOptions={withPlatformStatusCounts(
+              VSPHERE_NETWORK_STATUS_OPTIONS,
+              tableState.countForStatus,
+            )}
             visible={tableState.visible()}
             total={tableState.total()}
             rowNoun="networks"

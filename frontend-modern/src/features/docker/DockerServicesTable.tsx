@@ -14,6 +14,7 @@ import {
   getPlatformTableCellClassForKind,
   PlatformTableShell,
   type PlatformTableSortValue,
+  withPlatformStatusCounts,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
   PlatformResourceDetailToggleButton,
@@ -173,7 +174,10 @@ export const DockerServicesTable: Component<{
             searchSuggestions={tableState.searchSuggestions}
             status={tableState.status()}
             onStatusChange={tableState.setStatus}
-            statusOptions={PLATFORM_HEALTH_FILTER_OPTIONS}
+            statusOptions={withPlatformStatusCounts(
+              PLATFORM_HEALTH_FILTER_OPTIONS,
+              tableState.countForStatus,
+            )}
             visible={tableState.visible()}
             total={tableState.total()}
             rowNoun="services"

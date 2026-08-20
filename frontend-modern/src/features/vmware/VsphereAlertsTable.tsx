@@ -17,7 +17,7 @@ import {
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
   PlatformTableShell,
-  withPlatformAttentionCount,
+  withPlatformStatusCounts,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
   PlatformResourceDetailToggleButton,
@@ -124,11 +124,9 @@ export const VsphereAlertsTable: Component<{
   const drawer = createPlatformResourceDetailState({ idPrefix: 'vsphere-alert-drawer' });
   const posture = createMemo(() => buildVmwareHealthPosture(props.incidents));
   const statusOptions = createMemo(() =>
-    withPlatformAttentionCount(VSPHERE_INCIDENT_STATUS_OPTIONS, {
+    withPlatformStatusCounts(VSPHERE_INCIDENT_STATUS_OPTIONS, tableState.countForStatus, {
       value: 'attention',
-      count: posture().attention,
       tone: posture().critical > 0 ? 'danger' : 'warning',
-      noun: 'health signal',
     }),
   );
   const filteredEmptyState = () => getAlertFilteredEmptyState('vSphere health signals', 'severity');

@@ -16,6 +16,7 @@ import {
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
   PlatformTableShell,
+  withPlatformStatusCounts,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
   PlatformResourceDetailToggleButton,
@@ -142,7 +143,10 @@ export const KubernetesAlertsTable: Component<{
             searchSuggestions={tableState.searchSuggestions}
             status={tableState.status()}
             onStatusChange={tableState.setStatus}
-            statusOptions={KUBERNETES_INCIDENT_STATUS_OPTIONS}
+            statusOptions={withPlatformStatusCounts(
+              KUBERNETES_INCIDENT_STATUS_OPTIONS,
+              tableState.countForStatus,
+            )}
             visible={tableState.visible()}
             total={tableState.total()}
             rowNoun="alerts"

@@ -23,6 +23,7 @@ import {
   type PlatformTableFilterOption,
   type PlatformTableSortValue,
   PlatformTableShell,
+  withPlatformStatusCounts,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
   PlatformResourceDetailToggleButton,
@@ -220,7 +221,10 @@ export const TrueNASAppsTable: Component<{
             searchSuggestions={tableState.searchSuggestions}
             status={tableState.status()}
             onStatusChange={tableState.setStatus}
-            statusOptions={TRUENAS_APP_STATUS_OPTIONS}
+            statusOptions={withPlatformStatusCounts(
+              TRUENAS_APP_STATUS_OPTIONS,
+              tableState.countForStatus,
+            )}
             visible={tableState.visible()}
             total={tableState.total()}
             rowNoun="apps"

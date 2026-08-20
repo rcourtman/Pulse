@@ -19,6 +19,7 @@ import {
   type PlatformResourceStatusFilter,
   PlatformTableEmptyState,
   PlatformTableShell,
+  withPlatformStatusCounts,
 } from '@/features/platformPage/sharedPlatformPage';
 import { useObservedElementWidth } from '@/hooks/useObservedElementWidth';
 import { PlatformResourceDetailToggleButton } from '@/features/platformPage/PlatformResourceDetailTableRow';
@@ -124,7 +125,10 @@ export const ProxmoxMailGatewayTable: Component<{
           searchSuggestions={tableState.searchSuggestions}
           status={tableState.status()}
           onStatusChange={tableState.setStatus}
-          statusOptions={PLATFORM_HEALTH_FILTER_OPTIONS}
+          statusOptions={withPlatformStatusCounts(
+            PLATFORM_HEALTH_FILTER_OPTIONS,
+            tableState.countForStatus,
+          )}
           visible={tableState.visible()}
           total={tableState.total()}
           rowNoun="instances"

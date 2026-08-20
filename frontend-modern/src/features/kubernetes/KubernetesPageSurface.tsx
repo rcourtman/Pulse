@@ -19,6 +19,7 @@ import {
   PlatformTableEmptyState,
   PlatformTableLoadingState,
   PlatformTableToolbar,
+  withPlatformStatusCounts,
 } from '@/features/platformPage/sharedPlatformPage';
 import type { Resource } from '@/types/resource';
 import { buildPlatformResourceSearchSuggestions } from '@/features/platformPage/platformSearchSuggestions';
@@ -380,9 +381,9 @@ function KubernetesWorkloads(props: {
   const scopedControllers = () => scope.scopedSections()[2];
   const scopedAutoscaling = () => scope.scopedSections()[3];
   const scopeFilters = scope.scopeFilters;
-  const visibleRows = createMemo(() =>
-    countKubernetesVisible(scope.scopedSections(), toolbar.search(), toolbar.status()),
-  );
+  const countForStatus = (value: KubernetesResourceStatusFilter): number =>
+    countKubernetesVisible(scope.scopedSections(), toolbar.search(), value);
+  const visibleRows = createMemo(() => countForStatus(toolbar.status()));
   const hasActiveFilters = () => toolbar.hasActiveFilters() || scope.hasActiveScope();
   const resetFilters = () =>
     toolbar.resetFilters({
@@ -409,7 +410,7 @@ function KubernetesWorkloads(props: {
           searchSuggestions={searchSuggestions}
           status={toolbar.status()}
           onStatusChange={toolbar.setStatus}
-          statusOptions={PLATFORM_HEALTH_FILTER_OPTIONS}
+          statusOptions={withPlatformStatusCounts(PLATFORM_HEALTH_FILTER_OPTIONS, countForStatus)}
           filters={scopeFilters()}
           leadingControls={
             <Show when={(props.attentionCount ?? 0) > 0}>
@@ -499,9 +500,9 @@ function KubernetesServices(props: { model: KubernetesPageModel }) {
   const scope = createKubernetesInventoryScope(sections);
   const scopedServices = () => scope.scopedSections()[0];
   const scopedNetworking = () => scope.scopedSections()[1];
-  const visibleRows = createMemo(() =>
-    countKubernetesVisible(scope.scopedSections(), toolbar.search(), toolbar.status()),
-  );
+  const countForStatus = (value: KubernetesResourceStatusFilter): number =>
+    countKubernetesVisible(scope.scopedSections(), toolbar.search(), value);
+  const visibleRows = createMemo(() => countForStatus(toolbar.status()));
   const hasActiveFilters = () => toolbar.hasActiveFilters() || scope.hasActiveScope();
   const resetFilters = () =>
     toolbar.resetFilters({
@@ -528,7 +529,7 @@ function KubernetesServices(props: { model: KubernetesPageModel }) {
           searchSuggestions={searchSuggestions}
           status={toolbar.status()}
           onStatusChange={toolbar.setStatus}
-          statusOptions={PLATFORM_HEALTH_FILTER_OPTIONS}
+          statusOptions={withPlatformStatusCounts(PLATFORM_HEALTH_FILTER_OPTIONS, countForStatus)}
           filters={scope.scopeFilters()}
           visible={visibleRows()}
           total={totalRows()}
@@ -576,9 +577,9 @@ function KubernetesConfiguration(props: { model: KubernetesPageModel }) {
   const scope = createKubernetesInventoryScope(sections);
   const scopedConfig = () => scope.scopedSections()[0];
   const scopedPolicy = () => scope.scopedSections()[1];
-  const visibleRows = createMemo(() =>
-    countKubernetesVisible(scope.scopedSections(), toolbar.search(), toolbar.status()),
-  );
+  const countForStatus = (value: KubernetesResourceStatusFilter): number =>
+    countKubernetesVisible(scope.scopedSections(), toolbar.search(), value);
+  const visibleRows = createMemo(() => countForStatus(toolbar.status()));
   const hasActiveFilters = () => toolbar.hasActiveFilters() || scope.hasActiveScope();
   const resetFilters = () =>
     toolbar.resetFilters({
@@ -605,7 +606,7 @@ function KubernetesConfiguration(props: { model: KubernetesPageModel }) {
           searchSuggestions={searchSuggestions}
           status={toolbar.status()}
           onStatusChange={toolbar.setStatus}
-          statusOptions={PLATFORM_HEALTH_FILTER_OPTIONS}
+          statusOptions={withPlatformStatusCounts(PLATFORM_HEALTH_FILTER_OPTIONS, countForStatus)}
           filters={scope.scopeFilters()}
           visible={visibleRows()}
           total={totalRows()}

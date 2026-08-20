@@ -11,6 +11,7 @@ import {
   PlatformTableEmptyState,
   PlatformTableLoadingState,
   PlatformTableToolbar,
+  withPlatformStatusCounts,
 } from '@/features/platformPage/sharedPlatformPage';
 import { DockerAlertsTable } from './DockerAlertsTable';
 import { DockerConfigsTable } from './DockerConfigsTable';
@@ -210,11 +211,12 @@ function DockerStorage(props: { model: DockerPageModel }) {
     buildPlatformResourceSearchSuggestions([...storageHosts(), ...props.model.volumes]),
   );
   const totalRows = createMemo(() => storageHosts().length + props.model.volumes.length);
-  const visibleRows = createMemo(
-    () =>
-      filterDockerResources(storageHosts(), search(), status()).length +
-      filterDockerResources(props.model.volumes, search(), status()).length,
-  );
+  // The toolbar governs both stacked tables, so visible rows and chip counts
+  // sum the same per-section predicate.
+  const countForStatus = (value: DockerResourceStatusFilter): number =>
+    filterDockerResources(storageHosts(), search(), value).length +
+    filterDockerResources(props.model.volumes, search(), value).length;
+  const visibleRows = createMemo(() => countForStatus(status()));
   const hasActiveFilters = createMemo(() => search().trim().length > 0 || status() !== 'all');
   const resetFilters = () => {
     setSearch('');
@@ -240,7 +242,7 @@ function DockerStorage(props: { model: DockerPageModel }) {
           searchSuggestions={searchSuggestions}
           status={status()}
           onStatusChange={setStatus}
-          statusOptions={PLATFORM_HEALTH_FILTER_OPTIONS}
+          statusOptions={withPlatformStatusCounts(PLATFORM_HEALTH_FILTER_OPTIONS, countForStatus)}
           visible={visibleRows()}
           total={totalRows()}
           rowNoun="rows"

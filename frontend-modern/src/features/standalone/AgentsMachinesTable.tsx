@@ -53,6 +53,7 @@ import {
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
   type PlatformResourceStatusFilter,
+  withPlatformStatusCounts,
 } from '@/features/platformPage/sharedPlatformPage';
 import { useColumnVisibility } from '@/hooks/useColumnVisibility';
 import type { Disk } from '@/types/api';
@@ -1411,7 +1412,10 @@ export const AgentsMachinesTable: Component<{
           searchTips={AGENT_MACHINE_SEARCH_TIPS}
           status={tableState.status()}
           onStatusChange={tableState.setStatus}
-          statusOptions={PLATFORM_HEALTH_FILTER_OPTIONS}
+          statusOptions={withPlatformStatusCounts(
+            PLATFORM_HEALTH_FILTER_OPTIONS,
+            tableState.countForStatus,
+          )}
           visible={tableState.visible()}
           total={tableState.total()}
           rowNoun="machines"

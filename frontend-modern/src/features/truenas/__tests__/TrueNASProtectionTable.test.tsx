@@ -50,7 +50,7 @@ describe('TrueNASProtectionTable', () => {
     );
 
     const attentionFilter = screen.getByRole('button', {
-      name: 'Attention, 1 protection issue',
+      name: 'Attention, 1',
     });
     expect(attentionFilter).toHaveTextContent('Attention');
     expect(attentionFilter).toHaveTextContent('1');
@@ -59,7 +59,7 @@ describe('TrueNASProtectionTable', () => {
     expect(document.querySelectorAll('[data-truenas-protection-row]')).toHaveLength(1);
     expect(document.querySelector('[data-truenas-protection-row="failed"]')).not.toBeNull();
 
-    await fireEvent.click(screen.getByRole('button', { name: 'All' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'All, 3' }));
     expect(document.querySelectorAll('[data-truenas-protection-row]')).toHaveLength(3);
   });
 

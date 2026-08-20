@@ -10,6 +10,7 @@ import {
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
   PlatformTableShell,
+  withPlatformStatusCounts,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
   PlatformResourceDetailToggleButton,
@@ -142,7 +143,10 @@ export const TrueNASAlertsTable: Component<{
             searchSuggestions={tableState.searchSuggestions}
             status={tableState.status()}
             onStatusChange={tableState.setStatus}
-            statusOptions={TRUENAS_INCIDENT_STATUS_OPTIONS}
+            statusOptions={withPlatformStatusCounts(
+              TRUENAS_INCIDENT_STATUS_OPTIONS,
+              tableState.countForStatus,
+            )}
             visible={tableState.visible()}
             total={tableState.total()}
             rowNoun="alerts"

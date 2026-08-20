@@ -22,7 +22,7 @@ import {
   formatPlatformTableBytesValue,
   getPlatformTableCellClassForKind,
   getPlatformTableDateTimeSortValue,
-  withPlatformAttentionCount,
+  withPlatformStatusCounts,
   type PlatformTableFilterOption,
   type PlatformTableSortValue,
   PlatformTableShell,
@@ -357,20 +357,18 @@ export const TrueNASProtectionTable: Component<{
 }> = (props) => {
   const rows = createMemo(() => sortTrueNASProtectionPoints(props.points));
   const posture = createMemo(() => buildTrueNASProtectionPosture(rows()));
-  const statusOptions = createMemo(() =>
-    withPlatformAttentionCount(TRUENAS_PROTECTION_STATUS_OPTIONS, {
-      value: 'attention',
-      count: posture().attention,
-      tone: posture().failed > 0 ? 'danger' : 'warning',
-      noun: 'protection issue',
-    }),
-  );
   const detail = createPlatformResourceDetailState({ idPrefix: 'truenas-protection-detail' });
   const tableState = createPlatformTableFilterState({
     resources: rows,
     initialStatus: 'all' as TrueNASProtectionStatusFilter,
     filter: filterTrueNASProtectionPoints,
   });
+  const statusOptions = createMemo(() =>
+    withPlatformStatusCounts(TRUENAS_PROTECTION_STATUS_OPTIONS, tableState.countForStatus, {
+      value: 'attention',
+      tone: posture().failed > 0 ? 'danger' : 'warning',
+    }),
+  );
   const sort = createPlatformTableSortState({
     storageKey: 'truenasProtection',
     sortKeys: TRUENAS_PROTECTION_SORT_KEYS,

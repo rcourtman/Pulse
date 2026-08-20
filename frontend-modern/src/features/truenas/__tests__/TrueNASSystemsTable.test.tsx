@@ -99,7 +99,7 @@ describe('TrueNASSystemsTable', () => {
 
     await fireEvent.click(
       within(screen.getByRole('group', { name: 'Status' })).getByRole('button', {
-        name: 'Degraded',
+        name: /^Degraded, \d+$/,
       }),
     );
 

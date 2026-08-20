@@ -19,6 +19,7 @@ import {
   type PlatformTableFilterOption,
   type PlatformTableSortValue,
   PlatformTableShell,
+  withPlatformStatusCounts,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
   PlatformResourceDetailToggleButton,
@@ -173,7 +174,10 @@ export const VsphereDatastoresTable: Component<{
             searchSuggestions={tableState.searchSuggestions}
             status={tableState.status()}
             onStatusChange={tableState.setStatus}
-            statusOptions={VSPHERE_DATASTORE_STATUS_OPTIONS}
+            statusOptions={withPlatformStatusCounts(
+              VSPHERE_DATASTORE_STATUS_OPTIONS,
+              tableState.countForStatus,
+            )}
             visible={tableState.visible()}
             total={tableState.total()}
             rowNoun="datastores"

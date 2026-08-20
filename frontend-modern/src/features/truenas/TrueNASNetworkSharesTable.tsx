@@ -16,6 +16,7 @@ import {
   type PlatformTableFilterOption,
   type PlatformTableSortValue,
   PlatformTableShell,
+  withPlatformStatusCounts,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
   PlatformResourceDetailToggleButton,
@@ -162,7 +163,10 @@ export const TrueNASNetworkSharesTable: Component<{
             searchSuggestions={tableState.searchSuggestions}
             status={tableState.status()}
             onStatusChange={tableState.setStatus}
-            statusOptions={TRUENAS_SHARE_STATUS_OPTIONS}
+            statusOptions={withPlatformStatusCounts(
+              TRUENAS_SHARE_STATUS_OPTIONS,
+              tableState.countForStatus,
+            )}
             visible={tableState.visible()}
             total={tableState.total()}
             rowNoun="shares"

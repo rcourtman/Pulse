@@ -14,6 +14,7 @@ import {
   getPlatformTableHeadClassForKind,
   type PlatformTableContainerLayout,
   PlatformTableShell,
+  withPlatformStatusCounts,
 } from '@/features/platformPage/sharedPlatformPage';
 import { useObservedElementWidth } from '@/hooks/useObservedElementWidth';
 import {
@@ -109,24 +110,23 @@ const ATTACHMENT_GROUPS: readonly AttachmentGroup[] = [
   { key: 'running', label: 'Running', description: 'No active issue reported' },
 ] as const;
 
+// No static ariaLabel here: the shared chip naming (label plus live count)
+// is the accessible name, and the titles carry the descriptions.
 const ATTACHMENT_STATUS_FILTER_OPTIONS: PlatformTableFilterOption<AttachmentStatusFilter>[] = [
-  { value: 'all', label: 'All', ariaLabel: 'All', title: 'All attached containers' },
+  { value: 'all', label: 'All', title: 'All attached containers' },
   {
     value: 'attention',
     label: 'Attention',
-    ariaLabel: 'Attention',
     title: 'Containers that need review',
   },
   {
     value: 'running',
     label: 'Running',
-    ariaLabel: 'Running',
     title: 'Running containers',
   },
   {
     value: 'other',
     label: 'Other',
-    ariaLabel: 'Other',
     title: 'Stopped, paused, or unknown containers',
   },
 ];
@@ -301,7 +301,10 @@ const AttachmentDetail: Component<{ rows: readonly DockerNetworkAttachmentRow[] 
             searchSuggestions={tableState.searchSuggestions}
             status={tableState.status()}
             onStatusChange={setStatus}
-            statusOptions={ATTACHMENT_STATUS_FILTER_OPTIONS}
+            statusOptions={withPlatformStatusCounts(
+              ATTACHMENT_STATUS_FILTER_OPTIONS,
+              tableState.countForStatus,
+            )}
             visible={tableState.visible()}
             total={tableState.total()}
             rowNoun="containers"
@@ -445,7 +448,10 @@ export const DockerNetworksTable: Component<DockerNetworksTableProps> = (props) 
             searchSuggestions={tableState.searchSuggestions}
             status={tableState.status()}
             onStatusChange={tableState.setStatus}
-            statusOptions={PLATFORM_HEALTH_FILTER_OPTIONS}
+            statusOptions={withPlatformStatusCounts(
+              PLATFORM_HEALTH_FILTER_OPTIONS,
+              tableState.countForStatus,
+            )}
             visible={tableState.visible()}
             total={tableState.total()}
             rowNoun="networks"

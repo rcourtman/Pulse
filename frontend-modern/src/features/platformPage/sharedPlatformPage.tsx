@@ -21,7 +21,6 @@ import { EmptyState } from '@/components/shared/EmptyState';
 import { type FilterOption as PlatformTableFilterOption } from '@/components/shared/FilterButtonGroup';
 import { FilterBar, filterChipStatusDot, type FilterDef } from '@/components/shared/FilterBar';
 import { FilterSegmentedControl } from '@/components/shared/FilterToolbar';
-import { MetadataBadge } from '@/components/shared/MetadataBadge';
 import { type SearchInputProps, type SearchInputSuggestion } from '@/components/shared/SearchInput';
 import { Table, TableBody, TableHead, TableHeader, TableRow } from '@/components/shared/Table';
 import { TableCard } from '@/components/shared/TableCard';
@@ -51,35 +50,25 @@ import {
 
 export type { PlatformTableFilterOption };
 
-export function withPlatformAttentionCount<T extends string | number>(
+// Decorates every status option with the row count the table would show if
+// that option were selected. Callers pass the same predicate the table's
+// filter applies (createPlatformTableFilterState exposes it as
+// countForStatus), so a chip's number can never disagree with the rows that
+// clicking it renders. The optional attention entry escalates that option's
+// tone while it has matches.
+export function withPlatformStatusCounts<T extends string | number>(
   options: readonly PlatformTableFilterOption<T>[],
-  config: {
-    value: T;
-    count: number;
-    tone: 'warning' | 'danger';
-    noun: string;
-  },
+  countForStatus: (value: T) => number,
+  attention?: { value: T; tone: 'warning' | 'danger' },
 ): PlatformTableFilterOption<T>[] {
-  const count = Number.isFinite(config.count) ? Math.max(0, Math.trunc(config.count)) : 0;
-  if (count === 0) return [...options];
-
-  const countedNoun = count === 1 ? config.noun : `${config.noun}s`;
   return options.map((option) => {
-    if (option.value !== config.value) return option;
+    const raw = countForStatus(option.value);
+    const count = Number.isFinite(raw) ? Math.max(0, Math.trunc(raw)) : 0;
+    const escalate = attention !== undefined && option.value === attention.value && count > 0;
     return {
       ...option,
-      ariaLabel: `${option.label}, ${count} ${countedNoun}`,
-      title: `Show ${count} ${countedNoun}`,
-      tone: config.tone,
-      leading: undefined,
-      visualLabel: (
-        <>
-          <span>{option.label}</span>
-          <MetadataBadge tone={config.tone} size="xs" aria-hidden="true">
-            {count}
-          </MetadataBadge>
-        </>
-      ),
+      count,
+      ...(escalate ? { tone: attention.tone } : {}),
     };
   });
 }
@@ -1154,6 +1143,11 @@ export function createPlatformTableFilterState<Row, Status extends string | numb
   const filtered = createMemo(() => props.filter(props.resources(), search(), status()));
   const visible = createMemo(() => filtered().length);
   const total = createMemo(() => props.resources().length);
+  // Chip-count source for withPlatformStatusCounts: runs the table's own
+  // predicate with the candidate status, so the count a chip shows is exactly
+  // the row set selecting it would render.
+  const countForStatus = (value: Status): number =>
+    props.filter(props.resources(), search(), value).length;
   const hasActiveFilters = createMemo(
     () => search().trim().length > 0 || status() !== props.initialStatus,
   );
@@ -1177,6 +1171,7 @@ export function createPlatformTableFilterState<Row, Status extends string | numb
     filtered,
     visible,
     total,
+    countForStatus,
     hasActiveFilters,
     searchSuggestions,
     resetFilters,
@@ -1297,6 +1292,9 @@ export function PlatformTableToolbar<T extends string | number>(props: {
           visualLabel: option.visualLabel,
           icon: option.icon,
           tone: option.tone,
+          // The same estate-wide preference that gates the rows counter gates
+          // the chip counts, so "Inventory totals: Hide" quiets both.
+          count: inventoryCountsVisible() ? option.count : undefined,
         })),
       value: () => String(props.status),
       setValue: (value) => {
@@ -1391,7 +1389,10 @@ export const PlatformResourceTable: Component<{
           searchSuggestions={tableState.searchSuggestions}
           status={tableState.status()}
           onStatusChange={tableState.setStatus}
-          statusOptions={PLATFORM_STATUS_FILTER_OPTIONS}
+          statusOptions={withPlatformStatusCounts(
+            PLATFORM_STATUS_FILTER_OPTIONS,
+            tableState.countForStatus,
+          )}
           visible={tableState.visible()}
           total={tableState.total()}
           rowNoun="rows"

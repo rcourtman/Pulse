@@ -5290,11 +5290,13 @@ describe('shared primitive guardrails', () => {
   });
 
   it('keeps table-local attention counts on the shared platform filter template', () => {
-    expect(sharedPlatformPageSource).toContain('export function withPlatformAttentionCount');
-    expect(sharedPlatformPageSource).toContain('<MetadataBadge');
+    expect(sharedPlatformPageSource).toContain('export function withPlatformStatusCounts');
+    expect(sharedPlatformPageSource).toContain(
+      'count: inventoryCountsVisible() ? option.count : undefined',
+    );
 
     for (const source of [truenasProtectionTableSource, vsphereAlertsTableSource]) {
-      expect(source).toContain('withPlatformAttentionCount');
+      expect(source).toContain('withPlatformStatusCounts');
       expect(source).not.toContain('PlatformAttentionSummary');
       expect(source).not.toContain('<MetadataBadge');
     }

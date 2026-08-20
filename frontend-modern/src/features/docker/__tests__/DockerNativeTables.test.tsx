@@ -1096,7 +1096,7 @@ describe('Docker native tables', () => {
 
     expect(document.querySelectorAll('[data-docker-volume-row]')).toHaveLength(2);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Offline' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Offline, \d+$/ }));
 
     expect(screen.getByText('1 of 2 volumes')).toBeInTheDocument();
     expect(document.querySelector('[data-docker-volume-row="volume-cache"]')).not.toBeNull();
@@ -1331,13 +1331,13 @@ describe('Docker native tables', () => {
     expect(detail.getByText('worker-29')).toBeInTheDocument();
     expect(detail.getByText('Show first 24')).toBeInTheDocument();
 
-    fireEvent.click(detail.getByRole('button', { name: 'Attention' }));
+    fireEvent.click(detail.getByRole('button', { name: /^Attention, \d+$/ }));
     expect(detail.getByText('2 containers of 30 containers')).toBeInTheDocument();
     expect(detail.getByText('api-unhealthy')).toBeInTheDocument();
     expect(detail.getByText('api-restarting')).toBeInTheDocument();
     expect(detail.queryByText('worker-29')).toBeNull();
 
-    fireEvent.click(detail.getByRole('button', { name: 'All' }));
+    fireEvent.click(detail.getByRole('button', { name: /^All, \d+$/ }));
     fireEvent.input(detail.getByPlaceholderText('Search attached containers'), {
       target: { value: 'worker-29' },
     });

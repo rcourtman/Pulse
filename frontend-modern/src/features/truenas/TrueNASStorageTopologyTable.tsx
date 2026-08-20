@@ -22,6 +22,7 @@ import {
   type PlatformTableSortState,
   type PlatformTableSortValue,
   PlatformTableShell,
+  withPlatformStatusCounts,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
   PlatformResourceDetailToggleButton,
@@ -317,7 +318,10 @@ export const TrueNASStorageTopologyTable: Component<{
             searchSuggestions={tableState.searchSuggestions}
             status={tableState.status()}
             onStatusChange={tableState.setStatus}
-            statusOptions={TRUENAS_STORAGE_STATUS_OPTIONS}
+            statusOptions={withPlatformStatusCounts(
+              TRUENAS_STORAGE_STATUS_OPTIONS,
+              tableState.countForStatus,
+            )}
             visible={tableState.visible()}
             total={tableState.total()}
             rowNoun="items"

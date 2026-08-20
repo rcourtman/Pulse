@@ -34,7 +34,7 @@ import {
   getPlatformTableWeightedColumnWidthStyle,
   normalizePlatformResourceStatusFilter,
   summarizePlatformTableValues,
-  withPlatformAttentionCount,
+  withPlatformStatusCounts,
   type PlatformResourceStatusFilter,
 } from '../sharedPlatformPage';
 
@@ -43,39 +43,41 @@ afterEach(() => {
   window.localStorage.clear();
 });
 
-describe('withPlatformAttentionCount', () => {
-  it('decorates one attention option with a compact accessible count', () => {
-    let attention: ReturnType<typeof withPlatformAttentionCount<string>>[number] | undefined;
-    render(() => {
-      const options = withPlatformAttentionCount(
-        [
-          { value: 'all', label: 'All' },
-          { value: 'attention', label: 'Attention', tone: 'warning' },
-        ],
-        { value: 'attention', count: 2, tone: 'danger', noun: 'health signal' },
-      );
-      attention = options[1];
-      return attention.visualLabel;
-    });
-
-    expect(attention).toMatchObject({
-      ariaLabel: 'Attention, 2 health signals',
-      title: 'Show 2 health signals',
-      tone: 'danger',
-      leading: undefined,
-    });
-
-    expect(document.body).toHaveTextContent('Attention2');
-  });
-
-  it('leaves the base options undecorated when there is no attention', () => {
-    const options = withPlatformAttentionCount(
-      [{ value: 'attention', label: 'Attention', tone: 'warning' }],
-      { value: 'attention', count: 0, tone: 'warning', noun: 'issue' },
+describe('withPlatformStatusCounts', () => {
+  it('gives every option the count its own filter selection would render', () => {
+    const counts: Record<string, number> = { all: 5, attention: 2, healthy: 3 };
+    const options = withPlatformStatusCounts(
+      [
+        { value: 'all', label: 'All' },
+        { value: 'attention', label: 'Attention', tone: 'warning' },
+        { value: 'healthy', label: 'Healthy', tone: 'success' },
+      ],
+      (value) => counts[value],
     );
 
-    expect(options[0].visualLabel).toBeUndefined();
-    expect(options[0].ariaLabel).toBeUndefined();
+    expect(options.map((option) => option.count)).toEqual([5, 2, 3]);
+    expect(options[1].tone).toBe('warning');
+  });
+
+  it('escalates the attention tone only while that option has matches', () => {
+    const withMatches = withPlatformStatusCounts(
+      [{ value: 'attention', label: 'Attention', tone: 'warning' }],
+      () => 2,
+      { value: 'attention', tone: 'danger' },
+    );
+    expect(withMatches[0]).toMatchObject({ count: 2, tone: 'danger' });
+
+    const clear = withPlatformStatusCounts(
+      [{ value: 'attention', label: 'Attention', tone: 'warning' }],
+      () => 0,
+      { value: 'attention', tone: 'danger' },
+    );
+    expect(clear[0]).toMatchObject({ count: 0, tone: 'warning' });
+  });
+
+  it('clamps malformed counts to zero', () => {
+    const options = withPlatformStatusCounts([{ value: 'all', label: 'All' }], () => Number.NaN);
+    expect(options[0].count).toBe(0);
   });
 });
 

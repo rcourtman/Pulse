@@ -639,7 +639,7 @@ describe('DockerPageSurface', () => {
       'checkout',
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Offline' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Offline, \d+$/ }));
 
     expect(screen.getByText('1 of 2 rows')).toBeInTheDocument();
     expect(screen.getByTestId('docker-storage-usage-table')).toHaveAttribute(

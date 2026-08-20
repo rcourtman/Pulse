@@ -21,6 +21,7 @@ import {
   PlatformTableEmptyState,
   PlatformTableLoadingState,
   PlatformTableShell,
+  withPlatformStatusCounts,
 } from '@/features/platformPage/sharedPlatformPage';
 import { useObservedElementWidth } from '@/hooks/useObservedElementWidth';
 import type { ReplicationJob, ReplicationJobsResponse } from '@/types/api';
@@ -275,9 +276,8 @@ export const ProxmoxReplicationTable: Component<{
   const [status, setStatus] = createSignal<ReplicationStatusFilter>('all');
   const [expandedJobKey, setExpandedJobKey] = createSignal<string | null>(null);
 
-  const filtered = createMemo(() => {
+  const filterByStatus = (want: ReplicationStatusFilter) => {
     const split = splitSearchExclusions(search());
-    const want = status();
     return (props.jobs ?? []).filter((job) => {
       if (want !== 'all' && classifyJob(job) !== want) return false;
       if (!split.needle && split.excludes.length === 0) return true;
@@ -296,7 +296,9 @@ export const ProxmoxReplicationTable: Component<{
         .toLowerCase();
       return matchesSearchTermSplit(haystack, split);
     });
-  });
+  };
+  const filtered = createMemo(() => filterByStatus(status()));
+  const countForStatus = (value: ReplicationStatusFilter): number => filterByStatus(value).length;
 
   const total = createMemo(() => (props.jobs ?? []).length);
   const visible = createMemo(() => filtered().length);
@@ -385,7 +387,7 @@ export const ProxmoxReplicationTable: Component<{
               searchSuggestions={searchSuggestions}
               status={status()}
               onStatusChange={setStatus}
-              statusOptions={STATUS_FILTER_OPTIONS}
+              statusOptions={withPlatformStatusCounts(STATUS_FILTER_OPTIONS, countForStatus)}
               visible={visible()}
               total={total()}
               rowNoun="jobs"

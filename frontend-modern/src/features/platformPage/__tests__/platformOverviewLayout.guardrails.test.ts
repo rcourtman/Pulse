@@ -174,7 +174,7 @@ const proxmoxInlineDetailTableSources = [
 describe('platform overview layout guardrails', () => {
   it('keeps attention summaries canonical without a competing estate panel', () => {
     for (const source of [truenasProtectionTableSource, vsphereAlertsTableSource]) {
-      expect(source).toContain('withPlatformAttentionCount');
+      expect(source).toContain('withPlatformStatusCounts');
       expect(source).not.toContain('PlatformAttentionSummary');
     }
     for (const source of overviewSurfaceSources) {
