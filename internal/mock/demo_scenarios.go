@@ -292,7 +292,7 @@ var demoProxmoxClusterProfiles = []demoProxmoxClusterProfile{
 
 const demoOfflineProxmoxNode = "pve22"
 
-func applyDemoScenarioGraph(graph *FixtureGraph, now time.Time) {
+func applyDemoScenarioGraph(graph *FixtureGraph, cfg MockConfig, now time.Time) {
 	if graph == nil {
 		return
 	}
@@ -302,6 +302,10 @@ func applyDemoScenarioGraph(graph *FixtureGraph, now time.Time) {
 	vmProfiles := applyDemoWorkloadScenario(graph.State.VMs, demoVMProfiles, now)
 	containerProfiles := applyDemoContainerScenario(graph.State.Containers, demoContainerProfiles, now)
 	applyDemoDockerScenario(&graph.State, now)
+	// Docker-in-LXC nested hosts bind to the guests' final (scenario-shaped)
+	// names, instances, and states, so the fixture runs after the workload
+	// and Docker scenarios and before connection health is synced.
+	ensureMockDockerInLXCFixture(&graph.State, cfg)
 	applyDemoKubernetesScenario(&graph.State, now)
 	applyDemoHostScenario(&graph.State, now)
 	applyDemoStorageScenario(&graph.State, now)
@@ -571,9 +575,19 @@ func applyDemoDockerScenario(state *models.StateSnapshot, now time.Time) {
 	// disconnected host with its containers shown as exited rather than running.
 	const offlineDockerIndex = 2
 	onlineOrdinal := 0
+	nativeIndex := -1
 	for i := range state.DockerHosts {
 		host := &state.DockerHosts[i]
-		if i == offlineDockerIndex {
+		if strings.HasPrefix(host.ID, mockProxmoxLXCDockerHostSourcePrefix) {
+			// Docker-in-LXC hosts are identity-bound to their parent LXC
+			// guest; ensureMockDockerInLXCFixture owns their naming, status,
+			// and inventory. Handing them a fleet profile would sever the
+			// guest linkage and fabricate native engine inventory the
+			// production pct exec path never reports.
+			continue
+		}
+		nativeIndex++
+		if nativeIndex == offlineDockerIndex {
 			host.Hostname = "field-office-edge-01"
 			host.DisplayName = "Field Office Edge 01"
 			host.Status = "offline"

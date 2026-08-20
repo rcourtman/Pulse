@@ -34,7 +34,7 @@ func buildFixtureGraph(cfg MockConfig, now time.Time) FixtureGraph {
 		PlatformFixtures:     defaultPlatformFixtures(),
 		AvailabilityFixtures: defaultAvailabilityFixtures(now),
 	}
-	applyDemoScenarioGraph(&graph, now)
+	applyDemoScenarioGraph(&graph, cfg, now)
 	syncMetricFixtureRegistriesFromGraph(graph)
 	graph.UpdateMetrics(cfg, now)
 	graph.AlertHistory = buildAlertHistory(graph.State.Nodes, graph.State.VMs, graph.State.Containers)
@@ -61,12 +61,12 @@ func (g *FixtureGraph) UpdateMetrics(cfg MockConfig, now time.Time) {
 	}
 
 	setMockUpdateInterval(cfg.UpdateInterval)
-	applyDemoScenarioGraph(g, now)
+	applyDemoScenarioGraph(g, cfg, now)
 	syncMetricFixtureRegistriesFromGraph(*g)
 	updateFixtureStateMetricsAt(&g.State, cfg, now)
 	g.PlatformFixtures = rebasePlatformFixtures(g.PlatformFixtures, now)
 	g.AvailabilityFixtures = rebaseAvailabilityFixtures(g.AvailabilityFixtures, now)
-	applyDemoScenarioGraph(g, now)
+	applyDemoScenarioGraph(g, cfg, now)
 	g.DiscoveryFixtures = buildDiscoveryFixtures(g.State, now)
 	syncMetricFixtureRegistriesFromGraph(*g)
 }

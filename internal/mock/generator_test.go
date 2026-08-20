@@ -906,11 +906,8 @@ func TestEnsureConfigOnlyMountFixtureSeedsUnknownUsageMount(t *testing.T) {
 	}
 }
 
-func TestBuildFixtureStateIncludesDockerInLXCFixture(t *testing.T) {
-	cfg := DefaultConfig
-	cfg.StoppedPercent = 0 // keep every LXC running so the fixture always binds
-
-	data := buildFixtureState(cfg)
+func assertMockDockerInLXCFixture(t *testing.T, data *models.StateSnapshot) []models.DockerHost {
+	t.Helper()
 
 	var nested []models.DockerHost
 	for _, host := range data.DockerHosts {
@@ -946,6 +943,9 @@ func TestBuildFixtureStateIncludesDockerInLXCFixture(t *testing.T) {
 		if host.Hostname != guest.Name {
 			t.Fatalf("nested docker host hostname %q should be the guest name %q", host.Hostname, guest.Name)
 		}
+		if host.Status != "online" {
+			t.Fatalf("nested docker host %s bound to a running guest must be online, got %q", host.ID, host.Status)
+		}
 		if len(host.Containers) == 0 {
 			t.Fatalf("nested docker host %s has no containers", host.ID)
 		}
@@ -963,16 +963,41 @@ func TestBuildFixtureStateIncludesDockerInLXCFixture(t *testing.T) {
 	if !containerCounts[1] {
 		t.Fatalf("expected one single-container nested host so the row cue renders its singular form, got counts %v", containerCounts)
 	}
+	return nested
+}
+
+func TestFixtureGraphIncludesDockerInLXCFixture(t *testing.T) {
+	cfg := DefaultConfig
+	now := time.Now()
+
+	graph := buildFixtureGraph(cfg, now)
+	first := assertMockDockerInLXCFixture(t, &graph.State)
+
+	// The demo scenario layer reapplies on every metric tick; the fixture
+	// must stay idempotent and the scenario's Docker fleet profiles must
+	// keep their hands off the nested hosts.
+	graph.UpdateMetrics(cfg, now.Add(time.Minute))
+	second := assertMockDockerInLXCFixture(t, &graph.State)
+	firstIDs := map[string]bool{}
+	for _, host := range first {
+		firstIDs[host.ID] = true
+	}
+	for _, host := range second {
+		if !firstIDs[host.ID] {
+			t.Fatalf("nested docker host identity changed across ticks: %s not in first pass", host.ID)
+		}
+	}
 
 	// Disabling Docker in the mock estate disables the nested fixture too.
-	cfg.DockerHostCount = 0
-	dataNoDocker := buildFixtureState(cfg)
-	for _, host := range dataNoDocker.DockerHosts {
+	cfgNoDocker := DefaultConfig
+	cfgNoDocker.DockerHostCount = 0
+	graphNoDocker := buildFixtureGraph(cfgNoDocker, now)
+	for _, host := range graphNoDocker.State.DockerHosts {
 		if strings.HasPrefix(host.ID, mockProxmoxLXCDockerHostSourcePrefix) {
 			t.Fatalf("nested docker host %s generated despite DockerHostCount=0", host.ID)
 		}
 	}
-	for _, ct := range dataNoDocker.Containers {
+	for _, ct := range graphNoDocker.State.Containers {
 		if ct.HasDocker {
 			t.Fatalf("LXC %s marked HasDocker despite DockerHostCount=0", ct.ID)
 		}

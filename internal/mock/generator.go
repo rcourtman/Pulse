@@ -641,7 +641,9 @@ func buildFixtureState(config MockConfig) models.StateSnapshot {
 
 	ensureFreshFilesystemFixture(&data)
 	ensureConfigOnlyMountFixture(&data)
-	ensureMockDockerInLXCFixture(&data, config)
+	// Docker-in-LXC nested hosts are added by ensureMockDockerInLXCFixture
+	// from the demo scenario layer, after guests get their final names,
+	// instances, and states.
 
 	// Calculate stats
 	data.Stats.StartTime = time.Now()
@@ -2706,15 +2708,42 @@ const mockProxmoxLXCDockerHostSourcePrefix = "proxmox-lxc-docker:"
 // and lets the Proxmox page match them back to their parent guest for the
 // row cue and drawer card, so without this fixture the whole surface has no
 // local reproduction.
+//
+// It runs AFTER the demo scenario layer (from applyDemoScenarioGraph), because
+// the scenario renames guests, aliases cluster instances, and forces guest
+// states; a nested host bound to pre-scenario coordinates would never match
+// its parent again. The scenario reapplies on every metric tick, so this is
+// idempotent: an existing nested host is re-synced from its guest instead of
+// duplicated, and one whose guest stopped running goes offline the way a real
+// probe target would.
 func ensureMockDockerInLXCFixture(data *models.StateSnapshot, config MockConfig) {
-	if data == nil || config.DockerHostCount <= 0 {
+	if data == nil {
+		return
+	}
+	if data.ConnectionHealth == nil {
+		data.ConnectionHealth = make(map[string]bool)
+	}
+
+	existing := make(map[string]*models.DockerHost)
+	for i := range data.DockerHosts {
+		host := &data.DockerHosts[i]
+		if strings.HasPrefix(host.ID, mockProxmoxLXCDockerHostSourcePrefix) {
+			existing[host.ID] = host
+		}
+	}
+
+	if config.DockerHostCount <= 0 {
+		for _, host := range existing {
+			host.Status = "offline"
+		}
 		return
 	}
 
+	now := time.Now()
 	// One single-container guest and one busier guest, so the row cue
 	// renders both its singular and plural counts.
 	nestedCounts := []int{1, 4}
-	now := time.Now()
+	selected := make(map[string]bool, len(nestedCounts))
 	nested := 0
 	for i := range data.Containers {
 		if nested >= len(nestedCounts) {
@@ -2724,14 +2753,25 @@ func ensureMockDockerInLXCFixture(data *models.StateSnapshot, config MockConfig)
 		if ct.Status != "running" || ct.IsOCI {
 			continue
 		}
+		nestedIdx := nested
+		nested++
 
 		ct.HasDocker = true
-		ct.DockerCheckedAt = now
+		if ct.DockerCheckedAt.IsZero() {
+			ct.DockerCheckedAt = now
+		}
 
 		sourceID := fmt.Sprintf("%s%s:%s:%d", mockProxmoxLXCDockerHostSourcePrefix, ct.Instance, ct.Node, ct.VMID)
+		selected[sourceID] = true
+		if host, ok := existing[sourceID]; ok {
+			syncMockDockerInLXCHostFromGuest(host, *ct, now)
+			data.ConnectionHealth[dockerConnectionPrefix+host.ID] = true
+			continue
+		}
+
 		containers := generateDockerContainers(ct.Name, i, config, false)
-		if len(containers) > nestedCounts[nested] {
-			containers = containers[:nestedCounts[nested]]
+		if len(containers) > nestedCounts[nestedIdx] {
+			containers = containers[:nestedCounts[nestedIdx]]
 		}
 
 		version := dockerVersions[rand.Intn(len(dockerVersions))]
@@ -2743,49 +2783,86 @@ func ensureMockDockerInLXCFixture(data *models.StateSnapshot, config MockConfig)
 			}
 		}
 
-		// Host info mirrors what parseProxmoxGuestDockerInventory plus
-		// enrichGuestDockerReportFromContainer report for a real guest: the
-		// guest's own sizing and usage, one rootfs disk, no machine ID, no
-		// agent version, no network interfaces.
 		host := models.DockerHost{
-			ID:               sourceID,
-			AgentID:          sourceID,
-			Hostname:         ct.Name,
-			DisplayName:      ct.Name,
-			OS:               "linux",
-			KernelVersion:    kernelVersion,
-			Architecture:     "x86_64",
-			Runtime:          "docker",
-			RuntimeVersion:   version,
-			DockerVersion:    version,
-			CPUs:             ct.CPUs,
-			TotalMemoryBytes: ct.Memory.Total,
-			UptimeSeconds:    ct.Uptime,
-			CPUUsage:         clampFloat(ct.CPU*100, 0, 100),
-			Memory: models.Memory{
-				Total: ct.Memory.Total,
-				Used:  ct.Memory.Used,
-				Free:  ct.Memory.Free,
-				Usage: ct.Memory.Usage,
-			},
-			Disks: []models.Disk{{
-				Total:      ct.Disk.Total,
-				Used:       ct.Disk.Used,
-				Free:       ct.Disk.Free,
-				Usage:      ct.Disk.Usage,
-				Mountpoint: "/",
-				Type:       "rootfs",
-			}},
-			Status:          "online",
-			LastSeen:        now,
-			IntervalSeconds: 30,
-			Containers:      containers,
+			ID:            sourceID,
+			OS:            "linux",
+			KernelVersion: kernelVersion,
+			Architecture:  "x86_64",
+			Runtime:       "docker",
+			RuntimeVersion: version,
+			DockerVersion:  version,
+			Containers:     containers,
 		}
+		syncMockDockerInLXCHostFromGuest(&host, *ct, now)
 
 		data.DockerHosts = append(data.DockerHosts, host)
 		data.ConnectionHealth[dockerConnectionPrefix+host.ID] = true
-		nested++
 	}
+
+	// A nested host whose guest is no longer among the running targets stops
+	// reporting, exactly like a real probe target whose LXC was stopped.
+	for id, host := range existing {
+		if !selected[id] {
+			host.Status = "offline"
+			data.ConnectionHealth[dockerConnectionPrefix+id] = false
+		}
+	}
+}
+
+// syncMockDockerInLXCHostFromGuest keeps a nested Docker host mirroring its
+// parent LXC guest, matching what parseProxmoxGuestDockerInventory plus
+// enrichGuestDockerReportFromContainer report for a real guest: the guest's
+// own naming, sizing, and usage, one rootfs disk, and none of the native
+// agent surfaces (engine inventory, Swarm, host I/O rates, temperature,
+// machine ID, agent version, network interfaces). Clearing those every pass
+// also repairs any enrichment a demo cycle may have applied before the
+// scenario learned to skip nested hosts.
+func syncMockDockerInLXCHostFromGuest(host *models.DockerHost, guest models.Container, now time.Time) {
+	if host == nil {
+		return
+	}
+	host.AgentID = host.ID
+	host.Hostname = guest.Name
+	host.DisplayName = guest.Name
+	host.Status = "online"
+	host.CPUs = guest.CPUs
+	host.TotalMemoryBytes = guest.Memory.Total
+	host.UptimeSeconds = guest.Uptime
+	host.CPUUsage = clampFloat(guest.CPU*100, 0, 100)
+	host.Memory = models.Memory{
+		Total: guest.Memory.Total,
+		Used:  guest.Memory.Used,
+		Free:  guest.Memory.Free,
+		Usage: guest.Memory.Usage,
+	}
+	host.Disks = []models.Disk{{
+		Total:      guest.Disk.Total,
+		Used:       guest.Disk.Used,
+		Free:       guest.Disk.Free,
+		Usage:      guest.Disk.Usage,
+		Mountpoint: "/",
+		Type:       "rootfs",
+	}}
+	host.LastSeen = now
+	host.IntervalSeconds = 30
+	host.MachineID = ""
+	host.AgentVersion = ""
+	host.NetworkInterfaces = nil
+	host.Images = nil
+	host.Volumes = nil
+	host.Networks = nil
+	host.StorageUsage = nil
+	host.Services = nil
+	host.Tasks = nil
+	host.Secrets = nil
+	host.Configs = nil
+	host.Nodes = nil
+	host.Swarm = nil
+	host.Temperature = nil
+	host.NetInRate = 0
+	host.NetOutRate = 0
+	host.DiskReadRate = 0
+	host.DiskWriteRate = 0
 }
 
 func ensureMockDockerNativeInventory(host *models.DockerHost, hostIndex int, now time.Time) {
