@@ -18,14 +18,18 @@ func TestBuildFixtureStateIncludesDockerHosts(t *testing.T) {
 
 	data := buildFixtureState(cfg)
 
-	if len(data.DockerHosts) != cfg.DockerHostCount {
-		t.Fatalf("expected %d docker hosts, got %d", cfg.DockerHostCount, len(data.DockerHosts))
-	}
-
+	// Nested Docker-in-LXC hosts are appended on top of the configured
+	// agent-reported hosts and deliberately carry no native engine
+	// inventory, so the native-host expectations exclude them.
+	nativeHosts := 0
 	for _, host := range data.DockerHosts {
 		if host.ID == "" {
 			t.Fatalf("docker host missing id: %+v", host)
 		}
+		if strings.HasPrefix(host.ID, mockProxmoxLXCDockerHostSourcePrefix) {
+			continue
+		}
+		nativeHosts++
 		if len(host.Containers) == 0 {
 			t.Fatalf("docker host %s has no containers", host.Hostname)
 		}
@@ -41,6 +45,9 @@ func TestBuildFixtureStateIncludesDockerHosts(t *testing.T) {
 		if host.StorageUsage == nil || host.StorageUsage.Images.TotalCount == 0 || host.StorageUsage.Volumes.TotalCount == 0 {
 			t.Fatalf("docker host %s has no engine storage usage inventory: %+v", host.Hostname, host.StorageUsage)
 		}
+	}
+	if nativeHosts != cfg.DockerHostCount {
+		t.Fatalf("expected %d native docker hosts, got %d", cfg.DockerHostCount, nativeHosts)
 	}
 }
 
@@ -300,6 +307,11 @@ func TestBuildFixtureStatePopulatesDockerHostIORates(t *testing.T) {
 	}
 
 	for _, host := range data.DockerHosts {
+		if strings.HasPrefix(host.ID, mockProxmoxLXCDockerHostSourcePrefix) {
+			// Docker-in-LXC hosts mirror the production pct exec inventory,
+			// which reports no host-level I/O rates or temperature.
+			continue
+		}
 		if host.Status == "offline" {
 			if host.NetInRate != 0 || host.NetOutRate != 0 || host.DiskReadRate != 0 || host.DiskWriteRate != 0 {
 				t.Fatalf("offline docker host %s should have zero I/O rates", host.ID)
@@ -891,5 +903,78 @@ func TestEnsureConfigOnlyMountFixtureSeedsUnknownUsageMount(t *testing.T) {
 	}
 	if archive.Type != "mp0" || archive.Device == "" {
 		t.Fatalf("config-only mount must keep its mp key and device, got %+v", archive)
+	}
+}
+
+func TestBuildFixtureStateIncludesDockerInLXCFixture(t *testing.T) {
+	cfg := DefaultConfig
+	cfg.StoppedPercent = 0 // keep every LXC running so the fixture always binds
+
+	data := buildFixtureState(cfg)
+
+	var nested []models.DockerHost
+	for _, host := range data.DockerHosts {
+		if strings.HasPrefix(host.ID, mockProxmoxLXCDockerHostSourcePrefix) {
+			nested = append(nested, host)
+		}
+	}
+	if len(nested) != 2 {
+		t.Fatalf("expected 2 nested Docker-in-LXC hosts, got %d", len(nested))
+	}
+
+	guestsBySourceID := make(map[string]models.Container, len(data.Containers))
+	for _, ct := range data.Containers {
+		key := fmt.Sprintf("%s%s:%s:%d", mockProxmoxLXCDockerHostSourcePrefix, ct.Instance, ct.Node, ct.VMID)
+		guestsBySourceID[key] = ct
+	}
+
+	containerCounts := make(map[int]bool)
+	for _, host := range nested {
+		guest, ok := guestsBySourceID[host.ID]
+		if !ok {
+			t.Fatalf("nested docker host %s has no matching LXC guest", host.ID)
+		}
+		if guest.Status != "running" {
+			t.Fatalf("nested docker host %s bound to non-running guest %s", host.ID, guest.ID)
+		}
+		if !guest.HasDocker || guest.DockerCheckedAt.IsZero() {
+			t.Fatalf("parent LXC %s not marked as probed Docker host", guest.ID)
+		}
+		if host.AgentID != host.ID {
+			t.Fatalf("nested docker host agent id %q must equal its source id %q", host.AgentID, host.ID)
+		}
+		if host.Hostname != guest.Name {
+			t.Fatalf("nested docker host hostname %q should be the guest name %q", host.Hostname, guest.Name)
+		}
+		if len(host.Containers) == 0 {
+			t.Fatalf("nested docker host %s has no containers", host.ID)
+		}
+		containerCounts[len(host.Containers)] = true
+		if len(host.Images) != 0 || len(host.Volumes) != 0 || len(host.Networks) != 0 || host.StorageUsage != nil {
+			t.Fatalf("nested docker host %s must not fabricate native engine inventory (production pct exec inventory has none)", host.ID)
+		}
+		if host.Swarm != nil {
+			t.Fatalf("nested docker host %s must not join the mock Swarm", host.ID)
+		}
+		if !data.ConnectionHealth[dockerConnectionPrefix+host.ID] {
+			t.Fatalf("nested docker host %s missing connection health entry", host.ID)
+		}
+	}
+	if !containerCounts[1] {
+		t.Fatalf("expected one single-container nested host so the row cue renders its singular form, got counts %v", containerCounts)
+	}
+
+	// Disabling Docker in the mock estate disables the nested fixture too.
+	cfg.DockerHostCount = 0
+	dataNoDocker := buildFixtureState(cfg)
+	for _, host := range dataNoDocker.DockerHosts {
+		if strings.HasPrefix(host.ID, mockProxmoxLXCDockerHostSourcePrefix) {
+			t.Fatalf("nested docker host %s generated despite DockerHostCount=0", host.ID)
+		}
+	}
+	for _, ct := range dataNoDocker.Containers {
+		if ct.HasDocker {
+			t.Fatalf("LXC %s marked HasDocker despite DockerHostCount=0", ct.ID)
+		}
 	}
 }

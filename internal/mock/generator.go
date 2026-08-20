@@ -641,6 +641,7 @@ func buildFixtureState(config MockConfig) models.StateSnapshot {
 
 	ensureFreshFilesystemFixture(&data)
 	ensureConfigOnlyMountFixture(&data)
+	ensureMockDockerInLXCFixture(&data, config)
 
 	// Calculate stats
 	data.Stats.StartTime = time.Now()
@@ -2688,6 +2689,103 @@ func generateDockerHosts(config MockConfig) []models.DockerHost {
 	populateMockDockerSwarmNodeInventories(hosts, now)
 
 	return hosts
+}
+
+// mockProxmoxLXCDockerHostSourcePrefix mirrors the production Docker host
+// identity prefix from monitoring.proxmoxGuestDockerAgentID (and the platform
+// scope match in unifiedresources): hosts whose source ID carries it are
+// treated as Docker runtimes discovered inside a Proxmox LXC guest.
+const mockProxmoxLXCDockerHostSourcePrefix = "proxmox-lxc-docker:"
+
+// ensureMockDockerInLXCFixture adds Proxmox-side Docker-in-LXC discovery to
+// the fixture estate: the first running LXC guests are marked HasDocker (as
+// the node's pct exec socket probe would) and each gains a nested Docker host
+// whose identity follows the production proxmoxGuestDockerAgentID convention,
+// "proxmox-lxc-docker:" + the guest's instance:node:vmid coordinates. That
+// prefix is what grants the nested workloads the proxmox-pve platform scope
+// and lets the Proxmox page match them back to their parent guest for the
+// row cue and drawer card, so without this fixture the whole surface has no
+// local reproduction.
+func ensureMockDockerInLXCFixture(data *models.StateSnapshot, config MockConfig) {
+	if data == nil || config.DockerHostCount <= 0 {
+		return
+	}
+
+	// One single-container guest and one busier guest, so the row cue
+	// renders both its singular and plural counts.
+	nestedCounts := []int{1, 4}
+	now := time.Now()
+	nested := 0
+	for i := range data.Containers {
+		if nested >= len(nestedCounts) {
+			break
+		}
+		ct := &data.Containers[i]
+		if ct.Status != "running" || ct.IsOCI {
+			continue
+		}
+
+		ct.HasDocker = true
+		ct.DockerCheckedAt = now
+
+		sourceID := fmt.Sprintf("%s%s:%s:%d", mockProxmoxLXCDockerHostSourcePrefix, ct.Instance, ct.Node, ct.VMID)
+		containers := generateDockerContainers(ct.Name, i, config, false)
+		if len(containers) > nestedCounts[nested] {
+			containers = containers[:nestedCounts[nested]]
+		}
+
+		version := dockerVersions[rand.Intn(len(dockerVersions))]
+		kernelVersion := "6.8.12-4-pve"
+		for _, node := range data.Nodes {
+			if node.Name == ct.Node && node.KernelVersion != "" {
+				kernelVersion = node.KernelVersion
+				break
+			}
+		}
+
+		// Host info mirrors what parseProxmoxGuestDockerInventory plus
+		// enrichGuestDockerReportFromContainer report for a real guest: the
+		// guest's own sizing and usage, one rootfs disk, no machine ID, no
+		// agent version, no network interfaces.
+		host := models.DockerHost{
+			ID:               sourceID,
+			AgentID:          sourceID,
+			Hostname:         ct.Name,
+			DisplayName:      ct.Name,
+			OS:               "linux",
+			KernelVersion:    kernelVersion,
+			Architecture:     "x86_64",
+			Runtime:          "docker",
+			RuntimeVersion:   version,
+			DockerVersion:    version,
+			CPUs:             ct.CPUs,
+			TotalMemoryBytes: ct.Memory.Total,
+			UptimeSeconds:    ct.Uptime,
+			CPUUsage:         clampFloat(ct.CPU*100, 0, 100),
+			Memory: models.Memory{
+				Total: ct.Memory.Total,
+				Used:  ct.Memory.Used,
+				Free:  ct.Memory.Free,
+				Usage: ct.Memory.Usage,
+			},
+			Disks: []models.Disk{{
+				Total:      ct.Disk.Total,
+				Used:       ct.Disk.Used,
+				Free:       ct.Disk.Free,
+				Usage:      ct.Disk.Usage,
+				Mountpoint: "/",
+				Type:       "rootfs",
+			}},
+			Status:          "online",
+			LastSeen:        now,
+			IntervalSeconds: 30,
+			Containers:      containers,
+		}
+
+		data.DockerHosts = append(data.DockerHosts, host)
+		data.ConnectionHealth[dockerConnectionPrefix+host.ID] = true
+		nested++
+	}
 }
 
 func ensureMockDockerNativeInventory(host *models.DockerHost, hostIndex int, now time.Time) {
