@@ -488,6 +488,22 @@ the approved-action-success and adapter-specific Pulse MCP loop variants are
 active, including the stricter resolved operations loop split by first-party
 Assistant collaboration, external-agent collaboration, and Pulse MCP adapter
 use.
+Every Pulse Intelligence value report and autonomous operator-evidence
+projection must apply the same install-quality population in the license-server
+query before computing install counts, active counts, cohorts, funnels, or
+rates. The query excludes non-production pings, including development, manual,
+qualification, and other unpublished builds, plus the bounded historical mock
+fixture signature of 120 Kubernetes pods and 7 VMware hosts per scale unit. It
+also excludes an install when its entire otherwise-eligible report window is a
+single ping with no content-free feature configuration, resource, outcome, or
+activity signal. Two or more otherwise-eligible pings remain retention evidence
+even when their feature signals are empty. The report must publish candidate,
+included, total-excluded, non-production-excluded, mock-excluded, and
+single-ping-no-activity-excluded install counts so the correction is visible,
+the reason counts are disjoint, and `candidate = included + excluded` is an
+enforced invariant. Non-production or mock pings from an install that also has
+eligible production evidence must be removed before choosing its latest state
+or historical conversion sequence.
 The same aggregate may expose an `operations_funnel` object that keeps the
 loop proof readable as a staged pseudonymous install cohort sequence: loop configured,
 Patrol activity, Assistant or external-agent collaboration, governed action,
