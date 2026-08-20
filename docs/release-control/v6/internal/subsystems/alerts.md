@@ -437,6 +437,15 @@ removed because a saved view was only ever the page's URL query string, which
 the browser's own bookmarks already capture and share. History narrowing stays
 URL-owned so a filtered history page remains a shareable, bookmarkable link.
 
+The alert history severity facet derives each option count through
+`useAlertHistoryState.countForSeverity`, using the same
+`filterAlertHistoryItems` predicate that supplies the rendered list for the
+current fetched period and search term. It must not count an unfiltered or
+separately reduced collection that can disagree with the selected chip's
+result. These counts follow the shared Inventory totals visibility preference;
+the Period facet remains uncounted because it selects the fetched time scope
+rather than filtering the already-fetched rows.
+
 Alert history row timestamps render clock time in the viewer's own locale and
 must carry the absolute date and time as a title. The date otherwise lives
 only in the day group header, which scrolls out of sight, and a hardcoded

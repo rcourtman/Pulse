@@ -1,36 +1,35 @@
 {
   "version": 1,
-  "base_sha": "ee4cd560b6352fac50b988104e3ee370db8669c1",
-  "verified_at": "2026-08-20T21:08:35Z",
+  "base_sha": "4c7b1a2434385f13c5c89dd3a113cd894636ac4d",
+  "verified_at": "2026-08-20T22:47:56Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/features/alerts/AlertHistoryFiltersCard.tsx",
-    "frontend-modern/src/features/alerts/useAlertHistoryState.ts"
+    "frontend-modern/src/api/notifications.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/alerts/AlertHistoryFiltersCard.tsx": "07836c5b85ea484cfe984b2d0de5c302202ef6b844eafdc776b3f979f0938acb",
-    "frontend-modern/src/features/alerts/useAlertHistoryState.ts": "7528bd735ff84961e8bd880d89f0253255c698ab5910c1eb2fb10cf0255e39e8"
+    "frontend-modern/src/api/notifications.ts": "ac714c8f87c1e26f1abf523b4c4c7b83c0ce75250c92741b69dc6a36b35557ff"
   },
   "routes": [
-    "/alerts/history"
+    "/alerts/notifications"
   ],
   "viewports": [
     {
-      "width": 1280,
-      "height": 720
+      "width": 1440,
+      "height": 1000
     },
     {
-      "width": 375,
-      "height": 812
+      "width": 390,
+      "height": 844
     }
   ],
   "states": [
-    "Alert history severity facet now counted from the live history data: All 47 / Critical 8 / Warning 13, with Period chips left uncounted as time scopes",
-    "Critical selected: the page's own summary reads '8 alerts', matching the chip count exactly (counts share filterAlertHistoryItems with the list)",
-    "Chips verified through the mobile Filters sheet (the hidden preview pane renders the responsive mobile layout); the same options render inline at desktop width"
+    "Notifications page loaded with delivery paused and all destination configuration sections available",
+    "Recent delivery activity rendered its seven-day empty state with the refresh control enabled",
+    "Desktop and narrow layouts kept the delivery card, explanatory copy, refresh control, and empty state visible without clipping"
   ],
   "interactions": [
-    "Opened the Filters sheet on /alerts/history and read the counted severity chips",
-    "Clicked the Critical chip, confirmed the '8 alerts' summary, then reset the facet back to All"
+    "Refreshed delivery status at desktop width and confirmed the empty state remained available",
+    "Scrolled through the narrow notification layout and refreshed delivery status again",
+    "Checked the browser console after both refresh interactions and found no errors"
   ]
 }

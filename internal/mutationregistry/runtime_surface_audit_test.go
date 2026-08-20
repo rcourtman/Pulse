@@ -169,6 +169,7 @@ func TestTransportCommandCatalogsResolveToRegistry(t *testing.T) {
 		"MsgTypeExecuteCmd":               {Role: TransportRoleMutationRequest, MutationID: "transport.agent.raw-command", DurableAuthorityID: "assistant.resource-action"},
 		"MsgTypeHostStorageCleanup":       {Role: TransportRoleMutationRequest, MutationID: "transport.agent.host-package-cache-cleanup", DurableAuthorityID: "resource.host.package-cache-cleanup"},
 		"MsgTypeReadFile":                 {Role: TransportRoleProtocol},
+		"MsgTypeCancelCmd":                {Role: TransportRoleProtocol},
 		"MsgTypeHostUpdate":               {Role: TransportRoleMutationRequest, MutationID: "transport.agent.host-package-update", DurableAuthorityID: "resource.host.package-update"},
 		"MsgTypeDockerContainerLifecycle": {Role: TransportRoleMutationRequest, MutationID: "transport.agent.docker-container-lifecycle", DurableAuthorityID: "resource.docker.container-lifecycle"},
 		"MsgTypeDockerContainerUpdate":    {Role: TransportRoleMutationRequest, MutationID: "transport.agent.docker-container-update", DurableAuthorityID: "resource.docker.container-update"},

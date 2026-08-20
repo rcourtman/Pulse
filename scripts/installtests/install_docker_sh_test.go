@@ -358,6 +358,7 @@ func TestInstallDockerProofTracksPrereleaseContract(t *testing.T) {
 
 	assertFileContainsAllNormalized(t, repoFile("docs", "release-control", "v6", "internal", "subsystems", "deployment-installability.md"),
 		"The active prerelease `v"+version+"` cut sets the repo-root `VERSION`, repo-root `docker-compose.yml` image default, `scripts/install-docker.sh` fallback, and Helm chart release metadata to the same `"+version+"` release version.",
+		"It follows `v"+comparisonVersion+"` on the published 6.3 candidate line",
 		"This prerelease keeps `rollback_version=v"+previous+"`, publishes a versioned public GitHub prerelease plus versioned Docker and Helm artifacts, and does not move stable/latest install pointers or stable semver aliases.",
 		"The changes since `v"+comparisonVersion+"` do not require a Pulse Mobile client change and preserve the existing mobile, Relay, onboarding, and mobile-facing API contracts, so the server cut is classified `no-mobile-impact`; no companion upload or public mobile-store rollout is part of this candidate.",
 		"The prerelease Windows path retains exact-SHA, checksum, and detached-signature verification without Authenticode; stable `v"+stableTarget+"` restores mandatory SignPath signing unless a new version-bound decision is recorded.",

@@ -362,6 +362,17 @@ describe('NotificationsAPI', () => {
     expect(log.windowDays).toBe(7);
   });
 
+  it('normalizes a malformed delivery-log collection through the shared API boundary', async () => {
+    apiFetchJSONMock.mockResolvedValueOnce({
+      entries: { notificationId: 'not-a-collection' },
+      window_days: 7,
+    } as any);
+
+    const log = await NotificationsAPI.getDeliveryLog();
+
+    expect(log).toEqual({ entries: [], windowDays: 7 });
+  });
+
   it('passes the deliveryPaused flag through from test-send responses', async () => {
     apiFetchJSONMock.mockResolvedValueOnce({
       status: 'success',

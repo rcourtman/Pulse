@@ -1,7 +1,7 @@
-# Pulse v6.3.0-rc.3
+# Pulse v6.3.0-rc.4
 
-_This changelog describes the changes since `v6.3.0-rc.2` and carries forward
-the complete cumulative 6.3 packet since stable `v6.2.1`. `v6.3.0-rc.3` is a
+_This changelog describes the changes since `v6.3.0-rc.3` and carries forward
+the complete cumulative 6.3 packet since stable `v6.2.1`. `v6.3.0-rc.4` is a
 prerelease and rolls back to stable `v6.2.1`._
 
 ## Added
@@ -19,6 +19,11 @@ prerelease and rolls back to stable `v6.2.1`._
 - System-scoped alerts, so Pulse can report a fault in itself rather than only
   in a monitored resource. Broken notification delivery is the first, raised as
   an ordinary alert so it reaches the alert list and navigation badge.
+- Estate summaries, status facets, and canonical search on the primary
+  infrastructure platform pages.
+- A seven-day delivery log for real alert notification attempts.
+- A supported least-privilege Unified Agent installation profile and an
+  administrator-controlled Docker-in-LXC discovery mode.
 
 ## Changed
 
@@ -39,6 +44,10 @@ prerelease and rolls back to stable `v6.2.1`._
   source-tree value.
 - Buffered subscription CLI turns cannot extend a caller-owned idle deadline
   while a canceled descendant keeps an inherited output pipe open.
+- Platform and alert-history counts now use the same canonical filter
+  predicates as their visible result tables.
+- Failed settings and AI-state reads retain preserved data and expose the read
+  failure instead of silently replacing state with defaults.
 
 ## Fixed
 
@@ -67,6 +76,10 @@ prerelease and rolls back to stable `v6.2.1`._
   drained and a resource oscillating just under the threshold was never damped.
 - Mobile tables keep narrow values readable, preserve compact replication
   values, and use a consistent density across platform surfaces.
+- Docker-in-LXC discovery serializes and backs off slow probes, preserves
+  post-install command enablement, and surfaces failures without host churn.
+- In-progress Proxmox backups remain in progress rather than being shown as
+  completed.
 
 ## Security
 
@@ -79,8 +92,8 @@ prerelease and rolls back to stable `v6.2.1`._
 
 ## Release Metadata
 
-- Version: `v6.3.0-rc.3`
-- Previous release: `v6.2.1`
+- Version: `v6.3.0-rc.4`
+- Previous release: `v6.3.0-rc.3`
 - Previous stable: `v6.2.1`
 - Rollback target: `v6.2.1`
 - Rollback command: `./scripts/install.sh --version v6.2.1`
@@ -89,6 +102,6 @@ prerelease and rolls back to stable `v6.2.1`._
 - Windows signing decision: the standing prerelease path publishes exact-SHA,
   checksum, and detached-signature verified Windows agents without
   Authenticode; stable `v6.3.0` restores mandatory SignPath signing
-- Mobile decision: `no-mobile-impact`; changes since `v6.3.0-rc.2` preserve the
+- Mobile decision: `no-mobile-impact`; changes since `v6.3.0-rc.3` preserve the
   existing mobile, Relay, onboarding, and mobile-facing API contracts, and no
   companion upload or public store rollout is required

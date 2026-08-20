@@ -4331,7 +4331,10 @@ first — `entries` carrying `notificationId`, `type`, `destinationId`,
 counts are retention-bounded and must not read as lifetime history; webhook
 secrets are redacted from error text before the payload leaves the API. The
 frontend transport in `frontend-modern/src/api/notifications.ts` validates
-entry shape and drops malformed rows rather than rendering them. Successful
+entry shape and drops malformed rows rather than rendering them. It must route
+`entries` through the shared `arrayOrEmpty` normalization helper instead of
+creating a notifications-local array fallback that can drift from other API
+clients. Successful
 test-send responses from `POST /api/notifications/test` and
 `POST /api/notifications/webhooks/test` must include `deliveryPaused: true`
 whenever real alert delivery is gated off, so a passing test cannot be

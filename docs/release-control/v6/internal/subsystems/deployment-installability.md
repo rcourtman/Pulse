@@ -1461,10 +1461,10 @@ diagnostics. The same release workflow also executes the generated self-signed
 and custom-CA Windows installer commands through Windows PowerShell 5.1 before
 release assembly, so the first HTTPS fetch is release proof rather than a
 string-shape assertion.
-The active prerelease `v6.3.0-rc.3` cut sets the repo-root `VERSION`,
+The active prerelease `v6.3.0-rc.4` cut sets the repo-root `VERSION`,
 repo-root `docker-compose.yml` image default, `scripts/install-docker.sh`
-fallback, and Helm chart release metadata to the same `6.3.0-rc.3` release
-version. It follows stable `v6.2.1`, opens the published 6.3 candidate line, uses
+fallback, and Helm chart release metadata to the same `6.3.0-rc.4` release
+version. It follows `v6.3.0-rc.3` on the published 6.3 candidate line, uses
 `rollback_version=v6.2.1`, and keeps stable/latest pointers on `v6.2.1`. This
 candidate establishes the new minor-release packet with durable scoped Patrol
 objectives, validated read-only observers, verified work receipts, agent action
@@ -1473,8 +1473,11 @@ monitoring correctness fixes. The advanced branch also carries the decision-firs
 Patrol inbox, first-class Actions workspace, canonical platform-admission
 projection, and bounded concurrent unified-resource hydration. Subscription-backed
 Patrol turns bound command cleanup after an idle deadline so descendant-held
-output pipes cannot extend the caller-owned stall budget. The changes since
-`v6.3.0-rc.2` do not require a Pulse Mobile client change and preserve the
+output pipes cannot extend the caller-owned stall budget. This candidate also
+adds canonical estate summaries and search, a real-delivery activity log,
+least-privilege agent installation, and bounded Docker-in-LXC discovery while
+preserving unreadable settings and AI state. The changes since
+`v6.3.0-rc.3` do not require a Pulse Mobile client change and preserve the
 existing mobile, Relay, onboarding, and mobile-facing API contracts, so the
 server cut is classified `no-mobile-impact`; no companion upload or public
 mobile-store rollout is part of this candidate.
@@ -1760,8 +1763,8 @@ For the active stable `v6.1.2` cut, the repo-root compose default and
 `scripts/install-docker.sh` fallback must both pin `6.1.2` whenever the
 governed `VERSION` is that stable cut. The stable promotion guard remains in
 force and rejects leftover `-rc.` defaults.
-For the active prerelease `v6.3.0-rc.3` cut, the repo-root compose default and
-`scripts/install-docker.sh` fallback must both pin `6.3.0-rc.3`
+For the active prerelease `v6.3.0-rc.4` cut, the repo-root compose default and
+`scripts/install-docker.sh` fallback must both pin `6.3.0-rc.4`
 until the next governed stable cut moves them forward. Each new release moves
 these two pins together with the repo-root `VERSION` and the Helm chart metadata
 in the same commit; a cut that leaves any of the four on a superseded value is a

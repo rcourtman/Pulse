@@ -205,6 +205,9 @@ func renderLifecycleService(t *testing.T, stateDir, stateSource, unitPath, pulse
 		SERVER_FINGERPRINT=""
 		OBSERVERS_FILE=""
 		ENABLE_COMMANDS="` + commandFlag + `"
+		LEAST_PRIVILEGE="false"
+		GRANT_SMART="false"
+		GRANT_PCT="false"
 		HEALTH_ADDR_SET="true"
 		HEALTH_ADDR=""
 		ENROLL="true"
@@ -234,6 +237,7 @@ func renderLifecycleService(t *testing.T, stateDir, stateSource, unitPath, pulse
 ` + extractInstallShellFunction(t, "join_exec_arg_items") + `
 ` + extractInstallShellFunction(t, "build_exec_args") + `
 ` + extractInstallShellFunction(t, "systemd_agent_requires_lxc_attach") + `
+` + extractInstallShellFunction(t, "systemd_agent_may_attach_lxc") + `
 ` + extractInstallShellFunction(t, "render_systemd_agent_unit") + `
 ` + extractInstallShellFunction(t, "save_connection_info") + recovery + `
 		ensure_runtime_token_file "$STATE_DIR"

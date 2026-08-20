@@ -20684,13 +20684,8 @@ func TestContract_AgentFleetDiagnosticsEndpointSurfacesStableShape(t *testing.T)
 	if err != nil {
 		t.Fatalf("read router_routes_registration.go: %v", err)
 	}
-	monitoringSource, err := os.ReadFile("../monitoring/agent_fleet_doctor.go")
-	if err != nil {
-		t.Fatalf("read monitoring agent_fleet_doctor.go: %v", err)
-	}
 	handlerSrc := string(handler)
 	routerSrc := string(router)
-	monitoringSrc := string(monitoringSource)
 
 	if !strings.Contains(routerSrc, `"/api/agents/diagnostics"`) ||
 		!strings.Contains(routerSrc, `RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.handleAgentFleetDiagnostics))`) {
@@ -20699,21 +20694,34 @@ func TestContract_AgentFleetDiagnosticsEndpointSurfacesStableShape(t *testing.T)
 	if !strings.Contains(handlerSrc, "GetAgentFleetDiagnosticsForTarget(serverVersion, agentUpdateTargetVersion, time.Now().UTC())") {
 		t.Error("agent fleet diagnostics handler must delegate to the monitoring-owned read-only producer")
 	}
-	for _, required := range []string{
-		"SchemaVersion            int                         `json:\"schemaVersion\"`",
-		"GeneratedAt              int64                       `json:\"generatedAt\"`",
-		"ServerVersion            string                      `json:\"serverVersion,omitempty\"`",
-		"AgentUpdateTargetVersion string                      `json:\"agentUpdateTargetVersion,omitempty\"`",
-		"Summary                  AgentFleetDiagnosticSummary `json:\"summary\"`",
-		"Agents                   []AgentFleetAgentDiagnostic `json:\"agents\"`",
-		"ConnectionID           string                       `json:\"connectionId,omitempty\"`",
-		"AgentUpdate            *AgentFleetDiagnosticUpdate  `json:\"agentUpdate,omitempty\"`",
-		"AgentModules           []AgentFleetDiagnosticModule `json:\"agentModules,omitempty\"`",
-		"Reasons                []AgentFleetDiagnosticReason `json:\"reasons\"`",
-		"RepairActions          []AgentFleetDiagnosticRepair `json:\"repairActions,omitempty\"`",
+	for _, required := range []struct {
+		typeOf  reflect.Type
+		name    string
+		goType  reflect.Type
+		jsonTag string
+	}{
+		{reflect.TypeOf(monitoring.AgentFleetDiagnostics{}), "SchemaVersion", reflect.TypeOf(int(0)), "schemaVersion"},
+		{reflect.TypeOf(monitoring.AgentFleetDiagnostics{}), "GeneratedAt", reflect.TypeOf(int64(0)), "generatedAt"},
+		{reflect.TypeOf(monitoring.AgentFleetDiagnostics{}), "ServerVersion", reflect.TypeOf(""), "serverVersion,omitempty"},
+		{reflect.TypeOf(monitoring.AgentFleetDiagnostics{}), "AgentUpdateTargetVersion", reflect.TypeOf(""), "agentUpdateTargetVersion,omitempty"},
+		{reflect.TypeOf(monitoring.AgentFleetDiagnostics{}), "Summary", reflect.TypeOf(monitoring.AgentFleetDiagnosticSummary{}), "summary"},
+		{reflect.TypeOf(monitoring.AgentFleetDiagnostics{}), "Agents", reflect.TypeOf([]monitoring.AgentFleetAgentDiagnostic(nil)), "agents"},
+		{reflect.TypeOf(monitoring.AgentFleetAgentDiagnostic{}), "ConnectionID", reflect.TypeOf(""), "connectionId,omitempty"},
+		{reflect.TypeOf(monitoring.AgentFleetAgentDiagnostic{}), "AgentUpdate", reflect.TypeOf((*monitoring.AgentFleetDiagnosticUpdate)(nil)), "agentUpdate,omitempty"},
+		{reflect.TypeOf(monitoring.AgentFleetAgentDiagnostic{}), "AgentModules", reflect.TypeOf([]monitoring.AgentFleetDiagnosticModule(nil)), "agentModules,omitempty"},
+		{reflect.TypeOf(monitoring.AgentFleetAgentDiagnostic{}), "Reasons", reflect.TypeOf([]monitoring.AgentFleetDiagnosticReason(nil)), "reasons"},
+		{reflect.TypeOf(monitoring.AgentFleetAgentDiagnostic{}), "RepairActions", reflect.TypeOf([]monitoring.AgentFleetDiagnosticRepair(nil)), "repairActions,omitempty"},
 	} {
-		if !strings.Contains(monitoringSrc, required) {
-			t.Errorf("agent fleet diagnostics payload missing stable field %q", required)
+		field, ok := required.typeOf.FieldByName(required.name)
+		if !ok {
+			t.Errorf("%s payload missing stable field %s", required.typeOf.Name(), required.name)
+			continue
+		}
+		if field.Type != required.goType {
+			t.Errorf("%s.%s type = %s, want %s", required.typeOf.Name(), required.name, field.Type, required.goType)
+		}
+		if got := field.Tag.Get("json"); got != required.jsonTag {
+			t.Errorf("%s.%s json tag = %q, want %q", required.typeOf.Name(), required.name, got, required.jsonTag)
 		}
 	}
 }

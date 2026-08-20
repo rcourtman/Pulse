@@ -6,10 +6,10 @@ Pulse release notes live on GitHub:
 For historical v4 notes that previously lived in this repo, see:
 `docs/releases/RELEASE_NOTES_v4.md`
 
-For the current v6 release candidate packet (the current v6 support release
-candidate packet), see:
-- `docs/releases/RELEASE_NOTES_v6.3.0-rc.3.md`
-- `docs/releases/V6_CHANGELOG_v6.3.0-rc.3.md`
+For the current v6 release candidate packet
+(the current v6 support release candidate packet), see:
+- `docs/releases/RELEASE_NOTES_v6.3.0-rc.4.md`
+- `docs/releases/V6_CHANGELOG_v6.3.0-rc.4.md`
 
 For the current stable v6 packet, see:
 - `docs/releases/RELEASE_NOTES_v6.2.1.md`

@@ -1,15 +1,15 @@
-# Pulse v6.3.0-rc.3 Release Notes
+# Pulse v6.3.0-rc.4 Release Notes
 
-`v6.3.0-rc.3` is a release candidate for the next Pulse v6 minor release,
-following `v6.3.0-rc.2` in the 6.3 line and stable `v6.2.1`. It carries the
+`v6.3.0-rc.4` is a release candidate for the next Pulse v6 minor release,
+following `v6.3.0-rc.3` in the 6.3 line and stable `v6.2.1`. It carries the
 Patrol v2 operating model, a first-class Actions workspace, guarded agent
 action preflight, large-estate response improvements, and monitoring
 correctness fixes.
 
-This candidate adds a group of alert-delivery repairs. Production telemetry
-showed installs with a configured notification destination that had never
-delivered anything and had no way to find out, because the channel that would
-carry such a warning is the one that had failed.
+This candidate adds estate-first platform summaries and search, an operator-
+visible notification delivery log, a supported least-privilege agent profile,
+and safer Docker-in-LXC discovery. It also prevents failed settings or AI-state
+reads from silently overwriting preserved data.
 
 ## Highlights
 
@@ -19,6 +19,14 @@ carry such a warning is the one that had failed.
   without granting mutation authority.
 - Approved actions gain agent preflight and stable refusal telemetry; large
   installations gain compressed APIs and indexed lookups.
+- Platform pages now lead with estate totals, status facets, and search that
+  share the same predicates as their underlying tables.
+- Notification settings show the outcome of real delivery attempts instead of
+  relying on test sends as a proxy for live delivery health.
+- Docker-in-LXC discovery is explicitly controlled and backs off against slow
+  or failing Proxmox hosts instead of creating a probe storm.
+- Unified Agent installs can opt into a supported least-privilege profile with
+  narrowly scoped elevation for the capabilities that require it.
 
 ## Added
 
@@ -35,6 +43,12 @@ carry such a warning is the one that had failed.
 - Unified Agent preflight contracts for package updates, package-cache cleanup,
   and Docker lifecycle or update operations.
 - Production security deployment guidance and a focused security-review packet.
+- Estate overviews and infrastructure search across Proxmox, Docker,
+  Kubernetes, TrueNAS, VMware, and standalone agent surfaces.
+- A seven-day notification delivery activity log with destination and outcome
+  details for queued live alerts.
+- An administrator setting for Docker-in-LXC discovery and a supported
+  least-privilege Unified Agent installation profile.
 
 ## Improved
 
@@ -65,6 +79,10 @@ carry such a warning is the one that had failed.
   limits, readiness checks, deadlines, and continuation latency more reliably.
 - Subscription-backed turns now complete their idle timeout promptly even when
   a canceled CLI descendant still holds an inherited output pipe open.
+- Platform and alert-history facet counts are derived from each table's own
+  filter predicate, keeping summary totals aligned with the visible rows.
+- Failed settings and AI-state reads preserve the last known data and surface
+  the failure instead of treating unreadable storage as an empty value.
 
 ## Fixed
 
@@ -85,6 +103,10 @@ carry such a warning is the one that had failed.
 - vSphere backup status, agent thermal history, explicit cluster-member address
   overrides, and discovery-analysis request timeouts now reflect their actual
   runtime state.
+- Docker-in-LXC discovery no longer retries overlapping probes against slow
+  Proxmox hosts, and command enablement after install is reflected without a
+  reinstall.
+- In-progress Proxmox backups are no longer presented as completed backups.
 - The notifications surface now states when alert delivery is paused, and that
   a passing test send does not prove live alerts are getting through. Test
   sends bypass the delivery pause, so a configured destination could look
@@ -110,7 +132,7 @@ carry such a warning is the one that had failed.
 
 ## Upgrade Notes
 
-Use the normal v6 install or update flow for `v6.3.0-rc.3` only when you are
+Use the normal v6 install or update flow for `v6.3.0-rc.4` only when you are
 comfortable testing a release candidate. The rollback target is `v6.2.1`.
 
 The exact rollback reinstall command is:
@@ -119,7 +141,7 @@ The exact rollback reinstall command is:
 ./scripts/install.sh --version v6.2.1
 ```
 
-The changes since `v6.3.0-rc.2` do not require a Pulse Mobile client change
+The changes since `v6.3.0-rc.3` do not require a Pulse Mobile client change
 and preserve the existing mobile, Relay, onboarding, and mobile-facing API
 contracts. No companion mobile build upload or public mobile-store rollout is
 part of this candidate.

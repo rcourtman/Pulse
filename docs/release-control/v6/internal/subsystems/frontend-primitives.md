@@ -4301,6 +4301,13 @@ search-aware active-state accessor to `FilterBar`; the shared shell owns where
 the contextual Clear filters action appears, while the alerts feature must not
 fall back to sequential per-control URL writes or hide that action for a
 search-only result set.
+Alert History severity option counts also follow the shared estate-orientation
+contract: the alerts feature supplies counts from the exact predicate used by
+its list, while `FilterBar` renders the values and the shared Inventory totals
+visibility preference decides whether they are shown. A feature must not build
+counts from page-wide alert totals after search or another active facet has
+narrowed the rendered rows, and a time-scope option must not claim a count from
+an unfetched period.
 Because that popover combines view application, default selection, removal,
 and an inline naming form, it is a labelled non-modal dialog rather than an
 ARIA menu. Its trigger exposes the dialog relationship, Escape returns focus

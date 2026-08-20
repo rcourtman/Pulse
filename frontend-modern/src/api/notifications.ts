@@ -339,7 +339,7 @@ export class NotificationsAPI {
     const payload = await apiFetchJSON<Record<string, unknown>>(
       `${this.baseUrl}/delivery-log${query}`,
     );
-    const rawEntries = Array.isArray(payload.entries) ? payload.entries : [];
+    const rawEntries = arrayOrEmpty<unknown>(payload.entries);
     const entries: NotificationDeliveryLogEntry[] = [];
     for (const rawEntry of rawEntries) {
       const entry = normalizeDeliveryLogEntry(rawEntry);

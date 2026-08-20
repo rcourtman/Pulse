@@ -344,6 +344,10 @@ unreadable queue is an error, never an empty log. This per-attempt surface is
 deliberately distinct from the content-free telemetry aggregate above, which
 remains identity-free. Test sends bypass the queue and must not appear in the
 delivery log, and the destinations UI says so where the log renders.
+The frontend client normalizes the `entries` collection through the shared API
+collection helper before validating each record, so a malformed collection or
+row cannot bypass the canonical client boundary or create a module-local
+fallback shape.
 
 Because test sends also bypass the alert activation gate, a bare success
 result is exactly how installs come to believe delivery works while every
