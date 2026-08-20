@@ -1,6 +1,7 @@
 package config
 
 import (
+	"bytes"
 	"encoding/base64"
 	"errors"
 	"os"
@@ -9,6 +10,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -568,4 +571,95 @@ func TestLoad_IgnoresLegacyAutoUpdateScheduleFields(t *testing.T) {
 
 	assert.True(t, cfg.AutoUpdateEnabled, "autoUpdateEnabled from a legacy system.json must still apply")
 	assert.Equal(t, "stable", cfg.UpdateChannel)
+}
+
+func captureConfigLogs(t *testing.T) *bytes.Buffer {
+	t.Helper()
+
+	var buf bytes.Buffer
+	origLogger := log.Logger
+	origLevel := zerolog.GlobalLevel()
+	log.Logger = zerolog.New(&buf).Level(zerolog.DebugLevel)
+	zerolog.SetGlobalLevel(zerolog.DebugLevel)
+	t.Cleanup(func() {
+		log.Logger = origLogger
+		zerolog.SetGlobalLevel(origLevel)
+	})
+
+	return &buf
+}
+
+// A system.json that exists but cannot be read must not be confused with a
+// missing one: the failure has to be logged, the run continues on defaults,
+// and the file on disk must not be replaced with a default system.json.
+func TestLoad_SystemSettingsReadFailureWarnsAndKeepsFileIntact(t *testing.T) {
+	dataDir := t.TempDir()
+	t.Setenv("PULSE_DATA_DIR", dataDir)
+
+	// A directory named system.json makes the read fail with an error that
+	// is not os.IsNotExist — the same shape as a transient read failure.
+	require.NoError(t, os.Mkdir(filepath.Join(dataDir, "system.json"), 0o700))
+
+	prevDelay := systemSettingsRetryDelay
+	systemSettingsRetryDelay = 0
+	t.Cleanup(func() { systemSettingsRetryDelay = prevDelay })
+
+	logOutput := captureConfigLogs(t)
+
+	cfg, err := LoadWithoutLoggingInit()
+	require.NoError(t, err)
+	assert.True(t, cfg.TemperatureMonitoringEnabled, "run should continue on defaults")
+
+	assert.Contains(t, logOutput.String(), "Failed to load system settings",
+		"a failing system settings read must be logged, not skipped silently")
+	assert.Contains(t, logOutput.String(), filepath.Join(dataDir, "system.json"),
+		"the warning should name the settings file")
+	assert.NotContains(t, logOutput.String(), "No system.json found",
+		"a read failure must not take the missing-file create-default path")
+
+	info, err := os.Stat(filepath.Join(dataDir, "system.json"))
+	require.NoError(t, err)
+	assert.True(t, info.IsDir(), "system.json on disk must be left untouched")
+}
+
+func TestLoadSystemSettingsWithRetry(t *testing.T) {
+	prevDelay := systemSettingsRetryDelay
+	systemSettingsRetryDelay = 0
+	t.Cleanup(func() { systemSettingsRetryDelay = prevDelay })
+
+	t.Run("transient_failure_recovers_on_retry", func(t *testing.T) {
+		want := &SystemSettings{PVEPollingInterval: 42}
+		calls := 0
+		settings, err := loadSystemSettingsWithRetry(func() (*SystemSettings, error) {
+			calls++
+			if calls == 1 {
+				return nil, errors.New("transient read failure")
+			}
+			return want, nil
+		})
+		require.NoError(t, err)
+		assert.Equal(t, 2, calls)
+		assert.Same(t, want, settings)
+	})
+
+	t.Run("persistent_failure_surfaces_error", func(t *testing.T) {
+		calls := 0
+		settings, err := loadSystemSettingsWithRetry(func() (*SystemSettings, error) {
+			calls++
+			return nil, errors.New("still failing")
+		})
+		require.Error(t, err)
+		assert.Nil(t, settings)
+		assert.Equal(t, 2, calls, "exactly one retry")
+	})
+
+	t.Run("success_does_not_retry", func(t *testing.T) {
+		calls := 0
+		_, err := loadSystemSettingsWithRetry(func() (*SystemSettings, error) {
+			calls++
+			return nil, nil
+		})
+		require.NoError(t, err)
+		assert.Equal(t, 1, calls)
+	})
 }

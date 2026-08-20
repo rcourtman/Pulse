@@ -759,6 +759,23 @@ func parseDurationOverrideEnv(envName string, minDuration time.Duration) (time.D
 	return 0, false
 }
 
+// systemSettingsRetryDelay is how long load waits before retrying a failed
+// system settings read. Kept as a var so tests can shorten it.
+var systemSettingsRetryDelay = 250 * time.Millisecond
+
+// loadSystemSettingsWithRetry retries a failed system settings read once: a
+// transient read error at boot would otherwise revert every persisted system
+// setting to defaults for the whole run.
+func loadSystemSettingsWithRetry(loadSettings func() (*SystemSettings, error)) (*SystemSettings, error) {
+	settings, err := loadSettings()
+	if err == nil {
+		return settings, nil
+	}
+	log.Warn().Err(err).Msg("System settings read failed; retrying once")
+	time.Sleep(systemSettingsRetryDelay)
+	return loadSettings()
+}
+
 // Load reads configuration from encrypted persistence files.
 func Load() (*Config, error) {
 	return load(true)
@@ -857,7 +874,7 @@ func load(initLogging bool) (*Config, error) {
 		}
 
 		// Load system configuration
-		if systemSettings, err := persistence.LoadSystemSettings(); err == nil && systemSettings != nil {
+		if systemSettings, err := loadSystemSettingsWithRetry(persistence.LoadSystemSettings); err == nil && systemSettings != nil {
 			// Load polling intervals if configured
 			if systemSettings.PVEPollingInterval > 0 {
 				cfg.PVEPollingInterval = time.Duration(systemSettings.PVEPollingInterval) * time.Second
@@ -956,6 +973,10 @@ func load(initLogging bool) (*Config, error) {
 				Dur("dnsCacheTimeout", cfg.DNSCacheTimeout).
 				Int("metricsRetentionDailyDays", cfg.MetricsRetentionDailyDays).
 				Msg("Loaded system configuration")
+		} else if err != nil {
+			// A read failure is not a missing file: leave system.json on disk
+			// untouched and run on defaults rather than recreating it.
+			log.Warn().Err(err).Str("file", persistence.systemFile).Msg("Failed to load system settings; using defaults for this run")
 		} else {
 			// No system.json exists - create default one
 			log.Info().Msg("No system.json found, creating default")
