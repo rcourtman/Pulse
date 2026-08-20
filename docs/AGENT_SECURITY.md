@@ -146,7 +146,11 @@ dropping the LXC-attach ambient capability grant entirely.
 Two optional flags restore the collectors that genuinely need elevation, each
 through an exact-command sudoers grant validated with `visudo` and a
 root-owned wrapper the agent is pointed at via an absolute-path-only
-environment override:
+environment override. Because `NoNewPrivileges` blocks `sudo` entirely, a
+unit with an active grant sets `NoNewPrivileges=false` while keeping the
+remaining hardening; a grantless least-privilege install keeps
+`NoNewPrivileges=true`. Choose grants deliberately: each one is a scoped,
+auditable widening of the profile.
 
 - `--grant-smart` allows exactly `smartctl`, restoring SMART disk health.
 - `--grant-pct` allows exactly `pct list` and `pct df`, restoring Proxmox LXC

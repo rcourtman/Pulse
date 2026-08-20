@@ -1034,6 +1034,14 @@ render_systemd_agent_unit() {
 		no_new_privileges="false"
 		restrict_suidsgid="false"
 	fi
+	if [[ "$LEAST_PRIVILEGE" == "true" ]] && [[ "$GRANT_SMART" == "true" || "$GRANT_PCT" == "true" ]]; then
+		# The scoped sudo helpers are the profile's only privilege path, and
+		# NoNewPrivileges blocks sudo outright ("no new privileges flag is
+		# set"). Proven on a live systemd host: with NNP on, every helper call
+		# fails and SMART/pct silently disappear. A grant therefore relaxes
+		# NNP; a grantless least-privilege install keeps it.
+		no_new_privileges="false"
+	fi
 	if systemd_agent_may_attach_lxc; then
 		# lxc-attach into an unprivileged guest writes /proc/<pid>/uid_map,
 		# which needs CAP_SETUID in the parent user namespace. NoNewPrivileges

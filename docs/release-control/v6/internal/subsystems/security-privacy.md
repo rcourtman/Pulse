@@ -2287,6 +2287,8 @@ non-root with a nologin shell, keep every sudoers grant exact-command and
 visudo-validated with the pct grant excluding `pct exec`/`start`/`stop`/
 `enter`, refuse `--enable-commands` under the profile, refuse unsupported
 platforms instead of silently reverting to root, and drop the LXC-attach
-ambient capability grant. The agent-reported privilege profile is
+ambient capability grant. `NoNewPrivileges` stays enabled on a grantless
+profile and is relaxed only when a sudo grant is active, because NNP blocks
+sudo outright; that relaxation is part of the grant's declared cost. The agent-reported privilege profile is
 informational: the fleet doctor presents it descriptively and must not treat
 a non-root agent as unhealthy on that evidence alone.

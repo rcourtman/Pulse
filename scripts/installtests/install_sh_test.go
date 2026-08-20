@@ -5564,6 +5564,9 @@ func TestInstallSHLeastPrivilegeProfile(t *testing.T) {
 		`"network-online.target" "$SERVICE_USER" ""`,
 		"# The least-privilege profile never attaches into guests",
 		`rm -f "$PRIVILEGE_SUDOERS_FILE"`,
+		// NoNewPrivileges blocks sudo, so an active grant must relax it or
+		// the helpers silently fail inside the service (proven live).
+		`if [[ "$LEAST_PRIVILEGE" == "true" ]] && [[ "$GRANT_SMART" == "true" || "$GRANT_PCT" == "true" ]]; then`,
 	}
 	for _, needle := range required {
 		if !strings.Contains(script, needle) {

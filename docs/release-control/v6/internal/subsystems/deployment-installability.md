@@ -3474,6 +3474,8 @@ exact-command sudoers rules with root-owned wrapper helpers wired through
 flag is refused (never silently downgraded to root) on appliance platforms
 and non-systemd init systems, is mutually exclusive with
 `--enable-commands`, and `--update` preserves an installed profile and its
-grants by reading the existing unit. Uninstall removes the sudoers file and
-helper directory. `scripts/installtests/install_sh_test.go`
+grants by reading the existing unit. A unit with an active grant sets
+`NoNewPrivileges=false` because NNP blocks sudo (proven on a live systemd
+host); a grantless profile keeps `NoNewPrivileges=true`. Uninstall removes
+the sudoers file and helper directory. `scripts/installtests/install_sh_test.go`
 (`TestInstallSHLeastPrivilegeProfile`) pins these invariants.

@@ -6419,7 +6419,10 @@ installed unit rather than requiring the flags to be repeated. Optional
 need elevation through visudo-validated, exact-command sudoers rules and
 root-owned wrapper helpers the agent reaches only via the absolute-path-only
 `PULSE_SMARTCTL_PATH` / `PULSE_PCT_PATH` overrides; the pct grant covers
-`pct list` and `pct df` only and can never widen into `pct exec`. The agent
+`pct list` and `pct df` only and can never widen into `pct exec`. An active
+grant sets `NoNewPrivileges=false` because NNP blocks sudo outright (proven
+on a live systemd host); a grantless profile keeps `NoNewPrivileges=true`.
+The agent
 authors a `privilege` block in its report (`pkg/agents/host/report.go`
 `PrivilegeStatus`: effective root, service user, active helpers) so the
 server can present the profile descriptively. Uninstall removes the sudoers
