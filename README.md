@@ -106,6 +106,22 @@ The GitHub installer installs the Pulse server. Install and upgrade agents
 (including v5-to-v6 agent upgrades) with the per-host command generated under
 **Settings → Infrastructure → Install on a host**.
 
+### Do you need an agent?
+
+Often not. Proxmox VE, PBS, and PMG are monitored through the Proxmox API
+with a read-only token, so nothing runs on the host and the generated setup
+script creates a privilege-separated monitoring user. Install the unified
+agent only where you want data the platform API cannot provide, such as host
+SMART health, temperatures, Docker hosts, or standalone machines.
+
+The agent is operator-controlled by design. Command execution is off by
+default, the local listener binds to localhost, and generated systemd units
+ship hardened. On Linux, the installer's `--least-privilege` profile runs the
+service as a dedicated non-root user, with optional scoped sudo grants for
+the few collectors that need elevation. The
+[agent security model](docs/AGENT_SECURITY.md) documents exactly what the
+agent can and cannot do at each privilege level.
+
 > [!IMPORTANT]
 > GitHub release assets and `rcourtman/pulse` images are Community builds.
 > Relay, Pro, and eligible legacy customers should use the private image or
