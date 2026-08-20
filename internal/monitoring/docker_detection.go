@@ -3,6 +3,7 @@ package monitoring
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"strconv"
@@ -32,6 +33,22 @@ const (
 	// longer exist (a live failing guest refreshes its entry at least once
 	// per backoff window) and are pruned.
 	proxmoxGuestDockerProbeFailurePruneAfter = 24 * time.Hour
+
+	// A dispatched probe/inventory command owns its guest until it completes.
+	// When the server abandons the wait instead (poll context expired before
+	// the agent answered), the claim is held for this window: the agent may
+	// still be running the pct exec, and re-dispatching the same command
+	// every poll cycle is how the minipc incident (2026-08-20) accumulated
+	// ~100 orphaned children and hung the host.
+	proxmoxGuestDockerProbeInFlightWindow = 2 * time.Minute
+
+	// After this many consecutive command failures on one Proxmox node the
+	// circuit breaker opens and no Docker probe or inventory command is
+	// dispatched to that node until a backoff window passes. Per-guest
+	// backoff alone is not enough: a node that is slow for host-level
+	// reasons (NFS flapping, load) fails every guest's probe, and newly
+	// appearing guests would still be probed immediately.
+	proxmoxGuestDockerNodeFailureThreshold = 3
 )
 
 // dockerProbeFailureState tracks consecutive Docker socket probe failures for
@@ -102,6 +119,11 @@ func (m *Monitor) CheckContainersForDocker(ctx context.Context, containers []mod
 		previousContainers[ct.ID] = ct
 	}
 
+	// A context that is already dead means every probe would be abandoned the
+	// moment it was dispatched — the agent would be left running pct exec for
+	// nobody. Preserve previous status and try again next cycle.
+	ctxAlive := ctx.Err() == nil
+
 	// Identify containers that need Docker checking
 	var needsCheck []containerDockerCheck
 	for i, ct := range containers {
@@ -115,7 +137,10 @@ func (m *Monitor) CheckContainersForDocker(ctx context.Context, containers []mod
 		}
 
 		// Check if this container needs Docker detection
-		reason := m.containerNeedsDockerCheck(ct, previousContainers, checkerConfiguredAt)
+		reason := ""
+		if ctxAlive {
+			reason = m.containerNeedsDockerCheck(ct, previousContainers, checkerConfiguredAt)
+		}
 		if reason != "" && len(allowedVMIDs) > 0 {
 			if _, ok := allowedVMIDs[ct.VMID]; !ok {
 				// Outside the explicit VMID allowlist: never probe.
@@ -124,6 +149,15 @@ func (m *Monitor) CheckContainersForDocker(ctx context.Context, containers []mod
 		}
 		if reason != "" && m.dockerProbeInFailureBackoff(ct.ID) {
 			// A recent probe failure is still inside its backoff window.
+			reason = ""
+		}
+		if reason != "" && m.dockerNodeProbeBreakerOpen(ct.Node) {
+			// The whole node is failing Docker commands; don't pile on.
+			reason = ""
+		}
+		if reason != "" && !m.tryClaimDockerProbe(ct.ID) {
+			// A previously dispatched probe for this guest is still running
+			// (or was abandoned and may still be running on the agent).
 			reason = ""
 		}
 		if reason != "" {
@@ -159,7 +193,10 @@ func (m *Monitor) CheckContainersForDocker(ctx context.Context, containers []mod
 			if result.hasDocker {
 				dockerCount++
 			}
-			m.clearDockerProbeFailure(containers[result.index])
+			ct := containers[result.index]
+			m.releaseDockerProbe(ct.ID, false)
+			m.clearDockerProbeFailure(ct)
+			m.recordDockerNodeProbeResult(ct.Node, false)
 		} else if result.err != nil {
 			// Check failed - preserve previous status if available
 			ct := containers[result.index]
@@ -167,7 +204,12 @@ func (m *Monitor) CheckContainersForDocker(ctx context.Context, containers []mod
 				containers[result.index].HasDocker = prev.HasDocker
 				containers[result.index].DockerCheckedAt = prev.DockerCheckedAt
 			}
-			m.recordDockerProbeFailure(ct, result.err)
+			abandoned := dockerProbeAbandoned(result.err)
+			m.releaseDockerProbe(ct.ID, abandoned)
+			if !abandoned {
+				m.recordDockerProbeFailure(ct, result.err)
+				m.recordDockerNodeProbeResult(ct.Node, true)
+			}
 		}
 	}
 
@@ -308,7 +350,8 @@ func (m *Monitor) clearDockerProbeFailure(ct models.Container) {
 }
 
 // pruneDockerProbeFailures removes failure entries for containers that have
-// not been probed in a long time (guests that were removed while failing).
+// not been probed in a long time (guests that were removed while failing),
+// along with expired in-flight claims and stale node breaker entries.
 func (m *Monitor) pruneDockerProbeFailures() {
 	m.dockerProbeFailureMu.Lock()
 	defer m.dockerProbeFailureMu.Unlock()
@@ -317,14 +360,131 @@ func (m *Monitor) pruneDockerProbeFailures() {
 			delete(m.dockerProbeFailures, id)
 		}
 	}
+	for node, state := range m.dockerNodeProbeFailures {
+		if time.Since(state.lastAt) > proxmoxGuestDockerProbeFailurePruneAfter {
+			delete(m.dockerNodeProbeFailures, node)
+		}
+	}
+	for key, at := range m.dockerProbesInFlight {
+		if time.Since(at) > proxmoxGuestDockerProbeFailurePruneAfter {
+			delete(m.dockerProbesInFlight, key)
+		}
+	}
 }
 
-// resetDockerProbeFailures clears all failure streaks, so a reconfigured
-// checker retries every guest immediately.
+// resetDockerProbeFailures clears all failure streaks, in-flight claims, and
+// node circuit breakers, so a reconfigured checker retries every guest
+// immediately.
 func (m *Monitor) resetDockerProbeFailures() {
 	m.dockerProbeFailureMu.Lock()
 	defer m.dockerProbeFailureMu.Unlock()
 	m.dockerProbeFailures = nil
+	m.dockerProbesInFlight = nil
+	m.dockerNodeProbeFailures = nil
+}
+
+// dockerProbeAbandoned reports whether a probe error means the server stopped
+// waiting (its own context died) rather than the probe genuinely completing
+// with a failure. Abandonment says nothing about the guest or the node, so it
+// must not feed the failure backoff or the node circuit breaker — but the
+// agent may still be running the command, so the in-flight claim is kept.
+func dockerProbeAbandoned(err error) bool {
+	return errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)
+}
+
+// dockerInventoryClaimKey namespaces the in-flight claim for the inventory
+// command so it never collides with the socket probe's claim for the same
+// guest: they are different commands with different lifetimes.
+func dockerInventoryClaimKey(containerID string) string {
+	return "inventory:" + containerID
+}
+
+// tryClaimDockerProbe records that a probe/inventory command is being
+// dispatched for the given key (container ID, optionally prefixed per command
+// kind). It returns false while a previous dispatch still owns the key, which
+// is what prevents overlapping poll cycles from stacking identical pct exec
+// commands on the same guest.
+func (m *Monitor) tryClaimDockerProbe(key string) bool {
+	now := time.Now()
+	m.dockerProbeFailureMu.Lock()
+	defer m.dockerProbeFailureMu.Unlock()
+	if at, ok := m.dockerProbesInFlight[key]; ok && now.Sub(at) < proxmoxGuestDockerProbeInFlightWindow {
+		return false
+	}
+	if m.dockerProbesInFlight == nil {
+		m.dockerProbesInFlight = make(map[string]time.Time)
+	}
+	m.dockerProbesInFlight[key] = now
+	return true
+}
+
+// releaseDockerProbe ends a claim taken with tryClaimDockerProbe. A completed
+// command (success or genuine failure) releases immediately; an abandoned one
+// keeps the claim until the in-flight window expires, because the agent may
+// still be executing it.
+func (m *Monitor) releaseDockerProbe(key string, abandoned bool) {
+	if abandoned {
+		return
+	}
+	m.dockerProbeFailureMu.Lock()
+	defer m.dockerProbeFailureMu.Unlock()
+	delete(m.dockerProbesInFlight, key)
+}
+
+// recordDockerNodeProbeResult feeds the per-node circuit breaker. Any
+// completed Docker probe/inventory command counts: a success closes the
+// breaker for the node, a failure extends the streak.
+func (m *Monitor) recordDockerNodeProbeResult(node string, failed bool) {
+	node = strings.TrimSpace(node)
+	if node == "" {
+		return
+	}
+	m.dockerProbeFailureMu.Lock()
+	if !failed {
+		state, wasOpen := m.dockerNodeProbeFailures[node]
+		delete(m.dockerNodeProbeFailures, node)
+		m.dockerProbeFailureMu.Unlock()
+		if wasOpen && state.failures >= proxmoxGuestDockerNodeFailureThreshold {
+			log.Info().
+				Str("node", node).
+				Int("previousFailures", state.failures).
+				Msg("Docker probe circuit breaker closed for node after successful command")
+		}
+		return
+	}
+	if m.dockerNodeProbeFailures == nil {
+		m.dockerNodeProbeFailures = make(map[string]*dockerProbeFailureState)
+	}
+	state, ok := m.dockerNodeProbeFailures[node]
+	if !ok {
+		state = &dockerProbeFailureState{}
+		m.dockerNodeProbeFailures[node] = state
+	}
+	state.failures++
+	state.lastAt = time.Now()
+	failures := state.failures
+	m.dockerProbeFailureMu.Unlock()
+	if failures == proxmoxGuestDockerNodeFailureThreshold {
+		log.Warn().
+			Str("node", node).
+			Int("consecutiveFailures", failures).
+			Msg("Docker probe circuit breaker opened: suspending Docker command dispatch to node")
+	}
+}
+
+// dockerNodeProbeBreakerOpen reports whether the node's circuit breaker is
+// open, i.e. Docker probe/inventory commands must not be dispatched to it
+// right now. The suspension window grows with the failure streak on the same
+// schedule as the per-guest backoff.
+func (m *Monitor) dockerNodeProbeBreakerOpen(node string) bool {
+	m.dockerProbeFailureMu.Lock()
+	defer m.dockerProbeFailureMu.Unlock()
+	state, ok := m.dockerNodeProbeFailures[node]
+	if !ok || state.failures < proxmoxGuestDockerNodeFailureThreshold {
+		return false
+	}
+	backoff := dockerProbeFailureBackoff(state.failures - proxmoxGuestDockerNodeFailureThreshold + 1)
+	return time.Since(state.lastAt) < backoff
 }
 
 // checkDockerParallel checks Docker for multiple containers in parallel
@@ -347,6 +507,14 @@ func (m *Monitor) checkDockerParallel(ctx context.Context, checker DockerChecker
 				defer func() { <-sem }()
 			case <-ctx.Done():
 				results[idx] = containerDockerResult{index: chk.index, err: ctx.Err()}
+				return
+			}
+
+			// A select with both cases ready picks one at random; never let
+			// an already-dead context slip through to a dispatch the caller
+			// will abandon instantly.
+			if err := ctx.Err(); err != nil {
+				results[idx] = containerDockerResult{index: chk.index, err: err}
 				return
 			}
 
@@ -394,6 +562,12 @@ func (m *Monitor) CollectProxmoxGuestDockerInventory(ctx context.Context, contai
 		return
 	}
 
+	// Same rule as the socket probe: never dispatch commands the caller has
+	// already stopped waiting for.
+	if ctx.Err() != nil {
+		return
+	}
+
 	candidates := make([]models.Container, 0, len(containers))
 	for _, ct := range containers {
 		if ct.Status != "running" || !ct.HasDocker || ct.VMID <= 0 || strings.TrimSpace(ct.Node) == "" || ct.IsOCI {
@@ -405,6 +579,14 @@ func (m *Monitor) CollectProxmoxGuestDockerInventory(ctx context.Context, contai
 				Str("containerID", ct.ID).
 				Int("vmid", ct.VMID).
 				Msg("Skipping Proxmox LXC Docker inventory because a guest-local host agent is linked")
+			continue
+		}
+		if m.dockerNodeProbeBreakerOpen(ct.Node) {
+			continue
+		}
+		if !m.tryClaimDockerProbe(dockerInventoryClaimKey(ct.ID)) {
+			// A previous inventory command for this guest is still running
+			// (or was abandoned and may still be running on the agent).
 			continue
 		}
 		candidates = append(candidates, ct)
@@ -426,10 +608,20 @@ func (m *Monitor) CollectProxmoxGuestDockerInventory(ctx context.Context, contai
 		wg.Add(1)
 		go func(container models.Container) {
 			defer wg.Done()
+			claimKey := dockerInventoryClaimKey(container.ID)
 			select {
 			case sem <- struct{}{}:
 				defer func() { <-sem }()
 			case <-ctx.Done():
+				// Nothing was dispatched; free the claim immediately.
+				m.releaseDockerProbe(claimKey, false)
+				mu.Lock()
+				failed++
+				mu.Unlock()
+				return
+			}
+			if ctx.Err() != nil {
+				m.releaseDockerProbe(claimKey, false)
 				mu.Lock()
 				failed++
 				mu.Unlock()
@@ -438,6 +630,11 @@ func (m *Monitor) CollectProxmoxGuestDockerInventory(ctx context.Context, contai
 
 			report, ok, err := collector.CollectDockerInventory(ctx, container)
 			if err != nil {
+				abandoned := dockerProbeAbandoned(err)
+				m.releaseDockerProbe(claimKey, abandoned)
+				if !abandoned {
+					m.recordDockerNodeProbeResult(container.Node, true)
+				}
 				log.Debug().
 					Err(err).
 					Str("container", container.Name).
@@ -448,12 +645,14 @@ func (m *Monitor) CollectProxmoxGuestDockerInventory(ctx context.Context, contai
 				mu.Unlock()
 				return
 			}
+			m.releaseDockerProbe(claimKey, false)
 			if !ok {
 				mu.Lock()
 				skipped++
 				mu.Unlock()
 				return
 			}
+			m.recordDockerNodeProbeResult(container.Node, false)
 
 			enrichGuestDockerReportFromContainer(&report, container)
 

@@ -1192,6 +1192,18 @@ type Monitor struct {
 	// failures back off instead of re-running pct exec on every poll cycle.
 	dockerProbeFailureMu sync.Mutex
 	dockerProbeFailures  map[string]*dockerProbeFailureState
+	// Dispatch time of the Docker probe/inventory command currently owning
+	// each guest. A guest with a live claim is never re-probed, so overlapping
+	// poll cycles (or cycles whose enrichment context expired while the agent
+	// was still running the previous pct exec) cannot stack identical commands
+	// on the Proxmox host (minipc probe-storm incident, 2026-08-20).
+	dockerProbesInFlight map[string]time.Time
+	// Consecutive Docker probe/inventory failures per Proxmox node. Once a
+	// node accumulates enough back-to-back failures the circuit breaker
+	// suspends all Docker command dispatch to it, because the node itself
+	// (not one guest) is the likely problem — e.g. pct exec crawling under
+	// NFS flapping.
+	dockerNodeProbeFailures map[string]*dockerProbeFailureState
 	// Agent profile cache to avoid disk I/O on every report (refs #1094)
 	agentProfileCacheMu sync.RWMutex
 	agentProfileCache   *agentProfileCacheEntry

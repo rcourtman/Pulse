@@ -36,6 +36,7 @@ const (
 	MsgTypeDeployPreflight          MessageType = "deploy_preflight"
 	MsgTypeDeployInstall            MessageType = "deploy_install"
 	MsgTypeDeployCancelJob          MessageType = "deploy_cancel"
+	MsgTypeCancelCmd                MessageType = "cancel_command"
 
 	// Agent -> Server messages (deploy)
 	MsgTypeDeployProgress MessageType = "deploy_progress"
@@ -101,6 +102,15 @@ type AgentRegisterPayload struct {
 type RegisteredPayload struct {
 	Success bool   `json:"success"`
 	Message string `json:"message,omitempty"`
+}
+
+// CancelCommandPayload is sent by the server when it stops waiting for a
+// previously dispatched execute_command request (caller context expired or
+// the server-side timeout fired). Agents that understand it abort the running
+// command and reap its whole process tree; older agents ignore the message
+// and rely on their own per-command timeout.
+type CancelCommandPayload struct {
+	RequestID string `json:"request_id"`
 }
 
 // ExecuteCommandPayload is sent by server to request command execution

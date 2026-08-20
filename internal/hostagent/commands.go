@@ -45,6 +45,10 @@ const (
 	outputTruncatedMsg   = "\n... (output truncated)"
 )
 
+// How long Wait may block on inherited stdout/stderr pipes after the command
+// exits or is killed. Package var so tests can shorten it.
+var commandWaitDelay = 5 * time.Second
+
 var (
 	reconnectMaxDelay    = 5 * time.Minute
 	reconnectJitterRatio = 0.1
@@ -121,6 +125,13 @@ type CommandClient struct {
 	conn   *websocket.Conn
 	connMu sync.Mutex
 	done   chan struct{}
+
+	// In-flight execute_command requests by request ID, so a server-issued
+	// cancel_command can abort the execution (and its process group) instead
+	// of letting an abandoned command run to its full timeout. The server
+	// enforces unique in-flight request IDs on its side.
+	activeCommandsMu sync.Mutex
+	activeCommands   map[string]context.CancelFunc
 }
 
 // NewCommandClient creates a new command execution client
@@ -202,6 +213,7 @@ const (
 	msgTypeDeployInstall                  messageType = "deploy_install"
 	msgTypeDeployCancel                   messageType = "deploy_cancel"
 	msgTypeDeployProgress                 messageType = "deploy_progress"
+	msgTypeCancelCmd                      messageType = "cancel_command"
 )
 
 type wsMessage struct {
@@ -251,6 +263,12 @@ type commandResultPayload struct {
 	ExitCode  int    `json:"exit_code"`
 	Error     string `json:"error,omitempty"`
 	Duration  int64  `json:"duration_ms"`
+}
+
+// cancelCommandPayload is sent by the server when it stops waiting for a
+// previously dispatched execute_command request.
+type cancelCommandPayload struct {
+	RequestID string `json:"request_id"`
 }
 
 // Run starts the command client and maintains the WebSocket connection
@@ -638,6 +656,14 @@ func (c *CommandClient) handleMessages(ctx context.Context, conn *websocket.Conn
 				continue
 			}
 			c.handleDeployCancel(payload)
+
+		case msgTypeCancelCmd:
+			var payload cancelCommandPayload
+			if err := json.Unmarshal(msg.Payload, &payload); err != nil {
+				c.logger.Error().Err(err).Msg("Failed to parse cancel_command payload")
+				continue
+			}
+			c.handleCancelCommand(payload)
 
 		default:
 			c.logger.Debug().Str("type", string(msg.Type)).Msg("Unknown message type")
@@ -1037,7 +1063,12 @@ func (c *CommandClient) handleExecuteCommand(ctx context.Context, conn *websocke
 		Str("target_id", payload.TargetID).
 		Msg("Executing command")
 
-	result := c.executeCommand(ctx, payload)
+	cmdCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	c.registerActiveCommand(payload.RequestID, cancel)
+	defer c.unregisterActiveCommand(payload.RequestID)
+
+	result := c.executeCommand(cmdCtx, payload)
 	result.Duration = time.Since(startTime).Milliseconds()
 
 	// Send result back
@@ -1066,6 +1097,40 @@ func (c *CommandClient) handleExecuteCommand(ctx context.Context, conn *websocke
 			Int("exit_code", result.ExitCode).
 			Int64("duration_ms", result.Duration).
 			Msg("Command completed")
+	}
+}
+
+func (c *CommandClient) registerActiveCommand(requestID string, cancel context.CancelFunc) {
+	c.activeCommandsMu.Lock()
+	defer c.activeCommandsMu.Unlock()
+	if c.activeCommands == nil {
+		c.activeCommands = make(map[string]context.CancelFunc)
+	}
+	c.activeCommands[requestID] = cancel
+}
+
+func (c *CommandClient) unregisterActiveCommand(requestID string) {
+	c.activeCommandsMu.Lock()
+	defer c.activeCommandsMu.Unlock()
+	delete(c.activeCommands, requestID)
+}
+
+// handleCancelCommand aborts an in-flight execute_command request the server
+// has stopped waiting for. Canceling the command context SIGKILLs its whole
+// process group, so an abandoned `pct exec` against a wedged guest is reaped
+// instead of running to its full timeout and orphaning children.
+func (c *CommandClient) handleCancelCommand(payload cancelCommandPayload) {
+	c.activeCommandsMu.Lock()
+	cancel, ok := c.activeCommands[payload.RequestID]
+	c.activeCommandsMu.Unlock()
+
+	if ok {
+		c.logger.Info().Str("request_id", payload.RequestID).Msg("Canceling command at server request")
+		cancel()
+	} else {
+		// Common benign race: the result was already sent while the cancel
+		// was in flight.
+		c.logger.Debug().Str("request_id", payload.RequestID).Msg("No active command to cancel")
 	}
 }
 
@@ -1221,6 +1286,17 @@ func (c *CommandClient) executeCommand(ctx context.Context, payload executeComma
 		cmd.Env = append(os.Environ(), "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:"+os.Getenv("PATH"))
 	}
 
+	// Kill the whole process tree on timeout or cancellation, not just the
+	// direct shell. Server-issued commands routinely spawn grandchildren
+	// (pct exec → lxc-attach → docker); killing only the shell orphans those
+	// and, when the target is wedged, accumulates hung processes on the host
+	// every poll cycle until the machine runs out of PIDs (delly incident
+	// 2026-07-07, minipc incident 2026-08-20).
+	configureCommandProcessGroup(cmd)
+	// Bound Wait even if an orphaned grandchild inherits our stdout/stderr
+	// pipes and keeps them open past process exit.
+	cmd.WaitDelay = commandWaitDelay
+
 	stdout := newCappedBuffer(maxCommandOutputSize)
 	stderr := newCappedBuffer(maxCommandOutputSize)
 	cmd.Stdout = stdout
@@ -1231,9 +1307,20 @@ func (c *CommandClient) executeCommand(ctx context.Context, payload executeComma
 	result.Stdout = stdout.String()
 	result.Stderr = stderr.String()
 
+	if errors.Is(err, exec.ErrWaitDelay) {
+		// The command itself exited successfully; only the inherited pipes
+		// were still open (e.g. a deliberately backgrounded child).
+		err = nil
+	}
+
 	if err != nil {
 		if cmdCtx.Err() == context.DeadlineExceeded {
 			result.Error = "command timed out"
+			result.ExitCode = -1
+			result.Success = false
+		} else if cmdCtx.Err() == context.Canceled {
+			// The server told us it stopped waiting for this request.
+			result.Error = "command canceled"
 			result.ExitCode = -1
 			result.Success = false
 		} else if exitErr, ok := err.(*exec.ExitError); ok {

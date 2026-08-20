@@ -1,6 +1,7 @@
 package hostagent
 
 import (
+	"context"
 	"io"
 	"testing"
 
@@ -217,5 +218,44 @@ func TestCommandClientBuildWebSocketOrigin(t *testing.T) {
 				t.Fatalf("buildWebSocketOrigin() = %q, want %q", got, tt.want)
 			}
 		})
+	}
+}
+
+// A server-issued cancel_command for an in-flight request must cancel exactly
+// that request's execution context (minipc probe-storm regression: abandoned
+// probes previously ran to their full timeout on the agent).
+func TestCommandClient_handleCancelCommand_CancelsRegisteredRequest(t *testing.T) {
+	c := &CommandClient{logger: zerolog.Nop()}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	c.registerActiveCommand("req-1", cancel)
+	defer c.unregisterActiveCommand("req-1")
+
+	c.handleCancelCommand(cancelCommandPayload{RequestID: "req-1"})
+
+	select {
+	case <-ctx.Done():
+	default:
+		t.Fatalf("cancel_command did not cancel the registered request context")
+	}
+}
+
+// A cancel for a request that already finished (or never existed) must be a
+// no-op, not a panic or a cancellation of some other command.
+func TestCommandClient_handleCancelCommand_UnknownRequestIsNoOp(t *testing.T) {
+	c := &CommandClient{logger: zerolog.Nop()}
+
+	otherCtx, otherCancel := context.WithCancel(context.Background())
+	defer otherCancel()
+	c.registerActiveCommand("other", otherCancel)
+	defer c.unregisterActiveCommand("other")
+
+	c.handleCancelCommand(cancelCommandPayload{RequestID: "missing"})
+
+	select {
+	case <-otherCtx.Done():
+		t.Fatalf("cancel for unknown request canceled an unrelated command")
+	default:
 	}
 }

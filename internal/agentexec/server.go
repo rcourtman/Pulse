@@ -1546,6 +1546,17 @@ func (s *Server) ExecuteCommand(ctx context.Context, agentID string, cmd Execute
 		return nil, err
 	}
 
+	// Never dispatch under a context that has already expired: the send
+	// would succeed, this call would return the context error a moment
+	// later, and the agent would be left executing a command nobody is
+	// waiting for. A caller polling on a dead deadline can otherwise
+	// re-issue the same command every cycle while every previous copy is
+	// still running on the target host (minipc probe-storm incident,
+	// 2026-08-20).
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("command %q not dispatched: %w", cmd.RequestID, err)
+	}
+
 	startedAt := time.Now()
 
 	ac, ok := s.connectionForContext(ctx, agentID)
@@ -1653,12 +1664,14 @@ func (s *Server) ExecuteCommand(ctx context.Context, agentID string, cmd Execute
 			Msg("Agent command completed")
 		return &result, nil
 	case <-timer.C:
+		s.cancelAgentCommand(ac, cmd.RequestID)
 		execLog.Warn().
 			Dur("timeout", timeout).
 			Dur("duration", time.Since(startedAt)).
 			Msg("Agent command timed out")
 		return nil, fmt.Errorf("command timed out after %v", timeout)
 	case <-ctx.Done():
+		s.cancelAgentCommand(ac, cmd.RequestID)
 		execLog.Warn().
 			Err(ctx.Err()).
 			Dur("duration", time.Since(startedAt)).
@@ -1668,6 +1681,25 @@ func (s *Server) ExecuteCommand(ctx context.Context, agentID string, cmd Execute
 		return nil, fmt.Errorf("agent %s disconnected before command result", agentID)
 	case <-s.shutdown:
 		return nil, errServerShuttingDown
+	}
+}
+
+// cancelAgentCommand tells an agent to abort an execute_command request the
+// server has stopped waiting for, so the agent can reap the command's process
+// tree instead of running it to its full timeout. Best effort: agents that
+// predate the cancel_command message ignore it and fall back to their own
+// per-command timeout.
+func (s *Server) cancelAgentCommand(ac *agentConn, requestID string) {
+	msg, err := NewMessage(MsgTypeCancelCmd, requestID, CancelCommandPayload{RequestID: requestID})
+	if err != nil {
+		log.Debug().Err(err).Str("request_id", requestID).Msg("Failed to encode command cancellation")
+		return
+	}
+	ac.writeMu.Lock()
+	err = s.sendMessage(ac.conn, msg)
+	ac.writeMu.Unlock()
+	if err != nil {
+		log.Debug().Err(err).Str("request_id", requestID).Msg("Failed to send command cancellation to agent")
 	}
 }
 
@@ -2094,6 +2126,12 @@ func (s *Server) ReadFile(ctx context.Context, agentID string, req ReadFilePaylo
 		return nil, err
 	}
 
+	// Same rule as ExecuteCommand: never dispatch work the caller has
+	// already stopped waiting for.
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("read_file %q not dispatched: %w", req.RequestID, err)
+	}
+
 	ac, ok := s.connectionForContext(ctx, agentID)
 	if !ok {
 		log.Warn().
@@ -2177,8 +2215,10 @@ func (s *Server) ReadFile(ctx context.Context, agentID string, req ReadFilePaylo
 			Msg("Agent read_file completed")
 		return &result, nil
 	case <-timer.C:
+		s.cancelAgentCommand(ac, req.RequestID)
 		return nil, fmt.Errorf("read_file timed out after %v", timeout)
 	case <-ctx.Done():
+		s.cancelAgentCommand(ac, req.RequestID)
 		return nil, fmt.Errorf("read_file %q on agent %q canceled: %w", req.RequestID, agentID, ctx.Err())
 	case <-ac.done:
 		return nil, fmt.Errorf("agent %s disconnected before read_file result", agentID)

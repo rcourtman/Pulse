@@ -1,7 +1,10 @@
 package monitoring
 
 import (
+	"context"
+	"errors"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -1980,5 +1983,329 @@ func TestApplyDockerReport_SameHostnameDifferentTokens(t *testing.T) {
 	hosts := monitor.state.GetDockerHosts()
 	if len(hosts) != 2 {
 		t.Errorf("Expected 2 hosts in state, got %d", len(hosts))
+	}
+}
+
+// blockingDockerChecker simulates the field failure mode of the minipc
+// incident (2026-08-20): a loaded Proxmox host where pct exec is arbitrarily
+// slow, so probes are still executing when the next poll cycle starts.
+type blockingDockerChecker struct {
+	mu      sync.Mutex
+	calls   []int
+	started chan struct{} // closed when the first probe begins
+	release chan struct{} // probes block here until the test closes it
+	results map[int]bool
+	errs    map[int]error
+}
+
+func (c *blockingDockerChecker) CheckDockerInContainer(ctx context.Context, node string, vmid int) (bool, error) {
+	c.mu.Lock()
+	c.calls = append(c.calls, vmid)
+	first := len(c.calls) == 1
+	c.mu.Unlock()
+	if first {
+		close(c.started)
+	}
+	select {
+	case <-c.release:
+	case <-ctx.Done():
+		return false, ctx.Err()
+	}
+	if err, ok := c.errs[vmid]; ok {
+		return false, err
+	}
+	return c.results[vmid], nil
+}
+
+func (c *blockingDockerChecker) callCount() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return len(c.calls)
+}
+
+// Bug 1 regression (minipc incident): while a probe for a guest is still
+// executing, subsequent poll cycles must not re-dispatch the same probe. In
+// the field the dispatcher re-issued the identical command every ~3s with
+// fresh request IDs, so a slow host self-amplified until it ran out of
+// resources.
+func TestCheckContainersForDocker_InFlightProbeNotReissued(t *testing.T) {
+	state := models.NewState()
+	monitor := &Monitor{state: state}
+	checker := &blockingDockerChecker{
+		started: make(chan struct{}),
+		release: make(chan struct{}),
+		results: map[int]bool{101: true},
+	}
+	monitor.SetDockerChecker(checker)
+
+	containers := func() []models.Container {
+		return []models.Container{
+			{ID: "ct-1", VMID: 101, Name: "slow-guest", Node: "node1", Status: "running"},
+		}
+	}
+
+	firstDone := make(chan struct{})
+	go func() {
+		defer close(firstDone)
+		monitor.CheckContainersForDocker(context.Background(), containers())
+	}()
+
+	select {
+	case <-checker.started:
+	case <-time.After(5 * time.Second):
+		t.Fatalf("first probe never started")
+	}
+
+	// Second and third poll cycles arrive while the first probe is still
+	// executing. Before the in-flight claim they would each dispatch the
+	// same probe again.
+	monitor.CheckContainersForDocker(context.Background(), containers())
+	monitor.CheckContainersForDocker(context.Background(), containers())
+	if got := checker.callCount(); got != 1 {
+		t.Fatalf("expected 1 in-flight probe, got %d dispatches", got)
+	}
+
+	close(checker.release)
+	select {
+	case <-firstDone:
+	case <-time.After(5 * time.Second):
+		t.Fatalf("first poll cycle never finished")
+	}
+
+	// The probe completed, releasing the claim: the guest is probeable again
+	// once the normal cadence asks for it.
+	monitor.dockerProbeFailureMu.Lock()
+	_, held := monitor.dockerProbesInFlight["ct-1"]
+	monitor.dockerProbeFailureMu.Unlock()
+	if held {
+		t.Fatalf("expected in-flight claim to be released after probe completion")
+	}
+}
+
+// Bug 3 regression (server side): a poll cycle whose enrichment context has
+// already expired must not dispatch probes at all — in the field the server
+// sent the command and then logged "Agent command canceled ... duration 0.05"
+// while the agent kept executing it. An abandoned dispatch must also not
+// count as a probe failure against the guest.
+func TestCheckContainersForDocker_ExpiredContextDoesNotDispatch(t *testing.T) {
+	state := models.NewState()
+	checkedAt := time.Now().Add(-time.Hour)
+	state.UpdateContainers([]models.Container{
+		{ID: "ct-1", VMID: 101, Name: "guest", Node: "node1", Status: "running", HasDocker: true, DockerCheckedAt: checkedAt},
+	})
+	monitor := &Monitor{state: state}
+	checker := &mockDockerChecker{results: map[int]bool{101: false}}
+	monitor.SetDockerChecker(checker)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	result := monitor.CheckContainersForDocker(ctx, []models.Container{
+		{ID: "ct-1", VMID: 101, Name: "guest", Node: "node1", Status: "running"},
+	})
+
+	if got := checker.callCount(); got != 0 {
+		t.Fatalf("expected no probe dispatch under expired context, got %d", got)
+	}
+	if !result[0].HasDocker || !result[0].DockerCheckedAt.Equal(checkedAt) {
+		t.Fatalf("expected previous docker status preserved, got %+v", result[0])
+	}
+	monitor.dockerProbeFailureMu.Lock()
+	failures := len(monitor.dockerProbeFailures)
+	monitor.dockerProbeFailureMu.Unlock()
+	if failures != 0 {
+		t.Fatalf("expected no probe failures recorded for an undispatched cycle, got %d", failures)
+	}
+}
+
+// A probe the server abandoned mid-flight (context canceled while waiting on
+// the agent) may still be running on the agent. It must not be re-dispatched
+// while the in-flight window holds, and it must not feed the failure backoff
+// or the node circuit breaker — abandonment says nothing about the guest.
+func TestCheckContainersForDocker_AbandonedProbeHoldsClaimWithoutFailure(t *testing.T) {
+	state := models.NewState()
+	monitor := &Monitor{state: state}
+	checker := &mockDockerChecker{
+		errs: map[int]error{101: context.Canceled},
+	}
+	monitor.SetDockerChecker(checker)
+
+	containers := []models.Container{
+		{ID: "ct-1", VMID: 101, Name: "guest", Node: "node1", Status: "running"},
+	}
+
+	monitor.CheckContainersForDocker(context.Background(), containers)
+	if got := checker.callCount(); got != 1 {
+		t.Fatalf("expected 1 dispatch, got %d", got)
+	}
+
+	monitor.dockerProbeFailureMu.Lock()
+	failures := len(monitor.dockerProbeFailures)
+	nodeFailures := len(monitor.dockerNodeProbeFailures)
+	_, held := monitor.dockerProbesInFlight["ct-1"]
+	monitor.dockerProbeFailureMu.Unlock()
+	if failures != 0 || nodeFailures != 0 {
+		t.Fatalf("abandoned probe must not record failures (guest=%d node=%d)", failures, nodeFailures)
+	}
+	if !held {
+		t.Fatalf("abandoned probe must keep its in-flight claim")
+	}
+
+	// Next cycles: still claimed, no re-dispatch.
+	monitor.CheckContainersForDocker(context.Background(), containers)
+	monitor.CheckContainersForDocker(context.Background(), containers)
+	if got := checker.callCount(); got != 1 {
+		t.Fatalf("expected abandoned probe not to be re-issued, got %d dispatches", got)
+	}
+
+	// Once the in-flight window has passed the guest is probeable again.
+	monitor.dockerProbeFailureMu.Lock()
+	monitor.dockerProbesInFlight["ct-1"] = time.Now().Add(-2 * proxmoxGuestDockerProbeInFlightWindow)
+	monitor.dockerProbeFailureMu.Unlock()
+	monitor.CheckContainersForDocker(context.Background(), containers)
+	if got := checker.callCount(); got != 2 {
+		t.Fatalf("expected retry after in-flight window expiry, got %d dispatches", got)
+	}
+}
+
+// Node circuit breaker: once a node accumulates enough consecutive command
+// failures, no Docker probe is dispatched to it — even for a newly appearing
+// guest that has no per-guest failure history. Other nodes are unaffected,
+// and a success on the node closes the breaker.
+func TestCheckContainersForDocker_NodeCircuitBreaker(t *testing.T) {
+	state := models.NewState()
+	monitor := &Monitor{state: state}
+	checker := &mockDockerChecker{
+		errs: map[int]error{
+			101: errors.New("pct exec hung"),
+			102: errors.New("pct exec hung"),
+			103: errors.New("pct exec hung"),
+		},
+		results: map[int]bool{104: true, 201: true},
+	}
+	monitor.SetDockerChecker(checker)
+
+	// Cycle 1: three guests on node1 fail, opening the breaker.
+	monitor.CheckContainersForDocker(context.Background(), []models.Container{
+		{ID: "ct-1", VMID: 101, Name: "a", Node: "node1", Status: "running"},
+		{ID: "ct-2", VMID: 102, Name: "b", Node: "node1", Status: "running"},
+		{ID: "ct-3", VMID: 103, Name: "c", Node: "node1", Status: "running"},
+	})
+	if got := checker.callCount(); got != 3 {
+		t.Fatalf("expected 3 dispatches in first cycle, got %d", got)
+	}
+	if !monitor.dockerNodeProbeBreakerOpen("node1") {
+		t.Fatalf("expected node1 breaker open after %d consecutive failures", proxmoxGuestDockerNodeFailureThreshold)
+	}
+
+	// Cycle 2: a brand-new guest on node1 must not be probed while the
+	// breaker is open; a guest on node2 still is.
+	monitor.CheckContainersForDocker(context.Background(), []models.Container{
+		{ID: "ct-4", VMID: 104, Name: "new-on-bad-node", Node: "node1", Status: "running"},
+		{ID: "ct-5", VMID: 201, Name: "on-good-node", Node: "node2", Status: "running"},
+	})
+	checker.mu.Lock()
+	calls := append([]int(nil), checker.calls...)
+	checker.mu.Unlock()
+	if len(calls) != 4 || calls[3] != 201 {
+		t.Fatalf("expected only node2 guest probed while breaker open, got dispatches %v", calls)
+	}
+
+	// Breaker backoff expires: node1 is retried, and the success closes the
+	// breaker.
+	monitor.dockerProbeFailureMu.Lock()
+	monitor.dockerNodeProbeFailures["node1"].lastAt = time.Now().Add(-time.Hour)
+	monitor.dockerProbeFailureMu.Unlock()
+	monitor.CheckContainersForDocker(context.Background(), []models.Container{
+		{ID: "ct-4", VMID: 104, Name: "new-on-bad-node", Node: "node1", Status: "running"},
+	})
+	if got := checker.callCount(); got != 5 {
+		t.Fatalf("expected node1 retried after breaker backoff, got %d dispatches", got)
+	}
+	monitor.dockerProbeFailureMu.Lock()
+	_, stillTracked := monitor.dockerNodeProbeFailures["node1"]
+	monitor.dockerProbeFailureMu.Unlock()
+	if stillTracked {
+		t.Fatalf("expected breaker to close after a successful command on node1")
+	}
+}
+
+// blockingInventoryCollector mirrors blockingDockerChecker for the inventory
+// command path.
+type blockingInventoryCollector struct {
+	mu      sync.Mutex
+	calls   int
+	started chan struct{}
+	release chan struct{}
+}
+
+func (c *blockingInventoryCollector) CollectDockerInventory(ctx context.Context, container models.Container) (agentsdocker.Report, bool, error) {
+	c.mu.Lock()
+	c.calls++
+	first := c.calls == 1
+	c.mu.Unlock()
+	if first {
+		close(c.started)
+	}
+	select {
+	case <-c.release:
+	case <-ctx.Done():
+		return agentsdocker.Report{}, false, ctx.Err()
+	}
+	return agentsdocker.Report{}, false, nil
+}
+
+func (c *blockingInventoryCollector) callCount() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.calls
+}
+
+// The inventory command path has the same in-flight and expired-context rules
+// as the socket probe: no dispatch under a dead context, and no re-dispatch
+// while a previous inventory command for the guest is still executing.
+func TestCollectProxmoxGuestDockerInventory_InFlightAndExpiredContext(t *testing.T) {
+	state := models.NewState()
+	monitor := &Monitor{state: state}
+	collector := &blockingInventoryCollector{
+		started: make(chan struct{}),
+		release: make(chan struct{}),
+	}
+	monitor.SetDockerInventoryCollector(collector)
+
+	containers := []models.Container{
+		{ID: "ct-1", VMID: 101, Name: "guest", Node: "node1", Status: "running", HasDocker: true},
+	}
+
+	// Expired context: nothing dispatched.
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	monitor.CollectProxmoxGuestDockerInventory(ctx, containers)
+	if got := collector.callCount(); got != 0 {
+		t.Fatalf("expected no inventory dispatch under expired context, got %d", got)
+	}
+
+	firstDone := make(chan struct{})
+	go func() {
+		defer close(firstDone)
+		monitor.CollectProxmoxGuestDockerInventory(context.Background(), containers)
+	}()
+	select {
+	case <-collector.started:
+	case <-time.After(5 * time.Second):
+		t.Fatalf("first inventory collection never started")
+	}
+
+	// While in flight, the next cycle must not re-dispatch.
+	monitor.CollectProxmoxGuestDockerInventory(context.Background(), containers)
+	if got := collector.callCount(); got != 1 {
+		t.Fatalf("expected 1 in-flight inventory collection, got %d dispatches", got)
+	}
+
+	close(collector.release)
+	select {
+	case <-firstDone:
+	case <-time.After(5 * time.Second):
+		t.Fatalf("first inventory cycle never finished")
 	}
 }

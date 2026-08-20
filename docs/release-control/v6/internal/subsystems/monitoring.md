@@ -3080,3 +3080,38 @@ that evidence alone. Proofs:
 `internal/models/deepcopy_test.go` (`TestCloneHostIsolatesAgentPrivilege`),
 `internal/monitoring/agent_fleet_doctor_test.go`
 (`TestAgentFleetDiagnosticsSurfacesPrivilegeProfileWithoutDegradingHealth`).
+
+### Guest Docker command dispatch is single-flight, context-honest, and node-breakered
+
+The Proxmox guest Docker socket probe and inventory dispatcher in
+`internal/monitoring/docker_detection.go` owns dispatch discipline, not just
+result caching (minipc probe-storm incident, 2026-08-20):
+
+- **Single-flight per guest.** A dispatched probe or inventory command takes
+  an in-flight claim keyed by container ID (inventory under an
+  `inventory:` prefix). Overlapping poll cycles skip claimed guests, so a
+  slow `pct exec` can never be stacked with identical copies of itself. A
+  completed command (success or genuine failure) releases the claim; an
+  abandoned one (the wait ended with a context error, so the agent may
+  still be executing) holds it for a 2-minute window.
+- **No dispatch under a dead context.** `CheckContainersForDocker` and
+  `CollectProxmoxGuestDockerInventory` bail out before dispatching when the
+  enrichment context has already expired, preserving previous Docker
+  status; the parallel prober also re-checks the context deterministically
+  after semaphore acquisition.
+- **Abandonment is not evidence.** Context-canceled/deadline results feed
+  neither the per-guest failure backoff nor the node breaker — they say
+  nothing about the guest or node.
+- **Per-node circuit breaker.** Three consecutive completed command
+  failures on one node suspend all guest Docker command dispatch to that
+  node on the existing 1m→30m backoff schedule (a node-level stall such as
+  NFS flapping fails every guest, including newly appearing ones); any
+  completed success closes the breaker. Checker reconfiguration resets
+  claims, streaks, and breakers.
+
+Proofs in `internal/monitoring/monitor_docker_test.go`:
+`TestCheckContainersForDocker_InFlightProbeNotReissued`,
+`TestCheckContainersForDocker_ExpiredContextDoesNotDispatch`,
+`TestCheckContainersForDocker_AbandonedProbeHoldsClaimWithoutFailure`,
+`TestCheckContainersForDocker_NodeCircuitBreaker`,
+`TestCollectProxmoxGuestDockerInventory_InFlightAndExpiredContext`.

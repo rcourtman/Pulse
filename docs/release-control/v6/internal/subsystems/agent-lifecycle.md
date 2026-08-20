@@ -6428,3 +6428,41 @@ authors a `privilege` block in its report (`pkg/agents/host/report.go`
 server can present the profile descriptively. Uninstall removes the sudoers
 file and helpers. `scripts/installtests/install_sh_test.go`
 (`TestInstallSHLeastPrivilegeProfile`) pins the profile's invariants.
+
+### Command dispatch is context-honest and abandoned executions are canceled
+
+The agent command transport now refuses to dispatch work its caller has
+already stopped waiting for, and propagates abandonment to the agent
+(minipc probe-storm incident, 2026-08-20: probes dispatched under an
+expired poll context were re-issued every cycle while every previous copy
+kept running on the Proxmox host). Three coupled guarantees:
+
+1. `agentexec.Server.ExecuteCommand` and `ReadFile` fail with a
+   `not dispatched` error when the caller's context is already expired —
+   nothing crosses the WebSocket, so a caller polling on a dead deadline
+   cannot leave the agent executing commands nobody awaits.
+2. When the server stops waiting for a dispatched request (its own
+   command timeout or caller-context cancellation), it sends the new
+   best-effort server→agent `cancel_command` message
+   (`MsgTypeCancelCmd`, payload `CancelCommandPayload{request_id}`).
+   Agents that predate the message ignore the unknown type and fall back
+   to their own per-command timeout; the protocol change is additive.
+3. The unified agent's command client tracks in-flight
+   `execute_command`/`read_file` executions by request ID and, on
+   `cancel_command`, cancels that execution's context. Command execution
+   runs each command in its own process group (`Setpgid`; SIGKILL of the
+   group via `cmd.Cancel`, `taskkill /T` on Windows), bounds `Wait` with
+   a 5s `WaitDelay` so orphan-held pipes cannot hang it, treats
+   `exec.ErrWaitDelay` after a clean exit as success, and reports
+   cancellation as a distinct `command canceled` failure. This ports the
+   `pulse/v6-release` process-leak fix (45480a5cc) to main, which had
+   never received it, and extends it with server-driven cancellation.
+
+Proofs: `internal/agentexec/server_websocket_test.go`
+(`TestExecuteCommand_ExpiredContextNeverDispatches`,
+`TestExecuteCommand_AbandonedCommandSendsCancel`),
+`internal/hostagent/command_client_test.go`
+(`TestCommandClient_handleCancelCommand_CancelsRegisteredRequest`,
+`TestCommandClient_handleCancelCommand_UnknownRequestIsNoOp`), and
+`internal/hostagent/commands_execute_unix_test.go` (timeout and cancel
+kill the whole process group; WaitDelay unblocks inherited pipes).

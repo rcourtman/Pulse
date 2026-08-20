@@ -1078,3 +1078,159 @@ func TestRevokedAdmissionInvalidatesStaleSocketBeforeDispatch(t *testing.T) {
 		t.Fatal("revoked session remained visible as connected")
 	}
 }
+
+// registerCancelTestAgent registers agent "a1" over the websocket harness and
+// returns after the registration ack has been read.
+func registerCancelTestAgent(t *testing.T, s *Server, tsURL string) *cancelTestConn {
+	t.Helper()
+	conn, _, err := dialAgentExecWebSocket(t, tsURL)
+	if err != nil {
+		t.Fatalf("Dial: %v", err)
+	}
+	t.Cleanup(func() { conn.Close() })
+	wsWriteMessage(t, conn, mustNewMessage(t, MsgTypeAgentRegister, "", AgentRegisterPayload{
+		AgentID:  "a1",
+		Hostname: "host1",
+		Version:  "1.2.3",
+		Platform: "linux",
+		Token:    "any",
+	}))
+	_ = wsReadRegisteredPayload(t, conn)
+	return &cancelTestConn{t: t, conn: conn}
+}
+
+type cancelTestConn struct {
+	t    *testing.T
+	conn *websocket.Conn
+}
+
+// nextMessage returns the next message from the server, or ok=false when
+// nothing arrives before the timeout.
+func (c *cancelTestConn) nextMessage(timeout time.Duration) (wsRawMessage, bool) {
+	c.t.Helper()
+	msg, err := wsReadRawMessageWithTimeout(c.conn, timeout)
+	if err != nil {
+		return wsRawMessage{}, false
+	}
+	return msg, true
+}
+
+// The probe-storm incident (minipc, 2026-08-20) started with the server
+// dispatching commands under a parent context that had already expired: the
+// send succeeded, ExecuteCommand returned "context deadline exceeded,
+// duration 0.05", and the agent was left running the command. An expired
+// context must fail the call before anything reaches the agent.
+func TestExecuteCommand_ExpiredContextNeverDispatches(t *testing.T) {
+	s := NewServer(allowAllTestTokens)
+	ts := newWSServer(t, s)
+	defer ts.Close()
+
+	agent := registerCancelTestAgent(t, s, ts.URL)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, err := s.ExecuteCommand(ctx, "a1", ExecuteCommandPayload{
+		RequestID: "req-expired",
+		Command:   "echo hi",
+		Timeout:   5,
+		Trusted:   true,
+	})
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("ExecuteCommand error = %v, want context.Canceled", err)
+	}
+	if !strings.Contains(err.Error(), "not dispatched") {
+		t.Fatalf("error should say the command was not dispatched, got %q", err)
+	}
+
+	// The agent must never see the command.
+	if msg, ok := agent.nextMessage(500 * time.Millisecond); ok && msg.Type == MsgTypeExecuteCmd {
+		t.Fatalf("agent received execute_command despite expired context")
+	}
+}
+
+// When the server stops waiting for a dispatched command (its own timeout or
+// the caller's context), it must tell the agent to abort the execution so the
+// process tree is reaped instead of running on for minutes.
+func TestExecuteCommand_AbandonedCommandSendsCancel(t *testing.T) {
+	cases := []struct {
+		name    string
+		timeout int // ExecuteCommandPayload.Timeout in seconds
+		abandon func(cancel context.CancelFunc)
+		wantErr string
+	}{
+		{
+			name:    "server timeout",
+			timeout: 1,
+			abandon: func(context.CancelFunc) {}, // let the 1s timer fire
+			wantErr: "timed out",
+		},
+		{
+			name:    "caller context canceled",
+			timeout: 30,
+			abandon: func(cancel context.CancelFunc) {
+				time.Sleep(200 * time.Millisecond)
+				cancel()
+			},
+			wantErr: "context canceled",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			s := NewServer(allowAllTestTokens)
+			ts := newWSServer(t, s)
+			defer ts.Close()
+
+			agent := registerCancelTestAgent(t, s, ts.URL)
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			go tc.abandon(cancel)
+
+			requestID := "req-" + strings.ReplaceAll(tc.name, " ", "-")
+			_, err := s.ExecuteCommand(ctx, "a1", ExecuteCommandPayload{
+				RequestID: requestID,
+				Command:   "sleep 300",
+				Timeout:   tc.timeout,
+				Trusted:   true,
+			})
+			if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+				t.Fatalf("ExecuteCommand error = %v, want containing %q", err, tc.wantErr)
+			}
+
+			// The agent first receives the command, then the cancellation.
+			sawExecute := false
+			sawCancel := false
+			deadline := time.Now().Add(3 * time.Second)
+			for time.Now().Before(deadline) && !sawCancel {
+				msg, ok := agent.nextMessage(time.Until(deadline))
+				if !ok {
+					break
+				}
+				switch msg.Type {
+				case MsgTypeExecuteCmd:
+					sawExecute = true
+				case MsgTypeCancelCmd:
+					if msg.Payload == nil {
+						t.Fatalf("cancel_command payload missing")
+					}
+					var payload CancelCommandPayload
+					if err := json.Unmarshal(*msg.Payload, &payload); err != nil {
+						t.Fatalf("unmarshal cancel_command payload: %v", err)
+					}
+					if payload.RequestID != requestID {
+						t.Fatalf("cancel_command request_id = %q, want %q", payload.RequestID, requestID)
+					}
+					sawCancel = true
+				}
+			}
+			if !sawExecute {
+				t.Fatalf("agent never received execute_command")
+			}
+			if !sawCancel {
+				t.Fatalf("agent never received cancel_command after the server abandoned the request")
+			}
+		})
+	}
+}
