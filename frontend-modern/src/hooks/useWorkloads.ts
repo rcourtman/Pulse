@@ -97,6 +97,7 @@ type APIResource = {
     uptime?: number;
     template?: boolean;
     lastBackup?: string;
+    backupInProgress?: boolean;
     disks?: APIDiskInfo[];
     swapUsed?: number;
     swapTotal?: number;
@@ -576,6 +577,7 @@ const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
       // Go zero time "0001-01-01T00:00:00Z" parses to a large negative number
       return parsed > 0 ? parsed : 0;
     })(),
+    backupInProgress: resource.proxmox?.backupInProgress ?? false,
     // vSphere's flat `resource.tags` is a mixed keyword set: the adapter keeps
     // provenance strings there (`vmware`, `vsphere`, `source:vcenter`, ...) so
     // resource search and the `?tags=` filter keep matching, and appends the

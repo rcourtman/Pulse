@@ -16,7 +16,11 @@ func (s *State) UpdateGuestsForInstance(instanceName string, vms []VM, container
 		func(vm VM) string { return vm.Instance },
 		func(vm VM) int { return vm.VMID },
 		func(vm VM) time.Time { return vm.LastBackup },
-		func(vm VM, t time.Time) VM { vm.LastBackup = t; return vm },
+		func(vm VM, prev VM) VM {
+			vm.LastBackup = prev.LastBackup
+			vm.BackupInProgress = prev.BackupInProgress
+			return vm
+		},
 		cloneVM,
 		func(items []VM, i, j int) bool { return items[i].VMID < items[j].VMID },
 	)
@@ -26,7 +30,11 @@ func (s *State) UpdateGuestsForInstance(instanceName string, vms []VM, container
 		func(ct Container) string { return ct.Instance },
 		func(ct Container) int { return ct.VMID },
 		func(ct Container) time.Time { return ct.LastBackup },
-		func(ct Container, t time.Time) Container { ct.LastBackup = t; return ct },
+		func(ct Container, prev Container) Container {
+			ct.LastBackup = prev.LastBackup
+			ct.BackupInProgress = prev.BackupInProgress
+			return ct
+		},
 		cloneContainer,
 		func(items []Container, i, j int) bool { return items[i].VMID < items[j].VMID },
 	)

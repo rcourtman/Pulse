@@ -1,12 +1,20 @@
 import type { BackupStatus } from '@/utils/format';
 
+// The age-derived BackupStatus plus the overlay state for a backup that is
+// running right now. 'running' never comes from getBackupInfo (which only
+// knows ages); callers overlay it from the guest's backupInProgress flag.
+export type WorkloadsGuestBackupDisplayStatus = BackupStatus | 'running';
+
 export interface WorkloadsGuestBackupStatusPresentation {
   color: string;
   bgColor: string;
-  icon: 'check' | 'warning' | 'x';
+  icon: 'check' | 'warning' | 'x' | 'running';
 }
 
-const BACKUP_STATUS_PRESENTATION: Record<BackupStatus, WorkloadsGuestBackupStatusPresentation> = {
+const BACKUP_STATUS_PRESENTATION: Record<
+  WorkloadsGuestBackupDisplayStatus,
+  WorkloadsGuestBackupStatusPresentation
+> = {
   fresh: {
     color: 'text-green-600 dark:text-green-400',
     bgColor: 'bg-green-100 dark:bg-green-900',
@@ -27,10 +35,15 @@ const BACKUP_STATUS_PRESENTATION: Record<BackupStatus, WorkloadsGuestBackupStatu
     bgColor: 'bg-red-100 dark:bg-red-900',
     icon: 'x',
   },
+  running: {
+    color: 'text-blue-600 dark:text-blue-400',
+    bgColor: 'bg-blue-100 dark:bg-blue-900',
+    icon: 'running',
+  },
 };
 
 export function getWorkloadsGuestBackupStatusPresentation(
-  status: BackupStatus,
+  status: WorkloadsGuestBackupDisplayStatus,
 ): WorkloadsGuestBackupStatusPresentation {
   return BACKUP_STATUS_PRESENTATION[status];
 }
@@ -38,11 +51,17 @@ export function getWorkloadsGuestBackupStatusPresentation(
 export function getWorkloadsGuestBackupTooltip(
   status: BackupStatus,
   ageFormatted?: string | null,
+  backupRunning?: boolean,
 ): string {
+  const base =
+    status === 'never' ? 'No completed backup found' : `Last backup: ${ageFormatted || 'Unknown'}`;
+  if (backupRunning) {
+    return `Backup running now · ${base.toLowerCase()}`;
+  }
   if (status === 'never') {
     return 'No backup found';
   }
-  return `Last backup: ${ageFormatted || 'Unknown'}`;
+  return base;
 }
 
 export function getWorkloadsGuestNetworkEmptyState(): string {

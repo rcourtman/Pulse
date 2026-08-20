@@ -208,6 +208,8 @@ export interface VM {
   uptime: number;
   template: boolean;
   lastBackup: number;
+  /** A backup of this guest is running right now; lastBackup still points at the latest completed backup. */
+  backupInProgress?: boolean;
   tags: string[] | string | null;
   lock: string;
   lastSeen: string;
@@ -239,6 +241,8 @@ export interface Container {
   uptime: number;
   template: boolean;
   lastBackup: number;
+  /** A backup of this guest is running right now; lastBackup still points at the latest completed backup. */
+  backupInProgress?: boolean;
   tags: string[] | string | null;
   lock: string;
   lastSeen: string;
@@ -725,6 +729,8 @@ export interface StorageBackup {
   isPBS: boolean;
   verified: boolean;
   verification?: string;
+  /** Partial artifact a still-running backup is writing; not a completed backup. */
+  inProgress?: boolean;
 }
 
 export interface GuestSnapshot {
@@ -752,6 +758,8 @@ export interface PBSBackup {
   size: number;
   protected: boolean;
   verified: boolean;
+  /** In-flight snapshot the backup client is still writing (no manifest yet); not a completed backup. */
+  inProgress?: boolean;
   verificationRaw?: unknown;
   comment?: string;
   files: string[];

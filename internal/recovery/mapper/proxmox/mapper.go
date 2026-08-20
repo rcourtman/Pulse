@@ -294,14 +294,25 @@ func FromPVEStorageBackups(backups []models.StorageBackup, guestInfoByKey map[st
 			verifiedPtr = &verified
 		}
 
+		// A partial archive that a running vzdump task is still writing is a
+		// running recovery point, not a completed one: no completion time,
+		// and verification is not applicable yet.
+		outcome := recovery.OutcomeSuccess
+		completedAt := &t
+		if b.InProgress {
+			outcome = recovery.OutcomeRunning
+			completedAt = nil
+			verifiedPtr = nil
+		}
+
 		out = append(out, recovery.RecoveryPoint{
 			ID:                "pve-backup:" + strings.TrimSpace(b.ID),
 			Provider:          recovery.ProviderProxmoxPVE,
 			Kind:              recovery.KindBackup,
 			Mode:              mode,
-			Outcome:           recovery.OutcomeSuccess,
+			Outcome:           outcome,
 			StartedAt:         &t,
-			CompletedAt:       &t,
+			CompletedAt:       completedAt,
 			SizeBytes:         sizePtr(b.Size),
 			Verified:          verifiedPtr,
 			Immutable:         immutable,
@@ -319,6 +330,7 @@ func FromPVEStorageBackups(backups []models.StorageBackup, guestInfoByKey map[st
 				"notes":        strings.TrimSpace(b.Notes),
 				"volid":        strings.TrimSpace(b.Volid),
 				"isPBS":        b.IsPBS,
+				"inProgress":   b.InProgress,
 				"verification": strings.TrimSpace(b.Verification),
 				"type":         strings.TrimSpace(b.Type),
 				"instance":     instanceName,
@@ -534,6 +546,19 @@ func FromPBSBackups(backups []models.PBSBackup, candidatesByKey map[string][]Gue
 			"comment":    strings.TrimSpace(b.Comment),
 			"owner":      strings.TrimSpace(b.Owner),
 			"files":      append([]string(nil), b.Files...),
+			"inProgress": b.InProgress,
+		}
+
+		// An in-flight snapshot (no manifest yet) is a running recovery
+		// point: it has no completion time and cannot be verified. Keeping
+		// it out of OutcomeSuccess also keeps posture/rollup freshness
+		// anchored to the last COMPLETED backup.
+		outcome := recovery.OutcomeSuccess
+		completedAt := &t
+		if b.InProgress {
+			outcome = recovery.OutcomeRunning
+			completedAt = nil
+			verifiedPtr = nil
 		}
 
 		// Extract verification detail for frontend stability.
@@ -554,9 +579,9 @@ func FromPBSBackups(backups []models.PBSBackup, candidatesByKey map[string][]Gue
 			Provider:          recovery.ProviderProxmoxPBS,
 			Kind:              recovery.KindBackup,
 			Mode:              recovery.ModeRemote,
-			Outcome:           recovery.OutcomeSuccess,
+			Outcome:           outcome,
 			StartedAt:         &t,
-			CompletedAt:       &t,
+			CompletedAt:       completedAt,
 			SizeBytes:         sizePtr(b.Size),
 			Verified:          verifiedPtr,
 			Immutable:         immutable,

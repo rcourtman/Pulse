@@ -749,3 +749,80 @@ func TestFromPBSBackups_InvisibleClusterKeepsCollisionSnapshotUnlinked(t *testin
 		}
 	}
 }
+
+// An in-flight PBS snapshot (no manifest yet) must map to a running recovery
+// point: no completion time, no verification verdict, and never
+// OutcomeSuccess - otherwise posture freshness treats a backup that merely
+// STARTED as one that finished.
+func TestFromPBSBackups_InProgressMapsToRunning(t *testing.T) {
+	started := time.Date(2026, 8, 20, 9, 39, 1, 0, time.UTC)
+	backups := []models.PBSBackup{
+		{
+			ID:         "pbs-verdeclose-main-pve-pc-vm-117-1787221141",
+			VMID:       "117",
+			Instance:   "verdeclose",
+			Datastore:  "main",
+			Namespace:  "pve-pc",
+			BackupType: "vm",
+			BackupTime: started,
+			Files:      []string{"qemu-server.conf.blob"},
+			InProgress: true,
+		},
+	}
+
+	result := FromPBSBackups(backups, nil)
+	if len(result) != 1 {
+		t.Fatalf("expected 1 point, got %d", len(result))
+	}
+
+	p := result[0]
+	if p.Outcome != recovery.OutcomeRunning {
+		t.Errorf("Outcome = %v, want %v", p.Outcome, recovery.OutcomeRunning)
+	}
+	if p.CompletedAt != nil {
+		t.Errorf("CompletedAt = %v, want nil for a running backup", p.CompletedAt)
+	}
+	if p.StartedAt == nil || !p.StartedAt.Equal(started) {
+		t.Errorf("StartedAt = %v, want %v", p.StartedAt, started)
+	}
+	if p.Verified != nil {
+		t.Errorf("Verified = %v, want nil: verification is not applicable yet", *p.Verified)
+	}
+	if inProgress, _ := p.Details["inProgress"].(bool); !inProgress {
+		t.Error("Details[inProgress] = false, want true")
+	}
+}
+
+func TestFromPVEStorageBackups_InProgressMapsToRunning(t *testing.T) {
+	started := time.Date(2026, 8, 20, 9, 39, 1, 0, time.UTC)
+	backups := []models.StorageBackup{
+		{
+			ID:       "pve-pc-local:backup/vzdump-qemu-117.vma.zst",
+			Instance: "pve-pc",
+			Node:     "pve-pc",
+			Type:     "qemu",
+			VMID:     117,
+			Time:     started,
+			Size:     7 << 30,
+			Storage:  "local",
+			// Partial archive a running vzdump task is still writing.
+			InProgress: true,
+		},
+	}
+
+	result := FromPVEStorageBackups(backups, nil)
+	if len(result) != 1 {
+		t.Fatalf("expected 1 point, got %d", len(result))
+	}
+
+	p := result[0]
+	if p.Outcome != recovery.OutcomeRunning {
+		t.Errorf("Outcome = %v, want %v", p.Outcome, recovery.OutcomeRunning)
+	}
+	if p.CompletedAt != nil {
+		t.Errorf("CompletedAt = %v, want nil for a running backup", p.CompletedAt)
+	}
+	if p.Verified != nil {
+		t.Errorf("Verified = %v, want nil for a running backup", *p.Verified)
+	}
+}

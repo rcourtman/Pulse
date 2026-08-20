@@ -30,6 +30,22 @@ describe('workloadGuestPresentation', () => {
     expect(getWorkloadsGuestBackupTooltip('stale', '3d')).toBe('Last backup: 3d');
   });
 
+  it('presents a running backup as its own state, keeping the completed age', () => {
+    expect(getWorkloadsGuestBackupStatusPresentation('running')).toEqual({
+      color: 'text-blue-600 dark:text-blue-400',
+      bgColor: 'bg-blue-100 dark:bg-blue-900',
+      icon: 'running',
+    });
+    // While a backup runs, the tooltip still reports the last COMPLETED
+    // backup age - a started backup must never read as a finished one.
+    expect(getWorkloadsGuestBackupTooltip('stale', '3d', true)).toBe(
+      'Backup running now · last backup: 3d',
+    );
+    expect(getWorkloadsGuestBackupTooltip('never', undefined, true)).toBe(
+      'Backup running now · no completed backup found',
+    );
+  });
+
   it('returns canonical guest network and disk fallback copy', () => {
     expect(getWorkloadsGuestNetworkEmptyState()).toBe('No IP assigned');
     expect(getWorkloadGuestDiskStatusMessage('no-filesystems')).toBe(

@@ -3642,6 +3642,10 @@ func mergeProxmoxData(existing *ProxmoxData, incoming *ProxmoxData) *ProxmoxData
 	if !incoming.LastBackup.IsZero() {
 		merged.LastBackup = incoming.LastBackup
 	}
+	// A Proxmox facet is always built whole from the guest record, so the
+	// backup-running flag is authoritative in both directions: it must set
+	// when a backup starts and clear when it completes or aborts.
+	merged.BackupInProgress = incoming.BackupInProgress
 	if incoming.CPUInfo != nil {
 		cpuInfo := *incoming.CPUInfo
 		merged.CPUInfo = &cpuInfo

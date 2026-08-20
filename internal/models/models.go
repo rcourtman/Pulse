@@ -200,9 +200,13 @@ type VM struct {
 	Template           bool                    `json:"template"`
 	OnBoot             *bool                   `json:"onBoot,omitempty"`
 	LastBackup         time.Time               `json:"lastBackup,omitempty"`
-	Tags               []string                `json:"tags,omitempty"`
-	Lock               string                  `json:"lock,omitempty"`
-	LastSeen           time.Time               `json:"lastSeen"`
+	// BackupInProgress reports that a backup of this guest is running right
+	// now (a live vzdump task, or an in-flight PBS snapshot). LastBackup
+	// still points at the most recent COMPLETED backup while this is set.
+	BackupInProgress bool      `json:"backupInProgress,omitempty"`
+	Tags             []string  `json:"tags,omitempty"`
+	Lock             string    `json:"lock,omitempty"`
+	LastSeen         time.Time `json:"lastSeen"`
 }
 
 func (v VM) NormalizeCollections() VM {
@@ -226,28 +230,32 @@ func (v VM) NormalizeCollections() VM {
 
 // Container represents an LXC container
 type Container struct {
-	ID                string                  `json:"id"`
-	VMID              int                     `json:"vmid"`
-	Name              string                  `json:"name"`
-	Node              string                  `json:"node"`
-	Pool              string                  `json:"pool,omitempty"`
-	Instance          string                  `json:"instance"`
-	Status            string                  `json:"status"`
-	Type              string                  `json:"type"`
-	CPU               float64                 `json:"cpu"`
-	CPUs              int                     `json:"cpus"`
-	Memory            Memory                  `json:"memory"`
-	Disk              Disk                    `json:"disk"`
-	Disks             []Disk                  `json:"disks,omitempty"`
-	NetworkIn         int64                   `json:"networkIn"`
-	NetworkOut        int64                   `json:"networkOut"`
-	DiskRead          int64                   `json:"diskRead"`
-	DiskWrite         int64                   `json:"diskWrite"`
-	IORateValidity    IORateValidity          `json:"-"`
-	Uptime            int64                   `json:"uptime"`
-	Template          bool                    `json:"template"`
-	OnBoot            *bool                   `json:"onBoot,omitempty"`
-	LastBackup        time.Time               `json:"lastBackup,omitempty"`
+	ID             string         `json:"id"`
+	VMID           int            `json:"vmid"`
+	Name           string         `json:"name"`
+	Node           string         `json:"node"`
+	Pool           string         `json:"pool,omitempty"`
+	Instance       string         `json:"instance"`
+	Status         string         `json:"status"`
+	Type           string         `json:"type"`
+	CPU            float64        `json:"cpu"`
+	CPUs           int            `json:"cpus"`
+	Memory         Memory         `json:"memory"`
+	Disk           Disk           `json:"disk"`
+	Disks          []Disk         `json:"disks,omitempty"`
+	NetworkIn      int64          `json:"networkIn"`
+	NetworkOut     int64          `json:"networkOut"`
+	DiskRead       int64          `json:"diskRead"`
+	DiskWrite      int64          `json:"diskWrite"`
+	IORateValidity IORateValidity `json:"-"`
+	Uptime         int64          `json:"uptime"`
+	Template       bool           `json:"template"`
+	OnBoot         *bool          `json:"onBoot,omitempty"`
+	LastBackup     time.Time      `json:"lastBackup,omitempty"`
+	// BackupInProgress reports that a backup of this guest is running right
+	// now (a live vzdump task, or an in-flight PBS snapshot). LastBackup
+	// still points at the most recent COMPLETED backup while this is set.
+	BackupInProgress  bool                    `json:"backupInProgress,omitempty"`
 	Tags              []string                `json:"tags,omitempty"`
 	Lock              string                  `json:"lock,omitempty"`
 	LastSeen          time.Time               `json:"lastSeen"`
@@ -2741,20 +2749,25 @@ type PBSNamespace struct {
 
 // PBSBackup represents a backup stored on PBS
 type PBSBackup struct {
-	ID              string    `json:"id"`       // Unique ID combining PBS instance, namespace, type, vmid, and time
-	Instance        string    `json:"instance"` // PBS instance name
-	Datastore       string    `json:"datastore"`
-	Namespace       string    `json:"namespace"`
-	BackupType      string    `json:"backupType"` // "vm" or "ct"
-	VMID            string    `json:"vmid"`
-	BackupTime      time.Time `json:"backupTime"`
-	Size            int64     `json:"size"`
-	Protected       bool      `json:"protected"`
-	Verified        bool      `json:"verified"`
-	VerificationRaw any       `json:"verificationRaw,omitempty"`
-	Comment         string    `json:"comment,omitempty"`
-	Files           []string  `json:"files"`
-	Owner           string    `json:"owner,omitempty"` // User who created the backup
+	ID         string    `json:"id"`       // Unique ID combining PBS instance, namespace, type, vmid, and time
+	Instance   string    `json:"instance"` // PBS instance name
+	Datastore  string    `json:"datastore"`
+	Namespace  string    `json:"namespace"`
+	BackupType string    `json:"backupType"` // "vm" or "ct"
+	VMID       string    `json:"vmid"`
+	BackupTime time.Time `json:"backupTime"`
+	Size       int64     `json:"size"`
+	Protected  bool      `json:"protected"`
+	Verified   bool      `json:"verified"`
+	// InProgress marks a snapshot the PBS API listed while the backup is
+	// still being written: the manifest (index.json.blob) does not exist yet,
+	// so the listing has no size and only the guest config blob in files. It
+	// is not a completed backup and must not advance any last-backup age.
+	InProgress      bool     `json:"inProgress,omitempty"`
+	VerificationRaw any      `json:"verificationRaw,omitempty"`
+	Comment         string   `json:"comment,omitempty"`
+	Files           []string `json:"files"`
+	Owner           string   `json:"owner,omitempty"` // User who created the backup
 }
 
 func (b PBSBackup) NormalizeCollections() PBSBackup {
@@ -3244,6 +3257,11 @@ type StorageBackup struct {
 	IsPBS        bool      `json:"isPBS"`                  // Indicates if backup is on PBS storage
 	Verified     bool      `json:"verified"`               // PBS verification status
 	Verification string    `json:"verification,omitempty"` // Verification details
+	// InProgress marks a backup file that a still-running vzdump task for the
+	// same guest is currently writing (or a PBS-storage listing entry whose
+	// snapshot has no manifest yet). It is a partial artifact, not a
+	// completed backup, and must not advance any last-backup age.
+	InProgress bool `json:"inProgress,omitempty"`
 }
 
 // GuestSnapshot represents a VM/CT snapshot
@@ -4176,7 +4194,7 @@ func updateSliceByInstanceWithBackup[T any, K int | int64](
 	getInstance func(T) string,
 	getVMID func(T) K,
 	getLastBackup func(T) time.Time,
-	setLastBackup func(T, time.Time) T,
+	carryBackupState func(item T, prev T) T,
 	clone func(T) T,
 	less func([]T, int, int) bool,
 ) []T {
@@ -4195,8 +4213,11 @@ func updateSliceByInstanceWithBackup[T any, K int | int64](
 	}
 	for _, item := range newItems {
 		item = clone(item)
-		if existing, ok := existingByVMID[getVMID(item)]; ok && getLastBackup(item).IsZero() {
-			item = setLastBackup(item, getLastBackup(existing))
+		// Guest polls know nothing about backups (LastBackup arrives zero);
+		// carry the previously computed backup state forward so it survives
+		// until the next SyncGuestBackupTimes pass recomputes it.
+		if prev, ok := existingByVMID[getVMID(item)]; ok && getLastBackup(item).IsZero() {
+			item = carryBackupState(item, prev)
 		}
 		itemMap[getID(item)] = item
 	}
@@ -4217,7 +4238,7 @@ func updateSliceForInstance[T any, K int | int64](
 	getInstance func(T) string,
 	getVMID func(T) K,
 	getLastBackup func(T) time.Time,
-	setLastBackup func(T, time.Time) T,
+	carryBackupState func(item T, prev T) T,
 	clone func(T) T,
 	less func([]T, int, int) bool,
 ) {
@@ -4226,7 +4247,7 @@ func updateSliceForInstance[T any, K int | int64](
 
 	*slicePtr = updateSliceByInstanceWithBackup(
 		*slicePtr, newItems, instanceName,
-		getID, getInstance, getVMID, getLastBackup, setLastBackup, clone, less,
+		getID, getInstance, getVMID, getLastBackup, carryBackupState, clone, less,
 	)
 	s.LastUpdate = time.Now()
 }
@@ -4239,7 +4260,11 @@ func (s *State) UpdateVMsForInstance(instanceName string, vms []VM) {
 		func(vm VM) string { return vm.Instance },
 		func(vm VM) int { return vm.VMID },
 		func(vm VM) time.Time { return vm.LastBackup },
-		func(vm VM, t time.Time) VM { vm.LastBackup = t; return vm },
+		func(vm VM, prev VM) VM {
+			vm.LastBackup = prev.LastBackup
+			vm.BackupInProgress = prev.BackupInProgress
+			return vm
+		},
 		cloneVM,
 		func(items []VM, i, j int) bool { return items[i].VMID < items[j].VMID },
 	)
@@ -4256,6 +4281,12 @@ func (s *State) UpdateContainers(containers []Container) {
 	s.Containers = cloned
 	s.LastUpdate = time.Now()
 }
+
+// runningBackupTaskMaxAge bounds how long an unfinished vzdump task keeps
+// reporting a guest as backing up. Task lists stop refreshing for an
+// unreachable instance, and a wedged multi-day vzdump is not a state worth
+// advertising as "running" on the guest badge.
+const runningBackupTaskMaxAge = 24 * time.Hour
 
 // backupKey creates a composite key for backup matching using instance and VMID.
 // This ensures backups are correctly matched to guests even when VMIDs are reused across instances.
@@ -4331,7 +4362,10 @@ func (s *State) PBSGuestConfirmationsForInstance(instanceName string) []PBSGuest
 	return out
 }
 
-// SyncGuestBackupTimes updates LastBackup on VMs and Containers from storage backups and PBS backups.
+// SyncGuestBackupTimes updates LastBackup and BackupInProgress on VMs and
+// Containers from storage backups, PBS backups, and running backup tasks.
+// LastBackup only ever reflects completed backups; in-flight PBS snapshots
+// and partial vzdump archives surface through BackupInProgress instead.
 // Call this after updating storage backups or PBS backups to ensure guest backup indicators are accurate.
 // Matching is done by instance+VMID to prevent cross-instance VMID collisions.
 // For PBS backups with namespaces, namespace matching is ranked against the guest's node and
@@ -4349,9 +4383,43 @@ func (s *State) SyncGuestBackupTimes() {
 	// Using composite key prevents cross-instance VMID collision issues
 	latestBackup := make(map[string]time.Time)
 
+	// Guests with a backup running right now: a live vzdump task is the
+	// authoritative PVE-side signal. Partial artifacts (an in-flight PBS
+	// snapshot, a half-written vzdump archive) are collected separately
+	// below so they can surface as "backup running" without ever advancing
+	// the last-completed-backup age.
+	runningBackupTask := make(map[string]struct{})
+	runningTaskCutoff := time.Now().Add(-runningBackupTaskMaxAge)
+	for _, task := range s.PVEBackups.BackupTasks {
+		if task.VMID <= 0 || task.Instance == "" || !task.EndTime.IsZero() {
+			continue
+		}
+		status := strings.ToLower(strings.TrimSpace(task.Status))
+		if status != "" && status != "running" {
+			continue
+		}
+		// Task lists stop refreshing when an instance goes unreachable, so a
+		// stale "running" entry must eventually age out rather than pin the
+		// guest in a backup-running state forever. ObservedAt refreshes on
+		// every poll; tasks synthesized from job logs carry only StartTime.
+		observed := task.ObservedAt
+		if observed.IsZero() {
+			observed = task.StartTime
+		}
+		if observed.Before(runningTaskCutoff) {
+			continue
+		}
+		runningBackupTask[backupKey(task.Instance, task.VMID)] = struct{}{}
+	}
+
 	// Process PVE storage backups
 	for _, backup := range s.PVEBackups.StorageBackups {
 		if backup.VMID <= 0 || backup.Instance == "" {
+			continue
+		}
+		if backup.InProgress {
+			// A partial file is not a completed backup; the running-task set
+			// above already reports the guest as backing up.
 			continue
 		}
 		key := backupKey(backup.Instance, backup.VMID)
@@ -4362,7 +4430,10 @@ func (s *State) SyncGuestBackupTimes() {
 
 	// Process PBS backups (VMID is string, BackupTime is the timestamp).
 	// Group by PBS subject type and VMID so VM and CT IDs do not cross-match.
+	// In-flight snapshots are kept apart: they only feed the backup-running
+	// flag, never the completed-backup ages or the attribution learner.
 	pbsBackupsBySubject := make(map[pbsSubjectKey][]PBSBackup)
+	pbsInProgressBySubject := make(map[pbsSubjectKey][]PBSBackup)
 	for _, backup := range s.PBSBackups {
 		vmid, err := strconv.Atoi(backup.VMID)
 		if err != nil || vmid <= 0 {
@@ -4373,6 +4444,10 @@ func (s *State) SyncGuestBackupTimes() {
 			continue
 		}
 		key := pbsSubjectKey{backupType: backupType, vmid: vmid}
+		if backup.InProgress {
+			pbsInProgressBySubject[key] = append(pbsInProgressBySubject[key], backup)
+			continue
+		}
 		pbsBackupsBySubject[key] = append(pbsBackupsBySubject[key], backup)
 	}
 
@@ -4519,10 +4594,12 @@ func (s *State) SyncGuestBackupTimes() {
 
 	// findBestPBSBackup finds the best PBS backup for a given typed VMID and guest location.
 	// Placement and guest-name matches are preferred over VMID-only fallback.
-	// Returns zero time if no suitable backup found.
-	findBestPBSBackup := func(vmid int, backupType string, instance string, node string, name string) time.Time {
+	// Returns zero time if no suitable backup found. The subject map is a
+	// parameter so the same attribution rules apply to completed snapshots
+	// (feeding LastBackup) and to in-flight ones (feeding BackupInProgress).
+	findBestPBSBackup := func(bySubject map[pbsSubjectKey][]PBSBackup, vmid int, backupType string, instance string, node string, name string) time.Time {
 		subjectKey := pbsSubjectKey{backupType: backupType, vmid: vmid}
-		backups, ok := pbsBackupsBySubject[subjectKey]
+		backups, ok := bySubject[subjectKey]
 		if !ok || len(backups) == 0 {
 			return time.Time{}
 		}
@@ -4589,13 +4666,16 @@ func (s *State) SyncGuestBackupTimes() {
 			lastBackup = backupTime
 		}
 		// Check if PBS has a more recent backup
-		pbsTime := findBestPBSBackup(s.VMs[i].VMID, "vm", s.VMs[i].Instance, s.VMs[i].Node, s.VMs[i].Name)
+		pbsTime := findBestPBSBackup(pbsBackupsBySubject, s.VMs[i].VMID, "vm", s.VMs[i].Instance, s.VMs[i].Node, s.VMs[i].Name)
 		if !pbsTime.IsZero() {
 			if lastBackup.IsZero() || pbsTime.After(lastBackup) {
 				lastBackup = pbsTime
 			}
 		}
 		s.VMs[i].LastBackup = lastBackup
+		_, taskRunning := runningBackupTask[key]
+		s.VMs[i].BackupInProgress = taskRunning ||
+			!findBestPBSBackup(pbsInProgressBySubject, s.VMs[i].VMID, "vm", s.VMs[i].Instance, s.VMs[i].Node, s.VMs[i].Name).IsZero()
 	}
 
 	// Update Containers - recompute from current backup evidence instead of preserving stale values
@@ -4606,13 +4686,16 @@ func (s *State) SyncGuestBackupTimes() {
 			lastBackup = backupTime
 		}
 		// Check if PBS has a more recent backup
-		pbsTime := findBestPBSBackup(s.Containers[i].VMID, "ct", s.Containers[i].Instance, s.Containers[i].Node, s.Containers[i].Name)
+		pbsTime := findBestPBSBackup(pbsBackupsBySubject, s.Containers[i].VMID, "ct", s.Containers[i].Instance, s.Containers[i].Node, s.Containers[i].Name)
 		if !pbsTime.IsZero() {
 			if lastBackup.IsZero() || pbsTime.After(lastBackup) {
 				lastBackup = pbsTime
 			}
 		}
 		s.Containers[i].LastBackup = lastBackup
+		_, taskRunning := runningBackupTask[key]
+		s.Containers[i].BackupInProgress = taskRunning ||
+			!findBestPBSBackup(pbsInProgressBySubject, s.Containers[i].VMID, "ct", s.Containers[i].Instance, s.Containers[i].Node, s.Containers[i].Name).IsZero()
 	}
 
 	s.LastUpdate = time.Now()
@@ -4626,7 +4709,11 @@ func (s *State) UpdateContainersForInstance(instanceName string, containers []Co
 		func(ct Container) string { return ct.Instance },
 		func(ct Container) int { return ct.VMID },
 		func(ct Container) time.Time { return ct.LastBackup },
-		func(ct Container, t time.Time) Container { ct.LastBackup = t; return ct },
+		func(ct Container, prev Container) Container {
+			ct.LastBackup = prev.LastBackup
+			ct.BackupInProgress = prev.BackupInProgress
+			return ct
+		},
 		cloneContainer,
 		func(items []Container, i, j int) bool { return items[i].VMID < items[j].VMID },
 	)

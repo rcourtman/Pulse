@@ -3469,6 +3469,7 @@ func vmFromReadStateView(view *unifiedresources.VMView) models.VM {
 		Uptime:            view.Uptime(),
 		Template:          view.Template(),
 		LastBackup:        view.LastBackup(),
+		BackupInProgress:  view.BackupInProgress(),
 		Tags:              view.Tags(),
 		Lock:              view.Lock(),
 		LastSeen:          view.LastSeen(),
@@ -3505,6 +3506,7 @@ func containerFromReadStateView(view *unifiedresources.ContainerView) models.Con
 		Uptime:            view.Uptime(),
 		Template:          view.Template(),
 		LastBackup:        view.LastBackup(),
+		BackupInProgress:  view.BackupInProgress(),
 		Tags:              view.Tags(),
 		Lock:              view.Lock(),
 		LastSeen:          view.LastSeen(),
@@ -6808,12 +6810,15 @@ func buildProxmoxVMPayload(resource unifiedresources.Resource) map[string]interf
 		"diskWrite": monitorMetricInt64(resource.Metrics, func(metrics *unifiedresources.ResourceMetrics) *unifiedresources.MetricValue {
 			return metrics.DiskWrite
 		}),
-		"disks":       convertProxmoxDisks(resource.Proxmox.Disks),
-		"swapUsed":    resource.Proxmox.SwapUsed,
-		"swapTotal":   resource.Proxmox.SwapTotal,
-		"balloon":     resource.Proxmox.Balloon,
-		"lastBackup":  resource.Proxmox.LastBackup,
-		"ipAddresses": append([]string(nil), resource.Identity.IPAddresses...),
+		"disks":      convertProxmoxDisks(resource.Proxmox.Disks),
+		"swapUsed":   resource.Proxmox.SwapUsed,
+		"swapTotal":  resource.Proxmox.SwapTotal,
+		"balloon":    resource.Proxmox.Balloon,
+		"lastBackup": resource.Proxmox.LastBackup,
+		// A backup of this guest is running right now; lastBackup still
+		// points at the latest completed backup.
+		"backupInProgress": resource.Proxmox.BackupInProgress,
+		"ipAddresses":      append([]string(nil), resource.Identity.IPAddresses...),
 	}
 }
 

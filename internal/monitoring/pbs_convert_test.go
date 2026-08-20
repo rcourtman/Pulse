@@ -377,3 +377,75 @@ func TestConvertPBSSnapshots(t *testing.T) {
 		}
 	})
 }
+
+// An in-flight snapshot (backup still being written) is listed by the PBS API
+// without a size and without the manifest (index.json.blob) - typically only
+// the guest config blob exists yet. It must be flagged InProgress so nothing
+// downstream treats it as a completed backup.
+func TestConvertPBSSnapshotsInProgress(t *testing.T) {
+	tests := []struct {
+		name       string
+		snapshot   pbs.BackupSnapshot
+		inProgress bool
+	}{
+		{
+			name: "no size and only config blob is in-progress",
+			snapshot: pbs.BackupSnapshot{
+				BackupType: "vm",
+				BackupID:   "117",
+				BackupTime: 1787221141,
+				Files:      []interface{}{map[string]interface{}{"filename": "qemu-server.conf.blob"}},
+				Owner:      "admin@pbs!pve-homelab",
+			},
+			inProgress: true,
+		},
+		{
+			name: "completed snapshot with manifest and size",
+			snapshot: pbs.BackupSnapshot{
+				BackupType: "vm",
+				BackupID:   "117",
+				BackupTime: 1787221141,
+				Size:       80 << 30,
+				Files: []interface{}{
+					"qemu-server.conf.blob",
+					"drive-scsi0.img.fidx",
+					"index.json.blob",
+				},
+			},
+			inProgress: false,
+		},
+		{
+			name: "manifest present but size missing still counts as complete",
+			snapshot: pbs.BackupSnapshot{
+				BackupType: "ct",
+				BackupID:   "105",
+				BackupTime: 1787221141,
+				Files:      []interface{}{"root.pxar.didx", "index.json.blob"},
+			},
+			inProgress: false,
+		},
+		{
+			name: "size present without manifest counts as complete",
+			snapshot: pbs.BackupSnapshot{
+				BackupType: "vm",
+				BackupID:   "100",
+				BackupTime: 1787221141,
+				Size:       2048,
+				Files:      []interface{}{"drive-scsi0.img.fidx"},
+			},
+			inProgress: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := convertPBSSnapshots("pbs-1", "main", "pve-pc", []pbs.BackupSnapshot{tt.snapshot})
+			if len(result) != 1 {
+				t.Fatalf("expected 1 backup, got %d", len(result))
+			}
+			if result[0].InProgress != tt.inProgress {
+				t.Errorf("InProgress: expected %t, got %t", tt.inProgress, result[0].InProgress)
+			}
+		})
+	}
+}

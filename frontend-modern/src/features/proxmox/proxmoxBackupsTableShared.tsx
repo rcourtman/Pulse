@@ -241,6 +241,9 @@ export function artifactStateLabel(artifact: RecoverableArtifact): string {
   if (artifact.sourceKind === 'snapshot') {
     return getProxmoxBackupSourcePresentation('snapshot').stateFallbackLabel;
   }
+  // Running outranks everything: whatever else is true of the artifact, it
+  // is not a restorable backup yet.
+  if (artifact.running) return 'Running';
   if (artifact.protected) return 'Protected';
   if (artifact.verified === true) return 'Verified';
   if (artifact.verified === false) return 'Unverified';
@@ -248,6 +251,13 @@ export function artifactStateLabel(artifact: RecoverableArtifact): string {
 }
 
 export function ArtifactStateBadge(props: { artifact: RecoverableArtifact; label: string }) {
+  if (props.artifact.running) {
+    return (
+      <MetadataBadge {...PROXMOX_BACKUP_METADATA_BADGE_PROPS} tone="info">
+        {props.label}
+      </MetadataBadge>
+    );
+  }
   if (props.artifact.sourceKind === 'snapshot') {
     return (
       <MetadataBadge {...PROXMOX_BACKUP_METADATA_BADGE_PROPS} tone="indigo">

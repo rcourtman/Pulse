@@ -186,6 +186,13 @@ func (v VMView) LastBackup() time.Time {
 	return v.r.Proxmox.LastBackup
 }
 
+func (v VMView) BackupInProgress() bool {
+	if v.r == nil || v.r.Proxmox == nil {
+		return false
+	}
+	return v.r.Proxmox.BackupInProgress
+}
+
 func (v VMView) DiskStatusReason() string {
 	if v.r == nil || v.r.Proxmox == nil {
 		return ""
@@ -480,6 +487,13 @@ func (v ContainerView) LastBackup() time.Time {
 		return time.Time{}
 	}
 	return v.r.Proxmox.LastBackup
+}
+
+func (v ContainerView) BackupInProgress() bool {
+	if v.r == nil || v.r.Proxmox == nil {
+		return false
+	}
+	return v.r.Proxmox.BackupInProgress
 }
 
 func (v ContainerView) OSName() string {

@@ -10,11 +10,13 @@ import {
   getWorkloadsGuestBackupStatusPresentation,
   getWorkloadsGuestBackupTooltip,
   getWorkloadsGuestNetworkEmptyState,
+  type WorkloadsGuestBackupDisplayStatus,
 } from '@/utils/workloadGuestPresentation';
 
 function BackupIndicator(props: {
   lastBackup: string | number | null | undefined;
   isTemplate: boolean;
+  backupRunning?: boolean;
 }) {
   if (props.isTemplate) return null;
 
@@ -24,6 +26,9 @@ function BackupIndicator(props: {
   );
   const config = createMemo(() => getWorkloadsGuestBackupStatusPresentation(backupInfo().status));
 
+  // The indicator flags a problem (no fresh completed backup) and stays
+  // truthful while a backup is running - only a COMPLETED backup clears it.
+  // The running state is surfaced in the tooltip and the Backup column badge.
   const shouldShow = createMemo(() => {
     const status = backupInfo().status;
     return status === 'stale' || status === 'overdue' || status === 'never';
@@ -31,7 +36,7 @@ function BackupIndicator(props: {
 
   const tooltipText = createMemo(() => {
     const info = backupInfo();
-    return getWorkloadsGuestBackupTooltip(info.status, info.ageFormatted);
+    return getWorkloadsGuestBackupTooltip(info.status, info.ageFormatted, props.backupRunning);
   });
 
   return (
@@ -85,7 +90,7 @@ function getBackupAgeBadgeLabel(
   return compact.replace(/\s+ago$/, '');
 }
 
-function getBackupAgeBadgeClass(status: BackupInfo['status']): string {
+function getBackupAgeBadgeClass(status: WorkloadsGuestBackupDisplayStatus): string {
   const layout =
     'inline-flex h-5 min-w-[3.25rem] items-center justify-center gap-1 px-1.5 text-[10px] font-semibold leading-none tabular-nums cursor-help';
   // A healthy backup only needs its shield. Existing backups that cross an age
@@ -103,6 +108,11 @@ function getBackupAgeBadgeClass(status: BackupInfo['status']): string {
       return `${pill} border-yellow-200 bg-yellow-50 text-yellow-700 dark:border-yellow-900/70 dark:bg-yellow-950/40 dark:text-yellow-300`;
     case 'never':
       return `${pill} border-red-200 bg-red-50 text-red-700 dark:border-red-900/70 dark:bg-red-950/40 dark:text-red-300`;
+    // A running backup is work underway, not success (green would claim a
+    // completed backup) and not absence (hiding it would look like nothing
+    // is happening). Blue matches the Backups page's running-task tone.
+    case 'running':
+      return `${pill} border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-900/70 dark:bg-blue-950/40 dark:text-blue-300`;
   }
 }
 
@@ -307,17 +317,35 @@ function OSInfoCell(props: { osName: string; osVersion: string; agentVersion: st
   );
 }
 
-function BackupStatusCell(props: { lastBackup: string | number | null | undefined }) {
+function BackupStatusCell(props: {
+  lastBackup: string | number | null | undefined;
+  backupRunning?: boolean;
+}) {
   const tip = useTooltip();
 
   const alertsActivation = useAlertsActivation();
   const info = createMemo(() =>
     getBackupInfo(props.lastBackup, alertsActivation.getBackupThresholds()),
   );
-  const config = createMemo(() => getWorkloadsGuestBackupStatusPresentation(info().status));
-  const badgeLabel = createMemo(() => getBackupAgeBadgeLabel(props.lastBackup, info()));
+  // The badge shows "running" while a backup is underway: green would claim
+  // a completed backup that does not exist yet, and the age states would
+  // hide that the situation is being remediated. The age itself still
+  // reflects the latest COMPLETED backup and is kept in the tooltip.
+  const displayStatus = createMemo<WorkloadsGuestBackupDisplayStatus>(() =>
+    props.backupRunning ? 'running' : info().status,
+  );
+  const config = createMemo(() => getWorkloadsGuestBackupStatusPresentation(displayStatus()));
+  const badgeLabel = createMemo(() =>
+    displayStatus() === 'running' ? 'Running' : getBackupAgeBadgeLabel(props.lastBackup, info()),
+  );
+  const hasCompletedBackup = createMemo(() => info().status !== 'never');
   const ariaLabel = createMemo(() => {
     const currentInfo = info();
+    if (props.backupRunning) {
+      return hasCompletedBackup()
+        ? `Backup status: backup running now, last completed backup ${currentInfo.ageFormatted}`
+        : 'Backup status: backup running now, no completed backup yet';
+    }
     if (currentInfo.status === 'never') return 'Backup status: no backup found';
     return `Backup status: ${currentInfo.status}, last backup ${currentInfo.ageFormatted}`;
   });
@@ -325,13 +353,14 @@ function BackupStatusCell(props: { lastBackup: string | number | null | undefine
   return (
     <>
       <span
-        class={getBackupAgeBadgeClass(info().status)}
+        class={getBackupAgeBadgeClass(displayStatus())}
         onMouseEnter={tip.onMouseEnter}
         onMouseLeave={tip.onMouseLeave}
         aria-label={ariaLabel()}
       >
         <svg
           class="h-3.5 w-3.5 flex-shrink-0"
+          classList={{ 'animate-pulse': displayStatus() === 'running' }}
           viewBox="0 0 24 24"
           fill="none"
           stroke="currentColor"
@@ -350,8 +379,11 @@ function BackupStatusCell(props: { lastBackup: string | number | null | undefine
           <Show when={config().icon === 'x'}>
             <path d="M10 10l4 4M14 10l-4 4" />
           </Show>
+          <Show when={config().icon === 'running'}>
+            <path d="M8 12h.01M12 12h.01M16 12h.01" />
+          </Show>
         </svg>
-        <Show when={info().status !== 'fresh'}>
+        <Show when={displayStatus() !== 'fresh'}>
           <span>{badgeLabel()}</span>
         </Show>
       </span>
@@ -361,9 +393,14 @@ function BackupStatusCell(props: { lastBackup: string | number | null | undefine
           <div class="font-medium mb-1 text-slate-300 border-b border-border pb-1">
             Backup Status
           </div>
-          <Show when={info().status !== 'never'}>
+          <Show when={props.backupRunning}>
+            <div class="py-0.5 text-blue-400">Backup running now…</div>
+          </Show>
+          <Show when={hasCompletedBackup()}>
             <div class="py-0.5">
-              <div class="text-slate-400">Last backup</div>
+              <div class="text-slate-400">
+                {props.backupRunning ? 'Last completed backup' : 'Last backup'}
+              </div>
               <div class="text-base-content font-medium">
                 {new Date(props.lastBackup!).toLocaleDateString(undefined, {
                   weekday: 'short',
@@ -375,11 +412,17 @@ function BackupStatusCell(props: { lastBackup: string | number | null | undefine
               <div class="text-slate-300">{new Date(props.lastBackup!).toLocaleTimeString()}</div>
             </div>
             <div class="pt-1 mt-1 border-t border-border">
-              <span class={config().color}>{info().ageFormatted}</span>
+              <span class={getWorkloadsGuestBackupStatusPresentation(info().status).color}>
+                {info().ageFormatted}
+              </span>
             </div>
           </Show>
-          <Show when={info().status === 'never'}>
-            <div class="py-0.5 text-red-400">No backup has ever been recorded for this guest.</div>
+          <Show when={!hasCompletedBackup()}>
+            <div class="py-0.5 text-red-400">
+              {props.backupRunning
+                ? 'No completed backup yet - the first backup is running now.'
+                : 'No backup has ever been recorded for this guest.'}
+            </div>
           </Show>
         </div>
       </TooltipPortal>

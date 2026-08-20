@@ -45,6 +45,8 @@ export interface RecoverableArtifact {
   detail: string;
   protected: boolean;
   verified?: boolean;
+  /** A still-running backup is writing this artifact; it is not recoverable yet. */
+  running?: boolean;
   fileCount?: number;
 }
 
@@ -490,7 +492,8 @@ export function buildProxmoxBackupRecoveryModel(
       location: `${backup.datastore || '—'} / ${backup.namespace?.trim() || '(root)'}`,
       detail: pbsBackupFileDetailLabel(backup.files.length),
       protected: backup.protected,
-      verified: backup.verified,
+      verified: backup.inProgress ? undefined : backup.verified,
+      running: backup.inProgress === true,
       fileCount: backup.files.length,
     });
   }
@@ -515,7 +518,8 @@ export function buildProxmoxBackupRecoveryModel(
       location: archive.storage || archive.node || '—',
       detail: archive.volid || archive.format || archiveSource.detailFallbackLabel,
       protected: archive.protected,
-      verified: archive.isPBS ? archive.verified : undefined,
+      verified: archive.inProgress ? undefined : archive.isPBS ? archive.verified : undefined,
+      running: archive.inProgress === true,
     });
   }
 
@@ -561,19 +565,23 @@ export function buildProxmoxBackupRecoveryModel(
   }
 
   for (const row of rows.values()) {
+    // A running artifact cannot be restored from yet, so the "latest"
+    // pointers (which answer "what can I recover to?") skip it. The artifact
+    // itself stays listed with a Running state.
+    const completed = row.artifacts.filter((artifact) => !artifact.running);
     row.latestPBS = newest(
-      row.artifacts.filter((artifact) => artifact.sourceKind === 'pbs'),
+      completed.filter((artifact) => artifact.sourceKind === 'pbs'),
       (artifact) => artifact.createdMs,
     );
     row.latestArchive = newest(
-      row.artifacts.filter((artifact) => artifact.sourceKind === 'archive'),
+      completed.filter((artifact) => artifact.sourceKind === 'archive'),
       (artifact) => artifact.createdMs,
     );
     row.latestSnapshot = newest(
-      row.artifacts.filter((artifact) => artifact.sourceKind === 'snapshot'),
+      completed.filter((artifact) => artifact.sourceKind === 'snapshot'),
       (artifact) => artifact.createdMs,
     );
-    row.latestRecovery = newest(row.artifacts, (artifact) => artifact.createdMs);
+    row.latestRecovery = newest(completed, (artifact) => artifact.createdMs);
   }
 
   const coverageRows = Array.from(rows.values()).map((row) => {
@@ -670,6 +678,7 @@ export function recoverableArtifactMatchesSearch(
       : artifact.verified === false
         ? 'unverified'
         : undefined,
+    artifact.running ? 'running' : undefined,
     artifact.protected ? 'protected' : 'unprotected',
   ];
   return haystack.filter(Boolean).join(' ').toLowerCase().includes(normalizedTerm);

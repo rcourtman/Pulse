@@ -24,6 +24,11 @@ import (
 
 const (
 	pbsBackupSnapshotFetchWorkers = 5
+	// runningVzdumpClockSkew is the slack applied when deciding whether a
+	// backup file's ctime falls inside a running vzdump task's window, so a
+	// small clock offset between Pulse and the node cannot misclassify the
+	// task's own partial output as a completed backup.
+	runningVzdumpClockSkew = 2 * time.Minute
 	// pbsBackupSnapshotsPerGroupLimit bounds how many real snapshots are
 	// retained per backup group (newest first). It must comfortably exceed
 	// common PBS keep policies: groups are always represented by real fetched
@@ -168,6 +173,26 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 	snapshot := m.state.GetSnapshot()
 	guestNodeMap := make(map[int]string) // VMID -> actual node name
 	populateGuestNodeMapFromReadState(readState, instanceName, guestNodeMap)
+
+	// vzdump writes archives under their final name, so a backup that is
+	// still running is already listed by the storage content API as a
+	// growing partial file. Correlate content entries with the live vzdump
+	// tasks polled just before this pass (pollBackupTasks runs first in the
+	// cycle): a guest backup file created at or after a running task's start
+	// is that task's partial output, not a completed backup.
+	runningVzdumpStart := make(map[int]time.Time) // VMID -> earliest running task start
+	for _, task := range snapshot.PVEBackups.BackupTasks {
+		if task.Instance != instanceName || task.VMID <= 0 || !task.EndTime.IsZero() {
+			continue
+		}
+		status := strings.ToLower(strings.TrimSpace(task.Status))
+		if status != "" && status != "running" {
+			continue
+		}
+		if existing, ok := runningVzdumpStart[task.VMID]; !ok || task.StartTime.Before(existing) {
+			runningVzdumpStart[task.VMID] = task.StartTime
+		}
+	}
 
 	// For each node, get storage and check content
 	for _, node := range nodes {
@@ -355,6 +380,21 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 					}
 				}
 
+				// Partial-output window: the file belongs to a vzdump task
+				// that is still running. PBS-type storages additionally list
+				// in-flight snapshots without a size (no manifest yet), which
+				// covers backups submitted by another cluster or host.
+				inProgress := false
+				if content.VMID > 0 {
+					if start, ok := runningVzdumpStart[content.VMID]; ok &&
+						!time.Unix(content.CTime, 0).Before(start.Add(-runningVzdumpClockSkew)) {
+						inProgress = true
+					}
+					if isPBSStorage && content.Size == 0 {
+						inProgress = true
+					}
+				}
+
 				backup := models.StorageBackup{
 					ID:           fmt.Sprintf("%s-%s", instanceName, content.Volid),
 					Storage:      storage.Storage,
@@ -372,6 +412,7 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 					IsPBS:        isPBSStorage,
 					Verified:     verified,
 					Verification: verificationInfo,
+					InProgress:   inProgress,
 				}
 
 				allBackups = append(allBackups, backup)
@@ -1638,11 +1679,25 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 				cacheAge := time.Since(m.pbsBackupCacheTimeFor(instanceName, key))
 				cacheStillFresh := cacheAge < pbsBackupCacheTTL
 
+				// A cached in-flight snapshot must be re-fetched every poll:
+				// when it completes, neither the group's last-backup time nor
+				// its count changes (the listing already included it), so the
+				// normal reuse conditions would keep showing "backup running"
+				// until the TTL expired.
+				cachedHasInProgress := false
+				for _, cachedSnapshot := range cached.snapshots {
+					if cachedSnapshot.InProgress {
+						cachedHasInProgress = true
+						break
+					}
+				}
+
 				// Only re-fetch when the backup count changes, the most recent backup
 				// is newer, or the cache TTL has expired (to pick up verification changes).
 				if hasCachedData &&
 					cacheStillFresh &&
 					cacheCountMatches &&
+					!cachedHasInProgress &&
 					!lastBackupTime.After(cached.latest) {
 
 					allBackups = appendPBSBackupsWithinLimit(allBackups, cached.snapshots)
@@ -2029,6 +2084,19 @@ func convertPBSSnapshots(instanceName, datastore, namespace string, snapshots []
 			}
 		}
 
+		// A snapshot the PBS API lists while the backup is still being
+		// written has no manifest yet: no size field (decoded as 0) and no
+		// index.json.blob in files - typically only the guest config blob.
+		// Treat it as in-progress, not as a completed backup.
+		hasManifest := false
+		for _, name := range fileNames {
+			if name == "index.json.blob" {
+				hasManifest = true
+				break
+			}
+		}
+		inProgress := snapshot.Size == 0 && !hasManifest
+
 		verified := false
 		if snapshot.Verification != nil {
 			switch v := snapshot.Verification.(type) {
@@ -2059,6 +2127,7 @@ func convertPBSSnapshots(instanceName, datastore, namespace string, snapshots []
 			Size:            snapshot.Size,
 			Protected:       snapshot.Protected,
 			Verified:        verified,
+			InProgress:      inProgress,
 			VerificationRaw: snapshot.Verification,
 			Comment:         snapshot.Comment,
 			Files:           fileNames,

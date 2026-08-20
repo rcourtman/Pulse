@@ -242,6 +242,7 @@ export function GuestRow(props: GuestRowProps) {
                   <BackupIndicator
                     lastBackup={props.guest.lastBackup}
                     isTemplate={props.guest.template}
+                    backupRunning={props.guest.backupInProgress}
                   />
                 </Show>
                 <Show when={nestedWorkloadCueLabel()}>
@@ -667,7 +668,10 @@ export function GuestRow(props: GuestRowProps) {
                 }
               >
                 <Show when={!props.guest.template}>
-                  <BackupStatusCell lastBackup={props.guest.lastBackup} />
+                  <BackupStatusCell
+                    lastBackup={props.guest.lastBackup}
+                    backupRunning={props.guest.backupInProgress}
+                  />
                 </Show>
                 <Show when={props.guest.template}>
                   <span class="text-xs text-slate-400" aria-hidden="true">
