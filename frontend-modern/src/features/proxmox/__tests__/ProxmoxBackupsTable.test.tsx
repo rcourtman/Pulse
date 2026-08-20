@@ -507,17 +507,16 @@ describe('ProxmoxBackupsTable', () => {
   });
 
   it('keeps Overview guest totals aligned with the filtered Workloads collection', () => {
-    expect(proxmoxPageSurfaceSource).toContain(
-      'const visibleGuestStats = createMemo(() => workloadsState.totalStats())',
-    );
+    // Guest totals now render as the shared toolbar inventory counts, fed by
+    // the workloads state whose collection already excludes demoted app
+    // containers. They must never come from the raw model summary counts.
+    expect(proxmoxPageSurfaceSource).toContain('inventoryStats={workloadsState.inventoryStats}');
     expect(proxmoxPageSurfaceSource).not.toContain(
       'currentModel().summary.runningGuestCount} running',
     );
     expect(proxmoxPageSurfaceSource).not.toContain(
       'currentModel().summary.stoppedGuestCount} stopped',
     );
-    expect(proxmoxPageSurfaceSource).toContain('<Show when={visibleGuestStats().running > 0}>');
-    expect(proxmoxPageSurfaceSource).toContain('<Show when={visibleGuestStats().stopped > 0}>');
   });
 
   it('keeps the shared storage surface scoped to the whole Proxmox product family', () => {

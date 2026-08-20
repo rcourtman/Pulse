@@ -447,7 +447,7 @@ describe('Docker native tables', () => {
     expect(container.querySelector('[data-docker-host-group]')).toBeNull();
   });
 
-  it('omits the View menu when a single-host inventory has no layout choice', () => {
+  it('offers no layout choice in the View menu for a single-host inventory', () => {
     renderInRouter(() => (
       <DockerContainersTable
         resources={[
@@ -465,7 +465,14 @@ describe('Docker native tables', () => {
       />
     ));
 
-    expect(screen.queryByRole('button', { name: 'View' })).not.toBeInTheDocument();
+    // The View menu always carries the shared inventory-totals toggle, but a
+    // single-host inventory must not offer host grouping.
+    fireEvent.click(screen.getByRole('button', { name: 'View' }));
+
+    const dialog = screen.getByRole('dialog', { name: 'View preferences' });
+    expect(within(dialog).getByText('Inventory totals')).toBeInTheDocument();
+    expect(within(dialog).queryByText('Layout')).not.toBeInTheDocument();
+    expect(within(dialog).queryByRole('group', { name: 'Group by' })).not.toBeInTheDocument();
   });
 
   it('honors a persisted flat preference for multi-host fleets', () => {

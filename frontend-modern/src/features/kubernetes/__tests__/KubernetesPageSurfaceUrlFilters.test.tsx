@@ -93,7 +93,7 @@ describe('Kubernetes URL-backed shared toolbar filters', () => {
     );
   });
 
-  it('reserves prominent attention for node availability', () => {
+  it('surfaces node availability in the clusters table when a node is not ready', () => {
     setResources([
       makeResource({ id: 'cluster-1', type: 'k8s-cluster' }),
       makeResource({
@@ -110,12 +110,16 @@ describe('Kubernetes URL-backed shared toolbar filters', () => {
 
     renderSurfaceAt('/kubernetes/overview');
 
-    const summary = screen.getByRole('region', { name: 'Kubernetes attention' });
-    expect(summary).toHaveAttribute('data-platform-attention-summary', 'danger');
-    expect(summary).toHaveTextContent('1 resource needs review');
-    expect(summary).toHaveTextContent('1node');
-    expect(summary).not.toHaveTextContent('0workloads');
-    expect(summary).not.toHaveTextContent('0signals');
+    // The dedicated attention banner was folded into the canonical tables:
+    // node availability now reads as a warning-toned ready/total ratio on the
+    // cluster row instead of a standalone summary region.
+    expect(screen.queryByRole('region', { name: 'Kubernetes attention' })).not.toBeInTheDocument();
+    const clusterRow = screen.getAllByText('Cluster 1')[0].closest('tr');
+    expect(clusterRow).not.toBeNull();
+    expect(clusterRow).toHaveTextContent('0/1');
+    const degradedCount = clusterRow!.querySelector('.text-amber-700');
+    expect(degradedCount).not.toBeNull();
+    expect(degradedCount).toHaveTextContent('0');
   });
 
   it('applies the URL search filter, including -term exclusions, on the workloads tab', () => {
