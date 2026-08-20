@@ -199,6 +199,74 @@ export function getAlertDestinationsDeliveryRefreshLabel() {
   return ALERT_DESTINATIONS_DELIVERY_REFRESH_LABEL;
 }
 
+// Shown instead of the plain test-success toast when the backend reports the
+// test went out while real alert delivery is paused. Without this, a
+// successful test is exactly how installs come to believe delivery works
+// while every live alert is being suppressed.
+export const ALERT_DESTINATIONS_TEST_PAUSED_WARNING =
+  'Test sent, but notification delivery is paused: real alerts are not being sent. Turn on delivery at the top of this page.';
+
+export function getAlertDestinationsTestPausedWarning() {
+  return ALERT_DESTINATIONS_TEST_PAUSED_WARNING;
+}
+
+export const ALERT_DESTINATIONS_DELIVERY_LOG_TITLE = 'Recent delivery activity';
+export const ALERT_DESTINATIONS_DELIVERY_LOG_EMPTY =
+  'No alert deliveries were attempted in this window.';
+export const ALERT_DESTINATIONS_DELIVERY_LOG_UNAVAILABLE =
+  'Pulse could not read the delivery log, so recent delivery activity cannot be shown.';
+
+export function getAlertDestinationsDeliveryLogTitle() {
+  return ALERT_DESTINATIONS_DELIVERY_LOG_TITLE;
+}
+
+// The test-send caveat matters: test messages skip the queue entirely, so a
+// user who sends a test and then checks this log would otherwise read its
+// absence as a delivery failure.
+export function getAlertDestinationsDeliveryLogDescription(windowDays: number) {
+  return `Delivery attempts for real alerts over the last ${windowDays} days. Test sends skip the queue and are not listed here.`;
+}
+
+export function getAlertDestinationsDeliveryLogEmpty() {
+  return ALERT_DESTINATIONS_DELIVERY_LOG_EMPTY;
+}
+
+export function getAlertDestinationsDeliveryLogUnavailable() {
+  return ALERT_DESTINATIONS_DELIVERY_LOG_UNAVAILABLE;
+}
+
+export type AlertDeliveryLogOutcome = 'sent' | 'retry' | 'failed' | 'dead_letter' | 'cancelled';
+
+// One plain-language label per outcome. "Dead letter" is queue jargon; what a
+// user needs to know is that Pulse stopped retrying.
+export function getAlertDeliveryLogOutcomeLabel(outcome: AlertDeliveryLogOutcome) {
+  switch (outcome) {
+    case 'sent':
+      return 'Delivered';
+    case 'retry':
+      return 'Retrying';
+    case 'dead_letter':
+      return 'Failed, retries exhausted';
+    case 'cancelled':
+      return 'Cancelled';
+    default:
+      return 'Failed';
+  }
+}
+
+export function getAlertDeliveryLogFailureClassLabel(failureClass: string) {
+  const labels: Record<string, string> = {
+    authentication: 'Authentication failure',
+    rate_limited: 'Rate limited',
+    connectivity: 'Connectivity failure',
+    tls: 'TLS failure',
+    configuration: 'Configuration problem',
+    rejected: 'Rejected by destination',
+    unknown: 'Unclassified failure',
+  };
+  return labels[failureClass] ?? labels.unknown;
+}
+
 const ALERT_DESTINATIONS_DELIVERY_PAUSED_TITLE = 'Notifications are paused';
 const ALERT_DESTINATIONS_DELIVERY_PAUSED_ACTION = 'Turn on delivery';
 

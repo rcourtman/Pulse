@@ -6247,3 +6247,15 @@ Proofs live in `frontend-modern/src/components/shared/__tests__/MobileNavBar.tes
 `frontend-modern/src/components/__tests__/GitHubStarBanner.test.tsx`, and
 `frontend-modern/src/__tests__/App.architecture.test.ts`, which fails if any
 runtime source reintroduces a literal bar height.
+
+### Alert delivery log presentation
+
+The destinations-tab delivery log renders through the shared `Card` primitive
+in the feature-owned `AlertDeliveryLogCard`. Outcome badges use the
+plain-language labels from `alertDestinationsPresentation` rather than queue
+vocabulary ("Failed, retries exhausted", never "dead letter"), failure detail
+lines use the shared red emphasis tokens in both themes, and entry rows wrap
+without horizontal overflow at mobile widths. The unavailable state is a
+`role="alert"` message distinct from the empty state, because "cannot read
+the log" and "no attempts" mean opposite things to someone deciding whether
+to trust their alerting.

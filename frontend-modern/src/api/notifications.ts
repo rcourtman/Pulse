@@ -129,6 +129,37 @@ export interface NotificationHealth {
   queue: NotificationQueueHealth;
 }
 
+export type NotificationDeliveryOutcome = 'sent' | 'retry' | 'failed' | 'dead_letter' | 'cancelled';
+
+export interface NotificationDeliveryLogEntry {
+  notificationId: string;
+  type: string;
+  method?: string;
+  destinationId?: string;
+  outcome: NotificationDeliveryOutcome;
+  alertIds: string[];
+  alertCount: number;
+  attempts: number;
+  success: boolean;
+  errorMessage?: string;
+  failureClass?: NotificationFailureClass;
+  timestamp: string;
+}
+
+export interface NotificationDeliveryLog {
+  entries: NotificationDeliveryLogEntry[];
+  windowDays: number;
+}
+
+export interface NotificationTestResult {
+  status?: string;
+  message?: string;
+  // True when the test was delivered but real alert delivery is paused by the
+  // activation gate, so a successful test must not be read as proof that live
+  // alerts are getting through.
+  deliveryPaused?: boolean;
+}
+
 function apiRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
 }
@@ -153,6 +184,49 @@ const notificationFailureClasses: NotificationFailureClass[] = [
   'rejected',
   'unknown',
 ];
+
+const notificationDeliveryOutcomes: NotificationDeliveryOutcome[] = [
+  'sent',
+  'retry',
+  'failed',
+  'dead_letter',
+  'cancelled',
+];
+
+function normalizeDeliveryLogEntry(value: unknown): NotificationDeliveryLogEntry | undefined {
+  const record = apiRecord(value);
+  const notificationId = strictString(record.notificationId);
+  const outcome = record.outcome;
+  const timestamp = strictString(record.timestamp);
+  if (
+    !notificationId ||
+    !timestamp ||
+    !notificationDeliveryOutcomes.includes(outcome as NotificationDeliveryOutcome)
+  ) {
+    return undefined;
+  }
+  const failureClass = record.failureClass;
+  const entry: NotificationDeliveryLogEntry = {
+    notificationId,
+    type: strictString(record.type),
+    outcome: outcome as NotificationDeliveryOutcome,
+    alertIds: stringArray(record.alertIds),
+    alertCount: nonNegativeCount(record.alertCount) ?? 0,
+    attempts: nonNegativeCount(record.attempts) ?? 0,
+    success: strictBoolean(record.success),
+    timestamp,
+  };
+  const method = strictString(record.method);
+  if (method) entry.method = method;
+  const destinationId = strictString(record.destinationId);
+  if (destinationId) entry.destinationId = destinationId;
+  const errorMessage = strictString(record.errorMessage);
+  if (errorMessage) entry.errorMessage = errorMessage;
+  if (notificationFailureClasses.includes(failureClass as NotificationFailureClass)) {
+    entry.failureClass = failureClass as NotificationFailureClass;
+  }
+  return entry;
+}
 
 function normalizeFailureClassCounts(value: unknown): NotificationFailureClassCounts | undefined {
   const record = apiRecord(value);
@@ -260,6 +334,24 @@ export class NotificationsAPI {
     };
   }
 
+  static async getDeliveryLog(limit?: number): Promise<NotificationDeliveryLog> {
+    const query = limit && limit > 0 ? `?limit=${limit}` : '';
+    const payload = await apiFetchJSON<Record<string, unknown>>(
+      `${this.baseUrl}/delivery-log${query}`,
+    );
+    const rawEntries = Array.isArray(payload.entries) ? payload.entries : [];
+    const entries: NotificationDeliveryLogEntry[] = [];
+    for (const rawEntry of rawEntries) {
+      const entry = normalizeDeliveryLogEntry(rawEntry);
+      if (entry) entries.push(entry);
+    }
+    const windowDays = nonNegativeCount(payload.window_days);
+    return {
+      entries,
+      windowDays: windowDays && windowDays > 0 ? windowDays : 7,
+    };
+  }
+
   static async updateAppriseConfig(config: AppriseConfig): Promise<AppriseConfig> {
     return apiFetchJSON(`${this.baseUrl}/apprise`, {
       method: 'PUT',
@@ -363,9 +455,7 @@ export class NotificationsAPI {
   }
 
   // Testing
-  static async testNotification(
-    request: NotificationTestRequest,
-  ): Promise<{ success: boolean; message?: string }> {
+  static async testNotification(request: NotificationTestRequest): Promise<NotificationTestResult> {
     const body: {
       method: string;
       config?: Record<string, unknown> | AppriseConfig;
@@ -392,7 +482,7 @@ export class NotificationsAPI {
 
   static async testWebhook(
     webhook: Omit<Webhook, 'id'>,
-  ): Promise<{ success: boolean; message?: string }> {
+  ): Promise<{ success?: boolean; message?: string; deliveryPaused?: boolean }> {
     return apiFetchJSON(`${this.baseUrl}/webhooks/test`, {
       method: 'POST',
       body: JSON.stringify(webhook),

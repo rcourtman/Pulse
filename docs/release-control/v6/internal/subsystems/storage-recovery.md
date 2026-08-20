@@ -5330,3 +5330,13 @@ outside the already-projected Patrol profile and grants no plan, approval,
 execution, retention, cleanup, restore, or verification authority. An unknown
 resource type keeps the normal governed profile instead of inferring storage
 authority from prompt text.
+
+### Notification delivery-log routes do not confer storage authority
+
+The shared `internal/api/` surface now includes the notifications-owned
+read-only `GET /api/notifications/delivery-log` route and a `deliveryPaused`
+field on successful test-send responses. They expose retained notification
+delivery outcomes and the delivery gate state only; they add no storage,
+backup, snapshot, restore, retention, cleanup, or recovery capability, write
+nothing, and leave storage and recovery state, evidence freshness,
+persistence, and admission contracts unchanged.

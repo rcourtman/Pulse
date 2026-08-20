@@ -10,11 +10,13 @@ import {
   getAlertDestinationsAppriseValidationError,
   getAlertDestinationsEmailTestFailure,
   getAlertDestinationsEmailTestSuccess,
+  getAlertDestinationsTestPausedWarning,
 } from '@/utils/alertDestinationsPresentation';
 
 import { parseAppriseTargets } from './helpers';
 import type { UIAppriseConfig, UIEmailConfig } from './types';
 import { useNotificationDeliveryHealth } from './useNotificationDeliveryHealth';
+import { useNotificationDeliveryLog } from './useNotificationDeliveryLog';
 import { useAlertWebhookDestinationsState } from './useAlertWebhookDestinationsState';
 
 export interface AlertDestinationsTabStateProps {
@@ -37,6 +39,8 @@ export function useAlertDestinationsTabState(props: AlertDestinationsTabStatePro
     deliveryNeedsAttention,
     loadDeliveryHealth,
   } = useNotificationDeliveryHealth();
+  const { deliveryLog, deliveryLogUnavailable, refreshingDeliveryLog, loadDeliveryLog } =
+    useNotificationDeliveryLog();
   const webhookState = useAlertWebhookDestinationsState();
 
   const isLoading = createMemo(
@@ -70,11 +74,15 @@ export function useAlertDestinationsTabState(props: AlertDestinationsTabStatePro
   const testEmailConfig = async () => {
     setTestingEmail(true);
     try {
-      await NotificationsAPI.testNotification({
+      const result = await NotificationsAPI.testNotification({
         type: 'email',
         config: { ...props.emailConfig() } as Record<string, unknown>,
       });
-      notificationStore.success(getAlertDestinationsEmailTestSuccess());
+      if (result.deliveryPaused) {
+        notificationStore.warning(getAlertDestinationsTestPausedWarning());
+      } else {
+        notificationStore.success(getAlertDestinationsEmailTestSuccess());
+      }
     } catch (error) {
       logger.error(getAlertDestinationsEmailTestFailure(), error);
       const message =
@@ -103,11 +111,15 @@ export function useAlertDestinationsTabState(props: AlertDestinationsTabStatePro
         throw new Error(getAlertDestinationsAppriseValidationError('missingServerUrl'));
       }
 
-      await NotificationsAPI.testNotification({
+      const result = await NotificationsAPI.testNotification({
         type: 'apprise',
         config,
       });
-      notificationStore.success(getAlertDestinationsAppriseTestSuccess());
+      if (result.deliveryPaused) {
+        notificationStore.warning(getAlertDestinationsTestPausedWarning());
+      } else {
+        notificationStore.success(getAlertDestinationsAppriseTestSuccess());
+      }
     } catch (error) {
       logger.error(getAlertDestinationsAppriseTestFailure(), error);
       const message =
@@ -123,22 +135,28 @@ export function useAlertDestinationsTabState(props: AlertDestinationsTabStatePro
     props.onRetryLoad();
     void webhookState.loadWebhooks();
     void loadDeliveryHealth();
+    void loadDeliveryLog();
   };
 
   onMount(() => {
     void loadDeliveryHealth();
+    void loadDeliveryLog();
   });
 
   return {
     appriseState,
     deliveryHealth,
     deliveryHealthUnavailable,
+    deliveryLog,
+    deliveryLogUnavailable,
     deliveryNeedsAttention,
     handleRetry,
     hasLoadError,
     isLoading,
     loadDeliveryHealth,
+    loadDeliveryLog,
     refreshingDeliveryHealth,
+    refreshingDeliveryLog,
     testApprise,
     testEmailConfig,
     testingApprise,

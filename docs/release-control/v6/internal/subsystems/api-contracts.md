@@ -4321,6 +4321,22 @@ it, and an update that echoes the masked placeholder must preserve the stored
 secret rather than overwriting it, matching the header and custom-field
 secret-handling rules above.
 
+The notifications boundary additionally owns the delivery-log and
+test-send-honesty payload contracts. `GET /api/notifications/delivery-log`
+(settings-read scope) returns retained per-attempt delivery outcomes newest
+first — `entries` carrying `notificationId`, `type`, `destinationId`,
+`outcome` (`sent`/`retry`/`failed`/`dead_letter`/`cancelled`), `alertIds`,
+`attempts`, `success`, `failureClass`, redacted `errorMessage`, and RFC 3339
+`timestamp` — alongside `window_days` and retention metadata, because the
+counts are retention-bounded and must not read as lifetime history; webhook
+secrets are redacted from error text before the payload leaves the API. The
+frontend transport in `frontend-modern/src/api/notifications.ts` validates
+entry shape and drops malformed rows rather than rendering them. Successful
+test-send responses from `POST /api/notifications/test` and
+`POST /api/notifications/webhooks/test` must include `deliveryPaused: true`
+whenever real alert delivery is gated off, so a passing test cannot be
+presented as proof that live alerts flow.
+
 Proxmox setup bootstrap now includes a non-destructive Audit/Repair path in the
 generated PVE script and existing-source setup guide. That path audits token
 presence, token expiry, Pulse-managed token drift, and expected ACLs, then

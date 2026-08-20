@@ -4,7 +4,10 @@ import { NotificationsAPI, type Webhook } from '@/api/notifications';
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
 import { showErrorWithDetail } from '@/utils/toast';
-import { getAlertDestinationsWebhookLoadError } from '@/utils/alertDestinationsPresentation';
+import {
+  getAlertDestinationsTestPausedWarning,
+  getAlertDestinationsWebhookLoadError,
+} from '@/utils/alertDestinationsPresentation';
 import {
   getAlertWebhookMutationFailure,
   getAlertWebhookMutationSuccess,
@@ -44,12 +47,14 @@ export function useAlertWebhookDestinationsState() {
   const testWebhook = async (webhookId: string, webhookData?: Omit<Webhook, 'id'>) => {
     setTestingWebhook(webhookId);
     try {
-      if (webhookData) {
-        await NotificationsAPI.testWebhook(webhookData);
+      const result = webhookData
+        ? await NotificationsAPI.testWebhook(webhookData)
+        : await NotificationsAPI.testNotification({ type: 'webhook', webhookId });
+      if (result.deliveryPaused) {
+        notificationStore.warning(getAlertDestinationsTestPausedWarning());
       } else {
-        await NotificationsAPI.testNotification({ type: 'webhook', webhookId });
+        notificationStore.success(getAlertWebhookTestSuccess());
       }
-      notificationStore.success(getAlertWebhookTestSuccess());
     } catch (error) {
       const message = error instanceof Error ? error.message : getAlertWebhookTestFailure();
       const detail = (error as Error & { detail?: string })?.detail;

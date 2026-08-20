@@ -28,6 +28,7 @@ const (
 	legacyNotificationAuditAlertIdentifiersColumn = "alert_ids"
 	notificationOperationalLinksColumn            = "operational_links"
 	notificationFailureClassColumn                = "failure_class"
+	notificationAuditDestinationColumn            = "destination_id"
 	notificationQueueDirName                      = "notifications"
 	notificationQueueFileName                     = "notification_queue.db"
 )
@@ -412,6 +413,7 @@ func (nq *NotificationQueue) initSchema() error {
 		success BOOLEAN,
 		error_message TEXT,
 		failure_class TEXT NOT NULL DEFAULT '',
+		destination_id TEXT NOT NULL DEFAULT '',
 		payload_size INTEGER,
 		timestamp INTEGER NOT NULL,
 		FOREIGN KEY (notification_id) REFERENCES notification_queue(id)
@@ -452,9 +454,15 @@ func (nq *NotificationQueue) initSchema() error {
 	); err != nil {
 		return err
 	}
-	return nq.ensureTextColumn(
+	if err := nq.ensureTextColumn(
 		"notification_audit",
 		notificationFailureClassColumn,
+	); err != nil {
+		return err
+	}
+	return nq.ensureTextColumn(
+		"notification_audit",
+		notificationAuditDestinationColumn,
 	)
 }
 
@@ -1284,8 +1292,8 @@ func (nq *NotificationQueue) RecordAudit(notif *QueuedNotification, success bool
 
 	query := `
 		INSERT INTO notification_audit
-		(notification_id, type, method, status, alert_identifiers, alert_count, operational_links, attempts, success, error_message, failure_class, payload_size, timestamp)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		(notification_id, type, method, status, alert_identifiers, alert_count, operational_links, attempts, success, error_message, failure_class, destination_id, payload_size, timestamp)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
 	failureClass := ""
@@ -1304,22 +1312,14 @@ func (nq *NotificationQueue) RecordAudit(notif *QueuedNotification, success bool
 		success,
 		errorMsg,
 		failureClass,
+		strings.TrimSpace(notif.DestinationID),
 		notif.PayloadBytes,
 		time.Now().Unix(),
 	)
 	if err == nil {
-		outcome := "failed"
-		switch {
-		case success && notif.Status == QueueStatusSent:
-			outcome = "sent"
-		case notif.Status == QueueStatusDLQ:
-			outcome = "dead_letter"
-		case notif.Status == QueueStatusCancelled:
-			outcome = "cancelled"
-		case notif.Status == QueueStatusPending && notif.Attempts > 0:
-			outcome = "retry"
-		}
-		operationaltrust.GetMetrics().ObserveNotificationDelivery(outcome)
+		operationaltrust.GetMetrics().ObserveNotificationDelivery(
+			deliveryOutcome(notif.Status, success, notif.Attempts),
+		)
 	}
 	return err
 }

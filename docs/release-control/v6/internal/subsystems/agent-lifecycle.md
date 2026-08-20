@@ -6392,3 +6392,14 @@ has been applied; it cannot select an agent, add an agent-routed tool, establish
 a command session, or bypass capability, feasibility, policy, approval,
 dispatch, receipt, and verification gates. Unknown types retain the existing
 governed Patrol profile rather than guessing at agent authority.
+
+### Notification delivery-log routes do not touch agent lifecycle
+
+The shared `internal/api/` surface now includes the notifications-owned
+read-only `GET /api/notifications/delivery-log` route and a `deliveryPaused`
+field on successful test-send responses. Both are notification delivery
+evidence only: they read retained notification audit rows and the manager's
+enabled gate, and they do not enroll or select an agent, open or alter a
+command session, change fleet policy or update state, or add any
+agent-routed capability. Agent lifecycle obligations over `internal/api/`
+are unchanged by this surface.

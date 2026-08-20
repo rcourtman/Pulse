@@ -7,6 +7,7 @@ import { logger } from '@/utils/logger';
 import type { AlertDestinationsDeliveryPausedReason } from '@/utils/alertDestinationsPresentation';
 import { AlertAppriseDestinationsSection } from '../AlertAppriseDestinationsSection';
 import { AlertDeliveryHealthCard } from '../AlertDeliveryHealthCard';
+import { AlertDeliveryLogCard } from '../AlertDeliveryLogCard';
 import { AlertDeliveryPausedCard } from '../AlertDeliveryPausedCard';
 import { AlertDestinationsLoadErrorCard } from '../AlertDestinationsLoadErrorCard';
 import { AlertDestinationsLoadingState } from '../AlertDestinationsLoadingState';
@@ -119,6 +120,14 @@ export function DestinationsTab(props: DestinationsTabProps) {
           relayLicensed={hasFeature('relay')}
           showUpgradePrompts={!presentationPolicyHidesUpgradePrompts()}
           upgradeDestination={getUpgradeActionDestination('relay')}
+        />
+
+        <AlertDeliveryLogCard
+          log={state.deliveryLog()}
+          unavailable={state.deliveryLogUnavailable()}
+          refreshing={state.refreshingDeliveryLog()}
+          onRefresh={() => void state.loadDeliveryLog()}
+          webhooks={state.webhooks()}
         />
       </Show>
     </div>

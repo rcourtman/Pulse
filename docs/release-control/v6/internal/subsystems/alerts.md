@@ -1722,3 +1722,21 @@ cannot recreate them while suppression remains active. Existing prefix, tag,
 and `pulse-no-alerts` bulk rules remain compatible inputs and do not create a
 second per-resource state store. `internal/alerts/intent_policy_test.go` pins
 factory operator-state evaluation, writer gating, and active reconciliation.
+
+### Destinations tab carries delivery evidence
+
+The alert destinations tab is where the belief "delivery works" is formed, so
+it must carry delivery evidence, not only configuration. It renders the
+notifications-owned delivery log (`AlertDeliveryLogCard` fed by
+`useNotificationDeliveryLog` over `GET /api/notifications/delivery-log`) as a
+newest-first record of real alert delivery attempts with plain-language
+outcome labels, destination names resolved from the loaded webhook configs,
+failure classes, and secret-redacted error text. The card names its retention
+window and says that test sends skip the queue, and an unreadable log renders
+as unavailable rather than empty. Test-send results that report
+`deliveryPaused` surface as a warning toast, never plain success, across the
+email, Apprise, and webhook test actions in `useAlertDestinationsTabState`
+and `useAlertWebhookDestinationsState`. Delivery evidence remains
+notification truth: the delivery log card must not resolve, suppress, or
+re-evaluate alerts, and it does not alter the `AlertConfig.enabled` versus
+`activationState` ownership boundary above.

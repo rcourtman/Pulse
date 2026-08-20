@@ -291,4 +291,87 @@ describe('NotificationsAPI', () => {
       }),
     ]);
   });
+
+  it('normalizes the delivery log payload and drops malformed entries', async () => {
+    apiFetchJSONMock.mockResolvedValueOnce({
+      entries: [
+        {
+          notificationId: 'webhook-1',
+          type: 'webhook',
+          destinationId: 'webhook:wh-ops',
+          outcome: 'dead_letter',
+          alertIds: ['vm-offline-101'],
+          alertCount: 1,
+          attempts: 3,
+          success: false,
+          errorMessage: 'HTTP 401 Unauthorized',
+          failureClass: 'authentication',
+          timestamp: '2026-08-20T12:00:00Z',
+        },
+        // Malformed rows must be dropped, not rendered: unknown outcome,
+        // missing timestamp, and a non-object entry.
+        {
+          notificationId: 'bad-outcome',
+          type: 'email',
+          outcome: 'exploded',
+          timestamp: '2026-08-20T12:00:00Z',
+        },
+        { notificationId: 'no-timestamp', type: 'email', outcome: 'sent' },
+        'not-an-object',
+        {
+          notificationId: 'email-1',
+          type: 'email',
+          outcome: 'sent',
+          alertIds: ['disk-critical-1'],
+          alertCount: 1,
+          attempts: 1,
+          success: true,
+          // An unrecognized failure class is omitted rather than passed through.
+          failureClass: 'made-up',
+          timestamp: '2026-08-20T11:00:00Z',
+        },
+      ],
+      window_days: 7,
+    } as any);
+
+    const log = await NotificationsAPI.getDeliveryLog(25);
+
+    expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/notifications/delivery-log?limit=25');
+    expect(log.windowDays).toBe(7);
+    expect(log.entries).toHaveLength(2);
+    expect(log.entries[0]).toEqual(
+      expect.objectContaining({
+        notificationId: 'webhook-1',
+        outcome: 'dead_letter',
+        destinationId: 'webhook:wh-ops',
+        failureClass: 'authentication',
+        errorMessage: 'HTTP 401 Unauthorized',
+      }),
+    );
+    expect(log.entries[1].failureClass).toBeUndefined();
+  });
+
+  it('requests the delivery log without a limit query when none is given', async () => {
+    apiFetchJSONMock.mockResolvedValueOnce({ entries: [], window_days: 0 } as any);
+
+    const log = await NotificationsAPI.getDeliveryLog();
+
+    expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/notifications/delivery-log');
+    expect(log.entries).toEqual([]);
+    // A missing or nonsensical window falls back to the seven-day default.
+    expect(log.windowDays).toBe(7);
+  });
+
+  it('passes the deliveryPaused flag through from test-send responses', async () => {
+    apiFetchJSONMock.mockResolvedValueOnce({
+      status: 'success',
+      message: 'Test notification sent, but alert delivery is paused',
+      deliveryPaused: true,
+    } as any);
+
+    const result = await NotificationsAPI.testNotification({ type: 'email' });
+
+    expect(result.deliveryPaused).toBe(true);
+    expect(result.status).toBe('success');
+  });
 });

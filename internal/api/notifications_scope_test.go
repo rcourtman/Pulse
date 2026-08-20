@@ -41,6 +41,7 @@ func TestNotificationReadEndpointsRequireSettingsReadScope(t *testing.T) {
 		"/api/notifications/webhook-history",
 		"/api/notifications/email-providers",
 		"/api/notifications/health",
+		"/api/notifications/delivery-log",
 	}
 
 	for _, path := range endpoints {

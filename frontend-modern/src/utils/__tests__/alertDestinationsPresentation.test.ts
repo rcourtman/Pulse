@@ -26,6 +26,13 @@ import {
   ALERT_DESTINATIONS_RETRYING_LABEL,
   ALERT_DESTINATIONS_RETRY_LABEL,
   ALERT_DESTINATIONS_WEBHOOK_LOAD_ERROR,
+  getAlertDeliveryLogFailureClassLabel,
+  getAlertDeliveryLogOutcomeLabel,
+  getAlertDestinationsDeliveryLogDescription,
+  getAlertDestinationsDeliveryLogEmpty,
+  getAlertDestinationsDeliveryLogTitle,
+  getAlertDestinationsDeliveryLogUnavailable,
+  getAlertDestinationsTestPausedWarning,
   getAlertDestinationsAppriseTargetsHelp,
   getAlertDestinationsAppriseTestLabel,
   getAlertDestinationsAppriseTestError,
@@ -163,6 +170,42 @@ describe('alertDestinationsPresentation', () => {
       }),
     ).toContain('could not verify the notification queue');
     expect(getAlertDestinationsDeliveryRefreshLabel()).toBe('Refresh delivery status');
+  });
+});
+
+describe('alert destinations delivery log copy', () => {
+  it('labels every delivery outcome in plain language, not queue jargon', () => {
+    expect(getAlertDeliveryLogOutcomeLabel('sent')).toBe('Delivered');
+    expect(getAlertDeliveryLogOutcomeLabel('retry')).toBe('Retrying');
+    expect(getAlertDeliveryLogOutcomeLabel('failed')).toBe('Failed');
+    // "Dead letter" is queue vocabulary; a user needs to know retries stopped.
+    expect(getAlertDeliveryLogOutcomeLabel('dead_letter')).toBe('Failed, retries exhausted');
+    expect(getAlertDeliveryLogOutcomeLabel('cancelled')).toBe('Cancelled');
+  });
+
+  it('labels failure classes and falls back to unclassified for unknown values', () => {
+    expect(getAlertDeliveryLogFailureClassLabel('authentication')).toBe('Authentication failure');
+    expect(getAlertDeliveryLogFailureClassLabel('rate_limited')).toBe('Rate limited');
+    expect(getAlertDeliveryLogFailureClassLabel('made-up-class')).toBe('Unclassified failure');
+  });
+
+  it('names the retention window and the test-send caveat so absence is not read as failure', () => {
+    expect(getAlertDestinationsDeliveryLogTitle()).toBe('Recent delivery activity');
+    const description = getAlertDestinationsDeliveryLogDescription(7);
+    expect(description).toContain('last 7 days');
+    expect(description).toContain('Test sends skip the queue');
+    expect(getAlertDestinationsDeliveryLogEmpty()).toContain('No alert deliveries were attempted');
+    // An unreadable log must never present itself as an empty one.
+    expect(getAlertDestinationsDeliveryLogUnavailable()).toContain(
+      'could not read the delivery log',
+    );
+  });
+
+  it('warns that a passing test does not mean live alerts flow while delivery is paused', () => {
+    const warning = getAlertDestinationsTestPausedWarning();
+    expect(warning).toContain('Test sent');
+    expect(warning).toContain('delivery is paused');
+    expect(warning).toContain('real alerts are not being sent');
   });
 });
 

@@ -139,6 +139,182 @@ func TestGetNotificationHealthFailsClosedWhenQueueStatsAreUnavailable(t *testing
 	}
 }
 
+func TestGetDeliveryLogReturnsEntriesWithRedactedErrors(t *testing.T) {
+	mockMonitor := new(MockNotificationMonitor)
+	mockManager := new(MockNotificationManager)
+	mockMonitor.On("GetNotificationManager").Return(mockManager)
+	mockManager.On("GetDeliveryLog", mock.Anything, 25).Return([]notifications.DeliveryLogEntry{
+		{
+			NotificationID: "webhook-1",
+			Type:           "webhook",
+			DestinationID:  "wh-ops",
+			Outcome:        notifications.DeliveryOutcomeFailed,
+			AlertIDs:       []string{"vm-offline-101"},
+			AlertCount:     1,
+			Attempts:       3,
+			ErrorMessage:   "post https://hooks.example.test/notify?token=supersecret returned 401",
+			FailureClass:   "authentication",
+		},
+		{
+			NotificationID: "email-1",
+			Type:           "email",
+			Outcome:        notifications.DeliveryOutcomeSent,
+			AlertIDs:       []string{"disk-critical-1"},
+			AlertCount:     1,
+			Attempts:       1,
+			Success:        true,
+		},
+	}, nil).Once()
+
+	rec := httptest.NewRecorder()
+	NewNotificationHandlers(nil, mockMonitor).GetDeliveryLog(
+		rec,
+		httptest.NewRequest(http.MethodGet, "/api/notifications/delivery-log?limit=25", nil),
+	)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	var response struct {
+		Entries []struct {
+			NotificationID string   `json:"notificationId"`
+			Outcome        string   `json:"outcome"`
+			DestinationID  string   `json:"destinationId"`
+			AlertIDs       []string `json:"alertIds"`
+			ErrorMessage   string   `json:"errorMessage"`
+			FailureClass   string   `json:"failureClass"`
+		} `json:"entries"`
+		WindowDays                 int  `json:"window_days"`
+		DeadLetterRetentionDays    int  `json:"dead_letter_retention_days"`
+		EntriesAreRetentionBounded bool `json:"entries_are_retention_bounded"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+		t.Fatalf("decode delivery log response: %v", err)
+	}
+	if len(response.Entries) != 2 {
+		t.Fatalf("entries = %#v, want 2", response.Entries)
+	}
+	if response.Entries[0].Outcome != "failed" ||
+		response.Entries[0].DestinationID != "wh-ops" ||
+		response.Entries[0].FailureClass != "authentication" ||
+		len(response.Entries[0].AlertIDs) != 1 ||
+		response.Entries[0].AlertIDs[0] != "vm-offline-101" {
+		t.Fatalf("failed entry = %#v", response.Entries[0])
+	}
+	if strings.Contains(response.Entries[0].ErrorMessage, "supersecret") ||
+		!strings.Contains(response.Entries[0].ErrorMessage, "token=REDACTED") {
+		t.Fatalf("error message not redacted: %q", response.Entries[0].ErrorMessage)
+	}
+	if response.WindowDays != 7 ||
+		response.DeadLetterRetentionDays != 30 ||
+		!response.EntriesAreRetentionBounded {
+		t.Fatalf("retention context = %#v", response)
+	}
+}
+
+func TestGetDeliveryLogRejectsInvalidLimit(t *testing.T) {
+	mockMonitor := new(MockNotificationMonitor)
+	mockManager := new(MockNotificationManager)
+	mockMonitor.On("GetNotificationManager").Return(mockManager)
+
+	for _, limit := range []string{"abc", "-1", "0"} {
+		rec := httptest.NewRecorder()
+		NewNotificationHandlers(nil, mockMonitor).GetDeliveryLog(
+			rec,
+			httptest.NewRequest(http.MethodGet, "/api/notifications/delivery-log?limit="+limit, nil),
+		)
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("limit=%q status = %d, want %d", limit, rec.Code, http.StatusBadRequest)
+		}
+	}
+	mockManager.AssertNotCalled(t, "GetDeliveryLog", mock.Anything, mock.Anything)
+}
+
+func TestGetDeliveryLogFailsClosedWhenQueueUnavailable(t *testing.T) {
+	mockMonitor := new(MockNotificationMonitor)
+	mockManager := new(MockNotificationManager)
+	mockMonitor.On("GetNotificationManager").Return(mockManager)
+	mockManager.On("GetDeliveryLog", mock.Anything, 0).Return(
+		nil, errors.New("database path /secret unavailable"),
+	).Once()
+
+	rec := httptest.NewRecorder()
+	NewNotificationHandlers(nil, mockMonitor).GetDeliveryLog(
+		rec,
+		httptest.NewRequest(http.MethodGet, "/api/notifications/delivery-log", nil),
+	)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusServiceUnavailable)
+	}
+	if body := rec.Body.String(); containsAny(body, "database path", "/secret") {
+		t.Fatalf("delivery log response exposed internal queue error: %s", body)
+	}
+}
+
+// A test send bypasses the activation gate real alerts honor, so its result
+// must say when real delivery is paused instead of reporting bare success.
+func TestTestNotificationReportsPausedDeliveryInResult(t *testing.T) {
+	mockMonitor := new(MockNotificationMonitor)
+	mockManager := new(MockNotificationManager)
+	mockMonitor.On("GetNotificationManager").Return(mockManager)
+	mockManager.On("SendTestNotification", "email").Return(nil).Once()
+	mockManager.On("IsEnabled").Return(false).Once()
+
+	rec := httptest.NewRecorder()
+	NewNotificationHandlers(nil, mockMonitor).TestNotification(
+		rec,
+		httptest.NewRequest(
+			http.MethodPost,
+			"/api/notifications/test",
+			strings.NewReader(`{"method":"email"}`),
+		),
+	)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	var response struct {
+		Status         string `json:"status"`
+		Message        string `json:"message"`
+		DeliveryPaused bool   `json:"deliveryPaused"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+		t.Fatalf("decode test notification response: %v", err)
+	}
+	if response.Status != "success" || !response.DeliveryPaused {
+		t.Fatalf("response = %#v, want success with deliveryPaused", response)
+	}
+	if !strings.Contains(response.Message, "paused") {
+		t.Fatalf("message %q does not warn about paused delivery", response.Message)
+	}
+}
+
+func TestTestNotificationOmitsPausedFlagWhenDeliveryActive(t *testing.T) {
+	mockMonitor := new(MockNotificationMonitor)
+	mockManager := new(MockNotificationManager)
+	mockMonitor.On("GetNotificationManager").Return(mockManager)
+	mockManager.On("SendTestNotification", "email").Return(nil).Once()
+	mockManager.On("IsEnabled").Return(true).Once()
+
+	rec := httptest.NewRecorder()
+	NewNotificationHandlers(nil, mockMonitor).TestNotification(
+		rec,
+		httptest.NewRequest(
+			http.MethodPost,
+			"/api/notifications/test",
+			strings.NewReader(`{"method":"email"}`),
+		),
+	)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if strings.Contains(rec.Body.String(), "deliveryPaused") {
+		t.Fatalf("active delivery response carries paused flag: %s", rec.Body.String())
+	}
+}
+
 func containsAny(value string, needles ...string) bool {
 	for _, needle := range needles {
 		if needle != "" && strings.Contains(value, needle) {

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -45,6 +46,8 @@ type NotificationManager interface {
 	TestEnhancedWebhook(notifications.EnhancedWebhookConfig) (int, string, error)
 	GetQueueStats() (map[string]int, error)
 	GetTelemetryStats(time.Time) (notifications.TelemetryStats, error)
+	GetDeliveryLog(time.Time, int) ([]notifications.DeliveryLogEntry, error)
+	IsEnabled() bool
 }
 
 // NotificationConfigPersistence defines the interface for saving notification configuration.
@@ -710,8 +713,19 @@ func (h *NotificationHandlers) TestNotification(w http.ResponseWriter, r *http.R
 		}
 	}
 
+	// A test send bypasses the activation gate real alerts honor, so a bare
+	// success here is exactly how installs end up believing delivery works
+	// while every real alert is suppressed. Say so in the result itself.
+	response := map[string]interface{}{
+		"status":  "success",
+		"message": "Test notification sent",
+	}
+	if !h.getMonitor(r.Context()).GetNotificationManager().IsEnabled() {
+		response["deliveryPaused"] = true
+		response["message"] = "Test notification sent, but alert delivery is paused: real alerts are not being sent"
+	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"status": "success", "message": "Test notification sent"})
+	json.NewEncoder(w).Encode(response)
 }
 
 // GetWebhookTemplates returns available webhook templates
@@ -812,6 +826,11 @@ func (h *NotificationHandlers) TestWebhook(w http.ResponseWriter, r *http.Reques
 		w.WriteHeader(http.StatusBadRequest)
 	} else {
 		result["success"] = true
+		// Same honesty as TestNotification: a webhook test bypasses the
+		// activation gate, so its success must not imply live alerts flow.
+		if !h.getMonitor(r.Context()).GetNotificationManager().IsEnabled() {
+			result["deliveryPaused"] = true
+		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -901,6 +920,50 @@ func (h *NotificationHandlers) GetNotificationHealth(w http.ResponseWriter, r *h
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(health)
+}
+
+// GetDeliveryLog returns recent recorded delivery attempts, newest first.
+// This is the per-attempt evidence behind the aggregate health verdict: what
+// fired, which destination it went to, and what happened. Entries share the
+// queue's retention windows, so the payload names the window rather than
+// presenting itself as lifetime history.
+func (h *NotificationHandlers) GetDeliveryLog(w http.ResponseWriter, r *http.Request) {
+	manager := h.getMonitor(r.Context()).GetNotificationManager()
+
+	limit := 0
+	if raw := strings.TrimSpace(r.URL.Query().Get("limit")); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil || parsed <= 0 {
+			http.Error(w, "limit must be a positive integer", http.StatusBadRequest)
+			return
+		}
+		limit = parsed
+	}
+
+	entries, err := manager.GetDeliveryLog(
+		time.Now().Add(-completedQueueRetentionDays*24*time.Hour), limit,
+	)
+	if err != nil {
+		log.Warn().Err(err).Msg("Failed to read notification delivery log")
+		http.Error(w, "Delivery log unavailable", http.StatusServiceUnavailable)
+		return
+	}
+
+	// Webhook failure text can embed the destination URL, and destination URLs
+	// can embed credentials.
+	for i := range entries {
+		if entries[i].ErrorMessage != "" {
+			entries[i].ErrorMessage = notifications.RedactWebhookURLSecrets(entries[i].ErrorMessage)
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"entries":                       entries,
+		"window_days":                   completedQueueRetentionDays,
+		"dead_letter_retention_days":    deadLetterQueueRetentionDays,
+		"entries_are_retention_bounded": true,
+	})
 }
 
 // classifyNotificationQueueHealth delegates to the canonical rule in
@@ -1010,6 +1073,11 @@ func (h *NotificationHandlers) HandleNotifications(w http.ResponseWriter, r *htt
 			return
 		}
 		h.GetNotificationHealth(w, r)
+	case path == "/delivery-log" && r.Method == http.MethodGet:
+		if !requireAnyScope(config.ScopeSettingsRead, config.ScopeSettingsRead, config.ScopeSettingsWrite) {
+			return
+		}
+		h.GetDeliveryLog(w, r)
 	default:
 		http.Error(w, "Not found", http.StatusNotFound)
 	}

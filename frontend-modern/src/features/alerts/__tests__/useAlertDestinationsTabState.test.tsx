@@ -13,6 +13,7 @@ vi.mock('@/api/notifications', () => ({
   NotificationsAPI: {
     createWebhook: vi.fn(),
     deleteWebhook: vi.fn(),
+    getDeliveryLog: vi.fn(),
     getHealth: vi.fn(),
     getWebhooks: vi.fn(),
     testNotification: vi.fn(),
@@ -25,6 +26,7 @@ vi.mock('@/stores/notifications', () => ({
   notificationStore: {
     error: vi.fn(),
     success: vi.fn(),
+    warning: vi.fn(),
   },
 }));
 
@@ -72,6 +74,7 @@ describe('useAlertDestinationsTabState', () => {
   beforeEach(() => {
     vi.mocked(NotificationsAPI.createWebhook).mockReset();
     vi.mocked(NotificationsAPI.deleteWebhook).mockReset();
+    vi.mocked(NotificationsAPI.getDeliveryLog).mockReset();
     vi.mocked(NotificationsAPI.getHealth).mockReset();
     vi.mocked(NotificationsAPI.getWebhooks).mockReset();
     vi.mocked(NotificationsAPI.testNotification).mockReset();
@@ -79,6 +82,7 @@ describe('useAlertDestinationsTabState', () => {
     vi.mocked(NotificationsAPI.updateWebhook).mockReset();
     vi.mocked(notificationStore.error).mockReset();
     vi.mocked(notificationStore.success).mockReset();
+    vi.mocked(notificationStore.warning).mockReset();
     vi.mocked(showErrorWithDetail).mockReset();
   });
 
@@ -130,7 +134,22 @@ describe('useAlertDestinationsTabState', () => {
         failureClassWindowDays: 7,
       },
     });
-    vi.mocked(NotificationsAPI.testNotification).mockResolvedValue({ success: true } as never);
+    vi.mocked(NotificationsAPI.getDeliveryLog).mockResolvedValue({
+      entries: [
+        {
+          notificationId: 'email-1',
+          type: 'email',
+          outcome: 'sent',
+          alertIds: ['disk-critical-1'],
+          alertCount: 1,
+          attempts: 1,
+          success: true,
+          timestamp: '2026-08-20T12:00:00Z',
+        },
+      ],
+      windowDays: 7,
+    });
+    vi.mocked(NotificationsAPI.testNotification).mockResolvedValue({ status: 'success' } as never);
     vi.mocked(NotificationsAPI.testWebhook).mockResolvedValue({ success: true } as never);
 
     const { result } = renderHook(() =>
@@ -147,7 +166,10 @@ describe('useAlertDestinationsTabState', () => {
 
     await waitFor(() => expect(NotificationsAPI.getWebhooks).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(NotificationsAPI.getHealth).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(NotificationsAPI.getDeliveryLog).toHaveBeenCalledTimes(1));
     expect(result.deliveryHealth()?.queue.status).toBe('healthy');
+    expect(result.deliveryLog()?.entries).toHaveLength(1);
+    expect(result.deliveryLogUnavailable()).toBe(false);
     expect(result.webhooks()).toEqual([
       expect.objectContaining({ id: 'hook-1', service: 'generic' }),
     ]);
@@ -181,7 +203,49 @@ describe('useAlertDestinationsTabState', () => {
     expect(onRetryLoad).toHaveBeenCalledTimes(1);
     await waitFor(() => expect(NotificationsAPI.getWebhooks).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(NotificationsAPI.getHealth).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(NotificationsAPI.getDeliveryLog).toHaveBeenCalledTimes(2));
     expect(notificationStore.success).toHaveBeenCalledTimes(2);
+    expect(notificationStore.warning).not.toHaveBeenCalled();
     expect(showErrorWithDetail).not.toHaveBeenCalled();
+  });
+
+  it('warns instead of celebrating when a test send reports delivery is paused', async () => {
+    const [emailConfig] = createSignal(buildEmailConfig());
+    const [appriseConfig, setAppriseConfig] = createSignal(buildAppriseConfig());
+    const [configLoadError] = createSignal<string | null>(null);
+    const [isRetrying] = createSignal(false);
+    const [isLoadingDestinations] = createSignal(false);
+
+    vi.mocked(NotificationsAPI.getWebhooks).mockResolvedValue([]);
+    vi.mocked(NotificationsAPI.getHealth).mockRejectedValue(new Error('offline'));
+    vi.mocked(NotificationsAPI.getDeliveryLog).mockResolvedValue({ entries: [], windowDays: 7 });
+    // The backend reports the test went out while the activation gate keeps
+    // real alerts suppressed; plain success here is the postmortem trap.
+    vi.mocked(NotificationsAPI.testNotification).mockResolvedValue({
+      status: 'success',
+      deliveryPaused: true,
+    } as never);
+
+    const { result } = renderHook(() =>
+      useAlertDestinationsTabState({
+        appriseConfig,
+        configLoadError,
+        emailConfig,
+        isLoadingDestinations,
+        isRetrying,
+        onRetryLoad: vi.fn(),
+        setAppriseConfig,
+      }),
+    );
+
+    await result.testEmailConfig();
+    expect(notificationStore.warning).toHaveBeenCalledWith(
+      expect.stringContaining('delivery is paused'),
+    );
+    expect(notificationStore.success).not.toHaveBeenCalled();
+
+    await result.testApprise();
+    expect(notificationStore.warning).toHaveBeenCalledTimes(2);
+    expect(notificationStore.success).not.toHaveBeenCalled();
   });
 });

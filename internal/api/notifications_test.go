@@ -258,6 +258,19 @@ func (m *MockNotificationManager) GetTelemetryStats(since time.Time) (notificati
 	return args.Get(0).(notifications.TelemetryStats), args.Error(1)
 }
 
+func (m *MockNotificationManager) GetDeliveryLog(since time.Time, limit int) ([]notifications.DeliveryLogEntry, error) {
+	args := m.Called(since, limit)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]notifications.DeliveryLogEntry), args.Error(1)
+}
+
+func (m *MockNotificationManager) IsEnabled() bool {
+	args := m.Called()
+	return args.Bool(0)
+}
+
 type MockNotificationConfigPersistence struct {
 	mock.Mock
 }
@@ -654,6 +667,7 @@ func TestNotificationHandlers(t *testing.T) {
 			}},
 			{"POST", "/api/notifications/webhooks/test", func() {
 				mockManager.On("TestEnhancedWebhook", mock.Anything).Return(200, "OK", nil).Once()
+				mockManager.On("IsEnabled").Return(true).Once()
 			}},
 			{"PUT", "/api/notifications/webhooks/wh1", func() {
 				mockManager.On("GetWebhooks").Return([]notifications.WebhookConfig{{ID: "wh1"}}).Once()
@@ -705,6 +719,7 @@ func TestNotificationHandlers(t *testing.T) {
 
 	t.Run("TestNotification", func(t *testing.T) {
 		mockManager.On("SendTestNotification", "email").Return(nil).Once()
+		mockManager.On("IsEnabled").Return(true).Once()
 		body, _ := json.Marshal(map[string]string{"method": "email"})
 		req := httptest.NewRequest("POST", "/api/notifications/test", bytes.NewReader(body))
 		w := httptest.NewRecorder()
@@ -715,6 +730,7 @@ func TestNotificationHandlers(t *testing.T) {
 	t.Run("TestNotification_Webhook", func(t *testing.T) {
 		mockManager.On("GetWebhooks").Return([]notifications.WebhookConfig{{ID: "wh1"}}).Once()
 		mockManager.On("SendTestWebhook", mock.Anything).Return(nil).Once()
+		mockManager.On("IsEnabled").Return(true).Once()
 		body, _ := json.Marshal(map[string]string{"method": "webhook", "webhookId": "wh1"})
 		req := httptest.NewRequest("POST", "/api/notifications/test", bytes.NewReader(body))
 		w := httptest.NewRecorder()
@@ -724,6 +740,7 @@ func TestNotificationHandlers(t *testing.T) {
 
 	t.Run("TestWebhook", func(t *testing.T) {
 		mockManager.On("TestEnhancedWebhook", mock.Anything).Return(200, "OK", nil).Once()
+		mockManager.On("IsEnabled").Return(true).Once()
 		body, _ := json.Marshal(map[string]string{"url": "https://example.com/test", "service": "ntfy"})
 		req := httptest.NewRequest("POST", "/api/notifications/webhooks/test", bytes.NewReader(body))
 		w := httptest.NewRecorder()
@@ -774,6 +791,7 @@ func TestNotificationHandlers(t *testing.T) {
 				strings.Contains(webhook.PayloadTemplate, `"username": "Pulse Monitoring"`) &&
 				webhook.Headers["Content-Type"] == "application/json"
 		})).Return(200, "OK", nil).Once()
+		mockManager.On("IsEnabled").Return(true).Once()
 		body, _ := json.Marshal(map[string]string{"url": "https://example.com/test", "service": "discord"})
 		req := httptest.NewRequest("POST", "/api/notifications/webhooks/test", bytes.NewReader(body))
 		w := httptest.NewRecorder()
@@ -796,6 +814,7 @@ func TestNotificationHandlers(t *testing.T) {
 				!hasLegacyApp &&
 				!hasLegacyUser
 		})).Return(200, "OK", nil).Once()
+		mockManager.On("IsEnabled").Return(true).Once()
 
 		body, _ := json.Marshal(map[string]interface{}{
 			"url":     "https://api.pushover.net/1/messages.json",
@@ -814,6 +833,7 @@ func TestNotificationHandlers(t *testing.T) {
 
 	t.Run("TestNotification_EmailWithConfig", func(t *testing.T) {
 		mockManager.On("SendTestNotificationWithConfig", "email", mock.Anything, mock.Anything).Return(nil).Once()
+		mockManager.On("IsEnabled").Return(true).Once()
 		body, _ := json.Marshal(map[string]interface{}{
 			"method": "email",
 			"config": notifications.EmailConfig{Enabled: true, SMTPHost: "smtp.example.com", Password: "test"},
@@ -826,6 +846,7 @@ func TestNotificationHandlers(t *testing.T) {
 
 	t.Run("TestNotification_AppriseWithConfig", func(t *testing.T) {
 		mockManager.On("SendTestAppriseWithConfig", mock.Anything).Return(nil).Once()
+		mockManager.On("IsEnabled").Return(true).Once()
 		body, _ := json.Marshal(map[string]interface{}{
 			"method": "apprise",
 			"config": notifications.AppriseConfig{Enabled: true, APIKey: "test"},

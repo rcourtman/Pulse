@@ -325,6 +325,34 @@ counts cannot be read. Pending retries do not degrade health. The response
 must expose fixed reason codes and retention metadata rather than raw queue
 errors or notification content.
 
+### User-facing delivery log and honest test sends
+
+The queue owner exposes its retained per-attempt audit rows to the local
+notification-management API as a bounded, newest-first delivery log
+(`GetDeliveryLog` in `internal/notifications/delivery_log.go`). Each entry
+carries the attempt outcome (`sent`, `retry`, `failed`, `dead_letter`,
+`cancelled`), derived by the same single rule that feeds the delivery outcome
+metric in `RecordAudit`, plus alert identifiers, normalized destination
+identity, attempt count, failure class, error text, and timestamp. Audit rows
+persist destination identity in a dedicated `destination_id` column; rows
+written before that column existed resolve destination identity from their
+retained operational links. `GET /api/notifications/delivery-log`
+(settings-read scope) serves the log as local operator evidence: webhook
+secrets are redacted from error text at the API boundary, the payload names
+its retention window instead of presenting itself as lifetime history, and an
+unreadable queue is an error, never an empty log. This per-attempt surface is
+deliberately distinct from the content-free telemetry aggregate above, which
+remains identity-free. Test sends bypass the queue and must not appear in the
+delivery log, and the destinations UI says so where the log renders.
+
+Because test sends also bypass the alert activation gate, a bare success
+result is exactly how installs come to believe delivery works while every
+real alert is suppressed. Successful responses from
+`POST /api/notifications/test` and `POST /api/notifications/webhooks/test`
+must therefore report `deliveryPaused: true` whenever the notification
+manager is disabled, and the destinations UI must surface that as a warning
+instead of a plain success toast.
+
 ### Occurrence-bound delivery receipts
 
 The notification owner records successful firing delivery by exact alert ID,
