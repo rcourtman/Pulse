@@ -269,6 +269,12 @@ export function useAlertHistoryState(props: UseAlertHistoryStateProps) {
     return filterAlertHistoryItems(allHistoryData(), severityFilter(), searchTerm());
   });
 
+  // Chip-count source for the severity facet: the same predicate the list
+  // filters with, so each chip shows the row count its selection renders
+  // (before any chart bar drill-down, which narrows further and explicitly).
+  const countForSeverity = (value: AlertSeverityFilter): number =>
+    filterAlertHistoryItems(allHistoryData(), value, searchTerm()).length;
+
   const alertTrends = createMemo(() => {
     return buildAlertTrends(severityAndSearchFilteredItems(), timeFilter());
   });
@@ -334,6 +340,7 @@ export function useAlertHistoryState(props: UseAlertHistoryStateProps) {
     resourceIncidentEventFilters: resourceIncidentsState.resourceIncidentEventFilters,
     setResourceIncidentEventFilters: resourceIncidentsState.setResourceIncidentEventFilters,
     activeFilterCount,
+    countForSeverity,
     clearFilters,
     incidentTimelines,
     incidentLoading,

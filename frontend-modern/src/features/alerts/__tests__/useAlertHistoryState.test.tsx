@@ -156,6 +156,48 @@ describe('useAlertHistoryState', () => {
     expect(result.alertHistory()).toEqual([]);
   });
 
+  it('counts each severity chip from the same predicate the list filters with', async () => {
+    const [activeAlerts] = createSignal({});
+    const now = Date.now();
+    const startTime = new Date(now - 30 * 60 * 1000).toISOString();
+    const makeEntry = (id: string, level: string, resourceName: string) => ({
+      id,
+      type: 'cpu',
+      level,
+      startTime,
+      lastSeen: startTime,
+      resourceId: `resource-${id}`,
+      resourceName,
+      message: 'CPU high',
+      acknowledged: false,
+    });
+    vi.mocked(AlertsAPI.getHistory).mockResolvedValue([
+      makeEntry('alert-1', 'critical', 'db-01'),
+      makeEntry('alert-2', 'warning', 'db-01'),
+      makeEntry('alert-3', 'warning', 'web-01'),
+    ] as any);
+
+    const { result } = renderHook(() =>
+      useAlertHistoryState({
+        activeAlerts,
+        getResource: () => undefined,
+        allResources: () => [],
+      }),
+    );
+
+    await waitFor(() => expect(result.countForSeverity('all')).toBe(3));
+    expect(result.countForSeverity('critical')).toBe(1);
+    expect(result.countForSeverity('warning')).toBe(2);
+
+    // Counts ignore the selected severity (each chip shows what its own
+    // selection would render) but follow the search term.
+    result.setSeverityFilter('critical');
+    expect(result.countForSeverity('warning')).toBe(2);
+    result.setSearchTerm('db-01');
+    await waitFor(() => expect(result.countForSeverity('warning')).toBe(1));
+    expect(result.countForSeverity('all')).toBe(2);
+  });
+
   it('clears search, period, and severity in one route write', async () => {
     const [activeAlerts] = createSignal({});
     vi.mocked(AlertsAPI.getHistory).mockResolvedValue([] as any);

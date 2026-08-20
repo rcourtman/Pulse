@@ -1,4 +1,9 @@
 import { FilterBar, filterChipStatusDot, type FilterDef } from '@/components/shared/FilterBar';
+import {
+  PLATFORM_ESTATE_COUNTS_STORAGE_KEY,
+  deserializePlatformEstateCountsVisibility,
+} from '@/features/platformPage/platformEstateOverviewModel';
+import { usePersistentSignal } from '@/hooks/usePersistentSignal';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 import {
   ALERT_HISTORY_ALL_TIME_FILTER_LABEL,
@@ -13,6 +18,13 @@ interface AlertHistoryFiltersCardProps {
 }
 
 export function AlertHistoryFiltersCard(props: AlertHistoryFiltersCardProps) {
+  // Same estate-wide preference that gates the platform tables' chip counts,
+  // so hiding inventory totals quiets this facet too.
+  const [countsVisible] = usePersistentSignal(PLATFORM_ESTATE_COUNTS_STORAGE_KEY, true, {
+    deserialize: deserializePlatformEstateCountsVisibility,
+  });
+  const severityCount = (value: AlertSeverityFilter): number | undefined =>
+    countsVisible() ? props.state.countForSeverity(value) : undefined;
   const buildFilters = (): FilterDef[] => [
     {
       id: 'alert-period',
@@ -38,18 +50,20 @@ export function AlertHistoryFiltersCard(props: AlertHistoryFiltersCardProps) {
       setValue: (value: string) => props.state.setSeverityFilter(value as AlertSeverityFilter),
       defaultValue: 'all',
       options: () => [
-        { value: 'all', label: 'All' },
+        { value: 'all', label: 'All', count: severityCount('all') },
         {
           value: 'critical',
           label: 'Critical',
           leading: filterChipStatusDot('bg-red-500'),
           tone: 'danger',
+          count: severityCount('critical'),
         },
         {
           value: 'warning',
           label: 'Warning',
           leading: filterChipStatusDot('bg-amber-500'),
           tone: 'warning',
+          count: severityCount('warning'),
         },
       ],
     },
