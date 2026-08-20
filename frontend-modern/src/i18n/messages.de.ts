@@ -314,7 +314,7 @@ export const DE_MESSAGE_OVERRIDES = {
     'Docker-Container in Proxmox-LXC-Gaesten erkennen, ohne in jedem Gast einen Agent zu installieren.',
   'settings.general.guestDocker.toggle.title': 'Docker in LXC-Gaesten erkennen',
   'settings.general.guestDocker.toggle.description':
-    'Wenn aktiviert, fuehrt Pulse begrenzte pct-exec-Pruefungen ueber verbundene Proxmox-Node-Agents aus, um Docker in LXC-Gaesten zu finden und deren Container aufzulisten. Gaeste mit eigenem Agent werden uebersprungen; Pulse erfasst nur Containerliste und Auslastung — keine Inspect-, Umgebungs-, Mount-, Befehls- oder Prozessdetails.',
+    'Wenn aktiviert, fuehrt Pulse begrenzte pct-exec-Pruefungen ueber verbundene Proxmox-Node-Agents aus, um Docker in LXC-Gaesten zu finden und deren Container aufzulisten. Gaeste mit eigenem Agent werden uebersprungen. Pulse erfasst nur Containerliste und Auslastung — keine Inspect-, Umgebungs-, Mount-, Befehls- oder Prozessdetails.',
   'settings.general.guestDocker.requirements':
     'Erfordert einen Pulse-Agent auf dem Proxmox-Node mit aktivierter Befehlsausfuehrung. Nur fuer Administratoren.',
   'settings.general.language.ariaLabel': 'App-Sprache',
