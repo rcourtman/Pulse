@@ -124,6 +124,19 @@ export function getDockerUpdateActionsPresentation(
   } as const;
 }
 
+export const GUEST_DOCKER_INVENTORY_ENV_VAR = 'PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY';
+
+export function getGuestDockerDiscoveryPresentation(locale?: SupportedLocale) {
+  return {
+    sectionTitle: t('settings.general.guestDocker.section.title', {}, locale),
+    sectionDescription: t('settings.general.guestDocker.section.description', {}, locale),
+    toggleLabel: t('settings.general.guestDocker.toggle.title', {}, locale),
+    toggleDescription: t('settings.general.guestDocker.toggle.description', {}, locale),
+    requirementsHint: t('settings.general.guestDocker.requirements', {}, locale),
+    environmentHint: t('settings.general.docker.envHint', {}, locale),
+  } as const;
+}
+
 export function getBackupIntervalSelectValue(
   backupPollingUseCustom: boolean,
   backupPollingInterval: number,
@@ -170,6 +183,10 @@ export function getHideLocalLoginUpdateErrorMessage(message?: string): string {
 
 export function getDockerUpdateActionsUpdateErrorMessage(message?: string): string {
   return message || `Unable to update ${DOCKER_PODMAN_SOURCE_LABEL} update actions.`;
+}
+
+export function getGuestDockerInventoryUpdateErrorMessage(message?: string): string {
+  return message || 'Unable to update Docker discovery for Proxmox LXC guests.';
 }
 
 export function getTelemetryUpdateErrorMessage(message?: string): string {

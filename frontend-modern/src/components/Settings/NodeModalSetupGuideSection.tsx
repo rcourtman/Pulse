@@ -146,12 +146,13 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                     <p class="text-xs text-blue-800 dark:text-blue-200">
                       <strong>Docker inside Proxmox LXCs:</strong> use this host-agent path instead
                       of installing Pulse Agent in every guest. The copied command enables Pulse
-                      command execution on the Proxmox node. The Pulse server still must be opted in
-                      with{' '}
+                      command execution on the Proxmox node. The Pulse server still must be opted
+                      in: turn on <span class="font-medium">Discover Docker in LXC guests</span> in
+                      Settings → System → General (admin only), or set{' '}
                       <code class="break-all rounded bg-blue-100 px-1 font-mono dark:bg-blue-900">
                         PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY=true
-                      </code>
-                      , and you can limit guests with{' '}
+                      </code>{' '}
+                      in the server environment to lock it on. You can limit guests with{' '}
                       <code class="break-all rounded bg-blue-100 px-1 font-mono dark:bg-blue-900">
                         PULSE_PROXMOX_GUEST_DOCKER_INVENTORY_VMIDS=101,102
                       </code>

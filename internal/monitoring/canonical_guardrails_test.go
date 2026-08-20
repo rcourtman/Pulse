@@ -1199,6 +1199,17 @@ func TestProxmoxGuestDockerLXCProbingRequiresExplicitOptIn(t *testing.T) {
 			"m.SetDockerInventoryCollector(nil)",
 			"if inventoryEnabled {",
 		},
+		// The runtime Settings toggle is the same explicit opt-in, admin-gated
+		// through the system settings endpoint; the environment variable stays
+		// authoritative and locks the toggle out of the API when set.
+		"../api/system_settings.go": {
+			`rawRequest["enableProxmoxGuestDockerInventory"]`,
+			`h.config.EnvOverrides["PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY"]`,
+			"guestDockerInventoryToggleFunc",
+		},
+		"../config/persistence.go": {
+			"EnableProxmoxGuestDockerInventory bool `json:\"enableProxmoxGuestDockerInventory\"`",
+		},
 		"../../docs/UNIFIED_AGENT.md": {
 			"Pulse does not use a Proxmox node agent to look inside LXCs by default.",
 			"`PULSE_ENABLE_PROXMOX_GUEST_DOCKER_DETECTION=true`",

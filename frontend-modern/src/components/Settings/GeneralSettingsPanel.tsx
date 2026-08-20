@@ -7,6 +7,7 @@ import { EnvironmentLockBadge } from '@/components/shared/EnvironmentLockBadge';
 import { FilterButtonGroup, type FilterOption } from '@/components/shared/FilterButtonGroup';
 import type { TelemetryPreviewResponse } from '@/api/settings';
 import { DockerRuntimeSettingsCard } from './DockerRuntimeSettingsCard';
+import { GuestDockerDiscoverySettingsCard } from './GuestDockerDiscoverySettingsCard';
 import { BrandingSettingsCard } from './BrandingSettingsCard';
 import type { ReportBrandSettings } from '@/types/config';
 import Sun from 'lucide-solid/icons/sun';
@@ -96,6 +97,11 @@ export interface GeneralSettingsPanelProps {
   disableDockerUpdateActionsLocked: () => boolean;
   savingDockerUpdateActions: Accessor<boolean>;
   handleDisableDockerUpdateActionsChange: (disabled: boolean) => Promise<void>;
+
+  enableProxmoxGuestDockerInventory: Accessor<boolean>;
+  guestDockerInventoryLocked: () => boolean;
+  savingGuestDockerInventory: Accessor<boolean>;
+  handleGuestDockerInventoryChange: (enabled: boolean) => Promise<void>;
 }
 
 export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props) => {
@@ -326,6 +332,13 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
         disableDockerUpdateActionsLocked={props.disableDockerUpdateActionsLocked}
         savingDockerUpdateActions={props.savingDockerUpdateActions}
         handleDisableDockerUpdateActionsChange={props.handleDisableDockerUpdateActionsChange}
+      />
+
+      <GuestDockerDiscoverySettingsCard
+        enableProxmoxGuestDockerInventory={props.enableProxmoxGuestDockerInventory}
+        guestDockerInventoryLocked={props.guestDockerInventoryLocked}
+        savingGuestDockerInventory={props.savingGuestDockerInventory}
+        handleGuestDockerInventoryChange={props.handleGuestDockerInventoryChange}
       />
 
       {/* Monitoring Cadence Card */}

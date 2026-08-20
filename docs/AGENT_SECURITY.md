@@ -77,7 +77,7 @@ answers your monitoring question:
 | VM guest disk and memory details through QEMU Guest Agent | Use Proxmox API permissions such as `VM.GuestAgent.Audit` and `VM.GuestAgent.FileRead` where supported | No host agent for the Proxmox node |
 | All mounted LXC filesystem capacities and usage | Install the Unified Agent on the owning PVE node; it automatically uses bounded `pct list` and `pct df` reads for running LXCs | Yes, on the PVE node |
 | Docker/Podman containers inside a VM or LXC through guest-local reporting | Install the agent inside that VM/LXC with Docker/Podman monitoring enabled, or use another explicit guest access/reporting path | Usually requires root or Docker socket-equivalent access |
-| Docker containers inside an LXC from a Proxmox host agent | Start Pulse with `PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY=true`; optionally limit guests with `PULSE_PROXMOX_GUEST_DOCKER_INVENTORY_VMIDS=101,102` | Requires a root/equivalent Pulse agent on the Proxmox node and explicit server opt-in |
+| Docker containers inside an LXC from a Proxmox host agent | Turn on **Discover Docker in LXC guests** in Settings → System → General (admin only), or start Pulse with `PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY=true` to lock it on; optionally limit guests with `PULSE_PROXMOX_GUEST_DOCKER_INVENTORY_VMIDS=101,102` | Requires a root/equivalent Pulse agent on the Proxmox node and explicit server opt-in |
 | Host SMART, temperatures, local ZFS/Ceph/mdadm detail, arbitrary mount reads, and full host telemetry | Install the agent on that host | Yes, for the supported full-telemetry profile |
 | Kubernetes node/pod monitoring from a cluster | Use the Kubernetes agent/DaemonSet profile | Depends on whether host metrics are enabled |
 
@@ -93,8 +93,10 @@ guests reported stopped and bounds command time, output, guest count, and disk
 count.
 
 The node agent can collect Docker container inventory from LXC guests
-through `pct exec`, but only when the server is started with
-`PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY=true`.
+through `pct exec`, but only after an explicit server-side opt-in: the
+admin-only **Discover Docker in LXC guests** toggle in Settings → System →
+General, or starting the server with
+`PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY=true` (which locks the toggle).
 Inventory collection is disabled by default, can be VMID-allowlisted, and is
 limited to the Docker page summary path: Docker host/runtime version, container
 ID, name, image, state/status, ports, and aggregate `docker stats` counters.

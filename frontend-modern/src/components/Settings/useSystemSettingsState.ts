@@ -14,6 +14,7 @@ import {
   getBackupIntervalSelectValue,
   getBackupIntervalSummary,
   getDockerUpdateActionsUpdateErrorMessage,
+  getGuestDockerInventoryUpdateErrorMessage,
   getHideLocalLoginUpdateErrorMessage,
   getSystemSettingsSaveErrorMessage,
   getTelemetryUpdateErrorMessage,
@@ -58,6 +59,9 @@ export function useSystemSettingsState({
   const [savingHideLocalLogin, setSavingHideLocalLogin] = createSignal(false);
   const [disableDockerUpdateActions, setDisableDockerUpdateActions] = createSignal(false);
   const [savingDockerUpdateActions, setSavingDockerUpdateActions] = createSignal(false);
+  const [enableProxmoxGuestDockerInventory, setEnableProxmoxGuestDockerInventory] =
+    createSignal(false);
+  const [savingGuestDockerInventory, setSavingGuestDockerInventory] = createSignal(false);
   const [telemetryEnabled, setTelemetryEnabled] = createSignal(true);
   const [reportBrandDisplayName, setReportBrandDisplayName] = createSignal('');
   const [reportBrandLogoBase64, setReportBrandLogoBase64] = createSignal('');
@@ -93,6 +97,11 @@ export function useSystemSettingsState({
     Boolean(
       envOverrides().disableDockerUpdateActions ||
       envOverrides()['PULSE_DISABLE_DOCKER_UPDATE_ACTIONS'],
+    );
+  const guestDockerInventoryLocked = () =>
+    Boolean(
+      envOverrides().enableProxmoxGuestDockerInventory ||
+      envOverrides()['PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY'],
     );
   const telemetryEnabledLocked = () =>
     Boolean(envOverrides().telemetryEnabled || envOverrides()['PULSE_TELEMETRY']);
@@ -148,6 +157,9 @@ export function useSystemSettingsState({
       );
       setHideLocalLogin(systemSettings.hideLocalLogin ?? false);
       setDisableDockerUpdateActions(systemSettings.disableDockerUpdateActions ?? false);
+      setEnableProxmoxGuestDockerInventory(
+        systemSettings.enableProxmoxGuestDockerInventory ?? false,
+      );
       setTelemetryEnabled(systemSettings.telemetryEnabled ?? true);
       setReportBrandDisplayName(systemSettings.reportBranding?.displayName ?? '');
       setReportBrandLogoBase64(systemSettings.reportBranding?.logoBase64 ?? '');
@@ -338,6 +350,36 @@ export function useSystemSettingsState({
       setDisableDockerUpdateActions(previous);
     } finally {
       setSavingDockerUpdateActions(false);
+    }
+  };
+
+  const handleGuestDockerInventoryChange = async (enabled: boolean): Promise<void> => {
+    if (guestDockerInventoryLocked() || savingGuestDockerInventory()) {
+      return;
+    }
+
+    const previous = enableProxmoxGuestDockerInventory();
+    setEnableProxmoxGuestDockerInventory(enabled);
+    setSavingGuestDockerInventory(true);
+
+    try {
+      await SettingsAPI.updateSystemSettings({ enableProxmoxGuestDockerInventory: enabled });
+
+      if (enabled) {
+        notificationStore.success('Docker discovery in LXC guests enabled', 2000);
+      } else {
+        notificationStore.info('Docker discovery in LXC guests disabled', 2000);
+      }
+    } catch (error) {
+      logger.error('Failed to update guest Docker discovery setting', error);
+      notificationStore.error(
+        getGuestDockerInventoryUpdateErrorMessage(
+          error instanceof Error ? error.message : undefined,
+        ),
+      );
+      setEnableProxmoxGuestDockerInventory(previous);
+    } finally {
+      setSavingGuestDockerInventory(false);
     }
   };
 
@@ -539,6 +581,10 @@ export function useSystemSettingsState({
     disableDockerUpdateActionsLocked,
     savingDockerUpdateActions,
     handleDisableDockerUpdateActionsChange,
+    enableProxmoxGuestDockerInventory,
+    guestDockerInventoryLocked,
+    savingGuestDockerInventory,
+    handleGuestDockerInventoryChange,
     telemetryEnabled,
     reportBrandDisplayName,
     setReportBrandDisplayName,

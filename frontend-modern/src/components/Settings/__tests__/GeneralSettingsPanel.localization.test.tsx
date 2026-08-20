@@ -53,6 +53,10 @@ function renderGeneralSettingsPanel(overrides: Partial<GeneralSettingsPanelProps
     disableDockerUpdateActionsLocked: () => false,
     savingDockerUpdateActions: () => false,
     handleDisableDockerUpdateActionsChange: vi.fn(),
+    enableProxmoxGuestDockerInventory: () => false,
+    guestDockerInventoryLocked: () => false,
+    savingGuestDockerInventory: () => false,
+    handleGuestDockerInventoryChange: vi.fn(),
     ...overrides,
   };
 

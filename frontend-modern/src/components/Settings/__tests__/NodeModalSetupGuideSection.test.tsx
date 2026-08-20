@@ -118,6 +118,7 @@ describe('NodeModalSetupGuideSection', () => {
     expect(tlsOverride).not.toBeChecked();
     fireEvent.click(tlsOverride);
     expect(tlsOverride).toBeChecked();
+    expect(screen.getByText('Discover Docker in LXC guests')).toBeInTheDocument();
     expect(
       screen.getByText('PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY=true'),
     ).toBeInTheDocument();

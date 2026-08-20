@@ -416,8 +416,10 @@ with `PULSE_ENABLE_PROXMOX_GUEST_DOCKER_DETECTION=true`. That hint uses
 `pct exec` only to check whether `/var/run/docker.sock` exists in a running LXC;
 it does not enumerate containers, images, environment variables, files, or
 processes. The stronger Proxmox-side LXC Docker inventory path is separately
-disabled unless the server is started with
-`PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY=true`. Use either path only when
+disabled by default. An admin can turn it on with the **Discover Docker in
+LXC guests** toggle in Settings → System → General, or the server can be
+started with `PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY=true`, which locks
+the toggle to the environment value. Use either path only when
 operators are comfortable with Proxmox-side guest probing.
 
 ## Installation Options

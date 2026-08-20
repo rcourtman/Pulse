@@ -51,6 +51,10 @@ type SystemSettingsHandler struct {
 	telemetryToggleFunc      func(enabled bool) // Called when telemetry is toggled at runtime
 	telemetryPreviewFunc     func() (telemetry.Ping, error)
 	telemetryResetFunc       func() (telemetry.Ping, error)
+	// Called after the Proxmox guest Docker inventory opt-in changes at
+	// runtime, so the router can reconfigure the monitor's checker and
+	// collector without a restart.
+	guestDockerInventoryToggleFunc func()
 	mtMonitor                interface {
 		GetMonitor(string) (*monitoring.Monitor, error)
 	}
@@ -101,6 +105,12 @@ func NewSystemSettingsHandler(cfg *config.Config, persistence *config.ConfigPers
 // at runtime (true = start, false = stop).
 func (h *SystemSettingsHandler) SetTelemetryToggleFunc(fn func(enabled bool)) {
 	h.telemetryToggleFunc = fn
+}
+
+// SetGuestDockerInventoryToggleFunc sets the callback invoked after the
+// Proxmox guest Docker inventory opt-in changes at runtime.
+func (h *SystemSettingsHandler) SetGuestDockerInventoryToggleFunc(fn func()) {
+	h.guestDockerInventoryToggleFunc = fn
 }
 
 // SetTelemetryPreviewFunc sets the callback used to build the exact telemetry
@@ -712,6 +722,8 @@ func (h *SystemSettingsHandler) HandleGetSystemSettings(w http.ResponseWriter, r
 		settings.TemperatureMonitoringEnabled = h.config.TemperatureMonitoringEnabled
 		// Expose Docker update actions setting (respects env override)
 		settings.DisableDockerUpdateActions = h.config.DisableDockerUpdateActions
+		// Expose the Proxmox guest Docker inventory opt-in (respects env override)
+		settings.EnableProxmoxGuestDockerInventory = h.config.EnableProxmoxGuestDockerInventory
 		// Expose effective telemetry value (respects env override)
 		effectiveTelemetry := h.config.TelemetryEnabled
 		settings.TelemetryEnabled = &effectiveTelemetry
@@ -940,6 +952,19 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 	if _, ok := rawRequest["disableDockerUpdateActions"]; ok {
 		settings.DisableDockerUpdateActions = updates.DisableDockerUpdateActions
 	}
+	guestDockerInventoryToggleRequested := false
+	if _, ok := rawRequest["enableProxmoxGuestDockerInventory"]; ok {
+		// The environment opt-in is a deploy-time decision; a locked value
+		// must not be changeable through the API at all.
+		if h.config.EnvOverrides["PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY"] ||
+			h.config.EnvOverrides["enableProxmoxGuestDockerInventory"] {
+			writeErrorResponse(w, http.StatusBadRequest, "env_override",
+				"Proxmox guest Docker inventory is locked by the PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY environment variable", nil)
+			return
+		}
+		settings.EnableProxmoxGuestDockerInventory = updates.EnableProxmoxGuestDockerInventory
+		guestDockerInventoryToggleRequested = true
+	}
 	if _, ok := rawRequest["reduceProUpsellNoise"]; ok {
 		settings.ReduceProUpsellNoise = updates.ReduceProUpsellNoise
 	}
@@ -1034,6 +1059,16 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 		h.config.TemperatureMonitoringEnabled = settings.TemperatureMonitoringEnabled
 	}
 	h.config.DisableDockerUpdateActions = settings.DisableDockerUpdateActions
+	if guestDockerInventoryToggleRequested &&
+		h.config.EnableProxmoxGuestDockerInventory != settings.EnableProxmoxGuestDockerInventory {
+		h.config.EnableProxmoxGuestDockerInventory = settings.EnableProxmoxGuestDockerInventory
+		if h.guestDockerInventoryToggleFunc != nil {
+			h.guestDockerInventoryToggleFunc()
+		}
+		log.Info().
+			Bool("enabled", settings.EnableProxmoxGuestDockerInventory).
+			Msg("Proxmox guest Docker inventory opt-in changed via settings")
+	}
 	if _, ok := rawRequest["telemetryEnabled"]; ok && settings.TelemetryEnabled != nil {
 		h.config.TelemetryEnabled = *settings.TelemetryEnabled
 		if h.telemetryToggleFunc != nil {

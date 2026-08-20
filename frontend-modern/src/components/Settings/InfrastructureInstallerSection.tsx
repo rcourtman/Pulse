@@ -289,10 +289,13 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
             <p class="mt-1 text-xs text-blue-800 dark:text-blue-200">
               Install the agent on the Proxmox node, not inside every LXC. In advanced options,
               select <span class="font-medium">Proxmox VE node</span> and enable{' '}
-              <span class="font-medium">Pulse command execution</span>. Then start Pulse with{' '}
-              <code>PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY=true</code>. Optionally restrict it
-              with <code>PULSE_PROXMOX_GUEST_DOCKER_INVENTORY_VMIDS=101,102</code>. Pulse uses
-              bounded <code>pct exec</code> inventory for <code>docker ps</code> and{' '}
+              <span class="font-medium">Pulse command execution</span>. Then turn on{' '}
+              <span class="font-medium">Discover Docker in LXC guests</span> in Settings → System →
+              General (admin only), or set{' '}
+              <code>PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY=true</code> in the server
+              environment to lock it on. Optionally restrict it with{' '}
+              <code>PULSE_PROXMOX_GUEST_DOCKER_INVENTORY_VMIDS=101,102</code>. Pulse uses bounded{' '}
+              <code>pct exec</code> inventory for <code>docker ps</code> and{' '}
               <code>docker stats</code>, skips guests that already have their own agent, and does
               not collect inspect, environment, mount, command, or process details.
             </p>

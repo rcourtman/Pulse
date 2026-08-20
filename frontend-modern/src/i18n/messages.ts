@@ -295,6 +295,14 @@ export const EN_MESSAGES = {
   'settings.general.docker.toggle.description':
     'When enabled, {sourceLabel} "Update" actions are hidden across Pulse. Update detection still runs, so available updates remain visible.',
   'settings.general.docker.toggle.title': 'Hide update buttons',
+  'settings.general.guestDocker.section.title': 'Docker in Proxmox LXCs',
+  'settings.general.guestDocker.section.description':
+    'Discover Docker containers running inside Proxmox LXC guests without installing an agent in every guest.',
+  'settings.general.guestDocker.toggle.title': 'Discover Docker in LXC guests',
+  'settings.general.guestDocker.toggle.description':
+    'When enabled, Pulse runs bounded pct exec checks through connected Proxmox node agents to find Docker inside LXC guests and list their containers. Guests that already report through their own agent are skipped, and Pulse collects only the container list and usage stats — no inspect, environment, mount, command, or process details.',
+  'settings.general.guestDocker.requirements':
+    'Requires a Pulse agent on the Proxmox node with command execution enabled. Admin only.',
   'settings.general.language.ariaLabel': 'App language',
   'settings.general.language.description':
     'Use this language for the app shell. Commands, resource names, and API fields stay unchanged.',

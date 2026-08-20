@@ -1501,6 +1501,12 @@ type SystemSettings struct {
 	// about Pulse being a "monitoring-first" tool vs an orchestration tool.
 	DisableDockerUpdateActions bool `json:"disableDockerUpdateActions"` // Hide update buttons while still detecting updates
 
+	// Proxmox guest Docker inventory - server-wide opt-in for discovering Docker
+	// inside LXC guests through a node agent's bounded pct exec probes. Default
+	// off; the PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY environment variable
+	// overrides and locks this setting when set.
+	EnableProxmoxGuestDockerInventory bool `json:"enableProxmoxGuestDockerInventory"`
+
 	// UX + privacy knobs (server-wide)
 	ReduceProUpsellNoise bool `json:"reduceProUpsellNoise,omitempty"` // Legacy compatibility preference for proactive commercial prompts
 

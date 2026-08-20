@@ -63,6 +63,10 @@ export function useSettingsSystemPanels(
     savingDockerUpdateActions: params.systemSettings.savingDockerUpdateActions,
     handleDisableDockerUpdateActionsChange:
       params.systemSettings.handleDisableDockerUpdateActionsChange,
+    enableProxmoxGuestDockerInventory: params.systemSettings.enableProxmoxGuestDockerInventory,
+    guestDockerInventoryLocked: params.systemSettings.guestDockerInventoryLocked,
+    savingGuestDockerInventory: params.systemSettings.savingGuestDockerInventory,
+    handleGuestDockerInventoryChange: params.systemSettings.handleGuestDockerInventoryChange,
   });
 
   const systemGeneralPanel: Component = () => (

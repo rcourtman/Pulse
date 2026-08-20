@@ -922,6 +922,8 @@ func load(initLogging bool) (*Config, error) {
 			cfg.HideLocalLogin = systemSettings.HideLocalLogin
 			// Load DisableDockerUpdateActions (hide Docker update buttons)
 			cfg.DisableDockerUpdateActions = systemSettings.DisableDockerUpdateActions
+			// Load the Proxmox guest Docker inventory opt-in (env var overrides below)
+			cfg.EnableProxmoxGuestDockerInventory = systemSettings.EnableProxmoxGuestDockerInventory
 			// Load TelemetryEnabled (enabled by default; nil means true for upgrading users)
 			if systemSettings.TelemetryEnabled != nil {
 				cfg.TelemetryEnabled = *systemSettings.TelemetryEnabled
@@ -1110,6 +1112,7 @@ func load(initLogging bool) (*Config, error) {
 		if enabled, err := strconv.ParseBool(guestDockerInventoryStr); err == nil {
 			cfg.EnableProxmoxGuestDockerInventory = enabled
 			cfg.EnvOverrides["PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY"] = true
+			cfg.EnvOverrides["enableProxmoxGuestDockerInventory"] = true
 			log.Info().Bool("enabled", enabled).Msg("Overriding Proxmox guest Docker inventory setting from environment")
 		} else {
 			log.Warn().

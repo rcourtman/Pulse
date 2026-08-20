@@ -1076,8 +1076,10 @@ For PVE, that same setup guide must keep Docker inside Proxmox LXCs attached
 to the Host Telemetry Agent path, not the default API Inventory path: API
 Inventory alone cannot run host-side guest Docker inventory, while the PVE Host
 Telemetry Agent command must explicitly request Pulse command execution and
-explain the separate server-side `PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY`
-opt-in.
+explain the separate server-side opt-in: the admin-only Discover Docker in LXC
+guests toggle in Settings → System → General, or the
+`PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY` environment variable, which
+overrides and locks the toggle when set.
 For existing Proxmox API sources, that same setup guide must expose the
 non-destructive Audit/Repair rerun path before asking operators to rotate
 credentials. Audit/Repair is the first lifecycle response to suspected setup
@@ -5107,8 +5109,10 @@ augmentation is equivalent to a local agent install on that machine.
 Docker onboarding copy must also distinguish the standalone Docker / Podman
 install path from Docker inside Proxmox LXCs: standalone runtimes use the
 Docker runtime profile on that host, while Proxmox LXC Docker inventory uses a
-Proxmox VE node agent with command execution plus explicit server-side
-`PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY=true`, and the copy may not imply
+Proxmox VE node agent with command execution plus an explicit server-side
+opt-in (the admin-only Settings toggle, or
+`PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY=true` which locks the toggle),
+and the copy may not imply
 that installing an agent inside every LXC is required. The Docker empty state,
 infrastructure installer, and Proxmox node setup guide must all preserve that
 same distinction.

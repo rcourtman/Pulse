@@ -720,6 +720,14 @@ func (r *Router) setupRoutes() {
 
 	// System settings and API token management
 	r.systemSettingsHandler = NewSystemSettingsHandler(r.config, r.persistence, r.wsHub, r.mtMonitor, r.monitor, r.reloadSystemSettings, r.reloadFunc)
+	// Toggling the Proxmox guest Docker inventory opt-in reconfigures the
+	// monitor's checker and collector immediately instead of waiting for a
+	// restart.
+	r.systemSettingsHandler.SetGuestDockerInventoryToggleFunc(func() {
+		if r.monitor != nil {
+			r.configureProxmoxGuestDockerDetection(r.monitor)
+		}
+	})
 
 	// Agent execution server for AI tool use
 	r.agentExecServer = agentexec.NewServerWithAdmissionValidator(r.admitAgentExecToken, r.validateAgentExecSession)

@@ -53,6 +53,7 @@ export interface SystemConfig {
   hideLocalLogin?: boolean; // Hide local login form (username/password)
   publicURL?: string; // Public URL for email notifications (e.g., http://198.51.100.100:8080)
   disableDockerUpdateActions?: boolean; // Hide Docker update buttons while still detecting updates (server-wide)
+  enableProxmoxGuestDockerInventory?: boolean; // Discover Docker inside Proxmox LXC guests via node agents (server-wide, admin opt-in)
   reduceProUpsellNoise?: boolean; // Legacy compatibility preference for proactive commercial prompts
   telemetryEnabled?: boolean; // Outbound usage telemetry, enabled by default unless disabled
   reportBranding?: ReportBrandSettings; // Entitlement-gated application and report branding

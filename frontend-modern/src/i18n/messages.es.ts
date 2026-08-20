@@ -301,6 +301,14 @@ export const ES_MESSAGE_OVERRIDES = {
   'settings.general.docker.toggle.description':
     'Cuando está activado, las acciones "Update" de {sourceLabel} se ocultan en Pulse. La detección de actualizaciones sigue ejecutándose, por lo que las actualizaciones disponibles siguen visibles.',
   'settings.general.docker.toggle.title': 'Ocultar botones de actualización',
+  'settings.general.guestDocker.section.title': 'Docker en LXCs de Proxmox',
+  'settings.general.guestDocker.section.description':
+    'Descubre contenedores Docker dentro de invitados LXC de Proxmox sin instalar un agente en cada invitado.',
+  'settings.general.guestDocker.toggle.title': 'Descubrir Docker en invitados LXC',
+  'settings.general.guestDocker.toggle.description':
+    'Cuando está activado, Pulse ejecuta comprobaciones acotadas con pct exec a través de los agentes de nodo Proxmox conectados para encontrar Docker dentro de los invitados LXC y listar sus contenedores. Los invitados que ya informan mediante su propio agente se omiten, y Pulse solo recopila la lista de contenedores y sus estadísticas de uso — sin detalles de inspect, entorno, montajes, comandos ni procesos.',
+  'settings.general.guestDocker.requirements':
+    'Requiere un agente de Pulse en el nodo Proxmox con la ejecución de comandos habilitada. Solo administradores.',
   'settings.general.language.ariaLabel': 'Idioma de la app',
   'settings.general.language.description':
     'Usa este idioma para la interfaz de la app. Los comandos, nombres de recursos y campos API no cambian.',

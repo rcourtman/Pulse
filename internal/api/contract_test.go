@@ -10230,6 +10230,7 @@ func TestContract_SystemSettingsResponseJSONSnapshot(t *testing.T) {
 		"temperatureMonitoringEnabled":true,
 		"hideLocalLogin":false,
 		"disableDockerUpdateActions":true,
+		"enableProxmoxGuestDockerInventory":false,
 		"envOverrides":{"PULSE_TELEMETRY":true}
 	}`
 
