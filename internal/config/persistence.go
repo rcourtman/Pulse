@@ -463,6 +463,27 @@ func (c *ConfigPersistence) writeConfigFileLocked(path string, data []byte, perm
 	return nil
 }
 
+// preserveCorruptConfigFileLocked moves a config file that failed to parse or
+// decrypt aside to <path>.corrupt-<timestamp>. Loaders return empty data with
+// a nil error for such files, so read-modify-write savers would otherwise
+// treat them as safe to rewrite and permanently destroy whatever they still
+// hold. A missing file means a concurrent loader already moved it aside; that
+// counts as preserved.
+func (c *ConfigPersistence) preserveCorruptConfigFileLocked(path string) error {
+	preservedPath := path + ".corrupt-" + time.Now().UTC().Format("20060102-150405")
+	if err := c.fs.Rename(path, preservedPath); err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	log.Warn().
+		Str("file", path).
+		Str("preserved", preservedPath).
+		Msg("Unparseable config file preserved for recovery; continuing with empty data")
+	return nil
+}
+
 // saveJSON is a generic helper that marshals data to JSON, optionally encrypts,
 // and writes to file. Caller must NOT already hold c.mu.
 func saveJSON[T any](c *ConfigPersistence, filePath string, data T, encrypt bool) error {
@@ -2555,7 +2576,19 @@ func (c *ConfigPersistence) LoadAIFindings() (*AIFindingsData, error) {
 	var findingsData AIFindingsData
 	if err := json.Unmarshal(data, &findingsData); err != nil {
 		log.Error().Err(err).Str("file", c.aiFindingsFile).Msg("Failed to parse AI findings file")
-		// Return empty data on parse error rather than failing
+		// Move the file aside before reporting empty data: read-modify-write
+		// savers treat "empty, no error" as safe to rewrite, which would
+		// permanently destroy the user-authored suppression rules the file
+		// still holds. An undecryptable file lands here too — a failed
+		// Decrypt falls back to parsing the raw ciphertext as JSON. If the
+		// file cannot be moved aside, fail the load so those savers abort
+		// instead of clobbering it.
+		c.mu.Lock()
+		preserveErr := c.preserveCorruptConfigFileLocked(c.aiFindingsFile)
+		c.mu.Unlock()
+		if preserveErr != nil {
+			return nil, fmt.Errorf("preserve unparseable AI findings file %s: %w", c.aiFindingsFile, preserveErr)
+		}
 		return &AIFindingsData{
 			Version:          aiFindingsDataVersion,
 			Findings:         make(map[string]*AIFindingRecord),
@@ -3995,6 +4028,16 @@ func (c *ConfigPersistence) LoadAIChatSessions() (*AIChatSessionsData, error) {
 	var sessionsData AIChatSessionsData
 	if err := json.Unmarshal(data, &sessionsData); err != nil {
 		log.Error().Err(err).Str("file", c.aiChatSessionsFile).Msg("Failed to parse AI chat sessions file")
+		// Move the file aside before reporting empty data: SaveAIChatSession,
+		// DeleteAIChatSession, and CleanupOldAIChatSessions rewrite the file
+		// from what this loader returns, which would permanently destroy the
+		// user conversations it still holds. An undecryptable file lands here
+		// too — a failed Decrypt falls back to parsing the raw ciphertext as
+		// JSON. If the file cannot be moved aside, fail the load so those
+		// savers abort instead of clobbering it.
+		if preserveErr := c.preserveCorruptConfigFileLocked(c.aiChatSessionsFile); preserveErr != nil {
+			return nil, fmt.Errorf("preserve unparseable AI chat sessions file %s: %w", c.aiChatSessionsFile, preserveErr)
+		}
 		return &AIChatSessionsData{
 			Version:  1,
 			Sessions: make(map[string]*AIChatSession),
