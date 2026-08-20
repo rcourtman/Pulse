@@ -12,6 +12,7 @@ const mockVersionInfo = vi.hoisted(() => vi.fn());
 const mockStorageProps = vi.hoisted(() => vi.fn());
 const mockTotalStats = vi.hoisted(() => vi.fn());
 const mockNodesTableProps = vi.hoisted(() => vi.fn());
+const mockWorkloadSearch = vi.hoisted(() => vi.fn(() => ''));
 
 const makeResource = (resource: Partial<Resource> & Pick<Resource, 'id' | 'type'>): Resource =>
   ({
@@ -87,7 +88,7 @@ vi.mock('@/components/Workloads/useWorkloadsState', () => ({
     surfaceInitialDataReceived: () => false,
     allGuests: () => [],
     totalStats: mockTotalStats,
-    search: () => '',
+    search: mockWorkloadSearch,
     setSearch: vi.fn(),
   }),
 }));
@@ -153,6 +154,7 @@ describe('ProxmoxPageSurface contract', () => {
       appContainers: 0,
       pods: 0,
     });
+    mockWorkloadSearch.mockReturnValue('');
   });
 
   afterEach(() => {
@@ -208,6 +210,43 @@ describe('ProxmoxPageSurface contract', () => {
       'href',
       '/settings/infrastructure/agent-doctor?agents=agent%3Aagent-delly',
     );
+  });
+
+  it('keeps the node inventory independent from committed workload search terms', () => {
+    mockWorkloadSearch.mockReturnValue('reporting-api-01, wireguard-edge-01');
+    setResources([
+      makeResource({
+        id: 'agent:pve1',
+        type: 'agent',
+        proxmox: { nodeName: 'pve1', clusterName: 'production' },
+      }),
+      makeResource({
+        id: 'agent:pve2',
+        type: 'agent',
+        proxmox: { nodeName: 'pve2', clusterName: 'production' },
+      }),
+      makeResource({
+        id: 'lxc:108',
+        type: 'system-container',
+        name: 'reporting-api-01',
+        proxmox: { nodeName: 'pve1', vmid: 108 },
+      }),
+      makeResource({
+        id: 'lxc:111',
+        type: 'system-container',
+        name: 'wireguard-edge-01',
+        proxmox: { nodeName: 'pve2', vmid: 111 },
+      }),
+    ]);
+
+    renderSurface();
+
+    expect(screen.getByTestId('nodes-table')).toHaveAttribute('data-rows', '2');
+    expect(mockNodesTableProps).toHaveBeenCalledWith(
+      expect.objectContaining({ nodes: expect.arrayContaining([expect.any(Object)]) }),
+    );
+    expect(proxmoxPageSurfaceSource).toContain('nodes={currentModel().pveNodes}');
+    expect(proxmoxPageSurfaceSource).not.toContain('filterProxmoxNodesForSearch');
   });
 
   it('does not call a retained version from a stopped Proxmox agent currently running', () => {

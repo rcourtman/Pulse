@@ -139,6 +139,7 @@ export const TrueNASAlertsTable: Component<{
             search={tableState.search}
             onSearchChange={tableState.setSearch}
             searchPlaceholder="Search TrueNAS alerts"
+            searchSuggestions={tableState.searchSuggestions}
             status={tableState.status()}
             onStatusChange={tableState.setStatus}
             statusOptions={TRUENAS_INCIDENT_STATUS_OPTIONS}

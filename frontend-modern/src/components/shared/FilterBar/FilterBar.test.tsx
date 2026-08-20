@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen, within } from '@solidjs/testing-lib
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { FilterBar } from './FilterBar';
 import type { FilterDef } from './filterCatalog';
+import { createSignal } from 'solid-js';
 
 const search = {
   value: () => '',
@@ -301,5 +302,134 @@ describe('FilterBar', () => {
     expect(label).not.toHaveClass('sr-only');
     expect(label).toHaveTextContent('Filter');
     expect(select.parentElement).toHaveClass('p-0.5');
+  });
+
+  it('completes a matching filter inline before pinning it as a chip on Enter', () => {
+    const Harness = () => {
+      const [query, setQuery] = createSignal('');
+      const [node, setNode] = createSignal('');
+      const nodeFilter: FilterDef = {
+        id: 'node',
+        label: 'Node',
+        group: 'scope',
+        value: node,
+        setValue: setNode,
+        defaultValue: '',
+        options: () => [
+          { value: '', label: 'All nodes' },
+          { value: 'pve1', label: 'pve1' },
+        ],
+      };
+      return (
+        <FilterBar
+          search={{ value: query, setValue: setQuery, placeholder: 'Search infrastructure' }}
+          filters={[nodeFilter]}
+          isMobile={() => false}
+        />
+      );
+    };
+
+    const { container } = render(() => <Harness />);
+    const input = screen.getByPlaceholderText('Search infrastructure');
+    input.focus();
+    fireEvent.input(input, { target: { value: 'pv' } });
+    expect(container.querySelector('[data-search-completion-suffix]')).toHaveTextContent('e1');
+
+    fireEvent.keyDown(input, { key: 'Tab' });
+    expect(input).toHaveValue('pve1');
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    expect(screen.getByRole('button', { name: 'Remove Node filter' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Node: pve1' })).toBeInTheDocument();
+    expect(input).toHaveValue('');
+  });
+
+  it('commits multiple infrastructure completions as removable inclusive search pills', () => {
+    const Harness = () => {
+      const [query, setQuery] = createSignal('');
+      return (
+        <>
+          <FilterBar
+            search={{
+              value: query,
+              setValue: setQuery,
+              placeholder: 'Search objects',
+              suggestions: () => [
+                { id: 'node:pve1', label: 'pve1', value: 'pve1' },
+                { id: 'host:docker-a', label: 'docker-a', value: 'docker-a' },
+              ],
+            }}
+            filters={[]}
+            isMobile={() => false}
+          />
+          <output data-testid="effective-search">{query()}</output>
+        </>
+      );
+    };
+
+    render(() => <Harness />);
+    const input = screen.getByPlaceholderText('Search objects');
+    input.focus();
+
+    fireEvent.input(input, { target: { value: 'pv' } });
+    fireEvent.keyDown(input, { key: 'Tab' });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(screen.getByRole('button', { name: 'Remove search term pve1' })).toBeInTheDocument();
+
+    fireEvent.input(input, { target: { value: 'doc' } });
+    fireEvent.keyDown(input, { key: 'Tab' });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(screen.getByRole('button', { name: 'Remove search term docker-a' })).toBeInTheDocument();
+    expect(screen.getByTestId('effective-search')).toHaveTextContent('pve1, docker-a');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Remove search term pve1' }));
+    expect(
+      screen.queryByRole('button', { name: 'Remove search term pve1' }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByTestId('effective-search')).toHaveTextContent('docker-a');
+  });
+
+  it('commits a recognized abbreviated query without choosing one ambiguous object', () => {
+    const Harness = () => {
+      const [query, setQuery] = createSignal('');
+      return (
+        <>
+          <FilterBar
+            search={{
+              value: query,
+              setValue: setQuery,
+              placeholder: 'Search Kubernetes objects',
+              suggestions: () => [
+                { id: 'deployment:checkout-api', label: 'checkout-api' },
+                { id: 'deployment:checkout-web', label: 'checkout-web' },
+                { id: 'pod:checkout-api-a', label: 'checkout-api-6c746d5bcf-c7z2p' },
+              ],
+            }}
+            filters={[]}
+            isMobile={() => false}
+          />
+          <output data-testid="effective-search">{query()}</output>
+        </>
+      );
+    };
+
+    const { container } = render(() => <Harness />);
+    const input = screen.getByPlaceholderText('Search Kubernetes objects');
+    input.focus();
+    fireEvent.input(input, { target: { value: 'chec' } });
+
+    expect(container.querySelector('[data-search-completion-suffix]')).toHaveTextContent('kout-');
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    expect(input).toHaveValue('');
+    expect(screen.getByRole('button', { name: 'Remove search term chec' })).toBeInTheDocument();
+    expect(screen.getByTestId('effective-search')).toHaveTextContent('chec');
+
+    fireEvent.input(input, { target: { value: 'unmatched prose' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(input).toHaveValue('unmatched prose');
+    expect(
+      screen.queryByRole('button', { name: 'Remove search term unmatched prose' }),
+    ).not.toBeInTheDocument();
   });
 });

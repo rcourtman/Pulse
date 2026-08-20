@@ -134,6 +134,7 @@ export function WorkloadsSurface(props: WorkloadsSurfaceComponentProps) {
               ariaLabel={props.filterAriaLabel}
               searchPlaceholder={props.filterSearchPlaceholder}
               searchEmptyMessage={props.filterSearchEmptyMessage}
+              searchSuggestionWorkloads={state.allGuests}
               statusOptions={props.filterStatusOptions}
               columnVisibility={state.workloadsFilterColumnVisibility()}
               containerRuntimeFilter={state.containerRuntimeFilterConfig()}

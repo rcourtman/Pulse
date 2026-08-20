@@ -7,7 +7,11 @@ import {
 import { type SearchInputProps } from './searchInputModel';
 import { useSearchInputState } from './useSearchInputState';
 
-export type { SearchInputProps } from './searchInputModel';
+export type {
+  SearchInputProps,
+  SearchInputSuggestion,
+  SearchInputSuggestionsConfig,
+} from './searchInputModel';
 
 export const SearchInput: Component<SearchInputProps> = (props) => {
   const search = useSearchInputState(props);
@@ -16,7 +20,7 @@ export const SearchInput: Component<SearchInputProps> = (props) => {
     <div class={`relative w-full ${props.class ?? ''}`}>
       <SearchField
         value={props.value()}
-        onChange={props.onChange}
+        onChange={search.enhancements.onValueChange}
         placeholder={props.placeholder}
         title={props.title}
         inputRef={search.setInputRef}
@@ -28,7 +32,11 @@ export const SearchInput: Component<SearchInputProps> = (props) => {
         trailingControlCount={search.trailingControlCount()}
         onClearMouseDown={search.enhancements.onClearMouseDown}
         onKeyDown={search.enhancements.onFieldKeyDown}
+        onFocus={search.enhancements.onFieldFocus}
         onBlur={search.enhancements.onFieldBlur}
+        completionSuffix={search.enhancements.completionSuffix()}
+        role={search.enhancements.hasSuggestions() ? 'combobox' : undefined}
+        ariaAutocomplete={search.enhancements.hasSuggestions() ? 'inline' : undefined}
         trailingControls={
           <SearchInputTrailingControls state={search.enhancements} tips={props.tips} />
         }

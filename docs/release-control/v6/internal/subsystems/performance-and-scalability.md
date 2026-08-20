@@ -84,6 +84,7 @@ start a goroutine, timer, or notification lifecycle per target.
 50. `frontend-modern/src/components/Workloads/useGuestDrawerState.ts`
 51. `frontend-modern/src/components/Workloads/useGroupedTableWindowing.ts`
 52. `frontend-modern/src/components/Workloads/workloadSelectors.ts`
+    52a. `frontend-modern/src/components/Workloads/workloadSearchSuggestions.ts`
 53. `frontend-modern/src/components/Workloads/workloadTopology.ts`
 54. `frontend-modern/src/components/Workloads/workloadSelectionModel.ts`
 55. `frontend-modern/src/components/Workloads/workloadRouteModel.ts`
@@ -719,6 +720,19 @@ change may globally weaken the Task 03 lifecycle-state idempotency invariant.
     reads the unfiltered guest set so narrowing the table by search or status
     never removes the column.
 18. Extend workload filter active-count, reset semantics, and mobile toolbar state through `frontend-modern/src/components/Workloads/workloadsFilterModel.ts` (defaults, `countActiveWorkloadsFilters`, `hasActiveWorkloadsFilters`) rather than rebuilding filter-local state inside `frontend-modern/src/components/Workloads/WorkloadsFilter.tsx`. Workloads filter presentation now composes the shared `FilterBar` (`frontend-modern/src/components/shared/FilterBar/FilterBar.tsx`) with a per-page `FilterDef[]` catalog rather than the legacy `PageControls` structured control deck. High-frequency Type and Status filters stay in that catalog but render as inline compact segmented controls (`inline: true`), while longer or dynamic scope filters continue through the "+ Filter" menu and chip popovers. The Add filter control inherits FilterBar's compact accessible-only label by default instead of paying for a page-local labelled-field shell. Durable presentation controls pass only their panel content through `FilterBar.viewOptions`; the shared FilterBar owns the single View trigger and popover. Contextual actions use `leadingControls`, while frequently changed analytical orientation such as the active trend range uses `trailingControls`.
+    Workload autocomplete must project from the same unfiltered guest inventory
+    and the same search-candidate helper used by the workload predicate. The
+    projection includes workload identity plus deduplicated node, Docker host,
+    Kubernetes context, cluster, and namespace scopes so Proxmox, vSphere,
+    Docker, and Kubernetes embedded workload surfaces all inherit the same
+    inline completion and multi-term pill behavior. Committed comma-separated
+    workload terms, including recognized abbreviated queries, retain the
+    existing inclusive OR semantics; arbitrary unmatched draft text remains the
+    existing workload free-text query.
+    On the Proxmox overview, those workload terms filter only the workload
+    table. The node summary retains the real already-loaded node inventory so a
+    workload query can never produce or appear to produce the estate-empty "No
+    Proxmox VE nodes" state.
     Desktop filter/action wrap alignment must remain a pure shared flex-layout
     contract: the parent distributes the two rails while they fit and a wrapped
     action rail starts at the leading edge. It must not add resize observers,

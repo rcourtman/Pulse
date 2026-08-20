@@ -20,6 +20,7 @@ type SearchInputStateOptions = Pick<
   | 'onChange'
   | 'onKeyDown'
   | 'shortcutHint'
+  | 'suggestions'
   | 'tips'
   | 'typeToSearch'
   | 'value'
@@ -51,6 +52,7 @@ export function useSearchInputState(options: SearchInputStateOptions): {
 
   const enhancements = useSearchInputEnhancements({
     history: options.history,
+    suggestions: options.suggestions,
     tips: options.tips,
     value: options.value,
     onChange: options.onChange,

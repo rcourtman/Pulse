@@ -25,6 +25,7 @@ export interface SearchFieldProps {
   inputClass?: string;
   disabled?: boolean;
   onKeyDown?: (event: SearchFieldKeyboardEvent) => void;
+  onFocus?: (event: SearchFieldFocusEvent) => void;
   onBlur?: (event: SearchFieldFocusEvent) => void;
   showClearButton?: boolean;
   clearOnFocusedEscape?: boolean;
@@ -33,6 +34,9 @@ export interface SearchFieldProps {
   trailingControlCount?: number;
   trailingControls?: JSX.Element;
   onClearMouseDown?: (event: SearchFieldMouseEvent) => void;
+  completionSuffix?: string;
+  role?: JSX.InputHTMLAttributes<HTMLInputElement>['role'];
+  ariaAutocomplete?: JSX.AriaAttributes['aria-autocomplete'];
 }
 
 export const shouldShowSearchFieldShortcutHint = (value: string, shortcutHint?: string) =>

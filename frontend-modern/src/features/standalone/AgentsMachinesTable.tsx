@@ -1403,6 +1403,7 @@ export const AgentsMachinesTable: Component<{
           search={tableState.search}
           onSearchChange={tableState.setSearch}
           searchPlaceholder="Search machines"
+          searchSuggestions={tableState.searchSuggestions}
           searchHistory={{
             storageKey: STORAGE_KEYS.MACHINES_SEARCH_HISTORY,
             emptyMessage: 'Machine searches you run will appear here.',

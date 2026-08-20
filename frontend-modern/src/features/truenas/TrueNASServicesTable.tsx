@@ -223,6 +223,7 @@ export const TrueNASServicesTable: Component<{
             search={tableState.search}
             onSearchChange={tableState.setSearch}
             searchPlaceholder="Search TrueNAS services"
+            searchSuggestions={tableState.searchSuggestions}
             status={tableState.status()}
             onStatusChange={tableState.setStatus}
             statusOptions={TRUENAS_SERVICE_STATUS_OPTIONS}

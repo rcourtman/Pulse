@@ -4731,6 +4731,7 @@
         "frontend-modern/src/features/platformPage/PlatformOutdatedAgentNotice.tsx",
         "frontend-modern/src/features/platformPage/PlatformOutdatedSensorSetupNotice.tsx",
         "frontend-modern/src/features/platformPage/PlatformResourceDetailTableRow.tsx",
+        "frontend-modern/src/features/platformPage/platformSearchSuggestions.ts",
         "frontend-modern/src/features/platformPage/sharedPlatformPage.tsx",
         "frontend-modern/src/hooks/createNonSuspendingQuery.ts",
         "frontend-modern/src/i18n/index.ts",
@@ -5245,6 +5246,7 @@
               "frontend-modern/src/features/platformPage/PlatformOutdatedAgentNotice.tsx",
               "frontend-modern/src/features/platformPage/PlatformOutdatedSensorSetupNotice.tsx",
               "frontend-modern/src/features/platformPage/PlatformResourceDetailTableRow.tsx",
+              "frontend-modern/src/features/platformPage/platformSearchSuggestions.ts",
               "frontend-modern/src/features/platformPage/sharedPlatformPage.tsx"
             ],
             "allow_same_subsystem_tests": false,
@@ -5253,7 +5255,8 @@
               "frontend-modern/src/components/shared/SharedPrimitives.guardrails.test.ts",
               "frontend-modern/src/components/Workloads/__tests__/WorkloadsFilter.test.tsx",
               "frontend-modern/src/features/platformPage/__tests__/platformEstateOverviewModel.test.ts",
-              "frontend-modern/src/features/platformPage/__tests__/platformOverviewLayout.guardrails.test.ts"
+              "frontend-modern/src/features/platformPage/__tests__/platformOverviewLayout.guardrails.test.ts",
+              "frontend-modern/src/features/platformPage/platformSearchSuggestions.test.ts"
             ]
           },
           {
@@ -6382,6 +6385,7 @@
         "frontend-modern/src/components/Workloads/WorkloadPanel.tsx",
         "frontend-modern/src/components/Workloads/workloadRouteModel.ts",
         "frontend-modern/src/components/Workloads/workloadRouteStateModel.ts",
+        "frontend-modern/src/components/Workloads/workloadSearchSuggestions.ts",
         "frontend-modern/src/components/Workloads/workloadSelectionModel.ts",
         "frontend-modern/src/components/Workloads/workloadSelectors.ts",
         "frontend-modern/src/components/Workloads/WorkloadsFilter.tsx",
@@ -6545,6 +6549,7 @@
               "frontend-modern/src/components/Workloads/WorkloadPanel.tsx",
               "frontend-modern/src/components/Workloads/workloadRouteModel.ts",
               "frontend-modern/src/components/Workloads/workloadRouteStateModel.ts",
+              "frontend-modern/src/components/Workloads/workloadSearchSuggestions.ts",
               "frontend-modern/src/components/Workloads/workloadSelectionModel.ts",
               "frontend-modern/src/components/Workloads/workloadSelectors.ts",
               "frontend-modern/src/components/Workloads/WorkloadsFilter.tsx",
@@ -6586,6 +6591,7 @@
               "frontend-modern/src/components/Workloads/__tests__/workloadMetricHistoryModel.test.ts",
               "frontend-modern/src/components/Workloads/__tests__/workloadRouteModel.test.ts",
               "frontend-modern/src/components/Workloads/__tests__/workloadRouteStateModel.test.ts",
+              "frontend-modern/src/components/Workloads/__tests__/workloadSearchSuggestions.test.ts",
               "frontend-modern/src/components/Workloads/__tests__/workloadSelectionModel.test.ts",
               "frontend-modern/src/components/Workloads/__tests__/workloadSelectors.test.ts",
               "frontend-modern/src/components/Workloads/__tests__/WorkloadsFilter.test.tsx",

@@ -17,13 +17,27 @@ export const SearchField: Component<SearchFieldProps> = (props) => {
         disabled={props.disabled}
         onInput={(e) => props.onChange(e.currentTarget.value)}
         onKeyDown={search.handleKeyDown}
+        onFocus={search.handleFocus}
         onBlur={search.handleBlur}
         aria-label={props.title ?? props.placeholder ?? 'Search'}
+        role={props.role}
+        aria-autocomplete={props.ariaAutocomplete}
         class={`min-h-11 w-full pl-8 sm:min-h-10 sm:pl-9 ${search.inputPaddingRight()} py-1.5 sm:py-2 text-sm border border-border rounded-md
  bg-surface text-base-content placeholder-muted
  focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:focus:border-blue-400 outline-none transition-all disabled:opacity-60 disabled:cursor-not-allowed ${props.inputClass ?? ''}`}
         title={props.title}
       />
+      <Show when={props.completionSuffix}>
+        <div
+          aria-hidden="true"
+          class="pointer-events-none absolute inset-0 flex min-h-11 items-center overflow-hidden whitespace-pre pl-8 pr-8 text-sm sm:min-h-10 sm:pl-9"
+        >
+          <span class="text-transparent">{props.value}</span>
+          <span class="text-muted opacity-60" data-search-completion-suffix>
+            {props.completionSuffix}
+          </span>
+        </div>
+      </Show>
       <svg
         class="absolute left-2.5 sm:left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted"
         fill="none"

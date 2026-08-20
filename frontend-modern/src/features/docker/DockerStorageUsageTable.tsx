@@ -91,6 +91,7 @@ export const DockerStorageUsageTable: Component<{
             search={tableState.search}
             onSearchChange={tableState.setSearch}
             searchPlaceholder="Search storage usage"
+            searchSuggestions={tableState.searchSuggestions}
             status={tableState.status()}
             onStatusChange={tableState.setStatus}
             statusOptions={PLATFORM_HEALTH_FILTER_OPTIONS}

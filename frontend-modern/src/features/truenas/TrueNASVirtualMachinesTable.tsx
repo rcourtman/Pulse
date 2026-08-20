@@ -181,6 +181,7 @@ export const TrueNASVirtualMachinesTable: Component<{
             search={tableState.search}
             onSearchChange={tableState.setSearch}
             searchPlaceholder="Search TrueNAS VMs"
+            searchSuggestions={tableState.searchSuggestions}
             status={tableState.status()}
             onStatusChange={tableState.setStatus}
             statusOptions={TRUENAS_VM_STATUS_OPTIONS}

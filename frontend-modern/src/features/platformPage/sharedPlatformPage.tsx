@@ -22,7 +22,7 @@ import { type FilterOption as PlatformTableFilterOption } from '@/components/sha
 import { FilterBar, filterChipStatusDot, type FilterDef } from '@/components/shared/FilterBar';
 import { FilterSegmentedControl } from '@/components/shared/FilterToolbar';
 import { MetadataBadge } from '@/components/shared/MetadataBadge';
-import { type SearchInputProps } from '@/components/shared/SearchInput';
+import { type SearchInputProps, type SearchInputSuggestion } from '@/components/shared/SearchInput';
 import { Table, TableBody, TableHead, TableHeader, TableRow } from '@/components/shared/Table';
 import { TableCard } from '@/components/shared/TableCard';
 import { TableCardHeader } from '@/components/shared/TableCardHeader';
@@ -40,6 +40,10 @@ import {
 import { asTrimmedString } from '@/utils/stringUtils';
 import { formatVmwareClusterServices } from '@/utils/vmwareDisplay';
 import { getPlatformColumnAlign, type PlatformTableColumnKind } from './columnAlignment';
+import {
+  buildPlatformResourceSearchSuggestions,
+  isPlatformSearchSuggestionResource,
+} from './platformSearchSuggestions';
 import {
   PLATFORM_ESTATE_COUNTS_STORAGE_KEY,
   deserializePlatformEstateCountsVisibility,
@@ -1153,6 +1157,13 @@ export function createPlatformTableFilterState<Row, Status extends string | numb
   const hasActiveFilters = createMemo(
     () => search().trim().length > 0 || status() !== props.initialStatus,
   );
+  const searchSuggestions = createMemo(() => {
+    const resources: Resource[] = [];
+    for (const row of props.resources()) {
+      if (isPlatformSearchSuggestionResource(row)) resources.push(row);
+    }
+    return buildPlatformResourceSearchSuggestions(resources);
+  });
   const resetFilters = () => {
     setSearch('');
     setStatus(props.initialStatus);
@@ -1167,6 +1178,7 @@ export function createPlatformTableFilterState<Row, Status extends string | numb
     visible,
     total,
     hasActiveFilters,
+    searchSuggestions,
     resetFilters,
   };
 }
@@ -1228,6 +1240,7 @@ export function PlatformTableToolbar<T extends string | number>(props: {
   searchPlaceholder: string;
   searchHistory?: SearchInputProps['history'];
   searchTips?: SearchInputProps['tips'];
+  searchSuggestions?: () => readonly SearchInputSuggestion[];
   status: T;
   onStatusChange: (value: T) => void;
   statusOptions: PlatformTableFilterOption<T>[];
@@ -1305,6 +1318,7 @@ export function PlatformTableToolbar<T extends string | number>(props: {
         historyKey: props.searchHistory?.storageKey,
         emptyMessage: props.searchHistory?.emptyMessage,
         tips: props.searchTips,
+        suggestions: props.searchSuggestions,
       }}
       filters={allFilters}
       showAddFilterLabel={false}
@@ -1374,6 +1388,7 @@ export const PlatformResourceTable: Component<{
           search={tableState.search}
           onSearchChange={tableState.setSearch}
           searchPlaceholder={props.searchPlaceholder ?? 'Search rows'}
+          searchSuggestions={tableState.searchSuggestions}
           status={tableState.status()}
           onStatusChange={tableState.setStatus}
           statusOptions={PLATFORM_STATUS_FILTER_OPTIONS}

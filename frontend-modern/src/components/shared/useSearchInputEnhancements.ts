@@ -1,6 +1,13 @@
-import { createSignal, onMount, createEffect, onCleanup } from 'solid-js';
+import { createEffect, createMemo, createSignal, onCleanup, onMount } from 'solid-js';
 import type { Accessor } from 'solid-js';
 import { createSearchHistoryManager } from '@/utils/searchHistory';
+import {
+  getSearchInputSuggestionCompletions,
+  rankSearchInputSuggestions,
+  resolveSearchInputInlineCompletion,
+  type SearchInputSuggestion,
+  type SearchInputSuggestionsConfig,
+} from '@/components/shared/searchInputModel';
 
 export interface SearchTip {
   code: string;
@@ -23,6 +30,7 @@ export interface SearchTipsConfig {
 interface SearchInputEnhancementsOptions {
   history?: SearchHistoryConfig;
   tips?: SearchTipsConfig;
+  suggestions?: SearchInputSuggestionsConfig;
   onFieldKeyDown?: (event: SearchInputKeyboardEvent) => void;
 }
 
@@ -44,9 +52,11 @@ type SearchInputMouseEvent = MouseEvent & {
 export interface SearchInputEnhancementsState {
   hasHistory: Accessor<boolean>;
   hasTips: Accessor<boolean>;
+  hasSuggestions: Accessor<boolean>;
   isSimple: Accessor<boolean>;
   searchHistory: Accessor<string[]>;
   isHistoryOpen: Accessor<boolean>;
+  completionSuffix: Accessor<string>;
   emptyHistoryMessage: Accessor<string>;
   tipsPopoverId: Accessor<string>;
   onClearMouseDown?: (event: SearchInputMouseEvent) => void;
@@ -57,7 +67,9 @@ export interface SearchInputEnhancementsState {
   clearHistory: () => void;
   deleteHistoryEntry: (term: string) => void;
   selectHistoryEntry: (term: string) => void;
+  onValueChange: (value: string) => void;
   onFieldKeyDown: (event: SearchInputKeyboardEvent) => void;
+  onFieldFocus: (event: SearchInputFocusEvent) => void;
   onFieldBlur: (event: SearchInputFocusEvent) => void;
 }
 
@@ -70,6 +82,7 @@ export const useSearchInputEnhancements = (
 ): SearchInputEnhancementsState => {
   const hasHistory = () => !!options.history;
   const hasTips = () => !!options.tips;
+  const hasSuggestions = () => !!options.suggestions;
   const isSimple = () => !hasHistory() && !hasTips();
   const tipsPopoverId = () => options.tips?.popoverId ?? '';
   const emptyHistoryMessage = () =>
@@ -81,15 +94,54 @@ export const useSearchInputEnhancements = (
 
   const [searchHistory, setSearchHistory] = createSignal<string[]>([]);
   const [isHistoryOpen, setIsHistoryOpen] = createSignal(false);
+  const [isFieldFocused, setIsFieldFocused] = createSignal(false);
+  const [showInlineCompletion, setShowInlineCompletion] = createSignal(true);
+  const [acceptedSuggestionId, setAcceptedSuggestionId] = createSignal<string>();
+
+  const rankedSuggestions = createMemo<SearchInputSuggestion[]>(() => {
+    const config = options.suggestions;
+    const query = options.value().trim();
+    if (!config || query.length < (config.minQueryLength ?? 1)) return [];
+    const items = config.items();
+    return rankSearchInputSuggestions(items, query, config.maxResults ?? items.length);
+  });
+
+  const inlineCompletion = createMemo(() =>
+    resolveSearchInputInlineCompletion(rankedSuggestions(), options.value()),
+  );
+
+  const exactSuggestion = (): SearchInputSuggestion | undefined => {
+    const normalizedQuery = options.value().trim().toLowerCase();
+    if (!normalizedQuery) return undefined;
+    const acceptedId = acceptedSuggestionId();
+    return (
+      rankedSuggestions().find(
+        (suggestion) =>
+          suggestion.id === acceptedId &&
+          getSearchInputSuggestionCompletions(suggestion).some(
+            (completion) => completion.toLowerCase() === normalizedQuery,
+          ),
+      ) ??
+      rankedSuggestions().find((suggestion) =>
+        getSearchInputSuggestionCompletions(suggestion).some(
+          (completion) => completion.toLowerCase() === normalizedQuery,
+        ),
+      )
+    );
+  };
+
+  const completionSuffix = () => {
+    if (!isFieldFocused() || !showInlineCompletion()) return '';
+    const completion = inlineCompletion();
+    return completion ? completion.text.slice(options.value().length) : '';
+  };
 
   let historyMenuRef: HTMLDivElement | undefined;
   let historyToggleRef: HTMLButtonElement | undefined;
   let suppressBlurCommit = false;
 
   onMount(() => {
-    if (historyManager) {
-      setSearchHistory(historyManager.read());
-    }
+    if (historyManager) setSearchHistory(historyManager.read());
   });
 
   const commitSearchToHistory = (term: string) => {
@@ -124,29 +176,48 @@ export const useSearchInputEnhancements = (
     const target = event.target as Node;
     const clickedMenu = historyMenuRef?.contains(target) ?? false;
     const clickedToggle = historyToggleRef?.contains(target) ?? false;
-    if (!clickedMenu && !clickedToggle) {
-      closeHistory();
-    }
+    if (!clickedMenu && !clickedToggle) closeHistory();
   };
 
   createEffect(() => {
-    if (isHistoryOpen()) {
-      document.addEventListener('mousedown', handleDocumentClick);
-    } else {
-      document.removeEventListener('mousedown', handleDocumentClick);
-    }
+    if (isHistoryOpen()) document.addEventListener('mousedown', handleDocumentClick);
+    else document.removeEventListener('mousedown', handleDocumentClick);
   });
 
-  onCleanup(() => {
-    document.removeEventListener('mousedown', handleDocumentClick);
-  });
+  onCleanup(() => document.removeEventListener('mousedown', handleDocumentClick));
+
+  const acceptInlineCompletion = () => {
+    const completion = inlineCompletion();
+    if (!completion) return;
+    setAcceptedSuggestionId(completion.suggestion.id);
+    options.onChange(completion.text);
+    setShowInlineCompletion(false);
+  };
+
+  const applyExactSuggestion = (suggestion: SearchInputSuggestion, input: HTMLInputElement) => {
+    closeHistory();
+    if (suggestion.onSelect) {
+      suggestion.onSelect();
+      options.onChange('');
+      setAcceptedSuggestionId(undefined);
+      options.focusInput();
+      return;
+    }
+
+    const value = suggestion.value ?? options.value().trim();
+    options.onChange(value);
+    commitSearchToHistory(value);
+    input.blur();
+  };
 
   return {
     hasHistory,
     hasTips,
+    hasSuggestions,
     isSimple,
     searchHistory,
     isHistoryOpen,
+    completionSuffix,
     emptyHistoryMessage,
     tipsPopoverId,
     onClearMouseDown: hasHistory() ? markSuppressCommit : undefined,
@@ -157,13 +228,7 @@ export const useSearchInputEnhancements = (
       historyToggleRef = el;
     },
     toggleHistory: () => {
-      setIsHistoryOpen((prev) => {
-        const next = !prev;
-        if (!next) {
-          queueMicrotask(() => historyToggleRef?.blur());
-        }
-        return next;
-      });
+      setIsHistoryOpen((previous) => !previous);
     },
     closeHistory,
     clearHistory,
@@ -172,24 +237,68 @@ export const useSearchInputEnhancements = (
       options.onChange(term);
       commitSearchToHistory(term);
       setIsHistoryOpen(false);
+      setAcceptedSuggestionId(undefined);
       options.focusInput();
     },
-    onFieldKeyDown: (e) => {
-      if (hasHistory()) {
-        if (e.key === 'Enter') {
-          commitSearchToHistory(e.currentTarget.value);
-          closeHistory();
-        } else if (e.key === 'ArrowDown' && searchHistory().length > 0) {
-          e.preventDefault();
-          setIsHistoryOpen(true);
-        }
-      }
-      options.onFieldKeyDown?.(e);
+    onValueChange: (value) => {
+      options.onChange(value);
+      setAcceptedSuggestionId(undefined);
+      setShowInlineCompletion(true);
+      setIsHistoryOpen(false);
     },
-    onFieldBlur: (e) => {
-      if (!hasHistory()) return;
+    onFieldKeyDown: (event) => {
+      const cursorAtEnd =
+        event.currentTarget.selectionStart === options.value().length &&
+        event.currentTarget.selectionEnd === options.value().length;
+
+      if (
+        completionSuffix() &&
+        (event.key === 'Tab' || (event.key === 'ArrowRight' && cursorAtEnd))
+      ) {
+        event.preventDefault();
+        acceptInlineCompletion();
+        return;
+      }
+
+      if (event.key === 'Enter') {
+        const exact = exactSuggestion();
+        if (exact) {
+          event.preventDefault();
+          applyExactSuggestion(exact, event.currentTarget);
+          return;
+        }
+        const query = options.value().trim();
+        const matches = rankedSuggestions();
+        if (query && matches.length > 0 && options.suggestions?.onCommitQuery) {
+          event.preventDefault();
+          closeHistory();
+          options.suggestions.onCommitQuery(query, matches);
+          options.onChange('');
+          setAcceptedSuggestionId(undefined);
+          options.focusInput();
+          return;
+        }
+        commitSearchToHistory(event.currentTarget.value);
+        closeHistory();
+        event.currentTarget.blur();
+      } else if (hasHistory() && event.key === 'ArrowDown' && searchHistory().length > 0) {
+        event.preventDefault();
+        setIsHistoryOpen(true);
+      } else if (event.key === 'ArrowLeft' || event.key === 'Home') {
+        setShowInlineCompletion(false);
+      }
+      options.onFieldKeyDown?.(event);
+    },
+    onFieldFocus: (event) => {
+      setIsFieldFocused(true);
+      setShowInlineCompletion(
+        event.currentTarget.selectionStart === event.currentTarget.value.length,
+      );
+    },
+    onFieldBlur: (event) => {
+      setIsFieldFocused(false);
       if (suppressBlurCommit) return;
-      const next = e.relatedTarget as HTMLElement | null;
+      const next = event.relatedTarget as HTMLElement | null;
       const interactingWithHistory = next
         ? historyMenuRef?.contains(next) || historyToggleRef?.contains(next)
         : false;
@@ -197,7 +306,7 @@ export const useSearchInputEnhancements = (
         ? next?.getAttribute('aria-controls') === tipsPopoverId()
         : false;
       if (!interactingWithHistory && !interactingWithTips) {
-        commitSearchToHistory(e.currentTarget.value);
+        commitSearchToHistory(event.currentTarget.value);
       }
     },
   };

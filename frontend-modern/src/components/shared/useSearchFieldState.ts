@@ -15,6 +15,7 @@ type SearchFieldStateOptions = Pick<
   | 'inputRef'
   | 'onBlur'
   | 'onChange'
+  | 'onFocus'
   | 'onKeyDown'
   | 'showClearButton'
   | 'shortcutHint'
@@ -64,13 +65,19 @@ export function useSearchFieldState(options: SearchFieldStateOptions) {
   };
 
   const handleKeyDown = (event: KeyboardEvent & { currentTarget: HTMLInputElement }) => {
+    options.onKeyDown?.(normalizeEventTarget(event) as SearchFieldKeyboardEvent);
+    if (event.defaultPrevented) return;
+
     if (event.key === 'Escape' && (options.clearOnFocusedEscape ?? true)) {
       if (options.value) {
         options.onChange('');
       }
       inputEl?.blur();
     }
-    options.onKeyDown?.(normalizeEventTarget(event) as SearchFieldKeyboardEvent);
+  };
+
+  const handleFocus = (event: FocusEvent & { currentTarget: HTMLInputElement }) => {
+    options.onFocus?.(normalizeEventTarget(event) as SearchFieldFocusEvent);
   };
 
   const handleBlur = (event: FocusEvent & { currentTarget: HTMLInputElement }) => {
@@ -79,6 +86,7 @@ export function useSearchFieldState(options: SearchFieldStateOptions) {
 
   return {
     handleBlur,
+    handleFocus,
     handleKeyDown,
     inputPaddingRight,
     setInputRef,

@@ -21,6 +21,7 @@ import {
   PlatformTableToolbar,
 } from '@/features/platformPage/sharedPlatformPage';
 import type { Resource } from '@/types/resource';
+import { buildPlatformResourceSearchSuggestions } from '@/features/platformPage/platformSearchSuggestions';
 import { KubernetesAlertsTable } from './KubernetesAlertsTable';
 import { KubernetesAutoscalingTable } from './KubernetesAutoscalingTable';
 import { KubernetesClustersTable } from './KubernetesClustersTable';
@@ -366,6 +367,9 @@ function KubernetesWorkloads(props: {
     props.controllers,
     props.model.autoscaling,
   ]);
+  const searchSuggestions = createMemo(() =>
+    buildPlatformResourceSearchSuggestions(sections().flat()),
+  );
   const totalRows = createMemo(() => sections().reduce((sum, rows) => sum + rows.length, 0));
 
   // Cluster and namespace scope apply across every workload section at once
@@ -402,6 +406,7 @@ function KubernetesWorkloads(props: {
           search={toolbar.search}
           onSearchChange={toolbar.setSearch}
           searchPlaceholder="Search workload inventory"
+          searchSuggestions={searchSuggestions}
           status={toolbar.status()}
           onStatusChange={toolbar.setStatus}
           statusOptions={PLATFORM_HEALTH_FILTER_OPTIONS}
@@ -487,6 +492,9 @@ function KubernetesServices(props: { model: KubernetesPageModel }) {
     props.model.services,
     props.model.serviceNetworking,
   ]);
+  const searchSuggestions = createMemo(() =>
+    buildPlatformResourceSearchSuggestions(sections().flat()),
+  );
   const totalRows = createMemo(() => sections().reduce((sum, rows) => sum + rows.length, 0));
   const scope = createKubernetesInventoryScope(sections);
   const scopedServices = () => scope.scopedSections()[0];
@@ -517,6 +525,7 @@ function KubernetesServices(props: { model: KubernetesPageModel }) {
           search={toolbar.search}
           onSearchChange={toolbar.setSearch}
           searchPlaceholder="Search services and networking"
+          searchSuggestions={searchSuggestions}
           status={toolbar.status()}
           onStatusChange={toolbar.setStatus}
           statusOptions={PLATFORM_HEALTH_FILTER_OPTIONS}
@@ -560,6 +569,9 @@ function KubernetesConfiguration(props: { model: KubernetesPageModel }) {
   );
   const toolbar = createKubernetesSharedToolbar();
   const sections = createMemo<Resource[][]>(() => [props.model.config, props.model.policy]);
+  const searchSuggestions = createMemo(() =>
+    buildPlatformResourceSearchSuggestions(sections().flat()),
+  );
   const totalRows = createMemo(() => sections().reduce((sum, rows) => sum + rows.length, 0));
   const scope = createKubernetesInventoryScope(sections);
   const scopedConfig = () => scope.scopedSections()[0];
@@ -590,6 +602,7 @@ function KubernetesConfiguration(props: { model: KubernetesPageModel }) {
           search={toolbar.search}
           onSearchChange={toolbar.setSearch}
           searchPlaceholder="Search configuration and policy"
+          searchSuggestions={searchSuggestions}
           status={toolbar.status()}
           onStatusChange={toolbar.setStatus}
           statusOptions={PLATFORM_HEALTH_FILTER_OPTIONS}

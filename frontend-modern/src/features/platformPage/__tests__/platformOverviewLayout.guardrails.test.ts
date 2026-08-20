@@ -44,6 +44,7 @@ import proxmoxNodesTableSource from '@/features/proxmox/ProxmoxNodesTable.tsx?ra
 import proxmoxPageSurfaceSource from '@/features/proxmox/ProxmoxPageSurface.tsx?raw';
 import proxmoxReplicationTableSource from '@/features/proxmox/ProxmoxReplicationTable.tsx?raw';
 import sharedPlatformPageSource from '@/features/platformPage/sharedPlatformPage.tsx?raw';
+import platformSearchSuggestionsSource from '@/features/platformPage/platformSearchSuggestions.ts?raw';
 import truenasAlertsTableSource from '@/features/truenas/TrueNASAlertsTable.tsx?raw';
 import truenasAppsTableSource from '@/features/truenas/TrueNASAppsTable.tsx?raw';
 import truenasNetworkSharesTableSource from '@/features/truenas/TrueNASNetworkSharesTable.tsx?raw';
@@ -218,6 +219,7 @@ describe('platform overview layout guardrails', () => {
     for (const source of platformToolbarTableSources) {
       expect(source).toContain('PlatformTableToolbar');
       expect(source).toContain('createPlatformTableFilterState');
+      expect(source).toContain('searchSuggestions=');
       expect(source).toContain('PLATFORM_HEALTH_FILTER_OPTIONS');
       expect(source).not.toContain('ViewOptionsMenu');
       expect(source).not.toContain("from '@/components/shared/SearchInput'");
@@ -228,6 +230,10 @@ describe('platform overview layout guardrails', () => {
       // out of the net, since that is shared-FilterBar plumbing, not a rogue box.
       expect(source).not.toContain('const [search, ');
     }
+
+    expect(sharedPlatformPageSource).toContain('searchSuggestions={tableState.searchSuggestions}');
+    expect(platformSearchSuggestionsSource).toContain('buildPlatformResourceSearchSuggestions');
+    expect(platformSearchSuggestionsSource).not.toContain('platformData');
   });
 
   it('keeps Proxmox detail tables on the shared platform table primitives', () => {

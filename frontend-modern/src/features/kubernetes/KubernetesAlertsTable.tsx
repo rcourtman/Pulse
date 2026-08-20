@@ -139,6 +139,7 @@ export const KubernetesAlertsTable: Component<{
             search={tableState.search}
             onSearchChange={tableState.setSearch}
             searchPlaceholder="Search Kubernetes alerts"
+            searchSuggestions={tableState.searchSuggestions}
             status={tableState.status()}
             onStatusChange={tableState.setStatus}
             statusOptions={KUBERNETES_INCIDENT_STATUS_OPTIONS}

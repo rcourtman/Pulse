@@ -146,6 +146,7 @@ export const VsphereNetworksTable: Component<{
             search={tableState.search}
             onSearchChange={tableState.setSearch}
             searchPlaceholder="Search vSphere networks"
+            searchSuggestions={tableState.searchSuggestions}
             status={tableState.status()}
             onStatusChange={tableState.setStatus}
             statusOptions={VSPHERE_NETWORK_STATUS_OPTIONS}

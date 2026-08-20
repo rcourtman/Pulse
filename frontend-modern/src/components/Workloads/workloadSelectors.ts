@@ -86,7 +86,9 @@ type SortDirection = 'asc' | 'desc';
 
 type SortValue = string | number | boolean | null | undefined;
 
-const workloadSearchCandidates = (guest: WorkloadGuest): Array<string | number | undefined> => [
+export const getWorkloadSearchCandidates = (
+  guest: WorkloadGuest,
+): Array<string | number | undefined> => [
   guest.name,
   guest.id,
   guest.displayId,
@@ -104,13 +106,14 @@ const workloadSearchCandidates = (guest: WorkloadGuest): Array<string | number |
   guest.containerRuntime,
   guest.containerId,
   guest.dockerHostId,
+  guest.dockerHostName,
   guest.kubernetesAgentId,
 ];
 
 const matchesWorkloadTextSearch = (guest: WorkloadGuest, term: string): boolean => {
   const needle = term.trim().toLowerCase();
   if (!needle) return true;
-  return workloadSearchCandidates(guest)
+  return getWorkloadSearchCandidates(guest)
     .filter(
       (value): value is string | number => typeof value === 'string' || typeof value === 'number',
     )

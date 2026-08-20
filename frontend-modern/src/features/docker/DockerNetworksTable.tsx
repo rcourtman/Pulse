@@ -298,6 +298,7 @@ const AttachmentDetail: Component<{ rows: readonly DockerNetworkAttachmentRow[] 
             search={tableState.search}
             onSearchChange={setSearch}
             searchPlaceholder="Search attached containers"
+            searchSuggestions={tableState.searchSuggestions}
             status={tableState.status()}
             onStatusChange={setStatus}
             statusOptions={ATTACHMENT_STATUS_FILTER_OPTIONS}
@@ -441,6 +442,7 @@ export const DockerNetworksTable: Component<DockerNetworksTableProps> = (props) 
             search={tableState.search}
             onSearchChange={tableState.setSearch}
             searchPlaceholder="Search networks"
+            searchSuggestions={tableState.searchSuggestions}
             status={tableState.status()}
             onStatusChange={tableState.setStatus}
             statusOptions={PLATFORM_HEALTH_FILTER_OPTIONS}

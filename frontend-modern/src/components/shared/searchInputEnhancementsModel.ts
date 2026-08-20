@@ -6,7 +6,6 @@ export const SEARCH_HISTORY_ROW_CLASS =
 export const SEARCH_HISTORY_ENTRY_BUTTON_CLASS =
   'flex-1 truncate pr-2 text-left text-sm text-base-content transition-colors hover:text-blue-600 focus:outline-none dark:hover:text-blue-300';
 export const SEARCH_HISTORY_CLEAR_LABEL = 'Clear history';
-
 export function getSearchHistoryToggleButtonClass(isOpen: boolean): string {
   return `flex h-11 w-11 items-center justify-center rounded-md transition-colors sm:h-7 sm:w-7 ${
     isOpen

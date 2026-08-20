@@ -382,6 +382,16 @@ touch- and keyboard-operable inline detail disclosure.
 Future platform tables must keep that split: row data and platform semantics
 stay in the unified-resource consumer, and the repeated table shell stays in the
 shared frontend primitive.
+Platform search completion follows the same ownership split. Unified-resource
+consumers must project canonical resource identity, display name, type, scope,
+status, and safe aliases through
+`frontend-modern/src/features/platformPage/platformSearchSuggestions.ts` and
+pass that projection to the shared platform toolbar. They must not expose raw
+`platformData`, secret payloads, or arbitrary metadata as completion
+candidates. The frontend primitive owns ranking, common-prefix completion,
+recognized abbreviated terms, removable pills, and inclusive multi-term query
+serialization; each platform consumer remains responsible for applying that
+query to the same canonical resource collection its table renders.
 Large platform inventories may bound their initial row projection through the
 shared platform-table preview primitive so the next canonical surface remains
 in the initial reading flow. Proxmox node consumers retain the page model's

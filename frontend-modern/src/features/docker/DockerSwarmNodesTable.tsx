@@ -122,6 +122,7 @@ export const DockerSwarmNodesTable: Component<DockerNativeTableProps> = (props) 
             search={tableState.search}
             onSearchChange={tableState.setSearch}
             searchPlaceholder="Search Swarm nodes"
+            searchSuggestions={tableState.searchSuggestions}
             status={tableState.status()}
             onStatusChange={tableState.setStatus}
             statusOptions={PLATFORM_HEALTH_FILTER_OPTIONS}

@@ -418,5 +418,14 @@ describe('evaluateFilterStack', () => {
       const split = splitSearchExclusions('');
       expect(matchesSearchTermSplit('anything', split)).toBe(true);
     });
+
+    it('treats comma-separated committed object terms as inclusive alternatives', () => {
+      const split = splitSearchExclusions('pve1, docker-a');
+
+      expect(split.alternatives).toEqual(['pve1', 'docker-a']);
+      expect(matchesSearchTermSplit('node pve1 running', split)).toBe(true);
+      expect(matchesSearchTermSplit('host docker-a online', split)).toBe(true);
+      expect(matchesSearchTermSplit('host truenas-a online', split)).toBe(false);
+    });
   });
 });

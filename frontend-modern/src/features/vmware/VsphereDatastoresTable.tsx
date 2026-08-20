@@ -170,6 +170,7 @@ export const VsphereDatastoresTable: Component<{
             search={tableState.search}
             onSearchChange={tableState.setSearch}
             searchPlaceholder="Search vSphere datastores"
+            searchSuggestions={tableState.searchSuggestions}
             status={tableState.status()}
             onStatusChange={tableState.setStatus}
             statusOptions={VSPHERE_DATASTORE_STATUS_OPTIONS}

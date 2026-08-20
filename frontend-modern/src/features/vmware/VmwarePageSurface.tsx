@@ -404,6 +404,7 @@ function VmwareOverview(props: VmwareOverviewProps) {
             ariaLabel="vSphere workload filters"
             searchPlaceholder="Search vSphere VMs by name, host, cluster, or status"
             searchEmptyMessage="Recent vSphere workload searches appear here."
+            searchSuggestionWorkloads={workloadsState.allGuests}
             statusOptions={VMWARE_WORKLOAD_STATUS_OPTIONS}
             inventoryStats={workloadsState.inventoryStats}
             suppressTypeFilter

@@ -159,6 +159,7 @@ export const TrueNASNetworkSharesTable: Component<{
             search={tableState.search}
             onSearchChange={tableState.setSearch}
             searchPlaceholder="Search TrueNAS shares"
+            searchSuggestions={tableState.searchSuggestions}
             status={tableState.status()}
             onStatusChange={tableState.setStatus}
             statusOptions={TRUENAS_SHARE_STATUS_OPTIONS}

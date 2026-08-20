@@ -135,6 +135,7 @@ export const DockerAlertsTable: Component<{
             search={tableState.search}
             onSearchChange={tableState.setSearch}
             searchPlaceholder="Search Docker alerts"
+            searchSuggestions={tableState.searchSuggestions}
             status={tableState.status()}
             onStatusChange={tableState.setStatus}
             statusOptions={DOCKER_INCIDENT_STATUS_OPTIONS}

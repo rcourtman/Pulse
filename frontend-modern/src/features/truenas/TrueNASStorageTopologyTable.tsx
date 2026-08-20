@@ -314,6 +314,7 @@ export const TrueNASStorageTopologyTable: Component<{
             search={tableState.search}
             onSearchChange={tableState.setSearch}
             searchPlaceholder="Search TrueNAS pools, datasets, or disks"
+            searchSuggestions={tableState.searchSuggestions}
             status={tableState.status()}
             onStatusChange={tableState.setStatus}
             statusOptions={TRUENAS_STORAGE_STATUS_OPTIONS}

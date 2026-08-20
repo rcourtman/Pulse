@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createSignal } from 'solid-js';
 import { SearchInput } from '@/components/shared/SearchInput';
 import searchInputSource from '@/components/shared/SearchInput.tsx?raw';
@@ -252,5 +252,74 @@ describe('SearchInput', () => {
       expect(second).toHaveValue('z');
       expect(document.activeElement).toBe(second);
     });
+  });
+
+  it('offers one inline completion and applies an exact structured match on Enter', async () => {
+    const applyNode = vi.fn();
+    const InlineCompletionHarness = () => {
+      const [value, setValue] = createSignal('');
+      return (
+        <SearchInput
+          value={value}
+          onChange={setValue}
+          placeholder="Infrastructure search"
+          suggestions={{
+            items: () => [
+              {
+                id: 'filter:node:pve1',
+                label: 'Node: pve1',
+                completion: 'pve1',
+                keywords: ['node', 'pve1'],
+                onSelect: applyNode,
+              },
+            ],
+          }}
+        />
+      );
+    };
+
+    const { container } = render(() => <InlineCompletionHarness />);
+    const input = screen.getByPlaceholderText('Infrastructure search');
+    input.focus();
+    fireEvent.input(input, { target: { value: 'pv' } });
+
+    expect(container.querySelector('[data-search-completion-suffix]')).toHaveTextContent('e1');
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+
+    fireEvent.keyDown(input, { key: 'Tab' });
+    expect(input).toHaveValue('pve1');
+    expect(applyNode).not.toHaveBeenCalled();
+
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(applyNode).toHaveBeenCalledTimes(1);
+    expect(input).toHaveValue('');
+  });
+
+  it('accepts inline completion with Right Arrow but preserves unmatched free text', () => {
+    const InlineCompletionHarness = () => {
+      const [value, setValue] = createSignal('');
+      return (
+        <SearchInput
+          value={value}
+          onChange={setValue}
+          placeholder="Mixed search"
+          suggestions={{
+            items: () => [{ id: 'resource:alpha', label: 'alpha-host', value: 'alpha-host' }],
+          }}
+        />
+      );
+    };
+
+    render(() => <InlineCompletionHarness />);
+    const input = screen.getByPlaceholderText('Mixed search') as HTMLInputElement;
+    input.focus();
+    fireEvent.input(input, { target: { value: 'alp' } });
+    input.setSelectionRange(3, 3);
+    fireEvent.keyDown(input, { key: 'ArrowRight' });
+    expect(input).toHaveValue('alpha-host');
+
+    fireEvent.input(input, { target: { value: 'arbitrary phrase' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(input).toHaveValue('arbitrary phrase');
   });
 });

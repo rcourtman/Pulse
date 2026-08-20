@@ -212,10 +212,11 @@ puts the same machine on two surfaces that do not share an identity.
 129. `frontend-modern/scripts/shared-template-audit.mjs`
 130. `frontend-modern/scripts/shared-template-registry.json`
 131. `frontend-modern/src/features/platformPage/sharedPlatformPage.tsx`
-     131a. `frontend-modern/src/features/platformPage/PlatformResourceDetailTableRow.tsx`
-     131b. `frontend-modern/src/features/platformPage/PlatformOutdatedAgentNotice.tsx`
-     131c. `frontend-modern/src/features/platformPage/PlatformOutdatedSensorSetupNotice.tsx`
-     131d. `frontend-modern/src/features/platformPage/platformEstateOverviewModel.ts`
+    131a. `frontend-modern/src/features/platformPage/platformSearchSuggestions.ts`
+     131b. `frontend-modern/src/features/platformPage/PlatformResourceDetailTableRow.tsx`
+     131c. `frontend-modern/src/features/platformPage/PlatformOutdatedAgentNotice.tsx`
+     131d. `frontend-modern/src/features/platformPage/PlatformOutdatedSensorSetupNotice.tsx`
+     131e. `frontend-modern/src/features/platformPage/platformEstateOverviewModel.ts`
 132. `frontend-modern/src/utils/platformSupportManifest.generated.ts`
 133. `frontend-modern/src/utils/platformSupportManifest.ts`
 134. `frontend-modern/src/utils/sourcePlatformOptions.ts`
@@ -4185,6 +4186,15 @@ and `frontend-modern/src/components/shared/searchInputModel.ts` owns the shared
 search-input contract plus shortcut-hint and trailing-control policy. Future
 search-input work should extend those owners instead of pushing type-to-search
 or enhancement wiring back into the shared shell.
+Infrastructure-aware completion follows that owner split. Product surfaces
+provide safe canonical identity projections through `SearchInput` suggestions;
+`useSearchInputEnhancements.ts` ranks those identities and exposes only the
+single dimmed inline suffix after the current query. It must not introduce a
+second results dropdown. When several identities match, the suffix stops at
+their unambiguous common prefix instead of selecting the first object. Tab or
+Right Arrow accepts that inline text. Enter commits either an exact identity or
+a shorter query that still resolves to known suggestions; unmatched prose
+remains ordinary free-text search.
 The shared page-controls bar now follows that same owner split.
 `frontend-modern/src/components/shared/PageControls.tsx` stays the render shell
 for canonical page-level control composition, while
@@ -4214,6 +4224,16 @@ inherit the same ownership through `PlatformTableToolbar`. Recovery is event-fir
 and does not use equal workspace subtabs for protected rollups versus event
 history; Storage subtabs (Pools / Physical Disks) sit above the bar as
 navigation, not filters.
+`FilterBar` owns committed infrastructure search terms as removable pills,
+separate from its consumer-owned structured `FilterDef` chips. An exact
+infrastructure completion or a recognized abbreviated query clears the draft
+field, adds one search-term pill, and serializes committed terms as
+comma-separated inclusive alternatives so operators can select several
+objects without turning arbitrary phrases into chips. Removing a search-term
+pill must immediately update the consumer search state. Platform consumers
+project only canonical object identity, type, scope, status, and safe aliases through
+`frontend-modern/src/features/platformPage/platformSearchSuggestions.ts`;
+arbitrary resource metadata and secrets are not autocomplete candidates.
 `PlatformTableToolbar` must always expose contextual Clear filters for a
 non-empty search, including simple table-local search/status state that does
 not need a feature-owned reset. Route-owned or multi-facet platform surfaces

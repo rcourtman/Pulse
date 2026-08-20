@@ -55,6 +55,7 @@ export interface WorkloadsFilterProps {
   ariaLabel?: string;
   searchPlaceholder?: string;
   searchEmptyMessage?: string;
+  searchSuggestionWorkloads?: () => readonly WorkloadGuest[];
   statusOptions?: readonly WorkloadsStatusOption[];
   inventoryStats?: () => WorkloadsInventoryStats;
   inventoryCountsVisible?: () => boolean;

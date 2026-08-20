@@ -1,6 +1,5 @@
 import type { Resource, ResourceMetric, ResourceType } from '@/types/resource';
 import { formatProxmoxVersion } from '@/utils/proxmoxVersion';
-import { resourceMatchesSearch } from '@/utils/resourceSearchMatch';
 
 export type ProxmoxPageTabId = 'overview' | 'storage' | 'replication' | 'backups' | 'ceph' | 'mail';
 
@@ -195,27 +194,6 @@ export function isProxmoxChildOfNode(child: Resource, node: Resource): boolean {
     childScopes.length === 0 ||
     nodeScopes.size === 0 ||
     childScopes.some((scope) => nodeScopes.has(scope))
-  );
-}
-
-// filterProxmoxNodesForSearch narrows the nodes table to match the shared
-// workload search box. Because that box is a VM/LXC filter, filtering nodes by
-// the raw term alone collapses the table to its empty state whenever the term
-// matches a guest but not a node name — which misreads as "no Proxmox nodes"
-// while the matching guest is listed right below. Keep a node when it matches
-// the term directly OR when it hosts a guest that matches, so a guest search
-// still shows that guest's host node for context.
-export function filterProxmoxNodesForSearch(
-  nodes: Resource[],
-  guests: Resource[],
-  term: string,
-): Resource[] {
-  if (!term.trim()) return nodes;
-  const matchingGuests = guests.filter((guest) => resourceMatchesSearch(guest, term));
-  return nodes.filter(
-    (node) =>
-      resourceMatchesSearch(node, term) ||
-      matchingGuests.some((guest) => isProxmoxChildOfNode(guest, node)),
   );
 }
 

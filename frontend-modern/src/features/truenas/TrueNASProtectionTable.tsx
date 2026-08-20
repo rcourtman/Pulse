@@ -416,6 +416,7 @@ export const TrueNASProtectionTable: Component<{
                 search={tableState.search}
                 onSearchChange={tableState.setSearch}
                 searchPlaceholder="Search snapshots or replication"
+                searchSuggestions={tableState.searchSuggestions}
                 status={tableState.status()}
                 onStatusChange={tableState.setStatus}
                 statusOptions={statusOptions()}

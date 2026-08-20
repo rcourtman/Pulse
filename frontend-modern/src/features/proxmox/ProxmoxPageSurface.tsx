@@ -52,7 +52,6 @@ import {
   PROXMOX_TAB_SPECS,
   buildProxmoxPageModel,
   buildVisibleProxmoxTabSpecs,
-  filterProxmoxNodesForSearch,
   type ProxmoxPageModel,
   type ProxmoxPageTabId,
 } from './proxmoxPageModel';
@@ -318,18 +317,11 @@ function ProxmoxOverview(props: ProxmoxOverviewProps) {
       workloadsState.allGuests().length > 0,
   );
   const estateTopology = createMemo(() => buildProxmoxEstateTopology(currentModel().resources));
-  const filteredNodes = createMemo(() =>
-    filterProxmoxNodesForSearch(
-      currentModel().pveNodes,
-      currentModel().guests,
-      workloadsState.search(),
-    ),
-  );
 
   return (
     <div ref={overviewWidth.setElement} class="pulse-wide-data-surface space-y-4">
       <ProxmoxNodesTable
-        nodes={filteredNodes()}
+        nodes={currentModel().pveNodes}
         guests={currentModel().guests}
         metricDisplayMode={props.metricDisplayMode}
         metricHistoryRange={props.metricHistoryRange}
@@ -357,6 +349,7 @@ function ProxmoxOverview(props: ProxmoxOverviewProps) {
             ariaLabel="Proxmox workload filters"
             searchPlaceholder="Search VMs and LXCs by name, VMID, node, or status"
             searchEmptyMessage="Recent Proxmox workload searches appear here."
+            searchSuggestionWorkloads={workloadsState.allGuests}
             statusOptions={PROXMOX_WORKLOAD_STATUS_OPTIONS}
             inventoryStats={workloadsState.inventoryStats}
             inventoryCountsVisible={props.inventoryCountsVisible}

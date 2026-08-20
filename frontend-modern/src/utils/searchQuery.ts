@@ -11,6 +11,7 @@ import { getWorkloadCPUPercent } from '@/utils/workloads';
 export interface SearchTermSplit {
   needle: string;
   excludes: string[];
+  alternatives?: string[];
 }
 
 export function splitSearchExclusions(search: string): SearchTermSplit {
@@ -24,7 +25,12 @@ export function splitSearchExclusions(search: string): SearchTermSplit {
       kept.push(token);
     }
   }
-  return { needle: kept.join(' ').toLowerCase(), excludes };
+  const needle = kept.join(' ').toLowerCase();
+  const alternatives = needle
+    .split(',')
+    .map((term) => term.trim())
+    .filter(Boolean);
+  return alternatives.length > 1 ? { needle, excludes, alternatives } : { needle, excludes };
 }
 
 export function matchesSearchTermSplit(haystack: string, split: SearchTermSplit): boolean {
@@ -32,6 +38,9 @@ export function matchesSearchTermSplit(haystack: string, split: SearchTermSplit)
     if (haystack.includes(exclude)) return false;
   }
   if (!split.needle) return true;
+  if (split.alternatives) {
+    return split.alternatives.some((alternative) => haystack.includes(alternative));
+  }
   return haystack.includes(split.needle);
 }
 

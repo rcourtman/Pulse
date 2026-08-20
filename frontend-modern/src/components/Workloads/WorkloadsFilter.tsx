@@ -38,6 +38,7 @@ import type {
   WorkloadsMemoryDisplayBasis,
   WorkloadsStatusMode,
 } from './workloadsFilterModel';
+import { buildWorkloadSearchSuggestions } from './workloadSearchSuggestions';
 import {
   DEFAULT_WORKLOADS_SORT_DIRECTION,
   DEFAULT_WORKLOADS_SORT_KEY,
@@ -288,6 +289,10 @@ export const WorkloadsFilter: Component<WorkloadsFilterProps> = (props) => {
     return filters;
   };
 
+  const searchSuggestions = createMemo(() =>
+    buildWorkloadSearchSuggestions(props.searchSuggestionWorkloads?.() ?? []),
+  );
+
   return (
     <FilterBar
       role="group"
@@ -299,6 +304,7 @@ export const WorkloadsFilter: Component<WorkloadsFilterProps> = (props) => {
         placeholder: props.searchPlaceholder ?? 'Search workloads by name, ID, node, or image',
         historyKey: STORAGE_KEYS.WORKLOADS_SEARCH_HISTORY,
         emptyMessage: props.searchEmptyMessage ?? 'Recent workload searches appear here.',
+        suggestions: searchSuggestions,
         onBeforeAutoFocus: props.onBeforeAutoFocus,
       }}
       searchTrailing={props.searchTrailing}

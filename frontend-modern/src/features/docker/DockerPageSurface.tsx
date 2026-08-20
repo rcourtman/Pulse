@@ -53,6 +53,7 @@ import { DOCKER_QUERY_PARAMS, buildStandalonePath } from '@/routing/resourceLink
 import { asTrimmedString } from '@/utils/stringUtils';
 import { isPulseAgentPlatformResource } from '@/utils/agentResources';
 import type { Resource } from '@/types/resource';
+import { buildPlatformResourceSearchSuggestions } from '@/features/platformPage/platformSearchSuggestions';
 
 const DOCKER_RESOURCE_QUERY =
   'type=agent,docker-host,app-container,docker-service,docker-image,docker-volume,docker-network,docker-task,docker-swarm-node,docker-secret,docker-config';
@@ -205,6 +206,9 @@ function DockerStorage(props: { model: DockerPageModel }) {
   const [search, setSearch] = createSignal('');
   const [status, setStatus] = createSignal<DockerResourceStatusFilter>('all');
   const storageHosts = createMemo(() => props.model.hosts.filter(hasDockerEngineStorageUsage));
+  const searchSuggestions = createMemo(() =>
+    buildPlatformResourceSearchSuggestions([...storageHosts(), ...props.model.volumes]),
+  );
   const totalRows = createMemo(() => storageHosts().length + props.model.volumes.length);
   const visibleRows = createMemo(
     () =>
@@ -233,6 +237,7 @@ function DockerStorage(props: { model: DockerPageModel }) {
           search={search}
           onSearchChange={setSearch}
           searchPlaceholder="Search storage usage and volumes"
+          searchSuggestions={searchSuggestions}
           status={status()}
           onStatusChange={setStatus}
           statusOptions={PLATFORM_HEALTH_FILTER_OPTIONS}

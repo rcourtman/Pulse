@@ -726,6 +726,7 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
             search={tableState.search}
             onSearchChange={tableState.setSearch}
             searchPlaceholder="Search containers"
+            searchSuggestions={tableState.searchSuggestions}
             searchTips={DOCKER_CONTAINER_SEARCH_TIPS}
             status={tableState.status()}
             onStatusChange={tableState.setStatus}

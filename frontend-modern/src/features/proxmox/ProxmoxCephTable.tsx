@@ -29,6 +29,8 @@ import { PlatformResourceDetailToggleButton } from '@/features/platformPage/Plat
 import { useObservedElementWidth } from '@/hooks/useObservedElementWidth';
 import type { Resource, ResourceCephServiceMeta } from '@/types/resource';
 import { ProxmoxCephClusterDrawer } from './ProxmoxCephClusterDrawer';
+import { buildPlatformResourceSearchSuggestions } from '@/features/platformPage/platformSearchSuggestions';
+import { matchesSearchTermSplit, splitSearchExclusions } from '@/utils/searchQuery';
 
 // Ceph clusters are first-class Resources (type='ceph') with structured
 // metadata: pools, monitors, managers, OSDs, placement groups, health.
@@ -238,11 +240,11 @@ export const ProxmoxCephTable: Component<{
   };
 
   const filtered = createMemo(() => {
-    const term = search().trim().toLowerCase();
+    const split = splitSearchExclusions(search());
     const want = status();
     return props.resources.filter((cluster) => {
       if (want !== 'all' && classify(cluster) !== want) return false;
-      if (!term) return true;
+      if (!split.needle && split.excludes.length === 0) return true;
       const haystack = [
         cluster.name,
         cluster.displayName,
@@ -254,12 +256,15 @@ export const ProxmoxCephTable: Component<{
         .filter(Boolean)
         .join(' ')
         .toLowerCase();
-      return haystack.includes(term);
+      return matchesSearchTermSplit(haystack, split);
     });
   });
 
   const total = createMemo(() => props.resources.length);
   const visible = createMemo(() => filtered().length);
+  const searchSuggestions = createMemo(() =>
+    buildPlatformResourceSearchSuggestions(props.resources),
+  );
   const observedWidth = useObservedElementWidth();
   const layout = createMemo(() =>
     getPlatformTableContainerLayout(observedWidth.width() ?? 1920, [520, 720, 960, 1200]),
@@ -300,6 +305,7 @@ export const ProxmoxCephTable: Component<{
           search={search}
           onSearchChange={setSearch}
           searchPlaceholder="Search clusters, pools, FSID"
+          searchSuggestions={searchSuggestions}
           status={status()}
           onStatusChange={setStatus}
           statusOptions={STATUS_FILTER_OPTIONS}

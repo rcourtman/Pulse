@@ -24,6 +24,8 @@ import {
 } from '@/features/platformPage/sharedPlatformPage';
 import { useObservedElementWidth } from '@/hooks/useObservedElementWidth';
 import type { ReplicationJob, ReplicationJobsResponse } from '@/types/api';
+import { buildPlatformSearchSuggestions } from '@/features/platformPage/platformSearchSuggestions';
+import { matchesSearchTermSplit, splitSearchExclusions } from '@/utils/searchQuery';
 
 // Replication is a Proxmox-specific concept (zfs send/receive scheduled
 // between PVE nodes), so this table is bespoke rather than a filtered
@@ -274,11 +276,11 @@ export const ProxmoxReplicationTable: Component<{
   const [expandedJobKey, setExpandedJobKey] = createSignal<string | null>(null);
 
   const filtered = createMemo(() => {
-    const term = search().trim().toLowerCase();
+    const split = splitSearchExclusions(search());
     const want = status();
     return (props.jobs ?? []).filter((job) => {
       if (want !== 'all' && classifyJob(job) !== want) return false;
-      if (!term) return true;
+      if (!split.needle && split.excludes.length === 0) return true;
       const haystack = [
         job.jobId,
         job.guest,
@@ -292,12 +294,34 @@ export const ProxmoxReplicationTable: Component<{
         .filter(Boolean)
         .join(' ')
         .toLowerCase();
-      return haystack.includes(term);
+      return matchesSearchTermSplit(haystack, split);
     });
   });
 
   const total = createMemo(() => (props.jobs ?? []).length);
   const visible = createMemo(() => filtered().length);
+  const searchSuggestions = createMemo(() =>
+    buildPlatformSearchSuggestions(
+      (props.jobs ?? []).map((job, index) => ({
+        id: job.jobId || job.id || `job-${index}`,
+        label: job.guestName?.trim() || job.guest?.trim() || job.jobId || job.id,
+        description: [
+          job.jobId,
+          job.sourceNode && job.targetNode ? `${job.sourceNode} → ${job.targetNode}` : '',
+        ]
+          .filter(Boolean)
+          .join(' · '),
+        keywords: [
+          job.guest ?? '',
+          job.guestId?.toString() ?? '',
+          job.sourceNode ?? '',
+          job.targetNode ?? '',
+          job.instance ?? '',
+        ],
+      })),
+      'replication-job',
+    ),
+  );
   const observedWidth = useObservedElementWidth();
   const layout = createMemo(() =>
     getPlatformTableContainerLayout(observedWidth.width() ?? 1920, [520, 720, 960, 1200]),
@@ -358,6 +382,7 @@ export const ProxmoxReplicationTable: Component<{
               search={search}
               onSearchChange={setSearch}
               searchPlaceholder="Search jobs, guests, nodes"
+              searchSuggestions={searchSuggestions}
               status={status()}
               onStatusChange={setStatus}
               statusOptions={STATUS_FILTER_OPTIONS}

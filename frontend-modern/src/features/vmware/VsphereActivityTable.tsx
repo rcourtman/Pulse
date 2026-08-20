@@ -278,6 +278,7 @@ export const VsphereActivityTable: Component<{
             search={tableState.search}
             onSearchChange={tableState.setSearch}
             searchPlaceholder="Search vSphere activity"
+            searchSuggestions={tableState.searchSuggestions}
             status={tableState.status()}
             onStatusChange={tableState.setStatus}
             statusOptions={VSPHERE_ACTIVITY_STATUS_OPTIONS}
