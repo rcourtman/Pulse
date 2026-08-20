@@ -1012,9 +1012,26 @@ render_systemd_agent_unit() {
 	if [[ -n "$log_target" ]]; then
 		log_lines=$'\n'"StandardOutput=append:${log_target}"$'\n'"StandardError=append:${log_target}"
 	fi
+	local ambient_line=""
 	if systemd_agent_requires_lxc_attach; then
 		no_new_privileges="false"
 		restrict_suidsgid="false"
+	fi
+	if systemd_agent_may_attach_lxc; then
+		# lxc-attach into an unprivileged guest writes /proc/<pid>/uid_map,
+		# which needs CAP_SETUID in the parent user namespace. NoNewPrivileges
+		# drops CAP_SETUID from the effective set and also stops lxc-attach
+		# falling back to the setuid newuidmap/newgidmap helpers, so the probe
+		# dies with "write_id_mapping: Operation not permitted" and Docker in
+		# every unprivileged LXC stays invisible.
+		#
+		# This is granted for any PVE agent, not only one installed with
+		# --enable-commands, because command execution can be turned on later
+		# from the server (applyRemoteConfig) without rewriting this unit. That
+		# path used to leave the agent able to run commands but unable to
+		# attach to unprivileged guests, and the failure is only visible at
+		# debug level.
+		ambient_line=$'\n'"AmbientCapabilities=CAP_SETUID CAP_SETGID"
 	fi
 
 	local hardening_lines
@@ -1025,7 +1042,7 @@ ProtectKernelModules=true
 ProtectControlGroups=true
 LockPersonality=true
 RestrictSUIDSGID=${restrict_suidsgid}
-SystemCallArchitectures=native"
+SystemCallArchitectures=native${ambient_line}"
 	if [[ -d /usr/syno ]]; then
 		# Synology DSM ships a heavily patched, old systemd whose kernels
 		# cannot apply these sandbox directives; NoNewPrivileges alone kills
@@ -1053,7 +1070,18 @@ EOF
 }
 
 systemd_agent_requires_lxc_attach() {
-	if [[ "$ENABLE_COMMANDS" != "true" || "$ENABLE_PROXMOX" != "true" ]]; then
+	if [[ "$ENABLE_COMMANDS" != "true" ]]; then
+		return 1
+	fi
+	systemd_agent_may_attach_lxc
+}
+
+# Whether this host could ever need lxc-attach, independent of whether command
+# execution was enabled at install time. Command execution is also togglable
+# from the server after the fact, so the unit has to be provisioned for it up
+# front or the later toggle produces a half-working agent.
+systemd_agent_may_attach_lxc() {
+	if [[ "$ENABLE_PROXMOX" != "true" ]]; then
 		return 1
 	fi
 	case "${PROXMOX_TYPE:-}" in

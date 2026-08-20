@@ -467,6 +467,20 @@ upgrade, update, release, or artifact-selection behavior.
    `RestrictSUIDSGID=false`. That exception is deployment-owned operator truth
    for the Proxmox LXC Docker inventory path and must not leak into non-PVE or
    non-command agent installs.
+   Independently of the install-time command flag, the unit for **any** PVE
+   agent must grant `AmbientCapabilities=CAP_SETUID CAP_SETGID`. `lxc-attach`
+   into an unprivileged guest writes `/proc/<pid>/uid_map`, which requires
+   `CAP_SETUID` in the parent user namespace; `NoNewPrivileges` removes it from
+   the effective set and simultaneously blocks the setuid
+   `newuidmap`/`newgidmap` fallback, so the socket probe fails with
+   `write_id_mapping: 61 Operation not permitted`. Gating this grant on the
+   install-time flag is not sufficient, because command execution is also
+   enabled from the server at runtime (`applyRemoteConfig`) without rewriting
+   the unit; an agent switched on that way could run commands but never attach
+   to unprivileged guests, so Docker inside them silently vanished from the
+   Proxmox page. The grant is deliberately narrower than the
+   `NoNewPrivileges=false` exception above: it restores only the privilege
+   `lxc-attach` needs and leaves the rest of the sandbox intact.
 
 ## Extension Points
 

@@ -1983,6 +1983,18 @@ the intentionally sparse public response.
    `NoNewPrivileges=false` and `RestrictSUIDSGID=false`. That exception is
    limited to the PVE command-agent path; it must not become the default for
    Docker / Podman, host-only, PBS-only, or ordinary non-command agents.
+   The narrower `AmbientCapabilities=CAP_SETUID CAP_SETGID` grant is not bound
+   to the install-time flag and must be written for every `--enable-proxmox`
+   agent of type `pve` or `all`, with or without `--enable-commands`. Command
+   execution is also enabled from the server at runtime, where
+   `applyRemoteConfig` starts the command client without regenerating the unit,
+   so an agent provisioned only for the install-time case would accept commands
+   it cannot use: `lxc-attach` needs `CAP_SETUID` to write `/proc/<pid>/uid_map`
+   for unprivileged guests, and without it the Docker socket probe fails with
+   `write_id_mapping: 61 Operation not permitted` for every unprivileged LXC.
+   Because that probe failure is debug-level and retried each poll, the
+   resulting surface is silently incomplete rather than visibly broken, so the
+   capability must be provisioned up front rather than diagnosed later.
    Persistence-sensitive NAS targets must keep one canonical continuity model here: installer-owned bootstraps may use flash-backed or immutable-root launch hooks only as thin trampolines, while the durable wrapper, state, and reboot-surviving binary copy stay in the governed persistent state directory that updater continuity also refreshes.
    Unix `--update` re-entry must also preserve lifecycle identity for legacy
    v5.1.x agents that do not yet have v6 `connection.env` state. When a

@@ -266,7 +266,7 @@ func TestInstallSHAllowsProxmoxCommandAgentLXCAttach(t *testing.T) {
 	script := string(content)
 	required := []string{
 		`systemd_agent_requires_lxc_attach() {`,
-		`if [[ "$ENABLE_COMMANDS" != "true" || "$ENABLE_PROXMOX" != "true" ]]; then`,
+		`if [[ "$ENABLE_COMMANDS" != "true" ]]; then`,
 		`""|pve|all)`,
 		`no_new_privileges="false"`,
 		`restrict_suidsgid="false"`,
@@ -275,6 +275,37 @@ func TestInstallSHAllowsProxmoxCommandAgentLXCAttach(t *testing.T) {
 		if !strings.Contains(script, needle) {
 			t.Fatalf("install.sh missing Proxmox command-agent LXC attach service handling: %s", needle)
 		}
+	}
+}
+
+// A PVE agent installed without --enable-commands must still be provisioned for
+// lxc-attach, because command execution can be enabled later from the server
+// without rewriting the unit. Without CAP_SETUID, lxc-attach cannot write
+// /proc/<pid>/uid_map for unprivileged guests, so Docker inside every
+// unprivileged LXC silently disappears from the Proxmox page.
+func TestInstallSHGrantsLXCAttachCapabilitiesForAnyPVEAgent(t *testing.T) {
+	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
+	if err != nil {
+		t.Fatalf("read install.sh: %v", err)
+	}
+
+	script := string(content)
+	required := []string{
+		`systemd_agent_may_attach_lxc() {`,
+		`if [[ "$ENABLE_PROXMOX" != "true" ]]; then`,
+		`if systemd_agent_may_attach_lxc; then`,
+		`AmbientCapabilities=CAP_SETUID CAP_SETGID`,
+		`SystemCallArchitectures=native${ambient_line}`,
+	}
+	for _, needle := range required {
+		if !strings.Contains(script, needle) {
+			t.Fatalf("install.sh missing unprivileged-LXC attach capability grant: %s", needle)
+		}
+	}
+
+	if strings.Contains(script, `systemd_agent_may_attach_lxc`) &&
+		!strings.Contains(script, "command execution can be turned on later") {
+		t.Fatal("install.sh must document why the capability grant is not gated on ENABLE_COMMANDS")
 	}
 }
 
