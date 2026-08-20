@@ -713,9 +713,7 @@ describe('workloadSelectors', () => {
 
     it('returns the input list when no scope or exclusions apply', () => {
       const guests = [makeGuest(1), makeGuest(2)];
-      expect(
-        selectVisibleWorkloadInventory({ guests, excludedTypes: noExclusions }),
-      ).toBe(guests);
+      expect(selectVisibleWorkloadInventory({ guests, excludedTypes: noExclusions })).toBe(guests);
       expect(
         selectVisibleWorkloadInventory({
           guests,
