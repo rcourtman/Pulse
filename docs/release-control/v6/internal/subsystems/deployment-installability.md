@@ -3461,3 +3461,19 @@ install unlicensed with an explicit warning, and `PULSE_PROVIDER_MSP_SKIP_EVAL_L
 skips the request outright for air-gapped hosts. An existing evaluation licence
 on disk is reused rather than re-requested. The install must never abort
 because an evaluation licence could not be obtained.
+
+### Least-privilege agent install profile
+
+The unified agent installer (`scripts/install.sh`) offers
+`--least-privilege` on standard Linux systemd hosts: a dedicated nologin
+`pulse-agent` system user owns the service, state directory, and binary;
+docker-group membership covers socket reads; and the optional
+`--grant-smart` / `--grant-pct` flags install visudo-validated,
+exact-command sudoers rules with root-owned wrapper helpers wired through
+`PULSE_SMARTCTL_PATH` / `PULSE_PCT_PATH`. Installability boundaries: the
+flag is refused (never silently downgraded to root) on appliance platforms
+and non-systemd init systems, is mutually exclusive with
+`--enable-commands`, and `--update` preserves an installed profile and its
+grants by reading the existing unit. Uninstall removes the sudoers file and
+helper directory. `scripts/installtests/install_sh_test.go`
+(`TestInstallSHLeastPrivilegeProfile`) pins these invariants.

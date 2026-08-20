@@ -3063,3 +3063,20 @@ errored identity lookup. Monitoring does not reinterpret provider ownership or
 invent lifecycle state; Alerts owns signal suppression and unified resources
 owns persistence. `internal/monitoring/monitor_alert_intent_test.go` and the
 alerts intent-policy proof pin this adapter boundary.
+
+### Agent privilege profile is descriptive model state
+
+Host reports may carry an agent-authored privilege profile (effective root,
+service user, active smartctl/pct helpers). Ingest copies it verbatim into
+`models.Host.AgentPrivilege` (trimming the user), state deep-copy isolates it
+(`cloneHost`), the frontend host projection clones it, and the agent fleet
+doctor surfaces it as the dedicated descriptive `privilege` field rather than
+a health reason. A report without the block yields nil — the server never
+invents a profile — and a non-root profile must never degrade agent health on
+that evidence alone. Proofs:
+`pkg/agents/host/report_test.go` (`TestAgentInfoPrivilegeStatusRoundTrip`),
+`internal/monitoring/monitor_host_agents_test.go`
+(`TestApplyHostReportCarriesAgentPrivilegeProfile`),
+`internal/models/deepcopy_test.go` (`TestCloneHostIsolatesAgentPrivilege`),
+`internal/monitoring/agent_fleet_doctor_test.go`
+(`TestAgentFleetDiagnosticsSurfacesPrivilegeProfileWithoutDegradingHealth`).

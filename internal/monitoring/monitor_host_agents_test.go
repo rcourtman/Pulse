@@ -5066,3 +5066,48 @@ func TestMockModeDiscardsRealHostReports(t *testing.T) {
 		}
 	})
 }
+
+// The agent-authored privilege profile must survive ingest into model state
+// exactly, and a report without one must not invent a profile.
+func TestApplyHostReportCarriesAgentPrivilegeProfile(t *testing.T) {
+	report := agentshost.Report{
+		Agent: agentshost.AgentInfo{
+			ID:              "privilege-agent",
+			Version:         "6.3.0",
+			Type:            "unified",
+			IntervalSeconds: 30,
+			Privilege: &agentshost.PrivilegeStatus{
+				RunningAsRoot:  false,
+				ServiceUser:    "  pulse-agent  ",
+				SmartctlHelper: true,
+			},
+		},
+		Host:      agentshost.HostInfo{ID: "privilege-machine", Hostname: "privilege-host", Platform: "linux"},
+		Timestamp: time.Now().UTC(),
+	}
+
+	monitor := newTestMonitor(t)
+	host, err := monitor.ApplyHostReport(report, &config.APITokenRecord{ID: "privilege-token"})
+	if err != nil {
+		t.Fatalf("ApplyHostReport: %v", err)
+	}
+	if host.AgentPrivilege == nil ||
+		host.AgentPrivilege.RunningAsRoot ||
+		host.AgentPrivilege.ServiceUser != "pulse-agent" ||
+		!host.AgentPrivilege.SmartctlHelper ||
+		host.AgentPrivilege.PctHelper {
+		t.Fatalf("ingested privilege = %+v", host.AgentPrivilege)
+	}
+
+	report.Agent.Privilege = nil
+	report.Agent.ID = "privilege-agent-legacy"
+	report.Host.ID = "privilege-machine-legacy"
+	report.Host.Hostname = "privilege-host-legacy"
+	legacyHost, err := monitor.ApplyHostReport(report, &config.APITokenRecord{ID: "privilege-token"})
+	if err != nil {
+		t.Fatalf("ApplyHostReport legacy: %v", err)
+	}
+	if legacyHost.AgentPrivilege != nil {
+		t.Fatalf("legacy report invented a privilege profile: %+v", legacyHost.AgentPrivilege)
+	}
+}

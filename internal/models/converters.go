@@ -513,6 +513,7 @@ func (h Host) ToFrontend() HostFrontend {
 		AppliedConfig:   cloneAgentConfigFingerprint(h.AppliedConfig),
 		AgentUpdate:     cloneAgentUpdateStatus(h.AgentUpdate),
 		AgentModules:    cloneAgentModuleStatuses(h.AgentModules),
+		AgentPrivilege:  cloneAgentPrivilegeStatus(h.AgentPrivilege),
 		PackageUpdates:  cloneHostPackageUpdateStatus(h.PackageUpdates),
 		StorageCleanup:  cloneHostStorageCleanupStatus(h.StorageCleanup),
 		IsLegacy:        h.IsLegacy,
@@ -588,6 +589,14 @@ func cloneAgentModuleStatuses(values []AgentModuleStatus) []AgentModuleStatus {
 		return nil
 	}
 	return append([]AgentModuleStatus(nil), values...)
+}
+
+func cloneAgentPrivilegeStatus(value *AgentPrivilegeStatus) *AgentPrivilegeStatus {
+	if value == nil {
+		return nil
+	}
+	copy := *value
+	return &copy
 }
 
 // ToFrontend converts a DockerContainer to DockerContainerFrontend

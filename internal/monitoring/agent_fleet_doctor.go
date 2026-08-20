@@ -65,34 +65,35 @@ type AgentFleetDiagnosticSummary struct {
 }
 
 type AgentFleetAgentDiagnostic struct {
-	RowKey                 string                       `json:"rowKey"`
-	ID                     string                       `json:"id"`
-	AgentID                string                       `json:"agentId,omitempty"`
-	ConnectionID           string                       `json:"connectionId,omitempty"`
-	Name                   string                       `json:"name"`
-	Hostname               string                       `json:"hostname,omitempty"`
-	Platform               string                       `json:"platform,omitempty"`
-	OSName                 string                       `json:"osName,omitempty"`
-	OSVersion              string                       `json:"osVersion,omitempty"`
-	KernelVersion          string                       `json:"kernelVersion,omitempty"`
-	Architecture           string                       `json:"architecture,omitempty"`
-	MachineIDFingerprint   string                       `json:"machineIdFingerprint,omitempty"`
-	ReportIP               string                       `json:"reportIp,omitempty"`
-	InterfaceAddresses     []string                     `json:"interfaceAddresses,omitempty"`
-	Types                  []string                     `json:"types"`
-	Status                 string                       `json:"status"`
-	RawStatus              string                       `json:"rawStatus,omitempty"`
-	LastSeen               int64                        `json:"lastSeen,omitempty"`
-	IntervalSeconds        int                          `json:"intervalSeconds,omitempty"`
-	Version                string                       `json:"version,omitempty"`
-	ProfileID              string                       `json:"profileId,omitempty"`
-	ProfileName            string                       `json:"profileName,omitempty"`
-	ProfileVersion         int                          `json:"profileVersion,omitempty"`
-	DeployedProfileVersion int                          `json:"deployedProfileVersion,omitempty"`
-	AgentUpdate            *AgentFleetDiagnosticUpdate  `json:"agentUpdate,omitempty"`
-	AgentModules           []AgentFleetDiagnosticModule `json:"agentModules,omitempty"`
-	Reasons                []AgentFleetDiagnosticReason `json:"reasons"`
-	RepairActions          []AgentFleetDiagnosticRepair `json:"repairActions,omitempty"`
+	RowKey                 string                         `json:"rowKey"`
+	ID                     string                         `json:"id"`
+	AgentID                string                         `json:"agentId,omitempty"`
+	ConnectionID           string                         `json:"connectionId,omitempty"`
+	Name                   string                         `json:"name"`
+	Hostname               string                         `json:"hostname,omitempty"`
+	Platform               string                         `json:"platform,omitempty"`
+	OSName                 string                         `json:"osName,omitempty"`
+	OSVersion              string                         `json:"osVersion,omitempty"`
+	KernelVersion          string                         `json:"kernelVersion,omitempty"`
+	Architecture           string                         `json:"architecture,omitempty"`
+	MachineIDFingerprint   string                         `json:"machineIdFingerprint,omitempty"`
+	ReportIP               string                         `json:"reportIp,omitempty"`
+	InterfaceAddresses     []string                       `json:"interfaceAddresses,omitempty"`
+	Types                  []string                       `json:"types"`
+	Status                 string                         `json:"status"`
+	RawStatus              string                         `json:"rawStatus,omitempty"`
+	LastSeen               int64                          `json:"lastSeen,omitempty"`
+	IntervalSeconds        int                            `json:"intervalSeconds,omitempty"`
+	Version                string                         `json:"version,omitempty"`
+	ProfileID              string                         `json:"profileId,omitempty"`
+	ProfileName            string                         `json:"profileName,omitempty"`
+	ProfileVersion         int                            `json:"profileVersion,omitempty"`
+	DeployedProfileVersion int                            `json:"deployedProfileVersion,omitempty"`
+	AgentUpdate            *AgentFleetDiagnosticUpdate    `json:"agentUpdate,omitempty"`
+	AgentModules           []AgentFleetDiagnosticModule   `json:"agentModules,omitempty"`
+	Privilege              *AgentFleetDiagnosticPrivilege `json:"privilege,omitempty"`
+	Reasons                []AgentFleetDiagnosticReason   `json:"reasons"`
+	RepairActions          []AgentFleetDiagnosticRepair   `json:"repairActions,omitempty"`
 }
 
 type AgentFleetDiagnosticUpdate struct {
@@ -112,6 +113,17 @@ type AgentFleetDiagnosticModule struct {
 	State     string    `json:"state"`
 	LastError string    `json:"lastError,omitempty"`
 	UpdatedAt time.Time `json:"updatedAt"`
+}
+
+// AgentFleetDiagnosticPrivilege is the agent-reported privilege profile,
+// surfaced descriptively beside modules and update state. It is deliberately
+// not a Reason: a least-privilege install is an intentional hardening choice,
+// so it must never degrade the agent's health status by itself.
+type AgentFleetDiagnosticPrivilege struct {
+	RunningAsRoot  bool   `json:"runningAsRoot"`
+	ServiceUser    string `json:"serviceUser,omitempty"`
+	SmartctlHelper bool   `json:"smartctlHelper,omitempty"`
+	PctHelper      bool   `json:"pctHelper,omitempty"`
 }
 
 type AgentFleetDiagnosticReason struct {
@@ -420,6 +432,7 @@ func diagnoseAgentFleetSubject(
 		Version:              subject.version,
 		AgentUpdate:          agentFleetUpdateForSubject(subject),
 		AgentModules:         agentFleetModulesForSubject(subject),
+		Privilege:            agentFleetPrivilegeForSubject(subject),
 	}
 	if !subject.lastSeen.IsZero() {
 		result.LastSeen = subject.lastSeen.UnixMilli()
@@ -914,6 +927,19 @@ func agentFleetUpdateForSubject(subject agentFleetSubject) *AgentFleetDiagnostic
 		LastAttemptAt:    cloneFleetDiagnosticTime(update.LastAttemptAt),
 		LastSuccessAt:    cloneFleetDiagnosticTime(update.LastSuccessAt),
 		LastError:        safeDiagnosticError(update.LastError),
+	}
+}
+
+func agentFleetPrivilegeForSubject(subject agentFleetSubject) *AgentFleetDiagnosticPrivilege {
+	if subject.host == nil || subject.host.AgentPrivilege == nil {
+		return nil
+	}
+	privilege := subject.host.AgentPrivilege
+	return &AgentFleetDiagnosticPrivilege{
+		RunningAsRoot:  privilege.RunningAsRoot,
+		ServiceUser:    strings.TrimSpace(privilege.ServiceUser),
+		SmartctlHelper: privilege.SmartctlHelper,
+		PctHelper:      privilege.PctHelper,
 	}
 }
 

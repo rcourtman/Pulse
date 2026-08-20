@@ -1956,7 +1956,9 @@ func TestInstallSHUsesSharedServiceRenderers(t *testing.T) {
 		`render_freebsd_rc_agent_script() {`,
 		`render_systemd_agent_unit "$UNIT" "${INSTALL_DIR}/${BINARY_NAME}" "${EXEC_ARGS}" "network.target" "" "" ""`,
 		`render_systemd_agent_unit "$TRUENAS_SERVICE_STORAGE" "${TRUENAS_RUNTIME_BINARY}" "${EXEC_ARGS}" "network-online.target docker.service" "network-online.target" "root" "${TRUENAS_LOG_TARGET}"`,
-		`render_systemd_agent_unit "$UNIT" "${INSTALL_DIR}/${BINARY_NAME}" "${EXEC_ARGS}" "network-online.target docker.service" "network-online.target" "root" ""`,
+		// The Linux systemd unit takes the resolved service user so the
+		// least-privilege profile can swap root for pulse-agent.
+		`render_systemd_agent_unit "$UNIT" "${INSTALL_DIR}/${BINARY_NAME}" "${EXEC_ARGS}" "network-online.target docker.service" "network-online.target" "$SERVICE_USER" ""`,
 		`render_freebsd_rc_agent_script "$TRUENAS_SERVICE_STORAGE" "${TRUENAS_RUNTIME_BINARY}" "${EXEC_ARGS}"`,
 		`render_freebsd_rc_agent_script "$RCSCRIPT" "${INSTALL_DIR}/${BINARY_NAME}" "${EXEC_ARGS}"`,
 	}
@@ -5529,5 +5531,47 @@ func TestInstallSHVersionMismatchWarningIgnoresBuildMetadata(t *testing.T) {
 		if got != tc.warns {
 			t.Errorf("agent %q vs server %q: warns=%v, want %v", tc.agent, tc.server, got, tc.warns)
 		}
+	}
+}
+
+// The least-privilege profile must stay a real profile, not a cosmetic flag:
+// a dedicated nologin system user, validated exact-command sudoers grants, a
+// pct grant that can never widen into pct exec, env-pinned absolute helper
+// paths, update-time preservation of the profile, and no ambient capability
+// grant. Silently falling back to root on unsupported platforms is forbidden.
+func TestInstallSHLeastPrivilegeProfile(t *testing.T) {
+	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
+	if err != nil {
+		t.Fatalf("read install.sh: %v", err)
+	}
+
+	script := string(content)
+	required := []string{
+		`--least-privilege) LEAST_PRIVILEGE="true"; shift ;;`,
+		`--grant-smart) GRANT_SMART="true"; shift ;;`,
+		`--grant-pct) GRANT_PCT="true"; shift ;;`,
+		`LEAST_PRIVILEGE_USER="pulse-agent"`,
+		`PRIVILEGE_SUDOERS_FILE="/etc/sudoers.d/pulse-agent"`,
+		"--least-privilege and --enable-commands are mutually exclusive",
+		"--least-privilege is supported only on standard Linux systemd hosts",
+		`useradd --system --user-group --home-dir "$STATE_DIR" --no-create-home`,
+		`visudo -cf`,
+		`install -o root -g root -m 0440 "$sudoers_tmp" "$PRIVILEGE_SUDOERS_FILE"`,
+		"${pct_path} list, ${pct_path} df *",
+		`append_service_env "PULSE_SMARTCTL_PATH" "${PRIVILEGE_HELPER_DIR}/smartctl"`,
+		`append_service_env "PULSE_PCT_PATH" "${PRIVILEGE_HELPER_DIR}/pct"`,
+		`grep -q "^User=${LEAST_PRIVILEGE_USER}\$" "$UNIT"`,
+		`"network-online.target" "$SERVICE_USER" ""`,
+		"# The least-privilege profile never attaches into guests",
+		`rm -f "$PRIVILEGE_SUDOERS_FILE"`,
+	}
+	for _, needle := range required {
+		if !strings.Contains(script, needle) {
+			t.Fatalf("install.sh missing least-privilege profile invariant: %s", needle)
+		}
+	}
+
+	if strings.Contains(script, `NOPASSWD: ${pct_path}`) && !strings.Contains(script, "does NOT cover pct exec") {
+		t.Fatal("install.sh must document that the pct grant excludes pct exec")
 	}
 }

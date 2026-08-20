@@ -2,15 +2,26 @@
 
 Pulse agents incorporate several security mechanisms to ensure that the code running on your infrastructure is authentic and untampered with.
 
+**Start with the least privilege that answers your monitoring question.** For
+Proxmox VE, PBS, and PMG, that is usually no agent at all: API-only monitoring
+with a read-only token covers inventory, status, and metrics, and the
+generated setup script creates a privilege-separated monitoring user for it
+(see [Proxmox Deployment Choices](#proxmox-deployment-choices)). Install a
+host agent only where you want data the platform API cannot provide, and on
+Linux consider the supported
+[least-privilege profile](#least-privilege-agent-profile) before the root
+default.
+
 ## Agent Privilege Model
 
 Pulse's Linux/systemd installer runs the unified agent as `root` by default.
 That is intentional for full host telemetry: disk SMART data, mdadm/RAID state,
 temperature sensors, Docker or Podman socket reads, Proxmox host-local details
 that are not available through the API, and some NAS/platform integrations
-commonly require root or equivalent local privileges. Running the service as a
-lower-privilege user may work for a narrow subset of metrics, but it is not a
-supported full-telemetry profile today.
+commonly require root or equivalent local privileges. On Linux/systemd hosts,
+the supported alternative is the least-privilege profile documented below; it
+trades the root-only collectors it has not been granted for a dedicated
+non-root service user.
 
 Treat a host agent like other infrastructure monitoring software with local
 root read access:
@@ -123,12 +134,40 @@ mirrors the generated read/monitoring ACLs onto both the service user and the
 token. For PBS, the generated script grants the `Audit` ACL to both the service
 user and token.
 
-Running `pulse-agent` as a custom non-root systemd user is possible by editing
-the service unit, but it is not a supported full-telemetry mode today. Expect
-gaps in SMART, temperature, Docker socket, ZFS/Ceph/mdadm, mount, and platform
-integration data unless you deliberately grant equivalent capabilities or group
-access. If you choose that route, treat it as a local hardening profile and
-verify the exact metrics you care about after the change.
+## Least-Privilege Agent Profile
+
+On standard Linux systemd hosts, `install.sh --least-privilege` is a supported
+alternative to the root profile. It runs the service as a dedicated
+`pulse-agent` system user (nologin shell, owning only its state directory and
+binary), joins the `docker` group when Docker monitoring is enabled so socket
+reads keep working, and keeps every hardening directive of the root unit while
+dropping the LXC-attach ambient capability grant entirely.
+
+Two optional flags restore the collectors that genuinely need elevation, each
+through an exact-command sudoers grant validated with `visudo` and a
+root-owned wrapper the agent is pointed at via an absolute-path-only
+environment override:
+
+- `--grant-smart` allows exactly `smartctl`, restoring SMART disk health.
+- `--grant-pct` allows exactly `pct list` and `pct df`, restoring Proxmox LXC
+  filesystem capacity. The grant deliberately excludes `pct exec`, `start`,
+  `stop`, and `enter`, so guest Docker inventory stays a root-profile feature.
+
+What the profile gives up: command execution (`--enable-commands` is refused
+and a later server-side enable requires reinstalling the root profile),
+`pct exec` guest Docker inventory, and any platform integration that needs
+device or socket access you have not granted. Core metrics, mounts, `/proc`
+RAID state, hwmon temperatures, and Docker socket reads work without root.
+Ungranted collectors fail soft, and the agent reports its privilege profile so
+**Settings → Infrastructure → Agent Doctor** shows the service user and active
+helpers instead of presenting missing collectors as a fault. Appliance
+platforms (TrueNAS, Synology, QNAP, Unraid) and non-systemd init systems keep
+the root profile; the installer refuses `--least-privilege` there rather than
+silently falling back to root.
+
+`--update` preserves an existing least-privilege profile and its grants
+without the flags being repeated. Uninstall removes the sudoers file and
+helpers; the inert system user is left behind deliberately.
 
 ## Supply-Chain Boundary
 

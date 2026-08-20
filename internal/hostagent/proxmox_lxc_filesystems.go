@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -16,6 +17,20 @@ import (
 
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 )
+
+// resolvePctPath mirrors resolveSmartctlPath: PULSE_PCT_PATH lets a
+// least-privilege install point the read-only pct list/df queries at a scoped
+// privilege helper instead of requiring the whole agent to run as root. The
+// override must be absolute so a PATH-relative name cannot be hijacked.
+func resolvePctPath(lookPath func(string) (string, error)) (string, error) {
+	if configured := strings.TrimSpace(os.Getenv("PULSE_PCT_PATH")); configured != "" {
+		if !filepath.IsAbs(configured) {
+			return "", fmt.Errorf("PULSE_PCT_PATH must be an absolute path")
+		}
+		return configured, nil
+	}
+	return lookPath("pct")
+}
 
 const (
 	proxmoxLXCQueryTimeout       = 10 * time.Second
@@ -40,7 +55,7 @@ func (a *Agent) collectProxmoxLXCFilesystems(ctx context.Context) *agentshost.Pr
 	if a.collector.GOOS() != "linux" {
 		return nil
 	}
-	pctPath, err := a.collector.LookPath("pct")
+	pctPath, err := resolvePctPath(a.collector.LookPath)
 	if err != nil {
 		if !errors.Is(err, exec.ErrNotFound) && !os.IsNotExist(err) {
 			a.logger.Debug().Err(err).Msg("Failed to locate pct for Proxmox LXC filesystems")

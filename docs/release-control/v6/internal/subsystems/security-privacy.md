@@ -2278,3 +2278,15 @@ endpoint remains non-secret release metadata; this binding does not expose
 inventory, credentials, update selections, or command authority.
 `TestRunBindsPackagedVersionIdentity` in `pkg/server/server_test.go` pins the
 wrapper-runtime boundary.
+
+### Least-privilege agent install profile boundaries
+
+The least-privilege agent install profile is a security boundary, not a
+convenience flag: `install.sh --least-privilege` must keep the service user
+non-root with a nologin shell, keep every sudoers grant exact-command and
+visudo-validated with the pct grant excluding `pct exec`/`start`/`stop`/
+`enter`, refuse `--enable-commands` under the profile, refuse unsupported
+platforms instead of silently reverting to root, and drop the LXC-attach
+ambient capability grant. The agent-reported privilege profile is
+informational: the fleet doctor presents it descriptively and must not treat
+a non-root agent as unhealthy on that evidence alone.

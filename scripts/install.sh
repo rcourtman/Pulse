@@ -26,6 +26,9 @@
 #   --server-fingerprint <sha256> Pin the Pulse server leaf certificate
 #   --observers-file <path> Report to additional observer Pulse instances
 #   --enable-commands   Enable Pulse command execution on agent (disabled by default; required for Patrol actions and Proxmox LXC Docker inventory)
+#   --least-privilege   Run the agent as the dedicated 'pulse-agent' system user instead of root (Linux systemd only; SMART, Proxmox LXC filesystems, and command execution need root or an explicit grant)
+#   --grant-smart       With --least-privilege: allow SMART collection through an exact-command sudoers grant for smartctl
+#   --grant-pct         With --least-privilege: allow Proxmox LXC filesystem capacity through a sudoers grant restricted to 'pct list' and 'pct df'
 #   --health-addr <addr> Health/metrics listener address (default: 127.0.0.1:9191, use "" to disable)
 #   --update            Update an existing agent using saved connection state
 #   --uninstall         Remove the agent
@@ -116,6 +119,17 @@ ROOTLESS_RUNTIME_KIND=""
 ROOTLESS_RUNTIME_SOCKET_PATH=""
 ROOTLESS_RUNTIME_SOCKET_URI=""
 ROOTLESS_RUNTIME_XDG_DIR=""
+
+# Least-privilege profile: run the service as a dedicated system user instead
+# of root, with optional exact-command sudo helpers for the two collectors
+# that genuinely need elevation (smartctl, pct list/df). Linux systemd only.
+LEAST_PRIVILEGE="false"
+GRANT_SMART="false"
+GRANT_PCT="false"
+SERVICE_USER="root"
+LEAST_PRIVILEGE_USER="pulse-agent"
+PRIVILEGE_HELPER_DIR="/usr/local/lib/pulse-agent"
+PRIVILEGE_SUDOERS_FILE="/etc/sudoers.d/pulse-agent"
 
 SYSTEMD_ENV_LINES=""
 SHELL_EXPORT_LINES=""
@@ -481,6 +495,9 @@ Options:
   --server-fingerprint <sha256> Pin the Pulse server leaf certificate for agent connections
   --observers-file <path> Absolute path to private JSON config for report-only observer Pulse destinations
   --enable-commands       Enable Pulse command execution (disabled by default; required for Patrol actions and Proxmox LXC Docker inventory)
+  --least-privilege       Run the agent as the 'pulse-agent' system user instead of root (Linux systemd only)
+  --grant-smart           With --least-privilege: exact-command sudoers grant so SMART collection keeps working
+  --grant-pct             With --least-privilege: sudoers grant restricted to 'pct list'/'pct df' so Proxmox LXC filesystem capacity keeps working
   --health-addr <addr>    Health/metrics listener address (default: 127.0.0.1:9191; use "" to disable)
   --enroll                Exchange bootstrap token for runtime token (deploy wizard)
   --update                Update an existing agent using saved connection state
@@ -1081,6 +1098,12 @@ systemd_agent_requires_lxc_attach() {
 # from the server after the fact, so the unit has to be provisioned for it up
 # front or the later toggle produces a half-working agent.
 systemd_agent_may_attach_lxc() {
+	# The least-privilege profile never attaches into guests: pct exec and
+	# command execution stay root-profile features, so it does not get the
+	# CAP_SETUID/CAP_SETGID ambient grant either.
+	if [[ "$LEAST_PRIVILEGE" == "true" ]]; then
+		return 1
+	fi
 	if [[ "$ENABLE_PROXMOX" != "true" ]]; then
 		return 1
 	fi
@@ -2955,6 +2978,9 @@ while [[ $# -gt 0 ]]; do
         --server-fingerprint) SERVER_FINGERPRINT="$2"; shift 2 ;;
         --observers-file) OBSERVERS_FILE="$2"; shift 2 ;;
         --enable-commands) ENABLE_COMMANDS="true"; shift ;;
+        --least-privilege) LEAST_PRIVILEGE="true"; shift ;;
+        --grant-smart) GRANT_SMART="true"; shift ;;
+        --grant-pct) GRANT_PCT="true"; shift ;;
         --health-addr) HEALTH_ADDR="$2"; HEALTH_ADDR_SET="true"; shift 2 ;;
         --enroll) ENROLL="true"; shift ;;
         --update) UPDATE_ONLY="true"; shift ;;
@@ -3009,6 +3035,13 @@ fi
 
 if [[ -n "$PROXMOX_TYPE" && "$PROXMOX_TYPE" != "pve" && "$PROXMOX_TYPE" != "pbs" ]]; then
     fail "Invalid --proxmox-type value: ${PROXMOX_TYPE} (expected 'pve' or 'pbs')"
+fi
+
+if [[ "$GRANT_SMART" == "true" || "$GRANT_PCT" == "true" ]] && [[ "$LEAST_PRIVILEGE" != "true" ]]; then
+    fail "--grant-smart and --grant-pct only apply with --least-privilege (a root agent needs no grants)" "$EXIT_MISSING_ARGS"
+fi
+if [[ "$LEAST_PRIVILEGE" == "true" && "$ENABLE_COMMANDS" == "true" ]]; then
+    fail "--least-privilege and --enable-commands are mutually exclusive: governed command execution requires the root profile" "$EXIT_MISSING_ARGS"
 fi
 
 # --- Check Root ---
@@ -3319,6 +3352,12 @@ if [[ "$UNINSTALL" == "true" ]]; then
     # Remove agent state directory (contains agent ID, proxmox registration state, etc.)
     remove_agent_state_dir "$STATE_DIR"
 
+    # Remove least-privilege helper artifacts. The pulse-agent system user is
+    # deliberately left behind: deleting accounts can orphan files elsewhere,
+    # and an inert nologin system user is harmless.
+    rm -f "$PRIVILEGE_SUDOERS_FILE"
+    rm -rf "$PRIVILEGE_HELPER_DIR"
+
     # Remove log files
     rm -f /var/log/pulse-agent.log
 
@@ -3490,6 +3529,121 @@ is_install_dir_writable() {
         return 0
     fi
     return 1
+}
+
+# The least-privilege profile is supported only on standard Linux systemd
+# hosts: appliance platforms (TrueNAS, Synology, QNAP, Unraid) and non-systemd
+# init systems keep the root profile because their service managers, mounts,
+# or vendor tooling assume it. Failing here is deliberate — a flag that
+# silently falls back to root would defeat its purpose.
+if [[ "$LEAST_PRIVILEGE" == "true" && "$UNINSTALL" != "true" ]]; then
+    if [[ "$(uname -s)" != "Linux" ]] || ! command -v systemctl >/dev/null 2>&1 ||
+        is_truenas || [[ -d /usr/syno ]] || [[ -f /etc/unraid-version ]] ||
+        [[ -d /boot/config/plugins ]] || [[ -x /sbin/getcfg ]]; then
+        fail "--least-privilege is supported only on standard Linux systemd hosts. This platform keeps the root profile; see docs/AGENT_SECURITY.md for the per-platform privilege model." "$EXIT_MISSING_ARGS"
+    fi
+fi
+
+# Create the dedicated service account for the least-privilege profile and
+# hand it the state directory plus the agent binary (self-update swaps the
+# binary in place, so the service user must own it).
+provision_least_privilege_user() {
+    if ! id -u "$LEAST_PRIVILEGE_USER" >/dev/null 2>&1; then
+        if ! command -v useradd >/dev/null 2>&1; then
+            fail "--least-privilege needs useradd to create the ${LEAST_PRIVILEGE_USER} system user" "$EXIT_MISSING_ARGS"
+        fi
+        local nologin_shell="/usr/sbin/nologin"
+        if [[ ! -x "$nologin_shell" ]]; then
+            nologin_shell="/sbin/nologin"
+        fi
+        if [[ ! -x "$nologin_shell" ]]; then
+            nologin_shell="/bin/false"
+        fi
+        useradd --system --user-group --home-dir "$STATE_DIR" --no-create-home \
+            --shell "$nologin_shell" "$LEAST_PRIVILEGE_USER" ||
+            fail "Failed to create the ${LEAST_PRIVILEGE_USER} system user" "$EXIT_MISSING_ARGS"
+        log_info "Created system user ${LEAST_PRIVILEGE_USER}"
+    fi
+
+    # Docker/Podman socket reads need group membership, not root. Auto-detect
+    # mirrors the module default: only an explicit --disable-docker skips it.
+    if [[ "$ENABLE_DOCKER" != "false" ]] && getent group docker >/dev/null 2>&1; then
+        usermod -aG docker "$LEAST_PRIVILEGE_USER" 2>/dev/null || true
+    fi
+
+    chown -R "${LEAST_PRIVILEGE_USER}:${LEAST_PRIVILEGE_USER}" "$STATE_DIR" 2>/dev/null || true
+    chown "${LEAST_PRIVILEGE_USER}:${LEAST_PRIVILEGE_USER}" "${INSTALL_DIR}/${BINARY_NAME}" 2>/dev/null || true
+}
+
+# Write one privilege helper: a root-owned wrapper that execs the real binary
+# through sudo -n, plus the sudoers rule that makes exactly that invocation
+# possible. The agent is pointed at the wrapper via an env override that only
+# accepts absolute paths.
+write_privilege_helper() {
+    local helper_name="$1"
+    local real_path="$2"
+    local sudoers_spec="$3"
+    local helper_path="${PRIVILEGE_HELPER_DIR}/${helper_name}"
+
+    mkdir -p "$PRIVILEGE_HELPER_DIR"
+    chmod 755 "$PRIVILEGE_HELPER_DIR"
+    cat > "$helper_path" <<HELPER
+#!/bin/sh
+# Pulse least-privilege helper: runs ${real_path} through the exact-command
+# sudoers grant in ${PRIVILEGE_SUDOERS_FILE}. Managed by install.sh.
+exec sudo -n ${real_path} "\$@"
+HELPER
+    chown root:root "$helper_path"
+    chmod 755 "$helper_path"
+
+    PRIVILEGE_SUDOERS_CONTENT+="${LEAST_PRIVILEGE_USER} ALL=(root) NOPASSWD: ${sudoers_spec}"$'\n'
+}
+
+# Install the requested sudo grants and point the agent at the wrappers.
+provision_privilege_helpers() {
+    if [[ "$GRANT_SMART" != "true" && "$GRANT_PCT" != "true" ]]; then
+        return 0
+    fi
+    if ! command -v sudo >/dev/null 2>&1; then
+        fail "--grant-smart/--grant-pct need sudo installed on this host" "$EXIT_MISSING_ARGS"
+    fi
+
+    PRIVILEGE_SUDOERS_CONTENT="# Pulse least-privilege agent grants. Managed by install.sh."$'\n'
+
+    if [[ "$GRANT_SMART" == "true" ]]; then
+        local smartctl_path
+        smartctl_path="$(command -v smartctl 2>/dev/null || true)"
+        if [[ -z "$smartctl_path" ]]; then
+            fail "--grant-smart requires smartctl (smartmontools) on this host" "$EXIT_MISSING_ARGS"
+        fi
+        write_privilege_helper "smartctl" "$smartctl_path" "$smartctl_path"
+        append_service_env "PULSE_SMARTCTL_PATH" "${PRIVILEGE_HELPER_DIR}/smartctl"
+    fi
+
+    if [[ "$GRANT_PCT" == "true" ]]; then
+        local pct_path
+        pct_path="$(command -v pct 2>/dev/null || true)"
+        if [[ -z "$pct_path" ]]; then
+            fail "--grant-pct requires the Proxmox pct tool on this host" "$EXIT_MISSING_ARGS"
+        fi
+        # Restricted to the two read-only queries the collector issues. This
+        # deliberately does NOT cover pct exec, start, stop, or enter.
+        write_privilege_helper "pct" "$pct_path" "${pct_path} list, ${pct_path} df *"
+        append_service_env "PULSE_PCT_PATH" "${PRIVILEGE_HELPER_DIR}/pct"
+    fi
+
+    local sudoers_tmp
+    sudoers_tmp="$(mktemp)"
+    printf '%s' "$PRIVILEGE_SUDOERS_CONTENT" > "$sudoers_tmp"
+    if command -v visudo >/dev/null 2>&1; then
+        if ! visudo -cf "$sudoers_tmp" >/dev/null 2>&1; then
+            rm -f "$sudoers_tmp"
+            fail "Generated sudoers rules failed visudo validation; not installing them" "$EXIT_MISSING_ARGS"
+        fi
+    fi
+    install -o root -g root -m 0440 "$sudoers_tmp" "$PRIVILEGE_SUDOERS_FILE"
+    rm -f "$sudoers_tmp"
+    log_info "Installed scoped sudoers grants at ${PRIVILEGE_SUDOERS_FILE}"
 }
 
 if [[ "$(uname -s)" == "Linux" ]] && is_truenas; then
@@ -4383,13 +4537,42 @@ if command -v systemctl >/dev/null 2>&1; then
     TOKEN_FILE="${TOKEN_DIR}/token"
     log_info "Configuring Systemd service at $UNIT..."
 
+    # A least-privilege install must survive updates that do not repeat the
+    # flags: recover the profile and its grants from the existing unit before
+    # rendering a replacement, so an --update never silently reverts the
+    # service to root.
+    if [[ -f "$UNIT" ]]; then
+        if [[ "$LEAST_PRIVILEGE" != "true" ]] && grep -q "^User=${LEAST_PRIVILEGE_USER}\$" "$UNIT"; then
+            if [[ "$ENABLE_COMMANDS" == "true" ]]; then
+                fail "This agent runs the least-privilege profile; --enable-commands requires reinstalling the root profile first" "$EXIT_MISSING_ARGS"
+            fi
+            LEAST_PRIVILEGE="true"
+            log_info "Preserving existing least-privilege profile (User=${LEAST_PRIVILEGE_USER})"
+        fi
+        if [[ "$LEAST_PRIVILEGE" == "true" ]]; then
+            if [[ "$GRANT_SMART" != "true" ]] && grep -q "PULSE_SMARTCTL_PATH=${PRIVILEGE_HELPER_DIR}/" "$UNIT"; then
+                GRANT_SMART="true"
+            fi
+            if [[ "$GRANT_PCT" != "true" ]] && grep -q "PULSE_PCT_PATH=${PRIVILEGE_HELPER_DIR}/" "$UNIT"; then
+                GRANT_PCT="true"
+            fi
+        fi
+    fi
+
     ensure_runtime_token_file "$STATE_DIR"
     clear_proxmox_state_if_needed
+
+    if [[ "$LEAST_PRIVILEGE" == "true" ]]; then
+        SERVICE_USER="$LEAST_PRIVILEGE_USER"
+        provision_least_privilege_user
+        provision_privilege_helpers
+        log_info "Least-privilege profile: service runs as ${SERVICE_USER}. SMART $( [[ "$GRANT_SMART" == "true" ]] && echo "via scoped sudo helper" || echo "unavailable without --grant-smart" ); Proxmox LXC filesystems $( [[ "$GRANT_PCT" == "true" ]] && echo "via scoped sudo helper" || echo "unavailable without --grant-pct" )."
+    fi
 
     # Build command line args with --token-file instead of the raw token.
     build_exec_args
 
-    render_systemd_agent_unit "$UNIT" "${INSTALL_DIR}/${BINARY_NAME}" "${EXEC_ARGS}" "network-online.target docker.service" "network-online.target" "root" ""
+    render_systemd_agent_unit "$UNIT" "${INSTALL_DIR}/${BINARY_NAME}" "${EXEC_ARGS}" "network-online.target docker.service" "network-online.target" "$SERVICE_USER" ""
     # Restrict service file permissions (contains no secrets now, but good practice)
     chmod 644 "$UNIT"
 

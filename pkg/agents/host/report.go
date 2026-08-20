@@ -167,6 +167,25 @@ type AgentInfo struct {
 	AppliedConfig           *ConfigFingerprint `json:"appliedConfig,omitempty"`
 	Update                  *UpdateStatus      `json:"update,omitempty"`
 	Modules                 []ModuleStatus     `json:"modules,omitempty"`
+	Privilege               *PrivilegeStatus   `json:"privilege,omitempty"`
+}
+
+// PrivilegeStatus is the agent-authored view of the privilege it actually runs
+// with, so the server can present a least-privilege install as an intentional
+// profile instead of a broken agent. It is informational only: it never grants
+// anything, and the server must not treat a non-root agent as unhealthy on
+// this evidence alone.
+type PrivilegeStatus struct {
+	RunningAsRoot bool   `json:"runningAsRoot"`
+	ServiceUser   string `json:"serviceUser,omitempty"`
+	// SmartctlHelper reports that a PULSE_SMARTCTL_PATH override is in effect,
+	// which a least-privilege install uses to route SMART reads through a
+	// scoped privilege helper.
+	SmartctlHelper bool `json:"smartctlHelper,omitempty"`
+	// PctHelper reports that a PULSE_PCT_PATH override is in effect, which a
+	// least-privilege install on a Proxmox node uses to route the read-only
+	// pct list/df queries through a scoped privilege helper.
+	PctHelper bool `json:"pctHelper,omitempty"`
 }
 
 // ModuleStatus describes whether an enabled Unified Agent module initialized

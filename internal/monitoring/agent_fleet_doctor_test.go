@@ -363,6 +363,47 @@ func TestAgentFleetDiagnosticsSurfacesReportedUpdateModuleAndIdentityEvidence(t 
 	}
 }
 
+// A least-privilege install is an intentional hardening profile: the doctor
+// must surface the reported privilege descriptively and must not degrade the
+// agent's health status on that evidence alone.
+func TestAgentFleetDiagnosticsSurfacesPrivilegeProfileWithoutDegradingHealth(t *testing.T) {
+	now := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	monitor := newAgentFleetDoctorTestMonitor(t)
+	monitor.state.UpsertHost(models.Host{
+		ID:              "agent-least-priv",
+		Hostname:        "pve-node",
+		Status:          "online",
+		LastSeen:        now.Add(-30 * time.Second),
+		IntervalSeconds: 30,
+		AgentVersion:    "6.2.0",
+		AgentPrivilege: &models.AgentPrivilegeStatus{
+			RunningAsRoot:  false,
+			ServiceUser:    "pulse-agent",
+			SmartctlHelper: true,
+			PctHelper:      false,
+		},
+	})
+
+	diagnostics := monitor.GetAgentFleetDiagnosticsForTarget("6.2.0", "6.2.0", now)
+	agent := requireAgentDiagnostic(t, diagnostics, "agent-agent-least-priv")
+
+	if agent.Privilege == nil {
+		t.Fatal("privilege profile missing from diagnostics")
+	}
+	if agent.Privilege.RunningAsRoot || agent.Privilege.ServiceUser != "pulse-agent" ||
+		!agent.Privilege.SmartctlHelper || agent.Privilege.PctHelper {
+		t.Fatalf("privilege profile = %+v", agent.Privilege)
+	}
+	if agent.Status != AgentFleetStatusHealthy {
+		t.Fatalf("least-privilege agent status = %q, want healthy; reasons = %+v", agent.Status, agent.Reasons)
+	}
+	for _, reason := range agent.Reasons {
+		if strings.Contains(strings.ToLower(reason.Message), "privilege") {
+			t.Fatalf("privilege surfaced as a health reason: %+v", reason)
+		}
+	}
+}
+
 func TestAgentFleetDiagnosticsUpdaterReasonCodes(t *testing.T) {
 	now := time.Date(2026, 7, 13, 12, 0, 0, 0, time.UTC)
 	tests := []struct {

@@ -126,6 +126,44 @@ func TestCustomSensorMetricJSONRoundTrip(t *testing.T) {
 	}
 }
 
+// The privilege block is agent-authored fact, not configuration: it must
+// survive a JSON round trip exactly, and a legacy report without it must
+// decode to nil rather than a zero-value profile pretending to be evidence.
+func TestAgentInfoPrivilegeStatusRoundTrip(t *testing.T) {
+	agent := AgentInfo{
+		ID: "agent-privilege",
+		Privilege: &PrivilegeStatus{
+			RunningAsRoot:  false,
+			ServiceUser:    "pulse-agent",
+			SmartctlHelper: true,
+			PctHelper:      false,
+		},
+	}
+	encoded, err := json.Marshal(agent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var decoded AgentInfo
+	if err := json.Unmarshal(encoded, &decoded); err != nil {
+		t.Fatal(err)
+	}
+	if decoded.Privilege == nil ||
+		decoded.Privilege.RunningAsRoot ||
+		decoded.Privilege.ServiceUser != "pulse-agent" ||
+		!decoded.Privilege.SmartctlHelper ||
+		decoded.Privilege.PctHelper {
+		t.Fatalf("privilege round trip = %+v", decoded.Privilege)
+	}
+
+	var legacy AgentInfo
+	if err := json.Unmarshal([]byte(`{"id":"legacy"}`), &legacy); err != nil {
+		t.Fatal(err)
+	}
+	if legacy.Privilege != nil {
+		t.Fatalf("legacy report invented a privilege profile: %+v", legacy.Privilege)
+	}
+}
+
 func TestAgentInfo_Fields(t *testing.T) {
 	agent := AgentInfo{
 		ID:              "agent-123",

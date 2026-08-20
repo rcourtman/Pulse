@@ -121,6 +121,46 @@ describe('Agent Doctor model', () => {
     expect(targets[0].commandBlockedReason).toBeUndefined();
   });
 
+  it('describes the reported privilege profile without treating least privilege as a fault', () => {
+    const connection = connectionFixture();
+    const [rootTarget] = collectInfrastructureAgentDoctorTargets({
+      rows: [rowFixture(connection)],
+      connections: [connection],
+      diagnostics: [diagnosticFixture({ privilege: { runningAsRoot: true } })],
+      diagnosticsAvailable: true,
+      targetVersion: '6.2.0',
+    });
+    expect(rootTarget.privilegeLabel).toBe('root');
+
+    const [leastPrivTarget] = collectInfrastructureAgentDoctorTargets({
+      rows: [rowFixture(connection)],
+      connections: [connection],
+      diagnostics: [
+        diagnosticFixture({
+          privilege: {
+            runningAsRoot: false,
+            serviceUser: 'pulse-agent',
+            smartctlHelper: true,
+            pctHelper: false,
+          },
+        }),
+      ],
+      diagnosticsAvailable: true,
+      targetVersion: '6.2.0',
+    });
+    // Descriptive facts only: the service user and its active scoped helpers.
+    expect(leastPrivTarget.privilegeLabel).toBe(
+      'least privilege (pulse-agent) · SMART helper active',
+    );
+    // The profile itself must never be surfaced as an issue.
+    expect(
+      leastPrivTarget.reasons.some((reason) => reason.message.toLowerCase().includes('privilege')),
+    ).toBe(false);
+
+    const report = formatInfrastructureAgentDoctorReport([leastPrivTarget]);
+    expect(report).toContain('Privilege least privilege (pulse-agent) · SMART helper active');
+  });
+
   it('turns a missing credential into a token-gated authentication repair', () => {
     const connection = connectionFixture({
       agentUpdateAvailable: false,

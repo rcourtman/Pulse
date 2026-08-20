@@ -2993,6 +2993,7 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 		AppliedConfig:           convertAgentConfigFingerprint(report.Agent.AppliedConfig),
 		AgentUpdate:             agentUpdate,
 		AgentModules:            convertAgentModuleStatuses(report.Agent.Modules),
+		AgentPrivilege:          convertAgentPrivilegeStatus(report.Agent.Privilege),
 		PackageUpdates:          convertHostPackageUpdateStatus(report.Host.PackageUpdates, observedAt),
 		StorageCleanup:          convertHostStorageCleanupStatus(report.Host.StorageCleanup, observedAt),
 		IsLegacy:                isLegacyAgent(report.Agent.Type),
@@ -3380,6 +3381,21 @@ func convertAgentModuleStatuses(values []agentshost.ModuleStatus) []models.Agent
 		})
 	}
 	return result
+}
+
+// convertAgentPrivilegeStatus copies the agent-authored privilege profile
+// into model state. It is informational only: nothing downstream may treat a
+// non-root agent as unhealthy on this evidence alone.
+func convertAgentPrivilegeStatus(value *agentshost.PrivilegeStatus) *models.AgentPrivilegeStatus {
+	if value == nil {
+		return nil
+	}
+	return &models.AgentPrivilegeStatus{
+		RunningAsRoot:  value.RunningAsRoot,
+		ServiceUser:    strings.TrimSpace(value.ServiceUser),
+		SmartctlHelper: value.SmartctlHelper,
+		PctHelper:      value.PctHelper,
+	}
 }
 
 func previousHostAgentUpdate(hosts []models.Host, identifier string) *models.AgentUpdateStatus {

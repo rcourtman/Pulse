@@ -46,6 +46,15 @@ export interface AgentFleetDiagnosticModule {
   updatedAt?: string;
 }
 
+// Agent-reported privilege profile. Descriptive only: a least-privilege
+// install is an intentional hardening choice, never a health defect.
+export interface AgentFleetDiagnosticPrivilege {
+  runningAsRoot: boolean;
+  serviceUser?: string;
+  smartctlHelper?: boolean;
+  pctHelper?: boolean;
+}
+
 export interface AgentFleetAgentDiagnostic {
   /** Canonical `/api/connections` identifier. */
   connectionId?: string;
@@ -74,6 +83,7 @@ export interface AgentFleetAgentDiagnostic {
   deployedProfileVersion?: number;
   agentUpdate?: AgentFleetDiagnosticUpdate;
   agentModules?: AgentFleetDiagnosticModule[];
+  privilege?: AgentFleetDiagnosticPrivilege;
   reasons: AgentFleetDiagnosticReason[];
   repairActions?: AgentFleetDiagnosticRepair[];
 }

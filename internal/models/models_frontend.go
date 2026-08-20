@@ -730,6 +730,7 @@ type HostFrontend struct {
 	AppliedConfig     *AgentConfigFingerprint    `json:"appliedConfig,omitempty"`
 	AgentUpdate       *AgentUpdateStatus         `json:"agentUpdate,omitempty"`
 	AgentModules      []AgentModuleStatus        `json:"agentModules,omitempty"`
+	AgentPrivilege    *AgentPrivilegeStatus      `json:"agentPrivilege,omitempty"`
 	PackageUpdates    *HostPackageUpdateStatus   `json:"packageUpdates,omitempty"`
 	StorageCleanup    *HostStorageCleanupStatus  `json:"storageCleanup,omitempty"`
 	IsLegacy          bool                       `json:"isLegacy,omitempty"`     // True if using legacy agent protocol

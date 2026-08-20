@@ -1214,6 +1214,7 @@ func (a *Agent) buildReport(ctx context.Context) (agentshost.Report, error) {
 			AppliedConfig:           runtimeConfig.appliedConfig,
 			Update:                  a.currentUpdateStatus(),
 			Modules:                 moduleStatus,
+			Privilege:               collectPrivilegeStatus(),
 		},
 		Host: agentshost.HostInfo{
 			ID:             a.machineID,

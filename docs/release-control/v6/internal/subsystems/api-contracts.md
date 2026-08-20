@@ -9644,3 +9644,13 @@ calls consume budget without becoming evidence, and exhausting the budget with
 no success fails the run closed. Both paths are reductions after
 execution-profile projection; neither external clients nor model output can
 select or widen the surface.
+
+The agent fleet diagnostics payload (`GET /api/agents/diagnostics`) now
+carries an optional per-agent `privilege` object — `runningAsRoot`,
+`serviceUser`, `smartctlHelper`, `pctHelper` — mirrored by the frontend
+transport in `frontend-modern/src/api/agentDiagnostics.ts`
+(`AgentFleetDiagnosticPrivilege`). The field is descriptive fleet evidence:
+it appears only when the agent reported a profile, it never carries
+credentials or paths, and consumers must not derive health status from it.
+The unified agent report contract (`pkg/agents/host/report.go`) gains the
+matching agent-authored `privilege` block with the same fields.

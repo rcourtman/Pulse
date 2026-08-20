@@ -1,28 +1,20 @@
 {
   "version": 1,
-  "base_sha": "a5f1567172314003ee1b96b93090ffcbbe18e8f6",
-  "verified_at": "2026-08-20T16:20:02Z",
+  "base_sha": "74873e2b558e4f0984c8edd86e51cd7b9dbac012",
+  "verified_at": "2026-08-20T19:44:49Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/api/notifications.ts",
-    "frontend-modern/src/features/alerts/AlertDeliveryLogCard.tsx",
-    "frontend-modern/src/features/alerts/tabs/DestinationsTab.tsx",
-    "frontend-modern/src/features/alerts/useAlertDestinationsTabState.ts",
-    "frontend-modern/src/features/alerts/useAlertWebhookDestinationsState.ts",
-    "frontend-modern/src/features/alerts/useNotificationDeliveryLog.ts",
-    "frontend-modern/src/utils/alertDestinationsPresentation.ts"
+    "frontend-modern/src/api/agentDiagnostics.ts",
+    "frontend-modern/src/components/Settings/InfrastructureAgentDoctorPage.tsx",
+    "frontend-modern/src/components/Settings/infrastructureAgentUpdateCommandsModel.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/api/notifications.ts": "5bd796b6ec9222d6973a4a26b892b4fcfde11b2d9dd2e2ef705ad34531af0071",
-    "frontend-modern/src/features/alerts/AlertDeliveryLogCard.tsx": "7e7e4c5da2a4ea8c267c546da0064806949573bc57a51cf7c5b5f5f8576826ef",
-    "frontend-modern/src/features/alerts/tabs/DestinationsTab.tsx": "0411429355fd78e75948df8ede39da75f9f9e3600840d9b98f7342d2adbfad7b",
-    "frontend-modern/src/features/alerts/useAlertDestinationsTabState.ts": "c88336576ec08b69271244947f7892cac0b77e9ec68fdf33a12fe0f130e4e29d",
-    "frontend-modern/src/features/alerts/useAlertWebhookDestinationsState.ts": "b9c959388a06ce146f3706cbc2b191449d4dd5380198d711ed15fdf06fdc48b9",
-    "frontend-modern/src/features/alerts/useNotificationDeliveryLog.ts": "48ca901ec9435d94a06de5e55bf05dbf254cfd23114cd2b31383909d1585237b",
-    "frontend-modern/src/utils/alertDestinationsPresentation.ts": "8a2e9446dfbdd77d46ef6a678ff2aa403741e3d296ac8ef67ba708c8940a9b2a"
+    "frontend-modern/src/api/agentDiagnostics.ts": "f6ff4e1d6c29a0d141b973618d68263aad8e05a454c048469d0b5e3eb3cbb7ab",
+    "frontend-modern/src/components/Settings/InfrastructureAgentDoctorPage.tsx": "f4334238aea3d20bd1b602b6313555fe9b8855d8e9aa344cd7be3fa8f9b86334",
+    "frontend-modern/src/components/Settings/infrastructureAgentUpdateCommandsModel.ts": "5300b2ad75a3223d520a392df463ce9e9096c8f29cf1c543a60c7327904c58ad"
   },
   "routes": [
-    "/alerts/notifications"
+    "/settings/infrastructure/agent-doctor"
   ],
   "viewports": [
     {
@@ -35,19 +27,17 @@
     }
   ],
   "states": [
-    "Fresh-install destinations tab (activation pending): AlertDeliveryPausedCard at top, Recent delivery activity card at bottom with honest empty state naming the 7-day window and the test-sends-skip-the-queue caveat",
-    "Delivery log with seeded audit rows served by the sidecar-built backend at GET /api/notifications/delivery-log: newest-first entries with Failed-retries-exhausted (red), Retrying (amber), Delivered (green) outcome badges",
-    "Webhook destination id (webhook:<id>) resolved to the configured webhook name 'Ops Sink'; email entry labeled 'Email' with its opaque destination hash",
-    "Failure detail line renders 'Authentication failure: HTTP 401 Unauthorized from https://hooks.example.test/notify?token=REDACTED' proving API-layer webhook secret redaction (seeded value was token=supersecret)",
-    "Mobile viewport: card and badges wrap with no horizontal overflow (documentElement.scrollWidth == 375)",
-    "No console errors on the destinations tab after load, test send, and delivery log refresh",
-    "Receipt re-pinned during rebase onto a5f156717 (copy-fix replayed onto fd35c5477 canonical search work): every staged blob hash above is byte-identical to the exercised content, and neither upstream commit touches any of these files"
+    "Agent Doctor with a live non-root agent report: the expanded agent row's metadata line reads 'Privilege: least privilege (rcourtman) · SMART helper active', derived end-to-end from a real pulse-agent process (built from this tree) running as an unprivileged user with PULSE_SMARTCTL_PATH set, reporting into the sidecar-built backend",
+    "The agent's 'Needs attention' status comes from genuine unrelated reasons (dev version not comparable to update target, docker module retrying because this Mac has no Docker socket) — the privilege profile itself raises no reason, matching the non-degrading contract",
+    "Mobile viewport 375x812: the privilege line wraps cleanly inside the expanded row with no horizontal overflow (documentElement.scrollWidth == 375); desktop 1280 same check passes",
+    "Backend /api/agents/diagnostics returns privilege {runningAsRoot:false, serviceUser:'rcourtman', smartctlHelper:true} for the reporting agent"
   ],
   "interactions": [
-    "Logged into the isolated sidecar-built stack (backend :7811, vite :5487), opened Alerts > Notifications",
-    "Added webhook 'Ops Sink' -> http://127.0.0.1:18712/hook (allowlisted 127.0.0.1/32) and clicked Test: local sink logged the POST 200 and the UI raised the warning toast 'Test sent, but notification delivery is paused: real alerts are not being sent' instead of plain success, because the install's activation gate is pending",
-    "Saved the webhook via Add Webhook and confirmed GET /api/notifications/webhooks returns it",
-    "Seeded notification_audit rows (sent email, retry webhook, dead-letter webhook with token-bearing error text), clicked Refresh delivery status, and verified the three entries rendered newest-first with redacted error text",
-    "Resized to 375x812 and re-exercised the delivery log card"
+    "Rebuilt the scratch backend and pulse-agent from this tree, started the stack (backend :7811, vite :5487)",
+    "Minted a host-agent install token via POST /api/agent-install-command from the logged-in page and started pulse-agent as the unprivileged rcourtman user with --agent-id least-priv-verify and PULSE_SMARTCTL_PATH set",
+    "Opened Settings > Infrastructure > Agent Doctor, expanded the agent row, and located the rendered privilege line via DOM text walk at 1280x720 and 375x812",
+    "Read /api/agents/diagnostics from the page to confirm the wire payload carries the privilege block",
+    "Receipt hash for infrastructureAgentUpdateCommandsModel.ts re-pinned after the pre-commit prettier pass reformatted the staged blob; the change is formatting-only relative to the exercised content",
+    "Captured the mobile screenshot of the expanded row; stopped the scratch agent and both preview servers afterwards"
   ]
 }

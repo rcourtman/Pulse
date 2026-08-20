@@ -332,6 +332,7 @@ type Host struct {
 	AppliedConfig           *AgentConfigFingerprint `json:"appliedConfig,omitempty"`
 	AgentUpdate             *AgentUpdateStatus      `json:"agentUpdate,omitempty"`
 	AgentModules            []AgentModuleStatus     `json:"agentModules,omitempty"`
+	AgentPrivilege          *AgentPrivilegeStatus   `json:"agentPrivilege,omitempty"`
 	// IntegrationSource names the platform integration ("vmware", "truenas", ...)
 	// that supplies this host's telemetry when no Pulse Agent reports for it.
 	// Empty means Pulse-Agent-backed. Only unified-fabric snapshots populate it;
@@ -409,6 +410,18 @@ type AgentModuleStatus struct {
 	State     string    `json:"state"`
 	LastError string    `json:"lastError,omitempty"`
 	UpdatedAt time.Time `json:"updatedAt"`
+}
+
+// AgentPrivilegeStatus is the agent-reported privilege profile: whether the
+// service runs as root, the service account, and whether the scoped
+// smartctl/pct privilege helpers of a least-privilege install are in effect.
+// Informational only — a non-root agent is an intentional profile, not a
+// health defect.
+type AgentPrivilegeStatus struct {
+	RunningAsRoot  bool   `json:"runningAsRoot"`
+	ServiceUser    string `json:"serviceUser,omitempty"`
+	SmartctlHelper bool   `json:"smartctlHelper,omitempty"`
+	PctHelper      bool   `json:"pctHelper,omitempty"`
 }
 
 func (h Host) NormalizeCollections() Host {

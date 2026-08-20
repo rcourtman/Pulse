@@ -6403,3 +6403,25 @@ enabled gate, and they do not enroll or select an agent, open or alter a
 command session, change fleet policy or update state, or add any
 agent-routed capability. Agent lifecycle obligations over `internal/api/`
 are unchanged by this surface.
+
+### Least-privilege agent profile
+
+`scripts/install.sh --least-privilege` is a supported Linux/systemd install
+profile that runs the unified agent as the dedicated nologin `pulse-agent`
+system user instead of root. The profile is explicit at every boundary: it is
+refused on appliance platforms and non-systemd init systems rather than
+silently falling back to root, it is mutually exclusive with
+`--enable-commands` (governed command execution stays a root-profile
+capability), it never receives the LXC-attach ambient capability grant, and
+`--update` preserves an existing profile and its grants by reading the
+installed unit rather than requiring the flags to be repeated. Optional
+`--grant-smart` and `--grant-pct` restore exactly the two collectors that
+need elevation through visudo-validated, exact-command sudoers rules and
+root-owned wrapper helpers the agent reaches only via the absolute-path-only
+`PULSE_SMARTCTL_PATH` / `PULSE_PCT_PATH` overrides; the pct grant covers
+`pct list` and `pct df` only and can never widen into `pct exec`. The agent
+authors a `privilege` block in its report (`pkg/agents/host/report.go`
+`PrivilegeStatus`: effective root, service user, active helpers) so the
+server can present the profile descriptively. Uninstall removes the sudoers
+file and helpers. `scripts/installtests/install_sh_test.go`
+(`TestInstallSHLeastPrivilegeProfile`) pins the profile's invariants.

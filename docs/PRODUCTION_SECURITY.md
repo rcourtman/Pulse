@@ -48,10 +48,13 @@ The default posture limits that boundary:
 - Proxmox guest Docker inventory through `pct exec` is disabled by default and
   requires an explicit server setting.
 
-A custom non-root systemd user is possible, but it is not currently a supported
-full-telemetry profile. Expect gaps unless you deliberately grant equivalent
-device, filesystem, or socket access. If API data is sufficient, API-only
-monitoring is the cleaner least-privilege choice.
+On standard Linux systemd hosts the installer also offers a supported
+least-privilege profile: `--least-privilege` runs the service as a dedicated
+`pulse-agent` system user, with optional `--grant-smart` and `--grant-pct`
+flags that restore SMART and Proxmox LXC filesystem collection through
+exact-command sudoers grants. Command execution and `pct exec` guest inventory
+stay root-profile features. If API data is sufficient, API-only monitoring
+remains the cleanest least-privilege choice of all — it needs no agent.
 
 See [Agent Security](AGENT_SECURITY.md) for the precise command, guest-access,
 update, and service-hardening boundaries.

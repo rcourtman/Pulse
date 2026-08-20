@@ -500,6 +500,10 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
                                 {' '}
                                 · Updater: {target.updaterLabel}
                               </Show>
+                              <Show when={target.privilegeLabel}>
+                                {' '}
+                                · Privilege: {target.privilegeLabel}
+                              </Show>
                               <Show when={target.profileLabel}>
                                 {' '}
                                 · Profile: {target.profileLabel}

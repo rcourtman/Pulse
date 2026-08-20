@@ -410,6 +410,7 @@ func cloneHost(src Host) Host {
 	dest.Tags = append([]string(nil), src.Tags...)
 	dest.DiskExclude = append([]string(nil), src.DiskExclude...)
 	dest.IdentityConflict = cloneHostIdentityConflict(src.IdentityConflict)
+	dest.AgentPrivilege = cloneAgentPrivilegeStatus(src.AgentPrivilege)
 	return dest.NormalizeCollections()
 }
 

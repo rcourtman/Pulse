@@ -66,6 +66,21 @@ func TestCloneHostAndZFSPoolIsolateZFSDatasets(t *testing.T) {
 	}
 }
 
+func TestCloneHostIsolatesAgentPrivilege(t *testing.T) {
+	host := Host{AgentPrivilege: &AgentPrivilegeStatus{
+		RunningAsRoot: false,
+		ServiceUser:   "pulse-agent",
+	}}
+	hostClone := cloneHost(host)
+	if hostClone.AgentPrivilege == nil {
+		t.Fatal("host clone dropped agent privilege")
+	}
+	hostClone.AgentPrivilege.ServiceUser = "mutated"
+	if host.AgentPrivilege.ServiceUser != "pulse-agent" {
+		t.Fatal("host clone aliased agent privilege")
+	}
+}
+
 func TestCloneDockerContainer_PreservesIndependentOOMEvidence(t *testing.T) {
 	oomKilled := false
 	src := DockerContainer{

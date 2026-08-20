@@ -38,6 +38,7 @@ export type InfrastructureAgentDoctorTarget = Omit<
   updaterLabel?: string;
   profileLabel?: string;
   profileVersionLabel?: string;
+  privilegeLabel?: string;
   lastSeen?: number | string | null;
   source: 'diagnostics' | 'ledger-fallback' | 'removed';
 };
@@ -623,6 +624,7 @@ const doctorTargetFromBinding = (
     updaterLabel: updater.label,
     profileLabel,
     profileVersionLabel,
+    privilegeLabel: diagnosticPrivilegeLabel(diagnostic),
     lastSeen: connection.lastSeen ?? diagnostic?.lastSeen,
     source: diagnosticsAvailable && diagnostic ? 'diagnostics' : 'ledger-fallback',
   };
@@ -665,6 +667,21 @@ const diagnosticProfileVersionLabel = (
   return `Expected v${diagnostic.profileVersion} · deployed v${diagnostic.deployedProfileVersion}`;
 };
 
+// Descriptive privilege line for the doctor detail row. A least-privilege
+// install is an intentional hardening profile, so this label states facts
+// (service user, active scoped helpers) and never implies a defect.
+const diagnosticPrivilegeLabel = (diagnostic?: AgentFleetAgentDiagnostic): string | undefined => {
+  const privilege = diagnostic?.privilege;
+  if (!privilege) return undefined;
+  if (privilege.runningAsRoot) return 'root';
+  const user = privilege.serviceUser?.trim();
+  const base = user ? `least privilege (${user})` : 'least privilege';
+  const helpers: string[] = [];
+  if (privilege.smartctlHelper) helpers.push('SMART helper active');
+  if (privilege.pctHelper) helpers.push('pct helper active');
+  return helpers.length > 0 ? `${base} · ${helpers.join(' · ')}` : base;
+};
+
 const diagnosticOnlyDoctorTarget = (
   diagnostic: AgentFleetAgentDiagnostic,
 ): InfrastructureAgentDoctorTarget => {
@@ -685,6 +702,7 @@ const diagnosticOnlyDoctorTarget = (
     commandPlatform: resolveKnownAgentCommandPlatform(diagnostic.platform),
     profileLabel: diagnostic.profileName?.trim() || diagnostic.profileId?.trim() || undefined,
     profileVersionLabel: diagnosticProfileVersionLabel(diagnostic),
+    privilegeLabel: diagnosticPrivilegeLabel(diagnostic),
     lastSeen: diagnostic.lastSeen,
     source: removed ? 'removed' : 'diagnostics',
   };
@@ -845,6 +863,7 @@ export const formatInfrastructureAgentDoctorReport = (
     const lastSeen = doctorReportLastSeen(target.lastSeen);
     if (lastSeen) lines.push(`  Last seen ${lastSeen}`);
     if (target.updaterLabel) lines.push(`  Updater ${target.updaterLabel}`);
+    if (target.privilegeLabel) lines.push(`  Privilege ${target.privilegeLabel}`);
     if (target.profileLabel) {
       lines.push(
         `  Profile ${target.profileLabel}${
