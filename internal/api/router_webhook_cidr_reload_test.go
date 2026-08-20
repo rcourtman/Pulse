@@ -1,10 +1,15 @@
 package api
 
 import (
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 )
 
 // TestReloadSystemSettings_AppliesWebhookCIDRsToNewMonitor verifies the fix
@@ -91,5 +96,87 @@ func TestReloadSystemSettings_AppliesWebhookCIDRsToNewMonitor(t *testing.T) {
 	// IPs outside the allowlist should still be rejected.
 	if err := nm2.ValidateWebhookURL("http://172.16.0.1/hook"); err == nil {
 		t.Fatal("after ReloadSystemSettings: expected 172.16.0.1 to be rejected (not in allowlist)")
+	}
+}
+
+// captureRouterSettingsLogs swaps the global logger for a locked buffer so
+// tests can assert on warnings emitted by system-settings load failures.
+func captureRouterSettingsLogs(t *testing.T) *lockedLogBuffer {
+	t.Helper()
+
+	var buf lockedLogBuffer
+	prevLogger := log.Logger
+	prevLevel := zerolog.GlobalLevel()
+	log.Logger = zerolog.New(&buf).Level(zerolog.DebugLevel)
+	zerolog.SetGlobalLevel(zerolog.DebugLevel)
+	t.Cleanup(func() {
+		log.Logger = prevLogger
+		zerolog.SetGlobalLevel(prevLevel)
+	})
+
+	return &buf
+}
+
+// unreadableSystemSettings returns a ConfigPersistence whose LoadSystemSettings
+// fails: a directory named system.json produces a read error that is not
+// os.IsNotExist — the same shape as a transient read failure.
+func unreadableSystemSettings(t *testing.T) *config.ConfigPersistence {
+	t.Helper()
+
+	dataDir := t.TempDir()
+	if err := os.Mkdir(filepath.Join(dataDir, "system.json"), 0o700); err != nil {
+		t.Fatalf("mkdir system.json: %v", err)
+	}
+	return config.NewConfigPersistence(dataDir)
+}
+
+// A failed settings read while wiring a tenant monitor means the webhook
+// private CIDR allowlist silently never applies and private webhook targets
+// fail SSRF validation with no org-side fix — the failure must be logged.
+func TestConfigureMonitorDependencies_WarnsWhenSettingsLoadFails(t *testing.T) {
+	logOutput := captureRouterSettingsLogs(t)
+
+	router := &Router{persistence: unreadableSystemSettings(t)}
+	router.configureMonitorDependencies(&monitoring.Monitor{})
+
+	if !strings.Contains(logOutput.String(), "Failed to load system settings for tenant monitor") {
+		t.Fatalf("expected settings-load failure warning, got logs: %s", logOutput.String())
+	}
+}
+
+// A missing system.json is a normal fresh install, not a failure — the tenant
+// monitor wiring must stay quiet so fresh setups don't log spurious warnings.
+func TestConfigureMonitorDependencies_NoWarningWhenSettingsFileMissing(t *testing.T) {
+	logOutput := captureRouterSettingsLogs(t)
+
+	router := &Router{persistence: config.NewConfigPersistence(t.TempDir())}
+	router.configureMonitorDependencies(&monitoring.Monitor{})
+
+	if strings.Contains(logOutput.String(), "Failed to load system settings") {
+		t.Fatalf("missing system.json must not warn, got logs: %s", logOutput.String())
+	}
+}
+
+// reloadSystemSettings deliberately fails closed (embedding off) on a settings
+// read error, but the error must be observable: without a log line a
+// persistent read failure looks identical to embedding being switched off on
+// purpose.
+func TestReloadSystemSettings_WarnsWhenLoadFailsAndFailsClosed(t *testing.T) {
+	logOutput := captureRouterSettingsLogs(t)
+
+	router := &Router{
+		config:      &config.Config{},
+		persistence: unreadableSystemSettings(t),
+	}
+	router.cachedAllowEmbedding = true
+	router.cachedAllowedOrigins = "https://example.com"
+
+	router.ReloadSystemSettings()
+
+	if router.cachedAllowEmbedding || router.cachedAllowedOrigins != "" {
+		t.Fatal("a failed settings read must fail closed (embedding off, origins cleared)")
+	}
+	if !strings.Contains(logOutput.String(), "Failed to load system settings during reload") {
+		t.Fatalf("expected settings-load failure warning, got logs: %s", logOutput.String())
 	}
 }

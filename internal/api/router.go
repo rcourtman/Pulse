@@ -1903,6 +1903,8 @@ func (r *Router) configureMonitorDependencies(m *monitoring.Monitor) {
 					nm.SetPublicURL(settings.PublicURL)
 				}
 			}
+		} else if err != nil {
+			log.Warn().Err(err).Str("org", m.GetOrgID()).Msg("Failed to load system settings for tenant monitor; webhook private CIDR allowlist not applied")
 		}
 	}
 
@@ -4365,6 +4367,12 @@ func (r *Router) reloadSystemSettings() {
 			})
 		}
 	} else {
+		if err != nil {
+			// Failing closed (embedding off) is deliberate, but the error
+			// must still be observable — a persistent read failure otherwise
+			// looks identical to embedding being switched off on purpose.
+			log.Warn().Err(err).Msg("Failed to load system settings during reload; using safe defaults")
+		}
 		// On error, use safe defaults
 		r.cachedAllowEmbedding = false
 		r.cachedAllowedOrigins = ""
