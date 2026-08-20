@@ -310,6 +310,10 @@ func applyDemoScenarioGraph(graph *FixtureGraph, cfg MockConfig, now time.Time) 
 	applyDemoHostScenario(&graph.State, now)
 	applyDemoStorageScenario(&graph.State, now)
 	applyDemoBackupScenario(&graph.State, vmProfiles, containerProfiles, now)
+	// In-flight backups attach to the guests' final curated backup stories,
+	// so the fixture runs after the backup scenario rebuilds that history
+	// (which also sweeps away the previous tick's fixture artifacts).
+	ensureMockBackupRunningFixture(&graph.State, now)
 	syncDemoConnectionHealth(&graph.State)
 }
 

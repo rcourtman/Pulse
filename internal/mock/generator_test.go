@@ -1003,3 +1003,166 @@ func TestFixtureGraphIncludesDockerInLXCFixture(t *testing.T) {
 		}
 	}
 }
+
+// assertMockBackupRunningFixture verifies the running-backup estate invariants
+// and returns the set of flagged guest keys ("vm-<vmid>" / "ct-<vmid>").
+func assertMockBackupRunningFixture(t *testing.T, state *models.StateSnapshot, now time.Time) map[string]bool {
+	t.Helper()
+
+	flagged := map[string]bool{}
+	neverBackedUp := false
+	backedUp := false
+	for _, vm := range state.VMs {
+		if !vm.BackupInProgress {
+			continue
+		}
+		flagged[fmt.Sprintf("vm-%d", vm.VMID)] = true
+		if vm.LastBackup.IsZero() {
+			neverBackedUp = true
+		} else {
+			backedUp = true
+		}
+	}
+	for _, ct := range state.Containers {
+		if !ct.BackupInProgress {
+			continue
+		}
+		flagged[fmt.Sprintf("ct-%d", ct.VMID)] = true
+		if ct.LastBackup.IsZero() {
+			neverBackedUp = true
+		} else {
+			backedUp = true
+		}
+	}
+	if len(flagged) == 0 {
+		t.Fatal("no guest flagged BackupInProgress")
+	}
+	if !neverBackedUp || !backedUp {
+		t.Fatalf("running backups must spread across the age distribution; never=%v backed-up=%v", neverBackedUp, backedUp)
+	}
+
+	guests := len(state.VMs) + len(state.Containers)
+	if len(flagged) > guests/10 {
+		t.Fatalf("%d of %d guests flagged running; expected a small fraction", len(flagged), guests)
+	}
+
+	// The first-cycle showcase guests are pinned to specific protection
+	// stories (failed run, no evidence at all); a running backup would mask
+	// those states, so the fixture must never pick them.
+	showcase := map[string]bool{}
+	for _, profile := range demoVMProfiles {
+		showcase[profile.Name] = true
+	}
+	for _, profile := range demoContainerProfiles {
+		showcase[profile.Name] = true
+	}
+	for _, vm := range state.VMs {
+		if vm.BackupInProgress && showcase[vm.Name] {
+			t.Fatalf("showcase guest %s flagged BackupInProgress", vm.Name)
+		}
+	}
+	for _, ct := range state.Containers {
+		if ct.BackupInProgress && showcase[ct.Name] {
+			t.Fatalf("showcase guest %s flagged BackupInProgress", ct.Name)
+		}
+	}
+
+	inflight := map[string]bool{}
+	for _, backup := range state.PBSBackups {
+		if !strings.HasPrefix(backup.ID, mockBackupRunningIDPrefix) {
+			if backup.InProgress {
+				t.Fatalf("non-fixture PBS backup %s marked InProgress", backup.ID)
+			}
+			continue
+		}
+		key := fmt.Sprintf("%s-%s", backup.BackupType, backup.VMID)
+		if inflight[key] {
+			t.Fatalf("duplicate in-flight PBS backup for %s", key)
+		}
+		inflight[key] = true
+		if !flagged[key] {
+			t.Fatalf("in-flight PBS backup %s has no flagged guest", backup.ID)
+		}
+		if !backup.InProgress || backup.Size != 0 || backup.Verified {
+			t.Fatalf("in-flight PBS backup %s must be InProgress with no size and no verification: %+v", backup.ID, backup)
+		}
+		wantBlob := "qemu-server.conf.blob"
+		if backup.BackupType == "ct" {
+			wantBlob = "pct.conf.blob"
+		}
+		if len(backup.Files) != 1 || backup.Files[0] != wantBlob {
+			t.Fatalf("in-flight PBS backup %s files = %v, want only %s", backup.ID, backup.Files, wantBlob)
+		}
+		if age := now.Sub(backup.BackupTime); age <= 0 || age > time.Hour {
+			t.Fatalf("in-flight PBS backup %s should have started minutes ago, started %s before now", backup.ID, age)
+		}
+	}
+	if len(inflight) != len(flagged) {
+		t.Fatalf("flagged guests = %d but in-flight PBS backups = %d", len(flagged), len(inflight))
+	}
+
+	runningTasks := map[string]bool{}
+	for _, task := range state.PVEBackups.BackupTasks {
+		if !strings.HasPrefix(task.ID, mockBackupRunningIDPrefix) {
+			continue
+		}
+		kind := "vm"
+		if task.Type == "lxc" {
+			kind = "ct"
+		}
+		key := fmt.Sprintf("%s-%d", kind, task.VMID)
+		if runningTasks[key] {
+			t.Fatalf("duplicate running task for %s", key)
+		}
+		runningTasks[key] = true
+		if !flagged[key] {
+			t.Fatalf("running task %s has no flagged guest", task.ID)
+		}
+		if task.Status != "running" || !task.EndTime.IsZero() {
+			t.Fatalf("fixture task %s must be running with no end time: %+v", task.ID, task)
+		}
+		if task.ObservedAt.Before(now.Add(-time.Minute)) {
+			t.Fatalf("fixture task %s ObservedAt %s is stale relative to %s", task.ID, task.ObservedAt, now)
+		}
+	}
+	if len(runningTasks) != len(flagged) {
+		t.Fatalf("flagged guests = %d but running tasks = %d", len(flagged), len(runningTasks))
+	}
+
+	// The canonical Backups projection must mirror the fixture artifacts.
+	mirrored := 0
+	for _, backup := range state.Backups.PBS {
+		if strings.HasPrefix(backup.ID, mockBackupRunningIDPrefix) {
+			mirrored++
+		}
+	}
+	if mirrored != len(inflight) {
+		t.Fatalf("state.Backups.PBS mirrors %d in-flight backups, want %d", mirrored, len(inflight))
+	}
+
+	return flagged
+}
+
+func TestFixtureGraphIncludesBackupRunningFixture(t *testing.T) {
+	cfg := DefaultConfig
+	now := time.Now()
+
+	graph := buildFixtureGraph(cfg, now)
+	first := assertMockBackupRunningFixture(t, &graph.State, now)
+
+	// The demo scenario layer reapplies on every metric tick; the fixture
+	// must re-select the same guests and replace - not duplicate - its
+	// in-flight artifacts.
+	tick := now.Add(time.Minute)
+	graph.UpdateMetrics(cfg, tick)
+	second := assertMockBackupRunningFixture(t, &graph.State, tick)
+
+	if len(first) != len(second) {
+		t.Fatalf("running-guest selection changed size across ticks: %d then %d", len(first), len(second))
+	}
+	for key := range second {
+		if !first[key] {
+			t.Fatalf("running-guest selection changed across ticks: %s not in first pass", key)
+		}
+	}
+}

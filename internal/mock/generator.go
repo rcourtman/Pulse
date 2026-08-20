@@ -2784,11 +2784,11 @@ func ensureMockDockerInLXCFixture(data *models.StateSnapshot, config MockConfig)
 		}
 
 		host := models.DockerHost{
-			ID:            sourceID,
-			OS:            "linux",
-			KernelVersion: kernelVersion,
-			Architecture:  "x86_64",
-			Runtime:       "docker",
+			ID:             sourceID,
+			OS:             "linux",
+			KernelVersion:  kernelVersion,
+			Architecture:   "x86_64",
+			Runtime:        "docker",
 			RuntimeVersion: version,
 			DockerVersion:  version,
 			Containers:     containers,
@@ -2807,6 +2807,186 @@ func ensureMockDockerInLXCFixture(data *models.StateSnapshot, config MockConfig)
 			data.ConnectionHealth[dockerConnectionPrefix+id] = false
 		}
 	}
+}
+
+// mockBackupRunningIDPrefix marks the in-flight backup artifacts owned by
+// ensureMockBackupRunningFixture so a reapplied pass replaces them instead of
+// stacking duplicates.
+const mockBackupRunningIDPrefix = "mock-backup-running-"
+
+// ensureMockBackupRunningFixture flags a small slice of guests (roughly one
+// in twenty-five per age bucket) as having a backup running right now, and
+// gives each the evidence a live run actually produces: an in-flight PBS
+// snapshot shaped the way the PBS API lists one still being written (no size,
+// no verification, only the guest config blob in files, InProgress set) and a
+// running vzdump task with no end time. Guests are drawn from every
+// last-backup age bucket so the blue Running badge appears alongside fresh,
+// stale, overdue, and never-backed-up rows instead of clustering in one
+// story.
+//
+// It runs AFTER applyDemoBackupScenario: every guest is scenario-curated, so
+// each scenario pass drops the previous fixture artifacts along with the rest
+// of the curated guests' history and this fixture re-adds them, keeping the
+// per-tick reapplication idempotent. The fixture owns BackupInProgress for
+// the whole estate - cleared everywhere before selecting - so a guest that
+// falls out of the selection cannot keep a stale Running badge.
+func ensureMockBackupRunningFixture(state *models.StateSnapshot, now time.Time) {
+	if state == nil {
+		return
+	}
+
+	for i := range state.VMs {
+		state.VMs[i].BackupInProgress = false
+	}
+	for i := range state.Containers {
+		state.Containers[i].BackupInProgress = false
+	}
+
+	// Buckets mirror the badge stories: never backed up, fresh (<=1d),
+	// stale (<=7d), overdue (>7d).
+	bucketOf := func(lastBackup time.Time) int {
+		if lastBackup.IsZero() {
+			return 0
+		}
+		age := now.Sub(lastBackup)
+		switch {
+		case age <= 24*time.Hour:
+			return 1
+		case age <= 7*24*time.Hour:
+			return 2
+		default:
+			return 3
+		}
+	}
+
+	// The first profile cycle is the demo's hand-curated showcase: those
+	// exact rows are pinned by posture tests and walkthroughs (a failed run
+	// three hours ago, a guest with no recovery evidence at all, ...), and a
+	// backup running right now would mask exactly the states they exist to
+	// demonstrate. Later cycles repeat the same stories under suffixed names,
+	// so the fixture draws its running guests from them instead.
+	showcase := make(map[string]struct{}, len(demoVMProfiles)+len(demoContainerProfiles))
+	for _, profile := range demoVMProfiles {
+		showcase[profile.Name] = struct{}{}
+	}
+	for _, profile := range demoContainerProfiles {
+		showcase[profile.Name] = struct{}{}
+	}
+
+	type guestRef struct {
+		isVM  bool
+		index int
+	}
+	var buckets [4][]guestRef
+	for i := range state.VMs {
+		vm := &state.VMs[i]
+		// Templates are never vzdump targets, and a node the scenario keeps
+		// offline cannot be running a backup task.
+		if vm.Template || isDemoOfflineProxmoxNode(vm.Node) {
+			continue
+		}
+		if _, curated := showcase[vm.Name]; curated {
+			continue
+		}
+		bucket := bucketOf(vm.LastBackup)
+		buckets[bucket] = append(buckets[bucket], guestRef{isVM: true, index: i})
+	}
+	for i := range state.Containers {
+		ct := &state.Containers[i]
+		if isDemoOfflineProxmoxNode(ct.Node) {
+			continue
+		}
+		if _, curated := showcase[ct.Name]; curated {
+			continue
+		}
+		bucket := bucketOf(ct.LastBackup)
+		buckets[bucket] = append(buckets[bucket], guestRef{index: i})
+	}
+
+	var inflightPBS []models.PBSBackup
+	var runningTasks []models.BackupTask
+	markRunning := func(kind, guestType, node, instance string, vmid int) {
+		// Stagger start times a few minutes so the running rows don't all
+		// share one timestamp; stable per guest across ticks.
+		startedAt := now.Add(-time.Duration(3+mockStableChoice(9, "backup-running-start", kind, fmt.Sprintf("%d", vmid))) * time.Minute)
+		configBlob := "qemu-server.conf.blob"
+		if kind == "ct" {
+			configBlob = "pct.conf.blob"
+		}
+		inflightPBS = append(inflightPBS, models.PBSBackup{
+			ID:         fmt.Sprintf("%spbs-%s-%d", mockBackupRunningIDPrefix, kind, vmid),
+			Instance:   "backup-vault",
+			Datastore:  "primary-vault",
+			Namespace:  "root",
+			BackupType: kind,
+			VMID:       fmt.Sprintf("%d", vmid),
+			BackupTime: startedAt,
+			Size:       0,
+			InProgress: true,
+			Files:      []string{configBlob},
+			Owner:      "automation@pbs",
+		})
+		runningTasks = append(runningTasks, models.BackupTask{
+			ID:         fmt.Sprintf("%stask-%s-%d", mockBackupRunningIDPrefix, kind, vmid),
+			Node:       node,
+			Instance:   instance,
+			Type:       guestType,
+			VMID:       vmid,
+			Status:     "running",
+			StartTime:  startedAt,
+			ObservedAt: now,
+		})
+	}
+
+	for _, bucket := range buckets {
+		if len(bucket) == 0 {
+			continue
+		}
+		count := len(bucket) / 25
+		if count < 1 {
+			count = 1
+		}
+		step := len(bucket) / count
+		for j := 0; j < count; j++ {
+			ref := bucket[j*step]
+			if ref.isVM {
+				vm := &state.VMs[ref.index]
+				vm.BackupInProgress = true
+				markRunning("vm", "qemu", vm.Node, vm.Instance, vm.VMID)
+			} else {
+				ct := &state.Containers[ref.index]
+				ct.BackupInProgress = true
+				markRunning("ct", "lxc", ct.Node, ct.Instance, ct.VMID)
+			}
+		}
+	}
+
+	// Prepend so the newest-first ordering applyDemoBackupScenario just
+	// established still holds: in-flight artifacts are minutes old, the
+	// curated history starts at ninety. Strip any leftover fixture entries
+	// first in case a pass runs without the scenario's curated sweep.
+	keptPBS := make([]models.PBSBackup, 0, len(inflightPBS)+len(state.PBSBackups))
+	keptPBS = append(keptPBS, inflightPBS...)
+	for _, backup := range state.PBSBackups {
+		if strings.HasPrefix(backup.ID, mockBackupRunningIDPrefix) {
+			continue
+		}
+		keptPBS = append(keptPBS, backup)
+	}
+	state.PBSBackups = keptPBS
+
+	keptTasks := make([]models.BackupTask, 0, len(runningTasks)+len(state.PVEBackups.BackupTasks))
+	keptTasks = append(keptTasks, runningTasks...)
+	for _, task := range state.PVEBackups.BackupTasks {
+		if strings.HasPrefix(task.ID, mockBackupRunningIDPrefix) {
+			continue
+		}
+		keptTasks = append(keptTasks, task)
+	}
+	state.PVEBackups.BackupTasks = keptTasks
+
+	state.Backups.PVE = state.PVEBackups
+	state.Backups.PBS = append([]models.PBSBackup(nil), state.PBSBackups...)
 }
 
 // syncMockDockerInLXCHostFromGuest keeps a nested Docker host mirroring its
