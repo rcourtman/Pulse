@@ -20,7 +20,26 @@ const (
 	proxmoxGuestDockerInventoryMarker      = "PULSE_DOCKER_GUEST_INVENTORY_V1"
 	proxmoxGuestDockerSocketMarker         = "PULSE_DOCKER_SOCKET"
 	proxmoxGuestDockerNegativeRecheckAfter = 5 * time.Minute
+
+	// A probe that errors (as opposed to succeeding with "no docker") is
+	// retried with exponential backoff instead of on every poll cycle: a
+	// persistent failure such as an agent token without agent:exec or an
+	// lxc-attach that cannot enter the guest would otherwise re-run pct exec
+	// against every affected guest forever.
+	proxmoxGuestDockerProbeFailureBackoffBase = time.Minute
+	proxmoxGuestDockerProbeFailureBackoffMax  = 30 * time.Minute
+	// Failure entries not touched for this long belong to guests that no
+	// longer exist (a live failing guest refreshes its entry at least once
+	// per backoff window) and are pruned.
+	proxmoxGuestDockerProbeFailurePruneAfter = 24 * time.Hour
 )
+
+// dockerProbeFailureState tracks consecutive Docker socket probe failures for
+// one LXC container.
+type dockerProbeFailureState struct {
+	failures int
+	lastAt   time.Time
+}
 
 // DockerChecker provides the ability to check for Docker inside LXC containers.
 // This is typically implemented by wrapping the agentexec.Server.
@@ -68,11 +87,14 @@ func (m *Monitor) CheckContainersForDocker(ctx context.Context, containers []mod
 	m.mu.RLock()
 	checker := m.dockerChecker
 	checkerConfiguredAt := m.dockerCheckerConfiguredAt
+	allowedVMIDs := m.dockerCheckAllowedVMIDs
 	m.mu.RUnlock()
 
 	if checker == nil {
 		return containers
 	}
+
+	m.pruneDockerProbeFailures()
 
 	// Get previous container state for comparison
 	previousContainers := make(map[string]models.Container)
@@ -94,6 +116,16 @@ func (m *Monitor) CheckContainersForDocker(ctx context.Context, containers []mod
 
 		// Check if this container needs Docker detection
 		reason := m.containerNeedsDockerCheck(ct, previousContainers, checkerConfiguredAt)
+		if reason != "" && len(allowedVMIDs) > 0 {
+			if _, ok := allowedVMIDs[ct.VMID]; !ok {
+				// Outside the explicit VMID allowlist: never probe.
+				reason = ""
+			}
+		}
+		if reason != "" && m.dockerProbeInFailureBackoff(ct.ID) {
+			// A recent probe failure is still inside its backoff window.
+			reason = ""
+		}
 		if reason != "" {
 			needsCheck = append(needsCheck, containerDockerCheck{
 				index:     i,
@@ -127,6 +159,7 @@ func (m *Monitor) CheckContainersForDocker(ctx context.Context, containers []mod
 			if result.hasDocker {
 				dockerCount++
 			}
+			m.clearDockerProbeFailure(containers[result.index])
 		} else if result.err != nil {
 			// Check failed - preserve previous status if available
 			ct := containers[result.index]
@@ -134,6 +167,7 @@ func (m *Monitor) CheckContainersForDocker(ctx context.Context, containers []mod
 				containers[result.index].HasDocker = prev.HasDocker
 				containers[result.index].DockerCheckedAt = prev.DockerCheckedAt
 			}
+			m.recordDockerProbeFailure(ct, result.err)
 		}
 	}
 
@@ -188,6 +222,109 @@ func (m *Monitor) containerNeedsDockerCheck(ct models.Container, previousContain
 
 	// No check needed - use cached value
 	return ""
+}
+
+// dockerProbeFailureBackoff returns how long to wait after the given number of
+// consecutive probe failures before trying again.
+func dockerProbeFailureBackoff(failures int) time.Duration {
+	if failures <= 0 {
+		return 0
+	}
+	backoff := proxmoxGuestDockerProbeFailureBackoffBase
+	for i := 1; i < failures; i++ {
+		backoff *= 2
+		if backoff >= proxmoxGuestDockerProbeFailureBackoffMax {
+			return proxmoxGuestDockerProbeFailureBackoffMax
+		}
+	}
+	return backoff
+}
+
+// dockerProbeInFailureBackoff reports whether a container's last probe failure
+// is still inside its backoff window.
+func (m *Monitor) dockerProbeInFailureBackoff(containerID string) bool {
+	m.dockerProbeFailureMu.Lock()
+	defer m.dockerProbeFailureMu.Unlock()
+	state, ok := m.dockerProbeFailures[containerID]
+	if !ok {
+		return false
+	}
+	return time.Since(state.lastAt) < dockerProbeFailureBackoff(state.failures)
+}
+
+// recordDockerProbeFailure notes a failed Docker socket probe. The first
+// failure of a streak logs at warn so a default install surfaces why
+// Docker-in-LXC discovery is incomplete; repeats log at debug, escalating to
+// warn once more when the retry backoff reaches its cap.
+func (m *Monitor) recordDockerProbeFailure(ct models.Container, err error) {
+	m.dockerProbeFailureMu.Lock()
+	if m.dockerProbeFailures == nil {
+		m.dockerProbeFailures = make(map[string]*dockerProbeFailureState)
+	}
+	state, ok := m.dockerProbeFailures[ct.ID]
+	if !ok {
+		state = &dockerProbeFailureState{}
+		m.dockerProbeFailures[ct.ID] = state
+	}
+	state.failures++
+	state.lastAt = time.Now()
+	failures := state.failures
+	m.dockerProbeFailureMu.Unlock()
+
+	backoff := dockerProbeFailureBackoff(failures)
+	justCapped := backoff == proxmoxGuestDockerProbeFailureBackoffMax &&
+		dockerProbeFailureBackoff(failures-1) != proxmoxGuestDockerProbeFailureBackoffMax
+	event := log.Debug()
+	if failures == 1 || justCapped {
+		event = log.Warn()
+	}
+	event.
+		Err(err).
+		Str("container", ct.Name).
+		Int("vmid", ct.VMID).
+		Str("node", ct.Node).
+		Int("consecutiveFailures", failures).
+		Dur("retryAfter", backoff).
+		Msg("Docker socket probe failed for LXC container; retrying with backoff")
+}
+
+// clearDockerProbeFailure drops any recorded failure streak for a container
+// after a successful probe.
+func (m *Monitor) clearDockerProbeFailure(ct models.Container) {
+	m.dockerProbeFailureMu.Lock()
+	state, ok := m.dockerProbeFailures[ct.ID]
+	if ok {
+		delete(m.dockerProbeFailures, ct.ID)
+	}
+	m.dockerProbeFailureMu.Unlock()
+	if ok && state.failures > 0 {
+		log.Info().
+			Str("container", ct.Name).
+			Int("vmid", ct.VMID).
+			Str("node", ct.Node).
+			Int("previousFailures", state.failures).
+			Msg("Docker socket probe recovered for LXC container")
+	}
+}
+
+// pruneDockerProbeFailures removes failure entries for containers that have
+// not been probed in a long time (guests that were removed while failing).
+func (m *Monitor) pruneDockerProbeFailures() {
+	m.dockerProbeFailureMu.Lock()
+	defer m.dockerProbeFailureMu.Unlock()
+	for id, state := range m.dockerProbeFailures {
+		if time.Since(state.lastAt) > proxmoxGuestDockerProbeFailurePruneAfter {
+			delete(m.dockerProbeFailures, id)
+		}
+	}
+}
+
+// resetDockerProbeFailures clears all failure streaks, so a reconfigured
+// checker retries every guest immediately.
+func (m *Monitor) resetDockerProbeFailures() {
+	m.dockerProbeFailureMu.Lock()
+	defer m.dockerProbeFailureMu.Unlock()
+	m.dockerProbeFailures = nil
 }
 
 // checkDockerParallel checks Docker for multiple containers in parallel
@@ -1139,15 +1276,43 @@ func ParseProxmoxGuestDockerInventoryVMIDs(raw string) (map[int]struct{}, []stri
 // for new containers and containers that have restarted.
 func (m *Monitor) SetDockerChecker(checker DockerChecker) {
 	m.mu.Lock()
-	defer m.mu.Unlock()
 	m.dockerChecker = checker
 	if checker != nil {
 		m.dockerCheckerConfiguredAt = time.Now()
-		log.Info().Msg("Docker detection enabled for LXC containers")
 	} else {
 		m.dockerCheckerConfiguredAt = time.Time{}
+	}
+	m.mu.Unlock()
+	// Reconfiguration (for example command execution newly enabled on an
+	// agent) is exactly when a failing probe deserves an immediate retry.
+	m.resetDockerProbeFailures()
+	if checker != nil {
+		log.Info().Msg("Docker detection enabled for LXC containers")
+	} else {
 		log.Info().Msg("Docker detection disabled for LXC containers")
 	}
+}
+
+// SetDockerCheckerAllowedVMIDs restricts the LXC Docker socket probe to the
+// supplied Proxmox VMIDs. A nil or empty set means every running LXC guest is
+// eligible. The filter applies before a probe is scheduled, so guests outside
+// an explicit inventory allowlist are never pct exec'd at all.
+func (m *Monitor) SetDockerCheckerAllowedVMIDs(allowed map[int]struct{}) {
+	var filtered map[int]struct{}
+	if len(allowed) > 0 {
+		filtered = make(map[int]struct{}, len(allowed))
+		for vmid := range allowed {
+			if vmid > 0 {
+				filtered[vmid] = struct{}{}
+			}
+		}
+		if len(filtered) == 0 {
+			filtered = nil
+		}
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.dockerCheckAllowedVMIDs = filtered
 }
 
 // GetDockerChecker returns the current Docker checker, if configured.

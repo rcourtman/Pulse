@@ -1728,11 +1728,13 @@ func (r *Router) configureProxmoxGuestDockerDetection(m *monitoring.Monitor) {
 	detectionEnabled := r.config != nil && (r.config.EnableProxmoxGuestDockerDetection || inventoryEnabled)
 	if !detectionEnabled {
 		m.SetDockerChecker(nil)
+		m.SetDockerCheckerAllowedVMIDs(nil)
 		m.SetDockerInventoryCollector(nil)
 		return
 	}
 	if r.agentExecServer == nil {
 		m.SetDockerChecker(nil)
+		m.SetDockerCheckerAllowedVMIDs(nil)
 		m.SetDockerInventoryCollector(nil)
 		return
 	}
@@ -1754,15 +1756,20 @@ func (r *Router) configureProxmoxGuestDockerDetection(m *monitoring.Monitor) {
 		return result.Stdout + result.Stderr, result.ExitCode, nil
 	}
 
+	allowedVMIDs, invalidVMIDs := monitoring.ParseProxmoxGuestDockerInventoryVMIDs(r.config.ProxmoxGuestDockerInventoryVMIDs)
+	if len(invalidVMIDs) > 0 {
+		log.Warn().
+			Strs("invalidVmids", invalidVMIDs).
+			Msg("[Router] Ignoring invalid Proxmox guest Docker inventory VMID allowlist entries")
+	}
+
 	checker := monitoring.NewAgentDockerChecker(execFunc)
 	m.SetDockerChecker(checker)
+	// The allowlist gates the socket probe as well as inventory collection:
+	// opting into specific guests must not leave every other guest probed via
+	// pct exec on each poll cycle.
+	m.SetDockerCheckerAllowedVMIDs(allowedVMIDs)
 	if inventoryEnabled {
-		allowedVMIDs, invalidVMIDs := monitoring.ParseProxmoxGuestDockerInventoryVMIDs(r.config.ProxmoxGuestDockerInventoryVMIDs)
-		if len(invalidVMIDs) > 0 {
-			log.Warn().
-				Strs("invalidVmids", invalidVMIDs).
-				Msg("[Router] Ignoring invalid Proxmox guest Docker inventory VMID allowlist entries")
-		}
 		m.SetDockerInventoryCollector(monitoring.NewAgentDockerInventoryCollector(execFunc, monitoring.AgentDockerInventoryCollectorOptions{
 			AllowedVMIDs: allowedVMIDs,
 		}))

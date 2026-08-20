@@ -1186,7 +1186,12 @@ type Monitor struct {
 	mockMetricsWg             sync.WaitGroup
 	dockerChecker             DockerChecker            // Optional Docker checker for LXC containers
 	dockerCheckerConfiguredAt time.Time                // Last time the Docker checker was configured
+	dockerCheckAllowedVMIDs   map[int]struct{}         // Optional VMID allowlist gating the LXC Docker socket probe; empty means all guests
 	dockerInventoryCollector  DockerInventoryCollector // Optional Docker inventory collector for LXC containers
+	// Consecutive Docker socket probe failures per container ID, so persistent
+	// failures back off instead of re-running pct exec on every poll cycle.
+	dockerProbeFailureMu sync.Mutex
+	dockerProbeFailures  map[string]*dockerProbeFailureState
 	// Agent profile cache to avoid disk I/O on every report (refs #1094)
 	agentProfileCacheMu sync.RWMutex
 	agentProfileCache   *agentProfileCacheEntry

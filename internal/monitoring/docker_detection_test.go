@@ -2,6 +2,7 @@ package monitoring
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"sync"
 	"testing"
@@ -13,7 +14,8 @@ import (
 
 // mockDockerChecker is a test implementation of DockerChecker
 type mockDockerChecker struct {
-	results map[int]bool // vmid -> hasDocker
+	results map[int]bool  // vmid -> hasDocker
+	errs    map[int]error // vmid -> probe error
 	mu      sync.Mutex
 	calls   []int // records vmids that were checked
 }
@@ -22,10 +24,19 @@ func (m *mockDockerChecker) CheckDockerInContainer(ctx context.Context, node str
 	m.mu.Lock()
 	m.calls = append(m.calls, vmid)
 	m.mu.Unlock()
+	if err, ok := m.errs[vmid]; ok {
+		return false, err
+	}
 	if hasDocker, ok := m.results[vmid]; ok {
 		return hasDocker, nil
 	}
 	return false, nil
+}
+
+func (m *mockDockerChecker) callCount() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return len(m.calls)
 }
 
 func TestCheckContainersForDocker_NewContainers(t *testing.T) {
@@ -931,5 +942,150 @@ func TestContainerNeedsDockerCheck(t *testing.T) {
 				t.Errorf("Expected reason %q, got %q", tt.wantReason, reason)
 			}
 		})
+	}
+}
+
+func TestCheckContainersForDocker_VMIDAllowlistGatesProbe(t *testing.T) {
+	state := models.NewState()
+	monitor := &Monitor{state: state}
+	checker := &mockDockerChecker{
+		results: map[int]bool{101: true, 102: true},
+	}
+	monitor.SetDockerChecker(checker)
+	monitor.SetDockerCheckerAllowedVMIDs(map[int]struct{}{101: {}})
+
+	containers := []models.Container{
+		{ID: "ct-1", VMID: 101, Name: "allowed", Node: "node1", Status: "running"},
+		{ID: "ct-2", VMID: 102, Name: "excluded", Node: "node1", Status: "running"},
+	}
+
+	result := monitor.CheckContainersForDocker(context.Background(), containers)
+
+	if got := checker.callCount(); got != 1 {
+		t.Fatalf("expected only the allowlisted guest to be probed, got %d probes", got)
+	}
+	if len(checker.calls) != 1 || checker.calls[0] != 101 {
+		t.Fatalf("expected probe of VMID 101 only, got %v", checker.calls)
+	}
+	for i := range result {
+		switch result[i].ID {
+		case "ct-1":
+			if !result[i].HasDocker || result[i].DockerCheckedAt.IsZero() {
+				t.Errorf("allowlisted container should have been probed and marked")
+			}
+		case "ct-2":
+			if result[i].HasDocker || !result[i].DockerCheckedAt.IsZero() {
+				t.Errorf("excluded container must not be probed or marked")
+			}
+		}
+	}
+
+	// Clearing the allowlist re-enables probing for every guest.
+	monitor.SetDockerCheckerAllowedVMIDs(nil)
+	monitor.CheckContainersForDocker(context.Background(), containers)
+	if got := checker.callCount(); got != 3 {
+		t.Fatalf("expected both guests probed after clearing allowlist, got %d total probes", got)
+	}
+}
+
+func TestCheckContainersForDocker_FailedProbeBacksOff(t *testing.T) {
+	state := models.NewState()
+	monitor := &Monitor{state: state}
+	checker := &mockDockerChecker{
+		errs: map[int]error{101: errors.New("write_id_mapping: Operation not permitted")},
+	}
+	monitor.SetDockerChecker(checker)
+
+	containers := []models.Container{
+		{ID: "ct-1", VMID: 101, Name: "failing", Node: "node1", Status: "running"},
+	}
+
+	// First poll: probe runs and fails.
+	monitor.CheckContainersForDocker(context.Background(), containers)
+	if got := checker.callCount(); got != 1 {
+		t.Fatalf("expected 1 probe on first poll, got %d", got)
+	}
+
+	// Immediate next polls: still inside the backoff window, no re-probe.
+	monitor.CheckContainersForDocker(context.Background(), containers)
+	monitor.CheckContainersForDocker(context.Background(), containers)
+	if got := checker.callCount(); got != 1 {
+		t.Fatalf("expected failed probe to back off, got %d probes", got)
+	}
+
+	// Rewind the failure timestamp past the first backoff window: retries.
+	monitor.dockerProbeFailureMu.Lock()
+	monitor.dockerProbeFailures["ct-1"].lastAt = time.Now().Add(-2 * proxmoxGuestDockerProbeFailureBackoffBase)
+	monitor.dockerProbeFailureMu.Unlock()
+	monitor.CheckContainersForDocker(context.Background(), containers)
+	if got := checker.callCount(); got != 2 {
+		t.Fatalf("expected retry after backoff expiry, got %d probes", got)
+	}
+	monitor.dockerProbeFailureMu.Lock()
+	failures := monitor.dockerProbeFailures["ct-1"].failures
+	monitor.dockerProbeFailureMu.Unlock()
+	if failures != 2 {
+		t.Fatalf("expected 2 consecutive failures recorded, got %d", failures)
+	}
+
+	// Probe starts succeeding: streak clears and result applies.
+	checker.errs = nil
+	checker.results = map[int]bool{101: true}
+	monitor.dockerProbeFailureMu.Lock()
+	monitor.dockerProbeFailures["ct-1"].lastAt = time.Now().Add(-time.Hour)
+	monitor.dockerProbeFailureMu.Unlock()
+	result := monitor.CheckContainersForDocker(context.Background(), containers)
+	if !result[0].HasDocker {
+		t.Fatalf("expected successful probe to mark HasDocker")
+	}
+	monitor.dockerProbeFailureMu.Lock()
+	_, stillTracked := monitor.dockerProbeFailures["ct-1"]
+	monitor.dockerProbeFailureMu.Unlock()
+	if stillTracked {
+		t.Fatalf("expected failure streak to clear after success")
+	}
+}
+
+func TestSetDockerCheckerResetsProbeFailureBackoff(t *testing.T) {
+	state := models.NewState()
+	monitor := &Monitor{state: state}
+	checker := &mockDockerChecker{
+		errs: map[int]error{101: errors.New("agent token not authorized for command execution")},
+	}
+	monitor.SetDockerChecker(checker)
+
+	containers := []models.Container{
+		{ID: "ct-1", VMID: 101, Name: "failing", Node: "node1", Status: "running"},
+	}
+	monitor.CheckContainersForDocker(context.Background(), containers)
+	monitor.CheckContainersForDocker(context.Background(), containers)
+	if got := checker.callCount(); got != 1 {
+		t.Fatalf("expected backoff after first failure, got %d probes", got)
+	}
+
+	// Reconfiguring the checker (e.g. commands newly enabled) retries at once.
+	monitor.SetDockerChecker(checker)
+	monitor.CheckContainersForDocker(context.Background(), containers)
+	if got := checker.callCount(); got != 2 {
+		t.Fatalf("expected immediate retry after checker reconfiguration, got %d probes", got)
+	}
+}
+
+func TestDockerProbeFailureBackoffSchedule(t *testing.T) {
+	cases := []struct {
+		failures int
+		want     time.Duration
+	}{
+		{0, 0},
+		{1, proxmoxGuestDockerProbeFailureBackoffBase},
+		{2, 2 * proxmoxGuestDockerProbeFailureBackoffBase},
+		{5, 16 * proxmoxGuestDockerProbeFailureBackoffBase},
+		{6, proxmoxGuestDockerProbeFailureBackoffMax},
+		{100, proxmoxGuestDockerProbeFailureBackoffMax},
+	}
+	for _, tc := range cases {
+		if got := dockerProbeFailureBackoff(tc.failures); got != tc.want {
+			t.Errorf("backoff(%d) = %v, want %v", tc.failures, got, tc.want)
+		}
 	}
 }

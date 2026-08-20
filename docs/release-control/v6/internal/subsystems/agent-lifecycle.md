@@ -1992,9 +1992,17 @@ the intentionally sparse public response.
    it cannot use: `lxc-attach` needs `CAP_SETUID` to write `/proc/<pid>/uid_map`
    for unprivileged guests, and without it the Docker socket probe fails with
    `write_id_mapping: 61 Operation not permitted` for every unprivileged LXC.
-   Because that probe failure is debug-level and retried each poll, the
-   resulting surface is silently incomplete rather than visibly broken, so the
-   capability must be provisioned up front rather than diagnosed later.
+   The monitoring server must surface that failure mode instead of hiding it:
+   the first probe failure of a streak, and the point where the retry backoff
+   reaches its cap, log at warn with the guest, node, and error, and failed
+   probes retry with exponential backoff (one minute doubling to a
+   thirty-minute ceiling) instead of re-running `pct exec` on every poll.
+   Reconfiguring the checker resets the backoff so command execution enabled
+   at runtime retries immediately. A warn log is diagnosis, not discovery, so
+   the capability must still be provisioned up front rather than diagnosed
+   later. The `PULSE_PROXMOX_GUEST_DOCKER_INVENTORY_VMIDS` allowlist must gate
+   the socket probe as well as inventory collection, so opting into specific
+   guests never leaves every other guest probed each cycle.
    Persistence-sensitive NAS targets must keep one canonical continuity model here: installer-owned bootstraps may use flash-backed or immutable-root launch hooks only as thin trampolines, while the durable wrapper, state, and reboot-surviving binary copy stay in the governed persistent state directory that updater continuity also refreshes.
    Unix `--update` re-entry must also preserve lifecycle identity for legacy
    v5.1.x agents that do not yet have v6 `connection.env` state. When a
