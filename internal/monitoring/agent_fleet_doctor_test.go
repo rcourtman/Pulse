@@ -105,6 +105,69 @@ func TestAgentFleetDiagnosticsDetectsMissingAndExpiredCredentials(t *testing.T) 
 	}
 }
 
+func TestAgentFleetDiagnosticsTreatsFreshlyUsedUnlistedCredentialAsRegistryStale(t *testing.T) {
+	now := time.Date(2026, 8, 9, 12, 0, 0, 0, time.UTC)
+	lastUsed := now.Add(-30 * time.Second)
+	monitor := newAgentFleetDoctorTestMonitor(t)
+	// The judged token is absent from the inventory, but the host row shows it
+	// authenticated seconds ago (#1730). That contradiction means the server's
+	// token registry view is stale, so the verdict must not read as a
+	// credential outage and must not offer the repair-authentication loop.
+	monitor.state.UpsertHost(models.Host{
+		ID:              "agent-auth",
+		Hostname:        "auth-node",
+		Platform:        "linux",
+		Status:          "online",
+		LastSeen:        now,
+		IntervalSeconds: 30,
+		AgentVersion:    "6.2.0",
+		TokenID:         "unlisted-token",
+		TokenLastUsedAt: &lastUsed,
+	})
+
+	agent := requireAgentDiagnostic(t, monitor.GetAgentFleetDiagnostics("6.2.0", now), "agent-agent-auth")
+	reason := requireReasonCode(t, agent, AgentFleetReasonCredentialUnlisted)
+	if reason.Severity != AgentFleetStatusWarning {
+		t.Fatalf("severity = %q, want %q", reason.Severity, AgentFleetStatusWarning)
+	}
+	if agent.Status != AgentFleetStatusWarning {
+		t.Fatalf("status = %q, want %q", agent.Status, AgentFleetStatusWarning)
+	}
+	for _, r := range agent.Reasons {
+		if r.Code == AgentFleetReasonCredentialMissing {
+			t.Fatalf("fresh authentication must suppress the missing-credential outage: %#v", agent.Reasons)
+		}
+	}
+	for _, repair := range agent.RepairActions {
+		if repair.Code == AgentFleetActionRepairAuthentication {
+			t.Fatalf("registry-stale verdict must not offer repair authentication: %#v", agent.RepairActions)
+		}
+	}
+}
+
+func TestAgentFleetDiagnosticsKeepsMissingCredentialCriticalWhenUseIsStale(t *testing.T) {
+	now := time.Date(2026, 8, 9, 12, 0, 0, 0, time.UTC)
+	lastUsed := now.Add(-2 * time.Hour)
+	monitor := newAgentFleetDoctorTestMonitor(t)
+	monitor.state.UpsertHost(models.Host{
+		ID:              "agent-auth",
+		Hostname:        "auth-node",
+		Platform:        "linux",
+		Status:          "online",
+		LastSeen:        now,
+		IntervalSeconds: 30,
+		AgentVersion:    "6.2.0",
+		TokenID:         "revoked-token",
+		TokenLastUsedAt: &lastUsed,
+	})
+
+	agent := requireAgentDiagnostic(t, monitor.GetAgentFleetDiagnostics("6.2.0", now), "agent-agent-auth")
+	requireReasonCode(t, agent, AgentFleetReasonCredentialMissing)
+	if agent.Status != AgentFleetStatusCritical {
+		t.Fatalf("status = %q, want %q", agent.Status, AgentFleetStatusCritical)
+	}
+}
+
 func TestAgentFleetDiagnosticsAcceptsActiveCredential(t *testing.T) {
 	now := time.Date(2026, 8, 9, 12, 0, 0, 0, time.UTC)
 	monitor := newAgentFleetDoctorTestMonitor(t)

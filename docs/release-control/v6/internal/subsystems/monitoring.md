@@ -2739,6 +2739,17 @@ last successful heartbeat alone. A live host whose reported `TokenID` no
 longer resolves emits `agent_credential_missing`; a resolved but expired record
 emits `agent_credential_expired`; both are critical and expose a bounded
 authentication-repair handoff only when the runtime family is safely known.
+A missing-credential verdict is additionally cross-checked against the
+subject's own authentication evidence: when a row reporting the judged token
+id shows it authenticated within the freshness window (three report
+intervals, ten-minute floor), the diagnostic emits the warning
+`agent_credential_registry_stale` naming the id and the last authentication
+instead of the critical outage, and offers no authentication-repair handoff,
+because a credential that authenticated moments before diagnosis is not
+revoked — the server's token registry view is stale (#1730). Only same-token
+rows vouch; a fresh sibling row on a different credential never rescues a
+genuinely revoked one, and rows with stale or absent authentication evidence
+keep the critical missing verdict.
 An active record is not sufficient when the host reports Pulse command
 execution enabled: if that record lacks `agent:exec`, the diagnostic emits the
 critical `agent_exec_scope_missing` reason and exposes the same bounded

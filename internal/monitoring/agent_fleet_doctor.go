@@ -37,6 +37,7 @@ const (
 	AgentFleetReasonModuleDegraded        = "agent_module_degraded"
 	AgentFleetReasonCredentialMissing     = "agent_credential_missing"
 	AgentFleetReasonCredentialExpired     = "agent_credential_expired"
+	AgentFleetReasonCredentialUnlisted    = "agent_credential_registry_stale"
 	AgentFleetReasonExecScopeMissing      = "agent_exec_scope_missing"
 	AgentFleetReasonDuplicateInstallation = "duplicate_host_agent_installation"
 
@@ -449,7 +450,7 @@ func diagnoseAgentFleetSubject(
 	}
 
 	result.Reasons = append(result.Reasons, diagnoseAgentConnectivity(subject, now)...)
-	result.Reasons = append(result.Reasons, diagnoseAgentCredential(subject, tokenInventory)...)
+	result.Reasons = append(result.Reasons, diagnoseAgentCredential(subject, tokenInventory, now)...)
 	result.Reasons = append(result.Reasons, diagnoseAgentVersion(subject, serverVersion)...)
 	result.Reasons = append(result.Reasons, diagnoseAgentUpdate(subject, serverVersion)...)
 	result.Reasons = append(result.Reasons, diagnoseAgentModules(subject)...)
@@ -550,7 +551,7 @@ func diagnosticHasAnyReason(reasons []AgentFleetDiagnosticReason, codes ...strin
 	return false
 }
 
-func diagnoseAgentCredential(subject agentFleetSubject, inventory agentFleetTokenInventory) []AgentFleetDiagnosticReason {
+func diagnoseAgentCredential(subject agentFleetSubject, inventory agentFleetTokenInventory, now time.Time) []AgentFleetDiagnosticReason {
 	tokenID := strings.TrimSpace(subject.tokenID)
 	if subject.removed || !inventory.known || tokenID == "" {
 		return nil
@@ -577,6 +578,25 @@ func diagnoseAgentCredential(subject agentFleetSubject, inventory agentFleetToke
 			Evidence: []string{"Credential status: expired", "Credential id: " + tokenID},
 		}}
 	}
+	// The row itself proves whether the credential still authenticates. If it
+	// was used moments ago, a missing inventory entry means the server's token
+	// registry view is stale, not that the agent lost access (#1730), and the
+	// repair-authentication loop cannot fix that. Only a same-token row can
+	// vouch, so a fresh sibling row on a different credential never rescues a
+	// genuinely revoked one.
+	if lastUsed := agentFleetCredentialLastUsed(subject, tokenID); lastUsed != nil &&
+		now.Sub(*lastUsed) <= agentFleetCredentialFreshnessWindow(subject) {
+		return []AgentFleetDiagnosticReason{{
+			Code:     AgentFleetReasonCredentialUnlisted,
+			Severity: AgentFleetStatusWarning,
+			Message:  "The credential last used by this agent authenticated recently but is missing from this server's token registry view.",
+			Evidence: []string{
+				"Credential status: authenticating but unlisted",
+				"Credential id: " + tokenID,
+				"Credential last authenticated: " + lastUsed.UTC().Format(time.RFC3339),
+			},
+		}}
+	}
 	// The judged id is the token record UUID this host row last reported
 	// with, not secret material. Without it an operator cannot tell which
 	// credential the verdict is about, so a host that re-enrolled onto a
@@ -587,6 +607,44 @@ func diagnoseAgentCredential(subject agentFleetSubject, inventory agentFleetToke
 		Message:  "The credential last used by this agent no longer exists on this Pulse server.",
 		Evidence: []string{"Credential status: missing or revoked", "Credential id: " + tokenID},
 	}}
+}
+
+// agentFleetCredentialLastUsed returns the newest time the judged credential
+// authenticated according to the subject's own rows. Only rows that reported
+// with the same token id count.
+func agentFleetCredentialLastUsed(subject agentFleetSubject, tokenID string) *time.Time {
+	var newest *time.Time
+	consider := func(rowTokenID string, lastUsed *time.Time) {
+		if strings.TrimSpace(rowTokenID) != tokenID || lastUsed == nil || lastUsed.IsZero() {
+			return
+		}
+		if newest == nil || lastUsed.After(*newest) {
+			t := *lastUsed
+			newest = &t
+		}
+	}
+	if subject.host != nil {
+		consider(subject.host.TokenID, subject.host.TokenLastUsedAt)
+	}
+	if subject.docker != nil {
+		consider(subject.docker.TokenID, subject.docker.TokenLastUsedAt)
+	}
+	if subject.kubernetes != nil {
+		consider(subject.kubernetes.TokenID, subject.kubernetes.TokenLastUsedAt)
+	}
+	return newest
+}
+
+// agentFleetCredentialFreshnessWindow bounds how recent an authentication has
+// to be before it outweighs a missing token registry entry. Slow-reporting
+// agents get a window scaled to their interval so a normal gap between
+// reports never re-opens the false outage.
+func agentFleetCredentialFreshnessWindow(subject agentFleetSubject) time.Duration {
+	window := 10 * time.Minute
+	if interval := time.Duration(subject.intervalSeconds) * time.Second; interval*3 > window {
+		window = interval * 3
+	}
+	return window
 }
 
 func diagnoseDuplicateHostAgentInstallation(subject agentFleetSubject, state models.StateSnapshot) []AgentFleetDiagnosticReason {
