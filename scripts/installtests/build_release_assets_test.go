@@ -2794,8 +2794,18 @@ func TestReleaseBackendRaceGateUsesCompletePVEPartition(t *testing.T) {
 		"python3 scripts/shard_go_tests.py",
 		`--max-regex-bytes "$MAX_REGEX_BYTES"`,
 		`MEMORY_WAIT_SECONDS="${PULSE_BACKEND_TEST_MEMORY_WAIT_SECONDS:-120}"`,
-		`required_kib=$((16 * 1024 * 1024))`,
-		"backend shard admission requires",
+		// Admission thresholds are grounded in the 2026-08-21 direct probe on
+		// the PVE worker (~7.5 GiB measured gate footprint); auto mode must
+		// degrade the shard count when headroom is missing, never fail the
+		// release at admission.
+		`2) echo $((8 * 1024 * 1024))`,
+		`*) echo $((10 * 1024 * 1024))`,
+		"Degrading to $cpu_shards API shard(s)",
+		// Shard CPU is weighted by planned test volume: the serial prefix
+		// shard measured 569s at 2 procs vs 484s at 4 on 2026-08-21, while
+		// the wait-bound tails cannot use extra width.
+		"SHARD_GOMAXPROCS",
+		`GOMAXPROCS="$shard_procs"`,
 		"--shard-boundaries",
 		"TestWebSocketOriginAllowsTrustedForwardedHostedOriginIPv6Loopback",
 		"TestServerInfoEndpointMethodNotAllowed",

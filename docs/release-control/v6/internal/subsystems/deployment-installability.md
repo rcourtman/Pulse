@@ -650,11 +650,23 @@ upgrade, update, release, or artifact-selection behavior.
    consuming the worker. Auto-sharding must not make a permanent one-shard
    decision from the transient memory peak created by sibling credential-free
    release compilers. On an 8-vCPU worker it may wait up to 120 seconds for
-   those bounded compile processes to exit, but it must then require measured
-   16 GiB of available guest memory for three race binaries plus the concurrent
-   package graph and fail
-   immediately with a capacity diagnosis when that admission floor is still
-   unavailable. The exact RC.6 graph uses measured named boundaries: the fast
+   those bounded compile processes to exit, and it must then admit the widest
+   shard count the measured available guest memory supports — 10 GiB for three
+   race binaries plus the concurrent package graph, 8 GiB for two — degrading
+   the shard count instead of failing the release at admission. Those floors
+   are grounded in the 2026-08-21 direct worker probe that measured a ~7.5 GiB
+   footprint for the complete three-shard gate (8.9 GiB MemAvailable floor
+   from a 16.4 GiB idle start, zero swap); the prior 16 GiB requirement
+   exceeded the worker's own idle availability and could fail an otherwise
+   healthy release. Shard CPU width must be weighted by planned test volume.
+   Top-level tests execute serially inside one test-binary process, so a
+   shard's wall time tracks the serial duration of its planned range rather
+   than its CPU width; the width that matters is runtime, GC, and race-
+   detector headroom for the prefix shard's thousands of unit tests, which
+   the ~15-test wait-bound integration tails cannot use (prefix shard
+   measured 569s at 2 procs versus 484s at 4 on the 2026-08-21 worker
+   probes). The volume-weighted allocation must never oversubscribe the
+   worker's vCPUs across concurrent shards. The exact RC.6 graph uses measured named boundaries: the fast
    prefix ends at
    `TestWebSocketOriginAllowsTrustedForwardedHostedOriginIPv6Loopback`, and
    the repeated integration-server tail is divided after

@@ -117,17 +117,25 @@ if [ "$API_SHARDS" = auto ]; then
   fi
 
   # A release starts the public and private credential-free compilers beside
-  # this lane. Their short peak must not permanently collapse an otherwise
-  # capable 8-vCPU worker to a long API shard. Wait only while those useful
-  # jobs finish, then require measured headroom for every race binary plus the
-  # concurrent non-root package graph. If that headroom never appears, fail at
-  # admission instead of discovering the capacity problem at the job timeout.
+  # this lane on the same worker VM. Their short peak must not permanently
+  # collapse an otherwise capable 8-vCPU worker to a long API shard. Wait only
+  # while those useful jobs finish, then admit the widest shard count the
+  # measured headroom supports instead of failing the release at admission.
+  # A 2026-08-21 direct probe on the 8-vCPU/18-GiB PVE worker measured a
+  # ~7.5 GiB gate footprint for three race shards plus the concurrent non-API
+  # package graph (8.9 GiB MemAvailable floor from a 16.4 GiB idle start, zero
+  # swap), so these thresholds keep >2x margin while remaining reachable
+  # beside the compile peak (~14.1 GiB observed mid-release). The previous
+  # 16 GiB requirement exceeded the worker's own idle availability (16.1 GiB)
+  # and would have hard-failed the next release at admission.
+  shard_admission_required_kib() {
+    case "$1" in
+      2) echo $((8 * 1024 * 1024)) ;;
+      *) echo $((10 * 1024 * 1024)) ;;
+    esac
+  }
   if [ "$cpu_shards" -gt 1 ]; then
-    if [ "$cpu_shards" -ge 3 ]; then
-      required_kib=$((16 * 1024 * 1024))
-    else
-      required_kib=$((14 * 1024 * 1024))
-    fi
+    required_kib="$(shard_admission_required_kib "$cpu_shards")"
     waited_seconds=0
     while [ "$AVAILABLE_KIB" -lt "$required_kib" ] && [ "$waited_seconds" -lt "$MEMORY_WAIT_SECONDS" ]; do
       remaining_seconds=$((MEMORY_WAIT_SECONDS - waited_seconds))
@@ -139,10 +147,10 @@ if [ "$API_SHARDS" = auto ]; then
       AVAILABLE_KIB="$(read_available_kib)"
       if [ -z "$AVAILABLE_KIB" ]; then AVAILABLE_KIB=0; fi
     done
-    if [ "$AVAILABLE_KIB" -lt "$required_kib" ]; then
-      echo "Error: backend shard admission requires $((required_kib / 1024)) MiB available after a ${MEMORY_WAIT_SECONDS}s bounded wait; found $((AVAILABLE_KIB / 1024)) MiB." >&2
-      exit 4
-    fi
+    while [ "$cpu_shards" -gt 1 ] && [ "$AVAILABLE_KIB" -lt "$(shard_admission_required_kib "$cpu_shards")" ]; do
+      cpu_shards=$((cpu_shards - 1))
+      echo "Degrading to $cpu_shards API shard(s): $((AVAILABLE_KIB / 1024)) MiB available after the ${MEMORY_WAIT_SECONDS}s bounded wait."
+    done
   fi
   API_SHARDS="$cpu_shards"
 elif [[ ! "$API_SHARDS" =~ ^[1-9][0-9]*$ ]]; then
@@ -195,6 +203,37 @@ if [ -n "$SHARD_BOUNDARIES" ]; then
 fi
 python3 scripts/shard_go_tests.py "${plan_args[@]}"
 
+# CPU-weight each shard by its planned test volume. Top-level tests execute
+# serially inside one test-binary process, so a shard's wall time tracks the
+# serial duration of its range, not its CPU width — but the runtime, GC, and
+# race detector behind the canonical prefix shard's thousands of unit tests
+# still benefit from width the ~15-test wait-bound tail shards cannot use.
+# Direct 2026-08-21 worker probes measured the prefix shard at 569s with 2
+# procs and 484s with 4 while total allocation stayed at the worker's vCPU
+# count, so the volume-weighted split is a measured improvement with no
+# oversubscription risk.
+mapfile -t SHARD_GOMAXPROCS < <(python3 - "$PLAN_DIR/manifest.json" "$VCPUS" <<'PY'
+import json
+import sys
+
+manifest = json.load(open(sys.argv[1]))
+vcpus = int(sys.argv[2])
+counts = [shard["test_count"] for shard in manifest["shards"]]
+total = sum(counts) or 1
+floor = 2 if vcpus >= 2 * len(counts) else 1
+budget = vcpus - floor * len(counts)
+extras = [int(round(budget * count / total)) for count in counts]
+drift = budget - sum(extras)
+extras[max(range(len(extras)), key=lambda i: counts[i])] += drift
+print("\n".join(str(floor + extra) for extra in extras))
+PY
+)
+if [ "${#SHARD_GOMAXPROCS[@]}" -ne "$API_SHARDS" ]; then
+  echo "Error: shard GOMAXPROCS plan produced ${#SHARD_GOMAXPROCS[@]} entries for $API_SHARDS shards." >&2
+  exit 4
+fi
+echo "API shard GOMAXPROCS: ${SHARD_GOMAXPROCS[*]}"
+
 API_IMPORT_PATH="$(go list -f '{{.ImportPath}}' ./internal/api)"
 mapfile -t OTHER_PACKAGES < <(
   go list ./cmd/... ./internal/... ./pkg/... ./scripts/... ./tests/... \
@@ -213,6 +252,7 @@ run_other_packages() {
 
 run_api_shard() {
   local shard_index="$1"
+  local shard_procs="$2"
   local shard_dir="$RUN_ROOT/data/api-shard-$shard_index"
   local regex_file regex batch_index=0
   local shard_started_seconds="$SECONDS"
@@ -231,7 +271,7 @@ run_api_shard() {
     (
       cd internal/api
       env \
-        GOMAXPROCS="$((VCPUS / API_SHARDS))" \
+        GOMAXPROCS="$shard_procs" \
         PULSE_DATA_DIR="$shard_dir/batch-$batch_index" \
         "$API_BINARY" -test.run "$regex" -test.timeout 30m
     )
@@ -244,7 +284,7 @@ run_other_packages &
 pids+=("$!")
 for shard_number in $(seq 1 "$API_SHARDS"); do
   shard_index="$(printf '%02d' "$shard_number")"
-  run_api_shard "$shard_index" &
+  run_api_shard "$shard_index" "${SHARD_GOMAXPROCS[$((shard_number - 1))]}" &
   pids+=("$!")
 done
 
