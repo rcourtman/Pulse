@@ -6394,6 +6394,12 @@ summary.
 When missing provider configuration blocks Patrol, `blocked_reason` must point
 to Pulse Intelligence > Provider & Models settings and tool-capable Patrol model
 selection.
+When a provider is configured but its initialization failed — model resolution
+can require the provider's live catalog, so Pulse booting before a local model
+server loses that race — `blocked_reason` must name the initialization failure
+instead of claiming no provider is configured, and the runtime must retry
+provider initialization on each scheduled run so a boot-time race strands
+Patrol for at most one interval rather than until the next settings save.
 That runtime-state contract must be derived from live Patrol runtime inputs,
 not only from the last failed run attempt, and the backend must clear any stale
 managed-credit block once a provider or local model configuration returns.
@@ -6494,6 +6500,18 @@ snooze, dismiss, resolve, and suppress actions against synthetic `ai-service`
 runtime findings. The canonical recovery path is to correct Patrol provider
 configuration in Pulse Intelligence > Provider & Models settings and let Patrol
 re-evaluate the runtime condition on the next run.
+Runs Patrol never attempts are part of that same finding surface. A scheduled
+or scoped run skipped by a persistent readiness blocker or an unavailable
+provider must raise the deduped synthetic runtime finding, so an enabled-but-
+inert Patrol reaches the shared findings surfaces and alert notification
+channels once instead of living only on the Patrol page banner; field
+telemetry showed installs recording weeks of empty error runs before anyone
+noticed. A transiently open circuit breaker must stay finding-free, because
+the attempts that opened it already raised their classified finding.
+Turning Patrol off is a Patrol-owned resolution of that synthetic runtime
+finding: the disable transition must resolve it rather than leave an
+unactionable warning nagging about a state the operator just opted out of,
+and infrastructure findings are untouched by that transition.
 The shared findings lifecycle must also treat a regressed issue as a new active
 occurrence. When a resolved finding reappears, `internal/ai/findings.go` must
 clear any stale acknowledgement timestamp from the prior occurrence instead of

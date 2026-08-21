@@ -431,6 +431,76 @@ func summarizePatrolRuntimeFailureDetail(raw string, cancelled bool) string {
 	}
 }
 
+// patrolBlockedRunFailure describes a scheduled run Patrol skipped before any
+// provider attempt — a persistent readiness blocker (no provider configured,
+// no usable Patrol model) or a provider that failed to initialize. Raising it
+// as the deduped runtime finding gives the operator one nudge on the surfaces
+// they actually watch (findings list, attention badge, alert notification
+// channels); the Patrol page banner alone left field installs blocked for
+// weeks without anyone noticing. reason must already be operator-honest: it
+// becomes the finding description.
+func patrolBlockedRunFailure(reason string, cause PatrolFailureCause) patrolRuntimeFailure {
+	description := strings.TrimSpace(redactPatrolRuntimeFailureDetail(reason))
+	if description == "" {
+		description = "Patrol is enabled and scheduled, but its AI runtime is not ready, so analysis runs are being skipped."
+	}
+	if cause == "" {
+		cause = PatrolFailureCauseProviderNotConfigured
+	}
+	return patrolRuntimeFailure{
+		Title:          "Pulse Patrol: Runs are being skipped",
+		Summary:        "Patrol is enabled but runs are being skipped",
+		Cause:          cause,
+		Description:    description,
+		Impact:         patrolRuntimeFailureImpact,
+		Recommendation: "Open the Provider & Models settings page and complete the provider setup, or turn Patrol off if you do not plan to use AI analysis.",
+	}
+}
+
+// retryProviderInitIfNeeded reports whether the AI service can run LLM
+// analysis, first retrying provider initialization when the config claims a
+// configured provider but the boot-time build failed. Provider construction
+// can depend on a live model-catalog call, so Pulse starting before a local
+// Ollama server must strand Patrol for at most one interval, not until the
+// next settings save.
+func (p *PatrolService) retryProviderInitIfNeeded(ctx context.Context) bool {
+	if p == nil || p.aiService == nil {
+		return false
+	}
+	if p.aiService.IsEnabled() {
+		return true
+	}
+	if p.aiService.RetryProviderInit(ctx) {
+		log.Info().Msg("AI Patrol: Provider initialization recovered on scheduled retry")
+		return true
+	}
+	return false
+}
+
+// providerUnavailableReason returns the operator-facing reason Patrol cannot
+// use a provider right now. When the config claims a configured provider but
+// initialization failed, the reason names that failure instead of telling an
+// operator who has configured a provider to configure one.
+func (p *PatrolService) providerUnavailableReason() (string, PatrolFailureCause) {
+	if p != nil && p.aiService != nil {
+		if initErr := strings.TrimSpace(p.aiService.ProviderInitError()); initErr != "" {
+			return fmt.Sprintf("The configured AI provider failed to initialize, so Patrol runs are being skipped. Pulse retries on every scheduled run. Provider error: %s", initErr), PatrolFailureCauseProviderConnection
+		}
+	}
+	return patrolProviderNotConfiguredReason, PatrolFailureCauseProviderNotConfigured
+}
+
+// raiseBlockedRunFinding records the deduped runtime finding for a scheduled
+// run skipped by a persistent readiness blocker. The stable runtime finding ID
+// means repeated blocked ticks notify at most once, and the finding
+// auto-resolves on the next successful provider-backed run.
+func (p *PatrolService) raiseBlockedRunFinding(reason string, cause PatrolFailureCause) {
+	if p == nil || p.findings == nil {
+		return
+	}
+	p.recordFinding(newPatrolRuntimeFailureFinding(patrolBlockedRunFailure(reason, cause), time.Now()))
+}
+
 func newPatrolRuntimeFailureFinding(failure patrolRuntimeFailure, now time.Time) *Finding {
 	return &Finding{
 		ID:             generateFindingID(patrolRuntimeResourceID, "reliability", patrolRuntimeFindingKey),
@@ -464,6 +534,6 @@ func (p *PatrolService) resolvePatrolRuntimeFailureFinding(reason string) bool {
 	if resolver := p.unifiedFindingResolver; resolver != nil {
 		resolver(errorFindingID)
 	}
-	log.Info().Str("reason", reason).Msg("AI Patrol: Auto-resolved previous patrol runtime finding after successful provider-backed run")
+	log.Info().Str("reason", reason).Msg("AI Patrol: Resolved patrol runtime finding")
 	return true
 }

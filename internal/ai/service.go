@@ -235,10 +235,16 @@ type PatrolStreamResponse struct {
 
 // Service orchestrates AI interactions
 type Service struct {
-	mu                       sync.RWMutex
-	orgID                    string
-	persistence              *config.ConfigPersistence
-	provider                 providers.Provider
+	mu          sync.RWMutex
+	orgID       string
+	persistence *config.ConfigPersistence
+	provider    providers.Provider
+	// providerInitErr records why the default provider could not be built even
+	// though the config claims an enabled, configured provider (for example a
+	// live model-catalog resolution against an Ollama server that was still
+	// booting). Patrol readiness reports it instead of the misleading
+	// "provider not configured" copy, and RetryProviderInit clears it.
+	providerInitErr          string
 	cfg                      *config.AIConfig
 	agentServer              AgentServer
 	policy                   CommandPolicy
@@ -1745,44 +1751,18 @@ func (s *Service) LoadConfig() error {
 	if err != nil {
 		return fmt.Errorf("failed to load Pulse Assistant config: %w", err)
 	}
-	modelResolutionCtx := context.Background()
 	var providerClient providers.Provider
+	var providerInitErr string
 
 	// Don't initialize provider if AI is not enabled or not configured
-	if cfg == nil || !cfg.Enabled || !cfg.IsConfigured() {
-	} else {
-		selectedModel, resolveErr := ResolveConfiguredModel(modelResolutionCtx, cfg)
-		if resolveErr != nil {
-			log.Warn().Err(resolveErr).Str("orgID", orgID).Msg("AI enabled but no effective provider model could be resolved")
-		} else {
-			cfg.Model = selectedModel
-			selectedProvider, _ := config.ParseModelString(selectedModel)
-
-			nextProvider, providerErr := providers.NewForModel(cfg, selectedModel)
-			if providerErr != nil {
-				log.Warn().
-					Err(providerErr).
-					Str("selected_model", selectedModel).
-					Str("selected_provider", selectedProvider).
-					Strs("configured_providers", cfg.GetConfiguredProviders()).
-					Msg("AI enabled but selected provider could not be initialized")
-			}
-
-			providerClient = nextProvider
-			if providerClient != nil {
-				log.Info().
-					Str("provider", selectedProvider).
-					Str("model", selectedModel).
-					Str("control_level", cfg.GetControlLevel()).
-					Bool("autonomous", cfg.IsAutonomous()).
-					Msg("AI service initialized")
-			}
-		}
+	if cfg != nil && cfg.Enabled && cfg.IsConfigured() {
+		providerClient, providerInitErr = buildConfiguredProvider(context.Background(), cfg, orgID, true)
 	}
 
 	s.mu.Lock()
 	s.cfg = cfg
 	s.provider = providerClient
+	s.providerInitErr = providerInitErr
 	s.initInfraDiscoveryServiceLocked()
 	s.initDiscoveryServiceLocked()
 	s.mu.Unlock()
@@ -1791,6 +1771,90 @@ func (s *Service) LoadConfig() error {
 	s.updateDiscoverySettings(cfg)
 
 	return nil
+}
+
+// buildConfiguredProvider resolves the effective model and constructs the
+// default provider client for an enabled, configured AI config. It returns a
+// nil provider plus a redacted failure summary when either step fails — for
+// example when model resolution needs the provider's live catalog and that
+// server is still booting. Callers own storing the result under s.mu.
+// stampModel controls whether the resolved model is written back to cfg.Model:
+// LoadConfig owns the config instance it just loaded, while retry callers
+// share s.cfg and must not mutate it without the lock.
+func buildConfiguredProvider(ctx context.Context, cfg *config.AIConfig, orgID string, stampModel bool) (providers.Provider, string) {
+	selectedModel, resolveErr := ResolveConfiguredModel(ctx, cfg)
+	if resolveErr != nil {
+		log.Warn().Err(resolveErr).Str("orgID", orgID).Msg("AI enabled but no effective provider model could be resolved")
+		return nil, summarizePatrolRuntimeFailureDetail(resolveErr.Error(), false)
+	}
+	if stampModel {
+		cfg.Model = selectedModel
+	}
+	selectedProvider, _ := config.ParseModelString(selectedModel)
+
+	nextProvider, providerErr := providers.NewForModel(cfg, selectedModel)
+	if providerErr != nil {
+		log.Warn().
+			Err(providerErr).
+			Str("selected_model", selectedModel).
+			Str("selected_provider", selectedProvider).
+			Strs("configured_providers", cfg.GetConfiguredProviders()).
+			Msg("AI enabled but selected provider could not be initialized")
+		return nil, summarizePatrolRuntimeFailureDetail(providerErr.Error(), false)
+	}
+
+	log.Info().
+		Str("provider", selectedProvider).
+		Str("model", selectedModel).
+		Str("control_level", cfg.GetControlLevel()).
+		Bool("autonomous", cfg.IsAutonomous()).
+		Msg("AI service initialized")
+	return nextProvider, ""
+}
+
+// ProviderInitError returns the redacted reason the default provider could not
+// be initialized, or "" when the provider is healthy or intentionally absent.
+func (s *Service) ProviderInitError() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.providerInitErr
+}
+
+// RetryProviderInit rebuilds the default provider when the config claims an
+// enabled, configured provider but initialization previously failed. Provider
+// construction can depend on a live model-catalog call, so a boot-time race
+// (Pulse starting before a local Ollama server) must not strand the runtime
+// until the next settings save; Patrol calls this once per scheduled run.
+// Returns true when a usable provider is available afterwards.
+func (s *Service) RetryProviderInit(ctx context.Context) bool {
+	s.mu.RLock()
+	cfg := s.cfg
+	provider := s.provider
+	orgID := s.orgID
+	s.mu.RUnlock()
+
+	if provider != nil {
+		return true
+	}
+	if cfg == nil || !cfg.Enabled || !cfg.IsConfigured() {
+		return false
+	}
+
+	nextProvider, initErr := buildConfiguredProvider(ctx, cfg, orgID, false)
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	// A concurrent LoadConfig may have replaced provider or cfg; never clobber
+	// a healthy provider with a failed retry.
+	if s.provider != nil {
+		return true
+	}
+	if s.cfg != cfg {
+		return s.provider != nil
+	}
+	s.provider = nextProvider
+	s.providerInitErr = initErr
+	return nextProvider != nil
 }
 
 // IsEnabled returns true if AI is enabled and configured

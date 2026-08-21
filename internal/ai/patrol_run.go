@@ -385,6 +385,7 @@ func (p *PatrolService) runPatrolWithTriggerStart(ctx context.Context, trigger T
 			p.endRun()
 		}
 		p.setBlockedReasonWithCause(reason, cfg.RuntimeBlockedCause)
+		p.raiseBlockedRunFinding(reason, cfg.RuntimeBlockedCause)
 		log.Info().Str("reason", reason).Str("cause", string(cfg.RuntimeBlockedCause)).Msg("AI Patrol: Skipping run - runtime readiness blocked")
 		return
 	}
@@ -567,7 +568,7 @@ func (p *PatrolService) runPatrolWithTriggerStart(ctx context.Context, trigger T
 
 	// Acquire a breaker probe only when this run is actually ready to call the
 	// provider. Early collection/scope exits must not strand a half-open probe.
-	aiServiceEnabled := p.aiService != nil && p.aiService.IsEnabled()
+	aiServiceEnabled := p.retryProviderInitIfNeeded(ctx)
 	llmAllowed := true
 	if aiServiceEnabled && breaker != nil {
 		llmAllowed = breaker.Allow()
@@ -579,12 +580,17 @@ func (p *PatrolService) runPatrolWithTriggerStart(ctx context.Context, trigger T
 
 	// Check if we can run LLM analysis (AI-only patrol)
 	if !canRunLLM {
-		reason := patrolProviderNotConfiguredReason
-		cause := PatrolFailureCauseProviderNotConfigured
+		reason, cause := p.providerUnavailableReason()
 		if aiServiceEnabled && !llmAllowed {
 			reason = "circuit breaker is open"
 			cause = PatrolFailureCauseCircuitOpen
 			GetPatrolMetrics().RecordCircuitBlock()
+		} else {
+			// A run skipped for a persistent provider state (never attempted)
+			// surfaces as the deduped runtime finding; a transiently open
+			// breaker does not, because the attempts that opened it already
+			// raised their own specific finding.
+			trackFinding(newPatrolRuntimeFailureFinding(patrolBlockedRunFailure(reason, cause), time.Now()))
 		}
 		p.setBlockedReasonWithCause(reason, cause)
 		log.Info().Str("reason", reason).Str("cause", string(cause)).Msg("AI Patrol: Skipping run - AI unavailable")
@@ -1076,7 +1082,7 @@ func (p *PatrolService) runScopedPatrolWithStart(ctx context.Context, scope Patr
 
 	// Acquire a breaker probe only after the requested scope has resolved to
 	// real work. This keeps collection-only failures outside provider health.
-	aiServiceEnabled := p.aiService != nil && p.aiService.IsEnabled()
+	aiServiceEnabled := p.retryProviderInitIfNeeded(ctx)
 	llmAllowed := true
 	if aiServiceEnabled && breaker != nil {
 		llmAllowed = breaker.Allow()
@@ -1087,12 +1093,13 @@ func (p *PatrolService) runScopedPatrolWithStart(ctx context.Context, scope Patr
 	canRunLLM := aiServiceEnabled && llmAllowed
 
 	if !canRunLLM {
-		reason := patrolProviderNotConfiguredReason
-		cause := PatrolFailureCauseProviderNotConfigured
+		reason, cause := p.providerUnavailableReason()
 		if aiServiceEnabled && !llmAllowed {
 			reason = "circuit breaker is open"
 			cause = PatrolFailureCauseCircuitOpen
 			GetPatrolMetrics().RecordCircuitBlock()
+		} else {
+			p.raiseBlockedRunFinding(reason, cause)
 		}
 		p.setBlockedReasonWithCause(reason, cause)
 		log.Info().Str("reason", reason).Str("cause", string(cause)).Msg("AI Patrol: Skipping scoped run - AI unavailable")

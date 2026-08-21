@@ -337,6 +337,7 @@ func (p *PatrolService) SetConfig(cfg PatrolConfig) {
 	oldInterval := p.config.GetInterval()
 	oldBlockedReason := strings.TrimSpace(p.config.RuntimeBlockedReason)
 	oldBlockedCause := p.config.RuntimeBlockedCause
+	wasEnabled := p.config.Enabled
 	p.config = cfg
 	newInterval := cfg.GetInterval()
 	configCh := p.configChanged
@@ -352,6 +353,14 @@ func (p *PatrolService) SetConfig(cfg PatrolConfig) {
 		p.lastBlockedAt = time.Time{}
 	}
 	p.mu.Unlock()
+
+	// Turning Patrol off is a deliberate resolution of "Patrol cannot run":
+	// leaving the runtime finding active would nag about a state the operator
+	// just opted out of. Infrastructure findings are untouched — they describe
+	// the estate, not the Patrol runtime.
+	if wasEnabled && !cfg.Enabled {
+		p.resolvePatrolRuntimeFailureFinding("patrol_disabled")
+	}
 
 	// Signal config change if patrol is running and interval changed
 	if configCh != nil && newInterval != oldInterval {
