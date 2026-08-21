@@ -4,7 +4,7 @@
 - Subsystem: `api-contracts`
 - Baseline commit: `9dac68fd6`
 - Boundary commit: `b70a658c8992158b8d0f8a6408053afa2915a8d7`
-- Result: production decomposition passed; PVE acceleration remains open
+- Result: production decomposition and chart/resource PVE acceleration passed
 
 ## Production Boundaries
 
@@ -104,12 +104,135 @@ resource/router integration tests, including:
 - `TestLoad_500Node_ConcurrentResources`
 - `TestLoad_500Node_MixedEndpoints`
 
-The chart handlers and response builders currently span `internal/api/router.go`
-and `internal/api/types.go`; the resource query path shares one
-`ResourceHandlers` type with action lifecycle and operator-state mutation.
+At that boundary revision, chart handlers and response builders still spanned
+`internal/api/router.go` and `internal/api/types.go`; the resource query path
+still shared one `ResourceHandlers` type with action lifecycle and
+operator-state mutation.
 Moving only the expensive tests, copying list filters into a new package, or
 wrapping root behavior in callbacks would create an artificial boundary and is
 not acceptable. The next decomposition must separate the production chart and
 resource-query services, give each a lower-level monitor/registry interface,
 move their full contract/load tests with them, and leave root with route
 composition and cross-domain proof only.
+
+## Chart and Resource Query Continuation
+
+The continuation was mapped from `418402bf9eeb4ddb5a2f437ac9b93290bc96f103`,
+then rebased onto the corrected release selector at
+`1327dddad5200f07271e16abdf4dd83fa1f2eb4f`. Implementation commit
+`2e4bd36ec5fd0121a2a4cc3564be89eeb9d5c750` completed the two production
+boundaries identified above:
+
+- `internal/api/chartapi` owns all six chart handlers, monitor history queries,
+  aggregation/downsampling, response contracts, per-tenant response caches,
+  singleflight coordination, and the chart handler/contract suite.
+- `internal/api/resourceapi` owns registry construction, tenant stores,
+  unified seed ingestion, list/detail/facet/timeline queries, discovery and
+  metrics projections, response contracts, and the 500-node resource load
+  proof.
+- Root Router and `ResourceHandlers` retain source-compatible delegates and
+  type aliases. Root continues to own route authorization, action lifecycle,
+  operator-state mutation, and cross-domain integration proof. Neither domain
+  package imports root or delegates behavior back through generic callbacks.
+
+The root package changed from 587 to 581 Go files and from 3,755 to 3,645
+top-level tests. Exactly 110 existing test/benchmark entry points moved with
+their production domains: 35 to `chartapi` and 75 to `resourceapi`. The moved
+resource set includes `TestLoad_500Node_ConcurrentResources`; the moved chart
+set includes 17 end-to-end handler tests that previously ran serially in the
+root test binary.
+
+The exact local warm correctness run used the same command form as the earlier
+record:
+
+```sh
+/usr/bin/time -lp sh -c 'go test -count=1 ./internal/api/...'
+```
+
+It passed in `118.77s` wall, `177.00s` user, and `30.73s` system with
+`3,455,729,664` bytes maximum RSS. Average CPU occupancy was 1.749 cores
+(`17.49%` of the 10-logical-CPU local host). Concurrent package elapsed times
+were `114.725s` root, `96.313s` config, `22.665s` chart, and `8.971s`
+resource. The prior recorded local boundary run was `153.96s`; because the
+continuation baseline also includes later mainline release fixes, that
+`35.19s` difference is supporting evidence rather than the controlled PVE
+before/after result.
+
+Full race qualification passed with no detector report or panic:
+
+```sh
+/usr/bin/time -lp sh -c 'go test -race -timeout 20m -count=1 ./internal/api/...'
+```
+
+The race run used `667.59s` wall, `885.43s` user, `105.78s` system, and
+`3,728,080,896` bytes maximum RSS. Package elapsed times were `649.623s` root,
+`123.379s` chart, `104.904s` config, and `14.749s` resource.
+
+A static equivalence audit extracted every top-level `Test`, `Benchmark`, and
+`Example` function name from the continuation baseline and the completed tree.
+Both sets contain 4,038 unique names; the set difference is zero in both
+directions. This complements executable contract qualification by proving the
+package move did not rename, delete, or replace any existing test entry point.
+
+### Controlled PVE release qualification
+
+The final comparison ran on `pulse-dev`, Linux amd64 with Go 1.26.5 and 8
+vCPUs. Exact committed bundles were checked out detached beneath
+`/tmp/pulse-api-chart-resource.vxQAJx`; no primary checkout or runner service
+was modified. Both measured revisions used warmed race build and test caches,
+a fresh isolated data-root value, and the same fixed two-shard release plan:
+
+```sh
+/usr/bin/time -v -o baseline-steady.time \
+  ./scripts/run-release-backend-tests.sh \
+  --data-root /tmp/pulse-api-chart-resource.vxQAJx/data-baseline-steady \
+  --api-shards 2
+
+/usr/bin/time -v -o after.time \
+  ./scripts/run-release-backend-tests.sh \
+  --data-root /tmp/pulse-api-chart-resource.vxQAJx/data-after-fresh \
+  --api-shards 2
+```
+
+The explicit shard count removes a discovered environmental confound: the
+first baseline saw 11,116 MiB available and auto-selected two shards, while an
+immediate split attempt saw 9,591 MiB and auto-selected one. That one-shard
+attempt was terminated and excluded. A subsequent matched attempt was also
+excluded after its reused data-root exposed an asymmetric `resourceapi` test
+cache hit. The recorded pair is steady-state warm on both sides, used distinct
+fresh data-root values, saw 10,392 and 10,377 MiB available respectively, and
+produced the same two shards with one exact-name batch per shard.
+
+| Warm release gate | Wall | User | System | Average cores | 8-vCPU capacity | Maximum RSS | Result |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| Baseline `1327dddad` | 13:46.65 | 1,545.57s | 148.79s | 2.050 | 25.62% | 6,381,264 KiB | pass |
+| Chart/resource split `2e4bd36ec` | 11:16.05 | 1,369.46s | 138.27s | 2.230 | 27.88% | 6,526,072 KiB | pass |
+
+The production split reduced the warm release wall time by 150.60 seconds
+(18.22%) and total CPU time by 186.63 seconds (11.01%). Average occupancy rose
+from 2.050 to 2.230 cores, or 2.26 percentage points of worker capacity. Peak
+RSS increased by 144,808 KiB (2.27%). Both release runs completed with two API
+`PASS` results, no race report, and the terminal
+`Race-enabled backend release tests passed with 2 API shard(s).` marker.
+
+The split release log reports native warm package results for both
+`internal/api/chartapi` and `internal/api/resourceapi`; the uncached local race
+run above remains the execution proof for every moved test. Live checkpoints
+also showed the shorter root shard finishing near 5m13s after the split versus
+about 7m in the steady baseline. The remaining root shard therefore remains
+the release critical path even though the architectural cut materially reduced
+it.
+
+Preserved local evidence files and checksums:
+
+- `/tmp/pulse-api-next-cut.Cxp7CT/baseline-steady.time`:
+  `d6673f5a0f06a076e8fc661695b813129a831c5900eaf6d0bd74a122b6363f11`
+- `/tmp/pulse-api-next-cut.Cxp7CT/baseline-steady.log`:
+  `1e83269680567e1d92e361cfde26414e6bc6a815f44710a0353b94dfaeac3784`
+- `/tmp/pulse-api-next-cut.Cxp7CT/after.time`:
+  `c9570f253460e360432bacd9803b23f703a73baa93929d6cfce06c65dfce4f71`
+- `/tmp/pulse-api-next-cut.Cxp7CT/after.log`:
+  `5a8dfa99f184514467669990dd667e22507a04602809d2a1d48895c897964c00`
+
+After the measurements, the worker had no matching release-backend, API race,
+or Docker build process. The temporary remote files and logs were preserved.

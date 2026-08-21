@@ -3143,18 +3143,19 @@ a new API state machine, queue contract, or verification-accounting field.
     hidden. Upgrade prompts, trial nudges, monitored-system migration guidance,
     usage counts, billing identity, and plan metadata must therefore not depend
     on hidden commercial routes surviving the public demo boundary.
-37. Keep the storage summary route in `internal/api/router.go` as the
+37. Keep the storage summary route in `internal/api/chartapi/service.go` as the
     canonical storage summary contract across dashboard and storage consumers.
-    `internal/api/router.go`,
-    `internal/api/contract_test.go`, and shared frontend consumers must expose
-    pooled storage history through one response keyed by canonical
+    `internal/api/chartapi/service.go`,
+    `internal/api/chartapi/service_test.go`, and shared frontend consumers must
+    expose pooled storage history through one response keyed by canonical
     metrics-target IDs, preserve millisecond chart timestamps, and avoid
     reconstructing storage summary behavior from per-pool
     `/api/metrics-store/history` fan-out.
 38. Keep infrastructure summary metric filtering canonical on that same shared
     API surface. `frontend-modern/src/api/charts.ts`,
-    `internal/api/router_routes_monitoring.go`, `internal/api/router.go`,
-    `internal/api/types.go`, and `internal/api/contract_test.go` must route
+    `internal/api/router_routes_monitoring.go`,
+    `internal/api/chartapi/service.go`, `internal/api/chartapi/types.go`, and
+    `internal/api/chartapi/service_test.go` must route
     optional infrastructure-summary `metrics` filters through one governed
     transport contract, so route-owned consumers can request only the series
     they render without inventing a second summary endpoint or silently
@@ -3172,8 +3173,8 @@ a new API state machine, queue contract, or verification-accounting field.
     target join keys. New summary payloads must be owned by their product
     route and pinned in the API contract there.
 40. Keep mock and demo chart reads on the same canonical unified snapshot as
-    the rest of the API surface. `internal/api/router.go`,
-    `internal/api/contract_test.go`, and chart consumers must route
+    the rest of the API surface. `internal/api/chartapi/service.go`,
+    `internal/api/chartapi/service_test.go`, and chart consumers must route
     `/api/charts`, `/api/charts/infrastructure`, and `/api/storage-charts`
     through `GetUnifiedReadStateOrSnapshot()` whenever mock or demo
     presentation is active, so VMware, storage, and infrastructure series stay
@@ -7552,11 +7553,11 @@ store-backed metric reads across workload types, with no payload shape change.
 That endpoint now also carries an explicit API p95 budget under the same
 store-backed mixed-workload fixture used to verify the batched hot path.
 That same summary-chart contract now also owns synthetic mock fallback
-identity. When `internal/api/router.go` needs to synthesize summary history
-for workloads, infrastructure, or storage cards, it must key those series by
-canonical `resourceType`, `resourceID`, and `metricType` instead of ad hoc
-seed-prefix bounds, so all time ranges and runtime mock samples stay on one
-governed timeline.
+identity. When `internal/api/chartapi/service.go` needs to synthesize summary
+history for workloads, infrastructure, or storage cards, it must key those
+series by canonical `resourceType`, `resourceID`, and `metricType` instead of
+ad hoc seed-prefix bounds, so all time ranges and runtime mock samples stay on
+one governed timeline.
 Frontend AI API clients now also normalize `402 Payment Required` responses for
 optional paywalled collections into explicit empty states, so Pulse Pro gating
 does not become a transport error path during page bootstrap.
@@ -8249,7 +8250,7 @@ resource ownership for tenant-scoped requests: once a tenant state provider
 implements `UnifiedResourceSnapshotForTenant`, `/api/resources` may not fall
 back to raw tenant `StateSnapshot` seeding when that unified seed is empty.
 That same mock/runtime contract now also governs chart payloads under
-`internal/api/router.go`: when demo or mock presentation is enabled,
+`internal/api/chartapi/service.go`: when demo or mock presentation is enabled,
 `/api/charts`, `/api/charts/infrastructure`, and `/api/storage-charts` must
 read through `GetUnifiedReadStateOrSnapshot()` so chart payloads use the same
 canonical mock unified-resource snapshot as `/api/resources` and `/api/state`

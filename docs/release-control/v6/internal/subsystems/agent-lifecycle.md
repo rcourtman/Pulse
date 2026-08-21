@@ -3338,10 +3338,11 @@ runtime mock rewiring only through the internal `demo_fixtures` entitlement,
 and browser-facing lifecycle surfaces must not infer or persist that internal
 grant from public runtime-capabilities or presentation-policy payloads.
 Shared workload-chart reads that lifecycle surfaces reuse must stay
-presentation-only on that same boundary: `internal/api/router.go` may batch
-those reads in parallel, but it must request only the canonical rendered
-metric set for workload cards instead of widening the hot path back to
-fetch-all metrics on behalf of install or reporting callers.
+presentation-only on that same boundary:
+`internal/api/chartapi/service.go` may batch those reads in parallel, but it
+must request only the canonical rendered metric set for workload cards instead
+of widening the hot path back to fetch-all metrics on behalf of install or
+reporting callers.
 The same presentation-only rule applies when shared infrastructure-summary or
 workloads-summary chart routes serve a short cached response for repeated
 org/range/scope requests: lifecycle-adjacent surfaces may render those charts
@@ -3438,10 +3439,11 @@ platform inventory or recovery context, they must consume
 `internal/mock/fixture_graph.go` and its graph-owned projections instead of
 reintroducing snapshot-only or platform-only helper exports.
 Lifecycle-adjacent summary chart consumers may still depend on shared
-`internal/api/router.go` transport, but any synthetic mock series on that path
-must resolve through canonical `resourceType` and `resourceID` identities
-rather than lifecycle-local seed prefixes, so platform handoff surfaces do not
-see a different recent tail than the runtime mock inventory they describe.
+`internal/api/chartapi/service.go` transport, but any synthetic mock series on
+that path must resolve through canonical `resourceType` and `resourceID`
+identities rather than lifecycle-local seed prefixes, so platform handoff
+surfaces do not see a different recent tail than the runtime mock inventory
+they describe.
 When those lifecycle-adjacent surfaces call `/api/charts/infrastructure`, the
 shared `metrics` filter contract must stay authoritative through the backend
 batch loader as well, so quickstart or install readouts that only render CPU

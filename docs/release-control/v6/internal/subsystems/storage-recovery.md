@@ -1581,11 +1581,11 @@ recovery scope, or a storage/recovery-owned secret source.
     agent-lifecycle owned.
 34. Keep workload chart downsampling and short response caching presentation-only on that same adjacent shared API boundary. When `internal/api/chartapi/service.go` caps mixed-cadence workload history into equal-time buckets or serves a cached workload-summary payload for repeated operator-facing workload-card requests, storage and recovery may consume the resulting visual context only; they must not reinterpret those shaped chart samples, cached timestamps, or cache hits as recovery freshness windows, backup cadence, or restore evidence.
     The same adjacent chart boundary now covers compact storage capacity
-    transport. `internal/api/router.go` may batch only the canonical `used`
-    and `avail` storage series for `/api/charts/storage-summary`, but storage
-    and recovery must not treat the omitted `usage` or `total` series as lost
-    recovery truth or widen that compact route back into the full storage-page
-    payload.
+    transport. `internal/api/chartapi/service.go` may batch only the canonical
+    `used` and `avail` storage series for `/api/charts/storage-summary`, but
+    storage and recovery must not treat the omitted `usage` or `total` series
+    as lost recovery truth or widen that compact route back into the full
+    storage-page payload.
     That same adjacent API boundary also owns summary-request minimization:
     storage/recovery-adjacent consumers may rely on filtered infrastructure or
     guest summary payloads, but they must not widen a scoped chart request back
@@ -3137,11 +3137,11 @@ clusters monitored without PVE storage entries do not lose their only
 capacity row. Raw pool accounting stays on the Ceph tab's cluster drawer,
 which remains the canonical home for per-pool stored/available bytes.
 Shared chart transport that storage and recovery coexist with must also stay
-on rendered-metric budgets. When `internal/api/router.go` batches workload
-history for adjacent overview or shared summary cards, it may parallelize the
-provider reads, but it must not widen the shared hot path to disk read/write
-or fetch-all metrics just because storage or recovery also mount nearby chart
-shells.
+on rendered-metric budgets. When `internal/api/chartapi/service.go` batches
+workload history for adjacent overview or shared summary cards, it may
+parallelize the provider reads, but it must not widen the shared hot path to
+disk read/write or fetch-all metrics just because storage or recovery also
+mount nearby chart shells.
 That adjacent shared chart transport may also expose host-agent or Proxmox node
 CPU temperature as `metric=temperature` for node drawers. Storage and recovery
 may consume the surrounding context, but they must not reinterpret that
