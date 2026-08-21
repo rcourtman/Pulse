@@ -45,6 +45,7 @@
 //     legacy pro_activation metric keys for cohort continuity,
 //     operations-loop workflow starter request counts by surface, Assistant/Patrol AI calls,
 //     Patrol runs/new findings/investigations/resolved findings/autofixes,
+//     the fixed machine cause code when an enabled Patrol is blocked from running,
 //     external-agent readiness/usage, action plans, approval requests, rejected
 //     action decisions, approved action decisions, approved action attempts,
 //     and approved action successes
@@ -154,7 +155,12 @@ const (
 	// from refusals whose code is simply unrecognised. Agents that predate the
 	// typed refusal contract report the former, and folding them into "other"
 	// made a starved split indistinguishable from a broken one.
-	TelemetrySchemaVersion = 9
+	// Schema v10 adds the Patrol runtime blocked cause so an enabled Patrol
+	// that cannot run at all (no provider, unsuitable model, open circuit)
+	// is distinguishable in the fleet from one that runs and finds nothing.
+	// Field telemetry showed both present identically: high run counts with
+	// zero AI calls and zero findings.
+	TelemetrySchemaVersion = 10
 )
 
 type installIDRecord struct {
@@ -276,61 +282,62 @@ type Ping struct {
 	NotificationFailuresUnknown7d        int `json:"notification_failures_unknown_7d"`
 
 	// Pulse Intelligence usage (30-day counts/booleans — no prompts, commands, outputs, resource IDs, or token values)
-	PulseIntelligenceLoopConfigured                                bool `json:"pulse_intelligence_loop_configured"`
-	PulseIntelligenceLoopActive30d                                 bool `json:"pulse_intelligence_loop_active_30d"`
-	PulseIntelligenceCompleteOperationsLoop30d                     bool `json:"pulse_intelligence_complete_operations_loop_30d"`
-	PulseIntelligenceApprovedExecutionLoop30d                      bool `json:"pulse_intelligence_approved_execution_loop_30d"`
-	PulseIntelligenceResolvedOperationsLoop30d                     bool `json:"pulse_intelligence_resolved_operations_loop_30d"`
-	PulseIntelligencePatrolControlCompletedOperationsLoop30d       bool `json:"pulse_intelligence_patrol_control_completed_operations_loop_30d"`
-	PulseIntelligencePatrolControlResolvedOperationsLoop30d        bool `json:"pulse_intelligence_patrol_control_resolved_operations_loop_30d"`
-	PulseIntelligencePatrolControlPaidCompletedOperationsLoop30d   bool `json:"pulse_intelligence_patrol_control_paid_completed_operations_loop_30d"`
-	PulseIntelligencePatrolControlPaidResolvedOperationsLoop30d    bool `json:"pulse_intelligence_patrol_control_paid_resolved_operations_loop_30d"`
-	PulseIntelligenceProActivationCompletedOperationsLoop30d       bool `json:"pulse_intelligence_pro_activation_completed_operations_loop_30d"`
-	PulseIntelligenceProActivationResolvedOperationsLoop30d        bool `json:"pulse_intelligence_pro_activation_resolved_operations_loop_30d"`
-	PulseIntelligenceProActivationPaidCompletedOperationsLoop30d   bool `json:"pulse_intelligence_pro_activation_paid_completed_operations_loop_30d"`
-	PulseIntelligenceProActivationPaidResolvedOperationsLoop30d    bool `json:"pulse_intelligence_pro_activation_paid_resolved_operations_loop_30d"`
-	PulseIntelligenceGovernedActionActive30d                       bool `json:"pulse_intelligence_governed_action_active_30d"`
-	PulseIntelligenceAssistantOperationsLoop30d                    bool `json:"pulse_intelligence_assistant_operations_loop_30d"`
-	PulseIntelligenceAssistantApprovedExecutionLoop30d             bool `json:"pulse_intelligence_assistant_approved_execution_loop_30d"`
-	PulseIntelligenceAssistantApprovedActionSuccessLoop30d         bool `json:"pulse_intelligence_assistant_approved_action_success_loop_30d"`
-	PulseIntelligenceAssistantResolvedOperationsLoop30d            bool `json:"pulse_intelligence_assistant_resolved_operations_loop_30d"`
-	PulseIntelligenceExternalAgentOperationsLoop30d                bool `json:"pulse_intelligence_external_agent_operations_loop_30d"`
-	PulseIntelligenceExternalAgentApprovedExecutionLoop30d         bool `json:"pulse_intelligence_external_agent_approved_execution_loop_30d"`
-	PulseIntelligenceExternalAgentApprovedActionSuccessLoop30d     bool `json:"pulse_intelligence_external_agent_approved_action_success_loop_30d"`
-	PulseIntelligenceExternalAgentResolvedOperationsLoop30d        bool `json:"pulse_intelligence_external_agent_resolved_operations_loop_30d"`
-	PulseIntelligenceMCPAdapterOperationsLoop30d                   bool `json:"pulse_intelligence_mcp_adapter_operations_loop_30d"`
-	PulseIntelligenceMCPAdapterApprovedExecutionLoop30d            bool `json:"pulse_intelligence_mcp_adapter_approved_execution_loop_30d"`
-	PulseIntelligenceMCPAdapterApprovedActionSuccessLoop30d        bool `json:"pulse_intelligence_mcp_adapter_approved_action_success_loop_30d"`
-	PulseIntelligenceMCPAdapterResolvedOperationsLoop30d           bool `json:"pulse_intelligence_mcp_adapter_resolved_operations_loop_30d"`
-	PulseIntelligenceOperationsLoopStarterRequests30d              int  `json:"pulse_intelligence_operations_loop_starter_requests_30d"`
-	PulseIntelligenceAssistantOperationsLoopStarterRequests30d     int  `json:"pulse_intelligence_assistant_operations_loop_starter_requests_30d"`
-	PulseIntelligencePatrolOperationsLoopStarterRequests30d        int  `json:"pulse_intelligence_patrol_operations_loop_starter_requests_30d"`
-	PulseIntelligencePatrolControlOperationsLoopStarterRequests30d int  `json:"pulse_intelligence_patrol_control_operations_loop_starter_requests_30d"`
-	PulseIntelligenceProActivationOperationsLoopStarterRequests30d int  `json:"pulse_intelligence_pro_activation_operations_loop_starter_requests_30d"`
-	PulseIntelligenceMCPOperationsLoopStarterRequests30d           int  `json:"pulse_intelligence_mcp_operations_loop_starter_requests_30d"`
-	PulseIntelligenceAssistantAICalls30d                           int  `json:"pulse_intelligence_assistant_ai_calls_30d"`
-	PulseIntelligenceAssistantContextAICalls30d                    int  `json:"pulse_intelligence_assistant_context_ai_calls_30d"`
-	PulseIntelligenceAssistantToolCalls30d                         int  `json:"pulse_intelligence_assistant_tool_calls_30d"`
-	PulseIntelligencePatrolAICalls30d                              int  `json:"pulse_intelligence_patrol_ai_calls_30d"`
-	PulseIntelligencePatrolRuns30d                                 int  `json:"pulse_intelligence_patrol_runs_30d"`
-	PulseIntelligencePatrolNewFindings30d                          int  `json:"pulse_intelligence_patrol_new_findings_30d"`
-	PulseIntelligencePatrolInvestigations30d                       int  `json:"pulse_intelligence_patrol_investigations_30d"`
-	PulseIntelligencePatrolResolvedFindings30d                     int  `json:"pulse_intelligence_patrol_resolved_findings_30d"`
-	PulseIntelligenceExternalAgentEnabled                          bool `json:"pulse_intelligence_external_agent_enabled"`
-	PulseIntelligenceExternalAgentUsed30d                          bool `json:"pulse_intelligence_external_agent_used_30d"`
-	PulseIntelligenceMCPAdapterUsed30d                             bool `json:"pulse_intelligence_mcp_adapter_used_30d"`
-	PulseIntelligenceExternalAgentContextRequests30d               int  `json:"pulse_intelligence_external_agent_context_requests_30d"`
-	PulseIntelligenceExternalAgentEventStreamRequests30d           int  `json:"pulse_intelligence_external_agent_event_stream_requests_30d"`
-	PulseIntelligenceExternalAgentProvisioningRequests30d          int  `json:"pulse_intelligence_external_agent_provisioning_requests_30d"`
-	PulseIntelligenceExternalAgentOperatorStateRequests30d         int  `json:"pulse_intelligence_external_agent_operator_state_requests_30d"`
-	PulseIntelligenceExternalAgentFindingRequests30d               int  `json:"pulse_intelligence_external_agent_finding_requests_30d"`
-	PulseIntelligenceExternalAgentActionRequests30d                int  `json:"pulse_intelligence_external_agent_action_requests_30d"`
-	PulseIntelligenceActionPlans30d                                int  `json:"pulse_intelligence_action_plans_30d"`
-	PulseIntelligenceApprovalRequests30d                           int  `json:"pulse_intelligence_approval_requests_30d"`
-	PulseIntelligenceRejectedActionDecisions30d                    int  `json:"pulse_intelligence_rejected_action_decisions_30d"`
-	PulseIntelligenceApprovedActionDecisions30d                    int  `json:"pulse_intelligence_approved_action_decisions_30d"`
-	PulseIntelligenceApprovedActionAttempts30d                     int  `json:"pulse_intelligence_approved_action_attempts_30d"`
-	PulseIntelligenceApprovedActionSuccesses30d                    int  `json:"pulse_intelligence_approved_action_successes_30d"`
+	PulseIntelligenceLoopConfigured                                bool   `json:"pulse_intelligence_loop_configured"`
+	PulseIntelligenceLoopActive30d                                 bool   `json:"pulse_intelligence_loop_active_30d"`
+	PulseIntelligenceCompleteOperationsLoop30d                     bool   `json:"pulse_intelligence_complete_operations_loop_30d"`
+	PulseIntelligenceApprovedExecutionLoop30d                      bool   `json:"pulse_intelligence_approved_execution_loop_30d"`
+	PulseIntelligenceResolvedOperationsLoop30d                     bool   `json:"pulse_intelligence_resolved_operations_loop_30d"`
+	PulseIntelligencePatrolControlCompletedOperationsLoop30d       bool   `json:"pulse_intelligence_patrol_control_completed_operations_loop_30d"`
+	PulseIntelligencePatrolControlResolvedOperationsLoop30d        bool   `json:"pulse_intelligence_patrol_control_resolved_operations_loop_30d"`
+	PulseIntelligencePatrolControlPaidCompletedOperationsLoop30d   bool   `json:"pulse_intelligence_patrol_control_paid_completed_operations_loop_30d"`
+	PulseIntelligencePatrolControlPaidResolvedOperationsLoop30d    bool   `json:"pulse_intelligence_patrol_control_paid_resolved_operations_loop_30d"`
+	PulseIntelligenceProActivationCompletedOperationsLoop30d       bool   `json:"pulse_intelligence_pro_activation_completed_operations_loop_30d"`
+	PulseIntelligenceProActivationResolvedOperationsLoop30d        bool   `json:"pulse_intelligence_pro_activation_resolved_operations_loop_30d"`
+	PulseIntelligenceProActivationPaidCompletedOperationsLoop30d   bool   `json:"pulse_intelligence_pro_activation_paid_completed_operations_loop_30d"`
+	PulseIntelligenceProActivationPaidResolvedOperationsLoop30d    bool   `json:"pulse_intelligence_pro_activation_paid_resolved_operations_loop_30d"`
+	PulseIntelligenceGovernedActionActive30d                       bool   `json:"pulse_intelligence_governed_action_active_30d"`
+	PulseIntelligenceAssistantOperationsLoop30d                    bool   `json:"pulse_intelligence_assistant_operations_loop_30d"`
+	PulseIntelligenceAssistantApprovedExecutionLoop30d             bool   `json:"pulse_intelligence_assistant_approved_execution_loop_30d"`
+	PulseIntelligenceAssistantApprovedActionSuccessLoop30d         bool   `json:"pulse_intelligence_assistant_approved_action_success_loop_30d"`
+	PulseIntelligenceAssistantResolvedOperationsLoop30d            bool   `json:"pulse_intelligence_assistant_resolved_operations_loop_30d"`
+	PulseIntelligenceExternalAgentOperationsLoop30d                bool   `json:"pulse_intelligence_external_agent_operations_loop_30d"`
+	PulseIntelligenceExternalAgentApprovedExecutionLoop30d         bool   `json:"pulse_intelligence_external_agent_approved_execution_loop_30d"`
+	PulseIntelligenceExternalAgentApprovedActionSuccessLoop30d     bool   `json:"pulse_intelligence_external_agent_approved_action_success_loop_30d"`
+	PulseIntelligenceExternalAgentResolvedOperationsLoop30d        bool   `json:"pulse_intelligence_external_agent_resolved_operations_loop_30d"`
+	PulseIntelligenceMCPAdapterOperationsLoop30d                   bool   `json:"pulse_intelligence_mcp_adapter_operations_loop_30d"`
+	PulseIntelligenceMCPAdapterApprovedExecutionLoop30d            bool   `json:"pulse_intelligence_mcp_adapter_approved_execution_loop_30d"`
+	PulseIntelligenceMCPAdapterApprovedActionSuccessLoop30d        bool   `json:"pulse_intelligence_mcp_adapter_approved_action_success_loop_30d"`
+	PulseIntelligenceMCPAdapterResolvedOperationsLoop30d           bool   `json:"pulse_intelligence_mcp_adapter_resolved_operations_loop_30d"`
+	PulseIntelligenceOperationsLoopStarterRequests30d              int    `json:"pulse_intelligence_operations_loop_starter_requests_30d"`
+	PulseIntelligenceAssistantOperationsLoopStarterRequests30d     int    `json:"pulse_intelligence_assistant_operations_loop_starter_requests_30d"`
+	PulseIntelligencePatrolOperationsLoopStarterRequests30d        int    `json:"pulse_intelligence_patrol_operations_loop_starter_requests_30d"`
+	PulseIntelligencePatrolControlOperationsLoopStarterRequests30d int    `json:"pulse_intelligence_patrol_control_operations_loop_starter_requests_30d"`
+	PulseIntelligenceProActivationOperationsLoopStarterRequests30d int    `json:"pulse_intelligence_pro_activation_operations_loop_starter_requests_30d"`
+	PulseIntelligenceMCPOperationsLoopStarterRequests30d           int    `json:"pulse_intelligence_mcp_operations_loop_starter_requests_30d"`
+	PulseIntelligenceAssistantAICalls30d                           int    `json:"pulse_intelligence_assistant_ai_calls_30d"`
+	PulseIntelligenceAssistantContextAICalls30d                    int    `json:"pulse_intelligence_assistant_context_ai_calls_30d"`
+	PulseIntelligenceAssistantToolCalls30d                         int    `json:"pulse_intelligence_assistant_tool_calls_30d"`
+	PulseIntelligencePatrolAICalls30d                              int    `json:"pulse_intelligence_patrol_ai_calls_30d"`
+	PulseIntelligencePatrolRuns30d                                 int    `json:"pulse_intelligence_patrol_runs_30d"`
+	PulseIntelligencePatrolNewFindings30d                          int    `json:"pulse_intelligence_patrol_new_findings_30d"`
+	PulseIntelligencePatrolInvestigations30d                       int    `json:"pulse_intelligence_patrol_investigations_30d"`
+	PulseIntelligencePatrolResolvedFindings30d                     int    `json:"pulse_intelligence_patrol_resolved_findings_30d"`
+	PulseIntelligencePatrolBlockedCause                            string `json:"pulse_intelligence_patrol_blocked_cause,omitempty"`
+	PulseIntelligenceExternalAgentEnabled                          bool   `json:"pulse_intelligence_external_agent_enabled"`
+	PulseIntelligenceExternalAgentUsed30d                          bool   `json:"pulse_intelligence_external_agent_used_30d"`
+	PulseIntelligenceMCPAdapterUsed30d                             bool   `json:"pulse_intelligence_mcp_adapter_used_30d"`
+	PulseIntelligenceExternalAgentContextRequests30d               int    `json:"pulse_intelligence_external_agent_context_requests_30d"`
+	PulseIntelligenceExternalAgentEventStreamRequests30d           int    `json:"pulse_intelligence_external_agent_event_stream_requests_30d"`
+	PulseIntelligenceExternalAgentProvisioningRequests30d          int    `json:"pulse_intelligence_external_agent_provisioning_requests_30d"`
+	PulseIntelligenceExternalAgentOperatorStateRequests30d         int    `json:"pulse_intelligence_external_agent_operator_state_requests_30d"`
+	PulseIntelligenceExternalAgentFindingRequests30d               int    `json:"pulse_intelligence_external_agent_finding_requests_30d"`
+	PulseIntelligenceExternalAgentActionRequests30d                int    `json:"pulse_intelligence_external_agent_action_requests_30d"`
+	PulseIntelligenceActionPlans30d                                int    `json:"pulse_intelligence_action_plans_30d"`
+	PulseIntelligenceApprovalRequests30d                           int    `json:"pulse_intelligence_approval_requests_30d"`
+	PulseIntelligenceRejectedActionDecisions30d                    int    `json:"pulse_intelligence_rejected_action_decisions_30d"`
+	PulseIntelligenceApprovedActionDecisions30d                    int    `json:"pulse_intelligence_approved_action_decisions_30d"`
+	PulseIntelligenceApprovedActionAttempts30d                     int    `json:"pulse_intelligence_approved_action_attempts_30d"`
+	PulseIntelligenceApprovedActionSuccesses30d                    int    `json:"pulse_intelligence_approved_action_successes_30d"`
 
 	// Cause-coded approved-action failure counters. Together with successes
 	// and still-in-flight attempts these partition the attempt count, so the
@@ -460,6 +467,7 @@ type Snapshot struct {
 	PulseIntelligencePatrolNewFindings30d                          int
 	PulseIntelligencePatrolInvestigations30d                       int
 	PulseIntelligencePatrolResolvedFindings30d                     int
+	PulseIntelligencePatrolBlockedCause                            string
 	PulseIntelligenceExternalAgentEnabled                          bool
 	PulseIntelligenceExternalAgentOperationsLoopReady              bool
 	PulseIntelligenceExternalAgentUsed30d                          bool
@@ -546,6 +554,11 @@ type PulseIntelligenceActionSnapshot struct {
 	// ApprovedActionLastFailureReason30d is the machine reason code of the
 	// most recent approved-action failure, sanitized to a closed code shape.
 	ApprovedActionLastFailureReason30d string
+	// PatrolBlockedCause is the fixed machine cause code exported only while
+	// an enabled Patrol is in the blocked runtime state. Blocked-reason text,
+	// provider endpoints, model names, and configuration never leave the
+	// runtime.
+	PatrolBlockedCause string
 }
 
 // ApplyUpdateTelemetrySnapshot adds content-free update funnel counters from
@@ -1061,6 +1074,7 @@ func applySnapshot(base Ping, fn SnapshotFunc) Ping {
 	ping.PulseIntelligencePatrolNewFindings30d = s.PulseIntelligencePatrolNewFindings30d
 	ping.PulseIntelligencePatrolInvestigations30d = s.PulseIntelligencePatrolInvestigations30d
 	ping.PulseIntelligencePatrolResolvedFindings30d = s.PulseIntelligencePatrolResolvedFindings30d
+	ping.PulseIntelligencePatrolBlockedCause = s.PulseIntelligencePatrolBlockedCause
 	ping.PulseIntelligenceExternalAgentEnabled = s.PulseIntelligenceExternalAgentEnabled
 	ping.PulseIntelligenceExternalAgentUsed30d = s.PulseIntelligenceExternalAgentUsed30d
 	ping.PulseIntelligenceMCPAdapterUsed30d = s.PulseIntelligenceMCPAdapterUsed30d

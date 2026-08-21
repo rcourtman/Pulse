@@ -407,6 +407,7 @@ func TestApplySnapshot(t *testing.T) {
 			PulseIntelligencePatrolNewFindings30d:                          5,
 			PulseIntelligencePatrolInvestigations30d:                       6,
 			PulseIntelligencePatrolResolvedFindings30d:                     3,
+			PulseIntelligencePatrolBlockedCause:                            "provider_not_configured",
 			PulseIntelligenceExternalAgentEnabled:                          true,
 			PulseIntelligenceExternalAgentUsed30d:                          true,
 			PulseIntelligenceMCPAdapterUsed30d:                             true,
@@ -527,6 +528,7 @@ func TestApplySnapshot(t *testing.T) {
 		ping.PulseIntelligencePatrolNewFindings30d != 5 ||
 		ping.PulseIntelligencePatrolInvestigations30d != 6 ||
 		ping.PulseIntelligencePatrolResolvedFindings30d != 3 ||
+		ping.PulseIntelligencePatrolBlockedCause != "provider_not_configured" ||
 		ping.PulseIntelligenceActionPlans30d != 6 ||
 		ping.PulseIntelligenceApprovalRequests30d != 2 ||
 		ping.PulseIntelligenceRejectedActionDecisions30d != 1 ||

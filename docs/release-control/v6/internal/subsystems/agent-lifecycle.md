@@ -933,6 +933,13 @@ share of the fleet still awaiting an agent capable of typed refusals stays
 measurable and is never mistaken for a categorization failure. Dispatch still repeats all local
 preconditions after durable admission because preflight evidence is not a
 lease and target state may race after approval.
+
+The aggregate telemetry assembled through the shared `internal/api/` router
+also exports the Patrol blocked cause enum at schema v10. That value is
+derived from Patrol runtime state on the server, never from agent transport,
+agent refusal traffic, or agent identity, and it adds no agent-visible
+surface: agent refusal reporting, its typed vocabulary, and the `uncoded`
+partition above are unchanged by it.
 Proxmox VM and LXC lifecycle affordances follow the same adjacent boundary:
 lifecycle and fleet surfaces may consume backend-advertised `start`,
 `shutdown`, `reboot`, and `stop` capabilities and typed `actionReadiness`, but

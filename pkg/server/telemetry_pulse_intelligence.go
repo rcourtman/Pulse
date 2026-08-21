@@ -53,6 +53,7 @@ func applyPulseIntelligenceTelemetrySnapshot(
 	snap.PulseIntelligenceApprovedActionRefusalsOther30d = actionSnapshot.ApprovedActionRefusalsOther30d
 	snap.PulseIntelligenceVerifiedFindingResolutions30d = actionSnapshot.VerifiedFindingResolutions30d
 	snap.PulseIntelligenceApprovedActionLastFailureReason30d = actionSnapshot.ApprovedActionLastFailureReason30d
+	snap.PulseIntelligencePatrolBlockedCause = actionSnapshot.PatrolBlockedCause
 
 	applyPulseIntelligenceAdoptionSnapshot(snap)
 }

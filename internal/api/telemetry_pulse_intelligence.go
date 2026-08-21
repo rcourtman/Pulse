@@ -1,15 +1,53 @@
 package api
 
 import (
+	"context"
 	"regexp"
 	"strings"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
 	"github.com/rcourtman/pulse-go-rewrite/internal/telemetry"
 	unifiedresources "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 	"github.com/rs/zerolog/log"
 )
+
+// pulseIntelligencePatrolBlockedCause returns the fixed machine cause code
+// for a Patrol that is enabled but blocked from running (for example
+// provider_not_configured), or an empty string when Patrol is disabled,
+// healthy, mid-run, or unavailable. Only the enum cause code leaves the
+// process: no blocked-reason text, provider endpoint, model name, or
+// configuration.
+func (r *Router) pulseIntelligencePatrolBlockedCause() string {
+	if r == nil || r.aiSettingsHandler == nil {
+		return ""
+	}
+	patrol := r.aiSettingsHandler.getPatrolService(context.Background())
+	if patrol == nil {
+		return ""
+	}
+	status := retireQuickstartPatrolStatus(patrol.GetStatus())
+	return pulseIntelligencePatrolBlockedCauseForTelemetry(status)
+}
+
+// pulseIntelligencePatrolBlockedCauseForTelemetry reduces a patrol status to
+// the content-free cause code exported by usage telemetry. Anything but a
+// currently blocked Patrol exports nothing, and a blocked reason that carries
+// no typed cause exports nothing rather than free text.
+func pulseIntelligencePatrolBlockedCauseForTelemetry(status ai.PatrolStatus) string {
+	if status.RuntimeState != ai.PatrolRuntimeStateBlocked {
+		return ""
+	}
+	cause := strings.TrimSpace(string(status.BlockedCause))
+	if cause == string(ai.PatrolFailureCauseNone) {
+		return ""
+	}
+	if len(cause) > 64 {
+		cause = cause[:64]
+	}
+	return cause
+}
 
 // ApplyUpdateTelemetrySnapshot adds router-owned, content-free update funnel
 // counters to the outbound usage telemetry snapshot.
@@ -25,7 +63,11 @@ func (r *Router) ApplyUpdateTelemetrySnapshot(s *telemetry.Snapshot, now time.Ti
 // command text, approval actors/reasons, action outputs, and resource IDs.
 func (r *Router) GetPulseIntelligenceActionTelemetry(since time.Time) telemetry.PulseIntelligenceActionSnapshot {
 	var snapshot telemetry.PulseIntelligenceActionSnapshot
-	if r == nil || r.resourceHandlers == nil {
+	if r == nil {
+		return snapshot
+	}
+	snapshot.PatrolBlockedCause = r.pulseIntelligencePatrolBlockedCause()
+	if r.resourceHandlers == nil {
 		return snapshot
 	}
 

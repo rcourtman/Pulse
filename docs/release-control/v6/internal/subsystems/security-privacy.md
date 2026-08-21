@@ -2106,14 +2106,19 @@ actor, and every audit row read stay on the install.
 
 ### Telemetry ingestion matches the released sender while storage stays compatible
 
-The active outbound contract is schema v9. Schema v8 added content-free
+The active outbound contract is schema v10. Schema v8 added content-free
 approved-action refusal counters for target change, prerequisite failure, and
 invalid typed contract so agent-side pre-mutation failures no longer collapse
 into `other`. Schema v9 completes that split with a content-free `uncoded`
 counter for refusals that carried no machine reason code at all, which is what
 every agent older than the typed refusal contract reports. Without it a split
 starved by agent rollout is indistinguishable from a broken one, because both
-present as `other` absorbing every refusal.
+present as `other` absorbing every refusal. Schema v10 adds the Patrol blocked
+cause: one fixed machine enum exported only while an enabled Patrol is in the
+blocked runtime state, so an install whose Patrol can never run is
+distinguishable from one that runs and finds nothing. Blocked-reason text,
+provider endpoints, model names, and configuration stay on the install, and an
+untyped blocked reason exports nothing rather than free text.
 The earlier draft schema-v8 `business_estate` field was reverted and must not
 remain in the license server's accepted ping struct merely because a private receiver build
 and database migration briefly carried it. Existing deployed databases need no

@@ -378,6 +378,12 @@ persisted high-water mark, is pruned to its retention bound, and is a count of
 runs only. It never records run identity, scope resource IDs, finding IDs,
 evidence, or narrative, and it is not recovery coverage, backup verification,
 or storage-health proof.
+
+The schema-v10 Patrol blocked cause rides the outbound ping only and creates
+no new persisted state: it is read from live Patrol runtime status at snapshot
+time, not from the run history list or the run tally, records no run identity,
+provider configuration, or blocked-reason text, and is likewise not recovery
+coverage or storage-health proof.
 First-party workflow starter activity recorded through shared `internal/api/`
 handlers, including Pro activation entry-point telemetry for the same
 operations-loop prompt, is likewise API/privacy/commercial activation evidence

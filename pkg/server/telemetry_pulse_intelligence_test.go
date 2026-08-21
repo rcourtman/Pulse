@@ -1070,3 +1070,17 @@ func TestApplyPulseIntelligencePatrolRunSnapshotIgnoresHistoryCap(t *testing.T) 
 		t.Fatalf("PulseIntelligencePatrolRuns30d = %d, want %d", snap.PulseIntelligencePatrolRuns30d, total)
 	}
 }
+
+// The Patrol blocked cause must ride the router snapshot into the outbound
+// ping unchanged, so a blocked install is distinguishable in the fleet from
+// one whose Patrol runs and finds nothing.
+func TestApplyPulseIntelligenceTelemetrySnapshotCarriesPatrolBlockedCause(t *testing.T) {
+	snap := &telemetry.Snapshot{}
+	actionSnapshot := telemetry.PulseIntelligenceActionSnapshot{
+		PatrolBlockedCause: "provider_not_configured",
+	}
+	applyPulseIntelligenceTelemetrySnapshot(snap, nil, nil, actionSnapshot, time.Now().UTC())
+	if snap.PulseIntelligencePatrolBlockedCause != "provider_not_configured" {
+		t.Fatalf("PulseIntelligencePatrolBlockedCause = %q, want provider_not_configured", snap.PulseIntelligencePatrolBlockedCause)
+	}
+}

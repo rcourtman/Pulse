@@ -24367,3 +24367,51 @@ func TestApprovedActionRefusalPartitionSeparatesUncodedFromOther(t *testing.T) {
 		t.Fatalf("category(some_future_typed_code) = %q, want other", got)
 	}
 }
+
+// The schema-v10 Patrol blocked cause must export the typed enum code for a
+// currently blocked Patrol and nothing in every other state. Field telemetry
+// could not distinguish an enabled Patrol that can never run (provider init
+// failed, model unsuitable) from one that runs and finds nothing — both
+// presented as high run counts with zero AI calls and zero findings. The
+// export is the enum only: an untyped blocked reason must not fall back to
+// free text, and a stale cause on a non-blocked Patrol must not leak.
+func TestContract_PatrolBlockedCauseTelemetryExportsEnumOnlyWhileBlocked(t *testing.T) {
+	blocked := func(cause ai.PatrolFailureCause) ai.PatrolStatus {
+		return ai.PatrolStatus{
+			Enabled:       true,
+			RuntimeState:  ai.PatrolRuntimeStateBlocked,
+			BlockedReason: "AI provider unavailable",
+			BlockedCause:  cause,
+		}
+	}
+
+	if got := pulseIntelligencePatrolBlockedCauseForTelemetry(blocked(ai.PatrolFailureCauseProviderNotConfigured)); got != "provider_not_configured" {
+		t.Fatalf("blocked patrol cause = %q, want provider_not_configured", got)
+	}
+
+	// A blocked reason without a typed cause exports nothing rather than
+	// falling back to free text.
+	if got := pulseIntelligencePatrolBlockedCauseForTelemetry(blocked("")); got != "" {
+		t.Fatalf("untyped blocked cause exported %q, want empty", got)
+	}
+	if got := pulseIntelligencePatrolBlockedCauseForTelemetry(blocked(ai.PatrolFailureCauseNone)); got != "" {
+		t.Fatalf("cause none exported %q, want empty", got)
+	}
+
+	// A disabled Patrol is not blocked, and a stale cause on an active or
+	// running Patrol must not be exported.
+	for _, state := range []ai.PatrolRuntimeState{
+		ai.PatrolRuntimeStateDisabled,
+		ai.PatrolRuntimeStateActive,
+		ai.PatrolRuntimeStateRunning,
+	} {
+		status := ai.PatrolStatus{
+			Enabled:      state != ai.PatrolRuntimeStateDisabled,
+			RuntimeState: state,
+			BlockedCause: ai.PatrolFailureCauseProviderNotConfigured,
+		}
+		if got := pulseIntelligencePatrolBlockedCauseForTelemetry(status); got != "" {
+			t.Fatalf("runtime state %q exported %q, want empty", state, got)
+		}
+	}
+}

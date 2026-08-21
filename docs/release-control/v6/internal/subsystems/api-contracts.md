@@ -9397,7 +9397,7 @@ together: `type Ping struct` in `internal/telemetry/telemetry.go`, the
 Retired columns stay in the live receiver database rather than being dropped:
 migrations only add, the columns hold real rows from the schema-v6 window, and
 nothing writes them once the receiver struct loses the fields.
-### Telemetry payload parity spans three surfaces at schema v9
+### Telemetry payload parity spans three surfaces at schema v10
 
 Schema v8 preserved the same three-surface parity requirement and added
 content-free approved-action refusal counters for target change, prerequisite
@@ -9413,6 +9413,17 @@ as `other`. `other` means a typed code this server does not recognise, so
 collapsing the two made a partition starved by agent rollout read exactly like
 a partition that is wrong. The `uncoded` counter is a count only; the refusal's
 error text, command, target, and action payload stay on the install.
+
+Schema v10 adds `pulse_intelligence_patrol_blocked_cause`: the fixed machine
+cause code (for example `provider_not_configured`) exported only while an
+enabled Patrol is in the blocked runtime state. Field telemetry could not
+distinguish an install whose Patrol can never run from one that runs and finds
+nothing — both presented as high run counts with zero AI calls and zero
+findings. Only the typed enum leaves the install: the blocked-reason text,
+provider endpoint, model name, and configuration stay local, a blocked reason
+carrying no typed cause exports nothing rather than free text, and a disabled,
+active, or mid-run Patrol exports an empty value even when a stale cause is
+still recorded.
 
 ### Per-tenant resource stores are released on offboarding and shutdown
 
