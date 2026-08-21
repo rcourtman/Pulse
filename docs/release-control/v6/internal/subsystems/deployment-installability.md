@@ -530,6 +530,10 @@ upgrade, update, release, or artifact-selection behavior.
    before applying required native binaries, packaging, update-signing, SBOM
    generation, validation, or upload. Private signing material and publication
    credentials must never enter the PVE compilation job.
+   PVE jobs must consume their runner users' persistent local Go and npm caches
+   directly; disposable-runner Actions cache restore/save phases must remain
+   disabled because archiving those same caches adds network work after the
+   useful test or compilation process has already completed.
    Private Pro compilation must additionally bind the exact Pulse and
    pulse-enterprise commits in a manifest-covered identity record. Its PVE job
    may compile the public payload and Pro server matrix, but the hosted private

@@ -2034,6 +2034,7 @@ func TestReleasePipelinePromotesOneImmutableCandidate(t *testing.T) {
 	recoveryWorkflow := string(recoveryBytes)
 	leaseScript := string(leaseScriptBytes)
 	createJob := workflowJobBlock(t, createWorkflow, "create_release")
+	frontendBundleJob := workflowJobBlock(t, createWorkflow, "frontend_bundle")
 	backendJob := workflowJobBlock(t, createWorkflow, "backend_tests")
 	integrationJob := workflowJobBlock(t, createWorkflow, "integration_tests")
 	validationJob := workflowJobBlock(t, createWorkflow, "validate_release_assets")
@@ -2060,6 +2061,15 @@ func TestReleasePipelinePromotesOneImmutableCandidate(t *testing.T) {
 	}
 	if strings.Contains(compileJob, "PULSE_UPDATE_SIGNING_KEY") {
 		t.Fatal("PVE release compilation job must not receive private update-signing material")
+	}
+	if !strings.Contains(compileJob, "cache: false") || strings.Contains(compileJob, "cache: 'npm'") {
+		t.Fatal("PVE compilation must use persistent runner-local caches without Actions cache archival")
+	}
+	if strings.Contains(frontendBundleJob, "cache: 'npm'") {
+		t.Fatal("PVE frontend bundle must use its persistent runner-local npm cache")
+	}
+	if !strings.Contains(backendJob, "cache: false") {
+		t.Fatal("PVE backend qualification must not archive its persistent Go caches through Actions")
 	}
 	for _, needle := range []string{
 		`scripts/release_candidate_manifest.py create`,
