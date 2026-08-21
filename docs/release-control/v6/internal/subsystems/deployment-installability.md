@@ -559,6 +559,9 @@ upgrade, update, release, or artifact-selection behavior.
    image/toolchain cleanup. The hosted private job must verify both SHAs before
    release signing, R2 upload, private-registry publication, or paid-runtime
    staging.
+   Full public compilation may likewise overlap the frontend with agent and
+   MCP targets, but it must join successful frontend completion before any
+   server or control-plane target that consumes the embed directory starts.
    Public and Pro server archives must use the shared canonical staging helper
    and may assemble independent target archives concurrently with a bounded
    worker count. The verified dual-SHA Pro path must stage its five archives

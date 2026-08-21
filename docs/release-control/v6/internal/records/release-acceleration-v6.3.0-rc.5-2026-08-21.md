@@ -141,6 +141,15 @@ manifest-covered cross-repository payload. A governed regression test preserves
 the distinction between a required local compile input and an unused transfer
 product.
 
+The first public rc.6 dispatch then exposed the complementary warm-cache race:
+agent and MCP compilation advanced far enough to launch a public server while
+Vite was still producing the embed directory. The source run failed in 57
+seconds, before candidate upload or publication. The final scheduler retains
+frontend overlap with all agent and MCP targets but joins successful frontend
+completion before launching the first server or control-plane target, covering
+both the lean Pro profile and the full public matrix without serializing the
+independent work.
+
 Public Docker publication took 5 minutes 1 second, but its prior dependency
 shape did not make it eligible until 12 minutes 33 seconds after dispatch. The
 corrected DAG makes exact-version Docker staging eligible as soon as the

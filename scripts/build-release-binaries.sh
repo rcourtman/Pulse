@@ -208,6 +208,26 @@ terminate_active() {
 }
 trap terminate_active INT TERM
 
+finish_frontend() {
+    local pid status
+    if [[ -z "${frontend_pid:-}" ]]; then
+        return
+    fi
+    pid="${frontend_pid}"
+    frontend_pid=""
+    if wait "${pid}"; then
+        status=0
+    else
+        status=$?
+        echo "Error: frontend embed prerequisite failed." >&2
+        cat "${frontend_log}" >&2
+        terminate_active
+        exit "${status}"
+    fi
+    rm -f "${frontend_log}"
+    echo "Built frontend embed prerequisite."
+}
+
 next_task=0
 completed_tasks=0
 total_tasks="${#task_components[@]}"
@@ -215,6 +235,9 @@ while (( completed_tasks < total_tasks )); do
     while (( next_task < total_tasks && ${#active_pids[@]} < build_jobs )); do
         component="${task_components[next_task]}"
         target="${task_targets[next_task]}"
+        if [[ "${component}" == server || "${component}" == control-plane ]]; then
+            finish_frontend
+        fi
         log_path="${OUTPUT_ROOT}/${component}-${target}.log"
         build_one "${component}" "${target}" >"${log_path}" 2>&1 &
         pid=$!
@@ -249,18 +272,7 @@ while (( completed_tasks < total_tasks )); do
     echo "Compiled ${task_name} (${completed_tasks}/${total_tasks})."
 done
 
-if wait "${frontend_pid}"; then
-    status=0
-else
-    status=$?
-    echo "Error: frontend embed prerequisite failed." >&2
-    cat "${frontend_log}" >&2
-    frontend_pid=""
-    exit "${status}"
-fi
-frontend_pid=""
-rm -f "${frontend_log}"
-echo "Built frontend embed prerequisite."
+finish_frontend
 trap - INT TERM
 
 python3 scripts/release_candidate_manifest.py create \

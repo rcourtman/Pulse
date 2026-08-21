@@ -155,6 +155,8 @@ func TestProPackagingBuildsFrontendEmbedWithoutTransferringBundle(t *testing.T) 
 		`npm --prefix frontend-modern run build`,
 		`if [[ "${PROFILE}" == "full" ]]; then`,
 		`cp -a frontend-modern/dist/. "${FRONTEND_DIR}/"`,
+		`if [[ "${component}" == server || "${component}" == control-plane ]]; then`,
+		`finish_frontend`,
 		`transfer public Unified Agent binaries only`,
 	} {
 		if !strings.Contains(script, needle) {
@@ -166,6 +168,12 @@ func TestProPackagingBuildsFrontendEmbedWithoutTransferringBundle(t *testing.T) 
 	    echo "Building exact-SHA frontend bundle..."
 	    npm --prefix frontend-modern ci`) {
 		t.Fatal("Pro packaging must build the frontend embed prerequisite")
+	}
+	serverGate := strings.Index(script, `if [[ "${component}" == server || "${component}" == control-plane ]]; then`)
+	serverLaunch := strings.Index(script, `build_one "${component}" "${target}"`)
+	if serverGate < 0 || serverLaunch < 0 || serverGate > serverLaunch ||
+		!strings.Contains(script[serverGate:serverLaunch], "finish_frontend") {
+		t.Fatal("server and control-plane tasks must join the frontend build before launch")
 	}
 }
 
