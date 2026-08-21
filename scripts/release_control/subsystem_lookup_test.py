@@ -116,7 +116,7 @@ class SubsystemLookupTest(unittest.TestCase):
         self.assertTrue(args.lean)
 
     def test_lookup_paths_reports_multiple_subsystems_for_shared_runtime_file(self) -> None:
-        result = lookup_paths(["internal/api/resources.go"])
+        result = lookup_paths(["internal/api/resourceapi/resources.go"])
         impacted = {entry["subsystem"] for entry in result["impacted_subsystems"]}
         self.assertEqual(impacted, {"api-contracts", "unified-resources"})
         self.assertEqual(result["status_audit_errors"], [])

@@ -509,7 +509,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                     "allow_same_subsystem_tests": False,
                     "test_prefixes": [],
                     "exact_files": [
-                        "internal/api/resources_test.go",
+                        "internal/api/resourceapi/resources_test.go",
                         "internal/storagehealth/risk_test.go",
                         "internal/storagehealth/topology_test.go",
                         "internal/storagehealth/zfs_pool_health_contract_test.go",
