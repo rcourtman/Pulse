@@ -20,8 +20,11 @@ import (
 )
 
 // defaultQueueMaxAttempts is the default number of delivery attempts
-// before a notification is moved to the dead-letter queue.
-const defaultQueueMaxAttempts = 3
+// before a notification is moved to the dead-letter queue. With the
+// exponential backoff schedule (1s doubling, capped at 60s) eight attempts
+// span roughly three minutes, so a destination that is briefly down or
+// rebooting recovers deliveries instead of dead-lettering them.
+const defaultQueueMaxAttempts = 8
 
 const (
 	notificationAuditAlertIdentifiersColumn       = "alert_identifiers"
