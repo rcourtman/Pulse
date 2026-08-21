@@ -11,6 +11,7 @@ PULSE_REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 cd "${PULSE_REPO_ROOT}"
 
 source "${SCRIPT_DIR}/release_asset_common.sh"
+source "${SCRIPT_DIR}/release_build_targets.sh"
 
 # Prefer the pinned toolchain from go.mod (toolchain directive).
 # If /usr/local/go exists (typical in CI images), prepend it to PATH.
@@ -102,50 +103,47 @@ rm -rf $BUILD_DIR $RELEASE_DIR
 mkdir -p $BUILD_DIR $RELEASE_DIR
 render_release_installers "${RENDERED_INSTALLERS_DIR}"
 
-# Build frontend
-echo "Building frontend..."
-npm --prefix frontend-modern ci
-npm --prefix frontend-modern run build
+# Build the frontend locally, or consume the exact-SHA payload produced by the
+# credential-free compilation lane.
+if [[ -n "${PULSE_RELEASE_COMPILED_PAYLOAD_DIR:-}" ]]; then
+    compiled_payload_dir="$(cd "${PULSE_RELEASE_COMPILED_PAYLOAD_DIR}" && pwd)"
+    test -d "${compiled_payload_dir}/frontend-dist" || {
+        echo "Error: compiled release payload is missing frontend-dist." >&2
+        exit 1
+    }
+    rm -rf frontend-modern/dist
+    mkdir -p frontend-modern/dist
+    cp -a "${compiled_payload_dir}/frontend-dist/." frontend-modern/dist/
+    echo "Applied exact-SHA precompiled frontend bundle."
+else
+    echo "Building frontend..."
+    npm --prefix frontend-modern ci
+    npm --prefix frontend-modern run build
+fi
 
 agent_ldflags="$(./scripts/release_ldflags.sh agent --version "v${VERSION}" "${update_ldflags_args[@]}")"
 
 # Build unified agents for every supported platform/architecture
 echo "Building unified agents for all platforms..."
-agent_build_order=(linux-amd64 linux-arm64 linux-armv7 linux-armv6 linux-386 darwin-amd64 darwin-arm64 freebsd-amd64 freebsd-arm64 windows-amd64 windows-arm64 windows-386)
-agent_build_envs=(
-    "GOOS=linux GOARCH=amd64"
-    "GOOS=linux GOARCH=arm64"
-    "GOOS=linux GOARCH=arm GOARM=7"
-    "GOOS=linux GOARCH=arm GOARM=6"
-    "GOOS=linux GOARCH=386"
-    "GOOS=darwin GOARCH=amd64"
-    "GOOS=darwin GOARCH=arm64"
-    "GOOS=freebsd GOARCH=amd64"
-    "GOOS=freebsd GOARCH=arm64"
-    "GOOS=windows GOARCH=amd64"
-    "GOOS=windows GOARCH=arm64"
-    "GOOS=windows GOARCH=386"
-)
+agent_build_order=("${PULSE_RELEASE_AGENT_TARGETS[@]}")
 
-if [[ ${#agent_build_order[@]} -ne ${#agent_build_envs[@]} ]]; then
-    echo "Unified agent build config mismatch." >&2
-    exit 1
+if [[ -n "${compiled_payload_dir:-}" ]]; then
+    test -d "${compiled_payload_dir}/binaries" || {
+        echo "Error: compiled release payload is missing binaries." >&2
+        exit 1
+    }
+    cp -a "${compiled_payload_dir}/binaries/." "${BUILD_DIR}/"
+else
+    for target in "${agent_build_order[@]}"; do
+        build_env="$(pulse_release_target_env "${target}")"
+        output_path="${BUILD_DIR}/$(pulse_release_binary_filename agent "${target}")"
+        env ${build_env} go build \
+            -ldflags="${agent_ldflags}" \
+            "${release_go_build_args[@]}" \
+            -o "${output_path}" \
+            ./cmd/pulse-agent
+    done
 fi
-
-for i in "${!agent_build_order[@]}"; do
-    target="${agent_build_order[$i]}"
-    build_env="${agent_build_envs[$i]}"
-    output_path="$BUILD_DIR/pulse-agent-$target"
-    if [[ "$target" == windows-* ]]; then
-        output_path="${output_path}.exe"
-    fi
-
-    env $build_env go build \
-        -ldflags="${agent_ldflags}" \
-        "${release_go_build_args[@]}" \
-        -o "$output_path" \
-        ./cmd/pulse-agent
-done
 
 # Platform-native signing jobs may supply replacement desktop binaries. They
 # are copied before packaging, checksums, SBOM generation, and release signing
@@ -186,58 +184,58 @@ fi
 # it points at, so its own build identity is intentionally minimal.
 echo "Building pulse-mcp for all platforms..."
 mcp_build_order=("${agent_build_order[@]}")
-mcp_build_envs=("${agent_build_envs[@]}")
 
-for i in "${!mcp_build_order[@]}"; do
-    target="${mcp_build_order[$i]}"
-    build_env="${mcp_build_envs[$i]}"
-    output_path="$BUILD_DIR/pulse-mcp-$target"
-    if [[ "$target" == windows-* ]]; then
-        output_path="${output_path}.exe"
-    fi
-
-    env $build_env go build \
-        "${release_go_build_args[@]}" \
-        -o "$output_path" \
-        ./cmd/pulse-mcp
-done
-
-# Build for different architectures (server + agents)
-build_order=(linux-amd64 linux-arm64 linux-armv7 linux-armv6 linux-386)
-build_envs=(
-    "GOOS=linux GOARCH=amd64"
-    "GOOS=linux GOARCH=arm64"
-    "GOOS=linux GOARCH=arm GOARM=7"
-    "GOOS=linux GOARCH=arm GOARM=6"
-    "GOOS=linux GOARCH=386"
-)
-
-if [[ ${#build_order[@]} -ne ${#build_envs[@]} ]]; then
-    echo "Build target config mismatch." >&2
-    exit 1
+if [[ -z "${compiled_payload_dir:-}" ]]; then
+    for target in "${mcp_build_order[@]}"; do
+        build_env="$(pulse_release_target_env "${target}")"
+        output_path="${BUILD_DIR}/$(pulse_release_binary_filename mcp "${target}")"
+        env ${build_env} go build \
+            "${release_go_build_args[@]}" \
+            -o "${output_path}" \
+            ./cmd/pulse-mcp
+    done
 fi
 
-for i in "${!build_order[@]}"; do
-    build_name="${build_order[$i]}"
-    echo "Building for $build_name..."
+# Build for different architectures (server + agents)
+build_order=("${PULSE_RELEASE_SERVER_TARGETS[@]}")
 
-    build_env="${build_envs[$i]}"
-    
-    build_time=$(date -u '+%Y-%m-%d_%H:%M:%S')
-    git_commit=$(git rev-parse --short HEAD 2>/dev/null || echo 'unknown')
+if [[ -z "${compiled_payload_dir:-}" ]]; then
+    for build_name in "${build_order[@]}"; do
+        echo "Building for $build_name..."
 
-    server_ldflags="$(./scripts/release_ldflags.sh server --version "v${VERSION}" --build-time "${build_time}" --git-commit "${git_commit}" "${license_ldflags_args[@]}" "${update_ldflags_args[@]}")"
+        build_env="$(pulse_release_target_env "${build_name}")"
 
-    # Build backend binary with version info
-    # -tags release disables dev-mode env-var bypasses (PULSE_DEV, PULSE_MOCK_MODE,
-    # PULSE_LICENSE_DEV_MODE) so they cannot be used to skip feature gating or
-    # license signature validation in production binaries.
-    env $build_env go build \
-        -tags release \
-        -ldflags="${server_ldflags}" \
-        "${release_go_build_args[@]}" \
-        -o "$BUILD_DIR/pulse-$build_name" \
-        ./cmd/pulse
+        build_time=$(date -u '+%Y-%m-%d_%H:%M:%S')
+        git_commit=$(git rev-parse --short HEAD 2>/dev/null || echo 'unknown')
+
+        server_ldflags="$(./scripts/release_ldflags.sh server --version "v${VERSION}" --build-time "${build_time}" --git-commit "${git_commit}" "${license_ldflags_args[@]}" "${update_ldflags_args[@]}")"
+
+        # Build backend binary with version info. The release tag disables
+        # development-only feature-gating and signature-validation bypasses.
+        env $build_env go build \
+            -tags release \
+            -ldflags="${server_ldflags}" \
+            "${release_go_build_args[@]}" \
+            -o "$BUILD_DIR/pulse-$build_name" \
+            ./cmd/pulse
+    done
+fi
+
+for target in "${agent_build_order[@]}"; do
+    test -f "${BUILD_DIR}/$(pulse_release_binary_filename agent "${target}")" || {
+        echo "Error: release payload is missing agent binary for ${target}." >&2
+        exit 1
+    }
+    test -f "${BUILD_DIR}/$(pulse_release_binary_filename mcp "${target}")" || {
+        echo "Error: release payload is missing MCP binary for ${target}." >&2
+        exit 1
+    }
+done
+for target in "${build_order[@]}"; do
+    test -f "${BUILD_DIR}/$(pulse_release_binary_filename server "${target}")" || {
+        echo "Error: release payload is missing server binary for ${target}." >&2
+        exit 1
+    }
 done
 
 # Create platform-specific tarballs that include all unified agent binaries for download endpoints

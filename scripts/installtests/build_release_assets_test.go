@@ -22,6 +22,11 @@ func TestBuildReleaseUsesV6InstallScripts(t *testing.T) {
 	}
 
 	script := string(content)
+	compileContent, err := os.ReadFile(repoFile("scripts", "build-release-binaries.sh"))
+	if err != nil {
+		t.Fatalf("read build-release-binaries.sh: %v", err)
+	}
+	compileScript := string(compileContent)
 	required := []string{
 		`SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"`,
 		`PULSE_REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"`,
@@ -80,8 +85,16 @@ func TestBuildReleaseUsesV6InstallScripts(t *testing.T) {
 			t.Fatalf("build-release.sh missing canonical ldflags wiring: %s", needle)
 		}
 	}
-	if builds, cleanBuilds := strings.Count(script, `env $build_env go build \`), strings.Count(script, `"${release_go_build_args[@]}"`); builds != cleanBuilds {
+	if builds, cleanBuilds := strings.Count(script, "go build \\\n"), strings.Count(script, `"${release_go_build_args[@]}"`); builds != cleanBuilds {
 		t.Fatalf("build-release.sh must disable automatic VCS stamping on every release go build: builds=%d clean_builds=%d", builds, cleanBuilds)
+	}
+	for _, needle := range []string{
+		`release_go_build_args=(-buildvcs=false -trimpath)`,
+		`command=(go build "${release_go_build_args[@]}")`,
+	} {
+		if !strings.Contains(compileScript, needle) {
+			t.Fatalf("build-release-binaries.sh missing clean compilation contract: %s", needle)
+		}
 	}
 
 	helperBytes, err := os.ReadFile(repoFile("scripts", "release_asset_common.sh"))
@@ -1764,11 +1777,13 @@ func TestBuildReleasePackagesPulseMcpForAllPlatforms(t *testing.T) {
 		t.Fatalf("read build-release.sh: %v", err)
 	}
 	script := string(content)
+	compileContent, err := os.ReadFile(repoFile("scripts", "build-release-binaries.sh"))
+	if err != nil {
+		t.Fatalf("read build-release-binaries.sh: %v", err)
+	}
+	compileScript := string(compileContent)
 
 	required := []string{
-		// Build loop wires through ./cmd/pulse-mcp.
-		`-o "$output_path" \
-        ./cmd/pulse-mcp`,
 		// Per-platform packaging follows the pulse-agent shape
 		// exactly so the upload step's glob does not need
 		// special cases.
@@ -1791,6 +1806,14 @@ func TestBuildReleasePackagesPulseMcpForAllPlatforms(t *testing.T) {
 	for _, needle := range required {
 		if !strings.Contains(script, needle) {
 			t.Fatalf("build-release.sh missing pulse-mcp distribution wiring: %s", needle)
+		}
+	}
+	for _, needle := range []string{
+		`package=./cmd/pulse-mcp`,
+		`pulse_release_binary_filename "${component}" "${target}"`,
+	} {
+		if !strings.Contains(compileScript, needle) {
+			t.Fatalf("build-release-binaries.sh missing pulse-mcp compilation wiring: %s", needle)
 		}
 	}
 
@@ -2001,6 +2024,11 @@ func TestReleasePipelinePromotesOneImmutableCandidate(t *testing.T) {
 
 	createWorkflow := string(createBytes)
 	candidateWorkflow := string(candidateBytes)
+	compileScriptBytes, err := os.ReadFile(repoFile("scripts", "build-release-binaries.sh"))
+	if err != nil {
+		t.Fatalf("read build-release-binaries.sh: %v", err)
+	}
+	compileScript := string(compileScriptBytes)
 	validationWorkflow := string(validationBytes)
 	convergenceWorkflow := string(convergenceBytes)
 	recoveryWorkflow := string(recoveryBytes)
@@ -2018,6 +2046,39 @@ func TestReleasePipelinePromotesOneImmutableCandidate(t *testing.T) {
 	floatingJob := workflowJobBlock(t, convergenceWorkflow, "promote_floating_tags")
 	helmPagesJob := workflowJobBlock(t, convergenceWorkflow, "publish_helm_pages")
 	demoJob := workflowJobBlock(t, convergenceWorkflow, "update_stable_demo")
+	compileJob := workflowJobBlock(t, candidateWorkflow, "compile-release-payload")
+	candidateBuildJob := workflowJobBlock(t, candidateWorkflow, "build")
+
+	for _, needle := range []string{
+		"pulse-pve-compile",
+		`./scripts/build-release-binaries.sh "${{ inputs.version }}"`,
+		`release-compiled-${{ github.sha }}-${{ inputs.version }}`,
+	} {
+		if !strings.Contains(compileJob, needle) {
+			t.Fatalf("compiled release payload job missing exact-SHA contract: %s", needle)
+		}
+	}
+	if strings.Contains(compileJob, "PULSE_UPDATE_SIGNING_KEY") {
+		t.Fatal("PVE release compilation job must not receive private update-signing material")
+	}
+	for _, needle := range []string{
+		`scripts/release_candidate_manifest.py create`,
+		`--source-sha "${SOURCE_SHA}"`,
+		`--release-dir "${PAYLOAD_DIR}"`,
+	} {
+		if !strings.Contains(compileScript, needle) {
+			t.Fatalf("compiled release payload script missing manifest binding: %s", needle)
+		}
+	}
+	for _, needle := range []string{
+		`needs.compile-release-payload.result == 'success'`,
+		`scripts/release_candidate_manifest.py verify-local`,
+		`PULSE_RELEASE_COMPILED_PAYLOAD_DIR`,
+	} {
+		if !strings.Contains(candidateBuildJob, needle) {
+			t.Fatalf("hosted candidate build missing compiled-payload verification: %s", needle)
+		}
+	}
 
 	for _, needle := range []string{
 		`./scripts/build-release.sh "${{ inputs.version }}"`,

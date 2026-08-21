@@ -1,6 +1,30 @@
 name: Build Release Candidate
 
 on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version number without the leading v'
+        required: true
+        type: string
+      require_macos_signing:
+        description: 'Require Developer ID signed and notarized macOS agent binaries'
+        required: false
+        default: false
+        type: boolean
+      require_windows_signing:
+        description: 'Require Authenticode-signed Windows agent binaries'
+        required: false
+        default: false
+        type: boolean
+      windows_signing_backend:
+        description: 'Windows signing backend: signpath (canonical) or legacy-pfx (break-glass fallback)'
+        required: false
+        default: signpath
+        type: choice
+        options:
+          - signpath
+          - legacy-pfx
   workflow_call:
     inputs:
       version:
@@ -37,6 +61,51 @@ permissions:
   contents: read
 
 jobs:
+  compile-release-payload:
+    name: Compile Exact-SHA Release Payload on PVE
+    runs-on: [self-hosted, Linux, X64, pulse-pve-compile]
+    timeout-minutes: 20
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          fetch-depth: 0
+
+      - name: Validate candidate identity
+        run: |
+          set -euo pipefail
+          test "$(tr -d '\n' < VERSION)" = "${{ inputs.version }}"
+          test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
+
+      - name: Set up Go
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Set up Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: 'frontend-modern/package-lock.json'
+
+      - name: Compile credential-free release payload
+        env:
+          PULSE_LICENSE_PUBLIC_KEY: ${{ secrets.PULSE_LICENSE_PUBLIC_KEY }}
+          PULSE_UPDATE_SIGNING_PUBLIC_KEY: ${{ vars.PULSE_UPDATE_SIGNING_PUBLIC_KEY }}
+        run: ./scripts/build-release-binaries.sh "${{ inputs.version }}" "$RUNNER_TEMP/release-compiled"
+
+      - name: Upload exact-SHA compiled payload
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-compiled-${{ github.sha }}-${{ inputs.version }}
+          path: ${{ runner.temp }}/release-compiled/
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+          overwrite: true
+
   signing-configuration:
     name: Verify Native Signing Configuration
     if: ${{ inputs.require_macos_signing || inputs.require_windows_signing }}
@@ -486,8 +555,8 @@ jobs:
 
   build:
     name: Build and Validate Release Candidate
-    needs: [sign-macos-agent, collect-windows-signing]
-    if: ${{ always() && (!inputs.require_macos_signing || needs.sign-macos-agent.result == 'success') && (!inputs.require_windows_signing || needs.collect-windows-signing.result == 'success') }}
+    needs: [compile-release-payload, sign-macos-agent, collect-windows-signing]
+    if: ${{ always() && needs.compile-release-payload.result == 'success' && (!inputs.require_macos_signing || needs.sign-macos-agent.result == 'success') && (!inputs.require_windows_signing || needs.collect-windows-signing.result == 'success') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     outputs:
@@ -549,6 +618,20 @@ jobs:
           tar -xzf "${TMP_DIR}/${SYFT_ARCHIVE}" -C "${TMP_DIR}" syft
           install -m 0755 "${TMP_DIR}/syft" /usr/local/bin/syft
 
+      - name: Download exact-SHA compiled payload
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: release-compiled-${{ github.sha }}-${{ inputs.version }}
+          path: release-compiled
+
+      - name: Verify exact-SHA compiled payload
+        run: |
+          python3 scripts/release_candidate_manifest.py verify-local \
+            --release-dir release-compiled/payload \
+            --manifest release-compiled/manifest/release-compiled.json \
+            --version "${{ inputs.version }}" \
+            --source-sha "${GITHUB_SHA}"
+
       - name: Download signed macOS binaries
         if: ${{ inputs.require_macos_signing }}
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
@@ -579,6 +662,7 @@ jobs:
           PULSE_REQUIRE_MACOS_SIGNING: ${{ inputs.require_macos_signing }}
           PULSE_REQUIRE_WINDOWS_SIGNING: ${{ inputs.require_windows_signing }}
           PULSE_AGENT_NATIVE_BINARIES_DIR: ${{ (inputs.require_macos_signing || inputs.require_windows_signing) && format('{0}/native-agent-binaries', github.workspace) || '' }}
+          PULSE_RELEASE_COMPILED_PAYLOAD_DIR: ${{ github.workspace }}/release-compiled/payload
 
       - name: Validate installer signing key pins
         env:
