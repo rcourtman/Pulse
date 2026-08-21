@@ -525,9 +525,11 @@ upgrade, update, release, or artifact-selection behavior.
    The canonical public release workflow must run its credential-free prepare
    job on the PVE compilation identity so hosted-runner allocation cannot hold
    the entire dependency graph. Preparation must release that identity before
-   exact-SHA compilation becomes eligible. Dedicated, credential-free PVE
-   runner identities must also own the frontend embed bundle and backend race
-   gate.
+   exact-SHA compilation becomes eligible. Its sparse checkout must use
+   non-cone patterns because the governed file set includes top-level files and
+   the PVE runner Git version must reject neither those files nor the exact-SHA
+   checkout. Dedicated, credential-free PVE runner identities must also own the
+   frontend embed bundle and backend race gate.
    Signing, package publication, and release mutation authority must remain on
    hosted jobs. The bundle job must be independent from frontend quality so
    backend and browser-smoke lanes can start as soon as the bundle is available.

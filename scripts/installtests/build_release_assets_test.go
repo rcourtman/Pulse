@@ -2293,6 +2293,9 @@ func TestReleasePipelinePromotesOneImmutableCandidate(t *testing.T) {
 	if !strings.Contains(prepareJob, "runs-on: [self-hosted, Linux, X64, pulse-pve-compile]") {
 		t.Fatal("release preparation must avoid a hosted-runner queue before the dependency graph")
 	}
+	if !strings.Contains(prepareJob, "sparse-checkout-cone-mode: false") {
+		t.Fatal("PVE release preparation must support top-level files with the runner Git version")
+	}
 
 	for _, needle := range []string{
 		"pulse-pve-compile",
