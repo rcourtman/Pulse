@@ -254,6 +254,7 @@ func TestService_Start_Failures(t *testing.T) {
 			AIConfig: &config.AIConfig{
 				ChatModel: "unknown:model",
 			},
+			DataDir: t.TempDir(),
 		}
 		s := NewService(cfg)
 		err := s.Start(context.Background())
