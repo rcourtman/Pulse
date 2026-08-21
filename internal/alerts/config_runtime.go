@@ -117,7 +117,13 @@ func normalizeOverrides(overrides map[string]ThresholdConfig) {
 	normalized := make(map[string]ThresholdConfig, len(overrides))
 	priorityByKey := make(map[string]int, len(overrides))
 	for id, override := range overrides {
-		override.PoweredOffSeverity = NormalizePoweredOffSeverity(override.PoweredOffSeverity)
+		// An unset powered-off severity means "follow the global default".
+		// Normalizing it here would stamp every override with an explicit
+		// "warning" and silently downgrade guests whose global default is
+		// critical, so only normalize values the user actually set.
+		if override.PoweredOffSeverity != "" {
+			override.PoweredOffSeverity = NormalizePoweredOffSeverity(override.PoweredOffSeverity)
+		}
 		if override.Usage != nil {
 			override.Usage = ensureHysteresisThreshold(override.Usage)
 		}
