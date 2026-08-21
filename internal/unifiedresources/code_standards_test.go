@@ -650,7 +650,7 @@ func TestCloneResourceCopiesHostThermalState(t *testing.T) {
 }
 
 func TestProxmoxWorkloadActionTargetsStayBackendAuthored(t *testing.T) {
-	apiSource, err := os.ReadFile(filepath.Join("..", "api", "resources.go"))
+	apiSource, err := os.ReadFile(filepath.Join("..", "api", "resourceapi", "resources.go"))
 	if err != nil {
 		t.Fatalf("read api resources source: %v", err)
 	}
@@ -695,9 +695,9 @@ func TestDockerSwarmEvidenceGuardStaysInAdapter(t *testing.T) {
 }
 
 func TestAPIResourcesKeepsOwnedSupplementalGapFillAndVMwareAlias(t *testing.T) {
-	data, err := os.ReadFile(filepath.Join("..", "api", "resources.go"))
+	data, err := os.ReadFile(filepath.Join("..", "api", "resourceapi", "resources.go"))
 	if err != nil {
-		t.Fatalf("failed to read ../api/resources.go: %v", err)
+		t.Fatalf("failed to read ../api/resourceapi/resources.go: %v", err)
 	}
 	source := string(data)
 
@@ -709,23 +709,23 @@ func TestAPIResourcesKeepsOwnedSupplementalGapFillAndVMwareAlias(t *testing.T) {
 	}
 	for _, snippet := range requiredSnippets {
 		if !strings.Contains(source, snippet) {
-			t.Fatalf("../api/resources.go must contain %q", snippet)
+			t.Fatalf("../api/resourceapi/resources.go must contain %q", snippet)
 		}
 	}
 }
 
 func TestResourceAPIUsesCanonicalTenantUnifiedSeed(t *testing.T) {
-	data, err := os.ReadFile(filepath.Join("..", "api", "resources.go"))
+	data, err := os.ReadFile(filepath.Join("..", "api", "resourceapi", "resources.go"))
 	if err != nil {
 		t.Fatalf("failed to read resources.go: %v", err)
 	}
 	source := string(data)
 
 	if strings.Contains(source, "GetStateForTenant(") {
-		t.Fatalf("internal/api/resources.go must not fall back to tenant StateSnapshot seeding")
+		t.Fatalf("internal/api/resourceapi/resources.go must not fall back to tenant StateSnapshot seeding")
 	}
 	if !strings.Contains(source, "UnifiedResourceSnapshotForTenant(orgID)") {
-		t.Fatalf("internal/api/resources.go must use tenant unified resource snapshots as the canonical seed")
+		t.Fatalf("internal/api/resourceapi/resources.go must use tenant unified resource snapshots as the canonical seed")
 	}
 }
 
@@ -887,7 +887,7 @@ func TestCephPoolsProjectThroughCanonicalStoragePath(t *testing.T) {
 
 func TestResourceAPIExposesDedicatedFacetReads(t *testing.T) {
 	requiredSnippets := map[string][]string{
-		filepath.Join("..", "api", "resources.go"): {
+		filepath.Join("..", "api", "resourceapi", "resources.go"): {
 			"HandleGetResourceFacets",
 			"HandleGetResourceTimeline",
 			"HandleListResourceTimeline",
@@ -1027,7 +1027,7 @@ func TestActionExecutionContractStaysAPIOwned(t *testing.T) {
 			"agentcapabilities.AgentErrCodeActionPlanDrift",
 			"agentcapabilities.AgentErrCodeActionExecutorUnavailable",
 		},
-		filepath.Join("..", "api", "resources.go"): {
+		filepath.Join("..", "api", "resources_compat.go"): {
 			"actionExecutor            ActionExecutor",
 			"actionCompleted           func(unified.ActionAuditRecord)",
 			"actionTransition          func(orgID string, record unified.ActionAuditRecord)",
@@ -1035,7 +1035,10 @@ func TestActionExecutionContractStaysAPIOwned(t *testing.T) {
 			"func (h *ResourceHandlers) SetActionCompletedPublisher(",
 			"func (h *ResourceHandlers) SetActionTransitionPublisher(",
 			"policyAdmission           *actionlifecycle.PolicyAdmissionCoordinator",
-			"func (h *ResourceHandlers) applyActionAvailability(ctx context.Context, resources []unified.Resource)",
+		},
+		filepath.Join("..", "api", "resourceapi", "resources.go"): {
+			"actionAvailability  actionlifecycle.AvailabilityChecker",
+			"func (h *QueryService) applyActionAvailability(ctx context.Context, resources []unified.Resource)",
 			"resources[i].ActionReadiness = readinesses",
 		},
 		filepath.Join("..", "api", "agent_events.go"): {
@@ -1093,7 +1096,7 @@ func TestResourceChangeFilterParsingIsOwnedByUnifiedResources(t *testing.T) {
 			"func parseResourceChangeSourceTypes(values []string) ([]ChangeSourceType, error)",
 			"func parseResourceChangeSourceAdapters(values []string) ([]ChangeSourceAdapter, error)",
 		},
-		filepath.Join("..", "api", "resources.go"): {
+		filepath.Join("..", "api", "resourceapi", "resources.go"): {
 			"unified.ParseResourceChangeFilters(r.URL.Query()[\"kind\"], r.URL.Query()[\"sourceType\"], r.URL.Query()[\"sourceAdapter\"])",
 		},
 	}
@@ -1252,7 +1255,7 @@ func TestCanonicalMetadataRefreshHelperUsedByConsumers(t *testing.T) {
 		filepath.Join(".", "clone.go"): {
 			"RefreshCanonicalMetadata(&out)",
 		},
-		filepath.Join("..", "api", "resources.go"): {
+		filepath.Join("..", "api", "resourceapi", "resources.go"): {
 			"unified.RefreshCanonicalMetadata(&resourceCopy)",
 			"unified.RefreshCanonicalMetadataSlice(paged)",
 			"unified.RefreshCanonicalMetadataSlice(children)",
@@ -1380,7 +1383,7 @@ func TestPolicyPostureSummaryIsOwnedByUnifiedResources(t *testing.T) {
 		filepath.Join("..", "ai", "resource_context.go"): {
 			"unifiedresources.SummarizePolicyPosture(allResources)",
 		},
-		filepath.Join("..", "api", "resources.go"): {
+		filepath.Join("..", "api", "resourceapi", "resources.go"): {
 			"resourcePolicyPostureAggregation(allResources)",
 			"unified.ResourcePolicyPostureContract(unified.SummarizePolicyPosture(canonicalResources))",
 		},
@@ -2304,7 +2307,7 @@ func TestV6ReleaseFacingAPITestsCoverLegacyHostRejection(t *testing.T) {
 			},
 		},
 		{
-			path: filepath.Join(repoRoot, "internal", "api", "resources_test.go"),
+			path: filepath.Join(repoRoot, "internal", "api", "resourceapi", "resources_test.go"),
 			requiredSnippets: []string{
 				`/api/resources?type=host`,
 				`unsupported type filter token(s): host`,
@@ -2544,14 +2547,14 @@ func TestV6DirectHostAliasValidatorCoverage(t *testing.T) {
 			},
 		},
 		{
-			path: filepath.Join(repoRoot, "internal", "api", "resources_test.go"),
+			path: filepath.Join(repoRoot, "internal", "api", "resourceapi", "resources_test.go"),
 			requiredSnippets: []string{
 				`/api/resources?type=host`,
 				`unsupported type filter token(s): host`,
 			},
 		},
 		{
-			path: filepath.Join(repoRoot, "internal", "api", "resources_frontend_types_test.go"),
+			path: filepath.Join(repoRoot, "internal", "api", "resourceapi", "resources_frontend_types_test.go"),
 			requiredSnippets: []string{
 				`unsupported host ignored by parser`,
 				`TestUnsupportedResourceTypeFilterTokensRejectsLegacyAliases`,
@@ -2608,7 +2611,7 @@ func TestV6DirectHostAliasValidatorCoverage(t *testing.T) {
 
 func TestResourceAPIHotPathUsesSharedPresentationSnapshot(t *testing.T) {
 	repoRoot := filepath.Join("..", "..")
-	path := filepath.Join(repoRoot, "internal", "api", "resources.go")
+	path := filepath.Join(repoRoot, "internal", "api", "resourceapi", "resources.go")
 
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -2637,7 +2640,7 @@ func TestResourceAPIHotPathUsesSharedPresentationSnapshot(t *testing.T) {
 
 func TestCanonicalResourceOrderingContractsStayShared(t *testing.T) {
 	repoRoot := filepath.Join("..", "..")
-	resourcesPath := filepath.Join(repoRoot, "internal", "api", "resources.go")
+	resourcesPath := filepath.Join(repoRoot, "internal", "api", "resourceapi", "resources.go")
 	registryPath := filepath.Join(repoRoot, "internal", "unifiedresources", "registry.go")
 
 	resourcesSource, err := os.ReadFile(resourcesPath)
@@ -2663,7 +2666,7 @@ func TestCanonicalResourceOrderingContractsStayShared(t *testing.T) {
 func TestBroadcastStateUsesSharedCanonicalResourceContract(t *testing.T) {
 	repoRoot := filepath.Join("..", "..")
 	typesPath := filepath.Join(repoRoot, "internal", "unifiedresources", "types.go")
-	resourcesPath := filepath.Join(repoRoot, "internal", "api", "resources.go")
+	resourcesPath := filepath.Join(repoRoot, "internal", "api", "resourceapi", "resources.go")
 	monitorPath := filepath.Join(repoRoot, "internal", "monitoring", "monitor.go")
 
 	typesSource, err := os.ReadFile(typesPath)
@@ -2826,16 +2829,16 @@ func TestGuestRRDPointCarriesOnlyRecordedGuestColumns(t *testing.T) {
 // unremovable. This is a source-shape guard because the leak is invisible at
 // runtime until a tenant is deleted or a data directory is torn down.
 func TestCachedResourceStoresHaveATenantReleasePath(t *testing.T) {
-	resources, err := os.ReadFile("../api/resources.go")
+	resources, err := os.ReadFile("../api/resourceapi/resources.go")
 	if err != nil {
 		t.Fatalf("read resources.go: %v", err)
 	}
 	for _, fragment := range []string{
-		"func (h *ResourceHandlers) CloseTenantStore(orgID string) error",
-		"func (h *ResourceHandlers) CloseStores() error",
+		"func (h *QueryService) CloseTenantStore(orgID string) error",
+		"func (h *QueryService) CloseStores() error",
 	} {
 		if !strings.Contains(string(resources), fragment) {
-			t.Errorf("internal/api/resources.go must expose %q so cached per-tenant stores can be released", fragment)
+			t.Errorf("internal/api/resourceapi/resources.go must expose %q so cached per-tenant stores can be released", fragment)
 		}
 	}
 

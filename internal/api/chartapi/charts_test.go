@@ -1,4 +1,4 @@
-package api
+package chartapi
 
 import (
 	"encoding/json"

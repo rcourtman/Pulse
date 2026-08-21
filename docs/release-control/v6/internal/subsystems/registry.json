@@ -919,7 +919,7 @@
       ]
     },
     {
-      "path": "internal/api/resources.go",
+      "path": "internal/api/resourceapi/resources.go",
       "rationale": "the unified resource endpoint is both a backend payload contract surface and a unified-resource runtime boundary",
       "subsystems": [
         "api-contracts",
@@ -5510,7 +5510,7 @@
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
-              "internal/api/resources_test.go",
+              "internal/api/resourceapi/resources_test.go",
               "internal/monitoring/monitor_polling_test.go",
               "internal/truenas/client_api_shapes_test.go",
               "internal/truenas/client_test.go",
@@ -5563,7 +5563,7 @@
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
-              "internal/api/resources_test.go",
+              "internal/api/resourceapi/resources_test.go",
               "internal/storagehealth/risk_test.go",
               "internal/storagehealth/topology_test.go",
               "internal/storagehealth/zfs_pool_health_contract_test.go"
@@ -7447,7 +7447,7 @@
         "frontend-modern/src/utils/sourceTypePresentation.ts",
         "frontend-modern/src/utils/workloads.ts",
         "frontend-modern/src/utils/workloadTypePresentation.ts",
-        "internal/api/resources.go",
+        "internal/api/resourceapi/resources.go",
         "internal/platformsupport/manifest_generated.go"
       ],
       "verification": {
@@ -7622,7 +7622,7 @@
               "frontend-modern/src/types/resource.ts",
               "frontend-modern/src/utils/resourceIdentity.ts",
               "frontend-modern/src/utils/workloads.ts",
-              "internal/api/resources.go"
+              "internal/api/resourceapi/resources.go"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],

@@ -1,4 +1,4 @@
-package api
+package resourceapi
 
 import (
 	"encoding/json"
@@ -16,7 +16,7 @@ import (
 func TestResourceListPreservesCanonicalPoolHealthEvidence(t *testing.T) {
 	observedAt := time.Date(2026, 7, 24, 10, 0, 0, 0, time.UTC)
 	cfg := &config.Config{DataPath: t.TempDir()}
-	h := NewResourceHandlers(cfg)
+	h := NewQueryService(cfg)
 	h.SetStateProvider(resourceUnifiedSeedProvider{
 		snapshot: models.StateSnapshot{LastUpdate: observedAt},
 		resources: []unified.Resource{{

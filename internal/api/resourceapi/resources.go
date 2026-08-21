@@ -1,4 +1,4 @@
-package api
+package resourceapi
 
 import (
 	"context"
@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/actionlifecycle"
+	"github.com/rcourtman/pulse-go-rewrite/internal/api/apicontext"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
@@ -22,33 +23,35 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// ResourceHandlers provides HTTP handlers for the unified resource API.
-type ResourceHandlers struct {
-	cfg                       *config.Config
-	storeMu                   sync.Mutex
-	stores                    map[string]unified.ResourceStore
-	cacheMu                   sync.Mutex
-	registryCache             map[string]registryCacheEntry
-	supplementalMu            sync.RWMutex
-	supplementalRecords       map[unified.DataSource]SupplementalRecordsProvider
-	stateProvider             SnapshotProvider
-	tenantStateProvider       TenantStateProvider
-	actionExecutor            ActionExecutor
-	actionCompleted           func(unified.ActionAuditRecord)
-	actionTransition          func(orgID string, record unified.ActionAuditRecord)
-	policyAdmission           *actionlifecycle.PolicyAdmissionCoordinator
-	actionEmergencyStop       func(orgID string) (bool, error)
-	actionDecisionAuthorizer  actionlifecycle.DecisionAuthorizer
-	actionExecutionAuthorizer actionlifecycle.ExecutionAuthorizer
-	actionRefreshPlanner      actionlifecycle.RefreshPlanner
-	discoveryReadiness        ResourceDiscoveryReadinessProvider
-	operatorStateChanged      func(orgID, resourceID string)
+// QueryService provides HTTP handlers for the unified resource API.
+type QueryService struct {
+	cfg                 *config.Config
+	storeMu             sync.Mutex
+	stores              map[string]unified.ResourceStore
+	cacheMu             sync.Mutex
+	registryCache       map[string]registryCacheEntry
+	supplementalMu      sync.RWMutex
+	supplementalRecords map[unified.DataSource]SupplementalRecordsProvider
+	stateProvider       SnapshotProvider
+	tenantStateProvider TenantStateProvider
+	actionAvailability  actionlifecycle.AvailabilityChecker
+	discoveryReadiness  ResourceDiscoveryReadinessProvider
 }
 
-// SetOperatorStateChanged installs the runtime reconciliation hook invoked
-// after a canonical operator-state mutation commits successfully.
-func (h *ResourceHandlers) SetOperatorStateChanged(callback func(orgID, resourceID string)) {
-	h.operatorStateChanged = callback
+// SnapshotProvider supplies the legacy monitoring snapshot used while callers
+// migrate to the canonical unified-resource snapshot contract.
+type SnapshotProvider = models.SnapshotProvider
+
+// TenantStateProvider is the tenant-scoped resource read contract.
+type TenantStateProvider interface {
+	UnifiedReadStateForTenant(orgID string) unified.ReadState
+	UnifiedResourceSnapshotForTenant(orgID string) ([]unified.Resource, time.Time)
+}
+
+// UnifiedResourceSnapshotProvider supplies a canonical unified-resource seed
+// and freshness marker for the default tenant.
+type UnifiedResourceSnapshotProvider interface {
+	UnifiedResourceSnapshot() ([]unified.Resource, time.Time)
 }
 
 // ResourceDiscoveryReadinessProvider projects service-discovery state onto a
@@ -92,72 +95,41 @@ type TenantSupplementalSnapshotSourceOwner interface {
 	SnapshotOwnedSourcesForOrg(orgID string) []unified.DataSource
 }
 
-// NewResourceHandlers creates a new ResourceHandlers.
-func NewResourceHandlers(cfg *config.Config) *ResourceHandlers {
-	return &ResourceHandlers{
+// NewQueryService creates a unified resource query and storage service.
+func NewQueryService(cfg *config.Config) *QueryService {
+	return &QueryService{
 		cfg:                 cfg,
 		stores:              make(map[string]unified.ResourceStore),
 		registryCache:       make(map[string]registryCacheEntry),
 		supplementalRecords: make(map[unified.DataSource]SupplementalRecordsProvider),
-		policyAdmission:     &actionlifecycle.PolicyAdmissionCoordinator{},
 	}
 }
 
 // SetStateProvider sets the state provider for on-demand population.
-func (h *ResourceHandlers) SetStateProvider(provider SnapshotProvider) {
+func (h *QueryService) SetStateProvider(provider SnapshotProvider) {
 	h.stateProvider = provider
 }
 
 // SetTenantStateProvider sets the tenant-aware provider.
-func (h *ResourceHandlers) SetTenantStateProvider(provider TenantStateProvider) {
+func (h *QueryService) SetTenantStateProvider(provider TenantStateProvider) {
 	h.tenantStateProvider = provider
 }
 
-// SetActionExecutor configures the API-owned action execution driver.
-func (h *ResourceHandlers) SetActionExecutor(executor ActionExecutor) {
-	h.actionExecutor = executor
-}
-
-func (h *ResourceHandlers) SetActionEmergencyStopChecker(checker func(orgID string) (bool, error)) {
-	h.actionEmergencyStop = checker
-}
-
-func (h *ResourceHandlers) SetActionAuthorizers(decision actionlifecycle.DecisionAuthorizer, execution actionlifecycle.ExecutionAuthorizer) {
-	h.actionDecisionAuthorizer = decision
-	h.actionExecutionAuthorizer = execution
-}
-
-// SetActionRefreshPlanner installs the trusted reconstruction hook used when
-// a broker-originated immutable plan must be replaced.
-func (h *ResourceHandlers) SetActionRefreshPlanner(planner actionlifecycle.RefreshPlanner) {
-	h.actionRefreshPlanner = planner
-}
-
-// SetActionCompletedPublisher configures the terminal action notification hook
-// used by the agent SSE bridge. It is intentionally outside the execution
-// driver so refused-before-dispatch failures and future executor
-// implementations all publish from the API-owned lifecycle boundary.
-func (h *ResourceHandlers) SetActionCompletedPublisher(publisher func(unified.ActionAuditRecord)) {
-	h.actionCompleted = publisher
-}
-
-// SetActionTransitionPublisher configures the persisted-state transition
-// hook on the shared action lifecycle: plan creation, approval decisions,
-// and terminal execution outcomes, published only after the corresponding
-// store write succeeds. The org ID keys per-tenant reconciliation (e.g.
-// mapping a Patrol-origin action's decision back onto its finding).
-func (h *ResourceHandlers) SetActionTransitionPublisher(publisher func(orgID string, record unified.ActionAuditRecord)) {
-	h.actionTransition = publisher
+// SetActionAvailabilityChecker configures the read-only projection of action
+// readiness onto resource responses. Mutation lifecycle ownership remains in
+// the API composition layer.
+func (h *QueryService) SetActionAvailabilityChecker(checker actionlifecycle.AvailabilityChecker) {
+	h.actionAvailability = checker
 }
 
 // SetDiscoveryReadinessProvider wires the canonical discovery-readiness
 // projection onto resource responses and Assistant context packs.
-func (h *ResourceHandlers) SetDiscoveryReadinessProvider(provider ResourceDiscoveryReadinessProvider) {
+func (h *QueryService) SetDiscoveryReadinessProvider(provider ResourceDiscoveryReadinessProvider) {
 	h.discoveryReadiness = provider
 }
 
 // SetSupplementalRecordsProvider configures additional records for a source.
-func (h *ResourceHandlers) SetSupplementalRecordsProvider(source unified.DataSource, provider SupplementalRecordsProvider) {
+func (h *QueryService) SetSupplementalRecordsProvider(source unified.DataSource, provider SupplementalRecordsProvider) {
 	h.supplementalMu.Lock()
 	if h.supplementalRecords == nil {
 		h.supplementalRecords = make(map[unified.DataSource]SupplementalRecordsProvider)
@@ -176,16 +148,16 @@ func (h *ResourceHandlers) SetSupplementalRecordsProvider(source unified.DataSou
 }
 
 // HandleListResources handles GET /api/resources.
-func (h *ResourceHandlers) HandleListResources(w http.ResponseWriter, r *http.Request) {
+func (h *QueryService) HandleListResources(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	orgID := GetOrgID(r.Context())
+	orgID := apicontext.OrgID(r.Context())
 	sharedResources, registry, err := h.sharedPresentationResources(orgID)
 	if err != nil {
-		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
+		http.Error(w, sanitizeError(err, "Internal server error"), http.StatusInternalServerError)
 		return
 	}
 
@@ -227,16 +199,16 @@ func (h *ResourceHandlers) HandleListResources(w http.ResponseWriter, r *http.Re
 }
 
 // HandleStorageSummary handles GET /api/resources/storage-summary.
-func (h *ResourceHandlers) HandleStorageSummary(w http.ResponseWriter, r *http.Request) {
+func (h *QueryService) HandleStorageSummary(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	orgID := GetOrgID(r.Context())
+	orgID := apicontext.OrgID(r.Context())
 	resources, _, err := h.sharedRawResources(orgID)
 	if err != nil {
-		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
+		http.Error(w, sanitizeError(err, "Internal server error"), http.StatusInternalServerError)
 		return
 	}
 
@@ -257,16 +229,16 @@ func (h *ResourceHandlers) HandleStorageSummary(w http.ResponseWriter, r *http.R
 }
 
 // HandleStorageIncidents handles GET /api/resources/storage-incidents.
-func (h *ResourceHandlers) HandleStorageIncidents(w http.ResponseWriter, r *http.Request) {
+func (h *QueryService) HandleStorageIncidents(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	orgID := GetOrgID(r.Context())
+	orgID := apicontext.OrgID(r.Context())
 	resources, _, err := h.sharedRawResources(orgID)
 	if err != nil {
-		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
+		http.Error(w, sanitizeError(err, "Internal server error"), http.StatusInternalServerError)
 		return
 	}
 
@@ -313,16 +285,16 @@ func pruneResourceForListResponse(resource *unified.Resource) {
 }
 
 // HandleGetResource handles GET /api/resources/{id}.
-func (h *ResourceHandlers) HandleGetResource(w http.ResponseWriter, r *http.Request) {
+func (h *QueryService) HandleGetResource(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	orgID := GetOrgID(r.Context())
+	orgID := apicontext.OrgID(r.Context())
 	registry, err := h.buildRegistry(orgID)
 	if err != nil {
-		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
+		http.Error(w, sanitizeError(err, "Internal server error"), http.StatusInternalServerError)
 		return
 	}
 
@@ -354,9 +326,9 @@ func (h *ResourceHandlers) HandleGetResource(w http.ResponseWriter, r *http.Requ
 	json.NewEncoder(w).Encode(resourceCopy)
 }
 
-func (h *ResourceHandlers) applyActionAvailability(ctx context.Context, resources []unified.Resource) {
-	checker, ok := h.actionExecutor.(ActionAvailabilityChecker)
-	if !ok || checker == nil {
+func (h *QueryService) applyActionAvailability(ctx context.Context, resources []unified.Resource) {
+	checker := h.actionAvailability
+	if checker == nil {
 		return
 	}
 	for i := range resources {
@@ -404,6 +376,12 @@ func presentationResourceByID(registry *unified.ResourceRegistry, resourceID str
 	return resource, ok
 }
 
+// PresentationResourceByID resolves a resource through the canonical
+// presentation identity map used by list and detail handlers.
+func PresentationResourceByID(registry *unified.ResourceRegistry, resourceID string) (*unified.Resource, bool) {
+	return presentationResourceByID(registry, resourceID)
+}
+
 func presentationResourceByReference(registry *unified.ResourceRegistry, ref string) (*unified.Resource, string, bool) {
 	ref = unified.CanonicalResourceID(ref)
 	if ref == "" || registry == nil {
@@ -422,6 +400,12 @@ func presentationResourceByReference(registry *unified.ResourceRegistry, ref str
 	}
 
 	return rawResource, resolvedID, true
+}
+
+// PresentationResourceByReference resolves canonical IDs and accepted aliases
+// through the same presentation identity map as the resource API.
+func PresentationResourceByReference(registry *unified.ResourceRegistry, ref string) (*unified.Resource, string, bool) {
+	return presentationResourceByReference(registry, ref)
 }
 
 type resourceFacetCountsResponse = unified.ResourceFacetCounts
@@ -472,7 +456,7 @@ func parseResourceTimelineQuery(r *http.Request, defaultLimit int, includeRelate
 }
 
 // HandleResourceRoutes dispatches nested resource routes.
-func (h *ResourceHandlers) HandleResourceRoutes(w http.ResponseWriter, r *http.Request) {
+func (h *QueryService) HandleResourceRoutes(w http.ResponseWriter, r *http.Request) {
 	if strings.TrimSuffix(r.URL.Path, "/") == "/api/resources/timeline" {
 		h.HandleListResourceTimeline(w, r)
 		return
@@ -509,21 +493,21 @@ func (h *ResourceHandlers) HandleResourceRoutes(w http.ResponseWriter, r *http.R
 }
 
 // HandleGetResourceFacets handles GET /api/resources/{id}/facets.
-func (h *ResourceHandlers) HandleGetResourceFacets(w http.ResponseWriter, r *http.Request) {
+func (h *QueryService) HandleGetResourceFacets(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	orgID := GetOrgID(r.Context())
+	orgID := apicontext.OrgID(r.Context())
 	registry, err := h.buildRegistry(orgID)
 	if err != nil {
-		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
+		http.Error(w, sanitizeError(err, "Internal server error"), http.StatusInternalServerError)
 		return
 	}
 	store, err := h.getStore(orgID)
 	if err != nil {
-		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
+		http.Error(w, sanitizeError(err, "Internal server error"), http.StatusInternalServerError)
 		return
 	}
 
@@ -553,27 +537,27 @@ func (h *ResourceHandlers) HandleGetResourceFacets(w http.ResponseWriter, r *htt
 
 	recentChanges, err := store.GetRecentChangesFiltered(resourceID, since, limit, filters)
 	if err != nil {
-		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
+		http.Error(w, sanitizeError(err, "Internal server error"), http.StatusInternalServerError)
 		return
 	}
 	changeCount, err := store.CountRecentChangesFiltered(resourceID, since, filters)
 	if err != nil {
-		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
+		http.Error(w, sanitizeError(err, "Internal server error"), http.StatusInternalServerError)
 		return
 	}
 	changeKindCounts, err := store.CountRecentChangesByKindFiltered(resourceID, since, filters)
 	if err != nil {
-		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
+		http.Error(w, sanitizeError(err, "Internal server error"), http.StatusInternalServerError)
 		return
 	}
 	sourceTypeCounts, err := store.CountRecentChangesBySourceTypeFiltered(resourceID, since, filters)
 	if err != nil {
-		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
+		http.Error(w, sanitizeError(err, "Internal server error"), http.StatusInternalServerError)
 		return
 	}
 	sourceAdapterCounts, err := store.CountRecentChangesBySourceAdapterFiltered(resourceID, since, filters)
 	if err != nil {
-		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
+		http.Error(w, sanitizeError(err, "Internal server error"), http.StatusInternalServerError)
 		return
 	}
 
@@ -593,16 +577,16 @@ func (h *ResourceHandlers) HandleGetResourceFacets(w http.ResponseWriter, r *htt
 }
 
 // HandleGetChildren handles GET /api/resources/{id}/children.
-func (h *ResourceHandlers) HandleGetChildren(w http.ResponseWriter, r *http.Request) {
+func (h *QueryService) HandleGetChildren(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	orgID := GetOrgID(r.Context())
+	orgID := apicontext.OrgID(r.Context())
 	registry, err := h.buildRegistry(orgID)
 	if err != nil {
-		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
+		http.Error(w, sanitizeError(err, "Internal server error"), http.StatusInternalServerError)
 		return
 	}
 
@@ -628,16 +612,16 @@ func (h *ResourceHandlers) HandleGetChildren(w http.ResponseWriter, r *http.Requ
 }
 
 // HandleGetMetrics handles GET /api/resources/{id}/metrics.
-func (h *ResourceHandlers) HandleGetMetrics(w http.ResponseWriter, r *http.Request) {
+func (h *QueryService) HandleGetMetrics(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	orgID := GetOrgID(r.Context())
+	orgID := apicontext.OrgID(r.Context())
 	registry, err := h.buildRegistry(orgID)
 	if err != nil {
-		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
+		http.Error(w, sanitizeError(err, "Internal server error"), http.StatusInternalServerError)
 		return
 	}
 
@@ -661,16 +645,16 @@ func (h *ResourceHandlers) HandleGetMetrics(w http.ResponseWriter, r *http.Reque
 }
 
 // HandleListResourceTimeline handles GET /api/resources/timeline.
-func (h *ResourceHandlers) HandleListResourceTimeline(w http.ResponseWriter, r *http.Request) {
+func (h *QueryService) HandleListResourceTimeline(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	orgID := GetOrgID(r.Context())
+	orgID := apicontext.OrgID(r.Context())
 	store, err := h.getStore(orgID)
 	if err != nil {
-		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
+		http.Error(w, sanitizeError(err, "Internal server error"), http.StatusInternalServerError)
 		return
 	}
 
@@ -686,12 +670,12 @@ func (h *ResourceHandlers) HandleListResourceTimeline(w http.ResponseWriter, r *
 
 	changes, err := store.GetRecentChangesFiltered(resourceID, since, limit, filters)
 	if err != nil {
-		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
+		http.Error(w, sanitizeError(err, "Internal server error"), http.StatusInternalServerError)
 		return
 	}
 	changeCount, err := store.CountRecentChangesFiltered(resourceID, since, filters)
 	if err != nil {
-		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
+		http.Error(w, sanitizeError(err, "Internal server error"), http.StatusInternalServerError)
 		return
 	}
 
@@ -704,16 +688,16 @@ func (h *ResourceHandlers) HandleListResourceTimeline(w http.ResponseWriter, r *
 }
 
 // HandleGetResourceTimeline handles GET /api/resources/{id}/timeline.
-func (h *ResourceHandlers) HandleGetResourceTimeline(w http.ResponseWriter, r *http.Request) {
+func (h *QueryService) HandleGetResourceTimeline(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	orgID := GetOrgID(r.Context())
+	orgID := apicontext.OrgID(r.Context())
 	store, err := h.getStore(orgID)
 	if err != nil {
-		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
+		http.Error(w, sanitizeError(err, "Internal server error"), http.StatusInternalServerError)
 		return
 	}
 
@@ -737,12 +721,12 @@ func (h *ResourceHandlers) HandleGetResourceTimeline(w http.ResponseWriter, r *h
 
 	changes, err := store.GetRecentChangesFiltered(resourceID, since, limit, filters)
 	if err != nil {
-		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
+		http.Error(w, sanitizeError(err, "Internal server error"), http.StatusInternalServerError)
 		return
 	}
 	changeCount, err := store.CountRecentChangesFiltered(resourceID, since, filters)
 	if err != nil {
-		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
+		http.Error(w, sanitizeError(err, "Internal server error"), http.StatusInternalServerError)
 		return
 	}
 
@@ -755,16 +739,16 @@ func (h *ResourceHandlers) HandleGetResourceTimeline(w http.ResponseWriter, r *h
 }
 
 // HandleStats handles GET /api/resources/stats.
-func (h *ResourceHandlers) HandleStats(w http.ResponseWriter, r *http.Request) {
+func (h *QueryService) HandleStats(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	orgID := GetOrgID(r.Context())
+	orgID := apicontext.OrgID(r.Context())
 	allResources, _, err := h.sharedPresentationResources(orgID)
 	if err != nil {
-		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
+		http.Error(w, sanitizeError(err, "Internal server error"), http.StatusInternalServerError)
 		return
 	}
 
@@ -777,16 +761,16 @@ func (h *ResourceHandlers) HandleStats(w http.ResponseWriter, r *http.Request) {
 }
 
 // HandleLink handles POST /api/resources/{id}/link.
-func (h *ResourceHandlers) HandleLink(w http.ResponseWriter, r *http.Request) {
+func (h *QueryService) HandleLink(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	orgID := GetOrgID(r.Context())
+	orgID := apicontext.OrgID(r.Context())
 	store, err := h.getStore(orgID)
 	if err != nil {
-		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
+		http.Error(w, sanitizeError(err, "Internal server error"), http.StatusInternalServerError)
 		return
 	}
 
@@ -823,7 +807,7 @@ func (h *ResourceHandlers) HandleLink(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := store.AddLink(link); err != nil {
-		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
+		http.Error(w, sanitizeError(err, "Internal server error"), http.StatusInternalServerError)
 		return
 	}
 	h.invalidateCache(orgID)
@@ -836,16 +820,16 @@ func (h *ResourceHandlers) HandleLink(w http.ResponseWriter, r *http.Request) {
 }
 
 // HandleUnlink handles POST /api/resources/{id}/unlink.
-func (h *ResourceHandlers) HandleUnlink(w http.ResponseWriter, r *http.Request) {
+func (h *QueryService) HandleUnlink(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	orgID := GetOrgID(r.Context())
+	orgID := apicontext.OrgID(r.Context())
 	store, err := h.getStore(orgID)
 	if err != nil {
-		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
+		http.Error(w, sanitizeError(err, "Internal server error"), http.StatusInternalServerError)
 		return
 	}
 
@@ -881,7 +865,7 @@ func (h *ResourceHandlers) HandleUnlink(w http.ResponseWriter, r *http.Request) 
 	}
 
 	if err := store.AddExclusion(exclusion); err != nil {
-		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
+		http.Error(w, sanitizeError(err, "Internal server error"), http.StatusInternalServerError)
 		return
 	}
 	h.invalidateCache(orgID)
@@ -894,16 +878,16 @@ func (h *ResourceHandlers) HandleUnlink(w http.ResponseWriter, r *http.Request) 
 }
 
 // HandleReportMerge handles POST /api/resources/{id}/report-merge.
-func (h *ResourceHandlers) HandleReportMerge(w http.ResponseWriter, r *http.Request) {
+func (h *QueryService) HandleReportMerge(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	orgID := GetOrgID(r.Context())
+	orgID := apicontext.OrgID(r.Context())
 	store, err := h.getStore(orgID)
 	if err != nil {
-		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
+		http.Error(w, sanitizeError(err, "Internal server error"), http.StatusInternalServerError)
 		return
 	}
 
@@ -927,7 +911,7 @@ func (h *ResourceHandlers) HandleReportMerge(w http.ResponseWriter, r *http.Requ
 
 	registry, err := h.buildRegistry(orgID)
 	if err != nil {
-		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
+		http.Error(w, sanitizeError(err, "Internal server error"), http.StatusInternalServerError)
 		return
 	}
 
@@ -988,7 +972,7 @@ func (h *ResourceHandlers) HandleReportMerge(w http.ResponseWriter, r *http.Requ
 				Str("resourceID", path).
 				Str("candidateID", target.CandidateID).
 				Msg("Failed to add resource merge exclusion")
-			http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
+			http.Error(w, sanitizeError(err, "Internal server error"), http.StatusInternalServerError)
 			return
 		}
 		exclusionsAdded += 1
@@ -1017,7 +1001,7 @@ func (h *ResourceHandlers) HandleReportMerge(w http.ResponseWriter, r *http.Requ
 }
 
 // buildRegistry constructs a registry for the current tenant.
-func (h *ResourceHandlers) buildRegistry(orgID string) (*unified.ResourceRegistry, error) {
+func (h *QueryService) buildRegistry(orgID string) (*unified.ResourceRegistry, error) {
 	store, err := h.getStore(orgID)
 	if err != nil {
 		return nil, err
@@ -1084,10 +1068,20 @@ func (h *ResourceHandlers) buildRegistry(orgID string) (*unified.ResourceRegistr
 	}
 
 	h.cacheMu.Lock()
+	if h.registryCache == nil {
+		h.registryCache = make(map[string]registryCacheEntry)
+	}
 	h.registryCache[key] = registryCacheEntry{registry: registry, lastUpdate: seed.lastUpdate}
 	h.cacheMu.Unlock()
 
 	return registry, nil
+}
+
+// BuildRegistry returns the canonical tenant resource registry. It is exposed
+// for API composition services that coordinate resource mutations and action
+// lifecycle decisions against the same durable store.
+func (h *QueryService) BuildRegistry(orgID string) (*unified.ResourceRegistry, error) {
+	return h.buildRegistry(orgID)
 }
 
 func sortedSupplementalSources(
@@ -1109,7 +1103,7 @@ func sortedSupplementalSources(
 	return sources
 }
 
-func (h *ResourceHandlers) registrySeed(orgID string) (registrySeed, error) {
+func (h *QueryService) registrySeed(orgID string) (registrySeed, error) {
 	seed := registrySeed{}
 
 	if orgID != "" && orgID != "default" {
@@ -1241,6 +1235,11 @@ func unifiedSeedSources(resources []unified.Resource) map[unified.DataSource]str
 	return sources
 }
 
+// UnifiedSeedSources reports source-owned records present in a canonical seed.
+func UnifiedSeedSources(resources []unified.Resource) map[unified.DataSource]struct{} {
+	return unifiedSeedSources(resources)
+}
+
 func unifiedSeedIncludesSource(seedSources map[unified.DataSource]struct{}, source unified.DataSource) bool {
 	if len(seedSources) == 0 {
 		return false
@@ -1275,9 +1274,18 @@ func normalizeDataSourceAlias(source unified.DataSource) unified.DataSource {
 	}
 }
 
-func (h *ResourceHandlers) getStore(orgID string) (unified.ResourceStore, error) {
+// NormalizeDataSourceAlias canonicalizes legacy source identifiers accepted at
+// the router and query boundaries.
+func NormalizeDataSourceAlias(source unified.DataSource) unified.DataSource {
+	return normalizeDataSourceAlias(source)
+}
+
+func (h *QueryService) getStore(orgID string) (unified.ResourceStore, error) {
 	h.storeMu.Lock()
 	defer h.storeMu.Unlock()
+	if h.stores == nil {
+		h.stores = make(map[string]unified.ResourceStore)
+	}
 	key := cacheKey(orgID)
 	if store, ok := h.stores[key]; ok {
 		return store, nil
@@ -1294,13 +1302,25 @@ func (h *ResourceHandlers) getStore(orgID string) (unified.ResourceStore, error)
 	return store, nil
 }
 
+// InvalidateCache clears a tenant's resource registry and presentation cache
+// after an external mutation coordinated by another API domain.
+func (h *QueryService) InvalidateCache(orgID string) {
+	h.invalidateCache(orgID)
+}
+
+// Store returns the tenant-scoped durable resource store shared by resource
+// queries and API mutation services.
+func (h *QueryService) Store(orgID string) (unified.ResourceStore, error) {
+	return h.getStore(orgID)
+}
+
 // CloseTenantStore closes and evicts one org's cached resource store.
 //
 // getStore opens a SQLite handle per org and caches it for the process
 // lifetime. Without this, offboarding a tenant left its handle open: the
 // -wal and -shm files stay on disk, the file descriptors are never returned,
 // and the tenant directory cannot be fully removed.
-func (h *ResourceHandlers) CloseTenantStore(orgID string) error {
+func (h *QueryService) CloseTenantStore(orgID string) error {
 	if h == nil {
 		return nil
 	}
@@ -1323,7 +1343,7 @@ func (h *ResourceHandlers) CloseTenantStore(orgID string) error {
 
 // CloseStores closes and evicts every cached resource store. Used on shutdown
 // so SQLite handles are released rather than left to process exit.
-func (h *ResourceHandlers) CloseStores() error {
+func (h *QueryService) CloseStores() error {
 	if h == nil {
 		return nil
 	}
@@ -1349,7 +1369,7 @@ func (h *ResourceHandlers) CloseStores() error {
 	return errors.Join(errs...)
 }
 
-func (h *ResourceHandlers) invalidateCache(orgID string) {
+func (h *QueryService) invalidateCache(orgID string) {
 	key := cacheKey(orgID)
 	h.cacheMu.Lock()
 	delete(h.registryCache, key)
@@ -1533,7 +1553,7 @@ func flatCopyResources(shared []unified.Resource) []unified.Resource {
 // sharedPresentationResources returns the org's cached presentation-shape
 // resource list for the current registry generation, building it at most
 // once per generation instead of deep-cloning the registry on every request.
-func (h *ResourceHandlers) sharedPresentationResources(orgID string) ([]unified.Resource, *unified.ResourceRegistry, error) {
+func (h *QueryService) sharedPresentationResources(orgID string) ([]unified.Resource, *unified.ResourceRegistry, error) {
 	registry, err := h.buildRegistry(orgID)
 	if err != nil {
 		return nil, nil, err
@@ -1561,7 +1581,7 @@ func (h *ResourceHandlers) sharedPresentationResources(orgID string) ([]unified.
 
 // sharedRawResources is sharedPresentationResources for the raw (uncoalesced)
 // registry list.
-func (h *ResourceHandlers) sharedRawResources(orgID string) ([]unified.Resource, *unified.ResourceRegistry, error) {
+func (h *QueryService) sharedRawResources(orgID string) ([]unified.Resource, *unified.ResourceRegistry, error) {
 	registry, err := h.buildRegistry(orgID)
 	if err != nil {
 		return nil, nil, err
@@ -2114,6 +2134,11 @@ func parseResourceTypes(raw string) map[unified.ResourceType]struct{} {
 	return result
 }
 
+// ParseResourceTypes parses the public resource type filter grammar.
+func ParseResourceTypes(raw string) map[unified.ResourceType]struct{} {
+	return parseResourceTypes(raw)
+}
+
 func unsupportedResourceTypeFilterTokens(raw string) []string {
 	if strings.TrimSpace(raw) == "" {
 		return nil
@@ -2125,6 +2150,11 @@ func unsupportedResourceTypeFilterTokens(raw string) []string {
 		}
 	}
 	return unsupported
+}
+
+// UnsupportedResourceTypeFilterTokens returns rejected public filter tokens.
+func UnsupportedResourceTypeFilterTokens(raw string) []string {
+	return unsupportedResourceTypeFilterTokens(raw)
 }
 
 func isSupportedResourceTypeFilterToken(token string) bool {
@@ -2308,7 +2338,7 @@ func attachDiscoveryTarget(resource *unified.Resource) {
 	}
 }
 
-func (h *ResourceHandlers) attachDiscoveryReadinesses(resources []unified.Resource, now time.Time) {
+func (h *QueryService) attachDiscoveryReadinesses(resources []unified.Resource, now time.Time) {
 	if h == nil || h.discoveryReadiness == nil {
 		return
 	}
@@ -2317,7 +2347,7 @@ func (h *ResourceHandlers) attachDiscoveryReadinesses(resources []unified.Resour
 	}
 }
 
-func (h *ResourceHandlers) attachDiscoveryReadiness(resource *unified.Resource, now time.Time) {
+func (h *QueryService) attachDiscoveryReadiness(resource *unified.Resource, now time.Time) {
 	if h == nil || h.discoveryReadiness == nil || resource == nil {
 		return
 	}
@@ -2326,6 +2356,12 @@ func (h *ResourceHandlers) attachDiscoveryReadiness(resource *unified.Resource, 
 		return
 	}
 	resource.DiscoveryReadiness = &readiness
+}
+
+// AttachDiscoveryReadiness projects current discovery state onto a resource
+// used by another API domain.
+func (h *QueryService) AttachDiscoveryReadiness(resource *unified.Resource, now time.Time) {
+	h.attachDiscoveryReadiness(resource, now)
 }
 
 func attachMetricsTargets(resources []unified.Resource, registry *unified.ResourceRegistry) {
@@ -2345,6 +2381,16 @@ func attachMetricsTarget(resource *unified.Resource, registry *unified.ResourceR
 // REST resource-type contract without exposing legacy aliases.
 func resourceContractType(r unified.Resource) unified.ResourceType {
 	return unified.ContractResourceType(r)
+}
+
+// ContractType maps an internal resource shape onto the public API contract.
+func ContractType(resource unified.Resource) unified.ResourceType {
+	return resourceContractType(resource)
+}
+
+// AttachDiscoveryTarget projects the canonical discovery target metadata.
+func AttachDiscoveryTarget(resource *unified.Resource) {
+	attachDiscoveryTarget(resource)
 }
 
 // applyResourceContractTypes rewrites Type fields on the response slice so the
@@ -2438,6 +2484,11 @@ func cephDiscoveryTarget(resource unified.Resource) *unified.DiscoveryTarget {
 		ResourceID:   resource.ID,
 		Hostname:     resource.Name,
 	}
+}
+
+// CephDiscoveryTarget constructs the canonical discovery target for a Ceph resource.
+func CephDiscoveryTarget(resource unified.Resource) *unified.DiscoveryTarget {
+	return cephDiscoveryTarget(resource)
 }
 
 func hostDiscoveryTarget(resource unified.Resource) *unified.DiscoveryTarget {
@@ -2738,4 +2789,11 @@ func parseIntDefault(raw string, def int) int {
 // getUserID attempts to resolve the user ID for auditing.
 func getUserID(r *http.Request) string {
 	return auth.GetUser(r.Context())
+}
+
+func sanitizeError(err error, genericMessage string) string {
+	if err != nil {
+		log.Error().Err(err).Msg(genericMessage)
+	}
+	return genericMessage
 }

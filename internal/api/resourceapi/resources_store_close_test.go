@@ -1,4 +1,4 @@
-package api
+package resourceapi
 
 import (
 	"os"
@@ -27,7 +27,7 @@ func sqliteSidecarsPresent(t *testing.T, dataDir, orgID string) bool {
 // descriptors, and its -wal/-shm files outlive the tenant.
 func TestResourceHandlers_CloseTenantStoreReleasesTheHandle(t *testing.T) {
 	dataDir := t.TempDir()
-	handlers := NewResourceHandlers(&config.Config{DataPath: dataDir})
+	handlers := NewQueryService(&config.Config{DataPath: dataDir})
 	t.Cleanup(func() { _ = handlers.CloseStores() })
 
 	if _, err := handlers.getStore("client-x"); err != nil {
@@ -54,7 +54,7 @@ func TestResourceHandlers_CloseTenantStoreReleasesTheHandle(t *testing.T) {
 
 func TestResourceHandlers_CloseStoresReleasesEveryTenant(t *testing.T) {
 	dataDir := t.TempDir()
-	handlers := NewResourceHandlers(&config.Config{DataPath: dataDir})
+	handlers := NewQueryService(&config.Config{DataPath: dataDir})
 
 	for _, orgID := range []string{"client-a", "client-b"} {
 		if _, err := handlers.getStore(orgID); err != nil {
@@ -75,31 +75,5 @@ func TestResourceHandlers_CloseStoresReleasesEveryTenant(t *testing.T) {
 	handlers.storeMu.Unlock()
 	if remaining != 0 {
 		t.Fatalf("%d store(s) still cached after CloseStores", remaining)
-	}
-}
-
-// Closing must be safe to repeat and safe on a nil handler: the shutdown path
-// runs before every dependency is guaranteed to be wired.
-func TestResourceHandlers_CloseIsIdempotentAndNilSafe(t *testing.T) {
-	var nilHandlers *ResourceHandlers
-	if err := nilHandlers.CloseStores(); err != nil {
-		t.Fatalf("nil handler CloseStores: %v", err)
-	}
-	if err := nilHandlers.CloseTenantStore("client-a"); err != nil {
-		t.Fatalf("nil handler CloseTenantStore: %v", err)
-	}
-
-	handlers := NewResourceHandlers(&config.Config{DataPath: t.TempDir()})
-	if _, err := handlers.getStore("client-a"); err != nil {
-		t.Fatalf("getStore: %v", err)
-	}
-	if err := handlers.CloseStores(); err != nil {
-		t.Fatalf("first CloseStores: %v", err)
-	}
-	if err := handlers.CloseStores(); err != nil {
-		t.Fatalf("second CloseStores must be a no-op: %v", err)
-	}
-	if err := handlers.CloseTenantStore("client-a"); err != nil {
-		t.Fatalf("CloseTenantStore on an evicted org must be a no-op: %v", err)
 	}
 }

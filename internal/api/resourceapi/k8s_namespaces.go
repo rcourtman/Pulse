@@ -1,4 +1,4 @@
-package api
+package resourceapi
 
 import (
 	"encoding/json"
@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/api/apicontext"
 	unified "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
@@ -41,7 +42,7 @@ func (r k8sNamespacesResponse) normalizeCollections() k8sNamespacesResponse {
 
 // HandleK8sNamespaces handles GET /api/resources/k8s/namespaces?cluster=<clusterName>
 // and returns namespace-level counts for Pods and Deployments.
-func (h *ResourceHandlers) HandleK8sNamespaces(w http.ResponseWriter, r *http.Request) {
+func (h *QueryService) HandleK8sNamespaces(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -53,10 +54,10 @@ func (h *ResourceHandlers) HandleK8sNamespaces(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	orgID := GetOrgID(r.Context())
+	orgID := apicontext.OrgID(r.Context())
 	resources, _, err := h.sharedRawResources(orgID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, sanitizeError(err, "Internal server error"), http.StatusInternalServerError)
 		return
 	}
 

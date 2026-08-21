@@ -37,7 +37,9 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/unified"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
+	"github.com/rcourtman/pulse-go-rewrite/internal/api/chartapi"
 	"github.com/rcourtman/pulse-go-rewrite/internal/api/configapi"
+	"github.com/rcourtman/pulse-go-rewrite/internal/api/resourceapi"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/license/entitlements"
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
@@ -480,7 +482,7 @@ func TestContract_UnifiedSeedSourcesUsesSourceOwnedAvailabilityEndpoint(t *testi
 			TargetID: "ops-api",
 		}},
 	}
-	sources := unifiedSeedSources([]unifiedresources.Resource{hostProjection})
+	sources := resourceapi.UnifiedSeedSources([]unifiedresources.Resource{hostProjection})
 	if _, ok := sources[unifiedresources.SourceAvailability]; ok {
 		t.Fatalf("seed sources = %v, host projection must not claim provider ownership", sources)
 	}
@@ -492,7 +494,7 @@ func TestContract_UnifiedSeedSourcesUsesSourceOwnedAvailabilityEndpoint(t *testi
 			TargetID: "ops-api",
 		}},
 	}
-	sources = unifiedSeedSources([]unifiedresources.Resource{hostProjection, check})
+	sources = resourceapi.UnifiedSeedSources([]unifiedresources.Resource{hostProjection, check})
 	if _, ok := sources[unifiedresources.SourceAvailability]; !ok {
 		t.Fatalf("seed sources = %v, want availability from source-owned endpoint", sources)
 	}
@@ -2501,7 +2503,7 @@ func TestContract_AISettingsProviderRegistryMetadata(t *testing.T) {
 func TestContract_ChartMetricPointsPreserveMillisecondPrecision(t *testing.T) {
 	pointTime := time.Date(2026, time.March, 31, 12, 0, 0, 987_000_000, time.UTC)
 
-	converted := monitorPointsToAPI([]monitoring.MetricPoint{{
+	converted := chartapi.MonitorPointsToAPI([]monitoring.MetricPoint{{
 		Timestamp: pointTime,
 		Value:     42,
 	}})
@@ -2915,8 +2917,8 @@ func TestContract_InfrastructureChartsNormalizeLongRangeMixedCadence(t *testing.
 	if len(cpuSeries) == 0 {
 		t.Fatal("expected normalized cpu series")
 	}
-	if len(cpuSeries) > infrastructureSummaryMaxSeriesPoints {
-		t.Fatalf("expected cpu series <= %d points, got %d", infrastructureSummaryMaxSeriesPoints, len(cpuSeries))
+	if len(cpuSeries) > chartapi.InfrastructureSummaryMaxSeriesPoints {
+		t.Fatalf("expected cpu series <= %d points, got %d", chartapi.InfrastructureSummaryMaxSeriesPoints, len(cpuSeries))
 	}
 	if cpuSeries[len(cpuSeries)-1].Timestamp != now.UnixMilli() {
 		t.Fatalf("expected latest cpu timestamp %d, got %d", now.UnixMilli(), cpuSeries[len(cpuSeries)-1].Timestamp)
@@ -3235,7 +3237,7 @@ func TestContract_WorkloadChartsUseCanonicalWorkloadIDsForProviderBackedVMs(t *t
 	if readState == nil || len(readState.VMs()) != 1 || readState.VMs()[0] == nil {
 		t.Fatalf("expected one provider-backed VM in read state, got %+v", readState)
 	}
-	resourceID, _, ok := vmChartRequest(readState.VMs()[0])
+	resourceID, _, ok := chartapi.VMChartRequest(readState.VMs()[0])
 	if !ok {
 		t.Fatal("expected canonical vm chart request")
 	}
@@ -3373,11 +3375,11 @@ func TestContract_WorkloadsSummaryChartsNormalizeLongRangeMixedCadence(t *testin
 	if len(decoded.CPU.P50) == 0 {
 		t.Fatal("expected normalized workload summary p50 series")
 	}
-	if len(decoded.CPU.P50) > workloadsSummaryMaxSeriesPoints {
-		t.Fatalf("expected workload summary p50 <= %d points, got %d", workloadsSummaryMaxSeriesPoints, len(decoded.CPU.P50))
+	if len(decoded.CPU.P50) > chartapi.WorkloadsSummaryMaxSeriesPoints {
+		t.Fatalf("expected workload summary p50 <= %d points, got %d", chartapi.WorkloadsSummaryMaxSeriesPoints, len(decoded.CPU.P50))
 	}
-	if len(decoded.CPU.P95) > workloadsSummaryMaxSeriesPoints {
-		t.Fatalf("expected workload summary p95 <= %d points, got %d", workloadsSummaryMaxSeriesPoints, len(decoded.CPU.P95))
+	if len(decoded.CPU.P95) > chartapi.WorkloadsSummaryMaxSeriesPoints {
+		t.Fatalf("expected workload summary p95 <= %d points, got %d", chartapi.WorkloadsSummaryMaxSeriesPoints, len(decoded.CPU.P95))
 	}
 	if decoded.CPU.P50[len(decoded.CPU.P50)-1].Timestamp != now.UnixMilli() {
 		t.Fatalf("expected latest workload summary timestamp %d, got %d", now.UnixMilli(), decoded.CPU.P50[len(decoded.CPU.P50)-1].Timestamp)
@@ -3396,9 +3398,9 @@ func TestContract_WorkloadsSummaryChartsNormalizeLongRangeMixedCadence(t *testin
 }
 
 func TestContract_WorkloadChartMetricBudgetGuardrailsRemainCanonical(t *testing.T) {
-	data, err := os.ReadFile("router.go")
+	data, err := os.ReadFile("chartapi/service.go")
 	if err != nil {
-		t.Fatalf("failed to read router.go: %v", err)
+		t.Fatalf("failed to read chartapi/service.go: %v", err)
 	}
 	source := string(data)
 
@@ -3428,7 +3430,7 @@ func TestContract_WorkloadChartMetricBudgetGuardrailsRemainCanonical(t *testing.
 	}
 	for _, snippet := range requiredSnippets {
 		if !strings.Contains(source, snippet) {
-			t.Fatalf("router.go must contain %q", snippet)
+			t.Fatalf("chartapi/service.go must contain %q", snippet)
 		}
 	}
 }
@@ -3436,7 +3438,7 @@ func TestContract_WorkloadChartMetricBudgetGuardrailsRemainCanonical(t *testing.
 func TestContract_GenerateStyledMockSeries_UsesTimestampBasedCurve(t *testing.T) {
 	now := time.Date(2026, time.March, 31, 12, 0, 0, 0, time.UTC).UnixMilli()
 
-	coarse := generateStyledMockSeries(
+	coarse := chartapi.GenerateStyledMockSeries(
 		now,
 		time.Hour,
 		7,
@@ -3445,7 +3447,7 @@ func TestContract_GenerateStyledMockSeries_UsesTimestampBasedCurve(t *testing.T)
 		"orion-2-f54579833f9c",
 		"memory",
 	)
-	fine := generateStyledMockSeries(
+	fine := chartapi.GenerateStyledMockSeries(
 		now,
 		time.Hour,
 		13,
@@ -13331,11 +13333,11 @@ func TestContractResourceFiltersAcceptNativeDockerAndKubernetesInventory(t *test
 		"k8s-event",
 	}, ",")
 
-	if unsupported := unsupportedResourceTypeFilterTokens(raw); len(unsupported) != 0 {
+	if unsupported := resourceapi.UnsupportedResourceTypeFilterTokens(raw); len(unsupported) != 0 {
 		t.Fatalf("native platform inventory filters should be supported, got unsupported=%v", unsupported)
 	}
 
-	got := parseResourceTypes(raw)
+	got := resourceapi.ParseResourceTypes(raw)
 	for _, resourceType := range []unifiedresources.ResourceType{
 		unifiedresources.ResourceTypeDockerImage,
 		unifiedresources.ResourceTypeDockerVolume,

@@ -35,6 +35,15 @@ binding policy are shared through `internal/api/agenttokens/` and
 `internal/api/agentbinding/`, so config enrollment and root Router admission
 consume one security contract without importing each other.
 
+Unified resource registry construction, tenant stores, list/detail/facet
+queries, discovery projections, and storage/resource response contracts live
+with their tests in `internal/api/resourceapi/`. Chart aggregation, monitor
+history queries, response contracts, downsampling, per-tenant caches, and all
+six chart handlers live with their tests in `internal/api/chartapi/`. Root
+`ResourceHandlers` and Router methods remain source-compatible composition
+facades for action/operator-state mutations, extensions, and route wiring; they
+must not regain resource-query or chart computation behavior.
+
 Browser WebSocket shutdown distinguishes ordinary client lifecycle from
 transport failure. Normal closure, navigation/going-away, and abnormal closure
 codes used by disconnected clients are informational; policy violations and
@@ -139,7 +148,10 @@ continues to mint and quote the enrollment token.
    1a. `internal/api/platform_connection_shared.go`
    1b. `internal/api/metadata_handlers_shared.go`
    1c. `internal/config/persistence_metadata_accessors.go`
-2. `internal/api/resources.go`
+2. `internal/api/resourceapi/resources.go`
+   2a. `internal/api/resources_compat.go`
+   2b. `internal/api/chartapi/service.go`
+   2c. `internal/api/chartapi/types.go`
 3. `internal/api/discovery_handlers.go`
 4. `internal/api/alerting/alerts.go`
    4a. `internal/api/attention_handlers.go`
@@ -836,7 +848,7 @@ token-gated PowerShell payload until its installer owns the same saved-state
 update contract.
 
 Summary-chart response caching is a shared API boundary:
-`internal/api/router.go` may serve a short cached JSON payload for repeated
+`internal/api/chartapi/service.go` may serve a short cached JSON payload for repeated
 infrastructure-summary and workloads-summary requests with the same
 organization, range, metric set, and workload scope, but that cache is
 transport-only. It may amortize polling and remount cost, but it must not
@@ -1897,7 +1909,7 @@ payload shape change when the portal presents compact client rows.
     true server failures remain explicit.
 77. `internal/api/relay_mobile_capability.go` shared with `relay-runtime`: the backend-owned Pulse Mobile relay capability inventory is both a relay runtime boundary and a canonical API payload contract surface.
 78. `internal/api/relay_mobile_capability_generated.go` shared with `relay-runtime`: the generated Pulse Mobile route inventory is both a relay runtime allowlist and the backend projection of the canonical mobile API contract.
-78. `internal/api/resources.go` shared with `unified-resources`: the unified resource endpoint is both a backend payload contract surface and a unified-resource runtime boundary.
+78. `internal/api/resourceapi/resources.go` shared with `unified-resources`: the unified resource endpoint is both a backend payload contract surface and a unified-resource runtime boundary.
 79. `internal/api/security.go` shared with `security-privacy`: the security handlers are both a security/privacy control surface and a canonical API payload contract boundary.
     That same shared security/API boundary owns CSRF replacement-token
     concurrency. When parallel browser mutations arrive with stale or missing
@@ -2129,7 +2141,7 @@ a new API state machine, queue contract, or verification-accounting field.
    than CSS-derived state.
 3. Add dedicated contract tests for new stable payloads
    Unified resource type-filter and organization-share resource type additions
-   must route through `internal/api/resources.go`, `internal/api/org_handlers.go`,
+   must route through `internal/api/resourceapi/resources.go`, `internal/api/org_handlers.go`,
    frontend resource typing, and `internal/api/contract_test.go` together.
    Native provider projections such as TrueNAS `network-share` may be accepted
    by `/api/resources` filters and cross-organization share normalization only
@@ -2227,7 +2239,7 @@ a new API state machine, queue contract, or verification-accounting field.
    metadata; that token may bind once to the first command agent ID and
    hostname that registers, and a later different agent or hostname must be
    rejected. Generic unbound `agent:exec` tokens remain fail-closed.
-4. Route unified resource sensitivity, routing, and `aiSafeSummary` payload changes through `internal/api/resources.go`, `internal/api/contract_test.go`, and the canonical frontend resource consumer proofs together; resource governance metadata must not ship as an API-only or frontend-only heuristic
+4. Route unified resource sensitivity, routing, and `aiSafeSummary` payload changes through `internal/api/resourceapi/resources.go`, `internal/api/contract_test.go`, and the canonical frontend resource consumer proofs together; resource governance metadata must not ship as an API-only or frontend-only heuristic
    That same resource payload contract owns `aggregations.policyPosture` on
    `/api/resources` and `/api/resources/stats`. The aggregation must be derived
    from canonical unified-resource policy metadata, normalized as camelCase
@@ -2521,7 +2533,7 @@ a new API state machine, queue contract, or verification-accounting field.
    `GET /api/audit/actions` and `GET /api/audit/actions/{id}/events` as
    verification adapters, but they must remain read-only views of the canonical
    action audit and lifecycle trail rather than a second audit store.
-6. Route dedicated unified-resource timeline and facet-bundle reads through `frontend-modern/src/api/resources.ts`, `internal/api/resources.go`, and `internal/api/contract_test.go` together so the backend facet contract and the frontend client stay aligned on one timeline-first surface, while capability and relationship detail stays backend-owned for AI correlation and change detection.
+6. Route dedicated unified-resource timeline and facet-bundle reads through `frontend-modern/src/api/resources.ts`, `internal/api/resourceapi/resources.go`, and `internal/api/contract_test.go` together so the backend facet contract and the frontend client stay aligned on one timeline-first surface, while capability and relationship detail stays backend-owned for AI correlation and change detection.
    `/api/resources/{id}/timeline` and `/api/resources/{id}/facets` must keep
    resource timelines relationship-aware by opting into the canonical
    `ResourceChangeFilters.IncludeRelated` store path, so a resource timeline
@@ -2539,7 +2551,7 @@ a new API state machine, queue contract, or verification-accounting field.
    the monitoring-read scope. Platform pages may use it for API-authored
    provider activity such as vSphere tasks and events, but they must not create
    page-local activity stores or a second query vocabulary.
-7. Route unified-resource list ordering through `internal/api/resources.go`, `internal/api/contract_test.go`, and the owned unified-resource registry helpers together; list payloads must stay deterministic for equal-name resources by carrying one canonical `name -> type -> id` tie-break across cold seed, REST pagination, and websocket-backed refreshes instead of inheriting map order or page-local re-sorts
+7. Route unified-resource list ordering through `internal/api/resourceapi/resources.go`, `internal/api/contract_test.go`, and the owned unified-resource registry helpers together; list payloads must stay deterministic for equal-name resources by carrying one canonical `name -> type -> id` tie-break across cold seed, REST pagination, and websocket-backed refreshes instead of inheriting map order or page-local re-sorts
    That same shared API contract also owns the external resource `type`, canonical display name, and cluster identity published through `/api/resources` and `/api/state`; the websocket/state hydrate path must not emit legacy aliases or raw store labels once the unified resource contract has normalized them.
    Lightweight integration polling uses the same canonical read-state boundary:
    `GET /api/state/summary` is an authenticated `monitoring:read` route that
@@ -3044,9 +3056,9 @@ a new API state machine, queue contract, or verification-accounting field.
 22. Keep hosted billing-state quickstart grants retired from new shared API flows: `internal/api/hosted_entitlement_refresh.go`, hosted signup, and trial-state construction must not auto-grant or refresh quickstart inventory for new workspaces, while low-level billing-state readers may still preserve historical fields that already exist on disk.
 23. Keep hosted AI settings bootstrap on the shared API contract as a retired path: `internal/api/ai_hosted_runtime.go`, `internal/api/ai_handlers.go`, `internal/api/ai_handler.go`, and `internal/api/contract_test.go` must treat a missing `ai.enc` in hosted mode as an unconfigured BYOK/local-provider state, not as a machine-owned `quickstart:pulse-hosted` bootstrap condition. Hosted tenant reads may inherit billing state for commercial authorization, but they must not create quickstart-backed AI config or call the quickstart bootstrap upstream route.
 24. Keep post-boot AI enablement contract-backed on the shared AI/mobile approval surface: `internal/api/ai_handler.go`, `internal/api/ai_handlers.go`, `internal/api/router.go`, `internal/api/router_routes_ai_relay.go`, and `internal/api/contract_test.go` must turn the governed approvals-list API into the canonical empty-list payload as soon as settings-driven AI enablement succeeds, rather than leaving that surface on `503 Approval store not initialized` until some separate startup-only side effect happens. The same post-boot lifecycle owns the investigation surface: a successful in-process chat start or restart must reapply the same live dependency wiring as cold startup, including the Enterprise investigation orchestrator and Patrol circuit breaker, so enabling Intelligence after boot cannot leave finding investigations on `503 Investigation orchestrator not initialized` until the server restarts.
-25. Keep infrastructure summary chart transport contract-backed on the shared API surface: `internal/api/router.go`, `internal/api/contract_test.go`, and frontend infrastructure summary consumers must normalize long-range mixed-cadence history into equal-time summary buckets before shipping the infrastructure charts API payload, so 7-day and 30-day summary cards do not expose compressed right-edge tails just because recent samples arrive at a finer storage resolution.
-26. Keep long-range workload chart transport time-proportional on the shared API surface: `internal/api/router.go`, `internal/api/contract_test.go`, and workload chart consumers must cap mixed-cadence workload history by equal-time buckets rather than raw point index for the per-workload and aggregate workload chart APIs, so 7-day and 30-day workload cards do not bunch recent samples at the right edge just because recent telemetry is stored more densely.
-27. Keep chart timestamp precision canonical on that same shared API surface: when `internal/api/router.go` serializes monitoring history into infrastructure or workload chart payloads, it must preserve canonical millisecond timestamps from the shared monitoring timeline instead of rounding through whole-second conversion, so seeded mock history and live appends collapse onto one operator-visible timeline instead of appearing as duplicated tail samples.
+25. Keep infrastructure summary chart transport contract-backed on the shared API surface: `internal/api/chartapi/service.go`, `internal/api/contract_test.go`, and frontend infrastructure summary consumers must normalize long-range mixed-cadence history into equal-time summary buckets before shipping the infrastructure charts API payload, so 7-day and 30-day summary cards do not expose compressed right-edge tails just because recent samples arrive at a finer storage resolution.
+26. Keep long-range workload chart transport time-proportional on the shared API surface: `internal/api/chartapi/service.go`, `internal/api/contract_test.go`, and workload chart consumers must cap mixed-cadence workload history by equal-time buckets rather than raw point index for the per-workload and aggregate workload chart APIs, so 7-day and 30-day workload cards do not bunch recent samples at the right edge just because recent telemetry is stored more densely.
+27. Keep chart timestamp precision canonical on that same shared API surface: when `internal/api/chartapi/service.go` serializes monitoring history into infrastructure or workload chart payloads, it must preserve canonical millisecond timestamps from the shared monitoring timeline instead of rounding through whole-second conversion, so seeded mock history and live appends collapse onto one operator-visible timeline instead of appearing as duplicated tail samples.
 28. Keep Patrol remediation payload naming backward-compatible without leaking
     legacy automation-first wording into product copy. `frontend-modern/src/api/patrol.ts`,
     `internal/api/ai_handlers.go`, and `internal/api/router_routes_ai_relay.go`
@@ -3056,7 +3068,7 @@ a new API state machine, queue contract, or verification-accounting field.
     contract must describe the operator-visible capability as remediation or
     safe remediation workflows.
 29. Keep storage chart identity canonical on that same shared API surface: the shared storage charts endpoint must key pool and physical-disk series by the resolved unified-resource `MetricsTarget.ResourceID`, not by canonical resource IDs or page-local aliases, so storage rows, focused summary cards, sticky summary shells, and detail charts all address the same history series in live and mock mode.
-30. Keep synthetic summary-chart fallback identity canonical on that same shared API surface: when `internal/api/router.go` has to synthesize mock summary history for infrastructure, workloads, or storage cards, it must derive the fallback from canonical `resourceType`, `resourceID`, and `metricType` ownership instead of raw min/max seed-prefix helpers, so range changes and runtime mock updates stay on one governed timeline.
+30. Keep synthetic summary-chart fallback identity canonical on that same shared API surface: when `internal/api/chartapi/service.go` has to synthesize mock summary history for infrastructure, workloads, or storage cards, it must derive the fallback from canonical `resourceType`, `resourceID`, and `metricType` ownership instead of raw min/max seed-prefix helpers, so range changes and runtime mock updates stay on one governed timeline.
     The same compact chart boundary also owns aggregate-only storage summary
     transport. `/api/charts/storage-summary` may batch only the canonical
     `used` and `avail` storage series required for the aggregate capacity
@@ -3066,7 +3078,7 @@ a new API state machine, queue contract, or verification-accounting field.
     When mock mode is active, that same endpoint must come from the
     monitor-owned aggregate summary cache rather than rehydrating each pool
     chart on request.
-31. Keep workload-chart response identity canonical on that same shared API surface: `internal/api/router.go`, `internal/api/contract_test.go`, and workload summary consumers must emit provider-backed VM and system-container series under the same canonical workload IDs that workloads page rows use, while resolving history through the unified `MetricsTarget.ResourceID`, so hover and focus selection do not fall off for provider-backed rows.
+31. Keep workload-chart response identity canonical on that same shared API surface: `internal/api/chartapi/service.go`, `internal/api/contract_test.go`, and workload summary consumers must emit provider-backed VM and system-container series under the same canonical workload IDs that workloads page rows use, while resolving history through the unified `MetricsTarget.ResourceID`, so hover and focus selection do not fall off for provider-backed rows.
     Kubernetes pod workload rows follow that same contract through their
     metrics target. `/api/resources` may expose pod history only through the
     unified `MetricsTarget.ResourceID`, but that target must be the canonical
@@ -3151,7 +3163,7 @@ a new API state machine, queue contract, or verification-accounting field.
     `internal/monitoring/monitor_metrics.go` instead of fetching the full guest
     metric set and trimming after the API payload is already assembled.
 39. Keep the retired compact dashboard overview route absent from that same
-    shared API surface. `internal/api/resources.go`,
+    shared API surface. `internal/api/resourceapi/resources.go`,
     `internal/api/router_routes_monitoring.go`, and
     `frontend-modern/src/api/resources.ts` must not restore
     `/api/resources/dashboard-summary`, `useDashboardOverview`, or frontend
@@ -6320,7 +6332,7 @@ Action-plan stale-plan protection on those audit records now uses the canonical
 response contract stays deterministic without extra version baggage.
 The same API contract now also owns the dedicated frontend resource facet
 client in `frontend-modern/src/api/resources.ts`, which fetches the governed
-capability, relationship, and timeline surfaces from `internal/api/resources.go`
+capability, relationship, and timeline surfaces from `internal/api/resourceapi/resources.go`
 instead of teaching the drawer or list views to reconstruct them inline.
 Those facet reads now explicitly include the selected resource's canonical
 `capabilities` and `relationships`, so action affordances and relationship-map
@@ -6385,7 +6397,7 @@ kinds, source types, and source adapters through the shared unified-resource
 change-filter parser, so API validation stays owned by the change model rather
 than being re-parsed separately in the HTTP handler.
 The tenant-scoped unified resource API now also stays on canonical
-unified-resource seeds end to end: `internal/api/resources.go`,
+unified-resource seeds end to end: `internal/api/resourceapi/resources.go`,
 `internal/api/router_helpers.go`, and `internal/api/state_provider.go` no
 longer treat raw tenant `StateSnapshot` data as a live registry-seeding owner
 once `UnifiedResourceSnapshotForTenant` is available.

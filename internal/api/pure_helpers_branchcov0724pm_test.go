@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
+	"github.com/rcourtman/pulse-go-rewrite/internal/api/chartapi"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
@@ -22,7 +23,7 @@ import (
 //   - restoreAgentExecMetadata                        (agent_exec_token_binding.go)
 //   - buildAlertConnectionSnapshotsWithRuntimeSources (connections_alerts.go)
 //   - mockProtectionPostures                          (recovery_handlers.go)
-//   - buildMockWorkloadMetricHistorySeries            (router.go)
+//   - chartapi.BuildMockWorkloadMetricHistorySeries            (router.go)
 
 // ---------------------------------------------------------------------------
 // restoreAgentExecMetadata
@@ -394,7 +395,7 @@ func TestBranchcov0724pmMockProtectionPostures(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// buildMockWorkloadMetricHistorySeries
+// chartapi.BuildMockWorkloadMetricHistorySeries
 // ---------------------------------------------------------------------------
 
 func TestBranchcov0724pmBuildMockWorkloadMetricHistorySeries(t *testing.T) {
@@ -402,7 +403,7 @@ func TestBranchcov0724pmBuildMockWorkloadMetricHistorySeries(t *testing.T) {
 
 	t.Run("unsupported_metric_type_returns_nil", func(t *testing.T) {
 		for _, metricType := range []string{"smart_temp", "bogus", ""} {
-			got := buildMockWorkloadMetricHistorySeries(now, time.Hour, 100, "vm", "res-1", metricType, 50.0)
+			got := chartapi.BuildMockWorkloadMetricHistorySeries(now, time.Hour, 100, "vm", "res-1", metricType, 50.0)
 			if got != nil {
 				t.Fatalf("metricType %q: expected nil, got %d points", metricType, len(got))
 			}
@@ -413,11 +414,11 @@ func TestBranchcov0724pmBuildMockWorkloadMetricHistorySeries(t *testing.T) {
 		supported := []string{"cpu", "memory", "disk", "diskread", "diskwrite", "netin", "netout"}
 		duration := 2 * time.Hour
 		maxPoints := 0
-		expectedLen := targetMockSeriesPoints(duration, maxPoints)
+		expectedLen := chartapi.TargetMockSeriesPoints(duration, maxPoints)
 
 		for _, metricType := range supported {
 			t.Run(metricType, func(t *testing.T) {
-				got := buildMockWorkloadMetricHistorySeries(now, duration, maxPoints, "vm", "res-1", metricType, 50.0)
+				got := chartapi.BuildMockWorkloadMetricHistorySeries(now, duration, maxPoints, "vm", "res-1", metricType, 50.0)
 				if len(got) != expectedLen {
 					t.Fatalf("expected %d points, got %d", expectedLen, len(got))
 				}
@@ -444,23 +445,23 @@ func TestBranchcov0724pmBuildMockWorkloadMetricHistorySeries(t *testing.T) {
 	t.Run("max_points_caps_series_length", func(t *testing.T) {
 		duration := 24 * time.Hour
 		maxPoints := 50
-		got := buildMockWorkloadMetricHistorySeries(now, duration, maxPoints, "vm", "res-1", "cpu", 50.0)
+		got := chartapi.BuildMockWorkloadMetricHistorySeries(now, duration, maxPoints, "vm", "res-1", "cpu", 50.0)
 		if len(got) != maxPoints {
 			t.Fatalf("expected %d points (capped by maxPoints), got %d", maxPoints, len(got))
 		}
 	})
 
 	t.Run("deterministic_for_same_inputs", func(t *testing.T) {
-		first := buildMockWorkloadMetricHistorySeries(now, 2*time.Hour, 0, "vm", "res-1", "cpu", 50.0)
-		second := buildMockWorkloadMetricHistorySeries(now, 2*time.Hour, 0, "vm", "res-1", "cpu", 50.0)
+		first := chartapi.BuildMockWorkloadMetricHistorySeries(now, 2*time.Hour, 0, "vm", "res-1", "cpu", 50.0)
+		second := chartapi.BuildMockWorkloadMetricHistorySeries(now, 2*time.Hour, 0, "vm", "res-1", "cpu", 50.0)
 		if !reflect.DeepEqual(first, second) {
 			t.Fatalf("series not deterministic for identical inputs")
 		}
 	})
 
 	t.Run("different_resource_ids_produce_different_series", func(t *testing.T) {
-		a := buildMockWorkloadMetricHistorySeries(now, 2*time.Hour, 0, "vm", "res-1", "cpu", 50.0)
-		b := buildMockWorkloadMetricHistorySeries(now, 2*time.Hour, 0, "vm", "res-2", "cpu", 50.0)
+		a := chartapi.BuildMockWorkloadMetricHistorySeries(now, 2*time.Hour, 0, "vm", "res-1", "cpu", 50.0)
+		b := chartapi.BuildMockWorkloadMetricHistorySeries(now, 2*time.Hour, 0, "vm", "res-2", "cpu", 50.0)
 		if reflect.DeepEqual(a, b) {
 			t.Fatalf("expected different series for different resource IDs")
 		}

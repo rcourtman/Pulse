@@ -41,7 +41,7 @@ disk behind a client-side page ceiling. Search includes vendor, WWN, transport,
 instance, controller, and member target. Explicit `0%` life remaining is a
 known critical value for SSD/NVMe media; absent or negative wearout remains the
 neutral unknown state.
-The shared `internal/api/resources.go` registry builder may repair
+The shared `internal/api/resourceapi/resources.go` registry builder may repair
 availability-check identity by replaying authoritative supplemental records.
 That availability composition remains owned by API contracts and unified
 resources; it does not make availability rows recovery points, storage health,
@@ -1017,7 +1017,7 @@ recovery scope, or a storage/recovery-owned secret source.
    reinterpret that gap as a new counted system or invent a storage-local
    grace rule when the shared API and monitoring boundary already carry recent
    host continuity.
-   Any adjacent list surfaces that reuse `internal/api/resources.go` must also
+   Any adjacent list surfaces that reuse `internal/api/resourceapi/resources.go` must also
    preserve the canonical unified-resource `name -> type -> id` order so
    duplicate-name storage and recovery resources do not reshuffle between cold
    hydrate, paginated reads, and later live runtime updates.
@@ -1068,7 +1068,7 @@ recovery scope, or a storage/recovery-owned secret source.
    boundary for storage/recovery consumers: org-scope or enabled-state changes
    must invalidate stale in-flight REST refreshes before their errors or
    request-guard cleanup can leak into the active resource snapshot.
-   Shared chart transports in `internal/api/router.go` must follow the same
+   Shared chart transports in `internal/api/chartapi/service.go` must follow the same
    rule in mock mode: `/api/storage-charts` and adjacent infrastructure chart
    payloads must read through `GetUnifiedReadStateOrSnapshot()` so storage and
    recovery consumers stay aligned with the canonical mock unified snapshot
@@ -1573,13 +1573,13 @@ recovery scope, or a storage/recovery-owned secret source.
     `certificate_*` incident on those availability facets remain monitoring and
     alerts context. They do not prove storage encryption, backup integrity,
     repository authenticity, protection coverage, or restore readiness.
-33. Keep infrastructure summary chart bucketing and short response caching presentation-only on the adjacent shared API boundary. When `internal/api/router.go` normalizes mixed-cadence infrastructure history into equal-time summary buckets or serves a cached summary payload for repeated operator-facing summary-card requests, storage and recovery may consume the resulting visual context only; they must not reinterpret those normalized chart samples, cached timestamps, or cache hits as recovery freshness windows, backup cadence, or restore evidence.
+33. Keep infrastructure summary chart bucketing and short response caching presentation-only on the adjacent shared API boundary. When `internal/api/chartapi/service.go` normalizes mixed-cadence infrastructure history into equal-time summary buckets or serves a cached summary payload for repeated operator-facing summary-card requests, storage and recovery may consume the resulting visual context only; they must not reinterpret those normalized chart samples, cached timestamps, or cache hits as recovery freshness windows, backup cadence, or restore evidence.
     The same router may wire the adjacent server-owned agent command
     authorization verifier, but storage/recovery must not treat an approval id,
     signed command grant, or command result as restore authorization or
     recovery evidence; that authority remains action-governance and
     agent-lifecycle owned.
-34. Keep workload chart downsampling and short response caching presentation-only on that same adjacent shared API boundary. When `internal/api/router.go` caps mixed-cadence workload history into equal-time buckets or serves a cached workload-summary payload for repeated operator-facing workload-card requests, storage and recovery may consume the resulting visual context only; they must not reinterpret those shaped chart samples, cached timestamps, or cache hits as recovery freshness windows, backup cadence, or restore evidence.
+34. Keep workload chart downsampling and short response caching presentation-only on that same adjacent shared API boundary. When `internal/api/chartapi/service.go` caps mixed-cadence workload history into equal-time buckets or serves a cached workload-summary payload for repeated operator-facing workload-card requests, storage and recovery may consume the resulting visual context only; they must not reinterpret those shaped chart samples, cached timestamps, or cache hits as recovery freshness windows, backup cadence, or restore evidence.
     The same adjacent chart boundary now covers compact storage capacity
     transport. `internal/api/router.go` may batch only the canonical `used`
     and `avail` storage series for `/api/charts/storage-summary`, but storage

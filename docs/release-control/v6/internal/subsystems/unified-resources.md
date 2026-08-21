@@ -818,7 +818,7 @@ container inventory table.
     runtime workload belongs to both Docker and an owning infrastructure
     platform.
 18. `frontend-modern/src/utils/workloads.ts` shared with `performance-and-scalability`: the stable workload metadata identity helper is both a unified-resource persistence boundary and a workloads hot-path lookup boundary.
-19. `internal/api/resources.go` shared with `api-contracts`: the unified resource endpoint is both a backend payload contract surface and a unified-resource runtime boundary.
+19. `internal/api/resourceapi/resources.go` shared with `api-contracts`: the unified resource endpoint is both a backend payload contract surface and a unified-resource runtime boundary.
     `/api/resources` type filters must accept URL-encoded comma-separated lists
     from browser query builders exactly like literal comma separators, so Docker
     / Podman runtime pages do not lose `docker-host` inventory while requesting
@@ -1137,7 +1137,7 @@ AI-only summary payloads, or page-local heuristics.
    `internal/unifiedresources/pbs_rollups.go`,
    `internal/unifiedresources/monitored_systems.go`,
    `internal/unifiedresources/monitored_system_projection.go`, and
-   the shared list-order helpers consumed by `internal/api/resources.go`;
+   the shared list-order helpers consumed by `internal/api/resourceapi/resources.go`;
    canonical unified-resource lists must preserve one deterministic
    `name -> type -> id` order across registry reads, REST pagination, and
    websocket-backed refreshes so equal-name resources do not silently reshuffle
@@ -3319,7 +3319,7 @@ large historical tables during startup. Timeline reads must resolve legacy
 `timestamp` and nullable `observed_at` values through read-time fallback
 expressions, while writes preserve the legacy timestamp on target databases
 that still require it.
-`internal/api/resources.go` now exposes that same history through dedicated
+`internal/api/resourceapi/resources.go` now exposes that same history through dedicated
 `/api/resources/{id}/timeline` reads, while the bundled `/api/resources/{id}/facets`
 surface keeps the facet summary and recent-change history available without
 forcing consumers to parse the full resource payload.
@@ -3888,7 +3888,7 @@ The unified resource core is strong and canonical, but monitoring and some
 frontend/API consumers are still being tightened around it.
 
 Tenant-scoped API resource seeding now also stays on unified-resource ownership
-end to end: `internal/api/resources.go` consumes
+end to end: `internal/api/resourceapi/resources.go` consumes
 `UnifiedResourceSnapshotForTenant` as the canonical tenant registry seed, and
 no longer falls back to raw tenant `StateSnapshot` seeding on the live request
 path when that unified seed is empty.

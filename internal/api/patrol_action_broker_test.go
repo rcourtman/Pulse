@@ -205,9 +205,7 @@ func TestPatrolRefreshRebindsCurrentPolicyAndTrustedOrigin(t *testing.T) {
 		snapshot:  models.StateSnapshot{LastUpdate: changed.UpdatedAt},
 		resources: []unified.Resource{changed},
 	})
-	h.cacheMu.Lock()
-	h.registryCache = make(map[string]registryCacheEntry)
-	h.cacheMu.Unlock()
+	h.invalidateCache("default")
 	policyVersion = "tenant-v2"
 	h.SetActionRefreshPlanner(NewActionRefreshPlanner(h, policy))
 

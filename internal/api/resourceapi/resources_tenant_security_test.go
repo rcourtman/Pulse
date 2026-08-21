@@ -1,4 +1,4 @@
-package api
+package resourceapi
 
 import (
 	"context"
@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/api/apicontext"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	unified "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
@@ -19,7 +20,9 @@ type tenantResourceStateProvider struct {
 }
 
 func (p tenantResourceStateProvider) UnifiedReadStateForTenant(orgID string) unified.ReadState {
-	return SnapshotReadState(p.GetStateForTenant(orgID))
+	registry := unified.NewRegistry(nil)
+	registry.IngestSnapshot(p.GetStateForTenant(orgID))
+	return unified.NewMonitorAdapter(registry)
 }
 
 func (p tenantResourceStateProvider) GetStateForTenant(orgID string) models.StateSnapshot {
@@ -53,13 +56,13 @@ func (p tenantResourceStateProvider) UnifiedResourceSnapshotForTenant(orgID stri
 
 func TestResourceHandlers_NonDefaultOrgRequiresTenantStateProvider(t *testing.T) {
 	now := time.Now().UTC()
-	h := NewResourceHandlers(&config.Config{DataPath: t.TempDir()})
+	h := NewQueryService(&config.Config{DataPath: t.TempDir()})
 	h.SetStateProvider(resourceStateProvider{snapshot: models.StateSnapshot{
 		Hosts: []models.Host{{ID: "host-default", Hostname: "default", Status: "online", LastSeen: now}},
 	}})
 
 	req := httptest.NewRequest(http.MethodGet, "/api/resources", nil)
-	req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, "acme"))
+	req = req.WithContext(context.WithValue(req.Context(), apicontext.OrgIDContextKey, "acme"))
 	rec := httptest.NewRecorder()
 
 	h.HandleListResources(rec, req)
@@ -74,7 +77,7 @@ func TestResourceHandlers_NonDefaultOrgRequiresTenantStateProvider(t *testing.T)
 
 func TestResourceHandlers_NonDefaultOrgUsesTenantStateProvider(t *testing.T) {
 	now := time.Now().UTC()
-	h := NewResourceHandlers(&config.Config{DataPath: t.TempDir()})
+	h := NewQueryService(&config.Config{DataPath: t.TempDir()})
 	h.SetStateProvider(resourceStateProvider{snapshot: models.StateSnapshot{
 		Hosts: []models.Host{{ID: "host-default", Hostname: "default", Status: "online", LastSeen: now}},
 	}})
@@ -86,7 +89,7 @@ func TestResourceHandlers_NonDefaultOrgUsesTenantStateProvider(t *testing.T) {
 	}})
 
 	req := httptest.NewRequest(http.MethodGet, "/api/resources?type=agent", nil)
-	req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, "acme"))
+	req = req.WithContext(context.WithValue(req.Context(), apicontext.OrgIDContextKey, "acme"))
 	rec := httptest.NewRecorder()
 
 	h.HandleListResources(rec, req)
@@ -109,13 +112,13 @@ func TestResourceHandlers_NonDefaultOrgUsesTenantStateProvider(t *testing.T) {
 
 func TestResourceHandlers_NonDefaultOrgUsesTenantUnifiedSeedProvider(t *testing.T) {
 	now := time.Now().UTC()
-	h := NewResourceHandlers(&config.Config{DataPath: t.TempDir()})
+	h := NewQueryService(&config.Config{DataPath: t.TempDir()})
 	h.SetTenantStateProvider(tenantResourceStateProvider{snapshots: map[string]models.StateSnapshot{
 		"acme": {LastUpdate: now},
 	}})
 
 	req := httptest.NewRequest(http.MethodGet, "/api/resources?type=agent", nil)
-	req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, "acme"))
+	req = req.WithContext(context.WithValue(req.Context(), apicontext.OrgIDContextKey, "acme"))
 	rec := httptest.NewRecorder()
 
 	h.HandleListResources(rec, req)
@@ -138,7 +141,7 @@ func TestResourceHandlers_NonDefaultOrgUsesTenantUnifiedSeedProvider(t *testing.
 
 func TestResourceHandlers_NonDefaultOrgDoesNotFallbackToRawSnapshotSeeding(t *testing.T) {
 	now := time.Now().UTC()
-	h := NewResourceHandlers(&config.Config{DataPath: t.TempDir()})
+	h := NewQueryService(&config.Config{DataPath: t.TempDir()})
 	h.SetStateProvider(resourceStateProvider{snapshot: models.StateSnapshot{
 		Hosts: []models.Host{{ID: "host-default", Hostname: "default", Status: "online", LastSeen: now}},
 	}})
@@ -150,7 +153,7 @@ func TestResourceHandlers_NonDefaultOrgDoesNotFallbackToRawSnapshotSeeding(t *te
 	}})
 
 	req := httptest.NewRequest(http.MethodGet, "/api/resources?type=agent", nil)
-	req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, "acme"))
+	req = req.WithContext(context.WithValue(req.Context(), apicontext.OrgIDContextKey, "acme"))
 	rec := httptest.NewRecorder()
 
 	h.HandleListResources(rec, req)

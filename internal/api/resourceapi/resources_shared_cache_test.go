@@ -1,4 +1,4 @@
-package api
+package resourceapi
 
 import (
 	"context"
@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/api/apicontext"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	unifiedresources "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
@@ -35,7 +36,7 @@ func TestPruneResourceForListResponseDoesNotMutateSharedPMG(t *testing.T) {
 
 func TestSharedResourceListsCachedPerGenerationAndImmuneToRequestDecoration(t *testing.T) {
 	now := time.Date(2026, 8, 5, 12, 0, 0, 0, time.UTC)
-	h := newActionTestResourceHandlers(t, &config.Config{DataPath: t.TempDir()})
+	h := NewQueryService(&config.Config{DataPath: t.TempDir()})
 	h.SetStateProvider(resourceUnifiedSeedProvider{
 		snapshot: models.StateSnapshot{LastUpdate: now},
 		resources: []unifiedresources.Resource{
@@ -81,7 +82,7 @@ func TestSharedResourceListsCachedPerGenerationAndImmuneToRequestDecoration(t *t
 	// A full list request prunes PMG detail in its response; the shared cache
 	// must keep the untouched data for later consumers.
 	req := httptest.NewRequest(http.MethodGet, "/api/resources", nil)
-	req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, orgID))
+	req = req.WithContext(context.WithValue(req.Context(), apicontext.OrgIDContextKey, orgID))
 	rec := httptest.NewRecorder()
 	h.HandleListResources(rec, req)
 	if rec.Code != http.StatusOK {

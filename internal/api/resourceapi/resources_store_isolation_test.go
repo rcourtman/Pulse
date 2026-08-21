@@ -1,4 +1,4 @@
-package api
+package resourceapi
 
 import (
 	"testing"
@@ -8,7 +8,7 @@ import (
 )
 
 func TestResourceHandlers_GetStore_DotAndUnderscoreOrgIDsRemainIsolated(t *testing.T) {
-	h := NewResourceHandlers(&config.Config{DataPath: t.TempDir()})
+	h := NewQueryService(&config.Config{DataPath: t.TempDir()})
 
 	dotStore, err := h.getStore("org.a")
 	if err != nil {

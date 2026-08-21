@@ -1,4 +1,4 @@
-package api
+package resourceapi
 
 import (
 	"bytes"
@@ -17,7 +17,6 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
 	"github.com/rcourtman/pulse-go-rewrite/internal/truenas"
 	unified "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
-	authpkg "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 )
 
 type resourceStateProvider struct {
@@ -62,6 +61,47 @@ func (p *mutableResourceUnifiedSeedProvider) UnifiedResourceSnapshot() ([]unifie
 type mockSupplementalRecordsProvider struct {
 	records      []unified.IngestRecord
 	ownedSources []unified.DataSource
+}
+
+type ownedSupplementalProvider struct {
+	source unified.DataSource
+}
+
+func (p ownedSupplementalProvider) GetCurrentRecords() []unified.IngestRecord { return nil }
+
+func (p ownedSupplementalProvider) SnapshotOwnedSources() []unified.DataSource {
+	return []unified.DataSource{p.source}
+}
+
+type staticResourceDiscoveryReadinessProvider struct {
+	byResource map[string]unified.ResourceDiscoveryReadiness
+}
+
+func (p staticResourceDiscoveryReadinessProvider) DiscoveryReadinessForResource(resource unified.Resource, now time.Time) unified.ResourceDiscoveryReadiness {
+	if readiness, ok := p.byResource[unified.CanonicalResourceID(resource.ID)]; ok {
+		if readiness.GeneratedAt.IsZero() {
+			readiness.GeneratedAt = now
+		}
+		if resource.DiscoveryTarget != nil {
+			if readiness.ResourceType == "" {
+				readiness.ResourceType = resource.DiscoveryTarget.ResourceType
+			}
+			if readiness.TargetID == "" {
+				readiness.TargetID = resource.DiscoveryTarget.AgentID
+			}
+			if readiness.ResourceID == "" {
+				readiness.ResourceID = resource.DiscoveryTarget.ResourceID
+			}
+		}
+		return readiness
+	}
+	readiness := unified.ResourceDiscoveryReadiness{State: unified.ResourceDiscoveryReadinessMissing, Source: "service-discovery", GeneratedAt: now}
+	if resource.DiscoveryTarget != nil {
+		readiness.ResourceType = resource.DiscoveryTarget.ResourceType
+		readiness.TargetID = resource.DiscoveryTarget.AgentID
+		readiness.ResourceID = resource.DiscoveryTarget.ResourceID
+	}
+	return readiness
 }
 
 func TestResourceListRepairsPreFixAvailabilitySnapshotFromConfiguredTargets(t *testing.T) {
@@ -126,7 +166,7 @@ func TestResourceListRepairsPreFixAvailabilitySnapshotFromConfiguredTargets(t *t
 		}
 	}
 
-	h := NewResourceHandlers(&config.Config{DataPath: t.TempDir()})
+	h := NewQueryService(&config.Config{DataPath: t.TempDir()})
 	h.SetStateProvider(&mutableResourceUnifiedSeedProvider{
 		resources: seed,
 		freshness: now,
@@ -200,7 +240,7 @@ func (m mockSupplementalRecordsProvider) SupplementalRecords(*monitoring.Monitor
 
 func TestResourceListRejectsLegacyHostTypeFilter(t *testing.T) {
 	cfg := &config.Config{DataPath: t.TempDir()}
-	h := NewResourceHandlers(cfg)
+	h := NewQueryService(cfg)
 	h.SetStateProvider(resourceStateProvider{snapshot: models.StateSnapshot{}})
 
 	rec := httptest.NewRecorder()
@@ -244,7 +284,7 @@ func TestResourceListMergesLinkedHost(t *testing.T) {
 	}
 
 	cfg := &config.Config{DataPath: t.TempDir()}
-	h := NewResourceHandlers(cfg)
+	h := NewQueryService(cfg)
 	h.SetStateProvider(resourceStateProvider{snapshot: snapshot})
 
 	rec := httptest.NewRecorder()
@@ -293,7 +333,7 @@ func TestResourceListMergesLinkedHost(t *testing.T) {
 func TestResourceListUsesUnifiedSeedProvider(t *testing.T) {
 	now := time.Now().UTC()
 	cfg := &config.Config{DataPath: t.TempDir()}
-	h := NewResourceHandlers(cfg)
+	h := NewQueryService(cfg)
 	h.SetStateProvider(resourceUnifiedSeedProvider{
 		snapshot: models.StateSnapshot{LastUpdate: now},
 		resources: []unified.Resource{
@@ -381,7 +421,7 @@ func TestResourceListAttachesDiscoveryReadiness(t *testing.T) {
 	now := time.Date(2026, 6, 4, 11, 0, 0, 0, time.UTC)
 	observedAt := now.Add(-5 * time.Minute)
 	cfg := &config.Config{DataPath: t.TempDir()}
-	h := NewResourceHandlers(cfg)
+	h := NewQueryService(cfg)
 	h.SetStateProvider(resourceUnifiedSeedProvider{
 		snapshot: models.StateSnapshot{LastUpdate: now},
 		resources: []unified.Resource{
@@ -441,7 +481,7 @@ func TestResourceListAttachesDiscoveryReadiness(t *testing.T) {
 func TestResourceListUsesDeterministicNameTieBreakers(t *testing.T) {
 	now := time.Date(2026, 4, 11, 0, 0, 0, 0, time.UTC)
 	cfg := &config.Config{DataPath: t.TempDir()}
-	h := NewResourceHandlers(cfg)
+	h := NewQueryService(cfg)
 	h.SetStateProvider(resourceUnifiedSeedProvider{
 		snapshot: models.StateSnapshot{LastUpdate: now},
 		resources: []unified.Resource{
@@ -503,7 +543,7 @@ func TestResourceListInvalidatesUnifiedSeedCacheOnFreshnessChange(t *testing.T) 
 	}
 
 	cfg := &config.Config{DataPath: t.TempDir()}
-	h := NewResourceHandlers(cfg)
+	h := NewQueryService(cfg)
 	h.SetStateProvider(provider)
 
 	firstRec := httptest.NewRecorder()
@@ -582,7 +622,7 @@ func TestResourceListMergesOneSidedLinkedHostWhenHostnameCorroborates(t *testing
 	}
 
 	cfg := &config.Config{DataPath: t.TempDir()}
-	h := NewResourceHandlers(cfg)
+	h := NewQueryService(cfg)
 	h.SetStateProvider(resourceStateProvider{snapshot: snapshot})
 
 	rec := httptest.NewRecorder()
@@ -645,7 +685,7 @@ func TestResourceListDoesNotMergeOneSidedLinkedHostWithoutHostnameCorroboration(
 	}
 
 	cfg := &config.Config{DataPath: t.TempDir()}
-	h := NewResourceHandlers(cfg)
+	h := NewQueryService(cfg)
 	h.SetStateProvider(resourceStateProvider{snapshot: snapshot})
 
 	rec := httptest.NewRecorder()
@@ -713,7 +753,7 @@ func TestResourceListCollapsesClusterAndStandaloneNodeViewsByEndpoint(t *testing
 	}
 
 	cfg := &config.Config{DataPath: t.TempDir()}
-	h := NewResourceHandlers(cfg)
+	h := NewQueryService(cfg)
 	h.SetStateProvider(resourceStateProvider{snapshot: snapshot})
 
 	rec := httptest.NewRecorder()
@@ -744,7 +784,7 @@ func TestResourceListCollapsesClusterAndStandaloneNodeViewsByEndpoint(t *testing
 func TestResourceListDerivesProxmoxWorkloadParentFromUnifiedSeed(t *testing.T) {
 	now := time.Date(2026, 5, 14, 10, 0, 0, 0, time.UTC)
 	cfg := &config.Config{DataPath: t.TempDir()}
-	h := NewResourceHandlers(cfg)
+	h := NewQueryService(cfg)
 	h.SetStateProvider(resourceUnifiedSeedProvider{
 		snapshot: models.StateSnapshot{LastUpdate: now},
 		resources: []unified.Resource{
@@ -821,107 +861,6 @@ func TestResourceListDerivesProxmoxWorkloadParentFromUnifiedSeed(t *testing.T) {
 	}
 }
 
-func TestStateEndpointDerivesProxmoxWorkloadParentFromSupplementalRecords(t *testing.T) {
-	now := time.Date(2026, 5, 14, 10, 0, 0, 0, time.UTC)
-	hashedPassword, err := authpkg.HashPassword("password")
-	if err != nil {
-		t.Fatalf("hash password: %v", err)
-	}
-	dataPath := t.TempDir()
-	InitSessionStore(dataPath)
-	InitCSRFStore(dataPath)
-	cfg := &config.Config{
-		DataPath: dataPath,
-		AuthUser: "admin",
-		AuthPass: hashedPassword,
-	}
-	monitor, err := monitoring.New(cfg)
-	if err != nil {
-		t.Fatalf("new monitor: %v", err)
-	}
-	t.Cleanup(func() { monitor.Stop() })
-
-	monitor.SetResourceStore(unified.NewMonitorAdapter(nil))
-	monitor.SetSupplementalRecordsProvider(unified.SourceProxmox, mockSupplementalRecordsProvider{
-		records: []unified.IngestRecord{
-			{
-				SourceID: "homelab-delly",
-				Resource: unified.Resource{
-					Type:     unified.ResourceTypeAgent,
-					Name:     "delly",
-					Status:   unified.StatusOnline,
-					LastSeen: now,
-					Proxmox: &unified.ProxmoxData{
-						SourceID:    "homelab-delly",
-						NodeName:    "delly",
-						ClusterName: "homelab",
-						Instance:    "delly",
-					},
-				},
-				Identity: unified.ResourceIdentity{
-					MachineID: "machine-delly",
-					Hostnames: []string{"delly"},
-				},
-			},
-			{
-				SourceID: "delly:delly:104",
-				Resource: unified.Resource{
-					Type:     unified.ResourceTypeSystemContainer,
-					Name:     "cloudflared",
-					Status:   unified.StatusOnline,
-					LastSeen: now,
-					Proxmox: &unified.ProxmoxData{
-						SourceID:    "delly:delly:104",
-						NodeName:    "delly",
-						ClusterName: "homelab",
-						Instance:    "delly",
-						VMID:        104,
-					},
-				},
-				Identity: unified.ResourceIdentity{Hostnames: []string{"cloudflared"}},
-			},
-		},
-	})
-
-	router := &Router{config: cfg, monitor: monitor}
-	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/api/state", nil)
-	req.SetBasicAuth("admin", "password")
-	router.handleState(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("/api/state status = %d, body=%s", rec.Code, rec.Body.String())
-	}
-
-	var state models.StateFrontend
-	if err := json.NewDecoder(rec.Body).Decode(&state); err != nil {
-		t.Fatalf("decode /api/state: %v", err)
-	}
-
-	dellyCount := 0
-	dellyID := ""
-	cloudflaredParentID := ""
-	for _, resource := range state.Resources {
-		switch {
-		case resource.Type == string(unified.ResourceTypeAgent) && resource.Name == "delly":
-			dellyCount++
-			dellyID = resource.ID
-		case resource.Type == string(unified.ResourceTypeSystemContainer) && resource.Name == "cloudflared":
-			cloudflaredParentID = resource.ParentID
-		}
-	}
-
-	if dellyCount != 1 {
-		t.Fatalf("expected exactly one delly resource in /api/state, got %d: %#v", dellyCount, state.Resources)
-	}
-	if dellyID == "" {
-		t.Fatalf("expected delly resource id in /api/state: %#v", state.Resources)
-	}
-	if cloudflaredParentID != dellyID {
-		t.Fatalf("expected cloudflared parent %q, got %q: %#v", dellyID, cloudflaredParentID, state.Resources)
-	}
-}
-
 func TestResourceListCollapsesAsymmetricLinkedClusterNodeViews(t *testing.T) {
 	now := time.Now().UTC()
 	snapshot := models.StateSnapshot{
@@ -966,7 +905,7 @@ func TestResourceListCollapsesAsymmetricLinkedClusterNodeViews(t *testing.T) {
 	}
 
 	cfg := &config.Config{DataPath: t.TempDir()}
-	h := NewResourceHandlers(cfg)
+	h := NewQueryService(cfg)
 	h.SetStateProvider(resourceStateProvider{snapshot: snapshot})
 
 	rec := httptest.NewRecorder()
@@ -1040,7 +979,7 @@ func TestResourceListCollapsesHostLinkedClusterNodeViews(t *testing.T) {
 	}
 
 	cfg := &config.Config{DataPath: t.TempDir()}
-	h := NewResourceHandlers(cfg)
+	h := NewQueryService(cfg)
 	h.SetStateProvider(resourceStateProvider{snapshot: snapshot})
 
 	rec := httptest.NewRecorder()
@@ -1110,7 +1049,7 @@ func TestResourceListCollapsesHostLinkedNodeViewsAcrossEndpointForms(t *testing.
 	}
 
 	cfg := &config.Config{DataPath: t.TempDir()}
-	h := NewResourceHandlers(cfg)
+	h := NewQueryService(cfg)
 	h.SetStateProvider(resourceStateProvider{snapshot: snapshot})
 
 	rec := httptest.NewRecorder()
@@ -1173,7 +1112,7 @@ func TestResourceListIncludesHostSMARTPhysicalDisks(t *testing.T) {
 	}
 
 	cfg := &config.Config{DataPath: t.TempDir()}
-	h := NewResourceHandlers(cfg)
+	h := NewQueryService(cfg)
 	h.SetStateProvider(resourceStateProvider{snapshot: snapshot})
 
 	rec := httptest.NewRecorder()
@@ -1224,7 +1163,7 @@ func TestResourceListUsesCanonicalMetricIDForProxmoxPhysicalDisks(t *testing.T) 
 	}
 
 	cfg := &config.Config{DataPath: t.TempDir()}
-	h := NewResourceHandlers(cfg)
+	h := NewQueryService(cfg)
 	h.SetStateProvider(resourceStateProvider{snapshot: snapshot})
 
 	rec := httptest.NewRecorder()
@@ -1261,7 +1200,7 @@ func TestResourceGetResource(t *testing.T) {
 	snapshot := models.StateSnapshot{Hosts: []models.Host{host}}
 
 	cfg := &config.Config{DataPath: t.TempDir()}
-	h := NewResourceHandlers(cfg)
+	h := NewQueryService(cfg)
 	h.SetStateProvider(resourceStateProvider{snapshot: snapshot})
 
 	listRec := httptest.NewRecorder()
@@ -1344,7 +1283,7 @@ func TestResourceGetFacetsAndTimeline(t *testing.T) {
 	}
 
 	cfg := &config.Config{DataPath: t.TempDir()}
-	h := NewResourceHandlers(cfg)
+	h := NewQueryService(cfg)
 	h.SetStateProvider(resourceUnifiedSeedProvider{
 		snapshot:  models.StateSnapshot{LastUpdate: now},
 		resources: []unified.Resource{resource, node},
@@ -1739,7 +1678,7 @@ func TestResourceLinkMergesResources(t *testing.T) {
 	snapshot := models.StateSnapshot{Hosts: []models.Host{host}, DockerHosts: []models.DockerHost{dockerHost}}
 
 	cfg := &config.Config{DataPath: t.TempDir()}
-	h := NewResourceHandlers(cfg)
+	h := NewQueryService(cfg)
 	h.SetStateProvider(resourceStateProvider{snapshot: snapshot})
 
 	listRec := httptest.NewRecorder()
@@ -1863,7 +1802,7 @@ func TestResourceLinkFromAgentKeepsHypervisorGuestAuthorityInAPIState(t *testing
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			cfg := &config.Config{DataPath: t.TempDir()}
-			h := NewResourceHandlers(cfg)
+			h := NewQueryService(cfg)
 			h.SetStateProvider(resourceStateProvider{snapshot: tc.snapshot})
 
 			list := func() ResourcesResponse {
@@ -1965,7 +1904,7 @@ func TestResourceReportMergeCreatesExclusions(t *testing.T) {
 	snapshot := models.StateSnapshot{Hosts: []models.Host{host}, DockerHosts: []models.DockerHost{dockerHost}}
 
 	cfg := &config.Config{DataPath: t.TempDir()}
-	h := NewResourceHandlers(cfg)
+	h := NewQueryService(cfg)
 	h.SetStateProvider(resourceStateProvider{snapshot: snapshot})
 
 	listRec := httptest.NewRecorder()
@@ -2044,7 +1983,7 @@ func TestResourceListIncludesKubernetesPods(t *testing.T) {
 	}
 
 	cfg := &config.Config{DataPath: t.TempDir()}
-	h := NewResourceHandlers(cfg)
+	h := NewQueryService(cfg)
 	h.SetStateProvider(resourceStateProvider{snapshot: snapshot})
 
 	rec := httptest.NewRecorder()
@@ -2122,7 +2061,7 @@ func TestResourceListProjectsKubernetesClusterAgentVersionOntoNode(t *testing.T)
 	}
 
 	cfg := &config.Config{DataPath: t.TempDir()}
-	h := NewResourceHandlers(cfg)
+	h := NewQueryService(cfg)
 	h.SetStateProvider(resourceStateProvider{snapshot: snapshot})
 
 	rec := httptest.NewRecorder()
@@ -2185,7 +2124,7 @@ func TestResourceListFiltersCanonicalKubernetesNamespace(t *testing.T) {
 	}
 
 	cfg := &config.Config{DataPath: t.TempDir()}
-	h := NewResourceHandlers(cfg)
+	h := NewQueryService(cfg)
 	h.SetStateProvider(resourceStateProvider{snapshot: snapshot})
 
 	rec := httptest.NewRecorder()
@@ -2411,7 +2350,7 @@ func TestK8sNamespacesEndpointAggregatesPodsAndDeployments(t *testing.T) {
 	}
 
 	cfg := &config.Config{DataPath: t.TempDir()}
-	h := NewResourceHandlers(cfg)
+	h := NewQueryService(cfg)
 	h.SetStateProvider(resourceStateProvider{snapshot: snapshot})
 
 	rec := httptest.NewRecorder()
@@ -2626,7 +2565,7 @@ func TestResourceListRejectsLegacyKubernetesTypeAlias(t *testing.T) {
 	}
 
 	cfg := &config.Config{DataPath: t.TempDir()}
-	h := NewResourceHandlers(cfg)
+	h := NewQueryService(cfg)
 	h.SetStateProvider(resourceStateProvider{snapshot: snapshot})
 
 	rec := httptest.NewRecorder()
@@ -2680,7 +2619,7 @@ func TestResourceListReturnsCanonicalKubernetesMetricsTargets(t *testing.T) {
 	}
 
 	cfg := &config.Config{DataPath: t.TempDir()}
-	h := NewResourceHandlers(cfg)
+	h := NewQueryService(cfg)
 	h.SetStateProvider(resourceStateProvider{snapshot: snapshot})
 
 	rec := httptest.NewRecorder()
@@ -2784,7 +2723,7 @@ func TestResourceListIncludesDockerSwarmServicesAndFiltersByCluster(t *testing.T
 	}
 
 	cfg := &config.Config{DataPath: t.TempDir()}
-	h := NewResourceHandlers(cfg)
+	h := NewQueryService(cfg)
 	h.SetStateProvider(resourceStateProvider{snapshot: snapshot})
 
 	// Unfiltered-by-cluster: expect the service to show up exactly once.
@@ -2879,7 +2818,7 @@ func TestResourceListIncludesPBSAndPMG(t *testing.T) {
 	}
 
 	cfg := &config.Config{DataPath: t.TempDir()}
-	h := NewResourceHandlers(cfg)
+	h := NewQueryService(cfg)
 	h.SetStateProvider(resourceStateProvider{snapshot: snapshot})
 
 	rec := httptest.NewRecorder()
@@ -2982,7 +2921,7 @@ func TestResourceListIncludesStorageMetadata(t *testing.T) {
 	}
 
 	cfg := &config.Config{DataPath: t.TempDir()}
-	h := NewResourceHandlers(cfg)
+	h := NewQueryService(cfg)
 	h.SetStateProvider(resourceStateProvider{snapshot: snapshot})
 
 	rec := httptest.NewRecorder()
@@ -3086,7 +3025,7 @@ func TestResourceListIncludesStorageConsumerImpact(t *testing.T) {
 	}
 
 	cfg := &config.Config{DataPath: t.TempDir()}
-	h := NewResourceHandlers(cfg)
+	h := NewQueryService(cfg)
 	h.SetStateProvider(resourceStateProvider{snapshot: snapshot})
 
 	rec := httptest.NewRecorder()
@@ -3206,7 +3145,7 @@ func TestResourceListIncludesPBSStorageConsumerImpact(t *testing.T) {
 	}
 
 	cfg := &config.Config{DataPath: t.TempDir()}
-	h := NewResourceHandlers(cfg)
+	h := NewQueryService(cfg)
 	h.SetStateProvider(resourceStateProvider{snapshot: snapshot})
 
 	rec := httptest.NewRecorder()
@@ -3283,7 +3222,7 @@ func TestResourceListIncludesPBSPrimaryIncidentRollup(t *testing.T) {
 	}
 
 	cfg := &config.Config{DataPath: t.TempDir()}
-	h := NewResourceHandlers(cfg)
+	h := NewQueryService(cfg)
 	h.SetStateProvider(resourceStateProvider{snapshot: snapshot})
 
 	rec := httptest.NewRecorder()
@@ -3419,7 +3358,7 @@ func TestPBSResourceListIncludesProtectedWorkloadRollup(t *testing.T) {
 	}
 
 	cfg := &config.Config{DataPath: t.TempDir()}
-	h := NewResourceHandlers(cfg)
+	h := NewQueryService(cfg)
 	h.SetStateProvider(resourceStateProvider{snapshot: snapshot})
 
 	rec := httptest.NewRecorder()
@@ -3500,7 +3439,7 @@ func TestResourceListIncludesHostUnraidStorage(t *testing.T) {
 	}
 
 	cfg := &config.Config{DataPath: t.TempDir()}
-	h := NewResourceHandlers(cfg)
+	h := NewQueryService(cfg)
 	h.SetStateProvider(resourceStateProvider{snapshot: snapshot})
 
 	rec := httptest.NewRecorder()
@@ -3556,7 +3495,7 @@ func TestResourceListReturnsCanonicalStorageMetricsTargets(t *testing.T) {
 		}
 
 		cfg := &config.Config{DataPath: t.TempDir()}
-		h := NewResourceHandlers(cfg)
+		h := NewQueryService(cfg)
 		h.SetStateProvider(resourceStateProvider{snapshot: snapshot})
 
 		rec := httptest.NewRecorder()
@@ -3583,7 +3522,7 @@ func TestResourceListReturnsCanonicalStorageMetricsTargets(t *testing.T) {
 	t.Run("truenas pool", func(t *testing.T) {
 		now := time.Now().UTC()
 		cfg := &config.Config{DataPath: t.TempDir()}
-		h := NewResourceHandlers(cfg)
+		h := NewQueryService(cfg)
 		h.SetStateProvider(resourceStateProvider{snapshot: models.StateSnapshot{LastUpdate: now}})
 		h.SetSupplementalRecordsProvider(unified.SourceTrueNAS, mockSupplementalRecordsProvider{
 			records: []unified.IngestRecord{
@@ -3636,7 +3575,7 @@ func TestResourceListReturnsCanonicalStorageMetricsTargets(t *testing.T) {
 func TestResourceStorageSummaryRollsUpIncidents(t *testing.T) {
 	now := time.Now().UTC()
 	cfg := &config.Config{DataPath: t.TempDir()}
-	h := NewResourceHandlers(cfg)
+	h := NewQueryService(cfg)
 	h.SetStateProvider(resourceUnifiedSeedProvider{
 		snapshot: models.StateSnapshot{LastUpdate: now},
 		resources: []unified.Resource{
@@ -3772,7 +3711,7 @@ func TestResourceListIncludesTrueNASPhysicalDiskTemperature(t *testing.T) {
 
 	now := time.Now().UTC()
 	cfg := &config.Config{DataPath: t.TempDir()}
-	h := NewResourceHandlers(cfg)
+	h := NewQueryService(cfg)
 	h.SetStateProvider(resourceStateProvider{snapshot: models.StateSnapshot{LastUpdate: now}})
 	h.SetSupplementalRecordsProvider(unified.SourceTrueNAS, mockSupplementalRecordsProvider{
 		records:      truenas.NewProvider(truenas.DefaultFixtures()).Records(),
@@ -3851,7 +3790,7 @@ func TestResourceListIncludesTrueNASAppsAsAppContainers(t *testing.T) {
 
 	fixtures := truenas.DefaultFixtures()
 	cfg := &config.Config{DataPath: t.TempDir()}
-	h := NewResourceHandlers(cfg)
+	h := NewQueryService(cfg)
 	h.SetStateProvider(resourceStateProvider{snapshot: models.StateSnapshot{LastUpdate: time.Now().UTC()}})
 	h.SetSupplementalRecordsProvider(unified.SourceTrueNAS, mockSupplementalRecordsProvider{
 		records:      truenas.NewProvider(fixtures).Records(),
@@ -3917,7 +3856,7 @@ func TestResourceListIncludesTrueNASVMsAsCanonicalWorkloads(t *testing.T) {
 
 	fixtures := truenas.DefaultFixtures()
 	cfg := &config.Config{DataPath: t.TempDir()}
-	h := NewResourceHandlers(cfg)
+	h := NewQueryService(cfg)
 	h.SetStateProvider(resourceStateProvider{snapshot: models.StateSnapshot{LastUpdate: time.Now().UTC()}})
 	h.SetSupplementalRecordsProvider(unified.SourceTrueNAS, mockSupplementalRecordsProvider{
 		records:      truenas.NewProvider(fixtures).Records(),
@@ -3976,7 +3915,7 @@ func TestResourceListIncludesTrueNASSystemAsCanonicalHost(t *testing.T) {
 	})
 
 	cfg := &config.Config{DataPath: t.TempDir()}
-	h := NewResourceHandlers(cfg)
+	h := NewQueryService(cfg)
 	h.SetStateProvider(resourceStateProvider{snapshot: models.StateSnapshot{LastUpdate: time.Now().UTC()}})
 	h.SetSupplementalRecordsProvider(unified.SourceTrueNAS, mockSupplementalRecordsProvider{
 		records:      truenas.NewProvider(truenas.DefaultFixtures()).Records(),
@@ -4026,7 +3965,7 @@ func TestResourceListIncludesTrueNASSystemAsCanonicalHost(t *testing.T) {
 func TestResourceStorageIncidentsGroupsCanonicalSections(t *testing.T) {
 	now := time.Now().UTC()
 	cfg := &config.Config{DataPath: t.TempDir()}
-	h := NewResourceHandlers(cfg)
+	h := NewQueryService(cfg)
 	h.SetStateProvider(resourceUnifiedSeedProvider{
 		snapshot: models.StateSnapshot{LastUpdate: now},
 		resources: []unified.Resource{
@@ -4209,7 +4148,7 @@ func TestResourceListIncludesTrueNASFromSupplementalProvider(t *testing.T) {
 	now := time.Now().UTC()
 
 	cfg := &config.Config{DataPath: t.TempDir()}
-	h := NewResourceHandlers(cfg)
+	h := NewQueryService(cfg)
 	h.SetStateProvider(resourceStateProvider{snapshot: models.StateSnapshot{LastUpdate: now}})
 	h.SetSupplementalRecordsProvider(unified.SourceTrueNAS, mockSupplementalRecordsProvider{
 		records: []unified.IngestRecord{
@@ -4259,7 +4198,7 @@ func TestResourceListUnifiedSeedSkipsSupplementalReingest(t *testing.T) {
 	now := time.Now().UTC()
 
 	cfg := &config.Config{DataPath: t.TempDir()}
-	h := NewResourceHandlers(cfg)
+	h := NewQueryService(cfg)
 	h.SetStateProvider(resourceUnifiedSeedProvider{
 		snapshot: models.StateSnapshot{LastUpdate: now},
 		resources: []unified.Resource{
@@ -4321,7 +4260,7 @@ func TestResourceListUnifiedSeedIngestsOwnedSupplementalWhenSourceMissing(t *tes
 	now := time.Now().UTC()
 
 	cfg := &config.Config{DataPath: t.TempDir()}
-	h := NewResourceHandlers(cfg)
+	h := NewQueryService(cfg)
 	h.SetStateProvider(resourceUnifiedSeedProvider{
 		snapshot: models.StateSnapshot{LastUpdate: now},
 		resources: []unified.Resource{
@@ -4398,7 +4337,7 @@ func TestResourceListSupplementalOwnerSuppressesSnapshotSource(t *testing.T) {
 	}
 
 	cfg := &config.Config{DataPath: t.TempDir()}
-	h := NewResourceHandlers(cfg)
+	h := NewQueryService(cfg)
 	h.SetStateProvider(resourceStateProvider{snapshot: snapshot})
 	h.SetSupplementalRecordsProvider(unified.SourceAgent, mockSupplementalRecordsProvider{
 		ownedSources: []unified.DataSource{unified.SourceAgent},
@@ -4455,7 +4394,7 @@ func TestResourceListWithoutSupplementalProvider(t *testing.T) {
 	}
 
 	cfg := &config.Config{DataPath: t.TempDir()}
-	h := NewResourceHandlers(cfg)
+	h := NewQueryService(cfg)
 	h.SetStateProvider(resourceStateProvider{snapshot: snapshot})
 
 	truenasRec := httptest.NewRecorder()
@@ -4493,7 +4432,7 @@ func TestResourceListWithoutSupplementalProvider(t *testing.T) {
 
 func TestSupplementalSnapshotOwnedSources_TrueNASProviders(t *testing.T) {
 	sources := supplementalSnapshotOwnedSources(map[unified.DataSource]SupplementalRecordsProvider{
-		unified.SourceTrueNAS: mockSupplementalRecordsAdapter{source: unified.SourceTrueNAS},
+		unified.SourceTrueNAS: ownedSupplementalProvider{source: unified.SourceTrueNAS},
 	}, "default")
 
 	if len(sources) != 1 || sources[0] != unified.SourceTrueNAS {

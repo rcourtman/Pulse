@@ -1560,7 +1560,7 @@ the intentionally sparse public response.
    They must not bake vendor model IDs or provider-model fallback rules into
    install or activation flows just because those routes share the backend API
    tree.
-   Lifecycle-adjacent resource reads that traverse `internal/api/resources.go`
+   Lifecycle-adjacent resource reads that traverse `internal/api/resourceapi/resources.go`
    must also preserve the canonical unified-resource `name -> type -> id`
    order instead of inheriting map order or page-local re-sorts, so install
    and runtime hydration do not present one resource ordering at first load and
@@ -1584,7 +1584,7 @@ the intentionally sparse public response.
    snapshot must carry the same canonical resource types and display names as
    `/api/resources` instead of briefly showing legacy host aliases before the
    first websocket-backed refresh lands.
-   Chart-adjacent lifecycle reads in shared `internal/api/router.go` must obey
+   Chart-adjacent lifecycle reads in shared `internal/api/chartapi/service.go` must obey
    that same mock-aware unified snapshot boundary: demo `/api/charts` and
    `/api/charts/infrastructure` payloads may not bypass
    `GetUnifiedReadStateOrSnapshot()` and silently drop VMware-backed host rows
@@ -2039,7 +2039,7 @@ the intentionally sparse public response.
     user identity passed through that helper, but they must not treat a missing
     configured role header as administrator proof.
 13. Preserve shipped security-doc guidance in shared lifecycle setup helpers so `internal/api/configapi/config_setup_handlers.go` and adjacent install/setup runtime paths point operators at the running build's local security documentation route rather than GitHub `main` links.
-14. Keep shared `internal/api/router.go` workload-chart downsampling presentation-only: when that router caps mixed-cadence workload history into equal-time buckets for operator-facing cards, lifecycle-adjacent setup and fleet surfaces must not reuse the shaped chart samples as heartbeat, enrollment, or last-seen authority.
+14. Keep shared `internal/api/chartapi/service.go` workload-chart downsampling presentation-only: when that service caps mixed-cadence workload history into equal-time buckets for operator-facing cards, lifecycle-adjacent setup and fleet surfaces must not reuse the shaped chart samples as heartbeat, enrollment, or last-seen authority.
     That same presentation-only boundary must preserve canonical millisecond timestamps when it serializes chart points, so lifecycle-adjacent first-host and fleet surfaces do not misread rounded chart samples as duplicate or restarted heartbeat evidence.
     The same rule now applies to storage summary interaction. Shared sticky-card or row-hover focus behavior on infrastructure, workloads, and storage may reuse the canonical chart transport, but lifecycle-adjacent install, enrollment, and fleet surfaces must not treat highlighted summary series or sticky-shell state as agent freshness or setup progress.
     The same rule now applies to infrastructure-summary metric filters. Shared
@@ -2049,7 +2049,7 @@ the intentionally sparse public response.
     omitted disk or network series as missing lifecycle telemetry, missing
     agent capabilities, or reduced fleet freshness truth.
     The same rule now applies to retired compact dashboard summary payloads.
-    Shared `internal/api/resources.go` routes must not restore
+    Shared `internal/api/resourceapi/resources.go` routes must not restore
     `/api/resources/dashboard-summary` as a compatibility read; lifecycle
     surfaces must continue to use install inventory, enrollment proof, and
     fleet freshness truth from their owning contracts.
@@ -3701,7 +3701,7 @@ credential reaches only the explicit backend-owned route inventory, so
 lifecycle-adjacent setup and install flows cannot accidentally widen the
 paired-device credential just by touching neighboring `internal/api/` routes.
 The same shared API runtime now also exposes dedicated unified-resource
-timeline reads through `internal/api/resources.go` plus the bundled facet
+timeline reads through `internal/api/resourceapi/resources.go` plus the bundled facet
 history read used by the drawer, but those query surfaces remain owned by the
 API and unified-resource contracts rather than by lifecycle continuity.
 Those timeline reads also accept governed filters for change kind, source
@@ -3710,7 +3710,7 @@ agent lifecycle routing still stays on canonical fleet-continuity ownership
 instead of re-deriving resource history locally.
 Those dedicated resource timeline and facet reads are also relationship-aware
 at the API boundary: lifecycle-adjacent fleet views may consume the direct plus
-`relatedResources` history returned by `internal/api/resources.go`, but they
+`relatedResources` history returned by `internal/api/resourceapi/resources.go`, but they
 must not rebuild cross-resource timeline joins inside lifecycle-owned routes or
 change the direct-only store default used by other callers.
 The bundled facet read may also expose the selected resource's canonical
@@ -3719,7 +3719,7 @@ surfaces must treat those fields as API/unified-resource facts rather than
 agent-lifecycle-owned install, approval, or topology state.
 Agent-host, Kubernetes, and runtime parentage exposed through `ParentID` must
 therefore enter shared drawers as facet relationships from
-`internal/api/resources.go`; lifecycle surfaces must not rederive those edges
+`internal/api/resourceapi/resources.go`; lifecycle surfaces must not rederive those edges
 from agent install state, cluster names, or local fleet table grouping.
 That same shared `internal/api/` boundary now also exposes a dedicated VM
 inventory export route for reporting. Fleet and install surfaces may coexist

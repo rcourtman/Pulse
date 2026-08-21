@@ -13,6 +13,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/actionlifecycle"
 	"github.com/rcourtman/pulse-go-rewrite/internal/actionplanner"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
+	"github.com/rcourtman/pulse-go-rewrite/internal/api/resourceapi"
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	unified "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
@@ -816,12 +817,12 @@ func projectActionAudits(records []unified.ActionAuditRecord, registry *unified.
 
 func projectActionAudit(record unified.ActionAuditRecord, registry *unified.ResourceRegistry) actionAuditProjection {
 	projection := actionAuditProjection{ActionAuditRecord: record}
-	resource, ok := presentationResourceByID(registry, record.Request.ResourceID)
+	resource, ok := resourceapi.PresentationResourceByID(registry, record.Request.ResourceID)
 	if ok && resource != nil && strings.TrimSpace(resource.Name) != "" {
 		projection.Resource = &actionResourcePresentation{
 			ID:   unified.CanonicalResourceID(resource.ID),
 			Name: strings.TrimSpace(resource.Name),
-			Type: resourceContractType(*resource),
+			Type: resourceapi.ContractType(*resource),
 		}
 		for _, capability := range resource.Capabilities {
 			if capability.Name == record.Request.CapabilityName {
@@ -834,10 +835,10 @@ func projectActionAudit(record unified.ActionAuditRecord, registry *unified.Reso
 		projection.BlastRadius = make([]actionResourcePresentation, 0, len(record.Plan.PredictedBlastRadius))
 		for _, affectedID := range record.Plan.PredictedBlastRadius {
 			entry := actionResourcePresentation{ID: affectedID}
-			if affected, found := presentationResourceByID(registry, affectedID); found && affected != nil {
+			if affected, found := resourceapi.PresentationResourceByID(registry, affectedID); found && affected != nil {
 				entry.ID = unified.CanonicalResourceID(affected.ID)
 				entry.Name = strings.TrimSpace(affected.Name)
-				entry.Type = resourceContractType(*affected)
+				entry.Type = resourceapi.ContractType(*affected)
 			}
 			projection.BlastRadius = append(projection.BlastRadius, entry)
 		}

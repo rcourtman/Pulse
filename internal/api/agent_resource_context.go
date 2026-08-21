@@ -11,6 +11,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentcontext"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/approval"
+	"github.com/rcourtman/pulse-go-rewrite/internal/api/resourceapi"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/telemetry"
 	unified "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
@@ -492,7 +493,7 @@ func (h *AgentContextHandler) HandleResourceContext(w http.ResponseWriter, r *ht
 		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
 		return
 	}
-	resource, resourceID, ok := presentationResourceByReference(registry, resourceID)
+	resource, resourceID, ok := resourceapi.PresentationResourceByReference(registry, resourceID)
 	if !ok {
 		writeJSONError(w, http.StatusNotFound, agentcapabilities.AgentErrCodeResourceNotFound,
 			"No resource is registered with this canonical id.")
@@ -507,8 +508,8 @@ func (h *AgentContextHandler) HandleResourceContext(w http.ResponseWriter, r *ht
 
 	generatedAt := time.Now().UTC()
 	resourceCopy := *resource
-	attachDiscoveryTarget(&resourceCopy)
-	h.resources.attachDiscoveryReadiness(&resourceCopy, generatedAt)
+	resourceapi.AttachDiscoveryTarget(&resourceCopy)
+	h.resources.AttachDiscoveryReadiness(&resourceCopy, generatedAt)
 
 	bundle := AgentResourceContext{
 		CanonicalID:        resourceID,
@@ -617,7 +618,7 @@ func (h *AgentContextHandler) HandleResourceCapabilities(w http.ResponseWriter, 
 		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
 		return
 	}
-	resource, resourceID, ok := presentationResourceByReference(registry, resourceID)
+	resource, resourceID, ok := resourceapi.PresentationResourceByReference(registry, resourceID)
 	if !ok {
 		writeJSONError(w, http.StatusNotFound, agentcapabilities.AgentErrCodeResourceNotFound,
 			"No resource is registered with this canonical id.")

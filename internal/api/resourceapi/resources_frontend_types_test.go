@@ -1,4 +1,4 @@
-package api
+package resourceapi
 
 import (
 	"encoding/json"
@@ -371,7 +371,7 @@ func TestResourceListUsesCanonicalContractTypes(t *testing.T) {
 	}
 
 	cfg := &config.Config{DataPath: t.TempDir()}
-	h := NewResourceHandlers(cfg)
+	h := NewQueryService(cfg)
 	h.SetStateProvider(resourceStateProvider{snapshot: snapshot})
 
 	// Test 1: legacy ?type=node is accepted at the request boundary but resolves
@@ -578,7 +578,7 @@ func TestResourceGetUsesCanonicalContractType(t *testing.T) {
 	}
 
 	cfg := &config.Config{DataPath: t.TempDir()}
-	h := NewResourceHandlers(cfg)
+	h := NewQueryService(cfg)
 	h.SetStateProvider(resourceStateProvider{snapshot: snapshot})
 
 	// First get the resource ID from a list query.

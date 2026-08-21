@@ -5,6 +5,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/api/chartapi"
+	"github.com/rcourtman/pulse-go-rewrite/internal/api/resourceapi"
 	"github.com/rcourtman/pulse-go-rewrite/internal/deploy"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	unified "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
@@ -15,7 +17,7 @@ import (
 //   - filterPVEBackups        (pve_backups.go)
 //   - filterReplicationJobs    (replication.go)
 //   - cephDiscoveryTarget      (resources.go)
-//   - capMetricPointSeriesByIndex (router.go)
+//   - chartapi.CapMetricPointSeriesByIndex (router.go)
 //   - deriveInstallJobStatus   (deploy_handlers.go)
 //
 // Conventions mirror internal/api/deploy_handlers_test.go (package api,
@@ -257,7 +259,7 @@ func TestBranchcov0722PM_CephDiscoveryTarget(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := cephDiscoveryTarget(tc.resource)
+			got := resourceapi.CephDiscoveryTarget(tc.resource)
 			if tc.wantNil {
 				if got != nil {
 					t.Fatalf("expected nil target, got %+v", got)
@@ -283,7 +285,7 @@ func TestBranchcov0722PM_CephDiscoveryTarget(t *testing.T) {
 	}
 }
 
-// --- capMetricPointSeriesByIndex --------------------------------------------
+// --- chartapi.CapMetricPointSeriesByIndex --------------------------------------------
 
 func TestBranchcov0722PM_CapMetricPointSeriesByIndex(t *testing.T) {
 	// 10 distinct points: timestamp == index, value == index.
@@ -352,7 +354,7 @@ func TestBranchcov0722PM_CapMetricPointSeriesByIndex(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := capMetricPointSeriesByIndex(tc.points, tc.maxPoints)
+			got := chartapi.CapMetricPointSeriesByIndex(tc.points, tc.maxPoints)
 			if len(got) != tc.wantLen {
 				t.Fatalf("len: got %d, want %d", len(got), tc.wantLen)
 			}

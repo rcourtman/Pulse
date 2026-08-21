@@ -1232,7 +1232,7 @@
         },
         {
           "repo": "pulse",
-          "path": "internal/api/resources_tenant_security_test.go",
+          "path": "internal/api/resourceapi/resources_tenant_security_test.go",
           "kind": "file"
         },
         {
@@ -5459,7 +5459,7 @@
         },
         {
           "repo": "pulse",
-          "path": "internal/api/resources.go",
+          "path": "internal/api/resourceapi/resources.go",
           "kind": "file"
         },
         {
@@ -5899,7 +5899,7 @@
         },
         {
           "repo": "pulse",
-          "path": "internal/api/resources.go",
+          "path": "internal/api/resourceapi/resources.go",
           "kind": "file"
         },
         {
@@ -6643,12 +6643,12 @@
         },
         {
           "repo": "pulse",
-          "path": "internal/api/resources.go",
+          "path": "internal/api/resourceapi/resources.go",
           "kind": "file"
         },
         {
           "repo": "pulse",
-          "path": "internal/api/resources_test.go",
+          "path": "internal/api/resourceapi/resources_test.go",
           "kind": "file"
         },
         {
@@ -7424,7 +7424,7 @@
         },
         {
           "repo": "pulse",
-          "path": "internal/api/resources.go",
+          "path": "internal/api/resourceapi/resources.go",
           "kind": "file"
         },
         {
