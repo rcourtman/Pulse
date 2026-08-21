@@ -244,9 +244,24 @@ jobs:
     secrets: inherit
     with:
       version: ${{ needs.prepare.outputs.version }}
+      qualify_containers: false
       require_macos_signing: true
       require_windows_signing: ${{ needs.prepare.outputs.require_windows_signing == 'true' }}
       windows_signing_backend: signpath
+
+  qualify_release_containers:
+    name: Qualify Exact-Candidate Containers
+    needs:
+      - prepare
+      - build_release_candidate
+    if: ${{ always() && needs.prepare.result == 'success' && needs.build_release_candidate.result == 'success' && needs.prepare.outputs.historical_asset_backfill_only != 'true' }}
+    permissions:
+      contents: read
+    uses: ./.github/workflows/qualify-release-containers.yml
+    with:
+      version: ${{ needs.prepare.outputs.version }}
+      container_artifact: ${{ needs.build_release_candidate.outputs.container_artifact_name }}
+      source_sha: ${{ github.sha }}
 
   # Build the embed bundle independently so backend and smoke lanes can start
   # without waiting for the full frontend quality suite.
@@ -643,15 +658,9 @@ jobs:
     needs:
       - prepare
       - build_release_candidate
-      - frontend_bundle
-      - frontend_checks
-      - windows_install_command_smoke
-      - backend_tests
-      - integration_tests
-      - release_smoke
-    # Run if integration_tests passed OR was skipped (prereleases). The
-    # release smoke has no skipped escape: it runs for prereleases too.
-    if: ${{ needs.prepare.outputs.historical_asset_backfill_only != 'true' && always() && needs.build_release_candidate.result == 'success' && needs.frontend_bundle.result == 'success' && needs.frontend_checks.result == 'success' && needs.windows_install_command_smoke.result == 'success' && needs.backend_tests.result == 'success' && needs.release_smoke.result == 'success' && (needs.integration_tests.result == 'success' || needs.integration_tests.result == 'skipped') }}
+    # Draft metadata and immutable assets are inert staging. Qualification is
+    # joined at release_readiness before any activation boundary can open.
+    if: ${{ needs.prepare.outputs.historical_asset_backfill_only != 'true' && always() && needs.prepare.result == 'success' && needs.build_release_candidate.result == 'success' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
@@ -1078,8 +1087,9 @@ jobs:
     needs:
       - prepare
       - build_release_candidate
+      - qualify_release_containers
       - create_release
-    if: ${{ always() && needs.prepare.result == 'success' && needs.build_release_candidate.result == 'success' && needs.create_release.result == 'success' && needs.prepare.outputs.historical_asset_backfill_only != 'true' && github.event.inputs.draft_only != 'true' }}
+    if: ${{ always() && needs.prepare.result == 'success' && needs.build_release_candidate.result == 'success' && needs.qualify_release_containers.result == 'success' && needs.create_release.result == 'success' && needs.prepare.outputs.historical_asset_backfill_only != 'true' && github.event.inputs.draft_only != 'true' }}
     permissions:
       contents: read
       packages: write
@@ -1178,13 +1188,21 @@ jobs:
   release_readiness:
     needs:
       - prepare
+      - build_release_candidate
+      - qualify_release_containers
+      - frontend_bundle
+      - frontend_checks
+      - windows_install_command_smoke
+      - backend_tests
+      - integration_tests
+      - release_smoke
       - create_release
       - publish_docker
       - validate_release_assets
       - install_sh_smoke
       - publish_helm_chart
       - stage_private_pro_runtime
-    if: ${{ always() && needs.prepare.result == 'success' && needs.create_release.result == 'success' && needs.publish_docker.result == 'success' && needs.validate_release_assets.result == 'success' && needs.install_sh_smoke.result == 'success' && needs.publish_helm_chart.result == 'success' && ( !startsWith(needs.prepare.outputs.version, '6.') || needs.stage_private_pro_runtime.result == 'success' ) && needs.prepare.outputs.historical_asset_backfill_only != 'true' && github.event.inputs.draft_only != 'true' }}
+    if: ${{ always() && needs.prepare.result == 'success' && needs.build_release_candidate.result == 'success' && needs.qualify_release_containers.result == 'success' && needs.frontend_bundle.result == 'success' && needs.frontend_checks.result == 'success' && needs.windows_install_command_smoke.result == 'success' && needs.backend_tests.result == 'success' && needs.release_smoke.result == 'success' && (needs.integration_tests.result == 'success' || needs.integration_tests.result == 'skipped') && needs.create_release.result == 'success' && needs.publish_docker.result == 'success' && needs.validate_release_assets.result == 'success' && needs.install_sh_smoke.result == 'success' && needs.publish_helm_chart.result == 'success' && ( !startsWith(needs.prepare.outputs.version, '6.') || needs.stage_private_pro_runtime.result == 'success' ) && needs.prepare.outputs.historical_asset_backfill_only != 'true' && github.event.inputs.draft_only != 'true' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:

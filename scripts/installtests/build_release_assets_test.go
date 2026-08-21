@@ -336,13 +336,13 @@ func TestAgentBuildCacheDoesNotResurrectPulseAgentPackage(t *testing.T) {
 		}
 	}
 
-	release, err := os.ReadFile(repoFile(".github", "workflows", "build-release-candidate.yml"))
+	release, err := os.ReadFile(repoFile(".github", "workflows", "qualify-release-containers.yml"))
 	if err != nil {
-		t.Fatalf("read build-release-candidate.yml: %v", err)
+		t.Fatalf("read qualify-release-containers.yml: %v", err)
 	}
 	releaseText := string(release)
 	if !strings.Contains(releaseText, `--target agent_runtime_prebuilt`) {
-		t.Fatal("build-release-candidate.yml must assemble the candidate agent image without targeting an unpublished package")
+		t.Fatal("qualify-release-containers.yml must assemble the candidate agent image without targeting an unpublished package")
 	}
 	if strings.Contains(releaseText, "agent-buildcache") {
 		t.Fatal("exact-candidate release qualification must not create a remote agent image cache")
@@ -1194,7 +1194,11 @@ func TestReleaseWorkflowsUseSecretSafeAttestedImageBuilds(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read build-release-candidate.yml: %v", err)
 	}
-	createRelease := string(createReleaseBytes) + "\n" + string(candidateWorkflowBytes)
+	qualifierWorkflowBytes, err := os.ReadFile(repoFile(".github", "workflows", "qualify-release-containers.yml"))
+	if err != nil {
+		t.Fatalf("read qualify-release-containers.yml: %v", err)
+	}
+	createRelease := string(createReleaseBytes) + "\n" + string(candidateWorkflowBytes) + "\n" + string(qualifierWorkflowBytes)
 	createReleaseRequired := []string{
 		`Exact-Candidate Container and Helm Smoke`,
 		`./scripts/prepare-release-container-context.sh`,
@@ -1215,9 +1219,9 @@ func TestReleaseWorkflowsUseSecretSafeAttestedImageBuilds(t *testing.T) {
 		`attestations: write`,
 		`uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4`,
 	}
-	containerJob := workflowJobBlock(t, string(candidateWorkflowBytes), "qualify-release-containers")
-	if !strings.Contains(containerJob, "always() && needs.build.result == 'success'") {
-		t.Fatal("exact-candidate container qualification must not inherit skipped native-signing dependencies")
+	containerJob := workflowJobBlock(t, string(qualifierWorkflowBytes), "qualify")
+	if !strings.Contains(string(candidateWorkflowBytes), "always() && inputs.qualify_containers && needs.build.result == 'success'") {
+		t.Fatal("standalone exact-candidate qualification must not inherit skipped native-signing dependencies")
 	}
 	for _, forbidden := range []string{
 		"PULSE_UPDATE_SIGNING_KEY",
@@ -2379,6 +2383,7 @@ func TestReleaseCutGatesCriticalFrontendAndWindowsRuntimeProof(t *testing.T) {
 	windowsJob := workflowJobBlock(t, workflow, "windows_install_command_smoke")
 	smokeJob := workflowJobBlock(t, workflow, "release_smoke")
 	createJob := workflowJobBlock(t, workflow, "create_release")
+	readinessJob := workflowJobBlock(t, workflow, "release_readiness")
 	verdictJob := workflowJobBlock(t, workflow, "release_commit_verdict")
 
 	for _, needle := range []string{
@@ -2406,8 +2411,28 @@ func TestReleaseCutGatesCriticalFrontendAndWindowsRuntimeProof(t *testing.T) {
 			t.Fatalf("release render smoke missing %s", needle)
 		}
 	}
-	if !strings.Contains(createJob, `needs.windows_install_command_smoke.result == 'success'`) {
-		t.Fatal("release assembly must fail closed on the Windows install-command smoke")
+	if !strings.Contains(readinessJob, `needs.windows_install_command_smoke.result == 'success'`) {
+		t.Fatal("release readiness must fail closed on the Windows install-command smoke")
+	}
+	if strings.Contains(createJob, `needs.windows_install_command_smoke.result`) {
+		t.Fatal("inert draft staging must overlap independent Windows qualification")
+	}
+	for _, result := range []string{
+		"needs.qualify_release_containers.result == 'success'",
+		"needs.frontend_checks.result == 'success'",
+		"needs.backend_tests.result == 'success'",
+		"needs.release_smoke.result == 'success'",
+	} {
+		if !strings.Contains(readinessJob, result) {
+			t.Fatalf("release readiness missing deferred qualification join: %s", result)
+		}
+		if strings.Contains(createJob, result) {
+			t.Fatalf("inert draft staging must not serialize on deferred qualification: %s", result)
+		}
+	}
+	if !strings.Contains(workflow, "qualify_containers: false") ||
+		!strings.Contains(workflow, "uses: ./.github/workflows/qualify-release-containers.yml") {
+		t.Fatal("publishing release must qualify the candidate beside inert draft staging")
 	}
 	if !strings.Contains(verdictJob, `require_result "Windows install command smoke" "$WINDOWS_INSTALL_COMMAND_RESULT" success`) {
 		t.Fatal("release activation commit verdict must report the Windows install-command smoke")

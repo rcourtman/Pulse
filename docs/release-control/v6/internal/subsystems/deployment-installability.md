@@ -64,6 +64,7 @@ discarding existing explicit disk exclusions.
 17. `.github/workflows/promote-private-pro-runtime.yml`
 18. `.github/workflows/publish-docker.yml`
 19. `.github/workflows/publish-helm-chart.yml`
+20. `.github/workflows/qualify-release-containers.yml`
 20. `.github/workflows/release-convergence.yml`
 21. `.github/workflows/release-dry-run.yml`
 22. `.github/workflows/retry-release-convergence.yml`
@@ -555,9 +556,11 @@ upgrade, update, release, or artifact-selection behavior.
    recompiling source, and compare every embedded executable digest with the
    candidate bytes
    before exercising the same local runtime through the Helm install/upgrade
-   smoke. The reusable build-release-candidate workflow owns this proof so a
-   standalone candidate dispatch, a release dry run, and a publishing release
-   all cross the same container boundary before the candidate can succeed.
+   smoke. The reusable `qualify-release-containers.yml` workflow owns this
+   proof. Standalone candidate dispatches and dry runs invoke it inside the
+   candidate workflow; publishing releases invoke it as a sibling of inert
+   draft staging so qualification and upload overlap without weakening the
+   activation join.
    This credential-free lane may run against the isolated rootless
    Docker daemon owned by the low-priority PVE build identity; it must not gain
    host-Docker access, signing keys, registry login, or package-write authority.
