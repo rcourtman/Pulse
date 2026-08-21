@@ -1068,7 +1068,10 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
                 release_notes = read(release_notes_path)
                 changelog = read(changelog_path)
 
-                self.assertIn("current v6 support release candidate packet", release_index)
+                self.assertIn(
+                    "current v6 support release candidate packet",
+                    normalize_ws(release_index),
+                )
                 self.assertIn(release_notes_path, release_index)
                 self.assertIn(changelog_path, release_index)
                 self.assertIn(f"Pulse v{current_version} Release Notes", release_notes)

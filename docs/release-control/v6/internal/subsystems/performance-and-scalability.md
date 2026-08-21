@@ -1692,6 +1692,20 @@ workload hot path must also tolerate transient async route/data gaps by
 treating missing filtered-workload collections as empty until the route and
 resource snapshots converge, rather than crashing Workloads between sync
 phases.
+Platform-owned Workloads surfaces must also normalize their inventory before
+deduplication and downstream derivation. `useWorkloadsState.ts` calls
+`selectVisibleWorkloadInventory` once to apply only the owning page's forced
+platform and explicitly excluded workload types; ordinary user-selected
+status, search, node, namespace, and runtime filters remain in the later filter
+pipeline. The normalized inventory is the shared input for filter options,
+summary counts, empty-state availability, and table rows, so an off-platform
+degraded guest cannot inflate a platform page's Attention count or produce a
+filter state whose table can never show that guest. This boundary must remain
+a single linear selector pass with an identity-preserving fast path when no
+page-owned scope applies, rather than adding per-card or per-option scans.
+`workloadSelectors.test.ts` verifies the no-scope identity path, workload-type
+exclusion, forced-platform matching, and the cross-platform degraded-count
+regression.
 That same workload hot path also owns the split between canonical
 app-container routing and Docker-only actions. `frontend-modern/src/hooks/useWorkloads.ts`,
 `frontend-modern/src/components/Workloads/workloadTopology.ts`, and

@@ -1,34 +1,31 @@
-import { defineConfig, devices } from '@playwright/test';
-import {
-  PROBATION_SPECS,
-  QUARANTINED_SPECS,
-} from './e2e-tiering.mjs';
-import { preferredBrowserBaseURL } from './tests/runtime-defaults';
+import { defineConfig, devices } from "@playwright/test";
+import { PROBATION_SPECS, QUARANTINED_SPECS } from "./e2e-tiering.mjs";
+import { preferredBrowserBaseURL } from "./tests/runtime-defaults";
 
-const E2E_TIER = String(process.env.PULSE_E2E_TIER || '')
+const E2E_TIER = String(process.env.PULSE_E2E_TIER || "")
   .trim()
   .toLowerCase();
-if (E2E_TIER && E2E_TIER !== 'stable' && E2E_TIER !== 'probation') {
+if (E2E_TIER && E2E_TIER !== "stable" && E2E_TIER !== "probation") {
   throw new Error(
     `PULSE_E2E_TIER must be "stable", "probation", or unset (got "${E2E_TIER}")`,
   );
 }
 // Stable tier ignores probation specs; probation tier runs only them.
-const TIER_IGNORE = E2E_TIER === 'stable' ? PROBATION_SPECS : [];
+const TIER_IGNORE = E2E_TIER === "stable" ? PROBATION_SPECS : [];
 
 // CI runs both tiers inside one job; separate output roots keep the
 // probation pass from clobbering the stable pass's report and artifacts.
-const REPORT_DIR = process.env.PULSE_E2E_REPORT_DIR || 'playwright-report';
-const RESULTS_DIR = process.env.PULSE_E2E_RESULTS_DIR || 'test-results';
+const REPORT_DIR = process.env.PULSE_E2E_REPORT_DIR || "playwright-report";
+const RESULTS_DIR = process.env.PULSE_E2E_RESULTS_DIR || "test-results";
 
 /**
  * Playwright configuration for Pulse update integration tests
  * See https://playwright.dev/docs/test-configuration
  */
 export default defineConfig({
-  testDir: './tests',
+  testDir: "./tests",
 
-  ...(E2E_TIER === 'probation' ? { testMatch: PROBATION_SPECS } : {}),
+  ...(E2E_TIER === "probation" ? { testMatch: PROBATION_SPECS } : {}),
 
   outputDir: RESULTS_DIR,
 
@@ -53,9 +50,16 @@ export default defineConfig({
 
   /* Reporter to use */
   reporter: [
-    ['html', { outputFolder: REPORT_DIR, open: 'never' }],
-    ['list'],
-    ['junit', { outputFile: `${RESULTS_DIR}/junit.xml` }]
+    ["html", { outputFolder: REPORT_DIR, open: "never" }],
+    ["list"],
+    // Keep gating failures queryable through the check-run annotations API.
+    // Raw Actions logs and report archives can exceed the maintainer's bounded
+    // evidence surface; the built-in reporter includes project, spec, line,
+    // and test title without changing retries, tiering, or the verdict.
+    ...(process.env.GITHUB_ACTIONS === "true" && E2E_TIER === "stable"
+      ? ([["github"]] as const)
+      : []),
+    ["junit", { outputFile: `${RESULTS_DIR}/junit.xml` }],
   ],
 
   /* Shared test timeout */
@@ -70,18 +74,20 @@ export default defineConfig({
     baseURL: preferredBrowserBaseURL(),
 
     /* Allow testing against self-signed TLS when explicitly enabled */
-    ignoreHTTPSErrors: ['1', 'true', 'yes', 'on'].includes(
-      String(process.env.PULSE_E2E_INSECURE_TLS || '').trim().toLowerCase(),
+    ignoreHTTPSErrors: ["1", "true", "yes", "on"].includes(
+      String(process.env.PULSE_E2E_INSECURE_TLS || "")
+        .trim()
+        .toLowerCase(),
     ),
 
     /* Collect trace when retrying the failed test */
-    trace: 'on-first-retry',
+    trace: "on-first-retry",
 
     /* Screenshot on failure */
-    screenshot: 'only-on-failure',
+    screenshot: "only-on-failure",
 
     /* Video on failure */
-    video: 'retain-on-failure',
+    video: "retain-on-failure",
 
     /* Default navigation timeout */
     navigationTimeout: 15000,
@@ -93,18 +99,22 @@ export default defineConfig({
   /* Configure projects for different browsers */
   projects: [
     {
-      name: 'chromium',
+      name: "chromium",
       use: {
-        ...devices['Desktop Chrome'],
+        ...devices["Desktop Chrome"],
       },
       // Mobile-specific tests are intentionally excluded from the desktop project;
       // they rely on mobile viewports where md:hidden nav is visible, tables overflow, etc.
-      testIgnore: [...QUARANTINED_SPECS, ...TIER_IGNORE, '**/04-mobile.spec.ts'],
+      testIgnore: [
+        ...QUARANTINED_SPECS,
+        ...TIER_IGNORE,
+        "**/04-mobile.spec.ts",
+      ],
     },
     {
-      name: 'mobile-chrome',
+      name: "mobile-chrome",
       use: {
-        ...devices['Pixel 5'],
+        ...devices["Pixel 5"],
       },
       // Journey tests skip on mobile projects (all use test.skip for mobile-*),
       // so exclude them to avoid unnecessary browser launches. The visual
@@ -113,20 +123,20 @@ export default defineConfig({
       testIgnore: [
         ...QUARANTINED_SPECS,
         ...TIER_IGNORE,
-        '**/journeys/**',
-        '**/99-visual-crawl.spec.ts',
+        "**/journeys/**",
+        "**/99-visual-crawl.spec.ts",
       ],
     },
     {
-      name: 'mobile-safari',
+      name: "mobile-safari",
       use: {
-        ...devices['iPhone 12'],
+        ...devices["iPhone 12"],
       },
       testIgnore: [
         ...QUARANTINED_SPECS,
         ...TIER_IGNORE,
-        '**/journeys/**',
-        '**/99-visual-crawl.spec.ts',
+        "**/journeys/**",
+        "**/99-visual-crawl.spec.ts",
       ],
     },
 

@@ -2,6 +2,7 @@ package hostagent
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -35,7 +36,11 @@ func TestCollectPrivilegeStatusReportsHelperOverrides(t *testing.T) {
 }
 
 func TestResolvePctPathHonorsAbsoluteOverride(t *testing.T) {
-	t.Setenv("PULSE_PCT_PATH", "/usr/local/lib/pulse-agent/pct-helper")
+	configuredPath := filepath.Join(t.TempDir(), "pct-helper")
+	if !filepath.IsAbs(configuredPath) {
+		t.Fatalf("native test override = %q, want absolute path", configuredPath)
+	}
+	t.Setenv("PULSE_PCT_PATH", configuredPath)
 
 	resolved, err := resolvePctPath(func(string) (string, error) {
 		t.Fatal("lookPath must not be consulted when the override is set")
@@ -44,8 +49,8 @@ func TestResolvePctPathHonorsAbsoluteOverride(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolvePctPath: %v", err)
 	}
-	if resolved != "/usr/local/lib/pulse-agent/pct-helper" {
-		t.Fatalf("resolved = %q", resolved)
+	if resolved != configuredPath {
+		t.Fatalf("resolved = %q, want %q", resolved, configuredPath)
 	}
 }
 
