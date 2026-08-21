@@ -115,7 +115,7 @@ func (m *Manager) CheckPBS(pbs models.PBSInstance) {
 	} else {
 		// Check if PBS is offline first (similar to nodes)
 		if pbsOffline {
-			m.checkPBSOffline(pbs)
+			m.checkPBSOfflineWithThresholds(pbs, thresholds)
 		} else {
 			// Clear any existing offline alert if PBS is back online
 			m.clearPBSOfflineAlert(pbs)
@@ -141,11 +141,21 @@ func (m *Manager) CheckPBS(pbs models.PBSInstance) {
 
 // checkPBSOffline creates an alert for offline PBS instances
 func (m *Manager) checkPBSOffline(pbs models.PBSInstance) {
+	m.mu.RLock()
+	thresholds := m.resolveResourceThresholds("pbs", pbs.ID)
+	m.mu.RUnlock()
+	m.checkPBSOfflineWithThresholds(pbs, thresholds)
+}
+
+// checkPBSOfflineWithThresholds evaluates one observation against the policy
+// snapshot CheckPBS resolved when that observation began. A concurrent config
+// update applies to the next observation instead of changing eligibility
+// between this observation's pre-dispatch gate and lifecycle evaluation.
+func (m *Manager) checkPBSOfflineWithThresholds(pbs models.PBSInstance, thresholds ThresholdConfig) {
 	m.mu.Lock()
 	delete(m.offlineRecoveryConfirmations, canonicalConnectivityStateID(pbs.ID))
 	m.mu.Unlock()
 
-	thresholds := m.resolveResourceThresholds("pbs", pbs.ID)
 	spec, err := buildCanonicalConnectivitySpec(pbs.ID, pbs.Name, unifiedresources.ResourceTypePBS, AlertLevelCritical, 3, thresholds.Disabled || thresholds.DisableConnectivity)
 	if err != nil {
 		log.Warn().
