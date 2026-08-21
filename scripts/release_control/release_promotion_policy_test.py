@@ -471,6 +471,12 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("release-activation.json", helm_pages)
         self.assertIn("source_release_run_id", helm_pages)
         self.assertIn("Helm Pages refuses to advertise inactive", helm_pages)
+        for command in ("view", "upload", "create", "edit"):
+            with self.subTest(command=command):
+                self.assertRegex(
+                    helm_pages,
+                    rf'gh release {command} .*?(?:\\\n\s*)?--repo "\$\{{GITHUB_REPOSITORY\}}"',
+                )
 
         floating_tags = read(".github/workflows/promote-floating-tags.yml")
         self.assertIn("Require activated GitHub release", floating_tags)

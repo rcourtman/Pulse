@@ -165,17 +165,20 @@ jobs:
           chart_release="helm-chart-${VERSION}"
           chart_release_url="https://github.com/${{ github.repository }}/releases/download/${chart_release}"
 
-          if gh release view "${chart_release}" >/dev/null 2>&1; then
-            gh release upload "${chart_release}" "${chart_path}" --clobber
+          if gh release view "${chart_release}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+            gh release upload "${chart_release}" "${chart_path}" --clobber \
+              --repo "${GITHUB_REPOSITORY}"
           else
             gh release create "${chart_release}" "${chart_path}" \
+              --repo "${GITHUB_REPOSITORY}" \
               --target "${TARGET_COMMITISH}" \
               --title "Helm chart ${VERSION}" \
               --notes "Helm chart for Pulse ${VERSION}." \
               --prerelease \
               --latest=false
           fi
-          gh release edit "${chart_release}" --prerelease --latest=false
+          gh release edit "${chart_release}" --prerelease --latest=false \
+            --repo "${GITHUB_REPOSITORY}"
 
           git -C gh-pages config user.name "$GITHUB_ACTOR"
           git -C gh-pages config user.email "$GITHUB_ACTOR@users.noreply.github.com"

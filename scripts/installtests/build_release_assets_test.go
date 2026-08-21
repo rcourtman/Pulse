@@ -1547,6 +1547,7 @@ func TestDeploymentDefaultsPinVersionedImagesAndHelmDocsChecksum(t *testing.T) {
 		`qualified chart metadata does not match the activated release`,
 		`name: Publish chart release and merge Pages index`,
 		`gh release create "${chart_release}" "${chart_path}"`,
+		`--repo "${GITHUB_REPOSITORY}"`,
 		`helm repo index "${index_work}"`,
 		`git -C gh-pages push origin HEAD:gh-pages`,
 		`grep -q "version: ${VERSION}"`,

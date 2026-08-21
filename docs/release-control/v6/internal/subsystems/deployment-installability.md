@@ -1180,6 +1180,10 @@ upgrade, update, release, or artifact-selection behavior.
    resumed. Checkout-free activation jobs must also pass the repository
    explicitly to `gh release upload`; local git discovery is not a valid
    dependency at the irreversible marker boundary.
+   The same explicit-repository rule applies to reusable convergence jobs that
+   check out only a nested mutation branch such as `gh-pages`: every `gh
+   release` read or write must pass `--repo "${GITHUB_REPOSITORY}"` rather than
+   depending on current-directory repository discovery.
    A failed activation after immutable readiness has passed may use the
    activation-only recovery workflow. Recovery must accept only a completed
    failed `create-release.yml` run whose failures are confined to activation,
