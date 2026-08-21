@@ -30,6 +30,7 @@ func TestContract_HostedIdentityUsesStablePrincipals(t *testing.T) {
 		"security_tokens.go":                         readIdentityContractFile(t, "security_tokens.go"),
 		"org_handlers.go":                            readIdentityContractFile(t, "org_handlers.go"),
 		"agent_install_command_shared.go":            readIdentityContractFile(t, "agent_install_command_shared.go"),
+		"agenttokens/install.go":                     readIdentityContractFile(t, "agenttokens/install.go"),
 		"deploy_handlers.go":                         readIdentityContractFile(t, "deploy_handlers.go"),
 		"router.go":                                  readIdentityContractFile(t, "router.go"),
 		"security_setup_fix.go":                      readIdentityContractFile(t, "security_setup_fix.go"),
@@ -92,9 +93,12 @@ func TestContract_HostedIdentityUsesStablePrincipals(t *testing.T) {
 			"apiTokenOwnerUserIDForRequest",
 		},
 		"agent_install_command_shared.go": {
+			"return agenttokens.IssueAndPersist(cfg, persistence, opts)",
+		},
+		"agenttokens/install.go": {
 			"OwnerUserID string",
-			"setAPITokenOwnerUserID(record, opts.OwnerUserID)",
-			"mergeAPITokenMetadata(record, opts.Metadata)",
+			"setOwnerUserID(record, opts.OwnerUserID)",
+			"mergeMetadata(record, opts.Metadata)",
 		},
 		"deploy_handlers.go": {
 			"setAPITokenOwnerUserID(record, ownerUserID)",

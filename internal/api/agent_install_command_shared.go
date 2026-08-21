@@ -1,16 +1,14 @@
 package api
 
 import (
-	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
-	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/api/agenttokens"
 	"github.com/rcourtman/pulse-go-rewrite/internal/api/configapi"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
-	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 )
 
 const (
@@ -23,9 +21,9 @@ const (
 )
 
 var (
-	errAgentInstallTokenGeneration = errors.New("agent install token generation failed")
-	errAgentInstallTokenRecord     = errors.New("agent install token record failed")
-	errAgentInstallTokenPersist    = errors.New("agent install token persistence failed")
+	errAgentInstallTokenGeneration = agenttokens.ErrGeneration
+	errAgentInstallTokenRecord     = agenttokens.ErrRecord
+	errAgentInstallTokenPersist    = agenttokens.ErrPersist
 )
 
 func normalizeProxmoxInstallType(raw string) (string, error) {
@@ -37,12 +35,7 @@ func normalizeProxmoxInstallType(raw string) (string, error) {
 }
 
 func proxmoxAgentInstallScopes() []string {
-	return []string{
-		config.ScopeAgentReport,
-		config.ScopeAgentConfigRead,
-		config.ScopeAgentManage,
-		config.ScopeAgentExec,
-	}
+	return agenttokens.ProxmoxScopes()
 }
 
 // hostAgentInstallScopes returns the scopes for a generic unified host agent
@@ -50,87 +43,16 @@ func proxmoxAgentInstallScopes() []string {
 // command execution, because the token is minted before the agent enrols and
 // scopes cannot be upgraded on an existing token.
 func hostAgentInstallScopes(enableCommands bool) []string {
-	scopes := []string{
-		config.ScopeAgentReport,
-		config.ScopeAgentConfigRead,
-		config.ScopeAgentManage,
-		config.ScopeDockerReport,
-		config.ScopeKubernetesReport,
-	}
-	if enableCommands {
-		scopes = append(scopes, config.ScopeAgentExec)
-	}
-	return scopes
+	return agenttokens.HostScopes(enableCommands)
 }
 
-type issueAgentInstallTokenOptions struct {
-	TokenName   string
-	OrgID       string
-	OwnerUserID string
-	Metadata    map[string]string
-	// Scopes overrides the default Proxmox install scope set when non-empty
-	// (used by the generic host agent flow, which honours the operator's
-	// command-execution choice instead of always granting exec).
-	Scopes []string
-}
+type issueAgentInstallTokenOptions = agenttokens.IssueOptions
 
 func issueAndPersistAgentInstallToken(cfg *config.Config, persistence *config.ConfigPersistence, opts issueAgentInstallTokenOptions) (string, *config.APITokenRecord, error) {
-	if cfg == nil {
-		return "", nil, fmt.Errorf("config is required")
-	}
-
-	rawToken, err := internalauth.GenerateAPIToken()
-	if err != nil {
-		return "", nil, fmt.Errorf("%w: %w", errAgentInstallTokenGeneration, err)
-	}
-
-	scopes := opts.Scopes
-	if len(scopes) == 0 {
-		scopes = proxmoxAgentInstallScopes()
-	}
-	record, err := config.NewAPITokenRecord(rawToken, opts.TokenName, scopes)
-	if err != nil {
-		return "", nil, fmt.Errorf("%w: %w", errAgentInstallTokenRecord, err)
-	}
-
-	record.OrgID = strings.TrimSpace(opts.OrgID)
-	setAPITokenOwnerUserID(record, opts.OwnerUserID)
-	if err := mergeAPITokenMetadata(record, opts.Metadata); err != nil {
-		return "", nil, fmt.Errorf("%w: %w", errAgentInstallTokenRecord, err)
-	}
-
-	// Install tokens are minted without an expiry because the agent reports
-	// with them for the life of the install. Stamp the mint time so the
-	// one-shot Proxmox bootstrap grant they carry can expire on its own clock
-	// (proxmoxInstallBootstrapGrantTTL) instead of staying live forever.
-	if record.Metadata == nil {
-		record.Metadata = make(map[string]string)
-	}
-	record.Metadata[agentInstallTokenIssuedAtKey] = record.CreatedAt.UTC().Format(time.RFC3339)
-
-	config.Mu.Lock()
-	defer config.Mu.Unlock()
-
-	cfg.APITokens = append(cfg.APITokens, *record)
-	cfg.SortAPITokens()
-	if persistence != nil {
-		if err := persistence.SaveAPITokens(cfg.APITokens); err != nil {
-			cfg.APITokens = cfg.APITokens[:len(cfg.APITokens)-1]
-			return "", nil, fmt.Errorf("%w: %w", errAgentInstallTokenPersist, err)
-		}
-	}
-
-	return rawToken, record, nil
+	return agenttokens.IssueAndPersist(cfg, persistence, opts)
 }
 
-type agentInstallCommandOptions struct {
-	BaseURL            string
-	Token              string
-	InstallType        string
-	IncludeInstallType bool
-	EnableCommands     bool
-	Insecure           bool
-}
+type agentInstallCommandOptions = configapi.AgentInstallCommandOptions
 
 type setupScriptInstallArtifact = configapi.SetupScriptInstallArtifact
 
@@ -175,44 +97,7 @@ func withPrivilegeEscalation(command string) string {
 }
 
 func buildProxmoxAgentInstallCommand(opts agentInstallCommandOptions) string {
-	baseURL := normalizeAgentInstallBaseURL(opts.BaseURL)
-	installScriptURL := baseURL + "/install.sh"
-	curlFlags := "-fsSL"
-	if opts.Insecure {
-		curlFlags = "-kfsSL"
-	}
-	token := strings.TrimSpace(opts.Token)
-	tokenSetup := ""
-	tokenArg := ""
-	tokenCleanup := ""
-	if token != "" {
-		tokenSetup = fmt.Sprintf(`token_file=$(mktemp) && chmod 600 "$token_file" && printf %%s %s > "$token_file" && `, posixShellQuote(token))
-		tokenArg = ` \
-  --token-file "$token_file"`
-		tokenCleanup = `; rc=$?; rm -f "$token_file"; exit $rc`
-	}
-	command := fmt.Sprintf(`%scurl %s %s | bash -s -- \
-  --url %s \
-  --enable-proxmox`,
-		tokenSetup, curlFlags, posixShellQuote(installScriptURL), posixShellQuote(baseURL))
-	command += tokenArg
-
-	if opts.Insecure || installBaseURLRequiresInsecure(baseURL) {
-		command += ` \
-  --insecure`
-	}
-
-	if opts.IncludeInstallType {
-		command += fmt.Sprintf(` \
-  --proxmox-type %s`, posixShellQuote(opts.InstallType))
-	}
-
-	if opts.EnableCommands {
-		command += ` \
-  --enable-commands`
-	}
-
-	return withPrivilegeEscalation(command) + tokenCleanup
+	return configapi.BuildProxmoxAgentInstallCommand(opts)
 }
 
 func containerRuntimeAgentScopes(enableHost bool) []string {

@@ -1700,9 +1700,12 @@ func TestContract_APITokenOwnerBindingCoversSharedMintingPaths(t *testing.T) {
 			"reserved token metadata key",
 		},
 		"agent_install_command_shared.go": {
+			"return agenttokens.IssueAndPersist(cfg, persistence, opts)",
+		},
+		"agenttokens/install.go": {
 			"OwnerUserID string",
-			"setAPITokenOwnerUserID(record, opts.OwnerUserID)",
-			"mergeAPITokenMetadata(record, opts.Metadata)",
+			"setOwnerUserID(record, opts.OwnerUserID)",
+			"mergeMetadata(record, opts.Metadata)",
 		},
 		"deploy_handlers.go": {
 			"setAPITokenOwnerUserID(record, ownerUserID)",
