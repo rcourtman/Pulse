@@ -2273,6 +2273,7 @@ func TestReleasePipelinePromotesOneImmutableCandidate(t *testing.T) {
 	recoveryWorkflow := string(recoveryBytes)
 	leaseScript := string(leaseScriptBytes)
 	createJob := workflowJobBlock(t, createWorkflow, "create_release")
+	prepareJob := workflowJobBlock(t, createWorkflow, "prepare")
 	frontendBundleJob := workflowJobBlock(t, createWorkflow, "frontend_bundle")
 	backendJob := workflowJobBlock(t, createWorkflow, "backend_tests")
 	integrationJob := workflowJobBlock(t, createWorkflow, "integration_tests")
@@ -2288,6 +2289,10 @@ func TestReleasePipelinePromotesOneImmutableCandidate(t *testing.T) {
 	demoJob := workflowJobBlock(t, convergenceWorkflow, "update_stable_demo")
 	compileJob := workflowJobBlock(t, candidateWorkflow, "compile-release-payload")
 	candidateBuildJob := workflowJobBlock(t, candidateWorkflow, "build")
+
+	if !strings.Contains(prepareJob, "runs-on: [self-hosted, Linux, X64, pulse-pve-compile]") {
+		t.Fatal("release preparation must avoid a hosted-runner queue before the dependency graph")
+	}
 
 	for _, needle := range []string{
 		"pulse-pve-compile",

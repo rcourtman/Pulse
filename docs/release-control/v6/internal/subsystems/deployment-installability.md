@@ -522,8 +522,12 @@ upgrade, update, release, or artifact-selection behavior.
    integration-environment preparation as independent lanes after producing
    the frontend embed bundle. Its receipt must distinguish elapsed wall time
    from the sum of overlapping phase times.
-   The canonical public release workflow must use dedicated, credential-free
-   PVE runner identities for the frontend embed bundle and backend race gate.
+   The canonical public release workflow must run its credential-free prepare
+   job on the PVE compilation identity so hosted-runner allocation cannot hold
+   the entire dependency graph. Preparation must release that identity before
+   exact-SHA compilation becomes eligible. Dedicated, credential-free PVE
+   runner identities must also own the frontend embed bundle and backend race
+   gate.
    Signing, package publication, and release mutation authority must remain on
    hosted jobs. The bundle job must be independent from frontend quality so
    backend and browser-smoke lanes can start as soon as the bundle is available.

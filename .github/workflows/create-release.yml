@@ -76,7 +76,7 @@ permissions:
 jobs:
   # Combined version extraction and validation (saves a checkout)
   prepare:
-    runs-on: ubuntu-24.04
+    runs-on: [self-hosted, Linux, X64, pulse-pve-compile]
     timeout-minutes: 5
     outputs:
       version: ${{ steps.extract.outputs.version }}
