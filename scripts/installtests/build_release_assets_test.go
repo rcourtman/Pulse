@@ -2341,6 +2341,31 @@ func TestCreateReleasePublishesPrivateProRuntime(t *testing.T) {
 	}
 }
 
+func TestReleaseBackendRaceGateHasHostedRunnerHeadroom(t *testing.T) {
+	makefileBytes, err := os.ReadFile(repoFile("Makefile"))
+	if err != nil {
+		t.Fatalf("read Makefile: %v", err)
+	}
+	if !strings.Contains(string(makefileBytes), "GO_TEST_TIMEOUT ?= 30m") {
+		t.Fatal("backend race suite must keep a 30-minute per-package timeout for hosted-runner variance")
+	}
+	if !strings.Contains(string(makefileBytes), "go test -race -timeout $(GO_TEST_TIMEOUT)") {
+		t.Fatal("make test must apply the governed backend race-suite timeout")
+	}
+
+	workflowBytes, err := os.ReadFile(repoFile(".github", "workflows", "create-release.yml"))
+	if err != nil {
+		t.Fatalf("read create-release.yml: %v", err)
+	}
+	backendJob := workflowJobBlock(t, string(workflowBytes), "backend_tests")
+	if !strings.Contains(backendJob, "timeout-minutes: 40") {
+		t.Fatal("release backend job must leave setup and result-collection headroom above the package timeout")
+	}
+	if !strings.Contains(backendJob, "run: make test") {
+		t.Fatal("release backend job must consume the governed Makefile race-suite timeout")
+	}
+}
+
 func TestHelmAgentRuntimePointsAtRealImage(t *testing.T) {
 	// The helm chart's agent.enabled=true workload used to default to
 	// ghcr.io/rcourtman/pulse-agent — an image that was never published.

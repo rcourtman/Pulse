@@ -5,6 +5,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 HOT_DEV_RUNTIME_LIB="${ROOT_DIR}/scripts/lib/hot-dev-runtime.sh"
 HOT_DEV="${ROOT_DIR}/scripts/hot-dev.sh"
+MAKEFILE="${ROOT_DIR}/Makefile"
 
 if [[ ! -f "${HOT_DEV_RUNTIME_LIB}" ]]; then
   echo "hot-dev-runtime.sh not found at ${HOT_DEV_RUNTIME_LIB}" >&2
@@ -333,6 +334,14 @@ test_go_module_security_dependency_floors() {
   assert_contains "Go module floor keeps x/sys aligned with security module graph" "${output}" "golang.org/x/sys v0.47.0"
 }
 
+test_backend_race_suite_keeps_hosted_runner_timeout_headroom() {
+  local output
+  output="$(sed -n '1,125p' "${MAKEFILE}")"
+
+  assert_contains "backend race suite exposes the governed package timeout" "${output}" "GO_TEST_TIMEOUT ?= 30m"
+  assert_contains "make test applies the governed package timeout" "${output}" 'go test -race -timeout $(GO_TEST_TIMEOUT)'
+}
+
 source "${HOT_DEV_RUNTIME_LIB}"
 test_pulse_process_count_handles_zero_matches_under_pipefail
 test_pulse_process_count_counts_matching_processes
@@ -346,6 +355,7 @@ test_hot_dev_lab_agent_mode_enables_lan_and_guest_docker_inventory_defaults
 test_hot_dev_remembers_explicit_lab_agent_mode_for_later_managed_starts
 test_hot_dev_browser_urls_distinguish_bind_and_browser_hosts
 test_go_module_security_dependency_floors
+test_backend_race_suite_keeps_hosted_runner_timeout_headroom
 
 if (( failures > 0 )); then
   echo "FAIL: ${failures} hot-dev runtime assertions failed" >&2

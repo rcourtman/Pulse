@@ -328,7 +328,11 @@ jobs:
       - frontend_checks
     if: ${{ needs.prepare.outputs.historical_asset_backfill_only != 'true' }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    # The race-enabled internal/api package has measured at 24 minutes on the
+    # hosted runner. Keep the job ceiling above the Makefile's 30-minute
+    # per-package timeout so setup and result collection cannot become the
+    # effective release gate.
+    timeout-minutes: 40
     env:
       FRONTEND_DIST: frontend-modern/dist
     steps:

@@ -80,6 +80,19 @@ prerelease and rolls back to stable `v6.2.1`._
   post-install command enablement, and surfaces failures without host churn.
 - In-progress Proxmox backups remain in progress rather than being shown as
   completed.
+- Per-guest overrides without an explicit powered-off severity inherit the
+  global severity rather than being normalized to warning.
+- Resolved alert occurrences remain immutable in history, and each later
+  recurrence receives its own row without weakening short-gap coalescing.
+- Notification retries span roughly three minutes by default, allowing a
+  destination restart to recover before delivery is dead-lettered.
+- QNAP installs stage and run the Unified Agent from the persistent data volume
+  instead of consuming the RAM-backed system root.
+- Network filesystems are skipped before disk-usage syscalls by default, and
+  remaining mount probes are bounded so one stalled mount cannot freeze host
+  collection or shutdown.
+- Unix credential-repair commands retain the existing agent ID and hostname so
+  the repair converges on the current record instead of creating a duplicate.
 
 ## Security
 

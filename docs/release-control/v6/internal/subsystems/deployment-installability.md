@@ -505,6 +505,12 @@ upgrade, update, release, or artifact-selection behavior.
    persistent run directory and remove that bounded scratch directory on exit;
    a small WSL `/tmp` tmpfs must not turn release qualification into a false
    product failure.
+   The canonical backend race gate must likewise budget for hosted-runner
+   variance without weakening test coverage. `make test` owns a 30-minute
+   per-package timeout, and the release workflow's backend job owns a larger
+   40-minute ceiling so checkout, toolchain setup, and result collection cannot
+   become a tighter implicit deadline. The release-promotion contract test must
+   pin both sides of that headroom relationship.
    The rehearsal diagnostic spec is opt-in by design, so both the hosted
    rehearsal and its worker profile must set `PULSE_E2E_DIAGNOSTIC=1`; invoking
    that spec while leaving it skipped is not browser proof.

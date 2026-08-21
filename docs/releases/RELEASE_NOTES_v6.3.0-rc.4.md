@@ -9,24 +9,17 @@ correctness fixes.
 This candidate adds estate-first platform summaries and search, an operator-
 visible notification delivery log, a supported least-privilege agent profile,
 and safer Docker-in-LXC discovery. It also prevents failed settings or AI-state
-reads from silently overwriting preserved data.
+reads from silently overwriting preserved data, restores distinct alert-history
+recurrences, and hardens agent operation on QNAP and hosts with stalled mounts.
 
 ## Highlights
 
-- Patrol guides operators through one ranked decision at a time; Actions now
-  has its own primary review workspace.
-- Read-only observers extend Patrol coverage between full model investigations
-  without granting mutation authority.
-- Approved actions gain agent preflight and stable refusal telemetry; large
-  installations gain compressed APIs and indexed lookups.
-- Platform pages now lead with estate totals, status facets, and search that
-  share the same predicates as their underlying tables.
-- Notification settings show the outcome of real delivery attempts instead of
-  relying on test sends as a proxy for live delivery health.
-- Docker-in-LXC discovery is explicitly controlled and backs off against slow
-  or failing Proxmox hosts instead of creating a probe storm.
-- Unified Agent installs can opt into a supported least-privilege profile with
-  narrowly scoped elevation for the capabilities that require it.
+- Patrol guides operators through ranked decisions, read-only observation, and
+  governed Actions without expanding mutation authority.
+- Estate-first search, faster APIs, delivery logs, resilient alert history, and
+  longer notification retries improve daily operations.
+- Unified Agent hardening covers least privilege, Docker-in-LXC, QNAP storage,
+  stalled mounts, action preflight, and credential repair.
 
 ## Added
 
@@ -119,6 +112,21 @@ reads from silently overwriting preserved data.
   cooldown was recorded and never read, so suppression ended as soon as the
   measurement window drained and a resource oscillating just under the
   threshold was never damped at all.
+- Per-guest overrides that do not set powered-off severity continue to inherit
+  the global severity instead of silently being stamped as warning.
+- Each alert recurrence now creates its own history row after the preceding
+  occurrence resolves, while genuine short observation gaps still coalesce.
+- Notification delivery retries now cover roughly three minutes by default, so
+  a destination restarting with monitored infrastructure can recover before
+  the notification is dead-lettered.
+- QNAP installs place the agent runtime and download staging on the persistent
+  data volume instead of requiring tens of MiB on the RAM-backed root.
+- An unreachable network mount no longer freezes the entire host disk collector
+  or delays agent shutdown; skipped network filesystems are filtered before
+  usage probes and remaining probes are bounded.
+- Unix Repair Authentication commands pin the existing agent ID and hostname,
+  matching Windows behavior and preventing a repair from creating a suffixed
+  duplicate identity.
 
 ## Security
 
