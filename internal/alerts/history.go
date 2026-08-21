@@ -205,12 +205,11 @@ func sameHistoryIncident(existing, incoming HistoryEntry) bool {
 	if existingResolved || incomingResolved {
 		return false
 	}
-	if existing.Alert.OperationalRecord != nil &&
-		incoming.Alert.OperationalRecord != nil &&
-		!existingResolved && !incomingResolved {
-		return true
-	}
 
+	// Two open records do not by themselves make one incident: an operational
+	// record can survive across occurrences (or be stranded open), and treating
+	// that as identity merged every recurrence into its first row forever. The
+	// observation-gap window below decides instead.
 	lastObservation := existing.Timestamp
 	if existing.Alert.LastSeen.After(lastObservation) {
 		lastObservation = existing.Alert.LastSeen
@@ -297,6 +296,19 @@ func (hm *HistoryManager) UpdateAlertOperationalContractForAlert(alert *Alert) {
 		entryKey := historyIdentityKey(entry)
 		if (matchKey != "" && entryKey == matchKey) ||
 			(matchID != "" && hm.history[i].Alert.ID == matchID) {
+			// A resolved row is this occurrence's final state. A later
+			// occurrence of the same identity (different StartTime) gets its
+			// own row from AddAlert, so its record must not overwrite the
+			// resolved one here.
+			entryResolved := entry.OperationalRecord != nil &&
+				entry.OperationalRecord.State == operationaltrust.OperationalResolved
+			snapshotResolved := snapshot.OperationalRecord != nil &&
+				snapshot.OperationalRecord.State == operationaltrust.OperationalResolved
+			if entryResolved && !snapshotResolved &&
+				!entry.StartTime.IsZero() && !snapshot.StartTime.IsZero() &&
+				!entry.StartTime.Equal(snapshot.StartTime) {
+				return
+			}
 			hm.history[i].Alert.OperationalRecord = snapshot.OperationalRecord
 			hm.history[i].Alert.LatestTransition = snapshot.LatestTransition
 			hm.history[i].Alert.Transitions = snapshot.Transitions
