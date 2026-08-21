@@ -133,31 +133,38 @@ jobs:
             local name="$1"
             local url="$2"
             local expected_sha="$3"
+            local destination="$RUNNER_TEMP/$name"
+            local download="$destination.download"
             local installed_path=""
             installed_path="$(command -v "$name" 2>/dev/null || true)"
 
             if [ -n "$installed_path" ] && printf '%s  %s\n' "$expected_sha" "$installed_path" | sha256sum --check --status; then
-              ln -sf "$installed_path" "$RUNNER_TEMP/$name"
+              install -m 0755 "$installed_path" "$destination"
             else
-              curl -fsSL -o "$RUNNER_TEMP/$name" "$url"
-              printf '%s  %s\n' "$expected_sha" "$RUNNER_TEMP/$name" | sha256sum --check
-              chmod +x "$RUNNER_TEMP/$name"
+              rm -f "$download"
+              curl -fsSL -o "$download" "$url"
+              printf '%s  %s\n' "$expected_sha" "$download" | sha256sum --check
+              chmod 0755 "$download"
+              mv "$download" "$destination"
             fi
+
+            printf '%s  %s\n' "$expected_sha" "$destination" | sha256sum --check
+            test -x "$destination"
           }
 
           prepare_cluster_tool \
             kind \
             https://kind.sigs.k8s.io/dl/v0.20.0/kind-linux-amd64 \
-            513a7213d6d3332dd9ef27c24dab35e5ef10a04fa27274fe1c14d8a246493ded &
-          kind_setup_pid=$!
+            513a7213d6d3332dd9ef27c24dab35e5ef10a04fa27274fe1c14d8a246493ded
           prepare_cluster_tool \
             kubectl \
             https://dl.k8s.io/release/v1.27.3/bin/linux/amd64/kubectl \
-            fba6c062e754a120bc8105cde1344de200452fe014a8759e06e4eec7ed258a09 &
-          kubectl_setup_pid=$!
-          wait "$kind_setup_pid"
-          wait "$kubectl_setup_pid"
+            fba6c062e754a120bc8105cde1344de200452fe014a8759e06e4eec7ed258a09
           export PATH="$RUNNER_TEMP:$PATH"
+          test "$(command -v kind)" = "$RUNNER_TEMP/kind"
+          test "$(command -v kubectl)" = "$RUNNER_TEMP/kubectl"
+          kind version
+          kubectl version --client=true
 
           cleanup
           kind create cluster --name pulse-test --wait 5m
