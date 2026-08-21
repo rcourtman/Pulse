@@ -309,6 +309,136 @@ func TestInstallSHGrantsLXCAttachCapabilitiesForAnyPVEAgent(t *testing.T) {
 	}
 }
 
+func TestInstallSHSystemdAgentHardeningMatrix(t *testing.T) {
+	if _, err := os.Stat("/usr/syno"); err == nil {
+		t.Skip("Synology intentionally omits the standard systemd hardening block")
+	}
+
+	for _, tc := range []struct {
+		name                      string
+		enableCommands            string
+		enableProxmox             string
+		proxmoxType               string
+		leastPrivilege            string
+		grantSmart                string
+		grantPCT                  string
+		wantNoNewPrivileges       string
+		wantRestrictSUIDSGID      string
+		wantLXCAttachCapabilities bool
+	}{
+		{
+			name:           "root_standard",
+			enableCommands: "false", enableProxmox: "false", proxmoxType: "",
+			leastPrivilege: "false", grantSmart: "false", grantPCT: "false",
+			wantNoNewPrivileges: "true", wantRestrictSUIDSGID: "true",
+		},
+		{
+			name:           "root_pve_inventory_ready",
+			enableCommands: "false", enableProxmox: "true", proxmoxType: "pve",
+			leastPrivilege: "false", grantSmart: "false", grantPCT: "false",
+			wantNoNewPrivileges: "true", wantRestrictSUIDSGID: "true", wantLXCAttachCapabilities: true,
+		},
+		{
+			name:           "root_pve_auto_detect_inventory_ready",
+			enableCommands: "false", enableProxmox: "true", proxmoxType: "",
+			leastPrivilege: "false", grantSmart: "false", grantPCT: "false",
+			wantNoNewPrivileges: "true", wantRestrictSUIDSGID: "true", wantLXCAttachCapabilities: true,
+		},
+		{
+			name:           "root_pve_commands",
+			enableCommands: "true", enableProxmox: "true", proxmoxType: "pve",
+			leastPrivilege: "false", grantSmart: "false", grantPCT: "false",
+			wantNoNewPrivileges: "false", wantRestrictSUIDSGID: "false", wantLXCAttachCapabilities: true,
+		},
+		{
+			name:           "root_pbs_commands",
+			enableCommands: "true", enableProxmox: "true", proxmoxType: "pbs",
+			leastPrivilege: "false", grantSmart: "false", grantPCT: "false",
+			wantNoNewPrivileges: "true", wantRestrictSUIDSGID: "true",
+		},
+		{
+			name:           "least_privilege_grantless_pve",
+			enableCommands: "false", enableProxmox: "true", proxmoxType: "pve",
+			leastPrivilege: "true", grantSmart: "false", grantPCT: "false",
+			wantNoNewPrivileges: "true", wantRestrictSUIDSGID: "true",
+		},
+		{
+			name:           "least_privilege_smart_grant",
+			enableCommands: "false", enableProxmox: "true", proxmoxType: "pve",
+			leastPrivilege: "true", grantSmart: "true", grantPCT: "false",
+			wantNoNewPrivileges: "false", wantRestrictSUIDSGID: "true",
+		},
+		{
+			name:           "least_privilege_pct_grant",
+			enableCommands: "false", enableProxmox: "true", proxmoxType: "pve",
+			leastPrivilege: "true", grantSmart: "false", grantPCT: "true",
+			wantNoNewPrivileges: "false", wantRestrictSUIDSGID: "true",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			unitPath := filepath.Join(t.TempDir(), "pulse-agent.service")
+			runAsUser := "root"
+			if tc.leastPrivilege == "true" {
+				runAsUser = "pulse-agent"
+			}
+			script := `
+				set -euo pipefail
+				SYSTEMD_ENV_LINES=""
+				ENABLE_COMMANDS="` + tc.enableCommands + `"
+				ENABLE_PROXMOX="` + tc.enableProxmox + `"
+				PROXMOX_TYPE="` + tc.proxmoxType + `"
+				LEAST_PRIVILEGE="` + tc.leastPrivilege + `"
+				GRANT_SMART="` + tc.grantSmart + `"
+				GRANT_PCT="` + tc.grantPCT + `"
+` + extractInstallShellFunction(t, "systemd_agent_requires_lxc_attach") + `
+` + extractInstallShellFunction(t, "systemd_agent_may_attach_lxc") + `
+` + extractInstallShellFunction(t, "render_systemd_agent_unit") + `
+				render_systemd_agent_unit "$1" "/test/pulse-agent" "--state-dir /test/state" "network-online.target" "network-online.target" "$2" ""
+			`
+			cmd := exec.Command("bash", "-c", script, "systemd-hardening-test", unitPath, runAsUser)
+			if output, err := cmd.CombinedOutput(); err != nil {
+				t.Fatalf("render strict-shell systemd unit: %v\n%s", err, output)
+			}
+			unitBytes, err := os.ReadFile(unitPath)
+			if err != nil {
+				t.Fatalf("read rendered systemd unit: %v", err)
+			}
+			unit := string(unitBytes)
+			assertSingleDirective := func(key, wantValue string) {
+				t.Helper()
+				var got []string
+				for _, line := range strings.Split(unit, "\n") {
+					if strings.HasPrefix(line, key+"=") {
+						got = append(got, line)
+					}
+				}
+				want := key + "=" + wantValue
+				if len(got) != 1 || got[0] != want {
+					t.Fatalf("rendered unit directives for %s = %q, want exactly %q:\n%s", key, got, want, unit)
+				}
+			}
+			assertSingleDirective("NoNewPrivileges", tc.wantNoNewPrivileges)
+			assertSingleDirective("RestrictSUIDSGID", tc.wantRestrictSUIDSGID)
+			assertSingleDirective("User", runAsUser)
+
+			const lxcCapabilities = "AmbientCapabilities=CAP_SETUID CAP_SETGID"
+			var ambientCapabilities []string
+			for _, line := range strings.Split(unit, "\n") {
+				if strings.HasPrefix(line, "AmbientCapabilities=") {
+					ambientCapabilities = append(ambientCapabilities, line)
+				}
+			}
+			if tc.wantLXCAttachCapabilities {
+				if len(ambientCapabilities) != 1 || ambientCapabilities[0] != lxcCapabilities {
+					t.Fatalf("rendered unit ambient capabilities = %q, want exactly %q:\n%s", ambientCapabilities, lxcCapabilities, unit)
+				}
+			} else if len(ambientCapabilities) != 0 {
+				t.Fatalf("rendered unit must not grant ambient capabilities, got %q:\n%s", ambientCapabilities, unit)
+			}
+		})
+	}
+}
+
 func TestInstallSHPreflightChecksAgentDownloadArtifact(t *testing.T) {
 	var requestedDownloadPath string
 	var requestedDownloadArch string
