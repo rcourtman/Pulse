@@ -32,6 +32,52 @@ var (
 	netIOCounters  = gonet.IOCountersWithContext
 )
 
+// diskUsageTimeout bounds a single mountpoint usage syscall. statfs on a
+// healthy filesystem answers in microseconds; a hard-mounted network
+// filesystem whose server is unreachable blocks it in an uninterruptible
+// kernel wait, which would otherwise freeze the whole reporting cycle.
+var diskUsageTimeout = 5 * time.Second
+
+// stuckDiskMounts tracks mountpoints whose usage syscall has not returned
+// yet. The blocked goroutine cannot be cancelled, so the mount is skipped
+// on later cycles until its original call finally comes back.
+var stuckDiskMounts sync.Map
+
+// guardedDiskUsage runs the usage syscall off the collection goroutine and
+// gives up after diskUsageTimeout, leaving at most one in-flight call per
+// mountpoint.
+func guardedDiskUsage(ctx context.Context, mountpoint string) (*godisk.UsageStat, error) {
+	if _, stuck := stuckDiskMounts.Load(mountpoint); stuck {
+		return nil, fmt.Errorf("mountpoint %s skipped: previous usage call has not returned", mountpoint)
+	}
+
+	type usageResult struct {
+		usage *godisk.UsageStat
+		err   error
+	}
+	resultCh := make(chan usageResult, 1)
+	go func() {
+		usage, err := diskUsage(ctx, mountpoint)
+		resultCh <- usageResult{usage: usage, err: err}
+	}()
+
+	timer := time.NewTimer(diskUsageTimeout)
+	defer timer.Stop()
+	select {
+	case result := <-resultCh:
+		return result.usage, result.err
+	case <-timer.C:
+		stuckDiskMounts.Store(mountpoint, struct{}{})
+		log.Warn().Str("mount", mountpoint).Dur("timeout", diskUsageTimeout).Msg("disk: usage call did not answer, excluding mount until it does (unresponsive network mount?)")
+		go func() {
+			<-resultCh
+			stuckDiskMounts.Delete(mountpoint)
+			log.Info().Str("mount", mountpoint).Msg("disk: stalled usage call returned, mount re-included")
+		}()
+		return nil, fmt.Errorf("usage call for %s did not answer within %s", mountpoint, diskUsageTimeout)
+	}
+}
+
 // Snapshot represents a host resource utilisation sample.
 type Snapshot struct {
 	CPUUsagePercent float64
@@ -262,7 +308,21 @@ func collectDisksWithIncludes(ctx context.Context, diskExclude, diskInclude []st
 			continue
 		}
 
-		usage, err := diskUsage(ctx, part.Mountpoint)
+		explicitlyIncluded := fsfilters.MatchesDiskInclude(part.Device, part.Mountpoint, diskInclude)
+		isZFS := strings.EqualFold(part.Fstype, "zfs") || strings.EqualFold(part.Fstype, "fuse.zfs")
+
+		// Type- and mountpoint-based skips need no usage data. Deciding them
+		// before the usage syscall keeps mounts that would be discarded
+		// anyway, hard NFS and CIFS mounts in particular, from stalling the
+		// collector inside statfs. ZFS stays after usage collection because
+		// its datasets are aggregated before this filter applies.
+		if !isZFS && !explicitlyIncluded {
+			if shouldSkip, _ := fsfilters.ShouldSkipFilesystem(part.Fstype, part.Mountpoint, 0, 0); shouldSkip {
+				continue
+			}
+		}
+
+		usage, err := guardedDiskUsage(ctx, part.Mountpoint)
 		if err != nil {
 			log.Debug().Err(err).Str("mount", part.Mountpoint).Str("device", part.Device).Str("fstype", part.Fstype).Msg("disk: failed to get usage")
 			continue
@@ -300,7 +360,6 @@ func collectDisksWithIncludes(ctx context.Context, diskExclude, diskInclude []st
 		// - Virtual/pseudo filesystems (tmpfs, devtmpfs, cgroup, etc.)
 		// - Container overlay paths (Docker/Podman layers on ZFS, including TrueNAS .ix-apps)
 		// See issues #505, #690, #718, #790.
-		explicitlyIncluded := fsfilters.MatchesDiskInclude(part.Device, part.Mountpoint, diskInclude)
 		if shouldSkip, _ := fsfilters.ShouldSkipFilesystem(part.Fstype, part.Mountpoint, usage.Total, usage.Used); shouldSkip && !explicitlyIncluded {
 			continue
 		}
