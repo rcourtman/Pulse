@@ -561,6 +561,10 @@ upgrade, update, release, or artifact-selection behavior.
    candidate workflow; publishing releases invoke it as a sibling of inert
    draft staging so qualification and upload overlap without weakening the
    activation join.
+   The server executable and its detached Minisign and SSH signatures are one
+   architecture-bound payload unit; cross-archive deduplication must allow
+   those three files to differ while continuing to reject drift in every
+   universal agent, installer, and script input.
    This credential-free lane may run against the isolated rootless
    Docker daemon owned by the low-priority PVE build identity; it must not gain
    host-Docker access, signing keys, registry login, or package-write authority.

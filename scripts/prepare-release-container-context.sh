@@ -87,6 +87,8 @@ for arch in amd64 arm64; do
     tar --no-same-owner --no-same-permissions -xzf "${archive}" -C "${output_dir}/${arch}"
     for required in \
         bin/pulse \
+        bin/pulse.sig \
+        bin/pulse.sshsig \
         bin/pulse-agent-linux-amd64 \
         bin/pulse-agent-linux-amd64.sig \
         bin/pulse-agent-linux-amd64.sshsig \
@@ -103,8 +105,12 @@ for arch in amd64 arm64; do
     done
 done
 
-if ! diff -qr --exclude=pulse "${output_dir}/amd64" "${output_dir}/arm64"; then
-    echo "Error: candidate container inputs differ outside the target server binary." >&2
+if ! diff -qr \
+    --exclude=pulse \
+    --exclude=pulse.sig \
+    --exclude=pulse.sshsig \
+    "${output_dir}/amd64" "${output_dir}/arm64"; then
+    echo "Error: candidate container inputs differ outside the target server binary and its signatures." >&2
     exit 1
 fi
 

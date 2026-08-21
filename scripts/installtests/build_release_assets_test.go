@@ -1,6 +1,8 @@
 package installtests
 
 import (
+	"archive/tar"
+	"compress/gzip"
 	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/sha256"
@@ -169,12 +171,96 @@ func TestReleaseContainerTargetsConsumeImmutableCandidate(t *testing.T) {
 		`pulse-v${version}-linux-${arch}.tar.gz`,
 		`validate_archive_entries "${archive}"`,
 		`tar --no-same-owner --no-same-permissions -xzf`,
-		`diff -qr --exclude=pulse`,
+		`bin/pulse.sig`,
+		`bin/pulse.sshsig`,
+		`--exclude=pulse.sig`,
+		`--exclude=pulse.sshsig`,
 		`find "${output_dir}/arm64" -depth -mindepth 1`,
 	} {
 		if !strings.Contains(prepareScript, needle) {
 			t.Fatalf("prepare-release-container-context.sh missing candidate guard: %s", needle)
 		}
+	}
+}
+
+func TestReleaseContainerContextTreatsServerSignaturesAsArchitectureBound(t *testing.T) {
+	version := "6.3.0-rc.test"
+	releaseDir := t.TempDir()
+	outputDir := filepath.Join(t.TempDir(), "container-context")
+
+	writeArchive := func(arch string, driftUniversalPayload bool) {
+		t.Helper()
+		archivePath := filepath.Join(releaseDir, "pulse-v"+version+"-linux-"+arch+".tar.gz")
+		archiveFile, err := os.Create(archivePath)
+		if err != nil {
+			t.Fatalf("create %s archive: %v", arch, err)
+		}
+		gzipWriter := gzip.NewWriter(archiveFile)
+		tarWriter := tar.NewWriter(gzipWriter)
+		files := map[string]string{
+			"bin/pulse":                          "server-" + arch,
+			"bin/pulse.sig":                      "minisign-" + arch,
+			"bin/pulse.sshsig":                   "sshsig-" + arch,
+			"bin/pulse-agent-linux-amd64":        "shared-agent",
+			"bin/pulse-agent-linux-amd64.sig":    "shared-agent-minisign",
+			"bin/pulse-agent-linux-amd64.sshsig": "shared-agent-sshsig",
+			"scripts/install-container-agent.sh": "shared-container-installer",
+			"scripts/install-docker.sh":          "shared-docker-installer",
+			"scripts/install.sh":                 "shared-agent-installer",
+			"scripts/install.sh.sig":             "shared-installer-minisign",
+			"scripts/install.sh.sshsig":          "shared-installer-sshsig",
+			"VERSION":                            version,
+		}
+		if driftUniversalPayload {
+			files["scripts/install.sh"] = "drifted-agent-installer"
+		}
+		for name, content := range files {
+			header := &tar.Header{Name: name, Mode: 0o644, Size: int64(len(content))}
+			if strings.HasPrefix(name, "bin/") || strings.HasSuffix(name, ".sh") {
+				header.Mode = 0o755
+			}
+			if err := tarWriter.WriteHeader(header); err != nil {
+				t.Fatalf("write %s header to %s archive: %v", name, arch, err)
+			}
+			if _, err := tarWriter.Write([]byte(content)); err != nil {
+				t.Fatalf("write %s to %s archive: %v", name, arch, err)
+			}
+		}
+		if err := tarWriter.Close(); err != nil {
+			t.Fatalf("close %s tar stream: %v", arch, err)
+		}
+		if err := gzipWriter.Close(); err != nil {
+			t.Fatalf("close %s gzip stream: %v", arch, err)
+		}
+		if err := archiveFile.Close(); err != nil {
+			t.Fatalf("close %s archive: %v", arch, err)
+		}
+	}
+
+	writeArchive("amd64", false)
+	writeArchive("arm64", false)
+	cmd := exec.Command(repoFile("scripts", "prepare-release-container-context.sh"), releaseDir, version, outputDir)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("prepare context with architecture-bound server signatures: %v\n%s", err, output)
+	}
+	for _, relativePath := range []string{
+		"amd64/bin/pulse",
+		"amd64/bin/pulse.sig",
+		"amd64/bin/pulse.sshsig",
+		"arm64/bin/pulse",
+	} {
+		if _, err := os.Stat(filepath.Join(outputDir, filepath.FromSlash(relativePath))); err != nil {
+			t.Fatalf("prepared context missing %s: %v", relativePath, err)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(outputDir, "arm64", "scripts", "install.sh")); !os.IsNotExist(err) {
+		t.Fatalf("prepared context retained duplicate universal payload: %v", err)
+	}
+
+	writeArchive("arm64", true)
+	cmd = exec.Command(repoFile("scripts", "prepare-release-container-context.sh"), releaseDir, version, outputDir)
+	if output, err := cmd.CombinedOutput(); err == nil || !strings.Contains(string(output), "differ outside the target server binary and its signatures") {
+		t.Fatalf("prepare context accepted drifted universal payload: err=%v\n%s", err, output)
 	}
 }
 
