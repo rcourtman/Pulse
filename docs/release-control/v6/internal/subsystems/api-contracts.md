@@ -4115,10 +4115,22 @@ root router package retains cross-domain integration tests and stable
 compatibility aliases instead of duplicating domain behavior. On the reference
 10-logical-CPU development host, an uncached `go test -json -count=1
 ./internal/api/...` qualification run moved from 241.64 seconds at the
-monolithic baseline to 169.12 seconds on the final passing decomposed
-measurement (30.01% lower wall time), while aggregate CPU use increased from
-1.241 to 1.544 cores. This development-host sample is not a substitute for the
-PVE release-worker result.
+monolithic baseline to 153.96 seconds at the canonicalized boundary commit
+(36.28% lower wall time), while aggregate CPU use increased from 1.241 to
+1.435 cores. All 7,305 final test events passed.
+
+The 8-vCPU PVE release-worker audit does not yet establish release-path
+acceleration. Two monolithic samples completed in 251.14 and 258.87 seconds;
+the exact canonicalized boundary commit completed in 268.57 seconds. Go did
+schedule the extracted packages concurrently (`configapi` completed in 36.82
+seconds), but shared-worker contention expanded the remaining root package to
+267.07 seconds. Running that root alone completed in 249.38 seconds, confirming
+that the current worker critical path is the residual root chart, load, and
+router integration domain rather than configuration. Release qualification
+must therefore retain the monolithic baseline comparison until that production
+domain is extracted; package-count growth alone is not evidence of a faster
+release gate. The durable measurements and remaining-coupling audit are in
+`docs/release-control/v6/internal/records/api-runtime-decomposition-2026-08-21.md`.
 
 ### Host sensor payloads carry typed command and REST custom readings
 
