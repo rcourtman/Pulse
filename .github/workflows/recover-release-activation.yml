@@ -74,23 +74,14 @@ jobs:
           gh api --paginate --slurp \
             "repos/${GITHUB_REPOSITORY}/actions/runs/${SOURCE_RELEASE_RUN_ID}/jobs?per_page=100" \
             | jq '[.[].jobs[]]' > "${source_jobs}"
+          # release_readiness is the canonical DAG join for every immutable
+          # gate. Do not duplicate reusable-workflow display names here: those
+          # names are presentation details and can change while the join stays
+          # authoritative. The surrounding all-jobs verdict below still
+          # rejects every failure outside the activation boundary.
           for required_job in \
             prepare \
-            "Windows PowerShell 5.1 Install Command Smoke" \
-            docker_build \
-            helm_smoke \
-            frontend_checks \
-            "Build Immutable Release Candidate / Verify Native Signing Configuration" \
-            "Build Immutable Release Candidate / Sign and Notarize macOS Agent" \
-            "Build Immutable Release Candidate / Build and Validate Release Candidate" \
-            backend_tests \
-            release_smoke \
             create_release \
-            stage_private_pro_runtime \
-            "validate_release_assets / validate" \
-            "publish_docker / publish" \
-            "publish_helm_chart / Package and Push Helm Chart" \
-            "install_sh_smoke / smoke" \
             release_readiness \
             dispatch_release_convergence; do
             jq -e --arg name "${required_job}" \

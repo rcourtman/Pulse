@@ -1183,7 +1183,10 @@ upgrade, update, release, or artifact-selection behavior.
    A failed activation after immutable readiness has passed may use the
    activation-only recovery workflow. Recovery must accept only a completed
    failed `create-release.yml` run whose failures are confined to activation,
-   require every immutable gate to be successful, revalidate GitHub's stored
+   require the successful `release_readiness` DAG join as the canonical proof
+   that every immutable gate succeeded, and reject every failure outside the
+   activation boundary. Recovery must not duplicate reusable-workflow display
+   names as a parallel gate catalog. It must revalidate GitHub's stored
    asset digests against that source run's unexpired candidate manifest, and
    require the same draft release ID, tag, target commit, and absent activation
    marker. It then dispatches a fresh durable convergence owner and repeats the
@@ -1192,6 +1195,12 @@ upgrade, update, release, or artifact-selection behavior.
    name and display title are coherently indexed, both normal and recovered
    activation use a bounded metadata-propagation wait before rejecting the
    convergence owner; a terminal owner still fails immediately.
+   Every convergence job that calls a reusable workflow must explicitly grant
+   all permissions requested by that callee. In particular, Helm Pages
+   convergence requires both `actions: read` to retrieve the exact source-run
+   chart and `contents: write` to update the versioned Pages index; omitting a
+   required caller permission is a workflow startup failure, not retriable
+   customer-surface debt.
    One immutable-readiness join must cover the staged release packet, staged
    install smoke, exact public Docker images, exact Helm OCI chart, and (for
    v6) the exact Pro image and signed packet. After that join, activation must

@@ -282,6 +282,7 @@ jobs:
     # already won admission for the rollback-prone customer surfaces.
     if: ${{ needs.acquire_customer_promotion_lease.result == 'success' }}
     permissions:
+      actions: read
       contents: write
     uses: ./.github/workflows/helm-pages.yml
     secrets: inherit

@@ -439,6 +439,9 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn('.path == ".github/workflows/create-release.yml"', job)
         self.assertIn("release_readiness", job)
         self.assertIn("dispatch_release_convergence", job)
+        self.assertIn("release_readiness is the canonical DAG join", job)
+        self.assertNotIn("docker_build", job)
+        self.assertNotIn("helm_smoke", job)
         self.assertIn("failure outside the recoverable activation boundary", job)
         self.assertIn("release-candidate-manifest-${source_sha}-${version}", job)
         self.assertIn("scripts/release_candidate_manifest.py verify-release", job)
@@ -451,6 +454,11 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn('--repo "${GITHUB_REPOSITORY}"', job)
         self.assertNotIn("build-release-candidate.yml", recovery)
         self.assertNotIn("scripts/build-release.sh", recovery)
+
+        convergence = read(".github/workflows/release-convergence.yml")
+        helm_pages_caller = workflow_job_block(convergence, "publish_helm_pages")
+        self.assertIn("actions: read", helm_pages_caller)
+        self.assertIn("contents: write", helm_pages_caller)
 
         marker_upload = job.index('gh release upload "${TAG}"')
         committed = job.index("committed=true", marker_upload)
