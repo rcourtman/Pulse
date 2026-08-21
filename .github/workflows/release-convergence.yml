@@ -67,7 +67,8 @@ jobs:
         run: |
           set -euo pipefail
           marker_url="https://github.com/${{ github.repository }}/releases/download/${TAG}/release-activation.json"
-          for attempt in $(seq 1 2100); do
+          max_attempts=10500
+          for attempt in $(seq 1 "${max_attempts}"); do
             release_state="$(
               gh api "repos/${{ github.repository }}/releases/tags/${TAG}" \
                 --jq '[.id, .tag_name, .target_commitish, (.draft | tostring), (.published_at // "")] | @tsv' \
@@ -104,7 +105,7 @@ jobs:
                 if [ "${original_status}" != "completed" ]; then
                   rm -f "${marker}"
                   echo "Original convergence owner ${activation_owner_run_id} is ${original_status:-unavailable}; successor adoption is not yet allowed."
-                  sleep 10
+                  sleep 2
                   continue
                 fi
                 echo "[OK] Adopting committed ${TAG} from completed convergence owner ${activation_owner_run_id}."
@@ -117,8 +118,8 @@ jobs:
               exit 0
             fi
             rm -f "${marker}"
-            echo "Activation marker for ${TAG} is not committed yet (${attempt}/2100)."
-            sleep 10
+            echo "Activation marker for ${TAG} is not committed yet (${attempt}/${max_attempts})."
+            sleep 2
           done
           echo "::error::Timed out waiting for the verified activation marker for ${TAG}."
           exit 1
@@ -286,6 +287,8 @@ jobs:
     secrets: inherit
     with:
       chart_version: ${{ inputs.version }}
+      source_release_run_id: ${{ inputs.source_release_run_id }}
+      target_commitish: ${{ inputs.target_commitish }}
 
   promote_private_pro_runtime:
     name: Converge paid-runtime broker

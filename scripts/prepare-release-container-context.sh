@@ -85,6 +85,20 @@ for arch in amd64 arm64; do
     fi
     validate_archive_entries "${archive}"
     tar --no-same-owner --no-same-permissions -xzf "${archive}" -C "${output_dir}/${arch}"
+    for windows_arch in amd64 arm64 386; do
+        alias_path="${output_dir}/${arch}/bin/pulse-agent-windows-${windows_arch}"
+        expected_target="pulse-agent-windows-${windows_arch}.exe"
+        if [[ ! -L "${alias_path}" ]] || \
+           [[ "$(readlink "${alias_path}")" != "${expected_target}" ]] || \
+           [[ ! -f "${output_dir}/${arch}/bin/${expected_target}" ]]; then
+            echo "Error: ${archive} has an invalid Windows agent alias ${alias_path}." >&2
+            exit 1
+        fi
+        # runtime_prebuilt recreates these aliases after copying the immutable
+        # .exe payloads. Keep the manifest-covered context symlink-free rather
+        # than weakening its canonical-file rule.
+        rm -f "${alias_path}"
+    done
     for required in \
         bin/pulse \
         bin/pulse.sig \

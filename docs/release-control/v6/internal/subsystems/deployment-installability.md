@@ -565,6 +565,21 @@ upgrade, update, release, or artifact-selection behavior.
    architecture-bound payload unit; cross-archive deduplication must allow
    those three files to differ while continuing to reject drift in every
    universal agent, installer, and script input.
+   The container payload must validate the three Windows no-extension aliases
+   against their exact `.exe` targets and then omit them, because the image
+   recreates those aliases deterministically and the immutable payload
+   manifest remains regular-file-only.
+   Helm Pages convergence must promote the immutable chart artifact produced
+   and qualified by the exact create-release run. It must bind that artifact
+   to the activated source run, tag, commit, and activation marker, and must
+   not repeat chart packaging or the pre-activation kind install/upgrade smoke.
+   Release-to-convergence and cross-repository child-run observation should
+   use short bounded polls so GitHub indexing cannot add tens of seconds after
+   a required exact run or activation marker has already completed.
+   Paid-runtime convergence must retain the download-page browser audit, live
+   private broker/image proof, and public-runtime mismatch proof, but may run
+   the independent browser and public-boundary checks as a sibling of the
+   lease-bound broker mutation so customer-path evidence is not serialized.
    This credential-free lane may run against the isolated rootless
    Docker daemon owned by the low-priority PVE build identity; it must not gain
    host-Docker access, signing keys, registry login, or package-write authority.

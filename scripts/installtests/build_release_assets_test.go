@@ -204,6 +204,9 @@ func TestReleaseContainerContextTreatsServerSignaturesAsArchitectureBound(t *tes
 			"bin/pulse-agent-linux-amd64":        "shared-agent",
 			"bin/pulse-agent-linux-amd64.sig":    "shared-agent-minisign",
 			"bin/pulse-agent-linux-amd64.sshsig": "shared-agent-sshsig",
+			"bin/pulse-agent-windows-amd64.exe":  "shared-windows-amd64-agent",
+			"bin/pulse-agent-windows-arm64.exe":  "shared-windows-arm64-agent",
+			"bin/pulse-agent-windows-386.exe":    "shared-windows-386-agent",
 			"scripts/install-container-agent.sh": "shared-container-installer",
 			"scripts/install-docker.sh":          "shared-docker-installer",
 			"scripts/install.sh":                 "shared-agent-installer",
@@ -224,6 +227,14 @@ func TestReleaseContainerContextTreatsServerSignaturesAsArchitectureBound(t *tes
 			}
 			if _, err := tarWriter.Write([]byte(content)); err != nil {
 				t.Fatalf("write %s to %s archive: %v", name, arch, err)
+			}
+		}
+		for _, windowsArch := range []string{"amd64", "arm64", "386"} {
+			name := "bin/pulse-agent-windows-" + windowsArch
+			target := "pulse-agent-windows-" + windowsArch + ".exe"
+			header := &tar.Header{Name: name, Mode: 0o777, Typeflag: tar.TypeSymlink, Linkname: target}
+			if err := tarWriter.WriteHeader(header); err != nil {
+				t.Fatalf("write %s alias to %s archive: %v", name, arch, err)
 			}
 		}
 		if err := tarWriter.Close(); err != nil {
@@ -255,6 +266,12 @@ func TestReleaseContainerContextTreatsServerSignaturesAsArchitectureBound(t *tes
 	}
 	if _, err := os.Stat(filepath.Join(outputDir, "arm64", "scripts", "install.sh")); !os.IsNotExist(err) {
 		t.Fatalf("prepared context retained duplicate universal payload: %v", err)
+	}
+	for _, windowsArch := range []string{"amd64", "arm64", "386"} {
+		aliasPath := filepath.Join(outputDir, "amd64", "bin", "pulse-agent-windows-"+windowsArch)
+		if _, err := os.Lstat(aliasPath); !os.IsNotExist(err) {
+			t.Fatalf("prepared context retained recreated Windows alias %s: %v", aliasPath, err)
+		}
 	}
 
 	writeArchive("arm64", true)
@@ -1479,27 +1496,31 @@ func TestDeploymentDefaultsPinVersionedImagesAndHelmDocsChecksum(t *testing.T) {
 	required := []string{
 		`workflow_call:`,
 		`chart_version:`,
-		`Require activated GitHub release`,
-		`gh release view "${RELEASE_TAG}" --json isDraft,publishedAt,tagName`,
-		`Helm Pages refuses to advertise inactive release ${RELEASE_TAG}.`,
-		`HELM_DOCS_VERSION="1.14.2"`,
-		`HELM_DOCS_ARCHIVE="helm-docs_${HELM_DOCS_VERSION}_Linux_x86_64.tar.gz"`,
-		`HELM_DOCS_SHA256="a8cf72ada34fad93285ba2a452b38bdc5bd52cc9a571236244ec31022928d6cc"`,
-		`sha256sum --check --`,
-		`name: Ensure chart release and pages index`,
-		`gh release create "${CHART_RELEASE}" "${CHART_PATH}"`,
+		`source_release_run_id:`,
+		`target_commitish:`,
+		`Require activated GitHub release and source run`,
+		`release-activation.json`,
+		`.github/workflows/create-release.yml`,
+		`gh run download "${SOURCE_RELEASE_RUN_ID}"`,
+		`--name "pulse-chart-${VERSION}"`,
+		`qualified chart metadata does not match the activated release`,
+		`name: Publish chart release and merge Pages index`,
+		`gh release create "${chart_release}" "${chart_path}"`,
 		`helm repo index "${index_work}"`,
-		`git -C "${workdir}/gh-pages" push origin HEAD:gh-pages`,
+		`git -C gh-pages push origin HEAD:gh-pages`,
 		`grep -q "version: ${VERSION}"`,
-		`helm show chart pulse-public/pulse --version "$VERSION"`,
+		`helm show chart pulse-public/pulse --version "${VERSION}"`,
 	}
 	for _, needle := range required {
 		if !strings.Contains(helmPages, needle) {
-			t.Fatalf("helm-pages.yml missing checksum-verified helm-docs install step: %s", needle)
+			t.Fatalf("helm-pages.yml missing immutable chart promotion step: %s", needle)
 		}
 	}
 	for _, forbidden := range []string{
 		"workflow_run:",
+		`Smoke test with kind`,
+		`Install helm-docs`,
+		`helm package deploy/helm/pulse`,
 		`git checkout -B "$REQUIRED_BRANCH"`,
 		`git push origin HEAD:"$REQUIRED_BRANCH"`,
 	} {

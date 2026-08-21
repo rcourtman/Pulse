@@ -2,308 +2,236 @@ name: Release Helm Chart to GitHub Pages
 run-name: Release Helm Chart ${{ inputs.chart_version }}
 
 # Called only from release-convergence.yml while it holds the global customer-
-# promotion lease. This workflow mutates the public Pages index and must never
-# expose a direct dispatch path that bypasses that lease.
+# promotion lease. Chart lint, packaging, OCI publication, and the exact-
+# candidate install/upgrade smoke complete before activation. This workflow
+# verifies and promotes that immutable source-run artifact after activation.
 on:
   workflow_call:
     inputs:
       chart_version:
-        description: "Chart version (e.g., 6.2.0-rc.9)."
+        description: "Exact chart version (e.g., 6.3.0-rc.5)."
+        required: true
+        type: string
+      source_release_run_id:
+        description: "Exact create-release.yml run containing the qualified chart."
+        required: true
+        type: string
+      target_commitish:
+        description: "Exact activated release source commit."
         required: true
         type: string
 
 permissions:
+  actions: read
   contents: write
 
 jobs:
   release:
     runs-on: ubuntu-24.04
     steps:
-      - name: Determine chart version
-        id: version
-        run: |
-          VERSION="${{ inputs.chart_version }}"
-          if [ -z "$VERSION" ]; then
-            echo "::error::chart_version input is required"
-            exit 1
-          fi
-
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "release_tag=v${VERSION}" >> "$GITHUB_OUTPUT"
-          echo "Chart version: $VERSION"
-
-      - name: Checkout
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
-        with:
-          fetch-depth: 0
-          fetch-tags: true
-
-      - name: Validate release line policy
-        id: release_line
-        env:
-          RELEASE_TAG: ${{ steps.version.outputs.release_tag }}
-        run: |
-          set -euo pipefail
-          python3 scripts/release_control/validate_artifact_release_line.py \
-            --tag "${RELEASE_TAG}" \
-            --purpose "Helm pages release" \
-            --github-output "$GITHUB_OUTPUT"
-
-      - name: Require activated GitHub release
+      - name: Require activated GitHub release and source run
+        id: identity
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ steps.version.outputs.release_tag }}
+          VERSION: ${{ inputs.chart_version }}
+          SOURCE_RELEASE_RUN_ID: ${{ inputs.source_release_run_id }}
+          TARGET_COMMITISH: ${{ inputs.target_commitish }}
         run: |
           set -euo pipefail
-          release_state="$(gh release view "${RELEASE_TAG}" --json isDraft,publishedAt,tagName \
-            --jq '[.tagName, (.isDraft | tostring), (.publishedAt // "")] | @tsv')"
-          actual_tag="$(awk -F '\t' '{print $1}' <<<"${release_state}")"
-          is_draft="$(awk -F '\t' '{print $2}' <<<"${release_state}")"
-          published_at="$(awk -F '\t' '{print $3}' <<<"${release_state}")"
-          if [ "${actual_tag}" != "${RELEASE_TAG}" ] || [ "${is_draft}" != "false" ] || [ -z "${published_at}" ]; then
-            echo "::error::Helm Pages refuses to advertise inactive release ${RELEASE_TAG}."
+          if [[ -z "${VERSION}" ]] || \
+             [[ ! "${SOURCE_RELEASE_RUN_ID}" =~ ^[0-9]+$ ]] || \
+             [[ ! "${TARGET_COMMITISH}" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::Helm Pages requires an exact version, source run ID, and commit SHA."
             exit 1
           fi
 
-      - name: Check out validated release tag
+          release_tag="v${VERSION}"
+          release_state="$(
+            gh api "repos/${{ github.repository }}/releases/tags/${release_tag}" \
+              --jq '[.tag_name, .target_commitish, (.draft | tostring), (.published_at // "")] | @tsv'
+          )"
+          actual_tag="$(awk -F '\t' '{print $1}' <<<"${release_state}")"
+          actual_commit="$(awk -F '\t' '{print $2}' <<<"${release_state}")"
+          is_draft="$(awk -F '\t' '{print $3}' <<<"${release_state}")"
+          published_at="$(awk -F '\t' '{print $4}' <<<"${release_state}")"
+          if [[ "${actual_tag}" != "${release_tag}" ]] || \
+             [[ "${actual_commit}" != "${TARGET_COMMITISH}" ]] || \
+             [[ "${is_draft}" != "false" ]] || \
+             [[ -z "${published_at}" ]]; then
+            echo "::error::Helm Pages refuses to advertise inactive or mismatched release ${release_tag}."
+            exit 1
+          fi
+
+          marker="$(mktemp)"
+          curl -fsSL --retry 4 --retry-delay 2 --retry-all-errors \
+            -o "${marker}" \
+            "https://github.com/${{ github.repository }}/releases/download/${release_tag}/release-activation.json"
+          jq -e \
+            --arg tag "${release_tag}" \
+            --arg target_commitish "${TARGET_COMMITISH}" \
+            --arg source_release_run_id "${SOURCE_RELEASE_RUN_ID}" \
+            '.schema_version == 1 and .tag == $tag and .target_commitish == $target_commitish and .source_release_run_id == $source_release_run_id' \
+            "${marker}" >/dev/null
+          rm -f "${marker}"
+
+          source_run="$(
+            gh api "repos/${{ github.repository }}/actions/runs/${SOURCE_RELEASE_RUN_ID}" \
+              --jq '[.path, .event, .head_sha] | @tsv'
+          )"
+          run_path="$(awk -F '\t' '{print $1}' <<<"${source_run}")"
+          run_event="$(awk -F '\t' '{print $2}' <<<"${source_run}")"
+          run_sha="$(awk -F '\t' '{print $3}' <<<"${source_run}")"
+          if [[ "${run_path}" != ".github/workflows/create-release.yml" ]] || \
+             [[ "${run_event}" != "workflow_dispatch" ]] || \
+             [[ "${run_sha}" != "${TARGET_COMMITISH}" ]]; then
+            echo "::error::Source release run ${SOURCE_RELEASE_RUN_ID} does not own the activated ${release_tag} chart."
+            exit 1
+          fi
+
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "release_tag=${release_tag}" >> "$GITHUB_OUTPUT"
+
+      - name: Download immutable qualified chart
         env:
-          RELEASE_TAG: ${{ steps.version.outputs.release_tag }}
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.identity.outputs.version }}
+          SOURCE_RELEASE_RUN_ID: ${{ inputs.source_release_run_id }}
         run: |
           set -euo pipefail
-          git checkout --detach "refs/tags/${RELEASE_TAG}"
+          mkdir -p dist
+          gh run download "${SOURCE_RELEASE_RUN_ID}" \
+            --repo "${{ github.repository }}" \
+            --name "pulse-chart-${VERSION}" \
+            --dir dist
 
-      - name: Configure Git
-        run: |
-          git config user.name "$GITHUB_ACTOR"
-          git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
-
-      - name: Install Helm
+      - name: Set up Helm
         uses: azure/setup-helm@dda3372f752e03dde6b3237bc9431cdc2f7a02a2 # v5.0.0
         with:
           version: v3.15.2
 
-      - name: Install helm-docs
-        run: |
-          cd /tmp
-          HELM_DOCS_VERSION="1.14.2"
-          HELM_DOCS_ARCHIVE="helm-docs_${HELM_DOCS_VERSION}_Linux_x86_64.tar.gz"
-          HELM_DOCS_SHA256="a8cf72ada34fad93285ba2a452b38bdc5bd52cc9a571236244ec31022928d6cc"
-          wget "https://github.com/norwoodj/helm-docs/releases/download/v${HELM_DOCS_VERSION}/${HELM_DOCS_ARCHIVE}"
-          printf '%s  %s\n' "$HELM_DOCS_SHA256" "$HELM_DOCS_ARCHIVE" | sha256sum --check --
-          tar -xzf "$HELM_DOCS_ARCHIVE"
-          sudo mv helm-docs /usr/local/bin/
-          helm-docs --version
-
-      - name: Generate chart documentation
+      - name: Verify immutable chart identity
+        env:
+          VERSION: ${{ steps.identity.outputs.version }}
+          CHART_PATH: dist/pulse-${{ steps.identity.outputs.version }}.tgz
         run: |
           set -euo pipefail
-          cd deploy/helm/pulse
-          helm-docs
-          cd ../../..
+          python3 - <<'PY'
+          import os
+          import pathlib
+          import re
+          import tarfile
 
-      - name: Update Chart.yaml version
-        run: |
-          set -euo pipefail
-          VERSION="${{ steps.version.outputs.version }}"
-          python3 scripts/sync_chart_release_metadata.py \
-            --chart deploy/helm/pulse/Chart.yaml \
-            --version "$VERSION" \
-            --repo "${{ github.repository }}"
+          chart_path = pathlib.Path(os.environ["CHART_PATH"])
+          version = os.environ["VERSION"]
+          if not chart_path.is_file():
+              raise SystemExit(f"missing immutable qualified chart: {chart_path}")
+          with tarfile.open(chart_path, "r:gz") as archive:
+              for member in archive.getmembers():
+                  parts = pathlib.PurePosixPath(member.name).parts
+                  if member.name.startswith("/") or any(part in {"", ".", ".."} for part in parts):
+                      raise SystemExit(f"unsafe chart member: {member.name}")
+              stream = archive.extractfile(archive.getmember("pulse/Chart.yaml"))
+              if stream is None:
+                  raise SystemExit("qualified chart has no readable pulse/Chart.yaml")
+              metadata = stream.read().decode("utf-8")
 
-      - name: Validate Helm chart
-        run: |
-          # Strict linting
-          helm lint deploy/helm/pulse --strict
+          def value(key: str) -> str:
+              match = re.search(rf"(?m)^{re.escape(key)}:\s*[\"']?([^\"'\s]+)", metadata)
+              return match.group(1) if match else ""
 
-          # Template validation with minimal values
-          helm template pulse deploy/helm/pulse --set persistence.enabled=false > /dev/null
+          if value("name") != "pulse" or value("version") != version or value("appVersion") != version:
+              raise SystemExit("qualified chart metadata does not match the activated release")
+          PY
+          sha256sum "${CHART_PATH}"
+          helm show chart "${CHART_PATH}"
 
-          # Template validation with common overrides
-          helm template pulse deploy/helm/pulse \
-            --set ingress.enabled=true \
-            --set ingress.hosts[0].host=pulse.example.com \
-            --set agent.enabled=true > /dev/null
-
-          echo "✓ Chart validation passed"
-
-      - name: Smoke test with kind
-        run: |
-          set -euo pipefail
-
-          cleanup() {
-            kind delete cluster --name pulse-test >/dev/null 2>&1 || true
-          }
-
-          diagnose() {
-            echo "::group::helm status"
-            helm status pulse || true
-            echo "::endgroup::"
-
-            echo "::group::kubectl get all"
-            kubectl get all -A || true
-            echo "::endgroup::"
-
-            echo "::group::kubectl describe pods"
-            kubectl describe pods -A || true
-            echo "::endgroup::"
-
-            echo "::group::pod logs"
-            pods=$(kubectl get pods -A -o name 2>/dev/null || true)
-            for pod in $pods; do
-              echo "### ${pod}"
-              kubectl logs --all-containers=true --tail=200 "$pod" || true
-            done
-            echo "::endgroup::"
-
-            echo "::group::events"
-            kubectl get events -A --sort-by=.lastTimestamp || kubectl get events -A || true
-            echo "::endgroup::"
-
-            cleanup
-          }
-
-          trap 'diagnose' ERR
-
-          # Install kind
-          curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.20.0/kind-linux-amd64
-          chmod +x ./kind
-          sudo mv ./kind /usr/local/bin/kind
-
-          # Create cluster
-          kind create cluster --name pulse-test --wait 5m
-
-          # Install chart
-          helm install pulse deploy/helm/pulse \
-            --set persistence.enabled=false \
-            --set server.secretEnv.create=true \
-            --set server.secretEnv.data.API_TOKENS=test-token \
-            --wait --timeout 5m --debug
-
-          # Verify deployment
-          kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=pulse --timeout=180s || (kubectl describe pods -l app.kubernetes.io/name=pulse && exit 1)
-          kubectl get pods -l app.kubernetes.io/name=pulse
-
-          # Test upgrade
-          helm upgrade pulse deploy/helm/pulse \
-            --set persistence.enabled=false \
-            --set server.secretEnv.create=true \
-            --set server.secretEnv.data.API_TOKENS=test-token \
-            --wait --timeout 5m --debug
-
-          # Cleanup
-          trap - ERR
-          cleanup
-
-          echo "✓ Smoke test passed"
-
-      - name: Run chart-releaser
-        uses: helm/chart-releaser-action@a917fd15b20e8b64b94d9158ad54cd6345335584 # v1.6.0
+      - name: Check out current Pages index
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
-          charts_dir: deploy/helm
-          config: cr.yaml
-          skip_existing: true
-        env:
-          CR_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
-          CR_RELEASE_NAME_TEMPLATE: "helm-chart-{{ .Version }}"
-          CR_MAKE_RELEASE_LATEST: false
+          ref: gh-pages
+          path: gh-pages
+          fetch-depth: 1
+          persist-credentials: true
 
-      - name: Ensure chart release and pages index
+      - name: Publish chart release and merge Pages index
         env:
-          GITHUB_TOKEN: ${{ github.token }}
-          VERSION: ${{ steps.version.outputs.version }}
-          REPOSITORY: ${{ github.repository }}
-          RELEASE_TAG: ${{ steps.version.outputs.release_tag }}
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.identity.outputs.version }}
+          TARGET_COMMITISH: ${{ inputs.target_commitish }}
         run: |
           set -euo pipefail
+          chart="pulse-${VERSION}.tgz"
+          chart_path="dist/${chart}"
+          chart_release="helm-chart-${VERSION}"
+          chart_release_url="https://github.com/${{ github.repository }}/releases/download/${chart_release}"
 
-          CHART="pulse-${VERSION}.tgz"
-          CHART_PATH="dist/${CHART}"
-          CHART_RELEASE="helm-chart-${VERSION}"
-          CHART_RELEASE_URL="https://github.com/${REPOSITORY}/releases/download/${CHART_RELEASE}"
-          RELEASE_SHA="$(git rev-list -n 1 "${RELEASE_TAG}")"
-
-          mkdir -p dist
-          helm package deploy/helm/pulse \
-            --version "${VERSION}" \
-            --app-version "${VERSION}" \
-            --destination dist
-
-          if gh release view "${CHART_RELEASE}" >/dev/null 2>&1; then
-            gh release upload "${CHART_RELEASE}" "${CHART_PATH}" --clobber
+          if gh release view "${chart_release}" >/dev/null 2>&1; then
+            gh release upload "${chart_release}" "${chart_path}" --clobber
           else
-            gh release create "${CHART_RELEASE}" "${CHART_PATH}" \
-              --target "${RELEASE_SHA}" \
+            gh release create "${chart_release}" "${chart_path}" \
+              --target "${TARGET_COMMITISH}" \
               --title "Helm chart ${VERSION}" \
               --notes "Helm chart for Pulse ${VERSION}." \
               --prerelease \
               --latest=false
           fi
-          gh release edit "${CHART_RELEASE}" --prerelease --latest=false
+          gh release edit "${chart_release}" --prerelease --latest=false
 
-          workdir="$(mktemp -d)"
-          cleanup() {
-            git worktree remove -f "${workdir}/gh-pages" >/dev/null 2>&1 || true
-            rm -rf "${workdir}"
-          }
+          git -C gh-pages config user.name "$GITHUB_ACTOR"
+          git -C gh-pages config user.email "$GITHUB_ACTOR@users.noreply.github.com"
+          index_work="$(mktemp -d)"
+          cleanup() { rm -rf "${index_work}"; }
           trap cleanup EXIT
-
-          git fetch origin gh-pages
-          git worktree add "${workdir}/gh-pages" origin/gh-pages
-          git -C "${workdir}/gh-pages" checkout -B gh-pages origin/gh-pages
-
-          index_work="${workdir}/index"
-          mkdir -p "${index_work}"
-          cp "${CHART_PATH}" "${index_work}/${CHART}"
-          if [ -f "${workdir}/gh-pages/index.yaml" ]; then
-            cp "${workdir}/gh-pages/index.yaml" "${index_work}/index.yaml"
+          cp "${chart_path}" "${index_work}/${chart}"
+          if [[ -f gh-pages/index.yaml ]]; then
+            cp gh-pages/index.yaml "${index_work}/index.yaml"
             helm repo index "${index_work}" \
-              --url "${CHART_RELEASE_URL}" \
+              --url "${chart_release_url}" \
               --merge "${index_work}/index.yaml"
           else
-            helm repo index "${index_work}" --url "${CHART_RELEASE_URL}"
+            helm repo index "${index_work}" --url "${chart_release_url}"
           fi
-          cp "${index_work}/index.yaml" "${workdir}/gh-pages/index.yaml"
+          cp "${index_work}/index.yaml" gh-pages/index.yaml
 
-          if ! grep -q "version: ${VERSION}" "${workdir}/gh-pages/index.yaml"; then
-            echo "::error::Helm pages index is missing version ${VERSION}"
+          if ! grep -q "version: ${VERSION}" gh-pages/index.yaml; then
+            echo "::error::Helm Pages index is missing version ${VERSION}."
             exit 1
           fi
-
-          git -C "${workdir}/gh-pages" add index.yaml
-          if git -C "${workdir}/gh-pages" diff --cached --quiet; then
-            echo "Helm pages index already contains ${VERSION}"
+          git -C gh-pages add index.yaml
+          if git -C gh-pages diff --cached --quiet; then
+            echo "Helm Pages index already contains ${VERSION}."
           else
-            git -C "${workdir}/gh-pages" commit -m "Update Helm chart index for ${VERSION}"
-            git -C "${workdir}/gh-pages" push origin HEAD:gh-pages
+            git -C gh-pages commit -m "Update Helm chart index for ${VERSION}"
+            git -C gh-pages push origin HEAD:gh-pages
           fi
 
+      - name: Verify public Pages chart
+        env:
+          VERSION: ${{ steps.identity.outputs.version }}
+        run: |
+          set -euo pipefail
           public_repo="https://rcourtman.github.io/Pulse"
           public_ready=false
-          for attempt in $(seq 1 12); do
-            public_index="${workdir}/public-index.yaml"
-            if curl -fsSL --retry 3 --retry-delay 2 --retry-all-errors \
-                 -o "$public_index" "${public_repo}/index.yaml" && \
-               grep -q "version: ${VERSION}" "$public_index"; then
+          for attempt in $(seq 1 30); do
+            public_index="$(mktemp)"
+            if curl -fsSL --retry 2 --retry-delay 1 --retry-all-errors \
+                 -o "${public_index}" "${public_repo}/index.yaml" && \
+               grep -q "version: ${VERSION}" "${public_index}"; then
               helm repo remove pulse-public >/dev/null 2>&1 || true
-              helm repo add pulse-public "$public_repo" --force-update
+              helm repo add pulse-public "${public_repo}" --force-update
               helm repo update pulse-public
-              if helm show chart pulse-public/pulse --version "$VERSION" >/dev/null; then
+              if helm show chart pulse-public/pulse --version "${VERSION}" >/dev/null; then
                 public_ready=true
+                rm -f "${public_index}"
                 break
               fi
             fi
-            echo "Public Helm repository has not exposed ${VERSION} yet (attempt ${attempt}/12)."
-            sleep 5
+            rm -f "${public_index}"
+            echo "Public Helm repository has not exposed ${VERSION} yet (${attempt}/30)."
+            sleep 2
           done
-          if [ "$public_ready" != "true" ]; then
+          if [[ "${public_ready}" != "true" ]]; then
             echo "::error::Public Helm repository did not expose chart ${VERSION}."
             exit 1
           fi
           echo "[OK] Public Helm repository serves pulse ${VERSION}."
-
-      - name: Mark Helm chart release as pre-release (avoid latest override)
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: |
-          TAG="helm-chart-${{ steps.version.outputs.version }}"
-          gh release edit "$TAG" --prerelease --latest=false || echo "No helm chart release to edit for $TAG"

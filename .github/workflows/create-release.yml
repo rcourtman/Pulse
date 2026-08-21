@@ -1271,7 +1271,7 @@ jobs:
                 return 1
               fi
 
-              sleep 30
+              sleep 5
             done
 
             echo "::error::Timed out waiting for ${label} after ${timeout_seconds}s."

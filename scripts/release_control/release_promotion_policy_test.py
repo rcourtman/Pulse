@@ -458,21 +458,16 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertLess(marker_upload, committed)
         self.assertLess(committed, readback)
 
-        for workflow_path, refusal in (
-            (
-                ".github/workflows/helm-pages.yml",
-                "Helm Pages refuses to advertise inactive release",
-            ),
-            (
-                ".github/workflows/promote-floating-tags.yml",
-                "Floating-tag promotion refuses inactive release",
-            ),
-        ):
-            with self.subTest(workflow_path=workflow_path):
-                guarded_workflow = read(workflow_path)
-                self.assertIn("Require activated GitHub release", guarded_workflow)
-                self.assertIn("--json isDraft,publishedAt,tagName", guarded_workflow)
-                self.assertIn(refusal, guarded_workflow)
+        helm_pages = read(".github/workflows/helm-pages.yml")
+        self.assertIn("Require activated GitHub release", helm_pages)
+        self.assertIn("release-activation.json", helm_pages)
+        self.assertIn("source_release_run_id", helm_pages)
+        self.assertIn("Helm Pages refuses to advertise inactive", helm_pages)
+
+        floating_tags = read(".github/workflows/promote-floating-tags.yml")
+        self.assertIn("Require activated GitHub release", floating_tags)
+        self.assertIn("--json isDraft,publishedAt,tagName", floating_tags)
+        self.assertIn("Floating-tag promotion refuses inactive release", floating_tags)
 
     def test_each_post_commit_surface_failure_is_retriable_convergence_debt(self) -> None:
         release_workflow = read(".github/workflows/create-release.yml")
@@ -692,7 +687,8 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         )
         await_commit = workflow_job_block(convergence, "await_activation_commit")
         self.assertIn("timeout-minutes: 360", await_commit)
-        self.assertIn("seq 1 2100", await_commit)
+        self.assertIn('max_attempts=10500', await_commit)
+        self.assertIn('sleep 2', await_commit)
         self.assertIn("source_release_run_id", await_commit)
         self.assertIn("EXPECTED_CONVERGENCE_RUN_ID: ${{ github.run_id }}", await_commit)
         self.assertIn('original_status}" != "completed"', await_commit)
@@ -1785,7 +1781,9 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertNotIn("go build", preview_deploy)
         self.assertNotIn("scp ", preview_deploy)
         self.assertIn("validate_artifact_release_line.py", helm)
-        self.assertIn("validate_artifact_release_line.py", helm_pages)
+        self.assertIn(".github/workflows/create-release.yml", helm_pages)
+        self.assertIn("release-activation.json", helm_pages)
+        self.assertIn('gh run download "${SOURCE_RELEASE_RUN_ID}"', helm_pages)
         self.assertIn("release_branch_for_version", artifact_validator)
         self.assertIn("matching prerelease tag", artifact_validator)
         self.assertIn("previous stable tag", artifact_validator)
@@ -1797,39 +1795,35 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn('--set image.pullPolicy=Never', qualifier_workflow)
         self.assertNotIn("needs.docker_build.result", release_workflow)
         self.assertNotIn("needs.helm_smoke.result", release_workflow)
-        self.assertIn('--github-output "$GITHUB_OUTPUT"', helm_pages)
+        self.assertIn('qualified chart metadata does not match the activated release', helm_pages)
         self.assertIn("workflow_call:", helm_pages)
         self.assertNotIn("workflow_run:", helm_pages)
-        self.assertIn('git checkout --detach "refs/tags/${RELEASE_TAG}"', helm_pages)
+        self.assertIn('gh run download "${SOURCE_RELEASE_RUN_ID}"', helm_pages)
+        self.assertIn('--name "pulse-chart-${VERSION}"', helm_pages)
+        self.assertIn("release-activation.json", helm_pages)
+        self.assertIn(".github/workflows/create-release.yml", helm_pages)
         self.assertNotIn('git pull --rebase origin "$REQUIRED_BRANCH"', helm_pages)
         self.assertNotIn('git push origin HEAD:"$REQUIRED_BRANCH"', helm_pages)
-        self.assertIn('HELM_DOCS_VERSION="1.14.2"', helm_pages)
-        self.assertIn('HELM_DOCS_ARCHIVE="helm-docs_${HELM_DOCS_VERSION}_Linux_x86_64.tar.gz"', helm_pages)
-        self.assertIn(
-            'HELM_DOCS_SHA256="a8cf72ada34fad93285ba2a452b38bdc5bd52cc9a571236244ec31022928d6cc"',
-            helm_pages,
-        )
-        self.assertIn('printf \'%s  %s\\n\' "$HELM_DOCS_SHA256" "$HELM_DOCS_ARCHIVE" | sha256sum --check --', helm_pages)
+        self.assertNotIn("HELM_DOCS_VERSION", helm_pages)
+        self.assertNotIn("helm package deploy/helm/pulse", helm_pages)
         self.assertNotIn("git pull --rebase origin main", helm_pages)
         self.assertNotIn("git push origin main", helm_pages)
         self.assertNotIn("kind load docker-image", helm_pages)
-        self.assertIn("Ensure chart release and pages index", helm_pages)
-        self.assertIn('gh release create "${CHART_RELEASE}" "${CHART_PATH}"', helm_pages)
+        self.assertIn("Publish chart release and merge Pages index", helm_pages)
+        self.assertIn('gh release create "${chart_release}" "${chart_path}"', helm_pages)
         self.assertIn('helm repo index "${index_work}"', helm_pages)
-        self.assertIn('git -C "${workdir}/gh-pages" push origin HEAD:gh-pages', helm_pages)
+        self.assertIn('git -C gh-pages push origin HEAD:gh-pages', helm_pages)
         self.assertIn('grep -q "version: ${VERSION}"', helm_pages)
-        self.assertIn('helm show chart pulse-public/pulse --version "$VERSION"', helm_pages)
-        self.assertIn("helm status pulse || true", helm_pages)
-        self.assertIn("kubectl describe pods -A || true", helm_pages)
-        self.assertIn("kubectl get events -A --sort-by=.lastTimestamp || kubectl get events -A || true", helm_pages)
+        self.assertIn('helm show chart pulse-public/pulse --version "${VERSION}"', helm_pages)
+        self.assertNotIn("helm status pulse || true", helm_pages)
+        self.assertNotIn("kubectl describe pods", helm_pages)
         self.assertIn("release-convergence.yml/dispatches", release_workflow)
         self.assertIn("Release Activation Commit Verdict", release_workflow)
         self.assertNotIn('gh workflow run update-demo-server.yml --ref "${REQUIRED_BRANCH}"', release_workflow)
         self.assertNotIn('TARGET="preview-v6"', release_workflow)
         self.assertIn("sync_chart_release_metadata.py", helm)
-        self.assertIn("sync_chart_release_metadata.py", helm_pages)
+        self.assertNotIn("sync_chart_release_metadata.py", helm_pages)
         self.assertIn("--chart deploy/helm/pulse/Chart.yaml", helm)
-        self.assertIn("--chart deploy/helm/pulse/Chart.yaml", helm_pages)
         self.assertIn('git checkout --detach "refs/tags/${RELEASE_TAG}"', helm)
         self.assertIn("Verify public GHCR chart read", helm)
         self.assertIn("helm registry logout ghcr.io || true", helm)
