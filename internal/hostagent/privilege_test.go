@@ -37,6 +37,9 @@ func TestCollectPrivilegeStatusReportsHelperOverrides(t *testing.T) {
 
 func TestResolvePctPathHonorsAbsoluteOverride(t *testing.T) {
 	configuredPath := filepath.Join(t.TempDir(), "pct-helper")
+	if !filepath.IsAbs(configuredPath) {
+		t.Fatalf("native test override = %q, want absolute path", configuredPath)
+	}
 	t.Setenv("PULSE_PCT_PATH", configuredPath)
 
 	resolved, err := resolvePctPath(func(string) (string, error) {
