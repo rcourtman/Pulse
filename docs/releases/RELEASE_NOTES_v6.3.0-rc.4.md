@@ -14,12 +14,12 @@ recurrences, and hardens agent operation on QNAP and hosts with stalled mounts.
 
 ## Highlights
 
-- Patrol guides operators through ranked decisions, read-only observation, and
-  governed Actions without expanding mutation authority.
-- Estate-first search, faster APIs, delivery logs, resilient alert history, and
-  longer notification retries improve daily operations.
-- Unified Agent hardening covers least privilege, Docker-in-LXC, QNAP storage,
-  stalled mounts, action preflight, and credential repair.
+- Read-only observers extend Patrol coverage between full model investigations
+  without granting mutation authority.
+- Platform pages now lead with estate totals, status facets, and search that
+  share the same predicates as their underlying tables.
+- Notification settings show the outcome of real delivery attempts instead of
+  relying on test sends as a proxy for live delivery health.
 
 ## Added
 
@@ -40,8 +40,9 @@ recurrences, and hardens agent operation on QNAP and hosts with stalled mounts.
   Kubernetes, TrueNAS, VMware, and standalone agent surfaces.
 - A seven-day notification delivery activity log with destination and outcome
   details for queued live alerts.
-- An administrator setting for Docker-in-LXC discovery and a supported
-  least-privilege Unified Agent installation profile.
+- An administrator setting for Docker-in-LXC discovery.
+- Unified Agent installs can opt into a supported least-privilege profile with
+  narrowly scoped elevation for the capabilities that require it.
 
 ## Improved
 
@@ -76,6 +77,8 @@ recurrences, and hardens agent operation on QNAP and hosts with stalled mounts.
   filter predicate, keeping summary totals aligned with the visible rows.
 - Failed settings and AI-state reads preserve the last known data and surface
   the failure instead of treating unreadable storage as an empty value.
+- Docker-in-LXC discovery is explicitly controlled and backs off against slow
+  or failing Proxmox hosts instead of creating a probe storm.
 
 ## Fixed
 

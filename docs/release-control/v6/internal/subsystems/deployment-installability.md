@@ -1487,6 +1487,12 @@ preserving unreadable settings and AI state. The changes since
 existing mobile, Relay, onboarding, and mobile-facing API contracts, so the
 server cut is classified `no-mobile-impact`; no companion upload or public
 mobile-store rollout is part of this candidate.
+The publish body keeps its `Highlights` section within the governed three-item
+limit while preserving the packet's operator-facing summary of read-only
+observer coverage, estate-first platform search and facets, and real delivery-
+attempt visibility. The detailed packet must also retain the bounded Docker-in-
+LXC and supported least-privilege Unified Agent statements instead of dropping
+them during publish-body condensation.
 The prerelease Windows path retains exact-SHA, checksum, and detached-signature
 verification without Authenticode; stable `v6.3.0` restores mandatory SignPath
 signing unless a new version-bound decision is recorded.
