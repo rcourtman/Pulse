@@ -3330,7 +3330,13 @@ the writable data volume, write a flash-backed `autorun.sh` block that waits
 for that volume before launching the wrapper, recover the same state during
 uninstall, and keep the persisted boot copy aligned with updater-owned runtime
 binary replacements instead of assuming `/usr/local/bin` survives reboot on
-QTS/QuTS hero.
+QTS/QuTS hero. Because that root is a small RAM-backed volume that can lack
+the headroom to stage or hold the agent at all, the installer must stage,
+install, and run the agent binary from the data volume itself, defaulting the
+staging `TMPDIR` there when the operator has not chosen one, reclaiming any
+pre-relocation runtime copy left under `/usr/local/bin`, and keeping the
+boot-time runtime copy only for split layouts where an operator-supplied
+state directory separates the stored and runtime binaries.
 Before any agent artifact download or replacement, that boundary must also
 prove adequate space on the effective temporary and install filesystems,
 deduplicating the requirement when both paths share a filesystem and honoring

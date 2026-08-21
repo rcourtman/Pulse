@@ -1651,8 +1651,12 @@ wait_for_file "${stored_binary}"
 pkill -x "pulse-agent" 2>/dev/null || true
 sleep 2
 
-mkdir -p "$(dirname "$runtime_binary")" 2>/dev/null || true
-cp "${stored_binary}" "${runtime_binary}"
+# When the runtime binary lives on the data volume it IS the stored binary;
+# only a split layout needs the boot-time copy back onto the root.
+if [ "${stored_binary}" != "${runtime_binary}" ]; then
+    mkdir -p "$(dirname "$runtime_binary")" 2>/dev/null || true
+    cp "${stored_binary}" "${runtime_binary}"
+fi
 chmod +x "${runtime_binary}"${service_env_lines}
 
 # Watchdog loop: restart agent if it exits.
@@ -3674,6 +3678,25 @@ elif [[ "$(uname -s)" == "FreeBSD" ]] && [[ -d /data ]] && ! is_install_dir_writ
     log_info "Immutable filesystem detected (read-only /usr/local/bin). Using $TRUENAS_STATE_DIR for installation."
 fi
 
+# QNAP QTS/QuTS hero: the root filesystem is a small RAM-backed volume that is
+# rebuilt on every boot, so staging to /tmp and installing to /usr/local/bin
+# can both fail on space and never persist anyway (issue #1617). QNAP's own
+# QPKG packages execute from the data volume, so stage, install, and run the
+# agent from there.
+if [[ "$(uname -s)" == "Linux" ]] && { [[ -f /sbin/getcfg ]] || [[ -f /etc/config/qpkg.conf ]]; }; then
+    QNAP_EARLY_VOL=$(detect_qnap_data_volume || true)
+    if [[ -n "$QNAP_EARLY_VOL" ]]; then
+        INSTALL_DIR="${QNAP_EARLY_VOL}/.pulse-agent"
+        if [[ -z "${TMPDIR:-}" ]]; then
+            QNAP_STAGING_TMPDIR="${QNAP_EARLY_VOL}/.pulse-agent/tmp"
+            if mkdir -p "$QNAP_STAGING_TMPDIR" 2>/dev/null; then
+                export TMPDIR="$QNAP_STAGING_TMPDIR"
+            fi
+        fi
+        log_info "QNAP detected (RAM-backed root). Staging and installing under ${INSTALL_DIR}."
+    fi
+fi
+
 # --- Preflight-Only Mode ---
 if [[ "$PREFLIGHT_ONLY" == "true" ]]; then
     json_event "preflight" "checking" "Running preflight checks"
@@ -4200,9 +4223,19 @@ if [[ -f /sbin/getcfg ]] || [[ -f /etc/config/qpkg.conf ]]; then
     mkdir -p "$STATE_DIR"
 
     # Copy binary to persistent storage and keep the runtime copy executable.
-    cp "${RUNTIME_BINARY}" "$QNAP_STORED_BINARY"
+    # With the data-volume install dir these are the same file; the copy only
+    # applies when a custom STATE_DIR separates them.
+    if [[ "$RUNTIME_BINARY" != "$QNAP_STORED_BINARY" ]]; then
+        cp "${RUNTIME_BINARY}" "$QNAP_STORED_BINARY"
+    fi
     chmod +x "$QNAP_STORED_BINARY"
     chmod +x "$RUNTIME_BINARY"
+
+    # A pre-relocation install left its runtime copy on the RAM-backed root;
+    # reclaim that space now that the agent runs from the data volume.
+    if [[ "$RUNTIME_BINARY" != "/usr/local/bin/${BINARY_NAME}" ]]; then
+        rm -f "/usr/local/bin/${BINARY_NAME}"
+    fi
 
     log_info "Installed binary to ${QNAP_STORED_BINARY} (persistent) and ${RUNTIME_BINARY} (runtime)..."
 
