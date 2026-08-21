@@ -1,8 +1,9 @@
 name: Publish Docker Images
 run-name: Publish Docker Images ${{ inputs.tag }}
 
-# Triggered by create-release.yml after staging images pass tests.
-# Builds multi-arch images (amd64+arm64) from source and publishes to Docker Hub and GHCR.
+# Called by create-release.yml after exact-candidate image qualification passes.
+# Assembles multi-arch images (amd64+arm64) from the verified candidate payload
+# and publishes them to Docker Hub and GHCR.
 on:
   workflow_call:
     inputs:
@@ -10,10 +11,12 @@ on:
         description: 'Release tag (e.g., v4.34.0)'
         required: true
         type: string
-  workflow_dispatch:
-    inputs:
-      tag:
-        description: 'Release tag (e.g., v4.34.0)'
+      container_artifact:
+        description: 'Exact-candidate container payload artifact from this release run'
+        required: true
+        type: string
+      source_sha:
+        description: 'Exact source commit bound to the candidate payload'
         required: true
         type: string
 
@@ -71,9 +74,25 @@ jobs:
       - name: Check out validated release tag
         env:
           TAG: ${{ steps.version.outputs.tag }}
+          EXPECTED_SOURCE_SHA: ${{ inputs.source_sha }}
         run: |
           set -euo pipefail
           git checkout --detach "refs/tags/${TAG}"
+          test "$(git rev-parse HEAD)" = "${EXPECTED_SOURCE_SHA}"
+
+      - name: Download exact-candidate container payload
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: ${{ inputs.container_artifact }}
+          path: ${{ runner.temp }}/release-container-payload
+
+      - name: Verify exact-candidate container payload
+        run: |
+          python3 scripts/release_candidate_manifest.py verify-local \
+            --release-dir "$RUNNER_TEMP/release-container-payload/payload" \
+            --manifest "$RUNNER_TEMP/release-container-payload/release-container-payload.json" \
+            --version "${{ steps.version.outputs.version }}" \
+            --source-sha "${{ inputs.source_sha }}"
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@06116385d9baf250c9f4dcb4858b16962ea869c3 # v4.1.0
@@ -94,38 +113,19 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Derive license public key Docker cache key
-        id: license_key_cache
-        env:
-          PULSE_LICENSE_PUBLIC_KEY: ${{ secrets.PULSE_LICENSE_PUBLIC_KEY }}
-        run: |
-          set -euo pipefail
-          decoded_len="$(printf '%s' "${PULSE_LICENSE_PUBLIC_KEY}" | base64 -d | wc -c | tr -d ' ')"
-          if [ "${decoded_len}" != "32" ]; then
-            echo "PULSE_LICENSE_PUBLIC_KEY must decode to 32 bytes." >&2
-            exit 1
-          fi
-          key_sha256="$(printf '%s' "${PULSE_LICENSE_PUBLIC_KEY}" | base64 -d | sha256sum | awk '{print $1}')"
-          echo "sha256=${key_sha256}" >> "${GITHUB_OUTPUT}"
-
-      - name: Build and push Pulse server image (multi-arch)
+      - name: Assemble and push Pulse server image (multi-arch)
         id: build_server_image
         uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
         with:
           context: .
-          target: runtime
+          target: runtime_prebuilt
+          build-contexts: |
+            release_payload=${{ runner.temp }}/release-container-payload/payload/release
           platforms: linux/amd64,linux/arm64
           push: true
           provenance: mode=max
           sbom: true
           cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/pulse:buildcache
-          build-args: |
-            VERSION=${{ steps.version.outputs.tag }}
-            PULSE_LICENSE_PUBLIC_KEY_SHA256=${{ steps.license_key_cache.outputs.sha256 }}
-            PULSE_UPDATE_SIGNING_PUBLIC_KEY=${{ vars.PULSE_UPDATE_SIGNING_PUBLIC_KEY }}
-          secrets: |
-            pulse_license_public_key=${{ secrets.PULSE_LICENSE_PUBLIC_KEY }}
-            pulse_update_signing_key=${{ secrets.PULSE_UPDATE_SIGNING_KEY }}
           tags: |
             rcourtman/pulse:${{ steps.version.outputs.tag }}
             rcourtman/pulse:${{ steps.version.outputs.version }}
@@ -148,22 +148,20 @@ jobs:
           push-to-registry: true
           create-storage-record: false
 
-      - name: Build and push Pulse control-plane image (multi-arch)
+      - name: Assemble and push Pulse control-plane image (multi-arch)
         id: build_control_plane_image
         uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
         with:
           context: .
           file: deploy/provider-msp/Dockerfile.control-plane
+          target: control_plane_prebuilt
+          build-contexts: |
+            compiled_payload=${{ runner.temp }}/release-container-payload/payload/compiled
           platforms: linux/amd64,linux/arm64
           push: true
           provenance: mode=max
           sbom: true
           cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/pulse-control-plane:buildcache
-          build-args: |
-            VERSION=${{ steps.version.outputs.tag }}
-            PULSE_LICENSE_PUBLIC_KEY_SHA256=${{ steps.license_key_cache.outputs.sha256 }}
-          secrets: |
-            pulse_license_public_key=${{ secrets.PULSE_LICENSE_PUBLIC_KEY }}
           tags: |
             rcourtman/pulse-control-plane:${{ steps.version.outputs.tag }}
             rcourtman/pulse-control-plane:${{ steps.version.outputs.version }}

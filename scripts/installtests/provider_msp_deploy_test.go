@@ -10,6 +10,35 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+func TestProviderMSPControlPlaneImageConsumesExactCandidate(t *testing.T) {
+	dockerfileBytes, err := os.ReadFile(repoFile("deploy", "provider-msp", "Dockerfile.control-plane"))
+	if err != nil {
+		t.Fatalf("read provider MSP control-plane Dockerfile: %v", err)
+	}
+	publishBytes, err := os.ReadFile(repoFile(".github", "workflows", "publish-docker.yml"))
+	if err != nil {
+		t.Fatalf("read Docker publisher: %v", err)
+	}
+	dockerfile := string(dockerfileBytes)
+	publish := string(publishBytes)
+	assertContainsAll(t, dockerfile,
+		"FROM control-plane-runtime-foundation AS control_plane_prebuilt",
+		"COPY --from=compiled_payload /binaries/pulse-control-plane-linux-${TARGETARCH:-amd64}",
+		"FROM control-plane-runtime-foundation AS runtime",
+	)
+	assertContainsAll(t, publish,
+		"Verify exact-candidate container payload",
+		"target: control_plane_prebuilt",
+		"compiled_payload=${{ runner.temp }}/release-container-payload/payload/compiled",
+	)
+	assertNotContainsAny(t, publish,
+		"PULSE_LICENSE_PUBLIC_KEY",
+		"PULSE_UPDATE_SIGNING_KEY",
+		"pulse_license_public_key",
+		"pulse_update_signing_key",
+	)
+}
+
 func TestProviderMSPDeployComposeIsProviderModeAndStripeFree(t *testing.T) {
 	composePath := repoFile("deploy", "provider-msp", "docker-compose.yml")
 	composeBytes, err := os.ReadFile(composePath)

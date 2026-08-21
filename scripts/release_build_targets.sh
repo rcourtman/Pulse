@@ -26,6 +26,11 @@ PULSE_RELEASE_SERVER_TARGETS=(
     linux-386
 )
 
+PULSE_RELEASE_CONTROL_PLANE_TARGETS=(
+    linux-amd64
+    linux-arm64
+)
+
 pulse_release_target_env() {
     case "$1" in
         linux-amd64) printf '%s\n' 'GOOS=linux GOARCH=amd64' ;;
@@ -56,6 +61,7 @@ pulse_release_binary_filename() {
         agent) filename="pulse-agent-${target}" ;;
         mcp) filename="pulse-mcp-${target}" ;;
         server) filename="pulse-${target}" ;;
+        control-plane) filename="pulse-control-plane-${target}" ;;
         *)
             echo "Error: unsupported release component: ${component}" >&2
             return 1

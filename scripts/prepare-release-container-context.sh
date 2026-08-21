@@ -108,4 +108,13 @@ if ! diff -qr --exclude=pulse "${output_dir}/amd64" "${output_dir}/arm64"; then
     exit 1
 fi
 
+# The universal agent/script payload is identical in both server archives.
+# Keep one copy plus the arm64 server and VERSION needed by the multi-arch
+# runtime target so Actions transfers do not carry the same payload twice.
+find "${output_dir}/arm64" -depth -mindepth 1 \
+    ! -path "${output_dir}/arm64/bin" \
+    ! -path "${output_dir}/arm64/bin/pulse" \
+    ! -path "${output_dir}/arm64/VERSION" \
+    -delete
+
 echo "Prepared exact-candidate container context at ${output_dir}."

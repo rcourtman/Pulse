@@ -551,8 +551,9 @@ upgrade, update, release, or artifact-selection behavior.
    not build, sign, and then discard a complete public release packet first.
    Container qualification must consume the verified immutable candidate
    archives through `scripts/prepare-release-container-context.sh`, assemble
-   the prebuilt runtime and agent targets without recompiling source, and
-   compare the embedded server and agent digests with the candidate bytes
+   the prebuilt runtime, agent, and provider control-plane targets without
+   recompiling source, and compare every embedded executable digest with the
+   candidate bytes
    before exercising the same local runtime through the Helm install/upgrade
    smoke. The reusable build-release-candidate workflow owns this proof so a
    standalone candidate dispatch, a release dry run, and a publishing release
@@ -1904,26 +1905,29 @@ updated last.
 That same governed release lineage now also owns artifact attestation and
 secret-safe container builds. Release workflows must publish max-level image
 provenance plus SBOM attestations, push keyless GitHub/Sigstore attestations
-for the published server and agent images, attest the generated release packet
-assets from the `release/` directory, and pass the embedded license public key
-through BuildKit secret mounts instead of Docker build arguments so release
-metadata and image history cannot re-expose it.
-Because BuildKit secret contents are intentionally excluded from layer cache
-keys, those Docker builds must also pass a non-secret SHA-256 fingerprint of
-the mounted license public key through `PULSE_LICENSE_PUBLIC_KEY_SHA256` and
-the `Dockerfile` must verify that fingerprint before embedding the key. A
-release image build must fail closed if the fingerprint is present but the
-secret is missing, malformed, or mismatched, so cached no-key binaries cannot
-be reused for release-grade hosted or self-hosted runtime images. The matching
-installability proof lives in `scripts/installtests/build_release_assets_test.go`
-and `scripts/release_control/release_promotion_policy_test.py`, and both must
-assert the secret mount and non-secret fingerprint argument together.
+for the published server and provider control-plane images, and attest the
+generated release packet assets from the `release/` directory. The exact-SHA
+candidate compiler must validate and embed the governed license and update
+public keys once, record the resulting runtime and control-plane binaries in
+the immutable candidate manifest, and send only those verified bytes to image
+qualification and publication. `publish-docker.yml` must not receive release
+signing material or license-key build inputs and must not recompile either
+binary.
+Source-built release-grade Docker targets remain a fail-closed diagnostic and
+development boundary. When those targets are used, they must pass the license
+public key through a BuildKit secret mount rather than a Docker build argument,
+pair it with the non-secret `PULSE_LICENSE_PUBLIC_KEY_SHA256` cache key, and
+verify the fingerprint before embedding the key. The matching installability
+proof lives in `scripts/installtests/build_release_assets_test.go` and
+`scripts/release_control/release_promotion_policy_test.py`.
 The standalone hosted control-plane image is part of the same release-license
 boundary. `deploy/provider-msp/Dockerfile.control-plane` must build
 `cmd/pulse-control-plane` with `-tags release`, canonical
-`scripts/release_ldflags.sh server` metadata, an embedded license public key
-from the BuildKit `pulse_license_public_key` secret, and the same
-`PULSE_LICENSE_PUBLIC_KEY_SHA256` fingerprint gate. Provider-hosted MSP uses
+`scripts/release_ldflags.sh server` metadata, and the embedded governed license
+public key. Its source-built target must retain the BuildKit secret and
+`PULSE_LICENSE_PUBLIC_KEY_SHA256` fingerprint gate, while its published
+prebuilt target must consume the manifest-bound control-plane binaries from
+the exact candidate. Provider-hosted MSP uses
 that control-plane image for signed MSP-license enforcement, so it must not be
 possible to publish a provider MSP control-plane image that accepts
 `PULSE_LICENSE_DEV_MODE` or `PULSE_LICENSE_PUBLIC_KEY` runtime overrides.
@@ -1931,6 +1935,10 @@ possible to publish a provider MSP control-plane image that accepts
 `rcourtman/pulse-control-plane` and
 `ghcr.io/<owner>/pulse-control-plane` from that Dockerfile, with the same
 version tags and prerelease/latest tag policy as the main Pulse runtime image.
+The reusable Docker publisher must accept the exact container artifact name
+and source SHA from its owning release run, verify both against the checked-out
+tag and candidate manifest, and expose no standalone dispatch that could
+silently rebuild different bytes for an existing release tag.
 That same supply-chain boundary also owns the checked-in build roots
 themselves. `Dockerfile` must pin its Node, Go, and Alpine bases by immutable
 manifest-list digest so multi-arch release builds do not silently drift onto a

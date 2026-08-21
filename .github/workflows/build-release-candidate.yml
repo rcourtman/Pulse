@@ -53,6 +53,9 @@ on:
       manifest_artifact_name:
         description: 'Release candidate manifest artifact name'
         value: ${{ jobs.build.outputs.manifest_artifact_name }}
+      container_artifact_name:
+        description: 'Exact-candidate container payload artifact name'
+        value: ${{ jobs.build.outputs.container_artifact_name }}
       windows_signing_backend:
         description: 'Windows signing backend used for the candidate'
         value: ${{ jobs.collect-windows-signing.outputs.signing_backend }}
@@ -560,6 +563,7 @@ jobs:
     outputs:
       artifact_name: ${{ steps.identity.outputs.artifact_name }}
       manifest_artifact_name: ${{ steps.identity.outputs.manifest_artifact_name }}
+      container_artifact_name: ${{ steps.identity.outputs.container_artifact_name }}
     steps:
       - name: Resolve candidate identity
         id: identity
@@ -567,6 +571,7 @@ jobs:
           set -euo pipefail
           echo "artifact_name=release-candidate-${GITHUB_SHA}-${{ inputs.version }}" >> "$GITHUB_OUTPUT"
           echo "manifest_artifact_name=release-candidate-manifest-${GITHUB_SHA}-${{ inputs.version }}" >> "$GITHUB_OUTPUT"
+          echo "container_artifact_name=release-container-payload-${GITHUB_SHA}-${{ inputs.version }}" >> "$GITHUB_OUTPUT"
 
       - name: Checkout repository
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
@@ -690,6 +695,26 @@ jobs:
             --source-sha "${GITHUB_SHA}" \
             --output release-candidate-manifest/release-candidate.json
 
+      - name: Create exact-candidate container payload
+        run: |
+          set -euo pipefail
+          payload_root="$RUNNER_TEMP/release-container-payload"
+          ./scripts/prepare-release-container-context.sh \
+            release \
+            "${{ inputs.version }}" \
+            "${payload_root}/payload/release"
+          mkdir -p "${payload_root}/payload/compiled/binaries"
+          for arch in amd64 arm64; do
+            install -m 0755 \
+              "release-compiled/payload/binaries/pulse-control-plane-linux-${arch}" \
+              "${payload_root}/payload/compiled/binaries/pulse-control-plane-linux-${arch}"
+          done
+          python3 scripts/release_candidate_manifest.py create \
+            --release-dir "${payload_root}/payload" \
+            --version "${{ inputs.version }}" \
+            --source-sha "${GITHUB_SHA}" \
+            --output "${payload_root}/release-container-payload.json"
+
       - name: Upload immutable release candidate
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -709,37 +734,39 @@ jobs:
           retention-days: 1
           overwrite: true
 
+      - name: Upload exact-candidate container payload
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ steps.identity.outputs.container_artifact_name }}
+          path: ${{ runner.temp }}/release-container-payload/
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+          overwrite: true
+
   qualify-release-containers:
     name: Exact-Candidate Container and Helm Smoke
     needs: build
+    if: ${{ always() && needs.build.result == 'success' }}
     runs-on: [self-hosted, Linux, X64, pulse-pve-build]
     timeout-minutes: 15
     steps:
       - name: Checkout repository
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
 
-      - name: Download immutable release candidate
+      - name: Download exact-candidate container payload
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: ${{ needs.build.outputs.artifact_name }}
-          path: release
+          name: ${{ needs.build.outputs.container_artifact_name }}
+          path: ${{ runner.temp }}/release-container-payload
 
-      - name: Download release candidate manifest
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: ${{ needs.build.outputs.manifest_artifact_name }}
-          path: release-candidate-manifest
-
-      - name: Verify immutable release candidate
+      - name: Verify exact-candidate container payload
         run: |
           python3 scripts/release_candidate_manifest.py verify-local \
-            --release-dir release \
-            --manifest release-candidate-manifest/release-candidate.json \
+            --release-dir "$RUNNER_TEMP/release-container-payload/payload" \
+            --manifest "$RUNNER_TEMP/release-container-payload/release-container-payload.json" \
             --version "${{ inputs.version }}" \
             --source-sha "${GITHUB_SHA}"
-
-      - name: Prepare exact-candidate container context
-        run: ./scripts/prepare-release-container-context.sh release "${{ inputs.version }}" "$RUNNER_TEMP/release-container-context"
 
       - name: Assemble exact-candidate runtime and agent images
         run: |
@@ -747,27 +774,38 @@ jobs:
           docker buildx build \
             --target runtime_prebuilt \
             --platform linux/amd64 \
-            --build-context "release_payload=${RUNNER_TEMP}/release-container-context" \
+            --build-context "release_payload=${RUNNER_TEMP}/release-container-payload/payload/release" \
             --load \
             --tag "pulse-helm-smoke:${{ inputs.version }}" \
             .
           docker buildx build \
             --target agent_runtime_prebuilt \
             --platform linux/amd64 \
-            --build-context "release_payload=${RUNNER_TEMP}/release-container-context" \
+            --build-context "release_payload=${RUNNER_TEMP}/release-container-payload/payload/release" \
             --load \
             --tag "pulse-agent-candidate:${{ inputs.version }}" \
+            .
+          docker buildx build \
+            --file deploy/provider-msp/Dockerfile.control-plane \
+            --target control_plane_prebuilt \
+            --platform linux/amd64 \
+            --build-context "compiled_payload=${RUNNER_TEMP}/release-container-payload/payload/compiled" \
+            --load \
+            --tag "pulse-control-plane-candidate:${{ inputs.version }}" \
             .
 
       - name: Verify container binaries match immutable candidate
         run: |
           set -euo pipefail
-          expected_server="$(sha256sum "$RUNNER_TEMP/release-container-context/amd64/bin/pulse" | awk '{print $1}')"
+          expected_server="$(sha256sum "$RUNNER_TEMP/release-container-payload/payload/release/amd64/bin/pulse" | awk '{print $1}')"
           actual_server="$(docker run --rm --entrypoint /bin/sh "pulse-helm-smoke:${{ inputs.version }}" -c 'sha256sum /app/pulse' | awk '{print $1}')"
-          expected_agent="$(sha256sum "$RUNNER_TEMP/release-container-context/amd64/bin/pulse-agent-linux-amd64" | awk '{print $1}')"
+          expected_agent="$(sha256sum "$RUNNER_TEMP/release-container-payload/payload/release/amd64/bin/pulse-agent-linux-amd64" | awk '{print $1}')"
           actual_agent="$(docker run --rm --entrypoint /bin/sh "pulse-agent-candidate:${{ inputs.version }}" -c 'sha256sum /usr/local/bin/pulse-agent' | awk '{print $1}')"
+          expected_control_plane="$(sha256sum "$RUNNER_TEMP/release-container-payload/payload/compiled/binaries/pulse-control-plane-linux-amd64" | awk '{print $1}')"
+          actual_control_plane="$(docker run --rm --entrypoint /bin/sh "pulse-control-plane-candidate:${{ inputs.version }}" -c 'sha256sum /usr/local/bin/pulse-control-plane' | awk '{print $1}')"
           test "${actual_server}" = "${expected_server}"
           test "${actual_agent}" = "${expected_agent}"
+          test "${actual_control_plane}" = "${expected_control_plane}"
 
       - name: Set up Helm
         uses: azure/setup-helm@dda3372f752e03dde6b3237bc9431cdc2f7a02a2 # v5.0.0

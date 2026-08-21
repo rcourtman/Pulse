@@ -91,6 +91,8 @@ func TestBuildReleaseUsesV6InstallScripts(t *testing.T) {
 	for _, needle := range []string{
 		`release_go_build_args=(-buildvcs=false -trimpath)`,
 		`command=(go build "${release_go_build_args[@]}")`,
+		`package=./cmd/pulse-control-plane`,
+		`task_components+=(control-plane)`,
 	} {
 		if !strings.Contains(compileScript, needle) {
 			t.Fatalf("build-release-binaries.sh missing clean compilation contract: %s", needle)
@@ -168,6 +170,7 @@ func TestReleaseContainerTargetsConsumeImmutableCandidate(t *testing.T) {
 		`validate_archive_entries "${archive}"`,
 		`tar --no-same-owner --no-same-permissions -xzf`,
 		`diff -qr --exclude=pulse`,
+		`find "${output_dir}/arm64" -depth -mindepth 1`,
 	} {
 		if !strings.Contains(prepareScript, needle) {
 			t.Fatalf("prepare-release-container-context.sh missing candidate guard: %s", needle)
@@ -1195,8 +1198,13 @@ func TestReleaseWorkflowsUseSecretSafeAttestedImageBuilds(t *testing.T) {
 	createReleaseRequired := []string{
 		`Exact-Candidate Container and Helm Smoke`,
 		`./scripts/prepare-release-container-context.sh`,
+		`container_artifact_name`,
+		`container_artifact: ${{ needs.build_release_candidate.outputs.container_artifact_name }}`,
+		`source_sha: ${{ needs.create_release.outputs.target_commitish }}`,
+		`release-container-payload.json`,
 		`--target runtime_prebuilt`,
 		`--target agent_runtime_prebuilt`,
+		`--target control_plane_prebuilt`,
 		`Verify container binaries match immutable candidate`,
 		`PULSE_UPDATE_SIGNING_PUBLIC_KEY: ${{ vars.PULSE_UPDATE_SIGNING_PUBLIC_KEY }}`,
 		`Validate installer signing key pins`,
@@ -1208,6 +1216,9 @@ func TestReleaseWorkflowsUseSecretSafeAttestedImageBuilds(t *testing.T) {
 		`uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4`,
 	}
 	containerJob := workflowJobBlock(t, string(candidateWorkflowBytes), "qualify-release-containers")
+	if !strings.Contains(containerJob, "always() && needs.build.result == 'success'") {
+		t.Fatal("exact-candidate container qualification must not inherit skipped native-signing dependencies")
+	}
 	for _, forbidden := range []string{
 		"PULSE_UPDATE_SIGNING_KEY",
 		"PULSE_LICENSE_PUBLIC_KEY",
@@ -1216,6 +1227,20 @@ func TestReleaseWorkflowsUseSecretSafeAttestedImageBuilds(t *testing.T) {
 	} {
 		if strings.Contains(containerJob, forbidden) {
 			t.Fatalf("PVE exact-candidate container qualification must not receive release authority: %s", forbidden)
+		}
+	}
+	controlPlaneDockerfileBytes, err := os.ReadFile(repoFile("deploy", "provider-msp", "Dockerfile.control-plane"))
+	if err != nil {
+		t.Fatalf("read Dockerfile.control-plane: %v", err)
+	}
+	controlPlaneDockerfile := string(controlPlaneDockerfileBytes)
+	for _, needle := range []string{
+		"FROM control-plane-runtime-foundation AS control_plane_prebuilt",
+		"COPY --from=compiled_payload /binaries/pulse-control-plane-linux-${TARGETARCH:-amd64}",
+		"FROM control-plane-runtime-foundation AS runtime",
+	} {
+		if !strings.Contains(controlPlaneDockerfile, needle) {
+			t.Fatalf("Dockerfile.control-plane missing exact-candidate target: %s", needle)
 		}
 	}
 	for _, needle := range createReleaseRequired {
@@ -1235,14 +1260,16 @@ func TestReleaseWorkflowsUseSecretSafeAttestedImageBuilds(t *testing.T) {
 	publishRequired := []string{
 		`provenance: mode=max`,
 		`sbom: true`,
-		`secrets: |`,
-		`id: license_key_cache`,
+		`container_artifact:`,
+		`source_sha:`,
+		`Download exact-candidate container payload`,
+		`Verify exact-candidate container payload`,
+		`target: runtime_prebuilt`,
+		`release_payload=${{ runner.temp }}/release-container-payload/payload/release`,
 		`id: build_control_plane_image`,
 		`file: deploy/provider-msp/Dockerfile.control-plane`,
-		`PULSE_LICENSE_PUBLIC_KEY_SHA256=${{ steps.license_key_cache.outputs.sha256 }}`,
-		`PULSE_UPDATE_SIGNING_PUBLIC_KEY=${{ vars.PULSE_UPDATE_SIGNING_PUBLIC_KEY }}`,
-		`pulse_license_public_key=${{ secrets.PULSE_LICENSE_PUBLIC_KEY }}`,
-		`pulse_update_signing_key=${{ secrets.PULSE_UPDATE_SIGNING_KEY }}`,
+		`target: control_plane_prebuilt`,
+		`compiled_payload=${{ runner.temp }}/release-container-payload/payload/compiled`,
 		`subject-name: docker.io/rcourtman/pulse`,
 		`subject-name: ghcr.io/${{ github.repository_owner }}/pulse`,
 		`subject-name: docker.io/rcourtman/pulse-control-plane`,
@@ -1263,8 +1290,15 @@ func TestReleaseWorkflowsUseSecretSafeAttestedImageBuilds(t *testing.T) {
 			t.Fatalf("publish-docker.yml missing attested secret-safe publish contract: %s", needle)
 		}
 	}
-	if strings.Contains(publish, `PULSE_LICENSE_PUBLIC_KEY=${{ secrets.PULSE_LICENSE_PUBLIC_KEY }}`) {
-		t.Fatal("publish-docker.yml must not pass the license public key through docker build args")
+	for _, forbidden := range []string{
+		"PULSE_LICENSE_PUBLIC_KEY",
+		"PULSE_UPDATE_SIGNING_KEY",
+		"pulse_license_public_key",
+		"pulse_update_signing_key",
+	} {
+		if strings.Contains(publish, forbidden) {
+			t.Fatalf("publish-docker.yml must assemble the verified candidate without release build secrets: %s", forbidden)
+		}
 	}
 }
 

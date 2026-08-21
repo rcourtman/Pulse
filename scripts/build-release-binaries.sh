@@ -108,6 +108,10 @@ for target in "${PULSE_RELEASE_SERVER_TARGETS[@]}"; do
     task_components+=(server)
     task_targets+=("${target}")
 done
+for target in "${PULSE_RELEASE_CONTROL_PLANE_TARGETS[@]}"; do
+    task_components+=(control-plane)
+    task_targets+=("${target}")
+done
 
 build_one() {
     local component="$1"
@@ -129,10 +133,14 @@ build_one() {
             package=./cmd/pulse
             ldflags="${server_ldflags}"
             ;;
+        control-plane)
+            package=./cmd/pulse-control-plane
+            ldflags="${server_ldflags}"
+            ;;
     esac
     read -r -a target_env_parts <<<"${target_env}"
     command=(go build "${release_go_build_args[@]}")
-    if [[ "${component}" == server ]]; then command+=(-tags release); fi
+    if [[ "${component}" == server || "${component}" == control-plane ]]; then command+=(-tags release); fi
     if [[ -n "${ldflags}" ]]; then command+=("-ldflags=${ldflags}"); fi
     command+=(-o "${output}" "${package}")
     env "${target_env_parts[@]}" GOMAXPROCS="${go_procs}" "${command[@]}"
