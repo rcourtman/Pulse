@@ -223,6 +223,15 @@ export const useInfrastructureOperationsState = (
       if (commandsEnabled || installState.enableCommands()) {
         extraArgs.push('--enable-commands');
       }
+      // Pin the existing identity the way the Windows path does. A repair
+      // reinstall without it can register a fresh suffixed agent identity
+      // for the same machine instead of converging on this one.
+      if (agentId) {
+        extraArgs.push(`--agent-id ${shellQuoteArg(agentId)}`);
+      }
+      if (hostname) {
+        extraArgs.push(`--hostname ${shellQuoteArg(hostname)}`);
+      }
       return buildUnixAgentInstallCommand({
         baseUrl: url,
         token,

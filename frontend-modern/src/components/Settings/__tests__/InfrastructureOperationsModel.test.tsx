@@ -431,6 +431,21 @@ describe('infrastructure operations model', () => {
     expect(operationsStateSource).not.toContain('const tokenEnv = token ?');
   });
 
+  it('pins the existing agent identity in the Unix credential repair command', async () => {
+    const operationsStateSource = await import('../useInfrastructureOperationsState?raw').then(
+      (mod) => (mod as { default: string }).default,
+    );
+    const repairStart = operationsStateSource.indexOf('if (replaceCredential) {');
+    expect(repairStart).toBeGreaterThanOrEqual(0);
+    const repairEnd = operationsStateSource.indexOf('buildUnixAgentInstallCommand({', repairStart);
+    expect(repairEnd).toBeGreaterThan(repairStart);
+    const repairBranch = operationsStateSource.slice(repairStart, repairEnd);
+    // A repair reinstall without the identity can register a fresh suffixed
+    // agent for the same machine instead of converging. Refs discussion #1748.
+    expect(repairBranch).toContain('--agent-id ${shellQuoteArg(agentId)}');
+    expect(repairBranch).toContain('--hostname ${shellQuoteArg(hostname)}');
+  });
+
   it('keeps stale Unix agent update commands on the saved-state update path', async () => {
     const operationsStateSource = await import('../useInfrastructureOperationsState?raw').then(
       (mod) => (mod as { default: string }).default,

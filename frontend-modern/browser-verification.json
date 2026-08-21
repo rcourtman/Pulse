@@ -1,35 +1,39 @@
 {
   "version": 1,
-  "base_sha": "4c7b1a2434385f13c5c89dd3a113cd894636ac4d",
-  "verified_at": "2026-08-20T22:47:56Z",
+  "base_sha": "af6d4825152580779c21a48bc13a702c15a4a982",
+  "verified_at": "2026-08-21T05:48:24Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/api/notifications.ts"
+    "frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/api/notifications.ts": "ac714c8f87c1e26f1abf523b4c4c7b83c0ce75250c92741b69dc6a36b35557ff"
+    "frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx": "afcb6b556a0bb21e19b492744a62f97513206c27f3e8d643a2c8862e2e43fe13"
   },
   "routes": [
-    "/alerts/notifications"
+    "/settings/infrastructure",
+    "/settings/infrastructure (Agent Doctor view via Open Agent Doctor)"
   ],
   "viewports": [
     {
-      "width": 1440,
-      "height": 1000
+      "width": 1280,
+      "height": 800
     },
     {
-      "width": 390,
-      "height": 844
+      "width": 375,
+      "height": 812
     }
   ],
   "states": [
-    "Notifications page loaded with delivery paused and all destination configuration sections available",
-    "Recent delivery activity rendered its seven-day empty state with the refresh control enabled",
-    "Desktop and narrow layouts kept the delivery card, explanatory copy, refresh control, and empty state visible without clipping"
+    "Agent Doctor fleet table with 1 Critical and 12 Healthy targets (mock stack against live dev backend)",
+    "Expanded Critical row prod-euw1-k8s-03 showing stale-report diagnostic, no credential repair offered",
+    "Expanded Healthy row apollo-114 showing no fleet-health issues",
+    "Doctor table re-rendered at mobile width after reload",
+    "No repair_authentication target exists in the mock fleet, so the replaceCredential command branch was verified by unit tests (InfrastructureOperationsModel.test.tsx source pin plus agentInstallCommand builder tests), not by a rendered command"
   ],
   "interactions": [
-    "Refreshed delivery status at desktop width and confirmed the empty state remained available",
-    "Scrolled through the narrow notification layout and refreshed delivery status again",
-    "Checked the browser console after both refresh interactions and found no errors"
+    "Clicked Open Agent Doctor from Infrastructure settings",
+    "Expanded the Critical target row prod-euw1-k8s-03",
+    "Expanded the Healthy target row apollo-114",
+    "Reloaded the doctor view at 375x812 and confirmed clean render with zero console errors"
   ]
 }
