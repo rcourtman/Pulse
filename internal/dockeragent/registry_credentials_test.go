@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -35,18 +36,30 @@ func basicAuthValue(username, secret string) string {
 }
 
 func newTestCredentialStore(files map[string]string, env map[string]string) *dockerConfigCredentials {
+	nativeFiles := make(map[string]string, len(files))
+	for path, content := range files {
+		nativeFiles[filepath.FromSlash(path)] = content
+	}
+	nativeEnv := make(map[string]string, len(env))
+	for key, value := range env {
+		switch key {
+		case "HOME", "DOCKER_CONFIG", "REGISTRY_AUTH_FILE", "XDG_RUNTIME_DIR":
+			value = filepath.FromSlash(value)
+		}
+		nativeEnv[key] = value
+	}
 	c := &dockerConfigCredentials{
 		logger: zerolog.Nop(),
 		cache:  map[string]credentialCacheEntry{},
-		getenv: func(key string) string { return env[key] },
+		getenv: func(key string) string { return nativeEnv[key] },
 		homeDir: func() (string, error) {
-			if home, ok := env["HOME"]; ok {
+			if home, ok := nativeEnv["HOME"]; ok {
 				return home, nil
 			}
 			return "", errors.New("no home")
 		},
 		readFile: func(path string) ([]byte, error) {
-			if content, ok := files[path]; ok {
+			if content, ok := nativeFiles[path]; ok {
 				return []byte(content), nil
 			}
 			return nil, os.ErrNotExist
@@ -272,7 +285,7 @@ func TestDockerConfigCredentials_CacheAvoidsRepeatResolution(t *testing.T) {
 	store := newTestCredentialStore(nil, map[string]string{"HOME": "/home/agent"})
 	store.readFile = func(path string) ([]byte, error) {
 		reads++
-		if path == "/home/agent/.docker/config.json" {
+		if path == filepath.FromSlash("/home/agent/.docker/config.json") {
 			return []byte(fmt.Sprintf(`{"auths":{"registry.example.com":{"auth":%q}}}`, auth)), nil
 		}
 		return nil, os.ErrNotExist
