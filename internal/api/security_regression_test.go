@@ -5228,7 +5228,15 @@ func TestSystemSettingsWebhookAllowlistPropagatesToAllTenantManagers(t *testing.
 		}
 	}
 
-	h := NewSystemSettingsHandler(cfg, persistence, nil, mtm, nil, func() {}, nil)
+	// Match the production router, which always supplies its already-created
+	// primary monitor. Passing nil here makes the constructor create and start a
+	// default monitor asynchronously against cfg just before this test mutates
+	// cfg, introducing a test-only race that production cannot take.
+	primaryMonitor, ok := mtm.PeekMonitor("org-a")
+	if !ok {
+		t.Fatal("org-a monitor was not initialized")
+	}
+	h := NewSystemSettingsHandler(cfg, persistence, nil, mtm, primaryMonitor, func() {}, nil)
 
 	// Both org managers must reject the private target before the update.
 	for _, orgID := range []string{"org-a", "org-b"} {

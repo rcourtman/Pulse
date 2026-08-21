@@ -39,7 +39,7 @@ GO_TMP_DIR="${RUN_DIR}/go-tmp"
 TIMINGS_FILE="${RUN_DIR}/timings.tsv"
 TEST_DATA_DIR="${WORKER_ROOT}/test-data/${PROFILE}"
 
-for command_name in git go node npm docker curl flock timeout; do
+for command_name in git go node npm docker curl flock timeout python3; do
   if ! command -v "$command_name" >/dev/null 2>&1; then
     echo "Error: required worker command is missing: ${command_name}" >&2
     exit 3
@@ -68,6 +68,7 @@ if ! flock -n 9; then
   echo "Error: another release preflight is already using this worker." >&2
   exit 5
 fi
+WALL_STARTED="$(date +%s)"
 
 # A preflight compiles and tests only. Keep publication and signing authority
 # out of the worker even if its login shell happens to define these names.
@@ -129,29 +130,63 @@ if [ -n "$EXPECTED_GO" ] && [ "$ACTUAL_GO" != "$EXPECTED_GO" ]; then
 fi
 
 phase frontend-dependencies npm --prefix frontend-modern ci
-phase frontend-lint npm --prefix frontend-modern run lint
-phase frontend-headers npm --prefix frontend-modern run lint:headers
-phase frontend-duplication npm --prefix frontend-modern run lint:cpd
-phase frontend-types npm --prefix frontend-modern run type-check
-phase frontend-tests npm --prefix frontend-modern test
 phase frontend-build npm --prefix frontend-modern run build
 
 rm -rf internal/api/frontend-modern
 mkdir -p internal/api/frontend-modern
 cp -R frontend-modern/dist internal/api/frontend-modern/
-rm -rf "$TEST_DATA_DIR"
-mkdir -p "$TEST_DATA_DIR"
+run_frontend_quality() {
+  phase frontend-lint npm --prefix frontend-modern run lint
+  phase frontend-headers npm --prefix frontend-modern run lint:headers
+  phase frontend-duplication npm --prefix frontend-modern run lint:cpd
+  phase frontend-types npm --prefix frontend-modern run type-check
+  phase frontend-tests npm --prefix frontend-modern test
+}
 
-if [ "$PROFILE" = "rehearsal" ]; then
-  phase backend-serial env PULSE_DATA_DIR="$TEST_DATA_DIR" go test -p 1 ./...
-else
-  phase backend-race env PULSE_DATA_DIR="$TEST_DATA_DIR" make test
-fi
+run_backend() {
+  rm -rf "$TEST_DATA_DIR"
+  mkdir -p "$TEST_DATA_DIR"
+  if [ "$PROFILE" = "rehearsal" ]; then
+    phase backend-serial env PULSE_DATA_DIR="$TEST_DATA_DIR" go test -p 1 ./...
+  else
+    phase backend-race-sharded ./scripts/run-release-backend-tests.sh \
+      --data-root "$TEST_DATA_DIR" \
+      --api-shards auto
+  fi
+}
 
-phase integration-dependencies npm --prefix tests/integration ci
+run_integration_prep() {
+  phase integration-dependencies npm --prefix tests/integration ci
+  PLAYWRIGHT_VERSION="$(node -p "require('./tests/integration/node_modules/@playwright/test/package.json').version")"
+  PLAYWRIGHT_IMAGE="mcr.microsoft.com/playwright:v${PLAYWRIGHT_VERSION}-noble"
+  phase playwright-image docker pull "$PLAYWRIGHT_IMAGE"
+  phase mock-github-image docker build --tag pulse-mock-github:test tests/integration/mock-github-server
+}
+
+# These lanes have no output dependency on one another. Running them together
+# makes the critical path the slowest lane instead of their sum.
+parallel_pids=()
+run_frontend_quality &
+parallel_pids+=("$!")
+run_backend &
+parallel_pids+=("$!")
+run_integration_prep &
+parallel_pids+=("$!")
+
+remaining="${#parallel_pids[@]}"
+while [ "$remaining" -gt 0 ]; do
+  if wait -n; then
+    remaining=$((remaining - 1))
+  else
+    status=$?
+    kill "${parallel_pids[@]}" >/dev/null 2>&1 || true
+    wait "${parallel_pids[@]}" >/dev/null 2>&1 || true
+    exit "$status"
+  fi
+done
+
 PLAYWRIGHT_VERSION="$(node -p "require('./tests/integration/node_modules/@playwright/test/package.json').version")"
 PLAYWRIGHT_IMAGE="mcr.microsoft.com/playwright:v${PLAYWRIGHT_VERSION}-noble"
-phase playwright-image docker pull "$PLAYWRIGHT_IMAGE"
 
 VERSION="$(tr -d '\r\n' < VERSION)"
 if [ "$PROFILE" = "rehearsal" ]; then
@@ -170,8 +205,6 @@ else
     --tag pulse:test \
     .
 fi
-phase mock-github-image docker build --tag pulse-mock-github:test tests/integration/mock-github-server
-
 run_playwright() {
   docker run --rm \
     --network host \
@@ -231,15 +264,17 @@ else
 fi
 
 FINISHED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+WALL_SECONDS="$(($(date +%s) - WALL_STARTED))"
 TOTAL_SECONDS="$(awk -F '\t' '{ total += $2 } END { print total + 0 }' "$TIMINGS_FILE")"
 RECEIPT_PATH="${RECEIPT_DIR}/${RUN_ID}.json"
 {
   printf '{\n'
-  printf '  "schema_version": 1,\n'
+  printf '  "schema_version": 2,\n'
   printf '  "source_sha": "%s",\n' "$SOURCE_SHA"
   printf '  "profile": "%s",\n' "$PROFILE"
   printf '  "architecture": "%s",\n' "$(uname -m)"
   printf '  "finished_at": "%s",\n' "$FINISHED_AT"
+  printf '  "wall_seconds": %s,\n' "$WALL_SECONDS"
   printf '  "total_phase_seconds": %s,\n' "$TOTAL_SECONDS"
   printf '  "result": "success"\n'
   printf '}\n'
@@ -249,5 +284,6 @@ echo
 echo "Exact-SHA release preflight passed."
 echo "Source SHA: ${SOURCE_SHA}"
 echo "Profile: ${PROFILE}"
+echo "Wall time: ${WALL_SECONDS}s"
 echo "Phase time: ${TOTAL_SECONDS}s"
 echo "Receipt: ${RECEIPT_PATH}"

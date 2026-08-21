@@ -248,7 +248,41 @@ jobs:
       require_windows_signing: ${{ needs.prepare.outputs.require_windows_signing == 'true' }}
       windows_signing_backend: signpath
 
-  # Frontend checks run in parallel with backend tests
+  # Build the embed bundle independently so backend and smoke lanes can start
+  # without waiting for the full frontend quality suite.
+  frontend_bundle:
+    needs: prepare
+    if: ${{ needs.prepare.outputs.historical_asset_backfill_only != 'true' }}
+    runs-on: [self-hosted, Linux, X64, pulse-pve-build]
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: 'frontend-modern/package-lock.json'
+
+      - name: Install dependencies
+        run: npm --prefix frontend-modern ci
+
+      - name: Build frontend bundle
+        run: npm --prefix frontend-modern run build
+
+      - name: Upload frontend bundle
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-frontend-${{ github.sha }}
+          path: frontend-modern/dist/
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+          overwrite: true
+
+  # Frontend checks run independently from the bundle and backend lanes.
   frontend_checks:
     needs: prepare
     if: ${{ needs.prepare.outputs.historical_asset_backfill_only != 'true' }}
@@ -283,19 +317,6 @@ jobs:
       - name: Test frontend
         run: npm --prefix frontend-modern test
 
-      - name: Build verified frontend bundle
-        run: npm --prefix frontend-modern run build
-
-      - name: Upload verified frontend bundle
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: release-frontend-${{ github.sha }}
-          path: frontend-modern/dist/
-          if-no-files-found: error
-          retention-days: 1
-          compression-level: 0
-          overwrite: true
-
   windows_install_command_smoke:
     name: Windows PowerShell 5.1 Install Command Smoke
     needs: prepare
@@ -321,18 +342,16 @@ jobs:
         working-directory: frontend-modern
         run: npm test -- --run src/utils/__tests__/agentInstallCommand.windows.test.ts
 
-  # Backend tests run in parallel with frontend checks
+  # The dedicated PVE test runner provides the memory needed to run two
+  # complete, disjoint internal/api shards while all other packages run in a
+  # third lane. It holds no signing or publication credentials.
   backend_tests:
     needs:
       - prepare
-      - frontend_checks
+      - frontend_bundle
     if: ${{ needs.prepare.outputs.historical_asset_backfill_only != 'true' }}
-    runs-on: ubuntu-24.04
-    # The race-enabled internal/api package has measured at 24 minutes on the
-    # hosted runner. Keep the job ceiling above the Makefile's 30-minute
-    # per-package timeout so setup and result collection cannot become the
-    # effective release gate.
-    timeout-minutes: 40
+    runs-on: [self-hosted, Linux, X64, pulse-pve-tests]
+    timeout-minutes: 20
     env:
       FRONTEND_DIST: frontend-modern/dist
     steps:
@@ -358,9 +377,7 @@ jobs:
           cache: true
 
       - name: Run backend tests
-        env:
-          PULSE_DATA_DIR: /tmp/pulse-test-data
-        run: make test
+        run: ./scripts/run-release-backend-tests.sh --data-root "$RUNNER_TEMP/pulse-test-data"
 
   # Docker build - amd64 only for prereleases, multi-arch for stable
   docker_build:
@@ -558,7 +575,7 @@ jobs:
   integration_tests:
     needs:
       - prepare
-      - frontend_checks
+      - frontend_bundle
     if: ${{ needs.prepare.outputs.historical_asset_backfill_only != 'true' && needs.prepare.outputs.is_prerelease != 'true' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 45
@@ -721,7 +738,7 @@ jobs:
   release_smoke:
     needs:
       - prepare
-      - frontend_checks
+      - frontend_bundle
     if: ${{ needs.prepare.outputs.historical_asset_backfill_only != 'true' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -819,6 +836,7 @@ jobs:
     needs:
       - prepare
       - build_release_candidate
+      - frontend_bundle
       - frontend_checks
       - windows_install_command_smoke
       - backend_tests
@@ -828,7 +846,7 @@ jobs:
       - release_smoke
     # Run if integration_tests passed OR was skipped (prereleases). The
     # release smoke has no skipped escape: it runs for prereleases too.
-    if: ${{ needs.prepare.outputs.historical_asset_backfill_only != 'true' && always() && needs.build_release_candidate.result == 'success' && needs.frontend_checks.result == 'success' && needs.windows_install_command_smoke.result == 'success' && needs.backend_tests.result == 'success' && needs.docker_build.result == 'success' && needs.helm_smoke.result == 'success' && needs.release_smoke.result == 'success' && (needs.integration_tests.result == 'success' || needs.integration_tests.result == 'skipped') }}
+    if: ${{ needs.prepare.outputs.historical_asset_backfill_only != 'true' && always() && needs.build_release_candidate.result == 'success' && needs.frontend_bundle.result == 'success' && needs.frontend_checks.result == 'success' && needs.windows_install_command_smoke.result == 'success' && needs.backend_tests.result == 'success' && needs.docker_build.result == 'success' && needs.helm_smoke.result == 'success' && needs.release_smoke.result == 'success' && (needs.integration_tests.result == 'success' || needs.integration_tests.result == 'skipped') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:

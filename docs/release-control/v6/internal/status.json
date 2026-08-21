@@ -9644,7 +9644,21 @@
   ],
   "coverage_gaps": [],
   "candidate_lanes": [],
-  "work_claims": [],
+  "work_claims": [
+    {
+      "id": "release-acceleration-lane-l1",
+      "agent_id": "release-acceleration",
+      "summary": "Reduce warm RC dispatch-to-convergence time to 15 minutes with credential-isolated PVE runners, deterministic sharding, and cross-repo build parallelism.",
+      "target_id": "v6-product-lane-expansion",
+      "claimed_at": "2026-08-21T11:23:13Z",
+      "heartbeat_at": "2026-08-21T11:23:13Z",
+      "expires_at": "2026-08-21T19:23:13Z",
+      "work_item": {
+        "kind": "lane",
+        "id": "L1"
+      }
+    }
+  ],
   "open_decisions": [],
   "source_of_truth_file": "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",
   "resolved_decisions": [

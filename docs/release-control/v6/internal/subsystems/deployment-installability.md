@@ -92,6 +92,8 @@ discarding existing explicit disk exclusions.
 34. `go.mod`
 35. `go.sum`
 36. `scripts/build-release.sh`
+37. `scripts/run-release-backend-tests.sh`
+38. `scripts/shard_go_tests.py`
 37. `scripts/generate-release-notes.sh`
 37. `scripts/check-workflow-dispatch-inputs.py`
 38. `scripts/clean-mock-alerts.sh`
@@ -485,7 +487,7 @@ upgrade, update, release, or artifact-selection behavior.
 ## Extension Points
 
 1. Add or change deployment-type detection, update planning, or apply behavior through `internal/updates/`
-2. Add or change release-build metadata injection, Docker build-context allowlists, release artifact assembly, governed promotion metadata resolution, artifact release-line validation, post-install live-runtime claim proof, the canonical version file, operator-facing release packet content, prerelease feedback intake wording, historical published-release integrity backfill, release asset validation status publication, download endpoint checksum/signature header proof, end-to-end install.sh smoke against staged or published release assets, or the canonical in-repo v6 upgrade guide through `scripts/build-release.sh`, `scripts/release_asset_common.sh`, `scripts/backfill-release-assets.sh`, `scripts/release_ldflags.sh`, `scripts/check-workflow-dispatch-inputs.py`, `scripts/release-preflight-worker.sh`, `scripts/run-release-preflight.sh`, `scripts/release_control/live_runtime_proof.py`, `scripts/release_control/live_runtime_proof_test.py`, `scripts/release_control/mobile_release_gate.py`, `scripts/release_control/render_release_body.py`, `scripts/release_control/resolve_release_promotion.py`, `scripts/release_control/validate_artifact_release_line.py`, `scripts/release_control/record_rc_to_ga_rehearsal.py`, `scripts/release_control/internal/record_rc_to_ga_rehearsal.py`, `scripts/release_control/release_promotion_policy_support.py`, `.dockerignore`, `Dockerfile`, `.github/ISSUE_TEMPLATE/v6_rc_feedback.yml`, `docs/RELEASE_NOTES.md`, `docs/releases/`, `docs/UPGRADE_v6.md`, `docs/release-control/v6/internal/RELEASE_PROMOTION_POLICY.md`, `docs/release-control/v6/internal/PRE_RELEASE_CHECKLIST.md`, `docs/release-control/v6/internal/RC_TO_GA_REHEARSAL_TEMPLATE.md`, `scripts/validate-release.sh`, `scripts/validate-published-release.sh`, the operator dispatch helpers `scripts/trigger-release.sh` and `scripts/trigger-release-dry-run.sh`, and the governed release workflows `.github/workflows/backfill-release-assets.yml`, `.github/workflows/create-release.yml`, `.github/workflows/deploy-demo-server.yml`, `.github/workflows/helm-pages.yml`, `.github/workflows/install-sh-smoke.yml`, `.github/workflows/promote-floating-tags.yml`, `.github/workflows/promote-private-pro-runtime.yml`, `.github/workflows/publish-docker.yml`, `.github/workflows/publish-helm-chart.yml`, `.github/workflows/release-convergence.yml`, `.github/workflows/release-dry-run.yml`, `.github/workflows/retry-release-convergence.yml`, `.github/workflows/update-demo-server.yml`, and `.github/workflows/validate-release-assets.yml`
+2. Add or change release-build metadata injection, Docker build-context allowlists, release artifact assembly, governed promotion metadata resolution, artifact release-line validation, post-install live-runtime claim proof, the canonical version file, operator-facing release packet content, prerelease feedback intake wording, historical published-release integrity backfill, release asset validation status publication, download endpoint checksum/signature header proof, end-to-end install.sh smoke against staged or published release assets, or the canonical in-repo v6 upgrade guide through `scripts/build-release.sh`, `scripts/run-release-backend-tests.sh`, `scripts/shard_go_tests.py`, `scripts/release_asset_common.sh`, `scripts/backfill-release-assets.sh`, `scripts/release_ldflags.sh`, `scripts/check-workflow-dispatch-inputs.py`, `scripts/release-preflight-worker.sh`, `scripts/run-release-preflight.sh`, `scripts/release_control/live_runtime_proof.py`, `scripts/release_control/live_runtime_proof_test.py`, `scripts/release_control/mobile_release_gate.py`, `scripts/release_control/render_release_body.py`, `scripts/release_control/resolve_release_promotion.py`, `scripts/release_control/validate_artifact_release_line.py`, `scripts/release_control/record_rc_to_ga_rehearsal.py`, `scripts/release_control/internal/record_rc_to_ga_rehearsal.py`, `scripts/release_control/release_promotion_policy_support.py`, `.dockerignore`, `Dockerfile`, `.github/ISSUE_TEMPLATE/v6_rc_feedback.yml`, `docs/RELEASE_NOTES.md`, `docs/releases/`, `docs/UPGRADE_v6.md`, `docs/release-control/v6/internal/RELEASE_PROMOTION_POLICY.md`, `docs/release-control/v6/internal/PRE_RELEASE_CHECKLIST.md`, `docs/release-control/v6/internal/RC_TO_GA_REHEARSAL_TEMPLATE.md`, `scripts/validate-release.sh`, `scripts/validate-published-release.sh`, the operator dispatch helpers `scripts/trigger-release.sh` and `scripts/trigger-release-dry-run.sh`, and the governed release workflows `.github/workflows/backfill-release-assets.yml`, `.github/workflows/create-release.yml`, `.github/workflows/deploy-demo-server.yml`, `.github/workflows/helm-pages.yml`, `.github/workflows/install-sh-smoke.yml`, `.github/workflows/promote-floating-tags.yml`, `.github/workflows/promote-private-pro-runtime.yml`, `.github/workflows/publish-docker.yml`, `.github/workflows/publish-helm-chart.yml`, `.github/workflows/release-convergence.yml`, `.github/workflows/release-dry-run.yml`, `.github/workflows/retry-release-convergence.yml`, `.github/workflows/update-demo-server.yml`, and `.github/workflows/validate-release-assets.yml`
    Operators may configure an external Linux amd64 worker for the two trigger
    helpers. `scripts/run-release-preflight.sh` must resolve an immutable pushed
    commit, stream the worker implementation stored in that commit over SSH,
@@ -505,12 +507,27 @@ upgrade, update, release, or artifact-selection behavior.
    persistent run directory and remove that bounded scratch directory on exit;
    a small WSL `/tmp` tmpfs must not turn release qualification into a false
    product failure.
-   The canonical backend race gate must likewise budget for hosted-runner
-   variance without weakening test coverage. `make test` owns a 30-minute
-   per-package timeout, and the release workflow's backend job owns a larger
-   40-minute ceiling so checkout, toolchain setup, and result collection cannot
-   become a tighter implicit deadline. The release-promotion contract test must
-   pin both sides of that headroom relationship.
+   The exact-SHA worker must start frontend quality, backend qualification, and
+   integration-environment preparation as independent lanes after producing
+   the frontend embed bundle. Its receipt must distinguish elapsed wall time
+   from the sum of overlapping phase times.
+   The canonical public release workflow must use dedicated, credential-free
+   PVE runner identities for the frontend embed bundle and backend race gate.
+   Signing, package publication, and release mutation authority must remain on
+   hosted jobs. The bundle job must be independent from frontend quality so
+   backend and browser-smoke lanes can start as soon as the bundle is available.
+   The backend runner must compile the race-enabled `internal/api` test binary
+   once, enumerate every top-level test from that exact binary, and generate a
+   deterministic manifest proving a complete, disjoint partition. Two API
+   shards and the remaining Go packages may then execute concurrently with
+   isolated data directories. A failed shard must fail the complete backend
+   gate; sharding must never select a coverage subset. The backend job owns a
+   20-minute ceiling, while each invocation retains the canonical 30-minute Go
+   timeout as protection against a stuck package.
+   The warm-path release-control performance objective is 15 minutes or less
+   from dispatch to definitive publication/convergence. This objective is an
+   optimization target, not permission to weaken exact-SHA qualification,
+   signing, artifact integrity, installer smoke, or convergence proof.
    The rehearsal diagnostic spec is opt-in by design, so both the hosted
    rehearsal and its worker profile must set `PULSE_E2E_DIAGNOSTIC=1`; invoking
    that spec while leaving it skipped is not browser proof.
