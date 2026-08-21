@@ -1348,7 +1348,7 @@ func TestReleaseWorkflowsUseSecretSafeAttestedImageBuilds(t *testing.T) {
 		`./scripts/prepare-release-container-context.sh`,
 		`container_artifact_name`,
 		`container_artifact: ${{ needs.build_release_candidate.outputs.container_artifact_name }}`,
-		`source_sha: ${{ needs.create_release.outputs.target_commitish }}`,
+		`source_sha: ${{ github.sha }}`,
 		`release-container-payload.json`,
 		`--target runtime_prebuilt`,
 		`--target agent_runtime_prebuilt`,
@@ -2347,6 +2347,20 @@ func TestReleasePipelinePromotesOneImmutableCandidate(t *testing.T) {
 	} {
 		if !strings.Contains(candidateWorkflow, needle) {
 			t.Fatalf("build-release-candidate.yml missing single-build contract: %s", needle)
+		}
+	}
+	publishDockerJob := workflowJobBlock(t, createWorkflow, "publish_docker")
+	for _, needle := range []string{
+		"- build_release_candidate",
+		`source_sha: ${{ github.sha }}`,
+	} {
+		if !strings.Contains(publishDockerJob, needle) {
+			t.Fatalf("inert exact-version Docker staging missing acceleration contract: %s", needle)
+		}
+	}
+	for _, forbiddenDependency := range []string{"- qualify_release_containers", "- create_release"} {
+		if strings.Contains(publishDockerJob, forbiddenDependency) {
+			t.Fatalf("inert exact-version Docker staging must overlap independent qualification: %s", forbiddenDependency)
 		}
 	}
 

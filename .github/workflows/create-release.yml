@@ -1081,9 +1081,7 @@ jobs:
     needs:
       - prepare
       - build_release_candidate
-      - qualify_release_containers
-      - create_release
-    if: ${{ always() && needs.prepare.result == 'success' && needs.build_release_candidate.result == 'success' && needs.qualify_release_containers.result == 'success' && needs.create_release.result == 'success' && needs.prepare.outputs.historical_asset_backfill_only != 'true' && github.event.inputs.draft_only != 'true' }}
+    if: ${{ always() && needs.prepare.result == 'success' && needs.build_release_candidate.result == 'success' && needs.prepare.outputs.historical_asset_backfill_only != 'true' && github.event.inputs.draft_only != 'true' }}
     permissions:
       contents: read
       packages: write
@@ -1094,7 +1092,7 @@ jobs:
     with:
       tag: ${{ needs.prepare.outputs.tag }}
       container_artifact: ${{ needs.build_release_candidate.outputs.container_artifact_name }}
-      source_sha: ${{ needs.create_release.outputs.target_commitish }}
+      source_sha: ${{ github.sha }}
 
   validate_release_assets:
     needs:

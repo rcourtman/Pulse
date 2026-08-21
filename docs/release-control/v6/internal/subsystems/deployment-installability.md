@@ -548,9 +548,14 @@ upgrade, update, release, or artifact-selection behavior.
    useful test or compilation process has already completed.
    Private Pro compilation must additionally bind the exact Pulse and
    pulse-enterprise commits in a manifest-covered identity record. Its PVE job
-   may compile the public payload and Pro server matrix, but the hosted private
-   job must verify both SHAs before release signing, R2 upload, private-registry
-   publication, or paid-runtime staging.
+   must compile only the public Unified Agent matrix actually embedded in Pro
+   archives plus the Pro server matrix; rebuilding the unused public frontend,
+   MCP, server, or control-plane payload is not part of this boundary. The
+   cross-repository handoff must remain manifest-bound, use compressed artifact
+   transfer, and let a hosted runner with sufficient free space skip destructive
+   image/toolchain cleanup. The hosted private job must verify both SHAs before
+   release signing, R2 upload, private-registry publication, or paid-runtime
+   staging.
    Public and Pro server archives must use the shared canonical staging helper
    and may assemble independent target archives concurrently with a bounded
    worker count. The verified dual-SHA Pro path must stage its five archives
@@ -604,6 +609,16 @@ upgrade, update, release, or artifact-selection behavior.
    paid-runtime broker unchanged. Public readiness must still verify the final
    tag and every public artifact before convergence may activate that inert
    private staging packet for customers.
+   The same rule applies to public exact-version Docker images. Once the
+   immutable candidate exists, their credentialed publication may overlap
+   container qualification and draft creation when release-line validation is
+   bound to the anticipated exact 40-character source SHA, verifies that SHA is
+   reachable from the governed release branch, and rejects an existing tag at
+   any other commit. Exact-version tags are inert staging surfaces; the
+   canonical `release_readiness` join must still require candidate container
+   qualification, draft release validation, exact Docker publication, installer
+   smoke, and every other immutable gate before activation or floating-alias
+   promotion.
    The backend runner must compile the race-enabled `internal/api` test binary
    once, enumerate every top-level test from that exact binary, and generate a
    deterministic manifest proving a complete, disjoint partition. Each
@@ -2024,9 +2039,11 @@ possible to publish a provider MSP control-plane image that accepts
 `ghcr.io/<owner>/pulse-control-plane` from that Dockerfile, with the same
 version tags and prerelease/latest tag policy as the main Pulse runtime image.
 The reusable Docker publisher must accept the exact container artifact name
-and source SHA from its owning release run, verify both against the checked-out
-tag and candidate manifest, and expose no standalone dispatch that could
-silently rebuild different bytes for an existing release tag.
+and source SHA from its owning release run, verify both against the exact
+checkout and candidate manifest, and expose no standalone dispatch that could
+silently rebuild different bytes for an existing release tag. Before draft-tag
+creation it may validate an anticipated tag only through that exact SHA; if the
+tag already exists, its peeled commit must match the anticipated SHA.
 That same supply-chain boundary also owns the checked-in build roots
 themselves. `Dockerfile` must pin its Node, Go, and Alpine bases by immutable
 manifest-list digest so multi-arch release builds do not silently drift onto a

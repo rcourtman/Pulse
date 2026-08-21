@@ -17,10 +17,12 @@ class ValidateArtifactReleaseLineTest(unittest.TestCase):
         commits: dict[str, str],
         ancestors: set[tuple[str, str]],
         prerelease_tags: tuple[str, ...] = (),
+        anticipated_source_sha: str = "",
     ) -> dict[str, str]:
         return validator.validate_artifact_release_line(
             tag=tag,
             purpose="test publish",
+            anticipated_source_sha=anticipated_source_sha,
             branch_for_version_fn=lambda version: "pulse/v6-release",
             fetch_refs_fn=lambda required_branch: None,
             tag_exists_fn=lambda candidate: candidate in existing_tags,
@@ -98,6 +100,46 @@ class ValidateArtifactReleaseLineTest(unittest.TestCase):
                     "origin/pulse/v6-release": "branch",
                 },
                 ancestors={("ga", "patch")},
+            )
+
+    def test_anticipated_prerelease_staging_accepts_exact_branch_commit(self) -> None:
+        source_sha = "a" * 40
+        result = self.validate(
+            tag="v6.0.4-rc.3",
+            existing_tags=set(),
+            commits={
+                source_sha: source_sha,
+                "origin/pulse/v6-release": "branch",
+            },
+            ancestors={(source_sha, "branch")},
+            anticipated_source_sha=source_sha,
+        )
+
+        self.assertEqual(result["lineage"], "prerelease")
+
+    def test_anticipated_staging_rejects_existing_tag_at_another_commit(self) -> None:
+        source_sha = "b" * 40
+        with self.assertRaisesRegex(ValueError, "not anticipated source"):
+            self.validate(
+                tag="v6.0.4-rc.3",
+                existing_tags={"v6.0.4-rc.3"},
+                commits={
+                    source_sha: source_sha,
+                    "v6.0.4-rc.3": "other",
+                    "origin/pulse/v6-release": "branch",
+                },
+                ancestors=set(),
+                anticipated_source_sha=source_sha,
+            )
+
+    def test_anticipated_staging_rejects_non_exact_sha(self) -> None:
+        with self.assertRaisesRegex(ValueError, "exact lowercase 40-character commit"):
+            self.validate(
+                tag="v6.0.4-rc.3",
+                existing_tags=set(),
+                commits={"origin/pulse/v6-release": "branch"},
+                ancestors=set(),
+                anticipated_source_sha="main",
             )
 
 

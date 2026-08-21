@@ -14,10 +14,28 @@ source "${SCRIPT_DIR}/release_build_targets.sh"
 
 VERSION="${1:-$(tr -d '\n\r[:space:]' < VERSION)}"
 OUTPUT_ROOT="${2:-}"
-if [[ -z "${OUTPUT_ROOT}" ]]; then
-    echo "Usage: $0 <version> <output-directory>" >&2
+PROFILE="full"
+if [[ "${3:-}" == "--profile" ]]; then
+    PROFILE="${4:-}"
+    if [[ -z "${PROFILE}" || -n "${5:-}" ]]; then
+        echo "Usage: $0 <version> <output-directory> [--profile full|pro-packaging]" >&2
+        exit 2
+    fi
+elif [[ -n "${3:-}" ]]; then
+    echo "Usage: $0 <version> <output-directory> [--profile full|pro-packaging]" >&2
     exit 2
 fi
+if [[ -z "${OUTPUT_ROOT}" ]]; then
+    echo "Usage: $0 <version> <output-directory> [--profile full|pro-packaging]" >&2
+    exit 2
+fi
+case "${PROFILE}" in
+    full|pro-packaging) ;;
+    *)
+        echo "Error: unsupported release compilation profile: ${PROFILE}" >&2
+        exit 2
+        ;;
+esac
 OUTPUT_ROOT="$(python3 -c 'import os, sys; print(os.path.abspath(sys.argv[1]))' "${OUTPUT_ROOT}")"
 case "${OUTPUT_ROOT}" in
     /|"${REPO_ROOT}"|"${REPO_ROOT}/scripts")
@@ -69,12 +87,17 @@ if [[ -e "${OUTPUT_ROOT}" ]] && find "${OUTPUT_ROOT}" -mindepth 1 -print -quit |
     echo "Error: release compilation output must be absent or empty: ${OUTPUT_ROOT}" >&2
     exit 2
 fi
-mkdir -p "${BINARIES_DIR}" "${FRONTEND_DIR}" "${MANIFEST_DIR}"
+mkdir -p "${BINARIES_DIR}" "${MANIFEST_DIR}"
 
-echo "Building exact-SHA frontend bundle..."
-npm --prefix frontend-modern ci
-npm --prefix frontend-modern run build
-cp -a frontend-modern/dist/. "${FRONTEND_DIR}/"
+if [[ "${PROFILE}" == "full" ]]; then
+    mkdir -p "${FRONTEND_DIR}"
+    echo "Building exact-SHA frontend bundle..."
+    npm --prefix frontend-modern ci
+    npm --prefix frontend-modern run build
+    cp -a frontend-modern/dist/. "${FRONTEND_DIR}/"
+else
+    echo "Using Pro packaging profile: public Unified Agent binaries only."
+fi
 
 export CGO_ENABLED=0
 release_go_build_args=(-buildvcs=false -trimpath)
@@ -101,17 +124,23 @@ echo "Compiling release matrix with ${build_jobs} workers and GOMAXPROCS=${go_pr
 declare -a task_components=()
 declare -a task_targets=()
 for target in "${PULSE_RELEASE_AGENT_TARGETS[@]}"; do
-    task_components+=(agent mcp)
-    task_targets+=("${target}" "${target}")
-done
-for target in "${PULSE_RELEASE_SERVER_TARGETS[@]}"; do
-    task_components+=(server)
+    task_components+=(agent)
     task_targets+=("${target}")
+    if [[ "${PROFILE}" == "full" ]]; then
+        task_components+=(mcp)
+        task_targets+=("${target}")
+    fi
 done
-for target in "${PULSE_RELEASE_CONTROL_PLANE_TARGETS[@]}"; do
-    task_components+=(control-plane)
-    task_targets+=("${target}")
-done
+if [[ "${PROFILE}" == "full" ]]; then
+    for target in "${PULSE_RELEASE_SERVER_TARGETS[@]}"; do
+        task_components+=(server)
+        task_targets+=("${target}")
+    done
+    for target in "${PULSE_RELEASE_CONTROL_PLANE_TARGETS[@]}"; do
+        task_components+=(control-plane)
+        task_targets+=("${target}")
+    done
+fi
 
 build_one() {
     local component="$1"

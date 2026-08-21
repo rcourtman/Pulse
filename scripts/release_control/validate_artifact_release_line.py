@@ -68,6 +68,7 @@ def validate_artifact_release_line(
     *,
     tag: str,
     purpose: str,
+    anticipated_source_sha: str = "",
     branch_for_version_fn: Callable[[str], str] = release_branch_for_version,
     fetch_refs_fn: Callable[[str], None] = ensure_release_refs,
     tag_exists_fn: Callable[[str], bool] = tag_exists,
@@ -84,12 +85,30 @@ def validate_artifact_release_line(
     required_branch = branch_for_version_fn(version)
     fetch_refs_fn(required_branch)
 
-    if not tag_exists_fn(normalized_tag):
-        raise ValueError(f"Tag {normalized_tag} does not exist in repository tags.")
-
-    tag_sha = tag_commit_fn(normalized_tag)
     branch_ref = f"origin/{required_branch}"
     branch_sha = ref_commit_fn(branch_ref)
+    if anticipated_source_sha:
+        if len(anticipated_source_sha) != 40 or any(
+            character not in "0123456789abcdef" for character in anticipated_source_sha
+        ):
+            raise ValueError("anticipated source SHA must be an exact lowercase 40-character commit")
+        candidate_sha = ref_commit_fn(anticipated_source_sha)
+        if candidate_sha != anticipated_source_sha:
+            raise ValueError("anticipated source SHA did not resolve to the exact requested commit")
+    else:
+        candidate_sha = ""
+
+    if tag_exists_fn(normalized_tag):
+        tag_sha = tag_commit_fn(normalized_tag)
+        if candidate_sha and tag_sha != candidate_sha:
+            raise ValueError(
+                f"Tag {normalized_tag} resolves to {tag_sha}, not anticipated source {candidate_sha}."
+            )
+    elif candidate_sha:
+        tag_sha = candidate_sha
+    else:
+        raise ValueError(f"Tag {normalized_tag} does not exist in repository tags.")
+
     if not ref_is_ancestor_fn(tag_sha, branch_sha):
         raise ValueError(
             f"Tag {normalized_tag} is not reachable from {branch_ref}. Refusing {purpose}."
@@ -139,6 +158,11 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--tag", required=True)
     parser.add_argument("--purpose", default="artifact publication")
+    parser.add_argument(
+        "--anticipated-source-sha",
+        default="",
+        help="Permit inert exact-version staging before tag creation, bound to this exact commit.",
+    )
     parser.add_argument("--github-output", default="")
     return parser.parse_args()
 
@@ -153,7 +177,11 @@ def write_github_output(path: str, values: dict[str, str]) -> None:
 
 def main() -> int:
     args = parse_args()
-    result = validate_artifact_release_line(tag=args.tag, purpose=args.purpose)
+    result = validate_artifact_release_line(
+        tag=args.tag,
+        purpose=args.purpose,
+        anticipated_source_sha=args.anticipated_source_sha,
+    )
 
     if result["lineage"] == "promoted_prerelease":
         print(f"[OK] {result['tag']} descends from prerelease {result['lineage_tag']}")

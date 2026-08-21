@@ -111,3 +111,39 @@ dispatch-to-definitive-convergence objective remains open until a complete
 release measures 15 minutes or less without weakening exact-SHA
 qualification, signing, installer smoke, public/private integrity, or
 convergence verification.
+
+## Remaining critical-path decomposition
+
+The definitive run proves that backend work is not the only path that must be
+shortened. Even with a zero-duration backend gate, the private staging child
+finished 16 minutes 52 seconds after source dispatch and public exact-version
+Docker publication finished 17 minutes 34 seconds after dispatch.
+
+The private child spent 148 seconds uploading and 214 seconds downloading an
+uncompressed 1.24 GB dual-repository compiled payload. That payload included
+the complete public frontend, MCP, server, and control-plane matrix even though
+Pro archive assembly consumes only the public Unified Agent matrix plus five
+Pro server binaries. Its hosted job then spent another 99 seconds deleting
+preinstalled SDKs and unrelated cached images despite starting with 12 GB free.
+The corrected handoff requests the canonical Pro-packaging profile, omits those
+unused public products, enables compressed artifact transfer, uses the current
+artifact client, and performs heavyweight disk cleanup only below an explicit
+8 GiB safety floor. Exact Pulse and pulse-enterprise SHA manifests remain the
+authority on both sides of the credential boundary.
+
+Public Docker publication took 5 minutes 1 second, but its prior dependency
+shape did not make it eligible until 12 minutes 33 seconds after dispatch. The
+corrected DAG makes exact-version Docker staging eligible as soon as the
+immutable candidate exists, which was 8 minutes 56 seconds after dispatch in
+the definitive run. Release-line validation accepts the anticipated tag only
+when it is bound to the exact 40-character source SHA on the governed release
+branch and rejects an existing tag at any other commit. Candidate container
+qualification, draft validation, Docker staging, and every other immutable
+gate still meet at `release_readiness`; only that join can open durable
+convergence and activation. On the observed rc.5 timings, the dependency change
+alone moves projected Docker completion to approximately 13 minutes 57 seconds.
+
+These projections do not close the objective. The release-acceleration claim
+remains open until the private payload reduction is measured, the production
+API decomposition produces a controlled PVE improvement, and a fresh exact-SHA
+release completes definitive customer convergence in 15 minutes or less.
