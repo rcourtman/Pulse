@@ -554,7 +554,10 @@ upgrade, update, release, or artifact-selection behavior.
    the prebuilt runtime and agent targets without recompiling source, and
    compare the embedded server and agent digests with the candidate bytes
    before exercising the same local runtime through the Helm install/upgrade
-   smoke. This credential-free lane may run against the isolated rootless
+   smoke. The reusable build-release-candidate workflow owns this proof so a
+   standalone candidate dispatch, a release dry run, and a publishing release
+   all cross the same container boundary before the candidate can succeed.
+   This credential-free lane may run against the isolated rootless
    Docker daemon owned by the low-priority PVE build identity; it must not gain
    host-Docker access, signing keys, registry login, or package-write authority.
    The public orchestrator may stage the exact private packet and private image

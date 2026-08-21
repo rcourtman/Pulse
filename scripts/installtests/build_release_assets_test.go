@@ -166,7 +166,7 @@ func TestReleaseContainerTargetsConsumeImmutableCandidate(t *testing.T) {
 	for _, needle := range []string{
 		`pulse-v${version}-linux-${arch}.tar.gz`,
 		`validate_archive_entries "${archive}"`,
-		`tar --no-same-owner -xzf`,
+		`tar --no-same-owner --no-same-permissions -xzf`,
 		`diff -qr --exclude=pulse`,
 	} {
 		if !strings.Contains(prepareScript, needle) {
@@ -333,13 +333,13 @@ func TestAgentBuildCacheDoesNotResurrectPulseAgentPackage(t *testing.T) {
 		}
 	}
 
-	release, err := os.ReadFile(repoFile(".github", "workflows", "create-release.yml"))
+	release, err := os.ReadFile(repoFile(".github", "workflows", "build-release-candidate.yml"))
 	if err != nil {
-		t.Fatalf("read create-release.yml: %v", err)
+		t.Fatalf("read build-release-candidate.yml: %v", err)
 	}
 	releaseText := string(release)
 	if !strings.Contains(releaseText, `--target agent_runtime_prebuilt`) {
-		t.Fatal("create-release.yml must assemble the candidate agent image without targeting an unpublished package")
+		t.Fatal("build-release-candidate.yml must assemble the candidate agent image without targeting an unpublished package")
 	}
 	if strings.Contains(releaseText, "agent-buildcache") {
 		t.Fatal("exact-candidate release qualification must not create a remote agent image cache")
@@ -1207,7 +1207,7 @@ func TestReleaseWorkflowsUseSecretSafeAttestedImageBuilds(t *testing.T) {
 		`attestations: write`,
 		`uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4`,
 	}
-	containerJob := workflowJobBlock(t, string(createReleaseBytes), "docker_build")
+	containerJob := workflowJobBlock(t, string(candidateWorkflowBytes), "qualify-release-containers")
 	for _, forbidden := range []string{
 		"PULSE_UPDATE_SIGNING_KEY",
 		"PULSE_LICENSE_PUBLIC_KEY",

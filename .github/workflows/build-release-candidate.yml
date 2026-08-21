@@ -708,3 +708,143 @@ jobs:
           if-no-files-found: error
           retention-days: 1
           overwrite: true
+
+  qualify-release-containers:
+    name: Exact-Candidate Container and Helm Smoke
+    needs: build
+    runs-on: [self-hosted, Linux, X64, pulse-pve-build]
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - name: Download immutable release candidate
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: ${{ needs.build.outputs.artifact_name }}
+          path: release
+
+      - name: Download release candidate manifest
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: ${{ needs.build.outputs.manifest_artifact_name }}
+          path: release-candidate-manifest
+
+      - name: Verify immutable release candidate
+        run: |
+          python3 scripts/release_candidate_manifest.py verify-local \
+            --release-dir release \
+            --manifest release-candidate-manifest/release-candidate.json \
+            --version "${{ inputs.version }}" \
+            --source-sha "${GITHUB_SHA}"
+
+      - name: Prepare exact-candidate container context
+        run: ./scripts/prepare-release-container-context.sh release "${{ inputs.version }}" "$RUNNER_TEMP/release-container-context"
+
+      - name: Assemble exact-candidate runtime and agent images
+        run: |
+          set -euo pipefail
+          docker buildx build \
+            --target runtime_prebuilt \
+            --platform linux/amd64 \
+            --build-context "release_payload=${RUNNER_TEMP}/release-container-context" \
+            --load \
+            --tag "pulse-helm-smoke:${{ inputs.version }}" \
+            .
+          docker buildx build \
+            --target agent_runtime_prebuilt \
+            --platform linux/amd64 \
+            --build-context "release_payload=${RUNNER_TEMP}/release-container-context" \
+            --load \
+            --tag "pulse-agent-candidate:${{ inputs.version }}" \
+            .
+
+      - name: Verify container binaries match immutable candidate
+        run: |
+          set -euo pipefail
+          expected_server="$(sha256sum "$RUNNER_TEMP/release-container-context/amd64/bin/pulse" | awk '{print $1}')"
+          actual_server="$(docker run --rm --entrypoint /bin/sh "pulse-helm-smoke:${{ inputs.version }}" -c 'sha256sum /app/pulse' | awk '{print $1}')"
+          expected_agent="$(sha256sum "$RUNNER_TEMP/release-container-context/amd64/bin/pulse-agent-linux-amd64" | awk '{print $1}')"
+          actual_agent="$(docker run --rm --entrypoint /bin/sh "pulse-agent-candidate:${{ inputs.version }}" -c 'sha256sum /usr/local/bin/pulse-agent' | awk '{print $1}')"
+          test "${actual_server}" = "${expected_server}"
+          test "${actual_agent}" = "${expected_agent}"
+
+      - name: Set up Helm
+        uses: azure/setup-helm@dda3372f752e03dde6b3237bc9431cdc2f7a02a2 # v5.0.0
+        with:
+          version: v3.15.2
+
+      - name: Helm smoke test with local release-line image
+        env:
+          SMOKE_IMAGE_REPOSITORY: pulse-helm-smoke
+          SMOKE_IMAGE_TAG: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+
+          cleanup() {
+            kind delete cluster --name pulse-test >/dev/null 2>&1 || true
+          }
+
+          diagnose() {
+            echo "::group::helm status"
+            helm status pulse || true
+            echo "::endgroup::"
+
+            echo "::group::kubectl get all"
+            kubectl get all -A || true
+            echo "::endgroup::"
+
+            echo "::group::kubectl describe pods"
+            kubectl describe pods -A || true
+            echo "::endgroup::"
+
+            echo "::group::pod logs"
+            pods=$(kubectl get pods -A -o name 2>/dev/null || true)
+            for pod in $pods; do
+              echo "### ${pod}"
+              kubectl logs --all-containers=true --tail=200 "$pod" || true
+            done
+            echo "::endgroup::"
+
+            echo "::group::events"
+            kubectl get events -A --sort-by=.lastTimestamp || kubectl get events -A || true
+            echo "::endgroup::"
+
+            cleanup
+          }
+
+          trap 'diagnose' ERR
+
+          curl -fsSL -o "$RUNNER_TEMP/kind" https://kind.sigs.k8s.io/dl/v0.20.0/kind-linux-amd64
+          chmod +x "$RUNNER_TEMP/kind"
+          export PATH="$RUNNER_TEMP:$PATH"
+
+          cleanup
+          kind create cluster --name pulse-test --wait 5m
+          kind load docker-image "${SMOKE_IMAGE_REPOSITORY}:${SMOKE_IMAGE_TAG}" --name pulse-test
+
+          helm install pulse deploy/helm/pulse \
+            --set persistence.enabled=false \
+            --set server.secretEnv.create=true \
+            --set server.secretEnv.data.API_TOKENS=test-token \
+            --set image.repository="${SMOKE_IMAGE_REPOSITORY}" \
+            --set image.tag="${SMOKE_IMAGE_TAG}" \
+            --set image.pullPolicy=Never \
+            --wait --timeout 5m --debug
+
+          kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=pulse --timeout=180s || (kubectl describe pods -l app.kubernetes.io/name=pulse && exit 1)
+          kubectl get pods -l app.kubernetes.io/name=pulse
+
+          helm upgrade pulse deploy/helm/pulse \
+            --set persistence.enabled=false \
+            --set server.secretEnv.create=true \
+            --set server.secretEnv.data.API_TOKENS=test-token \
+            --set image.repository="${SMOKE_IMAGE_REPOSITORY}" \
+            --set image.tag="${SMOKE_IMAGE_TAG}" \
+            --set image.pullPolicy=Never \
+            --wait --timeout 5m --debug
+
+          trap - ERR
+          cleanup
+
+          echo "✓ Helm smoke test passed"
