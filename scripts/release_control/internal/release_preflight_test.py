@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import os
 import pathlib
+import re
 import subprocess
 import sys
 import tempfile
@@ -12,7 +13,7 @@ import unittest
 ROOT = pathlib.Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "scripts"))
 
-from shard_go_tests import build_plan, write_plan
+from shard_go_tests import _test_regex, build_plan, write_plan
 
 
 class ReleasePreflightTest(unittest.TestCase):
@@ -149,10 +150,12 @@ class ReleasePreflightTest(unittest.TestCase):
             build_plan(["TestDuplicate", "TestDuplicate"], 2, 10)
         with self.assertRaisesRegex(ValueError, "cannot exceed"):
             build_plan(["TestOnly"], 2, 10)
+        with self.assertRaisesRegex(ValueError, "safe per-argument ceiling"):
+            build_plan(["TestOnly"], 1, 10, max_regex_bytes=120_001)
 
     def test_api_shard_plan_bounds_one_shard_regex_argument_bytes(self) -> None:
         test_names = [
-            f"TestReleaseIntegrationCase{index:04d}{'X' * 64}"
+            f"Test{index:04d}{index * 7919:08d}{index * 104729:010d}{'X' * 64}"
             for index in range(3736)
         ]
         max_regex_bytes = 64 * 1024
@@ -186,6 +189,30 @@ class ReleasePreflightTest(unittest.TestCase):
                 batch_size=1,
                 max_regex_bytes=8,
             )
+
+    def test_api_shard_regex_compresses_shared_names_without_changing_membership(
+        self,
+    ) -> None:
+        test_names = [
+            "TestHandleCharts_Success",
+            "TestHandleCharts_MethodNotAllowed",
+            "TestHandleStorageCharts_Success",
+            "TestHandleStorageCharts_MethodNotAllowed",
+            "TestRouterPublicPathsInventory",
+        ]
+        regex = _test_regex(test_names)
+        naive = "^(?:" + "|".join(test_names) + ")$"
+        self.assertLess(len(regex.encode()), len(naive.encode()))
+
+        compiled = re.compile(regex)
+        for test_name in test_names:
+            self.assertIsNotNone(compiled.fullmatch(test_name))
+        for excluded in [
+            "TestHandleCharts",
+            "TestHandleCharts_Failure",
+            "TestRouterPublicPathsInventoryExtra",
+        ]:
+            self.assertIsNone(compiled.fullmatch(excluded))
 
     def test_release_workflow_uses_independent_pve_bundle_and_backend_lanes(self) -> None:
         workflow = (ROOT / ".github/workflows/create-release.yml").read_text()

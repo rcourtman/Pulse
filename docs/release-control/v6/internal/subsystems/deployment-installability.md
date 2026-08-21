@@ -604,11 +604,15 @@ upgrade, update, release, or artifact-selection behavior.
    deterministic manifest proving a complete, disjoint partition. Each
    partition must preserve the exact order emitted by that binary; sorting or
    hash distribution is not equivalent while legacy tests still exercise
-   package-global state. Each shard must split only at deterministic contiguous
-   batch boundaries whose encoded `-test.run` regex stays below the configured
-   per-argument byte ceiling, so a memory-driven one-shard fallback cannot
-   exceed the operating system's exec limit before tests begin. Two API shards
-   and the remaining Go packages may then
+   package-global state. The planner must prefix-compress the exact test-name
+   regex and keep a shard in one test-binary process whenever that encoded
+   argument fits below the configured byte ceiling. That ceiling must never
+   exceed 120,000 bytes, retaining explicit headroom below Linux's 131,072-byte
+   per-argument limit. A shard may split only at deterministic contiguous
+   batch boundaries when its compressed exact-name regex exceeds the configured
+   ceiling. Tests at those boundaries must initialize their own package-global
+   prerequisites rather than inheriting state from a prior process. Two API
+   shards and the remaining Go packages may then
    execute concurrently with isolated data directories. A failed shard must
    fail the complete backend gate and terminate every descendant test process;
    sharding must never select a coverage subset or leave orphan race binaries
@@ -1612,6 +1616,19 @@ deterministic contiguous batch by encoded regex bytes as well as test count.
 That failed run and its inert private staging child were cancelled; no public
 tag or GitHub release was created, and the corrected candidate must run from a
 new exact source SHA.
+Release run `32497250921` then proved that naïve byte-bounded alternation was
+not semantically sufficient: its third fresh test-binary process reached
+`TestEstablishSession` without the package-global session store historically
+initialized earlier in the ordered suite. Prefix compression reduces the exact
+3,736-test expression from 182,429 bytes to 110,384 bytes, so the one-shard
+fallback needs only two bounded processes at the default 65,536-byte ceiling
+instead of three naïve alternation batches. The two session-establishment tests
+now initialize their own persistent session store, removing the boundary-order
+dependency instead of relying on a larger process. The planner still records
+the complete test-name digest, proves each compressed expression is an exact
+ordered partition, and rejects any configured ceiling above 120,000 bytes.
+That failed run and its private child were cancelled before publication; no
+public tag or release was created.
 The publish body keeps its `Highlights` section within the governed three-item
 limit while preserving the packet's operator-facing summary of read-only
 observer coverage, estate-first platform search and facets, and real delivery-

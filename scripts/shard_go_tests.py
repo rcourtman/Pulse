@@ -12,7 +12,16 @@ from typing import Sequence
 
 
 TEST_NAME_PATTERN = re.compile(r"^Test[A-Za-z0-9_]+$")
+MAX_SAFE_REGEX_BYTES = 120_000
 DEFAULT_MAX_REGEX_BYTES = 64 * 1024
+
+
+class _RegexTrie(dict[str, "_RegexTrie"]):
+    terminal: bool
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.terminal = False
 
 
 def _digest(names: Sequence[str]) -> str:
@@ -21,29 +30,70 @@ def _digest(names: Sequence[str]) -> str:
 
 
 def _test_regex(names: Sequence[str]) -> str:
-    return "^(?:" + "|".join(re.escape(name) for name in names) + ")$"
+    root = _RegexTrie()
+    for name in names:
+        node = root
+        for character in name:
+            node = node.setdefault(character, _RegexTrie())
+        node.terminal = True
+
+    def render(node: _RegexTrie) -> str:
+        suffix_groups: dict[str, list[str]] = {}
+        for character, child in sorted(node.items()):
+            suffix_groups.setdefault(render(child), []).append(character)
+
+        alternatives: list[str] = []
+        for suffix, characters in sorted(suffix_groups.items()):
+            if len(characters) == 1:
+                prefix = re.escape(characters[0])
+            else:
+                prefix = (
+                    "["
+                    + "".join(re.escape(value) for value in characters)
+                    + "]"
+                )
+            alternatives.append(prefix + suffix)
+
+        if node.terminal:
+            if not alternatives:
+                return ""
+            body = (
+                alternatives[0]
+                if len(alternatives) == 1
+                else "(?:" + "|".join(alternatives) + ")"
+            )
+            return "(?:" + body + ")?"
+        if len(alternatives) == 1:
+            return alternatives[0]
+        return "(?:" + "|".join(alternatives) + ")"
+
+    return "^(?:" + render(root) + ")$"
 
 
 def _batch_names(
     names: Sequence[str], batch_size: int, max_regex_bytes: int
 ) -> list[list[str]]:
     batches: list[list[str]] = []
-    current: list[str] = []
-    for name in names:
-        candidate = [*current, name]
-        candidate_bytes = len(_test_regex(candidate).encode())
-        if current and (len(candidate) > batch_size or candidate_bytes > max_regex_bytes):
-            batches.append(current)
-            current = [name]
-            candidate_bytes = len(_test_regex(current).encode())
-        else:
-            current = candidate
-        if candidate_bytes > max_regex_bytes:
+    offset = 0
+    while offset < len(names):
+        if len(_test_regex([names[offset]]).encode()) > max_regex_bytes:
             raise ValueError(
-                f"top-level Go test name exceeds max regex bytes: {name}"
+                f"top-level Go test name exceeds max regex bytes: {names[offset]}"
             )
-    if current:
-        batches.append(current)
+
+        low = offset + 1
+        high = min(len(names), offset + batch_size)
+        best = low
+        while low <= high:
+            midpoint = (low + high) // 2
+            encoded_bytes = len(_test_regex(names[offset:midpoint]).encode())
+            if encoded_bytes <= max_regex_bytes:
+                best = midpoint
+                low = midpoint + 1
+            else:
+                high = midpoint - 1
+        batches.append(list(names[offset:best]))
+        offset = best
     return batches
 
 
@@ -59,6 +109,11 @@ def build_plan(
         raise ValueError("batch_size must be at least 1")
     if max_regex_bytes < 1:
         raise ValueError("max_regex_bytes must be at least 1")
+    if max_regex_bytes > MAX_SAFE_REGEX_BYTES:
+        raise ValueError(
+            f"max_regex_bytes cannot exceed the safe per-argument ceiling "
+            f"of {MAX_SAFE_REGEX_BYTES}"
+        )
     if not test_names:
         raise ValueError("the Go package did not expose any top-level tests")
     if shard_count > len(test_names):
@@ -92,6 +147,15 @@ def build_plan(
         ordered_names = list(names)
         assigned.extend(ordered_names)
         batches = _batch_names(ordered_names, batch_size, max_regex_bytes)
+        for batch in batches:
+            pattern = re.compile(_test_regex(batch))
+            matched_names = [
+                name for name in canonical if pattern.fullmatch(name) is not None
+            ]
+            if matched_names != batch:
+                raise RuntimeError(
+                    "generated test regex is not an exact ordered partition"
+                )
         shard_records.append(
             {
                 "index": shard_index,

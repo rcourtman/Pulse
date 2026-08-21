@@ -1604,6 +1604,7 @@ func TestHandleStorageSummaryCharts_AggregatesCapacityAcrossPools(t *testing.T) 
 }
 
 func TestEstablishSession(t *testing.T) {
+	InitPersistentAuthStores(t.TempDir())
 	router := &Router{}
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
@@ -1619,6 +1620,7 @@ func TestEstablishSession(t *testing.T) {
 }
 
 func TestEstablishOIDCSession(t *testing.T) {
+	InitPersistentAuthStores(t.TempDir())
 	router := &Router{}
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()

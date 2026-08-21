@@ -61,6 +61,10 @@ if [[ ! "$MAX_REGEX_BYTES" =~ ^[1-9][0-9]*$ ]]; then
   echo "Error: --max-regex-bytes must be a positive integer." >&2
   exit 2
 fi
+if [ "$MAX_REGEX_BYTES" -gt 120000 ]; then
+  echo "Error: --max-regex-bytes cannot exceed the safe 120000-byte per-argument ceiling." >&2
+  exit 2
+fi
 
 for command_name in go python3 getconf awk pgrep; do
   if ! command -v "$command_name" >/dev/null 2>&1; then
