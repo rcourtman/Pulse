@@ -598,7 +598,11 @@ upgrade, update, release, or artifact-selection behavior.
    deterministic manifest proving a complete, disjoint partition. Each
    partition must preserve the exact order emitted by that binary; sorting or
    hash distribution is not equivalent while legacy tests still exercise
-   package-global state. Two API shards and the remaining Go packages may then
+   package-global state. Each shard must split only at deterministic contiguous
+   batch boundaries whose encoded `-test.run` regex stays below the configured
+   per-argument byte ceiling, so a memory-driven one-shard fallback cannot
+   exceed the operating system's exec limit before tests begin. Two API shards
+   and the remaining Go packages may then
    execute concurrently with isolated data directories. A failed shard must
    fail the complete backend gate and terminate every descendant test process;
    sharding must never select a coverage subset or leave orphan race binaries
@@ -1594,6 +1598,14 @@ and manifests from that exact source run; it must not rebuild release binaries
 after qualification. Post-publication Helm and paid-runtime convergence likewise
 consume source-run artifacts and retain exact-SHA, installer, signature,
 public/private artifact, and definitive convergence proof.
+Release run `32493044910` exposed the memory-driven one-shard backend fallback
+before publication: all 3,736 top-level API tests were encoded into one
+`-test.run` argument and Linux rejected the invocation with `Argument list too
+long` before any API test executed. The canonical planner now bounds each
+deterministic contiguous batch by encoded regex bytes as well as test count.
+That failed run and its inert private staging child were cancelled; no public
+tag or GitHub release was created, and the corrected candidate must run from a
+new exact source SHA.
 The publish body keeps its `Highlights` section within the governed three-item
 limit while preserving the packet's operator-facing summary of read-only
 observer coverage, estate-first platform search and facets, and real delivery-

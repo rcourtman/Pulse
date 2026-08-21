@@ -12,6 +12,7 @@ from typing import Sequence
 
 
 TEST_NAME_PATTERN = re.compile(r"^Test[A-Za-z0-9_]+$")
+DEFAULT_MAX_REGEX_BYTES = 64 * 1024
 
 
 def _digest(names: Sequence[str]) -> str:
@@ -19,13 +20,45 @@ def _digest(names: Sequence[str]) -> str:
     return hashlib.sha256(payload).hexdigest()
 
 
+def _test_regex(names: Sequence[str]) -> str:
+    return "^(?:" + "|".join(re.escape(name) for name in names) + ")$"
+
+
+def _batch_names(
+    names: Sequence[str], batch_size: int, max_regex_bytes: int
+) -> list[list[str]]:
+    batches: list[list[str]] = []
+    current: list[str] = []
+    for name in names:
+        candidate = [*current, name]
+        candidate_bytes = len(_test_regex(candidate).encode())
+        if current and (len(candidate) > batch_size or candidate_bytes > max_regex_bytes):
+            batches.append(current)
+            current = [name]
+            candidate_bytes = len(_test_regex(current).encode())
+        else:
+            current = candidate
+        if candidate_bytes > max_regex_bytes:
+            raise ValueError(
+                f"top-level Go test name exceeds max regex bytes: {name}"
+            )
+    if current:
+        batches.append(current)
+    return batches
+
+
 def build_plan(
-    test_names: Sequence[str], shard_count: int, batch_size: int
+    test_names: Sequence[str],
+    shard_count: int,
+    batch_size: int,
+    max_regex_bytes: int = DEFAULT_MAX_REGEX_BYTES,
 ) -> dict[str, object]:
     if shard_count < 1:
         raise ValueError("shard_count must be at least 1")
     if batch_size < 1:
         raise ValueError("batch_size must be at least 1")
+    if max_regex_bytes < 1:
+        raise ValueError("max_regex_bytes must be at least 1")
     if not test_names:
         raise ValueError("the Go package did not expose any top-level tests")
     if shard_count > len(test_names):
@@ -58,10 +91,7 @@ def build_plan(
     for shard_index, names in enumerate(shards, start=1):
         ordered_names = list(names)
         assigned.extend(ordered_names)
-        batches = [
-            ordered_names[offset : offset + batch_size]
-            for offset in range(0, len(ordered_names), batch_size)
-        ]
+        batches = _batch_names(ordered_names, batch_size, max_regex_bytes)
         shard_records.append(
             {
                 "index": shard_index,
@@ -80,6 +110,7 @@ def build_plan(
         "test_names_sha256": _digest(canonical),
         "shard_count": shard_count,
         "batch_size": batch_size,
+        "max_regex_bytes": max_regex_bytes,
         "shards": shard_records,
     }
 
@@ -93,7 +124,7 @@ def write_plan(plan: dict[str, object], output_dir: Path) -> Path:
         batch_records: list[dict[str, object]] = []
         for batch_index, names in enumerate(batches, start=1):
             filename = f"shard-{shard_record['index']:02d}-batch-{batch_index:02d}.regex"
-            regex = "^(?:" + "|".join(re.escape(name) for name in names) + ")$"
+            regex = _test_regex(names)
             (output_dir / filename).write_text(f"{regex}\n")
             batch_records.append(
                 {
@@ -118,6 +149,9 @@ def main() -> int:
     parser.add_argument("--tests-file", type=Path, required=True)
     parser.add_argument("--shards", type=int, required=True)
     parser.add_argument("--batch-size", type=int, default=10000)
+    parser.add_argument(
+        "--max-regex-bytes", type=int, default=DEFAULT_MAX_REGEX_BYTES
+    )
     parser.add_argument("--output-dir", type=Path, required=True)
     args = parser.parse_args()
 
@@ -126,7 +160,9 @@ def main() -> int:
         for line in args.tests_file.read_text().splitlines()
         if line.strip()
     ]
-    plan = build_plan(test_names, args.shards, args.batch_size)
+    plan = build_plan(
+        test_names, args.shards, args.batch_size, args.max_regex_bytes
+    )
     manifest_path = write_plan(plan, args.output_dir)
     print(manifest_path.read_text(), end="")
     return 0

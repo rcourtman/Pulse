@@ -150,6 +150,43 @@ class ReleasePreflightTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "cannot exceed"):
             build_plan(["TestOnly"], 2, 10)
 
+    def test_api_shard_plan_bounds_one_shard_regex_argument_bytes(self) -> None:
+        test_names = [
+            f"TestReleaseIntegrationCase{index:04d}{'X' * 64}"
+            for index in range(3736)
+        ]
+        max_regex_bytes = 64 * 1024
+        plan = build_plan(
+            test_names,
+            shard_count=1,
+            batch_size=10000,
+            max_regex_bytes=max_regex_bytes,
+        )
+        batches = plan["shards"][0]["batches"]
+        self.assertGreater(len(batches), 1)
+        self.assertEqual(
+            [name for batch in batches for name in batch],
+            test_names,
+        )
+
+        with tempfile.TemporaryDirectory() as directory:
+            write_plan(plan, pathlib.Path(directory))
+            regex_files = sorted(pathlib.Path(directory).glob("*.regex"))
+            self.assertEqual(len(regex_files), len(batches))
+            for regex_file in regex_files:
+                self.assertLessEqual(
+                    len(regex_file.read_text().strip().encode()),
+                    max_regex_bytes,
+                )
+
+        with self.assertRaisesRegex(ValueError, "exceeds max regex bytes"):
+            build_plan(
+                ["TestNameThatCannotFit"],
+                shard_count=1,
+                batch_size=1,
+                max_regex_bytes=8,
+            )
+
     def test_release_workflow_uses_independent_pve_bundle_and_backend_lanes(self) -> None:
         workflow = (ROOT / ".github/workflows/create-release.yml").read_text()
         backend = (ROOT / "scripts/run-release-backend-tests.sh").read_text()
@@ -157,9 +194,13 @@ class ReleasePreflightTest(unittest.TestCase):
         self.assertIn("runs-on: [self-hosted, Linux, X64, pulse-pve-build]", workflow)
         self.assertIn("runs-on: [self-hosted, Linux, X64, pulse-pve-tests]", workflow)
         self.assertIn("./scripts/run-release-backend-tests.sh", workflow)
-        self.assertNotIn("      - frontend_checks\n    if:", workflow[workflow.index("  backend_tests:"):workflow.index("  docker_build:")])
+        backend_job = workflow[
+            workflow.index("  backend_tests:") : workflow.index("  integration_tests:")
+        ]
+        self.assertNotIn("      - frontend_checks\n    if:", backend_job)
         self.assertIn("go test -c -race", backend)
         self.assertIn("python3 scripts/shard_go_tests.py", backend)
+        self.assertIn('--max-regex-bytes "$MAX_REGEX_BYTES"', backend)
         self.assertIn("export GITHUB_ACTIONS=true", backend)
         self.assertIn("export CI=true", backend)
 

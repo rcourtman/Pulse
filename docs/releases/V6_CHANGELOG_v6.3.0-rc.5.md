@@ -41,6 +41,8 @@ forward the complete 6.3 product packet and rolls back to stable `v6.2.1`._
   are validated according to their actual release contract.
 - Release activation and private child-workflow polling no longer add long
   fixed delays after evidence becomes available.
+- Deterministic API test batches now enforce an encoded regex byte ceiling, so
+  the low-memory one-shard path remains executable without reducing coverage.
 
 ## Security
 

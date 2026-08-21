@@ -2717,6 +2717,7 @@ func TestReleaseBackendRaceGateUsesCompletePVEPartition(t *testing.T) {
 	for _, needle := range []string{
 		"go test -c -race",
 		"python3 scripts/shard_go_tests.py",
+		`--max-regex-bytes "$MAX_REGEX_BYTES"`,
 		"go test -race -timeout 30m",
 		`-test.timeout 30m`,
 	} {

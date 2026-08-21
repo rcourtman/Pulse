@@ -65,6 +65,9 @@ source commit that passed qualification.
 - Candidate qualification now runs even when intentionally disabled native
   signing jobs are skipped, while still failing closed on a required signing
   failure.
+- Backend qualification now byte-bounds deterministic API test batches, so a
+  memory-driven one-shard fallback cannot exceed the operating system's exec
+  argument limit before any tests run.
 
 ## Security
 

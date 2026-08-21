@@ -9,12 +9,15 @@ Options:
   --data-root DIR     Isolated test-data root (required)
   --api-shards VALUE  auto or a positive integer (default: auto)
   --batch-size VALUE  Top-level tests per API test-binary invocation (default: 10000)
+  --max-regex-bytes VALUE
+                      Maximum encoded -test.run regex bytes (default: 65536)
 EOF
 }
 
 DATA_ROOT=""
 API_SHARDS="${PULSE_BACKEND_TEST_SHARDS:-auto}"
 BATCH_SIZE=10000
+MAX_REGEX_BYTES="${PULSE_BACKEND_TEST_MAX_REGEX_BYTES:-65536}"
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -28,6 +31,10 @@ while [ "$#" -gt 0 ]; do
       ;;
     --batch-size)
       BATCH_SIZE="${2:-}"
+      shift 2
+      ;;
+    --max-regex-bytes)
+      MAX_REGEX_BYTES="${2:-}"
       shift 2
       ;;
     -h|--help)
@@ -48,6 +55,10 @@ if [ -z "$DATA_ROOT" ]; then
 fi
 if [[ ! "$BATCH_SIZE" =~ ^[1-9][0-9]*$ ]]; then
   echo "Error: --batch-size must be a positive integer." >&2
+  exit 2
+fi
+if [[ ! "$MAX_REGEX_BYTES" =~ ^[1-9][0-9]*$ ]]; then
+  echo "Error: --max-regex-bytes must be a positive integer." >&2
   exit 2
 fi
 
@@ -95,6 +106,7 @@ echo "  vCPUs:        $VCPUS"
 echo "  Available MiB: $((AVAILABLE_KIB / 1024))"
 echo "  API shards:   $API_SHARDS"
 echo "  Batch size:   $BATCH_SIZE"
+echo "  Regex bytes:  $MAX_REGEX_BYTES max"
 
 ./scripts/ensure_test_assets.sh
 
@@ -109,6 +121,7 @@ python3 scripts/shard_go_tests.py \
   --tests-file "$TEST_NAMES_FILE" \
   --shards "$API_SHARDS" \
   --batch-size "$BATCH_SIZE" \
+  --max-regex-bytes "$MAX_REGEX_BYTES" \
   --output-dir "$PLAN_DIR"
 
 API_IMPORT_PATH="$(go list -f '{{.ImportPath}}' ./internal/api)"
