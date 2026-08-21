@@ -2296,6 +2296,9 @@ func TestReleasePipelinePromotesOneImmutableCandidate(t *testing.T) {
 	if !strings.Contains(prepareJob, "sparse-checkout-cone-mode: false") {
 		t.Fatal("PVE release preparation must support top-level files with the runner Git version")
 	}
+	if !strings.Contains(prepareJob, "/scripts/release_control/") {
+		t.Fatal("PVE release preparation must include every governed promotion helper")
+	}
 
 	for _, needle := range []string{
 		"pulse-pve-compile",

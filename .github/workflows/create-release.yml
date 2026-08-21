@@ -134,11 +134,9 @@ jobs:
           fetch-depth: 0
           sparse-checkout-cone-mode: false
           sparse-checkout: |
-            VERSION
-            docs/release-control/control_plane.json
-            scripts/release_control/control_plane.py
-            scripts/release_control/mobile_release_gate.py
-            scripts/release_control/repo_file_io.py
+            /VERSION
+            /docs/release-control/control_plane.json
+            /scripts/release_control/
 
       - name: Resolve required release branch
         id: branch_policy
