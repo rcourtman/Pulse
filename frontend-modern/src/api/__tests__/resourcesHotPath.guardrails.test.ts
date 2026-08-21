@@ -3,7 +3,7 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const resourcesHandlerSource = readFileSync(
-  resolve(process.cwd(), '../internal/api/resources.go'),
+  resolve(process.cwd(), '../internal/api/resourceapi/resources.go'),
   'utf8',
 );
 

@@ -150,6 +150,16 @@ completion before launching the first server or control-plane target, covering
 both the lean Pro profile and the full public matrix without serializing the
 independent work.
 
+The next exact-SHA run passed the full public compiler, both backend race
+shards, private staging, candidate validation, container and installer smoke,
+and both public Docker publications. It then refused activation because the
+frontend hot-path source guard still opened the retired root
+`internal/api/resources.go` path after the production resource service moved
+to `internal/api/resourceapi/resources.go`. All 20,579 executable frontend
+tests passed; only the stale source-location assertion failed. The guard now
+follows the canonical production owner so future decomposition cannot leave a
+false release blocker behind.
+
 Public Docker publication took 5 minutes 1 second, but its prior dependency
 shape did not make it eligible until 12 minutes 33 seconds after dispatch. The
 corrected DAG makes exact-version Docker staging eligible as soon as the
