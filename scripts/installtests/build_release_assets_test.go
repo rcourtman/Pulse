@@ -281,6 +281,28 @@ func TestReleaseContainerContextTreatsServerSignaturesAsArchitectureBound(t *tes
 	}
 }
 
+func TestValidateReleaseScansArchivesOnceInParallel(t *testing.T) {
+	content, err := os.ReadFile(repoFile("scripts", "validate-release.sh"))
+	if err != nil {
+		t.Fatalf("read validate-release.sh: %v", err)
+	}
+	script := string(content)
+	for _, needle := range []string{
+		`platform_tar_entries=(`,
+		`check_tar_entries_nonempty "$tarball" "${platform_tar_entries[@]}"`,
+		`validate_platform_tarball "${arch}" >"${log_path}" 2>&1 &`,
+		`validate_universal_tarball >"${archive_validation_logs}/universal.log" 2>&1 &`,
+		`wait "${archive_validation_pids[$index]}"`,
+	} {
+		if !strings.Contains(script, needle) {
+			t.Fatalf("validate-release.sh missing single-pass parallel archive validation: %s", needle)
+		}
+	}
+	if strings.Contains(script, `tar -tzf "$tarball"`) {
+		t.Fatal("validate-release.sh must not rescan every platform archive with tar -t")
+	}
+}
+
 func TestProviderMSPReleaseBundleIsRequiredAndValidated(t *testing.T) {
 	validateBytes, err := os.ReadFile(repoFile("scripts", "validate-release.sh"))
 	if err != nil {

@@ -536,32 +536,57 @@ unified_agent_entries=(
     ./bin/pulse-agent-freebsd-amd64
     ./bin/pulse-agent-freebsd-arm64
 )
+platform_tar_entries=(
+    ./bin/pulse
+    "${unified_agent_entries[@]}"
+    ./scripts/install-container-agent.sh
+    ./scripts/install-docker.sh
+    ./scripts/install.sh
+    ./VERSION
+)
+validate_platform_tarball() {
+    local arch="$1"
+    local tarball="pulse-v${PULSE_VERSION}-${arch}.tar.gz"
+    check_tar_entries_nonempty "$tarball" "${platform_tar_entries[@]}"
+}
+validate_universal_tarball() {
+    check_tar_entries_nonempty \
+        "pulse-v${PULSE_VERSION}.tar.gz" \
+        ./VERSION \
+        "${unified_agent_entries[@]}"
+}
+
+# Each archive previously underwent up to four complete gzip scans in series.
+# Extract every required member in one pass, and let the host schedule the six
+# independent archives across all available virtual CPUs.
+archive_validation_logs="$(mktemp -d "$tmp_root/archive-validation.XXXXXX")"
+archive_validation_pids=()
+archive_validation_labels=()
 for arch in "${tar_arches[@]}"; do
-    tarball="pulse-v${PULSE_VERSION}-${arch}.tar.gz"
-
-    # Check binaries (note: tarballs use ./  prefix)
-    if ! tar -tzf "$tarball" ./bin/pulse >/dev/null 2>&1; then
-        error "$(basename $tarball) missing binaries"
-        exit 1
-    fi
-
-    check_tar_entries_nonempty "$tarball" "${unified_agent_entries[@]}"
-
-    # Check scripts
-    tar -tzf "$tarball" ./scripts/install-container-agent.sh ./scripts/install-docker.sh ./scripts/install.sh >/dev/null 2>&1 || { error "$(basename $tarball) missing scripts"; exit 1; }
-
-    # Check VERSION file
-    tar -tzf "$tarball" ./VERSION >/dev/null 2>&1 || { error "$(basename $tarball) missing VERSION file"; exit 1; }
+    log_path="${archive_validation_logs}/${arch}.log"
+    validate_platform_tarball "${arch}" >"${log_path}" 2>&1 &
+    archive_validation_pids+=("$!")
+    archive_validation_labels+=("${arch}")
 done
+validate_universal_tarball >"${archive_validation_logs}/universal.log" 2>&1 &
+archive_validation_pids+=("$!")
+archive_validation_labels+=("universal")
+
+archive_validation_failed=0
+for index in "${!archive_validation_pids[@]}"; do
+    label="${archive_validation_labels[$index]}"
+    if ! wait "${archive_validation_pids[$index]}"; then
+        error "${label} release archive validation failed"
+        cat "${archive_validation_logs}/${label}.log" >&2
+        archive_validation_failed=1
+    fi
+done
+rm -rf "${archive_validation_logs}"
+if [[ "${archive_validation_failed}" != "0" ]]; then
+    exit 1
+fi
 success "Platform-specific tarballs contain all required files (including cross-platform unified agents)"
-
-# Validate universal tarball
 section "Validating universal tarball"
-tar -tzf "pulse-v${PULSE_VERSION}.tar.gz" ./VERSION >/dev/null 2>&1 || { error "Universal tarball missing VERSION file"; exit 1; }
-
-# Validate universal tarball contains all agent binaries for download endpoint
-info "Validating universal tarball contains all agent binaries..."
-check_tar_entries_nonempty "pulse-v${PULSE_VERSION}.tar.gz" "${unified_agent_entries[@]}"
 success "Universal tarball validated (includes cross-platform unified agents)"
 
 # Validate the provider MSP bundle as one extracted tree. It is a separately

@@ -580,6 +580,10 @@ upgrade, update, release, or artifact-selection behavior.
    private broker/image proof, and public-runtime mismatch proof, but may run
    the independent browser and public-boundary checks as a sibling of the
    lease-bound broker mutation so customer-path evidence is not serialized.
+   Candidate archive validation must extract the complete required member set
+   from each archive in one gzip pass and validate independent platform and
+   universal archives concurrently, allowing the hosted runner to schedule
+   decompression across all available virtual CPUs.
    This credential-free lane may run against the isolated rootless
    Docker daemon owned by the low-priority PVE build identity; it must not gain
    host-Docker access, signing keys, registry login, or package-write authority.
