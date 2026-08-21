@@ -263,11 +263,10 @@ RUN apk --no-cache add python3 py3-pip && \
     /opt/apprise/bin/pip install --no-cache-dir "apprise==${APPRISE_VERSION}" && \
     /opt/apprise/bin/apprise --version | grep -F "Apprise v${APPRISE_VERSION}"
 
-# Base Pulse server runtime shared by self-hosted and hosted tenant images.
-FROM alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc AS pulse-runtime-base
+# Base operating-system surface shared by source-built and candidate-assembled
+# Pulse server images.
+FROM alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc AS pulse-runtime-foundation
 
-# Use TARGETARCH to select the correct binary for the build platform
-ARG TARGETARCH
 ARG APPRISE_VERSION
 
 RUN apk --no-cache add ca-certificates tzdata su-exec openssh-client python3
@@ -277,17 +276,6 @@ RUN ln -s /opt/apprise/bin/apprise /usr/local/bin/apprise && \
     apprise --version | grep -F "Apprise v${APPRISE_VERSION}"
 
 WORKDIR /app
-
-# Copy the correct pulse binary for target architecture directly
-# Use separate COPY commands with TARGETARCH to avoid copying both binaries
-# (copying to /tmp then deleting wastes space due to Docker layer immutability)
-COPY --from=backend-builder /app/pulse-linux-${TARGETARCH:-amd64} ./pulse
-RUN chmod +x ./pulse
-
-
-
-# Copy VERSION file
-COPY --from=backend-builder /app/VERSION .
 
 # Copy entrypoint script
 COPY docker-entrypoint.sh /docker-entrypoint.sh
@@ -321,6 +309,25 @@ ENTRYPOINT ["/docker-entrypoint.sh"]
 
 # Run the binary
 CMD ["./pulse"]
+
+# Canonical source-built runtime base.
+FROM pulse-runtime-foundation AS pulse-runtime-base
+
+ARG TARGETARCH
+
+COPY --from=backend-builder /app/pulse-linux-${TARGETARCH:-amd64} ./pulse
+COPY --from=backend-builder /app/VERSION .
+RUN chmod +x ./pulse && chown pulse:pulse ./pulse ./VERSION
+
+# Exact-candidate runtime base. release_payload is a named BuildKit context
+# produced from the verified linux-amd64 and linux-arm64 release archives.
+FROM pulse-runtime-foundation AS prebuilt-runtime-base
+
+ARG TARGETARCH
+
+COPY --from=release_payload /${TARGETARCH:-amd64}/bin/pulse ./pulse
+COPY --from=release_payload /${TARGETARCH:-amd64}/VERSION .
+RUN chmod +x ./pulse && chown pulse:pulse ./pulse ./VERSION
 
 # Hosted tenant runtime excludes embedded release installer and agent artifacts.
 # Those endpoints can still proxy canonical release assets instead of requiring
@@ -360,7 +367,6 @@ RUN if [ "$TARGETARCH" = "arm64" ]; then \
         ln -s pulse-linux-amd64 /opt/pulse/bin/pulse; \
     fi
 
-
 # Unified agent binaries (all platforms and architectures) plus detached signatures
 COPY --from=release-assets-builder /app/pulse-agent-* /opt/pulse/bin/
 # Create symlinks for Windows without .exe extension
@@ -382,3 +388,55 @@ RUN if [ "$TARGETARCH" = "arm64" ]; then \
     else \
         ln -s /opt/pulse/bin/pulse-agent-linux-amd64 /usr/local/bin/pulse-agent; \
     fi
+
+# Release qualification and publication target assembled from the immutable
+# candidate rather than recompiling source inside Docker.
+FROM prebuilt-runtime-base AS runtime_prebuilt
+
+ARG TARGETARCH
+
+RUN mkdir -p /opt/pulse/scripts /opt/pulse/bin
+COPY --from=release_payload /amd64/scripts/ /opt/pulse/scripts/
+COPY --from=release_payload /amd64/bin/pulse-agent-* /opt/pulse/bin/
+COPY --from=release_payload /amd64/bin/pulse /opt/pulse/bin/pulse-linux-amd64
+COPY --from=release_payload /arm64/bin/pulse /opt/pulse/bin/pulse-linux-arm64
+RUN chmod 755 /opt/pulse/scripts/*.sh /opt/pulse/scripts/*.ps1 && \
+    if [ "$TARGETARCH" = "arm64" ]; then \
+        ln -sf pulse-linux-arm64 /opt/pulse/bin/pulse; \
+        ln -sf /opt/pulse/bin/pulse-agent-linux-arm64 /usr/local/bin/pulse-agent; \
+    else \
+        ln -sf pulse-linux-amd64 /opt/pulse/bin/pulse; \
+        ln -sf /opt/pulse/bin/pulse-agent-linux-amd64 /usr/local/bin/pulse-agent; \
+    fi && \
+    ln -sf pulse-agent-windows-amd64.exe /opt/pulse/bin/pulse-agent-windows-amd64 && \
+    ln -sf pulse-agent-windows-arm64.exe /opt/pulse/bin/pulse-agent-windows-arm64 && \
+    ln -sf pulse-agent-windows-386.exe /opt/pulse/bin/pulse-agent-windows-386 && \
+    chown -R pulse:pulse /opt/pulse
+
+# Unified Agent image assembled from the same immutable candidate payload.
+FROM alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc AS agent_runtime_prebuilt
+
+ARG TARGETARCH
+ARG TARGETVARIANT
+
+RUN apk --no-cache add ca-certificates tzdata && mkdir -p /var/lib/pulse-agent
+WORKDIR /app
+COPY --from=release_payload /amd64/bin/pulse-agent-linux-* /tmp/
+RUN if [ "$TARGETARCH" = "arm64" ]; then \
+        cp /tmp/pulse-agent-linux-arm64 /usr/local/bin/pulse-agent; \
+    elif [ "$TARGETARCH" = "arm" ]; then \
+        cp /tmp/pulse-agent-linux-armv7 /usr/local/bin/pulse-agent; \
+    else \
+        cp /tmp/pulse-agent-linux-amd64 /usr/local/bin/pulse-agent; \
+    fi && \
+    chmod +x /usr/local/bin/pulse-agent && \
+    rm -rf /tmp/pulse-agent-*
+COPY --from=release_payload /amd64/VERSION /VERSION
+ENV PULSE_NO_AUTO_UPDATE=true \
+    PULSE_DISABLE_AUTO_UPDATE=true \
+    PULSE_ENABLE_HOST=true \
+    PULSE_ENABLE_DOCKER=true \
+    PULSE_AGENT_ID_FILE=/var/lib/pulse-agent/agent-id \
+    PULSE_STATE_DIR=/var/lib/pulse-agent
+VOLUME ["/var/lib/pulse-agent"]
+ENTRYPOINT ["/usr/local/bin/pulse-agent"]

@@ -138,6 +138,43 @@ func TestBuildReleaseUsesV6InstallScripts(t *testing.T) {
 	}
 }
 
+func TestReleaseContainerTargetsConsumeImmutableCandidate(t *testing.T) {
+	dockerfileBytes, err := os.ReadFile(repoFile("Dockerfile"))
+	if err != nil {
+		t.Fatalf("read Dockerfile: %v", err)
+	}
+	prepareBytes, err := os.ReadFile(repoFile("scripts", "prepare-release-container-context.sh"))
+	if err != nil {
+		t.Fatalf("read prepare-release-container-context.sh: %v", err)
+	}
+	dockerfile := string(dockerfileBytes)
+	prepareScript := string(prepareBytes)
+
+	for _, needle := range []string{
+		"FROM pulse-runtime-foundation AS prebuilt-runtime-base",
+		"COPY --from=release_payload /${TARGETARCH:-amd64}/bin/pulse ./pulse",
+		"FROM prebuilt-runtime-base AS runtime_prebuilt",
+		"COPY --from=release_payload /amd64/bin/pulse /opt/pulse/bin/pulse-linux-amd64",
+		"COPY --from=release_payload /arm64/bin/pulse /opt/pulse/bin/pulse-linux-arm64",
+		"FROM alpine:3.20@sha256:",
+		"AS agent_runtime_prebuilt",
+	} {
+		if !strings.Contains(dockerfile, needle) {
+			t.Fatalf("Dockerfile missing immutable-candidate container target: %s", needle)
+		}
+	}
+	for _, needle := range []string{
+		`pulse-v${version}-linux-${arch}.tar.gz`,
+		`validate_archive_entries "${archive}"`,
+		`tar --no-same-owner -xzf`,
+		`diff -qr --exclude=pulse`,
+	} {
+		if !strings.Contains(prepareScript, needle) {
+			t.Fatalf("prepare-release-container-context.sh missing candidate guard: %s", needle)
+		}
+	}
+}
+
 func TestProviderMSPReleaseBundleIsRequiredAndValidated(t *testing.T) {
 	validateBytes, err := os.ReadFile(repoFile("scripts", "validate-release.sh"))
 	if err != nil {
@@ -300,13 +337,12 @@ func TestAgentBuildCacheDoesNotResurrectPulseAgentPackage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read create-release.yml: %v", err)
 	}
-	for _, required := range []string{
-		`cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/pulse:agent-buildcache`,
-		`cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/pulse:agent-buildcache,mode=max`,
-	} {
-		if !strings.Contains(string(release), required) {
-			t.Fatalf("create-release.yml must cache the agent_runtime build under the published pulse package; missing %q", required)
-		}
+	releaseText := string(release)
+	if !strings.Contains(releaseText, `--target agent_runtime_prebuilt`) {
+		t.Fatal("create-release.yml must assemble the candidate agent image without targeting an unpublished package")
+	}
+	if strings.Contains(releaseText, "agent-buildcache") {
+		t.Fatal("exact-candidate release qualification must not create a remote agent image cache")
 	}
 
 	values, err := os.ReadFile(repoFile("deploy", "helm", "pulse", "values.yaml"))
@@ -967,7 +1003,9 @@ func TestDockerBuildUsesCanonicalReleaseLdflags(t *testing.T) {
 		`FROM --platform=linux/amd64 golang:1.26.5-alpine@sha256:0178a641fbb4858c5f1b48e34bdaabe0350a330a1b1149aabd498d0699ff5fb2 AS backend-builder`,
 		`FROM backend-builder AS release-assets-builder`,
 		`FROM alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc AS agent_runtime`,
-		`FROM alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc AS pulse-runtime-base`,
+		`FROM alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc AS pulse-runtime-foundation`,
+		`FROM pulse-runtime-foundation AS pulse-runtime-base`,
+		`FROM pulse-runtime-foundation AS prebuilt-runtime-base`,
 		`FROM pulse-runtime-base AS hosted_runtime`,
 		`FROM pulse-runtime-base AS runtime`,
 		`COPY scripts/release_ldflags.sh ./scripts/release_ldflags.sh`,
@@ -1155,27 +1193,30 @@ func TestReleaseWorkflowsUseSecretSafeAttestedImageBuilds(t *testing.T) {
 	}
 	createRelease := string(createReleaseBytes) + "\n" + string(candidateWorkflowBytes)
 	createReleaseRequired := []string{
-		`provenance: mode=max`,
-		`sbom: true`,
-		`secrets: |`,
-		`id: license_key_cache`,
-		`PULSE_LICENSE_PUBLIC_KEY_SHA256=${{ steps.license_key_cache.outputs.sha256 }}`,
-		`PULSE_UPDATE_SIGNING_PUBLIC_KEY=${{ vars.PULSE_UPDATE_SIGNING_PUBLIC_KEY }}`,
-		`pulse_license_public_key=${{ secrets.PULSE_LICENSE_PUBLIC_KEY }}`,
-		`pulse_update_signing_key=${{ secrets.PULSE_UPDATE_SIGNING_KEY }}`,
+		`Exact-Candidate Container and Helm Smoke`,
+		`./scripts/prepare-release-container-context.sh`,
+		`--target runtime_prebuilt`,
+		`--target agent_runtime_prebuilt`,
+		`Verify container binaries match immutable candidate`,
 		`PULSE_UPDATE_SIGNING_PUBLIC_KEY: ${{ vars.PULSE_UPDATE_SIGNING_PUBLIC_KEY }}`,
 		`Validate installer signing key pins`,
 		`go run ./scripts/release_update_key.go public-key-ssh`,
 		`install.sh scripts/pulse-auto-update.sh release/pulse-auto-update.sh`,
 		`does not trust the configured release signing key.`,
-		`DOCKER_BUILDKIT: 1`,
-		`--secret id=pulse_license_public_key,env=PULSE_LICENSE_PUBLIC_KEY`,
-		`--secret id=pulse_update_signing_key,env=PULSE_UPDATE_SIGNING_KEY`,
-		`--build-arg PULSE_LICENSE_PUBLIC_KEY_SHA256="${PULSE_LICENSE_PUBLIC_KEY_SHA256}"`,
-		`--build-arg PULSE_UPDATE_SIGNING_PUBLIC_KEY="${PULSE_UPDATE_SIGNING_PUBLIC_KEY}"`,
 		`id-token: write`,
 		`attestations: write`,
 		`uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4`,
+	}
+	containerJob := workflowJobBlock(t, string(createReleaseBytes), "docker_build")
+	for _, forbidden := range []string{
+		"PULSE_UPDATE_SIGNING_KEY",
+		"PULSE_LICENSE_PUBLIC_KEY",
+		"packages: write",
+		"docker/login-action",
+	} {
+		if strings.Contains(containerJob, forbidden) {
+			t.Fatalf("PVE exact-candidate container qualification must not receive release authority: %s", forbidden)
+		}
 	}
 	for _, needle := range createReleaseRequired {
 		if !strings.Contains(createRelease, needle) {
@@ -2358,7 +2399,7 @@ func TestCreateReleasePublishesPrivateProRuntime(t *testing.T) {
 	convergencePromotionJob := workflowJobBlock(t, string(convergenceContent), "promote_private_pro_runtime")
 
 	for _, needle := range []string{
-		`needs.create_release.result == 'success'`,
+		`needs.prepare.result == 'success'`,
 		`github.event.inputs.draft_only != 'true'`,
 		`startsWith(needs.prepare.outputs.version, '6.')`,
 		`GH_TOKEN: ${{ secrets.WORKFLOW_PAT }}`,
@@ -2366,6 +2407,7 @@ func TestCreateReleasePublishesPrivateProRuntime(t *testing.T) {
 		`r2_prefix="${TAG}-pro-${run_created_date}-${GITHUB_RUN_ID}"`,
 		`return_run_details: true`,
 		`pulse_ref: $pulse_ref`,
+		`pulse_checkout_ref: $pulse_checkout_ref`,
 		`version: $version`,
 		`upload_actions_artifact: "false"`,
 		`upload_to_r2: "true"`,
@@ -2373,6 +2415,7 @@ func TestCreateReleasePublishesPrivateProRuntime(t *testing.T) {
 		`docker_image: "license.pulserelay.pro/pulse-pro"`,
 		`r2_prefix: $r2_prefix`,
 		`reuse_existing_packet: "true"`,
+		`allow_pre_activation_staging: "true"`,
 		`allow_stable_ga_publish: $allow_stable_ga_publish`,
 		`repos/rcourtman/pulse-enterprise/actions/workflows/build-pro-release.yml/dispatches`,
 		`build_run_id="$(jq -r '.workflow_run_id // empty' <<<"${build_dispatch}")"`,
