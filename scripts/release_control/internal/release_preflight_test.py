@@ -110,10 +110,13 @@ class ReleasePreflightTest(unittest.TestCase):
         self.assertIn("is not reachable from a fetched origin branch", runner)
 
     def test_api_shard_plan_is_deterministic_complete_and_disjoint(self) -> None:
-        test_names = [f"TestReleaseCase{index:04d}" for index in range(17)]
+        test_names = [
+            f"TestReleaseCase{index:04d}"
+            for index in [8, 1, 14, 3, 16, 0, 7, 11, 2, 15, 5, 13, 4, 10, 6, 12, 9]
+        ]
         plan = build_plan(test_names, shard_count=2, batch_size=4)
         reordered_plan = build_plan(list(reversed(test_names)), shard_count=2, batch_size=4)
-        self.assertEqual(plan, reordered_plan)
+        self.assertNotEqual(plan, reordered_plan)
 
         assigned = [
             name
@@ -121,15 +124,15 @@ class ReleasePreflightTest(unittest.TestCase):
             for batch in shard["batches"]
             for name in batch
         ]
-        self.assertCountEqual(assigned, test_names)
+        self.assertEqual(assigned, test_names)
         self.assertEqual(len(assigned), len(set(assigned)))
         self.assertEqual(
             [name for batch in plan["shards"][0]["batches"] for name in batch],
-            sorted(test_names)[:9],
+            test_names[:9],
         )
         self.assertEqual(
             [name for batch in plan["shards"][1]["batches"] for name in batch],
-            sorted(test_names)[9:],
+            test_names[9:],
         )
 
         with tempfile.TemporaryDirectory() as directory:

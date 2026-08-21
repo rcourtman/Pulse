@@ -518,12 +518,16 @@ upgrade, update, release, or artifact-selection behavior.
    backend and browser-smoke lanes can start as soon as the bundle is available.
    The backend runner must compile the race-enabled `internal/api` test binary
    once, enumerate every top-level test from that exact binary, and generate a
-   deterministic manifest proving a complete, disjoint partition. Two API
-   shards and the remaining Go packages may then execute concurrently with
-   isolated data directories. A failed shard must fail the complete backend
-   gate; sharding must never select a coverage subset. The backend job owns a
-   20-minute ceiling, while each invocation retains the canonical 30-minute Go
-   timeout as protection against a stuck package.
+   deterministic manifest proving a complete, disjoint partition. Each
+   partition must preserve the exact order emitted by that binary; sorting or
+   hash distribution is not equivalent while legacy tests still exercise
+   package-global state. Two API shards and the remaining Go packages may then
+   execute concurrently with isolated data directories. A failed shard must
+   fail the complete backend gate and terminate every descendant test process;
+   sharding must never select a coverage subset or leave orphan race binaries
+   consuming the worker. The backend job owns a 20-minute ceiling, while each
+   invocation retains the canonical 30-minute Go timeout as protection against
+   a stuck package.
    The warm-path release-control performance objective is 15 minutes or less
    from dispatch to definitive publication/convergence. This objective is an
    optimization target, not permission to weaken exact-SHA qualification,

@@ -51,7 +51,7 @@ if [[ ! "$BATCH_SIZE" =~ ^[1-9][0-9]*$ ]]; then
   exit 2
 fi
 
-for command_name in go python3 getconf awk; do
+for command_name in go python3 getconf awk pgrep; do
   if ! command -v "$command_name" >/dev/null 2>&1; then
     echo "Error: required backend-test command is missing: $command_name" >&2
     exit 3
@@ -163,12 +163,25 @@ for shard_number in $(seq 1 "$API_SHARDS"); do
 done
 
 remaining="${#pids[@]}"
+terminate_tree() {
+  local parent_pid="$1"
+  local child_pid
+  while IFS= read -r child_pid; do
+    if [ -n "$child_pid" ]; then
+      terminate_tree "$child_pid"
+    fi
+  done < <(pgrep -P "$parent_pid" || true)
+  kill -TERM "$parent_pid" >/dev/null 2>&1 || true
+}
+
 while [ "$remaining" -gt 0 ]; do
   if wait -n; then
     remaining=$((remaining - 1))
   else
     status=$?
-    kill "${pids[@]}" >/dev/null 2>&1 || true
+    for pid in "${pids[@]}"; do
+      terminate_tree "$pid"
+    done
     wait "${pids[@]}" >/dev/null 2>&1 || true
     exit "$status"
   fi

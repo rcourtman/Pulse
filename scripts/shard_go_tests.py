@@ -40,10 +40,11 @@ def build_plan(
         )
         raise ValueError(f"duplicate top-level Go test name(s): {', '.join(duplicates)}")
 
-    canonical = sorted(test_names)
-    # Preserve the suite's canonical ordering inside each shard. Some legacy
-    # API tests still exercise package-global state, so hash distribution or
-    # extra process boundaries can change their historical neighbours.
+    canonical = list(test_names)
+    # Preserve the exact order emitted by the compiled test binary. Some
+    # legacy API tests still exercise package-global state, so sorting, hash
+    # distribution, or extra process boundaries can change their historical
+    # neighbours.
     base_size, remainder = divmod(len(canonical), shard_count)
     shards: list[list[str]] = []
     offset = 0
@@ -55,7 +56,7 @@ def build_plan(
     shard_records: list[dict[str, object]] = []
     assigned: list[str] = []
     for shard_index, names in enumerate(shards, start=1):
-        ordered_names = sorted(names)
+        ordered_names = list(names)
         assigned.extend(ordered_names)
         batches = [
             ordered_names[offset : offset + batch_size]
@@ -70,7 +71,7 @@ def build_plan(
             }
         )
 
-    if sorted(assigned) != canonical or len(assigned) != len(set(assigned)):
+    if assigned != canonical or len(assigned) != len(set(assigned)):
         raise RuntimeError("generated shard plan is not a complete, disjoint partition")
 
     return {

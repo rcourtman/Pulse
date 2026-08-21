@@ -2044,7 +2044,7 @@ func TestReleasePipelinePromotesOneImmutableCandidate(t *testing.T) {
 		t.Fatal("create_release must promote the verified candidate instead of rebuilding release assets")
 	}
 
-	if !strings.Contains(backendJob, "- frontend_checks") || !strings.Contains(integrationJob, "- frontend_checks") {
+	if !strings.Contains(backendJob, "- frontend_bundle") || !strings.Contains(integrationJob, "- frontend_bundle") {
 		t.Fatal("backend and integration jobs must consume the shared verified frontend bundle")
 	}
 	if strings.Contains(integrationJob, "- backend_tests") {
@@ -2341,7 +2341,7 @@ func TestCreateReleasePublishesPrivateProRuntime(t *testing.T) {
 	}
 }
 
-func TestReleaseBackendRaceGateHasHostedRunnerHeadroom(t *testing.T) {
+func TestReleaseBackendRaceGateUsesCompletePVEPartition(t *testing.T) {
 	makefileBytes, err := os.ReadFile(repoFile("Makefile"))
 	if err != nil {
 		t.Fatalf("read Makefile: %v", err)
@@ -2358,11 +2358,27 @@ func TestReleaseBackendRaceGateHasHostedRunnerHeadroom(t *testing.T) {
 		t.Fatalf("read create-release.yml: %v", err)
 	}
 	backendJob := workflowJobBlock(t, string(workflowBytes), "backend_tests")
-	if !strings.Contains(backendJob, "timeout-minutes: 40") {
-		t.Fatal("release backend job must leave setup and result-collection headroom above the package timeout")
+	if !strings.Contains(backendJob, "timeout-minutes: 20") {
+		t.Fatal("release backend job must retain the measured PVE execution ceiling")
 	}
-	if !strings.Contains(backendJob, "run: make test") {
-		t.Fatal("release backend job must consume the governed Makefile race-suite timeout")
+	if !strings.Contains(backendJob, "pulse-pve-tests") || !strings.Contains(backendJob, "run-release-backend-tests.sh") {
+		t.Fatal("release backend job must use the dedicated PVE partition runner")
+	}
+
+	backendScriptBytes, err := os.ReadFile(repoFile("scripts", "run-release-backend-tests.sh"))
+	if err != nil {
+		t.Fatalf("read run-release-backend-tests.sh: %v", err)
+	}
+	backendScript := string(backendScriptBytes)
+	for _, needle := range []string{
+		"go test -c -race",
+		"python3 scripts/shard_go_tests.py",
+		"go test -race -timeout 30m",
+		`-test.timeout 30m`,
+	} {
+		if !strings.Contains(backendScript, needle) {
+			t.Fatalf("PVE backend partition missing coverage contract: %s", needle)
+		}
 	}
 }
 
