@@ -228,6 +228,11 @@ class ReleasePreflightTest(unittest.TestCase):
         self.assertIn("go test -c -race", backend)
         self.assertIn("python3 scripts/shard_go_tests.py", backend)
         self.assertIn('--max-regex-bytes "$MAX_REGEX_BYTES"', backend)
+        self.assertIn(
+            'MEMORY_WAIT_SECONDS="${PULSE_BACKEND_TEST_MEMORY_WAIT_SECONDS:-120}"',
+            backend,
+        )
+        self.assertIn("two-shard backend admission requires", backend)
         self.assertIn("export GITHUB_ACTIONS=true", backend)
         self.assertIn("export CI=true", backend)
 

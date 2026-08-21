@@ -147,3 +147,14 @@ These projections do not close the objective. The release-acceleration claim
 remains open until the private payload reduction is measured, the production
 API decomposition produces a controlled PVE improvement, and a fresh exact-SHA
 release completes definitive customer convergence in 15 minutes or less.
+
+The rc.5 runner telemetry also explains why the backend used the slow path:
+its one-time planner sample occurred while both credential-free release
+compilers were resident and only 5,986 MiB remained available. That sample
+permanently selected one API shard even though the compilers were short-lived.
+The corrected admission policy waits at most 120 seconds for that useful
+sibling work to release memory, then requires 14 GiB of available headroom for
+two observed-size race binaries and the concurrent non-root package graph. If
+the worker still cannot supply that floor, the gate reports a capacity failure
+at admission instead of entering a one-shard path already known to approach
+the 20-minute job timeout.

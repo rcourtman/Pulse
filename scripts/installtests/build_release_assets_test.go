@@ -2741,6 +2741,10 @@ func TestReleaseBackendRaceGateUsesCompletePVEPartition(t *testing.T) {
 		"go test -c -race",
 		"python3 scripts/shard_go_tests.py",
 		`--max-regex-bytes "$MAX_REGEX_BYTES"`,
+		`MEMORY_WAIT_SECONDS="${PULSE_BACKEND_TEST_MEMORY_WAIT_SECONDS:-120}"`,
+		`memory_reserve_kib=$((4 * 1024 * 1024))`,
+		`memory_per_api_shard_kib=$((5 * 1024 * 1024))`,
+		"two-shard backend admission requires",
 		"go test -race -timeout 30m",
 		`-test.timeout 30m`,
 	} {

@@ -636,7 +636,13 @@ upgrade, update, release, or artifact-selection behavior.
    execute concurrently with isolated data directories. A failed shard must
    fail the complete backend gate and terminate every descendant test process;
    sharding must never select a coverage subset or leave orphan race binaries
-   consuming the worker. The backend job owns a 20-minute ceiling, while each
+   consuming the worker. Auto-sharding must not make a permanent one-shard
+   decision from the transient memory peak created by sibling credential-free
+   release compilers. On an 8-vCPU worker it may wait up to 120 seconds for
+   those bounded compile processes to exit, but it must then require measured
+   headroom for two race binaries plus the concurrent package graph and fail
+   immediately with a capacity diagnosis when that admission floor is still
+   unavailable. The backend job owns a 20-minute ceiling, while each
    invocation retains the canonical 30-minute Go timeout as protection against
    a stuck package.
    The warm-path release-control performance objective is 15 minutes or less

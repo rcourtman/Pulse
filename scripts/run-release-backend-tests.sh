@@ -11,6 +11,8 @@ Options:
   --batch-size VALUE  Top-level tests per API test-binary invocation (default: 10000)
   --max-regex-bytes VALUE
                       Maximum encoded -test.run regex bytes (default: 65536)
+  --memory-wait-seconds VALUE
+                      Bounded wait for two-shard memory admission (default: 120)
 EOF
 }
 
@@ -18,6 +20,7 @@ DATA_ROOT=""
 API_SHARDS="${PULSE_BACKEND_TEST_SHARDS:-auto}"
 BATCH_SIZE=10000
 MAX_REGEX_BYTES="${PULSE_BACKEND_TEST_MAX_REGEX_BYTES:-65536}"
+MEMORY_WAIT_SECONDS="${PULSE_BACKEND_TEST_MEMORY_WAIT_SECONDS:-120}"
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -35,6 +38,10 @@ while [ "$#" -gt 0 ]; do
       ;;
     --max-regex-bytes)
       MAX_REGEX_BYTES="${2:-}"
+      shift 2
+      ;;
+    --memory-wait-seconds)
+      MEMORY_WAIT_SECONDS="${2:-}"
       shift 2
       ;;
     -h|--help)
@@ -65,6 +72,10 @@ if [ "$MAX_REGEX_BYTES" -gt 120000 ]; then
   echo "Error: --max-regex-bytes cannot exceed the safe 120000-byte per-argument ceiling." >&2
   exit 2
 fi
+if [[ ! "$MEMORY_WAIT_SECONDS" =~ ^[0-9]+$ ]]; then
+  echo "Error: --memory-wait-seconds must be a non-negative integer." >&2
+  exit 2
+fi
 
 for command_name in go python3 getconf awk pgrep; do
   if ! command -v "$command_name" >/dev/null 2>&1; then
@@ -87,19 +98,46 @@ rm -rf "$RUN_ROOT"
 mkdir -p "$PLAN_DIR" "$RUN_ROOT/data/other"
 
 VCPUS="$(getconf _NPROCESSORS_ONLN)"
-AVAILABLE_KIB="$(awk '/^MemAvailable:/ { print $2; exit }' /proc/meminfo)"
-if [ -z "$AVAILABLE_KIB" ]; then
-  AVAILABLE_KIB=0
-fi
+read_available_kib() {
+  awk '/^MemAvailable:/ { print $2; exit }' /proc/meminfo
+}
+
+AVAILABLE_KIB="$(read_available_kib)"
+if [ -z "$AVAILABLE_KIB" ]; then AVAILABLE_KIB=0; fi
 
 if [ "$API_SHARDS" = auto ]; then
   cpu_shards=$((VCPUS / 4))
-  memory_shards=$(((AVAILABLE_KIB - 2097152) / 4194304))
   if [ "$cpu_shards" -lt 1 ]; then cpu_shards=1; fi
-  if [ "$memory_shards" -lt 1 ]; then memory_shards=1; fi
+  if [ "$cpu_shards" -gt 2 ]; then cpu_shards=2; fi
+
+  # A release starts the public and private credential-free compilers beside
+  # this lane. Their short peak must not permanently collapse an otherwise
+  # capable 8-vCPU/24-GiB worker to one 20-minute API shard. Wait only while
+  # those useful jobs finish, then require measured headroom for both race
+  # binaries plus the concurrent non-root package graph. If that headroom
+  # never appears, fail at admission instead of discovering the capacity
+  # problem at the job timeout.
+  if [ "$cpu_shards" -gt 1 ]; then
+    memory_reserve_kib=$((4 * 1024 * 1024))
+    memory_per_api_shard_kib=$((5 * 1024 * 1024))
+    required_kib=$((memory_reserve_kib + cpu_shards * memory_per_api_shard_kib))
+    waited_seconds=0
+    while [ "$AVAILABLE_KIB" -lt "$required_kib" ] && [ "$waited_seconds" -lt "$MEMORY_WAIT_SECONDS" ]; do
+      remaining_seconds=$((MEMORY_WAIT_SECONDS - waited_seconds))
+      wait_seconds=5
+      if [ "$remaining_seconds" -lt "$wait_seconds" ]; then wait_seconds="$remaining_seconds"; fi
+      echo "Waiting ${wait_seconds}s for two-shard memory admission: $((AVAILABLE_KIB / 1024)) MiB available, $((required_kib / 1024)) MiB required."
+      sleep "$wait_seconds"
+      waited_seconds=$((waited_seconds + wait_seconds))
+      AVAILABLE_KIB="$(read_available_kib)"
+      if [ -z "$AVAILABLE_KIB" ]; then AVAILABLE_KIB=0; fi
+    done
+    if [ "$AVAILABLE_KIB" -lt "$required_kib" ]; then
+      echo "Error: two-shard backend admission requires $((required_kib / 1024)) MiB available after a ${MEMORY_WAIT_SECONDS}s bounded wait; found $((AVAILABLE_KIB / 1024)) MiB." >&2
+      exit 4
+    fi
+  fi
   API_SHARDS="$cpu_shards"
-  if [ "$memory_shards" -lt "$API_SHARDS" ]; then API_SHARDS="$memory_shards"; fi
-  if [ "$API_SHARDS" -gt 2 ]; then API_SHARDS=2; fi
 elif [[ ! "$API_SHARDS" =~ ^[1-9][0-9]*$ ]]; then
   echo "Error: --api-shards must be auto or a positive integer." >&2
   exit 2
@@ -109,6 +147,7 @@ echo "Release backend test plan"
 echo "  vCPUs:        $VCPUS"
 echo "  Available MiB: $((AVAILABLE_KIB / 1024))"
 echo "  API shards:   $API_SHARDS"
+echo "  Memory wait:  ${MEMORY_WAIT_SECONDS}s max"
 echo "  Batch size:   $BATCH_SIZE"
 echo "  Regex bytes:  $MAX_REGEX_BYTES max"
 
