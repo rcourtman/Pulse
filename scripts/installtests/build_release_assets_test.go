@@ -876,6 +876,18 @@ func TestCurrentPrereleasePacketTracksInstallMetadata(t *testing.T) {
 		"changes since `v"+comparisonVersion+"` preserve the existing mobile, Relay, onboarding, and mobile-facing API contracts",
 		"no companion upload or public store rollout is required",
 	)
+	if version == "6.3.0-rc.5" {
+		assertFileContainsAllNormalized(t, releaseNotesPath,
+			"Release payload compilation now uses the dedicated Ryzen PVE worker and its persistent caches instead of leaving that hardware idle.",
+			"Container publication promotes the already-qualified exact-candidate payload rather than rebuilding release binaries after qualification.",
+			"PVE compilation remains credential-free. GitHub-hosted jobs retain signing, release mutation, and publication credentials.",
+		)
+		assertFileContainsAllNormalized(t, changelogPath,
+			"Dedicated PVE runners compile the credential-free public and paid release payloads with persistent caches.",
+			"Exact-candidate container payloads are promoted directly into public and private images without recompiling binaries after qualification.",
+			"Publication still requires exact-source identity, immutable manifests, signatures, public/private artifact integrity, installer smoke, and final convergence verification.",
+		)
+	}
 	assertFileContainsAll(t, repoFile("docs", "RELEASE_NOTES.md"),
 		"docs/releases/RELEASE_NOTES_v"+version+".md",
 		"docs/releases/V6_CHANGELOG_v"+version+".md",
@@ -1326,6 +1338,13 @@ func TestReleaseWorkflowsUseSecretSafeAttestedImageBuilds(t *testing.T) {
 	createRelease := string(createReleaseBytes) + "\n" + string(candidateWorkflowBytes) + "\n" + string(qualifierWorkflowBytes)
 	createReleaseRequired := []string{
 		`Exact-Candidate Container and Helm Smoke`,
+		`prepare_cluster_tool`,
+		`https://kind.sigs.k8s.io/dl/v0.20.0/kind-linux-amd64`,
+		`513a7213d6d3332dd9ef27c24dab35e5ef10a04fa27274fe1c14d8a246493ded`,
+		`https://dl.k8s.io/release/v1.27.3/bin/linux/amd64/kubectl`,
+		`fba6c062e754a120bc8105cde1344de200452fe014a8759e06e4eec7ed258a09`,
+		`wait "$kind_setup_pid"`,
+		`wait "$kubectl_setup_pid"`,
 		`./scripts/prepare-release-container-context.sh`,
 		`container_artifact_name`,
 		`container_artifact: ${{ needs.build_release_candidate.outputs.container_artifact_name }}`,
