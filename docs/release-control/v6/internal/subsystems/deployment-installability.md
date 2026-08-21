@@ -546,6 +546,12 @@ upgrade, update, release, or artifact-selection behavior.
    worker count. The verified dual-SHA Pro path must stage its five archives
    directly from the precompiled public-agent and Pro-server payloads; it must
    not build, sign, and then discard a complete public release packet first.
+   The public orchestrator may stage the exact private packet and private image
+   concurrently with public qualification when it binds the anticipated tag to
+   the immutable public commit, uses a run-scoped R2 prefix, and keeps the live
+   paid-runtime broker unchanged. Public readiness must still verify the final
+   tag and every public artifact before convergence may activate that inert
+   private staging packet for customers.
    The backend runner must compile the race-enabled `internal/api` test binary
    once, enumerate every top-level test from that exact binary, and generate a
    deterministic manifest proving a complete, disjoint partition. Each

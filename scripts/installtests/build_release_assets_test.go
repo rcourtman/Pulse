@@ -2142,8 +2142,19 @@ func TestReleasePipelinePromotesOneImmutableCandidate(t *testing.T) {
 	if strings.Contains(validationJob, "- publish_docker") {
 		t.Fatal("release asset digest validation must run in parallel with Docker publication")
 	}
-	if !strings.Contains(privateStageJob, "- create_release") || strings.Contains(privateStageJob, "- validate_release_assets") {
-		t.Fatal("private Pro staging must start after draft creation without waiting for asset validation")
+	if !strings.Contains(privateStageJob, "- prepare") ||
+		strings.Contains(privateStageJob, "- create_release") ||
+		strings.Contains(privateStageJob, "- validate_release_assets") {
+		t.Fatal("inert private Pro staging must start after preparation without waiting for public qualification or draft creation")
+	}
+	for _, needle := range []string{
+		`--arg pulse_checkout_ref "${GITHUB_SHA}"`,
+		`pulse_checkout_ref: $pulse_checkout_ref`,
+		`allow_pre_activation_staging: "true"`,
+	} {
+		if !strings.Contains(privateStageJob, needle) {
+			t.Fatalf("private Pro pre-activation staging missing exact-SHA contract: %s", needle)
+		}
 	}
 	for _, dependency := range []string{
 		"- create_release",

@@ -1381,14 +1381,14 @@ jobs:
       - name: Confirm immutable release readiness
         run: echo "All exact-version release paths are ready for customer activation."
 
-  # Stage the exact private Pro image and signed R2 packet as soon as the draft
-  # release/tag exist. This slow build runs in parallel with public artifact
-  # validation, but does not update the live paid-runtime broker manifest.
+  # Stage the exact private Pro image and signed R2 packet from the anticipated
+  # tag and immutable public SHA as soon as preparation succeeds. These assets
+  # remain inert until public readiness and activation allow the separate
+  # convergence workflow to update the live paid-runtime broker manifest.
   stage_private_pro_runtime:
     needs:
       - prepare
-      - create_release
-    if: ${{ always() && needs.prepare.result == 'success' && needs.create_release.result == 'success' && needs.prepare.outputs.historical_asset_backfill_only != 'true' && github.event.inputs.draft_only != 'true' && startsWith(needs.prepare.outputs.version, '6.') }}
+    if: ${{ always() && needs.prepare.result == 'success' && needs.prepare.outputs.historical_asset_backfill_only != 'true' && github.event.inputs.draft_only != 'true' && startsWith(needs.prepare.outputs.version, '6.') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     outputs:
@@ -1476,6 +1476,7 @@ jobs:
           build_dispatch="$(
             jq -n \
               --arg pulse_ref "${TAG}" \
+              --arg pulse_checkout_ref "${GITHUB_SHA}" \
               --arg version "${VERSION}" \
               --arg r2_prefix "${r2_prefix}" \
               --arg allow_stable_ga_publish "${allow_ga_publish}" \
@@ -1484,6 +1485,7 @@ jobs:
                 return_run_details: true,
                 inputs: {
                   pulse_ref: $pulse_ref,
+                  pulse_checkout_ref: $pulse_checkout_ref,
                   version: $version,
                   upload_actions_artifact: "false",
                   upload_to_r2: "true",
@@ -1491,7 +1493,8 @@ jobs:
                   docker_image: "license.pulserelay.pro/pulse-pro",
                   r2_prefix: $r2_prefix,
                   reuse_existing_packet: "true",
-                  allow_stable_ga_publish: $allow_stable_ga_publish
+                  allow_stable_ga_publish: $allow_stable_ga_publish,
+                  allow_pre_activation_staging: "true"
                 }
               }' | \
               gh api \
