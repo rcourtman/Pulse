@@ -118,6 +118,20 @@ jobs:
               exit 0
             fi
             rm -f "${marker}"
+            source_state="$(
+              gh run view "${EXPECTED_SOURCE_RUN_ID}" \
+                --repo "${{ github.repository }}" \
+                --json status,conclusion,url \
+                --jq '[.status, (.conclusion // ""), .url] | @tsv' \
+                2>/dev/null || true
+            )"
+            source_status="$(awk -F '\t' '{print $1}' <<<"${source_state}")"
+            source_conclusion="$(awk -F '\t' '{print $2}' <<<"${source_state}")"
+            source_url="$(awk -F '\t' '{print $3}' <<<"${source_state}")"
+            if [ "${source_status}" = "completed" ]; then
+              echo "::error::Source release run completed without the exact activation marker: conclusion=${source_conclusion:-none} ${source_url}."
+              exit 1
+            fi
             echo "Activation marker for ${TAG} is not committed yet (${attempt}/${max_attempts})."
             sleep 2
           done

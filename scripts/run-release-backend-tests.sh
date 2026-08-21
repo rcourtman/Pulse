@@ -10,17 +10,19 @@ Options:
   --api-shards VALUE  auto or a positive integer (default: auto)
   --batch-size VALUE  Top-level tests per API test-binary invocation (default: 10000)
   --max-regex-bytes VALUE
-                      Maximum encoded -test.run regex bytes (default: 65536)
+                      Maximum encoded -test.run regex bytes (default: 120000)
   --memory-wait-seconds VALUE
-                      Bounded wait for two-shard memory admission (default: 120)
+                      Bounded wait for multi-shard memory admission (default: 120)
 EOF
 }
 
 DATA_ROOT=""
 API_SHARDS="${PULSE_BACKEND_TEST_SHARDS:-auto}"
 BATCH_SIZE=10000
-MAX_REGEX_BYTES="${PULSE_BACKEND_TEST_MAX_REGEX_BYTES:-65536}"
+MAX_REGEX_BYTES="${PULSE_BACKEND_TEST_MAX_REGEX_BYTES:-120000}"
 MEMORY_WAIT_SECONDS="${PULSE_BACKEND_TEST_MEMORY_WAIT_SECONDS:-120}"
+SHARD_WEIGHTS="${PULSE_BACKEND_TEST_SHARD_WEIGHTS:-}"
+SHARD_BOUNDARIES="${PULSE_BACKEND_TEST_SHARD_BOUNDARIES:-}"
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -106,34 +108,39 @@ AVAILABLE_KIB="$(read_available_kib)"
 if [ -z "$AVAILABLE_KIB" ]; then AVAILABLE_KIB=0; fi
 
 if [ "$API_SHARDS" = auto ]; then
-  cpu_shards=$((VCPUS / 4))
-  if [ "$cpu_shards" -lt 1 ]; then cpu_shards=1; fi
-  if [ "$cpu_shards" -gt 2 ]; then cpu_shards=2; fi
+  if [ "$VCPUS" -ge 8 ]; then
+    cpu_shards=3
+  elif [ "$VCPUS" -ge 4 ]; then
+    cpu_shards=2
+  else
+    cpu_shards=1
+  fi
 
   # A release starts the public and private credential-free compilers beside
   # this lane. Their short peak must not permanently collapse an otherwise
-  # capable 8-vCPU/24-GiB worker to one 20-minute API shard. Wait only while
-  # those useful jobs finish, then require measured headroom for both race
-  # binaries plus the concurrent non-root package graph. If that headroom
-  # never appears, fail at admission instead of discovering the capacity
-  # problem at the job timeout.
+  # capable 8-vCPU worker to a long API shard. Wait only while those useful
+  # jobs finish, then require measured headroom for every race binary plus the
+  # concurrent non-root package graph. If that headroom never appears, fail at
+  # admission instead of discovering the capacity problem at the job timeout.
   if [ "$cpu_shards" -gt 1 ]; then
-    memory_reserve_kib=$((4 * 1024 * 1024))
-    memory_per_api_shard_kib=$((5 * 1024 * 1024))
-    required_kib=$((memory_reserve_kib + cpu_shards * memory_per_api_shard_kib))
+    if [ "$cpu_shards" -ge 3 ]; then
+      required_kib=$((16 * 1024 * 1024))
+    else
+      required_kib=$((14 * 1024 * 1024))
+    fi
     waited_seconds=0
     while [ "$AVAILABLE_KIB" -lt "$required_kib" ] && [ "$waited_seconds" -lt "$MEMORY_WAIT_SECONDS" ]; do
       remaining_seconds=$((MEMORY_WAIT_SECONDS - waited_seconds))
       wait_seconds=5
       if [ "$remaining_seconds" -lt "$wait_seconds" ]; then wait_seconds="$remaining_seconds"; fi
-      echo "Waiting ${wait_seconds}s for two-shard memory admission: $((AVAILABLE_KIB / 1024)) MiB available, $((required_kib / 1024)) MiB required."
+      echo "Waiting ${wait_seconds}s for backend shard admission: $((AVAILABLE_KIB / 1024)) MiB available, $((required_kib / 1024)) MiB required."
       sleep "$wait_seconds"
       waited_seconds=$((waited_seconds + wait_seconds))
       AVAILABLE_KIB="$(read_available_kib)"
       if [ -z "$AVAILABLE_KIB" ]; then AVAILABLE_KIB=0; fi
     done
     if [ "$AVAILABLE_KIB" -lt "$required_kib" ]; then
-      echo "Error: two-shard backend admission requires $((required_kib / 1024)) MiB available after a ${MEMORY_WAIT_SECONDS}s bounded wait; found $((AVAILABLE_KIB / 1024)) MiB." >&2
+      echo "Error: backend shard admission requires $((required_kib / 1024)) MiB available after a ${MEMORY_WAIT_SECONDS}s bounded wait; found $((AVAILABLE_KIB / 1024)) MiB." >&2
       exit 4
     fi
   fi
@@ -143,10 +150,23 @@ elif [[ ! "$API_SHARDS" =~ ^[1-9][0-9]*$ ]]; then
   exit 2
 fi
 
+if [ -n "$SHARD_WEIGHTS" ] && [ -n "$SHARD_BOUNDARIES" ]; then
+  echo "Error: configure shard weights or shard boundaries, not both." >&2
+  exit 2
+fi
+if [ -z "$SHARD_WEIGHTS" ] && [ -z "$SHARD_BOUNDARIES" ] && [ "$API_SHARDS" -eq 3 ]; then
+  # RC.6 exact-SHA bisection found the repeated integration-server cost in the
+  # final 31 tests. Keep the fast prefix together, then divide that hot tail
+  # across the remaining two processes at stable top-level test boundaries.
+  SHARD_BOUNDARIES="TestWebSocketOriginAllowsTrustedForwardedHostedOriginIPv6Loopback,TestServerInfoEndpointMethodNotAllowed"
+fi
+
 echo "Release backend test plan"
 echo "  vCPUs:        $VCPUS"
 echo "  Available MiB: $((AVAILABLE_KIB / 1024))"
 echo "  API shards:   $API_SHARDS"
+echo "  Shard weights: ${SHARD_WEIGHTS:-none}"
+echo "  Shard boundaries: ${SHARD_BOUNDARIES:-automatic}"
 echo "  Memory wait:  ${MEMORY_WAIT_SECONDS}s max"
 echo "  Batch size:   $BATCH_SIZE"
 echo "  Regex bytes:  $MAX_REGEX_BYTES max"
@@ -160,12 +180,20 @@ go test -c -race -o "$API_BINARY" ./internal/api
   "$API_BINARY" -test.list '^Test'
 ) | awk '/^Test[A-Za-z0-9_]+$/ { print }' > "$TEST_NAMES_FILE"
 
-python3 scripts/shard_go_tests.py \
-  --tests-file "$TEST_NAMES_FILE" \
-  --shards "$API_SHARDS" \
-  --batch-size "$BATCH_SIZE" \
-  --max-regex-bytes "$MAX_REGEX_BYTES" \
+plan_args=(
+  --tests-file "$TEST_NAMES_FILE"
+  --shards "$API_SHARDS"
+  --batch-size "$BATCH_SIZE"
+  --max-regex-bytes "$MAX_REGEX_BYTES"
   --output-dir "$PLAN_DIR"
+)
+if [ -n "$SHARD_WEIGHTS" ]; then
+  plan_args+=(--shard-weights "$SHARD_WEIGHTS")
+fi
+if [ -n "$SHARD_BOUNDARIES" ]; then
+  plan_args+=(--shard-boundaries "$SHARD_BOUNDARIES")
+fi
+python3 scripts/shard_go_tests.py "${plan_args[@]}"
 
 API_IMPORT_PATH="$(go list -f '{{.ImportPath}}' ./internal/api)"
 mapfile -t OTHER_PACKAGES < <(
@@ -187,6 +215,7 @@ run_api_shard() {
   local shard_index="$1"
   local shard_dir="$RUN_ROOT/data/api-shard-$shard_index"
   local regex_file regex batch_index=0
+  local shard_started_seconds="$SECONDS"
   mkdir -p "$shard_dir"
   shopt -s nullglob
   local regex_files=("$PLAN_DIR"/shard-"$shard_index"-batch-*.regex)
@@ -207,6 +236,7 @@ run_api_shard() {
         "$API_BINARY" -test.run "$regex" -test.timeout 30m
     )
   done
+  echo "Completed internal/api shard $shard_index in $((SECONDS - shard_started_seconds))s."
 }
 
 pids=()

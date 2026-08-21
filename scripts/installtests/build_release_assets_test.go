@@ -2469,10 +2469,21 @@ func TestReleasePipelinePromotesOneImmutableCandidate(t *testing.T) {
 			t.Fatalf("immutable readiness must exclude mutable customer state: %s", forbiddenDependency)
 		}
 	}
-	for _, dependency := range []string{"- release_readiness", "- stage_private_pro_runtime"} {
+	for _, dependency := range []string{"- create_release", "- stage_private_pro_runtime"} {
 		if !strings.Contains(dispatchJob, dependency) {
 			t.Fatalf("durable convergence dispatch missing staged dependency: %s", dependency)
 		}
+	}
+	if strings.Contains(dispatchJob, "- release_readiness") {
+		t.Fatal("durable convergence dispatch must prewarm before the readiness join")
+	}
+	if !strings.Contains(dispatchJob, "github.event.inputs.draft_only != 'true'") ||
+		!strings.Contains(dispatchJob, "historical_asset_backfill_only != 'true'") {
+		t.Fatal("early convergence dispatch must remain disabled for inert release modes")
+	}
+	if !strings.Contains(convergenceWorkflow, `gh run view "${EXPECTED_SOURCE_RUN_ID}"`) ||
+		!strings.Contains(convergenceWorkflow, "completed without the exact activation marker") {
+		t.Fatal("prewarmed convergence must terminate when its source run ends without activation")
 	}
 	if !strings.Contains(activationJob, "- dispatch_release_convergence") {
 		t.Fatal("release activation must depend on the exact durable convergence dispatch")
@@ -2783,9 +2794,11 @@ func TestReleaseBackendRaceGateUsesCompletePVEPartition(t *testing.T) {
 		"python3 scripts/shard_go_tests.py",
 		`--max-regex-bytes "$MAX_REGEX_BYTES"`,
 		`MEMORY_WAIT_SECONDS="${PULSE_BACKEND_TEST_MEMORY_WAIT_SECONDS:-120}"`,
-		`memory_reserve_kib=$((4 * 1024 * 1024))`,
-		`memory_per_api_shard_kib=$((5 * 1024 * 1024))`,
-		"two-shard backend admission requires",
+		`required_kib=$((16 * 1024 * 1024))`,
+		"backend shard admission requires",
+		"--shard-boundaries",
+		"TestWebSocketOriginAllowsTrustedForwardedHostedOriginIPv6Loopback",
+		"TestServerInfoEndpointMethodNotAllowed",
 		"go test -race -timeout 30m",
 		`-test.timeout 30m`,
 	} {

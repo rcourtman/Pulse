@@ -102,6 +102,8 @@ def build_plan(
     shard_count: int,
     batch_size: int,
     max_regex_bytes: int = DEFAULT_MAX_REGEX_BYTES,
+    shard_weights: Sequence[int] | None = None,
+    shard_boundaries: Sequence[str] | None = None,
 ) -> dict[str, object]:
     if shard_count < 1:
         raise ValueError("shard_count must be at least 1")
@@ -119,6 +121,23 @@ def build_plan(
     if shard_count > len(test_names):
         raise ValueError("shard_count cannot exceed the number of top-level tests")
 
+    weights = list(shard_weights) if shard_weights is not None else None
+    boundaries_by_name = (
+        list(shard_boundaries) if shard_boundaries is not None else None
+    )
+    if weights is not None and boundaries_by_name is not None:
+        raise ValueError("shard weights and shard boundaries are mutually exclusive")
+    if weights is not None:
+        if len(weights) != shard_count:
+            raise ValueError("shard weights must contain one value per shard")
+        if any(
+            isinstance(weight, bool) or not isinstance(weight, int) or weight < 1
+            for weight in weights
+        ):
+            raise ValueError("shard weights must be positive integers")
+    if boundaries_by_name is not None and len(boundaries_by_name) != shard_count - 1:
+        raise ValueError("shard boundaries must contain one fewer value than shards")
+
     invalid = sorted({name for name in test_names if not TEST_NAME_PATTERN.fullmatch(name)})
     if invalid:
         raise ValueError(f"invalid top-level Go test name(s): {', '.join(invalid)}")
@@ -133,11 +152,39 @@ def build_plan(
     # legacy API tests still exercise package-global state, so sorting, hash
     # distribution, or extra process boundaries can change their historical
     # neighbours.
-    base_size, remainder = divmod(len(canonical), shard_count)
     shards: list[list[str]] = []
+    if boundaries_by_name is not None:
+        unknown = [name for name in boundaries_by_name if name not in canonical]
+        if unknown:
+            raise ValueError(f"unknown shard boundary test(s): {', '.join(unknown)}")
+        boundaries = [canonical.index(name) + 1 for name in boundaries_by_name]
+        if boundaries != sorted(set(boundaries)):
+            raise ValueError("shard boundaries must follow compiled test order")
+        points = [0, *boundaries, len(canonical)]
+        sizes = [end - start for start, end in zip(points, points[1:])]
+    elif weights is None:
+        base_size, remainder = divmod(len(canonical), shard_count)
+        sizes = [
+            base_size + (1 if shard_index < remainder else 0)
+            for shard_index in range(shard_count)
+        ]
+    else:
+        total_weight = sum(weights)
+        boundaries: list[int] = []
+        cumulative_weight = 0
+        for shard_index, weight in enumerate(weights[:-1], start=1):
+            cumulative_weight += weight
+            boundary = (
+                len(canonical) * cumulative_weight + total_weight // 2
+            ) // total_weight
+            minimum = shard_index
+            maximum = len(canonical) - (shard_count - shard_index)
+            boundaries.append(max(minimum, min(boundary, maximum)))
+        points = [0, *boundaries, len(canonical)]
+        sizes = [end - start for start, end in zip(points, points[1:])]
+
     offset = 0
-    for shard_index in range(shard_count):
-        size = base_size + (1 if shard_index < remainder else 0)
+    for size in sizes:
         shards.append(canonical[offset : offset + size])
         offset += size
 
@@ -168,7 +215,7 @@ def build_plan(
     if assigned != canonical or len(assigned) != len(set(assigned)):
         raise RuntimeError("generated shard plan is not a complete, disjoint partition")
 
-    return {
+    plan: dict[str, object] = {
         "schema_version": 1,
         "test_count": len(canonical),
         "test_names_sha256": _digest(canonical),
@@ -177,6 +224,11 @@ def build_plan(
         "max_regex_bytes": max_regex_bytes,
         "shards": shard_records,
     }
+    if weights is not None:
+        plan["shard_weights"] = weights
+    if boundaries_by_name is not None:
+        plan["shard_boundaries"] = boundaries_by_name
+    return plan
 
 
 def write_plan(plan: dict[str, object], output_dir: Path) -> Path:
@@ -216,6 +268,14 @@ def main() -> int:
     parser.add_argument(
         "--max-regex-bytes", type=int, default=DEFAULT_MAX_REGEX_BYTES
     )
+    parser.add_argument(
+        "--shard-weights",
+        help="comma-separated positive integer weights for contiguous shard sizes",
+    )
+    parser.add_argument(
+        "--shard-boundaries",
+        help="comma-separated test names that end each contiguous shard except the last",
+    )
     parser.add_argument("--output-dir", type=Path, required=True)
     args = parser.parse_args()
 
@@ -224,8 +284,26 @@ def main() -> int:
         for line in args.tests_file.read_text().splitlines()
         if line.strip()
     ]
+    shard_weights = None
+    if args.shard_weights:
+        try:
+            shard_weights = [
+                int(value.strip()) for value in args.shard_weights.split(",")
+            ]
+        except ValueError as error:
+            parser.error(f"invalid --shard-weights: {error}")
+    shard_boundaries = None
+    if args.shard_boundaries:
+        shard_boundaries = [
+            value.strip() for value in args.shard_boundaries.split(",")
+        ]
     plan = build_plan(
-        test_names, args.shards, args.batch_size, args.max_regex_bytes
+        test_names,
+        args.shards,
+        args.batch_size,
+        args.max_regex_bytes,
+        shard_weights,
+        shard_boundaries,
     )
     manifest_path = write_plan(plan, args.output_dir)
     print(manifest_path.read_text(), end="")

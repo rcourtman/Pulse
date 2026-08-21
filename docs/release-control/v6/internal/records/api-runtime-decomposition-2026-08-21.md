@@ -236,3 +236,52 @@ Preserved local evidence files and checksums:
 
 After the measurements, the worker had no matching release-backend, API race,
 or Docker build process. The temporary remote files and logs were preserved.
+
+## Exact RC.6 Release Timing
+
+Release run [`32514803052`](https://github.com/rcourtman/Pulse/actions/runs/32514803052)
+published and converged exact source commit
+`779f9a10bc342fcbe66ee1b26493f1fa10355a06` as `v6.3.0-rc.6`.
+The release remained a draft until every immutable gate passed, and the public
+activation marker binds the tag, release id, source run, convergence run, and
+private R2 prefix.
+
+| Boundary from `18:43:31Z` dispatch | UTC | Elapsed | Result |
+| --- | --- | ---: | --- |
+| Exact-SHA public compilation complete | `18:47:07Z` | 3:36 | pass |
+| Private Pro child complete | `18:52:37Z` | 9:06 | pass |
+| GitHub release published | `18:57:14Z` | 13:43 | pass |
+| Source activation workflow complete | `18:57:32Z` | 14:01 | pass |
+| Customer convergence verdict | `18:59:14Z` | 15:43 | pass |
+| Promotion lease cleanup / convergence workflow complete | `18:59:27Z` | 15:56 | pass |
+
+Publication met the 15-minute objective, but definitive customer convergence
+missed it by 43 seconds. The acceleration objective therefore remained open.
+The exact backend log started with 14,858 MiB available and no admission wait.
+Its two 1,813-test shards began together at `18:45:19Z`, passed at
+`18:50:28Z` and `18:56:47Z`, and completed the backend gate at `18:56:48Z`.
+The 5:08 versus 11:27 split proves that equal test counts are not an adequate
+cost model for this ordered package.
+
+An unchanged exact-SHA three-equal-shard calibration passed every race test
+but still took 706.36 seconds because the final third retained the long tail.
+Deterministic contiguous bisection then established that tests 1,814–2,720
+take 69 seconds, 2,721–3,173 take 49 seconds, 3,174–3,400 take 9 seconds, and
+3,401–3,513 take 12 seconds when isolated. The remaining cost is the repeated
+integration-server setup in the final 113 tests. The canonical three-shard
+plan therefore keeps the 3,595-test fast prefix in one compressed expression
+and divides the last 31 integration tests at named, fail-closed boundaries.
+
+The two isolated hot-tail boundary proofs passed in 189 and 290 seconds. The
+final canonical PVE qualification then exercised the patched auto-selected
+release command against the unchanged RC.6 source with all 3,626 API tests and
+all 155 non-API packages. Admission selected three shards from eight vCPUs at
+16,399 MiB available, recorded exact shard sizes of 3,595, 15, and 16 in the
+manifest, and kept every shard in one compressed test-binary invocation. The
+three shards passed in 591, 320, and 434 seconds respectively, and the complete
+race-enabled backend gate passed in 639.57 seconds. This is a conservative
+full-worker result: the package graph and API shards ran concurrently, rather
+than timing the API partitions in isolation. Together with early inert
+convergence dispatch, it removes more than the 43-second RC.6 convergence miss
+without weakening exact-SHA, signing, integrity, installer-smoke, publication,
+or convergence requirements.

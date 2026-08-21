@@ -366,7 +366,7 @@ func TestInstallDockerProofTracksPrereleaseContract(t *testing.T) {
 	)
 	if version == "6.3.0-rc.6" {
 		assertFileContainsAllNormalized(t, repoFile("docs", "release-control", "v6", "internal", "subsystems", "deployment-installability.md"),
-			"For `v6.3.0-rc.6`, the release path retains credential-free PVE compilation while requiring the measured memory floor for two API race shards after a bounded admission wait.",
+			"For `v6.3.0-rc.6`, the release path retains credential-free PVE compilation while requiring the measured memory floor for API race shards after a bounded admission wait.",
 			"Public server and provider control-plane image publication uses independent matrix jobs that each revalidate the exact checkout and candidate manifest.",
 			"Private packaging transfers only the products consumed by Pro assembly, and paid-runtime Docker and direct-binary mismatch proofs execute concurrently without weakening either proof.",
 		)

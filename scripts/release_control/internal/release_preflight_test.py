@@ -152,6 +152,68 @@ class ReleasePreflightTest(unittest.TestCase):
             build_plan(["TestOnly"], 2, 10)
         with self.assertRaisesRegex(ValueError, "safe per-argument ceiling"):
             build_plan(["TestOnly"], 1, 10, max_regex_bytes=120_001)
+        with self.assertRaisesRegex(ValueError, "one value per shard"):
+            build_plan(["TestOne", "TestTwo"], 2, 10, shard_weights=[1])
+        with self.assertRaisesRegex(ValueError, "positive integers"):
+            build_plan(["TestOne", "TestTwo"], 2, 10, shard_weights=[1, 0])
+        with self.assertRaisesRegex(ValueError, "one fewer value"):
+            build_plan(
+                ["TestOne", "TestTwo"],
+                2,
+                10,
+                shard_boundaries=["TestOne", "TestTwo"],
+            )
+        with self.assertRaisesRegex(ValueError, "unknown shard boundary"):
+            build_plan(
+                ["TestOne", "TestTwo"],
+                2,
+                10,
+                shard_boundaries=["TestMissing"],
+            )
+        with self.assertRaisesRegex(ValueError, "mutually exclusive"):
+            build_plan(
+                ["TestOne", "TestTwo"],
+                2,
+                10,
+                shard_weights=[1, 1],
+                shard_boundaries=["TestOne"],
+            )
+
+    def test_api_shard_plan_supports_measured_contiguous_weights(self) -> None:
+        test_names = [f"TestReleaseCase{index:04d}" for index in range(20)]
+        plan = build_plan(
+            test_names,
+            shard_count=3,
+            batch_size=100,
+            shard_weights=[6, 1, 1],
+        )
+
+        shards = [
+            [name for batch in shard["batches"] for name in batch]
+            for shard in plan["shards"]
+        ]
+        self.assertEqual([len(shard) for shard in shards], [15, 3, 2])
+        self.assertEqual([name for shard in shards for name in shard], test_names)
+        self.assertEqual(plan["shard_weights"], [6, 1, 1])
+
+    def test_api_shard_plan_supports_named_contiguous_boundaries(self) -> None:
+        test_names = [f"TestReleaseCase{index:04d}" for index in range(8)]
+        plan = build_plan(
+            test_names,
+            shard_count=3,
+            batch_size=100,
+            shard_boundaries=[test_names[3], test_names[5]],
+        )
+
+        shards = [
+            [name for batch in shard["batches"] for name in batch]
+            for shard in plan["shards"]
+        ]
+        self.assertEqual([len(shard) for shard in shards], [4, 2, 2])
+        self.assertEqual([name for shard in shards for name in shard], test_names)
+        self.assertEqual(
+            plan["shard_boundaries"], [test_names[3], test_names[5]]
+        )
 
     def test_api_shard_plan_bounds_one_shard_regex_argument_bytes(self) -> None:
         test_names = [
@@ -232,7 +294,13 @@ class ReleasePreflightTest(unittest.TestCase):
             'MEMORY_WAIT_SECONDS="${PULSE_BACKEND_TEST_MEMORY_WAIT_SECONDS:-120}"',
             backend,
         )
-        self.assertIn("two-shard backend admission requires", backend)
+        self.assertIn("backend shard admission requires", backend)
+        self.assertIn(
+            "TestWebSocketOriginAllowsTrustedForwardedHostedOriginIPv6Loopback,"
+            "TestServerInfoEndpointMethodNotAllowed",
+            backend,
+        )
+        self.assertIn("Completed internal/api shard", backend)
         self.assertIn("export GITHUB_ACTIONS=true", backend)
         self.assertIn("export CI=true", backend)
 

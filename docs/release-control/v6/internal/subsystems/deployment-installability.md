@@ -642,8 +642,8 @@ upgrade, update, release, or artifact-selection behavior.
    per-argument limit. A shard may split only at deterministic contiguous
    batch boundaries when its compressed exact-name regex exceeds the configured
    ceiling. Tests at those boundaries must initialize their own package-global
-   prerequisites rather than inheriting state from a prior process. Two API
-   shards and the remaining Go packages may then
+   prerequisites rather than inheriting state from a prior process. On the
+   dedicated 8-vCPU release worker, three API shards and the remaining Go packages may then
    execute concurrently with isolated data directories. A failed shard must
    fail the complete backend gate and terminate every descendant test process;
    sharding must never select a coverage subset or leave orphan race binaries
@@ -651,15 +651,30 @@ upgrade, update, release, or artifact-selection behavior.
    decision from the transient memory peak created by sibling credential-free
    release compilers. On an 8-vCPU worker it may wait up to 120 seconds for
    those bounded compile processes to exit, but it must then require measured
-   headroom for two race binaries plus the concurrent package graph and fail
+   16 GiB of available guest memory for three race binaries plus the concurrent
+   package graph and fail
    immediately with a capacity diagnosis when that admission floor is still
-   unavailable. The backend job owns a 20-minute ceiling, while each
+   unavailable. The exact RC.6 graph uses measured named boundaries: the fast
+   prefix ends at
+   `TestWebSocketOriginAllowsTrustedForwardedHostedOriginIPv6Loopback`, and
+   the repeated integration-server tail is divided after
+   `TestServerInfoEndpointMethodNotAllowed`. The planner fails closed if those
+   anchors disappear or reorder, and the manifest records them while
+   continuing to prove exact ordered, complete, disjoint coverage. The backend
+   job owns a 20-minute ceiling, while each
    invocation retains the canonical 30-minute Go timeout as protection against
    a stuck package.
    The warm-path release-control performance objective is 15 minutes or less
    from dispatch to definitive publication/convergence. This objective is an
    optimization target, not permission to weaken exact-SHA qualification,
    signing, artifact integrity, installer smoke, or convergence proof.
+   Customer convergence should be dispatched as soon as the immutable draft
+   and applicable private packet are staged, so its credential-free activation
+   waiter can absorb hosted-runner startup while the readiness join finishes.
+   That early run remains inert until it verifies the exact public activation
+   marker; if the exact source release run terminates without that marker, the
+   waiter must fail promptly without acquiring the promotion lease or mutating
+   a customer surface.
    The rehearsal diagnostic spec is opt-in by design, so both the hosted
    rehearsal and its worker profile must set `PULSE_E2E_DIAGNOSTIC=1`; invoking
    that spec while leaving it skipped is not browser proof.
@@ -1659,7 +1674,7 @@ after qualification. Post-publication Helm and paid-runtime convergence likewise
 consume source-run artifacts and retain exact-SHA, installer, signature,
 public/private artifact, and definitive convergence proof.
 For `v6.3.0-rc.6`, the release path retains credential-free PVE compilation
-while requiring the measured memory floor for two API race shards after a
+while requiring the measured memory floor for API race shards after a
 bounded admission wait. Production chart and resource-query services move
 their complete handler, cache, tenant-store, and high-scale query suites out of
 the residual root package so the Go scheduler can overlap real domains rather
@@ -1682,9 +1697,9 @@ Release run `32497250921` then proved that naïve byte-bounded alternation was
 not semantically sufficient: its third fresh test-binary process reached
 `TestEstablishSession` without the package-global session store historically
 initialized earlier in the ordered suite. Prefix compression reduces the exact
-3,736-test expression from 182,429 bytes to 110,384 bytes, so the one-shard
-fallback needs only two bounded processes at the default 65,536-byte ceiling
-instead of three naïve alternation batches. The two session-establishment tests
+3,736-test expression from 182,429 bytes to 110,384 bytes, so the release
+planner can keep the measured fast prefix in one process at the 120,000-byte
+ceiling instead of fragmenting it into naïve alternation batches. The two session-establishment tests
 now initialize their own persistent session store, removing the boundary-order
 dependency instead of relying on a larger process. The planner still records
 the complete test-name digest, proves each compressed expression is an exact

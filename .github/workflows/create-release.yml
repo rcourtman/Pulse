@@ -1334,9 +1334,8 @@ jobs:
     needs:
       - prepare
       - create_release
-      - release_readiness
       - stage_private_pro_runtime
-    if: ${{ always() && needs.prepare.result == 'success' && needs.create_release.result == 'success' && needs.release_readiness.result == 'success' && ( !startsWith(needs.prepare.outputs.version, '6.') || needs.stage_private_pro_runtime.result == 'success' ) }}
+    if: ${{ always() && needs.prepare.result == 'success' && needs.create_release.result == 'success' && needs.prepare.outputs.historical_asset_backfill_only != 'true' && github.event.inputs.draft_only != 'true' && ( !startsWith(needs.prepare.outputs.version, '6.') || needs.stage_private_pro_runtime.result == 'success' ) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
