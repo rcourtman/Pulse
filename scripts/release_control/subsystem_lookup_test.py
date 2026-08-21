@@ -60,6 +60,7 @@ CONNECTIONS_LEDGER_WORKSPACE_EXACT_FILES = [
 RELEASE_PROMOTION_METADATA_EXACT_FILES = [
     "frontend-modern/src/components/__tests__/whatsNewModel.test.ts",
     "frontend-modern/src/utils/__tests__/docsLinks.test.ts",
+    "pulse-enterprise:scripts/validate-pro-release-line_test.sh",
     "pulse-pro:scripts/tests/test_validate_paid_runtime_distribution.py",
     "scripts/installtests/build_release_assets_test.go",
     "scripts/release_control/internal/record_rc_to_ga_rehearsal_test.py",
