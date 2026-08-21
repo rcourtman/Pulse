@@ -1,4 +1,4 @@
-package api
+package alerting
 
 import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"

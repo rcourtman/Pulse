@@ -1,10 +1,11 @@
-package api
+package alerting
 
 import (
 	"encoding/json"
 	"net/http"
 	"strconv"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/api/apihttp"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/notifications"
@@ -26,7 +27,7 @@ func NewNotificationQueueHandlers(monitor *monitoring.Monitor) *NotificationQueu
 
 // GetDLQ returns notifications in the dead letter queue
 func (h *NotificationQueueHandlers) GetDLQ(w http.ResponseWriter, r *http.Request) {
-	if !ensureScope(w, r, config.ScopeMonitoringRead) {
+	if !apihttp.EnsureScope(w, r, config.ScopeMonitoringRead) {
 		return
 	}
 
@@ -57,7 +58,7 @@ func (h *NotificationQueueHandlers) GetDLQ(w http.ResponseWriter, r *http.Reques
 
 // GetQueueStats returns statistics about the notification queue
 func (h *NotificationQueueHandlers) GetQueueStats(w http.ResponseWriter, r *http.Request) {
-	if !ensureScope(w, r, config.ScopeMonitoringRead) {
+	if !apihttp.EnsureScope(w, r, config.ScopeMonitoringRead) {
 		return
 	}
 
@@ -81,7 +82,7 @@ func (h *NotificationQueueHandlers) GetQueueStats(w http.ResponseWriter, r *http
 
 // RetryDLQItem retries a specific notification from the DLQ
 func (h *NotificationQueueHandlers) RetryDLQItem(w http.ResponseWriter, r *http.Request) {
-	if !ensureScope(w, r, config.ScopeMonitoringWrite) {
+	if !apihttp.EnsureScope(w, r, config.ScopeMonitoringWrite) {
 		return
 	}
 
@@ -128,7 +129,7 @@ func (h *NotificationQueueHandlers) RetryDLQItem(w http.ResponseWriter, r *http.
 
 // DeleteDLQItem removes a notification from the DLQ permanently
 func (h *NotificationQueueHandlers) DeleteDLQItem(w http.ResponseWriter, r *http.Request) {
-	if !ensureScope(w, r, config.ScopeMonitoringWrite) {
+	if !apihttp.EnsureScope(w, r, config.ScopeMonitoringWrite) {
 		return
 	}
 

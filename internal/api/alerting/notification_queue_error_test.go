@@ -1,4 +1,4 @@
-package api
+package alerting
 
 import (
 	"bytes"
@@ -10,6 +10,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/notifications"
+	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 )
 
 func TestNotificationQueueHandlers_GetDLQ_MissingScope(t *testing.T) {
@@ -17,7 +18,7 @@ func TestNotificationQueueHandlers_GetDLQ_MissingScope(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodGet, "/api/notifications/dlq", nil)
 	record := &config.APITokenRecord{Scopes: []string{config.ScopeMonitoringWrite}}
-	attachAPITokenRecord(req, record)
+	req = req.WithContext(internalauth.WithAPIToken(req.Context(), record))
 
 	rec := httptest.NewRecorder()
 	handler.GetDLQ(rec, req)

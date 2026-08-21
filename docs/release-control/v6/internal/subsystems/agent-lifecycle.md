@@ -3000,7 +3000,7 @@ restriction lists, role mappings, and masked secret-presence markers create no
 agent install, enrollment, setup-token, command, fleet liveness, or agent
 profile semantics.
 
-Alert delivery diagnosis on shared `internal/api/alerts.go` is likewise
+Alert delivery diagnosis on shared `internal/api/alerting/alerts.go` is likewise
 adjacent only: `/api/alerts/delivery-diagnosis` is alerts/API-contract owned
 read-only notification-policy evidence and must not be interpreted as agent
 enrollment, agent liveness, install progress, setup-token authority, or fleet
@@ -4523,18 +4523,18 @@ or recover those tokens through encrypted-at-rest session payloads, and any
 missing-crypto or invalid-ciphertext path must drop the refresh token instead
 of leaving plaintext-at-rest session state on the lifecycle runtime path.
 That same shared `internal/api/` dependency also assumes notification test
-handlers stay decode-and-delegate only: `internal/api/notifications.go` may
+handlers stay decode-and-delegate only: `internal/api/alerting/notifications.go` may
 surface adjacent operator test actions, but service-template selection and
 generic webhook-test payload fallback must remain notifications-owned instead
 of becoming a second API-layer owner under the shared helper surface.
 That same shared API boundary also assumes legacy service-specific webhook
-aliases are rewritten at ingress only: `internal/api/notifications.go` may
+aliases are rewritten at ingress only: `internal/api/alerting/notifications.go` may
 accept compatibility keys like Pushover `app_token` / `user_token`, but it
 must return and forward only canonical `token` / `user` fields so agent-
 adjacent shared `internal/api/` surfaces do not inherit a second live alias
 contract.
 That notification boundary also carries resource-tag routing configuration.
-`internal/api/notifications.go` may preserve and normalize `tagFilter` plus
+`internal/api/alerting/notifications.go` may preserve and normalize `tagFilter` plus
 `tagFilterMode` for email and webhook destinations, but those fields remain
 notifications/alerts-owned delivery policy. They do not change agent
 enrollment, command targeting, lifecycle authority, or host identity.

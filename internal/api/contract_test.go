@@ -42,7 +42,6 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
-	"github.com/rcourtman/pulse-go-rewrite/internal/notifications"
 	"github.com/rcourtman/pulse-go-rewrite/internal/operationreceipt"
 	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
 	"github.com/rcourtman/pulse-go-rewrite/internal/relay"
@@ -545,15 +544,15 @@ func TestContract_PatrolAttentionRoutesAcceptMobileRelayCapability(t *testing.T)
 }
 
 func TestContract_AlertDeliveryDiagnosisRouteIsReadOnlyMonitoringRead(t *testing.T) {
-	source, err := os.ReadFile("alerts.go")
+	source, err := os.ReadFile(filepath.Join("alerting", "alerts.go"))
 	if err != nil {
-		t.Fatalf("read alerts.go: %v", err)
+		t.Fatalf("read alerting/alerts.go: %v", err)
 	}
 	src := string(source)
 
 	required := []string{
 		`case path == "delivery-diagnosis" && r.Method == http.MethodGet:`,
-		`ensureScope(w, r, config.ScopeMonitoringRead)`,
+		`apihttp.EnsureScope(w, r, config.ScopeMonitoringRead)`,
 		`h.GetAlertDeliveryDiagnosis(w, r)`,
 		`manager.DiagnoseAlertDelivery(alertIdentifier)`,
 	}
@@ -21941,69 +21940,6 @@ func TestContract_MetadataGetPayloadsUseZeroRecordsInsteadOf404(t *testing.T) {
 	}
 }
 
-// TestContract_WebhookSigningSecretMaskedAndPreserved pins the webhook
-// management payload contract for delivery signing secrets: the list API must
-// mask a configured secret with the shared redaction placeholder, and an
-// update that echoes the placeholder must preserve the stored secret instead
-// of overwriting it with the literal placeholder string.
-func TestContract_WebhookSigningSecretMaskedAndPreserved(t *testing.T) {
-	mockMonitor := new(MockNotificationMonitor)
-	mockManager := new(MockNotificationManager)
-	mockPersistence := new(MockNotificationConfigPersistence)
-	mockMonitor.On("GetNotificationManager").Return(mockManager)
-	mockMonitor.On("GetConfigPersistence").Return(mockPersistence)
-	h := NewNotificationHandlers(nil, mockMonitor)
-
-	stored := notifications.WebhookConfig{
-		ID:            "wh-signed",
-		Name:          "Signed Webhook",
-		URL:           "https://psa.example.com/inbound/pulse",
-		Enabled:       true,
-		Service:       "generic",
-		SigningSecret: "stored-secret",
-	}
-
-	// List must mask the configured secret.
-	mockManager.On("GetWebhooks").Return([]notifications.WebhookConfig{stored}).Once()
-	rec := httptest.NewRecorder()
-	h.GetWebhooks(rec, httptest.NewRequest(http.MethodGet, "/api/notifications/webhooks", nil))
-	if rec.Code != http.StatusOK {
-		t.Fatalf("GetWebhooks responded %d", rec.Code)
-	}
-	var listed []map[string]interface{}
-	if err := json.Unmarshal(rec.Body.Bytes(), &listed); err != nil {
-		t.Fatalf("decode webhook list: %v", err)
-	}
-	if len(listed) != 1 {
-		t.Fatalf("expected one webhook in list, got %d", len(listed))
-	}
-	if got := listed[0]["signingSecret"]; got != "***REDACTED***" {
-		t.Fatalf("list signingSecret = %v, want masked placeholder", got)
-	}
-
-	// Update echoing the masked placeholder must preserve the stored secret.
-	mockManager.On("GetWebhooks").Return([]notifications.WebhookConfig{stored}).Once()
-	mockManager.On("ValidateWebhookURL", stored.URL).Return(nil).Once()
-	mockManager.On("UpdateWebhook", "wh-signed", tmock.MatchedBy(func(w notifications.WebhookConfig) bool {
-		return w.SigningSecret == "stored-secret"
-	})).Return(nil).Once()
-	mockManager.On("GetWebhooks").Return([]notifications.WebhookConfig{stored}).Once()
-	mockPersistence.On("SaveWebhooks", tmock.Anything).Return(nil).Once()
-
-	update := stored
-	update.SigningSecret = "***REDACTED***"
-	body, err := json.Marshal(update)
-	if err != nil {
-		t.Fatalf("marshal update: %v", err)
-	}
-	rec = httptest.NewRecorder()
-	h.UpdateWebhook(rec, httptest.NewRequest(http.MethodPut, "/api/notifications/webhooks/wh-signed", bytes.NewReader(body)))
-	if rec.Code != http.StatusOK {
-		t.Fatalf("UpdateWebhook responded %d: %s", rec.Code, rec.Body.String())
-	}
-	mockManager.AssertExpectations(t)
-}
-
 // TestContract_OrgBoundTokenIsScopedAwayFromDefaultOrg pins the MSP tenant
 // isolation boundary: a token explicitly bound to client organizations must
 // not implicitly reach the default org's data (a leaked client-site token
@@ -22120,7 +22056,7 @@ func TestContract_StateBroadcastsUseLazyCurrentStateInvalidation(t *testing.T) {
 				"BroadcastState(state)",
 			},
 		},
-		"alerts.go": {
+		filepath.Join("alerting", "alerts.go"): {
 			required: []string{
 				"h.wsHub.BroadcastCurrentStateToTenant(orgID)",
 				"h.wsHub.BroadcastCurrentState()",

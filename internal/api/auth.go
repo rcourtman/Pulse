@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/api/apihttp"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
@@ -1236,62 +1237,19 @@ func RequireAnyScope(scopes []string, handler http.HandlerFunc) http.HandlerFunc
 }
 
 func respondMissingScope(w http.ResponseWriter, scope string) {
-	if w == nil {
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusForbidden)
-	_ = json.NewEncoder(w).Encode(map[string]any{
-		"error":         "missing_scope",
-		"requiredScope": scope,
-	})
+	apihttp.RespondMissingScope(w, scope)
 }
 
 // ensureScope enforces that the request either originates from a session or a token
 // possessing the specified scope. Returns true when access should continue.
 func ensureScope(w http.ResponseWriter, r *http.Request, scope string) bool {
-	return ensureAnyScope(w, r, scope)
+	return apihttp.EnsureScope(w, r, scope)
 }
 
 // ensureAnyScope enforces that the request either originates from a session or
 // a token possessing at least one of the specified scopes.
 func ensureAnyScope(w http.ResponseWriter, r *http.Request, scopes ...string) bool {
-	normalized := make([]string, 0, len(scopes))
-	for _, scope := range scopes {
-		scope = strings.TrimSpace(scope)
-		if scope == "" {
-			return true
-		}
-		normalized = append(normalized, scope)
-	}
-	if len(normalized) == 0 {
-		return true
-	}
-
-	record := getAPITokenRecordFromRequest(r)
-	if record == nil {
-		return true
-	}
-	for _, scope := range normalized {
-		if record.HasScope(scope) {
-			return true
-		}
-	}
-
-	if len(normalized) == 1 {
-		respondMissingScope(w, normalized[0])
-		return false
-	}
-	if w != nil {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusForbidden)
-		_ = json.NewEncoder(w).Encode(map[string]any{
-			"error":          "missing_scope",
-			"requiredScopes": normalized,
-		})
-	}
-	return false
+	return apihttp.EnsureAnyScope(w, r, scopes...)
 }
 
 func attachAPITokenRecord(r *http.Request, record *config.APITokenRecord) {

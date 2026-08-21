@@ -1,4 +1,4 @@
-package api
+package alerting
 
 import (
 	"context"
@@ -14,6 +14,8 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
+	"github.com/rcourtman/pulse-go-rewrite/internal/api/apicontext"
+	"github.com/rcourtman/pulse-go-rewrite/internal/api/apihttp"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
@@ -119,7 +121,7 @@ func (h *AlertHandlers) getMonitor(ctx context.Context) AlertMonitor {
 	defaultMonitor := h.defaultMonitor
 	h.stateMu.RUnlock()
 
-	orgID := GetOrgID(ctx)
+	orgID := apicontext.OrgID(ctx)
 	if mtMonitor != nil {
 		if m, err := mtMonitor.GetMonitor(orgID); err == nil && m != nil {
 			return NewAlertMonitorWrapper(m)
@@ -128,12 +130,19 @@ func (h *AlertHandlers) getMonitor(ctx context.Context) AlertMonitor {
 	return defaultMonitor
 }
 
+// MonitorForContext resolves the tenant-scoped alert runtime used by handlers.
+// It is the supported extension boundary for integrations that need the same
+// tenant selection semantics as HTTP alert routes.
+func (h *AlertHandlers) MonitorForContext(ctx context.Context) AlertMonitor {
+	return h.getMonitor(ctx)
+}
+
 func (h *AlertHandlers) broadcastStateForContext(ctx context.Context) {
 	if h.wsHub == nil {
 		return
 	}
 
-	orgID := GetOrgID(ctx)
+	orgID := apicontext.OrgID(ctx)
 	if orgID != "" {
 		if h.wsHub.GetTenantClientCount(orgID) == 0 {
 			return
@@ -1156,88 +1165,88 @@ func (h *AlertHandlers) HandleAlerts(w http.ResponseWriter, r *http.Request) {
 
 	switch {
 	case path == "config" && r.Method == http.MethodGet:
-		if !ensureScope(w, r, config.ScopeMonitoringRead) {
+		if !apihttp.EnsureScope(w, r, config.ScopeMonitoringRead) {
 			return
 		}
 		h.GetAlertConfig(w, r)
 	case path == "config" && r.Method == http.MethodPut:
-		if !ensureScope(w, r, config.ScopeMonitoringWrite) {
+		if !apihttp.EnsureScope(w, r, config.ScopeMonitoringWrite) {
 			return
 		}
 		h.UpdateAlertConfig(w, r)
 	case path == "intent-policies" && r.Method == http.MethodGet:
-		if !ensureScope(w, r, config.ScopeMonitoringRead) {
+		if !apihttp.EnsureScope(w, r, config.ScopeMonitoringRead) {
 			return
 		}
 		h.GetAlertIntentPolicies(w, r)
 	case path == "intent-policies" && r.Method == http.MethodPut:
-		if !ensureScope(w, r, config.ScopeMonitoringWrite) {
+		if !apihttp.EnsureScope(w, r, config.ScopeMonitoringWrite) {
 			return
 		}
 		h.UpdateAlertIntentPolicies(w, r)
 	case path == "intent-policies/preview" && r.Method == http.MethodPost:
-		if !ensureScope(w, r, config.ScopeMonitoringRead) {
+		if !apihttp.EnsureScope(w, r, config.ScopeMonitoringRead) {
 			return
 		}
 		h.PreviewAlertIntentPolicy(w, r)
 	case path == "activate" && r.Method == http.MethodPost:
-		if !ensureScope(w, r, config.ScopeMonitoringWrite) {
+		if !apihttp.EnsureScope(w, r, config.ScopeMonitoringWrite) {
 			return
 		}
 		h.ActivateAlerts(w, r)
 	case path == "active" && r.Method == http.MethodGet:
-		if !ensureScope(w, r, config.ScopeMonitoringRead) {
+		if !apihttp.EnsureScope(w, r, config.ScopeMonitoringRead) {
 			return
 		}
 		h.GetActiveAlerts(w, r)
 	case path == "delivery-diagnosis" && r.Method == http.MethodGet:
-		if !ensureScope(w, r, config.ScopeMonitoringRead) {
+		if !apihttp.EnsureScope(w, r, config.ScopeMonitoringRead) {
 			return
 		}
 		h.GetAlertDeliveryDiagnosis(w, r)
 	case path == "history" && r.Method == http.MethodGet:
-		if !ensureScope(w, r, config.ScopeMonitoringRead) {
+		if !apihttp.EnsureScope(w, r, config.ScopeMonitoringRead) {
 			return
 		}
 		h.GetAlertHistory(w, r)
 	case path == "incidents" && r.Method == http.MethodGet:
-		if !ensureScope(w, r, config.ScopeMonitoringRead) {
+		if !apihttp.EnsureScope(w, r, config.ScopeMonitoringRead) {
 			return
 		}
 		h.GetAlertIncidentTimeline(w, r)
 	case path == "incidents/note" && r.Method == http.MethodPost:
-		if !ensureScope(w, r, config.ScopeMonitoringWrite) {
+		if !apihttp.EnsureScope(w, r, config.ScopeMonitoringWrite) {
 			return
 		}
 		h.SaveAlertIncidentNote(w, r)
 	case path == "history" && r.Method == http.MethodDelete:
-		if !ensureScope(w, r, config.ScopeMonitoringWrite) {
+		if !apihttp.EnsureScope(w, r, config.ScopeMonitoringWrite) {
 			return
 		}
 		h.ClearAlertHistory(w, r)
 	case path == "bulk/acknowledge" && r.Method == http.MethodPost:
-		if !ensureScope(w, r, config.ScopeMonitoringWrite) {
+		if !apihttp.EnsureScope(w, r, config.ScopeMonitoringWrite) {
 			return
 		}
 		h.BulkAcknowledgeAlerts(w, r)
 	case path == "bulk/clear" && r.Method == http.MethodPost:
-		if !ensureScope(w, r, config.ScopeMonitoringWrite) {
+		if !apihttp.EnsureScope(w, r, config.ScopeMonitoringWrite) {
 			return
 		}
 		h.BulkClearAlerts(w, r)
 	// Body-based endpoints (preferred - avoids URL encoding issues with reverse proxies)
 	case path == "acknowledge" && r.Method == http.MethodPost:
-		if !ensureScope(w, r, config.ScopeMonitoringWrite) {
+		if !apihttp.EnsureScope(w, r, config.ScopeMonitoringWrite) {
 			return
 		}
 		h.AcknowledgeAlertByBody(w, r)
 	case path == "unacknowledge" && r.Method == http.MethodPost:
-		if !ensureScope(w, r, config.ScopeMonitoringWrite) {
+		if !apihttp.EnsureScope(w, r, config.ScopeMonitoringWrite) {
 			return
 		}
 		h.UnacknowledgeAlertByBody(w, r)
 	case path == "clear" && r.Method == http.MethodPost:
-		if !ensureScope(w, r, config.ScopeMonitoringWrite) {
+		if !apihttp.EnsureScope(w, r, config.ScopeMonitoringWrite) {
 			return
 		}
 		h.ClearAlertByBody(w, r)

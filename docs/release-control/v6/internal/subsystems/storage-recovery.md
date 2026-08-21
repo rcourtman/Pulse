@@ -2459,7 +2459,7 @@ restriction lists, role mappings, and masked secret-presence markers create no
 storage health, recovery-point, backup verification, restore authorization, or
 provider-coverage semantics.
 
-Alert delivery diagnosis on shared `internal/api/alerts.go` is likewise
+Alert delivery diagnosis on shared `internal/api/alerting/alerts.go` is likewise
 adjacent only: `/api/alerts/delivery-diagnosis` exposes alerts/API-contract
 read-only notification-policy evidence and creates no storage health,
 recovery-point, backup verification, restore authorization, or provider
@@ -4320,12 +4320,12 @@ recovery-adjacent routes that rely on shared auth helpers may not reintroduce
 per-handler `returnTo` concatenation or absolute-target acceptance when they
 inherit those browser handoff paths through the common API router surface.
 That same shared `internal/api/` dependency also assumes notification test
-handlers stay decode-and-delegate only: `internal/api/notifications.go` may
+handlers stay decode-and-delegate only: `internal/api/alerting/notifications.go` may
 share the API helper boundary with storage-adjacent routes, but service-template
 selection and generic webhook-test payload fallback must remain
 notifications-owned instead of becoming a second API-layer owner.
 That same shared API boundary also assumes legacy service-specific webhook
-aliases are rewritten at ingress only: `internal/api/notifications.go` may
+aliases are rewritten at ingress only: `internal/api/alerting/notifications.go` may
 accept compatibility keys like Pushover `app_token` / `user_token`, but it
 must return and forward only canonical `token` / `user` fields so storage-
 adjacent shared `internal/api/` helpers do not inherit a second live alias

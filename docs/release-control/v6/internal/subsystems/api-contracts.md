@@ -20,6 +20,15 @@
 
 ## Purpose
 
+The API runtime is decomposed along production domain boundaries so Go can
+compile and execute domain qualification packages concurrently. Shared tenant
+identity and scope enforcement live in `internal/api/apicontext/` and
+`internal/api/apihttp/`; alert lifecycle, notification management, queue/DLQ,
+and their monitor adapters live together in `internal/api/alerting/` with their
+unit and contract tests. The root `internal/api` package retains router wiring,
+cross-domain integration proof, and compatibility aliases for established
+extensions; domain behavior must not be copied back into that root facade.
+
 Browser WebSocket shutdown distinguishes ordinary client lifecycle from
 transport failure. Normal closure, navigation/going-away, and abnormal closure
 codes used by disconnected clients are informational; policy violations and
@@ -126,7 +135,7 @@ continues to mint and quote the enrollment token.
    1c. `internal/config/persistence_metadata_accessors.go`
 2. `internal/api/resources.go`
 3. `internal/api/discovery_handlers.go`
-4. `internal/api/alerts.go`
+4. `internal/api/alerting/alerts.go`
    4a. `internal/api/attention_handlers.go`
    4b. `internal/api/attention_receipts.go`
 5. `internal/api/activity_audit_handlers.go`
@@ -250,7 +259,10 @@ continues to mint and quote the enrollment token.
 83. `scripts/generate-types.go`
     83a. `internal/api/agent_fleet_doctor.go`
     83b. `frontend-modern/src/api/agentDiagnostics.ts`
-84. `internal/api/notification_queue.go`
+84. `internal/api/alerting/notification_queue.go`
+    84a. `internal/api/alerting/notifications.go`
+    84b. `internal/api/apicontext/`
+    84c. `internal/api/apihttp/`
 85. `docs/release-control/v6/internal/MOBILE_COMPATIBILITY_MANIFEST.json`
 86. `docs/release-control/v6/internal/mobile_compatibility_manifest.schema.json`
 87. `scripts/release_control/generate_mobile_compatibility.py`
@@ -355,7 +367,7 @@ the config lock.
 
 WebSocket state refreshes triggered by API handlers are invalidation signals,
 not a parallel API payload contract. `internal/api/agent_handlers_base.go` and
-`internal/api/alerts.go` may check subscriber counts, then call
+`internal/api/alerting/alerts.go` may check subscriber counts, then call
 `BroadcastCurrentState` / `BroadcastCurrentStateToTenant`; they must not build
 or retain full frontend-state payloads at the handler boundary. The WebSocket
 hub owns tenant-aware state resolution after coalescing, through the same state
@@ -1755,7 +1767,9 @@ payload shape change when the portal presents compact client rows.
     must treat this payload as the canonical provider health contract rather
     than parsing free-form provider error strings.
 66. `internal/api/ai_intelligence_handlers.go` shared with `ai-runtime`: AI intelligence handlers are both an AI runtime control surface and a canonical API payload contract boundary.
-67. `internal/api/config_setup_handlers.go` shared with `agent-lifecycle`: auto-register and setup handlers are both an agent lifecycle control surface and a canonical API payload contract boundary.
+67. `internal/api/alerting/notification_queue.go` shared with `notifications`: the notification queue and DLQ handler is both a notification delivery consequence surface and a canonical API payload boundary for operational transition links.
+68. `internal/api/alerting/notifications.go` shared with `notifications`: notification handlers are both a notification delivery control surface and a canonical API payload contract boundary.
+69. `internal/api/config_setup_handlers.go` shared with `agent-lifecycle`: auto-register and setup handlers are both an agent lifecycle control surface and a canonical API payload contract boundary.
     That same shared boundary also owns reachable-host selection truth for canonical Proxmox registration: runtime callers may propose ordered `candidateHosts`, but the API contract must persist and echo the first candidate Pulse can actually reach instead of freezing the caller's rejected first preference into the stored node endpoint.
     That same canonical payload contract also owns strict-TLS truth for that selected host: `/api/auto-register` may only persist `VerifySSL=true` when Pulse actually captured a certificate fingerprint for the selected candidate, and it must not pretend public-CA verification is safe after every candidate fingerprint probe failed.
     For PVE cluster sources, that same contract must distinguish primary
@@ -1832,9 +1846,9 @@ payload shape change when the portal presents compact client rows.
     `VM.GuestAgent.FileRead` on PVE 9+ and reserve `VM.Monitor` for the legacy
     PVE 8 fallback, so API-generated scripts, runtime setup, installer setup,
     and browser manual guidance stay on one privilege contract.
-68. `internal/api/enterprise_extension_rbac_admin.go` shared with `organization-settings`: RBAC admin extension endpoints are both an organization settings control surface and a canonical API payload contract boundary.
-69. `internal/api/licensing_bridge.go` shared with `cloud-paid`: commercial licensing bridge handlers carry both API payload contract and cloud-paid entitlement boundary ownership.
-70. `internal/api/licensing_handlers.go` shared with `cloud-paid`: commercial licensing handlers carry both API payload contract and cloud-paid entitlement boundary ownership.
+70. `internal/api/enterprise_extension_rbac_admin.go` shared with `organization-settings`: RBAC admin extension endpoints are both an organization settings control surface and a canonical API payload contract boundary.
+71. `internal/api/licensing_bridge.go` shared with `cloud-paid`: commercial licensing bridge handlers carry both API payload contract and cloud-paid entitlement boundary ownership.
+72. `internal/api/licensing_handlers.go` shared with `cloud-paid`: commercial licensing handlers carry both API payload contract and cloud-paid entitlement boundary ownership.
     That same shared licensing boundary also owns authenticated
     install-version and runtime-build attribution: `internal/api/router.go`
     must hand the canonical process `serverVersion` and normalized runtime
@@ -1855,9 +1869,7 @@ payload shape change when the portal presents compact client rows.
     destination, but the browser/API contract must not reintroduce
     Pulse-Pro-as-page-name copy in callback titles, actions, or retry
     guidance.
-71. `internal/api/licensing_legacy_retry.go` shared with `cloud-paid`: the background legacy-exchange retry loop carries both API payload contract and cloud-paid entitlement boundary ownership.
-72. `internal/api/notification_queue.go` shared with `notifications`: the notification queue and DLQ handler is both a notification delivery consequence surface and a canonical API payload boundary for operational transition links.
-73. `internal/api/notifications.go` shared with `notifications`: notification handlers are both a notification delivery control surface and a canonical API payload contract boundary.
+73. `internal/api/licensing_legacy_retry.go` shared with `cloud-paid`: the background legacy-exchange retry loop carries both API payload contract and cloud-paid entitlement boundary ownership.
 74. `internal/api/org_handlers.go` shared with `organization-settings`: organization management handlers are both an organization settings control surface and a canonical API payload contract boundary.
 75. `internal/api/org_lifecycle_handlers.go` shared with `organization-settings`: organization lifecycle handlers are both an organization settings control surface and a canonical API payload contract boundary.
 76. `internal/api/payments_webhook_handlers.go` shared with `cloud-paid`: commercial payment webhook handlers carry both API payload contract and cloud-paid billing boundary ownership.
@@ -4078,6 +4090,12 @@ auto-register mutation boundary.
     `internal/api/platform_admin_session_parity_test.go`.
 
 ## Current State
+
+The first production package boundary is active under
+`internal/api/alerting/`, backed by shared tenant-context and scope-enforcement
+packages. Alert and notification unit/contract proof executes independently;
+the root router package retains cross-domain integration tests and stable
+compatibility aliases instead of duplicating domain behavior.
 
 ### Host sensor payloads carry typed command and REST custom readings
 
@@ -6657,7 +6675,7 @@ surfaces consume it: `status_explanation`, `explanation`, and
 missing mixed-version fields may be repaired only inside that API client layer
 rather than in panel-local fallback helpers.
 That same shared API boundary rule now also applies to notification test
-handlers: `internal/api/notifications.go` may decode webhook-test requests and
+handlers: `internal/api/alerting/notifications.go` may decode webhook-test requests and
 return the governed response envelope, but notifications-owned service-template
 selection, safe header copying, and generic webhook-test payload fallback must
 stay in `internal/notifications/` rather than becoming a second API-layer owner

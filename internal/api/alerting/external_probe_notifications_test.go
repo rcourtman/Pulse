@@ -1,4 +1,4 @@
-package api
+package alerting
 
 import (
 	"testing"
@@ -15,7 +15,7 @@ func TestExternalProbePushNotificationSelectsOnlyProbeLoss(t *testing.T) {
 			"incidentSource": alerts.ExternalProbeIncidentSource,
 		},
 	}
-	notification, ok := externalProbePushNotification(alert, nil)
+	notification, ok := ExternalProbePushNotification(alert, nil)
 	if !ok {
 		t.Fatal("external probe loss did not produce a push notification")
 	}
@@ -37,7 +37,7 @@ func TestExternalProbePushNotificationSelectsOnlyProbeLoss(t *testing.T) {
 			"incidentSource": alerts.ExternalProbeIncidentSource,
 		}},
 	} {
-		if got, ok := externalProbePushNotification(other, nil); ok {
+		if got, ok := ExternalProbePushNotification(other, nil); ok {
 			t.Fatalf("unrelated alert %#v produced push %#v", other, got)
 		}
 	}
@@ -52,7 +52,7 @@ func TestExternalProbePushNotificationSelectsAssignedHostOffline(t *testing.T) {
 		},
 	}
 	ownsAssignments := func(agentID string) bool { return agentID == "agent-1" }
-	notification, ok := externalProbePushNotification(alert, ownsAssignments)
+	notification, ok := ExternalProbePushNotification(alert, ownsAssignments)
 	if !ok {
 		t.Fatal("assigned probe host-offline alert did not produce a push")
 	}
@@ -60,7 +60,7 @@ func TestExternalProbePushNotificationSelectsAssignedHostOffline(t *testing.T) {
 		t.Fatalf("notification = %#v, want external probe mobile routing", notification)
 	}
 
-	if got, ok := externalProbePushNotification(alert, func(string) bool { return false }); ok {
+	if got, ok := ExternalProbePushNotification(alert, func(string) bool { return false }); ok {
 		t.Fatalf("ordinary host-offline alert produced external probe push %#v", got)
 	}
 }

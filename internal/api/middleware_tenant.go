@@ -8,20 +8,21 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
+	"github.com/rcourtman/pulse-go-rewrite/internal/api/apicontext"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 	"github.com/rs/zerolog/log"
 )
 
-type OrganizationContextKey string
+type OrganizationContextKey = apicontext.OrganizationContextKey
 
 const (
-	OrgIDContextKey OrganizationContextKey = "org_id"
-	OrgContextKey   OrganizationContextKey = "org_object"
-	subStateActive  string                 = "active"
-	subStateGrace   string                 = "grace"
-	subStateTrial   string                 = "trial"
+	OrgIDContextKey        = apicontext.OrgIDContextKey
+	OrgContextKey          = apicontext.OrgContextKey
+	subStateActive  string = "active"
+	subStateGrace   string = "grace"
+	subStateTrial   string = "trial"
 )
 
 // TenantMiddleware extracts the organization ID from the request and
@@ -243,18 +244,12 @@ func writeJSONErrorWithDetails(w http.ResponseWriter, status int, code, message 
 
 // Helper to get OrgID from context
 func GetOrgID(ctx context.Context) string {
-	if id, ok := ctx.Value(OrgIDContextKey).(string); ok {
-		return id
-	}
-	return "default"
+	return apicontext.OrgID(ctx)
 }
 
 // Helper to get Organization from context
 func GetOrganization(ctx context.Context) *models.Organization {
-	if org, ok := ctx.Value(OrgContextKey).(*models.Organization); ok {
-		return org
-	}
-	return &models.Organization{ID: "default", DisplayName: "Default Organization"}
+	return apicontext.Organization(ctx)
 }
 
 // isHostedSubscriptionValid checks whether a hosted Cloud tenant has a valid subscription

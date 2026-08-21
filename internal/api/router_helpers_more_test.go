@@ -184,11 +184,11 @@ func TestSetMultiTenantMonitor_WiresHandlers(t *testing.T) {
 	if router.monitor != defaultMonitor {
 		t.Fatalf("expected router monitor to be set to default monitor")
 	}
-	if router.alertHandlers.mtMonitor != mtm {
-		t.Fatalf("expected alertHandlers mtMonitor to be set")
+	if got := router.alertHandlers.MonitorForContext(context.Background()); got == nil || got.GetAlertManager() != defaultMonitor.GetAlertManager() {
+		t.Fatalf("expected alertHandlers to resolve the default tenant monitor")
 	}
-	if router.notificationHandlers.mtMonitor != mtm {
-		t.Fatalf("expected notificationHandlers mtMonitor to be set")
+	if got := router.notificationHandlers.MonitorForContext(context.Background()); got == nil || got.GetNotificationManager() != defaultMonitor.GetNotificationManager() {
+		t.Fatalf("expected notificationHandlers to resolve the default tenant monitor")
 	}
 	if router.configHandlers.mtMonitor != mtm {
 		t.Fatalf("expected configHandlers mtMonitor to be set")

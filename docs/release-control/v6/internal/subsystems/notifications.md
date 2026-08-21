@@ -39,24 +39,24 @@ group headings, and HTML-escape every resource, message, and category field.
 2. `internal/notifications/queue.go`
 3. `internal/notifications/email_enhanced.go`
 4. `internal/notifications/webhook_enhanced.go`
-5. `internal/api/notifications.go`
+5. `internal/api/alerting/notifications.go`
 6. `frontend-modern/src/api/notifications.ts`
 7. `internal/operationaltrust/contracts.go`
-8. `internal/api/notification_queue.go`
+8. `internal/api/alerting/notification_queue.go`
 9. `internal/notifications/tag_routing.go`
 10. `internal/notifications/delivery_health.go`
 
 ## Shared Boundaries
 
 1. `frontend-modern/src/api/notifications.ts` shared with `api-contracts`: the notifications frontend client is both a notification delivery control surface and a canonical API payload contract boundary.
-2. `internal/api/notification_queue.go` shared with `api-contracts`: the notification queue and DLQ handler is both a notification delivery consequence surface and a canonical API payload boundary for operational transition links.
-3. `internal/api/notifications.go` shared with `api-contracts`: notification handlers are both a notification delivery control surface and a canonical API payload contract boundary.
+2. `internal/api/alerting/notification_queue.go` shared with `api-contracts`: the notification queue and DLQ handler is both a notification delivery consequence surface and a canonical API payload boundary for operational transition links.
+3. `internal/api/alerting/notifications.go` shared with `api-contracts`: notification handlers are both a notification delivery control surface and a canonical API payload contract boundary.
 4. `internal/operationaltrust/contracts.go` shared with `alerts`: the operational trust contract is jointly consumed by canonical alert lifecycle ownership and notification delivery linkage without making delivery state operational truth.
 
 ## Extension Points
 
 1. Add or change provider delivery, queue processing, or retry behavior through `internal/notifications/`
-2. Add or change notification-management request or response handling through `internal/api/notifications.go`
+2. Add or change notification-management request or response handling through `internal/api/alerting/notifications.go`
 3. Add or change notification-management frontend transport through `frontend-modern/src/api/notifications.ts`
 4. Add or change the delivery-health verdict through
    `internal/notifications/delivery_health.go`. `ClassifyQueueHealth` is the
@@ -65,7 +65,7 @@ group headings, and HTML-escape every resource, message, and category field.
    carry their own copy. Only terminal failed or dead-letter outcomes count as
    unhealthy; recoverable retry attempts do not. A queue that cannot be read
    reports `unavailable` and never `healthy`, because an unreadable queue must
-   not be mistaken for successful delivery. `internal/api/notifications.go`
+   not be mistaken for successful delivery. `internal/api/alerting/notifications.go`
    delegates to this rule rather than reimplementing it, and `monitoring`
    consumes it to raise the notification-delivery system alert.
 
@@ -106,6 +106,12 @@ stable opaque routing identities and must not expose credentials.
 
 
 ## Current State
+
+Notification-management HTTP production and its unit/contract proof now live
+together under `internal/api/alerting/`. Router-level scope and integration
+tests remain in `internal/api`, while the compatibility aliases there keep the
+existing extension surface stable. This gives notification qualification a
+native Go package scheduling boundary without changing routes or payloads.
 
 This subsystem now makes email, webhook, Apprise, queueing, and delivery
 safety explicit inside the current architecture lane instead of leaving them
@@ -285,7 +291,7 @@ already-pending alert separately; service templates must be rendered only
 after the grouped summary contains every alert, so provider-specific payloads
 cannot silently collapse to the first alert.
 
-`internal/api/notifications.go` and
+`internal/api/alerting/notifications.go` and
 `frontend-modern/src/api/notifications.ts` are shared boundaries with
 `api-contracts`: they are the product-facing control surface for
 notification-management transport, while canonical payload-shape governance

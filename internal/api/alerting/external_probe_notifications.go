@@ -1,4 +1,4 @@
-package api
+package alerting
 
 import (
 	"strings"
@@ -10,7 +10,7 @@ import (
 // externalProbePushNotification keeps mobile payloads deliberately generic:
 // alert metadata selects the event, while infrastructure names and addresses
 // remain inside the self-hosted Pulse instance.
-func externalProbePushNotification(
+func ExternalProbePushNotification(
 	alert *alerts.Alert,
 	hasProbeAssignments func(string) bool,
 ) (relay.PushNotificationPayload, bool) {

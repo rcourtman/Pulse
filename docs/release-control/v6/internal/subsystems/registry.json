@@ -788,6 +788,22 @@
       ]
     },
     {
+      "path": "internal/api/alerting/notification_queue.go",
+      "rationale": "the notification queue and DLQ handler is both a notification delivery consequence surface and a canonical API payload boundary for operational transition links",
+      "subsystems": [
+        "api-contracts",
+        "notifications"
+      ]
+    },
+    {
+      "path": "internal/api/alerting/notifications.go",
+      "rationale": "notification handlers are both a notification delivery control surface and a canonical API payload contract boundary",
+      "subsystems": [
+        "api-contracts",
+        "notifications"
+      ]
+    },
+    {
       "path": "internal/api/config_setup_handlers.go",
       "rationale": "auto-register and setup handlers are both an agent lifecycle control surface and a canonical API payload contract boundary",
       "subsystems": [
@@ -825,22 +841,6 @@
       "subsystems": [
         "api-contracts",
         "cloud-paid"
-      ]
-    },
-    {
-      "path": "internal/api/notification_queue.go",
-      "rationale": "the notification queue and DLQ handler is both a notification delivery consequence surface and a canonical API payload boundary for operational transition links",
-      "subsystems": [
-        "api-contracts",
-        "notifications"
-      ]
-    },
-    {
-      "path": "internal/api/notifications.go",
-      "rationale": "notification handlers are both a notification delivery control surface and a canonical API payload contract boundary",
-      "subsystems": [
-        "api-contracts",
-        "notifications"
       ]
     },
     {
@@ -2865,7 +2865,7 @@
             "match_prefixes": [],
             "match_files": [
               "frontend-modern/src/api/alertIntentPolicies.ts",
-              "internal/api/alerts.go"
+              "internal/api/alerting/alerts.go"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
@@ -2909,7 +2909,7 @@
               "internal/api/availability_handlers_test.go",
               "internal/api/contract_test.go",
               "internal/api/docker_agents_report_size_test.go",
-              "internal/api/external_probe_notifications_test.go",
+              "internal/api/alerting/external_probe_notifications_test.go",
               "internal/api/host_agent_removal_lifecycle_integration_test.go",
               "internal/api/issue1640_readiness_gate_test.go",
               "internal/api/issue1640_readiness_transport_test.go",
@@ -5884,8 +5884,8 @@
       ],
       "owned_files": [
         "frontend-modern/src/api/notifications.ts",
-        "internal/api/notification_queue.go",
-        "internal/api/notifications.go",
+        "internal/api/alerting/notification_queue.go",
+        "internal/api/alerting/notifications.go",
         "internal/operationaltrust/contracts.go"
       ],
       "verification": {
@@ -5900,17 +5900,19 @@
             "match_prefixes": [],
             "match_files": [
               "frontend-modern/src/api/notifications.ts",
-              "internal/api/notification_queue.go",
-              "internal/api/notifications.go"
+              "internal/api/alerting/notification_queue.go",
+              "internal/api/alerting/notifications.go"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
               "frontend-modern/src/api/__tests__/notifications.test.ts",
-              "internal/api/notification_queue_additional_test.go",
-              "internal/api/notification_queue_error_test.go",
-              "internal/api/notifications_scope_test.go",
-              "internal/api/notifications_test.go"
+              "internal/api/alerting/notification_queue_additional_test.go",
+              "internal/api/alerting/notification_queue_error_test.go",
+              "internal/api/alerting/notifications_health_test.go",
+              "internal/api/alerting/notifications_test.go",
+              "internal/api/alerting/rate_limit_integration_test.go",
+              "internal/api/notifications_scope_test.go"
             ]
           },
           {

@@ -1,4 +1,4 @@
-package api
+package alerting
 
 import (
 	"context"
@@ -12,11 +12,14 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/api/apicontext"
+	"github.com/rcourtman/pulse-go-rewrite/internal/api/apihttp"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/notifications"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
+	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 	"github.com/rs/zerolog/log"
 )
 
@@ -123,13 +126,19 @@ func (h *NotificationHandlers) getMonitor(ctx context.Context) NotificationMonit
 	defaultMonitor := h.defaultMonitor
 	h.stateMu.RUnlock()
 
-	orgID := GetOrgID(ctx)
+	orgID := apicontext.OrgID(ctx)
 	if mtMonitor != nil {
 		if m, err := mtMonitor.GetMonitor(orgID); err == nil && m != nil {
 			return NewNotificationMonitorWrapper(m)
 		}
 	}
 	return defaultMonitor
+}
+
+// MonitorForContext resolves the tenant-scoped notification runtime used by
+// handlers and extensions.
+func (h *NotificationHandlers) MonitorForContext(ctx context.Context) NotificationMonitor {
+	return h.getMonitor(ctx)
 }
 
 // getReadState returns the tenant-scoped ReadState for the request context.
@@ -142,7 +151,7 @@ func (h *NotificationHandlers) getReadState(ctx context.Context) unifiedresource
 	fallback := h.readState
 	h.stateMu.RUnlock()
 
-	orgID := GetOrgID(ctx)
+	orgID := apicontext.OrgID(ctx)
 	if mtMonitor != nil {
 		if m, err := mtMonitor.GetMonitor(orgID); err == nil && m != nil {
 			if rs := m.GetUnifiedReadState(); rs != nil {
@@ -989,7 +998,7 @@ func (h *NotificationHandlers) HandleNotifications(w http.ResponseWriter, r *htt
 	path := strings.TrimPrefix(r.URL.Path, "/api/notifications")
 
 	requireAnyScope := func(required string, scopes ...string) bool {
-		record := getAPITokenRecordFromRequest(r)
+		record := internalauth.GetAPIToken(r.Context())
 		if record == nil {
 			return true
 		}
@@ -998,7 +1007,7 @@ func (h *NotificationHandlers) HandleNotifications(w http.ResponseWriter, r *htt
 				return true
 			}
 		}
-		respondMissingScope(w, required)
+		apihttp.RespondMissingScope(w, required)
 		return false
 	}
 
