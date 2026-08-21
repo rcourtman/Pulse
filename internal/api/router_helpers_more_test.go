@@ -190,8 +190,8 @@ func TestSetMultiTenantMonitor_WiresHandlers(t *testing.T) {
 	if got := router.notificationHandlers.MonitorForContext(context.Background()); got == nil || got.GetNotificationManager() != defaultMonitor.GetNotificationManager() {
 		t.Fatalf("expected notificationHandlers to resolve the default tenant monitor")
 	}
-	if router.configHandlers.mtMonitor != mtm {
-		t.Fatalf("expected configHandlers mtMonitor to be set")
+	if router.configHandlers.Monitor(context.Background()) != defaultMonitor {
+		t.Fatalf("expected configHandlers to resolve the default multi-tenant monitor")
 	}
 	if router.dockerAgentHandlers.mtMonitor != mtm {
 		t.Fatalf("expected dockerAgentHandlers mtMonitor to be set")

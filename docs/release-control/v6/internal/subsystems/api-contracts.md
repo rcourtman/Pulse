@@ -28,6 +28,12 @@ and their monitor adapters live together in `internal/api/alerting/` with their
 unit and contract tests. The root `internal/api` package retains router wiring,
 cross-domain integration proof, and compatibility aliases for established
 extensions; domain behavior must not be copied back into that root facade.
+Configuration, node lifecycle, discovery, export/import, setup-script,
+auto-registration, and agent-install handlers live with their focused tests in
+`internal/api/configapi/`. Install-token persistence and command-channel
+binding policy are shared through `internal/api/agenttokens/` and
+`internal/api/agentbinding/`, so config enrollment and root Router admission
+consume one security contract without importing each other.
 
 Browser WebSocket shutdown distinguishes ordinary client lifecycle from
 transport failure. Normal closure, navigation/going-away, and abnormal closure
@@ -217,9 +223,14 @@ continues to mint and quote the enrollment token.
 58. `internal/cloudcp/portal/frontend_sync_test.go`
 59. `internal/api/recovery_handlers.go`
     51a. `internal/api/pbs_backups.go`
-60. `internal/api/config_setup_handlers.go`
-    52a. `internal/api/setup_script_render.go`
+60. `internal/api/configapi/config_setup_handlers.go`
+    52a. `internal/api/configapi/setup_script_render.go`
     52b. `internal/api/cloud_agent_install_command.go`
+    52c. `internal/api/configapi/config_handlers.go`
+    52d. `internal/api/configapi/config_node_handlers.go`
+    52e. `internal/api/configapi/config_system_handlers.go`
+    52f. `internal/api/configapi/config_discovery_handlers.go`
+    52g. `internal/api/configapi/config_export_import_handlers.go`
 61. `internal/api/demo_mode_commercial.go`
 62. `internal/api/demo_mode_operations.go`
 63. `internal/api/security_status_capabilities.go`
@@ -249,6 +260,8 @@ continues to mint and quote the enrollment token.
     79a. `internal/api/patrol_objectives.go`
 80. `frontend-modern/src/api/generated/aiChatEvents.ts`
 81. `internal/api/agent_exec_token_binding.go`
+    81a. `internal/api/agentbinding/policy.go`
+    81b. `internal/api/agenttokens/install.go`
     72a. `cmd/pulse-mcp/main.go`
     72b. `cmd/pulse-mcp/README.md`
     72c. `cmd/agent-probe/main.go`
@@ -1477,6 +1490,8 @@ payload shape change when the portal presents compact client rows.
     page-local payload ownership.
 63. `internal/api/agent_ingest.go` shared with `agent-lifecycle`: Unified Agent report admission, removal, remote-config identity binding, and re-enrollment responses are both an agent lifecycle authority and a canonical authenticated API contract boundary.
 64. `internal/api/agent_install_command_shared.go` shared with `agent-lifecycle`: agent install command assembly is both an agent lifecycle control surface and a canonical API payload contract boundary.
+65. `internal/api/agentbinding/policy.go` shared with `agent-lifecycle`, `security-privacy`: install-token command-channel binding is simultaneously an agent lifecycle admission policy, a canonical API identity contract, and a security boundary.
+66. `internal/api/agenttokens/install.go` shared with `agent-lifecycle`, `security-privacy`: agent install-token issuance and persistence are simultaneously an agent lifecycle authority, a canonical API token contract, and a security boundary.
     Frontend and backend Unix install command builders must stay on the same
     token-file and preflight transport contract: tokens are passed to the
     installer as ephemeral files, and host install snippets must verify the
@@ -1769,7 +1784,8 @@ payload shape change when the portal presents compact client rows.
 66. `internal/api/ai_intelligence_handlers.go` shared with `ai-runtime`: AI intelligence handlers are both an AI runtime control surface and a canonical API payload contract boundary.
 67. `internal/api/alerting/notification_queue.go` shared with `notifications`: the notification queue and DLQ handler is both a notification delivery consequence surface and a canonical API payload boundary for operational transition links.
 68. `internal/api/alerting/notifications.go` shared with `notifications`: notification handlers are both a notification delivery control surface and a canonical API payload contract boundary.
-69. `internal/api/config_setup_handlers.go` shared with `agent-lifecycle`: auto-register and setup handlers are both an agent lifecycle control surface and a canonical API payload contract boundary.
+69. `internal/api/configapi/config_setup_handlers.go` shared with `agent-lifecycle`: auto-register and setup handlers are both an agent lifecycle control surface and a canonical API payload contract boundary.
+70. `internal/api/configapi/setup_script_render.go` shared with `agent-lifecycle`, `storage-recovery`: the generated Proxmox setup-script is a shared boundary across agent lifecycle (forced-command keys, install/uninstall edits), API contracts (rendered token shape and encoded rerun URL), and storage/recovery (backup visibility grants, Pulse-managed temperature SSH keys, and SMART disk-temperature collection).
     That same shared boundary also owns reachable-host selection truth for canonical Proxmox registration: runtime callers may propose ordered `candidateHosts`, but the API contract must persist and echo the first candidate Pulse can actually reach instead of freezing the caller's rejected first preference into the stored node endpoint.
     That same canonical payload contract also owns strict-TLS truth for that selected host: `/api/auto-register` may only persist `VerifySSL=true` when Pulse actually captured a certificate fingerprint for the selected candidate, and it must not pretend public-CA verification is safe after every candidate fingerprint probe failed.
     For PVE cluster sources, that same contract must distinguish primary
@@ -1923,7 +1939,7 @@ payload shape change when the portal presents compact client rows.
     before minting a `relay:mobile:access` credential. Community installs may
     receive the standard license-required response, but direct API calls must
     not bypass Relay entitlement by creating mobile runtime tokens.
-81. `internal/api/setup_script_render.go` shared with `agent-lifecycle`, `storage-recovery`: the generated Proxmox setup-script is a shared boundary across agent lifecycle (forced-command keys, install/uninstall edits), API contracts (rendered token shape and encoded rerun URL), and storage/recovery (backup visibility grants, Pulse-managed temperature SSH keys, and SMART disk-temperature collection).
+    Setup-script rendering remains governed by the shared boundary above.
     PVE setup-script auto-registration is part of the rendered API contract:
     after creating the privilege-separated token and applying ACLs, the script
     must smoke-test the exact token id/value against
@@ -3887,7 +3903,7 @@ the authoritative analysis outcome.
     role mappings, or stored secret markers unless the update explicitly
     replaces them.
 33. Keep config-archive import reloads fail-closed on the shared API/runtime
-    boundary. `internal/api/config_export_import_handlers.go`,
+    boundary. `internal/api/configapi/config_export_import_handlers.go`,
     `internal/api/contract_test.go`, and adjacent config/runtime helpers must
     tolerate absent notification managers and other optional runtime managers
     after a successful import-triggered reload request, returning a controlled
@@ -4091,11 +4107,18 @@ auto-register mutation boundary.
 
 ## Current State
 
-The first production package boundary is active under
-`internal/api/alerting/`, backed by shared tenant-context and scope-enforcement
-packages. Alert and notification unit/contract proof executes independently;
-the root router package retains cross-domain integration tests and stable
-compatibility aliases instead of duplicating domain behavior.
+Production package boundaries are active under `internal/api/alerting/` and
+`internal/api/configapi/`, backed by shared tenant-context, scope-enforcement,
+install-token, and agent-binding packages. Alert/notification and
+configuration/enrollment unit and contract proof execute independently; the
+root router package retains cross-domain integration tests and stable
+compatibility aliases instead of duplicating domain behavior. On the reference
+10-logical-CPU development host, an uncached `go test -json -count=1
+./internal/api/...` qualification run moved from 241.64 seconds at the
+monolithic baseline to 169.12 seconds on the final passing decomposed
+measurement (30.01% lower wall time), while aggregate CPU use increased from
+1.241 to 1.544 cores. This development-host sample is not a substitute for the
+PVE release-worker result.
 
 ### Host sensor payloads carry typed command and REST custom readings
 
@@ -4115,7 +4138,7 @@ projection are pinned by `TestCustomSensorMetricJSONRoundTrip`,
 ### System settings shed the dead auto-update schedule fields
 
 The system settings payload (`internal/config.SystemSettings`, projected by
-`internal/api/config_system_handlers.go` and mutated through
+`internal/api/configapi/config_system_handlers.go` and mutated through
 `internal/api/system_settings.go`) no longer includes
 `autoUpdateCheckInterval` or `autoUpdateTime`. Nothing ever consumed the
 fields — the unattended update schedule is owned entirely by the
@@ -6379,7 +6402,7 @@ The same shared-boundary rule now applies to `frontend-modern/src/api/agentProfi
 `frontend-modern/src/api/nodes.ts`,
 `frontend-modern/src/utils/agentInstallCommand.ts`,
 `internal/api/agent_install_command_shared.go`,
-`internal/api/config_setup_handlers.go`, and `internal/api/unified_agent.go`:
+`internal/api/configapi/config_setup_handlers.go`, and `internal/api/unified_agent.go`:
 agent install/register/profile control changes must preserve canonical API
 payload behavior instead of drifting into subsystem-local transport rules.
 That same shared boundary now assumes `InfrastructureWorkspace.tsx` owns the
@@ -6499,7 +6522,7 @@ carry a direct API-contract proof path instead of relying only on the generic
 frontend client or backend payload fallback coverage.
 That same rule now applies to the shared backend lifecycle install/register
 surface as well: `internal/api/agent_install_command_shared.go`,
-`internal/api/config_setup_handlers.go`, and `internal/api/unified_agent.go`
+`internal/api/configapi/config_setup_handlers.go`, and `internal/api/unified_agent.go`
 must carry a direct API-contract proof path instead of relying only on the
 generic `internal/api/` backend payload prefix.
 That same backend-owned `internal/api/` boundary also includes the generated
@@ -7002,8 +7025,8 @@ That same request contract must also accept one-time setup-token auth through
 `setupCode` payload alias alongside the canonical field.
 That same shared discovery transport surface must also keep structured error
 ownership in the runtime model: `pkg/discovery` and `internal/discovery` own
-`structured_errors`, while `internal/api/config_discovery_handlers.go`,
-`internal/api/config_setup_handlers.go`, and `internal/api/config_node_handlers.go`
+`structured_errors`, while `internal/api/configapi/config_discovery_handlers.go`,
+`internal/api/configapi/config_setup_handlers.go`, and `internal/api/configapi/config_node_handlers.go`
 may derive the deprecated `errors` string list only as a compatibility field
 at the API and WebSocket boundary.
 That same WebSocket state boundary must also stay tenant-aware by construction:
@@ -7757,7 +7780,7 @@ treat exclusions as client-only display state.
 The node update payload on `PUT /api/config/nodes/{id}` now also carries an
 optional write-only `clusterEndpointOverrides` collection of
 `{nodeName, ipOverride}` entries handled by
-`internal/api/config_node_handlers.go`: only the members named in the request
+`internal/api/configapi/config_node_handlers.go`: only the members named in the request
 are touched, an empty `ipOverride` clears the stored override, naming an
 unknown cluster member is a `400` rather than a silent no-op, and accepted
 values are normalized to a scheme-less IP or hostname with optional port
@@ -7769,7 +7792,7 @@ optional `ipOverride` endpoint field consumed by the shared normalization in
 `frontend-modern/src/api/nodes.ts`.
 `ClusterEndpoints[n].IPOverride` has a second canonical writer: when a
 canonical `/api/auto-register` PVE registration in
-`internal/api/config_setup_handlers.go` matches a non-primary cluster member
+`internal/api/configapi/config_setup_handlers.go` matches a non-primary cluster member
 endpoint (address identity against the agent's candidate list first, then an
 unambiguous corosync node-name match), the handler adopts the Pulse-verified
 selected host as that member's override plus the fingerprint captured from
@@ -8100,7 +8123,7 @@ customer-facing mutation and validation copy used by the governed runtime
 hooks stays explicit under the same API-backed settings proof instead of
 living as an unowned utility.
 That same backend-owned config/settings boundary also owns shipped security-doc
-references in operator guidance. `internal/api/config_system_handlers.go` and
+references in operator guidance. `internal/api/configapi/config_system_handlers.go` and
 shared setup helpers must not point API responses or runtime guidance at
 GitHub `main` for security instructions that the running build already serves
 locally; those references belong on the shipped `/docs/SECURITY.md` path.
@@ -8337,7 +8360,7 @@ must then echo that resolved model back as the canonical default selection, so
 UI setup flows and provider test routes do not drift into frontend-baked model
 defaults or handler-local vendor fallbacks.
 That same shared config/runtime contract also owns import-triggered reload
-safety. When `internal/api/config_export_import_handlers.go` imports a config
+safety. When `internal/api/configapi/config_export_import_handlers.go` imports a config
 archive and rebinds shared runtime state, the reload path must tolerate absent
 notification or monitoring managers and degrade gracefully instead of
 panicking on optional side effects. `/api/config/import` may be exercised from
@@ -9141,8 +9164,8 @@ Negative `checkRegistration` calls do not consume the install grant; a positive
 match consumes an otherwise-unneeded fresh-install grant so reinstalling an
 already-registered source cannot leave dormant creation authority. Successful
 steady-state authentication/processing emits only at debug severity.
-`internal/api/config_handlers_auto_register_test.go`,
-`internal/api/proxmox_install_registration_test.go`, and
+`internal/api/configapi/config_handlers_auto_register_test.go`,
+`internal/api/configapi/proxmox_install_registration_test.go`, and
 `internal/hostagent/proxmox_setup_test.go` prove the wire headers, omitted
 setup credential, one-time bootstrap, concurrency, and rejected-token
 diagnostics.
@@ -9166,7 +9189,7 @@ The browser config payload remains additive and compatible: no endpoint field
 is removed or renamed. Monitoring owns the later repeated-authoritative-
 absence retirement rule; config handlers must not reinterpret a partial
 membership or telemetry read as deletion.
-`internal/api/config_handlers_cluster_additional_test.go` and
+`internal/api/configapi/config_handlers_cluster_additional_test.go` and
 `internal/config/pve_instances_test.go` prove unreachable-member persistence,
 evidence preservation, duplicate consolidation, and same-name-cluster
 isolation.

@@ -1,0 +1,2314 @@
+package configapi
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"net"
+	"net/http"
+	"net/url"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/api/apicontext"
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
+	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/pbs"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/pmg"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
+	"github.com/rs/zerolog/log"
+)
+
+// errNodeIDNotFound signals that resolveNodeID parsed a well-formed semantic
+// ID ("pve:delly") but no matching instance is in the current config. Callers
+// distinguish this from malformed IDs so they can emit 404 vs 400.
+var errNodeIDNotFound = errors.New("node id not found")
+
+// resolveNodeID accepts either the legacy array-index form ("pve-0") or the
+// semantic form the unified connections aggregator emits ("pve:delly") and
+// returns (nodeType, slice-index) suitable for indexing into cfg's per-type
+// instance slices.
+//
+// Semantic-form lookup is by Name. Duplicate names are prevented at write
+// time; if one somehow sneaks in, the first match wins.
+func resolveNodeID(cfg *config.Config, raw string) (string, int, error) {
+	if raw == "" {
+		return "", 0, fmt.Errorf("empty node id")
+	}
+
+	if colonIdx := strings.Index(raw, ":"); colonIdx > 0 {
+		nodeType := raw[:colonIdx]
+		name := raw[colonIdx+1:]
+		if name == "" {
+			return "", 0, fmt.Errorf("empty name in node id %q", raw)
+		}
+		idx, found := findInstanceIndexByName(cfg, nodeType, name)
+		if !found {
+			return nodeType, 0, errNodeIDNotFound
+		}
+		return nodeType, idx, nil
+	}
+
+	parts := strings.Split(raw, "-")
+	if len(parts) != 2 {
+		return "", 0, fmt.Errorf("invalid node id %q", raw)
+	}
+	nodeType := parts[0]
+	var index int
+	if _, err := fmt.Sscanf(parts[1], "%d", &index); err != nil {
+		return "", 0, fmt.Errorf("invalid index in node id %q: %w", raw, err)
+	}
+	return nodeType, index, nil
+}
+
+func findInstanceIndexByName(cfg *config.Config, nodeType, name string) (int, bool) {
+	switch nodeType {
+	case "pve":
+		for i, inst := range cfg.PVEInstances {
+			if inst.Name == name {
+				return i, true
+			}
+		}
+	case "pbs":
+		for i, inst := range cfg.PBSInstances {
+			if inst.Name == name {
+				return i, true
+			}
+		}
+	case "pmg":
+		for i, inst := range cfg.PMGInstances {
+			if inst.Name == name {
+				return i, true
+			}
+		}
+	}
+	return 0, false
+}
+
+func (h *ConfigHandlers) handleGetNodes(w http.ResponseWriter, r *http.Request) {
+	// Check if mock mode is enabled
+	if mock.IsMockEnabled() {
+		// Return mock nodes for settings page
+		mockNodes := []NodeResponse{}
+
+		// Get ReadState from the monitor to extract node information.
+		monitor := h.getMonitor(r.Context())
+		readState := monitor.GetUnifiedReadState()
+
+		type mockNode struct {
+			Name     string
+			Instance string
+			Status   string
+		}
+		type mockPBS struct {
+			Name string
+			Host string
+		}
+		type mockPMG struct {
+			Name string
+			Host string
+		}
+
+		var clusterNodes []mockNode
+		var standaloneNodes []mockNode
+		var pbsEntries []mockPBS
+		var pmgEntries []mockPMG
+
+		if readState != nil {
+			for _, nv := range readState.Nodes() {
+				mn := mockNode{
+					Name:     nv.Name(),
+					Instance: nv.Instance(),
+					Status:   string(nv.Status()),
+				}
+				if mn.Instance == "mock-cluster" {
+					clusterNodes = append(clusterNodes, mn)
+				} else {
+					standaloneNodes = append(standaloneNodes, mn)
+				}
+			}
+			for _, pbsView := range readState.PBSInstances() {
+				pbsEntries = append(pbsEntries, mockPBS{Name: pbsView.Name(), Host: pbsView.Hostname()})
+			}
+			for _, pmgView := range readState.PMGInstances() {
+				pmgEntries = append(pmgEntries, mockPMG{Name: pmgView.Name(), Host: pmgView.Hostname()})
+			}
+		}
+
+		// If we have cluster nodes, create ONE config entry for the cluster
+		if len(clusterNodes) > 0 {
+			// Build cluster endpoints for cluster nodes only
+			var clusterEndpoints []config.ClusterEndpoint
+			for i, n := range clusterNodes {
+				clusterEndpoints = append(clusterEndpoints, config.ClusterEndpoint{
+					NodeName: n.Name,
+					Host:     fmt.Sprintf("192.168.0.%d:8006", 100+i),
+					Online:   n.Status == "online", // Set Online based on node status
+				})
+			}
+
+			// Create a single cluster entry (representing the cluster config)
+			clusterNode := NodeResponse{
+				ID:                   generateNodeID("pve", 0),
+				Type:                 "pve",
+				Name:                 "mock-cluster",        // The cluster name
+				Host:                 "198.51.100.100:8006", // Primary entry point
+				User:                 "root@pam",
+				HasPassword:          true,
+				TokenName:            "pulse",
+				HasToken:             true,
+				Fingerprint:          "",
+				VerifySSL:            false,
+				MonitorVMs:           true,
+				MonitorContainers:    true,
+				MonitorStorage:       true,
+				MonitorBackups:       true,
+				MonitorPhysicalDisks: nil, // nil = enabled by default
+				Status:               "connected",
+				IsCluster:            true,
+				ClusterName:          "mock-cluster",
+				ClusterEndpoints:     toClusterEndpointResponses(clusterEndpoints), // All cluster nodes
+			}.NormalizeCollections()
+			mockNodes = append(mockNodes, clusterNode)
+		}
+
+		// Add standalone nodes as individual entries
+		for i, node := range standaloneNodes {
+			standaloneNode := NodeResponse{
+				ID:                   generateNodeID("pve", len(mockNodes)+i),
+				Type:                 "pve",
+				Name:                 node.Name,                               // Use the actual node name
+				Host:                 fmt.Sprintf("192.168.0.%d:8006", 150+i), // Different IP range for standalone
+				User:                 "root@pam",
+				HasPassword:          true,
+				TokenName:            "pulse",
+				HasToken:             true,
+				Fingerprint:          "",
+				VerifySSL:            false,
+				MonitorVMs:           true,
+				MonitorContainers:    true,
+				MonitorStorage:       true,
+				MonitorBackups:       true,
+				MonitorPhysicalDisks: nil, // nil = enabled by default
+				Status:               "connected",
+				IsCluster:            false, // Not part of a cluster
+				ClusterName:          "",
+				ClusterEndpoints:     nil,
+			}.NormalizeCollections()
+			mockNodes = append(mockNodes, standaloneNode)
+		}
+
+		// Add mock PBS instances
+		for i, pbs := range pbsEntries {
+			pbsNode := NodeResponse{
+				ID:                 generateNodeID("pbs", i),
+				Type:               "pbs",
+				Name:               pbs.Name,
+				Host:               pbs.Host,
+				User:               "pulse@pbs",
+				HasPassword:        false,
+				TokenName:          "pulse",
+				HasToken:           true,
+				Fingerprint:        "",
+				VerifySSL:          false,
+				MonitorDatastores:  true,
+				MonitorSyncJobs:    true,
+				MonitorVerifyJobs:  true,
+				MonitorPruneJobs:   true,
+				MonitorGarbageJobs: true,
+				Status:             "connected", // Always connected in mock mode
+			}.NormalizeCollections()
+			mockNodes = append(mockNodes, pbsNode)
+		}
+
+		// Add mock PMG instances
+		for i, pmg := range pmgEntries {
+			pmgNode := NodeResponse{
+				ID:          generateNodeID("pmg", i),
+				Type:        "pmg",
+				Name:        pmg.Name,
+				Host:        pmg.Host,
+				User:        "root@pam",
+				HasPassword: true,
+				TokenName:   "pulse",
+				HasToken:    true,
+				Fingerprint: "",
+				VerifySSL:   false,
+				Status:      "connected", // Always connected in mock mode
+			}.NormalizeCollections()
+			mockNodes = append(mockNodes, pmgNode)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(mockNodes)
+		return
+	}
+
+	nodes := h.GetAllNodesForAPI(r.Context())
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(nodes)
+}
+
+func (h *ConfigHandlers) handleAddNode(w http.ResponseWriter, r *http.Request) {
+	// Prevent node modifications in mock mode
+	if mock.IsMockEnabled() {
+		http.Error(w, "Cannot modify nodes in mock mode. Please disable mock mode first: /opt/pulse/scripts/toggle-mock.sh off", http.StatusForbidden)
+		return
+	}
+
+	// Limit request body to 32KB to prevent memory exhaustion
+	r.Body = http.MaxBytesReader(w, r.Body, 32*1024)
+
+	var req NodeConfigRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		log.Error().Err(err).Msg("Failed to decode add node request")
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+	req.normalizeTokenAliases()
+
+	log.Info().
+		Str("type", req.Type).
+		Str("name", req.Name).
+		Str("host", req.Host).
+		Str("user", req.User).
+		Str("tokenName", req.TokenName).
+		Bool("hasTokenValue", req.TokenValue != "").
+		Msg("Add node request received")
+
+	// Validate required fields
+	if req.Name == "" {
+		http.Error(w, "Name is required", http.StatusBadRequest)
+		return
+	}
+
+	if req.Type == "" {
+		http.Error(w, "Type is required", http.StatusBadRequest)
+		return
+	}
+
+	if req.Host == "" {
+		http.Error(w, "Host is required", http.StatusBadRequest)
+		return
+	}
+
+	// Validate host format (IP address or hostname with optional port)
+	host, port, err := extractHostAndPort(req.Host)
+	if err != nil {
+		http.Error(w, "Invalid host format", http.StatusBadRequest)
+		return
+	}
+
+	// If it looks like an IP address, validate it strictly
+	// Check if it starts with a digit (likely an IP)
+	if len(host) > 0 && (host[0] >= '0' && host[0] <= '9') {
+		// Likely an IP address, validate strictly
+		if !validateIPAddress(host) {
+			http.Error(w, "Invalid IP address", http.StatusBadRequest)
+			return
+		}
+	} else if strings.Contains(host, ":") && strings.Contains(host, "[") {
+		// IPv6 address with brackets
+		ipv6 := strings.TrimPrefix(strings.TrimSuffix(host, "]"), "[")
+		if !validateIPAddress(ipv6) {
+			http.Error(w, "Invalid IPv6 address", http.StatusBadRequest)
+			return
+		}
+	} else if req.Type == "pbs" {
+		// Validate as hostname - no spaces or special characters
+		if strings.ContainsAny(host, " /\\<>|\"'`;") {
+			http.Error(w, "Invalid hostname", http.StatusBadRequest)
+			return
+		}
+	}
+
+	// Validate port if provided
+	if port != "" && !validatePort(port) {
+		http.Error(w, "Invalid port number", http.StatusBadRequest)
+		return
+	}
+
+	if req.Type != "pve" && req.Type != "pbs" && req.Type != "pmg" {
+		http.Error(w, "Invalid node type", http.StatusBadRequest)
+		return
+	}
+
+	// Check for authentication
+	hasAuth := (req.User != "" && req.Password != "") || (req.TokenName != "" && req.TokenValue != "")
+	if !hasAuth {
+		http.Error(w, "Authentication credentials required", http.StatusBadRequest)
+		return
+	}
+
+	normalizedHost, err := normalizeNodeHost(req.Host, req.Type)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// Check for duplicate nodes by HOST URL (not name!)
+	// Different physical hosts can share the same hostname (Issue #891).
+	// We disambiguate names later, but Host URLs must be unique.
+	switch req.Type {
+	case "pve":
+		for _, node := range h.getConfig(r.Context()).PVEInstances {
+			if node.Host == normalizedHost {
+				http.Error(w, "A node with this host URL already exists", http.StatusConflict)
+				return
+			}
+		}
+	case "pbs":
+		for _, node := range h.getConfig(r.Context()).PBSInstances {
+			if node.Host == normalizedHost {
+				http.Error(w, "A node with this host URL already exists", http.StatusConflict)
+				return
+			}
+		}
+	case "pmg":
+		for _, node := range h.getConfig(r.Context()).PMGInstances {
+			if node.Host == normalizedHost {
+				http.Error(w, "A node with this host URL already exists", http.StatusConflict)
+				return
+			}
+		}
+	}
+
+	// Add to appropriate list
+	if req.Type == "pve" {
+		if req.Password != "" && req.TokenName == "" && req.TokenValue == "" {
+			req.User = normalizePVEUser(req.User)
+		}
+		host := normalizedHost
+
+		// Check if node is part of a cluster (skip for test/invalid IPs)
+		var isCluster bool
+		var clusterName string
+		var clusterEndpoints []config.ClusterEndpoint
+
+		// Skip cluster detection for obviously test/invalid IPs
+		skipClusterDetection := strings.Contains(req.Host, "192.168.77.") ||
+			strings.Contains(req.Host, "192.168.88.") ||
+			strings.Contains(req.Host, "test-") ||
+			strings.Contains(req.Name, "test-") ||
+			strings.Contains(req.Name, "persist-") ||
+			strings.Contains(req.Name, "concurrent-")
+
+		if !skipClusterDetection {
+			verifySSL := false
+			if req.VerifySSL != nil {
+				verifySSL = *req.VerifySSL
+			}
+			clientConfig := config.CreateProxmoxConfigFromFields(host, req.User, req.Password, req.TokenName, req.TokenValue, req.Fingerprint, verifySSL)
+			isCluster, clusterName, clusterEndpoints = detectPVECluster(clientConfig, req.Name, nil)
+		}
+
+		// CLUSTER DEDUPLICATION: If this node is part of a cluster, merge it
+		// only when endpoint and TLS evidence identify an existing cluster.
+		// Cluster names and private addresses can repeat across organizations.
+		if isCluster && clusterName != "" {
+			candidateCluster := config.PVEInstance{
+				Name:             req.Name,
+				Host:             host,
+				Fingerprint:      req.Fingerprint,
+				IsCluster:        true,
+				ClusterName:      clusterName,
+				ClusterEndpoints: clusterEndpoints,
+			}
+			for i := range h.getConfig(r.Context()).PVEInstances {
+				existingInstance := &h.getConfig(r.Context()).PVEInstances[i]
+				if config.PVEClusterInstancesShareIdentity(*existingInstance, candidateCluster) {
+					// Strong identity evidence confirms this is another view
+					// of the existing cluster, so merge its endpoints.
+					log.Info().
+						Str("cluster", clusterName).
+						Str("existingInstance", existingInstance.Name).
+						Str("newNode", req.Name).
+						Msg("New node belongs to already-configured cluster - merging as endpoint instead of creating duplicate")
+
+					// Merge any new endpoints from the detected cluster
+					existingEndpointMap := make(map[string]bool)
+					for _, ep := range existingInstance.ClusterEndpoints {
+						existingEndpointMap[ep.NodeName] = true
+					}
+					for _, newEp := range clusterEndpoints {
+						if !existingEndpointMap[newEp.NodeName] {
+							existingInstance.ClusterEndpoints = append(existingInstance.ClusterEndpoints, newEp)
+							log.Info().
+								Str("cluster", clusterName).
+								Str("endpoint", newEp.NodeName).
+								Msg("Added new endpoint to existing cluster")
+						}
+					}
+
+					// Save the updated configuration
+					if h.getPersistence(r.Context()) != nil {
+						h.normalizePVEConfigState(r.Context())
+						if err := h.getPersistence(r.Context()).SaveNodesConfig(h.getConfig(r.Context()).PVEInstances, h.getConfig(r.Context()).PBSInstances, h.getConfig(r.Context()).PMGInstances); err != nil {
+							log.Warn().Err(err).Msg("Failed to persist cluster endpoint merge")
+						}
+					}
+
+					// Reload the monitor to pick up the updated endpoints
+					if h.reloadFunc != nil {
+						if err := h.reloadFunc(); err != nil {
+							log.Warn().Err(err).Msg("Failed to reload monitor after cluster merge")
+						}
+					}
+
+					// Return success - the cluster is now updated with new endpoints
+					w.Header().Set("Content-Type", "application/json")
+					json.NewEncoder(w).Encode(map[string]interface{}{
+						"success":        true,
+						"merged":         true,
+						"cluster":        clusterName,
+						"existingNode":   existingInstance.Name,
+						"message":        fmt.Sprintf("Node merged into existing cluster '%s' (already configured as '%s')", clusterName, existingInstance.Name),
+						"totalEndpoints": len(existingInstance.ClusterEndpoints),
+					})
+					return
+				}
+			}
+		}
+
+		if isCluster {
+			log.Info().
+				Str("cluster", clusterName).
+				Int("endpoints", len(clusterEndpoints)).
+				Msg("Detected new Proxmox cluster, auto-discovering all nodes")
+		}
+
+		// Use sensible defaults for boolean fields if not provided
+		verifySSL := false
+		if req.VerifySSL != nil {
+			verifySSL = *req.VerifySSL
+		}
+		monitorVMs := true // Default to true
+		if req.MonitorVMs != nil {
+			monitorVMs = *req.MonitorVMs
+		}
+		monitorContainers := true // Default to true
+		if req.MonitorContainers != nil {
+			monitorContainers = *req.MonitorContainers
+		}
+		monitorStorage := true // Default to true
+		if req.MonitorStorage != nil {
+			monitorStorage = *req.MonitorStorage
+		}
+		monitorBackups := true // Default to true
+		if req.MonitorBackups != nil {
+			monitorBackups = *req.MonitorBackups
+		}
+
+		// Disambiguate name if duplicate hostnames exist (Issue #891)
+		displayName := h.disambiguateNodeName(r.Context(), req.Name, host, "pve")
+
+		pve := config.PVEInstance{
+			Name:                         displayName,
+			Host:                         host, // Use normalized host
+			GuestURL:                     req.GuestURL,
+			User:                         req.User,
+			Password:                     req.Password,
+			TokenName:                    req.TokenName,
+			TokenValue:                   req.TokenValue,
+			Fingerprint:                  req.Fingerprint,
+			VerifySSL:                    verifySSL,
+			MonitorVMs:                   monitorVMs,
+			MonitorContainers:            monitorContainers,
+			MonitorStorage:               monitorStorage,
+			MonitorBackups:               monitorBackups,
+			MonitorPhysicalDisks:         req.MonitorPhysicalDisks,
+			PhysicalDiskPollingMinutes:   0,
+			TemperatureMonitoringEnabled: req.TemperatureMonitoringEnabled,
+			IsCluster:                    isCluster,
+			ClusterName:                  clusterName,
+			ClusterEndpoints:             clusterEndpoints,
+		}
+		if req.PhysicalDiskPollingMinutes != nil {
+			pve.PhysicalDiskPollingMinutes = *req.PhysicalDiskPollingMinutes
+		}
+
+		h.getConfig(r.Context()).PVEInstances = append(h.getConfig(r.Context()).PVEInstances, pve)
+		h.normalizePVEConfigState(r.Context())
+
+		if isCluster {
+			log.Info().
+				Str("cluster", clusterName).
+				Int("endpoints", len(clusterEndpoints)).
+				Msg("Added Proxmox cluster with auto-discovered endpoints")
+		}
+	} else if req.Type == "pbs" {
+		host := normalizedHost
+
+		// Parse PBS authentication details
+		var pbsUser string
+		var pbsPassword string
+		var pbsTokenName string
+		var pbsTokenValue string
+
+		// Determine authentication method
+		if req.TokenName != "" && req.TokenValue != "" {
+			// Using token authentication - don't store user/password
+			pbsTokenName = req.TokenName
+			pbsTokenValue = req.TokenValue
+			// Token name might contain the full format (user@realm!tokenname)
+			// The backend PBS client will parse this
+		} else if req.Password != "" {
+			// Using password authentication - try to create a token via API
+			// This enables turnkey setup for Docker/containerized PBS
+			pulseURL := h.resolveConfigAgentInstallBaseURL(r, h.getConfig(r.Context()))
+			if pulseURL == "" {
+				writeConfigAgentInstallBaseURLUnavailable(w)
+				return
+			}
+			pbsUser = req.User
+			if pbsUser != "" && !strings.Contains(pbsUser, "@") {
+				pbsUser = pbsUser + "@pbs" // Default to @pbs realm if not specified
+			}
+
+			log.Info().
+				Str("host", host).
+				Str("user", pbsUser).
+				Msg("PBS: Attempting turnkey token creation via API")
+
+			// Try to create a token using the provided credentials
+			pbsClient, err := pbs.NewClient(pbs.ClientConfig{
+				Host:      host,
+				User:      pbsUser,
+				Password:  req.Password,
+				VerifySSL: false, // Self-signed certs common
+			})
+
+			if err != nil {
+				log.Warn().Err(err).Str("host", host).Msg("PBS: Failed to connect for token creation, falling back to password auth")
+				// Fallback to password auth
+				pbsPassword = req.Password
+			} else {
+				tokenName := buildPulseMonitorTokenName(pulseURL)
+
+				tokenID, tokenSecret, err := pbsClient.SetupMonitoringAccess(context.Background(), tokenName)
+				if err != nil {
+					log.Warn().Err(err).Str("host", host).Msg("PBS: Failed to create token via API, falling back to password auth")
+					// Fallback to password auth
+					pbsPassword = req.Password
+				} else {
+					// Successfully created token - use it instead of password
+					pbsTokenName = tokenID
+					pbsTokenValue = tokenSecret
+					pbsUser = "" // Clear password auth fields
+					pbsPassword = ""
+					log.Info().
+						Str("host", host).
+						Str("tokenID", tokenID).
+						Msg("PBS: Successfully created monitoring token via API")
+				}
+			}
+		}
+
+		// Use sensible defaults for boolean fields if not provided
+		verifySSL := false
+		if req.VerifySSL != nil {
+			verifySSL = *req.VerifySSL
+		}
+		monitorBackups := true // Default to true for PBS
+		if req.MonitorBackups != nil {
+			monitorBackups = *req.MonitorBackups
+		}
+		monitorDatastores := true // Default to true for PBS
+		if req.MonitorDatastores != nil {
+			monitorDatastores = *req.MonitorDatastores
+		}
+		monitorSyncJobs := true // Default to true for PBS
+		if req.MonitorSyncJobs != nil {
+			monitorSyncJobs = *req.MonitorSyncJobs
+		}
+		monitorVerifyJobs := true // Default to true for PBS
+		if req.MonitorVerifyJobs != nil {
+			monitorVerifyJobs = *req.MonitorVerifyJobs
+		}
+		monitorPruneJobs := true // Default to true for PBS
+		if req.MonitorPruneJobs != nil {
+			monitorPruneJobs = *req.MonitorPruneJobs
+		}
+		monitorGarbageJobs := true // Default to true for PBS
+		if req.MonitorGarbageJobs != nil {
+			monitorGarbageJobs = *req.MonitorGarbageJobs
+		}
+
+		// Disambiguate name if duplicate hostnames exist (Issue #891)
+		pbsDisplayName := h.disambiguateNodeName(r.Context(), req.Name, host, "pbs")
+
+		pbs := config.PBSInstance{
+			Name:                         pbsDisplayName,
+			Host:                         host,
+			GuestURL:                     req.GuestURL,
+			User:                         pbsUser,
+			Password:                     pbsPassword,
+			TokenName:                    pbsTokenName,
+			TokenValue:                   pbsTokenValue,
+			Fingerprint:                  req.Fingerprint,
+			VerifySSL:                    verifySSL,
+			MonitorBackups:               monitorBackups,
+			MonitorDatastores:            monitorDatastores,
+			MonitorSyncJobs:              monitorSyncJobs,
+			MonitorVerifyJobs:            monitorVerifyJobs,
+			MonitorPruneJobs:             monitorPruneJobs,
+			MonitorGarbageJobs:           monitorGarbageJobs,
+			TemperatureMonitoringEnabled: req.TemperatureMonitoringEnabled,
+		}
+		h.getConfig(r.Context()).PBSInstances = append(h.getConfig(r.Context()).PBSInstances, pbs)
+	} else if req.Type == "pmg" {
+		host := normalizedHost
+
+		var pmgUser string
+		var pmgPassword string
+		var pmgTokenName string
+		var pmgTokenValue string
+
+		if req.TokenName != "" && req.TokenValue != "" {
+			pmgTokenName = req.TokenName
+			pmgTokenValue = req.TokenValue
+		} else if req.Password != "" {
+			pmgUser = req.User
+			pmgPassword = req.Password
+			if pmgUser != "" && !strings.Contains(pmgUser, "@") {
+				pmgUser = pmgUser + "@pmg"
+			}
+		}
+
+		// Use sensible defaults for boolean fields if not provided
+		verifySSL := false
+		if req.VerifySSL != nil {
+			verifySSL = *req.VerifySSL
+		}
+
+		// Check if any monitoring flags are explicitly set to true
+		anyMonitoringEnabled := (req.MonitorMailStats != nil && *req.MonitorMailStats) ||
+			(req.MonitorQueues != nil && *req.MonitorQueues) ||
+			(req.MonitorQuarantine != nil && *req.MonitorQuarantine) ||
+			(req.MonitorDomainStats != nil && *req.MonitorDomainStats)
+
+		// Default MonitorMailStats to true if no monitoring is explicitly enabled
+		monitorMailStats := true // Default to true
+		if req.MonitorMailStats != nil {
+			monitorMailStats = *req.MonitorMailStats
+		} else if anyMonitoringEnabled {
+			monitorMailStats = false // Don't default to true if other monitoring is enabled
+		}
+
+		monitorQueues := false
+		if req.MonitorQueues != nil {
+			monitorQueues = *req.MonitorQueues
+		}
+		monitorQuarantine := false
+		if req.MonitorQuarantine != nil {
+			monitorQuarantine = *req.MonitorQuarantine
+		}
+		monitorDomainStats := false
+		if req.MonitorDomainStats != nil {
+			monitorDomainStats = *req.MonitorDomainStats
+		}
+
+		// Disambiguate name if duplicate hostnames exist (Issue #891)
+		// Note: PMG uses similar logic to PBS - we check against PMG instances
+		pmgDisplayName := req.Name
+		for _, node := range h.getConfig(r.Context()).PMGInstances {
+			if strings.EqualFold(node.Name, req.Name) && node.Host != host {
+				parsed, err := url.Parse(host)
+				if err == nil && parsed.Host != "" {
+					pmgDisplayName = fmt.Sprintf("%s (%s)", req.Name, parsed.Hostname())
+				}
+				break
+			}
+		}
+
+		pmgInstance := config.PMGInstance{
+			Name:                         pmgDisplayName,
+			Host:                         host,
+			GuestURL:                     req.GuestURL,
+			User:                         pmgUser,
+			Password:                     pmgPassword,
+			TokenName:                    pmgTokenName,
+			TokenValue:                   pmgTokenValue,
+			Fingerprint:                  req.Fingerprint,
+			VerifySSL:                    verifySSL,
+			MonitorMailStats:             monitorMailStats,
+			MonitorQueues:                monitorQueues,
+			MonitorQuarantine:            monitorQuarantine,
+			MonitorDomainStats:           monitorDomainStats,
+			TemperatureMonitoringEnabled: req.TemperatureMonitoringEnabled,
+		}
+		h.getConfig(r.Context()).PMGInstances = append(h.getConfig(r.Context()).PMGInstances, pmgInstance)
+	}
+
+	// Save configuration to disk using our persistence instance
+	h.normalizePVEConfigState(r.Context())
+	if err := h.getPersistence(r.Context()).SaveNodesConfig(h.getConfig(r.Context()).PVEInstances, h.getConfig(r.Context()).PBSInstances, h.getConfig(r.Context()).PMGInstances); err != nil {
+		log.Error().Err(err).Msg("Failed to save nodes configuration")
+		http.Error(w, "Failed to save configuration", http.StatusInternalServerError)
+		return
+	}
+
+	// Reload monitor with new configuration
+	if h.reloadFunc != nil {
+		if err := h.reloadFunc(); err != nil {
+			log.Error().Err(err).Msg("Failed to reload monitor")
+			http.Error(w, "Configuration saved but failed to apply changes", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	h.runtimeDependencies().AuditEvent(apicontext.OrgID(r.Context()), "node_added", h.runtimeDependencies().AuthUsername(h.getConfig(r.Context()), r), h.runtimeDependencies().ClientIP(r), r.URL.Path, true,
+		fmt.Sprintf("Added %s node %q", req.Type, req.Name))
+
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(map[string]string{"status": "success"})
+}
+
+// HandleTestConnection tests a node connection without saving
+
+func (h *ConfigHandlers) handleTestConnection(w http.ResponseWriter, r *http.Request) {
+	// Limit request body to 32KB to prevent memory exhaustion
+	r.Body = http.MaxBytesReader(w, r.Body, 32*1024)
+
+	var req NodeConfigRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		log.Error().Err(err).Msg("Failed to decode test connection request")
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+	req.normalizeTokenAliases()
+
+	log.Info().
+		Str("type", req.Type).
+		Str("name", req.Name).
+		Str("host", req.Host).
+		Str("user", req.User).
+		Str("tokenName", req.TokenName).
+		Bool("hasTokenValue", req.TokenValue != "").
+		Msg("Test connection request received")
+
+	// Parse token format if needed
+	user := req.User
+	tokenName := req.TokenName
+
+	// If tokenName contains the full format (user@realm!tokenname), parse it
+	if strings.Contains(req.TokenName, "!") {
+		parts := strings.Split(req.TokenName, "!")
+		if len(parts) == 2 {
+			user = parts[0]
+			tokenName = parts[1]
+		}
+	}
+	// If user field contains the full format, extract just the user part
+	if strings.Contains(user, "!") {
+		parts := strings.Split(user, "!")
+		if len(parts) >= 1 {
+			user = parts[0]
+		}
+	}
+
+	log.Info().
+		Str("parsedUser", user).
+		Str("parsedTokenName", tokenName).
+		Msg("Parsed authentication details")
+
+	// Validate request
+	if req.Host == "" {
+		http.Error(w, "Host is required", http.StatusBadRequest)
+		return
+	}
+
+	// Auto-generate name if not provided for test
+	if req.Name == "" {
+		// Extract hostname from URL
+		host := strings.TrimPrefix(strings.TrimPrefix(req.Host, "http://"), "https://")
+		// Remove port
+		if colonIndex := strings.Index(host, ":"); colonIndex != -1 {
+			host = host[:colonIndex]
+		}
+		req.Name = host
+	}
+
+	if req.Type != "pve" && req.Type != "pbs" && req.Type != "pmg" {
+		http.Error(w, "Invalid node type", http.StatusBadRequest)
+		return
+	}
+
+	// Check for authentication
+	hasAuth := (user != "" && req.Password != "") || (tokenName != "" && req.TokenValue != "")
+	if !hasAuth {
+		http.Error(w, "Authentication credentials required", http.StatusBadRequest)
+		return
+	}
+
+	normalizedHost, err := normalizeNodeHost(req.Host, req.Type)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// Test connection based on type
+	if req.Type == "pve" {
+		host := normalizedHost
+
+		// Create a temporary client
+		authUser := req.User
+		if req.Password != "" && req.TokenName == "" && req.TokenValue == "" {
+			authUser = normalizePVEUser(authUser)
+			req.User = authUser
+		}
+		verifySSL := false
+		if req.VerifySSL != nil {
+			verifySSL = *req.VerifySSL
+		}
+		clientConfig := proxmox.ClientConfig{
+			Host:        host,
+			User:        authUser,
+			Password:    req.Password,
+			TokenName:   req.TokenName, // Pass the full token ID
+			TokenValue:  req.TokenValue,
+			VerifySSL:   verifySSL,
+			Fingerprint: req.Fingerprint,
+		}
+
+		tempClient, err := proxmox.NewClient(clientConfig)
+		if err != nil {
+			http.Error(w, sanitizeErrorMessage(err, "create_client"), http.StatusBadRequest)
+			return
+		}
+
+		// Try to get nodes to test connection
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		nodes, err := tempClient.GetNodes(ctx)
+		if err != nil {
+			http.Error(w, sanitizeErrorMessage(err, "connection"), http.StatusBadRequest)
+			return
+		}
+
+		isCluster, _, clusterEndpoints := detectPVECluster(clientConfig, req.Name, nil)
+
+		response := map[string]interface{}{
+			"status":    "success",
+			"message":   fmt.Sprintf("Successfully connected to %d node(s)", len(nodes)),
+			"isCluster": isCluster,
+			"nodeCount": len(nodes),
+		}
+
+		if isCluster {
+			response["clusterNodeCount"] = len(clusterEndpoints)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(response)
+	} else if req.Type == "pbs" {
+		host := normalizedHost
+
+		log.Info().
+			Str("processedHost", host).
+			Msg("PBS host after port processing")
+
+		// PBS test connection
+		// Parse PBS authentication details
+		pbsUser := user
+		pbsTokenName := tokenName
+
+		// Handle different token input formats
+		if req.TokenName != "" && req.TokenValue != "" {
+			// Check if token name contains the full format (user@realm!tokenname)
+			if strings.Contains(req.TokenName, "!") {
+				// Token name is in full format, leave it as is
+				// The PBS client will parse it
+			} else if pbsUser != "" && !strings.Contains(pbsUser, "@") {
+				// User provided separately without realm, add default realm
+				pbsUser = pbsUser + "@pbs"
+			}
+		} else if pbsUser != "" && !strings.Contains(pbsUser, "@") {
+			// Password auth: ensure user has realm
+			pbsUser = pbsUser + "@pbs" // Default to @pbs realm if not specified
+		}
+
+		verifySSL := false
+		if req.VerifySSL != nil {
+			verifySSL = *req.VerifySSL
+		}
+		clientConfig := pbs.ClientConfig{
+			Host:        host,
+			User:        pbsUser,
+			Password:    req.Password,
+			TokenName:   pbsTokenName,
+			TokenValue:  req.TokenValue,
+			VerifySSL:   verifySSL,
+			Fingerprint: req.Fingerprint,
+		}
+
+		tempClient, err := pbs.NewClient(clientConfig)
+		if err != nil {
+			http.Error(w, sanitizeErrorMessage(err, "create_client"), http.StatusBadRequest)
+			return
+		}
+
+		// Try to get datastores to test connection
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		datastores, err := tempClient.GetDatastores(ctx)
+		if err != nil {
+			http.Error(w, sanitizeErrorMessage(err, "connection"), http.StatusBadRequest)
+			return
+		}
+
+		response := map[string]interface{}{
+			"status":         "success",
+			"message":        fmt.Sprintf("Successfully connected. Found %d datastore(s)", len(datastores)),
+			"datastoreCount": len(datastores),
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(response)
+	} else {
+		host := normalizedHost
+
+		verifySSL := false
+		if req.VerifySSL != nil {
+			verifySSL = *req.VerifySSL
+		}
+		clientConfig := config.CreatePMGConfigFromFields(host, req.User, req.Password, req.TokenName, req.TokenValue, req.Fingerprint, verifySSL)
+
+		if req.Password != "" && req.TokenName == "" && req.TokenValue == "" {
+			if clientConfig.User != "" && !strings.Contains(clientConfig.User, "@") {
+				clientConfig.User = clientConfig.User + "@pmg"
+			}
+		} else if req.TokenName != "" && req.TokenValue != "" {
+			if user != "" {
+				normalizedUser := user
+				if !strings.Contains(normalizedUser, "@") {
+					normalizedUser = normalizedUser + "@pmg"
+				}
+				clientConfig.User = normalizedUser
+			}
+		}
+
+		tempClient, err := pmg.NewClient(clientConfig)
+		if err != nil {
+			http.Error(w, sanitizeErrorMessage(err, "create_client"), http.StatusBadRequest)
+			return
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+
+		version, err := tempClient.GetVersion(ctx)
+		if err != nil {
+			http.Error(w, sanitizeErrorMessage(err, "connection"), http.StatusBadRequest)
+			return
+		}
+
+		versionLabel := ""
+		if version != nil && strings.TrimSpace(version.Version) != "" {
+			versionLabel = strings.TrimSpace(version.Version)
+			if strings.TrimSpace(version.Release) != "" {
+				versionLabel = versionLabel + "-" + strings.TrimSpace(version.Release)
+			}
+		}
+
+		// Test actual metrics endpoints to ensure monitoring will work
+		warnings := []string{}
+
+		// Test mail statistics endpoint (core PMG functionality)
+		if _, err := tempClient.GetMailStatistics(ctx, "day"); err != nil {
+			warnings = append(warnings, "Mail statistics endpoint unavailable - check user permissions")
+			log.Warn().Err(err).Msg("PMG connection test: mail statistics check failed")
+		}
+
+		// Test cluster status endpoint
+		if _, err := tempClient.GetClusterStatus(ctx, true); err != nil {
+			warnings = append(warnings, "Cluster status endpoint unavailable")
+			log.Warn().Err(err).Msg("PMG connection test: cluster status check failed")
+		}
+
+		// Test quarantine endpoint
+		if _, err := tempClient.GetQuarantineStatus(ctx, "spam"); err != nil {
+			warnings = append(warnings, "Quarantine endpoint unavailable")
+			log.Warn().Err(err).Msg("PMG connection test: quarantine check failed")
+		}
+
+		message := "Connected to PMG instance"
+		if versionLabel != "" {
+			message = fmt.Sprintf("Connected to PMG instance (version %s)", versionLabel)
+		}
+		if len(warnings) > 0 {
+			message += " (some metrics may be unavailable - check logs for details)"
+		}
+
+		response := map[string]interface{}{
+			"status":  "success",
+			"message": message,
+		}
+
+		if version != nil {
+			if version.Version != "" {
+				response["version"] = strings.TrimSpace(version.Version)
+			}
+			if version.Release != "" {
+				response["release"] = strings.TrimSpace(version.Release)
+			}
+		}
+
+		if len(warnings) > 0 {
+			response["warnings"] = warnings
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(response)
+	}
+}
+
+func applyPVEAuthUpdate(updated *config.PVEInstance, req NodeConfigRequest) error {
+	tokenNameProvided := req.TokenName != ""
+	tokenValueProvided := req.TokenValue != ""
+
+	switch {
+	case tokenNameProvided && tokenValueProvided:
+		updated.TokenName = req.TokenName
+		updated.TokenValue = req.TokenValue
+		updated.Password = ""
+		if req.User != "" {
+			updated.User = req.User
+		}
+	case tokenValueProvided:
+		if strings.TrimSpace(updated.TokenName) == "" {
+			return fmt.Errorf("token value requires an existing token ID or tokenName")
+		}
+		updated.TokenValue = req.TokenValue
+		updated.Password = ""
+		if req.User != "" {
+			updated.User = req.User
+		}
+	case tokenNameProvided:
+		if strings.TrimSpace(updated.TokenValue) == "" {
+			return fmt.Errorf("tokenName without tokenValue cannot enable token authentication")
+		}
+		if updated.TokenName != "" && req.TokenName != updated.TokenName {
+			return fmt.Errorf("tokenName changes require a new tokenValue")
+		}
+		updated.TokenName = req.TokenName
+		updated.Password = ""
+		if req.User != "" {
+			updated.User = req.User
+		}
+	case req.Password != "":
+		if req.User != "" {
+			updated.User = normalizePVEUser(req.User)
+		} else if updated.User != "" {
+			updated.User = normalizePVEUser(updated.User)
+		}
+		updated.Password = req.Password
+		updated.TokenName = ""
+		updated.TokenValue = ""
+	default:
+		if req.User != "" && updated.Password != "" && updated.TokenName == "" && updated.TokenValue == "" {
+			updated.User = normalizePVEUser(req.User)
+		} else if updated.User != "" {
+			updated.User = normalizePVEUser(updated.User)
+		}
+	}
+
+	return nil
+}
+
+func applyPBSAuthUpdate(updated *config.PBSInstance, req NodeConfigRequest) error {
+	tokenNameProvided := req.TokenName != ""
+	tokenValueProvided := req.TokenValue != ""
+
+	switch {
+	case tokenNameProvided && tokenValueProvided:
+		updated.TokenName = req.TokenName
+		updated.TokenValue = req.TokenValue
+		updated.User = ""
+		updated.Password = ""
+	case tokenValueProvided:
+		if strings.TrimSpace(updated.TokenName) == "" {
+			return fmt.Errorf("token value requires an existing token ID or tokenName")
+		}
+		updated.TokenValue = req.TokenValue
+		updated.User = ""
+		updated.Password = ""
+	case tokenNameProvided:
+		if strings.TrimSpace(updated.TokenValue) == "" {
+			return fmt.Errorf("tokenName without tokenValue cannot enable token authentication")
+		}
+		if updated.TokenName != "" && req.TokenName != updated.TokenName {
+			return fmt.Errorf("tokenName changes require a new tokenValue")
+		}
+		updated.TokenName = req.TokenName
+		updated.User = ""
+		updated.Password = ""
+	case req.Password != "":
+		updated.Password = req.Password
+		updated.User = normalizePBSUser(req.User)
+		updated.TokenName = ""
+		updated.TokenValue = ""
+	default:
+		if req.User != "" && updated.Password != "" && updated.TokenName == "" && updated.TokenValue == "" {
+			updated.User = normalizePBSUser(req.User)
+		}
+	}
+
+	return nil
+}
+
+func applyPMGAuthUpdate(updated *config.PMGInstance, req NodeConfigRequest) error {
+	tokenNameProvided := req.TokenName != ""
+	tokenValueProvided := req.TokenValue != ""
+
+	switch {
+	case tokenNameProvided && tokenValueProvided:
+		updated.TokenName = req.TokenName
+		updated.TokenValue = req.TokenValue
+		updated.User = ""
+		updated.Password = ""
+	case tokenValueProvided:
+		if strings.TrimSpace(updated.TokenName) == "" {
+			return fmt.Errorf("token value requires an existing token ID or tokenName")
+		}
+		updated.TokenValue = req.TokenValue
+		updated.User = ""
+		updated.Password = ""
+	case tokenNameProvided:
+		if strings.TrimSpace(updated.TokenValue) == "" {
+			return fmt.Errorf("tokenName without tokenValue cannot enable token authentication")
+		}
+		if updated.TokenName != "" && req.TokenName != updated.TokenName {
+			return fmt.Errorf("tokenName changes require a new tokenValue")
+		}
+		updated.TokenName = req.TokenName
+		updated.User = ""
+		updated.Password = ""
+	case req.Password != "":
+		if req.User != "" {
+			updated.User = normalizePMGUser(req.User)
+		}
+		updated.Password = req.Password
+		updated.TokenName = ""
+		updated.TokenValue = ""
+	default:
+		if req.User != "" && updated.Password != "" && updated.TokenName == "" && updated.TokenValue == "" {
+			updated.User = normalizePMGUser(req.User)
+		}
+	}
+
+	return nil
+}
+
+func normalizePBSUser(user string) string {
+	user = strings.TrimSpace(user)
+	if user == "" || strings.Contains(user, "@") {
+		return user
+	}
+	return user + "@pbs"
+}
+
+func NormalizePBSUser(user string) string { return normalizePBSUser(user) }
+
+func normalizePMGUser(user string) string {
+	user = strings.TrimSpace(user)
+	if user == "" || strings.Contains(user, "@") {
+		return user
+	}
+	return user + "@pmg"
+}
+
+func NormalizePMGUser(user string) string { return normalizePMGUser(user) }
+
+// HandleUpdateNode updates an existing node
+// normalizeClusterEndpointIPOverride validates a user-supplied per-member
+// connection address and returns the canonical stored form. Empty clears the
+// override. Accepts an IP or hostname, optionally with a port; a pasted URL
+// is reduced to its host[:port]. The stored value stays scheme-less and a
+// bare IPv6 address stays unbracketed because clusterEndpointEffectiveURL
+// builds the URL (and re-brackets) at poll time.
+func normalizeClusterEndpointIPOverride(raw string) (string, error) {
+	value := strings.TrimSpace(raw)
+	if value == "" {
+		return "", nil
+	}
+
+	if strings.Contains(value, "://") {
+		parsed, err := url.Parse(value)
+		if err != nil || parsed.Host == "" {
+			return "", fmt.Errorf("invalid connection address")
+		}
+		value = parsed.Host
+	}
+	if strings.ContainsAny(value, "/\\?#@ \t") {
+		return "", fmt.Errorf("invalid connection address")
+	}
+
+	host := value
+	port := ""
+	if splitHost, splitPort, err := net.SplitHostPort(value); err == nil {
+		if _, perr := strconv.ParseUint(splitPort, 10, 16); perr != nil {
+			return "", fmt.Errorf("invalid connection address")
+		}
+		host = splitHost
+		port = splitPort
+	}
+	host = strings.Trim(host, "[]")
+	if host == "" {
+		return "", fmt.Errorf("invalid connection address")
+	}
+
+	if net.ParseIP(host) == nil && !isPlausibleHostname(host) {
+		return "", fmt.Errorf("invalid connection address")
+	}
+	if port != "" {
+		return net.JoinHostPort(host, port), nil
+	}
+	return host, nil
+}
+
+func isPlausibleHostname(host string) bool {
+	if len(host) == 0 || len(host) > 253 {
+		return false
+	}
+	for _, label := range strings.Split(host, ".") {
+		if label == "" || len(label) > 63 {
+			return false
+		}
+		for _, r := range label {
+			if r != '-' && r != '_' && (r < '0' || r > '9') && (r < 'a' || r > 'z') && (r < 'A' || r > 'Z') {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// applyClusterEndpointOverrides returns a copy of endpoints with the
+// requested per-member IPOverride values applied. Members not named in
+// overrides are left untouched; naming an unknown member is an error so a
+// stale UI cannot silently no-op.
+func applyClusterEndpointOverrides(endpoints []config.ClusterEndpoint, overrides []ClusterEndpointOverrideRequest) ([]config.ClusterEndpoint, error) {
+	result := append([]config.ClusterEndpoint(nil), endpoints...)
+	for _, override := range overrides {
+		nodeName := strings.TrimSpace(override.NodeName)
+		if nodeName == "" {
+			return nil, fmt.Errorf("cluster member name is required")
+		}
+		value, err := normalizeClusterEndpointIPOverride(override.IPOverride)
+		if err != nil {
+			return nil, fmt.Errorf("invalid connection address for cluster member %q: enter an IP or hostname, optionally with a port", nodeName)
+		}
+		found := false
+		for i := range result {
+			if strings.EqualFold(strings.TrimSpace(result[i].NodeName), nodeName) {
+				result[i].IPOverride = value
+				found = true
+			}
+		}
+		if !found {
+			return nil, fmt.Errorf("unknown cluster member %q", nodeName)
+		}
+	}
+	return result, nil
+}
+
+func applyClusterNodeDisplayNameOverrides(instance config.PVEInstance, overrides []ClusterNodeDisplayNameOverrideRequest) (config.PVEInstance, error) {
+	instance.ClusterEndpoints = append([]config.ClusterEndpoint(nil), instance.ClusterEndpoints...)
+	instance.ClusterNodeIdentities = append([]config.PVEClusterNodeIdentity(nil), instance.ClusterNodeIdentities...)
+	seen := make(map[string]struct{}, len(overrides))
+	for _, override := range overrides {
+		identityID := strings.TrimSpace(override.NodeIdentity)
+		if identityID == "" {
+			return instance, fmt.Errorf("cluster node identity is required")
+		}
+		if _, duplicate := seen[identityID]; duplicate {
+			return instance, fmt.Errorf("cluster node identity %q was provided more than once", identityID)
+		}
+		seen[identityID] = struct{}{}
+
+		displayName, err := config.NormalizePVEClusterNodeDisplayName(override.DisplayName)
+		if err != nil {
+			return instance, fmt.Errorf("display name for cluster node %q %w", identityID, err)
+		}
+
+		found := false
+		for idx := range instance.ClusterNodeIdentities {
+			if instance.ClusterNodeIdentities[idx].ID != identityID {
+				continue
+			}
+			instance.ClusterNodeIdentities[idx].DisplayName = displayName
+			found = true
+			break
+		}
+		if !found {
+			return instance, fmt.Errorf("unknown cluster node identity %q", identityID)
+		}
+	}
+	return instance, nil
+}
+
+func (h *ConfigHandlers) handleUpdateNode(w http.ResponseWriter, r *http.Request) {
+	// Prevent node modifications in mock mode
+	if mock.IsMockEnabled() {
+		http.Error(w, "Cannot modify nodes in mock mode", http.StatusForbidden)
+		return
+	}
+
+	nodeID := strings.TrimPrefix(r.URL.Path, "/api/config/nodes/")
+	if nodeID == "" {
+		http.Error(w, "Node ID required", http.StatusBadRequest)
+		return
+	}
+
+	// Limit request body to 32KB to prevent memory exhaustion
+	r.Body = http.MaxBytesReader(w, r.Body, 32*1024)
+
+	var req NodeConfigRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+	req.normalizeTokenAliases()
+
+	// Debug: Log the received temperatureMonitoringEnabled value
+	log.Info().
+		Str("nodeID", nodeID).
+		Interface("temperatureMonitoringEnabled", req.TemperatureMonitoringEnabled).
+		Msg("Received node update request")
+
+	nodeType, index, err := resolveNodeID(h.getConfig(r.Context()), nodeID)
+	if err != nil {
+		if errors.Is(err, errNodeIDNotFound) {
+			http.Error(w, "Node not found", http.StatusNotFound)
+		} else {
+			http.Error(w, "Invalid node ID", http.StatusBadRequest)
+		}
+		return
+	}
+
+	// Update the node
+	if nodeType == "pve" && index < len(h.getConfig(r.Context()).PVEInstances) {
+		pve := &h.getConfig(r.Context()).PVEInstances[index]
+		current := pve.DeepCopy()
+		normalizedCurrent := []config.PVEInstance{current}
+		config.EnsurePVEClusterNodeIdentities(normalizedCurrent)
+		current = normalizedCurrent[0]
+		updated := current
+
+		// Only update name if provided
+		if req.Name != "" {
+			updated.Name = req.Name
+		}
+
+		if req.Host != "" {
+			host, err := normalizeNodeHost(req.Host, nodeType)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			updated.Host = host
+		}
+
+		if req.hasGuestURLField() {
+			updated.GuestURL = req.GuestURL
+		}
+
+		if len(req.ClusterEndpointOverrides) > 0 {
+			endpoints, err := applyClusterEndpointOverrides(updated.ClusterEndpoints, req.ClusterEndpointOverrides)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			updated.ClusterEndpoints = endpoints
+		}
+		if len(req.ClusterNodeDisplayNameOverrides) > 0 {
+			updated, err = applyClusterNodeDisplayNameOverrides(updated, req.ClusterNodeDisplayNameOverrides)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+		}
+
+		if err := applyPVEAuthUpdate(&updated, req); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		if req.hasFingerprintField() {
+			updated.Fingerprint = req.Fingerprint
+		}
+		if req.VerifySSL != nil {
+			updated.VerifySSL = *req.VerifySSL
+		}
+		if req.MonitorVMs != nil {
+			updated.MonitorVMs = *req.MonitorVMs
+		}
+		if req.MonitorContainers != nil {
+			updated.MonitorContainers = *req.MonitorContainers
+		}
+		if req.MonitorStorage != nil {
+			updated.MonitorStorage = *req.MonitorStorage
+		}
+		if req.MonitorBackups != nil {
+			updated.MonitorBackups = *req.MonitorBackups
+		}
+		if req.MonitorPhysicalDisks != nil {
+			updated.MonitorPhysicalDisks = req.MonitorPhysicalDisks
+		}
+		if req.PhysicalDiskPollingMinutes != nil {
+			updated.PhysicalDiskPollingMinutes = *req.PhysicalDiskPollingMinutes
+		}
+		if req.TemperatureMonitoringEnabled != nil {
+			updated.TemperatureMonitoringEnabled = req.TemperatureMonitoringEnabled
+		}
+		if req.Enabled != nil {
+			updated.Disabled = !*req.Enabled
+		}
+
+		*pve = updated
+	} else if nodeType == "pbs" && index < len(h.getConfig(r.Context()).PBSInstances) {
+		pbs := &h.getConfig(r.Context()).PBSInstances[index]
+		current := *pbs
+		updated := current
+
+		// Only update name if provided
+		if req.Name != "" {
+			updated.Name = req.Name
+		}
+
+		if req.Host != "" {
+			host, err := normalizeNodeHost(req.Host, nodeType)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			updated.Host = host
+		}
+
+		if req.hasGuestURLField() {
+			updated.GuestURL = req.GuestURL
+		}
+
+		if err := applyPBSAuthUpdate(&updated, req); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		if req.hasFingerprintField() {
+			updated.Fingerprint = req.Fingerprint
+		}
+		if req.VerifySSL != nil {
+			updated.VerifySSL = *req.VerifySSL
+		}
+		if req.MonitorBackups != nil {
+			updated.MonitorBackups = *req.MonitorBackups
+		}
+		if req.MonitorDatastores != nil {
+			updated.MonitorDatastores = *req.MonitorDatastores
+		}
+		if req.MonitorSyncJobs != nil {
+			updated.MonitorSyncJobs = *req.MonitorSyncJobs
+		}
+		if req.MonitorVerifyJobs != nil {
+			updated.MonitorVerifyJobs = *req.MonitorVerifyJobs
+		}
+		if req.MonitorPruneJobs != nil {
+			updated.MonitorPruneJobs = *req.MonitorPruneJobs
+		}
+		if req.MonitorGarbageJobs != nil {
+			updated.MonitorGarbageJobs = *req.MonitorGarbageJobs
+		}
+		if req.TemperatureMonitoringEnabled != nil {
+			updated.TemperatureMonitoringEnabled = req.TemperatureMonitoringEnabled
+		}
+		// Update datastore exclusion list
+		if req.ExcludeDatastores != nil {
+			updated.ExcludeDatastores = req.ExcludeDatastores
+		}
+		if req.Enabled != nil {
+			updated.Disabled = !*req.Enabled
+		}
+
+		*pbs = updated
+	} else if nodeType == "pmg" && index < len(h.getConfig(r.Context()).PMGInstances) {
+		pmgInst := &h.getConfig(r.Context()).PMGInstances[index]
+		current := *pmgInst
+		updated := current
+		if req.Name != "" {
+			updated.Name = req.Name
+		}
+
+		if req.Host != "" {
+			host, err := normalizeNodeHost(req.Host, nodeType)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			updated.Host = host
+		}
+
+		if req.hasGuestURLField() {
+			updated.GuestURL = req.GuestURL
+		}
+
+		if err := applyPMGAuthUpdate(&updated, req); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		if req.hasFingerprintField() {
+			updated.Fingerprint = req.Fingerprint
+		}
+		if req.VerifySSL != nil {
+			updated.VerifySSL = *req.VerifySSL
+		}
+		if req.MonitorMailStats != nil {
+			updated.MonitorMailStats = *req.MonitorMailStats
+		}
+		if req.MonitorQueues != nil {
+			updated.MonitorQueues = *req.MonitorQueues
+		}
+		if req.MonitorQuarantine != nil {
+			updated.MonitorQuarantine = *req.MonitorQuarantine
+		}
+		if req.MonitorDomainStats != nil {
+			updated.MonitorDomainStats = *req.MonitorDomainStats
+		}
+		if req.TemperatureMonitoringEnabled != nil {
+			updated.TemperatureMonitoringEnabled = req.TemperatureMonitoringEnabled
+		}
+		if req.Enabled != nil {
+			updated.Disabled = !*req.Enabled
+		}
+
+		*pmgInst = updated
+	} else {
+		http.Error(w, "Node not found", http.StatusNotFound)
+		return
+	}
+
+	// Save configuration to disk using our persistence instance
+	h.normalizePVEConfigState(r.Context())
+	if err := h.getPersistence(r.Context()).SaveNodesConfig(h.getConfig(r.Context()).PVEInstances, h.getConfig(r.Context()).PBSInstances, h.getConfig(r.Context()).PMGInstances); err != nil {
+		log.Error().Err(err).Msg("Failed to save nodes configuration")
+		http.Error(w, "Failed to save configuration", http.StatusInternalServerError)
+		return
+	}
+
+	// IMPORTANT: Preserve alert overrides when updating nodes
+	// This fixes issue #440 where PBS alert thresholds were being reset
+	// Alert overrides are stored separately from node configuration
+	// and must be explicitly preserved during node updates
+	if h.getMonitor(r.Context()) != nil {
+		// Load current alert configuration to preserve overrides
+		alertConfig, err := h.getPersistence(r.Context()).LoadAlertConfig()
+		if err == nil && alertConfig != nil {
+			// For PBS nodes, we need to handle ID mapping
+			// PBS monitoring uses "pbs-<name>" but config uses "pbs-<index>"
+			// We need to preserve overrides by the monitoring ID
+			if nodeType == "pbs" && index < len(h.getConfig(r.Context()).PBSInstances) {
+				pbsName := h.getConfig(r.Context()).PBSInstances[index].Name
+				monitoringID := "pbs-" + pbsName
+
+				// Check if there are overrides for this PBS node
+				if alertConfig.Overrides != nil {
+					if _, exists := alertConfig.Overrides[monitoringID]; exists {
+						log.Debug().
+							Str("nodeID", nodeID).
+							Str("monitoringID", monitoringID).
+							Str("pbsName", pbsName).
+							Msg("Preserving PBS alert overrides using monitoring ID")
+					}
+				}
+			}
+
+			// Apply the alert configuration to preserve all overrides
+			h.getMonitor(r.Context()).GetAlertManager().UpdateConfig(*alertConfig)
+			log.Debug().
+				Str("nodeID", nodeID).
+				Str("nodeType", nodeType).
+				Msg("Preserved alert overrides after node update")
+		}
+	}
+
+	// Reload monitor with new configuration
+	if h.reloadFunc != nil {
+		if err := h.reloadFunc(); err != nil {
+			log.Error().Err(err).Msg("Failed to reload monitor")
+			http.Error(w, "Configuration saved but failed to apply changes", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	// Trigger discovery refresh after adding node
+	if h.getMonitor(r.Context()) != nil && h.getMonitor(r.Context()).GetDiscoveryService() != nil {
+		log.Info().Msg("Triggering discovery refresh after adding node")
+		h.getMonitor(r.Context()).GetDiscoveryService().ForceRefresh()
+
+		// Broadcast discovery update via WebSocket
+		if h.wsHub != nil {
+			// Wait a moment for discovery to complete
+			go func() {
+				time.Sleep(2 * time.Second)
+				result, _ := h.getMonitor(r.Context()).GetDiscoveryService().GetCachedResult()
+				if result != nil {
+					h.wsHub.BroadcastMessage(websocket.Message{
+						Type: "discovery_update",
+						Data: map[string]interface{}{
+							"servers":           result.Servers,
+							"errors":            result.LegacyErrors(),
+							"structured_errors": result.StructuredErrors,
+							"timestamp":         time.Now().Unix(),
+						},
+						Timestamp: time.Now().Format(time.RFC3339),
+					})
+					log.Info().Msg("Broadcasted discovery update after adding node")
+				}
+			}()
+		}
+	}
+
+	h.runtimeDependencies().AuditEvent(apicontext.OrgID(r.Context()), "node_updated", h.runtimeDependencies().AuthUsername(h.getConfig(r.Context()), r), h.runtimeDependencies().ClientIP(r), r.URL.Path, true,
+		fmt.Sprintf("Updated node %s", nodeID))
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{"status": "success"})
+}
+
+func mergeDiscoveredClusterEndpointConfiguration(existing, discovered []config.ClusterEndpoint) []config.ClusterEndpoint {
+	merged := append([]config.ClusterEndpoint(nil), discovered...)
+	used := make(map[int]struct{}, len(existing))
+	for idx := range merged {
+		matchUnique := func(predicate func(config.ClusterEndpoint) bool) int {
+			match := -1
+			for existingIdx, candidate := range existing {
+				if _, alreadyUsed := used[existingIdx]; alreadyUsed || !predicate(candidate) {
+					continue
+				}
+				if match >= 0 {
+					return -1
+				}
+				match = existingIdx
+			}
+			return match
+		}
+		match := -1
+		if merged[idx].NativeNodeID != 0 {
+			match = matchUnique(func(candidate config.ClusterEndpoint) bool {
+				return candidate.NativeNodeID != 0 && candidate.NativeNodeID == merged[idx].NativeNodeID
+			})
+		}
+		if match < 0 && merged[idx].NodeName != "" {
+			match = matchUnique(func(candidate config.ClusterEndpoint) bool {
+				return strings.EqualFold(strings.TrimSpace(candidate.NodeName), strings.TrimSpace(merged[idx].NodeName))
+			})
+		}
+		if match < 0 && merged[idx].IP != "" {
+			match = matchUnique(func(candidate config.ClusterEndpoint) bool {
+				return strings.TrimSpace(candidate.IP) == strings.TrimSpace(merged[idx].IP)
+			})
+		}
+		if match < 0 && merged[idx].Host != "" {
+			match = matchUnique(func(candidate config.ClusterEndpoint) bool {
+				return strings.EqualFold(strings.TrimSpace(candidate.Host), strings.TrimSpace(merged[idx].Host))
+			})
+		}
+		if match < 0 {
+			continue
+		}
+		used[match] = struct{}{}
+		old := existing[match]
+		merged[idx].NodeIdentity = old.NodeIdentity
+		if merged[idx].NativeNodeID == 0 {
+			merged[idx].NativeNodeID = old.NativeNodeID
+		}
+		if merged[idx].IPOverride == "" {
+			merged[idx].IPOverride = old.IPOverride
+		}
+		if merged[idx].GuestURL == "" {
+			merged[idx].GuestURL = old.GuestURL
+		}
+		if merged[idx].Fingerprint == "" {
+			merged[idx].Fingerprint = old.Fingerprint
+		}
+	}
+	return merged
+}
+
+// HandleDeleteNode deletes a node
+
+func (h *ConfigHandlers) handleDeleteNode(w http.ResponseWriter, r *http.Request) {
+	log.Info().Msg("HandleDeleteNode called")
+
+	// Prevent node modifications in mock mode
+	if mock.IsMockEnabled() {
+		http.Error(w, "Cannot modify nodes in mock mode", http.StatusForbidden)
+		return
+	}
+
+	nodeID := strings.TrimPrefix(r.URL.Path, "/api/config/nodes/")
+	if nodeID == "" {
+		http.Error(w, "Node ID required", http.StatusBadRequest)
+		return
+	}
+
+	nodeType, index, err := resolveNodeID(h.getConfig(r.Context()), nodeID)
+	if err != nil {
+		if errors.Is(err, errNodeIDNotFound) {
+			http.Error(w, "Node not found", http.StatusNotFound)
+		} else {
+			http.Error(w, "Invalid node ID", http.StatusBadRequest)
+		}
+		return
+	}
+
+	log.Debug().
+		Str("nodeID", nodeID).
+		Str("nodeType", nodeType).
+		Int("index", index).
+		Int("pveCount", len(h.getConfig(r.Context()).PVEInstances)).
+		Int("pbsCount", len(h.getConfig(r.Context()).PBSInstances)).
+		Int("pmgCount", len(h.getConfig(r.Context()).PMGInstances)).
+		Msg("Attempting to delete node")
+
+	var deletedNodeHost string
+
+	// Delete the node
+	if nodeType == "pve" && index < len(h.getConfig(r.Context()).PVEInstances) {
+		deletedNodeHost = h.getConfig(r.Context()).PVEInstances[index].Host
+		log.Info().Str("nodeID", nodeID).Int("index", index).Msg("Deleting PVE node")
+		h.getConfig(r.Context()).PVEInstances = append(h.getConfig(r.Context()).PVEInstances[:index], h.getConfig(r.Context()).PVEInstances[index+1:]...)
+	} else if nodeType == "pbs" && index < len(h.getConfig(r.Context()).PBSInstances) {
+		deletedNodeHost = h.getConfig(r.Context()).PBSInstances[index].Host
+		log.Info().Str("nodeID", nodeID).Int("index", index).Msg("Deleting PBS node")
+		h.getConfig(r.Context()).PBSInstances = append(h.getConfig(r.Context()).PBSInstances[:index], h.getConfig(r.Context()).PBSInstances[index+1:]...)
+	} else if nodeType == "pmg" && index < len(h.getConfig(r.Context()).PMGInstances) {
+		deletedNodeHost = h.getConfig(r.Context()).PMGInstances[index].Host
+		log.Info().Str("nodeID", nodeID).Int("index", index).Msg("Deleting PMG node")
+		h.getConfig(r.Context()).PMGInstances = append(h.getConfig(r.Context()).PMGInstances[:index], h.getConfig(r.Context()).PMGInstances[index+1:]...)
+	} else {
+		log.Warn().
+			Str("nodeID", nodeID).
+			Str("nodeType", nodeType).
+			Int("index", index).
+			Int("pveCount", len(h.getConfig(r.Context()).PVEInstances)).
+			Int("pbsCount", len(h.getConfig(r.Context()).PBSInstances)).
+			Int("pmgCount", len(h.getConfig(r.Context()).PMGInstances)).
+			Msg("Node not found for deletion")
+		http.Error(w, "Node not found", http.StatusNotFound)
+		return
+	}
+
+	// Save configuration to disk using our persistence instance
+	if err := h.getPersistence(r.Context()).SaveNodesConfigAllowEmpty(h.getConfig(r.Context()).PVEInstances, h.getConfig(r.Context()).PBSInstances, h.getConfig(r.Context()).PMGInstances); err != nil {
+		log.Error().Err(err).Msg("Failed to save nodes configuration")
+		http.Error(w, "Failed to save configuration", http.StatusInternalServerError)
+		return
+	}
+
+	// Immediately trigger discovery scan BEFORE reloading monitor
+	// Capture node type for cleanup
+	var deletedNodeType string = nodeType
+
+	// deletedNodeHost already captured before removal when available
+
+	// Reload monitor with new configuration
+	if h.reloadFunc != nil {
+		if err := h.reloadFunc(); err != nil {
+			log.Error().Err(err).Msg("Failed to reload monitor")
+			http.Error(w, "Configuration saved but failed to apply changes", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	// Broadcast node deletion to refresh the frontend
+	if h.wsHub != nil {
+		// Send a node_deleted message to trigger a refresh of the nodes list
+		h.wsHub.BroadcastMessage(websocket.Message{
+			Type: "node_deleted",
+			Data: map[string]interface{}{
+				"nodeType": nodeType,
+			},
+			Timestamp: time.Now().Format(time.RFC3339),
+		})
+		log.Info().Msg("Broadcasted node deletion event")
+
+		// Trigger a full discovery scan in the background to update the discovery cache
+		// This ensures the next time discovery modal is opened, it shows fresh results
+		go func() {
+			// Short delay to let the monitor stabilize
+			time.Sleep(500 * time.Millisecond)
+
+			// Trigger full discovery refresh
+			if h.getMonitor(r.Context()) != nil && h.getMonitor(r.Context()).GetDiscoveryService() != nil {
+				h.getMonitor(r.Context()).GetDiscoveryService().ForceRefresh()
+				log.Info().Msg("Triggered background discovery refresh after node deletion")
+			}
+		}()
+	}
+
+	if deletedNodeType == "pve" && deletedNodeHost != "" {
+	}
+
+	h.runtimeDependencies().AuditEvent(apicontext.OrgID(r.Context()), "node_deleted", h.runtimeDependencies().AuthUsername(h.getConfig(r.Context()), r), h.runtimeDependencies().ClientIP(r), r.URL.Path, true,
+		fmt.Sprintf("Deleted %s node %s", nodeType, nodeID))
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{"status": "success"})
+}
+
+// HandleRefreshClusterNodes re-detects cluster membership and updates endpoints
+// This handles the case where nodes are added to a Proxmox cluster after initial configuration
+
+func (h *ConfigHandlers) handleRefreshClusterNodes(w http.ResponseWriter, r *http.Request) {
+	// Prevent modifications in mock mode
+	if mock.IsMockEnabled() {
+		http.Error(w, "Cannot refresh cluster in mock mode", http.StatusForbidden)
+		return
+	}
+
+	// Path format: /api/config/nodes/{id}/refresh-cluster
+	path := strings.TrimPrefix(r.URL.Path, "/api/config/nodes/")
+	path = strings.TrimSuffix(path, "/refresh-cluster")
+	nodeID := path
+
+	if nodeID == "" {
+		http.Error(w, "Node ID required", http.StatusBadRequest)
+		return
+	}
+
+	nodeType, index, err := resolveNodeID(h.getConfig(r.Context()), nodeID)
+	if err != nil {
+		if errors.Is(err, errNodeIDNotFound) {
+			http.Error(w, "Node not found", http.StatusNotFound)
+		} else {
+			http.Error(w, "Invalid node ID", http.StatusBadRequest)
+		}
+		return
+	}
+
+	// Only PVE nodes can have clusters
+	if nodeType != "pve" {
+		http.Error(w, "Only PVE nodes can be cluster members", http.StatusBadRequest)
+		return
+	}
+
+	if index >= len(h.getConfig(r.Context()).PVEInstances) {
+		http.Error(w, "Node not found", http.StatusNotFound)
+		return
+	}
+
+	pve := &h.getConfig(r.Context()).PVEInstances[index]
+
+	// Create client config for cluster detection
+	clientConfig := config.CreateProxmoxConfig(pve)
+
+	// Force cluster re-detection (ignore existing endpoints)
+	isCluster, clusterName, clusterEndpoints := detectPVECluster(clientConfig, pve.Name, pve.ClusterEndpoints)
+
+	if !isCluster {
+		http.Error(w, "Node is not part of a cluster", http.StatusBadRequest)
+		return
+	}
+
+	if len(clusterEndpoints) == 0 {
+		http.Error(w, "Could not detect cluster nodes", http.StatusInternalServerError)
+		return
+	}
+
+	oldEndpointCount := len(pve.ClusterEndpoints)
+	newEndpointCount := len(clusterEndpoints)
+
+	// Update cluster info
+	pve.IsCluster = true
+	if clusterName != "" && !strings.EqualFold(clusterName, "unknown cluster") {
+		pve.ClusterName = clusterName
+	}
+	pve.ClusterEndpoints = mergeDiscoveredClusterEndpointConfiguration(pve.ClusterEndpoints, clusterEndpoints)
+
+	// Save configuration
+	h.normalizePVEConfigState(r.Context())
+	if err := h.getPersistence(r.Context()).SaveNodesConfig(h.getConfig(r.Context()).PVEInstances, h.getConfig(r.Context()).PBSInstances, h.getConfig(r.Context()).PMGInstances); err != nil {
+		log.Error().Err(err).Msg("Failed to save nodes configuration after cluster refresh")
+		http.Error(w, "Failed to save configuration", http.StatusInternalServerError)
+		return
+	}
+
+	log.Info().
+		Str("instance", pve.Name).
+		Str("cluster", pve.ClusterName).
+		Int("old_endpoints", oldEndpointCount).
+		Int("new_endpoints", newEndpointCount).
+		Msg("Refreshed cluster membership")
+
+	// Reload monitor with new configuration
+	if h.reloadFunc != nil {
+		if err := h.reloadFunc(); err != nil {
+			log.Error().Err(err).Msg("Failed to reload monitor after cluster refresh")
+			// Don't fail the request, config was saved successfully
+		}
+	}
+
+	// Broadcast update to refresh frontend
+	if h.wsHub != nil {
+		h.wsHub.BroadcastMessage(websocket.Message{
+			Type: "nodes_updated",
+			Data: map[string]interface{}{
+				"nodeType": "pve",
+				"action":   "cluster_refresh",
+			},
+			Timestamp: time.Now().Format(time.RFC3339),
+		})
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"status":       "success",
+		"clusterName":  pve.ClusterName,
+		"oldNodeCount": oldEndpointCount,
+		"newNodeCount": newEndpointCount,
+		"nodesAdded":   newEndpointCount - oldEndpointCount,
+		"clusterNodes": toClusterEndpointResponses(pve.ClusterEndpoints, pve.ClusterNodeIdentities),
+	})
+}
+
+// HandleTestNodeConfig tests a node connection from provided configuration
+
+func (h *ConfigHandlers) handleTestNodeConfig(w http.ResponseWriter, r *http.Request) {
+	// Limit request body to 32KB to prevent memory exhaustion
+	r.Body = http.MaxBytesReader(w, r.Body, 32*1024)
+
+	var req NodeConfigRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+	req.normalizeTokenAliases()
+
+	var testResult map[string]interface{}
+
+	if req.Type == "pve" {
+		// Create a temporary client to test connection
+		authUser := req.User
+		if req.Password != "" && req.TokenName == "" && req.TokenValue == "" {
+			authUser = normalizePVEUser(authUser)
+			req.User = authUser
+		}
+		verifySSL := false
+		if req.VerifySSL != nil {
+			verifySSL = *req.VerifySSL
+		}
+		clientConfig := proxmox.ClientConfig{
+			Host:        req.Host,
+			User:        authUser,
+			Password:    req.Password,
+			TokenName:   req.TokenName,
+			TokenValue:  req.TokenValue,
+			VerifySSL:   verifySSL,
+			Fingerprint: req.Fingerprint,
+		}
+		client, err := proxmox.NewClient(clientConfig)
+		if err != nil {
+			testResult = map[string]interface{}{
+				"status":  "error",
+				"message": sanitizeErrorMessage(err, "create_client"),
+			}
+		} else {
+			// Test connection by getting nodes list
+			startTime := time.Now()
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+
+			if nodes, err := client.GetNodes(ctx); err != nil {
+				testResult = map[string]interface{}{
+					"status":  "error",
+					"message": sanitizeErrorMessage(err, "connection"),
+				}
+			} else {
+				latency := time.Since(startTime).Milliseconds()
+				testResult = map[string]interface{}{
+					"status":  "success",
+					"message": fmt.Sprintf("Connected to PVE cluster with %d nodes", len(nodes)),
+					"latency": latency,
+				}
+			}
+		}
+	} else if req.Type == "pbs" {
+		testResult = testProxmoxBackupConnection(req)
+	} else if req.Type == "pmg" {
+		testResult = testProxmoxMailGatewayConnection(req)
+	} else {
+		http.Error(w, "Invalid node type", http.StatusBadRequest)
+		return
+	}
+
+	// Return appropriate HTTP status based on test result
+	w.Header().Set("Content-Type", "application/json")
+	if testResult["status"] == "error" {
+		w.WriteHeader(http.StatusBadRequest)
+	}
+	json.NewEncoder(w).Encode(testResult)
+}
+
+// HandleTestNode tests a node connection
+
+func (h *ConfigHandlers) handleTestNode(w http.ResponseWriter, r *http.Request) {
+	path := strings.TrimPrefix(r.URL.Path, "/api/config/nodes/")
+	parts := strings.Split(path, "/")
+	if len(parts) != 2 || parts[1] != "test" {
+		http.Error(w, "Invalid path", http.StatusBadRequest)
+		return
+	}
+
+	nodeID := parts[0]
+
+	nodeType, index, err := resolveNodeID(h.getConfig(r.Context()), nodeID)
+	if err != nil {
+		if errors.Is(err, errNodeIDNotFound) {
+			http.Error(w, "Node not found", http.StatusNotFound)
+		} else {
+			http.Error(w, "Invalid node ID", http.StatusBadRequest)
+		}
+		return
+	}
+
+	// Find the node to test
+	var testResult map[string]interface{}
+
+	if nodeType == "pve" && index < len(h.getConfig(r.Context()).PVEInstances) {
+		pve := h.getConfig(r.Context()).PVEInstances[index]
+
+		// Create a temporary client to test connection
+		authUser := pve.User
+		if pve.TokenName == "" && pve.TokenValue == "" {
+			authUser = normalizePVEUser(authUser)
+		}
+		clientConfig := proxmox.ClientConfig{
+			Host:        pve.Host,
+			User:        authUser,
+			Password:    pve.Password,
+			TokenName:   pve.TokenName,
+			TokenValue:  pve.TokenValue,
+			VerifySSL:   pve.VerifySSL,
+			Fingerprint: pve.Fingerprint,
+		}
+		client, err := proxmox.NewClient(clientConfig)
+		if err != nil {
+			testResult = map[string]interface{}{
+				"status":  "error",
+				"message": sanitizeErrorMessage(err, "create_client"),
+			}
+		} else {
+			// Test connection by getting nodes list
+			startTime := time.Now()
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+
+			if nodes, err := client.GetNodes(ctx); err != nil {
+				testResult = map[string]interface{}{
+					"status":  "error",
+					"message": sanitizeErrorMessage(err, "connection"),
+				}
+			} else {
+				latency := time.Since(startTime).Milliseconds()
+				testResult = map[string]interface{}{
+					"status":  "success",
+					"message": fmt.Sprintf("Connected to PVE cluster with %d nodes", len(nodes)),
+					"latency": latency,
+				}
+			}
+		}
+	} else if nodeType == "pbs" && index < len(h.getConfig(r.Context()).PBSInstances) {
+		pbsInstance := h.getConfig(r.Context()).PBSInstances[index]
+
+		// Create a temporary client to test connection
+		clientConfig := pbs.ClientConfig{
+			Host:        pbsInstance.Host,
+			User:        pbsInstance.User,
+			Password:    pbsInstance.Password,
+			TokenName:   pbsInstance.TokenName,
+			TokenValue:  pbsInstance.TokenValue,
+			VerifySSL:   pbsInstance.VerifySSL,
+			Fingerprint: pbsInstance.Fingerprint,
+		}
+		client, err := pbs.NewClient(clientConfig)
+		if err != nil {
+			testResult = map[string]interface{}{
+				"status":  "error",
+				"message": sanitizeErrorMessage(err, "create_client"),
+			}
+		} else {
+			// Test connection by getting datastores
+			startTime := time.Now()
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+
+			if _, err := client.GetDatastores(ctx); err != nil {
+				testResult = map[string]interface{}{
+					"status":  "error",
+					"message": sanitizeErrorMessage(err, "connection"),
+				}
+			} else {
+				latency := time.Since(startTime).Milliseconds()
+				testResult = map[string]interface{}{
+					"status":  "success",
+					"message": "Connected to PBS",
+					"latency": latency,
+				}
+			}
+		}
+	} else if nodeType == "pmg" && index < len(h.getConfig(r.Context()).PMGInstances) {
+		pmgInstance := h.getConfig(r.Context()).PMGInstances[index]
+
+		clientConfig := config.CreatePMGConfig(&pmgInstance)
+		if pmgInstance.Password != "" && pmgInstance.TokenName == "" && pmgInstance.TokenValue == "" {
+			if clientConfig.User != "" && !strings.Contains(clientConfig.User, "@") {
+				clientConfig.User = clientConfig.User + "@pmg"
+			}
+		}
+
+		client, err := pmg.NewClient(clientConfig)
+		if err != nil {
+			testResult = map[string]interface{}{
+				"status":  "error",
+				"message": sanitizeErrorMessage(err, "create_client"),
+			}
+		} else {
+			startTime := time.Now()
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+
+			if version, err := client.GetVersion(ctx); err != nil {
+				testResult = map[string]interface{}{
+					"status":  "error",
+					"message": sanitizeErrorMessage(err, "connection"),
+				}
+			} else {
+				latency := time.Since(startTime).Milliseconds()
+				versionLabel := ""
+				if version != nil && strings.TrimSpace(version.Version) != "" {
+					versionLabel = strings.TrimSpace(version.Version)
+					if strings.TrimSpace(version.Release) != "" {
+						versionLabel = versionLabel + "-" + strings.TrimSpace(version.Release)
+					}
+				}
+
+				message := "Connected to PMG instance"
+				if versionLabel != "" {
+					message = fmt.Sprintf("Connected to PMG instance (version %s)", versionLabel)
+				}
+
+				testResult = map[string]interface{}{
+					"status":  "success",
+					"message": message,
+					"latency": latency,
+				}
+
+				if version != nil {
+					if version.Version != "" {
+						testResult["version"] = strings.TrimSpace(version.Version)
+					}
+					if version.Release != "" {
+						testResult["release"] = strings.TrimSpace(version.Release)
+					}
+				}
+			}
+		}
+	} else {
+		testResult = map[string]interface{}{
+			"status":  "error",
+			"message": "Node not found",
+		}
+	}
+
+	// Return appropriate HTTP status based on test result
+	w.Header().Set("Content-Type", "application/json")
+	if testResult["status"] == "error" {
+		w.WriteHeader(http.StatusBadRequest)
+	}
+	json.NewEncoder(w).Encode(testResult)
+}
+
+// testProxmoxPlatformConnection runs the shared PBS/PMG node connection
+// probe: build a client from the request credentials, exercise one read
+// endpoint with a 10s timeout, and report latency. connect returns the
+// platform-specific probe call.
+func testProxmoxPlatformConnection(req NodeConfigRequest, successMsg string, connect func(verifySSL bool) (func(context.Context) error, error)) map[string]interface{} {
+	verifySSL := false
+	if req.VerifySSL != nil {
+		verifySSL = *req.VerifySSL
+	}
+	probe, err := connect(verifySSL)
+	if err != nil {
+		return map[string]interface{}{
+			"status":  "error",
+			"message": sanitizeErrorMessage(err, "create_client"),
+		}
+	}
+
+	startTime := time.Now()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if err := probe(ctx); err != nil {
+		return map[string]interface{}{
+			"status":  "error",
+			"message": sanitizeErrorMessage(err, "connection"),
+		}
+	}
+	latency := time.Since(startTime).Milliseconds()
+	return map[string]interface{}{
+		"status":  "success",
+		"message": successMsg,
+		"latency": latency,
+	}
+}
+
+func testProxmoxBackupConnection(req NodeConfigRequest) map[string]interface{} {
+	return testProxmoxPlatformConnection(req, "Connected to PBS instance", func(verifySSL bool) (func(context.Context) error, error) {
+		client, err := pbs.NewClient(pbs.ClientConfig{
+			Host:        req.Host,
+			User:        req.User,
+			Password:    req.Password,
+			TokenName:   req.TokenName,
+			TokenValue:  req.TokenValue,
+			VerifySSL:   verifySSL,
+			Fingerprint: req.Fingerprint,
+		})
+		if err != nil {
+			return nil, err
+		}
+		return func(ctx context.Context) error {
+			_, err := client.GetDatastores(ctx)
+			return err
+		}, nil
+	})
+}
+
+func testProxmoxMailGatewayConnection(req NodeConfigRequest) map[string]interface{} {
+	return testProxmoxPlatformConnection(req, "Connected to PMG instance", func(verifySSL bool) (func(context.Context) error, error) {
+		client, err := pmg.NewClient(pmg.ClientConfig{
+			Host:        req.Host,
+			User:        req.User,
+			Password:    req.Password,
+			TokenName:   req.TokenName,
+			TokenValue:  req.TokenValue,
+			VerifySSL:   verifySSL,
+			Fingerprint: req.Fingerprint,
+		})
+		if err != nil {
+			return nil, err
+		}
+		return func(ctx context.Context) error {
+			_, err := client.GetVersion(ctx)
+			return err
+		}, nil
+	})
+}

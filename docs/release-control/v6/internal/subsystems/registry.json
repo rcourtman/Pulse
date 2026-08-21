@@ -764,6 +764,24 @@
       ]
     },
     {
+      "path": "internal/api/agentbinding/policy.go",
+      "rationale": "install-token command-channel binding is simultaneously an agent lifecycle admission policy, a canonical API identity contract, and a security boundary",
+      "subsystems": [
+        "agent-lifecycle",
+        "api-contracts",
+        "security-privacy"
+      ]
+    },
+    {
+      "path": "internal/api/agenttokens/install.go",
+      "rationale": "agent install-token issuance and persistence are simultaneously an agent lifecycle authority, a canonical API token contract, and a security boundary",
+      "subsystems": [
+        "agent-lifecycle",
+        "api-contracts",
+        "security-privacy"
+      ]
+    },
+    {
       "path": "internal/api/ai_handler.go",
       "rationale": "Pulse Assistant handlers are both an AI runtime control surface and a canonical API payload contract boundary",
       "subsystems": [
@@ -804,11 +822,20 @@
       ]
     },
     {
-      "path": "internal/api/config_setup_handlers.go",
+      "path": "internal/api/configapi/config_setup_handlers.go",
       "rationale": "auto-register and setup handlers are both an agent lifecycle control surface and a canonical API payload contract boundary",
       "subsystems": [
         "agent-lifecycle",
         "api-contracts"
+      ]
+    },
+    {
+      "path": "internal/api/configapi/setup_script_render.go",
+      "rationale": "the generated Proxmox setup-script is a shared boundary across agent lifecycle (forced-command keys, install/uninstall edits), API contracts (rendered token shape and encoded rerun URL), and storage/recovery (backup visibility grants, Pulse-managed temperature SSH keys, and SMART disk-temperature collection)",
+      "subsystems": [
+        "agent-lifecycle",
+        "api-contracts",
+        "storage-recovery"
       ]
     },
     {
@@ -913,15 +940,6 @@
       "subsystems": [
         "api-contracts",
         "security-privacy"
-      ]
-    },
-    {
-      "path": "internal/api/setup_script_render.go",
-      "rationale": "the generated Proxmox setup-script is a shared boundary across agent lifecycle (forced-command keys, install/uninstall edits), API contracts (rendered token shape and encoded rerun URL), and storage/recovery (backup visibility grants, Pulse-managed temperature SSH keys, and SMART disk-temperature collection)",
-      "subsystems": [
-        "agent-lifecycle",
-        "api-contracts",
-        "storage-recovery"
       ]
     },
     {
@@ -1261,8 +1279,10 @@
         "internal/agenttls/config.go",
         "internal/api/agent_ingest.go",
         "internal/api/agent_install_command_shared.go",
-        "internal/api/config_setup_handlers.go",
-        "internal/api/setup_script_render.go",
+        "internal/api/agentbinding/policy.go",
+        "internal/api/agenttokens/install.go",
+        "internal/api/configapi/config_setup_handlers.go",
+        "internal/api/configapi/setup_script_render.go",
         "internal/api/unified_agent.go",
         "internal/config/host_continuity.go",
         "internal/dockeragent/agent.go",
@@ -1341,18 +1361,23 @@
             "match_prefixes": [],
             "match_files": [
               "internal/api/agent_install_command_shared.go",
-              "internal/api/config_setup_handlers.go",
-              "internal/api/setup_script_render.go",
+              "internal/api/agentbinding/policy.go",
+              "internal/api/agenttokens/install.go",
+              "internal/api/configapi/config_setup_handlers.go",
+              "internal/api/configapi/setup_script_render.go",
               "internal/api/unified_agent.go"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
               "internal/api/agent_install_command_shared_test.go",
-              "internal/api/config_handlers_auto_register_test.go",
-              "internal/api/config_handlers_canonical_auto_register_test.go",
+              "internal/api/agentbinding/policy_test.go",
+              "internal/api/agenttokens/install_test.go",
+              "internal/api/configapi/config_handlers_auto_register_test.go",
+              "internal/api/configapi/config_handlers_canonical_auto_register_test.go",
               "internal/api/contract_test.go",
               "internal/api/hosted_agent_install_command_test.go",
+              "internal/api/issue1644_exec_binding_integration_test.go",
               "internal/api/unified_agent_more_test.go",
               "internal/api/unified_agent_test.go"
             ]
@@ -2512,7 +2537,7 @@
         "frontend-modern/src/utils/agentInstallCommand.ts",
         "frontend-modern/src/utils/apiTokenPresentation.ts",
         "frontend-modern/src/utils/infrastructureSettingsPresentation.ts",
-        "internal/api/setup_script_render.go",
+        "internal/api/configapi/setup_script_render.go",
         "internal/config/persistence_metadata_accessors.go",
         "internal/websocket/hub.go",
         "pkg/aicontracts/action_broker.go",
@@ -2750,15 +2775,15 @@
             "match_files": [
               "internal/api/agent_install_command_shared.go",
               "internal/api/cloud_agent_install_command.go",
-              "internal/api/config_setup_handlers.go",
+              "internal/api/configapi/config_setup_handlers.go",
               "internal/api/unified_agent.go"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
               "internal/api/agent_install_command_shared_test.go",
-              "internal/api/config_handlers_auto_register_test.go",
-              "internal/api/config_handlers_canonical_auto_register_test.go",
+              "internal/api/configapi/config_handlers_auto_register_test.go",
+              "internal/api/configapi/config_handlers_canonical_auto_register_test.go",
               "internal/api/contract_test.go",
               "internal/api/hosted_agent_install_command_test.go",
               "internal/api/unified_agent_more_test.go",
@@ -2787,6 +2812,8 @@
             "match_prefixes": [],
             "match_files": [
               "frontend-modern/src/api/security.ts",
+              "internal/api/agentbinding/policy.go",
+              "internal/api/agenttokens/install.go",
               "internal/api/security.go",
               "internal/api/security_tokens.go",
               "internal/api/system_settings.go",
@@ -2905,11 +2932,11 @@
               "frontend-modern/src/types/api.ts",
               "internal/api/ai_handlers_more_test.go",
               "internal/api/ai_handlers_patrol_actions_additional_test.go",
+              "internal/api/alerting/external_probe_notifications_test.go",
               "internal/api/audit_handlers_test.go",
               "internal/api/availability_handlers_test.go",
               "internal/api/contract_test.go",
               "internal/api/docker_agents_report_size_test.go",
-              "internal/api/alerting/external_probe_notifications_test.go",
               "internal/api/host_agent_removal_lifecycle_integration_test.go",
               "internal/api/issue1640_readiness_gate_test.go",
               "internal/api/issue1640_readiness_transport_test.go",
@@ -6839,6 +6866,8 @@
         "frontend-modern/src/utils/auditWebhookPresentation.ts",
         "frontend-modern/src/utils/securityAuthPresentation.ts",
         "frontend-modern/src/utils/securityScorePresentation.ts",
+        "internal/api/agentbinding/policy.go",
+        "internal/api/agenttokens/install.go",
         "internal/api/security.go",
         "internal/api/security_tokens.go",
         "internal/api/system_settings.go",
@@ -7057,6 +7086,8 @@
             "match_prefixes": [],
             "match_files": [
               "frontend-modern/src/api/security.ts",
+              "internal/api/agentbinding/policy.go",
+              "internal/api/agenttokens/install.go",
               "internal/api/security.go",
               "internal/api/security_tokens.go",
               "internal/api/system_settings.go"
@@ -7065,6 +7096,9 @@
             "test_prefixes": [],
             "exact_files": [
               "frontend-modern/src/api/__tests__/security.test.ts",
+              "internal/api/agentbinding/policy_test.go",
+              "internal/api/agenttokens/install_test.go",
+              "internal/api/issue1644_exec_binding_integration_test.go",
               "internal/api/security_regression_test.go",
               "internal/api/security_status_additional_test.go",
               "internal/api/security_tokens_lifecycle_test.go",
@@ -7130,7 +7164,7 @@
         "frontend-modern/src/utils/recoveryOutcomePresentation.ts",
         "frontend-modern/src/utils/recoveryTimelineChartPresentation.ts",
         "frontend-modern/src/utils/recoveryTimelinePresentation.ts",
-        "internal/api/setup_script_render.go",
+        "internal/api/configapi/setup_script_render.go",
         "internal/proxmoxidentity/backup_identity.go"
       ],
       "verification": {
@@ -7255,7 +7289,7 @@
             "label": "shared Proxmox setup-script storage/recovery boundary proof",
             "match_prefixes": [],
             "match_files": [
-              "internal/api/setup_script_render.go"
+              "internal/api/configapi/setup_script_render.go"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],

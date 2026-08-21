@@ -594,12 +594,12 @@
         },
         {
           "repo": "pulse",
-          "path": "internal/api/config_handlers_add_test.go",
+          "path": "internal/api/configapi/config_handlers_add_test.go",
           "kind": "file"
         },
         {
           "repo": "pulse",
-          "path": "internal/api/config_handlers_auto_register_test.go",
+          "path": "internal/api/configapi/config_handlers_auto_register_test.go",
           "kind": "file"
         },
         {
@@ -2546,12 +2546,12 @@
         },
         {
           "repo": "pulse",
-          "path": "internal/api/config_handlers_canonical_auto_register_test.go",
+          "path": "internal/api/configapi/config_handlers_canonical_auto_register_test.go",
           "kind": "file"
         },
         {
           "repo": "pulse",
-          "path": "internal/api/config_setup_handlers.go",
+          "path": "internal/api/configapi/config_setup_handlers.go",
           "kind": "file"
         },
         {
@@ -6315,22 +6315,22 @@
         },
         {
           "repo": "pulse",
-          "path": "internal/api/config_handlers_setup_script_test.go",
+          "path": "internal/api/configapi/config_handlers_setup_script_test.go",
           "kind": "file"
         },
         {
           "repo": "pulse",
-          "path": "internal/api/config_setup_handlers.go",
+          "path": "internal/api/configapi/config_setup_handlers.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/configapi/setup_script_render.go",
           "kind": "file"
         },
         {
           "repo": "pulse",
           "path": "internal/api/contract_test.go",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse",
-          "path": "internal/api/setup_script_render.go",
           "kind": "file"
         },
         {

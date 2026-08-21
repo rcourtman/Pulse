@@ -20,11 +20,11 @@ func TestRouterUpdateReadinessConfigSnapshotUsesCanonicalRuntimeTokens(t *testin
 		t.Fatalf("NewAPITokenRecord() error = %v", err)
 	}
 
+	configHandlers := &ConfigHandlers{}
+	configHandlers.SetConfig(&config.Config{})
 	r := &Router{
-		config: &config.Config{APITokens: []config.APITokenRecord{*token}},
-		configHandlers: &ConfigHandlers{
-			defaultConfig: &config.Config{},
-		},
+		config:         &config.Config{APITokens: []config.APITokenRecord{*token}},
+		configHandlers: configHandlers,
 	}
 
 	snapshot := r.updateReadinessConfigSnapshot(context.Background())

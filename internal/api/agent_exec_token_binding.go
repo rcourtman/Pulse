@@ -5,8 +5,8 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
+	"github.com/rcourtman/pulse-go-rewrite/internal/api/agentbinding"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
-	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rs/zerolog/log"
 )
 
@@ -52,7 +52,7 @@ func (r *Router) validateAgentExecToken(token string, agentID string, hostname s
 // (unifiedresources.HostnamesEquivalent); the case-insensitive exact branch
 // keeps IP-literal hostnames comparable, which HostnamesEquivalent rejects.
 func agentExecHostnamesMatch(bound, requested string) bool {
-	return strings.EqualFold(bound, requested) || unifiedresources.HostnamesEquivalent(bound, requested)
+	return agentbinding.HostnamesMatch(bound, requested)
 }
 
 // agentExecBindingDecision is the single source of truth for whether an
@@ -75,55 +75,14 @@ type agentExecBindingDecision struct {
 // while its command channel was rejected, leaving the host permanently on
 // "Remote control blocked" with reinstall as the only recourse.
 func evaluateAgentExecBinding(record *config.APITokenRecord, requestedID, requestedHost string) agentExecBindingDecision {
-	if record == nil {
-		return agentExecBindingDecision{}
-	}
-	requestedID = strings.TrimSpace(requestedID)
-	requestedHost = strings.TrimSpace(requestedHost)
-	boundID := strings.TrimSpace(record.Metadata["bound_agent_id"])
-	boundHost := strings.TrimSpace(record.Metadata["bound_hostname"])
-
-	if boundID == "" && boundHost == "" {
-		if canBindAgentInstallExecToken(record, requestedID, requestedHost) {
-			return agentExecBindingDecision{admit: true, firstBind: true}
-		}
-		return agentExecBindingDecision{}
-	}
-
-	// An install token that already auto-registered a Proxmox source carries a
-	// bound_hostname written by the registration bootstrap, with no
-	// bound_agent_id and no binding version (#1644). That is still a clean
-	// first use of the command channel, not a legacy pre-v6.1.1 record, so bind
-	// it here with the fresh runtime agent ID instead of letting it fall
-	// through to the legacy-migration branch.
-	if canBindAutoRegisteredAgentInstallExecToken(record, requestedID, requestedHost) {
-		return agentExecBindingDecision{admit: true, firstBind: true}
-	}
-
-	// Pre-v6.1.1 deploy tokens could carry a server-synthesized agent ID even
-	// though the runtime derives its ID from machine-id. Migrate that
-	// hostname-bound legacy record exactly once, then enforce identity.
-	if strings.TrimSpace(record.Metadata[agentExecBindingVersionKey]) != agentExecBindingVersion &&
-		boundHost != "" && agentExecHostnamesMatch(boundHost, requestedHost) {
-		return agentExecBindingDecision{admit: true, legacyMigrate: true}
-	}
-
-	idMatches := boundID == "" || boundID == requestedID
-	hostMatches := boundHost == "" || agentExecHostnamesMatch(boundHost, requestedHost)
-	// The runtime agent ID is immutable machine identity while hostnames can
-	// be renamed after enrollment, so an exact ID match re-binds a drifted
-	// hostname rather than stranding the host: v6.1.1 admitted these agents
-	// under an ID-or-hostname rule, and rejecting them afterwards leaves no
-	// operator recourse short of reinstalling the agent.
-	rebindHostname := boundID != "" && boundID == requestedID && !hostMatches && requestedHost != ""
-	if !idMatches || (!hostMatches && !rebindHostname) {
-		return agentExecBindingDecision{}
-	}
+	decision := agentbinding.Evaluate(record, requestedID, requestedHost)
 	return agentExecBindingDecision{
-		admit:          true,
-		rebindHostname: rebindHostname,
-		backfillID:     boundID == "" && boundHost != "",
-		backfillHost:   boundHost == "" && boundID != "",
+		admit:          decision.Admit,
+		firstBind:      decision.FirstBind,
+		legacyMigrate:  decision.LegacyMigrate,
+		rebindHostname: decision.RebindHostname,
+		backfillID:     decision.BackfillID,
+		backfillHost:   decision.BackfillHost,
 	}
 }
 
@@ -389,26 +348,7 @@ func (r *Router) agentCommandSessionConnected(organizationID, tokenID, agentID, 
 }
 
 func canBindAgentInstallExecToken(record *config.APITokenRecord, agentID string, hostname string) bool {
-	if record == nil || strings.TrimSpace(agentID) == "" || strings.TrimSpace(hostname) == "" {
-		return false
-	}
-	if strings.TrimSpace(record.Metadata["bound_agent_id"]) != "" ||
-		strings.TrimSpace(record.Metadata["bound_hostname"]) != "" {
-		return false
-	}
-
-	switch strings.TrimSpace(record.Metadata["install_type"]) {
-	case proxmoxInstallTypePVE, proxmoxInstallTypePBS, agentInstallTypeHost:
-	default:
-		return false
-	}
-
-	switch strings.TrimSpace(record.Metadata["issued_via"]) {
-	case agentInstallIssuedViaConfig, agentInstallIssuedViaHosted:
-		return true
-	default:
-		return false
-	}
+	return agentbinding.CanBindInstallToken(record, agentID, hostname)
 }
 
 // canBindAutoRegisteredAgentInstallExecToken reports whether an install token
@@ -420,30 +360,5 @@ func canBindAgentInstallExecToken(record *config.APITokenRecord, agentID string,
 // legacy-migration branch, which exists to repair old records and is not the
 // contract this flow should depend on. Hostname equivalence is still required.
 func canBindAutoRegisteredAgentInstallExecToken(record *config.APITokenRecord, agentID string, hostname string) bool {
-	if record == nil || strings.TrimSpace(agentID) == "" || strings.TrimSpace(hostname) == "" {
-		return false
-	}
-	if strings.TrimSpace(record.Metadata["bound_agent_id"]) != "" {
-		return false
-	}
-	if strings.TrimSpace(record.Metadata[agentExecBindingVersionKey]) != "" {
-		return false
-	}
-	boundHost := strings.TrimSpace(record.Metadata["bound_hostname"])
-	if boundHost == "" || !agentExecHostnamesMatch(boundHost, strings.TrimSpace(hostname)) {
-		return false
-	}
-
-	switch strings.TrimSpace(record.Metadata["install_type"]) {
-	case proxmoxInstallTypePVE, proxmoxInstallTypePBS, agentInstallTypeHost:
-	default:
-		return false
-	}
-
-	switch strings.TrimSpace(record.Metadata["issued_via"]) {
-	case agentInstallIssuedViaConfig, agentInstallIssuedViaHosted:
-		return true
-	default:
-		return false
-	}
+	return agentbinding.CanBindAutoRegisteredInstallToken(record, agentID, hostname)
 }

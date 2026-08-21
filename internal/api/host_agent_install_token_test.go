@@ -134,7 +134,7 @@ func TestRouterSetupHandoffUsesCanonicalRuntimeConfig(t *testing.T) {
 	if resp.Token == "" || resp.Record == nil {
 		t.Fatalf("expected setup handoff to create a scoped install token")
 	}
-	if got := router.configHandlers.getConfig(req.Context()); got != runtimeConfig {
+	if got := router.configHandlers.Config(req.Context()); got != runtimeConfig {
 		t.Fatalf("config handler uses config %#v, want Router config %#v", got, runtimeConfig)
 	}
 }

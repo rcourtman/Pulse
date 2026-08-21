@@ -65,11 +65,11 @@ func TestRouterDecompositionRouteRegistrationDistribution(t *testing.T) {
 }
 
 func TestConfigHandlersDecompositionDelegationBoundaries(t *testing.T) {
-	fset, fileAST := parseAPISourceFile(t, "config_handlers.go")
+	fset, fileAST := parseAPISourceFile(t, filepath.Join("configapi", "config_handlers.go"))
 
 	methods := exportedHandleMethods(fileAST, "ConfigHandlers")
 	if len(methods) == 0 {
-		t.Fatal("no exported ConfigHandlers Handle* methods found in config_handlers.go")
+		t.Fatal("no exported ConfigHandlers Handle* methods found in configapi/config_handlers.go")
 	}
 
 	const maxMethodLines = 22
@@ -79,7 +79,7 @@ func TestConfigHandlersDecompositionDelegationBoundaries(t *testing.T) {
 		lines := nodeLineSpan(fset, method)
 		if lines > maxMethodLines {
 			t.Errorf(
-				"%s is too large (%d lines > %d). exported Handle* methods in config_handlers.go should remain delegation-focused",
+				"%s is too large (%d lines > %d). exported Handle* methods in configapi/config_handlers.go should remain delegation-focused",
 				method.Name.Name,
 				lines,
 				maxMethodLines,

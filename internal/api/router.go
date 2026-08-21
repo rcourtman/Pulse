@@ -442,19 +442,19 @@ func (r *Router) setupRoutes() {
 		r.bindDefaultMetadataStores(r.monitor)
 	}
 	guestMetadataHandler.SetStoreResolver(func(ctx context.Context) *config.GuestMetadataStore {
-		if monitor := r.configHandlers.getMonitor(ctx); monitor != nil {
+		if monitor := r.configHandlers.Monitor(ctx); monitor != nil {
 			return monitor.GuestMetadataStore()
 		}
 		return nil
 	})
 	dockerMetadataHandler.SetStoreResolver(func(ctx context.Context) *config.DockerMetadataStore {
-		if monitor := r.configHandlers.getMonitor(ctx); monitor != nil {
+		if monitor := r.configHandlers.Monitor(ctx); monitor != nil {
 			return monitor.DockerMetadataStore()
 		}
 		return nil
 	})
 	hostMetadataHandler.SetStoreResolver(func(ctx context.Context) *config.HostMetadataStore {
-		if monitor := r.configHandlers.getMonitor(ctx); monitor != nil {
+		if monitor := r.configHandlers.Monitor(ctx); monitor != nil {
 			return monitor.HostMetadataStore()
 		}
 		return nil
@@ -462,20 +462,20 @@ func (r *Router) setupRoutes() {
 	r.configHandlers.SetConfig(r.config)
 	r.configHandlers.SetMockModeChangeHook(r.syncPlatformSupplementalProviders)
 	r.trueNASHandlers = &TrueNASHandlers{
-		getPersistence: r.configHandlers.getPersistence,
-		getConfig:      r.configHandlers.getConfig,
-		getMonitor:     r.configHandlers.getMonitor,
+		getPersistence: r.configHandlers.Persistence,
+		getConfig:      r.configHandlers.Config,
+		getMonitor:     r.configHandlers.Monitor,
 		getPoller:      func(context.Context) *monitoring.TrueNASPoller { return r.trueNASPoller },
 	}
 	r.vmwareHandlers = &VMwareHandlers{
-		getPersistence: r.configHandlers.getPersistence,
-		getMonitor:     r.configHandlers.getMonitor,
+		getPersistence: r.configHandlers.Persistence,
+		getMonitor:     r.configHandlers.Monitor,
 		getPoller:      func(context.Context) *monitoring.VMwarePoller { return r.vmwarePoller },
 	}
 	r.connectionsHandlers = NewConnectionsHandlers(
-		r.configHandlers.getConfig,
-		r.configHandlers.getPersistence,
-		r.configHandlers.getMonitor,
+		r.configHandlers.Config,
+		r.configHandlers.Persistence,
+		r.configHandlers.Monitor,
 	)
 	r.connectionsHandlers.SetPlatformPollers(
 		func(context.Context) *monitoring.TrueNASPoller { return r.trueNASPoller },
@@ -486,8 +486,8 @@ func (r *Router) setupRoutes() {
 		// HTTP handler uses, so the active-notification stream stays in
 		// lockstep with the Settings → Infrastructure badges. Single-tenant
 		// only for now; multi-tenant per-org wiring is a follow-up.
-		getCfg := r.configHandlers.getConfig
-		getPersist := r.configHandlers.getPersistence
+		getCfg := r.configHandlers.Config
+		getPersist := r.configHandlers.Persistence
 		monitor := r.monitor
 		trueNASPoller := r.trueNASPoller
 		vmwarePoller := r.vmwarePoller
@@ -501,8 +501,8 @@ func (r *Router) setupRoutes() {
 		})
 	}
 	r.availabilityHandlers = NewAvailabilityHandlers(
-		r.configHandlers.getPersistence,
-		r.configHandlers.getMonitor,
+		r.configHandlers.Persistence,
+		r.configHandlers.Monitor,
 		// Resolved lazily: license handlers are constructed after this point.
 		availabilityFeatureResolverFunc(func(ctx context.Context) licenseFeatureChecker {
 			if r.licenseHandlers == nil {
@@ -519,7 +519,7 @@ func (r *Router) setupRoutes() {
 	)
 	recoveryManager := recoverymanager.New(r.multiTenant)
 	r.recoveryHandlers = NewRecoveryHandlers(recoveryManager)
-	r.attentionHandlers = NewAttentionHandlers(r.configHandlers.getMonitor, recoveryManager)
+	r.attentionHandlers = NewAttentionHandlers(r.configHandlers.Monitor, recoveryManager)
 	if r.mtMonitor != nil {
 		r.mtMonitor.SetRecoveryManager(recoveryManager)
 	}

@@ -191,6 +191,8 @@ with missing, unknown, or unrelated scopes fail closed.
     policy-allowed fixes, verification, and history. Security-facing token
     setup must not present it as generic operations workflow access.
 12. `frontend-modern/src/utils/apiTokenPresentation.ts` shared with `api-contracts`: the API token presentation helper is both a security/privacy control surface and a canonical API token management boundary.
+13. `internal/api/agentbinding/policy.go` shared with `agent-lifecycle`, `api-contracts`: install-token command-channel binding is simultaneously an agent lifecycle admission policy, a canonical API identity contract, and a security boundary.
+14. `internal/api/agenttokens/install.go` shared with `agent-lifecycle`, `api-contracts`: agent install-token issuance and persistence are simultaneously an agent lifecycle authority, a canonical API token contract, and a security boundary.
     It owns Docker / Podman token copy for API Access, token presets, usage
     summaries, and revoke warnings so security-facing copy does not drift into
     page-local `container runtime` labels.

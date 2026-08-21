@@ -1301,12 +1301,10 @@ func TestSetupScriptURLRejectsSetupTokenAuthWhenPulseAuthIsConfigured(t *testing
 
 	token := "0123456789abcdef0123456789abcdef"
 	tokenHash := auth.HashAPIToken(token)
-	router.configHandlers.codeMutex.Lock()
-	router.configHandlers.setupTokens[tokenHash] = &SetupTokenRecord{
+	router.configHandlers.StoreSetupToken(tokenHash, &SetupTokenRecord{
 		ExpiresAt: time.Now().Add(time.Minute),
 		NodeType:  "pve",
-	}
-	router.configHandlers.codeMutex.Unlock()
+	})
 
 	req := httptest.NewRequest(http.MethodPost, "/api/setup-script-url", strings.NewReader(`{"type":"pve","host":"pve.local"}`))
 	req.Header.Set("Content-Type", "application/json")
@@ -4655,7 +4653,7 @@ func TestSSHKeyGenerationBlockedInContainer(t *testing.T) {
 	t.Setenv("HOME", homeDir)
 
 	handler := NewConfigHandlers(nil, nil, func() error { return nil }, nil, nil, func() {}, false)
-	keys := handler.getOrGenerateSSHKeys()
+	keys := handler.GetOrGenerateSSHKeys()
 	if keys.SensorsPublicKey != "" {
 		t.Fatalf("expected empty key when container SSH generation is blocked")
 	}
@@ -4935,9 +4933,7 @@ func TestVerifyTemperatureSSHAllowsSetupToken(t *testing.T) {
 
 	token := "0123456789abcdef0123456789abcdef"
 	tokenHash := auth.HashAPIToken(token)
-	router.configHandlers.codeMutex.Lock()
-	router.configHandlers.setupTokens[tokenHash] = &SetupTokenRecord{ExpiresAt: time.Now().Add(time.Minute)}
-	router.configHandlers.codeMutex.Unlock()
+	router.configHandlers.StoreSetupToken(tokenHash, &SetupTokenRecord{ExpiresAt: time.Now().Add(time.Minute)})
 
 	req := httptest.NewRequest(http.MethodPost, "/api/system/verify-temperature-ssh", strings.NewReader(`{"nodes":""}`))
 	req.Header.Set("X-Setup-Token", token)
@@ -4959,12 +4955,10 @@ func TestVerifyTemperatureSSHRejectsSetupTokenOrgMismatch(t *testing.T) {
 
 	token := "fedcba9876543210fedcba9876543210"
 	tokenHash := auth.HashAPIToken(token)
-	router.configHandlers.codeMutex.Lock()
-	router.configHandlers.setupTokens[tokenHash] = &SetupTokenRecord{
+	router.configHandlers.StoreSetupToken(tokenHash, &SetupTokenRecord{
 		ExpiresAt: time.Now().Add(time.Minute),
 		OrgID:     "org-a",
-	}
-	router.configHandlers.codeMutex.Unlock()
+	})
 
 	req := httptest.NewRequest(http.MethodPost, "/api/system/verify-temperature-ssh", strings.NewReader(`{"nodes":""}`))
 	req.Header.Set("X-Setup-Token", token)
@@ -4984,12 +4978,10 @@ func TestVerifyTemperatureSSHRejectsSetupTokenOrgIDQueryBypass(t *testing.T) {
 
 	token := "11223344556677889900aabbccddeeff"
 	tokenHash := auth.HashAPIToken(token)
-	router.configHandlers.codeMutex.Lock()
-	router.configHandlers.setupTokens[tokenHash] = &SetupTokenRecord{
+	router.configHandlers.StoreSetupToken(tokenHash, &SetupTokenRecord{
 		ExpiresAt: time.Now().Add(time.Minute),
 		OrgID:     "org-a",
-	}
-	router.configHandlers.codeMutex.Unlock()
+	})
 
 	req := httptest.NewRequest(http.MethodPost, "/api/system/verify-temperature-ssh?org_id=org-a", strings.NewReader(`{"nodes":""}`))
 	req.Header.Set("X-Setup-Token", token)
@@ -5007,9 +4999,7 @@ func TestSSHConfigAllowsSetupToken(t *testing.T) {
 
 	token := "abcdef0123456789abcdef0123456789"
 	tokenHash := auth.HashAPIToken(token)
-	router.configHandlers.codeMutex.Lock()
-	router.configHandlers.setupTokens[tokenHash] = &SetupTokenRecord{ExpiresAt: time.Now().Add(time.Minute)}
-	router.configHandlers.codeMutex.Unlock()
+	router.configHandlers.StoreSetupToken(tokenHash, &SetupTokenRecord{ExpiresAt: time.Now().Add(time.Minute)})
 
 	req := httptest.NewRequest(http.MethodPost, "/api/system/ssh-config", strings.NewReader("Host example\nHostname example\n"))
 	req.Header.Set("X-Setup-Token", token)
@@ -5032,12 +5022,10 @@ func TestSSHConfigRejectsSetupTokenOrgMismatch(t *testing.T) {
 
 	token := "00112233445566778899aabbccddeeff"
 	tokenHash := auth.HashAPIToken(token)
-	router.configHandlers.codeMutex.Lock()
-	router.configHandlers.setupTokens[tokenHash] = &SetupTokenRecord{
+	router.configHandlers.StoreSetupToken(tokenHash, &SetupTokenRecord{
 		ExpiresAt: time.Now().Add(time.Minute),
 		OrgID:     "org-a",
-	}
-	router.configHandlers.codeMutex.Unlock()
+	})
 
 	req := httptest.NewRequest(http.MethodPost, "/api/system/ssh-config", strings.NewReader("Host example\nHostname example\n"))
 	req.Header.Set("X-Setup-Token", token)
@@ -5055,9 +5043,7 @@ func TestVerifyTemperatureSSHRejectsSetupTokenQueryParam(t *testing.T) {
 
 	token := "abcdefabcdefabcdefabcdefabcdefab"
 	tokenHash := auth.HashAPIToken(token)
-	router.configHandlers.codeMutex.Lock()
-	router.configHandlers.setupTokens[tokenHash] = &SetupTokenRecord{ExpiresAt: time.Now().Add(time.Minute)}
-	router.configHandlers.codeMutex.Unlock()
+	router.configHandlers.StoreSetupToken(tokenHash, &SetupTokenRecord{ExpiresAt: time.Now().Add(time.Minute)})
 
 	req := httptest.NewRequest(http.MethodPost, "/api/system/verify-temperature-ssh?auth_token="+token, strings.NewReader(`{"nodes":""}`))
 	rec := httptest.NewRecorder()
@@ -5074,9 +5060,7 @@ func TestSSHConfigRejectsSetupTokenQueryParam(t *testing.T) {
 
 	token := "deadbeefdeadbeefdeadbeefdeadbeef"
 	tokenHash := auth.HashAPIToken(token)
-	router.configHandlers.codeMutex.Lock()
-	router.configHandlers.setupTokens[tokenHash] = &SetupTokenRecord{ExpiresAt: time.Now().Add(time.Minute)}
-	router.configHandlers.codeMutex.Unlock()
+	router.configHandlers.StoreSetupToken(tokenHash, &SetupTokenRecord{ExpiresAt: time.Now().Add(time.Minute)})
 
 	req := httptest.NewRequest(http.MethodPost, "/api/system/ssh-config?auth_token="+token, strings.NewReader("Host example\nHostname example\n"))
 	rec := httptest.NewRecorder()

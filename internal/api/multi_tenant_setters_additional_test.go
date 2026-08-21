@@ -13,8 +13,8 @@ import (
 func TestConfigHandlersSetMultiTenantMonitor(t *testing.T) {
 	handler := &ConfigHandlers{}
 	handler.SetMultiTenantMonitor(nil)
-	if handler.mtMonitor != nil {
-		t.Fatalf("mtMonitor should be nil after SetMultiTenantMonitor(nil)")
+	if handler.Monitor(context.Background()) != nil {
+		t.Fatalf("monitor should be nil after SetMultiTenantMonitor(nil)")
 	}
 }
 
@@ -63,16 +63,16 @@ func TestRouterSetMultiTenantMonitorRefreshesConfigHandlerMonitorSource(t *testi
 	}
 	router.configHandlers.SetMultiTenantMonitor(oldMTM)
 
-	if got := router.configHandlers.getMonitor(context.Background()); got != oldMonitor {
+	if got := router.configHandlers.Monitor(context.Background()); got != oldMonitor {
 		t.Fatalf("precondition monitor = %#v, want old monitor %#v", got, oldMonitor)
 	}
 
 	router.SetMultiTenantMonitor(newMTM)
 
-	if got := router.configHandlers.getMonitor(context.Background()); got != newMonitor {
+	if got := router.configHandlers.Monitor(context.Background()); got != newMonitor {
 		t.Fatalf("config handler monitor = %#v, want reloaded monitor %#v", got, newMonitor)
 	}
-	if got := router.configHandlers.getConfig(context.Background()); got != newConfig {
+	if got := router.configHandlers.Config(context.Background()); got != newConfig {
 		t.Fatalf("config handler config = %#v, want reloaded config %#v", got, newConfig)
 	}
 }
@@ -84,15 +84,14 @@ func TestConfigHandlersNonDefaultMissingTenantMonitorFailsClosed(t *testing.T) {
 	mtm := monitoring.NewMultiTenantMonitor(defaultConfig, mtp, nil)
 	defer mtm.Stop()
 
-	handler := &ConfigHandlers{
-		defaultConfig:      defaultConfig,
-		defaultPersistence: config.NewConfigPersistence(defaultConfig.ConfigPath),
-		defaultMonitor:     defaultMonitor,
-	}
+	handler := NewConfigHandlers(nil, nil, nil, nil, nil, nil, false)
+	handler.SetConfig(defaultConfig)
+	handler.SetPersistence(config.NewConfigPersistence(defaultConfig.ConfigPath))
+	handler.SetMonitor(defaultMonitor)
 	handler.SetMultiTenantMonitor(mtm)
 
 	ctx := context.WithValue(context.Background(), OrgIDContextKey, "tenant-missing")
-	cfg, persistence, monitor := handler.getContextState(ctx)
+	cfg, persistence, monitor := handler.ContextState(ctx)
 	if cfg != nil || persistence != nil || monitor != nil {
 		t.Fatalf("expected missing non-default tenant state to fail closed, got cfg=%#v persistence=%#v monitor=%#v", cfg, persistence, monitor)
 	}
@@ -113,14 +112,12 @@ func TestConfigHandlersDefaultContextUsesPrimaryRuntimeState(t *testing.T) {
 	setUnexportedField(t, primaryMonitor, "config", primaryConfig)
 	primaryPersistence := config.NewConfigPersistence(primaryConfig.ConfigPath)
 
-	handler := &ConfigHandlers{
-		defaultConfig:      primaryConfig,
-		defaultPersistence: primaryPersistence,
-		defaultMonitor:     primaryMonitor,
-		mtMonitor:          mtm,
-	}
+	handler := NewConfigHandlers(nil, mtm, nil, nil, nil, nil, false)
+	handler.SetConfig(primaryConfig)
+	handler.SetPersistence(primaryPersistence)
+	handler.SetMonitor(primaryMonitor)
 
-	cfg, persistence, monitor := handler.getContextState(context.Background())
+	cfg, persistence, monitor := handler.ContextState(context.Background())
 	if cfg != primaryConfig {
 		t.Fatalf("default config = %#v, want primary config %#v", cfg, primaryConfig)
 	}

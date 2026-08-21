@@ -3114,7 +3114,7 @@ secret deterministically: it must request the machine-readable
 `pveum ... --output-format json` form first and parse the `value` field,
 falling back to the legacy box-drawing table layout only when an older pveum
 rejects the JSON flag — matching the hardened web-setup render path
-(`internal/api/setup_script_render.go`) so token capture does not silently fail
+(`internal/api/configapi/setup_script_render.go`) so token capture does not silently fail
 or mis-parse when pveum's table formatting drifts across versions/locales.
 `scripts/installtests/root_install_sh_test.go` is the owned proof surface for
 that install-time extraction. A

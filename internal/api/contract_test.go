@@ -37,6 +37,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/unified"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
+	"github.com/rcourtman/pulse-go-rewrite/internal/api/configapi"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/license/entitlements"
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
@@ -213,9 +214,7 @@ func TestContract_DefaultDetectPVEClusterRetainsUnreachableMembers(t *testing.T)
 	}))
 	defer server.Close()
 
-	originalValidate := validatePVEClusterNode
-	t.Cleanup(func() { validatePVEClusterNode = originalValidate })
-	validatePVEClusterNode = func(node proxmox.ClusterStatus, _ proxmox.ClientConfig) (bool, string, string) {
+	validator := func(node proxmox.ClusterStatus, _ proxmox.ClientConfig) (bool, string, string) {
 		if node.Name == "pve-a" {
 			return true, "fingerprint-a", ""
 		}
@@ -223,7 +222,7 @@ func TestContract_DefaultDetectPVEClusterRetainsUnreachableMembers(t *testing.T)
 	}
 	lastSeen := time.Now().Add(-time.Hour).UTC()
 
-	isCluster, clusterName, endpoints := defaultDetectPVECluster(
+	isCluster, clusterName, endpoints := configapi.DetectPVEClusterWithValidator(
 		proxmox.ClientConfig{
 			Host:       server.URL,
 			TokenName:  "root@pam!pulse",
@@ -240,7 +239,7 @@ func TestContract_DefaultDetectPVEClusterRetainsUnreachableMembers(t *testing.T)
 			NodeName: "pve-c",
 			Host:     "https://pve-c:8006",
 			LastSeen: lastSeen.Add(-time.Hour),
-		}},
+		}}, validator,
 	)
 	if !isCluster || clusterName != "production" {
 		t.Fatalf("cluster detection = (%v, %q), want (true, production)", isCluster, clusterName)
@@ -264,7 +263,7 @@ func TestContract_DefaultDetectPVEClusterRetainsUnreachableMembers(t *testing.T)
 	if offline.Fingerprint != "fingerprint-b" || offline.GuestURL != "https://guest.example/pve-b" || !offline.LastSeen.Equal(lastSeen) {
 		t.Fatalf("powered-off member lost last-known endpoint evidence: %+v", offline)
 	}
-	if pending, ok := findExistingClusterEndpoint("pve-c", endpoints); !ok ||
+	if pending, ok := configapi.FindExistingClusterEndpoint("pve-c", endpoints); !ok ||
 		pending.Host != "https://pve-c:8006" ||
 		!pending.LastSeen.Equal(lastSeen.Add(-time.Hour)) {
 		t.Fatalf("partially omitted endpoint was deleted before monitor reconciliation: %+v", endpoints)
@@ -1432,11 +1431,11 @@ func TestContract_NodeConfigUpdateTracksOptionalConnectionFieldsAndRedactedSecre
 	if err := json.Unmarshal([]byte(`{"name":"cluster","tokenName":"pulse-monitor@pve!pulse-pve","tokenValue":"********"}`), &preserveReq); err != nil {
 		t.Fatalf("decode preserve request: %v", err)
 	}
-	preserveReq.normalizeTokenAliases()
-	if preserveReq.hasGuestURLField() {
+	preserveReq.NormalizeTokenAliases()
+	if preserveReq.HasGuestURLField() {
 		t.Fatal("omitted guestURL must preserve the stored connection URL")
 	}
-	if preserveReq.hasFingerprintField() {
+	if preserveReq.HasFingerprintField() {
 		t.Fatal("omitted fingerprint must preserve the stored TLS fingerprint")
 	}
 	if preserveReq.TokenValue != "" {
@@ -1447,10 +1446,10 @@ func TestContract_NodeConfigUpdateTracksOptionalConnectionFieldsAndRedactedSecre
 	if err := json.Unmarshal([]byte(`{"guestURL":"","fingerprint":""}`), &clearReq); err != nil {
 		t.Fatalf("decode clear request: %v", err)
 	}
-	if !clearReq.hasGuestURLField() {
+	if !clearReq.HasGuestURLField() {
 		t.Fatal("explicit empty guestURL must remain observable so clients can clear it intentionally")
 	}
-	if !clearReq.hasFingerprintField() {
+	if !clearReq.HasFingerprintField() {
 		t.Fatal("explicit empty fingerprint must remain observable so clients can clear it intentionally")
 	}
 }
@@ -6541,9 +6540,7 @@ func TestContract_SetupTokenRoutesRejectQueryAuthToken(t *testing.T) {
 
 	token := "fedcba9876543210fedcba9876543210"
 	tokenHash := authpkg.HashAPIToken(token)
-	router.configHandlers.codeMutex.Lock()
-	router.configHandlers.setupTokens[tokenHash] = &SetupTokenRecord{ExpiresAt: time.Now().Add(time.Minute)}
-	router.configHandlers.codeMutex.Unlock()
+	router.configHandlers.StoreSetupToken(tokenHash, &SetupTokenRecord{ExpiresAt: time.Now().Add(time.Minute)})
 
 	t.Run("verify-temperature-ssh requires header token transport", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/api/system/verify-temperature-ssh?auth_token="+token, strings.NewReader(`{"nodes":""}`))
@@ -10567,12 +10564,10 @@ func TestContract_CanonicalAutoRegisterSetupTokenAuthFailureText(t *testing.T) {
 
 	const validSetupToken = "setup-token-123"
 	tokenHash := authpkg.HashAPIToken(validSetupToken)
-	handler.codeMutex.Lock()
-	handler.setupTokens[tokenHash] = &SetupTokenRecord{
+	handler.StoreSetupToken(tokenHash, &SetupTokenRecord{
 		ExpiresAt: time.Now().Add(5 * time.Minute),
 		NodeType:  "pve",
-	}
-	handler.codeMutex.Unlock()
+	})
 
 	requestBody.AuthToken = validSetupToken
 	requestBody.TokenValue = ""
@@ -11631,7 +11626,7 @@ func TestContract_CanonicalAutoRegisterDirectValidationContract(t *testing.T) {
 
 	missingServerReq := httptest.NewRequest(http.MethodPost, "/api/auto-register", bytes.NewReader(missingServerJSON))
 	missingServerRec := httptest.NewRecorder()
-	handler.handleCanonicalAutoRegister(missingServerRec, missingServerReq, &reqBody, "127.0.0.1")
+	handler.HandleCanonicalAutoRegister(missingServerRec, missingServerReq, &reqBody, "127.0.0.1")
 	if missingServerRec.Code != http.StatusBadRequest {
 		t.Fatalf("missing-serverName status = %d, want 400", missingServerRec.Code)
 	}
@@ -11643,7 +11638,7 @@ func TestContract_CanonicalAutoRegisterDirectValidationContract(t *testing.T) {
 	reqBody.TokenValue = ""
 	mismatchedReq := httptest.NewRequest(http.MethodPost, "/api/auto-register", nil)
 	mismatchedRec := httptest.NewRecorder()
-	handler.handleCanonicalAutoRegister(mismatchedRec, mismatchedReq, &reqBody, "127.0.0.1")
+	handler.HandleCanonicalAutoRegister(mismatchedRec, mismatchedReq, &reqBody, "127.0.0.1")
 	if mismatchedRec.Code != http.StatusBadRequest {
 		t.Fatalf("mismatched-completion status = %d, want 400", mismatchedRec.Code)
 	}
@@ -22998,10 +22993,7 @@ func TestContract_RequestOriginCannotRetargetTokenBearingCommands(t *testing.T) 
 					PublicURLAutoDetected: tc.publicAuto,
 					AgentConnectURL:       tc.agentConnectURL,
 				}
-				handler := &ConfigHandlers{
-					defaultConfig:      cfg,
-					defaultPersistence: config.NewConfigPersistence(cfg.DataPath),
-				}
+				handler := newTestConfigHandlers(t, cfg)
 
 				req := httptest.NewRequest(
 					http.MethodPost,
@@ -23662,7 +23654,7 @@ func TestContract_HostedInstallerOriginsFailClosedAtRouter(t *testing.T) {
 		cfg.PublicURLAutoDetected = autoDetected
 		cfg.AgentConnectURL = agentConnectURL
 		router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
-		if !router.hostedMode || router.configHandlers == nil || !router.configHandlers.hostedMode {
+		if !router.hostedMode || router.configHandlers == nil || !router.configHandlers.HostedMode() {
 			t.Fatal("Router hosted mode was not propagated into ConfigHandlers")
 		}
 		return router, cfg
@@ -23763,9 +23755,7 @@ func TestContract_HostedInstallerOriginsFailClosedAtRouter(t *testing.T) {
 					if rec.Code != http.StatusServiceUnavailable {
 						t.Fatalf("%s status = %d, want %d: %s", installType, rec.Code, http.StatusServiceUnavailable, rec.Body.String())
 					}
-					router.configHandlers.codeMutex.RLock()
-					setupTokenCount := len(router.configHandlers.setupTokens)
-					router.configHandlers.codeMutex.RUnlock()
+					setupTokenCount := router.configHandlers.SetupTokenCount()
 					if setupTokenCount != 0 {
 						t.Fatalf("%s setup token count = %d, want 0", installType, setupTokenCount)
 					}

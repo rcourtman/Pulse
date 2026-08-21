@@ -200,8 +200,8 @@ installer download and the agent's subsequent Pulse TLS connection.
 ## Canonical Files
 
 1. `internal/api/agent_install_command_shared.go`
-2. `internal/api/config_setup_handlers.go`
-   2a. `internal/api/setup_script_render.go`
+2. `internal/api/configapi/config_setup_handlers.go`
+   2a. `internal/api/configapi/setup_script_render.go`
 3. `internal/api/unified_agent.go`
 4. `internal/agentupdate/update.go`
 5. `internal/hostagent/agent.go`
@@ -548,7 +548,9 @@ update, profile rollout, command reachability, or fleet-control authority.
     with tenant-local tokens; branding is report rendering configuration inside
     that runtime, not a control-plane token, agent profile, or cross-client
     ingest path.
-21. `internal/api/config_setup_handlers.go` shared with `api-contracts`: auto-register and setup handlers are both an agent lifecycle control surface and a canonical API payload contract boundary.
+21. `internal/api/agentbinding/policy.go` shared with `api-contracts`, `security-privacy`: install-token command-channel binding is simultaneously an agent lifecycle admission policy, a canonical API identity contract, and a security boundary.
+22. `internal/api/agenttokens/install.go` shared with `api-contracts`, `security-privacy`: agent install-token issuance and persistence are simultaneously an agent lifecycle authority, a canonical API token contract, and a security boundary.
+21. `internal/api/configapi/config_setup_handlers.go` shared with `api-contracts`: auto-register and setup handlers are both an agent lifecycle control surface and a canonical API payload contract boundary.
     Assisted-setup naming is lifecycle-owned bootstrap state: the connection
     name typed in the add dialog travels on the one-time setup token
     (`SetupTokenRecord.DesiredName`) rather than through the node-side script,
@@ -557,7 +559,7 @@ update, profile rollout, command reachability, or fleet-control authority.
     self-reported hostname only when no name was typed. Dedup and
     cluster-member adoption identity remain hostname/candidate based so the
     carried name cannot fork or rotate an existing registration.
-22. `internal/api/setup_script_render.go` shared with `api-contracts`, `storage-recovery`: the generated Proxmox setup-script is a shared boundary across agent lifecycle (forced-command keys, install/uninstall edits), API contracts (rendered token shape and encoded rerun URL), and storage/recovery (backup visibility grants, Pulse-managed temperature SSH keys, and SMART disk-temperature collection).
+22. `internal/api/configapi/setup_script_render.go` shared with `api-contracts`, `storage-recovery`: the generated Proxmox setup-script is a shared boundary across agent lifecycle (forced-command keys, install/uninstall edits), API contracts (rendered token shape and encoded rerun URL), and storage/recovery (backup visibility grants, Pulse-managed temperature SSH keys, and SMART disk-temperature collection).
     PBS setup-script auto-registration remains lifecycle-owned bootstrap
     transport: rendered scripts must post registration payloads to the canonical
     Pulse base URL plus `/api/auto-register`, not to the script download
@@ -2036,7 +2038,7 @@ the intentionally sparse public response.
     lifecycle-adjacent setup and install surfaces may rely on the authenticated
     user identity passed through that helper, but they must not treat a missing
     configured role header as administrator proof.
-13. Preserve shipped security-doc guidance in shared lifecycle setup helpers so `internal/api/config_setup_handlers.go` and adjacent install/setup runtime paths point operators at the running build's local security documentation route rather than GitHub `main` links.
+13. Preserve shipped security-doc guidance in shared lifecycle setup helpers so `internal/api/configapi/config_setup_handlers.go` and adjacent install/setup runtime paths point operators at the running build's local security documentation route rather than GitHub `main` links.
 14. Keep shared `internal/api/router.go` workload-chart downsampling presentation-only: when that router caps mixed-cadence workload history into equal-time buckets for operator-facing cards, lifecycle-adjacent setup and fleet surfaces must not reuse the shaped chart samples as heartbeat, enrollment, or last-seen authority.
     That same presentation-only boundary must preserve canonical millisecond timestamps when it serializes chart points, so lifecycle-adjacent first-host and fleet surfaces do not misread rounded chart samples as duplicate or restarted heartbeat evidence.
     The same rule now applies to storage summary interaction. Shared sticky-card or row-hover focus behavior on infrastructure, workloads, and storage may reuse the canonical chart transport, but lifecycle-adjacent install, enrollment, and fleet surfaces must not treat highlighted summary series or sticky-shell state as agent freshness or setup progress.
@@ -2678,7 +2680,7 @@ runtime, daemon host, and Swarm capability from the new connection.
 ### Shared system-settings boundary dropped dead auto-update schedule fields
 
 The shared `internal/api` system-settings surface this subsystem consumes
-(`internal/api/system_settings.go`, `internal/api/config_system_handlers.go`)
+(`internal/api/system_settings.go`, `internal/api/configapi/config_system_handlers.go`)
 removed the never-consumed `autoUpdateCheckInterval` / `autoUpdateTime`
 fields. No agent-lifecycle behavior keyed off them — agent update targeting
 and command admission are unaffected — and the extension-point expectations
@@ -4569,7 +4571,7 @@ That same shared `internal/api/` dependency also assumes config import reloads
 fail closed without panicking when optional runtime managers are absent.
 Lifecycle-adjacent setup, install, and restore flows may invoke the shared
 config-import path before every notification or monitoring manager is wired,
-but `internal/api/config_export_import_handlers.go` must still rebind the
+but `internal/api/configapi/config_export_import_handlers.go` must still rebind the
 imported configuration without turning missing optional managers into a fatal
 reload path.
 The same proof boundary also owns deterministic first-run re-entry for the
@@ -5429,13 +5431,13 @@ persist service arguments without `--token` on token-optional Pulse instances,
 instead of advertising a no-token flow in settings while the installer still
 fails validation at runtime.
 That same optional-auth install contract also applies to backend-generated
-Proxmox install commands in `internal/api/config_setup_handlers.go` and
+Proxmox install commands in `internal/api/configapi/config_setup_handlers.go` and
 `internal/api/agent_install_command_shared.go`: when Pulse auth is not
 configured, the canonical agent-install-command API must return tokenless
 install transport and must not persist a new API token record just because an
 operator opened a backend-driven install surface.
 That same backend-owned setup/install boundary also owns shipped security-doc
-guidance in runtime responses and logs: `internal/api/config_setup_handlers.go`
+guidance in runtime responses and logs: `internal/api/configapi/config_setup_handlers.go`
 and adjacent lifecycle setup helpers must not point operators at GitHub
 `main` for security instructions that the running build already serves
 locally, and should use the shipped `/docs/SECURITY.md` path instead.
@@ -6053,9 +6055,9 @@ Token-optional installations retain the setup-token bootstrap path. Ordinary
 hosts never enter this Proxmox registration loop, while PVE, PBS, mixed-product
 hosts, restarts, and hosted-tenant install tokens retain the same authority
 split. `internal/hostagent/proxmox_setup_test.go`,
-`internal/api/config_handlers_auto_register_test.go`,
-`internal/api/proxmox_install_registration_test.go`, and
-`internal/api/issue1644_host_install_token_proxmox_test.go` prove the recurring
+`internal/api/configapi/config_handlers_auto_register_test.go`,
+`internal/api/configapi/proxmox_install_registration_test.go`, and
+`internal/api/configapi/issue1644_host_install_token_proxmox_test.go` prove the recurring
 health, first-install, type/host binding, one-time consumption, rejection,
 host-token bootstrap, and concurrent-completion contracts.
 

@@ -188,7 +188,7 @@ a recovery-provider read helper or compatibility alias.
 1. `frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx` shared with `unified-resources`: Proxmox backup server table rows are both a storage/recovery backup-health surface and a unified-resource platform-table consumer boundary.
 2. `frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx` shared with `unified-resources`: Proxmox workload coverage rows are both a storage/recovery protection-posture surface and a unified-resource identity consumer boundary.
 3. `frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx` shared with `unified-resources`: Proxmox recoverable workload table rows are both a storage/recovery coverage surface and a unified-resource platform-table consumer boundary.
-4. `internal/api/setup_script_render.go` shared with `agent-lifecycle`, `api-contracts`: the generated Proxmox setup-script is a shared boundary across agent lifecycle (forced-command keys, install/uninstall edits), API contracts (rendered token shape and encoded rerun URL), and storage/recovery (backup visibility grants, Pulse-managed temperature SSH keys, and SMART disk-temperature collection).
+4. `internal/api/configapi/setup_script_render.go` shared with `agent-lifecycle`, `api-contracts`: the generated Proxmox setup-script is a shared boundary across agent lifecycle (forced-command keys, install/uninstall edits), API contracts (rendered token shape and encoded rerun URL), and storage/recovery (backup visibility grants, Pulse-managed temperature SSH keys, and SMART disk-temperature collection).
     The user-chosen connection name carried by assisted setup travels on the
     server-side setup token, not through the rendered script or its
     registration payload, so honoring it changes neither the backup
@@ -297,10 +297,10 @@ remain independently observed inputs, and the live authenticated agent-server
 readiness check remains authoritative before any action admission or dispatch.
 
 Per-member cluster endpoint connection-address overrides accepted by
-`internal/api/config_node_handlers.go` (`clusterEndpointOverrides` on the node
+`internal/api/configapi/config_node_handlers.go` (`clusterEndpointOverrides` on the node
 update payload writing `ClusterEndpoints[n].IPOverride`), including the
 agent-driven writes of the same field by canonical auto-register member
-matching in `internal/api/config_setup_handlers.go`, are monitoring
+matching in `internal/api/configapi/config_setup_handlers.go`, are monitoring
 connectivity state only. Storage- and recovery-adjacent surfaces may observe
 the effective member address for support diagnostics, but they must not treat
 a present or absent `ipOverride` as backup coverage, restore readiness, or
@@ -1713,7 +1713,7 @@ recovery scope, or a storage/recovery-owned secret source.
     recovery. Shared `internal/api/router.go` may mount the
     `/api/connections` and `/api/connections/probe` routes alongside the
     existing storage/recovery-adjacent API surfaces, and
-    `internal/api/config_handlers.go` and `internal/api/config_node_handlers.go`
+    `internal/api/configapi/config_handlers.go` and `internal/api/configapi/config_node_handlers.go`
     may carry the new per-instance `Enabled`/`Disabled` round-trip, but
     storage and recovery consumers must not reinterpret the derived
     connection `state` (active/paused/unauthorized/unreachable/stale/pending)
@@ -2148,7 +2148,7 @@ must not treat starter
     storage-local timeout queue.
 24. Keep storage/recovery-adjacent config-import reload safety on the shared
     `internal/api/` boundary. When storage or recovery setup flows depend on
-    `internal/api/config_export_import_handlers.go`, post-import reloads must
+    `internal/api/configapi/config_export_import_handlers.go`, post-import reloads must
     tolerate absent notification managers and other optional runtime managers
     so adjacent browser surfaces inherit a fail-closed API response instead of
     a panic after the archive import succeeds.
@@ -2248,7 +2248,7 @@ pinned by `TestResourceFromHostPreservesCustomSensorMeta` and
 ### Shared system-settings boundary dropped dead auto-update schedule fields
 
 The shared `internal/api` system-settings surface this subsystem consumes
-(`internal/api/system_settings.go`, `internal/api/config_system_handlers.go`)
+(`internal/api/system_settings.go`, `internal/api/configapi/config_system_handlers.go`)
 removed the never-consumed `autoUpdateCheckInterval` / `autoUpdateTime`
 fields. Persisted `system.json` files that still carry the legacy keys load
 cleanly with the keys ignored, so tenant workspace preservation and recovery
@@ -4357,7 +4357,7 @@ That same shared `internal/api/` dependency also assumes config import reloads
 degrade safely when optional runtime managers are missing. Storage- and
 recovery-adjacent restore or support flows may drive the shared
 `/api/config/import` boundary before every notification or monitoring manager
-exists, but `internal/api/config_export_import_handlers.go` must still apply
+exists, but `internal/api/configapi/config_export_import_handlers.go` must still apply
 the imported configuration without panicking on absent optional managers.
 The same boundary also owns first-session reset cleanup during managed-backend
 proof: the dev-only `/api/security/dev/reset-first-run` route must clear auth
@@ -5043,7 +5043,7 @@ public-demo bootstrap signal instead of inferring demo posture from headers,
 
 ### Adjacent Proxmox registration authorization neutrality
 
-The shared `internal/api/config_setup_handlers.go` Proxmox registration fix is
+The shared `internal/api/configapi/config_setup_handlers.go` Proxmox registration fix is
 adjacent lifecycle/API authority only. Runtime agents now use
 `/api/auto-register` directly, ordinary agent tokens remain update-only, and a
 server-minted Proxmox install token may consume one host-bound initial source

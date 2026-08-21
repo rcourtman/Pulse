@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/api/configapi"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 )
@@ -131,19 +132,7 @@ type agentInstallCommandOptions struct {
 	Insecure           bool
 }
 
-type setupScriptInstallArtifact struct {
-	Type              string `json:"type"`
-	Host              string `json:"host"`
-	URL               string `json:"url"`
-	DownloadURL       string `json:"downloadURL"`
-	ScriptFileName    string `json:"scriptFileName"`
-	Command           string `json:"command"`
-	CommandWithEnv    string `json:"commandWithEnv"`
-	CommandWithoutEnv string `json:"commandWithoutEnv"`
-	Expires           int64  `json:"expires"`
-	SetupToken        string `json:"setupToken"`
-	TokenHint         string `json:"tokenHint"`
-}
+type setupScriptInstallArtifact = configapi.SetupScriptInstallArtifact
 
 func normalizeAgentInstallBaseURL(raw string) string {
 	return strings.TrimRight(strings.TrimSpace(raw), "/")
