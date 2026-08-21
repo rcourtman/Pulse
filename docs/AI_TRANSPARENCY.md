@@ -36,10 +36,13 @@ useful, so here is the breakdown.
 - **Documentation and release notes.** Drafted with AI assistance and checked
   against the actual code and behaviour before publishing.
 - **Issue triage and support.** AI helps investigate reports, reproduce bugs,
-  and draft replies. When a response comes from an automated triage run
-  rather than from me at the keyboard, it posts under the dedicated
-  pulse-triage bot identity and carries a footer saying so, with a link back
-  to this page. I would rather you know you are reading automation than
+  and draft replies. On GitHub, a response from an automated triage run
+  rather than from me at the keyboard posts under the dedicated pulse-triage
+  bot identity and links back to this page. Support email works the same
+  way: a reply may be handled end to end by automation, in which case it is
+  sent as Pulse Triage from the normal support address rather than as me,
+  and links back here. Automated replies never present themselves as me
+  personally. I would rather you know you are reading automation than
   wonder whether you are.
 
 ## What stays human
