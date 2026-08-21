@@ -1236,11 +1236,11 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                         "frontend-modern/src/types/api.ts",
                         "internal/api/ai_handlers_more_test.go",
                         "internal/api/ai_handlers_patrol_actions_additional_test.go",
+                        "internal/api/alerting/external_probe_notifications_test.go",
                         "internal/api/audit_handlers_test.go",
                         "internal/api/availability_handlers_test.go",
                         "internal/api/contract_test.go",
                         "internal/api/docker_agents_report_size_test.go",
-                        "internal/api/external_probe_notifications_test.go",
                         "internal/api/host_agent_removal_lifecycle_integration_test.go",
                         "internal/api/issue1640_readiness_gate_test.go",
                         "internal/api/issue1640_readiness_transport_test.go",
@@ -1683,10 +1683,13 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                     "test_prefixes": [],
                     "exact_files": [
                         "internal/api/agent_install_command_shared_test.go",
-                        "internal/api/config_handlers_auto_register_test.go",
-                        "internal/api/config_handlers_canonical_auto_register_test.go",
+                        "internal/api/agentbinding/policy_test.go",
+                        "internal/api/agenttokens/install_test.go",
+                        "internal/api/configapi/config_handlers_auto_register_test.go",
+                        "internal/api/configapi/config_handlers_canonical_auto_register_test.go",
                         "internal/api/contract_test.go",
                         "internal/api/hosted_agent_install_command_test.go",
+                        "internal/api/issue1644_exec_binding_integration_test.go",
                         "internal/api/unified_agent_more_test.go",
                         "internal/api/unified_agent_test.go",
                     ],
@@ -1714,8 +1717,8 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                     "test_prefixes": [],
                     "exact_files": [
                         "internal/api/agent_install_command_shared_test.go",
-                        "internal/api/config_handlers_auto_register_test.go",
-                        "internal/api/config_handlers_canonical_auto_register_test.go",
+                        "internal/api/configapi/config_handlers_auto_register_test.go",
+                        "internal/api/configapi/config_handlers_canonical_auto_register_test.go",
                         "internal/api/contract_test.go",
                         "internal/api/hosted_agent_install_command_test.go",
                         "internal/api/unified_agent_more_test.go",
@@ -1749,10 +1752,13 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                     "test_prefixes": [],
                     "exact_files": [
                         "internal/api/agent_install_command_shared_test.go",
-                        "internal/api/config_handlers_auto_register_test.go",
-                        "internal/api/config_handlers_canonical_auto_register_test.go",
+                        "internal/api/agentbinding/policy_test.go",
+                        "internal/api/agenttokens/install_test.go",
+                        "internal/api/configapi/config_handlers_auto_register_test.go",
+                        "internal/api/configapi/config_handlers_canonical_auto_register_test.go",
                         "internal/api/contract_test.go",
                         "internal/api/hosted_agent_install_command_test.go",
+                        "internal/api/issue1644_exec_binding_integration_test.go",
                         "internal/api/unified_agent_more_test.go",
                         "internal/api/unified_agent_test.go",
                     ],
@@ -1780,8 +1786,8 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                     "test_prefixes": [],
                     "exact_files": [
                         "internal/api/agent_install_command_shared_test.go",
-                        "internal/api/config_handlers_auto_register_test.go",
-                        "internal/api/config_handlers_canonical_auto_register_test.go",
+                        "internal/api/configapi/config_handlers_auto_register_test.go",
+                        "internal/api/configapi/config_handlers_canonical_auto_register_test.go",
                         "internal/api/contract_test.go",
                         "internal/api/hosted_agent_install_command_test.go",
                         "internal/api/unified_agent_more_test.go",
@@ -1792,7 +1798,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
         )
 
     def test_config_setup_backend_change_requires_lifecycle_and_api_contracts(self):
-        required = infer_impacted_subsystems(["internal/api/config_setup_handlers.go"])
+        required = infer_impacted_subsystems(["internal/api/configapi/config_setup_handlers.go"])
         self.assertEqual(set(required), {"agent-lifecycle", "api-contracts"})
 
         lifecycle = required["agent-lifecycle"]
@@ -1802,7 +1808,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
         )
         self.assertEqual(
             lifecycle["touched_runtime_files"],
-            ["internal/api/config_setup_handlers.go"],
+            ["internal/api/configapi/config_setup_handlers.go"],
         )
         self.assertEqual(
             lifecycle["verification_requirements"],
@@ -1810,15 +1816,18 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                 {
                     "id": "agent-install-api-surface",
                     "label": "agent install and registration API proof",
-                    "touched_runtime_files": ["internal/api/config_setup_handlers.go"],
+                    "touched_runtime_files": ["internal/api/configapi/config_setup_handlers.go"],
                     "allow_same_subsystem_tests": False,
                     "test_prefixes": [],
                     "exact_files": [
                         "internal/api/agent_install_command_shared_test.go",
-                        "internal/api/config_handlers_auto_register_test.go",
-                        "internal/api/config_handlers_canonical_auto_register_test.go",
+                        "internal/api/agentbinding/policy_test.go",
+                        "internal/api/agenttokens/install_test.go",
+                        "internal/api/configapi/config_handlers_auto_register_test.go",
+                        "internal/api/configapi/config_handlers_canonical_auto_register_test.go",
                         "internal/api/contract_test.go",
                         "internal/api/hosted_agent_install_command_test.go",
+                        "internal/api/issue1644_exec_binding_integration_test.go",
                         "internal/api/unified_agent_more_test.go",
                         "internal/api/unified_agent_test.go",
                     ],
@@ -1833,7 +1842,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
         )
         self.assertEqual(
             api_contracts["touched_runtime_files"],
-            ["internal/api/config_setup_handlers.go"],
+            ["internal/api/configapi/config_setup_handlers.go"],
         )
         self.assertEqual(
             api_contracts["verification_requirements"],
@@ -1841,13 +1850,13 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                 {
                     "id": "agent-install-backend-contract",
                     "label": "agent install and registration backend API contract proof",
-                    "touched_runtime_files": ["internal/api/config_setup_handlers.go"],
+                    "touched_runtime_files": ["internal/api/configapi/config_setup_handlers.go"],
                     "allow_same_subsystem_tests": False,
                     "test_prefixes": [],
                     "exact_files": [
                         "internal/api/agent_install_command_shared_test.go",
-                        "internal/api/config_handlers_auto_register_test.go",
-                        "internal/api/config_handlers_canonical_auto_register_test.go",
+                        "internal/api/configapi/config_handlers_auto_register_test.go",
+                        "internal/api/configapi/config_handlers_canonical_auto_register_test.go",
                         "internal/api/contract_test.go",
                         "internal/api/hosted_agent_install_command_test.go",
                         "internal/api/unified_agent_more_test.go",
@@ -2015,6 +2024,9 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                     "test_prefixes": [],
                     "exact_files": [
                         "frontend-modern/src/api/__tests__/security.test.ts",
+                        "internal/api/agentbinding/policy_test.go",
+                        "internal/api/agenttokens/install_test.go",
+                        "internal/api/issue1644_exec_binding_integration_test.go",
                         "internal/api/security_regression_test.go",
                         "internal/api/security_status_additional_test.go",
                         "internal/api/security_tokens_lifecycle_test.go",

@@ -1366,7 +1366,7 @@ class SubsystemLookupTest(unittest.TestCase):
                 self.assertEqual(match["verification_requirement"]["id"], requirement_id)
 
     def test_lookup_paths_reports_config_setup_backend_as_shared_boundary(self) -> None:
-        result = lookup_paths(["internal/api/config_setup_handlers.go"])
+        result = lookup_paths(["internal/api/configapi/config_setup_handlers.go"])
         self.assertEqual(result["unowned_runtime_files"], [])
         self.assertEqual(
             {item["subsystem"] for item in result["impacted_subsystems"]},
