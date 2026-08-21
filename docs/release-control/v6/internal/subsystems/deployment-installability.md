@@ -618,7 +618,12 @@ upgrade, update, release, or artifact-selection behavior.
    canonical `release_readiness` join must still require candidate container
    qualification, draft release validation, exact Docker publication, installer
    smoke, and every other immutable gate before activation or floating-alias
-   promotion.
+   promotion. The exact-version server and provider control-plane image builds
+   are independent consumers of the same immutable container payload and must
+   publish and attest in separate matrix jobs. Each matrix leg independently
+   verifies the exact checkout and candidate manifest; the reusable workflow
+   succeeds only after both legs finish, so parallel assembly cannot weaken the
+   readiness join or the shared source-SHA boundary.
    The backend runner must compile the race-enabled `internal/api` test binary
    once, enumerate every top-level test from that exact binary, and generate a
    deterministic manifest proving a complete, disjoint partition. Each

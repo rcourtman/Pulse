@@ -30,8 +30,15 @@ permissions:
 
 jobs:
   publish:
+    name: Publish ${{ matrix.image }} image
     runs-on: ubuntu-24.04
     timeout-minutes: 60  # Increased for multi-arch builds with QEMU
+    strategy:
+      fail-fast: false
+      matrix:
+        image:
+          - server
+          - control-plane
     permissions:
       contents: read
       packages: write
@@ -117,6 +124,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Assemble and push Pulse server image (multi-arch)
+        if: matrix.image == 'server'
         id: build_server_image
         uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
         with:
@@ -136,6 +144,7 @@ jobs:
             ghcr.io/${{ github.repository_owner }}/pulse:${{ steps.version.outputs.version }}
 
       - name: Attest Pulse server image on Docker Hub
+        if: matrix.image == 'server'
         uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0
         with:
           subject-name: docker.io/rcourtman/pulse
@@ -144,6 +153,7 @@ jobs:
           create-storage-record: false
 
       - name: Attest Pulse server image on GHCR
+        if: matrix.image == 'server'
         uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0
         with:
           subject-name: ghcr.io/${{ github.repository_owner }}/pulse
@@ -152,6 +162,7 @@ jobs:
           create-storage-record: false
 
       - name: Assemble and push Pulse control-plane image (multi-arch)
+        if: matrix.image == 'control-plane'
         id: build_control_plane_image
         uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
         with:
@@ -172,6 +183,7 @@ jobs:
             ghcr.io/${{ github.repository_owner }}/pulse-control-plane:${{ steps.version.outputs.version }}
 
       - name: Attest Pulse control-plane image on Docker Hub
+        if: matrix.image == 'control-plane'
         uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0
         with:
           subject-name: docker.io/rcourtman/pulse-control-plane
@@ -180,6 +192,7 @@ jobs:
           create-storage-record: false
 
       - name: Attest Pulse control-plane image on GHCR
+        if: matrix.image == 'control-plane'
         uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0
         with:
           subject-name: ghcr.io/${{ github.repository_owner }}/pulse-control-plane
@@ -188,17 +201,19 @@ jobs:
           create-storage-record: false
 
       - name: Output image information
+        env:
+          IMAGE_KIND: ${{ matrix.image }}
         run: |
-          echo "✅ Exact-version Docker images staged successfully!"
-          echo ""
-          echo "Server images (linux/amd64, linux/arm64):"
-          echo "  - rcourtman/pulse:${{ steps.version.outputs.tag }}"
-          echo "  - rcourtman/pulse:${{ steps.version.outputs.version }}"
-          echo ""
-          echo "Control-plane images (linux/amd64, linux/arm64):"
-          echo "  - rcourtman/pulse-control-plane:${{ steps.version.outputs.tag }}"
-          echo "  - rcourtman/pulse-control-plane:${{ steps.version.outputs.version }}"
-          echo ""
-          echo "Pulse Agent binaries ship as release assets, not as a Docker image."
-          echo "See the GitHub release page for pulse-agent-{darwin,freebsd,linux,windows}-{amd64,arm64,...}."
+          echo "✅ Exact-version ${IMAGE_KIND} Docker image staged successfully!"
+          if [[ "${IMAGE_KIND}" == "server" ]]; then
+            echo "Server images (linux/amd64, linux/arm64):"
+            echo "  - rcourtman/pulse:${{ steps.version.outputs.tag }}"
+            echo "  - rcourtman/pulse:${{ steps.version.outputs.version }}"
+            echo "Pulse Agent binaries ship as release assets, not as a Docker image."
+            echo "See the GitHub release page for pulse-agent-{darwin,freebsd,linux,windows}-{amd64,arm64,...}."
+          else
+            echo "Control-plane images (linux/amd64, linux/arm64):"
+            echo "  - rcourtman/pulse-control-plane:${{ steps.version.outputs.tag }}"
+            echo "  - rcourtman/pulse-control-plane:${{ steps.version.outputs.version }}"
+          fi
           echo "Floating aliases are promoted separately at the activation barrier."

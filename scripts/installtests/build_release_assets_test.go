@@ -1406,6 +1406,10 @@ func TestReleaseWorkflowsUseSecretSafeAttestedImageBuilds(t *testing.T) {
 	}
 	publish := string(publishBytes)
 	publishRequired := []string{
+		`name: Publish ${{ matrix.image }} image`,
+		`fail-fast: false`,
+		`- server`,
+		`- control-plane`,
 		`provenance: mode=max`,
 		`sbom: true`,
 		`container_artifact:`,
@@ -1415,6 +1419,8 @@ func TestReleaseWorkflowsUseSecretSafeAttestedImageBuilds(t *testing.T) {
 		`target: runtime_prebuilt`,
 		`release_payload=${{ runner.temp }}/release-container-payload/payload/release`,
 		`id: build_control_plane_image`,
+		`if: matrix.image == 'server'`,
+		`if: matrix.image == 'control-plane'`,
 		`file: deploy/provider-msp/Dockerfile.control-plane`,
 		`target: control_plane_prebuilt`,
 		`compiled_payload=${{ runner.temp }}/release-container-payload/payload/compiled`,

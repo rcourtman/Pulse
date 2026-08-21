@@ -158,3 +158,13 @@ two observed-size race binaries and the concurrent non-root package graph. If
 the worker still cannot supply that floor, the gate reports a capacity failure
 at admission instead of entering a one-shard path already known to approach
 the 20-minute job timeout.
+
+The public Docker publisher also serialized two independent consumers of the
+same verified container payload: the main server image followed by the provider
+control-plane image and their attestations. The corrected publisher expresses
+those products as a two-leg, fail-independent matrix. Both legs repeat the
+exact-checkout, release-line, and candidate-manifest verification before using
+their product-specific prebuilt target; the reusable workflow still joins both
+results before `release_readiness`. This removes the observed control-plane
+assembly and attestation steps from the server-image critical path without
+changing any tag, registry, provenance, SBOM, or activation contract.
