@@ -364,11 +364,11 @@ func TestInstallDockerProofTracksPrereleaseContract(t *testing.T) {
 		"The prerelease Windows path retains exact-SHA, checksum, and detached-signature verification without Authenticode; stable `v"+stableTarget+"` restores mandatory SignPath signing unless a new version-bound decision is recorded.",
 		"For the active prerelease `v"+version+"` cut, the repo-root compose default and `scripts/install-docker.sh` fallback must both pin `"+version+"` until the next governed stable cut moves them forward.",
 	)
-	if version == "6.3.0-rc.5" {
+	if version == "6.3.0-rc.6" {
 		assertFileContainsAllNormalized(t, repoFile("docs", "release-control", "v6", "internal", "subsystems", "deployment-installability.md"),
-			"For `v6.3.0-rc.5`, credential-free public and private payload compilation runs on dedicated PVE workers with persistent caches.",
-			"Publication consumes the immutable payloads and manifests from that exact source run; it must not rebuild release binaries after qualification.",
-			"Post-publication Helm and paid-runtime convergence likewise consume source-run artifacts and retain exact-SHA, installer, signature, public/private artifact, and definitive convergence proof.",
+			"For `v6.3.0-rc.6`, the release path retains credential-free PVE compilation while requiring the measured memory floor for two API race shards after a bounded admission wait.",
+			"Public server and provider control-plane image publication uses independent matrix jobs that each revalidate the exact checkout and candidate manifest.",
+			"Private packaging transfers only the products consumed by Pro assembly, and paid-runtime Docker and direct-binary mismatch proofs execute concurrently without weakening either proof.",
 		)
 	}
 }

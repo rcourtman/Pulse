@@ -1623,10 +1623,10 @@ diagnostics. The same release workflow also executes the generated self-signed
 and custom-CA Windows installer commands through Windows PowerShell 5.1 before
 release assembly, so the first HTTPS fetch is release proof rather than a
 string-shape assertion.
-The active prerelease `v6.3.0-rc.5` cut sets the repo-root `VERSION`,
+The active prerelease `v6.3.0-rc.6` cut sets the repo-root `VERSION`,
 repo-root `docker-compose.yml` image default, `scripts/install-docker.sh`
-fallback, and Helm chart release metadata to the same `6.3.0-rc.5` release
-version. It follows `v6.3.0-rc.4` on the published 6.3 candidate line, uses
+fallback, and Helm chart release metadata to the same `6.3.0-rc.6` release
+version. It follows `v6.3.0-rc.5` on the published 6.3 candidate line, uses
 `rollback_version=v6.2.1`, and keeps stable/latest pointers on `v6.2.1`. This
 candidate establishes the new minor-release packet with durable scoped Patrol
 objectives, validated read-only observers, verified work receipts, agent action
@@ -1639,11 +1639,11 @@ output pipes cannot extend the caller-owned stall budget. This candidate also
 adds canonical estate summaries and search, a real-delivery activity log,
 least-privilege agent installation, and bounded Docker-in-LXC discovery while
 preserving unreadable settings and AI state. The changes since
-`v6.3.0-rc.4` do not require a Pulse Mobile client change and preserve the
+`v6.3.0-rc.5` do not require a Pulse Mobile client change and preserve the
 existing mobile, Relay, onboarding, and mobile-facing API contracts, so the
 server cut is classified `no-mobile-impact`; no companion upload or public
 mobile-store rollout is part of this candidate.
-For `v6.3.0-rc.5`, credential-free public and private payload compilation runs
+For `v6.3.0-rc.5`, credential-free public and private payload compilation ran
 on dedicated PVE workers with persistent caches. Platform archive validation,
 exact-candidate container and Helm smoke, backend shards, frontend checks,
 mobile qualification, and paid-runtime checks overlap where their credential
@@ -1652,6 +1652,18 @@ and manifests from that exact source run; it must not rebuild release binaries
 after qualification. Post-publication Helm and paid-runtime convergence likewise
 consume source-run artifacts and retain exact-SHA, installer, signature,
 public/private artifact, and definitive convergence proof.
+For `v6.3.0-rc.6`, the release path retains credential-free PVE compilation
+while requiring the measured memory floor for two API race shards after a
+bounded admission wait. Production chart and resource-query services move
+their complete handler, cache, tenant-store, and high-scale query suites out of
+the residual root package so the Go scheduler can overlap real domains rather
+than test-only shells. Public server and provider control-plane image
+publication uses independent matrix jobs that each revalidate the exact
+checkout and candidate manifest. Private packaging transfers only the products
+consumed by Pro assembly, and paid-runtime Docker and direct-binary mismatch
+proofs execute concurrently without weakening either proof. All immutable
+candidate, signing, installer, public/private integrity, activation, and final
+convergence joins remain mandatory.
 Release run `32493044910` exposed the memory-driven one-shard backend fallback
 before publication: all 3,736 top-level API tests were encoded into one
 `-test.run` argument and Linux rejected the invocation with `Argument list too
@@ -1961,8 +1973,8 @@ For the active stable `v6.1.2` cut, the repo-root compose default and
 `scripts/install-docker.sh` fallback must both pin `6.1.2` whenever the
 governed `VERSION` is that stable cut. The stable promotion guard remains in
 force and rejects leftover `-rc.` defaults.
-For the active prerelease `v6.3.0-rc.5` cut, the repo-root compose default and
-`scripts/install-docker.sh` fallback must both pin `6.3.0-rc.5`
+For the active prerelease `v6.3.0-rc.6` cut, the repo-root compose default and
+`scripts/install-docker.sh` fallback must both pin `6.3.0-rc.6`
 until the next governed stable cut moves them forward. Each new release moves
 these two pins together with the repo-root `VERSION` and the Helm chart metadata
 in the same commit; a cut that leaves any of the four on a superseded value is a

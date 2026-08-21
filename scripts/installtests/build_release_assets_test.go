@@ -876,15 +876,15 @@ func TestCurrentPrereleasePacketTracksInstallMetadata(t *testing.T) {
 		"changes since `v"+comparisonVersion+"` preserve the existing mobile, Relay, onboarding, and mobile-facing API contracts",
 		"no companion upload or public store rollout is required",
 	)
-	if version == "6.3.0-rc.5" {
+	if version == "6.3.0-rc.6" {
 		assertFileContainsAllNormalized(t, releaseNotesPath,
-			"Release payload compilation now uses the dedicated Ryzen PVE worker and its persistent caches instead of leaving that hardware idle.",
-			"Container publication promotes the already-qualified exact-candidate payload rather than rebuilding release binaries after qualification.",
+			"Chart and resource-query services now qualify independently from the residual API router, shrinking the root test critical path.",
+			"Public server and provider control-plane images publish and attest in parallel from one verified exact-candidate payload.",
 			"PVE compilation remains credential-free. GitHub-hosted jobs retain signing, release mutation, and publication credentials.",
 		)
 		assertFileContainsAllNormalized(t, changelogPath,
-			"Dedicated PVE runners compile the credential-free public and paid release payloads with persistent caches.",
-			"Exact-candidate container payloads are promoted directly into public and private images without recompiling binaries after qualification.",
+			"Chart handling and resource queries are production packages with independent test scheduling",
+			"Exact-version public Docker staging overlaps qualification, and server and provider control-plane products publish as parallel matrix legs.",
 			"Publication still requires exact-source identity, immutable manifests, signatures, public/private artifact integrity, installer smoke, and final convergence verification.",
 		)
 	}
