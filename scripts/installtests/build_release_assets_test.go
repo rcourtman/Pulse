@@ -142,6 +142,33 @@ func TestBuildReleaseUsesV6InstallScripts(t *testing.T) {
 	}
 }
 
+func TestProPackagingBuildsFrontendEmbedWithoutTransferringBundle(t *testing.T) {
+	content, err := os.ReadFile(repoFile("scripts", "build-release-binaries.sh"))
+	if err != nil {
+		t.Fatalf("read build-release-binaries.sh: %v", err)
+	}
+	script := string(content)
+
+	for _, needle := range []string{
+		`build_frontend >"${frontend_log}" 2>&1 &`,
+		`npm --prefix frontend-modern ci`,
+		`npm --prefix frontend-modern run build`,
+		`if [[ "${PROFILE}" == "full" ]]; then`,
+		`cp -a frontend-modern/dist/. "${FRONTEND_DIR}/"`,
+		`transfer public Unified Agent binaries only`,
+	} {
+		if !strings.Contains(script, needle) {
+			t.Fatalf("build-release-binaries.sh missing Pro frontend embed contract: %s", needle)
+		}
+	}
+	if strings.Contains(script, `if [[ "${PROFILE}" == "full" ]]; then
+	    mkdir -p "${FRONTEND_DIR}"
+	    echo "Building exact-SHA frontend bundle..."
+	    npm --prefix frontend-modern ci`) {
+		t.Fatal("Pro packaging must build the frontend embed prerequisite")
+	}
+}
+
 func TestReleaseContainerTargetsConsumeImmutableCandidate(t *testing.T) {
 	dockerfileBytes, err := os.ReadFile(repoFile("Dockerfile"))
 	if err != nil {

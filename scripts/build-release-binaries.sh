@@ -89,14 +89,23 @@ if [[ -e "${OUTPUT_ROOT}" ]] && find "${OUTPUT_ROOT}" -mindepth 1 -print -quit |
 fi
 mkdir -p "${BINARIES_DIR}" "${MANIFEST_DIR}"
 
-if [[ "${PROFILE}" == "full" ]]; then
-    mkdir -p "${FRONTEND_DIR}"
-    echo "Building exact-SHA frontend bundle..."
+build_frontend() {
+    echo "Building exact-SHA frontend embed prerequisite..."
     npm --prefix frontend-modern ci
     npm --prefix frontend-modern run build
-    cp -a frontend-modern/dist/. "${FRONTEND_DIR}/"
+    if [[ "${PROFILE}" == "full" ]]; then
+        mkdir -p "${FRONTEND_DIR}"
+        cp -a frontend-modern/dist/. "${FRONTEND_DIR}/"
+    fi
+}
+
+frontend_log="${OUTPUT_ROOT}/frontend.log"
+build_frontend >"${frontend_log}" 2>&1 &
+frontend_pid=$!
+if [[ "${PROFILE}" == "full" ]]; then
+    echo "Building frontend bundle concurrently with the release binary matrix."
 else
-    echo "Using Pro packaging profile: public Unified Agent binaries only."
+    echo "Using Pro packaging profile: build the required frontend embed locally; transfer public Unified Agent binaries only."
 fi
 
 export CGO_ENABLED=0
@@ -191,6 +200,11 @@ terminate_active() {
         [[ -n "${pid}" ]] && terminate_tree "${pid}"
     done
     wait "${active_pids[@]:-}" >/dev/null 2>&1 || true
+    if [[ -n "${frontend_pid:-}" ]]; then
+        terminate_tree "${frontend_pid}"
+        wait "${frontend_pid}" >/dev/null 2>&1 || true
+        frontend_pid=""
+    fi
 }
 trap terminate_active INT TERM
 
@@ -234,6 +248,19 @@ while (( completed_tasks < total_tasks )); do
     completed_tasks=$((completed_tasks + 1))
     echo "Compiled ${task_name} (${completed_tasks}/${total_tasks})."
 done
+
+if wait "${frontend_pid}"; then
+    status=0
+else
+    status=$?
+    echo "Error: frontend embed prerequisite failed." >&2
+    cat "${frontend_log}" >&2
+    frontend_pid=""
+    exit "${status}"
+fi
+frontend_pid=""
+rm -f "${frontend_log}"
+echo "Built frontend embed prerequisite."
 trap - INT TERM
 
 python3 scripts/release_candidate_manifest.py create \

@@ -549,8 +549,11 @@ upgrade, update, release, or artifact-selection behavior.
    Private Pro compilation must additionally bind the exact Pulse and
    pulse-enterprise commits in a manifest-covered identity record. Its PVE job
    must compile only the public Unified Agent matrix actually embedded in Pro
-   archives plus the Pro server matrix; rebuilding the unused public frontend,
-   MCP, server, or control-plane payload is not part of this boundary. The
+   archives plus the Pro server matrix. The public frontend build is a required
+   source-checkout prerequisite because every Pro server embeds that exact-SHA
+   bundle, so it must overlap the public-agent matrix but must not enter the
+   transferred payload. Rebuilding the unused public MCP, server, or
+   control-plane payload is not part of this boundary. The
    cross-repository handoff must remain manifest-bound, use compressed artifact
    transfer, and let a hosted runner with sufficient free space skip destructive
    image/toolchain cleanup. The hosted private job must verify both SHAs before

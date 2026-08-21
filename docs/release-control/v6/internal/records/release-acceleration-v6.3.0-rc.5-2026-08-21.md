@@ -131,6 +131,16 @@ artifact client, and performs heavyweight disk cleanup only below an explicit
 8 GiB safety floor. Exact Pulse and pulse-enterprise SHA manifests remain the
 authority on both sides of the credential boundary.
 
+The first non-publishing exact-SHA proof of that lean profile failed before Pro
+compilation because the public server packages require
+`frontend-modern/dist` as an embed source even though Pro never transfers the
+frontend as a standalone payload. The corrected profile builds that exact-SHA
+embed prerequisite concurrently with the public-agent matrix, leaves it in the
+source checkout for the five Pro builds, and still excludes it from the
+manifest-covered cross-repository payload. A governed regression test preserves
+the distinction between a required local compile input and an unused transfer
+product.
+
 Public Docker publication took 5 minutes 1 second, but its prior dependency
 shape did not make it eligible until 12 minutes 33 seconds after dispatch. The
 corrected DAG makes exact-version Docker staging eligible as soon as the
