@@ -8,7 +8,7 @@ import hashlib
 import json
 import re
 import sys
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 
@@ -92,7 +92,15 @@ def manifest_assets_by_name(manifest: dict[str, Any]) -> dict[str, dict[str, Any
         name = asset.get("name")
         size = asset.get("size")
         digest = asset.get("sha256")
-        if not isinstance(name, str) or not name or Path(name).name != name:
+        if not isinstance(name, str) or not name:
+            raise ValueError(f"manifest asset {index} has invalid name: {name!r}")
+        relative_name = PurePosixPath(name)
+        if (
+            relative_name.is_absolute()
+            or relative_name.as_posix() != name
+            or "\\" in name
+            or any(part in {"", ".", ".."} for part in relative_name.parts)
+        ):
             raise ValueError(f"manifest asset {index} has invalid name: {name!r}")
         if not isinstance(size, int) or size < 0:
             raise ValueError(f"manifest asset {name!r} has invalid size: {size!r}")

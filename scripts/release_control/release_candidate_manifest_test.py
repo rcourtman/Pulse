@@ -9,6 +9,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from release_candidate_manifest import (
     create_manifest,
     load_release_assets,
+    manifest_assets_by_name,
     verify_local,
     verify_release,
 )
@@ -45,6 +46,39 @@ class ReleaseCandidateManifestTest(unittest.TestCase):
 
             with self.assertRaisesRegex(ValueError, "digest mismatch"):
                 verify_local(release_dir, manifest, "6.1.0-rc.1", SOURCE_SHA)
+
+    def test_verify_local_accepts_manifest_covered_payload_tree(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            release_dir = self.create_release_dir(Path(temp_dir))
+            binary_dir = release_dir / "binaries"
+            binary_dir.mkdir()
+            (binary_dir / "pulse-agent-linux-amd64").write_bytes(b"agent")
+            manifest = create_manifest(release_dir, "6.1.0-rc.1", SOURCE_SHA)
+
+            verify_local(release_dir, manifest, "6.1.0-rc.1", SOURCE_SHA)
+            self.assertIn(
+                "binaries/pulse-agent-linux-amd64",
+                [asset["name"] for asset in manifest["assets"]],
+            )
+
+    def test_manifest_rejects_noncanonical_or_traversing_asset_names(self) -> None:
+        for name in (
+            "../outside",
+            "binaries/../outside",
+            "/absolute",
+            "binaries\\outside",
+            "./binaries/agent",
+        ):
+            with self.subTest(name=name), self.assertRaisesRegex(
+                ValueError, "invalid name"
+            ):
+                manifest_assets_by_name(
+                    {
+                        "assets": [
+                            {"name": name, "size": 1, "sha256": "0" * 64}
+                        ]
+                    }
+                )
 
     def test_verify_release_uses_server_side_digests(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

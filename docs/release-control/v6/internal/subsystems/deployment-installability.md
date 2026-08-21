@@ -526,7 +526,9 @@ upgrade, update, release, or artifact-selection behavior.
    Cross-platform release compilation may run concurrently on a separate,
    low-priority PVE identity using only public embedding keys. It must produce
    one exact-version, exact-source-SHA manifest covering the complete frontend
-   and binary payload. The hosted candidate job must verify that manifest
+   and binary payload. That manifest may cover canonical relative paths in the
+   payload tree but must reject absolute, traversing, or noncanonical names.
+   The hosted candidate job must verify that manifest
    before applying required native binaries, packaging, update-signing, SBOM
    generation, validation, or upload. Private signing material and publication
    credentials must never enter the PVE compilation job.
@@ -539,6 +541,11 @@ upgrade, update, release, or artifact-selection behavior.
    may compile the public payload and Pro server matrix, but the hosted private
    job must verify both SHAs before release signing, R2 upload, private-registry
    publication, or paid-runtime staging.
+   Public and Pro server archives must use the shared canonical staging helper
+   and may assemble independent target archives concurrently with a bounded
+   worker count. The verified dual-SHA Pro path must stage its five archives
+   directly from the precompiled public-agent and Pro-server payloads; it must
+   not build, sign, and then discard a complete public release packet first.
    The backend runner must compile the race-enabled `internal/api` test binary
    once, enumerate every top-level test from that exact binary, and generate a
    deterministic manifest proving a complete, disjoint partition. Each

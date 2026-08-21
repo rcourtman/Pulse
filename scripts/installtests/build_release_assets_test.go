@@ -118,10 +118,22 @@ func TestBuildReleaseUsesV6InstallScripts(t *testing.T) {
 		`"${resolved_tool}" "dir:${release_dir}" -o "spdx-json=${tmp_sbom}"`,
 		`if compgen -G "pulse-*.sbom.spdx.json" > /dev/null; then`,
 		`find . -maxdepth 1 -type f \( -name '*.sig' -o -name '*.sshsig' \) -delete`,
+		`pulse_release_stage_server_archive()`,
+		`for target in "${PULSE_RELEASE_AGENT_TARGETS[@]}"; do`,
+		`install -m 0755 "${server_binary}" "${staging_dir}/bin/pulse"`,
 	}
 	for _, needle := range helperRequired {
 		if !strings.Contains(helper, needle) {
 			t.Fatalf("release_asset_common.sh missing canonical release asset wiring: %s", needle)
+		}
+	}
+	for _, needle := range []string{
+		`package_workers="${PULSE_RELEASE_PACKAGE_WORKERS:-4}"`,
+		`package_server_target "${build_name}" &`,
+		`pulse_release_stage_server_archive \`,
+	} {
+		if !strings.Contains(script, needle) {
+			t.Fatalf("build-release.sh missing bounded parallel archive assembly: %s", needle)
 		}
 	}
 }

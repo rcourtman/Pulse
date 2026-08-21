@@ -124,6 +124,61 @@ pulse_release_sign_directory_assets() {
     done < <(find "${dir}" -maxdepth 1 -type f ! -name '*.sig' ! -name '*.sshsig' -print0)
 }
 
+pulse_release_stage_server_archive() {
+    local archive_path="$1"
+    local staging_dir="$2"
+    local server_binary="$3"
+    local version="$4"
+    local agent_binary_dir="$5"
+    local rendered_installers_dir="$6"
+    local target=""
+    local src=""
+    local dest=""
+
+    if [[ ${#PULSE_RELEASE_AGENT_TARGETS[@]} -eq 0 ]]; then
+        echo "Error: PULSE_RELEASE_AGENT_TARGETS is empty." >&2
+        return 1
+    fi
+
+    rm -rf "${staging_dir}"
+    mkdir -p "${staging_dir}/bin" "${staging_dir}/scripts"
+    install -m 0755 "${server_binary}" "${staging_dir}/bin/pulse"
+
+    for target in "${PULSE_RELEASE_AGENT_TARGETS[@]}"; do
+        src="${agent_binary_dir}/pulse-agent-${target}"
+        dest="${staging_dir}/bin/pulse-agent-${target}"
+        if [[ "${target}" == windows-* ]]; then
+            src="${src}.exe"
+            dest="${dest}.exe"
+        fi
+        install -m 0755 "${src}" "${dest}"
+    done
+    (
+        cd "${staging_dir}/bin"
+        ln -sf pulse-agent-windows-amd64.exe pulse-agent-windows-amd64
+        ln -sf pulse-agent-windows-arm64.exe pulse-agent-windows-arm64
+        ln -sf pulse-agent-windows-386.exe pulse-agent-windows-386
+    )
+
+    install -m 0755 "${PULSE_SCRIPTS_DIR}/install-container-agent.sh" "${staging_dir}/scripts/install-container-agent.sh"
+    install -m 0755 "${PULSE_SCRIPTS_DIR}/install-docker.sh" "${staging_dir}/scripts/install-docker.sh"
+    install -m 0755 "${rendered_installers_dir}/install.sh" "${staging_dir}/scripts/install.sh"
+    if [[ -f "${rendered_installers_dir}/install.ps1" ]]; then
+        install -m 0755 "${rendered_installers_dir}/install.ps1" "${staging_dir}/scripts/install.ps1"
+    fi
+    printf '%s\n' "${version}" > "${staging_dir}/VERSION"
+
+    pulse_release_sign_directory_assets "${staging_dir}/bin"
+    pulse_release_sign_directory_assets "${staging_dir}/scripts"
+    pulse_release_sign_file "${staging_dir}/VERSION"
+
+    mkdir -p "$(dirname "${archive_path}")"
+    (
+        cd "${staging_dir}"
+        tar -czf "${archive_path}" .
+    )
+}
+
 pulse_release_generate_packet_sbom() {
     local release_dir="$1"
     local output_name="$2"

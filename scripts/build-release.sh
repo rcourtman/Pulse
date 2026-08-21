@@ -238,51 +238,53 @@ for target in "${build_order[@]}"; do
     }
 done
 
-# Create platform-specific tarballs that include all unified agent binaries for download endpoints
+# Create platform-specific tarballs that include all unified agent binaries for
+# download endpoints. The archives are independent, so stage them concurrently
+# while keeping the default bounded for hosted runners.
+package_server_target() {
+    local build_name="$1"
+    local archive_path="${PULSE_REPO_ROOT}/${RELEASE_DIR}/pulse-v${VERSION}-${build_name}.tar.gz"
+    local staging_dir="${PULSE_REPO_ROOT}/${BUILD_DIR}/staging-${build_name}"
+
+    echo "Packaging release for ${build_name}..."
+    pulse_release_stage_server_archive \
+        "${archive_path}" \
+        "${staging_dir}" \
+        "${PULSE_REPO_ROOT}/${BUILD_DIR}/pulse-${build_name}" \
+        "${VERSION}" \
+        "${PULSE_REPO_ROOT}/${BUILD_DIR}" \
+        "${PULSE_REPO_ROOT}/${RENDERED_INSTALLERS_DIR}"
+    rm -rf "${staging_dir}"
+    echo "Created ${RELEASE_DIR}/pulse-v${VERSION}-${build_name}.tar.gz"
+}
+
+package_workers="${PULSE_RELEASE_PACKAGE_WORKERS:-4}"
+if [[ ! "${package_workers}" =~ ^[1-9][0-9]*$ ]]; then
+    echo "Error: PULSE_RELEASE_PACKAGE_WORKERS must be a positive integer." >&2
+    exit 1
+fi
+package_pids=()
 for build_name in "${build_order[@]}"; do
-    echo "Packaging release for $build_name..."
-
-    tar_name="pulse-v${VERSION}-${build_name}.tar.gz"
-    staging_dir="$BUILD_DIR/staging-$build_name"
-    rm -rf "$staging_dir"
-    mkdir -p "$staging_dir/bin"
-    mkdir -p "$staging_dir/scripts"
-
-    # Copy architecture-specific runtime binaries
-    cp "$BUILD_DIR/pulse-$build_name" "$staging_dir/bin/pulse"
-
-    # Copy unified agent binaries for every supported platform/architecture
-    for target in "${agent_build_order[@]}"; do
-        src="$BUILD_DIR/pulse-agent-$target"
-        dest="$staging_dir/bin/pulse-agent-$target"
-        if [[ "$target" == windows-* ]]; then
-            src="${src}.exe"
-            dest="${dest}.exe"
-        fi
-        cp "$src" "$dest"
-    done
-    ( cd "$staging_dir/bin" && ln -sf pulse-agent-windows-amd64.exe pulse-agent-windows-amd64 && ln -sf pulse-agent-windows-arm64.exe pulse-agent-windows-arm64 && ln -sf pulse-agent-windows-386.exe pulse-agent-windows-386 )
-
-    # Copy scripts and VERSION metadata
-    cp "scripts/install-container-agent.sh" "$staging_dir/scripts/install-container-agent.sh"
-    cp "scripts/install-docker.sh" "$staging_dir/scripts/install-docker.sh"
-    cp "${RENDERED_INSTALLERS_DIR}/install.sh" "$staging_dir/scripts/install.sh"
-    [ -f "${RENDERED_INSTALLERS_DIR}/install.ps1" ] && cp "${RENDERED_INSTALLERS_DIR}/install.ps1" "$staging_dir/scripts/install.ps1"
-    chmod 755 "$staging_dir/scripts/"*.sh
-    chmod 755 "$staging_dir/scripts/"*.ps1 2>/dev/null || true
-    echo "$VERSION" > "$staging_dir/VERSION"
-    pulse_release_sign_directory_assets "$staging_dir/bin"
-    pulse_release_sign_directory_assets "$staging_dir/scripts"
-    pulse_release_sign_file "$staging_dir/VERSION"
-
-    # Create tarball from staging directory
-    cd "$staging_dir"
-    tar -czf "../../$RELEASE_DIR/$tar_name" .
-    cd ../..
-
-    rm -rf "$staging_dir"
-    echo "Created $RELEASE_DIR/$tar_name"
+    package_server_target "${build_name}" &
+    package_pids+=("$!")
+    if [[ ${#package_pids[@]} -ge ${package_workers} ]]; then
+        package_failed=0
+        for package_pid in "${package_pids[@]}"; do
+            if ! wait "${package_pid}"; then
+                package_failed=1
+            fi
+        done
+        [[ ${package_failed} -eq 0 ]] || exit 1
+        package_pids=()
+    fi
 done
+package_failed=0
+for package_pid in "${package_pids[@]}"; do
+    if ! wait "${package_pid}"; then
+        package_failed=1
+    fi
+done
+[[ ${package_failed} -eq 0 ]] || exit 1
 
 # Create universal tarball with all binaries
 echo "Creating universal tarball..."
