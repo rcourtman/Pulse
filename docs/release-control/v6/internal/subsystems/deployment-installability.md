@@ -586,6 +586,11 @@ upgrade, update, release, or artifact-selection behavior.
    private broker/image proof, and public-runtime mismatch proof, but may run
    the independent browser and public-boundary checks as a sibling of the
    lease-bound broker mutation so customer-path evidence is not serialized.
+   Every sibling proof that calls the tailnet-only license or broker endpoint
+   must independently establish the pinned Tailscale connection before that
+   call. A connection in the mutation sibling cannot supply network or DNS
+   state to another hosted job, and the private distribution validator must
+   enforce this placement structurally.
    Candidate archive validation must extract the complete required member set
    from each archive in one gzip pass and validate independent platform and
    universal archives concurrently, allowing the hosted runner to schedule
