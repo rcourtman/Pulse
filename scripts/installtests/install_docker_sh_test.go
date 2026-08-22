@@ -332,8 +332,8 @@ func TestInstallDockerProofTracksStableMinorContract(t *testing.T) {
 		"The active stable `v"+version+"` cut sets the repo-root `VERSION`, repo-root `docker-compose.yml` image default, `scripts/install-docker.sh` fallback, and Helm chart release metadata to the same `"+version+"` release version.",
 		"`rollback_version=v"+previous+"`",
 		"`hotfix_exception=true` transports that approved waiver through the shared promotion resolver; it does not reclassify v"+version+" as a patch hotfix.",
-		"The release owner then separately approved a v"+version+"-only unsigned-Windows exception.",
-		"The Windows packet must disclose the Unknown Publisher warning and retain exact-SHA, checksum, detached-signature, manifest, and published-digest verification",
+		"The release owner separately approved a v"+version+"-only unsigned-Windows exception",
+		"The Windows packet must disclose the Unknown Publisher warning and retain exact-SHA, checksum, detached-signature, immutable-manifest, and published-digest verification.",
 		"For the active stable `v"+version+"` cut, the repo-root compose default and `scripts/install-docker.sh` fallback must both pin `"+version+"`",
 	)
 }

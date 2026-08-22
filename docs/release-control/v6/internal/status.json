@@ -9646,13 +9646,13 @@
   "candidate_lanes": [],
   "work_claims": [
     {
-      "id": "release-acceleration-lane-l1",
-      "agent_id": "release-acceleration",
-      "summary": "Reduce warm RC dispatch-to-convergence time to 15 minutes with credential-isolated PVE runners, deterministic sharding, and cross-repo build parallelism.",
+      "id": "ga-release-2026-08-22-lane-l1",
+      "agent_id": "ga-release-2026-08-22",
+      "summary": "Audit production telemetry and prepare and publish v6.3.0 stable under the owner-authorized promotion after clean rc.5 and rc.6 cohorts.",
       "target_id": "v6-product-lane-expansion",
-      "claimed_at": "2026-08-21T11:23:13Z",
-      "heartbeat_at": "2026-08-21T19:14:24Z",
-      "expires_at": "2026-08-21T21:14:24Z",
+      "claimed_at": "2026-08-22T09:15:48Z",
+      "heartbeat_at": "2026-08-22T09:20:31Z",
+      "expires_at": "2026-08-22T15:20:31Z",
       "work_item": {
         "kind": "lane",
         "id": "L1"
@@ -10576,6 +10576,30 @@
       ],
       "lane_ids": [
         "L3"
+      ]
+    },
+    {
+      "id": "v6-3-0-telemetry-backed-stable-cutoff",
+      "summary": "On 2026-08-22 the release owner reviewed the privacy-safe production telemetry posture for v6.3.0-rc.5 and v6.3.0-rc.6, found no new update failures, rollback signals, notification-failure increases, or governed-action-failure increases, and approved stable v6.3.0 from main cutoff 53ba9786c5522a6839f9cbd3d01c02402556f9eb without another RC or the remainder of the normal 72-hour soak. This is a version-bound owner-risk acceptance that explicitly includes the modest cohort, young rc.6 follow-up window, and bounded post-RC changes; it is not soak evidence or a standing exception.",
+      "kind": "release-policy",
+      "decided_at": "2026-08-22",
+      "subsystem_ids": [
+        "deployment-installability"
+      ],
+      "lane_ids": [
+        "L1"
+      ]
+    },
+    {
+      "id": "v6-3-0-unsigned-windows-owner-exception",
+      "summary": "On 2026-08-22 the release owner explicitly authorized unsigned Windows Unified Agent artifacts for stable v6.3.0 because Authenticode signing is not yet available. This version-bound exception changes only the Authenticode requirement: the exact release SHA, immutable candidate manifest, SHA-256 checksums, detached signatures, published-digest verification, and public Unknown Publisher disclosure remain mandatory. Stable v6.3.1 and later restore mandatory Authenticode unless another explicit version-bound decision is recorded.",
+      "kind": "release-policy",
+      "decided_at": "2026-08-22",
+      "subsystem_ids": [
+        "deployment-installability"
+      ],
+      "lane_ids": [
+        "L1"
       ]
     }
   ]

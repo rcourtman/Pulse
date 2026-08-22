@@ -1335,12 +1335,12 @@ func TestReleaseCandidateRequiresPlatformNativeAgentSigning(t *testing.T) {
 	)
 	assertFileContainsAll(t, repoFile(".github", "workflows", "release-dry-run.yml"),
 		`Definitive Dry-Run Verdict`,
-		`require_windows_signing: ${{ !contains(inputs.version, '-') && !((inputs.version == '6.1.0' || inputs.version == '6.1.1' || inputs.version == '6.1.2' || inputs.version == '6.2.0' || inputs.version == '6.2.1') && inputs.unsigned_windows_exception) }}`,
+		`require_windows_signing: ${{ !contains(inputs.version, '-') && !((inputs.version == '6.1.0' || inputs.version == '6.1.1' || inputs.version == '6.1.2' || inputs.version == '6.2.0' || inputs.version == '6.2.1' || inputs.version == '6.3.0') && inputs.unsigned_windows_exception) }}`,
 		`require_result "exact-SHA release candidate" "$CANDIDATE_RESULT" success`,
 		`require_result "stable demo no-mutation verification" "$DEMO_RESULT" success`,
 	)
 	assertFileContainsAll(t, repoFile("scripts", "release_control", "resolve_release_promotion.py"),
-		`version not in {"6.1.0", "6.1.1", "6.1.2", "6.2.0", "6.2.1"}`,
+		`version not in {"6.1.0", "6.1.1", "6.1.2", "6.2.0", "6.2.1", "6.3.0"}`,
 		`unsigned_windows_reason is required`,
 		`not Authenticode-signed`,
 		`require_windows_signing = not is_prerelease and not unsigned_windows_exception`,

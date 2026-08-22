@@ -1255,7 +1255,7 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("if: ${{ inputs.version != '' }}", workflow)
         self.assertIn("require_macos_signing: true", workflow)
         self.assertIn(
-            "require_windows_signing: ${{ !contains(inputs.version, '-') && !((inputs.version == '6.1.0' || inputs.version == '6.1.1' || inputs.version == '6.1.2' || inputs.version == '6.2.0' || inputs.version == '6.2.1') && inputs.unsigned_windows_exception) }}",
+            "require_windows_signing: ${{ !contains(inputs.version, '-') && !((inputs.version == '6.1.0' || inputs.version == '6.1.1' || inputs.version == '6.1.2' || inputs.version == '6.2.0' || inputs.version == '6.2.1' || inputs.version == '6.3.0') && inputs.unsigned_windows_exception) }}",
             workflow,
         )
         self.assertIn("unsigned_windows_exception:", workflow)
@@ -1455,7 +1455,7 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("require_windows_signing: ${{ needs.prepare.outputs.require_windows_signing == 'true' }}", content)
         self.assertIn("unsigned_windows_exception:", content)
         self.assertIn("unsigned_windows_reason:", content)
-        self.assertIn('version not in {"6.1.0", "6.1.1", "6.1.2", "6.2.0", "6.2.1"}', resolver)
+        self.assertIn('version not in {"6.1.0", "6.1.1", "6.1.2", "6.2.0", "6.2.1", "6.3.0"}', resolver)
         self.assertIn("not Authenticode-signed", resolver)
         self.assertIn("windows_signing_backend: signpath", content)
         self.assertIn('if [[ "$REQUIRE_WINDOWS_SIGNING" == "true" ]]', candidate_workflow)
@@ -1702,6 +1702,42 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("explicitly authorized unsigned Windows Unified Agent artifacts", owner_record)
         self.assertIn("not Authenticode-signed", owner_record)
         self.assertIn("Unknown Publisher warning", owner_record)
+
+    def test_v630_owner_telemetry_cutoff_is_version_bound(self) -> None:
+        policy = normalize_ws(
+            read("docs/release-control/v6/internal/RELEASE_PROMOTION_POLICY.md")
+        )
+        owner_record = normalize_ws(
+            read(
+                "docs/release-control/v6/internal/records/"
+                "v6.3.0-stable-cutoff-owner-approval-2026-08-22.md"
+            )
+        )
+
+        self.assertIn("v6.3.0 release-cutoff exception", policy)
+        self.assertIn("bounded v6.3.0 owner-risk acceptance", policy)
+        self.assertIn("not soak evidence and not a standing exception", policy)
+        self.assertIn("Promoted prerelease: `v6.3.0-rc.6`", owner_record)
+        self.assertIn("Rollback target: `v6.2.1`", owner_record)
+        self.assertIn(
+            "Exact rollback reinstall command: `./scripts/install.sh --version v6.2.1`",
+            owner_record,
+        )
+        self.assertIn("18 active installs: 10 binary and 8 Docker", owner_record)
+        self.assertIn("56 rolling-window update attempts, 56 successes, and zero failures", owner_record)
+        self.assertIn("separate, version-bound `v6.3.0` unsigned-Windows decision", owner_record)
+
+        signing_record = normalize_ws(
+            read(
+                "docs/release-control/v6/internal/records/"
+                "v6.3.0-unsigned-windows-owner-approval-2026-08-22.md"
+            )
+        )
+        self.assertIn("v6.3.0 unsigned-Windows exception", policy)
+        self.assertIn("Stable `v6.3.1` and later restore mandatory Authenticode", policy)
+        self.assertIn("Windows Authenticode signing is not yet available", signing_record)
+        self.assertIn("not Authenticode-signed", signing_record)
+        self.assertIn("Unknown Publisher warning", signing_record)
 
     def test_release_artifact_workflows_refuse_stable_without_matching_rc(self) -> None:
         publish = read(".github/workflows/publish-docker.yml")

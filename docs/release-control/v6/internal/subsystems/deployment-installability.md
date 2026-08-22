@@ -1656,12 +1656,20 @@ diagnostics. The same release workflow also executes the generated self-signed
 and custom-CA Windows installer commands through Windows PowerShell 5.1 before
 release assembly, so the first HTTPS fetch is release proof rather than a
 string-shape assertion.
-The active prerelease `v6.3.0-rc.6` cut sets the repo-root `VERSION`,
+The active stable `v6.3.0` cut sets the repo-root `VERSION`,
 repo-root `docker-compose.yml` image default, `scripts/install-docker.sh`
-fallback, and Helm chart release metadata to the same `6.3.0-rc.6` release
-version. It follows `v6.3.0-rc.5` on the published 6.3 candidate line, uses
-`rollback_version=v6.2.1`, and keeps stable/latest pointers on `v6.2.1`. This
-candidate establishes the new minor-release packet with durable scoped Patrol
+fallback, and Helm chart release metadata to the same `6.3.0` release version.
+This stable minor release uses `promoted_from_tag=v6.3.0-rc.6`,
+`rollback_version=v6.2.1`, and the explicit version-bound decision recorded on
+2026-08-22 to accept the shortened soak and bounded post-RC cutoff after the
+canonical production telemetry review. The workflow input
+`hotfix_exception=true` transports that approved waiver through the shared
+promotion resolver; it does not reclassify v6.3.0 as a patch hotfix. The exact
+stable `main` SHA must pass the no-publication dry run before the same SHA is
+dispatched through the single-build publish workflow. The release moves
+stable/latest install pointers and stable semver aliases only after the exact
+public and private candidate paths pass. This release establishes the new
+minor-release packet with durable scoped Patrol
 objectives, validated read-only observers, verified work receipts, agent action
 preflight with stable refusal codes, large-estate response improvements, and
 monitoring correctness fixes. The advanced branch also carries the decision-first
@@ -1671,11 +1679,11 @@ Patrol turns bound command cleanup after an idle deadline so descendant-held
 output pipes cannot extend the caller-owned stall budget. This candidate also
 adds canonical estate summaries and search, a real-delivery activity log,
 least-privilege agent installation, and bounded Docker-in-LXC discovery while
-preserving unreadable settings and AI state. The changes since
-`v6.3.0-rc.5` do not require a Pulse Mobile client change and preserve the
-existing mobile, Relay, onboarding, and mobile-facing API contracts, so the
-server cut is classified `no-mobile-impact`; no companion upload or public
-mobile-store rollout is part of this candidate.
+preserving unreadable settings and AI state. The stable server cut is
+classified `existing-mobile-build-compatible`. The changes since
+`v6.3.0-rc.6` do not require a Pulse Mobile client change and preserve the
+existing mobile, Relay, onboarding, and mobile-facing API contracts, so no
+companion upload or public mobile-store rollout is part of this stable release.
 For `v6.3.0-rc.5`, credential-free public and private payload compilation ran
 on dedicated PVE workers with persistent caches. Platform archive validation,
 exact-candidate container and Helm smoke, backend shards, frontend checks,
@@ -1697,6 +1705,24 @@ consumed by Pro assembly, and paid-runtime Docker and direct-binary mismatch
 proofs execute concurrently without weakening either proof. All immutable
 candidate, signing, installer, public/private integrity, activation, and final
 convergence joins remain mandatory.
+The v6.3.0 stable cutoff at
+`53ba9786c5522a6839f9cbd3d01c02402556f9eb` adds fail-closed release dry-run
+diagnostics, native-agent fixture portability, measured backend shard
+admission, Patrol provider-unavailable recovery, per-resource alert override
+correctness, and cross-estate host identity preservation on top of the
+published `v6.3.0-rc.6` lineage. The 2026-08-22 release-owner record binds the
+shortened-soak and post-RC risk acceptance to aggregate production telemetry:
+18 active `rc.6` installs across binary and Docker, 56 recorded update
+successes and zero update failures, no rollback or version-departure signal,
+and no follow-up notification-failure or governed-action-failure increase; the
+preceding `rc.5` cohort likewise showed no rollback and one forward transition
+to `rc.6`. The record states the modest sample and young `rc.6` follow-up
+window explicitly rather than presenting them as 72-hour soak evidence.
+The release owner separately approved a v6.3.0-only unsigned-Windows
+exception because Authenticode signing is not yet available. This independent
+decision does not broaden the soak waiver. The Windows packet must disclose
+the Unknown Publisher warning and retain exact-SHA, checksum,
+detached-signature, immutable-manifest, and published-digest verification.
 Release run `32493044910` exposed the memory-driven one-shard backend fallback
 before publication: all 3,736 top-level API tests were encoded into one
 `-test.run` argument and Linux rejected the invocation with `Argument list too
@@ -1724,12 +1750,12 @@ observer coverage, estate-first platform search and facets, and real delivery-
 attempt visibility. The detailed packet must also retain the bounded Docker-in-
 LXC and supported least-privilege Unified Agent statements instead of dropping
 them during publish-body condensation.
-The prerelease Windows path retains exact-SHA, checksum, and detached-signature
-verification without Authenticode; stable `v6.3.0` restores mandatory SignPath
-signing unless a new version-bound decision is recorded.
-This prerelease keeps `rollback_version=v6.2.1`, publishes a versioned
-public GitHub prerelease plus versioned Docker and Helm artifacts, and does not
-move stable/latest install pointers or stable semver aliases.
+The preceding prerelease Windows path retained exact-SHA, checksum, and
+detached-signature verification without Authenticode. Stable `v6.3.0` uses the
+separately recorded version-bound unsigned-Windows exception: the public notes
+must state that its Windows binaries are not Authenticode-signed and may
+display an Unknown Publisher warning. The immutable-candidate, checksum,
+detached-signature, manifest, and published-digest controls remain mandatory.
 
 The preceding `v6.3.0-rc.1` publication attempt was quarantined before the
 GitHub release commit point when its exact private Pro staging run was
@@ -2006,9 +2032,10 @@ For the active stable `v6.1.2` cut, the repo-root compose default and
 `scripts/install-docker.sh` fallback must both pin `6.1.2` whenever the
 governed `VERSION` is that stable cut. The stable promotion guard remains in
 force and rejects leftover `-rc.` defaults.
-For the active prerelease `v6.3.0-rc.6` cut, the repo-root compose default and
-`scripts/install-docker.sh` fallback must both pin `6.3.0-rc.6`
-until the next governed stable cut moves them forward. Each new release moves
+For the active stable `v6.3.0` cut, the repo-root compose default and
+`scripts/install-docker.sh` fallback must both pin `6.3.0` until the next
+governed release moves them forward. The stable promotion guard remains in
+force and rejects leftover `-rc.` defaults. Each new release moves
 these two pins together with the repo-root `VERSION` and the Helm chart metadata
 in the same commit; a cut that leaves any of the four on a superseded value is a
 release-packet blocker.

@@ -398,6 +398,41 @@ TLS-unverified receipts leave the claim at `implemented` or
      checksums, detached `.sig`/`.sshsig` signatures, and published digests.
      Public notes must disclose that the binaries are not Authenticode-signed
      and may display an Unknown Publisher warning.
+13. v6.3.0 release-cutoff exception:
+   - On 2026-08-22, the release owner reviewed the privacy-safe production
+     telemetry posture for `v6.3.0-rc.5` and `v6.3.0-rc.6`, declared current
+     `main` at `53ba9786c5522a6839f9cbd3d01c02402556f9eb` the v6.3.0 content
+     cutoff, and explicitly directed stable promotion from `v6.3.0-rc.6`
+     without completing its normal 72-hour soak. The dated decision record is
+     `docs/release-control/v6/internal/records/v6.3.0-stable-cutoff-owner-approval-2026-08-22.md`.
+   - This is a bounded v6.3.0 owner-risk acceptance, not soak evidence and not
+     a standing exception for later releases. It explicitly accepts the modest
+     telemetry cohort, the young `rc.6` follow-up window, and the bounded
+     runtime and release-path changes between the promoted tag and the cutoff.
+     The workflow input `hotfix_exception=true` transports the approved waiver
+     through the shared resolver; it does not reclassify v6.3.0 as a patch
+     hotfix.
+   - The final release-preparation commit may change only governed version,
+     release-note, qualification, test-guardrail, and release-control metadata.
+     The exact pushed SHA must pass the no-publication `Release Dry Run` before
+     the same SHA is dispatched through the single-build publication workflow.
+   - This cutoff decision did not itself waive Windows signing. The release
+     owner subsequently recorded a separate version-bound v6.3.0
+     unsigned-Windows decision; neither exception broadens the other.
+14. v6.3.0 unsigned-Windows exception:
+   - On 2026-08-22, the release owner explicitly authorized unsigned Windows
+     Unified Agent artifacts for stable `v6.3.0` because Authenticode signing
+     is not yet available for this release. The dated decision record is
+     `docs/release-control/v6/internal/records/v6.3.0-unsigned-windows-owner-approval-2026-08-22.md`.
+   - This is a bounded `v6.3.0` decision, not evidence that Authenticode
+     succeeded and not a standing exception. Stable `v6.3.1` and later restore
+     mandatory Authenticode unless another explicit, version-bound owner
+     decision is recorded.
+   - Windows artifacts remain bound by the exact release SHA, immutable
+     candidate manifest, SHA-256 checksums, detached `.sig` and `.sshsig`
+     signatures, and published-digest verification. Public notes must disclose
+     that the binaries are not Authenticode-signed and may display an Unknown
+     Publisher warning.
 
 ## Single-Build Release Path
 

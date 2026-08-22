@@ -40,6 +40,16 @@ Use this as the final gate before cutting a Pulse v6 pre-release.
   remained pending, the release owner separately approved a v6.2.0-only
   unsigned-Windows exception with mandatory public disclosure and exact-SHA,
   checksum, detached-signature, manifest, and published-digest verification.
+- The 2026-08-22 v6.3.0 stable-cutoff decision authorizes promotion from
+  `v6.3.0-rc.6` after the release owner reviewed the aggregate `rc.5` and
+  `rc.6` production telemetry cohorts and accepted the shortened soak, modest
+  cohort size, young follow-up window, and bounded post-RC cutoff. The exact
+  stable SHA still requires the no-publication dry run.
+- The release owner separately approved a v6.3.0-only unsigned-Windows
+  exception because Authenticode signing is not yet available. The Windows
+  packet must retain exact-SHA, checksum, detached-signature, immutable-
+  manifest, and published-digest proof and publicly disclose the Unknown
+  Publisher warning.
 - `known-rc-issue-closure-for-ga` was introduced on 2026-04-21 to reflect the
   locked rule that v6 GA must be feature-complete relative to the prerelease
   issue set. It is currently blocked on the dated RC issue-closure packet.
@@ -65,6 +75,14 @@ Use this as the final gate before cutting a Pulse v6 pre-release.
   accepting the shortened RC11 soak and bind it to the exact content cutoff,
   rollback command, dry-run requirement, and the separate v6.2.0-only unsigned
   Windows decision recorded after the SignPath CSR-pending failure.
+- [x] For stable v6.3.0 promotion, record the 2026-08-22 release-owner decision
+  accepting the shortened `rc.6` soak and bounded post-RC cutoff after the
+  canonical production telemetry report showed no new update failures,
+  rollback signals, notification-failure increases, or governed-action-failure
+  increases across the `rc.5` and `rc.6` cohorts.
+- [x] For stable v6.3.0 publication, record the independent, version-bound
+  owner exception for unsigned Windows artifacts and require both public
+  Unknown Publisher disclosure and the unchanged exact-SHA integrity controls.
 - [x] For GA/stable promotion, confirm `V5_MAINTENANCE_SUPPORT_POLICY.md` is still the intended policy and replace any placeholder GA notice dates with the exact v6 GA date and exact v5 end-of-support date that will ship with the announcement.
 - [x] For GA/stable promotion, confirm the pushed governed release-branch copy of `.github/workflows/release-dry-run.yml` already accepts the governed stable rehearsal metadata envelope (`promoted_from_tag`, `rollback_version`, `ga_date`, `v5_eos_date`) through `workflow_dispatch`, because GitHub executes the selected remote ref and does not see local-only governance state.
 - [x] For GA/stable promotion, confirm the local rehearsal branch exactly matches `origin` before dispatching `Release Dry Run`, so the run exercises the intended governed branch state instead of stale remote control-plane metadata.

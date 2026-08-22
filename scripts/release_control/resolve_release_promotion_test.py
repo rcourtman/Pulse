@@ -289,15 +289,44 @@ class ResolveReleasePromotionTest(unittest.TestCase):
         self.assertEqual(metadata["require_windows_signing"], "false")
         self.assertEqual(metadata["unsigned_windows_exception"], "true")
 
+    def test_v630_owner_exception_allows_disclosed_stable_promotion(self) -> None:
+        metadata = resolver.resolve_metadata(
+            version="6.3.0",
+            promoted_from_tag_input="v6.3.0-rc.6",
+            rollback_version_input="v6.2.1",
+            ga_date_input="",
+            v5_eos_date_input="",
+            hotfix_exception=True,
+            hotfix_reason_input="Owner accepted the shortened prerelease soak.",
+            release_notes_input=(
+                "Windows Unified Agent binaries are not Authenticode-signed for v6.3.0."
+            ),
+            unsigned_windows_exception=True,
+            unsigned_windows_reason_input=(
+                "Windows signing is not yet available; the release owner accepts unsigned "
+                "Windows binaries for v6.3.0."
+            ),
+            tag_exists_fn=lambda tag: tag in {"v6.3.0-rc.6", "v6.2.1"},
+            tag_commit_fn=lambda tag: "rc6-commit",
+            head_descends_from_fn=lambda commit: commit == "rc6-commit",
+            tag_created_unix_fn=lambda tag: 100,
+            now_unix_fn=lambda: 100 + (24 * 3600),
+        )
+
+        self.assertEqual(metadata["promotion_mode"], "stable-rc-promotion")
+        self.assertEqual(metadata["rollback_tag"], "v6.2.1")
+        self.assertEqual(metadata["require_windows_signing"], "false")
+        self.assertEqual(metadata["unsigned_windows_exception"], "true")
+
     def test_unsigned_windows_exception_is_rejected_for_other_stable_versions(self) -> None:
         with self.assertRaisesRegex(
             ValueError,
-            "approved only for stable v6.1.0, v6.1.1, v6.1.2, v6.2.0, or v6.2.1",
+            "approved only for stable v6.1.0, v6.1.1, v6.1.2, v6.2.0, v6.2.1, or v6.3.0",
         ):
             resolver.resolve_metadata(
-                version="6.1.3",
+                version="6.3.1",
                 promoted_from_tag_input="",
-                rollback_version_input="v6.1.2",
+                rollback_version_input="v6.3.0",
                 ga_date_input="",
                 v5_eos_date_input="",
                 hotfix_exception=True,
