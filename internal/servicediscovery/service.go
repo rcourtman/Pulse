@@ -3035,6 +3035,15 @@ func (s *Service) GetDiscoveryByResource(resourceType ResourceType, targetID, re
 		ResourceID:   resourceID,
 	}
 	aliasIDs := []string{MakeResourceID(resourceType, targetID, resourceID)}
+	// A forked host identity is not reachable through normalizeDiscoveryRequest,
+	// which only matches exact snapshot IDs and hostnames. Seed the equivalent
+	// spellings of the target so records stored under a fork still resolve.
+	for _, candidate := range s.equivalentDiscoveryTargetIDs(targetID) {
+		aliasIDs = append(aliasIDs, MakeResourceID(resourceType, candidate, candidate))
+		if resourceID != "" && resourceID != candidate {
+			aliasIDs = append(aliasIDs, MakeResourceID(resourceType, candidate, resourceID))
+		}
+	}
 	req = s.normalizeDiscoveryRequest(req, &aliasIDs)
 
 	d, err := s.store.GetByResource(resourceType, req.TargetID, req.ResourceID)
@@ -3091,16 +3100,144 @@ func (s *Service) ListDiscoveriesByType(resourceType ResourceType) ([]*ResourceD
 }
 
 // ListDiscoveriesByTarget returns discoveries for a specific target ID.
+//
+// The store matches TargetID byte-for-byte, but callers legitimately hold a
+// different spelling of the same target than the record was stored under: a PVE
+// node reports its linked agent by base agent UUID while the host record itself
+// may have forked onto a suffixed identity. Resolve the request through
+// equivalentDiscoveryTargetIDs so those spellings still find their records.
 func (s *Service) ListDiscoveriesByTarget(targetID string) ([]*ResourceDiscovery, error) {
-	discoveries, err := s.store.ListByTarget(targetID)
+	candidates := s.equivalentDiscoveryTargetIDs(targetID)
+	if len(candidates) == 0 {
+		return nil, nil
+	}
+
+	all, err := s.store.List()
 	if err != nil {
 		return nil, fmt.Errorf("list discoveries by target %q: %w", targetID, err)
 	}
+
+	wanted := make(map[string]struct{}, len(candidates))
+	for _, candidate := range candidates {
+		wanted[candidate] = struct{}{}
+	}
+
+	discoveries := make([]*ResourceDiscovery, 0, len(all))
+	for _, d := range all {
+		if d == nil {
+			continue
+		}
+		if _, ok := wanted[strings.TrimSpace(d.TargetID)]; ok {
+			discoveries = append(discoveries, d)
+		}
+	}
+
 	discoveries = s.deduplicateDiscoveries(discoveries)
 	for _, d := range discoveries {
 		s.upgradeCLIAccessIfNeeded(d)
 	}
 	return discoveries, nil
+}
+
+// equivalentDiscoveryTargetIDs returns every target ID that identifies the same
+// target as targetID, starting with targetID itself.
+//
+// Host identities fork onto a "<base>-<hex suffix>" form when an agent re-enrolls
+// under a new token against an existing record (see the host token binding logic
+// in internal/monitoring) - re-running an install with --proxmox is enough to
+// trigger it. Discovery then stores records under the forked host ID while the
+// PVE node still reports the base agent UUID as its linked agent, so a lookup by
+// base UUID finds nothing. Bridge the two through the live snapshot.
+func (s *Service) equivalentDiscoveryTargetIDs(targetID string) []string {
+	trimmed := strings.TrimSpace(targetID)
+	if trimmed == "" {
+		return nil
+	}
+
+	ids := []string{trimmed}
+	seen := map[string]struct{}{trimmed: {}}
+	add := func(id string) {
+		id = strings.TrimSpace(id)
+		if id == "" {
+			return
+		}
+		if _, ok := seen[id]; ok {
+			return
+		}
+		seen[id] = struct{}{}
+		ids = append(ids, id)
+	}
+
+	snap, ok := s.getSnapshot()
+	if !ok {
+		return ids
+	}
+
+	// Hostnames that name the requested target. A forked host ID is otherwise
+	// unreachable from the base UUID, but it still reports the same hostname.
+	hostnames := make(map[string]struct{})
+	noteHostname := func(hostname string) {
+		hostname = strings.TrimSpace(hostname)
+		if hostname != "" {
+			hostnames[hostname] = struct{}{}
+		}
+	}
+
+	for _, node := range snap.Nodes {
+		if node.LinkedAgentID == trimmed || node.ID == trimmed || node.Name == trimmed {
+			add(node.LinkedAgentID)
+			add(node.Name)
+			noteHostname(node.Name)
+		}
+	}
+	for _, host := range snap.Hosts {
+		if host.ID == trimmed || host.Hostname == trimmed {
+			noteHostname(host.Hostname)
+		}
+	}
+
+	for _, host := range snap.Hosts {
+		switch {
+		case host.ID == trimmed:
+			add(host.Hostname)
+		case host.Hostname != "" && host.Hostname == trimmed:
+			add(host.ID)
+		case isForkedHostIdentity(host.ID, trimmed):
+			add(host.ID)
+		default:
+			if _, ok := hostnames[strings.TrimSpace(host.Hostname)]; ok && host.Hostname != "" {
+				add(host.ID)
+			}
+		}
+	}
+
+	return ids
+}
+
+// isForkedHostIdentity reports whether candidate is base carrying one or more
+// host-identity fork suffixes. Forks append "-<hex>", and a base longer than 40
+// characters is truncated before the next suffix is appended, so a twice-forked
+// identity carries a partial suffix followed by a full one. Requiring every
+// trailing segment to be hex keeps unrelated IDs that merely share a prefix out.
+func isForkedHostIdentity(candidate, base string) bool {
+	if candidate == "" || base == "" || candidate == base {
+		return false
+	}
+	tail, ok := strings.CutPrefix(candidate, base+"-")
+	if !ok {
+		return false
+	}
+	for _, segment := range strings.Split(tail, "-") {
+		if segment == "" {
+			return false
+		}
+		for _, r := range segment {
+			if (r < '0' || r > '9') && (r < 'a' || r > 'f') {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 // deduplicateDiscoveries filters out redundant discoveries where a PVE node
