@@ -93,6 +93,113 @@ class ReleasePreflightTest(unittest.TestCase):
         self.assertIn("--if-configured", release)
         self.assertIn('PULSE_E2E_DIAGNOSTIC: "1"', workflow)
 
+    def assert_release_dry_run_diagnostic_contract(
+        self, workflow: str, diagnostic: str
+    ) -> None:
+        installed_browser = re.search(
+            r"npx playwright install --with-deps ([a-z-]+)", workflow
+        )
+        diagnostic_step = re.search(
+            r"      - name: Run integration diagnostics\n(?P<body>.*?)(?=\n      - name:)",
+            workflow,
+            flags=re.DOTALL,
+        )
+        self.assertIsNotNone(diagnostic_step)
+        step_body = diagnostic_step.group("body")
+        diagnostic_command = re.search(
+            r"npx playwright test tests/00-diagnostic\.spec\.ts (?P<args>[^\n]+)",
+            step_body,
+        )
+        self.assertIsNotNone(installed_browser)
+        self.assertIsNotNone(diagnostic_command)
+        self.assertIn('PULSE_E2E_DIAGNOSTIC: "1"', step_body)
+        self.assertLess(
+            step_body.index("set -o pipefail"),
+            step_body.index("npx playwright test tests/00-diagnostic.spec.ts"),
+        )
+        self.assertIn("2>&1 | tee diagnostic-evidence/playwright-diagnostic.log", step_body)
+        selected_browser = re.search(
+            r"--project(?:=|\s+)([a-z-]+)", diagnostic_command.group("args")
+        )
+        self.assertIsNotNone(
+            selected_browser,
+            "release diagnostic must select the one browser installed by the job",
+        )
+        self.assertEqual(selected_browser.group(1), installed_browser.group(1))
+        self.assertIn("--retries=0", diagnostic_command.group("args"))
+
+        self.assertRegex(
+            diagnostic,
+            r"test\.describe\.configure\(\{\s*retries:\s*0\s*\}\);",
+        )
+        self.assertIn("test.setTimeout(120_000)", diagnostic)
+
+        for required_diagnostic in (
+            "API readiness failed:",
+            "dependencies.monitor",
+            "dependencies.scheduler",
+            "dependencies.websocket",
+            "/api/security/status",
+            "hasAuthentication",
+            "Rendered UI readiness failed:",
+            "Pulse app shell did not render within 20s",
+            "effectiveRenderedOpacity",
+            "stayed transparent",
+            "Pulse Setup Wizard",
+            "Paste your bootstrap token",
+            "diagnostic-evidence",
+            "release-dry-run-rendered-readiness-chromium.png",
+            "testInfo.attach(",
+            "DIAGNOSTIC EVIDENCE ERROR:",
+            "if (!readinessFailed)",
+        ):
+            self.assertIn(required_diagnostic, diagnostic)
+
+        self.assertIn("Collect integration diagnostic runtime evidence", workflow)
+        self.assertIn("Upload integration diagnostic evidence", workflow)
+        self.assertIn("if-no-files-found: error", workflow)
+        self.assertIn("tests/integration/test-results/", workflow)
+        self.assertNotIn("expect(true).toBe(true)", diagnostic)
+        self.assertNotIn("await page.waitForTimeout(3000)", diagnostic)
+
+    def test_release_dry_run_diagnostic_contract(self) -> None:
+        workflow = (ROOT / ".github/workflows/release-dry-run.yml").read_text()
+        diagnostic = (
+            ROOT / "tests/integration/tests/00-diagnostic.spec.ts"
+        ).read_text()
+
+        self.assert_release_dry_run_diagnostic_contract(workflow, diagnostic)
+
+        legacy_workflow = workflow.replace(
+            " --project=chromium --retries=0", "", 1
+        )
+        with self.assertRaises(AssertionError):
+            self.assert_release_dry_run_diagnostic_contract(
+                legacy_workflow, diagnostic
+            )
+
+        retrying_diagnostic = diagnostic.replace(
+            "test.describe.configure({ retries: 0 });", "", 1
+        )
+        with self.assertRaises(AssertionError):
+            self.assert_release_dry_run_diagnostic_contract(
+                workflow, retrying_diagnostic
+            )
+
+        unconditional_pass = f"{diagnostic}\nexpect(true).toBe(true);\n"
+        with self.assertRaises(AssertionError):
+            self.assert_release_dry_run_diagnostic_contract(
+                workflow, unconditional_pass
+            )
+
+        evidence_failure_ignored = diagnostic.replace(
+            "if (!readinessFailed) {", "if (false) {", 1
+        )
+        with self.assertRaises(AssertionError):
+            self.assert_release_dry_run_diagnostic_contract(
+                workflow, evidence_failure_ignored
+            )
+
     def test_worker_has_no_publication_or_signing_authority(self) -> None:
         worker = (ROOT / "scripts/release-preflight-worker.sh").read_text()
         runner = (ROOT / "scripts/run-release-preflight.sh").read_text()

@@ -316,7 +316,10 @@ jobs:
           timeout 60 sh -c 'until curl -fsS http://localhost:7655/api/health > /dev/null; do sleep 2; done'
 
           echo "Running Playwright diagnostics..."
-          npx playwright test tests/00-diagnostic.spec.ts --reporter=list
+          mkdir -p diagnostic-evidence
+          set -o pipefail
+          npx playwright test tests/00-diagnostic.spec.ts --project=chromium --retries=0 --reporter=list \
+            2>&1 | tee diagnostic-evidence/playwright-diagnostic.log
 
           echo "Running update API route smoke check..."
           STATUS=$(curl -s -o /tmp/update-status.json -w "%{http_code}" http://localhost:7655/api/updates/status || true)
@@ -331,12 +334,30 @@ jobs:
               ;;
           esac
 
-          docker compose -f docker-compose.test.yml down -v
+      - name: Collect integration diagnostic runtime evidence
+        if: always()
+        working-directory: tests/integration
+        run: |
+          mkdir -p diagnostic-evidence
+          docker compose -f docker-compose.test.yml ps --all \
+            > diagnostic-evidence/docker-compose-ps.txt 2>&1 || true
+          docker compose -f docker-compose.test.yml logs --no-color \
+            > diagnostic-evidence/docker-compose.log 2>&1 || true
 
       - name: Cleanup integration environment
         if: always()
         working-directory: tests/integration
         run: docker compose -f docker-compose.test.yml down -v || true
+
+      - name: Upload integration diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-dry-run-integration-diagnostics
+          path: |
+            tests/integration/diagnostic-evidence/
+            tests/integration/test-results/
+          if-no-files-found: error
 
       - name: Write rehearsal summary
         if: always()
