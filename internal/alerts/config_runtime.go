@@ -676,6 +676,12 @@ func (m *Manager) applyThresholdOverride(base ThresholdConfig, override Threshol
 	}
 	if override.DisableConnectivity {
 		result.DisableConnectivity = true
+	} else if override.PoweredOffSeverity != "" {
+		// An override carrying an explicit powered-off severity is that row's
+		// offline control set to warning/critical, so it re-enables
+		// connectivity alerts over a disabled default. A per-row "off" is
+		// stored as DisableConnectivity=true and takes the branch above.
+		result.DisableConnectivity = false
 	}
 	if override.PoweredOffSeverity != "" {
 		result.PoweredOffSeverity = NormalizePoweredOffSeverity(override.PoweredOffSeverity)
