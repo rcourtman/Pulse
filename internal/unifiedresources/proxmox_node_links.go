@@ -25,6 +25,36 @@ func inferLinkedHostsForProxmoxNodes(nodes []models.Node, hostByID map[string]*m
 	nodeIDToHostID := make(map[string]string)
 	ambiguousNodeIDs := make(map[string]struct{})
 	trustedHostIDs := make(map[string]struct{})
+	hostClusterByID := make(map[string]string)
+	hostClusterAmbiguous := make(map[string]struct{})
+	recordHostCluster := func(hostID string, node models.Node) {
+		hostID = strings.TrimSpace(hostID)
+		cluster := strings.TrimSpace(strings.ToLower(node.ClusterName))
+		if hostID == "" || cluster == "" {
+			return
+		}
+		if _, ambiguous := hostClusterAmbiguous[hostID]; ambiguous {
+			return
+		}
+		if existing, ok := hostClusterByID[hostID]; ok && existing != cluster {
+			delete(hostClusterByID, hostID)
+			hostClusterAmbiguous[hostID] = struct{}{}
+			return
+		}
+		hostClusterByID[hostID] = cluster
+	}
+	// Short hostnames and short endpoint aliases collide across estates
+	// (#1753: pve01 in staging vs pve01 in production), so a host whose
+	// trusted link pins it to one cluster must never be inferred for a node
+	// from a different cluster, whichever inference path proposed it.
+	hostClusterConflicts := func(hostID string, node models.Node) bool {
+		hostCluster := hostClusterByID[strings.TrimSpace(hostID)]
+		if hostCluster == "" {
+			return false
+		}
+		nodeCluster := strings.TrimSpace(strings.ToLower(node.ClusterName))
+		return nodeCluster != "" && nodeCluster != hostCluster
+	}
 	register := func(key, hostID string) {
 		key = strings.TrimSpace(key)
 		hostID = strings.TrimSpace(hostID)
@@ -68,6 +98,7 @@ func inferLinkedHostsForProxmoxNodes(nodes []models.Node, hostByID map[string]*m
 			continue
 		}
 		trustedHostIDs[hostID] = struct{}{}
+		recordHostCluster(hostID, node)
 		for _, key := range proxmoxNodeLinkKeys(node) {
 			register(key, hostID)
 		}
@@ -86,6 +117,7 @@ func inferLinkedHostsForProxmoxNodes(nodes []models.Node, hostByID map[string]*m
 			continue
 		}
 		trustedHostIDs[hostID] = struct{}{}
+		recordHostCluster(hostID, *node)
 		registerNode(nodeID, hostID)
 		for _, key := range proxmoxNodeLinkKeys(*node) {
 			register(key, hostID)
@@ -121,7 +153,7 @@ func inferLinkedHostsForProxmoxNodes(nodes []models.Node, hostByID map[string]*m
 				continue
 			}
 			hostID := strings.TrimSpace(keyToHostID[key])
-			if hostID == "" {
+			if hostID == "" || hostClusterConflicts(hostID, node) {
 				continue
 			}
 			if inferredHostID != "" && inferredHostID != hostID {
@@ -136,6 +168,9 @@ func inferLinkedHostsForProxmoxNodes(nodes []models.Node, hostByID map[string]*m
 				if host == nil ||
 					proxmoxNodeUsesProviderScopedIdentity(node) ||
 					!proxmoxNodeCorroboratesHost(node, *host) {
+					continue
+				}
+				if hostClusterConflicts(hostID, node) {
 					continue
 				}
 				if inferredHostID != "" && inferredHostID != hostID {

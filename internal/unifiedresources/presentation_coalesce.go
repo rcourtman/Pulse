@@ -61,6 +61,9 @@ func coalescePresentationHostResourcesOnce(
 			if excluded != nil && excluded(existing, resource) {
 				continue
 			}
+			if presentationHostIdentitiesDistinct(existing, resource) {
+				continue
+			}
 			if !presentationHostnamesCompatible(existing, resource) {
 				continue
 			}
@@ -164,6 +167,61 @@ func presentationHostnameCandidates(resource Resource) []string {
 	}
 	candidates = append(candidates, resource.Name)
 	return candidates
+}
+
+// presentationMachineIDs returns the hardware machine identifiers a host row
+// carries.
+func presentationMachineIDs(resource Resource) []string {
+	candidates := []string{resource.Identity.MachineID}
+	if resource.Agent != nil {
+		candidates = append(candidates, resource.Agent.MachineID)
+	}
+	ids := candidates[:0]
+	for _, id := range candidates {
+		if id = strings.TrimSpace(id); id != "" {
+			ids = append(ids, id)
+		}
+	}
+	return ids
+}
+
+func presentationMachineIDsOverlap(left, right []string) bool {
+	for _, leftID := range left {
+		for _, rightID := range right {
+			if strings.EqualFold(leftID, rightID) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// presentationHostIdentitiesDistinct reports whether two host views carry
+// identity proving they are different machines. Distinct machines share a
+// merge bucket whenever both report only a short hostname (#1753: a pve01 in
+// staging and a pve01 in production), so a differing machine ID, DMI UUID, or
+// Proxmox cluster membership must veto the merge no matter what the hostname
+// comparison concludes. Equal cluster names deliberately do not veto: the same
+// cluster added under two connections still describes the same machines.
+func presentationHostIdentitiesDistinct(left, right Resource) bool {
+	leftIDs, rightIDs := presentationMachineIDs(left), presentationMachineIDs(right)
+	if len(leftIDs) > 0 && len(rightIDs) > 0 && !presentationMachineIDsOverlap(leftIDs, rightIDs) {
+		return true
+	}
+	if presentationIdentityValuesConflict(left.Identity.DMIUUID, right.Identity.DMIUUID) {
+		return true
+	}
+	if left.Proxmox != nil && right.Proxmox != nil &&
+		presentationIdentityValuesConflict(left.Proxmox.ClusterName, right.Proxmox.ClusterName) {
+		return true
+	}
+	return false
+}
+
+func presentationIdentityValuesConflict(left, right string) bool {
+	left = strings.TrimSpace(left)
+	right = strings.TrimSpace(right)
+	return left != "" && right != "" && !strings.EqualFold(left, right)
 }
 
 // presentationHostnamesCompatible reports whether two host views may describe

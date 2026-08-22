@@ -456,3 +456,83 @@ func TestCoalescePresentationHostResourcesKeepsLiveAgentCPU(t *testing.T) {
 		t.Fatalf("expected live agent CPU 12 to be kept, got %+v", cpu)
 	}
 }
+
+// Two estates each running a node named pve01 must not collapse into one host
+// row just because PVE node names are short. Refs #1753.
+func TestCoalescePresentationHostResourcesKeepsSameShortNameEstatesApart(t *testing.T) {
+	estateRow := func(id, machineID, cluster string) Resource {
+		identity := ResourceIdentity{Hostnames: []string{"pve01"}, MachineID: machineID}
+		agent := &AgentData{Hostname: "pve01", MachineID: machineID, OSName: "Proxmox VE"}
+		return Resource{
+			ID:       id,
+			Type:     ResourceTypeAgent,
+			Name:     "pve01",
+			Status:   StatusOnline,
+			Sources:  []DataSource{SourceAgent, SourceProxmox},
+			Identity: identity,
+			Agent:    agent,
+			Proxmox:  &ProxmoxData{NodeName: "pve01", ClusterName: cluster},
+		}
+	}
+
+	t.Run("distinct machine ids veto the merge", func(t *testing.T) {
+		resources := []Resource{
+			estateRow("agent-staging-pve01", "machine-staging", ""),
+			estateRow("agent-production-pve01", "machine-production", ""),
+		}
+		if got := CoalescePresentationHostResources(resources); len(got) != 2 {
+			t.Fatalf("expected distinct machines to stay apart, got %d rows: %#v", len(got), got)
+		}
+	})
+
+	t.Run("distinct proxmox clusters veto the merge without machine ids", func(t *testing.T) {
+		platformOnly := estateRow("node-production-pve01", "", "production")
+		platformOnly.Sources = []DataSource{SourceProxmox}
+		platformOnly.Agent = nil
+		resources := []Resource{
+			estateRow("agent-staging-pve01", "machine-staging", "staging"),
+			platformOnly,
+		}
+		if got := CoalescePresentationHostResources(resources); len(got) != 2 {
+			t.Fatalf("expected distinct clusters to stay apart, got %d rows: %#v", len(got), got)
+		}
+	})
+
+	t.Run("distinct dmi uuids veto the merge", func(t *testing.T) {
+		left := estateRow("agent-staging-pve01", "", "")
+		left.Identity.DMIUUID = "uuid-staging"
+		right := estateRow("agent-production-pve01", "", "")
+		right.Identity.DMIUUID = "uuid-production"
+		right.Sources = []DataSource{SourceProxmox}
+		right.Agent = nil
+		if got := CoalescePresentationHostResources([]Resource{left, right}); len(got) != 2 {
+			t.Fatalf("expected distinct DMI UUIDs to stay apart, got %d rows: %#v", len(got), got)
+		}
+	})
+
+	t.Run("control: without distinguishing identity the rows merge", func(t *testing.T) {
+		platformOnly := estateRow("node-pve01", "", "")
+		platformOnly.Sources = []DataSource{SourceProxmox}
+		platformOnly.Agent = nil
+		resources := []Resource{
+			estateRow("agent-pve01", "machine-shared", ""),
+			platformOnly,
+		}
+		if got := CoalescePresentationHostResources(resources); len(got) != 1 {
+			t.Fatalf("expected identity-free split views to still merge, got %d rows: %#v", len(got), got)
+		}
+	})
+
+	t.Run("control: equal cluster names still merge", func(t *testing.T) {
+		platformOnly := estateRow("node-pve01", "", "homelab")
+		platformOnly.Sources = []DataSource{SourceProxmox}
+		platformOnly.Agent = nil
+		resources := []Resource{
+			estateRow("agent-pve01", "machine-shared", "homelab"),
+			platformOnly,
+		}
+		if got := CoalescePresentationHostResources(resources); len(got) != 1 {
+			t.Fatalf("expected same-cluster views to merge, got %d rows: %#v", len(got), got)
+		}
+	})
+}
