@@ -1301,6 +1301,41 @@ func TestAISettingsHandler_UpdateSettings_OpenRouterKeySetAndClear(t *testing.T)
 	}
 }
 
+func TestAISettingsHandler_UpdateSettings_VercelKeySetAndClear(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
+
+	body, _ := json.Marshal(AISettingsUpdateRequest{
+		VercelAPIKey: ptr("  vercel-test-key  "),
+		Model:        ptr("vercel:anthropic/claude-sonnet-4"),
+	})
+	req := newLoopbackRequest(http.MethodPut, "/api/settings/ai/update", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.HandleUpdateAISettings(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code, "body=%s", rec.Body.String())
+
+	var resp AISettingsResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assert.True(t, resp.VercelConfigured)
+	assert.Contains(t, resp.ConfiguredProviders, config.AIProviderVercel)
+	saved, err := persistence.LoadAIConfig()
+	require.NoError(t, err)
+	require.NotNil(t, saved)
+	assert.Equal(t, "vercel-test-key", saved.VercelAPIKey)
+
+	body, _ = json.Marshal(AISettingsUpdateRequest{ClearVercelKey: ptr(true)})
+	req = newLoopbackRequest(http.MethodPut, "/api/settings/ai/update", bytes.NewReader(body))
+	rec = httptest.NewRecorder()
+	handler.HandleUpdateAISettings(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code, "body=%s", rec.Body.String())
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assert.False(t, resp.VercelConfigured)
+}
+
 func TestAISettingsHandler_ListModels_Ollama(t *testing.T) {
 	t.Parallel()
 

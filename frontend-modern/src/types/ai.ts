@@ -4,6 +4,7 @@ export type AIProvider =
   | 'anthropic'
   | 'openai'
   | 'openrouter'
+  | 'vercel'
   | 'ollama'
   | 'deepseek'
   | 'gemini'
@@ -102,6 +103,7 @@ export interface AISettings {
   anthropic_configured: boolean; // true if Anthropic API key is set
   openai_configured: boolean; // true if an OpenAI key or custom compatible endpoint is set
   openrouter_configured: boolean; // true if OpenRouter API key is set
+  vercel_configured?: boolean; // true if Vercel AI Gateway API key is set
   deepseek_configured: boolean; // true if DeepSeek API key is set
   gemini_configured: boolean; // true if Gemini API key is set
   zai_configured?: boolean; // true if Z.ai (Zhipu) API key is set
@@ -246,6 +248,7 @@ export interface AISettingsUpdateRequest {
   anthropic_api_key?: string; // Set Anthropic API key
   openai_api_key?: string; // Set OpenAI API key
   openrouter_api_key?: string; // Set OpenRouter API key
+  vercel_api_key?: string; // Set Vercel AI Gateway API key
   deepseek_api_key?: string; // Set DeepSeek API key
   gemini_api_key?: string; // Set Gemini API key
   zai_api_key?: string; // Set Z.ai (Zhipu) API key
@@ -262,6 +265,7 @@ export interface AISettingsUpdateRequest {
   clear_anthropic_key?: boolean; // Clear Anthropic API key
   clear_openai_key?: boolean; // Clear OpenAI API key
   clear_openrouter_key?: boolean; // Clear OpenRouter API key
+  clear_vercel_key?: boolean; // Clear Vercel AI Gateway API key
   clear_deepseek_key?: boolean; // Clear DeepSeek API key
   clear_gemini_key?: boolean; // Clear Gemini API key
   clear_zai_key?: boolean; // Clear Z.ai API key
@@ -314,6 +318,7 @@ export const PROVIDER_DESCRIPTIONS: Record<AIProvider, string> = {
   anthropic: 'Claude models from Anthropic',
   openai: 'GPT models from OpenAI',
   openrouter: 'Unified gateway for OpenAI-compatible models',
+  vercel: 'Unified AI Gateway from Vercel',
   ollama: 'Local models via Ollama',
   deepseek: 'DeepSeek V4 models',
   gemini: 'Gemini models from Google',

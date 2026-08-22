@@ -617,7 +617,12 @@ func TestOpenAIClient_Chat_NonOpenRouterOmitsReasoningEffort(t *testing.T) {
 
 func TestOpenAIClient_OpenRouterOmitsInvalidReasoningEffort(t *testing.T) {
 	client := NewOpenAICompatibleClient("openrouter", "sk-test", "qwen/qwen3.5-plus", "https://openrouter.ai/api/v1", 0)
-	assert.Nil(t, client.openRouterReasoning(ReasoningEffort("unbounded")))
+	assert.Nil(t, client.gatewayReasoning(ReasoningEffort("unbounded")))
+}
+
+func TestOpenAIClient_VercelSupportsReasoningEffort(t *testing.T) {
+	client := NewOpenAICompatibleClient("vercel", "test-key", "anthropic/claude-sonnet-4", "https://ai-gateway.vercel.sh/v1", 0)
+	assert.Equal(t, &openAIReasoning{Effort: ReasoningEffortMedium}, client.gatewayReasoning(ReasoningEffortMedium))
 }
 
 func TestOpenAIClient_Chat_KeepsReasoningOutOfVisibleContent(t *testing.T) {

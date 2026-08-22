@@ -1,6 +1,7 @@
 package modelresolution
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 
@@ -169,5 +170,19 @@ func TestGatewayEquivalentChatModels_ReturnsEmptyWithoutConfiguredGateway(t *tes
 	cfg := &config.AIConfig{DeepSeekAPIKey: "deepseek-test"}
 	if got := GatewayEquivalentChatModels(cfg, "deepseek:deepseek-v4-pro"); len(got) != 0 {
 		t.Fatalf("GatewayEquivalentChatModels without gateway = %#v, want empty", got)
+	}
+}
+
+func TestGatewayEquivalentChatModels_MapsVercelGatewayRoute(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.AIConfig{
+		VercelAPIKey:    "vercel-test",
+		AnthropicAPIKey: "anthropic-test",
+	}
+	got := GatewayEquivalentChatModels(cfg, "anthropic:claude-sonnet-4.5")
+	want := []string{"vercel:anthropic/claude-sonnet-4.5"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("GatewayEquivalentChatModels() = %#v, want %#v", got, want)
 	}
 }

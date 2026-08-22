@@ -59,7 +59,7 @@ describe('aiProviderPresentation', () => {
     ).toBe('Fireworks AI: Accounts/Fireworks/Models/Llama V3p1 70B Instruct');
   });
 
-  it('keeps OpenRouter-routed model labels distinct from direct provider models', () => {
+  it('keeps gateway-routed model labels distinct from direct provider models', () => {
     expect(
       formatAIModelRouteLabel({
         id: 'openrouter:deepseek/deepseek-v4-pro',
@@ -77,6 +77,9 @@ describe('aiProviderPresentation', () => {
     ).toBe('DeepSeek: DeepSeek V4 Pro');
 
     expect(formatAIModelRouteLabel('deepseek:deepseek-v4-pro')).toBe('DeepSeek: DeepSeek V4 Pro');
+    expect(formatAIModelRouteLabel('vercel:anthropic/claude-sonnet-4.5')).toBe(
+      'Anthropic: Claude Sonnet 4.5 via Vercel AI Gateway',
+    );
   });
 
   it('does not duplicate an existing OpenRouter route label', () => {

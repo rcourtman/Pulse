@@ -327,6 +327,28 @@ func TestNewForProvider_OpenRouterNoAPIKey(t *testing.T) {
 	}
 }
 
+func TestNewForProvider_Vercel(t *testing.T) {
+	cfg := &config.AIConfig{
+		Enabled:      true,
+		VercelAPIKey: "test-key",
+	}
+	provider, err := NewForProvider(cfg, config.AIProviderVercel, "anthropic/claude-sonnet-4")
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	if provider.Name() != config.AIProviderVercel {
+		t.Errorf("Expected provider name %q, got %q", config.AIProviderVercel, provider.Name())
+	}
+}
+
+func TestNewForProvider_VercelNoAPIKey(t *testing.T) {
+	cfg := &config.AIConfig{Enabled: true}
+	_, err := NewForProvider(cfg, config.AIProviderVercel, "anthropic/claude-sonnet-4")
+	if err == nil {
+		t.Error("Expected error for Vercel AI Gateway without API key")
+	}
+}
+
 func TestNewForProvider_DeepSeek(t *testing.T) {
 	cfg := &config.AIConfig{
 		Enabled:        true,

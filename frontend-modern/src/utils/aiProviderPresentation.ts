@@ -4,6 +4,7 @@ export const AI_PROVIDER_DISPLAY_NAMES: Record<string, string> = {
   anthropic: 'Anthropic',
   openai: 'OpenAI',
   openrouter: 'OpenRouter',
+  vercel: 'Vercel AI Gateway',
   deepseek: 'DeepSeek',
   gemini: 'Google Gemini',
   zai: 'Z.ai',
@@ -71,7 +72,7 @@ export function getProviderFromModelId(modelId: string): AIProvider | string {
 type AIModelRouteLabelInput =
   string | (Pick<ModelInfo, 'id'> & Partial<Pick<ModelInfo, 'name' | 'provider'>>);
 
-const GATEWAY_MODEL_PROVIDERS = new Set<string>(['openrouter']);
+const GATEWAY_MODEL_PROVIDERS = new Set<string>(['openrouter', 'vercel']);
 const LOCAL_MODEL_ROUTE_LABELS: Record<string, string> = {
   'pulse:local-inventory': 'Pulse inventory',
   'pulse:mock-assistant': 'Pulse mock Assistant',

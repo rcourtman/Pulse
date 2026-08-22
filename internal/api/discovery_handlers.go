@@ -109,6 +109,8 @@ func (h *DiscoveryHandlers) getAIProviderInfo() *servicediscovery.AIProviderInfo
 		label = "Cloud (OpenAI)"
 	case config.AIProviderOpenRouter:
 		label = "Cloud (OpenRouter)"
+	case config.AIProviderVercel:
+		label = "Cloud (Vercel AI Gateway)"
 	case config.AIProviderDeepSeek:
 		label = "Cloud (DeepSeek)"
 	case config.AIProviderGemini:
