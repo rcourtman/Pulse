@@ -9049,7 +9049,7 @@
     },
     {
       "id": "rc-to-ga-promotion-readiness",
-      "summary": "Confirm Pulse v6 stable promotion uses a governed exact-SHA rehearsal, published prerelease lineage, explicit owner acceptance for any shortened soak or bounded post-RC cutoff, exact rollback instructions, and the written v5 maintenance-only policy; v6.3.0 promoted from rc.6 after clean privacy-safe production telemetry and converged from the unchanged stable cutoff SHA.",
+      "summary": "Confirm Pulse v6 stable promotion uses a governed exact-SHA rehearsal, published prerelease lineage, explicit owner risk acceptance for any shortened soak or bounded post-RC cutoff, exact rollback instructions, and the written v5 maintenance-only policy; v6.3.0 promoted from rc.6 after clean privacy-safe production telemetry and converged from the unchanged stable cutoff SHA.",
       "owner": "project-owner",
       "blocking_level": "release-ready",
       "minimum_evidence_tier": "real-external-e2e",
