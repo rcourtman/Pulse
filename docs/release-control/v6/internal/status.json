@@ -5139,7 +5139,7 @@
       "status": "target-met",
       "completion": {
         "state": "complete",
-        "summary": "Self-hosted release confidence reached its target with exact-SHA dry-run, stable activation, installer, demo, container, Helm, and private paid-runtime convergence proof for v6.2.0.",
+        "summary": "Self-hosted release confidence reached its target and was re-proved for v6.3.0 with exact-SHA dry-run, stable activation, published-asset integrity, installer, demo, container, Helm, and private paid-runtime convergence proof.",
         "tracking": []
       },
       "blockers": [],
@@ -5164,6 +5164,12 @@
         },
         {
           "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/rc-to-ga-promotion-readiness-rehearsal-2026-08-22.md",
+          "kind": "file",
+          "evidence_tier": "real-external-e2e"
+        },
+        {
+          "repo": "pulse",
           "path": "docs/release-control/v6/internal/records/self-hosted-installer-disk-preflight-2026-05-01.md",
           "kind": "file"
         },
@@ -5172,6 +5178,18 @@
           "path": "docs/release-control/v6/internal/records/v6.2.0-stable-cutoff-owner-approval-2026-08-09.md",
           "kind": "file",
           "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/v6.3.0-stable-cutoff-owner-approval-2026-08-22.md",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/v6.3.0-stable-publication-proof-2026-08-22.md",
+          "kind": "file",
+          "evidence_tier": "real-external-e2e"
         },
         {
           "repo": "pulse",
@@ -9031,7 +9049,7 @@
     },
     {
       "id": "rc-to-ga-promotion-readiness",
-      "summary": "Confirm Pulse v6 GA promotion is coming from the current pulse/v6-release branch after accumulated post-RC7 fixes, with the 2026-07-02 owner risk acceptance for no RC8 or further current-branch validation, rollback instructions, and a written v5 maintenance-only policy.",
+      "summary": "Confirm Pulse v6 stable promotion uses a governed exact-SHA rehearsal, published prerelease lineage, explicit owner acceptance for any shortened soak or bounded post-RC cutoff, exact rollback instructions, and the written v5 maintenance-only policy; v6.3.0 promoted from rc.6 after clean privacy-safe production telemetry and converged from the unchanged stable cutoff SHA.",
       "owner": "project-owner",
       "blocking_level": "release-ready",
       "minimum_evidence_tier": "real-external-e2e",
@@ -9094,7 +9112,25 @@
         },
         {
           "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/rc-to-ga-promotion-readiness-rehearsal-2026-08-22.md",
+          "kind": "file",
+          "evidence_tier": "real-external-e2e"
+        },
+        {
+          "repo": "pulse",
           "path": "docs/release-control/v6/internal/records/rc-to-ga-promotion-readiness-rehearsal-blocked-2026-03-26.md",
+          "kind": "file",
+          "evidence_tier": "real-external-e2e"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/v6.3.0-stable-cutoff-owner-approval-2026-08-22.md",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/v6.3.0-stable-publication-proof-2026-08-22.md",
           "kind": "file",
           "evidence_tier": "real-external-e2e"
         }
@@ -9310,6 +9346,12 @@
         {
           "repo": "pulse",
           "path": "docs/release-control/v6/internal/records/single-build-release-promotion-path-2026-07-09.md",
+          "kind": "file",
+          "evidence_tier": "real-external-e2e"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/v6.3.0-stable-publication-proof-2026-08-22.md",
           "kind": "file",
           "evidence_tier": "real-external-e2e"
         }
@@ -9644,21 +9686,7 @@
   ],
   "coverage_gaps": [],
   "candidate_lanes": [],
-  "work_claims": [
-    {
-      "id": "ga-release-2026-08-22-lane-l1",
-      "agent_id": "ga-release-2026-08-22",
-      "summary": "Audit production telemetry and prepare and publish v6.3.0 stable under the owner-authorized promotion after clean rc.5 and rc.6 cohorts.",
-      "target_id": "v6-product-lane-expansion",
-      "claimed_at": "2026-08-22T09:15:48Z",
-      "heartbeat_at": "2026-08-22T09:20:31Z",
-      "expires_at": "2026-08-22T15:20:31Z",
-      "work_item": {
-        "kind": "lane",
-        "id": "L1"
-      }
-    }
-  ],
+  "work_claims": [],
   "open_decisions": [],
   "source_of_truth_file": "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",
   "resolved_decisions": [
