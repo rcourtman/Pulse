@@ -247,12 +247,21 @@ while (( completed_tasks < total_tasks )); do
     done
 
     completed_pid=""
-    if wait -n -p completed_pid; then
+    # Restrict wait -n to compilation children. The frontend build is also a
+    # child of this shell, and an unrestricted wait can reap it as if it were
+    # one of the matrix tasks. That advances completed_tasks early, leaves one
+    # binary build unjoined, and can publish an incomplete compiled manifest.
+    if wait -n -p completed_pid "${active_pids[@]}"; then
         status=0
     else
         status=$?
     fi
-    task_record="${task_by_pid[${completed_pid}]:-unknown:}"
+    task_record="${task_by_pid[${completed_pid}]:-}"
+    if [[ -z "${task_record}" ]]; then
+        echo "Error: completed release compilation child is not in the active task set: ${completed_pid:-unknown}." >&2
+        terminate_active
+        exit 4
+    fi
     task_name="${task_record%%:*}"
     log_path="${task_record#*:}"
     remaining_pids=()

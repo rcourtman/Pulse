@@ -157,6 +157,8 @@ func TestProPackagingBuildsFrontendEmbedWithoutTransferringBundle(t *testing.T) 
 		`cp -a frontend-modern/dist/. "${FRONTEND_DIR}/"`,
 		`if [[ "${component}" == server || "${component}" == control-plane ]]; then`,
 		`finish_frontend`,
+		`wait -n -p completed_pid "${active_pids[@]}"`,
+		`completed release compilation child is not in the active task set`,
 		`transfer public Unified Agent binaries only`,
 	} {
 		if !strings.Contains(script, needle) {
@@ -168,6 +170,9 @@ func TestProPackagingBuildsFrontendEmbedWithoutTransferringBundle(t *testing.T) 
 	    echo "Building exact-SHA frontend bundle..."
 	    npm --prefix frontend-modern ci`) {
 		t.Fatal("Pro packaging must build the frontend embed prerequisite")
+	}
+	if strings.Contains(script, `wait -n -p completed_pid;`) {
+		t.Fatal("release compilation must not let wait -n consume the independent frontend child")
 	}
 	serverGate := strings.Index(script, `if [[ "${component}" == server || "${component}" == control-plane ]]; then`)
 	serverLaunch := strings.Index(script, `build_one "${component}" "${target}"`)
