@@ -204,12 +204,22 @@ if command -v golangci-lint >/dev/null 2>&1; then
         if [ -n "$NEW_FROM_REV" ]; then
             NEW_FROM_FLAG="--new-from-rev=$NEW_FROM_REV"
         fi
+        # golangci-lint's typecheck consumes export data written by the go
+        # command, and GOTOOLCHAIN=auto never downgrades: a system Go newer
+        # than the linter's vendored x/tools (go1.27 vs v1.64.8's go1.26)
+        # fails with "export data version 4 is greater than maximum
+        # supported version 2" and a cascade of bogus "type X has no field"
+        # errors. Pin lint to the toolchain go.mod declares, the same one
+        # release builds use. The root pin also covers nested modules; their
+        # go directives must not exceed it. Override with
+        # GOLANGCI_LINT_GOTOOLCHAIN.
+        LINT_GOTOOLCHAIN="${GOLANGCI_LINT_GOTOOLCHAIN:-$(awk '$1 == "toolchain" { tc = $2 } $1 == "go" && go == "" { go = "go" $2 } END { if (tc != "") print tc; else if (go != "") print go; else print "auto" }' go.mod)}"
         if [ -n "$STAGED_GO_PKGS" ]; then
-            GOMAXPROCS="${GOMAXPROCS:-2}" golangci-lint run --concurrency "${GOLANGCI_LINT_CONCURRENCY:-2}" --timeout "${GOLANGCI_LINT_TIMEOUT:-20m}" $NEW_FROM_FLAG $STAGED_GO_PKGS
+            GOTOOLCHAIN="$LINT_GOTOOLCHAIN" GOMAXPROCS="${GOMAXPROCS:-2}" golangci-lint run --concurrency "${GOLANGCI_LINT_CONCURRENCY:-2}" --timeout "${GOLANGCI_LINT_TIMEOUT:-20m}" $NEW_FROM_FLAG $STAGED_GO_PKGS
         fi
         for nested_module in $NESTED_GO_MODULES; do
             echo "Running golangci-lint in nested module $nested_module..."
-            (cd "$nested_module" && GOMAXPROCS="${GOMAXPROCS:-2}" golangci-lint run --concurrency "${GOLANGCI_LINT_CONCURRENCY:-2}" --timeout "${GOLANGCI_LINT_TIMEOUT:-20m}" $NEW_FROM_FLAG ./...)
+            (cd "$nested_module" && GOTOOLCHAIN="$LINT_GOTOOLCHAIN" GOMAXPROCS="${GOMAXPROCS:-2}" golangci-lint run --concurrency "${GOLANGCI_LINT_CONCURRENCY:-2}" --timeout "${GOLANGCI_LINT_TIMEOUT:-20m}" $NEW_FROM_FLAG ./...)
         done
     else
         echo "Skipping golangci-lint (no staged Go/module/linter changes)."
