@@ -58,6 +58,10 @@ jobs:
         working-directory: tests/integration
         run: npm run check:e2e-tiers
 
+      - name: Validate stable failure reporting
+        working-directory: tests/integration
+        run: node --test scripts/report-stable-e2e-failures.test.mjs
+
   e2e:
     name: Playwright Core E2E (shard ${{ matrix.shard }}/8)
     needs: tier-selection
@@ -122,6 +126,16 @@ jobs:
           PULSE_E2E_TIER: "stable"
           PULSE_MULTI_TENANT_ENABLED: "true"
         run: npm test -- --shard=${{ matrix.shard }}/8
+
+      # Playwright's report artifacts preserve the full forensic record, but
+      # artifact bodies and job logs require an authenticated GitHub session.
+      # Project the bounded failed testcase identity into ordinary check
+      # annotations so a red stable gate is diagnosable from the API without
+      # rerunning, demoting, or skipping the failure.
+      - name: Report stable-tier failures
+        if: ${{ !cancelled() && steps.stable.outcome == 'failure' }}
+        working-directory: tests/integration
+        run: node scripts/report-stable-e2e-failures.mjs test-results/junit.xml
 
       # Runs even when the stable tier failed (its data still counts toward
       # promotion), but not when the stable tier was skipped — that means the
