@@ -68,6 +68,11 @@ jobs:
           set -euo pipefail
           marker_url="https://github.com/${{ github.repository }}/releases/download/${TAG}/release-activation.json"
           max_attempts=10500
+          completed_propagation_attempts=0
+          # Each public read already includes two two-second retries. Twenty
+          # outer attempts allow roughly two minutes of post-upload edge
+          # propagation without hiding a genuine publication failure.
+          max_completed_propagation_attempts=20
           for attempt in $(seq 1 "${max_attempts}"); do
             release_state="$(
               gh api "repos/${{ github.repository }}/releases/tags/${TAG}" \
@@ -80,14 +85,18 @@ jobs:
             is_draft="$(awk -F '\t' '{print $4}' <<<"${release_state}")"
             published_at="$(awk -F '\t' '{print $5}' <<<"${release_state}")"
             marker="$(mktemp)"
+            marker_downloaded=false
             if [ "${release_id}" = "${EXPECTED_RELEASE_ID}" ] && \
                [ "${actual_tag}" = "${TAG}" ] && \
                [ "${actual_commit}" = "${EXPECTED_COMMIT}" ] && \
                [ "${is_draft}" = "false" ] && \
                [ -n "${published_at}" ] && \
                curl -fsSL --retry 2 --retry-delay 2 --retry-all-errors \
-                 -o "${marker}" "${marker_url}" && \
-               jq -e \
+                 -o "${marker}" "${marker_url}"; then
+              marker_downloaded=true
+            fi
+            if [ "${marker_downloaded}" = "true" ]; then
+              if ! jq -e \
                  --arg tag "${TAG}" \
                  --arg commit "${EXPECTED_COMMIT}" \
                  --arg release_id "${EXPECTED_RELEASE_ID}" \
@@ -95,6 +104,10 @@ jobs:
                  --arg r2_prefix "${EXPECTED_R2_PREFIX}" \
                  '.schema_version == 1 and .tag == $tag and .target_commitish == $commit and .release_id == $release_id and .source_release_run_id == $source_run_id and (.convergence_run_id | test("^[0-9]+$")) and .r2_prefix == $r2_prefix' \
                  "${marker}" >/dev/null; then
+                rm -f "${marker}"
+                echo "::error::Public activation marker for ${TAG} does not match the expected immutable release identity."
+                exit 1
+              fi
               activation_owner_run_id="$(jq -r '.convergence_run_id' "${marker}")"
               if [ "${activation_owner_run_id}" != "${EXPECTED_CONVERGENCE_RUN_ID}" ]; then
                 original_status="$(
@@ -129,8 +142,29 @@ jobs:
             source_conclusion="$(awk -F '\t' '{print $2}' <<<"${source_state}")"
             source_url="$(awk -F '\t' '{print $3}' <<<"${source_state}")"
             if [ "${source_status}" = "completed" ]; then
-              echo "::error::Source release run completed without the exact activation marker: conclusion=${source_conclusion:-none} ${source_url}."
-              exit 1
+              if [ "${source_conclusion}" != "success" ]; then
+                echo "::error::Source release run completed without the exact activation marker: conclusion=${source_conclusion:-none} ${source_url}."
+                exit 1
+              fi
+              marker_asset_state="$(
+                gh api \
+                  "repos/${{ github.repository }}/releases/${EXPECTED_RELEASE_ID}/assets?per_page=100" \
+                  --paginate \
+                  --jq '.[] | select(.name == "release-activation.json") | .state' \
+                  2>/dev/null || true
+              )"
+              if [ "${marker_asset_state}" != "uploaded" ]; then
+                echo "::error::Source release run completed successfully without an uploaded activation marker: ${source_url}."
+                exit 1
+              fi
+              completed_propagation_attempts=$((completed_propagation_attempts + 1))
+              if [ "${completed_propagation_attempts}" -gt "${max_completed_propagation_attempts}" ]; then
+                echo "::error::Uploaded activation marker for ${TAG} did not become publicly readable after ${max_completed_propagation_attempts} propagation attempts."
+                exit 1
+              fi
+              echo "Activation marker for ${TAG} is uploaded but not publicly readable yet (${completed_propagation_attempts}/${max_completed_propagation_attempts})."
+              sleep 2
+              continue
             fi
             echo "Activation marker for ${TAG} is not committed yet (${attempt}/${max_attempts})."
             sleep 2

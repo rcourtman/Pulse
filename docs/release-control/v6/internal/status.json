@@ -5139,7 +5139,7 @@
       "status": "target-met",
       "completion": {
         "state": "complete",
-        "summary": "Self-hosted release confidence reached its target and was re-proved for v6.3.0 with exact-SHA dry-run, stable activation, published-asset integrity, installer, demo, container, Helm, and private paid-runtime convergence proof.",
+        "summary": "Self-hosted release confidence reached its target and was re-proved for v6.3.1 with exact-SHA dry-run, stable activation, published-asset integrity, installer, demo, container, Helm, private paid-runtime convergence, and bounded recovery from GitHub activation-marker propagation.",
         "tracking": []
       },
       "blockers": [],
@@ -5188,6 +5188,12 @@
         {
           "repo": "pulse",
           "path": "docs/release-control/v6/internal/records/v6.3.0-stable-publication-proof-2026-08-22.md",
+          "kind": "file",
+          "evidence_tier": "real-external-e2e"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/v6.3.1-stable-publication-proof-2026-08-23.md",
           "kind": "file",
           "evidence_tier": "real-external-e2e"
         },

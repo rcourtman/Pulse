@@ -1337,8 +1337,7 @@ func TestReleaseCandidateRequiresPlatformNativeAgentSigning(t *testing.T) {
 	assertFileContainsAll(t, repoFile(".github", "workflows", "create-release.yml"),
 		`require_macos_signing: true`,
 		`require_windows_signing: ${{ needs.prepare.outputs.require_windows_signing == 'true' }}`,
-		`(!contains(inputs.version, '-') && !inputs.unsigned_windows_exception) && 'ubuntu-24.04'`,
-		`needs.prepare.outputs.require_windows_signing == 'true' && 'ubuntu-24.04'`,
+		`!contains(inputs.version, '-') && 'ubuntu-24.04'`,
 		`unsigned_windows_exception:`,
 		`unsigned_windows_reason:`,
 		`windows_signing_backend: signpath`,
@@ -2355,12 +2354,12 @@ func TestReleasePipelinePromotesOneImmutableCandidate(t *testing.T) {
 	candidateBuildJob := workflowJobBlock(t, candidateWorkflow, "build")
 
 	for _, needle := range []string{
-		`(!contains(inputs.version, '-') && !inputs.unsigned_windows_exception)`,
+		`!contains(inputs.version, '-') && 'ubuntu-24.04'`,
 		`'ubuntu-24.04'`,
 		`pulse-pve-compile`,
 	} {
 		if !strings.Contains(prepareJob, needle) {
-			t.Fatalf("release preparation missing SignPath-aware runner selection: %s", needle)
+			t.Fatalf("release preparation missing stable-hosted runner selection: %s", needle)
 		}
 	}
 	if strings.Contains(prepareJob, "sparse-checkout") {
@@ -2384,11 +2383,14 @@ func TestReleasePipelinePromotesOneImmutableCandidate(t *testing.T) {
 		"frontend bundle": frontendBundleJob,
 		"backend tests":   backendJob,
 	} {
-		if !strings.Contains(job, `needs.prepare.outputs.require_windows_signing == 'true' && 'ubuntu-24.04'`) {
-			t.Fatalf("%s must stay GitHub-hosted while a SignPath request is pending", label)
+		if !strings.Contains(job, `!contains(inputs.version, '-') && 'ubuntu-24.04'`) {
+			t.Fatalf("%s must stay GitHub-hosted for every stable release", label)
 		}
 		if !strings.Contains(job, "pulse-pve-") {
-			t.Fatalf("%s must retain PVE acceleration when Windows signing is not required", label)
+			t.Fatalf("%s must retain PVE acceleration for prereleases", label)
+		}
+		if strings.Contains(job, "require_windows_signing") || strings.Contains(job, "unsigned_windows_exception") {
+			t.Fatalf("%s runner selection must not depend on the Windows-signing decision", label)
 		}
 	}
 	if !strings.Contains(compileJob, "cache: false") || strings.Contains(compileJob, "cache: 'npm'") {
@@ -2522,7 +2524,9 @@ func TestReleasePipelinePromotesOneImmutableCandidate(t *testing.T) {
 		t.Fatal("early convergence dispatch must remain disabled for inert release modes")
 	}
 	if !strings.Contains(convergenceWorkflow, `gh run view "${EXPECTED_SOURCE_RUN_ID}"`) ||
-		!strings.Contains(convergenceWorkflow, "completed without the exact activation marker") {
+		!strings.Contains(convergenceWorkflow, "completed without the exact activation marker") ||
+		!strings.Contains(convergenceWorkflow, `select(.name == "release-activation.json") | .state`) ||
+		!strings.Contains(convergenceWorkflow, "uploaded but not publicly readable yet") {
 		t.Fatal("prewarmed convergence must terminate when its source run ends without activation")
 	}
 	if !strings.Contains(activationJob, "- dispatch_release_convergence") {

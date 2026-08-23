@@ -522,19 +522,24 @@ upgrade, update, release, or artifact-selection behavior.
    integration-environment preparation as independent lanes after producing
    the frontend embed bundle. Its receipt must distinguish elapsed wall time
    from the sum of overlapping phase times.
-   The canonical public release workflow must run its credential-free prepare
+   The canonical public prerelease workflow may run its credential-free prepare
    job on the PVE compilation identity so hosted-runner allocation cannot hold
-   the entire dependency graph. Preparation must release that identity before
-   exact-SHA compilation becomes eligible. Preparation must use a complete
-   exact-SHA checkout: leaving sparse-worktree state in the persistent runner
-   can make the following compilation checkout appear complete while required
-   root files remain absent. Dedicated, credential-free PVE runner identities
-   must also own the frontend embed bundle and backend race gate.
+   the entire dependency graph. Stable releases must use GitHub-hosted runners
+   for preparation, the frontend embed bundle, and the backend race gate
+   regardless of whether Windows signing is required or a version-bound
+   unsigned-Windows exception applies. Runner selection is a release-channel
+   reliability decision and must not be coupled to signing policy. Prerelease
+   preparation must release the PVE identity before exact-SHA compilation
+   becomes eligible and must use a complete exact-SHA checkout: leaving
+   sparse-worktree state in the persistent runner can make the following
+   compilation checkout appear complete while required root files remain
+   absent.
    Signing, package publication, and release mutation authority must remain on
    hosted jobs. The bundle job must be independent from frontend quality so
    backend and browser-smoke lanes can start as soon as the bundle is available.
-   Cross-platform release compilation may run concurrently on a separate,
-   low-priority PVE identity using only public embedding keys. It must produce
+   Prerelease cross-platform compilation may run concurrently on a separate,
+   low-priority PVE identity using only public embedding keys. Stable
+   cross-platform compilation must remain GitHub-hosted. Both paths must produce
    one exact-version, exact-source-SHA manifest covering the complete frontend
    and binary payload. That manifest may cover canonical relative paths in the
    payload tree but must reject absolute, traversing, or noncanonical names.
@@ -548,9 +553,12 @@ upgrade, update, release, or artifact-selection behavior.
    useful test or compilation process has already completed.
    Private Pro compilation must additionally bind the exact Pulse and
    pulse-enterprise commits in a manifest-covered identity record. Its PVE job
-   must compile only the public Unified Agent matrix actually embedded in Pro
-   archives plus the Pro server matrix. The public frontend build is a required
-   source-checkout prerequisite because every Pro server embeds that exact-SHA
+   is a prerelease acceleration path only; stable Pro compilation must use a
+   GitHub-hosted runner under the same release-channel rule as the public
+   candidate. Either runner must compile only the public Unified Agent matrix
+   actually embedded in Pro archives plus the Pro server matrix. The public
+   frontend build is a required source-checkout prerequisite because every Pro
+   server embeds that exact-SHA
    bundle, so it must overlap the public-agent matrix but must not enter the
    transferred payload. Rebuilding the unused public MCP, server, or
    control-plane payload is not part of this boundary. The
@@ -688,9 +696,13 @@ upgrade, update, release, or artifact-selection behavior.
    and applicable private packet are staged, so its credential-free activation
    waiter can absorb hosted-runner startup while the readiness join finishes.
    That early run remains inert until it verifies the exact public activation
-   marker; if the exact source release run terminates without that marker, the
-   waiter must fail promptly without acquiring the promotion lease or mutating
-   a customer surface.
+   marker. If the exact source release run terminates without an uploaded
+   marker, the waiter must fail promptly without acquiring the promotion lease
+   or mutating a customer surface. If GitHub's release API proves the exact
+   marker asset is already uploaded but the public download edge still returns
+   a transient 404, the waiter must allow a separate bounded propagation grace
+   before failing. A publicly readable marker with the wrong immutable identity
+   fails immediately rather than consuming that grace.
    The rehearsal diagnostic spec is opt-in by design, so both the hosted
    rehearsal and its worker profile must set `PULSE_E2E_DIAGNOSTIC=1`; invoking
    that spec while leaving it skipped is not browser proof.
@@ -1625,11 +1637,14 @@ Every caller of the reusable release-candidate builder must delegate
 exact uploaded artifact through the GitHub Actions API, and GitHub validates
 that nested permission even when a prerelease skips Authenticode signing.
 SignPath Foundation also requires every job leading up to an open-source
-signing request to execute on GitHub-hosted runners. Stable signed candidates
-therefore route release preparation, the parallel frontend bundle, and backend
-qualification through GitHub-hosted runners until the signing request is on
-record. All stable candidates route exact-SHA compilation through the hosted
-lane: rehearsals `32631653966` and `32635525554` lost different matrix compiler
+signing request to execute on GitHub-hosted runners. All stable candidates,
+including a version with an approved unsigned-Windows exception, therefore
+route release preparation, the parallel frontend bundle, backend
+qualification, and exact-SHA compilation through GitHub-hosted runners. The
+stable runner boundary is release-channel-based rather than signing-policy-
+based, so an external signing outage cannot silently return a GA or patch cut
+to persistent PVE capacity. Rehearsals `32631653966` and `32635525554` lost
+different matrix compiler
 processes on the PVE runner without compiler diagnostics after substantial
 progress, while the same targets build independently. Prereleases retain the
 credential-free PVE compilation path for speed. Stable container and Helm
@@ -1695,6 +1710,17 @@ owner recorded that separate `v6.3.1` exception after exact-SHA rehearsal
 the Authenticode requirement: public Unknown Publisher disclosure and the
 exact-SHA, checksum, detached-signature, immutable-manifest, and
 published-digest controls remain mandatory.
+Exact-SHA dry run `32637439888` and release run `32639641733` subsequently
+passed on `2f3d2249973293da3ae6783592c68ebd0f5d1280`. Convergence run
+`32640756239` initially failed without acquiring the promotion lease because
+GitHub's public asset edge returned HTTP 404 for the already-uploaded activation
+marker after the source run completed. Attempt 2 adopted that immutable marker
+and passed Docker aliases, Helm Pages, paid-runtime broker promotion, stable
+demo update and browser proof, the definitive convergence verdict, and lease
+release. The waiter now treats a successful source run with an API-visible
+uploaded marker as bounded propagation rather than an absent commit, while a
+failed source run, a successful run with no uploaded marker, or a readable
+marker with the wrong immutable identity still fails closed.
 
 The preceding stable `v6.3.0` cut set the repo-root `VERSION`,
 repo-root `docker-compose.yml` image default, `scripts/install-docker.sh`
