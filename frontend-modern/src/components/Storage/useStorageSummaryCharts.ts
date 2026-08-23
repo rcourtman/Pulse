@@ -56,8 +56,8 @@ export const useStorageSummaryCharts = (options: UseStorageSummaryChartsOptions)
       return;
     }
 
-    const timer = window.setTimeout(() => setInitialLoadReady(true), 0);
-    onCleanup(() => window.clearTimeout(timer));
+    const timer = globalThis.setTimeout(() => setInitialLoadReady(true), 0);
+    onCleanup(() => globalThis.clearTimeout(timer));
   });
 
   const awaitAbortable = <T>(promise: Promise<T>, signal: AbortSignal): Promise<T> => {

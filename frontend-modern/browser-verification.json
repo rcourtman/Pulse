@@ -1,21 +1,11 @@
 {
   "version": 1,
-  "base_sha": "1d3ee7a1b321c2718e896bcc8a38add23be1a636",
-  "verified_at": "2026-08-23T21:15:44Z",
+  "base_sha": "fd7f4156ca887c57b16ac506479102f95582c7aa",
+  "verified_at": "2026-08-23T21:23:10Z",
   "result": "passed",
-  "changed_paths": [
-    "frontend-modern/src/components/Storage/StoragePoolsTable.tsx",
-    "frontend-modern/src/components/Storage/useStoragePageModel.ts",
-    "frontend-modern/src/components/Storage/useStoragePageResources.ts",
-    "frontend-modern/src/components/Storage/useStoragePoolsTableWindowing.ts",
-    "frontend-modern/src/components/Storage/useStorageSummaryCharts.ts"
-  ],
+  "changed_paths": ["frontend-modern/src/components/Storage/useStorageSummaryCharts.ts"],
   "content_sha256": {
-    "frontend-modern/src/components/Storage/StoragePoolsTable.tsx": "c3298880787a0fdd83975a98888e1ab5483e943e60ba50b5e43b816c7b094738",
-    "frontend-modern/src/components/Storage/useStoragePageModel.ts": "98dfbe4ae5b7e737afff5f050e3a2013a33da0ee8818042067a1eff619b26a5a",
-    "frontend-modern/src/components/Storage/useStoragePageResources.ts": "566e6eae7bc5febd53f4346624ae8fdb40d3fe78d8c937472b2260ebb65f4d18",
-    "frontend-modern/src/components/Storage/useStoragePoolsTableWindowing.ts": "10056ef39237065866b7355636c9f81dfdfa3e482837b941b48896618c5b4388",
-    "frontend-modern/src/components/Storage/useStorageSummaryCharts.ts": "04035a225166dae821135ea3a31295de5ecb963d5278b5721e62cd2a4b826829"
+    "frontend-modern/src/components/Storage/useStorageSummaryCharts.ts": "3590301d2e7edf5d2672a3c4bd5b910cb457c936c586a1ec66a0abb2895a63e3"
   },
   "routes": ["/proxmox/overview", "/proxmox/storage?source=proxmox-all"],
   "viewports": [
