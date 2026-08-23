@@ -1,21 +1,16 @@
 {
   "version": 1,
-  "base_sha": "ae9cfb1da87235e81359e251ec5f0a6670398ad9",
-  "verified_at": "2026-08-23T18:06:00Z",
+  "base_sha": "35b8c0a4c2ccbc11a1bb67116cb2d1e8f6d72391",
+  "verified_at": "2026-08-23T18:28:00Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx",
-    "frontend-modern/src/features/proxmox/proxmoxPageModel.ts",
-    "frontend-modern/src/routing/resourceLinks.ts"
+    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx": "050b7e4336a467a71376b471f3e53cbcf65f11de088cd076efe0afe0943ecf31",
-    "frontend-modern/src/features/proxmox/proxmoxPageModel.ts": "09cebaf862d67def8e560b49acf50bdbcdc13f814fec15ad7fc8b1ae412a7fc1",
-    "frontend-modern/src/routing/resourceLinks.ts": "8a22520911eb1b84cee0ab4ef4388ec8dbfd40380db93dbac451d26f8031db3c"
+    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx": "5fbcb11d536ff657dcbffbe25c3b749bcf8bd4ff545dbdd0c02d3414c703c759"
   },
   "routes": [
-    "/proxmox/backups/date",
-    "/proxmox/backups/coverage"
+    "/proxmox/overview"
   ],
   "viewports": [
     {
@@ -28,15 +23,13 @@
     }
   ],
   "states": [
-    "Desktop direct navigation to /proxmox/backups/date renders the By date section with its chronological backup table and Coverage link",
-    "Desktop navigation to /proxmox/backups/coverage selects Coverage and renders posture filters and coverage rows",
-    "Narrow Coverage renders the route-backed section rail, responsive columns, and no horizontal overflow",
-    "The running app reported no console errors during direct navigation and section switching"
+    "Desktop direct navigation to /proxmox/overview rendered the connected Proxmox app shell and its overview loading state while the large mock estate hydrated",
+    "The running app reported a connected backend/live data stream and no browser console errors during the overview navigation",
+    "The large-estate narrowed node result is covered by the focused Proxmox page-surface and node-table tests"
   ],
   "interactions": [
-    "Loaded /proxmox/backups/date at the desktop viewport and inspected the active section rail and date table",
-    "Selected Coverage through the canonical section link and verified /proxmox/backups/coverage with active navigation",
-    "Loaded Coverage at 390x844 and verified responsive section navigation, posture table content, and overflow state",
-    "Reset the temporary narrow viewport after verification"
+    "Loaded /proxmox/overview at the desktop viewport and inspected the connected overview shell",
+    "Confirmed the page exposes the Proxmox overview route used by the shared workload search",
+    "Verified the guest-aware node narrowing contract through the focused page-surface and node-table test suites"
   ]
 }

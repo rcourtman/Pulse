@@ -437,10 +437,13 @@ That bounded node preview remains before the virtual guest inventory at every
 viewport; narrow layouts must not move it after the full guest list's virtual
 scroll extent, where the node estate would become effectively undiscoverable.
 The workload filter belongs immediately before the workload table it controls,
-after the node preview; it must not filter the node table. The nodes table must
-always receive the real already-loaded PVE node collection, so committed or
-draft workload terms can never manufacture the estate-empty `No Proxmox VE
-nodes` state. That empty state is reserved for genuinely absent node inventory.
+after the node preview, and its committed search term must also flow into the
+node table. The node table must use the shared Proxmox search model so a
+matching guest retains its owning node while unrelated nodes disappear; a
+node search must likewise retain the directly matching node. The table still
+receives the real already-loaded PVE node collection as its source, so the
+estate-empty `No Proxmox VE nodes` state remains reserved for genuinely absent
+node inventory, while a narrowed result uses the distinct no-match state.
 Those counts and layout controls must not imply
 protection, verification, or restore readiness beyond the evidence held by the
 workflow-owned Storage, Backups, Ceph, and Mail surfaces.

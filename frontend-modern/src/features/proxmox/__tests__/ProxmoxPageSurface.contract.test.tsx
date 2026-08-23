@@ -122,9 +122,15 @@ vi.mock('../ProxmoxMailGatewayTable', () => ({
 }));
 
 vi.mock('../ProxmoxNodesTable', () => ({
-  ProxmoxNodesTable: (props: { nodes: Resource[]; topology?: unknown }) => {
+  ProxmoxNodesTable: (props: { nodes: Resource[]; search?: () => string; topology?: unknown }) => {
     mockNodesTableProps(props);
-    return <div data-testid="nodes-table" data-rows={props.nodes.length} />;
+    return (
+      <div
+        data-testid="nodes-table"
+        data-rows={props.nodes.length}
+        data-search={props.search?.() ?? ''}
+      />
+    );
   },
 }));
 
@@ -212,7 +218,7 @@ describe('ProxmoxPageSurface contract', () => {
     );
   });
 
-  it('keeps the node inventory independent from committed workload search terms', () => {
+  it('passes committed workload search terms to the node table', () => {
     mockWorkloadSearch.mockReturnValue('reporting-api-01, wireguard-edge-01');
     setResources([
       makeResource({
@@ -242,11 +248,17 @@ describe('ProxmoxPageSurface contract', () => {
     renderSurface();
 
     expect(screen.getByTestId('nodes-table')).toHaveAttribute('data-rows', '2');
-    expect(mockNodesTableProps).toHaveBeenCalledWith(
-      expect.objectContaining({ nodes: expect.arrayContaining([expect.any(Object)]) }),
+    expect(screen.getByTestId('nodes-table')).toHaveAttribute(
+      'data-search',
+      'reporting-api-01, wireguard-edge-01',
     );
-    expect(proxmoxPageSurfaceSource).toContain('nodes={currentModel().pveNodes}');
-    expect(proxmoxPageSurfaceSource).not.toContain('filterProxmoxNodesForSearch');
+    expect(mockNodesTableProps).toHaveBeenCalledWith(
+      expect.objectContaining({
+        nodes: expect.arrayContaining([expect.any(Object)]),
+        search: mockWorkloadSearch,
+      }),
+    );
+    expect(proxmoxPageSurfaceSource).toContain('search={workloadsState.search}');
   });
 
   it('does not call a retained version from a stopped Proxmox agent currently running', () => {
@@ -312,7 +324,7 @@ describe('ProxmoxPageSurface contract', () => {
     );
   });
 
-  it('keeps workload search scoped to guests instead of hiding the node inventory', () => {
+  it('shares workload search with the node inventory', () => {
     mockWorkloadSearch.mockReturnValue('pve-1');
     setResources([
       makeResource({
@@ -325,7 +337,7 @@ describe('ProxmoxPageSurface contract', () => {
     renderSurface();
 
     expect(mockNodesTableProps).toHaveBeenLastCalledWith(
-      expect.not.objectContaining({ search: expect.anything() }),
+      expect.objectContaining({ search: mockWorkloadSearch }),
     );
   });
 
