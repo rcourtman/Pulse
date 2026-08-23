@@ -1526,6 +1526,16 @@ func (b *lateBoundDockerUpdater) TypedContainerUpdate(ctx context.Context, runti
 	return updater.TypedContainerUpdate(ctx, runtime, containerID, expectedImageDigest, progress)
 }
 
+func (b *lateBoundDockerUpdater) TypedContainerUpdatePreflight(ctx context.Context, runtime, containerID, expectedImageDigest string) error {
+	b.mu.RLock()
+	updater := b.updater
+	b.mu.RUnlock()
+	if updater == nil {
+		return agentexec.NewActionPreflightError(agentexec.ActionRefusalCapabilityUnavailable, fmt.Errorf("docker module is not running on this agent"))
+	}
+	return updater.TypedContainerUpdatePreflight(ctx, runtime, containerID, expectedImageDigest)
+}
+
 func initDockerWithRetry(ctx context.Context, cfg dockeragent.Config, logger *zerolog.Logger) RunnableCloser {
 	return initModuleWithRetry(ctx, logger, "docker_agent", "Docker", "Docker not available, will retry", func() (RunnableCloser, error) {
 		return newDockerAgent(cfg)

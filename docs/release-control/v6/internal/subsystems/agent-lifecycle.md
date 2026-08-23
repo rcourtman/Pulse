@@ -2623,6 +2623,18 @@ Agent` secondary handoff against the live setup wizard instead of relying
 
 ## Current State
 
+### Docker update preflight and execution share one late-bound capability
+
+The unified agent's late-bound Docker updater now carries the read-only typed
+container-update preflight and the corresponding execution method in one
+required interface. The bridge delegates both methods to the running Docker /
+Podman module and fails closed while that module is unavailable. This prevents
+the command client from advertising a false `agent_capability_unavailable`
+refusal merely because the process-lifetime bridge omitted the preflight
+method, and makes future bridge drift a compile-time failure. The bridge proof
+in `cmd/pulse-agent/main_test.go` covers unavailable, invalid-candidate, and
+connected-module states for both preflight and execution.
+
 ### Monitoring task limits do not change lifecycle authority
 
 The monitoring-owned process-wide scheduled-task limiter may bound host and

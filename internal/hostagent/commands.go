@@ -751,11 +751,10 @@ func (c *CommandClient) preflightDockerLifecycle(ctx context.Context, payload ag
 }
 
 func (c *CommandClient) preflightDockerUpdate(ctx context.Context, payload agentexec.DockerContainerUpdatePayload) (bool, string) {
-	preflighter, ok := c.dockerUpdater.(DockerContainerUpdatePreflighter)
-	if !ok || preflighter == nil {
+	if c.dockerUpdater == nil {
 		return false, agentexec.ActionRefusalCapabilityUnavailable
 	}
-	if err := preflighter.TypedContainerUpdatePreflight(ctx, payload.Runtime, payload.ContainerID, payload.ExpectedImageDigest); err != nil {
+	if err := c.dockerUpdater.TypedContainerUpdatePreflight(ctx, payload.Runtime, payload.ContainerID, payload.ExpectedImageDigest); err != nil {
 		return false, agentexec.ActionPreflightReasonCode(err, agentexec.ActionRefusalTargetPreconditionFailed)
 	}
 	return true, ""

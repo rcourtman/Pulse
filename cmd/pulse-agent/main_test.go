@@ -2301,8 +2301,14 @@ func TestSecureAgentStateDir(t *testing.T) {
 
 type stubTypedContainerUpdater struct {
 	calls              int
+	preflightCalls     int
 	lifecycleInspects  int
 	lifecycleMutations int
+}
+
+func (s *stubTypedContainerUpdater) TypedContainerUpdatePreflight(context.Context, string, string, string) error {
+	s.preflightCalls++
+	return nil
 }
 
 func (s *stubTypedContainerUpdater) TypedContainerUpdate(context.Context, string, string, string, func(string)) (agentexec.DockerContainerUpdateOutcome, error) {
@@ -2322,19 +2328,35 @@ func (s *stubTypedContainerUpdater) MutateDockerContainerLifecycle(context.Conte
 
 func TestLateBoundDockerUpdaterBridgesModuleWhenItComesUp(t *testing.T) {
 	bridge := &lateBoundDockerUpdater{}
+	containerID := strings.Repeat("a", 12)
+	expectedImageDigest := "sha256:" + strings.Repeat("1", 64)
 
-	if _, err := bridge.TypedContainerUpdate(context.Background(), "docker", strings.Repeat("a", 12), "sha256:"+strings.Repeat("1", 64), nil); err == nil {
+	if err := bridge.TypedContainerUpdatePreflight(context.Background(), "docker", containerID, expectedImageDigest); err == nil {
+		t.Fatal("bridge without a docker module accepted a preflight")
+	} else if got := agentexec.ActionPreflightReasonCode(err, agentexec.ActionRefusalTargetPreconditionFailed); got != agentexec.ActionRefusalCapabilityUnavailable {
+		t.Fatalf("bridge without a docker module refusal = %q, want %q", got, agentexec.ActionRefusalCapabilityUnavailable)
+	}
+	if _, err := bridge.TypedContainerUpdate(context.Background(), "docker", containerID, expectedImageDigest, nil); err == nil {
 		t.Fatal("bridge without a docker module accepted an update")
 	}
 
 	bridge.set(struct{}{}) // non-implementing candidates must not install
-	if _, err := bridge.TypedContainerUpdate(context.Background(), "docker", strings.Repeat("a", 12), "sha256:"+strings.Repeat("1", 64), nil); err == nil {
+	if err := bridge.TypedContainerUpdatePreflight(context.Background(), "docker", containerID, expectedImageDigest); err == nil {
+		t.Fatal("bridge accepted a preflight after a non-implementing candidate was offered")
+	}
+	if _, err := bridge.TypedContainerUpdate(context.Background(), "docker", containerID, expectedImageDigest, nil); err == nil {
 		t.Fatal("bridge accepted an update after a non-implementing candidate was offered")
 	}
 
 	stub := &stubTypedContainerUpdater{}
 	bridge.set(stub)
-	if _, err := bridge.TypedContainerUpdate(context.Background(), "docker", strings.Repeat("a", 12), "sha256:"+strings.Repeat("1", 64), nil); err != nil {
+	if err := bridge.TypedContainerUpdatePreflight(context.Background(), "docker", containerID, expectedImageDigest); err != nil {
+		t.Fatalf("bridge preflight with an installed module refused: %v", err)
+	}
+	if stub.preflightCalls != 1 {
+		t.Fatalf("expected one delegated preflight call, got %d", stub.preflightCalls)
+	}
+	if _, err := bridge.TypedContainerUpdate(context.Background(), "docker", containerID, expectedImageDigest, nil); err != nil {
 		t.Fatalf("bridge with an installed module refused: %v", err)
 	}
 	if stub.calls != 1 {

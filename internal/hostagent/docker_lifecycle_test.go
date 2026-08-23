@@ -160,6 +160,10 @@ type stubDockerUpdater struct {
 	calls   *int
 }
 
+func (stubDockerUpdater) TypedContainerUpdatePreflight(context.Context, string, string, string) error {
+	return nil
+}
+
 func (s stubDockerUpdater) TypedContainerUpdate(_ context.Context, _, _, _ string, _ func(string)) (agentexec.DockerContainerUpdateOutcome, error) {
 	if s.calls != nil {
 		*s.calls++

@@ -18,11 +18,8 @@ import (
 // missing, runtime mismatch, preflight drift) as opposed to update failures,
 // which arrive inside the outcome.
 type DockerContainerUpdater interface {
-	TypedContainerUpdate(ctx context.Context, runtime, containerID, expectedImageDigest string, progress func(string)) (agentexec.DockerContainerUpdateOutcome, error)
-}
-
-type DockerContainerUpdatePreflighter interface {
 	TypedContainerUpdatePreflight(ctx context.Context, runtime, containerID, expectedImageDigest string) error
+	TypedContainerUpdate(ctx context.Context, runtime, containerID, expectedImageDigest string, progress func(string)) (agentexec.DockerContainerUpdateOutcome, error)
 }
 
 func (c *CommandClient) handleDockerContainerUpdate(ctx context.Context, conn *websocket.Conn, payload agentexec.DockerContainerUpdatePayload) {

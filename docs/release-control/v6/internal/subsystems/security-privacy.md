@@ -690,6 +690,16 @@ tokens, and path-normalization variants.
 
 ## Current State
 
+### Docker update preflight remains read-only across the unified-agent bridge
+
+The `pulse-agent` late-bound Docker updater delegates the typed, read-only
+container-update preflight through the same required capability as execution.
+The preflight checks runtime identity, container identity, and expected image
+digest without mutating the workload; adding it to the bridge restores the
+existing approval boundary and grants no new command, inventory, environment,
+mount, file, process, or guest-inspection authority. An unavailable Docker /
+Podman module continues to fail closed.
+
 ### Historical credential containment is prerelease-blocking
 
 The `historical-credential-containment` release gate now owns the cross-repo
