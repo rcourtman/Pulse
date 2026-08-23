@@ -57,9 +57,9 @@ test.describe('TrueNAS storage disk history', () => {
     });
 
     await page.goto('/truenas/storage', { waitUntil: 'domcontentloaded' });
-    await page
-      .getByRole('textbox', { name: /Search TrueNAS/ })
-      .fill('sdc');
+    const search = page.getByRole('combobox', { name: /Search TrueNAS/ });
+    await expect(search).toBeVisible();
+    await search.fill('sdc');
 
     const diskRow = page.locator('tr').filter({ hasText: 'sdc' }).first();
     await expect(diskRow).toBeVisible();
