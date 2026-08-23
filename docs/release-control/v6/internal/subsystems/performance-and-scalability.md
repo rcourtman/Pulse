@@ -794,6 +794,18 @@ change may globally weaken the Task 03 lifecycle-state idempotency invariant.
     bounded app scroll container, or fall back to the window, so scrolling a
     large mobile estate advances the mounted row window and removes the final
     bottom spacer when the operator reaches the end.
+    Grouped virtualization must represent every node header in exactly one
+    place: a leading spacer, the mounted window, or a trailing spacer. The
+    inverse offset-to-guest calculation must use that same guest-row plus
+    group-header geometry, and a partially mounted group must not reinsert its
+    already-spaced header. This keeps total table height stable while groups
+    cross the virtual window and prevents the visible estate from bumping by a
+    header row during continuous scrolling.
+    That same viewport-sync owner may expose one passive app-shell scroll
+    position signal and a smooth back-to-top action for the Workloads surface.
+    The control must remain absent near the top, sit above the mobile navigation
+    when present, and reuse the existing viewport listener rather than adding a
+    second page-local scroll observer or any per-row work.
 25. Extend workload table shell ownership through `frontend-modern/src/components/Workloads/WorkloadTableHeader.tsx` and `frontend-modern/src/components/Workloads/WorkloadPanel.tsx` rather than rebuilding sortable header markup, grouped node rows, row expansion, or guest-drawer rendering inside `frontend-modern/src/components/Workloads/WorkloadsTable.tsx`
     `WorkloadPanel` owns the mutually exclusive host/guest drawer handoff:
     clicking a grouped host row while a guest drawer is open must clear the

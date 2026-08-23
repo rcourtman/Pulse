@@ -909,6 +909,23 @@ describe('Workloads performance contract', () => {
   });
 
   describe('Workload windowing contracts', () => {
+    it('keeps grouped virtual height stable and owns the back-to-top control in viewport sync', () => {
+      expect(workloadsWorkloadDerivedStateSource).toContain('estimatedGroupHeaderHeight');
+      expect(workloadsWorkloadDerivedStateSource).toContain('countGroupStartsBefore');
+      expect(workloadsWorkloadDerivedStateSource).toContain('guestIndexAtVirtualOffset');
+      expect(workloadsWorkloadDerivedStateSource).toContain('WORKLOADS_TABLE_DIVIDER_HEIGHT');
+      expect(groupedTableWindowingSource).toContain('rowIndexAtOffset');
+      expect(workloadPanelSource).toContain('groupGuests()[0] === fullGroupGuests()[0]');
+      expect(workloadPanelSource).toContain('class="h-0 !p-0 !border-0 leading-[0]"');
+      expect(workloadsWorkloadViewportSyncSource).toContain(
+        'SCROLL_TO_TOP_VISIBILITY_THRESHOLD_PX',
+      );
+      expect(workloadsWorkloadViewportSyncSource).toContain(
+        "scrollContainer.scrollTo({ top: 0, behavior: 'smooth' })",
+      );
+      expect(workloadsSource).toContain('data-testid="workloads-scroll-to-top"');
+    });
+
     it('Profile M: caps mounted guest rows when windowing is active', async () => {
       mockLocationSearch = '?type=all';
       mockWorkloads = makeGuests(PROFILES.M);

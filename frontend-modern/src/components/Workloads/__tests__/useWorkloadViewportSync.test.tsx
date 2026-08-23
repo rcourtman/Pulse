@@ -31,7 +31,7 @@ describe('useWorkloadViewportSync', () => {
       useWorkloadViewportSync({
         filteredGuestCount: () => 640,
         groupedWindowing,
-        rowHeight: 32,
+        rowHeight: () => 32,
         tableBodyRef: bodyRef,
       });
 
@@ -99,7 +99,7 @@ describe('useWorkloadViewportSync', () => {
       useWorkloadViewportSync({
         filteredGuestCount: () => 640,
         groupedWindowing,
-        rowHeight: 32,
+        rowHeight: () => 32,
         tableBodyRef: bodyRef,
       });
 
@@ -169,5 +169,71 @@ describe('useWorkloadViewportSync', () => {
 
     horizontalTableWrapper.dispatchEvent(new Event('scroll'));
     expect(onScroll).toHaveBeenCalledTimes(2);
+  });
+
+  it('exposes one app-shell back-to-top action after sustained workload scrolling', async () => {
+    let appScrollContainer!: HTMLDivElement;
+    let viewportSync!: ReturnType<typeof useWorkloadViewportSync>;
+    const scrollTo = vi.fn();
+    const groupedWindowing: UseGroupedTableWindowingResult = {
+      endIndex: () => 20,
+      getVisibleSlice: (_groupKey, guests) => guests,
+      isWindowed: () => false,
+      mountedCount: () => 20,
+      onScroll: vi.fn(),
+      revealIndex: vi.fn(),
+      startIndex: () => 0,
+    };
+
+    const Harness = () => {
+      const [bodyRef, setBodyRef] = createSignal<HTMLTableSectionElement | null>(null);
+      viewportSync = useWorkloadViewportSync({
+        filteredGuestCount: () => 20,
+        groupedWindowing,
+        rowHeight: () => 32,
+        tableBodyRef: bodyRef,
+      });
+
+      return (
+        <div
+          ref={(element) => {
+            appScrollContainer = element;
+            Object.defineProperty(element, 'clientHeight', { configurable: true, value: 400 });
+            Object.defineProperty(element, 'scrollHeight', { configurable: true, value: 1600 });
+            Object.defineProperty(element, 'scrollTo', { configurable: true, value: scrollTo });
+            vi.spyOn(element, 'getBoundingClientRect').mockReturnValue({
+              bottom: 400,
+              height: 400,
+              left: 0,
+              right: 800,
+              toJSON: () => ({}),
+              top: 0,
+              width: 800,
+              x: 0,
+              y: 0,
+            } as DOMRect);
+          }}
+          style={{ 'overflow-y': 'scroll' }}
+        >
+          <table>
+            <tbody ref={setBodyRef} />
+          </table>
+        </div>
+      );
+    };
+
+    render(() => <Harness />);
+    expect(viewportSync.isScrollToTopVisible()).toBe(false);
+
+    appScrollContainer.scrollTop = 700;
+    appScrollContainer.dispatchEvent(new Event('scroll'));
+    await waitFor(() => expect(viewportSync.isScrollToTopVisible()).toBe(true));
+
+    viewportSync.scrollToTop();
+    expect(scrollTo).toHaveBeenCalledWith({ top: 0, behavior: 'smooth' });
+
+    appScrollContainer.scrollTop = 0;
+    appScrollContainer.dispatchEvent(new Event('scroll'));
+    await waitFor(() => expect(viewportSync.isScrollToTopVisible()).toBe(false));
   });
 });

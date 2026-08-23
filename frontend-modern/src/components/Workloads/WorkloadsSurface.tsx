@@ -1,8 +1,10 @@
+import ArrowUpIcon from 'lucide-solid/icons/arrow-up';
 import { For, Show, createMemo } from 'solid-js';
+import { Portal } from 'solid-js/web';
 
 import { buildInfrastructureWorkspacePath } from '@/components/Settings/infrastructureWorkspaceModel';
 import { EmptyState } from '@/components/shared/EmptyState';
-import { ButtonLink } from '@/components/shared/Button';
+import { ActionIconButton, ButtonLink } from '@/components/shared/Button';
 import { TableCard } from '@/components/shared/TableCard';
 import { sessionCanReadInfrastructureSettings } from '@/stores/sessionSettingsCapabilities';
 import { getWorkloadsNoInventoryState } from '@/utils/workloadEmptyStatePresentation';
@@ -107,6 +109,20 @@ export function WorkloadsSurface(props: WorkloadsSurfaceComponentProps) {
 
   return (
     <div ref={state.setClearSurfaceRootRef} class="space-y-3" data-testid="workloads-page">
+      <Show when={state.isScrollToTopVisible?.() ?? false}>
+        <Portal>
+          <ActionIconButton
+            label="Back to top"
+            tone="outline"
+            size="lg"
+            class="fixed right-3 bottom-[calc(var(--pulse-mobile-nav-height)+0.75rem)] z-[70] !h-11 !w-11 rounded-full bg-surface/95 shadow-lg backdrop-blur-sm xl:right-6 xl:bottom-6"
+            data-testid="workloads-scroll-to-top"
+            onClick={() => state.scrollToTop?.()}
+          >
+            <ArrowUpIcon class="h-5 w-5" aria-hidden="true" />
+          </ActionIconButton>
+        </Portal>
+      </Show>
       <div class="space-y-3" data-testid="workloads-interaction-surface">
         <Show
           when={

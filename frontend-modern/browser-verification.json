@@ -1,41 +1,52 @@
 {
   "version": 1,
-  "base_sha": "3bc613c9157d1c6769ca25a0a5c3eec9c6694887",
-  "verified_at": "2026-08-23T14:51:12Z",
+  "base_sha": "4040a79f4f5ffc465131fb75c31146d93e45c8d5",
+  "verified_at": "2026-08-23T15:31:26Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Workloads/useWorkloadViewportSync.ts"
+    "frontend-modern/src/components/Workloads/WorkloadPanel.tsx",
+    "frontend-modern/src/components/Workloads/WorkloadsSurface.tsx",
+    "frontend-modern/src/components/Workloads/useGroupedTableWindowing.ts",
+    "frontend-modern/src/components/Workloads/useWorkloadViewportSync.ts",
+    "frontend-modern/src/components/Workloads/useWorkloadsDerivedState.ts",
+    "frontend-modern/src/components/Workloads/useWorkloadsState.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Workloads/useWorkloadViewportSync.ts": "5c5fd2650df7dfe6228e14cb033e8f22ec9866b3b5310cb6bb076757a4d09a1b"
+    "frontend-modern/src/components/Workloads/WorkloadPanel.tsx": "eb8ddd4c5f03efa629ba480fa9cbe4bbd8293834e6d0e6bf05e3fbb81d247edf",
+    "frontend-modern/src/components/Workloads/WorkloadsSurface.tsx": "765e4185fea10dd2e6da0c9e3de53ee53293ae6e1e0e19d6171fb01748fa5b8d",
+    "frontend-modern/src/components/Workloads/useGroupedTableWindowing.ts": "792a66e9f01fa1ab731413527255c631ccd20bc26bcef24a74208f1e61f76d58",
+    "frontend-modern/src/components/Workloads/useWorkloadViewportSync.ts": "b12b4a1df25c88a5468e867aa2b58f10a452d65be846dcfd1bcaa4942e506a96",
+    "frontend-modern/src/components/Workloads/useWorkloadsDerivedState.ts": "ecfc505a901c65b7ed8e7d17d828961d1409c948c6f78bf2528ea907cf484343",
+    "frontend-modern/src/components/Workloads/useWorkloadsState.ts": "d67a6b5d5f2de1ff3c0fe100652cf2e3d8ed2f74cda767a1bdb7462dea243b28"
   },
   "routes": [
     "/proxmox/overview"
   ],
   "viewports": [
     {
-      "width": 375,
-      "height": 812
+      "width": 1280,
+      "height": 720
     },
     {
-      "width": 1440,
-      "height": 900
+      "width": 375,
+      "height": 812
     }
   ],
   "states": [
-    "The authenticated Proxmox overview renders 50 nodes and 929 guests from the large local mock estate",
-    "At 375x812 the initial virtual window keeps one trailing spacer while the first 140 guest rows are mounted",
-    "At the absolute bottom of the app scroll shell the virtual spacer is the leading row at index zero, the final workload row is last, and no trailing spacer remains",
-    "The Nodes card and footer follow the final guest row without a blank virtualized section",
-    "At 1440x900 the 929-guest table also reaches its final wireguard-edge-78 row with only a leading spacer and no trailing blank section",
-    "The verified phone load reported no browser console errors"
+    "The Proxmox overview renders the large local mock estate with grouped workload virtualization active",
+    "At 1280x720 the app scroll height remains exactly 29470 pixels at scroll positions 0, 1800, and 5000",
+    "At 375x812 the app scroll height remains exactly 36372 pixels at scroll positions 0, 2800, and 7000",
+    "All mounted phone guest rows measure 37 pixels and grouped node headers remain a single 28-pixel line",
+    "Back to top is absent near the top and appears after the 640-pixel threshold",
+    "The phone control is a 44-pixel fixed button positioned above the bottom navigation",
+    "The verified desktop and phone journeys reported no browser console errors"
   ],
   "interactions": [
-    "Claimed the open local Proxmox overview and applied a temporary 375x812 viewport override",
-    "Reloaded the 929-guest mock estate and measured the initial virtual spacer and mounted row count",
-    "Scrolled the app-owned vertical container to its maximum scroll position and inspected spacer row placement plus the final workload row",
-    "Captured the bottom viewport showing the final guest rows followed immediately by the Nodes card and footer",
-    "Repeated the absolute-bottom spacer and final-row inspection at 1440x900",
-    "Reset the temporary viewport override after verification"
+    "Scrolled repeatedly through the desktop mock estate and compared the app-owned scroll shell height at multiple virtual windows",
+    "Activated Back to top on desktop and confirmed the smooth scroll completed at zero and the control disappeared",
+    "Applied a temporary 375x812 viewport override and repeated the multi-position scroll-height measurements",
+    "Captured and visually inspected the phone viewport with the control above the mobile navigation",
+    "Activated Back to top on phone and confirmed the app scroll shell returned to zero while retaining the same total height",
+    "Reset the temporary viewport override and closed the temporary test tab after verification"
   ]
 }

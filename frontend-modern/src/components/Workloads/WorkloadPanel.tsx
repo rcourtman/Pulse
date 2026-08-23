@@ -362,8 +362,8 @@ export function WorkloadPanel(props: WorkloadPanelProps) {
   return (
     <TableBody ref={props.setTableBodyRef} class="divide-y divide-border">
       <Show when={props.groupedWindowing.isWindowed() && props.topSpacerHeight() > 0}>
-        <TableRow aria-hidden="true">
-          <TableCell colspan={props.totalColumns()} class="p-0 border-0">
+        <TableRow aria-hidden="true" class="h-0 !border-0">
+          <TableCell colspan={props.totalColumns()} class="h-0 !p-0 !border-0 leading-[0]">
             <svg
               aria-hidden="true"
               width="1"
@@ -424,7 +424,11 @@ export function WorkloadPanel(props: WorkloadPanelProps) {
 
           return (
             <>
-              <Show when={props.groupingMode() === 'grouped'}>
+              <Show
+                when={
+                  props.groupingMode() === 'grouped' && groupGuests()[0] === fullGroupGuests()[0]
+                }
+              >
                 <Show
                   when={node()}
                   fallback={
@@ -487,8 +491,8 @@ export function WorkloadPanel(props: WorkloadPanelProps) {
                     }
                     trClass={
                       canOpenNodeDrawer()
-                        ? 'cursor-pointer select-none duration-150'
-                        : 'select-none duration-150'
+                        ? 'cursor-pointer select-none duration-150 [&>td>div]:flex-nowrap'
+                        : 'select-none duration-150 [&>td>div]:flex-nowrap'
                     }
                     trProps={{
                       'aria-expanded': canOpenNodeDrawer()
@@ -608,8 +612,8 @@ export function WorkloadPanel(props: WorkloadPanelProps) {
         }}
       </Index>
       <Show when={props.groupedWindowing.isWindowed() && props.bottomSpacerHeight() > 0}>
-        <TableRow aria-hidden="true">
-          <TableCell colspan={props.totalColumns()} class="p-0 border-0">
+        <TableRow aria-hidden="true" class="h-0 !border-0">
+          <TableCell colspan={props.totalColumns()} class="h-0 !p-0 !border-0 leading-[0]">
             <svg
               aria-hidden="true"
               width="1"

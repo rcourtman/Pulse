@@ -10,6 +10,8 @@ export interface UseGroupedTableWindowingOptions {
   enabled?: () => boolean;
   /** Index to ensure is visible (selection/deep-link reveal) */
   revealIndex?: () => number | null;
+  /** Resolve a row index from a virtual offset when grouped decorations add height. */
+  rowIndexAtOffset?: (offset: number, rowHeight: number) => number;
 }
 
 export interface UseGroupedTableWindowingResult {
@@ -92,7 +94,13 @@ export const useGroupedTableWindowing = (
       DEFAULT_OVERSCAN_ROWS,
       Math.max(0, normalizedWindowSize() - rowsInView),
     );
-    const firstVisibleRow = Math.floor(Math.max(0, scrollTop) / safeRowHeight);
+    const resolvedFirstVisibleRow = options.rowIndexAtOffset?.(
+      Math.max(0, scrollTop),
+      safeRowHeight,
+    );
+    const firstVisibleRow = Number.isFinite(resolvedFirstVisibleRow)
+      ? Math.max(0, Math.floor(resolvedFirstVisibleRow!))
+      : Math.floor(Math.max(0, scrollTop) / safeRowHeight);
     setClampedStart(firstVisibleRow - overscan);
   };
 

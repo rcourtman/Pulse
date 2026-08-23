@@ -1,4 +1,4 @@
-import { createMemo, type Accessor } from 'solid-js';
+import { createMemo, createSignal, type Accessor } from 'solid-js';
 
 import type { Alert, Node } from '@/types/api';
 import type { WorkloadGuest } from '@/types/workloads';
@@ -17,7 +17,11 @@ import { useGroupedTableWindowing } from './useGroupedTableWindowing';
 
 type GroupingMode = 'grouped' | 'flat';
 
-const WORKLOADS_TABLE_ESTIMATED_ROW_HEIGHT = 32;
+const DESKTOP_WORKLOAD_ROW_HEIGHT = 32;
+const DESKTOP_WORKLOAD_GROUP_HEADER_HEIGHT = 33;
+const PHONE_WORKLOAD_ROW_HEIGHT = 37;
+const PHONE_WORKLOAD_GROUP_HEADER_HEIGHT = 28;
+const WORKLOADS_TABLE_DIVIDER_HEIGHT = 1;
 
 interface WorkloadsWorkloadDerivedStateOptions {
   activeAlerts: Accessor<Record<string, Alert>>;
@@ -35,6 +39,13 @@ interface WorkloadsWorkloadDerivedStateOptions {
 
 export function useWorkloadsDerivedState(options: WorkloadsWorkloadDerivedStateOptions) {
   const filteredGuests = createMemo<WorkloadGuest[]>(() => options.filteredGuests() ?? []);
+  const phoneRowGeometry = typeof window !== 'undefined' && window.innerWidth < 640;
+  const [estimatedRowHeight, setEstimatedRowHeight] = createSignal(
+    phoneRowGeometry ? PHONE_WORKLOAD_ROW_HEIGHT : DESKTOP_WORKLOAD_ROW_HEIGHT,
+  );
+  const [estimatedGroupHeaderHeight, setEstimatedGroupHeaderHeight] = createSignal(
+    phoneRowGeometry ? PHONE_WORKLOAD_GROUP_HEADER_HEIGHT : DESKTOP_WORKLOAD_GROUP_HEADER_HEIGHT,
+  );
 
   const nodeByInstance = createMemo(() => buildNodeByInstance(options.nodes()));
   const guestParentNodeMap = createMemo(() =>
@@ -72,6 +83,65 @@ export function useWorkloadsDerivedState(options: WorkloadsWorkloadDerivedStateO
     });
   });
 
+  const groupStartIndices = createMemo(() => {
+    if (options.groupingMode() !== 'grouped') return [];
+    const groups = groupedGuests();
+    let guestIndex = 0;
+    return sortedGroupKeys().map((groupKey) => {
+      const start = guestIndex;
+      guestIndex += (groups[groupKey] || []).length;
+      return start;
+    });
+  });
+
+  // Group headers are real rows in the virtual table. Account for every
+  // header in either a spacer or the mounted window so scroll height cannot
+  // grow and shrink as groups cross the window boundary.
+  const countGroupStartsBefore = (guestIndex: number) => {
+    const starts = groupStartIndices();
+    let low = 0;
+    let high = starts.length;
+    while (low < high) {
+      const middle = Math.floor((low + high) / 2);
+      if (starts[middle] < guestIndex) low = middle + 1;
+      else high = middle;
+    }
+    return low;
+  };
+
+  const countGroupStartsAtOrBefore = (guestIndex: number) => {
+    const starts = groupStartIndices();
+    let low = 0;
+    let high = starts.length;
+    while (low < high) {
+      const middle = Math.floor((low + high) / 2);
+      if (starts[middle] <= guestIndex) low = middle + 1;
+      else high = middle;
+    }
+    return low;
+  };
+
+  const guestIndexAtVirtualOffset = (offset: number, rowHeight: number) => {
+    const totalGuests = filteredGuests().length;
+    if (totalGuests <= 1) return 0;
+
+    let low = 0;
+    let high = totalGuests - 1;
+    let resolved = 0;
+    while (low <= high) {
+      const middle = Math.floor((low + high) / 2);
+      const guestTop =
+        middle * rowHeight + countGroupStartsAtOrBefore(middle) * estimatedGroupHeaderHeight();
+      if (guestTop <= offset) {
+        resolved = middle;
+        low = middle + 1;
+      } else {
+        high = middle - 1;
+      }
+    }
+    return resolved;
+  };
+
   const guestGlobalIndexById = createMemo(() => {
     const indexById = new Map<string, number>();
     const groups = groupedGuests();
@@ -101,6 +171,7 @@ export function useWorkloadsDerivedState(options: WorkloadsWorkloadDerivedStateO
   const groupedWindowing = useGroupedTableWindowing({
     totalRowCount: () => filteredGuests().length,
     revealIndex: revealGuestIndex,
+    rowIndexAtOffset: guestIndexAtVirtualOffset,
   });
 
   const groupStartIndexByKey = createMemo(() => {
@@ -143,22 +214,37 @@ export function useWorkloadsDerivedState(options: WorkloadsWorkloadDerivedStateO
     return keys.filter((groupKey) => (groups[groupKey] || []).length > 0);
   });
 
-  const topSpacerHeight = createMemo(() =>
-    groupedWindowing.isWindowed()
-      ? groupedWindowing.startIndex() * WORKLOADS_TABLE_ESTIMATED_ROW_HEIGHT
-      : 0,
-  );
+  const topSpacerHeight = createMemo(() => {
+    if (!groupedWindowing.isWindowed() || groupedWindowing.startIndex() <= 0) return 0;
+    const virtualHeight =
+      groupedWindowing.startIndex() * estimatedRowHeight() +
+      countGroupStartsBefore(groupedWindowing.startIndex()) * estimatedGroupHeaderHeight();
+
+    // The table's divide-y rule adds one border when a leading spacer is
+    // mounted. Keep that border inside the virtual height instead of letting
+    // the document grow by one pixel after the first scroll.
+    return Math.max(0, virtualHeight - WORKLOADS_TABLE_DIVIDER_HEIGHT);
+  });
 
   const bottomSpacerHeight = createMemo(() =>
     groupedWindowing.isWindowed()
-      ? Math.max(0, (filteredGuests().length - groupedWindowing.endIndex()) * 32)
+      ? Math.max(
+          0,
+          (filteredGuests().length - groupedWindowing.endIndex()) * estimatedRowHeight() +
+            (groupStartIndices().length - countGroupStartsBefore(groupedWindowing.endIndex())) *
+              estimatedGroupHeaderHeight(),
+        )
       : 0,
   );
 
-  useWorkloadViewportSync({
+  const workloadViewport = useWorkloadViewportSync({
     filteredGuestCount: () => filteredGuests().length,
     groupedWindowing,
-    rowHeight: WORKLOADS_TABLE_ESTIMATED_ROW_HEIGHT,
+    onRowGeometryChange: (geometry) => {
+      if (geometry.rowHeight) setEstimatedRowHeight(geometry.rowHeight);
+      if (geometry.groupHeaderHeight) setEstimatedGroupHeaderHeight(geometry.groupHeaderHeight);
+    },
+    rowHeight: estimatedRowHeight,
     tableBodyRef: options.tableBodyRef,
   });
 
@@ -173,8 +259,10 @@ export function useWorkloadsDerivedState(options: WorkloadsWorkloadDerivedStateO
     groupedWindowing,
     guestParentNodeMap,
     inventoryStats,
+    isScrollToTopVisible: workloadViewport.isScrollToTopVisible,
     nodeByInstance,
     topSpacerHeight,
+    scrollToTop: workloadViewport.scrollToTop,
     totalStats,
     visibleGroupKeys,
     windowedGroupedGuests,

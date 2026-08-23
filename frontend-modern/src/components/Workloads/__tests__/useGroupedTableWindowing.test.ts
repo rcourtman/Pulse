@@ -1,5 +1,5 @@
 import { createRoot, createSignal } from 'solid-js';
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 
 import {
   useGroupedTableWindowing,
@@ -24,6 +24,7 @@ function createHook(
       windowSize: opts.windowSize,
       enabled: opts.enabled,
       revealIndex: opts.revealIndex,
+      rowIndexAtOffset: opts.rowIndexAtOffset,
     });
     return dispose;
   });
@@ -250,6 +251,35 @@ describe('useGroupedTableWindowing', () => {
       hook.onScroll(800, 0, 40);
       // firstVisible = 800/40 = 20, start = 20-20 = 0
       expect(hook.startIndex()).toBe(0);
+    });
+
+    it('uses grouped virtual geometry when decorations add height between rows', () => {
+      const rowIndexAtOffset = vi.fn(() => 80);
+      const hook = setup({
+        totalRowCount: () => 1000,
+        enabled: () => true,
+        windowSize: 100,
+        rowIndexAtOffset,
+      });
+
+      hook.onScroll(3200, 400, 32);
+
+      expect(rowIndexAtOffset).toHaveBeenCalledWith(3200, 32);
+      expect(hook.startIndex()).toBe(60);
+      expect(hook.endIndex()).toBe(160);
+    });
+
+    it('falls back to fixed row math when the grouped offset resolver is non-finite', () => {
+      const hook = setup({
+        totalRowCount: () => 1000,
+        enabled: () => true,
+        windowSize: 100,
+        rowIndexAtOffset: () => Number.NaN,
+      });
+
+      hook.onScroll(2000, 400, 40);
+
+      expect(hook.startIndex()).toBe(30);
     });
   });
 
