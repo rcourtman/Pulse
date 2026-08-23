@@ -81,6 +81,8 @@ describe('useWorkloadViewportSync', () => {
 
   it('tracks the app scroll container instead of leaving the initial spacer in place', async () => {
     const onScroll = vi.fn();
+    let appScrollContainer!: HTMLDivElement;
+    let horizontalTableWrapper!: HTMLDivElement;
     const groupedWindowing: UseGroupedTableWindowingResult = {
       endIndex: () => 150,
       getVisibleSlice: (_groupKey, guests) => guests,
@@ -104,7 +106,11 @@ describe('useWorkloadViewportSync', () => {
       return (
         <div
           ref={(element) => {
+            appScrollContainer = element;
             Object.defineProperty(element, 'clientHeight', { configurable: true, value: 400 });
+            // The explicit app scroll shell owns future vertical overflow even
+            // if the table rows have not contributed their final height yet.
+            Object.defineProperty(element, 'scrollHeight', { configurable: true, value: 400 });
             vi.spyOn(element, 'getBoundingClientRect').mockReturnValue({
               bottom: 400,
               height: 400,
@@ -119,24 +125,33 @@ describe('useWorkloadViewportSync', () => {
           }}
           style={{ 'overflow-y': 'scroll' }}
         >
-          <table>
-            <tbody
-              ref={(element) => {
-                vi.spyOn(element, 'getBoundingClientRect').mockReturnValue({
-                  bottom: -240,
-                  height: 320,
-                  left: 0,
-                  right: 800,
-                  toJSON: () => ({}),
-                  top: -560,
-                  width: 800,
-                  x: 0,
-                  y: -560,
-                } as DOMRect);
-                setBodyRef(element);
-              }}
-            />
-          </table>
+          <div
+            ref={(element) => {
+              horizontalTableWrapper = element;
+              Object.defineProperty(element, 'clientHeight', { configurable: true, value: 2800 });
+              Object.defineProperty(element, 'scrollHeight', { configurable: true, value: 2800 });
+            }}
+            style={{ 'overflow-x': 'auto' }}
+          >
+            <table>
+              <tbody
+                ref={(element) => {
+                  vi.spyOn(element, 'getBoundingClientRect').mockReturnValue({
+                    bottom: -240,
+                    height: 320,
+                    left: 0,
+                    right: 800,
+                    toJSON: () => ({}),
+                    top: -560,
+                    width: 800,
+                    x: 0,
+                    y: -560,
+                  } as DOMRect);
+                  setBodyRef(element);
+                }}
+              />
+            </table>
+          </div>
         </div>
       );
     };
@@ -146,5 +161,13 @@ describe('useWorkloadViewportSync', () => {
     await waitFor(() => {
       expect(onScroll).toHaveBeenCalledWith(560, 400, 32);
     });
+
+    appScrollContainer.dispatchEvent(new Event('scroll'));
+    await waitFor(() => {
+      expect(onScroll).toHaveBeenCalledTimes(2);
+    });
+
+    horizontalTableWrapper.dispatchEvent(new Event('scroll'));
+    expect(onScroll).toHaveBeenCalledTimes(2);
   });
 });

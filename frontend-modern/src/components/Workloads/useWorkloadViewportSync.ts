@@ -3,12 +3,19 @@ import { createEffect, onCleanup, type Accessor } from 'solid-js';
 import type { UseGroupedTableWindowingResult } from './useGroupedTableWindowing';
 
 const SCROLLABLE_OVERFLOW_PATTERN = /(?:auto|scroll|overlay)/;
+const MIN_VERTICAL_SCROLL_RANGE_PX = 1;
 
 const findScrollContainer = (element: HTMLElement): HTMLElement | null => {
   let parent = element.parentElement;
   while (parent && parent !== document.body && parent !== document.documentElement) {
     const styles = getComputedStyle(parent);
-    if (SCROLLABLE_OVERFLOW_PATTERN.test(`${styles.overflow} ${styles.overflowY}`)) {
+    const hasVerticalScrollRange =
+      parent.scrollHeight - parent.clientHeight > MIN_VERTICAL_SCROLL_RANGE_PX;
+    const ownsVerticalScrollBeforeOverflow = styles.overflowY === 'scroll';
+    if (
+      SCROLLABLE_OVERFLOW_PATTERN.test(styles.overflowY) &&
+      (ownsVerticalScrollBeforeOverflow || hasVerticalScrollRange)
+    ) {
       return parent;
     }
     parent = parent.parentElement;

@@ -784,6 +784,16 @@ change may globally weaken the Task 03 lifecycle-state idempotency invariant.
     `prefers-reduced-motion`; hot-path Workloads components must not re-create
     independent number animation loops.
 23. Extend grouped workload row windowing, reveal-index clamping, overscan math, and per-group visible-slice derivation through `frontend-modern/src/components/Workloads/useGroupedTableWindowing.ts`, and extend viewport event wiring through `frontend-modern/src/components/Workloads/useWorkloadViewportSync.ts` rather than rebuilding scroll handlers, mounted-row budgets, viewport listeners, or group-slice math inside `frontend-modern/src/components/Workloads/useWorkloadsDerivedState.ts`
+    Viewport sync may select an ancestor when it explicitly owns
+    `overflow-y: scroll`, including during the mount frame before children
+    contribute their final height, or when an `auto` / `overlay` ancestor has a
+    real vertical scroll range. A horizontally scrollable table shell may
+    compute `overflow-y: auto` through CSS overflow-axis coupling, but when its
+    scroll height equals its client height it is not the workload viewport
+    owner and must be skipped. The listener must continue outward to the
+    bounded app scroll container, or fall back to the window, so scrolling a
+    large mobile estate advances the mounted row window and removes the final
+    bottom spacer when the operator reaches the end.
 25. Extend workload table shell ownership through `frontend-modern/src/components/Workloads/WorkloadTableHeader.tsx` and `frontend-modern/src/components/Workloads/WorkloadPanel.tsx` rather than rebuilding sortable header markup, grouped node rows, row expansion, or guest-drawer rendering inside `frontend-modern/src/components/Workloads/WorkloadsTable.tsx`
     `WorkloadPanel` owns the mutually exclusive host/guest drawer handoff:
     clicking a grouped host row while a guest drawer is open must clear the
