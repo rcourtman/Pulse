@@ -36,8 +36,9 @@ _This changelog describes stable `v6.3.1` compared with stable `v6.3.0`._
   release workflow after an exact-SHA no-publication dry run
 - Emergency reason: active customer harm across notification recovery, Docker
   control, local subscription setup, and Synology Docker host load
-- Windows signing decision: Authenticode signing is required through SignPath;
-  the exact candidate must prove the configured production signer before
-  publication
+- Windows signing decision: version-bound `v6.3.1` owner exception because the
+  SignPath production certificate remains CSR pending; Windows binaries are
+  not Authenticode-signed and may display an Unknown Publisher warning, while
+  the exact-SHA integrity controls remain mandatory
 - Mobile decision: `no-mobile-impact`; no governed mobile-facing path changed
   from `v6.3.0`, so no companion build or public store rollout is required

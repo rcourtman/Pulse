@@ -50,9 +50,11 @@ control, local subscription providers, and Docker monitoring overhead.
 - The exact pushed release SHA must pass the no-publication Release Dry Run and
   its integrated exact-SHA candidate checks before that same SHA is submitted
   to the single-build publication workflow.
-- Authenticode signing is required through SignPath. The rehearsal must return
-  all three Windows Unified Agent binaries with valid signatures from the
-  configured production signer before the candidate can advance.
+- The release owner approved a `v6.3.1`-only exception because SignPath's
+  production certificate remains CSR pending. Windows Unified Agent binaries
+  are not Authenticode-signed and may display an Unknown Publisher warning;
+  exact-SHA checksums, detached signatures, immutable-manifest verification,
+  and published-digest verification remain mandatory.
 - No mobile-facing path changed between `v6.3.0` and this release, so the mobile
   decision is `no-mobile-impact`; no companion build or store rollout is
   required.

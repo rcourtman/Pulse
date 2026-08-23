@@ -433,6 +433,22 @@ TLS-unverified receipts leave the claim at `implemented` or
      signatures, and published-digest verification. Public notes must disclose
      that the binaries are not Authenticode-signed and may display an Unknown
      Publisher warning.
+15. v6.3.1 unsigned-Windows exception:
+   - On 2026-08-23, the release owner explicitly authorized unsigned Windows
+     Unified Agent artifacts for stable `v6.3.1` after exact-SHA rehearsal
+     `32634435531` proved that the SignPath production certificate remains
+     `CSR PENDING` and the `release-signing` policy is invalid. The dated
+     decision record is
+     `docs/release-control/v6/internal/records/v6.3.1-unsigned-windows-owner-approval-2026-08-23.md`.
+   - This is a bounded `v6.3.1` decision, not evidence that Authenticode
+     succeeded and not a standing exception. Stable `v6.3.2` and later restore
+     mandatory Authenticode unless another explicit, version-bound owner
+     decision is recorded.
+   - Windows artifacts remain bound by the exact release SHA, immutable
+     candidate manifest, SHA-256 checksums, detached `.sig` and `.sshsig`
+     signatures, and published-digest verification. Public notes must disclose
+     that the binaries are not Authenticode-signed and may display an Unknown
+     Publisher warning.
 
 ## Single-Build Release Path
 

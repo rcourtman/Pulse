@@ -50,6 +50,11 @@ Use this as the final gate before cutting a Pulse v6 pre-release.
   packet must retain exact-SHA, checksum, detached-signature, immutable-
   manifest, and published-digest proof and publicly disclose the Unknown
   Publisher warning.
+- On 2026-08-23 the release owner approved the same bounded integrity path for
+  `v6.3.1` after an exact-SHA signing rehearsal proved that SignPath's
+  production certificate remains CSR pending and the `release-signing` policy
+  is therefore invalid. This exception applies only to `v6.3.1` and retains
+  mandatory public Unknown Publisher disclosure.
 - `known-rc-issue-closure-for-ga` was introduced on 2026-04-21 to reflect the
   locked rule that v6 GA must be feature-complete relative to the prerelease
   issue set. It is currently blocked on the dated RC issue-closure packet.

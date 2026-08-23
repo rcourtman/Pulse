@@ -1680,9 +1680,15 @@ no-publication dry run and integrated candidate checks before the same SHA is
 dispatched through the single-build publication workflow. No governed
 mobile-facing path changed from `v6.3.0`, so the release decision is
 `no-mobile-impact` and no companion build or store rollout is required.
-Windows Authenticode remains mandatory for `v6.3.1` unless the release owner
-records a new explicit version-bound unsigned-Windows exception; the prior
-`v6.3.0` decision cannot be reused for this patch.
+Windows Authenticode was mandatory for `v6.3.1` unless the release owner
+recorded a new explicit version-bound unsigned-Windows exception; the prior
+`v6.3.0` decision could not be reused for this patch. On 2026-08-23 the release
+owner recorded that separate `v6.3.1` exception after exact-SHA rehearsal
+`32634435531` reached SignPath and proved the production certificate remained
+`CSR PENDING`, leaving the `release-signing` policy invalid. This changes only
+the Authenticode requirement: public Unknown Publisher disclosure and the
+exact-SHA, checksum, detached-signature, immutable-manifest, and
+published-digest controls remain mandatory.
 
 The preceding stable `v6.3.0` cut set the repo-root `VERSION`,
 repo-root `docker-compose.yml` image default, `scripts/install-docker.sh`

@@ -10629,6 +10629,18 @@
       "lane_ids": [
         "L1"
       ]
+    },
+    {
+      "id": "v6-3-1-unsigned-windows-owner-exception",
+      "summary": "On 2026-08-23 the release owner explicitly authorized unsigned Windows Unified Agent artifacts for stable v6.3.1 after exact-SHA rehearsal 32634435531 proved the SignPath production certificate remained CSR PENDING and the release-signing policy was invalid. This version-bound exception changes only the Authenticode requirement: the exact release SHA, immutable candidate manifest, SHA-256 checksums, detached signatures, published-digest verification, and public Unknown Publisher disclosure remain mandatory. Stable v6.3.2 and later restore mandatory Authenticode unless another explicit version-bound decision is recorded.",
+      "kind": "release-policy",
+      "decided_at": "2026-08-23",
+      "subsystem_ids": [
+        "deployment-installability"
+      ],
+      "lane_ids": [
+        "L1"
+      ]
     }
   ]
 }
