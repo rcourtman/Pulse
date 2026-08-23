@@ -384,6 +384,11 @@ no new persisted state: it is read from live Patrol runtime status at snapshot
 time, not from the run history list or the run tally, records no run identity,
 provider configuration, or blocked-reason text, and is likewise not recovery
 coverage or storage-health proof.
+
+Availability-refusal warn logs and the optional `actionReadiness` `detail`
+emitted through the shared `internal/api/` action handlers are likewise
+process-log observability only: they create no persisted state, no storage or
+recovery signal, and no backup, restore, or storage-health proof.
 First-party workflow starter activity recorded through shared `internal/api/`
 handlers, including Pro activation entry-point telemetry for the same
 operations-loop prompt, is likewise API/privacy/commercial activation evidence

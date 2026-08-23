@@ -2463,7 +2463,11 @@ a new API state machine, queue contract, or verification-accounting field.
    Resource payloads may expose the same executor-owned unavailable state as
    `actionReadiness[]` entries with stable `name`, `available`, `reasonCode`,
    and `reason` fields so browser and agent clients can explain disabled
-   actions without treating unavailable capabilities as executable.
+   actions without treating unavailable capabilities as executable. A readiness
+   entry may add an optional bounded `detail` naming the concrete lookup the
+   refusal was judged against (for example the stale enrollment token id, or
+   the agent-id / hostname session lookups that missed); `reason` stays the
+   stable operator-safe copy and clients must not branch on `detail` text.
    Action approval decisions are API-owned as a separate non-execution
    contract: `POST /api/actions/{id}/decision` may only record an
    `approved` or `rejected` decision against a persisted `pending_approval`
@@ -4273,7 +4277,13 @@ canonical resource and then asks the optional executor-owned
 `ExecuteUnderPolicy`, so an automatic broker cannot bypass it. A resource that
 disappears remains `action_plan_drift`; an explicitly unavailable capability
 returns HTTP `409` with shared code `action_execution_unavailable` and bounded
-`resourceId`, `capabilityName`, `reasonCode`, and `reason` details. Pulse
+`resourceId`, `capabilityName`, `reasonCode`, and `reason` details, plus an
+optional `detail` when the executor supplies a lookup diagnostic. Every
+availability refusal rendered through that shared envelope — plan, decision,
+and execution alike — also writes one server-side warn log line naming the
+resource, capability, reason code, and diagnostic, because a refusal that
+reaches the client as a toast while the server journal stays empty is
+undiagnosable from a remote bug report (#1728). Pulse
 persists a terminal failed/no-effect audit and lifecycle event and publishes
 the normal completion notification. Executors without either optional checker,
 and checkers returning an empty readiness result, preserve the existing

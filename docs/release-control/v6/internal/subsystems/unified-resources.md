@@ -907,7 +907,12 @@ cannot create a browser mutation.
    `available=false`, a stable reason code such as
    `command_agent_disconnected`, and operator-safe copy. Frontend consumers may
    use that field to explain disabled controls, while `capabilities` remains
-   the executable action set.
+   the executable action set. The same readiness entry may carry an optional
+   `detail` naming which command-session lookup the refusal was judged against
+   (the immutable enrollment token binding versus the agent-id / hostname
+   session lookups); it is diagnostic copy for server logs and support
+   threads, `reason` remains the stable user-facing text, and consumers must
+   not branch on `detail` content.
    Proxmox VM and LXC lifecycle actions are also part of that governed
    resource contract. `resourceFromVM` and `resourceFromContainer` may advertise
    `start` only for stopped guests and `shutdown`, `reboot`, and `stop` only

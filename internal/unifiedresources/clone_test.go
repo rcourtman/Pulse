@@ -875,3 +875,22 @@ func TestClonedResourcesPreservePlatformAdmission(t *testing.T) {
 		t.Fatalf("provider-owned host must not admit standalone after clone, got %+v", cloned)
 	}
 }
+
+func TestCloneResource_PreservesActionReadinessDetail(t *testing.T) {
+	original := &Resource{
+		ID: "app-container:api",
+		ActionReadiness: []ResourceActionReadiness{
+			{
+				Name:       "restart",
+				Available:  false,
+				ReasonCode: "command_agent_disconnected",
+				Reason:     "Docker / Podman command agent is not connected.",
+				Detail:     "no live command session for agent agent-1 or hostname docker-host",
+			},
+		},
+	}
+	cloned := cloneResource(original)
+	if len(cloned.ActionReadiness) != 1 || cloned.ActionReadiness[0] != original.ActionReadiness[0] {
+		t.Fatalf("clone dropped action readiness diagnostics: %#v", cloned.ActionReadiness)
+	}
+}

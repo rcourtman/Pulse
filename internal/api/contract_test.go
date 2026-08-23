@@ -21246,6 +21246,7 @@ func TestContract_ResourceActionReadinessPayloadShape(t *testing.T) {
 				Available:  false,
 				ReasonCode: "command_agent_disconnected",
 				Reason:     "Docker / Podman command agent is not connected.",
+				Detail:     "no live command session for agent agent-1 or hostname docker-host",
 			},
 		},
 	})
@@ -21259,6 +21260,7 @@ func TestContract_ResourceActionReadinessPayloadShape(t *testing.T) {
 		`"available":false`,
 		`"reasonCode":"command_agent_disconnected"`,
 		`"reason":"Docker / Podman command agent is not connected."`,
+		`"detail":"no live command session for agent agent-1 or hostname docker-host"`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("resource action readiness payload missing %s: %s", want, body)
@@ -21266,6 +21268,18 @@ func TestContract_ResourceActionReadinessPayloadShape(t *testing.T) {
 	}
 	if strings.Contains(body, "InternalHandler") {
 		t.Fatalf("resource payload leaked internal action handler: %s", body)
+	}
+	bare, err := json.Marshal(unifiedresources.ResourceActionReadiness{
+		Name:       "restart",
+		Available:  false,
+		ReasonCode: "command_agent_disconnected",
+		Reason:     "Docker / Podman command agent is not connected.",
+	})
+	if err != nil {
+		t.Fatalf("marshal readiness: %v", err)
+	}
+	if strings.Contains(string(bare), "detail") {
+		t.Fatalf("empty diagnostic detail must be omitted from the readiness payload: %s", bare)
 	}
 }
 

@@ -337,10 +337,12 @@ func (e dockerContainerActionExecutor) CheckActionAvailable(ctx context.Context,
 	if _, err := e.executableDockerContainerResource(ctx, resource, operation); err != nil {
 		return unavailableDockerActionReadiness(operation, dockerActionUnavailableReasonCode(err), dockerActionUnavailableReason(err))
 	}
-	if _, err := e.connectedDockerCommandAgentID(ctx, resource); err != nil {
-		return unavailableDockerActionReadiness(operation, "command_agent_disconnected", "Docker / Podman command agent is not connected.")
+	agentID, connectErr := e.connectedDockerCommandAgentID(ctx, resource)
+	if connectErr != nil {
+		readiness := unavailableDockerActionReadiness(operation, "command_agent_disconnected", "Docker / Podman command agent is not connected.")
+		readiness.Detail = connectErr.Error()
+		return readiness
 	}
-	agentID, _ := e.connectedDockerCommandAgentID(ctx, resource)
 	if liveAgentOperationReceiptVersion(ctx, e.agents, agentID) != operationreceipt.ProtocolVersion {
 		return unavailableDockerActionReadiness(operation, "operation_receipt_unsupported", "The Pulse agent on this host cannot run reviewed actions: it is on an older version, or its durable state directory is unavailable. Update the agent, or check the agent logs if it is already current, then retry.")
 	}
@@ -425,7 +427,7 @@ func (e dockerContainerActionExecutor) executableDockerContainerResource(_ conte
 
 func (e dockerContainerActionExecutor) connectedDockerCommandAgentID(ctx context.Context, resource unified.Resource) (string, error) {
 	if e.agents == nil {
-		return "", fmt.Errorf("docker container command agent is not connected")
+		return "", fmt.Errorf("docker container command agent is not connected: no agent command server is configured")
 	}
 	if resource.Docker == nil {
 		return "", fmt.Errorf("docker resource metadata missing")
@@ -435,8 +437,8 @@ func (e dockerContainerActionExecutor) connectedDockerCommandAgentID(ctx context
 	}
 	// When telemetry names a token, it is the immutable session binding. Do
 	// not fall back to a different identity or hostname after rotation.
-	if strings.TrimSpace(resource.Docker.TokenID) != "" {
-		return "", fmt.Errorf("docker container command agent is not connected")
+	if tokenID := strings.TrimSpace(resource.Docker.TokenID); tokenID != "" {
+		return "", fmt.Errorf("docker container command agent is not connected: no live command session for enrollment token %s (agent %q, hostname %q); a token-named resource never falls back to identity or hostname lookup", tokenID, strings.TrimSpace(resource.Docker.AgentID), strings.TrimSpace(resource.Docker.Hostname))
 	}
 	if agentID := strings.TrimSpace(resource.Docker.AgentID); agentID != "" && isAgentCommandConnected(ctx, e.agents, agentID) {
 		return agentID, nil
@@ -447,7 +449,7 @@ func (e dockerContainerActionExecutor) connectedDockerCommandAgentID(ctx context
 			return agentID, nil
 		}
 	}
-	return "", fmt.Errorf("docker container command agent is not connected")
+	return "", fmt.Errorf("docker container command agent is not connected: no live command session for agent %q or hostname %q", strings.TrimSpace(resource.Docker.AgentID), strings.TrimSpace(resource.Docker.Hostname))
 }
 
 func unavailableDockerActionReadiness(operation, reasonCode, reason string) unified.ResourceActionReadiness {

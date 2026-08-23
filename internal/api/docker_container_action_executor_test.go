@@ -671,3 +671,90 @@ func TestDockerContainerActionExecutorRefusesUpdateThroughLifecycleHandler(t *te
 		t.Fatalf("readiness = %+v, want fail-closed for wrong handler", readiness)
 	}
 }
+
+func TestDockerContainerActionAvailabilityDetailNamesMissedLookup(t *testing.T) {
+	now := time.Now().UTC()
+	request := unified.ActionRequest{
+		RequestID:      "req-detail",
+		ResourceID:     "app-container:api",
+		CapabilityName: "restart",
+		Reason:         "operator requested restart",
+		RequestedBy:    "operator",
+	}
+
+	resource := dockerContainerActionResource("app-container:api", "docker", "running", now)
+	h := newActionTestResourceHandlers(t, &config.Config{DataPath: t.TempDir()})
+	h.SetStateProvider(resourceUnifiedSeedProvider{
+		snapshot:  models.StateSnapshot{LastUpdate: now},
+		resources: []unified.Resource{resource},
+	})
+	executor := newDockerContainerActionExecutor(h, &fakeDockerActionAgentCommander{
+		connected: map[string]bool{"agent-1": false},
+	}).(dockerContainerActionExecutor)
+
+	readiness := executor.CheckActionAvailable(context.Background(), request, resource)
+	if readiness.Available || readiness.ReasonCode != "command_agent_disconnected" ||
+		readiness.Reason != "Docker / Podman command agent is not connected." {
+		t.Fatalf("identity-fallback readiness = %#v, want disconnected agent", readiness)
+	}
+	if !strings.Contains(readiness.Detail, `agent "agent-1"`) {
+		t.Fatalf("identity-fallback detail = %q, want the missed agent identity named", readiness.Detail)
+	}
+
+	tokenResource := dockerContainerActionResource("app-container:api", "docker", "running", now)
+	tokenResource.Docker.TokenID = "rotated-token"
+	tokenResource.Docker.Hostname = "docker-host"
+	tokenExecutor := newDockerContainerActionExecutor(h, &scopedFakeDockerActionAgentCommander{
+		fakeDockerActionAgentCommander: &fakeDockerActionAgentCommander{
+			connected: map[string]bool{"agent-1": true},
+		},
+		tokenAgents: map[string]string{},
+	}).(dockerContainerActionExecutor)
+
+	readiness = tokenExecutor.CheckActionAvailable(context.Background(), request, tokenResource)
+	if readiness.Available || readiness.ReasonCode != "command_agent_disconnected" ||
+		readiness.Reason != "Docker / Podman command agent is not connected." {
+		t.Fatalf("token-named readiness = %#v, want disconnected agent", readiness)
+	}
+	if !strings.Contains(readiness.Detail, "rotated-token") ||
+		!strings.Contains(readiness.Detail, "never falls back") {
+		t.Fatalf("token-named detail = %q, want the stale token binding named", readiness.Detail)
+	}
+}
+
+func TestHandlePlanActionRefusalEnvelopeCarriesDetail(t *testing.T) {
+	now := time.Now().UTC()
+	h := newActionTestResourceHandlers(t, &config.Config{DataPath: t.TempDir()})
+	h.SetStateProvider(resourceUnifiedSeedProvider{
+		snapshot: models.StateSnapshot{LastUpdate: now},
+		resources: []unified.Resource{
+			dockerContainerActionResource("app-container:api", "docker", "running", now),
+		},
+	})
+	h.SetActionExecutor(newDockerContainerActionExecutor(h, &fakeDockerActionAgentCommander{
+		connected: map[string]bool{"agent-1": false},
+	}))
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/actions/plan", bytes.NewBufferString(`{
+		"requestId":"req-refusal-detail",
+		"resourceId":"app-container:api",
+		"capabilityName":"restart",
+		"reason":"operator requested restart",
+		"requestedBy":"operator"
+	}`))
+	h.HandlePlanAction(rec, actionHandlerTestRequest(req, ""))
+
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("plan status = %d, want %d, body=%s", rec.Code, http.StatusConflict, rec.Body.String())
+	}
+	var envelope struct {
+		Details map[string]string `json:"details"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &envelope); err != nil {
+		t.Fatalf("decode refusal envelope: %v", err)
+	}
+	if !strings.Contains(envelope.Details["detail"], `agent "agent-1"`) {
+		t.Fatalf("envelope detail = %q, want the missed agent identity named", envelope.Details["detail"])
+	}
+}

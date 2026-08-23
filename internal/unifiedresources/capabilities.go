@@ -80,4 +80,8 @@ type ResourceActionReadiness struct {
 	Available  bool   `json:"available"`
 	ReasonCode string `json:"reasonCode,omitempty"`
 	Reason     string `json:"reason,omitempty"`
+	// Detail names the concrete lookup or identity the refusal was judged
+	// against (which token, agent id, or hostname missed). It feeds server
+	// logs and error envelopes; Reason stays the stable user-facing copy.
+	Detail string `json:"detail,omitempty"`
 }

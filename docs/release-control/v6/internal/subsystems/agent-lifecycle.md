@@ -960,7 +960,12 @@ reconnect, substitute, or directly address an agent to make a stale container
 action executable. Backend resource payloads and plan-action readiness are the
 only supported lifecycle signal for that state. When a resource payload carries
 typed `actionReadiness`, lifecycle surfaces may display the reason but must not
-treat it as reconnect authority or an alternate command grant.
+treat it as reconnect authority or an alternate command grant. The optional
+`detail` such an entry may carry (naming the missed enrollment-token or
+session lookup) and the server-side warn log every availability refusal now
+writes are the same API-owned diagnosis surface: they add no agent-visible
+transport, and no surface gains reconnect, rebind, or command authority from
+reading them.
 Assistant session rename through `PATCH /api/ai/sessions/{id}` follows that
 same browser-safe history boundary. Lifecycle surfaces, MCP adapters, and
 agents may display the updated title as human navigation metadata, but they

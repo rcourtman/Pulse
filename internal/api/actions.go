@@ -16,6 +16,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/api/resourceapi"
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	unified "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	"github.com/rs/zerolog/log"
 )
 
 const maxActionPlanRequestBytes = 1 << 20
@@ -337,6 +338,32 @@ func (h *ResourceHandlers) HandleGetAction(w http.ResponseWriter, r *http.Reques
 	}
 }
 
+// writeActionExecutionUnavailable renders an availability refusal into the
+// stable 409 contract and logs it. Refusals previously produced only a client
+// toast while the server journal stayed empty, so remote reports of "command
+// agent is not connected" were undiagnosable without source access (#1728).
+func writeActionExecutionUnavailable(w http.ResponseWriter, refusal *actionlifecycle.AvailabilityRefusedError) {
+	reason := firstNonEmpty(refusal.Readiness.Reason, "action execution is unavailable")
+	details := map[string]string{
+		"resourceId":     refusal.ResourceID,
+		"capabilityName": refusal.CapabilityName,
+		"reasonCode":     refusal.Readiness.ReasonCode,
+		"reason":         reason,
+	}
+	detail := strings.TrimSpace(refusal.Readiness.Detail)
+	if detail != "" {
+		details["detail"] = detail
+	}
+	log.Warn().
+		Str("resource_id", refusal.ResourceID).
+		Str("capability", refusal.CapabilityName).
+		Str("reason_code", refusal.Readiness.ReasonCode).
+		Str("reason", reason).
+		Str("detail", detail).
+		Msg("Action refused: capability is not currently executable")
+	writeJSONErrorWithDetails(w, http.StatusConflict, agentcapabilities.AgentErrCodeActionExecutionUnavailable, "Action execution is unavailable", details)
+}
+
 func writeActionPlanError(w http.ResponseWriter, err error) {
 	var validationErr *actionplanner.ValidationError
 	var notFound *actionlifecycle.ResourceNotFoundError
@@ -362,12 +389,7 @@ func writeActionPlanError(w http.ResponseWriter, err error) {
 			"resourceId": notFound.ResourceID,
 		})
 	case errors.As(err, &unavailable):
-		writeJSONErrorWithDetails(w, http.StatusConflict, agentcapabilities.AgentErrCodeActionExecutionUnavailable, "Action execution is unavailable", map[string]string{
-			"resourceId":     unavailable.ResourceID,
-			"capabilityName": unavailable.CapabilityName,
-			"reasonCode":     unavailable.Readiness.ReasonCode,
-			"reason":         firstNonEmpty(unavailable.Readiness.Reason, "action execution is unavailable"),
-		})
+		writeActionExecutionUnavailable(w, unavailable)
 	case errors.Is(err, actionlifecycle.ErrRegistryUnavailable):
 		writeJSONError(w, http.StatusInternalServerError, "resource_registry_unavailable", sanitizeErrorForClient(err, "Resource registry unavailable"))
 	case errors.Is(err, actionlifecycle.ErrStoreUnavailable):
@@ -578,12 +600,7 @@ func writeActionReadinessError(w http.ResponseWriter, err error) bool {
 	var availabilityCheck *actionlifecycle.AvailabilityCheckError
 	switch {
 	case errors.As(err, &availability):
-		writeJSONErrorWithDetails(w, http.StatusConflict, agentcapabilities.AgentErrCodeActionExecutionUnavailable, "Action execution is unavailable", map[string]string{
-			"resourceId":     availability.ResourceID,
-			"capabilityName": availability.CapabilityName,
-			"reasonCode":     availability.Readiness.ReasonCode,
-			"reason":         firstNonEmpty(availability.Readiness.Reason, "action execution is unavailable"),
-		})
+		writeActionExecutionUnavailable(w, availability)
 	case errors.Is(err, unified.ErrActionPlanDrift):
 		writeJSONError(w, http.StatusConflict, agentcapabilities.AgentErrCodeActionPlanDrift, "Action plan no longer matches the current resource contract; refresh the plan before continuing")
 	case errors.Is(err, unified.ErrActionEmergencyStop):
@@ -876,12 +893,7 @@ func writeActionExecuteError(w http.ResponseWriter, err error) {
 	case errors.Is(err, actionlifecycle.ErrExecutorUnavailable):
 		writeJSONError(w, http.StatusNotImplemented, agentcapabilities.AgentErrCodeActionExecutorUnavailable, "No action executor is configured for this API instance")
 	case errors.As(err, &availability):
-		writeJSONErrorWithDetails(w, http.StatusConflict, agentcapabilities.AgentErrCodeActionExecutionUnavailable, "Action execution is unavailable", map[string]string{
-			"resourceId":     availability.ResourceID,
-			"capabilityName": availability.CapabilityName,
-			"reasonCode":     availability.Readiness.ReasonCode,
-			"reason":         firstNonEmpty(availability.Readiness.Reason, "action execution is unavailable"),
-		})
+		writeActionExecutionUnavailable(w, availability)
 	case errors.As(err, &persist):
 		writeActionExecutionPersistError(w, err)
 	case errors.As(err, &freshness):
