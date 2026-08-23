@@ -302,8 +302,8 @@ func TestInstallDockerProofTracksStablePatchReleaseContract(t *testing.T) {
 		"This patch release uses the stable hotfix path with `rollback_version=v"+previous+"`, `hotfix_exception=true`, a release-owner reason, and no fabricated same-version RC tag.",
 		"active customer harm",
 		"`no-mobile-impact`",
-		"version-bound unsigned-Windows exception",
-		"not Authenticode-signed",
+		"Windows Authenticode remains mandatory for `v"+version+"`",
+		"prior `v"+previous+"` decision cannot be reused for this patch",
 		"For the active stable `v"+version+"` cut, the repo-root compose default and `scripts/install-docker.sh` fallback must both pin `"+version+"`",
 	)
 }

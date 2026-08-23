@@ -742,8 +742,8 @@ func TestCurrentStablePatchReleasePacketTracksInstallMetadata(t *testing.T) {
 		"`v"+previous+"`",
 		"Use the normal v6 install or update flow",
 		"integrated exact-SHA candidate checks",
-		"not Authenticode-signed",
-		"Unknown Publisher",
+		"Authenticode signing is required through SignPath",
+		"valid signatures from the configured production signer",
 		"`no-mobile-impact`",
 		"rollback target is `v"+previous+"`",
 	)
@@ -751,8 +751,8 @@ func TestCurrentStablePatchReleasePacketTracksInstallMetadata(t *testing.T) {
 		"Version: `v"+version+"`",
 		"Rollback target: `v"+previous+"`",
 		"Promotion path: emergency stable patch from `"+releaseBranch+"`",
-		"Windows signing decision: version-bound unsigned-Windows exception",
-		"not Authenticode-signed",
+		"Windows signing decision: Authenticode signing is required through SignPath",
+		"configured production signer before publication",
 		"Mobile decision: `no-mobile-impact`",
 	)
 	assertFileContainsAll(t, repoFile("docs", "RELEASE_NOTES.md"),
