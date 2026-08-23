@@ -76,12 +76,17 @@ permissions:
 jobs:
   compile-release-payload:
     name: Compile Exact-SHA Release Payload
-    # Stable exact-SHA candidates favor the reproducible hosted lane. The PVE
-    # matrix remains fast for prereleases, but two stable rehearsals lost
-    # different compiler processes under runner resource pressure. Hosted
-    # provenance is also mandatory when a stable candidate reaches SignPath.
-    runs-on: ${{ !contains(inputs.version, '-') && 'ubuntu-24.04' || fromJSON('["self-hosted","Linux","X64","pulse-pve-compile"]') }}
-    timeout-minutes: 20
+    # This credential-free worker is the trusted high-capacity compiler for
+    # every channel. Its output is immutable after upload and is consumed by
+    # artifact id and digest; hosted jobs verify and package it without a
+    # second compilation. It is not in the dependency chain leading to the
+    # separately hosted SignPath request.
+    runs-on: ${{ fromJSON('["self-hosted","Linux","X64","pulse-pve-compile"]') }}
+    timeout-minutes: 30
+    outputs:
+      artifact_id: ${{ steps.upload_compiled.outputs.artifact-id }}
+      artifact_digest: ${{ steps.upload_compiled.outputs.artifact-digest }}
+      artifact_name: release-compiled-${{ github.sha }}-${{ inputs.version }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
@@ -105,13 +110,35 @@ jobs:
         with:
           node-version: '20'
 
+      - name: Verify compiler capacity
+        shell: bash
+        run: |
+          set -euo pipefail
+          available_memory_kib="$(awk '$1 == "MemAvailable:" {print $2}' /proc/meminfo)"
+          minimum_memory_kib="$((6 * 1024 * 1024))"
+          available_disk_bytes="$(df --output=avail -B1 "$RUNNER_TEMP" | tail -n 1 | tr -d ' ')"
+          minimum_disk_bytes="$((10 * 1024 * 1024 * 1024))"
+          if (( available_memory_kib < minimum_memory_kib )); then
+            echo "::error::Release compiler has less than 6 GiB available memory."
+            exit 1
+          fi
+          if (( available_disk_bytes < minimum_disk_bytes )); then
+            echo "::error::Release compiler has less than 10 GiB free under RUNNER_TEMP."
+            exit 1
+          fi
+          echo "Release compiler capacity: $((available_memory_kib / 1024)) MiB memory, $((available_disk_bytes / 1024 / 1024 / 1024)) GiB disk."
+
       - name: Compile credential-free release payload
         env:
           PULSE_LICENSE_PUBLIC_KEY: ${{ secrets.PULSE_LICENSE_PUBLIC_KEY }}
           PULSE_UPDATE_SIGNING_PUBLIC_KEY: ${{ vars.PULSE_UPDATE_SIGNING_PUBLIC_KEY }}
+          # Two bounded workers avoid the compiler-process loss seen when four
+          # Go links competed with the frontend build on the same VM.
+          PULSE_RELEASE_BUILD_JOBS: "2"
         run: ./scripts/build-release-binaries.sh "${{ inputs.version }}" "$RUNNER_TEMP/release-compiled"
 
       - name: Upload exact-SHA compiled payload
+        id: upload_compiled
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: release-compiled-${{ github.sha }}-${{ inputs.version }}
@@ -574,6 +601,9 @@ jobs:
     if: ${{ always() && needs.compile-release-payload.result == 'success' && (!inputs.require_macos_signing || needs.sign-macos-agent.result == 'success') && (!inputs.require_windows_signing || needs.collect-windows-signing.result == 'success') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 60
+    permissions:
+      actions: read
+      contents: read
     outputs:
       artifact_name: ${{ steps.identity.outputs.artifact_name }}
       manifest_artifact_name: ${{ steps.identity.outputs.manifest_artifact_name }}
@@ -614,7 +644,7 @@ jobs:
       - name: Install release prerequisites
         run: |
           sudo apt-get update
-          sudo apt-get install -y zip
+          sudo apt-get install -y zip unzip
 
       - name: Set up Helm
         uses: azure/setup-helm@dda3372f752e03dde6b3237bc9431cdc2f7a02a2 # v5.0.0
@@ -635,19 +665,56 @@ jobs:
           tar -xzf "${TMP_DIR}/${SYFT_ARCHIVE}" -C "${TMP_DIR}" syft
           install -m 0755 "${TMP_DIR}/syft" /usr/local/bin/syft
 
-      - name: Download exact-SHA compiled payload
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
-        with:
-          name: release-compiled-${{ github.sha }}-${{ inputs.version }}
-          path: release-compiled
+      - name: Verify and download exact compiled artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_ARTIFACT_ID: ${{ needs.compile-release-payload.outputs.artifact_id }}
+          EXPECTED_ARTIFACT_DIGEST: ${{ needs.compile-release-payload.outputs.artifact_digest }}
+          EXPECTED_ARTIFACT_NAME: ${{ needs.compile-release-payload.outputs.artifact_name }}
+        run: |
+          set -euo pipefail
+          [[ "${EXPECTED_ARTIFACT_ID}" =~ ^[0-9]+$ ]]
+          [[ "${EXPECTED_ARTIFACT_DIGEST}" =~ ^[0-9a-f]{64}$ ]]
+          artifact_json="$RUNNER_TEMP/release-compiled-artifact.json"
+          artifact_zip="$RUNNER_TEMP/release-compiled-artifact.zip"
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${EXPECTED_ARTIFACT_ID}" > "${artifact_json}"
+          jq -e \
+            --argjson artifact_id "${EXPECTED_ARTIFACT_ID}" \
+            --arg artifact_name "${EXPECTED_ARTIFACT_NAME}" \
+            --arg artifact_digest "sha256:${EXPECTED_ARTIFACT_DIGEST}" \
+            --argjson run_id "${GITHUB_RUN_ID}" \
+            --arg source_sha "${GITHUB_SHA}" \
+            '.id == $artifact_id and .name == $artifact_name and .expired == false and .size_in_bytes > 0 and .digest == $artifact_digest and .workflow_run.id == $run_id and .workflow_run.head_sha == $source_sha' \
+            "${artifact_json}" >/dev/null
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${EXPECTED_ARTIFACT_ID}/zip" > "${artifact_zip}"
+          printf '%s  %s\n' "${EXPECTED_ARTIFACT_DIGEST}" "${artifact_zip}" | sha256sum --check --
+          mkdir -p release-compiled
+          unzip -q "${artifact_zip}" -d release-compiled
 
       - name: Verify exact-SHA compiled payload
+        env:
+          EXPECTED_ARTIFACT_ID: ${{ needs.compile-release-payload.outputs.artifact_id }}
+          EXPECTED_ARTIFACT_DIGEST: ${{ needs.compile-release-payload.outputs.artifact_digest }}
+          EXPECTED_ARTIFACT_NAME: ${{ needs.compile-release-payload.outputs.artifact_name }}
         run: |
+          set -euo pipefail
           python3 scripts/release_candidate_manifest.py verify-local \
             --release-dir release-compiled/payload \
             --manifest release-compiled/manifest/release-compiled.json \
             --version "${{ inputs.version }}" \
             --source-sha "${GITHUB_SHA}"
+          mkdir -p release-candidate-manifest
+          payload_manifest_sha256="$(sha256sum release-compiled/manifest/release-compiled.json | awk '{print $1}')"
+          jq -n \
+            --argjson artifact_id "${EXPECTED_ARTIFACT_ID}" \
+            --arg artifact_name "${EXPECTED_ARTIFACT_NAME}" \
+            --arg artifact_sha256 "${EXPECTED_ARTIFACT_DIGEST}" \
+            --arg payload_manifest_sha256 "${payload_manifest_sha256}" \
+            --argjson workflow_run_id "${GITHUB_RUN_ID}" \
+            --arg version "${{ inputs.version }}" \
+            --arg source_sha "${GITHUB_SHA}" \
+            '{schema_version: 1, trust_boundary: "trusted-self-hosted-compiler", verified_on: "github-hosted", artifact_id: $artifact_id, artifact_name: $artifact_name, artifact_sha256: $artifact_sha256, payload_manifest_sha256: $payload_manifest_sha256, workflow_run_id: $workflow_run_id, version: $version, source_sha: $source_sha}' \
+            > release-candidate-manifest/compiled-payload-verification.json
 
       - name: Download signed macOS binaries
         if: ${{ inputs.require_macos_signing }}

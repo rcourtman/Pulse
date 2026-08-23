@@ -10637,6 +10637,18 @@
       ]
     },
     {
+      "id": "trusted-pc-single-build-artifact-handoff",
+      "summary": "The project owner designated the dedicated PVE PC runners as trusted, credential-free compilers for public and private release payloads across RC, stable, and patch channels. Each payload is built once, uploaded as an immutable GitHub Actions artifact, and consumed without recompilation only after a GitHub-hosted job verifies the exact artifact id, server-recorded archive SHA-256, workflow run, head SHA, version/source inner manifest, and complete file digests. Signing and publication credentials remain hosted-only, and the SignPath request dependency chain remains entirely GitHub-hosted.",
+      "kind": "release-policy",
+      "decided_at": "2026-08-23",
+      "subsystem_ids": [
+        "deployment-installability"
+      ],
+      "lane_ids": [
+        "L1"
+      ]
+    },
+    {
       "id": "v6-3-1-unsigned-windows-owner-exception",
       "summary": "On 2026-08-23 the release owner explicitly authorized unsigned Windows Unified Agent artifacts for stable v6.3.1 after exact-SHA rehearsal 32634435531 proved the SignPath production certificate remained CSR PENDING and the release-signing policy was invalid. This version-bound exception changes only the Authenticode requirement: the exact release SHA, immutable candidate manifest, SHA-256 checksums, detached signatures, published-digest verification, and public Unknown Publisher disclosure remain mandatory. Stable v6.3.2 and later restore mandatory Authenticode unless another explicit version-bound decision is recorded.",
       "kind": "release-policy",

@@ -537,25 +537,32 @@ upgrade, update, release, or artifact-selection behavior.
    Signing, package publication, and release mutation authority must remain on
    hosted jobs. The bundle job must be independent from frontend quality so
    backend and browser-smoke lanes can start as soon as the bundle is available.
-   Prerelease cross-platform compilation may run concurrently on a separate,
-   low-priority PVE identity using only public embedding keys. Stable
-   cross-platform compilation must remain GitHub-hosted. Both paths must produce
-   one exact-version, exact-source-SHA manifest covering the complete frontend
-   and binary payload. That manifest may cover canonical relative paths in the
-   payload tree but must reject absolute, traversing, or noncanonical names.
-   The hosted candidate job must verify that manifest
+   Cross-platform compilation for every release channel runs once on the
+   dedicated, credential-free PVE compiler identity using only public embedding
+   keys. The compiler must produce one exact-version, exact-source-SHA manifest
+   covering the complete frontend and binary payload. That manifest may cover
+   canonical relative paths in the payload tree but must reject absolute,
+   traversing, or noncanonical names. The upload step must expose GitHub's
+   immutable artifact id and archive SHA-256 digest. The hosted candidate job
+   must retrieve that exact id, fail closed unless GitHub's artifact API binds
+   its name, digest, workflow-run id, and head SHA to the current release run,
+   verify the downloaded archive digest itself, and then verify the inner
+   payload manifest
    before applying required native binaries, packaging, update-signing, SBOM
-   generation, validation, or upload. Private signing material and publication
-   credentials must never enter the PVE compilation job.
+   generation, validation, or upload. It must record that verification beside
+   the final candidate manifest and must not rebuild the verified payload.
+   Private signing material and publication credentials must never enter the
+   PVE compilation job.
    PVE jobs must consume their runner users' persistent local Go and npm caches
    directly; disposable-runner Actions cache restore/save phases must remain
    disabled because archiving those same caches adds network work after the
    useful test or compilation process has already completed.
    Private Pro compilation must additionally bind the exact Pulse and
-   pulse-enterprise commits in a manifest-covered identity record. Its PVE job
-   is a prerelease acceleration path only; stable Pro compilation must use a
-   GitHub-hosted runner under the same release-channel rule as the public
-   candidate. Either runner must compile only the public Unified Agent matrix
+   pulse-enterprise commits in a manifest-covered identity record. It runs once
+   on the dedicated credential-free PVE enterprise compiler for every channel,
+   then crosses the same immutable GitHub artifact-id, archive-digest, run-id,
+   head-SHA, and inner-manifest verification boundary before any hosted private
+   signing or publication step. The compiler must build only the public Unified Agent matrix
    actually embedded in Pro archives plus the Pro server matrix. The public
    frontend build is a required source-checkout prerequisite because every Pro
    server embeds that exact-SHA
@@ -1637,17 +1644,19 @@ Every caller of the reusable release-candidate builder must delegate
 exact uploaded artifact through the GitHub Actions API, and GitHub validates
 that nested permission even when a prerelease skips Authenticode signing.
 SignPath Foundation also requires every job leading up to an open-source
-signing request to execute on GitHub-hosted runners. All stable candidates,
-including a version with an approved unsigned-Windows exception, therefore
-route release preparation, the parallel frontend bundle, backend
-qualification, and exact-SHA compilation through GitHub-hosted runners. The
-stable runner boundary is release-channel-based rather than signing-policy-
-based, so an external signing outage cannot silently return a GA or patch cut
-to persistent PVE capacity. Rehearsals `32631653966` and `32635525554` lost
-different matrix compiler
-processes on the PVE runner without compiler diagnostics after substantial
-progress, while the same targets build independently. Prereleases retain the
-credential-free PVE compilation path for speed. Stable container and Helm
+signing request to execute on GitHub-hosted runners. Stable release
+preparation, the parallel frontend bundle, backend qualification, signing
+configuration, and the Windows build/submission dependency chain therefore
+remain GitHub-hosted regardless of an unsigned-Windows exception. The
+credential-free PVE compiler is an independent sibling and never supplies the
+artifact submitted to SignPath; only the hosted final assembler joins its
+separately verified output after native signing. Rehearsals `32631653966` and
+`32635525554` lost different matrix compiler processes on the PVE runner under
+four-way compiler and frontend pressure. The single-build compiler now admits
+only a worker with explicit memory/disk headroom, limits the matrix to two
+concurrent workers, uploads one immutable GitHub artifact, and lets the hosted
+assembler verify the API identity, archive SHA-256, exact source/version inner
+manifest, and complete payload without recompiling it. Stable container and Helm
 qualification also runs hosted after rehearsal `32636149901` exhausted the
 persistent PVE build runner's disk while assembling the first candidate image;
 the candidate payload had already verified successfully. Prerelease container

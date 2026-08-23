@@ -1456,6 +1456,31 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertNotIn("pulse_update_signing_key=${{ secrets.PULSE_UPDATE_SIGNING_KEY }}", docker_build)
         self.assertIn("Validate installer signing key pins", candidate_workflow)
         self.assertIn("timeout-minutes: 60", candidate_workflow)
+        self.assertIn(
+            'runs-on: ${{ fromJSON(\'["self-hosted","Linux","X64","pulse-pve-compile"]\') }}',
+            candidate_workflow,
+        )
+        self.assertIn(
+            "artifact_id: ${{ steps.upload_compiled.outputs.artifact-id }}",
+            candidate_workflow,
+        )
+        self.assertIn(
+            "artifact_digest: ${{ steps.upload_compiled.outputs.artifact-digest }}",
+            candidate_workflow,
+        )
+        self.assertIn("PULSE_RELEASE_BUILD_JOBS: \"2\"", candidate_workflow)
+        self.assertIn(
+            "EXPECTED_ARTIFACT_ID: ${{ needs.compile-release-payload.outputs.artifact_id }}",
+            candidate_workflow,
+        )
+        self.assertIn(
+            "EXPECTED_ARTIFACT_DIGEST: ${{ needs.compile-release-payload.outputs.artifact_digest }}",
+            candidate_workflow,
+        )
+        self.assertIn(".workflow_run.head_sha == $source_sha", candidate_workflow)
+        self.assertIn("sha256sum --check --", candidate_workflow)
+        self.assertIn("compiled-payload-verification.json", candidate_workflow)
+        self.assertIn("trusted-self-hosted-compiler", candidate_workflow)
         self.assertIn("Verify Native Signing Configuration", candidate_workflow)
         self.assertEqual(candidate_workflow.count("needs: signing-configuration"), 2)
         self.assertIn("require_windows_signing: ${{ needs.prepare.outputs.require_windows_signing == 'true' }}", content)

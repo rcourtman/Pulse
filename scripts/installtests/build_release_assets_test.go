@@ -2367,8 +2367,10 @@ func TestReleasePipelinePromotesOneImmutableCandidate(t *testing.T) {
 	}
 
 	for _, needle := range []string{
-		`!contains(inputs.version, '-') && 'ubuntu-24.04'`,
-		"pulse-pve-compile",
+		`fromJSON('["self-hosted","Linux","X64","pulse-pve-compile"]')`,
+		`artifact_id: ${{ steps.upload_compiled.outputs.artifact-id }}`,
+		`artifact_digest: ${{ steps.upload_compiled.outputs.artifact-digest }}`,
+		`PULSE_RELEASE_BUILD_JOBS: "2"`,
 		`./scripts/build-release-binaries.sh "${{ inputs.version }}"`,
 		`release-compiled-${{ github.sha }}-${{ inputs.version }}`,
 	} {
@@ -2413,7 +2415,15 @@ func TestReleasePipelinePromotesOneImmutableCandidate(t *testing.T) {
 	}
 	for _, needle := range []string{
 		`needs.compile-release-payload.result == 'success'`,
+		`actions: read`,
+		`EXPECTED_ARTIFACT_ID: ${{ needs.compile-release-payload.outputs.artifact_id }}`,
+		`EXPECTED_ARTIFACT_DIGEST: ${{ needs.compile-release-payload.outputs.artifact_digest }}`,
+		`actions/artifacts/${EXPECTED_ARTIFACT_ID}`,
+		`.workflow_run.head_sha == $source_sha`,
+		`sha256sum --check --`,
 		`scripts/release_candidate_manifest.py verify-local`,
+		`compiled-payload-verification.json`,
+		`trusted-self-hosted-compiler`,
 		`PULSE_RELEASE_COMPILED_PAYLOAD_DIR`,
 	} {
 		if !strings.Contains(candidateBuildJob, needle) {
