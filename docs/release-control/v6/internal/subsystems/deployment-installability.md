@@ -1626,10 +1626,13 @@ exact uploaded artifact through the GitHub Actions API, and GitHub validates
 that nested permission even when a prerelease skips Authenticode signing.
 SignPath Foundation also requires every job leading up to an open-source
 signing request to execute on GitHub-hosted runners. Stable signed candidates
-therefore route release preparation, exact-SHA compilation, the parallel
-frontend bundle, and backend qualification through GitHub-hosted runners until
-the signing request is on record. Prerelease and explicitly unsigned candidates
-retain the credential-free PVE acceleration path; post-signing container
+therefore route release preparation, the parallel frontend bundle, and backend
+qualification through GitHub-hosted runners until the signing request is on
+record. All stable candidates route exact-SHA compilation through the hosted
+lane: rehearsals `32631653966` and `32635525554` lost different matrix compiler
+processes on the PVE runner without compiler diagnostics after substantial
+progress, while the same targets build independently. Prereleases retain the
+credential-free PVE compilation path for speed; post-signing container
 qualification may also use PVE because it cannot affect the submitted Windows
 artifact.
 

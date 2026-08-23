@@ -2360,7 +2360,7 @@ func TestReleasePipelinePromotesOneImmutableCandidate(t *testing.T) {
 	}
 
 	for _, needle := range []string{
-		`inputs.require_windows_signing && 'ubuntu-24.04'`,
+		`!contains(inputs.version, '-') && 'ubuntu-24.04'`,
 		"pulse-pve-compile",
 		`./scripts/build-release-binaries.sh "${{ inputs.version }}"`,
 		`release-compiled-${{ github.sha }}-${{ inputs.version }}`,

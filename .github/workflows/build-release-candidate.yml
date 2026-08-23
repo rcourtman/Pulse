@@ -76,10 +76,11 @@ permissions:
 jobs:
   compile-release-payload:
     name: Compile Exact-SHA Release Payload
-    # SignPath Foundation validates every job leading up to an OSS signing
-    # request. Keep stable signed candidates entirely on GitHub-hosted runners;
-    # prerelease and explicitly unsigned candidates retain the fast PVE lane.
-    runs-on: ${{ inputs.require_windows_signing && 'ubuntu-24.04' || fromJSON('["self-hosted","Linux","X64","pulse-pve-compile"]') }}
+    # Stable exact-SHA candidates favor the reproducible hosted lane. The PVE
+    # matrix remains fast for prereleases, but two stable rehearsals lost
+    # different compiler processes under runner resource pressure. Hosted
+    # provenance is also mandatory when a stable candidate reaches SignPath.
+    runs-on: ${{ !contains(inputs.version, '-') && 'ubuntu-24.04' || fromJSON('["self-hosted","Linux","X64","pulse-pve-compile"]') }}
     timeout-minutes: 20
     steps:
       - name: Checkout repository
