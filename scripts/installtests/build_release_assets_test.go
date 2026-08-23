@@ -1737,7 +1737,7 @@ func TestUpdateDemoWorkflowUsesGovernedNetworkPath(t *testing.T) {
 		`resolve_config_dir`,
 		`set_env_value DEMO_MODE true`,
 		`set_env_value PULSE_MOCK_MODE true`,
-		`set_env_value PULSE_MOCK_NODES 32`,
+		`set_env_value PULSE_MOCK_NODES 50`,
 		`set_env_value PULSE_MOCK_VMS_PER_NODE 10`,
 		`set_env_value PULSE_MOCK_LXCS_PER_NODE 8`,
 		`ensure_demo_fixture_entitlement`,

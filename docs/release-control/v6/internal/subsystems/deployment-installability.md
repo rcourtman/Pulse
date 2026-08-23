@@ -2616,8 +2616,8 @@ platform-first pages exercise multi-cluster grouping and the production
 workload-windowing path on first boot. `mock_default_entries()` in
 `scripts/toggle-mock.sh`, the public demo deployment environment in
 `.github/workflows/update-demo-server.yml`, and `internal/mock.DefaultConfig`
-carry the same baseline: 32 Proxmox nodes with 10 VMs and 8 LXCs each, arranged
-as five six-node clusters plus two standalone nodes; 5 Docker hosts with 14 containers
+carry the same baseline: 50 Proxmox nodes with 10 VMs and 8 LXCs each, arranged
+as eight six-node clusters plus two standalone nodes; 5 Docker hosts with 14 containers
 each, 4 standalone Pulse-managed hosts, and 3 Kubernetes clusters
 (production + staging + edge) with 5 nodes, 40 pods, and 14
 deployments each. Bumping any owner requires bumping the others (and

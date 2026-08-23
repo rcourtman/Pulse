@@ -34,7 +34,9 @@ export interface UseGroupedTableWindowingResult {
 }
 
 const DEFAULT_WINDOW_SIZE = 140;
-const DEFAULT_ENABLE_THRESHOLD = 500;
+// Keep even medium estates virtualized. On mobile, mounting a few hundred
+// metric-heavy rows is already enough to cause long layout and paint tasks.
+const DEFAULT_ENABLE_THRESHOLD = 250;
 const DEFAULT_OVERSCAN_ROWS = 20;
 
 export const useGroupedTableWindowing = (

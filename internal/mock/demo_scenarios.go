@@ -288,6 +288,9 @@ var demoProxmoxClusterProfiles = []demoProxmoxClusterProfile{
 	{SourceInstance: "mock-cluster-3", Name: "Core Services", NodeDisplayPrefix: "Core Services", StoragePrefix: "core", SharedStorageName: "core-shared-fabric"},
 	{SourceInstance: "mock-cluster-4", Name: "Disaster Recovery", NodeDisplayPrefix: "Disaster Recovery", StoragePrefix: "dr", SharedStorageName: "dr-shared-fabric"},
 	{SourceInstance: "mock-cluster-5", Name: "Edge Sites", NodeDisplayPrefix: "Edge Sites", StoragePrefix: "edge", SharedStorageName: "edge-shared-fabric"},
+	{SourceInstance: "mock-cluster-6", Name: "Analytics", NodeDisplayPrefix: "Analytics", StoragePrefix: "analytics", SharedStorageName: "analytics-shared-fabric"},
+	{SourceInstance: "mock-cluster-7", Name: "Research", NodeDisplayPrefix: "Research", StoragePrefix: "research", SharedStorageName: "research-shared-fabric"},
+	{SourceInstance: "mock-cluster-8", Name: "Branch Services", NodeDisplayPrefix: "Branch Services", StoragePrefix: "branch", SharedStorageName: "branch-shared-fabric"},
 }
 
 const demoOfflineProxmoxNode = "pve22"

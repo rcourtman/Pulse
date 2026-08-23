@@ -1,31 +1,27 @@
 {
   "version": 1,
-  "base_sha": "aba7cec747fd008f6053c106af1756b285762380",
-  "verified_at": "2026-08-23T13:37:06Z",
+  "base_sha": "6869612c669ff640f52becfc3f66ce66415195c1",
+  "verified_at": "2026-08-23T14:05:18Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/api/notifications.ts",
-    "frontend-modern/src/features/alerts/AlertAppriseDestinationsSection.tsx",
-    "frontend-modern/src/features/alerts/alertDestinationsModel.ts",
-    "frontend-modern/src/features/alerts/helpers.ts",
-    "frontend-modern/src/features/alerts/types.ts",
-    "frontend-modern/src/utils/alertDestinationsPresentation.ts"
+    "frontend-modern/src/components/Workloads/useGroupedTableWindowing.ts",
+    "frontend-modern/src/components/Workloads/useWorkloadsState.ts",
+    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx",
+    "frontend-modern/src/hooks/useWorkloads.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/api/notifications.ts": "facf96ad57bf8839e6138293455788b3ebb5fe3119bf13427cfe77abce3ff257",
-    "frontend-modern/src/features/alerts/AlertAppriseDestinationsSection.tsx": "77776a85389857efc7e87be3111b88bbe7fdd9e373c8c0ba658fd75d32c83cb9",
-    "frontend-modern/src/features/alerts/alertDestinationsModel.ts": "988f1e43f9e27dc2713abdb6c460713ef561c3490e6137ed91fb3c3ef56cb359",
-    "frontend-modern/src/features/alerts/helpers.ts": "c1ba8c32f3f73ab4ea3c6d1f2a657f20cf253c57fc24102e552909727b817268",
-    "frontend-modern/src/features/alerts/types.ts": "99f859d5008771c048f964684c4efbcad57543b91dba23f828e006db84ed982e",
-    "frontend-modern/src/utils/alertDestinationsPresentation.ts": "6c15b3a2c5daa4d5207bb8ed41bb9614bf7d5299f45cce8b814a7aa8efe88f6b"
+    "frontend-modern/src/components/Workloads/useGroupedTableWindowing.ts": "861e07273c9e7aa30a565889903224df596dcddd20b988b40c79c4ee108fa0a7",
+    "frontend-modern/src/components/Workloads/useWorkloadsState.ts": "85182febda02e646fa354c6efd973222ef64360efaebc8b7b51c4e80821daa5b",
+    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx": "66dcc020434ee4ea4622fc1007c96eeb0b16432058ec1ade459c78530d26a75e",
+    "frontend-modern/src/hooks/useWorkloads.ts": "6ca20e750675f7016617366dfb23c3cfbe42394046fded71702903f0368f004c"
   },
   "routes": [
-    "/alerts/notifications"
+    "/proxmox/overview"
   ],
   "viewports": [
     {
-      "width": 1280,
-      "height": 720
+      "width": 2560,
+      "height": 1199
     },
     {
       "width": 375,
@@ -33,19 +29,15 @@
     }
   ],
   "states": [
-    "Apprise HTTP mode with no saved API key shows the 'Optional API key' placeholder",
-    "After saving a key the PUT response body carried hasApiKey:true and no apiKey field; the input re-rendered blank with the 'Saved. Leave blank to keep the current key' placeholder and autocomplete=new-password",
-    "A second save with the key field left blank preserved the stored key server-side (backend parse log reported hasApiKey=true while the request carried an empty key)",
-    "Fresh page reload re-derived the saved-key placeholder purely from the redacted GET response (hasApiKey:true, no apiKey field in the body)",
-    "Mobile 375x812 layout renders the Apprise section with the saved-key placeholder visible and no horizontal overflow (body scrollWidth 375); console error-free at both widths"
+    "Fresh authenticated Proxmox overview renders separate Nodes and Guests regions with the guest count and workload table present",
+    "Desktop inspection shows the Proxmox guest region populated and the page remains within the desktop viewport width",
+    "Phone-width 375x812 inspection keeps the Guests heading, filters, and guest table visible with body scrollWidth equal to the 375px viewport",
+    "Fresh desktop and phone loads reported no browser console errors"
   ],
   "interactions": [
-    "Logged in against a sidecar-built backend on :17655 with mock data via a second vite instance on :5488",
-    "Navigated to /alerts/notifications and scrolled to Apprise notifications",
-    "Switched delivery mode from Local Apprise CLI to Remote Apprise API",
-    "Entered server URL http://apprise-api.internal:8000 and API key verify-secret-key-123, clicked Save Changes, inspected the PUT /api/notifications/apprise response body",
-    "Changed the config key to 'roundtrip' with the API key field left blank, saved again, confirmed the stored key survived",
-    "Reloaded the page, fetched GET /api/notifications/apprise from the authenticated session, verified the redacted body",
-    "Resized to 375x812, reloaded, scrolled to the Apprise section and re-checked field state and overflow"
+    "Opened the local demo entrypoint and signed in to the authenticated demo session",
+    "Navigated to /proxmox/overview and inspected the Nodes and Guests table regions",
+    "Applied a 375x812 viewport override, reloaded the Proxmox overview, and rechecked guest visibility and horizontal overflow",
+    "Reset the temporary viewport override and rechecked the fresh tab console"
   ]
 }

@@ -47,6 +47,7 @@ import { ProxmoxMailGatewayTable } from './ProxmoxMailGatewayTable';
 import { ProxmoxNodesTable } from './ProxmoxNodesTable';
 import { ProxmoxReplicationTable, fetchReplicationJobs } from './ProxmoxReplicationTable';
 import { useUnifiedResources } from '@/hooks/useUnifiedResources';
+import type { Resource } from '@/types/resource';
 import { updateStore } from '@/stores/updates';
 import {
   PROXMOX_TAB_SPECS,
@@ -220,6 +221,10 @@ export function ProxmoxPageSurface() {
                   setMetricHistoryRange={setMetricHistoryRange}
                   memoryDisplayBasis={memoryDisplayBasis}
                   setMemoryDisplayBasis={setMemoryDisplayBasis}
+                  resourceSnapshot={() =>
+                    loading() && model().resources.length === 0 ? undefined : model().resources
+                  }
+                  resourceSnapshotRefetch={() => refetch()}
                   inventoryCountsVisible={inventoryCountsVisible}
                   setInventoryCountsVisible={setInventoryCountsVisible}
                 />
@@ -281,6 +286,8 @@ interface ProxmoxOverviewProps {
   setMetricHistoryRange: (value: WorkloadTableMetricHistoryRange) => void;
   memoryDisplayBasis: Accessor<WorkloadsMemoryDisplayBasis>;
   setMemoryDisplayBasis: (value: WorkloadsMemoryDisplayBasis) => void;
+  resourceSnapshot: Accessor<Resource[] | undefined>;
+  resourceSnapshotRefetch: () => Promise<unknown>;
   inventoryCountsVisible: Accessor<boolean>;
   setInventoryCountsVisible: (visible: boolean) => void;
 }
@@ -294,6 +301,8 @@ function ProxmoxOverview(props: ProxmoxOverviewProps) {
     nodes: [],
     layoutWidth: overviewWidth.width,
     useWorkloads: true,
+    resourceSnapshot: props.resourceSnapshot,
+    resourceSnapshotRefetch: props.resourceSnapshotRefetch,
     forcedPlatform: PROXMOX_PLATFORM_FILTER,
     excludedWorkloadTypes: PROXMOX_WORKLOAD_EXCLUDED_TYPES,
     showNestedExcludedWorkloads: true,

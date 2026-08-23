@@ -119,8 +119,8 @@ func mockRecoveryChance(meanRecovery time.Duration) float64 {
 // Default fixture sizes target a large, believable mixed estate so platform
 // pages prove fleet-scale grouping, filtering, windowing, drawers, and
 // responsive layout out of the box:
-//   - 32 Proxmox nodes across five six-node clusters plus two standalone
-//     systems, with enough VMs and LXCs to cross the workload table's bounded
+//   - 50 Proxmox nodes across eight six-node clusters plus a standalone tail,
+//     with enough VMs and LXCs to exercise the workload table's bounded
 //     row-window threshold. The curated demo scenario in
 //     `internal/mock/demo_scenarios.go` owns the human-facing site, cluster,
 //     workload, and storage story layered over these graph-native fixtures.
@@ -131,7 +131,7 @@ func mockRecoveryChance(meanRecovery time.Duration) float64 {
 //     overview, nodes, pods, and deployments tabs all exercise grouped
 //     and flat layouts against a real multi-cluster footprint
 var DefaultConfig = MockConfig{
-	NodeCount:                32,
+	NodeCount:                50,
 	VMsPerNode:               10,
 	LXCsPerNode:              8,
 	DockerHostCount:          5,
@@ -968,7 +968,7 @@ func generateNodes(config MockConfig) []models.Node {
 
 const (
 	mockProxmoxClusterSize     = 6
-	maxMockProxmoxClusterCount = 5
+	maxMockProxmoxClusterCount = 8
 )
 
 // mockProxmoxClusteredNodeCount assigns nodes to complete or useful cluster

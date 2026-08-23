@@ -48,18 +48,18 @@ describe('useGroupedTableWindowing', () => {
   // isWindowed
   // ──────────────────────────────────────────────────────────────
   describe('isWindowed', () => {
-    it('returns false when total rows are below default threshold (500)', () => {
+    it('returns false when total rows are below default threshold (250)', () => {
       const hook = setup({ totalRowCount: () => 200 });
       expect(hook.isWindowed()).toBe(false);
     });
 
     it('returns true when total rows exceed default threshold', () => {
-      const hook = setup({ totalRowCount: () => 600 });
+      const hook = setup({ totalRowCount: () => 300 });
       expect(hook.isWindowed()).toBe(true);
     });
 
     it('returns false when total rows equal threshold (not exceeded)', () => {
-      const hook = setup({ totalRowCount: () => 500 });
+      const hook = setup({ totalRowCount: () => 250 });
       expect(hook.isWindowed()).toBe(false);
     });
 
@@ -141,8 +141,8 @@ describe('useGroupedTableWindowing', () => {
   // ──────────────────────────────────────────────────────────────
   describe('mountedCount', () => {
     it('equals total when not windowed', () => {
-      const hook = setup({ totalRowCount: () => 300 });
-      expect(hook.mountedCount()).toBe(300);
+      const hook = setup({ totalRowCount: () => 200 });
+      expect(hook.mountedCount()).toBe(200);
     });
 
     it('equals window size when windowed and total > windowSize', () => {

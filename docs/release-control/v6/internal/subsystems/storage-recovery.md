@@ -35,6 +35,13 @@ Own the storage and recovery product surfaces, recovery-point persistence and
 querying, and the operator-facing storage health presentation layer while
 keeping adjacent commercial reporting APIs out of storage/recovery product
 state.
+The Proxmox overview is also a large-estate read-side consumer: it owns one
+canonical unified-resource snapshot for its node and guest regions, and its
+shared workloads adapter must consume that snapshot without starting a second
+workload or infrastructure inventory request. Backup and recovery tables keep
+their domain-specific evidence requests, while an overview refresh must update
+all overview regions from the same owner snapshot rather than mixing reads
+from different inventory generations.
 The physical-disks surface consumes every page in the server-declared unified
 resource result, scopes same-named Proxmox nodes by instance, and never hides a
 disk behind a client-side page ceiling. Search includes vendor, WWN, transport,

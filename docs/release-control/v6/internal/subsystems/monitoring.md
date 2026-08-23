@@ -1806,8 +1806,8 @@ constant) are also part of that mock-runtime contract. The Proxmox default is
 an intentionally large public-demo estate so platform-first pages exercise
 multi-cluster navigation, table density, sorting, grouping, drawer behavior,
 responsive layout, and the production workload-windowing threshold out of the
-box: five named six-node Proxmox clusters plus two standalone nodes, with 10
-VMs and 8 LXCs per node (576 guests total), 5 Docker/Podman hosts with 14 containers
+box: eight named six-node Proxmox clusters plus two standalone nodes, with 10
+VMs and 8 LXCs per node (900 guests total), 5 Docker/Podman hosts with 14 containers
 each, 4 standalone Pulse-managed hosts, and 3 Kubernetes clusters
 (Production EU + Staging EU + Development EU; a fourth Edge / k3s
 profile is curated in `demo_scenarios.go` and instantiates when

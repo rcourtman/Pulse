@@ -51,6 +51,16 @@ the workload state, table, panel, and row contracts carry the selected basis
 and resolved parent-node data to the canonical memory bar, and the memory
 column header must expose the non-default Host basis after the control closes.
 
+Large-estate platform pages must keep one canonical inventory snapshot for the
+initial read and explicit refresh path. The Proxmox overview owns its unified
+resource request and passes that snapshot into the shared workloads state; the
+workloads adapter may map the snapshot into the legacy guest boundary, but must
+not issue a second workload inventory request or create a second infrastructure
+poll. Refreshing the overview must invalidate that owner snapshot and update
+both the node and guest regions from the same result, so a large estate cannot
+render contradictory counts or pay duplicate transport and reconciliation
+costs.
+
 Shared workload, node, Docker-host, and resource-drawer history presentation
 keeps current readings separate from stored samples. A current metric may
 populate the legend while history is still being collected, but it must never

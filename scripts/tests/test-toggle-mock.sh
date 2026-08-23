@@ -210,7 +210,7 @@ test_ensure_mock_env_file_seeds_canonical_demo_defaults() {
   env_contents="${output}"
 
   assert_contains "ensure_mock_env_file seeds mock mode default" "${env_contents}" "PULSE_MOCK_MODE=false"
-  assert_contains "ensure_mock_env_file seeds canonical node count" "${env_contents}" "PULSE_MOCK_NODES=32"
+  assert_contains "ensure_mock_env_file seeds canonical node count" "${env_contents}" "PULSE_MOCK_NODES=50"
   assert_contains "ensure_mock_env_file seeds canonical vm count" "${env_contents}" "PULSE_MOCK_VMS_PER_NODE=10"
   assert_contains "ensure_mock_env_file seeds canonical lxc count" "${env_contents}" "PULSE_MOCK_LXCS_PER_NODE=8"
   assert_contains "ensure_mock_env_file seeds canonical docker host count" "${env_contents}" "PULSE_MOCK_DOCKER_HOSTS=5"

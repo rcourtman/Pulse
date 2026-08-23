@@ -99,7 +99,7 @@ func TestDefaultDemoProxmoxEstateIsLargeMultiClusterAndBounded(t *testing.T) {
 	now := time.Date(2026, time.April, 1, 12, 0, 0, 0, time.UTC)
 	graph := buildFixtureGraph(cfg, now)
 
-	if got, want := len(graph.State.Nodes), 32; got != want {
+	if got, want := len(graph.State.Nodes), 50; got != want {
 		t.Fatalf("default demo node count = %d, want %d", got, want)
 	}
 
@@ -129,8 +129,8 @@ func TestDefaultDemoProxmoxEstateIsLargeMultiClusterAndBounded(t *testing.T) {
 	}
 
 	guestCount := len(graph.State.VMs) + len(graph.State.Containers)
-	if guestCount <= 500 || guestCount > 700 {
-		t.Fatalf("default demo guest count = %d, want a windowed but bounded estate in (500, 700]", guestCount)
+	if guestCount <= 800 || guestCount > 1000 {
+		t.Fatalf("default demo guest count = %d, want a windowed but bounded estate in (800, 1000]", guestCount)
 	}
 
 	// Local storage, two shared PBS definitions per clustered node, and a

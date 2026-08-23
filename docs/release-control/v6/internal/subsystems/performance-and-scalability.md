@@ -1752,9 +1752,9 @@ lifecycle. Future viewport sync changes must extend through that hook rather
 than rebuilding browser-event wiring or table-body geometry reads inside
 `frontend-modern/src/components/Workloads/useWorkloadsDerivedState.ts`.
 The canonical public demo intentionally exercises this production hot path:
-its default Proxmox estate contains 576 guests, crossing the 500-row windowing
+its default Proxmox estate contains 900 guests, crossing the 250-row windowing
 threshold while retaining the hook's 140-row mounted-window budget. The demo
-curation integration proof must assert both the 500-plus guest total and the
+curation integration proof must assert both the 800-plus guest total and the
 bounded mounted-row count. That same default estate produces more than 500
 backup coverage targets and recoverable artifacts; the coverage and By date
 tables must route through `useProxmoxBackupTableWindowing.ts`, retain full-set

@@ -20,6 +20,7 @@ import {
 } from '@/utils/resourceIdentity';
 import type { WorkloadGuest } from '@/types/workloads';
 import type {
+  Resource,
   ResourceActionReadiness,
   ResourceAvailabilityMeta,
   ResourceDiscoveryReadiness,
@@ -28,8 +29,12 @@ import type {
 } from '@/types/resource';
 
 const WORKLOADS_URL = '/api/resources?type=vm,system-container,app-container,pod';
-const WORKLOADS_PAGE_LIMIT = 200;
-const WORKLOADS_MAX_PAGES = 20;
+const WORKLOADS_PAGE_LIMIT = 500;
+const WORKLOADS_PAGE_CONCURRENCY = 4;
+// This is a safety valve for malformed pagination metadata, not a truncation
+// policy. Estates beyond the guard fail explicitly instead of presenting a
+// silently incomplete workload table.
+const WORKLOADS_MAX_PAGES = 100;
 const WORKLOADS_CACHE_MAX_AGE_MS = 15_000;
 
 type APIMetricValue = {
@@ -183,6 +188,7 @@ type APIListResponse = {
 
 type WorkloadsCacheEntry = {
   workloads: WorkloadGuest[];
+  signature: string;
   cachedAt: number;
   sharedFetch: Promise<WorkloadGuest[]> | null;
 };
@@ -196,6 +202,7 @@ const getWorkloadsCacheEntry = (orgScope: string): WorkloadsCacheEntry => {
   }
   const created: WorkloadsCacheEntry = {
     workloads: [],
+    signature: '',
     cachedAt: 0,
     sharedFetch: null,
   };
@@ -203,67 +210,22 @@ const getWorkloadsCacheEntry = (orgScope: string): WorkloadsCacheEntry => {
   return created;
 };
 
-const isPlainObject = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && Object.getPrototypeOf(value) === Object.prototype;
+// Workload objects are produced by one canonical mapper, so their property
+// order is stable. Serializing once per row gives refreshes a cheap immutable
+// signature without recursively comparing the same nested telemetry objects.
+const workloadSignature = (guest: WorkloadGuest): string => JSON.stringify(guest);
 
-const isDeepEqual = (left: unknown, right: unknown): boolean => {
-  if (Object.is(left, right)) {
-    return true;
-  }
+const buildWorkloadsSignature = (workloads: WorkloadGuest[]): string =>
+  workloads.map(workloadSignature).join('\u001e');
 
-  if (typeof left !== typeof right) {
-    return false;
-  }
-
-  if (Array.isArray(left) || Array.isArray(right)) {
-    if (!Array.isArray(left) || !Array.isArray(right) || left.length !== right.length) {
-      return false;
-    }
-    for (let i = 0; i < left.length; i += 1) {
-      if (!isDeepEqual(left[i], right[i])) {
-        return false;
-      }
-    }
-    return true;
-  }
-
-  if (!isPlainObject(left) || !isPlainObject(right)) {
-    return false;
-  }
-
-  const leftKeys = Object.keys(left);
-  const rightKeys = Object.keys(right);
-  if (leftKeys.length !== rightKeys.length) {
-    return false;
-  }
-
-  for (const key of leftKeys) {
-    if (!Object.prototype.hasOwnProperty.call(right, key) || !isDeepEqual(left[key], right[key])) {
-      return false;
-    }
-  }
-
-  return true;
-};
-
-const areWorkloadsEqual = (current: WorkloadGuest[], next: WorkloadGuest[]): boolean => {
-  if (current === next) {
-    return true;
-  }
-  if (current.length !== next.length) {
-    return false;
-  }
-  for (let i = 0; i < current.length; i += 1) {
-    const currentWorkload = current[i];
-    const nextWorkload = next[i];
-    if (currentWorkload.id !== nextWorkload.id) {
-      return false;
-    }
-    if (!isDeepEqual(currentWorkload, nextWorkload)) {
-      return false;
-    }
-  }
-  return true;
+const areWorkloadsEqual = (
+  current: WorkloadGuest[],
+  next: WorkloadGuest[],
+  currentSignature?: string,
+): boolean => {
+  if (current === next) return true;
+  if (current.length !== next.length) return false;
+  return (currentSignature ?? buildWorkloadsSignature(current)) === buildWorkloadsSignature(next);
 };
 
 const normalizeWorkloadStatus = (status?: string | null): string => {
@@ -654,18 +616,94 @@ const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
   };
 };
 
+const metricToAPI = (metric?: Resource['cpu']): APIMetricValue | undefined =>
+  metric
+    ? {
+        percent: metric.current,
+        used: metric.used,
+        total: metric.total,
+      }
+    : undefined;
+
+/**
+ * The Proxmox overview already owns a canonical unified-resource snapshot.
+ * Adapt that snapshot into the legacy WorkloadGuest boundary so the overview
+ * does not fetch and parse the same VM/LXC rows a second time.
+ */
+const mapCanonicalResourceToWorkload = (resource: Resource): WorkloadGuest | null =>
+  mapResourceToWorkload({
+    id: resource.id,
+    type: resource.type,
+    name: resource.name,
+    status: resource.status,
+    lastSeen: resource.lastSeen ? new Date(resource.lastSeen).toISOString() : undefined,
+    sources: resource.sources,
+    platformScopes: resource.platformScopes,
+    identity: resource.identity
+      ? {
+          machineId: resource.identity.machineId,
+          hostnames: resource.identity.hostname ? [resource.identity.hostname] : undefined,
+          ipAddresses: resource.identity.ips,
+          clusterName: resource.identity.clusterName,
+        }
+      : undefined,
+    metrics: {
+      cpu: metricToAPI(resource.cpu),
+      memory: metricToAPI(resource.memory),
+      disk: metricToAPI(resource.disk),
+      netIn: resource.network ? { value: resource.network.rxBytes } : undefined,
+      netOut: resource.network ? { value: resource.network.txBytes } : undefined,
+      diskRead: resource.diskIO ? { value: resource.diskIO.readRate } : undefined,
+      diskWrite: resource.diskIO ? { value: resource.diskIO.writeRate } : undefined,
+    },
+    parentId: resource.parentId,
+    parentName: resource.parentName,
+    tags: resource.tags,
+    vmid: resource.proxmox?.vmid,
+    node: resource.proxmox?.nodeName || resource.proxmox?.node,
+    instance: resource.proxmox?.instance,
+    proxmox: resource.proxmox ? (resource.proxmox as unknown as APIResource['proxmox']) : undefined,
+    virtualMachine: resource.virtualMachine
+      ? (resource.virtualMachine as unknown as APIResource['virtualMachine'])
+      : undefined,
+    agent: resource.agent ? (resource.agent as unknown as APIResource['agent']) : undefined,
+    docker: resource.docker ? (resource.docker as unknown as APIResource['docker']) : undefined,
+    kubernetes: resource.kubernetes
+      ? (resource.kubernetes as unknown as APIResource['kubernetes'])
+      : undefined,
+    vmware: resource.vmware ? (resource.vmware as unknown as APIResource['vmware']) : undefined,
+    discoveryTarget: resource.discoveryTarget,
+    discoveryReadiness: resource.discoveryReadiness,
+    availability: resource.availability,
+    availabilityChecks: resource.availabilityChecks,
+    actionReadiness: resource.actionReadiness,
+  });
+
 async function fetchWorkloads(): Promise<WorkloadGuest[]> {
   const firstResponse = await apiFetchJSON<unknown>(buildWorkloadsUrl(1), { cache: 'no-store' });
   const firstPage = resolveWorkloadsPayload(firstResponse);
   const allResources: APIResource[] = [...firstPage.data];
 
-  const totalPages = Math.min(firstPage.totalPages, WORKLOADS_MAX_PAGES);
-  if (totalPages > 1) {
-    const pageRequests: Promise<unknown>[] = [];
-    for (let page = 2; page <= totalPages; page++) {
-      pageRequests.push(apiFetchJSON<unknown>(buildWorkloadsUrl(page), { cache: 'no-store' }));
-    }
-    const responses = await Promise.all(pageRequests);
+  const totalPages = firstPage.totalPages;
+  if (totalPages > WORKLOADS_MAX_PAGES) {
+    throw new Error(
+      `Workload inventory has ${totalPages * WORKLOADS_PAGE_LIMIT}+ rows, refusing an unsafe browser payload`,
+    );
+  }
+  for (
+    let firstPageNumber = 2;
+    firstPageNumber <= totalPages;
+    firstPageNumber += WORKLOADS_PAGE_CONCURRENCY
+  ) {
+    const pageNumbers = Array.from(
+      { length: Math.min(WORKLOADS_PAGE_CONCURRENCY, totalPages - firstPageNumber + 1) },
+      (_, offset) => firstPageNumber + offset,
+    );
+    const responses = await Promise.all(
+      pageNumbers.map((page) =>
+        apiFetchJSON<unknown>(buildWorkloadsUrl(page), { cache: 'no-store' }),
+      ),
+    );
     for (const response of responses) {
       const pageData = resolveWorkloadsPayload(response);
       allResources.push(...pageData.data);
@@ -690,8 +728,10 @@ const setWorkloadsCache = (
   entry: WorkloadsCacheEntry,
   workloads: WorkloadGuest[],
   at = Date.now(),
+  signature = buildWorkloadsSignature(workloads),
 ) => {
   entry.workloads = workloads;
+  entry.signature = signature;
   entry.cachedAt = at;
 };
 
@@ -710,11 +750,12 @@ const fetchWorkloadsShared = async (
   const request = (async () => {
     const previous = entry.workloads;
     const fetched = await fetchWorkloads();
-    if (areWorkloadsEqual(previous, fetched)) {
+    const fetchedSignature = buildWorkloadsSignature(fetched);
+    if (areWorkloadsEqual(previous, fetched, entry.signature || undefined)) {
       entry.cachedAt = Date.now();
       return previous;
     }
-    setWorkloadsCache(entry, fetched);
+    setWorkloadsCache(entry, fetched, Date.now(), fetchedSignature);
     return fetched;
   })();
 
@@ -733,7 +774,17 @@ export const __resetWorkloadsCacheForTests = () => {
   workloadsCaches.clear();
 };
 
-export function useWorkloads(enabled: Accessor<boolean> = () => true) {
+export interface UseWorkloadsOptions {
+  /** Optional canonical snapshot owned by a platform page. */
+  resourceSnapshot?: Accessor<Resource[] | undefined>;
+  /** Refetch the owner snapshot when the surface explicitly reconnects. */
+  refetchSnapshot?: () => Promise<unknown>;
+}
+
+export function useWorkloads(
+  enabled: Accessor<boolean> = () => true,
+  options: UseWorkloadsOptions = {},
+) {
   const [orgScope, setOrgScope] = createSignal(normalizeOrgScope(getOrgID()));
   const resolveActiveOrgScope = () => orgScope();
   const resolveActiveCacheEntry = () => getWorkloadsCacheEntry(resolveActiveOrgScope());
@@ -741,7 +792,7 @@ export function useWorkloads(enabled: Accessor<boolean> = () => true) {
     resolveActiveCacheEntry().workloads,
   );
   const [loading, setLoading] = createSignal(
-    enabled() && !hasFreshWorkloadsCache(resolveActiveCacheEntry()),
+    enabled() && !options.resourceSnapshot && !hasFreshWorkloadsCache(resolveActiveCacheEntry()),
   );
   const [error, setError] = createSignal<unknown>(undefined);
   let requestVersion = 0;
@@ -752,25 +803,31 @@ export function useWorkloads(enabled: Accessor<boolean> = () => true) {
       const next = typeof value === 'function' ? value(current) : value;
       const normalized = next ?? [];
       const cacheEntry = resolveActiveCacheEntry();
-      if (areWorkloadsEqual(current, normalized)) {
+      const nextSignature = buildWorkloadsSignature(normalized);
+      const currentSignature =
+        cacheEntry.workloads === current ? cacheEntry.signature : buildWorkloadsSignature(current);
+      if (areWorkloadsEqual(current, normalized, currentSignature || undefined)) {
         setWorkloadsCache(cacheEntry, current);
         return current;
       }
-      setWorkloadsCache(cacheEntry, normalized);
+      setWorkloadsCache(cacheEntry, normalized, Date.now(), nextSignature);
       return normalized;
     });
 
   const applyWorkloads = (next: WorkloadGuest[], targetOrgScope = resolveActiveOrgScope()) => {
     const cacheEntry = getWorkloadsCacheEntry(targetOrgScope);
     const current = targetOrgScope === resolveActiveOrgScope() ? workloads() : cacheEntry.workloads;
-    if (areWorkloadsEqual(current, next)) {
-      setWorkloadsCache(cacheEntry, current);
+    const nextSignature = buildWorkloadsSignature(next);
+    const currentSignature =
+      cacheEntry.workloads === current ? cacheEntry.signature : buildWorkloadsSignature(current);
+    if (areWorkloadsEqual(current, next, currentSignature || undefined)) {
+      setWorkloadsCache(cacheEntry, current, Date.now(), cacheEntry.signature || nextSignature);
       if (targetOrgScope === resolveActiveOrgScope()) {
         setWorkloads(() => current);
       }
       return current;
     }
-    setWorkloadsCache(cacheEntry, next);
+    setWorkloadsCache(cacheEntry, next, Date.now(), nextSignature);
     if (targetOrgScope === resolveActiveOrgScope()) {
       setWorkloads(() => next);
     }
@@ -810,20 +867,41 @@ export function useWorkloads(enabled: Accessor<boolean> = () => true) {
   };
 
   const refetch = async () => {
+    if (options.resourceSnapshot) {
+      if (options.refetchSnapshot) {
+        await options.refetchSnapshot();
+      }
+      return workloads();
+    }
     const scope = resolveActiveOrgScope();
     const cacheEntry = getWorkloadsCacheEntry(scope);
     return loadWorkloads(scope, { force: true, showLoading: cacheEntry.workloads.length === 0 });
   };
 
   createEffect(() => {
-    const isEnabled = enabled();
-    const scope = resolveActiveOrgScope();
-    const cacheEntry = getWorkloadsCacheEntry(scope);
-    if (!isEnabled) {
+    if (!enabled()) {
       requestVersion += 1;
       setLoading(false);
       return;
     }
+    const resourceSnapshot = options.resourceSnapshot?.();
+    if (options.resourceSnapshot) {
+      if (resourceSnapshot === undefined) {
+        if (workloads().length === 0) setLoading(true);
+        return;
+      }
+
+      const next = resourceSnapshot
+        .map(mapCanonicalResourceToWorkload)
+        .filter((resource): resource is WorkloadGuest => Boolean(resource));
+      applyWorkloads(next);
+      setLoading(false);
+      setError(undefined);
+      return;
+    }
+
+    const scope = resolveActiveOrgScope();
+    const cacheEntry = getWorkloadsCacheEntry(scope);
     if (cacheEntry.workloads !== workloads()) {
       setWorkloads(() => cacheEntry.workloads);
     }
@@ -842,7 +920,7 @@ export function useWorkloads(enabled: Accessor<boolean> = () => true) {
   // the app-level <Suspense> boundary or replaces the last good table with an
   // empty loading surface.
   createEffect(() => {
-    if (!enabled()) return;
+    if (!enabled() || options.resourceSnapshot) return;
     const scope = resolveActiveOrgScope();
     const id = setInterval(async () => {
       try {
@@ -875,6 +953,10 @@ export function useWorkloads(enabled: Accessor<boolean> = () => true) {
     setError(undefined);
     setLoading(enabled() && nextCacheEntry.workloads.length === 0);
     setOrgScope(nextOrgScope);
+
+    if (options.resourceSnapshot) {
+      return;
+    }
 
     if (!hasFreshWorkloadsCache(nextCacheEntry)) {
       void loadWorkloads(nextOrgScope, {

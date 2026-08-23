@@ -229,6 +229,46 @@ describe('useWorkloads', () => {
     dispose();
   });
 
+  it('uses an owning canonical resource snapshot without a second workload request', async () => {
+    const snapshot = [
+      {
+        id: 'cluster-a-pve1-101',
+        type: 'vm',
+        name: 'vm-101',
+        status: 'running',
+        platformType: 'proxmox-pve',
+        sources: ['proxmox'],
+        identity: { hostname: 'vm-101', ips: ['192.0.2.101'] },
+        proxmox: { vmid: 101, nodeName: 'pve1', instance: 'cluster-a' },
+        cpu: { current: 25 },
+        memory: { current: 50, used: 2 * 1024, total: 4 * 1024 },
+        disk: { current: 20, used: 20 * 1024, total: 100 * 1024 },
+      },
+    ] as any;
+    const refetchSnapshot = vi.fn().mockResolvedValue(undefined);
+
+    let dispose = () => {};
+    let result: ReturnType<UseWorkloadsModule['useWorkloads']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      const [enabled] = createSignal(true);
+      result = useWorkloads(enabled, {
+        resourceSnapshot: () => snapshot,
+        refetchSnapshot,
+      });
+    });
+
+    await flushAsync();
+    expect(apiFetchJSONMock).not.toHaveBeenCalled();
+    expect(result!.workloads()).toMatchObject([{ name: 'vm-101', vmid: 101, node: 'pve1' }]);
+
+    await result!.refetch();
+    expect(refetchSnapshot).toHaveBeenCalledTimes(1);
+    expect(apiFetchJSONMock).not.toHaveBeenCalled();
+
+    dispose();
+  });
+
   it('retains the fulfilled workload snapshot when a forced refresh fails', async () => {
     let dispose = () => {};
     let result: ReturnType<UseWorkloadsModule['useWorkloads']> | undefined;

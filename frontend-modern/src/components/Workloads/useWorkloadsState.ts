@@ -92,6 +92,11 @@ export interface WorkloadsSurfaceProps {
   // this surface), set `suppressFilterToolbar` so the surface skips its
   // internal filter row and avoids a duplicate.
   suppressFilterToolbar?: boolean;
+  // An owning platform page may provide the canonical unified-resource
+  // snapshot it already fetched. This avoids a second workload/infrastructure
+  // request and keeps both surfaces on the same refresh generation.
+  resourceSnapshot?: Accessor<Resource[] | undefined>;
+  resourceSnapshotRefetch?: () => Promise<unknown>;
   statusModeStorageScope?: string;
   // Platform pages that render their own hosts table above the embedded
   // workloads surface (e.g. Proxmox overview) own the per-host CPU / Memory
@@ -151,12 +156,23 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
   const { guestMetadata, handleCustomUrlUpdate } = useWorkloadGuestMetadataState();
 
   const workloadsEnabled = createMemo(() => props.useWorkloads === true);
-  const workloads = useWorkloads(workloadsEnabled);
+  const workloads = useWorkloads(workloadsEnabled, {
+    resourceSnapshot: props.resourceSnapshot,
+    refetchSnapshot: props.resourceSnapshotRefetch,
+  });
   const infrastructureSources = useUnifiedResources({
     query: WORKLOADS_INFRASTRUCTURE_SOURCES_QUERY,
     cacheKey: 'workloads-infrastructure-sources',
-    enabled: workloadsEnabled,
+    enabled: () => workloadsEnabled() && !props.resourceSnapshot,
   });
+  const infrastructureResources = createMemo(() =>
+    props.resourceSnapshot ? (props.resourceSnapshot() ?? []) : infrastructureSources.resources(),
+  );
+  const infrastructureLoading = createMemo(() =>
+    props.resourceSnapshot
+      ? props.resourceSnapshot() === undefined
+      : infrastructureSources.loading(),
+  );
   const inventorySourcesResourceKey = createMemo(() =>
     workloadsEnabled() && !props.inventorySourcesQuery ? 'enabled' : null,
   );
@@ -322,8 +338,7 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
     props.nodes.forEach((node) => merged.set(node.id, node));
 
     if (workloadsEnabled()) {
-      infrastructureSources
-        .resources()
+      infrastructureResources()
         .filter(isProxmoxNodeResource)
         .map(nodeFromResource)
         .filter((node): node is Node => Boolean(node))
@@ -363,11 +378,11 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
   const hasWorkloadsData = createMemo(() => allGuests().length > 0);
   const hasInfrastructureSources = createMemo(() =>
     workloadsEnabled()
-      ? infrastructureNodes().length > 0 || infrastructureSources.resources().length > 0
+      ? infrastructureNodes().length > 0 || infrastructureResources().length > 0
       : infrastructureNodes().length > 0,
   );
   const infrastructureSourceStateReady = createMemo(() =>
-    workloadsEnabled() ? hasInfrastructureSources() || !infrastructureSources.loading() : true,
+    workloadsEnabled() ? hasInfrastructureSources() || !infrastructureLoading() : true,
   );
   const surfaceConnected = createMemo(() =>
     workloadsEnabled()

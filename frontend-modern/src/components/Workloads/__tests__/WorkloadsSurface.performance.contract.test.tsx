@@ -948,7 +948,7 @@ describe('Workloads performance contract', () => {
       );
     });
 
-    it('Profile S: renders all guest rows without windowing', async () => {
+    it('Profile S: keeps a medium estate virtualized', async () => {
       mockLocationSearch = '?type=all';
       mockWorkloads = makeGuests(PROFILES.S);
 
@@ -957,7 +957,9 @@ describe('Workloads performance contract', () => {
       ));
 
       await waitFor(() => {
-        expect(getGuestRowCount(container)).toBe(PROFILES.S);
+        const rowCount = getGuestRowCount(container);
+        expect(rowCount).toBeGreaterThan(0);
+        expect(rowCount).toBeLessThanOrEqual(140);
       });
     });
 
@@ -1010,7 +1012,9 @@ describe('Workloads performance contract', () => {
         ));
 
         await waitFor(() => {
-          expect(getGuestRowCount(container)).toBe(expectedByMode[mode]);
+          expect(getGuestRowCount(container)).toBe(
+            expectedByMode[mode] > 250 ? 140 : expectedByMode[mode],
+          );
         });
 
         unmount();
