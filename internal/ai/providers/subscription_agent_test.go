@@ -32,6 +32,52 @@ func TestSubscriptionAgentEnvironmentDoesNotForwardSecrets(t *testing.T) {
 	}
 }
 
+func TestResolveSubscriptionAgentCommandFindsServiceHomeLocalBin(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("service-home executable discovery uses POSIX executable bits")
+	}
+	home := t.TempDir()
+	binDir := filepath.Join(home, ".local", "bin")
+	if err := os.MkdirAll(binDir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	claudePath := filepath.Join(binDir, "claude")
+	writeExecutable(t, claudePath, "#!/bin/sh\nexit 0\n")
+	t.Setenv("HOME", home)
+	t.Setenv("PATH", t.TempDir())
+
+	got, err := resolveSubscriptionAgentCommand(SubscriptionAgentClaude, "claude")
+	if err != nil || got != claudePath {
+		t.Fatalf("service-home Claude command = %q, %v; want %q", got, err, claudePath)
+	}
+}
+
+func TestSubscriptionAgentConnectionReportsServiceAccountSetupFailures(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("fake subscription CLI uses a POSIX shell script")
+	}
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("PATH", t.TempDir())
+	client := NewSubscriptionAgentClient(SubscriptionAgentClaude, "sonnet", subscriptionAgentTestDeadline(time.Second))
+
+	err := client.TestConnection(context.Background())
+	var setupErr *SubscriptionAgentSetupError
+	if !errors.As(err, &setupErr) || setupErr.Agent != SubscriptionAgentClaude || setupErr.Issue != SubscriptionAgentExecutableMissing {
+		t.Fatalf("missing executable error = %#v, want Claude executable setup error", err)
+	}
+
+	binDir := filepath.Join(home, ".local", "bin")
+	if err := os.MkdirAll(binDir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	writeExecutable(t, filepath.Join(binDir, "claude"), "#!/bin/sh\nprintf '%s' '{\"loggedIn\":false,\"authMethod\":\"none\"}'\n")
+	err = client.TestConnection(context.Background())
+	if !errors.As(err, &setupErr) || setupErr.Agent != SubscriptionAgentClaude || setupErr.Issue != SubscriptionAgentLoginMissing {
+		t.Fatalf("missing login error = %#v, want Claude login setup error", err)
+	}
+}
+
 func TestCappedBufferBoundsChildOutput(t *testing.T) {
 	buffer := cappedBuffer{maxBytes: 4}
 	if n, err := buffer.Write([]byte("abcdef")); err != nil || n != 6 {

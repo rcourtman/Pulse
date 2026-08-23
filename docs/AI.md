@@ -420,6 +420,23 @@ does not forward API-key environment variables such as `OPENAI_API_KEY` or
 `ANTHROPIC_API_KEY`, Pulse secrets, cloud credentials, or unrelated tokens,
 preventing an installed API key from silently changing the billing route.
 
+On a standard Linux systemd install, Pulse runs as the `pulse` account with
+`HOME=/opt/pulse`. Install the selected CLI for that account (its supported
+user-local binary directory is `/opt/pulse/.local/bin`) and complete the login
+as that account; a CLI installed or authenticated only as `root` is
+intentionally unavailable to Pulse. For Claude, verify the service identity
+with:
+
+```bash
+sudo -u pulse env HOME=/opt/pulse PATH=/opt/pulse/.local/bin:/usr/local/bin:/usr/bin:/bin claude auth status --json
+```
+
+If it is not logged in, run `claude auth login` with the same `sudo -u pulse`
+environment, restart `pulse.service`, and retry the provider test. Pulse also
+accepts an absolute executable override through `PULSE_CLAUDE_CLI_PATH` or
+`PULSE_CODEX_CLI_PATH` in `/etc/pulse/.env`; the target must remain executable
+by the `pulse` account and its credentials must still belong to that account.
+
 The child CLI is not given infrastructure authority. Each invocation runs in a
 new temporary directory, with user extensions disabled, no Pulse MCP server,
 no approval capability, and a structured output schema. It returns one proposed

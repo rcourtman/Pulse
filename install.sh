@@ -4513,7 +4513,8 @@ Restart=always
 RestartSec=3
 StandardOutput=journal
 StandardError=journal
-Environment="PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+Environment="HOME=$INSTALL_DIR"
+Environment="PATH=$INSTALL_DIR/.local/bin:$INSTALL_DIR/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 Environment="PULSE_DATA_DIR=$CONFIG_DIR"
 Environment="PULSE_DEPLOYMENT_METHOD=systemd"
 EnvironmentFile=-$CONFIG_DIR/.env

@@ -22,6 +22,29 @@ import (
 // continues to own and execute every infrastructure tool call.
 type SubscriptionAgent string
 
+type SubscriptionAgentSetupIssue string
+
+const (
+	SubscriptionAgentExecutableMissing SubscriptionAgentSetupIssue = "executable_missing"
+	SubscriptionAgentLoginMissing      SubscriptionAgentSetupIssue = "login_missing"
+)
+
+// SubscriptionAgentSetupError distinguishes local CLI installation/login
+// faults from network provider failures. Callers can give operators the
+// service-account remediation without exposing raw CLI output.
+type SubscriptionAgentSetupError struct {
+	Agent SubscriptionAgent
+	Issue SubscriptionAgentSetupIssue
+}
+
+func (e *SubscriptionAgentSetupError) Error() string {
+	name := subscriptionAgentCommandName(e.Agent)
+	if e.Issue == SubscriptionAgentLoginMissing {
+		return fmt.Sprintf("%s CLI is not signed in for the account running Pulse", name)
+	}
+	return fmt.Sprintf("%s CLI is not installed for the account running Pulse or is not on its service PATH", name)
+}
+
 const (
 	SubscriptionAgentCodex  SubscriptionAgent = "codex-subscription"
 	SubscriptionAgentClaude SubscriptionAgent = "claude-subscription"
@@ -197,7 +220,7 @@ func (c *SubscriptionAgentClient) TestConnection(ctx context.Context) error {
 	}
 	if c.agent == SubscriptionAgentCodex {
 		if !strings.Contains(strings.ToLower(string(out)), "logged in using chatgpt") {
-			return errors.New("Codex CLI is not signed in with ChatGPT")
+			return &SubscriptionAgentSetupError{Agent: SubscriptionAgentCodex, Issue: SubscriptionAgentLoginMissing}
 		}
 		return nil
 	}
@@ -209,7 +232,7 @@ func (c *SubscriptionAgentClient) TestConnection(ctx context.Context) error {
 		return fmt.Errorf("decode Claude authentication status: %w", err)
 	}
 	if !status.LoggedIn || status.AuthMethod != "claude.ai" {
-		return errors.New("Claude CLI is not signed in with a Claude plan")
+		return &SubscriptionAgentSetupError{Agent: SubscriptionAgentClaude, Issue: SubscriptionAgentLoginMissing}
 	}
 	return nil
 }
@@ -418,9 +441,9 @@ func (c *SubscriptionAgentClient) run(ctx context.Context, name string, args []s
 		ctx, cancel = context.WithTimeout(ctx, c.timeout)
 		defer cancel()
 	}
-	path, err := exec.LookPath(name)
+	path, err := resolveSubscriptionAgentCommand(c.agent, name)
 	if err != nil {
-		return nil, fmt.Errorf("%s CLI is not installed or not on PATH", name)
+		return nil, err
 	}
 	cmd := exec.CommandContext(ctx, path, args...)
 	cmd.Env = subscriptionAgentEnvironment(os.Environ())
@@ -458,6 +481,64 @@ func (c *SubscriptionAgentClient) run(ctx context.Context, name string, args []s
 		return stderr.buffer.Bytes(), nil
 	}
 	return stdout.buffer.Bytes(), nil
+}
+
+func subscriptionAgentCommandName(agent SubscriptionAgent) string {
+	switch agent {
+	case SubscriptionAgentCodex:
+		return "codex"
+	case SubscriptionAgentClaude:
+		return "claude"
+	default:
+		return string(agent)
+	}
+}
+
+func subscriptionAgentCommandOverride(agent SubscriptionAgent) string {
+	switch agent {
+	case SubscriptionAgentCodex:
+		return strings.TrimSpace(os.Getenv("PULSE_CODEX_CLI_PATH"))
+	case SubscriptionAgentClaude:
+		return strings.TrimSpace(os.Getenv("PULSE_CLAUDE_CLI_PATH"))
+	default:
+		return ""
+	}
+}
+
+func resolveSubscriptionAgentCommand(agent SubscriptionAgent, name string) (string, error) {
+	if override := subscriptionAgentCommandOverride(agent); override != "" {
+		if path, ok := executableSubscriptionAgentPath(override); ok {
+			return path, nil
+		}
+		return "", &SubscriptionAgentSetupError{Agent: agent, Issue: SubscriptionAgentExecutableMissing}
+	}
+	if path, err := exec.LookPath(name); err == nil {
+		return path, nil
+	}
+
+	home, _ := os.UserHomeDir()
+	for _, relative := range []string{
+		filepath.Join(".local", "bin", name),
+		filepath.Join("bin", name),
+		filepath.Join(".npm-global", "bin", name),
+	} {
+		if path, ok := executableSubscriptionAgentPath(filepath.Join(home, relative)); ok {
+			return path, nil
+		}
+	}
+	return "", &SubscriptionAgentSetupError{Agent: agent, Issue: SubscriptionAgentExecutableMissing}
+}
+
+func executableSubscriptionAgentPath(path string) (string, bool) {
+	path = strings.TrimSpace(path)
+	if path == "" || !filepath.IsAbs(path) {
+		return "", false
+	}
+	info, err := os.Stat(path)
+	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0111 == 0 {
+		return "", false
+	}
+	return path, true
 }
 
 func subscriptionAgentEnvironment(environment []string) []string {

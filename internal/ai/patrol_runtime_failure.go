@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
 	"github.com/rs/zerolog/log"
 )
 
@@ -153,6 +154,15 @@ func ClassifyPatrolRuntimeFailure(err error) PatrolRuntimeFailureDiagnostic {
 }
 
 func ClassifyProviderConnectionFailure(err error) PatrolRuntimeFailureDiagnostic {
+	if setup, ok := subscriptionAgentSetupFailure(err); ok {
+		return PatrolRuntimeFailureDiagnostic{
+			Title:          "Local " + setup.displayName + " CLI not ready",
+			Summary:        "Local " + setup.displayName + " CLI not ready",
+			Cause:          PatrolFailureCauseProviderNotConfigured,
+			Description:    "Pulse cannot use the local " + setup.displayName + " subscription because its CLI executable or login is unavailable to the operating-system account running Pulse.",
+			Recommendation: setup.recommendation,
+		}
+	}
 	failure := patrolRuntimeFailureFromError(err)
 	diagnostic := PatrolRuntimeFailureDiagnostic{
 		Title:          "Provider connection issue",
@@ -223,6 +233,35 @@ func ClassifyProviderConnectionFailure(err error) PatrolRuntimeFailureDiagnostic
 	return diagnostic
 }
 
+type subscriptionAgentSetupCopy struct {
+	displayName    string
+	recommendation string
+}
+
+func subscriptionAgentSetupFailure(err error) (subscriptionAgentSetupCopy, bool) {
+	var setupErr *providers.SubscriptionAgentSetupError
+	if !errors.As(err, &setupErr) {
+		return subscriptionAgentSetupCopy{}, false
+	}
+	switch setupErr.Agent {
+	case providers.SubscriptionAgentClaude:
+		return subscriptionAgentSetupCopy{
+			displayName:    "Claude",
+			recommendation: "Install the Claude CLI and run `claude auth login` as the same account that runs Pulse. On standard systemd installs, use the `pulse` account with home `/opt/pulse`; restart Pulse, then retry.",
+		}, true
+	case providers.SubscriptionAgentCodex:
+		return subscriptionAgentSetupCopy{
+			displayName:    "Codex",
+			recommendation: "Install the Codex CLI and run `codex login` as the same account that runs Pulse. On standard systemd installs, use the `pulse` account with home `/opt/pulse`; restart Pulse, then retry.",
+		}, true
+	default:
+		return subscriptionAgentSetupCopy{
+			displayName:    "subscription",
+			recommendation: "Install and sign in to the local subscription CLI as the same operating-system account that runs Pulse, restart Pulse, then retry.",
+		}, true
+	}
+}
+
 // patrolRuntimeFailureFromError classifies an error with no knowledge of the
 // run context. Cancellation is then recognised only when the error actually
 // wraps context.Canceled. Callers that hold the run's context should use
@@ -251,6 +290,7 @@ func patrolRuntimeFailureFromErrorCtx(ctx context.Context, err error) patrolRunt
 		Detail:         detail,
 	}
 
+	setup, setupFailure := subscriptionAgentSetupFailure(err)
 	switch {
 	case cancelled:
 		failure.Title = "Pulse Patrol: Analysis interrupted"
@@ -258,6 +298,12 @@ func patrolRuntimeFailureFromErrorCtx(ctx context.Context, err error) patrolRunt
 		failure.Cause = PatrolFailureCauseInterrupted
 		failure.Description = "The Patrol run was cancelled before the provider finished, either by an operator cancel or because the client connection closed mid-analysis. An interrupted run is not evidence about the provider or model."
 		failure.Recommendation = "Run the analysis again when you are ready. If you did not cancel it, check for reverse proxies or load balancers that close long-running requests."
+	case setupFailure:
+		failure.Title = "Pulse Patrol: Local " + setup.displayName + " CLI not ready"
+		failure.Summary = "Local " + setup.displayName + " CLI not ready"
+		failure.Cause = PatrolFailureCauseProviderNotConfigured
+		failure.Description = "Pulse Patrol cannot use the local " + setup.displayName + " subscription because its CLI executable or login is unavailable to the operating-system account running Pulse."
+		failure.Recommendation = setup.recommendation
 	case patrolMalformedToolHistory(lower):
 		failure.Title = "Pulse Patrol: Malformed tool-call conversation history"
 		failure.Summary = "Malformed tool-call conversation history"

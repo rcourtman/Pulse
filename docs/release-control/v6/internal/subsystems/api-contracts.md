@@ -3823,6 +3823,11 @@ the authoritative analysis outcome.
     listing must accept that keyless custom route without emitting an empty
     Authorization header. Custom model-list results retain every non-empty
     opaque ID and carry server-authored `provider: "openai"` identity.
+    Local subscription test and Patrol failures must distinguish missing CLI
+    installation or login for the Pulse service identity from network
+    reachability: the response keeps the existing bounded diagnostic envelope,
+    classifies the route as not configured, and returns service-account setup
+    remediation without raw CLI output (#1742).
     `remove_providers` is the complete provider lifecycle mutation: it removes
     provider-owned secrets, endpoints and runtime options, clears selected
     models for that provider, invalidates model inventory, and disables Pulse

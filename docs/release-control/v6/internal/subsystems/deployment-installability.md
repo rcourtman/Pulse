@@ -2778,6 +2778,14 @@ not exist at all: the installer always writes the unit file itself, even
 where systemctl cannot run, so a missing unit is a broken installation
 rather than an unprivileged-container quirk and must fail the run loudly.
 
+The generated `pulse.service` unit also owns the local subscription-agent
+execution identity. It pins `HOME` to the Pulse install directory and prepends
+that identity's `.local/bin` plus the install `bin` directory to `PATH`, while
+retaining `User=pulse` and `ProtectHome=true`. This makes a Claude or Codex CLI
+installed and authenticated for the Pulse account discoverable without
+exposing a root or interactive user's home and lets updates migrate the unit
+contract onto existing systemd installations (#1742).
+
 Changes to the generated units must be able to reach already-deployed boxes.
 A box installed before the sandbox was widened runs the installer from a
 `pulse-update.service` whose `ReadWritePaths` excludes the helper and unit

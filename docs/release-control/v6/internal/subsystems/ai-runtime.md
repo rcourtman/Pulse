@@ -431,6 +431,14 @@ refresh, export, or forward that login, and its child environment is an
 allowlist that excludes API keys, Pulse secrets, cloud credentials, and
 unrelated tokens. It must never fall back to an API-key provider.
 
+CLI discovery is scoped to the Pulse service identity: the service `PATH`,
+that identity's `.local/bin`, `bin`, and `.npm-global/bin`, or an explicit
+absolute `PULSE_CLAUDE_CLI_PATH` / `PULSE_CODEX_CLI_PATH` override. It must not
+search or expose another user's home. Missing executables and missing
+first-party login are typed local-setup failures, not provider reachability
+failures, and provider-test plus Patrol diagnostics must tell the operator to
+install and authenticate the CLI as the account running Pulse (#1742).
+
 Each subscription-agent call is a single structured provider turn in a fresh
 temporary working directory. Codex runs ephemeral with user configuration
 ignored and a read-only sandbox. Claude runs without session persistence or

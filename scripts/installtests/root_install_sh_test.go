@@ -89,6 +89,23 @@ func TestRootInstallScriptArchiveSupportContract(t *testing.T) {
 	}
 }
 
+func TestRootInstallSystemdServiceExposesOnlyPulseOwnedSubscriptionCLIHome(t *testing.T) {
+	body := extractRootInstallShellFunction(t, "install_systemd_service")
+	for _, required := range []string{
+		`Environment="HOME=$INSTALL_DIR"`,
+		`Environment="PATH=$INSTALL_DIR/.local/bin:$INSTALL_DIR/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"`,
+		`User=pulse`,
+		`ProtectHome=true`,
+	} {
+		if !strings.Contains(body, required) {
+			t.Fatalf("systemd service missing subscription CLI boundary %q", required)
+		}
+	}
+	if strings.Contains(body, "/root/") {
+		t.Fatal("systemd service must not expose a privileged home to local subscription CLIs")
+	}
+}
+
 func TestRootInstallScriptStagesUpdateBeforeStoppingService(t *testing.T) {
 	downloadPulse := extractRootInstallShellFunction(t, "download_pulse")
 	orderedSteps := []string{

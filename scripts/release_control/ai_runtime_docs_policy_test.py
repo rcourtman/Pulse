@@ -181,6 +181,11 @@ class AIRuntimeDocsPolicyTest(unittest.TestCase):
         self.assertIn("inference_route=coding_plan_allowance", content)
         self.assertIn("per-run monetary cost unknown", normalized_content)
         self.assertIn("standard Z.ai `/api/paas/` endpoint remains a `metered_api` route", normalized_content)
+        self.assertIn("Pulse runs as the `pulse` account with `HOME=/opt/pulse`", normalized_content)
+        self.assertIn("a CLI installed or authenticated only as `root` is intentionally unavailable", normalized_content)
+        self.assertIn("claude auth status --json", content)
+        self.assertIn("PULSE_CLAUDE_CLI_PATH", content)
+        self.assertIn("PULSE_CODEX_CLI_PATH", content)
 
     def test_public_ai_privacy_copy_discloses_outbound_usage_telemetry(self) -> None:
         content = read_repo_text("docs/AI.md")

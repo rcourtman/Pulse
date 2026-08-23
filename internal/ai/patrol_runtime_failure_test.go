@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
@@ -210,6 +211,28 @@ func TestClassifyProviderConnectionFailureUsesNeutralProviderCopy(t *testing.T) 
 	}
 	if !strings.Contains(diagnostic.Description, "this provider") {
 		t.Fatalf("expected provider-specific description, got %q", diagnostic.Description)
+	}
+}
+
+func TestSubscriptionAgentSetupFailureUsesLocalServiceAccountRemediation(t *testing.T) {
+	err := &providers.SubscriptionAgentSetupError{
+		Agent: providers.SubscriptionAgentClaude,
+		Issue: providers.SubscriptionAgentExecutableMissing,
+	}
+	diagnostic := ClassifyProviderConnectionFailure(err)
+	if diagnostic.Summary != "Local Claude CLI not ready" || diagnostic.Cause != PatrolFailureCauseProviderNotConfigured {
+		t.Fatalf("connection diagnostic = %#v", diagnostic)
+	}
+	if !strings.Contains(diagnostic.Recommendation, "`pulse` account") || !strings.Contains(diagnostic.Recommendation, "`claude auth login`") {
+		t.Fatalf("connection recommendation lacks service-account remediation: %q", diagnostic.Recommendation)
+	}
+
+	failure := patrolRuntimeFailureFromError(err)
+	if failure.Summary != "Local Claude CLI not ready" || failure.Cause != PatrolFailureCauseProviderNotConfigured {
+		t.Fatalf("Patrol failure = %#v", failure)
+	}
+	if strings.Contains(failure.Description, "/root") || strings.Contains(failure.Recommendation, "/root") {
+		t.Fatalf("subscription setup copy encouraged sharing a privileged home: %#v", failure)
 	}
 }
 
