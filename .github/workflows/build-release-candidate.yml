@@ -764,8 +764,7 @@ jobs:
     if: ${{ always() && inputs.qualify_containers && needs.build.result == 'success' }}
     permissions:
       contents: read
-    uses: ./.github/workflows/qualify-release-containers.yml
+    uses: rcourtman/Pulse/.github/workflows/qualify-release-containers.yml@main
     with:
       version: ${{ inputs.version }}
       container_artifact: ${{ needs.build.outputs.container_artifact_name }}
-      source_sha: ${{ github.sha }}

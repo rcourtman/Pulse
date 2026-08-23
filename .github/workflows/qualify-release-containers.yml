@@ -11,17 +11,42 @@ on:
         description: 'Exact-candidate container payload artifact from this run'
         required: true
         type: string
-      source_sha:
-        description: 'Exact source commit bound to the candidate payload'
-        required: true
-        type: string
 
-permissions:
-  contents: read
+permissions: {}
 
 jobs:
+  authorize-source:
+    name: Authorize Immutable Default-Branch Source
+    permissions: {}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 1
+    steps:
+      - name: Reject unapproved source revisions
+        env:
+          SOURCE_REPOSITORY: ${{ github.repository }}
+          SOURCE_REF: ${{ github.ref }}
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          if [ "$SOURCE_REPOSITORY" != "rcourtman/Pulse" ]; then
+            echo "::error::Release container qualification is restricted to rcourtman/Pulse."
+            exit 1
+          fi
+          if [ "$SOURCE_REF" != "refs/heads/main" ]; then
+            echo "::error::Release container qualification requires refs/heads/main; received ${SOURCE_REF}."
+            exit 1
+          fi
+          if [[ ! "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::Release container qualification requires an immutable commit SHA."
+            exit 1
+          fi
+
   qualify:
     name: Exact-Candidate Container and Helm Smoke
+    needs: authorize-source
+    if: ${{ needs.authorize-source.result == 'success' }}
+    permissions:
+      contents: read
     # Stable qualification must be independent of persistent runner disk state.
     # Prereleases keep the faster PVE lane, where a later clean rehearsal can
     # expose and repair runner capacity without blocking a stable patch.
@@ -31,7 +56,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
-          ref: ${{ inputs.source_sha }}
+          ref: ${{ github.sha }}
 
       - name: Download exact-candidate container payload
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -45,7 +70,7 @@ jobs:
             --release-dir "$RUNNER_TEMP/release-container-payload/payload" \
             --manifest "$RUNNER_TEMP/release-container-payload/release-container-payload.json" \
             --version "${{ inputs.version }}" \
-            --source-sha "${{ inputs.source_sha }}"
+            --source-sha "${{ github.sha }}"
 
       - name: Assemble exact-candidate runtime and agent images
         run: |

@@ -1397,7 +1397,6 @@ func TestReleaseWorkflowsUseSecretSafeAttestedImageBuilds(t *testing.T) {
 		`./scripts/prepare-release-container-context.sh`,
 		`container_artifact_name`,
 		`container_artifact: ${{ needs.build_release_candidate.outputs.container_artifact_name }}`,
-		`source_sha: ${{ github.sha }}`,
 		`release-container-payload.json`,
 		`--target runtime_prebuilt`,
 		`--target agent_runtime_prebuilt`,
@@ -1509,6 +1508,198 @@ func TestReleaseWorkflowsUseSecretSafeAttestedImageBuilds(t *testing.T) {
 	} {
 		if strings.Contains(publish, forbidden) {
 			t.Fatalf("publish-docker.yml must assemble the verified candidate without release build secrets: %s", forbidden)
+		}
+	}
+}
+
+func TestReleaseContainerQualificationRejectsUnapprovedSourcesBeforePrivilegedExecution(t *testing.T) {
+	qualifierBytes, err := os.ReadFile(repoFile(".github", "workflows", "qualify-release-containers.yml"))
+	if err != nil {
+		t.Fatalf("read qualify-release-containers.yml: %v", err)
+	}
+	candidateBytes, err := os.ReadFile(repoFile(".github", "workflows", "build-release-candidate.yml"))
+	if err != nil {
+		t.Fatalf("read build-release-candidate.yml: %v", err)
+	}
+	releaseBytes, err := os.ReadFile(repoFile(".github", "workflows", "create-release.yml"))
+	if err != nil {
+		t.Fatalf("read create-release.yml: %v", err)
+	}
+
+	qualifier := string(qualifierBytes)
+	authorizeJob := workflowJobBlock(t, qualifier, "authorize-source")
+	qualifyJob := workflowJobBlock(t, qualifier, "qualify")
+	for _, needle := range []string{
+		"permissions: {}",
+		"runs-on: ubuntu-24.04",
+		`SOURCE_REPOSITORY: ${{ github.repository }}`,
+		`SOURCE_REF: ${{ github.ref }}`,
+		`SOURCE_SHA: ${{ github.sha }}`,
+		`if [ "$SOURCE_REPOSITORY" != "rcourtman/Pulse" ]; then`,
+		`if [ "$SOURCE_REF" != "refs/heads/main" ]; then`,
+		`[[ ! "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]`,
+	} {
+		if !strings.Contains(authorizeJob, needle) {
+			t.Fatalf("release source authorization must fail closed before privileged execution: %s", needle)
+		}
+	}
+	if strings.Contains(authorizeJob, "actions/checkout") || strings.Contains(authorizeJob, "self-hosted") || strings.Contains(authorizeJob, "uses:") {
+		t.Fatal("release source authorization must not check out or execute repository content on a self-hosted runner")
+	}
+	for _, needle := range []string{
+		"needs: authorize-source",
+		`if: ${{ needs.authorize-source.result == 'success' }}`,
+		"permissions:\n      contents: read",
+		`!contains(inputs.version, '-') && 'ubuntu-24.04'`,
+		"pulse-pve-build",
+		`ref: ${{ github.sha }}`,
+		`--source-sha "${{ github.sha }}"`,
+	} {
+		if !strings.Contains(qualifyJob, needle) {
+			t.Fatalf("release container qualification must preserve the authorized immutable source: %s", needle)
+		}
+	}
+	if strings.Contains(qualifier, "inputs.source_sha") || strings.Contains(qualifier, "source_sha:") {
+		t.Fatal("trusted qualifier must derive source identity from GitHub's immutable caller SHA, not caller-controlled input")
+	}
+	if strings.Count(qualifier, "permissions: {}") < 2 {
+		t.Fatal("source authorization must not receive a repository token")
+	}
+
+	runMarker := "        run: |\n"
+	runStart := strings.Index(authorizeJob, runMarker)
+	if runStart == -1 {
+		t.Fatal("release source authorization must use one auditable inline gate")
+	}
+	gateLines := strings.Split(authorizeJob[runStart+len(runMarker):], "\n")
+	for i, line := range gateLines {
+		gateLines[i] = strings.TrimPrefix(line, "          ")
+	}
+	gateScript := strings.TrimSpace(strings.Join(gateLines, "\n"))
+	bashPath, err := exec.LookPath("bash")
+	if err != nil {
+		t.Skip("bash is required to execute the GitHub-hosted authorization gate")
+	}
+	for _, tc := range []struct {
+		name       string
+		repository string
+		ref        string
+		sha        string
+		wantOK     bool
+	}{
+		{name: "approved main commit", repository: "rcourtman/Pulse", ref: "refs/heads/main", sha: strings.Repeat("a", 40), wantOK: true},
+		{name: "wrong repository", repository: "someone/Pulse", ref: "refs/heads/main", sha: strings.Repeat("a", 40)},
+		{name: "feature branch", repository: "rcourtman/Pulse", ref: "refs/heads/feature", sha: strings.Repeat("a", 40)},
+		{name: "pull request merge ref", repository: "rcourtman/Pulse", ref: "refs/pull/1764/merge", sha: strings.Repeat("a", 40)},
+		{name: "tag", repository: "rcourtman/Pulse", ref: "refs/tags/v6.3.1", sha: strings.Repeat("a", 40)},
+		{name: "symbolic sha", repository: "rcourtman/Pulse", ref: "refs/heads/main", sha: "main"},
+		{name: "short sha", repository: "rcourtman/Pulse", ref: "refs/heads/main", sha: strings.Repeat("a", 12)},
+		{name: "uppercase sha", repository: "rcourtman/Pulse", ref: "refs/heads/main", sha: strings.Repeat("A", 40)},
+		{name: "non-hex sha", repository: "rcourtman/Pulse", ref: "refs/heads/main", sha: strings.Repeat("z", 40)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cmd := exec.Command(bashPath, "-c", gateScript)
+			cmd.Env = append(os.Environ(),
+				"SOURCE_REPOSITORY="+tc.repository,
+				"SOURCE_REF="+tc.ref,
+				"SOURCE_SHA="+tc.sha,
+			)
+			err := cmd.Run()
+			if tc.wantOK && err != nil {
+				t.Fatalf("approved source rejected: %v", err)
+			}
+			if !tc.wantOK && err == nil {
+				t.Fatal("unapproved source passed release authorization")
+			}
+		})
+	}
+
+	t.Run("manifest identity mismatch", func(t *testing.T) {
+		releaseDir := t.TempDir()
+		if err := os.WriteFile(filepath.Join(releaseDir, "payload.bin"), []byte("candidate"), 0o600); err != nil {
+			t.Fatalf("write candidate payload: %v", err)
+		}
+		manifestPath := filepath.Join(t.TempDir(), "release-container-payload.json")
+		manifestScript := repoFile("scripts", "release_candidate_manifest.py")
+		create := exec.Command("python3", manifestScript, "create",
+			"--release-dir", releaseDir,
+			"--version", "6.3.1",
+			"--source-sha", strings.Repeat("1", 40),
+			"--output", manifestPath,
+		)
+		if output, err := create.CombinedOutput(); err != nil {
+			t.Fatalf("create candidate manifest: %v\n%s", err, output)
+		}
+		for name, tc := range map[string]struct {
+			version   string
+			sourceSHA string
+			wantError string
+		}{
+			"different full source SHA": {
+				version:   "6.3.1",
+				sourceSHA: strings.Repeat("2", 40),
+				wantError: "candidate source SHA",
+			},
+			"different version": {
+				version:   "6.3.2",
+				sourceSHA: strings.Repeat("1", 40),
+				wantError: "candidate version",
+			},
+		} {
+			t.Run(name, func(t *testing.T) {
+				verify := exec.Command("python3", manifestScript, "verify-local",
+					"--release-dir", releaseDir,
+					"--manifest", manifestPath,
+					"--version", tc.version,
+					"--source-sha", tc.sourceSHA,
+				)
+				output, err := verify.CombinedOutput()
+				if err == nil || !strings.Contains(string(output), tc.wantError) {
+					t.Fatalf("manifest verification accepted mismatched identity: err=%v\n%s", err, output)
+				}
+			})
+		}
+	})
+
+	trustedQualifier := "uses: rcourtman/Pulse/.github/workflows/qualify-release-containers.yml@main"
+	candidateQualifier := workflowJobBlock(t, string(candidateBytes), "qualify-release-containers")
+	releaseQualifier := workflowJobBlock(t, string(releaseBytes), "qualify_release_containers")
+	for workflowName, qualifierJob := range map[string]string{
+		"build-release-candidate.yml": candidateQualifier,
+		"create-release.yml":          releaseQualifier,
+	} {
+		if !strings.Contains(qualifierJob, trustedQualifier) {
+			t.Fatalf("%s must resolve privileged qualification from the trusted default branch", workflowName)
+		}
+		if strings.Contains(qualifierJob, "uses: ./.github/workflows/qualify-release-containers.yml") {
+			t.Fatalf("%s must not let a selected dispatch ref replace the privileged qualifier", workflowName)
+		}
+		if strings.Contains(qualifierJob, "source_sha:") {
+			t.Fatalf("%s qualifier call must not reintroduce a selectable source revision", workflowName)
+		}
+	}
+
+	workflowPaths := make([]string, 0)
+	for _, pattern := range []string{"*.yml", "*.yaml"} {
+		matches, err := filepath.Glob(repoFile(".github", "workflows", pattern))
+		if err != nil {
+			t.Fatalf("list %s workflows: %v", pattern, err)
+		}
+		workflowPaths = append(workflowPaths, matches...)
+	}
+	for _, workflowPath := range workflowPaths {
+		workflowBytes, err := os.ReadFile(workflowPath)
+		if err != nil {
+			t.Fatalf("read %s: %v", workflowPath, err)
+		}
+		workflow := string(workflowBytes)
+		if strings.Contains(workflow, "uses: ./.github/workflows/qualify-release-containers.yml") {
+			t.Fatalf("%s must not resolve privileged qualification from a selectable caller revision", workflowPath)
+		}
+		for _, line := range strings.Split(workflow, "\n") {
+			if strings.Contains(line, "uses:") && strings.Contains(line, "qualify-release-containers.yml") && !strings.Contains(line, trustedQualifier) {
+				t.Fatalf("%s contains an untrusted release qualifier reference: %s", workflowPath, strings.TrimSpace(line))
+			}
 		}
 	}
 }
@@ -2694,7 +2885,7 @@ func TestReleaseCutGatesCriticalFrontendAndWindowsRuntimeProof(t *testing.T) {
 		}
 	}
 	if !strings.Contains(workflow, "qualify_containers: false") ||
-		!strings.Contains(workflow, "uses: ./.github/workflows/qualify-release-containers.yml") {
+		!strings.Contains(workflow, "uses: rcourtman/Pulse/.github/workflows/qualify-release-containers.yml@main") {
 		t.Fatal("publishing release must qualify the candidate beside inert draft staging")
 	}
 	if !strings.Contains(verdictJob, `require_result "Windows install command smoke" "$WINDOWS_INSTALL_COMMAND_RESULT" success`) {
