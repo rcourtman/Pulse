@@ -1,7 +1,7 @@
 {
   "version": 1,
   "base_sha": "35b8c0a4c2ccbc11a1bb67116cb2d1e8f6d72391",
-  "verified_at": "2026-08-23T18:28:00Z",
+  "verified_at": "2026-08-23T18:52:30Z",
   "result": "passed",
   "changed_paths": [
     "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx"
@@ -23,13 +23,15 @@
     }
   ],
   "states": [
-    "Desktop direct navigation to /proxmox/overview rendered the connected Proxmox app shell and its overview loading state while the large mock estate hydrated",
-    "The running app reported a connected backend/live data stream and no browser console errors during the overview navigation",
-    "The large-estate narrowed node result is covered by the focused Proxmox page-surface and node-table tests"
+    "Fresh desktop navigation to /proxmox/overview hydrated the connected 50-node and 929-guest mock estate",
+    "Searching for guest artifact-cache-310 reduced the node result from 50 to 1 and retained only its Analytics A parent node",
+    "The same guest search at 390x844 retained one matching node and one matching guest without page-level horizontal overflow",
+    "Clearing the search restored all 50 nodes, and the browser console remained free of warnings and errors"
   ],
   "interactions": [
-    "Loaded /proxmox/overview at the desktop viewport and inspected the connected overview shell",
-    "Confirmed the page exposes the Proxmox overview route used by the shared workload search",
-    "Verified the guest-aware node narrowing contract through the focused page-surface and node-table test suites"
+    "Loaded /proxmox/overview in a fresh desktop tab and waited for the full large-estate resource snapshot",
+    "Entered artifact-cache-310 in the shared VM and LXC search and inspected both the Nodes and Guests tables",
+    "Cleared the search with the visible Clear search control and confirmed the complete node estate returned",
+    "Repeated the guest search at 390x844 and measured document clientWidth and scrollWidth at 390 pixels"
   ]
 }
