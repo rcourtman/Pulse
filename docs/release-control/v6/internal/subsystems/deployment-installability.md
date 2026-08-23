@@ -1624,6 +1624,14 @@ Every caller of the reusable release-candidate builder must delegate
 `actions: read` alongside `contents: read`; the Windows signing job reads the
 exact uploaded artifact through the GitHub Actions API, and GitHub validates
 that nested permission even when a prerelease skips Authenticode signing.
+SignPath Foundation also requires every job leading up to an open-source
+signing request to execute on GitHub-hosted runners. Stable signed candidates
+therefore route release preparation, exact-SHA compilation, the parallel
+frontend bundle, and backend qualification through GitHub-hosted runners until
+the signing request is on record. Prerelease and explicitly unsigned candidates
+retain the credential-free PVE acceleration path; post-signing container
+qualification may also use PVE because it cannot affect the submitted Windows
+artifact.
 
 The provider MSP proof command validates its handoff target with the same
 host-local redirect contract as runtime token minting and exchange. Proof input

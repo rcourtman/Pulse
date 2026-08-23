@@ -76,7 +76,10 @@ permissions:
 jobs:
   # Combined version extraction and validation (saves a checkout)
   prepare:
-    runs-on: [self-hosted, Linux, X64, pulse-pve-compile]
+    # Stable releases that will reach SignPath must not have a self-hosted job
+    # anywhere in the provenance preceding the signing request. Invalid
+    # exceptions still fail in the promotion resolver below.
+    runs-on: ${{ (!contains(inputs.version, '-') && !inputs.unsigned_windows_exception) && 'ubuntu-24.04' || fromJSON('["self-hosted","Linux","X64","pulse-pve-compile"]') }}
     timeout-minutes: 5
     outputs:
       version: ${{ steps.extract.outputs.version }}
@@ -262,7 +265,7 @@ jobs:
   frontend_bundle:
     needs: prepare
     if: ${{ needs.prepare.outputs.historical_asset_backfill_only != 'true' }}
-    runs-on: [self-hosted, Linux, X64, pulse-pve-build]
+    runs-on: ${{ needs.prepare.outputs.require_windows_signing == 'true' && 'ubuntu-24.04' || fromJSON('["self-hosted","Linux","X64","pulse-pve-build"]') }}
     timeout-minutes: 10
     steps:
       - name: Checkout repository
@@ -357,7 +360,7 @@ jobs:
       - prepare
       - frontend_bundle
     if: ${{ needs.prepare.outputs.historical_asset_backfill_only != 'true' }}
-    runs-on: [self-hosted, Linux, X64, pulse-pve-tests]
+    runs-on: ${{ needs.prepare.outputs.require_windows_signing == 'true' && 'ubuntu-24.04' || fromJSON('["self-hosted","Linux","X64","pulse-pve-tests"]') }}
     timeout-minutes: 20
     env:
       FRONTEND_DIST: frontend-modern/dist

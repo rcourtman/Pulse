@@ -1334,6 +1334,8 @@ func TestReleaseCandidateRequiresPlatformNativeAgentSigning(t *testing.T) {
 	assertFileContainsAll(t, repoFile(".github", "workflows", "create-release.yml"),
 		`require_macos_signing: true`,
 		`require_windows_signing: ${{ needs.prepare.outputs.require_windows_signing == 'true' }}`,
+		`(!contains(inputs.version, '-') && !inputs.unsigned_windows_exception) && 'ubuntu-24.04'`,
+		`needs.prepare.outputs.require_windows_signing == 'true' && 'ubuntu-24.04'`,
 		`unsigned_windows_exception:`,
 		`unsigned_windows_reason:`,
 		`windows_signing_backend: signpath`,
@@ -2341,14 +2343,21 @@ func TestReleasePipelinePromotesOneImmutableCandidate(t *testing.T) {
 	compileJob := workflowJobBlock(t, candidateWorkflow, "compile-release-payload")
 	candidateBuildJob := workflowJobBlock(t, candidateWorkflow, "build")
 
-	if !strings.Contains(prepareJob, "runs-on: [self-hosted, Linux, X64, pulse-pve-compile]") {
-		t.Fatal("release preparation must avoid a hosted-runner queue before the dependency graph")
+	for _, needle := range []string{
+		`(!contains(inputs.version, '-') && !inputs.unsigned_windows_exception)`,
+		`'ubuntu-24.04'`,
+		`pulse-pve-compile`,
+	} {
+		if !strings.Contains(prepareJob, needle) {
+			t.Fatalf("release preparation missing SignPath-aware runner selection: %s", needle)
+		}
 	}
 	if strings.Contains(prepareJob, "sparse-checkout") {
-		t.Fatal("PVE release preparation must leave a complete worktree for the following compile job")
+		t.Fatal("release preparation must leave a complete worktree for the following compile job")
 	}
 
 	for _, needle := range []string{
+		`inputs.require_windows_signing && 'ubuntu-24.04'`,
 		"pulse-pve-compile",
 		`./scripts/build-release-binaries.sh "${{ inputs.version }}"`,
 		`release-compiled-${{ github.sha }}-${{ inputs.version }}`,
@@ -2358,10 +2367,21 @@ func TestReleasePipelinePromotesOneImmutableCandidate(t *testing.T) {
 		}
 	}
 	if strings.Contains(compileJob, "PULSE_UPDATE_SIGNING_KEY") {
-		t.Fatal("PVE release compilation job must not receive private update-signing material")
+		t.Fatal("release compilation job must not receive private update-signing material")
+	}
+	for label, job := range map[string]string{
+		"frontend bundle": frontendBundleJob,
+		"backend tests":   backendJob,
+	} {
+		if !strings.Contains(job, `needs.prepare.outputs.require_windows_signing == 'true' && 'ubuntu-24.04'`) {
+			t.Fatalf("%s must stay GitHub-hosted while a SignPath request is pending", label)
+		}
+		if !strings.Contains(job, "pulse-pve-") {
+			t.Fatalf("%s must retain PVE acceleration when Windows signing is not required", label)
+		}
 	}
 	if !strings.Contains(compileJob, "cache: false") || strings.Contains(compileJob, "cache: 'npm'") {
-		t.Fatal("PVE compilation must use persistent runner-local caches without Actions cache archival")
+		t.Fatal("release compilation must avoid Actions cache archival on both hosted and PVE runners")
 	}
 	if strings.Contains(frontendBundleJob, "cache: 'npm'") {
 		t.Fatal("PVE frontend bundle must use its persistent runner-local npm cache")

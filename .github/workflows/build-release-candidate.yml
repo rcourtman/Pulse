@@ -75,8 +75,11 @@ permissions:
 
 jobs:
   compile-release-payload:
-    name: Compile Exact-SHA Release Payload on PVE
-    runs-on: [self-hosted, Linux, X64, pulse-pve-compile]
+    name: Compile Exact-SHA Release Payload
+    # SignPath Foundation validates every job leading up to an OSS signing
+    # request. Keep stable signed candidates entirely on GitHub-hosted runners;
+    # prerelease and explicitly unsigned candidates retain the fast PVE lane.
+    runs-on: ${{ inputs.require_windows_signing && 'ubuntu-24.04' || fromJSON('["self-hosted","Linux","X64","pulse-pve-compile"]') }}
     timeout-minutes: 20
     steps:
       - name: Checkout repository
