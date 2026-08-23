@@ -295,4 +295,58 @@ describe('proxmoxPageModel', () => {
       'site-b-node',
     ]);
   });
+
+  it('does not retain nodes whose only match is an opaque resource id', () => {
+    const nodes = [
+      makeResource({
+        id: 'agent-node-315-hidden',
+        type: 'agent',
+        name: 'Branch Services D',
+        displayName: 'Branch Services D',
+        proxmox: { instance: 'branch-services', nodeName: 'pve46' },
+      }),
+      makeResource({
+        id: 'analytics-a',
+        type: 'agent',
+        name: 'Analytics A',
+        displayName: 'Analytics A',
+        proxmox: { instance: 'analytics', nodeName: 'pve31' },
+      }),
+      makeResource({
+        id: 'production-east-e',
+        type: 'agent',
+        name: 'East Production E',
+        displayName: 'East Production E',
+        proxmox: { instance: 'production-east', nodeName: 'pve11' },
+      }),
+    ];
+    const guests = [
+      makeResource({
+        id: 'system-container-bbf38a3159484caf',
+        type: 'system-container',
+        name: 'auth-service-218',
+        displayName: 'auth-service-218',
+        proxmox: { instance: 'branch-services', nodeName: 'pve46', vmid: 467 },
+      }),
+      makeResource({
+        id: 'system-container-visible-name',
+        type: 'system-container',
+        name: 'billing-worker-315',
+        displayName: 'billing-worker-315',
+        proxmox: { instance: 'analytics', nodeName: 'pve31', vmid: 680 },
+      }),
+      makeResource({
+        id: 'system-container-visible-vmid',
+        type: 'system-container',
+        name: 'reporting-api-124',
+        displayName: 'reporting-api-124',
+        proxmox: { instance: 'production-east', nodeName: 'pve11', vmid: 315 },
+      }),
+    ];
+
+    expect(filterProxmoxNodes(nodes, guests, '315').map((node) => node.id)).toEqual([
+      'analytics-a',
+      'production-east-e',
+    ]);
+  });
 });

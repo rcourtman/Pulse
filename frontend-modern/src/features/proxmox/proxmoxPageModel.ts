@@ -211,16 +211,15 @@ export function getResourceVmid(resource: Resource): string {
   return '';
 }
 
+// Search here mirrors the operator-visible Proxmox workload vocabulary. Raw
+// unified-resource ids are intentionally excluded: VM/LXC rows expose their
+// canonical node-scoped id/VMID instead, and matching an opaque hash would
+// retain a parent node for a result the guest table cannot show.
 const getProxmoxSearchValues = (resource: Resource): Array<string | number | undefined> => [
   resource.name,
   resource.displayName,
-  resource.id,
   resource.parentName,
-  resource.platformId,
   resource.status,
-  resource.identity?.hostname,
-  ...(resource.identity?.ips ?? []),
-  ...(resource.tags ?? []),
   resource.proxmox?.node,
   resource.proxmox?.nodeName,
   resource.proxmox?.nodeIdentity,
@@ -228,8 +227,6 @@ const getProxmoxSearchValues = (resource: Resource): Array<string | number | und
   ...(resource.proxmox?.nodeAliases ?? []),
   resource.proxmox?.clusterName,
   resource.proxmox?.instance,
-  resource.proxmox?.host,
-  resource.proxmox?.pveVersion,
   getResourceVmid(resource),
 ];
 

@@ -1,21 +1,17 @@
 {
   "version": 1,
-  "base_sha": "10116cc17efb0004e3820f1a250335899d3b9bf0",
-  "verified_at": "2026-08-23T19:17:24Z",
+  "base_sha": "679497119925fca16420fdc3cb7b5d940a50578f",
+  "verified_at": "2026-08-23T20:54:57Z",
   "result": "passed",
-  "changed_paths": [
-    "frontend-modern/src/components/Workloads/useWorkloadViewportSync.ts"
-  ],
+  "changed_paths": ["frontend-modern/src/features/proxmox/proxmoxPageModel.ts"],
   "content_sha256": {
-    "frontend-modern/src/components/Workloads/useWorkloadViewportSync.ts": "f21b70f169cc595b31337584e3df20022342e39d50bdfc9eac96a04770bcf7ba"
+    "frontend-modern/src/features/proxmox/proxmoxPageModel.ts": "a8de01ecbcca7f65b2b5145ab6a239d6c2f9f10eb7073f74883a273aa12f2418"
   },
-  "routes": [
-    "/proxmox/overview"
-  ],
+  "routes": ["/proxmox/overview"],
   "viewports": [
     {
       "width": 1280,
-      "height": 800
+      "height": 720
     },
     {
       "width": 390,
@@ -23,16 +19,16 @@
     }
   ],
   "states": [
-    "The connected public mock estate rendered 50 nodes and 929 guests with the grouped workload window active",
-    "Across 24 consecutive 600-pixel desktop wheel steps from scrollTop 10000 to 24400, every sample retained at least 26 visible guest rows",
-    "Across 24 consecutive 600-pixel wheel steps at 390x844 from scrollTop 10000 to 24400, every sample retained at least 22 visible guest rows",
-    "Desktop and narrow verification both retained the 140-row mounted guest budget throughout rapid scrolling",
-    "The verified route reported no browser error-level runtime logs during responsive and sustained-scroll checks"
+    "Before the fix, searching 315 retained 8 of 50 nodes while the guest table showed only 3 matching guests",
+    "The five false parent nodes were admitted only by opaque VM or LXC resource ids containing 315",
+    "After the fix, searching 315 retained exactly Analytics A, Analytics F, and East Production E for the three visible guest matches",
+    "The same exact three-node result rendered at 390x844 with document clientWidth and scrollWidth both equal to 390 pixels",
+    "Direct navigation back to the unfiltered overview restored all 50 nodes and the browser console remained free of warnings and errors"
   ],
   "interactions": [
-    "Reloaded /proxmox/overview and confirmed the complete large-estate mock snapshot and bounded workload window",
-    "Applied repeated physical wheel input through the workload viewport and sampled visible and mounted rows immediately after every desktop step",
-    "Repeated the same sustained wheel-input sequence at a 390x844 phone viewport and visually inspected the populated table",
-    "Inspected browser runtime logs after both responsive scroll sequences"
+    "Loaded /proxmox/overview against the connected 50-node and 929-guest mock estate and entered 315 in the shared workload search",
+    "Compared the Nodes and Guests results before and after the search-vocabulary correction",
+    "Repeated the numeric search at a 390x844 viewport and checked the three expected parent nodes plus page overflow dimensions",
+    "Navigated to the clean overview route to remove search state and confirmed the complete node estate returned"
   ]
 }

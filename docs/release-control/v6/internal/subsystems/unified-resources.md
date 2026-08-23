@@ -262,6 +262,7 @@ about the same disk cannot diverge.
 121. `frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx`
 122. `frontend-modern/src/features/proxmox/ProxmoxReplicationTable.tsx`
 122a. `frontend-modern/src/features/proxmox/proxmoxHostTableModel.ts`
+122b. `frontend-modern/src/features/proxmox/proxmoxPageModel.ts`
 123. `frontend-modern/src/features/truenas/TrueNASAlertsTable.tsx`
 124. `frontend-modern/src/features/truenas/TrueNASAppsTable.tsx`
 125. `frontend-modern/src/features/truenas/TrueNASNetworkSharesTable.tsx`
@@ -392,6 +393,11 @@ candidates. The frontend primitive owns ranking, common-prefix completion,
 recognized abbreviated terms, removable pills, and inclusive multi-term query
 serialization; each platform consumer remains responsible for applying that
 query to the same canonical resource collection its table renders.
+The Proxmox overview applies that same rule when guest search narrows its node
+inventory: operator-visible guest names, VMIDs, node identities, status, and
+provider scope may retain a parent node, but opaque unified-resource `id`
+hashes must not create node matches that the normalized workload table cannot
+show.
 Large platform inventories may bound their initial row projection through the
 shared platform-table preview primitive so the next canonical surface remains
 in the initial reading flow. Proxmox node consumers retain the page model's
