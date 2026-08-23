@@ -1,0 +1,345 @@
+name: Qualify Immutable Release Containers v2
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: 'Pulse v6 version without the leading v'
+        required: true
+        type: string
+
+# The hosted validation job deliberately has no GITHUB_TOKEN permissions. The
+# downstream qualification job receives only the read permission it needs.
+permissions: {}
+
+jobs:
+  validate_invocation:
+    name: Validate Immutable Qualifier Invocation
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    permissions: {}
+    outputs:
+      release_version: ${{ steps.gate.outputs.release_version }}
+      source_sha: ${{ steps.gate.outputs.source_sha }}
+      container_artifact_name: ${{ steps.gate.outputs.container_artifact_name }}
+      runner: ${{ steps.gate.outputs.runner }}
+    steps:
+      - name: Reject untrusted caller or release identity
+        id: gate
+        shell: bash
+        env:
+          CALLED_WORKFLOW_REPOSITORY: ${{ job.workflow_repository }}
+          CALLED_WORKFLOW_FILE_PATH: ${{ job.workflow_file_path }}
+          CALLED_WORKFLOW_REF: ${{ job.workflow_ref }}
+          CALLED_WORKFLOW_SHA: ${{ job.workflow_sha }}
+          CALLER_REPOSITORY: ${{ github.repository }}
+          CALLER_REPOSITORY_ID: ${{ github.repository_id }}
+          CALLER_REPOSITORY_OWNER_ID: ${{ github.repository_owner_id }}
+          CALLER_REF: ${{ github.ref }}
+          CALLER_SHA: ${{ github.sha }}
+          CALLER_WORKFLOW_REF: ${{ github.workflow_ref }}
+          CALLER_WORKFLOW_SHA: ${{ github.workflow_sha }}
+          CALLER_EVENT_NAME: ${{ github.event_name }}
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os
+          import re
+
+          expected_repository = "rcourtman/Pulse"
+          expected_repository_id = "932825524"
+          expected_repository_owner_id = "8825017"
+          expected_workflow_path = ".github/workflows/qualify-release-containers-v2.yml"
+          full_sha = re.compile(r"[0-9a-f]{40}")
+          caller_workflow_ref_pattern = re.compile(
+              r"rcourtman/Pulse/\.github/workflows/"
+              r"[0-9A-Za-z_.-]+\.ya?ml@refs/heads/main"
+          )
+          supported_version = re.compile(
+              r"6\.[0-9]+\.[0-9]+(?:-(?:rc|alpha|beta)\.[0-9]+)?"
+          )
+
+          def require(condition: bool, message: str) -> None:
+              if not condition:
+                  raise SystemExit(f"::error::{message}")
+
+          called_repository = os.environ["CALLED_WORKFLOW_REPOSITORY"]
+          called_path = os.environ["CALLED_WORKFLOW_FILE_PATH"]
+          called_ref = os.environ["CALLED_WORKFLOW_REF"]
+          called_sha = os.environ["CALLED_WORKFLOW_SHA"]
+          caller_repository = os.environ["CALLER_REPOSITORY"]
+          caller_repository_id = os.environ["CALLER_REPOSITORY_ID"]
+          caller_repository_owner_id = os.environ["CALLER_REPOSITORY_OWNER_ID"]
+          caller_ref = os.environ["CALLER_REF"]
+          caller_sha = os.environ["CALLER_SHA"]
+          caller_workflow_ref = os.environ["CALLER_WORKFLOW_REF"]
+          caller_workflow_sha = os.environ["CALLER_WORKFLOW_SHA"]
+          caller_event_name = os.environ["CALLER_EVENT_NAME"]
+          version = os.environ["RELEASE_VERSION"]
+
+          require(
+              called_repository == expected_repository,
+              "called workflow repository is not trusted",
+          )
+          require(
+              called_path == expected_workflow_path,
+              "called workflow path is not trusted",
+          )
+          require(
+              full_sha.fullmatch(called_sha) is not None,
+              "called workflow SHA is not a full lowercase commit SHA",
+          )
+          require(
+              called_ref
+              == f"{expected_repository}/{expected_workflow_path}@{called_sha}",
+              "called workflow reference is not the matching immutable SHA",
+          )
+          require(
+              caller_repository == expected_repository,
+              "caller repository is not trusted",
+          )
+          require(
+              caller_repository_id == expected_repository_id,
+              "caller repository ID is not trusted",
+          )
+          require(
+              caller_repository_owner_id == expected_repository_owner_id,
+              "caller repository owner ID is not trusted",
+          )
+          require(
+              caller_event_name == "workflow_dispatch",
+              "caller event is not an authorized release dispatch",
+          )
+          require(caller_ref == "refs/heads/main", "caller ref is not main")
+          require(
+              full_sha.fullmatch(caller_sha) is not None,
+              "caller SHA is not a full lowercase commit SHA",
+          )
+          require(
+              caller_workflow_ref_pattern.fullmatch(caller_workflow_ref) is not None,
+              "caller workflow reference is not a workflow on main",
+          )
+          require(
+              full_sha.fullmatch(caller_workflow_sha) is not None,
+              "caller workflow SHA is not a full lowercase commit SHA",
+          )
+          require(
+              caller_workflow_sha == caller_sha,
+              "caller workflow SHA does not match the caller commit",
+          )
+          require(
+              supported_version.fullmatch(version) is not None,
+              "release version is not a supported Pulse v6 version",
+          )
+
+          artifact_name = f"release-container-payload-{caller_sha}-{version}"
+          outputs = {
+              "release_version": version,
+              "source_sha": caller_sha,
+              "container_artifact_name": artifact_name,
+              "runner": (
+                  '["self-hosted","Linux","X64","pulse-pve-build"]'
+                  if "-" in version
+                  else '"ubuntu-24.04"'
+              ),
+          }
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              for name, value in outputs.items():
+                  output.write(f"{name}={value}\n")
+
+          print("Immutable qualifier invocation validated.")
+          PY
+
+  qualify:
+    name: Exact-Candidate Container and Helm Smoke v2
+    needs: validate_invocation
+    if: needs.validate_invocation.result == 'success'
+    # Stable qualification remains GitHub-hosted. Validated prereleases retain
+    # the existing PVE lane, but it cannot be scheduled until the hosted gate
+    # has succeeded.
+    # fromJSON fails before scheduling if the validated runner output is absent
+    # or malformed; an output-propagation fault therefore cannot fall through
+    # to the self-hosted lane.
+    runs-on: ${{ fromJSON(needs.validate_invocation.outputs.runner) }}
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    env:
+      VALIDATED_RELEASE_VERSION: ${{ needs.validate_invocation.outputs.release_version }}
+      VALIDATED_SOURCE_SHA: ${{ needs.validate_invocation.outputs.source_sha }}
+      VALIDATED_CONTAINER_ARTIFACT_NAME: ${{ needs.validate_invocation.outputs.container_artifact_name }}
+    steps:
+      - name: Checkout validated caller source
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          repository: rcourtman/Pulse
+          ref: ${{ needs.validate_invocation.outputs.source_sha }}
+          persist-credentials: false
+
+      - name: Download current-run exact-candidate container payload
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: ${{ needs.validate_invocation.outputs.container_artifact_name }}
+          path: ${{ runner.temp }}/release-container-payload
+
+      - name: Verify exact-candidate container payload
+        run: |
+          set -euo pipefail
+          python3 scripts/release_candidate_manifest.py verify-local \
+            --release-dir "$RUNNER_TEMP/release-container-payload/payload" \
+            --manifest "$RUNNER_TEMP/release-container-payload/release-container-payload.json" \
+            --version "$VALIDATED_RELEASE_VERSION" \
+            --source-sha "$VALIDATED_SOURCE_SHA"
+
+      - name: Assemble exact-candidate runtime and agent images
+        run: |
+          set -euo pipefail
+          docker buildx build \
+            --target runtime_prebuilt \
+            --platform linux/amd64 \
+            --build-context "release_payload=${RUNNER_TEMP}/release-container-payload/payload/release" \
+            --load \
+            --tag "pulse-helm-smoke:${VALIDATED_RELEASE_VERSION}" \
+            .
+          docker buildx build \
+            --target agent_runtime_prebuilt \
+            --platform linux/amd64 \
+            --build-context "release_payload=${RUNNER_TEMP}/release-container-payload/payload/release" \
+            --load \
+            --tag "pulse-agent-candidate:${VALIDATED_RELEASE_VERSION}" \
+            .
+          docker buildx build \
+            --file deploy/provider-msp/Dockerfile.control-plane \
+            --target control_plane_prebuilt \
+            --platform linux/amd64 \
+            --build-context "compiled_payload=${RUNNER_TEMP}/release-container-payload/payload/compiled" \
+            --load \
+            --tag "pulse-control-plane-candidate:${VALIDATED_RELEASE_VERSION}" \
+            .
+
+      - name: Verify container binaries match immutable candidate
+        run: |
+          set -euo pipefail
+          expected_server="$(sha256sum "$RUNNER_TEMP/release-container-payload/payload/release/amd64/bin/pulse" | awk '{print $1}')"
+          actual_server="$(docker run --rm --entrypoint /bin/sh "pulse-helm-smoke:${VALIDATED_RELEASE_VERSION}" -c 'sha256sum /app/pulse' | awk '{print $1}')"
+          expected_agent="$(sha256sum "$RUNNER_TEMP/release-container-payload/payload/release/amd64/bin/pulse-agent-linux-amd64" | awk '{print $1}')"
+          actual_agent="$(docker run --rm --entrypoint /bin/sh "pulse-agent-candidate:${VALIDATED_RELEASE_VERSION}" -c 'sha256sum /usr/local/bin/pulse-agent' | awk '{print $1}')"
+          expected_control_plane="$(sha256sum "$RUNNER_TEMP/release-container-payload/payload/compiled/binaries/pulse-control-plane-linux-amd64" | awk '{print $1}')"
+          actual_control_plane="$(docker run --rm --entrypoint /bin/sh "pulse-control-plane-candidate:${VALIDATED_RELEASE_VERSION}" -c 'sha256sum /usr/local/bin/pulse-control-plane' | awk '{print $1}')"
+          test "${actual_server}" = "${expected_server}"
+          test "${actual_agent}" = "${expected_agent}"
+          test "${actual_control_plane}" = "${expected_control_plane}"
+
+      - name: Set up Helm
+        uses: azure/setup-helm@dda3372f752e03dde6b3237bc9431cdc2f7a02a2 # v5.0.0
+        with:
+          version: v3.15.2
+
+      - name: Helm smoke test with local release-line image
+        env:
+          SMOKE_IMAGE_REPOSITORY: pulse-helm-smoke
+          SMOKE_IMAGE_TAG: ${{ needs.validate_invocation.outputs.release_version }}
+        run: |
+          set -euo pipefail
+
+          cleanup() {
+            kind delete cluster --name pulse-test >/dev/null 2>&1 || true
+          }
+
+          diagnose() {
+            echo "::group::helm status"
+            helm status pulse || true
+            echo "::endgroup::"
+
+            echo "::group::kubectl get all"
+            kubectl get all -A || true
+            echo "::endgroup::"
+
+            echo "::group::kubectl describe pods"
+            kubectl describe pods -A || true
+            echo "::endgroup::"
+
+            echo "::group::pod logs"
+            pods=$(kubectl get pods -A -o name 2>/dev/null || true)
+            for pod in $pods; do
+              echo "### ${pod}"
+              kubectl logs --all-containers=true --tail=200 "$pod" || true
+            done
+            echo "::endgroup::"
+
+            echo "::group::events"
+            kubectl get events -A --sort-by=.lastTimestamp || kubectl get events -A || true
+            echo "::endgroup::"
+
+            cleanup
+          }
+
+          trap 'diagnose' ERR
+
+          prepare_cluster_tool() {
+            local name="$1"
+            local url="$2"
+            local expected_sha="$3"
+            local destination="$RUNNER_TEMP/$name"
+            local download="$destination.download"
+            local installed_path=""
+            installed_path="$(command -v "$name" 2>/dev/null || true)"
+
+            if [ -n "$installed_path" ] && printf '%s  %s\n' "$expected_sha" "$installed_path" | sha256sum --check --status; then
+              install -m 0755 "$installed_path" "$destination"
+            else
+              rm -f "$download"
+              curl -fsSL -o "$download" "$url"
+              printf '%s  %s\n' "$expected_sha" "$download" | sha256sum --check
+              chmod 0755 "$download"
+              mv "$download" "$destination"
+            fi
+
+            printf '%s  %s\n' "$expected_sha" "$destination" | sha256sum --check
+            test -x "$destination"
+          }
+
+          prepare_cluster_tool \
+            kind \
+            https://kind.sigs.k8s.io/dl/v0.20.0/kind-linux-amd64 \
+            513a7213d6d3332dd9ef27c24dab35e5ef10a04fa27274fe1c14d8a246493ded
+          prepare_cluster_tool \
+            kubectl \
+            https://dl.k8s.io/release/v1.27.3/bin/linux/amd64/kubectl \
+            fba6c062e754a120bc8105cde1344de200452fe014a8759e06e4eec7ed258a09
+          export PATH="$RUNNER_TEMP:$PATH"
+          test "$(command -v kind)" = "$RUNNER_TEMP/kind"
+          test "$(command -v kubectl)" = "$RUNNER_TEMP/kubectl"
+          kind version
+          kubectl version --client=true
+
+          cleanup
+          kind create cluster --name pulse-test --wait 5m
+          kind load docker-image "${SMOKE_IMAGE_REPOSITORY}:${SMOKE_IMAGE_TAG}" --name pulse-test
+
+          helm install pulse deploy/helm/pulse \
+            --set persistence.enabled=false \
+            --set server.secretEnv.create=true \
+            --set server.secretEnv.data.API_TOKENS=test-token \
+            --set image.repository="${SMOKE_IMAGE_REPOSITORY}" \
+            --set image.tag="${SMOKE_IMAGE_TAG}" \
+            --set image.pullPolicy=Never \
+            --wait --timeout 5m --debug
+
+          kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=pulse --timeout=180s || (kubectl describe pods -l app.kubernetes.io/name=pulse && exit 1)
+          kubectl get pods -l app.kubernetes.io/name=pulse
+
+          helm upgrade pulse deploy/helm/pulse \
+            --set persistence.enabled=false \
+            --set server.secretEnv.create=true \
+            --set server.secretEnv.data.API_TOKENS=test-token \
+            --set image.repository="${SMOKE_IMAGE_REPOSITORY}" \
+            --set image.tag="${SMOKE_IMAGE_TAG}" \
+            --set image.pullPolicy=Never \
+            --wait --timeout 5m --debug
+
+          trap - ERR
+          cleanup
+
+          echo "✓ Helm smoke test passed"
