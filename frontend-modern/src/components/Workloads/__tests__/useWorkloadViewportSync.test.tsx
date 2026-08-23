@@ -67,7 +67,13 @@ describe('useWorkloadViewportSync', () => {
       passive: true,
     });
     expect(addEventListenerSpy).toHaveBeenCalledWith('wheel', expect.any(Function), {
+      passive: false,
+    });
+    expect(addEventListenerSpy).toHaveBeenCalledWith('touchstart', expect.any(Function), {
       passive: true,
+    });
+    expect(addEventListenerSpy).toHaveBeenCalledWith('touchmove', expect.any(Function), {
+      passive: false,
     });
     expect(addEventListenerSpy).toHaveBeenCalledWith('resize', expect.any(Function));
 
@@ -80,6 +86,8 @@ describe('useWorkloadViewportSync', () => {
 
     expect(removeEventListenerSpy).toHaveBeenCalledWith('scroll', expect.any(Function));
     expect(removeEventListenerSpy).toHaveBeenCalledWith('wheel', expect.any(Function));
+    expect(removeEventListenerSpy).toHaveBeenCalledWith('touchstart', expect.any(Function));
+    expect(removeEventListenerSpy).toHaveBeenCalledWith('touchmove', expect.any(Function));
     expect(removeEventListenerSpy).toHaveBeenCalledWith('resize', expect.any(Function));
   });
 
@@ -174,10 +182,26 @@ describe('useWorkloadViewportSync', () => {
     horizontalTableWrapper.dispatchEvent(new Event('scroll'));
     expect(onScroll).toHaveBeenCalledTimes(2);
 
-    appScrollContainer.dispatchEvent(new WheelEvent('wheel', { deltaY: 120 }));
-    await waitFor(() => {
-      expect(onScroll).toHaveBeenLastCalledWith(680, 400, 32);
+    const wheelEvent = new WheelEvent('wheel', {
+      cancelable: true,
+      deltaY: 120,
     });
+    appScrollContainer.dispatchEvent(wheelEvent);
+    expect(onScroll).toHaveBeenLastCalledWith(680, 400, 32);
+    expect(wheelEvent.defaultPrevented).toBe(false);
+
+    const touchStart = new Event('touchstart');
+    Object.defineProperty(touchStart, 'touches', {
+      value: { item: () => ({ clientX: 200, clientY: 240 }) },
+    });
+    appScrollContainer.dispatchEvent(touchStart);
+    const touchMove = new Event('touchmove');
+    Object.defineProperty(touchMove, 'touches', {
+      value: { item: () => ({ clientX: 196, clientY: 120 }) },
+    });
+    appScrollContainer.dispatchEvent(touchMove);
+    expect(onScroll).toHaveBeenLastCalledWith(680, 400, 32);
+    expect(touchMove.defaultPrevented).toBe(false);
   });
 
   it('exposes one app-shell back-to-top action after sustained workload scrolling', async () => {

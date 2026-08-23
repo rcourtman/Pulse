@@ -7,6 +7,11 @@ const MIN_VERTICAL_SCROLL_RANGE_PX = 1;
 const SCROLL_TO_TOP_VISIBILITY_THRESHOLD_PX = 640;
 const WHEEL_LINE_HEIGHT_PX = 16;
 
+interface TouchPosition {
+  x: number;
+  y: number;
+}
+
 const wheelDeltaInPixels = (event: WheelEvent, viewportHeight: number) => {
   if (event.deltaMode === WheelEvent.DOM_DELTA_LINE) return event.deltaY * WHEEL_LINE_HEIGHT_PX;
   if (event.deltaMode === WheelEvent.DOM_DELTA_PAGE) return event.deltaY * viewportHeight;
@@ -91,6 +96,7 @@ export function useWorkloadViewportSync(options: WorkloadsWorkloadViewportSyncOp
     const handleViewportScroll = () => {
       syncGuestWindowToViewport();
     };
+    let lastTouchPosition: TouchPosition | null = null;
     const handleViewportWheel = (event: Event) => {
       const wheelEvent = event as WheelEvent;
       if (!options.groupedWindowing.isWindowed() || wheelEvent.deltaY === 0) return;
@@ -100,6 +106,31 @@ export function useWorkloadViewportSync(options: WorkloadsWorkloadViewportSyncOp
           : window.innerHeight;
       syncGuestWindowToViewport(false, wheelDeltaInPixels(wheelEvent, viewportHeight));
     };
+    const handleViewportTouchStart = (event: Event) => {
+      const touch = (event as TouchEvent).touches.item(0);
+      lastTouchPosition = touch ? { x: touch.clientX, y: touch.clientY } : null;
+    };
+    const handleViewportTouchMove = (event: Event) => {
+      const touch = (event as TouchEvent).touches.item(0);
+      if (!touch) {
+        lastTouchPosition = null;
+        return;
+      }
+
+      const nextPosition = { x: touch.clientX, y: touch.clientY };
+      const previousPosition = lastTouchPosition;
+      lastTouchPosition = nextPosition;
+      if (!previousPosition || !options.groupedWindowing.isWindowed()) return;
+
+      const deltaX = previousPosition.x - nextPosition.x;
+      const deltaY = previousPosition.y - nextPosition.y;
+      if (deltaY === 0 || Math.abs(deltaY) <= Math.abs(deltaX)) return;
+      syncGuestWindowToViewport(false, deltaY);
+    };
+    const handleViewportTouchEnd = (event: Event) => {
+      const touch = (event as TouchEvent).touches.item(0);
+      lastTouchPosition = touch ? { x: touch.clientX, y: touch.clientY } : null;
+    };
     const handleViewportResize = () => {
       syncGuestWindowToViewport(true);
     };
@@ -108,11 +139,22 @@ export function useWorkloadViewportSync(options: WorkloadsWorkloadViewportSyncOp
     const scrollContainer = findScrollContainer(options.tableBodyRef()!);
     const scrollTarget = scrollContainer ?? window;
     scrollTarget.addEventListener('scroll', handleViewportScroll, { passive: true });
-    scrollTarget.addEventListener('wheel', handleViewportWheel, { passive: true });
+    // These two pre-scroll listeners intentionally remain non-passive. That
+    // makes the browser wait for the bounded row window to move before its
+    // compositor advances the viewport; neither handler cancels native input.
+    scrollTarget.addEventListener('wheel', handleViewportWheel, { passive: false });
+    scrollTarget.addEventListener('touchstart', handleViewportTouchStart, { passive: true });
+    scrollTarget.addEventListener('touchmove', handleViewportTouchMove, { passive: false });
+    scrollTarget.addEventListener('touchend', handleViewportTouchEnd, { passive: true });
+    scrollTarget.addEventListener('touchcancel', handleViewportTouchEnd, { passive: true });
     window.addEventListener('resize', handleViewportResize);
     onCleanup(() => {
       scrollTarget.removeEventListener('scroll', handleViewportScroll);
       scrollTarget.removeEventListener('wheel', handleViewportWheel);
+      scrollTarget.removeEventListener('touchstart', handleViewportTouchStart);
+      scrollTarget.removeEventListener('touchmove', handleViewportTouchMove);
+      scrollTarget.removeEventListener('touchend', handleViewportTouchEnd);
+      scrollTarget.removeEventListener('touchcancel', handleViewportTouchEnd);
       window.removeEventListener('resize', handleViewportResize);
     });
   });

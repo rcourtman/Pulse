@@ -833,12 +833,15 @@ change may globally weaken the Task 03 lifecycle-state idempotency invariant.
     Virtualization must remain visually invisible under rapid wheel and
     trackpad input. The windowing owner keeps a hysteretic directional runway
     instead of shifting the slice for every visible-row change, and viewport
-    sync may prewarm that runway from one passive wheel listener before the
-    corresponding scroll event. Group and guest iteration must remain keyed so
-    overlapping rows survive window shifts rather than rebinding every mounted
-    row. This anticipation must preserve the existing bounded mounted-row
-    budget; rendering the whole estate or adding per-row observers, timers, or
-    scroll listeners is forbidden.
+    sync must prewarm that runway before the compositor advances the viewport.
+    The single viewport owner may use non-passive wheel and vertical touch-move
+    listeners for that sequencing, provided they do not cancel native input or
+    add per-frame reactive work when the mounted runway already covers the next
+    viewport. Group and guest iteration must remain keyed so overlapping rows
+    survive window shifts rather than rebinding every mounted row. This
+    anticipation must preserve the existing bounded mounted-row budget;
+    rendering the whole estate or adding per-row observers, timers, or scroll
+    listeners is forbidden.
     That same viewport-sync owner may expose one passive app-shell scroll
     position signal and a smooth back-to-top action for the Workloads surface.
     The control must remain absent near the top, sit above the mobile navigation
@@ -1811,6 +1814,11 @@ which owns the Workloads table body measurement and the scroll/resize listener
 lifecycle. Future viewport sync changes must extend through that hook rather
 than rebuilding browser-event wiring or table-body geometry reads inside
 `frontend-modern/src/components/Workloads/useWorkloadsDerivedState.ts`.
+Its wheel and vertical touch-move prewarm listeners are deliberately
+non-passive so the browser compositor cannot advance beyond the mounted runway
+before the keyed guest window moves; they do not cancel native input, while the
+ordinary scroll-position listener remains passive. This preserves continuous
+rapid scrolling without increasing the bounded mounted-row budget.
 The canonical public demo intentionally exercises this production hot path:
 its default Proxmox estate contains 900 guests, crossing the 250-row windowing
 threshold while retaining the hook's 140-row mounted-window budget. The demo

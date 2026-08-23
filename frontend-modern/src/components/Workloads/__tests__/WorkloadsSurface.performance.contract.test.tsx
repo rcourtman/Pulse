@@ -925,7 +925,12 @@ describe('Workloads performance contract', () => {
       expect(workloadsWorkloadViewportSyncSource).toContain(
         'SCROLL_TO_TOP_VISIBILITY_THRESHOLD_PX',
       );
-      expect(workloadsWorkloadViewportSyncSource).toContain("addEventListener('wheel'");
+      expect(workloadsWorkloadViewportSyncSource).toContain(
+        "addEventListener('wheel', handleViewportWheel, { passive: false })",
+      );
+      expect(workloadsWorkloadViewportSyncSource).toContain(
+        "addEventListener('touchmove', handleViewportTouchMove, { passive: false })",
+      );
       expect(workloadsWorkloadViewportSyncSource).toContain('wheelDeltaInPixels');
       expect(workloadsWorkloadViewportSyncSource).toContain(
         "scrollContainer.scrollTo({ top: 0, behavior: 'smooth' })",

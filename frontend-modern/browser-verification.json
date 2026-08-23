@@ -1,17 +1,13 @@
 {
   "version": 1,
-  "base_sha": "6ee36bc1ea456938a22f5a4bae4d3332ca98d9ed",
-  "verified_at": "2026-08-23T18:54:26Z",
+  "base_sha": "10116cc17efb0004e3820f1a250335899d3b9bf0",
+  "verified_at": "2026-08-23T19:17:24Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/shared/useAnimatedNumberState.ts",
-    "frontend-modern/src/stores/websocket.ts",
-    "frontend-modern/src/utils/resourceStateAdapters.ts"
+    "frontend-modern/src/components/Workloads/useWorkloadViewportSync.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/shared/useAnimatedNumberState.ts": "eff0a4e3e886c41515e1ebfb563004bad0218dda1e1465d45ab6d0025ab10363",
-    "frontend-modern/src/stores/websocket.ts": "f2d071acd989ba5fa3c2877be66ae54231adfe34e311e19151b3ddeb1de4e923",
-    "frontend-modern/src/utils/resourceStateAdapters.ts": "3999af02f025c93d3ffd8fc2d28d801d264b35e7091f0262d869ce8e60569433"
+    "frontend-modern/src/components/Workloads/useWorkloadViewportSync.ts": "f21b70f169cc595b31337584e3df20022342e39d50bdfc9eac96a04770bcf7ba"
   },
   "routes": [
     "/proxmox/overview"
@@ -19,7 +15,7 @@
   "viewports": [
     {
       "width": 1280,
-      "height": 720
+      "height": 800
     },
     {
       "width": 390,
@@ -27,16 +23,16 @@
     }
   ],
   "states": [
-    "Fresh desktop navigation hydrated the connected 50-node and 929-guest mock estate with both Nodes and Guests tables visible",
-    "A fast desktop table scroll to scrollTop 20000 retained populated guest rows with no blank virtualized section",
-    "At 390x844 the node summary, Nodes table, and Guests table remained visible, and a fast table scroll to scrollTop 12000 retained populated rows",
-    "The Back to top control appeared after deep scrolling and returned the desktop table to scrollTop 0",
-    "A clean phone-width reload remained stable during sustained realtime updates with no console errors"
+    "The connected public mock estate rendered 50 nodes and 929 guests with the grouped workload window active",
+    "Across 24 consecutive 600-pixel desktop wheel steps from scrollTop 10000 to 24400, every sample retained at least 26 visible guest rows",
+    "Across 24 consecutive 600-pixel wheel steps at 390x844 from scrollTop 10000 to 24400, every sample retained at least 22 visible guest rows",
+    "Desktop and narrow verification both retained the 140-row mounted guest budget throughout rapid scrolling",
+    "The verified route reported no browser error-level runtime logs during responsive and sustained-scroll checks"
   ],
   "interactions": [
-    "Loaded /proxmox/overview in fresh desktop and phone-width tabs and waited for the full large-estate snapshot",
-    "Performed fast wheel-equivalent guest-table scrolling at desktop and phone widths and inspected the rendered row window",
-    "Activated Back to top after a deep desktop scroll and confirmed the scroll settled at the table origin",
-    "Reloaded the phone-width route after the animation bound changed and sampled sustained renderer metrics and console output"
+    "Reloaded /proxmox/overview and confirmed the complete large-estate mock snapshot and bounded workload window",
+    "Applied repeated physical wheel input through the workload viewport and sampled visible and mounted rows immediately after every desktop step",
+    "Repeated the same sustained wheel-input sequence at a 390x844 phone viewport and visually inspected the populated table",
+    "Inspected browser runtime logs after both responsive scroll sequences"
   ]
 }
