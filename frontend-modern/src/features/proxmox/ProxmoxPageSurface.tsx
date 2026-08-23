@@ -333,6 +333,7 @@ function ProxmoxOverview(props: ProxmoxOverviewProps) {
         <ProxmoxNodesTable
           nodes={currentModel().pveNodes}
           guests={currentModel().guests}
+          search={workloadsState.search}
           metricDisplayMode={props.metricDisplayMode}
           metricHistoryRange={props.metricHistoryRange}
           layoutWidth={overviewWidth.width}

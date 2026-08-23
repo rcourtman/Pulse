@@ -312,6 +312,23 @@ describe('ProxmoxPageSurface contract', () => {
     );
   });
 
+  it('passes the shared workload search into the node table', () => {
+    mockWorkloadSearch.mockReturnValue('pve-1');
+    setResources([
+      makeResource({
+        id: 'agent:pve-1',
+        type: 'agent',
+        proxmox: { nodeName: 'pve-1', clusterName: 'homelab' },
+      }),
+    ]);
+
+    renderSurface();
+
+    expect(mockNodesTableProps).toHaveBeenLastCalledWith(
+      expect.objectContaining({ search: mockWorkloadSearch }),
+    );
+  });
+
   it('keeps Proxmox workload and backup filters free of a saved-views affordance', () => {
     // Saved views persisted the page's URL query string to localStorage. The
     // browser's own bookmarks already do that and survive a cleared cache, so

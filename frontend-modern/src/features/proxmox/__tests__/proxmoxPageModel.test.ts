@@ -4,6 +4,7 @@ import {
   PROXMOX_TAB_SPECS,
   buildProxmoxPageModel,
   buildVisibleProxmoxTabSpecs,
+  filterProxmoxNodes,
   getResourceVersion,
   resolveProxmoxPlatformScope,
 } from '../proxmoxPageModel';
@@ -217,5 +218,81 @@ describe('proxmoxPageModel', () => {
         }),
       ),
     ).toBe('8.3.3');
+  });
+
+  it('filters nodes by native identity, cluster, aliases, and matching guests', () => {
+    const nodes = [
+      makeResource({
+        id: 'friendly-east',
+        type: 'agent',
+        displayName: 'East estate',
+        platformId: 'site-east',
+        proxmox: {
+          nodeName: 'pve-east-01',
+          nodeAliases: ['old-east-name'],
+          clusterName: 'production',
+        },
+      }),
+      makeResource({
+        id: 'friendly-west',
+        type: 'agent',
+        displayName: 'West estate',
+        platformId: 'site-west',
+        proxmox: { nodeName: 'pve-west-01', clusterName: 'production' },
+      }),
+    ];
+    const guests = [
+      makeResource({
+        id: 'vm-database',
+        type: 'vm',
+        displayName: 'database-primary',
+        parentName: 'pve-east-01',
+        proxmox: { nodeName: 'pve-east-01', instance: 'site-east', vmid: 101 },
+      }),
+    ];
+
+    expect(filterProxmoxNodes(nodes, guests, 'pve-east-01').map((node) => node.id)).toEqual([
+      'friendly-east',
+    ]);
+    expect(filterProxmoxNodes(nodes, guests, 'old-east-name').map((node) => node.id)).toEqual([
+      'friendly-east',
+    ]);
+    expect(filterProxmoxNodes(nodes, guests, 'database-primary').map((node) => node.id)).toEqual([
+      'friendly-east',
+    ]);
+    expect(filterProxmoxNodes(nodes, guests, 'pve-east-01, pve-west-01')).toHaveLength(2);
+  });
+
+  it('preserves exclusion search semantics and does not cross provider boundaries', () => {
+    const nodes = [
+      makeResource({
+        id: 'site-a-node',
+        type: 'agent',
+        platformId: 'site-a',
+        proxmox: { instance: 'site-a', nodeName: 'pve-1', clusterName: 'production' },
+      }),
+      makeResource({
+        id: 'site-b-node',
+        type: 'agent',
+        platformId: 'site-b',
+        proxmox: { instance: 'site-b', nodeName: 'pve-1', clusterName: 'production' },
+      }),
+    ];
+    const guests = [
+      makeResource({
+        id: 'site-b-vm',
+        type: 'vm',
+        displayName: 'unique-west-guest',
+        platformId: 'site-b',
+        proxmox: { instance: 'site-b', nodeName: 'pve-1', vmid: 202 },
+      }),
+    ];
+
+    expect(
+      filterProxmoxNodes(nodes, guests, 'pve-1 -unique-west-guest').map((node) => node.id),
+    ).toEqual(['site-a-node']);
+    expect(filterProxmoxNodes(nodes, guests, 'unique-west-guest').map((node) => node.id)).toEqual([
+      'site-b-node',
+    ]);
   });
 });

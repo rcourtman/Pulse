@@ -113,6 +113,24 @@ afterEach(() => {
 });
 
 describe('ProxmoxNodesTable', () => {
+  it('uses the shared workload search to narrow the host preview and count', () => {
+    render(() => (
+      <ProxmoxNodesTable
+        nodes={makeNodeResources(10)}
+        guests={[]}
+        search={() => 'pve-node-9'}
+        emptyIcon={<span />}
+        emptyTitle="No Proxmox VE nodes"
+        emptyDescription="No nodes"
+      />
+    ));
+
+    expect(screen.getByText('Nodes').parentElement).toHaveTextContent('Nodes1of 10');
+    expect(screen.getByText('pve-node-9')).toBeInTheDocument();
+    expect(screen.queryByText('pve-node-1')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Show all 10 nodes' })).not.toBeInTheDocument();
+  });
+
   it('keeps large estates bounded until the operator expands the node preview', () => {
     render(() => (
       <ProxmoxNodesTable

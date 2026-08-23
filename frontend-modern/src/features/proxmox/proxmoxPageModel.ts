@@ -1,5 +1,6 @@
 import type { Resource, ResourceMetric, ResourceType } from '@/types/resource';
 import { formatProxmoxVersion } from '@/utils/proxmoxVersion';
+import { matchesSearchTermSplit, splitSearchExclusions } from '@/utils/searchQuery';
 
 export type ProxmoxPageTabId = 'overview' | 'storage' | 'replication' | 'backups' | 'ceph' | 'mail';
 
@@ -208,6 +209,58 @@ export function getResourceVmid(resource: Resource): string {
   }
   return '';
 }
+
+const getProxmoxSearchValues = (resource: Resource): Array<string | number | undefined> => [
+  resource.name,
+  resource.displayName,
+  resource.id,
+  resource.parentName,
+  resource.platformId,
+  resource.status,
+  resource.identity?.hostname,
+  ...(resource.identity?.ips ?? []),
+  ...(resource.tags ?? []),
+  resource.proxmox?.node,
+  resource.proxmox?.nodeName,
+  resource.proxmox?.nodeIdentity,
+  resource.proxmox?.nodeDisplayName,
+  ...(resource.proxmox?.nodeAliases ?? []),
+  resource.proxmox?.clusterName,
+  resource.proxmox?.instance,
+  resource.proxmox?.host,
+  resource.proxmox?.pveVersion,
+  getResourceVmid(resource),
+];
+
+/**
+ * Keeps the overview's host inventory aligned with its workload search.
+ * A matching guest makes its parent node searchable too, so searching for a
+ * VM/LXC does not leave the operator looking at an unrelated host preview.
+ */
+export const filterProxmoxNodes = (
+  nodes: Resource[],
+  guests: Resource[],
+  search: string,
+): Resource[] => {
+  const split = splitSearchExclusions(search);
+  if (!split.needle && split.excludes.length === 0) return nodes;
+
+  return nodes.filter((node) => {
+    const values = getProxmoxSearchValues(node);
+    for (const guest of guests) {
+      if (isProxmoxChildOfNode(guest, node)) values.push(...getProxmoxSearchValues(guest));
+    }
+
+    const haystack = values
+      .filter(
+        (value): value is string | number => typeof value === 'string' || typeof value === 'number',
+      )
+      .map(String)
+      .join(' ')
+      .toLowerCase();
+    return matchesSearchTermSplit(haystack, split);
+  });
+};
 
 export function getResourceLastBackup(resource: Resource): string | number | null {
   const platformProxmox = getPlatformData(resource).proxmox;

@@ -1,23 +1,17 @@
 {
   "version": 1,
-  "base_sha": "4040a79f4f5ffc465131fb75c31146d93e45c8d5",
-  "verified_at": "2026-08-23T15:31:26Z",
+  "base_sha": "d8fe2a935875675b22a87c5471ffc923f7a0ab51",
+  "verified_at": "2026-08-23T16:50:00Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Workloads/WorkloadPanel.tsx",
-    "frontend-modern/src/components/Workloads/WorkloadsSurface.tsx",
-    "frontend-modern/src/components/Workloads/useGroupedTableWindowing.ts",
-    "frontend-modern/src/components/Workloads/useWorkloadViewportSync.ts",
-    "frontend-modern/src/components/Workloads/useWorkloadsDerivedState.ts",
-    "frontend-modern/src/components/Workloads/useWorkloadsState.ts"
+    "frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx",
+    "frontend-modern/src/features/proxmox/proxmoxPageModel.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Workloads/WorkloadPanel.tsx": "eb8ddd4c5f03efa629ba480fa9cbe4bbd8293834e6d0e6bf05e3fbb81d247edf",
-    "frontend-modern/src/components/Workloads/WorkloadsSurface.tsx": "765e4185fea10dd2e6da0c9e3de53ee53293ae6e1e0e19d6171fb01748fa5b8d",
-    "frontend-modern/src/components/Workloads/useGroupedTableWindowing.ts": "792a66e9f01fa1ab731413527255c631ccd20bc26bcef24a74208f1e61f76d58",
-    "frontend-modern/src/components/Workloads/useWorkloadViewportSync.ts": "b12b4a1df25c88a5468e867aa2b58f10a452d65be846dcfd1bcaa4942e506a96",
-    "frontend-modern/src/components/Workloads/useWorkloadsDerivedState.ts": "ecfc505a901c65b7ed8e7d17d828961d1409c948c6f78bf2528ea907cf484343",
-    "frontend-modern/src/components/Workloads/useWorkloadsState.ts": "d67a6b5d5f2de1ff3c0fe100652cf2e3d8ed2f74cda767a1bdb7462dea243b28"
+    "frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx": "5b2dce1ff4cae9624fa106ad9c01f29e0025b33e0def87cee30798e74fe31329",
+    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx": "27d2077c659d40e2c51472086e745311221d771129455a4bae2be816ab116dbe",
+    "frontend-modern/src/features/proxmox/proxmoxPageModel.ts": "f80b8e01fd31e7f2de55cda5a2f5e58005068b07daa77c3356811ad7f5919051"
   },
   "routes": [
     "/proxmox/overview"
@@ -28,25 +22,22 @@
       "height": 720
     },
     {
-      "width": 375,
-      "height": 812
+      "width": 390,
+      "height": 844
     }
   ],
   "states": [
-    "The Proxmox overview renders the large local mock estate with grouped workload virtualization active",
-    "At 1280x720 the app scroll height remains exactly 29470 pixels at scroll positions 0, 1800, and 5000",
-    "At 375x812 the app scroll height remains exactly 36372 pixels at scroll positions 0, 2800, and 7000",
-    "All mounted phone guest rows measure 37 pixels and grouped node headers remain a single 28-pixel line",
-    "Back to top is absent near the top and appears after the 640-pixel threshold",
-    "The phone control is a 44-pixel fixed button positioned above the bottom navigation",
-    "The verified desktop and phone journeys reported no browser console errors"
+    "Default desktop Proxmox overview renders the 50-node mock estate with 8 clusters and 2 standalone nodes",
+    "Desktop search for pve31 renders one matching node as 1 of 50 and keeps the matching guest inventory visible",
+    "Narrow search for pve31 renders one matching node with the native pve31 identifier beside its friendly name",
+    "Narrow filtered layout has no horizontal overflow and retains the responsive node and workload columns",
+    "The browser verification run reported no console errors"
   ],
   "interactions": [
-    "Scrolled repeatedly through the desktop mock estate and compared the app-owned scroll shell height at multiple virtual windows",
-    "Activated Back to top on desktop and confirmed the smooth scroll completed at zero and the control disappeared",
-    "Applied a temporary 375x812 viewport override and repeated the multi-position scroll-height measurements",
-    "Captured and visually inspected the phone viewport with the control above the mobile navigation",
-    "Activated Back to top on phone and confirmed the app scroll shell returned to zero while retaining the same total height",
-    "Reset the temporary viewport override and closed the temporary test tab after verification"
+    "Loaded the Proxmox overview and inspected the default 50-node desktop table",
+    "Entered pve31 in the shared workload search and verified the node table reduced to 1 of 50",
+    "Verified the same query left the matching Analytics A host and its pve31 workload rows visible",
+    "Applied a temporary 390x844 viewport override, reloaded the overview, entered pve31, and verified the narrow DOM and screenshot",
+    "Reset the temporary viewport override after verification"
   ]
 }

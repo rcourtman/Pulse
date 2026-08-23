@@ -54,6 +54,7 @@ import type { Resource } from '@/types/resource';
 import { nodeFromResource } from '@/utils/resourceStateAdapters';
 import {
   getResourceClusterLabel,
+  filterProxmoxNodes,
   getResourceVersion,
   isProxmoxChildOfNode,
 } from './proxmoxPageModel';
@@ -192,6 +193,7 @@ const getHostSortValue = (
 export const ProxmoxNodesTable: Component<{
   nodes: Resource[];
   guests: Resource[];
+  search?: Accessor<string>;
   metricDisplayMode?: Accessor<WorkloadsMetricDisplayMode>;
   metricHistoryRange?: Accessor<WorkloadTableMetricHistoryRange>;
   layoutWidth?: Accessor<number | null | undefined>;
@@ -217,13 +219,16 @@ export const ProxmoxNodesTable: Component<{
   const visibleColumnIds = createMemo(() => visibleColumns().map((column) => column.id));
   const displayMode = () => props.metricDisplayMode?.() ?? 'bars';
   const isSparklineMode = () => displayMode() === 'sparklines';
+  const filteredNodes = createMemo(() =>
+    filterProxmoxNodes(props.nodes, props.guests, props.search?.() ?? ''),
+  );
   const sort = createPlatformTableSortState({
     storageKey: 'proxmoxNodes',
     sortKeys: PROXMOX_HOST_SORT_KEYS,
     descendingFirst: ['uptime', 'cpu', 'memory', 'disk', 'temp', 'vms', 'cts'],
   });
   const sortedNodes = createMemo(() =>
-    sort.sortRows(props.nodes, (node, key) => getHostSortValue(node, props.guests, key)),
+    sort.sortRows(filteredNodes(), (node, key) => getHostSortValue(node, props.guests, key)),
   );
   const previewLimit = createMemo(() =>
     layoutMode() === 'narrow' || layoutMode() === 'phone' || layoutMode() === 'mobile' ? 4 : 8,
@@ -253,483 +258,504 @@ export const ProxmoxNodesTable: Component<{
         />
       }
     >
-      <PlatformTableShell
-        title={
-          <span class="inline-flex items-center gap-1.5">
-            Nodes
-            <Show when={inventoryCountsVisible()}>
-              <span class="font-semibold tabular-nums text-base-content">
-                {formatPlatformTableIntegerValue(props.nodes.length)}
-              </span>
-            </Show>
-          </span>
+      <Show
+        when={filteredNodes().length > 0}
+        fallback={
+          <PlatformTableEmptyState
+            icon={props.emptyIcon}
+            title="No matching Proxmox VE nodes"
+            description="Adjust the search to see nodes or guests in this Proxmox estate."
+          />
         }
-        actions={
-          <span class="inline-flex items-center gap-2">
-            <Show
-              when={
-                inventoryCountsVisible() &&
-                props.topology &&
-                (props.topology.clusters > 0 || props.topology.standalone > 0)
-              }
-            >
-              <span class="text-[10px] font-medium text-muted">
-                <Show when={props.topology!.clusters > 0}>
-                  {formatPlatformTableIntegerValue(props.topology!.clusters)}{' '}
-                  {props.topology!.clusters === 1 ? 'cluster' : 'clusters'}
-                </Show>
-                <Show when={props.topology!.clusters > 0 && props.topology!.standalone > 0}>
-                  {' / '}
-                </Show>
-                <Show when={props.topology!.standalone > 0}>
-                  {formatPlatformTableIntegerValue(props.topology!.standalone)} standalone
-                </Show>
-              </span>
-            </Show>
-            <PlatformTablePreviewToggle
-              expanded={nodePreview.expanded()}
-              canExpand={nodePreview.canExpand()}
-              total={props.nodes.length}
-              noun="nodes"
-              showCount={inventoryCountsVisible()}
-              onToggle={toggleNodePreview}
-            />
-          </span>
-        }
-        cardClass="proxmox-nodes-card"
-        tableClass={`${getProxmoxHostTableMinWidthClass(layoutMode())} table-fixed text-xs`}
-        colgroup={
-          <colgroup>
+      >
+        <PlatformTableShell
+          title={
+            <span class="inline-flex items-center gap-1.5">
+              Nodes
+              <Show when={inventoryCountsVisible()}>
+                <span class="font-semibold tabular-nums text-base-content">
+                  {formatPlatformTableIntegerValue(filteredNodes().length)}
+                  <Show when={filteredNodes().length !== props.nodes.length}>
+                    <span class="ml-1 text-xs font-medium text-muted">
+                      of {formatPlatformTableIntegerValue(props.nodes.length)}
+                    </span>
+                  </Show>
+                </span>
+              </Show>
+            </span>
+          }
+          actions={
+            <span class="inline-flex items-center gap-2">
+              <Show
+                when={
+                  inventoryCountsVisible() &&
+                  props.topology &&
+                  !props.search?.()?.trim() &&
+                  (props.topology.clusters > 0 || props.topology.standalone > 0)
+                }
+              >
+                <span class="text-[10px] font-medium text-muted">
+                  <Show when={props.topology!.clusters > 0}>
+                    {formatPlatformTableIntegerValue(props.topology!.clusters)}{' '}
+                    {props.topology!.clusters === 1 ? 'cluster' : 'clusters'}
+                  </Show>
+                  <Show when={props.topology!.clusters > 0 && props.topology!.standalone > 0}>
+                    {' / '}
+                  </Show>
+                  <Show when={props.topology!.standalone > 0}>
+                    {formatPlatformTableIntegerValue(props.topology!.standalone)} standalone
+                  </Show>
+                </span>
+              </Show>
+              <PlatformTablePreviewToggle
+                expanded={nodePreview.expanded()}
+                canExpand={nodePreview.canExpand()}
+                total={filteredNodes().length}
+                noun="nodes"
+                showCount={inventoryCountsVisible()}
+                onToggle={toggleNodePreview}
+              />
+            </span>
+          }
+          cardClass="proxmox-nodes-card"
+          tableClass={`${getProxmoxHostTableMinWidthClass(layoutMode())} table-fixed text-xs`}
+          colgroup={
+            <colgroup>
+              <For each={visibleColumns()}>
+                {(column) => (
+                  <col
+                    style={getProxmoxHostColumnWidthStyle(
+                      column.id,
+                      layoutMode(),
+                      visibleColumnIds(),
+                    )}
+                  />
+                )}
+              </For>
+            </colgroup>
+          }
+          header={
             <For each={visibleColumns()}>
               {(column) => (
-                <col
-                  style={getProxmoxHostColumnWidthStyle(
-                    column.id,
-                    layoutMode(),
-                    visibleColumnIds(),
-                  )}
-                />
+                <PlatformSortableTableHead kind={column.kind} sort={sort} sortKey={column.id}>
+                  {(layoutMode() === 'narrow' ||
+                    layoutMode() === 'phone' ||
+                    layoutMode() === 'mobile') &&
+                  column.id === 'memory'
+                    ? 'Mem'
+                    : (layoutMode() === 'narrow' ||
+                          layoutMode() === 'phone' ||
+                          layoutMode() === 'mobile') &&
+                        column.id === 'uptime'
+                      ? 'Age'
+                      : column.label}
+                </PlatformSortableTableHead>
               )}
             </For>
-          </colgroup>
-        }
-        header={
-          <For each={visibleColumns()}>
-            {(column) => (
-              <PlatformSortableTableHead kind={column.kind} sort={sort} sortKey={column.id}>
-                {(layoutMode() === 'narrow' ||
+          }
+          body={
+            <For each={nodePreview.visibleRows()}>
+              {(node) => {
+                const name = () => asTrimmedString(node.name) || node.id;
+                const nativeNodeName = () => asTrimmedString(node.proxmox?.nodeName) ?? '';
+                const visibleNodeLabel = () =>
+                  layoutMode() === 'narrow' && nativeNodeName().length > 0
+                    ? nativeNodeName()
+                    : name();
+                const showNativeNodeName = () =>
+                  layoutMode() === 'phone' &&
+                  nativeNodeName().length > 0 &&
+                  nativeNodeName() !== name();
+                const drawerNode = createMemo(() => nodeFromResource(node));
+                const detailRowId = () => `proxmox-host-drawer-${node.id}`;
+                const isSelected = () => selectedNodeId() === node.id;
+                const toggleNodeDrawer = () =>
+                  setSelectedNodeId((current) => (current === node.id ? null : node.id));
+                const handleActivationKey: JSX.EventHandler<HTMLTableRowElement, KeyboardEvent> = (
+                  event,
+                ) => {
+                  if (event.key !== 'Enter' && event.key !== ' ') return;
+                  event.preventDefault();
+                  toggleNodeDrawer();
+                };
+                const version = () => asTrimmedString(getResourceVersion(node));
+                const cluster = () => getResourceClusterLabel(node);
+                const counts = () => countGuestsForNode(props.guests, node);
+                const indicator = () => getSimpleStatusIndicator(node.status);
+                const connectionHealth = createMemo(() =>
+                  (asTrimmedString(node.proxmox?.connectionHealth) ?? '').toLowerCase(),
+                );
+                const availabilityLabel = createMemo(() => {
+                  if (node.status === 'offline') return 'Offline';
+                  // A linked Pulse agent can still prove that a host is online
+                  // while the Proxmox provider path is unavailable. In that
+                  // hybrid case the provider metrics are stale, not evidence
+                  // that the host itself is powered off.
+                  if (connectionHealth() === 'error' && node.status === 'online') return 'Stale';
+                  if (connectionHealth() === 'error') return 'Offline';
+                  if (
+                    node.status === 'unknown' ||
+                    connectionHealth() === 'degraded' ||
+                    connectionHealth() === 'stale'
+                  ) {
+                    return 'Stale';
+                  }
+                  if (node.status === 'degraded' || node.status === 'warning') return 'Degraded';
+                  return 'Online';
+                });
+                const isOnline = createMemo(() => availabilityLabel() === 'Online');
+                const usesCompactMetrics = () =>
+                  layoutMode() === 'narrow' ||
                   layoutMode() === 'phone' ||
-                  layoutMode() === 'mobile') &&
-                column.id === 'memory'
-                  ? 'Mem'
-                  : (layoutMode() === 'narrow' ||
-                        layoutMode() === 'phone' ||
-                        layoutMode() === 'mobile') &&
-                      column.id === 'uptime'
-                    ? 'Age'
-                    : column.label}
-              </PlatformSortableTableHead>
-            )}
-          </For>
-        }
-        body={
-          <For each={nodePreview.visibleRows()}>
-            {(node) => {
-              const name = () => asTrimmedString(node.name) || node.id;
-              const nativeNodeName = () => asTrimmedString(node.proxmox?.nodeName) ?? '';
-              const visibleNodeLabel = () =>
-                layoutMode() === 'narrow' && nativeNodeName().length > 0
-                  ? nativeNodeName()
-                  : name();
-              const showNativeNodeName = () =>
-                layoutMode() === 'phone' &&
-                nativeNodeName().length > 0 &&
-                nativeNodeName() !== name();
-              const drawerNode = createMemo(() => nodeFromResource(node));
-              const detailRowId = () => `proxmox-host-drawer-${node.id}`;
-              const isSelected = () => selectedNodeId() === node.id;
-              const toggleNodeDrawer = () =>
-                setSelectedNodeId((current) => (current === node.id ? null : node.id));
-              const handleActivationKey: JSX.EventHandler<HTMLTableRowElement, KeyboardEvent> = (
-                event,
-              ) => {
-                if (event.key !== 'Enter' && event.key !== ' ') return;
-                event.preventDefault();
-                toggleNodeDrawer();
-              };
-              const version = () => asTrimmedString(getResourceVersion(node));
-              const cluster = () => getResourceClusterLabel(node);
-              const counts = () => countGuestsForNode(props.guests, node);
-              const indicator = () => getSimpleStatusIndicator(node.status);
-              const connectionHealth = createMemo(() =>
-                (asTrimmedString(node.proxmox?.connectionHealth) ?? '').toLowerCase(),
-              );
-              const availabilityLabel = createMemo(() => {
-                if (node.status === 'offline') return 'Offline';
-                // A linked Pulse agent can still prove that a host is online
-                // while the Proxmox provider path is unavailable. In that
-                // hybrid case the provider metrics are stale, not evidence
-                // that the host itself is powered off.
-                if (connectionHealth() === 'error' && node.status === 'online') return 'Stale';
-                if (connectionHealth() === 'error') return 'Offline';
-                if (
-                  node.status === 'unknown' ||
-                  connectionHealth() === 'degraded' ||
-                  connectionHealth() === 'stale'
-                ) {
-                  return 'Stale';
-                }
-                if (node.status === 'degraded' || node.status === 'warning') return 'Degraded';
-                return 'Online';
-              });
-              const isOnline = createMemo(() => availabilityLabel() === 'Online');
-              const usesCompactMetrics = () =>
-                layoutMode() === 'narrow' || layoutMode() === 'phone' || layoutMode() === 'mobile';
-              const usesCondensedIdentity = () =>
-                layoutMode() === 'narrow' || layoutMode() === 'phone';
-              const uptime = () =>
-                formatNodeUptime(isOnline() ? node.uptime : undefined, usesCompactMetrics());
-              const fullUptime = () => formatNodeUptime(isOnline() ? node.uptime : undefined).label;
-              const metricsKey = () => buildMetricKeyForUnifiedResource(node);
-              const temperature = () => node.temperature;
-              const alertResourceIds = () => hostOverrideIdCandidates(node);
-              const temperatureThresholds = () =>
-                alertsActivation.getMetricThresholds('node', 'temperature', alertResourceIds());
-              const cpuThresholds = () =>
-                alertsActivation.getMetricThresholds('node', 'cpu', alertResourceIds());
-              const memoryThresholds = () =>
-                alertsActivation.getMetricThresholds('node', 'memory', alertResourceIds());
-              const diskThresholds = () =>
-                alertsActivation.getMetricThresholds('node', 'disk', alertResourceIds());
-              const cpuPercent = () => getPlatformTableFiniteMetric(node.cpu?.current) ?? 0;
-              const memoryUsed = () => getPlatformTableFiniteMetric(node.memory?.used) ?? 0;
-              const memoryTotal = () => getPlatformTableFiniteMetric(node.memory?.total) ?? 0;
-              const memoryPercent = () =>
-                memoryTotal() > 0
-                  ? (memoryUsed() / memoryTotal()) * 100
-                  : (getPlatformTableFiniteMetric(node.memory?.current) ?? 0);
-              const memoryPercentOnly = () =>
-                !memoryTotal() && getPlatformTableFiniteMetric(node.memory?.current) !== undefined
-                  ? getPlatformTableFiniteMetric(node.memory?.current)
-                  : undefined;
-              const diskPercent = () => getPlatformTableFiniteMetric(node.disk?.current) ?? 0;
-              const aggregateDisk = (): Disk | undefined => {
-                if (!node.disk) return undefined;
-                const total = getPlatformTableFiniteMetric(node.disk.total) ?? 0;
-                const used = getPlatformTableFiniteMetric(node.disk.used) ?? 0;
-                const free = getPlatformTableFiniteMetric(node.disk.free) ?? 0;
-                const usage = getPlatformTableFiniteMetric(node.disk.current) ?? 0;
-                return { total, used, free, usage } as Disk;
-              };
-              const legacyNode = () => projectResourceToLegacyNode(node);
-              const externalUrl = () => {
-                const shimmed = drawerNode();
-                return shimmed ? getNodeExternalUrl(shimmed) : '';
-              };
-              const pendingUpdates = () => drawerNode()?.pendingUpdates ?? 0;
-              const alertStyles = createMemo(() =>
-                getAlertStyles(node.id, activeAlerts, alertsEnabled(), node.name),
-              );
-              const alertAccentTone = createMemo<
-                'critical' | 'warning' | 'acknowledged' | undefined
-              >(() => {
-                const styles = alertStyles();
-                if (styles.hasUnacknowledgedAlert) {
-                  return styles.severity === 'critical' ? 'critical' : 'warning';
-                }
-                return styles.hasAcknowledgedOnlyAlert ? 'acknowledged' : undefined;
-              });
-              const rowAlertBg = () => {
-                const styles = alertStyles();
-                if (!styles.hasUnacknowledgedAlert) return '';
-                return styles.severity === 'critical'
-                  ? 'bg-red-50 dark:bg-red-950'
-                  : 'bg-yellow-50 dark:bg-yellow-950';
-              };
-              const cpuSeries = () => metricHistory.getNodeMetricSeries(legacyNode(), 'cpu');
-              const memorySeries = () => metricHistory.getNodeMetricSeries(legacyNode(), 'memory');
-              const diskSeries = () => metricHistory.getNodeMetricSeries(legacyNode(), 'disk');
-              const renderColumnCell = (column: ProxmoxHostTableColumn): JSX.Element => {
-                switch (column.id) {
-                  case 'node':
-                    return (
-                      <TableCell class={getPlatformTableCellClassForKind(column.kind)}>
-                        <div
-                          class={`flex min-w-0 items-center ${usesCondensedIdentity() ? 'gap-1' : 'gap-2'}`}
-                        >
-                          <PlatformResourceDetailToggleButton
-                            expanded={isSelected()}
-                            resourceLabel={name()}
-                            controlsId={detailRowId()}
-                            onToggle={toggleNodeDrawer}
-                          />
-                          <StatusDot
-                            size="sm"
-                            variant={indicator().variant}
-                            title={node.status || 'unknown'}
-                            ariaHidden
-                          />
-                          <div class="flex min-w-0 flex-1 flex-col">
-                            <ResourceNameWithWebInterfaceLink
-                              name={name()}
-                              url={externalUrl()}
-                              class={`min-w-0 ${usesCondensedIdentity() ? '[&>a]:hidden' : ''}`}
-                              nameClass="truncate font-semibold text-base-content"
-                              title={`Open ${name()} web interface`}
-                            >
-                              {visibleNodeLabel()}
-                            </ResourceNameWithWebInterfaceLink>
-                            <Show when={showNativeNodeName()}>
-                              <span class="-mt-0.5 truncate text-[10px] text-muted">
-                                {nativeNodeName()}
+                  layoutMode() === 'mobile';
+                const usesCondensedIdentity = () =>
+                  layoutMode() === 'narrow' || layoutMode() === 'phone';
+                const uptime = () =>
+                  formatNodeUptime(isOnline() ? node.uptime : undefined, usesCompactMetrics());
+                const fullUptime = () =>
+                  formatNodeUptime(isOnline() ? node.uptime : undefined).label;
+                const metricsKey = () => buildMetricKeyForUnifiedResource(node);
+                const temperature = () => node.temperature;
+                const alertResourceIds = () => hostOverrideIdCandidates(node);
+                const temperatureThresholds = () =>
+                  alertsActivation.getMetricThresholds('node', 'temperature', alertResourceIds());
+                const cpuThresholds = () =>
+                  alertsActivation.getMetricThresholds('node', 'cpu', alertResourceIds());
+                const memoryThresholds = () =>
+                  alertsActivation.getMetricThresholds('node', 'memory', alertResourceIds());
+                const diskThresholds = () =>
+                  alertsActivation.getMetricThresholds('node', 'disk', alertResourceIds());
+                const cpuPercent = () => getPlatformTableFiniteMetric(node.cpu?.current) ?? 0;
+                const memoryUsed = () => getPlatformTableFiniteMetric(node.memory?.used) ?? 0;
+                const memoryTotal = () => getPlatformTableFiniteMetric(node.memory?.total) ?? 0;
+                const memoryPercent = () =>
+                  memoryTotal() > 0
+                    ? (memoryUsed() / memoryTotal()) * 100
+                    : (getPlatformTableFiniteMetric(node.memory?.current) ?? 0);
+                const memoryPercentOnly = () =>
+                  !memoryTotal() && getPlatformTableFiniteMetric(node.memory?.current) !== undefined
+                    ? getPlatformTableFiniteMetric(node.memory?.current)
+                    : undefined;
+                const diskPercent = () => getPlatformTableFiniteMetric(node.disk?.current) ?? 0;
+                const aggregateDisk = (): Disk | undefined => {
+                  if (!node.disk) return undefined;
+                  const total = getPlatformTableFiniteMetric(node.disk.total) ?? 0;
+                  const used = getPlatformTableFiniteMetric(node.disk.used) ?? 0;
+                  const free = getPlatformTableFiniteMetric(node.disk.free) ?? 0;
+                  const usage = getPlatformTableFiniteMetric(node.disk.current) ?? 0;
+                  return { total, used, free, usage } as Disk;
+                };
+                const legacyNode = () => projectResourceToLegacyNode(node);
+                const externalUrl = () => {
+                  const shimmed = drawerNode();
+                  return shimmed ? getNodeExternalUrl(shimmed) : '';
+                };
+                const pendingUpdates = () => drawerNode()?.pendingUpdates ?? 0;
+                const alertStyles = createMemo(() =>
+                  getAlertStyles(node.id, activeAlerts, alertsEnabled(), node.name),
+                );
+                const alertAccentTone = createMemo<
+                  'critical' | 'warning' | 'acknowledged' | undefined
+                >(() => {
+                  const styles = alertStyles();
+                  if (styles.hasUnacknowledgedAlert) {
+                    return styles.severity === 'critical' ? 'critical' : 'warning';
+                  }
+                  return styles.hasAcknowledgedOnlyAlert ? 'acknowledged' : undefined;
+                });
+                const rowAlertBg = () => {
+                  const styles = alertStyles();
+                  if (!styles.hasUnacknowledgedAlert) return '';
+                  return styles.severity === 'critical'
+                    ? 'bg-red-50 dark:bg-red-950'
+                    : 'bg-yellow-50 dark:bg-yellow-950';
+                };
+                const cpuSeries = () => metricHistory.getNodeMetricSeries(legacyNode(), 'cpu');
+                const memorySeries = () =>
+                  metricHistory.getNodeMetricSeries(legacyNode(), 'memory');
+                const diskSeries = () => metricHistory.getNodeMetricSeries(legacyNode(), 'disk');
+                const renderColumnCell = (column: ProxmoxHostTableColumn): JSX.Element => {
+                  switch (column.id) {
+                    case 'node':
+                      return (
+                        <TableCell class={getPlatformTableCellClassForKind(column.kind)}>
+                          <div
+                            class={`flex min-w-0 items-center ${usesCondensedIdentity() ? 'gap-1' : 'gap-2'}`}
+                          >
+                            <PlatformResourceDetailToggleButton
+                              expanded={isSelected()}
+                              resourceLabel={name()}
+                              controlsId={detailRowId()}
+                              onToggle={toggleNodeDrawer}
+                            />
+                            <StatusDot
+                              size="sm"
+                              variant={indicator().variant}
+                              title={node.status || 'unknown'}
+                              ariaHidden
+                            />
+                            <div class="flex min-w-0 flex-1 flex-col">
+                              <ResourceNameWithWebInterfaceLink
+                                name={name()}
+                                url={externalUrl()}
+                                class={`min-w-0 ${usesCondensedIdentity() ? '[&>a]:hidden' : ''}`}
+                                nameClass="truncate font-semibold text-base-content"
+                                title={`Open ${name()} web interface`}
+                              >
+                                {visibleNodeLabel()}
+                              </ResourceNameWithWebInterfaceLink>
+                              <Show when={showNativeNodeName()}>
+                                <span class="-mt-0.5 truncate text-[10px] text-muted">
+                                  {nativeNodeName()}
+                                </span>
+                              </Show>
+                            </div>
+                            <Show when={!isOnline()}>
+                              <span class="hidden rounded bg-surface-alt px-1.5 py-0.5 text-[10px] font-medium text-muted sm:inline-flex">
+                                {availabilityLabel()}
+                              </span>
+                            </Show>
+                            <Show when={isOnline() && pendingUpdates() > 0}>
+                              <span
+                                class={`hidden rounded px-1 py-0 text-[9px] font-medium whitespace-nowrap sm:inline-flex ${
+                                  pendingUpdates() >= 10
+                                    ? 'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-400'
+                                    : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-400'
+                                }`}
+                                title={`${pendingUpdates()} pending apt update${pendingUpdates() !== 1 ? 's' : ''}`}
+                              >
+                                {pendingUpdates()} updates
                               </span>
                             </Show>
                           </div>
-                          <Show when={!isOnline()}>
-                            <span class="hidden rounded bg-surface-alt px-1.5 py-0.5 text-[10px] font-medium text-muted sm:inline-flex">
-                              {availabilityLabel()}
+                        </TableCell>
+                      );
+                    case 'version':
+                      return (
+                        <TableCell class={getPlatformTableCellClassForKind(column.kind)}>
+                          <Show when={version()} fallback={<span class="text-muted">—</span>}>
+                            <span class="inline-flex items-center rounded bg-surface-alt px-1.5 py-0.5 font-mono text-[10px] text-base-content">
+                              {version()}
                             </span>
                           </Show>
-                          <Show when={isOnline() && pendingUpdates() > 0}>
-                            <span
-                              class={`hidden rounded px-1 py-0 text-[9px] font-medium whitespace-nowrap sm:inline-flex ${
-                                pendingUpdates() >= 10
-                                  ? 'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-400'
-                                  : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-400'
-                              }`}
-                              title={`${pendingUpdates()} pending apt update${pendingUpdates() !== 1 ? 's' : ''}`}
-                            >
-                              {pendingUpdates()} updates
-                            </span>
-                          </Show>
-                        </div>
-                      </TableCell>
-                    );
-                  case 'version':
-                    return (
-                      <TableCell class={getPlatformTableCellClassForKind(column.kind)}>
-                        <Show when={version()} fallback={<span class="text-muted">—</span>}>
-                          <span class="inline-flex items-center rounded bg-surface-alt px-1.5 py-0.5 font-mono text-[10px] text-base-content">
-                            {version()}
-                          </span>
-                        </Show>
-                      </TableCell>
-                    );
-                  case 'uptime':
-                    return (
-                      <TableCell
-                        class={`${getPlatformTableCellClassForKind(column.kind)} tabular-nums ${
-                          uptime().warn
-                            ? 'text-orange-600 dark:text-orange-400'
-                            : 'text-base-content'
-                        }`}
-                        title={usesCompactMetrics() ? fullUptime() : undefined}
-                      >
-                        {uptime().label}
-                      </TableCell>
-                    );
-                  case 'cpu':
-                    return (
-                      <TableCell class={getPlatformTableCellClassForKind(column.kind)}>
-                        <Show when={isOnline()} fallback={<PlatformTableMetricFallback />}>
-                          <Show
-                            when={isSparklineMode()}
-                            fallback={
-                              <ResponsiveMetricCell
-                                class="w-full"
-                                value={cpuPercent()}
-                                type="cpu"
-                                resourceId={metricsKey()}
-                                isRunning
-                                showMobile={false}
-                                thresholds={cpuThresholds()}
-                              />
-                            }
-                          >
-                            <MetricMiniSparkline
-                              series={cpuSeries()}
-                              valueLabel={formatPlatformTablePercentValue(cpuPercent(), {
-                                normalizeRatio: true,
-                                clamp: true,
-                              })}
-                              title={`${name()} CPU history`}
-                            />
-                          </Show>
-                        </Show>
-                      </TableCell>
-                    );
-                  case 'memory':
-                    return (
-                      <TableCell class={getPlatformTableCellClassForKind(column.kind)}>
-                        <Show
-                          when={isOnline() && (memoryTotal() > 0 || memoryPercentOnly() != null)}
-                          fallback={<PlatformTableMetricFallback />}
+                        </TableCell>
+                      );
+                    case 'uptime':
+                      return (
+                        <TableCell
+                          class={`${getPlatformTableCellClassForKind(column.kind)} tabular-nums ${
+                            uptime().warn
+                              ? 'text-orange-600 dark:text-orange-400'
+                              : 'text-base-content'
+                          }`}
+                          title={usesCompactMetrics() ? fullUptime() : undefined}
                         >
-                          <Show
-                            when={isSparklineMode()}
-                            fallback={
-                              <StackedMemoryBar
-                                used={memoryUsed()}
-                                total={memoryTotal()}
-                                unavailable={drawerNode()?.memory?.usageUnavailable === true}
-                                percentOnly={memoryPercentOnly()}
-                                cache={drawerNode()?.memory?.cache || 0}
-                                cacheInclusiveLabel="Shown in Proxmox"
-                                swapUsed={drawerNode()?.memory?.swapUsed || 0}
-                                swapTotal={drawerNode()?.memory?.swapTotal || 0}
-                                thresholds={memoryThresholds()}
-                              />
-                            }
-                          >
-                            <MetricMiniSparkline
-                              series={memorySeries()}
-                              valueLabel={
-                                drawerNode()?.memory?.usageUnavailable
-                                  ? 'N/A'
-                                  : formatPlatformTablePercentValue(memoryPercent(), {
-                                      normalizeRatio: true,
-                                      clamp: true,
-                                    })
+                          {uptime().label}
+                        </TableCell>
+                      );
+                    case 'cpu':
+                      return (
+                        <TableCell class={getPlatformTableCellClassForKind(column.kind)}>
+                          <Show when={isOnline()} fallback={<PlatformTableMetricFallback />}>
+                            <Show
+                              when={isSparklineMode()}
+                              fallback={
+                                <ResponsiveMetricCell
+                                  class="w-full"
+                                  value={cpuPercent()}
+                                  type="cpu"
+                                  resourceId={metricsKey()}
+                                  isRunning
+                                  showMobile={false}
+                                  thresholds={cpuThresholds()}
+                                />
                               }
-                              title={`${name()} memory history`}
-                            />
-                          </Show>
-                        </Show>
-                      </TableCell>
-                    );
-                  case 'disk':
-                    return (
-                      <TableCell class={getPlatformTableCellClassForKind(column.kind)}>
-                        <Show
-                          when={isOnline() && (aggregateDisk() || node.agent?.disks?.length)}
-                          fallback={<PlatformTableMetricFallback />}
-                        >
-                          <Show
-                            when={isSparklineMode()}
-                            fallback={
-                              <StackedDiskBar
-                                mode={
-                                  usesCompactMetrics()
-                                    ? 'aggregate'
-                                    : (node.agent?.disks?.length ?? 0) > 1
-                                      ? 'vertical-bars'
-                                      : undefined
-                                }
-                                disks={normalizeDiskArray(node.agent?.disks)}
-                                aggregateDisk={aggregateDisk()}
-                                thresholds={diskThresholds()}
+                            >
+                              <MetricMiniSparkline
+                                series={cpuSeries()}
+                                valueLabel={formatPlatformTablePercentValue(cpuPercent(), {
+                                  normalizeRatio: true,
+                                  clamp: true,
+                                })}
+                                title={`${name()} CPU history`}
                               />
-                            }
+                            </Show>
+                          </Show>
+                        </TableCell>
+                      );
+                    case 'memory':
+                      return (
+                        <TableCell class={getPlatformTableCellClassForKind(column.kind)}>
+                          <Show
+                            when={isOnline() && (memoryTotal() > 0 || memoryPercentOnly() != null)}
+                            fallback={<PlatformTableMetricFallback />}
                           >
-                            <MetricMiniSparkline
-                              series={diskSeries()}
-                              valueLabel={formatPlatformTablePercentValue(diskPercent(), {
-                                normalizeRatio: true,
-                                clamp: true,
-                              })}
-                              title={`${name()} disk history`}
+                            <Show
+                              when={isSparklineMode()}
+                              fallback={
+                                <StackedMemoryBar
+                                  used={memoryUsed()}
+                                  total={memoryTotal()}
+                                  unavailable={drawerNode()?.memory?.usageUnavailable === true}
+                                  percentOnly={memoryPercentOnly()}
+                                  cache={drawerNode()?.memory?.cache || 0}
+                                  cacheInclusiveLabel="Shown in Proxmox"
+                                  swapUsed={drawerNode()?.memory?.swapUsed || 0}
+                                  swapTotal={drawerNode()?.memory?.swapTotal || 0}
+                                  thresholds={memoryThresholds()}
+                                />
+                              }
+                            >
+                              <MetricMiniSparkline
+                                series={memorySeries()}
+                                valueLabel={
+                                  drawerNode()?.memory?.usageUnavailable
+                                    ? 'N/A'
+                                    : formatPlatformTablePercentValue(memoryPercent(), {
+                                        normalizeRatio: true,
+                                        clamp: true,
+                                      })
+                                }
+                                title={`${name()} memory history`}
+                              />
+                            </Show>
+                          </Show>
+                        </TableCell>
+                      );
+                    case 'disk':
+                      return (
+                        <TableCell class={getPlatformTableCellClassForKind(column.kind)}>
+                          <Show
+                            when={isOnline() && (aggregateDisk() || node.agent?.disks?.length)}
+                            fallback={<PlatformTableMetricFallback />}
+                          >
+                            <Show
+                              when={isSparklineMode()}
+                              fallback={
+                                <StackedDiskBar
+                                  mode={
+                                    usesCompactMetrics()
+                                      ? 'aggregate'
+                                      : (node.agent?.disks?.length ?? 0) > 1
+                                        ? 'vertical-bars'
+                                        : undefined
+                                  }
+                                  disks={normalizeDiskArray(node.agent?.disks)}
+                                  aggregateDisk={aggregateDisk()}
+                                  thresholds={diskThresholds()}
+                                />
+                              }
+                            >
+                              <MetricMiniSparkline
+                                series={diskSeries()}
+                                valueLabel={formatPlatformTablePercentValue(diskPercent(), {
+                                  normalizeRatio: true,
+                                  clamp: true,
+                                })}
+                                title={`${name()} disk history`}
+                              />
+                            </Show>
+                          </Show>
+                        </TableCell>
+                      );
+                    case 'temp':
+                      return (
+                        <TableCell class={getPlatformTableCellClassForKind(column.kind)}>
+                          <Show
+                            when={
+                              isOnline() &&
+                              typeof temperature() === 'number' &&
+                              (temperature() as number) > 0
+                            }
+                            fallback={<span class="text-xs text-muted">—</span>}
+                          >
+                            <TemperatureGauge
+                              value={temperature() as number}
+                              thresholds={temperatureThresholds()}
                             />
                           </Show>
-                        </Show>
-                      </TableCell>
-                    );
-                  case 'temp':
-                    return (
-                      <TableCell class={getPlatformTableCellClassForKind(column.kind)}>
-                        <Show
-                          when={
-                            isOnline() &&
-                            typeof temperature() === 'number' &&
-                            (temperature() as number) > 0
-                          }
-                          fallback={<span class="text-xs text-muted">—</span>}
-                        >
-                          <TemperatureGauge
-                            value={temperature() as number}
-                            thresholds={temperatureThresholds()}
-                          />
-                        </Show>
-                      </TableCell>
-                    );
-                  case 'vms':
-                    return (
-                      <TableCell class={getPlatformTableCellClassForKind(column.kind)}>
-                        <span
-                          class={counts().vms > 0 ? VMS_BADGE : ZERO_BADGE}
-                          data-proxmox-vm-count
-                        >
-                          {counts().vms}
-                        </span>
-                      </TableCell>
-                    );
-                  case 'cts':
-                    return (
-                      <TableCell class={getPlatformTableCellClassForKind(column.kind)}>
-                        <span
-                          class={counts().containers > 0 ? CTS_BADGE : ZERO_BADGE}
-                          data-proxmox-container-count
-                        >
-                          {counts().containers}
-                        </span>
-                      </TableCell>
-                    );
-                  case 'cluster':
-                    return (
-                      <TableCell class={getPlatformTableCellClassForKind(column.kind)}>
-                        <span class="inline-flex items-center rounded-md bg-surface-alt px-2 py-0.5 text-[11px] font-medium text-base-content">
-                          {cluster()}
-                        </span>
-                      </TableCell>
-                    );
-                  default:
-                    column.id satisfies never;
-                    return <></>;
-                }
-              };
+                        </TableCell>
+                      );
+                    case 'vms':
+                      return (
+                        <TableCell class={getPlatformTableCellClassForKind(column.kind)}>
+                          <span
+                            class={counts().vms > 0 ? VMS_BADGE : ZERO_BADGE}
+                            data-proxmox-vm-count
+                          >
+                            {counts().vms}
+                          </span>
+                        </TableCell>
+                      );
+                    case 'cts':
+                      return (
+                        <TableCell class={getPlatformTableCellClassForKind(column.kind)}>
+                          <span
+                            class={counts().containers > 0 ? CTS_BADGE : ZERO_BADGE}
+                            data-proxmox-container-count
+                          >
+                            {counts().containers}
+                          </span>
+                        </TableCell>
+                      );
+                    case 'cluster':
+                      return (
+                        <TableCell class={getPlatformTableCellClassForKind(column.kind)}>
+                          <span class="inline-flex items-center rounded-md bg-surface-alt px-2 py-0.5 text-[11px] font-medium text-base-content">
+                            {cluster()}
+                          </span>
+                        </TableCell>
+                      );
+                    default:
+                      column.id satisfies never;
+                      return <></>;
+                  }
+                };
 
-              return (
-                <>
-                  <TableRow
-                    class={`host-row cursor-pointer text-[11px] outline-none sm:text-xs ${
-                      isSelected() ? 'bg-surface-hover' : rowAlertBg()
-                    } ${isOnline() ? '' : 'opacity-60'} focus-visible:ring-2 focus-visible:ring-blue-500/60 focus-visible:ring-offset-1 focus-visible:ring-offset-surface`}
-                    aria-controls={isSelected() ? detailRowId() : undefined}
-                    aria-expanded={isSelected() ? 'true' : 'false'}
-                    data-proxmox-host-row={node.id}
-                    data-workload-alert-accent={alertAccentTone()}
-                    onClick={toggleNodeDrawer}
-                    onKeyDown={handleActivationKey}
-                    tabIndex={0}
-                  >
-                    <For each={visibleColumns()}>{(column) => renderColumnCell(column)}</For>
-                  </TableRow>
-                  <Show when={isSelected() && drawerNode()}>
-                    {(selectedNode) => (
-                      <InlineDetailTableRow
-                        cellId={detailRowId()}
-                        colspan={visibleColumns().length}
-                        data-inline-node-detail-for={node.id}
-                      >
-                        <NodeDrawer
-                          node={selectedNode()}
-                          disks={normalizeDiskArray(node.agent?.disks)}
-                          temperatureThresholds={temperatureThresholds()}
-                          discoveryTarget={(() => {
-                            const config = toDiscoveryConfig(node);
-                            return config
-                              ? { agentId: config.agentId, hostname: config.hostname }
-                              : undefined;
-                          })()}
-                        />
-                      </InlineDetailTableRow>
-                    )}
-                  </Show>
-                </>
-              );
-            }}
-          </For>
-        }
-      />
+                return (
+                  <>
+                    <TableRow
+                      class={`host-row cursor-pointer text-[11px] outline-none sm:text-xs ${
+                        isSelected() ? 'bg-surface-hover' : rowAlertBg()
+                      } ${isOnline() ? '' : 'opacity-60'} focus-visible:ring-2 focus-visible:ring-blue-500/60 focus-visible:ring-offset-1 focus-visible:ring-offset-surface`}
+                      aria-controls={isSelected() ? detailRowId() : undefined}
+                      aria-expanded={isSelected() ? 'true' : 'false'}
+                      data-proxmox-host-row={node.id}
+                      data-workload-alert-accent={alertAccentTone()}
+                      onClick={toggleNodeDrawer}
+                      onKeyDown={handleActivationKey}
+                      tabIndex={0}
+                    >
+                      <For each={visibleColumns()}>{(column) => renderColumnCell(column)}</For>
+                    </TableRow>
+                    <Show when={isSelected() && drawerNode()}>
+                      {(selectedNode) => (
+                        <InlineDetailTableRow
+                          cellId={detailRowId()}
+                          colspan={visibleColumns().length}
+                          data-inline-node-detail-for={node.id}
+                        >
+                          <NodeDrawer
+                            node={selectedNode()}
+                            disks={normalizeDiskArray(node.agent?.disks)}
+                            temperatureThresholds={temperatureThresholds()}
+                            discoveryTarget={(() => {
+                              const config = toDiscoveryConfig(node);
+                              return config
+                                ? { agentId: config.agentId, hostname: config.hostname }
+                                : undefined;
+                            })()}
+                          />
+                        </InlineDetailTableRow>
+                      )}
+                    </Show>
+                  </>
+                );
+              }}
+            </For>
+          }
+        />
+      </Show>
     </Show>
   );
 };
