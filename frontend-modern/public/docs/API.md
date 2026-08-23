@@ -600,6 +600,12 @@ Common reporting error codes:
 - `GET /api/notifications/dlq` (admin)
 - `POST /api/notifications/dlq/retry` (admin)
 - `POST /api/notifications/dlq/delete` (admin)
+- `POST /api/notifications/terminal-failures/retry` (admin, `settings:write`)
+  - Returns every retained `failed` or `dlq` delivery to `pending` with a fresh
+    retry budget. Existing per-attempt delivery history is preserved.
+- `POST /api/notifications/terminal-failures/dismiss` (admin, `settings:write`)
+  - Marks every retained terminal delivery `cancelled`, clearing the active
+    queue-health warning without deleting delivery history.
 
 ---
 

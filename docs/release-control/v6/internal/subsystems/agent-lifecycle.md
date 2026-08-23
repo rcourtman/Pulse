@@ -192,6 +192,10 @@ Docker/Podman module attached to that host identity. The removal must delete
 the associated runtime report surfaces and clear their active alerts instead
 of leaving container alerts or inventory detached from a removed agent.
 
+Notification terminal-failure retry and dismissal are delivery-queue operator
+actions only. They do not renew agent enrollment, heartbeat, command-channel
+readiness, update observation, or any agent-lifecycle lease.
+
 Proxmox node and backup-server setup may request an explicitly insecure
 Unified Agent installer command. The choice must remain off by default, be
 visible at the point where the command is generated, and affect both the

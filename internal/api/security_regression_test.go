@@ -508,6 +508,8 @@ func TestNotificationsDLQMutationsRequireSettingsWriteScope(t *testing.T) {
 	cases := []string{
 		"/api/notifications/dlq/retry",
 		"/api/notifications/dlq/delete",
+		"/api/notifications/terminal-failures/retry",
+		"/api/notifications/terminal-failures/dismiss",
 	}
 
 	for _, path := range cases {
@@ -2897,6 +2899,8 @@ func TestProxyAuthNonAdminDeniedAdminEndpoints(t *testing.T) {
 		{method: http.MethodGet, path: "/api/notifications/dlq", body: ""},
 		{method: http.MethodPost, path: "/api/notifications/dlq/retry", body: `{}`},
 		{method: http.MethodPost, path: "/api/notifications/dlq/delete", body: `{}`},
+		{method: http.MethodPost, path: "/api/notifications/terminal-failures/retry", body: `{}`},
+		{method: http.MethodPost, path: "/api/notifications/terminal-failures/dismiss", body: `{}`},
 	}
 
 	for _, tc := range cases {

@@ -331,6 +331,15 @@ counts cannot be read. Pending retries do not degrade health. The response
 must expose fixed reason codes and retention metadata rather than raw queue
 errors or notification content.
 
+Operator recovery is owned by the queue, not by database-file deletion. The
+settings-write retry action returns all retained `failed` and `dlq` rows to
+`pending`, resets their queue-attempt counters to a fresh retry budget, keeps
+their operational links, and wakes the processor; it never rewrites existing
+per-attempt audit rows. The settings-write dismiss action transitions those
+same rows to `cancelled`, preserves both queue and audit history, and clears
+the active health warning. Both actions are transactional across the selected
+terminal set and report the number of rows actually transitioned.
+
 ### User-facing delivery log and honest test sends
 
 The queue owner exposes its retained per-attempt audit rows to the local

@@ -1381,6 +1381,73 @@ func TestGetQueueStats(t *testing.T) {
 		}
 	})
 
+	t.Run("operator recovery retries or dismisses every terminal row without deleting history", func(t *testing.T) {
+		nq, err := NewNotificationQueue(t.TempDir())
+		if err != nil {
+			t.Fatalf("NewNotificationQueue: %v", err)
+		}
+		defer func() { _ = nq.Stop() }()
+
+		for _, notif := range []*QueuedNotification{
+			{ID: "failed-recovery", Type: "email", Status: QueueStatusPending, Attempts: 8, MaxAttempts: 8, Config: []byte(`{}`)},
+			{ID: "dlq-recovery", Type: "webhook", Status: QueueStatusPending, Attempts: 8, MaxAttempts: 8, Config: []byte(`{}`)},
+			{ID: "pending-unrelated", Type: "email", Status: QueueStatusPending, MaxAttempts: 8, Config: []byte(`{}`)},
+		} {
+			if err := nq.Enqueue(notif); err != nil {
+				t.Fatalf("enqueue %s: %v", notif.ID, err)
+			}
+		}
+		if err := nq.UpdateStatus("failed-recovery", QueueStatusFailed, "authentication failed"); err != nil {
+			t.Fatalf("mark failed: %v", err)
+		}
+		if err := nq.UpdateStatus("dlq-recovery", QueueStatusDLQ, "retries exhausted"); err != nil {
+			t.Fatalf("mark dlq: %v", err)
+		}
+
+		affected, err := nq.RetryTerminalFailures()
+		if err != nil {
+			t.Fatalf("RetryTerminalFailures: %v", err)
+		}
+		if affected != 2 {
+			t.Fatalf("retry affected = %d, want 2", affected)
+		}
+		for _, id := range []string{"failed-recovery", "dlq-recovery"} {
+			var status string
+			var attempts int
+			var lastAttempt, lastError, completedAt *int64
+			if err := nq.db.QueryRow(`
+				SELECT status, attempts, last_attempt, last_error, completed_at
+				FROM notification_queue WHERE id = ?
+			`, id).Scan(&status, &attempts, &lastAttempt, &lastError, &completedAt); err != nil {
+				t.Fatalf("read retried %s: %v", id, err)
+			}
+			if status != string(QueueStatusPending) || attempts != 0 || lastAttempt != nil || lastError != nil || completedAt != nil {
+				t.Fatalf("retried %s = status %q attempts %d lastAttempt %v lastError %v completedAt %v", id, status, attempts, lastAttempt, lastError, completedAt)
+			}
+		}
+
+		if err := nq.UpdateStatus("failed-recovery", QueueStatusFailed, "still invalid"); err != nil {
+			t.Fatalf("mark failed again: %v", err)
+		}
+		if err := nq.UpdateStatus("dlq-recovery", QueueStatusDLQ, "still unavailable"); err != nil {
+			t.Fatalf("mark dlq again: %v", err)
+		}
+		affected, err = nq.DismissTerminalFailures()
+		if err != nil {
+			t.Fatalf("DismissTerminalFailures: %v", err)
+		}
+		if affected != 2 {
+			t.Fatalf("dismiss affected = %d, want 2", affected)
+		}
+		stats, err := nq.GetQueueStats()
+		if err != nil {
+			t.Fatalf("GetQueueStats: %v", err)
+		}
+		if stats[string(QueueStatusFailed)] != 0 || stats[string(QueueStatusDLQ)] != 0 || stats[string(QueueStatusCancelled)] != 2 || stats[string(QueueStatusPending)] != 1 {
+			t.Fatalf("stats after dismissal = %#v", stats)
+		}
+	})
+
 	t.Run("UpdateStatus returns error for non-existent notification", func(t *testing.T) {
 		tempDir := t.TempDir()
 		nq, err := NewNotificationQueue(tempDir)

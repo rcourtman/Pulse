@@ -153,6 +153,20 @@ describe('docsLinks', () => {
     expect(importContract).toContain('settings:write');
   });
 
+  it('ships the retained notification recovery API contract', () => {
+    const apiReference = readFileSync(path.join(repoRoot, 'docs', 'API.md'), 'utf8');
+    const shippedAPIReference = readFileSync(
+      path.join(frontendRoot, 'public', 'docs', 'API.md'),
+      'utf8',
+    );
+
+    expect(shippedAPIReference).toBe(apiReference);
+    expect(apiReference).toContain('`POST /api/notifications/terminal-failures/retry`');
+    expect(apiReference).toContain('`POST /api/notifications/terminal-failures/dismiss`');
+    expect(apiReference).toContain('Existing per-attempt delivery history is preserved');
+    expect(apiReference).toContain('without deleting delivery history');
+  });
+
   it('ships the truthful Patrol objective API contract', () => {
     const apiReference = readFileSync(path.join(repoRoot, 'docs', 'API.md'), 'utf8');
     const shippedAPIReference = readFileSync(

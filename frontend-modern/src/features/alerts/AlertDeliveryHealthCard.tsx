@@ -2,11 +2,14 @@ import AlertTriangleIcon from 'lucide-solid/icons/alert-triangle';
 import RefreshCwIcon from 'lucide-solid/icons/refresh-cw';
 
 import type { NotificationQueueHealth } from '@/api/notifications';
+import { Button } from '@/components/shared/Button';
 import { Card } from '@/components/shared/Card';
 import {
+  getAlertDestinationsDeliveryDismissLabel,
   getAlertDestinationsDeliveryHealthDescription,
   getAlertDestinationsDeliveryHealthTitle,
   getAlertDestinationsDeliveryRefreshLabel,
+  getAlertDestinationsDeliveryRetryLabel,
 } from '@/utils/alertDestinationsPresentation';
 
 interface AlertDeliveryHealthCardProps {
@@ -14,6 +17,10 @@ interface AlertDeliveryHealthCardProps {
   unavailable: boolean;
   refreshing: boolean;
   onRefresh: () => void;
+  retryingFailures?: boolean;
+  dismissingFailures?: boolean;
+  onRetryFailures?: () => void;
+  onDismissFailures?: () => void;
 }
 
 export function AlertDeliveryHealthCard(props: AlertDeliveryHealthCardProps) {
@@ -46,15 +53,39 @@ export function AlertDeliveryHealthCard(props: AlertDeliveryHealthCardProps) {
             </p>
           </div>
         </div>
-        <button
-          type="button"
-          class="inline-flex flex-shrink-0 items-center justify-center gap-2 rounded-md border border-red-300 bg-transparent px-3 py-1.5 text-sm font-medium text-red-800 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-red-700 dark:text-red-200 dark:hover:bg-red-900/30"
-          disabled={props.refreshing}
-          onClick={props.onRefresh}
-        >
-          <RefreshCwIcon class={`h-4 w-4 ${props.refreshing ? 'animate-spin' : ''}`} />
-          {getAlertDestinationsDeliveryRefreshLabel()}
-        </button>
+        <div class="flex flex-shrink-0 flex-wrap items-center gap-2">
+          {props.onRetryFailures ? (
+            <Button
+              variant="secondary"
+              size="sm"
+              isLoading={props.retryingFailures}
+              disabled={props.dismissingFailures}
+              onClick={props.onRetryFailures}
+            >
+              {getAlertDestinationsDeliveryRetryLabel()}
+            </Button>
+          ) : null}
+          {props.onDismissFailures ? (
+            <Button
+              variant="danger"
+              size="sm"
+              isLoading={props.dismissingFailures}
+              disabled={props.retryingFailures}
+              onClick={props.onDismissFailures}
+            >
+              {getAlertDestinationsDeliveryDismissLabel()}
+            </Button>
+          ) : null}
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={props.refreshing || props.retryingFailures || props.dismissingFailures}
+            onClick={props.onRefresh}
+          >
+            <RefreshCwIcon class={`mr-2 h-4 w-4 ${props.refreshing ? 'animate-spin' : ''}`} />
+            {getAlertDestinationsDeliveryRefreshLabel()}
+          </Button>
+        </div>
       </div>
     </Card>
   );

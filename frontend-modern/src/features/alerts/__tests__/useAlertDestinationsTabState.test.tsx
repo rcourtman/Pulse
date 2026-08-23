@@ -16,6 +16,8 @@ vi.mock('@/api/notifications', () => ({
     getDeliveryLog: vi.fn(),
     getHealth: vi.fn(),
     getWebhooks: vi.fn(),
+    dismissTerminalFailures: vi.fn(),
+    retryTerminalFailures: vi.fn(),
     testNotification: vi.fn(),
     testWebhook: vi.fn(),
     updateWebhook: vi.fn(),
@@ -77,6 +79,8 @@ describe('useAlertDestinationsTabState', () => {
     vi.mocked(NotificationsAPI.getDeliveryLog).mockReset();
     vi.mocked(NotificationsAPI.getHealth).mockReset();
     vi.mocked(NotificationsAPI.getWebhooks).mockReset();
+    vi.mocked(NotificationsAPI.dismissTerminalFailures).mockReset();
+    vi.mocked(NotificationsAPI.retryTerminalFailures).mockReset();
     vi.mocked(NotificationsAPI.testNotification).mockReset();
     vi.mocked(NotificationsAPI.testWebhook).mockReset();
     vi.mocked(NotificationsAPI.updateWebhook).mockReset();
@@ -247,5 +251,83 @@ describe('useAlertDestinationsTabState', () => {
     await result.testApprise();
     expect(notificationStore.warning).toHaveBeenCalledTimes(2);
     expect(notificationStore.success).not.toHaveBeenCalled();
+  });
+
+  it('confirms and resolves retained terminal deliveries without deleting delivery history', async () => {
+    const [emailConfig] = createSignal(buildEmailConfig());
+    const [appriseConfig, setAppriseConfig] = createSignal(buildAppriseConfig());
+    const [configLoadError] = createSignal<string | null>(null);
+    const [isRetrying] = createSignal(false);
+    const [isLoadingDestinations] = createSignal(false);
+    const confirmSpy = vi.spyOn(globalThis, 'confirm').mockReturnValue(true);
+
+    vi.mocked(NotificationsAPI.getWebhooks).mockResolvedValue([]);
+    vi.mocked(NotificationsAPI.getHealth).mockResolvedValue({
+      overallHealthy: false,
+      queue: {
+        attentionRequired: 3,
+        completedRetentionDays: 7,
+        countsAreRetentionBounded: true,
+        deadLetter: 2,
+        deadLetterRetentionDays: 30,
+        failed: 1,
+        failureClasses7d: {
+          authentication: 3,
+          configuration: 0,
+          connectivity: 0,
+          rate_limited: 0,
+          rejected: 0,
+          tls: 0,
+          unknown: 0,
+        },
+        failureClassesAvailable: true,
+        failureClassWindowDays: 7,
+        healthy: false,
+        pending: 0,
+        reasonCodes: ['retained_failed_deliveries', 'retained_dead_letter_deliveries'],
+        retryAttemptsAffectHealth: false,
+        sending: 0,
+        sent: 0,
+        status: 'degraded',
+        terminalFailuresAffectHealth: true,
+      },
+    });
+    vi.mocked(NotificationsAPI.getDeliveryLog).mockResolvedValue({ entries: [], windowDays: 7 });
+    vi.mocked(NotificationsAPI.retryTerminalFailures).mockResolvedValue({
+      affected: 3,
+      success: true,
+    });
+    vi.mocked(NotificationsAPI.dismissTerminalFailures).mockResolvedValue({
+      affected: 3,
+      success: true,
+    });
+
+    const { result } = renderHook(() =>
+      useAlertDestinationsTabState({
+        appriseConfig,
+        configLoadError,
+        emailConfig,
+        isLoadingDestinations,
+        isRetrying,
+        onRetryLoad: vi.fn(),
+        setAppriseConfig,
+      }),
+    );
+
+    await waitFor(() => expect(result.deliveryNeedsAttention()).toBe(true));
+    await result.retryTerminalFailures();
+    expect(confirmSpy).toHaveBeenCalledWith(expect.stringContaining('Retry 3 retained deliveries'));
+    expect(NotificationsAPI.retryTerminalFailures).toHaveBeenCalledTimes(1);
+    expect(notificationStore.success).toHaveBeenCalledWith(
+      '3 retained deliveries queued for retry.',
+    );
+
+    await result.dismissTerminalFailures();
+    expect(confirmSpy).toHaveBeenCalledWith(expect.stringContaining('Dismiss 3 retained failures'));
+    expect(NotificationsAPI.dismissTerminalFailures).toHaveBeenCalledTimes(1);
+    expect(notificationStore.success).toHaveBeenCalledWith('3 retained failures dismissed.');
+    expect(NotificationsAPI.getDeliveryLog).toHaveBeenCalledTimes(3);
+
+    confirmSpy.mockRestore();
   });
 });

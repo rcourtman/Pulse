@@ -594,6 +594,8 @@ var allRouteAllowlist = []string{
 	"/api/notifications/queue/stats",
 	"/api/notifications/dlq/retry",
 	"/api/notifications/dlq/delete",
+	"/api/notifications/terminal-failures/retry",
+	"/api/notifications/terminal-failures/dismiss",
 	"/api/system/settings",
 	"/api/system/settings/update",
 	"/api/system/ssh-config",

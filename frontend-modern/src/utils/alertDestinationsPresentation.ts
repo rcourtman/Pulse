@@ -79,6 +79,8 @@ export const ALERT_DESTINATIONS_DELIVERY_DEGRADED_TITLE = 'Notification delivery
 export const ALERT_DESTINATIONS_DELIVERY_UNAVAILABLE_TITLE =
   'Notification delivery status is unavailable';
 export const ALERT_DESTINATIONS_DELIVERY_REFRESH_LABEL = 'Refresh delivery status';
+export const ALERT_DESTINATIONS_DELIVERY_RETRY_LABEL = 'Retry retained deliveries';
+export const ALERT_DESTINATIONS_DELIVERY_DISMISS_LABEL = 'Dismiss retained failures';
 
 export function getAlertDestinationsConfigLoadError() {
   return ALERT_DESTINATIONS_CONFIG_LOAD_ERROR;
@@ -197,6 +199,22 @@ export function getAlertDestinationsDeliveryHealthDescription(input: {
 
 export function getAlertDestinationsDeliveryRefreshLabel() {
   return ALERT_DESTINATIONS_DELIVERY_REFRESH_LABEL;
+}
+
+export function getAlertDestinationsDeliveryRetryLabel() {
+  return ALERT_DESTINATIONS_DELIVERY_RETRY_LABEL;
+}
+
+export function getAlertDestinationsDeliveryDismissLabel() {
+  return ALERT_DESTINATIONS_DELIVERY_DISMISS_LABEL;
+}
+
+export function getAlertDestinationsDeliveryRetryConfirmation(count: number) {
+  return `Retry ${count} retained ${count === 1 ? 'delivery' : 'deliveries'} now? A destination that accepted an earlier attempt may receive a duplicate.`;
+}
+
+export function getAlertDestinationsDeliveryDismissConfirmation(count: number) {
+  return `Dismiss ${count} retained ${count === 1 ? 'failure' : 'failures'}? Pulse will clear the warning and will not retry them. Delivery history remains available.`;
 }
 
 // Shown instead of the plain test-success toast when the backend reports the

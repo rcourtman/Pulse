@@ -38,12 +38,16 @@ describe('AlertDeliveryHealthCard', () => {
 
   it('tells operators that retained terminal deliveries were not delivered', () => {
     const onRefresh = vi.fn();
+    const onRetryFailures = vi.fn();
+    const onDismissFailures = vi.fn();
     render(() => (
       <AlertDeliveryHealthCard
         health={degradedHealth}
         unavailable={false}
         refreshing={false}
         onRefresh={onRefresh}
+        onRetryFailures={onRetryFailures}
+        onDismissFailures={onDismissFailures}
       />
     ));
 
@@ -62,6 +66,12 @@ describe('AlertDeliveryHealthCard', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Refresh delivery status' }));
     expect(onRefresh).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Retry retained deliveries' }));
+    expect(onRetryFailures).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss retained failures' }));
+    expect(onDismissFailures).toHaveBeenCalledTimes(1);
   });
 
   it('fails closed when queue health cannot be verified', () => {

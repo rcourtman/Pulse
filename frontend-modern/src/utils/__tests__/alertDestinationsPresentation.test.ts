@@ -42,7 +42,11 @@ import {
   getAlertDestinationsConfigLoadError,
   getAlertDestinationsDeliveryHealthDescription,
   getAlertDestinationsDeliveryHealthTitle,
+  getAlertDestinationsDeliveryDismissConfirmation,
+  getAlertDestinationsDeliveryDismissLabel,
   getAlertDestinationsDeliveryRefreshLabel,
+  getAlertDestinationsDeliveryRetryConfirmation,
+  getAlertDestinationsDeliveryRetryLabel,
   getAlertDestinationsEmailTestFailure,
   getAlertDestinationsEmailTestSuccess,
   getAlertDestinationsLoadErrorBanner,
@@ -170,6 +174,14 @@ describe('alertDestinationsPresentation', () => {
       }),
     ).toContain('could not verify the notification queue');
     expect(getAlertDestinationsDeliveryRefreshLabel()).toBe('Refresh delivery status');
+    expect(getAlertDestinationsDeliveryRetryLabel()).toBe('Retry retained deliveries');
+    expect(getAlertDestinationsDeliveryDismissLabel()).toBe('Dismiss retained failures');
+    expect(getAlertDestinationsDeliveryRetryConfirmation(1)).toContain(
+      'A destination that accepted an earlier attempt may receive a duplicate',
+    );
+    expect(getAlertDestinationsDeliveryDismissConfirmation(2)).toContain(
+      'Delivery history remains available',
+    );
   });
 });
 

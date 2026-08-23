@@ -82,7 +82,7 @@ func (h *NotificationQueueHandlers) GetQueueStats(w http.ResponseWriter, r *http
 
 // RetryDLQItem retries a specific notification from the DLQ
 func (h *NotificationQueueHandlers) RetryDLQItem(w http.ResponseWriter, r *http.Request) {
-	if !apihttp.EnsureScope(w, r, config.ScopeMonitoringWrite) {
+	if !apihttp.EnsureScope(w, r, config.ScopeSettingsWrite) {
 		return
 	}
 
@@ -129,7 +129,7 @@ func (h *NotificationQueueHandlers) RetryDLQItem(w http.ResponseWriter, r *http.
 
 // DeleteDLQItem removes a notification from the DLQ permanently
 func (h *NotificationQueueHandlers) DeleteDLQItem(w http.ResponseWriter, r *http.Request) {
-	if !apihttp.EnsureScope(w, r, config.ScopeMonitoringWrite) {
+	if !apihttp.EnsureScope(w, r, config.ScopeSettingsWrite) {
 		return
 	}
 
@@ -174,6 +174,56 @@ func (h *NotificationQueueHandlers) DeleteDLQItem(w http.ResponseWriter, r *http
 	}
 }
 
+// RetryTerminalFailures returns all retained terminal failures to the queue
+// after an operator has repaired the destination.
+func (h *NotificationQueueHandlers) RetryTerminalFailures(w http.ResponseWriter, r *http.Request) {
+	if !apihttp.EnsureScope(w, r, config.ScopeSettingsWrite) {
+		return
+	}
+	queue := h.monitor.GetNotificationManager().GetQueue()
+	if queue == nil {
+		http.Error(w, "Notification queue not initialized", http.StatusServiceUnavailable)
+		return
+	}
+	affected, err := queue.RetryTerminalFailures()
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to retry retained terminal notifications")
+		http.Error(w, "Failed to retry retained notification failures", http.StatusInternalServerError)
+		return
+	}
+	if err := utils.WriteJSONResponse(w, map[string]interface{}{
+		"success":  true,
+		"affected": affected,
+	}); err != nil {
+		log.Error().Err(err).Msg("Failed to write terminal retry response")
+	}
+}
+
+// DismissTerminalFailures cancels all retained terminal queue rows without
+// deleting their immutable delivery audit.
+func (h *NotificationQueueHandlers) DismissTerminalFailures(w http.ResponseWriter, r *http.Request) {
+	if !apihttp.EnsureScope(w, r, config.ScopeSettingsWrite) {
+		return
+	}
+	queue := h.monitor.GetNotificationManager().GetQueue()
+	if queue == nil {
+		http.Error(w, "Notification queue not initialized", http.StatusServiceUnavailable)
+		return
+	}
+	affected, err := queue.DismissTerminalFailures()
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to dismiss retained terminal notifications")
+		http.Error(w, "Failed to dismiss retained notification failures", http.StatusInternalServerError)
+		return
+	}
+	if err := utils.WriteJSONResponse(w, map[string]interface{}{
+		"success":  true,
+		"affected": affected,
+	}); err != nil {
+		log.Error().Err(err).Msg("Failed to write terminal dismissal response")
+	}
+}
+
 // HandleNotificationQueue routes notification queue requests
 func (h *NotificationQueueHandlers) HandleNotificationQueue(w http.ResponseWriter, r *http.Request) {
 	path := r.URL.Path
@@ -187,6 +237,10 @@ func (h *NotificationQueueHandlers) HandleNotificationQueue(w http.ResponseWrite
 		h.RetryDLQItem(w, r)
 	case path == "/api/notifications/dlq/delete" && r.Method == http.MethodPost:
 		h.DeleteDLQItem(w, r)
+	case path == "/api/notifications/terminal-failures/retry" && r.Method == http.MethodPost:
+		h.RetryTerminalFailures(w, r)
+	case path == "/api/notifications/terminal-failures/dismiss" && r.Method == http.MethodPost:
+		h.DismissTerminalFailures(w, r)
 	default:
 		http.Error(w, "Not found", http.StatusNotFound)
 	}

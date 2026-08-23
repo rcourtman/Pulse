@@ -72,6 +72,12 @@ The same live update applies all four `schedule.grouping` fields atomically.
 When grouping is disabled, pending and subsequent alerts are delivered
 individually; the API boundary must not reduce that setting to the window or
 grouping-key fields while silently ignoring `enabled`.
+`POST /api/notifications/terminal-failures/retry` and
+`POST /api/notifications/terminal-failures/dismiss` are admin,
+`settings:write` operator actions. Their strict response is
+`{"success": true, "affected": <non-negative integer>}`; frontend clients
+must normalize malformed counts to zero and must not consume the raw DLQ
+payload, which can contain notification configuration and content.
 `DELETE /api/ai/patrol/suppressions/finding_{findingID}` is the canonical
 reopen path for a dismissed Patrol finding. It removes the finding-backed
 suppression row, preserves the operator note, clears dismissal state in both

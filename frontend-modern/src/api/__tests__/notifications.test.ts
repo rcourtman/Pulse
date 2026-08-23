@@ -373,6 +373,28 @@ describe('NotificationsAPI', () => {
     expect(log).toEqual({ entries: [], windowDays: 7 });
   });
 
+  it('retries retained terminal deliveries through the operator recovery endpoint', async () => {
+    apiFetchJSONMock.mockResolvedValueOnce({ affected: 3, success: true } as any);
+
+    const result = await NotificationsAPI.retryTerminalFailures();
+
+    expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/notifications/terminal-failures/retry', {
+      method: 'POST',
+    });
+    expect(result).toEqual({ affected: 3, success: true });
+  });
+
+  it('dismisses retained terminal failures and fails closed on malformed counts', async () => {
+    apiFetchJSONMock.mockResolvedValueOnce({ affected: -1, success: 'yes' } as any);
+
+    const result = await NotificationsAPI.dismissTerminalFailures();
+
+    expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/notifications/terminal-failures/dismiss', {
+      method: 'POST',
+    });
+    expect(result).toEqual({ affected: 0, success: false });
+  });
+
   it('passes the deliveryPaused flag through from test-send responses', async () => {
     apiFetchJSONMock.mockResolvedValueOnce({
       status: 'success',

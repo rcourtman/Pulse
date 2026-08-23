@@ -1278,6 +1278,122 @@ func (nq *NotificationQueue) GetDLQ(limit int) ([]*QueuedNotification, error) {
 	return notifications, rows.Err()
 }
 
+// RetryTerminalFailures returns every retained failed or dead-lettered
+// delivery to the pending queue with a fresh retry budget. The per-attempt
+// audit rows remain intact, so this operator recovery never rewrites delivery
+// history or makes an earlier failure look successful.
+func (nq *NotificationQueue) RetryTerminalFailures() (int, error) {
+	return nq.resolveTerminalFailures(true)
+}
+
+// DismissTerminalFailures marks every retained failed or dead-lettered
+// delivery as cancelled. This clears the active queue-health warning while
+// retaining the immutable delivery audit instead of asking operators to
+// delete the queue database.
+func (nq *NotificationQueue) DismissTerminalFailures() (int, error) {
+	return nq.resolveTerminalFailures(false)
+}
+
+func (nq *NotificationQueue) resolveTerminalFailures(retry bool) (int, error) {
+	if nq == nil || nq.db == nil {
+		return 0, fmt.Errorf("notification queue not initialized")
+	}
+
+	nq.mu.Lock()
+	defer nq.mu.Unlock()
+
+	rows, err := nq.db.Query(`
+		SELECT id, operational_links
+		FROM notification_queue
+		WHERE status IN ('failed', 'dlq')
+		ORDER BY completed_at, id
+	`)
+	if err != nil {
+		return 0, fmt.Errorf("read retained terminal notifications: %w", err)
+	}
+	type terminalNotification struct {
+		id    string
+		links []operationaltrust.NotificationLink
+	}
+	terminal := make([]terminalNotification, 0)
+	for rows.Next() {
+		var id, rawLinks string
+		if err := rows.Scan(&id, &rawLinks); err != nil {
+			_ = rows.Close()
+			return 0, fmt.Errorf("scan retained terminal notification: %w", err)
+		}
+		var links []operationaltrust.NotificationLink
+		if err := json.Unmarshal([]byte(rawLinks), &links); err != nil {
+			_ = rows.Close()
+			return 0, fmt.Errorf("decode retained terminal notification links: %w", err)
+		}
+		terminal = append(terminal, terminalNotification{id: id, links: links})
+	}
+	if err := rows.Close(); err != nil {
+		return 0, fmt.Errorf("close retained terminal notification rows: %w", err)
+	}
+	if err := rows.Err(); err != nil {
+		return 0, fmt.Errorf("iterate retained terminal notifications: %w", err)
+	}
+	if len(terminal) == 0 {
+		return 0, nil
+	}
+
+	tx, err := nq.db.Begin()
+	if err != nil {
+		return 0, fmt.Errorf("begin terminal notification recovery: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	now := time.Now()
+	affected := 0
+	for _, notification := range terminal {
+		state := operationaltrust.NotificationCancelled
+		if retry {
+			state = operationaltrust.NotificationRetrying
+		}
+		linksJSON, err := json.Marshal(transitionNotificationLinks(notification.links, state, now))
+		if err != nil {
+			return 0, fmt.Errorf("encode terminal notification links: %w", err)
+		}
+
+		var result sql.Result
+		if retry {
+			result, err = tx.Exec(`
+				UPDATE notification_queue
+				SET status = 'pending', attempts = 0, last_attempt = NULL,
+				    last_error = NULL, next_retry_at = ?, completed_at = NULL,
+				    operational_links = ?
+				WHERE id = ? AND status IN ('failed', 'dlq')
+			`, now.Unix(), string(linksJSON), notification.id)
+		} else {
+			result, err = tx.Exec(`
+				UPDATE notification_queue
+				SET status = 'cancelled', last_attempt = ?,
+				    last_error = 'Dismissed by operator', next_retry_at = NULL,
+				    completed_at = ?, operational_links = ?
+				WHERE id = ? AND status IN ('failed', 'dlq')
+			`, now.Unix(), now.Unix(), string(linksJSON), notification.id)
+		}
+		if err != nil {
+			return 0, fmt.Errorf("resolve terminal notification %s: %w", notification.id, err)
+		}
+		if count, countErr := result.RowsAffected(); countErr == nil {
+			affected += int(count)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, fmt.Errorf("commit terminal notification recovery: %w", err)
+	}
+	if retry && affected > 0 {
+		select {
+		case nq.notifyChan <- struct{}{}:
+		default:
+		}
+	}
+	return affected, nil
+}
+
 // RecordAudit records a notification delivery attempt in the audit log
 func (nq *NotificationQueue) RecordAudit(notif *QueuedNotification, success bool, errorMsg string) error {
 	nq.mu.Lock()

@@ -201,6 +201,9 @@ active-alert read model only while detector evaluation is enabled. They must
 not hide storage or recovery alerts when external notification delivery is
 pending, paused, snoozed, unavailable, or destination-disabled; those delivery
 states do not change the underlying storage evidence or active lifecycle.
+Likewise, retrying or dismissing retained notification failures changes only
+delivery-queue state and its warning. It does not alter storage health,
+protection posture, recovery-point evidence, or restore readiness.
 
 ## Extension Points
 

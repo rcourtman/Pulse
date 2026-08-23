@@ -116,6 +116,43 @@ func TestNotificationQueueHandlers_RetryAndDelete(t *testing.T) {
 	}
 }
 
+func TestNotificationQueueHandlers_BulkTerminalFailureRecovery(t *testing.T) {
+	handler, queue := newNotificationQueueHandlers(t)
+	enqueueDLQNotification(t, queue, "notif-bulk")
+
+	req := httptest.NewRequest(http.MethodPost, "/api/notifications/terminal-failures/retry", nil)
+	rec := httptest.NewRecorder()
+	handler.RetryTerminalFailures(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("RetryTerminalFailures status = %d, want 200: %s", rec.Code, rec.Body.String())
+	}
+	var response struct {
+		Affected int `json:"affected"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+		t.Fatalf("decode retry response: %v", err)
+	}
+	if response.Affected != 1 {
+		t.Fatalf("retry affected = %d, want 1", response.Affected)
+	}
+
+	if err := queue.UpdateStatus("notif-bulk", notifications.QueueStatusDLQ, "still unavailable"); err != nil {
+		t.Fatalf("mark retried notification DLQ: %v", err)
+	}
+	req = httptest.NewRequest(http.MethodPost, "/api/notifications/terminal-failures/dismiss", nil)
+	rec = httptest.NewRecorder()
+	handler.DismissTerminalFailures(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("DismissTerminalFailures status = %d, want 200: %s", rec.Code, rec.Body.String())
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+		t.Fatalf("decode dismiss response: %v", err)
+	}
+	if response.Affected != 1 {
+		t.Fatalf("dismiss affected = %d, want 1", response.Affected)
+	}
+}
+
 func TestNotificationQueueHandlers_HandleNotificationQueue(t *testing.T) {
 	handler, queue := newNotificationQueueHandlers(t)
 	enqueueDLQNotification(t, queue, "notif-3")

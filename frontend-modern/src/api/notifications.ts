@@ -129,6 +129,11 @@ export interface NotificationHealth {
   queue: NotificationQueueHealth;
 }
 
+export interface NotificationTerminalFailureActionResult {
+  success: boolean;
+  affected: number;
+}
+
 export type NotificationDeliveryOutcome = 'sent' | 'retry' | 'failed' | 'dead_letter' | 'cancelled';
 
 export interface NotificationDeliveryLogEntry {
@@ -349,6 +354,28 @@ export class NotificationsAPI {
     return {
       entries,
       windowDays: windowDays && windowDays > 0 ? windowDays : 7,
+    };
+  }
+
+  static async retryTerminalFailures(): Promise<NotificationTerminalFailureActionResult> {
+    const payload = await apiFetchJSON<Record<string, unknown>>(
+      `${this.baseUrl}/terminal-failures/retry`,
+      { method: 'POST' },
+    );
+    return {
+      success: strictBoolean(payload.success),
+      affected: nonNegativeCount(payload.affected) ?? 0,
+    };
+  }
+
+  static async dismissTerminalFailures(): Promise<NotificationTerminalFailureActionResult> {
+    const payload = await apiFetchJSON<Record<string, unknown>>(
+      `${this.baseUrl}/terminal-failures/dismiss`,
+      { method: 'POST' },
+    );
+    return {
+      success: strictBoolean(payload.success),
+      affected: nonNegativeCount(payload.affected) ?? 0,
     };
   }
 

@@ -151,6 +151,10 @@ first step before platform-local cleanup.
 - Open **Alerts → Notifications** first. Pulse shows a delivery warning when
   failed or dead-lettered notifications remain in the persistent queue; a
   missing queue-health read is shown as unavailable rather than healthy.
+- After correcting the destination, use **Retry retained deliveries**. Use
+  **Dismiss retained failures** only when those deliveries should not be sent.
+  Both actions preserve delivery history; do not delete `notification_queue.db`
+  to clear the warning.
 - Check SMTP settings in **Alerts → Notifications**.
 - Check logs: `docker logs pulse | grep email`.
 - Ensure your SMTP provider allows the connection (e.g., Gmail App Passwords).
@@ -159,6 +163,9 @@ first step before platform-local cleanup.
 - Check the delivery warning in **Alerts → Notifications** and use **Send test**
   after correcting the destination. Recoverable retries do not trigger the
   warning; retained terminal failures do.
+- If the test succeeds, use **Retry retained deliveries** to give the retained
+  items a fresh retry budget. Dismiss them only when delivery is no longer
+  wanted; neither action deletes the audit trail.
 - Verify the URL is reachable from the Pulse server.
 - If targeting private IPs, allow them in **Settings → System → Network → Webhook Security**.
 - Check Pulse logs for HTTP status codes and response bodies.

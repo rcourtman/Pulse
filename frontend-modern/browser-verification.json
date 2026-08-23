@@ -1,17 +1,24 @@
 {
   "version": 1,
-  "base_sha": "af6d4825152580779c21a48bc13a702c15a4a982",
-  "verified_at": "2026-08-21T05:48:24Z",
+  "base_sha": "434e1448ff70464bccec3e6ec46257d10da2162f",
+  "verified_at": "2026-08-23T08:04:16Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx"
+    "frontend-modern/src/api/notifications.ts",
+    "frontend-modern/src/features/alerts/AlertDeliveryHealthCard.tsx",
+    "frontend-modern/src/features/alerts/tabs/DestinationsTab.tsx",
+    "frontend-modern/src/features/alerts/useAlertDestinationsTabState.ts",
+    "frontend-modern/src/utils/alertDestinationsPresentation.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx": "afcb6b556a0bb21e19b492744a62f97513206c27f3e8d643a2c8862e2e43fe13"
+    "frontend-modern/src/api/notifications.ts": "df77323e526d5c528bd4fb7fcfdccb70b5823c5b0dd41525718067ffd441b0b5",
+    "frontend-modern/src/features/alerts/AlertDeliveryHealthCard.tsx": "0e9c53191da45f5c81f336c1034bc0e0651d88f92fc89b268d9a997dcd7d1b20",
+    "frontend-modern/src/features/alerts/tabs/DestinationsTab.tsx": "23cc5d7800028b35019359af2b46937b5fef308bdf82116240fa92c21e16177c",
+    "frontend-modern/src/features/alerts/useAlertDestinationsTabState.ts": "6993829996d1acd877f310212f045f33ee9f92b56cb1fee62e293cf4c9b8f14e",
+    "frontend-modern/src/utils/alertDestinationsPresentation.ts": "52bf726d4b5a081db84c1be05bce466231749c73c0f2b43acce4cec11b7ff80b"
   },
   "routes": [
-    "/settings/infrastructure",
-    "/settings/infrastructure (Agent Doctor view via Open Agent Doctor)"
+    "/alerts/notifications"
   ],
   "viewports": [
     {
@@ -24,16 +31,15 @@
     }
   ],
   "states": [
-    "Agent Doctor fleet table with 1 Critical and 12 Healthy targets (mock stack against live dev backend)",
-    "Expanded Critical row prod-euw1-k8s-03 showing stale-report diagnostic, no credential repair offered",
-    "Expanded Healthy row apollo-114 showing no fleet-health issues",
-    "Doctor table re-rendered at mobile width after reload",
-    "No repair_authentication target exists in the mock fleet, so the replaceCredential command branch was verified by unit tests (InfrastructureOperationsModel.test.tsx source pin plus agentInstallCommand builder tests), not by a rendered command"
+    "Healthy queue with no retained terminal deliveries: recovery actions correctly absent and delivery activity empty",
+    "Notifications-paused warning remains distinct from queue health and explains that test sends bypass the activation gate",
+    "Desktop and narrow layouts render the delivery activity card without horizontal overflow or console errors",
+    "Retained-failure warning, retry/dismiss controls, confirmation consequences, loading states, API refresh, and success/error paths verified by focused component, state, API, and queue tests because the live development queue had no terminal failures"
   ],
   "interactions": [
-    "Clicked Open Agent Doctor from Infrastructure settings",
-    "Expanded the Critical target row prod-euw1-k8s-03",
-    "Expanded the Healthy target row apollo-114",
-    "Reloaded the doctor view at 375x812 and confirmed clean render with zero console errors"
+    "Navigated from Alerts overview to Notifications",
+    "Refreshed healthy delivery status on the desktop layout",
+    "Reloaded /alerts/notifications at 1280x800 and 375x812",
+    "Confirmed Recent delivery activity and Refresh delivery status remain visible and usable at narrow width"
   ]
 }

@@ -80,6 +80,10 @@ export function DestinationsTab(props: DestinationsTabProps) {
             unavailable={state.deliveryHealthUnavailable()}
             refreshing={state.refreshingDeliveryHealth()}
             onRefresh={() => void state.loadDeliveryHealth()}
+            retryingFailures={state.retryingTerminalFailures()}
+            dismissingFailures={state.dismissingTerminalFailures()}
+            onRetryFailures={() => void state.retryTerminalFailures()}
+            onDismissFailures={() => void state.dismissTerminalFailures()}
           />
         </Show>
 

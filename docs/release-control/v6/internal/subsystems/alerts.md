@@ -258,6 +258,11 @@ frontend-primitives: row, mobile-card, global-default, and bulk-selection
 icon-only actions must compose `ActionIconButton` for shared size, tone, focus,
 title, and accessible-name behavior instead of rendering local `<button>` plus
 inline SVG shells in alert-owned runtime components.
+The notification-delivery health card is an alerts-owned presentation over
+notification-owned queue truth. When retained terminal failures exist, the
+Destinations surface exposes explicit retry and dismiss actions with
+consequence confirmations, refreshes health and delivery history after either
+action, and never instructs the operator to delete queue storage.
 Alert runtime state has one explicit ownership boundary: `AlertConfig.enabled`
 controls detector evaluation and in-product alert visibility, while
 `AlertConfig.activationState` controls external notification delivery only.

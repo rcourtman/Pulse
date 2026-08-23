@@ -335,6 +335,20 @@ func (r *Router) registerMonitoringResourceRoutes(
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
 	})))
+	r.mux.HandleFunc("/api/notifications/terminal-failures/retry", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, func(w http.ResponseWriter, req *http.Request) {
+		if req.Method == http.MethodPost {
+			r.notificationQueueHandlers.RetryTerminalFailures(w, req)
+		} else {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})))
+	r.mux.HandleFunc("/api/notifications/terminal-failures/dismiss", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, func(w http.ResponseWriter, req *http.Request) {
+		if req.Method == http.MethodPost {
+			r.notificationQueueHandlers.DismissTerminalFailures(w, req)
+		} else {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})))
 	// AI-powered infrastructure discovery endpoints
 	r.mux.HandleFunc("/api/discovery", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.discoveryHandlers.HandleListDiscoveries)))
 	r.mux.HandleFunc("/api/discovery/status", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.discoveryHandlers.HandleGetStatus)))

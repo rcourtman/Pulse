@@ -22,6 +22,10 @@
 
 Own reusable frontend primitives and canonical page-shell patterns so feature
 work extends shared components instead of creating new local variants.
+Feature-owned warning cards, including notification delivery health, compose
+the shared `Button` variants for retry, dismiss, refresh, loading, and disabled
+states. Feature code owns the action copy and confirmation consequences, but
+must not recreate local button chrome for those controls.
 The alert schedule's initial-delivery selector composes `SettingsPanel` and
 `FormSelect`, uses the shared alert-configuration presentation vocabulary, and
 exposes the same email, webhook, Apprise, and all-destination labels used by
