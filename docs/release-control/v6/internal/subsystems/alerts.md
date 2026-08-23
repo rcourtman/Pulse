@@ -246,8 +246,9 @@ default construction path still restores.
 
 ## Shared Boundaries
 
-1. `internal/operationaltrust/contracts.go` shared with `notifications`: the operational trust contract is jointly consumed by canonical alert lifecycle ownership and notification delivery linkage without making delivery state operational truth.
-2. `internal/proxmoxidentity/backup_identity.go` shared with `monitoring`, `storage-recovery`: Proxmox PBS backup subject identity is a shared runtime boundary for monitoring backup freshness, backup-age alert attribution, and recovery-point guest mapping.
+1. `frontend-modern/src/stores/websocket.ts` shared with `performance-and-scalability`: the connection-owned realtime store is both the canonical alert truth boundary and the fleet-scale resource reconciliation hot path.
+2. `internal/operationaltrust/contracts.go` shared with `notifications`: the operational trust contract is jointly consumed by canonical alert lifecycle ownership and notification delivery linkage without making delivery state operational truth.
+3. `internal/proxmoxidentity/backup_identity.go` shared with `monitoring`, `storage-recovery`: Proxmox PBS backup subject identity is a shared runtime boundary for monitoring backup freshness, backup-age alert attribution, and recovery-point guest mapping.
 Alert multiline field presentation is shared with frontend-primitives:
 notification, timeline, threshold ignored-prefix, and resource threshold note
 editors must compose the shared `FormTextarea` primitive for label/id/help
@@ -283,6 +284,12 @@ invalidation is not lost. Late socket callbacks and REST responses from a
 retired connection must be ignored, while a current oversized connection
 remains free to hydrate without waiting for the retired connection's request
 to settle.
+While the document is hidden, that same connection-scoped baseline must keep
+accepting resource deltas without reconciling the visible resource store on
+every message. The store accumulates changed resource IDs and performs one
+canonical catch-up reconciliation on `visibilitychange` to visible. Alert and
+resolved-alert truth continues to update normally while hidden; this resource
+optimization must not defer, clear, or reinterpret alert lifecycle state.
 Operational evidence and lifecycle identity are typed through
 `internal/operationaltrust`. Evidence envelopes distinguish completeness,
 confidence, permissions, freshness, correlation, and bounded provider detail.

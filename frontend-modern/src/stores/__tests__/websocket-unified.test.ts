@@ -445,6 +445,59 @@ describe('websocket store unified resource contract', () => {
     }
   });
 
+  it('coalesces hidden-tab resource deltas into one visible-state reconciliation', async () => {
+    const visibility = vi.spyOn(document, 'visibilityState', 'get');
+    visibility.mockReturnValue('visible');
+    const { store, dispose } = await createStoreHarness();
+    try {
+      await waitForOpenTick();
+      emitMessage({
+        type: 'initialState',
+        data: {
+          resources: [
+            {
+              id: 'vm-1',
+              type: 'vm',
+              name: 'vm-1',
+              status: 'running',
+              cpu: { current: 10 },
+            },
+          ],
+          lastUpdate: 100,
+          activeAlerts: [],
+          recentlyResolved: [],
+        },
+      });
+
+      visibility.mockReturnValue('hidden');
+      emitMessage({
+        type: 'rawData',
+        data: {
+          lastUpdate: 200,
+          resourceDelta: { upserts: [{ id: 'vm-1', cpu: { current: 20 } }] },
+        },
+      });
+      emitMessage({
+        type: 'rawData',
+        data: {
+          lastUpdate: 300,
+          resourceDelta: { upserts: [{ id: 'vm-1', cpu: { current: 30 } }] },
+        },
+      });
+
+      expect(store.state.resources[0]?.cpu?.current).toBe(10);
+      expect(store.state.lastUpdate).toBe(300);
+
+      visibility.mockReturnValue('visible');
+      document.dispatchEvent(new Event('visibilitychange'));
+
+      expect(store.state.resources[0]?.cpu?.current).toBe(30);
+    } finally {
+      dispose();
+      visibility.mockRestore();
+    }
+  });
+
   // Regression: on estates large enough that the full snapshot exceeds the
   // inbound guard (~3100 resources at the ~2.7 KB/resource measured against a
   // real /api/state payload; ~12.8 MB at 5000), the client dropped initialState

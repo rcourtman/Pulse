@@ -6085,64 +6085,99 @@ func updateFixtureStateMetrics(data *models.StateSnapshot, config MockConfig) {
 }
 
 func updateFixtureStateMetricsAt(data *models.StateSnapshot, config MockConfig, refreshNow time.Time) {
+	updateFixtureStateMetricsSelectedAt(data, config, refreshNow, fixtureMetricSelection{
+		includeSupplemental: true,
+		uptimeStep:          currentMockUpdateStepInt64(),
+	})
+}
+
+type fixtureMetricSelection struct {
+	// A nil map means every Proxmox node. A non-nil map limits node-owned
+	// metrics, sightings, storage, and physical disks to the named cohort.
+	proxmoxNodeNames    map[string]struct{}
+	includeSupplemental bool
+	uptimeStep          int64
+}
+
+func (selection fixtureMetricSelection) includesProxmoxNode(nodeName string) bool {
+	if selection.proxmoxNodeNames == nil {
+		return true
+	}
+	_, ok := selection.proxmoxNodeNames[nodeName]
+	return ok
+}
+
+func updateFixtureStateMetricsSelectedAt(
+	data *models.StateSnapshot,
+	config MockConfig,
+	refreshNow time.Time,
+	selection fixtureMetricSelection,
+) {
 	if refreshNow.IsZero() {
 		refreshNow = time.Now()
 	}
+	if selection.uptimeStep <= 0 {
+		selection.uptimeStep = currentMockUpdateStepInt64()
+	}
 
-	updateDockerHosts(data, config, refreshNow)
-	updateKubernetesClusters(data, config, refreshNow)
-	updateHosts(data, config, refreshNow)
-	syncMockKubernetesNodeHosts(data)
+	if selection.includeSupplemental {
+		updateDockerHosts(data, config, refreshNow)
+		updateKubernetesClusters(data, config, refreshNow)
+		updateHosts(data, config, refreshNow)
+		syncMockKubernetesNodeHosts(data)
+	}
 
-	step := currentMockUpdateStepInt64()
+	step := selection.uptimeStep
 
-	for i := range data.PBSInstances {
-		inst := &data.PBSInstances[i]
-		inst.Status = "online"
-		inst.ConnectionHealth = "healthy"
-		inst.LastSeen = refreshNow.Add(-time.Duration(randIntnSafe(12)) * time.Second)
-		inst.Uptime += step
+	if selection.includeSupplemental {
+		for i := range data.PBSInstances {
+			inst := &data.PBSInstances[i]
+			inst.Status = "online"
+			inst.ConnectionHealth = "healthy"
+			inst.LastSeen = refreshNow.Add(-time.Duration(randIntnSafe(12)) * time.Second)
+			inst.Uptime += step
 
-		if data.ConnectionHealth != nil {
-			data.ConnectionHealth[fmt.Sprintf("pbs-%s", inst.Name)] = true
-		}
-
-		if !config.RandomMetrics {
-			continue
-		}
-
-		inst.CPU = SampleMetric("pbs", inst.ID, "cpu", refreshNow)
-		inst.Memory = SampleMetric("pbs", inst.ID, "memory", refreshNow)
-		if inst.MemoryTotal > 0 {
-			inst.MemoryUsed = int64(float64(inst.MemoryTotal) * (inst.Memory / 100.0))
-			if inst.MemoryUsed < 0 {
-				inst.MemoryUsed = 0
+			if data.ConnectionHealth != nil {
+				data.ConnectionHealth[fmt.Sprintf("pbs-%s", inst.Name)] = true
 			}
-		}
 
-		for j := range inst.Datastores {
-			datastore := &inst.Datastores[j]
-			if datastore.Total <= 0 {
+			if !config.RandomMetrics {
 				continue
 			}
 
-			datastore.Usage = SampleMetric("pbsDatastore", inst.ID+":"+datastore.Name, "usage", refreshNow)
-			datastore.Used = int64(float64(datastore.Total) * (datastore.Usage / 100.0))
-			if datastore.Used < 0 {
-				datastore.Used = 0
+			inst.CPU = SampleMetric("pbs", inst.ID, "cpu", refreshNow)
+			inst.Memory = SampleMetric("pbs", inst.ID, "memory", refreshNow)
+			if inst.MemoryTotal > 0 {
+				inst.MemoryUsed = int64(float64(inst.MemoryTotal) * (inst.Memory / 100.0))
+				if inst.MemoryUsed < 0 {
+					inst.MemoryUsed = 0
+				}
 			}
-			if datastore.Used > datastore.Total {
-				datastore.Used = datastore.Total
-			}
-			datastore.Free = datastore.Total - datastore.Used
-			datastore.Status = "available"
-		}
-	}
 
-	for i := range data.PMGInstances {
-		inst := &data.PMGInstances[i]
-		inst.LastSeen = refreshNow
-		inst.LastUpdated = refreshNow
+			for j := range inst.Datastores {
+				datastore := &inst.Datastores[j]
+				if datastore.Total <= 0 {
+					continue
+				}
+
+				datastore.Usage = SampleMetric("pbsDatastore", inst.ID+":"+datastore.Name, "usage", refreshNow)
+				datastore.Used = int64(float64(datastore.Total) * (datastore.Usage / 100.0))
+				if datastore.Used < 0 {
+					datastore.Used = 0
+				}
+				if datastore.Used > datastore.Total {
+					datastore.Used = datastore.Total
+				}
+				datastore.Free = datastore.Total - datastore.Used
+				datastore.Status = "available"
+			}
+		}
+
+		for i := range data.PMGInstances {
+			inst := &data.PMGInstances[i]
+			inst.LastSeen = refreshNow
+			inst.LastUpdated = refreshNow
+		}
 	}
 
 	// Sighting stamps simulate each poll delivering the PVE inventory; they
@@ -6161,9 +6196,15 @@ func updateFixtureStateMetricsAt(data *models.StateSnapshot, config MockConfig, 
 			}
 			continue
 		}
+		if !selection.includesProxmoxNode(node.Name) {
+			continue
+		}
 		node.LastSeen = refreshNow
 	}
 	stampGuestSighting := func(nodeName string, lastSeen *time.Time) {
+		if !selection.includesProxmoxNode(nodeName) {
+			return
+		}
 		if _, offline := offlineNodes[nodeName]; offline {
 			if lastSeen.IsZero() {
 				*lastSeen = staleSighting
@@ -6190,6 +6231,10 @@ func updateFixtureStateMetricsAt(data *models.StateSnapshot, config MockConfig, 
 	// Update node metrics
 	for i := range data.Nodes {
 		node := &data.Nodes[i]
+		if !selection.includesProxmoxNode(node.Name) ||
+			node.Status != "online" || node.ConnectionHealth == "offline" || node.Uptime <= 0 {
+			continue
+		}
 		node.CPU = SampleMetric("node", node.ID, "cpu", refreshNow) / 100.0
 		applyMemoryUsage(&node.Memory, SampleMetric("node", node.ID, "memory", refreshNow))
 		applyDiskUsage(&node.Disk, SampleMetric("node", node.ID, "disk", refreshNow))
@@ -6198,7 +6243,7 @@ func updateFixtureStateMetricsAt(data *models.StateSnapshot, config MockConfig, 
 	// Update VM metrics
 	for i := range data.VMs {
 		vm := &data.VMs[i]
-		if vm.Status != "running" {
+		if !selection.includesProxmoxNode(vm.Node) || vm.Status != "running" {
 			continue
 		}
 
@@ -6211,13 +6256,13 @@ func updateFixtureStateMetricsAt(data *models.StateSnapshot, config MockConfig, 
 		vm.DiskWrite = SampleMetricInt("vm", vm.ID, "diskwrite", refreshNow)
 
 		// Update uptime
-		vm.Uptime += 2 // Add 2 seconds per update
+		vm.Uptime += step
 	}
 
 	// Update container metrics
 	for i := range data.Containers {
 		ct := &data.Containers[i]
-		if ct.Status != "running" {
+		if !selection.includesProxmoxNode(ct.Node) || ct.Status != "running" {
 			continue
 		}
 
@@ -6230,12 +6275,12 @@ func updateFixtureStateMetricsAt(data *models.StateSnapshot, config MockConfig, 
 		ct.DiskWrite = SampleMetricInt("container", ct.ID, "diskwrite", refreshNow)
 
 		// Update uptime
-		ct.Uptime += 2
+		ct.Uptime += step
 	}
 
 	for i := range data.Storage {
 		storage := &data.Storage[i]
-		if storage.ID == "" || storage.Total <= 0 || storage.Status != "available" {
+		if !selection.includesProxmoxNode(storage.Node) || storage.ID == "" || storage.Total <= 0 || storage.Status != "available" {
 			continue
 		}
 		ApplyStorageUsage(storage, SampleMetric("storage", storage.ID, "usage", refreshNow))
@@ -6244,6 +6289,9 @@ func updateFixtureStateMetricsAt(data *models.StateSnapshot, config MockConfig, 
 	// Update disk metrics.
 	for i := range data.PhysicalDisks {
 		disk := &data.PhysicalDisks[i]
+		if !selection.includesProxmoxNode(disk.Node) {
+			continue
+		}
 		resourceID := disk.Serial
 		if strings.TrimSpace(resourceID) == "" {
 			resourceID = disk.ID
@@ -6261,74 +6309,76 @@ func updateFixtureStateMetricsAt(data *models.StateSnapshot, config MockConfig, 
 			}
 		}
 
-		disk.LastChecked = time.Now()
+		disk.LastChecked = refreshNow
 	}
 
 	// Update PMG metrics with gentle fluctuations
-	for i := range data.PMGInstances {
-		inst := &data.PMGInstances[i]
-		inst.LastSeen = refreshNow
-		inst.LastUpdated = refreshNow
+	if selection.includeSupplemental {
+		for i := range data.PMGInstances {
+			inst := &data.PMGInstances[i]
+			inst.LastSeen = refreshNow
+			inst.LastUpdated = refreshNow
 
-		if inst.MailStats != nil {
-			inst.MailStats.CountTotal = fluctuateFloat(inst.MailStats.CountTotal, 0.05, 0, math.MaxFloat64)
-			inst.MailStats.CountIn = fluctuateFloat(inst.MailStats.CountIn, 0.05, 0, math.MaxFloat64)
-			inst.MailStats.CountOut = fluctuateFloat(inst.MailStats.CountOut, 0.05, 0, math.MaxFloat64)
-			inst.MailStats.SpamIn = fluctuateFloat(inst.MailStats.SpamIn, 0.08, 0, math.MaxFloat64)
-			inst.MailStats.SpamOut = fluctuateFloat(inst.MailStats.SpamOut, 0.08, 0, math.MaxFloat64)
-			inst.MailStats.VirusIn = fluctuateFloat(inst.MailStats.VirusIn, 0.1, 0, math.MaxFloat64)
-			inst.MailStats.VirusOut = fluctuateFloat(inst.MailStats.VirusOut, 0.1, 0, math.MaxFloat64)
-			inst.MailStats.RBLRejects = fluctuateFloat(inst.MailStats.RBLRejects, 0.07, 0, math.MaxFloat64)
-			inst.MailStats.PregreetRejects = fluctuateFloat(inst.MailStats.PregreetRejects, 0.07, 0, math.MaxFloat64)
-			inst.MailStats.GreylistCount = fluctuateFloat(inst.MailStats.GreylistCount, 0.05, 0, math.MaxFloat64)
-			inst.MailStats.AverageProcessTimeMs = fluctuateFloat(inst.MailStats.AverageProcessTimeMs, 0.05, 200, 2000)
-			inst.MailStats.UpdatedAt = refreshNow
-		}
-
-		if len(inst.MailCount) > 0 {
-			// Drop oldest point if we already have 24
-			if len(inst.MailCount) >= 24 {
-				inst.MailCount = inst.MailCount[1:]
+			if inst.MailStats != nil {
+				inst.MailStats.CountTotal = fluctuateFloat(inst.MailStats.CountTotal, 0.05, 0, math.MaxFloat64)
+				inst.MailStats.CountIn = fluctuateFloat(inst.MailStats.CountIn, 0.05, 0, math.MaxFloat64)
+				inst.MailStats.CountOut = fluctuateFloat(inst.MailStats.CountOut, 0.05, 0, math.MaxFloat64)
+				inst.MailStats.SpamIn = fluctuateFloat(inst.MailStats.SpamIn, 0.08, 0, math.MaxFloat64)
+				inst.MailStats.SpamOut = fluctuateFloat(inst.MailStats.SpamOut, 0.08, 0, math.MaxFloat64)
+				inst.MailStats.VirusIn = fluctuateFloat(inst.MailStats.VirusIn, 0.1, 0, math.MaxFloat64)
+				inst.MailStats.VirusOut = fluctuateFloat(inst.MailStats.VirusOut, 0.1, 0, math.MaxFloat64)
+				inst.MailStats.RBLRejects = fluctuateFloat(inst.MailStats.RBLRejects, 0.07, 0, math.MaxFloat64)
+				inst.MailStats.PregreetRejects = fluctuateFloat(inst.MailStats.PregreetRejects, 0.07, 0, math.MaxFloat64)
+				inst.MailStats.GreylistCount = fluctuateFloat(inst.MailStats.GreylistCount, 0.05, 0, math.MaxFloat64)
+				inst.MailStats.AverageProcessTimeMs = fluctuateFloat(inst.MailStats.AverageProcessTimeMs, 0.05, 200, 2000)
+				inst.MailStats.UpdatedAt = refreshNow
 			}
 
-			base := 60 + rand.Float64()*30
-			newPoint := models.PMGMailCountPoint{
-				Timestamp:  refreshNow,
-				Count:      base + rand.Float64()*15,
-				CountIn:    base*0.6 + rand.Float64()*10,
-				CountOut:   base*0.4 + rand.Float64()*8,
-				SpamIn:     base*0.1 + rand.Float64()*5,
-				SpamOut:    base*0.02 + rand.Float64()*1,
-				VirusIn:    rand.Float64() * 2,
-				VirusOut:   rand.Float64(),
-				RBLRejects: rand.Float64() * 4,
-				Pregreet:   rand.Float64() * 3,
-				BouncesIn:  rand.Float64() * 3,
-				BouncesOut: rand.Float64() * 2,
-				Greylist:   rand.Float64() * 5,
-				Index:      len(inst.MailCount),
-				Timeframe:  "hour",
+			if len(inst.MailCount) > 0 {
+				// Drop oldest point if we already have 24
+				if len(inst.MailCount) >= 24 {
+					inst.MailCount = inst.MailCount[1:]
+				}
+
+				base := 60 + rand.Float64()*30
+				newPoint := models.PMGMailCountPoint{
+					Timestamp:  refreshNow,
+					Count:      base + rand.Float64()*15,
+					CountIn:    base*0.6 + rand.Float64()*10,
+					CountOut:   base*0.4 + rand.Float64()*8,
+					SpamIn:     base*0.1 + rand.Float64()*5,
+					SpamOut:    base*0.02 + rand.Float64()*1,
+					VirusIn:    rand.Float64() * 2,
+					VirusOut:   rand.Float64(),
+					RBLRejects: rand.Float64() * 4,
+					Pregreet:   rand.Float64() * 3,
+					BouncesIn:  rand.Float64() * 3,
+					BouncesOut: rand.Float64() * 2,
+					Greylist:   rand.Float64() * 5,
+					Index:      len(inst.MailCount),
+					Timeframe:  "hour",
+				}
+				inst.MailCount = append(inst.MailCount, newPoint)
 			}
-			inst.MailCount = append(inst.MailCount, newPoint)
-		}
 
-		if len(inst.SpamDistribution) > 0 {
-			for j := range inst.SpamDistribution {
-				inst.SpamDistribution[j].Count = fluctuateFloat(inst.SpamDistribution[j].Count, 0.05, 0, math.MaxFloat64)
+			if len(inst.SpamDistribution) > 0 {
+				for j := range inst.SpamDistribution {
+					inst.SpamDistribution[j].Count = fluctuateFloat(inst.SpamDistribution[j].Count, 0.05, 0, math.MaxFloat64)
+				}
 			}
-		}
 
-		if inst.Quarantine != nil {
-			inst.Quarantine.Spam = fluctuateInt(inst.Quarantine.Spam, 5, 0, 500)
-			inst.Quarantine.Virus = fluctuateInt(inst.Quarantine.Virus, 2, 0, 200)
-			inst.Quarantine.Attachment = fluctuateInt(inst.Quarantine.Attachment, 2, 0, 200)
-			inst.Quarantine.Blacklisted = fluctuateInt(inst.Quarantine.Blacklisted, 1, 0, 100)
-		}
+			if inst.Quarantine != nil {
+				inst.Quarantine.Spam = fluctuateInt(inst.Quarantine.Spam, 5, 0, 500)
+				inst.Quarantine.Virus = fluctuateInt(inst.Quarantine.Virus, 2, 0, 200)
+				inst.Quarantine.Attachment = fluctuateInt(inst.Quarantine.Attachment, 2, 0, 200)
+				inst.Quarantine.Blacklisted = fluctuateInt(inst.Quarantine.Blacklisted, 1, 0, 100)
+			}
 
-		if len(inst.Nodes) > 0 {
-			for j := range inst.Nodes {
-				if inst.Nodes[j].Status == "online" {
-					inst.Nodes[j].Uptime += currentMockUpdateStepInt64()
+			if len(inst.Nodes) > 0 {
+				for j := range inst.Nodes {
+					if inst.Nodes[j].Status == "online" {
+						inst.Nodes[j].Uptime += currentMockUpdateStepInt64()
+					}
 				}
 			}
 		}

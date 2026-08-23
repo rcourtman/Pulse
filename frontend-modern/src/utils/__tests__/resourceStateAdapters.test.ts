@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  mergeCanonicalResourceDeltaSnapshot,
   mergeCanonicalResourceSnapshot,
   nodeFromResource,
   pbsInstanceFromResource,
@@ -1050,5 +1051,38 @@ describe('resourceStateAdapters unavailable memory contract', () => {
       usage: 50,
       usageUnavailable: false,
     });
+  });
+});
+
+describe('incremental canonical resource snapshots', () => {
+  it('preserves untouched row identity while refreshing changed resources', () => {
+    const unchanged = {
+      id: 'vm-unchanged',
+      type: 'vm',
+      name: 'vm-unchanged',
+      status: 'running',
+      cpu: { current: 10 },
+    } as Resource;
+    const changed = {
+      id: 'vm-changed',
+      type: 'vm',
+      name: 'vm-changed',
+      status: 'running',
+      cpu: { current: 20 },
+    } as Resource;
+    const incoming = [
+      structuredClone(unchanged),
+      { ...structuredClone(changed), cpu: { current: 75 } },
+    ];
+
+    const result = mergeCanonicalResourceDeltaSnapshot(
+      incoming,
+      [unchanged, changed],
+      new Set(['vm-changed']),
+    );
+
+    expect(result[0]).toBe(unchanged);
+    expect(result[1]).not.toBe(changed);
+    expect(result[1]?.cpu?.current).toBe(75);
   });
 });

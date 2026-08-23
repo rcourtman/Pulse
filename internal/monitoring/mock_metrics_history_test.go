@@ -1165,6 +1165,47 @@ func TestStartMockMetricsSampler_SeedsCanonicalMockResourceHistory(t *testing.T)
 	}
 }
 
+func TestBoundMockMetricsHistoryGraphCapsLargeEstateGuestsAcrossTheEstate(t *testing.T) {
+	cfg := mock.DefaultConfig
+	cfg.NodeCount = 50
+	cfg.VMsPerNode = 10
+	cfg.LXCsPerNode = 8
+
+	previousEnabled := mock.IsMockEnabled()
+	previousConfig := mock.GetConfig()
+	t.Cleanup(func() {
+		mustSetMockEnabled(t, false)
+		mock.SetMockConfig(previousConfig)
+		if previousEnabled {
+			mustSetMockEnabled(t, true)
+		}
+	})
+	mustSetMockEnabled(t, false)
+	mock.SetMockConfig(cfg)
+	mustSetMockEnabled(t, true)
+
+	full := mock.CurrentFixtureGraph()
+	bounded := boundMockMetricsHistoryGraph(full)
+	boundedCount := len(bounded.State.VMs) + len(bounded.State.Containers)
+	if boundedCount != mockEagerHistoryPVEGuestLimit {
+		t.Fatalf("bounded eager guest count=%d, want=%d", boundedCount, mockEagerHistoryPVEGuestLimit)
+	}
+	if got := len(full.State.VMs) + len(full.State.Containers); got <= boundedCount {
+		t.Fatalf("large fixture guest count=%d, want more than bounded count=%d", got, boundedCount)
+	}
+
+	selectedNodes := make(map[string]struct{})
+	for _, vm := range bounded.State.VMs {
+		selectedNodes[vm.Node] = struct{}{}
+	}
+	for _, container := range bounded.State.Containers {
+		selectedNodes[container.Node] = struct{}{}
+	}
+	if len(selectedNodes) < cfg.NodeCount/2 {
+		t.Fatalf("bounded history sample covered only %d/%d nodes", len(selectedNodes), cfg.NodeCount)
+	}
+}
+
 func keysDiskCharts(charts map[string]DiskChartEntry) []string {
 	keys := make([]string, 0, len(charts))
 	for key := range charts {

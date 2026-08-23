@@ -463,6 +463,7 @@ cleanup so readers cannot retain orphaned runtime or alert projections.
 35a. `internal/mock/action_fixtures.go`
 35b. `internal/mock/availability_fixtures.go`
 35c. `internal/mock/recovery_points.go`
+35d. `internal/mock/integration.go`
 36. `internal/dockeragent/docker_client.go`
 37. `pkg/agents/docker/report.go`
 38. `internal/models/models.go`
@@ -505,11 +506,14 @@ cleanup so readers cannot retain orphaned runtime or alert projections.
 
 1. `internal/config/host_continuity.go` shared with `agent-lifecycle`: the durable host identity, report-order watermark, and removal tombstone journal is jointly owned by agent lifecycle admission and monitoring report continuity.
 2. `internal/kubernetesagent/agent.go` shared with `agent-lifecycle`: the Kubernetes native agent runtime is both a monitoring inventory source and an agent lifecycle Pulse control-plane transport client.
-3. `internal/models/models.go` shared with `agent-lifecycle`: removed host-agent identity aliases and tombstone state are both agent lifecycle authority and monitoring runtime report state.
-4. `internal/monitoring/monitor.go` shared with `agent-lifecycle`: monitor construction owns both monitoring runtime initialization and fail-closed agent lifecycle journal hydration before report admission.
-5. `internal/monitoring/monitor_agents.go` shared with `agent-lifecycle`: server-side Unified Agent report, removal, token binding, tombstone expiry, and re-enrollment semantics are jointly owned by agent lifecycle authority and monitoring ingest.
-6. `internal/proxmoxidentity/backup_identity.go` shared with `alerts`, `storage-recovery`: Proxmox PBS backup subject identity is a shared runtime boundary for monitoring backup freshness, backup-age alert attribution, and recovery-point guest mapping.
-7. `pkg/agents/host/report.go` shared with `agent-lifecycle`: the Unified Agent host report is both an agent lifecycle authored-state contract and a monitoring ingest contract for host maintenance posture.
+3. `internal/mock/fixture_graph.go` shared with `performance-and-scalability`: the canonical mock fixture graph is both monitoring-owned runtime data and a protected large-estate demo transport hot path.
+4. `internal/mock/generator.go` shared with `performance-and-scalability`: mock metric generation is both monitoring-owned runtime data and a protected large-estate demo update hot path.
+5. `internal/mock/integration.go` shared with `performance-and-scalability`: the mock runtime scheduler is both monitoring-owned sampling infrastructure and a protected large-estate demo cadence boundary.
+6. `internal/models/models.go` shared with `agent-lifecycle`: removed host-agent identity aliases and tombstone state are both agent lifecycle authority and monitoring runtime report state.
+7. `internal/monitoring/monitor.go` shared with `agent-lifecycle`: monitor construction owns both monitoring runtime initialization and fail-closed agent lifecycle journal hydration before report admission.
+8. `internal/monitoring/monitor_agents.go` shared with `agent-lifecycle`: server-side Unified Agent report, removal, token binding, tombstone expiry, and re-enrollment semantics are jointly owned by agent lifecycle authority and monitoring ingest.
+9. `internal/proxmoxidentity/backup_identity.go` shared with `alerts`, `storage-recovery`: Proxmox PBS backup subject identity is a shared runtime boundary for monitoring backup freshness, backup-age alert attribution, and recovery-point guest mapping.
+10. `pkg/agents/host/report.go` shared with `agent-lifecycle`: the Unified Agent host report is both an agent lifecycle authored-state contract and a monitoring ingest contract for host maintenance posture.
 
 ## Extension Points
 
@@ -682,6 +686,17 @@ cleanup so readers cannot retain orphaned runtime or alert projections.
    `GetState()` owns lazy fixture alert-snapshot initialization, so the ticker
    must preserve that maintenance call before its subscriber early-exit while
    production monitors continue to skip the snapshot build.
+   The mock update loop must advance the 50-node demo through ten node-scoped
+   metric cohorts on the shared two-second sampler. It must preserve unchanged
+   resource timestamps between cohorts, cover every node within twenty seconds,
+   and refresh provider-backed fixtures only once per full rotation so one demo
+   tick cannot manufacture an estate-wide WebSocket delta.
+   Mock metrics history must also stay bounded independently of estate size:
+   eager multi-day PVE guest history is limited to a deterministic sample spread
+   across the estate, while every omitted guest continues to receive the same
+   canonical timeline through deterministic on-demand chart synthesis. Dashboard
+   chart prewarming is limited per workload family and must never rebuild an
+   estate-sized guest chart cache on each mock sampler tick.
    `POLL_TASK_WORKERS` is a process-wide scheduled-task concurrency ceiling,
    not a per-monitor pool size. Each monitor may own one queue dispatcher, but
    all dispatchers must acquire the shared bounded limiter before executing a

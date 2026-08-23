@@ -122,6 +122,32 @@ func TestStartMockMetricsSampler_PrewarmsDefaultWorkloadChartCaches(t *testing.T
 	assertPrewarmed("dockerContainer", requests.dockerContainers)
 }
 
+func TestBoundMockWorkloadChartPrewarmRequestsCapsEveryWorkloadFamily(t *testing.T) {
+	makeRequests := func(count int) []GuestChartRequest {
+		requests := make([]GuestChartRequest, count)
+		for index := range requests {
+			id := fmt.Sprintf("guest-%d", index)
+			requests[index] = GuestChartRequest{InMemoryKey: id, SQLResourceID: id}
+		}
+		return requests
+	}
+
+	bounded := boundMockWorkloadChartPrewarmRequests(mockWorkloadChartPrewarmRequests{
+		vms:              makeRequests(100),
+		containers:       makeRequests(90),
+		pods:             makeRequests(80),
+		dockerContainers: makeRequests(70),
+	})
+	for family, requests := range map[string][]GuestChartRequest{
+		"vms": bounded.vms, "containers": bounded.containers,
+		"pods": bounded.pods, "dockerContainers": bounded.dockerContainers,
+	} {
+		if len(requests) != mockDashboardWorkloadPrewarmLimitPerType {
+			t.Fatalf("%s prewarm requests=%d, want=%d", family, len(requests), mockDashboardWorkloadPrewarmLimitPerType)
+		}
+	}
+}
+
 func newChartBatchSLOMonitor(t *testing.T) *Monitor {
 	t.Helper()
 

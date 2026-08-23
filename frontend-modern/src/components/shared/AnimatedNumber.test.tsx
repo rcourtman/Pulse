@@ -1,8 +1,9 @@
-import { createSignal } from 'solid-js';
+import { createSignal, For } from 'solid-js';
 import { cleanup, render } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { formatPercent } from '@/utils/format';
 import { AnimatedNumber } from './AnimatedNumber';
+import { MAX_CONCURRENT_ANIMATED_NUMBER_ENTRIES } from './useAnimatedNumberState';
 
 let queuedFrames: FrameRequestCallback[] = [];
 let reducedMotionMatches = false;
@@ -98,5 +99,25 @@ describe('AnimatedNumber', () => {
     expect(readout).toHaveTextContent('50%');
     expect(readout).toHaveAttribute('aria-label', '50%');
     expect(queuedFrames).toHaveLength(0);
+  });
+
+  it('bounds concurrent animation work when many readouts change together', () => {
+    const indices = Array.from(
+      { length: MAX_CONCURRENT_ANIMATED_NUMBER_ENTRIES + 1 },
+      (_, index) => index,
+    );
+    const [value, setValue] = createSignal(10);
+    const { container } = render(() => (
+      <For each={indices}>{() => <AnimatedNumber value={value()} format={formatPercent} />}</For>
+    ));
+
+    setValue(50);
+
+    const readouts = Array.from(container.querySelectorAll('[data-animated-number="true"]'));
+    expect(queuedFrames).toHaveLength(1);
+    expect(readouts.filter((readout) => readout.textContent === '10%')).toHaveLength(
+      MAX_CONCURRENT_ANIMATED_NUMBER_ENTRIES,
+    );
+    expect(readouts.filter((readout) => readout.textContent === '50%')).toHaveLength(1);
   });
 });

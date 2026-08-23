@@ -1,6 +1,8 @@
 package mock
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"math"
 	"slices"
@@ -624,5 +626,123 @@ func TestCloneTrueNASFixtureSnapshotIsolatesPoolHealthEvidence(t *testing.T) {
 		original.Pools[0].VDevs[0].Status != "UNAVAIL" ||
 		original.Pools[0].DiskMembers[0].Status != "UNAVAIL" {
 		t.Fatalf("clone mutated original pool evidence: %+v", original.Pools[0])
+	}
+}
+
+func TestFixtureGraphMetricCohortsBoundPVEChurnAndCoverTheEstate(t *testing.T) {
+	cfg := DefaultConfig
+	cfg.NodeCount = 10
+	cfg.VMsPerNode = 2
+	cfg.LXCsPerNode = 2
+	cfg.DockerHostCount = 0
+	cfg.GenericHostCount = 0
+	cfg.K8sClusterCount = 0
+	cfg.RandomMetrics = true
+
+	base := time.Date(2026, 8, 23, 12, 0, 0, 0, time.UTC)
+	graph := buildFixtureGraph(cfg, base)
+	initialVMSeen := make(map[string]time.Time, len(graph.State.VMs))
+	initialContainerSeen := make(map[string]time.Time, len(graph.State.Containers))
+	for _, vm := range graph.State.VMs {
+		initialVMSeen[vm.ID] = vm.LastSeen
+	}
+	for _, container := range graph.State.Containers {
+		initialContainerSeen[container.ID] = container.LastSeen
+	}
+
+	graph.UpdateMetricCohort(cfg, base.Add(cfg.UpdateInterval), 0, 5)
+	selectedNodes := map[string]struct{}{
+		graph.State.Nodes[0].Name: {},
+		graph.State.Nodes[5].Name: {},
+	}
+	changedGuests := 0
+	for _, vm := range graph.State.VMs {
+		_, selected := selectedNodes[vm.Node]
+		changed := !vm.LastSeen.Equal(initialVMSeen[vm.ID])
+		if changed {
+			changedGuests++
+		}
+		if changed != selected {
+			t.Fatalf("VM %s on %s changed=%v, selected=%v", vm.ID, vm.Node, changed, selected)
+		}
+	}
+	for _, container := range graph.State.Containers {
+		_, selected := selectedNodes[container.Node]
+		changed := !container.LastSeen.Equal(initialContainerSeen[container.ID])
+		if changed {
+			changedGuests++
+		}
+		if changed != selected {
+			t.Fatalf("container %s on %s changed=%v, selected=%v", container.ID, container.Node, changed, selected)
+		}
+	}
+	if total := len(graph.State.VMs) + len(graph.State.Containers); changedGuests <= 0 || changedGuests >= total/2 {
+		t.Fatalf("expected a bounded non-empty guest cohort, changed=%d total=%d", changedGuests, total)
+	}
+
+	for cohort := 1; cohort < 5; cohort++ {
+		graph.UpdateMetricCohort(cfg, base.Add(time.Duration(cohort+1)*cfg.UpdateInterval), cohort, 5)
+	}
+	for _, vm := range graph.State.VMs {
+		if !vm.LastSeen.After(initialVMSeen[vm.ID]) {
+			t.Fatalf("VM %s was not refreshed during a full cohort rotation", vm.ID)
+		}
+	}
+	for _, container := range graph.State.Containers {
+		if !container.LastSeen.After(initialContainerSeen[container.ID]) {
+			t.Fatalf("container %s was not refreshed during a full cohort rotation", container.ID)
+		}
+	}
+}
+
+func TestFixtureGraphMetricCohortProducesSparseUnifiedResourceChanges(t *testing.T) {
+	cfg := DefaultConfig
+	cfg.NodeCount = 50
+	cfg.VMsPerNode = 10
+	cfg.LXCsPerNode = 8
+	cfg.RandomMetrics = true
+
+	base := time.Date(2026, 8, 23, 12, 0, 0, 0, time.UTC)
+	graph := buildFixtureGraph(cfg, base)
+	before, _ := graph.UnifiedResourceSnapshot()
+
+	graph.UpdateMetricCohort(cfg, base.Add(cfg.UpdateInterval), 0, mockMetricCohortCount)
+	after, _ := graph.UnifiedResourceSnapshot()
+
+	encodeBroadcastRelevant := func(resource unifiedresources.Resource) []byte {
+		encoded, err := json.Marshal(resource)
+		if err != nil {
+			t.Fatalf("marshal resource %s: %v", resource.ID, err)
+		}
+		var payload map[string]json.RawMessage
+		if err := json.Unmarshal(encoded, &payload); err != nil {
+			t.Fatalf("decode resource %s: %v", resource.ID, err)
+		}
+		// ResourceFrontend intentionally omits the registry's ingestion timestamp.
+		// It is regenerated whenever a throwaway mock registry is built and is not
+		// part of the WebSocket resource payload.
+		delete(payload, "updatedAt")
+		encoded, err = json.Marshal(payload)
+		if err != nil {
+			t.Fatalf("re-marshal resource %s: %v", resource.ID, err)
+		}
+		return encoded
+	}
+
+	encodedBefore := make(map[string][]byte, len(before))
+	for _, resource := range before {
+		encodedBefore[resource.ID] = encodeBroadcastRelevant(resource)
+	}
+
+	changed := 0
+	for _, resource := range after {
+		encoded := encodeBroadcastRelevant(resource)
+		if !bytes.Equal(encodedBefore[resource.ID], encoded) {
+			changed++
+		}
+	}
+
+	if changed == 0 || changed >= len(after)/2 {
+		t.Fatalf("expected sparse unified resource churn, changed=%d total=%d", changed, len(after))
 	}
 }

@@ -587,12 +587,11 @@ const mergeRealtimeHostResources = (incoming: Resource, existing: Resource): Res
   );
 };
 
-const coalesceRealtimeResourceSnapshot = (resources: Resource[]): Resource[] => {
+const coalesceCanonicalRealtimeResourceSnapshot = (resources: Resource[]): Resource[] => {
   const coalesced: Resource[] = [];
   const indexByHostKey = new Map<string, number>();
 
-  for (const rawResource of resources) {
-    const resource = canonicalizeRealtimeResource(rawResource, { synthesizePlatformScopes: false });
+  for (const resource of resources) {
     const hostKey = getHostResourceMergeKey(resource);
     if (!hostKey) {
       coalesced.push(resource);
@@ -617,6 +616,13 @@ const coalesceRealtimeResourceSnapshot = (resources: Resource[]): Resource[] => 
 
   return coalesced;
 };
+
+const coalesceRealtimeResourceSnapshot = (resources: Resource[]): Resource[] =>
+  coalesceCanonicalRealtimeResourceSnapshot(
+    resources.map((resource) =>
+      canonicalizeRealtimeResource(resource, { synthesizePlatformScopes: false }),
+    ),
+  );
 
 const hasAvailabilityFacet = (
   resource: Resource,
@@ -828,6 +834,48 @@ export const mergeCanonicalResourceSnapshot = (
   return coalescedIncoming.map((resource) =>
     mergeCanonicalResource(resource, existingById.get(resource.id)),
   );
+};
+
+// Incremental counterpart to mergeCanonicalResourceSnapshot. Server delta
+// application preserves the raw object identity of untouched resources, so
+// only changed rows and the small host-coalescing set need to be cloned and
+// canonicalized. Non-host resources outside the delta retain their exact display
+// objects, preventing an estate-wide reactive invalidation on every metrics
+// tick while keeping the full-snapshot compatibility semantics intact.
+export const mergeCanonicalResourceDeltaSnapshot = (
+  incoming: Resource[],
+  existing: Resource[],
+  changedIds: ReadonlySet<string>,
+): Resource[] => {
+  if (incoming.length === 0) {
+    return [];
+  }
+
+  const existingById = new Map(existing.map((resource) => [resource.id, resource] as const));
+  const prepared = incoming.map((resource) => {
+    const existingResource = existingById.get(resource.id);
+    const mustRefresh =
+      resource.type === 'agent' || changedIds.has(resource.id) || existingResource === undefined;
+    if (!mustRefresh) {
+      return existingResource;
+    }
+    return canonicalizeRealtimeResource(structuredClone(resource), {
+      synthesizePlatformScopes: false,
+    });
+  });
+
+  const coalesced = coalesceCanonicalRealtimeResourceSnapshot(prepared);
+  return coalesced.map((resource) => {
+    const existingResource = existingById.get(resource.id);
+    if (
+      resource.type !== 'agent' &&
+      !changedIds.has(resource.id) &&
+      existingResource !== undefined
+    ) {
+      return existingResource;
+    }
+    return mergeCanonicalResource(resource, existingResource);
+  });
 };
 
 const buildMemory = (

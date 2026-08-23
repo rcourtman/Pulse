@@ -71,6 +71,53 @@ func (g *FixtureGraph) UpdateMetrics(cfg MockConfig, now time.Time) {
 	syncMetricFixtureRegistriesFromGraph(*g)
 }
 
+// UpdateMetricCohort advances one bounded slice of the demo estate. The full
+// UpdateMetrics path remains the fixture-construction and explicit refresh
+// boundary; the long-running mock sampler uses cohorts so a large public demo
+// does not make every resource appear changed on every two-second tick.
+func (g *FixtureGraph) UpdateMetricCohort(
+	cfg MockConfig,
+	now time.Time,
+	cohortIndex int,
+	cohortCount int,
+) {
+	if g == nil {
+		return
+	}
+	if cohortCount <= 0 {
+		cohortCount = 1
+	}
+	cohortIndex %= cohortCount
+	if cohortIndex < 0 {
+		cohortIndex += cohortCount
+	}
+
+	setMockUpdateInterval(cfg.UpdateInterval)
+	selectedNodes := make(map[string]struct{}, (len(g.State.Nodes)+cohortCount-1)/cohortCount)
+	for index := range g.State.Nodes {
+		if index%cohortCount != cohortIndex {
+			continue
+		}
+		selectedNodes[g.State.Nodes[index].Name] = struct{}{}
+	}
+
+	includeSupplemental := cohortIndex == 0
+	updateFixtureStateMetricsSelectedAt(&g.State, cfg, now, fixtureMetricSelection{
+		proxmoxNodeNames:    selectedNodes,
+		includeSupplemental: includeSupplemental,
+		uptimeStep:          currentMockUpdateStepInt64() * int64(cohortCount),
+	})
+	if includeSupplemental {
+		// Provider-backed demo fixtures are much smaller than the PVE estate and
+		// refresh once per full cohort rotation. Their timestamps stay live
+		// without forcing every provider resource through every socket delta.
+		g.PlatformFixtures = rebasePlatformFixtures(g.PlatformFixtures, now)
+		g.AvailabilityFixtures = rebaseAvailabilityFixtures(g.AvailabilityFixtures, now)
+		g.DiscoveryFixtures = buildDiscoveryFixtures(g.State, now)
+	}
+	syncMetricFixtureRegistriesFromGraph(*g)
+}
+
 func (g *FixtureGraph) UpdateAlertSnapshots(active []alerts.Alert, resolved []models.ResolvedAlert) {
 	if g == nil {
 		return

@@ -1170,7 +1170,10 @@ not a replacement status card, CTA band, or page-local nested card.
    `frontend-modern/src/components/shared/AnimatedNumber.tsx` and its
    `useAnimatedNumberState` owner. Feature surfaces may opt metric labels and
    compact counters into that primitive, but must not create local counter
-   timers, page-specific easing, or independent reduced-motion policy.
+   timers, page-specific easing, or independent reduced-motion policy. The
+   shared owner must also cap concurrent numeric animations and snap overflow
+   readouts to their current target so a realtime estate update cannot make
+   animation cost grow with the number of visible resources.
    Shared primitives must not reintroduce app-shell monitored-system capacity
    banners. Monitored-system grouping and ledger presentation belongs in the
    owned settings surfaces, while commercial plan explanation belongs in

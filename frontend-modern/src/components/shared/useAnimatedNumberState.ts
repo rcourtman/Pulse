@@ -29,6 +29,7 @@ type MotionMediaQueryList = MediaQueryList & {
 };
 
 const activeFrameEntries = new Map<number, AnimatedNumberFrameEntry>();
+export const MAX_CONCURRENT_ANIMATED_NUMBER_ENTRIES = 24;
 let nextFrameEntryId = 1;
 let frameRequestId: number | undefined;
 
@@ -79,6 +80,15 @@ function requestNextAnimatedNumberFrame() {
 
 function startAnimatedNumberFrame(entry: AnimatedNumberFrameEntry): () => void {
   if (!canUseAnimationFrame()) {
+    entry.onFrame(entry.to);
+    entry.onDone();
+    return () => undefined;
+  }
+
+  // A single estate update can change hundreds of visible metric labels at
+  // once. Keep a small amount of motion for continuity, then snap overflow
+  // labels to their target so animation work cannot scale with estate size.
+  if (activeFrameEntries.size >= MAX_CONCURRENT_ANIMATED_NUMBER_ENTRIES) {
     entry.onFrame(entry.to);
     entry.onDone();
     return () => undefined;

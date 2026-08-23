@@ -30,6 +30,12 @@ const (
 	// PULSE_MOCK_TRENDS_SEED_DURATION.
 	defaultMockSeedDuration   = 48 * time.Hour
 	defaultMockSampleInterval = 1 * time.Minute // 1m for detailed recent charts
+	// Large demo estates use deterministic on-demand chart synthesis for most
+	// workloads. Eagerly materialising multi-day history for every guest would
+	// otherwise turn a 50-node showcase into millions of retained MetricPoints.
+	// Keep a representative cross-estate sample warm and let the existing chart
+	// fallback produce an equivalent canonical series for every other guest.
+	mockEagerHistoryPVEGuestLimit = 64
 )
 
 type mockMetricsSamplerConfig struct {
@@ -1717,6 +1723,49 @@ func trueNASDiskMetricsResourceID(disk truenas.Disk) string {
 	return resourceID
 }
 
+func evenlySampleMockHistoryValues[T any](values []T, limit int) []T {
+	if limit <= 0 || len(values) == 0 {
+		return nil
+	}
+	if len(values) <= limit {
+		return values
+	}
+
+	selected := make([]T, 0, limit)
+	for index := 0; index < limit; index++ {
+		selected = append(selected, values[index*len(values)/limit])
+	}
+	return selected
+}
+
+// boundMockMetricsHistoryGraph limits only the eager PVE guest-history
+// materialisation. The canonical fixture graph and realtime inventory remain
+// complete, and chart reads for guests outside this sample use the existing
+// deterministic mock series fallback.
+func boundMockMetricsHistoryGraph(graph mock.FixtureGraph) mock.FixtureGraph {
+	vmCount := len(graph.State.VMs)
+	containerCount := len(graph.State.Containers)
+	total := vmCount + containerCount
+	if total <= mockEagerHistoryPVEGuestLimit {
+		return graph
+	}
+
+	vmLimit := mockEagerHistoryPVEGuestLimit * vmCount / total
+	containerLimit := mockEagerHistoryPVEGuestLimit - vmLimit
+	if vmCount > 0 && vmLimit == 0 {
+		vmLimit = 1
+		containerLimit--
+	}
+	if containerCount > 0 && containerLimit == 0 {
+		containerLimit = 1
+		vmLimit--
+	}
+
+	graph.State.VMs = evenlySampleMockHistoryValues(graph.State.VMs, vmLimit)
+	graph.State.Containers = evenlySampleMockHistoryValues(graph.State.Containers, containerLimit)
+	return graph
+}
+
 func (m *Monitor) startMockMetricsSampler(ctx context.Context) {
 	if ctx == nil || m == nil {
 		log.Debug().Msg("mock metrics sampler: nil context or monitor")
@@ -1752,10 +1801,13 @@ func (m *Monitor) startMockMetricsSampler(ctx context.Context) {
 
 	graph, fixtureRevision := mock.CurrentFixtureGraphWithRevision()
 	state := graph.State
+	historyGraph := boundMockMetricsHistoryGraph(graph)
 	log.Info().
 		Int("nodes", len(state.Nodes)).
 		Int("vms", len(state.VMs)).
 		Int("containers", len(state.Containers)).
+		Int("eagerHistoryVMs", len(historyGraph.State.VMs)).
+		Int("eagerHistoryContainers", len(historyGraph.State.Containers)).
 		Dur("seedDuration", seedDuration).
 		Dur("sampleInterval", cfg.SampleInterval).
 		Msg("Mock metrics sampler: seeding historical data")
@@ -1774,7 +1826,7 @@ func (m *Monitor) startMockMetricsSampler(ctx context.Context) {
 		}
 	}
 	history, cacheHit := prepareMockMetricsHistory(
-		graph,
+		historyGraph,
 		fixtureRevision,
 		time.Now(),
 		seedDuration,
@@ -1806,7 +1858,12 @@ func (m *Monitor) startMockMetricsSampler(ctx context.Context) {
 				if !mock.IsMockEnabled() {
 					continue
 				}
-				recordMockStateToMetricsHistory(m.metricsHistory, storeSink, mock.CurrentFixtureGraph(), normalizeMockMetricTimestamp(time.Now(), cfg.SampleInterval))
+				recordMockStateToMetricsHistory(
+					m.metricsHistory,
+					storeSink,
+					boundMockMetricsHistoryGraph(mock.CurrentFixtureGraph()),
+					normalizeMockMetricTimestamp(time.Now(), cfg.SampleInterval),
+				)
 				m.invalidateMockChartCaches()
 				m.prewarmMockDashboardChartCaches()
 			}

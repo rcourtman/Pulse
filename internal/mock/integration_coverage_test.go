@@ -35,6 +35,7 @@ func resetMockIntegrationState(t *testing.T) {
 	mockConfig = DefaultConfig
 	dataMu.Unlock()
 	setMockUpdateInterval(DefaultConfig.UpdateInterval)
+	metricCohort.Store(0)
 	enabled.Store(false)
 
 	for _, key := range mockEnvKeys {
@@ -48,6 +49,7 @@ func resetMockIntegrationState(t *testing.T) {
 		mockConfig = DefaultConfig
 		dataMu.Unlock()
 		setMockUpdateInterval(DefaultConfig.UpdateInterval)
+		metricCohort.Store(0)
 		enabled.Store(false)
 		for _, key := range mockEnvKeys {
 			_ = os.Unsetenv(key)

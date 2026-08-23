@@ -18,7 +18,10 @@ import {
   getAgentDiscoveryResourceId,
   isAppContainerDiscoveryResourceType,
 } from '@/utils/discoveryTarget';
-import { mergeCanonicalResourceSnapshot } from '@/utils/resourceStateAdapters';
+import {
+  mergeCanonicalResourceDeltaSnapshot,
+  mergeCanonicalResourceSnapshot,
+} from '@/utils/resourceStateAdapters';
 import { apiFetchJSON } from '@/utils/apiClient';
 
 // Advertised to the server as max_message_bytes on the upgrade request; the
@@ -94,18 +97,20 @@ const applyJSONMergePatch = (current: unknown, patch: unknown): unknown => {
 const applyResourceStateDelta = (
   current: readonly Resource[],
   delta: { upserts?: unknown; removed?: unknown; order?: unknown },
-): Resource[] => {
+): { resources: Resource[]; changedIds: Set<string> } => {
   const resourcesById = new Map(current.map((resource) => [resource.id, resource] as const));
   const removed = Array.isArray(delta.removed)
     ? new Set(delta.removed.filter((id): id is string => typeof id === 'string'))
     : new Set<string>();
   removed.forEach((id) => resourcesById.delete(id));
+  const changedIds = new Set(removed);
 
   const addedIds: string[] = [];
   if (Array.isArray(delta.upserts)) {
     delta.upserts.forEach((patch) => {
       const id = asString(asRecord(patch)?.id);
       if (!id) return;
+      changedIds.add(id);
       if (!resourcesById.has(id)) addedIds.push(id);
       const next = applyJSONMergePatch(resourcesById.get(id), patch) as Resource;
       if (next.id === id) resourcesById.set(id, next);
@@ -126,7 +131,7 @@ const applyResourceStateDelta = (
   resourcesById.forEach((resource, id) => {
     if (!included.has(id)) ordered.push(resource);
   });
-  return ordered;
+  return { resources: ordered, changedIds };
 };
 
 const parseTimestampMs = (value: unknown): number | null => {
@@ -329,6 +334,7 @@ export function createWebSocketStore(url: string) {
   // merge are cloned first, because the merge output shares nested references
   // and Solid's reconcile mutates adopted objects in place.
   let rawServerResources: Resource[] | null = null;
+  const deferredResourceIds = new Set<string>();
   let lastFullStateRecoveryAt = 0;
   // Set once the server has sent a full snapshot too large for the inbound
   // guard. Asking for another one over the socket would only reproduce the same
@@ -394,6 +400,7 @@ export function createWebSocketStore(url: string) {
 
   const resetConnectionBaseline = () => {
     rawServerResources = null;
+    deferredResourceIds.clear();
     lastFullStateRecoveryAt = 0;
     oversizedSnapshotObserved = false;
     // A recovery request from a retired connection may still settle, but its
@@ -406,6 +413,71 @@ export function createWebSocketStore(url: string) {
       restHydrationTimeout = 0;
     }
   };
+
+  const syncContainerCommands = (
+    resources: readonly Resource[],
+    changedResourceIds?: ReadonlySet<string>,
+  ) => {
+    const commandSyncResources = changedResourceIds
+      ? resources.filter((resource) => changedResourceIds.has(resource.id))
+      : resources;
+    commandSyncResources.forEach((resource: any) => {
+      if (resource?.type !== 'docker-host') return;
+      const platformData = asRecord(resource.platformData);
+      const dockerData = asRecord(platformData?.docker);
+      const command = dockerData?.command || platformData?.command;
+      if (!command || typeof command !== 'object') return;
+
+      const agentIds = new Set<string>([
+        resource.id,
+        asString(dockerData?.hostSourceId) || '',
+        asString(platformData?.hostSourceId) || '',
+        asString(resource?.discoveryTarget?.agentId) || '',
+        isAppContainerDiscoveryResourceType(resource?.discoveryTarget?.resourceType)
+          ? asString(resource?.discoveryTarget?.resourceId) || ''
+          : '',
+      ]);
+      agentIds.forEach((agentId) => {
+        if (agentId) {
+          syncWithAgentCommand(agentId, command as any);
+        }
+      });
+    });
+  };
+
+  const commitResources = (nextResources: Resource[], changedResourceIds?: ReadonlySet<string>) => {
+    logger.debug('[WebSocket] Updating resources', {
+      count: nextResources.length,
+      changedCount: changedResourceIds?.size ?? nextResources.length,
+    });
+    setState('resources', reconcile(nextResources, { key: 'id' }));
+    syncContainerCommands(nextResources, changedResourceIds);
+  };
+
+  const handleResourceVisibilityChange = () => {
+    if (
+      document.visibilityState !== 'visible' ||
+      rawServerResources === null ||
+      deferredResourceIds.size === 0
+    ) {
+      return;
+    }
+
+    const changedResourceIds = new Set(deferredResourceIds);
+    deferredResourceIds.clear();
+    const nextResources = mergeCanonicalResourceDeltaSnapshot(
+      rawServerResources,
+      state.resources,
+      changedResourceIds,
+    );
+    batch(() => commitResources(nextResources, changedResourceIds));
+  };
+
+  if (typeof document !== 'undefined') {
+    document.addEventListener('visibilitychange', handleResourceVisibilityChange, {
+      passive: true,
+    });
+  }
 
   const beginConnection = () => {
     const connectionId = ++nextConnectionId;
@@ -560,7 +632,9 @@ export function createWebSocketStore(url: string) {
             }
             // Handle unified resources
             let nextResources: Resource[] | undefined;
+            let changedResourceIds: ReadonlySet<string> | undefined;
             if (message.data.resources !== undefined) {
+              deferredResourceIds.clear();
               if (Array.isArray(message.data.resources)) {
                 // Only a full payload actually delivered on this socket can
                 // establish its server-owned delta baseline. REST recovery is
@@ -591,14 +665,23 @@ export function createWebSocketStore(url: string) {
               message.data.resourceDelta !== undefined
             ) {
               if (rawServerResources) {
-                rawServerResources = applyResourceStateDelta(
+                const appliedDelta = applyResourceStateDelta(
                   rawServerResources,
                   message.data.resourceDelta,
                 );
-                nextResources = mergeCanonicalResourceSnapshot(
-                  structuredClone(rawServerResources) as Resource[],
-                  state.resources,
-                );
+                rawServerResources = appliedDelta.resources;
+                changedResourceIds = appliedDelta.changedIds;
+                if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+                  changedResourceIds.forEach((id) => deferredResourceIds.add(id));
+                } else {
+                  changedResourceIds = new Set([...deferredResourceIds, ...changedResourceIds]);
+                  deferredResourceIds.clear();
+                  nextResources = mergeCanonicalResourceDeltaSnapshot(
+                    rawServerResources,
+                    state.resources,
+                    changedResourceIds,
+                  );
+                }
               } else {
                 // A delta landed before any full snapshot (e.g. the initial
                 // payload was dropped as oversized). There is no baseline to
@@ -608,35 +691,7 @@ export function createWebSocketStore(url: string) {
               }
             }
             if (nextResources !== undefined) {
-              logger.debug('[WebSocket] Updating resources', {
-                count: nextResources.length,
-                types: [...new Set(nextResources.map((resource) => resource.type) || [])],
-              });
-              setState('resources', reconcile(nextResources, { key: 'id' }));
-
-              // Sync container update states with docker host command status payloads.
-              nextResources.forEach((resource: any) => {
-                if (resource?.type !== 'docker-host') return;
-                const platformData = asRecord(resource.platformData);
-                const dockerData = asRecord(platformData?.docker);
-                const command = dockerData?.command || platformData?.command;
-                if (!command || typeof command !== 'object') return;
-
-                const agentIds = new Set<string>([
-                  resource.id,
-                  asString(dockerData?.hostSourceId) || '',
-                  asString(platformData?.hostSourceId) || '',
-                  asString(resource?.discoveryTarget?.agentId) || '',
-                  isAppContainerDiscoveryResourceType(resource?.discoveryTarget?.resourceType)
-                    ? asString(resource?.discoveryTarget?.resourceId) || ''
-                    : '',
-                ]);
-                agentIds.forEach((agentId) => {
-                  if (agentId) {
-                    syncWithAgentCommand(agentId, command as any);
-                  }
-                });
-              });
+              commitResources(nextResources, changedResourceIds);
             }
             // Sync active alerts from state
             if (message.data.activeAlerts !== undefined) {
@@ -1023,6 +1078,9 @@ export function createWebSocketStore(url: string) {
     pendingAckTimeouts.clear();
     if (typeof window !== 'undefined') {
       window.removeEventListener(ALERTS_DETECTION_EVENT, handleAlertsDetectionEvent);
+    }
+    if (typeof document !== 'undefined') {
+      document.removeEventListener('visibilitychange', handleResourceVisibilityChange);
     }
     if (ws) {
       ws.close(1000, 'Component unmounting');

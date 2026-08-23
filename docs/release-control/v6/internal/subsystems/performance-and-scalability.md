@@ -145,6 +145,14 @@ start a goroutine, timer, or notification lifecycle per target.
 110. `frontend-modern/src/utils/__tests__/searchQuery.test.ts`
 111. `pkg/server/gzip_middleware.go`
 112. `pkg/server/gzip_middleware_test.go`
+113. `frontend-modern/src/stores/websocket.ts`
+114. `frontend-modern/src/utils/resourceStateAdapters.ts`
+115. `internal/mock/fixture_graph.go`
+116. `internal/mock/generator.go`
+117. `internal/mock/integration.go`
+118. `internal/mock/platform_fixtures_test.go`
+119. `frontend-modern/src/stores/__tests__/websocket-unified.test.ts`
+120. `frontend-modern/src/utils/__tests__/resourceStateAdapters.test.ts`
 
 ## Shared Boundaries
 
@@ -160,6 +168,7 @@ start a goroutine, timer, or notification lifecycle per target.
 10. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts` shared with `unified-resources`: unified resource table state, grouping, and windowing are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
 11. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableViewportSync.ts` shared with `unified-resources`: unified resource table viewport sync and selected-row reveal are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
 15. `frontend-modern/src/routing/routePreload.ts` shared with `frontend-primitives`, `unified-resources`: the app-shell route preload registry is a canonical frontend shell boundary, an authenticated hot-path performance boundary, and the entry point for the unified-resource Actions workspace.
+19. `frontend-modern/src/stores/websocket.ts` shared with `alerts`: the connection-owned realtime store is both the canonical alert truth boundary and the fleet-scale resource reconciliation hot path.
 16. `frontend-modern/src/useAppRuntimeState.ts` shared with `cloud-paid`: the authenticated app runtime bootstrap is both a hosted commercial org-context boundary and a protected app-shell performance boundary.
     Security-status SSO display labels are part of the existing authenticated
     bootstrap payload. The app shell may project `ssoSessionDisplayName` into
@@ -177,8 +186,28 @@ start a goroutine, timer, or notification lifecycle per target.
     WebSocket startup, so a delayed or blocked first stream snapshot cannot
     hide server-owned platform scopes; auth-mode branches must not fork
     additional state probes or perform the same hydration twice.
+20. `frontend-modern/src/utils/resourceStateAdapters.ts` shared with `unified-resources`: canonical resource compatibility and host coalescence are both a unified-resource contract and a fleet-scale reconciliation hot path.
 17. `frontend-modern/src/utils/workloads.ts` shared with `unified-resources`: the stable workload metadata identity helper is both a unified-resource persistence boundary and a workloads hot-path lookup boundary.
 18. `internal/api/slo.go` shared with `api-contracts`: the SLO endpoint is both an API contract surface and a protected performance hot-path boundary.
+21. `internal/mock/fixture_graph.go` shared with `monitoring`: the canonical mock fixture graph is both monitoring-owned runtime data and a protected large-estate demo transport hot path.
+22. `internal/mock/generator.go` shared with `monitoring`: mock metric generation is both monitoring-owned runtime data and a protected large-estate demo update hot path.
+23. `internal/mock/integration.go` shared with `monitoring`: the mock runtime scheduler is both monitoring-owned sampling infrastructure and a protected large-estate demo cadence boundary.
+
+Large-estate realtime updates must be sparse end to end. The public 50-node,
+900-guest demo advances node-scoped metrics through ten bounded cohorts on the
+shared two-second sampler, keeping each node current within twenty seconds while
+leaving broadcast headroom to coalesce several sampler invalidations. A cohort
+must not rebase unchanged guest, node, storage, or disk evidence, and the
+provider-backed fixture set refreshes once per full rotation rather than on
+every tick.
+
+The browser applies resource deltas to its connection-scoped raw baseline, but
+canonicalizes and reconciles only changed resources plus the bounded
+host-coalescing set. Unchanged non-host display resources retain object identity.
+Hidden tabs continue advancing the raw baseline without reconciling the estate;
+all hidden changes are materialized once when the document becomes visible.
+These rules must be proved against a 50-node fixture and may not be replaced by
+blank-row virtualization or a second page-local polling path.
 
 Governed action decisions preserve SQLite and MemoryStore parity through one
 shared pure append command. Every accepted approval advances a monotonic

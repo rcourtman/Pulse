@@ -46,7 +46,13 @@ const (
 	mockChartPointTargetExtended   = 64
 )
 
-const mockDashboardWorkloadPrewarmDuration = time.Hour
+const (
+	mockDashboardWorkloadPrewarmDuration = time.Hour
+	// Prewarming every guest creates an estate-sized chart cache once per mock
+	// sampler tick. A first-viewport cohort removes cold-start latency while
+	// keeping the rest available through the same lazy deterministic path.
+	mockDashboardWorkloadPrewarmLimitPerType = 16
+)
 
 var storageChartMetricTypes = []string{"usage", "used", "avail", "total"}
 var storageSummaryChartMetricTypes = []string{"used", "avail"}
@@ -1248,12 +1254,30 @@ func mockWorkloadChartRequestsForReadState(
 	return requests
 }
 
+func boundMockWorkloadChartPrewarmRequests(
+	requests mockWorkloadChartPrewarmRequests,
+) mockWorkloadChartPrewarmRequests {
+	bound := func(values []GuestChartRequest) []GuestChartRequest {
+		if len(values) <= mockDashboardWorkloadPrewarmLimitPerType {
+			return values
+		}
+		return values[:mockDashboardWorkloadPrewarmLimitPerType]
+	}
+	requests.vms = bound(requests.vms)
+	requests.containers = bound(requests.containers)
+	requests.pods = bound(requests.pods)
+	requests.dockerContainers = bound(requests.dockerContainers)
+	return requests
+}
+
 func (m *Monitor) prewarmMockWorkloadChartCaches(duration time.Duration) {
 	if m == nil || duration <= 0 {
 		return
 	}
 
-	requests := mockWorkloadChartRequestsForReadState(m.GetUnifiedReadStateOrSnapshot())
+	requests := boundMockWorkloadChartPrewarmRequests(
+		mockWorkloadChartRequestsForReadState(m.GetUnifiedReadStateOrSnapshot()),
+	)
 	if len(requests.vms) > 0 {
 		_ = m.GetGuestMetricsForChartBatch("vm", requests.vms, duration)
 	}

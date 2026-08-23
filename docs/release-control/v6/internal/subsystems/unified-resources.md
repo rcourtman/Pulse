@@ -795,7 +795,8 @@ container inventory table.
     It must carry the manifest `surface_kind` distinction so `docker` remains
     machine-readable as a `runtime-lens` while owning infrastructure sources
     remain `platform` entries.
-17. `frontend-modern/src/utils/sourcePlatforms.ts` shared with `frontend-primitives`: the source platform normalizer is both a canonical unified-resource source adapter boundary and a shared frontend source/platform vocabulary boundary.
+17. `frontend-modern/src/utils/resourceStateAdapters.ts` shared with `performance-and-scalability`: canonical resource compatibility and host coalescence are both a unified-resource contract and a fleet-scale reconciliation hot path.
+18. `frontend-modern/src/utils/sourcePlatforms.ts` shared with `frontend-primitives`: the source platform normalizer is both a canonical unified-resource source adapter boundary and a shared frontend source/platform vocabulary boundary.
     That shared vocabulary boundary owns the generic `docker` platform label:
     selectors, badges, and filter options render it as "Docker / Podman" so
     v5 Docker users can still find the runtime surface while Podman-backed
@@ -817,8 +818,8 @@ container inventory table.
     display/source family; `platformScopes` is the overlap set used when a
     runtime workload belongs to both Docker and an owning infrastructure
     platform.
-18. `frontend-modern/src/utils/workloads.ts` shared with `performance-and-scalability`: the stable workload metadata identity helper is both a unified-resource persistence boundary and a workloads hot-path lookup boundary.
-19. `internal/api/resourceapi/resources.go` shared with `api-contracts`: the unified resource endpoint is both a backend payload contract surface and a unified-resource runtime boundary.
+19. `frontend-modern/src/utils/workloads.ts` shared with `performance-and-scalability`: the stable workload metadata identity helper is both a unified-resource persistence boundary and a workloads hot-path lookup boundary.
+20. `internal/api/resourceapi/resources.go` shared with `api-contracts`: the unified resource endpoint is both a backend payload contract surface and a unified-resource runtime boundary.
     `/api/resources` type filters must accept URL-encoded comma-separated lists
     from browser query builders exactly like literal comma separators, so Docker
     / Podman runtime pages do not lose `docker-host` inventory while requesting
@@ -1147,6 +1148,11 @@ AI-only summary payloads, or page-local heuristics.
    `name -> type -> id` order across registry reads, REST pagination, and
    websocket-backed refreshes so equal-name resources do not silently reshuffle
    between cold hydrate and later runtime updates
+   Realtime delta reconciliation must preserve exact display-object identity
+   for untouched non-host resources, canonicalize changed and newly added rows,
+   and always recompute the bounded agent/host coalescing set. Incremental and
+   full-snapshot paths must therefore produce the same canonical host identity,
+   labels, and compatibility fields without cloning the entire estate per tick.
    That same unified-resource owner also defines the canonical transport
    projection for operator-facing resources: `/api/resources` and websocket
    `state.resources` must share `ContractResourceType`, canonical display

@@ -29,11 +29,18 @@ var (
 	// this; fixtureRevision stays structural-only so the expensive seeded
 	// trend history can be reused across monitor restarts within a process.
 	fixtureDataVersion atomic.Uint64
+	metricCohort       atomic.Uint64
 	updateEveryNS      atomic.Int64
 	updateTicker       *time.Ticker
 	stopUpdatesCh      chan struct{}
 	updateLoopWg       sync.WaitGroup
 )
+
+// Ten two-second cohorts keep every PVE node and its guests fresh within twenty
+// seconds while bounding each realtime delta to roughly one tenth of a large
+// demo estate. The WebSocket publisher may coalesce several sampler ticks into
+// one broadcast, so this leaves enough headroom for that union to remain small.
+const mockMetricCohortCount = 10
 
 func init() {
 	loadedConfig := normalizeMockConfig(LoadMockConfig())
@@ -177,6 +184,7 @@ func enableMockMode(config MockConfig, fromInit bool) {
 	mockGraph = buildFixtureGraph(config, now)
 	fixtureRevision.Add(1)
 	fixtureDataVersion.Add(1)
+	metricCohort.Store(0)
 	enabled.Store(true)
 	dataMu.Unlock()
 	startUpdateLoop()
@@ -277,7 +285,8 @@ func updateMetrics(cfg MockConfig) {
 	dataMu.Lock()
 	defer dataMu.Unlock()
 
-	mockGraph.UpdateMetrics(cfg, time.Now())
+	cohort := int(metricCohort.Add(1)-1) % mockMetricCohortCount
+	mockGraph.UpdateMetricCohort(cfg, time.Now(), cohort, mockMetricCohortCount)
 	fixtureDataVersion.Add(1)
 }
 

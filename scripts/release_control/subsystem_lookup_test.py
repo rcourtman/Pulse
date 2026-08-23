@@ -3980,15 +3980,20 @@ class SubsystemLookupTest(unittest.TestCase):
         self.assertEqual(result["unowned_runtime_files"], [])
         self.assertEqual(
             {item["subsystem"] for item in result["impacted_subsystems"]},
-            {"monitoring"},
+            {"monitoring", "performance-and-scalability"},
         )
         for file_entry in result["files"]:
             self.assertEqual(file_entry["classification"], "runtime")
+            expected_subsystems = {"monitoring"}
+            if file_entry["path"] == "internal/mock/fixture_graph.go":
+                expected_subsystems.add("performance-and-scalability")
             self.assertEqual(
                 {match["subsystem"] for match in file_entry["matches"]},
-                {"monitoring"},
+                expected_subsystems,
             )
-            match = file_entry["matches"][0]
+            match = next(
+                match for match in file_entry["matches"] if match["subsystem"] == "monitoring"
+            )
             self.assertEqual(
                 match["contract"],
                 "docs/release-control/v6/internal/subsystems/monitoring.md",
@@ -4005,11 +4010,23 @@ class SubsystemLookupTest(unittest.TestCase):
                     "internal/mock/canonical_api_guardrails_test.go",
                     "internal/mock/demo_scenarios_test.go",
                     "internal/mock/generator_test.go",
+                    "internal/mock/integration_coverage_test.go",
                     "internal/mock/platform_fixtures_test.go",
                     "internal/mock/recovery_points_test.go",
                     "tests/integration/tests/43-platform-mock-runtime.spec.ts",
                 ],
             )
+            if file_entry["path"] == "internal/mock/fixture_graph.go":
+                performance_match = next(
+                    match
+                    for match in file_entry["matches"]
+                    if match["subsystem"] == "performance-and-scalability"
+                )
+                self.assertEqual(performance_match["lane_context"]["lane_id"], "L10")
+                self.assertEqual(
+                    performance_match["verification_requirement"]["id"],
+                    "large-estate-realtime-state",
+                )
 
     def test_lookup_paths_normalizes_absolute_repo_paths(self) -> None:
         absolute = str(Path(REPO_ROOT, "internal/api/resources.go"))

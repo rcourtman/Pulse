@@ -468,6 +468,14 @@
       ]
     },
     {
+      "path": "frontend-modern/src/stores/websocket.ts",
+      "rationale": "the connection-owned realtime store is both the canonical alert truth boundary and the fleet-scale resource reconciliation hot path",
+      "subsystems": [
+        "alerts",
+        "performance-and-scalability"
+      ]
+    },
+    {
       "path": "frontend-modern/src/useAppRuntimeState.ts",
       "rationale": "the authenticated app runtime bootstrap is both a hosted commercial org-context boundary and a protected app-shell performance boundary",
       "subsystems": [
@@ -504,6 +512,14 @@
       "rationale": "the generated platform support projection is both a canonical unified-resource platform union boundary and a shared frontend source/platform vocabulary boundary",
       "subsystems": [
         "frontend-primitives",
+        "unified-resources"
+      ]
+    },
+    {
+      "path": "frontend-modern/src/utils/resourceStateAdapters.ts",
+      "rationale": "canonical resource compatibility and host coalescence are both a unified-resource contract and a fleet-scale reconciliation hot path",
+      "subsystems": [
+        "performance-and-scalability",
         "unified-resources"
       ]
     },
@@ -1044,6 +1060,30 @@
       "subsystems": [
         "agent-lifecycle",
         "monitoring"
+      ]
+    },
+    {
+      "path": "internal/mock/fixture_graph.go",
+      "rationale": "the canonical mock fixture graph is both monitoring-owned runtime data and a protected large-estate demo transport hot path",
+      "subsystems": [
+        "monitoring",
+        "performance-and-scalability"
+      ]
+    },
+    {
+      "path": "internal/mock/generator.go",
+      "rationale": "mock metric generation is both monitoring-owned runtime data and a protected large-estate demo update hot path",
+      "subsystems": [
+        "monitoring",
+        "performance-and-scalability"
+      ]
+    },
+    {
+      "path": "internal/mock/integration.go",
+      "rationale": "the mock runtime scheduler is both monitoring-owned sampling infrastructure and a protected large-estate demo cadence boundary",
+      "subsystems": [
+        "monitoring",
+        "performance-and-scalability"
       ]
     },
     {
@@ -2212,6 +2252,7 @@
             "test_prefixes": [],
             "exact_files": [
               "frontend-modern/src/stores/__tests__/websocket-resilience.test.ts",
+              "frontend-modern/src/stores/__tests__/websocket-unified.test.ts",
               "frontend-modern/src/utils/__tests__/alertsActivation.branchcov0712c.test.ts",
               "frontend-modern/src/utils/__tests__/alertsActivation.test.ts"
             ]
@@ -5363,6 +5404,7 @@
               "frontend-modern/src/components/shared/__tests__/TagBadges.test.tsx",
               "frontend-modern/src/components/shared/__tests__/UpgradeLink.test.tsx",
               "frontend-modern/src/components/shared/__tests__/WebInterfaceUrlField.test.tsx",
+              "frontend-modern/src/components/shared/AnimatedNumber.test.tsx",
               "frontend-modern/src/components/shared/ColumnPicker.test.tsx",
               "frontend-modern/src/components/shared/FilterToolbar.test.tsx",
               "frontend-modern/src/components/shared/SharedPrimitives.guardrails.test.ts",
@@ -5401,6 +5443,7 @@
         "internal/mock/demo_scenarios.go",
         "internal/mock/fixture_graph.go",
         "internal/mock/generator.go",
+        "internal/mock/integration.go",
         "internal/mock/platform_fixtures.go",
         "internal/mock/recovery_points.go",
         "internal/models/converters.go",
@@ -5771,6 +5814,7 @@
               "internal/mock/demo_scenarios.go",
               "internal/mock/fixture_graph.go",
               "internal/mock/generator.go",
+              "internal/mock/integration.go",
               "internal/mock/platform_fixtures.go",
               "internal/mock/recovery_points.go"
             ],
@@ -5781,6 +5825,7 @@
               "internal/mock/canonical_api_guardrails_test.go",
               "internal/mock/demo_scenarios_test.go",
               "internal/mock/generator_test.go",
+              "internal/mock/integration_coverage_test.go",
               "internal/mock/platform_fixtures_test.go",
               "internal/mock/recovery_points_test.go",
               "tests/integration/tests/43-platform-mock-runtime.spec.ts"
@@ -6448,8 +6493,10 @@
         "frontend-modern/src/components/Workloads/workloadUrlSyncModel.ts",
         "frontend-modern/src/hooks/useWorkloads.ts",
         "frontend-modern/src/routing/routePreload.ts",
+        "frontend-modern/src/stores/websocket.ts",
         "frontend-modern/src/types/workloads.ts",
         "frontend-modern/src/useAppRuntimeState.ts",
+        "frontend-modern/src/utils/resourceStateAdapters.ts",
         "frontend-modern/src/utils/searchQuery.ts",
         "frontend-modern/src/utils/thresholdSliderPresentation.ts",
         "frontend-modern/src/utils/workloads.ts",
@@ -6457,6 +6504,9 @@
         "internal/api/router_bench_test.go",
         "internal/api/slo.go",
         "internal/api/slo_bench_test.go",
+        "internal/mock/fixture_graph.go",
+        "internal/mock/generator.go",
+        "internal/mock/integration.go",
         "pkg/server/gzip_middleware.go"
       ],
       "verification": {
@@ -6523,6 +6573,26 @@
               "pkg/metrics/store_bench_test.go",
               "pkg/metrics/store_query_plan_test.go",
               "pkg/metrics/store_slo_test.go"
+            ]
+          },
+          {
+            "id": "large-estate-realtime-state",
+            "label": "large-estate realtime state update proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/stores/websocket.ts",
+              "frontend-modern/src/utils/resourceStateAdapters.ts",
+              "internal/mock/fixture_graph.go",
+              "internal/mock/generator.go",
+              "internal/mock/integration.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/stores/__tests__/websocket-unified.test.ts",
+              "frontend-modern/src/utils/__tests__/resourceStateAdapters.test.ts",
+              "internal/mock/integration_coverage_test.go",
+              "internal/mock/platform_fixtures_test.go"
             ]
           },
           {

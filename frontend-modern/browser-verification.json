@@ -1,13 +1,17 @@
 {
   "version": 1,
-  "base_sha": "35b8c0a4c2ccbc11a1bb67116cb2d1e8f6d72391",
-  "verified_at": "2026-08-23T18:52:30Z",
+  "base_sha": "6ee36bc1ea456938a22f5a4bae4d3332ca98d9ed",
+  "verified_at": "2026-08-23T18:54:26Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx"
+    "frontend-modern/src/components/shared/useAnimatedNumberState.ts",
+    "frontend-modern/src/stores/websocket.ts",
+    "frontend-modern/src/utils/resourceStateAdapters.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx": "5fbcb11d536ff657dcbffbe25c3b749bcf8bd4ff545dbdd0c02d3414c703c759"
+    "frontend-modern/src/components/shared/useAnimatedNumberState.ts": "eff0a4e3e886c41515e1ebfb563004bad0218dda1e1465d45ab6d0025ab10363",
+    "frontend-modern/src/stores/websocket.ts": "f2d071acd989ba5fa3c2877be66ae54231adfe34e311e19151b3ddeb1de4e923",
+    "frontend-modern/src/utils/resourceStateAdapters.ts": "3999af02f025c93d3ffd8fc2d28d801d264b35e7091f0262d869ce8e60569433"
   },
   "routes": [
     "/proxmox/overview"
@@ -23,15 +27,16 @@
     }
   ],
   "states": [
-    "Fresh desktop navigation to /proxmox/overview hydrated the connected 50-node and 929-guest mock estate",
-    "Searching for guest artifact-cache-310 reduced the node result from 50 to 1 and retained only its Analytics A parent node",
-    "The same guest search at 390x844 retained one matching node and one matching guest without page-level horizontal overflow",
-    "Clearing the search restored all 50 nodes, and the browser console remained free of warnings and errors"
+    "Fresh desktop navigation hydrated the connected 50-node and 929-guest mock estate with both Nodes and Guests tables visible",
+    "A fast desktop table scroll to scrollTop 20000 retained populated guest rows with no blank virtualized section",
+    "At 390x844 the node summary, Nodes table, and Guests table remained visible, and a fast table scroll to scrollTop 12000 retained populated rows",
+    "The Back to top control appeared after deep scrolling and returned the desktop table to scrollTop 0",
+    "A clean phone-width reload remained stable during sustained realtime updates with no console errors"
   ],
   "interactions": [
-    "Loaded /proxmox/overview in a fresh desktop tab and waited for the full large-estate resource snapshot",
-    "Entered artifact-cache-310 in the shared VM and LXC search and inspected both the Nodes and Guests tables",
-    "Cleared the search with the visible Clear search control and confirmed the complete node estate returned",
-    "Repeated the guest search at 390x844 and measured document clientWidth and scrollWidth at 390 pixels"
+    "Loaded /proxmox/overview in fresh desktop and phone-width tabs and waited for the full large-estate snapshot",
+    "Performed fast wheel-equivalent guest-table scrolling at desktop and phone widths and inspected the rendered row window",
+    "Activated Back to top after a deep desktop scroll and confirmed the scroll settled at the table origin",
+    "Reloaded the phone-width route after the animation bound changed and sampled sustained renderer metrics and console output"
   ]
 }
