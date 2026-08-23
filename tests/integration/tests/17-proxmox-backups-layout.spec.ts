@@ -15,8 +15,13 @@ async function openProxmoxBackups(page: Page) {
     name: "Proxmox sections",
   });
   await expect(sections).toBeVisible({ timeout: 60_000 });
-  await sections.getByRole("link", { name: "Backups", exact: true }).click();
-  await expect(page).toHaveURL(/\/proxmox\/backups$/);
+  const backupsLink = sections.getByRole("link", {
+    name: "Backups",
+    exact: true,
+  });
+  await expect(backupsLink).toHaveAttribute("href", "/proxmox/backups/date");
+  await backupsLink.click();
+  await expect(page).toHaveURL(/\/proxmox\/backups\/date$/);
 }
 
 // Layout guards for the Proxmox Backups section, which replaced the retired
@@ -35,13 +40,27 @@ test.describe("Proxmox backups layout guards", () => {
 
     await page.setViewportSize(DESKTOP_VIEWPORT);
     await ensureAuthenticated(page);
+
+    // Existing bookmarks remain compatible, but the route is normalized to
+    // the canonical route-segment view before the table is used.
+    await page.goto("/proxmox/backups", { waitUntil: "domcontentloaded" });
+    await expect(page).toHaveURL(/\/proxmox\/backups\/date$/, {
+      timeout: 60_000,
+    });
     await openProxmoxBackups(page);
 
-    // The guest-centric Coverage view is the default whenever anything needs
-    // attention; the day-activity strip lives in the By date view.
-    const byDateButton = page.getByRole("button", { name: "By date" });
-    await expect(byDateButton).toBeVisible({ timeout: 60_000 });
-    await byDateButton.click();
+    const byDateLink = page.getByRole("link", { name: "By date", exact: true });
+    const coverageLink = page.getByRole("link", {
+      name: "Coverage",
+      exact: true,
+    });
+    await expect(byDateLink).toHaveAttribute("href", "/proxmox/backups/date");
+    await expect(coverageLink).toHaveAttribute(
+      "href",
+      "/proxmox/backups/coverage",
+    );
+    await byDateLink.click();
+    await expect(page).toHaveURL(/\/proxmox\/backups\/date$/);
     await expect(page.getByText("Backups per day").first()).toBeVisible();
     const dayButtons = page.getByRole("button", { name: /: \d+ backups?$/ });
     await expect.poll(() => dayButtons.count()).toBeGreaterThanOrEqual(7);
@@ -54,8 +73,19 @@ test.describe("Proxmox backups layout guards", () => {
       .getByRole("button", { name: /: [1-9]\d* backups?$/ })
       .last();
     await activeDay.click();
-    await expect(page).toHaveURL(/\/proxmox\/backups/);
+    await expect(page).toHaveURL(
+      /\/proxmox\/backups\/date\?day=\d{4}-\d{2}-\d{2}$/,
+    );
     await expect(page.getByText(/^\d+ of \d+ backups$/).first()).toBeVisible();
+
+    const filteredScreenshotPath = testInfo.outputPath(
+      "proxmox-backups-by-date-filtered.png",
+    );
+    await page.screenshot({ path: filteredScreenshotPath, fullPage: true });
+    await testInfo.attach("proxmox-backups-by-date-filtered", {
+      path: filteredScreenshotPath,
+      contentType: "image/png",
+    });
   });
 
   test("long-range activity keeps the page inside the horizontal viewport", async ({
@@ -70,9 +100,10 @@ test.describe("Proxmox backups layout guards", () => {
     await ensureAuthenticated(page);
     await openProxmoxBackups(page);
 
-    const byDateButton = page.getByRole("button", { name: "By date" });
-    await expect(byDateButton).toBeVisible({ timeout: 60_000 });
-    await byDateButton.click();
+    const byDateLink = page.getByRole("link", { name: "By date", exact: true });
+    await expect(byDateLink).toHaveAttribute("href", "/proxmox/backups/date");
+    await byDateLink.click();
+    await expect(page).toHaveURL(/\/proxmox\/backups\/date$/);
 
     await page
       .getByRole("group", { name: "Activity range" })
@@ -112,5 +143,14 @@ test.describe("Proxmox backups layout guards", () => {
     expect(dedupBox!.x + dedupBox!.width).toBeLessThanOrEqual(
       wrapperBox!.x + wrapperBox!.width + 1,
     );
+
+    const yearScreenshotPath = testInfo.outputPath(
+      "proxmox-backups-one-year-layout.png",
+    );
+    await page.screenshot({ path: yearScreenshotPath, fullPage: true });
+    await testInfo.attach("proxmox-backups-one-year-layout", {
+      path: yearScreenshotPath,
+      contentType: "image/png",
+    });
   });
 });

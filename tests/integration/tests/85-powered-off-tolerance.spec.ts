@@ -117,13 +117,13 @@ test("powered-off tolerance preserves inheritance, explicit zero, and strict val
   await expect(tolerance).toHaveValue("");
   await expect(
     page.getByText(
-      "Blank inherits the existing policy; 0 alerts on the first stopped observation.",
+      "Blank inherits the existing policy. 0 alerts on the first stopped observation.",
       { exact: true },
     ),
   ).toBeVisible();
-  await expect(page.getByRole("combobox", { name: "Resource" })).toHaveValue(
-    "vm:1567",
-  );
+  await expect(
+    page.getByRole("combobox", { name: "Resource", exact: true }),
+  ).toHaveValue("vm:1567");
   await tolerance.fill("300");
   await page.getByRole("button", { name: "Save defaults" }).click();
   await expect(
@@ -169,8 +169,10 @@ test("powered-off tolerance preserves inheritance, explicit zero, and strict val
     graceSeconds: 0,
   });
 
+  const screenshotPath = testInfo.outputPath("powered-off-tolerance.png");
+  await page.screenshot({ path: screenshotPath, fullPage: true });
   await testInfo.attach("powered-off-tolerance", {
-    body: await page.screenshot(),
+    path: screenshotPath,
     contentType: "image/png",
   });
 });

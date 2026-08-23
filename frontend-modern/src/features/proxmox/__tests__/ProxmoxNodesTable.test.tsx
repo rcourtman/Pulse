@@ -295,6 +295,32 @@ describe('ProxmoxNodesTable', () => {
     expect(screen.getByText('pve1')).toBeInTheDocument();
   });
 
+  it('keeps the adjacent web-interface link visible and touch-sized on phones', () => {
+    render(() => (
+      <ProxmoxNodesTable
+        nodes={[
+          makeNodeResource({
+            proxmox: {
+              clusterName: 'homelab',
+              nodeName: 'pve-node-1',
+              guestUrl: 'https://pve.example.com:8006',
+            },
+          }),
+        ]}
+        guests={[]}
+        layoutWidth={() => 390}
+        emptyIcon={<span />}
+        emptyTitle="No Proxmox VE nodes"
+        emptyDescription="No nodes"
+      />
+    ));
+
+    const link = screen.getByRole('link', { name: 'Open web interface for pve-node-1' });
+    expect(link).toBeVisible();
+    expect(link).toHaveClass('min-h-6', 'min-w-6');
+    expect(link.parentElement).not.toHaveClass('[&>a]:hidden');
+  });
+
   it('passes alert-backed temperature thresholds into the node temperature gauge', () => {
     render(() => (
       <ProxmoxNodesTable

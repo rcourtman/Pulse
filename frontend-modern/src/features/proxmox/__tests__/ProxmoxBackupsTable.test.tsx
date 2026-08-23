@@ -343,6 +343,28 @@ describe('ProxmoxBackupsTable', () => {
     expect(screen.queryByRole('button', { name: /pbs artifacts/i })).not.toBeInTheDocument();
   });
 
+  it('normalizes legacy backup bookmarks to the canonical route without losing filters', async () => {
+    mockBackupAPIs();
+    window.history.replaceState(
+      {},
+      '',
+      '/proxmox/backups?view=coverage&q=pbs-docker&source=pbs&day=2026-05-25',
+    );
+
+    renderInRouter(() => (
+      <ProxmoxBackupsTable emptyIcon={<span />} workloads={[workloadResource]} />
+    ));
+
+    await waitFor(() => {
+      expect(window.location.pathname).toBe('/proxmox/backups/coverage');
+      const params = new URLSearchParams(window.location.search);
+      expect(params.get('view')).toBeNull();
+      expect(params.get('q')).toBe('pbs-docker');
+      expect(params.get('source')).toBeNull();
+      expect(params.get('day')).toBeNull();
+    });
+  });
+
   it('hydrates the complete saved-view filter state from the URL and clears it atomically', async () => {
     mockBackupAPIs();
     window.history.replaceState(

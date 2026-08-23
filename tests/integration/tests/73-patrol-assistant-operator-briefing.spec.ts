@@ -11,8 +11,6 @@ type WorkerFixtures = {
   authStorageStatePath: string;
 };
 
-const SCREENSHOT_PATH = "/tmp/patrol-assistant-operator-briefing.png";
-
 const test = base.extend<{}, WorkerFixtures>({
   storageState: async ({ authStorageStatePath }, use) => {
     await use(authStorageStatePath);
@@ -44,7 +42,7 @@ test.describe("Patrol Assistant operator briefing", () => {
 
   test("shows attention and operator-decision context in the Assistant drawer", async ({
     page,
-  }) => {
+  }, testInfo) => {
     const approvalRequestedAt = new Date(Date.now() - 60_000).toISOString();
     const approvalExpiresAt = new Date(Date.now() + 10 * 60_000).toISOString();
     let includePendingApproval = true;
@@ -605,9 +603,7 @@ test.describe("Patrol Assistant operator briefing", () => {
 
     await page.goto("/patrol", { waitUntil: "domcontentloaded" });
     await page.getByRole("tab", { name: "Activity", exact: true }).click();
-    await page
-      .getByRole("button", { name: /Findings and run records/ })
-      .click();
+    await page.getByRole("button", { name: /^Patrol records(?:$|\s)/ }).click();
 
     await page.getByText("High CPU usage").click();
     const findingReview = page.locator(
@@ -634,7 +630,14 @@ test.describe("Patrol Assistant operator briefing", () => {
       assistantContext.getByText("systemctl restart workload.service"),
     ).toHaveCount(0);
 
-    await page.screenshot({ path: SCREENSHOT_PATH, fullPage: true });
+    const screenshotPath = testInfo.outputPath(
+      "patrol-assistant-operator-briefing.png",
+    );
+    await page.screenshot({ path: screenshotPath, fullPage: true });
+    await testInfo.attach("patrol-assistant-operator-briefing", {
+      path: screenshotPath,
+      contentType: "image/png",
+    });
 
     await page.getByTitle("Pulse Assistant sessions").click();
     const highCPUFollowUp = page.getByRole("option", {
@@ -744,9 +747,7 @@ test.describe("Patrol Assistant operator briefing", () => {
     includePendingApproval = false;
     await page.reload({ waitUntil: "domcontentloaded" });
     await page.getByRole("tab", { name: "Activity", exact: true }).click();
-    await page
-      .getByRole("button", { name: /Findings and run records/ })
-      .click();
+    await page.getByRole("button", { name: /^Patrol records(?:$|\s)/ }).click();
     const queuedFindingTitle = page.getByText("High CPU usage").first();
     await expect(queuedFindingTitle).toBeVisible();
     await queuedFindingTitle.click();
@@ -777,9 +778,7 @@ test.describe("Patrol Assistant operator briefing", () => {
     includeInvestigationProposedFix = true;
     await page.reload({ waitUntil: "domcontentloaded" });
     await page.getByRole("tab", { name: "Activity", exact: true }).click();
-    await page
-      .getByRole("button", { name: /Findings and run records/ })
-      .click();
+    await page.getByRole("button", { name: /^Patrol records(?:$|\s)/ }).click();
     const expiredFindingTitle = page.getByText("High CPU usage").first();
     await expect(expiredFindingTitle).toBeVisible();
     await expiredFindingTitle.click();

@@ -1,38 +1,40 @@
 {
   "version": 1,
-  "base_sha": "10116cc17efb0004e3820f1a250335899d3b9bf0",
-  "verified_at": "2026-08-23T19:17:24Z",
+  "base_sha": "679497119925fca16420fdc3cb7b5d940a50578f",
+  "verified_at": "2026-08-23T19:26:55Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Workloads/useWorkloadViewportSync.ts"
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Workloads/useWorkloadViewportSync.ts": "f21b70f169cc595b31337584e3df20022342e39d50bdfc9eac96a04770bcf7ba"
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx": "abd090fa70e905ccdabbca1599088288330ec380b3bcfc7bd84624db3a76c7f3",
+    "frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx": "5ac5e1670e9613b4b11a1596602c6f19a0e0df4982287cfbb491a0f09d993a31"
   },
   "routes": [
-    "/proxmox/overview"
+    "/proxmox",
+    "/proxmox/backups",
+    "/proxmox/backups/date",
+    "/proxmox/backups/coverage"
   ],
   "viewports": [
     {
-      "width": 1280,
-      "height": 800
+      "width": 1440,
+      "height": 900
     },
     {
-      "width": 390,
-      "height": 844
+      "width": 393,
+      "height": 727
     }
   ],
   "states": [
-    "The connected public mock estate rendered 50 nodes and 929 guests with the grouped workload window active",
-    "Across 24 consecutive 600-pixel desktop wheel steps from scrollTop 10000 to 24400, every sample retained at least 26 visible guest rows",
-    "Across 24 consecutive 600-pixel wheel steps at 390x844 from scrollTop 10000 to 24400, every sample retained at least 22 visible guest rows",
-    "Desktop and narrow verification both retained the 140-row mounted guest budget throughout rapid scrolling",
-    "The verified route reported no browser error-level runtime logs during responsive and sustained-scroll checks"
+    "A legacy /proxmox/backups bookmark replaced itself with canonical /proxmox/backups/date, while date selection retained the canonical route plus its day query",
+    "The one-year backup activity view and trailing backup-server columns remained inside the 1440-pixel desktop viewport",
+    "At the Pixel 5 viewport, the offline Proxmox node remained visible with dashed stale metrics and a visible safe web-interface link; the unsafe JavaScript URL remained blocked with its warning"
   ],
   "interactions": [
-    "Reloaded /proxmox/overview and confirmed the complete large-estate mock snapshot and bounded workload window",
-    "Applied repeated physical wheel input through the workload viewport and sampled visible and mounted rows immediately after every desktop step",
-    "Repeated the same sustained wheel-input sequence at a 390x844 phone viewport and visually inspected the populated table",
-    "Inspected browser runtime logs after both responsive scroll sequences"
+    "Opened the legacy backups bookmark, followed the shared Backups and view-tab links, selected a populated day, and exercised the one-year range",
+    "Opened the offline node's HTTPS web-interface link in a new page and confirmed that the adjacent control did not expand the node row",
+    "Verified the mobile link hit target, blocked unsafe URL, retained details control, and absence of horizontal viewport overflow"
   ]
 }

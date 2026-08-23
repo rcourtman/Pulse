@@ -115,7 +115,7 @@ test.describe("Offline Proxmox node visibility", () => {
 
   test("keeps an offline Proxmox node visible on desktop and mobile surfaces", async ({
     page,
-  }) => {
+  }, testInfo) => {
     await page.context().route("https://pve5:8006/**", async (route) => {
       await route.fulfill({
         status: 200,
@@ -198,5 +198,14 @@ test.describe("Offline Proxmox node visibility", () => {
         name: "Expand details for Disaster Recovery B",
       }),
     ).toBeVisible();
+
+    const screenshotPath = testInfo.outputPath(
+      "offline-proxmox-node-visible-with-web-interface.png",
+    );
+    await page.screenshot({ path: screenshotPath, fullPage: true });
+    await testInfo.attach("offline-proxmox-node-visible-with-web-interface", {
+      path: screenshotPath,
+      contentType: "image/png",
+    });
   });
 });

@@ -533,7 +533,8 @@ describe('shared primitive guardrails', () => {
     expect(patrolIntelligenceHeaderSource).not.toContain(
       'flex-1 py-1.5 px-2 text-xs font-semibold rounded-md transition-all duration-200',
     );
-    expect(proxmoxBackupsTableSource).toContain('FilterSegmentedControl');
+    expect(proxmoxBackupsTableSource).toContain('PlatformSectionTabs');
+    expect(proxmoxBackupsTableSource).not.toContain('FilterSegmentedControl');
     expect(proxmoxBackupsTableSource).not.toContain('FilterButtonGroup');
     expect(proxmoxBackupsTableSource).not.toContain('const viewButtonClass');
     expect(proxmoxBackupsTableSource).not.toContain(
@@ -7252,6 +7253,7 @@ describe('shared primitive guardrails', () => {
     const requiredConsumerPaths = [
       'src/features/docker/DockerPageSurface.tsx',
       'src/features/kubernetes/KubernetesPageSurface.tsx',
+      'src/features/proxmox/ProxmoxBackupsTable.tsx',
       'src/features/proxmox/ProxmoxPageSurface.tsx',
       'src/features/standalone/StandalonePageSurface.tsx',
       'src/features/truenas/TrueNASPageSurface.tsx',
@@ -7260,6 +7262,7 @@ describe('shared primitive guardrails', () => {
     const platformPageSurfaceSources = [
       dockerPageSurfaceSource,
       kubernetesPageSurfaceSource,
+      proxmoxBackupsTableSource,
       proxmoxPageSurfaceSource,
       standalonePageSurfaceSource,
       truenasPageSurfaceSource,
@@ -7306,7 +7309,7 @@ describe('shared primitive guardrails', () => {
     expect(sharedPlatformPageSource).toContain(
       'export const PLATFORM_TABLE_NARROW_IDENTITY_WIDTH_PERCENT = 40',
     );
-    expect(proxmoxNodesTableSource).toContain("usesCondensedIdentity() ? '[&>a]:hidden' : ''");
+    expect(proxmoxNodesTableSource).not.toContain("'[&>a]:hidden'");
     expect(proxmoxNodesTableSource).toContain(
       "layoutMode() === 'narrow' && nativeNodeName().length",
     );

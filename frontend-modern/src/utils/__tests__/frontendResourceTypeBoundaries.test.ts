@@ -602,7 +602,15 @@ describe('frontend resource type boundaries', () => {
     expect(workloadsSurfaceSource).not.toContain(
       'createMemo(() => getCanonicalWorkloadId(guest()))',
     );
-    expect(workloadPanelSource).toContain('createMemo(() => getCanonicalWorkloadId(guest()))');
+    expect(workloadPanelSource).toContain(
+      'new Map(groupGuests().map((guest) => [getCanonicalWorkloadId(guest), guest]))',
+    );
+    expect(workloadPanelSource).toContain(
+      'createMemo(() => groupGuests().map(getCanonicalWorkloadId))',
+    );
+    expect(workloadPanelSource).toContain('<For each={groupGuestIds()}');
+    expect(workloadPanelSource).toContain('groupGuestById().get(keyedGuestId)');
+    expect(workloadPanelSource).toContain('const guestId = () => keyedGuestId');
     expect(workloadsWorkloadTableSource).not.toContain(
       'createMemo(() => getCanonicalWorkloadId(guest()))',
     );
@@ -913,7 +921,15 @@ describe('frontend resource type boundaries', () => {
     expect(workloadTableHeaderSource).not.toContain('NodeGroupHeader');
     expect(workloadPanelSource).toContain('NodeGroupHeader');
     expect(workloadPanelSource).toContain('GuestDrawer');
-    expect(workloadPanelSource).toContain('createMemo(() => getCanonicalWorkloadId(guest()))');
+    expect(workloadPanelSource).toContain(
+      'new Map(groupGuests().map((guest) => [getCanonicalWorkloadId(guest), guest]))',
+    );
+    expect(workloadPanelSource).toContain(
+      'createMemo(() => groupGuests().map(getCanonicalWorkloadId))',
+    );
+    expect(workloadPanelSource).toContain('<For each={groupGuestIds()}');
+    expect(workloadPanelSource).toContain('groupGuestById().get(keyedGuestId)');
+    expect(workloadPanelSource).toContain('const guestId = () => keyedGuestId');
     expect(workloadPanelSource).not.toContain('TableHead');
     expect(emptyStateSource).toContain('getEmptyStatePresentation');
     expect(emptyStateSource).not.toContain('const iconBgClass: Record<EmptyStateTone, string> =');

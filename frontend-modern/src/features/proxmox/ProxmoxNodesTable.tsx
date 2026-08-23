@@ -498,7 +498,7 @@ export const ProxmoxNodesTable: Component<{
                               <ResourceNameWithWebInterfaceLink
                                 name={name()}
                                 url={externalUrl()}
-                                class={`min-w-0 ${usesCondensedIdentity() ? '[&>a]:hidden' : ''}`}
+                                class="min-w-0"
                                 nameClass="truncate font-semibold text-base-content"
                                 title={`Open ${name()} web interface`}
                               >

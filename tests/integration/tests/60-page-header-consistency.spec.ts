@@ -29,7 +29,8 @@ const PAGE_HEADER_ROUTES = [
     slug: "patrol",
     route: "/patrol",
     title: "Patrol",
-    description: "Patrol checks your infrastructure and shows current issues.",
+    description:
+      "See what needs a decision, choose the next step, and keep a verified record.",
   },
 ] as const;
 
@@ -101,7 +102,9 @@ test.describe("Top-level page header consistency", () => {
     });
   }
 
-  test("keeps primary page headings vertically aligned", async ({ page }, testInfo) => {
+  test("keeps primary page headings vertically aligned", async ({
+    page,
+  }, testInfo) => {
     test.skip(
       testInfo.project.name.startsWith("mobile-"),
       "Phone headers use responsive framing and intentionally do not share desktop Y coordinates",

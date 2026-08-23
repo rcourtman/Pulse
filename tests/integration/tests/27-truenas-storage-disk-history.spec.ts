@@ -58,7 +58,10 @@ test.describe('TrueNAS storage disk history', () => {
 
     await page.goto('/truenas/storage', { waitUntil: 'domcontentloaded' });
     await page
-      .getByRole('textbox', { name: /Search TrueNAS/ })
+      .getByRole('combobox', {
+        name: 'Search TrueNAS pools, datasets, or disks',
+        exact: true,
+      })
       .fill('sdc');
 
     const diskRow = page.locator('tr').filter({ hasText: 'sdc' }).first();
@@ -90,5 +93,12 @@ test.describe('TrueNAS storage disk history', () => {
     // Serial when available, disk:<node>:<device> composite otherwise; both
     // must stay canonical metrics-store keys.
     expect(resourceId).toMatch(/^(WD-|disk:truenas-main:)/);
+
+    const screenshotPath = testInfo.outputPath('truenas-disk-history.png');
+    await page.screenshot({ path: screenshotPath, fullPage: true });
+    await testInfo.attach('truenas-disk-history', {
+      path: screenshotPath,
+      contentType: 'image/png',
+    });
   });
 });

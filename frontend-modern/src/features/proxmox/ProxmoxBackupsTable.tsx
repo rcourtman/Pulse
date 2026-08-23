@@ -1,6 +1,14 @@
-import { Show, createMemo, createResource, createSignal, type Component, type JSX } from 'solid-js';
+import {
+  Show,
+  createEffect,
+  createMemo,
+  createResource,
+  createSignal,
+  type Component,
+  type JSX,
+} from 'solid-js';
 import ChevronRightIcon from 'lucide-solid/icons/chevron-right';
-import { useLocation, useSearchParams } from '@solidjs/router';
+import { useLocation, useNavigate, useSearchParams } from '@solidjs/router';
 import { FilterBar, type FilterDef, type FilterSelectOption } from '@/components/shared/FilterBar';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { useProtectionPostures } from '@/hooks/useProtectionPostures';
@@ -110,6 +118,7 @@ export const ProxmoxBackupsTable: Component<{
   const [pbsBackups] = createResource<PBSBackupsPayload>(fetchPBSBackups);
   const { isMobile } = useBreakpoint();
   const location = useLocation();
+  const navigate = useNavigate();
   const protectionPostures = useProtectionPostures(() =>
     (props.workloads ?? []).map((workload) => workload.id),
   );
@@ -394,6 +403,17 @@ export const ProxmoxBackupsTable: Component<{
   const backupViewTabs = createMemo(() =>
     BACKUP_VIEW_TABS.map((tab) => ({ ...tab, path: backupViewPath(tab.id) })),
   );
+
+  // Keep old bookmarks and saved links working, but replace the legacy base
+  // route and query-param view with the canonical route segment. Replacement
+  // avoids adding a dead compatibility URL to browser history.
+  createEffect(() => {
+    const normalizedPath = location.pathname.replace(/\/+$/, '');
+    if (normalizedPath !== PROXMOX_BACKUPS_PATH) return;
+    navigate(backupViewPath(legacyQueryView() ?? PROXMOX_BACKUPS_DEFAULT_VIEW), {
+      replace: true,
+    });
+  });
 
   // Recoverable artifact feed: PBS snapshots, PVE backup files, and guest snapshot rows.
   const RECOVERABLE_SEGMENT_KINDS: readonly BackupActivitySegmentKind[] = [
