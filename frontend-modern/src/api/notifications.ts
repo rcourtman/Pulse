@@ -84,6 +84,8 @@ export interface AppriseConfig {
   apiKey?: string;
   apiKeyHeader?: string;
   skipTlsVerify?: boolean;
+  // Responses never include the stored apiKey; this reports whether one is saved.
+  hasApiKey?: boolean;
 }
 
 export interface NotificationTestRequest {

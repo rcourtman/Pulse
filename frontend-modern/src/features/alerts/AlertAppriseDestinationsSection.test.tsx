@@ -15,6 +15,7 @@ function makeConfig(overrides: Partial<UIAppriseConfig> = {}): UIAppriseConfig {
     apiKey: '',
     apiKeyHeader: 'X-API-KEY',
     skipTlsVerify: false,
+    hasApiKey: false,
     ...overrides,
   };
 }
@@ -59,5 +60,22 @@ describe('AlertAppriseDestinationsSection', () => {
     expect(
       screen.getByRole('checkbox', { name: 'Allow self-signed certificates' }),
     ).toBeInTheDocument();
+  });
+
+  // The API never returns the stored key, so the field renders empty; the
+  // placeholder is the only signal that a key is already saved.
+  it('tells the user a saved API key is kept when the field is left blank', () => {
+    renderSection(makeConfig({ mode: 'http', apiKey: '', hasApiKey: true }));
+
+    expect(screen.getByLabelText('API key')).toHaveAttribute(
+      'placeholder',
+      'Saved. Leave blank to keep the current key',
+    );
+  });
+
+  it('offers the optional-key placeholder when no key is saved', () => {
+    renderSection(makeConfig({ mode: 'http', apiKey: '', hasApiKey: false }));
+
+    expect(screen.getByLabelText('API key')).toHaveAttribute('placeholder', 'Optional API key');
   });
 });

@@ -20,6 +20,7 @@ export function normalizeAppriseConfig(
     apiKey: config?.apiKey || '',
     apiKeyHeader: config?.apiKeyHeader || 'X-API-KEY',
     skipTlsVerify: Boolean(config?.skipTlsVerify),
+    hasApiKey: Boolean(config?.hasApiKey || config?.apiKey),
   };
 }
 

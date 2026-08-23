@@ -29,6 +29,7 @@ function makeUIAppriseConfig(overrides: Partial<UIAppriseConfig> = {}): UIAppris
     apiKey: '',
     apiKeyHeader: 'X-API-KEY',
     skipTlsVerify: false,
+    hasApiKey: false,
     ...overrides,
   };
 }
@@ -322,6 +323,7 @@ describe('normalizeAppriseConfig — branch coverage (0713)', () => {
       apiKey: '',
       apiKeyHeader: 'X-API-KEY',
       skipTlsVerify: false,
+      hasApiKey: false,
     };
 
     it('returns the exact default shape for null input', () => {

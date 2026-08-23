@@ -249,12 +249,26 @@ func (h *NotificationHandlers) UpdateEmailConfig(w http.ResponseWriter, r *http.
 	json.NewEncoder(w).Encode(map[string]string{"status": "success"})
 }
 
+// appriseConfigResponse is the API projection of an AppriseConfig. The stored
+// API key never leaves the server; callers only learn whether one is saved,
+// matching how the email handler blanks the SMTP password.
+type appriseConfigResponse struct {
+	notifications.AppriseConfig
+	HasAPIKey bool `json:"hasApiKey"`
+}
+
+func redactAppriseConfig(config notifications.AppriseConfig) appriseConfigResponse {
+	response := appriseConfigResponse{AppriseConfig: config, HasAPIKey: config.APIKey != ""}
+	response.APIKey = ""
+	return response
+}
+
 // GetAppriseConfig returns the current Apprise configuration.
 func (h *NotificationHandlers) GetAppriseConfig(w http.ResponseWriter, r *http.Request) {
 	config := h.getMonitor(r.Context()).GetNotificationManager().GetAppriseConfig()
 
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(config); err != nil {
+	if err := json.NewEncoder(w).Encode(redactAppriseConfig(config)); err != nil {
 		log.Error().Err(err).Msg("Failed to encode Apprise configuration response")
 	}
 }
@@ -274,6 +288,13 @@ func (h *NotificationHandlers) UpdateAppriseConfig(w http.ResponseWriter, r *htt
 	if err := json.Unmarshal(body, &config); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
+	}
+
+	// An empty API key means "keep the saved key": responses never include the
+	// stored value, so the settings form cannot round-trip it.
+	if config.APIKey == "" {
+		existingConfig := h.getMonitor(r.Context()).GetNotificationManager().GetAppriseConfig()
+		config.APIKey = existingConfig.APIKey
 	}
 
 	log.Info().
@@ -298,7 +319,7 @@ func (h *NotificationHandlers) UpdateAppriseConfig(w http.ResponseWriter, r *htt
 	normalized := h.getMonitor(r.Context()).GetNotificationManager().GetAppriseConfig()
 
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(normalized); err != nil {
+	if err := json.NewEncoder(w).Encode(redactAppriseConfig(normalized)); err != nil {
 		log.Error().Err(err).Msg("Failed to encode Apprise configuration response")
 	}
 }
@@ -708,6 +729,12 @@ func (h *NotificationHandlers) TestNotification(w http.ResponseWriter, r *http.R
 		if err := json.Unmarshal(req.Config, &appriseConfig); err != nil {
 			http.Error(w, fmt.Sprintf("Invalid Apprise config: %v", err), http.StatusBadRequest)
 			return
+		}
+
+		// If the API key is empty, use the saved key
+		if appriseConfig.APIKey == "" {
+			savedConfig := h.getMonitor(r.Context()).GetNotificationManager().GetAppriseConfig()
+			appriseConfig.APIKey = savedConfig.APIKey
 		}
 
 		if err := h.getMonitor(r.Context()).GetNotificationManager().SendTestAppriseWithConfig(appriseConfig); err != nil {

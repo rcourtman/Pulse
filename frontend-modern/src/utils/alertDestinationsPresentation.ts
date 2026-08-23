@@ -43,6 +43,8 @@ export const ALERT_DESTINATIONS_APPRISE_CONFIG_KEY_HELP =
   'Targets the /notify/<key> endpoint when provided.';
 export const ALERT_DESTINATIONS_APPRISE_API_KEY_LABEL = 'API key';
 export const ALERT_DESTINATIONS_APPRISE_API_KEY_PLACEHOLDER = 'Optional API key';
+export const ALERT_DESTINATIONS_APPRISE_API_KEY_SAVED_PLACEHOLDER =
+  'Saved. Leave blank to keep the current key';
 export const ALERT_DESTINATIONS_APPRISE_API_KEY_HELP =
   'Included with each request when your Apprise API requires authentication.';
 export const ALERT_DESTINATIONS_APPRISE_API_KEY_HEADER_LABEL = 'API key header';

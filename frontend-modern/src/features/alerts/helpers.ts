@@ -85,6 +85,7 @@ export const createDefaultAppriseConfig = (): UIAppriseConfig => ({
   apiKey: '',
   apiKeyHeader: 'X-API-KEY',
   skipTlsVerify: false,
+  hasApiKey: false,
 });
 
 export const createDefaultEmailConfig = (): UIEmailConfig => ({

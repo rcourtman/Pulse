@@ -14,6 +14,7 @@ import {
   ALERT_DESTINATIONS_APPRISE_API_KEY_HELP,
   ALERT_DESTINATIONS_APPRISE_API_KEY_LABEL,
   ALERT_DESTINATIONS_APPRISE_API_KEY_PLACEHOLDER,
+  ALERT_DESTINATIONS_APPRISE_API_KEY_SAVED_PLACEHOLDER,
   ALERT_DESTINATIONS_APPRISE_CLI_PATH_HELP,
   ALERT_DESTINATIONS_APPRISE_CLI_PATH_LABEL,
   ALERT_DESTINATIONS_APPRISE_CLI_PATH_PLACEHOLDER,
@@ -201,7 +202,12 @@ export function AlertAppriseDestinationsSection(props: AlertAppriseDestinationsS
                 type="password"
                 value={props.config.apiKey}
                 class={formControl}
-                placeholder={ALERT_DESTINATIONS_APPRISE_API_KEY_PLACEHOLDER}
+                placeholder={
+                  props.config.hasApiKey
+                    ? ALERT_DESTINATIONS_APPRISE_API_KEY_SAVED_PLACEHOLDER
+                    : ALERT_DESTINATIONS_APPRISE_API_KEY_PLACEHOLDER
+                }
+                autocomplete="new-password"
                 onInput={(event) => {
                   props.updateApprise({ apiKey: event.currentTarget.value });
                   props.setHasUnsavedChanges(true);

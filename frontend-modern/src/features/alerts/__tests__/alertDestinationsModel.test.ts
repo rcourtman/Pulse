@@ -115,6 +115,7 @@ describe('alertDestinationsModel', () => {
         apiKey: '',
         apiKeyHeader: 'X-API-KEY',
         skipTlsVerify: false,
+        hasApiKey: false,
       }),
     ).toEqual(
       expect.objectContaining({

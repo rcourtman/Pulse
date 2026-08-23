@@ -511,7 +511,7 @@ func TestNotificationHandlers(t *testing.T) {
 	})
 
 	t.Run("GetAppriseConfig", func(t *testing.T) {
-		cfg := notifications.AppriseConfig{Enabled: true}
+		cfg := notifications.AppriseConfig{Enabled: true, APIKey: "secret-key"}
 		mockManager.On("GetAppriseConfig").Return(cfg).Once()
 
 		req := httptest.NewRequest("GET", "/api/notifications/apprise", nil)
@@ -519,13 +519,17 @@ func TestNotificationHandlers(t *testing.T) {
 		h.GetAppriseConfig(w, req)
 
 		assert.Equal(t, 200, w.Code)
+		var resp map[string]interface{}
+		_ = json.Unmarshal(w.Body.Bytes(), &resp)
+		assert.NotContains(t, w.Body.String(), "secret-key") // Should be redacted
+		assert.Equal(t, true, resp["hasApiKey"])
 	})
 
 	t.Run("UpdateAppriseConfig", func(t *testing.T) {
 		cfg := notifications.AppriseConfig{Enabled: true}
+		mockManager.On("GetAppriseConfig").Return(cfg).Twice() // preserve lookup + response echo
 		mockManager.On("SetAppriseConfig", mock.Anything).Return().Once()
 		mockPersistence.On("SaveAppriseConfig", mock.Anything).Return(nil).Once()
-		mockManager.On("GetAppriseConfig").Return(cfg).Once()
 
 		body, _ := json.Marshal(cfg)
 		req := httptest.NewRequest("PUT", "/api/notifications/apprise", bytes.NewReader(body))
@@ -533,6 +537,49 @@ func TestNotificationHandlers(t *testing.T) {
 		h.UpdateAppriseConfig(w, req)
 
 		assert.Equal(t, 200, w.Code)
+	})
+
+	t.Run("UpdateAppriseConfig_PreservesSavedAPIKeyWhenBlank", func(t *testing.T) {
+		existing := notifications.AppriseConfig{Enabled: true, APIKey: "saved-key"}
+		mockManager.On("GetAppriseConfig").Return(existing).Twice() // preserve lookup + response echo
+		mockManager.On("SetAppriseConfig", mock.MatchedBy(func(cfg notifications.AppriseConfig) bool {
+			return cfg.APIKey == "saved-key"
+		})).Return().Once()
+		mockPersistence.On("SaveAppriseConfig", mock.MatchedBy(func(cfg notifications.AppriseConfig) bool {
+			return cfg.APIKey == "saved-key"
+		})).Return(nil).Once()
+
+		req := httptest.NewRequest(
+			"PUT",
+			"/api/notifications/apprise",
+			bytes.NewBufferString(`{"enabled":true,"apiKey":""}`),
+		)
+		w := httptest.NewRecorder()
+		h.UpdateAppriseConfig(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.NotContains(t, w.Body.String(), "saved-key") // Response should stay redacted
+	})
+
+	t.Run("UpdateAppriseConfig_ReplacesAPIKey", func(t *testing.T) {
+		mockManager.On("SetAppriseConfig", mock.MatchedBy(func(cfg notifications.AppriseConfig) bool {
+			return cfg.APIKey == "new-key"
+		})).Return().Once()
+		mockPersistence.On("SaveAppriseConfig", mock.MatchedBy(func(cfg notifications.AppriseConfig) bool {
+			return cfg.APIKey == "new-key"
+		})).Return(nil).Once()
+		mockManager.On("GetAppriseConfig").Return(notifications.AppriseConfig{Enabled: true, APIKey: "new-key"}).Once()
+
+		req := httptest.NewRequest(
+			"PUT",
+			"/api/notifications/apprise",
+			bytes.NewBufferString(`{"enabled":true,"apiKey":"new-key"}`),
+		)
+		w := httptest.NewRecorder()
+		h.UpdateAppriseConfig(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.NotContains(t, w.Body.String(), "new-key") // Response should stay redacted
 	})
 
 	t.Run("UpdateWebhook", func(t *testing.T) {
@@ -656,7 +703,7 @@ func TestNotificationHandlers(t *testing.T) {
 			{"PUT", "/api/notifications/apprise", func() {
 				mockManager.On("SetAppriseConfig", mock.Anything).Return().Once()
 				mockPersistence.On("SaveAppriseConfig", mock.Anything).Return(nil).Once()
-				mockManager.On("GetAppriseConfig").Return(notifications.AppriseConfig{}).Once()
+				mockManager.On("GetAppriseConfig").Return(notifications.AppriseConfig{}).Twice() // preserve lookup + response echo
 			}},
 			{"GET", "/api/notifications/webhooks", func() { mockManager.On("GetWebhooks").Return([]notifications.WebhookConfig{}).Once() }},
 			{"POST", "/api/notifications/webhooks", func() {
@@ -850,6 +897,23 @@ func TestNotificationHandlers(t *testing.T) {
 		body, _ := json.Marshal(map[string]interface{}{
 			"method": "apprise",
 			"config": notifications.AppriseConfig{Enabled: true, APIKey: "test"},
+		})
+		req := httptest.NewRequest("POST", "/api/notifications/test", bytes.NewReader(body))
+		w := httptest.NewRecorder()
+		h.TestNotification(w, req)
+		assert.Equal(t, 200, w.Code)
+	})
+
+	t.Run("TestNotification_AppriseWithConfig_UsesSavedAPIKeyWhenBlank", func(t *testing.T) {
+		saved := notifications.AppriseConfig{Enabled: true, APIKey: "saved-key"}
+		mockManager.On("GetAppriseConfig").Return(saved).Once()
+		mockManager.On("SendTestAppriseWithConfig", mock.MatchedBy(func(cfg notifications.AppriseConfig) bool {
+			return cfg.APIKey == "saved-key"
+		})).Return(nil).Once()
+		mockManager.On("IsEnabled").Return(true).Once()
+		body, _ := json.Marshal(map[string]interface{}{
+			"method": "apprise",
+			"config": notifications.AppriseConfig{Enabled: true},
 		})
 		req := httptest.NewRequest("POST", "/api/notifications/test", bytes.NewReader(body))
 		w := httptest.NewRecorder()

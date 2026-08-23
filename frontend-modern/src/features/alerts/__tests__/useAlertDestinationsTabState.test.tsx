@@ -65,6 +65,7 @@ const buildAppriseConfig = (): UIAppriseConfig => ({
   cliPath: '/usr/local/bin/apprise',
   configKey: '',
   enabled: true,
+  hasApiKey: false,
   mode: 'cli',
   serverUrl: '',
   skipTlsVerify: false,

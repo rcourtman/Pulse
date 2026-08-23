@@ -164,6 +164,7 @@ export interface UIAppriseConfig {
   apiKey: string;
   apiKeyHeader: string;
   skipTlsVerify: boolean;
+  hasApiKey: boolean;
 }
 
 export interface QuietHoursConfig {
