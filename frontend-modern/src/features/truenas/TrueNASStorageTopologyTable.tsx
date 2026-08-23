@@ -1,4 +1,4 @@
-import { For, Show, createMemo, type Component, type JSX } from 'solid-js';
+import { Show, createMemo, type Component, type JSX } from 'solid-js';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { ResponsiveMetricCell } from '@/components/shared/responsive';
 import { TableCell, TableRow } from '@/components/shared/Table';
@@ -7,6 +7,7 @@ import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
 import { buildMetricKeyForUnifiedResource } from '@/utils/metricsKeys';
 import {
+  PlatformWindowedRows,
   PlatformSortableTableHead,
   PlatformResponsiveTableLabel,
   PlatformTableEmptyState,
@@ -395,7 +396,7 @@ export const TrueNASStorageTopologyTable: Component<{
             }
             body={
               <>
-                <For each={sortedRows()}>
+                <PlatformWindowedRows items={sortedRows} estimatedRowHeight={32}>
                   {(row) => {
                     const resource = () => row.resource;
                     const detailRowId = () => drawer.detailRowId(resource());
@@ -470,7 +471,7 @@ export const TrueNASStorageTopologyTable: Component<{
                       </>
                     );
                   }}
-                </For>
+                </PlatformWindowedRows>
               </>
             }
           />

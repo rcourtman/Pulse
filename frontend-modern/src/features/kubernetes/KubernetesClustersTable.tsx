@@ -1,4 +1,4 @@
-import { For, Show, createMemo, type Component, type JSX } from 'solid-js';
+import { Show, createMemo, type Component, type JSX } from 'solid-js';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { ResponsiveMetricCell } from '@/components/shared/responsive';
 import { StackedMemoryBar } from '@/components/Workloads/StackedMemoryBar';
@@ -10,6 +10,7 @@ import { asTrimmedString } from '@/utils/stringUtils';
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import { unifiedPlatformOverrideIdCandidates } from '@/features/alerts/alertOverridesModel';
 import {
+  PlatformWindowedRows,
   PLATFORM_HEALTH_FILTER_OPTIONS,
   PlatformSortableTableHead,
   PlatformTableCountRatioValue,
@@ -248,7 +249,7 @@ export const KubernetesClustersTable: Component<{
             }
             body={
               <>
-                <For each={sortedRows()}>
+                <PlatformWindowedRows items={sortedRows} estimatedRowHeight={32}>
                   {(cluster) => {
                     const name = () =>
                       asTrimmedString(cluster.kubernetes?.clusterName) ||
@@ -430,7 +431,7 @@ export const KubernetesClustersTable: Component<{
                       </>
                     );
                   }}
-                </For>
+                </PlatformWindowedRows>
               </>
             }
           />

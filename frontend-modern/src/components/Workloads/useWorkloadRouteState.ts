@@ -15,6 +15,7 @@ export interface WorkloadRouteStateOptions {
   allGuests: Accessor<WorkloadGuest[]>;
   forcedPlatform?: string;
   forcedViewMode?: ViewMode;
+  routeStateEnabled?: Accessor<boolean>;
   showFilters: Accessor<boolean>;
   setShowFilters: Setter<boolean>;
 }
@@ -37,6 +38,7 @@ export function useWorkloadRouteState(options: WorkloadRouteStateOptions) {
 
   onMount(() => {
     if (typeof window === 'undefined') return;
+    if (options.routeStateEnabled && !options.routeStateEnabled()) return;
     const params = new URLSearchParams(location.search);
     let mutated = false;
 
@@ -97,7 +99,7 @@ export function useWorkloadRouteState(options: WorkloadRouteStateOptions) {
   const { isWorkloadsRoute } = useWorkloadUrlSync({
     containerRuntime,
     containerRuntimeOptions: () => filterOptions.containerRuntimeOptions(),
-    routeStateEnabled: () => true,
+    routeStateEnabled: options.routeStateEnabled ?? (() => true),
     kubernetesNamespaceOptions: () => filterOptions.kubernetesNamespaceOptions(),
     selectedCluster,
     setSelectedCluster,

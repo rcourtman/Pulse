@@ -128,6 +128,8 @@ export interface WorkloadsSurfaceProps {
   groupLabelBadges?: Record<string, WorkloadGroupLabelBadge>;
   /** Lets an owning platform page share one viewer-safe source-health poll. */
   inventorySourcesQuery?: WorkloadsInventorySourcesQuery;
+  /** Keeps a warmed, hidden platform tab from parsing or rewriting another tab's URL state. */
+  routeStateEnabled?: Accessor<boolean>;
 }
 
 export interface WorkloadsInventorySourcesQuery {
@@ -279,6 +281,7 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
     forcedViewMode: props.forcedViewMode,
     showFilters,
     setShowFilters,
+    routeStateEnabled: props.routeStateEnabled,
   });
   const effectiveViewMode = createMemo<ViewMode>(() => props.forcedViewMode ?? viewMode());
   const setEffectiveViewMode = (value: ViewMode): void => {
@@ -331,6 +334,7 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
     setShowFilters,
     showFilters,
     viewMode: effectiveViewMode,
+    routeStateEnabled: props.routeStateEnabled,
   });
 
   const infrastructureNodes = createMemo<Node[]>(() => {
@@ -496,6 +500,7 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
     },
     filteredGuests,
     summaryGroupScopes,
+    routeStateEnabled: props.routeStateEnabled,
   });
 
   const {

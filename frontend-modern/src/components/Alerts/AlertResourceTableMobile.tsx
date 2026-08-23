@@ -1,4 +1,4 @@
-import { For, Show } from 'solid-js';
+import { For, Show, createMemo } from 'solid-js';
 import Check from 'lucide-solid/icons/check';
 import Pencil from 'lucide-solid/icons/pencil';
 import RotateCcw from 'lucide-solid/icons/rotate-ccw';
@@ -11,6 +11,7 @@ import { FormTextarea } from '@/components/shared/FormTextarea';
 import { TogglePrimitive } from '@/components/shared/Toggle';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { AlertResourceGroupHeader } from './AlertResourceGroupHeader';
+import { PlatformWindowedList } from '@/features/platformPage/PlatformWindowedList';
 import {
   getAlertResourceTableCustomBadgeLabel,
   getAlertResourceTableEditNotePlaceholder,
@@ -45,7 +46,32 @@ interface AlertResourceTableMobileProps {
   setActiveMetricInput: (value: { resourceId: string; metric: string } | null) => void;
 }
 
+type AlertResourceMobileItem =
+  | { kind: 'group'; key: string; groupName: string }
+  | { kind: 'resource'; key: string; resource: Resource };
+
 export function AlertResourceTableMobile(props: AlertResourceTableMobileProps) {
+  const mobileItems = createMemo<AlertResourceMobileItem[]>(() => {
+    if (!props.table.groupedResources) {
+      return (props.table.resources ?? []).map((resource) => ({
+        kind: 'resource' as const,
+        key: `resource:${resource.id}`,
+        resource,
+      }));
+    }
+
+    const items: AlertResourceMobileItem[] = [];
+    for (const [groupName, resources] of Object.entries(props.table.groupedResources).sort(
+      ([left], [right]) => left.localeCompare(right),
+    )) {
+      items.push({ kind: 'group', key: `group:${groupName}`, groupName });
+      for (const resource of resources) {
+        items.push({ kind: 'resource', key: `resource:${resource.id}`, resource });
+      }
+    }
+    return items;
+  });
+
   const getThresholds = (resource: Resource, isEditing: boolean) =>
     isEditing ? props.table.editingThresholds() : (resource.thresholds ?? {});
 
@@ -309,337 +335,324 @@ export function AlertResourceTableMobile(props: AlertResourceTableMobileProps) {
         </Card>
       </Show>
 
-      <For
-        each={
-          props.table.groupedResources
-            ? Object.entries(props.table.groupedResources).sort(([a], [b]) => a.localeCompare(b))
-            : [['default', props.table.resources || []] as [string, Resource[]]]
-        }
+      <PlatformWindowedList
+        items={mobileItems}
+        estimatedItemHeight={240}
+        enableThreshold={18}
+        windowSize={24}
       >
-        {([groupName, resources]) => (
-          <div class="space-y-2">
-            <Show when={props.table.groupedResources}>
-              <div class="px-1 font-medium text-xs text-slate-500 uppercase mt-4 mb-1">
+        {(item) => {
+          if (item.kind === 'group') {
+            return (
+              <div class="px-1 pt-4 pb-1 font-medium text-xs text-slate-500 uppercase">
                 <AlertResourceGroupHeader
-                  groupKey={groupName}
-                  meta={props.table.groupHeaderMeta?.[groupName]}
+                  groupKey={item.groupName}
+                  meta={props.table.groupHeaderMeta?.[item.groupName]}
                 />
               </div>
-            </Show>
-            <For each={resources as Resource[]}>
-              {(resource) => {
-                const isEditing = () => props.table.editingId() === resource.id;
-                const thresholds = () => getThresholds(resource, isEditing());
-                const displayValue = (metric: string) =>
-                  getDisplayValue(resource, metric, isEditing());
-                const isOverridden = (metric: string) =>
-                  isAlertResourceMetricOverridden(resource, metric);
+            );
+          }
 
-                return (
-                  <Card
-                    padding="sm"
-                    class={`flex flex-col gap-3 transition-opacity ${resource.disabled || props.table.globalDisableFlag?.() ? 'opacity-60' : ''}`}
+          const resource = item.resource;
+          const isEditing = () => props.table.editingId() === resource.id;
+          const thresholds = () => getThresholds(resource, isEditing());
+          const displayValue = (metric: string) => getDisplayValue(resource, metric, isEditing());
+          const isOverridden = (metric: string) =>
+            isAlertResourceMetricOverridden(resource, metric);
+
+          return (
+            <Card
+              padding="sm"
+              class={`flex flex-col gap-3 transition-opacity ${resource.disabled || props.table.globalDisableFlag?.() ? 'opacity-60' : ''}`}
+            >
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-3 min-w-0">
+                  <Show when={props.table.onToggleDisabled}>
+                    <div class="shrink-0 scale-90 origin-left">
+                      <TogglePrimitive
+                        size="sm"
+                        checked={
+                          !(props.table.globalDisableFlag?.() ?? false) && !resource.disabled
+                        }
+                        disabled={props.table.globalDisableFlag?.() ?? false}
+                        onToggle={() =>
+                          !(props.table.globalDisableFlag?.() ?? false) &&
+                          props.table.onToggleDisabled?.(resource.id)
+                        }
+                      />
+                    </div>
+                  </Show>
+
+                  <div class="min-w-0 truncate">
+                    <div class="font-medium text-sm truncate">
+                      {getAlertResourceLabel(resource)}
+                    </div>
+                    <Show when={resource.subtitle}>
+                      <div class="text-xs text-slate-500 truncate">{resource.subtitle}</div>
+                    </Show>
+                  </div>
+                </div>
+
+                <div class="flex gap-1 shrink-0">
+                  <Show when={!isEditing() && resource.type !== 'dockerHost'}>
+                    <ActionIconButton
+                      onClick={() => startEditing(resource)}
+                      label={`Edit thresholds for ${getAlertResourceLabel(resource)}`}
+                      tone="accent"
+                      size="sm"
+                      class="min-h-11 min-w-11"
+                    >
+                      <Pencil class="w-4 h-4" aria-hidden="true" />
+                    </ActionIconButton>
+                  </Show>
+                  <Show when={!isEditing() && props.table.onConfigureResourceIntent}>
+                    <ActionIconButton
+                      onClick={() => {
+                        const preferredMetric = ['cpu', 'memory', 'disk'].find(
+                          (metric) =>
+                            props.table.columns.some(
+                              (column) => normalizeAlertResourceMetricKey(column) === metric,
+                            ) && alertResourceSupportsMetric(resource.type, metric),
+                        );
+                        props.table.onConfigureResourceIntent?.(
+                          resource.id,
+                          preferredMetric ? `metric.${preferredMetric}` : 'state.offline',
+                        );
+                      }}
+                      label={`Configure alert delay for ${getAlertResourceLabel(resource)}`}
+                      title="Configure individual alert delay"
+                      tone="neutral"
+                      size="sm"
+                      class="min-h-11 min-w-11"
+                    >
+                      <Timer class="w-4 h-4" aria-hidden="true" />
+                    </ActionIconButton>
+                  </Show>
+                  <Show when={isEditing()}>
+                    <ActionIconButton
+                      onClick={cancelEditing}
+                      label="Cancel threshold edits"
+                      tone="muted"
+                      size="sm"
+                      class="min-h-11 min-w-11"
+                    >
+                      <X class="w-4 h-4" aria-hidden="true" />
+                    </ActionIconButton>
+                    <ActionIconButton
+                      onClick={() => saveEditing(resource.id)}
+                      label={`Save threshold edits for ${getAlertResourceLabel(resource)}`}
+                      tone="success"
+                      size="sm"
+                      class="min-h-11 min-w-11"
+                    >
+                      <Check class="w-4 h-4" aria-hidden="true" />
+                    </ActionIconButton>
+                  </Show>
+                  <Show
+                    when={
+                      resource.hasOverride ||
+                      (resource.type === 'agent' && resource.disableConnectivity)
+                    }
                   >
-                    <div class="flex items-center justify-between">
-                      <div class="flex items-center gap-3 min-w-0">
-                        <Show when={props.table.onToggleDisabled}>
-                          <div class="shrink-0 scale-90 origin-left">
-                            <TogglePrimitive
-                              size="sm"
-                              checked={
-                                !(props.table.globalDisableFlag?.() ?? false) && !resource.disabled
-                              }
-                              disabled={props.table.globalDisableFlag?.() ?? false}
+                    <ActionIconButton
+                      onClick={() => props.table.onRemoveOverride(resource.id)}
+                      label={`Revert to defaults for ${getAlertResourceLabel(resource)}`}
+                      title={getAlertResourceTableRevertToDefaultsLabel()}
+                      tone="neutral"
+                      size="sm"
+                      class="min-h-11 min-w-11"
+                    >
+                      <RotateCcw class="w-4 h-4" aria-hidden="true" />
+                    </ActionIconButton>
+                  </Show>
+                </div>
+              </div>
+
+              <Show when={isEditing()}>
+                <FormTextarea
+                  label="Override note"
+                  labelClass="sr-only"
+                  fieldBaseClass="w-full"
+                  textareaBaseClass="w-full text-xs p-2 rounded border border-border bg-surface-alt"
+                  rows={2}
+                  placeholder={getAlertResourceTableEditNotePlaceholder()}
+                  value={props.table.editingNote()}
+                  onInput={(e) => props.table.setEditingNote(e.currentTarget.value)}
+                />
+              </Show>
+
+              <div
+                class={`grid gap-2 text-sm border-t pt-2 ${isEditing() ? 'grid-cols-1' : 'grid-cols-2'}`}
+              >
+                <For each={props.table.columns}>
+                  {(column) => {
+                    const metric = normalizeAlertResourceMetricKey(column);
+                    if (!alertResourceSupportsMetric(resource.type, metric)) return null;
+
+                    // Backup and snapshot carry day-based configs, not
+                    // trigger/clear thresholds. Routing them through the
+                    // numeric editor persisted {trigger, clear} into the
+                    // backup block, which the backend reads as an all-zero
+                    // disabled config (#1126). Render the same on/off
+                    // toggle the desktop rows use instead.
+                    if (metric === 'backup' || metric === 'snapshot') {
+                      const config = metric === 'backup' ? resource.backup : resource.snapshot;
+                      const onToggle =
+                        metric === 'backup'
+                          ? props.table.onToggleBackup
+                          : props.table.onToggleSnapshot;
+                      if (!onToggle) return null;
+                      const titlePrefix = metric === 'backup' ? 'Backup' : 'Snapshot';
+
+                      return (
+                        <div class="flex justify-between items-center p-1.5 bg-surface-alt rounded">
+                          <span class="text-[10px] uppercase font-bold tracking-wider">
+                            {column}
+                          </span>
+                          <StatusBadge
+                            isEnabled={config?.enabled ?? true}
+                            onToggle={() => onToggle(resource.id)}
+                            titleEnabled={`${titlePrefix} alerts enabled. Click to disable for this resource.`}
+                            titleDisabled={`${titlePrefix} alerts disabled. Click to enable for this resource.`}
+                          />
+                        </div>
+                      );
+                    }
+
+                    const isDisabled = () => isAlertResourceMetricOff(thresholds()?.[metric]);
+                    const inheritedDefault = () => resource.defaults?.[metric];
+                    const bounds = getAlertResourceMetricBounds(metric);
+
+                    return (
+                      <div class="flex justify-between items-center p-1.5 bg-surface-alt rounded">
+                        <span class="text-[10px] uppercase font-bold tracking-wider">
+                          {column.replace(/mb\/s|%|°c/gi, '').trim()}
+                        </span>
+
+                        <Show
+                          when={isEditing()}
+                          fallback={
+                            <button
+                              type="button"
+                              onClick={(e) => startEditing(resource, metric, e)}
+                              class="min-h-11 min-w-11 font-mono text-xs font-medium cursor-pointer rounded px-1 -mx-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                              aria-label={`Edit ${column} threshold for ${getAlertResourceLabel(resource)}`}
+                            >
+                              <MetricValueWithHeat
+                                resourceId={resource.id}
+                                metric={metric}
+                                value={displayValue(metric)}
+                                isOverridden={isOverridden(metric)}
+                              />
+                            </button>
+                          }
+                        >
+                          <div class="flex items-center gap-1.5 [&_button]:min-h-11">
+                            <input
+                              type="number"
+                              min={bounds.min}
+                              max={bounds.max}
+                              value={isDisabled() ? '' : (thresholds()?.[metric] ?? '')}
+                              placeholder={getAlertResourceTableMetricPlaceholder(isDisabled())}
+                              class="min-h-11 w-16 text-right text-xs p-1 rounded border border-border bg-surface"
+                              onInput={(e) => {
+                                const nextValue = parseFloat(e.currentTarget.value);
+                                if (
+                                  !Number.isNaN(nextValue) &&
+                                  (nextValue < bounds.min || nextValue > bounds.max)
+                                ) {
+                                  return;
+                                }
+                                props.table.setEditingThresholds({
+                                  ...props.table.editingThresholds(),
+                                  [metric]: Number.isNaN(nextValue) ? undefined : nextValue,
+                                });
+                              }}
+                            />
+                            <StatusBadge
+                              isEnabled={!isDisabled()}
                               onToggle={() =>
-                                !(props.table.globalDisableFlag?.() ?? false) &&
-                                props.table.onToggleDisabled?.(resource.id)
+                                props.table.setEditingThresholds({
+                                  ...props.table.editingThresholds(),
+                                  [metric]: isDisabled()
+                                    ? resolveAlertResourceMetricEnableValue(
+                                        inheritedDefault(),
+                                        metric,
+                                      )
+                                    : ALERT_RESOURCE_METRIC_OFF_VALUE,
+                                })
                               }
+                              {...getAlertResourceTableMetricOffToggleProps()}
                             />
                           </div>
                         </Show>
-
-                        <div class="min-w-0 truncate">
-                          <div class="font-medium text-sm truncate">
-                            {getAlertResourceLabel(resource)}
-                          </div>
-                          <Show when={resource.subtitle}>
-                            <div class="text-xs text-slate-500 truncate">{resource.subtitle}</div>
-                          </Show>
-                        </div>
                       </div>
+                    );
+                  }}
+                </For>
+                <Show when={props.table.showOfflineAlertsColumn}>
+                  {(() => {
+                    const supportsTriState =
+                      typeof props.table.onSetOfflineState === 'function' &&
+                      (resource.type === 'guest' || resource.type === 'dockerContainer');
+                    if (!supportsTriState && !props.table.onToggleNodeConnectivity) {
+                      return null;
+                    }
+                    const disabledGlobally = () => props.table.globalDisableFlag?.() ?? false;
 
-                      <div class="flex gap-1 shrink-0">
-                        <Show when={!isEditing() && resource.type !== 'dockerHost'}>
-                          <ActionIconButton
-                            onClick={() => startEditing(resource)}
-                            label={`Edit thresholds for ${getAlertResourceLabel(resource)}`}
-                            tone="accent"
-                            size="sm"
-                            class="min-h-11 min-w-11"
-                          >
-                            <Pencil class="w-4 h-4" aria-hidden="true" />
-                          </ActionIconButton>
-                        </Show>
-                        <Show when={!isEditing() && props.table.onConfigureResourceIntent}>
-                          <ActionIconButton
-                            onClick={() => {
-                              const preferredMetric = ['cpu', 'memory', 'disk'].find(
-                                (metric) =>
-                                  props.table.columns.some(
-                                    (column) => normalizeAlertResourceMetricKey(column) === metric,
-                                  ) && alertResourceSupportsMetric(resource.type, metric),
-                              );
-                              props.table.onConfigureResourceIntent?.(
-                                resource.id,
-                                preferredMetric ? `metric.${preferredMetric}` : 'state.offline',
-                              );
-                            }}
-                            label={`Configure alert delay for ${getAlertResourceLabel(resource)}`}
-                            title="Configure individual alert delay"
-                            tone="neutral"
-                            size="sm"
-                            class="min-h-11 min-w-11"
-                          >
-                            <Timer class="w-4 h-4" aria-hidden="true" />
-                          </ActionIconButton>
-                        </Show>
-                        <Show when={isEditing()}>
-                          <ActionIconButton
-                            onClick={cancelEditing}
-                            label="Cancel threshold edits"
-                            tone="muted"
-                            size="sm"
-                            class="min-h-11 min-w-11"
-                          >
-                            <X class="w-4 h-4" aria-hidden="true" />
-                          </ActionIconButton>
-                          <ActionIconButton
-                            onClick={() => saveEditing(resource.id)}
-                            label={`Save threshold edits for ${getAlertResourceLabel(resource)}`}
-                            tone="success"
-                            size="sm"
-                            class="min-h-11 min-w-11"
-                          >
-                            <Check class="w-4 h-4" aria-hidden="true" />
-                          </ActionIconButton>
-                        </Show>
+                    return (
+                      <div class="flex justify-between items-center p-1.5 bg-surface-alt rounded">
+                        <span class="text-[10px] uppercase font-bold tracking-wider">Offline</span>
                         <Show
-                          when={
-                            resource.hasOverride ||
-                            (resource.type === 'agent' && resource.disableConnectivity)
+                          when={supportsTriState}
+                          fallback={
+                            <StatusBadge
+                              isEnabled={
+                                !(props.table.globalDisableOfflineFlag?.() ?? false) &&
+                                !resource.disableConnectivity
+                              }
+                              disabled={disabledGlobally()}
+                              onToggle={() => {
+                                if (disabledGlobally()) return;
+                                props.table.onToggleNodeConnectivity?.(resource.id);
+                              }}
+                              titleEnabled="Offline alerts enabled. Click to disable for this resource."
+                              titleDisabled="Offline alerts disabled. Click to enable for this resource."
+                              titleWhenDisabled="Offline alerts controlled globally"
+                            />
                           }
                         >
-                          <ActionIconButton
-                            onClick={() => props.table.onRemoveOverride(resource.id)}
-                            label={`Revert to defaults for ${getAlertResourceLabel(resource)}`}
-                            title={getAlertResourceTableRevertToDefaultsLabel()}
-                            tone="neutral"
-                            size="sm"
-                            class="min-h-11 min-w-11"
-                          >
-                            <RotateCcw class="w-4 h-4" aria-hidden="true" />
-                          </ActionIconButton>
+                          {(() => {
+                            const defaultDisabled =
+                              props.table.globalDisableOfflineFlag?.() ?? false;
+                            const defaultSeverity = props.table.globalOfflineSeverity ?? 'warning';
+
+                            let state: OfflineState;
+                            if (resource.disableConnectivity) {
+                              state = 'off';
+                            } else if (resource.poweredOffSeverity) {
+                              state = resource.poweredOffSeverity;
+                            } else if (defaultDisabled) {
+                              state = 'off';
+                            } else {
+                              state = defaultSeverity === 'critical' ? 'critical' : 'warning';
+                            }
+
+                            return renderOfflineStateButton(state, disabledGlobally(), () => {
+                              if (disabledGlobally()) return;
+                              props.table.onSetOfflineState?.(resource.id, nextOfflineState(state));
+                            });
+                          })()}
                         </Show>
                       </div>
-                    </div>
-
-                    <Show when={isEditing()}>
-                      <FormTextarea
-                        label="Override note"
-                        labelClass="sr-only"
-                        fieldBaseClass="w-full"
-                        textareaBaseClass="w-full text-xs p-2 rounded border border-border bg-surface-alt"
-                        rows={2}
-                        placeholder={getAlertResourceTableEditNotePlaceholder()}
-                        value={props.table.editingNote()}
-                        onInput={(e) => props.table.setEditingNote(e.currentTarget.value)}
-                      />
-                    </Show>
-
-                    <div
-                      class={`grid gap-2 text-sm border-t pt-2 ${isEditing() ? 'grid-cols-1' : 'grid-cols-2'}`}
-                    >
-                      <For each={props.table.columns}>
-                        {(column) => {
-                          const metric = normalizeAlertResourceMetricKey(column);
-                          if (!alertResourceSupportsMetric(resource.type, metric)) return null;
-
-                          // Backup and snapshot carry day-based configs, not
-                          // trigger/clear thresholds. Routing them through the
-                          // numeric editor persisted {trigger, clear} into the
-                          // backup block, which the backend reads as an all-zero
-                          // disabled config (#1126). Render the same on/off
-                          // toggle the desktop rows use instead.
-                          if (metric === 'backup' || metric === 'snapshot') {
-                            const config =
-                              metric === 'backup' ? resource.backup : resource.snapshot;
-                            const onToggle =
-                              metric === 'backup'
-                                ? props.table.onToggleBackup
-                                : props.table.onToggleSnapshot;
-                            if (!onToggle) return null;
-                            const titlePrefix = metric === 'backup' ? 'Backup' : 'Snapshot';
-
-                            return (
-                              <div class="flex justify-between items-center p-1.5 bg-surface-alt rounded">
-                                <span class="text-[10px] uppercase font-bold tracking-wider">
-                                  {column}
-                                </span>
-                                <StatusBadge
-                                  isEnabled={config?.enabled ?? true}
-                                  onToggle={() => onToggle(resource.id)}
-                                  titleEnabled={`${titlePrefix} alerts enabled. Click to disable for this resource.`}
-                                  titleDisabled={`${titlePrefix} alerts disabled. Click to enable for this resource.`}
-                                />
-                              </div>
-                            );
-                          }
-
-                          const isDisabled = () => isAlertResourceMetricOff(thresholds()?.[metric]);
-                          const inheritedDefault = () => resource.defaults?.[metric];
-                          const bounds = getAlertResourceMetricBounds(metric);
-
-                          return (
-                            <div class="flex justify-between items-center p-1.5 bg-surface-alt rounded">
-                              <span class="text-[10px] uppercase font-bold tracking-wider">
-                                {column.replace(/mb\/s|%|°c/gi, '').trim()}
-                              </span>
-
-                              <Show
-                                when={isEditing()}
-                                fallback={
-                                  <button
-                                    type="button"
-                                    onClick={(e) => startEditing(resource, metric, e)}
-                                    class="min-h-11 min-w-11 font-mono text-xs font-medium cursor-pointer rounded px-1 -mx-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
-                                    aria-label={`Edit ${column} threshold for ${getAlertResourceLabel(resource)}`}
-                                  >
-                                    <MetricValueWithHeat
-                                      resourceId={resource.id}
-                                      metric={metric}
-                                      value={displayValue(metric)}
-                                      isOverridden={isOverridden(metric)}
-                                    />
-                                  </button>
-                                }
-                              >
-                                <div class="flex items-center gap-1.5 [&_button]:min-h-11">
-                                  <input
-                                    type="number"
-                                    min={bounds.min}
-                                    max={bounds.max}
-                                    value={isDisabled() ? '' : (thresholds()?.[metric] ?? '')}
-                                    placeholder={getAlertResourceTableMetricPlaceholder(
-                                      isDisabled(),
-                                    )}
-                                    class="min-h-11 w-16 text-right text-xs p-1 rounded border border-border bg-surface"
-                                    onInput={(e) => {
-                                      const nextValue = parseFloat(e.currentTarget.value);
-                                      if (
-                                        !Number.isNaN(nextValue) &&
-                                        (nextValue < bounds.min || nextValue > bounds.max)
-                                      ) {
-                                        return;
-                                      }
-                                      props.table.setEditingThresholds({
-                                        ...props.table.editingThresholds(),
-                                        [metric]: Number.isNaN(nextValue) ? undefined : nextValue,
-                                      });
-                                    }}
-                                  />
-                                  <StatusBadge
-                                    isEnabled={!isDisabled()}
-                                    onToggle={() =>
-                                      props.table.setEditingThresholds({
-                                        ...props.table.editingThresholds(),
-                                        [metric]: isDisabled()
-                                          ? resolveAlertResourceMetricEnableValue(
-                                              inheritedDefault(),
-                                              metric,
-                                            )
-                                          : ALERT_RESOURCE_METRIC_OFF_VALUE,
-                                      })
-                                    }
-                                    {...getAlertResourceTableMetricOffToggleProps()}
-                                  />
-                                </div>
-                              </Show>
-                            </div>
-                          );
-                        }}
-                      </For>
-                      <Show when={props.table.showOfflineAlertsColumn}>
-                        {(() => {
-                          const supportsTriState =
-                            typeof props.table.onSetOfflineState === 'function' &&
-                            (resource.type === 'guest' || resource.type === 'dockerContainer');
-                          if (!supportsTriState && !props.table.onToggleNodeConnectivity) {
-                            return null;
-                          }
-                          const disabledGlobally = () => props.table.globalDisableFlag?.() ?? false;
-
-                          return (
-                            <div class="flex justify-between items-center p-1.5 bg-surface-alt rounded">
-                              <span class="text-[10px] uppercase font-bold tracking-wider">
-                                Offline
-                              </span>
-                              <Show
-                                when={supportsTriState}
-                                fallback={
-                                  <StatusBadge
-                                    isEnabled={
-                                      !(props.table.globalDisableOfflineFlag?.() ?? false) &&
-                                      !resource.disableConnectivity
-                                    }
-                                    disabled={disabledGlobally()}
-                                    onToggle={() => {
-                                      if (disabledGlobally()) return;
-                                      props.table.onToggleNodeConnectivity?.(resource.id);
-                                    }}
-                                    titleEnabled="Offline alerts enabled. Click to disable for this resource."
-                                    titleDisabled="Offline alerts disabled. Click to enable for this resource."
-                                    titleWhenDisabled="Offline alerts controlled globally"
-                                  />
-                                }
-                              >
-                                {(() => {
-                                  const defaultDisabled =
-                                    props.table.globalDisableOfflineFlag?.() ?? false;
-                                  const defaultSeverity =
-                                    props.table.globalOfflineSeverity ?? 'warning';
-
-                                  let state: OfflineState;
-                                  if (resource.disableConnectivity) {
-                                    state = 'off';
-                                  } else if (resource.poweredOffSeverity) {
-                                    state = resource.poweredOffSeverity;
-                                  } else if (defaultDisabled) {
-                                    state = 'off';
-                                  } else {
-                                    state = defaultSeverity === 'critical' ? 'critical' : 'warning';
-                                  }
-
-                                  return renderOfflineStateButton(state, disabledGlobally(), () => {
-                                    if (disabledGlobally()) return;
-                                    props.table.onSetOfflineState?.(
-                                      resource.id,
-                                      nextOfflineState(state),
-                                    );
-                                  });
-                                })()}
-                              </Show>
-                            </div>
-                          );
-                        })()}
-                      </Show>
-                    </div>
-                  </Card>
-                );
-              }}
-            </For>
-          </div>
-        )}
-      </For>
+                    );
+                  })()}
+                </Show>
+              </div>
+            </Card>
+          );
+        }}
+      </PlatformWindowedList>
       <Show when={props.hasRows() === false}>
         <div class="text-center p-8 text-slate-500 text-sm italic bg-surface-alt rounded-md">
           {getAlertResourceTableEmptyState(props.table.emptyMessage)}

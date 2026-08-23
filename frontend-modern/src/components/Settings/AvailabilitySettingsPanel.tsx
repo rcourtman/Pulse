@@ -1,12 +1,4 @@
-import {
-  For,
-  Show,
-  createEffect,
-  createMemo,
-  createSignal,
-  onMount,
-  type Component,
-} from 'solid-js';
+import { Show, createEffect, createMemo, createSignal, onMount, type Component } from 'solid-js';
 import { useLocation, useNavigate } from '@solidjs/router';
 import Plus from 'lucide-solid/icons/plus';
 import RotateCw from 'lucide-solid/icons/rotate-cw';
@@ -17,6 +9,7 @@ import { EmptyState } from '@/components/shared/EmptyState';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import { Dialog } from '@/components/shared/Dialog';
 import { MetadataBadge } from '@/components/shared/MetadataBadge';
+import { PlatformWindowedList } from '@/features/platformPage/PlatformWindowedList';
 import { useResources } from '@/hooks/useResources';
 import { buildProbeAgentOptions } from '@/utils/availabilityProbeAgents';
 import {
@@ -263,7 +256,12 @@ export const AvailabilitySettingsPanel: Component = () => {
               />
             }
           >
-            <For each={sortedTargets()}>
+            <PlatformWindowedList
+              items={sortedTargets}
+              estimatedItemHeight={92}
+              enableThreshold={24}
+              windowSize={32}
+            >
               {(target) => {
                 const pending = () => pendingActionId() === target.id;
                 return (
@@ -338,7 +336,7 @@ export const AvailabilitySettingsPanel: Component = () => {
                   </div>
                 );
               }}
-            </For>
+            </PlatformWindowedList>
           </Show>
         </div>
       </SettingsPanel>

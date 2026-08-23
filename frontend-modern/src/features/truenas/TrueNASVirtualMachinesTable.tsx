@@ -1,9 +1,10 @@
-import { For, Show, createMemo, type Component, type JSX } from 'solid-js';
+import { Show, createMemo, type Component, type JSX } from 'solid-js';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { TableCell, TableRow } from '@/components/shared/Table';
 import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
 import {
+  PlatformWindowedRows,
   PlatformResponsiveTableLabel,
   PlatformSortableTableHead,
   PlatformTableEmptyState,
@@ -268,7 +269,7 @@ export const TrueNASVirtualMachinesTable: Component<{
             }
             body={
               <>
-                <For each={sortedRows()}>
+                <PlatformWindowedRows items={sortedRows} estimatedRowHeight={32}>
                   {(resource) => {
                     const vm = () => vmMeta(resource);
                     const name = () =>
@@ -370,7 +371,7 @@ export const TrueNASVirtualMachinesTable: Component<{
                       </>
                     );
                   }}
-                </For>
+                </PlatformWindowedRows>
               </>
             }
           />

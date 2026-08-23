@@ -21,6 +21,7 @@ import {
   PlatformTableEmptyState,
   PlatformTableLoadingState,
   PlatformTableShell,
+  PlatformWindowedRows,
   withPlatformStatusCounts,
 } from '@/features/platformPage/sharedPlatformPage';
 import { useObservedElementWidth } from '@/hooks/useObservedElementWidth';
@@ -486,7 +487,7 @@ export const ProxmoxReplicationTable: Component<{
                 }
                 body={
                   <>
-                    <For each={filtered()}>
+                    <PlatformWindowedRows items={filtered} estimatedRowHeight={32}>
                       {(job, index) => {
                         const classification = classifyJob(job);
                         const ind = indicatorFor(classification);
@@ -684,7 +685,7 @@ export const ProxmoxReplicationTable: Component<{
                           </>
                         );
                       }}
-                    </For>
+                    </PlatformWindowedRows>
                   </>
                 }
               />

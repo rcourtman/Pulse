@@ -1042,7 +1042,7 @@ describe('Workloads performance contract', () => {
 
         await waitFor(() => {
           expect(getGuestRowCount(container)).toBe(
-            expectedByMode[mode] > 250 ? 140 : expectedByMode[mode],
+            expectedByMode[mode] > 140 ? 140 : expectedByMode[mode],
           );
         });
 

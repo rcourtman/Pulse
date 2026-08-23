@@ -297,15 +297,39 @@ function isCoverageWorkload(workload: WorkloadReference): boolean {
   return workload.type === 'host' && Boolean(workload.vmid.trim());
 }
 
-function resolveWorkload(
+interface WorkloadCandidateIndex {
+  byTypeAndVmid: ReadonlyMap<string, readonly WorkloadCandidate[]>;
+  byVmid: ReadonlyMap<string, readonly WorkloadCandidate[]>;
+}
+
+const workloadTypeVmidKey = (type: WorkloadReference['type'], vmid: string): string =>
+  `${type}:${vmid}`;
+
+function buildWorkloadCandidateIndex(
   candidates: readonly WorkloadCandidate[],
+): WorkloadCandidateIndex {
+  const byTypeAndVmid = new Map<string, WorkloadCandidate[]>();
+  const byVmid = new Map<string, WorkloadCandidate[]>();
+  for (const candidate of candidates) {
+    const typedKey = workloadTypeVmidKey(candidate.type, candidate.vmid);
+    const typed = byTypeAndVmid.get(typedKey);
+    if (typed) typed.push(candidate);
+    else byTypeAndVmid.set(typedKey, [candidate]);
+
+    const matchingVmid = byVmid.get(candidate.vmid);
+    if (matchingVmid) matchingVmid.push(candidate);
+    else byVmid.set(candidate.vmid, [candidate]);
+  }
+  return { byTypeAndVmid, byVmid };
+}
+
+function resolveWorkload(
+  candidates: WorkloadCandidateIndex,
   type: WorkloadReference['type'],
   vmid: string,
   hints: readonly (string | undefined)[],
 ): WorkloadReference {
-  const typed = candidates.filter(
-    (candidate) => candidate.type === type && candidate.vmid === vmid,
-  );
+  const typed = candidates.byTypeAndVmid.get(workloadTypeVmidKey(type, vmid)) ?? [];
   const normalizedHints = hints.map(normalizeKey).filter(Boolean);
   if (typed.length > 0 && normalizedHints.length > 0) {
     const exact = typed.find((candidate) =>
@@ -350,8 +374,8 @@ function matchWorkloadByHints<T extends WorkloadReference>(
 }
 
 function resolveTaskWorkload(
-  candidates: readonly WorkloadCandidate[],
-  rows: ReadonlyMap<string, WorkloadRowDraft>,
+  candidates: WorkloadCandidateIndex,
+  workloadsByVmid: ReadonlyMap<string, readonly WorkloadReference[]>,
   task: BackupTask,
 ): WorkloadReference | undefined {
   const vmid = String(task.vmid);
@@ -361,18 +385,10 @@ function resolveTaskWorkload(
   const hints = [task.instance, task.node];
   if (explicitType !== 'unknown') return resolveWorkload(candidates, explicitType, vmid, hints);
 
-  const candidate = matchWorkloadByHints(
-    candidates.filter((item) => item.vmid === vmid),
-    hints,
-  );
+  const candidate = matchWorkloadByHints(candidates.byVmid.get(vmid) ?? [], hints);
   if (candidate) return candidate;
 
-  return matchWorkloadByHints(
-    Array.from(rows.values())
-      .map((row) => row.workload)
-      .filter((workload) => workload.vmid === vmid && workload.type !== 'unknown'),
-    hints,
-  );
+  return matchWorkloadByHints(workloadsByVmid.get(vmid) ?? [], hints);
 }
 
 function newest<T>(items: readonly T[], getMs: (item: T) => number | undefined): T | undefined {
@@ -439,7 +455,9 @@ export function buildProxmoxBackupRecoveryModel(
   const candidates = input.workloads
     .map(buildCandidateFromResource)
     .filter((candidate): candidate is WorkloadCandidate => candidate !== null);
+  const candidateIndex = buildWorkloadCandidateIndex(candidates);
   const rows = new Map<string, WorkloadRowDraft>();
+  const workloadsByVmid = new Map<string, WorkloadReference[]>();
 
   const ensureRow = (workload: WorkloadReference) => {
     const existing = rows.get(workload.key);
@@ -453,6 +471,9 @@ export function buildProxmoxBackupRecoveryModel(
       snapshotCount: 0,
     };
     rows.set(workload.key, row);
+    const matchingVmid = workloadsByVmid.get(workload.vmid);
+    if (matchingVmid) matchingVmid.push(workload);
+    else workloadsByVmid.set(workload.vmid, [workload]);
     return row;
   };
 
@@ -474,7 +495,7 @@ export function buildProxmoxBackupRecoveryModel(
 
   for (const backup of input.pbsBackups) {
     const type = backupTypeLabel(backup.backupType);
-    const workload = resolveWorkload(candidates, type, backup.vmid, [
+    const workload = resolveWorkload(candidateIndex, type, backup.vmid, [
       backup.namespace,
       backup.datastore,
     ]);
@@ -500,7 +521,7 @@ export function buildProxmoxBackupRecoveryModel(
 
   for (const archive of input.archives) {
     const type = backupTypeLabel(archive.type);
-    const workload = resolveWorkload(candidates, type, String(archive.vmid), [
+    const workload = resolveWorkload(candidateIndex, type, String(archive.vmid), [
       archive.instance,
       archive.node,
     ]);
@@ -525,7 +546,7 @@ export function buildProxmoxBackupRecoveryModel(
 
   for (const snapshot of input.snapshots) {
     const type = backupTypeLabel(snapshot.type);
-    const workload = resolveWorkload(candidates, type, String(snapshot.vmid), [
+    const workload = resolveWorkload(candidateIndex, type, String(snapshot.vmid), [
       snapshot.instance,
       snapshot.node,
     ]);
@@ -547,7 +568,7 @@ export function buildProxmoxBackupRecoveryModel(
   }
 
   for (const task of input.tasks) {
-    const workload = resolveTaskWorkload(candidates, rows, task);
+    const workload = resolveTaskWorkload(candidateIndex, workloadsByVmid, task);
     if (!workload) continue;
     const row = ensureRow(workload);
     const candidateTask: CoverageTask = {

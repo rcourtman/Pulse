@@ -1,5 +1,5 @@
 import { batch, createEffect, createSignal, onCleanup, type Accessor } from 'solid-js';
-import { createStore, reconcile } from 'solid-js/store';
+import { createStore, reconcile, unwrap } from 'solid-js/store';
 import { canonicalizeMetricsHistoryTargetType } from '@/api/charts';
 import { readAPIErrorMessage } from '@/api/responseUtils';
 import { apiFetch, getOrgID } from '@/utils/apiClient';
@@ -36,7 +36,11 @@ import { canonicalDiscoveryResourceType } from '@/utils/discoveryTarget';
 import { canonicalizeFrontendResourceType } from '@/utils/resourceTypeCompat';
 import { getPreferredNormalizedPlatformId } from '@/utils/resourceIdentity';
 import { getExplicitResourceClusterName } from '@/utils/agentResources';
-import { mergeCanonicalResourceSnapshot } from '@/utils/resourceStateAdapters';
+import {
+  mergeCanonicalResource,
+  mergeCanonicalResourceDeltaSnapshot,
+  mergeCanonicalResourceSnapshot,
+} from '@/utils/resourceStateAdapters';
 import { RESOURCE_METADATA_CHANGED_EVENT } from '@/utils/resourceMetadataEvents';
 import {
   normalizeSourcePlatformScopes,
@@ -509,8 +513,15 @@ type APIListResponse = {
     totalPages?: number;
   };
   aggregations?: {
+    total?: number;
+    byType?: Partial<Record<string, number>>;
     policyPosture?: APIResourcePolicyPostureSummary;
   };
+};
+
+export type UnifiedResourceAggregations = {
+  total: number;
+  byType: Partial<Record<ResourceType, number>>;
 };
 
 type APIResourcePolicyPostureSummary = {
@@ -523,15 +534,18 @@ type APIResourcePolicyPostureSummary = {
 type UnifiedResourcesSnapshot = {
   resources: Resource[];
   policyPosture: ResourcePolicyPostureSummary | null;
+  aggregations: UnifiedResourceAggregations | null;
 };
 
 type UnifiedResourcesCacheEntry = {
   resources: Resource[];
   policyPosture: ResourcePolicyPostureSummary | null;
+  aggregations: UnifiedResourceAggregations | null;
   hasSnapshot: boolean;
   cachedAt: number;
   lastFetchAt: number;
   sharedFetch: Promise<Resource[]> | null;
+  realtimeVersion: number;
 };
 
 const unifiedResourcesCaches = new Map<string, UnifiedResourcesCacheEntry>();
@@ -959,18 +973,40 @@ const normalizeResourcePolicyPosture = (
   };
 };
 
+const normalizeUnifiedResourceAggregations = (
+  value: APIListResponse['aggregations'],
+): UnifiedResourceAggregations | null => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const byType: Partial<Record<ResourceType, number>> = {};
+  for (const [rawType, rawCount] of Object.entries(value.byType ?? {})) {
+    const count = normalizeNonNegativeCount(rawCount);
+    if (count === undefined) continue;
+    byType[resolveType(rawType)] = count;
+  }
+  return {
+    total: normalizeNonNegativeCount(value.total) ?? 0,
+    byType,
+  };
+};
+
 const resolveResourcesPayload = (
   payload: unknown,
 ): {
   data: APIResource[];
   totalPages: number;
   policyPosture: ResourcePolicyPostureSummary | null;
+  aggregations: UnifiedResourceAggregations | null;
 } => {
   if (Array.isArray(payload)) {
-    return { data: payload as APIResource[], totalPages: 1, policyPosture: null };
+    return {
+      data: payload as APIResource[],
+      totalPages: 1,
+      policyPosture: null,
+      aggregations: null,
+    };
   }
   if (!payload || typeof payload !== 'object') {
-    return { data: [], totalPages: 1, policyPosture: null };
+    return { data: [], totalPages: 1, policyPosture: null, aggregations: null };
   }
   const record = payload as APIListResponse;
   const data = Array.isArray(record.data)
@@ -985,6 +1021,7 @@ const resolveResourcesPayload = (
     data,
     totalPages,
     policyPosture: normalizeResourcePolicyPosture(record.aggregations?.policyPosture),
+    aggregations: normalizeUnifiedResourceAggregations(record.aggregations),
   };
 };
 
@@ -1007,10 +1044,12 @@ const getUnifiedResourcesCacheEntry = (cacheKey: string): UnifiedResourcesCacheE
   const created: UnifiedResourcesCacheEntry = {
     resources: [],
     policyPosture: null,
+    aggregations: null,
     hasSnapshot: false,
     cachedAt: 0,
     lastFetchAt: 0,
     sharedFetch: null,
+    realtimeVersion: 0,
   };
   unifiedResourcesCaches.set(cacheKey, created);
   return created;
@@ -1024,11 +1063,30 @@ const setUnifiedResourcesCache = (
   resources: Resource[],
   at = Date.now(),
   policyPosture: ResourcePolicyPostureSummary | null = entry.policyPosture,
+  aggregations: UnifiedResourceAggregations | null = entry.aggregations,
 ) => {
   entry.resources = resources;
   entry.policyPosture = policyPosture;
+  entry.aggregations = aggregations;
   entry.hasSnapshot = true;
   entry.cachedAt = at;
+};
+
+const enrichCanonicalAllResourcesCache = (
+  entry: UnifiedResourcesCacheEntry,
+  resources: Resource[],
+) => {
+  if (!entry.hasSnapshot || resources.length === 0) return;
+
+  const incomingById = new Map(resources.map((resource) => [resource.id, resource] as const));
+  const enriched = entry.resources.map((existing) => {
+    const incoming = incomingById.get(existing.id);
+    if (!incoming) return existing;
+    incomingById.delete(existing.id);
+    return mergeCanonicalResource(incoming, existing);
+  });
+  enriched.push(...incomingById.values());
+  setUnifiedResourcesCache(entry, enriched);
 };
 
 const parseUnifiedResourcesTypeFilter = (query: string): Set<ResourceType> | null => {
@@ -1098,6 +1156,7 @@ const seedUnifiedResourcesCacheFromAllResources = (
     typeFilter.has(resolveType(resource.type)),
   );
   entry.policyPosture = allResourcesEntry.policyPosture;
+  entry.aggregations = allResourcesEntry.aggregations;
   entry.hasSnapshot = true;
   entry.cachedAt = allResourcesEntry.cachedAt;
   entry.lastFetchAt = allResourcesEntry.lastFetchAt;
@@ -1150,14 +1209,17 @@ async function fetchUnifiedResources(query: string): Promise<UnifiedResourcesSna
 
   const allRawResources: APIResource[] = [];
   let policyPosture: ResourcePolicyPostureSummary | null = null;
+  let aggregations: UnifiedResourceAggregations | null = null;
   for (const resolved of pages) {
     allRawResources.push(...resolved.data);
     policyPosture = policyPosture ?? resolved.policyPosture;
+    aggregations = aggregations ?? resolved.aggregations;
   }
 
   return {
     resources: dedupeResources(allRawResources).map((resource) => toResource(resource)),
     policyPosture,
+    aggregations,
   };
 }
 
@@ -1177,7 +1239,13 @@ const fetchUnifiedResourcesShared = async (
   const request = (async () => {
     const fetched = await fetchUnifiedResources(query);
     const now = Date.now();
-    setUnifiedResourcesCache(entry, fetched.resources, now, fetched.policyPosture);
+    setUnifiedResourcesCache(
+      entry,
+      fetched.resources,
+      now,
+      fetched.policyPosture,
+      fetched.aggregations,
+    );
     entry.lastFetchAt = now;
     return fetched.resources;
   })();
@@ -1219,6 +1287,8 @@ type UseUnifiedResourcesOptions = {
   cacheKey?: string;
   initialHydration?: UnifiedResourcesInitialHydration;
   enabled?: Accessor<boolean>;
+  /** Keep cached/background data inert while another retained route is visible. */
+  realtimeEnabled?: Accessor<boolean>;
 };
 
 export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
@@ -1226,6 +1296,7 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
   const cacheKey = (options?.cacheKey || query || 'all').trim();
   const initialHydration = options?.initialHydration ?? 'immediate';
   const enabled = options?.enabled ?? (() => true);
+  const realtimeEnabled = options?.realtimeEnabled ?? enabled;
   const typeFilter = parseUnifiedResourcesTypeFilter(query);
   const supportsCanonicalWsHydration = query === '' || typeFilter !== null;
   const prefersWsInitialHydration =
@@ -1243,11 +1314,15 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
   );
   const initialResources = cacheEntry.resources;
   const initialPolicyPosture = cacheEntry.policyPosture;
+  const initialAggregations = cacheEntry.aggregations;
   const hasCachedResources = cacheEntry.hasSnapshot;
 
   const [resources, setResources] = createStore<Resource[]>(initialResources);
   const [policyPosture, setPolicyPosture] = createSignal<ResourcePolicyPostureSummary | null>(
     initialPolicyPosture,
+  );
+  const [aggregations, setAggregations] = createSignal<UnifiedResourceAggregations | null>(
+    initialAggregations,
   );
   const [loading, setLoading] = createSignal(!hasCachedResources);
   const [error, setError] = createSignal<unknown>(undefined);
@@ -1271,6 +1346,7 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
     }
     setResources(reconcile(next, { key: 'id' }));
     setPolicyPosture(targetEntry.policyPosture);
+    setAggregations(targetEntry.aggregations);
   };
 
   const runRefetch = async (options?: {
@@ -1314,6 +1390,13 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
         );
         if (!isCurrentRequest()) {
           return resources as unknown as Resource[];
+        }
+        const allResourcesEntry = getUnifiedResourcesCacheEntry(
+          buildScopedUnifiedResourcesCacheKey(ALL_RESOURCES_CACHE_KEY, orgScope()),
+        );
+        if (allResourcesEntry !== entryForRequest) {
+          enrichCanonicalAllResourcesCache(allResourcesEntry, fetched);
+          entryForRequest.realtimeVersion = allResourcesEntry.realtimeVersion;
         }
         batch(() => {
           applyResources(fetched, entryForRequest);
@@ -1481,7 +1564,7 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
 
   createEffect(() => {
     const currentOrgScope = orgScope();
-    if (!enabled()) {
+    if (!enabled() || !realtimeEnabled()) {
       return;
     }
     if (!supportsCanonicalWsHydration) {
@@ -1503,7 +1586,13 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
       blockedWsHydrationToken = null;
     }
 
-    const wsResources = Array.isArray(wsStore.state.resources) ? wsStore.state.resources : [];
+    const wsResources = Array.isArray(wsStore.state.resources)
+      ? (unwrap(wsStore.state.resources) as Resource[])
+      : [];
+    const resourceChange = wsStore.resourceChange?.() ?? {
+      version: Number(lastUpdateToken) || 0,
+      changedIds: null,
+    };
     // For normal page loads, keep the first paint on the canonical REST contract.
     // Only explicit websocket-first consumers are allowed to render directly
     // from the thinner realtime transport before a canonical snapshot exists.
@@ -1515,10 +1604,23 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
     const allResourcesEntry = getUnifiedResourcesCacheEntry(
       buildScopedUnifiedResourcesCacheKey(ALL_RESOURCES_CACHE_KEY, currentOrgScope),
     );
-    const mergedWsResources = mergeCanonicalResourceSnapshot(
-      wsResources,
-      allResourcesEntry.resources,
-    );
+    const canApplyIncrementally =
+      resourceChange.changedIds !== null &&
+      allResourcesEntry.realtimeVersion > 0 &&
+      resourceChange.version === allResourcesEntry.realtimeVersion + 1;
+    const realtimeSnapshotAlreadyApplied =
+      resourceChange.version > 0 &&
+      allResourcesEntry.hasSnapshot &&
+      allResourcesEntry.realtimeVersion === resourceChange.version;
+    const mergedWsResources = realtimeSnapshotAlreadyApplied
+      ? allResourcesEntry.resources
+      : canApplyIncrementally
+        ? mergeCanonicalResourceDeltaSnapshot(
+            wsResources,
+            allResourcesEntry.resources,
+            resourceChange.changedIds!,
+          )
+        : mergeCanonicalResourceSnapshot(wsResources, allResourcesEntry.resources);
     const projectedResources = filterCanonicalUnifiedResources(
       mergedWsResources,
       query,
@@ -1528,20 +1630,40 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
     clearInitialHydrationTimeout();
     setUnifiedResourcesCache(allResourcesEntry, mergedWsResources, now);
     allResourcesEntry.lastFetchAt = now;
+    allResourcesEntry.realtimeVersion = resourceChange.version;
 
     if (projectedResources === null) {
       return;
     }
 
-    const mergedProjectedResources = mergeCanonicalResourceSnapshot(
-      projectedResources,
-      cacheEntry.resources,
-    );
-    setUnifiedResourcesCache(cacheEntry, mergedProjectedResources, now);
+    // A route can finish its richer REST hydration before the first websocket
+    // snapshot exists. Preserve that one-time enrichment, then promote it into
+    // the shared canonical cache so later incremental updates and retained tabs
+    // can project directly without repeating an estate-wide merge.
+    const resolvedProjectedResources =
+      cacheEntry !== allResourcesEntry && cacheEntry.hasSnapshot && cacheEntry.realtimeVersion === 0
+        ? mergeCanonicalResourceSnapshot(projectedResources, cacheEntry.resources)
+        : projectedResources;
+    if (resolvedProjectedResources !== projectedResources) {
+      const enrichedById = new Map(
+        resolvedProjectedResources.map((resource) => [resource.id, resource] as const),
+      );
+      setUnifiedResourcesCache(
+        allResourcesEntry,
+        allResourcesEntry.resources.map((resource) => enrichedById.get(resource.id) ?? resource),
+        now,
+      );
+      allResourcesEntry.lastFetchAt = now;
+      allResourcesEntry.realtimeVersion = resourceChange.version;
+    }
+
+    setUnifiedResourcesCache(cacheEntry, resolvedProjectedResources, now);
     cacheEntry.lastFetchAt = now;
+    cacheEntry.realtimeVersion = resourceChange.version;
     batch(() => {
-      setResources(reconcile(mergedProjectedResources, { key: 'id' }));
+      setResources(reconcile(resolvedProjectedResources, { key: 'id' }));
       setPolicyPosture(cacheEntry.policyPosture);
+      setAggregations(cacheEntry.aggregations);
       setError(undefined);
       setLoading(false);
     });
@@ -1554,7 +1676,7 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
   createEffect(() => {
     orgScope();
 
-    if (!enabled()) {
+    if (!enabled() || !realtimeEnabled()) {
       wsInitialized = false;
       lastWsUpdateToken = '';
       clearInitialHydrationTimeout();
@@ -1616,10 +1738,12 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
 
     const scopedResources = cacheEntry.resources;
     const scopedPolicyPosture = cacheEntry.policyPosture;
+    const scopedAggregations = cacheEntry.aggregations;
     batch(() => {
       setError(undefined);
       setResources(reconcile(scopedResources, { key: 'id' }));
       setPolicyPosture(scopedPolicyPosture);
+      setAggregations(scopedAggregations);
       setLoading(enabled() && !cacheEntry.hasSnapshot);
     });
 
@@ -1665,6 +1789,7 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
   return {
     resources: () => resources,
     policyPosture,
+    aggregations,
     refetch,
     mutate,
     loading,

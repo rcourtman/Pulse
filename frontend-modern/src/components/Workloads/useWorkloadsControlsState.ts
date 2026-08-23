@@ -1,4 +1,4 @@
-import { createMemo, createSignal, onMount, type Accessor } from 'solid-js';
+import { createEffect, createMemo, createSignal, onMount, type Accessor } from 'solid-js';
 import { useLocation, useNavigate } from '@solidjs/router';
 
 import { useBreakpoint } from '@/hooks/useBreakpoint';
@@ -57,6 +57,7 @@ interface WorkloadsControlsStateOptions {
   setShowFilters: (value: boolean | ((current: boolean) => boolean)) => void;
   showFilters: Accessor<boolean>;
   viewMode: Accessor<ViewMode>;
+  routeStateEnabled?: Accessor<boolean>;
 }
 
 const parseWorkloadsStatusMode = (raw: string | null | undefined): WorkloadsStatusMode =>
@@ -91,6 +92,12 @@ const readSavedWorkloadsStatusMode = (scope: string | undefined): WorkloadsStatu
 export function useWorkloadsControlsState(options: WorkloadsControlsStateOptions) {
   const location = useLocation();
   const navigate = useNavigate();
+  const routeStateEnabled = options.routeStateEnabled ?? (() => true);
+  const [activeRouteSearch, setActiveRouteSearch] = createSignal(location.search);
+  createEffect(() => {
+    if (!routeStateEnabled()) return;
+    setActiveRouteSearch(location.search);
+  });
   const breakpoint = useBreakpoint();
   const workloadTableLayoutMode = createMemo(() => {
     const measuredWidth = options.layoutWidth?.();
@@ -104,13 +111,18 @@ export function useWorkloadsControlsState(options: WorkloadsControlsStateOptions
   const [isSearchLocked, setIsSearchLocked] = createSignal(false);
 
   const updateSearchParam = (mutate: (params: URLSearchParams) => void): void => {
-    const params = new URLSearchParams(location.search);
+    if (!routeStateEnabled()) return;
+    const params = new URLSearchParams(activeRouteSearch());
     mutate(params);
     const query = params.toString();
+    // Router propagation is asynchronous. Keep the local URL-backed controls
+    // responsive in the same event turn, then let the location effect confirm
+    // the canonical value after navigation completes.
+    setActiveRouteSearch(query ? `?${query}` : '');
     navigate(`${location.pathname}${query ? `?${query}` : ''}`, { replace: true });
   };
 
-  const search: Accessor<string> = () => new URLSearchParams(location.search).get('q') ?? '';
+  const search: Accessor<string> = () => new URLSearchParams(activeRouteSearch()).get('q') ?? '';
   const setSearch = (value: string): void => {
     updateSearchParam((params) => {
       if (value === '') {
@@ -122,7 +134,7 @@ export function useWorkloadsControlsState(options: WorkloadsControlsStateOptions
   };
 
   const statusMode: Accessor<WorkloadsStatusMode> = () =>
-    parseWorkloadsStatusMode(new URLSearchParams(location.search).get('status'));
+    parseWorkloadsStatusMode(new URLSearchParams(activeRouteSearch()).get('status'));
   const setStatusMode = (value: WorkloadsStatusMode): void => {
     saveWorkloadsStatusMode(options.statusModeStorageScope, value);
     updateSearchParam((params) => {
@@ -136,7 +148,8 @@ export function useWorkloadsControlsState(options: WorkloadsControlsStateOptions
 
   onMount(() => {
     if (typeof window === 'undefined') return;
-    const params = new URLSearchParams(location.search);
+    if (!routeStateEnabled()) return;
+    const params = new URLSearchParams(activeRouteSearch());
     if (params.has('status')) return;
     const saved = readSavedWorkloadsStatusMode(options.statusModeStorageScope);
     if (saved !== DEFAULT_WORKLOADS_STATUS_MODE) {

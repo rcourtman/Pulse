@@ -66,6 +66,17 @@ four-row phone node preview before the guest list instead of visually moving
 the nodes after the guest list's full virtual scroll extent; revealing the full
 node estate remains an explicit table-preview action.
 
+Estate-sized table and card rendering routes through the shared
+`PlatformWindowedRows`, `PlatformWindowedList`, and
+`usePlatformWindowedItems` primitives. They preserve the complete filtered and
+sorted result plus native scroll extent while bounding mounted DOM to 140 items
+on wider layouts and 36 on phones unless a feature declares a smaller budget.
+Wheel and vertical touch projection must move a directional keyed-row runway
+before native scrolling can expose it. Spacer geometry is structural only: no
+feature may present it as loading, pagination, or an intentionally blank data
+region. Settings resource pickers, Availability target lists, Actions, alerts,
+and every provider-native platform table share this contract.
+
 Shared workload, node, Docker-host, and resource-drawer history presentation
 keeps current readings separate from stored samples. A current metric may
 populate the legend while history is still being collected, but it must never
@@ -573,6 +584,7 @@ attention/running/other filters so large bridge or overlay networks remain
 scan-friendly without hiding any container from drilldown.
 
 1. `frontend-modern/src/components/CommercialMigrationBanner.tsx` shared with `cloud-paid`: the global commercial migration notice is both a cloud-paid entitlement recovery surface and a shared app-shell notice primitive consumer.
+2. `frontend-modern/src/components/Infrastructure/useTableWindowing.ts` shared with `performance-and-scalability`: the shared bounded table-window controller is both a canonical frontend rendering primitive and a fleet-scale scrolling hot-path boundary.
 2. `frontend-modern/src/components/Settings/AgentIntegrationsPanel.tsx` shared with `ai-runtime`, `api-contracts`: the External agents settings panel is the optional settings-shell projection of Pulse MCP onboarding, the AI runtime connected-agent onboarding surface, and a presentation consumer of the shared agent capabilities frontend client.
 3. `frontend-modern/src/components/Settings/APIAccessPanel.tsx` shared with `security-privacy`: the API Access settings intro is both a security/privacy token-management trust surface and a canonical settings-shell presentation boundary.
    The panel may own shell placement and local action layout, but
@@ -684,6 +696,9 @@ AGENT_SURFACE_ID_PULSE_MCP)` and `getAgentSurfaceToolPosturePresentation`,
    settings shell derives posture summaries or hardening actions. The first-run
    shell must use generic host, Docker, and LXC bootstrap commands rather than
    probing public status for deployment identity.
+10. `frontend-modern/src/features/platformPage/PlatformWindowedList.tsx` shared with `performance-and-scalability`: the shared bounded list renderer is both a canonical platform-page primitive and a fleet-scale mounted-DOM performance boundary.
+11. `frontend-modern/src/features/platformPage/PlatformWindowedRows.tsx` shared with `performance-and-scalability`: the shared bounded table-row renderer is both a canonical platform-page primitive and a fleet-scale mounted-DOM performance boundary.
+12. `frontend-modern/src/features/platformPage/usePlatformWindowedItems.ts` shared with `performance-and-scalability`: the platform windowing controller is both a canonical frontend scroll primitive and a directional-runway performance hot path.
 9. `frontend-modern/src/routing/routePreload.ts` shared with `performance-and-scalability`, `unified-resources`: the app-shell route preload registry is a canonical frontend shell boundary, an authenticated hot-path performance boundary, and the entry point for the unified-resource Actions workspace.
 10. `frontend-modern/src/stores/aiChat.ts` shared with `ai-runtime`: the assistant drawer and session store is both an AI runtime control surface and a canonical app-shell presentation boundary.
     Assistant session pickers and reloads must restore only safe

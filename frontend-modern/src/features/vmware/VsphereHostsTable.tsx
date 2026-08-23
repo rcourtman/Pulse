@@ -1,4 +1,4 @@
-import { For, Show, createMemo, type Component, type JSX } from 'solid-js';
+import { Show, createMemo, type Component, type JSX } from 'solid-js';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { ResponsiveMetricCell } from '@/components/shared/responsive';
 import { StackedMemoryBar } from '@/components/Workloads/StackedMemoryBar';
@@ -17,6 +17,7 @@ import {
 } from './vmwarePageModel';
 import { buildMetricKeyForUnifiedResource } from '@/utils/metricsKeys';
 import {
+  PlatformWindowedRows,
   PLATFORM_HEALTH_FILTER_OPTIONS,
   PlatformSortableTableHead,
   PlatformTableMetricFallback,
@@ -303,7 +304,7 @@ export const VsphereHostsTable: Component<{
             }
             body={
               <>
-                <For each={sortedRows()}>
+                <PlatformWindowedRows items={sortedRows} estimatedRowHeight={32}>
                   {(host) => {
                     const meta = () => host.vmware;
                     const name = () => asTrimmedString(host.name) || host.id;
@@ -483,7 +484,7 @@ export const VsphereHostsTable: Component<{
                       </>
                     );
                   }}
-                </For>
+                </PlatformWindowedRows>
               </>
             }
           />

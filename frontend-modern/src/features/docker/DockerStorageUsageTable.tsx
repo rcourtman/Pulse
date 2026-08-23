@@ -1,4 +1,4 @@
-import { For, Show, type Component, type JSX } from 'solid-js';
+import { Show, type Component, type JSX } from 'solid-js';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
 import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
@@ -10,6 +10,7 @@ import {
 import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
 import {
+  PlatformWindowedRows,
   PLATFORM_HEALTH_FILTER_OPTIONS,
   PlatformResponsiveTableLabel,
   PlatformTableEmptyState,
@@ -151,7 +152,7 @@ export const DockerStorageUsageTable: Component<{
             }
             body={
               <>
-                <For each={tableState.filtered()}>
+                <PlatformWindowedRows items={tableState.filtered} estimatedRowHeight={32}>
                   {(host) => {
                     const name = () => asTrimmedString(host.name) || host.id;
                     const indicator = () => getSimpleStatusIndicator(host.status);
@@ -248,7 +249,7 @@ export const DockerStorageUsageTable: Component<{
                       </>
                     );
                   }}
-                </For>
+                </PlatformWindowedRows>
               </>
             }
           />

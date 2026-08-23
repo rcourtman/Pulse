@@ -1744,6 +1744,18 @@ and `pulse-no-alerts` bulk rules remain compatible inputs and do not create a
 second per-resource state store. `internal/alerts/intent_policy_test.go` pins
 factory operator-state evaluation, writer gating, and active reconciliation.
 
+### Large alert collections stay continuously scrollable
+
+Resource alert tables, active-alert lists, incident timelines, and resolved
+history must preserve full filter, group, count, selection, and action semantics
+without mounting the full estate. Desktop tables use the shared
+`PlatformWindowedRows` owner; phone cards use `PlatformWindowedList` with
+feature budgets no larger than 32 items. Native scroll extent comes from spacer
+geometry, and wheel/touch projection must maintain a mounted directional runway
+so rapid scrolling never exposes a loading-looking blank section. Alert
+windowing is presentation-only and must not change alert truth, grouping,
+acknowledgement, resolution, or delivery state.
+
 ### Destinations tab carries delivery evidence
 
 The alert destinations tab is where the belief "delivery works" is formed, so

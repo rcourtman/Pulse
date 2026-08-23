@@ -13,6 +13,8 @@ export type ProxmoxTabSpec = {
   path: string;
 };
 
+export type ProxmoxResourceTypeCounts = Partial<Record<ResourceType, number>>;
+
 export type ProxmoxClusterGroup = {
   id: string;
   label: string;
@@ -199,6 +201,35 @@ export function isProxmoxChildOfNode(child: Resource, node: Resource): boolean {
   );
 }
 
+const buildProxmoxNodeResolver = (nodes: readonly Resource[]) => {
+  const nodesById = new Map(nodes.map((node) => [node.id, node] as const));
+  const nodesByName = new Map<string, Resource[]>();
+  for (const node of nodes) {
+    const name = getResourceNodeName(node);
+    const matching = nodesByName.get(name);
+    if (matching) matching.push(node);
+    else nodesByName.set(name, [node]);
+  }
+
+  return (child: Resource): Resource | undefined => {
+    if (child.parentId) {
+      const explicitParent = nodesById.get(child.parentId);
+      if (explicitParent) return explicitParent;
+    }
+    const candidates = nodesByName.get(getResourceNodeName(child)) ?? [];
+    if (candidates.length === 0) return undefined;
+    const childScopes = getProxmoxProviderScopes(child);
+    return candidates.find((node) => {
+      const nodeScopes = new Set(getProxmoxProviderScopes(node));
+      return (
+        childScopes.length === 0 ||
+        nodeScopes.size === 0 ||
+        childScopes.some((scope) => nodeScopes.has(scope))
+      );
+    });
+  };
+};
+
 export function getResourceVmid(resource: Resource): string {
   const vmid = resource.proxmox?.vmid;
   if (typeof vmid === 'number' && Number.isFinite(vmid)) {
@@ -243,13 +274,18 @@ export const filterProxmoxNodes = (
   const split = splitSearchExclusions(search);
   if (!split.needle && split.excludes.length === 0) return nodes;
 
-  return nodes.filter((node) => {
-    const values = getProxmoxSearchValues(node);
-    for (const guest of guests) {
-      if (isProxmoxChildOfNode(guest, node)) values.push(...getProxmoxSearchValues(guest));
-    }
+  const resolveNode = buildProxmoxNodeResolver(nodes);
+  const searchValuesByNodeId = new Map(
+    nodes.map((node) => [node.id, getProxmoxSearchValues(node)] as const),
+  );
+  for (const guest of guests) {
+    const owningNode = resolveNode(guest);
+    if (!owningNode) continue;
+    searchValuesByNodeId.get(owningNode.id)?.push(...getProxmoxSearchValues(guest));
+  }
 
-    const haystack = values
+  return nodes.filter((node) => {
+    const haystack = (searchValuesByNodeId.get(node.id) ?? [])
       .filter(
         (value): value is string | number => typeof value === 'string' || typeof value === 'number',
       )
@@ -331,6 +367,7 @@ export function buildProxmoxPageModel(resources: Resource[]): ProxmoxPageModel {
       isRecord(getPlatformData(resource).ceph),
   );
   const physicalDisks = proxmoxResources.filter((resource) => resource.type === 'physical_disk');
+  const resolveOwningNode = buildProxmoxNodeResolver(pveNodes);
 
   const groupsById = new Map<string, ProxmoxClusterGroup>();
   const ensureGroup = (label: string, providerScope: string): ProxmoxClusterGroup => {
@@ -356,7 +393,7 @@ export function buildProxmoxPageModel(resources: Resource[]): ProxmoxPageModel {
   });
 
   guests.forEach((resource) => {
-    const owningNode = pveNodes.find((node) => isProxmoxChildOfNode(resource, node));
+    const owningNode = resolveOwningNode(resource);
     ensureGroup(
       owningNode ? getResourceClusterLabel(owningNode) : getResourceClusterLabel(resource),
       owningNode ? getProxmoxProviderScope(owningNode) : getProxmoxProviderScope(resource),
@@ -364,7 +401,7 @@ export function buildProxmoxPageModel(resources: Resource[]): ProxmoxPageModel {
   });
 
   storage.forEach((resource) => {
-    const owningNode = pveNodes.find((node) => isProxmoxChildOfNode(resource, node));
+    const owningNode = resolveOwningNode(resource);
     ensureGroup(
       owningNode ? getResourceClusterLabel(owningNode) : getResourceClusterLabel(resource),
       owningNode ? getProxmoxProviderScope(owningNode) : getProxmoxProviderScope(resource),
@@ -442,5 +479,19 @@ export function buildVisibleProxmoxTabSpecs(
     visible.add('mail');
   }
 
+  return PROXMOX_TAB_SPECS.filter((tab) => visible.has(tab.id));
+}
+
+export function buildVisibleProxmoxTabSpecsFromCounts(
+  counts: ProxmoxResourceTypeCounts,
+  replicationJobCount: number,
+): ProxmoxTabSpec[] {
+  const visible = new Set<ProxmoxPageTabId>(['overview']);
+  const count = (type: ResourceType): number => Math.max(0, counts[type] ?? 0);
+  if (count('storage') + count('physical_disk') > 0) visible.add('storage');
+  if (replicationJobCount > 0) visible.add('replication');
+  if (count('pbs') + count('vm') + count('system-container') > 0) visible.add('backups');
+  if (count('ceph') > 0) visible.add('ceph');
+  if (count('pmg') > 0) visible.add('mail');
   return PROXMOX_TAB_SPECS.filter((tab) => visible.has(tab.id));
 }

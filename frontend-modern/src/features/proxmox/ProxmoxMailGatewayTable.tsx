@@ -19,6 +19,7 @@ import {
   type PlatformResourceStatusFilter,
   PlatformTableEmptyState,
   PlatformTableShell,
+  PlatformWindowedRows,
   withPlatformStatusCounts,
 } from '@/features/platformPage/sharedPlatformPage';
 import { useObservedElementWidth } from '@/hooks/useObservedElementWidth';
@@ -229,7 +230,7 @@ export const ProxmoxMailGatewayTable: Component<{
             }
             body={
               <>
-                <For each={tableState.filtered()}>
+                <PlatformWindowedRows items={tableState.filtered} estimatedRowHeight={32}>
                   {(instance) => {
                     const pmg = () => instance.pmg;
                     const name = () => asTrimmedString(instance.name) || instance.id;
@@ -363,7 +364,7 @@ export const ProxmoxMailGatewayTable: Component<{
                       </>
                     );
                   }}
-                </For>
+                </PlatformWindowedRows>
               </>
             }
           />

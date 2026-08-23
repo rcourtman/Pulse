@@ -1,8 +1,9 @@
-import { For, Show, createMemo, type Component, type JSX } from 'solid-js';
+import { Show, createMemo, type Component, type JSX } from 'solid-js';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
 import { asTrimmedString } from '@/utils/stringUtils';
 import {
+  PlatformWindowedRows,
   PLATFORM_HEALTH_FILTER_OPTIONS,
   PlatformResponsiveTableLabel,
   PlatformTableEmptyState,
@@ -155,7 +156,7 @@ export const KubernetesEventsTable: Component<{
             }
             body={
               <>
-                <For each={tableState.filtered()}>
+                <PlatformWindowedRows items={tableState.filtered} estimatedRowHeight={32}>
                   {(resource) => {
                     const indicator = () =>
                       mapKubernetesEventSeverity(resource.kubernetes?.eventType);
@@ -263,7 +264,7 @@ export const KubernetesEventsTable: Component<{
                       </>
                     );
                   }}
-                </For>
+                </PlatformWindowedRows>
               </>
             }
           />

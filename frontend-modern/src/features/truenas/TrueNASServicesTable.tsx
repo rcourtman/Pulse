@@ -1,9 +1,10 @@
-import { For, Show, createMemo, type Component, type JSX } from 'solid-js';
+import { Show, createMemo, type Component, type JSX } from 'solid-js';
 import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { TableCell, TableRow } from '@/components/shared/Table';
 import { asTrimmedString } from '@/utils/stringUtils';
 import {
+  PlatformWindowedRows,
   PlatformSortableTableHead,
   PlatformTableEmptyState,
   PlatformTableToolbar,
@@ -296,7 +297,7 @@ export const TrueNASServicesTable: Component<{
             }
             body={
               <>
-                <For each={sortedRows()}>
+                <PlatformWindowedRows items={sortedRows} estimatedRowHeight={32}>
                   {(row) => {
                     const status = () => mapTrueNASServiceStatus(row);
                     const pids = createMemo(() => formatPIDs(row.service.pids));
@@ -371,7 +372,7 @@ export const TrueNASServicesTable: Component<{
                       </>
                     );
                   }}
-                </For>
+                </PlatformWindowedRows>
               </>
             }
           />

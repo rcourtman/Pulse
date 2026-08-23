@@ -533,7 +533,9 @@ describe('shared primitive guardrails', () => {
     expect(patrolIntelligenceHeaderSource).not.toContain(
       'flex-1 py-1.5 px-2 text-xs font-semibold rounded-md transition-all duration-200',
     );
-    expect(proxmoxBackupsTableSource).toContain('FilterSegmentedControl');
+    // Backup workspaces are route tabs, so they use the canonical platform
+    // navigation primitive instead of recreating segmented-control chrome.
+    expect(proxmoxBackupsTableSource).toContain('PlatformSectionTabs');
     expect(proxmoxBackupsTableSource).not.toContain('FilterButtonGroup');
     expect(proxmoxBackupsTableSource).not.toContain('const viewButtonClass');
     expect(proxmoxBackupsTableSource).not.toContain(

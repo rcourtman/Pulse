@@ -1,8 +1,9 @@
-import { For, Show } from 'solid-js';
+import { Show, createMemo } from 'solid-js';
 
 import { Table, TableBody, TableHead, TableHeader, TableRow } from '@/components/shared/Table';
 import { TableCard } from '@/components/shared/TableCard';
 import { getPlatformTableHeadClassForKind } from '@/features/platformPage/sharedPlatformPage';
+import { PlatformWindowedRows } from '@/features/platformPage/PlatformWindowedRows';
 import {
   getAlertHistoryEmptyState,
   getAlertHistoryLoadingState,
@@ -18,7 +19,24 @@ interface AlertHistoryTableSectionProps {
   state: AlertHistoryState;
 }
 
+type AlertHistoryGroup = ReturnType<AlertHistoryState['groupedAlerts']>[number];
+type AlertHistoryAlert = AlertHistoryGroup['alerts'][number];
+type AlertHistoryRenderItem =
+  | { kind: 'group'; key: string; group: AlertHistoryGroup }
+  | { kind: 'alert'; key: string; alert: AlertHistoryAlert };
+
 export function AlertHistoryTableSection(props: AlertHistoryTableSectionProps) {
+  const renderItems = createMemo<AlertHistoryRenderItem[]>(() => {
+    const items: AlertHistoryRenderItem[] = [];
+    for (const [groupIndex, group] of props.state.groupedAlerts().entries()) {
+      items.push({ kind: 'group', key: `group:${groupIndex}:${group.fullLabel}`, group });
+      for (const alert of group.alerts) {
+        items.push({ kind: 'alert', key: `alert:${alert.id}:${alert.startTime}`, alert });
+      }
+    }
+    return items;
+  });
+
   return (
     <Show
       when={props.state.loading()}
@@ -97,19 +115,15 @@ export function AlertHistoryTableSection(props: AlertHistoryTableSectionProps) {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  <For each={props.state.groupedAlerts()}>
-                    {(group) => (
-                      <>
-                        <AlertHistoryTableGroupRow group={group} />
-
-                        <For each={group.alerts}>
-                          {(alert) => (
-                            <AlertHistoryTableAlertRow alert={alert} state={props.state} />
-                          )}
-                        </For>
-                      </>
-                    )}
-                  </For>
+                  <PlatformWindowedRows items={renderItems} estimatedRowHeight={40}>
+                    {(item) =>
+                      item.kind === 'group' ? (
+                        <AlertHistoryTableGroupRow group={item.group} />
+                      ) : (
+                        <AlertHistoryTableAlertRow alert={item.alert} state={props.state} />
+                      )
+                    }
+                  </PlatformWindowedRows>
                 </TableBody>
               </Table>
             </TableCard>

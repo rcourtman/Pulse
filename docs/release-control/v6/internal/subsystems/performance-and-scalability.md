@@ -165,9 +165,14 @@ start a goroutine, timer, or notification lifecycle per target.
 7. `frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx` shared with `unified-resources`: the unified resource table is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
 8. `frontend-modern/src/components/Infrastructure/unifiedResourceTableModel.ts` shared with `unified-resources`: unified resource service row shaping and I/O emphasis are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
 9. `frontend-modern/src/components/Infrastructure/unifiedResourceTableStateModel.ts` shared with `unified-resources`: unified resource table state derivation, sort-cycle policy, service sorting, and responsive column layout are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
+10. `frontend-modern/src/components/Infrastructure/useTableWindowing.ts` shared with `frontend-primitives`: the shared bounded table-window controller is both a canonical frontend rendering primitive and a fleet-scale scrolling hot-path boundary.
 10. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts` shared with `unified-resources`: unified resource table state, grouping, and windowing are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
 11. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableViewportSync.ts` shared with `unified-resources`: unified resource table viewport sync and selected-row reveal are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
+12. `frontend-modern/src/features/platformPage/PlatformWindowedList.tsx` shared with `frontend-primitives`: the shared bounded list renderer is both a canonical platform-page primitive and a fleet-scale mounted-DOM performance boundary.
+13. `frontend-modern/src/features/platformPage/PlatformWindowedRows.tsx` shared with `frontend-primitives`: the shared bounded table-row renderer is both a canonical platform-page primitive and a fleet-scale mounted-DOM performance boundary.
+14. `frontend-modern/src/features/platformPage/usePlatformWindowedItems.ts` shared with `frontend-primitives`: the platform windowing controller is both a canonical frontend scroll primitive and a directional-runway performance hot path.
 15. `frontend-modern/src/routing/routePreload.ts` shared with `frontend-primitives`, `unified-resources`: the app-shell route preload registry is a canonical frontend shell boundary, an authenticated hot-path performance boundary, and the entry point for the unified-resource Actions workspace.
+18. `frontend-modern/src/stores/websocket-global.ts` shared with `unified-resources`: the process-wide realtime store owner is both a unified-resource state boundary and a fleet-scale connection and reconciliation hot path.
 19. `frontend-modern/src/stores/websocket.ts` shared with `alerts`: the connection-owned realtime store is both the canonical alert truth boundary and the fleet-scale resource reconciliation hot path.
 16. `frontend-modern/src/useAppRuntimeState.ts` shared with `cloud-paid`: the authenticated app runtime bootstrap is both a hosted commercial org-context boundary and a protected app-shell performance boundary.
     Security-status SSO display labels are part of the existing authenticated
@@ -204,6 +209,14 @@ every tick.
 The browser applies resource deltas to its connection-scoped raw baseline, but
 canonicalizes and reconciles only changed resources plus the bounded
 host-coalescing set. Unchanged non-host display resources retain object identity.
+`frontend-modern/src/stores/websocket.ts` publishes the changed-ID set and a
+monotonic resource revision with each reconciliation. The shared
+`useUnifiedResources` owner applies that revision to the process-wide canonical
+cache once, then projects route filters from the already-canonical result;
+route-scoped consumers must not independently canonicalize the full estate.
+Retained or prefetched tabs may keep fetched snapshots, but only the visible tab
+consumes realtime projection work. Re-entering an inactive tab must catch up
+from the shared canonical cache rather than replaying every missed delta.
 Hidden tabs continue advancing the raw baseline without reconciling the estate;
 all hidden changes are materialized once when the document becomes visible.
 These rules must be proved against a 50-node fixture and may not be replaced by
@@ -1820,18 +1833,27 @@ before the keyed guest window moves; they do not cancel native input, while the
 ordinary scroll-position listener remains passive. This preserves continuous
 rapid scrolling without increasing the bounded mounted-row budget.
 The canonical public demo intentionally exercises this production hot path:
-its default Proxmox estate contains 900 guests, crossing the 250-row windowing
-threshold while retaining the hook's 140-row mounted-window budget. The demo
+its default Proxmox estate contains 50 nodes and more than 900 guests, crossing
+the mounted-row threshold while retaining the hook's 140-row desktop and
+36-row phone mounted-window budgets. The demo
 curation integration proof must assert both the 800-plus guest total and the
 bounded mounted-row count. That same default estate produces more than 500
 backup coverage targets and recoverable artifacts; the coverage and By date
 tables must route through `useProxmoxBackupTableWindowing.ts`, retain full-set
-filter/sort/count semantics, and mount at most 140 row or day-header items
+filter/sort/count semantics, and mount at most 140 desktop or 36 phone row or day-header items
 without pagination chrome. `internal/mock/demo_scenarios_benchmark_test.go`
 records the corresponding graph-build, recurring sampler-update, and unified
 resource projection costs, and the mock storage topology must stay linear in
 node count so a realistic multi-cluster fixture cannot reintroduce quadratic
 projection work.
+All platform-native tables and long card lists use
+`PlatformWindowedRows`, `PlatformWindowedList`, and
+`usePlatformWindowedItems` over the same `useTableWindowing` controller. Those
+owners preserve native scrollbar geometry with measured spacers, project wheel
+and vertical touch movement before native scroll advances, and retain a
+directional runway around the viewport. A feature may choose a smaller bounded
+budget, but it must not restore an unbounded `<For>` over estate-sized data or
+show a blank viewport while the keyed window catches up.
 The workload guest-row path now follows the same pattern: the render shell
 stays in `frontend-modern/src/components/Workloads/GuestRow.tsx`, tooltip-backed
 cell presentation lives in `frontend-modern/src/components/Workloads/GuestRowCells.tsx`,

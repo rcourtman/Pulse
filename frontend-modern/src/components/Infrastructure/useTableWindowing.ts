@@ -7,6 +7,8 @@ export interface UseTableWindowingOptions {
   windowSize?: number;
   /** Whether windowing is enabled (disabled for small datasets) */
   enabled?: () => boolean;
+  /** Row count above which the default bounded window activates */
+  enableThreshold?: number;
   /** Index to ensure is visible (for deep-link/highlight reveal) */
   revealIndex?: () => number | null;
 }
@@ -27,8 +29,13 @@ export interface UseTableWindowingResult {
 }
 
 const DEFAULT_WINDOW_SIZE = 140;
-const DEFAULT_ENABLE_THRESHOLD = 500;
+// A few hundred rich platform rows are already enough to produce long style,
+// layout, and paint tasks on phones. Keep the default aligned with the mounted
+// row budget so consumers cannot accidentally leave a 200-500 row gap between
+// "small table" and "large estate" behaviour.
+const DEFAULT_ENABLE_THRESHOLD = DEFAULT_WINDOW_SIZE;
 const DEFAULT_OVERSCAN_ROWS = 20;
+const DEFAULT_EDGE_RUNWAY_ROWS = 24;
 
 export const useTableWindowing = (options: UseTableWindowingOptions): UseTableWindowingResult => {
   const [windowStart, setWindowStart] = createSignal(0);
@@ -39,9 +46,12 @@ export const useTableWindowing = (options: UseTableWindowingOptions): UseTableWi
 
   const isWindowed = createMemo(() => {
     const total = options.totalCount();
-    const enabled = options.enabled?.() ?? total > DEFAULT_ENABLE_THRESHOLD;
+    const threshold = Math.max(0, Math.floor(options.enableThreshold ?? DEFAULT_ENABLE_THRESHOLD));
+    const enabled = options.enabled?.() ?? total > threshold;
     return enabled && total > 0;
   });
+
+  let lastFirstVisibleRow = 0;
 
   const maxStart = createMemo(() => Math.max(0, options.totalCount() - normalizedWindowSize()));
 
@@ -74,12 +84,36 @@ export const useTableWindowing = (options: UseTableWindowingOptions): UseTableWi
     const safeRowHeight = rowHeight > 0 ? rowHeight : 40;
     const safeContainerHeight = containerHeight > 0 ? containerHeight : safeRowHeight;
     const rowsInView = Math.max(1, Math.ceil(safeContainerHeight / safeRowHeight));
-    const overscan = Math.min(
-      DEFAULT_OVERSCAN_ROWS,
-      Math.max(0, normalizedWindowSize() - rowsInView),
-    );
     const firstVisibleRow = Math.floor(Math.max(0, scrollTop) / safeRowHeight);
-    setClampedStart(firstVisibleRow - overscan);
+    const visibleEnd = Math.min(options.totalCount(), firstVisibleRow + rowsInView);
+    const availableBuffer = Math.max(0, normalizedWindowSize() - rowsInView);
+    const edgeRunway = Math.min(
+      Math.floor(availableBuffer / 2),
+      Math.max(DEFAULT_EDGE_RUNWAY_ROWS, rowsInView),
+    );
+    const direction = Math.sign(firstVisibleRow - lastFirstVisibleRow);
+    lastFirstVisibleRow = firstVisibleRow;
+
+    const leadingRunway = firstVisibleRow - startIndex();
+    const trailingRunway = endIndex() - visibleEnd;
+    const viewportIsMounted = leadingRunway >= 0 && trailingRunway >= 0;
+    if (
+      viewportIsMounted &&
+      ((direction > 0 && trailingRunway > edgeRunway) ||
+        (direction < 0 && leadingRunway > edgeRunway) ||
+        (direction === 0 && leadingRunway >= edgeRunway && trailingRunway >= edgeRunway))
+    ) {
+      return;
+    }
+
+    const directionalRunway = Math.max(edgeRunway, availableBuffer - edgeRunway);
+    const rowsBeforeViewport =
+      direction < 0
+        ? directionalRunway
+        : direction > 0
+          ? edgeRunway
+          : Math.min(DEFAULT_OVERSCAN_ROWS, availableBuffer);
+    setClampedStart(firstVisibleRow - rowsBeforeViewport);
   };
 
   const isVisible = (index: number) => {

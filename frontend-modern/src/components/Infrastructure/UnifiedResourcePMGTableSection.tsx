@@ -1,4 +1,4 @@
-import { For, Show, createMemo } from 'solid-js';
+import { Show, createMemo } from 'solid-js';
 import type { Component } from 'solid-js';
 import { formatUptime } from '@/utils/format';
 import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
@@ -37,6 +37,7 @@ import {
 import { getPMGTableRow, isResourceOnline } from './unifiedResourceTableModel';
 import { buildServiceDetailLinks } from './serviceDetailLinks';
 import { ResourceNameWithWebInterfaceLink } from '@/components/shared/WebInterfaceLink';
+import { PlatformWindowedRows } from '@/features/platformPage/PlatformWindowedRows';
 
 interface UnifiedResourcePMGTableSectionProps {
   tableProps: UnifiedResourceTableProps;
@@ -121,7 +122,7 @@ export const UnifiedResourcePMGTableSection: Component<UnifiedResourcePMGTableSe
           </TableRow>
         </TableHeader>
         <TableBody>
-          <For each={table.sortedPMGResources()}>
+          <PlatformWindowedRows items={table.sortedPMGResources} estimatedRowHeight={40}>
             {(resource) => {
               const isExpanded = createMemo(() => tableProps.expandedResourceId === resource.id);
               const isHighlighted = createMemo(
@@ -383,7 +384,7 @@ export const UnifiedResourcePMGTableSection: Component<UnifiedResourcePMGTableSe
                 </>
               );
             }}
-          </For>
+          </PlatformWindowedRows>
         </TableBody>
       </Table>
     </Show>

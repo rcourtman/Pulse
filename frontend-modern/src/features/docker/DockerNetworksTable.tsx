@@ -14,6 +14,7 @@ import {
   getPlatformTableHeadClassForKind,
   type PlatformTableContainerLayout,
   PlatformTableShell,
+  PlatformWindowedRows,
   withPlatformStatusCounts,
 } from '@/features/platformPage/sharedPlatformPage';
 import { useObservedElementWidth } from '@/hooks/useObservedElementWidth';
@@ -513,7 +514,7 @@ export const DockerNetworksTable: Component<DockerNetworksTableProps> = (props) 
             }
             body={
               <>
-                <For each={tableState.filtered()}>
+                <PlatformWindowedRows items={tableState.filtered} estimatedRowHeight={32}>
                   {(resource) => {
                     const detailRowId = () => drawer.detailRowId(resource);
                     const isExpanded = () => drawer.isExpanded(resource);
@@ -606,7 +607,7 @@ export const DockerNetworksTable: Component<DockerNetworksTableProps> = (props) 
                       </>
                     );
                   }}
-                </For>
+                </PlatformWindowedRows>
               </>
             }
           />

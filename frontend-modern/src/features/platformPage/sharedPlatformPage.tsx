@@ -49,6 +49,8 @@ import {
 } from './platformEstateOverviewModel';
 
 export type { PlatformTableFilterOption };
+export { PlatformWindowedRows } from './PlatformWindowedRows';
+export { PlatformWindowedList } from './PlatformWindowedList';
 
 // Decorates every status option with the row count the table would show if
 // that option were selected. Callers pass the same predicate the table's

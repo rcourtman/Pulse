@@ -330,11 +330,13 @@ describe('ResourceTable', () => {
       expect(alertResourceTableDesktopSource).toContain(
         'export function AlertResourceTableDesktop',
       );
+      expect(alertResourceTableDesktopSource).toContain('PlatformWindowedRows');
       expect(alertResourceTableDesktopSource).toContain('AlertResourceTableRow');
       expect(alertResourceTableDesktopSource).toContain('AlertResourceGroupHeader');
       expect(alertResourceTableDesktopSource).toContain('ActionIconButton');
       expect(alertResourceTableDesktopSource).not.toContain(rawSvgTag);
       expect(alertResourceTableMobileSource).toContain('export function AlertResourceTableMobile');
+      expect(alertResourceTableMobileSource).toContain('PlatformWindowedList');
       expect(alertResourceTableMobileSource).toContain('AlertResourceGroupHeader');
       expect(alertResourceTableMobileSource).toContain('FormTextarea');
       expect(alertResourceTableMobileSource).toContain('ActionIconButton');

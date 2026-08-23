@@ -1,4 +1,4 @@
-import { For, Show, createEffect } from 'solid-js';
+import { For, Show, createEffect, createMemo } from 'solid-js';
 import ChevronDown from 'lucide-solid/icons/chevron-down';
 import Trash2 from 'lucide-solid/icons/trash-2';
 
@@ -24,6 +24,7 @@ import {
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
 } from '@/features/platformPage/sharedPlatformPage';
+import { PlatformWindowedRows } from '@/features/platformPage/PlatformWindowedRows';
 import { AlertResourceTableRow } from './AlertResourceTableRow';
 import { AlertResourceGroupHeader } from './AlertResourceGroupHeader';
 import {
@@ -49,7 +50,10 @@ import {
   isAlertResourceMetricOff,
   normalizeAlertResourceMetricKey,
 } from './alertResourceTableModel';
-import type { OfflineState, ResourceTableProps } from './ResourceTable';
+import type { OfflineState, Resource, ResourceTableProps } from './ResourceTable';
+
+type AlertResourceRenderItem =
+  { kind: 'group'; key: string } | { kind: 'resource'; key: string; resource: Resource };
 
 const OFFLINE_ALERTS_TOOLTIP =
   'Toggle default behavior for powered-off or connectivity alerts for this resource type.';
@@ -116,6 +120,59 @@ export function AlertResourceTableDesktop(props: AlertResourceTableDesktopProps)
     titleDisabled?: string;
     titleWhenDisabled?: string;
   }) => <StatusBadge {...config} />;
+
+  const resourceRows = createMemo<AlertResourceRenderItem[]>(() => {
+    if (props.table.groupedResources) {
+      const rows: AlertResourceRenderItem[] = [];
+      for (const [groupKey, resources] of Object.entries(props.table.groupedResources).sort(
+        ([left], [right]) => left.localeCompare(right),
+      )) {
+        rows.push({ kind: 'group', key: `group:${groupKey}` });
+        for (const resource of resources) {
+          rows.push({ kind: 'resource', key: `resource:${resource.id}`, resource });
+        }
+      }
+      return rows;
+    }
+    return (props.table.resources ?? []).map((resource) => ({
+      kind: 'resource' as const,
+      key: `resource:${resource.id}`,
+      resource,
+    }));
+  });
+
+  const renderResourceRow = (resource: Resource) => (
+    <AlertResourceTableRow
+      resource={resource}
+      columns={props.table.columns}
+      editingId={props.table.editingId}
+      editingThresholds={props.table.editingThresholds}
+      setEditingThresholds={props.table.setEditingThresholds}
+      formatMetricValue={props.table.formatMetricValue}
+      hasActiveAlert={props.table.hasActiveAlert}
+      onEdit={props.table.onEdit}
+      onSaveEdit={props.table.onSaveEdit}
+      onCancelEdit={props.table.onCancelEdit}
+      onRemoveOverride={props.table.onRemoveOverride}
+      onToggleDisabled={props.table.onToggleDisabled}
+      onToggleNodeConnectivity={props.table.onToggleNodeConnectivity}
+      showOfflineAlertsColumn={props.table.showOfflineAlertsColumn}
+      globalOfflineSeverity={props.table.globalOfflineSeverity}
+      onSetOfflineState={props.table.onSetOfflineState}
+      onToggleBackup={props.table.onToggleBackup}
+      onToggleSnapshot={props.table.onToggleSnapshot}
+      onConfigureResourceIntent={props.table.onConfigureResourceIntent}
+      globalDisableFlag={props.table.globalDisableFlag}
+      globalDisableOfflineFlag={props.table.globalDisableOfflineFlag}
+      editingNote={props.table.editingNote}
+      setEditingNote={props.table.setEditingNote}
+      activeMetricInput={props.activeMetricInput}
+      setActiveMetricInput={props.setActiveMetricInput}
+      showBulkSelection={Boolean(props.table.onBulkEdit)}
+      selected={props.selectedIds().has(resource.id)}
+      onToggleSelection={(checked) => props.toggleSelection(resource.id, checked)}
+    />
+  );
 
   return (
     <Card padding="none" class="overflow-hidden border border-border" border={false} tone="card">
@@ -485,109 +542,39 @@ export function AlertResourceTableDesktop(props: AlertResourceTableDesktopProps)
               </TableCell>
             </TableRow>
           </Show>
-          <Show when={props.table.groupedResources}>
-            <For
-              each={Object.entries(props.table.groupedResources || {}).sort(([a], [b]) =>
-                a.localeCompare(b),
-              )}
-            >
-              {([nodeName, resources]) => (
-                <>
+          <Show when={resourceRows().length > 0}>
+            <PlatformWindowedRows items={resourceRows} estimatedRowHeight={40}>
+              {(item) =>
+                item.kind === 'group' ? (
                   <TableRow class={getGroupedTableRowClass()}>
                     <TableCell colspan={totalColumnCount()} class={getGroupedTableRowCellClass()}>
                       <AlertResourceGroupHeader
-                        groupKey={nodeName}
-                        meta={props.table.groupHeaderMeta?.[nodeName]}
+                        groupKey={item.key.slice('group:'.length)}
+                        meta={props.table.groupHeaderMeta?.[item.key.slice('group:'.length)]}
                       />
                     </TableCell>
                   </TableRow>
-                  <For each={resources}>
-                    {(resource) => (
-                      <AlertResourceTableRow
-                        resource={resource}
-                        columns={props.table.columns}
-                        editingId={props.table.editingId}
-                        editingThresholds={props.table.editingThresholds}
-                        setEditingThresholds={props.table.setEditingThresholds}
-                        formatMetricValue={props.table.formatMetricValue}
-                        hasActiveAlert={props.table.hasActiveAlert}
-                        onEdit={props.table.onEdit}
-                        onSaveEdit={props.table.onSaveEdit}
-                        onCancelEdit={props.table.onCancelEdit}
-                        onRemoveOverride={props.table.onRemoveOverride}
-                        onToggleDisabled={props.table.onToggleDisabled}
-                        onToggleNodeConnectivity={props.table.onToggleNodeConnectivity}
-                        showOfflineAlertsColumn={props.table.showOfflineAlertsColumn}
-                        globalOfflineSeverity={props.table.globalOfflineSeverity}
-                        onSetOfflineState={props.table.onSetOfflineState}
-                        onToggleBackup={props.table.onToggleBackup}
-                        onToggleSnapshot={props.table.onToggleSnapshot}
-                        onConfigureResourceIntent={props.table.onConfigureResourceIntent}
-                        globalDisableFlag={props.table.globalDisableFlag}
-                        globalDisableOfflineFlag={props.table.globalDisableOfflineFlag}
-                        editingNote={props.table.editingNote}
-                        setEditingNote={props.table.setEditingNote}
-                        activeMetricInput={props.activeMetricInput}
-                        setActiveMetricInput={props.setActiveMetricInput}
-                        showBulkSelection={Boolean(props.table.onBulkEdit)}
-                        selected={props.selectedIds().has(resource.id)}
-                        onToggleSelection={(checked) => props.toggleSelection(resource.id, checked)}
-                      />
-                    )}
-                  </For>
-                </>
-              )}
-            </For>
-          </Show>
-          <Show when={!props.table.groupedResources && props.table.resources}>
-            <Show
-              when={props.table.resources && props.table.resources.length === 0}
-              fallback={
-                <For each={props.table.resources}>
-                  {(resource) => (
-                    <AlertResourceTableRow
-                      resource={resource}
-                      columns={props.table.columns}
-                      editingId={props.table.editingId}
-                      editingThresholds={props.table.editingThresholds}
-                      setEditingThresholds={props.table.setEditingThresholds}
-                      formatMetricValue={props.table.formatMetricValue}
-                      hasActiveAlert={props.table.hasActiveAlert}
-                      onEdit={props.table.onEdit}
-                      onSaveEdit={props.table.onSaveEdit}
-                      onCancelEdit={props.table.onCancelEdit}
-                      onRemoveOverride={props.table.onRemoveOverride}
-                      onToggleDisabled={props.table.onToggleDisabled}
-                      onToggleNodeConnectivity={props.table.onToggleNodeConnectivity}
-                      showOfflineAlertsColumn={props.table.showOfflineAlertsColumn}
-                      globalOfflineSeverity={props.table.globalOfflineSeverity}
-                      onSetOfflineState={props.table.onSetOfflineState}
-                      onToggleBackup={props.table.onToggleBackup}
-                      onToggleSnapshot={props.table.onToggleSnapshot}
-                      onConfigureResourceIntent={props.table.onConfigureResourceIntent}
-                      globalDisableFlag={props.table.globalDisableFlag}
-                      globalDisableOfflineFlag={props.table.globalDisableOfflineFlag}
-                      editingNote={props.table.editingNote}
-                      setEditingNote={props.table.setEditingNote}
-                      activeMetricInput={props.activeMetricInput}
-                      setActiveMetricInput={props.setActiveMetricInput}
-                      showBulkSelection={Boolean(props.table.onBulkEdit)}
-                      selected={props.selectedIds().has(resource.id)}
-                      onToggleSelection={(checked) => props.toggleSelection(resource.id, checked)}
-                    />
-                  )}
-                </For>
+                ) : (
+                  renderResourceRow(item.resource)
+                )
               }
-            >
-              <TableRow>
-                <TableCell
-                  colspan={totalColumnCount()}
-                  class={`${getPlatformTableCellClassForKind('badge')} px-4 py-8 text-sm text-muted`}
-                >
-                  {getAlertResourceTableNoResultsState(props.table.title)}
-                </TableCell>
-              </TableRow>
-            </Show>
+            </PlatformWindowedRows>
+          </Show>
+          <Show
+            when={
+              !props.table.groupedResources &&
+              props.table.resources &&
+              props.table.resources.length === 0
+            }
+          >
+            <TableRow>
+              <TableCell
+                colspan={totalColumnCount()}
+                class={`${getPlatformTableCellClassForKind('badge')} px-4 py-8 text-sm text-muted`}
+              >
+                {getAlertResourceTableNoResultsState(props.table.title)}
+              </TableCell>
+            </TableRow>
           </Show>
           <Show when={props.hasRows() === false}>
             <TableRow>

@@ -22,6 +22,7 @@ function createHook(
     result = useGroupedTableWindowing({
       totalRowCount: opts.totalRowCount,
       windowSize: opts.windowSize,
+      enableThreshold: opts.enableThreshold,
       enabled: opts.enabled,
       revealIndex: opts.revealIndex,
       rowIndexAtOffset: opts.rowIndexAtOffset,
@@ -49,8 +50,8 @@ describe('useGroupedTableWindowing', () => {
   // isWindowed
   // ──────────────────────────────────────────────────────────────
   describe('isWindowed', () => {
-    it('returns false when total rows are below default threshold (250)', () => {
-      const hook = setup({ totalRowCount: () => 200 });
+    it('returns false when total rows are below the default mounted-row budget', () => {
+      const hook = setup({ totalRowCount: () => 140 });
       expect(hook.isWindowed()).toBe(false);
     });
 
@@ -60,7 +61,7 @@ describe('useGroupedTableWindowing', () => {
     });
 
     it('returns false when total rows equal threshold (not exceeded)', () => {
-      const hook = setup({ totalRowCount: () => 250 });
+      const hook = setup({ totalRowCount: () => 140 });
       expect(hook.isWindowed()).toBe(false);
     });
 
@@ -77,6 +78,11 @@ describe('useGroupedTableWindowing', () => {
     it('returns false when total is 0 even if enabled=true', () => {
       const hook = setup({ totalRowCount: () => 0, enabled: () => true });
       expect(hook.isWindowed()).toBe(false);
+    });
+
+    it('respects a custom activation threshold', () => {
+      const hook = setup({ totalRowCount: () => 73, enableThreshold: 72 });
+      expect(hook.isWindowed()).toBe(true);
     });
   });
 
@@ -142,8 +148,8 @@ describe('useGroupedTableWindowing', () => {
   // ──────────────────────────────────────────────────────────────
   describe('mountedCount', () => {
     it('equals total when not windowed', () => {
-      const hook = setup({ totalRowCount: () => 200 });
-      expect(hook.mountedCount()).toBe(200);
+      const hook = setup({ totalRowCount: () => 100 });
+      expect(hook.mountedCount()).toBe(100);
     });
 
     it('equals window size when windowed and total > windowSize', () => {

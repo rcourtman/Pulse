@@ -797,6 +797,7 @@ container inventory table.
 13. `frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx` shared with `storage-recovery`: Proxmox workload coverage rows are both a storage/recovery protection-posture surface and a unified-resource identity consumer boundary.
 14. `frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx` shared with `storage-recovery`: Proxmox recoverable workload table rows are both a storage/recovery coverage surface and a unified-resource platform-table consumer boundary.
 15. `frontend-modern/src/routing/routePreload.ts` shared with `frontend-primitives`, `performance-and-scalability`: the app-shell route preload registry is a canonical frontend shell boundary, an authenticated hot-path performance boundary, and the entry point for the unified-resource Actions workspace.
+16. `frontend-modern/src/stores/websocket-global.ts` shared with `performance-and-scalability`: the process-wide realtime store owner is both a unified-resource state boundary and a fleet-scale connection and reconciliation hot path.
 16. `frontend-modern/src/utils/platformSupportManifest.generated.ts` shared with `frontend-primitives`: the generated platform support projection is both a canonical unified-resource platform union boundary and a shared frontend source/platform vocabulary boundary.
     It must carry the manifest `surface_kind` distinction so `docker` remains
     machine-readable as a `runtime-lens` while owning infrastructure sources
@@ -1159,6 +1160,15 @@ AI-only summary payloads, or page-local heuristics.
    and always recompute the bounded agent/host coalescing set. Incremental and
    full-snapshot paths must therefore produce the same canonical host identity,
    labels, and compatibility fields without cloning the entire estate per tick.
+   The connection store publishes each reconciliation's changed IDs and resource
+   revision. `useUnifiedResources` applies that revision to the shared
+   all-resources cache once and derives type-filtered route projections from the
+   canonical result. Route-prefetch and route-realtime activation are separate:
+   a prefetched hidden surface may retain REST data without subscribing its full
+   projection to every realtime tick, and activation catches up from the shared
+   cache. Richer REST-only facets are promoted into that cache before thinner
+   realtime deltas are applied, so the optimization cannot discard disk I/O,
+   PBS, policy, or provider metadata.
    That same unified-resource owner also defines the canonical transport
    projection for operator-facing resources: `/api/resources` and websocket
    `state.resources` must share `ContractResourceType`, canonical display

@@ -524,12 +524,20 @@ explicit uncovered and failed-latest-task states, rather than from source-detail
 row counts alone. Large-estate rendering must preserve that same full result
 set without mounting every row. `useProxmoxBackupTableWindowing.ts` routes both
 the coverage table and dated artifact feed through the shared table-window math
-once the result set crosses 500 items, keeps at most 140 row/header items
-mounted, and preserves continuous scroll height with table spacers. Filtering,
+once the result set exceeds the mounted budget, keeps at most 140 desktop or 36
+phone row/header items mounted, and preserves continuous scroll height with
+table spacers. Filtering,
 sorting, health counts, and day-group counts continue to operate over the
 complete client-side result set; windowing must not become pagination, a partial
 count, or a recovery-local `Next` / `Load more` control. Expanded coverage
 evidence remains owned by the visible workload row.
+The Proxmox shell hydrates Overview, Storage, Replication, Backups, Ceph, and
+Mail from route-scoped resource families. Background hydration is staggered on
+phones, only the visible tab consumes realtime reconciliation, and the phone
+shell retains at most the two most-recent tab trees. Storage is prewarmed for
+the common Overview/Storage transition; hidden route-state effects remain
+dormant and a forced Proxmox storage scope is not serialized as redundant URL
+state.
 PBS server/datastore rows may display backup counts, but the
 counts must come from the PBS backup API artifact identity, not from a
 datastore-capacity approximation. The table owns which PBS artifact count is

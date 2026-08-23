@@ -36,6 +36,7 @@ import {
   PlatformTableMetricFallback,
   PlatformTablePreviewToggle,
   PlatformTableShell,
+  PlatformWindowedRows,
   createPlatformTablePreview,
   createPlatformTableSortState,
   formatPlatformTableIntegerValue,
@@ -354,7 +355,7 @@ export const ProxmoxNodesTable: Component<{
             </For>
           }
           body={
-            <For each={nodePreview.visibleRows()}>
+            <PlatformWindowedRows items={nodePreview.visibleRows} estimatedRowHeight={40}>
               {(node) => {
                 const name = () => asTrimmedString(node.name) || node.id;
                 const nativeNodeName = () => asTrimmedString(node.proxmox?.nodeName) ?? '';
@@ -752,7 +753,7 @@ export const ProxmoxNodesTable: Component<{
                   </>
                 );
               }}
-            </For>
+            </PlatformWindowedRows>
           }
         />
       </Show>

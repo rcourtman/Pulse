@@ -247,6 +247,11 @@ export function createWebSocketStore(url: string) {
   const [activeAlerts, setActiveAlerts] = createStore<Record<string, Alert>>({});
   const [recentlyResolved, setRecentlyResolved] = createStore<Record<string, ResolvedAlert>>({});
   const [updateProgress, setUpdateProgress] = createSignal<unknown>(null);
+  let resourceChangeVersion = 0;
+  const [resourceChange, setResourceChange] = createSignal<{
+    version: number;
+    changedIds: ReadonlySet<string> | null;
+  }>({ version: 0, changedIds: null });
 
   // Track alerts with pending acknowledgment changes to prevent race conditions
   const pendingAckChanges = new Map<string, { ack: boolean; previousAckTime?: string }>();
@@ -451,6 +456,10 @@ export function createWebSocketStore(url: string) {
       changedCount: changedResourceIds?.size ?? nextResources.length,
     });
     setState('resources', reconcile(nextResources, { key: 'id' }));
+    setResourceChange({
+      version: ++resourceChangeVersion,
+      changedIds: changedResourceIds ? new Set(changedResourceIds) : null,
+    });
     syncContainerCommands(nextResources, changedResourceIds);
   };
 
@@ -1157,6 +1166,7 @@ export function createWebSocketStore(url: string) {
     reconnecting,
     initialDataReceived,
     updateProgress,
+    resourceChange,
     shutdown,
     reconnect: () => {
       if (isDisposed) return;
@@ -1182,6 +1192,7 @@ export function createWebSocketStore(url: string) {
         setReconnecting(false);
         setInitialDataReceived(false);
         setUpdateProgress(null);
+        setResourceChange({ version: ++resourceChangeVersion, changedIds: null });
         setState(reconcile(createInitialState()));
         setActiveAlerts(reconcile({}));
         setRecentlyResolved(reconcile({}));

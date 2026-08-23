@@ -24,6 +24,7 @@ import {
   type PlatformTableFilterOption,
   PlatformTableEmptyState,
   PlatformTableShell,
+  PlatformWindowedRows,
   withPlatformStatusCounts,
 } from '@/features/platformPage/sharedPlatformPage';
 import { PlatformResourceDetailToggleButton } from '@/features/platformPage/PlatformResourceDetailTableRow';
@@ -402,7 +403,7 @@ export const ProxmoxCephTable: Component<{
             }
             body={
               <>
-                <For each={filtered()}>
+                <PlatformWindowedRows items={filtered} estimatedRowHeight={32}>
                   {(cluster) => {
                     const ind = indicatorFor(classify(cluster));
                     const name = asTrimmedString(cluster.name) || cluster.id;
@@ -535,7 +536,7 @@ export const ProxmoxCephTable: Component<{
                       </>
                     );
                   }}
-                </For>
+                </PlatformWindowedRows>
               </>
             }
           />

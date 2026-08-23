@@ -1,4 +1,4 @@
-import { For, Show, createMemo, type Component, type JSX } from 'solid-js';
+import { Show, createMemo, type Component, type JSX } from 'solid-js';
 import {
   InlineDetailPanel,
   compactDetailRows,
@@ -12,6 +12,7 @@ import { StatusDot } from '@/components/shared/StatusDot';
 import { TableCell, TableRow } from '@/components/shared/Table';
 import { filterChipStatusDot } from '@/components/shared/FilterBar';
 import {
+  PlatformWindowedRows,
   PlatformSortableTableHead,
   PlatformTableDateTimeValue,
   PlatformTableEmptyState,
@@ -367,7 +368,7 @@ export const VsphereActivityTable: Component<{
             }
             body={
               <>
-                <For each={sortedRows()}>
+                <PlatformWindowedRows items={sortedRows} estimatedRowHeight={32}>
                   {(activity) => {
                     const meta = () => activity.resource.vmware;
                     const detailRowId = () => drawer.detailRowId(activity);
@@ -476,7 +477,7 @@ export const VsphereActivityTable: Component<{
                       </>
                     );
                   }}
-                </For>
+                </PlatformWindowedRows>
               </>
             }
           />

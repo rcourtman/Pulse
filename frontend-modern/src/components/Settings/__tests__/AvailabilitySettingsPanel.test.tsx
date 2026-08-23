@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AvailabilityTargetsAPI, type AvailabilityTarget } from '@/api/availabilityTargets';
+import availabilitySettingsPanelSource from '../AvailabilitySettingsPanel.tsx?raw';
 import { AvailabilitySettingsPanel } from '../AvailabilitySettingsPanel';
 
 const routeState = vi.hoisted(() => ({
@@ -101,6 +102,11 @@ describe('AvailabilitySettingsPanel', () => {
   });
 
   afterEach(() => cleanup());
+
+  it('keeps large target inventories on the shared bounded list renderer', () => {
+    expect(availabilitySettingsPanelSource).toContain('PlatformWindowedList');
+    expect(availabilitySettingsPanelSource).toContain('estimatedItemHeight={92}');
+  });
 
   it('lists monitor-only MQTT and HTTP endpoint checks in the monitoring home', async () => {
     render(() => <AvailabilitySettingsPanel />);

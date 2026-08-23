@@ -1,6 +1,7 @@
-import { For, Show, createMemo, type Component } from 'solid-js';
+import { Show, createMemo, type Component } from 'solid-js';
 import { TableCell, TableRow } from '@/components/shared/Table';
 import {
+  PlatformWindowedRows,
   PLATFORM_HEALTH_FILTER_OPTIONS,
   PlatformResponsiveTableLabel,
   PlatformSortableTableHead,
@@ -183,7 +184,7 @@ export const DockerImagesTable: Component<
             }
             body={
               <>
-                <For each={sortedRows()}>
+                <PlatformWindowedRows items={sortedRows} estimatedRowHeight={32}>
                   {(resource) => {
                     const operational = () =>
                       getDockerImageOperationalPresentation(
@@ -254,7 +255,7 @@ export const DockerImagesTable: Component<
                       </>
                     );
                   }}
-                </For>
+                </PlatformWindowedRows>
               </>
             }
           />

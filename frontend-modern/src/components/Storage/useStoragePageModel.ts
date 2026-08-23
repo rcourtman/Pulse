@@ -93,6 +93,7 @@ export const useStoragePageModel = (options: UseStoragePageModelOptions = {}) =>
   } = useStoragePageFilters({
     location,
     navigate,
+    lockedSourceFilter: options.forcedSourceFilter,
   });
   const storageSummaryCharts = useStorageSummaryCharts({
     timeRange: summaryTimeRange,

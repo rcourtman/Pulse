@@ -38,6 +38,7 @@ import {
   getPlatformResourceDetailRowClass,
 } from '@/features/platformPage/PlatformResourceDetailTableRow';
 import {
+  PlatformWindowedRows,
   PLATFORM_HEALTH_FILTER_OPTIONS,
   PlatformTableEmptyState,
   PlatformTableMetricFallback,
@@ -1467,7 +1468,7 @@ export const AgentsMachinesTable: Component<{
             }
             body={
               <>
-                <For each={sortedMachines()}>
+                <PlatformWindowedRows items={sortedMachines} estimatedRowHeight={32}>
                   {(machine) => {
                     const name = () => asTrimmedString(machine.name) || machine.id;
                     const hostname = () =>
@@ -1872,7 +1873,7 @@ export const AgentsMachinesTable: Component<{
                       </>
                     );
                   }}
-                </For>
+                </PlatformWindowedRows>
               </>
             }
           />

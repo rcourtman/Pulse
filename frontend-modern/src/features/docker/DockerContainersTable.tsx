@@ -42,6 +42,7 @@ import {
   getPlatformTableFiniteMetric,
   getPlatformTableCellClassForKind,
   PlatformTableShell,
+  PlatformWindowedRows,
   type PlatformTableSortValue,
   withPlatformStatusCounts,
 } from '@/features/platformPage/sharedPlatformPage';
@@ -95,6 +96,10 @@ type DockerContainerHostGroup = {
   hostResource?: Resource;
   rows: Resource[];
 };
+
+type DockerContainerRenderItem =
+  | { kind: 'group'; key: string; group: DockerContainerHostGroup }
+  | { kind: 'resource'; key: string; resource: Resource };
 
 const networkLabel = (network: DockerNetwork): string => {
   const name = asTrimmedString(network.name);
@@ -422,6 +427,16 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
     return [...groups.entries()]
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([host, rows]) => ({ host, hostResource: hostResourceByName().get(host), rows }));
+  });
+  const groupedRenderItems = createMemo<DockerContainerRenderItem[]>(() => {
+    const items: DockerContainerRenderItem[] = [];
+    for (const group of groupedRows()) {
+      items.push({ kind: 'group', key: `group:${group.host}`, group });
+      for (const resource of group.rows) {
+        items.push({ kind: 'resource', key: `resource:${resource.id}`, resource });
+      }
+    }
+    return items;
   });
   // Runtime is host-level data repeated on every container row; it only
   // informs when the fleet actually mixes runtimes (docker vs podman).
@@ -824,17 +839,18 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
               <Show
                 when={groupingMode() === 'grouped'}
                 fallback={
-                  <For each={sortedRows()}>{(resource) => renderContainerRow(resource)}</For>
+                  <PlatformWindowedRows items={sortedRows} estimatedRowHeight={32}>
+                    {(resource) => renderContainerRow(resource)}
+                  </PlatformWindowedRows>
                 }
               >
-                <For each={groupedRows()}>
-                  {(group) => (
-                    <>
-                      {renderHostGroupHeader(group)}
-                      <For each={group.rows}>{(resource) => renderContainerRow(resource)}</For>
-                    </>
-                  )}
-                </For>
+                <PlatformWindowedRows items={groupedRenderItems} estimatedRowHeight={32}>
+                  {(item) =>
+                    item.kind === 'group'
+                      ? renderHostGroupHeader(item.group)
+                      : renderContainerRow(item.resource)
+                  }
+                </PlatformWindowedRows>
               </Show>
             }
           />

@@ -1,4 +1,4 @@
-import { For, Show, createMemo, type Component, type JSX } from 'solid-js';
+import { Show, createMemo, type Component, type JSX } from 'solid-js';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { ResponsiveMetricCell } from '@/components/shared/responsive';
 import { StackedMemoryBar } from '@/components/Workloads/StackedMemoryBar';
@@ -10,6 +10,7 @@ import { buildMetricKeyForUnifiedResource } from '@/utils/metricsKeys';
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import { unifiedPlatformOverrideIdCandidates } from '@/features/alerts/alertOverridesModel';
 import {
+  PlatformWindowedRows,
   PlatformSortableTableHead,
   PlatformResponsiveTableLabel,
   PlatformTableMetricFallback,
@@ -312,7 +313,7 @@ export const TrueNASAppsTable: Component<{
             }
             body={
               <>
-                <For each={sortedRows()}>
+                <PlatformWindowedRows items={sortedRows} estimatedRowHeight={32}>
                   {(resource) => {
                     const app = () => appMeta(resource);
                     const name = () =>
@@ -455,7 +456,7 @@ export const TrueNASAppsTable: Component<{
                       </>
                     );
                   }}
-                </For>
+                </PlatformWindowedRows>
               </>
             }
           />

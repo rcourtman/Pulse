@@ -6,6 +6,8 @@ export interface UseGroupedTableWindowingOptions {
   totalRowCount: () => number;
   /** Maximum rows to mount */
   windowSize?: number;
+  /** Row count above which the bounded window activates */
+  enableThreshold?: number;
   /** Whether windowing is enabled */
   enabled?: () => boolean;
   /** Index to ensure is visible (selection/deep-link reveal) */
@@ -38,7 +40,7 @@ export interface UseGroupedTableWindowingResult {
 const DEFAULT_WINDOW_SIZE = 140;
 // Keep even medium estates virtualized. On mobile, mounting a few hundred
 // metric-heavy rows is already enough to cause long layout and paint tasks.
-const DEFAULT_ENABLE_THRESHOLD = 250;
+const DEFAULT_ENABLE_THRESHOLD = DEFAULT_WINDOW_SIZE;
 const DEFAULT_OVERSCAN_ROWS = 20;
 const DEFAULT_EDGE_RUNWAY_ROWS = 24;
 
@@ -54,7 +56,8 @@ export const useGroupedTableWindowing = (
 
   const isWindowed = createMemo(() => {
     const total = options.totalRowCount();
-    const enabled = options.enabled?.() ?? total > DEFAULT_ENABLE_THRESHOLD;
+    const threshold = Math.max(0, Math.floor(options.enableThreshold ?? DEFAULT_ENABLE_THRESHOLD));
+    const enabled = options.enabled?.() ?? total > threshold;
     return enabled && total > 0;
   });
 

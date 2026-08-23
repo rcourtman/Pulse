@@ -1,5 +1,14 @@
 import { useLocation } from '@solidjs/router';
-import { Show, createMemo, createResource, type Accessor } from 'solid-js';
+import {
+  Show,
+  createEffect,
+  createMemo,
+  createResource,
+  createSignal,
+  onCleanup,
+  onMount,
+  type Accessor,
+} from 'solid-js';
 import StorageSurface from '@/components/Storage/Storage';
 import { WorkloadsFilter } from '@/components/Workloads/WorkloadsFilter';
 import { WorkloadsSurface } from '@/components/Workloads/WorkloadsSurface';
@@ -52,24 +61,28 @@ import { updateStore } from '@/stores/updates';
 import {
   PROXMOX_TAB_SPECS,
   buildProxmoxPageModel,
-  buildVisibleProxmoxTabSpecs,
+  buildVisibleProxmoxTabSpecsFromCounts,
   type ProxmoxPageModel,
   type ProxmoxPageTabId,
 } from './proxmoxPageModel';
 
-// `datastore`, `dataset`, and ZFS-style `pool` are not first-class
-// resource type tokens at the API boundary — they all collapse to
-// `storage` (with `storage.topology` differentiating dataset vs pool) or
-// `ceph` (for Ceph pools). Including them in the type filter triggers a
-// 400 from `/api/resources` which surfaces as "Could not load Proxmox
-// resources" in the UI. The page model still filters those topologies
-// client-side from the canonical `storage` rows.
-const PROXMOX_RESOURCE_QUERY =
-  'type=agent,vm,system-container,oci-container,storage,physical_disk,ceph,pbs,pmg';
+// Each workflow hydrates only the resource families it consumes. The first
+// REST page also carries global type aggregations, so evidence-gated tabs do
+// not require the old 1,000+ row workspace request.
+const PROXMOX_RESOURCE_QUERY_BY_TAB: Record<ProxmoxPageTabId, string> = {
+  overview: 'type=agent,vm,system-container,oci-container',
+  storage: 'type=agent,pbs,storage,physical_disk',
+  replication: 'type=agent',
+  backups: 'type=agent,vm,system-container,pbs',
+  ceph: 'type=ceph',
+  mail: 'type=pmg',
+};
 
 const PROXMOX_PLATFORM_FILTER = 'proxmox-all';
 const PROXMOX_WORKLOAD_STATUS_STORAGE_SCOPE = 'proxmox';
 const PROXMOX_WORKLOAD_EXCLUDED_TYPES = ['app-container'] as const;
+const PHONE_MOUNTED_TAB_LIMIT = 2;
+const PHONE_BACKGROUND_HYDRATION_INTERVAL_MS = 750;
 const VALID_TABS = new Set<ProxmoxPageTabId>(PROXMOX_TAB_SPECS.map((tab) => tab.id));
 const PROXMOX_WORKLOAD_STATUS_OPTIONS: readonly WorkloadsStatusOption[] = [
   { value: 'all', label: 'All' },
@@ -84,14 +97,13 @@ const EMPTY_PROXMOX_PAGE_MODEL = buildProxmoxPageModel([]);
 
 export function ProxmoxPageSurface() {
   const location = useLocation();
-  const { resources, loading, error, refetch } = useUnifiedResources({
-    query: PROXMOX_RESOURCE_QUERY,
-    cacheKey: 'proxmox-workspace',
-    initialHydration: 'prefer-ws-then-rest',
+  const phoneViewport = typeof window !== 'undefined' && window.innerWidth < 640;
+  const requestedTab = createMemo<ProxmoxPageTabId>(() => {
+    const segment = location.pathname.split('/').filter(Boolean)[1] as ProxmoxPageTabId | undefined;
+    return segment && VALID_TABS.has(segment) ? segment : 'overview';
   });
-  const model = createMemo(() =>
-    buildProxmoxPageModel(Array.isArray(resources()) ? resources() : []),
-  );
+  const [resourceAggregations, setResourceAggregations] =
+    createSignal<ReturnType<ReturnType<typeof useUnifiedResources>['aggregations']>>(null);
   // Replication jobs come straight from /api/replication/jobs (they bypass
   // the unified-resource pipeline), so the surface owns the fetch: the job
   // count gates the Replication tab and the same data feeds the table.
@@ -101,14 +113,174 @@ export function ProxmoxPageSurface() {
   const replicationJobCount = createMemo(() =>
     replicationJobs.error ? 0 : (replicationJobs() ?? []).length,
   );
-  const visibleTabs = createMemo(() => buildVisibleProxmoxTabSpecs(model(), replicationJobCount()));
+  const visibleTabs = createMemo(() => {
+    const aggregations = resourceAggregations();
+    if (aggregations) {
+      return buildVisibleProxmoxTabSpecsFromCounts(aggregations.byType, replicationJobCount());
+    }
+    return PROXMOX_TAB_SPECS;
+  });
   const visibleTabIds = createMemo(
     () => new Set<ProxmoxPageTabId>(visibleTabs().map((tab) => tab.id)),
   );
   const activeTab = createMemo<ProxmoxPageTabId>(() => {
-    const segment = location.pathname.split('/').filter(Boolean)[1] as ProxmoxPageTabId | undefined;
-    if (!segment || !VALID_TABS.has(segment)) return 'overview';
-    return visibleTabIds().has(segment) ? segment : 'overview';
+    const requested = requestedTab();
+    return visibleTabIds().has(requested) ? requested : 'overview';
+  });
+  const [backgroundHydrationTabs, setBackgroundHydrationTabs] = createSignal<Set<ProxmoxPageTabId>>(
+    new Set(),
+  );
+  onMount(() => {
+    const hydrationQueue: ProxmoxPageTabId[] = [
+      'storage',
+      'backups',
+      'replication',
+      'ceph',
+      'mail',
+      'overview',
+    ];
+    const idleHandles: number[] = [];
+    const timeoutHandles: number[] = [];
+
+    const hydrateNext = (index: number) => {
+      if (index >= hydrationQueue.length) return;
+      const hydrate = () => {
+        setBackgroundHydrationTabs((current) => {
+          const next = new Set(current);
+          next.add(hydrationQueue[index]);
+          return next;
+        });
+        if (phoneViewport) {
+          timeoutHandles.push(
+            window.setTimeout(() => hydrateNext(index + 1), PHONE_BACKGROUND_HYDRATION_INTERVAL_MS),
+          );
+        } else {
+          hydrateNext(index + 1);
+        }
+      };
+
+      if (typeof window.requestIdleCallback === 'function') {
+        idleHandles.push(window.requestIdleCallback(hydrate, { timeout: 1_000 }));
+      } else {
+        timeoutHandles.push(window.setTimeout(hydrate, 250));
+      }
+    };
+
+    hydrateNext(0);
+    onCleanup(() => {
+      idleHandles.forEach((handle) => window.cancelIdleCallback(handle));
+      timeoutHandles.forEach((handle) => window.clearTimeout(handle));
+    });
+  });
+  const shouldHydrateTab = (tab: ProxmoxPageTabId) =>
+    activeTab() === tab || backgroundHydrationTabs().has(tab);
+  const overviewResources = useUnifiedResources({
+    query: PROXMOX_RESOURCE_QUERY_BY_TAB.overview,
+    cacheKey: 'proxmox-overview',
+    enabled: () => shouldHydrateTab('overview'),
+    realtimeEnabled: () => activeTab() === 'overview',
+  });
+  const storageResources = useUnifiedResources({
+    query: PROXMOX_RESOURCE_QUERY_BY_TAB.storage,
+    cacheKey: 'proxmox-storage-shell',
+    enabled: () => shouldHydrateTab('storage'),
+    realtimeEnabled: () => activeTab() === 'storage',
+  });
+  const replicationResources = useUnifiedResources({
+    query: PROXMOX_RESOURCE_QUERY_BY_TAB.replication,
+    cacheKey: 'proxmox-replication-shell',
+    enabled: () => shouldHydrateTab('replication'),
+    realtimeEnabled: () => activeTab() === 'replication',
+  });
+  const backupResources = useUnifiedResources({
+    query: PROXMOX_RESOURCE_QUERY_BY_TAB.backups,
+    cacheKey: 'proxmox-backups-shell',
+    enabled: () => shouldHydrateTab('backups'),
+    realtimeEnabled: () => activeTab() === 'backups',
+  });
+  const cephResources = useUnifiedResources({
+    query: PROXMOX_RESOURCE_QUERY_BY_TAB.ceph,
+    cacheKey: 'proxmox-ceph',
+    enabled: () => shouldHydrateTab('ceph'),
+    realtimeEnabled: () => activeTab() === 'ceph',
+  });
+  const mailResources = useUnifiedResources({
+    query: PROXMOX_RESOURCE_QUERY_BY_TAB.mail,
+    cacheKey: 'proxmox-mail',
+    enabled: () => shouldHydrateTab('mail'),
+    realtimeEnabled: () => activeTab() === 'mail',
+  });
+  const [mountedTabs, setMountedTabs] = createSignal<Set<ProxmoxPageTabId>>(
+    new Set([requestedTab()]),
+  );
+  const mountTab = (tab: ProxmoxPageTabId) =>
+    setMountedTabs((current) => {
+      const mountedOrder = [...current];
+      if (mountedOrder[mountedOrder.length - 1] === tab) return current;
+      const next = new Set(current);
+      // Refresh insertion order so the least-recently-used tab is evicted.
+      next.delete(tab);
+      next.add(tab);
+      if (phoneViewport) {
+        while (next.size > PHONE_MOUNTED_TAB_LIMIT) {
+          const oldestTab = next.values().next().value as ProxmoxPageTabId | undefined;
+          if (!oldestTab) break;
+          next.delete(oldestTab);
+        }
+      }
+      return next;
+    });
+  createEffect(() => {
+    mountTab(activeTab());
+  });
+  let storagePrewarmScheduled = false;
+  createEffect(() => {
+    if (
+      storagePrewarmScheduled ||
+      activeTab() !== 'overview' ||
+      !backgroundHydrationTabs().has('storage') ||
+      storageResources.resources().length === 0
+    ) {
+      return;
+    }
+    storagePrewarmScheduled = true;
+    if (typeof window.requestIdleCallback === 'function') {
+      const idleHandle = window.requestIdleCallback(() => mountTab('storage'), { timeout: 2_000 });
+      onCleanup(() => window.cancelIdleCallback(idleHandle));
+      return;
+    }
+    const timeoutHandle = window.setTimeout(() => mountTab('storage'), 250);
+    onCleanup(() => window.clearTimeout(timeoutHandle));
+  });
+  const resourceState = createMemo(() => {
+    switch (activeTab()) {
+      case 'storage':
+        return storageResources;
+      case 'replication':
+        return replicationResources;
+      case 'backups':
+        return backupResources;
+      case 'ceph':
+        return cephResources;
+      case 'mail':
+        return mailResources;
+      default:
+        return overviewResources;
+    }
+  });
+  const loading = () => resourceState().loading();
+  const error = () => resourceState().error();
+  const refetch = () => resourceState().refetch();
+  createEffect(() => {
+    const next = resourceState().aggregations?.();
+    if (next) setResourceAggregations(next);
+  });
+  const buildModel = (snapshot: Resource[] | undefined) =>
+    buildProxmoxPageModel(Array.isArray(snapshot) ? snapshot : []);
+  const overviewModel = createMemo(() => buildModel(overviewResources.resources()));
+  const model = createMemo(() => {
+    if (activeTab() === 'overview') return overviewModel();
+    return buildModel(resourceState().resources());
   });
   const agentUpdateTargetVersion = createMemo(
     () => updateStore.versionInfo()?.agentUpdateTargetVersion,
@@ -211,10 +383,15 @@ export function ProxmoxPageSurface() {
               nodes={outdatedSensorSetupNodes()}
               actionHref={buildInfrastructureWorkspacePath()}
             />
-            <Show when={activeTab() === 'overview'}>
-              <div class="space-y-4">
+            <Show when={mountedTabs().has('overview')}>
+              <div
+                class="space-y-4"
+                classList={{ hidden: activeTab() !== 'overview' }}
+                aria-hidden={activeTab() !== 'overview' ? 'true' : undefined}
+              >
                 <ProxmoxOverview
-                  model={model}
+                  model={overviewModel}
+                  active={() => activeTab() === 'overview'}
                   metricDisplayMode={metricDisplayMode}
                   setMetricDisplayMode={setMetricDisplayMode}
                   metricHistoryRange={metricHistoryRange}
@@ -222,22 +399,29 @@ export function ProxmoxPageSurface() {
                   memoryDisplayBasis={memoryDisplayBasis}
                   setMemoryDisplayBasis={setMemoryDisplayBasis}
                   resourceSnapshot={() =>
-                    loading() && model().resources.length === 0 ? undefined : model().resources
+                    overviewResources.loading() && overviewModel().resources.length === 0
+                      ? undefined
+                      : overviewModel().resources
                   }
-                  resourceSnapshotRefetch={() => refetch()}
+                  resourceSnapshotRefetch={() => overviewResources.refetch()}
                   inventoryCountsVisible={inventoryCountsVisible}
                   setInventoryCountsVisible={setInventoryCountsVisible}
                 />
               </div>
             </Show>
-            <Show when={activeTab() === 'storage'}>
-              <StorageSurface
-                forcedSourceFilter={PROXMOX_PLATFORM_FILTER}
-                suppressNodeFilter
-                filterAriaLabel="Proxmox storage filters"
-                filterSearchPlaceholder="Search Proxmox storage by pool, datastore, node, or device"
-                filterSearchEmptyMessage="Recent Proxmox storage searches appear here."
-              />
+            <Show when={mountedTabs().has('storage')}>
+              <div
+                classList={{ hidden: activeTab() !== 'storage' }}
+                aria-hidden={activeTab() !== 'storage' ? 'true' : undefined}
+              >
+                <StorageSurface
+                  forcedSourceFilter={PROXMOX_PLATFORM_FILTER}
+                  suppressNodeFilter
+                  filterAriaLabel="Proxmox storage filters"
+                  filterSearchPlaceholder="Search Proxmox storage by pool, datastore, node, or device"
+                  filterSearchEmptyMessage="Recent Proxmox storage searches appear here."
+                />
+              </div>
             </Show>
             <Show when={activeTab() === 'replication'}>
               <ProxmoxReplicationTable
@@ -280,6 +464,7 @@ export function ProxmoxPageSurface() {
 
 interface ProxmoxOverviewProps {
   model: Accessor<ProxmoxPageModel>;
+  active: Accessor<boolean>;
   metricDisplayMode: Accessor<WorkloadsMetricDisplayMode>;
   setMetricDisplayMode: (value: WorkloadsMetricDisplayMode) => void;
   metricHistoryRange: Accessor<WorkloadTableMetricHistoryRange>;
@@ -318,6 +503,7 @@ function ProxmoxOverview(props: ProxmoxOverviewProps) {
     metricHistoryRange: props.metricHistoryRange,
     onMetricHistoryRangeChange: props.setMetricHistoryRange,
     memoryDisplayBasis: props.memoryDisplayBasis,
+    routeStateEnabled: props.active,
   });
   const showSharedFilterToolbar = createMemo(
     () =>

@@ -86,6 +86,7 @@ import {
   type PhysicalDiskTableColumnId,
 } from '@/features/storageBackups/diskPresentation';
 import { useObservedElementWidth } from '@/hooks/useObservedElementWidth';
+import { PlatformWindowedRows } from '@/features/platformPage/sharedPlatformPage';
 import type { Resource } from '@/types/resource';
 import type { StorageHealthFilter } from '@/features/storageBackups/models';
 import { getStorageSourceOption } from '@/utils/storageSources';
@@ -317,7 +318,7 @@ export const DiskList: Component<DiskListProps> = (props) => {
             </TableRow>
           </TableHeader>
           <TableBody class={PHYSICAL_DISK_TABLE_BODY_CLASS}>
-            <For each={model.filteredDisks()}>
+            <PlatformWindowedRows items={model.filteredDisks} estimatedRowHeight={32}>
               {(disk) => {
                 const data = model.getDiskData(disk);
                 const status = getPhysicalDiskHealthStatus(data);
@@ -521,7 +522,7 @@ export const DiskList: Component<DiskListProps> = (props) => {
                   </>
                 );
               }}
-            </For>
+            </PlatformWindowedRows>
           </TableBody>
         </Table>
       </Show>

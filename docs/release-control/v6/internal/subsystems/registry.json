@@ -202,6 +202,14 @@
       ]
     },
     {
+      "path": "frontend-modern/src/components/Infrastructure/useTableWindowing.ts",
+      "rationale": "the shared bounded table-window controller is both a canonical frontend rendering primitive and a fleet-scale scrolling hot-path boundary",
+      "subsystems": [
+        "frontend-primitives",
+        "performance-and-scalability"
+      ]
+    },
+    {
       "path": "frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts",
       "rationale": "unified resource table state, grouping, and windowing are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary",
       "subsystems": [
@@ -427,6 +435,30 @@
       ]
     },
     {
+      "path": "frontend-modern/src/features/platformPage/PlatformWindowedList.tsx",
+      "rationale": "the shared bounded list renderer is both a canonical platform-page primitive and a fleet-scale mounted-DOM performance boundary",
+      "subsystems": [
+        "frontend-primitives",
+        "performance-and-scalability"
+      ]
+    },
+    {
+      "path": "frontend-modern/src/features/platformPage/PlatformWindowedRows.tsx",
+      "rationale": "the shared bounded table-row renderer is both a canonical platform-page primitive and a fleet-scale mounted-DOM performance boundary",
+      "subsystems": [
+        "frontend-primitives",
+        "performance-and-scalability"
+      ]
+    },
+    {
+      "path": "frontend-modern/src/features/platformPage/usePlatformWindowedItems.ts",
+      "rationale": "the platform windowing controller is both a canonical frontend scroll primitive and a directional-runway performance hot path",
+      "subsystems": [
+        "frontend-primitives",
+        "performance-and-scalability"
+      ]
+    },
+    {
       "path": "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx",
       "subsystems": [
         "storage-recovery",
@@ -465,6 +497,14 @@
       "subsystems": [
         "ai-runtime",
         "frontend-primitives"
+      ]
+    },
+    {
+      "path": "frontend-modern/src/stores/websocket-global.ts",
+      "rationale": "the process-wide realtime store owner is both a unified-resource state boundary and a fleet-scale connection and reconciliation hot path",
+      "subsystems": [
+        "performance-and-scalability",
+        "unified-resources"
       ]
     },
     {
@@ -4749,6 +4789,7 @@
         "frontend-modern/src/components/CommercialMigrationBanner.tsx",
         "frontend-modern/src/components/GitHubStarBanner.tsx",
         "frontend-modern/src/components/Infrastructure/resourceDetailDrawerMetricsHistoryModel.ts",
+        "frontend-modern/src/components/Infrastructure/useTableWindowing.ts",
         "frontend-modern/src/components/Login.tsx",
         "frontend-modern/src/components/Settings/AgentIntegrationsPanel.tsx",
         "frontend-modern/src/components/Settings/AIChatMaintenanceSection.tsx",
@@ -4762,6 +4803,7 @@
         "frontend-modern/src/components/Settings/APIAccessPanel.tsx",
         "frontend-modern/src/components/Settings/AuditLogPanel.tsx",
         "frontend-modern/src/components/Settings/AuditWebhookPanel.tsx",
+        "frontend-modern/src/components/Settings/AvailabilitySettingsPanel.tsx",
         "frontend-modern/src/components/Settings/CopyCommandBlock.tsx",
         "frontend-modern/src/components/Settings/DataHandlingPanel.tsx",
         "frontend-modern/src/components/Settings/dataHandlingPanelModel.ts",
@@ -4822,7 +4864,10 @@
         "frontend-modern/src/features/platformPage/PlatformOutdatedSensorSetupNotice.tsx",
         "frontend-modern/src/features/platformPage/PlatformResourceDetailTableRow.tsx",
         "frontend-modern/src/features/platformPage/platformSearchSuggestions.ts",
+        "frontend-modern/src/features/platformPage/PlatformWindowedList.tsx",
+        "frontend-modern/src/features/platformPage/PlatformWindowedRows.tsx",
         "frontend-modern/src/features/platformPage/sharedPlatformPage.tsx",
+        "frontend-modern/src/features/platformPage/usePlatformWindowedItems.ts",
         "frontend-modern/src/hooks/createNonSuspendingQuery.ts",
         "frontend-modern/src/i18n/index.ts",
         "frontend-modern/src/i18n/messages.de.ts",
@@ -5069,6 +5114,7 @@
             "match_prefixes": [],
             "match_files": [
               "frontend-modern/scripts/header-audit.mjs",
+              "frontend-modern/src/components/Settings/AvailabilitySettingsPanel.tsx",
               "frontend-modern/src/components/Settings/ReportingPanel.tsx",
               "frontend-modern/src/components/Settings/reportingPanelModel.ts",
               "frontend-modern/src/components/Settings/ResourcePicker.tsx",
@@ -5084,6 +5130,7 @@
             "test_prefixes": [],
             "exact_files": [
               "frontend-modern/src/__tests__/App.architecture.test.ts",
+              "frontend-modern/src/components/Settings/__tests__/AvailabilitySettingsPanel.test.tsx",
               "frontend-modern/src/components/Settings/__tests__/reportingPanelModel.test.ts",
               "frontend-modern/src/components/Settings/__tests__/reportingResourceTypes.test.ts",
               "frontend-modern/src/components/Settings/__tests__/ResourcePicker.test.tsx",
@@ -5354,13 +5401,19 @@
             "label": "data grid and summary proof",
             "match_prefixes": [],
             "match_files": [
+              "frontend-modern/src/components/Infrastructure/useTableWindowing.ts",
               "frontend-modern/src/components/shared/PulseDataGrid.tsx",
-              "frontend-modern/src/components/shared/Table.tsx"
+              "frontend-modern/src/components/shared/Table.tsx",
+              "frontend-modern/src/features/platformPage/PlatformWindowedList.tsx",
+              "frontend-modern/src/features/platformPage/PlatformWindowedRows.tsx",
+              "frontend-modern/src/features/platformPage/usePlatformWindowedItems.ts"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
-              "frontend-modern/src/components/shared/__tests__/PulseDataGrid.test.tsx"
+              "frontend-modern/src/components/Infrastructure/__tests__/useTableWindowing.test.ts",
+              "frontend-modern/src/components/shared/__tests__/PulseDataGrid.test.tsx",
+              "frontend-modern/src/features/platformPage/__tests__/PlatformWindowedRows.test.tsx"
             ]
           },
           {
@@ -6436,6 +6489,7 @@
         "frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx",
         "frontend-modern/src/components/Infrastructure/unifiedResourceTableModel.ts",
         "frontend-modern/src/components/Infrastructure/unifiedResourceTableStateModel.ts",
+        "frontend-modern/src/components/Infrastructure/useTableWindowing.ts",
         "frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts",
         "frontend-modern/src/components/Infrastructure/useUnifiedResourceTableViewportSync.ts",
         "frontend-modern/src/components/Workloads/DiskList.tsx",
@@ -6491,8 +6545,12 @@
         "frontend-modern/src/components/Workloads/WorkloadTableHeader.tsx",
         "frontend-modern/src/components/Workloads/workloadTopology.ts",
         "frontend-modern/src/components/Workloads/workloadUrlSyncModel.ts",
+        "frontend-modern/src/features/platformPage/PlatformWindowedList.tsx",
+        "frontend-modern/src/features/platformPage/PlatformWindowedRows.tsx",
+        "frontend-modern/src/features/platformPage/usePlatformWindowedItems.ts",
         "frontend-modern/src/hooks/useWorkloads.ts",
         "frontend-modern/src/routing/routePreload.ts",
+        "frontend-modern/src/stores/websocket-global.ts",
         "frontend-modern/src/stores/websocket.ts",
         "frontend-modern/src/types/workloads.ts",
         "frontend-modern/src/useAppRuntimeState.ts",
@@ -6580,6 +6638,7 @@
             "label": "large-estate realtime state update proof",
             "match_prefixes": [],
             "match_files": [
+              "frontend-modern/src/stores/websocket-global.ts",
               "frontend-modern/src/stores/websocket.ts",
               "frontend-modern/src/utils/resourceStateAdapters.ts",
               "internal/mock/fixture_graph.go",
@@ -6625,6 +6684,7 @@
               "frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx",
               "frontend-modern/src/components/Infrastructure/unifiedResourceTableModel.ts",
               "frontend-modern/src/components/Infrastructure/unifiedResourceTableStateModel.ts",
+              "frontend-modern/src/components/Infrastructure/useTableWindowing.ts",
               "frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts",
               "frontend-modern/src/components/Infrastructure/useUnifiedResourceTableViewportSync.ts",
               "frontend-modern/src/components/Workloads/DiskList.tsx",
@@ -6680,6 +6740,9 @@
               "frontend-modern/src/components/Workloads/WorkloadTableHeader.tsx",
               "frontend-modern/src/components/Workloads/workloadTopology.ts",
               "frontend-modern/src/components/Workloads/workloadUrlSyncModel.ts",
+              "frontend-modern/src/features/platformPage/PlatformWindowedList.tsx",
+              "frontend-modern/src/features/platformPage/PlatformWindowedRows.tsx",
+              "frontend-modern/src/features/platformPage/usePlatformWindowedItems.ts",
               "frontend-modern/src/hooks/useWorkloads.ts",
               "frontend-modern/src/types/workloads.ts",
               "frontend-modern/src/utils/searchQuery.ts",
@@ -6692,6 +6755,7 @@
             "exact_files": [
               "frontend-modern/src/components/Infrastructure/__tests__/UnifiedResourceTable.performance.contract.test.tsx",
               "frontend-modern/src/components/Infrastructure/__tests__/unifiedResourceTableStateModel.test.ts",
+              "frontend-modern/src/components/Infrastructure/__tests__/useTableWindowing.test.ts",
               "frontend-modern/src/components/Workloads/__tests__/AvailabilityProbeStatusCard.test.tsx",
               "frontend-modern/src/components/Workloads/__tests__/DiskList.test.tsx",
               "frontend-modern/src/components/Workloads/__tests__/EnhancedCPUBar.test.tsx",
@@ -6723,6 +6787,7 @@
               "frontend-modern/src/components/Workloads/MetricBar.test.tsx",
               "frontend-modern/src/components/Workloads/StackedMemoryBar.test.tsx",
               "frontend-modern/src/components/Workloads/ThresholdSlider.test.tsx",
+              "frontend-modern/src/features/platformPage/__tests__/PlatformWindowedRows.test.tsx",
               "frontend-modern/src/hooks/__tests__/useWorkloads.test.ts",
               "frontend-modern/src/utils/__tests__/searchQuery.test.ts",
               "frontend-modern/src/utils/__tests__/thresholdSliderPresentation.test.ts",
@@ -7498,6 +7563,7 @@
         "frontend-modern/src/routing/navigation.ts",
         "frontend-modern/src/routing/resourceLinks.ts",
         "frontend-modern/src/routing/routePreload.ts",
+        "frontend-modern/src/stores/websocket-global.ts",
         "frontend-modern/src/types/resource.ts",
         "frontend-modern/src/utils/actionAuditPresentation.ts",
         "frontend-modern/src/utils/agentResources.ts",
@@ -7567,6 +7633,7 @@
             "label": "read-state and adapter proof",
             "match_prefixes": [],
             "match_files": [
+              "frontend-modern/src/stores/websocket-global.ts",
               "internal/unifiedresources/adapters.go",
               "internal/unifiedresources/host_storage_cleanup.go",
               "internal/unifiedresources/monitor_adapter.go",

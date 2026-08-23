@@ -14,6 +14,7 @@ import {
   PlatformTableNumberValue,
   PlatformTablePercentValue,
   PlatformTableShell,
+  PlatformWindowedRows,
 } from '@/features/platformPage/sharedPlatformPage';
 import { PlatformResourceDetailToggleButton } from '@/features/platformPage/PlatformResourceDetailTableRow';
 import type { PBSBackup } from '@/types/api';
@@ -251,7 +252,7 @@ export function ProxmoxBackupServersTable(props: {
           }
           body={
             <>
-              <For each={rows()}>
+              <PlatformWindowedRows items={rows} estimatedRowHeight={32}>
                 {(row) => {
                   const pct = () => (row.datastore ? usagePercent(row.datastore) : undefined);
                   const isExpanded = () => expandedKey() === row.key;
@@ -451,7 +452,7 @@ export function ProxmoxBackupServersTable(props: {
                     </>
                   );
                 }}
-              </For>
+              </PlatformWindowedRows>
             </>
           }
         />

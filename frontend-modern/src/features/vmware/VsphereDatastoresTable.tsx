@@ -1,4 +1,4 @@
-import { For, Show, createMemo, type Component, type JSX } from 'solid-js';
+import { Show, createMemo, type Component, type JSX } from 'solid-js';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { StackedDiskBar } from '@/components/Workloads/StackedDiskBar';
 import { TableCell, TableRow } from '@/components/shared/Table';
@@ -6,6 +6,7 @@ import { filterChipStatusDot } from '@/components/shared/FilterBar';
 import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
 import {
+  PlatformWindowedRows,
   PlatformSortableTableHead,
   PlatformResponsiveTableLabel,
   PlatformTableEmptyState,
@@ -257,7 +258,7 @@ export const VsphereDatastoresTable: Component<{
             }
             body={
               <>
-                <For each={sortedRows()}>
+                <PlatformWindowedRows items={sortedRows} estimatedRowHeight={32}>
                   {(datastore) => {
                     const hosts = createMemo(() => hostSummary(datastore));
                     const consumers = createMemo(() => consumerSummary(datastore));
@@ -354,7 +355,7 @@ export const VsphereDatastoresTable: Component<{
                       </>
                     );
                   }}
-                </For>
+                </PlatformWindowedRows>
               </>
             }
           />

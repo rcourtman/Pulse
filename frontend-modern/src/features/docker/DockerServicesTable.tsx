@@ -1,9 +1,10 @@
-import { For, Show, createMemo, type Component, type JSX } from 'solid-js';
+import { Show, createMemo, type Component, type JSX } from 'solid-js';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { TableCell, TableRow } from '@/components/shared/Table';
 import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
 import { asTrimmedString } from '@/utils/stringUtils';
 import {
+  PlatformWindowedRows,
   PLATFORM_HEALTH_FILTER_OPTIONS,
   PlatformSortableTableHead,
   PlatformTableNumberValue,
@@ -283,7 +284,7 @@ export const DockerServicesTable: Component<{
             }
             body={
               <>
-                <For each={sortedRows()}>
+                <PlatformWindowedRows items={sortedRows} estimatedRowHeight={32}>
                   {(service) => {
                     const name = () => asTrimmedString(service.name) || service.id;
                     const stack = () => dockerServiceStack(service) || '—';
@@ -400,7 +401,7 @@ export const DockerServicesTable: Component<{
                       </>
                     );
                   }}
-                </For>
+                </PlatformWindowedRows>
               </>
             }
           />

@@ -1,4 +1,4 @@
-import { For, Show, type Component, type JSX } from 'solid-js';
+import { Show, type Component, type JSX } from 'solid-js';
 import {
   InlineDetailPanel,
   compactDetailRows,
@@ -10,6 +10,7 @@ import { AlertSeverityBadge, AlertSeverityDot } from '@/components/shared/AlertS
 import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
 import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
 import {
+  PlatformWindowedRows,
   PlatformTableEmptyState,
   PlatformTableToolbar,
   createPlatformTableFilterState,
@@ -198,7 +199,7 @@ export const DockerAlertsTable: Component<{
             }
             body={
               <>
-                <For each={tableState.filtered()}>
+                <PlatformWindowedRows items={tableState.filtered} estimatedRowHeight={32}>
                   {(incident) => {
                     const docker = () => incident.resource.docker;
                     const detailRowId = () => drawer.detailRowId(incident);
@@ -298,7 +299,7 @@ export const DockerAlertsTable: Component<{
                       </>
                     );
                   }}
-                </For>
+                </PlatformWindowedRows>
               </>
             }
           />

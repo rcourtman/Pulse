@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import actionsSource from '@/pages/Actions.tsx?raw';
 import { getActionsWatchOnlyEmptyState } from '../actionPresentation';
 
 const base = {
@@ -11,6 +12,11 @@ const base = {
 };
 
 describe('getActionsWatchOnlyEmptyState', () => {
+  it('keeps large action inventories on the shared bounded list renderer', () => {
+    expect(actionsSource).toContain('PlatformWindowedList');
+    expect(actionsSource).toContain('estimatedItemHeight={92}');
+  });
+
   it('returns nothing when Patrol is not in Watch only', () => {
     expect(getActionsWatchOnlyEmptyState({ ...base, patrolWatchOnly: false })).toBeUndefined();
     expect(

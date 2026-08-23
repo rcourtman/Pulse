@@ -1,10 +1,11 @@
-import { Show, For, createMemo, type Accessor } from 'solid-js';
+import { Show, createMemo, type Accessor } from 'solid-js';
 import type { Incident } from '@/types/api';
 import { filterIncidentEvents } from '@/features/alerts/types';
 import { IncidentEventFilters } from '@/components/Alerts/IncidentEventFilters';
 import { IncidentAssistantHandoffButton } from '@/components/Alerts/IncidentAssistantHandoffButton';
 import { IncidentTimelineEventCard } from '@/components/Alerts/IncidentTimelineEventCard';
 import { FormTextarea } from '@/components/shared/FormTextarea';
+import { PlatformWindowedList } from '@/features/platformPage/PlatformWindowedList';
 import {
   getAlertTimelineEmptyState,
   getAlertTimelineAcknowledgedLabel,
@@ -94,11 +95,16 @@ export function IncidentTimelinePanel(props: IncidentTimelinePanelProps) {
             </Show>
             <Show when={filteredEvents().length > 0}>
               <div class="space-y-2">
-                <For each={filteredEvents()}>
+                <PlatformWindowedList
+                  items={filteredEvents}
+                  estimatedItemHeight={120}
+                  enableThreshold={18}
+                  windowSize={24}
+                >
                   {(event) => (
                     <IncidentTimelineEventCard event={event} variant={props.eventCardVariant} />
                   )}
-                </For>
+                </PlatformWindowedList>
               </div>
             </Show>
             <Show when={events().length > 0 && filteredEvents().length === 0}>

@@ -144,7 +144,7 @@ describe('UnifiedResourceTable performance contract', () => {
   });
 
   describe('Baseline structural contracts', () => {
-    it('renders Profile S table structure and all rows', async () => {
+    it('renders Profile S table structure within the mounted-row budget', async () => {
       const resources = makeResources(PROFILES.S);
       const { container } = render(() => (
         <UnifiedResourceTable
@@ -162,7 +162,8 @@ describe('UnifiedResourceTable performance contract', () => {
         expect(getBodyRowCount(container)).toBeGreaterThan(0);
       });
       await waitFor(() => {
-        expect(getBodyRowCount(container)).toBe(PROFILES.S);
+        expect(getBodyRowCount(container)).toBeGreaterThan(0);
+        expect(getBodyRowCount(container)).toBeLessThanOrEqual(140);
       });
     });
 
@@ -934,7 +935,7 @@ describe('UnifiedResourceTable performance contract', () => {
 
     it('renders facet summary badges without changing the Profile S row budget', async () => {
       const resources = makeResources(PROFILES.S, (i) =>
-        i === 0
+        i === 1
           ? {
               capabilities: [
                 {
@@ -946,7 +947,7 @@ describe('UnifiedResourceTable performance contract', () => {
               ],
               relationships: [
                 {
-                  sourceId: 'resource-0',
+                  sourceId: 'resource-1',
                   targetId: 'storage-1',
                   type: 'depends_on',
                   confidence: 0.91,
@@ -994,7 +995,8 @@ describe('UnifiedResourceTable performance contract', () => {
       });
       expect(container.querySelector('tbody')?.textContent).not.toContain('Config update 1');
       await waitFor(() => {
-        expect(getBodyRowCount(container)).toBe(PROFILES.S);
+        expect(getBodyRowCount(container)).toBeGreaterThan(0);
+        expect(getBodyRowCount(container)).toBeLessThanOrEqual(140);
       });
     });
 
@@ -1237,7 +1239,8 @@ describe('UnifiedResourceTable performance contract', () => {
       );
       await waitFor(
         () => {
-          expect(getBodyRowCount(container)).toBe(PROFILES.S + 2);
+          expect(getBodyRowCount(container)).toBeGreaterThan(0);
+          expect(getBodyRowCount(container)).toBeLessThanOrEqual(140);
         },
         { timeout: 15000 },
       );
@@ -1264,7 +1267,8 @@ describe('UnifiedResourceTable performance contract', () => {
       );
       await waitFor(
         () => {
-          expect(getBodyRowCount(container)).toBe(PROFILES.S);
+          expect(getBodyRowCount(container)).toBeGreaterThan(0);
+          expect(getBodyRowCount(container)).toBeLessThanOrEqual(140);
         },
         { timeout: 15000 },
       );

@@ -1,6 +1,7 @@
 import { For, Show } from 'solid-js';
 
 import { SectionHeader } from '@/components/shared/SectionHeader';
+import { PlatformWindowedList } from '@/features/platformPage/PlatformWindowedList';
 import type { Alert } from '@/types/api';
 import {
   getAlertOverviewAcknowledgedToggleLabel,
@@ -118,7 +119,12 @@ export function AlertOverviewActiveAlertsSection(props: AlertOverviewActiveAlert
               {getAlertListEmptyState(props.showAcknowledged)}
             </div>
           </Show>
-          <For each={props.state.groupedAlerts()}>
+          <PlatformWindowedList
+            items={props.state.groupedAlerts}
+            estimatedItemHeight={180}
+            enableThreshold={24}
+            windowSize={32}
+          >
             {(group) => (
               <div>
                 <AlertOverviewAlertCard
@@ -168,7 +174,7 @@ export function AlertOverviewActiveAlertsSection(props: AlertOverviewActiveAlert
                 </Show>
               </div>
             )}
-          </For>
+          </PlatformWindowedList>
         </div>
       </Show>
     </div>

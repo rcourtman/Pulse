@@ -1,8 +1,9 @@
-import { For, Show, createMemo, type Component } from 'solid-js';
+import { Show, createMemo, type Component } from 'solid-js';
 import { TableCell, TableRow } from '@/components/shared/Table';
 import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
 import { asTrimmedString } from '@/utils/stringUtils';
 import {
+  PlatformWindowedRows,
   PLATFORM_HEALTH_FILTER_OPTIONS,
   PlatformSortableTableHead,
   PlatformTableEmptyState,
@@ -161,7 +162,7 @@ export const DockerConfigsTable: Component<DockerNativeTableProps> = (props) => 
             }
             body={
               <>
-                <For each={sortedRows()}>
+                <PlatformWindowedRows items={sortedRows} estimatedRowHeight={32}>
                   {(resource) => {
                     const detailRowId = () => drawer.detailRowId(resource);
                     const isExpanded = () => drawer.isExpanded(resource);
@@ -238,7 +239,7 @@ export const DockerConfigsTable: Component<DockerNativeTableProps> = (props) => 
                       </>
                     );
                   }}
-                </For>
+                </PlatformWindowedRows>
               </>
             }
           />

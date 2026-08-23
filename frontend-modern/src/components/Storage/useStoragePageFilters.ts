@@ -22,6 +22,7 @@ type UseStoragePageFiltersOptions = {
     search: string;
   };
   navigate: (path: string, options: { replace: true }) => void;
+  lockedSourceFilter?: () => string | undefined;
 };
 
 export const useStoragePageFilters = (options: UseStoragePageFiltersOptions) => {
@@ -38,7 +39,40 @@ export const useStoragePageFilters = (options: UseStoragePageFiltersOptions) => 
   );
   const [groupBy, setGroupBy] = createSignal<StorageGroupKey>(DEFAULT_STORAGE_GROUP_KEY);
 
-  const isActiveStorageRoute = () => true;
+  // Storage can remain mounted as a warmed Proxmox tab. Route effects must
+  // stay dormant while another tab is visible or the hidden surface will
+  // parse and rewrite unrelated query state on every platform navigation.
+  const isActiveStorageRoute = () => options.location.pathname.endsWith('/storage');
+
+  const routeFields = buildStorageRouteFields({
+    view,
+    setView,
+    sourceFilter,
+    setSourceFilter,
+    healthFilter,
+    setHealthFilter,
+    diskRoleFilter,
+    setDiskRoleFilter,
+    diskGroupFilter,
+    setDiskGroupFilter,
+    selectedNodeId,
+    setSelectedNodeId,
+    groupBy,
+    setGroupBy,
+    sortKey,
+    setSortKey,
+    sortDirection,
+    setSortDirection,
+    search,
+    setSearch,
+  });
+  if (options.lockedSourceFilter?.()?.trim() && routeFields.source) {
+    routeFields.source = {
+      ...routeFields.source,
+      read: () => options.lockedSourceFilter?.()?.trim() || DEFAULT_STORAGE_SOURCE_FILTER,
+      write: () => null,
+    };
+  }
 
   useStorageRouteState({
     location: options.location,
@@ -50,28 +84,7 @@ export const useStoragePageFilters = (options: UseStoragePageFiltersOptions) => 
     isReadEnabled: isActiveStorageRoute,
     isWriteEnabled: isActiveStorageRoute,
     useCurrentPathForNavigation: true,
-    fields: buildStorageRouteFields({
-      view,
-      setView,
-      sourceFilter,
-      setSourceFilter,
-      healthFilter,
-      setHealthFilter,
-      diskRoleFilter,
-      setDiskRoleFilter,
-      diskGroupFilter,
-      setDiskGroupFilter,
-      selectedNodeId,
-      setSelectedNodeId,
-      groupBy,
-      setGroupBy,
-      sortKey,
-      setSortKey,
-      sortDirection,
-      setSortDirection,
-      search,
-      setSearch,
-    }),
+    fields: routeFields,
   });
 
   return {

@@ -1,4 +1,4 @@
-import { For, Show, createMemo, type Component, type JSX } from 'solid-js';
+import { Show, createMemo, type Component, type JSX } from 'solid-js';
 import {
   InlineDetailPanel,
   compactDetailRows,
@@ -10,6 +10,7 @@ import { AlertSeverityBadge, AlertSeverityDot } from '@/components/shared/AlertS
 import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
 import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
 import {
+  PlatformWindowedRows,
   PlatformTableEmptyState,
   PlatformResponsiveTableLabel,
   PlatformTableToolbar,
@@ -207,7 +208,7 @@ export const VsphereAlertsTable: Component<{
             }
             body={
               <>
-                <For each={tableState.filtered()}>
+                <PlatformWindowedRows items={tableState.filtered} estimatedRowHeight={32}>
                   {(incident) => {
                     const meta = () => incident.resource.vmware;
                     const detailRowId = () => drawer.detailRowId(incident);
@@ -309,7 +310,7 @@ export const VsphereAlertsTable: Component<{
                       </>
                     );
                   }}
-                </For>
+                </PlatformWindowedRows>
               </>
             }
           />

@@ -80,14 +80,6 @@ const Storage: Component<StorageProps> = (props) => {
   });
 
   createEffect(() => {
-    const forcedSource = props.forcedSourceFilter?.trim();
-    if (!forcedSource) return;
-    if (sourceFilter() !== forcedSource) {
-      setSourceFilter(forcedSource);
-    }
-  });
-
-  createEffect(() => {
     if (!props.forcedView) return;
     if (view() !== props.forcedView) {
       setView(props.forcedView);

@@ -878,6 +878,34 @@ describe('useUnifiedResources', () => {
     dispose();
   });
 
+  it('keeps a prefetched route inert until realtime updates are enabled', async () => {
+    const [realtimeEnabled, setRealtimeEnabled] = createSignal(false);
+    let dispose = () => {};
+    let result: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      result = useUnifiedResources({ realtimeEnabled });
+    });
+
+    await waitForResourceCount(() => result!.resources().length);
+    expect(result!.resources()[0]?.cpu?.current).toBe(15);
+
+    batch(() => {
+      setWsState(
+        'resources',
+        reconcile([createWsResource({ cpu: { current: 77 } })], { key: 'id' }),
+      );
+      setWsState('lastUpdate', 1738843204000);
+    });
+    await flushAsync();
+    expect(result!.resources()[0]?.cpu?.current).toBe(15);
+
+    setRealtimeEnabled(true);
+    await waitForValue(() => result!.resources()[0]?.cpu?.current, 77);
+
+    dispose();
+  });
+
   it('falls back to REST when websocket initial hydration does not arrive in time', async () => {
     setWsConnected(false);
     setWsInitialDataReceived(false);
@@ -1460,6 +1488,42 @@ describe('useUnifiedResources', () => {
       redactionCounts: {
         hostname: 1,
         'ip-address': 1,
+      },
+    });
+
+    dispose();
+  });
+
+  it('normalizes global resource counts for evidence-gated platform tabs', async () => {
+    apiFetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        data: [v2Resource],
+        aggregations: {
+          total: 42,
+          byType: {
+            agent: 5,
+            vm: 20,
+            'system-container': 17,
+          },
+        },
+      }),
+    });
+
+    let dispose = () => {};
+    let result: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      result = useUnifiedResources();
+    });
+
+    await waitForValue(() => result!.aggregations()?.total, 42);
+    expect(result!.aggregations()).toEqual({
+      total: 42,
+      byType: {
+        agent: 5,
+        vm: 20,
+        'system-container': 17,
       },
     });
 

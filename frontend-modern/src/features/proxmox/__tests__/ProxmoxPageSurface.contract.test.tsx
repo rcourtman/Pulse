@@ -351,6 +351,46 @@ describe('ProxmoxPageSurface contract', () => {
     expect(proxmoxBackupsTableSource).not.toContain('SavedViews');
   });
 
+  it('hydrates route-scoped resource families instead of one broad estate request', () => {
+    setResources([
+      makeResource({
+        id: 'agent:pve-1',
+        type: 'agent',
+        proxmox: { nodeName: 'pve-1', clusterName: 'homelab' },
+      }),
+    ]);
+
+    renderSurface();
+
+    const options = mockUseUnifiedResources.mock.calls.map(
+      ([value]) =>
+        value as {
+          query: string;
+          cacheKey: string;
+          enabled: () => boolean;
+        },
+    );
+    expect(options.map((value) => value.cacheKey)).toEqual([
+      'proxmox-overview',
+      'proxmox-storage-shell',
+      'proxmox-replication-shell',
+      'proxmox-backups-shell',
+      'proxmox-ceph',
+      'proxmox-mail',
+    ]);
+    expect(options.map((value) => value.query)).toEqual([
+      'type=agent,vm,system-container,oci-container',
+      'type=agent,pbs,storage,physical_disk',
+      'type=agent',
+      'type=agent,vm,system-container,pbs',
+      'type=ceph',
+      'type=pmg',
+    ]);
+    expect(options[0].enabled()).toBe(true);
+    expect(options.slice(1).every((value) => value.enabled() === false)).toBe(true);
+    expect(proxmoxPageSurfaceSource).toContain('requestIdleCallback');
+  });
+
   it('places workload controls beside the workload table they affect', () => {
     const nodesTableIndex = proxmoxPageSurfaceSource.indexOf('<ProxmoxNodesTable');
     const workloadFilterIndex = proxmoxPageSurfaceSource.indexOf('<WorkloadsFilter');

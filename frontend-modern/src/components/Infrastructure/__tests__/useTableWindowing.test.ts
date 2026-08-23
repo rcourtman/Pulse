@@ -43,18 +43,18 @@ describe('useTableWindowing', () => {
   // isWindowed
   // ──────────────────────────────────────────────────────────────
   describe('isWindowed', () => {
-    it('returns false when total count is below default threshold (500)', () => {
-      const hook = setup({ totalCount: () => 200 });
+    it('returns false when total count is below the mounted-row budget', () => {
+      const hook = setup({ totalCount: () => 140 });
       expect(hook.isWindowed()).toBe(false);
     });
 
     it('returns true when total count exceeds default threshold', () => {
-      const hook = setup({ totalCount: () => 600 });
+      const hook = setup({ totalCount: () => 141 });
       expect(hook.isWindowed()).toBe(true);
     });
 
     it('returns false when total count equals threshold (not exceeded)', () => {
-      const hook = setup({ totalCount: () => 500 });
+      const hook = setup({ totalCount: () => 140 });
       expect(hook.isWindowed()).toBe(false);
     });
 
@@ -181,12 +181,12 @@ describe('useTableWindowing', () => {
         enabled: () => true,
         windowSize: 100,
       });
-      // Scroll: firstVisible=50, overscan=20, start=30, end=130
-      hook.onScroll(2000, 400, 40);
-      expect(hook.isVisible(29)).toBe(false);
-      expect(hook.isVisible(30)).toBe(true);
-      expect(hook.isVisible(129)).toBe(true);
-      expect(hook.isVisible(130)).toBe(false);
+      // A jump beyond the initial runway moves the window with 24 rows ahead.
+      hook.onScroll(4000, 400, 40);
+      expect(hook.isVisible(75)).toBe(false);
+      expect(hook.isVisible(76)).toBe(true);
+      expect(hook.isVisible(175)).toBe(true);
+      expect(hook.isVisible(176)).toBe(false);
     });
   });
 
@@ -201,13 +201,10 @@ describe('useTableWindowing', () => {
         windowSize: 100,
       });
 
-      // scrollTop=2000, containerHeight=400, rowHeight=40
-      // firstVisibleRow = floor(2000/40) = 50
-      // overscan = min(20, max(0, 100 - ceil(400/40))) = min(20, 90) = 20
-      // start = 50 - 20 = 30
-      hook.onScroll(2000, 400, 40);
-      expect(hook.startIndex()).toBe(30);
-      expect(hook.endIndex()).toBe(130);
+      // firstVisibleRow=100 and the directional runway keeps 24 rows ahead.
+      hook.onScroll(4000, 400, 40);
+      expect(hook.startIndex()).toBe(76);
+      expect(hook.endIndex()).toBe(176);
     });
 
     it('clamps start to 0 when scrolled near top', () => {
@@ -250,8 +247,8 @@ describe('useTableWindowing', () => {
         windowSize: 100,
       });
       // rowHeight=0 → safeRowHeight=40, same calc as normal
-      hook.onScroll(2000, 400, 0);
-      expect(hook.startIndex()).toBe(30);
+      hook.onScroll(4000, 400, 0);
+      expect(hook.startIndex()).toBe(76);
     });
 
     it('handles negative scrollTop gracefully', () => {
@@ -284,9 +281,9 @@ describe('useTableWindowing', () => {
         enabled: () => true,
         windowSize: 100,
       });
-      hook.onScroll(2000, 400, -10);
+      hook.onScroll(4000, 400, -10);
       // safeRowHeight = 40 (negative not > 0)
-      expect(hook.startIndex()).toBe(30);
+      expect(hook.startIndex()).toBe(76);
     });
 
     it('handles large scrollTop values without error', () => {
@@ -521,7 +518,7 @@ describe('useTableWindowing', () => {
       disposers.push(dispose);
 
       // Scroll somewhere
-      result.onScroll(4000, 400, 40);
+      result.onScroll(8000, 400, 40);
       expect(result.startIndex()).toBeGreaterThan(0);
 
       // Disable windowing
@@ -594,7 +591,7 @@ describe('useTableWindowing', () => {
 
       expect(result.isWindowed()).toBe(true);
       // Scroll to a non-zero position first
-      result.onScroll(4000, 400, 40);
+      result.onScroll(8000, 400, 40);
       expect(result.startIndex()).toBeGreaterThan(0);
 
       // Drop below threshold — windowing off

@@ -1,10 +1,11 @@
-import { For, Show, createMemo, type Component, type JSX } from 'solid-js';
+import { Show, createMemo, type Component, type JSX } from 'solid-js';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { TableCell, TableRow } from '@/components/shared/Table';
 import { filterChipStatusDot } from '@/components/shared/FilterBar';
 import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
 import {
+  PlatformWindowedRows,
   PlatformSortableTableHead,
   PlatformResponsiveTableLabel,
   PlatformTableEmptyState,
@@ -225,7 +226,7 @@ export const VsphereNetworksTable: Component<{
             }
             body={
               <>
-                <For each={sortedRows()}>
+                <PlatformWindowedRows items={sortedRows} estimatedRowHeight={32}>
                   {(network) => {
                     const hosts = createMemo(() => hostSummary(network));
                     const vms = createMemo(() => vmSummary(network));
@@ -316,7 +317,7 @@ export const VsphereNetworksTable: Component<{
                       </>
                     );
                   }}
-                </For>
+                </PlatformWindowedRows>
               </>
             }
           />

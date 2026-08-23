@@ -22,6 +22,8 @@ const DESKTOP_WORKLOAD_GROUP_HEADER_HEIGHT = 33;
 const PHONE_WORKLOAD_ROW_HEIGHT = 37;
 const PHONE_WORKLOAD_GROUP_HEADER_HEIGHT = 28;
 const WORKLOADS_TABLE_DIVIDER_HEIGHT = 1;
+const DESKTOP_WORKLOAD_WINDOW_SIZE = 140;
+const PHONE_WORKLOAD_WINDOW_SIZE = 36;
 
 interface WorkloadsWorkloadDerivedStateOptions {
   activeAlerts: Accessor<Record<string, Alert>>;
@@ -170,6 +172,8 @@ export function useWorkloadsDerivedState(options: WorkloadsWorkloadDerivedStateO
 
   const groupedWindowing = useGroupedTableWindowing({
     totalRowCount: () => filteredGuests().length,
+    windowSize: phoneRowGeometry ? PHONE_WORKLOAD_WINDOW_SIZE : DESKTOP_WORKLOAD_WINDOW_SIZE,
+    enableThreshold: phoneRowGeometry ? PHONE_WORKLOAD_WINDOW_SIZE : DESKTOP_WORKLOAD_WINDOW_SIZE,
     revealIndex: revealGuestIndex,
     rowIndexAtOffset: guestIndexAtVirtualOffset,
   });

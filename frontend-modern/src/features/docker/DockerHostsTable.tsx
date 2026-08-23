@@ -1,4 +1,4 @@
-import { For, Show, createMemo, createSignal, type Component, type JSX } from 'solid-js';
+import { Show, createMemo, createSignal, type Component, type JSX } from 'solid-js';
 import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
 import { ResourceNameWithWebInterfaceLink } from '@/components/shared/WebInterfaceLink';
 import { StatusDot } from '@/components/shared/StatusDot';
@@ -16,6 +16,7 @@ import { asTrimmedString } from '@/utils/stringUtils';
 import { normalizeDiskArray } from '@/utils/format';
 import { buildMetricKeyForUnifiedResource } from '@/utils/metricsKeys';
 import {
+  PlatformWindowedRows,
   PLATFORM_HEALTH_FILTER_OPTIONS,
   PlatformSortableTableHead,
   PlatformResponsiveTableLabel,
@@ -334,7 +335,7 @@ export const DockerHostsTable: Component<{
             }
             body={
               <>
-                <For each={sortedHosts()}>
+                <PlatformWindowedRows items={sortedHosts} estimatedRowHeight={32}>
                   {(host) => {
                     const docker = () => dockerHostMeta(host);
                     const name = () => asTrimmedString(host.name) || host.id;
@@ -522,7 +523,7 @@ export const DockerHostsTable: Component<{
                       </>
                     );
                   }}
-                </For>
+                </PlatformWindowedRows>
               </>
             }
           />

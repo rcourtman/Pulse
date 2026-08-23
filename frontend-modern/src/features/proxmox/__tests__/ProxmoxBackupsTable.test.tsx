@@ -517,9 +517,12 @@ describe('ProxmoxBackupsTable', () => {
   });
 
   it('keeps the overview node and guest regions on one canonical resource snapshot', () => {
-    expect(proxmoxPageSurfaceSource).toContain('const { resources, loading, error, refetch }');
+    expect(proxmoxPageSurfaceSource).toContain('const overviewResources = useUnifiedResources({');
+    expect(proxmoxPageSurfaceSource).toContain("cacheKey: 'proxmox-overview'");
     expect(proxmoxPageSurfaceSource).toContain('resourceSnapshot={() =>');
-    expect(proxmoxPageSurfaceSource).toContain('resourceSnapshotRefetch={() => refetch()}');
+    expect(proxmoxPageSurfaceSource).toContain(
+      'resourceSnapshotRefetch={() => overviewResources.refetch()}',
+    );
     expect(proxmoxPageSurfaceSource).toContain('useWorkloadsState({');
     expect(proxmoxPageSurfaceSource).toContain('resourceSnapshot: props.resourceSnapshot');
     expect(proxmoxPageSurfaceSource).not.toContain(

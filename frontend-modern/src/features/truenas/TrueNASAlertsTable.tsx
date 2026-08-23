@@ -1,8 +1,9 @@
-import { For, Show, type Component, type JSX } from 'solid-js';
+import { Show, type Component, type JSX } from 'solid-js';
 import { AlertSeverityBadge, AlertSeverityDot } from '@/components/shared/AlertSeverityBadge';
 import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
 import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
 import {
+  PlatformWindowedRows,
   PlatformTableEmptyState,
   PlatformTableToolbar,
   PlatformResponsiveTableLabel,
@@ -202,7 +203,7 @@ export const TrueNASAlertsTable: Component<{
             }
             body={
               <>
-                <For each={tableState.filtered()}>
+                <PlatformWindowedRows items={tableState.filtered} estimatedRowHeight={32}>
                   {(incident) => {
                     const detailRowId = () => drawer.detailRowId(incident);
                     const isExpanded = () => drawer.isExpanded(incident);
@@ -300,7 +301,7 @@ export const TrueNASAlertsTable: Component<{
                       </>
                     );
                   }}
-                </For>
+                </PlatformWindowedRows>
               </>
             }
           />

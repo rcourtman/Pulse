@@ -19,6 +19,7 @@ interface UseWorkloadsSelectionStateOptions {
   clearAdditionalPageStateOnEscape?: () => void;
   filteredGuests: Accessor<WorkloadGuest[]>;
   summaryGroupScopes: Accessor<Map<string, SummarySeriesGroupScope>>;
+  routeStateEnabled?: Accessor<boolean>;
 }
 
 export function useWorkloadSelectionState(options: UseWorkloadsSelectionStateOptions) {
@@ -113,6 +114,7 @@ export function useWorkloadSelectionState(options: UseWorkloadsSelectionStateOpt
   };
 
   createEffect(() => {
+    if (options.routeStateEnabled && !options.routeStateEnabled()) return;
     const selection = resolveWorkloadResourceSelection(location.search);
     if (!selection) {
       if (handledResourceId() !== null) {

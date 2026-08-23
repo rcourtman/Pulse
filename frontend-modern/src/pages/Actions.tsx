@@ -1,4 +1,4 @@
-import { For, Show, createEffect, createMemo, createSignal, onMount } from 'solid-js';
+import { Show, createEffect, createMemo, createSignal, onMount } from 'solid-js';
 import { useLocation, useSearchParams } from '@solidjs/router';
 import ChevronRightIcon from 'lucide-solid/icons/chevron-right';
 import EyeIcon from 'lucide-solid/icons/eye';
@@ -20,6 +20,7 @@ import { MetadataBadge } from '@/components/shared/MetadataBadge';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { Subtabs } from '@/components/shared/Subtabs';
 import { ActionReviewDialog } from '@/features/actions/ActionReviewDialog';
+import { PlatformWindowedList } from '@/features/platformPage/PlatformWindowedList';
 import { ACTION_REVIEW_QUERY_PARAM, parseActionReviewId } from '@/features/actions/actionRouting';
 import {
   formatActionName,
@@ -247,11 +248,17 @@ export function Actions() {
       </Show>
       <Show when={actions().length > 0}>
         <Card padding="none" class="overflow-hidden" data-testid="actions-queue">
-          <ul
+          <div
+            role="list"
             class="divide-y divide-border-subtle"
             aria-label={view() === 'pending' ? 'Open actions' : 'Action history'}
           >
-            <For each={displayedActions()}>
+            <PlatformWindowedList
+              items={displayedActions}
+              estimatedItemHeight={92}
+              enableThreshold={36}
+              windowSize={48}
+            >
               {(action) => {
                 const state = () => getActionInboxStatePresentation(action.state);
                 const resource = () =>
@@ -259,7 +266,7 @@ export function Actions() {
                 const title = () => formatActionName(action.request.capabilityName);
                 const originLabel = () => getActionOriginLabel(action.origin);
                 return (
-                  <li>
+                  <div role="listitem">
                     <button
                       type="button"
                       aria-label={`Review ${title()} on ${action.request.resourceId}, ${state().label}`}
@@ -310,11 +317,11 @@ export function Actions() {
                         </span>
                       </div>
                     </button>
-                  </li>
+                  </div>
                 );
               }}
-            </For>
-          </ul>
+            </PlatformWindowedList>
+          </div>
         </Card>
       </Show>
       <ActionReviewDialog

@@ -1,4 +1,4 @@
-import { For, Show, createMemo, type Component, type JSX } from 'solid-js';
+import { Show, createMemo, type Component, type JSX } from 'solid-js';
 import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { TableCell, TableRow } from '@/components/shared/Table';
@@ -10,6 +10,7 @@ import {
 import { asTrimmedString } from '@/utils/stringUtils';
 import type { StatusIndicatorVariant } from '@/utils/status';
 import {
+  PlatformWindowedRows,
   PlatformErrorState,
   PlatformResponsiveTableLabel,
   PlatformSortableTableHead,
@@ -496,7 +497,7 @@ export const TrueNASProtectionTable: Component<{
                 }
                 body={
                   <>
-                    <For each={sortedRows()}>
+                    <PlatformWindowedRows items={sortedRows} estimatedRowHeight={32}>
                       {(point) => {
                         const outcome = () => normalizeRecoveryOutcome(point.outcome);
                         const artifact = () => artifactLabel(point);
@@ -595,7 +596,7 @@ export const TrueNASProtectionTable: Component<{
                           </>
                         );
                       }}
-                    </For>
+                    </PlatformWindowedRows>
                   </>
                 }
               />

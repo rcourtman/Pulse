@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import type { Resource } from '@/types/resource';
+import resourcePickerSource from '../ResourcePicker.tsx?raw';
 import { ResourcePicker, type SelectedResource } from '../ResourcePicker';
 
 let mockResources: Resource[] = [];
@@ -74,6 +75,11 @@ afterEach(() => {
 });
 
 describe('ResourcePicker', () => {
+  it('keeps large resource inventories on the shared bounded list renderer', () => {
+    expect(resourcePickerSource).toContain('PlatformWindowedList');
+    expect(resourcePickerSource).toContain('estimatedItemHeight={56}');
+  });
+
   it('renders reportable resources from useResources()', async () => {
     mockResources = [
       makeResource({

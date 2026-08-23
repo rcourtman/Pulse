@@ -22,6 +22,7 @@ import {
 import { showWarning } from '@/utils/toast';
 import { getResourceTypePresentation } from '@/utils/resourceTypePresentation';
 import { getSimpleStatusIndicator } from '@/utils/status';
+import { PlatformWindowedList } from '@/features/platformPage/PlatformWindowedList';
 
 const DEFAULT_MAX_SELECTION = 50;
 
@@ -199,7 +200,12 @@ export function ResourcePicker(props: ResourcePickerProps) {
             }
           >
             <div class="max-h-[300px] overflow-y-auto">
-              <For each={filteredResources()}>
+              <PlatformWindowedList
+                items={filteredResources}
+                estimatedItemHeight={56}
+                enableThreshold={16}
+                windowSize={20}
+              >
                 {(resource) => {
                   const badge = getResourceTypePresentation(resource.type) || {
                     label: resource.type,
@@ -303,7 +309,7 @@ export function ResourcePicker(props: ResourcePickerProps) {
                     </button>
                   );
                 }}
-              </For>
+              </PlatformWindowedList>
             </div>
           </Show>
         </Show>

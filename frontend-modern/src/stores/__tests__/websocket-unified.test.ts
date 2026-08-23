@@ -155,6 +155,8 @@ describe('websocket store unified resource contract', () => {
         },
       });
 
+      expect(store.resourceChange().changedIds).toBeNull();
+
       expect(store.state.resources).toHaveLength(2);
       expect((store.state as unknown as Record<string, unknown>).nodes).toBeUndefined();
     } finally {
@@ -360,6 +362,7 @@ describe('websocket store unified resource contract', () => {
       // the delta path has to agree with the full-snapshot path here.
       expect(agent?.status).toBe('online');
       expect(store.state.lastUpdate).toBe(200);
+      expect(store.resourceChange().changedIds).toEqual(new Set(['agent-1', 'vm-2', 'vm-1']));
     } finally {
       dispose();
     }

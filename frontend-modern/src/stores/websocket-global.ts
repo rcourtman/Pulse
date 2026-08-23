@@ -22,6 +22,10 @@ const createNoopWebSocketStore = (): ReturnType<typeof createWebSocketStore> => 
   const [reconnecting] = createSignal(false);
   const [initialDataReceived] = createSignal(true);
   const [updateProgress] = createSignal<unknown>(null);
+  const [resourceChange] = createSignal<{
+    version: number;
+    changedIds: ReadonlySet<string> | null;
+  }>({ version: 0, changedIds: null });
   const [state] = createStore<State>({
     connectedInfrastructure: [],
     metrics: [],
@@ -58,6 +62,7 @@ const createNoopWebSocketStore = (): ReturnType<typeof createWebSocketStore> => 
     reconnecting,
     initialDataReceived,
     updateProgress,
+    resourceChange,
     shutdown: () => {},
     reconnect: () => {},
     switchUrl: () => {},
