@@ -22,7 +22,10 @@ permissions:
 jobs:
   qualify:
     name: Exact-Candidate Container and Helm Smoke
-    runs-on: [self-hosted, Linux, X64, pulse-pve-build]
+    # Stable qualification must be independent of persistent runner disk state.
+    # Prereleases keep the faster PVE lane, where a later clean rehearsal can
+    # expose and repair runner capacity without blocking a stable patch.
+    runs-on: ${{ !contains(inputs.version, '-') && 'ubuntu-24.04' || fromJSON('["self-hosted","Linux","X64","pulse-pve-build"]') }}
     timeout-minutes: 15
     steps:
       - name: Checkout repository

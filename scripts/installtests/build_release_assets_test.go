@@ -1413,6 +1413,14 @@ func TestReleaseWorkflowsUseSecretSafeAttestedImageBuilds(t *testing.T) {
 		`uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4`,
 	}
 	containerJob := workflowJobBlock(t, string(qualifierWorkflowBytes), "qualify")
+	for _, needle := range []string{
+		`!contains(inputs.version, '-') && 'ubuntu-24.04'`,
+		"pulse-pve-build",
+	} {
+		if !strings.Contains(containerJob, needle) {
+			t.Fatalf("exact-candidate container qualification missing stable-hosted runner contract: %s", needle)
+		}
+	}
 	if !strings.Contains(string(candidateWorkflowBytes), "always() && inputs.qualify_containers && needs.build.result == 'success'") {
 		t.Fatal("standalone exact-candidate qualification must not inherit skipped native-signing dependencies")
 	}
@@ -1423,7 +1431,7 @@ func TestReleaseWorkflowsUseSecretSafeAttestedImageBuilds(t *testing.T) {
 		"docker/login-action",
 	} {
 		if strings.Contains(containerJob, forbidden) {
-			t.Fatalf("PVE exact-candidate container qualification must not receive release authority: %s", forbidden)
+			t.Fatalf("exact-candidate container qualification must not receive release authority: %s", forbidden)
 		}
 	}
 	controlPlaneDockerfileBytes, err := os.ReadFile(repoFile("deploy", "provider-msp", "Dockerfile.control-plane"))

@@ -1632,9 +1632,12 @@ record. All stable candidates route exact-SHA compilation through the hosted
 lane: rehearsals `32631653966` and `32635525554` lost different matrix compiler
 processes on the PVE runner without compiler diagnostics after substantial
 progress, while the same targets build independently. Prereleases retain the
-credential-free PVE compilation path for speed; post-signing container
-qualification may also use PVE because it cannot affect the submitted Windows
-artifact.
+credential-free PVE compilation path for speed. Stable container and Helm
+qualification also runs hosted after rehearsal `32636149901` exhausted the
+persistent PVE build runner's disk while assembling the first candidate image;
+the candidate payload had already verified successfully. Prerelease container
+qualification retains PVE acceleration so runner-capacity maintenance remains
+separate from the stable release boundary.
 
 The provider MSP proof command validates its handoff target with the same
 host-local redirect contract as runtime token minting and exchange. Proof input
