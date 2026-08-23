@@ -251,11 +251,10 @@ jobs:
     if: ${{ always() && needs.prepare.result == 'success' && needs.build_release_candidate.result == 'success' && needs.prepare.outputs.historical_asset_backfill_only != 'true' }}
     permissions:
       contents: read
-    uses: ./.github/workflows/qualify-release-containers.yml
+    uses: rcourtman/Pulse/.github/workflows/qualify-release-containers.yml@main
     with:
       version: ${{ needs.prepare.outputs.version }}
       container_artifact: ${{ needs.build_release_candidate.outputs.container_artifact_name }}
-      source_sha: ${{ github.sha }}
 
   # Build the embed bundle independently so backend and smoke lanes can start
   # without waiting for the full frontend quality suite.
