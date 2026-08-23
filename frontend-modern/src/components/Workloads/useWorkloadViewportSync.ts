@@ -5,6 +5,13 @@ import type { UseGroupedTableWindowingResult } from './useGroupedTableWindowing'
 const SCROLLABLE_OVERFLOW_PATTERN = /(?:auto|scroll|overlay)/;
 const MIN_VERTICAL_SCROLL_RANGE_PX = 1;
 const SCROLL_TO_TOP_VISIBILITY_THRESHOLD_PX = 640;
+const WHEEL_LINE_HEIGHT_PX = 16;
+
+const wheelDeltaInPixels = (event: WheelEvent, viewportHeight: number) => {
+  if (event.deltaMode === WheelEvent.DOM_DELTA_LINE) return event.deltaY * WHEEL_LINE_HEIGHT_PX;
+  if (event.deltaMode === WheelEvent.DOM_DELTA_PAGE) return event.deltaY * viewportHeight;
+  return event.deltaY;
+};
 
 const findScrollContainer = (element: HTMLElement): HTMLElement | null => {
   let parent = element.parentElement;
@@ -35,7 +42,7 @@ interface WorkloadsWorkloadViewportSyncOptions {
 export function useWorkloadViewportSync(options: WorkloadsWorkloadViewportSyncOptions) {
   const [isScrollToTopVisible, setIsScrollToTopVisible] = createSignal(false);
 
-  const syncGuestWindowToViewport = (measureRows = false) => {
+  const syncGuestWindowToViewport = (measureRows = false, projectedScrollDelta = 0) => {
     if (typeof window === 'undefined') return;
     const body = options.tableBodyRef();
     if (!body) return;
@@ -60,7 +67,7 @@ export function useWorkloadViewportSync(options: WorkloadsWorkloadViewportSyncOp
       const containerRect = scrollContainer.getBoundingClientRect();
       const scrollTop = Math.max(0, containerRect.top - rect.top);
       options.groupedWindowing.onScroll(
-        scrollTop,
+        Math.max(0, scrollTop + projectedScrollDelta),
         scrollContainer.clientHeight || window.innerHeight,
         options.rowHeight(),
       );
@@ -70,7 +77,7 @@ export function useWorkloadViewportSync(options: WorkloadsWorkloadViewportSyncOp
     setIsScrollToTopVisible(window.scrollY > SCROLL_TO_TOP_VISIBILITY_THRESHOLD_PX);
     if (!options.groupedWindowing.isWindowed()) return;
     options.groupedWindowing.onScroll(
-      Math.max(0, -rect.top),
+      Math.max(0, -rect.top + projectedScrollDelta),
       window.innerHeight,
       options.rowHeight(),
     );
@@ -84,6 +91,15 @@ export function useWorkloadViewportSync(options: WorkloadsWorkloadViewportSyncOp
     const handleViewportScroll = () => {
       syncGuestWindowToViewport();
     };
+    const handleViewportWheel = (event: Event) => {
+      const wheelEvent = event as WheelEvent;
+      if (!options.groupedWindowing.isWindowed() || wheelEvent.deltaY === 0) return;
+      const viewportHeight =
+        scrollTarget instanceof HTMLElement
+          ? scrollTarget.clientHeight || window.innerHeight
+          : window.innerHeight;
+      syncGuestWindowToViewport(false, wheelDeltaInPixels(wheelEvent, viewportHeight));
+    };
     const handleViewportResize = () => {
       syncGuestWindowToViewport(true);
     };
@@ -92,9 +108,11 @@ export function useWorkloadViewportSync(options: WorkloadsWorkloadViewportSyncOp
     const scrollContainer = findScrollContainer(options.tableBodyRef()!);
     const scrollTarget = scrollContainer ?? window;
     scrollTarget.addEventListener('scroll', handleViewportScroll, { passive: true });
+    scrollTarget.addEventListener('wheel', handleViewportWheel, { passive: true });
     window.addEventListener('resize', handleViewportResize);
     onCleanup(() => {
       scrollTarget.removeEventListener('scroll', handleViewportScroll);
+      scrollTarget.removeEventListener('wheel', handleViewportWheel);
       window.removeEventListener('resize', handleViewportResize);
     });
   });

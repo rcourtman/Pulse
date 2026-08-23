@@ -1,4 +1,4 @@
-import { createMemo, Index, Show } from 'solid-js';
+import { createMemo, For, Show } from 'solid-js';
 
 import { ComponentErrorBoundary } from '@/components/ErrorBoundary';
 import { EnhancedCPUBar } from '@/components/Workloads/EnhancedCPUBar';
@@ -373,29 +373,33 @@ export function WorkloadPanel(props: WorkloadPanelProps) {
           </TableCell>
         </TableRow>
       </Show>
-      <Index each={props.visibleGroupKeys()} fallback={<></>}>
+      <For each={props.visibleGroupKeys()} fallback={<></>}>
         {(groupKey) => {
-          const groupGuests = () => props.windowedGroupedGuests()[groupKey()] || [];
-          const fullGroupGuests = () => props.groupedGuests()[groupKey()] || [];
-          const node = () => props.nodeByInstance()[groupKey()];
+          const groupGuests = () => props.windowedGroupedGuests()[groupKey] || [];
+          const fullGroupGuests = () => props.groupedGuests()[groupKey] || [];
+          const groupGuestById = createMemo(
+            () => new Map(groupGuests().map((guest) => [getCanonicalWorkloadId(guest), guest])),
+          );
+          const groupGuestIds = createMemo(() => groupGuests().map(getCanonicalWorkloadId));
+          const node = () => props.nodeByInstance()[groupKey];
           const groupSummaryScope = createMemo<SummarySeriesGroupScope | null>(() => {
             if (props.groupingMode() !== 'grouped') {
               return null;
             }
             return buildWorkloadSummaryGroupScope(
-              groupKey(),
+              groupKey,
               fullGroupGuests(),
-              props.getGroupLabel(groupKey(), fullGroupGuests()),
+              props.getGroupLabel(groupKey, fullGroupGuests()),
             );
           });
           const isSummaryGroupHighlighted = createMemo(
-            () => props.activeSummaryWorkloadGroupScope()?.id === groupKey(),
+            () => props.activeSummaryWorkloadGroupScope()?.id === groupKey,
           );
           const shouldShowNodeDrawer = createMemo(
             () =>
               props.groupNodeDrawerMode() === 'inline' &&
               Boolean(node()) &&
-              props.focusedSummaryWorkloadGroupId() === groupKey() &&
+              props.focusedSummaryWorkloadGroupId() === groupKey &&
               props.selectedGuestId() === null,
           );
           const canOpenNodeDrawer = () => props.groupNodeDrawerMode() === 'inline';
@@ -438,7 +442,7 @@ export function WorkloadPanel(props: WorkloadPanelProps) {
                           ? getInteractiveGroupedTableRowClass()
                           : getGroupedTableRowClass()
                       }
-                      data-summary-group-id={groupKey()}
+                      data-summary-group-id={groupKey}
                       data-summary-group-series-count={String(
                         groupSummaryScope()?.seriesIds.length ?? 0,
                       )}
@@ -451,9 +455,9 @@ export function WorkloadPanel(props: WorkloadPanelProps) {
                         class={getGroupedTableRowCellClass()}
                       >
                         {(() => {
-                          const label = props.getGroupLabel(groupKey(), fullGroupGuests());
+                          const label = props.getGroupLabel(groupKey, fullGroupGuests());
                           const badges = props.groupLabelBadges();
-                          const badge = badges[groupKey()] ?? badges[groupKey().toLowerCase()];
+                          const badge = badges[groupKey] ?? badges[groupKey.toLowerCase()];
                           const badgeLabel = badge?.label || label.type;
                           const badgeClass = badge?.classes || GROUPED_TABLE_ROW_BADGE_CLASS;
                           return (
@@ -500,7 +504,7 @@ export function WorkloadPanel(props: WorkloadPanelProps) {
                           ? 'true'
                           : 'false'
                         : undefined,
-                      'data-summary-group-id': groupKey(),
+                      'data-summary-group-id': groupKey,
                       'data-summary-group-series-count': String(
                         groupSummaryScope()?.seriesIds.length ?? 0,
                       ),
@@ -513,7 +517,7 @@ export function WorkloadPanel(props: WorkloadPanelProps) {
                 <Show when={shouldShowNodeDrawer()}>
                   <InlineDetailTableRow
                     colspan={props.totalColumns()}
-                    data-inline-node-detail-for={groupKey()}
+                    data-inline-node-detail-for={groupKey}
                   >
                     <NodeDrawer
                       node={node()!}
@@ -522,9 +526,10 @@ export function WorkloadPanel(props: WorkloadPanelProps) {
                   </InlineDetailTableRow>
                 </Show>
               </Show>
-              <Index each={groupGuests()} fallback={<></>}>
-                {(guest) => {
-                  const guestId = createMemo(() => getCanonicalWorkloadId(guest()));
+              <For each={groupGuestIds()} fallback={<></>}>
+                {(keyedGuestId) => {
+                  const guest = () => groupGuestById().get(keyedGuestId)!;
+                  const guestId = () => keyedGuestId;
                   const metadataIdCandidates = createMemo(() =>
                     getWorkloadMetadataIdCandidates(guest()),
                   );
@@ -606,11 +611,11 @@ export function WorkloadPanel(props: WorkloadPanelProps) {
                     </ComponentErrorBoundary>
                   );
                 }}
-              </Index>
+              </For>
             </>
           );
         }}
-      </Index>
+      </For>
       <Show when={props.groupedWindowing.isWindowed() && props.bottomSpacerHeight() > 0}>
         <TableRow aria-hidden="true" class="h-0 !border-0">
           <TableCell colspan={props.totalColumns()} class="h-0 !p-0 !border-0 leading-[0]">

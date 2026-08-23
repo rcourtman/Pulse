@@ -40,11 +40,13 @@ const DEFAULT_WINDOW_SIZE = 140;
 // metric-heavy rows is already enough to cause long layout and paint tasks.
 const DEFAULT_ENABLE_THRESHOLD = 250;
 const DEFAULT_OVERSCAN_ROWS = 20;
+const DEFAULT_EDGE_RUNWAY_ROWS = 24;
 
 export const useGroupedTableWindowing = (
   options: UseGroupedTableWindowingOptions,
 ): UseGroupedTableWindowingResult => {
   const [windowStart, setWindowStart] = createSignal(0);
+  let lastFirstVisibleRow = 0;
 
   const normalizedWindowSize = createMemo(() =>
     Math.max(1, Math.floor(options.windowSize ?? DEFAULT_WINDOW_SIZE)),
@@ -90,10 +92,6 @@ export const useGroupedTableWindowing = (
     const safeRowHeight = rowHeight > 0 ? rowHeight : 40;
     const safeContainerHeight = containerHeight > 0 ? containerHeight : safeRowHeight;
     const rowsInView = Math.max(1, Math.ceil(safeContainerHeight / safeRowHeight));
-    const overscan = Math.min(
-      DEFAULT_OVERSCAN_ROWS,
-      Math.max(0, normalizedWindowSize() - rowsInView),
-    );
     const resolvedFirstVisibleRow = options.rowIndexAtOffset?.(
       Math.max(0, scrollTop),
       safeRowHeight,
@@ -101,7 +99,38 @@ export const useGroupedTableWindowing = (
     const firstVisibleRow = Number.isFinite(resolvedFirstVisibleRow)
       ? Math.max(0, Math.floor(resolvedFirstVisibleRow!))
       : Math.floor(Math.max(0, scrollTop) / safeRowHeight);
-    setClampedStart(firstVisibleRow - overscan);
+    const visibleEnd = Math.min(options.totalRowCount(), firstVisibleRow + rowsInView);
+    const availableBuffer = Math.max(0, normalizedWindowSize() - rowsInView);
+    const edgeRunway = Math.min(
+      Math.floor(availableBuffer / 2),
+      Math.max(DEFAULT_EDGE_RUNWAY_ROWS, rowsInView),
+    );
+    const direction = Math.sign(firstVisibleRow - lastFirstVisibleRow);
+    lastFirstVisibleRow = firstVisibleRow;
+
+    const leadingRunway = firstVisibleRow - startIndex();
+    const trailingRunway = endIndex() - visibleEnd;
+    const viewportIsMounted = leadingRunway >= 0 && trailingRunway >= 0;
+    if (
+      viewportIsMounted &&
+      ((direction > 0 && trailingRunway > edgeRunway) ||
+        (direction < 0 && leadingRunway > edgeRunway) ||
+        (direction === 0 && leadingRunway >= edgeRunway && trailingRunway >= edgeRunway))
+    ) {
+      return;
+    }
+
+    // Keep most of the spare window in the active scroll direction. Unlike
+    // tracking every visible row, this runway only moves when the viewport
+    // approaches an edge, avoiding a full reactive slice update per wheel tick.
+    const directionalRunway = Math.max(edgeRunway, availableBuffer - edgeRunway);
+    const rowsBeforeViewport =
+      direction < 0
+        ? directionalRunway
+        : direction > 0
+          ? edgeRunway
+          : Math.min(DEFAULT_OVERSCAN_ROWS, availableBuffer);
+    setClampedStart(firstVisibleRow - rowsBeforeViewport);
   };
 
   const getVisibleSlice = (

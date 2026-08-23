@@ -169,7 +169,7 @@ describe('useGroupedTableWindowing', () => {
   // onScroll
   // ──────────────────────────────────────────────────────────────
   describe('onScroll', () => {
-    it('moves window based on scroll position', () => {
+    it('keeps the current window while the viewport has a safe forward runway', () => {
       const hook = setup({
         totalRowCount: () => 1000,
         enabled: () => true,
@@ -178,11 +178,42 @@ describe('useGroupedTableWindowing', () => {
 
       // Scroll down: scrollTop=2000, containerHeight=400, rowHeight=40
       // firstVisibleRow = floor(2000/40) = 50
-      // overscan = min(20, max(0, 100 - ceil(400/40))) = min(20, max(0,90)) = 20
-      // start = 50 - 20 = 30
+      // The visible range [50, 60) remains inside [0, 100) with 40 rows
+      // ahead, so the window stays mounted instead of churning every row.
       hook.onScroll(2000, 400, 40);
-      expect(hook.startIndex()).toBe(30);
-      expect(hook.endIndex()).toBe(130);
+      expect(hook.startIndex()).toBe(0);
+      expect(hook.endIndex()).toBe(100);
+    });
+
+    it('moves once the viewport reaches the forward runway and then holds steady', () => {
+      const hook = setup({
+        totalRowCount: () => 1000,
+        enabled: () => true,
+        windowSize: 100,
+      });
+
+      hook.onScroll(3200, 400, 40);
+      expect(hook.startIndex()).toBe(56);
+      expect(hook.endIndex()).toBe(156);
+
+      hook.onScroll(3600, 400, 40);
+      expect(hook.startIndex()).toBe(56);
+      expect(hook.endIndex()).toBe(156);
+    });
+
+    it('keeps most spare rows behind the viewport while scrolling upward', () => {
+      const hook = setup({
+        totalRowCount: () => 1000,
+        enabled: () => true,
+        windowSize: 100,
+      });
+
+      hook.onScroll(8000, 400, 40);
+      expect(hook.startIndex()).toBe(176);
+
+      hook.onScroll(6800, 400, 40);
+      expect(hook.startIndex()).toBe(104);
+      expect(hook.endIndex()).toBe(204);
     });
 
     it('clamps start to 0 when scrolled near top', () => {
@@ -226,7 +257,7 @@ describe('useGroupedTableWindowing', () => {
       });
       // rowHeight=0 → safeRowHeight=40, same calc as normal
       hook.onScroll(2000, 400, 0);
-      expect(hook.startIndex()).toBe(30);
+      expect(hook.startIndex()).toBe(0);
     });
 
     it('handles negative scrollTop gracefully', () => {
@@ -265,8 +296,8 @@ describe('useGroupedTableWindowing', () => {
       hook.onScroll(3200, 400, 32);
 
       expect(rowIndexAtOffset).toHaveBeenCalledWith(3200, 32);
-      expect(hook.startIndex()).toBe(60);
-      expect(hook.endIndex()).toBe(160);
+      expect(hook.startIndex()).toBe(56);
+      expect(hook.endIndex()).toBe(156);
     });
 
     it('falls back to fixed row math when the grouped offset resolver is non-finite', () => {
@@ -279,7 +310,7 @@ describe('useGroupedTableWindowing', () => {
 
       hook.onScroll(2000, 400, 40);
 
-      expect(hook.startIndex()).toBe(30);
+      expect(hook.startIndex()).toBe(0);
     });
   });
 
@@ -490,8 +521,9 @@ describe('useGroupedTableWindowing', () => {
         enabled: () => true,
         windowSize: 100,
       });
-      // Scroll: window starts at 30
-      hook.onScroll(2000, 400, 40);
+      // Reveal a row that centers the window at 30.
+      hook.revealIndex(500);
+      hook.revealIndex(80);
       // startIndex=30, endIndex=130
       // Group at index 10..60 → sliceStart = max(0, 30-10) = 20, sliceEnd = min(50, 130-10) = 50
       const slice = hook.getVisibleSlice('group-partial', guests, 10);

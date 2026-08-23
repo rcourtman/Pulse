@@ -801,6 +801,15 @@ change may globally weaken the Task 03 lifecycle-state idempotency invariant.
     already-spaced header. This keeps total table height stable while groups
     cross the virtual window and prevents the visible estate from bumping by a
     header row during continuous scrolling.
+    Virtualization must remain visually invisible under rapid wheel and
+    trackpad input. The windowing owner keeps a hysteretic directional runway
+    instead of shifting the slice for every visible-row change, and viewport
+    sync may prewarm that runway from one passive wheel listener before the
+    corresponding scroll event. Group and guest iteration must remain keyed so
+    overlapping rows survive window shifts rather than rebinding every mounted
+    row. This anticipation must preserve the existing bounded mounted-row
+    budget; rendering the whole estate or adding per-row observers, timers, or
+    scroll listeners is forbidden.
     That same viewport-sync owner may expose one passive app-shell scroll
     position signal and a smooth back-to-top action for the Workloads surface.
     The control must remain absent near the top, sit above the mobile navigation

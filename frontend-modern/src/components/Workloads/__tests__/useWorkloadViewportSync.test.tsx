@@ -66,6 +66,9 @@ describe('useWorkloadViewportSync', () => {
     expect(addEventListenerSpy).toHaveBeenCalledWith('scroll', expect.any(Function), {
       passive: true,
     });
+    expect(addEventListenerSpy).toHaveBeenCalledWith('wheel', expect.any(Function), {
+      passive: true,
+    });
     expect(addEventListenerSpy).toHaveBeenCalledWith('resize', expect.any(Function));
 
     window.dispatchEvent(new Event('scroll'));
@@ -76,6 +79,7 @@ describe('useWorkloadViewportSync', () => {
     unmount();
 
     expect(removeEventListenerSpy).toHaveBeenCalledWith('scroll', expect.any(Function));
+    expect(removeEventListenerSpy).toHaveBeenCalledWith('wheel', expect.any(Function));
     expect(removeEventListenerSpy).toHaveBeenCalledWith('resize', expect.any(Function));
   });
 
@@ -169,6 +173,11 @@ describe('useWorkloadViewportSync', () => {
 
     horizontalTableWrapper.dispatchEvent(new Event('scroll'));
     expect(onScroll).toHaveBeenCalledTimes(2);
+
+    appScrollContainer.dispatchEvent(new WheelEvent('wheel', { deltaY: 120 }));
+    await waitFor(() => {
+      expect(onScroll).toHaveBeenLastCalledWith(680, 400, 32);
+    });
   });
 
   it('exposes one app-shell back-to-top action after sustained workload scrolling', async () => {

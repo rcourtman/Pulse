@@ -1,17 +1,17 @@
 {
   "version": 1,
-  "base_sha": "d8fe2a935875675b22a87c5471ffc923f7a0ab51",
-  "verified_at": "2026-08-23T16:50:00Z",
+  "base_sha": "dc129cd3a403e9fd2f9177ddbfcf18e5042445e5",
+  "verified_at": "2026-08-23T16:03:35Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx",
-    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx",
-    "frontend-modern/src/features/proxmox/proxmoxPageModel.ts"
+    "frontend-modern/src/components/Workloads/WorkloadPanel.tsx",
+    "frontend-modern/src/components/Workloads/useGroupedTableWindowing.ts",
+    "frontend-modern/src/components/Workloads/useWorkloadViewportSync.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx": "5b2dce1ff4cae9624fa106ad9c01f29e0025b33e0def87cee30798e74fe31329",
-    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx": "27d2077c659d40e2c51472086e745311221d771129455a4bae2be816ab116dbe",
-    "frontend-modern/src/features/proxmox/proxmoxPageModel.ts": "f80b8e01fd31e7f2de55cda5a2f5e58005068b07daa77c3356811ad7f5919051"
+    "frontend-modern/src/components/Workloads/WorkloadPanel.tsx": "ea56e3d8a4e8c63baf1f99e1dea82d8e6ea2dd801b8eafaf4cb849ebf8612bad",
+    "frontend-modern/src/components/Workloads/useGroupedTableWindowing.ts": "76fd82b5a0baefdf09e37af1713681e4424c2762ece99652b2d998011a457ce8",
+    "frontend-modern/src/components/Workloads/useWorkloadViewportSync.ts": "0f2315ddf875206f5de6a97fc9a600b5b61aaa2ae910cc4353c5eb78eb5bfd18"
   },
   "routes": [
     "/proxmox/overview"
@@ -22,22 +22,23 @@
       "height": 720
     },
     {
-      "width": 390,
-      "height": 844
+      "width": 375,
+      "height": 812
     }
   ],
   "states": [
-    "Default desktop Proxmox overview renders the 50-node mock estate with 8 clusters and 2 standalone nodes",
-    "Desktop search for pve31 renders one matching node as 1 of 50 and keeps the matching guest inventory visible",
-    "Narrow search for pve31 renders one matching node with the native pve31 identifier beside its friendly name",
-    "Narrow filtered layout has no horizontal overflow and retains the responsive node and workload columns",
-    "The browser verification run reported no console errors"
+    "The large Proxmox mock estate renders 929 guests while retaining the 140-row mounted DOM budget",
+    "After an 8000-pixel desktop wheel burst, 25 workload rows cover the full 1280x720 viewport from -6 to 723 pixels without exposing a spacer",
+    "After a 2800-pixel phone wheel burst, 23 workload rows cover the full 375x812 viewport from -21 to 821 pixels without exposing a spacer",
+    "Desktop scroll height remains 29470 pixels and phone scroll height remains 36372 pixels while virtual windows move",
+    "Rapid-scroll screenshots show continuous populated rows with the back-to-top control remaining above mobile navigation",
+    "The desktop and phone rapid-scroll runs reported no console errors"
   ],
   "interactions": [
-    "Loaded the Proxmox overview and inspected the default 50-node desktop table",
-    "Entered pve31 in the shared workload search and verified the node table reduced to 1 of 50",
-    "Verified the same query left the matching Analytics A host and its pve31 workload rows visible",
-    "Applied a temporary 390x844 viewport override, reloaded the overview, entered pve31, and verified the narrow DOM and screenshot",
-    "Reset the temporary viewport override after verification"
+    "Loaded the large desktop mock estate and confirmed its initial 140-row virtual runway",
+    "Applied an 8000-pixel wheel burst and immediately measured and captured continuous visible-row coverage",
+    "Applied a temporary 375x812 viewport override and reloaded the 929-guest estate",
+    "Applied a 2800-pixel phone wheel burst and immediately measured and captured continuous visible-row coverage",
+    "Checked runtime error logs, reset the temporary viewport override, and closed the temporary test tab"
   ]
 }

@@ -915,11 +915,18 @@ describe('Workloads performance contract', () => {
       expect(workloadsWorkloadDerivedStateSource).toContain('guestIndexAtVirtualOffset');
       expect(workloadsWorkloadDerivedStateSource).toContain('WORKLOADS_TABLE_DIVIDER_HEIGHT');
       expect(groupedTableWindowingSource).toContain('rowIndexAtOffset');
+      expect(groupedTableWindowingSource).toContain('DEFAULT_EDGE_RUNWAY_ROWS');
+      expect(groupedTableWindowingSource).toContain('viewportIsMounted');
       expect(workloadPanelSource).toContain('groupGuests()[0] === fullGroupGuests()[0]');
       expect(workloadPanelSource).toContain('class="h-0 !p-0 !border-0 leading-[0]"');
+      expect(workloadPanelSource).toContain('<For each={props.visibleGroupKeys()}');
+      expect(workloadPanelSource).toContain('<For each={groupGuestIds()}');
+      expect(workloadPanelSource).toContain('groupGuests().map(getCanonicalWorkloadId)');
       expect(workloadsWorkloadViewportSyncSource).toContain(
         'SCROLL_TO_TOP_VISIBILITY_THRESHOLD_PX',
       );
+      expect(workloadsWorkloadViewportSyncSource).toContain("addEventListener('wheel'");
+      expect(workloadsWorkloadViewportSyncSource).toContain('wheelDeltaInPixels');
       expect(workloadsWorkloadViewportSyncSource).toContain(
         "scrollContainer.scrollTo({ top: 0, behavior: 'smooth' })",
       );
@@ -1327,7 +1334,8 @@ describe('Workloads performance contract', () => {
       expect(workloadsStateSource).not.toContain('const DEFAULT_ENABLE_THRESHOLD =');
       expect(workloadsStateSource).not.toContain('const DEFAULT_OVERSCAN_ROWS =');
       expect(workloadsSource).not.toContain('createMemo(() => getCanonicalWorkloadId(guest()))');
-      expect(workloadPanelSource).toContain('createMemo(() => getCanonicalWorkloadId(guest()))');
+      expect(workloadPanelSource).toContain('groupGuests().map(getCanonicalWorkloadId)');
+      expect(workloadPanelSource).toContain('groupGuestById().get(keyedGuestId)');
       expect(workloadPanelSource).toContain('buildWorkloadSummaryGroupScope');
       expect(workloadPanelSource).toContain('data-summary-group-id');
       expect(workloadPanelSource).toContain('setHoveredWorkloadGroupScope');
@@ -1647,7 +1655,7 @@ describe('Workloads performance contract', () => {
       expect(workloadTableHeaderSource).not.toContain('NodeGroupHeader');
       expect(workloadPanelSource).toContain('NodeGroupHeader');
       expect(workloadPanelSource).toContain('GuestDrawer');
-      expect(workloadPanelSource).toContain('createMemo(() => getCanonicalWorkloadId(guest()))');
+      expect(workloadPanelSource).toContain('groupGuests().map(getCanonicalWorkloadId)');
       expect(workloadPanelSource).toContain('createSummaryInteractiveRowPreviewHandlers');
       expect(workloadPanelSource).toContain('resolveSummaryGroupMemberInteractionState');
       expect(workloadPanelSource).toContain('getInteractiveGroupedTableRowClass');
