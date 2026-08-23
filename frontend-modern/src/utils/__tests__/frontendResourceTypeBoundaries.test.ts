@@ -602,7 +602,10 @@ describe('frontend resource type boundaries', () => {
     expect(workloadsSurfaceSource).not.toContain(
       'createMemo(() => getCanonicalWorkloadId(guest()))',
     );
-    expect(workloadPanelSource).toContain('createMemo(() => getCanonicalWorkloadId(guest()))');
+    expect(workloadPanelSource).toContain(
+      'createMemo(() => groupGuests().map(getCanonicalWorkloadId))',
+    );
+    expect(workloadPanelSource).toContain('const guestId = () => keyedGuestId;');
     expect(workloadsWorkloadTableSource).not.toContain(
       'createMemo(() => getCanonicalWorkloadId(guest()))',
     );
@@ -913,7 +916,9 @@ describe('frontend resource type boundaries', () => {
     expect(workloadTableHeaderSource).not.toContain('NodeGroupHeader');
     expect(workloadPanelSource).toContain('NodeGroupHeader');
     expect(workloadPanelSource).toContain('GuestDrawer');
-    expect(workloadPanelSource).toContain('createMemo(() => getCanonicalWorkloadId(guest()))');
+    expect(workloadPanelSource).toContain(
+      'createMemo(() => groupGuests().map(getCanonicalWorkloadId))',
+    );
     expect(workloadPanelSource).not.toContain('TableHead');
     expect(emptyStateSource).toContain('getEmptyStatePresentation');
     expect(emptyStateSource).not.toContain('const iconBgClass: Record<EmptyStateTone, string> =');
@@ -1453,7 +1458,10 @@ describe('frontend resource type boundaries', () => {
     expect(storagePageResourcesSource).toContain('export const useStoragePageResources');
     expect(storagePageResourcesSource).toContain('useWebSocket');
     expect(storagePageResourcesSource).toContain('useResources');
-    expect(storagePageResourcesSource).toContain('useStorageRecoveryResources');
+    expect(storagePageResourcesSource).toContain('useUnifiedResources');
+    expect(storagePageResourcesSource).toContain(
+      "const STORAGE_PAGE_RESOURCES_QUERY = 'type=storage'",
+    );
     expect(storagePageResourcesSource).toContain('useAlertsActivation');
     expect(storagePageModelSource).toContain('export const useStoragePageModel');
     expect(storagePageModelSource).toContain('useStoragePageResources');

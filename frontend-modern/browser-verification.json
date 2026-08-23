@@ -1,13 +1,23 @@
 {
   "version": 1,
-  "base_sha": "679497119925fca16420fdc3cb7b5d940a50578f",
-  "verified_at": "2026-08-23T20:54:57Z",
+  "base_sha": "1d3ee7a1b321c2718e896bcc8a38add23be1a636",
+  "verified_at": "2026-08-23T21:15:44Z",
   "result": "passed",
-  "changed_paths": ["frontend-modern/src/features/proxmox/proxmoxPageModel.ts"],
+  "changed_paths": [
+    "frontend-modern/src/components/Storage/StoragePoolsTable.tsx",
+    "frontend-modern/src/components/Storage/useStoragePageModel.ts",
+    "frontend-modern/src/components/Storage/useStoragePageResources.ts",
+    "frontend-modern/src/components/Storage/useStoragePoolsTableWindowing.ts",
+    "frontend-modern/src/components/Storage/useStorageSummaryCharts.ts"
+  ],
   "content_sha256": {
-    "frontend-modern/src/features/proxmox/proxmoxPageModel.ts": "a8de01ecbcca7f65b2b5145ab6a239d6c2f9f10eb7073f74883a273aa12f2418"
+    "frontend-modern/src/components/Storage/StoragePoolsTable.tsx": "c3298880787a0fdd83975a98888e1ab5483e943e60ba50b5e43b816c7b094738",
+    "frontend-modern/src/components/Storage/useStoragePageModel.ts": "98dfbe4ae5b7e737afff5f050e3a2013a33da0ee8818042067a1eff619b26a5a",
+    "frontend-modern/src/components/Storage/useStoragePageResources.ts": "566e6eae7bc5febd53f4346624ae8fdb40d3fe78d8c937472b2260ebb65f4d18",
+    "frontend-modern/src/components/Storage/useStoragePoolsTableWindowing.ts": "10056ef39237065866b7355636c9f81dfdfa3e482837b941b48896618c5b4388",
+    "frontend-modern/src/components/Storage/useStorageSummaryCharts.ts": "04035a225166dae821135ea3a31295de5ecb963d5278b5721e62cd2a4b826829"
   },
-  "routes": ["/proxmox/overview"],
+  "routes": ["/proxmox/overview", "/proxmox/storage?source=proxmox-all"],
   "viewports": [
     {
       "width": 1280,
@@ -19,16 +29,17 @@
     }
   ],
   "states": [
-    "Before the fix, searching 315 retained 8 of 50 nodes while the guest table showed only 3 matching guests",
-    "The five false parent nodes were admitted only by opaque VM or LXC resource ids containing 315",
-    "After the fix, searching 315 retained exactly Analytics A, Analytics F, and East Production E for the three visible guest matches",
-    "The same exact three-node result rendered at 390x844 with document clientWidth and scrollWidth both equal to 390 pixels",
-    "Direct navigation back to the unfiltered overview restored all 50 nodes and the browser console remained free of warnings and errors"
+    "The connected mock estate contained 50 Proxmox nodes, 929 guests, and 209 storage pool rows",
+    "The Storage table mounted 72 pool rows, one virtual spacer, 152 table SVGs, and 2307 total DOM nodes at 1280x720 instead of mounting all 209 pool rows",
+    "A fast jump through the storage estate retained all 72 bounded rows and painted the visible middle-of-estate rows without an empty table section",
+    "At 390x844 the Storage table remained present with 72 mounted rows and 2288 total DOM nodes",
+    "The browser console contained no warnings or errors after desktop and narrow transition and scrolling checks"
   ],
   "interactions": [
-    "Loaded /proxmox/overview against the connected 50-node and 929-guest mock estate and entered 315 in the shared workload search",
-    "Compared the Nodes and Guests results before and after the search-vocabulary correction",
-    "Repeated the numeric search at a 390x844 viewport and checked the three expected parent nodes plus page overflow dimensions",
-    "Navigated to the clean overview route to remove search state and confirmed the complete node estate returned"
+    "Loaded /proxmox/overview against the connected 50-node and 929-guest mock estate and switched to Storage repeatedly",
+    "Counted the mounted Storage rows, spacer rows, SVGs, and complete document DOM after the transition",
+    "Jumped through the virtualized estate and visually inspected the populated middle-of-estate viewport for blank regions",
+    "Applied a 390x844 viewport override, repeated the Overview to Storage transition, and confirmed the table and rows remained visible",
+    "Read browser warning and error logs, reset the temporary viewport override, and left the demo at its normal viewport"
   ]
 }

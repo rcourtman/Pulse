@@ -62,7 +62,7 @@ export const useStoragePageModel = (options: UseStoragePageModelOptions = {}) =>
     state,
     activeAlerts,
     reconnect,
-    storageRecoveryResources,
+    storageResources,
     nodes,
     physicalDisks,
     cephResources,
@@ -98,6 +98,7 @@ export const useStoragePageModel = (options: UseStoragePageModelOptions = {}) =>
     timeRange: summaryTimeRange,
     nodeId: selectedNodeId,
     caller: 'useStoragePageModel',
+    deferInitialLoad: true,
   });
   const storageGrowthRangeLabel = createMemo(
     () => SUMMARY_TIME_RANGE_LABEL[summaryTimeRange()] ?? summaryTimeRange(),
@@ -129,7 +130,7 @@ export const useStoragePageModel = (options: UseStoragePageModelOptions = {}) =>
     groupedRecords,
   } = useStoragePageData({
     state: () => state,
-    resources: storageRecoveryResources.resources,
+    resources: storageResources.resources,
     activeAlerts,
     alertsEnabled,
     nodes,
@@ -146,19 +147,13 @@ export const useStoragePageModel = (options: UseStoragePageModelOptions = {}) =>
   });
 
   const surfaceInitialDataReceived = createMemo(
-    () =>
-      records().length > 0 ||
-      !storageRecoveryResources.loading() ||
-      Boolean(storageRecoveryResources.error()),
+    () => records().length > 0 || !storageResources.loading() || Boolean(storageResources.error()),
   );
   const surfaceConnected = createMemo(
-    () =>
-      storageRecoveryResources.loading() ||
-      records().length > 0 ||
-      !storageRecoveryResources.error(),
+    () => storageResources.loading() || records().length > 0 || !storageResources.error(),
   );
   const reconnectSurface = () => {
-    void storageRecoveryResources.refetch();
+    void storageResources.refetch();
     reconnect();
   };
   const {
@@ -389,7 +384,7 @@ export const useStoragePageModel = (options: UseStoragePageModelOptions = {}) =>
   });
 
   const { isLoadingPools } = useStoragePageStatus({
-    loading: storageRecoveryResources.loading,
+    loading: storageResources.loading,
     filteredRecordCount: () => filteredRecords().length,
     view,
   });

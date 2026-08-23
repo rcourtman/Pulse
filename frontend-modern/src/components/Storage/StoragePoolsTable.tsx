@@ -1,8 +1,15 @@
-import { Component, For, Index, Show, createMemo } from 'solid-js';
+import { Component, For, Show, createMemo } from 'solid-js';
 import ArrowDownIcon from 'lucide-solid/icons/arrow-down';
 import ArrowUpIcon from 'lucide-solid/icons/arrow-up';
 import ArrowUpDownIcon from 'lucide-solid/icons/arrow-up-down';
-import { Table, TableBody, TableHead, TableHeader, TableRow } from '@/components/shared/Table';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/shared/Table';
 import { getPlatformTableHeadClassForKind } from '@/features/platformPage/sharedPlatformPage';
 import {
   getStoragePoolColumnWidthPercent,
@@ -30,6 +37,7 @@ import { useStoragePoolsTableModel } from './useStoragePoolsTableModel';
 import type { SummarySeriesGroupScope } from '@/components/shared/summaryCardInteraction';
 import { resolveSummaryGroupMemberInteractionState } from '@/components/shared/summaryCardInteraction';
 import { buildStorageSummaryGroupScope } from './storageSummaryGroups';
+import { useStoragePoolsTableWindowing } from './useStoragePoolsTableWindowing';
 
 type StoragePoolsTableProps = {
   groupedRecords: StorageGroupedRecords[];
@@ -103,6 +111,10 @@ export const StoragePoolsTable: Component<StoragePoolsTableProps> = (props) => {
     nodeOnlineByLabel: () => props.nodeOnlineByLabel,
     getRecordAlertState: props.getRecordAlertState,
     setExpandedPoolId: props.setExpandedPoolId,
+  });
+  const tableWindow = useStoragePoolsTableWindowing({
+    groups: model.groups,
+    expandedPoolId: () => props.expandedPoolId,
   });
 
   const handleSort = (sortKey: StorageSortKey) => {
@@ -213,71 +225,78 @@ export const StoragePoolsTable: Component<StoragePoolsTableProps> = (props) => {
                 </For>
               </TableRow>
             </TableHeader>
-            <TableBody class={STORAGE_POOLS_BODY_CLASS}>
-              <For each={model.groups()}>
-                {(group) => (
-                  <>
-                    <Show when={group.showHeader}>
-                      {(() => {
-                        const groupSummaryScope = buildStorageSummaryGroupScope(
-                          group,
-                          props.groupBy,
-                        );
-                        return (
-                          <StorageGroupRow
-                            group={group}
-                            groupBy={props.groupBy}
-                            expanded={group.expanded}
-                            onToggle={() => props.toggleGroup(group.key)}
-                            summaryGroupScope={groupSummaryScope}
-                            summaryActive={
-                              props.activeSummaryGroupScope?.id === groupSummaryScope?.id
-                            }
-                            summaryFocused={props.focusedSummaryGroupId === groupSummaryScope?.id}
-                            onFocusChange={props.onGroupFocusChange}
-                            onHoverChange={props.onGroupHoverChange}
-                          />
-                        );
-                      })()}
-                    </Show>
-                    <Show when={group.expanded}>
-                      <Index each={group.items}>
-                        {(record) => {
-                          const rowModel = () => model.buildRowModel(record().id, record());
+            <TableBody ref={tableWindow.setBodyRef} class={STORAGE_POOLS_BODY_CLASS}>
+              <Show when={tableWindow.topSpacerHeight() > 0}>
+                <TableRow aria-hidden="true" class="h-0 !border-0">
+                  <TableCell colspan={99} class="h-0 !border-0 !p-0 leading-[0]">
+                    <svg
+                      aria-hidden="true"
+                      width="1"
+                      height={String(tableWindow.topSpacerHeight())}
+                      class="pointer-events-none block w-px"
+                    />
+                  </TableCell>
+                </TableRow>
+              </Show>
+              <For each={tableWindow.visibleItems()}>
+                {(item) => {
+                  if (item.kind === 'group') {
+                    const groupSummaryScope = buildStorageSummaryGroupScope(
+                      item.group,
+                      props.groupBy,
+                    );
+                    return (
+                      <StorageGroupRow
+                        group={item.group}
+                        groupBy={props.groupBy}
+                        expanded={item.group.expanded}
+                        onToggle={() => props.toggleGroup(item.group.key)}
+                        summaryGroupScope={groupSummaryScope}
+                        summaryActive={props.activeSummaryGroupScope?.id === groupSummaryScope?.id}
+                        summaryFocused={props.focusedSummaryGroupId === groupSummaryScope?.id}
+                        onFocusChange={props.onGroupFocusChange}
+                        onHoverChange={props.onGroupHoverChange}
+                      />
+                    );
+                  }
 
-                          return (
-                            <StoragePoolRow
-                              layoutMode={layoutMode()}
-                              record={record()}
-                              growthDelta={
-                                props.storageGrowthBySeriesId.get(
-                                  resolveStorageRecordMetricResourceId(record()),
-                                ) ?? null
-                              }
-                              summarySeriesId={resolveStorageRecordMetricResourceId(record())}
-                              expanded={rowModel().expanded}
-                              summaryHighlighted={
-                                props.highlightedSummarySeriesId ===
-                                resolveStorageRecordMetricResourceId(record())
-                              }
-                              summaryGroupMemberState={resolveSummaryGroupMemberInteractionState({
-                                seriesId: resolveStorageRecordMetricResourceId(record()),
-                                hoveredGroupScope: props.hoveredSummaryGroupScope,
-                                focusedGroupScope: props.focusedSummaryGroupScope,
-                              })}
-                              onToggleExpand={() => model.togglePool(record().id)}
-                              onHoverChange={props.onHoverChange}
-                              rowClass={rowModel().rowClass}
-                              physicalDisks={props.physicalDisks}
-                              alertDataAttrs={rowModel().alertDataAttrs}
-                            />
-                          );
-                        }}
-                      </Index>
-                    </Show>
-                  </>
-                )}
+                  const record = item.record;
+                  const metricResourceId = resolveStorageRecordMetricResourceId(record);
+                  const rowModel = createMemo(() => model.buildRowModel(record.id, record));
+                  return (
+                    <StoragePoolRow
+                      layoutMode={layoutMode()}
+                      record={record}
+                      growthDelta={props.storageGrowthBySeriesId.get(metricResourceId) ?? null}
+                      summarySeriesId={metricResourceId}
+                      expanded={rowModel().expanded}
+                      summaryHighlighted={props.highlightedSummarySeriesId === metricResourceId}
+                      summaryGroupMemberState={resolveSummaryGroupMemberInteractionState({
+                        seriesId: metricResourceId,
+                        hoveredGroupScope: props.hoveredSummaryGroupScope,
+                        focusedGroupScope: props.focusedSummaryGroupScope,
+                      })}
+                      onToggleExpand={() => model.togglePool(record.id)}
+                      onHoverChange={props.onHoverChange}
+                      rowClass={rowModel().rowClass}
+                      physicalDisks={props.physicalDisks}
+                      alertDataAttrs={rowModel().alertDataAttrs}
+                    />
+                  );
+                }}
               </For>
+              <Show when={tableWindow.bottomSpacerHeight() > 0}>
+                <TableRow aria-hidden="true" class="h-0 !border-0">
+                  <TableCell colspan={99} class="h-0 !border-0 !p-0 leading-[0]">
+                    <svg
+                      aria-hidden="true"
+                      width="1"
+                      height={String(tableWindow.bottomSpacerHeight())}
+                      class="pointer-events-none block w-px"
+                    />
+                  </TableCell>
+                </TableRow>
+              </Show>
             </TableBody>
           </Table>
         </Show>

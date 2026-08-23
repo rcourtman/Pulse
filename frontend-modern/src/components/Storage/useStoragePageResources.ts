@@ -1,14 +1,22 @@
 import { createMemo } from 'solid-js';
 import { useWebSocket } from '@/contexts/appRuntime';
 import { useResources } from '@/hooks/useResources';
-import { useStorageRecoveryResources } from '@/hooks/useUnifiedResources';
+import { useUnifiedResources } from '@/hooks/useUnifiedResources';
 import { useAlertsActivation } from '@/stores/alertsActivation';
+
+const STORAGE_PAGE_RESOURCES_QUERY = 'type=storage';
 
 export const useStoragePageResources = () => {
   const { state, activeAlerts, connected, initialDataReceived, reconnecting, reconnect } =
     useWebSocket();
   const { byType } = useResources();
-  const storageRecoveryResources = useStorageRecoveryResources();
+  // The storage adapter consumes canonical storage resources only. Recovery
+  // needs workload inventory too, but sharing its broad query here made this
+  // tab hydrate every guest in a large estate before doing useful work.
+  const storageResources = useUnifiedResources({
+    query: STORAGE_PAGE_RESOURCES_QUERY,
+    cacheKey: 'storage-page',
+  });
   const alertsActivation = useAlertsActivation();
 
   const nodes = createMemo(() => byType('agent'));
@@ -26,7 +34,7 @@ export const useStoragePageResources = () => {
     nodes,
     physicalDisks,
     cephResources,
-    storageRecoveryResources,
+    storageResources,
     alertsEnabled,
   };
 };

@@ -327,10 +327,10 @@ vi.mock('@/hooks/useUnifiedResources', () => ({
     refetch: vi.fn(),
     mutate: vi.fn(),
   }),
-  useUnifiedResources: () => ({
-    resources: () => nodeResources,
-    loading: () => false,
-    error: () => undefined,
+  useUnifiedResources: (options?: { cacheKey?: string }) => ({
+    resources: () => (options?.cacheKey === 'storage-page' ? hookResources : nodeResources),
+    loading: () => (options?.cacheKey === 'storage-page' ? hookLoading : false),
+    error: () => (options?.cacheKey === 'storage-page' ? hookError : undefined),
     refetch: vi.fn(),
     mutate: vi.fn(),
   }),
@@ -1436,6 +1436,7 @@ describe('Storage', () => {
     expect(storageSummarySource).toContain('readStorageSummaryCache(range, nodeId)');
     expect(storageSummarySource).toContain('fetchStorageSummaryAndCache(requestedRange, {');
     expect(storageSummarySource).toContain("caller: options.caller ?? 'useStorageSummaryCharts'");
+    expect(storageSummarySource).toContain('requestIdleCallback');
     expect(storageSummaryCacheSource).toContain('const STORAGE_SUMMARY_CACHE_VERSION = 1;');
     expect(storageSummaryCacheSource).toContain(
       "return `${STORAGE_SUMMARY_CACHE_VERSION}::${orgScope}::${range}::${nodeId || '__all__'}`;",

@@ -1,4 +1,11 @@
-import { createEffect, createMemo, createSignal, onCleanup, type Accessor } from 'solid-js';
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  onCleanup,
+  onMount,
+  type Accessor,
+} from 'solid-js';
 import type { StorageSummaryChartsResponse, TimeRange } from '@/api/charts';
 import type { SummaryTimeRange } from '@/components/shared/summaryTimeRange';
 import { eventBus } from '@/stores/events';
@@ -10,6 +17,7 @@ type UseStorageSummaryChartsOptions = {
   timeRange: Accessor<SummaryTimeRange>;
   nodeId?: Accessor<string | null | undefined>;
   caller?: string;
+  deferInitialLoad?: boolean;
 };
 
 export const useStorageSummaryCharts = (options: UseStorageSummaryChartsOptions) => {
@@ -17,6 +25,7 @@ export const useStorageSummaryCharts = (options: UseStorageSummaryChartsOptions)
   const [loaded, setLoaded] = createSignal(false);
   const [fetchFailed, setFetchFailed] = createSignal(false);
   const [orgVersion, setOrgVersion] = createSignal(0);
+  const [initialLoadReady, setInitialLoadReady] = createSignal(options.deferInitialLoad !== true);
 
   const unsubscribeOrgSwitch = eventBus.on('org_switched', () => {
     setOrgVersion((value) => value + 1);
@@ -30,6 +39,25 @@ export const useStorageSummaryCharts = (options: UseStorageSummaryChartsOptions)
   const selectedNodeId = createMemo(() => {
     const raw = options.nodeId?.()?.trim();
     return raw && raw !== 'all' ? raw : undefined;
+  });
+
+  onMount(() => {
+    if (initialLoadReady()) return;
+    if (typeof window === 'undefined') {
+      setInitialLoadReady(true);
+      return;
+    }
+
+    if ('requestIdleCallback' in window) {
+      const idleHandle = window.requestIdleCallback(() => setInitialLoadReady(true), {
+        timeout: 500,
+      });
+      onCleanup(() => window.cancelIdleCallback(idleHandle));
+      return;
+    }
+
+    const timer = window.setTimeout(() => setInitialLoadReady(true), 0);
+    onCleanup(() => window.clearTimeout(timer));
   });
 
   const awaitAbortable = <T>(promise: Promise<T>, signal: AbortSignal): Promise<T> => {
@@ -95,6 +123,7 @@ export const useStorageSummaryCharts = (options: UseStorageSummaryChartsOptions)
   };
 
   createEffect(() => {
+    if (!initialLoadReady()) return;
     const range = selectedRange();
     const nodeId = selectedNodeId();
     const _org = orgVersion();

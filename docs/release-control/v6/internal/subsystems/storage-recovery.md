@@ -156,6 +156,7 @@ command remains a bounded onboarding artifact with server-owned token quoting.
 31. `frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx`
 32. `internal/mock/recovery_points.go`
 33. `frontend-modern/src/features/proxmox/useProxmoxBackupTableWindowing.ts`
+34. `frontend-modern/src/components/Storage/useStoragePoolsTableWindowing.ts`
 
 ## Shared Boundaries
 
@@ -5064,6 +5065,19 @@ websocket state only through `frontend-modern/src/contexts/appRuntime.ts`.
 They must not import `@/App` or create storage/recovery-local shell coupling,
 because provider placement remains app-shell-owned and storage/recovery
 surfaces must stay lazy-load safe.
+The Storage page also keeps large-estate hydration and rendering bounded at
+that page boundary. Its unified-resource query requests canonical `storage`
+resources only; recovery's broader workload inventory must not be hydrated by
+the Storage tab when the storage adapter cannot consume it. Pool filtering,
+sorting, grouping, counts, and scroll height continue to describe the complete
+result set, while `useStoragePoolsTableWindowing.ts` flattens the expanded group
+model and mounts at most 72 pool/header items with table spacers. Wheel and
+touch projection must move that bounded window before native scrolling so a
+fast scroll does not expose an unpainted table region. Expanded pool targets
+must be revealed inside the current window. The page-scoped
+`/api/storage-charts` summary remains the sole pool-growth history payload, but
+its initial cache read, parse, and fetch may wait for browser idle so those
+secondary growth readouts cannot block the first Storage frame.
 That same adjacent `internal/api/` boundary now also governs public-demo
 commercial redaction for storage and recovery viewers. Shared storage/recovery
 surfaces may run beside a demo runtime that has real internal entitlements,
