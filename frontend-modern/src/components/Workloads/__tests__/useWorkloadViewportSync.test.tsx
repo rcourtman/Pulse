@@ -78,4 +78,73 @@ describe('useWorkloadViewportSync', () => {
     expect(removeEventListenerSpy).toHaveBeenCalledWith('scroll', expect.any(Function));
     expect(removeEventListenerSpy).toHaveBeenCalledWith('resize', expect.any(Function));
   });
+
+  it('tracks the app scroll container instead of leaving the initial spacer in place', async () => {
+    const onScroll = vi.fn();
+    const groupedWindowing: UseGroupedTableWindowingResult = {
+      endIndex: () => 150,
+      getVisibleSlice: (_groupKey, guests) => guests,
+      isWindowed: () => true,
+      mountedCount: () => 140,
+      onScroll,
+      revealIndex: vi.fn(),
+      startIndex: () => 0,
+    };
+
+    const Harness = () => {
+      const [bodyRef, setBodyRef] = createSignal<HTMLTableSectionElement | null>(null);
+
+      useWorkloadViewportSync({
+        filteredGuestCount: () => 640,
+        groupedWindowing,
+        rowHeight: 32,
+        tableBodyRef: bodyRef,
+      });
+
+      return (
+        <div
+          ref={(element) => {
+            Object.defineProperty(element, 'clientHeight', { configurable: true, value: 400 });
+            vi.spyOn(element, 'getBoundingClientRect').mockReturnValue({
+              bottom: 400,
+              height: 400,
+              left: 0,
+              right: 800,
+              toJSON: () => ({}),
+              top: 0,
+              width: 800,
+              x: 0,
+              y: 0,
+            } as DOMRect);
+          }}
+          style={{ 'overflow-y': 'scroll' }}
+        >
+          <table>
+            <tbody
+              ref={(element) => {
+                vi.spyOn(element, 'getBoundingClientRect').mockReturnValue({
+                  bottom: -240,
+                  height: 320,
+                  left: 0,
+                  right: 800,
+                  toJSON: () => ({}),
+                  top: -560,
+                  width: 800,
+                  x: 0,
+                  y: -560,
+                } as DOMRect);
+                setBodyRef(element);
+              }}
+            />
+          </table>
+        </div>
+      );
+    };
+
+    render(() => <Harness />);
+
+    await waitFor(() => {
+      expect(onScroll).toHaveBeenCalledWith(560, 400, 32);
+    });
+  });
 });

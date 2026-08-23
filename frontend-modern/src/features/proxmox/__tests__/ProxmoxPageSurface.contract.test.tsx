@@ -332,6 +332,13 @@ describe('ProxmoxPageSurface contract', () => {
     expect(workloadsSurfaceIndex).toBeGreaterThan(workloadFilterIndex);
   });
 
+  it('prioritizes the guest inventory on narrow overview layouts', () => {
+    expect(proxmoxPageSurfaceSource).toContain('class="order-2 lg:order-1"');
+    expect(proxmoxPageSurfaceSource).toContain('class="order-1 space-y-3 scroll-mt-4 lg:order-2"');
+    expect(proxmoxPageSurfaceSource).toContain('id="proxmox-guests-section"');
+    expect(proxmoxPageSurfaceSource).toContain('>\n            Guests\n          </h2>');
+  });
+
   it('keeps Patrol coverage off the Proxmox overview', () => {
     setResources([
       makeResource({

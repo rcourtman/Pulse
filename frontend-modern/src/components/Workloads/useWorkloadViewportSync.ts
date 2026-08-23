@@ -2,6 +2,20 @@ import { createEffect, onCleanup, type Accessor } from 'solid-js';
 
 import type { UseGroupedTableWindowingResult } from './useGroupedTableWindowing';
 
+const SCROLLABLE_OVERFLOW_PATTERN = /(?:auto|scroll|overlay)/;
+
+const findScrollContainer = (element: HTMLElement): HTMLElement | null => {
+  let parent = element.parentElement;
+  while (parent && parent !== document.body && parent !== document.documentElement) {
+    const styles = getComputedStyle(parent);
+    if (SCROLLABLE_OVERFLOW_PATTERN.test(`${styles.overflow} ${styles.overflowY}`)) {
+      return parent;
+    }
+    parent = parent.parentElement;
+  }
+  return null;
+};
+
 interface WorkloadsWorkloadViewportSyncOptions {
   filteredGuestCount: Accessor<number>;
   groupedWindowing: UseGroupedTableWindowingResult;
@@ -15,8 +29,23 @@ export function useWorkloadViewportSync(options: WorkloadsWorkloadViewportSyncOp
     const body = options.tableBodyRef();
     if (!body) return;
     const rect = body.getBoundingClientRect();
-    const scrollTop = Math.max(0, -rect.top);
-    options.groupedWindowing.onScroll(scrollTop, window.innerHeight, options.rowHeight);
+    const scrollContainer = findScrollContainer(body);
+    if (scrollContainer) {
+      const containerRect = scrollContainer.getBoundingClientRect();
+      const scrollTop = Math.max(0, containerRect.top - rect.top);
+      options.groupedWindowing.onScroll(
+        scrollTop,
+        scrollContainer.clientHeight || window.innerHeight,
+        options.rowHeight,
+      );
+      return;
+    }
+
+    options.groupedWindowing.onScroll(
+      Math.max(0, -rect.top),
+      window.innerHeight,
+      options.rowHeight,
+    );
   };
 
   createEffect(() => {
@@ -30,10 +59,12 @@ export function useWorkloadViewportSync(options: WorkloadsWorkloadViewportSyncOp
     };
 
     handleViewportChange();
-    window.addEventListener('scroll', handleViewportChange, { passive: true });
+    const scrollContainer = findScrollContainer(options.tableBodyRef()!);
+    const scrollTarget = scrollContainer ?? window;
+    scrollTarget.addEventListener('scroll', handleViewportChange, { passive: true });
     window.addEventListener('resize', handleViewportChange);
     onCleanup(() => {
-      window.removeEventListener('scroll', handleViewportChange);
+      scrollTarget.removeEventListener('scroll', handleViewportChange);
       window.removeEventListener('resize', handleViewportChange);
     });
   });

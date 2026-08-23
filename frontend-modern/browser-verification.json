@@ -1,24 +1,18 @@
 {
   "version": 1,
-  "base_sha": "434e1448ff70464bccec3e6ec46257d10da2162f",
-  "verified_at": "2026-08-23T08:04:16Z",
+  "base_sha": "567eca25729b0fc826110cd2458e7444aa81718e",
+  "verified_at": "2026-08-23T13:17:50Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/api/notifications.ts",
-    "frontend-modern/src/features/alerts/AlertDeliveryHealthCard.tsx",
-    "frontend-modern/src/features/alerts/tabs/DestinationsTab.tsx",
-    "frontend-modern/src/features/alerts/useAlertDestinationsTabState.ts",
-    "frontend-modern/src/utils/alertDestinationsPresentation.ts"
+    "frontend-modern/src/components/Workloads/useWorkloadViewportSync.ts",
+    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/api/notifications.ts": "df77323e526d5c528bd4fb7fcfdccb70b5823c5b0dd41525718067ffd441b0b5",
-    "frontend-modern/src/features/alerts/AlertDeliveryHealthCard.tsx": "0e9c53191da45f5c81f336c1034bc0e0651d88f92fc89b268d9a997dcd7d1b20",
-    "frontend-modern/src/features/alerts/tabs/DestinationsTab.tsx": "23cc5d7800028b35019359af2b46937b5fef308bdf82116240fa92c21e16177c",
-    "frontend-modern/src/features/alerts/useAlertDestinationsTabState.ts": "6993829996d1acd877f310212f045f33ee9f92b56cb1fee62e293cf4c9b8f14e",
-    "frontend-modern/src/utils/alertDestinationsPresentation.ts": "52bf726d4b5a081db84c1be05bce466231749c73c0f2b43acce4cec11b7ff80b"
+    "frontend-modern/src/components/Workloads/useWorkloadViewportSync.ts": "0e5fb873bfeb18d1a6d2f0f95b0ee5f79af883cc10c7e19cae266fcee651534b",
+    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx": "74fe27bf718224199e6f0f63c81246297221d308424fc9aed9cf29ac724b2252"
   },
   "routes": [
-    "/alerts/notifications"
+    "/proxmox/overview"
   ],
   "viewports": [
     {
@@ -31,15 +25,15 @@
     }
   ],
   "states": [
-    "Healthy queue with no retained terminal deliveries: recovery actions correctly absent and delivery activity empty",
-    "Notifications-paused warning remains distinct from queue health and explains that test sends bypass the activation gate",
-    "Desktop and narrow layouts render the delivery activity card without horizontal overflow or console errors",
-    "Retained-failure warning, retry/dismiss controls, confirmation consequences, loading states, API refresh, and success/error paths verified by focused component, state, API, and queue tests because the live development queue had no terminal failures"
+    "Desktop overview with Nodes first and the labeled Guests section, filter toolbar, and guest rows visible",
+    "Narrow overview with Guests reordered above Nodes and the guest table fitting without horizontal clipping",
+    "Large-inventory virtualization window updates from the app scroll container so the bottom spacer does not remain after the visible guest rows",
+    "Loading-to-connected overview transition preserves the Guests section and guest inventory once resources arrive"
   ],
   "interactions": [
-    "Navigated from Alerts overview to Notifications",
-    "Refreshed healthy delivery status on the desktop layout",
-    "Reloaded /alerts/notifications at 1280x800 and 375x812",
-    "Confirmed Recent delivery activity and Refresh delivery status remain visible and usable at narrow width"
+    "Reloaded /proxmox/overview at 1280x800 and inspected the rendered desktop pixels and DOM",
+    "Reloaded /proxmox/overview at 390x844 and inspected the rendered narrow pixels and DOM",
+    "Verified the guest filter controls and mobile table remain visible and usable",
+    "Exercised the scroll-container virtualization path with the focused regression test and confirmed listener cleanup"
   ]
 }
