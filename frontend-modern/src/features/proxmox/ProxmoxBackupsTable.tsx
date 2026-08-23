@@ -1,17 +1,21 @@
 import { Show, createMemo, createResource, createSignal, type Component, type JSX } from 'solid-js';
 import ChevronRightIcon from 'lucide-solid/icons/chevron-right';
-import CalendarIcon from 'lucide-solid/icons/calendar';
-import ShieldCheckIcon from 'lucide-solid/icons/shield-check';
-import { useSearchParams } from '@solidjs/router';
+import { useLocation, useSearchParams } from '@solidjs/router';
 import { FilterBar, type FilterDef, type FilterSelectOption } from '@/components/shared/FilterBar';
-import { FilterSegmentedControl } from '@/components/shared/FilterToolbar';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { useProtectionPostures } from '@/hooks/useProtectionPostures';
-import { PROXMOX_BACKUPS_QUERY_PARAMS } from '@/routing/resourceLinks';
+import {
+  buildProxmoxBackupsPath,
+  PROXMOX_BACKUPS_DEFAULT_VIEW,
+  PROXMOX_BACKUPS_PATH,
+  PROXMOX_BACKUPS_QUERY_PARAMS,
+  type ProxmoxBackupsView,
+} from '@/routing/resourceLinks';
 import { apiFetch } from '@/utils/apiClient';
 import {
   PlatformErrorState,
   PlatformResourceCounter,
+  PlatformSectionTabs,
   PlatformTableLoadingState,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
@@ -66,7 +70,12 @@ import { ProxmoxRecoverableTable } from './ProxmoxRecoverableTable';
 // One backups surface, two operator views: a chronological recoverable-artifact
 // feed for "what ran when", and a guest coverage table for "what is protected".
 
-type BackupView = 'date' | 'coverage';
+type BackupView = ProxmoxBackupsView;
+
+const BACKUP_VIEW_TABS: readonly { id: BackupView; label: string }[] = [
+  { id: 'date', label: 'By date' },
+  { id: 'coverage', label: 'Coverage' },
+];
 
 async function fetchPVEBackups(): Promise<PVEBackupsPayload> {
   const response = await apiFetch('/api/backups/pve');
@@ -100,6 +109,7 @@ export const ProxmoxBackupsTable: Component<{
   const [backups, { refetch }] = createResource<PVEBackupsPayload>(fetchPVEBackups);
   const [pbsBackups] = createResource<PBSBackupsPayload>(fetchPBSBackups);
   const { isMobile } = useBreakpoint();
+  const location = useLocation();
   const protectionPostures = useProtectionPostures(() =>
     (props.workloads ?? []).map((workload) => workload.id),
   );
@@ -116,7 +126,13 @@ export const ProxmoxBackupsTable: Component<{
   const search = (): string => queryValue(PROXMOX_BACKUPS_QUERY_PARAMS.query);
   const setSearch = (value: string): void =>
     setSearchParams({ [PROXMOX_BACKUPS_QUERY_PARAMS.query]: value || null }, { replace: true });
-  const selectedView = (): BackupView | null => {
+  const routeView = (): BackupView | null => {
+    const normalizedPath = location.pathname.replace(/\/+$/, '');
+    if (!normalizedPath.startsWith(`${PROXMOX_BACKUPS_PATH}/`)) return null;
+    const segment = normalizedPath.slice(`${PROXMOX_BACKUPS_PATH}/`.length).split('/')[0];
+    return segment === 'date' || segment === 'coverage' ? segment : null;
+  };
+  const legacyQueryView = (): BackupView | null => {
     const value = queryValue(PROXMOX_BACKUPS_QUERY_PARAMS.view);
     return value === 'date' || value === 'coverage' ? value : null;
   };
@@ -356,31 +372,28 @@ export const ProxmoxBackupsTable: Component<{
     };
   });
   const view = (): BackupView =>
-    selectedView() ??
+    routeView() ??
+    legacyQueryView() ??
     (liveHealthSummary().attention + liveHealthSummary().unprotected + liveHealthSummary().unknown >
     0
       ? 'coverage'
-      : 'date');
-  const setView = (next: BackupView): void => {
+      : PROXMOX_BACKUPS_DEFAULT_VIEW);
+
+  const backupViewPath = (next: BackupView): string => {
+    const params = new URLSearchParams(location.search);
+    params.delete(PROXMOX_BACKUPS_QUERY_PARAMS.view);
     if (next === 'date') {
-      setSearchParams(
-        {
-          [PROXMOX_BACKUPS_QUERY_PARAMS.view]: next,
-          [PROXMOX_BACKUPS_QUERY_PARAMS.posture]: null,
-        },
-        { replace: true },
-      );
-      return;
+      params.delete(PROXMOX_BACKUPS_QUERY_PARAMS.posture);
+    } else {
+      params.delete(PROXMOX_BACKUPS_QUERY_PARAMS.source);
+      params.delete(PROXMOX_BACKUPS_QUERY_PARAMS.day);
     }
-    setSearchParams(
-      {
-        [PROXMOX_BACKUPS_QUERY_PARAMS.view]: next,
-        [PROXMOX_BACKUPS_QUERY_PARAMS.source]: null,
-        [PROXMOX_BACKUPS_QUERY_PARAMS.day]: null,
-      },
-      { replace: true },
-    );
+    const query = params.toString();
+    return `${buildProxmoxBackupsPath(next)}${query ? `?${query}` : ''}`;
   };
+  const backupViewTabs = createMemo(() =>
+    BACKUP_VIEW_TABS.map((tab) => ({ ...tab, path: backupViewPath(tab.id) })),
+  );
 
   // Recoverable artifact feed: PBS snapshots, PVE backup files, and guest snapshot rows.
   const RECOVERABLE_SEGMENT_KINDS: readonly BackupActivitySegmentKind[] = [
@@ -528,6 +541,7 @@ export const ProxmoxBackupsTable: Component<{
     setSearchParams(
       {
         [PROXMOX_BACKUPS_QUERY_PARAMS.query]: null,
+        [PROXMOX_BACKUPS_QUERY_PARAMS.view]: null,
         [PROXMOX_BACKUPS_QUERY_PARAMS.node]: null,
         [PROXMOX_BACKUPS_QUERY_PARAMS.type]: null,
         [PROXMOX_BACKUPS_QUERY_PARAMS.source]: null,
@@ -558,6 +572,7 @@ export const ProxmoxBackupsTable: Component<{
         }
       >
         <div class="space-y-3">
+          <PlatformSectionTabs tabs={backupViewTabs()} active={view()} ariaLabel="Backup views" />
           <Show when={protectionPostures.response.error}>
             <div
               role="status"
@@ -571,8 +586,7 @@ export const ProxmoxBackupsTable: Component<{
             <ProxmoxBackupServersTable servers={props.servers ?? []} backups={pbsArtifacts()} />
           </Show>
 
-          {/* The health strip renders identically in both views so the view
-              toggle below it never shifts under the cursor when clicked. */}
+          {/* The health strip renders identically in both route-backed views. */}
           <ProxmoxBackupsCoverageStrip
             title="Backup health"
             tail={
@@ -631,34 +645,6 @@ export const ProxmoxBackupsTable: Component<{
                 label: 'not evaluated',
                 toneClass: 'bg-slate-300 dark:bg-slate-600',
                 muted: liveHealthSummary().notEvaluated === 0,
-              },
-            ]}
-          />
-
-          <FilterSegmentedControl
-            aria-label="Backups view"
-            value={view()}
-            onChange={(value) => setView(value as BackupView)}
-            options={[
-              {
-                value: 'date',
-                title: 'Backups by date',
-                label: (
-                  <>
-                    <CalendarIcon class="h-3 w-3" />
-                    By date
-                  </>
-                ),
-              },
-              {
-                value: 'coverage',
-                title: 'Backups by workload coverage',
-                label: (
-                  <>
-                    <ShieldCheckIcon class="h-3 w-3" />
-                    Coverage
-                  </>
-                ),
               },
             ]}
           />

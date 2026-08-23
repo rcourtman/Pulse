@@ -24,8 +24,13 @@ export const STANDALONE_QUERY_PARAMS = {
 } as const;
 export const PROXMOX_PATH = '/proxmox';
 export const PROXMOX_DEFAULT_TAB = 'overview';
+export const PROXMOX_BACKUPS_PATH = `${PROXMOX_PATH}/backups`;
+export const PROXMOX_BACKUPS_DEFAULT_VIEW = 'date';
+export type ProxmoxBackupsView = 'date' | 'coverage';
 export const PROXMOX_BACKUPS_QUERY_PARAMS = {
   query: 'q',
+  // Legacy query-param compatibility. The canonical view now lives in the
+  // /proxmox/backups/:view route segment.
   view: 'view',
   node: 'node',
   type: 'type',
@@ -308,6 +313,10 @@ export const buildProxmoxPath = (tab: string = PROXMOX_DEFAULT_TAB): string => {
   const normalized = tab.trim().replace(/^\/+|\/+$/g, '');
   return normalized ? `${PROXMOX_PATH}/${normalized}` : PROXMOX_PATH;
 };
+
+export const buildProxmoxBackupsPath = (
+  view: ProxmoxBackupsView = PROXMOX_BACKUPS_DEFAULT_VIEW,
+): string => `${PROXMOX_BACKUPS_PATH}/${view}`;
 
 export const buildStandalonePath = (tab: string = STANDALONE_DEFAULT_TAB): string => {
   const normalized = tab.trim().replace(/^\/+|\/+$/g, '');

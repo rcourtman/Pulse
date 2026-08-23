@@ -2238,6 +2238,15 @@ capability over storage or recovery data.
 
 ## Current State
 
+### Proxmox backup views use canonical workflow routes
+
+The Proxmox backup surface exposes its two operator workflows as explicit
+route-backed sections: `/proxmox/backups/date` owns the chronological recovery
+feed and `/proxmox/backups/coverage` owns workload protection posture. The
+legacy `/proxmox/backups?view=...` query form remains compatibility input only;
+new links and tab state must use the path segment, preserve shared scope
+filters, and clear incompatible per-view facets when crossing sections.
+
 ### Retained Patrol objectives do not create recovery authority
 
 The shared `internal/api` retained-objective endpoints may scope an outcome to

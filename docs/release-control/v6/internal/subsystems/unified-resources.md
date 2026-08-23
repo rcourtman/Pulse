@@ -1344,6 +1344,13 @@ AI-only summary payloads, or page-local heuristics.
     narrow already-correlated backup rows, but they do not add unified-resource
     membership, change canonical workload identity, or turn recovery evidence
     into a provider-resource projection.
+    The Proxmox backup workspace's chronological and coverage views are
+    canonical route state under `/proxmox/backups/date` and
+    `/proxmox/backups/coverage`. The shared route helper owns those path
+    builders; the backup surface must use the shared platform section-tab
+    primitive for navigation and may retain legacy query parsing only as
+    compatibility input. Those view paths describe backup evidence and must
+    not be treated as unified-resource membership or workload identity.
     The default tab for each platform path must point at a sub-tab whose
     canonical unified-resource projection actually populates, and visible
     workflow subtabs must stay evidence-gated by the same canonical row or

@@ -1,16 +1,21 @@
 {
   "version": 1,
-  "base_sha": "4182f79028af6449b68c0cb75775ac9a5da99aaa",
-  "verified_at": "2026-08-23T16:45:15Z",
+  "base_sha": "ae9cfb1da87235e81359e251ec5f0a6670398ad9",
+  "verified_at": "2026-08-23T18:06:00Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx"
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx",
+    "frontend-modern/src/features/proxmox/proxmoxPageModel.ts",
+    "frontend-modern/src/routing/resourceLinks.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx": "7ef3505d70c16ff8905dff325111adab351338890a615fe47a1ec3b1ca70fcce"
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx": "050b7e4336a467a71376b471f3e53cbcf65f11de088cd076efe0afe0943ecf31",
+    "frontend-modern/src/features/proxmox/proxmoxPageModel.ts": "09cebaf862d67def8e560b49acf50bdbcdc13f814fec15ad7fc8b1ae412a7fc1",
+    "frontend-modern/src/routing/resourceLinks.ts": "8a22520911eb1b84cee0ab4ef4388ec8dbfd40380db93dbac451d26f8031db3c"
   },
   "routes": [
-    "/proxmox/overview"
+    "/proxmox/backups/date",
+    "/proxmox/backups/coverage"
   ],
   "viewports": [
     {
@@ -18,23 +23,20 @@
       "height": 720
     },
     {
-      "width": 375,
-      "height": 812
+      "width": 390,
+      "height": 844
     }
   ],
   "states": [
-    "The large Proxmox mock estate renders 50 nodes and 929 guests from one overview snapshot",
-    "At 375x812 the bounded Nodes preview occupies y=103 through y=328 with four rows, and Guests begins immediately below at y=344",
-    "At 1280x720 the eight-row Nodes preview occupies y=170 through y=505, and Guests begins immediately below at y=521",
-    "Expanding the phone node preview renders all 50 nodes and moves Guests to y=2046; collapsing restores four nodes and Guests to y=344",
-    "A guest search leaves the phone node preview at four rows with the 50-node estate count and topology visible",
-    "The desktop and phone overview runs reported no console errors"
+    "Desktop direct navigation to /proxmox/backups/date renders the By date section with its chronological backup table and Coverage link",
+    "Desktop navigation to /proxmox/backups/coverage selects Coverage and renders posture filters and coverage rows",
+    "Narrow Coverage renders the route-backed section rail, responsive columns, and no horizontal overflow",
+    "The running app reported no console errors during direct navigation and section switching"
   ],
   "interactions": [
-    "Loaded the 1280x720 large mock estate and captured Nodes before Guests in the initial overview",
-    "Applied 375x812 device metrics and captured the four-node preview with Guests visible directly underneath",
-    "Expanded all 50 nodes, measured the resulting guest-section position, then collapsed back to the four-row phone preview",
-    "Entered a guest-only search and confirmed it narrowed Guests without hiding or filtering the node inventory",
-    "Cleared the search, checked runtime error logs, reset device metrics, and closed the temporary test tab"
+    "Loaded /proxmox/backups/date at the desktop viewport and inspected the active section rail and date table",
+    "Selected Coverage through the canonical section link and verified /proxmox/backups/coverage with active navigation",
+    "Loaded Coverage at 390x844 and verified responsive section navigation, posture table content, and overflow state",
+    "Reset the temporary narrow viewport after verification"
   ]
 }

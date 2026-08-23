@@ -35,6 +35,8 @@ import {
   SETTINGS_PULSE_INTELLIGENCE_PATH,
   isExternalAgentSetupHash,
   PROXMOX_BACKUPS_QUERY_PARAMS,
+  PROXMOX_BACKUPS_PATH,
+  PROXMOX_BACKUPS_DEFAULT_VIEW,
   PROXMOX_DEFAULT_TAB,
   PROXMOX_PATH,
   RECOVERY_QUERY_PARAMS,
@@ -51,6 +53,7 @@ import {
   buildKubernetesPath,
   buildRecoveryRouteSearch,
   buildProxmoxPath,
+  buildProxmoxBackupsPath,
   buildStandalonePath,
   buildStorageRouteSearch,
   buildTrueNASPath,
@@ -162,6 +165,8 @@ describe('resource link routing contract', () => {
   it('builds canonical Proxmox platform tab paths', () => {
     expect(PROXMOX_PATH).toBe('/proxmox');
     expect(PROXMOX_DEFAULT_TAB).toBe('overview');
+    expect(PROXMOX_BACKUPS_PATH).toBe('/proxmox/backups');
+    expect(PROXMOX_BACKUPS_DEFAULT_VIEW).toBe('date');
     expect(PROXMOX_BACKUPS_QUERY_PARAMS).toEqual({
       query: 'q',
       view: 'view',
@@ -174,6 +179,8 @@ describe('resource link routing contract', () => {
     expect(buildProxmoxPath()).toBe('/proxmox/overview');
     expect(buildProxmoxPath('/storage/')).toBe('/proxmox/storage');
     expect(buildProxmoxPath('')).toBe('/proxmox');
+    expect(buildProxmoxBackupsPath()).toBe('/proxmox/backups/date');
+    expect(buildProxmoxBackupsPath('coverage')).toBe('/proxmox/backups/coverage');
   });
 
   it('builds canonical Machines, container runtime, Kubernetes, TrueNAS, and vSphere tab paths', () => {

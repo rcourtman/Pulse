@@ -447,6 +447,12 @@ table. Legacy object-specific URLs may resolve to the owning
 workflow tab, but they must not reappear as top-level platform navigation unless
 the product IA is intentionally changed. Overview tabs must stay deliberately
 shaped around the primary operator job instead of repeating every detail table:
+
+The Proxmox backup workflow follows this same boundary: its chronological date
+feed and workload coverage posture are route-backed sections under
+`/proxmox/backups`, and their navigation must compose `PlatformSectionTabs`
+instead of a page-local segmented control or query-only view switch.
+
 Docker / Podman Overview owns runtime hosts and primary container workloads in
 the proven host-then-workloads pattern, while Kubernetes Overview owns
 cluster/control-plane rollup; supporting object tables live in their dedicated

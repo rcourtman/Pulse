@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { Route, Router } from '@solidjs/router';
 import type { JSX } from 'solid-js';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ProxmoxBackupsTable } from '../ProxmoxBackupsTable';
 import proxmoxBackupServersTableSource from '../ProxmoxBackupServersTable.tsx?raw';
@@ -21,7 +21,7 @@ import { resetCreateNonSuspendingQueryCacheForTest } from '@/hooks/createNonSusp
 const renderInRouter = (component: () => JSX.Element) =>
   render(() => (
     <Router>
-      <Route path="/" component={component} />
+      <Route path="/*" component={component} />
     </Router>
   ));
 
@@ -197,10 +197,15 @@ const expectCanonicalPlatformTableShell = (table: HTMLElement): void => {
 
 afterEach(() => {
   cleanup();
+  vi.unstubAllGlobals();
   window.history.replaceState({}, '', '/');
   apiFetchMock.mockReset();
   apiFetchJSONMock.mockReset();
   resetCreateNonSuspendingQueryCacheForTest();
+});
+
+beforeEach(() => {
+  vi.stubGlobal('scrollTo', vi.fn());
 });
 
 describe('ProxmoxBackupsTable', () => {
@@ -266,12 +271,9 @@ describe('ProxmoxBackupsTable', () => {
     ));
 
     await screen.findAllByText('pbs-docker');
-    expect(screen.getByRole('button', { name: /coverage/i })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    );
+    expect(screen.getByRole('link', { name: /coverage/i })).toHaveAttribute('aria-current', 'page');
 
-    await fireEvent.click(screen.getByRole('button', { name: /by date/i }));
+    await fireEvent.click(screen.getByRole('link', { name: /by date/i }));
 
     // The chronological feed remains available for forensic review: one row
     // per restore point, sourced and located.
@@ -319,26 +321,22 @@ describe('ProxmoxBackupsTable', () => {
     expect(healthSummary.parentElement).toHaveClass('w-full', 'sm:ml-auto', 'sm:w-auto');
     expect(healthSummary.parentElement).not.toHaveClass('ml-auto');
 
-    expect(proxmoxBackupsTableSource).toContain(
-      "import { FilterSegmentedControl } from '@/components/shared/FilterToolbar';",
-    );
-    expect(proxmoxBackupsTableSource).toContain('<FilterSegmentedControl');
-    expect(proxmoxBackupsTableSource).not.toContain('variant="segmented"');
-    expect(proxmoxBackupsTableSource).not.toContain('const viewButtonClass');
-    expect(proxmoxBackupsTableSource).not.toContain(
-      'inline-flex items-center gap-1 rounded-md border border-border bg-surface p-1',
-    );
-    expect(proxmoxBackupsTableSource).not.toContain(
-      'inline-flex min-h-8 items-center gap-1.5 rounded-sm px-3 text-xs font-medium transition-colors',
-    );
+    expect(proxmoxBackupsTableSource).toContain('<PlatformSectionTabs');
+    expect(proxmoxBackupsTableSource).not.toContain('FilterSegmentedControl');
+    expect(proxmoxBackupsTableSource).toContain('buildProxmoxBackupsPath');
     expect(proxmoxBackupsTableSource).toContain('trailingControls={');
     expect(proxmoxBackupsTableSource).toContain('<PlatformResourceCounter');
-    expect(proxmoxBackupsTableSource).not.toContain('viewOptionsTrailing');
 
-    // The two top-level views exist...
-    expect(screen.getByRole('group', { name: /backups view/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /by date/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /coverage/i })).toBeInTheDocument();
+    // The two route-backed sections exist...
+    expect(screen.getByRole('navigation', { name: /backup views/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /by date/i })).toHaveAttribute(
+      'href',
+      '/proxmox/backups/date',
+    );
+    expect(screen.getByRole('link', { name: /coverage/i })).toHaveAttribute(
+      'href',
+      '/proxmox/backups/coverage',
+    );
     // ...and the old four-tab + sub-tab tree does not.
     expect(screen.queryByRole('button', { name: /source details/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /job history/i })).not.toBeInTheDocument();
@@ -358,10 +356,7 @@ describe('ProxmoxBackupsTable', () => {
     ));
 
     await screen.findAllByText('pbs-docker');
-    expect(screen.getByRole('button', { name: /by date/i })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    );
+    expect(screen.getByRole('link', { name: /by date/i })).toHaveAttribute('aria-current', 'page');
     expect(screen.getByPlaceholderText(/search backups by workload/i)).toHaveValue('pbs-docker');
     expect(screen.getByRole('button', { name: /pbs snapshots/i })).toHaveAttribute(
       'aria-pressed',
@@ -373,7 +368,7 @@ describe('ProxmoxBackupsTable', () => {
 
     await waitFor(() => {
       const params = new URLSearchParams(window.location.search);
-      expect(params.get('view')).toBe('date');
+      expect(params.get('view')).toBeNull();
       expect(params.get('q')).toBeNull();
       expect(params.get('source')).toBeNull();
       expect(params.get('node')).toBeNull();
@@ -392,11 +387,12 @@ describe('ProxmoxBackupsTable', () => {
     ));
 
     await screen.findAllByText('pbs-docker');
-    await fireEvent.click(screen.getByRole('button', { name: /coverage/i }));
+    await fireEvent.click(screen.getByRole('link', { name: /coverage/i }));
 
     await waitFor(() => {
       const params = new URLSearchParams(window.location.search);
-      expect(params.get('view')).toBe('coverage');
+      expect(window.location.pathname).toBe('/proxmox/backups/coverage');
+      expect(params.get('view')).toBeNull();
       expect(params.get('source')).toBeNull();
       expect(params.get('day')).toBeNull();
     });
@@ -406,10 +402,11 @@ describe('ProxmoxBackupsTable', () => {
       expect(new URLSearchParams(window.location.search).get('posture')).toBe('protected'),
     );
 
-    await fireEvent.click(screen.getByRole('button', { name: /by date/i }));
+    await fireEvent.click(screen.getByRole('link', { name: /by date/i }));
     await waitFor(() => {
       const params = new URLSearchParams(window.location.search);
-      expect(params.get('view')).toBe('date');
+      expect(window.location.pathname).toBe('/proxmox/backups/date');
+      expect(params.get('view')).toBeNull();
       expect(params.get('posture')).toBeNull();
     });
   });
@@ -422,7 +419,7 @@ describe('ProxmoxBackupsTable', () => {
     ));
 
     await screen.findAllByText('pbs-docker');
-    await fireEvent.click(screen.getByRole('button', { name: /coverage/i }));
+    await fireEvent.click(screen.getByRole('link', { name: /coverage/i }));
 
     // Coverage is the posture view; the server-owned workload posture reads
     // "Protected".
@@ -444,7 +441,7 @@ describe('ProxmoxBackupsTable', () => {
     ));
 
     await screen.findAllByText('pbs-docker');
-    await fireEvent.click(screen.getByRole('button', { name: /by date/i }));
+    await fireEvent.click(screen.getByRole('link', { name: /by date/i }));
 
     const searchInput = screen.getByPlaceholderText(/search backups by workload/i);
     await fireEvent.input(searchInput, { target: { value: 'no-such-guest' } });

@@ -1,4 +1,5 @@
 import type { Resource, ResourceMetric, ResourceType } from '@/types/resource';
+import { buildProxmoxBackupsPath } from '@/routing/resourceLinks';
 import { formatProxmoxVersion } from '@/utils/proxmoxVersion';
 import { matchesSearchTermSplit, splitSearchExclusions } from '@/utils/searchQuery';
 
@@ -76,7 +77,7 @@ export const PROXMOX_TAB_SPECS: ProxmoxTabSpec[] = [
   { id: 'overview', label: 'Overview', path: '/proxmox/overview' },
   { id: 'storage', label: 'Storage', path: '/proxmox/storage' },
   { id: 'replication', label: 'Replication', path: '/proxmox/replication' },
-  { id: 'backups', label: 'Backups', path: '/proxmox/backups' },
+  { id: 'backups', label: 'Backups', path: buildProxmoxBackupsPath() },
   { id: 'ceph', label: 'Ceph', path: '/proxmox/ceph' },
   { id: 'mail', label: 'Mail Gateway', path: '/proxmox/mail' },
 ];
