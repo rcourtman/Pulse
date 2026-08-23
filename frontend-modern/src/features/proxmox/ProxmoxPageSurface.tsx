@@ -329,11 +329,10 @@ function ProxmoxOverview(props: ProxmoxOverviewProps) {
 
   return (
     <div ref={overviewWidth.setElement} class="pulse-wide-data-surface flex flex-col gap-4">
-      <section class="order-2 lg:order-1">
+      <section>
         <ProxmoxNodesTable
           nodes={currentModel().pveNodes}
           guests={currentModel().guests}
-          search={workloadsState.search}
           metricDisplayMode={props.metricDisplayMode}
           metricHistoryRange={props.metricHistoryRange}
           layoutWidth={overviewWidth.width}
@@ -347,7 +346,7 @@ function ProxmoxOverview(props: ProxmoxOverviewProps) {
       <section
         id="proxmox-guests-section"
         aria-labelledby="proxmox-guests-heading"
-        class="order-1 space-y-3 scroll-mt-4 lg:order-2"
+        class="space-y-3 scroll-mt-4"
         data-testid="proxmox-guests-section"
       >
         <div class="flex items-center gap-2 px-1">

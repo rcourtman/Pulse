@@ -60,6 +60,11 @@ poll. Refreshing the overview must invalidate that owner snapshot and update
 both the node and guest regions from the same result, so a large estate cannot
 render contradictory counts or pay duplicate transport and reconciliation
 costs.
+The overview's bounded structural summary remains ahead of its long virtualized
+inventory at desktop and narrow widths. In particular, Proxmox must show its
+four-row phone node preview before the guest list instead of visually moving
+the nodes after the guest list's full virtual scroll extent; revealing the full
+node estate remains an explicit table-preview action.
 
 Shared workload, node, Docker-host, and resource-drawer history presentation
 keeps current readings separate from stored samples. A current metric may

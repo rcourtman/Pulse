@@ -312,7 +312,7 @@ describe('ProxmoxPageSurface contract', () => {
     );
   });
 
-  it('passes the shared workload search into the node table', () => {
+  it('keeps workload search scoped to guests instead of hiding the node inventory', () => {
     mockWorkloadSearch.mockReturnValue('pve-1');
     setResources([
       makeResource({
@@ -325,7 +325,7 @@ describe('ProxmoxPageSurface contract', () => {
     renderSurface();
 
     expect(mockNodesTableProps).toHaveBeenLastCalledWith(
-      expect.objectContaining({ search: mockWorkloadSearch }),
+      expect.not.objectContaining({ search: expect.anything() }),
     );
   });
 
@@ -349,9 +349,11 @@ describe('ProxmoxPageSurface contract', () => {
     expect(workloadsSurfaceIndex).toBeGreaterThan(workloadFilterIndex);
   });
 
-  it('prioritizes the guest inventory on narrow overview layouts', () => {
-    expect(proxmoxPageSurfaceSource).toContain('class="order-2 lg:order-1"');
-    expect(proxmoxPageSurfaceSource).toContain('class="order-1 space-y-3 scroll-mt-4 lg:order-2"');
+  it('keeps the bounded node preview before guests at every viewport', () => {
+    expect(proxmoxPageSurfaceSource).toContain('<section>\n        <ProxmoxNodesTable');
+    expect(proxmoxPageSurfaceSource).toContain('class="space-y-3 scroll-mt-4"');
+    expect(proxmoxPageSurfaceSource).not.toContain('order-2 lg:order-1');
+    expect(proxmoxPageSurfaceSource).not.toContain('order-1 space-y-3');
     expect(proxmoxPageSurfaceSource).toContain('id="proxmox-guests-section"');
     expect(proxmoxPageSurfaceSource).toContain('>\n            Guests\n          </h2>');
   });

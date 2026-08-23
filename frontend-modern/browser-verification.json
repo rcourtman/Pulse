@@ -1,17 +1,13 @@
 {
   "version": 1,
-  "base_sha": "dc129cd3a403e9fd2f9177ddbfcf18e5042445e5",
-  "verified_at": "2026-08-23T16:03:35Z",
+  "base_sha": "4182f79028af6449b68c0cb75775ac9a5da99aaa",
+  "verified_at": "2026-08-23T16:45:15Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Workloads/WorkloadPanel.tsx",
-    "frontend-modern/src/components/Workloads/useGroupedTableWindowing.ts",
-    "frontend-modern/src/components/Workloads/useWorkloadViewportSync.ts"
+    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Workloads/WorkloadPanel.tsx": "ea56e3d8a4e8c63baf1f99e1dea82d8e6ea2dd801b8eafaf4cb849ebf8612bad",
-    "frontend-modern/src/components/Workloads/useGroupedTableWindowing.ts": "76fd82b5a0baefdf09e37af1713681e4424c2762ece99652b2d998011a457ce8",
-    "frontend-modern/src/components/Workloads/useWorkloadViewportSync.ts": "0f2315ddf875206f5de6a97fc9a600b5b61aaa2ae910cc4353c5eb78eb5bfd18"
+    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx": "7ef3505d70c16ff8905dff325111adab351338890a615fe47a1ec3b1ca70fcce"
   },
   "routes": [
     "/proxmox/overview"
@@ -27,18 +23,18 @@
     }
   ],
   "states": [
-    "The large Proxmox mock estate renders 929 guests while retaining the 140-row mounted DOM budget",
-    "After an 8000-pixel desktop wheel burst, 25 workload rows cover the full 1280x720 viewport from -6 to 723 pixels without exposing a spacer",
-    "After a 2800-pixel phone wheel burst, 23 workload rows cover the full 375x812 viewport from -21 to 821 pixels without exposing a spacer",
-    "Desktop scroll height remains 29470 pixels and phone scroll height remains 36372 pixels while virtual windows move",
-    "Rapid-scroll screenshots show continuous populated rows with the back-to-top control remaining above mobile navigation",
-    "The desktop and phone rapid-scroll runs reported no console errors"
+    "The large Proxmox mock estate renders 50 nodes and 929 guests from one overview snapshot",
+    "At 375x812 the bounded Nodes preview occupies y=103 through y=328 with four rows, and Guests begins immediately below at y=344",
+    "At 1280x720 the eight-row Nodes preview occupies y=170 through y=505, and Guests begins immediately below at y=521",
+    "Expanding the phone node preview renders all 50 nodes and moves Guests to y=2046; collapsing restores four nodes and Guests to y=344",
+    "A guest search leaves the phone node preview at four rows with the 50-node estate count and topology visible",
+    "The desktop and phone overview runs reported no console errors"
   ],
   "interactions": [
-    "Loaded the large desktop mock estate and confirmed its initial 140-row virtual runway",
-    "Applied an 8000-pixel wheel burst and immediately measured and captured continuous visible-row coverage",
-    "Applied a temporary 375x812 viewport override and reloaded the 929-guest estate",
-    "Applied a 2800-pixel phone wheel burst and immediately measured and captured continuous visible-row coverage",
-    "Checked runtime error logs, reset the temporary viewport override, and closed the temporary test tab"
+    "Loaded the 1280x720 large mock estate and captured Nodes before Guests in the initial overview",
+    "Applied 375x812 device metrics and captured the four-node preview with Guests visible directly underneath",
+    "Expanded all 50 nodes, measured the resulting guest-section position, then collapsed back to the four-row phone preview",
+    "Entered a guest-only search and confirmed it narrowed Guests without hiding or filtering the node inventory",
+    "Cleared the search, checked runtime error logs, reset device metrics, and closed the temporary test tab"
   ]
 }
