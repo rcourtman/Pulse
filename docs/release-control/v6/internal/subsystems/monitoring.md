@@ -3115,3 +3115,17 @@ Proofs in `internal/monitoring/monitor_docker_test.go`:
 `TestCheckContainersForDocker_AbandonedProbeHoldsClaimWithoutFailure`,
 `TestCheckContainersForDocker_NodeCircuitBreaker`,
 `TestCollectProxmoxGuestDockerInventory_InFlightAndExpiredContext`.
+
+### Docker storage inventory is decoupled from live telemetry
+
+The Docker / Podman agent keeps container liveness and running-container stats
+on the configured report cadence, but Docker's full verbose `DiskUsage`
+(`system df`) walk is a separate 15-minute inventory. That scan traverses
+container layers, images, volumes, and build cache and can saturate appliance
+daemons such as Synology DSM when many stopped containers exist. It runs once
+per refresh window with no immediate transient retry, preserves the last good
+aggregate across a failed refresh, and suppresses a failed cold-start scan
+until the next window instead of starting it again on every 30-second report
+(#1729). `TestCollectStorageUsageDecouplesFullDaemonScanFromLiveTelemetry` and
+`TestCollectStorageUsageThrottlesInitialTransientFailureWithoutRetry` pin the
+cadence, stale-result continuity, and no-retry boundary.

@@ -6507,3 +6507,13 @@ Proofs: `internal/agentexec/server_websocket_test.go`
 `TestCommandClient_handleCancelCommand_UnknownRequestIsNoOp`), and
 `internal/hostagent/commands_execute_unix_test.go` (timeout and cancel
 kill the whole process group; WaitDelay unblocks inherited pipes).
+
+### Docker report cadence does not imply full storage-scan cadence
+
+The unified agent's Docker module continues to send live host and container
+telemetry at its configured interval, while the daemon-wide verbose storage
+inventory is cached for 15 minutes. A storage refresh is single-attempt and
+retains the last successful aggregate after failure, so a slow appliance
+daemon cannot be held busy by an immediate retry followed by another scan on
+the next report tick. This changes neither agent enrollment nor report
+authority; it bounds the collection work attached to that lifecycle (#1729).

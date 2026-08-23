@@ -133,6 +133,8 @@ type Agent struct {
 	hostID              string
 	prevContainerCPU    map[string]cpuSample
 	cpuMu               sync.Mutex // protects prevContainerCPU
+	storageUsageMu      sync.Mutex
+	storageUsageCache   dockerStorageUsageCache
 	reportBuffer        *utils.Queue[agentsdocker.Report]
 	reportBuffers       map[string]*utils.Queue[agentsdocker.Report]
 	registryChecker     *RegistryChecker // For checking container image updates
@@ -152,6 +154,13 @@ type Agent struct {
 	asyncWG             sync.WaitGroup
 	closeOnce           sync.Once
 	closeErr            error
+}
+
+type dockerStorageUsageCache struct {
+	nextRefresh time.Time
+	result      client.DiskUsageResult
+	usage       *agentsdocker.StorageUsage
+	valid       bool
 }
 
 // ErrStopRequested indicates the agent should terminate gracefully after acknowledging a stop command.

@@ -17,10 +17,15 @@ const (
 	dockerInfoCallTimeout          = 8 * time.Second
 	dockerContainerListCallTimeout = 20 * time.Second
 	dockerInventoryCallTimeout     = 20 * time.Second
-	dockerSwarmListCallTimeout     = 20 * time.Second
-	dockerCleanupCallTimeout       = 15 * time.Second
-	dockerUpdateCallTimeout        = 2 * time.Minute
-	dockerUpdateOverallTimeout     = 15 * time.Minute
+	// dockerStorageUsageRefreshInterval separates Docker's expensive full
+	// system-df scan from the 30-second live telemetry cadence. Appliance
+	// daemons such as Synology DSM may traverse every stopped container layer
+	// for this call, so immediate repetition can saturate dockerd (#1729).
+	dockerStorageUsageRefreshInterval = 15 * time.Minute
+	dockerSwarmListCallTimeout        = 20 * time.Second
+	dockerCleanupCallTimeout          = 15 * time.Second
+	dockerUpdateCallTimeout           = 2 * time.Minute
+	dockerUpdateOverallTimeout        = 15 * time.Minute
 
 	// dockerCollectCycleTimeout bounds one whole collection cycle
 	// (buildReport). Every docker call inside the cycle already carries its

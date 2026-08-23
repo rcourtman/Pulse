@@ -37,6 +37,71 @@ func TestBuildHostSecurityInfoAuthorizationPlugins(t *testing.T) {
 	}
 }
 
+func TestCollectStorageUsageDecouplesFullDaemonScanFromLiveTelemetry(t *testing.T) {
+	calls := 0
+	agent := &Agent{
+		logger: zerolog.Nop(),
+		docker: &fakeDockerClient{
+			diskUsageFn: func(context.Context, dockerDiskUsageOptions) (dockerclient.DiskUsageResult, error) {
+				calls++
+				if calls > 1 {
+					return dockerclient.DiskUsageResult{}, context.DeadlineExceeded
+				}
+				return dockerclient.DiskUsageResult{
+					Containers: dockerclient.ContainersDiskUsage{TotalCount: 47, ActiveCount: 4, TotalSize: 4096},
+				}, nil
+			},
+		},
+	}
+
+	firstResult, firstUsage, err := agent.collectStorageUsage(context.Background())
+	if err != nil || firstUsage == nil || firstUsage.Containers.TotalCount != 47 {
+		t.Fatalf("first storage scan = %#v, %#v, %v", firstResult, firstUsage, err)
+	}
+	secondResult, secondUsage, err := agent.collectStorageUsage(context.Background())
+	if err != nil || secondUsage == nil || secondUsage.Containers.TotalCount != 47 || calls != 1 {
+		t.Fatalf("cached storage scan = %#v, %#v, %v; calls=%d, want one daemon scan", secondResult, secondUsage, err, calls)
+	}
+	if firstUsage == secondUsage {
+		t.Fatal("cached storage usage must be returned as an independent value")
+	}
+
+	agent.storageUsageMu.Lock()
+	agent.storageUsageCache.nextRefresh = time.Now().Add(-time.Second)
+	agent.storageUsageMu.Unlock()
+	staleResult, staleUsage, err := agent.collectStorageUsage(context.Background())
+	if !errors.Is(err, context.DeadlineExceeded) || staleUsage == nil || staleUsage.Containers.TotalCount != 47 || calls != 2 {
+		t.Fatalf("failed refresh = %#v, %#v, %v; calls=%d, want one attempt plus retained cache", staleResult, staleUsage, err, calls)
+	}
+	_, retainedUsage, err := agent.collectStorageUsage(context.Background())
+	if err != nil || retainedUsage == nil || retainedUsage.Containers.TotalCount != 47 || calls != 2 {
+		t.Fatalf("post-failure cache = %#v, %v; calls=%d, want throttled retained result", retainedUsage, err, calls)
+	}
+}
+
+func TestCollectStorageUsageThrottlesInitialTransientFailureWithoutRetry(t *testing.T) {
+	calls := 0
+	agent := &Agent{
+		logger: zerolog.Nop(),
+		docker: &fakeDockerClient{
+			diskUsageFn: func(context.Context, dockerDiskUsageOptions) (dockerclient.DiskUsageResult, error) {
+				calls++
+				return dockerclient.DiskUsageResult{}, context.DeadlineExceeded
+			},
+		},
+	}
+
+	if _, _, err := agent.collectStorageUsage(context.Background()); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("initial scan error = %v, want deadline", err)
+	}
+	if _, usage, err := agent.collectStorageUsage(context.Background()); err != nil || usage != nil {
+		t.Fatalf("throttled scan = %#v, %v; want no repeated error or data", usage, err)
+	}
+	if calls != 1 {
+		t.Fatalf("DiskUsage calls = %d, want one attempt across the refresh window", calls)
+	}
+}
+
 func TestExtractHealthcheckTargetsKeepsOnlyNormalizedURLHosts(t *testing.T) {
 	targets := extractHealthcheckTargets([]string{
 		"CMD-SHELL",

@@ -1713,6 +1713,32 @@ func TestBuildReportForwardsExplicitDiskIncludesAndExcludes(t *testing.T) {
 	}
 }
 
+func TestDockerStorageUsageCadenceIsScopedPerAgentInstance(t *testing.T) {
+	firstCalls, secondCalls := 0, 0
+	newAgent := func(calls *int, total int64) *Agent {
+		return &Agent{
+			logger: zerolog.Nop(),
+			docker: &fakeDockerClient{
+				diskUsageFn: func(context.Context, dockerDiskUsageOptions) (client.DiskUsageResult, error) {
+					*calls++
+					return client.DiskUsageResult{Containers: client.ContainersDiskUsage{TotalCount: total}}, nil
+				},
+			},
+		}
+	}
+	first := newAgent(&firstCalls, 41)
+	second := newAgent(&secondCalls, 7)
+
+	for _, agent := range []*Agent{first, first, second, second} {
+		if _, _, err := agent.collectStorageUsage(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if firstCalls != 1 || secondCalls != 1 {
+		t.Fatalf("per-agent Docker storage scans = %d/%d, want 1/1", firstCalls, secondCalls)
+	}
+}
+
 func TestRegistryCredentialSourceForConfig(t *testing.T) {
 	logger := zerolog.Nop()
 

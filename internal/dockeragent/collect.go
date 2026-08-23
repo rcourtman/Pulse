@@ -430,7 +430,24 @@ func (a *Agent) collectNetworks(ctx context.Context) ([]agentsdocker.Network, er
 }
 
 func (a *Agent) collectStorageUsage(ctx context.Context) (client.DiskUsageResult, *agentsdocker.StorageUsage, error) {
-	result, err := dockerCallWithRetry(ctx, dockerInventoryCallTimeout, func(callCtx context.Context) (client.DiskUsageResult, error) {
+	a.storageUsageMu.Lock()
+	defer a.storageUsageMu.Unlock()
+
+	now := time.Now()
+	if !a.storageUsageCache.nextRefresh.IsZero() && now.Before(a.storageUsageCache.nextRefresh) {
+		if a.storageUsageCache.valid {
+			return a.storageUsageCache.result, cloneDockerStorageUsage(a.storageUsageCache.usage), nil
+		}
+		// The last refresh attempt already surfaced its error. Keep the
+		// expensive scan suppressed until the bounded refresh window expires.
+		return client.DiskUsageResult{}, nil, nil
+	}
+	a.storageUsageCache.nextRefresh = now.Add(dockerStorageUsageRefreshInterval)
+
+	// A full daemon storage walk must not be retried immediately. If it times
+	// out on an appliance daemon, the normal retry policy would double the load
+	// and the next live telemetry tick would begin another walk.
+	result, err := dockerCallWithRetryAttempts(ctx, dockerInventoryCallTimeout, 1, func(callCtx context.Context) (client.DiskUsageResult, error) {
 		return a.docker.DiskUsage(callCtx, dockerDiskUsageOptions{
 			Containers: true,
 			Images:     true,
@@ -440,10 +457,14 @@ func (a *Agent) collectStorageUsage(ctx context.Context) (client.DiskUsageResult
 		})
 	})
 	if err != nil {
-		return client.DiskUsageResult{}, nil, annotateDockerConnectionError(err)
+		annotatedErr := annotateDockerConnectionError(err)
+		if a.storageUsageCache.valid {
+			return a.storageUsageCache.result, cloneDockerStorageUsage(a.storageUsageCache.usage), annotatedErr
+		}
+		return client.DiskUsageResult{}, nil, annotatedErr
 	}
 
-	return result, &agentsdocker.StorageUsage{
+	usage := &agentsdocker.StorageUsage{
 		Images: agentsdocker.StorageUsageBucket{
 			TotalCount:       result.Images.TotalCount,
 			ActiveCount:      result.Images.ActiveCount,
@@ -468,7 +489,20 @@ func (a *Agent) collectStorageUsage(ctx context.Context) (client.DiskUsageResult
 			TotalSizeBytes:   result.BuildCache.TotalSize,
 			ReclaimableBytes: result.BuildCache.Reclaimable,
 		},
-	}, nil
+	}
+	a.storageUsageCache.result = result
+	a.storageUsageCache.usage = cloneDockerStorageUsage(usage)
+	a.storageUsageCache.valid = true
+	a.storageUsageCache.nextRefresh = time.Now().Add(dockerStorageUsageRefreshInterval)
+	return result, usage, nil
+}
+
+func cloneDockerStorageUsage(usage *agentsdocker.StorageUsage) *agentsdocker.StorageUsage {
+	if usage == nil {
+		return nil
+	}
+	cloned := *usage
+	return &cloned
 }
 
 func dockerUnixTimestamp(seconds int64) time.Time {
