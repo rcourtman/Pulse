@@ -2757,6 +2757,30 @@ for IP literals), so short-name vs fully-qualified drift does not break
 admission. Legacy pre-v6.1.1 hostname-bound records still migrate exactly
 once on hostname match.
 
+### Install-token command intent converges once on the accepted host
+
+The generic host and PVE/PBS install-command endpoints stamp every newly
+minted token with the operator's explicit enabled/disabled command-policy
+intent. On the first report accepted for that token,
+`reconcileInstallTokenCommandPolicy` re-reads the live token record, requires
+the same `evaluateAgentExecBinding` identity decision used by the command
+channel, projects enabled intent only while `agent:exec` is still present, and
+persists the effective choice through `Monitor.UpdateHostAgentConfig` before
+the report acknowledgement is built. This closes the #1728 reinstall failure:
+a stable machine ID may retain an older `commandsEnabled=false` override, but
+a fresh commands-enabled install no longer receives the stale override that
+would stop its command client one second after startup.
+
+The token records the accepted host ID after the projection. That marker makes
+install intent one-shot, so a later server-side command-policy change remains
+authoritative instead of being undone on every report. Hand-created API tokens,
+legacy records without explicit intent metadata, and tokens whose shared
+binding decision rejects the reporting identity never enter this convergence
+path. `TestHostAgentFreshInstallTokenReplacesStaleDisabledCommandPolicyOnce`
+pins stale-policy repair and subsequent-admin-policy preservation;
+`TestHandleAgentInstallCommand_HostWithCommands` and
+`TestHandleAgentInstallCommand_HostWithoutCommands` pin the mint-time intent.
+
 ### PBS connection composition does not create agent lifecycle evidence
 
 The shared API connections ledger and diagnostics now project PBS health from

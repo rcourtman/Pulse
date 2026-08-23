@@ -1,11 +1,15 @@
 package api
 
 import (
+	"bytes"
+	"encoding/json"
+	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/api/agenttokens"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/stretchr/testify/require"
 )
@@ -18,6 +22,35 @@ func TestNormalizeProxmoxInstallType(t *testing.T) {
 	_, err = normalizeProxmoxInstallType("vmware")
 	require.Error(t, err)
 	require.Equal(t, "Type must be 'pve' or 'pbs'", err.Error())
+}
+
+func TestAgentInstallCommandCarriesCommandPolicyIntent(t *testing.T) {
+	cfg := &config.Config{DataPath: t.TempDir(), AuthUser: "admin", AuthPass: "hashed-password"}
+	handler := newTestConfigHandlers(t, cfg)
+	req := httptest.NewRequest(
+		http.MethodPost,
+		"/api/agent-install-command",
+		bytes.NewBufferString(`{"type":"pve","enableCommands":true}`),
+	)
+	req.Host = "pulse.example:7655"
+	rec := httptest.NewRecorder()
+	handler.HandleAgentInstallCommand(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("install command status = %d: %s", rec.Code, rec.Body.String())
+	}
+	var response AgentInstallCommandResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+		t.Fatalf("decode install command response: %v", err)
+	}
+	if len(cfg.APITokens) != 1 || response.Token == "" {
+		t.Fatalf("install command did not mint one token: response=%+v tokens=%d", response, len(cfg.APITokens))
+	}
+	if got := cfg.APITokens[0].Metadata[agenttokens.CommandPolicyIntentMetadataKey]; got != agenttokens.CommandPolicyIntentEnabled {
+		t.Fatalf("command policy intent = %q, want enabled", got)
+	}
+	if !strings.Contains(response.Command, "--enable-commands") {
+		t.Fatalf("commands-enabled install omitted flag: %s", response.Command)
+	}
 }
 
 func TestBuildProxmoxAgentInstallCommand(t *testing.T) {

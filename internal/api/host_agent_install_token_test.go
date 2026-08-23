@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/api/agenttokens"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 )
@@ -58,6 +59,9 @@ func TestHandleAgentInstallCommand_HostWithCommands(t *testing.T) {
 	if got := record.Metadata["issued_via"]; got != agentInstallIssuedViaConfig {
 		t.Fatalf("issued_via metadata = %q, want %q", got, agentInstallIssuedViaConfig)
 	}
+	if got := record.Metadata[agenttokens.CommandPolicyIntentMetadataKey]; got != "enabled" {
+		t.Fatalf("command_policy_intent metadata = %q, want enabled", got)
+	}
 	if !canBindAgentInstallExecToken(&record, "agent-nuc", "nuc") {
 		t.Fatalf("expected host install token to be eligible for first-use exec binding")
 	}
@@ -82,6 +86,9 @@ func TestHandleAgentInstallCommand_HostWithoutCommands(t *testing.T) {
 	record := cfg.APITokens[0]
 	if record.HasScope(config.ScopeAgentExec) {
 		t.Fatalf("expected no exec scope without enableCommands, got %v", record.Scopes)
+	}
+	if got := record.Metadata[agenttokens.CommandPolicyIntentMetadataKey]; got != "disabled" {
+		t.Fatalf("command_policy_intent metadata = %q, want disabled", got)
 	}
 }
 

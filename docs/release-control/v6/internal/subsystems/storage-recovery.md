@@ -2242,6 +2242,20 @@ capability over storage or recovery data.
 
 ## Current State
 
+### Fresh agent command policy preserves the existing recovery authority boundary
+
+New self-hosted install-command tokens project their explicit command-policy
+intent onto the accepted host exactly once before the first report
+acknowledgement. This repairs stale disabled policy after agent reinstall but
+does not create a new storage recovery path: enabled intent still requires the
+shared exec-token binding decision and live `agent:exec` scope, generic tokens
+remain fail-closed, and every Docker update, host update, cleanup, or recovery
+action continues through its existing late-bound readiness, approval, dispatch,
+receipt, and verification authority. The one-shot applied-agent marker also
+prevents later reports from undoing an administrator disable. The authenticated
+reinstall regression is pinned by
+`internal/api/host_agent_removal_lifecycle_integration_test.go`.
+
 ### Proxmox backup views use canonical workflow routes
 
 The Proxmox backup surface exposes its two operator workflows as explicit

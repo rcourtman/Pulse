@@ -18,6 +18,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/approval"
+	"github.com/rcourtman/pulse-go-rewrite/internal/api/agenttokens"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
@@ -29,6 +30,34 @@ import (
 type wsRawMessage struct {
 	Type    agentexec.MessageType `json:"type"`
 	Payload json.RawMessage       `json:"payload,omitempty"`
+}
+
+func TestSecurityGenericExecTokenCannotApplyInstallCommandPolicy(t *testing.T) {
+	token := config.APITokenRecord{
+		ID:     "generic-exec-token",
+		Scopes: []string{config.ScopeAgentReport, config.ScopeAgentExec},
+	}
+	cfg := &config.Config{DataPath: t.TempDir(), APITokens: []config.APITokenRecord{token}}
+	_, monitor := newUnifiedAgentHandlers(t, cfg)
+
+	disabled := false
+	if err := monitor.UpdateHostAgentConfig("machine-1", &disabled); err != nil {
+		t.Fatalf("seed disabled command policy: %v", err)
+	}
+	if err := reconcileInstallTokenCommandPolicy(monitor, &token, models.Host{
+		ID:       "machine-1",
+		Hostname: "docker-1",
+	}); err != nil {
+		t.Fatalf("reconcile generic exec token: %v", err)
+	}
+
+	desired := monitor.GetHostAgentConfig("machine-1").CommandsEnabled
+	if desired == nil || *desired {
+		t.Fatalf("generic exec token changed desired command policy: %#v", desired)
+	}
+	if got := cfg.APITokens[0].Metadata[agenttokens.CommandPolicyAppliedAgentIDMetadataKey]; got != "" {
+		t.Fatalf("generic exec token gained install-policy marker %q", got)
+	}
 }
 
 func TestDeprovisionSessionRevocationIncludesPersistedUntrackedSessions(t *testing.T) {

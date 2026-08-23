@@ -38,3 +38,31 @@ func TestIssueAndPersistRejectsReservedOwnerMetadata(t *testing.T) {
 		t.Fatalf("reserved owner metadata error = %v, want ErrRecord", err)
 	}
 }
+
+func TestCommandPolicyIntentRoundTrip(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		value   string
+		enabled bool
+		valid   bool
+	}{
+		{name: "enabled", value: CommandPolicyIntent(true), enabled: true, valid: true},
+		{name: "disabled", value: CommandPolicyIntent(false), enabled: false, valid: true},
+		{name: "missing", value: "", enabled: false, valid: false},
+		{name: "invalid", value: "yes", enabled: false, valid: false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			record := &config.APITokenRecord{Metadata: map[string]string{
+				CommandPolicyIntentMetadataKey: tc.value,
+			}}
+			enabled, valid := ParseCommandPolicyIntent(record)
+			if enabled != tc.enabled || valid != tc.valid {
+				t.Fatalf("ParseCommandPolicyIntent() = (%v, %v), want (%v, %v)", enabled, valid, tc.enabled, tc.valid)
+			}
+		})
+	}
+
+	if _, valid := ParseCommandPolicyIntent(nil); valid {
+		t.Fatal("nil record unexpectedly carried command-policy intent")
+	}
+}

@@ -525,7 +525,7 @@ func TestHandleAgentInstallCommand(t *testing.T) {
 	cfg := &config.Config{DataPath: t.TempDir(), AuthUser: "admin", AuthPass: "hashed-password"}
 	handler := newTestConfigHandlers(t, cfg)
 
-	body := []byte(`{"type":"pve"}`)
+	body := []byte(`{"type":"pve","enableCommands":true}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/config/agent-install", bytes.NewReader(body))
 	req.Host = "example.com:8080"
 	rec := httptest.NewRecorder()
@@ -550,6 +550,12 @@ func TestHandleAgentInstallCommand(t *testing.T) {
 	}
 	if len(cfg.APITokens) != 1 {
 		t.Fatalf("expected API token to be persisted")
+	}
+	if got := cfg.APITokens[0].Metadata[agentInstallCommandPolicyIntentKey]; got != "enabled" {
+		t.Fatalf("command_policy_intent metadata = %q, want enabled", got)
+	}
+	if !bytes.Contains([]byte(resp.Command), []byte("--enable-commands")) {
+		t.Fatalf("expected command execution flag in command: %s", resp.Command)
 	}
 }
 

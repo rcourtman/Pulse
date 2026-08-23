@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/api/agenttokens"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
@@ -101,6 +102,18 @@ func (h *UnifiedAgentHandlers) HandleReport(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	// A freshly generated install token is the server's durable record of the
+	// operator's command-policy choice. Project that choice onto the stable host
+	// identity before returning remote config, otherwise an old false override
+	// survives remove/reinstall and immediately shuts down an agent launched
+	// with --enable-commands (#1728).
+	if err := reconcileInstallTokenCommandPolicy(h.getMonitor(r.Context()), tokenRecord, host); err != nil {
+		log.Error().Err(err).
+			Str("agent_id", host.ID).
+			Str("token_id", tokenID(tokenRecord)).
+			Msg("Failed to reconcile install-token command policy")
+	}
+
 	log.Debug().
 		Str("agentId", host.ID).
 		Str("hostname", host.Hostname).
@@ -135,6 +148,86 @@ func (h *UnifiedAgentHandlers) HandleReport(w http.ResponseWriter, r *http.Reque
 	if err := utils.WriteJSONResponse(w, resp); err != nil {
 		log.Error().Err(err).Msg("Failed to serialize agent response")
 	}
+}
+
+func reconcileInstallTokenCommandPolicy(monitor *monitoring.Monitor, requestRecord *config.APITokenRecord, host models.Host) error {
+	if monitor == nil || requestRecord == nil || strings.TrimSpace(requestRecord.ID) == "" || strings.TrimSpace(host.ID) == "" {
+		return nil
+	}
+
+	cfg := monitor.GetConfig()
+	if cfg == nil {
+		return nil
+	}
+
+	// Authentication stores a clone in the request context. Re-read the live
+	// record so concurrent scope changes and an already-consumed intent marker
+	// are authoritative.
+	var record *config.APITokenRecord
+	config.Mu.RLock()
+	for index := range cfg.APITokens {
+		if cfg.APITokens[index].ID == requestRecord.ID {
+			clone := cfg.APITokens[index].Clone()
+			record = &clone
+			break
+		}
+	}
+	config.Mu.RUnlock()
+	if record == nil {
+		return nil
+	}
+
+	requestedEnabled, hasIntent := agenttokens.ParseCommandPolicyIntent(record)
+	if !hasIntent || strings.TrimSpace(record.Metadata[agenttokens.CommandPolicyAppliedAgentIDMetadataKey]) != "" {
+		return nil
+	}
+	if !evaluateAgentExecBinding(record, host.ID, host.Hostname).admit {
+		// Intent metadata is useful only on a Pulse-minted install token whose
+		// binding policy admits this identity. Hand-created API tokens remain
+		// unable to turn themselves into command credentials.
+		return nil
+	}
+
+	// Scope removal always wins over the original enabled intent. Conversely,
+	// adding agent:exec later does not rewrite a deliberately disabled install
+	// intent; the explicit token-scope editor and desired policy remain separate
+	// controls.
+	effectiveEnabled := requestedEnabled && record.HasScope(config.ScopeAgentExec)
+	if err := monitor.UpdateHostAgentConfig(host.ID, &effectiveEnabled); err != nil {
+		return fmt.Errorf("persist desired command policy: %w", err)
+	}
+
+	persistence := monitor.GetConfigPersistence()
+	config.Mu.Lock()
+	defer config.Mu.Unlock()
+	for index := range cfg.APITokens {
+		live := &cfg.APITokens[index]
+		if live.ID != requestRecord.ID {
+			continue
+		}
+		if strings.TrimSpace(live.Metadata[agenttokens.CommandPolicyAppliedAgentIDMetadataKey]) != "" {
+			return nil
+		}
+		if live.Metadata == nil {
+			live.Metadata = make(map[string]string)
+		}
+		live.Metadata[agenttokens.CommandPolicyAppliedAgentIDMetadataKey] = host.ID
+		if persistence != nil {
+			if err := persistence.SaveAPITokens(cfg.APITokens); err != nil {
+				delete(live.Metadata, agenttokens.CommandPolicyAppliedAgentIDMetadataKey)
+				return fmt.Errorf("persist install-token command-policy marker: %w", err)
+			}
+		}
+		log.Info().
+			Str("agent_id", host.ID).
+			Str("hostname", host.Hostname).
+			Str("token_id", live.ID).
+			Bool("commands_enabled", effectiveEnabled).
+			Msg("Applied install-token command policy to host")
+		return nil
+	}
+
+	return nil
 }
 
 // HandleLookup returns agent registration details for installer validation.

@@ -71,10 +71,13 @@ code: the service commonly runs as root, so only administrators should be able
 to replace them.
 
 Agent command tokens must be bound to a host or agent identity before command
-registration is accepted. Proxmox install-command tokens are the only first-use
-exception: because the server mints them before the installer knows the final
-hostname, Pulse binds them to the first command agent that registers with that
-token. Generic unbound `agent:exec` tokens still fail closed.
+registration is accepted. Pulse-minted install-command tokens for the generic
+host and Proxmox flows are the only first-use exception: because the server
+mints them before the installer knows the final hostname, Pulse binds them to
+the first command agent that registers with that token. Those tokens also carry
+the operator's command-policy choice into the first accepted report so a stale
+policy from an earlier installation cannot immediately disable the replacement
+agent. Generic unbound `agent:exec` tokens still fail closed.
 
 ## Proxmox Deployment Choices
 

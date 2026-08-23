@@ -1117,6 +1117,16 @@ binding version through the first-use path, an unrelated hostname still fails
 closed, and the registration-bound hostname is never overwritten by an
 equivalent spelling the agent reports, because the install grant compares
 against it.
+Pulse-minted install tokens now carry a server-authored command-policy intent
+in addition to first-use binding metadata. That intent grants no independent
+authority: first-report convergence requires the same shared binding decision
+as command-channel admission, and enabled intent is projected only while the
+live token still has `agent:exec`. A generic API token cannot opt itself into
+this path by holding `agent:exec`, and the applied-agent marker makes the
+installer choice one-shot so it cannot override a later administrator disable.
+This is the security side of #1728's stale-policy repair: reinstall intent may
+replace policy retained from an earlier installation exactly once, without
+turning reusable bearer credentials into command credentials.
 Telemetry/privacy disclosures now also route through the shipped frontend docs
 boundary: `frontend-modern/src/utils/docsLinks.ts` is the canonical frontend
 owner for privacy-document URLs, while `frontend-modern/public/docs/PRIVACY.md`

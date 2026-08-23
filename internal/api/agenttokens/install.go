@@ -12,8 +12,12 @@ import (
 )
 
 const (
-	IssuedAtMetadataKey    = "install_issued_at"
-	OwnerUserIDMetadataKey = "owner_user_id"
+	IssuedAtMetadataKey                    = "install_issued_at"
+	OwnerUserIDMetadataKey                 = "owner_user_id"
+	CommandPolicyIntentMetadataKey         = "command_policy_intent"
+	CommandPolicyAppliedAgentIDMetadataKey = "command_policy_applied_agent_id"
+	CommandPolicyIntentEnabled             = "enabled"
+	CommandPolicyIntentDisabled            = "disabled"
 )
 
 var (
@@ -51,6 +55,27 @@ func HostScopes(enableCommands bool) []string {
 		scopes = append(scopes, config.ScopeAgentExec)
 	}
 	return scopes
+}
+
+func CommandPolicyIntent(enableCommands bool) string {
+	if enableCommands {
+		return CommandPolicyIntentEnabled
+	}
+	return CommandPolicyIntentDisabled
+}
+
+func ParseCommandPolicyIntent(record *config.APITokenRecord) (bool, bool) {
+	if record == nil {
+		return false, false
+	}
+	switch strings.TrimSpace(record.Metadata[CommandPolicyIntentMetadataKey]) {
+	case CommandPolicyIntentEnabled:
+		return true, true
+	case CommandPolicyIntentDisabled:
+		return false, true
+	default:
+		return false, false
+	}
 }
 
 func IssueAndPersist(cfg *config.Config, persistence *config.ConfigPersistence, opts IssueOptions) (string, *config.APITokenRecord, error) {

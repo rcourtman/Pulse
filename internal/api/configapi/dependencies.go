@@ -15,10 +15,11 @@ import (
 )
 
 const (
-	OrgIDContextKey             = apicontext.OrgIDContextKey
-	agentInstallIssuedViaConfig = "config_agent_install_command"
-	agentInstallIssuedViaHosted = "hosted_agent_install_command"
-	agentInstallTypeHost        = "host"
+	OrgIDContextKey                    = apicontext.OrgIDContextKey
+	agentInstallIssuedViaConfig        = "config_agent_install_command"
+	agentInstallIssuedViaHosted        = "hosted_agent_install_command"
+	agentInstallTypeHost               = "host"
+	agentInstallCommandPolicyIntentKey = agenttokens.CommandPolicyIntentMetadataKey
 )
 
 var (
@@ -118,6 +119,10 @@ func issueAndPersistAgentInstallToken(cfg *config.Config, persistence *config.Co
 
 func hostAgentInstallScopes(enableCommands bool) []string {
 	return agenttokens.HostScopes(enableCommands)
+}
+
+func agentInstallCommandPolicyIntent(enableCommands bool) string {
+	return agenttokens.CommandPolicyIntent(enableCommands)
 }
 
 func (h *ConfigHandlers) authConfiguredForAgentLifecycle(cfg *config.Config) bool {

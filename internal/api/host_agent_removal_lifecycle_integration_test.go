@@ -6,9 +6,11 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/api/agenttokens"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
@@ -330,6 +332,97 @@ func TestHostAgentRemovalLifecycleThroughAuthenticatedRouterAndRestart(t *testin
 	if oldConfigBody.AgentID != keeperID {
 		t.Fatalf("shared token resolved config for %q, want active keeper %q", oldConfigBody.AgentID, keeperID)
 	}
+}
+
+func TestHostAgentFreshInstallTokenReplacesStaleDisabledCommandPolicyOnce(t *testing.T) {
+	dataPath := t.TempDir()
+	const adminRaw = "issue-1728-admin-token-123.12345678"
+	admin := newTokenRecord(t, adminRaw, []string{config.ScopeWildcard}, nil)
+	if err := config.NewConfigPersistence(dataPath).SaveAPITokens([]config.APITokenRecord{admin}); err != nil {
+		t.Fatalf("SaveAPITokens: %v", err)
+	}
+
+	runtime := newHostRemovalLifecycleHTTPRuntime(t, dataPath, []config.APITokenRecord{admin})
+	t.Cleanup(runtime.stop)
+
+	const hostID = "machine-stale-command-policy"
+	disabled := false
+	if err := runtime.monitor.UpdateHostAgentConfig(hostID, &disabled); err != nil {
+		t.Fatalf("seed stale command policy: %v", err)
+	}
+
+	installRec := serveHostRemovalLifecycleRequest(
+		t,
+		runtime,
+		http.MethodPost,
+		"/api/agent-install-command",
+		adminRaw,
+		[]byte(`{"type":"host","enableCommands":true,"name":"issue-1728-reinstall"}`),
+	)
+	install := decodeHostAgentInstallResponse(t, installRec)
+	if install.Token == "" || install.Record == nil {
+		t.Fatalf("commands-enabled reinstall omitted token record: %+v", install)
+	}
+
+	report := agentshost.Report{
+		Agent: agentshost.AgentInfo{
+			ID:              "agent-stale-command-policy",
+			Version:         "6.3.1",
+			Type:            "unified",
+			CommandsEnabled: true,
+		},
+		Host: agentshost.HostInfo{
+			ID:        hostID,
+			MachineID: hostID,
+			Hostname:  "alpine-docker",
+			Platform:  "linux",
+		},
+		Timestamp: time.Now().UTC(),
+	}
+
+	status, gotID, body := postHostRemovalLifecycleReport(t, runtime, install.Token, report)
+	if status != http.StatusOK || gotID != hostID {
+		t.Fatalf("fresh reinstall report = (%d, %q), want (200, %q): %s", status, gotID, hostID, body)
+	}
+	if !strings.Contains(body, `"commandsEnabled":true`) {
+		t.Fatalf("fresh reinstall acknowledgement retained stale disabled policy: %s", body)
+	}
+	if desired := runtime.monitor.GetHostAgentConfig(hostID).CommandsEnabled; desired == nil || !*desired {
+		t.Fatalf("stored desired command policy = %#v, want true", desired)
+	}
+
+	record, ok := runtime.config.ValidateAPIToken(install.Token)
+	if !ok || record.Metadata[agenttokens.CommandPolicyAppliedAgentIDMetadataKey] != hostID {
+		t.Fatalf("install-token applied marker = %#v, want agent %q", record, hostID)
+	}
+	persistedTokens, err := config.NewConfigPersistence(dataPath).LoadAPITokens()
+	if err != nil {
+		t.Fatalf("reload install token marker: %v", err)
+	}
+	persistedRecord := tokenRecordByID(persistedTokens, record.ID)
+	if persistedRecord == nil || persistedRecord.Metadata[agenttokens.CommandPolicyAppliedAgentIDMetadataKey] != hostID {
+		t.Fatalf("persisted install token marker = %#v, want agent %q", persistedRecord, hostID)
+	}
+
+	// The install intent is one-shot. A later explicit server-side disable
+	// remains authoritative instead of being undone on every report.
+	if err := runtime.monitor.UpdateHostAgentConfig(hostID, &disabled); err != nil {
+		t.Fatalf("disable command policy after install convergence: %v", err)
+	}
+	report.Timestamp = report.Timestamp.Add(time.Minute)
+	status, _, body = postHostRemovalLifecycleReport(t, runtime, install.Token, report)
+	if status != http.StatusOK || !strings.Contains(body, `"commandsEnabled":false`) {
+		t.Fatalf("consumed install intent overrode later disabled policy: status=%d body=%s", status, body)
+	}
+}
+
+func tokenRecordByID(records []config.APITokenRecord, tokenID string) *config.APITokenRecord {
+	for index := range records {
+		if records[index].ID == tokenID {
+			return &records[index]
+		}
+	}
+	return nil
 }
 
 // TestHostAgentRenameKeepsCommandGateAlignedWithChannelAdmission covers the

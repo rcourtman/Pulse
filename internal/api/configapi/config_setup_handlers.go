@@ -2571,8 +2571,9 @@ func (h *ConfigHandlers) handleAgentInstallCommand(w http.ResponseWriter, r *htt
 			TokenName:   tokenName,
 			OwnerUserID: h.apiTokenOwnerUserIDForRequest(cfg, r),
 			Metadata: map[string]string{
-				"install_type": installType,
-				"issued_via":   "config_agent_install_command",
+				"install_type":                     installType,
+				"issued_via":                       "config_agent_install_command",
+				agentInstallCommandPolicyIntentKey: agentInstallCommandPolicyIntent(req.EnableCommands),
 			},
 		})
 		if err != nil {
@@ -2643,8 +2644,9 @@ func (h *ConfigHandlers) handleHostAgentInstallToken(w http.ResponseWriter, r *h
 		OwnerUserID: h.apiTokenOwnerUserIDForRequest(cfg, r),
 		Scopes:      hostAgentInstallScopes(req.EnableCommands),
 		Metadata: map[string]string{
-			"install_type": agentInstallTypeHost,
-			"issued_via":   agentInstallIssuedViaConfig,
+			"install_type":                     agentInstallTypeHost,
+			"issued_via":                       agentInstallIssuedViaConfig,
+			agentInstallCommandPolicyIntentKey: agentInstallCommandPolicyIntent(req.EnableCommands),
 		},
 	})
 	if err != nil {

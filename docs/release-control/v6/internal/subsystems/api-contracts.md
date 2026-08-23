@@ -4229,6 +4229,26 @@ canonical hostname. A token-named resource never falls back through agent ID
 or hostname independently, so token rotation restores control for the same
 installed agent without permitting cross-host dispatch (#1728).
 
+### Agent install command policy is a one-shot first-report contract
+
+`POST /api/agent-install-command` now binds its `enableCommands` request choice
+to the minted token as server-authored `command_policy_intent` metadata for
+both generic host and self-hosted PVE/PBS installers. Hosted tenant install
+commands remain outside this convergence path. The token response shape is
+unchanged and the metadata is not caller-controlled API input.
+
+When the token first reports an admitted host identity, the report handler
+applies that intent to the host's durable desired configuration before building
+the acknowledgement, then persists `command_policy_applied_agent_id`. Thus the
+same response cannot carry an older disabled override after the installer
+explicitly requested `--enable-commands`, while the marker prevents subsequent
+reports from overwriting a later administrator policy decision. Enabled intent
+without a live `agent:exec` scope becomes effective-disabled, and generic or
+identity-rejected tokens remain outside the path. The report and config payload
+schemas remain unchanged. The exact regression is pinned by
+`TestHostAgentFreshInstallTokenReplacesStaleDisabledCommandPolicyOnce`;
+minted enabled/disabled metadata is pinned by the agent install command tests.
+
 ### Agent update target responses are reconciliation-safe
 
 `GET` and `HEAD /api/agent/version` project
