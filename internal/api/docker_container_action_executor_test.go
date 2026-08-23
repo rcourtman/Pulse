@@ -53,6 +53,12 @@ func (f *scopedFakeDockerActionAgentCommander) GetAgentForTokenForOrganization(o
 	return agentID, ok
 }
 
+func (f *scopedFakeDockerActionAgentCommander) GetAgentForIdentityForOrganization(organizationID, agentID, hostname string) (string, bool) {
+	f.lastOrg = organizationID
+	hostAgentID, ok := f.GetAgentForHost(hostname)
+	return agentID, ok && hostAgentID == agentID && f.IsAgentConnected(agentID)
+}
+
 func dockerActionDispatchContext(t *testing.T, executor dockerContainerActionExecutor, record unified.ActionAuditRecord) context.Context {
 	t.Helper()
 	attempt, err := unified.NewActionDispatchAttempt(record.ID, time.Now())
@@ -144,7 +150,7 @@ func dockerActionReadinessByName(readinesses []unified.ResourceActionReadiness, 
 	return unified.ResourceActionReadiness{}, false
 }
 
-func TestDockerCommandSessionResolutionUsesTenantAndImmutableReportToken(t *testing.T) {
+func TestDockerCommandSessionResolutionUsesTenantAndRecoversFromStaleReportToken(t *testing.T) {
 	agents := &scopedFakeDockerActionAgentCommander{
 		fakeDockerActionAgentCommander: &fakeDockerActionAgentCommander{
 			connected:   map[string]bool{"canonical-agent": true, "stale-agent": true},
@@ -169,8 +175,15 @@ func TestDockerCommandSessionResolutionUsesTenantAndImmutableReportToken(t *test
 	}
 
 	delete(agents.tokenAgents, "fresh-token")
+	agents.agentByHost["docker-host"] = "canonical-agent"
+	resource.Docker.AgentID = "canonical-agent"
+	if agentID, err := executor.connectedDockerCommandAgentID(ctx, resource); err != nil || agentID != "canonical-agent" {
+		t.Fatalf("stale token exact-identity fallback = %q, %v; want canonical-agent", agentID, err)
+	}
+
+	resource.Docker.AgentID = "stale-agent"
 	if agentID, err := executor.connectedDockerCommandAgentID(ctx, resource); err == nil {
-		t.Fatalf("stale token unexpectedly fell back to report identity %q", agentID)
+		t.Fatalf("stale token unexpectedly crossed report identity to %q", agentID)
 	}
 }
 
@@ -717,8 +730,8 @@ func TestDockerContainerActionAvailabilityDetailNamesMissedLookup(t *testing.T) 
 		t.Fatalf("token-named readiness = %#v, want disconnected agent", readiness)
 	}
 	if !strings.Contains(readiness.Detail, "rotated-token") ||
-		!strings.Contains(readiness.Detail, "never falls back") {
-		t.Fatalf("token-named detail = %q, want the stale token binding named", readiness.Detail)
+		!strings.Contains(readiness.Detail, `exact agent "agent-1" and hostname "docker-host" identity`) {
+		t.Fatalf("token-named detail = %q, want the stale token and failed exact identity proof named", readiness.Detail)
 	}
 }
 

@@ -21315,6 +21315,7 @@ func TestContract_DockerLifecycleActionsResolveCommandAgentAndDispatchOneTypedOp
 		"func (e dockerContainerActionExecutor) connectedDockerCommandAgentID(ctx context.Context, resource unified.Resource) (string, error)",
 		"resource.Docker.TokenID",
 		"commandAgentForToken(ctx, e.agents, resource.Docker.TokenID)",
+		"commandAgentForIdentity(ctx, e.agents, resource.Docker.AgentID, resource.Docker.Hostname)",
 		"resource.Docker.AgentID",
 		"commandAgentForHost(ctx, e.agents, strings.TrimSpace(resource.Docker.Hostname))",
 		"ExecuteDockerContainerLifecycle(context.Context, string, agentexec.DockerContainerLifecyclePayload)",
@@ -21352,10 +21353,12 @@ func TestContract_DockerLifecycleActionsResolveCommandAgentAndDispatchOneTypedOp
 		t.Fatal("durable reconciliation must not rediscover its executor from current resource inventory")
 	}
 	if strings.Index(src, "commandAgentForToken(ctx, e.agents, resource.Docker.TokenID)") >
-		strings.Index(src, "if agentID := strings.TrimSpace(resource.Docker.AgentID)") ||
+		strings.Index(src, "commandAgentForIdentity(ctx, e.agents, resource.Docker.AgentID, resource.Docker.Hostname)") ||
+		strings.Index(src, "commandAgentForIdentity(ctx, e.agents, resource.Docker.AgentID, resource.Docker.Hostname)") >
+			strings.Index(src, "if agentID := strings.TrimSpace(resource.Docker.AgentID)") ||
 		strings.Index(src, "if agentID := strings.TrimSpace(resource.Docker.AgentID)") >
 			strings.Index(src, "commandAgentForHost(ctx, e.agents, strings.TrimSpace(resource.Docker.Hostname))") {
-		t.Fatal("docker lifecycle executor must resolve the immutable reporting token before legacy agent-id and hostname fallbacks")
+		t.Fatal("docker lifecycle executor must resolve the reporting token, exact identity, then legacy agent-id and hostname fallbacks")
 	}
 }
 

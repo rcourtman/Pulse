@@ -4216,6 +4216,14 @@ admission decision exactly via the shared binding evaluation in
 `internal/api/agent_exec_token_binding.go`, so the config payload never
 advertises command execution that admission would reject.
 
+Docker / Podman lifecycle and update actions use the same stale-token model
+without weakening dispatch identity. They resolve the report token first; when
+that sticky token no longer names a live session, fallback is allowed only when
+one tenant-scoped command admission matches both the resource's agent ID and
+canonical hostname. A token-named resource never falls back through agent ID
+or hostname independently, so token rotation restores control for the same
+installed agent without permitting cross-host dispatch (#1728).
+
 ### Agent update target responses are reconciliation-safe
 
 `GET` and `HEAD /api/agent/version` project

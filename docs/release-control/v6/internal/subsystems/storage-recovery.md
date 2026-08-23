@@ -5354,3 +5354,12 @@ delivery outcomes and the delivery gate state only; they add no storage,
 backup, snapshot, restore, retention, cleanup, or recovery capability, write
 nothing, and leave storage and recovery state, evidence freshness,
 persistence, and admission contracts unchanged.
+
+### Docker command-session identity recovery does not grant storage authority
+
+The shared Docker / Podman action executor may recover from a stale telemetry
+token only when one live tenant-scoped command admission matches both the
+resource agent ID and canonical hostname. This identity reconciliation changes
+neither backup, snapshot, restore, retention, nor recovery authority; those
+operations remain governed by their existing resource capabilities and action
+lifecycle contracts.

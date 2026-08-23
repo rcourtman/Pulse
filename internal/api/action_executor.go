@@ -112,6 +112,15 @@ type scopedActionAgentCommander interface {
 	GetAgentForTokenForOrganization(organizationID, tokenID string) (string, bool)
 }
 
+// scopedActionIdentityAgentCommander resolves a command session only when the
+// tenant, agent ID, and hostname all describe the same live admission. It is
+// intentionally separate from scopedActionAgentCommander so older action
+// commander implementations cannot accidentally approximate this proof with
+// independent ID and hostname lookups.
+type scopedActionIdentityAgentCommander interface {
+	GetAgentForIdentityForOrganization(organizationID, agentID, hostname string) (string, bool)
+}
+
 type scopedAgentOperationReceiptCapability interface {
 	AgentOperationReceiptVersionForOrganization(organizationID, agentID string) int
 }
@@ -158,6 +167,18 @@ func commandAgentForToken(ctx context.Context, agents actionAgentCommander, toke
 	}
 	if scoped, ok := agents.(scopedActionAgentCommander); ok {
 		return scoped.GetAgentForTokenForOrganization(GetOrgID(ctx), tokenID)
+	}
+	return "", false
+}
+
+func commandAgentForIdentity(ctx context.Context, agents actionAgentCommander, agentID, hostname string) (string, bool) {
+	agentID = strings.TrimSpace(agentID)
+	hostname = strings.TrimSpace(hostname)
+	if agentID == "" || hostname == "" {
+		return "", false
+	}
+	if scoped, ok := agents.(scopedActionIdentityAgentCommander); ok {
+		return scoped.GetAgentForIdentityForOrganization(GetOrgID(ctx), agentID, hostname)
 	}
 	return "", false
 }

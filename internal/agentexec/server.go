@@ -2328,6 +2328,29 @@ func (s *Server) GetAgentForTokenForOrganization(organizationID, tokenID string)
 	return "", false
 }
 
+// GetAgentForIdentityForOrganization resolves a live command session only
+// when one tenant-scoped admission matches both the supplied agent ID and the
+// canonical hostname. This is the safe recovery path for telemetry whose
+// last-seen token ID predates an enrollment-token rotation.
+func (s *Server) GetAgentForIdentityForOrganization(organizationID, agentID, hostname string) (string, bool) {
+	if s == nil {
+		return "", false
+	}
+	organizationID = normalizeOrganizationID(organizationID)
+	agentID = strings.TrimSpace(agentID)
+	hostname = strings.TrimSpace(hostname)
+	if agentID == "" || hostname == "" {
+		return "", false
+	}
+	ac, ok := s.connectionForOrganization(organizationID, agentID)
+	if !ok || normalizeOrganizationID(ac.admission.OrganizationID) != organizationID ||
+		strings.TrimSpace(ac.admission.AgentID) != agentID ||
+		!unifiedresources.HostnamesEquivalent(ac.admission.Hostname, hostname) {
+		return "", false
+	}
+	return agentID, true
+}
+
 // --- Deploy protocol ---
 
 // SubscribeDeployProgress registers a channel to receive deploy progress

@@ -416,6 +416,31 @@ func TestConnectedAgentLookups(t *testing.T) {
 	}
 }
 
+func TestGetAgentForIdentityForOrganizationRequiresOneExactLiveAdmission(t *testing.T) {
+	s := NewServer(allowAllTestTokens)
+	s.mu.Lock()
+	s.agents[agentSessionKey("org-a", "a1")] = &agentConn{
+		agent:     ConnectedAgent{AgentID: "a1", Hostname: "node.example.com"},
+		admission: AgentAdmission{OrganizationID: "org-a", TokenID: "rotated-token", AgentID: "a1", Hostname: "node.example.com"},
+	}
+	s.mu.Unlock()
+
+	if got, ok := s.GetAgentForIdentityForOrganization("org-a", "a1", "NODE"); !ok || got != "a1" {
+		t.Fatalf("exact identity lookup = %q, %v; want a1, true", got, ok)
+	}
+	for _, mismatch := range []struct{ org, agentID, hostname string }{
+		{"org-b", "a1", "node"},
+		{"org-a", "a2", "node"},
+		{"org-a", "a1", "other"},
+		{"org-a", "", "node"},
+		{"org-a", "a1", ""},
+	} {
+		if got, ok := s.GetAgentForIdentityForOrganization(mismatch.org, mismatch.agentID, mismatch.hostname); ok {
+			t.Fatalf("mismatched identity unexpectedly resolved %q for %#v", got, mismatch)
+		}
+	}
+}
+
 func TestGetAgentForHostNormalizesFQDNAndCase(t *testing.T) {
 	s := NewServer(allowAllTestTokens)
 	now := time.Now().Add(-1 * time.Minute)

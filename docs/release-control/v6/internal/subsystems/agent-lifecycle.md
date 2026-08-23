@@ -6059,6 +6059,15 @@ The registration-bound hostname is authoritative and is not rewritten by an
 equivalent spelling the agent reports, because the still-unconsumed install
 grant compares against it.
 
+Command-capable Docker / Podman resources may retain a last-seen telemetry
+token after their enrollment token rotates. Action dispatch therefore tries
+the report token first, then permits recovery only through one live admission
+in the same tenant whose agent ID and canonical hostname both match the
+resource. Independent ID-only or hostname-only fallback remains forbidden for
+token-named resources, preventing a stale report from crossing identities
+while restoring start, stop, restart, and update control for the same agent
+(#1728).
+
 A blocked registration is not a silent skip. When the pre-registration check
 reports `canRegister=false`, the agent must log at error level, return a setup
 error to its caller, and record the operator-facing reason in a

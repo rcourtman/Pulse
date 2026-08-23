@@ -435,10 +435,15 @@ func (e dockerContainerActionExecutor) connectedDockerCommandAgentID(ctx context
 	if agentID, ok := commandAgentForToken(ctx, e.agents, resource.Docker.TokenID); ok {
 		return strings.TrimSpace(agentID), nil
 	}
-	// When telemetry names a token, it is the immutable session binding. Do
-	// not fall back to a different identity or hostname after rotation.
+	// Telemetry retains its last-seen token ID across enrollment-token rotation.
+	// A token miss may therefore use the live admission only when its tenant,
+	// agent ID, and hostname all match this resource. Never degrade this to an
+	// ID-only or hostname-only lookup: either could select a different identity.
 	if tokenID := strings.TrimSpace(resource.Docker.TokenID); tokenID != "" {
-		return "", fmt.Errorf("docker container command agent is not connected: no live command session for enrollment token %s (agent %q, hostname %q); a token-named resource never falls back to identity or hostname lookup", tokenID, strings.TrimSpace(resource.Docker.AgentID), strings.TrimSpace(resource.Docker.Hostname))
+		if agentID, ok := commandAgentForIdentity(ctx, e.agents, resource.Docker.AgentID, resource.Docker.Hostname); ok {
+			return strings.TrimSpace(agentID), nil
+		}
+		return "", fmt.Errorf("docker container command agent is not connected: no live command session matches enrollment token %s or the exact agent %q and hostname %q identity", tokenID, strings.TrimSpace(resource.Docker.AgentID), strings.TrimSpace(resource.Docker.Hostname))
 	}
 	if agentID := strings.TrimSpace(resource.Docker.AgentID); agentID != "" && isAgentCommandConnected(ctx, e.agents, agentID) {
 		return agentID, nil
