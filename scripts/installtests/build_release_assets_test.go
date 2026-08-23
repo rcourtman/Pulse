@@ -2307,6 +2307,10 @@ func TestReleasePipelinePromotesOneImmutableCandidate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read build-release-candidate.yml: %v", err)
 	}
+	compilerBytes, err := os.ReadFile(repoFile(".github", "workflows", "compile-release-payload.yml"))
+	if err != nil {
+		t.Fatalf("read compile-release-payload.yml: %v", err)
+	}
 	validationBytes, err := os.ReadFile(repoFile(".github", "workflows", "validate-release-assets.yml"))
 	if err != nil {
 		t.Fatalf("read validate-release-assets.yml: %v", err)
@@ -2326,6 +2330,7 @@ func TestReleasePipelinePromotesOneImmutableCandidate(t *testing.T) {
 
 	createWorkflow := string(createBytes)
 	candidateWorkflow := string(candidateBytes)
+	compilerWorkflow := string(compilerBytes)
 	compileScriptBytes, err := os.ReadFile(repoFile("scripts", "build-release-binaries.sh"))
 	if err != nil {
 		t.Fatalf("read build-release-binaries.sh: %v", err)
@@ -2350,7 +2355,8 @@ func TestReleasePipelinePromotesOneImmutableCandidate(t *testing.T) {
 	floatingJob := workflowJobBlock(t, convergenceWorkflow, "promote_floating_tags")
 	helmPagesJob := workflowJobBlock(t, convergenceWorkflow, "publish_helm_pages")
 	demoJob := workflowJobBlock(t, convergenceWorkflow, "update_stable_demo")
-	compileJob := workflowJobBlock(t, candidateWorkflow, "compile-release-payload")
+	compileJob := workflowJobBlock(t, compilerWorkflow, "compile-release-payload")
+	obtainPayloadJob := workflowJobBlock(t, candidateWorkflow, "obtain-release-payload")
 	candidateBuildJob := workflowJobBlock(t, candidateWorkflow, "build")
 
 	for _, needle := range []string{
@@ -2368,11 +2374,11 @@ func TestReleasePipelinePromotesOneImmutableCandidate(t *testing.T) {
 
 	for _, needle := range []string{
 		`fromJSON('["self-hosted","Linux","X64","pulse-pve-compile"]')`,
-		`artifact_id: ${{ steps.upload_compiled.outputs.artifact-id }}`,
-		`artifact_digest: ${{ steps.upload_compiled.outputs.artifact-digest }}`,
+		`GITHUB_WORKFLOW_SHA`,
+		`ref: ${{ inputs.source_sha }}`,
 		`PULSE_RELEASE_BUILD_JOBS: "2"`,
 		`./scripts/build-release-binaries.sh "${{ inputs.version }}"`,
-		`release-compiled-${{ github.sha }}-${{ inputs.version }}`,
+		`release-compiled-${{ inputs.source_sha }}-${{ inputs.version }}-${{ inputs.request_id }}`,
 	} {
 		if !strings.Contains(compileJob, needle) {
 			t.Fatalf("compiled release payload job missing exact-SHA contract: %s", needle)
@@ -2380,6 +2386,21 @@ func TestReleasePipelinePromotesOneImmutableCandidate(t *testing.T) {
 	}
 	if strings.Contains(compileJob, "PULSE_UPDATE_SIGNING_KEY") {
 		t.Fatal("release compilation job must not receive private update-signing material")
+	}
+	if strings.Contains(candidateWorkflow, `runs-on: ${{ fromJSON('["self-hosted"`) {
+		t.Fatal("SignPath release workflow must not contain a self-hosted runner job")
+	}
+	for _, needle := range []string{
+		`runs-on: ubuntu-24.04`,
+		`actions: write`,
+		`actions/workflows/compile-release-payload.yml/dispatches`,
+		`X-GitHub-Api-Version: 2026-03-10`,
+		`compiler_run_id: ${{ steps.dispatch.outputs.compiler_run_id }}`,
+		`.path == ".github/workflows/compile-release-payload.yml"`,
+	} {
+		if !strings.Contains(obtainPayloadJob, needle) {
+			t.Fatalf("hosted compiler handoff job missing isolated-workflow contract: %s", needle)
+		}
 	}
 	for label, job := range map[string]string{
 		"frontend bundle": frontendBundleJob,
@@ -2414,16 +2435,17 @@ func TestReleasePipelinePromotesOneImmutableCandidate(t *testing.T) {
 		}
 	}
 	for _, needle := range []string{
-		`needs.compile-release-payload.result == 'success'`,
+		`needs.obtain-release-payload.result == 'success'`,
 		`actions: read`,
-		`EXPECTED_ARTIFACT_ID: ${{ needs.compile-release-payload.outputs.artifact_id }}`,
-		`EXPECTED_ARTIFACT_DIGEST: ${{ needs.compile-release-payload.outputs.artifact_digest }}`,
+		`EXPECTED_ARTIFACT_ID: ${{ needs.obtain-release-payload.outputs.artifact_id }}`,
+		`EXPECTED_ARTIFACT_DIGEST: ${{ needs.obtain-release-payload.outputs.artifact_digest }}`,
+		`EXPECTED_COMPILER_RUN_ID: ${{ needs.obtain-release-payload.outputs.compiler_run_id }}`,
 		`actions/artifacts/${EXPECTED_ARTIFACT_ID}`,
 		`.workflow_run.head_sha == $source_sha`,
 		`sha256sum --check --`,
 		`scripts/release_candidate_manifest.py verify-local`,
 		`compiled-payload-verification.json`,
-		`trusted-self-hosted-compiler`,
+		`separate-trusted-self-hosted-compiler-workflow`,
 		`PULSE_RELEASE_COMPILED_PAYLOAD_DIR`,
 	} {
 		if !strings.Contains(candidateBuildJob, needle) {

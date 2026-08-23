@@ -1270,12 +1270,12 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertRegex(
             workflow,
             r"(?ms)^  build_release_candidate:\n.*?^    permissions:\n"
-            r"      actions: read\n      contents: read\n    uses: \.\/\.github\/workflows\/build-release-candidate\.yml$",
+            r"      actions: write\n      contents: read\n    uses: \.\/\.github\/workflows\/build-release-candidate\.yml$",
         )
         self.assertRegex(
             release_workflow,
             r"(?ms)^  build_release_candidate:\n.*?^    permissions:\n"
-            r"      actions: read\n      contents: read\n    uses: \.\/\.github\/workflows\/build-release-candidate\.yml$",
+            r"      actions: write\n      contents: read\n    uses: \.\/\.github\/workflows\/build-release-candidate\.yml$",
         )
         self.assertIn("Definitive Dry-Run Verdict", workflow)
         self.assertIn('require_result "exact-SHA release candidate" "$CANDIDATE_RESULT" success', workflow)
@@ -1327,6 +1327,7 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         demo_reachability_helper = read(".github/scripts/check-demo-reachability.sh")
         validation_workflow = read(".github/workflows/validate-release-assets.yml")
         candidate_workflow = read(".github/workflows/build-release-candidate.yml")
+        compiler_workflow = read(".github/workflows/compile-release-payload.yml")
         qualifier_workflow = read(".github/workflows/qualify-release-containers.yml")
         docker_build = workflow_job_block(qualifier_workflow, "qualify")
         release_validator = read("scripts/validate-release.sh")
@@ -1456,31 +1457,34 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertNotIn("pulse_update_signing_key=${{ secrets.PULSE_UPDATE_SIGNING_KEY }}", docker_build)
         self.assertIn("Validate installer signing key pins", candidate_workflow)
         self.assertIn("timeout-minutes: 60", candidate_workflow)
+        self.assertNotRegex(candidate_workflow, r"(?m)^\s+runs-on:.*self-hosted")
         self.assertIn(
             'runs-on: ${{ fromJSON(\'["self-hosted","Linux","X64","pulse-pve-compile"]\') }}',
+            compiler_workflow,
+        )
+        self.assertIn("GITHUB_WORKFLOW_SHA", compiler_workflow)
+        self.assertIn("ref: ${{ inputs.source_sha }}", compiler_workflow)
+        self.assertIn("PULSE_RELEASE_BUILD_JOBS: \"2\"", compiler_workflow)
+        self.assertIn("actions/workflows/compile-release-payload.yml/dispatches", candidate_workflow)
+        self.assertIn("X-GitHub-Api-Version: 2026-03-10", candidate_workflow)
+        self.assertIn("compiler_run_id: ${{ steps.dispatch.outputs.compiler_run_id }}", candidate_workflow)
+        self.assertIn('.path == ".github/workflows/compile-release-payload.yml"', candidate_workflow)
+        self.assertIn(
+            "EXPECTED_ARTIFACT_ID: ${{ needs.obtain-release-payload.outputs.artifact_id }}",
             candidate_workflow,
         )
         self.assertIn(
-            "artifact_id: ${{ steps.upload_compiled.outputs.artifact-id }}",
+            "EXPECTED_ARTIFACT_DIGEST: ${{ needs.obtain-release-payload.outputs.artifact_digest }}",
             candidate_workflow,
         )
         self.assertIn(
-            "artifact_digest: ${{ steps.upload_compiled.outputs.artifact-digest }}",
-            candidate_workflow,
-        )
-        self.assertIn("PULSE_RELEASE_BUILD_JOBS: \"2\"", candidate_workflow)
-        self.assertIn(
-            "EXPECTED_ARTIFACT_ID: ${{ needs.compile-release-payload.outputs.artifact_id }}",
-            candidate_workflow,
-        )
-        self.assertIn(
-            "EXPECTED_ARTIFACT_DIGEST: ${{ needs.compile-release-payload.outputs.artifact_digest }}",
+            "EXPECTED_COMPILER_RUN_ID: ${{ needs.obtain-release-payload.outputs.compiler_run_id }}",
             candidate_workflow,
         )
         self.assertIn(".workflow_run.head_sha == $source_sha", candidate_workflow)
         self.assertIn("sha256sum --check --", candidate_workflow)
         self.assertIn("compiled-payload-verification.json", candidate_workflow)
-        self.assertIn("trusted-self-hosted-compiler", candidate_workflow)
+        self.assertIn("separate-trusted-self-hosted-compiler-workflow", candidate_workflow)
         self.assertIn("Verify Native Signing Configuration", candidate_workflow)
         self.assertEqual(candidate_workflow.count("needs: signing-configuration"), 2)
         self.assertIn("require_windows_signing: ${{ needs.prepare.outputs.require_windows_signing == 'true' }}", content)

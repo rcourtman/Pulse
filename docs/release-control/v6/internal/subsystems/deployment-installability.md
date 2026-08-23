@@ -539,13 +539,19 @@ upgrade, update, release, or artifact-selection behavior.
    backend and browser-smoke lanes can start as soon as the bundle is available.
    Cross-platform compilation for every release channel runs once on the
    dedicated, credential-free PVE compiler identity using only public embedding
-   keys. The compiler must produce one exact-version, exact-source-SHA manifest
+   keys in a separately dispatched GitHub Actions workflow run. The release
+   candidate and SignPath workflow run must contain only GitHub-hosted jobs;
+   its hosted handoff job may dispatch and wait for the isolated compiler run,
+   but the self-hosted job must never appear in the signing run. The compiler
+   workflow must execute from the same exact workflow SHA as the parent release
+   and must produce one exact-version, exact-source-SHA manifest
    covering the complete frontend and binary payload. That manifest may cover
    canonical relative paths in the payload tree but must reject absolute,
    traversing, or noncanonical names. The upload step must expose GitHub's
    immutable artifact id and archive SHA-256 digest. The hosted candidate job
    must retrieve that exact id, fail closed unless GitHub's artifact API binds
-   its name, digest, workflow-run id, and head SHA to the current release run,
+   its name, digest, isolated compiler workflow-run id, and head SHA to the
+   exact release source,
    verify the downloaded archive digest itself, and then verify the inner
    payload manifest
    before applying required native binaries, packaging, update-signing, SBOM
@@ -1640,17 +1646,22 @@ decision is limited to `v6.1.2`, retains the exact-SHA and integrity controls,
 and requires the public release notes to disclose that Windows binaries are
 not Authenticode-signed and may show Unknown Publisher.
 Every caller of the reusable release-candidate builder must delegate
-`actions: read` alongside `contents: read`; the Windows signing job reads the
-exact uploaded artifact through the GitHub Actions API, and GitHub validates
-that nested permission even when a prerelease skips Authenticode signing.
+`actions: write` alongside `contents: read`; only the hosted compiler-handoff
+job receives that effective permission so it can dispatch the isolated PC
+workflow, while the Windows signing and final assembly jobs narrow themselves
+back to `actions: read`. GitHub validates that nested permission even when a
+prerelease skips Authenticode signing.
 SignPath Foundation also requires every job leading up to an open-source
 signing request to execute on GitHub-hosted runners. Stable release
 preparation, the parallel frontend bundle, backend qualification, signing
 configuration, and the Windows build/submission dependency chain therefore
 remain GitHub-hosted regardless of an unsigned-Windows exception. The
-credential-free PVE compiler is an independent sibling and never supplies the
-artifact submitted to SignPath; only the hosted final assembler joins its
-separately verified output after native signing. Rehearsals `32631653966` and
+credential-free PVE compiler executes in an entirely separate workflow run and
+never supplies the artifact submitted to SignPath. The hosted release workflow
+dispatches it by exact source SHA, validates the returned compiler-run identity,
+and only the hosted final assembler joins its separately verified output after
+native signing. This keeps every job in the SignPath workflow run hosted rather
+than relying on a sibling-job interpretation of SignPath's OSS rule. Rehearsals `32631653966` and
 `32635525554` lost different matrix compiler processes on the PVE runner under
 four-way compiler and frontend pressure. The single-build compiler now admits
 only a worker with explicit memory/disk headroom, limits the matrix to two

@@ -74,79 +74,103 @@ permissions:
   contents: read
 
 jobs:
-  compile-release-payload:
-    name: Compile Exact-SHA Release Payload
-    # This credential-free worker is the trusted high-capacity compiler for
-    # every channel. Its output is immutable after upload and is consumed by
-    # artifact id and digest; hosted jobs verify and package it without a
-    # second compilation. It is not in the dependency chain leading to the
-    # separately hosted SignPath request.
-    runs-on: ${{ fromJSON('["self-hosted","Linux","X64","pulse-pve-compile"]') }}
-    timeout-minutes: 30
+  obtain-release-payload:
+    name: Obtain Isolated PC Release Payload
+    # The self-hosted compiler runs in a separate workflow run. This release
+    # and SignPath workflow therefore contains only GitHub-hosted jobs, while
+    # the expensive payload still compiles once on the trusted PC.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    permissions:
+      actions: write
+      contents: read
     outputs:
-      artifact_id: ${{ steps.upload_compiled.outputs.artifact-id }}
-      artifact_digest: ${{ steps.upload_compiled.outputs.artifact-digest }}
-      artifact_name: release-compiled-${{ github.sha }}-${{ inputs.version }}
+      artifact_id: ${{ steps.wait.outputs.artifact_id }}
+      artifact_digest: ${{ steps.wait.outputs.artifact_digest }}
+      artifact_name: ${{ steps.wait.outputs.artifact_name }}
+      compiler_run_id: ${{ steps.dispatch.outputs.compiler_run_id }}
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
-        with:
-          fetch-depth: 0
-
-      - name: Validate candidate identity
-        run: |
-          set -euo pipefail
-          test "$(tr -d '\n' < VERSION)" = "${{ inputs.version }}"
-          test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
-
-      - name: Set up Go
-        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
-        with:
-          go-version-file: go.mod
-          cache: false
-
-      - name: Set up Node.js
-        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
-        with:
-          node-version: '20'
-
-      - name: Verify compiler capacity
-        shell: bash
-        run: |
-          set -euo pipefail
-          available_memory_kib="$(awk '$1 == "MemAvailable:" {print $2}' /proc/meminfo)"
-          minimum_memory_kib="$((6 * 1024 * 1024))"
-          available_disk_bytes="$(df --output=avail -B1 "$RUNNER_TEMP" | tail -n 1 | tr -d ' ')"
-          minimum_disk_bytes="$((10 * 1024 * 1024 * 1024))"
-          if (( available_memory_kib < minimum_memory_kib )); then
-            echo "::error::Release compiler has less than 6 GiB available memory."
-            exit 1
-          fi
-          if (( available_disk_bytes < minimum_disk_bytes )); then
-            echo "::error::Release compiler has less than 10 GiB free under RUNNER_TEMP."
-            exit 1
-          fi
-          echo "Release compiler capacity: $((available_memory_kib / 1024)) MiB memory, $((available_disk_bytes / 1024 / 1024 / 1024)) GiB disk."
-
-      - name: Compile credential-free release payload
+      - name: Dispatch exact-SHA compiler workflow
+        id: dispatch
         env:
-          PULSE_LICENSE_PUBLIC_KEY: ${{ secrets.PULSE_LICENSE_PUBLIC_KEY }}
-          PULSE_UPDATE_SIGNING_PUBLIC_KEY: ${{ vars.PULSE_UPDATE_SIGNING_PUBLIC_KEY }}
-          # Two bounded workers avoid the compiler-process loss seen when four
-          # Go links competed with the frontend build on the same VM.
-          PULSE_RELEASE_BUILD_JOBS: "2"
-        run: ./scripts/build-release-binaries.sh "${{ inputs.version }}" "$RUNNER_TEMP/release-compiled"
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+          SOURCE_SHA: ${{ github.sha }}
+          SOURCE_REF: ${{ github.ref_name }}
+          REQUEST_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          [[ "${GITHUB_REF}" == refs/heads/* ]]
+          dispatch_payload="$(jq -nc \
+            --arg ref "${SOURCE_REF}" \
+            --arg version "${VERSION}" \
+            --arg source_sha "${SOURCE_SHA}" \
+            --arg request_id "${REQUEST_ID}" \
+            '{ref: $ref, inputs: {version: $version, source_sha: $source_sha, request_id: $request_id}}')"
+          dispatch_json="$(gh api \
+            --method POST \
+            -H 'Accept: application/vnd.github+json' \
+            -H 'X-GitHub-Api-Version: 2026-03-10' \
+            "repos/${GITHUB_REPOSITORY}/actions/workflows/compile-release-payload.yml/dispatches" \
+            --input - <<<"${dispatch_payload}")"
+          compiler_run_id="$(jq -er '.workflow_run_id | select(type == "number")' <<<"${dispatch_json}")"
+          compiler_run_url="$(jq -er '.html_url | select(type == "string" and length > 0)' <<<"${dispatch_json}")"
+          echo "compiler_run_id=${compiler_run_id}" >> "$GITHUB_OUTPUT"
+          echo "Compiler workflow: ${compiler_run_url}"
 
-      - name: Upload exact-SHA compiled payload
-        id: upload_compiled
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: release-compiled-${{ github.sha }}-${{ inputs.version }}
-          path: ${{ runner.temp }}/release-compiled/
-          if-no-files-found: error
-          retention-days: 1
-          compression-level: 0
-          overwrite: true
+      - name: Wait for immutable compiler artifact
+        id: wait
+        env:
+          GH_TOKEN: ${{ github.token }}
+          COMPILER_RUN_ID: ${{ steps.dispatch.outputs.compiler_run_id }}
+          VERSION: ${{ inputs.version }}
+          SOURCE_SHA: ${{ github.sha }}
+          SOURCE_REF: ${{ github.ref_name }}
+          REQUEST_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          deadline="$((SECONDS + 35 * 60))"
+          while true; do
+            run_json="$(gh api \
+              -H 'Accept: application/vnd.github+json' \
+              -H 'X-GitHub-Api-Version: 2026-03-10' \
+              "repos/${GITHUB_REPOSITORY}/actions/runs/${COMPILER_RUN_ID}")"
+            status="$(jq -er '.status' <<<"${run_json}")"
+            if [[ "${status}" == "completed" ]]; then
+              break
+            fi
+            if (( SECONDS >= deadline )); then
+              echo "::error::Compiler workflow ${COMPILER_RUN_ID} did not complete within 35 minutes."
+              exit 1
+            fi
+            echo "Compiler workflow ${COMPILER_RUN_ID} is ${status}."
+            sleep 10
+          done
+          if ! jq -e \
+              --argjson run_id "${COMPILER_RUN_ID}" \
+              --arg source_ref "${SOURCE_REF}" \
+              --arg source_sha "${SOURCE_SHA}" \
+              '.id == $run_id and .event == "workflow_dispatch" and .path == ".github/workflows/compile-release-payload.yml" and .head_branch == $source_ref and .head_sha == $source_sha and .conclusion == "success"' \
+              <<<"${run_json}" >/dev/null; then
+            run_summary="$(jq -c '{id, event, path, head_branch, head_sha, status, conclusion, html_url}' <<<"${run_json}")"
+            echo "::error::Compiler workflow identity or result verification failed: ${run_summary}"
+            exit 1
+          fi
+
+          artifact_name="release-compiled-${SOURCE_SHA}-${VERSION}-${REQUEST_ID}"
+          artifacts_json="$(gh api \
+            -H 'Accept: application/vnd.github+json' \
+            -H 'X-GitHub-Api-Version: 2026-03-10' \
+            "repos/${GITHUB_REPOSITORY}/actions/runs/${COMPILER_RUN_ID}/artifacts?per_page=100")"
+          artifact_json="$(jq -ce \
+            --arg artifact_name "${artifact_name}" \
+            '[.artifacts[] | select(.name == $artifact_name and .expired == false and .size_in_bytes > 0)] | if length == 1 then .[0] else error("expected exactly one compiler artifact") end' \
+            <<<"${artifacts_json}")"
+          artifact_id="$(jq -er '.id | select(type == "number")' <<<"${artifact_json}")"
+          artifact_digest="$(jq -er '.digest | select(test("^sha256:[0-9a-f]{64}$")) | sub("^sha256:"; "")' <<<"${artifact_json}")"
+          echo "artifact_id=${artifact_id}" >> "$GITHUB_OUTPUT"
+          echo "artifact_digest=${artifact_digest}" >> "$GITHUB_OUTPUT"
+          echo "artifact_name=${artifact_name}" >> "$GITHUB_OUTPUT"
 
   signing-configuration:
     name: Verify Native Signing Configuration
@@ -597,8 +621,8 @@ jobs:
 
   build:
     name: Build and Validate Release Candidate
-    needs: [compile-release-payload, sign-macos-agent, collect-windows-signing]
-    if: ${{ always() && needs.compile-release-payload.result == 'success' && (!inputs.require_macos_signing || needs.sign-macos-agent.result == 'success') && (!inputs.require_windows_signing || needs.collect-windows-signing.result == 'success') }}
+    needs: [obtain-release-payload, sign-macos-agent, collect-windows-signing]
+    if: ${{ always() && needs.obtain-release-payload.result == 'success' && (!inputs.require_macos_signing || needs.sign-macos-agent.result == 'success') && (!inputs.require_windows_signing || needs.collect-windows-signing.result == 'success') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     permissions:
@@ -668,9 +692,10 @@ jobs:
       - name: Verify and download exact compiled artifact
         env:
           GH_TOKEN: ${{ github.token }}
-          EXPECTED_ARTIFACT_ID: ${{ needs.compile-release-payload.outputs.artifact_id }}
-          EXPECTED_ARTIFACT_DIGEST: ${{ needs.compile-release-payload.outputs.artifact_digest }}
-          EXPECTED_ARTIFACT_NAME: ${{ needs.compile-release-payload.outputs.artifact_name }}
+          EXPECTED_ARTIFACT_ID: ${{ needs.obtain-release-payload.outputs.artifact_id }}
+          EXPECTED_ARTIFACT_DIGEST: ${{ needs.obtain-release-payload.outputs.artifact_digest }}
+          EXPECTED_ARTIFACT_NAME: ${{ needs.obtain-release-payload.outputs.artifact_name }}
+          EXPECTED_COMPILER_RUN_ID: ${{ needs.obtain-release-payload.outputs.compiler_run_id }}
         run: |
           set -euo pipefail
           [[ "${EXPECTED_ARTIFACT_ID}" =~ ^[0-9]+$ ]]
@@ -682,7 +707,7 @@ jobs:
             --argjson artifact_id "${EXPECTED_ARTIFACT_ID}" \
             --arg artifact_name "${EXPECTED_ARTIFACT_NAME}" \
             --arg artifact_digest "sha256:${EXPECTED_ARTIFACT_DIGEST}" \
-            --argjson run_id "${GITHUB_RUN_ID}" \
+            --argjson run_id "${EXPECTED_COMPILER_RUN_ID}" \
             --arg source_sha "${GITHUB_SHA}" \
             '.id == $artifact_id and .name == $artifact_name and .expired == false and .size_in_bytes > 0 and .digest == $artifact_digest and .workflow_run.id == $run_id and .workflow_run.head_sha == $source_sha' \
             "${artifact_json}" >/dev/null
@@ -693,9 +718,10 @@ jobs:
 
       - name: Verify exact-SHA compiled payload
         env:
-          EXPECTED_ARTIFACT_ID: ${{ needs.compile-release-payload.outputs.artifact_id }}
-          EXPECTED_ARTIFACT_DIGEST: ${{ needs.compile-release-payload.outputs.artifact_digest }}
-          EXPECTED_ARTIFACT_NAME: ${{ needs.compile-release-payload.outputs.artifact_name }}
+          EXPECTED_ARTIFACT_ID: ${{ needs.obtain-release-payload.outputs.artifact_id }}
+          EXPECTED_ARTIFACT_DIGEST: ${{ needs.obtain-release-payload.outputs.artifact_digest }}
+          EXPECTED_ARTIFACT_NAME: ${{ needs.obtain-release-payload.outputs.artifact_name }}
+          EXPECTED_COMPILER_RUN_ID: ${{ needs.obtain-release-payload.outputs.compiler_run_id }}
         run: |
           set -euo pipefail
           python3 scripts/release_candidate_manifest.py verify-local \
@@ -710,10 +736,11 @@ jobs:
             --arg artifact_name "${EXPECTED_ARTIFACT_NAME}" \
             --arg artifact_sha256 "${EXPECTED_ARTIFACT_DIGEST}" \
             --arg payload_manifest_sha256 "${payload_manifest_sha256}" \
-            --argjson workflow_run_id "${GITHUB_RUN_ID}" \
+            --argjson compiler_workflow_run_id "${EXPECTED_COMPILER_RUN_ID}" \
+            --argjson release_workflow_run_id "${GITHUB_RUN_ID}" \
             --arg version "${{ inputs.version }}" \
             --arg source_sha "${GITHUB_SHA}" \
-            '{schema_version: 1, trust_boundary: "trusted-self-hosted-compiler", verified_on: "github-hosted", artifact_id: $artifact_id, artifact_name: $artifact_name, artifact_sha256: $artifact_sha256, payload_manifest_sha256: $payload_manifest_sha256, workflow_run_id: $workflow_run_id, version: $version, source_sha: $source_sha}' \
+            '{schema_version: 2, trust_boundary: "separate-trusted-self-hosted-compiler-workflow", verified_on: "github-hosted", artifact_id: $artifact_id, artifact_name: $artifact_name, artifact_sha256: $artifact_sha256, payload_manifest_sha256: $payload_manifest_sha256, compiler_workflow_run_id: $compiler_workflow_run_id, release_workflow_run_id: $release_workflow_run_id, version: $version, source_sha: $source_sha}' \
             > release-candidate-manifest/compiled-payload-verification.json
 
       - name: Download signed macOS binaries

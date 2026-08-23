@@ -72,7 +72,7 @@ jobs:
     name: Build Immutable Release Candidate
     if: ${{ inputs.version != '' }}
     permissions:
-      actions: read
+      actions: write
       contents: read
     uses: ./.github/workflows/build-release-candidate.yml
     secrets: inherit

@@ -10638,7 +10638,7 @@
     },
     {
       "id": "trusted-pc-single-build-artifact-handoff",
-      "summary": "The project owner designated the dedicated PVE PC runners as trusted, credential-free compilers for public and private release payloads across RC, stable, and patch channels. Each payload is built once, uploaded as an immutable GitHub Actions artifact, and consumed without recompilation only after a GitHub-hosted job verifies the exact artifact id, server-recorded archive SHA-256, workflow run, head SHA, version/source inner manifest, and complete file digests. Signing and publication credentials remain hosted-only, and the SignPath request dependency chain remains entirely GitHub-hosted.",
+      "summary": "The project owner designated the dedicated PVE PC runners as trusted, credential-free compilers for public and private release payloads across RC, stable, and patch channels. Each payload is built once in a separately dispatched workflow run, uploaded as an immutable GitHub Actions artifact, and consumed without recompilation only after a GitHub-hosted job verifies the exact artifact id, server-recorded archive SHA-256, isolated compiler workflow run, head SHA, version/source inner manifest, and complete file digests. Signing and publication credentials remain hosted-only, and the complete SignPath workflow run contains only GitHub-hosted jobs rather than relying on a sibling-job interpretation of the Foundation rule.",
       "kind": "release-policy",
       "decided_at": "2026-08-23",
       "subsystem_ids": [
