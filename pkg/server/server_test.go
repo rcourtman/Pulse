@@ -16,6 +16,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
+	"github.com/rcourtman/pulse-go-rewrite/internal/telemetry"
 	"github.com/rcourtman/pulse-go-rewrite/internal/updates"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/extensions"
 	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
@@ -392,5 +393,44 @@ func TestServerRun_RejectsWildcardTrustedProxyCIDR(t *testing.T) {
 	err := Run(context.Background(), "test-version")
 	if err == nil || !strings.Contains(err.Error(), "wildcard trust range") {
 		t.Fatalf("expected wildcard trusted proxy configuration to be rejected, got %v", err)
+	}
+}
+
+// Node connection test counts must reach the telemetry snapshot, and counts
+// older than the reporting window must not, otherwise the add-node stall this
+// counter exists to measure cannot be read from the fleet.
+func TestApplyNodeTestTelemetrySnapshotReadsTallyWithinWindow(t *testing.T) {
+	dir := t.TempDir()
+	persistence := config.NewConfigPersistence(dir)
+	now := time.Now().UTC()
+
+	if err := persistence.RecordNodeTestOutcome(true, now.AddDate(0, 0, -40)); err != nil {
+		t.Fatalf("record stale outcome: %v", err)
+	}
+	if err := persistence.RecordNodeTestOutcome(true, now); err != nil {
+		t.Fatalf("record failure: %v", err)
+	}
+	if err := persistence.RecordNodeTestOutcome(false, now); err != nil {
+		t.Fatalf("record success: %v", err)
+	}
+
+	var snap telemetry.Snapshot
+	applyNodeTestTelemetrySnapshot(&snap, persistence, now)
+
+	if snap.NodeTestAttempts30d != 2 {
+		t.Fatalf("NodeTestAttempts30d = %d, want 2", snap.NodeTestAttempts30d)
+	}
+	if snap.NodeTestFailures30d != 1 {
+		t.Fatalf("NodeTestFailures30d = %d, want 1", snap.NodeTestFailures30d)
+	}
+}
+
+// A missing tally is the normal state on an install that has never opened the
+// add-node dialog, and must report zero rather than fail the snapshot.
+func TestApplyNodeTestTelemetrySnapshotToleratesMissingTally(t *testing.T) {
+	var snap telemetry.Snapshot
+	applyNodeTestTelemetrySnapshot(&snap, config.NewConfigPersistence(t.TempDir()), time.Now().UTC())
+	if snap.NodeTestAttempts30d != 0 || snap.NodeTestFailures30d != 0 {
+		t.Fatalf("counts = %d/%d, want 0/0", snap.NodeTestAttempts30d, snap.NodeTestFailures30d)
 	}
 }

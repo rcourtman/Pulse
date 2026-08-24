@@ -2286,6 +2286,13 @@ the `/api/recovery/points` or `/api/recovery/rollups` list meta; lifecycle
 code MUST NOT treat that pagination meta as an agent enrollment, admission, or
 report-ingestion contract.
 
+The node connection test handlers under `internal/api/configapi/` record a
+content-free outcome tally for telemetry. This adds no agent lifecycle surface:
+it does not touch agent registration, capability negotiation, command dispatch,
+token rotation, or removal state, and it records nothing about agents. Node
+connection tests target Proxmox, PBS, and PMG endpoints directly and never
+traverse an agent.
+
 ## Forbidden Paths
 
 1. New install or update continuity behavior hidden only inside broad monitoring ownership.

@@ -24432,3 +24432,43 @@ func TestContract_PatrolBlockedCauseTelemetryExportsEnumOnlyWhileBlocked(t *test
 		}
 	}
 }
+
+// The node connection test tally is only meaningful if it starts after the
+// request is known to carry a target and credentials. Moving the recorder above
+// those guards would silently begin counting incomplete forms as nodes that
+// could not be reached, which is the exact confusion the counter exists to
+// resolve, and nothing about the response would change to reveal it.
+func TestContract_NodeTestTelemetryRecordsOnlyAfterTargetValidation(t *testing.T) {
+	source, err := os.ReadFile(filepath.Clean("configapi/config_node_handlers.go"))
+	if err != nil {
+		t.Fatalf("read node handlers: %v", err)
+	}
+	handlers := string(source)
+
+	start := strings.Index(handlers, "func (h *ConfigHandlers) handleTestConnection(")
+	if start < 0 {
+		t.Fatal("handleTestConnection not found")
+	}
+	body := handlers[start:]
+	if end := strings.Index(body[1:], "\nfunc "); end >= 0 {
+		body = body[:end+1]
+	}
+
+	recorderAt := strings.Index(body, "testRecorder := newNodeTestOutcomeRecorder(w)")
+	if recorderAt < 0 {
+		t.Fatal("handleTestConnection no longer records node connection test outcomes")
+	}
+	for _, guard := range []string{
+		`http.Error(w, "Host is required", http.StatusBadRequest)`,
+		`http.Error(w, "Invalid node type", http.StatusBadRequest)`,
+		`http.Error(w, "Authentication credentials required", http.StatusBadRequest)`,
+	} {
+		guardAt := strings.Index(body, guard)
+		if guardAt < 0 {
+			t.Fatalf("validation guard %q missing from handleTestConnection", guard)
+		}
+		if guardAt > recorderAt {
+			t.Fatalf("validation guard %q must run before the node connection test tally starts", guard)
+		}
+	}
+}

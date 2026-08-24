@@ -568,6 +568,17 @@ the `white_label` branding entitlement.
     configuration has no key for this boundary and must not gain one that
     can re-enable credential reads a local operator disabled.
 
+Node connection test telemetry reports two counters over the install-ID
+rotation window: `node_test_attempts_30d` and `node_test_failures_30d`. They
+count only tests that carried a target and credentials, and they carry counts
+alone. Hostnames, addresses, ports, credentials, fingerprints, and error text
+must never enter the tally or the outbound ping. The tally is stored as plain
+JSON in the config directory precisely because it holds no secret material;
+adding any field that identifies a target would invalidate that storage choice
+and require the encrypted history path instead. Both fields must stay disclosed
+in `docs/PRIVACY.md` and `frontend-modern/public/docs/PRIVACY.md`, which
+`TestAllTelemetryFieldsAreDisclosed` enforces.
+
 ## Forbidden Paths
 
 1. Changing telemetry payload semantics without updating the canonical privacy disclosure.

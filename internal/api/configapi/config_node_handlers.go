@@ -770,6 +770,43 @@ func (h *ConfigHandlers) handleAddNode(w http.ResponseWriter, r *http.Request) {
 
 // HandleTestConnection tests a node connection without saving
 
+// nodeTestOutcomeRecorder captures the status a node connection test responded
+// with, so the outcome can be tallied once without threading a result through
+// every branch of the handler.
+type nodeTestOutcomeRecorder struct {
+	http.ResponseWriter
+	status int
+}
+
+func newNodeTestOutcomeRecorder(w http.ResponseWriter) *nodeTestOutcomeRecorder {
+	return &nodeTestOutcomeRecorder{ResponseWriter: w, status: http.StatusOK}
+}
+
+func (rec *nodeTestOutcomeRecorder) WriteHeader(status int) {
+	rec.status = status
+	rec.ResponseWriter.WriteHeader(status)
+}
+
+// failed reports whether the test resolved to anything other than success. The
+// success paths write a body without an explicit status, which is why the
+// recorder starts at 200.
+func (rec *nodeTestOutcomeRecorder) failed() bool {
+	return rec.status < 200 || rec.status >= 300
+}
+
+// recordNodeTestOutcome tallies one node connection test for telemetry. The
+// tally is advisory, so a write failure is logged and never surfaced to the
+// caller: a broken counter must not break a connection test.
+func (h *ConfigHandlers) recordNodeTestOutcome(ctx context.Context, failed bool) {
+	persistence := h.getPersistence(ctx)
+	if persistence == nil {
+		return
+	}
+	if err := persistence.RecordNodeTestOutcome(failed, time.Now()); err != nil {
+		log.Warn().Err(err).Msg("Failed to record node connection test outcome")
+	}
+}
+
 func (h *ConfigHandlers) handleTestConnection(w http.ResponseWriter, r *http.Request) {
 	// Limit request body to 32KB to prevent memory exhaustion
 	r.Body = http.MaxBytesReader(w, r.Body, 32*1024)
@@ -850,6 +887,16 @@ func (h *ConfigHandlers) handleTestConnection(w http.ResponseWriter, r *http.Req
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+
+	// Past this point the request carries a target and credentials, so it is a
+	// real attempt by someone to reach a node. Requests that never carried them
+	// are rejected above and stay out of the tally, which is what keeps an
+	// incomplete form from counting as a node that could not be reached. A host
+	// string that turns out to be unusable still counts: the attempt was made
+	// and it failed.
+	testRecorder := newNodeTestOutcomeRecorder(w)
+	w = testRecorder
+	defer func() { h.recordNodeTestOutcome(r.Context(), testRecorder.failed()) }()
 
 	// Test connection based on type
 	if req.Type == "pve" {

@@ -1857,6 +1857,13 @@ serving page size that does not move the shared handler bounds re-opens the
 `totalPages` misreport that silently truncates rollup iteration for clients
 walking the reported page count.
 
+The node connection test tally persists as a bounded, day-bucketed JSON file in
+the config directory, pruned to a 31-day retention window so it cannot grow
+without limit however long an install runs. It is advisory telemetry state: it
+is outside backup, restore, and recovery, and a missing or corrupt tally must be
+discarded and rebuilt rather than surfaced as a recovery failure. Nothing may
+take a correctness dependency on its contents.
+
 ## Forbidden Paths
 
 1. Reintroducing storage or recovery product logic as ad hoc dashboard-only summaries without a canonical page-surface owner

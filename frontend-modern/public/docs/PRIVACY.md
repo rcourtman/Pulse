@@ -120,6 +120,8 @@ Every field is listed below with the reason it exists. Nothing else is included 
 | Update successes 30d | `1` | Count successful update attempts in the current 30-day telemetry window |
 | Update failures 30d | `1` | Count failed or rolled-back update attempts in the current 30-day telemetry window without sending raw errors, logs, URLs, or command output |
 | Update last failure category | `download` | Send only a coarse category for the latest update failure, such as `download`, `signature`, `checksum`, `disk_space`, `extract`, `backup`, `apply`, `restart`, `rolled_back`, or `unknown` |
+| Node test attempts 30d | `3` | Count node connection tests that reached the connection stage in the current 30-day telemetry window, without sending hostnames, addresses, credentials, or error text |
+| Node test failures 30d | `2` | Count those connection tests that could not reach or authenticate against the target, so an install that tried to add a node and failed is distinguishable from one that never attempted it, without sending hostnames, addresses, credentials, or error text |
 | Pulse Intelligence loop configured | `true`/`false` | See whether Assistant, Patrol, governed actions, or external-agent access is configured so adoption can be measured without sending configuration details |
 | Pulse Intelligence loop active 30d | `true`/`false` | See whether Assistant, Patrol, external-agent, or governed-action activity occurred in the current 30-day telemetry window |
 | Pulse Intelligence complete operations loop 30d | `true`/`false` | See whether Patrol issue activity reached an approved or rejected governed-action decision without sending prompts, findings, resource identifiers, command text, or action output |

@@ -616,6 +616,7 @@ func Run(ctx context.Context, version string) error {
 				router.ApplyUpdateTelemetrySnapshot(&snap, now)
 				router.ApplyLicensedFeatureTelemetrySnapshot(&snap, now)
 			}
+			applyNodeTestTelemetrySnapshot(&snap, telemetryPersistence, now)
 			var actionSnapshot telemetry.PulseIntelligenceActionSnapshot
 			if router != nil {
 				actionSnapshot = router.GetPulseIntelligenceActionTelemetry(now.Add(-telemetry.PulseIntelligenceTelemetryWindow))

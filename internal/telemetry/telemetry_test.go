@@ -1255,3 +1255,18 @@ func decodeInstallIDRecord(t *testing.T, data []byte) installIDRecord {
 	}
 	return record
 }
+
+// The node connection test counts are only useful if they leave the install, so
+// assert the snapshot-to-ping mapping rather than trusting field order.
+func TestBuildPingCarriesNodeTestCounts(t *testing.T) {
+	ping := BuildPingForSnapshot(Snapshot{
+		NodeTestAttempts30d: 9,
+		NodeTestFailures30d: 4,
+	})
+	if ping.NodeTestAttempts30d != 9 {
+		t.Fatalf("node_test_attempts_30d = %d, want 9", ping.NodeTestAttempts30d)
+	}
+	if ping.NodeTestFailures30d != 4 {
+		t.Fatalf("node_test_failures_30d = %d, want 4", ping.NodeTestFailures30d)
+	}
+}

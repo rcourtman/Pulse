@@ -160,7 +160,12 @@ const (
 	// is distinguishable in the fleet from one that runs and finds nothing.
 	// Field telemetry showed both present identically: high run counts with
 	// zero AI calls and zero findings.
-	TelemetrySchemaVersion = 10
+	// Schema v11 adds node connection test attempt and failure counts. The
+	// fleet shows a population that configures authentication and then never
+	// saves a connection, concentrated three to one in container deployments,
+	// and nothing recorded whether those installs tried to reach a node and
+	// failed or never attempted one at all.
+	TelemetrySchemaVersion = 11
 )
 
 type installIDRecord struct {
@@ -262,6 +267,16 @@ type Ping struct {
 	UpdateFailures30d      int `json:"update_failures_30d"`
 	// Last coarse update failure category; never raw error text.
 	UpdateLastFailureCategory string `json:"update_last_failure_category,omitempty"`
+
+	// Node connection test outcomes over the install-ID rotation window.
+	// ConfiguredConnections counts only connections that were saved, so an
+	// install that tried to reach a node and could not is indistinguishable
+	// from one that never opened the add-node dialog: both report zero
+	// connections and stall at the "secured" activation stage. These separate
+	// the two. Counts only; hosts, credentials, and error text never leave the
+	// install. Successes are attempts minus failures.
+	NodeTestAttempts30d int `json:"node_test_attempts_30d"`
+	NodeTestFailures30d int `json:"node_test_failures_30d"`
 
 	// Core product outcomes. Alert history is retained locally for 30 days;
 	// notification delivery rows are locally retention-bounded to seven days.
@@ -412,6 +427,8 @@ type Snapshot struct {
 	UpdateSuccesses30d                                             int
 	UpdateFailures30d                                              int
 	UpdateLastFailureCategory                                      string
+	NodeTestAttempts30d                                            int
+	NodeTestFailures30d                                            int
 	AuthConfigured                                                 bool
 	ConfiguredConnections                                          int
 	AlertsFired30d                                                 int
@@ -1019,6 +1036,8 @@ func applySnapshot(base Ping, fn SnapshotFunc) Ping {
 	ping.UpdateSuccesses30d = s.UpdateSuccesses30d
 	ping.UpdateFailures30d = s.UpdateFailures30d
 	ping.UpdateLastFailureCategory = s.UpdateLastFailureCategory
+	ping.NodeTestAttempts30d = s.NodeTestAttempts30d
+	ping.NodeTestFailures30d = s.NodeTestFailures30d
 	ping.AuthConfigured = s.AuthConfigured
 	ping.ConfiguredConnections = s.ConfiguredConnections
 	ping.AlertsFired30d = s.AlertsFired30d

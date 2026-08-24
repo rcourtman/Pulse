@@ -3325,6 +3325,16 @@ and MUST NOT reconstruct it from `aggregations.bySource`. Proof:
 `TestContract_ResourceListReportsPlatformAdmission` and the wire-shape pin in
 `frontend-modern/src/types/__tests__/resource.test.ts`.
 
+`POST /api/config/nodes/test-connection` records a node connection test outcome
+for telemetry. Recording begins only after the request is validated as carrying
+a target and credentials, so a request rejected for incomplete input is never
+counted as a node that could not be reached. Recording wraps the response
+writer and must not alter the response contract: status codes and sanitized
+error bodies stay exactly as they were. `POST /api/config/nodes/test-config` is
+deliberately not instrumented, because instrumenting both endpoints would
+double-count a single operator action and corrupt the failure share the
+counters exist to measure.
+
 ## Forbidden Paths
 
 1. Handler-local payload shape drift without a contract test
