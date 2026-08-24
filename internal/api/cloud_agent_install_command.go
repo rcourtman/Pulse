@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/api/agenttokens"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rs/zerolog/log"
@@ -74,6 +75,11 @@ func GenerateHostedTenantAgentInstallCommand(opts HostedTenantAgentInstallComman
 		Metadata: map[string]string{
 			"install_type": installType,
 			"issued_via":   "hosted_agent_install_command",
+			// Hosted installs have no enableCommands toggle; commands follow the
+			// install type like the self-hosted flow (pve on, pbs off). Without
+			// this stamp, reconcileInstallTokenCommandPolicy skips the token and
+			// a reinstall never clears a stale disabled policy (#1728).
+			agenttokens.CommandPolicyIntentMetadataKey: agenttokens.CommandPolicyIntent(installType == proxmoxInstallTypePVE),
 		},
 	})
 	if err != nil {

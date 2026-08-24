@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/api/agenttokens"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
@@ -156,6 +157,50 @@ func TestGenerateHostedTenantAgentInstallCommandEnforcesHostedOrgBoundary(t *tes
 	require.Equal(t, "hosted_agent_install_command", tokens[0].Metadata["issued_via"])
 	_, ok := (&config.Config{APITokens: tokens}).ValidateAPIToken(result.Token)
 	require.True(t, ok)
+}
+
+func TestHostedTenantAgentInstallCommandCarriesCommandPolicyIntent(t *testing.T) {
+	setMockModeForTest(t, true)
+
+	dataDir := t.TempDir()
+	cfg := &config.Config{
+		DataPath:  dataDir,
+		PublicURL: "https://cloud.example.com",
+	}
+	persistence := config.NewConfigPersistence(dataDir)
+	multiTenant := config.NewMultiTenantPersistence(dataDir)
+	orgID := "acme"
+	_, err := multiTenant.GetPersistence(orgID)
+	require.NoError(t, err)
+
+	for _, tc := range []struct {
+		installType string
+		wantIntent  string
+	}{
+		{installType: "pve", wantIntent: agenttokens.CommandPolicyIntentEnabled},
+		{installType: "pbs", wantIntent: agenttokens.CommandPolicyIntentDisabled},
+	} {
+		result, err := GenerateHostedTenantAgentInstallCommand(HostedTenantAgentInstallCommandOptions{
+			Config:      cfg,
+			Persistence: persistence,
+			MultiTenant: multiTenant,
+			HostedMode:  true,
+			OrgID:       orgID,
+			InstallType: tc.installType,
+			BaseURL:     "https://acme.cloud.example.com",
+		})
+		require.NoError(t, err)
+
+		var record *config.APITokenRecord
+		for index := range cfg.APITokens {
+			if cfg.APITokens[index].ID == result.TokenID {
+				record = &cfg.APITokens[index]
+				break
+			}
+		}
+		require.NotNil(t, record, "minted token record not found for %s", tc.installType)
+		require.Equal(t, tc.wantIntent, record.Metadata[agenttokens.CommandPolicyIntentMetadataKey], "install type %s", tc.installType)
+	}
 }
 
 func TestHostedTenantAgentInstallTokenCannotReportToOtherTenant(t *testing.T) {
