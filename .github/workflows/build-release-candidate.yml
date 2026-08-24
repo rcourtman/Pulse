@@ -862,4 +862,3 @@ jobs:
     with:
       version: ${{ inputs.version }}
       container_artifact: ${{ needs.build.outputs.container_artifact_name }}
-      source_sha: ${{ github.sha }}

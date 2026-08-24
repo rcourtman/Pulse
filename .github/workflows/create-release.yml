@@ -257,7 +257,6 @@ jobs:
     with:
       version: ${{ needs.prepare.outputs.version }}
       container_artifact: ${{ needs.build_release_candidate.outputs.container_artifact_name }}
-      source_sha: ${{ github.sha }}
 
   # Build the embed bundle independently so backend and smoke lanes can start
   # without waiting for the full frontend quality suite.
