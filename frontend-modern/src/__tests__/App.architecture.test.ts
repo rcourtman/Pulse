@@ -601,6 +601,7 @@ describe('App architecture', () => {
     expect(appStylesSource).toContain('@container (min-width: 72rem)');
     expect(appStylesSource).toContain('.hidden.md\\:table-cell');
     expect(appStylesSource).toContain('contain: paint');
+    expect(appStylesSource).toContain('overflow-y: hidden');
     expect(appStylesSource).toContain('overscroll-behavior-x: contain');
     expect(appStylesSource).toContain('.progress-fill-frame');
     expect(appStylesSource).toContain('.metric-fill-geometry');

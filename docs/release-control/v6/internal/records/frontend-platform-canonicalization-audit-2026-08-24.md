@@ -221,6 +221,26 @@ well.
   that are both statically and dynamically imported; it did not affect build
   correctness or the canonical frontend contract.
 
+## Post-audit correction: phone scroll ownership
+
+The initial audit missed a gesture-level inconsistency that was not visible in
+static phone captures. On `/docker` at 390×844, the two shared table shells had
+2px of incidental vertical overflow. Because `overflow-x: auto` computes the
+other axis to `auto` unless it is specified, a vertical gesture beginning over
+either table first scrolled that nested shell instead of the page. Proxmox did
+not expose the defect because its current table geometry did not create the
+same incidental overflow.
+
+The canonical `.table-scroll-shell` owner in `frontend-modern/src/index.css`
+now explicitly sets `overflow-y: hidden`: tables own horizontal overflow while
+the page owns vertical gestures. Browser verification at 390×844 confirmed a
+gesture over the Docker containers table moved `.app-scroll-shell` to 197px
+while both table-shell `scrollTop` values remained zero. The same gesture over
+the visible Proxmox node table moved the page to 450px with every table shell
+remaining at zero. The shared-primitives guardrail now protects this contract.
+Updated visual evidence is stored as
+`post-docker-phone-scroll-ownership-390x844.png` alongside the audit captures.
+
 ## Remaining exceptions
 
 There are no known static-audit or platform-page exceptions to the canonical

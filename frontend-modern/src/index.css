@@ -218,6 +218,8 @@
   .table-scroll-shell {
     container-type: inline-size;
     contain: paint;
+    /* Tables own horizontal overflow only; vertical gestures belong to the page. */
+    overflow-y: hidden;
     overscroll-behavior-x: contain;
   }
 

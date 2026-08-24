@@ -1380,6 +1380,7 @@ describe('shared primitive guardrails', () => {
     expect(frontendIndexCssSource).toContain('.table-scroll-shell');
     expect(frontendIndexCssSource).toContain('container-type: inline-size');
     expect(frontendIndexCssSource).toContain('contain: paint');
+    expect(frontendIndexCssSource).toContain('overflow-y: hidden');
     expect(frontendIndexCssSource).toContain('overscroll-behavior-x: contain');
     expect(frontendIndexCssSource).toContain(
       '.table-scroll-shell > .table-fixed.platform-table th.platform-table-name-column',

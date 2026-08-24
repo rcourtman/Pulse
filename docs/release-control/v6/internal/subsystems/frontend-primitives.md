@@ -1170,7 +1170,10 @@ not a replacement status card, CTA band, or page-local nested card.
    product-table frame, section header band, and light/dark border treatment
    belong to frontend primitives so Infrastructure, Workloads, Storage, and
    Recovery do not drift visually. The shared `Table` primitive owns the
-   horizontal scroll shell (`overflow-x-auto` plus touch scrolling); feature
+   horizontal scroll shell (`overflow-x-auto` plus touch scrolling), and the
+   canonical `.table-scroll-shell` CSS explicitly suppresses vertical overflow
+   so a phone gesture that starts over a table scrolls the page rather than an
+   incidental nested vertical scroll range. Feature
    tables must not wrap it in page-local scroll containers just to restore
    table sides or mobile overflow. Headerless product tables, including alert
    history, still use `TableCard` for the outer frame instead of hand-coded
