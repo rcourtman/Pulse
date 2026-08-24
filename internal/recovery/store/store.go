@@ -24,8 +24,8 @@ const (
 	privateDirPerm  = 0o700
 	privateFilePerm = 0o600
 
-	defaultLimit = 100
-	maxLimit     = 500
+	defaultLimit = recovery.DefaultListPageLimit
+	maxLimit     = recovery.MaxListPageLimit
 
 	defaultRetention = 90 * 24 * time.Hour
 )

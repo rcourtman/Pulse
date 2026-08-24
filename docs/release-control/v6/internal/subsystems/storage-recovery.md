@@ -1850,12 +1850,16 @@ than inferring it from an agent-source count in a runtime payload.
 The `/api/recovery/points` and `/api/recovery/rollups` list transports in
 `internal/api/recovery_handlers.go` clamp the requested page size to the
 canonical bounds (default 100, max 500) and report their pagination meta
-(`page`, `limit`, `totalPages`) from those normalized values. The store-side
-clamps in `internal/recovery/store` (`normalizeLimit` / `normalizePage`) MUST
-stay aligned with those handler-side bounds: a storage-side change to the
-serving page size that does not move the shared handler bounds re-opens the
-`totalPages` misreport that silently truncates rollup iteration for clients
-walking the reported page count.
+(`page`, `limit`, `totalPages`) from those normalized values. Those bounds
+are defined once, as `DefaultListPageLimit` / `MaxListPageLimit` in
+`internal/recovery/model` (re-exported through `internal/recovery`), and the
+store-side clamps in `internal/recovery/store` (`normalizeLimit` /
+`normalizePage`) MUST derive from those exported constants rather than
+re-hardcoding the numbers: a storage-side page-size clamp that drifts from
+the shared bounds re-opens the `totalPages` misreport that silently
+truncates rollup iteration for clients walking the reported page count.
+`internal/recovery/store/store_test.go` pins the store clamps to the shared
+constants.
 
 The node connection test tally persists as a bounded, day-bucketed JSON file in
 the config directory, pruned to a 31-day retention window so it cannot grow

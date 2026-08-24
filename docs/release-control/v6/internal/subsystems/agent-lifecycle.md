@@ -2281,9 +2281,12 @@ Recovery list pagination-meta normalization in
 `internal/api/recovery_handlers.go` (the clamped effective `limit` echoed in
 `meta`, `totalPages` computed from that effective page size) is an
 API-contracts and storage-recovery transport concern that lives under the
-shared `internal/api/` extension boundary. No agent lifecycle surface consumes
-the `/api/recovery/points` or `/api/recovery/rollups` list meta; lifecycle
-code MUST NOT treat that pagination meta as an agent enrollment, admission, or
+shared `internal/api/` extension boundary. The clamp bounds are the exported
+`DefaultListPageLimit` / `MaxListPageLimit` constants in
+`internal/recovery/model`, which are likewise recovery-transport vocabulary
+and not lifecycle surface. No agent lifecycle surface consumes the
+`/api/recovery/points` or `/api/recovery/rollups` list meta; lifecycle code
+MUST NOT treat that pagination meta as an agent enrollment, admission, or
 report-ingestion contract.
 
 The node connection test handlers under `internal/api/configapi/` record a

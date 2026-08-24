@@ -238,6 +238,21 @@ func TestNormalizeRecoveryLimit(t *testing.T) {
 	if got := (1200 + limit - 1) / limit; got != 3 {
 		t.Fatalf("totalPages for total=1200 at requested limit=1000 = %d, want 3", got)
 	}
+
+	// The handler bounds must be the shared recovery-model constants, not
+	// re-hardcoded numbers that can drift from the store-side clamps.
+	if recoveryDefaultPageLimit != recovery.DefaultListPageLimit {
+		t.Fatalf(
+			"recoveryDefaultPageLimit = %d, want shared recovery.DefaultListPageLimit %d",
+			recoveryDefaultPageLimit, recovery.DefaultListPageLimit,
+		)
+	}
+	if recoveryMaxPageLimit != recovery.MaxListPageLimit {
+		t.Fatalf(
+			"recoveryMaxPageLimit = %d, want shared recovery.MaxListPageLimit %d",
+			recoveryMaxPageLimit, recovery.MaxListPageLimit,
+		)
+	}
 }
 
 func assertRecoveryMetaUsesNormalizedLimit(t *testing.T, body []byte, wantLimit int) {

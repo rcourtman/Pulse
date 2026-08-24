@@ -200,6 +200,16 @@ type ListPointsOptions struct {
 	Limit int
 }
 
+// List pagination bounds shared by every recovery list serving path. The API
+// handlers (internal/api/recovery_handlers.go) and the persistent store
+// (internal/recovery/store) must clamp ListPointsOptions.Limit to these same
+// bounds, because the handlers echo pagination meta (limit, totalPages)
+// computed from them and clients walk the reported page count.
+const (
+	DefaultListPageLimit = 100
+	MaxListPageLimit     = 500
+)
+
 // PointsSeriesBucket is a per-day aggregation of recovery points within a time window.
 // Day is formatted as YYYY-MM-DD in the requested (client) timezone.
 type PointsSeriesBucket struct {

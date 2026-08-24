@@ -53,6 +53,11 @@ type ListPointsOptions = model.ListPointsOptions
 type PointsSeriesBucket = model.PointsSeriesBucket
 type PointsFacets = model.PointsFacets
 
+const (
+	DefaultListPageLimit = model.DefaultListPageLimit
+	MaxListPageLimit     = model.MaxListPageLimit
+)
+
 type VerifyIntent = model.VerifyIntent
 
 const (

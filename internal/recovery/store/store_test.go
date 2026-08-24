@@ -12,6 +12,32 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
+func TestNormalizeLimitAndPageUseSharedListBounds(t *testing.T) {
+	t.Parallel()
+
+	if got := normalizeLimit(0); got != recovery.DefaultListPageLimit {
+		t.Fatalf("normalizeLimit(0) = %d, want shared default %d", got, recovery.DefaultListPageLimit)
+	}
+	if got := normalizeLimit(-1); got != recovery.DefaultListPageLimit {
+		t.Fatalf("normalizeLimit(-1) = %d, want shared default %d", got, recovery.DefaultListPageLimit)
+	}
+	if got := normalizeLimit(recovery.MaxListPageLimit + 1); got != recovery.MaxListPageLimit {
+		t.Fatalf(
+			"normalizeLimit(%d) = %d, want shared max %d",
+			recovery.MaxListPageLimit+1, got, recovery.MaxListPageLimit,
+		)
+	}
+	if got := normalizeLimit(250); got != 250 {
+		t.Fatalf("normalizeLimit(250) = %d, want 250", got)
+	}
+	if got := normalizePage(0); got != 1 {
+		t.Fatalf("normalizePage(0) = %d, want 1", got)
+	}
+	if got := normalizePage(3); got != 3 {
+		t.Fatalf("normalizePage(3) = %d, want 3", got)
+	}
+}
+
 func TestStore_UpsertAndList(t *testing.T) {
 	t.Parallel()
 

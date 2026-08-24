@@ -3949,13 +3949,17 @@ the authoritative analysis outcome.
     rewired.
 34. Keep recovery list pagination meta honest on the shared `/api/recovery/*`
     surface. `/api/recovery/points` and `/api/recovery/rollups` clamp the
-    requested page size to the canonical bounds (default 100, max 500) before
-    serving, in both the mock paginators and the store paths, so
-    `internal/api/recovery_handlers.go` must normalize `page` and `limit` once
-    at parse time and compute the response `meta` block (`page`, `limit`,
-    `totalPages`) from those normalized values. The meta must echo the
-    effective limit, never the raw query value, so a client iterating
-    `totalPages` is never told fewer pages than the server actually serves.
+    requested page size to the canonical shared bounds
+    `recovery.DefaultListPageLimit` (100) and `recovery.MaxListPageLimit`
+    (500), defined once in `internal/recovery/model` and re-exported through
+    `internal/recovery`, before serving, in both the mock paginators and the
+    store paths, so `internal/api/recovery_handlers.go` must normalize `page`
+    and `limit` once at parse time and compute the response `meta` block
+    (`page`, `limit`, `totalPages`) from those normalized values. The meta
+    must echo the effective limit, never the raw query value, so a client
+    iterating `totalPages` is never told fewer pages than the server actually
+    serves. Handler and store clamps must derive from those exported
+    constants rather than re-hardcoding the numbers.
     `internal/api/recovery_handlers_test.go` pins the above-max and
     non-positive limit meta normalization in the same slice as any handler
     change.

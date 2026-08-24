@@ -579,13 +579,13 @@ func getDisplayItemType(d *recovery.RecoveryPointDisplay) string {
 	return recovery.NormalizeRecoveryItemType(d.SubjectType)
 }
 
-// Recovery list pagination bounds. These mirror the store-side clamps in
-// internal/recovery/store (normalizeLimit/normalizePage); the handler meta must
-// be computed from the same normalized values the serving paths use, or
-// totalPages misreports the real page count.
+// Recovery list pagination bounds. Single source in internal/recovery/model,
+// shared with the store-side clamps (internal/recovery/store normalizeLimit /
+// normalizePage); the handler meta must be computed from the same normalized
+// values the serving paths use, or totalPages misreports the real page count.
 const (
-	recoveryDefaultPageLimit = 100
-	recoveryMaxPageLimit     = 500
+	recoveryDefaultPageLimit = recovery.DefaultListPageLimit
+	recoveryMaxPageLimit     = recovery.MaxListPageLimit
 )
 
 func normalizeRecoveryPage(page int) int {
