@@ -1,6 +1,7 @@
 import { Component, For, Show } from 'solid-js';
 import type { OnboardingQRResponse } from '@/api/onboarding';
 import { Card } from '@/components/shared/Card';
+import { ExternalTextLink } from '@/components/shared/ExternalTextLink';
 import { formField, formHelpText, labelClass } from '@/components/shared/Form';
 import { PULSE_PRO_DOWNLOAD_URL } from '@/utils/licensePresentation';
 import {
@@ -9,7 +10,6 @@ import {
   RELAY_DIAGNOSTICS_TITLE_CLASS,
   RELAY_DIAGNOSTICS_WRAP_CLASS,
   RELAY_PAIRING_APP_AVAILABILITY_TEXT,
-  RELAY_PAIRING_APP_DOWNLOAD_LINK_CLASS,
   RELAY_PAIRING_APP_DOWNLOAD_LINK_LABEL,
   RELAY_PRIMARY_BUTTON_CLASS,
   RELAY_QR_IMAGE_CLASS,
@@ -68,14 +68,12 @@ export const RelayPairingSection: Component<RelayPairingSectionProps> = (props) 
         <p class={formHelpText}>
           Generate a QR code to securely link the Pulse Mobile app on your phone to this Pulse
           instance. {RELAY_PAIRING_APP_AVAILABILITY_TEXT}{' '}
-          <a
+          <ExternalTextLink
             href={PULSE_PRO_DOWNLOAD_URL}
-            target="_blank"
-            rel="noreferrer"
-            class={RELAY_PAIRING_APP_DOWNLOAD_LINK_CLASS}
+            class="font-medium"
           >
             {RELAY_PAIRING_APP_DOWNLOAD_LINK_LABEL}
-          </a>
+          </ExternalTextLink>
           .
         </p>
 

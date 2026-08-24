@@ -44,8 +44,6 @@ export const RELAY_ACTIVATION_REQUIRED_MESSAGE =
 export const RELAY_PAIRING_APP_AVAILABILITY_TEXT =
   'Pulse Mobile is in early access for iOS and Android. To get the install links, enter your activation key on';
 export const RELAY_PAIRING_APP_DOWNLOAD_LINK_LABEL = 'your download page';
-export const RELAY_PAIRING_APP_DOWNLOAD_LINK_CLASS =
-  'font-medium text-blue-600 underline-offset-2 hover:underline dark:text-blue-400';
 
 export function getRelayDiagnosticClass(severity: 'warning' | 'error'): string {
   return severity === 'error'

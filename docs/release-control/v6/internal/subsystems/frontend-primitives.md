@@ -2832,6 +2832,11 @@ for desktop and mobile accessible navigation counts. The label remains
 buttons, visible focus, selected-state semantics, focus restoration, narrow
 viewport ordering, and reduced-motion-safe behavior. Detail deep links use
 `frontend-modern/src/routing/resourceLinks.ts` and remain stable across reload.
+The temporary-suppression reason and duration are labelled native controls
+owned by `FormTextarea` and `FormSelect`; Patrol must not recreate their label,
+focus, responsive touch-target, or controlled-value shells locally.
+The objective brief and optional-context fields in `PatrolObjectivesPanel`
+share the same `FormTextarea` ownership contract.
 
 The default queue shows severity, lifecycle state, plain-language consequence,
 resource, the required review posture, and observation age. It sorts severity

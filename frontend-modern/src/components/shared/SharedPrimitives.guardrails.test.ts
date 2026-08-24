@@ -38,6 +38,8 @@ import filterToolbarSource from '@/components/shared/FilterToolbar.tsx?raw';
 import filterOptionPresentationSource from '@/components/shared/filterOptionPresentation.ts?raw';
 import formSelectSource from '@/components/shared/FormSelect.tsx?raw';
 import formTextareaSource from '@/components/shared/FormTextarea.tsx?raw';
+import patrolAttentionWorkbenchSource from '@/features/patrol/PatrolAttentionWorkbench.tsx?raw';
+import patrolObjectivesPanelSource from '@/features/patrol/PatrolObjectivesPanel.tsx?raw';
 import helpIconSource from '@/components/shared/HelpIcon.tsx?raw';
 import helpIconModelSource from '@/components/shared/helpIconModel.ts?raw';
 import historyChartHeaderSource from '@/components/shared/HistoryChartHeader.tsx?raw';
@@ -686,7 +688,6 @@ describe('shared primitive guardrails', () => {
       'src/components/Settings/RecoverySettingsPanel.tsx',
       'src/components/Settings/RolesEditorDialog.tsx',
       'src/components/Settings/SystemLogsPanel.tsx',
-      'src/components/Settings/UpdatesSettingsPanel.tsx',
       'src/components/Storage/DiskDetail.tsx',
       'src/components/Storage/StoragePageControls.tsx',
       'src/components/Storage/StoragePoolDetail.tsx',
@@ -697,6 +698,7 @@ describe('shared primitive guardrails', () => {
       'src/features/alerts/AlertDeliveryRoutingSection.tsx',
       'src/features/alerts/AlertEscalationSection.tsx',
       'src/features/alerts/AlertQuietHoursSection.tsx',
+      'src/features/patrol/PatrolAttentionWorkbench.tsx',
     ]);
     expect(registeredGuard?.canonical?.path).toBe('src/components/shared/FormSelect.tsx');
     expect(registeredGuard?.canonical?.export).toBe('FormSelect');
@@ -774,6 +776,9 @@ describe('shared primitive guardrails', () => {
     const infrastructureGuard = registry.patternGuards?.find(
       (guard) => guard.id === 'form-textarea-local-infrastructure-fields',
     );
+    const patrolGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'form-textarea-local-patrol-fields',
+    );
 
     expect(registeredRule?.canonical?.path).toBe('src/components/shared/FormTextarea.tsx');
     expect(registeredRule?.canonical?.export).toBe('FormTextarea');
@@ -787,6 +792,8 @@ describe('shared primitive guardrails', () => {
       'src/components/Settings/SelfHostedCommercialRecoverySection.tsx',
       'src/components/Settings/SuggestProfileModal.tsx',
       'src/features/alerts/AlertAppriseDestinationsSection.tsx',
+      'src/features/patrol/PatrolAttentionWorkbench.tsx',
+      'src/features/patrol/PatrolObjectivesPanel.tsx',
     ]);
     expect(alertGuard?.canonical?.path).toBe('src/components/shared/FormTextarea.tsx');
     expect(alertGuard?.canonical?.export).toBe('FormTextarea');
@@ -803,6 +810,11 @@ describe('shared primitive guardrails', () => {
     expect(infrastructureGuard?.allPatterns).toEqual(['<textarea']);
     expect(infrastructureGuard?.scopes).toEqual(['src/components/Infrastructure']);
     expect(infrastructureGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(patrolGuard?.canonical?.path).toBe('src/components/shared/FormTextarea.tsx');
+    expect(patrolGuard?.canonical?.export).toBe('FormTextarea');
+    expect(patrolGuard?.allPatterns).toEqual(['<textarea']);
+    expect(patrolGuard?.scopes).toEqual(['src/features/patrol']);
+    expect(patrolGuard?.allowedPaths ?? []).toHaveLength(0);
 
     expect(formTextareaSource).toContain("from '@/components/shared/Form'");
     expect(formTextareaSource).toContain('createUniqueId');
@@ -834,6 +846,8 @@ describe('shared primitive guardrails', () => {
       suggestProfileModalSource,
       ssoProvidersPanelSource,
       alertAppriseDestinationsSectionSource,
+      patrolAttentionWorkbenchSource,
+      patrolObjectivesPanelSource,
     ];
     for (const source of migratedConsumers) {
       expect(source).toContain('FormTextarea');
@@ -2511,7 +2525,6 @@ describe('shared primitive guardrails', () => {
     expect(metadataRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual([
       'src/components/shared/OrganizationBadges.tsx',
       'src/components/AI/FindingsPanel.tsx',
-      'src/components/patrol/ApprovalBanner.tsx',
       'src/components/patrol/ApprovalSection.tsx',
       'src/components/patrol/InvestigationSection.tsx',
       'src/components/patrol/RunHistoryEntry.tsx',
@@ -2798,7 +2811,6 @@ describe('shared primitive guardrails', () => {
       'src/components/shared/DiscoveryLoadingFallback.tsx',
       'src/components/shared/HistoryChartOverlay.tsx',
       'src/components/shared/PulseDataGrid.tsx',
-      'src/components/patrol/ApprovalBanner.tsx',
       'src/components/patrol/ApprovalSection.tsx',
       'src/components/patrol/InvestigationMessages.tsx',
       'src/components/patrol/InvestigationSection.tsx',

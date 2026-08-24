@@ -7,6 +7,7 @@ import TrashIcon from 'lucide-solid/icons/trash-2';
 import XIcon from 'lucide-solid/icons/x';
 import { Button } from '@/components/shared/Button';
 import { Dialog } from '@/components/shared/Dialog';
+import { FormTextarea } from '@/components/shared/FormTextarea';
 import { MetadataBadge } from '@/components/shared/MetadataBadge';
 import { ResourcePicker, type SelectedResource } from '@/components/Settings/ResourcePicker';
 import {
@@ -391,31 +392,29 @@ export const PatrolObjectivesPanel: Component = () => {
             </Button>
           </header>
           <div class="space-y-5 overflow-y-auto px-5 py-4">
-            <label class="block">
-              <span class="text-sm font-medium text-base-content">
-                What should Patrol keep true?
-              </span>
-              <textarea
-                autofocus
-                rows="3"
-                maxlength="2048"
-                value={brief()}
-                onInput={(event) => setBrief(event.currentTarget.value)}
-                placeholder="Keep Jellyfin playback from buffering for users"
-                class="mt-2 w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-base-content outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30"
-              />
-            </label>
-            <label class="block">
-              <span class="text-sm font-medium text-base-content">Useful context (optional)</span>
-              <textarea
-                rows="2"
-                maxlength="4096"
-                value={context()}
-                onInput={(event) => setContext(event.currentTarget.value)}
-                placeholder="For example: prefer local event evidence and avoid interrupting active playback"
-                class="mt-2 w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-base-content outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30"
-              />
-            </label>
+            <FormTextarea
+              label="What should Patrol keep true?"
+              autofocus
+              rows="3"
+              maxlength="2048"
+              density="compact"
+              fieldBaseClass="block"
+              textareaClass="mt-2"
+              value={brief()}
+              onInput={(event) => setBrief(event.currentTarget.value)}
+              placeholder="Keep Jellyfin playback from buffering for users"
+            />
+            <FormTextarea
+              label="Useful context (optional)"
+              rows="2"
+              maxlength="4096"
+              density="compact"
+              fieldBaseClass="block"
+              textareaClass="mt-2"
+              value={context()}
+              onInput={(event) => setContext(event.currentTarget.value)}
+              placeholder="For example: prefer local event evidence and avoid interrupting active playback"
+            />
             <div class="rounded-lg border border-border">
               <button
                 type="button"

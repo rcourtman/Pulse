@@ -146,14 +146,18 @@ were not artificially inferred from healthy pixels.
   excludes tests from runtime chevron/native-control rules, and retains the
   canonical-platform lint gate.
 
-### P3 — unrelated pre-existing shared-template findings
+### P3 — remaining shared-template findings resolved in follow-up
 
-The complete shared-template audit still reports four consumers outside this
-platform canonicalization slice: `ApprovalBanner`/`LoadingSpinner`,
-`UpdatesSettingsPanel`/`FormSelect`, `RelayPairingSection`/`ExternalTextLink`,
-and `PatrolAttentionWorkbench`/`FormSelect`. None is rendered by or newly
-introduced in the audited platform inventory/drawer contract. They remain
-explicit exceptions rather than being hidden by this slice.
+The follow-up complete shared-template audit now passes without exceptions.
+Two reported consumers were inaccurate ownership declarations:
+`ApprovalBanner` has no loading state and `UpdatesSettingsPanel` has no native
+select, so those paths were removed from the respective required-consumer
+inventories. The two real findings were migrated: `RelayPairingSection` now
+composes `ExternalTextLink`, while the Patrol suppression reason and duration
+compose `FormTextarea` and `FormSelect`. A Patrol textarea guard now protects
+that additional form-control boundary and identified the same latent fork in
+`PatrolObjectivesPanel`; both objective textareas now compose `FormTextarea` as
+well.
 
 ## Decisions for previously ambiguous contracts
 
@@ -203,8 +207,7 @@ explicit exceptions rather than being hidden by this slice.
 
 ## Remaining exceptions
 
-There are no known platform-page exceptions to the canonical table or summary
-row interaction contracts after this slice. The four unrelated static-audit
-findings listed above remain outside this task. Route-specific cells, metrics,
-drawer sections, and technical details are intentional object content inside
-the shared contract, not forks.
+There are no known static-audit or platform-page exceptions to the canonical
+table, summary-row, external-link, or labelled native-control contracts after
+the follow-up. Route-specific cells, metrics, drawer sections, and technical
+details are intentional object content inside the shared contract, not forks.

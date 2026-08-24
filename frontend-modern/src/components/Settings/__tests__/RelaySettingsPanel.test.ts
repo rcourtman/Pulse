@@ -59,5 +59,7 @@ describe('Onboarding QR payload contract', () => {
   it('points pairing users at the download page for the Pulse Mobile app', () => {
     expect(relayPairingSectionSource).toContain('PULSE_PRO_DOWNLOAD_URL');
     expect(relayPairingSectionSource).toContain('RELAY_PAIRING_APP_AVAILABILITY_TEXT');
+    expect(relayPairingSectionSource).toContain('ExternalTextLink');
+    expect(relayPairingSectionSource).not.toContain('<a');
   });
 });

@@ -822,7 +822,6 @@
         { "path": "src/components/shared/DiscoveryLoadingFallback.tsx" },
         { "path": "src/components/shared/HistoryChartOverlay.tsx" },
         { "path": "src/components/shared/PulseDataGrid.tsx" },
-        { "path": "src/components/patrol/ApprovalBanner.tsx" },
         { "path": "src/components/patrol/ApprovalSection.tsx" },
         { "path": "src/components/patrol/InvestigationMessages.tsx" },
         { "path": "src/components/patrol/InvestigationSection.tsx" },
@@ -1701,7 +1700,6 @@
         { "path": "src/components/Settings/RecoverySettingsPanel.tsx" },
         { "path": "src/components/Settings/RolesEditorDialog.tsx" },
         { "path": "src/components/Settings/SystemLogsPanel.tsx" },
-        { "path": "src/components/Settings/UpdatesSettingsPanel.tsx" },
         { "path": "src/components/Storage/DiskDetail.tsx" },
         { "path": "src/components/Storage/StoragePageControls.tsx" },
         { "path": "src/components/Storage/StoragePoolDetail.tsx" },
@@ -1711,7 +1709,8 @@
         { "path": "src/features/alerts/AlertAppriseDestinationsSection.tsx" },
         { "path": "src/features/alerts/AlertDeliveryRoutingSection.tsx" },
         { "path": "src/features/alerts/AlertEscalationSection.tsx" },
-        { "path": "src/features/alerts/AlertQuietHoursSection.tsx" }
+        { "path": "src/features/alerts/AlertQuietHoursSection.tsx" },
+        { "path": "src/features/patrol/PatrolAttentionWorkbench.tsx" }
       ],
       "proof": [
         "src/components/shared/SharedPrimitives.guardrails.test.ts",
@@ -1736,7 +1735,9 @@
         { "path": "src/components/Settings/AgentProfilesPanel.tsx" },
         { "path": "src/components/Settings/SelfHostedCommercialRecoverySection.tsx" },
         { "path": "src/components/Settings/SuggestProfileModal.tsx" },
-        { "path": "src/features/alerts/AlertAppriseDestinationsSection.tsx" }
+        { "path": "src/features/alerts/AlertAppriseDestinationsSection.tsx" },
+        { "path": "src/features/patrol/PatrolAttentionWorkbench.tsx" },
+        { "path": "src/features/patrol/PatrolObjectivesPanel.tsx" }
       ],
       "proof": [
         "src/components/shared/SharedPrimitives.guardrails.test.ts",
@@ -2009,7 +2010,6 @@
       "requiredConsumers": [
         { "path": "src/components/shared/OrganizationBadges.tsx" },
         { "path": "src/components/AI/FindingsPanel.tsx" },
-        { "path": "src/components/patrol/ApprovalBanner.tsx" },
         { "path": "src/components/patrol/ApprovalSection.tsx" },
         { "path": "src/components/patrol/InvestigationSection.tsx" },
         { "path": "src/components/patrol/RunHistoryEntry.tsx" },
@@ -5356,6 +5356,26 @@
       "ignoredPaths": ["src/components/shared/SharedPrimitives.guardrails.test.ts"],
       "proof": [
         "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "form-textarea-local-patrol-fields",
+      "category": "form-control",
+      "summary": "Patrol decision forms must compose FormTextarea instead of recreating labelled native textarea wrappers locally.",
+      "canonical": {
+        "path": "src/components/shared/FormTextarea.tsx",
+        "export": "FormTextarea"
+      },
+      "scopes": ["src/features/patrol"],
+      "extensions": [".tsx"],
+      "allPatterns": ["<textarea"],
+      "legacyReason": "Retired migration debt. Patrol decision fields use FormTextarea for shared label, focus, responsive sizing, and controlled-value behavior.",
+      "allowedPaths": [],
+      "ignoredPaths": ["src/components/shared/SharedPrimitives.guardrails.test.ts"],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/features/patrol/__tests__/PatrolAttentionWorkbench.test.tsx",
         "scripts/shared-template-audit.mjs"
       ]
     },

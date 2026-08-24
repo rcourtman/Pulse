@@ -37,6 +37,8 @@ import {
 } from '@/api/patrolAttention';
 import { ResourceActionsAPI } from '@/api/resourceActions';
 import { Button, ButtonLink, CopyValueButton } from '@/components/shared/Button';
+import { FormSelect } from '@/components/shared/FormSelect';
+import { FormTextarea } from '@/components/shared/FormTextarea';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 import { MetadataBadge, type MetadataBadgeTone } from '@/components/shared/MetadataBadge';
 import { ActionReviewDialog } from '@/features/actions/ActionReviewDialog';
@@ -1346,42 +1348,33 @@ function AttentionLifecycleControls(props: {
             class="mt-3 space-y-3 border-t border-border-subtle pt-3"
             onSubmit={submitSuppression}
           >
-            <div>
-              <label
-                for={`attention-suppression-reason-${props.detail.item.id}`}
-                class="text-xs font-medium text-base-content"
-              >
-                Why is this safe to hide from active attention?
-              </label>
-              <textarea
-                id={`attention-suppression-reason-${props.detail.item.id}`}
-                class="mt-1 min-h-20 w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-base-content focus:outline-none focus:ring-2 focus:ring-blue-500"
-                value={reason()}
-                maxlength={240}
-                required
-                disabled={props.busy}
-                onInput={(event) => setReason(event.currentTarget.value)}
-              />
-            </div>
-            <div>
-              <label
-                for={`attention-suppression-duration-${props.detail.item.id}`}
-                class="text-xs font-medium text-base-content"
-              >
-                Return it to active attention after
-              </label>
-              <select
-                id={`attention-suppression-duration-${props.detail.item.id}`}
-                class="mt-1 block min-h-11 rounded-md border border-border bg-surface px-3 py-1.5 text-sm text-base-content focus:outline-none focus:ring-2 focus:ring-blue-500 sm:min-h-9"
-                value={String(durationMs())}
-                disabled={props.busy}
-                onChange={(event) => setDurationMs(Number(event.currentTarget.value))}
-              >
-                <For each={SUPPRESSION_DURATIONS}>
-                  {(duration) => <option value={duration.value}>{duration.label}</option>}
-                </For>
-              </select>
-            </div>
+            <FormTextarea
+              id={`attention-suppression-reason-${props.detail.item.id}`}
+              label="Why is this safe to hide from active attention?"
+              density="compact"
+              fieldBaseClass="block"
+              labelClass="text-xs"
+              textareaClass="mt-1 min-h-20"
+              value={reason()}
+              maxlength={240}
+              required
+              disabled={props.busy}
+              onInput={(event) => setReason(event.currentTarget.value)}
+            />
+            <FormSelect
+              id={`attention-suppression-duration-${props.detail.item.id}`}
+              label="Return it to active attention after"
+              fieldBaseClass="block"
+              labelClass="text-xs"
+              selectClass="mt-1 w-auto"
+              value={String(durationMs())}
+              disabled={props.busy}
+              onChange={(event) => setDurationMs(Number(event.currentTarget.value))}
+            >
+              <For each={SUPPRESSION_DURATIONS}>
+                {(duration) => <option value={duration.value}>{duration.label}</option>}
+              </For>
+            </FormSelect>
             <div class="flex flex-wrap gap-2">
               <Button
                 variant="warning"
