@@ -1208,7 +1208,10 @@ not a replacement status card, CTA band, or page-local nested card.
    explicitly through the required `hideWhenRowTappableOnMobile` boolean, so a
    new table cannot silently restore a redundant mobile chevron. Rows whose
    click action does something other than expand details must pass `false` and
-   keep a visible disclosure control.
+   keep a visible disclosure control. A grouped row may retain its summary
+   focus or pin behavior while also owning disclosure, but when it does, the
+   row click must perform both actions and suppress the redundant mobile
+   chevron; summary interaction is not a reason for a one-off visual exception.
    They must not rely on a global rule that reveals
    every hidden column: phone priority remains source-specific because state, capacity,
    freshness, and recovery posture do not carry equal value for every resource

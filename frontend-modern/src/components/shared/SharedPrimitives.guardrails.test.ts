@@ -1626,7 +1626,9 @@ describe('shared primitive guardrails', () => {
 
     expect(storageGroupRowSource).toContain('createSummaryInteractiveRowPreviewHandlers');
     expect(storageGroupRowSource).toContain('SummaryRowActionButton');
-    expect(storageGroupRowSource).toContain('hideWhenRowTappableOnMobile={false}');
+    expect(storageGroupRowSource).toContain('hideWhenRowTappableOnMobile');
+    expect(storageGroupRowSource).not.toContain('hideWhenRowTappableOnMobile={false}');
+    expect(storageGroupRowSource).toContain('props.onToggle();');
 
     expect(workloadPanelSource).toContain('createSummaryInteractiveRowPreviewHandlers');
     expect(workloadPanelSource).not.toContain('kind="scope"');

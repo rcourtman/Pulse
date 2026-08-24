@@ -58,7 +58,7 @@ describe('StorageGroupRow', () => {
     expect(container.querySelector('.bg-slate-300')).toBeInTheDocument();
   });
 
-  it('keeps group-row scope on the row itself while disclosure stays separate', () => {
+  it('lets the whole group row own disclosure and summary focus', () => {
     const onToggle = vi.fn();
     const onFocusChange = vi.fn();
     const onHoverChange = vi.fn();
@@ -103,11 +103,13 @@ describe('StorageGroupRow', () => {
 
     fireEvent.click(row);
     expect(onFocusChange).toHaveBeenCalledWith(scope);
-    expect(onToggle).not.toHaveBeenCalled();
+    expect(onToggle).toHaveBeenCalledTimes(1);
 
     const toggleButton = screen.getByRole('button', { name: 'Expand tower' });
+    expect(toggleButton).toHaveClass('sr-only');
+    expect(toggleButton).toHaveClass('sm:not-sr-only');
     fireEvent.click(toggleButton);
-    expect(onToggle).toHaveBeenCalledTimes(1);
+    expect(onToggle).toHaveBeenCalledTimes(2);
 
     fireEvent.pointerLeave(row, { pointerType: 'mouse' });
     expect(onHoverChange).toHaveBeenLastCalledWith(null);

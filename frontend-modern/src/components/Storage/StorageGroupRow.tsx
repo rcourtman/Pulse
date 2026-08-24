@@ -44,7 +44,10 @@ export const StorageGroupRow: Component<StorageGroupRowProps> = (props) => {
       data-summary-group-id={props.summaryGroupScope?.id ?? undefined}
       data-summary-group-series-count={String(props.summaryGroupScope?.seriesIds.length ?? 0)}
       data-summary-row-active={props.summaryActive ? 'true' : 'false'}
-      onClick={() => props.onFocusChange?.(props.summaryFocused ? null : props.summaryGroupScope)}
+      onClick={() => {
+        props.onToggle();
+        props.onFocusChange?.(props.summaryFocused ? null : props.summaryGroupScope);
+      }}
       {...interactiveRowHandlers}
     >
       <td colSpan={99} class={STORAGE_GROUP_ROW_CELL_CLASS}>
@@ -53,7 +56,7 @@ export const StorageGroupRow: Component<StorageGroupRowProps> = (props) => {
             kind="disclosure"
             subjectLabel={row().label}
             expanded={props.expanded}
-            hideWhenRowTappableOnMobile={false}
+            hideWhenRowTappableOnMobile
             onAction={props.onToggle}
             onPreviewClear={() => props.onHoverChange?.(null)}
             class="inline-flex items-center justify-center"
