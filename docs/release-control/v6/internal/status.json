@@ -9690,7 +9690,44 @@
       "subsystem_ids": []
     }
   ],
-  "coverage_gaps": [],
+  "coverage_gaps": [
+    {
+      "id": "resource-payload-static-metadata",
+      "summary": "The client-facing resource stream ships ~3KB of mostly-static metadata per resource (duplicated capabilities blobs with only 10 distinct values across 1,508 resources, canonicalIdentity alias/superseded-id history, aiSafeSummary prose, and policy routing) on every snapshot, REST recovery, and reconnect. At 50-node scale the snapshot is a single 4.73MB websocket frame and browser main-thread cost per delta reaches ~1s even on desktop hardware. Slimming the stream is a wire-format change with consumers beyond frontend-modern (pulse-mobile OTA compatibility, Pro surfaces, AI runtime), so it needs an owned slice with contract updates and cross-client verification.",
+      "owner": "project-owner",
+      "status": "triaged",
+      "recorded_at": "2026-08-24",
+      "lane_ids": [
+        "L6",
+        "L10",
+        "L13"
+      ],
+      "subsystem_ids": [
+        "api-contracts",
+        "performance-and-scalability",
+        "unified-resources"
+      ],
+      "proposed_resolution": "lane-expansion",
+      "coverage_impact": 6,
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/resource-payload-static-metadata-2026-08-24.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/stores/websocket.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/websocket/state_delta.go",
+          "kind": "file"
+        }
+      ]
+    }
+  ],
   "candidate_lanes": [],
   "work_claims": [],
   "open_decisions": [],
