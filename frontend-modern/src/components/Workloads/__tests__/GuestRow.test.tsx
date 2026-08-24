@@ -910,16 +910,30 @@ describe('GuestRow', () => {
       expect(firstTd?.className).toContain('sm:pl-3');
     });
 
-    it('keeps the disclosure control close to the identity in compact layouts', () => {
-      const { container } = renderGuestRow({
-        guest: makeGuest(),
+    it('visually removes the redundant disclosure control in compact layouts', () => {
+      const guest = makeGuest();
+      renderGuestRow({
+        guest,
         isGroupedView: true,
         workloadTableLayoutMode: 'phone',
+        onClick: vi.fn(),
       });
-      const identityRow = container.querySelector('td > div') as HTMLElement | null;
+      const disclosureButton = screen.getByRole('button', {
+        name: `Expand ${guest.name}`,
+      });
 
-      expect(identityRow?.className).toContain('gap-0.5');
-      expect(identityRow?.className).not.toContain('gap-2');
+      expect(disclosureButton.className).toContain('sr-only');
+      expect(disclosureButton.className).toContain('focus:not-sr-only');
+    });
+
+    it('keeps the visible disclosure control in desktop layouts', () => {
+      const guest = makeGuest();
+      renderGuestRow({ guest, onClick: vi.fn() });
+      const disclosureButton = screen.getByRole('button', {
+        name: `Expand ${guest.name}`,
+      });
+
+      expect(disclosureButton.className).not.toContain('sr-only');
     });
   });
 

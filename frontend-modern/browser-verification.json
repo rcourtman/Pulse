@@ -1,15 +1,11 @@
 {
   "version": 1,
-  "base_sha": "e9fdd18570536fe7549d46c77ceb8e0badd6cf40",
-  "verified_at": "2026-08-24T09:44:38Z",
+  "base_sha": "791e29ad8d4cc991837ac43d0bf7c7a42d5fa54a",
+  "verified_at": "2026-08-24T09:50:53Z",
   "result": "passed",
-  "changed_paths": [
-    "frontend-modern/src/components/Workloads/GuestRow.tsx",
-    "frontend-modern/src/components/Workloads/guestRowModel.tsx"
-  ],
+  "changed_paths": ["frontend-modern/src/components/Workloads/GuestRow.tsx"],
   "content_sha256": {
-    "frontend-modern/src/components/Workloads/GuestRow.tsx": "f2c1e623f96d20743345ba697be4366c99b1e423c67bc3c2fe63154bb2e4fbfe",
-    "frontend-modern/src/components/Workloads/guestRowModel.tsx": "cd3ba65449eeead9f71f1d15eb76137cc39820a0eec6220c8f16e8a31a0d7f2e"
+    "frontend-modern/src/components/Workloads/GuestRow.tsx": "64776e4a32d5361a2ec541344178e9e7d1e401a3d09086e68ad4f923240bf715"
   },
   "routes": [
     "/proxmox"
@@ -31,10 +27,10 @@
     "desktop Workloads table with the same filtered guest"
   ],
   "interactions": [
-    "verified the compact phone disclosure target remains 36px while the first-cell inset and identity gap use less horizontal space",
+    "confirmed the visible disclosure control is removed from compact rows while its screen-reader and keyboard-focus path remains available",
     "confirmed the Type sort header renders without clipping at 390x844 and the availability column receives a larger compact-layout share when present",
-    "expanded the filtered guest and confirmed the disclosure changes to Collapse without disturbing the table layout",
-    "confirmed the expanded state survives the transition from 390x844 to 1440x900",
+    "tapped the workload name to expand the filtered phone row and confirmed the accessible disclosure changes to Collapse",
+    "confirmed the expanded state survives the transition from 390x844 to 1440x900 and the desktop chevron remains visible",
     "restored the browser viewport and real-node runtime after verification"
   ]
 }
