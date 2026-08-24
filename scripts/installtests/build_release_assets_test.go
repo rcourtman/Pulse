@@ -1175,6 +1175,37 @@ func TestReleaseValidationRequiresSignedSidecars(t *testing.T) {
 	}
 }
 
+func TestReleaseToolchainPinsAreAligned(t *testing.T) {
+	const requiredGo = "go1.26.7"
+
+	versionBytes, err := os.ReadFile(repoFile("scripts", ".go-version"))
+	if err != nil {
+		t.Fatalf("read scripts/.go-version: %v", err)
+	}
+	if got := strings.TrimSpace(string(versionBytes)); got != requiredGo {
+		t.Fatalf("scripts/.go-version = %q, want %q", got, requiredGo)
+	}
+
+	checks := []struct {
+		path   []string
+		needle string
+	}{
+		{[]string{"go.mod"}, "toolchain " + requiredGo},
+		{[]string{"scripts", "install-go-toolchain.sh"}, `DEFAULT_VERSION="` + requiredGo + `"`},
+		{[]string{"scripts", "build-release.sh"}, `required_go="` + requiredGo + `"`},
+		{[]string{"scripts", "build-release-binaries.sh"}, `required_go="` + requiredGo + `"`},
+	}
+	for _, check := range checks {
+		content, err := os.ReadFile(repoFile(check.path...))
+		if err != nil {
+			t.Fatalf("read %s: %v", strings.Join(check.path, "/"), err)
+		}
+		if !strings.Contains(string(content), check.needle) {
+			t.Errorf("%s does not pin %s", strings.Join(check.path, "/"), requiredGo)
+		}
+	}
+}
+
 func TestDockerBuildUsesCanonicalReleaseLdflags(t *testing.T) {
 	dockerfileBytes, err := os.ReadFile(repoFile("Dockerfile"))
 	if err != nil {
@@ -1183,7 +1214,7 @@ func TestDockerBuildUsesCanonicalReleaseLdflags(t *testing.T) {
 	dockerfile := string(dockerfileBytes)
 	dockerRequired := []string{
 		`FROM --platform=linux/amd64 node:20-alpine@sha256:fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0fb8363f609372293 AS frontend-builder`,
-		`FROM --platform=linux/amd64 golang:1.26.5-alpine@sha256:0178a641fbb4858c5f1b48e34bdaabe0350a330a1b1149aabd498d0699ff5fb2 AS backend-builder`,
+		`FROM --platform=linux/amd64 golang:1.26.7-alpine@sha256:28d89ee9cc0ff9fec75c82ca201e6bf7fdf9a679d4b7b24dfa04f2bb766bb468 AS backend-builder`,
 		`FROM backend-builder AS release-assets-builder`,
 		`FROM alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc AS agent_runtime`,
 		`FROM alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc AS pulse-runtime-foundation`,
@@ -1227,7 +1258,7 @@ func TestDockerBuildUsesCanonicalReleaseLdflags(t *testing.T) {
 		t.Fatalf("hosted_runtime target must not depend on installer rendering or embedded agent artifacts:\n%s", hostedStage)
 	}
 	if strings.Contains(dockerfile, `FROM --platform=linux/amd64 node:20-alpine AS frontend-builder`) ||
-		strings.Contains(dockerfile, `FROM --platform=linux/amd64 golang:1.26.5-alpine AS backend-builder`) ||
+		strings.Contains(dockerfile, `FROM --platform=linux/amd64 golang:1.26.7-alpine AS backend-builder`) ||
 		strings.Contains(dockerfile, `FROM alpine:3.20 AS agent_runtime`) ||
 		strings.Contains(dockerfile, `FROM alpine:3.20 AS pulse-runtime-base`) {
 		t.Fatal("Dockerfile base images must be pinned by immutable @sha256 digests")
