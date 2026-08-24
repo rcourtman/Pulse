@@ -12,7 +12,10 @@
  *   3. Groups files sharing the same logical name (e.g. two "Dashboard" chunks)
  *   4. Computes gzip size for each file using Node zlib (level 6, default)
  *   5. Compares per-chunk and total gzip sizes against .bundlesize.json thresholds
- *   6. Exits 0 on pass, 1 on any violation
+ *   6. Asserts the built index.html preload posture: modulepreload links are
+ *      limited to the entry's static imports (no lazy route chunks), and the
+ *      import map integrity block covers every built JS asset
+ *   7. Exits 0 on pass, 1 on any violation
  */
 
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -88,6 +91,103 @@ function measureBuild() {
   }
 
   return { groups, totalJsGzip, totalCssGzip };
+}
+
+// ---------------------------------------------------------------------------
+// Built index.html preload posture
+// ---------------------------------------------------------------------------
+
+/**
+ * Verify the deployment-installability preload invariant against the built
+ * index.html (see the subsystem contract clause on modulepreload posture):
+ *   - the import map integrity block exists and covers every JS asset in
+ *     dist/assets, so dynamic-import SRI stays enforced without preloading;
+ *   - modulepreload links reference only the entry chunk's static imports —
+ *     preloading lazy route chunks (preloadDynamicChunks: true) would fetch
+ *     the whole app at cold start and defeat route-level code splitting.
+ * Returns a list of violation messages (empty on pass).
+ */
+function checkPreloadPosture() {
+  const errors = [];
+  let html;
+  try {
+    html = readFileSync(join(ROOT, 'dist', 'index.html'), 'utf8');
+  } catch {
+    errors.push('dist/index.html not found. Run "npx vite build" first.');
+    return errors;
+  }
+
+  const importmapMatch = html.match(/<script type="importmap">([\s\S]*?)<\/script>/);
+  let integrity = null;
+  if (!importmapMatch) {
+    errors.push('importmap script block missing from index.html (dynamic-import SRI unenforced)');
+  } else {
+    let parsed;
+    try {
+      parsed = JSON.parse(importmapMatch[1]);
+    } catch {
+      errors.push('importmap block in index.html is not valid JSON');
+    }
+    if (parsed) {
+      if (!parsed.integrity || typeof parsed.integrity !== 'object' || Object.keys(parsed.integrity).length === 0) {
+        errors.push('importmap in index.html has no integrity block (dynamic-import SRI unenforced)');
+      } else {
+        integrity = parsed.integrity;
+      }
+    }
+  }
+  if (integrity) {
+    for (const file of readdirSync(DIST_ASSETS)) {
+      if (!file.endsWith('.js')) continue;
+      if (!(`/assets/${file}` in integrity)) {
+        errors.push(`importmap integrity missing entry for /assets/${file}`);
+      }
+    }
+  }
+
+  const entryMatch = html.match(/<script type="module"[^>]*\bsrc="\/assets\/([^"]+\.js)"[^>]*>/);
+  if (!entryMatch) {
+    errors.push('module entry script not found in index.html');
+    return errors;
+  }
+  const entryFile = entryMatch[1];
+  if (!/\bintegrity="/.test(entryMatch[0])) {
+    errors.push(`entry script /assets/${entryFile} missing integrity attribute`);
+  }
+
+  let entrySource;
+  try {
+    entrySource = readFileSync(join(DIST_ASSETS, entryFile), 'utf8');
+  } catch {
+    errors.push(`entry chunk ${entryFile} not found in dist/assets/`);
+    return errors;
+  }
+
+  // Static imports/re-exports in Rollup output: import ... from"./x.js",
+  // import"./x.js", export ... from"./x.js". Dynamic imports never match:
+  // their specifier follows an opening parenthesis, not the keyword.
+  const allowedPreloads = new Set([entryFile]);
+  const staticImportRe = /\b(?:import|export)\s*(?:[\w$*{},\s]+?\s*from\s*)?["']\.\/([^"']+\.js)["']/g;
+  let m;
+  while ((m = staticImportRe.exec(entrySource))) allowedPreloads.add(m[1]);
+
+  for (const tag of html.match(/<link rel="modulepreload"[^>]*>/g) ?? []) {
+    const href = tag.match(/\bhref="\/assets\/([^"]+)"/);
+    if (!href) {
+      errors.push(`modulepreload link with unrecognized href in index.html: ${tag}`);
+      continue;
+    }
+    if (!allowedPreloads.has(href[1])) {
+      errors.push(
+        `modulepreload of lazy chunk /assets/${href[1]} — only the entry's static imports may be preloaded (keep preloadDynamicChunks: false in vite.config.ts)`,
+      );
+    }
+    if (!/\bintegrity="/.test(tag)) {
+      errors.push(`modulepreload of /assets/${href[1]} missing integrity attribute`);
+    }
+  }
+
+  return errors;
 }
 
 // ---------------------------------------------------------------------------
@@ -266,11 +366,27 @@ function check() {
 
   console.log();
 
-  if (violations.length === 0) {
+  const postureErrors = checkPreloadPosture();
+  console.log('index.html preload posture');
+  console.log('==========================');
+  if (postureErrors.length === 0) {
+    console.log('ok: modulepreload limited to entry static imports; importmap integrity covers all JS assets.');
+  } else {
+    for (const message of postureErrors) {
+      console.log(`  ${message}`);
+    }
+  }
+  console.log();
+
+  if (violations.length === 0 && postureErrors.length === 0) {
     console.log('All chunks within budget.');
     process.exit(0);
-  } else {
-    console.log(`${violations.length} violation(s) found:\n`);
+  }
+  if (postureErrors.length > 0) {
+    console.log(`${postureErrors.length} preload posture violation(s) found (listed above).`);
+  }
+  if (violations.length > 0) {
+    console.log(`${violations.length} bundle size violation(s) found:\n`);
     for (const v of violations) {
       if (v.missing) {
         console.log(
@@ -286,8 +402,8 @@ function check() {
       '\nTo update the baseline after an intentional size increase:',
     );
     console.log('  npx vite build && node scripts/check-bundle-size.mjs --update-baseline');
-    process.exit(1);
   }
+  process.exit(1);
 }
 
 // ---------------------------------------------------------------------------

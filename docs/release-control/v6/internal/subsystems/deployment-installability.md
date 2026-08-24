@@ -984,6 +984,12 @@ upgrade, update, release, or artifact-selection behavior.
    effective on slow devices), while dynamic-import integrity remains enforced
    through the generated import map `integrity` block. Reintroducing whole-app
    preloading is a governed regression, not a tuning knob.
+   `frontend-modern/scripts/check-bundle-size.mjs` pins this posture against the
+   built output (modulepreload links limited to the entry's static imports,
+   import map `integrity` coverage of every built JS asset) and is the accepted
+   build-output verification proof for `frontend-modern/vite.config.ts` changes
+   under the `frontend-build-output` path policy, alongside the dev-runtime
+   orchestration proofs for dev-server-facing edits to the same file.
    Managed browser verification must also restart an existing hot-dev session
    when a verification lock is active or the runtime auth file no longer matches
    the deterministic dev user/hash. `tests/integration/scripts/run-playwright.mjs`

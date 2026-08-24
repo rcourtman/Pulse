@@ -875,6 +875,42 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
             ],
         )
 
+    def test_vite_config_change_uses_frontend_build_output_policy(self):
+        required = infer_impacted_subsystems(["frontend-modern/vite.config.ts"])
+        self.assertEqual(set(required), {"deployment-installability"})
+
+        installability = required["deployment-installability"]
+        self.assertEqual(
+            installability["contract"],
+            "docs/release-control/v6/internal/subsystems/deployment-installability.md",
+        )
+        self.assertEqual(
+            installability["touched_runtime_files"],
+            ["frontend-modern/vite.config.ts"],
+        )
+        self.assertEqual(
+            installability["verification_requirements"],
+            [
+                {
+                    "id": "frontend-build-output",
+                    "label": "frontend production build output proof",
+                    "touched_runtime_files": ["frontend-modern/vite.config.ts"],
+                    "allow_same_subsystem_tests": False,
+                    "test_prefixes": [],
+                    "exact_files": [
+                        "frontend-modern/scripts/check-bundle-size.mjs",
+                        "scripts/release_control/ssh_host_key_policy_test.py",
+                        "scripts/tests/test-hot-dev-auth.sh",
+                        "scripts/tests/test-hot-dev-bg.sh",
+                        "scripts/tests/test-hot-dev-runtime.sh",
+                        "scripts/tests/test-toggle-mock.sh",
+                        "tests/integration/scripts/managed-local-backend.test.mjs",
+                        "tests/integration/tests/16-dev-runtime-recovery.spec.ts",
+                    ],
+                }
+            ],
+        )
+
     def test_sensor_proxy_uninstall_change_uses_trust_policy(self):
         required = infer_impacted_subsystems(["scripts/uninstall-sensor-proxy.sh"])
         self.assertEqual(set(required), {"deployment-installability"})
