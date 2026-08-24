@@ -11,7 +11,7 @@ type SummaryRowActionButtonProps =
       subjectLabel: string;
       controlsId?: string;
       class?: string;
-      hideWhenRowTappableOnMobile?: boolean;
+      hideWhenRowTappableOnMobile: boolean;
       onAction: () => void;
       onPreviewClear?: () => void;
     }

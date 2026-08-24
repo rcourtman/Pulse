@@ -1187,9 +1187,12 @@ not a replacement status card, CTA band, or page-local nested card.
    below the shared mobile breakpoint while preserving the button for screen
    readers and revealing it on keyboard focus. `PlatformResourceDetailToggleButton`
    applies that policy to provider-native platform tables, and workload rows
-   opt in only while their compact row remains the disclosure target. Rows
-   whose click action does something other than expand details must keep a
-   visible disclosure control.
+   opt in only while their compact row remains the disclosure target. Every
+   disclosure-button consumer must declare that row-target relationship
+   explicitly through the required `hideWhenRowTappableOnMobile` boolean, so a
+   new table cannot silently restore a redundant mobile chevron. Rows whose
+   click action does something other than expand details must pass `false` and
+   keep a visible disclosure control.
    They must not rely on a global rule that reveals
    every hidden column: phone priority remains source-specific because state, capacity,
    freshness, and recovery posture do not carry equal value for every resource

@@ -2187,9 +2187,12 @@ files.
     `frontend-modern/src/components/shared/SummaryRowActionButton.tsx`, but
     storage group headers should pin through the row itself and must not add a
     separate scope/pinned pill button beside the disclosure chevron. Touch
-    users still must not inherit synthetic hover branches, and storage must
-    not keep a special trailing expand column once the shared leading action
-    contract exists.
+    pool and physical-disk rows own expansion through the whole row, so they
+    must explicitly suppress the redundant visible mobile chevron; group
+    headers whose row click owns summary focus rather than expansion must keep
+    their disclosure chevron visible. Touch users still must not inherit
+    synthetic hover branches, and storage must not keep a special trailing
+    expand column once the shared leading action contract exists.
     Static subgroup header emphasis for storage group rows and recovery history
     day headers must also route through
     `frontend-modern/src/components/shared/groupedTableRowPresentation.ts` and

@@ -1585,7 +1585,11 @@ served clones. Proof: `TestClonedResourcesPreservePlatformAdmission` and
     `frontend-modern/src/components/shared/SummaryRowActionButton.tsx`, so the
     unified-resource table does not fork mouse-only hover logic, focusable-row
     button shims, touch-hostile synthetic hover, or provider-specific control
-    handling across host, PBS, and PMG sections.
+    handling across host, PBS, and PMG sections. Those three resource rows are
+    themselves the compact touch disclosure target and must explicitly enable
+    the shared mobile-chevron suppression; their accessible row/button state
+    remains available without spending a visible summary-cell slot on a
+    duplicate control.
 15. Keep infrastructure search aligned with the governed display label. Shared
     infrastructure filtering through
     `frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts`

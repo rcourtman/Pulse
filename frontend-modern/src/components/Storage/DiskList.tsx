@@ -361,6 +361,7 @@ export const DiskList: Component<DiskListProps> = (props) => {
                             subjectLabel={data.model || 'disk'}
                             expanded={isSelected()}
                             controlsId={detailControlsId}
+                            hideWhenRowTappableOnMobile
                             onAction={() => model.toggleSelectedDisk(disk)}
                             onPreviewClear={() => props.onHoverChange?.(null)}
                           />

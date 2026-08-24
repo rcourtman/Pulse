@@ -1,25 +1,39 @@
 {
   "version": 1,
-  "base_sha": "714b26b69f8a39d906b041dbf1b64d5d623632c1",
-  "verified_at": "2026-08-24T15:30:00Z",
+  "base_sha": "b67ac28f25434cb9e6e393a0787e72d915ba479a",
+  "verified_at": "2026-08-24T15:34:13Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/shared/TooltipPortal.tsx",
-    "frontend-modern/src/components/shared/hoverCapability.ts",
-    "frontend-modern/src/components/shared/useTooltipState.ts",
-    "frontend-modern/src/hooks/useTooltip.ts"
+    "frontend-modern/src/components/Infrastructure/UnifiedResourceHostTableCard.tsx",
+    "frontend-modern/src/components/Infrastructure/UnifiedResourcePBSTableSection.tsx",
+    "frontend-modern/src/components/Infrastructure/UnifiedResourcePMGTableSection.tsx",
+    "frontend-modern/src/components/Storage/DiskList.tsx",
+    "frontend-modern/src/components/Storage/StorageGroupRow.tsx",
+    "frontend-modern/src/components/Storage/StoragePoolRow.tsx",
+    "frontend-modern/src/components/shared/SummaryRowActionButton.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/shared/TooltipPortal.tsx": "dafea8136a75491438a9ab45de348a4307ada67799796f38e3e26087339ef445",
-    "frontend-modern/src/components/shared/hoverCapability.ts": "bae00548234580fe72e4fe93833c57ff237d7666d2ada00a0f673c676f9c39dc",
-    "frontend-modern/src/components/shared/useTooltipState.ts": "4959c6840e3c062fa31c2a0a7391f5c0314725ac8ef48deeed37551f9d48194c",
-    "frontend-modern/src/hooks/useTooltip.ts": "fa13e21a922954466a9cb09abaff9cd04b3caf0c43dbb025829e8bf251f8065f"
+    "frontend-modern/src/components/Infrastructure/UnifiedResourceHostTableCard.tsx": "78588725f625e58325c2ddca6133d3e0b0d46a18f9d19e8946f7c0181c094442",
+    "frontend-modern/src/components/Infrastructure/UnifiedResourcePBSTableSection.tsx": "15031095e5910c02bd47038213974de4b3d2aef53b1ff6cd030fee381a98fe91",
+    "frontend-modern/src/components/Infrastructure/UnifiedResourcePMGTableSection.tsx": "d9a5a6f209b97a02dfa40100f783d91e8202b0efc33af73415e05689251f6ec6",
+    "frontend-modern/src/components/Storage/DiskList.tsx": "5d600b9bfa8e34ee9ed13037cdbe87b931c10e6378440d41bf1d1ba68cab9526",
+    "frontend-modern/src/components/Storage/StorageGroupRow.tsx": "5ce92da0c45b4146c51eb52786adb245978b5f6b4adc95b40d2294d949720e99",
+    "frontend-modern/src/components/Storage/StoragePoolRow.tsx": "f389fef94c53a74cf69d6f165ae01f71f02a1e0143dc68c1318033aebe0001a4",
+    "frontend-modern/src/components/shared/SummaryRowActionButton.tsx": "dbd6a62b6dbf11cabfaf01bc7240ab3ba3a8230cef1ee20bc2f0bd8c19e4bb14"
   },
-  "routes": ["/proxmox"],
+  "routes": [
+    "/proxmox/overview",
+    "/proxmox/storage",
+    "/docker/overview",
+    "/kubernetes/overview",
+    "/truenas/overview",
+    "/vmware/health",
+    "/standalone/machines"
+  ],
   "viewports": [
     {
       "width": 1280,
-      "height": 720
+      "height": 800
     },
     {
       "width": 390,
@@ -27,13 +41,15 @@
     }
   ],
   "states": [
-    "Proxmox workload table with a fine hover-capable desktop pointer",
-    "Proxmox workload table with touch emulation reporting a coarse primary pointer",
-    "expanded artifact-cache-310 inline guest drawer on the narrow viewport"
+    "collapsed storage-pool and physical-disk rows at narrow width without visible disclosure chevrons",
+    "expanded and collapsed storage detail rows activated from the whole summary row",
+    "provider overview rows across Proxmox, Docker, Kubernetes, TrueNAS, vSphere, and standalone machines with accessible but visually suppressed mobile disclosure buttons",
+    "desktop storage rows retaining their explicit disclosure affordance"
   ],
   "interactions": [
-    "tapped the artifact-cache-310 workload row at 390x844 and confirmed the inline guest drawer opened without a portal or singleton tooltip",
-    "hovered a workload CPU metric at 1280x720 and confirmed the CPU Details tooltip remained available for a fine pointer",
-    "confirmed the touch and desktop media capability queries selected the intended tooltip behavior before restoring the browser viewport"
+    "opened and closed a Proxmox storage-pool detail from the whole row at 390px",
+    "switched from Storage to Physical Disks and confirmed its whole-row disclosure buttons are visually clipped at 390px",
+    "audited seven loaded platform routes and found zero visible Expand or Collapse disclosure buttons at 390px while retaining 232 accessible controls",
+    "inspected the Proxmox storage table at 1280px and confirmed desktop disclosure layout and row density remain intact"
   ]
 }

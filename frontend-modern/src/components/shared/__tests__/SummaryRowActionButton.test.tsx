@@ -11,6 +11,7 @@ describe('SummaryRowActionButton', () => {
         subjectLabel="alpha"
         expanded={true}
         controlsId="summary-row-detail-alpha"
+        hideWhenRowTappableOnMobile={false}
         onAction={onAction}
       />
     ));
@@ -78,6 +79,7 @@ describe('SummaryRowActionButton', () => {
         subjectLabel="alpha"
         expanded={false}
         controlsId="summary-row-detail-alpha"
+        hideWhenRowTappableOnMobile={false}
         onAction={onAction}
       />
     ));

@@ -100,6 +100,7 @@ export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
               subjectLabel={props.record.name}
               expanded={props.expanded}
               controlsId={detailControlsId()}
+              hideWhenRowTappableOnMobile
               onAction={props.onToggleExpand}
               onPreviewClear={() => props.onHoverChange?.(null)}
             />

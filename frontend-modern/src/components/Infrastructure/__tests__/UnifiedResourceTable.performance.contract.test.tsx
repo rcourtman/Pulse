@@ -821,6 +821,7 @@ describe('UnifiedResourceTable performance contract', () => {
         expect(source).toContain('data-summary-row-active');
         expect(source).toContain('createSummaryInteractiveRowPreviewHandlers');
         expect(source).toContain('SummaryRowActionButton');
+        expect(source).toContain('hideWhenRowTappableOnMobile');
         expect(source).not.toContain('bg-blue-50 dark:bg-blue-900 ring-1 ring-blue-300');
         expect(source).not.toContain('bg-blue-100 dark:bg-blue-800');
       }

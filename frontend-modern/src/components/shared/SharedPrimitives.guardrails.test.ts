@@ -1555,7 +1555,7 @@ describe('shared primitive guardrails', () => {
     expect(summaryRowActionButtonSource).toContain('aria-expanded');
     expect(summaryRowActionButtonSource).toContain('aria-pressed');
     expect(summaryRowActionButtonSource).toContain('data-row-action="true"');
-    expect(summaryRowActionButtonSource).toContain('hideWhenRowTappableOnMobile');
+    expect(summaryRowActionButtonSource).toContain('hideWhenRowTappableOnMobile: boolean');
     expect(summaryRowActionButtonSource).toContain('sm:not-sr-only');
     expect(platformResourceDetailTableRowSource).toContain('PlatformResourceDetailToggleButton');
     expect(platformResourceDetailTableRowSource).toContain('SummaryRowActionButton');
@@ -1563,7 +1563,6 @@ describe('shared primitive guardrails', () => {
 
     for (const source of [
       guestRowSource,
-      storageGroupRowSource,
       storagePoolRowSource,
       diskListSource,
       unifiedResourceHostTableCardSource,
@@ -1572,7 +1571,12 @@ describe('shared primitive guardrails', () => {
     ]) {
       expect(source).toContain('createSummaryInteractiveRowPreviewHandlers');
       expect(source).toContain('SummaryRowActionButton');
+      expect(source).toContain('hideWhenRowTappableOnMobile');
     }
+
+    expect(storageGroupRowSource).toContain('createSummaryInteractiveRowPreviewHandlers');
+    expect(storageGroupRowSource).toContain('SummaryRowActionButton');
+    expect(storageGroupRowSource).toContain('hideWhenRowTappableOnMobile={false}');
 
     expect(workloadPanelSource).toContain('createSummaryInteractiveRowPreviewHandlers');
     expect(workloadPanelSource).not.toContain('kind="scope"');

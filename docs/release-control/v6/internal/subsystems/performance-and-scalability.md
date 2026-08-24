@@ -2191,6 +2191,11 @@ forking separate table-only presentation logic. That component now also
 consumes the shared `frontend-modern/src/utils/resourceChangePresentation.ts`
 label helper for canonical change kinds, source types, and adapter provenance
 so the chip wording stays consistent without adding extra hot-path branching.
+Host, PBS, and PMG summary rows also declare themselves as the compact touch
+disclosure target through `SummaryRowActionButton`; the shared primitive hides
+the redundant visible mobile chevron while preserving accessible disclosure
+semantics, so provider sections do not pay a separate cell-width or tap-target
+cost for an action already owned by the whole row.
 The same infrastructure hot path now also depends on the shared
 `frontend-modern/src/components/shared/ProgressBar.tsx` primitive for metric
 fill rendering. Performance-sensitive metric bars may vary by value and color,

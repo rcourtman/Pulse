@@ -53,6 +53,7 @@ export const StorageGroupRow: Component<StorageGroupRowProps> = (props) => {
             kind="disclosure"
             subjectLabel={row().label}
             expanded={props.expanded}
+            hideWhenRowTappableOnMobile={false}
             onAction={props.onToggle}
             onPreviewClear={() => props.onHoverChange?.(null)}
             class="inline-flex items-center justify-center"

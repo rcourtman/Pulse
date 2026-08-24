@@ -198,6 +198,7 @@ export const UnifiedResourcePMGTableSection: Component<UnifiedResourcePMGTableSe
                           subjectLabel={displayName()}
                           expanded={isExpanded()}
                           controlsId={detailControlsId()}
+                          hideWhenRowTappableOnMobile
                           onAction={() => table.toggleExpand(resource.id)}
                           onPreviewClear={() => tableProps.onHoverChange?.(null)}
                         />
