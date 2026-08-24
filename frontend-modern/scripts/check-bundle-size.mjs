@@ -166,10 +166,33 @@ function checkPreloadPosture() {
   // Static imports/re-exports in Rollup output: import ... from"./x.js",
   // import"./x.js", export ... from"./x.js". Dynamic imports never match:
   // their specifier follows an opening parenthesis, not the keyword.
-  const allowedPreloads = new Set([entryFile]);
   const staticImportRe = /\b(?:import|export)\s*(?:[\w$*{},\s]+?\s*from\s*)?["']\.\/([^"']+\.js)["']/g;
-  let m;
-  while ((m = staticImportRe.exec(entrySource))) allowedPreloads.add(m[1]);
+  function staticImportsOf(source) {
+    const specifiers = [];
+    let m;
+    while ((m = staticImportRe.exec(source))) specifiers.push(m[1]);
+    return specifiers;
+  }
+
+  // Vite preloads the entry's TRANSITIVE static import graph, so walk it:
+  // a chunk is preloadable iff it is reachable from the entry through static
+  // imports alone. Lazy route chunks are only reachable dynamically and stay
+  // excluded, as do their own static-only dependencies.
+  const allowedPreloads = new Set([entryFile]);
+  const queue = staticImportsOf(entrySource);
+  while (queue.length > 0) {
+    const file = queue.pop();
+    if (allowedPreloads.has(file)) continue;
+    allowedPreloads.add(file);
+    let source;
+    try {
+      source = readFileSync(join(DIST_ASSETS, file), 'utf8');
+    } catch {
+      errors.push(`statically imported chunk ${file} not found in dist/assets/`);
+      continue;
+    }
+    queue.push(...staticImportsOf(source));
+  }
 
   for (const tag of html.match(/<link rel="modulepreload"[^>]*>/g) ?? []) {
     const href = tag.match(/\bhref="\/assets\/([^"]+)"/);
