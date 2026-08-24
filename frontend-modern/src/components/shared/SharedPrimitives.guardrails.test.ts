@@ -1387,6 +1387,11 @@ describe('shared primitive guardrails', () => {
     expect(frontendIndexCssSource).toContain('contain: paint');
     expect(frontendIndexCssSource).toContain('overflow-y: hidden');
     expect(frontendIndexCssSource).toContain('overscroll-behavior-x: contain');
+    expect(frontendIndexCssSource).toContain('overscroll-behavior-y: chain');
+    expect(frontendIndexCssSource).toContain('.table-scroll-shell.table-scroll-shell-phone-page');
+    expect(frontendIndexCssSource).toContain('overflow: clip');
+    expect(tableSource).toContain("phoneVerticalScrollOwner?: 'page' | 'table'");
+    expect(tableSource).toContain('table-scroll-shell-phone-page');
     expect(windowedPageScrollSource).toContain(
       "addEventListener('scroll', options.onScroll, { passive: true })",
     );
@@ -5371,6 +5376,7 @@ describe('shared primitive guardrails', () => {
     );
     expect(sharedPlatformPageSource).toContain('TableCard class={props.cardClass');
     expect(sharedPlatformPageSource).toContain('export function PlatformDetailTable');
+    expect(sharedPlatformPageSource).toContain('phoneVerticalScrollOwner="page"');
     expect(sharedPlatformPageSource).toContain('export function PlatformDetailTableHeader');
     expect(sharedPlatformPageSource).toContain('export function PlatformDetailTableBody');
     expect(sharedPlatformPageSource).toContain('class={`${PLATFORM_TABLE_HEADER_ROW_CLASS}');

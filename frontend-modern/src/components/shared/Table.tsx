@@ -1,6 +1,7 @@
 import { JSX, splitProps } from 'solid-js';
 
 export interface TableProps extends JSX.HTMLAttributes<HTMLTableElement> {
+  phoneVerticalScrollOwner?: 'page' | 'table';
   wrapperClass?: string;
   wrapperProps?: JSX.HTMLAttributes<HTMLDivElement>;
   wrapperRef?: (el: HTMLDivElement) => void;
@@ -11,6 +12,7 @@ export function Table(props: TableProps) {
   const [local, rest] = splitProps(props, [
     'class',
     'children',
+    'phoneVerticalScrollOwner',
     'wrapperClass',
     'wrapperProps',
     'wrapperRef',
@@ -19,7 +21,7 @@ export function Table(props: TableProps) {
     <div
       {...local.wrapperProps}
       ref={local.wrapperRef}
-      class={`table-scroll-shell w-full min-w-0 max-w-full overflow-x-auto touch-scroll ${local.wrapperClass || ''}`}
+      class={`table-scroll-shell w-full min-w-0 max-w-full overflow-x-auto touch-scroll ${local.phoneVerticalScrollOwner === 'page' ? 'table-scroll-shell-phone-page' : ''} ${local.wrapperClass || ''}`}
     >
       <table
         class={`w-full border-collapse text-left whitespace-nowrap ${local.class || ''}`}

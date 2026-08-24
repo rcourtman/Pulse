@@ -603,6 +603,9 @@ describe('App architecture', () => {
     expect(appStylesSource).toContain('contain: paint');
     expect(appStylesSource).toContain('overflow-y: hidden');
     expect(appStylesSource).toContain('overscroll-behavior-x: contain');
+    expect(appStylesSource).toContain('overscroll-behavior-y: chain');
+    expect(appStylesSource).toContain('.table-scroll-shell.table-scroll-shell-phone-page');
+    expect(appStylesSource).toContain('overflow: clip');
     expect(appStylesSource).toContain('.progress-fill-frame');
     expect(appStylesSource).toContain('.metric-fill-geometry');
     expect(appStylesSource).toContain('.animated-number');

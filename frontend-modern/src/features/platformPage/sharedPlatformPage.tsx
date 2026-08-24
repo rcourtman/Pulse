@@ -292,7 +292,9 @@ export function getPlatformTableClass(tableClass?: string): string {
 // tables. Domain-specific columns remain caller-owned; the table chrome does
 // not fork merely because it is nested.
 export function PlatformDetailTable(props: TableProps) {
-  return <Table {...props} class={getPlatformTableClass(props.class)} />;
+  return (
+    <Table {...props} class={getPlatformTableClass(props.class)} phoneVerticalScrollOwner="page" />
+  );
 }
 
 export function PlatformDetailTableHeader(props: { children: JSX.Element; class?: string }) {

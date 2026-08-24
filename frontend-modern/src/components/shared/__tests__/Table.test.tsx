@@ -20,6 +20,22 @@ describe('TableBody', () => {
     expect(tableSource).not.toContain('style={');
   });
 
+  it('exposes an explicit phone page-scroll owner variant', () => {
+    render(() => (
+      <Table phoneVerticalScrollOwner="page">
+        <tbody>
+          <tr>
+            <td>phone row</td>
+          </tr>
+        </tbody>
+      </Table>
+    ));
+
+    expect(screen.getByText('phone row').closest('.table-scroll-shell')).toHaveClass(
+      'table-scroll-shell-phone-page',
+    );
+  });
+
   it('keeps default dividers when no custom divider classes are provided', () => {
     render(() => (
       <Table>

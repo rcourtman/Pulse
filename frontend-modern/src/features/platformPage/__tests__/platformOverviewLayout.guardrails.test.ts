@@ -262,9 +262,15 @@ describe('platform overview layout guardrails', () => {
       expect(source).toContain('PlatformDetailTableBody');
       expect(source).toContain('getPlatformTableHeadClassForKind');
       expect(source).toContain('getPlatformTableCellClassForKind');
-      expect(source).not.toMatch(/import \{[^}]*\bTable\b[^}]*\} from '@\/components\/shared\/Table'/);
-      expect(source).not.toMatch(/import \{[^}]*\bTableHeader\b[^}]*\} from '@\/components\/shared\/Table'/);
-      expect(source).not.toMatch(/import \{[^}]*\bTableBody\b[^}]*\} from '@\/components\/shared\/Table'/);
+      expect(source).not.toMatch(
+        /import \{[^}]*\bTable\b[^}]*\} from '@\/components\/shared\/Table'/,
+      );
+      expect(source).not.toMatch(
+        /import \{[^}]*\bTableHeader\b[^}]*\} from '@\/components\/shared\/Table'/,
+      );
+      expect(source).not.toMatch(
+        /import \{[^}]*\bTableBody\b[^}]*\} from '@\/components\/shared\/Table'/,
+      );
       expect(source).not.toContain('PLATFORM_TABLE_HEADER_ROW_CLASS');
       expect(source).not.toContain('PLATFORM_TABLE_BODY_CLASS');
       expect(source).not.toContain('<table');
@@ -278,9 +284,7 @@ describe('platform overview layout guardrails', () => {
     expect(proxmoxMailGatewayDrawerSource).toContain(
       '<PlatformDetailTable class="min-w-0 table-fixed text-xs">',
     );
-    expect(sharedPlatformPageSource).toContain(
-      '<Table {...props} class={getPlatformTableClass(props.class)} />',
-    );
+    expect(sharedPlatformPageSource).toContain('phoneVerticalScrollOwner="page"');
     expect(proxmoxMailGatewayDrawerSource).toContain(
       'platform-table-mobile-w-10 platform-table-narrow-hidden md:w-[15%]',
     );

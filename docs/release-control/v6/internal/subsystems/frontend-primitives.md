@@ -118,6 +118,15 @@ header band, borders, single-line density, responsive table class, and overflow
 boundary. Provider-specific columns and cell contents are intentional variants,
 but a drawer or expanded row must not rebuild raw `table` / `thead` / `tbody`
 chrome or duplicate the shared header class strings.
+`PlatformDetailTable` also declares `phoneVerticalScrollOwner="page"` through
+the shared `Table` API. At the phone stage, canonical platform columns already
+fit their real container, so that variant clips accidental overflow instead of
+creating a nested scrollport that Chrome Android can stretch. Wider tables keep
+horizontal overflow, while `overscroll-behavior-y: chain` progressively removes
+Chromium's table-local boundary effect without blocking propagation to the app
+scroll shell. A platform page must not remove this variant or create a competing
+phone table scroller to recover columns that should be handled by responsive
+priority.
 
 Expandable platform summary rows use
 `getPlatformResourceDetailRowInteractionProps` (or

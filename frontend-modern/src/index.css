@@ -221,6 +221,19 @@
     /* Tables own horizontal overflow only; vertical gestures belong to the page. */
     overflow-y: hidden;
     overscroll-behavior-x: contain;
+    /* Newer Chromium renders elastic stretch on nested scrollers. `chain` keeps
+       vertical propagation to the app shell without the table-local effect. */
+    overscroll-behavior-y: auto;
+    overscroll-behavior-y: chain;
+  }
+
+  /* Canonical platform tables already collapse to their prioritized phone
+     columns. Remove their nested scrollport entirely at that stage so Android
+     Chrome cannot stretch the table instead of handing the gesture to the app. */
+  @media (max-width: 39.999rem) {
+    .table-scroll-shell.table-scroll-shell-phone-page {
+      overflow: clip;
+    }
   }
 
   /*

@@ -63,6 +63,8 @@ describe('PulseDataGrid', () => {
     expect(tableSource).toContain(
       'table-scroll-shell w-full min-w-0 max-w-full overflow-x-auto touch-scroll',
     );
+    expect(tableSource).toContain("phoneVerticalScrollOwner?: 'page' | 'table'");
+    expect(tableSource).toContain('table-scroll-shell-phone-page');
     expect(tableSource).toContain('height?: string | number;');
     expect(tableSource).not.toContain('style={{');
     expect(tableSource).not.toContain('style={');

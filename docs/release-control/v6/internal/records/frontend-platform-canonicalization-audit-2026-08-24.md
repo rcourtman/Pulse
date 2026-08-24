@@ -251,8 +251,29 @@ projection. An independent Computer Use swipe over Docker's windowed container
 table at 390×844 moved the page from the host summary to the footer while
 preserving the table as part of that single page scroll. Focused runtime and
 source-contract tests protect the shared owner and every consumer.
-Updated visual evidence is stored as
-`post-docker-windowed-touch-page-scroll-390x844.jpg` alongside the audit
+
+Customer verification on Chrome Android then identified a distinct remaining
+effect: the container table itself elastically stretched while the page stayed
+fixed. The prior Computer Use proof was invalid for this path because the page
+had initialized at desktop width before device emulation was enabled, leaving
+the 12-row demo below the 140-row desktop window rather than exercising phone
+windowing. Chrome's newer non-root overscroll effect also made the horizontal
+table wrapper visibly stretch at its vertical boundary even after touch
+listeners were removed.
+
+The final canonical rule is structural. `Table` exposes the explicit
+`phoneVerticalScrollOwner` variant, and every `PlatformDetailTable` selects the
+page owner. Below 40rem the responsive platform table already fits its
+prioritized columns, so `.table-scroll-shell-phone-page` uses `overflow: clip`
+and is not a nested scrollport on either axis. Wider horizontal tables retain
+their rail, with `overscroll-behavior-y: chain` where Chromium supports it so
+vertical propagation has no table-local stretch effect. A fresh 390×844 Chrome
+reload performed after emulation was enabled and with a forced six-item phone
+window measured both Docker wrappers at `overflow-x: clip`, `overflow-y: clip`,
+`scrollWidth === clientWidth === 372`, and vertical overscroll `chain`. The
+production 36-item phone budget was restored after that diagnostic run.
+Updated evidence is stored as
+`post-docker-chrome-android-page-scroll-owner-390x844.jpg` alongside the audit
 captures.
 
 ## Remaining exceptions
