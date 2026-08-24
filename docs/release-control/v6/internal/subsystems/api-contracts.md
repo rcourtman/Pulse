@@ -347,6 +347,11 @@ raw profile or metadata desire. A profile that wants commands enabled but is
 served to a runtime token without an allowed `agent:exec` binding is
 desired-disabled for the connections payload, matching
 `/api/agents/agent/{id}/config` and agent report responses.
+The internal connection-to-alert snapshot also carries the platform monitor's
+resource ID separately from the public connection-row ID. Alert policy lookup
+must resolve that source identity through the unified registry so a PBS or PMG
+offline override saved under the registry resource cannot be bypassed by the
+ledger's `pbs:<name>` or `pmg:<name>` display identity.
 
 PVE setup API consumers, generated scripts, runtime setup, installer setup, and
 browser manual guidance must share one `PulseMonitor` privilege contract:

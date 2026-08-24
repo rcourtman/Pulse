@@ -114,13 +114,14 @@ func snapshotConnectionsForAlerts(connections []Connection) []alerts.ConnectionS
 		}
 
 		snap := alerts.ConnectionSnapshot{
-			ID:          conn.ID,
-			Name:        conn.Name,
-			Type:        alertType,
-			State:       alerts.ConnectionState(conn.State),
-			StateReason: conn.StateReason,
-			Enabled:     conn.Enabled,
-			LastSeen:    conn.LastSeen,
+			ID:               conn.ID,
+			PolicyResourceID: conn.alertPolicyResourceID,
+			Name:             conn.Name,
+			Type:             alertType,
+			State:            alerts.ConnectionState(conn.State),
+			StateReason:      conn.StateReason,
+			Enabled:          conn.Enabled,
+			LastSeen:         conn.LastSeen,
 		}
 		if conn.LastError != nil {
 			snap.LastError = &alerts.ConnectionErrorSnapshot{

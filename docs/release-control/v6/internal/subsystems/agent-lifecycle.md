@@ -74,6 +74,11 @@ The shared `internal/api/ai_handlers.go` route may also reopen a dismissed
 Patrol finding and mirror that state into the unified findings store. This is
 AI finding-state management only; it grants no agent enrollment, report,
 profile, update, removal, command, or fleet-control authority.
+The shared Connections aggregation may carry a JSON-excluded PBS/PMG
+monitor-resource identity into alert evaluation so the owning resource's
+availability policy is applied. That alert-only routing identity must not
+become an agent enrollment, host continuity, command-channel, or fleet
+identity, and it must not alter the public Connections payload.
 The JSON-excluded Proxmox VM/LXC I/O-rate validity fields carried by
 `internal/models/models.go` are likewise monitoring-owned sidecar evidence.
 They distinguish a valid idle interval from an unknown rate for history,

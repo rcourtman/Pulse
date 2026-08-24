@@ -241,7 +241,7 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 
 	// Initialize PBS instance with default values
 	pbsInst = models.PBSInstance{
-		ID:               "pbs-" + instanceName,
+		ID:               PBSMonitorResourceID(instanceName),
 		Name:             instanceName,
 		Host:             instanceCfg.Host,
 		GuestURL:         instanceCfg.GuestURL,
@@ -484,7 +484,7 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 				AliasIDs: []string{pbsInst.ID + "/" + ds.Name},
 				Name:     ds.Name,
 				Node:     instanceName, // Use PBS instance name as "node"
-				Instance: "pbs-" + instanceName,
+				Instance: PBSMonitorResourceID(instanceName),
 				Type:     "pbs",
 				Status:   ds.Status,
 				Total:    ds.Total,
@@ -694,7 +694,7 @@ func (m *Monitor) pollPMGInstance(ctx context.Context, instanceName string, clie
 
 	now := time.Now()
 	pmgInst := models.PMGInstance{
-		ID:               "pmg-" + instanceName,
+		ID:               PMGMonitorResourceID(instanceName),
 		Name:             instanceName,
 		Host:             instanceCfg.Host,
 		GuestURL:         instanceCfg.GuestURL,

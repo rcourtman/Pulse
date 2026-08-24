@@ -90,6 +90,9 @@ func TestPollPBSInstanceDoesNotQueryExcludedDatastoreDetails(t *testing.T) {
 	if len(snapshot.PBSInstances) != 1 {
 		t.Fatalf("PBS instances = %+v, want one", snapshot.PBSInstances)
 	}
+	if snapshot.PBSInstances[0].ID != PBSMonitorResourceID("pbs-excludes") {
+		t.Fatalf("PBS runtime identity = %q, want canonical monitor identity", snapshot.PBSInstances[0].ID)
+	}
 	datastores := snapshot.PBSInstances[0].Datastores
 	if len(datastores) != 1 || datastores[0].Name != "internal" {
 		t.Fatalf("datastores = %+v, want only internal", datastores)

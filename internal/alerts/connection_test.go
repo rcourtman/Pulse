@@ -179,6 +179,184 @@ func TestCheckConnection(t *testing.T) {
 	})
 }
 
+func TestCheckConnectionHonorsOwningResourceAvailabilityPolicy(t *testing.T) {
+	pbs, adapter, canonicalID := newPBSOfflinePolicyFixture(t)
+	connectionID := "pbs:" + pbs.Name
+	resolvedPolicyID, ok := adapter.ResolveCanonicalResourceID(pbs.ID)
+	if !ok || resolvedPolicyID != canonicalID {
+		t.Fatalf("PBS policy ID %q resolved to %q, %t; want %q", pbs.ID, resolvedPolicyID, ok, canonicalID)
+	}
+
+	newPBSConnectionManager := func(t *testing.T) (*Manager, chan *Alert) {
+		t.Helper()
+		m := newTestManager(t)
+		m.SetResourceIntentIdentityResolver(adapter.ResolveCanonicalResourceID)
+		cfg := m.GetConfig()
+		cfg.ActivationState = ActivationActive
+		m.UpdateConfig(cfg)
+		fired := make(chan *Alert, 4)
+		m.SetAlertCallback(func(alert *Alert) { fired <- alert })
+		return m, fired
+	}
+	snap := ConnectionSnapshot{
+		ID:               connectionID,
+		PolicyResourceID: pbs.ID,
+		Name:             pbs.Name,
+		Type:             ConnectionTypePBS,
+		State:            ConnectionStateUnreachable,
+		Enabled:          true,
+	}
+	alertID := canonicalDiscreteStateStateID(snap.ID, connectionDegradedStateKey)
+
+	t.Run("canonical per-resource offline toggle blocks alert and notification", func(t *testing.T) {
+		m, fired := newPBSConnectionManager(t)
+		cfg := m.GetConfig()
+		cfg.Overrides = map[string]ThresholdConfig{
+			canonicalID: {DisableConnectivity: true},
+		}
+		m.UpdateConfig(cfg)
+
+		for range 5 {
+			m.CheckConnection(snap)
+		}
+
+		if testHasActiveAlert(t, m, alertID) {
+			t.Fatal("offline-disabled PBS created a connection-degraded alert")
+		}
+		m.mu.RLock()
+		_, tracked := m.connectionDegradedCount[snap.ID]
+		m.mu.RUnlock()
+		if tracked {
+			t.Fatal("offline-disabled PBS retained connection-degraded confirmation state")
+		}
+		select {
+		case alert := <-fired:
+			t.Fatalf("offline-disabled PBS dispatched %q", alert.ID)
+		default:
+		}
+	})
+
+	t.Run("global PBS offline toggle blocks the parallel detector", func(t *testing.T) {
+		m, fired := newPBSConnectionManager(t)
+		cfg := m.GetConfig()
+		cfg.DisableAllPBSOffline = true
+		m.UpdateConfig(cfg)
+
+		for range 5 {
+			m.CheckConnection(snap)
+		}
+
+		if testHasActiveAlert(t, m, alertID) {
+			t.Fatal("global PBS offline toggle left connection-degraded active")
+		}
+		select {
+		case alert := <-fired:
+			t.Fatalf("global PBS offline toggle dispatched %q", alert.ID)
+		default:
+		}
+	})
+
+	t.Run("enabling the toggle immediately resolves a standing alert", func(t *testing.T) {
+		m, fired := newPBSConnectionManager(t)
+		for range 3 {
+			m.CheckConnection(snap)
+		}
+		testRequireActiveAlert(t, m, alertID)
+		select {
+		case <-fired:
+		default:
+			t.Fatal("enabled PBS connection did not dispatch its firing alert")
+		}
+
+		cfg := m.GetConfig()
+		cfg.Overrides = map[string]ThresholdConfig{
+			canonicalID: {DisableConnectivity: true},
+		}
+		m.UpdateConfig(cfg)
+
+		if testHasActiveAlert(t, m, alertID) {
+			t.Fatal("policy update did not immediately resolve connection-degraded")
+		}
+		m.mu.RLock()
+		_, tracked := m.connectionDegradedCount[snap.ID]
+		m.mu.RUnlock()
+		if tracked {
+			t.Fatal("policy update left connection-degraded confirmation state")
+		}
+	})
+
+	t.Run("expected-offline intent blocks both state and notification", func(t *testing.T) {
+		m, fired := newPBSConnectionManager(t)
+		m.SetOperatorIntentContextResolver(func(resourceID string, observedAt time.Time) (OperatorIntentContext, bool) {
+			if resourceID != connectionID {
+				return OperatorIntentContext{}, false
+			}
+			return OperatorIntentContext{MonitoringMode: "expected_offline", LifecycleState: "active"}, true
+		})
+
+		for range 5 {
+			m.CheckConnection(snap)
+		}
+
+		if testHasActiveAlert(t, m, alertID) {
+			t.Fatal("expected-offline PBS created a connection-degraded alert")
+		}
+		select {
+		case alert := <-fired:
+			t.Fatalf("expected-offline PBS dispatched %q", alert.ID)
+		default:
+		}
+	})
+}
+
+func TestConnectionDegradedUsesOfflineNotificationPolicy(t *testing.T) {
+	alert := &Alert{Type: connectionDegradedAlertType}
+	if got := quietHoursCategoryForAlert(alert); got != "offline" {
+		t.Fatalf("connection-degraded quiet-hours category = %q, want offline", got)
+	}
+}
+
+func TestConnectionDegradedPolicyUsesEveryPlatformResourceOverride(t *testing.T) {
+	tests := []struct {
+		name           string
+		connectionType ConnectionType
+		resourceID     string
+	}{
+		{name: "PVE", connectionType: ConnectionTypePVE, resourceID: "pve:lab"},
+		{name: "PBS", connectionType: ConnectionTypePBS, resourceID: "pbs:backup"},
+		{name: "PMG", connectionType: ConnectionTypePMG, resourceID: "pmg:mail"},
+		{name: "VMware", connectionType: ConnectionTypeVMware, resourceID: "vmware:vcenter"},
+		{name: "TrueNAS", connectionType: ConnectionTypeTrueNAS, resourceID: "truenas:nas"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			m := newTestManager(t)
+			cfg := m.GetConfig()
+			cfg.Overrides = map[string]ThresholdConfig{
+				test.resourceID: {DisableConnectivity: true},
+			}
+			m.UpdateConfig(cfg)
+
+			snap := ConnectionSnapshot{
+				ID:      test.resourceID,
+				Name:    test.name,
+				Type:    test.connectionType,
+				State:   ConnectionStateUnreachable,
+				Enabled: true,
+			}
+			for range 5 {
+				m.CheckConnection(snap)
+			}
+
+			alertID := canonicalDiscreteStateStateID(snap.ID, connectionDegradedStateKey)
+			if testHasActiveAlert(t, m, alertID) {
+				t.Fatalf("%s connectivity-disabled override created connection-degraded", test.name)
+			}
+		})
+	}
+}
+
 func TestClearConnectionDegradedAlert(t *testing.T) {
 	t.Run("clears an active alert after the recovery confirmation gate", func(t *testing.T) {
 		m := newTestManager(t)
