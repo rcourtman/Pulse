@@ -4576,6 +4576,12 @@ When a shared portal tooltip is already visible, that same owner must
 reschedule positioning on live coordinate and viewport changes so chart hover
 tooltips keep following the active pointer instead of sticking to their first
 anchor.
+Floating hover tooltips are a fine-pointer interaction only. The shared
+tooltip hook, portal, and singleton API must suppress them when the primary
+device reports no hover capability or a coarse pointer, because touch browsers
+may synthesize mouse-enter before the row click that should open canonical
+details. Desktop pointer and keyboard interaction remain unchanged; mobile row
+activation must continue directly to its drawer or other primary action.
 The shared collapsible search input now follows that same owner split.
 `frontend-modern/src/components/shared/CollapsibleSearchInput.tsx` stays the
 render shell, `frontend-modern/src/components/shared/useCollapsibleSearchInputState.ts`

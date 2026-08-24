@@ -1,6 +1,7 @@
 import { Show } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import type { JSX } from 'solid-js';
+import { supportsHoverTooltips } from './hoverCapability';
 import { useTooltipPortalState } from './useTooltipState';
 import type { TooltipOptions } from './tooltipModel';
 
@@ -20,7 +21,7 @@ export function TooltipPortal(props: TooltipPortalProps) {
   const state = useTooltipPortalState(props);
 
   return (
-    <Show when={props.when}>
+    <Show when={props.when && supportsHoverTooltips()}>
       <Portal mount={document.body}>
         <svg
           class="fixed inset-0 z-[9999] h-screen w-screen overflow-visible pointer-events-none"

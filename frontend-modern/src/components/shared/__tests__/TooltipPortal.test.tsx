@@ -9,6 +9,25 @@ describe('TooltipPortal', () => {
   afterEach(() => {
     cleanup();
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  it('does not render floating portal content for a coarse touch pointer', () => {
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn().mockReturnValue({
+        matches: false,
+        media: '(hover: hover) and (pointer: fine)',
+      }),
+    );
+
+    render(() => (
+      <TooltipPortal when x={120} y={80}>
+        <span>Touch-only detail</span>
+      </TooltipPortal>
+    ));
+
+    expect(document.body.querySelector('[data-tooltip-portal="true"]')).toBeNull();
   });
 
   it('keeps tooltip portal on shell and runtime owners', () => {

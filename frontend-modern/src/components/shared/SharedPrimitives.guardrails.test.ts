@@ -77,7 +77,9 @@ import searchTipsPopoverSource from '@/components/shared/SearchTipsPopover.tsx?r
 import searchTipsPopoverModelSource from '@/components/shared/searchTipsPopoverModel.ts?raw';
 import tooltipSource from '@/components/shared/Tooltip.tsx?raw';
 import tooltipPortalSource from '@/components/shared/TooltipPortal.tsx?raw';
+import hoverCapabilitySource from '@/components/shared/hoverCapability.ts?raw';
 import tooltipModelSource from '@/components/shared/tooltipModel.ts?raw';
+import sharedTooltipHookSource from '@/hooks/useTooltip.ts?raw';
 import upgradeLinkSource from '@/components/shared/UpgradeLink.tsx?raw';
 import activeHorizontalRailVisibilitySource from '@/components/shared/useActiveHorizontalRailItemVisibility.ts?raw';
 import contextualFocusSource from '@/components/shared/contextualFocus.ts?raw';
@@ -8169,6 +8171,7 @@ describe('shared primitive guardrails', () => {
     expect(tooltipSource).not.toContain('style={');
 
     expect(tooltipPortalSource).toContain('useTooltipPortalState');
+    expect(tooltipPortalSource).toContain('supportsHoverTooltips');
     expect(tooltipPortalSource).toContain('foreignObject');
     expect(tooltipPortalSource).not.toContain('createSignal');
     expect(tooltipPortalSource).not.toContain('resolveTooltipPosition');
@@ -8182,6 +8185,11 @@ describe('shared primitive guardrails', () => {
     expect(tooltipStateSource).toContain('tooltipInstance');
     expect(tooltipStateSource).toContain('resolveTooltipPosition');
     expect(tooltipStateSource).toContain('sanitizeTooltipContent');
+    expect(tooltipStateSource).toContain('supportsHoverTooltips');
+
+    expect(sharedTooltipHookSource).toContain('supportsHoverTooltips');
+    expect(hoverCapabilitySource).toContain('(hover: hover) and (pointer: fine)');
+    expect(hoverCapabilitySource).toContain('window.matchMedia');
 
     expect(tooltipModelSource).toContain('export function sanitizeTooltipContent');
     expect(tooltipModelSource).toContain('export function resolveTooltipPosition');

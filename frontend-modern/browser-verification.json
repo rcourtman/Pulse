@@ -1,68 +1,25 @@
 {
   "version": 1,
-  "base_sha": "7e363e40e7aa21bf4d5029108a217c0f93b963b5",
-  "verified_at": "2026-08-24T15:09:06Z",
+  "base_sha": "714b26b69f8a39d906b041dbf1b64d5d623632c1",
+  "verified_at": "2026-08-24T15:30:00Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/features/docker/DockerAlertsTable.tsx",
-    "frontend-modern/src/features/kubernetes/KubernetesAlertsTable.tsx",
-    "frontend-modern/src/features/platformPage/sharedPlatformPage.tsx",
-    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx",
-    "frontend-modern/src/features/proxmox/ProxmoxCephTable.tsx",
-    "frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx",
-    "frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx",
-    "frontend-modern/src/features/standalone/AgentsMachinesTable.tsx",
-    "frontend-modern/src/features/truenas/TrueNASAlertsTable.tsx",
-    "frontend-modern/src/features/truenas/TrueNASAppsTable.tsx",
-    "frontend-modern/src/features/truenas/TrueNASNetworkSharesTable.tsx",
-    "frontend-modern/src/features/truenas/TrueNASProtectionTable.tsx",
-    "frontend-modern/src/features/truenas/TrueNASStorageTopologyTable.tsx",
-    "frontend-modern/src/features/truenas/TrueNASSystemsTable.tsx",
-    "frontend-modern/src/features/truenas/TrueNASVirtualMachinesTable.tsx",
-    "frontend-modern/src/features/vmware/VsphereActivityTable.tsx",
-    "frontend-modern/src/features/vmware/VsphereAlertsTable.tsx",
-    "frontend-modern/src/index.css"
+    "frontend-modern/src/components/shared/TooltipPortal.tsx",
+    "frontend-modern/src/components/shared/hoverCapability.ts",
+    "frontend-modern/src/components/shared/useTooltipState.ts",
+    "frontend-modern/src/hooks/useTooltip.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/docker/DockerAlertsTable.tsx": "c9cee8ac612f616810964394ca2873c44bc36abe5313a61e3d26a74579c9f1d5",
-    "frontend-modern/src/features/kubernetes/KubernetesAlertsTable.tsx": "3840ec971c93e89fe6842d942493b4811cf7b6c76a9c66b28c3480be14ecf304",
-    "frontend-modern/src/features/platformPage/sharedPlatformPage.tsx": "0a76cb318523582bb1342ff23161041642ffcf5259c2205d127df11ed68e7584",
-    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx": "efa5326b0bd8562348107513c632c44aa828eb03942b056acf2f53b25da3301b",
-    "frontend-modern/src/features/proxmox/ProxmoxCephTable.tsx": "22cdce43826f6543f0bf295099a4362c3428d80a8781064b7a3249323204ad06",
-    "frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx": "216a0e0576145864500f4b975d5699a3fe6abc4fa226664f7522a19205030fa2",
-    "frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx": "8703f76bb5decb5a80a17d6cb221443d91691fb513619bd39bfd771092e66edc",
-    "frontend-modern/src/features/standalone/AgentsMachinesTable.tsx": "3973e4bbb836c796d558f298b6c5c6e30ee36c608923ffe030118f23c2c101b6",
-    "frontend-modern/src/features/truenas/TrueNASAlertsTable.tsx": "87a3793e3871abfa534bff3220a433cf7e6ae75a658fd93813e8cde37af2da3f",
-    "frontend-modern/src/features/truenas/TrueNASAppsTable.tsx": "c14a06d7087127289391b8a8e5af62ea88e1f30aac23c57e0994bc149c0108d3",
-    "frontend-modern/src/features/truenas/TrueNASNetworkSharesTable.tsx": "3994bd01b6cd723bfacabf5edcd1afad7b5f23be5c15f8558f6efe74b4664a3f",
-    "frontend-modern/src/features/truenas/TrueNASProtectionTable.tsx": "f14b8373ac11cd9f7039032554c4d541bd69a66b9969e7d26976264ec6e18ef9",
-    "frontend-modern/src/features/truenas/TrueNASStorageTopologyTable.tsx": "f36e5afd440d4f440eb72f1594842121c4abc32dfcff90305a3a538453724b19",
-    "frontend-modern/src/features/truenas/TrueNASSystemsTable.tsx": "a24d04e5ca1f9c6a9a4cdee795866cdd9069d93fa657aa7e3b65a0a4414b6711",
-    "frontend-modern/src/features/truenas/TrueNASVirtualMachinesTable.tsx": "ce44e4f4686a23d44999f6b8e035b46d30a7651c7aa3d978d560a0ac834318e5",
-    "frontend-modern/src/features/vmware/VsphereActivityTable.tsx": "df0c19160f33f5c23129317d941dd003d26d52edc5fda503475f3a07631571ca",
-    "frontend-modern/src/features/vmware/VsphereAlertsTable.tsx": "76de93dde01009102aedbab381833530199e31861f82a1469689639d5ada264d",
-    "frontend-modern/src/index.css": "ee23f0612d3a28e74d1bd260709616b3e54b9836451a618d8f55dfb21d7bcfd4"
+    "frontend-modern/src/components/shared/TooltipPortal.tsx": "dafea8136a75491438a9ab45de348a4307ada67799796f38e3e26087339ef445",
+    "frontend-modern/src/components/shared/hoverCapability.ts": "bae00548234580fe72e4fe93833c57ff237d7666d2ada00a0f673c676f9c39dc",
+    "frontend-modern/src/components/shared/useTooltipState.ts": "4959c6840e3c062fa31c2a0a7391f5c0314725ac8ef48deeed37551f9d48194c",
+    "frontend-modern/src/hooks/useTooltip.ts": "fa13e21a922954466a9cb09abaff9cd04b3caf0c43dbb025829e8bf251f8065f"
   },
-  "routes": [
-    "/proxmox/overview",
-    "/proxmox/backups/date",
-    "/proxmox/ceph",
-    "/docker/overview",
-    "/kubernetes/overview",
-    "/truenas/overview",
-    "/truenas/storage",
-    "/truenas/apps",
-    "/truenas/vms",
-    "/truenas/shares",
-    "/truenas/protection",
-    "/vmware/health",
-    "/vmware/activity",
-    "/standalone/machines"
-  ],
+  "routes": ["/proxmox"],
   "viewports": [
     {
       "width": 1280,
-      "height": 800
+      "height": 720
     },
     {
       "width": 390,
@@ -70,15 +27,13 @@
     }
   ],
   "states": [
-    "single-line platform summary rows across Proxmox, Docker, Kubernetes, TrueNAS, vSphere, and standalone machine tables",
-    "Proxmox node, guest, backup-server, Ceph, TrueNAS alert, app, VM, share, protection, storage, vSphere alert/activity, and standalone machine identities without stacked subtitles",
-    "default and expanded Proxmox node states with the inline detail row remaining content-sized",
-    "desktop and narrow table layouts with provider-specific column priority preserved"
+    "Proxmox workload table with a fine hover-capable desktop pointer",
+    "Proxmox workload table with touch emulation reporting a coarse primary pointer",
+    "expanded artifact-cache-310 inline guest drawer on the narrow viewport"
   ],
   "interactions": [
-    "expanded a Proxmox node from its canonical 32px summary row and collapsed it from the full drawer header",
-    "navigated every changed provider route at narrow width and inspected row height, truncation, clipping, horizontal containment, and bottom-navigation clearance",
-    "inspected representative Proxmox, Docker, TrueNAS, vSphere, and standalone tables at desktop width",
-    "confirmed supplemental provider metadata remains available through inline details or cell titles without creating a second visual line"
+    "tapped the artifact-cache-310 workload row at 390x844 and confirmed the inline guest drawer opened without a portal or singleton tooltip",
+    "hovered a workload CPU metric at 1280x720 and confirmed the CPU Details tooltip remained available for a fine pointer",
+    "confirmed the touch and desktop media capability queries selected the intended tooltip behavior before restoring the browser viewport"
   ]
 }

@@ -15,6 +15,23 @@ describe('Tooltip', () => {
   afterEach(() => {
     cleanup();
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  it('suppresses the singleton tooltip on a coarse touch pointer', () => {
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn().mockReturnValue({
+        matches: false,
+        media: '(hover: hover) and (pointer: fine)',
+      }),
+    );
+
+    const TooltipRoot = createTooltipSystem();
+    render(() => <TooltipRoot />);
+
+    showTooltip('touch detail', 120, 80);
+    expect(screen.queryByText('touch detail')).toBeNull();
   });
 
   it('keeps tooltip on shell, runtime, and model owners', () => {

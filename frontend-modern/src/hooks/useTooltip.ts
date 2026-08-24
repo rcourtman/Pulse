@@ -1,5 +1,7 @@
 import { createSignal } from 'solid-js';
 
+import { supportsHoverTooltips } from '@/components/shared/hoverCapability';
+
 export interface TooltipPos {
   x: number;
   y: number;
@@ -24,6 +26,10 @@ export function useTooltip() {
   const [pos, setPos] = createSignal<TooltipPos>({ x: 0, y: 0 });
 
   const onMouseEnter = (e: MouseEvent) => {
+    if (!supportsHoverTooltips()) {
+      setShow(false);
+      return;
+    }
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     const hasPointerPosition = Number.isFinite(e.clientX) && Number.isFinite(e.clientY);
     setPos({

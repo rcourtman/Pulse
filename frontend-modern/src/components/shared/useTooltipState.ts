@@ -7,6 +7,7 @@ import {
   type TooltipPosition,
   type TooltipViewportRect,
 } from './tooltipModel';
+import { supportsHoverTooltips } from './hoverCapability';
 
 interface TooltipStateOptions extends TooltipOptions {
   content: string;
@@ -211,6 +212,10 @@ export function createTooltipSystemState() {
 }
 
 export function showTooltip(content: string, x: number, y: number, options?: TooltipOptions) {
+  if (!supportsHoverTooltips()) {
+    tooltipInstance?.hide();
+    return;
+  }
   tooltipInstance?.show(content, x, y, options);
 }
 
