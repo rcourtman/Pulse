@@ -84,11 +84,14 @@ Estate-sized table and card rendering routes through the shared
 `usePlatformWindowedItems` primitives. They preserve the complete filtered and
 sorted result plus native scroll extent while bounding mounted DOM to 140 items
 on wider layouts and 36 on phones unless a feature declares a smaller budget.
-Wheel and vertical touch projection must move a directional keyed-row runway
-before native scrolling can expose it. Spacer geometry is structural only: no
-feature may present it as loading, pagination, or an intentionally blank data
-region. Settings resource pickers, Availability target lists, Actions, alerts,
-and every provider-native platform table share this contract.
+Wheel projection may prewarm a directional keyed-row runway before native
+scrolling exposes it. Touch scrolling must remain compositor-native: windowed
+renderers must not attach touch listeners or replace keyed rows before the
+browser moves the page, and must update their runway only from the passive
+native scroll event. Spacer geometry is structural only: no feature may present
+it as loading, pagination, or an intentionally blank data region. Settings
+resource pickers, Availability target lists, Actions, alerts, and every
+provider-native platform table share this contract.
 
 Shared workload, node, Docker-host, and resource-drawer history presentation
 keeps current readings separate from stored samples. A current metric may

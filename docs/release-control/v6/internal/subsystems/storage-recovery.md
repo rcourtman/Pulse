@@ -5157,9 +5157,13 @@ the Storage tab when the storage adapter cannot consume it. Pool filtering,
 sorting, grouping, counts, and scroll height continue to describe the complete
 result set, while `useStoragePoolsTableWindowing.ts` flattens the expanded group
 model and mounts at most 72 pool/header items with table spacers. Wheel and
-touch projection must move that bounded window before native scrolling so a
-fast scroll does not expose an unpainted table region. Expanded pool targets
-must be revealed inside the current window. The page-scoped
+touch input intentionally follow different canonical paths: wheel projection
+may prewarm that bounded window, while touch must remain compositor-native and
+advance the window only from the passive native page-scroll event. The
+listener lifecycle, scroll-ancestor selection, and wheel normalization must
+route through `frontend-modern/src/components/shared/windowedPageScroll.ts` so
+Storage cannot reintroduce a competing phone gesture owner. Expanded pool
+targets must be revealed inside the current window. The page-scoped
 `/api/storage-charts` summary remains the sole pool-growth history payload, but
 its initial cache read, parse, and fetch may wait for browser idle so those
 secondary growth readouts cannot block the first Storage frame.

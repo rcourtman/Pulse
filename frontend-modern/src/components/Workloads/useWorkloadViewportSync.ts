@@ -1,42 +1,15 @@
 import { createEffect, createSignal, onCleanup, type Accessor } from 'solid-js';
 
 import { findInlineDetailElement } from '@/components/shared/contextualFocus';
+import {
+  bindWindowedPageScrollEvents,
+  findWindowedPageScrollContainer,
+  wheelDeltaInPixels,
+} from '@/components/shared/windowedPageScroll';
 
 import type { UseGroupedTableWindowingResult } from './useGroupedTableWindowing';
 
-const SCROLLABLE_OVERFLOW_PATTERN = /(?:auto|scroll|overlay)/;
-const MIN_VERTICAL_SCROLL_RANGE_PX = 1;
 const SCROLL_TO_TOP_VISIBILITY_THRESHOLD_PX = 640;
-const WHEEL_LINE_HEIGHT_PX = 16;
-
-interface TouchPosition {
-  x: number;
-  y: number;
-}
-
-const wheelDeltaInPixels = (event: WheelEvent, viewportHeight: number) => {
-  if (event.deltaMode === WheelEvent.DOM_DELTA_LINE) return event.deltaY * WHEEL_LINE_HEIGHT_PX;
-  if (event.deltaMode === WheelEvent.DOM_DELTA_PAGE) return event.deltaY * viewportHeight;
-  return event.deltaY;
-};
-
-const findScrollContainer = (element: HTMLElement): HTMLElement | null => {
-  let parent = element.parentElement;
-  while (parent && parent !== document.body && parent !== document.documentElement) {
-    const styles = getComputedStyle(parent);
-    const hasVerticalScrollRange =
-      parent.scrollHeight - parent.clientHeight > MIN_VERTICAL_SCROLL_RANGE_PX;
-    const ownsVerticalScrollBeforeOverflow = styles.overflowY === 'scroll';
-    if (
-      SCROLLABLE_OVERFLOW_PATTERN.test(styles.overflowY) &&
-      (ownsVerticalScrollBeforeOverflow || hasVerticalScrollRange)
-    ) {
-      return parent;
-    }
-    parent = parent.parentElement;
-  }
-  return null;
-};
 
 interface WorkloadsWorkloadViewportSyncOptions {
   expandedDetailActive?: Accessor<boolean>;
@@ -81,7 +54,7 @@ export function useWorkloadViewportSync(options: WorkloadsWorkloadViewportSyncOp
       });
     }
     const rect = body.getBoundingClientRect();
-    const scrollContainer = findScrollContainer(body);
+    const scrollContainer = findWindowedPageScrollContainer(body);
     if (scrollContainer) {
       setIsScrollToTopVisible(scrollContainer.scrollTop > SCROLL_TO_TOP_VISIBILITY_THRESHOLD_PX);
       if (!options.groupedWindowing.isWindowed()) return;
@@ -134,7 +107,6 @@ export function useWorkloadViewportSync(options: WorkloadsWorkloadViewportSyncOp
     const handleViewportScroll = () => {
       syncGuestWindowToViewport();
     };
-    let lastTouchPosition: TouchPosition | null = null;
     const handleViewportWheel = (event: Event) => {
       const wheelEvent = event as WheelEvent;
       // Let native input move first while a variable-height drawer is open.
@@ -153,69 +125,27 @@ export function useWorkloadViewportSync(options: WorkloadsWorkloadViewportSyncOp
           : window.innerHeight;
       syncGuestWindowToViewport(false, wheelDeltaInPixels(wheelEvent, viewportHeight));
     };
-    const handleViewportTouchStart = (event: Event) => {
-      const touch = (event as TouchEvent).touches.item(0);
-      lastTouchPosition = touch ? { x: touch.clientX, y: touch.clientY } : null;
-    };
-    const handleViewportTouchMove = (event: Event) => {
-      const touch = (event as TouchEvent).touches.item(0);
-      if (!touch) {
-        lastTouchPosition = null;
-        return;
-      }
-
-      const nextPosition = { x: touch.clientX, y: touch.clientY };
-      const previousPosition = lastTouchPosition;
-      lastTouchPosition = nextPosition;
-      if (
-        !previousPosition ||
-        !options.groupedWindowing.isWindowed() ||
-        options.expandedDetailActive?.()
-      ) {
-        return;
-      }
-
-      const deltaX = previousPosition.x - nextPosition.x;
-      const deltaY = previousPosition.y - nextPosition.y;
-      if (deltaY === 0 || Math.abs(deltaY) <= Math.abs(deltaX)) return;
-      syncGuestWindowToViewport(false, deltaY);
-    };
-    const handleViewportTouchEnd = (event: Event) => {
-      const touch = (event as TouchEvent).touches.item(0);
-      lastTouchPosition = touch ? { x: touch.clientX, y: touch.clientY } : null;
-    };
     const handleViewportResize = () => {
       syncGuestWindowToViewport(true);
     };
 
     handleViewportResize();
-    const scrollContainer = findScrollContainer(options.tableBodyRef()!);
+    const scrollContainer = findWindowedPageScrollContainer(options.tableBodyRef()!);
     const scrollTarget = scrollContainer ?? window;
-    scrollTarget.addEventListener('scroll', handleViewportScroll, { passive: true });
-    // These two pre-scroll listeners intentionally remain non-passive. That
-    // makes the browser wait for the bounded row window to move before its
-    // compositor advances the viewport; neither handler cancels native input.
-    scrollTarget.addEventListener('wheel', handleViewportWheel, { passive: false });
-    scrollTarget.addEventListener('touchstart', handleViewportTouchStart, { passive: true });
-    scrollTarget.addEventListener('touchmove', handleViewportTouchMove, { passive: false });
-    scrollTarget.addEventListener('touchend', handleViewportTouchEnd, { passive: true });
-    scrollTarget.addEventListener('touchcancel', handleViewportTouchEnd, { passive: true });
-    window.addEventListener('resize', handleViewportResize);
-    onCleanup(() => {
-      scrollTarget.removeEventListener('scroll', handleViewportScroll);
-      scrollTarget.removeEventListener('wheel', handleViewportWheel);
-      scrollTarget.removeEventListener('touchstart', handleViewportTouchStart);
-      scrollTarget.removeEventListener('touchmove', handleViewportTouchMove);
-      scrollTarget.removeEventListener('touchend', handleViewportTouchEnd);
-      scrollTarget.removeEventListener('touchcancel', handleViewportTouchEnd);
-      window.removeEventListener('resize', handleViewportResize);
-    });
+    onCleanup(
+      bindWindowedPageScrollEvents({
+        scrollTarget,
+        onScroll: handleViewportScroll,
+        onWheel: handleViewportWheel,
+        onResize: handleViewportResize,
+      }),
+    );
   });
 
   const scrollToTop = () => {
     if (typeof window === 'undefined') return;
     const body = options.tableBodyRef();
-    const scrollContainer = body ? findScrollContainer(body) : null;
+    const scrollContainer = body ? findWindowedPageScrollContainer(body) : null;
     if (scrollContainer) {
       scrollContainer.scrollTo({ top: 0, behavior: 'smooth' });
       return;

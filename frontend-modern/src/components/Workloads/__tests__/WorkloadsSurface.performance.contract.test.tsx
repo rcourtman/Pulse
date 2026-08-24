@@ -926,12 +926,8 @@ describe('Workloads performance contract', () => {
       expect(workloadsWorkloadViewportSyncSource).toContain(
         'SCROLL_TO_TOP_VISIBILITY_THRESHOLD_PX',
       );
-      expect(workloadsWorkloadViewportSyncSource).toContain(
-        "addEventListener('wheel', handleViewportWheel, { passive: false })",
-      );
-      expect(workloadsWorkloadViewportSyncSource).toContain(
-        "addEventListener('touchmove', handleViewportTouchMove, { passive: false })",
-      );
+      expect(workloadsWorkloadViewportSyncSource).toContain('bindWindowedPageScrollEvents');
+      expect(workloadsWorkloadViewportSyncSource).not.toContain("addEventListener('touch");
       expect(workloadsWorkloadViewportSyncSource).toContain('wheelDeltaInPixels');
       expect(workloadsWorkloadViewportSyncSource).toContain(
         "scrollContainer.scrollTo({ top: 0, behavior: 'smooth' })",
@@ -1302,8 +1298,7 @@ describe('Workloads performance contract', () => {
       expect(workloadsWorkloadDerivedStateSource).toContain('useWorkloadViewportSync');
       expect(workloadsWorkloadDerivedStateSource).not.toContain('window.addEventListener');
       expect(workloadsWorkloadDerivedStateSource).not.toContain('getBoundingClientRect');
-      expect(workloadsWorkloadViewportSyncSource).toContain('window.addEventListener');
-      expect(workloadsWorkloadViewportSyncSource).toContain('window.removeEventListener');
+      expect(workloadsWorkloadViewportSyncSource).toContain('bindWindowedPageScrollEvents');
       expect(workloadsWorkloadViewportSyncSource).toContain('getBoundingClientRect');
       expect(workloadsWorkloadViewportSyncSource).toContain('groupedWindowing.onScroll');
       expect(workloadsWorkloadRouteStateSource).not.toContain("from './workloadTopology'");

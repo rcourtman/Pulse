@@ -3,9 +3,15 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import { PlatformWindowedRows } from '../PlatformWindowedRows';
 import { PlatformWindowedList } from '../PlatformWindowedList';
+import platformWindowedItemsSource from '../usePlatformWindowedItems.ts?raw';
 
 describe('PlatformWindowedRows', () => {
   afterEach(cleanup);
+
+  it('keeps phone touch scrolling on the browser-native page path', () => {
+    expect(platformWindowedItemsSource).toContain('bindWindowedPageScrollEvents');
+    expect(platformWindowedItemsSource).not.toContain("addEventListener('touch");
+  });
 
   it('mounts small tables in full without virtual spacer rows', () => {
     const items = () => Array.from({ length: 20 }, (_, index) => index);

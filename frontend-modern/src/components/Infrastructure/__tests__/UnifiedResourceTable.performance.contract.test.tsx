@@ -762,9 +762,10 @@ describe('UnifiedResourceTable performance contract', () => {
       expect(unifiedResourceTableStateSource).not.toContain('const items: HostTableItem[] = [];');
       expect(unifiedResourceTableStateSource).not.toContain('window.addEventListener');
       expect(unifiedResourceTableStateSource).not.toContain('getBoundingClientRect');
-      expect(unifiedResourceTableViewportSyncSource).toContain('window.addEventListener');
+      expect(unifiedResourceTableViewportSyncSource).toContain('bindWindowedPageScrollEvents');
       expect(unifiedResourceTableViewportSyncSource).toContain('getBoundingClientRect');
       expect(unifiedResourceTableViewportSyncSource).not.toContain('scrollIntoView');
+      expect(unifiedResourceTableViewportSyncSource).not.toContain("addEventListener('touch");
       expect(unifiedResourceTableViewportSyncSource).toContain('hostWindowing.onScroll');
       expect(unifiedResourceTableModelSource).toContain('export const getPBSTableRow');
       expect(unifiedResourceTableModelSource).toContain('export const getPMGTableRow');

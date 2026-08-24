@@ -15,8 +15,8 @@ export interface PlatformWindowedRowsProps<Row> {
  * Canonical bounded renderer for ordinary platform table rows.
  *
  * The full filtered/sorted result remains in memory, while only a directional
- * runway is mounted. Spacer rows preserve native page scrolling and wheel/touch
- * listeners move the runway before the compositor advances the viewport.
+ * runway is mounted. Spacer rows preserve native page scrolling; wheel input
+ * prewarms the runway while touch input remains compositor-native.
  */
 export function PlatformWindowedRows<Row>(props: PlatformWindowedRowsProps<Row>) {
   const windowing = usePlatformWindowedItems({

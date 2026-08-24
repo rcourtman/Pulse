@@ -8,6 +8,7 @@ import {
   buildStoragePoolsTableItems,
   useStoragePoolsTableWindowing,
 } from '@/components/Storage/useStoragePoolsTableWindowing';
+import storagePoolsTableWindowingSource from '@/components/Storage/useStoragePoolsTableWindowing.ts?raw';
 
 const makeRecord = (index: number): StorageRecord =>
   ({
@@ -33,6 +34,11 @@ const makeGroup = (
 });
 
 describe('useStoragePoolsTableWindowing', () => {
+  it('keeps phone touch scrolling on the browser-native page path', () => {
+    expect(storagePoolsTableWindowingSource).toContain('bindWindowedPageScrollEvents');
+    expect(storagePoolsTableWindowingSource).not.toContain("addEventListener('touch");
+  });
+
   it('flattens only visible group headers and expanded pool rows', () => {
     const items = buildStoragePoolsTableItems([
       makeGroup('open', [makeRecord(1), makeRecord(2)]),

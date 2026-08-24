@@ -38,6 +38,7 @@ captures prefixed with `post-`, and independent Computer Use evidence.
 | Loading/empty/error | Page tables use the same presentation and copy slots; domain-specific nouns may vary, but the placement, spacing, iconography, and retry boundary do not. | `sharedPlatformPage.tsx` (`PlatformTableLoading`, `PlatformTableEmpty`, `PlatformTableError`) |
 | Status and metrics | Semantic meaning selects the status color; bars share the metric primitive. Different metrics are intentional content, not design variants. | Shared status and metric primitives consumed by platform pages |
 | Responsive rows | Rows remain compact and single-line, with truncation and column priority. Tables own overflow; the document does not horizontally scroll. | `Table.tsx` and the exported platform table class constants in `sharedPlatformPage.tsx` |
+| Windowed page scrolling | Large tables bound mounted DOM while preserving one browser-native vertical page scroller. Wheel input may prewarm the keyed runway; touch must update it only after the passive native scroll event. | `components/shared/windowedPageScroll.ts`, consumed by `usePlatformWindowedItems.ts`, `useUnifiedResourceTableViewportSync.ts`, `useStoragePoolsTableWindowing.ts`, and `useWorkloadViewportSync.ts` |
 
 ## Rendered route coverage
 
@@ -224,22 +225,35 @@ well.
 ## Post-audit correction: phone scroll ownership
 
 The initial audit missed a gesture-level inconsistency that was not visible in
-static phone captures. On `/docker` at 390×844, the two shared table shells had
-2px of incidental vertical overflow. Because `overflow-x: auto` computes the
-other axis to `auto` unless it is specified, a vertical gesture beginning over
-either table first scrolled that nested shell instead of the page. Proxmox did
-not expose the defect because its current table geometry did not create the
-same incidental overflow.
+static phone captures, and the first correction addressed only one of its two
+causes. On `/docker` at 390×844, the shared table shells had 2px of incidental
+vertical overflow. Because `overflow-x: auto` computes the other axis to `auto`
+unless it is specified, a vertical gesture beginning over either table could
+first scroll that nested shell instead of the page. The canonical
+`.table-scroll-shell` owner in `frontend-modern/src/index.css` therefore sets
+`overflow-y: hidden`: tables own horizontal overflow while the page owns
+vertical gestures.
 
-The canonical `.table-scroll-shell` owner in `frontend-modern/src/index.css`
-now explicitly sets `overflow-y: hidden`: tables own horizontal overflow while
-the page owns vertical gestures. Browser verification at 390×844 confirmed a
-gesture over the Docker containers table moved `.app-scroll-shell` to 197px
-while both table-shell `scrollTop` values remained zero. The same gesture over
-the visible Proxmox node table moved the page to 450px with every table shell
-remaining at zero. The shared-primitives guardrail now protects this contract.
+Actual touch-device testing then exposed a second interception on large data
+sets. The four virtualized table controllers attached a non-passive
+`touchmove` listener to the app scroller and replaced the mounted keyed-row
+runway before native page movement. Browser scroll anchoring could consume the
+gesture: operators saw different table items while the page appeared fixed.
+Proxmox Overview currently follows a different workload rendering path, which
+explains why the same phone gesture did not show the defect there.
+
+The canonical windowing contract now leaves touch entirely on the
+compositor-native path. `components/shared/windowedPageScroll.ts` is the sole
+listener-lifecycle owner: it registers passive native `scroll`, desktop wheel
+prewarming, and resize, and exposes no touch registration. The four windowing
+controllers consume that owner while retaining only their object-specific row
+projection. An independent Computer Use swipe over Docker's windowed container
+table at 390×844 moved the page from the host summary to the footer while
+preserving the table as part of that single page scroll. Focused runtime and
+source-contract tests protect the shared owner and every consumer.
 Updated visual evidence is stored as
-`post-docker-phone-scroll-ownership-390x844.png` alongside the audit captures.
+`post-docker-windowed-touch-page-scroll-390x844.jpg` alongside the audit
+captures.
 
 ## Remaining exceptions
 

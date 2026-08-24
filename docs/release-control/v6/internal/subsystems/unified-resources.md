@@ -3339,6 +3339,12 @@ and viewport reveal plus scroll synchronization now route through
 `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableViewportSync.ts`,
 so the shared consumer model is no longer interleaving selector derivation,
 layout policy, and DOM viewport coordination inside one mixed state boundary.
+That viewport controller must consume
+`frontend-modern/src/components/shared/windowedPageScroll.ts` for scroll-
+ancestor selection, wheel normalization, and listener lifecycle. Wheel may
+prewarm the bounded row runway, but touch remains compositor-native and updates
+the runway only through the passive native page-scroll event; unified-resource
+tables must not register their own touch listener.
 The mobile shell class from that shared state model now uses `min-w-full` for
 the phone stage and restores the existing wider-stage floor above it. Mobile
 column weights must sum to the available table width, retain the prioritized

@@ -856,12 +856,15 @@ change may globally weaken the Task 03 lifecycle-state idempotency invariant.
     header row during continuous scrolling.
     Virtualization must remain visually invisible under rapid wheel and
     trackpad input. The windowing owner keeps a hysteretic directional runway
-    instead of shifting the slice for every visible-row change, and viewport
-    sync must prewarm that runway before the compositor advances the viewport.
-    The single viewport owner may use non-passive wheel and vertical touch-move
-    listeners for that sequencing, provided they do not cancel native input or
-    add per-frame reactive work when the mounted runway already covers the next
-    viewport. Group and guest iteration must remain keyed so overlapping rows
+    instead of shifting the slice for every visible-row change, and wheel
+    viewport sync may prewarm that runway before the compositor advances the
+    viewport. Every windowed surface must route listener lifecycle, scroll-
+    ancestor selection, and wheel-delta normalization through
+    `frontend-modern/src/components/shared/windowedPageScroll.ts`. That shared
+    owner may register a non-passive wheel listener, but it must not register a
+    touch listener: phone gestures remain compositor-native and advance the
+    keyed runway only through the passive native scroll event after the page
+    moves. Group and guest iteration must remain keyed so overlapping rows
     survive window shifts rather than rebinding every mounted row. This
     anticipation must preserve the existing bounded mounted-row budget;
     rendering the whole estate or adding per-row observers, timers, or scroll

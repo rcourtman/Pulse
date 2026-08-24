@@ -88,6 +88,7 @@ import contextualFocusSource from '@/components/shared/contextualFocus.ts?raw';
 import summaryCardInteractionSource from '@/components/shared/summaryCardInteraction.ts?raw';
 import summaryRowActionButtonSource from '@/components/shared/SummaryRowActionButton.tsx?raw';
 import summaryInteractionA11ySource from '@/components/shared/summaryInteractionA11y.ts?raw';
+import windowedPageScrollSource from '@/components/shared/windowedPageScroll.ts?raw';
 import tableSource from '@/components/shared/Table.tsx?raw';
 import tableSortPresentationSource from '@/components/shared/tableSortPresentation.ts?raw';
 import tableCardHeaderSource from '@/components/shared/TableCardHeader.tsx?raw';
@@ -95,6 +96,10 @@ import summaryTableFocusSource from '@/components/shared/summaryTableFocus.ts?ra
 import tableCardSource from '@/components/shared/TableCard.tsx?raw';
 import groupedTableModeSegmentedControlSource from '@/components/shared/GroupedTableModeSegmentedControl.tsx?raw';
 import groupedTableRowPresentationSource from '@/components/shared/groupedTableRowPresentation.ts?raw';
+import unifiedResourceTableViewportSyncSource from '@/components/Infrastructure/useUnifiedResourceTableViewportSync.ts?raw';
+import storagePoolsTableWindowingSource from '@/components/Storage/useStoragePoolsTableWindowing.ts?raw';
+import workloadViewportSyncSource from '@/components/Workloads/useWorkloadViewportSync.ts?raw';
+import platformWindowedItemsSource from '@/features/platformPage/usePlatformWindowedItems.ts?raw';
 import animatedNumberSource from '@/components/shared/AnimatedNumber.tsx?raw';
 import animatedNumberModelSource from '@/components/shared/animatedNumberModel.ts?raw';
 import animatedNumberStateSource from '@/components/shared/useAnimatedNumberState.ts?raw';
@@ -1382,6 +1387,22 @@ describe('shared primitive guardrails', () => {
     expect(frontendIndexCssSource).toContain('contain: paint');
     expect(frontendIndexCssSource).toContain('overflow-y: hidden');
     expect(frontendIndexCssSource).toContain('overscroll-behavior-x: contain');
+    expect(windowedPageScrollSource).toContain(
+      "addEventListener('scroll', options.onScroll, { passive: true })",
+    );
+    expect(windowedPageScrollSource).toContain(
+      "addEventListener('wheel', options.onWheel, { passive: false })",
+    );
+    expect(windowedPageScrollSource).not.toContain("addEventListener('touch");
+    for (const source of [
+      platformWindowedItemsSource,
+      unifiedResourceTableViewportSyncSource,
+      storagePoolsTableWindowingSource,
+      workloadViewportSyncSource,
+    ]) {
+      expect(source).toContain('bindWindowedPageScrollEvents');
+      expect(source).not.toContain("addEventListener('touch");
+    }
     expect(frontendIndexCssSource).toContain(
       '.table-scroll-shell > .table-fixed.platform-table th.platform-table-name-column',
     );

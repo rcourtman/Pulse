@@ -69,12 +69,9 @@ describe('useWorkloadViewportSync', () => {
     expect(addEventListenerSpy).toHaveBeenCalledWith('wheel', expect.any(Function), {
       passive: false,
     });
-    expect(addEventListenerSpy).toHaveBeenCalledWith('touchstart', expect.any(Function), {
-      passive: true,
-    });
-    expect(addEventListenerSpy).toHaveBeenCalledWith('touchmove', expect.any(Function), {
-      passive: false,
-    });
+    expect(addEventListenerSpy.mock.calls.some(([type]) => String(type).startsWith('touch'))).toBe(
+      false,
+    );
     expect(addEventListenerSpy).toHaveBeenCalledWith('resize', expect.any(Function));
 
     window.dispatchEvent(new Event('scroll'));
@@ -86,8 +83,9 @@ describe('useWorkloadViewportSync', () => {
 
     expect(removeEventListenerSpy).toHaveBeenCalledWith('scroll', expect.any(Function));
     expect(removeEventListenerSpy).toHaveBeenCalledWith('wheel', expect.any(Function));
-    expect(removeEventListenerSpy).toHaveBeenCalledWith('touchstart', expect.any(Function));
-    expect(removeEventListenerSpy).toHaveBeenCalledWith('touchmove', expect.any(Function));
+    expect(
+      removeEventListenerSpy.mock.calls.some(([type]) => String(type).startsWith('touch')),
+    ).toBe(false);
     expect(removeEventListenerSpy).toHaveBeenCalledWith('resize', expect.any(Function));
   });
 
@@ -254,20 +252,6 @@ describe('useWorkloadViewportSync', () => {
     const callsBeforeExpandedInput = onScroll.mock.calls.length;
     appScrollContainer.dispatchEvent(wheelEvent);
     expect(onScroll).toHaveBeenCalledTimes(callsBeforeExpandedInput);
-
-    const touchStart = new Event('touchstart');
-    Object.defineProperty(touchStart, 'touches', {
-      value: { item: () => ({ clientX: 200, clientY: 240 }) },
-    });
-    appScrollContainer.dispatchEvent(touchStart);
-    const touchMove = new Event('touchmove');
-    Object.defineProperty(touchMove, 'touches', {
-      value: { item: () => ({ clientX: 196, clientY: 120 }) },
-    });
-    appScrollContainer.scrollTop = 320;
-    appScrollContainer.dispatchEvent(touchMove);
-    expect(onScroll).toHaveBeenCalledTimes(callsBeforeExpandedInput);
-    expect(touchMove.defaultPrevented).toBe(false);
   });
 
   it('exposes one app-shell back-to-top action after sustained workload scrolling', async () => {
