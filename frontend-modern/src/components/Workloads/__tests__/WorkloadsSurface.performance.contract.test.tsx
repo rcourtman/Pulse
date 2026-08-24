@@ -1570,7 +1570,7 @@ describe('Workloads performance contract', () => {
       expect(guestDrawerSource).toContain('GuestDrawerOverview');
       expect(guestDrawerSource).toContain('GuestDrawerHistoryRangeSelect');
       expect(guestDrawerSource).toContain('DrawerHeaderActionGroup');
-      expect(guestDrawerSource).toContain('DrawerHeaderActionButton');
+      expect(guestDrawerSource).not.toContain('DrawerHeaderActionButton');
       expect(guestDrawerSource).toContain('DrawerHeaderIconButton');
       expect(guestDrawerSource).not.toContain('Open related infrastructure');
       expect(guestDrawerHistorySource).toContain('data-testid="guest-history-hover-time"');

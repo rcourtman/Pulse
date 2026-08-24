@@ -1,13 +1,7 @@
 import { Component, Show, Suspense, createMemo } from 'solid-js';
-import CopyIcon from 'lucide-solid/icons/copy';
-import MessageSquareIcon from 'lucide-solid/icons/message-square';
 import XIcon from 'lucide-solid/icons/x';
 import { DiscoveryTab } from '../Discovery/DiscoveryTab';
-import {
-  DrawerHeaderActionButton,
-  DrawerHeaderActionGroup,
-  DrawerHeaderIconButton,
-} from '@/components/shared/Button';
+import { DrawerHeaderActionGroup, DrawerHeaderIconButton } from '@/components/shared/Button';
 import { DiscoveryLoadingFallback } from '@/components/shared/DiscoveryLoadingFallback';
 import { DrawerSubjectHeading } from '@/components/shared/DrawerSubjectHeading';
 import { DiscoveryReadinessBadge } from '@/components/shared/DiscoveryReadinessBadge';
@@ -25,9 +19,7 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
     agentHeading,
     agentLabel,
     agentTitle,
-    agentContextCopied,
     backupPresentation,
-    copyingAgentContext,
     discoveryAgentId,
     discoveryIdentifiedSummary,
     discoveryLoadingState,
@@ -49,9 +41,6 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
     guestOsSummary,
     networkInterfaces,
     normalizedTags,
-    assistantAvailable,
-    copyAgentContext,
-    openAssistantForGuest,
     setHistoryRange,
     showInGuestAgentInstallCue,
     switchTab,
@@ -74,25 +63,6 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
           statusLabel={headerIndicator().label}
         />
         <DrawerHeaderActionGroup>
-          <Show when={assistantAvailable()}>
-            <DrawerHeaderActionButton
-              onClick={() => openAssistantForGuest()}
-              title={`Ask Pulse Assistant about ${props.guest.name}`}
-              aria-label={`Ask Pulse Assistant about ${props.guest.name}`}
-            >
-              <MessageSquareIcon class="h-4 w-4" aria-hidden="true" />
-              <span class="hidden sm:inline">Ask</span>
-            </DrawerHeaderActionButton>
-          </Show>
-          <DrawerHeaderActionButton
-            onClick={() => void copyAgentContext()}
-            disabled={copyingAgentContext()}
-            title={`Copy Pulse context for ${props.guest.name}`}
-            aria-label={`Copy Pulse context for ${props.guest.name}`}
-          >
-            <CopyIcon class="h-4 w-4" aria-hidden="true" />
-            <span class="hidden sm:inline">{agentContextCopied() ? 'Copied' : 'Copy'}</span>
-          </DrawerHeaderActionButton>
           <DrawerHeaderIconButton onClick={() => props.onClose()} aria-label="Close guest drawer">
             <XIcon class="h-4 w-4" aria-hidden="true" />
           </DrawerHeaderIconButton>

@@ -1,15 +1,10 @@
 import { createEffect, createMemo, createSignal } from 'solid-js';
 
-import { AgentContextAPI } from '@/api/agentContext';
 import { getDiscovery } from '@/api/discovery';
 import type { HistoryTimeRange } from '@/api/charts';
 import { createNonSuspendingQuery } from '@/hooks/createNonSuspendingQuery';
-import { aiChatStore } from '@/stores/aiChat';
 import { useAlertsActivation } from '@/stores/alertsActivation';
-import { notificationStore } from '@/stores/notifications';
 import type { ResourceDiscovery, ResourceType as DiscoveryResourceType } from '@/types/discovery';
-import { formatAgentResourceContextForClipboard } from '@/utils/agentContextPresentation';
-import { copyToClipboard } from '@/utils/clipboard';
 import {
   getDiscoveryIdentifiedSummary,
   getDiscoveryLoadingState,
@@ -44,7 +39,6 @@ import {
   type GuestDrawerProps,
   type GuestDrawerTab,
 } from './guestDrawerModel';
-import { buildGuestAssistantContext } from './guestAssistantContextModel';
 import {
   getWorkloadActionAgentTitle,
   hasExplicitWorkloadActionAgent,
@@ -63,8 +57,6 @@ export function useGuestDrawerState(props: GuestDrawerProps) {
   const [historyRange, setHistoryRange] = createSignal<HistoryTimeRange>(
     GUEST_DRAWER_HISTORY_DEFAULT_RANGE,
   );
-  const [copyingAgentContext, setCopyingAgentContext] = createSignal(false);
-  const [agentContextCopied, setAgentContextCopied] = createSignal(false);
 
   const guestId = createMemo(() => getCanonicalWorkloadId(props.guest));
   const alertThresholdScope = createMemo(() => getWorkloadAlertThresholdScope(props.guest));
@@ -161,35 +153,6 @@ export function useGuestDrawerState(props: GuestDrawerProps) {
     setActiveTab(tab);
   };
 
-  const assistantAvailable = () => aiChatStore.enabled === true;
-
-  const openAssistantForGuest = () => {
-    if (!assistantAvailable()) return;
-    aiChatStore.open(buildGuestAssistantContext(props.guest));
-  };
-
-  const copyAgentContext = async () => {
-    if (copyingAgentContext()) return;
-    setCopyingAgentContext(true);
-    setAgentContextCopied(false);
-
-    try {
-      const context = await AgentContextAPI.getResourceContext(guestId());
-      const copiedContext = await copyToClipboard(formatAgentResourceContextForClipboard(context));
-      if (!copiedContext) {
-        throw new Error('Clipboard unavailable');
-      }
-      setAgentContextCopied(true);
-      notificationStore.success('Resource context copied.');
-      setTimeout(() => setAgentContextCopied(false), 2000);
-    } catch {
-      notificationStore.error('Unable to copy resource context.');
-      setAgentContextCopied(false);
-    } finally {
-      setCopyingAgentContext(false);
-    }
-  };
-
   createEffect(() => {
     if (activeTab() === 'discovery' && !hasDiscoverySupport()) {
       setActiveTab('overview');
@@ -205,8 +168,6 @@ export function useGuestDrawerState(props: GuestDrawerProps) {
     agentLabel,
     agentTitle,
     backupPresentation,
-    copyingAgentContext,
-    agentContextCopied,
     discoveryAgentId,
     discoveryIdentifiedSummary,
     discoveryReadinessPresentation,
@@ -232,9 +193,6 @@ export function useGuestDrawerState(props: GuestDrawerProps) {
     osVersion,
     showInGuestAgentInstallCue,
     workloadActionAgentTitle,
-    assistantAvailable,
-    openAssistantForGuest,
-    copyAgentContext,
     switchTab,
     setHistoryRange,
     webInterfaceMetadataId,

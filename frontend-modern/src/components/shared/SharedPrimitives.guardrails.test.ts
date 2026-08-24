@@ -4184,7 +4184,7 @@ describe('shared primitive guardrails', () => {
     for (const drawerSource of [guestDrawerSource, resourceDetailDrawerSource]) {
       expect(drawerSource).toContain('@/components/shared/Button');
       expect(drawerSource).toContain('DrawerHeaderActionGroup');
-      expect(drawerSource).toContain('DrawerHeaderActionButton');
+      expect(drawerSource).not.toContain('DrawerHeaderActionButton');
       expect(drawerSource).toContain('DrawerHeaderIconButton');
       expect(drawerSource).not.toContain(
         'inline-flex h-8 min-h-11 min-w-11 items-center gap-1.5 rounded border border-border bg-surface px-2 text-xs font-medium text-base-content transition-colors hover:bg-surface-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500',
@@ -8507,6 +8507,25 @@ describe('shared primitive guardrails', () => {
     for (const ownerPath of manageContentOwners) {
       const source = readFrontendSource(ownerPath);
       expect(source).toContain('ResourceOperatorStateSection');
+    }
+
+    for (const headerPath of [
+      'src/components/Infrastructure/ResourceDetailDrawer.tsx',
+      'src/components/Workloads/GuestDrawer.tsx',
+    ]) {
+      const source = readFrontendSource(headerPath);
+      expect(source).not.toContain('Ask Pulse Assistant about');
+      expect(source).not.toContain('Copy Pulse context for');
+      expect(source).not.toContain('copyAgentContext');
+    }
+
+    for (const statePath of [
+      'src/components/Infrastructure/useResourceDetailDrawerState.ts',
+      'src/components/Workloads/useGuestDrawerState.ts',
+    ]) {
+      const source = readFrontendSource(statePath);
+      expect(source).not.toContain('AgentContextAPI');
+      expect(source).not.toContain('formatAgentResourceContextForClipboard');
     }
 
     const disclosureSource = readFrontendSource(

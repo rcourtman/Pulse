@@ -1366,6 +1366,10 @@ selected. Alert lookup may consume the already-loaded active-alert map through
 the resource's bounded canonical/provider identity candidate list; it must not
 add a per-drawer fetch, rescan the workload inventory, or eagerly mount hidden
 technical sections.
+Guest and resource drawer headers must not initialize clipboard-context or
+Assistant-handoff state for generic header buttons. Removing those controls
+also removes their drawer-local signal, API, and formatting wiring; the global
+Assistant shell remains the single generic entry point.
 
 The investigation enrichment path in `MaybeInvestigateFinding`
 adds at most one operator-state projection lookup per investigation

@@ -1,65 +1,21 @@
 {
   "version": 1,
-  "base_sha": "a73abe909caceee084e647b959f9adae9a355bb3",
-  "verified_at": "2026-08-24T11:27:51Z",
+  "base_sha": "9e622c291d499cd88b8269ef98c878c702de801b",
+  "verified_at": "2026-08-24T11:47:38Z",
   "result": "passed",
   "changed_paths": [
     "frontend-modern/src/components/Infrastructure/ResourceDetailDrawer.tsx",
-    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx",
-    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerSupportDisclosure.tsx",
-    "frontend-modern/src/components/Infrastructure/ResourceDetailSummary.tsx",
-    "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDerivedState.ts",
     "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerState.ts",
     "frontend-modern/src/components/Workloads/GuestDrawer.tsx",
-    "frontend-modern/src/components/Workloads/GuestDrawerManage.tsx",
-    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx",
-    "frontend-modern/src/components/Workloads/NodeDrawer.tsx",
-    "frontend-modern/src/components/Workloads/NodeDrawerOverview.tsx",
-    "frontend-modern/src/components/Workloads/WorkloadPanel.tsx",
-    "frontend-modern/src/components/Workloads/guestDrawerModel.ts",
-    "frontend-modern/src/components/shared/DetailSectionTable.tsx",
-    "frontend-modern/src/components/shared/DrawerAttentionSection.tsx",
-    "frontend-modern/src/components/shared/TechnicalDetailsDisclosure.tsx",
-    "frontend-modern/src/components/shared/detailSectionModel.ts",
-    "frontend-modern/src/features/alerts/alertOverridesModel.ts",
-    "frontend-modern/src/features/docker/DockerHostDrawer.tsx",
-    "frontend-modern/src/features/docker/DockerHostDrawerOverview.tsx",
-    "frontend-modern/src/features/platformPage/PlatformResourceDetailTableRow.tsx",
-    "frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx",
-    "frontend-modern/src/hooks/useWorkloads.ts",
-    "frontend-modern/src/types/workloads.ts",
-    "frontend-modern/src/utils/alerts.ts",
-    "frontend-modern/src/utils/workloadGuestPresentation.ts"
+    "frontend-modern/src/components/Workloads/useGuestDrawerState.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawer.tsx": "8d759c4043eca6ffc4353e478e8ecc9117eb5cac0ee0799afb186f669802bf09",
-    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx": "7a69a40a65452affb25c5a136dcfb5a84bb07d3ee948c08eb77e0fe6707bee8f",
-    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerSupportDisclosure.tsx": "040da0942faabe89455b2d478b2fac03697e50ee9c12426a399b2cb0004327dd",
-    "frontend-modern/src/components/Infrastructure/ResourceDetailSummary.tsx": "0d40dbff2b59f63813f98419004fedf1269c99efa29308210e11c3d18ee8d904",
-    "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDerivedState.ts": "10dc7c47e116f50f197908b52b88c9acca42ffd35e89106390a5d69f73a00837",
-    "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerState.ts": "850cd9dba3b91530068c8542121e4929bebc547b3abda1a10744fa886c0f9361",
-    "frontend-modern/src/components/Workloads/GuestDrawer.tsx": "543a17e2bcb03cc7e411aebe63330e575c069e03f78ceb31baa6ca727cb01f57",
-    "frontend-modern/src/components/Workloads/GuestDrawerManage.tsx": "8def7d128956c2e24e7f8c0913b7f79f7c9b3f21c54130ed51f4149915f417b5",
-    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx": "b9bddadb3c2386329a2caae6c8ae6d785e935af35c41c79be9f47f2163463252",
-    "frontend-modern/src/components/Workloads/NodeDrawer.tsx": "f6803503882e380e2d0d3df56d6676607717579da81ed7e24c06894961fb1258",
-    "frontend-modern/src/components/Workloads/NodeDrawerOverview.tsx": "5d9f130c58cffe8f653730b961b297fb789df3a5bc79b83c3da874c2067bc31e",
-    "frontend-modern/src/components/Workloads/WorkloadPanel.tsx": "e5ccf2149958fc5cfe3b0711b9d56557e0c86d525efdef69af229f325a0fe4df",
-    "frontend-modern/src/components/Workloads/guestDrawerModel.ts": "faf23c024fd0c0395ef1fbcebb10f13063ed9a4b7dcb5800c2ab836c9d5c5e8b",
-    "frontend-modern/src/components/shared/DetailSectionTable.tsx": "871c66c39f727ae46fbfb6e3246c6ea0acd37d02e9abe6ba7143013913f19e22",
-    "frontend-modern/src/components/shared/DrawerAttentionSection.tsx": "b9035090571c09e791021f789e8e4a4bcaffbff33dd37458ffbebf9a223d319c",
-    "frontend-modern/src/components/shared/TechnicalDetailsDisclosure.tsx": "d6a8ed7f006cecbe1b2e7055d041e767ff8d200ecb2c8454827bfc397e0dbdeb",
-    "frontend-modern/src/components/shared/detailSectionModel.ts": "b2effcc4ff9ce98e9fdd73d4853cb38166b92487c553e8cd981bb41ff7c11d86",
-    "frontend-modern/src/features/alerts/alertOverridesModel.ts": "8e344f8d76f4038efad5fe2765ba92ef5ca8edc0afbcdbfbc3d4cda9696a1d0a",
-    "frontend-modern/src/features/docker/DockerHostDrawer.tsx": "8bfd9ea8ec7cd8be5a77568aa33774a2c30f6bcc33113044ef4bf1e34422bcc4",
-    "frontend-modern/src/features/docker/DockerHostDrawerOverview.tsx": "4adb8252dcac84ed8523f798338091852869f891f1583e130053649affc987a7",
-    "frontend-modern/src/features/platformPage/PlatformResourceDetailTableRow.tsx": "05bc58b83bb5ecce65243a6849d6ded08bcbb656fcb3eda23d13129463e94ccd",
-    "frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx": "65c945d3ae01adeb6f41b2ba144b5b7b523c3e7c118721890c78bd6d19b42efb",
-    "frontend-modern/src/hooks/useWorkloads.ts": "f56021125846e931dd175ed8c4a0c46bd884edce434c61bf5a332a8c0a444f52",
-    "frontend-modern/src/types/workloads.ts": "e878e4d96359b4add4ea650ce5e3af361e6cb15e3fede51a8f7bc9d2c8ca8aa9",
-    "frontend-modern/src/utils/alerts.ts": "6b9556d0415294a8151d786489a4ecb9667b26ddc272c8fe33cf955a9ebcbbeb",
-    "frontend-modern/src/utils/workloadGuestPresentation.ts": "ef23c08bed5f507a163aca438ec8edd2e95e47e20d164a68e0e15b7697941886"
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawer.tsx": "4bc28b3a2f26f1e011502a55deb6befe62e001db2d4020c14b016a7d2f1458e5",
+    "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerState.ts": "8e1f892548ec92d5e895013c8247b73e6119e909cb9d635dcab354c25d14fd04",
+    "frontend-modern/src/components/Workloads/GuestDrawer.tsx": "17291d2c1f574e8bb1a60ca3d933dc6fab6badbd80cd4097542d74db13050429",
+    "frontend-modern/src/components/Workloads/useGuestDrawerState.ts": "ec24e7f9c32f9ffdf36eebc0391fbd7019af8ed096a01513e81ac54806e315f2"
   },
-  "routes": ["/proxmox/overview", "/docker/overview", "/truenas/overview"],
+  "routes": ["/truenas/overview", "/proxmox/overview"],
   "viewports": [
     {
       "width": 1440,
@@ -71,17 +27,14 @@
     }
   ],
   "states": [
-    "Proxmox guest with an active powered-off alert and condensed additive operator context",
-    "Proxmox node with an active offline alert and condensed node context",
-    "Docker host overview and Manage tab with update actions separated from context",
-    "TrueNAS system with multiple active health issues and both technical disclosure groups collapsed",
-    "generic resource Manage tab with operator overrides and saved web access"
+    "TrueNAS system drawer with active health issues and only the close control in its header",
+    "Proxmox guest drawer with only the close control in its header",
+    "global platform Assistant entry remaining available outside the object drawer"
   ],
   "interactions": [
-    "expanded guest, node, Docker host, and TrueNAS resource drawers",
-    "confirmed exact active alert messages render immediately and wrap at phone width",
-    "expanded Technical details and Platform details independently",
-    "switched to Manage and confirmed overrides, actions, and access are absent from Overview",
-    "confirmed the hierarchy at desktop width and restored the temporary browser viewport"
+    "expanded a TrueNAS resource drawer at phone width and confirmed no object Assistant or context-copy controls",
+    "expanded a Proxmox guest drawer at phone width and confirmed no object Assistant or context-copy controls",
+    "confirmed the guest header rule at desktop width",
+    "restored the temporary browser viewport"
   ]
 }

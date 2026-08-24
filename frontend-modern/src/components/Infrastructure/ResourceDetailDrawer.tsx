@@ -1,14 +1,8 @@
 import { Show, For, Suspense } from 'solid-js';
 import type { Component } from 'solid-js';
-import CopyIcon from 'lucide-solid/icons/copy';
-import MessageSquareIcon from 'lucide-solid/icons/message-square';
 import XIcon from 'lucide-solid/icons/x';
 import type { Resource } from '@/types/resource';
-import {
-  DrawerHeaderActionButton,
-  DrawerHeaderActionGroup,
-  DrawerHeaderIconButton,
-} from '@/components/shared/Button';
+import { DrawerHeaderActionGroup, DrawerHeaderIconButton } from '@/components/shared/Button';
 import { DiscoveryLoadingFallback } from '@/components/shared/DiscoveryLoadingFallback';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { Subtabs } from '@/components/shared/Subtabs';
@@ -129,25 +123,6 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
               onActionSettled={props.onResourceActionSettled}
             />
           </Show>
-          <Show when={drawer.assistantAvailable()}>
-            <DrawerHeaderActionButton
-              onClick={() => drawer.openAssistantForResource()}
-              title={`Ask Pulse Assistant about ${drawer.displayName()}`}
-              aria-label={`Ask Pulse Assistant about ${drawer.displayName()}`}
-            >
-              <MessageSquareIcon class="h-4 w-4" />
-              <span class="hidden sm:inline">Ask</span>
-            </DrawerHeaderActionButton>
-          </Show>
-          <DrawerHeaderActionButton
-            onClick={() => void drawer.copyAgentContext()}
-            disabled={drawer.copyingAgentContext()}
-            title={`Copy Pulse context for ${drawer.displayName()}`}
-            aria-label={`Copy Pulse context for ${drawer.displayName()}`}
-          >
-            <CopyIcon class="h-4 w-4" />
-            <span class="hidden sm:inline">{drawer.agentContextCopied() ? 'Copied' : 'Copy'}</span>
-          </DrawerHeaderActionButton>
           <Show when={props.onClose}>
             <DrawerHeaderIconButton
               onClick={() => props.onClose?.()}

@@ -23,6 +23,26 @@
           "path": "src/features/docker/DockerHostDrawerOverview.tsx"
         }
       ],
+      "forbiddenPatterns": [
+        {
+          "path": "src/components/Infrastructure/ResourceDetailDrawer.tsx",
+          "patterns": [
+            "Ask Pulse Assistant about",
+            "Copy Pulse context for",
+            "openAssistantForResource",
+            "copyAgentContext"
+          ]
+        },
+        {
+          "path": "src/components/Workloads/GuestDrawer.tsx",
+          "patterns": [
+            "Ask Pulse Assistant about",
+            "Copy Pulse context for",
+            "openAssistantForGuest",
+            "copyAgentContext"
+          ]
+        }
+      ],
       "proof": [
         "src/components/shared/SharedPrimitives.guardrails.test.ts",
         "src/components/Workloads/GuestDrawer.test.tsx",

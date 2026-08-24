@@ -4659,3 +4659,7 @@ details. Operator overrides, lifecycle policy, update actions, audit controls,
 and saved web access belong to Manage. Provider pages may supply typed detail
 models, but they must not create a provider-local drawer hierarchy or promote
 metadata into Overview solely because it exists.
+The drawer header contains no generic Assistant handoff or agent-context copy
+action. Those shell-level capabilities must not consume object identity space;
+only the close control and a capability-backed object lifecycle action may sit
+beside the heading.

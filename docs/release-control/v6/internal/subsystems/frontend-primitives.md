@@ -3607,6 +3607,11 @@ automatic-action policy, saved access configuration, and action audit belong
 to a dedicated `Manage` tab and must not render inside Overview. Guest, node,
 Docker-host, and unified-resource drawers must compose these shared primitives
 instead of defining provider-local attention or technical disclosure shells.
+Drawer headers reserve their limited space for the subject and a close control,
+plus a direct object-specific lifecycle action only where the object contract
+requires one. Generic `Ask Assistant` and `Copy context` actions do not belong
+in object drawer headers: Assistant remains available through the global shell,
+and raw context export must not compete with the operational reading path.
 The shared interactive sparkline now follows that same split.
 `frontend-modern/src/components/shared/InteractiveSparkline.tsx` stays the
 render shell, `frontend-modern/src/components/shared/useInteractiveSparklineState.ts`

@@ -11,7 +11,6 @@ import { Suspense } from 'solid-js';
 import type { WorkloadGuest } from '@/types/workloads';
 import type { Memory, Disk, GuestNetworkInterface } from '@/types/api';
 import { resetCreateNonSuspendingQueryCacheForTest } from '@/hooks/createNonSuspendingQuery';
-import { aiChatStore } from '@/stores/aiChat';
 import { getCanonicalWorkloadId, getWorkloadMetadataId } from '@/utils/workloads';
 import { getDiscoveryProvenanceTitle } from '@/utils/discoveryPresentation';
 import guestDrawerSource from './GuestDrawer.tsx?raw';
@@ -69,10 +68,6 @@ const discoveryApiMocks = vi.hoisted(() => ({
       null,
   ),
 }));
-const getResourceContextMock = vi.hoisted(() => vi.fn());
-const copyToClipboardMock = vi.hoisted(() => vi.fn());
-const notificationSuccessMock = vi.hoisted(() => vi.fn());
-const notificationErrorMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@/api/discovery', async () => {
   const actual = await vi.importActual<typeof import('@/api/discovery')>('@/api/discovery');
@@ -81,23 +76,6 @@ vi.mock('@/api/discovery', async () => {
     getDiscovery: discoveryApiMocks.getDiscovery,
   };
 });
-
-vi.mock('@/api/agentContext', () => ({
-  AgentContextAPI: {
-    getResourceContext: getResourceContextMock,
-  },
-}));
-
-vi.mock('@/utils/clipboard', () => ({
-  copyToClipboard: copyToClipboardMock,
-}));
-
-vi.mock('@/stores/notifications', () => ({
-  notificationStore: {
-    success: notificationSuccessMock,
-    error: notificationErrorMock,
-  },
-}));
 
 vi.mock('@/components/shared/WebInterfaceUrlField', () => ({
   WebInterfaceUrlField: (props: {
@@ -217,7 +195,6 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
-  aiChatStore.setEnabled(false);
   vi.clearAllMocks();
   vi.useRealTimers();
 });
@@ -277,99 +254,15 @@ describe('GuestDrawer', () => {
     expect(screen.queryByTestId('guest-manage-tab')).not.toBeInTheDocument();
   });
 
-  describe('Assistant context actions', () => {
-    it('opens Pulse Assistant with a canonical Proxmox LXC resource handoff', () => {
-      aiChatStore.setEnabled(true);
-      const openSpy = vi.spyOn(aiChatStore, 'open');
-      const guest = makeGuest({
-        id: 'legacy-row-id',
-        instance: 'pve-main',
-        node: 'pve-a',
-        vmid: 101,
-        name: 'homeassistant',
-        type: 'lxc',
-        workloadType: 'system-container',
-        platformType: 'proxmox',
-        status: 'running',
-        discoveryTarget: {
-          resourceType: 'system-container',
-          agentId: 'agent-pve-a',
-          resourceId: '101',
-        },
-      });
+  it('keeps generic Assistant and context-copy actions out of the drawer header', () => {
+    render(() => <GuestDrawer guest={makeGuest({ name: 'homeassistant' })} onClose={vi.fn()} />);
 
-      render(() => <GuestDrawer guest={guest} onClose={vi.fn()} />);
-
-      fireEvent.click(
-        screen.getByRole('button', { name: 'Ask Pulse Assistant about homeassistant' }),
-      );
-
-      expect(openSpy).toHaveBeenCalledWith(
-        expect.objectContaining({
-          targetType: 'resource',
-          targetId: 'pve-main:pve-a:101',
-          autonomousMode: false,
-          handoffResources: [
-            {
-              id: 'pve-main:pve-a:101',
-              name: 'homeassistant',
-              type: 'system-container',
-              node: 'pve-a',
-            },
-          ],
-          handoffMetadata: { kind: 'resource_context' },
-        }),
-      );
-      expect(openSpy.mock.calls[0]?.[0]?.handoffContext).toBeUndefined();
-      expect(openSpy.mock.calls[0]?.[0]?.briefing?.detailLines).toContain(
-        'Discovery: system-container:101',
-      );
-      openSpy.mockRestore();
-    });
-
-    it('copies the safe agent context bundle using canonical guest identity', async () => {
-      getResourceContextMock.mockResolvedValue({
-        canonicalId: 'pve-main:pve-a:101',
-        resourceType: 'system-container',
-        resourceName: 'homeassistant',
-        activeFindings: [],
-        pendingApprovals: [],
-        recentActions: [],
-        generatedAt: '2026-05-06T14:00:00Z',
-        contextSections: [
-          {
-            id: 'runtime',
-            title: 'Runtime',
-            source: 'discovery',
-            trustTier: 'pulse-observed',
-            generatedAt: '2026-05-06T14:00:00Z',
-            facts: [{ label: 'Service', value: 'Home Assistant' }],
-          },
-        ],
-      });
-      copyToClipboardMock.mockResolvedValue(true);
-      const guest = makeGuest({
-        id: 'legacy-row-id',
-        instance: 'pve-main',
-        node: 'pve-a',
-        vmid: 101,
-        name: 'homeassistant',
-        type: 'lxc',
-        workloadType: 'system-container',
-      });
-
-      render(() => <GuestDrawer guest={guest} onClose={vi.fn()} />);
-
-      fireEvent.click(screen.getByRole('button', { name: 'Copy Pulse context for homeassistant' }));
-
-      await waitFor(() => {
-        expect(getResourceContextMock).toHaveBeenCalledWith('pve-main:pve-a:101');
-        expect(copyToClipboardMock).toHaveBeenCalledWith(
-          expect.stringContaining('Pulse resource context: homeassistant'),
-        );
-        expect(notificationSuccessMock).toHaveBeenCalledWith('Resource context copied.');
-      });
-    });
+    expect(
+      screen.queryByRole('button', { name: 'Ask Pulse Assistant about homeassistant' }),
+    ).toBeNull();
+    expect(
+      screen.queryByRole('button', { name: 'Copy Pulse context for homeassistant' }),
+    ).toBeNull();
   });
 
   // ── Tabs ──
