@@ -1,34 +1,23 @@
 {
   "version": 1,
-  "base_sha": "b67ac28f25434cb9e6e393a0787e72d915ba479a",
-  "verified_at": "2026-08-24T15:34:13Z",
+  "base_sha": "32b721503cc1bf75592baed55599c98e1c2aa896",
+  "verified_at": "2026-08-24T15:58:26Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Infrastructure/UnifiedResourceHostTableCard.tsx",
-    "frontend-modern/src/components/Infrastructure/UnifiedResourcePBSTableSection.tsx",
-    "frontend-modern/src/components/Infrastructure/UnifiedResourcePMGTableSection.tsx",
-    "frontend-modern/src/components/Storage/DiskList.tsx",
-    "frontend-modern/src/components/Storage/StorageGroupRow.tsx",
-    "frontend-modern/src/components/Storage/StoragePoolRow.tsx",
-    "frontend-modern/src/components/shared/SummaryRowActionButton.tsx"
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawer.tsx",
+    "frontend-modern/src/components/Storage/DiskDetail.tsx",
+    "frontend-modern/src/components/Storage/StoragePoolDetail.tsx",
+    "frontend-modern/src/features/storageBackups/detailPresentation.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Infrastructure/UnifiedResourceHostTableCard.tsx": "78588725f625e58325c2ddca6133d3e0b0d46a18f9d19e8946f7c0181c094442",
-    "frontend-modern/src/components/Infrastructure/UnifiedResourcePBSTableSection.tsx": "15031095e5910c02bd47038213974de4b3d2aef53b1ff6cd030fee381a98fe91",
-    "frontend-modern/src/components/Infrastructure/UnifiedResourcePMGTableSection.tsx": "d9a5a6f209b97a02dfa40100f783d91e8202b0efc33af73415e05689251f6ec6",
-    "frontend-modern/src/components/Storage/DiskList.tsx": "5d600b9bfa8e34ee9ed13037cdbe87b931c10e6378440d41bf1d1ba68cab9526",
-    "frontend-modern/src/components/Storage/StorageGroupRow.tsx": "5ce92da0c45b4146c51eb52786adb245978b5f6b4adc95b40d2294d949720e99",
-    "frontend-modern/src/components/Storage/StoragePoolRow.tsx": "f389fef94c53a74cf69d6f165ae01f71f02a1e0143dc68c1318033aebe0001a4",
-    "frontend-modern/src/components/shared/SummaryRowActionButton.tsx": "dbd6a62b6dbf11cabfaf01bc7240ab3ba3a8230cef1ee20bc2f0bd8c19e4bb14"
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawer.tsx": "5eb9c0f3293e10771e1c68c91e61030046c1999a12d007ffcd45a1e345306fc2",
+    "frontend-modern/src/components/Storage/DiskDetail.tsx": "f9c0574b3437b4dfe81585aecdbfed441dbeef32f066022a0fc3dd5aa5719991",
+    "frontend-modern/src/components/Storage/StoragePoolDetail.tsx": "f678e7339627759d82cd78e50c3afad8857203ff5f8f196c4676277c5b613d29",
+    "frontend-modern/src/features/storageBackups/detailPresentation.ts": "5a179856f2f0fe148034abc8c3360b598eab89084871a923e8d8918754dc3187"
   },
   "routes": [
     "/proxmox/overview",
-    "/proxmox/storage",
-    "/docker/overview",
-    "/kubernetes/overview",
-    "/truenas/overview",
-    "/vmware/health",
-    "/standalone/machines"
+    "/proxmox/storage"
   ],
   "viewports": [
     {
@@ -41,15 +30,16 @@
     }
   ],
   "states": [
-    "collapsed storage-pool and physical-disk rows at narrow width without visible disclosure chevrons",
-    "expanded and collapsed storage detail rows activated from the whole summary row",
-    "provider overview rows across Proxmox, Docker, Kubernetes, TrueNAS, vSphere, and standalone machines with accessible but visually suppressed mobile disclosure buttons",
-    "desktop storage rows retaining their explicit disclosure affordance"
+    "Proxmox node detail opening on Overview with History inactive at 1280px",
+    "storage-pool detail opening on Overview with configuration and ZFS facts visible at 390px",
+    "storage-pool History selected with its capacity chart and trailing range control at desktop and 390px",
+    "physical-disk detail opening on Overview and switching to History with live and stored I/O charts at 390px"
   ],
   "interactions": [
-    "opened and closed a Proxmox storage-pool detail from the whole row at 390px",
-    "switched from Storage to Physical Disks and confirmed its whole-row disclosure buttons are visually clipped at 390px",
-    "audited seven loaded platform routes and found zero visible Expand or Collapse disclosure buttons at 390px while retaining 232 accessible controls",
-    "inspected the Proxmox storage table at 1280px and confirmed desktop disclosure layout and row density remain intact"
+    "opened a storage pool and confirmed historical content and range controls are absent from the default Overview tab",
+    "selected storage-pool History and confirmed the range control and Capacity Trend appear together without clipping",
+    "switched to Physical Disks, opened a disk, and confirmed the same Overview-to-History interaction and trailing range placement",
+    "compared the storage detail tab framing with an expanded Proxmox node drawer at 1280px",
+    "reset the temporary responsive viewport override after completing the phone-width checks"
   ]
 }

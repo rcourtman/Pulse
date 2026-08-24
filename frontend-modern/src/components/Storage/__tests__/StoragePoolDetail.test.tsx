@@ -59,6 +59,9 @@ describe('StoragePoolDetail', () => {
       </table>
     ));
 
+    expect(screen.queryByTestId('history-chart')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('tab', { name: 'History' }));
+
     expect(screen.getByTestId('history-chart')).toHaveTextContent('storage:pool:tank:usage');
     expect(historyChartSpy).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -87,8 +90,10 @@ describe('StoragePoolDetail', () => {
       </table>
     ));
 
+    fireEvent.click(screen.getByRole('tab', { name: 'History' }));
+
     const rangeSelector = screen.getByRole('combobox', {
-      name: 'Capacity trend range',
+      name: 'Capacity history range',
     }) as HTMLSelectElement;
     expect(Array.from(rangeSelector.options).map((option) => option.value)).toEqual(['24h', '7d']);
 
@@ -120,6 +125,8 @@ describe('StoragePoolDetail', () => {
         </tbody>
       </table>
     ));
+
+    fireEvent.click(screen.getByRole('tab', { name: 'History' }));
 
     expect(screen.getByTestId('history-chart')).toHaveTextContent('storage:pve1:local-zfs:usage');
     expect(historyChartSpy).toHaveBeenCalledWith(
@@ -197,6 +204,27 @@ describe('StoragePoolDetail', () => {
     expect(screen.getByText('R 10 / W 20')).toBeInTheDocument();
     expect(screen.getByText('spun down')).toBeInTheDocument();
     expect(screen.getByText('16 errors')).toBeInTheDocument();
+  });
+
+  it('uses the canonical overview and history detail navigation', () => {
+    render(() => (
+      <table>
+        <tbody>
+          <StoragePoolDetail record={makeRecord()} physicalDisks={[]} summarySeriesId="tank" />
+        </tbody>
+      </table>
+    ));
+
+    expect(screen.getByRole('tab', { name: 'Overview' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: 'History' })).toHaveAttribute('aria-selected', 'false');
+    expect(screen.getByText('Configuration')).toBeVisible();
+    expect(screen.queryByText('Capacity Trend')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('tab', { name: 'History' }));
+
+    expect(screen.getByRole('tab', { name: 'History' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByText('Capacity Trend')).toBeVisible();
+    expect(screen.getByText('Configuration').closest('.hidden')).not.toBeNull();
   });
 
   it('renders linked host-agent ZFS datasets inside the expanded pool detail', () => {

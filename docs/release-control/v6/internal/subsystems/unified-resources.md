@@ -3111,6 +3111,13 @@ canonical header badges while only surfacing a `Sources` row when source
 health is degraded or unhealthy,
 and it no longer repeats that same provenance as a separate `Mode` row because
 the drawer header badges already own canonical source display,
+and that composition preserves the frontend-primitives-owned object-detail
+navigation contract without resource-local spacing variants: `Overview`
+remains the landing tab, stored metrics remain behind the evidence-gated
+`History` tab, and both use the default shared `Subtabs` shell and trailing
+History range position. Unified-resource drawers may add evidence-gated
+resource-specific sections, but they must not create a second tab density or
+place stored metric charts inline on Overview,
 and the drawer header no longer carries the technical primary identity line;
 that canonical identifier now lives in the `Identity` card as `Primary ID`,
 and the drawer header interaction is a frontend-primitives dependency:

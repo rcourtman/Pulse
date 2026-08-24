@@ -96,6 +96,16 @@ populate the legend while history is still being collected, but it must never
 be expanded into synthetic timestamps or chart geometry. An empty stored
 series renders the shared collecting-history state; zero remains a valid
 reported reading, while an absent metric remains unavailable.
+Object-detail navigation follows that same canonical split across platform and
+feature owners. `Overview` is the stable landing tab for current operational
+facts, while stored metric charts appear only after selecting an evidence-gated
+`History` tab rendered through `frontend-modern/src/components/shared/Subtabs.tsx`.
+The active History range belongs in the shared subtab row's trailing slot, and
+uses the shared filter-select presentation; storage pools, physical disks,
+guests, nodes, and unified resources must not render historical charts inline
+on Overview or reintroduce object-local tab or range-selector chrome. The
+metrics and chart groups may remain object-specific without changing this
+navigation contract.
 
 
 Presentation helpers that mirror a server-side classification must name the

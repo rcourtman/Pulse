@@ -2100,6 +2100,14 @@ files.
     storage detail charts must all address history through the canonical
     unified-resource metrics-target IDs, and the storage page must reuse the
     shared sticky summary primitive instead of a storage-local scroll wrapper.
+    Expanded pool and physical-disk details must also follow the canonical
+    object-detail information architecture: current configuration, topology,
+    health, and SMART facts land on `Overview`; stored capacity and I/O charts
+    land behind the shared `Subtabs` `History` tab; and the active range uses
+    the shared filter-select presentation in that tab row. Storage must not
+    place historical charts directly into the default detail view or restore
+    the retired storage-local range-selector classes and inline SVG select
+    decoration.
     Storage-page pool growth readouts belong to that same contract: the table
     may derive per-pool used-capacity deltas from the shared
     `/api/storage-charts` summary payload, but it must not fan out row-local

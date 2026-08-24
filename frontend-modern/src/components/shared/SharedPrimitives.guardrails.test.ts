@@ -225,6 +225,7 @@ import storagePoolRowSource from '@/components/Storage/StoragePoolRow.tsx?raw';
 import storageContentCardSource from '@/components/Storage/StorageContentCard.tsx?raw';
 import storagePoolsTableSource from '@/components/Storage/StoragePoolsTable.tsx?raw';
 import storagePoolDetailSource from '@/components/Storage/StoragePoolDetail.tsx?raw';
+import diskDetailSource from '@/components/Storage/DiskDetail.tsx?raw';
 import diskListSource from '@/components/Storage/DiskList.tsx?raw';
 import alertOverviewStatsCardsSource from '@/features/alerts/AlertOverviewStatsCards.tsx?raw';
 import alertHistoryTableSectionSource from '@/features/alerts/AlertHistoryTableSection.tsx?raw';
@@ -1199,6 +1200,34 @@ describe('shared primitive guardrails', () => {
     expect(subtabsSource).toContain('subtabsShellClass');
     expect(subtabsSource).toContain('subtabsListClass');
     expect(subtabsSource).toContain('subtabButtonClass');
+  });
+
+  it('keeps object detail history behind the canonical Overview and History subtabs', () => {
+    for (const source of [
+      diskDetailSource,
+      guestDrawerSource,
+      nodeDrawerSource,
+      storagePoolDetailSource,
+    ]) {
+      expect(source).toContain('@/components/shared/Subtabs');
+      expect(source).toContain("value: 'overview', label: 'Overview'");
+      expect(source).toContain("value: 'history', label: 'History'");
+    }
+
+    expect(resourceDetailDrawerSource).toContain('@/components/shared/Subtabs');
+    expect(resourceDetailDrawerSource).toContain('tabs={drawer.tabs().map');
+
+    for (const storageDetailSource of [diskDetailSource, storagePoolDetailSource]) {
+      expect(storageDetailSource).toContain('filterSelectClass');
+      expect(storageDetailSource).toContain("activeTab() === 'history'");
+      expect(storageDetailSource).not.toContain('STORAGE_DETAIL_SELECT_CLASS');
+      expect(storageDetailSource).not.toContain('STORAGE_DETAIL_HEADER_SELECT_CLASS');
+    }
+
+    expect(resourceDetailDrawerSource).not.toContain('listClass="!gap-2 sm:!gap-6"');
+    expect(resourceDetailDrawerSource).not.toContain(
+      'tabClass="!px-0.5 !text-xs sm:!px-1 sm:!text-sm"',
+    );
   });
 
   it('keeps the Actions inbox on the canonical in-page subtab primitive', () => {

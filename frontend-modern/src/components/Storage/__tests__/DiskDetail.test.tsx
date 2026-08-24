@@ -1,4 +1,4 @@
-import { render, screen } from '@solidjs/testing-library';
+import { fireEvent, render, screen } from '@solidjs/testing-library';
 import { describe, expect, it, vi } from 'vitest';
 import { DiskDetail } from '@/components/Storage/DiskDetail';
 import type { Resource } from '@/types/resource';
@@ -50,6 +50,11 @@ describe('DiskDetail', () => {
   it('keeps disk detail range choices inside the current history entitlement', () => {
     render(() => <DiskDetail disk={buildDisk()} nodes={[]} />);
 
+    expect(screen.getByRole('tab', { name: 'Overview' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.queryByRole('combobox', { name: 'Disk history range' })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('tab', { name: 'History' }));
+
     const rangeSelector = screen.getByRole('combobox', {
       name: 'Disk history range',
     }) as HTMLSelectElement;
@@ -63,6 +68,7 @@ describe('DiskDetail', () => {
     ]);
     expect(Array.from(rangeSelector.options).map((option) => option.value)).not.toContain('14d');
     expect(Array.from(rangeSelector.options).map((option) => option.value)).not.toContain('90d');
+    expect(screen.getByRole('tab', { name: 'History' })).toHaveAttribute('aria-selected', 'true');
   });
 
   it('shows explicit collection status and does not render misleading live I/O', () => {

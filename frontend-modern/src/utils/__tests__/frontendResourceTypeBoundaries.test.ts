@@ -904,8 +904,10 @@ describe('frontend resource type boundaries', () => {
     expect(guestDrawerStateSource).toContain('guestOsSummary');
     expect(guestDrawerSource).not.toContain('const guestId = () => {');
     expect(guestDrawerSource).not.toContain('WebInterfaceUrlField');
-    expect(guestDrawerOverviewSource).toContain('WebInterfaceUrlField');
-    expect(guestDrawerOverviewSource).toContain('DiskList');
+    expect(guestDrawerOverviewSource).toContain('TechnicalDetailsSection');
+    expect(guestDrawerOverviewSource).toContain('DrawerAttentionSection');
+    expect(guestDrawerOverviewSource).not.toContain('WebInterfaceUrlField');
+    expect(guestDrawerOverviewSource).not.toContain('DiskList');
     expect(workloadsWorkloadTableSource).toContain('WorkloadTableHeader');
     expect(workloadsWorkloadTableSource).toContain('WorkloadPanel');
     expect(workloadsWorkloadTableSource).not.toContain('<TableHead');
@@ -1281,7 +1283,7 @@ describe('frontend resource type boundaries', () => {
     expect(storagePoolDetailSource).toContain('useStoragePoolDetailModel');
     expect(storagePoolDetailSource).toContain('STORAGE_POOL_DETAIL_HISTORY_RANGE_OPTIONS');
     expect(storagePoolDetailSource).toContain('FormSelect');
-    expect(storagePoolDetailSource).toContain('label="Capacity trend range"');
+    expect(storagePoolDetailSource).toContain('label="Capacity history range"');
     expect(storagePoolDetailSource).not.toContain('<select');
     expect(storagePoolDetailSource).not.toContain('const ConfigRow: Component');
     expect(storagePoolDetailSource).not.toContain('const chartResourceType = createMemo');
@@ -1604,7 +1606,8 @@ describe('frontend resource type boundaries', () => {
     );
     expect(diskDetailPresentationSource).toContain('export const DISK_DETAIL_LIVE_CHARTS');
     expect(storageDetailPresentationSource).toContain('export const STORAGE_DETAIL_CARD_CLASS');
-    expect(storageDetailPresentationSource).toContain('export const STORAGE_DETAIL_SELECT_CLASS');
+    expect(storageDetailPresentationSource).not.toContain('STORAGE_DETAIL_SELECT_CLASS');
+    expect(storagePoolDetailSource).toContain('filterSelectClass');
     expect(storageDetailPresentationSource).toContain('export const STORAGE_DETAIL_EMPTY_CLASS');
     expect(storageDetailPresentationSource).toContain('export const STORAGE_DETAIL_ROW_CLASS');
     expect(storageDetailPresentationSource).toContain(
@@ -2563,7 +2566,9 @@ describe('frontend resource type boundaries', () => {
     expect(discoveryProvenanceMarkerSource).toContain('getDiscoveryProvenanceBadgeClass');
     expect(discoveryTabSource).toContain('DiscoveryProvenanceMarker');
     expect(webInterfaceUrlFieldSource).toContain('DiscoveryProvenanceMarker');
-    expect(guestDrawerOverviewSource).toContain('DiscoveryProvenanceMarker');
+    expect(guestDrawerOverviewSource).toContain('discovery.sourceLabel');
+    expect(guestDrawerOverviewSource).toContain('formatDiscoveryAge');
+    expect(guestDrawerOverviewSource).not.toContain('DiscoveryProvenanceMarker');
     expect(discoveryPresentationSource).toContain(
       'export function getDiscoverySuggestedURLCardClass',
     );

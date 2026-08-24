@@ -9761,7 +9761,21 @@
     }
   ],
   "candidate_lanes": [],
-  "work_claims": [],
+  "work_claims": [
+    {
+      "id": "codex-table-sort-indicators-lane-l8",
+      "agent_id": "codex-table-sort-indicators",
+      "summary": "Canonicalize active-only sortable table header indicators across shared platform surfaces",
+      "target_id": "v6-product-lane-expansion",
+      "claimed_at": "2026-08-24T15:51:40Z",
+      "heartbeat_at": "2026-08-24T15:51:40Z",
+      "expires_at": "2026-08-24T17:51:40Z",
+      "work_item": {
+        "kind": "lane",
+        "id": "L8"
+      }
+    }
+  ],
   "open_decisions": [],
   "source_of_truth_file": "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",
   "resolved_decisions": [
