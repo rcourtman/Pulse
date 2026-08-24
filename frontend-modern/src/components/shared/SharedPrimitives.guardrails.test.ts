@@ -87,6 +87,7 @@ import summaryCardInteractionSource from '@/components/shared/summaryCardInterac
 import summaryRowActionButtonSource from '@/components/shared/SummaryRowActionButton.tsx?raw';
 import summaryInteractionA11ySource from '@/components/shared/summaryInteractionA11y.ts?raw';
 import tableSource from '@/components/shared/Table.tsx?raw';
+import tableSortPresentationSource from '@/components/shared/tableSortPresentation.ts?raw';
 import tableCardHeaderSource from '@/components/shared/TableCardHeader.tsx?raw';
 import summaryTableFocusSource from '@/components/shared/summaryTableFocus.ts?raw';
 import tableCardSource from '@/components/shared/TableCard.tsx?raw';
@@ -174,6 +175,7 @@ import guestDrawerHistorySource from '@/components/Workloads/GuestDrawerHistory.
 import nodeDrawerSource from '@/components/Workloads/NodeDrawer.tsx?raw';
 import workloadsSurfaceSource from '@/components/Workloads/WorkloadsSurface.tsx?raw';
 import workloadsTableSource from '@/components/Workloads/WorkloadsTable.tsx?raw';
+import workloadTableHeaderSource from '@/components/Workloads/WorkloadTableHeader.tsx?raw';
 import workloadPanelSource from '@/components/Workloads/WorkloadPanel.tsx?raw';
 import guestRowStateSource from '@/components/Workloads/useGuestRowState.ts?raw';
 import workloadSelectionStateSource from '@/components/Workloads/useWorkloadSelectionState.ts?raw';
@@ -1445,6 +1447,25 @@ describe('shared primitive guardrails', () => {
     expect(apiTokenManagerSource.match(/frame="flush"/g) ?? []).toHaveLength(1);
     expect(rolesPanelSource.match(/frame="flush"/g) ?? []).toHaveLength(1);
     expect(userAssignmentsPanelSource.match(/frame="flush"/g) ?? []).toHaveLength(1);
+  });
+
+  it('keeps sortable table direction markers active-only and shared', () => {
+    expect(tableSortPresentationSource).toContain('export function getTableSortIndicator');
+    expect(tableSortPresentationSource).toContain('if (!active) return null');
+
+    for (const source of [
+      sharedPlatformPageSource,
+      workloadTableHeaderSource,
+      storagePoolsTableSource,
+      proxmoxBackupsTableSharedSource,
+    ]) {
+      expect(source).toContain('getTableSortIndicator');
+    }
+
+    for (const source of [storagePoolsTableSource, proxmoxBackupsTableSharedSource]) {
+      expect(source).not.toContain('ArrowUpDownIcon');
+      expect(source).not.toContain('SORT_ICON_CLASS');
+    }
   });
 
   it('keeps chart visibility display actions on the shared toolbar toggle', () => {

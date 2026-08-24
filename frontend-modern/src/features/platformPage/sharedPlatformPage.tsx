@@ -23,6 +23,7 @@ import { FilterBar, filterChipStatusDot, type FilterDef } from '@/components/sha
 import { FilterSegmentedControl } from '@/components/shared/FilterToolbar';
 import { type SearchInputProps, type SearchInputSuggestion } from '@/components/shared/SearchInput';
 import { Table, TableBody, TableHead, TableHeader, TableRow } from '@/components/shared/Table';
+import { getTableSortIndicator } from '@/components/shared/tableSortPresentation';
 import { TableCard } from '@/components/shared/TableCard';
 import { TableCardHeader } from '@/components/shared/TableCardHeader';
 import { useActiveHorizontalRailItemVisibility } from '@/components/shared/useActiveHorizontalRailItemVisibility';
@@ -573,7 +574,7 @@ export function PlatformSortableTableHead<SortKey extends string>(props: {
       onClick={handleClick}
     >
       {props.children}
-      {isSorted() && (props.sort.sortDirection() === 'asc' ? ' ▲' : ' ▼')}
+      {isSorted() ? ` ${getTableSortIndicator(true, props.sort.sortDirection())}` : null}
     </TableHead>
   );
 }

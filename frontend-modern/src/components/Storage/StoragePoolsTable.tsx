@@ -1,7 +1,4 @@
 import { Component, For, Show, createMemo } from 'solid-js';
-import ArrowDownIcon from 'lucide-solid/icons/arrow-down';
-import ArrowUpIcon from 'lucide-solid/icons/arrow-up';
-import ArrowUpDownIcon from 'lucide-solid/icons/arrow-up-down';
 import {
   Table,
   TableBody,
@@ -10,6 +7,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/shared/Table';
+import { getTableSortIndicator } from '@/components/shared/tableSortPresentation';
 import { getPlatformTableHeadClassForKind } from '@/features/platformPage/sharedPlatformPage';
 import {
   getStoragePoolColumnWidthPercent,
@@ -69,7 +67,6 @@ type StoragePoolsTableProps = {
 
 const STORAGE_POOL_HEADER_SORT_BUTTON_CLASS =
   'inline-flex min-w-0 max-w-full items-center gap-1 rounded-sm text-left outline-none transition-colors hover:text-base-content focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 focus-visible:ring-offset-surface';
-const STORAGE_POOL_HEADER_SORT_ICON_CLASS = 'h-3 w-3 shrink-0';
 
 const getNextStorageColumnSortDirection = (
   currentSortKey: StorageSortKey,
@@ -195,30 +192,10 @@ export const StoragePoolsTable: Component<StoragePoolsTableProps> = (props) => {
                         >
                           <span class="min-w-0 truncate">{column.label}</span>
                         </Show>
-                        <Show
-                          when={props.sortKey === column.sortKey}
-                          fallback={
-                            <ArrowUpDownIcon
-                              aria-hidden="true"
-                              class={`${STORAGE_POOL_HEADER_SORT_ICON_CLASS} text-muted/70`}
-                            />
-                          }
-                        >
-                          <Show
-                            when={props.sortDirection === 'asc'}
-                            fallback={
-                              <ArrowDownIcon
-                                aria-hidden="true"
-                                class={`${STORAGE_POOL_HEADER_SORT_ICON_CLASS} text-base-content`}
-                              />
-                            }
-                          >
-                            <ArrowUpIcon
-                              aria-hidden="true"
-                              class={`${STORAGE_POOL_HEADER_SORT_ICON_CLASS} text-base-content`}
-                            />
-                          </Show>
-                        </Show>
+                        {getTableSortIndicator(
+                          props.sortKey === column.sortKey,
+                          props.sortDirection,
+                        )}
                       </button>
                     </TableHead>
                   )}

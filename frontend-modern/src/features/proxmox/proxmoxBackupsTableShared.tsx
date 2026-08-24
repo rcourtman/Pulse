@@ -1,12 +1,10 @@
-import { Show, type Accessor } from 'solid-js';
-import ArrowDownIcon from 'lucide-solid/icons/arrow-down';
-import ArrowUpIcon from 'lucide-solid/icons/arrow-up';
-import ArrowUpDownIcon from 'lucide-solid/icons/arrow-up-down';
+import type { Accessor } from 'solid-js';
 import { filterChipStatusDot } from '@/components/shared/FilterBar';
 import { type FilterOption } from '@/components/shared/FilterButtonGroup';
 import { MetadataBadge } from '@/components/shared/MetadataBadge';
 import { ProgressBar } from '@/components/shared/ProgressBar';
 import { TableHead } from '@/components/shared/Table';
+import { getTableSortIndicator } from '@/components/shared/tableSortPresentation';
 import { WorkloadTypeBadge as SharedWorkloadTypeBadge } from '@/components/shared/WorkloadTypeBadge';
 import { PlatformTableRelativeTimeValue } from '@/features/platformPage/sharedPlatformPage';
 
@@ -334,13 +332,11 @@ export function ProxmoxBackupWorkloadTypeBadge(props: {
   );
 }
 
-// Sortable column header — matches Storage's pattern (StoragePoolsTable.tsx).
+// Sortable column header — matches the shared active-only table pattern.
 // Clicking an inactive column sorts it with the supplied default direction;
-// clicking the active column flips direction. Renders the idle / asc / desc
-// arrow trio so the affordance reads identically across the app.
+// clicking the active column flips direction.
 const SORT_BUTTON_CLASS =
   'inline-flex min-w-0 max-w-full items-center gap-1 rounded-sm outline-none transition-colors hover:text-base-content focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 focus-visible:ring-offset-surface';
-const SORT_ICON_CLASS = 'h-3 w-3 shrink-0';
 
 export function SortableHead<K extends string>(props: {
   label: string;
@@ -376,21 +372,7 @@ export function SortableHead<K extends string>(props: {
         title={ariaLabel()}
       >
         <span class="min-w-0 truncate">{props.label}</span>
-        <Show
-          when={isActive()}
-          fallback={
-            <ArrowUpDownIcon class={`${SORT_ICON_CLASS} text-muted/70`} aria-hidden="true" />
-          }
-        >
-          <Show
-            when={props.direction() === 'asc'}
-            fallback={
-              <ArrowDownIcon class={`${SORT_ICON_CLASS} text-base-content`} aria-hidden="true" />
-            }
-          >
-            <ArrowUpIcon class={`${SORT_ICON_CLASS} text-base-content`} aria-hidden="true" />
-          </Show>
-        </Show>
+        {getTableSortIndicator(isActive(), props.direction())}
       </button>
     </TableHead>
   );

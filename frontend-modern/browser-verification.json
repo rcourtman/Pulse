@@ -1,28 +1,27 @@
 {
   "version": 1,
-  "base_sha": "32b721503cc1bf75592baed55599c98e1c2aa896",
-  "verified_at": "2026-08-24T15:58:26Z",
+  "base_sha": "e140ee207130c3e3be4997736429eccd7e987b53",
+  "verified_at": "2026-08-24T16:05:29Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawer.tsx",
-    "frontend-modern/src/components/Storage/DiskDetail.tsx",
-    "frontend-modern/src/components/Storage/StoragePoolDetail.tsx",
-    "frontend-modern/src/features/storageBackups/detailPresentation.ts"
+    "frontend-modern/src/components/Storage/StoragePoolsTable.tsx",
+    "frontend-modern/src/components/Workloads/WorkloadTableHeader.tsx",
+    "frontend-modern/src/components/shared/tableSortPresentation.ts",
+    "frontend-modern/src/features/platformPage/sharedPlatformPage.tsx",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTableShared.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawer.tsx": "5eb9c0f3293e10771e1c68c91e61030046c1999a12d007ffcd45a1e345306fc2",
-    "frontend-modern/src/components/Storage/DiskDetail.tsx": "f9c0574b3437b4dfe81585aecdbfed441dbeef32f066022a0fc3dd5aa5719991",
-    "frontend-modern/src/components/Storage/StoragePoolDetail.tsx": "f678e7339627759d82cd78e50c3afad8857203ff5f8f196c4676277c5b613d29",
-    "frontend-modern/src/features/storageBackups/detailPresentation.ts": "5a179856f2f0fe148034abc8c3360b598eab89084871a923e8d8918754dc3187"
+    "frontend-modern/src/components/Storage/StoragePoolsTable.tsx": "a2dc17b6c7531c95bc52a4f20bc34e2d9157a87647b5ae20fc7fb5113b0ca5ec",
+    "frontend-modern/src/components/Workloads/WorkloadTableHeader.tsx": "bfc35a4200e6d7bd6bb26a660f3c316fe84e1b9f7a80cb43fd4a3869ce8144e8",
+    "frontend-modern/src/components/shared/tableSortPresentation.ts": "85dbad24387cc0f9909c65dc65694df4feba3dc80781398961be6548069ba4d9",
+    "frontend-modern/src/features/platformPage/sharedPlatformPage.tsx": "504400c889c59cd33f66df8be9ef92f047fa8a74765f86b893445b6fbb9ded66",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTableShared.tsx": "e5b2dd95865854d8755f4dd2e8f70e89763d35600b5f0029a9a90f8a2d90eb04"
   },
-  "routes": [
-    "/proxmox/overview",
-    "/proxmox/storage"
-  ],
+  "routes": ["/proxmox/storage", "/proxmox/backups/date", "/proxmox/overview"],
   "viewports": [
     {
       "width": 1280,
-      "height": 800
+      "height": 720
     },
     {
       "width": 390,
@@ -30,16 +29,17 @@
     }
   ],
   "states": [
-    "Proxmox node detail opening on Overview with History inactive at 1280px",
-    "storage-pool detail opening on Overview with configuration and ZFS facts visible at 390px",
-    "storage-pool History selected with its capacity chart and trailing range control at desktop and 390px",
-    "physical-disk detail opening on Overview and switching to History with live and stored I/O charts at 390px"
+    "Proxmox Storage table with no visible marker when its default sorted column is hidden",
+    "Proxmox Storage table with Usage selected as the active descending sort",
+    "compact mobile Storage table with Used as the sole active descending sort",
+    "Proxmox backup table with Created as its sole active descending sort",
+    "Proxmox overview node, workload, and storage headers using the shared active-only marker"
   ],
   "interactions": [
-    "opened a storage pool and confirmed historical content and range controls are absent from the default Overview tab",
-    "selected storage-pool History and confirmed the range control and Capacity Trend appear together without clipping",
-    "switched to Physical Disks, opened a disk, and confirmed the same Overview-to-History interaction and trailing range placement",
-    "compared the storage detail tab framing with an expanded Proxmox node drawer at 1280px",
-    "reset the temporary responsive viewport override after completing the phone-width checks"
+    "clicked the desktop Storage Usage header and confirmed only Usage displayed a descending marker with aria-sort descending",
+    "inspected the compact mobile Storage table and confirmed only Used displayed its persisted descending marker while the page remained contained to 390 pixels",
+    "inspected the Proxmox backup table and confirmed only the active Created column displayed a direction marker",
+    "inspected Proxmox overview table headers and confirmed only the active workload Type column displayed a direction marker",
+    "confirmed inactive sortable headers remained clickable and clearly labelled without dormant up/down icons"
   ]
 }

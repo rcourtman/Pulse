@@ -89,6 +89,12 @@ describe('proxmoxBackupsTableShared', () => {
     expect(proxmoxBackupsTableSharedSource).toContain('PlatformTableRelativeTimeValue');
     expect(proxmoxBackupsTableSharedSource).not.toContain('formatRelativeTime(');
   });
+
+  it('keeps backup sort headers on the shared active-only indicator', () => {
+    expect(proxmoxBackupsTableSharedSource).toContain('getTableSortIndicator');
+    expect(proxmoxBackupsTableSharedSource).not.toContain('ArrowUpDownIcon');
+    expect(proxmoxBackupsTableSharedSource).not.toContain('SORT_ICON_CLASS');
+  });
 });
 
 function artifact(overrides: Partial<RecoverableArtifact> = {}): RecoverableArtifact {

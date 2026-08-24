@@ -594,8 +594,15 @@ describe('Storage', () => {
     ).toBe(true);
 
     const usageHeader = screen.getByRole('columnheader', { name: 'Usage' });
+    const sortableHeaderButtons = screen.getAllByRole('button', { name: /^Sort .* column/ });
+    expect(within(usageHeader).getByRole('button')).not.toHaveTextContent(/[▲▼]/);
+
     fireEvent.click(within(usageHeader).getByRole('button', { name: 'Sort Usage column' }));
     expect(usageHeader).toHaveAttribute('aria-sort', 'descending');
+    expect(within(usageHeader).getByRole('button')).toHaveTextContent('▼');
+    expect(
+      sortableHeaderButtons.filter((button) => /[▲▼]/.test(button.textContent ?? '')),
+    ).toHaveLength(1);
     const viewOptions = openStorageViewOptions();
     expect((within(viewOptions).getByLabelText('Sort by') as HTMLSelectElement).value).toBe(
       'usage',

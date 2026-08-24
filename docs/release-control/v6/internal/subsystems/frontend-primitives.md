@@ -913,6 +913,12 @@ the shared `TableHead` primitive and expose column state through `aria-sort`;
 the feature owner may define the sort keys and data comparator, but the header
 interaction must update that canonical owner state rather than forking
 table-local sort state or making header labels look clickable while inert.
+Sortable header direction presentation belongs to
+`frontend-modern/src/components/shared/tableSortPresentation.ts`. Inactive
+sortable columns stay visually quiet; only the active column renders its
+ascending or descending marker. Storage, Workloads, backup, and shared platform
+tables must consume that helper rather than repeating dormant up/down icons in
+every header or defining page-local direction glyphs.
 
 Shared filter/search primitives may provide the common shell, keyboard behavior,
 history, and reset mechanics, but the owning page or table must supply
@@ -2146,7 +2152,8 @@ default` instead of fusing provider and badge text such as
     persists per table through `usePersistentSignal` storage keys; rows with
     missing values sink to the bottom regardless of direction; headers expose
     `aria-sort` and the arrow indicator consistent with the workloads table
-    header; and header alignment stays on the canonical
+    header through the active-only `tableSortPresentation.ts` helper; and header
+    alignment stays on the canonical
     `getPlatformTableHeadClassForKind` helpers from `columnAlignment.ts`. A
     table's default order remains its page-model status-first compare until
     the user selects a column, and grouped modes (for example Docker's

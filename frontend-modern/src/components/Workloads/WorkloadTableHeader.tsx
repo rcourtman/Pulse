@@ -1,6 +1,7 @@
 import { For } from 'solid-js';
 
 import { TableHead, TableHeader, TableRow } from '@/components/shared/Table';
+import { getTableSortIndicator } from '@/components/shared/tableSortPresentation';
 import {
   getPlatformColumnAlign,
   type PlatformTableColumnKind,
@@ -114,7 +115,7 @@ export function WorkloadTableHeader(props: WorkloadTableHeaderProps) {
                   ) : (
                     label()
                   )}
-                  {isSorted() && (props.sortDirection() === 'asc' ? ' ▲' : ' ▼')}
+                  {getTableSortIndicator(Boolean(isSorted()), props.sortDirection())}
                 </div>
               </TableHead>
             );

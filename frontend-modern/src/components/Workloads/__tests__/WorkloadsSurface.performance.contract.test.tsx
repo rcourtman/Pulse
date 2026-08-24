@@ -1655,6 +1655,7 @@ describe('Workloads performance contract', () => {
       expect(workloadsWorkloadTableSource).not.toContain('GuestDrawer');
       expect(workloadTableHeaderSource).toContain('TableHead');
       expect(workloadTableHeaderSource).toContain('col.sortKey as WorkloadSortKey');
+      expect(workloadTableHeaderSource).toContain('getTableSortIndicator');
       expect(workloadTableHeaderSource).toContain('style={getGuestColumnStyle(');
       expect(workloadTableHeaderSource).toContain('props.workloadTableLayoutMode()');
       expect(workloadTableHeaderSource).toContain('props.workloadTableVisibleColumnIds()');

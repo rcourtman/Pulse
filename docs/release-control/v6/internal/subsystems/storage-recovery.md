@@ -3351,6 +3351,11 @@ storage-local raw `<select>` wrapper. Grouping, sort key, and sort direction are
 durable presentation preferences, so `StoragePageControls` supplies them
 through the frontend-primitives-owned `FilterBar.viewOptions` content boundary
 instead of leaving them as permanent filter-rail controls.
+Sortable storage and Proxmox backup headers keep their real button and
+`aria-sort` semantics, but their visible direction marker must come from the
+frontend-primitives-owned `tableSortPresentation.ts` helper. Inactive columns
+must not repeat dormant up/down icons across the header row; only the active
+sort column displays its direction.
 Recovery all-history, all-item-type, and all-platform defaults follow the same
 shared filter-option contract through
 `frontend-modern/src/utils/recoveryTablePresentation.ts`, so recovery history

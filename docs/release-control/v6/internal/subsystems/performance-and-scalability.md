@@ -889,6 +889,10 @@ change may globally weaken the Task 03 lifecycle-state idempotency invariant.
     the column label must remain present through an `sr-only` label so the
     header row exposes names such as Uptime, Image, Context, and Node instead
     of collapsing to only the visible text columns.
+    Sort-direction presentation must remain a constant-time shared helper call:
+    inactive headers render no repeated marker, while the active header consumes
+    `frontend-modern/src/components/shared/tableSortPresentation.ts`. It must not
+    add per-column state, measurement, or listeners to the workload hot path.
     Inline detail table rows rendered from workload or infrastructure hot
     paths must compose the frontend-primitives-owned
     `InlineDetailTableRow` shell. Performance ownership remains on expansion
