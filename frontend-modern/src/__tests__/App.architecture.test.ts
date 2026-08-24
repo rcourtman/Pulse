@@ -268,8 +268,11 @@ describe('App architecture', () => {
       "import { APP_SHELL_ROUTE_PRELOAD_PATHS, preloadRouteModule } from '@/routing/routePreload';",
     );
     expect(routePreloadSource).toContain('export const APP_SHELL_ROUTE_PRELOAD_PATHS = [');
-    expect(routePreloadSource).toContain('ROOT_PROXMOX_PATH,');
-    expect(routePreloadSource).toContain('PATROL_PATH,');
+    expect(routePreloadSource).toContain(
+      'export const APP_SHELL_ROUTE_PRELOAD_PATHS = [ACTIONS_PATH] as const;',
+    );
+    expect(routePreloadSource).not.toContain('ROOT_PROXMOX_PATH');
+    expect(routePreloadSource).not.toContain('ROOT_STANDALONE_PATH');
     // These aggregate pages never shipped as stable top-level routes, so they
     // must not remain wired as hidden compatibility or shell workspace surfaces.
     expect(routePreloadSource).not.toContain('ROOT_INFRASTRUCTURE_PATH');
@@ -660,8 +663,12 @@ describe('App architecture', () => {
     expect(appLayoutSource).not.toContain('presentationPolicyHidesCommercialSurfaces');
     expect(appLayoutSource).not.toContain('presentationPolicyHidesOrganizationSurfaces');
     expect(appLayoutSource).not.toContain('presentationPolicyIsDemoMode');
-    expect(appLayoutSource).toContain('await preloadRouteModule(targetRoute);');
-    expect(appLayoutSource).toContain('await preloadRouteModule(tab.route);');
+    expect(appLayoutSource).toContain(
+      'warmNavigationTarget(targetRoute);\n    navigate(targetRoute);',
+    );
+    expect(appLayoutSource).toContain('warmNavigationTarget(tab.route);\n    navigate(tab.route);');
+    expect(appLayoutSource).not.toContain('await preloadRouteModule(targetRoute);');
+    expect(appLayoutSource).not.toContain('await preloadRouteModule(tab.route);');
     expect(appLayoutSource).toContain('onMouseEnter={() => warmNavigationTarget(');
     expect(appLayoutSource).toContain('aiChatStore.enabled === true &&');
     expect(appLayoutSource).toContain('!dialogStackHasBlockingDialog()');

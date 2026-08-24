@@ -1130,6 +1130,38 @@ const filterCanonicalUnifiedResources = (
   return resources.filter((resource) => typeFilter.has(resolveType(resource.type)));
 };
 
+/**
+ * Resolve the small set of store rows that need reconciliation for one
+ * canonical realtime revision. A structural mismatch returns `null` so the
+ * caller can fall back to a full keyed reconcile for additions, removals, type
+ * membership changes, or order changes.
+ *
+ * Agent rows are a bounded exception: when an agent changed, canonical host
+ * coalescing can update another agent row as well, so refresh the complete
+ * agent subset while leaving every non-host row outside the delta untouched.
+ */
+export const resolveIncrementalResourcePatchIndices = (
+  current: readonly Resource[],
+  next: readonly Resource[],
+  changedIds: ReadonlySet<string>,
+  refreshAgentRows: boolean,
+): number[] | null => {
+  if (current.length !== next.length) return null;
+
+  const patchIndices: number[] = [];
+  for (let index = 0; index < next.length; index += 1) {
+    const currentResource = current[index];
+    const nextResource = next[index];
+    if (!currentResource || !nextResource || currentResource.id !== nextResource.id) {
+      return null;
+    }
+    if (changedIds.has(nextResource.id) || (refreshAgentRows && nextResource.type === 'agent')) {
+      patchIndices.push(index);
+    }
+  }
+  return patchIndices;
+};
+
 const seedUnifiedResourcesCacheFromAllResources = (
   entry: UnifiedResourcesCacheEntry,
   cacheKey: string,
@@ -1657,11 +1689,37 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
       allResourcesEntry.realtimeVersion = resourceChange.version;
     }
 
+    const canPatchProjectionIncrementally =
+      resourceChange.changedIds !== null &&
+      cacheEntry.hasSnapshot &&
+      cacheEntry.realtimeVersion > 0 &&
+      resourceChange.version === cacheEntry.realtimeVersion + 1 &&
+      resolvedProjectedResources === projectedResources;
+    const changedResourceTouchesAgent =
+      canPatchProjectionIncrementally &&
+      wsResources.some(
+        (resource) => resource.type === 'agent' && resourceChange.changedIds!.has(resource.id),
+      );
+    const incrementalPatchIndices = canPatchProjectionIncrementally
+      ? resolveIncrementalResourcePatchIndices(
+          resources as unknown as Resource[],
+          resolvedProjectedResources,
+          resourceChange.changedIds!,
+          changedResourceTouchesAgent,
+        )
+      : null;
+
     setUnifiedResourcesCache(cacheEntry, resolvedProjectedResources, now);
     cacheEntry.lastFetchAt = now;
     cacheEntry.realtimeVersion = resourceChange.version;
     batch(() => {
-      setResources(reconcile(resolvedProjectedResources, { key: 'id' }));
+      if (incrementalPatchIndices === null) {
+        setResources(reconcile(resolvedProjectedResources, { key: 'id' }));
+      } else {
+        incrementalPatchIndices.forEach((index) => {
+          setResources(index, reconcile(resolvedProjectedResources[index], { key: 'id' }));
+        });
+      }
       setPolicyPosture(cacheEntry.policyPosture);
       setAggregations(cacheEntry.aggregations);
       setError(undefined);

@@ -975,7 +975,11 @@ dashboard-specific overview, trend, or summary transport.
     preload call in `frontend-modern/src/App.tsx`. `frontend-modern/src/useAppRuntimeState.ts`
     must not keep page-local dynamic imports or a second route-preload cache,
     because the runtime bootstrap already owns state, chart cache warming, org
-    hydration, and health probing.
+    hydration, and health probing. The delayed preload set is limited to the
+    lightweight global Actions review route. Alerts and platform routes load
+    from operator intent because their larger module graphs should not compile
+    behind the current destination; Patrol, Settings, and alternate platform
+    modules remain lazy for the same phone-startup reason.
     The same protected hot path now also owns proof harness steadiness.
     Store-backed chart SLO and benchmark helpers in `pkg/metrics/store_slo_test.go`,
     `internal/api/slo_bench_test.go`, and `internal/monitoring/monitor_metrics_slo_test.go`

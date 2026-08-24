@@ -1457,11 +1457,12 @@ describe('frontend resource type boundaries', () => {
     expect(storagePageDataSource).toContain('useStorageModel');
     expect(storagePageResourcesSource).toContain('export const useStoragePageResources');
     expect(storagePageResourcesSource).toContain('useWebSocket');
-    expect(storagePageResourcesSource).toContain('useResources');
     expect(storagePageResourcesSource).toContain('useUnifiedResources');
     expect(storagePageResourcesSource).toContain(
-      "const STORAGE_PAGE_RESOURCES_QUERY = 'type=storage'",
+      "const STORAGE_PAGE_RESOURCES_QUERY = 'type=agent,pbs,storage,physical_disk,ceph'",
     );
+    expect(storagePageResourcesSource).not.toContain("from '@/hooks/useResources'");
+    expect(storagePageResourcesSource).toContain('options.resourceSource ??');
     expect(storagePageResourcesSource).toContain('useAlertsActivation');
     expect(storagePageModelSource).toContain('export const useStoragePageModel');
     expect(storagePageModelSource).toContain('useStoragePageResources');

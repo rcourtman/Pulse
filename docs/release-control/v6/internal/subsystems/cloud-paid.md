@@ -635,6 +635,10 @@ utility tab arrays are identity-stabilized through the shared
 `frontend-primitives`): navigation destinations, including the Actions utility
 tab and its pending-approval badge, must not have their DOM recreated by a
 websocket state frame whose tab content is structurally unchanged.
+Primary and utility navigation must commit the route synchronously with the
+tap. Route-module warming remains best-effort background work and must never be
+awaited before `navigate`, so a cold or invalidated lazy chunk cannot make the
+responsive shell appear to ignore an operator.
 
 1. Add or change limits through `pkg/licensing/`
 2. Add or change hosted entitlement issuance through `internal/cloudcp/entitlements/service.go`

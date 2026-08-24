@@ -380,7 +380,7 @@ describe('ProxmoxPageSurface contract', () => {
     ]);
     expect(options.map((value) => value.query)).toEqual([
       'type=agent,vm,system-container,oci-container',
-      'type=agent,pbs,storage,physical_disk',
+      'type=agent,pbs,storage,physical_disk,ceph',
       'type=agent',
       'type=agent,vm,system-container,pbs',
       'type=ceph',
@@ -389,6 +389,8 @@ describe('ProxmoxPageSurface contract', () => {
     expect(options[0].enabled()).toBe(true);
     expect(options.slice(1).every((value) => value.enabled() === false)).toBe(true);
     expect(proxmoxPageSurfaceSource).toContain('requestIdleCallback');
+    expect(proxmoxPageSurfaceSource).toContain("phoneViewport\n      ? ['storage']");
+    expect(proxmoxPageSurfaceSource).toContain('resourceSource={storageResources}');
   });
 
   it('places workload controls beside the workload table they affect', () => {

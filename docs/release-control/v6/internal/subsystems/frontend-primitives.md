@@ -2551,9 +2551,11 @@ default` instead of fusing provider and badge text such as
     primitive spinner contract.
     The authenticated app shell's boot-time route preloads must be owned by
     `frontend-modern/src/routing/routePreload.ts` so top-level cold-tab
-    readiness cannot drift from the route-module preloader. Workloads,
-    Recovery, Patrol, Alerts, Storage, and Settings are part of that shared
-    preload contract.
+    readiness cannot drift from the route-module preloader. The delayed
+    boot-time set is bounded to the lightweight global Actions review
+    destination. Alerts, platform, Patrol, and Settings modules load from
+    current route or interaction intent instead of compiling an unseen
+    workspace behind the active phone route.
     Route-module preloads and chart-cache fetches are separate shell
     responsibilities: the shared route preload inventory must stay module-only,
     while chart payload warming must route through the route or interaction that

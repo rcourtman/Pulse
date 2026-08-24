@@ -141,9 +141,14 @@ describe('useUnifiedResources', () => {
   let setWsState: SetStoreFunction<TestWsState>;
   let setWsConnected: (value: boolean) => boolean;
   let setWsInitialDataReceived: (value: boolean) => boolean;
+  let setWsResourceChange: (value: {
+    version: number;
+    changedIds: ReadonlySet<string> | null;
+  }) => unknown;
   let useUnifiedResources: UseUnifiedResourcesModule['useUnifiedResources'];
   let useStorageRecoveryResources: UseUnifiedResourcesModule['useStorageRecoveryResources'];
   let resetUnifiedResourcesCacheForTests: UseUnifiedResourcesModule['__resetUnifiedResourcesCacheForTests'];
+  let resolveIncrementalResourcePatchIndices: UseUnifiedResourcesModule['resolveIncrementalResourcePatchIndices'];
   let eventBus: (typeof import('@/stores/events'))['eventBus'];
 
   beforeEach(async () => {
@@ -157,8 +162,13 @@ describe('useUnifiedResources', () => {
 
     const [connected, _setConnected] = createSignal(true);
     const [initialDataReceived, _setInitialDataReceived] = createSignal(true);
+    const [resourceChange, _setResourceChange] = createSignal<{
+      version: number;
+      changedIds: ReadonlySet<string> | null;
+    }>({ version: 0, changedIds: null });
     setWsConnected = _setConnected;
     setWsInitialDataReceived = _setInitialDataReceived;
+    setWsResourceChange = _setResourceChange;
     const [state, _setWsState] = createStore<TestWsState>({
       connectedInfrastructure: [],
       metrics: [],
@@ -188,7 +198,7 @@ describe('useUnifiedResources', () => {
     });
     setWsState = _setWsState;
 
-    const wsStore = { connected, initialDataReceived, state };
+    const wsStore = { connected, initialDataReceived, state, resourceChange };
 
     vi.doMock('@/utils/apiClient', () => ({
       apiFetch: apiFetchMock,
@@ -202,6 +212,7 @@ describe('useUnifiedResources', () => {
       useUnifiedResources,
       useStorageRecoveryResources,
       __resetUnifiedResourcesCacheForTests: resetUnifiedResourcesCacheForTests,
+      resolveIncrementalResourcePatchIndices,
     } = await import('@/hooks/useUnifiedResources'));
     ({ eventBus } = await import('@/stores/events'));
     resetUnifiedResourcesCacheForTests();
@@ -211,6 +222,85 @@ describe('useUnifiedResources', () => {
     vi.useRealTimers();
     vi.clearAllMocks();
     vi.resetModules();
+  });
+
+  it('bounds realtime store reconciliation to changed rows in a large estate', () => {
+    const current = Array.from({ length: 1_508 }, (_, index): Resource => ({
+      ...createWsResource(),
+      id: `resource-${index}`,
+      name: `resource-${index}`,
+      displayName: `resource-${index}`,
+      type: index < 50 ? 'agent' : 'vm',
+    }));
+    const next = current.map((resource, index) =>
+      index === 900 ? { ...resource, cpu: { current: 73 } } : resource,
+    );
+
+    expect(
+      resolveIncrementalResourcePatchIndices(current, next, new Set(['resource-900']), false),
+    ).toEqual([900]);
+
+    const hostRefresh = resolveIncrementalResourcePatchIndices(
+      current,
+      next,
+      new Set(['resource-900']),
+      true,
+    );
+    expect(hostRefresh).toHaveLength(51);
+    expect(hostRefresh?.slice(0, 50)).toEqual(Array.from({ length: 50 }, (_, index) => index));
+    expect(hostRefresh?.at(-1)).toBe(900);
+  });
+
+  it('falls back to a full keyed reconcile when realtime membership or order changes', () => {
+    const first = createWsResource({ id: 'first' });
+    const second = createWsResource({ id: 'second' });
+
+    expect(
+      resolveIncrementalResourcePatchIndices(
+        [first, second],
+        [second, first],
+        new Set(['first', 'second']),
+        false,
+      ),
+    ).toBeNull();
+    expect(
+      resolveIncrementalResourcePatchIndices([first], [first, second], new Set(['second']), false),
+    ).toBeNull();
+  });
+
+  it('applies sequential changed-ID revisions through the incremental route store path', async () => {
+    const vm = createWsResource({
+      id: 'vm-1',
+      name: 'vm-1',
+      displayName: 'vm-1',
+      type: 'vm',
+    });
+    setWsState('resources', [vm]);
+    setWsResourceChange({ version: 1, changedIds: null });
+
+    let dispose = () => {};
+    let result: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      result = useUnifiedResources({
+        query: '',
+        cacheKey: 'all-resources',
+        initialHydration: 'prefer-ws',
+      });
+    });
+
+    await waitForResourceCount(() => result!.resources().length);
+    expect(result!.resources()[0]?.cpu?.current).toBe(15);
+
+    batch(() => {
+      setWsState('resources', 0, 'cpu', 'current', 88);
+      setWsResourceChange({ version: 2, changedIds: new Set(['vm-1']) });
+      setWsState('lastUpdate', 1738843201000);
+    });
+
+    await waitForValue(() => result!.resources()[0]?.cpu?.current, 88);
+    expect(apiFetchMock).not.toHaveBeenCalled();
+    dispose();
   });
 
   it('uses canonical websocket resource updates without a REST refetch for supported queries', async () => {

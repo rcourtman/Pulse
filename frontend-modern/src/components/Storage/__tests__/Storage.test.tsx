@@ -328,7 +328,8 @@ vi.mock('@/hooks/useUnifiedResources', () => ({
     mutate: vi.fn(),
   }),
   useUnifiedResources: (options?: { cacheKey?: string }) => ({
-    resources: () => (options?.cacheKey === 'storage-page' ? hookResources : nodeResources),
+    resources: () =>
+      options?.cacheKey === 'storage-page' ? [...nodeResources, ...hookResources] : nodeResources,
     loading: () => (options?.cacheKey === 'storage-page' ? hookLoading : false),
     error: () => (options?.cacheKey === 'storage-page' ? hookError : undefined),
     refetch: vi.fn(),

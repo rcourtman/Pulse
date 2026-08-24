@@ -22,7 +22,7 @@ import { useStorageExpansionState } from './useStorageExpansionState';
 import { useStorageFilterState } from './useStorageFilterState';
 import { useStoragePageData } from './useStoragePageData';
 import { useStoragePageFilters } from './useStoragePageFilters';
-import { useStoragePageResources } from './useStoragePageResources';
+import { useStoragePageResources, type StoragePageResourceSource } from './useStoragePageResources';
 import { useStoragePageStatus } from './useStoragePageStatus';
 import { useStorageResourceHighlight } from './useStorageResourceHighlight';
 import { useStorageSummaryCharts } from './useStorageSummaryCharts';
@@ -37,6 +37,7 @@ import { buildStorageSummaryGroupScopeMap } from './storageSummaryGroups';
 
 type UseStoragePageModelOptions = {
   forcedSourceFilter?: () => string | undefined;
+  resourceSource?: StoragePageResourceSource;
 };
 
 export const useStoragePageModel = (options: UseStoragePageModelOptions = {}) => {
@@ -67,7 +68,7 @@ export const useStoragePageModel = (options: UseStoragePageModelOptions = {}) =>
     physicalDisks,
     cephResources,
     alertsEnabled,
-  } = useStoragePageResources();
+  } = useStoragePageResources({ resourceSource: options.resourceSource });
 
   const {
     search,

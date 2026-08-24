@@ -644,35 +644,6 @@ export function AppLayout(props: AppLayoutProps) {
 
   const utilityTabs = createStableTabList(utilityTabsSource, utilityNavTabEquals);
 
-  const handlePrimaryClick = (tab: PrimaryTab) => {
-    const targetRoute = resolvePrimaryNavigationRoute(tab, primaryRouteMemory);
-    void (async () => {
-      try {
-        await preloadRouteModule(targetRoute);
-      } catch (error) {
-        logger.warn('Failed to preload navigation target', {
-          route: targetRoute,
-          error: error instanceof Error ? error.message : String(error),
-        });
-      }
-      navigate(targetRoute);
-    })();
-  };
-
-  const handleUtilityClick = (tab: UtilityTab) => {
-    void (async () => {
-      try {
-        await preloadRouteModule(tab.route);
-      } catch (error) {
-        logger.warn('Failed to preload navigation target', {
-          route: tab.route,
-          error: error instanceof Error ? error.message : String(error),
-        });
-      }
-      navigate(tab.route);
-    })();
-  };
-
   const warmNavigationTarget = (route: string) => {
     void preloadRouteModule(route).catch((error) => {
       logger.warn('Failed to warm navigation target', {
@@ -680,6 +651,17 @@ export function AppLayout(props: AppLayoutProps) {
         error: error instanceof Error ? error.message : String(error),
       });
     });
+  };
+
+  const handlePrimaryClick = (tab: PrimaryTab) => {
+    const targetRoute = resolvePrimaryNavigationRoute(tab, primaryRouteMemory);
+    warmNavigationTarget(targetRoute);
+    navigate(targetRoute);
+  };
+
+  const handleUtilityClick = (tab: UtilityTab) => {
+    warmNavigationTarget(tab.route);
+    navigate(tab.route);
   };
 
   const getPrimaryTargetRoute = (tab: PrimaryTab) => {

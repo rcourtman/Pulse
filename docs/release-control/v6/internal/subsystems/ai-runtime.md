@@ -3434,7 +3434,10 @@ query...`, and `Reading storage...` before streamed tool arguments are
     `AppLayout`'s tab lists shares the nav identity-stability contract owned
     by `frontend-primitives` (`stableNavTabs.ts`): a websocket state frame
     with structurally unchanged tab content must not recreate the Patrol
-    button DOM or its attention-count badge element.
+    button DOM or its attention-count badge element. Patrol and the peer
+    utility destinations commit navigation without awaiting best-effort module
+    warming, so lazy-route work cannot make the shared AI-aware shell drop or
+    defer a tap.
     The primary-nav demotion of Infrastructure / Workloads / Storage /
     Recovery does not change Patrol or Assistant addressability: both
     surfaces remain reachable through the utility tab strip in

@@ -31,6 +31,7 @@ const patrolAttentionMockState = vi.hoisted(() => ({
 const actionInboxMockState = vi.hoisted(() => ({
   pendingActionCount: 0,
 }));
+const preloadRouteModuleMock = vi.hoisted(() => vi.fn(() => Promise.resolve()));
 
 vi.mock('@/stores/patrolAttention', () => ({
   patrolAttentionStore: {
@@ -49,7 +50,7 @@ vi.mock('@/stores/actionInbox', () => ({
 }));
 
 vi.mock('@/routing/routePreload', () => ({
-  preloadRouteModule: vi.fn(() => Promise.resolve()),
+  preloadRouteModule: preloadRouteModuleMock,
 }));
 
 const makeResource = (overrides: Partial<Resource>): Resource =>
@@ -141,6 +142,8 @@ describe('AppLayout navigation icons', () => {
     resetPrimaryNavigationRouteMemory();
     patrolAttentionMockState.activeCount = 0;
     actionInboxMockState.pendingActionCount = 0;
+    preloadRouteModuleMock.mockReset();
+    preloadRouteModuleMock.mockResolvedValue(undefined);
     clearRuntimeBranding();
     aiChatStore.close();
     aiChatStore.setEnabled(true);
@@ -256,6 +259,17 @@ describe('AppLayout navigation icons', () => {
       within(mobileNav).getByRole('button', { name: 'Actions: 3 actions await approval' }),
     ).toHaveAttribute('aria-current', 'page');
     expect(document.title).toContain('Actions');
+  });
+
+  it('commits utility navigation without waiting for a cold route preload', async () => {
+    setViewportWidth(390);
+    preloadRouteModuleMock.mockReturnValueOnce(new Promise<void>(() => undefined));
+    renderLayout([], '/alerts');
+
+    const mobileNav = screen.getByRole('navigation', { name: 'Mobile navigation' });
+    fireEvent.click(within(mobileNav).getByRole('button', { name: 'Actions' }));
+
+    await waitFor(() => expect(window.location.pathname).toBe('/actions'));
   });
 
   it('shows platform and runtime lens tabs with supported infrastructure evidence', () => {

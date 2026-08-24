@@ -1163,7 +1163,11 @@ AI-only summary payloads, or page-local heuristics.
    The connection store publishes each reconciliation's changed IDs and resource
    revision. `useUnifiedResources` applies that revision to the shared
    all-resources cache once and derives type-filtered route projections from the
-   canonical result. Route-prefetch and route-realtime activation are separate:
+   canonical result. A sequential revision with unchanged route membership
+   patches only the changed row indices plus the bounded agent coalescing set;
+   initial hydration, missed revisions, additions, removals, or reorderings
+   fall back to keyed full reconciliation. Route-prefetch and route-realtime
+   activation are separate:
    a prefetched hidden surface may retain REST data without subscribing its full
    projection to every realtime tick, and activation catches up from the shared
    cache. Richer REST-only facets are promoted into that cache before thinner

@@ -3,6 +3,7 @@ import StorageContentCard from '@/components/Storage/StorageContentCard';
 import StoragePageControls from '@/components/Storage/StoragePageControls';
 import { DEFAULT_STORAGE_SELECTED_NODE_ID } from './storagePageState';
 import { useStoragePageModel } from './useStoragePageModel';
+import type { StoragePageResourceSource } from './useStoragePageResources';
 
 type StorageProps = {
   forcedView?: 'pools' | 'disks';
@@ -17,6 +18,7 @@ type StorageProps = {
   filterAriaLabel?: string;
   filterSearchPlaceholder?: string;
   filterSearchEmptyMessage?: string;
+  resourceSource?: StoragePageResourceSource;
 };
 
 const Storage: Component<StorageProps> = (props) => {
@@ -77,6 +79,7 @@ const Storage: Component<StorageProps> = (props) => {
     setSummaryTableRootRef,
   } = useStoragePageModel({
     forcedSourceFilter: () => props.forcedSourceFilter,
+    resourceSource: props.resourceSource,
   });
 
   createEffect(() => {

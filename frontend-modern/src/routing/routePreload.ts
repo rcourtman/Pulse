@@ -1,7 +1,5 @@
 import {
-  buildProxmoxPath,
   ACTIONS_PATH,
-  buildStandalonePath,
   DOCKER_PATH,
   KUBERNETES_PATH,
   PATROL_PATH,
@@ -17,20 +15,11 @@ type RoutePreloader = {
   preload: () => Promise<void>;
 };
 
-const ROOT_PROXMOX_PATH = buildProxmoxPath();
-const ROOT_STANDALONE_PATH = buildStandalonePath();
 const ALERTS_PATH = '/alerts';
 const SETTINGS_PATH = '/settings';
 const routePreloadCache = new Map<string, Promise<void>>();
 
-export const APP_SHELL_ROUTE_PRELOAD_PATHS = [
-  ROOT_PROXMOX_PATH,
-  ROOT_STANDALONE_PATH,
-  PATROL_PATH,
-  ACTIONS_PATH,
-  ALERTS_PATH,
-  SETTINGS_PATH,
-] as const;
+export const APP_SHELL_ROUTE_PRELOAD_PATHS = [ACTIONS_PATH] as const;
 
 function normalizeRoute(route: string): string {
   const [pathname] = route.split(/[?#]/, 1);

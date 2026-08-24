@@ -1,20 +1,31 @@
 {
   "version": 1,
-  "base_sha": "dec1c94c27d65b6110f5bef08d2b54313a1a7e3a",
-  "verified_at": "2026-08-24T09:23:55Z",
+  "base_sha": "30c07922b499611b33ef46d6c1eafa37b1b16890",
+  "verified_at": "2026-08-24T09:30:12Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Workloads/useGroupedTableWindowing.ts",
-    "frontend-modern/src/components/Workloads/useWorkloadViewportSync.ts",
-    "frontend-modern/src/components/Workloads/useWorkloadsDerivedState.ts"
+    "frontend-modern/src/AppLayout.tsx",
+    "frontend-modern/src/components/Storage/Storage.tsx",
+    "frontend-modern/src/components/Storage/useStoragePageModel.ts",
+    "frontend-modern/src/components/Storage/useStoragePageResources.ts",
+    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx",
+    "frontend-modern/src/hooks/useUnifiedResources.ts",
+    "frontend-modern/src/routing/routePreload.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Workloads/useGroupedTableWindowing.ts": "79f29210f6edcb74dc7bcc4bd66fd43e2268467bc4f0cca318a5824a9f966c5e",
-    "frontend-modern/src/components/Workloads/useWorkloadViewportSync.ts": "301ea460d570d7e1ba1d87ab78c41000f78f55b2913cf454036415026bcf4599",
-    "frontend-modern/src/components/Workloads/useWorkloadsDerivedState.ts": "2bd50562e5b58f8a197c6b4cfb3c50a2cb7c61a187cb26203419e7ac668e5f8f"
+    "frontend-modern/src/AppLayout.tsx": "ca3dd5972bbb5e0690aeeb19b36773ad26fa427e142838905f5750955d9e0861",
+    "frontend-modern/src/components/Storage/Storage.tsx": "dd8c9e4e1490c516f5d7d3c58ad4f59f87552323800f32ad828ea28cdad8ea88",
+    "frontend-modern/src/components/Storage/useStoragePageModel.ts": "83c905bc17e0ddef56e73cbb0aa61cb930d7dae6c53bf3732f099673253d743a",
+    "frontend-modern/src/components/Storage/useStoragePageResources.ts": "c61b1d17d52fd54d20e6faec2ad7f7d7178c41cb2d73a0907acb4dbce516b46c",
+    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx": "07b9669969c45e21fb5253b7b807ba0b8dfd53f25fcef28467e72e308a2ece20",
+    "frontend-modern/src/hooks/useUnifiedResources.ts": "0bfdd2f8210d71da9aec15d78e2bde550eb82832fd42edeeefd5d98a19dd103e",
+    "frontend-modern/src/routing/routePreload.ts": "ee79d423db0afcf8d76d1d39da59a13cb2c98e908e516a016cbb425982b25873"
   },
   "routes": [
-    "/proxmox"
+    "/proxmox/overview",
+    "/proxmox/storage",
+    "/alerts/overview",
+    "/actions"
   ],
   "viewports": [
     {
@@ -28,14 +39,14 @@
   ],
   "states": [
     "managed hot-dev mock estate with 50 nodes and 929 guests",
-    "first visible guest expanded with its variable-height inline detail mounted",
-    "expanded detail crossed out of the virtual window while the guest selection and full table height were retained",
-    "mock mode disabled and the managed runtime restored to real-nodes mode after verification"
+    "phone cold load with the Proxmox Overview active and Storage prewarmed from its bounded route source",
+    "retained Proxmox Storage tree reusing the shell resource source with realtime active only while visible",
+    "global Alerts and Actions transitions from the phone bottom navigation"
   ],
   "interactions": [
-    "expanded artifact-cache-310 from the guest-table chevron at both responsive breakpoints",
-    "repeated native scrolling crossed the expanded-detail handoff without a backward jump: phone advanced 611 to 4251 and desktop advanced 1021 to 5921",
-    "confirmed the mounted guest budgets stayed at 36 rows on phone and 140 rows on desktop through the handoff",
+    "measured Proxmox Storage route work at 274 ms on the 390x844 viewport and 406 ms on the 1440x900 viewport",
+    "measured the warmed Actions transition at 146 ms of browser main-thread work on the phone viewport",
+    "verified a cache-disabled phone reload requested the active Storage family and the lightweight Actions preload with zero Alerts, Settings, or Patrol page-module requests",
     "confirmed zero browser console errors on phone and desktop"
   ]
 }

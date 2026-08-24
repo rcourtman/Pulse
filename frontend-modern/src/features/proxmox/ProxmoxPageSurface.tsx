@@ -71,7 +71,7 @@ import {
 // not require the old 1,000+ row workspace request.
 const PROXMOX_RESOURCE_QUERY_BY_TAB: Record<ProxmoxPageTabId, string> = {
   overview: 'type=agent,vm,system-container,oci-container',
-  storage: 'type=agent,pbs,storage,physical_disk',
+  storage: 'type=agent,pbs,storage,physical_disk,ceph',
   replication: 'type=agent',
   backups: 'type=agent,vm,system-container,pbs',
   ceph: 'type=ceph',
@@ -131,14 +131,13 @@ export function ProxmoxPageSurface() {
     new Set(),
   );
   onMount(() => {
-    const hydrationQueue: ProxmoxPageTabId[] = [
-      'storage',
-      'backups',
-      'replication',
-      'ceph',
-      'mail',
-      'overview',
-    ];
+    // A phone retains only two tab trees, so downloading every route in the
+    // background spends memory and main-thread time on views that will be
+    // evicted before they are likely to be used. Storage is the common
+    // Overview transition and the only worthwhile phone prewarm.
+    const hydrationQueue: ProxmoxPageTabId[] = phoneViewport
+      ? ['storage']
+      : ['storage', 'backups', 'replication', 'ceph', 'mail', 'overview'];
     const idleHandles: number[] = [];
     const timeoutHandles: number[] = [];
 
@@ -416,6 +415,7 @@ export function ProxmoxPageSurface() {
               >
                 <StorageSurface
                   forcedSourceFilter={PROXMOX_PLATFORM_FILTER}
+                  resourceSource={storageResources}
                   suppressNodeFilter
                   filterAriaLabel="Proxmox storage filters"
                   filterSearchPlaceholder="Search Proxmox storage by pool, datastore, node, or device"
