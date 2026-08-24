@@ -1105,6 +1105,17 @@ tasks. A large tenant count therefore adds only one blocked dispatcher per
 monitor rather than another full override-sized goroutine pool, while a single
 large tenant can still fill the configured I/O concurrency budget.
 
+### Configured fixed poll intervals hold on both scheduler paths
+
+An instance that carries a user-configured cadence (availability targets via
+`FixedInstanceInterval`) polls at exactly that cadence whether or not the
+adaptive scheduler is enabled. With adaptive polling disabled, planning
+passes run on the main poll tick and re-upsert every instance task; they
+preserve an already-queued pending slot instead of stamping it due-now, and
+tighten it only when a freshly shortened interval justifies an earlier run.
+Without this, a sixty-second availability target polls at the ten-second
+tick cadence whenever adaptive polling is off, which is the default.
+
 ### Large Proxmox generations preserve reachability under bounded enrichment
 
 The efficient PVE poll reserves a fixed tail of the scheduler deadline and
