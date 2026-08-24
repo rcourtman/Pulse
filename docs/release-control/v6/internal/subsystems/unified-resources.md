@@ -2064,6 +2064,12 @@ table owners. Proxmox host row version, uptime, temperature, CPU, memory, disk,
 network I/O, and disk I/O presentation must derive from canonical resource
 facets and the shared `nodeFromResource` adapter; platform pages must not
 rebuild resource identity, merge policy, or metric-target inference locally.
+The bounded Proxmox node preview must preserve that canonical row ordering and
+render its expansion affordance through the shared platform-table continuation
+footer after the visible rows. The footer may dim the final row edge and expose
+the remaining-row count, but expanding or collapsing it only changes the
+client-side visible slice; it must not refetch, reorder, or redefine the
+canonical resource collection.
 The registry and presentation coalescer also own metric-source freshness. When
 two source facets contribute the same metric, source priority decides only if
 both sources have equivalent freshness. A stale source must not hold CPU,

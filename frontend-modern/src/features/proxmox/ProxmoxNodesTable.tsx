@@ -34,7 +34,7 @@ import {
   PlatformSortableTableHead,
   PlatformTableEmptyState,
   PlatformTableMetricFallback,
-  PlatformTablePreviewToggle,
+  PlatformTablePreviewFooter,
   PlatformTableShell,
   PlatformWindowedRows,
   createPlatformTablePreview,
@@ -308,15 +308,18 @@ export const ProxmoxNodesTable: Component<{
                   </Show>
                 </span>
               </Show>
-              <PlatformTablePreviewToggle
-                expanded={nodePreview.expanded()}
-                canExpand={nodePreview.canExpand()}
-                total={filteredNodes().length}
-                noun="nodes"
-                showCount={inventoryCountsVisible()}
-                onToggle={toggleNodePreview}
-              />
             </span>
+          }
+          footer={
+            <PlatformTablePreviewFooter
+              expanded={nodePreview.expanded()}
+              canExpand={nodePreview.canExpand()}
+              total={filteredNodes().length}
+              visibleCount={nodePreview.visibleRows().length}
+              noun="nodes"
+              showCount={inventoryCountsVisible()}
+              onToggle={toggleNodePreview}
+            />
           }
           cardClass="proxmox-nodes-card"
           tableClass={`${getProxmoxHostTableMinWidthClass(layoutMode())} table-fixed text-xs`}

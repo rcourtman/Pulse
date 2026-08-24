@@ -2152,11 +2152,14 @@ default` instead of fusing provider and badge text such as
     must not leave the same title floating above the filter card or recreate
     table-header chrome outside the canonical Workloads frame.
     Large provider inventories use the shared `createPlatformTablePreview` and
-    `PlatformTablePreviewToggle` boundary to keep the controlled workload table
+    `PlatformTablePreviewFooter` boundary to keep the controlled workload table
     in the initial reading flow: Proxmox shows eight node rows by default on
-    larger layouts and four on phone-sized layouts, with an accessible,
-    reversible show-all control in the Nodes header. Expansion is deliberate
-    session state and must not persist a page-burying expanded default.
+    larger layouts and four on phone-sized layouts. The accessible, reversible
+    show-all control belongs below the bounded rows, where a shared fade,
+    remaining-row hint, and directional chevron communicate that the list
+    continues; it must not compete with topology context in the Nodes header.
+    Expansion is deliberate session state and must not persist a page-burying
+    expanded default.
     Docker / Podman, Kubernetes, TrueNAS, VMware vSphere, and Standalone Machines must continue using their shared
     `PlatformTableToolbar` counters and table headers; none may add a parallel
     estate card grid or provider-only spotlight surface.

@@ -281,6 +281,7 @@ export function getPlatformTableClass(tableClass?: string): string {
 export type PlatformTableShellProps = {
   title?: JSX.Element;
   actions?: JSX.Element;
+  footer?: JSX.Element;
   tableClass?: string;
   tableWrapperClass?: string;
   cardClass?: string;
@@ -300,6 +301,7 @@ export function PlatformTableShell(props: PlatformTableShellProps) {
         </TableHeader>
         <TableBody class={PLATFORM_TABLE_BODY_CLASS}>{props.body}</TableBody>
       </Table>
+      {props.footer}
     </TableCard>
   );
 }
@@ -331,10 +333,11 @@ export function createPlatformTablePreview<Row>(options: {
   };
 }
 
-export function PlatformTablePreviewToggle(props: {
+export function PlatformTablePreviewFooter(props: {
   expanded: boolean;
   canExpand: boolean;
   total: number;
+  visibleCount: number;
   noun: string;
   showCount?: boolean;
   onToggle: () => void;
@@ -342,24 +345,47 @@ export function PlatformTablePreviewToggle(props: {
   const collapsedLabel = () =>
     props.showCount === false ? `Show all ${props.noun}` : `Show all ${props.total} ${props.noun}`;
   const label = () => (props.expanded ? `Show fewer ${props.noun}` : collapsedLabel());
+  const hiddenCount = () => Math.max(0, props.total - props.visibleCount);
 
   return (
     <Show when={props.canExpand}>
-      <button
-        type="button"
-        class="inline-flex min-h-11 min-w-11 items-center justify-center gap-1 rounded px-1.5 text-[11px] font-medium text-muted transition-colors hover:bg-surface-hover hover:text-base-content focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 sm:min-h-8"
-        aria-expanded={props.expanded}
-        aria-label={label()}
-        onClick={props.onToggle}
+      <div
+        class="relative z-10 border-t border-border bg-surface"
+        data-platform-table-preview-footer
       >
-        <span>{label()}</span>
-        <Show
-          when={props.expanded}
-          fallback={<ChevronDownIcon class="h-3.5 w-3.5" aria-hidden="true" />}
-        >
-          <ChevronUpIcon class="h-3.5 w-3.5" aria-hidden="true" />
+        <Show when={!props.expanded}>
+          <div
+            class="pointer-events-none absolute inset-x-0 bottom-full h-9 bg-gradient-to-t from-surface via-surface/80 to-transparent"
+            aria-hidden="true"
+          />
         </Show>
-      </button>
+        <button
+          type="button"
+          class="group inline-flex min-h-11 w-full items-center justify-center gap-2 px-3 py-2 text-[11px] font-semibold text-muted transition-colors hover:bg-surface-hover hover:text-base-content focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-blue-500"
+          aria-expanded={props.expanded}
+          aria-label={label()}
+          onClick={props.onToggle}
+        >
+          <Show
+            when={props.expanded}
+            fallback={
+              <ChevronDownIcon
+                class="h-4 w-4 transition-transform group-hover:translate-y-0.5"
+                aria-hidden="true"
+              />
+            }
+          >
+            <ChevronUpIcon
+              class="h-4 w-4 transition-transform group-hover:-translate-y-0.5"
+              aria-hidden="true"
+            />
+          </Show>
+          <span>{label()}</span>
+          <Show when={!props.expanded && props.showCount !== false}>
+            <span class="text-[10px] font-medium text-muted">{hiddenCount()} more below</span>
+          </Show>
+        </button>
+      </div>
     </Show>
   );
 }

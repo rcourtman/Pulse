@@ -5270,7 +5270,8 @@ describe('shared primitive guardrails', () => {
     expect(sharedPlatformPageSource).toContain("className !== 'min-w-full'");
     expect(sharedPlatformPageSource).toContain('class={getPlatformTableClass(props.tableClass)}');
     expect(sharedPlatformPageSource).toContain('export function createPlatformTablePreview');
-    expect(sharedPlatformPageSource).toContain('export function PlatformTablePreviewToggle');
+    expect(sharedPlatformPageSource).toContain('export function PlatformTablePreviewFooter');
+    expect(sharedPlatformPageSource).toContain('data-platform-table-preview-footer');
     expect(sharedPlatformPageSource).toContain('aria-expanded={props.expanded}');
 
     for (const [path, source] of [

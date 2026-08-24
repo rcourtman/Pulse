@@ -1,17 +1,15 @@
 {
   "version": 1,
-  "base_sha": "a585eab712a7e80ef4b148c650fa5a34ff01e2c7",
-  "verified_at": "2026-08-24T10:18:41Z",
+  "base_sha": "095b0124557f04672a2b08530eba1da732ebf5b6",
+  "verified_at": "2026-08-24T10:30:06Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Workloads/WorkloadsSurface.tsx",
-    "frontend-modern/src/components/Workloads/WorkloadsTable.tsx",
-    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx"
+    "frontend-modern/src/features/platformPage/sharedPlatformPage.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Workloads/WorkloadsSurface.tsx": "466fe1160c58bba42fbce61e74f602a8ddc30ef463c38b0c07968881d70d8bca",
-    "frontend-modern/src/components/Workloads/WorkloadsTable.tsx": "9849f4f54fa5eab0cb5394c683cbdf72a4831672672609f2ee9a8801246f0962",
-    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx": "1e6daf19456ff79e7181e8117bbb2064feb53b852438294a58dd2fa5197b3817"
+    "frontend-modern/src/features/platformPage/sharedPlatformPage.tsx": "83568958f52d09910fb15ec3d350cbeb30d04050849470601fb2941e995746f5",
+    "frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx": "f9f76a8da5d7d721196acfe92052564e056404ceb07ffae77e2b25f2b347fc7b"
   },
   "routes": ["/proxmox"],
   "viewports": [
@@ -25,17 +23,16 @@
     }
   ],
   "states": [
-    "managed hot-dev mock estate with the Proxmox Nodes and Guests sections visible",
-    "phone Guests filter controls and populated workload table",
-    "phone filtered-empty workload table state",
-    "desktop Guests filter controls and populated workload table"
+    "managed hot-dev mock estate with the bounded Proxmox Nodes preview visible",
+    "phone node preview collapsed to four rows",
+    "phone node preview expanded through the continuation footer",
+    "desktop node preview collapsed to eight rows"
   ],
   "interactions": [
-    "confirmed Guests and its inventory count render inside the canonical grey table-card header band at 390x844",
-    "confirmed the phone table remains within the viewport without new horizontal overflow",
-    "applied a no-match search and confirmed the Guests header remains attached to the empty table card",
-    "confirmed the same table-card header treatment at 1280x720 desktop width",
-    "cleared the temporary verification search",
+    "confirmed the final phone row fades into a full-width footer labelled Show all 50 nodes with 46 more below",
+    "clicked the phone footer and confirmed it expanded in one action, removed the fade, and changed to Show fewer nodes",
+    "collapsed the preview and confirmed the desktop footer reports 42 more below after eight visible rows",
+    "confirmed the desktop node card has no new horizontal overflow",
     "restored the browser viewport after verification"
   ]
 }

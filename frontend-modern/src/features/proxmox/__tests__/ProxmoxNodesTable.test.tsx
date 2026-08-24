@@ -145,6 +145,11 @@ describe('ProxmoxNodesTable', () => {
     expect(screen.getAllByRole('row')).toHaveLength(9);
     const showAll = screen.getByRole('button', { name: 'Show all 10 nodes' });
     expect(showAll).toHaveAttribute('aria-expanded', 'false');
+    expect(showAll.closest('[data-platform-table-preview-footer]')).toBeInTheDocument();
+    expect(showAll.parentElement).toHaveTextContent('2 more below');
+    expect(
+      screen.getByRole('table').compareDocumentPosition(showAll) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
 
     fireEvent.click(showAll);
     expect(screen.getAllByRole('row')).toHaveLength(11);
@@ -171,6 +176,7 @@ describe('ProxmoxNodesTable', () => {
 
     expect(screen.getAllByRole('row')).toHaveLength(5);
     expect(screen.getByRole('button', { name: 'Show all 6 nodes' })).toBeVisible();
+    expect(screen.getByText('2 more below')).toBeVisible();
   });
 
   it('hides node and topology totals through the page-owned inventory preference', () => {
