@@ -324,7 +324,12 @@ export const InlineResourceSummaryTables: Component<ResourceSummaryPresentationP
     class="overflow-hidden rounded border border-border bg-surface"
   >
     <table class="w-full table-fixed text-[11px]">
-      <Show when={props.content !== 'technical'}>
+      <Show
+        when={
+          props.content !== 'technical' &&
+          Boolean(props.drawer.sourceSummary() || props.drawer.identityIpValues()[0])
+        }
+      >
         <tbody data-testid="resource-current-state-section" class="divide-y divide-border">
           <tr class="bg-surface-alt">
             <th

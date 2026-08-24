@@ -50,12 +50,12 @@
       ]
     },
     {
-      "id": "operator-first-technical-disclosure",
+      "id": "operator-first-technical-section",
       "category": "drawer-information-hierarchy",
-      "summary": "Object drawers keep raw inventory behind one shared lazy technical-details disclosure while promoting additive operator facts into Overview.",
+      "summary": "Object drawers keep curated deeper inventory visible through the same compact section rows as Overview; only genuinely large or interactive provider-support material stays behind a disclosure.",
       "canonical": {
         "path": "src/components/shared/TechnicalDetailsDisclosure.tsx",
-        "export": "TechnicalDetailsDisclosure"
+        "export": "TechnicalDetailsSection"
       },
       "requiredConsumers": [
         {
@@ -69,6 +69,20 @@
         },
         {
           "path": "src/features/docker/DockerHostDrawerOverview.tsx"
+        }
+      ],
+      "forbiddenPatterns": [
+        {
+          "path": "src/components/Workloads/GuestDrawerOverview.tsx",
+          "patterns": ["const DetailCard"]
+        },
+        {
+          "path": "src/components/Workloads/NodeDrawerOverview.tsx",
+          "patterns": ["const DetailCard"]
+        },
+        {
+          "path": "src/features/docker/DockerHostDrawerOverview.tsx",
+          "patterns": ["const DetailCard"]
         }
       ],
       "proof": [
@@ -429,8 +443,6 @@
         { "path": "src/components/shared/cards/SystemInfoCard.tsx" },
         { "path": "src/components/shared/cards/TemperaturesCard.tsx" },
         { "path": "src/components/Workloads/DrawerDiskListCard.tsx" },
-        { "path": "src/components/Workloads/GuestDrawerOverview.tsx" },
-        { "path": "src/components/Workloads/NodeDrawerOverview.tsx" },
         { "path": "src/features/docker/DockerHostDrawerOverview.tsx" },
         { "path": "src/features/storageBackups/detailPresentation.ts" }
       ],

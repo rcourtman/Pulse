@@ -31,7 +31,10 @@ import { ResourceFacetSummary } from './ResourceFacetSummary';
 import { InlineResourceSummaryTables } from './ResourceDetailSummary';
 import { ResourceInvestigationContextTables } from './ResourceInvestigationContextTables';
 import { DetailSectionTable } from '@/components/shared/DetailSectionTable';
-import { TechnicalDetailsDisclosure } from '@/components/shared/TechnicalDetailsDisclosure';
+import {
+  TechnicalDetailsDisclosure,
+  TechnicalDetailsSection,
+} from '@/components/shared/TechnicalDetailsDisclosure';
 import { DrawerAttentionSection } from '@/components/shared/DrawerAttentionSection';
 import {
   RESOURCE_CHANGE_KIND_ORDER,
@@ -380,27 +383,15 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
   return (
     <div class="space-y-3">
       <DrawerAttentionSection items={attentionItems()} />
-      <Show when={drawer.sourceSummary() || drawer.identityIpValues()[0]}>
+      <TechnicalDetailsSection dataTestId="resource-technical-details">
         <InlineResourceSummaryTables
           resource={resource}
           drawer={drawer}
           showPlatformId={showPlatformId}
-          content="overview"
-        />
-      </Show>
-
-      <TechnicalDetailsDisclosure
-        dataTestId="resource-technical-details"
-        subtitle="Identity, runtime, and source IDs"
-      >
-        <InlineResourceSummaryTables
-          resource={resource}
-          drawer={drawer}
-          showPlatformId={showPlatformId}
-          content="technical"
+          content="all"
           dataTestId="resource-technical-summary-section"
         />
-      </TechnicalDetailsDisclosure>
+      </TechnicalDetailsSection>
 
       <Show when={resource.availability || (resource.availabilityChecks?.length ?? 0) > 0}>
         <div class="flex flex-wrap gap-3 [&>*]:min-w-[240px] [&>*]:flex-1">

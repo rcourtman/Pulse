@@ -1,32 +1,26 @@
-import { For, Show, createMemo } from 'solid-js';
+import { Show, createMemo } from 'solid-js';
 
 import {
-  DrawerDiskListCard,
   buildDrawerDiskListItems,
   type DrawerDiskListItem,
 } from '@/components/Workloads/DrawerDiskListCard';
 import { AvailabilityProbeStatusCards } from '@/components/Infrastructure/AvailabilityProbeStatusCard';
 import { InfoCardFrame } from '@/components/shared/InfoCardFrame';
-import { TechnicalDetailsDisclosure } from '@/components/shared/TechnicalDetailsDisclosure';
+import { TechnicalDetailsSection } from '@/components/shared/TechnicalDetailsDisclosure';
 import { DrawerAttentionSection } from '@/components/shared/DrawerAttentionSection';
 import {
-  DetailSectionTable,
   compactDetailRows,
   compactDetailSections,
   makeDetailRow,
+  type DetailRow,
+  type DetailValueTone,
 } from '@/components/shared/DetailSectionTable';
 import { useResourceDetailDrawerDockerActionsState } from '@/components/Infrastructure/useResourceDetailDrawerDockerActionsState';
 import { hostOverrideIdCandidates } from '@/features/alerts/alertOverridesModel';
 import { areSystemSettingsLoaded, shouldHideDockerUpdateActions } from '@/stores/systemSettings';
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import type { Resource } from '@/types/resource';
-import {
-  formatBytes,
-  formatRelativeTime,
-  formatSpeed,
-  formatUptime,
-  normalizeDiskArray,
-} from '@/utils/format';
+import { formatBytes, formatRelativeTime, formatSpeed, normalizeDiskArray } from '@/utils/format';
 import { formatTemperature, getTemperatureTextClass } from '@/utils/temperature';
 
 interface DockerHostDrawerOverviewProps {
@@ -55,74 +49,26 @@ const cleanText = (value: string | null | undefined): string => {
 const stripAgentPrefix = (value: string): string =>
   value.startsWith('agent:') ? value.slice('agent:'.length) : value;
 
-const formatStatus = (value: string | null | undefined): string => {
-  const status = cleanText(value);
-  if (!status) return '-';
-  return status.charAt(0).toUpperCase() + status.slice(1);
-};
-
-const formatPercent = (value: number | null | undefined): string => {
-  if (typeof value !== 'number' || !Number.isFinite(value)) return '-';
-  const normalized = value <= 1 ? value * 100 : value;
-  return `${Math.round(Math.max(0, normalized))}%`;
-};
-
-const getUsedPercent = (used?: number | null, total?: number | null): string => {
-  if (typeof used !== 'number' || typeof total !== 'number' || total <= 0) return '-';
-  return formatPercent((used / total) * 100);
-};
-
-const getNumericField = (value: unknown, field: string): number | undefined => {
-  if (!value || typeof value !== 'object') return undefined;
-  const fieldValue = (value as Record<string, unknown>)[field];
-  return typeof fieldValue === 'number' ? fieldValue : undefined;
-};
-
-const getBooleanField = (value: unknown, field: string): boolean | undefined => {
-  if (!value || typeof value !== 'object') return undefined;
-  const fieldValue = (value as Record<string, unknown>)[field];
-  return typeof fieldValue === 'boolean' ? fieldValue : undefined;
-};
-
-const formatLastSeenRow = (value: string | number | null | undefined): DockerOverviewRow | null => {
-  if (value == null) return null;
-  const parsed = typeof value === 'number' ? new Date(value) : new Date(String(value));
-  if (Number.isNaN(parsed.getTime())) return null;
-  const iso = parsed.toISOString();
-  return {
-    label: 'Last seen',
-    value: formatRelativeTime(iso, { compact: true }) || '-',
-    title: parsed.toLocaleString(),
-  };
-};
-
 const titleCase = (value: string): string =>
   value.length === 0 ? value : value.charAt(0).toUpperCase() + value.slice(1);
 
-const DetailCard = (props: { title: string; rows: DockerOverviewRow[] }) => (
-  <Show when={props.rows.length > 0}>
-    <InfoCardFrame>
-      <h3 class="mb-2 text-[11px] font-medium uppercase tracking-wide text-base-content">
-        {props.title}
-      </h3>
-      <div class="space-y-1.5 text-[11px]">
-        <For each={props.rows}>
-          {(row) => (
-            <div class="flex items-center justify-between gap-2 min-w-0">
-              <span class="shrink-0 text-muted">{row.label}</span>
-              <span
-                class={`truncate text-right font-medium ${row.valueClass ?? 'text-base-content'}`}
-                title={row.title ?? row.value}
-              >
-                {row.value}
-              </span>
-            </div>
-          )}
-        </For>
-      </div>
-    </InfoCardFrame>
-  </Show>
-);
+const getDetailTone = (valueClass: string | undefined): DetailValueTone => {
+  if (valueClass?.includes('red') || valueClass?.includes('rose')) return 'danger';
+  if (valueClass?.includes('yellow') || valueClass?.includes('amber')) return 'warning';
+  if (valueClass?.includes('green') || valueClass?.includes('emerald')) return 'success';
+  if (valueClass?.includes('blue') || valueClass?.includes('cyan')) return 'accent';
+  return 'default';
+};
+
+const toDetailRows = (rows: DockerOverviewRow[]): DetailRow[] =>
+  compactDetailRows(
+    rows.map((row) =>
+      makeDetailRow(row.label, row.value, {
+        title: row.title,
+        tone: getDetailTone(row.valueClass),
+      }),
+    ),
+  );
 
 export function DockerHostDrawerManagement(props: DockerHostDrawerOverviewProps) {
   const docker = () => props.host.docker;
@@ -255,44 +201,10 @@ export function DockerHostDrawerOverview(props: DockerHostDrawerOverviewProps) {
     return dockerOs || agentOs || '';
   };
 
-  const uptimeSeconds = (): number => {
-    if (typeof props.host.uptime === 'number' && props.host.uptime > 0) return props.host.uptime;
-    if (typeof docker()?.uptimeSeconds === 'number' && (docker()?.uptimeSeconds ?? 0) > 0) {
-      return docker()!.uptimeSeconds!;
-    }
-    return 0;
-  };
-
   const memorySource = () => props.host.memory ?? agent()?.memory ?? docker()?.memory;
   const diskSource = () => props.host.disk;
 
-  const systemRows = (): DockerOverviewRow[] => [
-    {
-      label: 'Name',
-      value: cleanText(props.host.name) || props.host.id,
-      title: props.host.name,
-    },
-    ...(cleanText(docker()?.hostname)
-      ? [
-          {
-            label: 'Hostname',
-            value: cleanText(docker()?.hostname),
-            title: docker()?.hostname,
-          } satisfies DockerOverviewRow,
-        ]
-      : []),
-    { label: 'Status', value: formatStatus(props.host.status) },
-    ...(uptimeSeconds() > 0
-      ? [{ label: 'Uptime', value: formatUptime(uptimeSeconds()) } satisfies DockerOverviewRow]
-      : []),
-    ...(formatLastSeenRow(props.host.lastSeen) ? [formatLastSeenRow(props.host.lastSeen)!] : []),
-  ];
-
   const runtimeRows = (): DockerOverviewRow[] => [
-    { label: 'Engine', value: runtimeLabel(), title: docker()?.runtimeVersion },
-    ...(osLabel()
-      ? [{ label: 'OS', value: osLabel(), title: osLabel() } satisfies DockerOverviewRow]
-      : []),
     ...(cleanText(docker()?.kernelVersion) || cleanText(agent()?.kernelVersion)
       ? [
           {
@@ -324,24 +236,15 @@ export function DockerHostDrawerOverview(props: DockerHostDrawerOverviewProps) {
     const memory = memorySource();
     if (!memory) return [];
     const rows: DockerOverviewRow[] = [];
-    if (getBooleanField(memory, 'usageUnavailable') === true) {
-      rows.push({ label: 'Usage', value: 'Unavailable' });
+    if ('usageUnavailable' in memory && memory.usageUnavailable === true) {
       if (typeof memory.total === 'number' && memory.total > 0) {
         rows.push({ label: 'Total', value: formatBytes(memory.total) });
       }
     } else if (typeof memory.total === 'number' && memory.total > 0) {
-      rows.push({
-        label: 'Usage',
-        value: `${getUsedPercent(memory.used, memory.total)} · ${formatBytes(memory.used || 0)}`,
-      });
       rows.push({ label: 'Total', value: formatBytes(memory.total) });
       if (typeof memory.free === 'number') {
         rows.push({ label: 'Free', value: formatBytes(memory.free) });
       }
-    } else if (typeof getNumericField(memory, 'current') === 'number') {
-      rows.push({ label: 'Usage', value: formatPercent(getNumericField(memory, 'current')) });
-    } else if (typeof getNumericField(memory, 'usage') === 'number') {
-      rows.push({ label: 'Usage', value: formatPercent(getNumericField(memory, 'usage')) });
     }
     return rows;
   };
@@ -351,31 +254,16 @@ export function DockerHostDrawerOverview(props: DockerHostDrawerOverviewProps) {
     if (!disk) return [];
     const rows: DockerOverviewRow[] = [];
     if (typeof disk.total === 'number' && disk.total > 0) {
-      rows.push({
-        label: 'Usage',
-        value: `${formatPercent(disk.current)} · ${formatBytes(disk.used || 0)}`,
-      });
       rows.push({ label: 'Total', value: formatBytes(disk.total) });
       if (typeof disk.free === 'number') {
         rows.push({ label: 'Free', value: formatBytes(disk.free) });
       }
-    } else if (typeof disk.current === 'number') {
-      rows.push({ label: 'Usage', value: formatPercent(disk.current) });
     }
     return rows;
   };
 
   const telemetryRows = (): DockerOverviewRow[] => {
     const rows: DockerOverviewRow[] = [];
-    rows.push({
-      label: 'Connection',
-      value: formatStatus(props.host.status),
-    });
-    rows.push({
-      label: 'Agent ID',
-      value: linkedAgentId() ? stripAgentPrefix(linkedAgentId()) : 'Direct API',
-      title: linkedAgentId() || undefined,
-    });
     const temperature = props.host.temperature ?? docker()?.temperature;
     if (typeof temperature === 'number' && temperature > 0) {
       rows.push({
@@ -411,6 +299,33 @@ export function DockerHostDrawerOverview(props: DockerHostDrawerOverviewProps) {
     return buildDrawerDiskListItems(disks);
   };
 
+  const technicalSections = () =>
+    compactDetailSections([
+      { label: 'Runtime', rows: toDetailRows(runtimeRows()) },
+      { label: 'Memory', rows: toDetailRows(memoryRows()) },
+      {
+        label: 'Storage',
+        rows:
+          perDiskItems().length > 0
+            ? compactDetailRows(
+                perDiskItems().map((disk) =>
+                  makeDetailRow(
+                    disk.label,
+                    `${Math.round(disk.percent)}% · ${formatBytes(disk.used)} / ${formatBytes(
+                      disk.total,
+                    )}`,
+                    {
+                      title: disk.device ? `${disk.label} · ${disk.device}` : disk.label,
+                      tone: getDetailTone(disk.textClass),
+                    },
+                  ),
+                ),
+              )
+            : toDetailRows(storageRows()),
+      },
+      { label: 'Telemetry', rows: toDetailRows(telemetryRows()) },
+    ]);
+
   const overviewSections = () => {
     const swarm = cleanText(docker()?.swarm?.localState);
     return compactDetailSections([
@@ -444,7 +359,6 @@ export function DockerHostDrawerOverview(props: DockerHostDrawerOverviewProps) {
           severity: alert.level,
         }))}
       />
-      <DetailSectionTable sections={overviewSections()} />
       <Show when={props.host.availability || props.host.availabilityChecks?.length}>
         <div class="max-w-sm">
           <AvailabilityProbeStatusCards
@@ -453,22 +367,10 @@ export function DockerHostDrawerOverview(props: DockerHostDrawerOverviewProps) {
           />
         </div>
       </Show>
-      <TechnicalDetailsDisclosure
+      <TechnicalDetailsSection
         dataTestId="docker-host-technical-details"
-        subtitle="Runtime, capacity, and storage"
-        contentClass="mt-2 flex flex-wrap gap-2 border-t border-border pt-2 [&>*]:flex-1 [&>*]:basis-[calc(25%-0.5rem)] [&>*]:min-w-[200px] [&>*]:max-w-full [&>*]:overflow-hidden"
-      >
-        <DetailCard title="System" rows={systemRows()} />
-        <DetailCard title="Runtime" rows={runtimeRows()} />
-        <DetailCard title="Memory" rows={memoryRows()} />
-        <Show
-          when={perDiskItems().length > 0}
-          fallback={<DetailCard title="Storage" rows={storageRows()} />}
-        >
-          <DrawerDiskListCard disks={perDiskItems()} testId="docker-host-drawer-disks" />
-        </Show>
-        <DetailCard title="Telemetry" rows={telemetryRows()} />
-      </TechnicalDetailsDisclosure>
+        sections={[...overviewSections(), ...technicalSections()]}
+      />
     </div>
   );
 }

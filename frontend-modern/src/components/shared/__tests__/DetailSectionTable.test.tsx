@@ -1,4 +1,4 @@
-import { cleanup, render, screen, within } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, within } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   DetailSectionTable,
@@ -12,6 +12,7 @@ import {
 } from '../DetailSectionTable';
 import detailSectionTableSource from '../DetailSectionTable.tsx?raw';
 import detailSectionModelSource from '../detailSectionModel.ts?raw';
+import { TechnicalDetailsDisclosure, TechnicalDetailsSection } from '../TechnicalDetailsDisclosure';
 
 describe('DetailSectionTable', () => {
   afterEach(() => cleanup());
@@ -75,6 +76,53 @@ describe('DetailSectionTable', () => {
     expect(screen.getByText('Severity')).toBeInTheDocument();
     expect(screen.getByText('Warning').closest('td')).toHaveClass('text-amber-700');
     expect(screen.getByText('tower').closest('td')).toHaveAttribute('title', 'tower.example.test');
+  });
+
+  it('lazily renders technical details with the same compact section rows', () => {
+    const { container } = render(() => (
+      <TechnicalDetailsDisclosure
+        dataTestId="technical-details"
+        subtitle="Identity and runtime"
+        sections={[
+          {
+            label: 'Runtime',
+            rows: [{ label: 'Kernel', value: '6.8.0' }],
+          },
+        ]}
+      />
+    ));
+
+    expect(screen.queryByText('Runtime')).toBeNull();
+    const details = container.querySelector('details');
+    expect(details).not.toBeNull();
+    details!.open = true;
+    fireEvent(details!, new Event('toggle'));
+
+    const disclosure = screen.getByTestId('technical-details');
+    expect(within(disclosure).getByText('Runtime')).toBeInTheDocument();
+    expect(within(disclosure).getByText('Kernel')).toBeInTheDocument();
+    expect(within(disclosure).getByText('6.8.0')).toBeInTheDocument();
+    expect(disclosure.querySelector('table')).toHaveClass('table-fixed');
+  });
+
+  it('renders curated technical rows without an extra disclosure interaction', () => {
+    render(() => (
+      <TechnicalDetailsSection
+        dataTestId="technical-section"
+        sections={[
+          {
+            label: 'Hardware',
+            rows: [{ label: 'CPU', value: 'Ryzen' }],
+          },
+        ]}
+      />
+    ));
+
+    const section = screen.getByTestId('technical-section');
+    expect(section.tagName).toBe('DIV');
+    expect(section.querySelector('details')).toBeNull();
+    expect(within(section).getByText('Hardware')).toBeInTheDocument();
+    expect(within(section).getByText('Ryzen')).toBeInTheDocument();
   });
 
   it('renders inline detail panels with the canonical close action', () => {

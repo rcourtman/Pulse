@@ -27,10 +27,7 @@ vi.mock('@/stores/license', () => ({
 import { NodeDrawer } from './NodeDrawer';
 
 const openTechnicalDetails = () => {
-  const details = screen.getByTestId('node-technical-details') as HTMLDetailsElement;
-  details.open = true;
-  fireEvent(details, new Event('toggle'));
-  return within(details);
+  return within(screen.getByTestId('node-technical-details'));
 };
 
 const makeHistoryPoints = (base: number) => [
@@ -129,27 +126,28 @@ describe('NodeDrawer', () => {
     expect(screen.getByText('Overview')).toBeInTheDocument();
     expect(screen.getByText('History')).toBeInTheDocument();
     expect(screen.getByText('Manage')).toBeInTheDocument();
-    expect(technical.getByText('System')).toBeInTheDocument();
-    expect(technical.getByText('Platform')).toBeInTheDocument();
+    expect(technical.queryByText('System')).toBeNull();
+    expect(technical.getAllByText('Platform').length).toBeGreaterThan(0);
     expect(technical.getByText('Hardware')).toBeInTheDocument();
     expect(technical.getByText('Telemetry')).toBeInTheDocument();
     expect(technical.getByText('Ryzen')).toBeInTheDocument();
     expect(technical.getByText('6.8.0')).toBeInTheDocument();
     expect(technical.getByText('8')).toBeInTheDocument();
     expect(screen.getAllByText('PVE 9.1.9').length).toBeGreaterThan(0);
-    expect(technical.getAllByText('65°C').length).toBeGreaterThan(0);
+    expect(technical.getByText('CPU low')).toBeInTheDocument();
+    expect(technical.getByText('CPU record')).toBeInTheDocument();
     expect(technical.getByText('Temp monitor')).toBeInTheDocument();
   });
 
-  it('colors overview thermal rows from configured thresholds', () => {
+  it('colors an operator-significant thermal row from configured thresholds', () => {
     render(() => (
       <NodeDrawer
         node={makeNode({
           temperature: {
-            cpuPackage: 76,
-            cpuMax: 76,
+            cpuPackage: 86,
+            cpuMax: 86,
             cpuMin: 50,
-            cpuMaxRecord: 76,
+            cpuMaxRecord: 86,
             available: true,
             hasCPU: true,
             lastUpdate: new Date().toISOString(),
@@ -159,10 +157,12 @@ describe('NodeDrawer', () => {
       />
     ));
 
-    expect(openTechnicalDetails().getAllByText('76°C')[0]).toHaveClass('text-green-600');
+    expect(openTechnicalDetails().getAllByText('86°C')[0].closest('td')).toHaveClass(
+      'text-rose-700',
+    );
   });
 
-  it('puts the active alert problem before context and collapsed inventory', () => {
+  it('puts the active alert problem before context and visible inventory', () => {
     render(() => (
       <NodeDrawer
         node={makeNode()}
@@ -187,8 +187,8 @@ describe('NodeDrawer', () => {
 
     expect(screen.getByText('Needs attention')).toBeInTheDocument();
     expect(screen.getByText('Root disk usage is above 85%')).toBeInTheDocument();
-    expect(screen.getByText('PVE 9.1.9')).toBeInTheDocument();
-    expect(screen.getByTestId('node-technical-details')).not.toHaveAttribute('open');
+    expect(screen.getAllByText('PVE 9.1.9').length).toBeGreaterThan(0);
+    expect(screen.getByTestId('node-technical-details').querySelector('table')).toBeTruthy();
   });
 
   it('renders node-only thermal history without requiring a table temperature column', async () => {

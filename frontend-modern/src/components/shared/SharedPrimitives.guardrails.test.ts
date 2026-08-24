@@ -1143,8 +1143,6 @@ describe('shared primitive guardrails', () => {
       'src/components/shared/cards/SystemInfoCard.tsx',
       'src/components/shared/cards/TemperaturesCard.tsx',
       'src/components/Workloads/DrawerDiskListCard.tsx',
-      'src/components/Workloads/GuestDrawerOverview.tsx',
-      'src/components/Workloads/NodeDrawerOverview.tsx',
       'src/features/docker/DockerHostDrawerOverview.tsx',
       'src/features/storageBackups/detailPresentation.ts',
     ];
@@ -8495,7 +8493,7 @@ describe('shared primitive guardrails', () => {
     for (const consumerPath of overviewConsumers) {
       const source = readFrontendSource(consumerPath);
       expect(source).toContain('DrawerAttentionSection');
-      expect(source).toContain('TechnicalDetailsDisclosure');
+      expect(source).toContain('TechnicalDetailsSection');
       expect(source).not.toContain('ResourceOperatorStateSection');
     }
 
@@ -8533,14 +8531,30 @@ describe('shared primitive guardrails', () => {
     );
     expect(disclosureSource).toContain('onToggle');
     expect(disclosureSource).toContain('<Show when={expanded()}>');
+    expect(disclosureSource).toContain('sections?: DetailSection[]');
+    expect(disclosureSource).toContain('<DetailSectionTable');
+    expect(disclosureSource).toContain('export const TechnicalDetailsSection');
+
+    for (const overviewPath of [
+      'src/components/Workloads/GuestDrawerOverview.tsx',
+      'src/components/Workloads/NodeDrawerOverview.tsx',
+      'src/features/docker/DockerHostDrawerOverview.tsx',
+    ]) {
+      const source = readFrontendSource(overviewPath);
+      expect(source).toContain('<TechnicalDetailsSection');
+      expect(source).toContain('...technicalSections()');
+      expect(source).not.toContain('const DetailCard');
+    }
+
+    const resourceOverviewSource = readFrontendSource(
+      'src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx',
+    );
+    expect(resourceOverviewSource).toContain('content="all"');
 
     const registry = JSON.parse(readFrontendSource('scripts/shared-template-registry.json')) as {
       rules?: Array<{ id: string; requiredConsumers?: Array<{ path: string }> }>;
     };
-    for (const ruleId of [
-      'operator-first-drawer-attention',
-      'operator-first-technical-disclosure',
-    ]) {
+    for (const ruleId of ['operator-first-drawer-attention', 'operator-first-technical-section']) {
       const rule = registry.rules?.find((candidate) => candidate.id === ruleId);
       expect(rule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual(overviewConsumers);
     }

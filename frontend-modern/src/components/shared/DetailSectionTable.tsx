@@ -55,6 +55,7 @@ export const DetailSectionTable: Component<{
                       title={row.title ?? row.value}
                     >
                       <span
+                        title={row.title ?? row.value}
                         class={
                           row.wrap
                             ? 'block whitespace-normal break-words text-left leading-snug'

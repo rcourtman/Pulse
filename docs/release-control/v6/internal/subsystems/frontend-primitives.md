@@ -3600,9 +3600,13 @@ operator context that the parent table row cannot carry, such as OS/runtime,
 Pulse observation or action coverage, primary reachability, protection gaps,
 pending updates, or an identified service. Routine health, placement, and
 metric values already visible in the row must not be restated merely to fill
-the drawer. `TechnicalDetailsDisclosure` owns the collapsed, lazily mounted
-inventory boundary for raw IDs, kernel/build strings, full interface and disk
-lists, and provider metadata. Monitoring mode, lifecycle, notes, maintenance,
+the drawer. Curated raw IDs, kernel/build strings, interface and disk facts, and
+provider metadata stay visible through `TechnicalDetailsSection` and the same
+compact `DetailSectionTable` rows as Overview; those facts must not switch to a
+provider-local card mosaic or require another tap. Only genuinely large or
+interactive provider-support content belongs behind
+`TechnicalDetailsDisclosure`, which owns its collapsed, lazily mounted
+boundary. Monitoring mode, lifecycle, notes, maintenance,
 automatic-action policy, saved access configuration, and action audit belong
 to a dedicated `Manage` tab and must not render inside Overview. Guest, node,
 Docker-host, and unified-resource drawers must compose these shared primitives

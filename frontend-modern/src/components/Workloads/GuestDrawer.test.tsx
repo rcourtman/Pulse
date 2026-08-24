@@ -12,7 +12,6 @@ import type { WorkloadGuest } from '@/types/workloads';
 import type { Memory, Disk, GuestNetworkInterface } from '@/types/api';
 import { resetCreateNonSuspendingQueryCacheForTest } from '@/hooks/createNonSuspendingQuery';
 import { getCanonicalWorkloadId, getWorkloadMetadataId } from '@/utils/workloads';
-import { getDiscoveryProvenanceTitle } from '@/utils/discoveryPresentation';
 import { resetAIRuntimeState, syncAIRuntimeSettings } from '@/stores/aiRuntimeState';
 import guestDrawerSource from './GuestDrawer.tsx?raw';
 import guestDrawerManageSource from './GuestDrawerManage.tsx?raw';
@@ -38,12 +37,6 @@ vi.mock('@/stores/license', () => ({
   isRangeLocked: () => false,
   loadRuntimeCapabilities: vi.fn(),
   maxHistoryDays: () => 90,
-}));
-
-vi.mock('./DiskList', () => ({
-  DiskList: (props: { disks: Disk[] }) => (
-    <div data-testid="disk-list">DiskList({props.disks.length} disks)</div>
-  ),
 }));
 
 vi.mock('../Discovery/DiscoveryTab', () => ({
@@ -250,11 +243,9 @@ describe('GuestDrawer', () => {
 
     expect(screen.getByText('Needs attention')).toBeInTheDocument();
     expect(screen.getByText('Memory usage has remained above 95%')).toBeInTheDocument();
-    expect(screen.getByText(/Debian.*12/)).toBeInTheDocument();
-    expect(screen.getByText('192.0.2.25')).toBeInTheDocument();
-    expect(container.querySelector('[data-testid="guest-technical-details"]')).not.toHaveAttribute(
-      'open',
-    );
+    expect(screen.getAllByText(/Debian.*12/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText('192.0.2.25').length).toBeGreaterThan(0);
+    expect(container.querySelector('[data-testid="guest-technical-details"] table')).toBeTruthy();
     expect(screen.queryByTestId('guest-manage-tab')).not.toBeInTheDocument();
   });
 
@@ -363,10 +354,9 @@ describe('GuestDrawer', () => {
       await waitFor(() => {
         expect(screen.getByText('Identified Service')).toBeInTheDocument();
       });
-      expect(screen.getByText('Homepage Dashboard')).toBeInTheDocument();
-      expect(screen.getByText('web_server')).toBeInTheDocument();
+      expect(screen.getByText('Homepage Dashboard · web_server')).toBeInTheDocument();
       expect(screen.getByText('0.9.0')).toBeInTheDocument();
-      expect(screen.getByLabelText(getDiscoveryProvenanceTitle())).toBeInTheDocument();
+      expect(technicalDetails().getByText('Source')).toBeInTheDocument();
       expect(screen.getAllByText('http://192.0.2.10:3000').length).toBeGreaterThan(0);
       expect(screen.getByTestId('url-suggested')).toHaveTextContent('http://192.0.2.10:3000');
       expect(screen.getByTestId('url-suggested-reason')).toHaveTextContent('Detected 3000/tcp');
@@ -565,16 +555,16 @@ describe('GuestDrawer', () => {
 
   // ── System card ──
 
-  describe('System card', () => {
+  describe('System details', () => {
     it('displays CPU count', () => {
       render(() => <GuestDrawer guest={makeGuest({ cpus: 8 })} onClose={vi.fn()} />);
       expect(screen.getByText('CPUs')).toBeInTheDocument();
       expect(screen.getByText('8')).toBeInTheDocument();
     });
 
-    it('displays uptime when > 0', () => {
+    it('does not repeat row-level uptime', () => {
       render(() => <GuestDrawer guest={makeGuest({ uptime: 3600 })} onClose={vi.fn()} />);
-      expect(screen.getByText('Uptime')).toBeInTheDocument();
+      expect(screen.queryByText('Uptime')).not.toBeInTheDocument();
     });
 
     it('hides uptime when 0', () => {
@@ -582,17 +572,15 @@ describe('GuestDrawer', () => {
       expect(screen.queryByText('Uptime')).not.toBeInTheDocument();
     });
 
-    it('displays node name', () => {
+    it('does not repeat row-level node placement', () => {
       render(() => <GuestDrawer guest={makeGuest({ node: 'pve-prod-01' })} onClose={vi.fn()} />);
-      expect(screen.getByText('Node')).toBeInTheDocument();
-      // Node name appears in both overview and discovery mock; use getAllByText
-      const nodes = screen.getAllByText('pve-prod-01');
-      expect(nodes.length).toBeGreaterThanOrEqual(1);
+      expect(screen.queryByText('Node')).not.toBeInTheDocument();
+      expect(screen.queryByText('pve-prod-01')).not.toBeInTheDocument();
     });
   });
 
-  describe('Nested workload context card', () => {
-    it('shows nested Docker container count, sample rows, and canonical Docker link', () => {
+  describe('Nested workload context', () => {
+    it('shows nested Docker container count and sample rows in the compact details table', () => {
       render(() => (
         <GuestDrawer
           guest={makeGuest({ name: 'media-lxc', type: 'lxc', workloadType: 'system-container' })}
@@ -611,15 +599,12 @@ describe('GuestDrawer', () => {
         />
       ));
 
-      const card = screen.getByTestId('nested-workload-context-card');
-      expect(within(card).getByText('Nested Docker')).toBeInTheDocument();
-      expect(within(card).getByText('Containers')).toBeInTheDocument();
-      expect(within(card).getByText('2')).toBeInTheDocument();
-      expect(within(card).getByText('frigate')).toBeInTheDocument();
-      expect(within(card).getByText('mosquitto')).toBeInTheDocument();
-      expect(
-        within(card).getByRole('link', { name: 'Open Docker page for media-lxc' }),
-      ).toHaveAttribute('href', '/docker/overview?host=media-lxc.mist-stork.ts.net');
+      const technical = technicalDetails();
+      expect(technical.getByText('Nested Docker')).toBeInTheDocument();
+      expect(technical.getByText('Containers')).toBeInTheDocument();
+      expect(technical.getByText('2')).toBeInTheDocument();
+      expect(technical.getByText('frigate')).toBeInTheDocument();
+      expect(technical.getByText('mosquitto')).toBeInTheDocument();
     });
   });
 
@@ -658,15 +643,12 @@ describe('GuestDrawer', () => {
       expect(technicalDetails().getByText('1.0.0')).toBeInTheDocument();
     });
 
-    it('surfaces the install path when a running VM has no Pulse agent', () => {
+    it('identifies when a running VM would benefit from a Pulse agent', () => {
       render(() => (
         <GuestDrawer guest={makeGuest({ agentVersion: undefined })} onClose={vi.fn()} />
       ));
-      expect(screen.getByText('Actions')).toBeInTheDocument();
-      expect(screen.getByRole('link', { name: 'Add agent for AI actions' })).toHaveAttribute(
-        'href',
-        '/settings/infrastructure?add=agent',
-      );
+      expect(screen.getByText('Pulse coverage')).toBeInTheDocument();
+      expect(technicalDetails().getByText('Agent recommended')).toBeInTheDocument();
     });
 
     it('shows connected node agent actions when the workload has an explicit action target', () => {
@@ -687,7 +669,7 @@ describe('GuestDrawer', () => {
         />
       ));
 
-      expect(screen.getByText('Actions')).toBeInTheDocument();
+      expect(screen.getByText('Pulse coverage')).toBeInTheDocument();
       expect(technicalDetails().getByText('Node agent connected')).toHaveAttribute(
         'title',
         'Discovery and governed actions use the Pulse Agent connected to delly.',
@@ -722,9 +704,9 @@ describe('GuestDrawer', () => {
     });
   });
 
-  // ── Guest Info card (OS + IPs) ──
+  // ── Operator identity context (OS + IPs) ──
 
-  describe('Guest Info card', () => {
+  describe('Operator identity context', () => {
     it('shows OS name and version', () => {
       render(() => (
         <GuestDrawer
@@ -732,9 +714,7 @@ describe('GuestDrawer', () => {
           onClose={vi.fn()}
         />
       ));
-      expect(screen.getByText('Guest Info')).toBeInTheDocument();
-      expect(screen.getByText('Ubuntu')).toBeInTheDocument();
-      expect(screen.getByText('22.04')).toBeInTheDocument();
+      expect(technicalDetails().getByText('Ubuntu • 22.04')).toBeInTheDocument();
     });
 
     it('shows OS name only when version is missing', () => {
@@ -754,7 +734,6 @@ describe('GuestDrawer', () => {
           onClose={vi.fn()}
         />
       ));
-      expect(screen.getByText('Guest Info')).toBeInTheDocument();
       expect(technicalDetails().getByText('11.0')).toBeInTheDocument();
     });
 
@@ -766,17 +745,17 @@ describe('GuestDrawer', () => {
         />
       ));
       expect(technicalDetails().getByText('192.168.1.10')).toBeInTheDocument();
-      expect(screen.getByText('10.0.0.5')).toBeInTheDocument();
+      expect(technicalDetails().getByText('10.0.0.5')).toBeInTheDocument();
     });
 
-    it('hides Guest Info card when no OS info and no IPs', () => {
+    it('hides identity rows when no OS info and no IPs', () => {
       render(() => (
         <GuestDrawer
           guest={makeGuest({ osName: undefined, osVersion: undefined, ipAddresses: [] })}
           onClose={vi.fn()}
         />
       ));
-      expect(screen.queryByText('Guest Info')).not.toBeInTheDocument();
+      expect(screen.queryByText('Primary IP')).not.toBeInTheDocument();
     });
   });
 
@@ -817,9 +796,8 @@ describe('GuestDrawer', () => {
         usage: 0.5,
       };
       render(() => <GuestDrawer guest={makeGuest({ memory })} onClose={vi.fn()} />);
-      // The Memory card now always surfaces primary RAM usage (Usage / Total /
-      // Free) to match the node drawer's memory card; balloon and swap remain
-      // optional rows. See commit "show RAM usage in guest drawer Memory card".
+      // Row-level usage is not repeated; capacity and optional balloon/swap
+      // facts remain visible in the compact drawer section.
       expect(screen.getByText('Memory')).toBeInTheDocument();
       expect(screen.queryByText(/Balloon/)).not.toBeInTheDocument();
       expect(screen.queryByText(/Swap/)).not.toBeInTheDocument();
@@ -849,7 +827,7 @@ describe('GuestDrawer', () => {
     it('shows "Today" for a backup from today', () => {
       const now = new Date('2026-03-02T10:00:00Z').getTime();
       render(() => <GuestDrawer guest={makeGuest({ lastBackup: now })} onClose={vi.fn()} />);
-      expect(screen.getByText('Backup')).toBeInTheDocument();
+      expect(screen.getByText('Protection')).toBeInTheDocument();
       expect(technicalDetails().getByText('Today')).toBeInTheDocument();
     });
 
@@ -871,8 +849,8 @@ describe('GuestDrawer', () => {
       const tenDaysAgo = new Date('2026-02-20T12:00:00Z').getTime();
       render(() => <GuestDrawer guest={makeGuest({ lastBackup: tenDaysAgo })} onClose={vi.fn()} />);
       expect(technicalDetails().getByText('10d ago')).toBeInTheDocument();
-      const ageEl = technicalDetails().getByText('10d ago');
-      expect(ageEl.className).toContain('yellow');
+      const ageCell = technicalDetails().getByText('10d ago').closest('td');
+      expect(ageCell).toHaveClass('text-amber-700');
     });
 
     it('keeps an old existing backup in the caution color rather than red', () => {
@@ -881,16 +859,16 @@ describe('GuestDrawer', () => {
         <GuestDrawer guest={makeGuest({ lastBackup: fortyDaysAgo })} onClose={vi.fn()} />
       ));
       expect(technicalDetails().getByText('40d ago')).toBeInTheDocument();
-      const ageEl = technicalDetails().getByText('40d ago');
-      expect(ageEl.className).toContain('yellow');
-      expect(ageEl.className).not.toContain('red');
+      const ageCell = technicalDetails().getByText('40d ago').closest('td');
+      expect(ageCell).toHaveClass('text-amber-700');
+      expect(ageCell).not.toHaveClass('text-rose-700');
     });
 
     it('applies green color for recent backups', () => {
       const now = new Date('2026-03-02T10:00:00Z').getTime();
       render(() => <GuestDrawer guest={makeGuest({ lastBackup: now })} onClose={vi.fn()} />);
-      const ageEl = technicalDetails().getByText('Today');
-      expect(ageEl.className).toContain('green');
+      const ageCell = technicalDetails().getByText('Today').closest('td');
+      expect(ageCell).toHaveClass('text-emerald-700');
     });
 
     it('hides Backup card when lastBackup is 0 (falsy)', () => {
@@ -907,24 +885,21 @@ describe('GuestDrawer', () => {
         <GuestDrawer guest={makeGuest({ tags: ['production', 'web'] })} onClose={vi.fn()} />
       ));
       expect(screen.getByText('Tags')).toBeInTheDocument();
-      expect(screen.getByText('production')).toBeInTheDocument();
-      expect(screen.getByText('web')).toBeInTheDocument();
+      expect(technicalDetails().getByText('production, web')).toBeInTheDocument();
     });
 
     it('renders tags from a comma-separated string', () => {
       render(() => (
         <GuestDrawer guest={makeGuest({ tags: 'db,critical' as any })} onClose={vi.fn()} />
       ));
-      expect(screen.getByText('db')).toBeInTheDocument();
-      expect(screen.getByText('critical')).toBeInTheDocument();
+      expect(technicalDetails().getByText('db, critical')).toBeInTheDocument();
     });
 
     it('trims whitespace from tags', () => {
       render(() => (
         <GuestDrawer guest={makeGuest({ tags: ' spaced , padded ' as any })} onClose={vi.fn()} />
       ));
-      expect(screen.getByText('spaced')).toBeInTheDocument();
-      expect(screen.getByText('padded')).toBeInTheDocument();
+      expect(technicalDetails().getByText('spaced, padded')).toBeInTheDocument();
     });
 
     it('hides Tags card when tags is null', () => {
@@ -941,13 +916,14 @@ describe('GuestDrawer', () => {
   // ── Filesystems card ──
 
   describe('Filesystems card', () => {
-    it('renders DiskList when disks are present', () => {
+    it('renders compact filesystem usage rows when disks are present', () => {
       const disks: Disk[] = [
         { total: 10737418240, used: 5368709120, free: 5368709120, usage: 0.5, mountpoint: '/' },
       ];
       render(() => <GuestDrawer guest={makeGuest({ disks })} onClose={vi.fn()} />);
       expect(screen.getByText('Filesystems')).toBeInTheDocument();
-      expect(screen.getByTestId('disk-list')).toBeInTheDocument();
+      expect(technicalDetails().getByText('/')).toBeInTheDocument();
+      expect(technicalDetails().getByText(/50% · 5\.00 GB\/10\.0 GB/)).toBeInTheDocument();
     });
 
     it('hides Filesystems card when disks is empty', () => {
@@ -977,16 +953,16 @@ describe('GuestDrawer', () => {
       render(() => <GuestDrawer guest={makeGuest({ networkInterfaces })} onClose={vi.fn()} />);
       expect(screen.getByText('Network')).toBeInTheDocument();
       expect(screen.getByText('eth0')).toBeInTheDocument();
-      expect(screen.getByText('aa:bb:cc:dd:ee:ff')).toBeInTheDocument();
-      expect(screen.getByText('192.168.1.5')).toBeInTheDocument();
-      expect(screen.getByText(/^RX /)).toBeInTheDocument();
-      expect(screen.getByText(/^TX /)).toBeInTheDocument();
+      const interfaceDetails = technicalDetails().getByText(
+        /192\.168\.1\.5.*MAC aa:bb:cc:dd:ee:ff/,
+      );
+      expect(interfaceDetails).toHaveTextContent('RX 1.00 KB / TX 2.00 KB');
     });
 
     it('displays "interface" as fallback when name is missing', () => {
       const networkInterfaces: GuestNetworkInterface[] = [{ rxBytes: 100, txBytes: 200 }];
       render(() => <GuestDrawer guest={makeGuest({ networkInterfaces })} onClose={vi.fn()} />);
-      expect(screen.getByText('interface')).toBeInTheDocument();
+      expect(screen.getByText('Interface 1')).toBeInTheDocument();
     });
 
     it('limits displayed interfaces to 4', () => {

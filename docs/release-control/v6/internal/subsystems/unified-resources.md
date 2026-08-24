@@ -1246,6 +1246,14 @@ AI-only summary payloads, or page-local heuristics.
    `ResourceActionHistory.tsx`, and `DiscoveryTab.tsx` must compose
    `InfoCardFrame` for that shell instead of restoring local card-frame
    classes.
+   Curated technical inventory follows the shared compact-row contract instead
+   of the secondary-card contract. Docker-host drawers must project system,
+   runtime, memory, storage, and telemetry facts through
+   `TechnicalDetailsSection` with canonical `DetailSection[]` data, while the
+   unified-resource drawer keeps its existing compact technical summary tables
+   visible. Only genuinely large or interactive provider-support content stays
+   lazy behind `TechnicalDetailsDisclosure`; technical inventory must not
+   restore a local card mosaic or add a drawer-open fetch.
 9. Keep dashboard and infrastructure freshness on the canonical unified-resource
    ownership path. `frontend-modern/src/stores/websocket.ts`,
    `frontend-modern/src/utils/resourceStateAdapters.ts`, and

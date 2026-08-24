@@ -825,7 +825,7 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
     const inlineAliases = inlineRender.getByText('Aliases');
     expect(inlineAliases).toBeInTheDocument();
     expect(inlineAliases.closest('summary')).toBeNull();
-    expect(inlineRender.container.querySelectorAll('details')).toHaveLength(2);
+    expect(inlineRender.container.querySelectorAll('details')).toHaveLength(1);
     expect(inlineRender.getByText('agent-inline-1')).toBeInTheDocument();
     expect(inlineRender.getAllByText('inline-host.local').length).toBeGreaterThan(0);
 

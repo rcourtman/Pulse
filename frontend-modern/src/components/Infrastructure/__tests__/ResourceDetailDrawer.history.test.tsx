@@ -366,7 +366,7 @@ describe('ResourceDetailDrawer change history section', () => {
     await Promise.resolve();
 
     expect(screen.queryByText('Loading view...')).not.toBeInTheDocument();
-    expect(screen.getByText('Technical details')).toBeInTheDocument();
+    expect(screen.getByTestId('resource-technical-details')).toBeInTheDocument();
   });
 
   it('keeps table-row presentation focused on local resource details', async () => {
@@ -655,7 +655,7 @@ describe('ResourceDetailDrawer change history section', () => {
 
     render(() => <ResourceDetailDrawer resource={resource} />);
 
-    await screen.findByText('Technical details');
+    await screen.findByTestId('resource-technical-details');
     expect(screen.queryByText('Context')).toBeNull();
     expect(screen.queryByText('Governance')).toBeNull();
     expect(screen.queryByText('Safe Summary')).toBeNull();

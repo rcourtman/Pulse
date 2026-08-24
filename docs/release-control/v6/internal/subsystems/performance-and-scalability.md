@@ -1362,18 +1362,24 @@ but it must not add host powercap reads, sensor-specific history reads,
 per-row polling, browser-side command assumptions, or table-wide aggregation
 work.
 The Proxmox node drawer overview should follow the existing guest drawer
-compact detail-card pattern and expose node-specific context such as platform,
+compact detail-section pattern and expose node-specific context such as platform,
 kernel, hardware, raw capacity, telemetry, and thermal facts rather than
 repeating the metric cells already visible in the grouped table row.
 Object drawers across workload, node, Docker, and unified-resource surfaces
 must keep their default render bounded to active attention plus a small
-additive context projection. Full inventory and provider-specific support
-tables remain lazy behind collapsed technical disclosures, while operator
+additive context projection. Full provider-specific support workflows remain
+lazy behind collapsed support disclosures, while curated technical inventory
+stays visible through shared compact section rows. Operator
 policy, update actions, and saved access mount only after the Manage tab is
 selected. Alert lookup may consume the already-loaded active-alert map through
 the resource's bounded canonical/provider identity candidate list; it must not
 add a per-drawer fetch, rescan the workload inventory, or eagerly mount hidden
 technical sections.
+Guest, node, and Docker-host technical rows must compose
+`TechnicalDetailsSection`, `DetailSectionTable`, and `detailSectionModel.ts`
+instead of local detail-card grids. The projection may only format the
+already-selected resource payload and existing drawer state; making those rows
+visible must not add a fetch or inventory scan.
 Guest and resource drawer headers must not initialize clipboard-context or
 Assistant-handoff state for generic header buttons. Removing those controls
 also removes their drawer-local signal, API, and formatting wiring; the global
@@ -1923,11 +1929,14 @@ and workload-derived navigation state live in
 `frontend-modern/src/components/Workloads/useGuestDrawerState.ts`. Future
 drawer runtime and overview-surface changes must extend through those owners
 instead of adding more mixed state and helper drift back into the shell.
-Compact drawer card frames in `GuestDrawerOverview.tsx`,
-`NodeDrawerOverview.tsx`, and shared drawer helpers are a frontend-primitives
-dependency: the Workloads hot path owns which cards render and what data they
-show, but the repeated bordered `bg-surface p-3 shadow-sm` frame must compose
-`InfoCardFrame` instead of carrying workload-local frame constants.
+Compact drawer technical sections in `GuestDrawerOverview.tsx` and
+`NodeDrawerOverview.tsx` are a frontend-primitives dependency: the Workloads
+hot path owns which sections and rows render and what data they show, while row
+compaction, table rendering, and tone classes must compose
+`TechnicalDetailsSection`, `DetailSectionTable`, and `detailSectionModel.ts`
+instead of workload-local card frames or detail loops. Non-technical secondary
+cards still compose `InfoCardFrame` where a framed interactive surface is
+genuinely required.
 The guest drawer header follows the same dependency boundary for its Assistant,
 copy-context, and close actions: Workloads owns availability and click
 handlers, while `frontend-modern/src/components/shared/Button.tsx` owns the
