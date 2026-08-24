@@ -515,6 +515,7 @@ export const DockerHostsTable: Component<{
                           >
                             <DockerHostDrawer
                               host={host}
+                              onClose={() => setSelectedHostId(null)}
                               customUrl={customUrl()}
                               onCustomUrlChange={setCustomUrl}
                             />

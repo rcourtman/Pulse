@@ -1,25 +1,35 @@
 {
   "version": 1,
-  "base_sha": "f1aee5ccd1befb40ff2bc78940ad6a12558c4475",
-  "verified_at": "2026-08-24T13:54:53Z",
+  "base_sha": "6991208ad62c550328109f50ea53b7b4202da62b",
+  "verified_at": "2026-08-24T14:36:00Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx",
-    "frontend-modern/src/components/Infrastructure/ResourceDetailSummary.tsx",
-    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx",
-    "frontend-modern/src/components/Workloads/NodeDrawerOverview.tsx",
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawer.tsx",
+    "frontend-modern/src/components/Workloads/GuestDrawer.tsx",
+    "frontend-modern/src/components/Workloads/NodeDrawer.tsx",
+    "frontend-modern/src/components/Workloads/WorkloadPanel.tsx",
     "frontend-modern/src/components/shared/DetailSectionTable.tsx",
-    "frontend-modern/src/components/shared/TechnicalDetailsDisclosure.tsx",
-    "frontend-modern/src/features/docker/DockerHostDrawerOverview.tsx"
+    "frontend-modern/src/components/shared/ObjectDrawerHeader.tsx",
+    "frontend-modern/src/features/docker/DockerHostDrawer.tsx",
+    "frontend-modern/src/features/docker/DockerHostDrawerOverview.tsx",
+    "frontend-modern/src/features/docker/DockerHostsTable.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxCephClusterDrawer.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxMailGatewayDrawer.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx": "5423e151cf559054d5c17292c48b8d82bc17e2b235aae7191bfd2950171f2df5",
-    "frontend-modern/src/components/Infrastructure/ResourceDetailSummary.tsx": "5a2b06ce9abafa674dc9821b31a10f946cdd4b7f06d7a847af13ea32b1983547",
-    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx": "99d6324d0b4be99d677ebd9a76cd4d5d4f86b786f6d9ff141d02d690f6d253bb",
-    "frontend-modern/src/components/Workloads/NodeDrawerOverview.tsx": "04178af05ed8753d705f2c503e866973d9b3f35ad96d8e46cc2d57bf1a1d129c",
-    "frontend-modern/src/components/shared/DetailSectionTable.tsx": "18a24812a1b02af72c47edee5327c1d5e2c397cdffb57be9542ffdc89cb41595",
-    "frontend-modern/src/components/shared/TechnicalDetailsDisclosure.tsx": "5f6e0a9d206171d2497e345c9cc3438c164126974e69323bbf16a9f21643a5ae",
-    "frontend-modern/src/features/docker/DockerHostDrawerOverview.tsx": "22d8fc6f6b395aadb15dc208016edd078b5adb7151e67ab10c03b7f5657b629b"
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawer.tsx": "65b714d5e11f32aad5baf27dab6529a1759478e86be377ae4e208fd3730a0815",
+    "frontend-modern/src/components/Workloads/GuestDrawer.tsx": "d13a9e66746541b7c28311d2e07ba961df4620c2178ab8fc5ebc1a079a858263",
+    "frontend-modern/src/components/Workloads/NodeDrawer.tsx": "14926ce4b200435a7675028d5467aed89b5c9cb894e788822ff9fd70ae7f1f6f",
+    "frontend-modern/src/components/Workloads/WorkloadPanel.tsx": "b933c323e93f56022f57d8083e5e2b4d715e8de906d7d3d38c7802ef1680b0c4",
+    "frontend-modern/src/components/shared/DetailSectionTable.tsx": "9ea698e10d5ef197a5e0bea3cc5a97a23173116b093cb4377a0bcbd29119fb20",
+    "frontend-modern/src/components/shared/ObjectDrawerHeader.tsx": "39702f2a07f9f3c9b64a82820ce21f6e42ba1b88b33e7900ebb353fab09cce83",
+    "frontend-modern/src/features/docker/DockerHostDrawer.tsx": "e05dcca8cd2c9a170bc6a405d869982a6e6607d760083f62b95520cc131358ab",
+    "frontend-modern/src/features/docker/DockerHostDrawerOverview.tsx": "6ad83f0faf4c02fb29f027104ff91cc6fbafd8fc0db8da1693f1546e00bdca9b",
+    "frontend-modern/src/features/docker/DockerHostsTable.tsx": "c6af64cb0a2fbdf2d1973463b1a7d992685e39bda8456a138ed1ff81e2c71718",
+    "frontend-modern/src/features/proxmox/ProxmoxCephClusterDrawer.tsx": "4da690f8ac74e95d77f728f7be910e140e25119f796e0874b2bbd6193e4cf5fc",
+    "frontend-modern/src/features/proxmox/ProxmoxMailGatewayDrawer.tsx": "e0eba7b1fa5233379bb7f0eda3e49920976a5b9b82fa4749f8e150f186f3a687",
+    "frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx": "a192b907ce195f9c72257d25f0cf1e015a070e30cea794872dbeda2f4d2b1826"
   },
   "routes": ["/proxmox/overview", "/docker/overview"],
   "viewports": [
@@ -33,14 +43,16 @@
     }
   ],
   "states": [
-    "Proxmox node drawer with curated operator context, platform, hardware, memory, storage, and telemetry rows visible",
-    "Proxmox guest drawer with only the operator and inventory sections supported by the selected workload visible",
-    "Docker host drawer with operator context, runtime, capacity, and telemetry rows visible"
+    "Proxmox node drawer with the complete subject header row presented as one visible collapse target at desktop and phone widths",
+    "Proxmox guest drawer with the same canonical full-width collapse affordance at phone width",
+    "Proxmox Ceph cluster and Mail Gateway drawers with the same canonical full-width collapse affordance at phone width",
+    "Docker host drawer with the canonical full-width collapse affordance and condensed technical rows at phone width"
   ],
   "interactions": [
-    "opened a Proxmox node row at desktop and phone widths and confirmed compact detail rows render immediately with no nested details disclosure",
-    "opened a Proxmox guest row at phone width and confirmed row-level uptime and placement are not repeated in the drawer",
-    "opened a Docker host row at desktop and phone widths and confirmed compact detail rows render immediately with no nested details disclosure",
-    "confirmed long values truncate within the value column and the drawer remains inside the phone viewport"
+    "expanded and collapsed a Proxmox node by pressing the full subject header row at desktop and phone widths",
+    "expanded and collapsed a Proxmox guest by pressing the full subject header row at phone width",
+    "expanded and collapsed Ceph cluster and Mail Gateway objects by pressing their full subject header rows at phone width",
+    "expanded and collapsed a Docker host by pressing the full subject header row at phone width",
+    "confirmed the visible subject content and chevron communicate the full-row collapse affordance without adding a separate Close control"
   ]
 }

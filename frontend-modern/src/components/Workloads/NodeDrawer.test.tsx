@@ -104,6 +104,15 @@ afterEach(() => {
 });
 
 describe('NodeDrawer', () => {
+  it('collapses from the full shared drawer header surface', async () => {
+    const onClose = vi.fn();
+    render(() => <NodeDrawer node={makeNode()} onClose={onClose} />);
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Collapse pve-node-1 details' }));
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
   it('does not expose Discovery when the feature is disabled', () => {
     syncAIRuntimeSettings({ discovery_enabled: false } as Parameters<
       typeof syncAIRuntimeSettings

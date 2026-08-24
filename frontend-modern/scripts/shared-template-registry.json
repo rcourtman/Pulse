@@ -339,6 +339,30 @@
       ]
     },
     {
+      "id": "object-drawer-full-header-collapse",
+      "category": "row-detail",
+      "summary": "Object drawer headers must compose ObjectDrawerHeader so the complete subject row is a keyboard-accessible collapse target while object-specific actions remain independent.",
+      "canonical": {
+        "path": "src/components/shared/ObjectDrawerHeader.tsx",
+        "export": "ObjectDrawerHeader"
+      },
+      "requiredConsumers": [
+        { "path": "src/components/Infrastructure/ResourceDetailDrawer.tsx" },
+        { "path": "src/components/Workloads/GuestDrawer.tsx" },
+        { "path": "src/components/Workloads/NodeDrawer.tsx" },
+        { "path": "src/components/shared/DetailSectionTable.tsx" },
+        { "path": "src/features/docker/DockerHostDrawer.tsx" },
+        { "path": "src/features/proxmox/ProxmoxCephClusterDrawer.tsx" },
+        { "path": "src/features/proxmox/ProxmoxMailGatewayDrawer.tsx" }
+      ],
+      "forbiddenPatterns": [],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/shared/__tests__/ObjectDrawerHeader.test.tsx",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
       "id": "resource-detail-numeric-value-formatting",
       "category": "row-detail",
       "summary": "Resource detail drawer models must use the shared detail-section numeric formatting helpers for byte scaling, integer labels, and count pluralization instead of recreating provider-local byte/count helpers.",
@@ -1053,7 +1077,6 @@
         { "path": "src/components/patrol/ApprovalBanner.tsx" },
         { "path": "src/components/patrol/ApprovalSection.tsx" },
         { "path": "src/components/ErrorBoundary.tsx" },
-        { "path": "src/components/Infrastructure/ResourceDetailDrawer.tsx" },
         { "path": "src/components/Infrastructure/ResourceDetailDrawerDebugTab.tsx" },
         { "path": "src/components/Settings/AgentProfilesPanel.tsx" },
         { "path": "src/components/Settings/APIAccessPanel.tsx" },
@@ -1097,7 +1120,6 @@
         { "path": "src/components/Settings/UserAssignmentsPanel.tsx" },
         { "path": "src/components/UpdateConfirmationModal.tsx" },
         { "path": "src/components/UpdateProgressModal.tsx" },
-        { "path": "src/components/Workloads/GuestDrawer.tsx" },
         { "path": "src/features/patrol/PatrolIntelligenceWorkspace.tsx" },
         { "path": "src/features/standalone/StandalonePageSurface.tsx" }
       ],

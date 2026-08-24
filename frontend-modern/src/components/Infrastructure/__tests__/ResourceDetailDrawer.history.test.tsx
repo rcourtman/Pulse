@@ -193,9 +193,7 @@ describe('ResourceDetailDrawer change history section', () => {
     expect(resourceDetailDrawerShellSource).toContain("from './ResourceDetailDrawerDebugTab'");
     expect(resourceDetailDrawerShellSource).toContain('data-testid="resource-header-badges"');
     expect(resourceDetailDrawerShellSource).toContain('drawer.headerBadges()');
-    expect(resourceDetailDrawerShellSource).toContain('DrawerHeaderActionGroup');
-    expect(resourceDetailDrawerShellSource).toContain('DrawerHeaderActionButton');
-    expect(resourceDetailDrawerShellSource).toContain('DrawerHeaderIconButton');
+    expect(resourceDetailDrawerShellSource).toContain('ObjectDrawerHeader');
     expect(resourceDetailDrawerShellSource).not.toContain('drawer.headerIdentity()');
     expect(resourceDetailDrawerShellSource).not.toContain('drawer.unifiedSourceBadges()');
     expect(resourceDetailDrawerShellSource).not.toContain('Change history');
@@ -619,8 +617,9 @@ describe('ResourceDetailDrawer change history section', () => {
     expect(screen.getByRole('button', { name: 'Show access' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Show access' }));
     const accessSection = within(screen.getByTestId('resource-access-section'));
-    expect(accessSection.getByText('Analysis')).toBeInTheDocument();
-    expect(accessSection.getByRole('button', { name: 'Open analysis' })).toBeInTheDocument();
+    expect(accessSection.getAllByText('Web interface')).toHaveLength(2);
+    expect(accessSection.queryByText('Analysis')).toBeNull();
+    expect(accessSection.queryByRole('button', { name: 'Open analysis' })).toBeNull();
   });
 
   it('keeps default internal cloud-summary posture out of the investigation context drawer block', async () => {

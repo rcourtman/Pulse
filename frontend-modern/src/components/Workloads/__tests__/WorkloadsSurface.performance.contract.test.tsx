@@ -1569,9 +1569,7 @@ describe('Workloads performance contract', () => {
       expect(guestDrawerSource).toContain('useGuestDrawerState');
       expect(guestDrawerSource).toContain('GuestDrawerOverview');
       expect(guestDrawerSource).toContain('GuestDrawerHistoryRangeSelect');
-      expect(guestDrawerSource).toContain('DrawerHeaderActionGroup');
-      expect(guestDrawerSource).not.toContain('DrawerHeaderActionButton');
-      expect(guestDrawerSource).toContain('DrawerHeaderIconButton');
+      expect(guestDrawerSource).toContain('ObjectDrawerHeader');
       expect(guestDrawerSource).not.toContain('Open related infrastructure');
       expect(guestDrawerHistorySource).toContain('data-testid="guest-history-hover-time"');
       expect(guestDrawerHistorySource).toContain('data-testid="guest-history-range-control"');
@@ -1589,7 +1587,6 @@ describe('Workloads performance contract', () => {
       expect(nodeDrawerOverviewSource).toContain('Hardware');
       expect(nodeDrawerOverviewSource).toContain('Telemetry');
       expect(nodeDrawerOverviewSource).toContain('Thermals');
-      expect(nodeDrawerOverviewSource).toContain('InfoCardFrame');
       expect(nodeDrawerModelSource).toContain('HOST_METRICS_HISTORY_GROUPS');
       expect(nodeDrawerModelSource).not.toContain("id: 'thermals'");
       expect(workloadPanelSource).toContain('NodeDrawer');
@@ -1620,9 +1617,10 @@ describe('Workloads performance contract', () => {
       expect(guestDrawerOverviewSource).not.toContain('WebInterfaceUrlField');
       expect(guestDrawerManageSource).toContain('WebInterfaceUrlField');
       expect(guestDrawerManageSource).toContain('ResourceOperatorStateSection');
-      expect(guestDrawerOverviewSource).toContain('DiskList');
+      expect(guestDrawerOverviewSource).toContain('buildWorkloadsDiskPresentation');
       expect(guestDrawerOverviewSource).toContain('Filesystems');
-      expect(guestDrawerOverviewSource).toContain('InfoCardFrame');
+      expect(guestDrawerOverviewSource).toContain('TechnicalDetailsSection');
+      expect(nodeDrawerOverviewSource).toContain('TechnicalDetailsSection');
       const retiredInfoCardFrameClass = [
         'rounded border border-border',
         'bg-surface p-3 shadow-sm',

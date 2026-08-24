@@ -3105,11 +3105,14 @@ and it no longer repeats that same provenance as a separate `Mode` row because
 the drawer header badges already own canonical source display,
 and the drawer header no longer carries the technical primary identity line;
 that canonical identifier now lives in the `Identity` card as `Primary ID`,
-and the drawer header action chrome is a frontend-primitives dependency:
-ResourceDetailDrawer may own which actions are available and how they call the
-resource state, but Assistant, copy-context, close, and future drawer-header
-actions must compose the shared Button drawer-header action primitives instead
-of restoring resource-drawer-local button classes,
+and the drawer header interaction is a frontend-primitives dependency:
+`ResourceDetailDrawer` may own which lifecycle actions are available and how
+they call resource state, but it must compose `ObjectDrawerHeader` so the
+complete subject/badge row is the semantic collapse target and lifecycle
+buttons remain independent siblings. Assistant, copy-context, close, and
+future drawer-header action chrome must continue through shared primitives
+instead of restoring resource-drawer-local button classes or a small
+icon-only collapse target,
 and platform alert tables use the same dependency rule for severity
 presentation: Docker, Kubernetes, TrueNAS, and vSphere incident rows may own
 which incidents exist and which native detail rows are shown, but visible

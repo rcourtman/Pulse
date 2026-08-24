@@ -1937,12 +1937,15 @@ compaction, table rendering, and tone classes must compose
 instead of workload-local card frames or detail loops. Non-technical secondary
 cards still compose `InfoCardFrame` where a framed interactive surface is
 genuinely required.
-The guest drawer header follows the same dependency boundary for its Assistant,
-copy-context, and close actions: Workloads owns availability and click
-handlers, while `frontend-modern/src/components/shared/Button.tsx` owns the
-drawer-header action group and button chrome through
-`DrawerHeaderActionGroup`, `DrawerHeaderActionButton`, and
-`DrawerHeaderIconButton`.
+Guest, node, and Docker-host drawer headers follow the same frontend-primitives dependency
+boundary for collapse: Workloads owns which inline row is selected and the
+close handler, while
+`frontend-modern/src/components/shared/ObjectDrawerHeader.tsx` owns the
+full-width semantic header button, phone target height, focus treatment, and
+collapse chevron. `WorkloadPanel` must pass the grouped node close handler into
+`NodeDrawer`, the Docker hosts table must pass its close handler into
+`DockerHostDrawer`, and those shells must not fall back to a small icon-only
+collapse target or wrap interactive header actions inside a local button.
 That drawer state now also consumes the same shared
 `frontend-modern/src/routing/resourceLinks.ts` workload-to-infrastructure
 helper, so row and drawer navigation stay aligned without a second

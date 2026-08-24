@@ -1,7 +1,7 @@
 import { For, Show, createMemo, createResource, type Component } from 'solid-js';
-import XIcon from 'lucide-solid/icons/x';
 import { Card } from '@/components/shared/Card';
 import { DrawerSubjectHeading } from '@/components/shared/DrawerSubjectHeading';
+import { ObjectDrawerHeader } from '@/components/shared/ObjectDrawerHeader';
 import { StatusDot } from '@/components/shared/StatusDot';
 import {
   Table,
@@ -298,30 +298,42 @@ export const ProxmoxMailGatewayDrawer: Component<{
 
   return (
     <section class="space-y-3" aria-labelledby={headingId()}>
-      <header class="flex items-start justify-between gap-3">
-        <div class="min-w-0 space-y-1">
-          <DrawerSubjectHeading
-            headingId={headingId()}
-            title={name()}
-            statusVariant={health().variant}
-            statusLabel={health().label}
-            trailing={<span class="shrink-0 text-[10px] font-mono text-muted">{version()}</span>}
-          />
-          <Show when={hostname()}>
-            <div class="font-mono text-[10px] text-muted break-all">{hostname()}</div>
-          </Show>
-        </div>
-        <Show when={props.onClose}>
-          <button
-            type="button"
-            onClick={() => props.onClose?.()}
-            class="shrink-0 inline-flex h-7 w-7 items-center justify-center rounded-sm text-muted hover:bg-surface-hover hover:text-base-content"
-            aria-label="Close mail gateway drawer"
-          >
-            <XIcon class="h-4 w-4" />
-          </button>
-        </Show>
-      </header>
+      <Show
+        when={props.onClose}
+        fallback={
+          <div class="min-w-0 space-y-1">
+            <DrawerSubjectHeading
+              headingId={headingId()}
+              title={name()}
+              statusVariant={health().variant}
+              statusLabel={health().label}
+              trailing={<span class="shrink-0 text-[10px] font-mono text-muted">{version()}</span>}
+            />
+            <Show when={hostname()}>
+              <div class="font-mono text-[10px] text-muted break-all">{hostname()}</div>
+            </Show>
+          </div>
+        }
+      >
+        {(onClose) => (
+          <ObjectDrawerHeader collapseLabel={`Collapse ${name()} details`} onCollapse={onClose()}>
+            <div class="min-w-0 space-y-1">
+              <DrawerSubjectHeading
+                headingId={headingId()}
+                title={name()}
+                statusVariant={health().variant}
+                statusLabel={health().label}
+                trailing={
+                  <span class="shrink-0 text-[10px] font-mono text-muted">{version()}</span>
+                }
+              />
+              <Show when={hostname()}>
+                <div class="font-mono text-[10px] text-muted break-all">{hostname()}</div>
+              </Show>
+            </div>
+          </ObjectDrawerHeader>
+        )}
+      </Show>
 
       <Show
         when={!instance.error}

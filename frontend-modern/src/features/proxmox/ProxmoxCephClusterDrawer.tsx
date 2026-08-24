@@ -1,8 +1,8 @@
 import { For, Show, createSignal, type Component } from 'solid-js';
-import XIcon from 'lucide-solid/icons/x';
 import { Card } from '@/components/shared/Card';
 import { DrawerSubjectHeading } from '@/components/shared/DrawerSubjectHeading';
 import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
+import { ObjectDrawerHeader } from '@/components/shared/ObjectDrawerHeader';
 import { ProgressBar } from '@/components/shared/ProgressBar';
 import { StatusDot } from '@/components/shared/StatusDot';
 import {
@@ -119,7 +119,10 @@ export const ProxmoxCephClusterDrawer: Component<{
 
   return (
     <section class="space-y-3" aria-labelledby={headingId()}>
-      <header class="flex items-start justify-between gap-3">
+      <ObjectDrawerHeader
+        collapseLabel={`Collapse ${asTrimmedString(props.cluster.name) || props.cluster.id} details`}
+        onCollapse={props.onClose}
+      >
         <div class="min-w-0 space-y-1">
           <DrawerSubjectHeading
             headingId={headingId()}
@@ -139,15 +142,7 @@ export const ProxmoxCephClusterDrawer: Component<{
             <p class="text-xs text-amber-700 dark:text-amber-300">{meta()?.healthMessage}</p>
           </Show>
         </div>
-        <button
-          type="button"
-          onClick={props.onClose}
-          class="shrink-0 inline-flex h-7 w-7 items-center justify-center rounded-sm text-muted hover:bg-surface-hover hover:text-base-content"
-          aria-label="Close ceph cluster drawer"
-        >
-          <XIcon class="h-4 w-4" />
-        </button>
-      </header>
+      </ObjectDrawerHeader>
 
       <CapacityBar used={usedCapacity()} total={totalCapacity()} percent={usagePercent()} />
 

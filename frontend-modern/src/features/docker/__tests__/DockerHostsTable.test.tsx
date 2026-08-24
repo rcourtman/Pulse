@@ -10,15 +10,6 @@ import dockerHostsTableSource from '../DockerHostsTable.tsx?raw';
 const formatThresholds = (thresholds?: MetricDisplayThresholds | null): string =>
   thresholds ? `${thresholds.warning}/${thresholds.critical}` : '';
 
-const expandTechnicalDetails = (drawer: HTMLElement): void => {
-  const details = within(drawer).getByText('Technical details').closest('details');
-  if (!(details instanceof HTMLDetailsElement)) {
-    throw new Error('Expected Docker technical details disclosure');
-  }
-  details.open = true;
-  fireEvent(details, new Event('toggle'));
-};
-
 // Row bars must color from the alert-configured thresholds, not the
 // hardcoded METRIC_THRESHOLDS display defaults (memory 75/85), so a host
 // with a raised memory override stops showing red below its alert point.
@@ -356,8 +347,10 @@ describe('DockerHostsTable', () => {
     fireEvent.click(screen.getByText('docker-01').closest('tr')!);
 
     const drawer = screen.getByTestId('docker-host-drawer');
-    expandTechnicalDetails(drawer);
-    expect(within(drawer).getByText('76°C')).toHaveClass('text-green-600');
+    expect(within(drawer).getByText('76°C').closest('td')).toHaveClass(
+      'text-emerald-700',
+      'dark:text-emerald-300',
+    );
   });
 
   it('surfaces container update actions in the host drawer', () => {
@@ -533,7 +526,6 @@ describe('DockerHostsTable', () => {
 
     fireEvent.click(screen.getByText('docker-01').closest('tr')!);
     const drawer = screen.getByTestId('docker-host-drawer');
-    expandTechnicalDetails(drawer);
     expect(within(drawer).getByText('Unavailable')).toBeInTheDocument();
     expect(within(drawer).getByText('7.81 KB')).toBeInTheDocument();
   });

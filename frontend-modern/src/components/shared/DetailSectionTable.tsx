@@ -1,5 +1,5 @@
 import { For, type Component, type JSX } from 'solid-js';
-import { Button } from './Button';
+import { ObjectDrawerHeader } from './ObjectDrawerHeader';
 import { Table, TableBody, TableCell, TableHead, TableRow } from './Table';
 import type { DetailSection, DetailValueTone } from './detailSectionModel';
 
@@ -93,23 +93,17 @@ export const InlineDetailPanel: Component<{
     data-testid={props.testId}
     data-inline-detail-for={props.detailFor}
   >
-    <div class="flex flex-wrap items-start justify-between gap-3">
+    <ObjectDrawerHeader
+      collapseLabel={`Collapse ${props.detailFor} details`}
+      onCollapse={props.onClose}
+    >
       <div>
         <div class="text-[11px] font-medium uppercase tracking-wide text-base-content">
           {props.title}
         </div>
         {props.summary ? <div class="mt-1 text-[10px] text-muted">{props.summary}</div> : null}
       </div>
-      <Button
-        type="button"
-        variant="outline"
-        size="xs"
-        class="bg-surface text-[10px] hover:bg-base"
-        onClick={props.onClose}
-      >
-        Close
-      </Button>
-    </div>
+    </ObjectDrawerHeader>
     <DetailSectionTable sections={props.sections} class={props.tableClass} />
   </div>
 );

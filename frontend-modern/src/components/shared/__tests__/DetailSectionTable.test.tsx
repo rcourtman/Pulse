@@ -146,7 +146,7 @@ describe('DetailSectionTable', () => {
     expect(within(panel).getByText('Alert detail')).toBeInTheDocument();
     expect(within(panel).getAllByText('Warning')).toHaveLength(2);
 
-    within(panel).getByRole('button', { name: 'Close' }).click();
+    within(panel).getByRole('button', { name: 'Collapse resource-1 details' }).click();
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 });

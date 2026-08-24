@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { resetAIRuntimeState, syncAIRuntimeSettings } from '@/stores/aiRuntimeState';
@@ -47,6 +47,15 @@ afterEach(() => {
 });
 
 describe('DockerHostDrawer Discovery availability', () => {
+  it('collapses from the full shared drawer header surface', async () => {
+    const onClose = vi.fn();
+    render(() => <DockerHostDrawer host={host()} onClose={onClose} />);
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Collapse docker-1 details' }));
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
   it('does not expose Discovery when the feature is disabled', () => {
     syncAIRuntimeSettings({ discovery_enabled: false } as Parameters<
       typeof syncAIRuntimeSettings

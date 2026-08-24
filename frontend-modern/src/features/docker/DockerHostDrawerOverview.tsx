@@ -237,6 +237,7 @@ export function DockerHostDrawerOverview(props: DockerHostDrawerOverviewProps) {
     if (!memory) return [];
     const rows: DockerOverviewRow[] = [];
     if ('usageUnavailable' in memory && memory.usageUnavailable === true) {
+      rows.push({ label: 'Usage', value: 'Unavailable', valueClass: 'text-muted' });
       if (typeof memory.total === 'number' && memory.total > 0) {
         rows.push({ label: 'Total', value: formatBytes(memory.total) });
       }

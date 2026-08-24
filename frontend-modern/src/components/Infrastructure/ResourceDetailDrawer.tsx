@@ -1,9 +1,8 @@
 import { Show, For, Suspense } from 'solid-js';
 import type { Component } from 'solid-js';
-import XIcon from 'lucide-solid/icons/x';
 import type { Resource } from '@/types/resource';
-import { DrawerHeaderActionGroup, DrawerHeaderIconButton } from '@/components/shared/Button';
 import { DiscoveryLoadingFallback } from '@/components/shared/DiscoveryLoadingFallback';
+import { ObjectDrawerHeader } from '@/components/shared/ObjectDrawerHeader';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { Subtabs } from '@/components/shared/Subtabs';
 import { ReportMergeModal } from './ReportMergeModal';
@@ -74,65 +73,80 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
     initialShowTrueNASDetails: props.initialShowTrueNASDetails,
   });
   const headingId = () => `resource-detail-drawer-heading-${props.resource.id}`;
+  const HeaderIdentity = () => (
+    <div class="space-y-1 min-w-0">
+      <div class="flex items-center gap-2">
+        <StatusDot
+          variant={drawer.statusIndicator().variant}
+          title={drawer.statusIndicator().label}
+          ariaLabel={drawer.statusIndicator().label}
+          size="sm"
+        />
+        <h2
+          id={headingId()}
+          class="text-sm font-semibold text-base-content truncate m-0"
+          title={drawer.displayName()}
+        >
+          {drawer.displayName()}
+        </h2>
+      </div>
+      <div class="flex flex-wrap gap-1.5" data-testid="resource-header-badges">
+        <For each={drawer.headerBadges()}>
+          {(badge) => (
+            <span class={badge.classes} title={badge.title}>
+              {badge.label}
+            </span>
+          )}
+        </For>
+        <Show when={drawer.healthIssue()}>
+          {(issue) => (
+            <span
+              class="inline-flex max-w-full items-center rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900 dark:text-amber-300"
+              title={issue().title}
+            >
+              {issue().compactLabel}
+            </span>
+          )}
+        </Show>
+      </div>
+    </div>
+  );
 
   return (
     <section class="space-y-3" aria-labelledby={headingId()}>
-      <div class="flex items-start justify-between gap-4">
-        <div class="space-y-1 min-w-0">
-          <div class="flex items-center gap-2">
-            <StatusDot
-              variant={drawer.statusIndicator().variant}
-              title={drawer.statusIndicator().label}
-              ariaLabel={drawer.statusIndicator().label}
-              size="sm"
-            />
-            <h2
-              id={headingId()}
-              class="text-sm font-semibold text-base-content truncate m-0"
-              title={drawer.displayName()}
-            >
-              {drawer.displayName()}
-            </h2>
-          </div>
-          <div class="flex flex-wrap gap-1.5" data-testid="resource-header-badges">
-            <For each={drawer.headerBadges()}>
-              {(badge) => (
-                <span class={badge.classes} title={badge.title}>
-                  {badge.label}
-                </span>
-              )}
-            </For>
-            <Show when={drawer.healthIssue()}>
-              {(issue) => (
-                <span
-                  class="inline-flex max-w-full items-center rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900 dark:text-amber-300"
-                  title={issue().title}
-                >
-                  {issue().compactLabel}
-                </span>
-              )}
+      <Show
+        when={props.onClose}
+        fallback={
+          <div class="flex items-start justify-between gap-4">
+            <HeaderIdentity />
+            <Show when={isDockerContainerLifecycleResource(props.resource)}>
+              <DockerContainerLifecycleControls
+                resource={props.resource}
+                surface="resource-detail"
+                onActionSettled={props.onResourceActionSettled}
+              />
             </Show>
           </div>
-        </div>
-
-        <DrawerHeaderActionGroup>
-          <Show when={isDockerContainerLifecycleResource(props.resource)}>
-            <DockerContainerLifecycleControls
-              resource={props.resource}
-              surface="resource-detail"
-              onActionSettled={props.onResourceActionSettled}
-            />
-          </Show>
-          <Show when={props.onClose}>
-            <DrawerHeaderIconButton
-              onClick={() => props.onClose?.()}
-              aria-label="Close resource drawer"
-            >
-              <XIcon class="h-4 w-4" />
-            </DrawerHeaderIconButton>
-          </Show>
-        </DrawerHeaderActionGroup>
-      </div>
+        }
+      >
+        {(onClose) => (
+          <ObjectDrawerHeader
+            collapseLabel={`Collapse ${drawer.displayName()} details`}
+            onCollapse={onClose()}
+            actions={
+              <Show when={isDockerContainerLifecycleResource(props.resource)}>
+                <DockerContainerLifecycleControls
+                  resource={props.resource}
+                  surface="resource-detail"
+                  onActionSettled={props.onResourceActionSettled}
+                />
+              </Show>
+            }
+          >
+            <HeaderIdentity />
+          </ObjectDrawerHeader>
+        )}
+      </Show>
 
       <Subtabs
         class="mb-1"

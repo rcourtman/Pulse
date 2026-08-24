@@ -522,6 +522,7 @@ export function WorkloadPanel(props: WorkloadPanelProps) {
                   >
                     <NodeDrawer
                       node={node()!}
+                      onClose={() => props.setFocusedWorkloadGroupScope(null)}
                       temperatureThresholds={props.getNodeTemperatureThresholds(node()!)}
                       alerts={getAlertsForResource(
                         [node()!.id],

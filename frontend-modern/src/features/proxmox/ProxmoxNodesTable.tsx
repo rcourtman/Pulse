@@ -741,6 +741,7 @@ export const ProxmoxNodesTable: Component<{
                         >
                           <NodeDrawer
                             node={selectedNode()}
+                            onClose={() => setSelectedNodeId(null)}
                             alerts={getAlertsForResource(
                               alertResourceIds(),
                               activeAlerts,

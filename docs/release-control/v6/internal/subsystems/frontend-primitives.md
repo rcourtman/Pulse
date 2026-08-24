@@ -1058,6 +1058,14 @@ not a replacement status card, CTA band, or page-local nested card.
    and future drawer-header action chrome must compose
    `DrawerHeaderActionGroup`, `DrawerHeaderActionButton`, or
    `DrawerHeaderIconButton` instead of copying drawer-local button classes.
+   The object-drawer subject row and its collapse interaction belong to
+   `ObjectDrawerHeader`: the complete visible header is one semantic button
+   with phone-safe target height, focus treatment, and a collapse chevron,
+   while lifecycle or other object-specific action controls remain independent
+   siblings above that button. Workload, infrastructure, shared inline, Ceph
+   cluster, and Proxmox Mail Gateway detail consumers must compose this owner instead of leaving collapse on a
+   small icon-only target or adding a local clickable wrapper around nested
+   buttons.
    Copy-value affordances belong to the same shared button family. Feature
    surfaces may own the copied value, success/error notification, and adjacent
    product copy, but icon/chip copy controls must use `CopyValueButton`, and
@@ -3618,9 +3626,13 @@ enabled, drawers render no Discovery tab, readiness state, explanatory copy,
 analysis reveal, or identified-service suggestion and issue no passive
 discovery-record read. Provider-specific drawer shells must not reinterpret a
 technical discovery target as operator consent to enable the feature.
-Drawer headers reserve their limited space for the subject and a close control,
-plus a direct object-specific lifecycle action only where the object contract
-requires one. Generic `Ask Assistant` and `Copy context` actions do not belong
+Drawer headers reserve their limited space for the subject and the canonical
+full-row collapse control, plus a direct object-specific lifecycle action only
+where the object contract requires one. `ObjectDrawerHeader` owns that
+interaction across guest, node, Docker/unified-resource, Ceph cluster,
+Proxmox Mail Gateway, and shared inline detail panels: pressing anywhere in the subject row collapses the detail,
+Enter/Space work through the native button, and lifecycle actions do not bubble
+into collapse. Generic `Ask Assistant` and `Copy context` actions do not belong
 in object drawer headers: Assistant remains available through the global shell,
 and raw context export must not compete with the operational reading path.
 The shared interactive sparkline now follows that same split.
@@ -4208,10 +4220,12 @@ long operator-state copy cannot escape the shared row border.
 Inline detail section content is registry-backed separately from the row shell.
 `DetailSectionTable`, `InlineDetailPanel`, and `detailSectionModel.ts` own
 detail row compaction, section-table rendering, value-tone classes, and the
-inline close action for platform alert/activity/protection/service detail
-panels; consumers may own the platform-specific section data, but they must not
-recreate local `DetailField` grids or route platform-neutral detail tables
-through a provider-named primitive.
+inline collapse action for platform alert/activity/protection/service detail
+panels. `InlineDetailPanel` composes `ObjectDrawerHeader`, so its entire heading
+row closes the panel instead of presenting a separate text button; consumers
+may own the platform-specific section data, but they must not recreate local
+`DetailField` grids or route platform-neutral detail tables through a
+provider-named primitive.
 Platform row-detail disclosure controls are also registry-backed templates.
 `frontend-modern/src/features/platformPage/PlatformResourceDetailTableRow.tsx`
 owns `PlatformResourceDetailToggleButton`, which composes

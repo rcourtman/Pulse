@@ -260,6 +260,15 @@ describe('GuestDrawer', () => {
     ).toBeNull();
   });
 
+  it('collapses from the full shared drawer header surface', async () => {
+    const onClose = vi.fn();
+    render(() => <GuestDrawer guest={makeGuest({ name: 'homeassistant' })} onClose={onClose} />);
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Collapse homeassistant details' }));
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
   // ── Tabs ──
 
   describe('tab switching', () => {

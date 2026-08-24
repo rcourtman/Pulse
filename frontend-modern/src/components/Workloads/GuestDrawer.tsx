@@ -1,10 +1,9 @@
 import { Component, Show, Suspense, createMemo } from 'solid-js';
-import XIcon from 'lucide-solid/icons/x';
 import { DiscoveryTab } from '../Discovery/DiscoveryTab';
-import { DrawerHeaderActionGroup, DrawerHeaderIconButton } from '@/components/shared/Button';
 import { DiscoveryLoadingFallback } from '@/components/shared/DiscoveryLoadingFallback';
 import { DrawerSubjectHeading } from '@/components/shared/DrawerSubjectHeading';
 import { DiscoveryReadinessBadge } from '@/components/shared/DiscoveryReadinessBadge';
+import { ObjectDrawerHeader } from '@/components/shared/ObjectDrawerHeader';
 import { Subtabs, type SubtabOption } from '@/components/shared/Subtabs';
 import { getSimpleStatusIndicator } from '@/utils/status';
 import { getGuestDrawerCurrentMetrics, type GuestDrawerProps } from './guestDrawerModel';
@@ -55,19 +54,17 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
 
   return (
     <section class="space-y-3" aria-labelledby={headingId()}>
-      <div class="flex items-start justify-between gap-3">
+      <ObjectDrawerHeader
+        collapseLabel={`Collapse ${props.guest.name} details`}
+        onCollapse={props.onClose}
+      >
         <DrawerSubjectHeading
           headingId={headingId()}
           title={props.guest.name}
           statusVariant={headerIndicator().variant}
           statusLabel={headerIndicator().label}
         />
-        <DrawerHeaderActionGroup>
-          <DrawerHeaderIconButton onClick={() => props.onClose()} aria-label="Close guest drawer">
-            <XIcon class="h-4 w-4" aria-hidden="true" />
-          </DrawerHeaderIconButton>
-        </DrawerHeaderActionGroup>
-      </div>
+      </ObjectDrawerHeader>
       <Show when={discoveryReadinessPresentation()}>
         {(presentation) => (
           <div class="flex items-center gap-2 text-xs text-muted">

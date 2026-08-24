@@ -6,6 +6,7 @@ import { useDiscoveryFeatureAvailability } from '@/components/Discovery/useDisco
 import { DiscoveryLoadingFallback } from '@/components/shared/DiscoveryLoadingFallback';
 import { ResourceOperatorStateSection } from '@/components/Infrastructure/ResourceOperatorStateSection';
 import { DrawerSubjectHeading } from '@/components/shared/DrawerSubjectHeading';
+import { ObjectDrawerHeader } from '@/components/shared/ObjectDrawerHeader';
 import { Subtabs, type SubtabOption } from '@/components/shared/Subtabs';
 import { nodeOverrideIdCandidates } from '@/features/alerts/alertOverridesModel';
 import { useAlertsActivation } from '@/stores/alertsActivation';
@@ -34,6 +35,7 @@ interface NodeDrawerProps {
   discoveryTarget?: NodeDrawerDiscoveryTarget;
   temperatureThresholds?: MetricDisplayThresholds | null;
   alerts?: Alert[];
+  onClose?: () => void;
 }
 
 type NodeDrawerTab = 'overview' | 'history' | 'manage' | 'discovery';
@@ -73,12 +75,31 @@ export const NodeDrawer: Component<NodeDrawerProps> = (props) => {
 
   return (
     <section class="space-y-3" aria-labelledby={headingId()} data-testid="node-drawer">
-      <DrawerSubjectHeading
-        headingId={headingId()}
-        title={displayName()}
-        statusVariant={headerIndicator().variant}
-        statusLabel={headerIndicator().label}
-      />
+      <Show
+        when={props.onClose}
+        fallback={
+          <DrawerSubjectHeading
+            headingId={headingId()}
+            title={displayName()}
+            statusVariant={headerIndicator().variant}
+            statusLabel={headerIndicator().label}
+          />
+        }
+      >
+        {(onClose) => (
+          <ObjectDrawerHeader
+            collapseLabel={`Collapse ${displayName()} details`}
+            onCollapse={onClose()}
+          >
+            <DrawerSubjectHeading
+              headingId={headingId()}
+              title={displayName()}
+              statusVariant={headerIndicator().variant}
+              statusLabel={headerIndicator().label}
+            />
+          </ObjectDrawerHeader>
+        )}
+      </Show>
 
       <Subtabs
         class="mb-1"

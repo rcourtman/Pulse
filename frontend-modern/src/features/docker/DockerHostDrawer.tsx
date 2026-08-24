@@ -5,6 +5,7 @@ import { DiscoveryTab } from '@/components/Discovery/DiscoveryTab';
 import { useDiscoveryFeatureAvailability } from '@/components/Discovery/useDiscoveryFeatureAvailability';
 import { DiscoveryLoadingFallback } from '@/components/shared/DiscoveryLoadingFallback';
 import { DrawerSubjectHeading } from '@/components/shared/DrawerSubjectHeading';
+import { ObjectDrawerHeader } from '@/components/shared/ObjectDrawerHeader';
 import { Subtabs, type SubtabOption } from '@/components/shared/Subtabs';
 import { getSimpleStatusIndicator } from '@/utils/status';
 import {
@@ -29,6 +30,7 @@ interface DockerHostDrawerProps {
   host: Resource;
   customUrl?: string;
   onCustomUrlChange?: (url: string) => void;
+  onClose?: () => void;
 }
 
 type DockerHostDrawerTab = 'overview' | 'history' | 'manage' | 'discovery';
@@ -61,12 +63,31 @@ export const DockerHostDrawer: Component<DockerHostDrawerProps> = (props) => {
 
   return (
     <section class="space-y-3" aria-labelledby={headingId()} data-testid="docker-host-drawer">
-      <DrawerSubjectHeading
-        headingId={headingId()}
-        title={displayName()}
-        statusVariant={headerIndicator().variant}
-        statusLabel={headerIndicator().label}
-      />
+      <Show
+        when={props.onClose}
+        fallback={
+          <DrawerSubjectHeading
+            headingId={headingId()}
+            title={displayName()}
+            statusVariant={headerIndicator().variant}
+            statusLabel={headerIndicator().label}
+          />
+        }
+      >
+        {(onClose) => (
+          <ObjectDrawerHeader
+            collapseLabel={`Collapse ${displayName()} details`}
+            onCollapse={onClose()}
+          >
+            <DrawerSubjectHeading
+              headingId={headingId()}
+              title={displayName()}
+              statusVariant={headerIndicator().variant}
+              statusLabel={headerIndicator().label}
+            />
+          </ObjectDrawerHeader>
+        )}
+      </Show>
 
       <Subtabs
         class="mb-1"

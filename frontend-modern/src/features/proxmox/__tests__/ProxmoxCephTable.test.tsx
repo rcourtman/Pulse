@@ -82,7 +82,7 @@ describe('ProxmoxCephTable', () => {
     ));
 
     const disclosure = screen.getByRole('button', { name: 'Collapse details for ceph-main' });
-    const close = screen.getByRole('button', { name: 'Close ceph cluster drawer' });
+    const close = screen.getByRole('button', { name: 'Collapse ceph-main details' });
     close.focus();
     await fireEvent.click(close);
 
@@ -123,7 +123,7 @@ describe('ProxmoxCephTable', () => {
 
     const disclosure = screen.getByRole('button', { name: 'Expand details for ceph-lab' });
     await fireEvent.click(disclosure);
-    const close = screen.getByRole('button', { name: 'Close ceph cluster drawer' });
+    const close = screen.getByRole('button', { name: 'Collapse ceph-lab details' });
     close.focus();
     await fireEvent.click(close);
 
