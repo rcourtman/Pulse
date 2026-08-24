@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen, within } from '@solidjs/testing-lib
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Resource } from '@/types/resource';
 import { ResourceDetailDrawer } from '../ResourceDetailDrawer';
+import { resetAIRuntimeState, syncAIRuntimeSettings } from '@/stores/aiRuntimeState';
 
 vi.mock('@/components/Workloads/GuestDrawerHistory', () => ({
   GuestDrawerHistory: (props: {
@@ -74,6 +75,7 @@ const resource = (overrides: Partial<Resource>): Resource =>
 
 afterEach(() => {
   cleanup();
+  resetAIRuntimeState();
   vi.clearAllMocks();
 });
 
@@ -116,6 +118,10 @@ describe('ResourceDetailDrawer machine metrics history', () => {
   });
 
   it('adds a first-class discovery tab for Pulse Agent machines', async () => {
+    syncAIRuntimeSettings({ discovery_enabled: true } as Parameters<
+      typeof syncAIRuntimeSettings
+    >[0]);
+
     render(() => (
       <ResourceDetailDrawer
         resource={resource({

@@ -108,6 +108,7 @@ interface UseResourceDetailDrawerDerivedStateOptions {
   resource: Resource;
   resolveResourceLabel?: (resourceId: string) => string | null | undefined;
   debugEnabled: Accessor<boolean>;
+  discoveryFeatureEnabled: Accessor<boolean>;
   resourceIntelligence: Accessor<ResourceIntelligence | null>;
   resourceRelationships?: Accessor<readonly ResourceRelationship[] | null | undefined>;
 }
@@ -119,6 +120,7 @@ export const useResourceDetailDrawerDerivedState = (
     resource,
     resolveResourceLabel: resolveResourceLabelInput,
     debugEnabled,
+    discoveryFeatureEnabled,
     resourceIntelligence,
   } = options;
 
@@ -288,6 +290,7 @@ export const useResourceDetailDrawerDerivedState = (
   const discoveryConfig = createMemo(() => toDiscoveryConfig(resource));
   const discoveryContextSummary = createMemo(() => buildDiscoveryContextSummary(discoveryConfig()));
   const discoverySourceKey = createMemo(() => {
+    if (!discoveryFeatureEnabled()) return null;
     const config = discoveryConfig();
     if (!config?.resourceType || !config.agentId || !config.resourceId) return null;
     return {
@@ -312,7 +315,7 @@ export const useResourceDetailDrawerDerivedState = (
     },
   });
   const discoveryIdentifiedSummary = createMemo(() =>
-    getDiscoveryIdentifiedSummary(discoveryRecord.value()),
+    discoveryFeatureEnabled() ? getDiscoveryIdentifiedSummary(discoveryRecord.value()) : null,
   );
 
   const hostDetailCards = createMemo(() =>
@@ -358,7 +361,10 @@ export const useResourceDetailDrawerDerivedState = (
   const metricsHistoryGroups = createMemo(() => getResourceMetricsHistoryGroups(resource));
   const hasMetricsHistory = createMemo(() => resourceSupportsMetricsHistory(resource));
   const hasDiscoveryTab = createMemo(
-    () => isPulseAgentPlatformResource(resource) && Boolean(discoveryConfig()),
+    () =>
+      discoveryFeatureEnabled() &&
+      isPulseAgentPlatformResource(resource) &&
+      Boolean(discoveryConfig()),
   );
 
   const relatedLinks = createMemo(() => buildRelatedLinks(resource, displayName()));
@@ -477,6 +483,7 @@ export const useResourceDetailDrawerDerivedState = (
     hasAliasOverflow,
     hasMergedSources,
     discoveryConfig,
+    discoveryFeatureEnabled,
     discoveryContextSummary,
     discoveryIdentifiedSummary,
     discoveryLoading: discoveryRecord.loading,

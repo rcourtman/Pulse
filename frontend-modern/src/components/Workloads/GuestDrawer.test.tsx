@@ -13,6 +13,7 @@ import type { Memory, Disk, GuestNetworkInterface } from '@/types/api';
 import { resetCreateNonSuspendingQueryCacheForTest } from '@/hooks/createNonSuspendingQuery';
 import { getCanonicalWorkloadId, getWorkloadMetadataId } from '@/utils/workloads';
 import { getDiscoveryProvenanceTitle } from '@/utils/discoveryPresentation';
+import { resetAIRuntimeState, syncAIRuntimeSettings } from '@/stores/aiRuntimeState';
 import guestDrawerSource from './GuestDrawer.tsx?raw';
 import guestDrawerManageSource from './GuestDrawerManage.tsx?raw';
 import guestDrawerOverviewSource from './GuestDrawerOverview.tsx?raw';
@@ -172,6 +173,8 @@ const makeHistoryPoints = (base: number) => [
 ];
 
 beforeEach(() => {
+  resetAIRuntimeState();
+  syncAIRuntimeSettings({ discovery_enabled: true } as Parameters<typeof syncAIRuntimeSettings>[0]);
   resetCreateNonSuspendingQueryCacheForTest();
   discoveryApiMocks.getDiscovery.mockResolvedValue(null);
   chartsApiMocks.getMetricsHistory.mockResolvedValue({
@@ -195,6 +198,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  resetAIRuntimeState();
   vi.clearAllMocks();
   vi.useRealTimers();
 });
@@ -294,6 +298,32 @@ describe('GuestDrawer', () => {
       expect(screen.getByText('History')).toBeInTheDocument();
       expect(screen.queryByText('Discovery')).toBeNull();
       expect(screen.queryByTestId('discovery-tab')).toBeNull();
+    });
+
+    it('hides every discovery surface and skips discovery reads when Discovery is disabled', () => {
+      syncAIRuntimeSettings({ discovery_enabled: false } as Parameters<
+        typeof syncAIRuntimeSettings
+      >[0]);
+
+      render(() => (
+        <GuestDrawer
+          guest={makeGuestWithDiscoveryTarget({
+            discoveryReadiness: {
+              state: 'missing',
+              source: 'service-discovery',
+              reason: 'Discovery has not run for this resource.',
+            },
+          })}
+          onClose={vi.fn()}
+        />
+      ));
+
+      expect(screen.queryByRole('tab', { name: 'Discovery' })).toBeNull();
+      expect(screen.queryByText('Not discovered')).toBeNull();
+      expect(screen.queryByText('Discovery has not run for this resource.')).toBeNull();
+      expect(screen.queryByText('Identified Service')).toBeNull();
+      expect(screen.queryByTestId('discovery-tab')).toBeNull();
+      expect(discoveryApiMocks.getDiscovery).not.toHaveBeenCalled();
     });
 
     it('starts on the Overview tab (discovery content hidden)', () => {

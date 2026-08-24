@@ -297,7 +297,7 @@ export const ResourceAccessDisclosure: Component<{
               embedded
             />
 
-            <Show when={!props.drawer.hasDiscoveryTab()}>
+            <Show when={props.drawer.discoveryFeatureEnabled() && !props.drawer.hasDiscoveryTab()}>
               <div
                 class="space-y-2 border-t border-border pt-3"
                 data-testid="resource-access-analysis"

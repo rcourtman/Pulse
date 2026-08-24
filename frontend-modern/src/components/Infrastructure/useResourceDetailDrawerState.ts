@@ -2,6 +2,7 @@ import { createEffect, createSignal } from 'solid-js';
 import type { Resource } from '@/types/resource';
 import type { HistoryTimeRange } from '@/api/charts';
 import { GUEST_DRAWER_HISTORY_DEFAULT_RANGE } from '@/components/Workloads/guestDrawerModel';
+import { useDiscoveryFeatureAvailability } from '@/components/Discovery/useDiscoveryFeatureAvailability';
 import { createLocalStorageBooleanSignal, STORAGE_KEYS } from '@/utils/localStorage';
 import { useResourceDetailDrawerDockerActionsState } from './useResourceDetailDrawerDockerActionsState';
 import { useResourceDetailDrawerHistoryState } from './useResourceDetailDrawerHistoryState';
@@ -31,6 +32,7 @@ export interface UseResourceDetailDrawerStateOptions {
 export const useResourceDetailDrawerState = (options: UseResourceDetailDrawerStateOptions) => {
   const { resource, resolveResourceLabel: resolveResourceLabelInput } = options;
   const [activeTab, setActiveTab] = createSignal<DrawerTab>('overview');
+  const { discoveryFeatureEnabled } = useDiscoveryFeatureAvailability();
   const [metricsHistoryRange, setMetricsHistoryRange] = createSignal<HistoryTimeRange>(
     GUEST_DRAWER_HISTORY_DEFAULT_RANGE,
   );
@@ -64,6 +66,7 @@ export const useResourceDetailDrawerState = (options: UseResourceDetailDrawerSta
     resource,
     resolveResourceLabel: resolveResourceLabelInput,
     debugEnabled,
+    discoveryFeatureEnabled,
     resourceIntelligence: history.resourceIntelligence,
     resourceRelationships: history.resourceFacetRelationships,
   });

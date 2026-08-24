@@ -82,6 +82,8 @@ start a goroutine, timer, or notification lifecycle per target.
 48. `frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx`
 49. `frontend-modern/src/components/Workloads/guestDrawerModel.ts`
 50. `frontend-modern/src/components/Workloads/useGuestDrawerState.ts`
+50a. `frontend-modern/src/components/Workloads/NodeDrawer.tsx`
+50b. `frontend-modern/src/features/docker/DockerHostDrawer.tsx`
 51. `frontend-modern/src/components/Workloads/useGroupedTableWindowing.ts`
 52. `frontend-modern/src/components/Workloads/workloadSelectors.ts`
     52a. `frontend-modern/src/components/Workloads/workloadSearchSuggestions.ts`
@@ -1235,7 +1237,13 @@ Workload and host drawer discovery-tab Suspense fallbacks now compose the
 frontend-primitives `DiscoveryLoadingFallback` template. `GuestDrawer`,
 `NodeDrawer`, and Docker host drawer consumers own tab availability and target
 identity, but they must not recreate the centered loading row, local border
-spinner, or discovery loading copy inside hot-path drawer render code.
+spinner, or discovery loading copy inside hot-path drawer render code. Those
+consumers must also gate Discovery through the shared
+`useDiscoveryFeatureAvailability` boundary: unresolved, failed, or explicitly
+disabled AI settings expose no Discovery tab, readiness badge, explanatory
+copy, identified-service suggestion, or passive discovery lookup. A discovery
+target proves technical support only; it does not override the operator's
+feature setting.
 
 Default-org token scoping and notification-settings fan-out on shared
 `internal/api/router.go` are likewise adjacent only: the tenant-monitor

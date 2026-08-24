@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render as solidRender, waitFor, within } from '@solidjs/testing-library';
 
 import type { Resource } from '@/types/resource';
@@ -6,6 +6,7 @@ import {
   ResourceDetailDrawer,
   getSpecializedTabAvailabilityMessage,
 } from '@/components/Infrastructure/ResourceDetailDrawer';
+import { resetAIRuntimeState, syncAIRuntimeSettings } from '@/stores/aiRuntimeState';
 
 const render = (...args: Parameters<typeof solidRender>): ReturnType<typeof solidRender> => {
   const result = solidRender(...args);
@@ -124,7 +125,15 @@ const baseResource = (overrides: Partial<Resource>): Resource => ({
   ...overrides,
 });
 
-afterEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  resetAIRuntimeState();
+  syncAIRuntimeSettings({ discovery_enabled: true } as Parameters<typeof syncAIRuntimeSettings>[0]);
+});
+
+afterEach(() => {
+  resetAIRuntimeState();
+  vi.clearAllMocks();
+});
 
 describe('ResourceDetailDrawer runtime and identity cards', () => {
   it('keeps generic Assistant and context-copy actions out of the drawer header', () => {
@@ -237,6 +246,37 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
     await waitFor(() => {
       expect(queryByTestId('discovery-tab')).toBeInTheDocument();
     });
+  });
+
+  it('keeps discovery analysis and tabs absent when Discovery is disabled', () => {
+    syncAIRuntimeSettings({ discovery_enabled: false } as Parameters<
+      typeof syncAIRuntimeSettings
+    >[0]);
+
+    const { getByRole, queryByRole, queryByTestId, queryByText } = render(() => (
+      <ResourceDetailDrawer
+        resource={baseResource({
+          discoveryTarget: {
+            resourceType: 'agent',
+            agentId: 'resource-1',
+            resourceId: 'resource-1',
+          },
+          discoveryReadiness: {
+            state: 'missing',
+            source: 'service-discovery',
+            reason: 'Discovery has not run for this resource.',
+          },
+        })}
+      />
+    ));
+
+    expect(queryByRole('tab', { name: 'Discovery' })).toBeNull();
+    fireEvent.click(getByRole('tab', { name: 'Manage' }));
+    fireEvent.click(getByRole('button', { name: 'Show access' }));
+    expect(queryByText('Analysis')).toBeNull();
+    expect(queryByText('Not discovered')).toBeNull();
+    expect(queryByText('Discovery has not run for this resource.')).toBeNull();
+    expect(queryByTestId('discovery-tab')).toBeNull();
   });
 
   it('uses terse availability notices for specialized tabs', () => {

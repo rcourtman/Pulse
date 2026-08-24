@@ -1,21 +1,29 @@
 {
   "version": 1,
-  "base_sha": "9e622c291d499cd88b8269ef98c878c702de801b",
-  "verified_at": "2026-08-24T11:47:38Z",
+  "base_sha": "66fd37ee6f801388a5606e374be3d17266c087cd",
+  "verified_at": "2026-08-24T12:13:28Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawer.tsx",
+    "frontend-modern/src/components/Discovery/useDiscoveryFeatureAvailability.ts",
+    "frontend-modern/src/components/Discovery/useDiscoveryTabState.ts",
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx",
+    "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDerivedState.ts",
     "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerState.ts",
-    "frontend-modern/src/components/Workloads/GuestDrawer.tsx",
-    "frontend-modern/src/components/Workloads/useGuestDrawerState.ts"
+    "frontend-modern/src/components/Workloads/NodeDrawer.tsx",
+    "frontend-modern/src/components/Workloads/useGuestDrawerState.ts",
+    "frontend-modern/src/features/docker/DockerHostDrawer.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawer.tsx": "4bc28b3a2f26f1e011502a55deb6befe62e001db2d4020c14b016a7d2f1458e5",
-    "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerState.ts": "8e1f892548ec92d5e895013c8247b73e6119e909cb9d635dcab354c25d14fd04",
-    "frontend-modern/src/components/Workloads/GuestDrawer.tsx": "17291d2c1f574e8bb1a60ca3d933dc6fab6badbd80cd4097542d74db13050429",
-    "frontend-modern/src/components/Workloads/useGuestDrawerState.ts": "ec24e7f9c32f9ffdf36eebc0391fbd7019af8ed096a01513e81ac54806e315f2"
+    "frontend-modern/src/components/Discovery/useDiscoveryFeatureAvailability.ts": "3cc4fa39aa93c35b52272b00a3f5eb383a8e5a6aaed969e01a4a13844b2425f4",
+    "frontend-modern/src/components/Discovery/useDiscoveryTabState.ts": "373489b948cb2ea38a3ca033b112d6cf2ec6368bd04b4dfde93d10b7a3184023",
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx": "d074c6291867891ff788144e46bb59d687567c75b7b1059728fe1d355eb5155a",
+    "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDerivedState.ts": "bc373c72f2d1fad9f36f6cf8b04dc97b8de9edb6c0bb5bf1d8fd3ece4aaa766b",
+    "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerState.ts": "8674933ff1bd22d6c17a22802b56a2345b334c98fa6f219cc27c9525a4b01b6a",
+    "frontend-modern/src/components/Workloads/NodeDrawer.tsx": "bb62a66419fc658e4979a82d0ccecf7db3e5e4bc7c3bdb4792e63f312498c44e",
+    "frontend-modern/src/components/Workloads/useGuestDrawerState.ts": "7a369ffa496fa66b260ca5f1e26b7016b82f4ded20d47aedde982a6d4f0e46b0",
+    "frontend-modern/src/features/docker/DockerHostDrawer.tsx": "c1d3e336b5fb128214a7899a41169bdbc5c4c1e9e19e9078fb99f6c52b46ff25"
   },
-  "routes": ["/truenas/overview", "/proxmox/overview"],
+  "routes": ["/proxmox/overview", "/truenas/overview", "/docker/overview"],
   "viewports": [
     {
       "width": 1440,
@@ -27,14 +35,15 @@
     }
   ],
   "states": [
-    "TrueNAS system drawer with active health issues and only the close control in its header",
-    "Proxmox guest drawer with only the close control in its header",
-    "global platform Assistant entry remaining available outside the object drawer"
+    "AI Discovery disabled with Proxmox node and guest drawers expanded",
+    "AI Discovery disabled with a TrueNAS unified-resource drawer expanded",
+    "AI Discovery disabled with a Docker host drawer expanded"
   ],
   "interactions": [
-    "expanded a TrueNAS resource drawer at phone width and confirmed no object Assistant or context-copy controls",
-    "expanded a Proxmox guest drawer at phone width and confirmed no object Assistant or context-copy controls",
-    "confirmed the guest header rule at desktop width",
+    "expanded a Proxmox node drawer at desktop width and confirmed only Overview, History, and Manage tabs",
+    "expanded a Proxmox guest drawer at desktop and phone widths and confirmed no Discovery badge, reason, identified-service context, or tab",
+    "expanded a TrueNAS resource drawer at phone width and confirmed no Discovery tab or analysis disclosure while active alerts remained visible",
+    "expanded a Docker host drawer at phone width and confirmed no Discovery tab or disabled-state copy",
     "restored the temporary browser viewport"
   ]
 }

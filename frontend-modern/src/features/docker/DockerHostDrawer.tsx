@@ -1,7 +1,8 @@
-import { Show, Suspense, createMemo, createSignal, type Component } from 'solid-js';
+import { Show, Suspense, createEffect, createMemo, createSignal, type Component } from 'solid-js';
 
 import type { HistoryTimeRange } from '@/api/charts';
 import { DiscoveryTab } from '@/components/Discovery/DiscoveryTab';
+import { useDiscoveryFeatureAvailability } from '@/components/Discovery/useDiscoveryFeatureAvailability';
 import { DiscoveryLoadingFallback } from '@/components/shared/DiscoveryLoadingFallback';
 import { DrawerSubjectHeading } from '@/components/shared/DrawerSubjectHeading';
 import { Subtabs, type SubtabOption } from '@/components/shared/Subtabs';
@@ -37,16 +38,26 @@ export const DockerHostDrawer: Component<DockerHostDrawerProps> = (props) => {
   const [historyRange, setHistoryRange] = createSignal<HistoryTimeRange>(
     GUEST_DRAWER_HISTORY_DEFAULT_RANGE,
   );
+  const { discoveryFeatureEnabled } = useDiscoveryFeatureAvailability();
 
   const headingId = () => `docker-host-drawer-heading-${props.host.id}`;
   const displayName = createMemo(() => asTrimmedString(props.host.name) || props.host.id);
   const historyTarget = createMemo(() => getDockerHostDrawerHistoryTarget(props.host));
   const currentMetrics = createMemo(() => getDockerHostDrawerCurrentMetrics(props.host));
   const discoveryConfig = createMemo(() => toDiscoveryConfig(props.host));
+  const hasDiscoverySupport = createMemo(
+    () => discoveryFeatureEnabled() && Boolean(discoveryConfig()),
+  );
   const headerIndicator = createMemo(() => getSimpleStatusIndicator(props.host.status));
   const metadataId = createMemo(
     () => asTrimmedString(props.host.docker?.hostSourceId) || asTrimmedString(props.host.id),
   );
+
+  createEffect(() => {
+    if (activeTab() === 'discovery' && !hasDiscoverySupport()) {
+      setActiveTab('overview');
+    }
+  });
 
   return (
     <section class="space-y-3" aria-labelledby={headingId()} data-testid="docker-host-drawer">
@@ -66,7 +77,7 @@ export const DockerHostDrawer: Component<DockerHostDrawerProps> = (props) => {
           { value: 'overview', label: 'Overview' },
           { value: 'history', label: 'History' },
           { value: 'manage', label: 'Manage' },
-          ...(discoveryConfig()
+          ...(hasDiscoverySupport()
             ? [{ value: 'discovery', label: 'Discovery' } satisfies SubtabOption]
             : []),
         ]}
@@ -114,7 +125,7 @@ export const DockerHostDrawer: Component<DockerHostDrawerProps> = (props) => {
         />
       </div>
 
-      <Show when={discoveryConfig()}>
+      <Show when={hasDiscoverySupport() ? discoveryConfig() : null}>
         {(config) => (
           <div
             class={activeTab() === 'discovery' ? '' : 'hidden'}

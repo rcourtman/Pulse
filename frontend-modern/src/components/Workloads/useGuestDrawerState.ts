@@ -3,6 +3,7 @@ import { createEffect, createMemo, createSignal } from 'solid-js';
 import { getDiscovery } from '@/api/discovery';
 import type { HistoryTimeRange } from '@/api/charts';
 import { createNonSuspendingQuery } from '@/hooks/createNonSuspendingQuery';
+import { useDiscoveryFeatureAvailability } from '@/components/Discovery/useDiscoveryFeatureAvailability';
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import type { ResourceDiscovery, ResourceType as DiscoveryResourceType } from '@/types/discovery';
 import {
@@ -53,6 +54,7 @@ interface GuestDiscoverySourceKey {
 
 export function useGuestDrawerState(props: GuestDrawerProps) {
   const alertsActivation = useAlertsActivation();
+  const { discoveryFeatureEnabled } = useDiscoveryFeatureAvailability();
   const [activeTab, setActiveTab] = createSignal<GuestDrawerTab>('overview');
   const [historyRange, setHistoryRange] = createSignal<HistoryTimeRange>(
     GUEST_DRAWER_HISTORY_DEFAULT_RANGE,
@@ -103,7 +105,9 @@ export function useGuestDrawerState(props: GuestDrawerProps) {
         )
       : null,
   );
-  const hasDiscoverySupport = createMemo(() => hasDiscoverySupportForWorkload(props.guest));
+  const hasDiscoverySupport = createMemo(
+    () => discoveryFeatureEnabled() && hasDiscoverySupportForWorkload(props.guest),
+  );
   const historyTarget = createMemo(() => getGuestDrawerHistoryTarget(props.guest));
   const hasHistorySupport = createMemo(() => historyTarget() !== null);
   const discoveryAgentId = createMemo(() => getDiscoveryHostIdForWorkload(props.guest));
@@ -121,6 +125,7 @@ export function useGuestDrawerState(props: GuestDrawerProps) {
   // read — no scan is triggered. The discovery sub-tab continues to own
   // manual scan triggering and progress UI.
   const discoverySourceKey = createMemo(() => {
+    if (!hasDiscoverySupport()) return null;
     const type = discoveryResourceType();
     const agent = discoveryAgentId();
     const resource = discoveryResourceId();
@@ -143,10 +148,12 @@ export function useGuestDrawerState(props: GuestDrawerProps) {
     },
   });
   const discoveryIdentifiedSummary = createMemo(() =>
-    getDiscoveryIdentifiedSummary(discoveryRecord.value()),
+    hasDiscoverySupport() ? getDiscoveryIdentifiedSummary(discoveryRecord.value()) : null,
   );
   const discoveryReadinessPresentation = createMemo(() =>
-    getDiscoveryReadinessPresentation(props.guest.discoveryReadiness, hasDiscoverySupport()),
+    hasDiscoverySupport()
+      ? getDiscoveryReadinessPresentation(props.guest.discoveryReadiness, true)
+      : null,
   );
 
   const switchTab = (tab: GuestDrawerTab) => {

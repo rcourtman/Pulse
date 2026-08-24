@@ -1,7 +1,8 @@
-import { Show, Suspense, createMemo, createSignal, type Component } from 'solid-js';
+import { Show, Suspense, createEffect, createMemo, createSignal, type Component } from 'solid-js';
 
 import type { HistoryTimeRange } from '@/api/charts';
 import { DiscoveryTab } from '@/components/Discovery/DiscoveryTab';
+import { useDiscoveryFeatureAvailability } from '@/components/Discovery/useDiscoveryFeatureAvailability';
 import { DiscoveryLoadingFallback } from '@/components/shared/DiscoveryLoadingFallback';
 import { ResourceOperatorStateSection } from '@/components/Infrastructure/ResourceOperatorStateSection';
 import { DrawerSubjectHeading } from '@/components/shared/DrawerSubjectHeading';
@@ -43,12 +44,17 @@ export const NodeDrawer: Component<NodeDrawerProps> = (props) => {
     GUEST_DRAWER_HISTORY_DEFAULT_RANGE,
   );
   const alertsActivation = useAlertsActivation();
+  const { discoveryFeatureEnabled } = useDiscoveryFeatureAvailability();
 
   const headingId = () => `node-drawer-heading-${props.node.id}`;
   const displayName = createMemo(() => getNodeDisplayName(props.node));
   const historyTarget = createMemo(() => getNodeDrawerHistoryTarget(props.node));
   const currentMetrics = createMemo(() => getNodeDrawerCurrentMetrics(props.node));
   const headerIndicator = createMemo(() => getSimpleStatusIndicator(props.node.status));
+  const enabledDiscoveryTarget = createMemo(() =>
+    discoveryFeatureEnabled() && props.discoveryTarget?.agentId ? props.discoveryTarget : null,
+  );
+  const hasDiscoverySupport = createMemo(() => Boolean(enabledDiscoveryTarget()));
   const temperatureThresholds = createMemo(() =>
     props.temperatureThresholds !== undefined
       ? props.temperatureThresholds
@@ -58,6 +64,12 @@ export const NodeDrawer: Component<NodeDrawerProps> = (props) => {
           nodeOverrideIdCandidates(props.node),
         ),
   );
+
+  createEffect(() => {
+    if (activeTab() === 'discovery' && !hasDiscoverySupport()) {
+      setActiveTab('overview');
+    }
+  });
 
   return (
     <section class="space-y-3" aria-labelledby={headingId()} data-testid="node-drawer">
@@ -77,7 +89,7 @@ export const NodeDrawer: Component<NodeDrawerProps> = (props) => {
           { value: 'overview', label: 'Overview' },
           { value: 'history', label: 'History' },
           { value: 'manage', label: 'Manage' },
-          ...(props.discoveryTarget?.agentId
+          ...(hasDiscoverySupport()
             ? [{ value: 'discovery', label: 'Discovery' } satisfies SubtabOption]
             : []),
         ]}
@@ -120,22 +132,24 @@ export const NodeDrawer: Component<NodeDrawerProps> = (props) => {
         </Show>
       </div>
 
-      {props.discoveryTarget?.agentId && (
-        <div
-          class={activeTab() === 'discovery' ? '' : 'hidden'}
-          style={{ 'overflow-anchor': 'none' }}
-        >
-          <Suspense fallback={<DiscoveryLoadingFallback />}>
-            <DiscoveryTab
-              resourceType="agent"
-              agentId={props.discoveryTarget.agentId}
-              resourceId={props.discoveryTarget.agentId}
-              hostname={props.discoveryTarget?.hostname || displayName()}
-              showManualRunAction
-            />
-          </Suspense>
-        </div>
-      )}
+      <Show when={enabledDiscoveryTarget()}>
+        {(target) => (
+          <div
+            class={activeTab() === 'discovery' ? '' : 'hidden'}
+            style={{ 'overflow-anchor': 'none' }}
+          >
+            <Suspense fallback={<DiscoveryLoadingFallback />}>
+              <DiscoveryTab
+                resourceType="agent"
+                agentId={target().agentId}
+                resourceId={target().agentId}
+                hostname={target().hostname || displayName()}
+                showManualRunAction
+              />
+            </Suspense>
+          </div>
+        )}
+      </Show>
     </section>
   );
 };

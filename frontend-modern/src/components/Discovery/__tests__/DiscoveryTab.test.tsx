@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ResourceDiscovery } from '@/types/discovery';
 
 vi.mock('@/api/discovery', () => {
@@ -41,6 +41,7 @@ vi.mock('@/api/ai', () => ({
 import { AIAPI } from '@/api/ai';
 import * as discoveryApi from '@/api/discovery';
 import { DiscoveryTab } from '@/components/Discovery/DiscoveryTab';
+import { resetAIRuntimeState } from '@/stores/aiRuntimeState';
 import { copyToClipboard } from '@/utils/clipboard';
 import { getDiscoveryProvenanceTitle } from '@/utils/discoveryPresentation';
 
@@ -62,8 +63,13 @@ const discoveryInfoWithProvider = () => ({
 });
 
 describe('DiscoveryTab', () => {
+  beforeEach(() => {
+    resetAIRuntimeState();
+  });
+
   afterEach(() => {
     cleanup();
+    resetAIRuntimeState();
     vi.clearAllMocks();
     vi.mocked(AIAPI.getSettings).mockResolvedValue(aiSettingsWithDiscovery(true));
     // clearAllMocks wipes call history but not mockResolvedValue impls, so a

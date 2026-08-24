@@ -7,7 +7,6 @@ import {
   triggerDiscovery,
   updateDiscoveryNotes,
 } from '@/api/discovery';
-import { AIAPI } from '@/api/ai';
 import { eventBus } from '@/stores/events';
 import type { DiscoveryProgress, ResourceType } from '@/types/discovery';
 import {
@@ -17,6 +16,7 @@ import {
 import { copyToClipboard } from '@/utils/clipboard';
 import { toDiscoveryAPIResourceType } from '@/utils/discoveryTarget';
 import { computeDiscoveryReadiness, type DiscoveryReadiness } from './discoveryReadiness';
+import { useDiscoveryFeatureAvailability } from './useDiscoveryFeatureAvailability';
 
 export interface DiscoveryTabStateProps {
   resourceType: ResourceType;
@@ -54,20 +54,8 @@ export function useDiscoveryTabState(props: DiscoveryTabStateProps) {
     makeResourceId(props.resourceType, targetAgentId(), props.resourceId),
   );
 
-  const [aiSettings] = createResource(async () => {
-    try {
-      return await AIAPI.getSettings();
-    } catch {
-      return null;
-    }
-  });
-  const discoveryFeatureResolved = createMemo(() => !aiSettings.loading);
-  const discoveryFeatureEnabled = createMemo(
-    () => discoveryFeatureResolved() && aiSettings()?.discovery_enabled !== false,
-  );
-  const discoveryFeatureKnownDisabled = createMemo(
-    () => discoveryFeatureResolved() && aiSettings()?.discovery_enabled === false,
-  );
+  const { discoveryFeatureEnabled, discoveryFeatureKnownDisabled } =
+    useDiscoveryFeatureAvailability();
 
   const [discoveryInfo] = createResource(
     () => (discoveryFeatureEnabled() ? props.resourceType : null),

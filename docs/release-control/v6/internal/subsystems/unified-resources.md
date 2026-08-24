@@ -199,6 +199,7 @@ about the same disk cannot diverge.
 67. `frontend-modern/src/components/Discovery/discoveryReadiness.ts`
 68. `frontend-modern/src/components/Discovery/DiscoveryTab.tsx`
 69. `frontend-modern/src/components/Discovery/useDiscoveryTabState.ts`
+69a. `frontend-modern/src/components/Discovery/useDiscoveryFeatureAvailability.ts`
 70. `frontend-modern/src/utils/agentResources.ts`
 71. `frontend-modern/src/utils/canonicalResourceTypes.ts`
 72. `frontend-modern/src/utils/resourceBadgePresentation.ts`
@@ -1229,6 +1230,15 @@ AI-only summary payloads, or page-local heuristics.
    the actual protection boundary behind a broader count phrase.
 6. Add canonical governed name-resolution or policy-aware resource lookup behavior through `internal/unifiedresources/resolve.go` and `internal/unifiedresources/resolve_context.go`
 8. Add or change discovery-support runtime under the resource drawer through `frontend-modern/src/components/Discovery/DiscoveryTab.tsx` for shell/presentation ownership, `frontend-modern/src/components/Discovery/useDiscoveryTabState.ts` for fetch, websocket-progress, manual-run triggering, and notes-mutation ownership, and `frontend-modern/src/components/Discovery/discoveryReadiness.ts` for the shared readiness verdict used by resource-drawer Discovery surfaces. Embedded drawers may expose the top-level run action through this shared Discovery tab, but they must still call the canonical discovery trigger state path instead of introducing drawer-local API mutations.
+   Drawer-level feature availability belongs to
+   `frontend-modern/src/components/Discovery/useDiscoveryFeatureAvailability.ts`.
+   It consumes the shared AI runtime settings store and fails closed until the
+   runtime explicitly reports `discovery_enabled=true`. Resource, guest, node,
+   and Docker host drawers must use that boundary for every Discovery tab,
+   readiness badge, analysis reveal, identified-service suggestion, and
+   passive discovery-record query. A disabled or unresolved feature must leave
+   no Discovery mention in drawer chrome or content and must not start a
+   drawer-local discovery read.
    Resource drawer secondary sections, action history, discovery run summaries,
    and other compact resource-detail cards may own their resource-specific
    labels, rows, filters, and actions, but the repeated bordered compact frame

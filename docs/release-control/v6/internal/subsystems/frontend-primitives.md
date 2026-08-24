@@ -3607,6 +3607,13 @@ automatic-action policy, saved access configuration, and action audit belong
 to a dedicated `Manage` tab and must not render inside Overview. Guest, node,
 Docker-host, and unified-resource drawers must compose these shared primitives
 instead of defining provider-local attention or technical disclosure shells.
+The same drawer family must consume the canonical
+`useDiscoveryFeatureAvailability` boundary before exposing Discovery chrome or
+content. Until the shared AI runtime settings explicitly report Discovery as
+enabled, drawers render no Discovery tab, readiness state, explanatory copy,
+analysis reveal, or identified-service suggestion and issue no passive
+discovery-record read. Provider-specific drawer shells must not reinterpret a
+technical discovery target as operator consent to enable the feature.
 Drawer headers reserve their limited space for the subject and a close control,
 plus a direct object-specific lifecycle action only where the object contract
 requires one. Generic `Ask Assistant` and `Copy context` actions do not belong
