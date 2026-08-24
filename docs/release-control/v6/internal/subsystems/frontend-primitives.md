@@ -61,10 +61,12 @@ both the node and guest regions from the same result, so a large estate cannot
 render contradictory counts or pay duplicate transport and reconciliation
 costs.
 The overview's bounded structural summary remains ahead of its long virtualized
-inventory at desktop and narrow widths. In particular, Proxmox must show its
-four-row phone node preview before the guest list instead of visually moving
-the nodes after the guest list's full virtual scroll extent; revealing the full
-node estate remains an explicit table-preview action.
+inventory at desktop and narrow widths. In particular, Proxmox must show up to
+six phone rows or twelve larger-layout rows before the guest list instead of
+visually moving the nodes after the guest list's full virtual scroll extent;
+estates at or below the applicable threshold render in full without a
+continuation control, while revealing a larger node estate remains an explicit
+table-preview action.
 
 App-shell navigation tab lists rendered through reference-keyed `<For>`
 consumers keep stable item identity across websocket state frames. AppLayout

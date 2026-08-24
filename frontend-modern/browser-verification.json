@@ -1,15 +1,11 @@
 {
   "version": 1,
-  "base_sha": "095b0124557f04672a2b08530eba1da732ebf5b6",
-  "verified_at": "2026-08-24T10:30:06Z",
+  "base_sha": "1fbf10e2c2fc9757f1636550b504218923280d01",
+  "verified_at": "2026-08-24T10:43:10Z",
   "result": "passed",
-  "changed_paths": [
-    "frontend-modern/src/features/platformPage/sharedPlatformPage.tsx",
-    "frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx"
-  ],
+  "changed_paths": ["frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx"],
   "content_sha256": {
-    "frontend-modern/src/features/platformPage/sharedPlatformPage.tsx": "83568958f52d09910fb15ec3d350cbeb30d04050849470601fb2941e995746f5",
-    "frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx": "f9f76a8da5d7d721196acfe92052564e056404ceb07ffae77e2b25f2b347fc7b"
+    "frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx": "259b90d13dff95fe03418f4da14cba4cd1012ba58ab459be18f329df45a0a210"
   },
   "routes": ["/proxmox"],
   "viewports": [
@@ -24,14 +20,14 @@
   ],
   "states": [
     "managed hot-dev mock estate with the bounded Proxmox Nodes preview visible",
-    "phone node preview collapsed to four rows",
+    "phone node preview collapsed to six rows",
     "phone node preview expanded through the continuation footer",
-    "desktop node preview collapsed to eight rows"
+    "desktop node preview collapsed to twelve rows"
   ],
   "interactions": [
-    "confirmed the final phone row fades into a full-width footer labelled Show all 50 nodes with 46 more below",
+    "confirmed the final phone row fades into a full-width footer labelled Show all 50 nodes with 44 more below",
     "clicked the phone footer and confirmed it expanded in one action, removed the fade, and changed to Show fewer nodes",
-    "collapsed the preview and confirmed the desktop footer reports 42 more below after eight visible rows",
+    "collapsed the preview and confirmed the desktop footer reports 38 more below after twelve visible rows",
     "confirmed the desktop node card has no new horizontal overflow",
     "restored the browser viewport after verification"
   ]

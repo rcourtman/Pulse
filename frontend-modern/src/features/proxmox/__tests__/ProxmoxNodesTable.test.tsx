@@ -134,7 +134,7 @@ describe('ProxmoxNodesTable', () => {
   it('keeps large estates bounded until the operator expands the node preview', () => {
     render(() => (
       <ProxmoxNodesTable
-        nodes={makeNodeResources(10)}
+        nodes={makeNodeResources(14)}
         guests={[]}
         emptyIcon={<span />}
         emptyTitle="No Proxmox VE nodes"
@@ -142,8 +142,8 @@ describe('ProxmoxNodesTable', () => {
       />
     ));
 
-    expect(screen.getAllByRole('row')).toHaveLength(9);
-    const showAll = screen.getByRole('button', { name: 'Show all 10 nodes' });
+    expect(screen.getAllByRole('row')).toHaveLength(13);
+    const showAll = screen.getByRole('button', { name: 'Show all 14 nodes' });
     expect(showAll).toHaveAttribute('aria-expanded', 'false');
     expect(showAll.closest('[data-platform-table-preview-footer]')).toBeInTheDocument();
     expect(showAll.parentElement).toHaveTextContent('2 more below');
@@ -152,20 +152,35 @@ describe('ProxmoxNodesTable', () => {
     ).toBeTruthy();
 
     fireEvent.click(showAll);
-    expect(screen.getAllByRole('row')).toHaveLength(11);
+    expect(screen.getAllByRole('row')).toHaveLength(15);
     expect(screen.getByRole('button', { name: 'Show fewer nodes' })).toHaveAttribute(
       'aria-expanded',
       'true',
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Show fewer nodes' }));
-    expect(screen.getAllByRole('row')).toHaveLength(9);
+    expect(screen.getAllByRole('row')).toHaveLength(13);
   });
 
-  it('keeps the phone preview to four rows with its reveal control available', () => {
+  it('shows a threshold-sized estate without a continuation control', () => {
     render(() => (
       <ProxmoxNodesTable
-        nodes={makeNodeResources(6)}
+        nodes={makeNodeResources(12)}
+        guests={[]}
+        emptyIcon={<span />}
+        emptyTitle="No Proxmox VE nodes"
+        emptyDescription="No nodes"
+      />
+    ));
+
+    expect(screen.getAllByRole('row')).toHaveLength(13);
+    expect(screen.queryByRole('button', { name: 'Show all 12 nodes' })).not.toBeInTheDocument();
+  });
+
+  it('keeps the phone preview to six rows with its reveal control available', () => {
+    render(() => (
+      <ProxmoxNodesTable
+        nodes={makeNodeResources(8)}
         guests={[]}
         layoutWidth={() => 390}
         emptyIcon={<span />}
@@ -174,17 +189,17 @@ describe('ProxmoxNodesTable', () => {
       />
     ));
 
-    expect(screen.getAllByRole('row')).toHaveLength(5);
-    expect(screen.getByRole('button', { name: 'Show all 6 nodes' })).toBeVisible();
+    expect(screen.getAllByRole('row')).toHaveLength(7);
+    expect(screen.getByRole('button', { name: 'Show all 8 nodes' })).toBeVisible();
     expect(screen.getByText('2 more below')).toBeVisible();
   });
 
   it('hides node and topology totals through the page-owned inventory preference', () => {
     render(() => (
       <ProxmoxNodesTable
-        nodes={makeNodeResources(10)}
+        nodes={makeNodeResources(14)}
         guests={[]}
-        topology={{ nodes: 10, clusters: 1, standalone: 0 }}
+        topology={{ nodes: 14, clusters: 1, standalone: 0 }}
         inventoryCountsVisible={() => false}
         emptyIcon={<span />}
         emptyTitle="No Proxmox VE nodes"
@@ -195,7 +210,7 @@ describe('ProxmoxNodesTable', () => {
     expect(screen.getByText('Nodes').parentElement).toHaveTextContent(/^Nodes$/);
     expect(screen.queryByText('1 cluster')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Show all nodes' })).toBeVisible();
-    expect(screen.queryByRole('button', { name: 'Show all 10 nodes' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Show all 14 nodes' })).not.toBeInTheDocument();
   });
 
   it('links each node to its PVE web interface without hijacking the row click', () => {

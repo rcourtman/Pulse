@@ -232,7 +232,7 @@ export const ProxmoxNodesTable: Component<{
     sort.sortRows(filteredNodes(), (node, key) => getHostSortValue(node, props.guests, key)),
   );
   const previewLimit = createMemo(() =>
-    layoutMode() === 'narrow' || layoutMode() === 'phone' || layoutMode() === 'mobile' ? 4 : 8,
+    layoutMode() === 'narrow' || layoutMode() === 'phone' || layoutMode() === 'mobile' ? 6 : 12,
   );
   const nodePreview = createPlatformTablePreview({ rows: sortedNodes, limit: previewLimit });
   const toggleNodePreview = () => {

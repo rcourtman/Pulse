@@ -401,10 +401,12 @@ show.
 Large platform inventories may bound their initial row projection through the
 shared platform-table preview primitive so the next canonical surface remains
 in the initial reading flow. Proxmox node consumers retain the page model's
-canonical ordering, render eight rows on larger layouts and four rows on phone
-layouts by default, and expose all rows only through the reversible shared
-header disclosure. The preview must slice the already-sorted unified-resource
-collection; it must not fetch, re-rank, omit, or derive a second node truth.
+canonical ordering, render up to twelve rows on larger layouts and six rows on
+phone layouts by default, and expose all rows only through the reversible
+shared continuation footer. Estates at or below the applicable threshold
+remain fully visible and must not gain an unnecessary expansion affordance.
+The preview must slice the already-sorted unified-resource collection; it must
+not fetch, re-rank, omit, or derive a second node truth.
 Alert decoration on those platform rows consumes the canonical active-alert
 read model and the detector-enabled accessor. External notification activation
 is not a resource-health field and must never suppress row alerts, change
