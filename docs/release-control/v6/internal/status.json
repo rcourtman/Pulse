@@ -9692,6 +9692,38 @@
   ],
   "coverage_gaps": [
     {
+      "id": "host-identity-fork-heal-on-reenrollment",
+      "summary": "Host identities fork onto a '<base>-<hex>' spelling when an agent re-enrolls under a new token against an existing record (re-running an install with --proxmox is enough), and the only heal path (hostRenameHealSource in internal/monitoring/monitor_agents.go) requires the same token plus a changed hostname plus three missed health windows, so a re-enrollment fork fails two of the three conditions structurally and is held open forever. The PVE node keeps reporting the base agent UUID as LinkedAgentID while the host record carries the forked ID, so every identity consumer must resolve equivalent spellings indefinitely; discovery lookups were fixed symptom-side in 0e8f63cdd (PR #1715). Healing at the source is clone-safety territory (#1584): the machine-id evidence already on host records and the cross-estate veto signals from 53ba9786c plausibly let a re-enrollment rebind the existing base identity instead of forking, but that needs an owned slice with clone-safety regression coverage.",
+      "owner": "project-owner",
+      "status": "triaged",
+      "recorded_at": "2026-08-24",
+      "lane_ids": [
+        "L16"
+      ],
+      "subsystem_ids": [
+        "agent-lifecycle"
+      ],
+      "proposed_resolution": "lane-expansion",
+      "coverage_impact": 3,
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/host-identity-fork-heal-on-reenrollment-2026-08-24.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/monitoring/monitor_agents.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/servicediscovery/service.go",
+          "kind": "file"
+        }
+      ]
+    },
+    {
       "id": "resource-payload-static-metadata",
       "summary": "The client-facing resource stream ships ~3KB of mostly-static metadata per resource (duplicated capabilities blobs with only 10 distinct values across 1,508 resources, canonicalIdentity alias/superseded-id history, aiSafeSummary prose, and policy routing) on every snapshot, REST recovery, and reconnect. At 50-node scale the snapshot is a single 4.73MB websocket frame and browser main-thread cost per delta reaches ~1s even on desktop hardware. Slimming the stream is a wire-format change with consumers beyond frontend-modern (pulse-mobile OTA compatibility, Pro surfaces, AI runtime), so it needs an owned slice with contract updates and cross-client verification.",
       "owner": "project-owner",
