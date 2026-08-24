@@ -17,6 +17,7 @@ import { getGuestDrawerCurrentMetrics, type GuestDrawerProps } from './guestDraw
 import { useGuestDrawerState } from './useGuestDrawerState';
 import { GuestDrawerHistory, GuestDrawerHistoryRangeSelect } from './GuestDrawerHistory';
 import { GuestDrawerOverview } from './GuestDrawerOverview';
+import { GuestDrawerManage } from './GuestDrawerManage';
 
 export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
   const {
@@ -117,6 +118,7 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
           ...(hasHistorySupport()
             ? [{ value: 'history', label: 'History' } satisfies SubtabOption]
             : []),
+          { value: 'manage', label: 'Manage' },
           ...(hasDiscoverySupport()
             ? [{ value: 'discovery', label: 'Discovery' } satisfies SubtabOption]
             : []),
@@ -133,7 +135,6 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
       <div class={activeTab() === 'overview' ? '' : 'hidden'} style={{ 'overflow-anchor': 'none' }}>
         <GuestDrawerOverview
           guest={props.guest}
-          guestId={guestId()}
           guestOsSummary={guestOsSummary()}
           agentHeading={agentHeading()}
           agentLabel={agentLabel()}
@@ -146,16 +147,13 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
           networkInterfaces={networkInterfaces()}
           nestedWorkloadContext={props.nestedWorkloadContext}
           normalizedTags={normalizedTags()}
-          onCustomUrlChange={props.onCustomUrlChange}
-          customUrl={props.customUrl}
           backupPresentation={backupPresentation()}
           diskThresholds={diskThresholds()}
           discoveryIdentifiedSummary={discoveryIdentifiedSummary()}
           hasWorkloadActionAgent={hasWorkloadActionAgent()}
           showInGuestAgentInstallCue={showInGuestAgentInstallCue()}
-          webInterfaceMetadataId={webInterfaceMetadataId()}
-          webInterfaceTargetLabel={webInterfaceTargetLabel()}
           workloadActionAgentTitle={workloadActionAgentTitle()}
+          alerts={props.alerts}
         />
       </div>
 
@@ -188,6 +186,20 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
           </Suspense>
         </div>
       )}
+
+      <div class={activeTab() === 'manage' ? '' : 'hidden'} style={{ 'overflow-anchor': 'none' }}>
+        <Show when={activeTab() === 'manage'}>
+          <GuestDrawerManage
+            guest={props.guest}
+            resourceId={guestId()}
+            metadataId={webInterfaceMetadataId()}
+            targetLabel={webInterfaceTargetLabel()}
+            customUrl={props.customUrl}
+            onCustomUrlChange={props.onCustomUrlChange}
+            suggestion={discoveryIdentifiedSummary() ?? undefined}
+          />
+        </Show>
+      </div>
     </section>
   );
 };

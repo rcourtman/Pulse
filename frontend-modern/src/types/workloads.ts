@@ -21,6 +21,8 @@ export interface WorkloadTelemetryAvailability {
 
 export type WorkloadGuest = (VM | Container) & {
   workloadType?: WorkloadType;
+  /** Backend identities that may own active alerts for this canonical workload. */
+  alertResourceIds?: string[];
   /** Canonical unified-resource health, kept separate from runtime power state in `status`. */
   resourceStatus?: string;
   displayId?: string;

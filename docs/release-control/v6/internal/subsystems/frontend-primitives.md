@@ -3592,6 +3592,21 @@ owns canonical metadata-id and discovery-hostname derivation. Future
 infrastructure-details-drawer work should extend those owners instead of
 pushing tab state or resource-identity normalization back into the shared
 shell.
+Object detail drawers follow one operator-first information hierarchy across
+platform implementations. Overview must begin with `DrawerAttentionSection`
+when active alert or health evidence exists and show the actual problem text,
+not only repeat a coloured status. The remaining Overview rows are additive
+operator context that the parent table row cannot carry, such as OS/runtime,
+Pulse observation or action coverage, primary reachability, protection gaps,
+pending updates, or an identified service. Routine health, placement, and
+metric values already visible in the row must not be restated merely to fill
+the drawer. `TechnicalDetailsDisclosure` owns the collapsed, lazily mounted
+inventory boundary for raw IDs, kernel/build strings, full interface and disk
+lists, and provider metadata. Monitoring mode, lifecycle, notes, maintenance,
+automatic-action policy, saved access configuration, and action audit belong
+to a dedicated `Manage` tab and must not render inside Overview. Guest, node,
+Docker-host, and unified-resource drawers must compose these shared primitives
+instead of defining provider-local attention or technical disclosure shells.
 The shared interactive sparkline now follows that same split.
 `frontend-modern/src/components/shared/InteractiveSparkline.tsx` stays the
 render shell, `frontend-modern/src/components/shared/useInteractiveSparklineState.ts`
@@ -3860,7 +3875,7 @@ linked resource names, or duplicated new-tab safety handling for that launch
 affordance.
 Docker host rows follow the same primitive-owned contract end to end.
 `DockerHostsTable.tsx` composes `ResourceNameWithWebInterfaceLink` beside the
-inert host name, while the host drawer's Overview access surface embeds
+inert host name, while the host drawer's Manage access surface embeds
 `WebInterfaceUrlField` with `metadataKind="docker-host"` and the stable host
 source id. The drawer must return saved URL changes to its owning table row so
 the adjacent launch control updates immediately; neither the table nor drawer

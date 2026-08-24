@@ -4,6 +4,8 @@ import {
   isAlertsDetectionEnabled,
   setGlobalAlertsDetectionEnabled,
 } from '@/utils/alertsActivation';
+import { getAlertsForResource } from '@/utils/alerts';
+import type { Alert } from '@/types/api';
 
 describe('alerts detection state', () => {
   beforeEach(() => {
@@ -49,5 +51,20 @@ describe('alerts detection state', () => {
       setGlobalAlertsDetectionEnabled(null);
       expect(window.__pulseAlertsDetectionEnabled).toBeNull();
     });
+  });
+
+  it('projects active problems through canonical and provider resource identities', () => {
+    const providerAlert = {
+      id: 'provider-alert',
+      resourceId: 'provider-host',
+      level: 'warning',
+      message: 'Node is offline',
+    } as Alert;
+
+    expect(
+      getAlertsForResource(['canonical-host', 'provider-host'], {
+        [providerAlert.id]: providerAlert,
+      }),
+    ).toEqual([providerAlert]);
   });
 });

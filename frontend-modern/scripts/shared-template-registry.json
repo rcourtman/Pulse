@@ -2,6 +2,62 @@
   "version": 1,
   "rules": [
     {
+      "id": "operator-first-drawer-attention",
+      "category": "drawer-information-hierarchy",
+      "summary": "Object drawers surface active problem messages before additive operator context through one shared compact attention section.",
+      "canonical": {
+        "path": "src/components/shared/DrawerAttentionSection.tsx",
+        "export": "DrawerAttentionSection"
+      },
+      "requiredConsumers": [
+        {
+          "path": "src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx"
+        },
+        {
+          "path": "src/components/Workloads/GuestDrawerOverview.tsx"
+        },
+        {
+          "path": "src/components/Workloads/NodeDrawerOverview.tsx"
+        },
+        {
+          "path": "src/features/docker/DockerHostDrawerOverview.tsx"
+        }
+      ],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/Workloads/GuestDrawer.test.tsx",
+        "src/components/Workloads/NodeDrawer.test.tsx"
+      ]
+    },
+    {
+      "id": "operator-first-technical-disclosure",
+      "category": "drawer-information-hierarchy",
+      "summary": "Object drawers keep raw inventory behind one shared lazy technical-details disclosure while promoting additive operator facts into Overview.",
+      "canonical": {
+        "path": "src/components/shared/TechnicalDetailsDisclosure.tsx",
+        "export": "TechnicalDetailsDisclosure"
+      },
+      "requiredConsumers": [
+        {
+          "path": "src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx"
+        },
+        {
+          "path": "src/components/Workloads/GuestDrawerOverview.tsx"
+        },
+        {
+          "path": "src/components/Workloads/NodeDrawerOverview.tsx"
+        },
+        {
+          "path": "src/features/docker/DockerHostDrawerOverview.tsx"
+        }
+      ],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/Workloads/GuestDrawer.test.tsx",
+        "src/components/Infrastructure/__tests__/ResourceDetailDrawer.history.test.tsx"
+      ]
+    },
+    {
       "id": "runtime-web-interface-inline-link",
       "category": "resource-launch",
       "summary": "Runtime resource rows keep names available for row selection and expose saved or inferred web-interface URLs through the shared adjacent-link template, not a page-local link or separate web column.",

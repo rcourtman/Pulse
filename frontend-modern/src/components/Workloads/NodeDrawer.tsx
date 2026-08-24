@@ -3,11 +3,12 @@ import { Show, Suspense, createMemo, createSignal, type Component } from 'solid-
 import type { HistoryTimeRange } from '@/api/charts';
 import { DiscoveryTab } from '@/components/Discovery/DiscoveryTab';
 import { DiscoveryLoadingFallback } from '@/components/shared/DiscoveryLoadingFallback';
+import { ResourceOperatorStateSection } from '@/components/Infrastructure/ResourceOperatorStateSection';
 import { DrawerSubjectHeading } from '@/components/shared/DrawerSubjectHeading';
 import { Subtabs, type SubtabOption } from '@/components/shared/Subtabs';
 import { nodeOverrideIdCandidates } from '@/features/alerts/alertOverridesModel';
 import { useAlertsActivation } from '@/stores/alertsActivation';
-import type { Disk, Node } from '@/types/api';
+import type { Alert, Disk, Node } from '@/types/api';
 import type { MetricDisplayThresholds } from '@/utils/metricThresholds';
 import { getNodeDisplayName } from '@/utils/nodes';
 import { getSimpleStatusIndicator } from '@/utils/status';
@@ -31,9 +32,10 @@ interface NodeDrawerProps {
   disks?: Disk[];
   discoveryTarget?: NodeDrawerDiscoveryTarget;
   temperatureThresholds?: MetricDisplayThresholds | null;
+  alerts?: Alert[];
 }
 
-type NodeDrawerTab = 'overview' | 'history' | 'discovery';
+type NodeDrawerTab = 'overview' | 'history' | 'manage' | 'discovery';
 
 export const NodeDrawer: Component<NodeDrawerProps> = (props) => {
   const [activeTab, setActiveTab] = createSignal<NodeDrawerTab>('overview');
@@ -74,6 +76,7 @@ export const NodeDrawer: Component<NodeDrawerProps> = (props) => {
         tabs={[
           { value: 'overview', label: 'Overview' },
           { value: 'history', label: 'History' },
+          { value: 'manage', label: 'Manage' },
           ...(props.discoveryTarget?.agentId
             ? [{ value: 'discovery', label: 'Discovery' } satisfies SubtabOption]
             : []),
@@ -92,6 +95,7 @@ export const NodeDrawer: Component<NodeDrawerProps> = (props) => {
           node={props.node}
           disks={props.disks}
           temperatureThresholds={temperatureThresholds()}
+          alerts={props.alerts}
         />
       </div>
 
@@ -102,6 +106,18 @@ export const NodeDrawer: Component<NodeDrawerProps> = (props) => {
           range={historyRange()}
           target={historyTarget()}
         />
+      </div>
+
+      <div class={activeTab() === 'manage' ? '' : 'hidden'} style={{ 'overflow-anchor': 'none' }}>
+        <Show when={activeTab() === 'manage'}>
+          <div data-testid="node-manage-tab">
+            <ResourceOperatorStateSection
+              resourceId={props.node.id}
+              resourceType="node"
+              platformType="proxmox"
+            />
+          </div>
+        </Show>
       </div>
 
       {props.discoveryTarget?.agentId && (

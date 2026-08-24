@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, within } from '@solidjs/testing-library';
+import { fireEvent, render as solidRender, screen, within } from '@solidjs/testing-library';
 import { Suspense } from 'solid-js';
 
 import discoveryTabSource from '@/components/Discovery/DiscoveryTab.tsx?raw';
@@ -25,6 +25,25 @@ import actionAuditApiSource from '@/api/actionAudit.ts?raw';
 import actionAuditPresentationSource from '@/utils/actionAuditPresentation.ts?raw';
 import type { Resource } from '@/types/resource';
 import { ResourceDetailDrawer } from '@/components/Infrastructure/ResourceDetailDrawer';
+
+const render = (...args: Parameters<typeof solidRender>): ReturnType<typeof solidRender> => {
+  const result = solidRender(...args);
+  const details = result.container.querySelector<HTMLDetailsElement>(
+    '[data-testid="resource-technical-details"]',
+  );
+  if (details) {
+    details.open = true;
+    fireEvent(details, new Event('toggle'));
+  }
+  const platformDetails = result.container.querySelector<HTMLDetailsElement>(
+    '[data-testid="resource-platform-details"]',
+  );
+  if (platformDetails) {
+    platformDetails.open = true;
+    fireEvent(platformDetails, new Event('toggle'));
+  }
+  return result;
+};
 
 const facetBundleMock = vi.hoisted(() => ({
   getFacetBundle: vi.fn(),
@@ -202,7 +221,8 @@ describe('ResourceDetailDrawer change history section', () => {
     expect(resourceDetailDrawerHistoryStateSource).toContain('ResourceAPI.getFacetBundle');
     expect(resourceDetailDrawerHistoryStateSource).toContain('AIAPI.getResourceIntelligence');
     expect(resourceDetailDrawerHistoryStateSource).toContain('ActionAuditAPI.listActionAudits');
-    expect(resourceDetailDrawerOverviewSource).toContain("from './ResourceActionHistory'");
+    expect(resourceDetailDrawerOverviewSource).not.toContain("from './ResourceActionHistory'");
+    expect(resourceDetailDrawerShellSource).toContain("from './ResourceActionHistory'");
     expect(resourceDetailDrawerOverviewSource).toContain(
       'dataTestId="resource-relationship-map-section"',
     );
@@ -346,7 +366,7 @@ describe('ResourceDetailDrawer change history section', () => {
     await Promise.resolve();
 
     expect(screen.queryByText('Loading view...')).not.toBeInTheDocument();
-    expect(screen.getByText('Current state')).toBeInTheDocument();
+    expect(screen.getByText('Technical details')).toBeInTheDocument();
   });
 
   it('keeps table-row presentation focused on local resource details', async () => {
@@ -370,12 +390,11 @@ describe('ResourceDetailDrawer change history section', () => {
 
     await Promise.resolve();
 
-    expect(screen.getByText('Current state')).toBeInTheDocument();
+    expect(screen.queryByText('Operator context')).not.toBeInTheDocument();
     expect(screen.getByText('Identity')).toBeInTheDocument();
     expect(screen.queryByText('Change history')).not.toBeInTheDocument();
-    // Operator overrides render in every presentation (issue #1622) —
-    // intentionally-offline and never-auto-remediate must stay reachable
-    // even for resources with no auto-authorizable capabilities.
+    expect(screen.queryByText('Operator overrides')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('tab', { name: 'Manage' }));
     expect(screen.getByText('Operator overrides')).toBeInTheDocument();
     expect(screen.queryByText('Maintenance verification')).not.toBeInTheDocument();
     expect(screen.queryByText('Action history')).not.toBeInTheDocument();
@@ -494,46 +513,24 @@ describe('ResourceDetailDrawer change history section', () => {
     const changeHistorySection = screen.getByTestId('resource-change-history-section');
     expect(screen.queryByRole('button', { name: 'Discovery' })).toBeNull();
     expect(screen.queryByText('Summary')).toBeNull();
-    expect(screen.getByText('Current state')).toBeInTheDocument();
+    expect(screen.queryByText('Operator context')).not.toBeInTheDocument();
     expect(screen.queryByText('Runtime')).toBeNull();
     expect(screen.getByText('Change history')).toBeInTheDocument();
     expect(screen.getByTestId('resource-secondary-sections').classList.contains('space-y-3')).toBe(
       true,
     );
-    expect(screen.getByTestId('resource-support-sections').classList.contains('flex')).toBe(true);
-    expect(screen.getByTestId('resource-support-sections').classList.contains('flex-wrap')).toBe(
-      true,
-    );
     expect(
-      screen.getByTestId('resource-summary-section').querySelectorAll('.bg-surface-hover.px-2.py-2')
-        .length,
+      screen
+        .getByTestId('resource-technical-summary-section')
+        .querySelectorAll('.bg-surface-hover.px-2.py-2').length,
     ).toBe(0);
-    const summarySection = screen.getByTestId('resource-summary-section');
-    expect(summarySection.classList.contains('grid')).toBe(true);
-    expect(summarySection.classList.contains('gap-3')).toBe(true);
-    expect(summarySection.classList.contains('sm:grid-cols-2')).toBe(true);
-    expect(
-      screen.getByTestId('resource-current-state-section').classList.contains('rounded-md'),
-    ).toBe(true);
-    expect(
-      screen.getByTestId('resource-current-state-section').classList.contains('bg-surface'),
-    ).toBe(true);
-    expect(
-      screen.getByTestId('resource-current-state-section').classList.contains('shadow-sm'),
-    ).toBe(true);
-    expect(screen.getByTestId('resource-identity-section').classList.contains('rounded-md')).toBe(
-      true,
-    );
-    expect(screen.getByTestId('resource-identity-section').classList.contains('bg-surface')).toBe(
-      true,
-    );
-    expect(screen.getByTestId('resource-identity-section').classList.contains('shadow-sm')).toBe(
-      true,
-    );
+    const summarySection = screen.getByTestId('resource-technical-summary-section');
+    expect(summarySection.classList.contains('overflow-hidden')).toBe(true);
+    expect(summarySection.querySelector('table')).toBeTruthy();
+    expect(screen.getByTestId('resource-identity-section').tagName).toBe('TBODY');
     expect(
       screen.getByTestId('resource-change-history-section').querySelector('.mt-3.grid.gap-2'),
     ).toBeNull();
-    const currentStateSection = screen.getByTestId('resource-current-state-section');
     const identitySection = screen.getByTestId('resource-identity-section');
     expect(screen.queryByText('Host')).toBeNull();
     expect(screen.queryByText('Service')).toBeNull();
@@ -553,34 +550,23 @@ describe('ResourceDetailDrawer change history section', () => {
     expect(screen.queryByText('Container Updates')).toBeNull();
     expect(screen.queryByText('Check Updates')).toBeNull();
     expect(screen.queryByText('Show update controls')).toBeNull();
-    expect(screen.getByText('Access')).toBeInTheDocument();
+    expect(screen.queryByText('Access')).toBeNull();
     expect(screen.queryByText('Analysis')).toBeNull();
     expect(
       screen.queryByText('Supporting metadata only. The web interface path above stays primary.'),
     ).toBeNull();
-    expect(screen.getByRole('button', { name: 'Show access' })).toBeInTheDocument();
-    expect(
-      screen
-        .getByTestId('resource-access-section')
-        .querySelector('.mt-3.rounded.border.border-border.bg-surface.p-2\\.5'),
-    ).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Show access' })).toBeNull();
     expect(screen.queryByText('Details')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Show details' })).toBeNull();
     expect(screen.queryByText('Platform ID')).toBeNull();
-    expect(currentStateSection.querySelector('.border-dashed')).toBeNull();
     expect(within(identitySection).getByText('Tags')).toBeInTheDocument();
-    expect(within(currentStateSection).queryByText('Tags')).toBeNull();
+    expect(within(identitySection).getByText('Tags')).toBeInTheDocument();
     expect(
       within(changeHistorySection).queryByText('Filterable event history for this resource.'),
     ).toBeNull();
     expect(within(changeHistorySection).queryByText('Recent activity')).toBeNull();
     expect(screen.queryByText('Events')).toBeNull();
     expect(screen.getAllByText('Timeline 3')).toHaveLength(1);
-    expect(
-      Array.from(screen.getByTestId('resource-support-sections').children).map((node) =>
-        node.getAttribute('data-testid'),
-      ),
-    ).toEqual(['resource-access-section', 'resource-investigation-context']);
     expect(screen.getAllByText('Restart 2')).toHaveLength(1);
     expect(screen.getAllByText('Anomaly 1')).toHaveLength(1);
     expect(screen.getAllByText('Platform event 1')).toHaveLength(1);
@@ -602,14 +588,14 @@ describe('ResourceDetailDrawer change history section', () => {
     expect(screen.getByText('Correlations')).toBeInTheDocument();
     expect(screen.getByText('Storage 1 alias')).toBeInTheDocument();
     expect(screen.getByText('VM Child')).toBeInTheDocument();
+    await screen.findByText('Platform details');
+    const platformDetails = screen.getByTestId('resource-platform-details') as HTMLDetailsElement;
+    platformDetails.open = true;
+    fireEvent(platformDetails, new Event('toggle'));
     expect(screen.getByText('Context')).toBeInTheDocument();
     expect(screen.queryByText('Capabilities 1')).toBeNull();
     expect(screen.queryByText('Relationships 1')).toBeNull();
     expect(screen.queryByText('Analysis')).toBeNull();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Show access' }));
-    expect(screen.getByText('Analysis')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Open analysis' })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Show context' }));
     const contextSection = screen.getByTestId('resource-investigation-context');
@@ -627,6 +613,14 @@ describe('ResourceDetailDrawer change history section', () => {
     expect(screen.getByText('3')).toBeInTheDocument();
     expect(screen.queryByTestId('resource-correlation-context')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Show correlations' })).toBeNull();
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Manage' }));
+    expect(screen.getByText('Access')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Show access' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Show access' }));
+    const accessSection = within(screen.getByTestId('resource-access-section'));
+    expect(accessSection.getByText('Analysis')).toBeInTheDocument();
+    expect(accessSection.getByRole('button', { name: 'Open analysis' })).toBeInTheDocument();
   });
 
   it('keeps default internal cloud-summary posture out of the investigation context drawer block', async () => {
@@ -661,7 +655,7 @@ describe('ResourceDetailDrawer change history section', () => {
 
     render(() => <ResourceDetailDrawer resource={resource} />);
 
-    await screen.findByText('Current state');
+    await screen.findByText('Technical details');
     expect(screen.queryByText('Context')).toBeNull();
     expect(screen.queryByText('Governance')).toBeNull();
     expect(screen.queryByText('Safe Summary')).toBeNull();
@@ -699,9 +693,7 @@ describe('ResourceDetailDrawer change history section', () => {
     expect(
       within(screen.getByTestId('resource-identity-section')).getByText('Aliases'),
     ).toBeInTheDocument();
-    expect(
-      within(screen.getByTestId('resource-current-state-section')).queryByText('Aliases'),
-    ).toBeNull();
+    expect(screen.queryByTestId('resource-current-state-section')).toBeNull();
   });
 
   it('renders timeline history without surfacing unsupported capability or relationship facets', async () => {
@@ -918,6 +910,8 @@ describe('ResourceDetailDrawer change history section', () => {
       />
     ));
 
+    fireEvent.click(screen.getByRole('tab', { name: 'Manage' }));
+
     const actionHistoryNode = await screen.findByTestId('resource-action-history-section');
     const actionHistory = within(actionHistoryNode);
 
@@ -1031,7 +1025,7 @@ describe('ResourceDetailDrawer change history section', () => {
       Array.from(screen.getByTestId('resource-support-sections').children).map((node) =>
         node.getAttribute('data-testid'),
       ),
-    ).toEqual(['resource-access-section', 'resource-service-details-section']);
+    ).toEqual(['resource-service-details-section']);
     fireEvent.click(screen.getByRole('button', { name: 'Show service' }));
     const serviceDetails = within(screen.getByTestId('resource-service-details-section'));
     expect(

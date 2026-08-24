@@ -4,7 +4,10 @@ import { describe, expect, it } from 'vitest';
 
 import type { Resource } from '@/types/resource';
 
-import { unifiedPlatformOverrideIdCandidates } from '../alertOverridesModel';
+import {
+  hostOverrideIdCandidates,
+  unifiedPlatformOverrideIdCandidates,
+} from '../alertOverridesModel';
 import { useAlertOverridesState } from '../useAlertOverridesState';
 
 const makeResource = (overrides: Partial<Resource>): Resource =>
@@ -16,6 +19,30 @@ const makeResource = (overrides: Partial<Resource>): Resource =>
   }) as Resource;
 
 describe('useAlertOverridesState', () => {
+  it('retains every bounded host identity used by active alert projections', () => {
+    expect(
+      hostOverrideIdCandidates(
+        makeResource({
+          id: 'canonical-host',
+          proxmox: { sourceId: 'provider-host' },
+          metricsTarget: { resourceType: 'agent', resourceId: 'metrics-host' },
+          canonicalIdentity: {
+            primaryId: 'node:provider-host',
+            aliases: ['host-alias'],
+            supersededIds: ['old-host-id'],
+          },
+        }),
+      ),
+    ).toEqual([
+      'provider-host',
+      'metrics-host',
+      'node:provider-host',
+      'host-alias',
+      'old-host-id',
+      'canonical-host',
+    ]);
+  });
+
   it('owns raw override normalization and projected alert override read models outside config transport', async () => {
     const [hasUnsavedChanges] = createSignal(false);
     const [overviewOverrides, setOverviewOverrides] = createSignal([]);

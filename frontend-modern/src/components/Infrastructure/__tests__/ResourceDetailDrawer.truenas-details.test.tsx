@@ -64,6 +64,12 @@ const baseResource = (overrides: Partial<Resource>): Resource =>
     ...overrides,
   }) as Resource;
 
+const expandPlatformDetails = (getByTestId: (id: string) => HTMLElement): void => {
+  const details = getByTestId('resource-platform-details') as HTMLDetailsElement;
+  details.open = true;
+  fireEvent(details, new Event('toggle'));
+};
+
 describe('ResourceDetailDrawer TrueNAS details', () => {
   it('opens native TrueNAS system detail immediately for inline platform rows', () => {
     const resource = baseResource({
@@ -95,12 +101,13 @@ describe('ResourceDetailDrawer TrueNAS details', () => {
         initialShowTrueNASDetails
       />
     ));
+    expandPlatformDetails(getByTestId);
 
     expect(getByRole('button', { name: 'Hide TrueNAS' })).toBeInTheDocument();
     const trueNASSection = getByTestId('resource-truenas-details-section');
-    const summary = getByTestId('resource-summary-section');
+    const summary = getByTestId('resource-technical-details');
     expect(
-      trueNASSection.compareDocumentPosition(summary) & Node.DOCUMENT_POSITION_FOLLOWING,
+      trueNASSection.compareDocumentPosition(summary) & Node.DOCUMENT_POSITION_PRECEDING,
     ).toBeTruthy();
     const section = within(trueNASSection);
     expect(section.getByText('System')).toBeInTheDocument();
@@ -137,6 +144,7 @@ describe('ResourceDetailDrawer TrueNAS details', () => {
     const { getByText, getByRole, getByTestId, getAllByText, queryByText } = render(() => (
       <ResourceDetailDrawer resource={resource} />
     ));
+    expandPlatformDetails(getByTestId);
 
     expect(getAllByText('TrueNAS').length).toBeGreaterThan(0);
     expect(getByText('Running, 4 vCPU, 8.00 GB, 3 devices')).toBeInTheDocument();
@@ -186,6 +194,7 @@ describe('ResourceDetailDrawer TrueNAS details', () => {
     const { getByText, getByRole, getByTestId, queryByText } = render(() => (
       <ResourceDetailDrawer resource={resource} />
     ));
+    expandPlatformDetails(getByTestId);
 
     expect(getByText('Running, 2 containers, 1 port, 1 update')).toBeInTheDocument();
     expect(queryByText('Docker runtime')).toBeNull();
@@ -232,16 +241,20 @@ describe('ResourceDetailDrawer TrueNAS details', () => {
         initialShowTrueNASDetails
       />
     ));
+    expandPlatformDetails(getByTestId);
 
-    const summary = getByTestId('resource-summary-section');
-    expect(summary.querySelector('table')).toBeTruthy();
-    expect(getByTestId('resource-current-state-section').tagName).toBe('TBODY');
+    const summary = getByTestId('resource-technical-details');
+    const technicalDetails = getByTestId('resource-technical-details') as HTMLDetailsElement;
+    technicalDetails.open = true;
+    fireEvent(technicalDetails, new Event('toggle'));
+    expect(getByTestId('resource-technical-summary-section').querySelector('table')).toBeTruthy();
+    expect(() => getByTestId('resource-current-state-section')).toThrow();
     expect(getByTestId('resource-identity-section').tagName).toBe('TBODY');
     expect(summary.querySelector('[class*="shadow-sm"]')).toBeNull();
     expect(getByRole('button', { name: 'Hide TrueNAS' })).toBeInTheDocument();
     const trueNASSection = getByTestId('resource-truenas-details-section');
     expect(
-      trueNASSection.compareDocumentPosition(summary) & Node.DOCUMENT_POSITION_FOLLOWING,
+      trueNASSection.compareDocumentPosition(summary) & Node.DOCUMENT_POSITION_PRECEDING,
     ).toBeTruthy();
     const section = within(trueNASSection);
     expect(trueNASSection.querySelector('table')).toBeTruthy();
@@ -277,6 +290,7 @@ describe('ResourceDetailDrawer TrueNAS details', () => {
     const { getByText, getByRole, getByTestId } = render(() => (
       <ResourceDetailDrawer resource={resource} />
     ));
+    expandPlatformDetails(getByTestId);
 
     expect(getByText('SMB, Enabled, tank/media, Read/write')).toBeInTheDocument();
 
@@ -333,6 +347,7 @@ describe('ResourceDetailDrawer TrueNAS details', () => {
         initialShowTrueNASDetails
       />
     ));
+    expandPlatformDetails(getByTestId);
 
     expect(getByRole('button', { name: 'Hide TrueNAS' })).toBeInTheDocument();
     const section = within(getByTestId('resource-truenas-details-section'));

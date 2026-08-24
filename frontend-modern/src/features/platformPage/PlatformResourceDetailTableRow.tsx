@@ -1,6 +1,5 @@
 import { Show, createSignal, type Component, type JSX } from 'solid-js';
 import { ResourceDetailDrawer } from '@/components/Infrastructure/ResourceDetailDrawer';
-import { hasTrueNASDetailSections } from '@/components/Infrastructure/resourceDetailDrawerTrueNASModel';
 import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
 import { SummaryRowActionButton } from '@/components/shared/SummaryRowActionButton';
 import type { Resource } from '@/types/resource';
@@ -100,9 +99,6 @@ export const PlatformResourceDetailTableRow: Component<{
   onResourceActionSettled?: () => void | Promise<void>;
   onClose?: () => void;
 }> = (props) => {
-  const initialShowTrueNASDetails = () =>
-    props.initialShowTrueNASDetails ?? hasTrueNASDetailSections(props.resource);
-
   return (
     <Show when={props.open}>
       <InlineDetailTableRow
@@ -117,7 +113,7 @@ export const PlatformResourceDetailTableRow: Component<{
           resolveResourceLabel={props.resolveResourceLabel}
           initialShowAccessContext={props.initialShowAccessContext}
           initialShowHostDetails={props.initialShowHostDetails}
-          initialShowTrueNASDetails={initialShowTrueNASDetails()}
+          initialShowTrueNASDetails={props.initialShowTrueNASDetails}
           onResourceActionSettled={props.onResourceActionSettled}
           onClose={props.onClose}
         />

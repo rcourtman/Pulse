@@ -9,7 +9,7 @@ import {
 } from 'solid-js';
 import { useWebSocket } from '@/contexts/appRuntime';
 import { useAlertsActivation } from '@/stores/alertsActivation';
-import { getAlertStyles } from '@/utils/alerts';
+import { getAlertsForResource, getAlertStyles } from '@/utils/alerts';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { ResourceNameWithWebInterfaceLink } from '@/components/shared/WebInterfaceLink';
 import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
@@ -741,6 +741,12 @@ export const ProxmoxNodesTable: Component<{
                         >
                           <NodeDrawer
                             node={selectedNode()}
+                            alerts={getAlertsForResource(
+                              alertResourceIds(),
+                              activeAlerts,
+                              alertsEnabled(),
+                              node.name,
+                            )}
                             disks={normalizeDiskArray(node.agent?.disks)}
                             temperatureThresholds={temperatureThresholds()}
                             discoveryTarget={(() => {

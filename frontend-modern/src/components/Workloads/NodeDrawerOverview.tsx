@@ -1,7 +1,15 @@
 import { For, Show } from 'solid-js';
 
 import { InfoCardFrame } from '@/components/shared/InfoCardFrame';
-import type { Disk, Node, Temperature } from '@/types/api';
+import { TechnicalDetailsDisclosure } from '@/components/shared/TechnicalDetailsDisclosure';
+import { DrawerAttentionSection } from '@/components/shared/DrawerAttentionSection';
+import {
+  DetailSectionTable,
+  compactDetailRows,
+  compactDetailSections,
+  makeDetailRow,
+} from '@/components/shared/DetailSectionTable';
+import type { Alert, Disk, Node, Temperature } from '@/types/api';
 import {
   formatBytes,
   formatRelativeTime,
@@ -19,6 +27,7 @@ interface NodeDrawerOverviewProps {
   node: Node;
   disks?: Disk[];
   temperatureThresholds?: MetricDisplayThresholds | null;
+  alerts?: Alert[];
 }
 
 interface NodeOverviewRow {
@@ -323,23 +332,67 @@ export function NodeDrawerOverview(props: NodeDrawerOverviewProps) {
     return buildDrawerDiskListItems(disks);
   };
 
+  const overviewSections = () => {
+    const primaryTemperature = getCpuTemperature(props.node.temperature);
+    const temperatureClass =
+      typeof primaryTemperature === 'number'
+        ? getTemperatureTextClass(primaryTemperature, props.temperatureThresholds)
+        : '';
+    return compactDetailSections([
+      {
+        label: 'Operator context',
+        rows: compactDetailRows([
+          makeDetailRow('Platform', versionLabel() ? `PVE ${versionLabel()}` : null),
+          makeDetailRow(
+            'Pulse coverage',
+            linkedAgentId() ? `Agent ${stripAgentPrefix(linkedAgentId())}` : 'PVE API only',
+          ),
+          typeof props.node.pendingUpdates === 'number' && props.node.pendingUpdates > 0
+            ? makeDetailRow('Updates', `${props.node.pendingUpdates} pending`, { tone: 'warning' })
+            : null,
+          typeof primaryTemperature === 'number' &&
+          (temperatureClass.includes('yellow') || temperatureClass.includes('red'))
+            ? makeDetailRow('Temperature', formatTemperature(primaryTemperature), {
+                tone: temperatureClass.includes('red') ? 'danger' : 'warning',
+              })
+            : null,
+        ]),
+      },
+    ]);
+  };
+
   return (
-    <div class="flex flex-wrap gap-3 [&>*]:flex-1 [&>*]:basis-[calc(25%-0.75rem)] [&>*]:min-w-[200px] [&>*]:max-w-full [&>*]:overflow-hidden">
-      <DetailCard title="System" rows={systemRows()} />
-      <DetailCard title="Platform" rows={platformRows()} />
-      <DetailCard title="Hardware" rows={hardwareRows()} />
-      <DetailCard title="Memory" rows={memoryRows()} />
-      <Show
-        when={perDiskItems().length > 0}
-        fallback={<DetailCard title="Storage" rows={storageRows()} />}
-      >
-        <DrawerDiskListCard disks={perDiskItems()} testId="node-drawer-disks" />
-      </Show>
-      <DetailCard title="Telemetry" rows={telemetryRows()} />
-      <DetailCard
-        title="Thermals"
-        rows={getThermalRows(props.node.temperature, props.temperatureThresholds)}
+    <div class="space-y-3">
+      <DrawerAttentionSection
+        items={(props.alerts ?? []).map((alert) => ({
+          id: alert.id,
+          message: alert.message,
+          severity: alert.level,
+          acknowledged: alert.acknowledged,
+        }))}
       />
+      <DetailSectionTable sections={overviewSections()} />
+      <TechnicalDetailsDisclosure
+        dataTestId="node-technical-details"
+        subtitle="Hardware, telemetry, and storage"
+        contentClass="mt-2 flex flex-wrap gap-2 border-t border-border pt-2 [&>*]:flex-1 [&>*]:basis-[calc(25%-0.5rem)] [&>*]:min-w-[200px] [&>*]:max-w-full [&>*]:overflow-hidden"
+      >
+        <DetailCard title="System" rows={systemRows()} />
+        <DetailCard title="Platform" rows={platformRows()} />
+        <DetailCard title="Hardware" rows={hardwareRows()} />
+        <DetailCard title="Memory" rows={memoryRows()} />
+        <Show
+          when={perDiskItems().length > 0}
+          fallback={<DetailCard title="Storage" rows={storageRows()} />}
+        >
+          <DrawerDiskListCard disks={perDiskItems()} testId="node-drawer-disks" />
+        </Show>
+        <DetailCard title="Telemetry" rows={telemetryRows()} />
+        <DetailCard
+          title="Thermals"
+          rows={getThermalRows(props.node.temperature, props.temperatureThresholds)}
+        />
+      </TechnicalDetailsDisclosure>
     </div>
   );
 }

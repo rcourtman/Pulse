@@ -22,7 +22,10 @@ import {
   GuestDrawerHistoryRangeSelect,
 } from '@/components/Workloads/GuestDrawerHistory';
 import { ResourceDetailDrawerDebugTab } from './ResourceDetailDrawerDebugTab';
-import { ResourceDetailDrawerOverviewTab } from './ResourceDetailDrawerOverviewTab';
+import {
+  ResourceAccessDisclosure,
+  ResourceDetailDrawerOverviewTab,
+} from './ResourceDetailDrawerOverviewTab';
 import { useResourceDetailDrawerState } from './useResourceDetailDrawerState';
 import { DiscoveryTab } from '@/components/Discovery/DiscoveryTab';
 import {
@@ -31,6 +34,9 @@ import {
 } from './resourceDetailDrawerPresentation';
 import { DockerContainerLifecycleControls } from '@/features/docker/DockerContainerLifecycleControls';
 import { isDockerContainerLifecycleResource } from '@/features/docker/dockerContainerLifecycleActions';
+import { ResourceOperatorStateSection } from './ResourceOperatorStateSection';
+import { MaintenanceVerificationSection } from './MaintenanceVerificationSection';
+import { ResourceActionHistory } from './ResourceActionHistory';
 
 interface ResourceDetailDrawerProps {
   resource: Resource;
@@ -203,6 +209,37 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
               </div>
             )}
           </Show>
+        </Show>
+      </div>
+
+      <div
+        class={drawer.activeTab() === 'manage' ? '' : 'hidden'}
+        style={{ 'overflow-anchor': 'none' }}
+      >
+        <Show when={drawer.activeTab() === 'manage'}>
+          <div class="space-y-3" data-testid="resource-manage-tab">
+            <ResourceOperatorStateSection
+              resourceId={props.resource.id}
+              resourceType={props.resource.type}
+              platformType={props.resource.platformType}
+              capabilities={props.resource.capabilities}
+            />
+            <Show when={drawer.hasAccessContext()}>
+              <ResourceAccessDisclosure resource={props.resource} drawer={drawer} />
+            </Show>
+            <Show when={presentation() !== 'table-row'}>
+              <MaintenanceVerificationSection resourceId={props.resource.id} />
+            </Show>
+            <Show when={drawer.actionAuditAvailable()}>
+              <ResourceActionHistory
+                audits={drawer.sortedActionAudits()}
+                count={drawer.actionAuditCount()}
+                loadingLabel={drawer.actionAuditLoadingLabel()}
+                error={drawer.actionAuditError()}
+                onRetry={drawer.refetchActionAudits}
+              />
+            </Show>
+          </div>
         </Show>
       </div>
 

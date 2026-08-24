@@ -103,6 +103,30 @@ describe('hostOverrideIdCandidates', () => {
       ),
     ).toEqual(['same']);
   });
+
+  it('retains provider and canonical identities used by active host alerts', () => {
+    expect(
+      hostOverrideIdCandidates(
+        makeResource({
+          id: 'canonical-host',
+          proxmox: { sourceId: 'provider-host' },
+          metricsTarget: { resourceType: 'agent', resourceId: 'metrics-host' },
+          canonicalIdentity: {
+            primaryId: 'node:provider-host',
+            aliases: ['host-alias'],
+            supersededIds: ['old-host-id'],
+          },
+        }),
+      ),
+    ).toEqual([
+      'provider-host',
+      'metrics-host',
+      'node:provider-host',
+      'host-alias',
+      'old-host-id',
+      'canonical-host',
+    ]);
+  });
 });
 
 // ---------------------------------------------------------------------------

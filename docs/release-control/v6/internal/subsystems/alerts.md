@@ -1744,6 +1744,19 @@ and `pulse-no-alerts` bulk rules remain compatible inputs and do not create a
 second per-resource state store. `internal/alerts/intent_policy_test.go` pins
 factory operator-state evaluation, writer gating, and active reconciliation.
 
+### Object drawers expose the active problem across identity aliases
+
+An object drawer with active alerts must show the exact problem in its default
+Overview, not only an alert accent or aggregate status already present in the
+table row. Frontend matching accepts a bounded ordered set containing the
+canonical resource id and provider-authored, metrics-target, alias, and
+superseded identities. The same candidate set drives row alert decoration and
+drawer message selection so opening a highlighted object cannot lose the alert
+because the provider stream and unified-resource projection use different
+keys. This is a read-only projection of the existing active-alert map; it does
+not create alert truth, change acknowledgement, or add a detector or delivery
+path.
+
 ### Large alert collections stay continuously scrollable
 
 Resource alert tables, active-alert lists, incident timelines, and resolved

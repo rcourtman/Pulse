@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   getWorkloadsGuestBackupStatusPresentation,
   getWorkloadsGuestBackupTooltip,
+  getWorkloadsGuestProtectionPresentation,
   getWorkloadGuestDiskStatusMessage,
   getWorkloadsGuestNetworkEmptyState,
 } from '@/utils/workloadGuestPresentation';
@@ -28,6 +29,23 @@ describe('workloadGuestPresentation', () => {
   it('returns canonical guest backup tooltip copy', () => {
     expect(getWorkloadsGuestBackupTooltip('never')).toBe('No backup found');
     expect(getWorkloadsGuestBackupTooltip('stale', '3d')).toBe('Last backup: 3d');
+  });
+
+  it('returns canonical compact protection context for object drawers', () => {
+    expect(getWorkloadsGuestProtectionPresentation({ backupInProgress: true })).toEqual({
+      label: 'Backup running',
+      tone: 'success',
+    });
+    expect(getWorkloadsGuestProtectionPresentation({})).toEqual({
+      label: 'No backup found',
+      tone: 'danger',
+    });
+    expect(
+      getWorkloadsGuestProtectionPresentation({
+        ageLabel: '3d ago',
+        ageClass: 'text-yellow-600',
+      }),
+    ).toEqual({ label: '3d ago', tone: 'warning' });
   });
 
   it('presents a running backup as its own state, keeping the completed age', () => {

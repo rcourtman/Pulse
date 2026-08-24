@@ -8471,4 +8471,59 @@ describe('shared primitive guardrails', () => {
     expect(filterToolbarSource).toContain('min-h-11');
     expect(inlineDetailTableRowSource).toContain('max-w-[calc(100vw-3.5rem)]');
   });
+
+  it('keeps object drawers operator-first across platform implementations', () => {
+    const overviewConsumers = [
+      'src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx',
+      'src/components/Workloads/GuestDrawerOverview.tsx',
+      'src/components/Workloads/NodeDrawerOverview.tsx',
+      'src/features/docker/DockerHostDrawerOverview.tsx',
+    ];
+    const manageConsumers = [
+      'src/components/Infrastructure/ResourceDetailDrawer.tsx',
+      'src/components/Workloads/GuestDrawer.tsx',
+      'src/components/Workloads/NodeDrawer.tsx',
+      'src/features/docker/DockerHostDrawer.tsx',
+    ];
+    const manageContentOwners = [
+      'src/components/Infrastructure/ResourceDetailDrawer.tsx',
+      'src/components/Workloads/GuestDrawerManage.tsx',
+      'src/components/Workloads/NodeDrawer.tsx',
+      'src/features/docker/DockerHostDrawer.tsx',
+    ];
+
+    for (const consumerPath of overviewConsumers) {
+      const source = readFrontendSource(consumerPath);
+      expect(source).toContain('DrawerAttentionSection');
+      expect(source).toContain('TechnicalDetailsDisclosure');
+      expect(source).not.toContain('ResourceOperatorStateSection');
+    }
+
+    for (const consumerPath of manageConsumers) {
+      const source = readFrontendSource(consumerPath);
+      expect(source).toContain("'manage'");
+    }
+
+    for (const ownerPath of manageContentOwners) {
+      const source = readFrontendSource(ownerPath);
+      expect(source).toContain('ResourceOperatorStateSection');
+    }
+
+    const disclosureSource = readFrontendSource(
+      'src/components/shared/TechnicalDetailsDisclosure.tsx',
+    );
+    expect(disclosureSource).toContain('onToggle');
+    expect(disclosureSource).toContain('<Show when={expanded()}>');
+
+    const registry = JSON.parse(readFrontendSource('scripts/shared-template-registry.json')) as {
+      rules?: Array<{ id: string; requiredConsumers?: Array<{ path: string }> }>;
+    };
+    for (const ruleId of [
+      'operator-first-drawer-attention',
+      'operator-first-technical-disclosure',
+    ]) {
+      const rule = registry.rules?.find((candidate) => candidate.id === ruleId);
+      expect(rule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual(overviewConsumers);
+    }
+  });
 });

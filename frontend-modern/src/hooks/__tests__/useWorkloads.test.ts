@@ -239,7 +239,17 @@ describe('useWorkloads', () => {
         platformType: 'proxmox-pve',
         sources: ['proxmox'],
         identity: { hostname: 'vm-101', ips: ['192.0.2.101'] },
-        proxmox: { vmid: 101, nodeName: 'pve1', instance: 'cluster-a' },
+        metricsTarget: { resourceId: 'cluster-a-pve1-101' },
+        canonicalIdentity: {
+          primaryId: 'vm:cluster-a-pve1-101',
+          aliases: ['legacy-vm-101'],
+        },
+        proxmox: {
+          sourceId: 'cluster-a-pve1-101',
+          vmid: 101,
+          nodeName: 'pve1',
+          instance: 'cluster-a',
+        },
         cpu: { current: 25 },
         memory: { current: 50, used: 2 * 1024, total: 4 * 1024 },
         disk: { current: 20, used: 20 * 1024, total: 100 * 1024 },
@@ -260,7 +270,18 @@ describe('useWorkloads', () => {
 
     await flushAsync();
     expect(apiFetchJSONMock).not.toHaveBeenCalled();
-    expect(result!.workloads()).toMatchObject([{ name: 'vm-101', vmid: 101, node: 'pve1' }]);
+    expect(result!.workloads()).toMatchObject([
+      {
+        name: 'vm-101',
+        vmid: 101,
+        node: 'pve1',
+        alertResourceIds: expect.arrayContaining([
+          'cluster-a-pve1-101',
+          'vm:cluster-a-pve1-101',
+          'legacy-vm-101',
+        ]),
+      },
+    ]);
 
     await result!.refetch();
     expect(refetchSnapshot).toHaveBeenCalledTimes(1);

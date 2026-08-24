@@ -10,6 +10,15 @@ import dockerHostsTableSource from '../DockerHostsTable.tsx?raw';
 const formatThresholds = (thresholds?: MetricDisplayThresholds | null): string =>
   thresholds ? `${thresholds.warning}/${thresholds.critical}` : '';
 
+const expandTechnicalDetails = (drawer: HTMLElement): void => {
+  const details = within(drawer).getByText('Technical details').closest('details');
+  if (!(details instanceof HTMLDetailsElement)) {
+    throw new Error('Expected Docker technical details disclosure');
+  }
+  details.open = true;
+  fireEvent(details, new Event('toggle'));
+};
+
 // Row bars must color from the alert-configured thresholds, not the
 // hardcoded METRIC_THRESHOLDS display defaults (memory 75/85), so a host
 // with a raised memory override stops showing red below its alert point.
@@ -256,8 +265,9 @@ describe('DockerHostsTable', () => {
     fireEvent.click(screen.getByText('docker-01').closest('tr')!);
 
     const drawer = screen.getByTestId('docker-host-drawer');
+    fireEvent.click(within(drawer).getByRole('tab', { name: 'Manage' }));
     expect(within(drawer).getByText('Access')).toBeInTheDocument();
-    const input = within(drawer).getByRole('textbox');
+    const input = within(drawer).getByPlaceholderText('https://198.51.100.100:8080');
     fireEvent.input(input, { target: { value: 'https://portainer.example:9443' } });
     fireEvent.click(within(drawer).getByRole('button', { name: 'Save' }));
 
@@ -346,6 +356,7 @@ describe('DockerHostsTable', () => {
     fireEvent.click(screen.getByText('docker-01').closest('tr')!);
 
     const drawer = screen.getByTestId('docker-host-drawer');
+    expandTechnicalDetails(drawer);
     expect(within(drawer).getByText('76°C')).toHaveClass('text-green-600');
   });
 
@@ -370,9 +381,11 @@ describe('DockerHostsTable', () => {
     ));
 
     fireEvent.click(screen.getByText('docker-01').closest('tr')!);
+    const drawer = screen.getByTestId('docker-host-drawer');
+    fireEvent.click(within(drawer).getByRole('tab', { name: 'Manage' }));
 
-    expect(screen.getByRole('button', { name: 'Check updates' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Update all (3)' })).toBeInTheDocument();
+    expect(within(drawer).getByRole('button', { name: 'Check updates' })).toBeInTheDocument();
+    expect(within(drawer).getByRole('button', { name: 'Update all (3)' })).toBeInTheDocument();
   });
 
   it('identifies the host system separately from the container runtime', () => {
@@ -520,6 +533,7 @@ describe('DockerHostsTable', () => {
 
     fireEvent.click(screen.getByText('docker-01').closest('tr')!);
     const drawer = screen.getByTestId('docker-host-drawer');
+    expandTechnicalDetails(drawer);
     expect(within(drawer).getByText('Unavailable')).toBeInTheDocument();
     expect(within(drawer).getByText('7.81 KB')).toBeInTheDocument();
   });

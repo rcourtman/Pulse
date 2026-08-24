@@ -6,8 +6,6 @@ import { GUEST_DRAWER_HISTORY_DEFAULT_RANGE } from '@/components/Workloads/guest
 import { aiChatStore } from '@/stores/aiChat';
 import { notificationStore } from '@/stores/notifications';
 import { createLocalStorageBooleanSignal, STORAGE_KEYS } from '@/utils/localStorage';
-import { hasKubernetesDetailSections } from './resourceDetailDrawerKubernetesModel';
-import { isPulseAgentPlatformResource } from '@/utils/agentResources';
 import { copyToClipboard } from '@/utils/clipboard';
 import { formatAgentResourceContextForClipboard } from '@/utils/agentContextPresentation';
 import { useResourceDetailDrawerDockerActionsState } from './useResourceDetailDrawerDockerActionsState';
@@ -17,7 +15,15 @@ import { buildResourceAssistantContext } from '@/utils/resourceAssistantContextM
 import type { ResourceDetailDrawerPresentation } from './resourceDetailDrawerPresentation';
 
 type DrawerTab =
-  'overview' | 'history' | 'discovery' | 'mail' | 'namespaces' | 'deployments' | 'swarm' | 'debug';
+  | 'overview'
+  | 'history'
+  | 'manage'
+  | 'discovery'
+  | 'mail'
+  | 'namespaces'
+  | 'deployments'
+  | 'swarm'
+  | 'debug';
 
 export interface UseResourceDetailDrawerStateOptions {
   resource: Resource;
@@ -46,17 +52,14 @@ export const useResourceDetailDrawerState = (options: UseResourceDetailDrawerSta
   const [showInvestigationContext, setShowInvestigationContext] = createSignal(false);
   const [showDiscoveryContext, setShowDiscoveryContext] = createSignal(false);
   const [showHostDetails, setShowHostDetails] = createSignal(
-    options.initialShowHostDetails ??
-      (options.presentation === 'table-row' && isPulseAgentPlatformResource(resource)),
+    options.initialShowHostDetails === true,
   );
   const [showServiceDetails, setShowServiceDetails] = createSignal(false);
   const [showVMwareDetails, setShowVMwareDetails] = createSignal(false);
   const [showTrueNASDetails, setShowTrueNASDetails] = createSignal(
     options.initialShowTrueNASDetails === true,
   );
-  const [showKubernetesDetails, setShowKubernetesDetails] = createSignal(
-    hasKubernetesDetailSections(resource),
-  );
+  const [showKubernetesDetails, setShowKubernetesDetails] = createSignal(false);
   const [showPbsJobDetail, setShowPbsJobDetail] = createSignal(false);
   const [showPmgMailFlowDetail, setShowPmgMailFlowDetail] = createSignal(false);
   const [k8sDeploymentsPrefillNamespace, setK8sDeploymentsPrefillNamespace] = createSignal('');

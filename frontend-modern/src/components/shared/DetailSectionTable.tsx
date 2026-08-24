@@ -54,7 +54,15 @@ export const DetailSectionTable: Component<{
                       )}`}
                       title={row.title ?? row.value}
                     >
-                      <span class="block truncate">{row.value}</span>
+                      <span
+                        class={
+                          row.wrap
+                            ? 'block whitespace-normal break-words text-left leading-snug'
+                            : 'block truncate'
+                        }
+                      >
+                        {row.value}
+                      </span>
                     </TableCell>
                   </TableRow>
                 )}

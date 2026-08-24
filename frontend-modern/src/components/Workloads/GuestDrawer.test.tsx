@@ -1,5 +1,12 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
-import { render, screen, fireEvent, cleanup, waitFor, within } from '@solidjs/testing-library';
+import {
+  render as solidRender,
+  screen,
+  fireEvent,
+  cleanup,
+  waitFor,
+  within,
+} from '@solidjs/testing-library';
 import { Suspense } from 'solid-js';
 import type { WorkloadGuest } from '@/types/workloads';
 import type { Memory, Disk, GuestNetworkInterface } from '@/types/api';
@@ -8,6 +15,7 @@ import { aiChatStore } from '@/stores/aiChat';
 import { getCanonicalWorkloadId, getWorkloadMetadataId } from '@/utils/workloads';
 import { getDiscoveryProvenanceTitle } from '@/utils/discoveryPresentation';
 import guestDrawerSource from './GuestDrawer.tsx?raw';
+import guestDrawerManageSource from './GuestDrawerManage.tsx?raw';
 import guestDrawerOverviewSource from './GuestDrawerOverview.tsx?raw';
 
 // ── Mocks ──────────────────────────────────────────────────────────────
@@ -114,6 +122,20 @@ vi.mock('@/components/shared/WebInterfaceUrlField', () => ({
 // After mocks, import the component under test
 import { GuestDrawer } from './GuestDrawer';
 
+const render = (...args: Parameters<typeof solidRender>): ReturnType<typeof solidRender> => {
+  const result = solidRender(...args);
+  const details = result.container.querySelector<HTMLDetailsElement>(
+    '[data-testid="guest-technical-details"]',
+  );
+  if (details) {
+    details.open = true;
+    fireEvent(details, new Event('toggle'));
+  }
+  const manageTab = screen.queryByRole('tab', { name: 'Manage' });
+  if (manageTab) fireEvent.click(manageTab);
+  return result;
+};
+
 // ── Helpers ────────────────────────────────────────────────────────────
 
 /** Build a minimal WorkloadGuest with required fields, overridable via partial. */
@@ -163,6 +185,8 @@ function getDiscoveryPanel(): HTMLElement {
   return panel;
 }
 
+const technicalDetails = () => within(screen.getByTestId('guest-technical-details'));
+
 const makeHistoryPoints = (base: number) => [
   { timestamp: 1, value: base, min: base, max: base },
   { timestamp: 2, value: base + 5, min: base + 5, max: base + 5 },
@@ -208,10 +232,49 @@ describe('GuestDrawer', () => {
     );
   });
 
-  it('mounts canonical resource policy only in the selected guest overview', () => {
-    expect(guestDrawerOverviewSource).toContain('<ResourceOperatorStateSection');
-    expect(guestDrawerOverviewSource).toContain('resourceId={props.guestId}');
-    expect(guestDrawerOverviewSource).toContain('platformType="proxmox"');
+  it('keeps canonical resource policy out of Overview and mounts it on demand in Manage', () => {
+    expect(guestDrawerOverviewSource).not.toContain('<ResourceOperatorStateSection');
+    expect(guestDrawerManageSource).toContain('<ResourceOperatorStateSection');
+    expect(guestDrawerSource).toContain("activeTab() === 'manage'");
+    expect(guestDrawerManageSource).toContain('data-testid="guest-manage-tab"');
+  });
+
+  it('opens with additive context and the active problem before technical inventory', () => {
+    const { container } = solidRender(() => (
+      <GuestDrawer
+        guest={makeGuest({
+          osName: 'Debian',
+          osVersion: '12',
+          ipAddresses: ['192.0.2.25'],
+        })}
+        alerts={[
+          {
+            id: 'alert-memory',
+            type: 'memory',
+            level: 'critical',
+            resourceId: 'inst1-node1-100',
+            resourceName: 'test-vm',
+            node: 'node1',
+            instance: 'inst1',
+            message: 'Memory usage has remained above 95%',
+            value: 96,
+            threshold: 95,
+            startTime: new Date().toISOString(),
+            acknowledged: false,
+          },
+        ]}
+        onClose={vi.fn()}
+      />
+    ));
+
+    expect(screen.getByText('Needs attention')).toBeInTheDocument();
+    expect(screen.getByText('Memory usage has remained above 95%')).toBeInTheDocument();
+    expect(screen.getByText(/Debian.*12/)).toBeInTheDocument();
+    expect(screen.getByText('192.0.2.25')).toBeInTheDocument();
+    expect(container.querySelector('[data-testid="guest-technical-details"]')).not.toHaveAttribute(
+      'open',
+    );
+    expect(screen.queryByTestId('guest-manage-tab')).not.toBeInTheDocument();
   });
 
   describe('Assistant context actions', () => {
@@ -341,7 +404,7 @@ describe('GuestDrawer', () => {
     });
 
     it('starts on the Overview tab (discovery content hidden)', () => {
-      const { container } = render(() => (
+      const { container } = solidRender(() => (
         <GuestDrawer guest={makeGuestWithDiscoveryTarget()} onClose={vi.fn()} />
       ));
       const panels = container.querySelectorAll('[style*="overflow-anchor"]');
@@ -645,7 +708,7 @@ describe('GuestDrawer', () => {
         <GuestDrawer guest={makeGuest({ agentVersion: '5.2.0', type: 'qemu' })} onClose={vi.fn()} />
       ));
       expect(screen.getByText('Guest agent')).toBeInTheDocument();
-      expect(screen.getByText('QEMU 5.2.0')).toBeInTheDocument();
+      expect(technicalDetails().getByText('QEMU 5.2.0')).toBeInTheDocument();
     });
 
     it('identifies an API-mapped in-guest Pulse Agent without calling it QEMU', () => {
@@ -657,7 +720,10 @@ describe('GuestDrawer', () => {
       ));
 
       expect(screen.getByText('Pulse Agent')).toBeInTheDocument();
-      expect(screen.getByText('Pulse 6.2.0')).toHaveAttribute('title', 'Pulse Agent 6.2.0');
+      expect(technicalDetails().getByText('Pulse 6.2.0')).toHaveAttribute(
+        'title',
+        'Pulse Agent 6.2.0',
+      );
       expect(screen.queryByText(/QEMU/)).toBeNull();
     });
 
@@ -666,7 +732,7 @@ describe('GuestDrawer', () => {
         <GuestDrawer guest={makeGuest({ agentVersion: '1.0.0', type: 'lxc' })} onClose={vi.fn()} />
       ));
       expect(screen.getByText('Guest agent')).toBeInTheDocument();
-      expect(screen.getByText('1.0.0')).toBeInTheDocument();
+      expect(technicalDetails().getByText('1.0.0')).toBeInTheDocument();
     });
 
     it('surfaces the install path when a running VM has no Pulse agent', () => {
@@ -699,7 +765,7 @@ describe('GuestDrawer', () => {
       ));
 
       expect(screen.getByText('Actions')).toBeInTheDocument();
-      expect(screen.getByText('Node agent connected')).toHaveAttribute(
+      expect(technicalDetails().getByText('Node agent connected')).toHaveAttribute(
         'title',
         'Discovery and governed actions use the Pulse Agent connected to delly.',
       );
@@ -755,7 +821,7 @@ describe('GuestDrawer', () => {
           onClose={vi.fn()}
         />
       ));
-      expect(screen.getByText('Debian')).toBeInTheDocument();
+      expect(technicalDetails().getByText('Debian')).toBeInTheDocument();
     });
 
     it('shows OS version only when name is missing', () => {
@@ -766,7 +832,7 @@ describe('GuestDrawer', () => {
         />
       ));
       expect(screen.getByText('Guest Info')).toBeInTheDocument();
-      expect(screen.getByText('11.0')).toBeInTheDocument();
+      expect(technicalDetails().getByText('11.0')).toBeInTheDocument();
     });
 
     it('shows IP addresses', () => {
@@ -776,7 +842,7 @@ describe('GuestDrawer', () => {
           onClose={vi.fn()}
         />
       ));
-      expect(screen.getByText('192.168.1.10')).toBeInTheDocument();
+      expect(technicalDetails().getByText('192.168.1.10')).toBeInTheDocument();
       expect(screen.getByText('10.0.0.5')).toBeInTheDocument();
     });
 
@@ -861,13 +927,13 @@ describe('GuestDrawer', () => {
       const now = new Date('2026-03-02T10:00:00Z').getTime();
       render(() => <GuestDrawer guest={makeGuest({ lastBackup: now })} onClose={vi.fn()} />);
       expect(screen.getByText('Backup')).toBeInTheDocument();
-      expect(screen.getByText('Today')).toBeInTheDocument();
+      expect(technicalDetails().getByText('Today')).toBeInTheDocument();
     });
 
     it('shows "Yesterday" for a 1-day-old backup', () => {
       const yesterday = new Date('2026-03-01T12:00:00Z').getTime();
       render(() => <GuestDrawer guest={makeGuest({ lastBackup: yesterday })} onClose={vi.fn()} />);
-      expect(screen.getByText('Yesterday')).toBeInTheDocument();
+      expect(technicalDetails().getByText('Yesterday')).toBeInTheDocument();
     });
 
     it('shows "Xd ago" for older backups', () => {
@@ -875,14 +941,14 @@ describe('GuestDrawer', () => {
       render(() => (
         <GuestDrawer guest={makeGuest({ lastBackup: fiveDaysAgo })} onClose={vi.fn()} />
       ));
-      expect(screen.getByText('5d ago')).toBeInTheDocument();
+      expect(technicalDetails().getByText('5d ago')).toBeInTheDocument();
     });
 
     it('applies the caution color for an aging backup', () => {
       const tenDaysAgo = new Date('2026-02-20T12:00:00Z').getTime();
       render(() => <GuestDrawer guest={makeGuest({ lastBackup: tenDaysAgo })} onClose={vi.fn()} />);
-      expect(screen.getByText('10d ago')).toBeInTheDocument();
-      const ageEl = screen.getByText('10d ago');
+      expect(technicalDetails().getByText('10d ago')).toBeInTheDocument();
+      const ageEl = technicalDetails().getByText('10d ago');
       expect(ageEl.className).toContain('yellow');
     });
 
@@ -891,8 +957,8 @@ describe('GuestDrawer', () => {
       render(() => (
         <GuestDrawer guest={makeGuest({ lastBackup: fortyDaysAgo })} onClose={vi.fn()} />
       ));
-      expect(screen.getByText('40d ago')).toBeInTheDocument();
-      const ageEl = screen.getByText('40d ago');
+      expect(technicalDetails().getByText('40d ago')).toBeInTheDocument();
+      const ageEl = technicalDetails().getByText('40d ago');
       expect(ageEl.className).toContain('yellow');
       expect(ageEl.className).not.toContain('red');
     });
@@ -900,7 +966,7 @@ describe('GuestDrawer', () => {
     it('applies green color for recent backups', () => {
       const now = new Date('2026-03-02T10:00:00Z').getTime();
       render(() => <GuestDrawer guest={makeGuest({ lastBackup: now })} onClose={vi.fn()} />);
-      const ageEl = screen.getByText('Today');
+      const ageEl = technicalDetails().getByText('Today');
       expect(ageEl.className).toContain('green');
     });
 

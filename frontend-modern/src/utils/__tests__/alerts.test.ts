@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getAlertStyles } from '@/utils/alerts';
+import { getAlertsForResource, getAlertStyles } from '@/utils/alerts';
 import type { Alert } from '@/types/api';
 
 describe('getAlertStyles', () => {
@@ -85,6 +85,16 @@ describe('getAlertStyles', () => {
     });
   });
 
+  it('matches alert styles through any canonical resource identity candidate', () => {
+    const alerts = createActiveAlerts(
+      createAlert({ resourceId: 'provider-source-id', level: 'critical' }),
+    );
+
+    expect(getAlertStyles(['canonical-id', 'provider-source-id'], alerts, true).severity).toBe(
+      'critical',
+    );
+  });
+
   describe('alert counts', () => {
     it('counts multiple alerts for same resource', () => {
       const alerts = createActiveAlerts(
@@ -161,6 +171,21 @@ describe('getAlertStyles', () => {
 
       expect(result.alertCount).toBe(1);
       expect(result.severity).toBe('critical');
+    });
+
+    it('returns the matching alert records for canonical drawer presentation', () => {
+      const alerts = createActiveAlerts(
+        createAlert({ id: 'canonical', resourceId: 'resource-1', message: 'CPU is hot' }),
+        createAlert({ id: 'legacy', resourceId: 'legacy-resource', message: 'Disk is full' }),
+        createAlert({ id: 'other', resourceId: 'resource-2' }),
+      );
+
+      expect(
+        getAlertsForResource(['resource-1', 'legacy-resource'], alerts, true).map(
+          (alert) => alert.message,
+        ),
+      ).toEqual(['CPU is hot', 'Disk is full']);
+      expect(getAlertsForResource(['resource-1'], alerts, false)).toEqual([]);
     });
 
     it('returns empty styles when no alerts for resource', () => {

@@ -17,7 +17,8 @@ import { createSummaryInteractiveRowPreviewHandlers } from '@/components/shared/
 import { buildSummaryDisclosureControlsId } from '@/components/shared/summaryInteractionA11y';
 import { TableBody, TableCell, TableRow } from '@/components/shared/Table';
 import type { Node } from '@/types/api';
-import { getAlertStyles } from '@/utils/alerts';
+import { getAlertsForResource, getAlertStyles } from '@/utils/alerts';
+import { guestOverrideIdCandidates } from '@/features/alerts/guestOverrideIdentity';
 import { formatSpeed, formatUptime } from '@/utils/format';
 import { isNodeOnline } from '@/utils/status';
 import { formatTemperature, getCpuTemperature, getTemperatureTextClass } from '@/utils/temperature';
@@ -522,6 +523,12 @@ export function WorkloadPanel(props: WorkloadPanelProps) {
                     <NodeDrawer
                       node={node()!}
                       temperatureThresholds={props.getNodeTemperatureThresholds(node()!)}
+                      alerts={getAlertsForResource(
+                        [node()!.id],
+                        props.activeAlerts,
+                        props.alertsEnabled(),
+                        node()!.name,
+                      )}
                     />
                   </InlineDetailTableRow>
                 </Show>
@@ -558,7 +565,7 @@ export function WorkloadPanel(props: WorkloadPanelProps) {
                       <GuestRow
                         guest={guest()}
                         alertStyles={getAlertStyles(
-                          guestId(),
+                          [guestId(), ...(guest().alertResourceIds ?? [])],
                           props.activeAlerts,
                           props.alertsEnabled(),
                         )}
@@ -605,6 +612,15 @@ export function WorkloadPanel(props: WorkloadPanelProps) {
                             nestedWorkloadContext={nestedWorkloadContext()}
                             onCustomUrlChange={props.handleCustomUrlUpdate}
                             parentNodeOnline={parentNodeOnline()}
+                            alerts={getAlertsForResource(
+                              [
+                                guestId(),
+                                ...(guest().alertResourceIds ?? []),
+                                ...guestOverrideIdCandidates(guest()),
+                              ],
+                              props.activeAlerts,
+                              props.alertsEnabled(),
+                            )}
                           />
                         </InlineDetailTableRow>
                       </Show>

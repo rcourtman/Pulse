@@ -167,6 +167,11 @@ export const hostOverrideIdCandidates = (resource: Resource): string[] => {
     resource.agent?.agentId,
     agent?.agentId,
     data?.agentId,
+    resource.proxmox?.sourceId,
+    resource.metricsTarget?.resourceId,
+    resource.canonicalIdentity?.primaryId,
+    ...(resource.canonicalIdentity?.aliases ?? []),
+    ...(resource.canonicalIdentity?.supersededIds ?? []),
     resource.id,
   );
 };

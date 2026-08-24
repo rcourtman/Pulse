@@ -11,6 +11,11 @@ export interface WorkloadsGuestBackupStatusPresentation {
   icon: 'check' | 'warning' | 'x' | 'running';
 }
 
+export interface WorkloadsGuestProtectionPresentation {
+  label: string;
+  tone: 'success' | 'warning' | 'danger';
+}
+
 const BACKUP_STATUS_PRESENTATION: Record<
   WorkloadsGuestBackupDisplayStatus,
   WorkloadsGuestBackupStatusPresentation
@@ -62,6 +67,27 @@ export function getWorkloadsGuestBackupTooltip(
     return 'No backup found';
   }
   return base;
+}
+
+export function getWorkloadsGuestProtectionPresentation(options: {
+  backupInProgress?: boolean;
+  ageLabel?: string | null;
+  ageClass?: string | null;
+}): WorkloadsGuestProtectionPresentation {
+  if (options.backupInProgress) {
+    return { label: 'Backup running', tone: 'success' };
+  }
+  if (!options.ageLabel) {
+    return { label: 'No backup found', tone: 'danger' };
+  }
+  return {
+    label: options.ageLabel,
+    tone: options.ageClass?.includes('green')
+      ? 'success'
+      : options.ageClass?.includes('red')
+        ? 'danger'
+        : 'warning',
+  };
 }
 
 export function getWorkloadsGuestNetworkEmptyState(): string {

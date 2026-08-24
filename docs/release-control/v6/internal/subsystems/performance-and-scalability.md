@@ -1357,6 +1357,15 @@ The Proxmox node drawer overview should follow the existing guest drawer
 compact detail-card pattern and expose node-specific context such as platform,
 kernel, hardware, raw capacity, telemetry, and thermal facts rather than
 repeating the metric cells already visible in the grouped table row.
+Object drawers across workload, node, Docker, and unified-resource surfaces
+must keep their default render bounded to active attention plus a small
+additive context projection. Full inventory and provider-specific support
+tables remain lazy behind collapsed technical disclosures, while operator
+policy, update actions, and saved access mount only after the Manage tab is
+selected. Alert lookup may consume the already-loaded active-alert map through
+the resource's bounded canonical/provider identity candidate list; it must not
+add a per-drawer fetch, rescan the workload inventory, or eagerly mount hidden
+technical sections.
 
 The investigation enrichment path in `MaybeInvestigateFinding`
 adds at most one operator-state projection lookup per investigation

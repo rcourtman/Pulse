@@ -27,15 +27,17 @@ export const ResourceDetailDrawerSupportDisclosure: Component<
   return (
     <div
       data-testid={props.dataTestId}
-      class={props.class ?? 'rounded border border-dashed border-border bg-surface-hover p-3'}
+      class={`rounded border border-border bg-surface px-2 py-1.5 ${props.class ?? ''}`}
     >
-      <div class="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <div class="text-[11px] font-medium uppercase tracking-wide text-base-content">
+      <div class="flex min-w-0 items-center justify-between gap-2">
+        <div class="flex min-w-0 flex-1 items-baseline gap-2">
+          <div class="shrink-0 text-[11px] font-medium uppercase tracking-wide text-base-content">
             {props.title}
           </div>
           <Show when={summary()}>
-            <div class="mt-1 text-[10px] text-base-content">{summary()}</div>
+            <div class="truncate text-[10px] text-muted" title={summary()}>
+              {summary()}
+            </div>
           </Show>
         </div>
 

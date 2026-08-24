@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, waitFor, within } from '@solidjs/testing-library';
+import { fireEvent, render as solidRender, waitFor, within } from '@solidjs/testing-library';
 
 import type { Resource } from '@/types/resource';
 import { aiChatStore } from '@/stores/aiChat';
@@ -7,6 +7,25 @@ import {
   ResourceDetailDrawer,
   getSpecializedTabAvailabilityMessage,
 } from '@/components/Infrastructure/ResourceDetailDrawer';
+
+const render = (...args: Parameters<typeof solidRender>): ReturnType<typeof solidRender> => {
+  const result = solidRender(...args);
+  const details = result.container.querySelector<HTMLDetailsElement>(
+    '[data-testid="resource-technical-details"]',
+  );
+  if (details) {
+    details.open = true;
+    fireEvent(details, new Event('toggle'));
+  }
+  const platformDetails = result.container.querySelector<HTMLDetailsElement>(
+    '[data-testid="resource-platform-details"]',
+  );
+  if (platformDetails) {
+    platformDetails.open = true;
+    fireEvent(platformDetails, new Event('toggle'));
+  }
+  return result;
+};
 
 const wsState = vi.hoisted(() => ({ pmg: [] as any[] }));
 const reconnectSpy = vi.hoisted(() => vi.fn());
@@ -207,7 +226,7 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
     });
   });
 
-  it('renders a unified summary shell without repeating healthy source status', () => {
+  it('omits empty operator context without repeating healthy source status', () => {
     const resource = baseResource({
       platformData: {
         sources: ['agent', 'proxmox'],
@@ -223,15 +242,13 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
     ));
 
     expect(() => getByText('Summary')).toThrow();
-    expect(getByText('Current state')).toBeInTheDocument();
-    expect(() => getByText('Sources')).toThrow();
+    expect(() => getByText('Operator context')).toThrow();
+    expect(() => getByText('Pulse coverage')).toThrow();
     expect(queryByRole('link', { name: 'Open related workloads for host-1' })).toBeNull();
     expect(() => getByText('Mode')).toThrow();
     expect(() => getByText('Hybrid')).toThrow();
     expect(() => getByText('Platform ID')).toThrow();
-    expect(
-      getByTestId('resource-current-state-section').querySelector('.border-dashed'),
-    ).toBeNull();
+    expect(() => getByTestId('resource-current-state-section')).toThrow();
     expect(queryByRole('button', { name: 'Show details' })).toBeNull();
     expect(() => getByText('Runtime')).toThrow();
     expect(container.querySelector('.text-\\[11px\\].text-muted.truncate')).toBeNull();
@@ -251,8 +268,7 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
 
     const { getByText } = render(() => <ResourceDetailDrawer resource={resource} />);
 
-    expect(getByText('No parity')).toBeInTheDocument();
-    expect(getByText('Reason')).toBeInTheDocument();
+    expect(getByText('Needs attention')).toBeInTheDocument();
     expect(getByText('Unraid array is running without parity protection')).toBeInTheDocument();
     expect(getByText('Unraid array is running check')).toBeInTheDocument();
   });
@@ -285,6 +301,8 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
     );
 
     expect(queryByRole('button', { name: 'Analysis' })).toBeNull();
+    expect(queryByText('Access')).toBeNull();
+    fireEvent.click(getByRole('tab', { name: 'Manage' }));
     expect(getByText('Access')).toBeInTheDocument();
     expect(queryByText('Analysis')).toBeNull();
     expect(queryByText('Host analysis via host-1')).toBeNull();
@@ -373,7 +391,7 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
       Array.from(getByTestId('resource-support-sections').children).map((node) =>
         node.getAttribute('data-testid'),
       ),
-    ).toEqual(['resource-access-section', 'resource-host-details-section']);
+    ).toEqual(['resource-host-details-section']);
     expect(
       getByTestId('resource-host-details-section').querySelector('.mt-3.flex.flex-wrap'),
     ).toBeTruthy();
@@ -686,7 +704,7 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
 
     const { getByTestId, queryByText } = render(() => <ResourceDetailDrawer resource={resource} />);
 
-    expect(queryByText('Sources')).toBeNull();
+    expect(queryByText('Pulse coverage')).toBeNull();
     expect(within(getByTestId('resource-header-badges')).getByText('PMG')).toBeInTheDocument();
     expect(queryByText('Mode')).toBeNull();
     expect(queryByText('Platform ID')).toBeNull();
@@ -707,7 +725,7 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
 
     const { getByText } = render(() => <ResourceDetailDrawer resource={resource} />);
 
-    expect(getByText('Sources')).toBeInTheDocument();
+    expect(getByText('Pulse coverage')).toBeInTheDocument();
     expect(getByText('1/2 degraded')).toBeInTheDocument();
   });
 
@@ -720,9 +738,9 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
       },
     });
 
-    const { getByText, queryByText } = render(() => <ResourceDetailDrawer resource={resource} />);
+    const { queryByText } = render(() => <ResourceDetailDrawer resource={resource} />);
 
-    expect(getByText('Current state')).toBeInTheDocument();
+    expect(queryByText('Operator context')).toBeNull();
     expect(queryByText('Mode')).toBeNull();
     expect(queryByText('Unknown')).toBeNull();
   });
@@ -857,7 +875,7 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
     const inlineAliases = inlineRender.getByText('Aliases');
     expect(inlineAliases).toBeInTheDocument();
     expect(inlineAliases.closest('summary')).toBeNull();
-    expect(inlineRender.container.querySelectorAll('details')).toHaveLength(1);
+    expect(inlineRender.container.querySelectorAll('details')).toHaveLength(2);
     expect(inlineRender.getByText('agent-inline-1')).toBeInTheDocument();
     expect(inlineRender.getAllByText('inline-host.local').length).toBeGreaterThan(0);
 
@@ -887,7 +905,8 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
     const overflowRender = render(() => <ResourceDetailDrawer resource={overflowResource} />);
     const overflowAliases = overflowRender.getByText('Aliases');
     expect(overflowAliases).toBeInTheDocument();
-    expect(overflowAliases.closest('summary')).toBeTruthy();
+    expect(overflowAliases.closest('summary')).toBeNull();
+    expect(overflowRender.getByText(/^\+\d+$/)).toBeInTheDocument();
   });
 
   it('surfaces policy governance details and the safe summary', () => {
@@ -959,9 +978,11 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
       <ResourceDetailDrawer resource={resource} />
     ));
 
-    await waitFor(() => {
-      expect(getByText('Context')).toBeInTheDocument();
-    });
+    await waitFor(() => expect(getByTestId('resource-platform-details')).toBeInTheDocument());
+    const platformDetails = getByTestId('resource-platform-details') as HTMLDetailsElement;
+    platformDetails.open = true;
+    fireEvent(platformDetails, new Event('toggle'));
+    await waitFor(() => expect(getByText('Context')).toBeInTheDocument());
 
     expect(queryByText('Analysis')).toBeNull();
     fireEvent.click(getByRole('button', { name: 'Show context' }));

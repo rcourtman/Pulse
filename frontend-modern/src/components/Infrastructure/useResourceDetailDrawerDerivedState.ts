@@ -88,7 +88,15 @@ import {
 import { getResourceHealthIssuePresentation } from './resourceHealthPresentation';
 
 type DrawerTab =
-  'overview' | 'history' | 'discovery' | 'mail' | 'namespaces' | 'deployments' | 'swarm' | 'debug';
+  | 'overview'
+  | 'history'
+  | 'manage'
+  | 'discovery'
+  | 'mail'
+  | 'namespaces'
+  | 'deployments'
+  | 'swarm'
+  | 'debug';
 
 interface ResourceDrawerDiscoverySourceKey {
   type: DiscoveryResourceType;
@@ -383,6 +391,7 @@ export const useResourceDetailDrawerDerivedState = (
     const base = [
       { id: 'overview' as DrawerTab, label: 'Overview' },
       ...(hasMetricsHistory() ? [{ id: 'history' as DrawerTab, label: 'History' }] : []),
+      { id: 'manage' as DrawerTab, label: 'Manage' },
       ...(hasDiscoveryTab() ? [{ id: 'discovery' as DrawerTab, label: 'Discovery' }] : []),
       ...(resource.type === 'pmg' ? [{ id: 'mail' as DrawerTab, label: 'Mail' }] : []),
       ...(resource.type === 'k8s-cluster'

@@ -7,6 +7,7 @@ export type DetailRow = {
   value: string;
   title?: string;
   tone?: DetailValueTone;
+  wrap?: boolean;
 };
 
 export type DetailSection = {
@@ -17,7 +18,7 @@ export type DetailSection = {
 export const makeDetailRow = (
   label: string,
   value?: string | null,
-  options: Pick<DetailRow, 'title' | 'tone'> = {},
+  options: Pick<DetailRow, 'title' | 'tone' | 'wrap'> = {},
 ): DetailRow | null => {
   const trimmed = value?.trim();
   if (!trimmed || trimmed === '-') return null;

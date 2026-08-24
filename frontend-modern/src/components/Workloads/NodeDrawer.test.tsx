@@ -25,6 +25,13 @@ vi.mock('@/stores/license', () => ({
 
 import { NodeDrawer } from './NodeDrawer';
 
+const openTechnicalDetails = () => {
+  const details = screen.getByTestId('node-technical-details') as HTMLDetailsElement;
+  details.open = true;
+  fireEvent(details, new Event('toggle'));
+  return within(details);
+};
+
 const makeHistoryPoints = (base: number) => [
   { timestamp: 1, value: base, min: base, max: base },
   { timestamp: 2, value: base + 5, min: base + 5, max: base + 5 },
@@ -98,19 +105,21 @@ afterEach(() => {
 describe('NodeDrawer', () => {
   it('shows a guest-drawer style Proxmox node overview with detailed node context', () => {
     render(() => <NodeDrawer node={makeNode()} />);
+    const technical = openTechnicalDetails();
 
     expect(screen.getByText('Overview')).toBeInTheDocument();
     expect(screen.getByText('History')).toBeInTheDocument();
-    expect(screen.getByText('System')).toBeInTheDocument();
-    expect(screen.getByText('Platform')).toBeInTheDocument();
-    expect(screen.getByText('Hardware')).toBeInTheDocument();
-    expect(screen.getByText('Telemetry')).toBeInTheDocument();
-    expect(screen.getByText('Ryzen')).toBeInTheDocument();
-    expect(screen.getByText('6.8.0')).toBeInTheDocument();
-    expect(screen.getByText('8')).toBeInTheDocument();
-    expect(screen.getByText('PVE 9.1.9')).toBeInTheDocument();
-    expect(screen.getAllByText('65°C').length).toBeGreaterThan(0);
-    expect(screen.getByText('Temp monitor')).toBeInTheDocument();
+    expect(screen.getByText('Manage')).toBeInTheDocument();
+    expect(technical.getByText('System')).toBeInTheDocument();
+    expect(technical.getByText('Platform')).toBeInTheDocument();
+    expect(technical.getByText('Hardware')).toBeInTheDocument();
+    expect(technical.getByText('Telemetry')).toBeInTheDocument();
+    expect(technical.getByText('Ryzen')).toBeInTheDocument();
+    expect(technical.getByText('6.8.0')).toBeInTheDocument();
+    expect(technical.getByText('8')).toBeInTheDocument();
+    expect(screen.getAllByText('PVE 9.1.9').length).toBeGreaterThan(0);
+    expect(technical.getAllByText('65°C').length).toBeGreaterThan(0);
+    expect(technical.getByText('Temp monitor')).toBeInTheDocument();
   });
 
   it('colors overview thermal rows from configured thresholds', () => {
@@ -131,7 +140,36 @@ describe('NodeDrawer', () => {
       />
     ));
 
-    expect(screen.getAllByText('76°C')[0]).toHaveClass('text-green-600');
+    expect(openTechnicalDetails().getAllByText('76°C')[0]).toHaveClass('text-green-600');
+  });
+
+  it('puts the active alert problem before context and collapsed inventory', () => {
+    render(() => (
+      <NodeDrawer
+        node={makeNode()}
+        alerts={[
+          {
+            id: 'alert-disk',
+            type: 'disk',
+            level: 'warning',
+            resourceId: 'agent:pve-node-1',
+            resourceName: 'pve-node-1',
+            node: 'pve-node-1',
+            instance: 'homelab',
+            message: 'Root disk usage is above 85%',
+            value: 88,
+            threshold: 85,
+            startTime: new Date().toISOString(),
+            acknowledged: false,
+          },
+        ]}
+      />
+    ));
+
+    expect(screen.getByText('Needs attention')).toBeInTheDocument();
+    expect(screen.getByText('Root disk usage is above 85%')).toBeInTheDocument();
+    expect(screen.getByText('PVE 9.1.9')).toBeInTheDocument();
+    expect(screen.getByTestId('node-technical-details')).not.toHaveAttribute('open');
   });
 
   it('renders node-only thermal history without requiring a table temperature column', async () => {

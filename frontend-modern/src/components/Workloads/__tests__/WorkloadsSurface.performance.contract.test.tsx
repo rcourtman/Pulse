@@ -48,6 +48,7 @@ import metricBarSource from '../MetricBar.tsx?raw';
 import metricBarModelSource from '../metricBarModel.ts?raw';
 import metricBarStateSource from '../useMetricBarState.ts?raw';
 import guestDrawerSource from '../GuestDrawer.tsx?raw';
+import guestDrawerManageSource from '../GuestDrawerManage.tsx?raw';
 import guestDrawerHistorySource from '../GuestDrawerHistory.tsx?raw';
 import guestDrawerOverviewSource from '../GuestDrawerOverview.tsx?raw';
 import guestDrawerModelSource from '../guestDrawerModel.ts?raw';
@@ -1616,7 +1617,9 @@ describe('Workloads performance contract', () => {
       expect(guestDrawerStateSource).toContain('guestOsSummary');
       expect(guestDrawerModelSource).toContain('export const getGuestDrawerBackupPresentation');
       expect(guestDrawerModelSource).toContain('export const normalizeGuestDrawerTags');
-      expect(guestDrawerOverviewSource).toContain('WebInterfaceUrlField');
+      expect(guestDrawerOverviewSource).not.toContain('WebInterfaceUrlField');
+      expect(guestDrawerManageSource).toContain('WebInterfaceUrlField');
+      expect(guestDrawerManageSource).toContain('ResourceOperatorStateSection');
       expect(guestDrawerOverviewSource).toContain('DiskList');
       expect(guestDrawerOverviewSource).toContain('Filesystems');
       expect(guestDrawerOverviewSource).toContain('InfoCardFrame');

@@ -1,5 +1,5 @@
 import type { WorkloadGuest } from '@/types/workloads';
-import type { VM } from '@/types/api';
+import type { Alert, VM } from '@/types/api';
 import type {
   AggregatedMetricPoint,
   HistoryTimeRange,
@@ -26,9 +26,10 @@ export interface GuestDrawerProps {
   onCustomUrlChange?: (guestId: string, url: string) => void;
   parentNodeOnline?: boolean;
   nestedWorkloadContext?: NestedWorkloadContext;
+  alerts?: Alert[];
 }
 
-export type GuestDrawerTab = 'overview' | 'history' | 'discovery';
+export type GuestDrawerTab = 'overview' | 'history' | 'discovery' | 'manage';
 
 export interface GuestDrawerHistoryTarget {
   resourceType: HistoryResourceType;

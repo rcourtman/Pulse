@@ -4646,3 +4646,16 @@ to that boolean. Identity succession continues to rekey the same state row.
 `resource_operator_state_policy_test.go` pin normalization, validation,
 round-trip persistence, attention suppression, and the retired remediation
 lock.
+
+### Canonical object drawer hierarchy
+
+The unified resource drawer is the shared operator-facing detail contract for
+provider resources. Its default Overview begins with exact active-alert
+messages for every canonical, provider, alias, or superseded identity that can
+name the resource, then shows only bounded context not already present in the
+expanded table row. Raw identity/runtime fields and provider, service, or host
+support tables remain collapsed and lazy under Technical details and Platform
+details. Operator overrides, lifecycle policy, update actions, audit controls,
+and saved web access belong to Manage. Provider pages may supply typed detail
+models, but they must not create a provider-local drawer hierarchy or promote
+metadata into Overview solely because it exists.

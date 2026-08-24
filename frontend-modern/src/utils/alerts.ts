@@ -21,7 +21,7 @@ const noAlertStyles = {
 // (covers storage/topology/disk alerts that belong to a node but have a
 // different resourceId than the node itself).
 export const getAlertStyles = (
-  resourceId: string,
+  resourceId: string | string[],
   activeAlerts: Record<string, Alert>,
   alertsEnabled: boolean | undefined = isAlertsDetectionEnabled(),
   nodeMatch?: string,
@@ -30,9 +30,11 @@ export const getAlertStyles = (
     return noAlertStyles;
   }
 
-  const alertsForResource = Object.values(activeAlerts).filter(
-    (alert) =>
-      alert.resourceId === resourceId || (nodeMatch !== undefined && alert.node === nodeMatch),
+  const alertsForResource = getAlertsForResource(
+    Array.isArray(resourceId) ? resourceId : [resourceId],
+    activeAlerts,
+    alertsEnabled,
+    nodeMatch,
   );
 
   const unacknowledgedAlerts = alertsForResource.filter((alert) => !alert.acknowledged);
@@ -113,6 +115,19 @@ export const getAlertStyles = (
     hasAcknowledgedOnlyAlert: !hasUnacknowledgedAlert && acknowledgedCount > 0,
   };
 };
+
+export function getAlertsForResource(
+  resourceIds: string[],
+  activeAlerts: Record<string, Alert>,
+  alertsEnabled: boolean | undefined = isAlertsDetectionEnabled(),
+  nodeMatch?: string,
+): Alert[] {
+  if (!alertsEnabled) return [];
+  const ids = new Set(resourceIds.filter(Boolean));
+  return Object.values(activeAlerts).filter(
+    (alert) => ids.has(alert.resourceId) || (nodeMatch !== undefined && alert.node === nodeMatch),
+  );
+}
 
 // Alert types representing binary or enumerated state conditions rather
 // than a metric crossing a threshold. For these, "current value vs

@@ -71,6 +71,14 @@ type APIResource = {
   lastSeen?: string;
   sources?: string[];
   platformScopes?: string[];
+  metricsTarget?: {
+    resourceId?: string;
+  };
+  canonicalIdentity?: {
+    primaryId?: string;
+    aliases?: string[];
+    supersededIds?: string[];
+  };
   identity?: {
     machineId?: string;
     hostnames?: string[];
@@ -93,6 +101,7 @@ type APIResource = {
   node?: string;
   instance?: string;
   proxmox?: {
+    sourceId?: string;
     runtimeStatus?: string;
     nodeName?: string;
     clusterName?: string;
@@ -173,6 +182,18 @@ type APIResource = {
   availability?: ResourceAvailabilityMeta;
   availabilityChecks?: ResourceAvailabilityMeta[];
   actionReadiness?: ResourceActionReadiness[];
+};
+
+const buildAlertResourceIds = (resource: APIResource): string[] => {
+  const candidates = [
+    resource.metricsTarget?.resourceId,
+    resource.proxmox?.sourceId,
+    resource.canonicalIdentity?.primaryId,
+    ...(resource.canonicalIdentity?.aliases ?? []),
+    ...(resource.canonicalIdentity?.supersededIds ?? []),
+    resource.id,
+  ];
+  return [...new Set(candidates.map((value) => value?.trim()).filter(Boolean) as string[])];
 };
 
 type APIListResponse = {
@@ -473,6 +494,7 @@ const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
 
   return {
     id: guestId,
+    alertResourceIds: buildAlertResourceIds(resource),
     vmid: Number.isFinite(vmid) ? vmid : 0,
     name: name || resource.id,
     node,
@@ -639,6 +661,8 @@ const mapCanonicalResourceToWorkload = (resource: Resource): WorkloadGuest | nul
     lastSeen: resource.lastSeen ? new Date(resource.lastSeen).toISOString() : undefined,
     sources: resource.sources,
     platformScopes: resource.platformScopes,
+    metricsTarget: resource.metricsTarget,
+    canonicalIdentity: resource.canonicalIdentity,
     identity: resource.identity
       ? {
           machineId: resource.identity.machineId,
