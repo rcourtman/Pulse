@@ -2086,6 +2086,13 @@ def validate_candidate_lanes(
         current_lane_refs = _require_string_list(raw, "current_lane_ids", errors, context=context)
         gap_refs = _require_string_list(raw, "coverage_gap_ids", errors, context=context)
         subsystem_refs = _require_string_list(raw, "subsystem_ids", errors, context=context)
+        demand_evidence = _require_string_list(raw, "demand_evidence", errors, context=context)
+        if raw.get("demand_evidence") == []:
+            errors.append(
+                f"{context}.demand_evidence must cite at least one demand signal "
+                "(issue/discussion/support/telemetry pointer, or demand-ledger entry) "
+                "or carry a 'named-bet: <rationale>' declaration"
+            )
 
         if recorded_at:
             _validate_date(recorded_at, errors, context=f"{context}.recorded_at")
@@ -2194,6 +2201,7 @@ def validate_candidate_lanes(
                     "current_lane_ids": current_lane_refs,
                     "coverage_gap_ids": gap_refs,
                     "subsystem_ids": subsystem_refs,
+                    "demand_evidence": demand_evidence,
                     "repo_ids": sorted(repo_ids, key=_repo_sort_key),
                     "cross_repo": len(repo_ids) > 1,
                 }
@@ -3217,6 +3225,7 @@ def audit_status_payload(
                 "current_lane_ids": list(candidate["current_lane_ids"]),
                 "repo_ids": list(candidate["repo_ids"]),
                 "subsystem_ids": list(candidate["subsystem_ids"]),
+                "demand_evidence": list(candidate["demand_evidence"]),
                 "cross_repo": bool(candidate["cross_repo"]),
                 "claim_ids": sorted(
                     [
@@ -3572,6 +3581,7 @@ def render_pretty(report: dict[str, Any]) -> str:
                 f"subsystems={','.join(candidate['subsystem_ids']) or '-'}"
             )
             lines.append(f"    name={candidate['name']}")
+            lines.append(f"    demand_evidence={'; '.join(candidate['demand_evidence'])}")
             lines.append(f"    {candidate['summary']}")
     if report.get("work_claims"):
         lines.append("work_claims:")
@@ -3597,6 +3607,7 @@ def render_pretty(report: dict[str, Any]) -> str:
                 f"coverage_gaps={','.join(item['coverage_gap_ids']) or '-'}"
             )
             lines.append(f"    name={item['name']}")
+            lines.append(f"    demand_evidence={'; '.join(item['demand_evidence'])}")
             if item["claim_ids"]:
                 lines.append(
                     f"    claims={','.join(item['claim_ids'])} agents={','.join(item['claim_agent_ids'])}"

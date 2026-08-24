@@ -115,6 +115,7 @@ def candidate_lane(
     subsystem_ids: list[str] | None = None,
     status: str = "planned",
     target_id: str = "v6-product-lane-expansion",
+    demand_evidence: list[str] | None = None,
 ) -> dict[str, object]:
     return {
         "id": candidate_id,
@@ -126,6 +127,10 @@ def candidate_lane(
         "current_lane_ids": list(current_lane_ids or ["L1"]),
         "coverage_gap_ids": list(gap_ids or ["core-monitoring-product-lane"]),
         "subsystem_ids": list(subsystem_ids or []),
+        "demand_evidence": list(
+            demand_evidence
+            or ["named-bet: promote the discovered surface into a governed lane"]
+        ),
     }
 
 
@@ -1257,6 +1262,10 @@ class StatusAuditTest(unittest.TestCase):
                 pretty,
             )
             self.assertIn("name=Core monitoring runtime", pretty)
+            self.assertIn(
+                "demand_evidence=named-bet: promote the discovered surface into a governed lane",
+                pretty,
+            )
             self.assertIn("candidate_lane_queue:", pretty)
             self.assertIn(
                 "rank=1 candidate=core-monitoring-runtime impact=5 target=v6-product-lane-expansion",
@@ -1605,6 +1614,50 @@ class StatusAuditTest(unittest.TestCase):
             )
             self.assertIn(
                 "coverage_gap 'core-monitoring-product-lane' is referenced by multiple candidate_lanes",
+                report["errors"],
+            )
+
+    def test_candidate_lane_requires_demand_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pulse = Path(tmp) / "pulse"
+            pulse.mkdir()
+            write_file(pulse, "docs/lane-proof.md")
+            write_file(pulse, "docs/proof_test.go")
+            write_file(pulse, "docs/hybrid_test.go")
+            write_file(pulse, "docs/coverage-gap.md")
+
+            missing = candidate_lane()
+            del missing["demand_evidence"]
+            empty = candidate_lane(
+                candidate_id="core-monitoring-runtime-empty",
+                name="Core monitoring runtime empty",
+                gap_ids=["core-monitoring-product-lane-empty"],
+            )
+            empty["demand_evidence"] = []
+
+            payload = base_payload(
+                coverage_gaps=[
+                    coverage_gap(status="planned"),
+                    coverage_gap(gap_id="core-monitoring-product-lane-empty", status="planned"),
+                ],
+                candidate_lanes=[missing, empty],
+            )
+
+            with mock.patch.dict(os.environ, {"PULSE_REPO_ROOT_PULSE": str(pulse)}, clear=False), mock.patch(
+                "status_audit.load_subsystem_rules",
+                return_value=[],
+            ):
+                report = audit_status_payload(payload)
+
+            self.assertIn(
+                "candidate_lanes[0] missing list demand_evidence",
+                report["errors"],
+            )
+            self.assertTrue(
+                any(
+                    error.startswith("candidate_lanes[1].demand_evidence must cite at least one demand signal")
+                    for error in report["errors"]
+                ),
                 report["errors"],
             )
 

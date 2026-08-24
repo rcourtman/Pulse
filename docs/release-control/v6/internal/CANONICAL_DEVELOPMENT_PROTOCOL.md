@@ -355,6 +355,13 @@ Every substantial task must finish by checking these questions:
    When the intended destination is already clear, also add or update the
    matching `candidate_lanes` record so the lane-expansion plan is typed,
    machine-readable, and pointed at the owning control-plane target.
+   Every `candidate_lanes` record must carry `demand_evidence`: dated
+   pointers to the demand signals that justify the lane (issue, discussion,
+   support-thread, or telemetry references, or a demand-ledger entry in
+   `pulse-pro/FEATURE_REQUESTS.md`), or an explicit `named-bet: <rationale>`
+   entry when the lane is maintainer-originated with no external signal
+   yet. `status_audit.py` rejects records without it; a named bet is
+   legitimate, an unlabelled hunch is not.
    Once a lane-shaping gap (`new-lane`, `lane-split`, or `lane-expansion`)
    has a typed `candidate_lanes` record, move that `coverage_gaps` entry to
    `planned`; do not mark such a gap `planned` before the matching
