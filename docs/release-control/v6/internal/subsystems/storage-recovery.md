@@ -445,6 +445,12 @@ node search must likewise retain the directly matching node. The table still
 receives the real already-loaded PVE node collection as its source, so the
 estate-empty `No Proxmox VE nodes` state remains reserved for genuinely absent
 node inventory, while a narrowed result uses the distinct no-match state.
+The Proxmox `Guests` title/count must remain frontend-primitives-owned chrome:
+the page supplies it through the Workloads `tableTitle` slot and the shared
+`TableCardHeader` renders it with both populated and filtered-empty guest table
+states. This heading alignment changes neither workload backup scope nor the
+storage/recovery evidence carried by the adjacent Backup column and Backups
+tab.
 Those counts and layout controls must not imply
 protection, verification, or restore readiness beyond the evidence held by the
 workflow-owned Storage, Backups, Ceph, and Mail surfaces.

@@ -532,23 +532,10 @@ function ProxmoxOverview(props: ProxmoxOverviewProps) {
       </section>
       <section
         id="proxmox-guests-section"
-        aria-labelledby="proxmox-guests-heading"
+        aria-label="Guests"
         class="space-y-3 scroll-mt-4"
         data-testid="proxmox-guests-section"
       >
-        <div class="flex items-center gap-2 px-1">
-          <h2
-            id="proxmox-guests-heading"
-            class="text-xs font-semibold uppercase tracking-wide text-muted"
-          >
-            Guests
-          </h2>
-          <Show when={showSharedFilterToolbar()}>
-            <span class="rounded bg-surface-alt px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-muted">
-              {workloadsState.allGuests().length}
-            </span>
-          </Show>
-        </div>
         <Show when={showSharedFilterToolbar()}>
           <div data-summary-clear-ignore>
             <WorkloadsFilter
@@ -607,6 +594,16 @@ function ProxmoxOverview(props: ProxmoxOverviewProps) {
           suppressFilterToolbar
           emptyStateTitle="No Proxmox workloads"
           emptyStateDescription="Proxmox VMs and LXCs appear here when inventory is available."
+          tableTitle={
+            <h2 id="proxmox-guests-heading" class="inline-flex items-center gap-1.5">
+              Guests
+              <Show when={showSharedFilterToolbar()}>
+                <span class="font-semibold tabular-nums text-base-content">
+                  {workloadsState.allGuests().length}
+                </span>
+              </Show>
+            </h2>
+          }
         />
       </section>
     </div>

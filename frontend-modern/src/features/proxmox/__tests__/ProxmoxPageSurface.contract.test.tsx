@@ -409,7 +409,9 @@ describe('ProxmoxPageSurface contract', () => {
     expect(proxmoxPageSurfaceSource).not.toContain('order-2 lg:order-1');
     expect(proxmoxPageSurfaceSource).not.toContain('order-1 space-y-3');
     expect(proxmoxPageSurfaceSource).toContain('id="proxmox-guests-section"');
-    expect(proxmoxPageSurfaceSource).toContain('>\n            Guests\n          </h2>');
+    expect(proxmoxPageSurfaceSource).toContain('tableTitle={');
+    expect(proxmoxPageSurfaceSource).toContain('id="proxmox-guests-heading"');
+    expect(proxmoxPageSurfaceSource).not.toContain('class="flex items-center gap-2 px-1"');
   });
 
   it('keeps Patrol coverage off the Proxmox overview', () => {

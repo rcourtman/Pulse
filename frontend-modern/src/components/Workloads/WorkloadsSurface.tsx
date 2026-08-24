@@ -1,11 +1,12 @@
 import ArrowUpIcon from 'lucide-solid/icons/arrow-up';
-import { For, Show, createMemo } from 'solid-js';
+import { For, Show, createMemo, type JSX } from 'solid-js';
 import { Portal } from 'solid-js/web';
 
 import { buildInfrastructureWorkspacePath } from '@/components/Settings/infrastructureWorkspaceModel';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { ActionIconButton, ButtonLink } from '@/components/shared/Button';
 import { TableCard } from '@/components/shared/TableCard';
+import { TableCardHeader } from '@/components/shared/TableCardHeader';
 import { sessionCanReadInfrastructureSettings } from '@/stores/sessionSettingsCapabilities';
 import { getWorkloadsNoInventoryState } from '@/utils/workloadEmptyStatePresentation';
 import { WorkloadsFilter } from './WorkloadsFilter';
@@ -23,6 +24,7 @@ interface WorkloadsSurfaceComponentProps extends WorkloadsSurfaceProps {
   emptyStateDescription?: string;
   emptyStateTitle?: string;
   state?: WorkloadsState;
+  tableTitle?: JSX.Element;
 }
 
 type TableOnlyEmptyState = {
@@ -229,6 +231,7 @@ export function WorkloadsSurface(props: WorkloadsSurfaceComponentProps) {
             workloadTableLayoutMode={state.workloadTableLayoutMode}
             workloadTableVisibleColumnIds={state.workloadTableVisibleColumnIds}
             workloadTableVisibleColumns={state.workloadTableVisibleColumns}
+            title={props.tableTitle}
           />
         </Show>
         <Show
@@ -239,6 +242,7 @@ export function WorkloadsSurface(props: WorkloadsSurfaceComponentProps) {
           }
         >
           <TableCard>
+            <TableCardHeader title={props.tableTitle} />
             <div class="p-6">
               <EmptyState
                 title={tableOnlyEmptyState().title}

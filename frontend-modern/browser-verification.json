@@ -1,17 +1,17 @@
 {
   "version": 1,
-  "base_sha": "d50f5c664e74e3a4d6a00abf76ef1e2c554e79a6",
-  "verified_at": "2026-08-24T10:04:07Z",
+  "base_sha": "a585eab712a7e80ef4b148c650fa5a34ff01e2c7",
+  "verified_at": "2026-08-24T10:18:41Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Workloads/GuestRow.tsx",
-    "frontend-modern/src/components/shared/SummaryRowActionButton.tsx",
-    "frontend-modern/src/features/platformPage/PlatformResourceDetailTableRow.tsx"
+    "frontend-modern/src/components/Workloads/WorkloadsSurface.tsx",
+    "frontend-modern/src/components/Workloads/WorkloadsTable.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Workloads/GuestRow.tsx": "f8927883b484789cae4ca999845a77a7409aed800656d931be621a1f4d996ca8",
-    "frontend-modern/src/components/shared/SummaryRowActionButton.tsx": "626741b5b725d19dd594a4c071888170d74b0e8352513cc2aa8557c86c986c88",
-    "frontend-modern/src/features/platformPage/PlatformResourceDetailTableRow.tsx": "7907a58eeace6c2648f1e92e63a27bfd82fe305347e0100b76b59ab0e367ce61"
+    "frontend-modern/src/components/Workloads/WorkloadsSurface.tsx": "466fe1160c58bba42fbce61e74f602a8ddc30ef463c38b0c07968881d70d8bca",
+    "frontend-modern/src/components/Workloads/WorkloadsTable.tsx": "9849f4f54fa5eab0cb5394c683cbdf72a4831672672609f2ee9a8801246f0962",
+    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx": "1e6daf19456ff79e7181e8117bbb2064feb53b852438294a58dd2fa5197b3817"
   },
   "routes": ["/proxmox"],
   "viewports": [
@@ -20,21 +20,22 @@
       "height": 844
     },
     {
-      "width": 1440,
-      "height": 900
+      "width": 1280,
+      "height": 720
     }
   ],
   "states": [
-    "managed hot-dev mock estate with the canonical Proxmox Nodes and Guests tables visible",
-    "phone Nodes and Guests tables with their collapsed rows visible",
-    "phone Nodes and Guests tables after row-owned detail expansion",
-    "desktop Nodes and Guests tables after the responsive breakpoint transition"
+    "managed hot-dev mock estate with the Proxmox Nodes and Guests sections visible",
+    "phone Guests filter controls and populated workload table",
+    "phone filtered-empty workload table state",
+    "desktop Guests filter controls and populated workload table"
   ],
   "interactions": [
-    "confirmed provider node and workload disclosure controls remain in the accessibility tree while their redundant phone chevrons are visually removed",
-    "tapped the Analytics A node row and the artifact-cache-310 guest row and confirmed both detail regions expanded",
-    "confirmed both disclosure controls become visible again at the 1440x900 desktop breakpoint",
-    "confirmed Type, ID, CPU, Mem, Disk, and Age remain separated in the compact Workloads header",
+    "confirmed Guests and its inventory count render inside the canonical grey table-card header band at 390x844",
+    "confirmed the phone table remains within the viewport without new horizontal overflow",
+    "applied a no-match search and confirmed the Guests header remains attached to the empty table card",
+    "confirmed the same table-card header treatment at 1280x720 desktop width",
+    "cleared the temporary verification search",
     "restored the browser viewport after verification"
   ]
 }

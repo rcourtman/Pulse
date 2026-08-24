@@ -2145,6 +2145,12 @@ default` instead of fusing provider and badge text such as
     immediately before the `WorkloadsSurface` it controls. It must never precede
     a provider table whose rows it does not filter; Proxmox and VMware vSphere
     use the same host-or-node, workload-controls, workload-table reading order.
+    When a platform names the embedded workload collection, that title and its
+    inventory count must enter `WorkloadsSurface` through the `tableTitle`
+    slot. `WorkloadsTable` renders the slot inside the shared
+    `TableCardHeader`, including the filtered-empty table state; platform pages
+    must not leave the same title floating above the filter card or recreate
+    table-header chrome outside the canonical Workloads frame.
     Large provider inventories use the shared `createPlatformTablePreview` and
     `PlatformTablePreviewToggle` boundary to keep the controlled workload table
     in the initial reading flow: Proxmox shows eight node rows by default on

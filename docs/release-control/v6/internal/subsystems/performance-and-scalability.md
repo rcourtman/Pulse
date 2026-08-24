@@ -861,6 +861,11 @@ change may globally weaken the Task 03 lifecycle-state idempotency invariant.
     when present, and reuse the existing viewport listener rather than adding a
     second page-local scroll observer or any per-row work.
 25. Extend workload table shell ownership through `frontend-modern/src/components/Workloads/WorkloadTableHeader.tsx` and `frontend-modern/src/components/Workloads/WorkloadPanel.tsx` rather than rebuilding sortable header markup, grouped node rows, row expansion, or guest-drawer rendering inside `frontend-modern/src/components/Workloads/WorkloadsTable.tsx`
+    Platform-owned workload titles must enter the Workloads surface through
+    its optional `tableTitle` slot and render from the shared
+    `TableCardHeader` inside both the populated and filtered-empty table card.
+    A platform page must not place a parallel floating title above its filters;
+    the title/count band belongs to the same framed table surface as the rows.
     `WorkloadPanel` owns the mutually exclusive host/guest drawer handoff:
     clicking a grouped host row while a guest drawer is open must clear the
     selected guest and keep/focus the host summary group so the node drawer can

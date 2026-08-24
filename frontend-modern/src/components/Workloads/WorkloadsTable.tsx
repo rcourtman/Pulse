@@ -1,8 +1,9 @@
-import { For } from 'solid-js';
+import { For, type JSX } from 'solid-js';
 
 import { ComponentErrorBoundary } from '@/components/ErrorBoundary';
 import { Table } from '@/components/shared/Table';
 import { TableCard } from '@/components/shared/TableCard';
+import { TableCardHeader } from '@/components/shared/TableCardHeader';
 
 import { getGuestColumnWidthStyle } from './guestRowModel';
 import type { WorkloadsState } from './useWorkloadsState';
@@ -60,7 +61,9 @@ type WorkloadsTableProps = Pick<
   | 'workloadTableLayoutMode'
   | 'workloadTableVisibleColumnIds'
   | 'workloadTableVisibleColumns'
->;
+> & {
+  title?: JSX.Element;
+};
 
 export function WorkloadsTable(props: WorkloadsTableProps) {
   return (
@@ -71,6 +74,7 @@ export function WorkloadsTable(props: WorkloadsTableProps) {
         data-summary-clear-surface
         data-testid="workloads-table-surface"
       >
+        <TableCardHeader title={props.title} />
         <Table
           wrapperRef={props.setTableWrapperRef}
           class={`platform-table workload-table table-fixed ${props.isMobile() ? `workload-table--mobile ${WORKLOAD_TABLE_MOBILE_MIN_WIDTH_CLASS}` : 'workload-table--desktop min-w-full'}`}

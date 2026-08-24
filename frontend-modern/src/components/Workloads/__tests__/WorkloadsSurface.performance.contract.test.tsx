@@ -1382,6 +1382,9 @@ describe('Workloads performance contract', () => {
       expect(workloadsWorkloadTableSource).toContain('data-summary-clear-surface');
       expect(workloadsWorkloadTableSource).toContain('data-testid="workloads-table-surface"');
       expect(workloadsWorkloadTableSource).toContain('TableCard');
+      expect(workloadsWorkloadTableSource).toContain('<TableCardHeader title={props.title} />');
+      expect(workloadsSource).toContain('<TableCardHeader title={props.tableTitle} />');
+      expect(workloadsSource).toContain('title={props.tableTitle}');
       expect(workloadsWorkloadTableSource).toContain(
         'workloadMemoryDisplayBasis={props.workloadMemoryDisplayBasis}',
       );
