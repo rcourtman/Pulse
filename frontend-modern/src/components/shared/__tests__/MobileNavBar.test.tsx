@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
 import { describe, expect, it, vi } from 'vitest';
-import { type Component } from 'solid-js';
+import { createSignal, type Component } from 'solid-js';
+import { createStableTabList, utilityNavTabEquals } from '@/components/shared/stableNavTabs';
 import mobileNavBarSource from '@/components/shared/MobileNavBar.tsx?raw';
 import mobileNavBarModelSource from '@/components/shared/mobileNavBarModel.ts?raw';
 import mobileNavBarStateSource from '@/components/shared/useMobileNavBarState.ts?raw';
@@ -288,6 +289,46 @@ describe('MobileNavBar', () => {
     expect(screen.queryByRole('button', { name: 'More navigation' })).toBeNull();
     screen.getAllByRole('button').forEach((button) => {
       expect(button).not.toHaveAttribute('aria-current');
+    });
+  });
+
+  it('keeps destination button DOM identity when tab arrays are rebuilt with equal content', async () => {
+    const buildTabs = () => [
+      makeUtility('alerts', 'Alerts', { count: 3, breakdown: { warning: 2, critical: 1 } }),
+      makeUtility('ai', 'Patrol'),
+      makeUtility('actions', 'Actions'),
+    ];
+    const [rawTabs, setRawTabs] = createSignal(buildTabs(), { equals: false });
+    const utilityTabs = createStableTabList(rawTabs, utilityNavTabEquals);
+    const { container } = render(() => (
+      <MobileNavBar
+        activeTab={() => null}
+        primaryTabs={() => [makePrimary('proxmox', 'Proxmox')]}
+        utilityTabs={() => [...utilityTabs()]}
+        onPrimaryClick={() => {}}
+        onUtilityClick={() => {}}
+      />
+    ));
+
+    const buttonsBefore = [
+      ...container.querySelectorAll<HTMLButtonElement>('[data-mobile-nav-destination]'),
+    ];
+    expect(buttonsBefore.length).toBeGreaterThan(0);
+
+    // A state frame carrying an unchanged alerts array rebuilds the tab
+    // objects; identical content must not recreate the rendered buttons.
+    setRawTabs(buildTabs());
+    await waitFor(() => {
+      const buttonsAfter = [
+        ...container.querySelectorAll<HTMLButtonElement>('[data-mobile-nav-destination]'),
+      ];
+      expect(buttonsAfter).toHaveLength(buttonsBefore.length);
+      buttonsAfter.forEach((button, index) => {
+        expect(button).toBe(buttonsBefore[index]);
+      });
+      buttonsBefore.forEach((button) => {
+        expect(button.isConnected).toBe(true);
+      });
     });
   });
 });

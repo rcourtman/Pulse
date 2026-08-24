@@ -66,6 +66,17 @@ four-row phone node preview before the guest list instead of visually moving
 the nodes after the guest list's full virtual scroll extent; revealing the full
 node estate remains an explicit table-preview action.
 
+App-shell navigation tab lists rendered through reference-keyed `<For>`
+consumers keep stable item identity across websocket state frames. AppLayout
+derives its primary and utility tab arrays through the shared
+`frontend-modern/src/components/shared/stableNavTabs.ts` reuse helper, which
+returns previous tab object references (and the previous array identity) when a
+rebuilt list is structurally unchanged, so an alerts-bearing state frame with
+unchanged badge content cannot recreate nav button DOM and drop an in-flight
+tap. New nav or tab-strip consumers that rebuild their item arrays from live
+store reads must route through the same helper instead of `<For>`-ing over
+freshly constructed objects.
+
 Estate-sized table and card rendering routes through the shared
 `PlatformWindowedRows`, `PlatformWindowedList`, and
 `usePlatformWindowedItems` primitives. They preserve the complete filtered and

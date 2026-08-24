@@ -361,6 +361,16 @@ describe('App architecture', () => {
     expect(appLayoutSource).not.toContain("id: 'recovery',");
     expect(appLayoutSource).not.toContain('aria-label="Workspaces"');
     expect(appLayoutSource).not.toContain('buildStorageRecoveryTabSpecs(');
+    // Nav tab arrays are rebuilt from live store reads (activeAlerts is
+    // replaced wholesale by state frames), so both tab lists must route
+    // through the shared identity stabilizer or every reference-keyed <For>
+    // consumer recreates all nav buttons and drops in-flight taps.
+    expect(appLayoutSource).toContain(
+      'const primaryTabs = createStableTabList(primaryTabsSource, primaryNavTabEquals);',
+    );
+    expect(appLayoutSource).toContain(
+      'const utilityTabs = createStableTabList(utilityTabsSource, utilityNavTabEquals);',
+    );
     expect(appSource).not.toContain('DashboardPage');
     expect(headerAuditSource).not.toContain("['src/pages/Dashboard.tsx', 'PageHeader']");
     expect(appSource).toContain("import RuntimeHomePage from '@/pages/RuntimeHome';");
@@ -618,14 +628,14 @@ describe('App architecture', () => {
     expect(appLayoutSource).not.toContain("label: 'Needs Attention'");
     expect(appLayoutSource).not.toContain("route: '/operations',");
     expect(appLayoutSource).not.toContain('props.connected()');
-    expect(appLayoutSource).toContain('const utilityTabs = createMemo(() =>');
+    expect(appLayoutSource).toContain('const utilityTabsSource = createMemo<UtilityTab[]>(() =>');
     expect(appLayoutSource).toContain(
       'type MobileNavBarPrimaryTab as PrimaryTab,\n  type MobileNavBarUtilityTab as UtilityTab,',
     );
     expect(appLayoutSource).toContain("const NAV_TAB_ICON_CLASS = 'w-4 h-4 shrink-0';");
     expect(appLayoutSource).toContain('function getDesktopUtilityTabAriaLabel(tab: UtilityTab)');
     expect(appLayoutSource).toContain('return `${count} ${tab.label}`;');
-    expect(appLayoutSource).toContain('const primaryTabs = createMemo<PrimaryTab[]>(() =>');
+    expect(appLayoutSource).toContain('const primaryTabsSource = createMemo<PrimaryTab[]>(() =>');
     expect(appLayoutSource).toContain("id: 'proxmox',");
     expect(appLayoutSource).toContain("icon: getPlatformIcon('proxmox'),");
     expect(appLayoutSource).toContain('const Icon = tab.icon;');

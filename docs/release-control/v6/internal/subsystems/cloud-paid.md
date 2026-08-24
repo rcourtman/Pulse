@@ -629,7 +629,12 @@ its independent operational-attention count. Action authority and result truth
 remain in the unified-resources and api-contracts projections. This
 information-architecture choice is independent of hosted entitlement, billing,
 and acquisition state. Navigation proof is owned by the App/AppLayout, routing,
-mobile navigation, and desktop Actions journey tests.
+mobile navigation, and desktop Actions journey tests. AppLayout's primary and
+utility tab arrays are identity-stabilized through the shared
+`frontend-modern/src/components/shared/stableNavTabs.ts` helper (see
+`frontend-primitives`): navigation destinations, including the Actions utility
+tab and its pending-approval badge, must not have their DOM recreated by a
+websocket state frame whose tab content is structurally unchanged.
 
 1. Add or change limits through `pkg/licensing/`
 2. Add or change hosted entitlement issuance through `internal/cloudcp/entitlements/service.go`

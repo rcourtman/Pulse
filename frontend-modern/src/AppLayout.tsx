@@ -15,6 +15,11 @@ import {
   type MobileNavBarUtilityTab as UtilityTab,
 } from '@/components/shared/MobileNavBar';
 import {
+  createStableTabList,
+  primaryNavTabEquals,
+  utilityNavTabEquals,
+} from '@/components/shared/stableNavTabs';
+import {
   buildPrimaryPlatformNavigationVisibility,
   primaryPlatformNavigationIsVisible,
   selectFirstVisiblePrimaryPlatformNavigationId,
@@ -487,7 +492,7 @@ export function AppLayout(props: AppLayoutProps) {
   // Platform/runtime nav is resource-admitted. A platform or runtime lens only
   // appears when the support manifest says the surface is supported and the
   // current resource snapshot proves that surface is actually present.
-  const primaryTabs = createMemo<PrimaryTab[]>(() => {
+  const primaryTabsSource = createMemo<PrimaryTab[]>(() => {
     const visible = platformNavigationVisibility();
     const isVisible = (id: PrimaryTab['id']) =>
       primaryPlatformNavigationIsVisible(visible, id as PrimaryPlatformNavId);
@@ -563,7 +568,13 @@ export function AppLayout(props: AppLayoutProps) {
     return allPrimaryTabs.filter((tab) => tab.alwaysShow || tab.enabled);
   });
 
-  const utilityTabs = createMemo(() => {
+  // Both tab memos rebuild their arrays from live store reads (activeAlerts is
+  // replaced wholesale on every websocket state message), so without identity
+  // stabilization every reference-keyed <For> consumer recreates all nav
+  // buttons each tick — dropping taps that land mid-rebuild.
+  const primaryTabs = createStableTabList(primaryTabsSource, primaryNavTabEquals);
+
+  const utilityTabsSource = createMemo<UtilityTab[]>(() => {
     const allAlerts = props.state().activeAlerts || [];
     const breakdown = allAlerts.reduce(
       (accumulator, alert: Alert) => {
@@ -630,6 +641,8 @@ export function AppLayout(props: AppLayoutProps) {
 
     return tabs;
   });
+
+  const utilityTabs = createStableTabList(utilityTabsSource, utilityNavTabEquals);
 
   const handlePrimaryClick = (tab: PrimaryTab) => {
     const targetRoute = resolvePrimaryNavigationRoute(tab, primaryRouteMemory);

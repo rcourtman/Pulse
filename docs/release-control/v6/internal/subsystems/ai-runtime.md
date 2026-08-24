@@ -3430,7 +3430,11 @@ query...`, and `Reading storage...` before streamed tool arguments are
     the shared AI-aware chrome by virtue of routing through `AppLayout`, and
     must not introduce a parallel chat surface, launcher button, or model
     picker on the platform page itself; cross-platform AI guidance stays
-    routed through Assistant and Patrol.
+    routed through Assistant and Patrol. The Patrol utility destination in
+    `AppLayout`'s tab lists shares the nav identity-stability contract owned
+    by `frontend-primitives` (`stableNavTabs.ts`): a websocket state frame
+    with structurally unchanged tab content must not recreate the Patrol
+    button DOM or its attention-count badge element.
     The primary-nav demotion of Infrastructure / Workloads / Storage /
     Recovery does not change Patrol or Assistant addressability: both
     surfaces remain reachable through the utility tab strip in
