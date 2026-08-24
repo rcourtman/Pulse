@@ -212,7 +212,9 @@ export function GuestRow(props: GuestRowProps) {
             props.visibleColumnIds,
           )}
         >
-          <div class="flex items-center gap-2 min-w-0">
+          <div
+            class={`flex items-center min-w-0 ${usesCompactTableLayout() ? 'gap-0.5' : 'gap-2'}`}
+          >
             <Show when={props.onClick}>
               <SummaryRowActionButton
                 kind="disclosure"

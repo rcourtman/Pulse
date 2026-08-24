@@ -896,7 +896,8 @@ describe('GuestRow', () => {
         isGroupedView: true,
       });
       const firstTd = container.querySelector('td');
-      expect(firstTd?.className).toContain('pl-3');
+      expect(firstTd?.className).toContain('pl-1');
+      expect(firstTd?.className).toContain('sm:pl-5');
     });
 
     it('uses default indent class when isGroupedView is false', () => {
@@ -905,7 +906,20 @@ describe('GuestRow', () => {
         isGroupedView: false,
       });
       const firstTd = container.querySelector('td');
-      expect(firstTd?.className).toContain('pl-2');
+      expect(firstTd?.className).toContain('pl-1');
+      expect(firstTd?.className).toContain('sm:pl-3');
+    });
+
+    it('keeps the disclosure control close to the identity in compact layouts', () => {
+      const { container } = renderGuestRow({
+        guest: makeGuest(),
+        isGroupedView: true,
+        workloadTableLayoutMode: 'phone',
+      });
+      const identityRow = container.querySelector('td > div') as HTMLElement | null;
+
+      expect(identityRow?.className).toContain('gap-0.5');
+      expect(identityRow?.className).not.toContain('gap-2');
     });
   });
 
@@ -1112,8 +1126,16 @@ describe('GUEST_COLUMNS', () => {
       'max-width': '30%',
     });
     expect(getGuestColumnStyle('cpu', true)).toEqual({
-      width: '11.4925%',
-      'max-width': '11.4925%',
+      width: '11.3235%',
+      'max-width': '11.3235%',
+    });
+    expect(getGuestColumnStyle('availability', true)).toEqual({
+      width: '7.2059%',
+      'max-width': '7.2059%',
+    });
+    expect(getGuestColumnStyle('type', true)).toEqual({
+      width: '9.2647%',
+      'max-width': '9.2647%',
     });
     expect(getGuestColumnWidthStyle('name', true)).toEqual({ width: '30%' });
     expect(getGuestColumnWidthStyle('diskIo', true)).toEqual({ width: '170px' });

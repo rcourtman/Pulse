@@ -145,8 +145,8 @@ export const EMPTY_IO_EMPHASIS: WorkloadIOEmphasis = {
   diskIO: EMPTY_IO_DISTRIBUTION,
 };
 
-export const GROUPED_FIRST_CELL_INDENT = 'pl-3 sm:pl-5 lg:pl-8';
-export const DEFAULT_FIRST_CELL_INDENT = 'pl-2 sm:pl-3';
+export const GROUPED_FIRST_CELL_INDENT = 'pl-1 sm:pl-5 lg:pl-8';
+export const DEFAULT_FIRST_CELL_INDENT = 'pl-1 sm:pl-3';
 
 export const getOutlierEmphasis = (value: number, stats: IODistributionStats): IOEmphasis => {
   if (!Number.isFinite(value) || value <= 0 || stats.max <= 0) {
@@ -458,23 +458,23 @@ const GUEST_COLUMN_RESPONSIVE_WEIGHTS: Record<
   },
   phone: {
     name: 33,
-    availability: 5,
-    type: 7,
-    info: 9,
+    availability: 7,
+    type: 9,
+    info: 8,
     cpu: 11,
     memory: 11,
     disk: 11,
-    uptime: 13,
+    uptime: 11,
   },
   mobile: {
     name: 33,
-    availability: 5,
-    type: 7,
-    info: 9,
+    availability: 7,
+    type: 9,
+    info: 8,
     cpu: 11,
     memory: 11,
     disk: 11,
-    uptime: 13,
+    uptime: 11,
   },
   tablet: {
     name: 30,
