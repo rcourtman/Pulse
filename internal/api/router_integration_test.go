@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/cookiejar"
@@ -876,36 +877,50 @@ func TestStateEndpointReturnsMockData(t *testing.T) {
 func TestRecoveryRollupsEndpointReturnsMockData(t *testing.T) {
 	srv := newIntegrationServer(t)
 
-	res, err := http.Get(srv.server.URL + "/api/recovery/rollups?limit=500")
-	if err != nil {
-		t.Fatalf("rollups request failed: %v", err)
-	}
-	defer res.Body.Close()
+	// The endpoint caps limit at 500 per page and the default mock estate
+	// produces more rollups than one page holds, so walk every page.
+	var allItems []map[string]any
+	for page := 1; ; page++ {
+		res, err := http.Get(fmt.Sprintf("%s/api/recovery/rollups?limit=500&page=%d", srv.server.URL, page))
+		if err != nil {
+			t.Fatalf("rollups request failed (page %d): %v", page, err)
+		}
 
-	if res.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(res.Body)
-		t.Fatalf("unexpected status: got %d want %d, body=%s", res.StatusCode, http.StatusOK, string(body))
+		if res.StatusCode != http.StatusOK {
+			body, _ := io.ReadAll(res.Body)
+			res.Body.Close()
+			t.Fatalf("unexpected status on page %d: got %d want %d, body=%s", page, res.StatusCode, http.StatusOK, string(body))
+		}
+
+		var payload struct {
+			Data []map[string]any `json:"data"`
+			Meta map[string]any   `json:"meta"`
+		}
+		body, err := io.ReadAll(res.Body)
+		res.Body.Close()
+		if err != nil {
+			t.Fatalf("read rollups response (page %d): %v", page, err)
+		}
+		if err := json.Unmarshal(body, &payload); err != nil {
+			t.Fatalf("unmarshal rollups response (page %d): %v", page, err)
+		}
+
+		allItems = append(allItems, payload.Data...)
+		if len(payload.Data) < 500 {
+			break
+		}
+		if page > 100 {
+			t.Fatalf("rollups pagination did not terminate after %d pages", page)
+		}
 	}
 
-	var payload struct {
-		Data []map[string]any `json:"data"`
-		Meta map[string]any   `json:"meta"`
-	}
-	body, err := io.ReadAll(res.Body)
-	if err != nil {
-		t.Fatalf("read rollups response: %v", err)
-	}
-	if err := json.Unmarshal(body, &payload); err != nil {
-		t.Fatalf("unmarshal rollups response: %v", err)
-	}
-
-	if len(payload.Data) == 0 {
-		t.Fatalf("expected rollups data, got none: %s", string(body))
+	if len(allItems) == 0 {
+		t.Fatal("expected rollups data, got none")
 	}
 
 	hasK8s := false
 	hasTrueNAS := false
-	for _, item := range payload.Data {
+	for _, item := range allItems {
 		raw, ok := item["platforms"]
 		if !ok {
 			continue

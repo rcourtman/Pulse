@@ -86,12 +86,9 @@ func TestStartPeriodicSave_PersistsHistoryOnTicker(t *testing.T) {
 	}
 
 	hm.startPeriodicSave()
-	defer func() {
-		close(hm.stopChan)
-		if hm.saveTicker != nil {
-			hm.saveTicker.Stop()
-		}
-	}()
+	// Stop waits for the save worker, so an in-flight save cannot race the
+	// TempDir cleanup.
+	defer hm.Stop()
 
 	deadline := time.Now().Add(750 * time.Millisecond)
 	for time.Now().Before(deadline) {

@@ -74,13 +74,9 @@ func TestHistoryManagerConcurrentAccess(t *testing.T) {
 
 	wg.Wait()
 
-	close(hm.stopChan)
-	if hm.saveTicker != nil {
-		hm.saveTicker.Stop()
-	}
-
-	// give final save a chance
-	time.Sleep(20 * time.Millisecond)
+	// Stop waits for the save worker and performs the final save, so nothing
+	// races the TempDir cleanup.
+	hm.Stop()
 
 	_ = os.RemoveAll(tempDir)
 }

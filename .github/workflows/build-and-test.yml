@@ -199,9 +199,11 @@ jobs:
       - name: Go unit tests (shard ${{ matrix.shard }})
         env:
           PULSE_DATA_DIR: /tmp/pulse-test-data
-        # internal/api alone takes ~10m under -race on a fast machine; CI
-        # runners need the larger per-binary budget. Remaining packages are
-        # split deterministically by list position.
+        # internal/api alone takes ~22m under -race on a fast machine since
+        # the demo estate scaled to 50 nodes, and CI runners have needed
+        # roughly double the fast-machine time, hence the large per-binary
+        # budget. Remaining packages are split deterministically by list
+        # position.
         run: |
           set -euo pipefail
           case "${{ matrix.shard }}" in
@@ -215,7 +217,7 @@ jobs:
             exit 1
           fi
           printf 'Packages in this shard:\n%s\n' "$pkgs"
-          go test -race -timeout 25m $pkgs
+          go test -race -timeout 50m $pkgs
 
   scripts-and-build:
     name: Script smoke tests & backend build
