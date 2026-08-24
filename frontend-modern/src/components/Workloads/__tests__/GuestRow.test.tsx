@@ -1589,6 +1589,42 @@ describe('backup column', () => {
     expect(badge?.classList.contains('text-red-700')).toBe(true);
   });
 
+  it('keeps positive backup coverage visible when the backup column is hidden', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-05-26T12:00:00Z'));
+
+    const { container } = renderGuestRow({
+      guest: makeGuest({
+        type: 'qemu',
+        workloadType: 'vm',
+        lastBackup: Date.parse('2026-05-26T07:00:00Z'),
+      }),
+      visibleColumnIds: ['name'],
+    });
+
+    const indicator = container.querySelector('[aria-label="Last backup: 5 hours ago"]');
+    expect(indicator).toBeTruthy();
+    expect(indicator?.classList.contains('text-green-600')).toBe(true);
+  });
+
+  it('shows active backup work in blue when the backup column is hidden', () => {
+    const { container } = renderGuestRow({
+      guest: makeGuest({
+        type: 'qemu',
+        workloadType: 'vm',
+        lastBackup: 0,
+        backupInProgress: true,
+      }),
+      visibleColumnIds: ['name'],
+    });
+
+    const indicator = container.querySelector(
+      '[aria-label="Backup running now · no completed backup found"]',
+    );
+    expect(indicator).toBeTruthy();
+    expect(indicator?.classList.contains('text-blue-600')).toBe(true);
+  });
+
   it('does not infer a backup failure for a vSphere VM when the column is hidden', () => {
     const { container } = renderGuestRow({
       guest: makeGuest({

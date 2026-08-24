@@ -640,9 +640,14 @@ change may globally weaken the Task 03 lifecycle-state idempotency invariant.
     the shared `getBackupInfo` / `workloadGuestPresentation` vocabulary:
     existing stale or overdue backups stay amber, while red is reserved for a
     supported guest with no recorded backup. The compact row must not infer a
-    red failure state from a fixed backup age. Backup support must be derived
-    from the row's canonical platform scopes before classifying an absent
-    scalar: `proxmox-pve` rows may consume the current `lastBackup` contract,
+    red failure state from a fixed backup age. When the dedicated Backup column
+    is hidden, supported non-template guests retain one fixed-size shield in
+    the identity cell for every state: green for fresh completed coverage,
+    amber for stale or overdue coverage, red for no recorded backup, and blue
+    for a backup currently running. Positive coverage must not disappear merely
+    because it is healthy. Backup support must be derived from the row's
+    canonical platform scopes before classifying an absent scalar: `proxmox-pve`
+    rows may consume the current `lastBackup` contract,
     while API-backed providers without that contract, including
     `vmware-vsphere`, render no compact warning and an unavailable cell rather
     than converting missing evidence into "never backed up." Legacy workload

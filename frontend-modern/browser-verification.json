@@ -1,11 +1,11 @@
 {
   "version": 1,
-  "base_sha": "1fbf10e2c2fc9757f1636550b504218923280d01",
-  "verified_at": "2026-08-24T10:43:10Z",
+  "base_sha": "78be1b1c2a33c6d5df87bc08098c4ef67132070f",
+  "verified_at": "2026-08-24T10:59:15Z",
   "result": "passed",
-  "changed_paths": ["frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx"],
+  "changed_paths": ["frontend-modern/src/components/Workloads/GuestRowCells.tsx"],
   "content_sha256": {
-    "frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx": "259b90d13dff95fe03418f4da14cba4cd1012ba58ab459be18f329df45a0a210"
+    "frontend-modern/src/components/Workloads/GuestRowCells.tsx": "e745e1cf5875af055c2846b5ae4638be5a71ab6c08a5333b99cf700c6c05b806"
   },
   "routes": ["/proxmox"],
   "viewports": [
@@ -19,16 +19,15 @@
     }
   ],
   "states": [
-    "managed hot-dev mock estate with the bounded Proxmox Nodes preview visible",
-    "phone node preview collapsed to six rows",
-    "phone node preview expanded through the continuation footer",
-    "desktop node preview collapsed to twelve rows"
+    "managed hot-dev mock estate with the compact Proxmox Guests table visible",
+    "phone identity cells showing fresh, stale or overdue, missing, and running backup shields",
+    "desktop Guests table showing the existing dedicated Backup column"
   ],
   "interactions": [
-    "confirmed the final phone row fades into a full-width footer labelled Show all 50 nodes with 44 more below",
-    "clicked the phone footer and confirmed it expanded in one action, removed the fade, and changed to Show fewer nodes",
-    "collapsed the preview and confirmed the desktop footer reports 38 more below after twelve visible rows",
-    "confirmed the desktop node card has no new horizontal overflow",
+    "confirmed fresh phone rows retain a fixed-size green checked shield when the Backup column is hidden",
+    "confirmed stale or overdue rows remain amber, missing backups remain red, and an active backup is blue",
+    "confirmed shield tooltips and accessible labels retain the completed-backup age or running state",
+    "confirmed the desktop Backup column continues to show its green healthy state and the table has no horizontal overflow",
     "restored the browser viewport after verification"
   ]
 }

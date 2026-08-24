@@ -13,6 +13,36 @@ import {
   type WorkloadsGuestBackupDisplayStatus,
 } from '@/utils/workloadGuestPresentation';
 
+function BackupShieldIcon(props: { icon: 'check' | 'warning' | 'x' | 'running'; pulse?: boolean }) {
+  return (
+    <svg
+      class="h-3.5 w-3.5 flex-shrink-0"
+      classList={{ 'animate-pulse': props.pulse }}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+      <Show when={props.icon === 'check'}>
+        <path d="m9 12 2 2 4-4" />
+      </Show>
+      <Show when={props.icon === 'warning'}>
+        <path d="M12 8v4M12 16h.01" />
+      </Show>
+      <Show when={props.icon === 'x'}>
+        <path d="M10 10l4 4M14 10l-4 4" />
+      </Show>
+      <Show when={props.icon === 'running'}>
+        <path d="M8 12h.01M12 12h.01M16 12h.01" />
+      </Show>
+    </svg>
+  );
+}
+
 function BackupIndicator(props: {
   lastBackup: string | number | null | undefined;
   isTemplate: boolean;
@@ -24,15 +54,10 @@ function BackupIndicator(props: {
   const backupInfo = createMemo(() =>
     getBackupInfo(props.lastBackup, alertsActivation.getBackupThresholds()),
   );
-  const config = createMemo(() => getWorkloadsGuestBackupStatusPresentation(backupInfo().status));
-
-  // The indicator flags a problem (no fresh completed backup) and stays
-  // truthful while a backup is running - only a COMPLETED backup clears it.
-  // The running state is surfaced in the tooltip and the Backup column badge.
-  const shouldShow = createMemo(() => {
-    const status = backupInfo().status;
-    return status === 'stale' || status === 'overdue' || status === 'never';
-  });
+  const displayStatus = createMemo<WorkloadsGuestBackupDisplayStatus>(() =>
+    props.backupRunning ? 'running' : backupInfo().status,
+  );
+  const config = createMemo(() => getWorkloadsGuestBackupStatusPresentation(displayStatus()));
 
   const tooltipText = createMemo(() => {
     const info = backupInfo();
@@ -40,40 +65,13 @@ function BackupIndicator(props: {
   });
 
   return (
-    <Show when={shouldShow()}>
-      <span class={`flex-shrink-0 ${config().color}`} title={tooltipText()}>
-        <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
-          <path
-            d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          />
-          <Show when={config().icon === 'warning'}>
-            <path
-              d="M12 8v4M12 16h.01"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            />
-          </Show>
-          <Show when={config().icon === 'x'}>
-            <path
-              d="M10 10l4 4M14 10l-4 4"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            />
-          </Show>
-        </svg>
-      </span>
-    </Show>
+    <span
+      class={`flex-shrink-0 ${config().color}`}
+      title={tooltipText()}
+      aria-label={tooltipText()}
+    >
+      <BackupShieldIcon icon={config().icon} pulse={displayStatus() === 'running'} />
+    </span>
   );
 }
 
@@ -358,31 +356,7 @@ function BackupStatusCell(props: {
         onMouseLeave={tip.onMouseLeave}
         aria-label={ariaLabel()}
       >
-        <svg
-          class="h-3.5 w-3.5 flex-shrink-0"
-          classList={{ 'animate-pulse': displayStatus() === 'running' }}
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-
-          <Show when={config().icon === 'check'}>
-            <path d="m9 12 2 2 4-4" />
-          </Show>
-          <Show when={config().icon === 'warning'}>
-            <path d="M12 8v4M12 16h.01" />
-          </Show>
-          <Show when={config().icon === 'x'}>
-            <path d="M10 10l4 4M14 10l-4 4" />
-          </Show>
-          <Show when={config().icon === 'running'}>
-            <path d="M8 12h.01M12 12h.01M16 12h.01" />
-          </Show>
-        </svg>
+        <BackupShieldIcon icon={config().icon} pulse={displayStatus() === 'running'} />
         <Show when={displayStatus() !== 'fresh'}>
           <span>{badgeLabel()}</span>
         </Show>
