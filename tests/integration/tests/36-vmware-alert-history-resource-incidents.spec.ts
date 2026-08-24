@@ -172,7 +172,7 @@ test.describe("VMware alert history resource incidents", () => {
 
     await ensureAuthenticated(page);
 
-    await page.goto("/alerts/history", {
+    await page.goto("/alerts/history?q=app-01", {
       waitUntil: "domcontentloaded",
     });
 

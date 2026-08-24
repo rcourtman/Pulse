@@ -29,7 +29,8 @@ const PAGE_HEADER_ROUTES = [
     slug: "patrol",
     route: "/patrol",
     title: "Patrol",
-    description: "Patrol checks your infrastructure and shows current issues.",
+    description:
+      "See what needs a decision, choose the next step, and keep a verified record.",
   },
 ] as const;
 
