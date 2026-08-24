@@ -714,6 +714,9 @@ PY
       frontend-modern/package.json | frontend-modern/package-lock.json)
         expected_policy="frontend-dependency-security"
         ;;
+      frontend-modern/vite.config.ts)
+        expected_policy="frontend-build-output"
+        ;;
       *)
         expected_policy="dev-runtime-orchestration"
         ;;
