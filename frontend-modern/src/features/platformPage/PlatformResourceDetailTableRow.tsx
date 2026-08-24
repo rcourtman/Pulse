@@ -39,6 +39,7 @@ export const PlatformResourceDetailToggleButton: Component<{
     subjectLabel={`details for ${props.resourceLabel}`}
     controlsId={props.controlsId}
     class={props.class}
+    hideWhenRowTappableOnMobile
     onAction={props.onToggle}
   />
 );

@@ -11,6 +11,7 @@ type SummaryRowActionButtonProps =
       subjectLabel: string;
       controlsId?: string;
       class?: string;
+      hideWhenRowTappableOnMobile?: boolean;
       onAction: () => void;
       onPreviewClear?: () => void;
     }
@@ -46,12 +47,16 @@ export const SummaryRowActionButton: Component<SummaryRowActionButtonProps> = (p
     scopeProps()?.pressed
       ? `Unpin summary scope for ${props.subjectLabel}`
       : `Pin summary scope for ${props.subjectLabel}`;
+  const mobileRowTargetClass = () =>
+    disclosureProps()?.hideWhenRowTappableOnMobile
+      ? 'sr-only focus:not-sr-only sm:not-sr-only'
+      : '';
 
   return (
     <button
       type="button"
       data-row-action="true"
-      class={`${props.kind === 'disclosure' ? DISCLOSURE_BUTTON_CLASS : SCOPE_BUTTON_CLASS} ${props.class ?? ''}`.trim()}
+      class={`${props.kind === 'disclosure' ? DISCLOSURE_BUTTON_CLASS : SCOPE_BUTTON_CLASS} ${mobileRowTargetClass()} ${props.class ?? ''}`.trim()}
       aria-label={props.kind === 'disclosure' ? disclosureLabel() : scopeLabel()}
       aria-expanded={disclosureProps()?.expanded}
       aria-controls={disclosureProps()?.controlsId}

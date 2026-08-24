@@ -86,4 +86,21 @@ describe('SummaryRowActionButton', () => {
     fireEvent.keyDown(button, { key: 'Space', code: 'Space' });
     expect(onAction).toHaveBeenCalledTimes(1);
   });
+
+  it('removes redundant mobile chrome when the whole row is tappable', () => {
+    render(() => (
+      <SummaryRowActionButton
+        kind="disclosure"
+        subjectLabel="alpha"
+        expanded={false}
+        hideWhenRowTappableOnMobile
+        onAction={vi.fn()}
+      />
+    ));
+
+    const button = screen.getByRole('button', { name: 'Expand alpha' });
+    expect(button).toHaveClass('sr-only');
+    expect(button).toHaveClass('focus:not-sr-only');
+    expect(button).toHaveClass('sm:not-sr-only');
+  });
 });

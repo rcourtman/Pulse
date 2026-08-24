@@ -1,15 +1,19 @@
 {
   "version": 1,
-  "base_sha": "791e29ad8d4cc991837ac43d0bf7c7a42d5fa54a",
-  "verified_at": "2026-08-24T09:50:53Z",
+  "base_sha": "d50f5c664e74e3a4d6a00abf76ef1e2c554e79a6",
+  "verified_at": "2026-08-24T10:04:07Z",
   "result": "passed",
-  "changed_paths": ["frontend-modern/src/components/Workloads/GuestRow.tsx"],
-  "content_sha256": {
-    "frontend-modern/src/components/Workloads/GuestRow.tsx": "64776e4a32d5361a2ec541344178e9e7d1e401a3d09086e68ad4f923240bf715"
-  },
-  "routes": [
-    "/proxmox"
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/GuestRow.tsx",
+    "frontend-modern/src/components/shared/SummaryRowActionButton.tsx",
+    "frontend-modern/src/features/platformPage/PlatformResourceDetailTableRow.tsx"
   ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/GuestRow.tsx": "f8927883b484789cae4ca999845a77a7409aed800656d931be621a1f4d996ca8",
+    "frontend-modern/src/components/shared/SummaryRowActionButton.tsx": "626741b5b725d19dd594a4c071888170d74b0e8352513cc2aa8557c86c986c88",
+    "frontend-modern/src/features/platformPage/PlatformResourceDetailTableRow.tsx": "7907a58eeace6c2648f1e92e63a27bfd82fe305347e0100b76b59ab0e367ce61"
+  },
+  "routes": ["/proxmox"],
   "viewports": [
     {
       "width": 390,
@@ -21,16 +25,16 @@
     }
   ],
   "states": [
-    "managed hot-dev mock estate with 50 nodes and 929 guests",
-    "phone Workloads table filtered to one guest with the compact header and collapsed row visible",
-    "phone Workloads table with the guest detail row expanded",
-    "desktop Workloads table with the same filtered guest"
+    "managed hot-dev mock estate with the canonical Proxmox Nodes and Guests tables visible",
+    "phone Nodes and Guests tables with their collapsed rows visible",
+    "phone Nodes and Guests tables after row-owned detail expansion",
+    "desktop Nodes and Guests tables after the responsive breakpoint transition"
   ],
   "interactions": [
-    "confirmed the visible disclosure control is removed from compact rows while its screen-reader and keyboard-focus path remains available",
-    "confirmed the Type sort header renders without clipping at 390x844 and the availability column receives a larger compact-layout share when present",
-    "tapped the workload name to expand the filtered phone row and confirmed the accessible disclosure changes to Collapse",
-    "confirmed the expanded state survives the transition from 390x844 to 1440x900 and the desktop chevron remains visible",
-    "restored the browser viewport and real-node runtime after verification"
+    "confirmed provider node and workload disclosure controls remain in the accessibility tree while their redundant phone chevrons are visually removed",
+    "tapped the Analytics A node row and the artifact-cache-310 guest row and confirmed both detail regions expanded",
+    "confirmed both disclosure controls become visible again at the 1440x900 desktop breakpoint",
+    "confirmed Type, ID, CPU, Mem, Disk, and Age remain separated in the compact Workloads header",
+    "restored the browser viewport after verification"
   ]
 }

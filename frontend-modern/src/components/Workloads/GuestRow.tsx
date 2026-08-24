@@ -221,7 +221,7 @@ export function GuestRow(props: GuestRowProps) {
                 subjectLabel={props.guest.name}
                 expanded={props.isExpanded === true}
                 controlsId={detailControlsId()}
-                class={usesCompactTableLayout() ? 'sr-only focus:not-sr-only' : undefined}
+                hideWhenRowTappableOnMobile={usesCompactTableLayout()}
                 onAction={() => props.onClick?.()}
                 onPreviewClear={() => props.onHoverChange?.(null)}
               />

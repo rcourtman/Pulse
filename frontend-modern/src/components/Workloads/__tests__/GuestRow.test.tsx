@@ -924,6 +924,7 @@ describe('GuestRow', () => {
 
       expect(disclosureButton.className).toContain('sr-only');
       expect(disclosureButton.className).toContain('focus:not-sr-only');
+      expect(disclosureButton.className).toContain('sm:not-sr-only');
     });
 
     it('keeps the visible disclosure control in desktop layouts', () => {

@@ -1554,8 +1554,11 @@ describe('shared primitive guardrails', () => {
     expect(summaryRowActionButtonSource).toContain('aria-expanded');
     expect(summaryRowActionButtonSource).toContain('aria-pressed');
     expect(summaryRowActionButtonSource).toContain('data-row-action="true"');
+    expect(summaryRowActionButtonSource).toContain('hideWhenRowTappableOnMobile');
+    expect(summaryRowActionButtonSource).toContain('sm:not-sr-only');
     expect(platformResourceDetailTableRowSource).toContain('PlatformResourceDetailToggleButton');
     expect(platformResourceDetailTableRowSource).toContain('SummaryRowActionButton');
+    expect(platformResourceDetailTableRowSource).toContain('hideWhenRowTappableOnMobile');
 
     for (const source of [
       guestRowSource,
