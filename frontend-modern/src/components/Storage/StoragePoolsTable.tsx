@@ -7,7 +7,6 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/shared/Table';
-import { getTableSortIndicator } from '@/components/shared/tableSortPresentation';
 import { getPlatformTableHeadClassForKind } from '@/features/platformPage/sharedPlatformPage';
 import {
   getStoragePoolColumnWidthPercent,
@@ -29,8 +28,7 @@ import type { StorageAlertRowState } from '@/features/storageBackups/storageAler
 import type { Resource } from '@/types/resource';
 import { StorageGroupRow } from './StorageGroupRow';
 import { StoragePoolRow } from './StoragePoolRow';
-import { getDefaultStorageSortDirection } from './storagePageState';
-import type { StorageGroupedRecords, StorageGroupKey, StorageSortKey } from './useStorageModel';
+import type { StorageGroupedRecords, StorageGroupKey } from './useStorageModel';
 import { useStoragePoolsTableModel } from './useStoragePoolsTableModel';
 import type { SummarySeriesGroupScope } from '@/components/shared/summaryCardInteraction';
 import { resolveSummaryGroupMemberInteractionState } from '@/components/shared/summaryCardInteraction';
@@ -40,10 +38,6 @@ import { useStoragePoolsTableWindowing } from './useStoragePoolsTableWindowing';
 type StoragePoolsTableProps = {
   groupedRecords: StorageGroupedRecords[];
   groupBy: StorageGroupKey;
-  sortKey: StorageSortKey;
-  setSortKey: (value: StorageSortKey) => void;
-  sortDirection: 'asc' | 'desc';
-  setSortDirection: (value: 'asc' | 'desc') => void;
   expandedGroups: Set<string>;
   toggleGroup: (key: string) => void;
   expandedPoolId: string | null;
@@ -63,29 +57,6 @@ type StoragePoolsTableProps = {
   onGroupHoverChange?: (scope: SummarySeriesGroupScope | null) => void;
   highlightedSummarySeriesId?: string | null;
   onHoverChange?: (recordId: string | null) => void;
-};
-
-const STORAGE_POOL_HEADER_SORT_BUTTON_CLASS =
-  'inline-flex min-w-0 max-w-full items-center gap-1 rounded-sm text-left outline-none transition-colors hover:text-base-content focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 focus-visible:ring-offset-surface';
-
-const getNextStorageColumnSortDirection = (
-  currentSortKey: StorageSortKey,
-  currentSortDirection: 'asc' | 'desc',
-  columnSortKey: StorageSortKey,
-): 'asc' | 'desc' => {
-  if (currentSortKey !== columnSortKey) {
-    return getDefaultStorageSortDirection(columnSortKey);
-  }
-  return currentSortDirection === 'asc' ? 'desc' : 'asc';
-};
-
-const getStorageColumnSortButtonLabel = (
-  label: string,
-  isSorted: boolean,
-  direction: 'asc' | 'desc',
-): string => {
-  if (!isSorted) return `Sort ${label} column`;
-  return `Sort ${label} column ${direction === 'asc' ? 'descending' : 'ascending'}`;
 };
 
 export const StoragePoolsTable: Component<StoragePoolsTableProps> = (props) => {
@@ -113,13 +84,6 @@ export const StoragePoolsTable: Component<StoragePoolsTableProps> = (props) => {
     groups: model.groups,
     expandedPoolId: () => props.expandedPoolId,
   });
-
-  const handleSort = (sortKey: StorageSortKey) => {
-    props.setSortDirection(
-      getNextStorageColumnSortDirection(props.sortKey, props.sortDirection, sortKey),
-    );
-    props.setSortKey(sortKey);
-  };
 
   return (
     <Show
@@ -162,41 +126,14 @@ export const StoragePoolsTable: Component<StoragePoolsTableProps> = (props) => {
                       )}
                       data-storage-column={column.id}
                       aria-label={column.label}
-                      aria-sort={
-                        props.sortKey === column.sortKey
-                          ? props.sortDirection === 'asc'
-                            ? 'ascending'
-                            : 'descending'
-                          : undefined
-                      }
                       title={column.label}
                     >
-                      <button
-                        type="button"
-                        class={STORAGE_POOL_HEADER_SORT_BUTTON_CLASS}
-                        onClick={() => handleSort(column.sortKey)}
-                        aria-label={getStorageColumnSortButtonLabel(
-                          column.label,
-                          props.sortKey === column.sortKey,
-                          props.sortDirection,
-                        )}
-                        title={getStorageColumnSortButtonLabel(
-                          column.label,
-                          props.sortKey === column.sortKey,
-                          props.sortDirection,
-                        )}
+                      <Show
+                        when={layoutMode() === 'full'}
+                        fallback={<span class="min-w-0 truncate">{column.compactLabel}</span>}
                       >
-                        <Show
-                          when={layoutMode() === 'full'}
-                          fallback={<span class="min-w-0 truncate">{column.compactLabel}</span>}
-                        >
-                          <span class="min-w-0 truncate">{column.label}</span>
-                        </Show>
-                        {getTableSortIndicator(
-                          props.sortKey === column.sortKey,
-                          props.sortDirection,
-                        )}
-                      </button>
+                        <span class="min-w-0 truncate">{column.label}</span>
+                      </Show>
                     </TableHead>
                   )}
                 </For>

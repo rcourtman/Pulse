@@ -1,11 +1,17 @@
 {
   "version": 1,
-  "base_sha": "3d77ac9cec60d55d3c1e732e748d21f60f32b1da",
-  "verified_at": "2026-08-24T16:15:55Z",
+  "base_sha": "baabed91a61acc7b4262c5170e3f5f5a6b457ab1",
+  "verified_at": "2026-08-24T16:27:42Z",
   "result": "passed",
-  "changed_paths": ["frontend-modern/src/components/Storage/StorageGroupRow.tsx"],
+  "changed_paths": [
+    "frontend-modern/src/components/Storage/Storage.tsx",
+    "frontend-modern/src/components/Storage/StorageContentCard.tsx",
+    "frontend-modern/src/components/Storage/StoragePoolsTable.tsx"
+  ],
   "content_sha256": {
-    "frontend-modern/src/components/Storage/StorageGroupRow.tsx": "e6ef06dae2236e5c414de92aeab356b96fc2ed795f97d572d80e0e2f00674792"
+    "frontend-modern/src/components/Storage/Storage.tsx": "68ec929f7daf54b809fb9fa508e35ed73613666e242df41cd2c147bdcdb761af",
+    "frontend-modern/src/components/Storage/StorageContentCard.tsx": "4ec6d2d81673e02e8937695cfe59773f548b5c052554245e44deffc0d44f03af",
+    "frontend-modern/src/components/Storage/StoragePoolsTable.tsx": "d23551a00a460075996ac78eed48d7cf190dcd40adace7fcfdaf2fa2034b2797"
   },
   "routes": ["/proxmox/storage"],
   "viewports": [
@@ -19,13 +25,15 @@
     }
   ],
   "states": [
-    "Proxmox Storage grouped by node with expanded storage group rows",
-    "Proxmox Storage grouped by node after collapsing a group through the row label"
+    "Proxmox Storage with plain desktop table headings",
+    "Proxmox Storage after sorting by usage and changing direction through View preferences",
+    "Proxmox Storage compact phone table with Filters and View preferences open"
   ],
   "interactions": [
-    "opened mobile Filters and View preferences, then selected Group by node",
-    "confirmed storage group disclosure buttons are visually hidden at 390 pixels while retaining accessible expand and collapse labels",
-    "clicked the Analytics A group label and confirmed the whole row collapsed the group without a visible chevron",
-    "confirmed ordinary storage pool row disclosure controls remain visually hidden at the mobile breakpoint"
+    "confirmed every desktop Storage table heading contains no button, aria-sort state, or visible direction marker",
+    "selected Usage in View -> Order and changed the sort direction, confirming the rendered row order changed while headings remained plain",
+    "confirmed compact phone headings render Storage, State, Type, Host, Prot, and Used without direction markers",
+    "opened phone Filters -> View and confirmed Sort by and Sort direction remain available",
+    "confirmed the page has no horizontal overflow at 390 pixels"
   ]
 }

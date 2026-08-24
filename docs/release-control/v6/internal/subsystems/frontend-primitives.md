@@ -913,10 +913,14 @@ the shared `TableHead` primitive and expose column state through `aria-sort`;
 the feature owner may define the sort keys and data comparator, but the header
 interaction must update that canonical owner state rather than forking
 table-local sort state or making header labels look clickable while inert.
+Storage pool headers are intentionally presentation-only rather than sortable
+headers: their one canonical sort interaction lives in `StoragePageControls`
+under `View` -> `Order`, so the table headings remain plain labels without a
+second hidden or competing sort affordance.
 Sortable header direction presentation belongs to
 `frontend-modern/src/components/shared/tableSortPresentation.ts`. Inactive
 sortable columns stay visually quiet; only the active column renders its
-ascending or descending marker. Storage, Workloads, backup, and shared platform
+ascending or descending marker. Workloads, backup, and shared platform
 tables must consume that helper rather than repeating dormant up/down icons in
 every header or defining page-local direction glyphs.
 

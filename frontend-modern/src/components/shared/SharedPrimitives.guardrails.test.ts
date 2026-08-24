@@ -1456,16 +1456,16 @@ describe('shared primitive guardrails', () => {
     for (const source of [
       sharedPlatformPageSource,
       workloadTableHeaderSource,
-      storagePoolsTableSource,
       proxmoxBackupsTableSharedSource,
     ]) {
       expect(source).toContain('getTableSortIndicator');
     }
 
-    for (const source of [storagePoolsTableSource, proxmoxBackupsTableSharedSource]) {
-      expect(source).not.toContain('ArrowUpDownIcon');
-      expect(source).not.toContain('SORT_ICON_CLASS');
-    }
+    expect(proxmoxBackupsTableSharedSource).not.toContain('ArrowUpDownIcon');
+    expect(proxmoxBackupsTableSharedSource).not.toContain('SORT_ICON_CLASS');
+    expect(storagePoolsTableSource).not.toContain('getTableSortIndicator');
+    expect(storagePoolsTableSource).not.toContain('aria-sort');
+    expect(storagePoolsTableSource).not.toContain('HEADER_SORT_BUTTON');
   });
 
   it('keeps chart visibility display actions on the shared toolbar toggle', () => {

@@ -541,7 +541,7 @@ describe('Storage', () => {
     storageSummarySpy.mockRestore();
   });
 
-  it('renders compact table columns and supports sort/group controls', async () => {
+  it('renders plain compact table headings and supports View sort/group controls', async () => {
     hookResources = [
       buildStorageResource('storage-1', 'Alpha-Store', 'pve1', {
         current: 20,
@@ -594,23 +594,27 @@ describe('Storage', () => {
     ).toBe(true);
 
     const usageHeader = screen.getByRole('columnheader', { name: 'Usage' });
-    const sortableHeaderButtons = screen.getAllByRole('button', { name: /^Sort .* column/ });
-    expect(within(usageHeader).getByRole('button')).not.toHaveTextContent(/[▲▼]/);
-
-    fireEvent.click(within(usageHeader).getByRole('button', { name: 'Sort Usage column' }));
-    expect(usageHeader).toHaveAttribute('aria-sort', 'descending');
-    expect(within(usageHeader).getByRole('button')).toHaveTextContent('▼');
+    expect(within(usageHeader).queryByRole('button')).not.toBeInTheDocument();
+    expect(usageHeader).not.toHaveAttribute('aria-sort');
+    expect(screen.queryByRole('button', { name: /^Sort .* column/ })).not.toBeInTheDocument();
     expect(
-      sortableHeaderButtons.filter((button) => /[▲▼]/.test(button.textContent ?? '')),
-    ).toHaveLength(1);
+      screen.getAllByRole('columnheader').some((header) => /[▲▼]/.test(header.textContent ?? '')),
+    ).toBe(false);
+
     const viewOptions = openStorageViewOptions();
+    setStorageViewOption(viewOptions, 'Sort by', 'usage');
     expect((within(viewOptions).getByLabelText('Sort by') as HTMLSelectElement).value).toBe(
       'usage',
     );
 
-    fireEvent.click(
-      within(usageHeader).getByRole('button', { name: 'Sort Usage column ascending' }),
-    );
+    await waitFor(() => {
+      const orderedRowIds = Array.from(document.querySelectorAll('tr[data-row-id]')).map((row) =>
+        row.getAttribute('data-row-id'),
+      );
+      expect(orderedRowIds.slice(0, 2)).toEqual(['storage-2', 'storage-1']);
+    });
+
+    fireEvent.click(within(viewOptions).getByRole('button', { name: 'Sort direction' }));
 
     await waitFor(() => {
       const orderedRowIds = Array.from(document.querySelectorAll('tr[data-row-id]')).map((row) =>
@@ -897,6 +901,11 @@ describe('Storage', () => {
         '/proxmox/storage?group=node&summaryGroup=storage%3Anode%3Apve1',
         ROUTE_STATE_REPLACE_OPTIONS,
       );
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Expand pve1' }));
+
+    await waitFor(() => {
       expect(
         document.querySelectorAll('tr[data-summary-group-member-active="pinned"]'),
       ).toHaveLength(1);
@@ -938,6 +947,7 @@ describe('Storage', () => {
     render(() => <Storage />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Expand tank' }));
+    fireEvent.click(await screen.findByRole('tab', { name: 'History' }));
 
     await waitFor(() => {
       expect(metricsHistorySpy).toHaveBeenCalledWith(
