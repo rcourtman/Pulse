@@ -2275,6 +2275,17 @@ NOT admit the standalone platform page on its own. The canonical predicate is
 `unifiedresources.IsPulseAgentPlatformResource`; new agent surfaces MUST use it
 rather than testing `type == "agent"` or counting the `agent` source.
 
+### Recovery list pagination meta adjacency
+
+Recovery list pagination-meta normalization in
+`internal/api/recovery_handlers.go` (the clamped effective `limit` echoed in
+`meta`, `totalPages` computed from that effective page size) is an
+API-contracts and storage-recovery transport concern that lives under the
+shared `internal/api/` extension boundary. No agent lifecycle surface consumes
+the `/api/recovery/points` or `/api/recovery/rollups` list meta; lifecycle
+code MUST NOT treat that pagination meta as an agent enrollment, admission, or
+report-ingestion contract.
+
 ## Forbidden Paths
 
 1. New install or update continuity behavior hidden only inside broad monitoring ownership.

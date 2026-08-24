@@ -208,6 +208,121 @@ func TestHandleListRollupsExposeCanonicalPlatformsPayload(t *testing.T) {
 	}
 }
 
+func TestNormalizeRecoveryLimit(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		limit int
+		want  int
+	}{
+		{name: "clamps above max to 500", limit: 1000, want: 500},
+		{name: "zero falls back to default 100", limit: 0, want: 100},
+		{name: "negative falls back to default 100", limit: -5, want: 100},
+		{name: "in-range value passes through", limit: 250, want: 250},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if got := normalizeRecoveryLimit(tc.limit); got != tc.want {
+				t.Fatalf("normalizeRecoveryLimit(%d) = %d, want %d", tc.limit, got, tc.want)
+			}
+		})
+	}
+
+	// The misreport this pins: 1200 rollups at requested limit=1000 are served
+	// as 3 pages of 500, so meta must say 3, not ceil(1200/1000)=2.
+	limit := normalizeRecoveryLimit(1000)
+	if got := (1200 + limit - 1) / limit; got != 3 {
+		t.Fatalf("totalPages for total=1200 at requested limit=1000 = %d, want 3", got)
+	}
+}
+
+func assertRecoveryMetaUsesNormalizedLimit(t *testing.T, body []byte, wantLimit int) {
+	t.Helper()
+
+	var resp struct {
+		Meta struct {
+			Page       int `json:"page"`
+			Limit      int `json:"limit"`
+			Total      int `json:"total"`
+			TotalPages int `json:"totalPages"`
+		} `json:"meta"`
+	}
+	if err := json.Unmarshal(body, &resp); err != nil {
+		t.Fatalf("json.Unmarshal() error = %v", err)
+	}
+	if resp.Meta.Limit != wantLimit {
+		t.Fatalf("meta.limit = %d, want normalized %d", resp.Meta.Limit, wantLimit)
+	}
+	if resp.Meta.Page != 1 {
+		t.Fatalf("meta.page = %d, want 1", resp.Meta.Page)
+	}
+	wantPages := (resp.Meta.Total + wantLimit - 1) / wantLimit
+	if resp.Meta.TotalPages != wantPages {
+		t.Fatalf(
+			"meta.totalPages = %d, want %d (total %d at effective limit %d)",
+			resp.Meta.TotalPages, wantPages, resp.Meta.Total, wantLimit,
+		)
+	}
+}
+
+func TestHandleListRollupsMetaReportsNormalizedPagination(t *testing.T) {
+	setMockModeForTest(t, true)
+
+	tests := []struct {
+		name      string
+		rawLimit  string
+		wantLimit int
+	}{
+		{name: "limit above max reports the 500 cap", rawLimit: "1000", wantLimit: 500},
+		{name: "limit zero reports the default 100", rawLimit: "0", wantLimit: 100},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/api/recovery/rollups?limit="+tc.rawLimit, nil)
+			rec := httptest.NewRecorder()
+
+			NewRecoveryHandlers(nil).HandleListRollups(rec, req)
+
+			if rec.Code != http.StatusOK {
+				t.Fatalf("HandleListRollups() status = %d, want %d", rec.Code, http.StatusOK)
+			}
+			assertRecoveryMetaUsesNormalizedLimit(t, rec.Body.Bytes(), tc.wantLimit)
+		})
+	}
+}
+
+func TestHandleListPointsMetaReportsNormalizedPagination(t *testing.T) {
+	setMockModeForTest(t, true)
+
+	tests := []struct {
+		name      string
+		rawLimit  string
+		wantLimit int
+	}{
+		{name: "limit above max reports the 500 cap", rawLimit: "1000", wantLimit: 500},
+		{name: "limit zero reports the default 100", rawLimit: "0", wantLimit: 100},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/api/recovery/points?limit="+tc.rawLimit, nil)
+			rec := httptest.NewRecorder()
+
+			NewRecoveryHandlers(nil).HandleListPoints(rec, req)
+
+			if rec.Code != http.StatusOK {
+				t.Fatalf("HandleListPoints() status = %d, want %d", rec.Code, http.StatusOK)
+			}
+			assertRecoveryMetaUsesNormalizedLimit(t, rec.Body.Bytes(), tc.wantLimit)
+		})
+	}
+}
+
 func TestBuildRecoveryRollupPayloadExposesCanonicalItemResourceIDField(t *testing.T) {
 	verifiedAt := time.Date(2026, 7, 19, 6, 0, 0, 0, time.UTC)
 	payload := buildRecoveryRollupPayload(recovery.ProtectionRollup{

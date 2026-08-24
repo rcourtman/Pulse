@@ -191,8 +191,8 @@ func (h *RecoveryHandlers) HandleListPoints(w http.ResponseWriter, r *http.Reque
 	}
 
 	qs := r.URL.Query()
-	page := parseIntQuery(qs, "page", 1)
-	limit := parseIntQuery(qs, "limit", 100)
+	page := normalizeRecoveryPage(parseIntQuery(qs, "page", 1))
+	limit := normalizeRecoveryLimit(parseIntQuery(qs, "limit", recoveryDefaultPageLimit))
 
 	var from, to *time.Time
 	if t, err := parseRFC3339QueryTime(qs.Get("from")); err != nil {
@@ -271,11 +271,7 @@ func (h *RecoveryHandlers) HandleListPoints(w http.ResponseWriter, r *http.Reque
 	resp.Meta.Page = page
 	resp.Meta.Limit = limit
 	resp.Meta.Total = total
-	if limit <= 0 {
-		resp.Meta.TotalPages = 1
-	} else {
-		resp.Meta.TotalPages = (total + limit - 1) / limit
-	}
+	resp.Meta.TotalPages = (total + limit - 1) / limit
 
 	if err := utils.WriteJSONResponse(w, resp); err != nil {
 		log.Error().Err(err).Msg("Failed to serialize recovery points response")
@@ -583,22 +579,39 @@ func getDisplayItemType(d *recovery.RecoveryPointDisplay) string {
 	return recovery.NormalizeRecoveryItemType(d.SubjectType)
 }
 
+// Recovery list pagination bounds. These mirror the store-side clamps in
+// internal/recovery/store (normalizeLimit/normalizePage); the handler meta must
+// be computed from the same normalized values the serving paths use, or
+// totalPages misreports the real page count.
+const (
+	recoveryDefaultPageLimit = 100
+	recoveryMaxPageLimit     = 500
+)
+
+func normalizeRecoveryPage(page int) int {
+	if page <= 0 {
+		return 1
+	}
+	return page
+}
+
+func normalizeRecoveryLimit(limit int) int {
+	if limit <= 0 {
+		return recoveryDefaultPageLimit
+	}
+	if limit > recoveryMaxPageLimit {
+		return recoveryMaxPageLimit
+	}
+	return limit
+}
+
 func paginateRecoveryPoints(filtered []recovery.RecoveryPoint, page int, limit int) []recovery.RecoveryPoint {
 	if len(filtered) == 0 {
 		return []recovery.RecoveryPoint{}
 	}
 
-	normalizedLimit := limit
-	if normalizedLimit <= 0 {
-		normalizedLimit = 100
-	}
-	if normalizedLimit > 500 {
-		normalizedLimit = 500
-	}
-	normalizedPage := page
-	if normalizedPage <= 0 {
-		normalizedPage = 1
-	}
+	normalizedLimit := normalizeRecoveryLimit(limit)
+	normalizedPage := normalizeRecoveryPage(page)
 
 	offset := (normalizedPage - 1) * normalizedLimit
 	if offset >= len(filtered) {
@@ -618,8 +631,8 @@ func (h *RecoveryHandlers) HandleListRollups(w http.ResponseWriter, r *http.Requ
 	}
 
 	qs := r.URL.Query()
-	page := parseIntQuery(qs, "page", 1)
-	limit := parseIntQuery(qs, "limit", 100)
+	page := normalizeRecoveryPage(parseIntQuery(qs, "page", 1))
+	limit := normalizeRecoveryLimit(parseIntQuery(qs, "limit", recoveryDefaultPageLimit))
 
 	var from, to *time.Time
 	if t, err := parseRFC3339QueryTime(qs.Get("from")); err != nil {
@@ -687,12 +700,7 @@ func (h *RecoveryHandlers) HandleListRollups(w http.ResponseWriter, r *http.Requ
 		"page":       page,
 		"limit":      limit,
 		"total":      total,
-		"totalPages": 0,
-	}
-	if limit <= 0 {
-		meta["totalPages"] = 1
-	} else {
-		meta["totalPages"] = (total + limit - 1) / limit
+		"totalPages": (total + limit - 1) / limit,
 	}
 
 	payloadRollups := make([]recoveryRollupPayload, 0, len(rollups))
@@ -1094,17 +1102,8 @@ func paginateRecoveryRollups(filtered []recovery.ProtectionRollup, page int, lim
 		return []recovery.ProtectionRollup{}
 	}
 
-	normalizedLimit := limit
-	if normalizedLimit <= 0 {
-		normalizedLimit = 100
-	}
-	if normalizedLimit > 500 {
-		normalizedLimit = 500
-	}
-	normalizedPage := page
-	if normalizedPage <= 0 {
-		normalizedPage = 1
-	}
+	normalizedLimit := normalizeRecoveryLimit(limit)
+	normalizedPage := normalizeRecoveryPage(page)
 
 	offset := (normalizedPage - 1) * normalizedLimit
 	if offset >= len(filtered) {

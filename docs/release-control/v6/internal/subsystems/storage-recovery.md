@@ -1845,6 +1845,18 @@ canonical resource aggregations. A TrueNAS host admits the TrueNAS page and not
 the standalone page, and the shell MUST take that answer from the facet rather
 than inferring it from an agent-source count in a runtime payload.
 
+### Recovery list pagination meta
+
+The `/api/recovery/points` and `/api/recovery/rollups` list transports in
+`internal/api/recovery_handlers.go` clamp the requested page size to the
+canonical bounds (default 100, max 500) and report their pagination meta
+(`page`, `limit`, `totalPages`) from those normalized values. The store-side
+clamps in `internal/recovery/store` (`normalizeLimit` / `normalizePage`) MUST
+stay aligned with those handler-side bounds: a storage-side change to the
+serving page size that does not move the shared handler bounds re-opens the
+`totalPages` misreport that silently truncates rollup iteration for clients
+walking the reported page count.
+
 ## Forbidden Paths
 
 1. Reintroducing storage or recovery product logic as ad hoc dashboard-only summaries without a canonical page-surface owner
