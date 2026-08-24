@@ -56,7 +56,7 @@ describe('ProxmoxRecoverableTable responsive columns', () => {
       'Workload',
       'Via',
       'Loc',
-      'Age',
+      'Age▼',
       'State',
     ]);
     expect(document.body.textContent).toContain('VM 100');
@@ -73,7 +73,7 @@ describe('ProxmoxRecoverableTable responsive columns', () => {
       'Target ID',
       'Source',
       'Location',
-      'Created',
+      'Created▼',
       'Size',
       'State',
       'Details',

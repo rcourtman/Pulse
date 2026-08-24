@@ -153,7 +153,7 @@ describe('platform resource table drawers', () => {
     await expectRowOpensResourceDrawer(row!, system.id);
   });
 
-  it('opens native TrueNAS detail by default from TrueNAS storage topology rows', async () => {
+  it('keeps native TrueNAS provider detail collapsed from storage topology rows', async () => {
     const pool = makeResource({
       id: 'storage:tank',
       type: 'storage',
@@ -190,7 +190,7 @@ describe('platform resource table drawers', () => {
     );
     expect(screen.getByTestId('resource-detail-drawer')).toHaveAttribute(
       'data-initial-show-truenas-details',
-      'true',
+      'false',
     );
   });
 

@@ -79,7 +79,7 @@ describe('ProxmoxCoverageTable column visibility', () => {
     expect(headers).toContain('Type');
     expect(headers).toContain('Target ID');
     expect(headers).toContain('Node');
-    expect(headers).toContain('Posture');
+    expect(headers).toContain('Posture▲');
     expect(headers).toContain('Restore');
     expect(headers).toContain('PBS snapshot');
     expect(headers).toContain('Guest snapshot');
@@ -114,7 +114,7 @@ describe('ProxmoxCoverageTable column visibility', () => {
       />
     ));
 
-    expect(headerTexts()).toEqual(['Workload', 'Posture', 'Age', 'PBS', 'Job']);
+    expect(headerTexts()).toEqual(['Workload', 'Posture▲', 'Age', 'PBS', 'Job']);
     expect(document.body.textContent).toContain('Prot.');
     expect(document.body.textContent).not.toContain('VM 100 · pve1');
   });

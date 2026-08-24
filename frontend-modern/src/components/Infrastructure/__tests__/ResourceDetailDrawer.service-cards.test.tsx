@@ -4,6 +4,12 @@ import { fireEvent, render, within } from '@solidjs/testing-library';
 import type { Resource } from '@/types/resource';
 import { ResourceDetailDrawer } from '@/components/Infrastructure/ResourceDetailDrawer';
 
+const expandPlatformDetails = (getByTestId: (id: string) => HTMLElement): void => {
+  const details = getByTestId('resource-platform-details') as HTMLDetailsElement;
+  details.open = true;
+  fireEvent(details, new Event('toggle'));
+};
+
 const wsState = vi.hoisted(() => ({ pmg: [] as any[] }));
 const reconnectSpy = vi.hoisted(() => vi.fn());
 
@@ -90,6 +96,7 @@ describe('ResourceDetailDrawer service cards', () => {
       <ResourceDetailDrawer resource={resource} />
     ));
 
+    expandPlatformDetails(getByTestId);
     expect(getByText('Service')).toBeInTheDocument();
     expect(getByText('2 datastores · 3 jobs')).toBeInTheDocument();
     expect(getByText('Platform ID')).toBeInTheDocument();
@@ -105,7 +112,6 @@ describe('ResourceDetailDrawer service cards', () => {
     expect(queryByText('Job breakdown')).toBeNull();
     expect(queryByText('Types')).toBeNull();
     expect(queryByText('Show job detail')).toBeNull();
-    fireEvent.click(getByRole('button', { name: 'Show access' }));
     fireEvent.click(getByRole('button', { name: 'Show jobs' }));
     expect(getByText('Datastores')).toBeInTheDocument();
     expect(getByText('Jobs')).toBeInTheDocument();
@@ -183,6 +189,7 @@ describe('ResourceDetailDrawer service cards', () => {
       <ResourceDetailDrawer resource={resource} />
     ));
 
+    expandPlatformDetails(getByTestId);
     expect(getByText('2 datastores · 2 active tasks')).toBeInTheDocument();
     fireEvent.click(getByRole('button', { name: 'Show service' }));
     const serviceDetails = within(getByTestId('resource-service-details-section'));
@@ -224,10 +231,11 @@ describe('ResourceDetailDrawer service cards', () => {
       },
     });
 
-    const { getByText, getByRole, getByTestId, queryByText } = render(() => (
+    const { getByText, getByRole, getByTestId, queryByRole, queryByText } = render(() => (
       <ResourceDetailDrawer resource={resource} />
     ));
 
+    expandPlatformDetails(getByTestId);
     expect(getByText('Service')).toBeInTheDocument();
     expect(getByText('519 queued messages · 16 delayed messages')).toBeInTheDocument();
     expect(getByText('Platform ID')).toBeInTheDocument();
@@ -253,11 +261,7 @@ describe('ResourceDetailDrawer service cards', () => {
     expect(pmgSupportContext.getByText('Updated')).toBeInTheDocument();
     expect(getByText('Queue detail').closest('summary')?.textContent).toBe('Queue detail');
     expect(getByText('Mail detail').closest('summary')?.textContent).toBe('Mail detail');
-    fireEvent.click(getByRole('button', { name: 'Show access' }));
-    expect(getByRole('link', { name: /open pmg thresholds/i })).toHaveAttribute(
-      'href',
-      '/alerts/thresholds/mail-gateway',
-    );
+    expect(queryByRole('link', { name: /open pmg thresholds/i })).toBeNull();
   });
 
   it('keeps PMG freshness in support context even without a node count', () => {
@@ -282,6 +286,7 @@ describe('ResourceDetailDrawer service cards', () => {
 
     const { getByRole, getByTestId } = render(() => <ResourceDetailDrawer resource={resource} />);
 
+    expandPlatformDetails(getByTestId);
     fireEvent.click(getByRole('button', { name: 'Show service' }));
     fireEvent.click(getByRole('button', { name: 'Show mail flow' }));
     const pmgSupportContext = within(getByTestId('pmg-support-context'));
@@ -310,10 +315,11 @@ describe('ResourceDetailDrawer service cards', () => {
       },
     });
 
-    const { getByText, getByRole, queryByText } = render(() => (
+    const { getByText, getByRole, getByTestId, queryByText } = render(() => (
       <ResourceDetailDrawer resource={resource} />
     ));
 
+    expandPlatformDetails(getByTestId);
     expect(getByText('Service')).toBeInTheDocument();
     expect(getByText('18 containers · 4 updates')).toBeInTheDocument();
     fireEvent.click(getByRole('button', { name: 'Show service' }));

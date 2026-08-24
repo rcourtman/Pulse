@@ -17,11 +17,8 @@ the duplicated seams made future density, header, phone-disclosure, and form
 changes likely to drift. This slice removes those seams and turns the visual
 agreement into shared structure plus static enforcement.
 
-Rendered evidence is stored under:
-
-`/Users/rcourtman/.codex/visualizations/2026/08/24/01a03497-2e33-7a81-95ce-f33967bb968d/platform-audit`
-
-The directory contains a desktop and phone capture for every route in the
+Rendered evidence is stored in the task's `platform-audit` visual-artifact
+directory. It contains a desktop and phone capture for every route in the
 coverage matrix, representative open drawers and History tabs, post-change
 captures prefixed with `post-`, and independent Computer Use evidence.
 
@@ -204,6 +201,25 @@ well.
   semantics.
 - Availability check drawers intentionally omitting History when no useful
   historical series exists.
+
+## Verification closure
+
+- The eight focused stale-contract files passed **38 tests** after their
+  assertions were migrated to the canonical drawer, disclosure, sorting, and
+  operator-information contracts.
+- The four files that timed out only under the initial unbounded worker load
+  passed **115 tests** in isolated reruns, confirming contention rather than a
+  product or contract failure.
+- The bounded complete frontend suite passed **1,149 test files** with
+  **20,676 passing tests** and **3 intentionally skipped Windows-specific
+  tests**. One test file is intentionally skipped; there were no failed files,
+  unhandled worker errors, or RPC timeouts.
+- `npm run lint` passed, including the theme, copy, and canonical-platform
+  ownership audits. `npm run type-check` and the production `npm run build`
+  also passed.
+- The production build retained only the existing Vite advisory for modules
+  that are both statically and dynamically imported; it did not affect build
+  correctness or the canonical frontend contract.
 
 ## Remaining exceptions
 

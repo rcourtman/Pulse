@@ -7,8 +7,8 @@ const sectionSource = readFileSync(
   'utf-8',
 );
 
-const overviewTabSource = readFileSync(
-  resolve(__dirname, '..', 'ResourceDetailDrawerOverviewTab.tsx'),
+const drawerSource = readFileSync(
+  resolve(__dirname, '..', 'ResourceDetailDrawer.tsx'),
   'utf-8',
 );
 
@@ -79,14 +79,14 @@ describe('maintenanceVerification API client', () => {
   });
 });
 
-describe('ResourceDetailDrawerOverviewTab integration', () => {
+describe('ResourceDetailDrawer manage-tab integration', () => {
   it('renders MaintenanceVerificationSection directly under the operator-state section', () => {
-    expect(overviewTabSource).toContain("from './MaintenanceVerificationSection'");
-    expect(overviewTabSource).toContain(
-      '<MaintenanceVerificationSection resourceId={resource.id} />',
+    expect(drawerSource).toContain("from './MaintenanceVerificationSection'");
+    expect(drawerSource).toContain(
+      '<MaintenanceVerificationSection resourceId={props.resource.id} />',
     );
-    const operatorIndex = overviewTabSource.indexOf('<ResourceOperatorStateSection');
-    const verificationIndex = overviewTabSource.indexOf('<MaintenanceVerificationSection');
+    const operatorIndex = drawerSource.indexOf('<ResourceOperatorStateSection');
+    const verificationIndex = drawerSource.indexOf('<MaintenanceVerificationSection');
     expect(operatorIndex).toBeGreaterThan(0);
     expect(verificationIndex).toBeGreaterThan(operatorIndex);
   });

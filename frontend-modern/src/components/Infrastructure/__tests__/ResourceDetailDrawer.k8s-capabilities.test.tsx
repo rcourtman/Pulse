@@ -85,18 +85,19 @@ const buildKubernetesResource = (): Resource => ({
 });
 
 describe('ResourceDetailDrawer kubernetes capabilities', () => {
-  it('renders Kubernetes capability badges when metric capabilities are present', () => {
-    const { getByText } = render(() => (
+  it('keeps raw Kubernetes collection capabilities out of the operator overview', async () => {
+    const { queryByText } = render(() => (
       <ResourceDetailDrawer resource={buildKubernetesResource()} />
     ));
 
-    expect(getByText('Platform signals')).toBeInTheDocument();
-    expect(getByText('K8s Node CPU/Memory')).toBeInTheDocument();
-    expect(getByText('Node Telemetry (Agent)')).toBeInTheDocument();
-    expect(getByText('Pod CPU/Memory')).toBeInTheDocument();
-    expect(getByText('Pod Network')).toBeInTheDocument();
-    expect(getByText('Pod Ephemeral Disk')).toBeInTheDocument();
-    expect(getByText('Pod Disk I/O Unsupported')).toBeInTheDocument();
+    const details = (await screen.findByTestId('resource-platform-details')) as HTMLDetailsElement;
+    details.open = true;
+    fireEvent(details, new Event('toggle'));
+    expect(queryByText('Platform signals')).toBeNull();
+    expect(queryByText('K8s Node CPU/Memory')).toBeNull();
+    expect(queryByText('Node Telemetry (Agent)')).toBeNull();
+    expect(screen.getByRole('tab', { name: 'Namespaces' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Deployments' })).toBeInTheDocument();
   });
 
   it('uses the canonical Kubernetes cluster name for drawer fetch keys', async () => {

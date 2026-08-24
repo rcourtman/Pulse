@@ -4,6 +4,12 @@ import type { Resource } from '@/types/resource';
 import { ResourceDetailDrawer } from '../ResourceDetailDrawer';
 import { resetAIRuntimeState, syncAIRuntimeSettings } from '@/stores/aiRuntimeState';
 
+const expandPlatformDetails = (): void => {
+  const details = screen.getByTestId('resource-platform-details') as HTMLDetailsElement;
+  details.open = true;
+  fireEvent(details, new Event('toggle'));
+};
+
 vi.mock('@/components/Workloads/GuestDrawerHistory', () => ({
   GuestDrawerHistory: (props: {
     target: { resourceType: string; resourceId: string } | null;
@@ -149,7 +155,7 @@ describe('ResourceDetailDrawer machine metrics history', () => {
     expect(discovery).toHaveAttribute('data-manual-run', 'true');
   });
 
-  it('opens agent machine facts by default in table-row presentation', () => {
+  it('keeps agent machine facts behind the shared nested detail disclosures', () => {
     render(() => (
       <ResourceDetailDrawer
         presentation="table-row"
@@ -191,12 +197,15 @@ describe('ResourceDetailDrawer machine metrics history', () => {
       />
     ));
 
+    expect(screen.queryByTestId('resource-host-details-section')).toBeNull();
+    expandPlatformDetails();
     const machineSection = screen.getByTestId('resource-host-details-section');
     expect(within(machineSection).getByText('Machine')).toBeInTheDocument();
     expect(
-      within(machineSection).getByRole('button', { name: 'Hide details' }),
+      within(machineSection).getByRole('button', { name: 'Show details' }),
     ).toBeInTheDocument();
-    expect(within(machineSection).queryByRole('button', { name: 'Show details' })).toBeNull();
+    expect(within(machineSection).queryByRole('button', { name: 'Hide details' })).toBeNull();
+    fireEvent.click(within(machineSection).getByRole('button', { name: 'Show details' }));
     expect(within(machineSection).getByText('richard-mac-mini.local')).toBeInTheDocument();
     expect(within(machineSection).getByText('Network')).toBeInTheDocument();
     expect(within(machineSection).getByText('192.168.0.42')).toBeInTheDocument();
@@ -228,6 +237,8 @@ describe('ResourceDetailDrawer machine metrics history', () => {
       />
     ));
 
+    expect(screen.queryByTestId('resource-host-details-section')).toBeNull();
+    expandPlatformDetails();
     const hostSection = screen.getByTestId('resource-host-details-section');
     expect(within(hostSection).getByText('Host')).toBeInTheDocument();
     expect(within(hostSection).getByRole('button', { name: 'Show host' })).toBeInTheDocument();
