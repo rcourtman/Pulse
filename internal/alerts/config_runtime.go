@@ -377,6 +377,16 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 			primaryResourceType = resourceTypeKeys[0]
 		}
 
+		if connectionType, ok := connectionTypeFromAlert(alert); ok {
+			policyResourceID := metadataStringValue(alert.Metadata, "policyResourceID")
+			if m.connectionDegradedPolicyDisabledNoLock(resourceID, policyResourceID, connectionType) {
+				alertsToResolve = append(alertsToResolve, alertID)
+				delete(m.connectionDegradedCount, resourceID)
+				delete(m.offlineRecoveryConfirmations, alertID)
+			}
+			continue
+		}
+
 		if alert.Type == "queue-depth" || alert.Type == "queue-deferred" || alert.Type == "queue-hold" || alert.Type == "message-age" {
 			if m.config.DisableAllPMG {
 				alertsToResolve = append(alertsToResolve, alertID)

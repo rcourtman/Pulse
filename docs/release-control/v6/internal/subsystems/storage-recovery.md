@@ -57,6 +57,11 @@ The shared alerts API may persist and apply `schedule.initialNotify` for email,
 webhook, or Apprise delivery. That notification routing is not storage-health,
 backup, recovery-point, restore, or protection evidence; storage/recovery
 surfaces must not infer product state from the selected destination.
+The shared Connections aggregation path may also carry an unexported PBS/PMG
+monitor-resource identity into alert evaluation so availability policy resolves
+against the owning resource rather than the public ledger row ID. That routing
+identity must not enter the public Connections payload, become recovery-point
+identity, or be interpreted as backup, restore, or protection evidence.
 The shared AI handlers may reopen dismissed Patrol findings and synchronize
 the unified finding projection. That finding-state transition does not create,
 delete, validate, or restore recovery points and must not be treated as

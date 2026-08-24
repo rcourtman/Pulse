@@ -10,23 +10,25 @@ import (
 )
 
 type canonicalLifecycleAlertParams struct {
-	Spec          alertspecs.ResourceAlertSpec
-	Evidence      alertspecs.AlertEvidence
-	Tracking      map[string]int
-	TrackingKey   string
-	AlertID       string
-	AlertType     string
-	ResourceID    string
-	ResourceName  string
-	Node          string
-	Instance      string
-	Message       string
-	Metadata      map[string]interface{}
-	AddToRecent   bool
-	AddToHistory  bool
-	RateLimit     bool
-	DispatchAsync bool
-	IntentBackup  BackupIntentContext
+	Spec                 alertspecs.ResourceAlertSpec
+	Evidence             alertspecs.AlertEvidence
+	IntentSignal         string
+	PolicyDisabledNoLock func() bool
+	Tracking             map[string]int
+	TrackingKey          string
+	AlertID              string
+	AlertType            string
+	ResourceID           string
+	ResourceName         string
+	Node                 string
+	Instance             string
+	Message              string
+	Metadata             map[string]interface{}
+	AddToRecent          bool
+	AddToHistory         bool
+	RateLimit            bool
+	DispatchAsync        bool
+	IntentBackup         BackupIntentContext
 }
 
 type canonicalStatefulAlertParams struct {
@@ -336,6 +338,14 @@ func (m *Manager) evaluateCanonicalLifecycleAlert(params canonicalLifecycleAlert
 	}()
 	defer m.mu.Unlock()
 
+	// Recheck mutable policy while holding the same lock used for lifecycle
+	// state and dispatch. This closes the save-vs-dispatch race where policy
+	// could be disabled after a detector's initial snapshot but before it
+	// activated the alert.
+	if params.PolicyDisabledNoLock != nil && params.PolicyDisabledNoLock() {
+		params.Spec.Disabled = true
+	}
+
 	storageKey := canonicalTrackingKeyForSpec(params.Spec, params.AlertID)
 	trackingKey := storageKey
 
@@ -374,8 +384,8 @@ func (m *Manager) evaluateCanonicalLifecycleAlert(params canonicalLifecycleAlert
 		}
 	}
 
-	intentSignal := ""
-	if params.Spec.Kind == alertspecs.AlertSpecKindConnectivity || params.Spec.Kind == alertspecs.AlertSpecKindPoweredState {
+	intentSignal := params.IntentSignal
+	if intentSignal == "" && (params.Spec.Kind == alertspecs.AlertSpecKindConnectivity || params.Spec.Kind == alertspecs.AlertSpecKindPoweredState) {
 		intentSignal = string(AlertIntentSignalOffline)
 	}
 	if intentSignal != "" && existing == nil {
@@ -384,7 +394,7 @@ func (m *Manager) evaluateCanonicalLifecycleAlert(params canonicalLifecycleAlert
 		if decision.StateChanged {
 			m.saveActiveAlertsAsync("lifecycle intent state")
 		}
-		if decision.Effective.Explicit && conditionActive && !decision.ShouldActivate {
+		if conditionActive && !decision.ShouldActivate && (decision.Effective.Explicit || decision.Suppressed) {
 			result.State.State = alertspecs.AlertStatePending
 			result.State.Reason = decision.Reason
 			if pending, ok := m.intentPending[storageKey]; ok && !pending.FirstMatchedAt.IsZero() {

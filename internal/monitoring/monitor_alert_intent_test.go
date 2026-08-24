@@ -39,6 +39,15 @@ func TestInstallOperatorIntentResolverProjectsCanonicalResourcePolicy(t *testing
 	}
 }
 
+func TestPlatformMonitorResourceIdentityConstructors(t *testing.T) {
+	if got := PBSMonitorResourceID("backup-main"); got != "pbs-backup-main" {
+		t.Fatalf("PBS monitor resource ID = %q", got)
+	}
+	if got := PMGMonitorResourceID("mail-main"); got != "pmg-mail-main" {
+		t.Fatalf("PMG monitor resource ID = %q", got)
+	}
+}
+
 func TestResolveBackupIntentContextRequiresFreshActiveMatchingEvidence(t *testing.T) {
 	now := time.Date(2026, 7, 20, 12, 0, 0, 0, time.UTC)
 	state := models.NewState()

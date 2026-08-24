@@ -410,7 +410,7 @@ func quietHoursCategoryForAlert(alert *Alert) string {
 			return "offline"
 		}
 		return "performance"
-	case "connectivity", "offline", "powered-off", "docker-host-offline":
+	case "connectivity", "offline", "powered-off", "docker-host-offline", connectionDegradedAlertType:
 		return "offline"
 	}
 

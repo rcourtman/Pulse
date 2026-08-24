@@ -264,6 +264,15 @@ notification-owned queue truth. When retained terminal failures exist, the
 Destinations surface exposes explicit retry and dismiss actions with
 consequence confirmations, refreshes health and delivery history after either
 action, and never instructs the operator to delete queue storage.
+Platform `connection-degraded` alerts are availability observations of their
+owning PVE, PBS, PMG, VMware, or TrueNAS resource, not a separate policy
+surface. They must honor that resource's disabled and connectivity-disabled
+override, the platform-wide alert and offline-alert switches, offline intent
+and quiet-hours policy, and must clear immediately when that policy becomes
+disabled. The connection snapshot must carry the owning monitor resource ID
+used by registry alias resolution; the ledger's display ID is not a substitute
+for that policy identity. A second connection detector must never notify around
+a resource's offline-alert toggle.
 Alert runtime state has one explicit ownership boundary: `AlertConfig.enabled`
 controls detector evaluation and in-product alert visibility, while
 `AlertConfig.activationState` controls external notification delivery only.

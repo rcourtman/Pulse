@@ -186,11 +186,15 @@ func buildConnections(in aggregatorInputs) []Connection {
 	}
 	for _, pbs := range in.pbsInstances {
 		interval := effectivePollInterval(in.pbsPollingInterval, in.plannedPollIntervals["pbs::"+pbs.Name])
-		out = append(out, buildPBSConnection(pbs, in.instanceHealth, now, interval, in.pbsReportedNodeNames[pbs.Name]))
+		connection := buildPBSConnection(pbs, in.instanceHealth, now, interval, in.pbsReportedNodeNames[pbs.Name])
+		connection.alertPolicyResourceID = monitoring.PBSMonitorResourceID(pbs.Name)
+		out = append(out, connection)
 	}
 	for _, pmg := range in.pmgInstances {
 		interval := effectivePollInterval(in.pmgPollingInterval, in.plannedPollIntervals["pmg::"+pmg.Name])
-		out = append(out, buildPMGConnection(pmg, in.instanceHealth, now, interval))
+		connection := buildPMGConnection(pmg, in.instanceHealth, now, interval)
+		connection.alertPolicyResourceID = monitoring.PMGMonitorResourceID(pmg.Name)
+		out = append(out, connection)
 	}
 	for _, vmw := range in.vmwareInstances {
 		out = append(out, buildVMwareConnection(vmw, in.instanceHealth, in.vmwareSummaries, now))

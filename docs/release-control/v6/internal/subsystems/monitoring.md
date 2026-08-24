@@ -40,6 +40,11 @@ Monitoring owns source freshness cadence for Proxmox, PBS, and PMG resources:
 the stale threshold is derived from the configured polling interval with a
 minimum floor, so API-facing resource status must not degrade merely because a
 healthy source is between normal poll cycles.
+PBS and PMG configured instances also have one monitoring-owned runtime
+resource identity constructor. Poll publication, connection status, setup and
+auto-registration checks, canonical alias resolution, and alert-policy bridges
+must all use that constructor rather than rebuilding `pbs-<name>` or
+`pmg-<name>` independently.
 Proxmox guest enumeration is a generation boundary. VM and LXC collection and
 enrichment must finish before one `State.UpdateGuestsForInstance` publication,
 so readers never observe a VM-only or LXC-only intermediate snapshot. A failed

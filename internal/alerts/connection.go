@@ -54,14 +54,15 @@ type ConnectionErrorSnapshot struct {
 // this shape before invoking CheckConnection so alerts does not depend on
 // api.
 type ConnectionSnapshot struct {
-	ID          string
-	Name        string
-	Type        ConnectionType
-	State       ConnectionState
-	StateReason string
-	Enabled     bool
-	LastSeen    *time.Time
-	LastError   *ConnectionErrorSnapshot
+	ID               string
+	PolicyResourceID string
+	Name             string
+	Type             ConnectionType
+	State            ConnectionState
+	StateReason      string
+	Enabled          bool
+	LastSeen         *time.Time
+	LastError        *ConnectionErrorSnapshot
 }
 
 // connectionDegradedAlertType is the alert.Type emitted for connection-degraded
@@ -83,6 +84,77 @@ func isPlatformConnectionType(t ConnectionType) bool {
 	}
 }
 
+// connectionDegradedPolicyDisabledNoLock applies the alert policy owned by
+// the platform resource to its canonical connection-degraded lifecycle. A
+// platform connection is another observation of that resource's
+// availability, not an independent alert-policy surface. Callers must hold at
+// least m.mu.RLock.
+func (m *Manager) connectionDegradedPolicyDisabledNoLock(resourceID, policyResourceID string, connectionType ConnectionType) bool {
+	if !m.config.Enabled {
+		return true
+	}
+
+	thresholdType := ""
+	switch connectionType {
+	case ConnectionTypePVE:
+		if m.config.DisableAllNodes || m.config.DisableAllNodesOffline {
+			return true
+		}
+		thresholdType = "node"
+	case ConnectionTypePBS:
+		if m.config.DisableAllPBS || m.config.DisableAllPBSOffline {
+			return true
+		}
+		thresholdType = "pbs"
+	case ConnectionTypePMG:
+		if m.config.DisableAllPMG || m.config.DisableAllPMGOffline {
+			return true
+		}
+		thresholdType = "pmg"
+	case ConnectionTypeVMware:
+		if m.config.DisableAllVMware {
+			return true
+		}
+		thresholdType = "vmware-host"
+	case ConnectionTypeTrueNAS:
+		if m.config.DisableAllTrueNAS {
+			return true
+		}
+		thresholdType = "truenas-system"
+	default:
+		return true
+	}
+
+	policyResourceID = strings.TrimSpace(policyResourceID)
+	if policyResourceID == "" {
+		policyResourceID = resourceID
+	}
+	thresholds := m.resolveResourceThresholds(thresholdType, policyResourceID)
+	return thresholds.Disabled || thresholds.DisableConnectivity
+}
+
+func connectionTypeFromAlert(alert *Alert) (ConnectionType, bool) {
+	if alert == nil || alert.Type != connectionDegradedAlertType {
+		return "", false
+	}
+	connectionType := ConnectionType(strings.TrimSpace(metadataStringValue(alert.Metadata, "connectionType")))
+	return connectionType, isPlatformConnectionType(connectionType)
+}
+
+// suppressConnectionDegradedAlert immediately removes detector tracking and
+// any active alert when the connection or its availability policy is disabled.
+// Policy changes are authoritative and do not need healthy-poll confirmation.
+func (m *Manager) suppressConnectionDegradedAlert(snap ConnectionSnapshot) {
+	alertID := canonicalDiscreteStateStateID(snap.ID, connectionDegradedStateKey)
+
+	m.mu.Lock()
+	delete(m.connectionDegradedCount, snap.ID)
+	delete(m.offlineRecoveryConfirmations, alertID)
+	m.mu.Unlock()
+
+	m.clearAlert(alertID)
+}
+
 // CheckConnection raises or clears the connection-degraded alert for one
 // platform connection. Severity scales with observed state: stale → warning,
 // unreachable / unauthorized → critical. State=active runs through the
@@ -95,8 +167,11 @@ func (m *Manager) CheckConnection(snap ConnectionSnapshot) {
 	if strings.TrimSpace(snap.ID) == "" {
 		return
 	}
-	if !snap.Enabled || snap.State == ConnectionStatePaused {
-		m.clearConnectionDegradedAlert(snap)
+	m.mu.RLock()
+	policyDisabled := m.connectionDegradedPolicyDisabledNoLock(snap.ID, snap.PolicyResourceID, snap.Type)
+	m.mu.RUnlock()
+	if !snap.Enabled || snap.State == ConnectionStatePaused || policyDisabled {
+		m.suppressConnectionDegradedAlert(snap)
 		return
 	}
 
@@ -162,6 +237,9 @@ func (m *Manager) CheckConnection(snap ConnectionSnapshot) {
 		"connectionType": string(snap.Type),
 		"state":          string(snap.State),
 	}
+	if policyResourceID := strings.TrimSpace(snap.PolicyResourceID); policyResourceID != "" {
+		metadata["policyResourceID"] = policyResourceID
+	}
 	if reason != "" {
 		metadata["stateReason"] = reason
 	}
@@ -186,6 +264,10 @@ func (m *Manager) CheckConnection(snap ConnectionSnapshot) {
 				StateKey: connectionDegradedStateKey,
 				Observed: string(snap.State),
 			},
+		},
+		IntentSignal: string(AlertIntentSignalOffline),
+		PolicyDisabledNoLock: func() bool {
+			return m.connectionDegradedPolicyDisabledNoLock(snap.ID, snap.PolicyResourceID, snap.Type)
 		},
 		Tracking:      m.connectionDegradedCount,
 		TrackingKey:   snap.ID,

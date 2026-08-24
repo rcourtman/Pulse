@@ -96,6 +96,20 @@ func TestContractPatrolInternalBridgePreservesBoundedToolAuthority(t *testing.T)
 	}
 }
 
+func TestContractConnectionAlertPolicyIdentityStaysInternal(t *testing.T) {
+	payload, err := json.Marshal(Connection{
+		ID:                    "pbs:backup-main",
+		Type:                  ConnectionTypePBS,
+		alertPolicyResourceID: monitoring.PBSMonitorResourceID("backup-main"),
+	})
+	if err != nil {
+		t.Fatalf("marshal connection: %v", err)
+	}
+	if bytes.Contains(payload, []byte("alertPolicyResourceID")) || bytes.Contains(payload, []byte("pbs-backup-main")) {
+		t.Fatalf("internal alert policy identity leaked into public connection payload: %s", payload)
+	}
+}
+
 func TestContractAIChatRestartReappliesLiveRuntimeWiring(t *testing.T) {
 	mockSvc := &MockAIService{}
 	mockSvc.On("Restart", tmock.Anything, tmock.Anything).Return(nil)

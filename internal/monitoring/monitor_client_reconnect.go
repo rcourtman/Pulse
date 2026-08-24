@@ -166,7 +166,7 @@ func (m *Monitor) retryFailedConnections(ctx context.Context) {
 					m.stalenessTracker.UpdateError(InstanceTypePBS, pbsInst.Name)
 				}
 				m.publishPBSConnectionOutcome(models.PBSInstance{
-					ID:       "pbs-" + pbsInst.Name,
+					ID:       PBSMonitorResourceID(pbsInst.Name),
 					Name:     pbsInst.Name,
 					Host:     pbsInst.Host,
 					GuestURL: pbsInst.GuestURL,

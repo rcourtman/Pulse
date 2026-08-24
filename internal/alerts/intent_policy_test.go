@@ -11,6 +11,36 @@ import (
 func intPointer(value int) *int    { return &value }
 func boolPointer(value bool) *bool { return &value }
 
+func TestConnectionDegradedCanonicalLifecycleHonorsOwningOfflinePolicy(t *testing.T) {
+	pbs, adapter, canonicalID := newPBSOfflinePolicyFixture(t)
+	m := newTestManager(t)
+	m.SetResourceIntentIdentityResolver(adapter.ResolveCanonicalResourceID)
+
+	cfg := m.GetConfig()
+	cfg.ActivationState = ActivationActive
+	cfg.Overrides = map[string]ThresholdConfig{
+		canonicalID: {DisableConnectivity: true},
+	}
+	m.UpdateConfig(cfg)
+
+	snapshot := ConnectionSnapshot{
+		ID:               "pbs:" + pbs.Name,
+		PolicyResourceID: pbs.ID,
+		Name:             pbs.Name,
+		Type:             ConnectionTypePBS,
+		State:            ConnectionStateUnreachable,
+		Enabled:          true,
+	}
+	for range 5 {
+		m.CheckConnection(snapshot)
+	}
+
+	alertID := canonicalDiscreteStateStateID(snapshot.ID, connectionDegradedStateKey)
+	if testHasActiveAlert(t, m, alertID) {
+		t.Fatal("connection-degraded bypassed the canonical PBS offline policy")
+	}
+}
+
 func TestAlertIntentPolicyResolutionPrecedenceIsFieldByField(t *testing.T) {
 	m := NewManagerWithDataDir(t.TempDir())
 	t.Cleanup(m.Stop)

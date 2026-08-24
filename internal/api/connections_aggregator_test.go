@@ -138,6 +138,25 @@ func TestBuildConnections_SortsByTypeThenName(t *testing.T) {
 	}
 }
 
+func TestBuildConnectionsCarriesMonitorPolicyIdentityForPBSAndPMG(t *testing.T) {
+	got := buildConnections(aggregatorInputs{
+		pbsInstances: []config.PBSInstance{{Name: "backup-main"}},
+		pmgInstances: []config.PMGInstance{{Name: "mail-main"}},
+		now:          time.Now(),
+	})
+
+	policyIDs := make(map[ConnectionType]string, len(got))
+	for _, connection := range got {
+		policyIDs[connection.Type] = connection.alertPolicyResourceID
+	}
+	if policyIDs[ConnectionTypePBS] != monitoring.PBSMonitorResourceID("backup-main") {
+		t.Fatalf("PBS alert policy ID = %q, want monitor resource identity", policyIDs[ConnectionTypePBS])
+	}
+	if policyIDs[ConnectionTypePMG] != monitoring.PMGMonitorResourceID("mail-main") {
+		t.Fatalf("PMG alert policy ID = %q, want monitor resource identity", policyIDs[ConnectionTypePMG])
+	}
+}
+
 func TestBuildConnections_PVEPausedRespectsDisabled(t *testing.T) {
 	in := aggregatorInputs{
 		pveInstances: []config.PVEInstance{{Name: "pve1", Host: "https://pve1.lan:8006", Disabled: true}},

@@ -100,10 +100,11 @@ func TestBranchcov0722SnapshotConnectionsForAlerts(t *testing.T) {
 				},
 			},
 			{
-				ID:    "pbs:store-1",
-				Type:  ConnectionTypePBS,
-				Name:  "store-1",
-				State: ConnectionStateActive,
+				ID:                    "pbs:store-1",
+				Type:                  ConnectionTypePBS,
+				Name:                  "store-1",
+				State:                 ConnectionStateActive,
+				alertPolicyResourceID: "pbs-store-1",
 			},
 		}
 
@@ -138,10 +139,11 @@ func TestBranchcov0722SnapshotConnectionsForAlerts(t *testing.T) {
 
 		// Sparse row with no LastSeen / no LastError: those fields stay nil.
 		wantPBS := alerts.ConnectionSnapshot{
-			ID:    "pbs:store-1",
-			Name:  "store-1",
-			Type:  alerts.ConnectionTypePBS,
-			State: alerts.ConnectionStateActive,
+			ID:               "pbs:store-1",
+			PolicyResourceID: "pbs-store-1",
+			Name:             "store-1",
+			Type:             alerts.ConnectionTypePBS,
+			State:            alerts.ConnectionStateActive,
 		}
 		if !reflect.DeepEqual(got[1], wantPBS) {
 			t.Fatalf("pbs snapshot mismatch:\n got  %+v\n want %+v", got[1], wantPBS)
