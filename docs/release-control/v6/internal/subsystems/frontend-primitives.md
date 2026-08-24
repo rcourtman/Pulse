@@ -107,6 +107,27 @@ on Overview or reintroduce object-local tab or range-selector chrome. The
 metrics and chart groups may remain object-specific without changing this
 navigation contract.
 
+Platform inventory presentation has one structural owner across provider pages,
+drawers, and inline detail rows. `PlatformTableShell` owns framed page tables;
+`PlatformDetailTable`, `PlatformDetailTableHeader`, and
+`PlatformDetailTableBody` own cardless nested tables while reusing the same
+header band, borders, single-line density, responsive table class, and overflow
+boundary. Provider-specific columns and cell contents are intentional variants,
+but a drawer or expanded row must not rebuild raw `table` / `thead` / `tbody`
+chrome or duplicate the shared header class strings.
+
+Expandable platform summary rows use
+`getPlatformResourceDetailRowInteractionProps` (or
+`createPlatformResourceDetailState`, which owns the same state contract) for
+whole-row pointer activation, Enter/Space keyboard activation, focus treatment,
+`aria-expanded` / `aria-controls`, and exclusion of embedded links and controls.
+`PlatformResourceDetailToggleButton` is the desktop disclosure affordance and
+is visually removed on phone layouts where the complete row is the touch target;
+provider tables must not add a second mobile chevron. Operator overrides remain
+in the shared `Manage` tab and use the explicit compact density of `FormSelect`
+and `FormTextarea`, keeping form labels, help relationships, touch targets, and
+control chrome canonical without expanding the low-frequency management surface.
+
 
 Presentation helpers that mirror a server-side classification must name the
 predicate they mirror and expose it as a single exported function rather than
@@ -270,6 +291,10 @@ puts the same machine on two surfaces that do not share an identity.
      131c. `frontend-modern/src/features/platformPage/PlatformOutdatedAgentNotice.tsx`
      131d. `frontend-modern/src/features/platformPage/PlatformOutdatedSensorSetupNotice.tsx`
      131e. `frontend-modern/src/features/platformPage/platformEstateOverviewModel.ts`
+     131f. `frontend-modern/src/components/shared/Form.ts`
+     131g. `frontend-modern/src/components/shared/FormSelect.tsx`
+     131h. `frontend-modern/src/components/shared/FormTextarea.tsx`
+     131i. `frontend-modern/src/components/Infrastructure/ResourceOperatorStateSection.tsx`
 132. `frontend-modern/src/utils/platformSupportManifest.generated.ts`
 133. `frontend-modern/src/utils/platformSupportManifest.ts`
 134. `frontend-modern/src/utils/sourcePlatformOptions.ts`

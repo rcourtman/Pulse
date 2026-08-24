@@ -2167,6 +2167,28 @@
       ]
     },
     {
+      "id": "platform-detail-table-shell",
+      "category": "platform-table-shell",
+      "summary": "Cardless tables inside platform drawers and inline detail rows compose the canonical platform table structure instead of duplicating header, body, density, and overflow chrome.",
+      "canonical": {
+        "path": "src/features/platformPage/sharedPlatformPage.tsx",
+        "export": "PlatformDetailTable"
+      },
+      "requiredConsumers": [
+        { "path": "src/components/Docker/SwarmServicesDrawer.tsx" },
+        { "path": "src/components/Kubernetes/K8sDeploymentsDrawer.tsx" },
+        { "path": "src/components/Kubernetes/K8sNamespacesDrawer.tsx" },
+        { "path": "src/features/proxmox/ProxmoxCephClusterDrawer.tsx" },
+        { "path": "src/features/proxmox/ProxmoxCoverageTable.tsx" },
+        { "path": "src/features/proxmox/ProxmoxMailGatewayDrawer.tsx" }
+      ],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/features/platformPage/__tests__/sharedPlatformPage.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
       "id": "platform-table-loading-state",
       "category": "platform-table-loading-state",
       "summary": "Platform page and table loading states must compose PlatformTableLoadingState instead of recreating local TableCard status rows.",
@@ -4728,7 +4750,10 @@
         "src/features/vmware"
       ],
       "extensions": [".tsx"],
-      "allPatterns": ["flex justify-center", "text-xs text-muted", "aria-hidden=\"true\""],
+      "allPatterns": [
+        "class=\"flex justify-center\"",
+        "class=\"text-xs text-muted\" aria-hidden=\"true\""
+      ],
       "legacyReason": "Retired migration debt. Platform metric cells must compose PlatformTableMetricFallback instead of carrying inline centered dash fallback markup.",
       "allowedPaths": [],
       "ignoredPaths": [],
@@ -5256,6 +5281,7 @@
       },
       "scopes": ["src/components", "src/features"],
       "extensions": [".tsx"],
+      "pathExcludes": [".test.", "__tests__"],
       "allPatterns": ["<select"],
       "legacyReason": "Retired migration debt. Native select controls must use FormSelect for label/id/select chrome wiring and dynamic option value synchronization.",
       "allowedPaths": [],
@@ -6566,9 +6592,40 @@
       "extensions": [".tsx"],
       "triggerPatterns": ["data-inline", "aria-expanded"],
       "requiredPatterns": ["PlatformResourceDetailToggleButton"],
+      "pathExcludes": ["__tests__"],
       "allowedPaths": [],
       "proof": [
         "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "platform-row-detail-whole-row-activation",
+      "category": "row-disclosure",
+      "summary": "Platform inline-detail tables compose the canonical whole-row pointer, keyboard, focus, and aria interaction contract.",
+      "canonical": {
+        "path": "src/features/platformPage/PlatformResourceDetailTableRow.tsx",
+        "export": "getPlatformResourceDetailRowInteractionProps"
+      },
+      "scopes": [
+        "src/features/docker",
+        "src/features/kubernetes",
+        "src/features/proxmox",
+        "src/features/standalone",
+        "src/features/truenas",
+        "src/features/vmware"
+      ],
+      "extensions": [".tsx"],
+      "triggerPatterns": ["PlatformResourceDetailToggleButton", "data-inline-detail-for"],
+      "requiredAnyPatterns": [
+        "createPlatformResourceDetailState",
+        "getPlatformResourceDetailRowInteractionProps"
+      ],
+      "pathExcludes": ["__tests__"],
+      "allowedPaths": [],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/features/platformPage/__tests__/PlatformResourceDetailTableRow.test.tsx",
         "scripts/shared-template-audit.mjs"
       ]
     },
@@ -6648,6 +6705,7 @@
       "extensions": [".tsx"],
       "triggerPatterns": ["detail-row", "TableRow"],
       "requiredPatterns": ["InlineDetailTableRow"],
+      "pathExcludes": ["__tests__"],
       "allowedPaths": [],
       "proof": [
         "src/components/shared/SharedPrimitives.guardrails.test.ts",

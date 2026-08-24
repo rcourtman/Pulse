@@ -22,7 +22,14 @@ import { type FilterOption as PlatformTableFilterOption } from '@/components/sha
 import { FilterBar, filterChipStatusDot, type FilterDef } from '@/components/shared/FilterBar';
 import { FilterSegmentedControl } from '@/components/shared/FilterToolbar';
 import { type SearchInputProps, type SearchInputSuggestion } from '@/components/shared/SearchInput';
-import { Table, TableBody, TableHead, TableHeader, TableRow } from '@/components/shared/Table';
+import {
+  Table,
+  TableBody,
+  TableHead,
+  TableHeader,
+  TableRow,
+  type TableProps,
+} from '@/components/shared/Table';
 import { getTableSortIndicator } from '@/components/shared/tableSortPresentation';
 import { TableCard } from '@/components/shared/TableCard';
 import { TableCardHeader } from '@/components/shared/TableCardHeader';
@@ -280,6 +287,32 @@ export function getPlatformTableClass(tableClass?: string): string {
     .join(' ');
 }
 
+// Cardless tables inside drawers and inline detail rows share the exact same
+// header, body, density, overflow, and responsive class boundary as page
+// tables. Domain-specific columns remain caller-owned; the table chrome does
+// not fork merely because it is nested.
+export function PlatformDetailTable(props: TableProps) {
+  return <Table {...props} class={getPlatformTableClass(props.class)} />;
+}
+
+export function PlatformDetailTableHeader(props: { children: JSX.Element; class?: string }) {
+  return (
+    <TableHeader>
+      <TableRow class={`${PLATFORM_TABLE_HEADER_ROW_CLASS} ${props.class ?? ''}`.trim()}>
+        {props.children}
+      </TableRow>
+    </TableHeader>
+  );
+}
+
+export function PlatformDetailTableBody(props: { children: JSX.Element; class?: string }) {
+  return (
+    <TableBody class={`${PLATFORM_TABLE_BODY_CLASS} ${props.class ?? ''}`.trim()}>
+      {props.children}
+    </TableBody>
+  );
+}
+
 export type PlatformTableShellProps = {
   title?: JSX.Element;
   actions?: JSX.Element;
@@ -296,13 +329,11 @@ export function PlatformTableShell(props: PlatformTableShellProps) {
   return (
     <TableCard class={props.cardClass ?? PLATFORM_TABLE_CARD_CLASS}>
       <TableCardHeader title={props.title} actions={props.actions} />
-      <Table class={getPlatformTableClass(props.tableClass)} wrapperClass={props.tableWrapperClass}>
+      <PlatformDetailTable class={props.tableClass} wrapperClass={props.tableWrapperClass}>
         {props.colgroup}
-        <TableHeader>
-          <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>{props.header}</TableRow>
-        </TableHeader>
-        <TableBody class={PLATFORM_TABLE_BODY_CLASS}>{props.body}</TableBody>
-      </Table>
+        <PlatformDetailTableHeader>{props.header}</PlatformDetailTableHeader>
+        <PlatformDetailTableBody>{props.body}</PlatformDetailTableBody>
+      </PlatformDetailTable>
       {props.footer}
     </TableCard>
   );

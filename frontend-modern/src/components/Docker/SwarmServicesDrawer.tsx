@@ -4,20 +4,14 @@ import { apiFetchJSON } from '@/utils/apiClient';
 import { Card } from '@/components/shared/Card';
 import { SearchInput } from '@/components/shared/SearchInput';
 import { StatusDot } from '@/components/shared/StatusDot';
-import {
-  Table,
-  TableHeader,
-  TableBody,
-  TableRow,
-  TableHead,
-  TableCell,
-} from '@/components/shared/Table';
+import { TableRow, TableHead, TableCell } from '@/components/shared/Table';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
 import {
-  PLATFORM_TABLE_BODY_CLASS,
-  PLATFORM_TABLE_HEADER_ROW_CLASS,
+  PlatformDetailTable,
+  PlatformDetailTableBody,
+  PlatformDetailTableHeader,
   PlatformTableNumberValue,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
@@ -269,50 +263,48 @@ export const SwarmServicesDrawer: Component<{ cluster: string; swarm?: SwarmInfo
             }
           >
             <Card padding="none" tone="card" class="overflow-hidden">
-              <Table class="min-w-0 table-fixed text-xs">
-                <TableHeader>
-                  <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
-                    <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[18%]`}>
-                      {drawerPresentation.serviceColumnLabel}
-                    </TableHead>
-                    <TableHead
-                      class={`${getPlatformTableHeadClassForKind('text')} hidden md:w-[13%] sm:table-cell`}
-                    >
-                      {drawerPresentation.stackColumnLabel}
-                    </TableHead>
-                    <TableHead
-                      class={`${getPlatformTableHeadClassForKind('text')} swarm-service-detail-column md:w-[22%]`}
-                    >
-                      {drawerPresentation.imageColumnLabel}
-                    </TableHead>
-                    <TableHead
-                      class={`${getPlatformTableHeadClassForKind('text')} swarm-service-detail-column md:w-[10%]`}
-                    >
-                      {drawerPresentation.modeColumnLabel}
-                    </TableHead>
-                    <TableHead
-                      class={`${getPlatformTableHeadClassForKind('numeric-value')} md:w-[8%]`}
-                    >
-                      {drawerPresentation.desiredColumnLabel}
-                    </TableHead>
-                    <TableHead
-                      class={`${getPlatformTableHeadClassForKind('numeric-value')} md:w-[8%]`}
-                    >
-                      {drawerPresentation.runningColumnLabel}
-                    </TableHead>
-                    <TableHead
-                      class={`${getPlatformTableHeadClassForKind('text')} hidden md:w-[12%] sm:table-cell`}
-                    >
-                      {drawerPresentation.updateColumnLabel}
-                    </TableHead>
-                    <TableHead
-                      class={`${getPlatformTableHeadClassForKind('text')} swarm-service-detail-column md:w-[9%]`}
-                    >
-                      {drawerPresentation.portsColumnLabel}
-                    </TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody class={PLATFORM_TABLE_BODY_CLASS}>
+              <PlatformDetailTable class="min-w-0 table-fixed text-xs">
+                <PlatformDetailTableHeader>
+                  <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[18%]`}>
+                    {drawerPresentation.serviceColumnLabel}
+                  </TableHead>
+                  <TableHead
+                    class={`${getPlatformTableHeadClassForKind('text')} hidden md:w-[13%] sm:table-cell`}
+                  >
+                    {drawerPresentation.stackColumnLabel}
+                  </TableHead>
+                  <TableHead
+                    class={`${getPlatformTableHeadClassForKind('text')} swarm-service-detail-column md:w-[22%]`}
+                  >
+                    {drawerPresentation.imageColumnLabel}
+                  </TableHead>
+                  <TableHead
+                    class={`${getPlatformTableHeadClassForKind('text')} swarm-service-detail-column md:w-[10%]`}
+                  >
+                    {drawerPresentation.modeColumnLabel}
+                  </TableHead>
+                  <TableHead
+                    class={`${getPlatformTableHeadClassForKind('numeric-value')} md:w-[8%]`}
+                  >
+                    {drawerPresentation.desiredColumnLabel}
+                  </TableHead>
+                  <TableHead
+                    class={`${getPlatformTableHeadClassForKind('numeric-value')} md:w-[8%]`}
+                  >
+                    {drawerPresentation.runningColumnLabel}
+                  </TableHead>
+                  <TableHead
+                    class={`${getPlatformTableHeadClassForKind('text')} hidden md:w-[12%] sm:table-cell`}
+                  >
+                    {drawerPresentation.updateColumnLabel}
+                  </TableHead>
+                  <TableHead
+                    class={`${getPlatformTableHeadClassForKind('text')} swarm-service-detail-column md:w-[9%]`}
+                  >
+                    {drawerPresentation.portsColumnLabel}
+                  </TableHead>
+                </PlatformDetailTableHeader>
+                <PlatformDetailTableBody>
                   <For each={filteredServices()}>
                     {(svc) => {
                       const name = () => asTrimmedString(svc.name) || svc.id;
@@ -387,8 +379,8 @@ export const SwarmServicesDrawer: Component<{ cluster: string; swarm?: SwarmInfo
                       );
                     }}
                   </For>
-                </TableBody>
-              </Table>
+                </PlatformDetailTableBody>
+              </PlatformDetailTable>
             </Card>
           </Show>
         }

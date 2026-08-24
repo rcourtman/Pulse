@@ -1884,7 +1884,7 @@ describe('frontend resource type boundaries', () => {
     expect(swarmServicesDrawerSource).toContain('getSwarmDrawerPresentation');
     expect(swarmServicesDrawerSource).toContain('getSwarmServicesEmptyState');
     expect(swarmServicesDrawerSource).toContain('getSwarmServicesLoadingState');
-    expect(swarmServicesDrawerSource).toMatch(/<Table(?:\s|>)/);
+    expect(swarmServicesDrawerSource).toContain('<PlatformDetailTable');
     expect(swarmServicesDrawerSource).not.toContain('<div class="overflow-x-auto">');
     expect(swarmServicesDrawerSource).not.toContain('const statusTone =');
     expect(swarmServicesDrawerSource).not.toContain('No Swarm cluster detected');
@@ -1900,7 +1900,7 @@ describe('frontend resource type boundaries', () => {
     expect(k8sDeploymentsDrawerSource).toContain('getK8sDeploymentsDrawerPresentation');
     expect(k8sDeploymentsDrawerSource).toContain('getK8sDeploymentsEmptyState');
     expect(k8sDeploymentsDrawerSource).toContain('getK8sDeploymentsLoadingState');
-    expect(k8sDeploymentsDrawerSource).toMatch(/<Table(?:\s|>)/);
+    expect(k8sDeploymentsDrawerSource).toContain('<PlatformDetailTable');
     expect(k8sDeploymentsDrawerSource).not.toContain('<div class="overflow-x-auto">');
     expect(k8sDeploymentPresentationSource).toContain('getAllFilterOptionLabel');
     expect(k8sDeploymentsDrawerSource).not.toContain('const statusTone =');
@@ -1929,7 +1929,7 @@ describe('frontend resource type boundaries', () => {
     expect(k8sNamespacesDrawerSource).toContain('getK8sNamespacesLoadingState');
     expect(k8sNamespacesDrawerSource).toContain('getK8sNamespacesFailureState');
     expect(k8sNamespacesDrawerSource).toContain('<StatusDot');
-    expect(k8sNamespacesDrawerSource).toMatch(/<Table(?:\s|>)/);
+    expect(k8sNamespacesDrawerSource).toContain('<PlatformDetailTable');
     expect(k8sNamespacesDrawerSource).not.toContain('<div class="overflow-x-auto">');
     expect(k8sNamespacesDrawerSource).not.toContain('const statusTone =');
     expect(k8sNamespacesDrawerSource).not.toContain('Scope Pods and Deployments by namespace');
@@ -2624,9 +2624,12 @@ describe('frontend resource type boundaries', () => {
     expect(discoverySettingsFormSource).not.toContain(
       'Discovery settings are locked by environment variables.',
     );
-    expect(proxmoxMailGatewayDrawerSource).toMatch(/<Table(?:\s|>)/);
-    expect(proxmoxMailGatewayDrawerSource).toContain('PLATFORM_TABLE_HEADER_ROW_CLASS');
-    expect(proxmoxMailGatewayDrawerSource).toContain('PLATFORM_TABLE_BODY_CLASS');
+    expect(proxmoxMailGatewayDrawerSource).toContain('<PlatformDetailTable');
+    expect(proxmoxMailGatewayDrawerSource).toContain('<PlatformDetailTableHeader>');
+    expect(proxmoxMailGatewayDrawerSource).toContain('<PlatformDetailTableBody>');
+    expect(proxmoxMailGatewayDrawerSource).not.toMatch(/<Table(?:\s|>)/);
+    expect(proxmoxMailGatewayDrawerSource).not.toContain('PLATFORM_TABLE_HEADER_ROW_CLASS');
+    expect(proxmoxMailGatewayDrawerSource).not.toContain('PLATFORM_TABLE_BODY_CLASS');
     expect(proxmoxMailGatewayDrawerSource).toContain('getPlatformTableHeadClassForKind');
     expect(proxmoxMailGatewayDrawerSource).toContain('getPlatformTableCellClassForKind');
     expect(proxmoxMailGatewayDrawerSource).not.toContain('divide-y divide-border-subtle');

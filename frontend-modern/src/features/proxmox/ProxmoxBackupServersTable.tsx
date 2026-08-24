@@ -1,4 +1,4 @@
-import { For, Show, createMemo, createSignal, type Accessor, type JSX } from 'solid-js';
+import { For, Show, createMemo, type Accessor, type JSX } from 'solid-js';
 
 import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
 import { StatusDot } from '@/components/shared/StatusDot';
@@ -16,7 +16,11 @@ import {
   PlatformTableShell,
   PlatformWindowedRows,
 } from '@/features/platformPage/sharedPlatformPage';
-import { PlatformResourceDetailToggleButton } from '@/features/platformPage/PlatformResourceDetailTableRow';
+import {
+  createPlatformResourceDetailState,
+  getPlatformResourceDetailRowInteractionProps,
+  PlatformResourceDetailToggleButton,
+} from '@/features/platformPage/PlatformResourceDetailTableRow';
 import type { PBSBackup } from '@/types/api';
 import type { Resource, ResourcePBSDatastore } from '@/types/resource';
 import type { StatusIndicatorVariant } from '@/utils/status';
@@ -166,7 +170,7 @@ export function ProxmoxBackupServersTable(props: {
       : 'full';
   });
   const visibleColumns = createMemo(() => getBackupServerColumns(layoutMode()));
-  const [expandedKey, setExpandedKey] = createSignal<string | null>(null);
+  const detail = createPlatformResourceDetailState({ idPrefix: 'proxmox-backup-server-detail' });
   const columnVisible = (column: BackupServerColumnId) =>
     visibleColumns().some((candidate) => candidate.id === column);
 
@@ -255,11 +259,18 @@ export function ProxmoxBackupServersTable(props: {
               <PlatformWindowedRows items={rows} estimatedRowHeight={32}>
                 {(row) => {
                   const pct = () => (row.datastore ? usagePercent(row.datastore) : undefined);
-                  const isExpanded = () => expandedKey() === row.key;
-                  const detailRowId = () => `proxmox-backup-server-detail-${row.key}`;
+                  const rowIdentity = { id: row.key };
+                  const isExpanded = () => detail.isExpanded(rowIdentity);
+                  const detailRowId = () => detail.detailRowId(rowIdentity);
                   return (
                     <>
-                      <TableRow class="hover:bg-surface-hover">
+                      <TableRow
+                        {...getPlatformResourceDetailRowInteractionProps({
+                          expanded: isExpanded(),
+                          detailRowId: detailRowId(),
+                          onToggle: () => detail.toggle(rowIdentity),
+                        })}
+                      >
                         <TableCell
                           class={`${getPlatformTableCellClassForKind('name')} text-base-content truncate font-medium`}
                           title={[row.serverName, row.datastore?.name].filter(Boolean).join(' · ')}
@@ -269,9 +280,7 @@ export function ProxmoxBackupServersTable(props: {
                               expanded={isExpanded()}
                               resourceLabel={row.serverName}
                               controlsId={detailRowId()}
-                              onToggle={() =>
-                                setExpandedKey((current) => (current === row.key ? null : row.key))
-                              }
+                              onToggle={() => detail.toggle(rowIdentity)}
                             />
                             <div class="min-w-0 truncate" title={row.serverName}>
                               {row.serverName}

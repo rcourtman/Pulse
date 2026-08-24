@@ -11,19 +11,13 @@ import {
 } from '@/components/shared/FilterToolbar';
 import { SearchInput } from '@/components/shared/SearchInput';
 import { StatusDot } from '@/components/shared/StatusDot';
-import {
-  Table,
-  TableHeader,
-  TableBody,
-  TableRow,
-  TableHead,
-  TableCell,
-} from '@/components/shared/Table';
+import { TableRow, TableHead, TableCell } from '@/components/shared/Table';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { buildKubernetesPath } from '@/routing/resourceLinks';
 import {
-  PLATFORM_TABLE_BODY_CLASS,
-  PLATFORM_TABLE_HEADER_ROW_CLASS,
+  PlatformDetailTable,
+  PlatformDetailTableBody,
+  PlatformDetailTableHeader,
   PlatformResponsiveTableLabel,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
@@ -243,43 +237,41 @@ export const K8sDeploymentsDrawer: Component<{
             }
           >
             <Card padding="none" tone="card" class="overflow-hidden">
-              <Table class="min-w-0 table-fixed text-xs">
-                <TableHeader>
-                  <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
-                    <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[26%]`}>
-                      {drawerPresentation.deploymentColumnLabel}
-                    </TableHead>
-                    <TableHead
-                      class={`${getPlatformTableHeadClassForKind('text')} hidden md:w-[16%] sm:table-cell`}
-                    >
-                      {drawerPresentation.namespaceColumnLabel}
-                    </TableHead>
-                    <TableHead
-                      class={`${getPlatformTableHeadClassForKind('numeric-value')} k8s-deployment-detail-column md:w-[10%]`}
-                    >
-                      {drawerPresentation.desiredColumnLabel}
-                    </TableHead>
-                    <TableHead
-                      class={`${getPlatformTableHeadClassForKind('numeric-value')} k8s-deployment-detail-column md:w-[10%]`}
-                    >
-                      {drawerPresentation.updatedColumnLabel}
-                    </TableHead>
-                    <TableHead
-                      class={`${getPlatformTableHeadClassForKind('numeric-value')} md:w-[10%]`}
-                    >
-                      {drawerPresentation.readyColumnLabel}
-                    </TableHead>
-                    <TableHead
-                      class={`${getPlatformTableHeadClassForKind('numeric-value')} md:w-[10%]`}
-                    >
-                      {drawerPresentation.availableColumnLabel}
-                    </TableHead>
-                    <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[18%]`}>
-                      {drawerPresentation.actionsColumnLabel}
-                    </TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody class={PLATFORM_TABLE_BODY_CLASS}>
+              <PlatformDetailTable class="min-w-0 table-fixed text-xs">
+                <PlatformDetailTableHeader>
+                  <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[26%]`}>
+                    {drawerPresentation.deploymentColumnLabel}
+                  </TableHead>
+                  <TableHead
+                    class={`${getPlatformTableHeadClassForKind('text')} hidden md:w-[16%] sm:table-cell`}
+                  >
+                    {drawerPresentation.namespaceColumnLabel}
+                  </TableHead>
+                  <TableHead
+                    class={`${getPlatformTableHeadClassForKind('numeric-value')} k8s-deployment-detail-column md:w-[10%]`}
+                  >
+                    {drawerPresentation.desiredColumnLabel}
+                  </TableHead>
+                  <TableHead
+                    class={`${getPlatformTableHeadClassForKind('numeric-value')} k8s-deployment-detail-column md:w-[10%]`}
+                  >
+                    {drawerPresentation.updatedColumnLabel}
+                  </TableHead>
+                  <TableHead
+                    class={`${getPlatformTableHeadClassForKind('numeric-value')} md:w-[10%]`}
+                  >
+                    {drawerPresentation.readyColumnLabel}
+                  </TableHead>
+                  <TableHead
+                    class={`${getPlatformTableHeadClassForKind('numeric-value')} md:w-[10%]`}
+                  >
+                    {drawerPresentation.availableColumnLabel}
+                  </TableHead>
+                  <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[18%]`}>
+                    {drawerPresentation.actionsColumnLabel}
+                  </TableHead>
+                </PlatformDetailTableHeader>
+                <PlatformDetailTableBody>
                   <For each={filteredDeployments()}>
                     {(dep) => {
                       const name = () => asTrimmedString(dep.name) || dep.id;
@@ -350,8 +342,8 @@ export const K8sDeploymentsDrawer: Component<{
                       );
                     }}
                   </For>
-                </TableBody>
-              </Table>
+                </PlatformDetailTableBody>
+              </PlatformDetailTable>
             </Card>
           </Show>
         }

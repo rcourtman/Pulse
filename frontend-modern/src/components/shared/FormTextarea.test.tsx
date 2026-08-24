@@ -34,6 +34,18 @@ describe('FormTextarea', () => {
     expect(textarea).toHaveClass('min-h-16');
   });
 
+  it('provides a canonical compact drawer density', () => {
+    render(() => <FormTextarea label="Operator note" value="" density="compact" />);
+
+    expect(screen.getByLabelText('Operator note')).toHaveClass(
+      'min-h-16',
+      'px-2',
+      'py-1.5',
+      'text-xs',
+      'resize-y',
+    );
+  });
+
   it('connects helper text without dropping an existing description', () => {
     render(() => (
       <>

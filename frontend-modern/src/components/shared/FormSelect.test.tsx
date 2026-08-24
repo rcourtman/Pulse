@@ -42,6 +42,22 @@ describe('FormSelect', () => {
     expect(select).toHaveClass('w-auto');
   });
 
+  it('provides a canonical compact drawer density', () => {
+    render(() => (
+      <FormSelect label="Monitoring" value="normal" density="compact">
+        <option value="normal">Normal monitoring</option>
+      </FormSelect>
+    ));
+
+    expect(screen.getByLabelText('Monitoring')).toHaveClass(
+      'min-h-11',
+      'sm:min-h-8',
+      'px-2',
+      'py-1.5',
+      'text-xs',
+    );
+  });
+
   it('connects helper text without dropping an existing description', () => {
     render(() => (
       <>

@@ -7,8 +7,8 @@ const sectionSource = readFileSync(
   'utf-8',
 );
 
-const overviewTabSource = readFileSync(
-  resolve(__dirname, '..', 'ResourceDetailDrawerOverviewTab.tsx'),
+const resourceDetailDrawerSource = readFileSync(
+  resolve(__dirname, '..', 'ResourceDetailDrawer.tsx'),
   'utf-8',
 );
 
@@ -17,8 +17,8 @@ const supportDisclosureSource = readFileSync(
   'utf-8',
 );
 
-const guestOverviewSource = readFileSync(
-  resolve(__dirname, '..', '..', 'Workloads', 'GuestDrawerOverview.tsx'),
+const guestManageSource = readFileSync(
+  resolve(__dirname, '..', '..', 'Workloads', 'GuestDrawerManage.tsx'),
   'utf-8',
 );
 
@@ -180,7 +180,9 @@ describe('ResourceOperatorStateSection', () => {
 
   it('keeps drawer disclosure and operator controls touch-safe on phones', () => {
     expect(supportDisclosureSource).toContain('inline-flex min-h-11 shrink-0 items-center');
-    expect(sectionSource).toContain('min-h-11 w-full text-xs rounded');
+    expect(sectionSource).toContain('density="compact"');
+    expect(sectionSource).toContain('<FormSelect');
+    expect(sectionSource).toContain('<FormTextarea');
     expect(sectionSource).toContain('min-h-11 min-w-11 px-1.5 py-0.5');
     expect(sectionSource).toContain('min-h-11 px-2.5 py-1 text-xs font-medium text-base-content');
     expect(sectionSource).toContain(
@@ -208,18 +210,18 @@ describe('ResourceOperatorStateSection', () => {
   });
 });
 
-describe('ResourceDetailDrawerOverviewTab integration', () => {
+describe('ResourceDetailDrawer manage-tab integration', () => {
   it('renders ResourceOperatorStateSection alongside ResourceActionHistory', () => {
     // The operator-set state and the action audit history are
     // conceptually paired — what the operator decided to suppress, and
     // what Pulse actually did. They belong on the same drawer surface
     // so the operator can read both stories together.
-    expect(overviewTabSource).toContain("from './ResourceOperatorStateSection'");
-    expect(overviewTabSource).toContain('capabilities={resource.capabilities}');
+    expect(resourceDetailDrawerSource).toContain("from './ResourceOperatorStateSection'");
+    expect(resourceDetailDrawerSource).toContain('capabilities={props.resource.capabilities}');
     // Section must precede the action-history block so the override
     // explains the actions that follow, not vice versa.
-    const operatorIndex = overviewTabSource.indexOf('<ResourceOperatorStateSection');
-    const historyIndex = overviewTabSource.indexOf('<ResourceActionHistory');
+    const operatorIndex = resourceDetailDrawerSource.indexOf('<ResourceOperatorStateSection');
+    const historyIndex = resourceDetailDrawerSource.indexOf('<ResourceActionHistory');
     expect(operatorIndex).toBeGreaterThan(0);
     expect(historyIndex).toBeGreaterThan(0);
     expect(operatorIndex).toBeLessThan(historyIndex);
@@ -233,19 +235,19 @@ describe('ResourceDetailDrawerOverviewTab integration', () => {
     // The overrides don't depend on capabilities — only the
     // automatic-actions block does, and it self-gates inside the section
     // via eligibleAutoCapabilities.
-    expect(overviewTabSource).toContain('<Show when={resource.id}>');
-    expect(overviewTabSource).not.toContain('shouldRenderOperatorStateSection');
+    expect(resourceDetailDrawerSource).toContain('resourceId={props.resource.id}');
+    expect(resourceDetailDrawerSource).not.toContain('shouldRenderOperatorStateSection');
     expect(sectionSource).toContain('<Show when={eligibleAutoCapabilities().length > 0}>');
   });
 });
 
 describe('Proxmox guest drawer integration', () => {
   it('exposes the same canonical policy with provider ownership context', () => {
-    expect(guestOverviewSource).toContain(
+    expect(guestManageSource).toContain(
       "from '@/components/Infrastructure/ResourceOperatorStateSection'",
     );
-    expect(guestOverviewSource).toContain('<ResourceOperatorStateSection');
-    expect(guestOverviewSource).toContain('resourceId={props.guestId}');
-    expect(guestOverviewSource).toContain('platformType="proxmox"');
+    expect(guestManageSource).toContain('<ResourceOperatorStateSection');
+    expect(guestManageSource).toContain('resourceId={props.resourceId}');
+    expect(guestManageSource).toContain("platformType={props.guest.platformType || 'proxmox'}");
   });
 });

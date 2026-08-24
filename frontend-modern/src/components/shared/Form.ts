@@ -5,6 +5,10 @@ const baseControl = [
   'w-full min-h-11 sm:min-h-9 rounded-md border border-border bg-surface px-3 py-2.5 text-sm text-base-content',
   'focus:outline-none focus:ring-0 focus:border-blue-500 transition-colors',
 ].join(' ');
+const compactControl = [
+  'w-full min-h-11 sm:min-h-8 rounded border border-border bg-surface px-2 py-1.5 text-xs text-base-content',
+  'focus:outline-none focus:ring-0 focus:border-blue-500 transition-colors',
+].join(' ');
 const baseCheckbox =
   'h-4 w-4 rounded border-border text-blue-600 focus:ring-0 focus:ring-offset-0 transition-colors';
 
@@ -23,6 +27,8 @@ export const formControlMono = join(baseControl, 'font-mono');
 
 export const formSelect = join(baseControl, 'pr-8 appearance-none');
 export const formTextarea = join(baseControl, 'min-h-[120px] resize-vertical');
+export const formSelectCompact = join(compactControl, 'pr-8 appearance-none');
+export const formTextareaCompact = join(compactControl, 'min-h-16 resize-y');
 
 export const formLabelMuted = join(baseLabel, 'text-muted font-normal');
 
@@ -46,6 +52,8 @@ export default {
   formControlMono,
   formSelect,
   formTextarea,
+  formSelectCompact,
+  formTextareaCompact,
   formCheckbox,
   labelClass,
   controlClass,

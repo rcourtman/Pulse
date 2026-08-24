@@ -197,8 +197,11 @@ for (const guard of requiredPatternGuards) {
   }
 
   const requiredPatterns = Array.isArray(guard.requiredPatterns) ? guard.requiredPatterns : [];
-  if (requiredPatterns.length === 0) {
-    failures.push(`${guard.id}: missing requiredPatterns`);
+  const requiredAnyPatterns = Array.isArray(guard.requiredAnyPatterns)
+    ? guard.requiredAnyPatterns
+    : [];
+  if (requiredPatterns.length === 0 && requiredAnyPatterns.length === 0) {
+    failures.push(`${guard.id}: missing requiredPatterns or requiredAnyPatterns`);
     continue;
   }
 
@@ -237,6 +240,17 @@ for (const guard of requiredPatternGuards) {
         );
         break;
       }
+    }
+
+    if (
+      requiredAnyPatterns.length > 0 &&
+      !requiredAnyPatterns.some((pattern) => source.includes(pattern))
+    ) {
+      failures.push(
+        `${guard.id}: ${file} matches ${JSON.stringify(
+          triggerPatterns,
+        )} but does not compose one of ${JSON.stringify(requiredAnyPatterns)}`,
+      );
     }
   }
 

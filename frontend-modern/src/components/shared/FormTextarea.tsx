@@ -1,6 +1,12 @@
 import { Show, createEffect, createUniqueId, splitProps } from 'solid-js';
 import type { Component, JSX } from 'solid-js';
-import { formField, formHelpText, formLabel, formTextarea } from '@/components/shared/Form';
+import {
+  formField,
+  formHelpText,
+  formLabel,
+  formTextarea,
+  formTextareaCompact,
+} from '@/components/shared/Form';
 
 interface FormTextareaProps extends JSX.TextareaHTMLAttributes<HTMLTextAreaElement> {
   label: JSX.Element;
@@ -9,6 +15,7 @@ interface FormTextareaProps extends JSX.TextareaHTMLAttributes<HTMLTextAreaEleme
   labelClass?: string;
   textareaBaseClass?: string;
   textareaClass?: string;
+  density?: 'default' | 'compact';
   help?: JSX.Element;
   helpClass?: string;
 }
@@ -28,6 +35,7 @@ export const FormTextarea: Component<FormTextareaProps> = (props) => {
     'class',
     'textareaBaseClass',
     'textareaClass',
+    'density',
     'value',
   ]);
   let textareaElement: HTMLTextAreaElement | undefined;
@@ -68,7 +76,12 @@ export const FormTextarea: Component<FormTextareaProps> = (props) => {
         {...textareaProps}
         id={textareaId()}
         aria-describedby={describedBy()}
-        class={joinClass(local.textareaBaseClass ?? formTextarea, local.class, local.textareaClass)}
+        class={joinClass(
+          local.textareaBaseClass ??
+            (local.density === 'compact' ? formTextareaCompact : formTextarea),
+          local.class,
+          local.textareaClass,
+        )}
       />
       <Show when={local.help}>
         {(help) => (

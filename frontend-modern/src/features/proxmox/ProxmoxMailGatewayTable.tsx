@@ -1,4 +1,4 @@
-import { For, Show, createMemo, createSignal, type Component } from 'solid-js';
+import { For, Show, createMemo, type Component } from 'solid-js';
 import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
@@ -23,7 +23,11 @@ import {
   withPlatformStatusCounts,
 } from '@/features/platformPage/sharedPlatformPage';
 import { useObservedElementWidth } from '@/hooks/useObservedElementWidth';
-import { PlatformResourceDetailToggleButton } from '@/features/platformPage/PlatformResourceDetailTableRow';
+import {
+  createPlatformResourceDetailState,
+  getPlatformResourceDetailRowInteractionProps,
+  PlatformResourceDetailToggleButton,
+} from '@/features/platformPage/PlatformResourceDetailTableRow';
 import type { Resource } from '@/types/resource';
 import { ProxmoxMailGatewayDrawer } from './ProxmoxMailGatewayDrawer';
 
@@ -84,8 +88,7 @@ export const ProxmoxMailGatewayTable: Component<{
     initialStatus: 'all' as PlatformResourceStatusFilter,
     filter: filterPlatformResources,
   });
-  const [selectedId, setSelectedId] = createSignal<string | null>(null);
-  const toggleSelected = (id: string) => setSelectedId((current) => (current === id ? null : id));
+  const detail = createPlatformResourceDetailState({ idPrefix: 'proxmox-mail-gateway-detail' });
   const observedWidth = useObservedElementWidth();
   const layout = createMemo(() =>
     getPlatformTableContainerLayout(observedWidth.width() ?? 1920, [520, 720, 960, 1200]),
@@ -236,17 +239,16 @@ export const ProxmoxMailGatewayTable: Component<{
                     const name = () => asTrimmedString(instance.name) || instance.id;
                     const version = () => asTrimmedString(pmg()?.version) || '—';
                     const indicator = () => getSimpleStatusIndicator(instance.status);
-                    const isOpen = () => selectedId() === instance.id;
-                    const detailRowId = () => `proxmox-mail-gateway-detail-${instance.id}`;
+                    const isOpen = () => detail.isExpanded(instance);
+                    const detailRowId = () => detail.detailRowId(instance);
                     return (
                       <>
                         <TableRow
-                          class={`cursor-pointer hover:bg-surface-hover ${
-                            isOpen() ? 'bg-surface-hover' : ''
-                          }`}
-                          onClick={() => toggleSelected(instance.id)}
-                          aria-controls={isOpen() ? detailRowId() : undefined}
-                          aria-expanded={isOpen()}
+                          {...getPlatformResourceDetailRowInteractionProps({
+                            expanded: isOpen(),
+                            detailRowId: detailRowId(),
+                            onToggle: () => detail.toggle(instance),
+                          })}
                         >
                           <TableCell class={getPlatformTableCellClassForKind('name')}>
                             <div class="flex items-center gap-2 min-w-0">
@@ -254,7 +256,7 @@ export const ProxmoxMailGatewayTable: Component<{
                                 expanded={isOpen()}
                                 resourceLabel={name()}
                                 controlsId={detailRowId()}
-                                onToggle={() => toggleSelected(instance.id)}
+                                onToggle={() => detail.toggle(instance)}
                               />
                               <StatusDot
                                 size="sm"
@@ -357,7 +359,7 @@ export const ProxmoxMailGatewayTable: Component<{
                           >
                             <ProxmoxMailGatewayDrawer
                               instanceRow={instance}
-                              onClose={() => setSelectedId(null)}
+                              onClose={() => detail.close(instance)}
                             />
                           </InlineDetailTableRow>
                         </Show>

@@ -1,6 +1,12 @@
 import { Show, createEffect, createUniqueId, onCleanup, splitProps } from 'solid-js';
 import type { Component, JSX } from 'solid-js';
-import { formField, formHelpText, formLabel, formSelect } from '@/components/shared/Form';
+import {
+  formField,
+  formHelpText,
+  formLabel,
+  formSelect,
+  formSelectCompact,
+} from '@/components/shared/Form';
 
 interface FormSelectProps extends JSX.SelectHTMLAttributes<HTMLSelectElement> {
   label: JSX.Element;
@@ -10,6 +16,7 @@ interface FormSelectProps extends JSX.SelectHTMLAttributes<HTMLSelectElement> {
   labelClass?: string;
   selectBaseClass?: string;
   selectClass?: string;
+  density?: 'default' | 'compact';
   help?: JSX.Element;
   helpClass?: string;
 }
@@ -31,6 +38,7 @@ export const FormSelect: Component<FormSelectProps> = (props) => {
     'class',
     'selectBaseClass',
     'selectClass',
+    'density',
     'value',
   ]);
   let selectElement: HTMLSelectElement | undefined;
@@ -96,7 +104,11 @@ export const FormSelect: Component<FormSelectProps> = (props) => {
         {...selectProps}
         id={selectId()}
         aria-describedby={describedBy()}
-        class={joinClass(local.selectBaseClass ?? formSelect, local.class, local.selectClass)}
+        class={joinClass(
+          local.selectBaseClass ?? (local.density === 'compact' ? formSelectCompact : formSelect),
+          local.class,
+          local.selectClass,
+        )}
       >
         {local.children}
       </select>

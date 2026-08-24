@@ -3,17 +3,11 @@ import { Card } from '@/components/shared/Card';
 import { DrawerSubjectHeading } from '@/components/shared/DrawerSubjectHeading';
 import { ObjectDrawerHeader } from '@/components/shared/ObjectDrawerHeader';
 import { StatusDot } from '@/components/shared/StatusDot';
+import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/shared/Table';
-import {
-  PLATFORM_TABLE_BODY_CLASS,
-  PLATFORM_TABLE_HEADER_ROW_CLASS,
+  PlatformDetailTable,
+  PlatformDetailTableBody,
+  PlatformDetailTableHeader,
   formatPlatformTableIntegerValue,
   formatPlatformTablePercentValue,
   formatPlatformTableUptimeValue,
@@ -483,42 +477,40 @@ export const ProxmoxMailGatewayDrawer: Component<{
                 when={nodes().length > 0}
                 fallback={<p class="text-xs text-muted">No cluster nodes reported.</p>}
               >
-                <Table class="platform-table min-w-0 table-fixed text-xs">
-                  <TableHeader>
-                    <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
-                      <TableHead
-                        class={`${getPlatformTableHeadClassForKind('name')} platform-table-mobile-w-30 md:w-[24%]`}
-                      >
-                        Node
-                      </TableHead>
-                      <TableHead
-                        class={`${getPlatformTableHeadClassForKind('text')} platform-table-mobile-w-15 md:w-[14%]`}
-                      >
-                        Role
-                      </TableHead>
-                      <TableHead
-                        class={`${getPlatformTableHeadClassForKind('numeric-value')} platform-table-mobile-w-15 md:w-[16%]`}
-                      >
-                        <PlatformResponsiveTableLabel compact="Up" full="Uptime" />
-                      </TableHead>
-                      <TableHead
-                        class={`${getPlatformTableHeadClassForKind('numeric-value')} platform-table-mobile-w-15 md:w-[16%]`}
-                      >
-                        <PlatformResponsiveTableLabel compact="Ld" full="Load" />
-                      </TableHead>
-                      <TableHead
-                        class={`${getPlatformTableHeadClassForKind('numeric-value')} platform-table-mobile-w-15 md:w-[15%]`}
-                      >
-                        <PlatformResponsiveTableLabel compact="Q" full="Queue" />
-                      </TableHead>
-                      <TableHead
-                        class={`${getPlatformTableHeadClassForKind('numeric-value')} platform-table-mobile-w-10 platform-table-narrow-hidden md:w-[15%]`}
-                      >
-                        <PlatformResponsiveTableLabel compact="Old" full="Oldest" />
-                      </TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody class={PLATFORM_TABLE_BODY_CLASS}>
+                <PlatformDetailTable class="min-w-0 table-fixed text-xs">
+                  <PlatformDetailTableHeader>
+                    <TableHead
+                      class={`${getPlatformTableHeadClassForKind('name')} platform-table-mobile-w-30 md:w-[24%]`}
+                    >
+                      Node
+                    </TableHead>
+                    <TableHead
+                      class={`${getPlatformTableHeadClassForKind('text')} platform-table-mobile-w-15 md:w-[14%]`}
+                    >
+                      Role
+                    </TableHead>
+                    <TableHead
+                      class={`${getPlatformTableHeadClassForKind('numeric-value')} platform-table-mobile-w-15 md:w-[16%]`}
+                    >
+                      <PlatformResponsiveTableLabel compact="Up" full="Uptime" />
+                    </TableHead>
+                    <TableHead
+                      class={`${getPlatformTableHeadClassForKind('numeric-value')} platform-table-mobile-w-15 md:w-[16%]`}
+                    >
+                      <PlatformResponsiveTableLabel compact="Ld" full="Load" />
+                    </TableHead>
+                    <TableHead
+                      class={`${getPlatformTableHeadClassForKind('numeric-value')} platform-table-mobile-w-15 md:w-[15%]`}
+                    >
+                      <PlatformResponsiveTableLabel compact="Q" full="Queue" />
+                    </TableHead>
+                    <TableHead
+                      class={`${getPlatformTableHeadClassForKind('numeric-value')} platform-table-mobile-w-10 platform-table-narrow-hidden md:w-[15%]`}
+                    >
+                      <PlatformResponsiveTableLabel compact="Old" full="Oldest" />
+                    </TableHead>
+                  </PlatformDetailTableHeader>
+                  <PlatformDetailTableBody>
                     <For each={nodes()}>
                       {(node) => {
                         const cls = classifyNode(node);
@@ -580,8 +572,8 @@ export const ProxmoxMailGatewayDrawer: Component<{
                         );
                       }}
                     </For>
-                  </TableBody>
-                </Table>
+                  </PlatformDetailTableBody>
+                </PlatformDetailTable>
               </Show>
             </Card>
 
@@ -598,37 +590,35 @@ export const ProxmoxMailGatewayDrawer: Component<{
                 when={topDomains().length > 0}
                 fallback={<p class="text-xs text-muted">No domain stats reported.</p>}
               >
-                <Table class="platform-table min-w-0 table-fixed text-xs">
-                  <TableHeader>
-                    <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
-                      <TableHead
-                        class={`${getPlatformTableHeadClassForKind('name')} platform-table-mobile-w-30 md:w-[28%]`}
-                      >
-                        Domain
-                      </TableHead>
-                      <TableHead
-                        class={`${getPlatformTableHeadClassForKind('numeric-value')} platform-table-mobile-w-15 md:w-[14%]`}
-                      >
-                        Mail
-                      </TableHead>
-                      <TableHead
-                        class={`${getPlatformTableHeadClassForKind('numeric-value')} platform-table-mobile-w-15 md:w-[14%]`}
-                      >
-                        Spam
-                      </TableHead>
-                      <TableHead
-                        class={`${getPlatformTableHeadClassForKind('numeric-value')} platform-table-mobile-w-15 md:w-[14%]`}
-                      >
-                        Virus
-                      </TableHead>
-                      <TableHead
-                        class={`${getPlatformTableHeadClassForKind('numeric-value')} platform-table-mobile-w-15 md:w-[30%]`}
-                      >
-                        Bytes
-                      </TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody class={PLATFORM_TABLE_BODY_CLASS}>
+                <PlatformDetailTable class="min-w-0 table-fixed text-xs">
+                  <PlatformDetailTableHeader>
+                    <TableHead
+                      class={`${getPlatformTableHeadClassForKind('name')} platform-table-mobile-w-30 md:w-[28%]`}
+                    >
+                      Domain
+                    </TableHead>
+                    <TableHead
+                      class={`${getPlatformTableHeadClassForKind('numeric-value')} platform-table-mobile-w-15 md:w-[14%]`}
+                    >
+                      Mail
+                    </TableHead>
+                    <TableHead
+                      class={`${getPlatformTableHeadClassForKind('numeric-value')} platform-table-mobile-w-15 md:w-[14%]`}
+                    >
+                      Spam
+                    </TableHead>
+                    <TableHead
+                      class={`${getPlatformTableHeadClassForKind('numeric-value')} platform-table-mobile-w-15 md:w-[14%]`}
+                    >
+                      Virus
+                    </TableHead>
+                    <TableHead
+                      class={`${getPlatformTableHeadClassForKind('numeric-value')} platform-table-mobile-w-15 md:w-[30%]`}
+                    >
+                      Bytes
+                    </TableHead>
+                  </PlatformDetailTableHeader>
+                  <PlatformDetailTableBody>
                     <For each={topDomains()}>
                       {(domain) => (
                         <TableRow>
@@ -671,8 +661,8 @@ export const ProxmoxMailGatewayDrawer: Component<{
                         </TableRow>
                       )}
                     </For>
-                  </TableBody>
-                </Table>
+                  </PlatformDetailTableBody>
+                </PlatformDetailTable>
               </Show>
             </Card>
 

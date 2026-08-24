@@ -27,7 +27,10 @@ import {
   PlatformWindowedRows,
   withPlatformStatusCounts,
 } from '@/features/platformPage/sharedPlatformPage';
-import { PlatformResourceDetailToggleButton } from '@/features/platformPage/PlatformResourceDetailTableRow';
+import {
+  getPlatformResourceDetailRowInteractionProps,
+  PlatformResourceDetailToggleButton,
+} from '@/features/platformPage/PlatformResourceDetailTableRow';
 import { useObservedElementWidth } from '@/hooks/useObservedElementWidth';
 import type { Resource, ResourceCephServiceMeta } from '@/types/resource';
 import { ProxmoxCephClusterDrawer } from './ProxmoxCephClusterDrawer';
@@ -413,18 +416,11 @@ export const ProxmoxCephTable: Component<{
                     return (
                       <>
                         <TableRow
-                          class={`cursor-pointer hover:bg-surface-hover ${
-                            isOpen() ? 'bg-surface-hover' : ''
-                          }`}
-                          onClick={() => toggleSelected(cluster.id)}
-                          onKeyDown={(event) => {
-                            if (event.key !== 'Enter' && event.key !== ' ') return;
-                            event.preventDefault();
-                            toggleSelected(cluster.id);
-                          }}
-                          aria-controls={isOpen() ? detailRowId() : undefined}
-                          aria-expanded={isOpen()}
-                          tabIndex={0}
+                          {...getPlatformResourceDetailRowInteractionProps({
+                            expanded: isOpen(),
+                            detailRowId: detailRowId(),
+                            onToggle: () => toggleSelected(cluster.id),
+                          })}
                         >
                           <TableCell
                             class={getPlatformTableCellClassForKind('name')}

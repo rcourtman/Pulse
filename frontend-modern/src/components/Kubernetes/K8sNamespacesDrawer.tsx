@@ -4,20 +4,14 @@ import { useNavigate } from '@solidjs/router';
 import { apiFetchJSON } from '@/utils/apiClient';
 import { Card } from '@/components/shared/Card';
 import { SearchInput } from '@/components/shared/SearchInput';
-import {
-  Table,
-  TableHeader,
-  TableBody,
-  TableRow,
-  TableHead,
-  TableCell,
-} from '@/components/shared/Table';
+import { TableRow, TableHead, TableCell } from '@/components/shared/Table';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { buildKubernetesPath } from '@/routing/resourceLinks';
 import {
-  PLATFORM_TABLE_BODY_CLASS,
-  PLATFORM_TABLE_HEADER_ROW_CLASS,
+  PlatformDetailTable,
+  PlatformDetailTableBody,
+  PlatformDetailTableHeader,
   PlatformResponsiveTableLabel,
   formatPlatformTableIntegerValue,
   getPlatformTableCellClassForKind,
@@ -149,30 +143,28 @@ export const K8sNamespacesDrawer: Component<{
             }
           >
             <Card padding="none" tone="card" class="overflow-hidden">
-              <Table class="min-w-0 table-fixed text-xs">
-                <TableHeader>
-                  <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
-                    <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[22%]`}>
-                      {drawerPresentation.namespaceColumnLabel}
-                    </TableHead>
-                    <TableHead
-                      class={`${getPlatformTableHeadClassForKind('numeric-value')} platform-table-mobile-w-15 md:w-[18%]`}
-                    >
-                      {drawerPresentation.podsColumnLabel}
-                    </TableHead>
-                    <TableHead
-                      class={`${getPlatformTableHeadClassForKind('numeric-value')} platform-table-mobile-w-15 md:w-[22%]`}
-                    >
-                      {drawerPresentation.deploymentsColumnLabel}
-                    </TableHead>
-                    <TableHead
-                      class={`${getPlatformTableHeadClassForKind('text')} platform-table-mobile-w-30 md:w-[38%]`}
-                    >
-                      {drawerPresentation.actionsColumnLabel}
-                    </TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody class={PLATFORM_TABLE_BODY_CLASS}>
+              <PlatformDetailTable class="min-w-0 table-fixed text-xs">
+                <PlatformDetailTableHeader>
+                  <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[22%]`}>
+                    {drawerPresentation.namespaceColumnLabel}
+                  </TableHead>
+                  <TableHead
+                    class={`${getPlatformTableHeadClassForKind('numeric-value')} platform-table-mobile-w-15 md:w-[18%]`}
+                  >
+                    {drawerPresentation.podsColumnLabel}
+                  </TableHead>
+                  <TableHead
+                    class={`${getPlatformTableHeadClassForKind('numeric-value')} platform-table-mobile-w-15 md:w-[22%]`}
+                  >
+                    {drawerPresentation.deploymentsColumnLabel}
+                  </TableHead>
+                  <TableHead
+                    class={`${getPlatformTableHeadClassForKind('text')} platform-table-mobile-w-30 md:w-[38%]`}
+                  >
+                    {drawerPresentation.actionsColumnLabel}
+                  </TableHead>
+                </PlatformDetailTableHeader>
+                <PlatformDetailTableBody>
                   <For each={filteredRows()}>
                     {(row) => {
                       const podIndicator = () => getNamespaceCountsIndicator(row.pods);
@@ -256,8 +248,8 @@ export const K8sNamespacesDrawer: Component<{
                       );
                     }}
                   </For>
-                </TableBody>
-              </Table>
+                </PlatformDetailTableBody>
+              </PlatformDetailTable>
             </Card>
           </Show>
         </Show>

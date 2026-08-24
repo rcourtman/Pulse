@@ -7,6 +7,13 @@ import { getPreferredInfrastructureDisplayName } from '@/utils/resourceIdentity'
 
 type ResourceLike = Pick<Resource, 'id'>;
 
+export type PlatformResourceDetailRowInteractionOptions = {
+  expanded: boolean;
+  detailRowId: string;
+  onToggle: () => void;
+  class?: string;
+};
+
 export type PlatformResourceDetailState = {
   expandedResourceId: () => string | null;
   isExpanded: (resource: ResourceLike) => boolean;
@@ -24,6 +31,44 @@ export const PLATFORM_RESOURCE_DETAIL_ROW_CLASS =
 
 export const getPlatformResourceDetailRowClass = (expanded: boolean): string =>
   `${PLATFORM_RESOURCE_DETAIL_ROW_CLASS}${expanded ? ' bg-surface-hover' : ''}`;
+
+const isInteractiveDetailRowDescendant = (event: MouseEvent | KeyboardEvent): boolean => {
+  const target = event.target;
+  const currentTarget = event.currentTarget;
+  if (
+    !(target instanceof Element) ||
+    !(currentTarget instanceof Element) ||
+    target === currentTarget
+  ) {
+    return false;
+  }
+  return Boolean(
+    target.closest('a, button, input, select, textarea, [role="button"], [role="link"]'),
+  );
+};
+
+// Canonical whole-row disclosure contract. Keeping pointer, keyboard, focus,
+// aria linkage, and interactive-child exclusion together prevents a table
+// from becoming mouse-only (or from opening when an embedded link is used).
+export function getPlatformResourceDetailRowInteractionProps(
+  options: PlatformResourceDetailRowInteractionOptions,
+): JSX.HTMLAttributes<HTMLTableRowElement> {
+  return {
+    class: `${getPlatformResourceDetailRowClass(options.expanded)} ${options.class ?? ''}`.trim(),
+    onClick: (event) => {
+      if (!isInteractiveDetailRowDescendant(event)) options.onToggle();
+    },
+    onKeyDown: (event) => {
+      if (isInteractiveDetailRowDescendant(event)) return;
+      if (event.key !== 'Enter' && event.key !== ' ' && event.key !== 'Space') return;
+      event.preventDefault();
+      options.onToggle();
+    },
+    tabIndex: 0,
+    'aria-expanded': options.expanded,
+    'aria-controls': options.detailRowId,
+  };
+}
 
 export const PlatformResourceDetailToggleButton: Component<{
   expanded: boolean;

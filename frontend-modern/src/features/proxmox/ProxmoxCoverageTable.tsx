@@ -7,10 +7,16 @@ import {
   formatPlatformTableBytesValue,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
+  PlatformDetailTable,
+  PlatformDetailTableBody,
+  PlatformDetailTableHeader,
   PlatformTableEmptyState,
   PlatformTableShell,
 } from '@/features/platformPage/sharedPlatformPage';
-import { PlatformResourceDetailToggleButton } from '@/features/platformPage/PlatformResourceDetailTableRow';
+import {
+  getPlatformResourceDetailRowInteractionProps,
+  PlatformResourceDetailToggleButton,
+} from '@/features/platformPage/PlatformResourceDetailTableRow';
 import type { StatusIndicatorVariant } from '@/utils/status';
 import { useObservedElementWidth } from '@/hooks/useObservedElementWidth';
 
@@ -306,7 +312,14 @@ export function ProxmoxCoverageTable(props: {
                   const detailRowId = () => `proxmox-coverage-evidence-${row.key}`;
                   return (
                     <>
-                      <TableRow class="hover:bg-surface-hover" data-proxmox-backup-row="coverage">
+                      <TableRow
+                        {...getPlatformResourceDetailRowInteractionProps({
+                          expanded: isExpanded(),
+                          detailRowId: detailRowId(),
+                          onToggle: () => props.onToggleExpand(row.key),
+                        })}
+                        data-proxmox-backup-row="coverage"
+                      >
                         <TableCell
                           class={`${getPlatformTableCellClassForKind('name')} text-base-content`}
                         >
@@ -564,105 +577,119 @@ export function ProxmoxCoverageTable(props: {
                                   </span>
                                 </Show>
                               </div>
-                              <table class="w-full text-[11px]">
-                                <thead>
-                                  <tr class="bg-surface-alt text-muted">
-                                    <th class="px-2 py-0.5 text-left font-medium">Source</th>
-                                    <Show
-                                      when={isCoverageEvidenceColumnVisible(
-                                        layoutMode(),
-                                        'location',
-                                      )}
+                              <PlatformDetailTable class="table-fixed text-[11px]">
+                                <PlatformDetailTableHeader>
+                                  <TableHead class={getPlatformTableHeadClassForKind('name')}>
+                                    Source
+                                  </TableHead>
+                                  <Show
+                                    when={isCoverageEvidenceColumnVisible(layoutMode(), 'location')}
+                                  >
+                                    <TableHead class={getPlatformTableHeadClassForKind('text')}>
+                                      Location
+                                    </TableHead>
+                                  </Show>
+                                  <TableHead
+                                    class={getPlatformTableHeadClassForKind('numeric-value')}
+                                  >
+                                    {PROXMOX_BACKUP_COLUMN_LABELS.created}
+                                  </TableHead>
+                                  <Show
+                                    when={isCoverageEvidenceColumnVisible(layoutMode(), 'size')}
+                                  >
+                                    <TableHead
+                                      class={getPlatformTableHeadClassForKind('numeric-value')}
                                     >
-                                      <th class="px-2 py-0.5 text-left font-medium">Location</th>
-                                    </Show>
-                                    <th class="px-2 py-0.5 text-right font-medium">
-                                      {PROXMOX_BACKUP_COLUMN_LABELS.created}
-                                    </th>
-                                    <Show
-                                      when={isCoverageEvidenceColumnVisible(layoutMode(), 'size')}
-                                    >
-                                      <th class="px-2 py-0.5 text-right font-medium">Size</th>
-                                    </Show>
-                                    <th class="px-2 py-0.5 text-left font-medium">State</th>
-                                    <Show
-                                      when={isCoverageEvidenceColumnVisible(
-                                        layoutMode(),
-                                        'details',
-                                      )}
-                                    >
-                                      <th class="px-2 py-0.5 text-left font-medium">
-                                        {PROXMOX_BACKUP_COLUMN_LABELS.details}
-                                      </th>
-                                    </Show>
-                                  </tr>
-                                </thead>
-                                <tbody class="divide-y divide-border-subtle">
+                                      Size
+                                    </TableHead>
+                                  </Show>
+                                  <TableHead class={getPlatformTableHeadClassForKind('badge')}>
+                                    State
+                                  </TableHead>
+                                  <Show
+                                    when={isCoverageEvidenceColumnVisible(layoutMode(), 'details')}
+                                  >
+                                    <TableHead class={getPlatformTableHeadClassForKind('text')}>
+                                      {PROXMOX_BACKUP_COLUMN_LABELS.details}
+                                    </TableHead>
+                                  </Show>
+                                </PlatformDetailTableHeader>
+                                <PlatformDetailTableBody class="divide-border-subtle">
                                   <For each={evidence()}>
                                     {(artifact) => (
-                                      <tr class="hover:bg-surface-hover">
-                                        <td class="px-2 py-1">
+                                      <TableRow>
+                                        <TableCell class={getPlatformTableCellClassForKind('name')}>
                                           <ArtifactSourceBadge artifact={artifact} />
-                                        </td>
+                                        </TableCell>
                                         <Show
                                           when={isCoverageEvidenceColumnVisible(
                                             layoutMode(),
                                             'location',
                                           )}
                                         >
-                                          <td class="px-2 py-1 text-base-content">
+                                          <TableCell
+                                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                                          >
                                             <span
                                               class="inline-block max-w-[18rem] truncate"
                                               title={artifact.location}
                                             >
                                               {artifact.location}
                                             </span>
-                                          </td>
+                                          </TableCell>
                                         </Show>
-                                        <td class="px-2 py-1 text-right text-base-content">
+                                        <TableCell
+                                          class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
+                                        >
                                           <ProxmoxBackupAgeText artifact={artifact} />
-                                        </td>
+                                        </TableCell>
                                         <Show
                                           when={isCoverageEvidenceColumnVisible(
                                             layoutMode(),
                                             'size',
                                           )}
                                         >
-                                          <td class="px-2 py-1 text-right tabular-nums text-base-content">
+                                          <TableCell
+                                            class={`${getPlatformTableCellClassForKind('numeric-value')} tabular-nums text-base-content`}
+                                          >
                                             <Show
                                               when={artifact.size && artifact.size > 0}
                                               fallback={<span class="text-muted">No size</span>}
                                             >
                                               {formatPlatformTableBytesValue(artifact.size)}
                                             </Show>
-                                          </td>
+                                          </TableCell>
                                         </Show>
-                                        <td class="px-2 py-1">
+                                        <TableCell
+                                          class={getPlatformTableCellClassForKind('badge')}
+                                        >
                                           <ArtifactStateBadge
                                             artifact={artifact}
                                             label={artifactStateLabel(artifact)}
                                           />
-                                        </td>
+                                        </TableCell>
                                         <Show
                                           when={isCoverageEvidenceColumnVisible(
                                             layoutMode(),
                                             'details',
                                           )}
                                         >
-                                          <td class="px-2 py-1 text-base-content">
+                                          <TableCell
+                                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                                          >
                                             <span
                                               class="inline-block max-w-[24rem] truncate"
                                               title={artifact.detail}
                                             >
                                               {artifact.detail || '—'}
                                             </span>
-                                          </td>
+                                          </TableCell>
                                         </Show>
-                                      </tr>
+                                      </TableRow>
                                     )}
                                   </For>
-                                </tbody>
-                              </table>
+                                </PlatformDetailTableBody>
+                              </PlatformDetailTable>
                             </div>
                           </Show>
                         </InlineDetailTableRow>

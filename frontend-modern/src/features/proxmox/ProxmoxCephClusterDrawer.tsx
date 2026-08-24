@@ -5,17 +5,11 @@ import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
 import { ObjectDrawerHeader } from '@/components/shared/ObjectDrawerHeader';
 import { ProgressBar } from '@/components/shared/ProgressBar';
 import { StatusDot } from '@/components/shared/StatusDot';
+import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/shared/Table';
-import {
-  PLATFORM_TABLE_BODY_CLASS,
-  PLATFORM_TABLE_HEADER_ROW_CLASS,
+  PlatformDetailTable,
+  PlatformDetailTableBody,
+  PlatformDetailTableHeader,
   formatPlatformTableIntegerValue,
   formatPlatformTablePercentValue,
   getPlatformTableCellClassForKind,
@@ -158,37 +152,35 @@ export const ProxmoxCephClusterDrawer: Component<{
             when={pools().length > 0}
             fallback={<p class="text-xs text-muted">No pools reported.</p>}
           >
-            <Table class="platform-table min-w-0 table-fixed text-xs">
-              <TableHeader>
-                <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind('name')} platform-table-mobile-w-30 md:w-[24%]`}
-                  >
-                    Pool
-                  </TableHead>
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind('numeric-value')} platform-table-mobile-w-15 md:w-[16%]`}
-                  >
-                    <PlatformResponsiveTableLabel compact="Obj" full="Objects" />
-                  </TableHead>
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind('numeric-value')} platform-table-mobile-w-20 md:w-[20%]`}
-                  >
-                    <PlatformResponsiveTableLabel compact="Store" full="Stored" />
-                  </TableHead>
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind('numeric-value')} platform-table-mobile-w-20 md:w-[20%]`}
-                  >
-                    <PlatformResponsiveTableLabel compact="Avail" full="Available" />
-                  </TableHead>
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind('numeric-value')} platform-table-mobile-w-15 md:w-[20%]`}
-                  >
-                    Used
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody class={PLATFORM_TABLE_BODY_CLASS}>
+            <PlatformDetailTable class="min-w-0 table-fixed text-xs">
+              <PlatformDetailTableHeader>
+                <TableHead
+                  class={`${getPlatformTableHeadClassForKind('name')} platform-table-mobile-w-30 md:w-[24%]`}
+                >
+                  Pool
+                </TableHead>
+                <TableHead
+                  class={`${getPlatformTableHeadClassForKind('numeric-value')} platform-table-mobile-w-15 md:w-[16%]`}
+                >
+                  <PlatformResponsiveTableLabel compact="Obj" full="Objects" />
+                </TableHead>
+                <TableHead
+                  class={`${getPlatformTableHeadClassForKind('numeric-value')} platform-table-mobile-w-20 md:w-[20%]`}
+                >
+                  <PlatformResponsiveTableLabel compact="Store" full="Stored" />
+                </TableHead>
+                <TableHead
+                  class={`${getPlatformTableHeadClassForKind('numeric-value')} platform-table-mobile-w-20 md:w-[20%]`}
+                >
+                  <PlatformResponsiveTableLabel compact="Avail" full="Available" />
+                </TableHead>
+                <TableHead
+                  class={`${getPlatformTableHeadClassForKind('numeric-value')} platform-table-mobile-w-15 md:w-[20%]`}
+                >
+                  Used
+                </TableHead>
+              </PlatformDetailTableHeader>
+              <PlatformDetailTableBody>
                 <For each={pools()}>
                   {(pool, index) => {
                     const poolKey = () => pool.name || `pool-${index()}`;
@@ -299,8 +291,8 @@ export const ProxmoxCephClusterDrawer: Component<{
                     );
                   }}
                 </For>
-              </TableBody>
-            </Table>
+              </PlatformDetailTableBody>
+            </PlatformDetailTable>
           </Show>
         </Card>
 
@@ -315,20 +307,18 @@ export const ProxmoxCephClusterDrawer: Component<{
             when={services().length > 0}
             fallback={<p class="text-xs text-muted">No services reported.</p>}
           >
-            <Table class="platform-table min-w-0 table-fixed text-xs">
-              <TableHeader>
-                <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
-                  <TableHead class={getPlatformTableHeadClassForKind('name')}>Service</TableHead>
-                  <TableHead class={getPlatformTableHeadClassForKind('text')}>Status</TableHead>
-                  <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
-                    <PlatformResponsiveTableLabel compact="Up" full="Running" />
-                  </TableHead>
-                  <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
-                    Total
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody class={PLATFORM_TABLE_BODY_CLASS}>
+            <PlatformDetailTable class="min-w-0 table-fixed text-xs">
+              <PlatformDetailTableHeader>
+                <TableHead class={getPlatformTableHeadClassForKind('name')}>Service</TableHead>
+                <TableHead class={getPlatformTableHeadClassForKind('text')}>Status</TableHead>
+                <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
+                  <PlatformResponsiveTableLabel compact="Up" full="Running" />
+                </TableHead>
+                <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
+                  Total
+                </TableHead>
+              </PlatformDetailTableHeader>
+              <PlatformDetailTableBody>
                 <For each={services()}>
                   {(svc) => {
                     const cls = classifyService(svc);
@@ -366,8 +356,8 @@ export const ProxmoxCephClusterDrawer: Component<{
                     );
                   }}
                 </For>
-              </TableBody>
-            </Table>
+              </PlatformDetailTableBody>
+            </PlatformDetailTable>
           </Show>
         </Card>
       </div>

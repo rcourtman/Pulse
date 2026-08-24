@@ -723,7 +723,9 @@ describe('shared primitive guardrails', () => {
     expect(formSelectSource).toContain('MutationObserver');
     expect(formSelectSource).toContain("'value'");
     expect(formSelectSource).toContain('selectElement.value = resolvedValue');
-    expect(formSelectSource).toContain('local.selectBaseClass ?? formSelect');
+    expect(formSelectSource).toContain(
+      "local.density === 'compact' ? formSelectCompact : formSelect",
+    );
     expect(formSelectSource).toContain('local.fieldBaseClass ?? formField');
 
     for (const source of [
@@ -814,7 +816,9 @@ describe('shared primitive guardrails', () => {
     expect(formTextareaSource).toContain('createEffect');
     expect(formTextareaSource).toContain("'value'");
     expect(formTextareaSource).toContain('textareaElement.value = nextValue');
-    expect(formTextareaSource).toContain('local.textareaBaseClass ?? formTextarea');
+    expect(formTextareaSource).toContain(
+      "local.density === 'compact' ? formTextareaCompact : formTextarea",
+    );
     expect(formTextareaSource).toContain('local.fieldBaseClass ?? formField');
 
     const migratedConsumers = [
@@ -5332,14 +5336,18 @@ describe('shared primitive guardrails', () => {
       'getPlatformTableRowClass = (): string => PLATFORM_TABLE_SUMMARY_ROW_CLASS',
     );
     expect(sharedPlatformPageSource).toContain('TableCard class={props.cardClass');
-    expect(sharedPlatformPageSource).toContain('TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}');
-    expect(sharedPlatformPageSource).toContain('TableBody class={PLATFORM_TABLE_BODY_CLASS}');
+    expect(sharedPlatformPageSource).toContain('export function PlatformDetailTable');
+    expect(sharedPlatformPageSource).toContain('export function PlatformDetailTableHeader');
+    expect(sharedPlatformPageSource).toContain('export function PlatformDetailTableBody');
+    expect(sharedPlatformPageSource).toContain('class={`${PLATFORM_TABLE_HEADER_ROW_CLASS}');
+    expect(sharedPlatformPageSource).toContain('class={`${PLATFORM_TABLE_BODY_CLASS}');
     expect(sharedPlatformPageSource).toContain(
       "export const PLATFORM_TABLE_DEFAULT_RESPONSIVE_MIN_WIDTH_CLASS = 'min-w-[0px]'",
     );
     expect(sharedPlatformPageSource).toContain('export function getPlatformTableClass');
     expect(sharedPlatformPageSource).toContain("className !== 'min-w-full'");
-    expect(sharedPlatformPageSource).toContain('class={getPlatformTableClass(props.tableClass)}');
+    expect(sharedPlatformPageSource).toContain('<PlatformDetailTable');
+    expect(sharedPlatformPageSource).toContain('class={props.tableClass}');
     expect(sharedPlatformPageSource).toContain('export function createPlatformTablePreview');
     expect(sharedPlatformPageSource).toContain('export function PlatformTablePreviewFooter');
     expect(sharedPlatformPageSource).toContain('data-platform-table-preview-footer');
@@ -7218,9 +7226,8 @@ describe('shared primitive guardrails', () => {
     ];
     const platformMetricConsumerPaths = platformMetricConsumers.map(([path]) => path);
     const inlineMetricMarkerPatterns = [
-      'flex justify-center',
-      'text-xs text-muted',
-      'aria-hidden="true"',
+      'class="flex justify-center"',
+      'class="text-xs text-muted" aria-hidden="true"',
     ];
 
     expect(registeredRule?.canonical?.path).toBe(

@@ -1,5 +1,7 @@
 import { Component, For, Show, createEffect, createMemo, createSignal } from 'solid-js';
 import { Toggle } from '@/components/shared/Toggle';
+import { FormSelect } from '@/components/shared/FormSelect';
+import { FormTextarea } from '@/components/shared/FormTextarea';
 import { notificationStore } from '@/stores/notifications';
 import {
   type ResourceCriticality,
@@ -527,35 +529,30 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
       </Show>
 
       <div class="grid grid-cols-1 gap-3 pt-2 border-t border-border-subtle sm:grid-cols-[minmax(0,12rem)_minmax(0,1fr)]">
-        <label class="block">
-          <span class="block text-sm font-medium text-base-content">Patrol priority</span>
-          <select
-            value={criticality()}
-            onChange={(e) => setCriticality(e.currentTarget.value as ResourceCriticality)}
-            disabled={saving()}
-            class="mt-1 block min-h-11 w-full text-xs rounded border border-border bg-surface px-2 py-1.5 text-base-content focus:outline-none focus:ring-1 focus:ring-blue-400 disabled:opacity-50 sm:min-h-0"
-          >
-            <option value="">Default</option>
-            <option value="high">High</option>
-            <option value="medium">Medium</option>
-            <option value="low">Low</option>
-          </select>
-          <span class="mt-1 block text-[11px] text-muted leading-tight">
-            Orders this resource among same-severity Patrol findings.
-          </span>
-        </label>
+        <FormSelect
+          label="Patrol priority"
+          density="compact"
+          value={criticality()}
+          onChange={(e) => setCriticality(e.currentTarget.value as ResourceCriticality)}
+          disabled={saving()}
+          help="Orders this resource among same-severity Patrol findings."
+          helpClass="text-[11px] leading-tight"
+        >
+          <option value="">Default</option>
+          <option value="high">High</option>
+          <option value="medium">Medium</option>
+          <option value="low">Low</option>
+        </FormSelect>
 
-        <label class="block">
-          <span class="block text-sm font-medium text-base-content">Operator note</span>
-          <textarea
-            value={note()}
-            onInput={(e) => setNote(e.currentTarget.value)}
-            placeholder="e.g. Production database. Page before rebooting"
-            class="mt-1 block min-h-16 w-full resize-y text-xs rounded border border-border bg-surface px-2 py-1.5 text-base-content focus:outline-none focus:ring-1 focus:ring-blue-400 disabled:opacity-50"
-            disabled={saving()}
-            maxLength={500}
-          />
-        </label>
+        <FormTextarea
+          label="Operator note"
+          density="compact"
+          value={note()}
+          onInput={(e) => setNote(e.currentTarget.value)}
+          placeholder="e.g. Production database. Page before rebooting"
+          disabled={saving()}
+          maxLength={500}
+        />
       </div>
 
       {/* Maintenance window scheduler. The form is closed by default;
@@ -810,43 +807,36 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
       </Show>
 
       <div class="grid grid-cols-1 gap-3 border-t border-border-subtle pt-3 sm:grid-cols-2">
-        <label class="block">
-          <span class="block text-sm font-medium text-base-content">Monitoring</span>
-          <select
-            value={monitoringMode()}
-            onChange={(event) =>
-              setMonitoringMode(event.currentTarget.value as ResourceMonitoringMode)
-            }
-            disabled={saving() || lifecycleState() === 'retired'}
-            class="mt-1 block min-h-11 w-full rounded border border-border bg-surface px-2 py-1.5 text-xs text-base-content focus:outline-none focus:ring-1 focus:ring-blue-400 disabled:opacity-50 sm:min-h-0"
-          >
-            <option value="normal">Normal monitoring</option>
-            <option value="expected_offline">Expected offline</option>
-            <option value="muted">Mute all attention</option>
-          </select>
-          <span class="mt-1 block text-[11px] leading-tight text-muted">
-            Expected offline hides availability noise only. Mute all stops Alerts and Patrol while
-            keeping this resource visible.
-          </span>
-        </label>
+        <FormSelect
+          label="Monitoring"
+          density="compact"
+          value={monitoringMode()}
+          onChange={(event) =>
+            setMonitoringMode(event.currentTarget.value as ResourceMonitoringMode)
+          }
+          disabled={saving() || lifecycleState() === 'retired'}
+          help="Expected offline hides availability noise only. Mute all stops Alerts and Patrol while keeping this resource visible."
+          helpClass="text-[11px] leading-tight"
+        >
+          <option value="normal">Normal monitoring</option>
+          <option value="expected_offline">Expected offline</option>
+          <option value="muted">Mute all attention</option>
+        </FormSelect>
 
-        <label class="block">
-          <span class="block text-sm font-medium text-base-content">Lifecycle</span>
-          <select
-            value={lifecycleState()}
-            onChange={(event) =>
-              setLifecycleState(event.currentTarget.value as ResourceLifecycleState)
-            }
-            disabled={saving()}
-            class="mt-1 block min-h-11 w-full rounded border border-border bg-surface px-2 py-1.5 text-xs text-base-content focus:outline-none focus:ring-1 focus:ring-blue-400 disabled:opacity-50 sm:min-h-0"
-          >
-            <option value="active">Active</option>
-            <option value="retired">Retired from monitoring</option>
-          </select>
-          <span class="mt-1 block text-[11px] leading-tight text-muted">
-            {inventoryOwnership().retirementDescription}
-          </span>
-        </label>
+        <FormSelect
+          label="Lifecycle"
+          density="compact"
+          value={lifecycleState()}
+          onChange={(event) =>
+            setLifecycleState(event.currentTarget.value as ResourceLifecycleState)
+          }
+          disabled={saving()}
+          help={inventoryOwnership().retirementDescription}
+          helpClass="text-[11px] leading-tight"
+        >
+          <option value="active">Active</option>
+          <option value="retired">Retired from monitoring</option>
+        </FormSelect>
       </div>
 
       <Show when={lifecycleState() === 'retired'}>
