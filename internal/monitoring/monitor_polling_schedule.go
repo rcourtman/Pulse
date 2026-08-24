@@ -85,10 +85,26 @@ func (m *Monitor) buildScheduledTasks(now time.Time) []ScheduledTask {
 			if interval <= 0 {
 				interval = DefaultSchedulerConfig().BaseInterval
 			}
+			// Planning passes run every poll tick, and Upsert overwrites the
+			// queued slot. Stamping NextRun=now here re-arms every instance as
+			// due immediately each tick, so a fixed-interval instance polls at
+			// the tick cadence instead of its configured interval (#1745).
+			// Keep a pending future slot, tightening only when the freshly
+			// computed interval justifies an earlier run, mirroring the
+			// adaptive path's #1437 handling.
+			nextRun := now
+			if m.taskQueue != nil {
+				if pending, ok := m.taskQueue.Get(desc.Type, desc.Name); ok && pending.NextRun.After(now) {
+					nextRun = pending.NextRun
+					if candidate := now.Add(interval); candidate.Before(nextRun) {
+						nextRun = candidate
+					}
+				}
+			}
 			tasks = append(tasks, ScheduledTask{
 				InstanceName: desc.Name,
 				InstanceType: desc.Type,
-				NextRun:      now,
+				NextRun:      nextRun,
 				Interval:     interval,
 			})
 		}

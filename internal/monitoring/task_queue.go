@@ -88,6 +88,19 @@ func (q *TaskQueue) Upsert(task ScheduledTask) {
 	q.entries[key] = entry
 }
 
+// Get returns the queued task for an instance, if present.
+func (q *TaskQueue) Get(instanceType InstanceType, instance string) (ScheduledTask, bool) {
+	key := schedulerKey(instanceType, instance)
+	q.mu.Lock()
+	defer q.mu.Unlock()
+
+	entry, ok := q.entries[key]
+	if !ok {
+		return ScheduledTask{}, false
+	}
+	return entry.task, true
+}
+
 // Remove deletes a task by key if present.
 func (q *TaskQueue) Remove(instanceType InstanceType, instance string) {
 	key := schedulerKey(instanceType, instance)

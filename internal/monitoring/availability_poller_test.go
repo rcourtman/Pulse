@@ -320,3 +320,55 @@ func TestAvailabilityCertificateTrustIncidentsRespectSelfSignedExemptionAndOptOu
 		t.Fatalf("disabled monitoring incidents = %+v, want none", incidents)
 	}
 }
+
+// Regression for #1745: with the adaptive scheduler disabled, planning passes
+// run every poll tick and Upsert overwrites the queued slot, so they must not
+// re-arm a pending fixed-interval task as due-now or availability targets poll
+// at the tick cadence instead of their configured interval.
+func TestBuildScheduledTasksWithoutSchedulerPreservesPendingFixedIntervalSlot(t *testing.T) {
+	monitor := availabilityFixedIntervalTestMonitor(t, []config.AvailabilityTarget{
+		{ID: "plex", Name: "Plex", Address: "plex.local", Protocol: config.AvailabilityProbeICMP, Enabled: true, PollIntervalSecs: 60},
+	})
+	monitor.taskQueue = NewTaskQueue()
+
+	now := time.Now()
+	first := monitor.buildScheduledTasks(now)
+	if len(first) != 1 {
+		t.Fatalf("expected one planned task, got %d", len(first))
+	}
+	if !first[0].NextRun.Equal(now) {
+		t.Fatalf("new instance NextRun = %v, want immediate %v", first[0].NextRun, now)
+	}
+	if first[0].Interval != 60*time.Second {
+		t.Fatalf("Interval = %v, want 60s", first[0].Interval)
+	}
+
+	// Simulate the post-run reschedule parking the next slot in the future.
+	pending := first[0]
+	pending.NextRun = now.Add(60 * time.Second)
+	monitor.taskQueue.Upsert(pending)
+
+	replanned := monitor.buildScheduledTasks(now.Add(10 * time.Second))
+	if len(replanned) != 1 {
+		t.Fatalf("expected one replanned task, got %d", len(replanned))
+	}
+	if !replanned[0].NextRun.Equal(pending.NextRun) {
+		t.Fatalf("replanned NextRun = %v, want preserved %v", replanned[0].NextRun, pending.NextRun)
+	}
+
+	// A shortened configured interval still tightens the pending slot.
+	shortened := availabilityFixedIntervalTestMonitor(t, []config.AvailabilityTarget{
+		{ID: "plex", Name: "Plex", Address: "plex.local", Protocol: config.AvailabilityProbeICMP, Enabled: true, PollIntervalSecs: 15},
+	})
+	shortened.taskQueue = monitor.taskQueue
+	monitor.taskQueue.Upsert(pending)
+	tick := now.Add(10 * time.Second)
+	tightened := shortened.buildScheduledTasks(tick)
+	if len(tightened) != 1 {
+		t.Fatalf("expected one tightened task, got %d", len(tightened))
+	}
+	want := tick.Add(15 * time.Second)
+	if !tightened[0].NextRun.Equal(want) {
+		t.Fatalf("tightened NextRun = %v, want %v", tightened[0].NextRun, want)
+	}
+}
