@@ -91,9 +91,67 @@ describe('useWorkloadViewportSync', () => {
     expect(removeEventListenerSpy).toHaveBeenCalledWith('resize', expect.any(Function));
   });
 
+  it('captures expanded detail geometry when the drawer mounts before scrolling', async () => {
+    const onExpandedDetailHeightChange = vi.fn();
+    const groupedWindowing: UseGroupedTableWindowingResult = {
+      endIndex: () => 36,
+      getVisibleSlice: (_groupKey, guests) => guests,
+      isWindowed: () => true,
+      mountedCount: () => 36,
+      onScroll: vi.fn(),
+      revealIndex: vi.fn(),
+      startIndex: () => 0,
+    };
+
+    const Harness = () => {
+      const [bodyRef, setBodyRef] = createSignal<HTMLTableSectionElement | null>(null);
+
+      useWorkloadViewportSync({
+        filteredGuestCount: () => 640,
+        groupedWindowing,
+        onExpandedDetailHeightChange,
+        rowHeight: () => 37,
+        selectedGuestId: () => 'guest-1',
+        tableBodyRef: bodyRef,
+      });
+
+      return (
+        <table>
+          <tbody ref={setBodyRef}>
+            <tr
+              data-inline-detail-for="guest-1"
+              ref={(element) => {
+                vi.spyOn(element, 'getBoundingClientRect').mockReturnValue({
+                  bottom: 900,
+                  height: 900,
+                  left: 0,
+                  right: 800,
+                  toJSON: () => ({}),
+                  top: 0,
+                  width: 800,
+                  x: 0,
+                  y: 0,
+                } as DOMRect);
+              }}
+            >
+              <td>Expanded guest details</td>
+            </tr>
+          </tbody>
+        </table>
+      );
+    };
+
+    render(() => <Harness />);
+
+    await waitFor(() => {
+      expect(onExpandedDetailHeightChange).toHaveBeenCalledWith(900);
+    });
+  });
+
   it('tracks the app scroll container instead of leaving the initial spacer in place', async () => {
-    const onScroll = vi.fn();
+    let expandedDetailActive = false;
     let appScrollContainer!: HTMLDivElement;
+    const onScroll = vi.fn();
     let horizontalTableWrapper!: HTMLDivElement;
     const groupedWindowing: UseGroupedTableWindowingResult = {
       endIndex: () => 150,
@@ -109,6 +167,7 @@ describe('useWorkloadViewportSync', () => {
       const [bodyRef, setBodyRef] = createSignal<HTMLTableSectionElement | null>(null);
 
       useWorkloadViewportSync({
+        expandedDetailActive: () => expandedDetailActive,
         filteredGuestCount: () => 640,
         groupedWindowing,
         rowHeight: () => 32,
@@ -186,9 +245,15 @@ describe('useWorkloadViewportSync', () => {
       cancelable: true,
       deltaY: 120,
     });
+    appScrollContainer.scrollTop = 300;
     appScrollContainer.dispatchEvent(wheelEvent);
     expect(onScroll).toHaveBeenLastCalledWith(680, 400, 32);
     expect(wheelEvent.defaultPrevented).toBe(false);
+
+    expandedDetailActive = true;
+    const callsBeforeExpandedInput = onScroll.mock.calls.length;
+    appScrollContainer.dispatchEvent(wheelEvent);
+    expect(onScroll).toHaveBeenCalledTimes(callsBeforeExpandedInput);
 
     const touchStart = new Event('touchstart');
     Object.defineProperty(touchStart, 'touches', {
@@ -199,8 +264,9 @@ describe('useWorkloadViewportSync', () => {
     Object.defineProperty(touchMove, 'touches', {
       value: { item: () => ({ clientX: 196, clientY: 120 }) },
     });
+    appScrollContainer.scrollTop = 320;
     appScrollContainer.dispatchEvent(touchMove);
-    expect(onScroll).toHaveBeenLastCalledWith(680, 400, 32);
+    expect(onScroll).toHaveBeenCalledTimes(callsBeforeExpandedInput);
     expect(touchMove.defaultPrevented).toBe(false);
   });
 

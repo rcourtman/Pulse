@@ -6,6 +6,7 @@ import {
   type UseGroupedTableWindowingOptions,
   type UseGroupedTableWindowingResult,
 } from '../useGroupedTableWindowing';
+import { resolveWorkloadGuestIndexAtVirtualOffset } from '../useWorkloadsDerivedState';
 import type { WorkloadGuest } from '@/types/workloads';
 
 /** Build a minimal WorkloadGuest stub for slicing tests. */
@@ -725,6 +726,43 @@ describe('useGroupedTableWindowing', () => {
       hook.revealIndex(200);
       expect(hook.startIndex()).toBe(80);
       expect(hook.endIndex()).toBe(100);
+    });
+  });
+
+  describe('expanded detail scrolling', () => {
+    it('treats the expanded detail height as part of the selected guest virtual row', () => {
+      const geometry = {
+        detailHeight: 900,
+        detailRowIndex: 10,
+        groupHeaderHeight: 28,
+        groupStartIndices: [0],
+        rowHeight: 37,
+        totalRows: 100,
+      };
+
+      expect(
+        resolveWorkloadGuestIndexAtVirtualOffset({ ...geometry, offset: 10 * 37 + 28 + 600 }),
+      ).toBe(10);
+      expect(
+        resolveWorkloadGuestIndexAtVirtualOffset({ ...geometry, offset: 11 * 37 + 28 + 900 }),
+      ).toBe(11);
+    });
+
+    it('uses a reveal target once without pinning later scroll-driven windows to it', () => {
+      const [revealIndex] = createSignal<number | null>(500);
+      const hook = setup({
+        totalRowCount: () => 1000,
+        enabled: () => true,
+        windowSize: 100,
+        revealIndex,
+      });
+
+      expect(hook.startIndex()).toBe(450);
+
+      hook.onScroll(28000, 400, 40);
+
+      expect(hook.startIndex()).toBeGreaterThan(600);
+      expect(hook.startIndex()).not.toBe(450);
     });
   });
 });

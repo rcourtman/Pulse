@@ -1,5 +1,7 @@
 import { createEffect, createSignal, onCleanup, type Accessor } from 'solid-js';
 
+import { findInlineDetailElement } from '@/components/shared/contextualFocus';
+
 import type { UseGroupedTableWindowingResult } from './useGroupedTableWindowing';
 
 const SCROLLABLE_OVERFLOW_PATTERN = /(?:auto|scroll|overlay)/;
@@ -37,20 +39,34 @@ const findScrollContainer = (element: HTMLElement): HTMLElement | null => {
 };
 
 interface WorkloadsWorkloadViewportSyncOptions {
+  expandedDetailActive?: Accessor<boolean>;
   filteredGuestCount: Accessor<number>;
   groupedWindowing: UseGroupedTableWindowingResult;
+  onExpandedDetailHeightChange?: (height: number) => void;
   onRowGeometryChange?: (geometry: { groupHeaderHeight?: number; rowHeight?: number }) => void;
   rowHeight: Accessor<number>;
+  selectedGuestId?: Accessor<string | null>;
   tableBodyRef: Accessor<HTMLTableSectionElement | null>;
 }
 
 export function useWorkloadViewportSync(options: WorkloadsWorkloadViewportSyncOptions) {
   const [isScrollToTopVisible, setIsScrollToTopVisible] = createSignal(false);
 
+  const reportExpandedDetailHeight = (body: HTMLTableSectionElement, selectedGuestId: string) => {
+    const detail = findInlineDetailElement(body, selectedGuestId);
+    const detailHeight = detail?.getBoundingClientRect().height ?? 0;
+    if (detailHeight > 0) options.onExpandedDetailHeightChange?.(detailHeight);
+    return detail;
+  };
+
   const syncGuestWindowToViewport = (measureRows = false, projectedScrollDelta = 0) => {
     if (typeof window === 'undefined') return;
     const body = options.tableBodyRef();
     if (!body) return;
+    const selectedGuestId = options.selectedGuestId?.();
+    if (selectedGuestId) {
+      reportExpandedDetailHeight(body, selectedGuestId);
+    }
     if (measureRows) {
       const guestRowHeight = body
         .querySelector<HTMLTableRowElement>(':scope > tr.workload-row')
@@ -90,6 +106,28 @@ export function useWorkloadViewportSync(options: WorkloadsWorkloadViewportSyncOp
 
   createEffect(() => {
     if (typeof window === 'undefined') return;
+    const selectedGuestId = options.selectedGuestId?.();
+    const body = options.tableBodyRef();
+    if (!selectedGuestId || !body) return;
+
+    let detailObserver: ResizeObserver | undefined;
+    const measurementFrame = window.requestAnimationFrame(() => {
+      const detail = reportExpandedDetailHeight(body, selectedGuestId);
+      if (!detail || typeof ResizeObserver === 'undefined') return;
+      detailObserver = new ResizeObserver(() => {
+        reportExpandedDetailHeight(body, selectedGuestId);
+      });
+      detailObserver.observe(detail);
+    });
+
+    onCleanup(() => {
+      window.cancelAnimationFrame(measurementFrame);
+      detailObserver?.disconnect();
+    });
+  });
+
+  createEffect(() => {
+    if (typeof window === 'undefined') return;
     options.filteredGuestCount();
     if (!options.tableBodyRef()) return;
 
@@ -99,7 +137,16 @@ export function useWorkloadViewportSync(options: WorkloadsWorkloadViewportSyncOp
     let lastTouchPosition: TouchPosition | null = null;
     const handleViewportWheel = (event: Event) => {
       const wheelEvent = event as WheelEvent;
-      if (!options.groupedWindowing.isWindowed() || wheelEvent.deltaY === 0) return;
+      // Let native input move first while a variable-height drawer is open.
+      // Prewarming can replace that keyed detail row before the browser applies
+      // its delta, causing scroll anchoring to consume the drawer height.
+      if (
+        !options.groupedWindowing.isWindowed() ||
+        options.expandedDetailActive?.() ||
+        wheelEvent.deltaY === 0
+      ) {
+        return;
+      }
       const viewportHeight =
         scrollTarget instanceof HTMLElement
           ? scrollTarget.clientHeight || window.innerHeight
@@ -120,7 +167,13 @@ export function useWorkloadViewportSync(options: WorkloadsWorkloadViewportSyncOp
       const nextPosition = { x: touch.clientX, y: touch.clientY };
       const previousPosition = lastTouchPosition;
       lastTouchPosition = nextPosition;
-      if (!previousPosition || !options.groupedWindowing.isWindowed()) return;
+      if (
+        !previousPosition ||
+        !options.groupedWindowing.isWindowed() ||
+        options.expandedDetailActive?.()
+      ) {
+        return;
+      }
 
       const deltaX = previousPosition.x - nextPosition.x;
       const deltaY = previousPosition.y - nextPosition.y;

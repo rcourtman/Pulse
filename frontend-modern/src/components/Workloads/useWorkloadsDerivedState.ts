@@ -1,4 +1,4 @@
-import { createMemo, createSignal, type Accessor } from 'solid-js';
+import { createEffect, createMemo, createSignal, type Accessor } from 'solid-js';
 
 import type { Alert, Node } from '@/types/api';
 import type { WorkloadGuest } from '@/types/workloads';
@@ -24,6 +24,56 @@ const PHONE_WORKLOAD_GROUP_HEADER_HEIGHT = 28;
 const WORKLOADS_TABLE_DIVIDER_HEIGHT = 1;
 const DESKTOP_WORKLOAD_WINDOW_SIZE = 140;
 const PHONE_WORKLOAD_WINDOW_SIZE = 36;
+
+interface WorkloadVirtualOffsetOptions {
+  detailHeight: number;
+  detailRowIndex: number | null;
+  groupHeaderHeight: number;
+  groupStartIndices: readonly number[];
+  offset: number;
+  rowHeight: number;
+  totalRows: number;
+}
+
+export const resolveWorkloadGuestIndexAtVirtualOffset = ({
+  detailHeight,
+  detailRowIndex,
+  groupHeaderHeight,
+  groupStartIndices,
+  offset,
+  rowHeight,
+  totalRows,
+}: WorkloadVirtualOffsetOptions): number => {
+  if (totalRows <= 1) return 0;
+
+  const countGroupStartsAtOrBefore = (guestIndex: number) => {
+    let low = 0;
+    let high = groupStartIndices.length;
+    while (low < high) {
+      const middle = Math.floor((low + high) / 2);
+      if (groupStartIndices[middle] <= guestIndex) low = middle + 1;
+      else high = middle;
+    }
+    return low;
+  };
+
+  let low = 0;
+  let high = totalRows - 1;
+  let resolved = 0;
+  while (low <= high) {
+    const middle = Math.floor((low + high) / 2);
+    const detailOffset = detailRowIndex !== null && middle > detailRowIndex ? detailHeight : 0;
+    const guestTop =
+      middle * rowHeight + countGroupStartsAtOrBefore(middle) * groupHeaderHeight + detailOffset;
+    if (guestTop <= offset) {
+      resolved = middle;
+      low = middle + 1;
+    } else {
+      high = middle - 1;
+    }
+  }
+  return resolved;
+};
 
 interface WorkloadsWorkloadDerivedStateOptions {
   activeAlerts: Accessor<Record<string, Alert>>;
@@ -111,39 +161,6 @@ export function useWorkloadsDerivedState(options: WorkloadsWorkloadDerivedStateO
     return low;
   };
 
-  const countGroupStartsAtOrBefore = (guestIndex: number) => {
-    const starts = groupStartIndices();
-    let low = 0;
-    let high = starts.length;
-    while (low < high) {
-      const middle = Math.floor((low + high) / 2);
-      if (starts[middle] <= guestIndex) low = middle + 1;
-      else high = middle;
-    }
-    return low;
-  };
-
-  const guestIndexAtVirtualOffset = (offset: number, rowHeight: number) => {
-    const totalGuests = filteredGuests().length;
-    if (totalGuests <= 1) return 0;
-
-    let low = 0;
-    let high = totalGuests - 1;
-    let resolved = 0;
-    while (low <= high) {
-      const middle = Math.floor((low + high) / 2);
-      const guestTop =
-        middle * rowHeight + countGroupStartsAtOrBefore(middle) * estimatedGroupHeaderHeight();
-      if (guestTop <= offset) {
-        resolved = middle;
-        low = middle + 1;
-      } else {
-        high = middle - 1;
-      }
-    }
-    return resolved;
-  };
-
   const guestGlobalIndexById = createMemo(() => {
     const indexById = new Map<string, number>();
     const groups = groupedGuests();
@@ -159,6 +176,28 @@ export function useWorkloadsDerivedState(options: WorkloadsWorkloadDerivedStateO
 
     return indexById;
   });
+
+  const [selectedDetailHeight, setSelectedDetailHeight] = createSignal(0);
+  const selectedGuestIndex = createMemo<number | null>(() => {
+    const selectedId = options.selectedGuestId();
+    return selectedId ? (guestGlobalIndexById().get(selectedId) ?? null) : null;
+  });
+
+  createEffect(() => {
+    options.selectedGuestId();
+    setSelectedDetailHeight(0);
+  });
+
+  const guestIndexAtVirtualOffset = (offset: number, rowHeight: number) =>
+    resolveWorkloadGuestIndexAtVirtualOffset({
+      detailHeight: selectedDetailHeight(),
+      detailRowIndex: selectedGuestIndex(),
+      groupHeaderHeight: estimatedGroupHeaderHeight(),
+      groupStartIndices: groupStartIndices(),
+      offset,
+      rowHeight,
+      totalRows: filteredGuests().length,
+    });
 
   const revealGuestIndex = createMemo<number | null>(() => {
     const selectedId = options.selectedGuestId();
@@ -220,9 +259,14 @@ export function useWorkloadsDerivedState(options: WorkloadsWorkloadDerivedStateO
 
   const topSpacerHeight = createMemo(() => {
     if (!groupedWindowing.isWindowed() || groupedWindowing.startIndex() <= 0) return 0;
+    const detailHeight =
+      selectedGuestIndex() !== null && selectedGuestIndex()! < groupedWindowing.startIndex()
+        ? selectedDetailHeight()
+        : 0;
     const virtualHeight =
       groupedWindowing.startIndex() * estimatedRowHeight() +
-      countGroupStartsBefore(groupedWindowing.startIndex()) * estimatedGroupHeaderHeight();
+      countGroupStartsBefore(groupedWindowing.startIndex()) * estimatedGroupHeaderHeight() +
+      detailHeight;
 
     // The table's divide-y rule adds one border when a leading spacer is
     // mounted. Keep that border inside the virtual height instead of letting
@@ -230,25 +274,34 @@ export function useWorkloadsDerivedState(options: WorkloadsWorkloadDerivedStateO
     return Math.max(0, virtualHeight - WORKLOADS_TABLE_DIVIDER_HEIGHT);
   });
 
-  const bottomSpacerHeight = createMemo(() =>
-    groupedWindowing.isWindowed()
-      ? Math.max(
-          0,
-          (filteredGuests().length - groupedWindowing.endIndex()) * estimatedRowHeight() +
-            (groupStartIndices().length - countGroupStartsBefore(groupedWindowing.endIndex())) *
-              estimatedGroupHeaderHeight(),
-        )
-      : 0,
-  );
+  const bottomSpacerHeight = createMemo(() => {
+    if (!groupedWindowing.isWindowed()) return 0;
+    const detailHeight =
+      selectedGuestIndex() !== null && selectedGuestIndex()! >= groupedWindowing.endIndex()
+        ? selectedDetailHeight()
+        : 0;
+    return Math.max(
+      0,
+      (filteredGuests().length - groupedWindowing.endIndex()) * estimatedRowHeight() +
+        (groupStartIndices().length - countGroupStartsBefore(groupedWindowing.endIndex())) *
+          estimatedGroupHeaderHeight() +
+        detailHeight,
+    );
+  });
 
   const workloadViewport = useWorkloadViewportSync({
+    expandedDetailActive: () => selectedGuestIndex() !== null && selectedDetailHeight() > 0,
     filteredGuestCount: () => filteredGuests().length,
     groupedWindowing,
+    onExpandedDetailHeightChange: (height) => {
+      if (Math.abs(height - selectedDetailHeight()) > 0.5) setSelectedDetailHeight(height);
+    },
     onRowGeometryChange: (geometry) => {
       if (geometry.rowHeight) setEstimatedRowHeight(geometry.rowHeight);
       if (geometry.groupHeaderHeight) setEstimatedGroupHeaderHeight(geometry.groupHeaderHeight);
     },
     rowHeight: estimatedRowHeight,
+    selectedGuestId: options.selectedGuestId,
     tableBodyRef: options.tableBodyRef,
   });
 

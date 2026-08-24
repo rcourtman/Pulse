@@ -1,4 +1,4 @@
-import { createEffect, createMemo, createSignal } from 'solid-js';
+import { createEffect, createMemo, createSignal, untrack } from 'solid-js';
 import type { WorkloadGuest } from '@/types/workloads';
 
 export interface UseGroupedTableWindowingOptions {
@@ -168,7 +168,10 @@ export const useGroupedTableWindowing = (
     if (!isWindowed()) return;
     const target = options.revealIndex?.();
     if (target == null || target < 0) return;
-    revealIndex(target);
+    // A reveal target is an initial positioning request, not a permanent pin.
+    // Reading the current window inside this effect would otherwise make every
+    // scroll-driven window shift snap back to an expanded or deep-linked row.
+    untrack(() => revealIndex(target));
   });
 
   return {

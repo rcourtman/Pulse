@@ -1,44 +1,41 @@
 {
   "version": 1,
-  "base_sha": "814f7008833c19fce7d457c1818ebc9197b83c6e",
-  "verified_at": "2026-08-24T07:44:48Z",
+  "base_sha": "dec1c94c27d65b6110f5bef08d2b54313a1a7e3a",
+  "verified_at": "2026-08-24T09:23:55Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/AppLayout.tsx",
-    "frontend-modern/src/components/shared/stableNavTabs.ts"
+    "frontend-modern/src/components/Workloads/useGroupedTableWindowing.ts",
+    "frontend-modern/src/components/Workloads/useWorkloadViewportSync.ts",
+    "frontend-modern/src/components/Workloads/useWorkloadsDerivedState.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/AppLayout.tsx": "60abf2ff6cbba15f57d1f0c8a5775b10fdfda96ff7827dc36953028571c5deeb",
-    "frontend-modern/src/components/shared/stableNavTabs.ts": "41221184dc142e55a37a0bbc4f08edce2edfd067aa7f15e1a7f02d363f654018"
+    "frontend-modern/src/components/Workloads/useGroupedTableWindowing.ts": "79f29210f6edcb74dc7bcc4bd66fd43e2268467bc4f0cca318a5824a9f966c5e",
+    "frontend-modern/src/components/Workloads/useWorkloadViewportSync.ts": "301ea460d570d7e1ba1d87ab78c41000f78f55b2913cf454036415026bcf4599",
+    "frontend-modern/src/components/Workloads/useWorkloadsDerivedState.ts": "2bd50562e5b58f8a197c6b4cfb3c50a2cb7c61a187cb26203419e7ac668e5f8f"
   },
   "routes": [
-    "/login",
-    "/proxmox/overview",
-    "/proxmox/storage",
-    "/proxmox/backups/date",
-    "/proxmox/mail",
-    "/alerts/overview",
-    "/patrol",
-    "/actions"
+    "/proxmox"
   ],
   "viewports": [
     {
-      "width": 1440,
-      "height": 900
-    },
-    {
       "width": 390,
       "height": 844
+    },
+    {
+      "width": 1440,
+      "height": 900
     }
   ],
   "states": [
-    "production build served via vite preview :4173 proxied to the live dev backend (mock estate: 50 nodes / 929 guests / 1508 resources, 46+ active alerts)",
-    "desktop top nav (12 tabs) and mobile bottom bar (4 destinations) observed across 40s of websocket frames including activeAlerts-bearing rawData frames",
-    "negative control on the pre-fix build: 3 of 4 mobile nav buttons and 4 of 10 desktop tabs were detached (recreated) within the same 40s window; with this change all tagged nav elements stayed connected"
+    "managed hot-dev mock estate with 50 nodes and 929 guests",
+    "first visible guest expanded with its variable-height inline detail mounted",
+    "expanded detail crossed out of the virtual window while the guest selection and full table height were retained",
+    "mock mode disabled and the managed runtime restored to real-nodes mode after verification"
   ],
   "interactions": [
-    "login as admin (real input)",
-    "Playwright CDP clicks on Proxmox sub-tabs (Storage, Backups, Mail, Overview) and mobile bottom-bar destinations (Alerts, Patrol, Actions) with navigation confirmed by URL change",
-    "desktop utility tab click to /alerts after the 40s stability window; zero console errors on both form factors"
+    "expanded artifact-cache-310 from the guest-table chevron at both responsive breakpoints",
+    "repeated native scrolling crossed the expanded-detail handoff without a backward jump: phone advanced 611 to 4251 and desktop advanced 1021 to 5921",
+    "confirmed the mounted guest budgets stayed at 36 rows on phone and 140 rows on desktop through the handoff",
+    "confirmed zero browser console errors on phone and desktop"
   ]
 }
