@@ -646,10 +646,13 @@ func (m *Monitor) allowHostAgentReenrollLocked(
 		}
 	}
 
-	transitioned := existsOnDisk
-	if !hasDurableStore {
-		transitioned = existsInMemory || existsInState
-	}
+	// A removal block can live in the durable store, the legacy in-memory
+	// map, or persisted monitor state written by releases that predate the
+	// durable store. Clearing must honor whichever still holds the block:
+	// trusting only the durable store leaves a state-only block permanently
+	// un-clearable after an upgrade, so every fresh re-enroll reads as
+	// "already consumed" and the host can never report again (#1772).
+	transitioned := existsOnDisk || existsInMemory || existsInState
 	if !transitioned {
 		log.Info().
 			Str("hostID", hostID).

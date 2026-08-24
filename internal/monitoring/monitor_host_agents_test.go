@@ -3890,6 +3890,41 @@ func TestAllowHostAgentReenroll_ClearsStateMirrorWithoutMemoryEntry(t *testing.T
 	}
 }
 
+// Regression for #1772: a removal block that lives only in persisted monitor
+// state (written before the durable continuity store existed) must still be
+// clearable when a durable store is attached, or every fresh re-enroll reads
+// as already-consumed and the host can never report again.
+func TestAllowHostAgentReenroll_ClearsStateMirrorWhenDurableStoreLacksEntry(t *testing.T) {
+	monitor := &Monitor{
+		state:               models.NewState(),
+		alertManager:        alerts.NewManager(),
+		hostTokenBindings:   make(map[string]string),
+		removedHostAgents:   make(map[string]time.Time),
+		rateTracker:         NewRateTracker(),
+		config:              &config.Config{},
+		hostContinuityStore: config.NewHostContinuityStore(t.TempDir(), nil),
+	}
+	t.Cleanup(func() { monitor.alertManager.Stop() })
+
+	hostID := "host-upgrade-block"
+	monitor.state.AddRemovedHostAgent(models.RemovedHostAgent{
+		ID:        hostID,
+		Hostname:  "npm.local",
+		RemovedAt: time.Now().Add(-time.Hour),
+	})
+
+	cleared, err := monitor.allowHostAgentReenrollLocked(hostID, "token-fresh", false)
+	if err != nil {
+		t.Fatalf("allowHostAgentReenrollLocked: %v", err)
+	}
+	if !cleared {
+		t.Fatal("expected state-only removal block to report cleared with a durable store attached")
+	}
+	if len(monitor.state.GetRemovedHostAgents()) != 0 {
+		t.Fatal("expected state removal block to be cleared")
+	}
+}
+
 // TestCleanupRemovedHostAgents_ExpiresStateMirrorEntries pins expiry for
 // models.State-only compatibility entries when the in-memory map lacks them.
 func TestCleanupRemovedHostAgents_ExpiresStateMirrorEntries(t *testing.T) {

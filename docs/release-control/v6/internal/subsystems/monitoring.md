@@ -1116,6 +1116,15 @@ tighten it only when a freshly shortened interval justifies an earlier run.
 Without this, a sixty-second availability target polls at the ten-second
 tick cadence whenever adaptive polling is off, which is the default.
 
+### Host report admission does not wedge on stale removal blocks
+
+Host-agent report admission consults removal blocks across the durable
+continuity store, the legacy in-memory map, and persisted monitor state.
+Clearing a block on re-enroll honors whichever store still holds it (the
+agent-lifecycle contract carries the matching clause), so admission cannot
+wedge into permanent 400s for a host whose block predates the durable
+store.
+
 ### Large Proxmox generations preserve reachability under bounded enrichment
 
 The efficient PVE poll reserves a fixed tail of the scheduler deadline and

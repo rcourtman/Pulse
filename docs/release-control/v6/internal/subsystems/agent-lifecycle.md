@@ -6562,3 +6562,13 @@ retains the last successful aggregate after failure, so a slow appliance
 daemon cannot be held busy by an immediate retry followed by another scan on
 the next report tick. This changes neither agent enrollment nor report
 authority; it bounds the collection work attached to that lifecycle (#1729).
+
+### Host removal blocks clear from every store on re-enroll
+
+A host-agent removal block may live in the durable continuity store, the
+legacy in-memory map, or persisted monitor state written by releases that
+predate the durable store. The re-enroll transition honors whichever store
+still holds the block. A state-only block with a durable store attached is
+cleared rather than read as already-consumed, so a fresh token minted after
+removal always re-enrolls the host instead of rejecting its reports
+indefinitely with 400s that no reinstall can escape (#1772).
