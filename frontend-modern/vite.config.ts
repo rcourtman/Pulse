@@ -46,7 +46,11 @@ const proxyOriginOverride = process.env.PULSE_DEV_PROXY_ORIGIN ?? '';
 const srcAlias = path.resolve(__dirname, './src');
 
 export default defineConfig(({ mode }) => ({
-  plugins: [solid(), sri({ algorithm: 'sha384' })],
+  // preloadDynamicChunks would modulepreload every lazy chunk (~3.1MB raw,
+  // the whole app incl. all Settings panels and every locale) at cold start,
+  // defeating route-level code splitting on slow devices. Dynamic-import SRI
+  // is still enforced through the generated import map integrity block.
+  plugins: [solid(), sri({ algorithm: 'sha384', preloadDynamicChunks: false })],
   resolve: {
     alias: {
       '@': srcAlias,

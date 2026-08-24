@@ -978,6 +978,12 @@ upgrade, update, release, or artifact-selection behavior.
    deterministic token authentication after setup, and may use the server setup
    API as a fallback only when the UI wizard fails to complete cleanly under the
    managed hot-dev runtime.
+   The built `index.html` must not modulepreload lazy route chunks: the SRI
+   plugin runs with `preloadDynamicChunks: false` so cold start fetches only the
+   entry and its static vendor imports (route-level code splitting stays
+   effective on slow devices), while dynamic-import integrity remains enforced
+   through the generated import map `integrity` block. Reintroducing whole-app
+   preloading is a governed regression, not a tuning knob.
    Managed browser verification must also restart an existing hot-dev session
    when a verification lock is active or the runtime auth file no longer matches
    the deterministic dev user/hash. `tests/integration/scripts/run-playwright.mjs`
