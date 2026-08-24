@@ -80,7 +80,7 @@ describe('TrueNASAlertsTable', () => {
       detail.getByText('Investigate disk health and schedule replacement if degradation continues'),
     ).toBeInTheDocument();
 
-    await fireEvent.click(detail.getByRole('button', { name: 'Close' }));
+    await fireEvent.click(detail.getByRole('button', { name: /^Collapse .* details$/ }));
 
     expect(screen.queryByTestId('truenas-alert-detail')).not.toBeInTheDocument();
     expect(row).toHaveAttribute('aria-expanded', 'false');

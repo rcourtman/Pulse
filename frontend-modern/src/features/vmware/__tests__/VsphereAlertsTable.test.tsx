@@ -89,7 +89,7 @@ describe('VsphereAlertsTable', () => {
     const firstRow = document.querySelector('[data-vsphere-alert-row]') as HTMLElement;
     expect(firstRow).toHaveAttribute('data-vsphere-alert-row', 'host-alarm:incident:alarm-401:0');
     expect(within(firstRow).getByText('lab-vcenter')).toBeInTheDocument();
-    expect(within(firstRow).getByText('host-101')).toBeInTheDocument();
+    expect(within(firstRow).getByTitle('Host · host-101')).toBeInTheDocument();
 
     const attentionFilter = screen.getByRole('button', {
       name: 'Attention, 1',
@@ -119,7 +119,7 @@ describe('VsphereAlertsTable', () => {
     expect(detail.getByText('Action')).toBeInTheDocument();
     expect(detail.getByText('Investigate in vCenter')).toBeInTheDocument();
 
-    await fireEvent.click(detail.getByRole('button', { name: 'Close' }));
+    await fireEvent.click(detail.getByRole('button', { name: /^Collapse .* details$/ }));
 
     expect(screen.queryByTestId('vsphere-alert-detail')).not.toBeInTheDocument();
     expect(row).toHaveAttribute('aria-expanded', 'false');

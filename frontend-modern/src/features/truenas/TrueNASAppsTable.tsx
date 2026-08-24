@@ -372,14 +372,16 @@ export const TrueNASAppsTable: Component<{
                               <div class="min-w-0">
                                 <div
                                   class="truenas-app-name-value truncate font-medium text-base-content"
-                                  title={name()}
+                                  title={[
+                                    name(),
+                                    `${formatPlatformTableTitleCaseValue(app()?.state)} on ${
+                                      resource.parentName || 'TrueNAS'
+                                    }${app()?.customApp ? ' · Custom' : ''}`,
+                                  ]
+                                    .filter(Boolean)
+                                    .join(' · ')}
                                 >
                                   {name()}
-                                </div>
-                                <div class="truncate text-[10px] text-muted">
-                                  {formatPlatformTableTitleCaseValue(app()?.state)} on{' '}
-                                  {resource.parentName || 'TrueNAS'}
-                                  <Show when={app()?.customApp}> - Custom</Show>
                                 </div>
                               </div>
                             </div>

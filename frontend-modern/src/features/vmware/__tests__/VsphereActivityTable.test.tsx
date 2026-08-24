@@ -99,7 +99,9 @@ describe('VsphereActivityTable', () => {
     expect(within(table).getByText('vCenter')).toBeInTheDocument();
     expect(screen.getAllByText('warehouse-api-01')).toHaveLength(2);
     expect(screen.getByText('Reconfigure virtual machine')).toBeInTheDocument();
-    expect(screen.getByText('Permission denied while reconfiguring VM')).toBeInTheDocument();
+    expect(
+      screen.getByTitle('Reconfigure virtual machine · Permission denied while reconfiguring VM'),
+    ).toBeInTheDocument();
     expect(screen.getByText('Error')).toBeInTheDocument();
     expect(screen.getByText('VmPoweredOnEvent')).toBeInTheDocument();
     expect(screen.getByText('administrator@vsphere.local')).toBeInTheDocument();
@@ -119,7 +121,7 @@ describe('VsphereActivityTable', () => {
     expect(detail.getByText('Description')).toBeInTheDocument();
     expect(detail.getByText('Reconfigure virtual machine CPU reservation')).toBeInTheDocument();
 
-    await fireEvent.click(detail.getByRole('button', { name: 'Close' }));
+    await fireEvent.click(detail.getByRole('button', { name: /^Collapse .* details$/ }));
 
     expect(screen.queryByTestId('vsphere-activity-detail')).not.toBeInTheDocument();
     expect(row).toHaveAttribute('aria-expanded', 'false');

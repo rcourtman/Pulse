@@ -262,6 +262,7 @@ export function ProxmoxBackupServersTable(props: {
                       <TableRow class="hover:bg-surface-hover">
                         <TableCell
                           class={`${getPlatformTableCellClassForKind('name')} text-base-content truncate font-medium`}
+                          title={[row.serverName, row.datastore?.name].filter(Boolean).join(' · ')}
                         >
                           <div class="flex min-w-0 items-center gap-1">
                             <PlatformResourceDetailToggleButton
@@ -276,19 +277,6 @@ export function ProxmoxBackupServersTable(props: {
                               {row.serverName}
                             </div>
                           </div>
-                          <Show
-                            when={
-                              layoutMode() === 'compact' &&
-                              !columnVisible('datastore') &&
-                              row.datastore
-                            }
-                          >
-                            {(datastore) => (
-                              <div class="min-w-0 truncate font-mono text-[10px] font-normal text-muted">
-                                {datastore().name}
-                              </div>
-                            )}
-                          </Show>
                         </TableCell>
                         <TableCell class={getPlatformTableCellClassForKind('text')}>
                           <div class="flex items-center gap-2">

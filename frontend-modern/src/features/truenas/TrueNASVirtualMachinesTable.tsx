@@ -310,14 +310,19 @@ export const TrueNASVirtualMachinesTable: Component<{
                                 title={indicator().label}
                               />
                               <div class="min-w-0">
-                                <div class="truncate font-medium text-base-content" title={name()}>
+                                <div
+                                  class="truncate font-medium text-base-content"
+                                  title={[
+                                    name(),
+                                    vm()?.description ||
+                                      vm()?.uuid ||
+                                      resource.parentName ||
+                                      'TrueNAS',
+                                  ]
+                                    .filter(Boolean)
+                                    .join(' · ')}
+                                >
                                   {name()}
-                                </div>
-                                <div class="truncate text-[10px] text-muted">
-                                  {vm()?.description ||
-                                    vm()?.uuid ||
-                                    resource.parentName ||
-                                    'TrueNAS'}
                                 </div>
                               </div>
                             </div>

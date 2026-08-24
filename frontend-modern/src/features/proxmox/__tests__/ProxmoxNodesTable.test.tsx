@@ -288,7 +288,7 @@ describe('ProxmoxNodesTable', () => {
     expect(link).toHaveAttribute('href', 'https://pve1:8006');
   });
 
-  it('keeps the provider-native node name visible beside a friendly name on phones', () => {
+  it('keeps provider-native node identity without adding a phone subtitle', () => {
     render(() => (
       <ProxmoxNodesTable
         nodes={[
@@ -313,7 +313,7 @@ describe('ProxmoxNodesTable', () => {
     ));
 
     expect(screen.getByText('West Production A')).toBeInTheDocument();
-    expect(screen.getByText('pve1')).toBeInTheDocument();
+    expect(screen.getByTitle('West Production A · Proxmox node pve1')).toBeInTheDocument();
   });
 
   it('passes alert-backed temperature thresholds into the node temperature gauge', () => {

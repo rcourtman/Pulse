@@ -90,7 +90,6 @@ it: that connection is invisible to the mapping rather than absent from the
 source, and resolution stays inconclusive for the PBS instance until every
 candidate connection has been observed.
 
-
 Physical-disk to node association is evidence-directional. A disk reported by a
 host agent carries no Proxmox scope, so its instance is empty and the matching
 node name is the only evidence available; that match must stand. A disk that
@@ -197,11 +196,11 @@ a recovery-provider read helper or compatibility alias.
 2. `frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx` shared with `unified-resources`: Proxmox workload coverage rows are both a storage/recovery protection-posture surface and a unified-resource identity consumer boundary.
 3. `frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx` shared with `unified-resources`: Proxmox recoverable workload table rows are both a storage/recovery coverage surface and a unified-resource platform-table consumer boundary.
 4. `internal/api/configapi/setup_script_render.go` shared with `agent-lifecycle`, `api-contracts`: the generated Proxmox setup-script is a shared boundary across agent lifecycle (forced-command keys, install/uninstall edits), API contracts (rendered token shape and encoded rerun URL), and storage/recovery (backup visibility grants, Pulse-managed temperature SSH keys, and SMART disk-temperature collection).
-    The user-chosen connection name carried by assisted setup travels on the
-    server-side setup token, not through the rendered script or its
-    registration payload, so honoring it changes neither the backup
-    visibility grants the script applies nor the storage-side identity that
-    backup and recovery attribution key on (hostname and candidate hosts).
+   The user-chosen connection name carried by assisted setup travels on the
+   server-side setup token, not through the rendered script or its
+   registration payload, so honoring it changes neither the backup
+   visibility grants the script applies nor the storage-side identity that
+   backup and recovery attribution key on (hostname and candidate hosts).
 5. `internal/proxmoxidentity/backup_identity.go` shared with `alerts`, `monitoring`: Proxmox PBS backup subject identity is a shared runtime boundary for monitoring backup freshness, backup-age alert attribution, and recovery-point guest mapping.
 
 Storage resource projections may show alert indicators from the canonical
@@ -465,6 +464,14 @@ Proxmox backup source/state chips are also a frontend-primitives boundary:
 badge tones, `proxmoxBackupsTableShared.tsx` owns the backup table helper
 composition, and visible source/state chips must render through `MetadataBadge`
 instead of restoring local rounded-sm xs badge spans.
+Proxmox backup-health and recoverable-artifact summary rows follow the same
+platform-table density contract as every other provider surface. Storage and
+recovery owns which backup, datastore, workload-type, and VMID facts matter to
+an operator, while frontend-primitives owns the canonical 32px single-line
+summary row. Compact layouts must not stack those secondary facts beneath the
+resource name and make the row taller: keep essential identity inline when no
+detail disclosure exists, and otherwise preserve supporting context in its
+existing column, the row's accessible title, or the expanded detail content.
 The Proxmox backup view selector follows the same ownership split:
 storage/recovery owns the chronological-versus-coverage view values and backup
 semantics, while the visible segmented selector shell must compose the
@@ -863,7 +870,7 @@ outside the storage/recovery contract and must not become restore material,
 recovery scope, or a storage/recovery-owned secret source.
 
 1. Add or change recovery-point persistence, rollups, or series derivation through `internal/recovery/`
-4. Route transport changes for storage and recovery endpoints through `internal/api/` and the owning `api-contracts` proof routes
+2. Route transport changes for storage and recovery endpoints through `internal/api/` and the owning `api-contracts` proof routes
    Commercial migration startup behavior in
    `internal/api/licensing_handlers.go` and `internal/api/licensing_bridge.go`
    remains adjacent cloud-paid/API state. Synthetic mock-license suppression
@@ -1093,7 +1100,7 @@ recovery scope, or a storage/recovery-owned secret source.
    both directions: they may show their existing gated-capability affordances
    when the policy exposes them, and they must not add edition- or
    license-sniffing of their own to re-suppress or re-expose paid prompts.
-5. Route canonical storage/recovery resource selection through `frontend-modern/src/hooks/useUnifiedResources.ts` and the owning `unified-resources` contract
+3. Route canonical storage/recovery resource selection through `frontend-modern/src/hooks/useUnifiedResources.ts` and the owning `unified-resources` contract
    That shared hook now also projects resource `clusterId` through the shared cluster-name helper, so storage and recovery links keep the same cluster-context label as other unified-resource consumers instead of rebuilding a local fallback chain.
    That shared hook plus the adjacent websocket/store adapter path must keep
    realtime transport merges canonical for storage/recovery consumers too:
@@ -1142,7 +1149,7 @@ recovery scope, or a storage/recovery-owned secret source.
    are visible must now pass an explicit enabled gate into that shared hook and
    any adjacent recovery-rollup query, so hidden workload-route selectors do
    not hydrate storage/recovery transport on the protected hot path.
-6. Preserve API-owned node identity continuity in shared `internal/api/` helpers so storage and recovery transport attachments do not fork by hostname-versus-IP drift across the same runtime.
+4. Preserve API-owned node identity continuity in shared `internal/api/` helpers so storage and recovery transport attachments do not fork by hostname-versus-IP drift across the same runtime.
    That same adjacent `internal/api/` boundary also owns canonical
    host-alias propagation on grouped-system and attached-connection payloads.
    `internal/api/connections_types.go`,
@@ -1201,7 +1208,7 @@ recovery scope, or a storage/recovery-owned secret source.
    they must not treat that response as a source for owner identity because the
    stable hosted owner principal is server-side org metadata resolved later
    through magic-link verification.
-7. Preserve fail-closed API assignment and lookup behavior in shared `internal/api/` helpers so storage and recovery surfaces do not inherit orphaned profile or resource references from unrelated transport mutations.
+5. Preserve fail-closed API assignment and lookup behavior in shared `internal/api/` helpers so storage and recovery surfaces do not inherit orphaned profile or resource references from unrelated transport mutations.
    Preserve fail-closed proxy-auth administrator evaluation in those same
    shared helpers as an adjacent security/API boundary: storage and recovery
    surfaces may consume an already-authorized admin request, but they must not
@@ -1213,12 +1220,12 @@ recovery scope, or a storage/recovery-owned secret source.
    visibility, restore authority, protected-system ownership, and
    recovery-local audit attribution must continue to use backend-authenticated
    stable principals and storage/recovery resource identities.
-8. Preserve canonical configured public endpoint selection in shared `internal/api/` helpers so recovery and storage links do not inherit loopback-local scheme drift from admin-originated setup/install flows.
-9. Preserve trailing-slash normalization in those shared install-command helpers so recovery-adjacent transport and link surfaces do not inherit double-slash installer paths or slash-suffixed public endpoint drift from canonical backend install payloads.
-10. Preserve canonical /api/auto-register token-action truth in shared `internal/api/` helpers so adjacent setup and recovery-adjacent transport flows stay on caller-supplied credential completion instead of reviving deleted alternate completion modes.
-11. Preserve the canonical setup-script `source="script"` marker through those same shared auto-register helpers, and reject non-canonical source labels there, so later canonical reruns can keep treating script-confirmed tokens differently from agent-created tokens without reviving arbitrary caller-label compatibility.
-12. Preserve the canonical auto-register node-type boundary in those same shared helpers so only supported `pve` and `pbs` registrations can complete, and unsupported runtime labels cannot bleed fake node identities into adjacent transport or recovery-adjacent state.
-13. Preserve the canonical auto-register token-identity boundary in those same shared helpers so only Pulse-managed `pulse-monitor@{pve|pbs}!pulse-<canonical-scope-slug>` token IDs matching the requested node type can complete, and arbitrary, cross-type, or non-Pulse-managed token identities cannot bleed into adjacent transport or recovery-adjacent state.
+6. Preserve canonical configured public endpoint selection in shared `internal/api/` helpers so recovery and storage links do not inherit loopback-local scheme drift from admin-originated setup/install flows.
+7. Preserve trailing-slash normalization in those shared install-command helpers so recovery-adjacent transport and link surfaces do not inherit double-slash installer paths or slash-suffixed public endpoint drift from canonical backend install payloads.
+8. Preserve canonical /api/auto-register token-action truth in shared `internal/api/` helpers so adjacent setup and recovery-adjacent transport flows stay on caller-supplied credential completion instead of reviving deleted alternate completion modes.
+9. Preserve the canonical setup-script `source="script"` marker through those same shared auto-register helpers, and reject non-canonical source labels there, so later canonical reruns can keep treating script-confirmed tokens differently from agent-created tokens without reviving arbitrary caller-label compatibility.
+10. Preserve the canonical auto-register node-type boundary in those same shared helpers so only supported `pve` and `pbs` registrations can complete, and unsupported runtime labels cannot bleed fake node identities into adjacent transport or recovery-adjacent state.
+11. Preserve the canonical auto-register token-identity boundary in those same shared helpers so only Pulse-managed `pulse-monitor@{pve|pbs}!pulse-<canonical-scope-slug>` token IDs matching the requested node type can complete, and arbitrary, cross-type, or non-Pulse-managed token identities cannot bleed into adjacent transport or recovery-adjacent state.
     Preserve canonical auto-register event intent in those same shared helpers:
     only first-time node creation may emit the toast-bearing
     `node_auto_registered` WebSocket event, while idempotent existing-node
@@ -1238,7 +1245,7 @@ recovery scope, or a storage/recovery-owned secret source.
     same discovery-refresh plus node-deleted websocket side effects as a manual
     delete so adjacent recovery/storage surfaces do not retain stale provider
     context after Pulse credentials have been removed from the host.
-14. Preserve canonical /api/auto-register DHCP continuity in those shared helpers so a PVE or PBS node that reruns registration from a new IP with the same canonical node name and deterministic Pulse-managed token identity updates in place instead of duplicating the inventory record.
+12. Preserve canonical /api/auto-register DHCP continuity in those shared helpers so a PVE or PBS node that reruns registration from a new IP with the same canonical node name and deterministic Pulse-managed token identity updates in place instead of duplicating the inventory record.
     Known contradictory TLS fingerprints must veto inferred resolved-address,
     changed-address name/token, and cluster-member continuity matches so
     separate protected sources are not overwritten when sites reuse node
@@ -1260,18 +1267,18 @@ recovery scope, or a storage/recovery-owned secret source.
     transport flows must not reintroduce local marker trust or token rotation
     when the canonical auto-register helper can verify whether Pulse still has
     a matching node.
-15. Preserve the governed root-or-sudo Unix wrapper in shared backend install-command helpers so storage- and recovery-adjacent transport surfaces do not inherit a stale raw `| bash -s --` install payload shape from the canonical agent-install-command API and hosted Proxmox install responses.
-16. Preserve optional-auth tokenless behavior in those same shared backend install-command helpers so adjacent transport surfaces do not implicitly persist API tokens and flip auth-configured state when an operator only requested a Proxmox install command on a token-optional Pulse instance.
-17. Preserve backend-owned Pulse Mobile relay runtime credential minting in those same shared `internal/api/` auth/security helpers so storage- and recovery-adjacent transport surfaces do not inherit browser-authored wildcard token bundles when they depend on the canonical security helper layer.
-18. Preserve the dedicated backend-owned `relay:mobile:access` capability and its governed backward-compatible route inventory plus the shared helper call sites around it, so storage- and recovery-adjacent transport surfaces do not treat the mobile relay credential as a general AI scope bundle.
+13. Preserve the governed root-or-sudo Unix wrapper in shared backend install-command helpers so storage- and recovery-adjacent transport surfaces do not inherit a stale raw `| bash -s --` install payload shape from the canonical agent-install-command API and hosted Proxmox install responses.
+14. Preserve optional-auth tokenless behavior in those same shared backend install-command helpers so adjacent transport surfaces do not implicitly persist API tokens and flip auth-configured state when an operator only requested a Proxmox install command on a token-optional Pulse instance.
+15. Preserve backend-owned Pulse Mobile relay runtime credential minting in those same shared `internal/api/` auth/security helpers so storage- and recovery-adjacent transport surfaces do not inherit browser-authored wildcard token bundles when they depend on the canonical security helper layer.
+16. Preserve the dedicated backend-owned `relay:mobile:access` capability and its governed backward-compatible route inventory plus the shared helper call sites around it, so storage- and recovery-adjacent transport surfaces do not treat the mobile relay credential as a general AI scope bundle.
     That same shared `internal/api/` machine boundary also owns hosted
     entitlement refresh targeting: when storage- or recovery-adjacent hosted
     routes execute under a tenant org without org-local billing state, the
     refresh path must repair the instance-level `default` lease and evaluator
     instead of rewriting the empty tenant org, so AI-guided recovery and
     hosted diagnostics do not collapse into false free-tier behavior.
-19. Preserve shipped local security-doc guidance in shared `internal/api/` config/setup helpers so storage- and recovery-adjacent transport surfaces do not reintroduce GitHub `main` security links when the running build already serves its own local security documentation route.
-20. Keep shared `internal/api/` Patrol transport and alert-trigger edits feature-isolated: Patrol-specific recency fields, callback fan-out, or alert-bridge wiring changes must not leak into recovery queries, storage links, or recovery-adjacent install/setup flows unless this contract changes in the same slice.
+17. Preserve shipped local security-doc guidance in shared `internal/api/` config/setup helpers so storage- and recovery-adjacent transport surfaces do not reintroduce GitHub `main` security links when the running build already serves its own local security documentation route.
+18. Keep shared `internal/api/` Patrol transport and alert-trigger edits feature-isolated: Patrol-specific recency fields, callback fan-out, or alert-bridge wiring changes must not leak into recovery queries, storage links, or recovery-adjacent install/setup flows unless this contract changes in the same slice.
     Retained Patrol objective routes follow the same adjacency rule. A brief,
     canonical resource scope, observer lifecycle, or derived coverage state is
     AI/runtime plus API-contract context; storage and recovery consumers must not
@@ -1477,47 +1484,47 @@ recovery scope, or a storage/recovery-owned secret source.
     normalize the message, but they must not reinterpret it as a storage install
     prerequisite, provider-connection error, or
     recovery-capability verdict.
-21. Keep provider-backed recovery onboarding on the adjacent platform-connections contract. When `internal/api/` grows or changes TrueNAS connection CRUD, masked-secret preservation, saved-connection retest routes, edit-form saved-test payload overlays, or similar provider setup flows, storage and recovery may consume the resulting recovery points but must not absorb that connection-management ownership into storage/recovery-local handlers or page flows. That same adjacency also covers per-surface scope as it flows through the unified connections aggregator: when `internal/api/connections_aggregator.go` projects TrueNAS `MonitorDatasets`/`MonitorPools`/`MonitorReplication` flags into the aggregator's `scope` map, storage and recovery may observe that projection to explain dataset/pool/replication coverage to operators but must not reinterpret those flags as a recovery freshness verdict, restore-capability gate, or storage-local scope registry.
-   That same adjacent platform-connections boundary now also owns
-   source-oriented `systems[]` grouping on `/api/connections`. Storage and
-   recovery may observe grouped source composition to explain whether a
-   platform row is collecting additional host telemetry through Pulse Agent,
-   but they must not reinterpret attached agents as separate protected
-   systems, duplicate recovery inventory rows, or a storage-local ownership
-   model. The same shared `/api/connections` contract also owns compact
-   `agentIdentity` facts for agent-backed rows; storage and recovery may read
-   that metadata, including host-profile ids such as `unraid`, when they need
-   to label a represented host, but they must not rebuild OS/endpoint identity
-   from recovery inventory or alias heuristics, or reinterpret an agent
-   host-profile id as a storage provider platform.
-   When that grouped platform row is a Proxmox cluster, storage and
-   recovery must also treat the backend-authored cluster moniker as the
-   canonical row identity instead of re-expanding cluster-member agents into
-   sibling host rows or per-node storage owners. If the grouped row carries
-   backend-authored cluster member nodes, adjacent storage/recovery surfaces
-   may use that composition for explanatory UI only; they must not promote
-   those child nodes into a second top-level grouped-system taxonomy or infer
-   per-node storage ownership from the settings payload. The same shared
-   `/api/connections` payload also owns any agent-version/update facts and
-   fleet-governance posture carried alongside those grouped rows; adjacent
-   storage or recovery surfaces may reuse that signal for operator context,
-   but must not fork their own version-comparison semantics, desired/applied
-   config-drift classifier, rollout-state classifier, credential-health
-   classifier, command-policy vocabulary, or another agent lifecycle
-   vocabulary. If `/api/connections` reports agent config drift as pending or
-   unknown because no trustworthy applied fingerprint exists, storage and
-   recovery must preserve that uncertainty instead of translating it into a
-   storage-local current/drifted verdict. If `/api/connections` reports
-   `configDrift: not-applicable` with a current applied rollout because no
-   managed host-agent config override is assigned, storage and recovery must
-   preserve that no-rollout state instead of translating it into a pending
-   storage/recovery problem.
-   When `/api/connections` attaches an exact-match host agent to a blocked
-   Proxmox API source without fresh node inventory, storage and recovery must
-   treat that as one represented source with host telemetry, not as a second
-   protected system or a storage-local duplicate host.
-22. Keep backend-native platform actions on the adjacent AI/runtime and platform contracts. When `internal/api/` wires native TrueNAS app control for Assistant, storage and recovery may consume the refreshed recovery points afterward, but they must not grow a parallel recovery-local action transport or action-specific payload shape.
-23. Keep backend-native platform diagnostics on the adjacent AI/runtime and platform contracts. When `internal/api/` wires native TrueNAS app log reads for Assistant, storage and recovery may use those diagnostics during investigation, but they must not grow a parallel recovery-local log transport or diagnostic payload shape.
+19. Keep provider-backed recovery onboarding on the adjacent platform-connections contract. When `internal/api/` grows or changes TrueNAS connection CRUD, masked-secret preservation, saved-connection retest routes, edit-form saved-test payload overlays, or similar provider setup flows, storage and recovery may consume the resulting recovery points but must not absorb that connection-management ownership into storage/recovery-local handlers or page flows. That same adjacency also covers per-surface scope as it flows through the unified connections aggregator: when `internal/api/connections_aggregator.go` projects TrueNAS `MonitorDatasets`/`MonitorPools`/`MonitorReplication` flags into the aggregator's `scope` map, storage and recovery may observe that projection to explain dataset/pool/replication coverage to operators but must not reinterpret those flags as a recovery freshness verdict, restore-capability gate, or storage-local scope registry.
+    That same adjacent platform-connections boundary now also owns
+    source-oriented `systems[]` grouping on `/api/connections`. Storage and
+    recovery may observe grouped source composition to explain whether a
+    platform row is collecting additional host telemetry through Pulse Agent,
+    but they must not reinterpret attached agents as separate protected
+    systems, duplicate recovery inventory rows, or a storage-local ownership
+    model. The same shared `/api/connections` contract also owns compact
+    `agentIdentity` facts for agent-backed rows; storage and recovery may read
+    that metadata, including host-profile ids such as `unraid`, when they need
+    to label a represented host, but they must not rebuild OS/endpoint identity
+    from recovery inventory or alias heuristics, or reinterpret an agent
+    host-profile id as a storage provider platform.
+    When that grouped platform row is a Proxmox cluster, storage and
+    recovery must also treat the backend-authored cluster moniker as the
+    canonical row identity instead of re-expanding cluster-member agents into
+    sibling host rows or per-node storage owners. If the grouped row carries
+    backend-authored cluster member nodes, adjacent storage/recovery surfaces
+    may use that composition for explanatory UI only; they must not promote
+    those child nodes into a second top-level grouped-system taxonomy or infer
+    per-node storage ownership from the settings payload. The same shared
+    `/api/connections` payload also owns any agent-version/update facts and
+    fleet-governance posture carried alongside those grouped rows; adjacent
+    storage or recovery surfaces may reuse that signal for operator context,
+    but must not fork their own version-comparison semantics, desired/applied
+    config-drift classifier, rollout-state classifier, credential-health
+    classifier, command-policy vocabulary, or another agent lifecycle
+    vocabulary. If `/api/connections` reports agent config drift as pending or
+    unknown because no trustworthy applied fingerprint exists, storage and
+    recovery must preserve that uncertainty instead of translating it into a
+    storage-local current/drifted verdict. If `/api/connections` reports
+    `configDrift: not-applicable` with a current applied rollout because no
+    managed host-agent config override is assigned, storage and recovery must
+    preserve that no-rollout state instead of translating it into a pending
+    storage/recovery problem.
+    When `/api/connections` attaches an exact-match host agent to a blocked
+    Proxmox API source without fresh node inventory, storage and recovery must
+    treat that as one represented source with host telemetry, not as a second
+    protected system or a storage-local duplicate host.
+20. Keep backend-native platform actions on the adjacent AI/runtime and platform contracts. When `internal/api/` wires native TrueNAS app control for Assistant, storage and recovery may consume the refreshed recovery points afterward, but they must not grow a parallel recovery-local action transport or action-specific payload shape.
+21. Keep backend-native platform diagnostics on the adjacent AI/runtime and platform contracts. When `internal/api/` wires native TrueNAS app log reads for Assistant, storage and recovery may use those diagnostics during investigation, but they must not grow a parallel recovery-local log transport or diagnostic payload shape.
     The same adjacent-boundary rule applies to `GET /api/agents/diagnostics`:
     storage and recovery may read Agent Fleet Doctor evidence as operational
     context for stale agents, version drift, profile drift, or identity split
@@ -1530,9 +1537,9 @@ recovery scope, or a storage/recovery-owned secret source.
     Agent Doctor repair handoff may open an existing lifecycle flow or copy a
     local installer command, but it must never be reinterpreted as a restore,
     recovery, SMART, or cleanup action.
-24. Keep backend-native platform configuration reads on the adjacent AI/runtime and platform contracts. When `internal/api/` wires native TrueNAS app config for Assistant, storage and recovery may use that runtime shape during investigation, but they must not grow a parallel recovery-local config transport or provider-shaped configuration payload.
-25. Keep provider-backed poll cadence and settings-runtime health on the adjacent platform-connections contract. When shared `internal/api/` and poller wiring expose TrueNAS last-sync status, failure summaries, discovered contribution counts, manual saved-test status refresh, or platform handoff links in settings, storage and recovery may consume the resulting datasets, apps, disks, and recovery artifacts but must not redefine those settings-runtime health semantics or connection-level handoffs in storage/recovery-local transport or page flows.
-26. Keep recovery filter/query state on the shared route-state parsing contract without restoring standalone recovery navigation. When platform pages or other embedded owners expose TrueNAS recovery context, they may reuse the canonical recovery query vocabulary with owned `platform` and `node` fields, but they must land inside an owning platform/runtime route instead of inventing drawer-local recovery URLs, treating PBS services as the only recovery path, or sending operators to the retired Recovery aggregate route.
+22. Keep backend-native platform configuration reads on the adjacent AI/runtime and platform contracts. When `internal/api/` wires native TrueNAS app config for Assistant, storage and recovery may use that runtime shape during investigation, but they must not grow a parallel recovery-local config transport or provider-shaped configuration payload.
+23. Keep provider-backed poll cadence and settings-runtime health on the adjacent platform-connections contract. When shared `internal/api/` and poller wiring expose TrueNAS last-sync status, failure summaries, discovered contribution counts, manual saved-test status refresh, or platform handoff links in settings, storage and recovery may consume the resulting datasets, apps, disks, and recovery artifacts but must not redefine those settings-runtime health semantics or connection-level handoffs in storage/recovery-local transport or page flows.
+24. Keep recovery filter/query state on the shared route-state parsing contract without restoring standalone recovery navigation. When platform pages or other embedded owners expose TrueNAS recovery context, they may reuse the canonical recovery query vocabulary with owned `platform` and `node` fields, but they must land inside an owning platform/runtime route instead of inventing drawer-local recovery URLs, treating PBS services as the only recovery path, or sending operators to the retired Recovery aggregate route.
     That same shared route-helper boundary also owns exact workload handoffs
     when storage or recovery surfaces send operators back to node-scoped
     workloads for investigation context. Proxmox VM and system-container links
@@ -1544,8 +1551,8 @@ recovery scope, or a storage/recovery-owned secret source.
     Patrol control anchor, must stay owned by their product surface and
     must not be reused as recovery entry points or storage/recovery navigation
     aliases.
-27. Keep alert-side recovery drill-ins on that same embedded-owner route-state contract. When alert investigation surfaces such as resource-incident panels expose recovery follow-up links for TrueNAS or future API-backed platforms, they must route through an owning platform/runtime destination using canonical recovery query vocabulary instead of freezing alert-local recovery URLs, reviving the retired Recovery aggregate route, or introducing another provider-shaped recovery handoff vocabulary.
-28. Keep VMware onboarding runtime and recovery semantics separate on that same adjacent platform-connections contract. When `internal/api/router.go`, `internal/api/router_routes_registration.go`, or `internal/api/vmware_handlers.go` evolve VMware connection CRUD, poller-owned `poll` / `observed` summary payloads, saved-test refresh, or observed datastore/VM snapshot visibility, storage and recovery may consume the resulting shared context but must not treat those onboarding/runtime payloads as canonical recovery artifacts, restore capability, or recovery-local control transport.
+25. Keep alert-side recovery drill-ins on that same embedded-owner route-state contract. When alert investigation surfaces such as resource-incident panels expose recovery follow-up links for TrueNAS or future API-backed platforms, they must route through an owning platform/runtime destination using canonical recovery query vocabulary instead of freezing alert-local recovery URLs, reviving the retired Recovery aggregate route, or introducing another provider-shaped recovery handoff vocabulary.
+26. Keep VMware onboarding runtime and recovery semantics separate on that same adjacent platform-connections contract. When `internal/api/router.go`, `internal/api/router_routes_registration.go`, or `internal/api/vmware_handlers.go` evolve VMware connection CRUD, poller-owned `poll` / `observed` summary payloads, saved-test refresh, or observed datastore/VM snapshot visibility, storage and recovery may consume the resulting shared context but must not treat those onboarding/runtime payloads as canonical recovery artifacts, restore capability, or recovery-local control transport.
     A successful VMware connection test with `degraded` optional signal or
     performance diagnostics remains connection-readiness context only; storage
     and recovery must not reinterpret that warning as datastore protection
@@ -1556,7 +1563,7 @@ recovery scope, or a storage/recovery-owned secret source.
     route remains deployment-installability and API-contract owned; storage
     and recovery must not treat release-note availability or publication time
     as protection freshness, recovery evidence, or restore state.
-29. Keep VMware datastore projection on the shared unified-resource and storage-source contracts. When `frontend-modern/src/hooks/useUnifiedResources.ts` or shared `internal/api/router.go` wiring starts surfacing VMware-backed canonical `storage` resources, storage and recovery may expose those datastores through the owned `vmware-vsphere` source/platform vocabulary for inventory, capacity, and handoff flows only; they must not reinterpret that projection as VMware recovery support, restore semantics, or a provider-local protection surface.
+27. Keep VMware datastore projection on the shared unified-resource and storage-source contracts. When `frontend-modern/src/hooks/useUnifiedResources.ts` or shared `internal/api/router.go` wiring starts surfacing VMware-backed canonical `storage` resources, storage and recovery may expose those datastores through the owned `vmware-vsphere` source/platform vocabulary for inventory, capacity, and handoff flows only; they must not reinterpret that projection as VMware recovery support, restore semantics, or a provider-local protection surface.
     The same shared unified-resource boundary also covers canonical
     Resource.Uptime fallback on the consumer side. When
     `frontend-modern/src/hooks/useUnifiedResources.ts`'s `toResource`
@@ -1574,7 +1581,7 @@ recovery scope, or a storage/recovery-owned secret source.
     health-check targets as protection topology, or container block I/O totals
     as backup throughput, recovery-point evidence, protection cadence, or
     storage-health ownership.
-30. Keep VMware placement, cluster service state, guest-detail, VM snapshot-tree, VM virtual-hardware configuration, VMware Tools, VM hardware Ethernet, VM hardware disk, and network enrichment descriptive on that same shared unified-resource contract. When `internal/vmware/provider.go`, `internal/unifiedresources/types.go`, and `frontend-modern/src/hooks/useUnifiedResources.ts` project datacenter, cluster, `vmware.clusterHaEnabled`, `vmware.clusterDrsEnabled`, folder, runtime-host, datastore-attachment, guest-hostname, guest-IP, `vmware.currentSnapshotId`, `vmware.snapshotTree`, snapshot creation/state/quiesce/current markers, child snapshot metadata, `vmware.hardware`, virtual hardware version, hardware upgrade policy/version/status/error, boot type/order/retry/setup-mode flags, CPU cores-per-socket and hot-add/remove flags, memory hot-add settings, `vmware.tools`, Tools run state, version status, version number/string, install type, upgrade policy, auto-update support, install-attempt count, guest reboot requests, `vmware.networkAdapters`, adapter MAC address/type, backing network id/name, backing type, connection state, start-connected / guest-control flags, `vmware.virtualDisks`, virtual disk label/type, IDE/SCSI/SATA/NVMe placement, VMDK path, backing type, datastore name, capacity, `vmware.networkType`, `vmware.networkHostNames`, `vmware.networkVmNames`, or `vmware.tags` onto canonical VMware `agent` / `vm` / `storage` / `network` resources, storage and recovery may use that detail for labeling, navigation, and VM investigation context only; they must not promote those topology, cluster-service, guest, snapshot-tree, virtual-hardware, VMware Tools, vNIC, virtual disk, tag, or network fields into recovery ownership, restore targeting, protection grouping, compliance scoring, or a VMware-local recovery taxonomy without a separately governed slice.
+28. Keep VMware placement, cluster service state, guest-detail, VM snapshot-tree, VM virtual-hardware configuration, VMware Tools, VM hardware Ethernet, VM hardware disk, and network enrichment descriptive on that same shared unified-resource contract. When `internal/vmware/provider.go`, `internal/unifiedresources/types.go`, and `frontend-modern/src/hooks/useUnifiedResources.ts` project datacenter, cluster, `vmware.clusterHaEnabled`, `vmware.clusterDrsEnabled`, folder, runtime-host, datastore-attachment, guest-hostname, guest-IP, `vmware.currentSnapshotId`, `vmware.snapshotTree`, snapshot creation/state/quiesce/current markers, child snapshot metadata, `vmware.hardware`, virtual hardware version, hardware upgrade policy/version/status/error, boot type/order/retry/setup-mode flags, CPU cores-per-socket and hot-add/remove flags, memory hot-add settings, `vmware.tools`, Tools run state, version status, version number/string, install type, upgrade policy, auto-update support, install-attempt count, guest reboot requests, `vmware.networkAdapters`, adapter MAC address/type, backing network id/name, backing type, connection state, start-connected / guest-control flags, `vmware.virtualDisks`, virtual disk label/type, IDE/SCSI/SATA/NVMe placement, VMDK path, backing type, datastore name, capacity, `vmware.networkType`, `vmware.networkHostNames`, `vmware.networkVmNames`, or `vmware.tags` onto canonical VMware `agent` / `vm` / `storage` / `network` resources, storage and recovery may use that detail for labeling, navigation, and VM investigation context only; they must not promote those topology, cluster-service, guest, snapshot-tree, virtual-hardware, VMware Tools, vNIC, virtual disk, tag, or network fields into recovery ownership, restore targeting, protection grouping, compliance scoring, or a VMware-local recovery taxonomy without a separately governed slice.
     `vmware.tags` is the sharpest case of that boundary, because vCenter tag
     vocabularies routinely read like backup policy — an operator-authored
     `Backup:Nightly` or `Compliance:PCI` is a label the operator wrote, not a
@@ -1583,7 +1590,7 @@ recovery scope, or a storage/recovery-owned secret source.
     for an observed backup, satisfy a protection requirement, or move a
     resource's coverage or compliance verdict; those verdicts continue to come
     from recovery-owned evidence alone.
-31. Keep VMware datastore classification neutral on the shared storage adapter contract. When `frontend-modern/src/features/storageBackups/resourceStorageMapping.ts`, `frontend-modern/src/features/storageBackups/resourceStoragePresentation.ts`, and `frontend-modern/src/features/storageBackups/storageAdapters.ts` evolve canonical storage-record mapping, VMware-backed datastores must continue to land on the shared storage route as inventory-only datastores with neutral protection fallback, not as backup repositories, backup targets, or recovery-protected resources.
+29. Keep VMware datastore classification neutral on the shared storage adapter contract. When `frontend-modern/src/features/storageBackups/resourceStorageMapping.ts`, `frontend-modern/src/features/storageBackups/resourceStoragePresentation.ts`, and `frontend-modern/src/features/storageBackups/storageAdapters.ts` evolve canonical storage-record mapping, VMware-backed datastores must continue to land on the shared storage route as inventory-only datastores with neutral protection fallback, not as backup repositories, backup targets, or recovery-protected resources.
     That same shared storage adapter boundary also owns canonical platform
     family vocabulary through the governed platform manifest.
     `frontend-modern/src/features/storageBackups/models.ts`,
@@ -1601,7 +1608,7 @@ recovery scope, or a storage/recovery-owned secret source.
     recovery platform. Shared `AgentData.hostProfile` may carry that profile id
     for presentation, while storage and recovery must continue to treat
     `AgentData.platform` as the normalized runtime platform.
-32. Keep agentless availability endpoints neutral on the shared unified-resource and API contracts. When `internal/api/availability_handlers.go`, `internal/api/connections_handlers.go`, `internal/api/platform_mock_connections.go`, or `frontend-modern/src/hooks/useUnifiedResources.ts` surface `network-endpoint` availability resources, storage and recovery may consume their liveness as infrastructure context only; they must not reinterpret ping/TCP/HTTP endpoints as storage providers, backup targets, recovery repositories, or protected-workload evidence.
+30. Keep agentless availability endpoints neutral on the shared unified-resource and API contracts. When `internal/api/availability_handlers.go`, `internal/api/connections_handlers.go`, `internal/api/platform_mock_connections.go`, or `frontend-modern/src/hooks/useUnifiedResources.ts` surface `network-endpoint` availability resources, storage and recovery may consume their liveness as infrastructure context only; they must not reinterpret ping/TCP/HTTP endpoints as storage providers, backup targets, recovery repositories, or protected-workload evidence.
     The same neutrality applies when one or more canonical
     `availabilityChecks` facets attach to a storage-related resource. The
     additive plural facet, its compatibility `availability` summary, evidence
@@ -1618,13 +1625,13 @@ recovery scope, or a storage/recovery-owned secret source.
     `certificate_*` incident on those availability facets remain monitoring and
     alerts context. They do not prove storage encryption, backup integrity,
     repository authenticity, protection coverage, or restore readiness.
-33. Keep infrastructure summary chart bucketing and short response caching presentation-only on the adjacent shared API boundary. When `internal/api/chartapi/service.go` normalizes mixed-cadence infrastructure history into equal-time summary buckets or serves a cached summary payload for repeated operator-facing summary-card requests, storage and recovery may consume the resulting visual context only; they must not reinterpret those normalized chart samples, cached timestamps, or cache hits as recovery freshness windows, backup cadence, or restore evidence.
+31. Keep infrastructure summary chart bucketing and short response caching presentation-only on the adjacent shared API boundary. When `internal/api/chartapi/service.go` normalizes mixed-cadence infrastructure history into equal-time summary buckets or serves a cached summary payload for repeated operator-facing summary-card requests, storage and recovery may consume the resulting visual context only; they must not reinterpret those normalized chart samples, cached timestamps, or cache hits as recovery freshness windows, backup cadence, or restore evidence.
     The same router may wire the adjacent server-owned agent command
     authorization verifier, but storage/recovery must not treat an approval id,
     signed command grant, or command result as restore authorization or
     recovery evidence; that authority remains action-governance and
     agent-lifecycle owned.
-34. Keep workload chart downsampling and short response caching presentation-only on that same adjacent shared API boundary. When `internal/api/chartapi/service.go` caps mixed-cadence workload history into equal-time buckets or serves a cached workload-summary payload for repeated operator-facing workload-card requests, storage and recovery may consume the resulting visual context only; they must not reinterpret those shaped chart samples, cached timestamps, or cache hits as recovery freshness windows, backup cadence, or restore evidence.
+32. Keep workload chart downsampling and short response caching presentation-only on that same adjacent shared API boundary. When `internal/api/chartapi/service.go` caps mixed-cadence workload history into equal-time buckets or serves a cached workload-summary payload for repeated operator-facing workload-card requests, storage and recovery may consume the resulting visual context only; they must not reinterpret those shaped chart samples, cached timestamps, or cache hits as recovery freshness windows, backup cadence, or restore evidence.
     The same adjacent chart boundary now covers compact storage capacity
     transport. `internal/api/chartapi/service.go` may batch only the canonical
     `used` and `avail` storage series for `/api/charts/storage-summary`, but
@@ -1639,7 +1646,7 @@ recovery scope, or a storage/recovery-owned secret source.
     In mock mode, that same compact route must stay aggregate-only and
     sampler-prewarmed; storage and recovery must not trigger per-pool chart
     reconstruction on the first dashboard request after each mock refresh.
-36. Keep shared `frontend-modern/src/App.tsx` public-route ownership explicit by
+33. Keep shared `frontend-modern/src/App.tsx` public-route ownership explicit by
     surface. Storage/recovery preview entrypoints such as
     `/preview/setup-complete` may remain public app-shell routes, but unrelated
     commercial compatibility handoffs like `/pricing` must stay separate thin
@@ -1694,7 +1701,7 @@ recovery scope, or a storage/recovery-owned secret source.
     owners must treat that as shell-owned navigation evidence, not as a reason
     to restore Storage or Recovery as equal primary tabs or depend on
     platform-only tab terminology.
-37. Keep public self-hosted purchase handoff and activation routes on the
+34. Keep public self-hosted purchase handoff and activation routes on the
     adjacent commercial/auth boundary. When `internal/api/router.go`,
     `internal/api/router_routes_cloud.go`, `internal/api/licensing_handlers.go`,
     or `internal/api/demo_mode_commercial.go` evolve
@@ -1747,14 +1754,14 @@ recovery scope, or a storage/recovery-owned secret source.
     runtime as populated mock inventory, but they must not expose
     `demo_fixtures`, billing identity, or alternate entitlement semantics as
     recovery-local transport or operator-facing storage metadata.
-39. Keep storage and recovery route framing additive and owner-neutral.
+35. Keep storage and recovery route framing additive and owner-neutral.
     `frontend-modern/src/components/Storage/Storage.tsx` and storage/recovery-
     adjacent route composition may use the shared `PageHeader` shell for
     top-level route framing, but that header must stay additive on top of the
     canonical storage page model, recovery presenters, and shared summary
     caches. Header chrome must not become a second owner for storage filters,
     recovery posture, commercial purchase state, or transport selection.
-40. Keep the unified connections ledger owner-neutral toward storage and
+36. Keep the unified connections ledger owner-neutral toward storage and
     recovery. Shared `internal/api/router.go` may mount the
     `/api/connections` and `/api/connections/probe` routes alongside the
     existing storage/recovery-adjacent API surfaces, and
@@ -1807,7 +1814,7 @@ recovery scope, or a storage/recovery-owned secret source.
     Storage filter option semantics stay storage-owned, but FilterBar chip
     presentation is frontend-primitives-owned: storage status leading dots must
     use `filterChipStatusDot` rather than storage-local span factories.
-41. Keep agent memory composition descriptive on the shared unified-resource
+37. Keep agent memory composition descriptive on the shared unified-resource
     contract. `internal/unifiedresources/types.go` carries the reclaimable
     page-cache split (`AgentMemoryMeta.cache`, holding used + cache + free
     within the reported total) as host RAM description for machine surfaces.
@@ -1984,24 +1991,24 @@ files.
    appliance, or recovery endpoint was read, mutated, or verified.
    The operations-loop status projection is also adjacent-only. Its content-free
    stage, next-action, Patrol evidence, contextual collaboration, pending
-approval, governed action, verified outcome, and optional token-backed MCP
-readiness fields may describe Pulse Intelligence activation progress, but storage and
-recovery must not treat them as backup coverage, restore readiness, storage
-health verification, appliance access, dataset access, API-token authority
-for recovery paths, or recovery mutation proof.
-If an aggregate active Patrol finding or pending approval outranks older
-completed/resolved loop proof in that projection, that precedence remains only
-current operator orientation; it is not backup freshness, restore authority, or
-storage-local remediation proof.
-Operations-loop workflow starter request counts are even narrower: they are
-content-free markers that a native Assistant surface rendered, a first-party
-Patrol control handoff started, a legacy Pro activation entry-point handoff
-started, or a Pulse MCP surface rendered the manifest-owned
-`pulse_operations_loop` starter. The aggregate Patrol control starter count may
-include native Patrol, legacy Patrol autonomy, and legacy Pro activation starts,
-while `proActivationOperationsLoopStarterCount` remains the legacy entry-point
-count. Storage and recovery may observe those aggregate activation reports, but
-must not treat starter
+   approval, governed action, verified outcome, and optional token-backed MCP
+   readiness fields may describe Pulse Intelligence activation progress, but storage and
+   recovery must not treat them as backup coverage, restore readiness, storage
+   health verification, appliance access, dataset access, API-token authority
+   for recovery paths, or recovery mutation proof.
+   If an aggregate active Patrol finding or pending approval outranks older
+   completed/resolved loop proof in that projection, that precedence remains only
+   current operator orientation; it is not backup freshness, restore authority, or
+   storage-local remediation proof.
+   Operations-loop workflow starter request counts are even narrower: they are
+   content-free markers that a native Assistant surface rendered, a first-party
+   Patrol control handoff started, a legacy Pro activation entry-point handoff
+   started, or a Pulse MCP surface rendered the manifest-owned
+   `pulse_operations_loop` starter. The aggregate Patrol control starter count may
+   include native Patrol, legacy Patrol autonomy, and legacy Pro activation starts,
+   while `proActivationOperationsLoopStarterCount` remains the legacy entry-point
+   count. Storage and recovery may observe those aggregate activation reports, but
+   must not treat starter
    access as backup coverage, recovery freshness, restore readiness, storage
    health verification, dataset access, appliance access, or evidence that any
    recovery endpoint was used.
@@ -2104,7 +2111,7 @@ must not treat starter
     behavior by fanning out per-pool `/api/metrics-store/history` reads, by
     pulling the full storage-page `/api/storage-charts` payload, or by
     inventing a dashboard-only storage history transport.
-15a. Keep shared diagnostics cache scope honest when storage/recovery-adjacent
+    15a. Keep shared diagnostics cache scope honest when storage/recovery-adjacent
     surfaces reuse `internal/api/diagnostics.go`. The shared diagnostics
     payload must not include local commercial funnel summaries or
     infrastructure-onboarding analytics, so recovery-adjacent diagnostics do
@@ -2120,7 +2127,7 @@ must not treat starter
     load or save AI settings through shared helpers, any historical hosted
     quickstart model IDs must be cleared before adjacent surfaces read or
     re-emit that state. Legacy Anthropic OAuth tokens follow the same shared-owner rule: adjacent storage/recovery code may not use them as provider configuration and must leave cleanup to the AI settings contract.
-17a. Keep adjacent AI paid-control state entitlement-effective on that shared
+    17a. Keep adjacent AI paid-control state entitlement-effective on that shared
     `internal/api/` boundary. Storage- and recovery-adjacent flows may preserve
     stored Assistant or Patrol preferences in config, but they must not treat
     stored autonomous, auto-remediation, or alert-triggered analysis settings
@@ -2260,8 +2267,8 @@ capability over storage or recovery data.
     pool reads as its concrete layout ("Mirror", "Raidz2") without the
     discriminator ever carrying presentation detail. Regression coverage:
     `labels a TrueNAS pool by its vdev layout while keeping the pool
-    discriminator` and `falls back to the topology discriminator when no
-    vdev layout is reported` in
+discriminator` and `falls back to the topology discriminator when no
+vdev layout is reported` in
     `frontend-modern/src/features/storageBackups/__tests__/storageAdapters.test.ts`.
 
 27. A rejected legacy RBAC import must not destroy the store. The import is
@@ -5270,6 +5277,7 @@ The ZFS pool-detail summary has one stable shape: `datasets` is always an
 array, including when the backend reports no dataset inventory. Consumers and
 branch proofs must retain the empty array instead of treating dataset support
 as an optional return-field contract.
+
 ### Scheduled reporting adoption is read from persisted config as counts
 
 The usage telemetry snapshot reads `LoadReportScheduleStore` and reports three
@@ -5283,6 +5291,7 @@ reporting actually produced output, not whether it is currently armed. The read
 is in `applyLicensedFeatureConfigSnapshot`
 (`pkg/server/telemetry_licensed_features.go`), pinned by
 `TestApplyLicensedFeatureConfigSnapshot_CountsScheduledReportingAndProfiles`.
+
 ### Audit-read activity is a bounded, content-free local history
 
 `audit_read_activity.json` follows the same shape as the existing external-agent
@@ -5294,6 +5303,7 @@ the 30-day telemetry window are excluded at count time by
 `CountAuditReadActivitySince`, so the derived signal stays "is using" rather
 than drifting into "has ever used"
 (`TestAuditReadsOutsideWindowAreNotCounted`).
+
 ### Per-tenant resource stores are released on offboarding and shutdown
 
 `ResourceHandlers.getStore` opens a SQLite handle per org and caches it for the
@@ -5307,6 +5317,7 @@ a fresh handle rather than using a closed one
 (`TestResourceHandlers_CloseTenantStoreReleasesTheHandle`), and both entry points
 are idempotent and nil-safe
 (`TestResourceHandlers_CloseIsIdempotentAndNilSafe`).
+
 ### Report-ack version echo persists nothing
 
 The unified-agent report ack's `serverVersion` field is supplied from the
@@ -5315,6 +5326,7 @@ running server's version at router wiring time
 ingest path's persistence surface — agent-id continuity and host state — is
 unchanged by the echo
 (`TestHostAgentRemovalLifecycleThroughAuthenticatedRouterAndRestart`).
+
 ### Security status capability payload gained an infrastructure field
 
 `internal/api/` is a canonical reference in this contract's Extension Points, so

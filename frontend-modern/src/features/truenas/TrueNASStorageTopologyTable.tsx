@@ -265,11 +265,11 @@ const ResourceCell: Component<{ row: TrueNASStorageTopologyRow; detailToggle?: J
       {props.detailToggle}
       <StatusDot size="sm" variant={indicator().variant} title={indicator().label} />
       <div class="min-w-0">
-        <div class="truncate font-medium text-base-content" title={name()}>
+        <div
+          class="truncate font-medium text-base-content"
+          title={[name(), subtitle(props.row)].filter(Boolean).join(' · ')}
+        >
           {name()}
-        </div>
-        <div class="truncate text-[10px] text-muted" title={subtitle(props.row)}>
-          {subtitle(props.row)}
         </div>
       </div>
     </div>

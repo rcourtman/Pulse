@@ -380,7 +380,11 @@ consumers use `platform-table-narrow-hidden` to demote only their lowest-value
 field while the shared shell promotes identity to 40 percent and retains five
 readable fields. Provider tables must keep summary rows single-line and may
 truncate a value only when the row exposes its complete source value through a
-touch- and keyboard-operable inline detail disclosure.
+touch- and keyboard-operable inline detail disclosure. The frontend-primitives
+owner fixes that summary rhythm at 32 pixels for every `platform-table` path;
+provider consumers must not add stacked subtitles or local row-height
+exceptions. Lower-priority provider metadata belongs in another operational
+column, a supplemental tooltip, or the inline detail drawer.
 Future platform tables must keep that split: row data and platform semantics
 stay in the unified-resource consumer, and the repeated table shell stays in the
 shared frontend primitive.

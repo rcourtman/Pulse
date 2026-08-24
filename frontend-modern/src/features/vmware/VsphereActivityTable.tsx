@@ -400,15 +400,17 @@ export const VsphereActivityTable: Component<{
                               <div class="min-w-0">
                                 <div
                                   class="truncate font-medium text-base-content"
-                                  title={activity.resourceName}
+                                  title={[
+                                    activity.resourceName,
+                                    formatResourceType(activity.resourceType),
+                                    activity.resource.parentName
+                                      ? `on ${activity.resource.parentName}`
+                                      : '',
+                                  ]
+                                    .filter(Boolean)
+                                    .join(' · ')}
                                 >
                                   {activity.resourceName}
-                                </div>
-                                <div class="truncate text-[10px] text-muted">
-                                  {formatResourceType(activity.resourceType)}
-                                  <Show when={activity.resource.parentName}>
-                                    on {activity.resource.parentName}
-                                  </Show>
                                 </div>
                               </div>
                             </div>
@@ -419,11 +421,16 @@ export const VsphereActivityTable: Component<{
                             </span>
                           </TableCell>
                           <TableCell class={getPlatformTableCellClassForKind('text')}>
-                            <span class="block truncate text-base-content" title={activity.title}>
+                            <span
+                              class="block truncate text-base-content"
+                              title={[
+                                activity.title,
+                                activity.message || activity.description || activity.nativeId,
+                              ]
+                                .filter(Boolean)
+                                .join(' · ')}
+                            >
                               {activity.title}
-                            </span>
-                            <span class="block truncate text-[10px] text-muted">
-                              {activity.message || activity.description || activity.nativeId}
                             </span>
                           </TableCell>
                           <TableCell class={getPlatformTableCellClassForKind('badge')}>
@@ -443,12 +450,14 @@ export const VsphereActivityTable: Component<{
                           >
                             <span
                               class="block truncate text-base-content"
-                              title={meta()?.connectionName || meta()?.vcenterHost}
+                              title={[
+                                meta()?.connectionName || meta()?.vcenterHost,
+                                meta()?.datacenterName || meta()?.clusterName,
+                              ]
+                                .filter(Boolean)
+                                .join(' · ')}
                             >
                               {meta()?.connectionName || meta()?.vcenterHost || '-'}
-                            </span>
-                            <span class="block truncate text-[10px] text-muted">
-                              {meta()?.datacenterName || meta()?.clusterName || '-'}
                             </span>
                           </TableCell>
                           <TableCell

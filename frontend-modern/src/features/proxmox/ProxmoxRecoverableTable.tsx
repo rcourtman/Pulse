@@ -116,15 +116,24 @@ export function ProxmoxRecoverableTable(props: {
   const renderRow = (artifact: RecoverableArtifact): JSX.Element => (
     <TableRow class="hover:bg-surface-hover" data-proxmox-backup-row="recoverable">
       <TableCell class={`${getPlatformTableCellClassForKind('name')} text-base-content`}>
-        <div class="min-w-0">
-          <div class="truncate font-semibold">
+        <div class="flex min-w-0 items-center gap-1">
+          <div
+            class="min-w-0 truncate font-semibold"
+            title={[
+              artifact.workload.name || artifact.workload.label,
+              artifact.workload.typeLabel,
+              artifact.workload.vmid,
+            ]
+              .filter(Boolean)
+              .join(' · ')}
+          >
             {artifact.workload.name || artifact.workload.label}
           </div>
           <Show when={isCompactBackupIdentityLayout(layoutMode())}>
-            <div class="truncate text-[10px] text-muted">
+            <span class="shrink-0 text-[10px] text-muted">
               {artifact.workload.typeLabel}
               <Show when={artifact.workload.vmid}> {artifact.workload.vmid}</Show>
-            </div>
+            </span>
           </Show>
         </div>
       </TableCell>

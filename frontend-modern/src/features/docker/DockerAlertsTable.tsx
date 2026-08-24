@@ -231,15 +231,20 @@ export const DockerAlertsTable: Component<{
                               <div class="min-w-0">
                                 <div
                                   class="truncate font-medium text-base-content"
-                                  title={incident.resourceName}
+                                  title={[
+                                    incident.resourceName,
+                                    formatPlatformAlertResourceType(
+                                      incident.resourceType,
+                                      'docker',
+                                    ),
+                                    incident.resource.parentName
+                                      ? `on ${incident.resource.parentName}`
+                                      : '',
+                                  ]
+                                    .filter(Boolean)
+                                    .join(' · ')}
                                 >
                                   {incident.resourceName}
-                                </div>
-                                <div class="truncate text-[10px] text-muted">
-                                  {formatPlatformAlertResourceType(incident.resourceType, 'docker')}
-                                  <Show when={incident.resource.parentName}>
-                                    on {incident.resource.parentName}
-                                  </Show>
                                 </div>
                               </div>
                             </div>
@@ -251,23 +256,25 @@ export const DockerAlertsTable: Component<{
                             />
                           </TableCell>
                           <TableCell class={getPlatformTableCellClassForKind('text')}>
-                            <span class="block truncate text-base-content" title={incident.summary}>
+                            <span
+                              class="block truncate text-base-content"
+                              title={[incident.summary, incident.label].filter(Boolean).join(' · ')}
+                            >
                               {incident.summary}
-                            </span>
-                            <span class="block truncate text-[10px] text-muted">
-                              {incident.label}
                             </span>
                           </TableCell>
                           <TableCell class={`${getPlatformTableCellClassForKind('text')}`}>
                             <span
                               class="block truncate text-base-content"
-                              title={docker()?.hostname || docker()?.swarm?.clusterName}
+                              title={[
+                                docker()?.hostname || docker()?.swarm?.clusterName,
+                                docker()?.runtime ||
+                                  formatPlatformAlertCode(incident.code, 'docker'),
+                              ]
+                                .filter(Boolean)
+                                .join(' · ')}
                             >
                               {docker()?.hostname || docker()?.swarm?.clusterName || '-'}
-                            </span>
-                            <span class="block truncate text-[10px] text-muted">
-                              {docker()?.runtime ||
-                                formatPlatformAlertCode(incident.code, 'docker')}
                             </span>
                           </TableCell>
                           <TableCell

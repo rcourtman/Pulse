@@ -1169,10 +1169,15 @@ not a replacement status card, CTA band, or page-local nested card.
    `PlatformTableShell` marks every
    owned table with the shared `platform-table` class; direct Workloads and
    Storage consumers and nested provider detail tables must apply that same
-   marker so the phone contract cannot vary by rendering path. Text-only
-   operational rows must use `getPlatformTableRowClass` so the absence of
-   buttons, badges, or progress bars does not collapse them below the canonical
-   compact scanning rhythm. Mobile truncation may rely on a full-value row
+   marker so the phone contract cannot vary by rendering path. The marker owns
+   a canonical 32-pixel summary-row rhythm across every provider and excludes
+   inline detail rows, which remain content-sized. Summary cells must render
+   one line only: secondary identity, raw provider labels, and descriptive
+   context belong in an existing operational column, a supplemental tooltip,
+   or its inline detail drawer rather than a stacked subtitle. Text-only
+   operational rows may use `getPlatformTableRowClass` to declare that same
+   shared rhythm explicitly; providers must not introduce local row-height
+   exceptions. Mobile truncation may rely on a full-value row
    detail only when that row actually has a keyboard- and touch-operable
    disclosure; a non-expandable identity cell must otherwise expose its
    complete value without requiring hover. Default data rows stay single-line
@@ -3925,7 +3930,12 @@ label and destination intent; they must not own CTA button chrome.
 Platform table frames are one of those registry-backed templates.
 `frontend-modern/src/features/platformPage/sharedPlatformPage.tsx` owns
 `PlatformTableShell`, including the canonical table card, header row, and body
-divide styling. It also owns the final responsive table-class composition, so
+divide styling, plus the single-line 32-pixel summary-row rhythm inherited by
+Proxmox, Docker / Podman, Kubernetes, TrueNAS, vSphere, Standalone, Workloads,
+and direct Storage consumers. Inline detail rows remain content-sized.
+Secondary context must move to an existing column, a supplemental tooltip, or
+the inline detail drawer instead of stacking a second visual line. The shell
+also owns the final responsive table-class composition, so
 feature tables may supply breakpoint floors but cannot accidentally override
 the shared phone-width floor with `min-w-full`. Platform table frames now have
 no local-frame exceptions in `shared-template-registry.json`: new and existing

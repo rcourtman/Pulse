@@ -363,7 +363,7 @@ const AgentMachineNetworkCell: Component<{
     <AgentMachineMetricTooltip
       triggerDataAttribute="data-agent-machine-network-trigger"
       tooltipDataAttribute="data-agent-machine-network-tooltip"
-      triggerClass="grid w-full grid-cols-[0.75rem_minmax(0,1fr)] grid-rows-2 items-center gap-x-1 gap-y-0.5 text-[11px] leading-tight tabular-nums"
+      triggerClass="flex w-full min-w-0 items-center gap-1 text-[11px] tabular-nums"
       tooltipClass="min-w-[230px] max-w-[360px] space-y-2"
       enabled={hasDetails()}
       ariaLabel={ariaLabel()}
@@ -371,9 +371,9 @@ const AgentMachineNetworkCell: Component<{
       maxWidth={380}
       trigger={
         <>
-          <span class="inline-flex w-3 justify-center text-emerald-500">↓</span>
+          <span class="inline-flex shrink-0 text-emerald-500">↓</span>
           <span class="min-w-0 truncate">{formatSpeed(props.network?.rxBytes ?? 0)}</span>
-          <span class="inline-flex w-3 justify-center text-orange-400">↑</span>
+          <span class="inline-flex shrink-0 text-orange-400">↑</span>
           <span class="min-w-0 truncate">{formatSpeed(props.network?.txBytes ?? 0)}</span>
         </>
       }
@@ -493,7 +493,7 @@ const AgentMachineDiskIOCell: Component<{
     <AgentMachineMetricTooltip
       triggerDataAttribute="data-agent-machine-diskio-trigger"
       tooltipDataAttribute="data-agent-machine-diskio-tooltip"
-      triggerClass="grid w-full grid-cols-[0.75rem_minmax(0,1fr)] grid-rows-2 items-center gap-x-1 gap-y-0.5 text-[11px] leading-tight tabular-nums"
+      triggerClass="flex w-full min-w-0 items-center gap-1 text-[11px] tabular-nums"
       tooltipClass="min-w-[230px] max-w-[360px] space-y-2"
       enabled={hasDetails()}
       ariaLabel={ariaLabel()}
@@ -501,9 +501,9 @@ const AgentMachineDiskIOCell: Component<{
       maxWidth={380}
       trigger={
         <>
-          <span class="inline-flex w-3 justify-center font-mono text-blue-500">R</span>
+          <span class="inline-flex shrink-0 font-mono text-blue-500">R</span>
           <span class="min-w-0 truncate">{formatSpeed(props.diskIO?.readRate ?? 0)}</span>
-          <span class="inline-flex w-3 justify-center font-mono text-amber-500">W</span>
+          <span class="inline-flex shrink-0 font-mono text-amber-500">W</span>
           <span class="min-w-0 truncate">{formatSpeed(props.diskIO?.writeRate ?? 0)}</span>
         </>
       }
@@ -1607,6 +1607,9 @@ export const AgentsMachinesTable: Component<{
                         >
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('name')} ${machineColumnWidthClass('machine')}`}
+                            title={[name(), machineSubtitle() || systemLabel()]
+                              .filter(Boolean)
+                              .join(' · ')}
                           >
                             <div class="flex min-w-0 items-center gap-2">
                               <PlatformResourceDetailToggleButton
@@ -1628,26 +1631,6 @@ export const AgentsMachinesTable: Component<{
                                 nameClass="truncate font-semibold text-base-content"
                               />
                             </div>
-                            <Show
-                              when={machineSubtitle()}
-                              fallback={
-                                <span
-                                  class="mt-0.5 hidden truncate pl-10 text-[9px] text-muted sm:text-[10px] md:block"
-                                  title={systemLabel()}
-                                >
-                                  {systemLabel()}
-                                </span>
-                              }
-                            >
-                              {(subtitle) => (
-                                <span
-                                  class="mt-0.5 hidden truncate pl-10 text-[9px] text-muted sm:text-[10px] md:block"
-                                  title={subtitle()}
-                                >
-                                  {subtitle()}
-                                </span>
-                              )}
-                            </Show>
                           </TableCell>
                           <Show when={columnVisibility.isColumnVisible('system')}>
                             <TableCell

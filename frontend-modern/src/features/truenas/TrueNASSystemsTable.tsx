@@ -380,15 +380,10 @@ export const TrueNASSystemsTable: Component<{
                               <div class="min-w-0">
                                 <div
                                   class="truncate font-semibold text-base-content"
-                                  title={name()}
+                                  title={[name(), systemMeta()].filter(Boolean).join(' · ')}
                                 >
                                   {name()}
                                 </div>
-                                <Show when={systemMeta()}>
-                                  <div class="truncate text-[11px] text-muted" title={systemMeta()}>
-                                    {systemMeta()}
-                                  </div>
-                                </Show>
                               </div>
                             </div>
                           </TableCell>
@@ -443,14 +438,11 @@ export const TrueNASSystemsTable: Component<{
                             <PlatformTableTemperatureValue value={system.temperature} />
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} hidden whitespace-normal text-base-content lg:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content lg:table-cell`}
                             title={`${storageInventoryPrimary(c())} · ${storageInventorySecondary(c())}`}
                           >
-                            <div class="leading-tight">
-                              <div class="truncate">{storageInventoryPrimary(c())}</div>
-                              <div class="truncate text-[11px] text-muted">
-                                {storageInventorySecondary(c())}
-                              </div>
+                            <div class="truncate">
+                              {storageInventoryPrimary(c())} · {storageInventorySecondary(c())}
                             </div>
                           </TableCell>
                           <TableCell
@@ -459,14 +451,11 @@ export const TrueNASSystemsTable: Component<{
                             <PlatformTableNumberValue value={c().shares} />
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} hidden whitespace-normal text-base-content lg:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content lg:table-cell`}
                             title={`${workloadInventoryPrimary(c())} · ${workloadInventorySecondary(c())}`}
                           >
-                            <div class="leading-tight">
-                              <div class="truncate">{workloadInventoryPrimary(c())}</div>
-                              <div class="truncate text-[11px] text-muted">
-                                {workloadInventorySecondary(c())}
-                              </div>
+                            <div class="truncate">
+                              {workloadInventoryPrimary(c())} · {workloadInventorySecondary(c())}
                             </div>
                           </TableCell>
                           <TableCell

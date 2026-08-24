@@ -5267,6 +5267,12 @@ describe('shared primitive guardrails', () => {
     expect(registeredGuard?.canonical?.export).toBe('PlatformTableShell');
     expect(registeredGuard?.allowedPaths ?? []).toHaveLength(0);
     expect(sharedPlatformPageSource).toContain('export function PlatformTableShell');
+    expect(sharedPlatformPageSource).toContain(
+      "export const PLATFORM_TABLE_SUMMARY_ROW_CLASS = 'h-8'",
+    );
+    expect(sharedPlatformPageSource).toContain(
+      'getPlatformTableRowClass = (): string => PLATFORM_TABLE_SUMMARY_ROW_CLASS',
+    );
     expect(sharedPlatformPageSource).toContain('TableCard class={props.cardClass');
     expect(sharedPlatformPageSource).toContain('TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}');
     expect(sharedPlatformPageSource).toContain('TableBody class={PLATFORM_TABLE_BODY_CLASS}');
@@ -5293,6 +5299,40 @@ describe('shared primitive guardrails', () => {
       expect(source).not.toContain('TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}');
       expect(source).not.toContain('TableBody class={PLATFORM_TABLE_BODY_CLASS}');
     }
+  });
+
+  it('keeps provider summary rows on the canonical single-line density contract', () => {
+    expect(frontendIndexCssSource).toContain(
+      '.table-fixed.platform-table > tbody > tr:not([data-inline-detail-for])',
+    );
+    expect(frontendIndexCssSource).toContain('height: 2rem;');
+    expect(frontendIndexCssSource).not.toContain(
+      '.pulse-wide-data-surface .host-row,\n    .pulse-wide-data-surface .workload-row',
+    );
+
+    for (const source of [
+      dockerAlertsTableSource,
+      kubernetesAlertsTableSource,
+      proxmoxBackupServersTableSource,
+      proxmoxCephTableSource,
+      proxmoxNodesTableSource,
+      proxmoxRecoverableTableSource,
+      agentsMachinesTableSource,
+      truenasAlertsTableSource,
+      truenasAppsTableSource,
+      truenasNetworkSharesTableSource,
+      truenasProtectionTableSource,
+      truenasStorageTopologyTableSource,
+      truenasSystemsTableSource,
+      truenasVirtualMachinesTableSource,
+      vsphereActivityTableSource,
+      vsphereAlertsTableSource,
+    ]) {
+      expect(source).not.toContain('block truncate text-[10px] text-muted');
+      expect(source).not.toContain('flex min-w-0 flex-1 flex-col');
+    }
+
+    expect(agentsMachinesTableSource).not.toContain('grid-rows-2');
   });
 
   it('keeps platform count grammar and route status normalization shared', () => {

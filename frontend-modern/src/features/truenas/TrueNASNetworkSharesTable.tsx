@@ -277,14 +277,19 @@ export const TrueNASNetworkSharesTable: Component<{
                                 title={indicator().label}
                               />
                               <div class="min-w-0">
-                                <div class="truncate font-medium text-base-content" title={name()}>
+                                <div
+                                  class="truncate font-medium text-base-content"
+                                  title={[
+                                    name(),
+                                    share()?.dataset ||
+                                      share()?.path ||
+                                      resource.parentName ||
+                                      'TrueNAS',
+                                  ]
+                                    .filter(Boolean)
+                                    .join(' · ')}
+                                >
                                   {name()}
-                                </div>
-                                <div class="truncate text-[10px] text-muted">
-                                  {share()?.dataset ||
-                                    share()?.path ||
-                                    resource.parentName ||
-                                    'TrueNAS'}
                                 </div>
                               </div>
                             </div>
@@ -309,11 +314,6 @@ export const TrueNASNetworkSharesTable: Component<{
                             title={[access().title, security().title].filter(Boolean).join(' | ')}
                           >
                             <span class="block truncate">{access().label}</span>
-                            <Show when={security().label !== '-'}>
-                              <span class="block truncate text-[10px] text-muted">
-                                {security().label}
-                              </span>
-                            </Show>
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content lg:table-cell`}

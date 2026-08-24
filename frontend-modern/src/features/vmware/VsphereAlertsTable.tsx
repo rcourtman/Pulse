@@ -240,15 +240,20 @@ export const VsphereAlertsTable: Component<{
                               <div class="min-w-0">
                                 <div
                                   class="truncate font-medium text-base-content"
-                                  title={incident.resourceName}
+                                  title={[
+                                    incident.resourceName,
+                                    formatPlatformAlertResourceType(
+                                      incident.resourceType,
+                                      'vmware',
+                                    ),
+                                    incident.resource.parentName
+                                      ? `on ${incident.resource.parentName}`
+                                      : '',
+                                  ]
+                                    .filter(Boolean)
+                                    .join(' · ')}
                                 >
                                   {incident.resourceName}
-                                </div>
-                                <div class="truncate text-[10px] text-muted">
-                                  {formatPlatformAlertResourceType(incident.resourceType, 'vmware')}
-                                  <Show when={incident.resource.parentName}>
-                                    on {incident.resource.parentName}
-                                  </Show>
                                 </div>
                               </div>
                             </div>
@@ -260,32 +265,39 @@ export const VsphereAlertsTable: Component<{
                             />
                           </TableCell>
                           <TableCell class={getPlatformTableCellClassForKind('text')}>
-                            <span class="block truncate text-base-content" title={incident.summary}>
+                            <span
+                              class="block truncate text-base-content"
+                              title={[incident.summary, incident.label].filter(Boolean).join(' · ')}
+                            >
                               {incident.summary}
-                            </span>
-                            <span class="block truncate text-[10px] text-muted">
-                              {incident.label}
                             </span>
                           </TableCell>
                           <TableCell class={getPlatformTableCellClassForKind('text')}>
                             <span
                               class="block truncate text-base-content"
-                              title={meta()?.connectionName || meta()?.vcenterHost}
+                              title={[
+                                meta()?.connectionName || meta()?.vcenterHost,
+                                meta()?.datacenterName || meta()?.clusterName,
+                              ]
+                                .filter(Boolean)
+                                .join(' · ')}
                             >
                               {meta()?.connectionName || meta()?.vcenterHost || '-'}
-                            </span>
-                            <span class="block truncate text-[10px] text-muted">
-                              {meta()?.datacenterName || meta()?.clusterName || '-'}
                             </span>
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content lg:table-cell`}
                           >
-                            <span class="block truncate" title={incident.managedObjectId}>
+                            <span
+                              class="block truncate"
+                              title={[
+                                formatPlatformAlertEntityType(incident.entityType),
+                                incident.managedObjectId,
+                              ]
+                                .filter(Boolean)
+                                .join(' · ')}
+                            >
                               {formatPlatformAlertEntityType(incident.entityType)}
-                            </span>
-                            <span class="block truncate text-[10px] text-muted">
-                              {incident.managedObjectId}
                             </span>
                           </TableCell>
                           <TableCell

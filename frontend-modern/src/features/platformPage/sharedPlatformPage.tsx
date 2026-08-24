@@ -243,6 +243,7 @@ export const PLATFORM_TABLE_CARD_CLASS = 'rounded-md';
 export const PLATFORM_TABLE_HEADER_ROW_CLASS = 'bg-surface-alt text-muted border-b border-border';
 export const PLATFORM_TABLE_BODY_CLASS = 'divide-y divide-border';
 export const PLATFORM_TABLE_CLASS = 'platform-table';
+export const PLATFORM_TABLE_SUMMARY_ROW_CLASS = 'h-8';
 export const PLATFORM_TABLE_PHONE_IDENTITY_WIDTH_PERCENT = 30;
 export const PLATFORM_TABLE_NARROW_IDENTITY_WIDTH_PERCENT = 40;
 // Responsive platform tables already decide which columns remain useful at
@@ -415,9 +416,10 @@ export const getPlatformTableHeadClassForKind = (kind: PlatformTableColumnKind):
 export const getPlatformTableCellClassForKind = (kind: PlatformTableColumnKind): string =>
   getPlatformTableCellClass(getPlatformColumnAlign(kind));
 
-// Text-only rows otherwise collapse below the scanning rhythm established by
-// platform rows with buttons, badges, or progress bars.
-export const getPlatformTableRowClass = (): string => 'h-8';
+// Summary rows stay on one 32px scanning rhythm across every provider. Detail
+// rows are deliberately excluded at the shared CSS boundary so their content
+// can expand without weakening the overview-table contract.
+export const getPlatformTableRowClass = (): string => PLATFORM_TABLE_SUMMARY_ROW_CLASS;
 
 export function PlatformResponsiveTableLabel(props: { compact: string; full: string }) {
   return (

@@ -526,11 +526,6 @@
       line-height: 1rem;
     }
 
-    .pulse-wide-data-surface .host-row,
-    .pulse-wide-data-surface .workload-row {
-      height: 2.25rem;
-    }
-
     .pulse-wide-data-surface .host-row > td:first-child > div,
     .pulse-wide-data-surface .workload-row [data-workload-col='name'] > div {
       gap: 0.25rem;
@@ -1021,6 +1016,16 @@ body,
   padding-left: 0.375rem;
   font-size: 11px;
   letter-spacing: 0.025em;
+}
+
+/*
+ * Docker's single-line rows are the canonical operator density. Every
+ * platform summary row uses the same 32px scan rhythm; inline drawers remain
+ * content-sized. Secondary context belongs in another column, a tooltip, or
+ * the expanded detail row rather than making the overview row taller.
+ */
+.table-scroll-shell > .table-fixed.platform-table > tbody > tr:not([data-inline-detail-for]) {
+  height: 2rem;
 }
 
 .platform-table-label-compact {

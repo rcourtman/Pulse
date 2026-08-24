@@ -116,7 +116,7 @@ describe('TrueNASProtectionTable', () => {
     expect(detail.getAllByText('vault/compliance/tank_apps').length).toBeGreaterThan(1);
     expect(detail.getByText('tank/apps@auto-20260331-0600')).toBeInTheDocument();
 
-    await fireEvent.click(detail.getByRole('button', { name: 'Close' }));
+    await fireEvent.click(detail.getByRole('button', { name: /^Collapse .* details$/ }));
 
     expect(screen.queryByTestId('truenas-protection-detail')).not.toBeInTheDocument();
     expect(row).toHaveAttribute('aria-expanded', 'false');

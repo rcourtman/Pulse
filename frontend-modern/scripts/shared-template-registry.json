@@ -3847,7 +3847,7 @@
     {
       "id": "platform-table-shell-local-frame",
       "category": "platform-table-shell",
-      "summary": "Platform tables must compose the shared PlatformTableShell frame instead of recreating the TableCard/TableHeader/TableBody shell locally.",
+      "summary": "Platform tables must compose the shared PlatformTableShell frame and its canonical single-line 32px summary-row rhythm instead of recreating local table chrome or provider-specific density.",
       "canonical": {
         "path": "src/features/platformPage/sharedPlatformPage.tsx",
         "export": "PlatformTableShell"

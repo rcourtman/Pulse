@@ -426,7 +426,10 @@ export const ProxmoxCephTable: Component<{
                           aria-expanded={isOpen()}
                           tabIndex={0}
                         >
-                          <TableCell class={getPlatformTableCellClassForKind('name')}>
+                          <TableCell
+                            class={getPlatformTableCellClassForKind('name')}
+                            title={[name, cluster.platformId].filter(Boolean).join(' · ')}
+                          >
                             <div class="flex items-center gap-2 min-w-0">
                               <PlatformResourceDetailToggleButton
                                 expanded={isOpen()}
@@ -438,16 +441,13 @@ export const ProxmoxCephTable: Component<{
                                 {name}
                               </span>
                             </div>
-                            <Show when={cluster.platformId}>
-                              <div
-                                class="hidden text-[10px] text-muted font-mono truncate md:block"
-                                title={cluster.platformId}
-                              >
-                                {cluster.platformId}
-                              </div>
-                            </Show>
                           </TableCell>
-                          <TableCell class={getPlatformTableCellClassForKind('text')}>
+                          <TableCell
+                            class={getPlatformTableCellClassForKind('text')}
+                            title={[ind.label, cluster.ceph?.healthStatus]
+                              .filter(Boolean)
+                              .join(' · ')}
+                          >
                             <div class="flex items-center gap-2">
                               <StatusDot
                                 size="sm"
@@ -457,11 +457,6 @@ export const ProxmoxCephTable: Component<{
                               />
                               <span class={`text-[11px] font-medium ${ind.tone}`}>{ind.label}</span>
                             </div>
-                            <Show when={!!cluster.ceph?.healthStatus}>
-                              <div class="hidden text-[10px] text-muted font-mono md:block">
-                                {cluster.ceph?.healthStatus}
-                              </div>
-                            </Show>
                           </TableCell>
                           <Show when={showFsid()}>
                             <TableCell

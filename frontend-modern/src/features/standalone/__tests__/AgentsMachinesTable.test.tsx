@@ -325,21 +325,21 @@ describe('AgentsMachinesTable', () => {
     ).toBeInTheDocument();
 
     expect(screen.queryByRole('button', { name: 'Sort by IP' })).not.toBeInTheDocument();
-    expect(screen.getByText('192.168.0.10')).toBeInTheDocument();
+    expect(screen.getByTitle('Tower · 192.168.0.10')).toBeInTheDocument();
     await fireEvent.click(screen.getByLabelText('IP'));
     await fireEvent.click(screen.getByLabelText('RAID'));
 
     expect(screen.getByRole('button', { name: 'Sort by IP' })).toBeInTheDocument();
-    // The primary IP remains in the compact identity subtitle as a fallback
-    // while the dedicated user-selected column is container-hidden.
-    expect(screen.getAllByText('192.168.0.10').length).toBeGreaterThanOrEqual(2);
+    // The compact identity stays one line; the selected IP column owns the
+    // visible value while the identity tooltip retains the same context.
+    expect(screen.getAllByText('192.168.0.10').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText('1 clean')).toBeInTheDocument();
     const memoryBar = screen.getByTestId('agent-machine-memory-bar');
     expect(memoryBar).toHaveAttribute('data-cache', '10');
     expect(memoryBar).not.toHaveAttribute('data-cache-inclusive-label', 'Shown in Proxmox');
   });
 
-  it('shows hostname and primary IP in the machine identity subtitle', () => {
+  it('keeps hostname and primary IP in the single-line machine identity context', () => {
     render(() => (
       <AgentsMachinesTable
         resources={[
@@ -355,7 +355,9 @@ describe('AgentsMachinesTable', () => {
       />
     ));
 
-    expect(screen.getByText('richard-mac-mini.local | 192.168.0.98')).toBeInTheDocument();
+    expect(
+      screen.getByTitle('Mac Mini · richard-mac-mini.local | 192.168.0.98'),
+    ).toBeInTheDocument();
   });
 
   it('normalizes canonical OS labels from platform fallback values', () => {
@@ -581,7 +583,7 @@ describe('AgentsMachinesTable', () => {
     expect(screen.getByText('Windows Runner')).toBeInTheDocument();
   });
 
-  it('preserves last-seen context in the machine subtitle when that column is hidden', async () => {
+  it('preserves last-seen context in the single-line machine identity when that column is hidden', async () => {
     vi.spyOn(Date, 'now').mockReturnValue(1_700_000_600_000);
 
     render(() => (
@@ -605,7 +607,7 @@ describe('AgentsMachinesTable', () => {
     await openMachineColumnPicker();
     await fireEvent.click(screen.getByLabelText('Last seen'));
 
-    expect(screen.getByText('192.168.0.21 | seen 5m ago')).toBeInTheDocument();
+    expect(screen.getByTitle('Recent Machine · 192.168.0.21 | seen 5m ago')).toBeInTheDocument();
   });
 
   it('shows a row expansion affordance for machine details', async () => {

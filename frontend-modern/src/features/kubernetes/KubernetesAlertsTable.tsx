@@ -241,18 +241,20 @@ export const KubernetesAlertsTable: Component<{
                               <div class="min-w-0">
                                 <div
                                   class="truncate font-medium text-base-content"
-                                  title={incident.resourceName}
+                                  title={[
+                                    incident.resourceName,
+                                    formatPlatformAlertResourceType(
+                                      incident.resourceType,
+                                      'kubernetes',
+                                    ),
+                                    k()?.ownerKind && k()?.ownerName
+                                      ? `${k()?.ownerKind}/${k()?.ownerName}`
+                                      : '',
+                                  ]
+                                    .filter(Boolean)
+                                    .join(' · ')}
                                 >
                                   {incident.resourceName}
-                                </div>
-                                <div class="truncate text-[10px] text-muted">
-                                  {formatPlatformAlertResourceType(
-                                    incident.resourceType,
-                                    'kubernetes',
-                                  )}
-                                  <Show when={k()?.ownerKind && k()?.ownerName}>
-                                    · {k()?.ownerKind}/{k()?.ownerName}
-                                  </Show>
                                 </div>
                               </div>
                             </div>
@@ -264,20 +266,25 @@ export const KubernetesAlertsTable: Component<{
                             />
                           </TableCell>
                           <TableCell class={getPlatformTableCellClassForKind('text')}>
-                            <span class="block truncate text-base-content" title={incident.summary}>
+                            <span
+                              class="block truncate text-base-content"
+                              title={[incident.summary, incident.label].filter(Boolean).join(' · ')}
+                            >
                               {incident.summary}
-                            </span>
-                            <span class="block truncate text-[10px] text-muted">
-                              {incident.label}
                             </span>
                           </TableCell>
                           <TableCell class={getPlatformTableCellClassForKind('text')}>
-                            <span class="block truncate text-base-content" title={scopeText()}>
+                            <span
+                              class="block truncate text-base-content"
+                              title={[
+                                scopeText(),
+                                k()?.nodeName ||
+                                  formatPlatformAlertCode(incident.code, 'kubernetes'),
+                              ]
+                                .filter(Boolean)
+                                .join(' · ')}
+                            >
                               {scopeText()}
-                            </span>
-                            <span class="block truncate text-[10px] text-muted">
-                              {k()?.nodeName ||
-                                formatPlatformAlertCode(incident.code, 'kubernetes')}
                             </span>
                           </TableCell>
                           <TableCell

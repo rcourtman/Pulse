@@ -358,7 +358,7 @@ export const ProxmoxNodesTable: Component<{
             </For>
           }
           body={
-            <PlatformWindowedRows items={nodePreview.visibleRows} estimatedRowHeight={40}>
+            <PlatformWindowedRows items={nodePreview.visibleRows} estimatedRowHeight={32}>
               {(node) => {
                 const name = () => asTrimmedString(node.name) || node.id;
                 const nativeNodeName = () => asTrimmedString(node.proxmox?.nodeName) ?? '';
@@ -366,10 +366,6 @@ export const ProxmoxNodesTable: Component<{
                   layoutMode() === 'narrow' && nativeNodeName().length > 0
                     ? nativeNodeName()
                     : name();
-                const showNativeNodeName = () =>
-                  layoutMode() === 'phone' &&
-                  nativeNodeName().length > 0 &&
-                  nativeNodeName() !== name();
                 const drawerNode = createMemo(() => nodeFromResource(node));
                 const detailRowId = () => `proxmox-host-drawer-${node.id}`;
                 const isSelected = () => selectedNodeId() === node.id;
@@ -498,21 +494,20 @@ export const ProxmoxNodesTable: Component<{
                               title={node.status || 'unknown'}
                               ariaHidden
                             />
-                            <div class="flex min-w-0 flex-1 flex-col">
+                            <div class="min-w-0 flex-1">
                               <ResourceNameWithWebInterfaceLink
                                 name={name()}
                                 url={externalUrl()}
                                 class={`min-w-0 ${usesCondensedIdentity() ? '[&>a]:hidden' : ''}`}
                                 nameClass="truncate font-semibold text-base-content"
-                                title={`Open ${name()} web interface`}
+                                title={
+                                  nativeNodeName() && nativeNodeName() !== name()
+                                    ? `${name()} · Proxmox node ${nativeNodeName()}`
+                                    : `Open ${name()} web interface`
+                                }
                               >
                                 {visibleNodeLabel()}
                               </ResourceNameWithWebInterfaceLink>
-                              <Show when={showNativeNodeName()}>
-                                <span class="-mt-0.5 truncate text-[10px] text-muted">
-                                  {nativeNodeName()}
-                                </span>
-                              </Show>
                             </div>
                             <Show when={!isOnline()}>
                               <span class="hidden rounded bg-surface-alt px-1.5 py-0.5 text-[10px] font-medium text-muted sm:inline-flex">

@@ -321,11 +321,11 @@ const DatasetCell: Component<{ point: RecoveryPoint; detailToggle?: JSX.Element 
         title={getRecoveryOutcomeLabel(normalizeRecoveryOutcome(props.point.outcome))}
       />
       <div class="min-w-0">
-        <div class="truncate font-medium text-base-content" title={name()}>
+        <div
+          class="truncate font-medium text-base-content"
+          title={[name(), subtitle()].filter(Boolean).join(' · ')}
+        >
           {name()}
-        </div>
-        <div class="truncate text-[10px] text-muted" title={subtitle()}>
-          {subtitle()}
         </div>
       </div>
     </div>
@@ -533,30 +533,22 @@ export const TrueNASProtectionTable: Component<{
                                 />
                               </TableCell>
                               <TableCell class={getPlatformTableCellClassForKind('text')}>
-                                <span class="block truncate text-base-content" title={artifact()}>
+                                <span
+                                  class="block truncate text-base-content"
+                                  title={[artifact(), artifactSecondary()]
+                                    .filter(Boolean)
+                                    .join(' · ')}
+                                >
                                   {artifact()}
                                 </span>
-                                <Show when={artifactSecondary()}>
-                                  <span
-                                    class="block truncate text-[10px] text-muted"
-                                    title={artifactSecondary()}
-                                  >
-                                    {artifactSecondary()}
-                                  </span>
-                                </Show>
                               </TableCell>
                               <TableCell class={getPlatformTableCellClassForKind('text')}>
-                                <span class="block truncate text-base-content" title={target()}>
+                                <span
+                                  class="block truncate text-base-content"
+                                  title={[target(), targetSecondary()].filter(Boolean).join(' · ')}
+                                >
                                   {target()}
                                 </span>
-                                <Show when={targetSecondary()}>
-                                  <span
-                                    class="block truncate text-[10px] text-muted"
-                                    title={targetSecondary()}
-                                  >
-                                    {targetSecondary()}
-                                  </span>
-                                </Show>
                               </TableCell>
                               <TableCell
                                 class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}

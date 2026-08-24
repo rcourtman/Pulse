@@ -4,7 +4,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Resource } from '@/types/resource';
 import { ProxmoxPageSurface } from '../ProxmoxPageSurface';
 import proxmoxPageSurfaceSource from '../ProxmoxPageSurface.tsx?raw';
+import proxmoxBackupServersTableSource from '../ProxmoxBackupServersTable.tsx?raw';
 import proxmoxBackupsTableSource from '../ProxmoxBackupsTable.tsx?raw';
+import proxmoxRecoverableTableSource from '../ProxmoxRecoverableTable.tsx?raw';
 
 const mockUseUnifiedResources = vi.fn();
 const mockPathname = vi.hoisted(() => vi.fn(() => '/proxmox/overview'));
@@ -349,6 +351,17 @@ describe('ProxmoxPageSurface contract', () => {
     expect(proxmoxPageSurfaceSource).not.toContain('savedViewsKey');
     expect(proxmoxBackupsTableSource).not.toContain('savedViewsKey');
     expect(proxmoxBackupsTableSource).not.toContain('SavedViews');
+  });
+
+  it('keeps backup summary identity on one canonical compact row', () => {
+    expect(proxmoxBackupServersTableSource).not.toContain(
+      'font-mono text-[10px] font-normal text-muted',
+    );
+    expect(proxmoxBackupServersTableSource).toContain(
+      "title={[row.serverName, row.datastore?.name].filter(Boolean).join(' · ')}",
+    );
+    expect(proxmoxRecoverableTableSource).toContain('class="flex min-w-0 items-center gap-1"');
+    expect(proxmoxRecoverableTableSource).not.toContain('class="truncate text-[10px] text-muted"');
   });
 
   it('hydrates route-scoped resource families instead of one broad estate request', () => {

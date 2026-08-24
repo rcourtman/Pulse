@@ -560,7 +560,12 @@ describe('App architecture', () => {
     expect(appStylesSource).toContain('.pulse-wide-data-surface.space-y-3');
     expect(appStylesSource).toContain('.filter-bar > div > div:first-child button');
     expect(appStylesSource).not.toContain('.proxmox-nodes-card > :first-child');
-    expect(appStylesSource).toContain('.pulse-wide-data-surface .host-row');
+    expect(appStylesSource).toContain(
+      '.table-fixed.platform-table > tbody > tr:not([data-inline-detail-for])',
+    );
+    expect(appStylesSource).not.toContain(
+      '.pulse-wide-data-surface .host-row,\n    .pulse-wide-data-surface .workload-row',
+    );
     expect(appStylesSource).toContain('.pulse-footer > div');
     expect(appLayoutSource).toContain('tabs mb-2 hidden xl:flex');
     expect(appLayoutSource).toContain('xl:px-2 2xl:px-3');
