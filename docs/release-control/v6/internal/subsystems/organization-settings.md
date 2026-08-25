@@ -80,6 +80,11 @@ create, review, and approve cross-organization shares.
    come from `frontend-primitives` through `PulseDataGrid`/`Table`; do not add
    organization-local `overflow-x-auto`, negative-margin, or side-border
    compensation around grids.
+   Their phone projection must keep the identity, current access/state, and
+   available row action needed for an immediate decision. Added/requested
+   timestamps, repeated permission detail, and other review metadata are
+   desktop detail columns; they must not squeeze those decision fields into an
+   unreadable six-column phone grid.
    Organization role and share-status badges follow the same primitive
    boundary: role/status semantics remain organization-owned, but visible badge
    shell, tone vocabulary, and label rendering must compose

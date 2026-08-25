@@ -4,6 +4,7 @@ import Download from 'lucide-solid/icons/download';
 import BarChart from 'lucide-solid/icons/bar-chart';
 import TableProperties from 'lucide-solid/icons/table-properties';
 import Plus from 'lucide-solid/icons/plus';
+import EllipsisVertical from 'lucide-solid/icons/ellipsis-vertical';
 import Pencil from 'lucide-solid/icons/pencil';
 import Play from 'lucide-solid/icons/play';
 import RefreshCw from 'lucide-solid/icons/refresh-cw';
@@ -353,8 +354,10 @@ export function ReportingPanel() {
                   <table class="w-full min-w-0 table-fixed text-left text-sm">
                     <thead class="border-b border-base-300 bg-base-200/50 text-xs uppercase text-muted">
                       <tr>
-                        <th class="w-[18%] px-3 py-2 font-semibold">Name</th>
-                        <th class="w-[16%] px-3 py-2 font-semibold">Cadence</th>
+                        <th class="w-[56%] px-3 py-2 font-semibold sm:w-[18%]">Name</th>
+                        <th class="hidden w-[16%] px-3 py-2 font-semibold sm:table-cell">
+                          Cadence
+                        </th>
                         <th class="report-schedule-detail-column w-[14%] px-3 py-2 font-semibold">
                           Scope
                         </th>
@@ -364,8 +367,10 @@ export function ReportingPanel() {
                         <th class="hidden w-[16%] px-3 py-2 font-semibold sm:table-cell">
                           Last run
                         </th>
-                        <th class="w-[8%] px-3 py-2 font-semibold">Enabled</th>
-                        <th class="w-[14%] px-3 py-2 text-right font-semibold">Actions</th>
+                        <th class="w-[16%] px-3 py-2 font-semibold sm:w-[8%]">Enabled</th>
+                        <th class="w-[28%] px-3 py-2 text-right font-semibold sm:w-[14%]">
+                          Actions
+                        </th>
                       </tr>
                     </thead>
                     <tbody class="divide-y divide-base-300">
@@ -377,9 +382,12 @@ export function ReportingPanel() {
                               title={schedule.name}
                             >
                               {schedule.name}
+                              <span class="mt-0.5 block truncate text-xs font-normal text-muted sm:hidden">
+                                {reportScheduleCadenceLabel(schedule)}
+                              </span>
                             </td>
                             <td
-                              class="truncate px-3 py-2 text-muted"
+                              class="hidden truncate px-3 py-2 text-muted sm:table-cell"
                               title={reportScheduleCadenceLabel(schedule)}
                             >
                               {reportScheduleCadenceLabel(schedule)}
@@ -418,12 +426,59 @@ export function ReportingPanel() {
                               </label>
                             </td>
                             <td class="px-3 py-2">
-                              <div class="flex justify-end gap-1">
+                              <details class="group sm:hidden">
+                                <summary
+                                  class="ml-auto flex min-h-11 min-w-11 cursor-pointer list-none items-center justify-center rounded-md text-base-content hover:bg-surface-hover"
+                                  aria-label={`Actions for ${schedule.name}`}
+                                >
+                                  <EllipsisVertical size={18} />
+                                </summary>
+                                <div class="mt-1 flex flex-col gap-1">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    class="min-h-11 w-full justify-start gap-2 px-2"
+                                    aria-label={`Run ${schedule.name} now`}
+                                    isLoading={runningScheduleID() === schedule.id}
+                                    disabled={runningScheduleID() !== ''}
+                                    onClick={() => runReportScheduleNow(schedule)}
+                                  >
+                                    <Show when={runningScheduleID() !== schedule.id}>
+                                      <Play size={15} />
+                                    </Show>
+                                    Run
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    class="min-h-11 w-full justify-start gap-2 px-2"
+                                    aria-label={`Edit ${schedule.name}`}
+                                    onClick={() => startEditSchedule(schedule)}
+                                  >
+                                    <Pencil size={15} />
+                                    Edit
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    class="min-h-11 w-full justify-start gap-2 px-2"
+                                    aria-label={`Delete ${schedule.name}`}
+                                    isLoading={deletingScheduleID() === schedule.id}
+                                    disabled={deletingScheduleID() !== ''}
+                                    onClick={() => deleteReportSchedule(schedule)}
+                                  >
+                                    <Trash2 size={15} />
+                                    Delete
+                                  </Button>
+                                </div>
+                              </details>
+                              <div class="hidden justify-end gap-1 sm:flex">
                                 <Button
                                   variant="ghost"
                                   size="sm"
                                   class="gap-1 px-2"
                                   title="Run now"
+                                  aria-label={`Run ${schedule.name} now`}
                                   isLoading={runningScheduleID() === schedule.id}
                                   disabled={runningScheduleID() !== ''}
                                   onClick={() => runReportScheduleNow(schedule)}
@@ -438,6 +493,7 @@ export function ReportingPanel() {
                                   size="sm"
                                   class="gap-1 px-2"
                                   title="Edit"
+                                  aria-label={`Edit ${schedule.name}`}
                                   onClick={() => startEditSchedule(schedule)}
                                 >
                                   <Pencil size={15} />
@@ -448,6 +504,7 @@ export function ReportingPanel() {
                                   size="sm"
                                   class="gap-1 px-2"
                                   title="Delete"
+                                  aria-label={`Delete ${schedule.name}`}
                                   isLoading={deletingScheduleID() === schedule.id}
                                   disabled={deletingScheduleID() !== ''}
                                   onClick={() => deleteReportSchedule(schedule)}

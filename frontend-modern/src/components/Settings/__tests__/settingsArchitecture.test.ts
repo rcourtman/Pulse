@@ -83,6 +83,7 @@ import organizationAccessMembersSectionSource from '../OrganizationAccessMembers
 import organizationIncomingSharesSectionSource from '../OrganizationIncomingSharesSection.tsx?raw';
 import organizationOutgoingSharesSectionSource from '../OrganizationOutgoingSharesSection.tsx?raw';
 import organizationOverviewDetailsSectionSource from '../OrganizationOverviewDetailsSection.tsx?raw';
+import organizationOverviewMembersSectionSource from '../OrganizationOverviewMembersSection.tsx?raw';
 import organizationSharingCreateSectionSource from '../OrganizationSharingCreateSection.tsx?raw';
 import rolesEditorDialogSource from '../RolesEditorDialog.tsx?raw';
 import rolesPanelSource from '../RolesPanel.tsx?raw';
@@ -718,6 +719,37 @@ describe('settings architecture guardrails', () => {
     expect(vmwareCredentialSlotSource).not.toContain(
       'rounded-md border border-rose-300 bg-rose-50',
     );
+  });
+
+  it('keeps dense settings tables on deliberate phone information priorities', () => {
+    const expectHiddenColumn = (source: string, key: string) => {
+      expect(source).toMatch(
+        new RegExp(`key: '${key}',[\\s\\S]*?label: '[^']+',[\\s\\S]*?hiddenOnMobile: true`),
+      );
+    };
+
+    expectHiddenColumn(organizationAccessMembersSectionSource, 'addedAt');
+    expectHiddenColumn(organizationOverviewMembersSectionSource, 'addedAt');
+    expectHiddenColumn(organizationIncomingSharesSectionSource, 'accessRole');
+    expectHiddenColumn(organizationIncomingSharesSectionSource, 'createdAt');
+    expectHiddenColumn(organizationOutgoingSharesSectionSource, 'accessRole');
+    expectHiddenColumn(organizationOutgoingSharesSectionSource, 'createdAt');
+    expectHiddenColumn(rolesPanelSource, 'permissions');
+    expectHiddenColumn(auditLogPanelSource, 'success');
+    expectHiddenColumn(auditLogPanelSource, 'timestamp');
+    expectHiddenColumn(auditLogPanelSource, 'user');
+
+    expect(auditLogPanelSource).toContain('text-[11px] text-muted sm:hidden');
+    expect(auditLogPanelSource).toContain("event.user || 'Unknown user'");
+    expect(userAssignmentsPanelSource).toContain(
+      '<span class="hidden sm:inline">Manage Access</span>',
+    );
+    expect(userAssignmentsPanelSource).toContain('<span class="hidden sm:inline">Remove</span>');
+    expect(reportingPanelSource).toContain('hidden w-[16%] px-3 py-2 font-semibold sm:table-cell');
+    expect(reportingPanelSource).toContain('text-xs font-normal text-muted sm:hidden');
+    expect(reportingPanelSource).toContain('<details class="group sm:hidden">');
+    expect(reportingPanelSource).toContain('aria-label={`Actions for ${schedule.name}`}');
+    expect(reportingPanelSource).toContain('class="hidden justify-end gap-1 sm:flex"');
   });
 
   it('keeps settings loading skeletons on the shared skeleton primitive', () => {

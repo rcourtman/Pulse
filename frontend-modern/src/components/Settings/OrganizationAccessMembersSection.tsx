@@ -74,6 +74,7 @@ export const OrganizationAccessMembersSection: Component<OrganizationAccessMembe
           {
             key: 'addedAt',
             label: 'Added',
+            hiddenOnMobile: true,
             render: (member) => <span class="text-muted">{formatOrgDate(member.addedAt)}</span>,
           },
           {

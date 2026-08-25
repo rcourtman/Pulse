@@ -49,6 +49,7 @@ export const OrganizationIncomingSharesSection: Component<
           {
             key: 'accessRole',
             label: 'Access',
+            hiddenOnMobile: true,
             render: (share) => {
               const role = normalizeOrganizationShareRole(share.accessRole);
               return <OrganizationRoleBadge role={role} />;
@@ -73,6 +74,7 @@ export const OrganizationIncomingSharesSection: Component<
           {
             key: 'createdAt',
             label: 'Requested',
+            hiddenOnMobile: true,
             render: (share) => <span class="text-muted">{formatOrgDate(share.createdAt)}</span>,
           },
           {

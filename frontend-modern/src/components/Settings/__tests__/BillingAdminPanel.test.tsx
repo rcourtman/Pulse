@@ -151,6 +151,14 @@ describe('BillingAdminPanel', () => {
     expect(billingAdminOrganizationsTableSource).toContain('variant="secondary"');
     expect(billingAdminOrganizationsTableSource).toContain('size="sm"');
     expect(billingAdminOrganizationsTableSource).toContain('size="xs"');
+    for (const key of ['owner', 'trial', 'stripeCustomer']) {
+      expect(billingAdminOrganizationsTableSource).toMatch(
+        new RegExp(`key: '${key}',[\\s\\S]*?hiddenOnMobile: true`),
+      );
+    }
+    expect(billingAdminOrganizationsTableSource).not.toMatch(
+      /key: 'subscription',\s+label: 'Subscription',\s+hiddenOnMobile:/,
+    );
     expect(billingAdminOrganizationsTableSource).not.toContain(
       'px-2.5 py-1.5 text-xs font-medium rounded-md border border-border bg-surface hover:bg-surface-hover disabled:opacity-50',
     );

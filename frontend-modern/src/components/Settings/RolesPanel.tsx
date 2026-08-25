@@ -88,6 +88,7 @@ export const RolesPanel: Component = () => {
               {
                 key: 'permissions',
                 label: 'Permissions',
+                hiddenOnMobile: true,
                 render: (role) => (
                   <div class="flex flex-wrap gap-1">
                     <For each={role.permissions}>

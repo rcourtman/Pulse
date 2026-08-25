@@ -34,6 +34,7 @@ export const OrganizationOverviewMembersSection: Component<
         {
           key: 'addedAt',
           label: 'Added',
+          hiddenOnMobile: true,
           render: (member) => <span class="text-muted">{formatOrgDate(member.addedAt)}</span>,
         },
       ]}

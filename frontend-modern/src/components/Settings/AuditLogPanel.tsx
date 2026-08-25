@@ -381,6 +381,7 @@ export default function AuditLogPanel() {
                 label: 'Status',
                 width: '64px',
                 align: 'center',
+                hiddenOnMobile: true,
                 render: (event) => {
                   const presentation = getAuditEventStatusPresentation(event.success);
                   const Icon = presentation.icon;
@@ -390,6 +391,7 @@ export default function AuditLogPanel() {
               {
                 key: 'timestamp',
                 label: 'Timestamp',
+                hiddenOnMobile: true,
                 render: (event) => (
                   <span class="text-muted">{formatTimestamp(event.timestamp)}</span>
                 ),
@@ -398,16 +400,23 @@ export default function AuditLogPanel() {
                 key: 'event',
                 label: 'Event',
                 render: (event) => (
-                  <span
-                    class={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${getAuditEventTypeBadgeClass(event.event)}`}
-                  >
-                    {event.event}
-                  </span>
+                  <div class="min-w-0">
+                    <span
+                      class={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${getAuditEventTypeBadgeClass(event.event)}`}
+                    >
+                      {event.event}
+                    </span>
+                    <div class="mt-1 truncate text-[11px] text-muted sm:hidden">
+                      {event.success ? 'Success' : 'Failed'} · {event.user || 'Unknown user'} ·{' '}
+                      {formatTimestamp(event.timestamp)}
+                    </div>
+                  </div>
                 ),
               },
               {
                 key: 'user',
                 label: 'User',
+                hiddenOnMobile: true,
                 render: (event) => <span class="text-base-content">{event.user || '-'}</span>,
               },
               {

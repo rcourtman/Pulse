@@ -160,20 +160,24 @@ export const UserAssignmentsPanel: Component = () => {
                     <Button
                       variant="ghost"
                       size="settingsAction"
-                      class="min-h-11 gap-2 sm:min-h-9"
+                      class="min-h-11 min-w-11 gap-2 px-2 sm:min-h-9 sm:min-w-0"
+                      aria-label={`Manage access for ${getUserIdentityDisplayName(assignment)}`}
+                      title="Manage access"
                       onClick={() => state.openManageAccess(assignment)}
                     >
                       <Pencil class="w-4 h-4" />
-                      Manage Access
+                      <span class="hidden sm:inline">Manage Access</span>
                     </Button>
                     <Button
                       variant="ghost"
                       size="settingsAction"
-                      class="min-h-11 gap-2 text-red-600 hover:text-red-700 sm:min-h-9"
+                      class="min-h-11 min-w-11 gap-2 px-2 text-red-600 hover:text-red-700 sm:min-h-9 sm:min-w-0"
+                      aria-label={`Remove ${getUserIdentityDisplayName(assignment)}`}
+                      title="Remove user access"
                       onClick={() => state.openDeleteUser(assignment)}
                     >
                       <Trash2 class="w-4 h-4" />
-                      Remove
+                      <span class="hidden sm:inline">Remove</span>
                     </Button>
                   </div>
                 ),

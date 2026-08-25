@@ -925,6 +925,10 @@ responsive shell appear to ignore an operator.
     split: cloud-paid owns Suspend, Activate, Reload, tenant billing state, and
     mutation semantics, while frontend-primitives owns the shared `Button`
     chrome used by those row actions.
+    On phones, the tenant grid must retain organization identity, subscription
+    state, and mutation actions. Owner IDs, trial detail, and Stripe customer
+    IDs remain desktop review fields or expanded billing-state detail rather
+    than forcing the primary mobile decision surface into horizontal scanning.
 14. Add or change shared commercial plan/usage presentation through `frontend-modern/src/components/Settings/CommercialBillingSections.tsx` and `frontend-modern/src/utils/commercialBillingModel.ts`
 15. Add or change organization billing and usage presentation through `frontend-modern/src/components/Settings/OrganizationBillingPanel.tsx`, `frontend-modern/src/components/Settings/OrganizationBillingLoadingState.tsx`, and `frontend-modern/src/components/Settings/useOrganizationBillingPanelState.ts`
 16. Add or change self-hosted Pro plan, recovery, and entitlement actions through `frontend-modern/src/components/Settings/ProLicensePanel.tsx`, `frontend-modern/src/components/Settings/ProLicensePlanSection.tsx`, `frontend-modern/src/components/Settings/SelfHostedCommercialRecoverySection.tsx`, and `frontend-modern/src/components/Settings/useProLicensePanelState.ts`

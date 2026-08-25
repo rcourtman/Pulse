@@ -67,6 +67,7 @@ export const BillingAdminOrganizationsTable: Component<BillingAdminOrganizations
       {
         key: 'owner',
         label: 'Owner',
+        hiddenOnMobile: true,
         render: (org) => (
           <span class="font-mono text-xs text-base-content">{org.owner_user_id || 'N/A'}</span>
         ),
@@ -86,6 +87,7 @@ export const BillingAdminOrganizationsTable: Component<BillingAdminOrganizations
       {
         key: 'trial',
         label: 'Trial',
+        hiddenOnMobile: true,
         render: (org) => {
           const billing = props.billingByOrgID[(org.org_id || '').trim()];
           return (
@@ -96,6 +98,7 @@ export const BillingAdminOrganizationsTable: Component<BillingAdminOrganizations
       {
         key: 'stripeCustomer',
         label: 'Stripe Customer',
+        hiddenOnMobile: true,
         render: (org) => {
           const billing = props.billingByOrgID[(org.org_id || '').trim()];
           const cellValue = stripeCustomerCell(billing);

@@ -1072,9 +1072,14 @@ not a replacement status card, CTA band, or page-local nested card.
    focus, and embedded-row propagation behavior.
    Global app-shell prompts are part of the same action boundary.
    `frontend-modern/src/components/GitHubStarBanner.tsx` may own its display
-   timing, product copy, and GitHub destination, but its primary, defer, and
-   dismiss controls must compose `Button` and `ActionIconButton` instead of
-   carrying local floating-prompt button shells.
+   timing, product copy, and GitHub destination, but its primary and dismiss
+   controls must compose `Button` and `ActionIconButton` instead of carrying
+   local floating-prompt button shells. The prompt must wait for fourteen
+   distinct active days with connected infrastructure, consume at most one
+   lifetime appearance, treat close as permanent dismissal, and never restore
+   recurring snooze behavior. It must yield the browser session to an existing
+   release, disclosure, or other low-priority app-shell notice and suppress
+   itself for the remainder of a session that presents a blocking dialog.
    Settings selection helpers such as `ResourcePicker` must use the same
    `Button` primitive for select-all, clear, and chip remove actions instead of
    restoring footer-local action shells.
@@ -4987,6 +4992,9 @@ update-surface wording inline. `CopyCommandBlock` must use the shared
 `copyToClipboard` helper so install/update/agent snippets keep the same
 Clipboard API fallback path and only report copied state after the shared copy
 path succeeds.
+The running published version must keep a direct `Current release notes` link
+in this settings shell so suppressing or dismissing the one-time post-update
+notice never makes the changelog undiscoverable.
 
 The update verdict is honest about its age. The frontend serves the update
 verdict from a 24-hour localStorage cache, so the panel's "Up to date" state
@@ -6091,6 +6099,15 @@ disclosure, navigation, copy, and row-action controls must keep a 40-pixel
 mobile touch floor while retaining their compact desktop density. Settings
 navigation must own a viewport-bounded vertical scroll region so its route list
 does not push the active panel below the page.
+Settings data grids must also define a phone information hierarchy instead of
+depending on horizontal scrolling as their first responsive behavior. Identity,
+current state, and immediately available actions stay visible; lower-priority
+timestamps, external IDs, and verbose detail columns may be hidden through the
+shared symmetric column boundary. When a hidden field is still needed for the
+phone decision, its concise value belongs as mobile-only secondary context in
+the surviving identity cell. Multi-action cells may collapse visible labels on
+phones only when every action keeps an accessible name and the shared touch
+floor.
 
 Patrol finding handoffs must derive approval posture from the canonical typed
 action state and approval policy, not only from a legacy approval id. A
@@ -6478,7 +6495,8 @@ element ref, because a ref runs before the node is in the document, where the
 measured height is zero.
 
 Every surface that must sit on top of the bar reads that property: the
-Assistant overlay panel and its backdrop, the global GitHub star banner, and
+Assistant overlay panel and its backdrop, the compact post-update notice, the
+global GitHub star banner, and
 the `.filter-bottom-nav-aware-panel` rule in
 `frontend-modern/src/index.css`. Consumers must not add
 `env(safe-area-inset-bottom)` on top of the published value, and must not

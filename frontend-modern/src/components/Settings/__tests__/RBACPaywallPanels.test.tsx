@@ -240,7 +240,7 @@ describe('RBAC paywall settings panels', () => {
     expect(getUsersMock).toHaveBeenCalled();
     expect(getRolesMock).toHaveBeenCalled();
     expect(screen.getByPlaceholderText('Search users...')).not.toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Manage Access' })).toHaveClass(
+    expect(screen.getByRole('button', { name: 'Manage access for alice' })).toHaveClass(
       'min-h-11',
       'sm:min-h-9',
     );
@@ -265,7 +265,7 @@ describe('RBAC paywall settings panels', () => {
     expect(screen.getByText('OIDC · okta')).toBeInTheDocument();
     expect(screen.getByTitle('sso:oidc:okta:opaque_subject')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Alice Example' }));
     const dialog = await screen.findByRole('dialog', { name: 'Remove user access: Alice Example' });
     expect(dialog).toHaveTextContent('does not disable the account at the identity provider');
 
@@ -331,7 +331,7 @@ describe('RBAC paywall settings panels', () => {
       expect(screen.getByText('alice')).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Manage Access' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Manage access for alice' }));
 
     await waitFor(() => {
       expect(screen.getByRole('dialog', { name: 'Manage access: alice' })).toBeInTheDocument();
