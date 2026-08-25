@@ -141,7 +141,8 @@ func TestPreviousStableForPrereleaseVersionCrossesMinorBoundaries(t *testing.T) 
 		{version: "6.2.2-rc.3", want: "6.2.1"},
 		{version: "6.3.0-rc.1", want: "6.2.1"},
 		{version: "6.3.0-rc.2", want: "6.2.1"},
-		{version: "6.4.0-rc.1", want: "6.3.1"},
+		{version: "6.4.0-rc.1", want: "6.3.2"},
+		{version: "6.4.0-rc.2", want: "6.3.2"},
 	}
 
 	for _, test := range tests {
@@ -362,13 +363,16 @@ func TestInstallDockerProofTracksPrereleaseContract(t *testing.T) {
 		t.Fatalf("current prerelease %q has no stable target", version)
 	}
 	comparisonVersion, ok := previousPrereleaseVersion(version)
+	comparisonLine := "It follows stable `v" + previous + "` and opens the published `v" + stableTarget + "` candidate line."
 	if !ok {
 		comparisonVersion = previous
+	} else {
+		comparisonLine = "It follows `v" + comparisonVersion + "` on the published `v" + stableTarget + "` candidate line."
 	}
 
 	assertFileContainsAllNormalized(t, repoFile("docs", "release-control", "v6", "internal", "subsystems", "deployment-installability.md"),
 		"The active prerelease `v"+version+"` cut sets the repo-root `VERSION`, repo-root `docker-compose.yml` image default, `scripts/install-docker.sh` fallback, and Helm chart release metadata to the same `"+version+"` release version.",
-		"It follows stable `v"+comparisonVersion+"` and opens the published `v"+stableTarget+"` candidate line.",
+		comparisonLine,
 		"This prerelease keeps `rollback_version=v"+previous+"`, publishes a versioned public GitHub prerelease plus versioned Docker and Helm artifacts, and does not move stable/latest install pointers or stable semver aliases.",
 		"The changes since `v"+comparisonVersion+"` do not require a Pulse Mobile client change and preserve the existing mobile, Relay, onboarding, and mobile-facing API contracts, so the server cut is classified `no-mobile-impact`; no companion upload or public mobile-store rollout is part of this candidate.",
 		"The prerelease Windows path retains exact-SHA, checksum, and detached-signature verification without Authenticode. Stable `v"+stableTarget+"` also skips SignPath under the standing unavailable policy",

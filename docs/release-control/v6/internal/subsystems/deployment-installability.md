@@ -1744,19 +1744,21 @@ diagnostics. The same release workflow also executes the generated self-signed
 and custom-CA Windows installer commands through Windows PowerShell 5.1 before
 release assembly, so the first HTTPS fetch is release proof rather than a
 string-shape assertion.
-The active prerelease `v6.4.0-rc.1` cut sets the repo-root `VERSION`, repo-root
+The active prerelease `v6.4.0-rc.2` cut sets the repo-root `VERSION`, repo-root
 `docker-compose.yml` image default, `scripts/install-docker.sh` fallback, and
-Helm chart release metadata to the same `6.4.0-rc.1` release version. It follows
-stable `v6.3.1` and opens the published `v6.4.0` candidate line. This prerelease
-keeps `rollback_version=v6.3.1`, publishes a versioned public GitHub prerelease
+Helm chart release metadata to the same `6.4.0-rc.2` release version. It follows
+`v6.4.0-rc.1` on the published `v6.4.0` candidate line. This prerelease keeps
+`rollback_version=v6.3.2`, publishes a versioned public GitHub prerelease
 plus versioned Docker and Helm artifacts, and does not move stable/latest
 install pointers or stable semver aliases. The candidate makes large-estate
 workload, infrastructure, storage, and platform rendering incremental;
 canonicalizes table, drawer, touch, disclosure, sorting, and navigation
-behavior; fixes fixed-interval scheduling, re-enrollment cleanup, offline-alert
-policy, command-intent continuity, and forked-identity discovery lookup; and
-moves release compilation behind an isolated immutable artifact handoff. The
-changes since `v6.3.1` do not require a Pulse Mobile client change and preserve
+behavior; adds notification delivery history and a least-privilege agent
+profile; provides deliberate Docker and Kubernetes re-enrolment recovery; and
+fixes metrics-history retention, Patrol startup recovery, backup pagination,
+stale storage and stale container-health presentation, and backup scope
+persistence. The changes since `v6.4.0-rc.1` do not require a Pulse Mobile
+client change and preserve
 the existing mobile, Relay, onboarding, and mobile-facing API contracts, so the
 server cut is classified `no-mobile-impact`; no companion upload or public
 mobile-store rollout is part of this candidate. The prerelease Windows path
@@ -1767,6 +1769,28 @@ published-digest, and Unknown Publisher disclosure controls. Signing returns
 only after the release owner explicitly confirms that production credentials
 and certificate authorization are ready and a reviewed policy/code change
 restores it.
+
+The preceding prerelease `v6.4.0-rc.1` cut set the repo-root `VERSION`,
+repo-root `docker-compose.yml` image default, `scripts/install-docker.sh`
+fallback, and Helm chart release metadata to the same `6.4.0-rc.1` release
+version. It opened the `v6.4.0` candidate line from `main` with
+`rollback_version=v6.3.1` and did not move stable/latest install pointers or
+stable semver aliases.
+
+The preceding stable `v6.3.2` cut set the repo-root `VERSION`, repo-root
+`docker-compose.yml` image default, `scripts/install-docker.sh` fallback, and
+Helm chart release metadata to the same `6.3.2` release version. This patch
+used the stable hotfix path with `rollback_version=v6.3.1`,
+`hotfix_exception=true`, a release-owner reason, and no fabricated same-version
+RC tag. The emergency reason was metrics-history memory growth that could wedge
+a memory-limited Pulse runtime plus offline-policy alert noise on stable. The
+exact pushed `release/v6.3.2` SHA passed the integrated candidate checks before
+publication. No governed mobile-facing path changed from `v6.3.1`, so the
+release decision was `no-mobile-impact`. Release run `32896554952` failed
+closed during SignPath request submission; the release owner then established
+the standing SignPath-unavailable policy from `v6.3.2` onward. Public Unknown
+Publisher disclosure plus checksum, detached-signature, immutable-manifest and
+published-digest controls remain mandatory.
 
 The preceding stable `v6.3.1` cut set the repo-root `VERSION`, repo-root
 `docker-compose.yml` image default, `scripts/install-docker.sh` fallback, and
@@ -2177,12 +2201,14 @@ For the active stable `v6.1.2` cut, the repo-root compose default and
 `scripts/install-docker.sh` fallback must both pin `6.1.2` whenever the
 governed `VERSION` is that stable cut. The stable promotion guard remains in
 force and rejects leftover `-rc.` defaults.
-For the active prerelease `v6.4.0-rc.1` cut, the repo-root compose default and
-`scripts/install-docker.sh` fallback must both pin `6.4.0-rc.1` until the next
+For the active prerelease `v6.4.0-rc.2` cut, the repo-root compose default and
+`scripts/install-docker.sh` fallback must both pin `6.4.0-rc.2` until the next
 governed stable cut moves them forward. Each new release moves
 these two pins together with the repo-root `VERSION` and the Helm chart metadata
 in the same commit; a cut that leaves any of the four on a superseded value is a
 release-packet blocker.
+For the preceding stable `v6.3.2` cut, the repo-root compose default and
+`scripts/install-docker.sh` fallback both pinned `6.3.2`.
 For the preceding stable `v6.3.1` cut, the repo-root compose default and
 `scripts/install-docker.sh` fallback both pinned `6.3.1`.
 For the preceding stable `v6.3.0` cut, the repo-root compose default and
@@ -2458,8 +2484,8 @@ raw packet text to already be publish-safe.
 User-visible fixes added to an assembled candidate packet must remain bound to
 release-body verification: the exact claim is pinned in
 `scripts/release_control/render_release_body_test.py`, and the complete packet
-must still pass canonical shape validation. The `v6.4.0-rc.1` packet therefore
-binds the non-running container stale-health correction under **Fixed** without
+must still pass canonical shape validation. The `v6.4.0-rc.2` packet therefore
+binds the non-running container stale-health correction under **Fixes** without
 changing candidate artifact identity or dispatch authority.
 Release-note transport is file-backed and fail-closed: operator helpers must
 send the Markdown through JSON input rather than multiline form-field
