@@ -224,27 +224,48 @@ func (mh *MetricsHistory) appendMetric(metrics []MetricPoint, point MetricPoint)
 		metrics = append(metrics, point)
 	}
 
-	// Remove old points beyond retention time
+	// Remove old points beyond retention time. Compact in place instead of
+	// re-slicing the front: `metrics[i:]` hides the trimmed prefix from
+	// cap() while keeping the whole backing array reachable, so seed-sized
+	// arrays stayed pinned long after their points aged out.
 	cutoffTime := time.Now().Add(-mh.retentionTime)
-	found := false
+	firstRetained := len(metrics)
 	for i, p := range metrics {
 		if p.Timestamp.After(cutoffTime) {
-			metrics = metrics[i:]
-			found = true
+			firstRetained = i
 			break
 		}
 	}
-	if !found {
+	if firstRetained == len(metrics) {
 		metrics = metrics[:0]
+	} else if firstRetained > 0 {
+		metrics = append(metrics[:0], metrics[firstRetained:]...)
 	}
 
-	// Ensure we don't exceed max data points
-	if len(metrics) > mh.maxDataPoints {
-		// Keep the most recent points
-		metrics = metrics[len(metrics)-mh.maxDataPoints:]
+	// Ensure we don't exceed max data points, keeping the most recent.
+	if over := len(metrics) - mh.maxDataPoints; over > 0 {
+		metrics = append(metrics[:0], metrics[over:]...)
 	}
 
-	return metrics
+	return releaseTrimmedCapacity(metrics)
+}
+
+// releaseTrimmedCapacity copies the retained window into a right-sized
+// backing array when the window occupies a small fraction of it. After a
+// dense historical seed (~2,800 points/series) ages out of retention, every
+// series would otherwise keep its seed-sized array while holding a few
+// hundred live points — across thousands of series that pinned ~700MB on
+// the public demo and wedged it against its memory cgroup. The trims above
+// compact in place (never re-slice the front) so cap() here reflects the
+// full backing array. The 4x threshold keeps the copy amortized: a healthy
+// sliding window sits between 1x and ~2x capacity and never triggers it.
+func releaseTrimmedCapacity(metrics []MetricPoint) []MetricPoint {
+	if cap(metrics) <= 64 || cap(metrics) <= 4*len(metrics) {
+		return metrics
+	}
+	resized := make([]MetricPoint, len(metrics), len(metrics)+len(metrics)/4+8)
+	copy(resized, metrics)
+	return resized
 }
 
 // appendMetricSeries applies the same retention, duplicate-tail, and capacity
@@ -275,13 +296,13 @@ func (mh *MetricsHistory) appendMetricSeries(metrics []MetricPoint, values []flo
 	if firstRetained == len(metrics) {
 		metrics = metrics[:0]
 	} else if firstRetained > 0 {
-		metrics = metrics[firstRetained:]
+		metrics = append(metrics[:0], metrics[firstRetained:]...)
 	}
 
-	if len(metrics) > mh.maxDataPoints {
-		metrics = metrics[len(metrics)-mh.maxDataPoints:]
+	if over := len(metrics) - mh.maxDataPoints; over > 0 {
+		metrics = append(metrics[:0], metrics[over:]...)
 	}
-	return metrics
+	return releaseTrimmedCapacity(metrics)
 }
 
 func (mh *MetricsHistory) addGuestMetricSeries(guestID, metricType string, values []float64, timestamps []time.Time) {
@@ -828,7 +849,12 @@ func (mh *MetricsHistory) Cleanup() {
 func (mh *MetricsHistory) cleanupMetrics(metrics []MetricPoint, cutoffTime time.Time) []MetricPoint {
 	for i, p := range metrics {
 		if p.Timestamp.After(cutoffTime) {
-			return metrics[i:]
+			if i > 0 {
+				// Compact rather than re-slice so the backing array's true
+				// size stays visible to the release check below.
+				metrics = append(metrics[:0], metrics[i:]...)
+			}
+			return releaseTrimmedCapacity(metrics)
 		}
 	}
 	// Return nil instead of metrics[:0] to release the backing array
