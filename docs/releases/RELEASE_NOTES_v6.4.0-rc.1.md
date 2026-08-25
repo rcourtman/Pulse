@@ -79,8 +79,11 @@ build path.
   contracts.
 - Windows Unified Agent binaries in this prerelease retain exact-SHA, checksum,
   and detached-signature verification but are not Authenticode-signed. Stable
-  `v6.4.0` still requires the normal SignPath Authenticode lane unless a new
-  explicit version-bound owner decision is recorded.
+  `v6.4.0` also skips SignPath under the standing unavailable policy until the
+  release owner explicitly confirms production credentials and certificate
+  authorization are ready. The binaries may display an Unknown Publisher
+  warning; exact-SHA, checksum, detached-signature, manifest, and
+  published-digest verification remain mandatory.
 
 ## Upgrade Notes
 

@@ -43,12 +43,12 @@ on:
         required: false
         type: string
       unsigned_windows_exception:
-        description: 'v6.1.0, v6.1.1, v6.1.2, v6.2.0, v6.2.1, v6.3.0, or v6.3.1 only: rehearse Windows agents without Authenticode under a recorded owner exception'
+        description: 'Optional version-bound override after SignPath availability is restored; not required while the standing unavailable policy is active'
         required: false
         type: boolean
         default: false
       unsigned_windows_reason:
-        description: 'v6.1.0, v6.1.1, v6.1.2, v6.2.0, v6.2.1, v6.3.0, or v6.3.1 only: owner reason for the unsigned Windows exception'
+        description: 'Owner reason for an explicit version-bound unsigned Windows override'
         required: false
         type: string
       note:
@@ -79,7 +79,11 @@ jobs:
     with:
       version: ${{ inputs.version }}
       require_macos_signing: true
-      require_windows_signing: ${{ !contains(inputs.version, '-') && !((inputs.version == '6.1.0' || inputs.version == '6.1.1' || inputs.version == '6.1.2' || inputs.version == '6.2.0' || inputs.version == '6.2.1' || inputs.version == '6.3.0' || inputs.version == '6.3.1') && inputs.unsigned_windows_exception) }}
+      # Keep this aligned with WINDOWS_AUTHENTICODE_AVAILABLE in
+      # scripts/release_control/resolve_release_promotion.py. Restore both only
+      # after the release owner confirms production credentials and certificate
+      # authorization are ready.
+      require_windows_signing: false
       windows_signing_backend: signpath
 
   dry-run:

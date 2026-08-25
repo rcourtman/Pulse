@@ -348,15 +348,68 @@ class ResolveReleasePromotionTest(unittest.TestCase):
         self.assertEqual(metadata["require_windows_signing"], "false")
         self.assertEqual(metadata["unsigned_windows_exception"], "true")
 
+    def test_v632_standing_unavailable_policy_allows_disclosed_emergency_patch(self) -> None:
+        metadata = resolver.resolve_metadata(
+            version="6.3.2",
+            promoted_from_tag_input="",
+            rollback_version_input="v6.3.1",
+            ga_date_input="",
+            v5_eos_date_input="",
+            hotfix_exception=True,
+            hotfix_reason_input=(
+                "Metrics memory growth can wedge stable and disabled offline policies emit alert noise."
+            ),
+            release_notes_input=(
+                "Windows Unified Agent binaries are not Authenticode-signed for v6.3.2."
+            ),
+            unsigned_windows_exception=False,
+            unsigned_windows_reason_input="",
+            list_stable_tags_fn=lambda: ["v6.3.1", "v6.3.0"],
+            list_same_version_rc_tags_fn=lambda version: [],
+            changed_paths_fn=lambda tag: ["internal/monitoring/metrics_history.go"],
+            tag_exists_fn=lambda tag: tag == "v6.3.1",
+            tag_commit_fn=lambda tag: "v631-commit",
+            head_descends_from_fn=lambda commit: commit == "v631-commit",
+        )
+
+        self.assertEqual(metadata["promotion_mode"], "emergency-stable-patch")
+        self.assertEqual(metadata["rollback_tag"], "v6.3.1")
+        self.assertEqual(metadata["require_windows_signing"], "false")
+        self.assertEqual(metadata["unsigned_windows_exception"], "true")
+        self.assertIn("until availability is explicitly restored", metadata["unsigned_windows_reason"])
+
+    def test_future_stable_release_stays_unsigned_until_authenticode_is_restored(self) -> None:
+        metadata = resolver.resolve_metadata(
+            version="6.4.0",
+            promoted_from_tag_input="v6.4.0-rc.1",
+            rollback_version_input="v6.3.2",
+            ga_date_input="",
+            v5_eos_date_input="",
+            hotfix_exception=True,
+            hotfix_reason_input="Release owner approved stable promotion.",
+            release_notes_input=(
+                "Windows Unified Agent binaries are not Authenticode-signed for v6.4.0."
+            ),
+            list_stable_tags_fn=lambda: ["v6.3.2", "v6.3.1"],
+            tag_exists_fn=lambda tag: tag in {"v6.4.0-rc.1", "v6.3.2"},
+            tag_commit_fn=lambda tag: "rc-commit" if tag == "v6.4.0-rc.1" else "v632-commit",
+            head_descends_from_fn=lambda commit: True,
+            tag_created_unix_fn=lambda tag: 100,
+            now_unix_fn=lambda: 100 + (73 * 3600),
+        )
+
+        self.assertEqual(metadata["require_windows_signing"], "false")
+        self.assertEqual(metadata["unsigned_windows_exception"], "true")
+
     def test_unsigned_windows_exception_is_rejected_for_other_stable_versions(self) -> None:
         with self.assertRaisesRegex(
             ValueError,
-            "approved only for stable v6.1.0, v6.1.1, v6.1.2, v6.2.0, v6.2.1, v6.3.0, or v6.3.1",
+            "approved only for stable v6.1.0, v6.1.1, v6.1.2, v6.2.0, v6.2.1, v6.3.0, v6.3.1, or v6.3.2",
         ):
             resolver.resolve_metadata(
-                version="6.3.2",
+                version="6.4.0",
                 promoted_from_tag_input="",
-                rollback_version_input="v6.3.1",
+                rollback_version_input="v6.3.2",
                 ga_date_input="",
                 v5_eos_date_input="",
                 hotfix_exception=True,
@@ -364,6 +417,7 @@ class ResolveReleasePromotionTest(unittest.TestCase):
                 release_notes_input="Windows binaries are not Authenticode-signed.",
                 unsigned_windows_exception=True,
                 unsigned_windows_reason_input="Not approved for this version.",
+                windows_authenticode_available=True,
                 tag_exists_fn=lambda tag: True,
             )
 

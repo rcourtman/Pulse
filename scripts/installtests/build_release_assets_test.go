@@ -899,7 +899,8 @@ func TestCurrentPrereleasePacketTracksInstallMetadata(t *testing.T) {
 		"The changes since `v"+comparisonVersion+"` do not require a Pulse Mobile client change",
 		"preserve the existing mobile, Relay, onboarding, and mobile-facing API contracts",
 		"Windows Unified Agent binaries in this prerelease retain exact-SHA, checksum, and detached-signature verification but are not Authenticode-signed",
-		"Stable `v"+stableTarget+"` still requires the normal SignPath Authenticode lane",
+		"Stable `v"+stableTarget+"` also skips SignPath under the standing unavailable policy",
+		"Unknown Publisher warning",
 		"Paid Pulse Pro, Relay, and eligible legacy customers should continue to use the private download page",
 	)
 	assertFileContainsAllNormalized(t, changelogPath,
@@ -915,7 +916,7 @@ func TestCurrentPrereleasePacketTracksInstallMetadata(t *testing.T) {
 		"Fixed poll intervals remain fixed when adaptive scheduling is disabled.",
 		"Agent re-enrollment clears host-removal blocks from every owning store.",
 		"The notifications API no longer returns the stored Apprise API key.",
-		"Windows signing decision: the standing prerelease path publishes exact-SHA, checksum, and detached-signature verified Windows agents without Authenticode; stable `v"+stableTarget+"` restores mandatory SignPath signing",
+		"Windows signing decision: the standing prerelease path publishes exact-SHA, checksum, and detached-signature verified Windows agents without Authenticode. Stable `v"+stableTarget+"` also skips SignPath under the standing unavailable policy",
 		"Mobile decision: `no-mobile-impact`",
 		"changes since `v"+comparisonVersion+"` preserve the existing mobile, Relay, onboarding, and mobile-facing API contracts",
 		"no companion upload or public store rollout is required",
@@ -964,7 +965,7 @@ func TestCurrentPrereleasePacketTracksInstallMetadata(t *testing.T) {
 		"This prerelease keeps `rollback_version=v"+previous+"`, publishes a versioned public GitHub prerelease plus versioned Docker and Helm artifacts, and does not move stable/latest install pointers or stable semver aliases.",
 		"For the active prerelease `v"+version+"` cut, the repo-root compose default and `scripts/install-docker.sh` fallback must both pin `"+version+"` until the next governed stable cut moves them forward.",
 		"The changes since `v"+comparisonVersion+"` do not require a Pulse Mobile client change and preserve the existing mobile, Relay, onboarding, and mobile-facing API contracts, so the server cut is classified `no-mobile-impact`; no companion upload or public mobile-store rollout is part of this candidate.",
-		"The prerelease Windows path retains exact-SHA, checksum, and detached-signature verification without Authenticode; stable `v"+stableTarget+"` restores mandatory SignPath signing unless a new version-bound decision is recorded.",
+		"The prerelease Windows path retains exact-SHA, checksum, and detached-signature verification without Authenticode. Stable `v"+stableTarget+"` also skips SignPath under the standing unavailable policy",
 	)
 }
 
@@ -1345,15 +1346,18 @@ func TestReleaseCandidateRequiresPlatformNativeAgentSigning(t *testing.T) {
 	)
 	assertFileContainsAll(t, repoFile(".github", "workflows", "release-dry-run.yml"),
 		`Definitive Dry-Run Verdict`,
-		`require_windows_signing: ${{ !contains(inputs.version, '-') && !((inputs.version == '6.1.0' || inputs.version == '6.1.1' || inputs.version == '6.1.2' || inputs.version == '6.2.0' || inputs.version == '6.2.1' || inputs.version == '6.3.0' || inputs.version == '6.3.1') && inputs.unsigned_windows_exception) }}`,
+		`require_windows_signing: false`,
+		`WINDOWS_AUTHENTICODE_AVAILABLE`,
 		`require_result "exact-SHA release candidate" "$CANDIDATE_RESULT" success`,
 		`require_result "stable demo no-mutation verification" "$DEMO_RESULT" success`,
 	)
 	assertFileContainsAll(t, repoFile("scripts", "release_control", "resolve_release_promotion.py"),
-		`version not in {"6.1.0", "6.1.1", "6.1.2", "6.2.0", "6.2.1", "6.3.0", "6.3.1"}`,
+		`WINDOWS_AUTHENTICODE_AVAILABLE = False`,
+		`WINDOWS_AUTHENTICODE_STANDING_UNSIGNED_MIN_VERSION = (6, 3, 2)`,
+		`version not in {"6.1.0", "6.1.1", "6.1.2", "6.2.0", "6.2.1", "6.3.0", "6.3.1", "6.3.2"}`,
 		`unsigned_windows_reason is required`,
 		`not Authenticode-signed`,
-		`require_windows_signing = not is_prerelease and not unsigned_windows_exception`,
+		`require_windows_signing = not is_prerelease and not effective_unsigned_windows_exception`,
 	)
 	assertFileContainsAll(t, repoFile("scripts", "build-release.sh"),
 		`PULSE_AGENT_NATIVE_BINARIES_DIR`,

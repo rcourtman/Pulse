@@ -745,15 +745,17 @@ upgrade, update, release, or artifact-selection behavior.
    candidate build whenever its required `version` input is non-empty and must
    apply the same channel-specific native-signing policy as a publish run.
    macOS notarization remains mandatory for both prerelease and stable
-   candidates. Windows Authenticode remains mandatory for stable candidates
-   except for the explicitly version-bound `v6.1.0`, `v6.1.1`, `v6.1.2`, and
-   `v6.2.0` owner exceptions; prerelease candidates and those four stable exceptions may
+   candidates. Windows Authenticode is unavailable for stable candidates from
+   `v6.3.2` onward under the standing owner policy until production credentials
+   and certificate authorization are explicitly confirmed ready. Prerelease
+   candidates and stable candidates under that standing unavailable policy may
    retain checksum and detached-signature verification without Authenticode
    while the release packet explicitly discloses the unknown-publisher warning.
-   Prerelease promotion remains blocked on the normal stable signing
-   requirement. Stable releases after each recorded exception restore it
-   automatically unless policy records a new version-bound owner decision. A cheap
-   signing-configuration job
+   New stable versions must not require per-version unsigned allowlist updates
+   while this state is active. Restoring signing requires a reviewed policy and
+   code change after the release owner confirms readiness; external account
+   state alone must not change release behavior. When Authenticode is enabled,
+   a cheap signing-configuration job
    must report every missing secret for the platforms required by that
    candidate before either platform runner is allocated. Stable Windows signing must use SignPath's GitHub
    trusted-build-system action by default, submit an immutable GitHub artifact
@@ -1759,8 +1761,12 @@ the existing mobile, Relay, onboarding, and mobile-facing API contracts, so the
 server cut is classified `no-mobile-impact`; no companion upload or public
 mobile-store rollout is part of this candidate. The prerelease Windows path
 retains exact-SHA, checksum, and detached-signature verification without
-Authenticode; stable `v6.4.0` restores mandatory SignPath signing unless a new
-version-bound decision is recorded.
+Authenticode. Stable `v6.4.0` also skips SignPath under the standing unavailable
+policy and retains the same exact-SHA, checksum, detached-signature, manifest,
+published-digest, and Unknown Publisher disclosure controls. Signing returns
+only after the release owner explicitly confirms that production credentials
+and certificate authorization are ready and a reviewed policy/code change
+restores it.
 
 The preceding stable `v6.3.1` cut set the repo-root `VERSION`, repo-root
 `docker-compose.yml` image default, `scripts/install-docker.sh` fallback, and
@@ -3744,11 +3750,13 @@ notarized macOS agent binaries while Windows Authenticode approval is still an
 externally owned bounded residual, but only when the RC packet explicitly
 discloses the unsigned Windows publisher state and the Windows binaries retain
 the exact-SHA candidate, checksum, detached-signature, and post-publication
-digest controls. Stable publication and the stable-path dry-run must continue
-to require both native signing lanes except for the recorded, version-bound
-`v6.1.0`, `v6.1.1`, `v6.1.2`, `v6.2.0`, and `v6.2.1` Windows exceptions;
-subsequent stable versions restore both requirements unless policy records a
-new explicit version-bound owner decision. `scripts/build-release.sh` must replace
+digest controls. Stable publication and the stable-path dry-run must skip the
+Windows native-signing lane from `v6.3.2` onward while the standing
+SignPath-unavailable owner policy is active. New stable versions inherit that
+state without per-version allowlist changes. Authenticode returns only through
+an explicit reviewed policy/code change after the release owner confirms
+production credentials and certificate authorization are ready.
+`scripts/build-release.sh` must replace
 only the native targets required by those independent inputs and must fail
 closed when a required native-binary directory or target is absent.
 Historical published-release repair must flow through

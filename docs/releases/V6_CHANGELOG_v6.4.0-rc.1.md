@@ -50,8 +50,11 @@ _This changelog describes the changes since `v6.3.1` included in
 - Promotion path: exact-SHA single-build release candidate from `main`
 - Windows signing decision: the standing prerelease path publishes exact-SHA,
   checksum, and detached-signature verified Windows agents without
-  Authenticode; stable `v6.4.0` restores mandatory SignPath signing unless a
-  new version-bound owner decision is recorded
+  Authenticode. Stable `v6.4.0` also skips SignPath under the standing
+  unavailable policy until the release owner explicitly confirms production
+  credentials and certificate authorization are ready; Unknown Publisher
+  disclosure and the exact-SHA, checksum, detached-signature, manifest, and
+  published-digest controls remain mandatory
 - Mobile decision: `no-mobile-impact`; changes since `v6.3.1` preserve the
   existing mobile, Relay, onboarding, and mobile-facing API contracts, so no
   companion upload or public store rollout is required

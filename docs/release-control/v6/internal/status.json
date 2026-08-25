@@ -10728,6 +10728,18 @@
       "lane_ids": [
         "L1"
       ]
+    },
+    {
+      "id": "windows-authenticode-unavailable-owner-policy",
+      "summary": "On 2026-08-25 release run 32896554952 failed closed when the SignPath production request returned Invalid request to SignPath API before creating a signing-request record. The release owner directed stable releases from v6.3.2 onward to skip Windows Authenticode while production credentials and certificate authorization remain unavailable. This standing unavailable state changes only the Authenticode requirement: the exact release SHA, immutable candidate manifest, SHA-256 checksums, detached signatures, published-digest verification, and public Unknown Publisher disclosure remain mandatory. Windows signing must not be restored until the release owner confirms that SignPath production credentials and certificate authorization are ready.",
+      "kind": "release-policy",
+      "decided_at": "2026-08-25",
+      "subsystem_ids": [
+        "deployment-installability"
+      ],
+      "lane_ids": [
+        "L1"
+      ]
     }
   ]
 }

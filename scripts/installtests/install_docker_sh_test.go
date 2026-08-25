@@ -371,7 +371,7 @@ func TestInstallDockerProofTracksPrereleaseContract(t *testing.T) {
 		"It follows stable `v"+comparisonVersion+"` and opens the published `v"+stableTarget+"` candidate line.",
 		"This prerelease keeps `rollback_version=v"+previous+"`, publishes a versioned public GitHub prerelease plus versioned Docker and Helm artifacts, and does not move stable/latest install pointers or stable semver aliases.",
 		"The changes since `v"+comparisonVersion+"` do not require a Pulse Mobile client change and preserve the existing mobile, Relay, onboarding, and mobile-facing API contracts, so the server cut is classified `no-mobile-impact`; no companion upload or public mobile-store rollout is part of this candidate.",
-		"The prerelease Windows path retains exact-SHA, checksum, and detached-signature verification without Authenticode; stable `v"+stableTarget+"` restores mandatory SignPath signing unless a new version-bound decision is recorded.",
+		"The prerelease Windows path retains exact-SHA, checksum, and detached-signature verification without Authenticode. Stable `v"+stableTarget+"` also skips SignPath under the standing unavailable policy",
 		"For the active prerelease `v"+version+"` cut, the repo-root compose default and `scripts/install-docker.sh` fallback must both pin `"+version+"` until the next governed stable cut moves them forward.",
 	)
 	if version == "6.3.0-rc.6" {
