@@ -14,6 +14,7 @@ import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
 import { copyToClipboard } from '@/utils/clipboard';
 import { formatRelativeTime } from '@/utils/format';
 import { notificationStore } from '@/stores/notifications';
+import { MonitoringAPI } from '@/api/monitoring';
 import {
   getUnifiedAgentClipboardCopyErrorMessage,
   getUnifiedAgentClipboardCopySuccessMessage,
@@ -190,6 +191,38 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
   const [expansionOverrides, setExpansionOverrides] = createSignal<ReadonlyMap<string, boolean>>(
     new Map(),
   );
+  const [reenrollPendingId, setReenrollPendingId] = createSignal('');
+  const allowReenroll = async (target: InfrastructureAgentDoctorTarget) => {
+    const separator = target.connectionId.indexOf(':');
+    const type = separator > 0 ? target.connectionId.slice(0, separator) : '';
+    const id = separator > 0 ? target.connectionId.slice(separator + 1) : '';
+    if (!id) {
+      notificationStore.error('This diagnostic does not include a reconnectable agent ID.');
+      return;
+    }
+    setReenrollPendingId(target.connectionId);
+    try {
+      if (type === 'docker') {
+        await MonitoringAPI.allowDockerRuntimeReenroll(id);
+      } else if (type === 'kubernetes') {
+        await MonitoringAPI.allowKubernetesClusterReenroll(id);
+      } else if (type === 'agent') {
+        await MonitoringAPI.allowHostAgentReenroll(id);
+      } else {
+        throw new Error(`Allow re-enrol is not supported for ${type || 'unknown'} diagnostics.`);
+      }
+      notificationStore.success(`${target.displayName} can re-enrol on its next report.`);
+      await props.onRetryDiagnostics?.();
+    } catch (error) {
+      notificationStore.error(
+        error instanceof Error
+          ? error.message
+          : `Failed to allow ${target.displayName} to re-enrol.`,
+      );
+    } finally {
+      setReenrollPendingId('');
+    }
+  };
   const isExpanded = (target: InfrastructureAgentDoctorTarget) =>
     expansionOverrides().get(target.connectionId) ?? props.targets.length === 1;
   const toggleExpanded = (target: InfrastructureAgentDoctorTarget) => {
@@ -436,7 +469,12 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
                     (target.diagnostic?.repairActions ?? []).filter(
                       (action) =>
                         action.code !== 'copy_upgrade_command' &&
-                        action.code !== 'repair_authentication',
+                        action.code !== 'repair_authentication' &&
+                        action.code !== 'allow_reenroll',
+                    );
+                  const canAllowReenroll = () =>
+                    (target.diagnostic?.repairActions ?? []).some(
+                      (action) => action.code === 'allow_reenroll' && action.supported,
                     );
                   const uninstallHandoff = () =>
                     getInfrastructureAgentDoctorUninstallHandoff(target);
@@ -566,6 +604,28 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
                                 </div>
                               )}
                             </For>
+
+                            <Show when={canAllowReenroll()}>
+                              <div class="rounded-md border border-border bg-surface px-3 py-2 text-xs">
+                                <div class="font-medium text-base-content">Allow re-enrol</div>
+                                <div class="mt-0.5 text-muted">
+                                  Clear the removal block so this agent can reconnect on its next
+                                  report.
+                                </div>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  class="mt-2"
+                                  disabled={reenrollPendingId() === target.connectionId}
+                                  onClick={() => void allowReenroll(target)}
+                                >
+                                  {reenrollPendingId() === target.connectionId
+                                    ? 'Allowing…'
+                                    : 'Allow re-enrol'}
+                                </Button>
+                              </div>
+                            </Show>
 
                             <Show when={target.needsUpdate || target.needsCredentialRepair}>
                               <Show

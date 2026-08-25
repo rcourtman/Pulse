@@ -232,20 +232,34 @@ describe('ConnectionsAPI — branch coverage', () => {
       );
     });
 
-    it('throws Remove-not-yet-supported for a docker connection id', async () => {
-      await expect(ConnectionsAPI.remove('docker:runtime/1')).rejects.toThrow(
-        'Remove is not yet supported for docker connections',
-      );
+    it('docker connection delegates to the runtime delete endpoint with the suffix path', async () => {
+      mockedApiFetch.mockResolvedValueOnce({
+        ok: true,
+        text: () => Promise.resolve(JSON.stringify({ success: true })),
+      } as unknown as Response);
+
+      await ConnectionsAPI.remove('docker:runtime/1');
+
       expect(mockedApiFetchJSON).not.toHaveBeenCalled();
-      expect(mockedApiFetch).not.toHaveBeenCalled();
+      expect(mockedApiFetch).toHaveBeenCalledWith(
+        '/api/agents/docker/runtimes/runtime%2F1',
+        expect.objectContaining({ method: 'DELETE' }),
+      );
     });
 
-    it('throws Remove-not-yet-supported for a kubernetes connection id', async () => {
-      await expect(ConnectionsAPI.remove('kubernetes:cluster/1')).rejects.toThrow(
-        'Remove is not yet supported for kubernetes connections',
-      );
+    it('kubernetes connection delegates to the cluster delete endpoint with the suffix path', async () => {
+      mockedApiFetch.mockResolvedValueOnce({
+        ok: true,
+        text: () => Promise.resolve(JSON.stringify({ success: true })),
+      } as unknown as Response);
+
+      await ConnectionsAPI.remove('kubernetes:cluster/1');
+
       expect(mockedApiFetchJSON).not.toHaveBeenCalled();
-      expect(mockedApiFetch).not.toHaveBeenCalled();
+      expect(mockedApiFetch).toHaveBeenCalledWith(
+        '/api/agents/kubernetes/clusters/cluster%2F1',
+        expect.objectContaining({ method: 'DELETE' }),
+      );
     });
 
     it('throws Unknown-connection-type for an unrecognized prefix on remove', async () => {

@@ -304,8 +304,11 @@ export class ConnectionsAPI {
         await MonitoringAPI.deleteAgent(suffix);
         return;
       case 'docker':
+        await MonitoringAPI.deleteDockerRuntime(suffix);
+        return;
       case 'kubernetes':
-        throw new Error(`Remove is not yet supported for ${type} connections`);
+        await MonitoringAPI.deleteKubernetesCluster(suffix);
+        return;
       default:
         throw new Error(`Unknown connection type: ${type}`);
     }
