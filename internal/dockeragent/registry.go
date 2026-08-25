@@ -73,6 +73,8 @@ type ImageUpdateResult struct {
 func isPulseManagedImageReference(image string) bool {
 	normalized := strings.ToLower(strings.TrimSpace(image))
 	for _, repository := range []string{
+		"rcourtman/pulse",
+		"docker.io/rcourtman/pulse",
 		"license.pulserelay.pro/pulse-pro",
 		"registry.pulserelay.pro/pulse/pulse-pro",
 	} {
