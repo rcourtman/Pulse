@@ -7,7 +7,8 @@ import type {
   ResolvedAlert,
   ConnectedInfrastructureItem,
 } from '@/types/api';
-import type { Resource } from '@/types/resource';
+import type { Resource, ResourceCapability } from '@/types/resource';
+import { createDefaultResourcePolicy } from '@/types/resource';
 import { logger } from '@/utils/logger';
 import { POLLING_INTERVALS, WEBSOCKET } from '@/constants';
 import { notificationStore } from './notifications';
@@ -252,6 +253,27 @@ export function createWebSocketStore(url: string) {
     version: number;
     changedIds: ReadonlySet<string> | null;
   }>({ version: 0, changedIds: null });
+  // Bounded per-tick changed-id history so a consumer that mounted or resumed
+  // a few ticks behind the live version can still catch up with a delta merge
+  // instead of a full-estate remerge. A full-snapshot commit (changedIds null)
+  // invalidates the whole span, so the history resets there.
+  const RESOURCE_CHANGE_HISTORY_LIMIT = 30;
+  let resourceChangeHistory: { version: number; changedIds: ReadonlySet<string> }[] = [];
+
+  const changedResourceIdsSince = (sinceVersion: number): ReadonlySet<string> | null => {
+    if (sinceVersion >= resourceChangeVersion) return null;
+    if (resourceChangeHistory.length === 0) return null;
+    if (resourceChangeHistory[0].version > sinceVersion + 1) return null;
+    if (resourceChangeHistory[resourceChangeHistory.length - 1].version !== resourceChangeVersion) {
+      return null;
+    }
+    const union = new Set<string>();
+    for (const entry of resourceChangeHistory) {
+      if (entry.version <= sinceVersion) continue;
+      entry.changedIds.forEach((id) => union.add(id));
+    }
+    return union;
+  };
 
   // Track alerts with pending acknowledgment changes to prevent race conditions
   const pendingAckChanges = new Map<string, { ack: boolean; previousAckTime?: string }>();
@@ -340,6 +362,34 @@ export function createWebSocketStore(url: string) {
   // and Solid's reconcile mutates adopted objects in place.
   let rawServerResources: Resource[] | null = null;
   const deferredResourceIds = new Set<string>();
+  // Latest capabilityCatalog from the state payload. Broadcast resources carry
+  // capabilitiesRef instead of inline capability blobs; ingestion expands the
+  // ref back into `capabilities` so consumers keep the inline shape.
+  let capabilityCatalog: Record<string, ResourceCapability[]> = {};
+  // Records which catalog ref an expanded capabilities array was cloned from,
+  // so a patched row re-expands only when its ref actually changed.
+  const capabilitiesExpandedFromRef = new WeakMap<object, string>();
+
+  const hydrateSlimResource = (resource: Resource): void => {
+    if (!resource || typeof resource !== 'object') return;
+    const ref = resource.capabilitiesRef;
+    if (ref) {
+      const current = resource.capabilities as unknown as object | undefined;
+      if (!current || capabilitiesExpandedFromRef.get(current) !== ref) {
+        const entry = capabilityCatalog[ref];
+        if (entry) {
+          // Per-row clone: reconcile mutates adopted objects in place, so rows
+          // must not share one materialized capabilities array.
+          const expanded = structuredClone(entry);
+          capabilitiesExpandedFromRef.set(expanded as unknown as object, ref);
+          resource.capabilities = expanded;
+        }
+      }
+    }
+    if (!resource.policy) {
+      resource.policy = createDefaultResourcePolicy();
+    }
+  };
   let lastFullStateRecoveryAt = 0;
   // Set once the server has sent a full snapshot too large for the inbound
   // guard. Asking for another one over the socket would only reproduce the same
@@ -456,10 +506,25 @@ export function createWebSocketStore(url: string) {
       changedCount: changedResourceIds?.size ?? nextResources.length,
     });
     setState('resources', reconcile(nextResources, { key: 'id' }));
+    const committedChangedIds = changedResourceIds ? new Set(changedResourceIds) : null;
     setResourceChange({
       version: ++resourceChangeVersion,
-      changedIds: changedResourceIds ? new Set(changedResourceIds) : null,
+      changedIds: committedChangedIds,
     });
+    if (committedChangedIds) {
+      resourceChangeHistory.push({
+        version: resourceChangeVersion,
+        changedIds: committedChangedIds,
+      });
+      if (resourceChangeHistory.length > RESOURCE_CHANGE_HISTORY_LIMIT) {
+        resourceChangeHistory.splice(
+          0,
+          resourceChangeHistory.length - RESOURCE_CHANGE_HISTORY_LIMIT,
+        );
+      }
+    } else {
+      resourceChangeHistory = [];
+    }
     syncContainerCommands(nextResources, changedResourceIds);
   };
 
@@ -615,6 +680,13 @@ export function createWebSocketStore(url: string) {
               setInitialDataReceived(true);
             }
 
+            // Adopt the capability catalog before any resource handling below:
+            // the delta engine ships catalog changes in the same frame as the
+            // first resource that references a new entry.
+            if (message.data.capabilityCatalog !== undefined) {
+              capabilityCatalog = message.data.capabilityCatalog ?? {};
+            }
+
             // Canonical resource contract:
             // `state.resources` is the authoritative frontend model.
             // `state.connectedInfrastructure` is the authoritative reporting projection.
@@ -645,6 +717,10 @@ export function createWebSocketStore(url: string) {
             if (message.data.resources !== undefined) {
               deferredResourceIds.clear();
               if (Array.isArray(message.data.resources)) {
+                // Expand capabilitiesRef and synthesize omitted default
+                // policies before the rows feed the baseline clone and the
+                // canonical merge.
+                message.data.resources.forEach(hydrateSlimResource);
                 // Only a full payload actually delivered on this socket can
                 // establish its server-owned delta baseline. REST recovery is
                 // an independently built display snapshot and stays baseline-
@@ -678,6 +754,10 @@ export function createWebSocketStore(url: string) {
                   rawServerResources,
                   message.data.resourceDelta,
                 );
+                // Patched rows are fresh objects: re-synthesize a nulled-out
+                // default policy and re-expand capabilities when a patch moved
+                // the ref. Unpatched rows no-op.
+                appliedDelta.resources.forEach(hydrateSlimResource);
                 rawServerResources = appliedDelta.resources;
                 changedResourceIds = appliedDelta.changedIds;
                 if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
@@ -1167,6 +1247,7 @@ export function createWebSocketStore(url: string) {
     initialDataReceived,
     updateProgress,
     resourceChange,
+    changedResourceIdsSince,
     shutdown,
     reconnect: () => {
       if (isDisposed) return;
@@ -1193,6 +1274,7 @@ export function createWebSocketStore(url: string) {
         setInitialDataReceived(false);
         setUpdateProgress(null);
         setResourceChange({ version: ++resourceChangeVersion, changedIds: null });
+        resourceChangeHistory = [];
         setState(reconcile(createInitialState()));
         setActiveAlerts(reconcile({}));
         setRecentlyResolved(reconcile({}));

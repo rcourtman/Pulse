@@ -1503,6 +1503,18 @@ canonical unified-resource metrics include `diskRead` or `diskWrite`,
 `ResourceFrontend.diskIO` through the shared resource converter, so
 `/api/state` and websocket consumers read disk throughput from the same
 freshness-gated resource metrics contract as CPU, memory, disk, and network.
+That same broadcast projection owns client-payload static-metadata slimming
+(governed gap `resource-payload-static-metadata`): identical resource
+capability blobs are deduped into the state-level `capabilityCatalog` under
+content-addressed ids and referenced per resource via `capabilitiesRef`
+instead of being inlined on every row; resources whose derived policy posture
+is the default (internal sensitivity, cloud-summary routing, no redactions)
+omit `policy` and `aiSafeSummary` from the broadcast, which ingestion
+synthesizes back, while non-default postures keep both inline; and broadcast
+`canonicalIdentity.aliases` entries that duplicate `supersededIds` are
+dropped, with the superseded ids still shipped for identity resolution.
+Slimming edits only the per-broadcast copy refreshed by
+`RefreshCanonicalMetadata`, never stored monitor state.
 Unraid ingest must preserve the agent's native disk topology fields through the
 monitoring model and read-state projection. `internal/monitoring/monitor_agents.go`
 and `internal/monitoring/monitor.go` must carry model, transport, filesystem,

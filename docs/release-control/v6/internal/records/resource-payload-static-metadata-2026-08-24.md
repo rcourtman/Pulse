@@ -50,3 +50,38 @@ contract updates and cross-client verification, not an opportunistic patch.
   start no longer fetches and compiles all ~3.1 MB of lazy chunks up front.
 - Per-tab scoped hydration and realtime gating on the Proxmox surface
   (`17bb2b3b7`, Performance lane).
+
+## 2026-08-25 partial remediation (interactive session, governed claim on this gap)
+
+Landed on `main` (same-day follow-up to the tick-pipeline fixes in
+`7bac525af`):
+
+- **Capabilities catalog**: broadcast payloads dedupe the estate's distinct
+  capability blobs into a content-addressed state-level `capabilityCatalog`
+  referenced per resource via `capabilitiesRef`; the websocket store expands
+  refs back to inline `capabilities` at ingestion. On the 50-node mock the
+  catalog is 7 entries / 2.5KB where 946 resources previously inlined the
+  blobs.
+- **Audience-scoped policy metadata**: default-posture resources (internal
+  sensitivity, cloud-summary routing, no redactions) omit `policy` and
+  `aiSafeSummary` from the stream; ingestion synthesizes the default posture
+  so consumer semantics are unchanged. 806 of 1,509 mock resources shed both
+  fields.
+- **Alias dedupe**: broadcast `canonicalIdentity.aliases` no longer
+  duplicates `supersededIds`; client identity resolution now consults
+  `supersededIds` explicitly (alert overrides, thresholds, and workload
+  matching already did).
+
+Measured: `/api/state` 4.75MB -> 4.09MB (-13.9%) at the pinned mock estate.
+Cross-client check: pulse-mobile and pulse-enterprise contain no reads of
+`capabilities`/`canonicalIdentity`/`aiSafeSummary`/resource `policy` from
+this stream; the AI runtime consumes the internal resource model, which is
+untouched.
+
+**Remaining residual (why the gap stays open):** the canonicalIdentity alias
+vocabulary itself (~0.8MB) still ships inline because superseded-spelling
+resolution is load-bearing client-side while
+`host-identity-fork-heal-on-reenrollment` remains open; moving identity
+history behind a detail endpoint needs the alert-override/threshold matching
+reworked onto an on-demand lookup. Platform source payloads (~1.4MB) are
+live data, not static metadata, and are out of scope for this gap.

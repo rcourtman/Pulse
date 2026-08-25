@@ -2,6 +2,8 @@ package monitoring
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	stderrors "errors"
 	"fmt"
@@ -4165,7 +4167,7 @@ func (m *Monitor) buildBroadcastFrontendStateFromSnapshot(snapshot models.StateS
 	metricsTargetResolver := broadcastMetricsTargetResolver(unifiedView.readState)
 	broadcastResources := unifiedresources.CoalescePresentationHostResources(unifiedView.resources)
 	broadcastResources = m.applyPersistedMetadataToUnifiedResources(broadcastResources)
-	frontendState.Resources = convertResourcesForBroadcast(broadcastResources, metricsTargetResolver)
+	frontendState.Resources, frontendState.CapabilityCatalog = convertResourcesForBroadcast(broadcastResources, metricsTargetResolver)
 	frontendState.ConnectedInfrastructure = buildConnectedInfrastructure(broadcastResources, snapshot)
 	if !unifiedView.freshness.IsZero() {
 		frontendState.LastUpdate = unifiedView.freshness.UnixMilli()
@@ -5603,10 +5605,11 @@ func (m *Monitor) getResourcesForBroadcast() []models.ResourceFrontend {
 	m.mu.RLock()
 	store := m.resourceStore
 	m.mu.RUnlock()
-	return convertResourcesForBroadcast(
+	resources, _ := convertResourcesForBroadcast(
 		m.applyPersistedMetadataToUnifiedResources(m.getUnifiedResourcesForBroadcast()),
 		broadcastMetricsTargetResolver(store),
 	)
+	return resources
 }
 
 func (m *Monitor) applyPersistedMetadataToUnifiedResources(resources []unifiedresources.Resource) []unifiedresources.Resource {
@@ -5808,13 +5811,15 @@ func (m *Monitor) dockerAppContainerCustomURL(
 	return "", false
 }
 
-// convertResourcesForBroadcast converts unified resources into the frontend payload shape.
+// convertResourcesForBroadcast converts unified resources into the frontend
+// payload shape. Distinct capability blobs are deduped into the returned
+// catalog and referenced per resource via capabilitiesRef.
 func convertResourcesForBroadcast(
 	allResources []unifiedresources.Resource,
 	metricsTargetResolvers ...MetricsTargetResourceStore,
-) []models.ResourceFrontend {
+) ([]models.ResourceFrontend, map[string]json.RawMessage) {
 	if len(allResources) == 0 {
-		return []models.ResourceFrontend{}
+		return []models.ResourceFrontend{}, nil
 	}
 	allResources = attachBroadcastMetricsTargets(
 		allResources,
@@ -5828,8 +5833,15 @@ func convertResourcesForBroadcast(
 	}
 
 	converted := make([]broadcastResource, 0, len(allResources))
+	capabilityCatalog := make(map[string]json.RawMessage)
 	for _, r := range allResources {
 		input := monitorResourceToConvertInput(r)
+		if len(input.Capabilities) > 0 {
+			id := capabilityCatalogID(input.Capabilities)
+			capabilityCatalog[id] = input.Capabilities
+			input.CapabilitiesRef = id
+			input.Capabilities = nil
+		}
 		sortKey := strings.ToLower(input.DisplayName)
 		if sortKey == "" {
 			sortKey = strings.ToLower(input.Name)
@@ -5852,7 +5864,10 @@ func convertResourcesForBroadcast(
 	for i, resource := range converted {
 		result[i] = models.ConvertResourceToFrontend(resource.input)
 	}
-	return result
+	if len(capabilityCatalog) == 0 {
+		capabilityCatalog = nil
+	}
+	return result, capabilityCatalog
 }
 
 func broadcastMetricsTargetResolver(source interface{}) MetricsTargetResourceStore {
@@ -5920,6 +5935,7 @@ func monitorResourceToConvertInput(resource unifiedresources.Resource) models.Re
 		resource.MetricsTarget = monitorMetricsTarget(resource, resourceType)
 	}
 	unifiedresources.RefreshCanonicalMetadata(&resource)
+	slimResourceForBroadcast(&resource)
 	name, displayName := monitorFrontendNames(resource, resourceType)
 	platformID := monitorPlatformID(resource, resourceType)
 
@@ -6005,6 +6021,59 @@ func monitorRawJSON(value interface{}) json.RawMessage {
 		return nil
 	}
 	return encoded
+}
+
+// slimResourceForBroadcast trims static metadata the client-facing stream was
+// re-shipping on every resource (governed gap resource-payload-static-metadata).
+// It only edits the freshly refreshed per-broadcast copy, never stored state:
+//   - Aliases duplicating superseded canonical ids are dropped; the ids remain
+//     available in canonicalIdentity.supersededIds, which identity consumers
+//     also resolve against.
+//   - Default-posture policy and its AI-safe summary are omitted; consumers
+//     treat a missing policy as the default posture, and the summary is only
+//     rendered for non-default postures.
+func slimResourceForBroadcast(resource *unifiedresources.Resource) {
+	if resource == nil {
+		return
+	}
+	if canonical := resource.Canonical; canonical != nil && len(canonical.SupersededIDs) > 0 &&
+		len(canonical.Aliases) > 0 {
+		superseded := make(map[string]struct{}, len(canonical.SupersededIDs))
+		for _, id := range canonical.SupersededIDs {
+			superseded[strings.ToLower(strings.TrimSpace(id))] = struct{}{}
+		}
+		aliases := make([]string, 0, len(canonical.Aliases))
+		for _, alias := range canonical.Aliases {
+			if _, dup := superseded[strings.ToLower(strings.TrimSpace(alias))]; dup {
+				continue
+			}
+			aliases = append(aliases, alias)
+		}
+		canonical.Aliases = aliases
+	}
+	if isDefaultBroadcastResourcePolicy(resource.Policy) {
+		resource.Policy = nil
+		resource.AISafeSummary = ""
+	}
+}
+
+// isDefaultBroadcastResourcePolicy mirrors the frontend's
+// hasDefaultResourcePolicyPosture: internal sensitivity, cloud-summary
+// routing, and no redactions is the posture consumers assume when the
+// broadcast omits the policy entirely.
+func isDefaultBroadcastResourcePolicy(policy *unifiedresources.ResourcePolicy) bool {
+	return policy != nil &&
+		policy.Sensitivity == unifiedresources.ResourceSensitivityInternal &&
+		policy.Routing.Scope == unifiedresources.ResourceRoutingScopeCloudSummary &&
+		len(policy.Routing.Redact) == 0
+}
+
+// capabilityCatalogID derives the stable catalog id for one marshaled
+// capabilities blob. Content-addressed ids keep the catalog and refs stable
+// across restarts and reconnects, so they never churn websocket deltas.
+func capabilityCatalogID(encoded json.RawMessage) string {
+	digest := sha256.Sum256(encoded)
+	return hex.EncodeToString(digest[:6])
 }
 
 func monitorDiscoveryTarget(resource unifiedresources.Resource, resourceType string) *unifiedresources.DiscoveryTarget {

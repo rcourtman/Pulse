@@ -104,6 +104,51 @@ func TestMonitoringBroadcastCarriesEveryAvailabilityProjection(t *testing.T) {
 	}
 }
 
+func TestBroadcastSlimmingKeepsHostAgentSupersededIdentityResolvable(t *testing.T) {
+	// A re-enrolled host carries retired canonical spellings. Broadcast
+	// slimming stops duplicating them into the alias list, but they must stay
+	// resolvable through supersededIds so alert overrides and identity
+	// consumers keep following the host across its retired ids.
+	input := monitorResourceToConvertInput(unifiedresources.Resource{
+		ID:                     "agent-core2026",
+		Type:                   unifiedresources.ResourceTypeAgent,
+		Name:                   "core2026",
+		Status:                 unifiedresources.StatusOnline,
+		Sources:                []unifiedresources.DataSource{unifiedresources.SourceAgent},
+		SupersededCanonicalIDs: []string{"agent-core2026-a1b2c3", "agent-core2026-d4e5f6"},
+		Agent: &unifiedresources.AgentData{
+			AgentID:  "core2026",
+			Hostname: "core2026",
+		},
+	})
+
+	var canonical struct {
+		Aliases       []string `json:"aliases"`
+		SupersededIDs []string `json:"supersededIds"`
+	}
+	if err := json.Unmarshal(input.Canonical, &canonical); err != nil {
+		t.Fatalf("unmarshal canonicalIdentity: %v (payload %s)", err, input.Canonical)
+	}
+	if len(canonical.SupersededIDs) != 2 {
+		t.Fatalf("supersededIds = %v, want both retired spellings", canonical.SupersededIDs)
+	}
+	for _, alias := range canonical.Aliases {
+		if alias == "agent-core2026-a1b2c3" || alias == "agent-core2026-d4e5f6" {
+			t.Fatalf("aliases must not duplicate superseded ids, got %v", canonical.Aliases)
+		}
+	}
+	// The live alias vocabulary the host is reachable by must survive the trim.
+	aliasSet := make(map[string]struct{}, len(canonical.Aliases))
+	for _, alias := range canonical.Aliases {
+		aliasSet[alias] = struct{}{}
+	}
+	for _, required := range []string{"agent:core2026", "core2026"} {
+		if _, ok := aliasSet[required]; !ok {
+			t.Fatalf("aliases = %v, want %q retained", canonical.Aliases, required)
+		}
+	}
+}
+
 func TestHostAgentCorrelationKeepsSameNamedProxmoxProvidersDistinct(t *testing.T) {
 	now := time.Now()
 	state := &models.State{

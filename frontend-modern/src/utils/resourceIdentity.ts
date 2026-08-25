@@ -138,9 +138,17 @@ export const getResourceIdentityAliases = (resource: Resource): string[] => {
         .map((alias) => asTrimmedString(alias))
         .filter((alias): alias is string => Boolean(alias))
     : [];
+  // Broadcast payloads no longer duplicate superseded canonical ids into the
+  // alias list, so identity resolution has to consult them explicitly.
+  const canonicalSupersededIds = Array.isArray(canonical?.supersededIds)
+    ? canonical.supersededIds
+        .map((id) => asTrimmedString(id))
+        .filter((id): id is string => Boolean(id))
+    : [];
 
   const raw = [
     ...canonicalAliases,
+    ...canonicalSupersededIds,
     resource.metricsTarget?.resourceId,
     resource.discoveryTarget?.agentId,
     resource.discoveryTarget?.resourceId,

@@ -145,6 +145,7 @@ describe('useUnifiedResources', () => {
     version: number;
     changedIds: ReadonlySet<string> | null;
   }) => unknown;
+  let wsStoreMock: Record<string, unknown>;
   let useUnifiedResources: UseUnifiedResourcesModule['useUnifiedResources'];
   let useStorageRecoveryResources: UseUnifiedResourcesModule['useStorageRecoveryResources'];
   let resetUnifiedResourcesCacheForTests: UseUnifiedResourcesModule['__resetUnifiedResourcesCacheForTests'];
@@ -199,6 +200,7 @@ describe('useUnifiedResources', () => {
     setWsState = _setWsState;
 
     const wsStore = { connected, initialDataReceived, state, resourceChange };
+    wsStoreMock = wsStore as unknown as Record<string, unknown>;
 
     vi.doMock('@/utils/apiClient', () => ({
       apiFetch: apiFetchMock,
@@ -299,6 +301,65 @@ describe('useUnifiedResources', () => {
     });
 
     await waitForValue(() => result!.resources()[0]?.cpu?.current, 88);
+    expect(apiFetchMock).not.toHaveBeenCalled();
+    dispose();
+  });
+
+  it('catches up multi-tick version gaps through the changed-id history instead of a full remerge', async () => {
+    // Distinct nested cpu objects: the shared wsResource base would otherwise
+    // alias one cpu object across both rows and the two writes below.
+    const vm1 = createWsResource({
+      id: 'vm-1',
+      name: 'vm-1',
+      displayName: 'vm-1',
+      type: 'vm',
+      cpu: { current: 15 },
+    });
+    const vm2 = createWsResource({
+      id: 'vm-2',
+      name: 'vm-2',
+      displayName: 'vm-2',
+      type: 'vm',
+      cpu: { current: 15 },
+    });
+    setWsState('resources', [vm1, vm2]);
+    setWsResourceChange({ version: 1, changedIds: null });
+
+    let dispose = () => {};
+    let result: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      result = useUnifiedResources({
+        query: '',
+        cacheKey: 'all-resources',
+        initialHydration: 'prefer-ws',
+      });
+    });
+
+    await waitForResourceCount(() => result!.resources().length);
+
+    const vm2RowBefore = result!.resources().find((resource) => resource.id === 'vm-2');
+
+    // Two ticks land while no instance applies them (version 1 -> 3). The
+    // store's history union names only vm-1, so the delta path must re-merge
+    // vm-1 and keep the unflagged vm-2 row by identity — a full remerge would
+    // rebuild it.
+    const historySpy = vi.fn().mockReturnValue(new Set(['vm-1']));
+    wsStoreMock.changedResourceIdsSince = historySpy;
+    batch(() => {
+      setWsState('resources', 0, 'cpu', 'current', 88);
+      setWsState('resources', 1, 'cpu', 'current', 99);
+      setWsResourceChange({ version: 3, changedIds: new Set(['vm-1']) });
+      setWsState('lastUpdate', 1738843203000);
+    });
+
+    await waitForValue(
+      () => result!.resources().find((resource) => resource.id === 'vm-1')?.cpu?.current,
+      88,
+    );
+    expect(historySpy).toHaveBeenCalledWith(1);
+    const vm2RowAfter = result!.resources().find((resource) => resource.id === 'vm-2');
+    expect(vm2RowAfter).toBe(vm2RowBefore);
     expect(apiFetchMock).not.toHaveBeenCalled();
     dispose();
   });

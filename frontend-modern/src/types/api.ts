@@ -1,6 +1,6 @@
 // Properly typed TypeScript interfaces for Pulse API
 
-import type { Resource } from './resource';
+import type { Resource, ResourceCapability } from './resource';
 import type { EvidenceEnvelope, LifecycleTransition, OperationalRecord } from './operationalTrust';
 
 export interface APITokenRecord {
@@ -31,6 +31,9 @@ export interface State {
   pveTagStyles?: Record<string, PVETagStyle>;
   // Unified resources (canonical resource model)
   resources: Resource[];
+  // Distinct capability blobs referenced by Resource.capabilitiesRef; the
+  // websocket store expands refs into inline capabilities at ingestion.
+  capabilityCatalog?: Record<string, ResourceCapability[]> | null;
 }
 
 export interface ResourceStateDelta {

@@ -1180,8 +1180,13 @@ AI-only summary payloads, or page-local heuristics.
    instance dereferences raw store subtrees only for rows the delta merge will
    clone (flagged ids, host-merge members, and ids absent from the shared
    cache). A sequential revision with unchanged route membership
-   patches only the changed row indices plus the bounded agent coalescing set;
-   initial hydration, missed revisions, additions, removals, or reorderings
+   patches only the changed row indices plus the bounded agent coalescing set.
+   The connection store retains a bounded per-revision changed-id history; an
+   instance that resumes several revisions behind the shared cache must catch
+   up through the unioned changed-id set as an incremental delta merge whenever
+   the history covers the gap, so tab entry and re-entry do not deep-unwrap or
+   remerge the full estate. Only initial hydration, uncovered revision gaps,
+   full-snapshot commits, additions, removals, or reorderings
    fall back to keyed full reconciliation. Route-prefetch and route-realtime
    activation are separate:
    a prefetched hidden surface may retain REST data without subscribing its full
@@ -1189,6 +1194,16 @@ AI-only summary payloads, or page-local heuristics.
    cache. Richer REST-only facets are promoted into that cache before thinner
    realtime deltas are applied, so the optimization cannot discard disk I/O,
    PBS, policy, or provider metadata.
+   Broadcast payload slimming is reversed at the connection-store ingestion
+   boundary, before any canonical merge or consumer read: `capabilitiesRef` is
+   expanded into per-row inline `capabilities` through the state payload's
+   `capabilityCatalog` (per-row clones, because store reconciliation mutates
+   adopted objects in place), and a resource arriving without a policy is given
+   a synthesized default posture (internal sensitivity, cloud-summary routing,
+   no redactions) so a posture transition patched as `policy: null` cannot
+   leave a stale governed policy behind. Client identity-alias resolution must
+   consult `canonicalIdentity.supersededIds` explicitly, because broadcast
+   aliases no longer duplicate superseded canonical ids.
    That same unified-resource owner also defines the canonical transport
    projection for operator-facing resources: `/api/resources` and websocket
    `state.resources` must share `ContractResourceType`, canonical display

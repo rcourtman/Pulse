@@ -964,6 +964,13 @@ type StateFrontend struct {
 	// Unified resources - the new way to access all monitored entities
 	Resources               []ResourceFrontend                    `json:"resources"`
 	ConnectedInfrastructure []ConnectedInfrastructureItemFrontend `json:"connectedInfrastructure"`
+	// CapabilityCatalog maps content-hash ids to capability blobs referenced by
+	// ResourceFrontend.CapabilitiesRef. Estates carry only a handful of
+	// distinct capability sets, so the catalog replaces per-resource inline
+	// duplication in broadcast payloads. The websocket delta engine diffs
+	// top-level state fields generically, so catalog changes ride the same
+	// frame as the resource refs that need them.
+	CapabilityCatalog map[string]json.RawMessage `json:"capabilityCatalog,omitempty"`
 }
 
 // EmptyStateFrontend returns a canonical empty frontend state with stable
@@ -1064,12 +1071,18 @@ type ResourceFrontend struct {
 	// Identity for deduplication
 	Identity *ResourceIdentityFrontend `json:"identity,omitempty"`
 
-	DiscoveryTarget    json.RawMessage `json:"discoveryTarget,omitempty"`
-	MetricsTarget      json.RawMessage `json:"metricsTarget,omitempty"`
-	Canonical          json.RawMessage `json:"canonicalIdentity,omitempty"`
-	Policy             json.RawMessage `json:"policy,omitempty"`
-	AISafeSummary      string          `json:"aiSafeSummary,omitempty"`
-	Capabilities       json.RawMessage `json:"capabilities,omitempty"`
+	DiscoveryTarget json.RawMessage `json:"discoveryTarget,omitempty"`
+	MetricsTarget   json.RawMessage `json:"metricsTarget,omitempty"`
+	Canonical       json.RawMessage `json:"canonicalIdentity,omitempty"`
+	Policy          json.RawMessage `json:"policy,omitempty"`
+	AISafeSummary   string          `json:"aiSafeSummary,omitempty"`
+	Capabilities    json.RawMessage `json:"capabilities,omitempty"`
+	// CapabilitiesRef references an entry in StateFrontend.CapabilityCatalog.
+	// Broadcast payloads dedupe the small set of distinct capability blobs
+	// through the catalog instead of inlining ~3KB per resource; consumers
+	// resolve the ref at ingestion. Inline Capabilities remains valid for
+	// producers that do not carry a catalog.
+	CapabilitiesRef    string          `json:"capabilitiesRef,omitempty"`
 	Relationships      json.RawMessage `json:"relationships,omitempty"`
 	RecentChanges      json.RawMessage `json:"recentChanges,omitempty"`
 	FacetCounts        json.RawMessage `json:"facetCounts,omitempty"`

@@ -65,6 +65,12 @@ or rename correlations.
 websocket payloads. Carrying plural availability facets through that serializer
 is an adjacent monitoring/API projection and does not change agent enrollment,
 report admission, removal, update, profile, or command authority.
+The serializer's broadcast slimming is likewise an adjacent projection with an
+agent-identity obligation: superseded canonical ids produced by re-enrollment
+or identity re-derivation must remain resolvable to the client through
+`canonicalIdentity.supersededIds` even though they are no longer duplicated
+into the broadcast alias list, so alert overrides and identity consumers keep
+following a forked or re-enrolled host across its retired spellings.
 That shared monitor constructor may also copy the persisted alert schedule's
 initial notification target into the notification manager. This adjacent
 alerts/notifications wiring grants no agent enrollment, reporting, removal,

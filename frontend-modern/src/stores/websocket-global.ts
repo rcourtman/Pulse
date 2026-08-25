@@ -63,6 +63,7 @@ const createNoopWebSocketStore = (): ReturnType<typeof createWebSocketStore> => 
     initialDataReceived,
     updateProgress,
     resourceChange,
+    changedResourceIdsSince: () => null,
     shutdown: () => {},
     reconnect: () => {},
     switchUrl: () => {},

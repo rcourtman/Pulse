@@ -1126,9 +1126,11 @@ recovery scope, or a storage/recovery-owned secret source.
    must invalidate stale in-flight REST refreshes before their errors or
    request-guard cleanup can leak into the active resource snapshot.
    The shared hook's realtime tick path may read the connection store lazily —
-   skipping revisions the shared canonical cache already holds and
-   dereferencing raw store subtrees only for rows the delta merge will clone —
-   but that optimization must stay invisible to storage/recovery consumers: it
+   skipping revisions the shared canonical cache already holds, catching up
+   multi-revision gaps through the store's bounded changed-id history union,
+   and dereferencing raw store subtrees only for rows the delta merge will
+   clone — but that optimization must stay invisible to storage/recovery
+   consumers: it
    must not change which canonical fields a merged row carries, must not
    reorder the REST-first hydration guarantee above, and a skipped store read
    must never leave a storage/recovery projection behind the shared cache's

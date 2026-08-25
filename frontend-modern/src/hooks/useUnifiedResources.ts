@@ -1633,10 +1633,21 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
     const allResourcesEntry = getUnifiedResourcesCacheEntry(
       buildScopedUnifiedResourcesCacheKey(ALL_RESOURCES_CACHE_KEY, currentOrgScope),
     );
-    const canApplyIncrementally =
-      resourceChange.changedIds !== null &&
-      allResourcesEntry.realtimeVersion > 0 &&
-      resourceChange.version === allResourcesEntry.realtimeVersion + 1;
+    // An instance that mounts or resumes more than one tick behind the shared
+    // cache used to fall off the incremental path onto a full-estate remerge —
+    // the dominant Alerts-entry / tab re-entry cost in the 2026-08-25 profile.
+    // Catch up through the store's bounded changed-id history instead; a
+    // single-tick gap keeps using the latest delta without touching history.
+    const resolveCatchUpIds = (sinceVersion: number): ReadonlySet<string> | null => {
+      if (sinceVersion <= 0 || resourceChange.version <= sinceVersion) return null;
+      if (resourceChange.version === sinceVersion + 1) return resourceChange.changedIds;
+      return wsStore.changedResourceIdsSince?.(sinceVersion) ?? null;
+    };
+    const allEntryCatchUpIds =
+      allResourcesEntry.realtimeVersion > 0
+        ? resolveCatchUpIds(allResourcesEntry.realtimeVersion)
+        : null;
+    const canApplyIncrementally = allEntryCatchUpIds !== null;
     const realtimeSnapshotAlreadyApplied =
       resourceChange.version > 0 &&
       allResourcesEntry.hasSnapshot &&
@@ -1665,9 +1676,9 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
       ? allResourcesEntry.resources
       : canApplyIncrementally
         ? mergeCanonicalResourceDeltaSnapshot(
-            readWsResources(resourceChange.changedIds),
+            readWsResources(allEntryCatchUpIds),
             allResourcesEntry.resources,
-            resourceChange.changedIds!,
+            allEntryCatchUpIds!,
           )
         : mergeCanonicalResourceSnapshot(readWsResources(null), allResourcesEntry.resources);
     const projectedResources = filterCanonicalUnifiedResources(
@@ -1706,22 +1717,23 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
       allResourcesEntry.realtimeVersion = resourceChange.version;
     }
 
-    const canPatchProjectionIncrementally =
-      resourceChange.changedIds !== null &&
+    const cacheEntryCatchUpIds =
       cacheEntry.hasSnapshot &&
       cacheEntry.realtimeVersion > 0 &&
-      resourceChange.version === cacheEntry.realtimeVersion + 1 &&
-      resolvedProjectedResources === projectedResources;
+      resolvedProjectedResources === projectedResources
+        ? resolveCatchUpIds(cacheEntry.realtimeVersion)
+        : null;
+    const canPatchProjectionIncrementally = cacheEntryCatchUpIds !== null;
     const changedResourceTouchesAgent =
       canPatchProjectionIncrementally &&
       mergedWsResources.some(
-        (resource) => resource.type === 'agent' && resourceChange.changedIds!.has(resource.id),
+        (resource) => resource.type === 'agent' && cacheEntryCatchUpIds!.has(resource.id),
       );
     const incrementalPatchIndices = canPatchProjectionIncrementally
       ? resolveIncrementalResourcePatchIndices(
           resources as unknown as Resource[],
           resolvedProjectedResources,
-          resourceChange.changedIds!,
+          cacheEntryCatchUpIds!,
           changedResourceTouchesAgent,
         )
       : null;

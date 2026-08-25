@@ -87,7 +87,7 @@ func TestIssue1597UnifiedGuestCPUFeedsDashboardDetailsAndAlerts(t *testing.T) {
 	})
 
 	adapter := unifiedresources.NewMonitorAdapter(registry)
-	frontend := convertResourcesForBroadcast(adapter.GetAll(), adapter)
+	frontend, _ := convertResourcesForBroadcast(adapter.GetAll(), adapter)
 	if len(frontend) != 1 {
 		t.Fatalf("dashboard resource count = %d, want one unified guest", len(frontend))
 	}

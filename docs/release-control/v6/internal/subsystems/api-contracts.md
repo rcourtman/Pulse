@@ -2580,6 +2580,18 @@ a new API state machine, queue contract, or verification-accounting field.
    host-agent row for the same machine must leave the API boundary as one
    hybrid `agent` resource with merged source facets, not as duplicate rows
    that disappear only after REST reconciliation.
+   Realtime `/api/state` and websocket state payloads carry deduped static
+   metadata: the state-level `capabilityCatalog` maps content-addressed ids to
+   the estate's distinct capability blobs and each resource references its set
+   via `capabilitiesRef` instead of inlining the blob per resource; a resource
+   published without an inline `policy` is, by contract, at the default posture
+   (internal sensitivity, cloud-summary routing, no redactions) and its
+   `aiSafeSummary` is withheld with it, while non-default postures keep both
+   inline; and `canonicalIdentity.aliases` no longer duplicates
+   `supersededIds`, which stay the canonical superseded-spelling carrier for
+   identity resolution. Because the websocket delta engine diffs top-level
+   state fields generically, a catalog change must ride the same frame as the
+   first resource referencing the new entry.
    Realtime `/api/state` and websocket state snapshots also own Proxmox tag
    presentation payloads. `pveTagStyles` is keyed by Proxmox instance and
    carries the parsed datacenter `tag-style` color overrides plus

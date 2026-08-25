@@ -368,6 +368,167 @@ describe('websocket store unified resource contract', () => {
     }
   });
 
+  it('expands capabilitiesRef through the catalog and synthesizes omitted default policies', async () => {
+    const { store, dispose } = await createStoreHarness();
+    try {
+      await waitForOpenTick();
+
+      emitMessage({
+        type: 'initialState',
+        data: {
+          connectedInfrastructure: [],
+          capabilityCatalog: {
+            cap1: [{ name: 'restart', type: 'common', description: 'Restart the guest' }],
+          },
+          resources: [
+            {
+              id: 'vm-1',
+              type: 'vm',
+              name: 'vm-1',
+              status: 'running',
+              capabilitiesRef: 'cap1',
+            },
+            {
+              id: 'storage-1',
+              type: 'storage',
+              name: 'tank',
+              status: 'online',
+              policy: { sensitivity: 'sensitive', routing: { scope: 'local-first', redact: [] } },
+            },
+          ],
+          lastUpdate: 100,
+          activeAlerts: [],
+          recentlyResolved: [],
+        },
+      });
+
+      const vm = store.state.resources.find((resource) => resource.id === 'vm-1');
+      expect(vm?.capabilities?.map((capability) => capability.name)).toEqual(['restart']);
+      // Omitted policy means default posture; ingestion synthesizes it so every
+      // policy consumer keeps seeing an inline policy.
+      expect(vm?.policy).toEqual({
+        sensitivity: 'internal',
+        routing: { scope: 'cloud-summary', redact: [] },
+      });
+      const storage = store.state.resources.find((resource) => resource.id === 'storage-1');
+      expect(storage?.policy?.sensitivity).toBe('sensitive');
+
+      // A later delta can move a resource's ref; the catalog change rides the
+      // same frame and the patched row re-expands.
+      emitMessage({
+        type: 'rawData',
+        data: {
+          lastUpdate: 200,
+          capabilityCatalog: {
+            cap1: [{ name: 'restart', type: 'common', description: 'Restart the guest' }],
+            cap2: [{ name: 'stop', type: 'common', description: 'Stop the guest' }],
+          },
+          resourceDelta: {
+            upserts: [{ id: 'vm-1', capabilitiesRef: 'cap2' }],
+            removed: [],
+            order: ['vm-1', 'storage-1'],
+          },
+        },
+      });
+      const vmAfter = store.state.resources.find((resource) => resource.id === 'vm-1');
+      expect(vmAfter?.capabilities?.map((capability) => capability.name)).toEqual(['stop']);
+
+      // A posture transition back to default nulls the policy in the patch;
+      // ingestion re-synthesizes the default instead of keeping the stale one.
+      emitMessage({
+        type: 'rawData',
+        data: {
+          lastUpdate: 300,
+          resourceDelta: {
+            upserts: [{ id: 'storage-1', policy: null }],
+            removed: [],
+            order: ['vm-1', 'storage-1'],
+          },
+        },
+      });
+      const storageAfter = store.state.resources.find((resource) => resource.id === 'storage-1');
+      expect(storageAfter?.policy).toEqual({
+        sensitivity: 'internal',
+        routing: { scope: 'cloud-summary', redact: [] },
+      });
+    } finally {
+      dispose();
+    }
+  });
+
+  it('serves unions from the bounded changed-id history so late consumers catch up incrementally', async () => {
+    const { store, dispose } = await createStoreHarness();
+    try {
+      await waitForOpenTick();
+
+      emitMessage({
+        type: 'initialState',
+        data: {
+          connectedInfrastructure: [],
+          resources: [
+            { id: 'agent-1', type: 'agent', name: 'agent-1', status: 'online' },
+            { id: 'vm-1', type: 'vm', name: 'vm-1', status: 'running' },
+            { id: 'vm-2', type: 'vm', name: 'vm-2', status: 'running' },
+          ],
+          lastUpdate: 100,
+          activeAlerts: [],
+          recentlyResolved: [],
+        },
+      });
+      // version 1: full snapshot — not coverable by the history.
+      expect(store.changedResourceIdsSince(0)).toBeNull();
+
+      emitMessage({
+        type: 'rawData',
+        data: {
+          lastUpdate: 200,
+          resourceDelta: {
+            upserts: [{ id: 'vm-1', lastSeen: 200 }],
+            removed: [],
+            order: ['agent-1', 'vm-1', 'vm-2'],
+          },
+        },
+      });
+      emitMessage({
+        type: 'rawData',
+        data: {
+          lastUpdate: 300,
+          resourceDelta: {
+            upserts: [{ id: 'vm-2', lastSeen: 300 }],
+            removed: [],
+            order: ['agent-1', 'vm-1', 'vm-2'],
+          },
+        },
+      });
+
+      // versions 2 and 3 are delta commits: a consumer still on version 1 gets
+      // the union, one on version 2 gets just the last delta, and a current
+      // consumer gets null (nothing to catch up).
+      expect(store.changedResourceIdsSince(1)).toEqual(new Set(['vm-1', 'vm-2']));
+      expect(store.changedResourceIdsSince(2)).toEqual(new Set(['vm-2']));
+      expect(store.changedResourceIdsSince(3)).toBeNull();
+      // version 1 was a full snapshot, so a span reaching before it is not
+      // coverable and must force the caller onto the full-merge path.
+      expect(store.changedResourceIdsSince(0)).toBeNull();
+
+      emitMessage({
+        type: 'initialState',
+        data: {
+          connectedInfrastructure: [],
+          resources: [{ id: 'agent-1', type: 'agent', name: 'agent-1', status: 'online' }],
+          lastUpdate: 400,
+          activeAlerts: [],
+          recentlyResolved: [],
+        },
+      });
+      // A later full snapshot invalidates the accumulated history.
+      expect(store.changedResourceIdsSince(3)).toBeNull();
+      expect(store.changedResourceIdsSince(2)).toBeNull();
+    } finally {
+      dispose();
+    }
+  });
+
   it('keeps canonically merged hosts consistent with full snapshots across deltas (#1601)', async () => {
     const { store, dispose } = await createStoreHarness();
     try {

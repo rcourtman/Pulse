@@ -247,6 +247,13 @@ default construction path still restores.
 ## Shared Boundaries
 
 1. `frontend-modern/src/stores/websocket.ts` shared with `performance-and-scalability`: the connection-owned realtime store is both the canonical alert truth boundary and the fleet-scale resource reconciliation hot path.
+   That shared store normalizes slimmed broadcast resources at ingestion —
+   expanding `capabilitiesRef` through the state `capabilityCatalog` and
+   synthesizing the default policy posture for resources published without one
+   — before any alert consumer resolves alert-to-resource identity or policy
+   display. Alert override and threshold identity matching must consult
+   `canonicalIdentity.supersededIds` alongside aliases, because broadcast
+   aliases no longer duplicate superseded canonical ids.
 2. `internal/operationaltrust/contracts.go` shared with `notifications`: the operational trust contract is jointly consumed by canonical alert lifecycle ownership and notification delivery linkage without making delivery state operational truth.
 3. `internal/proxmoxidentity/backup_identity.go` shared with `monitoring`, `storage-recovery`: Proxmox PBS backup subject identity is a shared runtime boundary for monitoring backup freshness, backup-age alert attribution, and recovery-point guest mapping.
 Alert multiline field presentation is shared with frontend-primitives:

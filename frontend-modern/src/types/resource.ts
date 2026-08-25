@@ -221,6 +221,17 @@ export const requiresGovernedResourceDisplay = (policy?: ResourcePolicy | null):
   if (!policy) return false;
   return policy.routing.scope === 'local-only' || (policy.routing.redact?.length ?? 0) > 0;
 };
+
+// The posture the server omits from broadcast payloads: default-posture
+// resources carry no inline policy on the wire (see the backend's
+// isDefaultBroadcastResourcePolicy), and the websocket store synthesizes it at
+// ingestion so every policy consumer keeps seeing an inline policy. Fresh
+// objects per resource — a shared instance would be corrupted in place by
+// store reconciliation when one resource's posture later changes.
+export const createDefaultResourcePolicy = (): ResourcePolicy => ({
+  sensitivity: 'internal',
+  routing: { scope: 'cloud-summary', redact: [] },
+});
 export type ResourceChangeConfidence = 'high' | 'medium' | 'low';
 export type ResourceChangeKind =
   | 'state_transition'
@@ -1587,6 +1598,10 @@ export interface Resource {
   policy?: ResourcePolicy;
   aiSafeSummary?: string;
   capabilities?: ResourceCapability[];
+  // Reference into the state payload's capabilityCatalog; the websocket store
+  // expands it into `capabilities` at ingestion so consumers keep reading the
+  // inline shape.
+  capabilitiesRef?: string;
   actionReadiness?: ResourceActionReadiness[];
   sourceStatus?: Record<string, ResourceSourceStatus>;
   relationships?: ResourceRelationship[];

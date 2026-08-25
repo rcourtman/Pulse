@@ -222,7 +222,17 @@ cache once, then projects route filters from the already-canonical result;
 route-scoped consumers must not independently canonicalize the full estate. A
 hook instance observing an already-applied revision must not deep-unwrap the
 realtime store, and the merging instance dereferences raw store subtrees only
-for rows the delta merge will clone. Workload table rows derived from canonical
+for rows the delta merge will clone. The connection store keeps a bounded
+per-revision changed-id history so an instance that mounts or resumes several
+revisions behind the shared cache catches up through the unioned changed-id
+set as a delta merge instead of a full-estate remerge; the full fallback is
+reserved for uncovered gaps and full-snapshot commits. The broadcast payload
+itself is a scalability surface: duplicated capability blobs travel once
+through the state-level `capabilityCatalog` and per-resource
+`capabilitiesRef`, default-posture policy and AI-safe prose are omitted and
+synthesized at ingestion, and superseded canonical ids are not duplicated
+into the alias list, so full snapshots, REST recovery, and reconnects do not
+re-ship static metadata per resource. Workload table rows derived from canonical
 snapshots reuse the previous row object whenever the serialized row is
 unchanged, and a refresh that changes nothing returns the previous row array
 itself, so per-tick row identity churn stays bounded to guests whose data

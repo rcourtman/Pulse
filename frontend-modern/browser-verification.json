@@ -1,26 +1,35 @@
 {
   "version": 1,
-  "base_sha": "7bac525af355bc5c8eb6ff2db8f9ce116697013f",
-  "verified_at": "2026-08-25T10:44:58Z",
+  "base_sha": "51b7357285b0ac7020212aff0a67b8cd5974757c",
+  "verified_at": "2026-08-25T11:20:27Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/shared/horizontalRailVisibilityModel.ts",
-    "frontend-modern/src/components/shared/useActiveHorizontalRailItemVisibility.ts",
-    "frontend-modern/src/features/platformPage/sharedPlatformPage.tsx"
+    "frontend-modern/src/hooks/useUnifiedResources.ts",
+    "frontend-modern/src/stores/websocket-global.ts",
+    "frontend-modern/src/stores/websocket.ts",
+    "frontend-modern/src/types/api.ts",
+    "frontend-modern/src/types/resource.ts",
+    "frontend-modern/src/utils/resourceIdentity.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/shared/horizontalRailVisibilityModel.ts": "1fa3ad5d3cfffd0ccf78ced497d87564602cb124103175c17ba6c3e4b9531c4f",
-    "frontend-modern/src/components/shared/useActiveHorizontalRailItemVisibility.ts": "add047b223402743fbabf5d7c9b867f160174ab2e48baf53c0c60509caf01510",
-    "frontend-modern/src/features/platformPage/sharedPlatformPage.tsx": "3507374c3c9c236a95ee50793f2462b16d71680f13c1f4c864efc3ea88159659"
+    "frontend-modern/src/hooks/useUnifiedResources.ts": "5b63ab55ce28b72216561acf7b818c55179e70acfc2a35155cd6391490a13f54",
+    "frontend-modern/src/stores/websocket-global.ts": "59d2ddc55882f98c72b5c893ce16c250ba5c0eeb20e31419e23f651ab72c00b5",
+    "frontend-modern/src/stores/websocket.ts": "56c7fa58dc5f79855b6ab4a9c9c36c85f00a554a76ea981b593e175a4547dba1",
+    "frontend-modern/src/types/api.ts": "88a40975498e284b3c704b384a6a2ab52bd1fd19e6fd1de522953d570f2afa25",
+    "frontend-modern/src/types/resource.ts": "9b73aa4df0b734f37f19f1b607872442ea988f5212d6bdb2a59be4b613d83249",
+    "frontend-modern/src/utils/resourceIdentity.ts": "f0a0203a2e5de11afcffa1ae70382c9e55249e9a5651b0fb9611b3f0f196fb51"
   },
   "routes": [
+    "/login",
     "/proxmox/overview",
-    "/proxmox/replication"
+    "/proxmox/storage",
+    "/docker",
+    "/alerts"
   ],
   "viewports": [
     {
-      "width": 1440,
-      "height": 900
+      "width": 1280,
+      "height": 800
     },
     {
       "width": 390,
@@ -28,16 +37,20 @@
     }
   ],
   "states": [
-    "Proxmox overview tab rail with all six destinations at desktop width",
-    "Proxmox overview tab rail initially clipped at phone width with the right affordance visible",
-    "phone tab rail manually scrolled to its 207px end position with the left affordance visible",
-    "manually scrolled phone rail after a same-width viewport-height resize",
-    "Replication selected from the manually explored rail with the active label clear of the left overlay"
+    "authenticated session against a dev build of this exact diff serving the 50-node mock estate with the slimmed broadcast payload (capabilityCatalog with 7 entries, zero inline capabilities, 806 default-posture policies and aiSafeSummary omitted, aliases deduped against supersededIds)",
+    "Proxmox overview table populated at both viewports with live 2s websocket ticks applying",
+    "Proxmox storage sub-tab populated (sensitive-posture resources keep inline policy)",
+    "Docker workloads table with an expanded container row and its lifecycle actions group",
+    "container lifecycle menu open: Start disabled with running reason, Stop and Restart enabled via catalog-expanded capabilities",
+    "Alerts utility surface rendering the active-alert list",
+    "console error stream captured on both builds: only the pre-existing CSP inline-style warnings, no new errors"
   ],
   "interactions": [
-    "native horizontal wheel/swipe projection across the phone-width Proxmox section rail",
-    "phone viewport resize after manual rail exploration preserved scrollLeft at 207px",
-    "selected Replication from the revealed rail and confirmed route navigation plus active-tab visibility",
-    "repeated the final phone flow after the active-label clearance adjustment: swipe to 190px, resize without snap-back, then select Replication at a safe 55px viewport offset"
+    "logged in and waited for landing hydration",
+    "switched platform tabs to Docker and sub-tabs to Storage and back to Overview",
+    "expanded a docker container row and opened its container-actions menu, reading each action's enabled/disabled state and aria-label",
+    "navigated to Alerts and back",
+    "fetched /api/state on the slimmed build and asserted capabilityCatalog presence, per-resource capabilitiesRef, omitted default policies, and the 4.75MB to 4.09MB size drop",
+    "ran the identical probe script against the unmodified baseline build and confirmed byte-identical UI outcomes (rows, drawer, action states, console errors)"
   ]
 }

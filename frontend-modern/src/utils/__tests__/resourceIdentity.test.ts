@@ -89,6 +89,24 @@ describe('resourceIdentity', () => {
     ]);
   });
 
+  it('resolves superseded canonical ids even though broadcast aliases no longer carry them', () => {
+    // Slimmed broadcast payloads stop duplicating supersededIds into the
+    // alias list, so the identity resolver has to consult them explicitly for
+    // alert overrides and lookups keyed by a retired spelling.
+    const aliases = getResourceIdentityAliases(
+      makeResource({
+        canonicalIdentity: {
+          primaryId: 'agent:core2026',
+          aliases: ['agent:core2026', 'core2026'],
+          supersededIds: ['agent-core2026-a1b2c3', 'agent-core2026-d4e5f6'],
+        },
+      }),
+    );
+    expect(aliases).toContain('agent-core2026-a1b2c3');
+    expect(aliases).toContain('agent-core2026-d4e5f6');
+    expect(aliases).toContain('agent:core2026');
+  });
+
   it('uses actionable linked identities before falling back to unified ids', () => {
     expect(
       getPrimaryResourceIdentity(

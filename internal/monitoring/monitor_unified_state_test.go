@@ -134,7 +134,7 @@ func TestConvertResourcesForBroadcastCoalescesSplitHostResources(t *testing.T) {
 		},
 	}
 
-	frontend := convertResourcesForBroadcast(resources)
+	frontend, _ := convertResourcesForBroadcast(resources)
 	if len(frontend) != 1 {
 		t.Fatalf("expected split host resources to coalesce into 1 frontend resource, got %d: %#v", len(frontend), frontend)
 	}
@@ -218,7 +218,7 @@ func TestConvertResourcesForBroadcastAttachesResolvedStorageMetricsTarget(t *tes
 	})
 	adapter := unifiedresources.NewMonitorAdapter(registry)
 
-	frontend := convertResourcesForBroadcast(adapter.GetAll(), adapter)
+	frontend, _ := convertResourcesForBroadcast(adapter.GetAll(), adapter)
 
 	var storagePayload struct {
 		ID            string `json:"id"`
@@ -338,7 +338,7 @@ func TestConvertResourcesForBroadcastKeepsLinkedGuestCPUAndHistoryTargetAligned(
 			})
 
 			adapter := unifiedresources.NewMonitorAdapter(registry)
-			frontend := convertResourcesForBroadcast(adapter.GetAll(), adapter)
+			frontend, _ := convertResourcesForBroadcast(adapter.GetAll(), adapter)
 			if len(frontend) != 1 {
 				t.Fatalf("broadcast resources = %d, want one merged guest: %+v", len(frontend), frontend)
 			}
@@ -686,7 +686,8 @@ func TestMonitorBuildBroadcastFrontendStateUsesCanonicalMockUnifiedResources(t *
 	// pin an exact merge count. Require the broadcast count to fall
 	// within a 5% tolerance of the convert-pipeline count so future
 	// fixture bumps stay green as long as the merge contract is honored.
-	expectedBroadcastCount := len(convertResourcesForBroadcast(expectedResources))
+	expectedBroadcastResources, _ := convertResourcesForBroadcast(expectedResources)
+	expectedBroadcastCount := len(expectedBroadcastResources)
 	tolerance := expectedBroadcastCount / 20
 	if tolerance < 5 {
 		tolerance = 5
@@ -783,7 +784,7 @@ func TestConvertResourcesForBroadcastIncludesCanonicalHealthContext(t *testing.T
 		},
 	}
 
-	frontend := convertResourcesForBroadcast(resources)
+	frontend, _ := convertResourcesForBroadcast(resources)
 	if len(frontend) != 2 {
 		t.Fatalf("expected 2 frontend resources, got %d", len(frontend))
 	}
@@ -998,5 +999,119 @@ func TestMonitorMonitoredSystemUsageDoesNotDoubleCountLinkedProxmoxHostContinuit
 	}
 	if usage.Count != 1 {
 		t.Fatalf("MonitoredSystemUsage().Count = %d, want 1", usage.Count)
+	}
+}
+
+func TestBroadcastPayloadSlimsStaticMetadata(t *testing.T) {
+	sharedCapabilities := []unifiedresources.ResourceCapability{{
+		Name:                 "restart",
+		Type:                 unifiedresources.CapabilityTypeCommon,
+		Description:          "Restart the guest",
+		MinimumApprovalLevel: unifiedresources.ApprovalAdmin,
+	}}
+	resources := []unifiedresources.Resource{
+		{
+			ID:                     "vm-100",
+			Type:                   unifiedresources.ResourceTypeVM,
+			Name:                   "web-01",
+			Status:                 unifiedresources.StatusOnline,
+			LastSeen:               time.Date(2026, 8, 25, 10, 0, 0, 0, time.UTC),
+			Sources:                []unifiedresources.DataSource{unifiedresources.SourceProxmox},
+			SupersededCanonicalIDs: []string{"vm-superseded-hash-1", "vm-superseded-hash-2"},
+			Capabilities:           sharedCapabilities,
+		},
+		{
+			ID:           "vm-101",
+			Type:         unifiedresources.ResourceTypeVM,
+			Name:         "web-02",
+			Status:       unifiedresources.StatusOnline,
+			LastSeen:     time.Date(2026, 8, 25, 10, 0, 0, 0, time.UTC),
+			Sources:      []unifiedresources.DataSource{unifiedresources.SourceProxmox},
+			Capabilities: sharedCapabilities,
+		},
+		{
+			ID:       "storage-1",
+			Type:     unifiedresources.ResourceTypeStorage,
+			Name:     "tank",
+			Status:   unifiedresources.StatusOnline,
+			LastSeen: time.Date(2026, 8, 25, 10, 0, 0, 0, time.UTC),
+			Sources:  []unifiedresources.DataSource{unifiedresources.SourceProxmox},
+		},
+	}
+
+	frontend, catalog := convertResourcesForBroadcast(resources)
+	if len(frontend) != 3 {
+		t.Fatalf("expected 3 frontend resources, got %d", len(frontend))
+	}
+	byID := make(map[string]map[string]json.RawMessage, len(frontend))
+	refs := make(map[string]string, len(frontend))
+	for _, resource := range frontend {
+		encoded, err := json.Marshal(resource)
+		if err != nil {
+			t.Fatalf("marshal %s: %v", resource.ID, err)
+		}
+		fields := map[string]json.RawMessage{}
+		if err := json.Unmarshal(encoded, &fields); err != nil {
+			t.Fatalf("unmarshal %s: %v", resource.ID, err)
+		}
+		byID[resource.ID] = fields
+		refs[resource.ID] = resource.CapabilitiesRef
+	}
+
+	// Default-posture workloads must not re-ship policy or AI-safe prose.
+	vm := byID["vm-100"]
+	if _, ok := vm["policy"]; ok {
+		t.Fatalf("default-posture vm must omit policy, got %s", vm["policy"])
+	}
+	if _, ok := vm["aiSafeSummary"]; ok {
+		t.Fatalf("default-posture vm must omit aiSafeSummary, got %s", vm["aiSafeSummary"])
+	}
+	// Sensitive storage keeps its governed posture inline.
+	storage := byID["storage-1"]
+	var storagePolicy struct {
+		Sensitivity string `json:"sensitivity"`
+	}
+	if err := json.Unmarshal(storage["policy"], &storagePolicy); err != nil {
+		t.Fatalf("sensitive storage must keep policy inline: %v (payload %s)", err, storage["policy"])
+	}
+	if storagePolicy.Sensitivity != "sensitive" {
+		t.Fatalf("storage sensitivity = %q", storagePolicy.Sensitivity)
+	}
+
+	// Superseded ids stay resolvable via supersededIds but are no longer
+	// duplicated into the alias list.
+	var canonical struct {
+		Aliases       []string `json:"aliases"`
+		SupersededIDs []string `json:"supersededIds"`
+	}
+	if err := json.Unmarshal(vm["canonicalIdentity"], &canonical); err != nil {
+		t.Fatalf("unmarshal canonicalIdentity: %v", err)
+	}
+	if len(canonical.SupersededIDs) != 2 {
+		t.Fatalf("supersededIds = %v", canonical.SupersededIDs)
+	}
+	for _, alias := range canonical.Aliases {
+		if alias == "vm-superseded-hash-1" || alias == "vm-superseded-hash-2" {
+			t.Fatalf("aliases must not duplicate superseded ids, got %v", canonical.Aliases)
+		}
+	}
+
+	// Identical capability sets collapse onto one catalog entry.
+	if refs["vm-100"] == "" || refs["vm-100"] != refs["vm-101"] {
+		t.Fatalf("expected shared capabilitiesRef, got %q vs %q", refs["vm-100"], refs["vm-101"])
+	}
+	if _, ok := vm["capabilities"]; ok {
+		t.Fatalf("catalog broadcast must not inline capabilities, got %s", vm["capabilities"])
+	}
+	entry, ok := catalog[refs["vm-100"]]
+	if !ok {
+		t.Fatalf("catalog missing ref %q (catalog %v)", refs["vm-100"], catalog)
+	}
+	var decoded []unifiedresources.ResourceCapability
+	if err := json.Unmarshal(entry, &decoded); err != nil {
+		t.Fatalf("decode catalog entry: %v", err)
+	}
+	if len(decoded) != 1 || decoded[0].Name != "restart" {
+		t.Fatalf("catalog entry = %+v", decoded)
 	}
 }
