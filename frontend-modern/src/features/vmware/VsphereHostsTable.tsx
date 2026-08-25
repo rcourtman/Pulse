@@ -303,7 +303,7 @@ export const VsphereHostsTable: Component<{
                   sortKey="vms"
                   class="platform-table-mobile-w-10 w-[12%] md:w-[4%]"
                 >
-                  <PlatformResponsiveTableLabel compact="#" full="VMs" />
+                  VMs
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead
                   kind="text"

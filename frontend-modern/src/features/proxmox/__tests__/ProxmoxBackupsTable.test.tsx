@@ -326,6 +326,10 @@ describe('ProxmoxBackupsTable', () => {
     expect(proxmoxBackupsTableSource).toContain('buildProxmoxBackupsPath');
     expect(proxmoxBackupsTableSource).toContain('trailingControls={');
     expect(proxmoxBackupsTableSource).toContain('<PlatformResourceCounter');
+    expect(proxmoxBackupServersTableSource).toContain(
+      '<PlatformResponsiveTableLabel\n                    compact="Bkps"',
+    );
+    expect(proxmoxBackupServersTableSource).not.toContain('compact="#"');
 
     // The two route-backed sections exist...
     expect(screen.getByRole('navigation', { name: /backup views/i })).toBeInTheDocument();

@@ -1214,16 +1214,21 @@ not a replacement status card, CTA band, or page-local nested card.
    breakpoint-specific widths take over. Its class composition removes a
    consumer's redundant `min-w-full` token because the shared `Table` already
    fills the available width and that second minimum would override the
-   phone-width policy. Platform consumers must explicitly select five to seven
-   high-value phone columns when that many meaningful fields exist, keep the
-   identity column at the canonical 30 percent of the available width, use the
-   shared compact label and column-width classes, and preserve the fuller tablet
-   and desktop presentation. Below a 360-pixel content width, the shared narrow
-   layout must retain five high-value columns, promote identity to 40 percent,
-   and remove the lowest-priority context columns rather than shrinking names
-   and metric values into illegible fragments. Consumers mark only that
-   source-specific demotion with `platform-table-narrow-hidden`; the shared
-   container rule then applies the same 40-percent identity/five-column stage
+   phone-width policy. Platform consumers must explicitly select the three to
+   five high-value phone columns that answer the row's operational questions,
+   keep the identity column at the canonical 30 percent of the available width,
+   use the shared compact label and column-width classes, and preserve the fuller
+   tablet and desktop presentation. A sixth track is valid only when rendered
+   values remain legible at the measured phone width. Duplicate state or
+   severity text must not consume a separate phone column when the identity
+   indicator already carries the same condition; the full value remains in the
+   desktop table and inline detail. Consumers mark a normal-phone demotion with
+   `platform-table-phone-hidden` on both its header and its body cell. The shared
+   container rule owns the matching `th`/`td` visibility so the two cannot drift.
+   Below a 360-pixel content width, the shared narrow layout promotes identity to
+   40 percent and may remove one additional lowest-priority context column via
+   `platform-table-narrow-hidden` rather than shrinking names and metric values
+   into illegible fragments. The shared container rule then applies that stage
    across provider tables, direct Storage tables, and nested provider detail
    tables without a global reveal or page-local media-query exception.
    `PlatformTableShell` marks every

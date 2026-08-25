@@ -225,7 +225,7 @@ export const KubernetesNodesTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="roles"
-                  class="platform-table-mobile-w-15 platform-table-narrow-hidden md:w-[10%]"
+                  class="platform-table-phone-hidden md:w-[10%]"
                 >
                   <PlatformResponsiveTableLabel compact="Role" full="Roles" />
                 </PlatformSortableTableHead>
@@ -378,7 +378,7 @@ export const KubernetesNodesTable: Component<{
                             {cluster()}
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} text-base-content platform-table-narrow-hidden`}
+                            class={`${getPlatformTableCellClassForKind('text')} platform-table-phone-hidden text-base-content`}
                           >
                             {formatRoles(meta()?.roles)}
                           </TableCell>

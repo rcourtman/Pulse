@@ -123,7 +123,7 @@ export const KubernetesEventsTable: Component<{
                   Scope
                 </TableHead>
                 <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} platform-table-mobile-w-15 md:w-[10%]`}
+                  class={`${getPlatformTableHeadClassForKind('text')} platform-table-phone-hidden md:w-[10%]`}
                 >
                   Type
                 </TableHead>
@@ -206,7 +206,7 @@ export const KubernetesEventsTable: Component<{
                             </span>
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                            class={`${getPlatformTableCellClassForKind('text')} platform-table-phone-hidden text-base-content`}
                           >
                             {formatPlatformTableTextValue(resource.kubernetes?.eventType)}
                           </TableCell>

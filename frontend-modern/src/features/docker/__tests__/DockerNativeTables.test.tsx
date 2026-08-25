@@ -1144,7 +1144,7 @@ describe('Docker native tables', () => {
     ));
 
     expect(screen.getByText('Attached workloads')).toBeInTheDocument();
-    expect(screen.getByText('Attention')).toBeInTheDocument();
+    expect(screen.getByText('State')).toBeInTheDocument();
     expect(screen.getByText('frontend')).toBeInTheDocument();
     expect(screen.getByText('No containers')).toBeInTheDocument();
     expect(screen.getByText('Unused')).toBeInTheDocument();

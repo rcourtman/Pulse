@@ -218,6 +218,11 @@ describe('App architecture', () => {
   });
 
   it('keeps narrow platform tables readable through the global app-shell contract', () => {
+    expect(appStylesSource).toContain('@container (max-width: 33.999rem)');
+    expect(appStylesSource).toContain(':is(th, td).platform-table-phone-hidden');
+    expect(appStylesSource).toContain(':is(th, td).platform-table-phone-only');
+    expect(appStylesSource).toContain('.platform-table-phone-hidden-inline');
+    expect(appStylesSource).toContain('.platform-table-phone-only-inline');
     expect(appStylesSource).toContain('@container (max-width: 22.499rem)');
     expect(appStylesSource).toContain(
       '.table-scroll-shell > .table-fixed.platform-table th.platform-table-name-column',

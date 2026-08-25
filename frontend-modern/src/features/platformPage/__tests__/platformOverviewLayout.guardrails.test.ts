@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
 import agentsMachinesTableSource from '@/features/standalone/AgentsMachinesTable.tsx?raw';
 import agentMachineTableModelSource from '@/features/standalone/agentMachineTableModel.ts?raw';
 import standalonePageModelSource from '@/features/standalone/standalonePageModel.ts?raw';
@@ -60,6 +61,8 @@ import vsphereAlertsTableSource from '@/features/vmware/VsphereAlertsTable.tsx?r
 import vsphereDatastoresTableSource from '@/features/vmware/VsphereDatastoresTable.tsx?raw';
 import vsphereHostsTableSource from '@/features/vmware/VsphereHostsTable.tsx?raw';
 import vsphereNetworksTableSource from '@/features/vmware/VsphereNetworksTable.tsx?raw';
+
+const indexCssSource = readFileSync('src/index.css', 'utf8');
 
 const platformTableSources = [
   agentsMachinesTableSource,
@@ -322,7 +325,7 @@ describe('platform overview layout guardrails', () => {
       /sortKey="size"[\s\S]{0,120}?class="platform-table-mobile-w-15 md:w-\[12%\]"/,
     );
     expect(dockerServicesTableSource).toMatch(
-      /sortKey="mode"[\s\S]{0,120}?class="platform-table-mobile-w-10 w-\[10%\] md:w-\[8%\]"/,
+      /sortKey="mode"[\s\S]{0,120}?class="platform-table-phone-hidden md:w-\[8%\]"/,
     );
     expect(dockerServicesTableSource).toMatch(
       /sortKey="update"[\s\S]{0,120}?class="platform-table-mobile-w-15 w-\[15%\] md:w-\[12%\]"/,
@@ -346,7 +349,7 @@ describe('platform overview layout guardrails', () => {
       '-my-3 inline-flex min-h-11 items-center truncate',
     );
     expect(kubernetesNodesTableSource).toMatch(
-      /sortKey="roles"[\s\S]{0,160}?class="platform-table-mobile-w-15 platform-table-narrow-hidden md:w-\[10%\]"/,
+      /sortKey="roles"[\s\S]{0,160}?class="platform-table-phone-hidden md:w-\[10%\]"/,
     );
     expect(kubernetesNodesTableSource).toMatch(
       /sortKey="capacity"[\s\S]{0,120}?class="platform-table-mobile-w-10 md:w-\[14%\]"/,
@@ -358,7 +361,7 @@ describe('platform overview layout guardrails', () => {
       /sortKey="scope"[\s\S]{0,120}?class="platform-table-mobile-w-15 md:w-\[13%\]"/,
     );
     expect(kubernetesPodsTableSource).toMatch(
-      /sortKey="node"[\s\S]{0,120}?class="platform-table-mobile-w-15 md:w-\[13%\]"/,
+      /sortKey="node"[\s\S]{0,120}?class="platform-table-phone-hidden md:w-\[13%\]"/,
     );
     expect(kubernetesServicesTableSource).toMatch(
       /sortKey="scope"[\s\S]{0,120}?class="platform-table-mobile-w-15 md:w-\[15%\]"/,
@@ -374,6 +377,39 @@ describe('platform overview layout guardrails', () => {
     );
     expect(kubernetesPolicyTableSource).toContain(
       "getPlatformTableHeadClassForKind('text')} platform-table-mobile-w-15 md:w-[15%]",
+    );
+  });
+
+  it('keeps phone-priority visibility container-led and symmetric across table rows', () => {
+    expect(indexCssSource).toContain(':is(th, td).platform-table-phone-hidden');
+    expect(indexCssSource).toContain(':is(th, td).platform-table-phone-only');
+
+    for (const source of [
+      dockerAlertsTableSource,
+      kubernetesAlertsTableSource,
+      truenasAlertsTableSource,
+      vsphereAlertsTableSource,
+    ]) {
+      expect(source).toMatch(/TableHead[\s\S]{0,160}?platform-table-phone-hidden/);
+      expect(source).toMatch(
+        /TableCell[\s\S]{0,160}?getPlatformTableCellClassForKind\('badge'\)[\s\S]{0,80}?platform-table-phone-hidden/,
+      );
+    }
+
+    expect(dockerVolumesTableSource).toMatch(
+      /sortKey="scope"[\s\S]{0,120}?platform-table-phone-hidden/,
+    );
+    expect(dockerVolumesTableSource).toMatch(
+      /getPlatformTableCellClassForKind\('text'\)[\s\S]{0,100}?platform-table-phone-hidden[\s\S]{0,140}?dockerTextValue\(resource\.docker\?\.scope\)/,
+    );
+    expect(kubernetesDeploymentsTableSource).toMatch(
+      /sortKey="desired"[\s\S]{0,120}?platform-table-phone-hidden/,
+    );
+    expect(truenasVirtualMachinesTableSource).toMatch(
+      /sortKey="state"[\s\S]{0,120}?platform-table-phone-hidden/,
+    );
+    expect(vsphereActivityTableSource).toMatch(
+      /sortKey="state"[\s\S]{0,120}?platform-table-phone-hidden/,
     );
   });
 
@@ -574,7 +610,9 @@ describe('platform overview layout guardrails', () => {
     expect(dockerHostsTableSource).toMatch(/kind="metric-bar"[\s\S]{0,200}?Disk/);
 
     expect(kubernetesClustersTableSource).toMatch(/kind="name"[\s\S]{0,200}?Cluster/);
-    expect(kubernetesClustersTableSource).toMatch(/kind="numeric-value"[\s\S]{0,200}?Nodes/);
+    expect(kubernetesClustersTableSource).toMatch(
+      /sortKey="nodes"[\s\S]{0,180}?<PlatformResponsiveTableLabel compact="Nds" full="Nodes" \/>/,
+    );
     expect(kubernetesNodesTableSource).toMatch(/kind="name"[\s\S]{0,200}?Node/);
     expect(kubernetesNodesTableSource).toContain(
       '<span class="md:hidden">{compactCapacityLabel()}</span>',
@@ -586,7 +624,7 @@ describe('platform overview layout guardrails', () => {
     );
     expect(vsphereHostsTableSource).toMatch(/kind="name"[\s\S]{0,200}?Host/);
     expect(vsphereHostsTableSource).toMatch(
-      /kind="numeric-value"[\s\S]{0,240}?<PlatformResponsiveTableLabel compact="#" full="VMs" \/>/,
+      /sortKey="vms"[\s\S]{0,180}?class="platform-table-mobile-w-10 w-\[12%\] md:w-\[4%\]"[\s\S]{0,80}?VMs/,
     );
     expect(vsphereHostsTableSource).toContain('hidden md:table-cell');
     // AgentsMachinesTable uses a column-config pattern: kind helpers are

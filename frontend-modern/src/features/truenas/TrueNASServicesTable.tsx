@@ -265,7 +265,7 @@ export const TrueNASServicesTable: Component<{
                   kind="badge"
                   sort={sort}
                   sortKey="state"
-                  class="platform-table-mobile-w-15 md:w-[14%]"
+                  class="platform-table-phone-hidden md:w-[14%]"
                 >
                   State
                 </PlatformSortableTableHead>
@@ -289,7 +289,7 @@ export const TrueNASServicesTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="system"
-                  class="platform-table-mobile-w-25 md:w-[28%]"
+                  class="platform-table-phone-hidden md:w-[28%]"
                 >
                   System
                 </PlatformSortableTableHead>
@@ -333,7 +333,9 @@ export const TrueNASServicesTable: Component<{
                               </div>
                             </div>
                           </TableCell>
-                          <TableCell class={getPlatformTableCellClassForKind('badge')}>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('badge')} platform-table-phone-hidden`}
+                          >
                             <span class="inline-flex rounded-full border border-border px-2 py-0.5 text-[11px] font-medium text-base-content">
                               {formatPlatformTableTitleCaseValue(rawState())}
                             </span>
@@ -355,7 +357,9 @@ export const TrueNASServicesTable: Component<{
                           >
                             <span class="tabular-nums text-base-content">{pids().label}</span>
                           </TableCell>
-                          <TableCell class={getPlatformTableCellClassForKind('text')}>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('text')} platform-table-phone-hidden`}
+                          >
                             <div class="truncate text-base-content">{row.systemName}</div>
                           </TableCell>
                         </TableRow>

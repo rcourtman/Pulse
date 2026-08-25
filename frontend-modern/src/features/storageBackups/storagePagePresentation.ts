@@ -34,12 +34,11 @@ const STORAGE_POOL_VISIBLE_COLUMNS: Record<
   StoragePoolTableLayoutMode,
   readonly StoragePoolTableColumnId[]
 > = {
-  // The smallest supported phone keeps the same five-field scan contract as
-  // native platform tables. Topology remains available in the row detail.
-  narrow: ['name', 'state', 'host', 'protection', 'usage'],
-  // Phone tables should answer identity, health, topology, placement,
-  // protection, and capacity without requiring a horizontal rail.
-  compact: ['name', 'state', 'type', 'host', 'protection', 'usage'],
+  // Phones prioritize the four questions needed for an operational scan:
+  // what, health, where, and capacity. Type and protection remain available
+  // in the expanded detail instead of being squeezed into unusable tracks.
+  narrow: ['name', 'state', 'host', 'usage'],
+  compact: ['name', 'state', 'host', 'usage'],
   operational: ['name', 'state', 'host', 'protection', 'usage'],
   full: ['name', 'state', 'type', 'host', 'protection', 'usage', 'growth'],
 };
@@ -48,8 +47,8 @@ const STORAGE_POOL_COLUMN_WIDTHS: Record<
   StoragePoolTableLayoutMode,
   Partial<Record<StoragePoolTableColumnId, number>>
 > = {
-  narrow: { name: 40, state: 15, host: 15, protection: 15, usage: 15 },
-  compact: { name: 30, state: 16, type: 13, host: 16, protection: 12, usage: 13 },
+  narrow: { name: 40, state: 20, host: 20, usage: 20 },
+  compact: { name: 35, state: 20, host: 20, usage: 25 },
   operational: { name: 29, state: 20, host: 15, protection: 15, usage: 21 },
   full: { name: 20, state: 14, type: 10, host: 12, protection: 13, usage: 20, growth: 11 },
 };

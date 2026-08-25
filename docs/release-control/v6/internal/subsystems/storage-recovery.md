@@ -2054,10 +2054,11 @@ files.
    is likewise API/AI-owned transport: storage and recovery may consume the
    resulting incident context, but must not define storage-local approval
    argument keys or bypass the shared `internal/agentcapabilities` helper.
-5. Keep recovery history table width budgeting derived from the canonical column specs in `frontend-modern/src/utils/recoveryTablePresentation.ts`, not from raw visible-column counts, so normalized subject labels and optional column sets cannot drift the right-edge badges and controls off-screen. Storage-pool, physical-disk, backup-server, coverage, and recoverable-artifact compact models must follow the same source-owned budgeting rule: expose the five to seven highest-value phone fields when the source provides them, fix identity at the shared 30-percent track, use compact labels for narrow evidence fields, and normalize the selected tracks to the container without a horizontal rail. Desktop column sets and storage/recovery evidence semantics must remain unchanged.
-   Below 360 pixels of content width, those models must retain five fields,
-   promote identity to 40 percent, and demote the lowest-priority field through
-   the shared `platform-table-narrow-hidden`/source-owned layout contract.
+5. Keep recovery history table width budgeting derived from the canonical column specs in `frontend-modern/src/utils/recoveryTablePresentation.ts`, not from raw visible-column counts, so normalized subject labels and optional column sets cannot drift the right-edge badges and controls off-screen. Storage-pool, physical-disk, backup-server, coverage, and recoverable-artifact compact models must follow the same source-owned budgeting rule: expose three to five semantically distinct phone fields, allow a sixth only when measured content remains legible, fix identity at the shared 30-percent track, use explicit compact labels for narrow evidence fields, and normalize the selected tracks to the container without a horizontal rail. A status already conveyed by the identity indicator must not consume a duplicate phone column. Desktop column sets and storage/recovery evidence semantics must remain unchanged.
+   Below 360 pixels of content width, those models must promote identity to 40
+   percent and may demote the lowest-priority field through the shared
+   `platform-table-narrow-hidden`/source-owned layout contract rather than
+   preserving a fixed column count at the expense of legibility.
    Summary rows remain single-line; any truncated backup, datastore, workload,
    or topology value must be recoverable through a touch- and
    keyboard-operable inline detail rather than a hover-only title.

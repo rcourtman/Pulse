@@ -377,13 +377,20 @@ filter semantics, drawer handoffs, and resource projections, while
 That shell also owns responsive width composition. Source tables may declare
 desktop breakpoint floors, but the phone branch must fit its selected columns
 inside the available container without a horizontal rail. Each unified-resource
-consumer selects five to seven high-value source fields when they exist, fixes
-identity at 30 percent of the width, and uses shared compact-label and phone
-width classes so the remaining tracks stay readable. No global reveal rule may
-override those source-specific priorities. Below 360 pixels of content width,
-consumers use `platform-table-narrow-hidden` to demote only their lowest-value
-field while the shared shell promotes identity to 40 percent and retains five
-readable fields. Provider tables must keep summary rows single-line and may
+consumer selects the three to five high-value source fields that answer
+identity, condition, capacity or activity at a glance, fixes identity at 30
+percent of the width, and uses shared compact-label and phone width classes so
+the remaining tracks stay readable. A sixth field is permitted only when each
+surviving value remains readable in the rendered phone container. Status must
+appear once: when the identity indicator already communicates the same state or
+severity, the duplicate text/badge column is desktop-only and the expanded row
+retains its full value. Consumers apply `platform-table-phone-hidden` to both
+the header and body cell for normal-phone demotions; the shared container rule
+owns that symmetric visibility. No global reveal rule may override those
+source-specific priorities. Below 360 pixels of content width, consumers use
+`platform-table-narrow-hidden` for any additional lowest-value demotion while
+the shared shell promotes identity to 40 percent. Provider tables must keep
+summary rows single-line and may
 truncate a value only when the row exposes its complete source value through a
 touch- and keyboard-operable inline detail disclosure. The frontend-primitives
 owner fixes that summary rhythm at 32 pixels for every `platform-table` path;
@@ -3406,9 +3413,10 @@ The native provider rollout now applies the same projection to Proxmox backup,
 coverage, recoverable, Ceph, Mail Gateway, and replication rows; Docker native
 and Swarm inventories; Kubernetes native inventories; TrueNAS systems and
 workflows; vSphere hosts and workflows; and Standalone machines. The shared
-`platform-table-narrow-hidden` marker keeps the less-than-360-pixel stage at
-five source-selected fields with a 40-percent identity track, while the normal
-phone stage retains five to seven fields. Docker rows whose full timestamps,
+`platform-table-phone-hidden` marker removes secondary or duplicate tracks at
+the normal phone stage and applies identically to `th` and `td`; the
+`platform-table-narrow-hidden` marker adds only the less-than-360-pixel
+demotion while promoting identity to a 40-percent track. Docker rows whose full timestamps,
 labels, image references, or placement values cannot fit now expose those
 values in the same touch- and keyboard-operable inline detail pattern used by
 the other platform tables rather than relying on hover titles.

@@ -288,7 +288,7 @@ export const KubernetesConfigTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="lifecycle"
-                  class="platform-table-mobile-w-20 md:w-[16%]"
+                  class="platform-table-phone-hidden md:w-[16%]"
                 >
                   <PlatformResponsiveTableLabel compact="Status" full="Lifecycle / trust" />
                 </PlatformSortableTableHead>
@@ -373,7 +373,7 @@ export const KubernetesConfigTable: Component<{
                             </span>
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                            class={`${getPlatformTableCellClassForKind('text')} platform-table-phone-hidden text-base-content`}
                           >
                             {state()}
                           </TableCell>

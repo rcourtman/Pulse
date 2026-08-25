@@ -223,7 +223,7 @@ export const TrueNASVirtualMachinesTable: Component<{
                   kind="badge"
                   sort={sort}
                   sortKey="state"
-                  class="platform-table-mobile-w-15 md:w-[10%]"
+                  class="platform-table-phone-hidden md:w-[10%]"
                 >
                   State
                 </PlatformSortableTableHead>
@@ -247,7 +247,7 @@ export const TrueNASVirtualMachinesTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="boot"
-                  class="platform-table-mobile-w-25 md:w-[11%]"
+                  class="platform-table-phone-hidden md:w-[11%]"
                 >
                   Boot
                 </PlatformSortableTableHead>
@@ -327,7 +327,9 @@ export const TrueNASVirtualMachinesTable: Component<{
                               </div>
                             </div>
                           </TableCell>
-                          <TableCell class={getPlatformTableCellClassForKind('badge')}>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('badge')} platform-table-phone-hidden`}
+                          >
                             <span class="text-[11px] font-medium text-base-content">
                               {stateLabel()}
                             </span>
@@ -343,7 +345,7 @@ export const TrueNASVirtualMachinesTable: Component<{
                             {formatPlatformTableBytesValue(vm()?.memoryBytes, '-')}
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                            class={`${getPlatformTableCellClassForKind('text')} platform-table-phone-hidden text-base-content`}
                           >
                             {vm()?.bootloader || '-'}
                           </TableCell>

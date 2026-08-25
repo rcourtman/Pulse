@@ -227,7 +227,7 @@ export const VsphereDatastoresTable: Component<{
                 <PlatformSortableTableHead
                   kind="text"
                   sort={sort}
-                  class="platform-table-mobile-w-15 md:w-[14%]"
+                  class="platform-table-phone-hidden md:w-[14%]"
                 >
                   <PlatformResponsiveTableLabel compact="H" full="Hosts" />
                 </PlatformSortableTableHead>
@@ -237,7 +237,7 @@ export const VsphereDatastoresTable: Component<{
                   sortKey="vms"
                   class="platform-table-mobile-w-15 md:w-[7%]"
                 >
-                  <PlatformResponsiveTableLabel compact="#" full="VMs" />
+                  VMs
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead
                   kind="text"
@@ -321,7 +321,7 @@ export const VsphereDatastoresTable: Component<{
                             </Show>
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                            class={`${getPlatformTableCellClassForKind('text')} platform-table-phone-hidden text-base-content`}
                             title={hosts().title}
                           >
                             <span class="block truncate">{hosts().label}</span>

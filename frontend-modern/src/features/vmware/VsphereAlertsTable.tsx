@@ -180,7 +180,7 @@ export const VsphereAlertsTable: Component<{
                   Resource
                 </TableHead>
                 <TableHead
-                  class={`${getPlatformTableHeadClassForKind('badge')} platform-table-mobile-w-15 md:w-[10%]`}
+                  class={`${getPlatformTableHeadClassForKind('badge')} platform-table-phone-hidden md:w-[10%]`}
                 >
                   <PlatformResponsiveTableLabel compact="Sev" full="Severity" />
                 </TableHead>
@@ -258,7 +258,9 @@ export const VsphereAlertsTable: Component<{
                               </div>
                             </div>
                           </TableCell>
-                          <TableCell class={getPlatformTableCellClassForKind('badge')}>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('badge')} platform-table-phone-hidden`}
+                          >
                             <AlertSeverityBadge
                               severity={incident.severity}
                               bucket={incident.severityBucket}

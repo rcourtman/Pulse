@@ -2516,10 +2516,16 @@ per-row layout measurement on the Workloads hot path.
 
 The canonical Workloads table mobile floor is 36rem. The mobile table branch
 must preserve that intrinsic width inside its existing scroll shell instead of
-combining it with `min-w-full`, which allows the five operational columns to
-compress into unreadable phone-width fragments. This is a layout-only contract:
-it must not add row-time measurement, duplicate tables, or viewport listeners
-to the Workloads rendering hot path.
+combining it with `min-w-full`, which allows the operational columns to
+compress into unreadable phone-width fragments. `guestRowModel.tsx` owns the
+phone priority projection: retain workload identity and availability once,
+then prefer the already-loaded CPU, memory, disk, and age signals over type or
+provider context that the identity cell already communicates. Wider mobile and
+desktop projections may restore those secondary fields through the same column
+model. This is a layout-only contract: priority changes must remain static
+model/class work and must not add row-time measurement, duplicate tables,
+viewport listeners, or per-row responsive signals to the Workloads rendering
+hot path.
 
 The router owns exactly one in-process Patrol action transition publisher.
 Publication remains an O(1) wakeup keyed by org and action id; reconciliation

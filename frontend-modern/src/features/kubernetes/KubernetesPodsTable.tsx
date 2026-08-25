@@ -231,7 +231,7 @@ export const KubernetesPodsTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="node"
-                  class="platform-table-mobile-w-15 md:w-[13%]"
+                  class="platform-table-phone-hidden md:w-[13%]"
                 >
                   Node
                 </PlatformSortableTableHead>
@@ -239,7 +239,7 @@ export const KubernetesPodsTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="status"
-                  class="platform-table-mobile-w-10 md:w-[8%]"
+                  class="platform-table-phone-hidden md:w-[8%]"
                 >
                   Status
                 </PlatformSortableTableHead>
@@ -340,14 +340,14 @@ export const KubernetesPodsTable: Component<{
                             </span>
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                            class={`${getPlatformTableCellClassForKind('text')} platform-table-phone-hidden text-base-content`}
                           >
                             <span class="block max-w-full truncate" title={node()}>
                               {node()}
                             </span>
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                            class={`${getPlatformTableCellClassForKind('text')} platform-table-phone-hidden text-base-content`}
                           >
                             {/* The mapped label carries the container failure reason
                               (CrashLoopBackOff, ImagePullBackOff, ...) where the raw

@@ -72,7 +72,7 @@ describe('TrueNASStorageTopologyTable', () => {
     expect(headers[2]).toHaveClass('platform-table-mobile-w-25');
     expect(headers[3]).toHaveClass('platform-table-mobile-w-15');
     expect(headers[3]).not.toHaveClass('hidden');
-    expect(headers[5]).toHaveClass('platform-table-mobile-w-15');
+    expect(headers[5]).toHaveClass('platform-table-phone-hidden');
 
     expect(mediaRow).toHaveAttribute('data-truenas-storage-depth', '1');
     expect(photosRow).toHaveAttribute('data-truenas-storage-depth', '2');

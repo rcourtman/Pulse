@@ -7,6 +7,7 @@ import {
   PLATFORM_HEALTH_FILTER_OPTIONS,
   PlatformSortableTableHead,
   PlatformTableEmptyState,
+  PlatformTableRelativeTimeValue,
   PlatformTableToolbar,
   createPlatformTableFilterState,
   createPlatformTableSortState,
@@ -141,7 +142,7 @@ export const DockerSecretsTable: Component<DockerNativeTableProps> = (props) => 
                   kind="text"
                   sort={sort}
                   sortKey="template"
-                  class="platform-table-mobile-w-15 md:w-[14%]"
+                  class="platform-table-phone-hidden md:w-[14%]"
                 >
                   Template
                 </PlatformSortableTableHead>
@@ -156,7 +157,7 @@ export const DockerSecretsTable: Component<DockerNativeTableProps> = (props) => 
                 <PlatformSortableTableHead
                   kind="text"
                   sort={sort}
-                  class="platform-table-mobile-w-10 platform-table-narrow-hidden md:w-[18%]"
+                  class="platform-table-phone-hidden md:w-[18%]"
                 >
                   Labels
                 </PlatformSortableTableHead>
@@ -204,7 +205,7 @@ export const DockerSecretsTable: Component<DockerNativeTableProps> = (props) => 
                             {dockerTextValue(resource.docker?.driver)}
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                            class={`${getPlatformTableCellClassForKind('text')} platform-table-phone-hidden text-base-content`}
                           >
                             {dockerTextValue(resource.docker?.templatingDriver)}
                           </TableCell>
@@ -215,11 +216,13 @@ export const DockerSecretsTable: Component<DockerNativeTableProps> = (props) => 
                               class="inline-block max-w-[12rem] truncate"
                               title={dockerTextValue(resource.docker?.objectCreatedAt)}
                             >
-                              {dockerTextValue(resource.docker?.objectCreatedAt)}
+                              <PlatformTableRelativeTimeValue
+                                value={resource.docker?.objectCreatedAt}
+                              />
                             </span>
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} platform-table-narrow-hidden text-base-content`}
+                            class={`${getPlatformTableCellClassForKind('text')} platform-table-phone-hidden text-base-content`}
                           >
                             <span
                               class="inline-block max-w-[16rem] truncate"

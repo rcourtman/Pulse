@@ -1190,8 +1190,6 @@ describe('GUEST_COLUMNS', () => {
     expect(phoneColumns.map((column) => column.id)).toEqual([
       'name',
       'availability',
-      'type',
-      'info',
       'cpu',
       'memory',
       'disk',

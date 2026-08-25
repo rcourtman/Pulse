@@ -195,7 +195,7 @@ export const VsphereNetworksTable: Component<{
                 <PlatformSortableTableHead
                   kind="text"
                   sort={sort}
-                  class="platform-table-mobile-w-20 md:w-[18%]"
+                  class="platform-table-phone-hidden md:w-[18%]"
                 >
                   Hosts
                 </PlatformSortableTableHead>
@@ -283,7 +283,7 @@ export const VsphereNetworksTable: Component<{
                             </span>
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                            class={`${getPlatformTableCellClassForKind('text')} platform-table-phone-hidden text-base-content`}
                             title={hosts().title}
                           >
                             <span class="block truncate">{hosts().label}</span>

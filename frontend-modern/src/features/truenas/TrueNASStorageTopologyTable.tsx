@@ -388,7 +388,7 @@ export const TrueNASStorageTopologyTable: Component<{
                   kind="badge"
                   sort={sort}
                   sortKey="health"
-                  class="platform-table-mobile-w-15 md:w-[14%]"
+                  class="platform-table-phone-hidden md:w-[14%]"
                 >
                   <PlatformResponsiveTableLabel compact="H" full="Health" />
                 </PlatformSortableTableHead>
@@ -456,7 +456,9 @@ export const TrueNASStorageTopologyTable: Component<{
                               emptyText="-"
                             />
                           </TableCell>
-                          <TableCell class={getPlatformTableCellClassForKind('badge')}>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('badge')} platform-table-phone-hidden`}
+                          >
                             <RiskPill row={row} />
                           </TableCell>
                         </TableRow>

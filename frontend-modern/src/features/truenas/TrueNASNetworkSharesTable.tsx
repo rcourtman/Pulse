@@ -216,7 +216,7 @@ export const TrueNASNetworkSharesTable: Component<{
                 <PlatformSortableTableHead
                   kind="text"
                   sort={sort}
-                  class="platform-table-mobile-w-15 md:w-[19%]"
+                  class="platform-table-phone-hidden md:w-[19%]"
                 >
                   <PlatformResponsiveTableLabel compact="ACL" full="Access" />
                 </PlatformSortableTableHead>
@@ -231,7 +231,7 @@ export const TrueNASNetworkSharesTable: Component<{
                   kind="badge"
                   sort={sort}
                   sortKey="state"
-                  class="platform-table-mobile-w-15 md:w-[7%]"
+                  class="platform-table-phone-hidden md:w-[7%]"
                 >
                   State
                 </PlatformSortableTableHead>
@@ -310,7 +310,7 @@ export const TrueNASNetworkSharesTable: Component<{
                             </span>
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                            class={`${getPlatformTableCellClassForKind('text')} platform-table-phone-hidden text-base-content`}
                             title={[access().title, security().title].filter(Boolean).join(' | ')}
                           >
                             <span class="block truncate">{access().label}</span>
@@ -321,7 +321,9 @@ export const TrueNASNetworkSharesTable: Component<{
                           >
                             <span class="block truncate">{clients().label}</span>
                           </TableCell>
-                          <TableCell class={getPlatformTableCellClassForKind('badge')}>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('badge')} platform-table-phone-hidden`}
+                          >
                             <span class="text-[11px] font-medium text-base-content">
                               {stateLabel()}
                             </span>

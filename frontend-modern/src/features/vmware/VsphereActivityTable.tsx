@@ -336,7 +336,7 @@ export const VsphereActivityTable: Component<{
                   kind="badge"
                   sort={sort}
                   sortKey="state"
-                  class="platform-table-mobile-w-15 md:w-[10%]"
+                  class="platform-table-phone-hidden md:w-[10%]"
                 >
                   State
                 </PlatformSortableTableHead>
@@ -433,7 +433,9 @@ export const VsphereActivityTable: Component<{
                               {activity.title}
                             </span>
                           </TableCell>
-                          <TableCell class={getPlatformTableCellClassForKind('badge')}>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('badge')} platform-table-phone-hidden`}
+                          >
                             <span class="text-[11px] font-semibold text-base-content">
                               {formatActivityState(activity)}
                             </span>

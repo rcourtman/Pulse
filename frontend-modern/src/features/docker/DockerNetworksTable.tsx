@@ -487,7 +487,7 @@ export const DockerNetworksTable: Component<DockerNetworksTableProps> = (props) 
                 <TableHead
                   class={`${getPlatformTableHeadClassForKind('text')} ${columnWidthClass('attention')}`}
                 >
-                  Attention
+                  State
                 </TableHead>
                 <Show when={showSubnet()}>
                   <TableHead
@@ -498,7 +498,7 @@ export const DockerNetworksTable: Component<DockerNetworksTableProps> = (props) 
                 </Show>
                 <Show when={showDriver()}>
                   <TableHead
-                    class={`${getPlatformTableHeadClassForKind('text')} ${columnWidthClass('driver')}`}
+                    class={`${getPlatformTableHeadClassForKind('text')} platform-table-phone-hidden ${columnWidthClass('driver')}`}
                   >
                     Driver
                   </TableHead>
@@ -571,7 +571,7 @@ export const DockerNetworksTable: Component<DockerNetworksTableProps> = (props) 
                           </TableCell>
                           <Show when={showSubnet()}>
                             <TableCell
-                              class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                              class={`${getPlatformTableCellClassForKind('text')} platform-table-phone-hidden text-base-content`}
                             >
                               <span class="inline-block max-w-[18rem] truncate" title={subnets()}>
                                 {subnets()}

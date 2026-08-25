@@ -152,7 +152,7 @@ export const DockerVolumesTable: Component<DockerNativeTableProps> = (props) => 
                   kind="text"
                   sort={sort}
                   sortKey="driver"
-                  class="platform-table-mobile-w-15 md:w-[12%]"
+                  class="platform-table-phone-hidden md:w-[12%]"
                 >
                   Driver
                 </PlatformSortableTableHead>
@@ -160,7 +160,7 @@ export const DockerVolumesTable: Component<DockerNativeTableProps> = (props) => 
                   kind="text"
                   sort={sort}
                   sortKey="scope"
-                  class="platform-table-mobile-w-10 platform-table-narrow-hidden md:w-[10%]"
+                  class="platform-table-phone-hidden md:w-[10%]"
                 >
                   Scope
                 </PlatformSortableTableHead>
@@ -227,12 +227,12 @@ export const DockerVolumesTable: Component<DockerNativeTableProps> = (props) => 
                             }
                           />
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                            class={`${getPlatformTableCellClassForKind('text')} platform-table-phone-hidden text-base-content`}
                           >
                             {dockerTextValue(resource.docker?.driver)}
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} platform-table-narrow-hidden hidden text-base-content md:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('text')} platform-table-phone-hidden text-base-content`}
                           >
                             {dockerTextValue(resource.docker?.scope)}
                           </TableCell>

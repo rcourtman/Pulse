@@ -201,7 +201,7 @@ export const KubernetesClustersTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="version"
-                  class="platform-table-mobile-w-15 md:w-[10%]"
+                  class="platform-table-phone-hidden md:w-[10%]"
                 >
                   <PlatformResponsiveTableLabel compact="Ver" full="Version" />
                 </PlatformSortableTableHead>
@@ -211,7 +211,7 @@ export const KubernetesClustersTable: Component<{
                   sortKey="nodes"
                   class="platform-table-mobile-w-10 md:w-[8%]"
                 >
-                  Nodes
+                  <PlatformResponsiveTableLabel compact="Nds" full="Nodes" />
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead
                   kind="numeric-value"
@@ -356,7 +356,7 @@ export const KubernetesClustersTable: Component<{
                             {context()}
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} font-mono text-[11px] text-base-content`}
+                            class={`${getPlatformTableCellClassForKind('text')} platform-table-phone-hidden font-mono text-[11px] text-base-content`}
                           >
                             <span class="inline-flex items-center rounded bg-surface-alt px-1.5 py-0.5 font-mono text-[10px] text-base-content">
                               {version()}

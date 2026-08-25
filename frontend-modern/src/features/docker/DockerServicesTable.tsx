@@ -206,8 +206,9 @@ export const DockerServicesTable: Component<{
                     qualified service names). Mode / Desired / Running trim
                     to short text and 1-2 digit counts. Update, Ports, and
                     Host get middle slices for rollout state, port lists, and
-                    hostnames. Phones keep the decision-making replica pair;
-                    the basic container tier restores mode, update, and host.
+                    hostnames. Phones keep identity, image, running count, and
+                    rollout state; the expanded row retains the full replica
+                    and placement context.
                   */}
                 <PlatformSortableTableHead
                   kind="name"
@@ -237,7 +238,7 @@ export const DockerServicesTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="mode"
-                  class="platform-table-mobile-w-10 w-[10%] md:w-[8%]"
+                  class="platform-table-phone-hidden md:w-[8%]"
                 >
                   Mode
                 </PlatformSortableTableHead>
@@ -245,7 +246,7 @@ export const DockerServicesTable: Component<{
                   kind="numeric-value"
                   sort={sort}
                   sortKey="desired"
-                  class="platform-table-narrow-hidden platform-table-mobile-w-10 w-[10%] md:w-[8%]"
+                  class="platform-table-phone-hidden md:w-[8%]"
                 >
                   Desired
                 </PlatformSortableTableHead>
@@ -276,7 +277,7 @@ export const DockerServicesTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="host"
-                  class="platform-table-narrow-hidden platform-table-mobile-w-10 w-[10%] md:w-[10%]"
+                  class="platform-table-phone-hidden md:w-[10%]"
                 >
                   Host
                 </PlatformSortableTableHead>
@@ -340,12 +341,12 @@ export const DockerServicesTable: Component<{
                             </span>
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                            class={`${getPlatformTableCellClassForKind('text')} platform-table-phone-hidden text-base-content`}
                           >
                             {mode()}
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} platform-table-narrow-hidden text-base-content`}
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} platform-table-phone-hidden text-base-content`}
                           >
                             <PlatformTableNumberValue value={service.docker?.desiredTasks ?? 0} />
                           </TableCell>
@@ -372,7 +373,7 @@ export const DockerServicesTable: Component<{
                             </span>
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} platform-table-narrow-hidden text-base-content`}
+                            class={`${getPlatformTableCellClassForKind('text')} platform-table-phone-hidden text-base-content`}
                           >
                             {host()}
                           </TableCell>

@@ -190,14 +190,14 @@ export const KubernetesServicesTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="clusterIp"
-                  class="platform-table-mobile-w-15 kubernetes-service-ip-column md:w-[13%]"
+                  class="platform-table-phone-hidden kubernetes-service-ip-column md:w-[13%]"
                 >
                   <PlatformResponsiveTableLabel compact="IP" full="Cluster IP" />
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead
                   kind="text"
                   sort={sort}
-                  class="platform-table-mobile-w-10 md:w-[13%] platform-table-narrow-hidden"
+                  class="platform-table-phone-hidden md:w-[13%]"
                 >
                   <PlatformResponsiveTableLabel compact="Ext IP" full="External IPs" />
                 </PlatformSortableTableHead>
@@ -280,12 +280,12 @@ export const KubernetesServicesTable: Component<{
                             {serviceType()}
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                            class={`${getPlatformTableCellClassForKind('text')} platform-table-phone-hidden text-base-content`}
                           >
                             {clusterIp()}
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} text-base-content platform-table-narrow-hidden`}
+                            class={`${getPlatformTableCellClassForKind('text')} platform-table-phone-hidden text-base-content`}
                           >
                             <span
                               class="inline-block max-w-[12rem] truncate"

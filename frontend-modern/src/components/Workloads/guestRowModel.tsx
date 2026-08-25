@@ -50,12 +50,12 @@ const WORKLOAD_COLUMN_MIN_LAYOUT: Record<string, WorkloadTableLayoutMode> = {
   runtime: 'tablet',
   cpu: 'narrow',
   memory: 'narrow',
-  // Phone rows retain the compact operational scan: workload kind, all three
-  // capacity metrics, and age. The percentage model below preserves a useful
-  // identity track without hiding those signals behind row expansion.
+  // Phone rows retain the compact operational scan: identity, all three
+  // capacity metrics, and age. Kind and numeric ID move to the expanded row;
+  // seven simultaneous tracks made every value unreadable at phone widths.
   disk: 'narrow',
-  type: 'phone',
-  info: 'phone',
+  type: 'mobile',
+  info: 'mobile',
   vmid: 'tablet',
   uptime: 'narrow',
   backup: 'compact',

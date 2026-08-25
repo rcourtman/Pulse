@@ -172,7 +172,7 @@ export const DockerSwarmNodesTable: Component<DockerNativeTableProps> = (props) 
                   kind="text"
                   sort={sort}
                   sortKey="availability"
-                  class="platform-table-mobile-w-15 w-[15%] md:w-[12%]"
+                  class="platform-table-phone-hidden md:w-[12%]"
                 >
                   <PlatformResponsiveTableLabel compact="Avail" full="Availability" />
                 </PlatformSortableTableHead>
@@ -258,7 +258,7 @@ export const DockerSwarmNodesTable: Component<DockerNativeTableProps> = (props) 
                             {dockerTextValue(resource.docker?.nodeRole)}
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                            class={`${getPlatformTableCellClassForKind('text')} platform-table-phone-hidden text-base-content`}
                           >
                             {dockerTextValue(resource.docker?.availability)}
                           </TableCell>

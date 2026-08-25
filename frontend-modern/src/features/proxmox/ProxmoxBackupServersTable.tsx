@@ -242,7 +242,7 @@ export function ProxmoxBackupServersTable(props: {
                   title="Backups"
                 >
                   <PlatformResponsiveTableLabel
-                    compact="#"
+                    compact="Bkps"
                     full={layoutMode() === 'full' ? 'Backups' : 'Count'}
                   />
                 </TableHead>

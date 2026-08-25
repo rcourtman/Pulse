@@ -204,7 +204,7 @@ export const KubernetesDeploymentsTable: Component<{
                   kind="numeric-value"
                   sort={sort}
                   sortKey="desired"
-                  class="platform-table-mobile-w-10 md:w-[8%]"
+                  class="platform-table-phone-hidden md:w-[8%]"
                 >
                   <PlatformResponsiveTableLabel compact="Des" full="Desired" />
                 </PlatformSortableTableHead>
@@ -212,7 +212,7 @@ export const KubernetesDeploymentsTable: Component<{
                   kind="numeric-value"
                   sort={sort}
                   sortKey="updated"
-                  class="platform-table-mobile-w-10 md:w-[8%] platform-table-narrow-hidden"
+                  class="platform-table-phone-hidden md:w-[8%]"
                 >
                   <PlatformResponsiveTableLabel compact="Upd" full="Updated" />
                 </PlatformSortableTableHead>
@@ -228,7 +228,7 @@ export const KubernetesDeploymentsTable: Component<{
                   kind="numeric-value"
                   sort={sort}
                   sortKey="available"
-                  class="platform-table-mobile-w-10 md:w-[9%]"
+                  class="platform-table-phone-hidden md:w-[9%]"
                 >
                   <PlatformResponsiveTableLabel compact="Avail" full="Available" />
                 </PlatformSortableTableHead>
@@ -296,14 +296,14 @@ export const KubernetesDeploymentsTable: Component<{
                             {cluster()}
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} platform-table-phone-hidden text-base-content`}
                           >
                             <PlatformTableNumberValue
                               value={deployment.kubernetes?.desiredReplicas ?? 0}
                             />
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content platform-table-narrow-hidden`}
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} platform-table-phone-hidden text-base-content`}
                           >
                             <PlatformTableNumberValue
                               value={deployment.kubernetes?.updatedReplicas ?? 0}
@@ -320,7 +320,7 @@ export const KubernetesDeploymentsTable: Component<{
                             </span>
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} platform-table-phone-hidden text-base-content`}
                           >
                             <PlatformTableNumberValue
                               value={deployment.kubernetes?.availableReplicas ?? 0}

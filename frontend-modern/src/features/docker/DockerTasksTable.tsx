@@ -163,7 +163,7 @@ export const DockerTasksTable: Component<DockerNativeTableProps> = (props) => {
                   kind="text"
                   sort={sort}
                   sortKey="desired"
-                  class="platform-table-mobile-w-15 md:w-[12%]"
+                  class="platform-table-phone-hidden md:w-[12%]"
                 >
                   Desired
                 </PlatformSortableTableHead>
@@ -233,7 +233,7 @@ export const DockerTasksTable: Component<DockerNativeTableProps> = (props) => {
                             {dockerNumberValue(resource.docker?.slot)}
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                            class={`${getPlatformTableCellClassForKind('text')} platform-table-phone-hidden text-base-content`}
                           >
                             {dockerTextValue(resource.docker?.desiredState)}
                           </TableCell>

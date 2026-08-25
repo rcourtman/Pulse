@@ -1051,6 +1051,18 @@ body,
   display: none;
 }
 
+/*
+ * Table columns and inline status labels can opt into the same container-led
+ * phone priority contract. Keeping these rules beside the canonical mobile
+ * widths means a header can never disappear at a different breakpoint from
+ * its body cells, and nested panels respond to their own usable width rather
+ * than the browser viewport.
+ */
+.platform-table-phone-only,
+.platform-table-phone-only-inline {
+  display: none;
+}
+
 @container (min-width: 34rem) {
   .platform-table-label-compact {
     display: none;
@@ -1097,6 +1109,19 @@ body,
 
   .table-scroll-shell > .table-fixed.platform-table th.platform-table-mobile-w-10 {
     width: 10%;
+  }
+
+  .table-scroll-shell > .table-fixed.platform-table :is(th, td).platform-table-phone-hidden,
+  .platform-table-phone-hidden-inline {
+    display: none;
+  }
+
+  .table-scroll-shell > .table-fixed.platform-table :is(th, td).platform-table-phone-only {
+    display: table-cell;
+  }
+
+  .platform-table-phone-only-inline {
+    display: inline-flex;
   }
 }
 
