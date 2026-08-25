@@ -6897,47 +6897,54 @@ func generateDisksForNode(node models.Node) []models.PhysicalDisk {
 	diskCount := 1 + mockStableChoice(3, strings.TrimSpace(node.ID), strings.TrimSpace(node.Instance), strings.TrimSpace(node.Name), "physical-disk-count")
 
 	diskModels := []struct {
-		model    string
-		diskType string
-		size     int64
+		model          string
+		diskType       string
+		size           int64
+		reportsWearout bool
 	}{
-		{"Samsung SSD 970 EVO Plus 1TB", "nvme", 1000204886016},
-		{"WD Blue SN570 500GB", "nvme", 500107862016},
-		{"Crucial MX500 2TB", "sata", 2000398934016},
-		{"Seagate BarraCuda 4TB", "sata", 4000787030016},
-		{"Kingston NV2 250GB", "nvme", 250059350016},
-		{"WD Red Pro 8TB", "sata", 8001563222016},
-		{"Samsung 980 PRO 2TB", "nvme", 2000398934016},
-		{"Intel SSD 660p 1TB", "nvme", 1000204886016},
-		{"Toshiba X300 6TB", "sata", 6001175126016},
+		{"Samsung SSD 970 EVO Plus 1TB", "nvme", 1000204886016, true},
+		{"WD Blue SN570 500GB", "nvme", 500107862016, true},
+		{"Crucial MX500 2TB", "sata", 2000398934016, true},
+		{"Seagate BarraCuda 4TB", "sata", 4000787030016, false},
+		{"Kingston NV2 250GB", "nvme", 250059350016, true},
+		{"WD Red Pro 8TB", "sata", 8001563222016, false},
+		{"Samsung 980 PRO 2TB", "nvme", 2000398934016, true},
+		{"Intel SSD 660p 1TB", "nvme", 1000204886016, true},
+		{"Toshiba X300 6TB", "sata", 6001175126016, false},
 	}
 
 	for i := 0; i < diskCount; i++ {
 		diskModel := diskModels[mockStableChoice(len(diskModels), strings.TrimSpace(node.ID), strings.TrimSpace(node.Instance), strings.TrimSpace(node.Name), fmt.Sprintf("%d", i), "physical-disk-model")]
 
-		// Generate health status - most are healthy
+		seedParts := []string{
+			strings.TrimSpace(node.ID),
+			strings.TrimSpace(node.Instance),
+			strings.TrimSpace(node.Name),
+			fmt.Sprintf("%d", i),
+		}
+
+		// Keep alert-producing health evidence stable across mock restarts.
+		// Most disks are healthy, while a small deterministic cohort exercises
+		// unknown and failed states.
 		health := "PASSED"
-		if rand.Float64() < 0.05 { // 5% chance of failure
+		healthRoll := mockStableChoice(100, append(seedParts, "physical-disk-health")...)
+		if healthRoll < 5 {
 			health = "FAILED"
-		} else if rand.Float64() < 0.1 { // 10% chance of unknown
+		} else if healthRoll < 15 {
 			health = "UNKNOWN"
 		}
 
-		// Generate wearout for SSDs (percentage life remaining; lower numbers mean heavy wear)
-		wearout := 0
-		if diskModel.diskType == "nvme" || diskModel.diskType == "sata" {
-			if rand.Float64() < 0.7 { // 70% chance it's an SSD with wearout data
-				wearout = rand.Intn(50) + 50 // 50-100% life remaining
-				if rand.Float64() < 0.1 {    // 10% chance of low life
-					wearout = rand.Intn(15) + 5 // 5-20% life remaining
-				}
+		// Wearout is percentage life remaining. -1 is the canonical unreported
+		// sentinel; 0 is real evidence that an SSD/NVMe has no life remaining
+		// and would correctly render as "Replace Now". Rotational disks never
+		// receive synthetic endurance data.
+		wearout := -1
+		if diskModel.reportsWearout &&
+			mockStableChoice(100, append(seedParts, "physical-disk-wearout-reported")...) < 70 {
+			wearout = 50 + mockStableChoice(51, append(seedParts, "physical-disk-wearout-normal")...)
+			if mockStableChoice(100, append(seedParts, "physical-disk-wearout-low-cohort")...) < 10 {
+				wearout = 5 + mockStableChoice(16, append(seedParts, "physical-disk-wearout-low")...)
 			}
-		}
-		if wearout < 0 {
-			wearout = 0
-		}
-		if wearout > 100 {
-			wearout = 100
 		}
 
 		devPath := fmt.Sprintf("/dev/%s%d", []string{"nvme", "sd"}[i%2], i)

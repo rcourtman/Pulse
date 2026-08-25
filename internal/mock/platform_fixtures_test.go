@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/operationaltrust"
 	"github.com/rcourtman/pulse-go-rewrite/internal/truenas"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
@@ -70,6 +71,80 @@ func TestUnifiedResourceSnapshotIncludesPlatformFixtures(t *testing.T) {
 		t.Fatalf(
 			"expected VMware fixture network %q to project as a canonical VMware network resource",
 			graph.PlatformFixtures.VMware.Networks[0].Name,
+		)
+	}
+}
+
+func TestGenerateDisksForNodeUsesStableRealisticHealthEvidence(t *testing.T) {
+	totals := map[string]int{}
+	reportedWearout := 0
+	unreportedWearout := 0
+	lowWearout := 0
+	rotationalModels := map[string]struct{}{
+		"Seagate BarraCuda 4TB": {},
+		"WD Red Pro 8TB":        {},
+		"Toshiba X300 6TB":      {},
+	}
+
+	for i := 0; i < 300; i++ {
+		node := models.Node{
+			ID:       fmt.Sprintf("disk-health-node-%d", i),
+			Name:     fmt.Sprintf("pve-%d", i),
+			Instance: "mock-pve",
+		}
+		first := generateDisksForNode(node)
+		second := generateDisksForNode(node)
+		if len(first) != len(second) {
+			t.Fatalf("disk count changed for stable node %q: %d then %d", node.ID, len(first), len(second))
+		}
+
+		for diskIndex := range first {
+			disk := first[diskIndex]
+			repeated := second[diskIndex]
+			if disk.Health != repeated.Health || disk.Wearout != repeated.Wearout {
+				t.Fatalf(
+					"health evidence changed for %q disk %d: health=%q wearout=%d, then health=%q wearout=%d",
+					node.ID,
+					diskIndex,
+					disk.Health,
+					disk.Wearout,
+					repeated.Health,
+					repeated.Wearout,
+				)
+			}
+
+			totals[disk.Health]++
+			if disk.Wearout == 0 {
+				t.Fatalf("mock disk %q encoded unreported endurance as spent 0%% life", disk.ID)
+			}
+			if _, rotational := rotationalModels[disk.Model]; rotational && disk.Wearout != -1 {
+				t.Fatalf("rotational mock disk %q reports SSD life %d%%", disk.Model, disk.Wearout)
+			}
+			if disk.Wearout < 0 {
+				unreportedWearout++
+			} else {
+				reportedWearout++
+				if disk.Wearout <= 9 {
+					lowWearout++
+				}
+			}
+		}
+	}
+
+	if totals["PASSED"] <= totals["FAILED"]+totals["UNKNOWN"] {
+		t.Fatalf("mock disk health is not predominantly healthy: %+v", totals)
+	}
+	for _, health := range []string{"PASSED", "UNKNOWN", "FAILED"} {
+		if totals[health] == 0 {
+			t.Fatalf("mock disk health does not exercise %q: %+v", health, totals)
+		}
+	}
+	if reportedWearout == 0 || unreportedWearout == 0 || lowWearout == 0 {
+		t.Fatalf(
+			"mock wearout mix missing a required state: reported=%d unreported=%d low=%d",
+			reportedWearout,
+			unreportedWearout,
+			lowWearout,
 		)
 	}
 }

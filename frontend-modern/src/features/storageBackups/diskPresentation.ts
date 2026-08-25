@@ -646,12 +646,11 @@ export function getPhysicalDiskHealthStatus(
     };
   }
 
+  const isHealthy = PHYSICAL_DISK_HEALTHY_STATES.has(normalizedHealth);
   return {
-    label: PHYSICAL_DISK_HEALTHY_STATES.has(normalizedHealth) ? 'Healthy' : 'Unknown',
-    summary: PHYSICAL_DISK_HEALTHY_STATES.has(normalizedHealth)
-      ? 'No active disk-health issues.'
-      : 'Health state is not reported.',
-    tone: 'text-base-content',
+    label: isHealthy ? 'Healthy' : 'Unknown',
+    summary: isHealthy ? 'No active disk-health issues.' : 'Health state is not reported.',
+    tone: isHealthy ? 'text-emerald-700 dark:text-emerald-300' : 'text-base-content',
   };
 }
 

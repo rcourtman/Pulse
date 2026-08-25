@@ -556,7 +556,7 @@ describe('getPhysicalDiskHealthStatus branch coverage', () => {
     expect(getPhysicalDiskHealthStatus(disk)).toEqual({
       label: 'Healthy',
       summary: 'No active disk-health issues.',
-      tone: 'text-base-content',
+      tone: 'text-emerald-700 dark:text-emerald-300',
     });
   });
 
