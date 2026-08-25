@@ -703,7 +703,9 @@ change may globally weaken the Task 03 lifecycle-state idempotency invariant.
     accumulating, but it must never be expanded into synthetic timestamps or a
     flat line. Fewer than two stored points remains `Collecting history` and
     only metrics-store samples may contribute chart geometry, bounds, or hover
-    inspection.
+    inspection. Current-value legends must preserve the same availability
+    semantics as workload rows: the poller's negative unknown-disk sentinel is
+    unavailable and renders `-`, never a fabricated negative percentage.
     History cards must let the plot area stretch to the card height instead of
     pinning the SVG wrapper to a fixed short height, so guest and node drawer
     history cards do not leave unused card space when headers have different

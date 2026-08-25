@@ -1,30 +1,35 @@
 {
   "version": 1,
-  "base_sha": "caf7f80867871f0a601d9a572cbab309f8d4b41f",
-  "verified_at": "2026-08-25T18:42:00Z",
+  "base_sha": "3678d583bf43840d0086e4ba70c81aec77dadd01",
+  "verified_at": "2026-08-25T19:06:05Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/AI/AICostDashboard.tsx",
-    "frontend-modern/src/utils/aiCostPresentation.ts"
+    "frontend-modern/src/components/Workloads/guestDrawerModel.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/AI/AICostDashboard.tsx": "eb9291049d9c415bfc24868cf45da5f9d862bb24f98100bc0fb10e2188554100",
-    "frontend-modern/src/utils/aiCostPresentation.ts": "816376697dc3eefa1b3d3a198ab29f80ae9148ddbffaf3dc1ab18fb22bc46041"
+    "frontend-modern/src/components/Workloads/guestDrawerModel.ts": "5aaccadfaa746f391431c5138e7a1c051b643e264e57fb8e2f58f121cffb0de9"
   },
-  "routes": ["/settings/pulse-intelligence/provider"],
+  "routes": [
+    "/proxmox/overview",
+    "/docker/overview",
+    "/kubernetes/overview",
+    "/truenas/apps"
+  ],
   "viewports": [
-    { "width": 1440, "height": 900 },
+    { "width": 1280, "height": 800 },
     { "width": 390, "height": 844 }
   ],
   "states": [
-    "loaded provider usage range with no provider/model rows",
-    "phone projection retaining Provider, Model, and Est. USD",
-    "desktop projection restoring Input, Output, and Total"
+    "stopped Proxmox guest History drawer using the negative unknown-disk sentinel",
+    "running Docker container History drawer with populated utilization data",
+    "degraded Kubernetes pod History drawer with populated utilization and network data",
+    "TrueNAS app Overview drawer with long container and identity values"
   ],
   "interactions": [
-    "navigated to Provider & Models and scrolled the settings surface to Provider Usage & Spend",
-    "verified the empty-state row is fully readable at 390px after correcting fixed-table text clipping",
-    "measured zero table-shell and page overflow at 390px and 1440px",
-    "confirmed all six desktop headers return at 1440px"
+    "opened the stopped dev-portal Proxmox guest and switched from Overview to History at 390px",
+    "verified the unavailable disk fallback renders as a dash instead of a negative percentage at 390px and 1280px",
+    "opened Docker and Kubernetes History tabs to confirm valid current metrics and chart geometry remain intact",
+    "opened a TrueNAS app drawer and inspected long-value truncation, stacking, scrolling, and tab placement",
+    "restored the browser viewport after responsive verification"
   ]
 }

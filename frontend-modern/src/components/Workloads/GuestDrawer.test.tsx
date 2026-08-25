@@ -502,6 +502,33 @@ describe('GuestDrawer', () => {
       expect(utilizationChart.querySelector('path')).toBeNull();
     });
 
+    it('renders unavailable current disk usage as a dash', async () => {
+      chartsApiMocks.getMetricsHistory.mockResolvedValue({
+        resourceType: 'vm',
+        resourceId: 'inst1:node1:100',
+        range: '24h',
+        start: 0,
+        end: 0,
+        metrics: {},
+        source: 'store',
+      });
+      render(() => (
+        <GuestDrawer
+          guest={makeGuest({
+            disk: { total: 100, used: 0, free: 100, usage: -1 },
+          })}
+          onClose={vi.fn()}
+        />
+      ));
+
+      await fireEvent.click(screen.getByText('History'));
+      await waitFor(() => expect(chartsApiMocks.getMetricsHistory).toHaveBeenCalled());
+
+      const utilizationChart = screen.getAllByTestId('guest-history-group-chart')[0];
+      expect(utilizationChart).toHaveTextContent('Disk-');
+      expect(utilizationChart).not.toHaveTextContent('Disk-100.0%');
+    });
+
     it('updates grouped metric header values on History chart hover', async () => {
       render(() => <GuestDrawer guest={makeGuest()} onClose={vi.fn()} />);
 

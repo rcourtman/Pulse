@@ -73,13 +73,19 @@ export const getGuestDrawerCurrentMetrics = (guest: Guest): Record<string, numbe
   const cpuPercent = available('cpu') ? getWorkloadCPUPercent(guest.cpu) : undefined;
   const memUsage =
     available('memory') && !guest.memory?.usageUnavailable ? guest.memory?.usage : undefined;
-  const diskUsage = available('disk') ? guest.disk?.usage : undefined;
+  const reportedDiskUsage = available('disk') ? guest.disk?.usage : undefined;
+  const diskUsage =
+    typeof reportedDiskUsage === 'number' &&
+    Number.isFinite(reportedDiskUsage) &&
+    reportedDiskUsage >= 0
+      ? reportedDiskUsage
+      : undefined;
   const finite = (value: number | undefined): number | undefined =>
     typeof value === 'number' && Number.isFinite(value) ? value : undefined;
   return {
     cpu: finite(cpuPercent),
     memory: finite(memUsage),
-    disk: finite(diskUsage),
+    disk: diskUsage,
     netin: available('networkIO') ? finite(guest.networkIn) : undefined,
     netout: available('networkIO') ? finite(guest.networkOut) : undefined,
     diskread: available('diskIO') ? finite(guest.diskRead) : undefined,

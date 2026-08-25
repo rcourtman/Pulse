@@ -142,6 +142,15 @@ describe('guestDrawerModel (branch coverage)', () => {
       expect(result.memory).toBeUndefined();
     });
 
+    it('does not render the negative unknown-disk sentinel as a current history value', () => {
+      const result = getGuestDrawerCurrentMetrics(
+        makeGuest({
+          disk: { total: 100, used: 0, free: 100, usage: -1 },
+        }),
+      );
+      expect(result.disk).toBeUndefined();
+    });
+
     it('drops a non-finite network value via the finite() guard', () => {
       const result = getGuestDrawerCurrentMetrics(
         makeGuest({ networkIn: Number.POSITIVE_INFINITY }),
