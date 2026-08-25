@@ -310,15 +310,27 @@ const readStringArray = (value: unknown): string[] =>
 
 const readPhysicalDiskSourceCandidates = (resource: Resource): string[] => {
   const directSources = readStringArray((resource as { sources?: unknown }).sources);
+  const directPlatformScopes = readStringArray(
+    (resource as { platformScopes?: unknown }).platformScopes,
+  );
   const platformSources = readStringArray(
     (resource.platformData as { sources?: unknown } | undefined)?.sources,
+  );
+  const platformScopes = readStringArray(
+    (resource.platformData as { platformScopes?: unknown } | undefined)?.platformScopes,
   );
   const sourceStatus = (resource.platformData as { sourceStatus?: unknown } | undefined)
     ?.sourceStatus;
   const sourceStatusSources =
     sourceStatus && typeof sourceStatus === 'object' ? Object.keys(sourceStatus) : [];
 
-  return [...platformSources, ...directSources, ...sourceStatusSources];
+  return [
+    ...directPlatformScopes,
+    ...platformScopes,
+    ...platformSources,
+    ...directSources,
+    ...sourceStatusSources,
+  ];
 };
 
 export function getPhysicalDiskSourceKey(resource: Resource): string {

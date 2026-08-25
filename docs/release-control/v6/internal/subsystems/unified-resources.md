@@ -97,6 +97,11 @@ Physical-disk resources own cross-source disk identity. When Proxmox inventory
 and host-agent SMART telemetry describe the same device, the merged resource
 must retain Proxmox node/instance source payloads while carrying SMART
 temperature, capacity, health, and identity enrichment.
+Agent-only physical disks under a canonically merged Proxmox node inherit a
+minimal owning-node Proxmox facet and `proxmox-pve` platform membership even
+when the PVE disk API has no corresponding controller-member row. Their
+`Sources` and SMART facts remain agent-authored; platform ownership must not be
+misrepresented as Proxmox disk telemetry.
 Physical-disk matching is parent-scoped and topology-aware: persisted source
 mappings survive registry rebuilds, controller members sharing a block path
 remain distinct, placeholder serials/WWNs never become canonical or metrics
@@ -4056,6 +4061,11 @@ refreshes and Proxmox-scoped views can drop the disk even though inventory
 still exists. `HostSMARTMeta` must carry `sizeBytes` through adapter, clone,
 read-state, and API transport so disk capacity remains available after
 registry rebuilds.
+When no Proxmox physical-disk row exists, as with member disks behind a PERC or
+other multiplexing controller, `ingestHostSMARTDisks` projects the merged
+parent node's minimal Proxmox ownership facet onto the agent disk. That makes
+the member discoverable in the owning Proxmox workspace without adding a
+false Proxmox data source or changing SMART fact precedence.
 That round trip must also retain provider vendor, controller/target topology,
 and explicit zero-valued SMART counters. Registry matching may use usable
 serial or WWN only inside a compatible physical-disk parent scope; when those

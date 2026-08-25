@@ -95,14 +95,17 @@ it: that connection is invisible to the mapping rather than absent from the
 source, and resolution stays inconclusive for the PBS instance until every
 candidate connection has been observed.
 
-Physical-disk to node association is evidence-directional. A disk reported by a
-host agent carries no Proxmox scope, so its instance is empty and the matching
-node name is the only evidence available; that match must stand. A disk that
-does carry a Proxmox instance belongs only to a node in the same instance and
-must not attach to a node outside it, including a node with no instance at all.
-Requiring an instance on both sides drops every agent-reported disk off the
-Proxmox node it physically lives on, emptying the node filter, breaking per-node
-grouping, and stranding metric target resolution.
+Physical-disk to node association is evidence-directional. An unlinked disk
+reported by a host agent carries no Proxmox scope, so its instance is empty and
+the matching node name is the only evidence available; that fallback match must
+stand. An agent disk whose canonical parent is a merged Proxmox node inherits
+that parent's explicit node/instance ownership, including controller members
+that have no PVE inventory row. Once a disk carries a Proxmox instance it
+belongs only to a node in the same instance and must not attach to a node
+outside it, including a node with no instance at all. Requiring an instance on
+both sides for unlinked agent disks, or discarding inherited instance evidence
+for linked disks, empties node filters, breaks per-node grouping, and strands
+metric target resolution.
 
 The Physical Disks surface reads wearout through the same evidence boundary the
 server applies. `-1` is unreported and renders as a muted placeholder, a `0`
@@ -5303,6 +5306,11 @@ exact, so selecting PVE does not admit PBS and selecting PBS does not admit
 PVE. Agent-reported SMART disks correlated to a unique PBS host may carry PBS
 platform membership for this filter, but their health and device facts remain
 agent telemetry rather than PBS API inventory.
+Agent-reported SMART disks parented to a merged PVE node likewise carry PVE
+platform membership for this filter even when the PVE disk API exposes only a
+logical RAID volume. Controller-member identity, health, temperature, and
+collection status remain agent telemetry, and the storage source resolver must
+read canonical `platformScopes` before falling back to raw data sources.
 
 `frontend-modern/src/features/storageBackups/__tests__/storageModelCore.test.ts`,
 `frontend-modern/src/features/storageBackups/__tests__/diskPresentation.test.ts`,

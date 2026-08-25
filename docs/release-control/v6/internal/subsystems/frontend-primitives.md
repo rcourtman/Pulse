@@ -1657,6 +1657,10 @@ Agent`), with the plain-language source phrase available through accessible
    default row may carry only a quiet icon/count cue beside the guest name to
    show nested runtime presence; names, metrics, state, and actions stay in the
    drawer or Docker lens.
+   Shared platform-scoped storage presenters follow the same membership rule.
+   A physical disk may be sourced only from the agent while canonically owned
+   by a Proxmox node, so hidden provider-family filters must consult
+   `platformScopes` before falling back to `sources` or `platformType`.
    Drawer-to-runtime navigation is still part of the shared platform-table
    affordance contract: when the LXC drawer exposes an `Open Docker` action for
    nested containers, that action must use the Docker host facet route state so
@@ -6355,8 +6359,11 @@ drawer grouping and fallback proof belongs in
 canonical shared Storage surface for its Storage tab and supplies the hidden
 `proxmox-all` filter. Shared storage source matching owns that internal
 umbrella and admits normalized PVE, PBS, and other Proxmox-family source keys;
-visible source-picker filters remain exact. The page must not create a
-PBS-only disk table or duplicate storage state in the Proxmox feature.
+visible source-picker filters remain exact. Agent-only physical-disk telemetry
+whose canonical parent is a Proxmox node is admitted through its explicit
+platform membership rather than being hidden because its fact source remains
+`agent`. The page must not create a PBS-only disk table or duplicate storage
+state in the Proxmox feature.
 
 The rendered route contract in
 `frontend-modern/src/features/proxmox/__tests__/ProxmoxPageSurface.contract.test.tsx`

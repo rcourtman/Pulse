@@ -6197,3 +6197,83 @@ func TestIncidentActionFallbackKeepsNetworkAndStorageGuidanceDistinct(t *testing
 		t.Fatalf("storage action = %q, want storage guidance", storageAction)
 	}
 }
+
+func TestIssue1720AgentControllerMembersInheritOwningProxmoxScope(t *testing.T) {
+	now := time.Date(2026, 8, 25, 12, 0, 0, 0, time.UTC)
+	registry := NewRegistry(nil)
+	registry.IngestSnapshot(models.StateSnapshot{
+		Nodes: []models.Node{{
+			ID:            "cluster-a-pve1",
+			Name:          "pve1",
+			Instance:      "cluster-a",
+			ClusterName:   "cluster-a",
+			LinkedAgentID: "host-1",
+			Status:        "online",
+			LastSeen:      now,
+		}},
+		Hosts: []models.Host{{
+			ID:           "host-1",
+			Hostname:     "pve1",
+			LinkedNodeID: "cluster-a-pve1",
+			Status:       "online",
+			LastSeen:     now,
+			Sensors: models.HostSensorSummary{SMART: []models.HostDiskSMART{
+				{
+					Device:      "0 [megaraid,0]",
+					Model:       "TOSHIBA MG03SCA300",
+					Serial:      "9410A0FWFVL9",
+					Type:        "sas",
+					Controller:  "0",
+					Target:      "megaraid,0",
+					SizeBytes:   3_000_592_982_016,
+					Temperature: 35,
+					Health:      "PASSED",
+				},
+				{
+					Device:      "0 [megaraid,1]",
+					Model:       "TOSHIBA MG03SCA300",
+					Serial:      "35C0A39YFVL9",
+					Type:        "sas",
+					Controller:  "0",
+					Target:      "megaraid,1",
+					SizeBytes:   3_000_592_982_016,
+					Temperature: 37,
+					Health:      "PASSED",
+				},
+			}},
+		}},
+	})
+
+	disks := registry.ListByType(ResourceTypePhysicalDisk)
+	if len(disks) != 2 {
+		t.Fatalf("controller member resources = %d, want 2: %+v", len(disks), disks)
+	}
+
+	targets := make(map[string]bool, len(disks))
+	for _, disk := range disks {
+		if disk.PhysicalDisk == nil {
+			t.Fatalf("disk %q has no physical-disk facet", disk.ID)
+		}
+		targets[disk.PhysicalDisk.Target] = true
+		if !reflect.DeepEqual(disk.Sources, []DataSource{SourceAgent}) {
+			t.Fatalf("disk %q sources = %v, want agent telemetry only", disk.ID, disk.Sources)
+		}
+		if !reflect.DeepEqual(disk.PlatformScopes, []string{"agent", "proxmox-pve"}) {
+			t.Fatalf("disk %q platform scopes = %v, want agent + proxmox-pve", disk.ID, disk.PlatformScopes)
+		}
+		if disk.Proxmox == nil || disk.Proxmox.NodeName != "pve1" || disk.Proxmox.Instance != "cluster-a" {
+			t.Fatalf("disk %q Proxmox ownership = %+v", disk.ID, disk.Proxmox)
+		}
+		if disk.ParentID == nil {
+			t.Fatalf("disk %q has no owning node parent", disk.ID)
+		}
+		parent, ok := registry.Get(*disk.ParentID)
+		if !ok || parent.Proxmox == nil || parent.Proxmox.Instance != "cluster-a" {
+			t.Fatalf("disk %q parent = %+v, found=%v", disk.ID, parent, ok)
+		}
+	}
+
+	if !targets["megaraid,0"] || !targets["megaraid,1"] {
+		t.Fatalf("controller members collapsed or disappeared: %v", targets)
+	}
+}

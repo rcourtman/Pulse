@@ -1726,6 +1726,10 @@ func (rr *ResourceRegistry) ingestHostSMARTDisks(host models.Host) {
 	}
 
 	hostParentID := rr.sourceResourceID(SourceAgent, host.ID)
+	var proxmoxOwnership *ProxmoxData
+	if parent, ok := rr.Get(hostParentID); ok {
+		proxmoxOwnership = proxmoxPhysicalDiskOwnership(parent.Proxmox)
+	}
 	unraidStorageID := rr.sourceResourceID(SourceAgent, hostUnraidStorageSourceID(host))
 	for _, disk := range host.Sensors.SMART {
 		if fsfilters.IsVirtualBlockDevice(disk.Device) {
@@ -1751,11 +1755,32 @@ func (rr *ResourceRegistry) ingestHostSMARTDisks(host models.Host) {
 		if parentID != "" {
 			resource.ParentID = &parentID
 		}
+		resource.Proxmox = cloneProxmoxData(proxmoxOwnership)
 		sourceID := HostSMARTDiskSourceID(host, disk)
 		if sourceID == "" {
 			continue
 		}
 		rr.ingest(SourceAgent, sourceID, resource, identity)
+	}
+}
+
+// proxmoxPhysicalDiskOwnership projects only the owning-node identity needed
+// by an agent-reported disk. The SMART facts and source remain agent-owned,
+// while the platform facet keeps disks that have no matching PVE inventory row
+// discoverable in the owning Proxmox workspace.
+func proxmoxPhysicalDiskOwnership(parent *ProxmoxData) *ProxmoxData {
+	if parent == nil {
+		return nil
+	}
+	return &ProxmoxData{
+		NodeIdentity:    strings.TrimSpace(parent.NodeIdentity),
+		NodeName:        strings.TrimSpace(parent.NodeName),
+		NodeAliases:     cloneStringSlice(parent.NodeAliases),
+		NodeDisplayName: strings.TrimSpace(parent.NodeDisplayName),
+		ClusterName:     strings.TrimSpace(parent.ClusterName),
+		IsClusterMember: parent.IsClusterMember,
+		Instance:        strings.TrimSpace(parent.Instance),
+		HostURL:         strings.TrimSpace(parent.HostURL),
 	}
 }
 

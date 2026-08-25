@@ -240,6 +240,13 @@ describe('diskPresentation', () => {
         platformData: { sources: ['agent', 'proxmox'] },
       } as unknown as Resource).label,
     ).toBe('PVE');
+    expect(
+      getPhysicalDiskSourceKey({
+        platformType: 'agent',
+        sources: ['agent'],
+        platformScopes: ['agent', 'proxmox-pve'],
+      } as unknown as Resource),
+    ).toBe('proxmox-pve');
   });
 
   it('returns host, health summary, and empty-state presentation canonically', () => {
@@ -491,6 +498,27 @@ describe('diskPresentation', () => {
         },
       ).map((disk) => disk.id),
     ).toEqual(['disk-warning', 'pbs-disk']);
+    expect(
+      filterAndSortPhysicalDisks(
+        [
+          {
+            ...healthyDisk,
+            id: 'megaraid-member',
+            platformType: 'agent',
+            sources: ['agent'],
+            platformScopes: ['agent', 'proxmox-pve'],
+          },
+        ],
+        {
+          selectedNode: null,
+          searchTerm: '',
+          sourceFilter: 'proxmox-all',
+          healthFilter: 'all',
+          getDiskData: () => healthyData,
+          matchesNode: () => true,
+        },
+      ).map((disk) => disk.id),
+    ).toEqual(['megaraid-member']);
     expect(
       filterAndSortPhysicalDisks([warningDisk, healthyDisk], {
         selectedNode: null,
