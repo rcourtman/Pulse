@@ -1,23 +1,21 @@
 {
   "version": 1,
-  "base_sha": "389ff2825e5228a9113921cd2e3ca6c1d2118962",
-  "verified_at": "2026-08-25T16:54:23Z",
+  "base_sha": "07e85acc6d80b83afe95df6fef13617a1687b835",
+  "verified_at": "2026-08-25T17:04:15Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/hooks/useTooltip.ts"
+    "frontend-modern/src/features/vmware/VsphereHostsTable.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/hooks/useTooltip.ts": "5cd07282857599694979567df14cbfdb54f853b73f6d5d17b29ab1fffcc51c17"
+    "frontend-modern/src/features/vmware/VsphereHostsTable.tsx": "55d156b27c0b1e7808fb6ef2e135b5ace3c8a72d60591a0af0af2d2e639fcbf9"
   },
   "routes": [
-    "/docker/overview",
-    "/truenas/overview",
     "/vmware/overview"
   ],
   "viewports": [
     {
-      "width": 1280,
-      "height": 800
+      "width": 1440,
+      "height": 900
     },
     {
       "width": 390,
@@ -25,15 +23,17 @@
     }
   ],
   "states": [
-    "Docker host table before expansion with metric hover targets",
-    "Docker auth-service-01 host drawer open without a lingering metric tooltip",
-    "TrueNAS truenas-main system drawer open at phone width",
-    "vSphere etl-batch-01 workload drawer open at phone width"
+    "phone host table with powered-on rows omitting the redundant Power column",
+    "phone host table with degraded esxi-07 health remaining amber independently of power presentation",
+    "phone esxi-07 host detail expanded without clipping or horizontal overflow",
+    "desktop host table with the Power column and powered-on cells visible",
+    "desktop esxi-01 host detail expanded with the Power column retained"
   ],
   "interactions": [
-    "activated the auth-service-01 metric-heavy row at 390px and verified the memory and CPU tooltip portals dismissed before the drawer reflow",
-    "repeated the auth-service-01 row activation at desktop width and verified the drawer remained unobscured with no lingering metric tooltip",
-    "opened TrueNAS and vSphere specialized drawers at 390px and inspected placement, clipping, stacking, scrolling, and tab usability",
+    "inspected the 390px host table and verified Host, CPU, Mem, VM count, and uptime remain aligned while Power and repeated On values are absent",
+    "expanded and collapsed the degraded esxi-07 host row at 390px and verified the canonical health state and detail disclosure remain usable",
+    "resized to 1440px, verified the Power header and powered-on cells return, and expanded the esxi-01 host detail",
+    "verified Off, Suspended, and Unknown exception badges through the focused component regression test",
     "restored the browser viewport after responsive verification"
   ]
 }

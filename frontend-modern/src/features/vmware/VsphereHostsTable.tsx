@@ -1,4 +1,5 @@
 import { Show, createMemo, type Component, type JSX } from 'solid-js';
+import { MetadataBadge, type MetadataBadgeTone } from '@/components/shared/MetadataBadge';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { ResponsiveMetricCell } from '@/components/shared/responsive';
 import { StackedMemoryBar } from '@/components/Workloads/StackedMemoryBar';
@@ -14,6 +15,7 @@ import {
   formatVmwarePowerState,
   getVmwareResourceDisplayStatus,
   getVmwarePowerStateVariant,
+  normalizeVmwarePowerStateToken,
 } from './vmwarePageModel';
 import { buildMetricKeyForUnifiedResource } from '@/utils/metricsKeys';
 import {
@@ -74,6 +76,24 @@ const VSPHERE_HOST_SORT_KEYS = [
 ] as const;
 
 type VsphereHostSortKey = (typeof VSPHERE_HOST_SORT_KEYS)[number];
+
+type MobilePowerException = {
+  label: 'Off' | 'Suspended' | 'Unknown';
+  tone: MetadataBadgeTone;
+  title: string;
+};
+
+const getMobilePowerException = (powerState: string | undefined): MobilePowerException | null => {
+  const normalized = normalizeVmwarePowerStateToken(powerState);
+  if (normalized === 'poweredon' || normalized === 'on') return null;
+  if (normalized === 'poweredoff' || normalized === 'off') {
+    return { label: 'Off', tone: 'danger', title: 'Power state: Off' };
+  }
+  if (normalized === 'suspended') {
+    return { label: 'Suspended', tone: 'warning', title: 'Power state: Suspended' };
+  }
+  return { label: 'Unknown', tone: 'muted', title: 'Power state: Unknown' };
+};
 
 const getVsphereHostSortValue = (
   host: Resource,
@@ -209,8 +229,9 @@ export const VsphereHostsTable: Component<{
                     Desktop widths give the Host FQDN room, balance the CPU
                     and Memory bars, and trim the Datacenter / Cluster /
                     Power / vCenter text columns and the Datastores / VMs
-                    integer-count columns to what their content actually
-                    needs. Mobile widths are unchanged.
+                    integer-count columns to what their content actually needs.
+                    Phone rows omit the normally repetitive powered-on column;
+                    exceptional power states remain visible beside the host.
                   */}
                 <PlatformSortableTableHead
                   kind="name"
@@ -248,7 +269,7 @@ export const VsphereHostsTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="power"
-                  class="platform-table-mobile-w-10 platform-table-narrow-hidden w-[12%] md:w-[7%]"
+                  class="hidden md:table-cell md:w-[7%]"
                 >
                   Power
                 </PlatformSortableTableHead>
@@ -329,6 +350,7 @@ export const VsphereHostsTable: Component<{
                       meta()?.datastoreIds?.length ?? meta()?.datastoreNames?.length ?? 0;
                     const vmCount = () =>
                       vmCountByHost().get(asTrimmedString(meta()?.managedObjectId) || '') ?? 0;
+                    const mobilePowerException = () => getMobilePowerException(meta()?.powerState);
                     const displayStatus = () => getVmwareResourceDisplayStatus(host);
                     const indicator = () => getSimpleStatusIndicator(displayStatus());
                     const metricsKey = () => buildMetricKeyForUnifiedResource(host);
@@ -384,9 +406,26 @@ export const VsphereHostsTable: Component<{
                                 title={displayStatus() || 'unknown'}
                                 ariaHidden
                               />
-                              <span class="truncate font-semibold text-base-content" title={name()}>
+                              <span
+                                class="min-w-0 truncate font-semibold text-base-content"
+                                title={name()}
+                              >
                                 {name()}
                               </span>
+                              <Show when={mobilePowerException()}>
+                                {(power) => (
+                                  <MetadataBadge
+                                    size="xs"
+                                    shape="rounded"
+                                    tone={power().tone}
+                                    class="shrink-0 md:hidden"
+                                    title={power().title}
+                                    data-vsphere-host-power-exception={power().label.toLowerCase()}
+                                  >
+                                    {power().label}
+                                  </MetadataBadge>
+                                )}
+                              </Show>
                             </div>
                           </TableCell>
                           <TableCell
@@ -407,7 +446,7 @@ export const VsphereHostsTable: Component<{
                             <span class="block truncate">{cluster()}</span>
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} platform-table-narrow-hidden text-base-content`}
+                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
                           >
                             <div class="flex items-center gap-2">
                               <StatusDot

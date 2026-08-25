@@ -4184,6 +4184,13 @@ identity candidates) and pass them into the shared metric bar primitives
 (`ResponsiveMetricCell`, `StackedMemoryBar`, `StackedDiskBar`); the static
 `METRIC_THRESHOLDS` display constants remain fallback-only presentation for
 callers without alert configuration in scope.
+The vSphere ESXi host table keeps power state distinct from aggregate resource
+health without spending a phone column on the repeated normal case. At phone
+widths the Power column is hidden and a shared `MetadataBadge` appears beside
+host identity only for Off, Suspended, or Unknown; powered-on hosts retain only
+the canonical health dot there. Tablet and desktop widths keep the full Power
+column, and the mobile exception badge must not replace or recolor the health
+indicator.
 Canonical Linux memory usage-unavailable is a first-class metric fallback,
 not a numeric zero. Shared workload bars, platform tables, drawers, and live
 history labels must render `N/A` (while retaining known capacity where useful)

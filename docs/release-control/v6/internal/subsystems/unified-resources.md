@@ -2724,6 +2724,12 @@ top-level types. Phase-1 vSphere work must not invent `esxi-host`,
 `vsphere-vm`, `vsphere-cluster`, `system-container`, `app-container`, or
 `physical-disk` projections just because the upstream APIs expose additional
 object classes.
+The ESXi consumer preserves provider-authored power state separately from
+aggregate resource health. Desktop tables may expose both as independent
+columns; phone presentation may suppress the ordinary powered-on value, but
+must surface Off, Suspended, or Unknown beside host identity and must not use
+that exception badge as a replacement for the canonical resource-health
+indicator.
 That same VMware contract now also includes the shared source boundary. When
 runtime work starts, VMware-backed records must flow through one canonical
 VMware source key plus `platformType: vmware-vsphere`, not through separate

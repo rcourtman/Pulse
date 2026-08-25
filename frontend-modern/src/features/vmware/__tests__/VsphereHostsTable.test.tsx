@@ -53,7 +53,7 @@ afterEach(() => {
 });
 
 describe('VsphereHostsTable', () => {
-  it('keeps power, VM count, and uptime in the phone column set', () => {
+  it('hides the normal power column on phones while retaining VM count and uptime', () => {
     const { container } = render(() => (
       <VsphereHostsTable
         hosts={[makeHost({ id: 'host-1' })]}
@@ -69,8 +69,59 @@ describe('VsphereHostsTable', () => {
     expect(headers.find((header) => header.textContent?.includes('Host'))).toHaveClass(
       'platform-table-mobile-w-30',
     );
-    expect(headers.find((header) => header.textContent?.includes('Power'))).toHaveClass('w-[12%]');
+    expect(headers.find((header) => header.textContent?.includes('Power'))).toHaveClass(
+      'hidden',
+      'md:table-cell',
+    );
     expect(headers.find((header) => header.textContent?.includes('Up'))).toHaveClass('w-[16%]');
+  });
+
+  it('shows only exceptional power states beside the host name on phones', () => {
+    const poweredOn = makeHost({ id: 'host-on' });
+    const poweredOff = makeHost({
+      id: 'host-off',
+      vmware: { ...makeHost({ id: 'host-off' }).vmware!, powerState: 'poweredOff' },
+    });
+    const suspended = makeHost({
+      id: 'host-suspended',
+      vmware: { ...makeHost({ id: 'host-suspended' }).vmware!, powerState: 'suspended' },
+    });
+    const unknown = makeHost({
+      id: 'host-unknown',
+      vmware: { ...makeHost({ id: 'host-unknown' }).vmware!, powerState: undefined },
+    });
+
+    const { container } = render(() => (
+      <VsphereHostsTable
+        hosts={[poweredOn, poweredOff, suspended, unknown]}
+        scope={[poweredOn, poweredOff, suspended, unknown]}
+        emptyIcon={<span />}
+        emptyTitle="No hosts"
+        emptyDescription="No hosts"
+        showToolbar={false}
+      />
+    ));
+
+    expect(
+      container.querySelector(
+        '[data-vsphere-host-row="host-on"] [data-vsphere-host-power-exception]',
+      ),
+    ).toBeNull();
+    expect(
+      container.querySelector(
+        '[data-vsphere-host-row="host-off"] [data-vsphere-host-power-exception="off"]',
+      ),
+    ).toHaveTextContent('Off');
+    expect(
+      container.querySelector(
+        '[data-vsphere-host-row="host-suspended"] [data-vsphere-host-power-exception="suspended"]',
+      ),
+    ).toHaveTextContent('Suspended');
+    expect(
+      container.querySelector(
+        '[data-vsphere-host-row="host-unknown"] [data-vsphere-host-power-exception="unknown"]',
+      ),
+    ).toHaveTextContent('Unknown');
   });
 
   it('treats an impaired vSphere source as degraded for the row indicator and health filter', async () => {
