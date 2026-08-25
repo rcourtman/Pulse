@@ -9240,6 +9240,16 @@ credential remains denied for that identity after re-enrollment, even if it is
 still valid for another active agent. The admin-only `allow-reenroll` route is
 the explicit policy override that permits the prior credential again.
 
+The browser connection API maps removal by typed connection identity:
+`agent:{id}` uses the host-agent delete route, `docker:{id}` uses the Docker
+runtime delete route, and `kubernetes:{id}` uses the Kubernetes cluster delete
+route. Agent Doctor applies the same typed routing to the three existing
+admin-only `allow-reenroll` endpoints. Unknown types and missing identifiers
+fail locally rather than falling through to a different lifecycle authority.
+Successful allowance is followed by a diagnostic refresh so the rendered
+read model cannot continue to advertise a removal block that has just been
+cleared.
+
 `internal/api/host_agent_removal_lifecycle_integration_test.go` exercises the
 real router middleware, token persistence/reload, monitor reconstruction,
 delete and config handlers, generated install token, alias re-enrollment, and

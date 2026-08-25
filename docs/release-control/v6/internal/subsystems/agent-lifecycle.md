@@ -749,8 +749,13 @@ evidence is absent.
 
 Repair entries remain handoffs to existing lifecycle operations:
 `copy_upgrade_command` renders a local operator command and
-`allow_reenroll` invokes the existing removed-agent flow. They never enqueue a
-remote command or create an action plan. A stale agent with an unknown or
+`allow_reenroll` invokes the existing removed-agent flow. Agent Doctor exposes
+that supported action for removed host, Docker / Podman, and Kubernetes
+diagnostics, disables the control while the request is pending, reports the
+result, and refreshes diagnostics after success. The connection ID's typed
+prefix selects the matching lifecycle endpoint; an absent ID or unknown type
+must fail closed without issuing a request. They never enqueue a remote command
+or create an action plan. A stale agent with an unknown or
 explicitly unsupported runtime family, or with FreeBSD/pfSense installer state
 that the server cannot verify, must receive an unsupported handoff rather than
 a guessed command. A non-empty legacy Linux distribution identifier is not

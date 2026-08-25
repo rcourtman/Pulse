@@ -551,6 +551,11 @@ describe('Agent Doctor model', () => {
       'removed',
     );
     expect(
+      collectInfrastructureAgentDoctorTargets(base).find(
+        (target) => target.connectionId === 'agent:removed-host',
+      )?.diagnostic?.repairActions,
+    ).toEqual([expect.objectContaining({ code: 'allow_reenroll', supported: true })]);
+    expect(
       collectInfrastructureAgentDoctorTargets({
         ...base,
         scopedAgentIds: ['agent:host-1'],
