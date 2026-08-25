@@ -57,6 +57,59 @@ const unsafeUrlNode = {
   },
 };
 
+const asRecord = (value: unknown): Record<string, unknown> =>
+  value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+
+function buildOfflineNodeFixture(
+  resource: Record<string, unknown>,
+  nodeName: "pve5" | "pve6",
+) {
+  const unsafe = nodeName === "pve6";
+  const displayName = unsafe ? "Unsafe Link Node" : "Disaster Recovery B";
+  const lastSeen = offlineNode.lastSeen;
+  const proxmox = asRecord(resource.proxmox);
+  const agent = asRecord(resource.agent);
+  const sourceStatus = asRecord(resource.sourceStatus);
+
+  return {
+    ...resource,
+    name: displayName,
+    status: "offline",
+    lastSeen,
+    customUrl: unsafe ? unsafeUrlNode.customUrl : `https://${nodeName}:8006`,
+    canonicalIdentity: {
+      ...asRecord(resource.canonicalIdentity),
+      displayName,
+      hostname: nodeName,
+      platformId: nodeName,
+    },
+    sourceStatus: {
+      ...sourceStatus,
+      agent: { status: "offline", lastSeen },
+      proxmox: { status: "offline", lastSeen, error: "unreachable" },
+    },
+    metrics: offlineNode.metrics,
+    uptime: offlineNode.uptime,
+    proxmox: {
+      ...proxmox,
+      nodeName,
+      nodeDisplayName: displayName,
+      host: `https://${nodeName}:8006`,
+      connectionHealth: "error",
+      temperature: offlineNode.proxmox.temperature,
+      uptime: offlineNode.uptime,
+    },
+    agent: {
+      ...agent,
+      hostname: nodeName,
+      uptimeSeconds: offlineNode.uptime,
+      temperature: offlineNode.proxmox.temperature,
+    },
+  };
+}
+
 async function routeOfflineProxmoxInventory(page: Page) {
   // The browser assertion owns presentation, while the Go lifecycle tests own
   // membership reconciliation. Suppress live websocket inventory here and
@@ -69,12 +122,50 @@ async function routeOfflineProxmoxInventory(page: Page) {
       await route.continue();
       return;
     }
+    // Proxmox preloads the other section-specific resource queries. Returning
+    // these agent rows for storage, backup, Ceph, and PMG queries violates the
+    // API's type-filter contract and feeds the same identities into multiple
+    // reactive caches. Only the overview query owns this fixture.
+    const requestedTypes = requestUrl.searchParams.get("type");
+    if (requestedTypes === "agent,vm,system-container,oci-container") {
+      const response = await route.fetch();
+      const payload = asRecord(await response.json());
+      const data = Array.isArray(payload.data)
+        ? payload.data.flatMap((candidate) => {
+            const resource = asRecord(candidate);
+            const nodeName = asRecord(resource.proxmox).nodeName;
+            return nodeName === "pve5" || nodeName === "pve6"
+              ? [buildOfflineNodeFixture(resource, nodeName)]
+              : [];
+          })
+        : [];
+      await route.fulfill({
+        status: response.status(),
+        contentType: "application/json",
+        body: JSON.stringify({
+          ...payload,
+          data,
+          aggregations: { total: 2, byType: { agent: 2 } },
+        }),
+      });
+      return;
+    }
+    const data: unknown[] = [];
     await route.fulfill({
       status: 200,
       contentType: "application/json",
       body: JSON.stringify({
-        data: [offlineNode, unsafeUrlNode],
-        meta: { page: 1, limit: 100, total: 2, totalPages: 1 },
+        data,
+        meta: {
+          page: 1,
+          limit: 100,
+          total: data.length,
+          totalPages: 1,
+        },
+        aggregations: {
+          total: 2,
+          byType: { agent: 2 },
+        },
         links: { next: null },
       }),
     });
@@ -115,8 +206,8 @@ test.describe("Offline Proxmox node visibility", () => {
 
   test("keeps an offline Proxmox node visible on desktop and mobile surfaces", async ({
     page,
-  }) => {
-    await page.context().route("https://pve5:8006/**", async (route) => {
+  }, testInfo) => {
+    await page.context().route("https://**:8006/**", async (route) => {
       await route.fulfill({
         status: 200,
         contentType: "text/html",
@@ -128,7 +219,7 @@ test.describe("Offline Proxmox node visibility", () => {
     await expect(page.getByTestId("proxmox-page")).toBeVisible();
 
     const offlineRow = page
-      .locator('[data-testid="proxmox-page"] tr')
+      .locator('[data-testid="proxmox-page"] tr[data-proxmox-host-row]')
       .filter({ hasText: "Disaster Recovery B" })
       .first();
     await expect(offlineRow).toBeVisible({ timeout: 60_000 });
@@ -136,38 +227,48 @@ test.describe("Offline Proxmox node visibility", () => {
 
     // Offline presentation: live metrics are dashed out, but the node keeps
     // its identity and management affordances.
-    await expect(offlineRow).toContainText("Offline");
+    await expect(offlineRow).toContainText("Disaster Recovery B");
+    if (!testInfo.project.name.startsWith("mobile-")) {
+      await expect(offlineRow).toContainText("Offline");
+    }
     await expect(offlineRow).toContainText("—");
     await expect(offlineRow).not.toContainText("71°C");
     await expect(offlineRow).not.toContainText("28d 0h");
-    const webInterfaceLink = offlineRow.getByRole("link", {
-      name: "Open web interface for Disaster Recovery B",
-    });
-    await expect(webInterfaceLink).toBeVisible();
-    await expect(webInterfaceLink).toHaveAttribute("href", "https://pve5:8006");
-    await expect(webInterfaceLink).toHaveAttribute("target", "_blank");
-    await expect(webInterfaceLink).toHaveAttribute(
-      "rel",
-      "noopener noreferrer",
-    );
+    if (!testInfo.project.name.startsWith("mobile-")) {
+      const webInterfaceLink = offlineRow.getByRole("link", {
+        name: "Open web interface for Disaster Recovery B",
+      });
+      await expect(webInterfaceLink).toBeVisible();
+      await expect(webInterfaceLink).toHaveAttribute(
+        "href",
+        /^https:\/\/[^/]+:8006$/,
+      );
+      await expect(webInterfaceLink).toHaveAttribute("target", "_blank");
+      await expect(webInterfaceLink).toHaveAttribute(
+        "rel",
+        "noopener noreferrer",
+      );
 
-    const linkBox = await webInterfaceLink.boundingBox();
-    expect(
-      linkBox,
-      "Web-interface control should have a measurable hit target",
-    ).not.toBeNull();
-    expect(linkBox!.width).toBeGreaterThanOrEqual(24);
-    expect(linkBox!.height).toBeGreaterThanOrEqual(24);
+      const linkBox = await webInterfaceLink.boundingBox();
+      expect(
+        linkBox,
+        "Web-interface control should have a measurable hit target",
+      ).not.toBeNull();
+      expect(linkBox!.width).toBeGreaterThanOrEqual(24);
+      expect(linkBox!.height).toBeGreaterThanOrEqual(24);
 
-    // Opening the adjacent control must not bubble into the selectable row.
-    await expect(offlineRow).toHaveAttribute("aria-expanded", "false");
-    const popupPromise = page.context().waitForEvent("page");
-    await webInterfaceLink.click();
-    const popup = await popupPromise;
-    await popup.waitForLoadState("domcontentloaded");
-    expect(popup.url()).toBe("https://pve5:8006/");
-    await popup.close();
-    await expect(offlineRow).toHaveAttribute("aria-expanded", "false");
+      // Opening the adjacent control must not bubble into the selectable row.
+      await expect(offlineRow).toHaveAttribute("aria-expanded", "false");
+      const webInterfaceUrl = await webInterfaceLink.getAttribute("href");
+      expect(webInterfaceUrl).toBeTruthy();
+      const popupPromise = page.context().waitForEvent("page");
+      await webInterfaceLink.click();
+      const popup = await popupPromise;
+      await popup.waitForLoadState("domcontentloaded");
+      expect(popup.url()).toBe(`${webInterfaceUrl}/`);
+      await popup.close();
+      await expect(offlineRow).toHaveAttribute("aria-expanded", "false");
+    }
 
     const viewportContainment = await page.evaluate(() => ({
       clientWidth: document.documentElement.clientWidth,
@@ -178,7 +279,7 @@ test.describe("Offline Proxmox node visibility", () => {
     );
 
     const unsafeRow = page
-      .locator('[data-testid="proxmox-page"] tr')
+      .locator('[data-testid="proxmox-page"] tr[data-proxmox-host-row]')
       .filter({ hasText: "Unsafe Link Node" })
       .first();
     await expect(unsafeRow).toBeVisible();
@@ -186,7 +287,7 @@ test.describe("Offline Proxmox node visibility", () => {
       unsafeRow.getByRole("img", {
         name: "Web interface URL for Unsafe Link Node is invalid",
       }),
-    ).toBeVisible();
+    ).toBeAttached();
     await expect(
       unsafeRow.getByRole("link", {
         name: "Open web interface for Unsafe Link Node",

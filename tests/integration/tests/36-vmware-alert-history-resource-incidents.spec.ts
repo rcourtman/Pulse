@@ -172,6 +172,11 @@ test.describe("VMware alert history resource incidents", () => {
 
     await ensureAuthenticated(page);
 
+    // Alert history also incorporates the live active-alert snapshot. Keep
+    // this fixture authoritative after authentication instead of letting the
+    // mock estate's websocket frame replace the routed history.
+    await page.routeWebSocket("**/ws*", () => {});
+
     await page.goto("/alerts/history", {
       waitUntil: "domcontentloaded",
     });

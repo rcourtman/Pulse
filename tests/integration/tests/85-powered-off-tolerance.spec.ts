@@ -117,11 +117,11 @@ test("powered-off tolerance preserves inheritance, explicit zero, and strict val
   await expect(tolerance).toHaveValue("");
   await expect(
     page.getByText(
-      "Blank inherits the existing policy; 0 alerts on the first stopped observation.",
+      "Blank inherits the existing policy. 0 alerts on the first stopped observation.",
       { exact: true },
     ),
   ).toBeVisible();
-  await expect(page.getByRole("combobox", { name: "Resource" })).toHaveValue(
+  await expect(page.getByLabel("Resource", { exact: true })).toHaveValue(
     "vm:1567",
   );
   await tolerance.fill("300");

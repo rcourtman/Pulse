@@ -16,7 +16,7 @@ async function openProxmoxBackups(page: Page) {
   });
   await expect(sections).toBeVisible({ timeout: 60_000 });
   await sections.getByRole("link", { name: "Backups", exact: true }).click();
-  await expect(page).toHaveURL(/\/proxmox\/backups$/);
+  await expect(page).toHaveURL(/\/proxmox\/backups\/date$/);
 }
 
 // Layout guards for the Proxmox Backups section, which replaced the retired
@@ -37,11 +37,7 @@ test.describe("Proxmox backups layout guards", () => {
     await ensureAuthenticated(page);
     await openProxmoxBackups(page);
 
-    // The guest-centric Coverage view is the default whenever anything needs
-    // attention; the day-activity strip lives in the By date view.
-    const byDateButton = page.getByRole("button", { name: "By date" });
-    await expect(byDateButton).toBeVisible({ timeout: 60_000 });
-    await byDateButton.click();
+    // The Backups section now opens the date view directly.
     await expect(page.getByText("Backups per day").first()).toBeVisible();
     const dayButtons = page.getByRole("button", { name: /: \d+ backups?$/ });
     await expect.poll(() => dayButtons.count()).toBeGreaterThanOrEqual(7);
@@ -69,10 +65,6 @@ test.describe("Proxmox backups layout guards", () => {
     await page.setViewportSize(DESKTOP_VIEWPORT);
     await ensureAuthenticated(page);
     await openProxmoxBackups(page);
-
-    const byDateButton = page.getByRole("button", { name: "By date" });
-    await expect(byDateButton).toBeVisible({ timeout: 60_000 });
-    await byDateButton.click();
 
     await page
       .getByRole("group", { name: "Activity range" })
