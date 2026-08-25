@@ -2383,21 +2383,21 @@ func TestLoadSystemSettingsFileNotExist(t *testing.T) {
 	}
 }
 
-func TestLoadNodesConfig_PVEMonitorBackupsMigration(t *testing.T) {
+func TestLoadNodesConfig_PreservesExplicitlyDisabledPVEBackups(t *testing.T) {
 	tempDir := t.TempDir()
 	cp := config.NewConfigPersistence(tempDir)
 	if err := cp.EnsureConfigDir(); err != nil {
 		t.Fatalf("EnsureConfigDir: %v", err)
 	}
 
-	// Save PVE instance with MonitorBackups=false (simulating old config or missing field)
+	// Save through the canonical writer so the false field is explicitly present.
 	pveInstances := []config.PVEInstance{
 		{
 			Name:           "pve-no-backups",
 			Host:           "https://pve.local:8006",
 			User:           "root@pam",
 			Password:       "secret",
-			MonitorBackups: false, // This should be migrated to true
+			MonitorBackups: false,
 		},
 	}
 
@@ -2415,28 +2415,55 @@ func TestLoadNodesConfig_PVEMonitorBackupsMigration(t *testing.T) {
 	}
 
 	pve := loaded.PVEInstances[0]
-	// MonitorBackups should be migrated to true
-	if !pve.MonitorBackups {
-		t.Errorf("expected MonitorBackups to be migrated to true, got false")
+	if pve.MonitorBackups {
+		t.Error("expected explicit MonitorBackups=false to survive reload")
 	}
 }
 
-func TestLoadNodesConfig_PBSMonitorDatastoresMigration(t *testing.T) {
+func TestLoadNodesConfig_DefaultsMissingLegacyCollectionFields(t *testing.T) {
 	tempDir := t.TempDir()
 	cp := config.NewConfigPersistence(tempDir)
 	if err := cp.EnsureConfigDir(); err != nil {
 		t.Fatalf("EnsureConfigDir: %v", err)
 	}
 
-	// Save PBS instance with MonitorDatastores=false (simulating old config)
+	legacy := []byte(`{
+		"pveInstances": [{"Name":"legacy-pve","Host":"https://pve.local:8006"}],
+		"pbsInstances": [{"Name":"legacy-pbs","Host":"https://pbs.local:8007"}],
+		"pmgInstances": []
+	}`)
+	if err := os.WriteFile(filepath.Join(tempDir, "nodes.enc"), legacy, 0600); err != nil {
+		t.Fatalf("write legacy nodes config: %v", err)
+	}
+
+	loaded, err := cp.LoadNodesConfig()
+	if err != nil {
+		t.Fatalf("LoadNodesConfig: %v", err)
+	}
+	if len(loaded.PVEInstances) != 1 || !loaded.PVEInstances[0].MonitorBackups {
+		t.Fatalf("legacy PVE MonitorBackups was not defaulted: %+v", loaded.PVEInstances)
+	}
+	if len(loaded.PBSInstances) != 1 || !loaded.PBSInstances[0].MonitorBackups || !loaded.PBSInstances[0].MonitorDatastores {
+		t.Fatalf("legacy PBS collection fields were not defaulted: %+v", loaded.PBSInstances)
+	}
+}
+
+func TestLoadNodesConfig_PreservesExplicitlyDisabledPBSCollection(t *testing.T) {
+	tempDir := t.TempDir()
+	cp := config.NewConfigPersistence(tempDir)
+	if err := cp.EnsureConfigDir(); err != nil {
+		t.Fatalf("EnsureConfigDir: %v", err)
+	}
+
+	// Both false fields are explicit in the canonical saved representation.
 	pbsInstances := []config.PBSInstance{
 		{
 			Name:              "pbs-no-datastores",
 			Host:              "https://pbs.local:8007",
 			User:              "admin@pbs",
 			Password:          "secret",
-			MonitorBackups:    true,
-			MonitorDatastores: false, // This should be migrated to true
+			MonitorBackups:    false,
+			MonitorDatastores: false,
 		},
 	}
 
@@ -2454,7 +2481,7 @@ func TestLoadNodesConfig_PBSMonitorDatastoresMigration(t *testing.T) {
 	}
 
 	pbs := loaded.PBSInstances[0]
-	if !pbs.MonitorDatastores {
-		t.Errorf("expected MonitorDatastores to be migrated to true, got false")
+	if pbs.MonitorBackups || pbs.MonitorDatastores {
+		t.Fatalf("expected explicit PBS collection flags to remain false: %+v", pbs)
 	}
 }

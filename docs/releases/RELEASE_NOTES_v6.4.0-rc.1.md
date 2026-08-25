@@ -46,6 +46,8 @@ build path.
 ## Fixed
 
 - Fixed polling intervals are honored when adaptive scheduling is disabled.
+- Disabled Proxmox backup collection now remains disabled after configuration
+  reloads instead of reverting to the default collection scope.
 - Re-enrollment clears host-removal blocks from every owning store so a valid
   returning agent is not held in a partially removed state.
 - Connection alerts can no longer bypass the configured offline-alert policy.

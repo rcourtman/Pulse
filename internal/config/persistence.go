@@ -1477,6 +1477,18 @@ type NodesConfig struct {
 	PMGInstances []PMGInstance `json:"pmgInstances"`
 }
 
+func nodeConfigFieldPresent(instances []map[string]json.RawMessage, index int, field string) bool {
+	if index < 0 || index >= len(instances) {
+		return false
+	}
+	for key := range instances[index] {
+		if strings.EqualFold(key, field) {
+			return true
+		}
+	}
+	return false
+}
+
 // SystemSettings represents system configuration settings
 type SystemSettings struct {
 	PVEPollingInterval           int                  `json:"pvePollingInterval"` // PVE polling interval in seconds
@@ -1827,6 +1839,18 @@ func (c *ConfigPersistence) LoadNodesConfig() (*NodesConfig, error) {
 	if err := json.Unmarshal(data, &config); err != nil {
 		return nil, fmt.Errorf("parse nodes config: %w", err)
 	}
+	// Boolean collector settings predate an explicit schema version. Keep a
+	// parallel view of the saved object keys so a legacy missing field can
+	// still receive its default without treating an explicit false as missing.
+	// Decoding straight into bool loses that distinction and used to re-enable
+	// collectors every time the configuration was loaded.
+	var persistedFields struct {
+		PVEInstances []map[string]json.RawMessage `json:"pveInstances"`
+		PBSInstances []map[string]json.RawMessage `json:"pbsInstances"`
+	}
+	if err := json.Unmarshal(data, &persistedFields); err != nil {
+		return nil, fmt.Errorf("parse nodes config field presence: %w", err)
+	}
 
 	if config.PVEInstances == nil {
 		config.PVEInstances = []PVEInstance{}
@@ -1875,12 +1899,12 @@ func (c *ConfigPersistence) LoadNodesConfig() (*NodesConfig, error) {
 			}
 		}
 
-		// Migration: Ensure MonitorBackups is enabled for PVE instances
-		// This fixes issue #1139 where PVE backups weren't showing
-		if !config.PVEInstances[i].MonitorBackups {
+		// Legacy records omitted MonitorBackups before backup collection became
+		// the default. Default only an absent field; false is an operator choice.
+		if !nodeConfigFieldPresent(persistedFields.PVEInstances, i, "MonitorBackups") {
 			log.Info().
 				Str("instance", config.PVEInstances[i].Name).
-				Msg("Enabling MonitorBackups for PVE instance (was disabled)")
+				Msg("Enabling MonitorBackups for legacy PVE instance (field was absent)")
 			config.PVEInstances[i].MonitorBackups = true
 			migrationApplied = true
 		}
@@ -1916,12 +1940,12 @@ func (c *ConfigPersistence) LoadNodesConfig() (*NodesConfig, error) {
 			migrationApplied = true
 		}
 
-		// Migration: Ensure MonitorBackups is enabled for PBS instances
-		// This fixes issue #411 where PBS backups weren't showing
-		if !config.PBSInstances[i].MonitorBackups {
+		// As above, preserve explicit collection-scope choices while retaining
+		// the default for records written before these fields existed.
+		if !nodeConfigFieldPresent(persistedFields.PBSInstances, i, "MonitorBackups") {
 			log.Info().
 				Str("instance", config.PBSInstances[i].Name).
-				Msg("Enabling MonitorBackups for PBS instance (was disabled)")
+				Msg("Enabling MonitorBackups for legacy PBS instance (field was absent)")
 			config.PBSInstances[i].MonitorBackups = true
 			migrationApplied = true
 		}
@@ -1930,10 +1954,10 @@ func (c *ConfigPersistence) LoadNodesConfig() (*NodesConfig, error) {
 		// Without this, PBS datastores aren't polled, which means backup data
 		// from the direct PBS connection is never fetched — and PVE-side backup
 		// polling skips PBS storages when a direct connection exists.
-		if !config.PBSInstances[i].MonitorDatastores {
+		if !nodeConfigFieldPresent(persistedFields.PBSInstances, i, "MonitorDatastores") {
 			log.Info().
 				Str("instance", config.PBSInstances[i].Name).
-				Msg("Enabling MonitorDatastores for PBS instance (was disabled)")
+				Msg("Enabling MonitorDatastores for legacy PBS instance (field was absent)")
 			config.PBSInstances[i].MonitorDatastores = true
 			migrationApplied = true
 		}
