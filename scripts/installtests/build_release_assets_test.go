@@ -892,6 +892,7 @@ func TestCurrentPrereleasePacketTracksInstallMetadata(t *testing.T) {
 		"Saved views have been removed",
 		"MSP evaluation mode",
 		"Business tier",
+		"API-only Proxmox nodes now retain node metrics history",
 		"not Authenticode-signed",
 		"Unknown Publisher warning",
 	)
@@ -911,6 +912,7 @@ func TestCurrentPrereleasePacketTracksInstallMetadata(t *testing.T) {
 		"Storage rows mark retained readings stale",
 		"Stopped Docker and Podman containers no longer re-fire health alerts",
 		"Disabled Proxmox backup collection scope persists",
+		"API-only Proxmox nodes retain node metrics history",
 		"Windows signing decision: prereleases publish checksum- and detached-signature-verified Windows agents without Authenticode",
 		"Mobile decision: `no-mobile-impact`",
 		"no companion build or public store rollout is required",

@@ -1747,10 +1747,10 @@ diagnostics. The same release workflow also executes the generated self-signed
 and custom-CA Windows installer commands through Windows PowerShell 5.1 before
 release assembly, so the first HTTPS fetch is release proof rather than a
 string-shape assertion.
-The active prerelease `v6.4.0-rc.2` cut sets the repo-root `VERSION`, repo-root
+The active prerelease `v6.4.0-rc.3` cut sets the repo-root `VERSION`, repo-root
 `docker-compose.yml` image default, `scripts/install-docker.sh` fallback, and
-Helm chart release metadata to the same `6.4.0-rc.2` release version. It follows
-`v6.4.0-rc.1` on the published `v6.4.0` candidate line. This prerelease keeps
+Helm chart release metadata to the same `6.4.0-rc.3` release version. It follows
+`v6.4.0-rc.2` on the published `v6.4.0` candidate line. This prerelease keeps
 `rollback_version=v6.3.2`, publishes a versioned public GitHub prerelease
 plus versioned Docker and Helm artifacts, and does not move stable/latest
 install pointers or stable semver aliases. The candidate makes large-estate
@@ -1760,7 +1760,8 @@ behavior; adds notification delivery history and a least-privilege agent
 profile; provides deliberate Docker and Kubernetes re-enrolment recovery; and
 fixes metrics-history retention, Patrol startup recovery, backup pagination,
 stale storage and stale container-health presentation, and backup scope
-persistence. The changes since `v6.4.0-rc.1` do not require a Pulse Mobile
+persistence. API-only Proxmox nodes also retain node metrics history without
+presenting agent-only disk I/O. The changes since `v6.4.0-rc.2` do not require a Pulse Mobile
 client change and preserve
 the existing mobile, Relay, onboarding, and mobile-facing API contracts, so the
 server cut is classified `no-mobile-impact`; no companion upload or public
@@ -1772,6 +1773,11 @@ published-digest, and Unknown Publisher disclosure controls. Signing returns
 only after the release owner explicitly confirms that production credentials
 and certificate authorization are ready and a reviewed policy/code change
 restores it.
+
+The preceding `v6.4.0-rc.2` publication attempt built and staged the exact
+candidate artifacts but failed release convergence before public activation.
+Its tag is immutable and the candidate is superseded by `v6.4.0-rc.3`; stable
+install pointers and stable semver aliases remained on `v6.3.2`.
 
 The preceding prerelease `v6.4.0-rc.1` cut set the repo-root `VERSION`,
 repo-root `docker-compose.yml` image default, `scripts/install-docker.sh`
@@ -2204,8 +2210,8 @@ For the active stable `v6.1.2` cut, the repo-root compose default and
 `scripts/install-docker.sh` fallback must both pin `6.1.2` whenever the
 governed `VERSION` is that stable cut. The stable promotion guard remains in
 force and rejects leftover `-rc.` defaults.
-For the active prerelease `v6.4.0-rc.2` cut, the repo-root compose default and
-`scripts/install-docker.sh` fallback must both pin `6.4.0-rc.2` until the next
+For the active prerelease `v6.4.0-rc.3` cut, the repo-root compose default and
+`scripts/install-docker.sh` fallback must both pin `6.4.0-rc.3` until the next
 governed stable cut moves them forward. Each new release moves
 these two pins together with the repo-root `VERSION` and the Helm chart metadata
 in the same commit; a cut that leaves any of the four on a superseded value is a
