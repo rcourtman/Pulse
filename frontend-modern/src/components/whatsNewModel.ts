@@ -26,14 +26,18 @@ const sectionBody = (lines: string[], headings: Heading[], headingIndex: number)
 };
 
 /**
- * Extract the contents of the `## Highlights` section from a GitHub release
- * body. Returns null when the section is missing or empty, which callers
- * treat as "nothing worth announcing".
+ * Extract the compact pre-update summary from a GitHub release body. Current
+ * customer-facing notes use `What's improved`; historical releases may still
+ * carry `Highlights`.
  */
 export const extractHighlights = (markdown: string): string | null => {
   const lines = markdown.replace(/\r\n/g, '\n').split('\n');
   const headings = headingsIn(lines);
-  const headingIndex = headings.findIndex((heading) => /^highlights\b/i.test(heading.title));
+  const highlightsIndex = headings.findIndex((heading) => /^highlights\b/i.test(heading.title));
+  const improvementsIndex = headings.findIndex((heading) =>
+    /^what(?:'|’)s improved\b/i.test(heading.title),
+  );
+  const headingIndex = highlightsIndex === -1 ? improvementsIndex : highlightsIndex;
   if (headingIndex === -1) {
     return null;
   }
@@ -47,8 +51,11 @@ const CHANGELOG_SECTION_LABELS: Readonly<Record<string, string>> = {
   'new features': 'Added',
   improved: 'Improved',
   improvements: 'Improved',
+  "what's improved": 'Improved',
+  'what’s improved': 'Improved',
   changed: 'Changed',
   fixed: 'Fixed',
+  fixes: 'Fixed',
   'bug fixes': 'Fixed',
   security: 'Security',
   'breaking changes': 'Breaking changes',

@@ -65,56 +65,55 @@ notice. Ignore internal refactors, test changes, CI/tooling, and docs.
 
 Write the release notes in exactly this format:
 
-## v${VERSION}
+# Pulse v${VERSION} Release Notes
 
-### Highlights
-[2-3 short bullets covering only what a typical user would notice and care
-about. This is the entire overview shown inside Pulse after an update. Use one
-plain-text sentence per bullet, no more than 140 characters. Say what improved
-and why it matters in everyday words; avoid component names, acronyms,
-implementation details, links, issue numbers, and Markdown formatting.
-IMPORTANT: if this release has nothing a typical user would notice (only
-internal fixes or minor patches), OMIT this entire section — that deliberately
-keeps the in-app banner silent for maintenance releases. Keep the heading at
-level 3 (###).]
+[One short paragraph explaining the customer outcome of this release. Lead
+with what feels better or works now, not how it was implemented.]
 
-### Added
-[Genuinely new user-facing capabilities. Name the page, workflow, integration,
-or platform where users will find each one, then say what they can now do.]
+## What's improved
 
-### Improved
-[Meaningful changes to existing behavior. Name the affected experience and the
-observable improvement; do not summarize several unrelated changes together.]
+- **[Short outcome]** — [Where users notice it and why it matters.]
 
-### Fixed
-[Problems users would have encountered. State the visible symptom that no
-longer happens, not the internal cause. Include issue refs like (#1234) only
-when the fix verifiably addresses that issue.]
+[Use 4-6 meaningful bullets for a normal RC or minor release. A narrow patch
+may use fewer. Keep every bullet concrete and independently useful.]
+
+## Fixes
+
+- [A visible problem that no longer happens.]
+
+[Omit this section only when there are genuinely no user-facing fixes.]
+
+## Before you upgrade
+
+[Only user-relevant compatibility, migration, signing, companion-app, or known
+risk information. Omit this section when there is nothing users need to do or
+understand before upgrading.]
 
 Guidelines:
 - Plain, factual, understated. No marketing language, no emojis.
 - Omit any section that has no items.
-- Every Added, Improved, and Fixed bullet must stand on its own as a concrete
-  changelog entry. A reader should understand where they would notice the
-  change and what is different without knowing Pulse's implementation.
+- Every bullet must stand on its own. A reader should understand where they
+  would notice the change and what is different without knowing Pulse's
+  implementation.
 - Avoid internal release and architecture vocabulary such as canonical,
   governed, schema, provider transport, preflight, convergence, or runtime
   boundary unless that exact term is visible to the user in the product.
 - Do not use vague entries such as "improved agent handling" or "various UI
   fixes". Split unrelated changes and name the behavior that changed.
-- Do NOT write an Installation section or anything after Fixed — the
-  release pipeline appends those.
-- Highlights is the ONE exception to "boring": it is shown in-app before users
-  update, so make it the shortest useful preview of what changed — still
-  factual, with no hype.
+- Do NOT write Install, Roll back, Promotion Metadata, Release Qualification,
+  validation, gate, workflow, or governance sections. The release pipeline
+  appends concise install and rollback instructions, while machine promotion
+  records stay outside the customer changelog.
 
 Your reply must be ONLY the release-notes markdown, starting with
-"## v${VERSION}" — no preamble, no code fences, no commentary.
+"# Pulse v${VERSION} Release Notes" — no preamble, no code fences, no
+commentary.
 EOF
 
-# Strip accidental markdown fences and anything before the "## v" heading.
+# Strip accidental markdown fences and anything before the release title.
 clean_notes() {
-    sed -e 's/^```[a-z]*$//' -e 's/^```$//' | awk '/^## v/{found=1} found{print}'
+    sed -e 's/^```[a-z]*$//' -e 's/^```$//' | \
+        awk -v title="# Pulse v${VERSION} Release Notes" '$0 == title {found=1} found{print}'
 }
 
 # Both engines must run on the logged-in subscription (Claude Max / OpenAI
@@ -174,7 +173,7 @@ esac
 RELEASE_NOTES=$(printf '%s\n' "$RELEASE_NOTES" | clean_notes)
 
 if [ -z "$RELEASE_NOTES" ]; then
-    echo "Error: release notes generation returned no '## v' section" >&2
+    echo "Error: release notes generation returned no canonical release title" >&2
     exit 1
 fi
 

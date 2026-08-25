@@ -59,9 +59,9 @@ export function UpdateBanner() {
     buildReleaseNotesUrl(updateStore.updateInfo()?.latestVersion),
   );
 
-  // Curated `## Highlights` section of the upcoming release, if the release
-  // author wrote one — helps answer "is this update worth taking now?"
-  // without leaving for GitHub. Empty when absent, and the block hides.
+  // Curated customer-facing improvements from the upcoming release help
+  // answer "is this update worth taking now?" without leaving for GitHub.
+  // Historical `Highlights` notes remain supported. Empty notes stay hidden.
   const highlightsHtml = createMemo(() => {
     const info = updateStore.updateInfo();
     if (!info?.available || !info.releaseNotes) return '';
@@ -284,7 +284,7 @@ export function UpdateBanner() {
                   {updateStore.updateInfo()?.latestVersion}
                 </p>
 
-                {/* What's new preview (curated Highlights section of the release notes) */}
+                {/* What's new preview (customer-facing improvements or historical Highlights) */}
                 <Show when={highlightsHtml()}>
                   <div class="mt-2 p-3 rounded-md border bg-blue-100 dark:bg-blue-950 border-blue-300 dark:border-blue-700 text-blue-800 dark:text-blue-200">
                     <div class="font-medium mb-1">

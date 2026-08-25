@@ -73,6 +73,42 @@ describe('extractHighlights', () => {
     expect(extractHighlights('## Changelog\n- fix things')).toBeNull();
   });
 
+  it("uses the customer-facing What's improved section when Highlights is absent", () => {
+    const body = [
+      '# Pulse v6.4.0 Release Notes',
+      '',
+      'Pulse is faster in larger environments.',
+      '',
+      "## What's improved",
+      '',
+      '- **Faster large environments** — Tables stay responsive as estates grow.',
+      '- **Lighter realtime updates** — Pages do less work when resources change.',
+      '',
+      '## Fixes',
+      '',
+      '- Saved API keys are no longer returned to the browser.',
+    ].join('\n');
+
+    expect(extractHighlights(body)).toBe(
+      [
+        '- **Faster large environments** — Tables stay responsive as estates grow.',
+        '- **Lighter realtime updates** — Pages do less work when resources change.',
+      ].join('\n'),
+    );
+  });
+
+  it('prefers historical Highlights when both preview headings exist', () => {
+    const body = [
+      '## Highlights',
+      '- Short preview.',
+      '',
+      "## What's improved",
+      '- **Longer detail** — Full customer-facing explanation.',
+    ].join('\n');
+
+    expect(extractHighlights(body)).toBe('- Short preview.');
+  });
+
   it('returns null when the Highlights section is empty', () => {
     expect(extractHighlights('## Highlights\n\n## Changelog\n- fix')).toBeNull();
   });
@@ -144,6 +180,27 @@ describe('extractChangelog', () => {
         '### Fixed',
         '',
         '- Keep acknowledged alerts dismissed after refresh.',
+      ].join('\n'),
+    );
+  });
+
+  it("includes What's improved in the post-update changelog", () => {
+    const body = [
+      "## What's improved",
+      '- **Faster large environments** — Tables stay responsive as estates grow.',
+      '## Fixes',
+      '- Storage rows remain visible after refresh.',
+    ].join('\n');
+
+    expect(extractChangelog(body)).toBe(
+      [
+        '### Improved',
+        '',
+        '- **Faster large environments** — Tables stay responsive as estates grow.',
+        '',
+        '### Fixed',
+        '',
+        '- Storage rows remain visible after refresh.',
       ].join('\n'),
     );
   });

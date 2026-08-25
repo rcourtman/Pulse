@@ -189,6 +189,106 @@ class RenderReleaseBodyTest(unittest.TestCase):
 
         render_release_body.validate_release_notes_shape(notes, "6.2.1")
 
+    def test_future_release_notes_require_customer_facing_structure(self) -> None:
+        notes = """# Pulse v6.4.0-rc.2 Release Notes
+
+Pulse is faster and more predictable in larger environments.
+
+## What's improved
+
+- **Faster infrastructure views** — Tables stay responsive as estates grow.
+- **Lighter realtime updates** — Pages do less work when resources change.
+
+## Fixes
+
+- Saved API keys are no longer returned to the browser.
+
+## Before you upgrade
+
+No manual migration is required.
+"""
+
+        render_release_body.validate_release_notes_shape(notes, "6.4.0-rc.2")
+
+    def test_customer_facing_standard_exempts_only_the_already_cut_rc1(self) -> None:
+        self.assertFalse(
+            render_release_body._requires_customer_facing_standard("6.4.0-rc.1")
+        )
+        self.assertTrue(
+            render_release_body._requires_customer_facing_standard("6.4.0-beta.1")
+        )
+        self.assertTrue(
+            render_release_body._requires_customer_facing_standard("v6.4.0-rc.2")
+        )
+        self.assertTrue(
+            render_release_body._requires_customer_facing_standard("6.4.0")
+        )
+
+    def test_future_release_notes_reject_internal_release_control_sections(self) -> None:
+        notes = """# Pulse v6.4.0-rc.2 Release Notes
+
+Pulse is faster and more predictable in larger environments.
+
+## What's improved
+
+- **Faster infrastructure views** — Tables stay responsive as estates grow.
+
+## Release Qualification
+
+- All readiness assertions and release gates passed.
+"""
+
+        with self.assertRaisesRegex(
+            render_release_body.ReleaseBodyIntegrityError,
+            "may only use",
+        ):
+            render_release_body.validate_release_notes_shape(notes, "6.4.0-rc.2")
+
+    def test_future_release_notes_reject_internal_release_control_language(self) -> None:
+        notes = """# Pulse v6.4.0 Release Notes
+
+Pulse is faster and more predictable in larger environments.
+
+## What's improved
+
+- **Safer releases** — Every immutable candidate now crosses an exact-SHA gate.
+"""
+
+        with self.assertRaisesRegex(
+            render_release_body.ReleaseBodyIntegrityError,
+            "internal release-control language",
+        ):
+            render_release_body.validate_release_notes_shape(notes, "6.4.0")
+
+    def test_future_release_notes_require_scannable_improvement_bullets(self) -> None:
+        notes = """# Pulse v6.4.0 Release Notes
+
+Pulse is faster and more predictable in larger environments.
+
+## What's improved
+
+- Tables stay responsive as estates grow.
+"""
+
+        with self.assertRaisesRegex(
+            render_release_body.ReleaseBodyIntegrityError,
+            "short bold outcome",
+        ):
+            render_release_body.validate_release_notes_shape(notes, "6.4.0")
+
+    def test_canonical_template_keeps_machine_process_out_of_customer_notes(self) -> None:
+        template = (
+            _REPO_ROOT / "docs/releases/RELEASE_NOTES_TEMPLATE.md"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("## What's improved", template)
+        self.assertIn("## Fixes", template)
+        self.assertIn("## Before you upgrade", template)
+        self.assertIn("four to six meaningful improvements", template)
+        self.assertIn("pipeline appends the `Install` and `Roll back` sections", template)
+        self.assertNotIn("## Release Qualification", template)
+        self.assertNotIn("## Promotion Metadata", template)
+
     def test_v621_packet_documents_cached_update_verdict_age(self) -> None:
         release_notes = (
             _REPO_ROOT / "docs/releases/RELEASE_NOTES_v6.2.1.md"
@@ -233,7 +333,7 @@ Old metadata section.
         self.assertNotIn("## Installation", sanitized)
         self.assertNotIn("## Promotion Metadata", sanitized)
 
-    def test_main_renders_single_installation_and_promotion_metadata_sections(self) -> None:
+    def test_main_renders_concise_install_and_rollback_sections(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             notes_file = Path(tmp) / "notes.md"
             output_file = Path(tmp) / "body.md"
@@ -276,26 +376,18 @@ Old metadata section.
             sections = [
                 sanitized,
                 render_release_body.build_installation_section(namespace.version),
-                render_release_body.build_promotion_metadata_section(namespace),
+                render_release_body.build_rollback_section(namespace),
             ]
             Path(namespace.output).write_text("\n\n".join(sections) + "\n", encoding="utf-8")
 
             body = output_file.read_text(encoding="utf-8")
-            self.assertEqual(body.count("## Installation"), 1)
-            self.assertEqual(body.count("## Promotion Metadata"), 1)
+            self.assertEqual(body.count("## Install"), 1)
+            self.assertEqual(body.count("## Roll back"), 1)
+            self.assertNotIn("## Promotion Metadata", body)
             self.assertIn("docker pull rcourtman/pulse:6.0.0-rc.2", body)
-            self.assertIn(
-                "[Code signing policy](https://github.com/rcourtman/Pulse/blob/v6.0.0-rc.2/docs/CODE_SIGNING_POLICY.md)",
-                body,
-            )
-            self.assertIn(
-                "public GitHub release assets and the public `rcourtman/pulse` Docker image are community builds",
-                body,
-            )
             self.assertIn("https://pulserelay.pro/download.html", body)
-            self.assertIn("- Rollback target: v5.1.28", body)
-            self.assertIn("- Windows Authenticode required: false", body)
-            self.assertIn("- Unsigned Windows exception: false", body)
+            self.assertIn("The rollback target is `v5.1.28`", body)
+            self.assertIn("./scripts/install.sh --version v5.1.28", body)
             render_release_body.validate_release_body_shape(body, "6.0.0-rc.2")
 
     def test_flattened_release_notes_fail_closed(self) -> None:
@@ -326,13 +418,13 @@ Intro.
 
 - Patrol findings stay governed.
 
-## Installation
+## Install
 
 Install details.
 
-## Promotion Metadata
+## Roll back
 
-- Promotion channel: rc
+Rollback details.
 """
         validation_block = """<!-- VALIDATION_STATUS_START -->
 ## Release Asset Validation: PASSED
@@ -365,13 +457,13 @@ Assets passed.
 
 Intro.## Highlights- Patrol findings stay governed.
 
-## Installation
+## Install
 
 Install details.
 
-## Promotion Metadata
+## Roll back
 
-- Promotion channel: rc
+Rollback details.
 """
         with self.assertRaisesRegex(
             render_release_body.ReleaseBodyIntegrityError,

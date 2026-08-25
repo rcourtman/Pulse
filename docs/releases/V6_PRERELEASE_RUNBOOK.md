@@ -118,6 +118,12 @@ git push origin pulse/v6-release
    ./scripts/trigger-release.sh "$RC_VERSION" "$RELEASE_NOTES_FILE"
    ```
 
+   - Start new notes from `docs/releases/RELEASE_NOTES_TEMPLATE.md` or use the
+     canonical generator. Lead with one short customer-outcome paragraph,
+     keep `What's improved` to at most six scannable items, list concrete
+     fixes, and include only user-relevant risk under `Before you upgrade`.
+     Do not put qualification, validation, workflow, gate, governance, or
+     promotion metadata into the public changelog.
    - Keep the current release-notes, changelog, and operator-support packet in
      sync. Do not update only one of them and treat the packet as ready.
    - Do not paste multiline release notes into the GitHub workflow form as the
@@ -141,7 +147,9 @@ git push origin pulse/v6-release
    - Confirm assets exist and checksums match.
    - Confirm GitHub marks the release as a prerelease.
    - Confirm the rendered release body retains its standalone headings, lists,
-     code fences, Installation section, and Promotion Metadata section.
+     code fences, concise `Install` section, and exact `Roll back` section.
+     Machine promotion metadata belongs in the governed workflow record, not
+     in the customer-facing GitHub release body.
    - Smoke install on a test host/container.
 
 5. Retry an unpublished draft only through the same helper:

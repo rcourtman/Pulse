@@ -1069,6 +1069,18 @@ upgrade, update, release, or artifact-selection behavior.
    must render the public release body through a canonical sanitizer instead of
    publishing `Draft Release Notes` framing, `_DRAFT.md` packet links, or
    duplicate appended `Installation` / `Promotion Metadata` sections verbatim.
+   From the release after `v6.4.0-rc.1` onward, that renderer also owns a
+   customer-facing communication contract. Public notes lead with one short
+   outcome paragraph, use a scannable `What's improved` section with no more
+   than six concrete items, keep fixes symptom-led, and reserve `Before you
+   upgrade` or `Known issues` for information users must act on or understand.
+   Qualification counts, readiness assertions, release gates, workflow
+   narration, artifact identity, and promotion metadata stay in governed
+   workflow summaries and evidence records rather than the public changelog.
+   The renderer appends only concise `Install` and exact `Roll back` sections;
+   `docs/releases/RELEASE_NOTES_TEMPLATE.md` and
+   `scripts/generate-release-notes.sh` are the canonical manual and generated
+   authoring entry points for this shape.
    `docs/UPGRADE_v6.md` and its shipped frontend copy
    `frontend-modern/public/docs/UPGRADE_v6.md` must also stay byte-aligned with
    the current RC support packet so upgrade guidance does not keep pointing

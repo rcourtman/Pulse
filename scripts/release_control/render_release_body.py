@@ -21,6 +21,30 @@ _VALIDATION_STATUS_BLOCK_RE = re.compile(
 
 _HIGHLIGHTS_HEADING_RE = re.compile(r"^(#{2,6})[ \t]+Highlights[ \t]*$", re.IGNORECASE)
 _HIGHLIGHT_BULLET_RE = re.compile(r"^-[ \t]+(.+)$")
+_CUSTOMER_SECTION_HEADINGS = {
+    "what's improved",
+    "what’s improved",
+    "fixes",
+    "before you upgrade",
+    "known issues",
+}
+_INTERNAL_RELEASE_LANGUAGE_RE = re.compile(
+    r"\b(?:"
+    r"readiness assertions?"
+    r"|release gates?"
+    r"|candidate cutoff"
+    r"|exact-sha"
+    r"|immutable (?:release )?candidate"
+    r"|promotion channel"
+    r"|completion state"
+    r"|lane follow-?ups?"
+    r"|artifact identity"
+    r"|self-contained checks"
+    r")\b",
+    re.IGNORECASE,
+)
+_CUSTOMER_FORMAT_MINIMUM = (6, 4, 0)
+_CUSTOMER_FORMAT_EXEMPTIONS = {"6.4.0-rc.1"}
 _ISSUE_REFERENCE_RE = re.compile(
     r"(?:"
     r"(?<![A-Za-z0-9])#[0-9]+\b"
@@ -32,6 +56,10 @@ _ISSUE_REFERENCE_RE = re.compile(
 )
 _MAX_HIGHLIGHT_ITEMS = 3
 _MAX_HIGHLIGHT_LENGTH = 140
+_MAX_CUSTOMER_IMPROVEMENT_ITEMS = 6
+_MAX_CUSTOMER_FIX_ITEMS = 12
+_MAX_CUSTOMER_ITEM_LENGTH = 260
+_MAX_CUSTOMER_SUMMARY_LENGTH = 600
 
 
 def _normalize_newlines(text: str) -> str:
@@ -123,6 +151,136 @@ def _highlight_items(text: str) -> list[str] | None:
     return items
 
 
+def _release_core(version: str) -> tuple[int, int, int] | None:
+    match = re.fullmatch(
+        r"v?(\d+)\.(\d+)\.(\d+)(?:-(?:rc|alpha|beta)\.\d+)?",
+        version,
+        re.IGNORECASE,
+    )
+    if not match:
+        return None
+    return tuple(int(match.group(index)) for index in range(1, 4))
+
+
+def _requires_customer_facing_standard(version: str) -> bool:
+    normalized = version.lower().removeprefix("v")
+    if normalized in _CUSTOMER_FORMAT_EXEMPTIONS:
+        return False
+    core = _release_core(normalized)
+    return core is not None and core >= _CUSTOMER_FORMAT_MINIMUM
+
+
+def _section_lines(text: str, heading_index: int) -> list[str]:
+    lines = _normalize_newlines(text).splitlines()
+    section: list[str] = []
+    for line in lines[heading_index + 1 :]:
+        if re.fullmatch(r"##[ \t]+\S.*", line):
+            break
+        section.append(line)
+    return section
+
+
+def _flat_bullet_items(lines: list[str], section_name: str) -> list[str]:
+    items: list[str] = []
+    for line in lines:
+        if not line.strip():
+            continue
+        bullet = _HIGHLIGHT_BULLET_RE.fullmatch(line)
+        if bullet:
+            items.append(bullet.group(1).strip())
+            continue
+        if line[:1].isspace() and items and not line.lstrip().startswith(("- ", "* ", "+ ")):
+            items[-1] = f"{items[-1]} {line.strip()}"
+            continue
+        raise ReleaseBodyIntegrityError(
+            f"{section_name} must be a flat Markdown bullet list"
+        )
+    return items
+
+
+def _validate_customer_facing_release_notes(text: str) -> None:
+    """Enforce concise public notes without release-control implementation prose."""
+
+    lines = _normalize_newlines(text).strip().splitlines()
+    first_section_index = next(
+        (index for index, line in enumerate(lines) if re.fullmatch(r"##[ \t]+\S.*", line)),
+        None,
+    )
+    if first_section_index is None:
+        raise ReleaseBodyIntegrityError("customer-facing release notes need sections")
+
+    summary = " ".join(line.strip() for line in lines[1:first_section_index] if line.strip())
+    if not summary or summary.startswith(('-', '*', '+')):
+        raise ReleaseBodyIntegrityError(
+            "customer-facing release notes need one plain-language summary paragraph"
+        )
+    if len(summary) > _MAX_CUSTOMER_SUMMARY_LENGTH:
+        raise ReleaseBodyIntegrityError(
+            f"the release summary must be {_MAX_CUSTOMER_SUMMARY_LENGTH} characters or fewer"
+        )
+
+    headings: dict[str, int] = {}
+    for index, line in enumerate(lines):
+        heading = re.fullmatch(r"##[ \t]+(.+?)\s*", line)
+        if not heading:
+            continue
+        normalized = re.sub(r"\s+", " ", heading.group(1)).lower()
+        if normalized not in _CUSTOMER_SECTION_HEADINGS:
+            raise ReleaseBodyIntegrityError(
+                "customer-facing release notes may only use What's improved, "
+                "Fixes, Before you upgrade, and Known issues sections"
+            )
+        if normalized in headings:
+            raise ReleaseBodyIntegrityError(
+                f"customer-facing release notes contain duplicate {heading.group(1)} sections"
+            )
+        headings[normalized] = index
+
+    improvements_key = next(
+        (key for key in ("what's improved", "what’s improved") if key in headings),
+        None,
+    )
+    if improvements_key is None:
+        raise ReleaseBodyIntegrityError(
+            "customer-facing release notes must contain a What's improved section"
+        )
+
+    improvements = _flat_bullet_items(
+        _section_lines(text, headings[improvements_key]),
+        "What's improved",
+    )
+    if not improvements or len(improvements) > _MAX_CUSTOMER_IMPROVEMENT_ITEMS:
+        raise ReleaseBodyIntegrityError(
+            "What's improved must contain between 1 and "
+            f"{_MAX_CUSTOMER_IMPROVEMENT_ITEMS} bullets"
+        )
+    for item in improvements:
+        if len(item) > _MAX_CUSTOMER_ITEM_LENGTH:
+            raise ReleaseBodyIntegrityError(
+                f"customer-facing bullets must be {_MAX_CUSTOMER_ITEM_LENGTH} characters or fewer"
+            )
+        if not re.match(r"^\*\*[^*]+\*\*[ \t]+(?:—|-)[ \t]+\S", item):
+            raise ReleaseBodyIntegrityError(
+                "What's improved bullets must start with a short bold outcome followed by a dash"
+            )
+
+    if "fixes" in headings:
+        fixes = _flat_bullet_items(_section_lines(text, headings["fixes"]), "Fixes")
+        if not fixes or len(fixes) > _MAX_CUSTOMER_FIX_ITEMS:
+            raise ReleaseBodyIntegrityError(
+                f"Fixes must contain between 1 and {_MAX_CUSTOMER_FIX_ITEMS} bullets"
+            )
+        if any(len(item) > _MAX_CUSTOMER_ITEM_LENGTH for item in fixes):
+            raise ReleaseBodyIntegrityError(
+                f"customer-facing bullets must be {_MAX_CUSTOMER_ITEM_LENGTH} characters or fewer"
+            )
+
+    if _INTERNAL_RELEASE_LANGUAGE_RE.search(text):
+        raise ReleaseBodyIntegrityError(
+            "customer-facing release notes contain internal release-control language"
+        )
+
+
 def validate_release_notes_shape(raw_text: str, version: str) -> None:
     """Fail closed when authored release-note Markdown has lost its structure."""
 
@@ -155,6 +313,8 @@ def validate_release_notes_shape(raw_text: str, version: str) -> None:
         )
 
     _highlight_items(text)
+    if _requires_customer_facing_standard(version):
+        _validate_customer_facing_release_notes(text)
 
 
 def strip_validation_status_block(text: str) -> str:
@@ -173,34 +333,43 @@ def validate_release_body_shape(
     """Validate a stored GitHub release body and return its authored body."""
 
     clean_body = strip_validation_status_block(body)
-    validate_release_notes_shape(clean_body, version)
 
-    if clean_body.count("## Installation\n") != 1:
+    if clean_body.count("## Install\n") != 1:
         raise ReleaseBodyIntegrityError(
-            "published release body must contain exactly one Installation section"
+            "published release body must contain exactly one Install section"
         )
-    if clean_body.count("## Promotion Metadata\n") != 1:
+    if clean_body.count("## Roll back\n") != 1:
         raise ReleaseBodyIntegrityError(
-            "published release body must contain exactly one Promotion Metadata section"
+            "published release body must contain exactly one Roll back section"
+        )
+    if "## Promotion Metadata\n" in clean_body:
+        raise ReleaseBodyIntegrityError(
+            "published release body must keep promotion metadata out of customer notes"
         )
     if "Draft Release Notes" in clean_body or "_DRAFT.md" in clean_body:
         raise ReleaseBodyIntegrityError(
             "published release body still contains draft-only framing"
         )
 
-    installation_index = clean_body.index("## Installation\n")
-    promotion_index = clean_body.index("## Promotion Metadata\n")
-    if installation_index >= promotion_index:
+    installation_index = clean_body.index("## Install\n")
+    rollback_index = clean_body.index("## Roll back\n")
+    if installation_index >= rollback_index:
         raise ReleaseBodyIntegrityError(
-            "Installation must precede Promotion Metadata in the published body"
+            "Install must precede Roll back in the published body"
         )
 
     authored_prefix = clean_body[:installation_index]
+    inline_markers = _find_inline_markdown_markers(authored_prefix)
+    if inline_markers:
+        raise ReleaseBodyIntegrityError(
+            "release notes contain flattened Markdown: " + ", ".join(inline_markers)
+        )
     authored_sections = re.findall(r"(?m)^##[ \t]+\S.*$", authored_prefix)
     if not authored_sections:
         raise ReleaseBodyIntegrityError(
-            "published release body has no authored section before Installation"
+            "published release body has no authored section before Install"
         )
+    validate_release_notes_shape(authored_prefix, version)
 
     if expected_body is not None:
         expected_clean = strip_validation_status_block(expected_body)
@@ -262,7 +431,10 @@ def sanitize_release_notes(raw_text: str, version: str) -> str:
     text = _normalize_newlines(raw_text)
     text = _replace_draft_heading(text, version)
     text = _drop_draft_disclaimer(text)
-    text = _drop_level_two_sections(text, {"## Installation", "## Promotion Metadata"})
+    text = _drop_level_two_sections(
+        text,
+        {"## Installation", "## Install", "## Roll back", "## Promotion Metadata"},
+    )
     text = _drop_draft_packet_links(text)
     return _collapse_blank_lines(text)
 
@@ -270,47 +442,33 @@ def sanitize_release_notes(raw_text: str, version: str) -> str:
 def build_installation_section(version: str) -> str:
     return "\n".join(
         [
-            "## Installation",
+            "## Install",
             "",
-            "**Docker (recommended):**",
             "```bash",
             f"docker pull rcourtman/pulse:{version}",
             "```",
             "",
-            "**Docker Compose:**",
-            f"Update your `docker-compose.yml` to use `rcourtman/pulse:{version}`",
+            f"For Docker Compose, update the image to `rcourtman/pulse:{version}` and recreate the container.",
             "",
-            "See the [Installation Guide](https://github.com/rcourtman/Pulse#installation) for complete setup instructions.",
-            "",
-            f"Review the [Code signing policy](https://github.com/rcourtman/Pulse/blob/v{version}/docs/CODE_SIGNING_POLICY.md) for release provenance, approval roles, and signing scope.",
-            "",
-            "Paid Pulse Pro, Relay, and eligible legacy customers: public GitHub release assets and the public `rcourtman/pulse` Docker image are community builds. They do not include the private Pulse Pro runtime hooks. Use https://pulserelay.pro/download.html with your activation key to get the private Pulse Pro Docker image or Linux/LXC archive.",
+            "Pulse Pro and Relay customers should continue using the "
+            "[private download page](https://pulserelay.pro/download.html) and private "
+            "runtime image for paid features.",
         ]
     )
 
 
-def build_promotion_metadata_section(args: argparse.Namespace) -> str:
-    lines = [
-        "## Promotion Metadata",
-        "",
-        f"- Promotion channel: {args.promotion_channel}",
-        f"- Candidate stable tag: {args.candidate_tag}",
-        f"- Promoted prerelease tag: {args.promoted_prerelease_tag or 'n/a'}",
-        f"- Rollback target: {args.rollback_target}",
-        f"- Rollback command: `{args.rollback_command}`",
-    ]
-    if args.planned_ga_date:
-        lines.append(f"- Planned GA date: {args.planned_ga_date}")
-    if args.planned_v5_eos_date:
-        lines.append(f"- Planned v5 end-of-support date: {args.planned_v5_eos_date}")
-    lines.append(f"- Hotfix exception: {args.hotfix_exception}")
-    if args.hotfix_reason:
-        lines.append(f"- Hotfix reason: {args.hotfix_reason}")
-    lines.append(f"- Windows Authenticode required: {args.require_windows_signing}")
-    lines.append(f"- Unsigned Windows exception: {args.unsigned_windows_exception}")
-    if args.unsigned_windows_reason:
-        lines.append(f"- Unsigned Windows reason: {args.unsigned_windows_reason}")
-    return "\n".join(lines)
+def build_rollback_section(args: argparse.Namespace) -> str:
+    return "\n".join(
+        [
+            "## Roll back",
+            "",
+            f"The rollback target is `{args.rollback_target}`:",
+            "",
+            "```bash",
+            args.rollback_command,
+            "```",
+        ]
+    )
 
 
 def parse_args() -> argparse.Namespace:
@@ -397,7 +555,7 @@ def main() -> int:
         sections = [
             sanitized,
             build_installation_section(args.version),
-            build_promotion_metadata_section(args),
+            build_rollback_section(args),
         ]
         rendered = "\n\n".join(sections) + "\n"
         validate_release_body_shape(rendered, args.version)

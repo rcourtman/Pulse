@@ -729,15 +729,15 @@ jobs:
             --unsigned-windows-exception "${{ needs.prepare.outputs.unsigned_windows_exception }}" \
             --unsigned-windows-reason "${{ needs.prepare.outputs.unsigned_windows_reason }}"
 
-          # Highlights provide the compact pre-update preview. The post-update
-          # dialog uses categorized changelog entries instead of that summary.
-          if grep -qiE '^#{1,6}[[:space:]]+highlights\b' "$RENDERED_NOTES_FILE"; then
-            echo "::notice::Release notes include Highlights — the update banner can preview them before users update."
+          # Customer-facing improvements provide the compact pre-update preview.
+          # Historical Highlights sections remain supported for older packets.
+          if grep -qiE "^#{1,6}[[:space:]]+(highlights|what.?s improved)\\b" "$RENDERED_NOTES_FILE"; then
+            echo "::notice::Release notes include customer-facing improvements — the update banner can preview them before users update."
           else
-            echo "::notice::Release notes have no Highlights — the update banner will not show a summary preview."
+            echo "::notice::Release notes have no customer-facing improvements — the update banner will not show a summary preview."
           fi
 
-          if grep -qiE '^#{1,6}[[:space:]]+(added|new features|improved|improvements|changed|fixed|bug fixes|security|breaking changes|deprecated|removed)[[:space:]]*$' "$RENDERED_NOTES_FILE"; then
+          if grep -qiE "^#{1,6}[[:space:]]+(what.?s improved|added|new features|improved|improvements|changed|fixed|fixes|bug fixes|security|breaking changes|deprecated|removed)[[:space:]]*$" "$RENDERED_NOTES_FILE"; then
             echo "::notice::Release notes include categorized changes — the post-update changelog dialog will show them."
           else
             echo "::notice::Release notes have no categorized changes — the post-update changelog dialog stays silent."

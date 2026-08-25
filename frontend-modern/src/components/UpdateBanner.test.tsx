@@ -16,6 +16,7 @@ const { mock } = vi.hoisted(() => ({
           composeUpCommand: string;
         }
       | undefined,
+    releaseNotes: '',
     plan: {
       canAutoUpdate: true,
       requiresRoot: false,
@@ -37,7 +38,7 @@ vi.mock('@/stores/updates', () => ({
       available: true,
       currentVersion: '6.0.0',
       latestVersion: '6.1.0',
-      releaseNotes: '',
+      releaseNotes: mock.releaseNotes,
       releaseDate: '',
       downloadUrl:
         'https://github.com/rcourtman/Pulse/releases/download/v6.1.0/pulse-v6.1.0-linux-amd64.tar.gz',
@@ -71,6 +72,7 @@ afterEach(() => {
   mock.runtimeBuild = 'community';
   mock.deploymentType = 'systemd';
   mock.dockerUpdate = undefined;
+  mock.releaseNotes = '';
   mock.plan = {
     canAutoUpdate: true,
     requiresRoot: false,
@@ -198,5 +200,32 @@ describe('UpdateBanner Proxmox LXC update safety', () => {
 
     fireEvent.click(screen.getByTitle('Show more'));
     expect(screen.getByText(/Safe upgrade:/)).toBeInTheDocument();
+  });
+});
+
+describe('UpdateBanner release-note preview', () => {
+  it("shows customer-facing What's improved bullets in the expanded banner", async () => {
+    mock.releaseNotes = `# Pulse v6.4.0-rc.2 Release Notes
+
+Infrastructure views stay fast and predictable as your environment grows.
+
+## What's improved
+
+- **Faster infrastructure views** — Tables stay responsive as estates grow.
+- **Lighter realtime updates** — Pages do less work when resources change.
+
+## Fixes
+
+- Saved API keys are no longer returned to the browser.
+`;
+
+    render(() => <UpdateBanner />);
+    await screen.findByRole('button', { name: 'Apply Update' });
+    fireEvent.click(screen.getByTitle('Show more'));
+
+    expect(screen.getByText("What's new in v6.1.0")).toBeInTheDocument();
+    expect(screen.getByText(/Faster infrastructure views/)).toBeInTheDocument();
+    expect(screen.getByText(/Lighter realtime updates/)).toBeInTheDocument();
+    expect(screen.queryByText(/Saved API keys/)).not.toBeInTheDocument();
   });
 });
