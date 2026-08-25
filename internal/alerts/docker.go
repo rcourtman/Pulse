@@ -896,6 +896,16 @@ func dockerLabelTags(labels map[string]string) []string {
 }
 
 func (m *Manager) checkDockerContainerHealth(host models.DockerHost, container models.DockerContainer, resourceID, containerName, instanceName, nodeName string) {
+	// Docker retains the last health-check result after a container stops (and
+	// while health checks are suspended in other non-running states). That
+	// persisted value is no longer live health evidence; the runtime-state alert
+	// owns the non-running condition.
+	state := strings.ToLower(strings.TrimSpace(container.State))
+	if state != "" && state != "running" {
+		m.clearDockerContainerHealthAlert(resourceID)
+		return
+	}
+
 	health := strings.ToLower(strings.TrimSpace(container.Health))
 	if health == "" || health == "none" || health == "healthy" || health == "starting" {
 		m.clearDockerContainerHealthAlert(resourceID)

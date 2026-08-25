@@ -37,6 +37,11 @@ Docker and Podman container CPU thresholds evaluate host-capacity-normalized
 CPU percent, not Docker's runtime-native per-core percent. Alert metadata may
 carry the raw per-core value and reporting host CPU count for evidence, but the
 threshold value and canonical `cpuPercent` metadata remain normalized.
+Docker and Podman container health is live evidence only while the container
+state is `running`. Runtime APIs retain the last health-check result after exit
+and suspend health checks in other non-running states, so those stale values
+must clear rather than raise `docker-container-health`; the canonical runtime
+state lifecycle owns the non-running condition.
 Proxmox VM and LXC CPU thresholds consume the same canonical guest CPU-percent
 normalizer as unified live state and guest history. Proxmox guest CPU is the
 authoritative observation for that guest; a Pulse host agent running inside the

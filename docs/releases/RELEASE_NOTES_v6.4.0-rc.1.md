@@ -51,6 +51,8 @@ build path.
 - Re-enrollment clears host-removal blocks from every owning store so a valid
   returning agent is not held in a partially removed state.
 - Connection alerts can no longer bypass the configured offline-alert policy.
+- Stopped Docker and Podman containers no longer re-fire health alerts from the
+  stale health-check result retained by the container runtime.
 - Agent reinstall and hosted enrollment preserve command-policy intent instead
   of silently dropping the command-execution posture.
 - Discovery resolves known equivalent forked host identities when matching

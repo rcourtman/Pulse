@@ -13021,6 +13021,45 @@ func TestDockerContainerHealthAlert(t *testing.T) {
 		}
 	})
 
+	t.Run("stopped container clears persisted unhealthy health", func(t *testing.T) {
+		m := newTestManager(t)
+
+		host := models.DockerHost{
+			ID:          "host-health-stopped",
+			DisplayName: "Docker Host",
+			Hostname:    "docker.local",
+			Containers: []models.DockerContainer{
+				{
+					ID:     "container-stopped",
+					Name:   "stopped-app",
+					State:  "running",
+					Status: "Up 10 minutes (unhealthy)",
+					Health: "unhealthy",
+				},
+			},
+		}
+
+		m.CheckDockerHost(host)
+
+		resourceID := DockerResourceID(host.ID, host.Containers[0].ID)
+		alertID := fmt.Sprintf("docker-container-health-%s", resourceID)
+		if !testHasActiveAlert(t, m, alertID) {
+			t.Fatal("expected running unhealthy container to raise a health alert")
+		}
+
+		// Docker keeps the final health value after exit. It is stale once the
+		// health check is no longer running and must not keep or re-open a health
+		// alert alongside the runtime-state lifecycle.
+		host.Containers[0].State = "exited"
+		host.Containers[0].Status = "Exited (0) 1 minute ago"
+		m.CheckDockerHost(host)
+		m.CheckDockerHost(host)
+
+		if testHasActiveAlert(t, m, alertID) {
+			t.Fatal("expected persisted unhealthy health to stay cleared after container exit")
+		}
+	})
+
 	t.Run("alert cleared when container becomes healthy", func(t *testing.T) {
 		m := newTestManager(t)
 
