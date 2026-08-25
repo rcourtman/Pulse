@@ -1,0 +1,174 @@
+name: Recover Stable Demo Runtime
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: stable-demo-runtime-recovery
+  cancel-in-progress: false
+
+jobs:
+  recover:
+    runs-on: ubuntu-24.04
+    environment: demo-stable
+    env:
+      DEMO_EXPECTED_HOSTNAME: ${{ vars.DEMO_EXPECTED_HOSTNAME }}
+      DEMO_LOCAL_BASE_URL: ${{ vars.DEMO_LOCAL_BASE_URL }}
+      DEMO_PUBLIC_HEALTH_URL: ${{ vars.DEMO_PUBLIC_HEALTH_URL }}
+
+    steps:
+      - name: Checkout exact recovery implementation
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Validate fixed recovery boundary
+        env:
+          DEMO_SERVER_HOST: ${{ secrets.DEMO_SERVER_HOST }}
+          DEMO_SERVER_USER: ${{ secrets.DEMO_SERVER_USER }}
+          DEMO_SERVER_SSH_KEY: ${{ secrets.DEMO_SERVER_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          [ -n "$DEMO_SERVER_HOST" ]
+          [ -n "$DEMO_SERVER_USER" ]
+          [ -n "$DEMO_SERVER_SSH_KEY" ]
+          [ -n "$DEMO_EXPECTED_HOSTNAME" ]
+          [ -n "$DEMO_LOCAL_BASE_URL" ]
+          [ -n "$DEMO_PUBLIC_HEALTH_URL" ]
+
+      - name: Resolve current committed stable version
+        id: stable
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG="$(gh api "repos/${GITHUB_REPOSITORY}/releases/latest" --jq '.tag_name')"
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve target-compatible recovery profile
+        id: runtime_profile
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.stable.outputs.tag }}"
+          PROFILE_OUTPUT="$(bash .github/scripts/resolve-demo-runtime-profile.sh "refs/tags/${TAG}")"
+          printf '%s\n' "$PROFILE_OUTPUT" >> "$GITHUB_OUTPUT"
+          printf 'Resolved stable demo recovery profile for %s:\n%s\n' "$TAG" "$PROFILE_OUTPUT"
+
+      - name: Connect to the governed demo network
+        id: tailscale
+        uses: tailscale/github-action@306e68a486fd2350f2bfc3b19fcd143891a4a2d8 # v4
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:infra
+          version: '1.94.2'
+          ping: ${{ secrets.DEMO_SERVER_HOST }}
+
+      - name: Diagnose network setup failure
+        if: failure() && steps.tailscale.outcome == 'failure'
+        env:
+          DEMO_SERVER_HOST: ${{ secrets.DEMO_SERVER_HOST }}
+        run: bash .github/scripts/check-demo-reachability.sh diagnose
+
+      - name: Verify demo network path
+        env:
+          DEMO_SERVER_HOST: ${{ secrets.DEMO_SERVER_HOST }}
+        run: bash .github/scripts/check-demo-reachability.sh
+
+      - name: Set up pinned SSH identity
+        env:
+          DEMO_SERVER_HOST: ${{ secrets.DEMO_SERVER_HOST }}
+          DEMO_SERVER_SSH_KEY: ${{ secrets.DEMO_SERVER_SSH_KEY }}
+        run: bash .github/scripts/setup-demo-ssh.sh
+
+      - name: Recover current installed runtime
+        id: recovery
+        env:
+          DEMO_SERVER_HOST: ${{ secrets.DEMO_SERVER_HOST }}
+          DEMO_SERVER_USER: ${{ secrets.DEMO_SERVER_USER }}
+          EXPECTED_VERSION: ${{ steps.stable.outputs.tag }}
+          MOCK_NODES: ${{ steps.runtime_profile.outputs.mock_nodes }}
+          MOCK_SEED_DURATION: ${{ steps.runtime_profile.outputs.mock_seed_duration }}
+          MOCK_UPDATE_INTERVAL: ${{ steps.runtime_profile.outputs.mock_update_interval }}
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/id_ed25519 \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile=~/.ssh/known_hosts \
+            "$DEMO_SERVER_USER@$DEMO_SERVER_HOST" \
+            "bash -s -- $(printf '%q ' "$DEMO_EXPECTED_HOSTNAME" "$DEMO_LOCAL_BASE_URL" "$EXPECTED_VERSION" "$MOCK_NODES" "$MOCK_SEED_DURATION" "$MOCK_UPDATE_INTERVAL")" \
+            < .github/scripts/recover-demo-runtime.sh \
+            > demo-runtime-recovery.json
+          jq -e '.schema_version == 1 and (.status == "recovered" or .status == "healthy_noop")' \
+            demo-runtime-recovery.json
+          echo "mutated=$(jq -r '.mutated' demo-runtime-recovery.json)" >> "$GITHUB_OUTPUT"
+
+      - name: Verify public health
+        run: curl --connect-timeout 5 --max-time 20 -fsS "$DEMO_PUBLIC_HEALTH_URL"
+
+      - name: Verify public frontend parity
+        env:
+          DEMO_SERVER_HOST: ${{ secrets.DEMO_SERVER_HOST }}
+          DEMO_SERVER_USER: ${{ secrets.DEMO_SERVER_USER }}
+        run: |
+          set -euo pipefail
+          case "$DEMO_PUBLIC_HEALTH_URL" in
+            */api/health) PUBLIC_ROOT_URL="${DEMO_PUBLIC_HEALTH_URL%/api/health}/" ;;
+            *) echo "::error::DEMO_PUBLIC_HEALTH_URL must end with /api/health"; exit 1 ;;
+          esac
+          extract_asset() {
+            python3 -c 'import re,sys; h=sys.stdin.read(); m=re.search(r"<script\b[^>]*\bsrc=\"(/assets/index-[^\"]*\.js)\"",h); sys.exit(1) if m is None else sys.stdout.write(m.group(1))'
+          }
+          REMOTE_ROOT_URL="${DEMO_LOCAL_BASE_URL%/}/"
+          REMOTE_ASSET="$(ssh -i ~/.ssh/id_ed25519 \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile=~/.ssh/known_hosts \
+            "$DEMO_SERVER_USER@$DEMO_SERVER_HOST" \
+            "curl -fsS -- $(printf '%q' "$REMOTE_ROOT_URL")" | extract_asset)"
+          PUBLIC_ASSET="$(curl -fsS "$PUBLIC_ROOT_URL" | extract_asset)"
+          [ "$REMOTE_ASSET" = "$PUBLIC_ASSET" ]
+
+      - name: Verify public browser smoke
+        run: |
+          set -euo pipefail
+          export PULSE_PUBLIC_SITE_URL="${DEMO_PUBLIC_HEALTH_URL%/api/health}/"
+          ./scripts/run_demo_public_browser_smoke.sh
+
+      - name: Compensate failed mutated recovery
+        if: failure() && steps.recovery.outputs.mutated == 'true'
+        env:
+          DEMO_SERVER_HOST: ${{ secrets.DEMO_SERVER_HOST }}
+          DEMO_SERVER_USER: ${{ secrets.DEMO_SERVER_USER }}
+        run: |
+          set -euo pipefail
+          BEFORE="$(ssh -i ~/.ssh/id_ed25519 "$DEMO_SERVER_USER@$DEMO_SERVER_HOST" \
+            "systemctl show pulse --property=ActiveState,SubState,MainPID --value | paste -sd, -")"
+          ssh -i ~/.ssh/id_ed25519 "$DEMO_SERVER_USER@$DEMO_SERVER_HOST" \
+            "sudo systemctl stop pulse"
+          AFTER="$(ssh -i ~/.ssh/id_ed25519 "$DEMO_SERVER_USER@$DEMO_SERVER_HOST" \
+            "systemctl show pulse --property=ActiveState,SubState,MainPID --value | paste -sd, -")"
+          jq -n --arg before "$BEFORE" --arg after "$AFTER" \
+            '{schema_version: 1, status: "compensated_unavailable", before: $before, after: $after}' \
+            > demo-runtime-rollback.json
+
+      - name: Retain bounded recovery evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: stable-demo-runtime-recovery-${{ github.run_id }}
+          path: |
+            demo-runtime-recovery.json
+            demo-runtime-rollback.json
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Cleanup SSH material
+        if: always()
+        run: rm -f ~/.ssh/id_ed25519 ~/.ssh/known_hosts

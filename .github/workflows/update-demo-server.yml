@@ -49,6 +49,9 @@ jobs:
       target: ${{ steps.target.outputs.target }}
       environment_name: ${{ steps.target.outputs.environment_name }}
       skip: ${{ steps.target.outputs.skip || 'false' }}
+      mock_nodes: ${{ steps.runtime_profile.outputs.mock_nodes }}
+      mock_seed_duration: ${{ steps.runtime_profile.outputs.mock_seed_duration }}
+      mock_update_interval: ${{ steps.runtime_profile.outputs.mock_update_interval }}
 
     steps:
       - name: Resolve target tag and demo environment
@@ -144,6 +147,16 @@ jobs:
           fi
 
           echo "[OK] ${TAG} validated for governed demo deployment on ${REQUIRED_BRANCH}"
+
+      - name: Resolve target-compatible demo runtime profile
+        id: runtime_profile
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.target.outputs.tag }}"
+          TAG_REF="refs/tags/${TAG}"
+          PROFILE_OUTPUT="$(bash .github/scripts/resolve-demo-runtime-profile.sh "${TAG_REF}")"
+          printf '%s\n' "$PROFILE_OUTPUT" >> "$GITHUB_OUTPUT"
+          printf 'Resolved target-compatible demo runtime profile for %s:\n%s\n' "$TAG" "$PROFILE_OUTPUT"
 
   update-demo:
     needs: resolve
@@ -531,10 +544,16 @@ jobs:
         run: |
           set -euo pipefail
           SERVICE_NAME="${{ steps.config.outputs.service_name }}"
+          MOCK_NODES="${{ needs.resolve.outputs.mock_nodes }}"
+          MOCK_SEED_DURATION="${{ needs.resolve.outputs.mock_seed_duration }}"
+          MOCK_UPDATE_INTERVAL="${{ needs.resolve.outputs.mock_update_interval }}"
           REMOTE_SCRIPT=$(cat <<'EOF'
           set -euo pipefail
           SERVICE_NAME="${1:-pulse}"
           DEMO_LOCAL_BASE_URL="$2"
+          MOCK_NODES="$3"
+          MOCK_SEED_DURATION="$4"
+          MOCK_UPDATE_INTERVAL="$5"
           CONFIG_DIR="/etc/${SERVICE_NAME:-pulse}"
           SERVICE_USER="$(systemctl show "$SERVICE_NAME" --property=User --value 2>/dev/null || true)"
           SERVICE_GROUP="$(systemctl show "$SERVICE_NAME" --property=Group --value 2>/dev/null || true)"
@@ -616,7 +635,7 @@ jobs:
 
           set_env_value DEMO_MODE true
           set_env_value PULSE_MOCK_MODE true
-          set_env_value PULSE_MOCK_NODES 50
+          set_env_value PULSE_MOCK_NODES "$MOCK_NODES"
           set_env_value PULSE_MOCK_VMS_PER_NODE 10
           set_env_value PULSE_MOCK_LXCS_PER_NODE 8
           set_env_value PULSE_MOCK_DOCKER_HOSTS 5
@@ -628,6 +647,8 @@ jobs:
           set_env_value PULSE_MOCK_K8S_DEPLOYMENTS 14
           set_env_value PULSE_MOCK_RANDOM_METRICS true
           set_env_value PULSE_MOCK_STOPPED_PERCENT 6
+          set_env_value PULSE_MOCK_TRENDS_SEED_DURATION "$MOCK_SEED_DURATION"
+          set_env_value PULSE_MOCK_UPDATE_INTERVAL "$MOCK_UPDATE_INTERVAL"
 
           ensure_demo_fixture_entitlement
 
@@ -648,7 +669,8 @@ jobs:
           exit 1
           EOF
           )
-          ssh -i ~/.ssh/id_ed25519 "$DEMO_SERVER_USER@$DEMO_SERVER_HOST" "bash -s -- $(printf '%q ' "$SERVICE_NAME" "$DEMO_LOCAL_BASE_URL")" <<<"$REMOTE_SCRIPT"
+          ssh -i ~/.ssh/id_ed25519 "$DEMO_SERVER_USER@$DEMO_SERVER_HOST" \
+            "bash -s -- $(printf '%q ' "$SERVICE_NAME" "$DEMO_LOCAL_BASE_URL" "$MOCK_NODES" "$MOCK_SEED_DURATION" "$MOCK_UPDATE_INTERVAL")" <<<"$REMOTE_SCRIPT"
 
       - name: Verify demo runtime
         env:

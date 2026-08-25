@@ -4246,6 +4246,8 @@
         ".dockerignore",
         ".github/ISSUE_TEMPLATE/v6_rc_feedback.yml",
         ".github/scripts/check-demo-reachability.sh",
+        ".github/scripts/recover-demo-runtime.sh",
+        ".github/scripts/resolve-demo-runtime-profile.sh",
         ".github/scripts/setup-demo-ssh.sh",
         ".github/workflows/backfill-release-assets.yml",
         ".github/workflows/build-and-test.yml",
@@ -4258,6 +4260,7 @@
         ".github/workflows/publish-docker.yml",
         ".github/workflows/publish-helm-chart.yml",
         ".github/workflows/qualify-release-containers.yml",
+        ".github/workflows/recover-demo-server.yml",
         ".github/workflows/recover-release-activation.yml",
         ".github/workflows/release-convergence.yml",
         ".github/workflows/release-dry-run.yml",
@@ -4452,6 +4455,8 @@
             "match_files": [
               ".github/ISSUE_TEMPLATE/v6_rc_feedback.yml",
               ".github/scripts/check-demo-reachability.sh",
+              ".github/scripts/recover-demo-runtime.sh",
+              ".github/scripts/resolve-demo-runtime-profile.sh",
               ".github/scripts/setup-demo-ssh.sh",
               ".github/workflows/backfill-release-assets.yml",
               ".github/workflows/build-release-candidate.yml",
@@ -4463,6 +4468,7 @@
               ".github/workflows/publish-docker.yml",
               ".github/workflows/publish-helm-chart.yml",
               ".github/workflows/qualify-release-containers.yml",
+              ".github/workflows/recover-demo-server.yml",
               ".github/workflows/recover-release-activation.yml",
               ".github/workflows/release-convergence.yml",
               ".github/workflows/release-dry-run.yml",
@@ -5665,7 +5671,8 @@
               "internal/monitoring/metrics_history_memory_regression_test.go",
               "internal/monitoring/metrics_history_test.go",
               "internal/monitoring/metrics_test.go",
-              "internal/monitoring/mock_metrics_history_test.go"
+              "internal/monitoring/mock_metrics_history_test.go",
+              "internal/monitoring/mock_metrics_seed_cache_test.go"
             ]
           },
           {

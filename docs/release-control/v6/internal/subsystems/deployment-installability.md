@@ -69,6 +69,9 @@ discarding existing explicit disk exclusions.
 21. `.github/workflows/release-dry-run.yml`
 22. `.github/workflows/retry-release-convergence.yml`
 23. `.github/workflows/update-demo-server.yml`
+23a. `.github/workflows/recover-demo-server.yml`
+23b. `.github/scripts/recover-demo-runtime.sh`
+23c. `.github/scripts/resolve-demo-runtime-profile.sh`
 24. `.github/workflows/validate-release-assets.yml`
 25. `.github/workflows/install-sh-smoke.yml`
 26. `scripts/release_control/customer_promotion_lease.sh`
@@ -2717,6 +2720,24 @@ the matching `scripts/tests/test-toggle-mock.sh` fixtures) so toggle
 CLIs, managed runtime restarts, public demo convergence, and the in-binary
 default never drift apart. Existing installations with explicit custom
 `PULSE_MOCK_*` values retain those values during legacy-sidecar migration.
+Because the reusable deployment workflow executes from its caller revision
+while installing an exact tagged binary, it must inspect that tag before
+converging the runtime environment. The 50-node profile is permitted only when
+the tagged runtime contains both bounded eager guest history and cohort-based
+metric updates. A stable tag that predates either capability must receive the
+bounded compatibility profile (the estate size declared by that tag's own demo
+workflow, six hours of eager history, and a ten-second full-estate update
+cadence), preventing newer workflow defaults from imposing an unqualified
+memory and CPU load on an older binary. Tags without a readable numeric demo
+node declaration fall back to the last legacy stable baseline of 32 nodes.
+The manually dispatched stable-demo recovery path consumes that same resolver
+and may mutate only the three bounded mock-profile values before restarting the
+already-installed `pulse` service. It must retain the current stable binary,
+unit, drop-ins, Relay process, and billing state; prove the expected hostname
+and release version plus public health, frontend parity, and browser readiness;
+and restore the prior runtime configuration while stopping the failed service
+if post-mutation validation fails. It must not install artifacts, invoke release
+convergence, or accept caller-selected target/version inputs.
 Mock toggles are runtime transitions, not just environment-file edits. A
 successful `scripts/toggle-mock.sh on|off` run must leave the managed browser
 entrypoint serving the requested `/api/system/mock-mode` state through the

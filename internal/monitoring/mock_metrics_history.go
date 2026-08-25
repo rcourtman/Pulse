@@ -36,6 +36,11 @@ const (
 	// Keep a representative cross-estate sample warm and let the existing chart
 	// fallback produce an equivalent canonical series for every other guest.
 	mockEagerHistoryPVEGuestLimit = 64
+	// Seed reuse is useful while tenant monitors initialize together, but the
+	// template duplicates every retained MetricPoint. Release it promptly after
+	// the startup burst so a single-tenant demo does not pin a second complete
+	// history for the lifetime of the process.
+	mockMetricsSeedCacheTTL = 30 * time.Second
 )
 
 type mockMetricsSamplerConfig struct {
@@ -58,9 +63,20 @@ type mockMetricsSeedCacheKey struct {
 
 var mockMetricsSeedCache = struct {
 	sync.Mutex
-	key     mockMetricsSeedCacheKey
-	history *MetricsHistory
+	key        mockMetricsSeedCacheKey
+	history    *MetricsHistory
+	generation uint64
 }{}
+
+func expireMockMetricsSeedCache(generation uint64) {
+	mockMetricsSeedCache.Lock()
+	defer mockMetricsSeedCache.Unlock()
+	if mockMetricsSeedCache.generation != generation {
+		return
+	}
+	mockMetricsSeedCache.key = mockMetricsSeedCacheKey{}
+	mockMetricsSeedCache.history = nil
+}
 
 func mockMetricsSamplerConfigFromEnv() mockMetricsSamplerConfig {
 	seedDuration := parseDurationEnv("PULSE_MOCK_TRENDS_SEED_DURATION", defaultMockSeedDuration)
@@ -1090,6 +1106,11 @@ func prepareMockMetricsHistory(
 	maxDataPoints int,
 	storeSink *metrics.Store,
 ) (*MetricsHistory, bool) {
+	// Enforce the eager-history cardinality limit at the allocation/cache
+	// boundary. Callers may retain the complete fixture graph for inventory and
+	// realtime updates, but neither the active history nor the reusable seed
+	// template may ever materialize every guest in a large estate.
+	graph = boundMockMetricsHistoryGraph(graph)
 	seedAt := normalizeMockMetricTimestamp(now, interval)
 	if storeSink != nil {
 		history := NewMetricsHistory(maxDataPoints, seedDuration)
@@ -1115,6 +1136,11 @@ func prepareMockMetricsHistory(
 	seedMockMetricsHistory(template, nil, graph, seedAt, seedDuration, interval)
 	mockMetricsSeedCache.key = key
 	mockMetricsSeedCache.history = template
+	mockMetricsSeedCache.generation++
+	generation := mockMetricsSeedCache.generation
+	time.AfterFunc(mockMetricsSeedCacheTTL, func() {
+		expireMockMetricsSeedCache(generation)
+	})
 	return template.clone(), false
 }
 

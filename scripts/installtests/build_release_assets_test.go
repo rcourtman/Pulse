@@ -1703,7 +1703,11 @@ func TestUpdateDemoWorkflowUsesGovernedNetworkPath(t *testing.T) {
 		t.Fatalf("read update-demo-server workflow: %v", err)
 	}
 
-	workflow := string(workflowBytes)
+	profileBytes, err := os.ReadFile(repoFile(".github", "scripts", "resolve-demo-runtime-profile.sh"))
+	if err != nil {
+		t.Fatalf("read demo runtime profile resolver: %v", err)
+	}
+	workflow := string(workflowBytes) + "\n" + string(profileBytes)
 	required := []string{
 		`- name: Tailscale`,
 		`uses: tailscale/github-action@306e68a486fd2350f2bfc3b19fcd143891a4a2d8 # v4`,
@@ -1733,12 +1737,27 @@ func TestUpdateDemoWorkflowUsesGovernedNetworkPath(t *testing.T) {
 		`Removing demo volatile store: %s`,
 		`Demo host does not have enough free space to back up $CONFIG_DIR before install.`,
 		`Restore demo runtime configuration`,
+		`Resolve target-compatible demo runtime profile`,
+		`git grep -q 'mockEagerHistoryPVEGuestLimit'`,
+		`git grep -q 'UpdateMetricCohort'`,
+		`PROFILE="large-estate"`,
+		`MOCK_NODES=50`,
+		`MOCK_SEED_DURATION=48h`,
+		`MOCK_UPDATE_INTERVAL=2s`,
+		`PROFILE="legacy-bounded"`,
+		`git show "${TAG_REF}:.github/workflows/update-demo-server.yml"`,
+		`set_env_value PULSE_MOCK_NODES ([0-9]+)`,
+		`if [[ ! "${MOCK_NODES}" =~ ^[1-9][0-9]*$ ]]`,
+		`MOCK_SEED_DURATION=6h`,
+		`MOCK_UPDATE_INTERVAL=10s`,
 		`resolve_config_dir`,
 		`set_env_value DEMO_MODE true`,
 		`set_env_value PULSE_MOCK_MODE true`,
-		`set_env_value PULSE_MOCK_NODES 50`,
+		`set_env_value PULSE_MOCK_NODES "$MOCK_NODES"`,
 		`set_env_value PULSE_MOCK_VMS_PER_NODE 10`,
 		`set_env_value PULSE_MOCK_LXCS_PER_NODE 8`,
+		`set_env_value PULSE_MOCK_TRENDS_SEED_DURATION "$MOCK_SEED_DURATION"`,
+		`set_env_value PULSE_MOCK_UPDATE_INTERVAL "$MOCK_UPDATE_INTERVAL"`,
 		`ensure_demo_fixture_entitlement`,
 		`"demo_fixtures"`,
 		`del(.integrity)`,

@@ -701,7 +701,13 @@ cleanup so readers cannot retain orphaned runtime or alert projections.
    across the estate, while every omitted guest continues to receive the same
    canonical timeline through deterministic on-demand chart synthesis. Dashboard
    chart prewarming is limited per workload family and must never rebuild an
-   estate-sized guest chart cache on each mock sampler tick.
+   estate-sized guest chart cache on each mock sampler tick. The eager-history
+   limit must be applied inside the seed preparation boundary itself, before
+   either the active tenant history or reusable seed template allocates series,
+   so a caller cannot accidentally cache the complete fixture graph. The
+   reusable template exists only for the bounded tenant-startup window and must
+   then be released; a single-tenant runtime may not pin a duplicate history for
+   the lifetime of the process.
    `POLL_TASK_WORKERS` is a process-wide scheduled-task concurrency ceiling,
    not a per-monitor pool size. Each monitor may own one queue dispatcher, but
    all dispatchers must acquire the shared bounded limiter before executing a
