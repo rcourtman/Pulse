@@ -1943,7 +1943,11 @@ owners preserve native scrollbar geometry with measured spacers, project wheel
 and vertical touch movement before native scroll advances, and retain a
 directional runway around the viewport. A feature may choose a smaller bounded
 budget, but it must not restore an unbounded `<For>` over estate-sized data or
-show a blank viewport while the keyed window catches up.
+show a blank viewport while the keyed window catches up. `PlatformWindowedRows`
+also reconciles unique string/number resource IDs into stable row proxies, so
+sparse live snapshots update fields without remounting an open inline drawer
+or discarding its tab and form state. Rows without a unique logical ID retain
+reference-keyed rendering rather than paying for guessed index identity.
 The workload guest-row path now follows the same pattern: the render shell
 stays in `frontend-modern/src/components/Workloads/GuestRow.tsx`, tooltip-backed
 cell presentation lives in `frontend-modern/src/components/Workloads/GuestRowCells.tsx`,
@@ -2119,7 +2123,10 @@ it may retain total capacity for explanatory copy, but it emits no numeric
 memory segments, percentage, or fit calculation that could make unknown usage
 look like zero. Platform tables and resource-detail mappers consume the same
 canonical unavailable state instead of recomputing `total - free` in render
-hot paths.
+hot paths. The shell keeps its fitted percentage/capacity label on a
+semi-opaque surface scrim with base-content contrast so segment colors cannot
+make the small readout illegible; this remains CSS presentation only and adds
+no measurement or per-row runtime work.
 The dashboard metric bar now follows that same pattern: the shell stays in
 `frontend-modern/src/components/Workloads/MetricBar.tsx`, while width,
 show-label, sublabel-fit, and threshold-color derivation live in

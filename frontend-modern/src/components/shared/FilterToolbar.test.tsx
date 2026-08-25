@@ -18,6 +18,7 @@ import toggleSource from './Toggle.tsx?raw';
 import toggleModelSource from './toggleModel.ts?raw';
 import toggleStateSource from './useToggleState.ts?raw';
 import filterToolbarSource from './FilterToolbar.tsx?raw';
+import subtabsSource from './Subtabs.tsx?raw';
 
 describe('FilterHeader', () => {
   afterEach(() => {
@@ -33,6 +34,15 @@ describe('FilterHeader', () => {
 
     expect(screen.getByTestId('search')).toBeInTheDocument();
     expect(container.querySelector('.flex.w-full.items-center.gap-2')).not.toBeNull();
+  });
+
+  it('keeps clipped in-page tab controls visibly scrollable on phones', () => {
+    expect(subtabsSource).toContain('overflow-x-auto');
+    expect(subtabsSource).toContain('canScrollLeft');
+    expect(subtabsSource).toContain('canScrollRight');
+    expect(subtabsSource).toContain('scrollTabs(-1)');
+    expect(subtabsSource).toContain('scrollTabs(1)');
+    expect(subtabsSource).toContain('sm:hidden');
   });
 
   it('keeps segmented controls on value callbacks while forwarding div attributes', async () => {

@@ -76,4 +76,45 @@ describe('Subtabs', () => {
       }
     }
   });
+
+  it('shows phone scroll affordances when the tab rail is clipped', async () => {
+    render(() => (
+      <Subtabs
+        value="overview"
+        onChange={vi.fn()}
+        ariaLabel="Resource detail sections"
+        tabs={[
+          { value: 'overview', label: 'Overview' },
+          { value: 'history', label: 'History' },
+          { value: 'manage', label: 'Manage' },
+          { value: 'deployments', label: 'Deployments' },
+        ]}
+      />
+    ));
+
+    const tablist = screen.getByRole('tablist', { name: 'Resource detail sections' });
+    const scrollBy = vi.fn();
+    Object.defineProperties(tablist, {
+      clientWidth: { configurable: true, value: 180 },
+      scrollWidth: { configurable: true, value: 420 },
+      scrollLeft: { configurable: true, writable: true, value: 0 },
+      scrollBy: { configurable: true, value: scrollBy },
+    });
+    window.dispatchEvent(new Event('resize'));
+
+    const scrollRight = await screen.findByRole('button', {
+      name: 'Resource detail sections: scroll right',
+    });
+    expect(scrollRight).toHaveClass('sm:hidden');
+    expect(screen.queryByRole('button', { name: /scroll left/i })).not.toBeInTheDocument();
+
+    await fireEvent.click(scrollRight);
+    expect(scrollBy).toHaveBeenCalledWith({ left: 126, behavior: 'smooth' });
+
+    tablist.scrollLeft = 120;
+    tablist.dispatchEvent(new Event('scroll'));
+    expect(
+      await screen.findByRole('button', { name: 'Resource detail sections: scroll left' }),
+    ).toBeInTheDocument();
+  });
 });

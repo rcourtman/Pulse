@@ -1,21 +1,30 @@
 {
   "version": 1,
-  "base_sha": "f18f15bf7b1fbdf1078bf412754c059694c8b996",
-  "verified_at": "2026-08-25T15:58:23Z",
+  "base_sha": "f5eb87437a396048959a851584d3104326e0d671",
+  "verified_at": "2026-08-25T16:41:20Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/UpdateBanner.tsx",
-    "frontend-modern/src/components/whatsNewModel.ts"
+    "frontend-modern/src/components/Infrastructure/ResourceOperatorStateSection.tsx",
+    "frontend-modern/src/components/Workloads/StackedMemoryBar.tsx",
+    "frontend-modern/src/components/shared/InlineDetailTableRow.tsx",
+    "frontend-modern/src/components/shared/Subtabs.tsx",
+    "frontend-modern/src/features/platformPage/PlatformWindowedRows.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/UpdateBanner.tsx": "455a8546b5b98c4541993ea7f894ad352c87a29392ede0da2a562e05f85b09de",
-    "frontend-modern/src/components/whatsNewModel.ts": "d81c8ae4fcc59cff06a63b4a7407a97848acd934f6b6e04535059dc89f652471"
+    "frontend-modern/src/components/Infrastructure/ResourceOperatorStateSection.tsx": "1a01f6e6c8db585c32b37afae33ed7b6671dc76e40e8f49c364ee78659e8a961",
+    "frontend-modern/src/components/Workloads/StackedMemoryBar.tsx": "3266fa75221643199d41b7a87f8e07181e643171c744ac0e32e2ac9c6773e3bf",
+    "frontend-modern/src/components/shared/InlineDetailTableRow.tsx": "0e169eb088c0bb0754dda5936b52baecc102f1a50853263517d76931729a1673",
+    "frontend-modern/src/components/shared/Subtabs.tsx": "5106f14ec387c72bd2d3014200678f342e28b04d5ff372aa95410695fe0dc544",
+    "frontend-modern/src/features/platformPage/PlatformWindowedRows.tsx": "3f5d02c126379a44803bea3efcc803965d872eb188ec7e0305c973a82fa80924"
   },
-  "routes": ["/release-notes-verification.html"],
+  "routes": [
+    "/truenas/overview",
+    "/kubernetes/overview"
+  ],
   "viewports": [
     {
-      "width": 1440,
-      "height": 900
+      "width": 1280,
+      "height": 720
     },
     {
       "width": 390,
@@ -23,13 +32,16 @@
     }
   ],
   "states": [
-    "expanded update banner with a v6.4.0-rc.2 customer-facing What's improved section",
-    "desktop banner rendered both improvement bullets and excluded the Fixes section from the preview",
-    "narrow banner retained the full preview at 390px with document scroll width equal to client width"
+    "TrueNAS system summary with memory-capacity label scrim",
+    "TrueNAS system drawer Manage tab at desktop width",
+    "TrueNAS system drawer Manage tab at phone width",
+    "Kubernetes cluster drawer with five-tab overflow rail before and after scrolling"
   ],
   "interactions": [
-    "opened the isolated current-tree frontend fixture against the local mock backend",
-    "expanded the update banner with Show more",
-    "inspected rendered text, layout geometry, and horizontal overflow at desktop and narrow widths"
+    "opened the TrueNAS system inline drawer and selected Manage",
+    "verified Manage remained selected through repeated realtime refresh samples and after the final main rebase",
+    "inspected wrapped operator-policy help text and the stacked phone maintenance action",
+    "opened a Kubernetes cluster inline drawer at 390px and used its right-edge tab scroll control",
+    "verified the left-edge control appeared after scrolling and restored the default viewport"
   ]
 }

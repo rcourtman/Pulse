@@ -559,7 +559,7 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
           opening it pre-fills with sensible defaults (start = now, end
           = +1h) or with the persisted window when one exists. */}
       <Show when={!schedulerOpen()}>
-        <div class="flex items-center justify-between gap-3 pt-2 border-t border-border-subtle">
+        <div class="flex flex-col items-stretch justify-between gap-3 border-t border-border-subtle pt-2 sm:flex-row sm:items-center">
           <div class="min-w-0 flex-1">
             <label class="text-sm font-medium text-base-content">Maintenance window</label>
             <p class="text-[11px] text-muted mt-0.5 leading-tight">
@@ -574,13 +574,13 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
                 type="button"
                 onClick={handleOpenScheduler}
                 disabled={saving()}
-                class="min-h-11 px-2.5 py-1 text-xs font-medium text-base-content border border-border rounded hover:bg-surface-hover disabled:opacity-50 sm:min-h-0"
+                class="min-h-11 self-start rounded border border-border px-2.5 py-1 text-xs font-medium text-base-content hover:bg-surface-hover disabled:opacity-50 sm:min-h-0"
               >
                 Schedule window
               </button>
             }
           >
-            <div class="flex items-center gap-2">
+            <div class="flex items-center gap-2 self-start">
               <button
                 type="button"
                 onClick={handleOpenScheduler}

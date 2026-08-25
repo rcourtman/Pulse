@@ -230,6 +230,8 @@ describe('StackedMemoryBar', () => {
     // Should show sublabel in parentheses with bytes format
     const sublabel = screen.getByText(/4\.00 GB/);
     expect(sublabel).toBeInTheDocument();
+    expect(sublabel).toHaveClass('text-base-content/80');
+    expect(sublabel.parentElement).toHaveClass('bg-surface/80', 'shadow-sm');
   });
 
   it('hides sublabel when container is too narrow', () => {

@@ -184,7 +184,10 @@ describe('ResourceOperatorStateSection', () => {
     expect(sectionSource).toContain('<FormSelect');
     expect(sectionSource).toContain('<FormTextarea');
     expect(sectionSource).toContain('min-h-11 min-w-11 px-1.5 py-0.5');
-    expect(sectionSource).toContain('min-h-11 px-2.5 py-1 text-xs font-medium text-base-content');
+    expect(sectionSource).toContain(
+      'flex flex-col items-stretch justify-between gap-3 border-t border-border-subtle pt-2 sm:flex-row sm:items-center',
+    );
+    expect(sectionSource).toContain('min-h-11 self-start rounded border border-border');
     expect(sectionSource).toContain(
       'min-h-11 px-2.5 py-1 text-xs font-medium text-white bg-blue-600',
     );

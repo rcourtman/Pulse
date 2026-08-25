@@ -1225,6 +1225,9 @@ describe('shared primitive guardrails', () => {
     expect(subtabsSource).toContain('subtabsShellClass');
     expect(subtabsSource).toContain('subtabsListClass');
     expect(subtabsSource).toContain('subtabButtonClass');
+    expect(subtabsSource).toContain('canScrollLeft');
+    expect(subtabsSource).toContain('canScrollRight');
+    expect(subtabsSource).toContain('sm:hidden');
   });
 
   it('keeps object detail history behind the canonical Overview and History subtabs', () => {
@@ -7662,6 +7665,8 @@ describe('shared primitive guardrails', () => {
     expect(inlineDetailTableRowSource).toContain('INLINE_DETAIL_TABLE_CELL_CLASS');
     expect(inlineDetailTableRowSource).toContain('INLINE_DETAIL_TABLE_CONTENT_CLASS');
     expect(inlineDetailTableRowSource).toContain('overflow-x-clip');
+    expect(inlineDetailTableRowSource).toContain('whitespace-normal');
+    expect(inlineDetailTableRowSource).toContain('min-w-0');
     expect(inlineDetailTableRowSource).toContain('lg:overflow-x-visible');
     expect(inlineDetailTableRowSource).toContain('event.stopPropagation()');
     expect(registeredRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual(

@@ -4301,8 +4301,10 @@ workload, and infrastructure inline drawers; callers may pass row-specific
 `data-*` attributes, colspan, and content classes, but they must not recreate
 the surface-alt detail row shell locally. The content shell must clip
 horizontal paint below the large breakpoint without becoming a scroll
-container, then restore visible overflow for the static desktop layout, so
-long operator-state copy cannot escape the shared row border.
+container, reset the parent table's `whitespace-nowrap` inheritance, and allow
+its descendants to shrink, then restore visible overflow for the static
+desktop layout. Long operator-state copy must wrap inside the shared row border
+instead of painting beneath adjacent controls or disappearing at the clip edge.
 Inline detail section content is registry-backed separately from the row shell.
 `DetailSectionTable`, `InlineDetailPanel`, and `detailSectionModel.ts` own
 detail row compaction, section-table rendering, value-tone classes, and the
@@ -4593,7 +4595,10 @@ When those workspace tabs need an embedded control-bar treatment, they should
 still stay on the one canonical `frontend-modern/src/components/shared/Subtabs.tsx`
 primitive and reuse the established shell, list, and button class pattern
 already proven on owning surfaces like operations rather than introducing new
-variant APIs on the primitive.
+variant APIs on the primitive. When that rail overflows on phone widths,
+`Subtabs` owns visible, accessible edge-scroll controls and keeps them in sync
+with native scrolling and rail resize; callers must not add drawer-local arrow
+overlays or leave clipped tab labels as the only overflow cue.
 The search-input enhancement surfaces now follow that same owner split.
 `frontend-modern/src/components/shared/SearchInputEnhancements.tsx` stays the
 render shell, `frontend-modern/src/components/shared/useSearchInputEnhancements.ts`

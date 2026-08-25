@@ -2222,7 +2222,9 @@ capability-gated. By default the resource follows the tenant Patrol mode.
 Enabling the optional limit requires selecting exact capabilities and may add a
 recurring daily time/timezone window; copy must state that the control narrows
 the tenant mode, while `NeverAutoRemediate` disables automatic action for the
-resource.
+resource. At phone widths, the collapsed maintenance-window action stacks
+below its explanatory copy so the button cannot squeeze policy text into a
+narrow side column; desktop retains the compact side-by-side layout.
 The UI must never infer eligibility from capability names, severity, or the
 human approval floor.
 

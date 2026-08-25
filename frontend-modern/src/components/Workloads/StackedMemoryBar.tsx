@@ -70,7 +70,7 @@ export function StackedMemoryBar(props: StackedMemoryBarProps) {
         </svg>
 
         <span class="absolute inset-0 flex items-center justify-center text-[10px] font-semibold text-base-content leading-none pointer-events-none min-w-0 overflow-hidden">
-          <span class="max-w-full min-w-0 whitespace-nowrap overflow-hidden text-ellipsis px-0.5 text-center">
+          <span class="max-w-full min-w-0 whitespace-nowrap overflow-hidden text-ellipsis rounded-sm bg-surface/80 px-1 text-center shadow-sm">
             <span>
               <Show
                 when={!presentation().unavailable}
@@ -80,7 +80,7 @@ export function StackedMemoryBar(props: StackedMemoryBarProps) {
               </Show>
             </span>
             <Show when={presentation().showSublabel}>
-              <span class="metric-sublabel font-normal text-muted">
+              <span class="metric-sublabel font-normal text-base-content/80">
                 {' '}
                 ({presentation().displaySublabel})
               </span>
