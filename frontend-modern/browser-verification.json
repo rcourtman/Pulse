@@ -1,13 +1,13 @@
 {
   "version": 1,
-  "base_sha": "020bfb111b6eed776f532012cba7e1f5a86f93ad",
-  "verified_at": "2026-08-25T06:11:01Z",
+  "base_sha": "d3bfb3bb7bef7e67ea62b41940ac240082c74532",
+  "verified_at": "2026-08-25T07:11:13Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx"
+    "frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx": "9534ba8387f7a0fbce47b80faaf5df2e203f35f1869f54ea1de862c92f375c93"
+    "frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx": "cf2a0e35fc4f412a2dec9dad378630e747539ea7e38849cc77a2b66b8d61c162"
   },
   "routes": [
     "/settings/infrastructure"
@@ -23,15 +23,13 @@
     }
   ],
   "states": [
-    "Add Pulse Agent modal opened from Pulse Agent hosts Add",
-    "install token generated so the commands section unlocked",
-    "advanced connection and install options expanded",
-    "Enable Pulse command execution checked showing the Pulse commands enabled panel",
-    "checkbox unchecked returning to the default state"
+    "Infrastructure connected systems list with 57 manage targets",
+    "Manage Lab vCenter connection editor open",
+    "editor closed via Cancel returning to the list"
   ],
   "interactions": [
-    "clicked Show advanced connection and install options",
-    "verified Skip TLS and Enable Pulse command execution labels render as stacked block rows (computed display flex, separate line boxes) at 1280px and 375px",
-    "toggled Enable Pulse command execution on and confirmed the info panel appears, then toggled it off"
+    "opened the Manage editor for vmware:vc-mock-1 and closed it with Cancel at 1280px and 375px",
+    "confirmed focus returns to the row's manage control after the 250ms focus-return timer at both widths",
+    "checked the console for errors, only the pre-existing dev websocket proxy reconnect noise present"
   ]
 }

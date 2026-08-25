@@ -1,4 +1,13 @@
-import { Component, Match, Show, Switch, createEffect, createMemo, createSignal } from 'solid-js';
+import {
+  Component,
+  Match,
+  Show,
+  Switch,
+  createEffect,
+  createMemo,
+  createSignal,
+  onCleanup,
+} from 'solid-js';
 import { useLocation, useNavigate } from '@solidjs/router';
 import X from 'lucide-solid/icons/x';
 import { presentationPolicyIsReadOnly } from '@/stores/sessionPresentationPolicy';
@@ -280,6 +289,11 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
     navigateToWorkspace(Boolean(routeStep()));
   };
 
+  // The focus-return timeout can outlive this component (and, in tests, the
+  // DOM environment), so it must be cleared on disposal.
+  let focusReturnTimer: number | undefined;
+  onCleanup(() => window.clearTimeout(focusReturnTimer));
+
   const closeEditFlow = () => {
     const focusReturnConnectionId = editFocusReturnConnectionId();
     const connection = editingConnection();
@@ -293,7 +307,8 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
     setEditingRowSource(null);
     setEditFocusReturnConnectionId(null);
     if (focusReturnConnectionId && typeof document !== 'undefined') {
-      window.setTimeout(() => {
+      window.clearTimeout(focusReturnTimer);
+      focusReturnTimer = window.setTimeout(() => {
         const focusTarget = Array.from(
           document.querySelectorAll<HTMLElement>('[data-infrastructure-manage-id]'),
         ).find(
