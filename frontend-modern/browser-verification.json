@@ -1,21 +1,44 @@
 {
   "version": 1,
-  "base_sha": "d5440ff43efd4964cabdcf3ae0beea0306cb94d7",
-  "verified_at": "2026-08-25T14:14:16Z",
+  "base_sha": "6e5571997e8b94b0a698c4c5c7486548c5ef7d42",
+  "verified_at": "2026-08-25T14:27:03Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/features/storageBackups/diskPresentation.ts"
+    "frontend-modern/src/hooks/useUnifiedResources.ts",
+    "frontend-modern/src/stores/websocket-global.ts",
+    "frontend-modern/src/stores/websocket.ts",
+    "frontend-modern/src/utils/resourceStateAdapters.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/storageBackups/diskPresentation.ts": "c84bcda4c2f41c581a4985abbc0bb60df31d2196f5722a81dafcd39bda8f02a8"
+    "frontend-modern/src/hooks/useUnifiedResources.ts": "7cad439395da8c5ccb281abe4b38313d63d45f87d38add8574120be5d1ab76a8",
+    "frontend-modern/src/stores/websocket-global.ts": "644e5bccf8612259188d8cf3fd8b89e7b30fcc326bc717b69745f0b0c5ae5d6c",
+    "frontend-modern/src/stores/websocket.ts": "e59b92a87db8f373129e7321e0bc06222ad59c57d25703aaf8f8ffc1d07b8fad",
+    "frontend-modern/src/utils/resourceStateAdapters.ts": "099acb8c55827396ef0722b6b5afdd8d742e3811434ca498de4604ad05edb8fa"
   },
   "routes": [
-    "/proxmox/storage"
+    "/proxmox/overview",
+    "/proxmox/storage",
+    "/proxmox/backups",
+    "/proxmox/replication",
+    "/proxmox/ceph",
+    "/docker",
+    "/kubernetes",
+    "/truenas",
+    "/vmware",
+    "/standalone",
+    "/alerts",
+    "/ai",
+    "/actions",
+    "/settings"
   ],
   "viewports": [
     {
+      "width": 1440,
+      "height": 900
+    },
+    {
       "width": 1280,
-      "height": 800
+      "height": 720
     },
     {
       "width": 390,
@@ -23,16 +46,17 @@
     }
   ],
   "states": [
-    "Physical Disks default inventory",
-    "provider-scoped search results",
-    "expanded physical-disk detail",
-    "restored default inventory after clearing search"
+    "live realtime metric ticks flowing through the patched-keys fast merge on the 50-node/1500-resource mock estate (pulse-dev rig build of this exact tree on :7696)",
+    "per-cell DOM-vs-store consistency for workloads-table CPU cells across cohort updates (11/12 rows within 1% at two samples 30s apart; 12th is a group header without a CPU cell)",
+    "warm tab re-entry catch-up through the changed-key history (Alerts, Proxmox, Storage/Overview sub-tab cycles)",
+    "30s idle observation on Proxmox Overview at desktop and 390px/4x-throttle mobile",
+    "nodes / workloads / storage tables rendered and live under realtime deltas; zero console errors across all probes on both viewport classes"
   ],
   "interactions": [
-    "opened the Physical Disks view",
-    "filtered disks by owning Proxmox node",
-    "expanded and collapsed a physical-disk detail",
-    "cleared search and restored the full inventory",
-    "verified no horizontal table overflow at 390px"
+    "login",
+    "desktop platform-tab rail navigation across all platforms and utility tabs",
+    "mobile bottom-bar navigation including platform-switcher and More sheets",
+    "Proxmox sub-tab cycle (Storage, Backups, Replication, Ceph, Overview) with repeated warm switches",
+    "repeated warm Alerts entry (5-rep A/B harness)"
   ]
 }

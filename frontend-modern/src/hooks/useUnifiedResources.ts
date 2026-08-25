@@ -37,9 +37,12 @@ import { canonicalizeFrontendResourceType } from '@/utils/resourceTypeCompat';
 import { getPreferredNormalizedPlatformId } from '@/utils/resourceIdentity';
 import { getExplicitResourceClusterName } from '@/utils/agentResources';
 import {
+  buildFastResourceStorePatchOps,
+  getFastResourceMergePatchKeys,
   mergeCanonicalResource,
   mergeCanonicalResourceDeltaSnapshot,
   mergeCanonicalResourceSnapshot,
+  type ResourceChangedKeys,
 } from '@/utils/resourceStateAdapters';
 import { RESOURCE_METADATA_CHANGED_EVENT } from '@/utils/resourceMetadataEvents';
 import {
@@ -1621,6 +1624,7 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
     const resourceChange = wsStore.resourceChange?.() ?? {
       version: Number(lastUpdateToken) || 0,
       changedIds: null,
+      changedKeys: null,
     };
     // For normal page loads, keep the first paint on the canonical REST contract.
     // Only explicit websocket-first consumers are allowed to render directly
@@ -1638,16 +1642,33 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
     // the dominant Alerts-entry / tab re-entry cost in the 2026-08-25 profile.
     // Catch up through the store's bounded changed-id history instead; a
     // single-tick gap keeps using the latest delta without touching history.
-    const resolveCatchUpIds = (sinceVersion: number): ReadonlySet<string> | null => {
-      if (sinceVersion <= 0 || resourceChange.version <= sinceVersion) return null;
-      if (resourceChange.version === sinceVersion + 1) return resourceChange.changedIds;
-      return wsStore.changedResourceIdsSince?.(sinceVersion) ?? null;
+    // The per-key change shapes ride along so metrics-only rows keep fast-path
+    // eligibility across the whole catch-up window.
+    type CatchUpMeta = {
+      changedIds: ReadonlySet<string>;
+      changedKeys: ResourceChangedKeys | null;
     };
-    const allEntryCatchUpIds =
+    const resolveCatchUpMeta = (sinceVersion: number): CatchUpMeta | null => {
+      if (sinceVersion <= 0 || resourceChange.version <= sinceVersion) return null;
+      if (resourceChange.version === sinceVersion + 1) {
+        return resourceChange.changedIds
+          ? {
+              changedIds: resourceChange.changedIds,
+              changedKeys: resourceChange.changedKeys ?? null,
+            }
+          : null;
+      }
+      if (wsStore.changedResourceMetaSince) {
+        return wsStore.changedResourceMetaSince(sinceVersion);
+      }
+      const catchUpIds = wsStore.changedResourceIdsSince?.(sinceVersion) ?? null;
+      return catchUpIds ? { changedIds: catchUpIds, changedKeys: null } : null;
+    };
+    const allEntryCatchUp =
       allResourcesEntry.realtimeVersion > 0
-        ? resolveCatchUpIds(allResourcesEntry.realtimeVersion)
+        ? resolveCatchUpMeta(allResourcesEntry.realtimeVersion)
         : null;
-    const canApplyIncrementally = allEntryCatchUpIds !== null;
+    const canApplyIncrementally = allEntryCatchUp !== null;
     const realtimeSnapshotAlreadyApplied =
       resourceChange.version > 0 &&
       allResourcesEntry.hasSnapshot &&
@@ -1660,27 +1681,47 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
     // store read entirely when this realtime version is already applied.
     // untrack keeps the per-item id/type reads from registering thousands of
     // fine-grained dependencies; the effect is driven by resourceChange().
-    const readWsResources = (changedIds: ReadonlySet<string> | null): Resource[] =>
+    const readWsResources = (catchUp: CatchUpMeta | null): Resource[] =>
       untrack(() => {
         const stored = wsStore.state.resources;
         if (!Array.isArray(stored)) return [];
-        if (changedIds === null) return unwrap(stored) as Resource[];
-        const cachedIds = new Set(allResourcesEntry.resources.map((resource) => resource.id));
-        return stored.map((resource) =>
-          resource.type === 'agent' || changedIds.has(resource.id) || !cachedIds.has(resource.id)
-            ? (unwrap(resource) as Resource)
-            : (resource as Resource),
+        if (catchUp === null) return unwrap(stored) as Resource[];
+        const cachedById = new Map(
+          allResourcesEntry.resources.map((resource) => [resource.id, resource] as const),
         );
+        return stored.map((resource) => {
+          if (resource.type === 'agent' || !cachedById.has(resource.id)) {
+            return unwrap(resource) as Resource;
+          }
+          if (!catchUp.changedIds.has(resource.id)) {
+            return resource as Resource;
+          }
+          // Fast-path rows are read per patched key inside the merge (an O(1)
+          // proxy escape per subtree); only full-merge rows need the deep
+          // unwrap that structuredClone requires.
+          return getFastResourceMergePatchKeys(
+            catchUp.changedKeys ?? undefined,
+            resource.id,
+            cachedById.get(resource.id),
+          )
+            ? (resource as Resource)
+            : (unwrap(resource) as Resource);
+        });
       });
     const mergedWsResources = realtimeSnapshotAlreadyApplied
       ? allResourcesEntry.resources
       : canApplyIncrementally
-        ? mergeCanonicalResourceDeltaSnapshot(
-            readWsResources(allEntryCatchUpIds),
-            allResourcesEntry.resources,
-            allEntryCatchUpIds!,
+        ? untrack(() =>
+            mergeCanonicalResourceDeltaSnapshot(
+              readWsResources(allEntryCatchUp),
+              allResourcesEntry.resources,
+              allEntryCatchUp!.changedIds,
+              allEntryCatchUp!.changedKeys ?? undefined,
+            ),
           )
-        : mergeCanonicalResourceSnapshot(readWsResources(null), allResourcesEntry.resources);
+        : untrack(() =>
+            mergeCanonicalResourceSnapshot(readWsResources(null), allResourcesEntry.resources),
+          );
     const projectedResources = filterCanonicalUnifiedResources(
       mergedWsResources,
       query,
@@ -1717,27 +1758,30 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
       allResourcesEntry.realtimeVersion = resourceChange.version;
     }
 
-    const cacheEntryCatchUpIds =
+    const cacheEntryCatchUp =
       cacheEntry.hasSnapshot &&
       cacheEntry.realtimeVersion > 0 &&
       resolvedProjectedResources === projectedResources
-        ? resolveCatchUpIds(cacheEntry.realtimeVersion)
+        ? resolveCatchUpMeta(cacheEntry.realtimeVersion)
         : null;
-    const canPatchProjectionIncrementally = cacheEntryCatchUpIds !== null;
+    const canPatchProjectionIncrementally = cacheEntryCatchUp !== null;
     const changedResourceTouchesAgent =
       canPatchProjectionIncrementally &&
       mergedWsResources.some(
-        (resource) => resource.type === 'agent' && cacheEntryCatchUpIds!.has(resource.id),
+        (resource) => resource.type === 'agent' && cacheEntryCatchUp!.changedIds.has(resource.id),
       );
     const incrementalPatchIndices = canPatchProjectionIncrementally
       ? resolveIncrementalResourcePatchIndices(
           resources as unknown as Resource[],
           resolvedProjectedResources,
-          cacheEntryCatchUpIds!,
+          cacheEntryCatchUp!.changedIds,
           changedResourceTouchesAgent,
         )
       : null;
 
+    // Captured before the cache write below replaces it: the fast-commit
+    // eligibility check needs the row the instance store currently mirrors.
+    const previousProjectedResources = cacheEntry.resources;
     setUnifiedResourcesCache(cacheEntry, resolvedProjectedResources, now);
     cacheEntry.lastFetchAt = now;
     cacheEntry.realtimeVersion = resourceChange.version;
@@ -1746,7 +1790,39 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
         setResources(reconcile(resolvedProjectedResources, { key: 'id' }));
       } else {
         incrementalPatchIndices.forEach((index) => {
-          setResources(index, reconcile(resolvedProjectedResources[index], { key: 'id' }));
+          const nextRow = resolvedProjectedResources[index];
+          const previousRow = previousProjectedResources[index];
+          const fastKeys =
+            previousRow && previousRow.id === nextRow.id
+              ? getFastResourceMergePatchKeys(
+                  cacheEntryCatchUp!.changedKeys ?? undefined,
+                  nextRow.id,
+                  previousRow,
+                )
+              : null;
+          if (fastKeys) {
+            // A fast-path row differs from the store row only in its patched
+            // subtrees; committing those per key avoids the full-row reconcile
+            // whose unwrap pass deep-walks every field.
+            for (const op of buildFastResourceStorePatchOps(nextRow, fastKeys)) {
+              if (op.leaf !== undefined) {
+                setResources(
+                  index,
+                  op.key as keyof Resource,
+                  op.leaf as never,
+                  (op.mode === 'reconcile' ? reconcile(op.value) : op.value) as never,
+                );
+              } else {
+                setResources(
+                  index,
+                  op.key as keyof Resource,
+                  (op.mode === 'reconcile' ? reconcile(op.value) : op.value) as never,
+                );
+              }
+            }
+          } else {
+            setResources(index, reconcile(nextRow, { key: 'id' }));
+          }
         });
       }
       setPolicyPosture(cacheEntry.policyPosture);

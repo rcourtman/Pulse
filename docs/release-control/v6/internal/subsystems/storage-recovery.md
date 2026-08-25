@@ -1138,6 +1138,16 @@ recovery scope, or a storage/recovery-owned secret source.
    reorder the REST-first hydration guarantee above, and a skipped store read
    must never leave a storage/recovery projection behind the shared cache's
    applied revision.
+   The same invisibility bound covers the per-key fast merge: a changed row
+   whose recorded patch keys stay within the metric fast-path allow-list may
+   be merged as the previous display row with only the patched subtrees
+   cloned in, and committed to instance projections as per-key subtree writes
+   — but the result must stay content-equivalent to the full
+   clone-canonicalize-merge. The `storage` facet, structural `platformData`
+   keys, and identity fields are all outside the allow-list, so a patch
+   touching any of them forces the full merge path, and no
+   storage/recovery-visible field may change value, presence, or merge
+   semantics because of the fast path.
    Shared chart transports in `internal/api/chartapi/service.go` must follow the same
    rule in mock mode: `/api/storage-charts` and adjacent infrastructure chart
    payloads must read through `GetUnifiedReadStateOrSnapshot()` so storage and

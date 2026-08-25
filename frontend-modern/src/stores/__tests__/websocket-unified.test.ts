@@ -368,6 +368,113 @@ describe('websocket store unified resource contract', () => {
     }
   });
 
+  it('commits metrics-only deltas with per-key change shapes and a catch-up meta history', async () => {
+    const { store, dispose } = await createStoreHarness();
+    try {
+      await waitForOpenTick();
+
+      emitMessage({
+        type: 'initialState',
+        data: {
+          connectedInfrastructure: [],
+          resources: [
+            {
+              id: 'vm-1',
+              type: 'vm',
+              name: 'vm-1',
+              status: 'running',
+              lastSeen: 100,
+              cpu: { current: 10 },
+              memory: { current: 20, total: 1024, used: 256 },
+              tags: ['prod'],
+              platformData: {
+                sources: ['proxmox-pve'],
+                vmid: 100,
+                diskRead: 5,
+                networkIn: 100,
+              },
+            },
+            { id: 'vm-2', type: 'vm', name: 'vm-2', status: 'running', lastSeen: 100 },
+          ],
+          lastUpdate: 100,
+          activeAlerts: [],
+          recentlyResolved: [],
+        },
+      });
+      const baseVersion = store.resourceChange().version;
+
+      // Metrics-only tick: aligned commit, per-key change shape recorded with
+      // platformData expanded into its leaves.
+      emitMessage({
+        type: 'rawData',
+        data: {
+          lastUpdate: 200,
+          resourceDelta: {
+            upserts: [
+              {
+                id: 'vm-1',
+                lastSeen: 200,
+                cpu: { current: 55 },
+                platformData: { diskRead: 9, networkIn: 300 },
+              },
+            ],
+          },
+        },
+      });
+
+      const row = store.state.resources[0];
+      expect(row?.cpu?.current).toBe(55);
+      expect(row?.lastSeen).toBe(200);
+      expect(row?.tags).toEqual(['prod']);
+      expect(row?.platformData).toMatchObject({ vmid: 100, diskRead: 9, networkIn: 300 });
+      expect(store.resourceChange().changedKeys?.get('vm-1')).toEqual([
+        'lastSeen',
+        'cpu',
+        'platformData.diskRead',
+        'platformData.networkIn',
+      ]);
+
+      // Second tick with a structural key; the catch-up meta must union both
+      // ticks per id.
+      emitMessage({
+        type: 'rawData',
+        data: {
+          lastUpdate: 300,
+          resourceDelta: {
+            upserts: [
+              { id: 'vm-1', cpu: { current: 60 } },
+              { id: 'vm-2', tags: ['edge'] },
+            ],
+          },
+        },
+      });
+
+      const meta = store.changedResourceMetaSince(baseVersion);
+      expect(meta).not.toBeNull();
+      expect(meta?.changedIds).toEqual(new Set(['vm-1', 'vm-2']));
+      expect(meta?.changedKeys.get('vm-1')).toEqual([
+        'lastSeen',
+        'cpu',
+        'platformData.diskRead',
+        'platformData.networkIn',
+      ]);
+      expect(meta?.changedKeys.get('vm-2')).toEqual(['tags']);
+
+      // A removal marks the row's change shape unknown.
+      emitMessage({
+        type: 'rawData',
+        data: {
+          lastUpdate: 400,
+          resourceDelta: { removed: ['vm-2'] },
+        },
+      });
+      expect(store.changedResourceMetaSince(baseVersion)?.changedKeys.get('vm-2')).toBeNull();
+      expect(store.state.resources.map((resource) => resource.id)).toEqual(['vm-1']);
+    } finally {
+      dispose();
+    }
+  });
+
   it('expands capabilitiesRef through the catalog and synthesizes omitted default policies', async () => {
     const { store, dispose } = await createStoreHarness();
     try {

@@ -20,8 +20,12 @@ import {
   isAppContainerDiscoveryResourceType,
 } from '@/utils/discoveryTarget';
 import {
+  buildFastResourceStorePatchOps,
+  getFastResourceMergePatchKeys,
   mergeCanonicalResourceDeltaSnapshot,
   mergeCanonicalResourceSnapshot,
+  unionResourceChangedKeys,
+  type ResourceChangedKeys,
 } from '@/utils/resourceStateAdapters';
 import { apiFetchJSON } from '@/utils/apiClient';
 
@@ -95,24 +99,58 @@ const applyJSONMergePatch = (current: unknown, patch: unknown): unknown => {
   return result;
 };
 
+// Top-level keys a merge patch touches, with platformData expanded one level
+// so the fast merge path can reason about the metric mirror leaves. Returns
+// null when the patch replaces or deletes platformData wholesale — the change
+// shape is then too coarse for a per-key fast path.
+const collectResourcePatchKeys = (patch: Record<string, unknown>): readonly string[] | null => {
+  const keys: string[] = [];
+  for (const key of Object.keys(patch)) {
+    if (key === 'id') continue;
+    if (key === 'platformData') {
+      const platformData = asRecord(patch.platformData);
+      if (!platformData) return null;
+      for (const leaf of Object.keys(platformData)) keys.push(`platformData.${leaf}`);
+      continue;
+    }
+    keys.push(key);
+  }
+  return keys;
+};
+
 const applyResourceStateDelta = (
   current: readonly Resource[],
   delta: { upserts?: unknown; removed?: unknown; order?: unknown },
-): { resources: Resource[]; changedIds: Set<string> } => {
+): {
+  resources: Resource[];
+  changedIds: Set<string>;
+  changedKeys: Map<string, readonly string[] | null>;
+} => {
   const resourcesById = new Map(current.map((resource) => [resource.id, resource] as const));
   const removed = Array.isArray(delta.removed)
     ? new Set(delta.removed.filter((id): id is string => typeof id === 'string'))
     : new Set<string>();
   removed.forEach((id) => resourcesById.delete(id));
   const changedIds = new Set(removed);
+  const changedKeys = new Map<string, readonly string[] | null>();
+  removed.forEach((id) => changedKeys.set(id, null));
 
   const addedIds: string[] = [];
   if (Array.isArray(delta.upserts)) {
     delta.upserts.forEach((patch) => {
-      const id = asString(asRecord(patch)?.id);
-      if (!id) return;
+      const patchRecord = asRecord(patch);
+      const id = asString(patchRecord?.id);
+      if (!id || !patchRecord) return;
       changedIds.add(id);
-      if (!resourcesById.has(id)) addedIds.push(id);
+      const isNewRow = !resourcesById.has(id);
+      if (isNewRow) addedIds.push(id);
+      if (isNewRow || changedKeys.has(id)) {
+        // Added rows and repeated patches for one id in a single frame have no
+        // usable per-key shape; force the full merge path.
+        changedKeys.set(id, null);
+      } else {
+        changedKeys.set(id, collectResourcePatchKeys(patchRecord));
+      }
       const next = applyJSONMergePatch(resourcesById.get(id), patch) as Resource;
       if (next.id === id) resourcesById.set(id, next);
     });
@@ -132,7 +170,7 @@ const applyResourceStateDelta = (
   resourcesById.forEach((resource, id) => {
     if (!included.has(id)) ordered.push(resource);
   });
-  return { resources: ordered, changedIds };
+  return { resources: ordered, changedIds, changedKeys };
 };
 
 const parseTimestampMs = (value: unknown): number | null => {
@@ -252,15 +290,28 @@ export function createWebSocketStore(url: string) {
   const [resourceChange, setResourceChange] = createSignal<{
     version: number;
     changedIds: ReadonlySet<string> | null;
-  }>({ version: 0, changedIds: null });
+    changedKeys: ResourceChangedKeys | null;
+  }>({ version: 0, changedIds: null, changedKeys: null });
   // Bounded per-tick changed-id history so a consumer that mounted or resumed
   // a few ticks behind the live version can still catch up with a delta merge
   // instead of a full-estate remerge. A full-snapshot commit (changedIds null)
   // invalidates the whole span, so the history resets there.
   const RESOURCE_CHANGE_HISTORY_LIMIT = 30;
-  let resourceChangeHistory: { version: number; changedIds: ReadonlySet<string> }[] = [];
+  let resourceChangeHistory: {
+    version: number;
+    changedIds: ReadonlySet<string>;
+    changedKeys: ResourceChangedKeys | null;
+  }[] = [];
 
-  const changedResourceIdsSince = (sinceVersion: number): ReadonlySet<string> | null => {
+  const changedResourceIdsSince = (sinceVersion: number): ReadonlySet<string> | null =>
+    changedResourceMetaSince(sinceVersion)?.changedIds ?? null;
+
+  // Union of changed ids and their per-key change shapes across the history
+  // window (sinceVersion, current]. changedKeys entries degrade to null for a
+  // row whenever any covered tick could not describe its change shape.
+  const changedResourceMetaSince = (
+    sinceVersion: number,
+  ): { changedIds: ReadonlySet<string>; changedKeys: ResourceChangedKeys } | null => {
     if (sinceVersion >= resourceChangeVersion) return null;
     if (resourceChangeHistory.length === 0) return null;
     if (resourceChangeHistory[0].version > sinceVersion + 1) return null;
@@ -268,11 +319,19 @@ export function createWebSocketStore(url: string) {
       return null;
     }
     const union = new Set<string>();
+    const keysUnion = new Map<string, readonly string[] | null>();
     for (const entry of resourceChangeHistory) {
       if (entry.version <= sinceVersion) continue;
-      entry.changedIds.forEach((id) => union.add(id));
+      entry.changedIds.forEach((id) => {
+        union.add(id);
+        const tickKeys = entry.changedKeys ? (entry.changedKeys.get(id) ?? null) : null;
+        keysUnion.set(
+          id,
+          keysUnion.has(id) ? unionResourceChangedKeys(keysUnion.get(id), tickKeys) : tickKeys,
+        );
+      });
     }
-    return union;
+    return { changedIds: union, changedKeys: keysUnion };
   };
 
   // Track alerts with pending acknowledgment changes to prevent race conditions
@@ -362,6 +421,9 @@ export function createWebSocketStore(url: string) {
   // and Solid's reconcile mutates adopted objects in place.
   let rawServerResources: Resource[] | null = null;
   const deferredResourceIds = new Set<string>();
+  // Per-key change shapes for deferred ids, unioned across the hidden ticks so
+  // the resume merge can still take the fast path for metrics-only rows.
+  const deferredResourceKeys = new Map<string, readonly string[] | null>();
   // Latest capabilityCatalog from the state payload. Broadcast resources carry
   // capabilitiesRef instead of inline capability blobs; ingestion expands the
   // ref back into `capabilities` so consumers keep the inline shape.
@@ -456,6 +518,7 @@ export function createWebSocketStore(url: string) {
   const resetConnectionBaseline = () => {
     rawServerResources = null;
     deferredResourceIds.clear();
+    deferredResourceKeys.clear();
     lastFullStateRecoveryAt = 0;
     oversizedSnapshotObserved = false;
     // A recovery request from a retired connection may still settle, but its
@@ -500,21 +563,84 @@ export function createWebSocketStore(url: string) {
     });
   };
 
-  const commitResources = (nextResources: Resource[], changedResourceIds?: ReadonlySet<string>) => {
+  const commitResources = (
+    nextResources: Resource[],
+    changedResourceIds?: ReadonlySet<string>,
+    changedResourceKeys?: ResourceChangedKeys,
+  ) => {
     logger.debug('[WebSocket] Updating resources', {
       count: nextResources.length,
       changedCount: changedResourceIds?.size ?? nextResources.length,
     });
-    setState('resources', reconcile(nextResources, { key: 'id' }));
+    // A metrics tick leaves row count and order untouched, so it can commit as
+    // per-index writes instead of a whole-array reconcile (whose unwrap pass
+    // deep-walks every merged row). Delta-merge pass-through rows keep their
+    // store proxy identity, so the alignment scan skips them by equality.
+    const currentResources = state.resources;
+    let alignedPatchIndices: number[] | null = null;
+    if (
+      changedResourceIds &&
+      Array.isArray(currentResources) &&
+      currentResources.length === nextResources.length
+    ) {
+      alignedPatchIndices = [];
+      for (let index = 0; index < nextResources.length; index += 1) {
+        const nextRow = nextResources[index];
+        const currentRow = currentResources[index];
+        if (nextRow === currentRow) continue;
+        if (!nextRow || !currentRow || nextRow.id !== currentRow.id) {
+          alignedPatchIndices = null;
+          break;
+        }
+        alignedPatchIndices.push(index);
+      }
+    }
+    if (alignedPatchIndices) {
+      for (const index of alignedPatchIndices) {
+        const row = nextResources[index];
+        const fastKeys = getFastResourceMergePatchKeys(
+          changedResourceKeys,
+          row.id,
+          currentResources[index],
+        );
+        if (fastKeys) {
+          for (const op of buildFastResourceStorePatchOps(row, fastKeys)) {
+            if (op.leaf !== undefined) {
+              setState(
+                'resources',
+                index,
+                op.key as keyof Resource,
+                op.leaf as never,
+                (op.mode === 'reconcile' ? reconcile(op.value) : op.value) as never,
+              );
+            } else {
+              setState(
+                'resources',
+                index,
+                op.key as keyof Resource,
+                (op.mode === 'reconcile' ? reconcile(op.value) : op.value) as never,
+              );
+            }
+          }
+        } else {
+          setState('resources', index, reconcile(row, { key: 'id' }));
+        }
+      }
+    } else {
+      setState('resources', reconcile(nextResources, { key: 'id' }));
+    }
     const committedChangedIds = changedResourceIds ? new Set(changedResourceIds) : null;
+    const committedChangedKeys = changedResourceKeys ?? null;
     setResourceChange({
       version: ++resourceChangeVersion,
       changedIds: committedChangedIds,
+      changedKeys: committedChangedKeys,
     });
     if (committedChangedIds) {
       resourceChangeHistory.push({
         version: resourceChangeVersion,
         changedIds: committedChangedIds,
+        changedKeys: committedChangedKeys,
       });
       if (resourceChangeHistory.length > RESOURCE_CHANGE_HISTORY_LIMIT) {
         resourceChangeHistory.splice(
@@ -538,13 +664,16 @@ export function createWebSocketStore(url: string) {
     }
 
     const changedResourceIds = new Set(deferredResourceIds);
+    const changedResourceKeys = new Map(deferredResourceKeys);
     deferredResourceIds.clear();
+    deferredResourceKeys.clear();
     const nextResources = mergeCanonicalResourceDeltaSnapshot(
       rawServerResources,
       state.resources,
       changedResourceIds,
+      changedResourceKeys,
     );
-    batch(() => commitResources(nextResources, changedResourceIds));
+    batch(() => commitResources(nextResources, changedResourceIds, changedResourceKeys));
   };
 
   if (typeof document !== 'undefined') {
@@ -714,6 +843,7 @@ export function createWebSocketStore(url: string) {
             // Handle unified resources
             let nextResources: Resource[] | undefined;
             let changedResourceIds: ReadonlySet<string> | undefined;
+            let changedResourceKeys: ResourceChangedKeys | undefined;
             if (message.data.resources !== undefined) {
               deferredResourceIds.clear();
               if (Array.isArray(message.data.resources)) {
@@ -761,14 +891,38 @@ export function createWebSocketStore(url: string) {
                 rawServerResources = appliedDelta.resources;
                 changedResourceIds = appliedDelta.changedIds;
                 if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
-                  changedResourceIds.forEach((id) => deferredResourceIds.add(id));
+                  changedResourceIds.forEach((id) => {
+                    const tickKeys = appliedDelta.changedKeys.get(id) ?? null;
+                    deferredResourceKeys.set(
+                      id,
+                      deferredResourceIds.has(id)
+                        ? unionResourceChangedKeys(deferredResourceKeys.get(id), tickKeys)
+                        : tickKeys,
+                    );
+                    deferredResourceIds.add(id);
+                  });
                 } else {
+                  const combinedKeys = appliedDelta.changedKeys;
+                  deferredResourceIds.forEach((id) => {
+                    combinedKeys.set(
+                      id,
+                      combinedKeys.has(id)
+                        ? unionResourceChangedKeys(
+                            combinedKeys.get(id),
+                            deferredResourceKeys.get(id) ?? null,
+                          )
+                        : (deferredResourceKeys.get(id) ?? null),
+                    );
+                  });
                   changedResourceIds = new Set([...deferredResourceIds, ...changedResourceIds]);
                   deferredResourceIds.clear();
+                  deferredResourceKeys.clear();
+                  changedResourceKeys = combinedKeys;
                   nextResources = mergeCanonicalResourceDeltaSnapshot(
                     rawServerResources,
                     state.resources,
                     changedResourceIds,
+                    changedResourceKeys,
                   );
                 }
               } else {
@@ -780,7 +934,7 @@ export function createWebSocketStore(url: string) {
               }
             }
             if (nextResources !== undefined) {
-              commitResources(nextResources, changedResourceIds);
+              commitResources(nextResources, changedResourceIds, changedResourceKeys);
             }
             // Sync active alerts from state
             if (message.data.activeAlerts !== undefined) {
@@ -1248,6 +1402,7 @@ export function createWebSocketStore(url: string) {
     updateProgress,
     resourceChange,
     changedResourceIdsSince,
+    changedResourceMetaSince,
     shutdown,
     reconnect: () => {
       if (isDisposed) return;
@@ -1273,7 +1428,11 @@ export function createWebSocketStore(url: string) {
         setReconnecting(false);
         setInitialDataReceived(false);
         setUpdateProgress(null);
-        setResourceChange({ version: ++resourceChangeVersion, changedIds: null });
+        setResourceChange({
+          version: ++resourceChangeVersion,
+          changedIds: null,
+          changedKeys: null,
+        });
         resourceChangeHistory = [];
         setState(reconcile(createInitialState()));
         setActiveAlerts(reconcile({}));

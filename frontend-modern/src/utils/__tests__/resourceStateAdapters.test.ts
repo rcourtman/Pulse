@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  buildFastResourceStorePatchOps,
+  getFastResourceMergePatchKeys,
   mergeCanonicalResourceDeltaSnapshot,
   mergeCanonicalResourceSnapshot,
   nodeFromResource,
   pbsInstanceFromResource,
   pmgInstanceFromResource,
+  unionResourceChangedKeys,
 } from '../resourceStateAdapters';
 import type { Resource } from '@/types/resource';
 
@@ -1166,5 +1169,244 @@ describe('incremental canonical resource snapshots', () => {
 
     expect(result).toHaveLength(1);
     expect(result[0]?.sources).toEqual(expect.arrayContaining(['agent', 'proxmox-pve']));
+  });
+});
+
+describe('fast merge path for metrics-only delta patches', () => {
+  // Mirrors the wire shape of a PVE guest metrics tick captured from the mock
+  // estate: top-level metric subtrees, the proxmox facet mirror, and the four
+  // platformData metric mirror leaves.
+  const createPveGuestRaw = (): Resource =>
+    ({
+      id: 'vm-fast-1',
+      type: 'vm',
+      name: 'vm-fast-1',
+      displayName: 'VM Fast 1',
+      platformId: 'pve-node-1',
+      platformType: 'proxmox-pve',
+      sourceType: 'api',
+      status: 'running',
+      lastSeen: 1700000000000,
+      uptime: 1000,
+      cpu: { current: 10 },
+      memory: { current: 20, total: 1024, used: 256, free: 768 },
+      disk: { current: 30, total: 2048, used: 512, free: 1536 },
+      network: { rxBytes: 100, txBytes: 200 },
+      diskIO: { readRate: 5, writeRate: 7 },
+      tags: ['prod'],
+      canonicalIdentity: { canonicalId: 'vm-fast-1', aliases: ['vm/100'] },
+      proxmox: {
+        vmid: 100,
+        nodeName: 'pve-node-1',
+        memory: { free: 768, usage: 20, used: 256 },
+        uptime: 1000,
+      },
+      platformData: {
+        sources: ['proxmox-pve'],
+        instance: 'pve-node-1',
+        vmid: 100,
+        diskRead: 5,
+        diskWrite: 7,
+        networkIn: 100,
+        networkOut: 200,
+        proxmox: { vmid: 100, nodeName: 'pve-node-1' },
+      },
+    }) as unknown as Resource;
+
+  const METRICS_PATCH_KEYS = [
+    'cpu',
+    'uptime',
+    'lastSeen',
+    'memory',
+    'network',
+    'diskIO',
+    'proxmox',
+    'platformData.diskRead',
+    'platformData.diskWrite',
+    'platformData.networkIn',
+    'platformData.networkOut',
+  ] as const;
+
+  const applyMetricsTick = (raw: Resource): Resource => {
+    const next = structuredClone(raw) as unknown as Record<string, unknown>;
+    next.cpu = { current: 55 };
+    next.uptime = 1002;
+    next.lastSeen = 1700000002000;
+    next.memory = { current: 40, total: 1024, used: 400, free: 624 };
+    next.network = { rxBytes: 300, txBytes: 400 };
+    next.diskIO = { readRate: 9, writeRate: 11 };
+    next.proxmox = {
+      ...(next.proxmox as Record<string, unknown>),
+      memory: { free: 624, usage: 40, used: 400 },
+      uptime: 1002,
+    };
+    next.platformData = {
+      ...(next.platformData as Record<string, unknown>),
+      diskRead: 9,
+      diskWrite: 11,
+      networkIn: 300,
+      networkOut: 400,
+    };
+    return next as unknown as Resource;
+  };
+
+  const seedDisplayRows = (raw: Resource[]): Resource[] =>
+    mergeCanonicalResourceDeltaSnapshot(
+      raw.map((row) => structuredClone(row)),
+      [],
+      new Set(raw.map((row) => row.id)),
+    );
+
+  it('produces the same merged row as the full path for a metrics-only patch', () => {
+    const raw = createPveGuestRaw();
+    const display = seedDisplayRows([raw]);
+    const patched = applyMetricsTick(raw);
+    const changedIds = new Set(['vm-fast-1']);
+    const changedKeys = new Map([['vm-fast-1', [...METRICS_PATCH_KEYS]]]);
+
+    const fast = mergeCanonicalResourceDeltaSnapshot([patched], display, changedIds, changedKeys);
+    const slow = mergeCanonicalResourceDeltaSnapshot(
+      [structuredClone(patched)],
+      display,
+      changedIds,
+    );
+
+    expect(fast[0]).toEqual(slow[0]);
+    expect(fast[0]?.cpu?.current).toBe(55);
+    expect(fast[0]?.uptime).toBe(1002);
+    expect((fast[0]?.platformData as Record<string, unknown>)?.diskRead).toBe(9);
+    expect((fast[0]?.proxmox as Record<string, unknown>)?.uptime).toBe(1002);
+  });
+
+  it('keeps unpatched subtree identity on the fast path', () => {
+    const raw = createPveGuestRaw();
+    const display = seedDisplayRows([raw]);
+    const patched = applyMetricsTick(raw);
+    const changedKeys = new Map([['vm-fast-1', [...METRICS_PATCH_KEYS]]]);
+
+    const fast = mergeCanonicalResourceDeltaSnapshot(
+      [patched],
+      display,
+      new Set(['vm-fast-1']),
+      changedKeys,
+    );
+
+    expect(fast[0]).not.toBe(display[0]);
+    expect(fast[0]?.canonicalIdentity).toBe(display[0]?.canonicalIdentity);
+    expect(fast[0]?.disk).toBe(display[0]?.disk);
+    expect(fast[0]?.tags).toBe(display[0]?.tags);
+    // platformData is rebuilt for the patched leaves but its untouched nested
+    // records keep identity so downstream reconciles short-circuit on them.
+    expect((fast[0]?.platformData as Record<string, unknown>)?.proxmox).toBe(
+      (display[0]?.platformData as Record<string, unknown>)?.proxmox,
+    );
+    // The fast row must not adopt the raw row's subtrees: reconcile mutates
+    // adopted objects in place and would corrupt the raw delta baseline.
+    expect(fast[0]?.cpu).not.toBe(patched.cpu);
+    expect(fast[0]?.proxmox).not.toBe(patched.proxmox);
+  });
+
+  it('falls back to the full merge when a patch touches an ineligible key', () => {
+    const raw = createPveGuestRaw();
+    const display = seedDisplayRows([raw]);
+    const patched = {
+      ...applyMetricsTick(raw),
+      tags: ['prod', 'new-tag'],
+    } as unknown as Resource;
+    const changedKeys = new Map([['vm-fast-1', [...METRICS_PATCH_KEYS, 'tags']]]);
+
+    expect(getFastResourceMergePatchKeys(changedKeys, 'vm-fast-1', display[0])).toBeNull();
+
+    const result = mergeCanonicalResourceDeltaSnapshot(
+      [patched],
+      display,
+      new Set(['vm-fast-1']),
+      changedKeys,
+    );
+    expect(result[0]?.tags).toEqual(['prod', 'new-tag']);
+    expect(result[0]?.cpu?.current).toBe(55);
+  });
+
+  it('falls back to the full merge for platformData leaves outside the metric mirrors', () => {
+    const display = seedDisplayRows([createPveGuestRaw()]);
+    const changedKeys = new Map([['vm-fast-1', ['cpu', 'platformData.instance']]]);
+
+    expect(getFastResourceMergePatchKeys(changedKeys, 'vm-fast-1', display[0])).toBeNull();
+  });
+
+  it('treats unknown change shapes and agent rows as ineligible', () => {
+    const display = seedDisplayRows([createPveGuestRaw()]);
+    expect(
+      getFastResourceMergePatchKeys(new Map([['vm-fast-1', null]]), 'vm-fast-1', display[0]),
+    ).toBeNull();
+    expect(getFastResourceMergePatchKeys(undefined, 'vm-fast-1', display[0])).toBeNull();
+    expect(
+      getFastResourceMergePatchKeys(new Map([['vm-fast-1', ['cpu']]]), 'vm-fast-1', undefined),
+    ).toBeNull();
+
+    const agent = { ...createPveGuestRaw(), type: 'agent' } as unknown as Resource;
+    expect(
+      getFastResourceMergePatchKeys(new Map([['vm-fast-1', ['cpu']]]), 'vm-fast-1', agent),
+    ).toBeNull();
+  });
+
+  it('keeps the existing value when a fast key was deleted from the raw row', () => {
+    const raw = createPveGuestRaw();
+    const display = seedDisplayRows([raw]);
+    const patched = structuredClone(raw) as unknown as Record<string, unknown>;
+    delete patched.diskIO;
+    const changedKeys = new Map([['vm-fast-1', ['diskIO']]]);
+
+    const fast = mergeCanonicalResourceDeltaSnapshot(
+      [patched as unknown as Resource],
+      display,
+      new Set(['vm-fast-1']),
+      changedKeys,
+    );
+    const slow = mergeCanonicalResourceDeltaSnapshot(
+      [structuredClone(patched) as unknown as Resource],
+      display,
+      new Set(['vm-fast-1']),
+    );
+
+    expect(fast[0]?.diskIO).toEqual(display[0]?.diskIO);
+    expect(fast[0]).toEqual(slow[0]);
+  });
+
+  it('unions changed keys across ticks with null contamination', () => {
+    expect(unionResourceChangedKeys(['cpu'], ['memory', 'cpu'])).toEqual(['cpu', 'memory']);
+    expect(unionResourceChangedKeys(['cpu'], null)).toBeNull();
+    expect(unionResourceChangedKeys(null, ['cpu'])).toBeNull();
+    expect(unionResourceChangedKeys(undefined, ['cpu'])).toEqual(['cpu']);
+    expect(unionResourceChangedKeys(['cpu'], undefined)).toEqual(['cpu']);
+  });
+
+  it('builds per-key store patch ops for a fast row', () => {
+    const raw = createPveGuestRaw();
+    const display = seedDisplayRows([raw]);
+    const patched = applyMetricsTick(raw);
+    const changedKeys = new Map([['vm-fast-1', [...METRICS_PATCH_KEYS]]]);
+    const fast = mergeCanonicalResourceDeltaSnapshot(
+      [patched],
+      display,
+      new Set(['vm-fast-1']),
+      changedKeys,
+    );
+
+    const ops = buildFastResourceStorePatchOps(fast[0]!, [...METRICS_PATCH_KEYS]);
+    const byTarget = new Map(ops.map((op) => [op.leaf ? `${op.key}.${op.leaf}` : op.key, op]));
+
+    expect(byTarget.get('cpu')?.mode).toBe('reconcile');
+    expect(byTarget.get('uptime')).toEqual({ key: 'uptime', value: 1002, mode: 'set' });
+    expect(byTarget.get('platformData.diskRead')).toEqual({
+      key: 'platformData',
+      leaf: 'diskRead',
+      value: 9,
+      mode: 'set',
+    });
+    expect(byTarget.get('proxmox')?.mode).toBe('reconcile');
+    // No op may reference platformData wholesale; only leaf writes are allowed
+    // so unpatched platformData subtrees never get touched in the store.
+    expect(ops.every((op) => op.key !== 'platformData' || op.leaf !== undefined)).toBe(true);
   });
 });

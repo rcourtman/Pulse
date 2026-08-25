@@ -1192,7 +1192,21 @@ AI-only summary payloads, or page-local heuristics.
    the history covers the gap, so tab entry and re-entry do not deep-unwrap or
    remerge the full estate. Only initial hydration, uncovered revision gaps,
    full-snapshot commits, additions, removals, or reorderings
-   fall back to keyed full reconciliation. Route-prefetch and route-realtime
+   fall back to keyed full reconciliation.
+   Each reconciliation also records the per-resource top-level keys its merge
+   patches touched (`platformData` expanded one level), published with the
+   revision and unioned across the history window and the hidden-tab deferral
+   set with unknown-shape contamination. A changed non-host row whose recorded
+   keys stay within the pass-through metric fields, the `proxmox` facet
+   mirror, and the `platformData` metric mirror leaves takes a fast merge
+   path: the previous display row with only the patched subtrees cloned in,
+   bypassing the full clone-canonicalize-merge, and committing to the
+   connection store and instance projections as per-key subtree writes rather
+   than whole-row keyed reconciles. The fast output must stay
+   content-equivalent to the full path (facet keeps, deletion semantics, and
+   default-policy synthesis included), must never adopt raw-baseline subtrees
+   by reference, and any row outside the allow-list — including agent rows,
+   whose output can depend on host coalescing — must take the full path. Route-prefetch and route-realtime
    activation are separate:
    a prefetched hidden surface may retain REST data without subscribing its full
    projection to every realtime tick, and activation catches up from the shared

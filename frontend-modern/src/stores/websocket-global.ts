@@ -25,7 +25,8 @@ const createNoopWebSocketStore = (): ReturnType<typeof createWebSocketStore> => 
   const [resourceChange] = createSignal<{
     version: number;
     changedIds: ReadonlySet<string> | null;
-  }>({ version: 0, changedIds: null });
+    changedKeys: import('@/utils/resourceStateAdapters').ResourceChangedKeys | null;
+  }>({ version: 0, changedIds: null, changedKeys: null });
   const [state] = createStore<State>({
     connectedInfrastructure: [],
     metrics: [],
@@ -64,6 +65,7 @@ const createNoopWebSocketStore = (): ReturnType<typeof createWebSocketStore> => 
     updateProgress,
     resourceChange,
     changedResourceIdsSince: () => null,
+    changedResourceMetaSince: () => null,
     shutdown: () => {},
     reconnect: () => {},
     switchUrl: () => {},

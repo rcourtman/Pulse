@@ -226,7 +226,24 @@ for rows the delta merge will clone. The connection store keeps a bounded
 per-revision changed-id history so an instance that mounts or resumes several
 revisions behind the shared cache catches up through the unioned changed-id
 set as a delta merge instead of a full-estate remerge; the full fallback is
-reserved for uncovered gaps and full-snapshot commits. The broadcast payload
+reserved for uncovered gaps and full-snapshot commits.
+Per-tick reconciliation work must additionally scale with the patch, not the
+row: the server's resource delta is a JSON merge patch, and each
+reconciliation records which top-level keys every patch touched
+(`platformData` expanded one level). A changed non-host row whose recorded
+keys are confined to the pass-through metric fields (`cpu`, `memory`, `disk`,
+`network`, `diskIO`, `temperature`, `uptime`, `lastSeen`, `status`), the
+`proxmox` facet mirror, and the four `platformData` metric mirror leaves
+(`diskRead`, `diskWrite`, `networkIn`, `networkOut`) is merged as the previous
+display row with only those subtrees cloned in — no full-row deep clone,
+re-canonicalization, or full canonical merge — and commits to the resource
+stores as per-key subtree writes instead of a whole-row keyed reconcile, so
+neither commit path deep-walks the unchanged remainder of the row. The
+changed-key shapes ride the revision history (and the hidden-tab deferral
+set) with unknown-shape contamination: rows added, removed, patched twice in
+one frame, or patched outside the allow-list fall back to the full
+clone-canonicalize-merge path, and the fast output must remain
+content-equivalent to that path. The broadcast payload
 itself is a scalability surface: duplicated capability blobs travel once
 through the state-level `capabilityCatalog` and per-resource
 `capabilitiesRef`, default-posture policy and AI-safe prose are omitted and

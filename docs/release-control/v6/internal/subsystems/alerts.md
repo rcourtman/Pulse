@@ -302,10 +302,18 @@ remains free to hydrate without waiting for the retired connection's request
 to settle.
 While the document is hidden, that same connection-scoped baseline must keep
 accepting resource deltas without reconciling the visible resource store on
-every message. The store accumulates changed resource IDs and performs one
-canonical catch-up reconciliation on `visibilitychange` to visible. Alert and
+every message. The store accumulates changed resource IDs (and their per-key
+change shapes, unioned across the hidden ticks with unknown-shape
+contamination) and performs one canonical catch-up reconciliation on
+`visibilitychange` to visible. Alert and
 resolved-alert truth continues to update normally while hidden; this resource
 optimization must not defer, clear, or reinterpret alert lifecycle state.
+The visible-tick resource commit may apply metrics-only rows as per-key
+subtree writes instead of whole-row reconciles, but alert truth is outside
+that fast path entirely: active-alert and resolved-alert stores keep their
+own commit path, resource `alerts` facets are not in the fast-path
+allow-list, and a row whose patch touches alert-relevant structure always
+takes the full canonical merge.
 Operational evidence and lifecycle identity are typed through
 `internal/operationaltrust`. Evidence envelopes distinguish completeness,
 confidence, permissions, freshness, correlation, and bounded provider detail.

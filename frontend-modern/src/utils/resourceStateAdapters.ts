@@ -20,6 +20,8 @@ import type {
   PMGSpamBucket,
   Temperature,
 } from '@/types/api';
+import { $RAW } from 'solid-js/store';
+
 import type { Resource } from '@/types/resource';
 import {
   getActionableAgentIdFromResource,
@@ -836,16 +838,218 @@ export const mergeCanonicalResourceSnapshot = (
   );
 };
 
+// Per-resource top-level keys touched by a server delta's JSON merge patches.
+// `platformData` is expanded one level into `platformData.<leaf>` entries. A
+// `null` value means the change shape is unknown (row added/removed, whole
+// subtree replaced, deferred ticks) and the row must take the full merge path.
+export type ResourceChangedKeys = ReadonlyMap<string, readonly string[] | null>;
+
+// Union of two per-resource changed-key lists across ticks. Unknown (`null`)
+// contaminates: once a tick could not describe a row's change shape, no later
+// tick can restore fast-path eligibility for that row.
+export const unionResourceChangedKeys = (
+  first: readonly string[] | null | undefined,
+  second: readonly string[] | null | undefined,
+): readonly string[] | null => {
+  if (first === undefined) return second ?? null;
+  if (second === undefined) return first ?? null;
+  if (first === null || second === null) return null;
+  return Array.from(new Set([...first, ...second]));
+};
+
+// Top-level Resource fields the canonical merge takes verbatim from the
+// incoming row (plain `...incoming` spread, no special handling) and that the
+// canonicalization pass never reads. A patch confined to these fields cannot
+// change platform/source resolution, facet keeps, or identity merging, so the
+// merged display row is the previous display row with just these subtrees
+// replaced. `diskIO` is special-cased in the merge (`incoming ?? existing`)
+// but a merge-patch either sets it (incoming wins) or deletes it (existing
+// survives both paths), so it stays equivalent.
+const FAST_MERGE_TOP_KEYS = new Set([
+  'cpu',
+  'memory',
+  'disk',
+  'network',
+  'diskIO',
+  'temperature',
+  'uptime',
+  'lastSeen',
+  'status',
+]);
+const FAST_MERGE_PLATFORM_DATA_PREFIX = 'platformData.';
+// platformData leaves the metric mirror writes touch every tick. None of them
+// are read by canonicalizeLegacyPlatformData or the source-list derivation, so
+// patching them cannot alter canonicalization output beyond the leaf values.
+const FAST_MERGE_PLATFORM_DATA_KEYS = new Set(['diskRead', 'diskWrite', 'networkIn', 'networkOut']);
+
+// O(1) escape from a Solid store proxy; identity for plain values. Never use
+// store `unwrap` here: it deep-walks plain objects, which is the cost this
+// path exists to avoid.
+const rawStoreValue = <T>(value: T): T =>
+  (value != null && ((value as { [$RAW]?: T })[$RAW] as T)) || value;
+
+// Returns the validated changed-key list when `id`'s row can skip the full
+// clone+canonicalize+merge, or null when it must take the full path. The same
+// predicate gates the per-key store commits, so it must stay conservative:
+// anything it accepts is asserted to leave every other field of the merged
+// display row untouched.
+export const getFastResourceMergePatchKeys = (
+  changedKeys: ResourceChangedKeys | undefined,
+  id: string,
+  existing: Resource | undefined,
+): readonly string[] | null => {
+  if (!changedKeys || !existing) return null;
+  // Agent rows can join host-coalescing groups; their merged output is not a
+  // per-row function of the patch.
+  if (existing.type === 'agent') return null;
+  const keys = changedKeys.get(id);
+  if (!keys || keys.length === 0) return null;
+  let touchesPlatformData = false;
+  for (const key of keys) {
+    if (FAST_MERGE_TOP_KEYS.has(key) || key === 'proxmox') continue;
+    if (key.startsWith(FAST_MERGE_PLATFORM_DATA_PREFIX)) {
+      if (!FAST_MERGE_PLATFORM_DATA_KEYS.has(key.slice(FAST_MERGE_PLATFORM_DATA_PREFIX.length))) {
+        return null;
+      }
+      touchesPlatformData = true;
+      continue;
+    }
+    return null;
+  }
+  if (
+    touchesPlatformData &&
+    !asRecord(rawStoreValue(existing as unknown as JsonRecord).platformData)
+  ) {
+    return null;
+  }
+  return keys;
+};
+
+// Patched subtrees are JSON-derived plain data and typically tiny (a handful
+// of numeric leaves). A manual walk clones them several times faster than
+// structuredClone, whose per-invocation setup dominates at this size; symbol
+// keys (Solid's internal store markers on raw nodes) are skipped by design.
+const clonePlainValue = <T>(value: T): T => {
+  if (value === null || typeof value !== 'object') return value;
+  if (Array.isArray(value)) return value.map(clonePlainValue) as unknown as T;
+  const source = value as Record<string, unknown>;
+  const out: Record<string, unknown> = {};
+  for (const key of Object.keys(source)) out[key] = clonePlainValue(source[key]);
+  return out as T;
+};
+
+const cloneFastPatchValue = (value: unknown): unknown => clonePlainValue(value);
+
+// Fast-path counterpart of mergeCanonicalResource for rows whose patch passed
+// getFastResourceMergePatchKeys: the previous display row with the patched
+// subtrees cloned in. Content-equivalent to the full path; unpatched subtrees
+// keep their object identity so downstream reconciles short-circuit on them.
+const applyFastResourceMergePatch = (
+  incoming: Resource,
+  existing: Resource,
+  keys: readonly string[],
+): Resource => {
+  const rawIncoming = rawStoreValue(incoming as unknown as JsonRecord);
+  const rawExisting = rawStoreValue(existing as unknown as JsonRecord);
+  const next: JsonRecord = { ...rawExisting };
+  let platformDataLeaves: string[] | null = null;
+  for (const key of keys) {
+    if (key.startsWith(FAST_MERGE_PLATFORM_DATA_PREFIX)) {
+      (platformDataLeaves ??= []).push(key.slice(FAST_MERGE_PLATFORM_DATA_PREFIX.length));
+      continue;
+    }
+    // A merge-patch deletion removed the key from the raw row; the full merge's
+    // `...incoming` spread would keep the existing display value, so keep it.
+    if (!(key in rawIncoming)) continue;
+    const value = rawIncoming[key];
+    if (key === 'proxmox') {
+      const incomingFacet = asRecord(value);
+      if (!incomingFacet) continue;
+      const cloned = clonePlainValue(incomingFacet);
+      const existingFacet = asRecord(next.proxmox);
+      // Mirror mergeCanonicalSourceFacet: the facet merges with the existing
+      // one only while the (unchanged) source list keeps it authoritative.
+      next.proxmox =
+        existingFacet &&
+        shouldKeepSourceFacet(
+          getCanonicalSourceList(existing, existing.platformData),
+          'proxmox-pve',
+        )
+          ? { ...existingFacet, ...cloned }
+          : cloned;
+      continue;
+    }
+    next[key] = cloneFastPatchValue(value);
+  }
+  if (platformDataLeaves) {
+    const incomingPlatformData = asRecord(rawIncoming.platformData);
+    const nextPlatformData: JsonRecord = { ...(asRecord(next.platformData) ?? {}) };
+    for (const leaf of platformDataLeaves) {
+      if (!incomingPlatformData || !(leaf in incomingPlatformData)) continue;
+      nextPlatformData[leaf] = cloneFastPatchValue(incomingPlatformData[leaf]);
+    }
+    next.platformData = nextPlatformData;
+  }
+  return next as unknown as Resource;
+};
+
+export type FastResourceStorePatchOp = {
+  key: string;
+  // Set for platformData leaf writes; the value then targets platformData[leaf].
+  leaf?: string;
+  value: unknown;
+  // Records diff via a nested reconcile at the key path; primitives replace.
+  mode: 'set' | 'reconcile';
+};
+
+// Store-commit counterpart of the fast merge: instead of a full-row reconcile
+// (whose unwrap deep-walks every subtree), a fast row commits as a handful of
+// per-key writes. Callers apply `reconcile` ops with a subtree reconcile and
+// `set` ops as plain path sets.
+export const buildFastResourceStorePatchOps = (
+  row: Resource,
+  keys: readonly string[],
+): FastResourceStorePatchOp[] => {
+  const record = rawStoreValue(row as unknown as JsonRecord);
+  const ops: FastResourceStorePatchOp[] = [];
+  const platformData = asRecord(record.platformData);
+  for (const key of keys) {
+    if (key.startsWith(FAST_MERGE_PLATFORM_DATA_PREFIX)) {
+      const leaf = key.slice(FAST_MERGE_PLATFORM_DATA_PREFIX.length);
+      if (!platformData || !(leaf in platformData)) continue;
+      const value = platformData[leaf];
+      ops.push({
+        key: 'platformData',
+        leaf,
+        value,
+        mode: value !== null && typeof value === 'object' ? 'reconcile' : 'set',
+      });
+      continue;
+    }
+    if (!(key in record)) continue;
+    const value = record[key];
+    ops.push({
+      key,
+      value,
+      mode: value !== null && typeof value === 'object' ? 'reconcile' : 'set',
+    });
+  }
+  return ops;
+};
+
 // Incremental counterpart to mergeCanonicalResourceSnapshot. Server delta
 // application preserves the raw object identity of untouched resources, so
 // only changed rows and the small host-coalescing set need to be cloned and
 // canonicalized. Non-host resources outside the delta retain their exact display
 // objects, preventing an estate-wide reactive invalidation on every metrics
-// tick while keeping the full-snapshot compatibility semantics intact.
+// tick while keeping the full-snapshot compatibility semantics intact. Rows
+// whose per-key change shape passes getFastResourceMergePatchKeys skip the
+// clone+canonicalize+merge entirely and patch the previous display row.
 export const mergeCanonicalResourceDeltaSnapshot = (
   incoming: Resource[],
   existing: Resource[],
   changedIds: ReadonlySet<string>,
+  changedKeys?: ResourceChangedKeys,
 ): Resource[] => {
   if (incoming.length === 0) {
     return [];
@@ -877,6 +1081,9 @@ export const mergeCanonicalResourceDeltaSnapshot = (
   });
 
   const SKIP = Symbol('skip');
+  // Fast-path outputs are already fully merged display rows; they must bypass
+  // the final mergeCanonicalResource pass.
+  const fastMergedRows = new Set<Resource>();
   const prepared = incoming
     .map((resource, index) => {
       const hostKey = hostKeys[index];
@@ -895,6 +1102,14 @@ export const mergeCanonicalResourceDeltaSnapshot = (
       if (!mustRefresh) {
         return existingResource;
       }
+      if (existingResource !== undefined) {
+        const fastKeys = getFastResourceMergePatchKeys(changedKeys, resource.id, existingResource);
+        if (fastKeys) {
+          const fastRow = applyFastResourceMergePatch(resource, existingResource, fastKeys);
+          fastMergedRows.add(fastRow);
+          return fastRow;
+        }
+      }
       return canonicalizeRealtimeResource(structuredClone(resource), {
         synthesizePlatformScopes: false,
       });
@@ -906,6 +1121,9 @@ export const mergeCanonicalResourceDeltaSnapshot = (
     const existingResource = existingById.get(resource.id);
     if (resource === existingResource) {
       return existingResource;
+    }
+    if (fastMergedRows.has(resource)) {
+      return resource;
     }
     return mergeCanonicalResource(resource, existingResource);
   });
