@@ -36,9 +36,12 @@ func TestRegistryChecker_CheckImageUpdate_Behavior(t *testing.T) {
 		}
 	})
 
-	t.Run("Pulse private image uses the product update service", func(t *testing.T) {
+	t.Run("Pulse images use the product update service", func(t *testing.T) {
 		checker := NewRegistryChecker(logger)
 		for _, image := range []string{
+			"rcourtman/pulse:latest",
+			"docker.io/rcourtman/pulse:6.3.1",
+			"rcourtman/pulse@sha256:abc123",
 			"license.pulserelay.pro/pulse-pro:6.2.0-rc.4",
 			"license.pulserelay.pro/pulse-pro@sha256:abc123",
 			"registry.pulserelay.pro/pulse/pulse-pro:v6.0.5",
