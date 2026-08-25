@@ -1721,7 +1721,27 @@ diagnostics. The same release workflow also executes the generated self-signed
 and custom-CA Windows installer commands through Windows PowerShell 5.1 before
 release assembly, so the first HTTPS fetch is release proof rather than a
 string-shape assertion.
-The active stable `v6.3.1` cut sets the repo-root `VERSION`, repo-root
+The active prerelease `v6.4.0-rc.1` cut sets the repo-root `VERSION`, repo-root
+`docker-compose.yml` image default, `scripts/install-docker.sh` fallback, and
+Helm chart release metadata to the same `6.4.0-rc.1` release version. It follows
+stable `v6.3.1` and opens the published `v6.4.0` candidate line. This prerelease
+keeps `rollback_version=v6.3.1`, publishes a versioned public GitHub prerelease
+plus versioned Docker and Helm artifacts, and does not move stable/latest
+install pointers or stable semver aliases. The candidate makes large-estate
+workload, infrastructure, storage, and platform rendering incremental;
+canonicalizes table, drawer, touch, disclosure, sorting, and navigation
+behavior; fixes fixed-interval scheduling, re-enrollment cleanup, offline-alert
+policy, command-intent continuity, and forked-identity discovery lookup; and
+moves release compilation behind an isolated immutable artifact handoff. The
+changes since `v6.3.1` do not require a Pulse Mobile client change and preserve
+the existing mobile, Relay, onboarding, and mobile-facing API contracts, so the
+server cut is classified `no-mobile-impact`; no companion upload or public
+mobile-store rollout is part of this candidate. The prerelease Windows path
+retains exact-SHA, checksum, and detached-signature verification without
+Authenticode; stable `v6.4.0` restores mandatory SignPath signing unless a new
+version-bound decision is recorded.
+
+The preceding stable `v6.3.1` cut set the repo-root `VERSION`, repo-root
 `docker-compose.yml` image default, `scripts/install-docker.sh` fallback, and
 Helm chart release metadata to the same `6.3.1` release version. This patch
 release uses the stable hotfix path with `rollback_version=v6.3.0`,
@@ -2130,13 +2150,14 @@ For the active stable `v6.1.2` cut, the repo-root compose default and
 `scripts/install-docker.sh` fallback must both pin `6.1.2` whenever the
 governed `VERSION` is that stable cut. The stable promotion guard remains in
 force and rejects leftover `-rc.` defaults.
-For the active stable `v6.3.1` cut, the repo-root compose default and
-`scripts/install-docker.sh` fallback must both pin `6.3.1` until the next
-governed release moves them forward. The stable promotion guard remains in
-force and rejects leftover `-rc.` defaults. Each new release moves
+For the active prerelease `v6.4.0-rc.1` cut, the repo-root compose default and
+`scripts/install-docker.sh` fallback must both pin `6.4.0-rc.1` until the next
+governed stable cut moves them forward. Each new release moves
 these two pins together with the repo-root `VERSION` and the Helm chart metadata
 in the same commit; a cut that leaves any of the four on a superseded value is a
 release-packet blocker.
+For the preceding stable `v6.3.1` cut, the repo-root compose default and
+`scripts/install-docker.sh` fallback both pinned `6.3.1`.
 For the preceding stable `v6.3.0` cut, the repo-root compose default and
 `scripts/install-docker.sh` fallback both pinned `6.3.0`.
 For the preceding stable `v6.2.1` cut, the repo-root compose default and
