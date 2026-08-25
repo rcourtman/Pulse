@@ -11,9 +11,13 @@ type StorageDetailKeyValueRowProps = {
 };
 
 export const StorageDetailKeyValueRow: Component<StorageDetailKeyValueRowProps> = (props) => (
-  <div class={STORAGE_DETAIL_KEY_VALUE_ROW_CLASS}>
-    <span class={STORAGE_DETAIL_KEY_CLASS}>{props.label}</span>
-    <span class={STORAGE_DETAIL_VALUE_CLASS}>{props.value}</span>
+  <div
+    class={`${STORAGE_DETAIL_KEY_VALUE_ROW_CLASS} col-span-2 min-w-0 items-start gap-3 sm:col-span-1`}
+  >
+    <span class={`${STORAGE_DETAIL_KEY_CLASS} shrink-0`}>{props.label}</span>
+    <span class={`${STORAGE_DETAIL_VALUE_CLASS} min-w-0 break-words text-right`}>
+      {props.value}
+    </span>
   </div>
 );
 

@@ -1,54 +1,41 @@
 {
   "version": 1,
-  "base_sha": "b3d9984f7e3a92b9b8f13ecd71efcd8a7babc923",
-  "verified_at": "2026-08-25T19:34:45Z",
+  "base_sha": "af03903a734f6741360748fbe661cccb45c880ca",
+  "verified_at": "2026-08-25T19:48:51Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Settings/AuditLogPanel.tsx",
-    "frontend-modern/src/components/Settings/BillingAdminOrganizationsTable.tsx",
-    "frontend-modern/src/components/Settings/OrganizationAccessMembersSection.tsx",
-    "frontend-modern/src/components/Settings/OrganizationIncomingSharesSection.tsx",
-    "frontend-modern/src/components/Settings/OrganizationOutgoingSharesSection.tsx",
-    "frontend-modern/src/components/Settings/OrganizationOverviewMembersSection.tsx",
-    "frontend-modern/src/components/Settings/ReportingPanel.tsx",
-    "frontend-modern/src/components/Settings/RolesPanel.tsx",
-    "frontend-modern/src/components/Settings/UserAssignmentsPanel.tsx"
+    "frontend-modern/src/components/Storage/DiskDetail.tsx",
+    "frontend-modern/src/components/Storage/StorageDetailKeyValueRow.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Settings/AuditLogPanel.tsx": "8dc3a831609e02c69bc497be2c91daea5ced4c59f79cbf554fa3fc41b05b1f65",
-    "frontend-modern/src/components/Settings/BillingAdminOrganizationsTable.tsx": "47f94e29a76f9f545029c7ae8f4ee7e7b66e5c5b32fb4458608d24e57bd70b50",
-    "frontend-modern/src/components/Settings/OrganizationAccessMembersSection.tsx": "d2dbc0bbd350b7871a6591c146079972be520769987d91dd101c2aa840a552aa",
-    "frontend-modern/src/components/Settings/OrganizationIncomingSharesSection.tsx": "f22e4a8c7fc2898561d1039d1c9885e84c2246a788ef086e4868a74e93502b67",
-    "frontend-modern/src/components/Settings/OrganizationOutgoingSharesSection.tsx": "a4764da645e44ade198a438091b092c89d2a90021dbea85004ed0e911997f42f",
-    "frontend-modern/src/components/Settings/OrganizationOverviewMembersSection.tsx": "8f0a16bdd5523e54520f66fab68fde9571d682ba088cc75e111b6949d4a5c471",
-    "frontend-modern/src/components/Settings/ReportingPanel.tsx": "004e78cc0b32263fa05555d43b6fbc3a61b8b0d6aa5dda4b3a16dbee01a42547",
-    "frontend-modern/src/components/Settings/RolesPanel.tsx": "293d21bf65340202581b314ae6c402b19a9f29dbcc4dbebc841c20989e205b53",
-    "frontend-modern/src/components/Settings/UserAssignmentsPanel.tsx": "4651822c6467732b182eb5a888beeee5b976f1819fab12cc357d69095659ce20"
+    "frontend-modern/src/components/Storage/DiskDetail.tsx": "19487ce71ef93ed4db8c8a36bb76790298408a449313bcb19e7266b1b41e0afc",
+    "frontend-modern/src/components/Storage/StorageDetailKeyValueRow.tsx": "bc045c2a053c395154c9a4d0ff5bac32bd1c129ab579032ce282e81acd623426"
   },
   "routes": [
-    "/settings/security-audit",
-    "/settings/support/reporting",
-    "/settings/security-roles",
-    "/settings/security-users",
-    "/settings/organization/access",
-    "/settings/organization/sharing",
-    "/settings/organization/billing-admin"
+    "/proxmox/storage"
   ],
   "viewports": [
-    { "width": 1440, "height": 900 },
-    { "width": 390, "height": 844 }
+    {
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
   ],
   "states": [
-    "audit log, reporting, roles, and user access paid-feature fallbacks in the local self-hosted session",
-    "organization access and billing-admin capability redirects",
-    "organization sharing unavailable-capability route state",
-    "populated mobile column priorities and row-action names exercised by the targeted component tests"
+    "degraded ZFS pool Overview with long node and content values",
+    "degraded ZFS pool History with collection availability messaging",
+    "critical NVMe disk Overview without detailed SMART attributes",
+    "physical disk History with live I/O and SMART history"
   ],
   "interactions": [
-    "navigated every affected settings route at 390px and 1440px",
-    "confirmed zero document-level horizontal overflow on every rendered route state",
-    "confirmed the phone projections retain primary identity, current state, and actions while desktop detail remains available",
-    "confirmed report schedule phone actions collapse behind one 44px accessible actions trigger",
+    "opened the Storage and Physical Disks tabs",
+    "expanded standalone1-service-pool and switched between Overview and History",
+    "expanded the WD Blue disk and switched between Overview and History",
+    "confirmed mobile key-value stacking and wrapping without clipping",
+    "confirmed the two-column desktop configuration grid remains intact",
     "restored the browser viewport after responsive verification"
   ]
 }

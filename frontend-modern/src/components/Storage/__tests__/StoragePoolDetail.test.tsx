@@ -138,6 +138,30 @@ describe('StoragePoolDetail', () => {
     );
   });
 
+  it('stacks key-value rows on narrow drawers and wraps long values', () => {
+    render(() => (
+      <table>
+        <tbody>
+          <StoragePoolDetail
+            record={makeRecord({
+              location: { label: 'London Edge Standalone', scope: 'host' },
+            })}
+            physicalDisks={[]}
+            summarySeriesId="pool:tank"
+          />
+        </tbody>
+      </table>
+    ));
+
+    const nodeLabel = screen.getByText('Node');
+    expect(nodeLabel.parentElement).toHaveClass('col-span-2', 'sm:col-span-1', 'min-w-0', 'gap-3');
+    expect(screen.getByText('London Edge Standalone')).toHaveClass(
+      'min-w-0',
+      'break-words',
+      'text-right',
+    );
+  });
+
   it('renders UnRAID topology and linked disk facts plainly', () => {
     historyChartSpy.mockClear();
 

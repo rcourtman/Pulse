@@ -3231,7 +3231,10 @@ chart must route through the shared `HistoryChart` API contract using the disk
 resource's canonical history target. Storage must not keep a drawer-local live
 metrics collector, agent-id/device fallback stream, or separate real-time
 history store once monitoring and `/api/metrics-store/history` already own the
-disk timeline.
+disk timeline. A disk Overview panel must never collapse into unexplained empty
+space: when neither detailed SMART attributes nor a typed collection message
+exists, it renders an explicit unavailable-details state while retaining the
+bounded model, device, host, source, and serial header facts.
 Storage pool and disk detail range selectors must mirror the shared history
 chart entitlement sequence. They must expose `14d` between `7d` and `30d` and
 pass the selected range through to `HistoryChart` unchanged, rather than
@@ -3249,6 +3252,11 @@ the record's `details.zfsPool`, which
 `frontend-modern/src/components/Storage/StoragePoolDetail.tsx` renders that
 report inside the row expansion so degraded pools name the failing device and
 running scrub/resilver without re-promoting per-device noise into table rows.
+The pool detail key/value rows span the full Configuration card below the
+small-screen breakpoint, then return to the two-column desktop grid. Labels
+stay fixed while long node, content, and provider values wrap inside a
+right-aligned value region, so narrow row expansions never concatenate one
+field with the next or overflow the drawer.
 The pools table must not double-list Ceph-backed storage. Cluster-internal
 pool rows synthesized from Ceph cluster telemetry (`models.StorageFromCephPool`:
 type `ceph` homed on the `cluster` pseudo-node) are consolidated into the PVE

@@ -101,4 +101,15 @@ describe('DiskDetail', () => {
     expect(screen.queryByText(/:diskread:/)).not.toBeInTheDocument();
     expect(screen.queryByText(/:diskwrite:/)).not.toBeInTheDocument();
   });
+
+  it('shows an explicit overview fallback when SMART details are unavailable', () => {
+    const disk = buildDisk();
+    delete disk.physicalDisk!.smart;
+
+    render(() => <DiskDetail disk={disk} nodes={[]} />);
+
+    expect(
+      screen.getByText('Detailed SMART attributes are not available for this disk.'),
+    ).toHaveAttribute('role', 'status');
+  });
 });

@@ -67,6 +67,9 @@ export const DiskDetail: Component<DiskDetailProps> = (props) => {
   const hasHistory = createMemo(
     () => Boolean(historyResourceId()) || Boolean(metricResourceId() && liveIOAvailable()),
   );
+  const hasOverviewDetails = createMemo(
+    () => collectionMessages().length > 0 || attributeCards().length > 0,
+  );
 
   createEffect(() => {
     const nextRange = resolveHistoryRangeWithinLimit(
@@ -138,7 +141,7 @@ export const DiskDetail: Component<DiskDetailProps> = (props) => {
           </div>
         </Show>
 
-        <Show when={diskData().smartAttributes}>
+        <Show when={attributeCards().length > 0}>
           <div class={STORAGE_DISK_DETAIL_ATTRIBUTE_GRID_CLASS}>
             <For each={attributeCards()}>
               {(card) => (
@@ -149,6 +152,12 @@ export const DiskDetail: Component<DiskDetailProps> = (props) => {
                 />
               )}
             </For>
+          </div>
+        </Show>
+
+        <Show when={!hasOverviewDetails()}>
+          <div class={STORAGE_DETAIL_EMPTY_CLASS} role="status">
+            Detailed SMART attributes are not available for this disk.
           </div>
         </Show>
       </div>
