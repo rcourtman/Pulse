@@ -1,4 +1,4 @@
-const HORIZONTAL_RAIL_EDGE_PADDING = 8;
+const DEFAULT_HORIZONTAL_RAIL_EDGE_PADDING = 8;
 
 export interface HorizontalRailVisibilityMetrics {
   scrollLeft: number;
@@ -6,20 +6,24 @@ export interface HorizontalRailVisibilityMetrics {
   clientWidth: number;
   itemOffsetLeft: number;
   itemOffsetWidth: number;
+  edgePadding?: number;
 }
 
 export function getHorizontalRailScrollLeft(options: HorizontalRailVisibilityMetrics): number {
   const maxScrollLeft = Math.max(0, options.scrollWidth - options.clientWidth);
+  const edgePadding = Number.isFinite(options.edgePadding)
+    ? Math.max(0, options.edgePadding ?? DEFAULT_HORIZONTAL_RAIL_EDGE_PADDING)
+    : DEFAULT_HORIZONTAL_RAIL_EDGE_PADDING;
   const visibleStart = options.scrollLeft;
   const visibleEnd = visibleStart + options.clientWidth;
   const itemStart = options.itemOffsetLeft;
   const itemEnd = itemStart + options.itemOffsetWidth;
 
-  if (itemStart < visibleStart + HORIZONTAL_RAIL_EDGE_PADDING) {
-    return Math.max(0, itemStart - HORIZONTAL_RAIL_EDGE_PADDING);
+  if (itemStart < visibleStart + edgePadding) {
+    return Math.max(0, itemStart - edgePadding);
   }
-  if (itemEnd > visibleEnd - HORIZONTAL_RAIL_EDGE_PADDING) {
-    return Math.min(maxScrollLeft, itemEnd + HORIZONTAL_RAIL_EDGE_PADDING - options.clientWidth);
+  if (itemEnd > visibleEnd - edgePadding) {
+    return Math.min(maxScrollLeft, itemEnd + edgePadding - options.clientWidth);
   }
   return Math.min(maxScrollLeft, Math.max(0, options.scrollLeft));
 }

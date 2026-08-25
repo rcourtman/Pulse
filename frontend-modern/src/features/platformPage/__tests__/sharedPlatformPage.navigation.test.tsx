@@ -64,6 +64,19 @@ describe('PlatformSectionTabs', () => {
     ).toBe(300);
   });
 
+  it('keeps active labels clear of overlaid mobile rail controls', () => {
+    expect(
+      getHorizontalRailScrollLeft({
+        scrollLeft: 207,
+        scrollWidth: 570,
+        clientWidth: 363,
+        itemOffsetLeft: 170,
+        itemOffsetWidth: 97,
+        edgePadding: 48,
+      }),
+    ).toBe(122);
+  });
+
   it('hides overview-only section navigation', () => {
     render(() => (
       <Router>
@@ -107,6 +120,8 @@ describe('PlatformSectionTabs', () => {
 
     const navigation = screen.getByRole('navigation', { name: 'TrueNAS sections' });
     expect(navigation).toHaveClass('overflow-x-auto');
+    expect(navigation).toHaveClass('overscroll-x-contain');
+    expect(navigation).toHaveClass('touch-scroll');
     expect(navigation).toHaveClass('scrollbar-hide');
     expect(navigation).toHaveClass('pl-0');
     expect(navigation).toHaveClass('pr-0');
@@ -173,6 +188,53 @@ describe('PlatformSectionTabs', () => {
       await screen.findByRole('button', { name: 'Example sections: scroll left' }),
     ).toBeInTheDocument();
     expect(navigation).toHaveClass('pl-0');
+    expect(navigation).toHaveClass('pr-10');
+  });
+
+  it('preserves a manually explored position when mobile viewport resizes fire mid-gesture', async () => {
+    render(() => (
+      <Router>
+        <Route
+          path="/"
+          component={() => (
+            <PlatformSectionTabs
+              tabs={
+                [
+                  { id: 'overview', label: 'Overview', path: '/example/overview' },
+                  { id: 'images', label: 'Images', path: '/example/images' },
+                  { id: 'storage', label: 'Storage', path: '/example/storage' },
+                  { id: 'networks', label: 'Networks', path: '/example/networks' },
+                ] as const
+              }
+              active="overview"
+              ariaLabel="Example sections"
+            />
+          )}
+        />
+      </Router>
+    ));
+
+    await new Promise((resolve) => window.setTimeout(resolve));
+
+    const navigation = screen.getByRole('navigation', { name: 'Example sections' });
+    const activeLink = within(navigation).getByRole('link', { name: 'Overview' });
+    Object.defineProperties(navigation, {
+      clientWidth: { configurable: true, value: 200 },
+      scrollWidth: { configurable: true, value: 500 },
+      scrollLeft: { configurable: true, writable: true, value: 0 },
+    });
+    Object.defineProperties(activeLink, {
+      offsetLeft: { configurable: true, value: 0 },
+      offsetWidth: { configurable: true, value: 100 },
+    });
+
+    navigation.dispatchEvent(new Event('pointerdown'));
+    navigation.scrollLeft = 120;
+    navigation.dispatchEvent(new Event('scroll'));
+    window.dispatchEvent(new Event('resize'));
+
+    await new Promise((resolve) => window.setTimeout(resolve));
+    expect(navigation.scrollLeft).toBe(120);
   });
 
   it('keeps the active destination visible when the tab rail narrows', async () => {
@@ -214,6 +276,6 @@ describe('PlatformSectionTabs', () => {
 
     window.dispatchEvent(new Event('resize'));
 
-    await waitFor(() => expect(navigation.scrollLeft).toBe(258));
+    await waitFor(() => expect(navigation.scrollLeft).toBe(298));
   });
 });

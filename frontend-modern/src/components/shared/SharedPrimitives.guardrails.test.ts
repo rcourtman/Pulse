@@ -7458,7 +7458,7 @@ describe('shared primitive guardrails', () => {
     expect(sharedPlatformPageSource).toContain('href={tab.path}');
     expect(sharedPlatformPageSource).toContain('border-b-2');
     expect(sharedPlatformPageSource).toContain('overflow-x-auto pl-0');
-    expect(sharedPlatformPageSource).toContain("canScrollRight() ? 'pr-10' : 'pr-0'");
+    expect(sharedPlatformPageSource).toContain("hasOverflow() ? 'pr-10' : 'pr-0'");
     expect(sharedPlatformPageSource).not.toContain('overflow-x-auto px-10');
     expect(sharedPlatformPageSource).toContain('export const getPlatformTableRowClass');
     expect(sharedPlatformPageSource).toContain(
@@ -7473,10 +7473,13 @@ describe('shared primitive guardrails', () => {
       'export function getHorizontalRailScrollLeft',
     );
     expect(activeHorizontalRailVisibilitySource).toContain(
-      "window.addEventListener('resize', keepActiveItemVisible)",
+      "window.addEventListener('resize', keepActiveItemVisibleAfterResize)",
     );
     expect(activeHorizontalRailVisibilitySource).toContain(
-      'new ResizeObserver(keepActiveItemVisible)',
+      'new ResizeObserver(keepActiveItemVisibleAfterResize)',
+    );
+    expect(activeHorizontalRailVisibilitySource).toContain(
+      "rail?.addEventListener('pointerdown', markManualScrollIntent",
     );
     expect(sharedPlatformPageSource).toContain(
       "aria-current={props.active === tab.id ? 'page' : undefined}",

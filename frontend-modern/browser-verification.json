@@ -1,24 +1,21 @@
 {
   "version": 1,
-  "base_sha": "831e55f011f3478767daa3d6578dab9f2bd96e45",
-  "verified_at": "2026-08-25T09:34:54Z",
+  "base_sha": "7bac525af355bc5c8eb6ff2db8f9ce116697013f",
+  "verified_at": "2026-08-25T10:44:58Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/hooks/useUnifiedResources.ts",
-    "frontend-modern/src/hooks/useWorkloads.ts",
-    "frontend-modern/src/utils/resourceStateAdapters.ts"
+    "frontend-modern/src/components/shared/horizontalRailVisibilityModel.ts",
+    "frontend-modern/src/components/shared/useActiveHorizontalRailItemVisibility.ts",
+    "frontend-modern/src/features/platformPage/sharedPlatformPage.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/hooks/useUnifiedResources.ts": "dd5880e08d41cd8d9595084a3bfedc292584e38e785ff144e4ead96c36a67a3b",
-    "frontend-modern/src/hooks/useWorkloads.ts": "e14581a0af97e49da1322b253be6a3ffa433163d00bbc436c31614539e70094d",
-    "frontend-modern/src/utils/resourceStateAdapters.ts": "2ec8e4754e323ae36f9c61148db4256732a2c7e8678746a7c0e9f60538539d1b"
+    "frontend-modern/src/components/shared/horizontalRailVisibilityModel.ts": "1fa3ad5d3cfffd0ccf78ced497d87564602cb124103175c17ba6c3e4b9531c4f",
+    "frontend-modern/src/components/shared/useActiveHorizontalRailItemVisibility.ts": "add047b223402743fbabf5d7c9b867f160174ab2e48baf53c0c60509caf01510",
+    "frontend-modern/src/features/platformPage/sharedPlatformPage.tsx": "3507374c3c9c236a95ee50793f2462b16d71680f13c1f4c864efc3ea88159659"
   },
   "routes": [
-    "/login",
     "/proxmox/overview",
-    "/proxmox/storage",
-    "/proxmox/backups/date",
-    "/alerts"
+    "/proxmox/replication"
   ],
   "viewports": [
     {
@@ -31,17 +28,16 @@
     }
   ],
   "states": [
-    "50-node/1512-resource mock estate with RandomMetrics websocket ticks every 2s riding through every dwell",
-    "Proxmox overview fully hydrated at desktop (11.7k DOM nodes) after login, including return visit after sub-tab navigation",
-    "Storage and Backups sub-tabs fully hydrated at desktop (11.4k / 15.4k DOM nodes)",
-    "Alerts page dwelled 20s at 390px under 4x CPU throttle while websocket deltas applied (CDP profile captured)",
-    "Proxmox overview dwelled 20s at 390px under 4x CPU throttle while websocket deltas applied (CDP profile captured)",
-    "zero console errors across the desktop exercise run"
+    "Proxmox overview tab rail with all six destinations at desktop width",
+    "Proxmox overview tab rail initially clipped at phone width with the right affordance visible",
+    "phone tab rail manually scrolled to its 207px end position with the left affordance visible",
+    "manually scrolled phone rail after a same-width viewport-height resize",
+    "Replication selected from the manually explored rail with the active label clear of the left overlay"
   ],
   "interactions": [
-    "headless-Chromium (Playwright) login form fill and submit as admin",
-    "SPA clicks across Proxmox sub-tab anchors Overview -> Storage -> Backups -> Overview at 1440x900",
-    "mobile bottom-bar data-tab-id click into Alerts at 390x844 with 4x CPU throttle",
-    "multi-tick idle dwells on Overview and Alerts confirming realtime delta merge, host coalescing, and workload row updates render live data"
+    "native horizontal wheel/swipe projection across the phone-width Proxmox section rail",
+    "phone viewport resize after manual rail exploration preserved scrollLeft at 207px",
+    "selected Replication from the revealed rail and confirmed route navigation plus active-tab visibility",
+    "repeated the final phone flow after the active-label clearance adjustment: swipe to 190px, resize without snap-back, then select Replication at a safe 55px viewport offset"
   ]
 }

@@ -95,6 +95,7 @@ export function PlatformSectionTabs<TabId extends string>(props: {
   ariaLabel: string;
 }) {
   let tabListRef: HTMLElement | undefined;
+  const [hasOverflow, setHasOverflow] = createSignal(false);
   const [canScrollLeft, setCanScrollLeft] = createSignal(false);
   const [canScrollRight, setCanScrollRight] = createSignal(false);
 
@@ -102,13 +103,18 @@ export function PlatformSectionTabs<TabId extends string>(props: {
     const rail = tabListRef;
     if (!rail) return;
     const maxScrollLeft = Math.max(0, rail.scrollWidth - rail.clientWidth);
+    setHasOverflow(maxScrollLeft > 1);
     setCanScrollLeft(rail.scrollLeft > 1);
     setCanScrollRight(rail.scrollLeft < maxScrollLeft - 1);
   };
 
-  useActiveHorizontalRailItemVisibility({
+  const activeItemVisibility = useActiveHorizontalRailItemVisibility({
     active: () => props.active,
     rail: () => tabListRef,
+    // The phone-only arrow overlays occupy 40px at either rail edge. Keep
+    // selected labels beyond those controls, with the normal 8px breathing
+    // room, whenever route navigation brings a tab into view.
+    edgePadding: 48,
   });
 
   createEffect(() => {
@@ -137,6 +143,7 @@ export function PlatformSectionTabs<TabId extends string>(props: {
   const scrollSections = (direction: -1 | 1) => {
     const rail = tabListRef;
     if (!rail) return;
+    activeItemVisibility.markManualScrollIntent();
     rail.scrollBy({
       left: direction * Math.max(160, Math.round(rail.clientWidth * 0.7)),
       behavior: 'smooth',
@@ -150,8 +157,8 @@ export function PlatformSectionTabs<TabId extends string>(props: {
           ref={(element) => {
             tabListRef = element;
           }}
-          class={`flex min-w-0 items-center gap-1 overflow-x-auto pl-0 scrollbar-hide sm:pr-0 ${
-            canScrollRight() ? 'pr-10' : 'pr-0'
+          class={`touch-scroll flex min-w-0 items-center gap-1 overflow-x-auto pl-0 overscroll-x-contain scrollbar-hide sm:pr-0 ${
+            hasOverflow() ? 'pr-10' : 'pr-0'
           }`}
           aria-label={props.ariaLabel}
         >

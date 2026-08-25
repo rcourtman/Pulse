@@ -9761,21 +9761,7 @@
     }
   ],
   "candidate_lanes": [],
-  "work_claims": [
-    {
-      "id": "root-lane-l1",
-      "agent_id": "root",
-      "summary": "Prepare and publish the next governed Pulse release candidate from current main.",
-      "target_id": "v6-product-lane-expansion",
-      "claimed_at": "2026-08-25T08:42:33Z",
-      "heartbeat_at": "2026-08-25T08:42:33Z",
-      "expires_at": "2026-08-25T10:42:33Z",
-      "work_item": {
-        "kind": "lane",
-        "id": "L1"
-      }
-    }
-  ],
+  "work_claims": [],
   "open_decisions": [],
   "source_of_truth_file": "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",
   "resolved_decisions": [
