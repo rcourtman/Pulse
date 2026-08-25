@@ -7,9 +7,11 @@ there is no ambiguity about that, and so nobody has to guess.
 
 I am the sole maintainer of Pulse. I use AI assistance throughout the project.
 Code, tests, documentation, release notes, and issue replies may all be
-produced with AI tools in the loop. Everything ships under my direction, my
-review, and my responsibility. If something is wrong, it is my bug, regardless
-of what typed the first draft.
+produced with AI tools in the loop. Everything ships under my direction and
+my responsibility. Automated changes land through the same test and audit
+gates as my own; I review the stream of what lands and answer for all of it.
+If something is wrong, it is my bug, regardless of what typed the first
+draft.
 
 ## Why
 
@@ -48,11 +50,10 @@ useful, so here is the breakdown.
 ## What stays human
 
 The tools write a lot of the code. They do not decide what Pulse is. Product
-direction, architecture, what gets built and what gets cut, review of what
-ships, and every release decision are mine. When you report a bug, the
-investigation may be automated, but what the fix should be and whether it is
-good enough to ship is my call, and I own the outcome of every thread either
-way.
+direction, architecture, what gets built and what gets cut, and every
+release decision are mine. When you report a bug, the investigation and
+often the fix may be automated, but the bar it must clear is mine, and I own
+the outcome of every thread either way.
 
 ## What it does not change
 
