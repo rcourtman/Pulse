@@ -209,13 +209,24 @@ provider-backed fixture set refreshes once per full rotation rather than on
 every tick.
 
 The browser applies resource deltas to its connection-scoped raw baseline, but
-canonicalizes and reconciles only changed resources plus the bounded
-host-coalescing set. Unchanged non-host display resources retain object identity.
+canonicalizes and reconciles only changed resources plus the host-merge groups
+the delta could have altered: a group refreshes when a flagged id names one of
+its members (a flagged id absent from the incoming snapshot conservatively
+refreshes every group), and a tick that flags no member preserves the cached
+merged host row by object identity. Unchanged non-host display resources retain
+object identity.
 `frontend-modern/src/stores/websocket.ts` publishes the changed-ID set and a
 monotonic resource revision with each reconciliation. The shared
 `useUnifiedResources` owner applies that revision to the process-wide canonical
 cache once, then projects route filters from the already-canonical result;
-route-scoped consumers must not independently canonicalize the full estate.
+route-scoped consumers must not independently canonicalize the full estate. A
+hook instance observing an already-applied revision must not deep-unwrap the
+realtime store, and the merging instance dereferences raw store subtrees only
+for rows the delta merge will clone. Workload table rows derived from canonical
+snapshots reuse the previous row object whenever the serialized row is
+unchanged, and a refresh that changes nothing returns the previous row array
+itself, so per-tick row identity churn stays bounded to guests whose data
+changed.
 Retained or prefetched tabs may keep fetched snapshots, but only the visible tab
 consumes realtime projection work. Re-entering an inactive tab must catch up
 from the shared canonical cache rather than replaying every missed delta.

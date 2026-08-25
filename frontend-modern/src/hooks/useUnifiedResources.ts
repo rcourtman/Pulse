@@ -1,4 +1,4 @@
-import { batch, createEffect, createSignal, onCleanup, type Accessor } from 'solid-js';
+import { batch, createEffect, createSignal, onCleanup, untrack, type Accessor } from 'solid-js';
 import { createStore, reconcile, unwrap } from 'solid-js/store';
 import { canonicalizeMetricsHistoryTargetType } from '@/api/charts';
 import { readAPIErrorMessage } from '@/api/responseUtils';
@@ -1618,9 +1618,6 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
       blockedWsHydrationToken = null;
     }
 
-    const wsResources = Array.isArray(wsStore.state.resources)
-      ? (unwrap(wsStore.state.resources) as Resource[])
-      : [];
     const resourceChange = wsStore.resourceChange?.() ?? {
       version: Number(lastUpdateToken) || 0,
       changedIds: null,
@@ -1644,15 +1641,35 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
       resourceChange.version > 0 &&
       allResourcesEntry.hasSnapshot &&
       allResourcesEntry.realtimeVersion === resourceChange.version;
+    // Deep-unwrapping the whole resource store on every websocket tick was the
+    // single largest idle main-thread cost in the 2026-08-25 audit profile.
+    // The delta merge only dereferences raw subtrees for entries it will clone
+    // (changed ids, agents whose host-merge groups it re-evaluates, and ids it
+    // has no cached merge output for), so unwrap exactly those and skip the
+    // store read entirely when this realtime version is already applied.
+    // untrack keeps the per-item id/type reads from registering thousands of
+    // fine-grained dependencies; the effect is driven by resourceChange().
+    const readWsResources = (changedIds: ReadonlySet<string> | null): Resource[] =>
+      untrack(() => {
+        const stored = wsStore.state.resources;
+        if (!Array.isArray(stored)) return [];
+        if (changedIds === null) return unwrap(stored) as Resource[];
+        const cachedIds = new Set(allResourcesEntry.resources.map((resource) => resource.id));
+        return stored.map((resource) =>
+          resource.type === 'agent' || changedIds.has(resource.id) || !cachedIds.has(resource.id)
+            ? (unwrap(resource) as Resource)
+            : (resource as Resource),
+        );
+      });
     const mergedWsResources = realtimeSnapshotAlreadyApplied
       ? allResourcesEntry.resources
       : canApplyIncrementally
         ? mergeCanonicalResourceDeltaSnapshot(
-            wsResources,
+            readWsResources(resourceChange.changedIds),
             allResourcesEntry.resources,
             resourceChange.changedIds!,
           )
-        : mergeCanonicalResourceSnapshot(wsResources, allResourcesEntry.resources);
+        : mergeCanonicalResourceSnapshot(readWsResources(null), allResourcesEntry.resources);
     const projectedResources = filterCanonicalUnifiedResources(
       mergedWsResources,
       query,
@@ -1697,7 +1714,7 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
       resolvedProjectedResources === projectedResources;
     const changedResourceTouchesAgent =
       canPatchProjectionIncrementally &&
-      wsResources.some(
+      mergedWsResources.some(
         (resource) => resource.type === 'agent' && resourceChange.changedIds!.has(resource.id),
       );
     const incrementalPatchIndices = canPatchProjectionIncrementally

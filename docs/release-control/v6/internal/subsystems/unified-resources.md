@@ -1164,13 +1164,22 @@ AI-only summary payloads, or page-local heuristics.
    between cold hydrate and later runtime updates
    Realtime delta reconciliation must preserve exact display-object identity
    for untouched non-host resources, canonicalize changed and newly added rows,
-   and always recompute the bounded agent/host coalescing set. Incremental and
+   and re-evaluate exactly the host-merge groups the delta could have altered:
+   a group refreshes when a flagged id names one of its current members, and a
+   flagged id absent from the incoming snapshot (a removal, or a partner id an
+   earlier coalesce folded away) conservatively refreshes every group. A tick
+   that flags no member of a group must preserve that group's cached merged
+   host row by object identity. Incremental and
    full-snapshot paths must therefore produce the same canonical host identity,
    labels, and compatibility fields without cloning the entire estate per tick.
    The connection store publishes each reconciliation's changed IDs and resource
    revision. `useUnifiedResources` applies that revision to the shared
    all-resources cache once and derives type-filtered route projections from the
-   canonical result. A sequential revision with unchanged route membership
+   canonical result. An instance observing a revision the shared cache already
+   holds must not re-read or deep-unwrap the realtime store, and the merging
+   instance dereferences raw store subtrees only for rows the delta merge will
+   clone (flagged ids, host-merge members, and ids absent from the shared
+   cache). A sequential revision with unchanged route membership
    patches only the changed row indices plus the bounded agent coalescing set;
    initial hydration, missed revisions, additions, removals, or reorderings
    fall back to keyed full reconciliation. Route-prefetch and route-realtime

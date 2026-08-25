@@ -209,7 +209,6 @@ type APIListResponse = {
 
 type WorkloadsCacheEntry = {
   workloads: WorkloadGuest[];
-  signature: string;
   cachedAt: number;
   sharedFetch: Promise<WorkloadGuest[]> | null;
 };
@@ -223,7 +222,6 @@ const getWorkloadsCacheEntry = (orgScope: string): WorkloadsCacheEntry => {
   }
   const created: WorkloadsCacheEntry = {
     workloads: [],
-    signature: '',
     cachedAt: 0,
     sharedFetch: null,
   };
@@ -231,22 +229,52 @@ const getWorkloadsCacheEntry = (orgScope: string): WorkloadsCacheEntry => {
   return created;
 };
 
-// Workload objects are produced by one canonical mapper, so their property
-// order is stable. Serializing once per row gives refreshes a cheap immutable
-// signature without recursively comparing the same nested telemetry objects.
-const workloadSignature = (guest: WorkloadGuest): string => JSON.stringify(guest);
+// Workload objects are produced by one canonical mapper and never mutated
+// after construction, so their property order is stable and one serialization
+// per row object is a valid immutable signature. The WeakMap keeps reused row
+// objects from being re-serialized on every refresh.
+const workloadRowSignatures = new WeakMap<WorkloadGuest, string>();
 
-const buildWorkloadsSignature = (workloads: WorkloadGuest[]): string =>
-  workloads.map(workloadSignature).join('\u001e');
+const workloadSignature = (guest: WorkloadGuest): string => {
+  const cached = workloadRowSignatures.get(guest);
+  if (cached !== undefined) return cached;
+  const signature = JSON.stringify(guest);
+  workloadRowSignatures.set(guest, signature);
+  return signature;
+};
 
-const areWorkloadsEqual = (
-  current: WorkloadGuest[],
+// Rebuilding every row object on each refresh made row identity churn even
+// for guests whose data did not change, forcing keyed table rows to re-render
+// estate-wide on every metrics tick. Reusing the previous row object whenever
+// its serialized form is unchanged keeps referential identity stable, and
+// returning the previous array itself when nothing changed lets those
+// refreshes skip downstream work entirely.
+const reconcileWorkloadRowIdentity = (
+  previous: WorkloadGuest[],
   next: WorkloadGuest[],
-  currentSignature?: string,
-): boolean => {
-  if (current === next) return true;
-  if (current.length !== next.length) return false;
-  return (currentSignature ?? buildWorkloadsSignature(current)) === buildWorkloadsSignature(next);
+): WorkloadGuest[] => {
+  if (previous === next || previous.length === 0 || next.length === 0) return next;
+  const previousById = new Map(previous.map((row) => [row.id, row] as const));
+  let reusedCount = 0;
+  const reconciled = next.map((row) => {
+    const previousRow = previousById.get(row.id);
+    if (previousRow && workloadSignature(previousRow) === workloadSignature(row)) {
+      reusedCount += 1;
+      return previousRow;
+    }
+    return row;
+  });
+  if (reusedCount === next.length && next.length === previous.length) {
+    let sameOrder = true;
+    for (let index = 0; index < reconciled.length; index += 1) {
+      if (reconciled[index] !== previous[index]) {
+        sameOrder = false;
+        break;
+      }
+    }
+    if (sameOrder) return previous;
+  }
+  return reconciled;
 };
 
 const normalizeWorkloadStatus = (status?: string | null): string => {
@@ -752,10 +780,8 @@ const setWorkloadsCache = (
   entry: WorkloadsCacheEntry,
   workloads: WorkloadGuest[],
   at = Date.now(),
-  signature = buildWorkloadsSignature(workloads),
 ) => {
   entry.workloads = workloads;
-  entry.signature = signature;
   entry.cachedAt = at;
 };
 
@@ -774,13 +800,13 @@ const fetchWorkloadsShared = async (
   const request = (async () => {
     const previous = entry.workloads;
     const fetched = await fetchWorkloads();
-    const fetchedSignature = buildWorkloadsSignature(fetched);
-    if (areWorkloadsEqual(previous, fetched, entry.signature || undefined)) {
+    const reconciled = reconcileWorkloadRowIdentity(previous, fetched);
+    if (reconciled === previous) {
       entry.cachedAt = Date.now();
       return previous;
     }
-    setWorkloadsCache(entry, fetched, Date.now(), fetchedSignature);
-    return fetched;
+    setWorkloadsCache(entry, reconciled, Date.now());
+    return reconciled;
   })();
 
   entry.sharedFetch = request;
@@ -827,35 +853,31 @@ export function useWorkloads(
       const next = typeof value === 'function' ? value(current) : value;
       const normalized = next ?? [];
       const cacheEntry = resolveActiveCacheEntry();
-      const nextSignature = buildWorkloadsSignature(normalized);
-      const currentSignature =
-        cacheEntry.workloads === current ? cacheEntry.signature : buildWorkloadsSignature(current);
-      if (areWorkloadsEqual(current, normalized, currentSignature || undefined)) {
+      const reconciled = reconcileWorkloadRowIdentity(current, normalized);
+      if (reconciled === current) {
         setWorkloadsCache(cacheEntry, current);
         return current;
       }
-      setWorkloadsCache(cacheEntry, normalized, Date.now(), nextSignature);
-      return normalized;
+      setWorkloadsCache(cacheEntry, reconciled, Date.now());
+      return reconciled;
     });
 
   const applyWorkloads = (next: WorkloadGuest[], targetOrgScope = resolveActiveOrgScope()) => {
     const cacheEntry = getWorkloadsCacheEntry(targetOrgScope);
     const current = targetOrgScope === resolveActiveOrgScope() ? workloads() : cacheEntry.workloads;
-    const nextSignature = buildWorkloadsSignature(next);
-    const currentSignature =
-      cacheEntry.workloads === current ? cacheEntry.signature : buildWorkloadsSignature(current);
-    if (areWorkloadsEqual(current, next, currentSignature || undefined)) {
-      setWorkloadsCache(cacheEntry, current, Date.now(), cacheEntry.signature || nextSignature);
+    const reconciled = reconcileWorkloadRowIdentity(current, next);
+    if (reconciled === current) {
+      setWorkloadsCache(cacheEntry, current, Date.now());
       if (targetOrgScope === resolveActiveOrgScope()) {
         setWorkloads(() => current);
       }
       return current;
     }
-    setWorkloadsCache(cacheEntry, next, Date.now(), nextSignature);
+    setWorkloadsCache(cacheEntry, reconciled, Date.now());
     if (targetOrgScope === resolveActiveOrgScope()) {
-      setWorkloads(() => next);
+      setWorkloads(() => reconciled);
     }
-    return next;
+    return reconciled;
   };
 
   const loadWorkloads = async (

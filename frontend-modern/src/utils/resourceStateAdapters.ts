@@ -852,26 +852,59 @@ export const mergeCanonicalResourceDeltaSnapshot = (
   }
 
   const existingById = new Map(existing.map((resource) => [resource.id, resource] as const));
-  const prepared = incoming.map((resource) => {
-    const existingResource = existingById.get(resource.id);
-    const mustRefresh =
-      resource.type === 'agent' || changedIds.has(resource.id) || existingResource === undefined;
-    if (!mustRefresh) {
-      return existingResource;
-    }
-    return canonicalizeRealtimeResource(structuredClone(resource), {
-      synthesizePlatformScopes: false,
-    });
+
+  // Host coalescing only ever folds agent-type resources together, so an
+  // agent's merged output can change only when a member of its host-merge
+  // group is in the delta. Groups without a flagged member reuse the cached
+  // output instead of re-cloning and re-merging every agent on every tick.
+  // A changed id that is absent from `incoming` is either a true removal or a
+  // partner id that a previous coalesce folded away; both can dissolve or
+  // alter a group without flagging its surviving member, so such ticks
+  // conservatively refresh every agent group (the pre-optimization behavior).
+  const hostKeys = incoming.map((resource) => getHostResourceMergeKey(resource));
+  const incomingIds = new Set(incoming.map((resource) => resource.id));
+  let refreshAllHostGroups = false;
+  changedIds.forEach((id) => {
+    if (!incomingIds.has(id)) refreshAllHostGroups = true;
   });
+  const dirtyHostKeys = new Set<string>();
+  const cachedHostKeys = new Set<string>();
+  incoming.forEach((resource, index) => {
+    const hostKey = hostKeys[index];
+    if (!hostKey) return;
+    if (refreshAllHostGroups || changedIds.has(resource.id)) dirtyHostKeys.add(hostKey);
+    if (existingById.has(resource.id)) cachedHostKeys.add(hostKey);
+  });
+
+  const SKIP = Symbol('skip');
+  const prepared = incoming
+    .map((resource, index) => {
+      const hostKey = hostKeys[index];
+      const existingResource = existingById.get(resource.id);
+      if (hostKey) {
+        if (!dirtyHostKeys.has(hostKey) && cachedHostKeys.has(hostKey)) {
+          // Clean group: cached outputs pass through untouched. Members whose
+          // ids were coalesced away are already represented by that output.
+          return existingResource ?? SKIP;
+        }
+        return canonicalizeRealtimeResource(structuredClone(resource), {
+          synthesizePlatformScopes: false,
+        });
+      }
+      const mustRefresh = changedIds.has(resource.id) || existingResource === undefined;
+      if (!mustRefresh) {
+        return existingResource;
+      }
+      return canonicalizeRealtimeResource(structuredClone(resource), {
+        synthesizePlatformScopes: false,
+      });
+    })
+    .filter((resource): resource is Resource => resource !== SKIP);
 
   const coalesced = coalesceCanonicalRealtimeResourceSnapshot(prepared);
   return coalesced.map((resource) => {
     const existingResource = existingById.get(resource.id);
-    if (
-      resource.type !== 'agent' &&
-      !changedIds.has(resource.id) &&
-      existingResource !== undefined
-    ) {
+    if (resource === existingResource) {
       return existingResource;
     }
     return mergeCanonicalResource(resource, existingResource);

@@ -1,35 +1,47 @@
 {
   "version": 1,
-  "base_sha": "d3bfb3bb7bef7e67ea62b41940ac240082c74532",
-  "verified_at": "2026-08-25T07:11:13Z",
+  "base_sha": "831e55f011f3478767daa3d6578dab9f2bd96e45",
+  "verified_at": "2026-08-25T09:34:54Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx"
+    "frontend-modern/src/hooks/useUnifiedResources.ts",
+    "frontend-modern/src/hooks/useWorkloads.ts",
+    "frontend-modern/src/utils/resourceStateAdapters.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx": "cf2a0e35fc4f412a2dec9dad378630e747539ea7e38849cc77a2b66b8d61c162"
+    "frontend-modern/src/hooks/useUnifiedResources.ts": "dd5880e08d41cd8d9595084a3bfedc292584e38e785ff144e4ead96c36a67a3b",
+    "frontend-modern/src/hooks/useWorkloads.ts": "e14581a0af97e49da1322b253be6a3ffa433163d00bbc436c31614539e70094d",
+    "frontend-modern/src/utils/resourceStateAdapters.ts": "2ec8e4754e323ae36f9c61148db4256732a2c7e8678746a7c0e9f60538539d1b"
   },
   "routes": [
-    "/settings/infrastructure"
+    "/login",
+    "/proxmox/overview",
+    "/proxmox/storage",
+    "/proxmox/backups/date",
+    "/alerts"
   ],
   "viewports": [
     {
-      "width": 1280,
-      "height": 720
+      "width": 1440,
+      "height": 900
     },
     {
-      "width": 375,
-      "height": 812
+      "width": 390,
+      "height": 844
     }
   ],
   "states": [
-    "Infrastructure connected systems list with 57 manage targets",
-    "Manage Lab vCenter connection editor open",
-    "editor closed via Cancel returning to the list"
+    "50-node/1512-resource mock estate with RandomMetrics websocket ticks every 2s riding through every dwell",
+    "Proxmox overview fully hydrated at desktop (11.7k DOM nodes) after login, including return visit after sub-tab navigation",
+    "Storage and Backups sub-tabs fully hydrated at desktop (11.4k / 15.4k DOM nodes)",
+    "Alerts page dwelled 20s at 390px under 4x CPU throttle while websocket deltas applied (CDP profile captured)",
+    "Proxmox overview dwelled 20s at 390px under 4x CPU throttle while websocket deltas applied (CDP profile captured)",
+    "zero console errors across the desktop exercise run"
   ],
   "interactions": [
-    "opened the Manage editor for vmware:vc-mock-1 and closed it with Cancel at 1280px and 375px",
-    "confirmed focus returns to the row's manage control after the 250ms focus-return timer at both widths",
-    "checked the console for errors, only the pre-existing dev websocket proxy reconnect noise present"
+    "headless-Chromium (Playwright) login form fill and submit as admin",
+    "SPA clicks across Proxmox sub-tab anchors Overview -> Storage -> Backups -> Overview at 1440x900",
+    "mobile bottom-bar data-tab-id click into Alerts at 390x844 with 4x CPU throttle",
+    "multi-tick idle dwells on Overview and Alerts confirming realtime delta merge, host coalescing, and workload row updates render live data"
   ]
 }

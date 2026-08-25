@@ -303,6 +303,47 @@ describe('useUnifiedResources', () => {
     dispose();
   });
 
+  it('hydrates realtime store entries that arrive without being flagged changed', async () => {
+    // The incremental path only unwraps raw subtrees for entries it expects to
+    // clone (changed ids, agents, and ids missing from the merge cache). An
+    // unflagged addition exercises the missing-from-cache branch: without its
+    // defensive unwrap, structuredClone on the store proxy would throw here.
+    const vm = createWsResource({
+      id: 'vm-1',
+      name: 'vm-1',
+      displayName: 'vm-1',
+      type: 'vm',
+    });
+    setWsState('resources', [vm]);
+    setWsResourceChange({ version: 1, changedIds: null });
+
+    let dispose = () => {};
+    let result: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      result = useUnifiedResources({
+        query: '',
+        cacheKey: 'all-resources',
+        initialHydration: 'prefer-ws',
+      });
+    });
+
+    await waitForResourceCount(() => result!.resources().length);
+
+    batch(() => {
+      setWsState('resources', [
+        vm,
+        createWsResource({ id: 'vm-2', name: 'vm-2', displayName: 'vm-2', type: 'vm' }),
+      ]);
+      setWsResourceChange({ version: 2, changedIds: new Set(['vm-1']) });
+      setWsState('lastUpdate', 1738843202000);
+    });
+
+    await waitForValue(() => result!.resources().length, 2);
+    expect(result!.resources().map((resource) => resource.id)).toContain('vm-2');
+    dispose();
+  });
+
   it('uses canonical websocket resource updates without a REST refetch for supported queries', async () => {
     let dispose = () => {};
     let result: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']> | undefined;

@@ -1085,4 +1085,86 @@ describe('incremental canonical resource snapshots', () => {
     expect(result[1]).not.toBe(changed);
     expect(result[1]?.cpu?.current).toBe(75);
   });
+
+  it('preserves agent identity when no member of its host-merge group changed', () => {
+    const agent = {
+      id: 'agent-a',
+      type: 'agent',
+      name: 'host-a',
+      status: 'online',
+      sources: ['agent'],
+    } as unknown as Resource;
+    const vm = {
+      id: 'vm-1',
+      type: 'vm',
+      name: 'vm-1',
+      status: 'running',
+      cpu: { current: 5 },
+    } as Resource;
+    const incoming = [structuredClone(agent), { ...structuredClone(vm), cpu: { current: 60 } }];
+
+    const result = mergeCanonicalResourceDeltaSnapshot(incoming, [agent, vm], new Set(['vm-1']));
+
+    expect(result[0]).toBe(agent);
+    expect(result[1]?.cpu?.current).toBe(60);
+  });
+
+  it('refreshes an agent when its own id is in the delta', () => {
+    const agent = {
+      id: 'agent-a',
+      type: 'agent',
+      name: 'host-a',
+      status: 'online',
+      cpu: { current: 10 },
+      sources: ['agent'],
+    } as unknown as Resource;
+    const incoming = [{ ...structuredClone(agent), cpu: { current: 90 } }];
+
+    const result = mergeCanonicalResourceDeltaSnapshot(incoming, [agent], new Set(['agent-a']));
+
+    expect(result[0]).not.toBe(agent);
+    expect(result[0]?.cpu?.current).toBe(90);
+  });
+
+  it('refreshes agent groups when a changed id is absent from the incoming snapshot', () => {
+    // A flagged id that no longer appears can be a removal or a partner id an
+    // earlier coalesce folded away; either can alter a group without flagging
+    // its surviving member, so such ticks refresh every agent group.
+    const agent = {
+      id: 'agent-a',
+      type: 'agent',
+      name: 'host-a',
+      status: 'online',
+      sources: ['agent'],
+    } as unknown as Resource;
+    const incoming = [structuredClone(agent)];
+
+    const result = mergeCanonicalResourceDeltaSnapshot(incoming, [agent], new Set(['gone-id']));
+
+    expect(result[0]).not.toBe(agent);
+    expect(result[0]?.id).toBe('agent-a');
+  });
+
+  it('still coalesces a dirty host-merge group into one merged agent', () => {
+    const agentSide = {
+      id: 'agent-a',
+      type: 'agent',
+      name: 'host-a',
+      status: 'online',
+      sources: ['agent'],
+    } as unknown as Resource;
+    const platformSide = {
+      id: 'pve-a',
+      type: 'agent',
+      name: 'host-a',
+      status: 'online',
+      sources: ['proxmox-pve'],
+    } as unknown as Resource;
+    const incoming = [structuredClone(agentSide), structuredClone(platformSide)];
+
+    const result = mergeCanonicalResourceDeltaSnapshot(incoming, [], new Set(['pve-a']));
+
+    expect(result).toHaveLength(1);
+    expect(result[0]?.sources).toEqual(expect.arrayContaining(['agent', 'proxmox-pve']));
+  });
 });

@@ -290,6 +290,51 @@ describe('useWorkloads', () => {
     dispose();
   });
 
+  it('keeps row identity stable for guests whose data did not change', async () => {
+    const buildGuest = (id: string, vmid: number, cpu: number) =>
+      ({
+        id,
+        type: 'vm',
+        name: `vm-${vmid}`,
+        status: 'running',
+        platformType: 'proxmox-pve',
+        sources: ['proxmox'],
+        proxmox: { sourceId: id, vmid, nodeName: 'pve1', instance: 'cluster-a' },
+        cpu: { current: cpu },
+      }) as any;
+    const [snapshot, setSnapshot] = createSignal([
+      buildGuest('vm-a', 101, 10),
+      buildGuest('vm-b', 102, 20),
+    ]);
+
+    let dispose = () => {};
+    let result: ReturnType<UseWorkloadsModule['useWorkloads']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      const [enabled] = createSignal(true);
+      result = useWorkloads(enabled, { resourceSnapshot: snapshot });
+    });
+
+    await flushAsync();
+    const firstRows = result!.workloads();
+    expect(firstRows).toHaveLength(2);
+
+    // One guest changes; the untouched guest's row object must be reused.
+    setSnapshot([buildGuest('vm-a', 101, 10), buildGuest('vm-b', 102, 85)]);
+    await flushAsync();
+    const secondRows = result!.workloads();
+    expect(secondRows[0]).toBe(firstRows[0]);
+    expect(secondRows[1]).not.toBe(firstRows[1]);
+    expect(secondRows[1]?.cpu).toBeCloseTo(0.85);
+
+    // A refresh that changes nothing must keep the array identity itself.
+    setSnapshot([buildGuest('vm-a', 101, 10), buildGuest('vm-b', 102, 85)]);
+    await flushAsync();
+    expect(result!.workloads()).toBe(secondRows);
+
+    dispose();
+  });
+
   it('retains the fulfilled workload snapshot when a forced refresh fails', async () => {
     let dispose = () => {};
     let result: ReturnType<UseWorkloadsModule['useWorkloads']> | undefined;
