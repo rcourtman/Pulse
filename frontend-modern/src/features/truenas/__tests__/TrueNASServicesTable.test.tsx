@@ -58,9 +58,7 @@ describe('TrueNASServicesTable', () => {
     expect(detail.getByText('2418, 2420')).toBeInTheDocument();
     expect(detail.getByText('TrueNAS-SCALE-24.10.2')).toBeInTheDocument();
 
-    await fireEvent.click(
-      detail.getByRole('button', { name: `Collapse ${rows[0].id} details` }),
-    );
+    await fireEvent.click(detail.getByRole('button', { name: `Collapse ${rows[0].id} details` }));
 
     expect(screen.queryByTestId('truenas-service-detail')).not.toBeInTheDocument();
     expect(row).toHaveAttribute('aria-expanded', 'false');

@@ -68,10 +68,7 @@ export const RelayPairingSection: Component<RelayPairingSectionProps> = (props) 
         <p class={formHelpText}>
           Generate a QR code to securely link the Pulse Mobile app on your phone to this Pulse
           instance. {RELAY_PAIRING_APP_AVAILABILITY_TEXT}{' '}
-          <ExternalTextLink
-            href={PULSE_PRO_DOWNLOAD_URL}
-            class="font-medium"
-          >
+          <ExternalTextLink href={PULSE_PRO_DOWNLOAD_URL} class="font-medium">
             {RELAY_PAIRING_APP_DOWNLOAD_LINK_LABEL}
           </ExternalTextLink>
           .

@@ -7,10 +7,7 @@ const sectionSource = readFileSync(
   'utf-8',
 );
 
-const drawerSource = readFileSync(
-  resolve(__dirname, '..', 'ResourceDetailDrawer.tsx'),
-  'utf-8',
-);
+const drawerSource = readFileSync(resolve(__dirname, '..', 'ResourceDetailDrawer.tsx'), 'utf-8');
 
 const apiClientSource = readFileSync(
   resolve(__dirname, '..', '..', '..', 'api', 'maintenanceVerification.ts'),
