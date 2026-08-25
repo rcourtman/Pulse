@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { StorageRecord } from '@/features/storageBackups/models';
 import {
   buildStoragePoolRowModel,
@@ -63,5 +63,28 @@ describe('storage pool row presentation', () => {
     expect(model.capacityDeltaLabel).toBe('+40.00 GB');
     expect(model.capacityDeltaToneClass).toContain('text-amber-600');
     expect(model.freeBytes).toBe(200);
+  });
+
+  it('marks retained values stale and identifies the last successful refresh', () => {
+    const now = new Date('2026-08-25T18:00:00Z');
+    vi.useFakeTimers();
+    vi.setSystemTime(now);
+
+    const model = buildStoragePoolRowModel(
+      baseRecord({
+        statusLabel: 'Online',
+        freshness: 'stale',
+        observedAt: now.getTime() - 5 * 60 * 1000,
+        freshnessError: 'Datastore.Audit permission denied',
+      }),
+    );
+
+    expect(model.stateLabel).toBe('Stale');
+    expect(model.stateToneClass).toContain('text-amber');
+    expect(model.stateTitle).toBe(
+      'Retained last-known storage values. Last successful refresh 5 mins ago. Datastore.Audit permission denied',
+    );
+
+    vi.useRealTimers();
   });
 });

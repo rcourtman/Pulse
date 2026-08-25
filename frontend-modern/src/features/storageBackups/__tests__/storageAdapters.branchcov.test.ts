@@ -271,6 +271,35 @@ describe('storageAdapters.branchcov - mapResourceStorageRecord (via resource ada
     expect(records[0].observedAt).toBe(9999999);
   });
 
+  it('preserves stale source delivery state and its collection error', () => {
+    const resource = makeResource({
+      id: 'stale-storage',
+      sourceStatus: {
+        proxmox: {
+          status: 'stale',
+          lastSeen: '2026-08-25T18:00:00Z',
+          error: 'Datastore.Audit permission denied',
+        },
+      },
+    });
+    const records = resourceAdapter.build(ctx([resource]));
+
+    expect(records[0].freshness).toBe('stale');
+    expect(records[0].freshnessError).toBe('Datastore.Audit permission denied');
+  });
+
+  it('distinguishes fresh and unknown source delivery state', () => {
+    const records = resourceAdapter.build(
+      ctx([
+        makeResource({ id: 'fresh-storage', sourceStatus: { proxmox: { status: 'online' } } }),
+        makeResource({ id: 'unknown-storage', sourceStatus: {} }),
+      ]),
+    );
+
+    expect(records.find((record) => record.id === 'fresh-storage')?.freshness).toBe('fresh');
+    expect(records.find((record) => record.id === 'unknown-storage')?.freshness).toBe('unknown');
+  });
+
   it('defaults incidentPriority to 0 when the resource does not declare one', () => {
     const resource = makeResource({ id: 'no-prio' });
     const records = resourceAdapter.build(ctx([resource]));

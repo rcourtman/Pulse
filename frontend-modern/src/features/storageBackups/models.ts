@@ -91,6 +91,8 @@ export interface StorageRecord {
   capabilities: StorageCapability[];
   source: SourceDescriptor;
   observedAt: number;
+  freshness?: 'fresh' | 'stale' | 'unknown';
+  freshnessError?: string;
   metricsTarget?: StorageMetricsTarget;
   refs?: {
     resourceId?: string;

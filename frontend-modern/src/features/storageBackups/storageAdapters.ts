@@ -157,6 +157,17 @@ const mapResourceStorageRecord = (resource: Resource, adapterId: string): Storag
     resource.storage?.vdevLayout || resource.storage?.topology,
   );
   const metricsTarget = metricsTargetForStorageResource(resource);
+  const sourceStatuses = Object.values(resource.sourceStatus ?? {});
+  const degradedSource = sourceStatuses.find((source) =>
+    ['stale', 'offline', 'error', 'failed', 'unauthorized'].includes(
+      (source.status || '').trim().toLowerCase(),
+    ),
+  );
+  const freshness = degradedSource
+    ? 'stale'
+    : sourceStatuses.some((source) => (source.status || '').trim().toLowerCase() === 'online')
+      ? 'fresh'
+      : 'unknown';
 
   return {
     id: resource.id,
@@ -200,6 +211,8 @@ const mapResourceStorageRecord = (resource: Resource, adapterId: string): Storag
       typeof resource.lastSeen === 'number' && Number.isFinite(resource.lastSeen)
         ? resource.lastSeen
         : Date.now(),
+    freshness,
+    freshnessError: degradedSource?.error?.trim() || undefined,
     metricsTarget,
     refs: {
       resourceId: metricsTarget?.resourceId || resource.id,

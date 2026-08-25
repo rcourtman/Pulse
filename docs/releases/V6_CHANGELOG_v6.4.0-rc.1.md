@@ -37,6 +37,8 @@ _This changelog describes the changes since `v6.3.1` included in
 - Discovery lookups resolve known equivalent forked host identities.
 - Windowed tables no longer leave blank regions, lose expanded-row scroll
   ownership, or detach touch gestures from the page.
+- Storage rows now mark retained values stale and show the last successful
+  refresh age when their source poll fails.
 - The notifications API no longer returns the stored Apprise API key.
 
 ## Release Metadata

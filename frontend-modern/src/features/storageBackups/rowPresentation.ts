@@ -1,4 +1,5 @@
 import type { StorageRecord } from './models';
+import { formatRelativeTime } from '@/utils/format';
 import {
   getStorageRecordIssueSummary,
   getStorageRecordStatus,
@@ -46,6 +47,9 @@ export function getStoragePoolIssueTextClass(record: StorageRecord): string {
 }
 
 export function getStoragePoolStateTextClass(record: StorageRecord): string {
+  if (record.freshness === 'stale') {
+    return 'text-amber-700 dark:text-amber-300';
+  }
   const normalized = getStoragePoolStateLabel(record).trim().toLowerCase();
   if (
     normalized === 'critical' ||
@@ -74,6 +78,9 @@ export function getCompactStoragePoolProtectionLabel(record: StorageRecord): str
 }
 
 export function getStoragePoolStateLabel(record: StorageRecord): string {
+  if (record.freshness === 'stale') {
+    return 'Stale';
+  }
   const arrayState = getRecordStringDetail(record, 'arrayState');
   if (arrayState) {
     return titleize(arrayState);
@@ -87,6 +94,12 @@ export function getStoragePoolStateLabel(record: StorageRecord): string {
 }
 
 export function getStoragePoolStateTitle(record: StorageRecord): string {
+  if (record.freshness === 'stale') {
+    const observed = formatRelativeTime(record.observedAt);
+    const age = observed ? ` Last successful refresh ${observed}.` : '';
+    const error = record.freshnessError ? ` ${record.freshnessError}` : '';
+    return `Retained last-known storage values.${age}${error}`.trim();
+  }
   const label = getStoragePoolStateLabel(record);
   const summary =
     getCompactStoragePoolIssueSummary(record).trim() || getStorageRecordIssueSummary(record).trim();
