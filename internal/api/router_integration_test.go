@@ -1551,15 +1551,22 @@ func TestWebSocketSendsInitialState(t *testing.T) {
 		return typeVal, payload
 	}
 
-	msgType, _ := readMsg()
-	if msgType != "welcome" {
-		t.Fatalf("expected welcome message, got %q", msgType)
+	// Heartbeat pings interleave freely with the connect sequence, so wait
+	// for each expected type instead of asserting strict message order.
+	readType := func(expected string) map[string]any {
+		t.Helper()
+		for i := 0; i < 6; i++ {
+			msgType, payload := readMsg()
+			if msgType == expected {
+				return payload
+			}
+		}
+		t.Fatalf("timed out waiting for %q websocket message", expected)
+		return nil
 	}
 
-	msgType, payload := readMsg()
-	if msgType != "initialState" {
-		t.Fatalf("expected initialState message, got %q", msgType)
-	}
+	readType("welcome")
+	payload := readType("initialState")
 
 	legacyKeys := []string{
 		"nodes",
@@ -1579,16 +1586,7 @@ func TestWebSocketSendsInitialState(t *testing.T) {
 	state := srv.monitor.BuildFrontendState()
 	srv.hub.BroadcastState(state)
 
-	deadline := time.Now().Add(15 * time.Second)
-	for {
-		msgType, payload = readMsg()
-		if msgType == "rawData" {
-			break
-		}
-		if time.Now().After(deadline) {
-			t.Fatalf("expected rawData broadcast before deadline, got %q", msgType)
-		}
-	}
+	payload = readType("rawData")
 	for _, key := range legacyKeys {
 		if _, ok := payload[key]; ok {
 			t.Fatalf("broadcast payload should not include legacy key %q", key)
