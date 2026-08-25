@@ -4216,6 +4216,7 @@ class SubsystemLookupTest(unittest.TestCase):
                 "internal/monitoring/metrics_history_test.go",
                 "internal/monitoring/metrics_test.go",
                 "internal/monitoring/mock_metrics_history_test.go",
+                "internal/monitoring/mock_metrics_seed_cache_test.go",
             ],
         )
 
