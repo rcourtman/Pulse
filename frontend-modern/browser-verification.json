@@ -1,47 +1,37 @@
 {
   "version": 1,
-  "base_sha": "a3d7a90b1bfb14e60432a2a23b0cbd73d6911101",
-  "verified_at": "2026-08-24T20:51:46Z",
+  "base_sha": "020bfb111b6eed776f532012cba7e1f5a86f93ad",
+  "verified_at": "2026-08-25T06:11:01Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Settings/RelayPairingSection.tsx",
-    "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx",
-    "frontend-modern/src/features/patrol/PatrolObjectivesPanel.tsx",
-    "frontend-modern/src/utils/relayPresentation.ts"
+    "frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Settings/RelayPairingSection.tsx": "85c907c138a6d8693cff5c596236ea09b6188242a7454c42ce341ae02c59371a",
-    "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx": "280ee62dc69a1d165da6dcb6db1dff2716c4905d43be8fa50ec5aa9628a4934d",
-    "frontend-modern/src/features/patrol/PatrolObjectivesPanel.tsx": "f5512db67c12c8a353680eb11af98d61493d942e24c2822d65d7e57a303cdf6c",
-    "frontend-modern/src/utils/relayPresentation.ts": "930d00c8191a34d6ce6b50197b1dbe94856056c8abeb1de91db312b6cd8966d7"
+    "frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx": "9534ba8387f7a0fbce47b80faaf5df2e203f35f1869f54ea1de862c92f375c93"
   },
   "routes": [
-    "/patrol",
-    "/settings/system-relay"
+    "/settings/infrastructure"
   ],
   "viewports": [
     {
       "width": 1280,
-      "height": 800
+      "height": 720
     },
     {
-      "width": 390,
-      "height": 844
+      "width": 375,
+      "height": 812
     }
   ],
   "states": [
-    "populated Patrol decision inbox with critical and warning attention items",
-    "Patrol Protection view with the add-objective dialog open",
-    "Patrol attention detail with the temporary-suppression form expanded",
-    "Relay settings capability-gated state for the current runtime"
+    "Add Pulse Agent modal opened from Pulse Agent hosts Add",
+    "install token generated so the commands section unlocked",
+    "advanced connection and install options expanded",
+    "Enable Pulse command execution checked showing the Pulse commands enabled panel",
+    "checkbox unchecked returning to the default state"
   ],
   "interactions": [
-    "opened the Patrol Protection tab and Add objective dialog at 1280 by 800",
-    "confirmed both objective textareas have generated ids and explicit label associations",
-    "opened an Inbox decision and expanded temporary suppression at 390 by 844",
-    "confirmed the shared suppression textarea and select preserve 80 pixel and 44 pixel phone targets",
-    "confirmed no document-level horizontal overflow at either exact viewport",
-    "inspected the Relay route without mutating its capability-gated live configuration",
-    "independently inspected the populated Patrol interface and accessibility hierarchy with Computer Use in Safari"
+    "clicked Show advanced connection and install options",
+    "verified Skip TLS and Enable Pulse command execution labels render as stacked block rows (computed display flex, separate line boxes) at 1280px and 375px",
+    "toggled Enable Pulse command execution on and confirmed the info panel appears, then toggled it off"
   ]
 }

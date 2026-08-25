@@ -580,7 +580,7 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
                   </Show>
 
                   <label
-                    class={`inline-flex items-center gap-2 text-sm text-base-content ${state.isGeneratingToken() ? 'cursor-wait opacity-70' : 'cursor-pointer'}`}
+                    class={`flex items-center gap-2 text-sm text-base-content ${state.isGeneratingToken() ? 'cursor-wait opacity-70' : 'cursor-pointer'}`}
                     title="Skip TLS certificate verification (for self-signed certificates)"
                   >
                     <input
@@ -593,7 +593,7 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
                   </label>
 
                   <label
-                    class="inline-flex cursor-pointer items-center gap-2 text-sm text-base-content"
+                    class="flex cursor-pointer items-center gap-2 text-sm text-base-content"
                     title="Allow Pulse-scoped command requests on this agent for Patrol actions and opted-in Proxmox LXC Docker inventory"
                   >
                     <input
