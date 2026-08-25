@@ -6505,3 +6505,13 @@ without horizontal overflow at mobile widths. The unavailable state is a
 `role="alert"` message distinct from the empty state, because "cannot read
 the log" and "no attempts" mean opposite things to someone deciding whether
 to trust their alerting.
+
+### Storage rows distinguish retained observations
+
+Storage table state presentation consumes the storage record's canonical
+freshness field before provider-native health labels. When polling fails and
+the last-known capacity remains visible, the row uses the shared amber warning
+tokens, labels the observation `Stale`, and exposes the last successful refresh
+age in its title. Freshness presentation remains in the pure storage row model;
+the table component must not infer age from render time or restyle retained
+capacity independently.

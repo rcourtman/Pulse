@@ -5522,3 +5522,18 @@ resource agent ID and canonical hostname. This identity reconciliation changes
 neither backup, snapshot, restore, retention, nor recovery authority; those
 operations remain governed by their existing resource capabilities and action
 lifecycle contracts.
+
+### Retained storage observations preserve freshness truth
+
+The shared storage adapter may retain the last successful capacity observation
+when a provider poll fails, but it must also project the canonical resource
+`sourceStatus` into the storage record. A stale, offline, failed, errored, or
+unauthorised source therefore renders as `Stale` even when the provider's last
+native state was online. The row identifies the last successful observation
+age and may include the bounded collection error; a subsequent online source
+observation clears that stale presentation. Retained capacity must never be
+presented indistinguishably from current provider data.
+
+`frontend-modern/src/features/storageBackups/__tests__/storageAdapters.test.ts`
+pins the canonical freshness and error projection, while the row-presentation
+tests pin the operator-facing state and observation age.

@@ -61,6 +61,29 @@ describe('storageAdapters', () => {
     expect(records).toHaveLength(0);
   });
 
+  it('carries failed-poll freshness into the storage presentation record', () => {
+    const records = buildStorageRecords({
+      state: baseState(),
+      resources: [
+        makeResourceStorage({
+          sourceStatus: {
+            proxmox: {
+              status: 'stale',
+              lastSeen: '2026-08-25T18:00:00Z',
+              error: 'Datastore.Audit permission denied',
+            },
+          },
+        }),
+      ],
+    });
+
+    expect(records[0]).toMatchObject({
+      observedAt: 1731000000000,
+      freshness: 'stale',
+      freshnessError: 'Datastore.Audit permission denied',
+    });
+  });
+
   it('prefers enriched storage metadata over platformData inference', () => {
     const enriched = {
       ...makeResourceStorage({
