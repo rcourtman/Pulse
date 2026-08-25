@@ -136,6 +136,7 @@ import workloadSelectionModelSource from '@/components/Workloads/workloadSelecti
 import workloadsSelectionStateSource from '@/components/Workloads/useWorkloadSelectionState.ts?raw';
 import workloadsWorkloadDerivedStateSource from '@/components/Workloads/useWorkloadsDerivedState.ts?raw';
 import workloadsWorkloadViewportSyncSource from '@/components/Workloads/useWorkloadViewportSync.ts?raw';
+import windowedPageScrollSource from '@/components/shared/windowedPageScroll.ts?raw';
 import workloadsWorkloadFilterOptionsSource from '@/components/Workloads/useWorkloadFilterOptions.ts?raw';
 import workloadFilterConfigModelSource from '@/components/Workloads/workloadFilterConfigModel.ts?raw';
 import workloadRouteModelSource from '@/components/Workloads/workloadRouteModel.ts?raw';
@@ -760,10 +761,13 @@ describe('frontend resource type boundaries', () => {
     expect(groupedTableWindowingSource).toContain('getVisibleSlice');
     expect(groupedTableWindowingSource).toContain('onScroll');
     expect(groupedTableWindowingSource).toContain('revealIndex');
-    expect(workloadsWorkloadViewportSyncSource).toContain('window.addEventListener');
-    expect(workloadsWorkloadViewportSyncSource).toContain('window.removeEventListener');
+    expect(workloadsWorkloadViewportSyncSource).toContain('bindWindowedPageScrollEvents');
+    expect(workloadsWorkloadViewportSyncSource).not.toContain('window.addEventListener');
     expect(workloadsWorkloadViewportSyncSource).toContain('getBoundingClientRect');
     expect(workloadsWorkloadViewportSyncSource).toContain('groupedWindowing.onScroll');
+    expect(windowedPageScrollSource).toContain('addEventListener');
+    expect(windowedPageScrollSource).toContain('removeEventListener');
+    expect(windowedPageScrollSource).toContain("window.addEventListener('resize'");
     expect(workloadTopologySource).toContain('export const workloadNodeScopeId');
     expect(workloadTopologySource).toContain('export const getKubernetesContextKey');
     expect(workloadTopologySource).toContain('export const getWorkloadDockerHostId');
@@ -2530,7 +2534,8 @@ describe('frontend resource type boundaries', () => {
     );
     expect(unifiedResourceTableModelSource).toContain('getServiceHealthSummaryPresentation');
     expect(unifiedResourceTableModelSource).toContain('export const getOutlierEmphasis');
-    expect(unifiedResourceTableViewportSyncSource).toContain('window.addEventListener');
+    expect(unifiedResourceTableViewportSyncSource).toContain('bindWindowedPageScrollEvents');
+    expect(unifiedResourceTableViewportSyncSource).not.toContain('window.addEventListener');
     expect(unifiedResourceTableViewportSyncSource).toContain('getBoundingClientRect');
     expect(unifiedResourceTableViewportSyncSource).toContain('hostWindowing.onScroll');
     expect(unifiedResourceTableViewportSyncSource).not.toContain('scrollIntoView');
