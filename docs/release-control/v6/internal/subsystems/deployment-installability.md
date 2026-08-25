@@ -2440,6 +2440,12 @@ When operators pass draft packet markdown to `.github/workflows/create-release.y
 the workflow must sanitize draft-only framing and append the standardized
 installation and promotion metadata sections exactly once, rather than trusting
 raw packet text to already be publish-safe.
+User-visible fixes added to an assembled candidate packet must remain bound to
+release-body verification: the exact claim is pinned in
+`scripts/release_control/render_release_body_test.py`, and the complete packet
+must still pass canonical shape validation. The `v6.4.0-rc.1` packet therefore
+binds the non-running container stale-health correction under **Fixed** without
+changing candidate artifact identity or dispatch authority.
 Release-note transport is file-backed and fail-closed: operator helpers must
 send the Markdown through JSON input rather than multiline form-field
 substitution, and every `gh workflow run --json` input value must be encoded as

@@ -224,6 +224,19 @@ No manual migration is required.
             render_release_body._requires_customer_facing_standard("6.4.0")
         )
 
+    def test_v640_rc1_packet_records_stale_container_health_fix(self) -> None:
+        notes = (
+            _REPO_ROOT / "docs" / "releases" / "RELEASE_NOTES_v6.4.0-rc.1.md"
+        ).read_text(encoding="utf-8")
+
+        render_release_body.validate_release_notes_shape(notes, "6.4.0-rc.1")
+        normalized_notes = re.sub(r"\s+", " ", notes)
+        self.assertIn(
+            "Stopped Docker and Podman containers no longer re-fire health alerts "
+            "from the stale health-check result retained by the container runtime.",
+            normalized_notes,
+        )
+
     def test_future_release_notes_reject_internal_release_control_sections(self) -> None:
         notes = """# Pulse v6.4.0-rc.2 Release Notes
 
