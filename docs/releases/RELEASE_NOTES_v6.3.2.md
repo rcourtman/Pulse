@@ -1,6 +1,6 @@
 # Pulse v6.3.2 Release Notes
 
-`v6.3.2` is a focused stable patch release for the Pulse v6 line. It follows
+`v6.3.2` is a stable patch release for the Pulse v6 line. It follows
 stable `v6.3.1` and corrects memory retention, offline-alert policy handling,
 self-container update detection, and fixed polling intervals.
 

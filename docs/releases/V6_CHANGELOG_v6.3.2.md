@@ -24,8 +24,8 @@ _This changelog describes stable `v6.3.2` compared with stable `v6.3.1`._
 - Previous stable: `v6.3.1`
 - Rollback target: `v6.3.1`
 - Rollback command: `./scripts/install.sh --version v6.3.1`
-- Promotion path: urgent stable patch using the single-build release workflow
-  after exact-SHA branch qualification
+- Promotion path: emergency stable patch from `main`, using the single-build
+  release workflow after exact-SHA qualification
 - Emergency reason: metrics-history memory growth can wedge Pulse under
   container memory limits, while disabled offline policies can still produce
   alert noise on stable
