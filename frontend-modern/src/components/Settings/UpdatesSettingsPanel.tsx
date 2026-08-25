@@ -12,9 +12,15 @@ import ArrowRight from 'lucide-solid/icons/arrow-right';
 import Package from 'lucide-solid/icons/package';
 import type { UpdateInfo, VersionInfo, UpdatePlan } from '@/api/updates';
 import { runtimeCapabilities } from '@/stores/license';
-import { buildDockerImageTag, buildLinuxAmd64DownloadCommand } from '@/components/updateVersion';
+import {
+  buildDockerImageTag,
+  buildLinuxAmd64DownloadCommand,
+  buildReleaseNotesUrl,
+} from '@/components/updateVersion';
+import { isReleaseVersion } from '@/components/whatsNewModel';
 import { UpdateInstallGuide } from '@/components/Settings/UpdateInstallGuide';
 import { UpdateHistorySection } from '@/components/Settings/UpdateHistorySection';
+import { ExternalTextLink } from '@/components/shared/ExternalTextLink';
 import {
   getUpdateChannelCardOptions,
   type UpdateChannelOptionValue,
@@ -122,6 +128,21 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
                         {(badge) => <span class={badge.className}>{badge.label}</span>}
                       </For>
                     </div>
+                    <Show
+                      when={
+                        !props.versionInfo()?.isDevelopment &&
+                        !props.versionInfo()?.isSourceBuild &&
+                        isReleaseVersion(props.versionInfo()?.version ?? '')
+                      }
+                    >
+                      <ExternalTextLink
+                        href={buildReleaseNotesUrl(props.versionInfo()?.version)}
+                        variant="compactAction"
+                        class="mt-1 -ml-1"
+                      >
+                        Current release notes
+                      </ExternalTextLink>
+                    </Show>
                   </div>
                 </div>
               </div>

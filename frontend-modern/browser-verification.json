@@ -1,23 +1,29 @@
 {
   "version": 1,
-  "base_sha": "af03903a734f6741360748fbe661cccb45c880ca",
-  "verified_at": "2026-08-25T19:48:51Z",
+  "base_sha": "51d49474e461eaca83a75065ba370f3092d6ba34",
+  "verified_at": "2026-08-25T20:20:32Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Storage/DiskDetail.tsx",
-    "frontend-modern/src/components/Storage/StorageDetailKeyValueRow.tsx"
+    "frontend-modern/src/components/GitHubStarBanner.tsx",
+    "frontend-modern/src/components/Settings/UpdatesSettingsPanel.tsx",
+    "frontend-modern/src/components/WhatsNewCard.tsx",
+    "frontend-modern/src/utils/localStorage.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Storage/DiskDetail.tsx": "19487ce71ef93ed4db8c8a36bb76790298408a449313bcb19e7266b1b41e0afc",
-    "frontend-modern/src/components/Storage/StorageDetailKeyValueRow.tsx": "bc045c2a053c395154c9a4d0ff5bac32bd1c129ab579032ce282e81acd623426"
+    "frontend-modern/src/components/GitHubStarBanner.tsx": "7c5b51cb927fa778bd6bb201793a20c084d4e3f6bfab39feb4573fe2759f8c85",
+    "frontend-modern/src/components/Settings/UpdatesSettingsPanel.tsx": "b0cb063a25f0c9a966522b740afa962163d87a50e241030ac289f1a5679063ad",
+    "frontend-modern/src/components/WhatsNewCard.tsx": "5e5d7314e46b8aa496f73a42e1abc37a294a3f3ebff3c3c424c33f8d615961d0",
+    "frontend-modern/src/utils/localStorage.ts": "452dbaa0e4014e0af635b24502ffbe53c738a449670ac6b4c381b3033c53ee0a"
   },
   "routes": [
-    "/proxmox/storage"
+    "/prompt-verification.html",
+    "/proxmox/overview",
+    "/settings/system-updates"
   ],
   "viewports": [
     {
-      "width": 1280,
-      "height": 800
+      "width": 1440,
+      "height": 900
     },
     {
       "width": 390,
@@ -25,17 +31,17 @@
     }
   ],
   "states": [
-    "degraded ZFS pool Overview with long node and content values",
-    "degraded ZFS pool History with collection availability messaging",
-    "critical NVMe disk Overview without detailed SMART attributes",
-    "physical disk History with live I/O and SMART history"
+    "compact post-update notice over an active infrastructure page without a blocking backdrop",
+    "opt-in categorized release changelog dialog at desktop and phone widths",
+    "one-time GitHub star prompt at desktop and phone widths",
+    "dismissed release notice, changelog dialog, and star prompt states",
+    "System Updates current-version panel in the signed-in development runtime"
   ],
   "interactions": [
-    "opened the Storage and Physical Disks tabs",
-    "expanded standalone1-service-pool and switched between Overview and History",
-    "expanded the WD Blue disk and switched between Overview and History",
-    "confirmed mobile key-value stacking and wrapping without clipping",
-    "confirmed the two-column desktop configuration grid remains intact",
-    "restored the browser viewport after responsive verification"
+    "opened the changelog from See what's new and closed it with both Escape and Got it",
+    "dismissed the compact update notice without opening the changelog",
+    "closed the GitHub star prompt and confirmed it left the page cleanly",
+    "navigated the signed-in System Updates page and confirmed development builds do not claim published release notes",
+    "restored the browser viewport and closed all verification tabs"
   ]
 }

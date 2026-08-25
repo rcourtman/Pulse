@@ -720,7 +720,7 @@
     {
       "id": "github-star-banner-action-shell",
       "category": "action-button",
-      "summary": "The GitHub star prompt must compose Button and ActionIconButton for its primary, defer, and dismiss actions instead of carrying local floating-prompt button shells.",
+      "summary": "The one-time GitHub star prompt must compose Button and ActionIconButton for its primary and permanent-dismiss actions instead of carrying local floating-prompt button shells.",
       "canonical": {
         "path": "src/components/shared/Button.tsx",
         "export": "Button"

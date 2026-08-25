@@ -138,6 +138,30 @@ export function createLocalStorageStringSignal(
   );
 }
 
+export type LowPriorityNoticeOwner = 'github-star' | 'release-update' | 'telemetry-update';
+
+export const SESSION_STORAGE_KEYS = {
+  LOW_PRIORITY_NOTICE_OWNER: 'pulse-low-priority-notice-owner',
+} as const;
+
+/**
+ * Reserve the single low-priority app-shell notice slot for this browser
+ * session. Informational and promotional prompts use this boundary so a user
+ * never has to clear a sequence of unrelated notices after opening Pulse.
+ */
+export function reserveLowPriorityNoticeSession(owner: LowPriorityNoticeOwner): boolean {
+  if (typeof sessionStorage === 'undefined') return true;
+  try {
+    const existingOwner = sessionStorage.getItem(SESSION_STORAGE_KEYS.LOW_PRIORITY_NOTICE_OWNER);
+    if (existingOwner) return existingOwner === owner;
+    sessionStorage.setItem(SESSION_STORAGE_KEYS.LOW_PRIORITY_NOTICE_OWNER, owner);
+    return true;
+  } catch {
+    // Storage-disabled browsers still get the notice's own persistence rules.
+    return true;
+  }
+}
+
 /**
  * Creates a number signal that syncs with localStorage
  * @param key - The localStorage key
@@ -208,8 +232,9 @@ export const STORAGE_KEYS = {
 
   // GitHub star prompt
   GITHUB_STAR_DISMISSED: 'pulse-github-star-dismissed',
-  GITHUB_STAR_FIRST_SEEN: 'pulse-github-star-first-seen',
-  GITHUB_STAR_SNOOZED_UNTIL: 'pulse-github-star-snoozed-until',
+  GITHUB_STAR_PROMPT_SHOWN: 'pulse-github-star-prompt-shown',
+  GITHUB_STAR_ACTIVE_DAYS: 'pulse-github-star-active-days',
+  GITHUB_STAR_LAST_ACTIVE_DATE: 'pulse-github-star-last-active-date',
 
   // Billing / migration guidance
   AGENT_MIGRATION_NOTICE_DISMISSED: 'pulse-agent-migration-notice-dismissed',

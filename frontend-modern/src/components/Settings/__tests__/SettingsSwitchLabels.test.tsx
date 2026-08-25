@@ -33,6 +33,40 @@ describe('settings switch labels', () => {
     expect(screen.getByRole('checkbox', { name: 'Automatic Stable Updates' })).toBeInTheDocument();
   });
 
+  it('keeps the running release notes available from update settings', () => {
+    const [updateChannel, setUpdateChannel] = createSignal<'stable' | 'rc'>('stable');
+    const [autoUpdateEnabled, setAutoUpdateEnabled] = createSignal(false);
+
+    render(() => (
+      <UpdatesSettingsPanel
+        versionInfo={() => ({
+          version: '6.4.0',
+          build: 'community',
+          runtime: 'server',
+          isDocker: false,
+          isSourceBuild: false,
+          isDevelopment: false,
+        })}
+        updateInfo={() => null}
+        checkingForUpdates={() => false}
+        updateChannel={updateChannel}
+        setUpdateChannel={setUpdateChannel}
+        autoUpdateEnabled={autoUpdateEnabled}
+        setAutoUpdateEnabled={setAutoUpdateEnabled}
+        checkForUpdates={vi.fn().mockResolvedValue(undefined)}
+        setHasUnsavedChanges={vi.fn()}
+        updatePlan={() => null}
+        onInstallUpdate={vi.fn()}
+        isInstalling={() => false}
+      />
+    ));
+
+    expect(screen.getByRole('link', { name: 'Current release notes' })).toHaveAttribute(
+      'href',
+      'https://github.com/rcourtman/Pulse/releases/tag/v6.4.0',
+    );
+  });
+
   it('associates the backup polling switch with its visible label', () => {
     const [backupPollingEnabled, setBackupPollingEnabled] = createSignal(true);
     const [backupPollingInterval, setBackupPollingInterval] = createSignal(3600);

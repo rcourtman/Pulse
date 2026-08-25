@@ -252,4 +252,12 @@ describe('post-update telemetry disclosure', () => {
     expect(whatsNewCardSource).toContain("openTelemetrySettings('disable')");
     expect(whatsNewCardSource).toContain('PRIVACY_DOC_URL');
   });
+
+  it('keeps release details opt-in and coordinates the automatic notice session', () => {
+    expect(whatsNewCardSource).toContain("reserveLowPriorityNoticeSession('release-update')");
+    expect(whatsNewCardSource).toContain('markVersionSeen(currentVersion);');
+    expect(whatsNewCardSource).toContain('actionLabel="See what\'s new"');
+    expect(whatsNewCardSource).toContain('setDialogVisible(true)');
+    expect(whatsNewCardSource).not.toContain('setDialogVisible(true);\n      markVersionSeen');
+  });
 });

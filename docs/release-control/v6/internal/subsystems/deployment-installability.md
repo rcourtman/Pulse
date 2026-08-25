@@ -954,13 +954,22 @@ upgrade, update, release, or artifact-selection behavior.
    unavailable for source/development builds, and return the canonical release
    body without inventing a second changelog source. The update banner may
    preview only the curated `Highlights` section from update-check metadata,
-   while the post-update card must render the release's categorized user-facing
+   while the post-update card must offer the release's categorized user-facing
    change sections (`Added`, `Improved`/`Changed`, `Fixed`, `Security`,
    `Breaking changes`, `Deprecated`, or `Removed`) as a changelog once per
-   later installed release. It must not reuse the Highlights summary as the
-   post-update content, and must stay silent for a first baseline, malformed or
-   development versions, missing releases, and releases without categorized
-   changes. `Highlights` remains a pre-update overview only: release rendering
+   later installed release. Automatic release communication is limited to a
+   compact non-blocking update notice; the detailed changelog may open only
+   after explicit operator action. Preparing that notice records the version
+   immediately so a reload cannot turn it into a recurring prompt. When the
+   one-time telemetry disclosure owns the same session, it suppresses the
+   lower-priority release notice instead of creating consecutive notices.
+   `frontend-modern/src/utils/localStorage.ts` owns that browser-session notice
+   reservation boundary so the release notice, telemetry disclosure, and
+   GitHub gratitude prompt cannot create a one-two sequence. The post-update
+   surface must not reuse the Highlights summary as its content,
+   and must stay silent for a first baseline, malformed or development
+   versions, missing releases, and releases without categorized changes.
+   `Highlights` remains a pre-update overview only: release rendering
    keeps it to at most three short plain-text bullets of no more than 140
    characters each, with links, code, issue references, and nested structure
    reserved for the categorized or full release notes.

@@ -32,6 +32,7 @@ describe('WhatsNewCard', () => {
     getReleaseNotesMock.mockReset();
     navigateMock.mockReset();
     localStorage.clear();
+    sessionStorage.clear();
   });
 
   afterEach(cleanup);
@@ -126,8 +127,9 @@ describe('WhatsNewCard', () => {
     expect(screen.queryByTestId('telemetry-payload-update-notice')).not.toBeInTheDocument();
   });
 
-  it('shows the categorized changelog after the running release changes', async () => {
+  it('announces the running release without opening a blocking dialog', async () => {
     localStorage.setItem(STORAGE_KEYS.WHATS_NEW_LAST_SEEN, '6.0.5');
+    localStorage.setItem(STORAGE_KEYS.TELEMETRY_PAYLOAD_NOTICE_SEEN, '2');
     versionInfoMock.mockReturnValue({
       version: '6.1.0-rc.1',
       isDevelopment: false,
@@ -155,8 +157,18 @@ describe('WhatsNewCard', () => {
     await renderCard();
 
     await waitFor(() => {
-      expect(screen.getByTestId('whats-new-modal')).toBeInTheDocument();
+      expect(screen.getByTestId('whats-new-notice')).toBeInTheDocument();
     });
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.getByText('Pulse updated to v6.1.0-rc.1')).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: "See what's new in Pulse 6.1.0-rc.1" }),
+    ).toBeInTheDocument();
+    expect(localStorage.getItem(STORAGE_KEYS.WHATS_NEW_LAST_SEEN)).toBe('6.1.0-rc.1');
+
+    fireEvent.click(screen.getByRole('button', { name: "See what's new in Pulse 6.1.0-rc.1" }));
+
+    expect(screen.queryByTestId('whats-new-notice')).not.toBeInTheDocument();
     expect(screen.getByRole('dialog')).toBeInTheDocument();
     expect(screen.getByText('Pulse v6.1.0-rc.1 changelog')).toBeInTheDocument();
     expect(screen.getByText('Added')).toBeInTheDocument();
@@ -175,8 +187,9 @@ describe('WhatsNewCard', () => {
     );
   });
 
-  it('persists dismissal for the current release', async () => {
+  it('dismisses the compact notice without reopening it on reload', async () => {
     localStorage.setItem(STORAGE_KEYS.WHATS_NEW_LAST_SEEN, '6.0.5');
+    localStorage.setItem(STORAGE_KEYS.TELEMETRY_PAYLOAD_NOTICE_SEEN, '2');
     versionInfoMock.mockReturnValue({
       version: '6.1.0-rc.1',
       isDevelopment: false,
@@ -190,14 +203,48 @@ describe('WhatsNewCard', () => {
     });
 
     await renderCard();
-    await waitFor(() => expect(screen.getByText('Got it')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByTestId('whats-new-notice')).toBeInTheDocument());
 
-    fireEvent.click(screen.getByText('Got it'));
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss update notice' }));
 
     await waitFor(() => {
-      expect(screen.queryByTestId('whats-new-modal')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('whats-new-notice')).not.toBeInTheDocument();
     });
     expect(localStorage.getItem(STORAGE_KEYS.WHATS_NEW_LAST_SEEN)).toBe('6.1.0-rc.1');
+
+    cleanup();
+    await renderCard();
+
+    expect(screen.queryByTestId('whats-new-notice')).not.toBeInTheDocument();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('keeps the release notice quiet when the telemetry disclosure owns the session', async () => {
+    localStorage.setItem(STORAGE_KEYS.WHATS_NEW_LAST_SEEN, '6.0.5');
+    versionInfoMock.mockReturnValue({
+      version: '6.1.0-rc.1',
+      isDevelopment: false,
+      isSourceBuild: false,
+    });
+    getReleaseNotesMock.mockResolvedValue({
+      version: '6.1.0-rc.1',
+      releaseNotes: '## Improved\n- Faster resource updates.',
+      releaseDate: '2026-07-13T12:00:00Z',
+      isPrerelease: true,
+    });
+
+    await renderCard();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('telemetry-payload-update-notice')).toBeInTheDocument();
+      expect(localStorage.getItem(STORAGE_KEYS.WHATS_NEW_LAST_SEEN)).toBe('6.1.0-rc.1');
+    });
+    expect(screen.queryByTestId('whats-new-notice')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss telemetry payload update' }));
+
+    expect(screen.queryByTestId('telemetry-payload-update-notice')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('whats-new-notice')).not.toBeInTheDocument();
   });
 
   it('stays quiet when a release has only a highlights summary', async () => {

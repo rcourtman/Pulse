@@ -1,11 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { dialogStackHasBlockingDialog } from '@/components/shared/useDialogState';
 import gitHubStarBannerSource from '../GitHubStarBanner.tsx?raw';
-
-/* ------------------------------------------------------------------ */
-/*  Mocks                                                              */
-/* ------------------------------------------------------------------ */
 
 type BannerResource = { id: string; name: string };
 
@@ -23,43 +18,41 @@ vi.mock('@/utils/logger', () => ({
   logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
-/* ------------------------------------------------------------------ */
-/*  Helpers                                                            */
-/* ------------------------------------------------------------------ */
-
 const DISMISSED_KEY = 'pulse-github-star-dismissed';
-const FIRST_SEEN_KEY = 'pulse-github-star-first-seen';
-const SNOOZED_KEY = 'pulse-github-star-snoozed-until';
+const PROMPT_SHOWN_KEY = 'pulse-github-star-prompt-shown';
+const ACTIVE_DAYS_KEY = 'pulse-github-star-active-days';
+const LAST_ACTIVE_DATE_KEY = 'pulse-github-star-last-active-date';
+const LOW_PRIORITY_NOTICE_OWNER_KEY = 'pulse-low-priority-notice-owner';
 const LOCAL_DISMISS_BUTTON_CLASS =
   'inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted transition-colors hover:bg-surface-hover hover:text-base-content';
 const LOCAL_PRIMARY_BUTTON_CLASS =
   'inline-flex min-h-9 items-center justify-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700';
-const LOCAL_DEFER_BUTTON_CLASS =
-  'inline-flex min-h-9 items-center justify-center rounded-md px-3 py-2 text-sm text-muted transition-colors hover:bg-surface-hover hover:text-base-content';
 
 async function renderBanner() {
   const mod = await import('../GitHubStarBanner');
   render(() => <mod.GitHubStarBanner />);
 }
 
-/** Seed N fake websocket resources into runtime state. */
-function setResourceCount(n: number) {
-  wsState.resources = Array.from({ length: n }, (_, i) => ({
-    id: `res-${i}`,
-    name: `Resource ${i}`,
+function setResourceCount(count: number) {
+  wsState.resources = Array.from({ length: count }, (_, index) => ({
+    id: `res-${index}`,
+    name: `Resource ${index}`,
   }));
 }
 
-/* ------------------------------------------------------------------ */
-/*  Tests                                                              */
-/* ------------------------------------------------------------------ */
+function seedEligibleEngagement() {
+  localStorage.setItem(ACTIVE_DAYS_KEY, '13');
+  localStorage.setItem(LAST_ACTIVE_DATE_KEY, '2026-03-13');
+}
 
 describe('GitHubStarBanner', () => {
   beforeEach(() => {
     vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-03-14T12:00:00Z'));
     wsState.resources = [];
     mockInitialDataReceived.mockReturnValue(true);
     localStorage.clear();
+    sessionStorage.clear();
   });
 
   afterEach(() => {
@@ -68,175 +61,107 @@ describe('GitHubStarBanner', () => {
     cleanup();
   });
 
-  /* ---------- Visibility: not shown scenarios ---------- */
-
-  it('does not render when there are no resources', async () => {
-    wsState.resources = [];
-
+  it('stays quiet without connected infrastructure', async () => {
     await renderBanner();
 
-    expect(screen.queryByText('Enjoying Pulse?')).not.toBeInTheDocument();
+    expect(screen.queryByText('Finding Pulse useful?')).not.toBeInTheDocument();
+    expect(localStorage.getItem(ACTIVE_DAYS_KEY)).toBe('0');
   });
 
-  it('keeps the shell banner on websocket runtime state instead of reopening unified resources', () => {
-    expect(gitHubStarBannerSource).toContain('useWebSocket');
-    expect(gitHubStarBannerSource).toContain('initialDataReceived');
-    expect(gitHubStarBannerSource).not.toContain('useResources');
-  });
-
-  it('renders as a non-modal prompt so Assistant remains available', () => {
-    expect(gitHubStarBannerSource).not.toContain('<Dialog');
-    expect(gitHubStarBannerSource).toContain('aria-live="polite"');
-    expect(gitHubStarBannerSource).toContain('z-30');
-  });
-
-  it('routes prompt action chrome through shared Button primitives', () => {
-    expect(gitHubStarBannerSource).toContain('@/components/shared/Button');
-    expect(gitHubStarBannerSource).toContain('<ActionIconButton');
-    expect(gitHubStarBannerSource).toContain('<Button');
-    expect(gitHubStarBannerSource).not.toContain(LOCAL_DISMISS_BUTTON_CLASS);
-    expect(gitHubStarBannerSource).not.toContain(LOCAL_PRIMARY_BUTTON_CLASS);
-    expect(gitHubStarBannerSource).not.toContain(LOCAL_DEFER_BUTTON_CLASS);
-  });
-
-  it('does not render on the first day infrastructure is seen (records first-seen date)', async () => {
-    vi.setSystemTime(new Date('2026-03-01T12:00:00Z'));
-    setResourceCount(3);
-
-    await renderBanner();
-
-    // Should not show prompt
-    expect(screen.queryByText('Enjoying Pulse?')).not.toBeInTheDocument();
-
-    // Should have recorded today as first-seen date
-    expect(localStorage.getItem(FIRST_SEEN_KEY)).toBe('2026-03-01');
-  });
-
-  it('does not render before websocket initial data is available', async () => {
+  it('waits for websocket initial data before recording engagement', async () => {
     mockInitialDataReceived.mockReturnValue(false);
     setResourceCount(3);
 
     await renderBanner();
 
-    expect(screen.queryByText('Enjoying Pulse?')).not.toBeInTheDocument();
-    const stored = localStorage.getItem(FIRST_SEEN_KEY);
-    expect(stored === null || stored === '').toBe(true);
+    expect(screen.queryByText('Finding Pulse useful?')).not.toBeInTheDocument();
+    expect(localStorage.getItem(ACTIVE_DAYS_KEY)).toBe('0');
   });
 
-  it('does not render when first-seen date is today (same day)', async () => {
-    vi.setSystemTime(new Date('2026-03-01T12:00:00Z'));
-    localStorage.setItem(FIRST_SEEN_KEY, '2026-03-01');
+  it('counts one distinct active day without showing the prompt', async () => {
     setResourceCount(3);
 
     await renderBanner();
 
-    expect(screen.queryByText('Enjoying Pulse?')).not.toBeInTheDocument();
+    await waitFor(() => expect(localStorage.getItem(ACTIVE_DAYS_KEY)).toBe('1'));
+    expect(localStorage.getItem(LAST_ACTIVE_DATE_KEY)).toBe('2026-03-14');
+    expect(screen.queryByText('Finding Pulse useful?')).not.toBeInTheDocument();
   });
 
-  it('does not render when permanently dismissed', async () => {
-    vi.setSystemTime(new Date('2026-03-05T12:00:00Z'));
-    localStorage.setItem(FIRST_SEEN_KEY, '2026-03-01');
-    localStorage.setItem(DISMISSED_KEY, 'true');
+  it('does not count repeated sessions on the same day', async () => {
+    localStorage.setItem(ACTIVE_DAYS_KEY, '7');
+    localStorage.setItem(LAST_ACTIVE_DATE_KEY, '2026-03-14');
     setResourceCount(3);
 
     await renderBanner();
 
-    expect(screen.queryByText('Enjoying Pulse?')).not.toBeInTheDocument();
+    expect(localStorage.getItem(ACTIVE_DAYS_KEY)).toBe('7');
+    expect(screen.queryByText('Finding Pulse useful?')).not.toBeInTheDocument();
   });
 
-  it('does not render when within snooze period', async () => {
-    vi.setSystemTime(new Date('2026-03-05T12:00:00Z'));
-    localStorage.setItem(FIRST_SEEN_KEY, '2026-03-01');
-    localStorage.setItem(SNOOZED_KEY, '2026-03-10'); // snoozed until the 10th
-    setResourceCount(3);
-
-    await renderBanner();
-
-    expect(screen.queryByText('Enjoying Pulse?')).not.toBeInTheDocument();
-  });
-
-  /* ---------- Visibility: shown scenarios ---------- */
-
-  it('renders when returning user has infrastructure (different day than first seen)', async () => {
-    vi.setSystemTime(new Date('2026-03-05T12:00:00Z'));
-    localStorage.setItem(FIRST_SEEN_KEY, '2026-03-01');
+  it('shows one compact prompt after fourteen distinct active days', async () => {
+    seedEligibleEngagement();
     setResourceCount(3);
 
     await renderBanner();
 
     await waitFor(() => {
-      expect(screen.getByText('Enjoying Pulse?')).toBeInTheDocument();
+      expect(screen.getByText('Finding Pulse useful?')).toBeInTheDocument();
     });
-  });
-
-  it('renders when snooze period has expired', async () => {
-    vi.setSystemTime(new Date('2026-03-15T12:00:00Z'));
-    localStorage.setItem(FIRST_SEEN_KEY, '2026-03-01');
-    localStorage.setItem(SNOOZED_KEY, '2026-03-10'); // expired 5 days ago
-    setResourceCount(3);
-
-    await renderBanner();
-
-    await waitFor(() => {
-      expect(screen.getByText('Enjoying Pulse?')).toBeInTheDocument();
-    });
-  });
-
-  /* ---------- Content ---------- */
-
-  it('displays the expected content when shown', async () => {
-    vi.setSystemTime(new Date('2026-03-05T12:00:00Z'));
-    localStorage.setItem(FIRST_SEEN_KEY, '2026-03-01');
-    setResourceCount(3);
-
-    await renderBanner();
-
-    await waitFor(() => {
-      expect(screen.getByText('Enjoying Pulse?')).toBeInTheDocument();
-    });
-    expect(screen.getByText(/independent developer/)).toBeInTheDocument();
+    expect(
+      screen.getByText('Starring the project on GitHub helps others discover it.'),
+    ).toBeInTheDocument();
     expect(screen.getByText('Star on GitHub')).toBeInTheDocument();
-    expect(screen.getByText('Maybe later')).toBeInTheDocument();
-    expect(screen.getByLabelText("Close and don't show again")).toBeInTheDocument();
+    expect(screen.queryByText('Maybe later')).not.toBeInTheDocument();
+    expect(localStorage.getItem(ACTIVE_DAYS_KEY)).toBe('14');
+    expect(localStorage.getItem(PROMPT_SHOWN_KEY)).toBe('true');
   });
 
-  /* ---------- Dismiss (X button) ---------- */
-
-  it('hides the prompt and persists dismissal when the X button is clicked', async () => {
-    vi.setSystemTime(new Date('2026-03-05T12:00:00Z'));
-    localStorage.setItem(FIRST_SEEN_KEY, '2026-03-01');
+  it('never reopens after its single lifetime appearance', async () => {
+    localStorage.setItem(PROMPT_SHOWN_KEY, 'true');
+    localStorage.setItem(ACTIVE_DAYS_KEY, '14');
+    localStorage.setItem(LAST_ACTIVE_DATE_KEY, '2026-03-13');
     setResourceCount(3);
 
     await renderBanner();
 
+    expect(screen.queryByText('Finding Pulse useful?')).not.toBeInTheDocument();
+  });
+
+  it('stays quiet when another low-priority notice owns the session', async () => {
+    sessionStorage.setItem(LOW_PRIORITY_NOTICE_OWNER_KEY, 'release-update');
+    seedEligibleEngagement();
+    setResourceCount(3);
+
+    await renderBanner();
+
+    await waitFor(() => expect(localStorage.getItem(ACTIVE_DAYS_KEY)).toBe('14'));
+    expect(screen.queryByText('Finding Pulse useful?')).not.toBeInTheDocument();
+    expect(localStorage.getItem(PROMPT_SHOWN_KEY)).not.toBe('true');
+  });
+
+  it('permanently dismisses the prompt from the close action', async () => {
+    seedEligibleEngagement();
+    setResourceCount(3);
+
+    await renderBanner();
+    await waitFor(() => expect(screen.getByText('Finding Pulse useful?')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByLabelText("Close and don't show again"));
+
     await waitFor(() => {
-      expect(screen.getByText('Enjoying Pulse?')).toBeInTheDocument();
+      expect(screen.queryByText('Finding Pulse useful?')).not.toBeInTheDocument();
     });
-
-    const closeBtn = screen.getByLabelText("Close and don't show again");
-    fireEvent.click(closeBtn);
-
-    await waitFor(() => {
-      expect(screen.queryByText('Enjoying Pulse?')).not.toBeInTheDocument();
-    });
-
     expect(localStorage.getItem(DISMISSED_KEY)).toBe('true');
   });
 
-  /* ---------- Star on GitHub ---------- */
-
-  it('opens GitHub repo, dismisses permanently on star click', async () => {
-    vi.setSystemTime(new Date('2026-03-05T12:00:00Z'));
-    localStorage.setItem(FIRST_SEEN_KEY, '2026-03-01');
+  it('opens GitHub and permanently dismisses on the star action', async () => {
+    seedEligibleEngagement();
     setResourceCount(3);
-
     const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
 
     await renderBanner();
-
-    await waitFor(() => {
-      expect(screen.getByText('Star on GitHub')).toBeInTheDocument();
-    });
+    await waitFor(() => expect(screen.getByText('Star on GitHub')).toBeInTheDocument());
 
     fireEvent.click(screen.getByText('Star on GitHub'));
 
@@ -245,119 +170,26 @@ describe('GitHubStarBanner', () => {
       '_blank',
       'noopener,noreferrer',
     );
-
-    await waitFor(() => {
-      expect(screen.queryByText('Enjoying Pulse?')).not.toBeInTheDocument();
-    });
-
-    // Permanent dismissal
     expect(localStorage.getItem(DISMISSED_KEY)).toBe('true');
   });
 
-  /* ---------- Maybe later (snooze) ---------- */
-
-  it('hides the prompt and sets a 7-day snooze when "Maybe later" is clicked', async () => {
-    vi.setSystemTime(new Date('2026-03-05T12:00:00Z'));
-    localStorage.setItem(FIRST_SEEN_KEY, '2026-03-01');
-    setResourceCount(3);
-
-    await renderBanner();
-
-    await waitFor(() => {
-      expect(screen.getByText('Maybe later')).toBeInTheDocument();
-    });
-
-    fireEvent.click(screen.getByText('Maybe later'));
-
-    await waitFor(() => {
-      expect(screen.queryByText('Enjoying Pulse?')).not.toBeInTheDocument();
-    });
-
-    // Should snooze for 7 days from today
-    expect(localStorage.getItem(SNOOZED_KEY)).toBe('2026-03-12');
-
-    // Should NOT permanently dismiss
-    expect(localStorage.getItem(DISMISSED_KEY)).not.toBe('true');
+  it('uses runtime state and remains a non-blocking app-shell prompt', () => {
+    expect(gitHubStarBannerSource).toContain('useWebSocket');
+    expect(gitHubStarBannerSource).toContain('initialDataReceived');
+    expect(gitHubStarBannerSource).not.toContain('useResources');
+    expect(gitHubStarBannerSource).not.toContain('<Dialog');
+    expect(gitHubStarBannerSource).toContain('dialogStackHasBlockingDialog');
+    expect(gitHubStarBannerSource).toContain('reserveLowPriorityNoticeSession');
+    expect(gitHubStarBannerSource).toContain('aria-live="polite"');
+    expect(gitHubStarBannerSource).toContain('z-30');
   });
 
-  it('snoozes on Escape without registering as a blocking dialog', async () => {
-    vi.setSystemTime(new Date('2026-03-05T12:00:00Z'));
-    localStorage.setItem(FIRST_SEEN_KEY, '2026-03-01');
-    setResourceCount(3);
-
-    expect(dialogStackHasBlockingDialog()).toBe(false);
-    await renderBanner();
-
-    await waitFor(() => {
-      expect(screen.getByText('Enjoying Pulse?')).toBeInTheDocument();
-    });
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-    expect(dialogStackHasBlockingDialog()).toBe(false);
-
-    fireEvent.keyDown(document, { key: 'Escape' });
-
-    await waitFor(() => {
-      expect(screen.queryByText('Enjoying Pulse?')).not.toBeInTheDocument();
-    });
-    expect(dialogStackHasBlockingDialog()).toBe(false);
-    expect(localStorage.getItem(SNOOZED_KEY)).toBe('2026-03-12');
-    expect(localStorage.getItem(DISMISSED_KEY)).not.toBe('true');
-  });
-
-  /* ---------- Edge cases ---------- */
-
-  it('renders on the exact snooze expiry date (snooze date == today)', async () => {
-    vi.setSystemTime(new Date('2026-03-10T12:00:00Z'));
-    localStorage.setItem(FIRST_SEEN_KEY, '2026-03-01');
-    localStorage.setItem(SNOOZED_KEY, '2026-03-10'); // today === snooze date, so today < snooze is false
-    setResourceCount(3);
-
-    await renderBanner();
-
-    await waitFor(() => {
-      expect(screen.getByText('Enjoying Pulse?')).toBeInTheDocument();
-    });
-  });
-
-  it('does not write first-seen date when there are no resources', async () => {
-    vi.setSystemTime(new Date('2026-03-01T12:00:00Z'));
-    wsState.resources = [];
-
-    await renderBanner();
-
-    // The localStorage signal initializes with '' and syncs it, but the
-    // component never sets it to a real date when there are no resources.
-    const stored = localStorage.getItem(FIRST_SEEN_KEY);
-    expect(stored === null || stored === '').toBe(true);
-  });
-
-  it('stays dismissed across re-renders after clicking X', async () => {
-    vi.setSystemTime(new Date('2026-03-05T12:00:00Z'));
-    localStorage.setItem(FIRST_SEEN_KEY, '2026-03-01');
-    setResourceCount(3);
-
-    await renderBanner();
-
-    await waitFor(() => {
-      expect(screen.getByText('Enjoying Pulse?')).toBeInTheDocument();
-    });
-
-    fireEvent.click(screen.getByLabelText("Close and don't show again"));
-
-    await waitFor(() => {
-      expect(screen.queryByText('Enjoying Pulse?')).not.toBeInTheDocument();
-    });
-
-    // Verify localStorage has dismissed flag persisted
-    expect(localStorage.getItem(DISMISSED_KEY)).toBe('true');
-
-    // Clean up and re-render — should stay hidden due to persisted dismissal
-    cleanup();
-    await renderBanner();
-
-    await waitFor(() => {
-      expect(screen.queryByText('Enjoying Pulse?')).not.toBeInTheDocument();
-    });
+  it('routes prompt actions through shared Button primitives', () => {
+    expect(gitHubStarBannerSource).toContain('@/components/shared/Button');
+    expect(gitHubStarBannerSource).toContain('<ActionIconButton');
+    expect(gitHubStarBannerSource).toContain('<Button');
+    expect(gitHubStarBannerSource).not.toContain(LOCAL_DISMISS_BUTTON_CLASS);
+    expect(gitHubStarBannerSource).not.toContain(LOCAL_PRIMARY_BUTTON_CLASS);
   });
 });
 
@@ -367,8 +199,6 @@ describe('GitHubStarBanner mobile navigation clearance', () => {
   });
 
   it('does not keep its own copy of the bar height', () => {
-    // This banner was one of five sites hardcoding 5rem for a bar that
-    // measures ~45px. The bar publishes its measured height instead.
     expect(gitHubStarBannerSource).not.toMatch(/5rem\s*\+\s*env\(safe-area-inset-bottom/);
   });
 

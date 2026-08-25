@@ -1,16 +1,20 @@
-import { Show, createSignal, createEffect, onCleanup } from 'solid-js';
+import { Show, createSignal, createEffect } from 'solid-js';
 import {
   createLocalStorageBooleanSignal,
+  createLocalStorageNumberSignal,
   createLocalStorageStringSignal,
+  reserveLowPriorityNoticeSession,
   STORAGE_KEYS,
 } from '@/utils/localStorage';
 import { useWebSocket } from '@/contexts/appRuntime';
 import { ActionIconButton, Button } from '@/components/shared/Button';
+import { dialogStackHasBlockingDialog } from '@/components/shared/useDialogState';
 import GithubIcon from 'lucide-solid/icons/github';
 import StarIcon from 'lucide-solid/icons/star';
 import XIcon from 'lucide-solid/icons/x';
 
 const GITHUB_REPO_URL = 'https://github.com/rcourtman/Pulse';
+const ACTIVE_DAYS_BEFORE_PROMPT = 14;
 
 function getTodayDateString(): string {
   return new Date().toISOString().split('T')[0]; // YYYY-MM-DD
@@ -19,127 +23,111 @@ function getTodayDateString(): string {
 export function GitHubStarBanner() {
   const { initialDataReceived, state } = useWebSocket();
 
-  // Track if user has dismissed the modal (permanent)
+  // Closing the prompt is permanent; this is gratitude, not a workflow.
   const [dismissed, setDismissed] = createLocalStorageBooleanSignal(
     STORAGE_KEYS.GITHUB_STAR_DISMISSED,
     false,
   );
 
-  // Track the first date user had infrastructure connected
-  const [firstSeenDate, setFirstSeenDate] = createLocalStorageStringSignal(
-    STORAGE_KEYS.GITHUB_STAR_FIRST_SEEN,
+  // A rendered prompt counts as its single lifetime appearance even if the
+  // browser closes before the user chooses an action.
+  const [promptShown, setPromptShown] = createLocalStorageBooleanSignal(
+    STORAGE_KEYS.GITHUB_STAR_PROMPT_SHOWN,
+    false,
+  );
+
+  const [activeDays, setActiveDays] = createLocalStorageNumberSignal(
+    STORAGE_KEYS.GITHUB_STAR_ACTIVE_DAYS,
+    0,
+  );
+
+  const [lastActiveDate, setLastActiveDate] = createLocalStorageStringSignal(
+    STORAGE_KEYS.GITHUB_STAR_LAST_ACTIVE_DATE,
     '',
   );
 
-  // Track snooze date (when "Maybe later" was clicked, don't show again until this date)
-  const [snoozedUntil, setSnoozedUntil] = createLocalStorageStringSignal(
-    STORAGE_KEYS.GITHUB_STAR_SNOOZED_UNTIL,
-    '',
-  );
+  const [showPrompt, setShowPrompt] = createSignal(false);
+  let blockedByDialogThisSession = false;
 
-  const [showModal, setShowModal] = createSignal(false);
-
-  // Check if user qualifies to see the modal
+  // Count distinct days with connected infrastructure, then offer one quiet
+  // prompt only when the rest of the app shell has yielded the session.
   createEffect(() => {
-    // Already dismissed? Don't show
     if (dismissed()) {
-      setShowModal(false);
+      setShowPrompt(false);
       return;
     }
+
+    if (promptShown()) return;
+
+    if (dialogStackHasBlockingDialog()) {
+      blockedByDialogThisSession = true;
+      setShowPrompt(false);
+      return;
+    }
+
+    if (blockedByDialogThisSession) return;
 
     if (!initialDataReceived()) {
-      setShowModal(false);
+      setShowPrompt(false);
       return;
     }
 
-    // Check if user has connected infrastructure
     const hasInfrastructure = (state.resources || []).length > 0;
 
     if (!hasInfrastructure) {
-      setShowModal(false);
+      setShowPrompt(false);
       return;
     }
 
     const today = getTodayDateString();
-    const firstSeen = firstSeenDate();
-
-    // First time seeing infrastructure? Record the date, don't show yet
-    if (!firstSeen) {
-      setFirstSeenDate(today);
-      setShowModal(false);
+    if (lastActiveDate() !== today) {
+      setLastActiveDate(today);
+      setActiveDays(Math.min(activeDays() + 1, ACTIVE_DAYS_BEFORE_PROMPT));
       return;
     }
 
-    // Still within snooze period? Don't show
-    const snoozeDate = snoozedUntil();
-    if (snoozeDate && today < snoozeDate) {
-      setShowModal(false);
-      return;
-    }
+    if (activeDays() < ACTIVE_DAYS_BEFORE_PROMPT) return;
+    if (!reserveLowPriorityNoticeSession('github-star')) return;
 
-    // Returning user (different day than first seen)? Show the modal
-    if (firstSeen !== today) {
-      setShowModal(true);
-    }
+    setShowPrompt(true);
+    setPromptShown(true);
   });
 
   const handleDismiss = () => {
     setDismissed(true);
-    setShowModal(false);
+    setShowPrompt(false);
   };
 
   const handleStarClick = () => {
     window.open(GITHUB_REPO_URL, '_blank', 'noopener,noreferrer');
     // Auto-dismiss - trust that they starred
     setDismissed(true);
-    setShowModal(false);
+    setShowPrompt(false);
   };
-
-  const handleMaybeLater = () => {
-    // Snooze for 7 days before showing again
-    const snoozeDate = new Date();
-    snoozeDate.setDate(snoozeDate.getDate() + 7);
-    setSnoozedUntil(snoozeDate.toISOString().split('T')[0]);
-    setShowModal(false);
-  };
-
-  createEffect(() => {
-    if (!showModal()) return;
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return;
-      handleMaybeLater();
-    };
-    document.addEventListener('keydown', handleKeyDown);
-    onCleanup(() => document.removeEventListener('keydown', handleKeyDown));
-  });
 
   return (
-    <Show when={showModal()}>
+    <Show when={showPrompt()}>
       <section
-        class="fixed left-4 right-20 bottom-[var(--pulse-mobile-nav-height)] z-30 max-w-md overflow-hidden rounded-lg border border-border bg-surface text-base-content shadow-xl md:right-auto md:bottom-4"
+        class="fixed left-4 right-20 bottom-[var(--pulse-mobile-nav-height)] z-30 max-w-sm overflow-hidden rounded-lg border border-border bg-surface text-base-content shadow-lg md:right-auto md:bottom-4"
         aria-labelledby="github-star-title"
         aria-live="polite"
       >
-        <div class="flex items-start gap-3 p-4">
+        <div class="flex items-start gap-3 p-3">
           <div
-            class="relative mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-surface-hover"
+            class="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface-hover"
             aria-hidden="true"
           >
-            <GithubIcon class="h-5 w-5 text-base-content" />
-            <div class="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-yellow-400 shadow-sm">
-              <StarIcon class="h-3 w-3 text-yellow-800" />
-            </div>
+            <GithubIcon class="h-4 w-4 text-base-content" />
           </div>
 
           <div class="min-w-0 flex-1">
             <div class="flex items-start gap-2">
               <div class="min-w-0 flex-1">
                 <h2 id="github-star-title" class="text-sm font-semibold text-base-content">
-                  Enjoying Pulse?
+                  Finding Pulse useful?
                 </h2>
                 <p class="mt-1 text-xs leading-5 text-muted">
-                  Pulse is built and maintained by an independent developer. If it's been useful for
-                  monitoring your infrastructure, a GitHub star helps more than you'd think.
+                  Starring the project on GitHub helps others discover it.
                 </p>
               </div>
               <ActionIconButton
@@ -153,7 +141,7 @@ export function GitHubStarBanner() {
                 <XIcon class="h-4 w-4" aria-hidden="true" />
               </ActionIconButton>
             </div>
-            <div class="mt-3 flex flex-wrap gap-2">
+            <div class="mt-2 flex flex-wrap gap-2">
               <Button
                 onClick={handleStarClick}
                 variant="primary"
@@ -163,9 +151,6 @@ export function GitHubStarBanner() {
               >
                 <StarIcon class="h-4 w-4" aria-hidden="true" />
                 Star on GitHub
-              </Button>
-              <Button onClick={handleMaybeLater} variant="ghost" size="mdCompact" type="button">
-                Maybe later
               </Button>
             </div>
           </div>

@@ -1080,6 +1080,9 @@ not a replacement status card, CTA band, or page-local nested card.
    recurring snooze behavior. It must yield the browser session to an existing
    release, disclosure, or other low-priority app-shell notice and suppress
    itself for the remainder of a session that presents a blocking dialog.
+   Low-priority app-shell consumers must coordinate through
+   `reserveLowPriorityNoticeSession` rather than restoring component-local
+   cooldowns that can produce consecutive prompts.
    Settings selection helpers such as `ResourcePicker` must use the same
    `Button` primitive for select-all, clear, and chip remove actions instead of
    restoring footer-local action shells.
@@ -4994,7 +4997,8 @@ Clipboard API fallback path and only report copied state after the shared copy
 path succeeds.
 The running published version must keep a direct `Current release notes` link
 in this settings shell so suppressing or dismissing the one-time post-update
-notice never makes the changelog undiscoverable.
+notice never makes the changelog undiscoverable. Development and source-build
+identities must not render that link as if they named a published release.
 
 The update verdict is honest about its age. The frontend serves the update
 verdict from a 24-hour localStorage cache, so the panel's "Up to date" state

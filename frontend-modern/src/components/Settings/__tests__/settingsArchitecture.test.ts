@@ -1435,6 +1435,15 @@ describe('settings architecture guardrails', () => {
     );
   });
 
+  it('keeps published release notes discoverable from the current-version card', () => {
+    expect(updatesSettingsPanelSource).toContain('Current release notes');
+    expect(updatesSettingsPanelSource).toContain('buildReleaseNotesUrl');
+    expect(updatesSettingsPanelSource).toContain('isReleaseVersion');
+    expect(updatesSettingsPanelSource).toContain('!props.versionInfo()?.isDevelopment');
+    expect(updatesSettingsPanelSource).toContain('!props.versionInfo()?.isSourceBuild');
+    expect(updatesSettingsPanelSource).toContain('variant="compactAction"');
+  });
+
   it('keeps the update verdict honest about the age of the check behind it', () => {
     // The displayed verdict can come from the 24h localStorage cache, so the
     // Up to date state must carry the age of the check it came from through

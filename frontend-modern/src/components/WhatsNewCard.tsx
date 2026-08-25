@@ -1,10 +1,11 @@
 import { Show, createEffect, createSignal } from 'solid-js';
 import { useNavigate } from '@solidjs/router';
+import CheckCircleIcon from 'lucide-solid/icons/check-circle';
 import InfoIcon from 'lucide-solid/icons/info';
 import XIcon from 'lucide-solid/icons/x';
 import { updateStore } from '@/stores/updates';
 import { UpdatesAPI } from '@/api/updates';
-import { STORAGE_KEYS } from '@/utils/localStorage';
+import { reserveLowPriorityNoticeSession, STORAGE_KEYS } from '@/utils/localStorage';
 import { ActionIconButton, Button } from '@/components/shared/Button';
 import { Dialog } from '@/components/shared/Dialog';
 import { ExternalTextLink } from '@/components/shared/ExternalTextLink';
@@ -55,10 +56,11 @@ const markTelemetryPayloadNoticeSeen = () => {
 };
 
 /**
- * Post-update "What's New" dialog. Shows once after the running version
- * changes, and only when that release has categorized user-facing changelog
- * entries in its GitHub release notes. Dismissing (or a release without those
- * entries) records the version so the dialog stays quiet until the next update.
+ * Post-update "What's New" notice. A compact non-blocking notice appears once
+ * after the running version changes and only when that release has categorized
+ * user-facing changelog entries. The detailed dialog opens only after an
+ * explicit action. Preparing the notice (or finding no categorized entries)
+ * records the version so reloads stay quiet until the next update.
  *
  * This release communication boundary also owns the one-time, non-blocking
  * telemetry schema v2 notice. Existing installations see it once; fresh
@@ -66,15 +68,22 @@ const markTelemetryPayloadNoticeSeen = () => {
  */
 export function WhatsNewCard() {
   const navigate = useNavigate();
-  const [visible, setVisible] = createSignal(false);
+  const [noticeVisible, setNoticeVisible] = createSignal(false);
+  const [dialogVisible, setDialogVisible] = createSignal(false);
   const [telemetryNoticeVisible, setTelemetryNoticeVisible] = createSignal(false);
   const [version, setVersion] = createSignal('');
   const [changelogHtml, setChangelogHtml] = createSignal('');
   const hadPriorReleaseBaseline = readLastSeenVersion() !== null;
+  const telemetryNoticeAlreadySeen =
+    readTelemetryPayloadNoticeVersion() === TELEMETRY_PAYLOAD_NOTICE_VERSION;
+  const telemetryNoticeNeedsSession = hadPriorReleaseBaseline && !telemetryNoticeAlreadySeen;
+  if (telemetryNoticeNeedsSession) {
+    reserveLowPriorityNoticeSession('telemetry-update');
+  }
   let checked = false;
   let telemetryNoticeChecked = false;
 
-  const loadNotes = async (currentVersion: string) => {
+  const loadNotes = async (currentVersion: string, noticeSlotReserved: boolean) => {
     try {
       const notes = await UpdatesAPI.getReleaseNotes();
       // Mid-update the backend can briefly disagree with the UI about the
@@ -89,7 +98,12 @@ export function WhatsNewCard() {
       }
       setChangelogHtml(renderMarkdown(changelog));
       setVersion(currentVersion);
-      setVisible(true);
+      // The compact notice is the only automatic release UI. Record the
+      // version immediately so reloads cannot turn it into a recurring prompt.
+      markVersionSeen(currentVersion);
+      if (noticeSlotReserved) {
+        setNoticeVisible(true);
+      }
     } catch (error) {
       if ((error as { status?: number }).status === 404) {
         // No published release for this build — stop asking.
@@ -124,7 +138,8 @@ export function WhatsNewCard() {
       return;
     }
 
-    void loadNotes(currentVersion);
+    const noticeSlotReserved = reserveLowPriorityNoticeSession('release-update');
+    void loadNotes(currentVersion, noticeSlotReserved);
   });
 
   createEffect(() => {
@@ -149,10 +164,17 @@ export function WhatsNewCard() {
     setTelemetryNoticeVisible(true);
   });
 
-  // Any close path (button, backdrop, Escape) counts as seen.
-  const dismiss = () => {
-    markVersionSeen(version());
-    setVisible(false);
+  const dismissNotice = () => {
+    setNoticeVisible(false);
+  };
+
+  const openChangelog = () => {
+    setNoticeVisible(false);
+    setDialogVisible(true);
+  };
+
+  const dismissChangelog = () => {
+    setDialogVisible(false);
   };
 
   const dismissTelemetryNotice = () => {
@@ -212,10 +234,32 @@ export function WhatsNewCard() {
         </InlineNotice>
       </Show>
 
-      <Show when={visible()}>
+      <Show when={noticeVisible()}>
+        <aside
+          class="fixed bottom-[var(--pulse-mobile-nav-height)] left-4 right-4 z-30 max-w-sm md:right-auto md:bottom-4"
+          aria-live="polite"
+          data-testid="whats-new-notice"
+        >
+          <InlineNotice
+            tone="success"
+            icon={<CheckCircleIcon class="h-4 w-4" aria-hidden="true" />}
+            actionLabel="See what's new"
+            actionOnClick={openChangelog}
+            actionAriaLabel={`See what's new in Pulse ${version()}`}
+            onDismiss={dismissNotice}
+            dismissLabel="Dismiss update notice"
+            dismissTitle="Dismiss"
+            class="shadow-lg"
+          >
+            <span class="font-semibold">Pulse updated to v{version()}</span>
+          </InlineNotice>
+        </aside>
+      </Show>
+
+      <Show when={dialogVisible()}>
         <Dialog
-          isOpen={visible()}
-          onClose={dismiss}
+          isOpen={dialogVisible()}
+          onClose={dismissChangelog}
           panelClass="max-w-xl"
           ariaLabelledBy="whats-new-title"
         >
@@ -250,7 +294,7 @@ export function WhatsNewCard() {
                   </div>
                 </div>
                 <ActionIconButton
-                  onClick={dismiss}
+                  onClick={dismissChangelog}
                   label="Dismiss what's new"
                   title="Close"
                   tone="muted"
@@ -276,7 +320,7 @@ export function WhatsNewCard() {
               >
                 Full release notes →
               </ExternalTextLink>
-              <Button onClick={dismiss} variant="primary" size="md" type="button">
+              <Button onClick={dismissChangelog} variant="primary" size="md" type="button">
                 Got it
               </Button>
             </div>

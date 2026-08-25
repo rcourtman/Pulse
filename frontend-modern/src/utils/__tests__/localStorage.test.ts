@@ -4,6 +4,8 @@ import {
   createLocalStorageBooleanSignal,
   createLocalStorageNumberSignal,
   createLocalStorageStringSignal,
+  reserveLowPriorityNoticeSession,
+  SESSION_STORAGE_KEYS,
   STORAGE_KEYS,
 } from '@/utils/localStorage';
 
@@ -62,6 +64,7 @@ function dispatchStorageEvent(key: string, newValue: string | null, storageArea:
 describe('localStorage signals', () => {
   beforeEach(() => {
     localStorage.clear();
+    sessionStorage.clear();
   });
 
   afterEach(() => {
@@ -83,7 +86,23 @@ describe('localStorage signals', () => {
     it('exposes a broad set of keys across feature areas', () => {
       expect(Object.keys(STORAGE_KEYS).length).toBeGreaterThan(40);
       expect(STORAGE_KEYS.WORKLOADS_SEARCH_HISTORY).toBe('workloadsSearchHistory');
-      expect(STORAGE_KEYS.GITHUB_STAR_SNOOZED_UNTIL).toBe('pulse-github-star-snoozed-until');
+      expect(STORAGE_KEYS.GITHUB_STAR_ACTIVE_DAYS).toBe('pulse-github-star-active-days');
+      expect(STORAGE_KEYS.GITHUB_STAR_PROMPT_SHOWN).toBe('pulse-github-star-prompt-shown');
+    });
+  });
+
+  describe('low-priority notice sessions', () => {
+    it('allows one owner to reserve and reuse the session notice slot', () => {
+      expect(reserveLowPriorityNoticeSession('release-update')).toBe(true);
+      expect(reserveLowPriorityNoticeSession('release-update')).toBe(true);
+      expect(sessionStorage.getItem(SESSION_STORAGE_KEYS.LOW_PRIORITY_NOTICE_OWNER)).toBe(
+        'release-update',
+      );
+    });
+
+    it('rejects a second low-priority notice owner in the same session', () => {
+      expect(reserveLowPriorityNoticeSession('telemetry-update')).toBe(true);
+      expect(reserveLowPriorityNoticeSession('github-star')).toBe(false);
     });
   });
 

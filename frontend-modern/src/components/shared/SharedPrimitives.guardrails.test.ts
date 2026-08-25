@@ -5130,6 +5130,11 @@ describe('shared primitive guardrails', () => {
     expect(gitHubStarBannerSource).toContain('@/components/shared/Button');
     expect(gitHubStarBannerSource).toContain('<ActionIconButton');
     expect(gitHubStarBannerSource).toContain('<Button');
+    expect(gitHubStarBannerSource).toContain('const ACTIVE_DAYS_BEFORE_PROMPT = 14;');
+    expect(gitHubStarBannerSource).toContain("reserveLowPriorityNoticeSession('github-star')");
+    expect(gitHubStarBannerSource).toContain('GITHUB_STAR_PROMPT_SHOWN');
+    expect(gitHubStarBannerSource).not.toContain('Maybe later');
+    expect(gitHubStarBannerSource).not.toContain('GITHUB_STAR_SNOOZED_UNTIL');
     expect(gitHubStarBannerSource).not.toContain(
       'inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted transition-colors hover:bg-surface-hover hover:text-base-content',
     );
