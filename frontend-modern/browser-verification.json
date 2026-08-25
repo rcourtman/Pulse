@@ -1,30 +1,23 @@
 {
   "version": 1,
-  "base_sha": "f5eb87437a396048959a851584d3104326e0d671",
-  "verified_at": "2026-08-25T16:41:20Z",
+  "base_sha": "389ff2825e5228a9113921cd2e3ca6c1d2118962",
+  "verified_at": "2026-08-25T16:54:23Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Infrastructure/ResourceOperatorStateSection.tsx",
-    "frontend-modern/src/components/Workloads/StackedMemoryBar.tsx",
-    "frontend-modern/src/components/shared/InlineDetailTableRow.tsx",
-    "frontend-modern/src/components/shared/Subtabs.tsx",
-    "frontend-modern/src/features/platformPage/PlatformWindowedRows.tsx"
+    "frontend-modern/src/hooks/useTooltip.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Infrastructure/ResourceOperatorStateSection.tsx": "1a01f6e6c8db585c32b37afae33ed7b6671dc76e40e8f49c364ee78659e8a961",
-    "frontend-modern/src/components/Workloads/StackedMemoryBar.tsx": "3266fa75221643199d41b7a87f8e07181e643171c744ac0e32e2ac9c6773e3bf",
-    "frontend-modern/src/components/shared/InlineDetailTableRow.tsx": "0e169eb088c0bb0754dda5936b52baecc102f1a50853263517d76931729a1673",
-    "frontend-modern/src/components/shared/Subtabs.tsx": "5106f14ec387c72bd2d3014200678f342e28b04d5ff372aa95410695fe0dc544",
-    "frontend-modern/src/features/platformPage/PlatformWindowedRows.tsx": "3f5d02c126379a44803bea3efcc803965d872eb188ec7e0305c973a82fa80924"
+    "frontend-modern/src/hooks/useTooltip.ts": "5cd07282857599694979567df14cbfdb54f853b73f6d5d17b29ab1fffcc51c17"
   },
   "routes": [
+    "/docker/overview",
     "/truenas/overview",
-    "/kubernetes/overview"
+    "/vmware/overview"
   ],
   "viewports": [
     {
       "width": 1280,
-      "height": 720
+      "height": 800
     },
     {
       "width": 390,
@@ -32,16 +25,15 @@
     }
   ],
   "states": [
-    "TrueNAS system summary with memory-capacity label scrim",
-    "TrueNAS system drawer Manage tab at desktop width",
-    "TrueNAS system drawer Manage tab at phone width",
-    "Kubernetes cluster drawer with five-tab overflow rail before and after scrolling"
+    "Docker host table before expansion with metric hover targets",
+    "Docker auth-service-01 host drawer open without a lingering metric tooltip",
+    "TrueNAS truenas-main system drawer open at phone width",
+    "vSphere etl-batch-01 workload drawer open at phone width"
   ],
   "interactions": [
-    "opened the TrueNAS system inline drawer and selected Manage",
-    "verified Manage remained selected through repeated realtime refresh samples and after the final main rebase",
-    "inspected wrapped operator-policy help text and the stacked phone maintenance action",
-    "opened a Kubernetes cluster inline drawer at 390px and used its right-edge tab scroll control",
-    "verified the left-edge control appeared after scrolling and restored the default viewport"
+    "activated the auth-service-01 metric-heavy row at 390px and verified the memory and CPU tooltip portals dismissed before the drawer reflow",
+    "repeated the auth-service-01 row activation at desktop width and verified the drawer remained unobscured with no lingering metric tooltip",
+    "opened TrueNAS and vSphere specialized drawers at 390px and inspected placement, clipping, stacking, scrolling, and tab usability",
+    "restored the browser viewport after responsive verification"
   ]
 }

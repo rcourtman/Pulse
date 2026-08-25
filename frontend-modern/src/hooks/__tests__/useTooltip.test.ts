@@ -41,6 +41,49 @@ describe('useTooltip', () => {
     });
   });
 
+  it('dismisses an active hover tooltip when the pointer activates the page', () => {
+    createRoot((dispose) => {
+      const tip = useTooltip();
+      tip.onMouseEnter({
+        clientX: 120,
+        clientY: 80,
+        currentTarget: {
+          ownerDocument: document,
+          getBoundingClientRect: () => ({ left: 10, top: 20, width: 40, height: 16 }),
+        },
+      } as unknown as MouseEvent);
+
+      expect(tip.show()).toBe(true);
+      document.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+      expect(tip.show()).toBe(false);
+      dispose();
+    });
+  });
+
+  it('re-arms pointer dismissal after a subsequent hover', () => {
+    createRoot((dispose) => {
+      const tip = useTooltip();
+      const enter = () =>
+        tip.onMouseEnter({
+          clientX: 120,
+          clientY: 80,
+          currentTarget: {
+            ownerDocument: document,
+            getBoundingClientRect: () => ({ left: 10, top: 20, width: 40, height: 16 }),
+          },
+        } as unknown as MouseEvent);
+
+      enter();
+      document.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+      enter();
+      expect(tip.show()).toBe(true);
+
+      document.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+      expect(tip.show()).toBe(false);
+      dispose();
+    });
+  });
+
   it('ignores synthesized mouse hover on a coarse touch pointer', () => {
     vi.stubGlobal(
       'matchMedia',

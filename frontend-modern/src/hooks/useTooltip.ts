@@ -1,4 +1,4 @@
-import { createSignal } from 'solid-js';
+import { createSignal, onCleanup } from 'solid-js';
 
 import { supportsHoverTooltips } from '@/components/shared/hoverCapability';
 
@@ -24,22 +24,47 @@ export interface TooltipPos {
 export function useTooltip() {
   const [show, setShow] = createSignal(false);
   const [pos, setPos] = createSignal<TooltipPos>({ x: 0, y: 0 });
+  let pointerDismissDocument: Document | undefined;
+
+  const disarmPointerDismissal = () => {
+    pointerDismissDocument?.removeEventListener('pointerdown', dismissTooltip, true);
+    pointerDismissDocument = undefined;
+  };
+
+  const dismissTooltip = () => {
+    setShow(false);
+    disarmPointerDismissal();
+  };
+
+  const armPointerDismissal = (ownerDocument?: Document) => {
+    disarmPointerDismissal();
+    pointerDismissDocument =
+      ownerDocument ?? (typeof document === 'undefined' ? undefined : document);
+    pointerDismissDocument?.addEventListener('pointerdown', dismissTooltip, {
+      capture: true,
+      once: true,
+    });
+  };
 
   const onMouseEnter = (e: MouseEvent) => {
     if (!supportsHoverTooltips()) {
-      setShow(false);
+      dismissTooltip();
       return;
     }
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const currentTarget = e.currentTarget as HTMLElement;
+    const rect = currentTarget.getBoundingClientRect();
     const hasPointerPosition = Number.isFinite(e.clientX) && Number.isFinite(e.clientY);
     setPos({
       x: hasPointerPosition ? e.clientX : rect.left + rect.width / 2,
       y: hasPointerPosition ? e.clientY : rect.top,
     });
     setShow(true);
+    armPointerDismissal(currentTarget.ownerDocument);
   };
 
-  const onMouseLeave = () => setShow(false);
+  const onMouseLeave = dismissTooltip;
+
+  onCleanup(disarmPointerDismissal);
 
   return { show, setShow, pos, onMouseEnter, onMouseLeave } as const;
 }
