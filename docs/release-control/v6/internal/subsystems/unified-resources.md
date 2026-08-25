@@ -4367,6 +4367,11 @@ Canonical metrics targets must also trim source-owned target IDs before they
 become query coordinates. The same resource must not query different history
 series just because one ingest path emitted `" host-1 "` and another emitted
 `"host-1"`.
+Proxmox node metrics targets retain the canonical `node` resource type when the
+node is API-only; compatibility normalization must not rewrite that target to
+`agent`. A node with an explicit linked-agent target may still use the `agent`
+series, so the selected target continues to describe the source that actually
+owns the chart data.
 If the canonicalized target ID is empty after that normalization, the metrics
 target must fail closed to `nil` instead of emitting an empty query coordinate.
 Kubernetes pod metrics targets must also canonicalize onto the shared

@@ -1578,11 +1578,12 @@ describe('Workloads performance contract', () => {
       expect(guestDrawerHistorySource).not.toContain('relative h-24');
       expect(nodeDrawerSource).toContain('NodeDrawerOverview');
       expect(nodeDrawerSource).toContain('GuestDrawerHistoryRangeSelect');
-      expect(nodeDrawerSource).toContain('NODE_DRAWER_HISTORY_GROUPS');
+      expect(nodeDrawerSource).toContain('getNodeDrawerHistoryGroups');
       expect(nodeDrawerOverviewSource).toContain('Hardware');
       expect(nodeDrawerOverviewSource).toContain('Telemetry');
       expect(nodeDrawerOverviewSource).toContain('Thermals');
       expect(nodeDrawerModelSource).toContain('HOST_METRICS_HISTORY_GROUPS');
+      expect(nodeDrawerModelSource).toContain("group.id !== 'disk-io'");
       expect(nodeDrawerModelSource).not.toContain("id: 'thermals'");
       expect(workloadPanelSource).toContain('NodeDrawer');
       expect(workloadPanelSource).toContain('data-inline-node-detail-for');

@@ -109,7 +109,7 @@ describe('nodeDrawerModel (branch coverage 0713)', () => {
         name: 'whatever',
       });
       expect(getNodeDrawerHistoryTarget(node)).toStrictEqual({
-        resourceType: 'agent',
+        resourceType: 'node',
         resourceId: 'node-7',
       });
     });
@@ -137,17 +137,15 @@ describe('nodeDrawerModel (branch coverage 0713)', () => {
       });
     });
 
-    it('falls through an absent linkedAgentId and empty id to a prefixed name', () => {
-      // linkedAgentId is undefined (optional field) -> || arm 2 (id '') is falsy
-      // -> || arm 3 (name 'agent:host-9') -> stripAgentPrefix true arm -> 'host-9'.
+    it('falls through an absent linkedAgentId and empty id to the node name', () => {
       const node = makeNode({
         linkedAgentId: undefined,
         id: '',
         name: 'agent:host-9',
       });
       expect(getNodeDrawerHistoryTarget(node)).toStrictEqual({
-        resourceType: 'agent',
-        resourceId: 'host-9',
+        resourceType: 'node',
+        resourceId: 'agent:host-9',
       });
     });
   });

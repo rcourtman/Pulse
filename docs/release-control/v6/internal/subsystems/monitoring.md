@@ -1613,8 +1613,12 @@ Agent and node CPU temperature are part of that shared metrics-history family.
 temperature into both in-memory guest history and the persisted `agent`
 metrics-store stream, while `internal/monitoring/metrics_history.go` keeps
 `temperature` alongside CPU, memory, disk, and I/O for guest and node history
-reads. Mock history must seed the same metric so Proxmox node drawer thermals
-exercise the production contract instead of relying on a frontend-only fallback.
+reads. The PVE node polling path in
+`internal/monitoring/monitor_pve_storage.go` must likewise append the selected
+node CPU temperature to in-memory and persisted `node` history whenever a
+positive collected temperature is available. Mock history must seed the same
+metric so Proxmox node drawer thermals exercise the production contract instead
+of relying on a frontend-only fallback.
 Host-agent thermal pressure is not part of that Celsius history stream.
 `internal/monitoring/monitor_agents.go`, `internal/monitoring/monitor.go`, and
 the shared model conversion helpers must preserve `sensors.thermalState`

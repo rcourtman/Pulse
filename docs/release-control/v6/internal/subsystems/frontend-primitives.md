@@ -6385,7 +6385,12 @@ temperature history remains on the physical-disk resource rather than being
 mislabelled as host CPU temperature. Resources with typed GPU sensors extend
 the applicable host groups with core utilization, VRAM pressure, and GPU
 temperature series and provide current typed readings as initial fallbacks.
-Non-host workloads retain the default workload history groups unchanged.
+API-only Proxmox nodes select their canonical `node` metrics target and reuse a
+source-aware subset of that catalog: utilization, network, and thermals remain,
+while host disk throughput is omitted because the PVE node API does not expose
+that stream. The drawer must not leave an unsupported disk-I/O chart in a
+permanent `Collecting history` state. Non-host workloads retain the default
+workload history groups unchanged.
 Rendered table proof belongs in
 `frontend-modern/src/features/standalone/__tests__/AgentsMachinesTable.test.tsx`;
 drawer grouping and fallback proof belongs in

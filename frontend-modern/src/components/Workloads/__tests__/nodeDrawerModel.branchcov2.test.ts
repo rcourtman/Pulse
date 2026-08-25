@@ -2,7 +2,11 @@ import { describe, expect, it } from 'vitest';
 
 import type { Node, Temperature } from '@/types/api';
 
-import { getNodeDrawerCurrentMetrics, getNodeDrawerHistoryTarget } from '../nodeDrawerModel';
+import {
+  getNodeDrawerCurrentMetrics,
+  getNodeDrawerHistoryGroups,
+  getNodeDrawerHistoryTarget,
+} from '../nodeDrawerModel';
 
 const makeNode = (overrides: Partial<Node> = {}): Node => ({
   id: 'agent:pve-node-1',
@@ -73,16 +77,15 @@ describe('nodeDrawerModel (branch coverage 2)', () => {
       });
     });
 
-    it('falls back to id (stripping agent:) when linkedAgentId is empty', () => {
-      // || chain arm 2 (linkedAgentId '' falsy -> id) + stripAgentPrefix true arm.
+    it('uses the node identity directly when no agent is linked', () => {
       const node = makeNode({
         linkedAgentId: '',
-        id: 'agent:pve-node-1',
+        id: 'homelab-pve-node-1',
         name: 'pve-node-1',
       });
       expect(getNodeDrawerHistoryTarget(node)).toStrictEqual({
-        resourceType: 'agent',
-        resourceId: 'pve-node-1',
+        resourceType: 'node',
+        resourceId: 'homelab-pve-node-1',
       });
     });
 
@@ -94,21 +97,20 @@ describe('nodeDrawerModel (branch coverage 2)', () => {
         name: 'pve-node-1',
       });
       expect(getNodeDrawerHistoryTarget(node)).toStrictEqual({
-        resourceType: 'agent',
+        resourceType: 'node',
         resourceId: 'pve-node-1',
       });
     });
 
-    it('strips the agent: prefix from the name fallback', () => {
-      // || chain arm 3 (name) + stripAgentPrefix true arm.
+    it('preserves the node name fallback verbatim', () => {
       const node = makeNode({
         linkedAgentId: '',
         id: '',
         name: 'agent:pve-node-1',
       });
       expect(getNodeDrawerHistoryTarget(node)).toStrictEqual({
-        resourceType: 'agent',
-        resourceId: 'pve-node-1',
+        resourceType: 'node',
+        resourceId: 'agent:pve-node-1',
       });
     });
 
@@ -122,14 +124,16 @@ describe('nodeDrawerModel (branch coverage 2)', () => {
       expect(getNodeDrawerHistoryTarget(node)).toBeNull();
     });
 
-    it('returns null when the chosen value is whitespace-only (trim -> empty)', () => {
-      // '   ' is truthy -> chosen; .trim() -> '' -> !resourceId null.
+    it('ignores a whitespace-only linked agent id and uses the node id', () => {
       const node = makeNode({
         linkedAgentId: '   ',
         id: 'agent:ignored',
         name: 'ignored',
       });
-      expect(getNodeDrawerHistoryTarget(node)).toBeNull();
+      expect(getNodeDrawerHistoryTarget(node)).toStrictEqual({
+        resourceType: 'node',
+        resourceId: 'agent:ignored',
+      });
     });
 
     it('returns null when the chosen value is exactly "agent:" (strip -> empty)', () => {
@@ -163,9 +167,21 @@ describe('nodeDrawerModel (branch coverage 2)', () => {
         name: 'node-7',
       });
       expect(getNodeDrawerHistoryTarget(node)).toStrictEqual({
-        resourceType: 'agent',
-        resourceId: 'node-7',
+        resourceType: 'node',
+        resourceId: 'agent:node-7',
       });
+    });
+  });
+
+  describe('getNodeDrawerHistoryGroups', () => {
+    it('keeps disk throughput for agent-backed nodes', () => {
+      const groups = getNodeDrawerHistoryGroups(makeNode({ linkedAgentId: 'host-1' }));
+      expect(groups.map((group) => group.id)).toContain('disk-io');
+    });
+
+    it('omits unavailable host disk throughput for API-only nodes', () => {
+      const groups = getNodeDrawerHistoryGroups(makeNode({ linkedAgentId: '' }));
+      expect(groups.map((group) => group.id)).toStrictEqual(['utilization', 'network', 'thermals']);
     });
   });
 

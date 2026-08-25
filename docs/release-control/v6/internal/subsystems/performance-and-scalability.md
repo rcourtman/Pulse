@@ -1394,7 +1394,10 @@ only after a grouped node row is selected. Host-agent CPU temperature must be
 persisted into the same metrics-store history stream as other agent metrics,
 with current node temperature displayed only as a drawer-local current reading
 while history is still accumulating; it must not become a synthetic history
-point.
+point. API-only nodes must query the existing canonical `node` stream and omit
+the host disk-throughput group that their source cannot populate; selecting a
+node therefore remains one bounded all-metrics request rather than a per-series
+fallback fan-out.
 Standalone agent thermal pressure follows a compact table-and-drawer rule:
 platform tables may show a short pressure status such as `Nominal` or
 `Constrained` in the existing temperature cell when no positive Celsius reading

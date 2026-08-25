@@ -140,6 +140,7 @@ export interface StorageSummaryTrendResponse {
 // Persistent metrics history types (SQLite-backed, longer retention)
 export type HistoryTimeRange = '30m' | '1h' | '6h' | '12h' | '24h' | '7d' | '14d' | '30d' | '90d';
 type MetricsHistoryAPIResourceType =
+  | 'node'
   | 'vm'
   | 'system-container'
   | 'oci-container'
@@ -151,6 +152,7 @@ type MetricsHistoryAPIResourceType =
   | 'disk';
 
 export type ResourceType =
+  | 'node'
   | 'agent'
   | 'vm'
   | 'system-container'
@@ -162,7 +164,6 @@ export type ResourceType =
   | 'k8s-node'
   | 'k8s-deployment'
   | 'pod'
-  | 'agent'
   | 'disk';
 
 export interface MetricsHistoryParams {
@@ -190,6 +191,7 @@ export function toMetricsHistoryAPIResourceType(
 export function asMetricsHistoryResourceType(type: string): ResourceType | null {
   const normalizedType = type.trim().toLowerCase();
   const historyTypes: ResourceType[] = [
+    'node',
     'agent',
     'vm',
     'system-container',
@@ -209,7 +211,9 @@ export function asMetricsHistoryResourceType(type: string): ResourceType | null 
 }
 
 export function mapUnifiedTypeToHistoryResourceType(type: string): ResourceType | null {
-  const canonical = canonicalizeFrontendResourceType(type) || type.trim().toLowerCase();
+  const normalized = type.trim().toLowerCase();
+  if (normalized === 'node') return 'node';
+  const canonical = canonicalizeFrontendResourceType(type) || normalized;
   switch (canonical) {
     case 'agent':
       return 'agent';
@@ -241,9 +245,6 @@ export function canonicalizeMetricsHistoryTargetType(
   unifiedType?: string,
 ): ResourceType | null {
   const normalized = metricsType.trim().toLowerCase();
-  if (normalized === 'node') {
-    return 'agent';
-  }
   if (normalized === 'k8s') {
     switch (unifiedType) {
       case 'k8s-cluster':

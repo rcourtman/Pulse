@@ -140,20 +140,22 @@ describe('ChartsAPI', () => {
     expect(toMetricsHistoryAPIResourceType('k8s-node')).toBe('k8s');
     expect(toMetricsHistoryAPIResourceType('k8s-deployment')).toBe('k8s');
     expect(toMetricsHistoryAPIResourceType('pod')).toBe('k8s');
+    expect(toMetricsHistoryAPIResourceType('node')).toBe('node');
   });
 
   it('exposes shared metrics history resource type helpers', () => {
+    expect(asMetricsHistoryResourceType('node')).toBe('node');
     expect(asMetricsHistoryResourceType('agent')).toBe('agent');
     expect(asMetricsHistoryResourceType('disk')).toBe('disk');
     expect(asMetricsHistoryResourceType('host')).toBeNull();
 
     expect(mapUnifiedTypeToHistoryResourceType('truenas')).toBe('agent');
-    expect(mapUnifiedTypeToHistoryResourceType('node')).toBe('agent');
+    expect(mapUnifiedTypeToHistoryResourceType('node')).toBe('node');
     expect(mapUnifiedTypeToHistoryResourceType('k8s-deployment')).toBe('k8s-deployment');
     expect(mapUnifiedTypeToHistoryResourceType('pod')).toBe('pod');
     expect(mapUnifiedTypeToHistoryResourceType('container')).toBeNull();
 
-    expect(canonicalizeMetricsHistoryTargetType('node', 'agent')).toBe('agent');
+    expect(canonicalizeMetricsHistoryTargetType('node', 'agent')).toBe('node');
     expect(canonicalizeMetricsHistoryTargetType('k8s', 'k8s-node')).toBe('k8s-node');
     expect(canonicalizeMetricsHistoryTargetType('k8s', 'k8s-deployment')).toBe('k8s-deployment');
     expect(canonicalizeMetricsHistoryTargetType('k8s', 'pod')).toBe('pod');

@@ -34,6 +34,16 @@ describe('getResourceMetricsHistoryTarget branch coverage', () => {
     });
   });
 
+  it('preserves a canonical API-only Proxmox node target', () => {
+    const resource = baseResource({
+      metricsTarget: { resourceType: 'node', resourceId: 'pve1-node1' },
+    });
+    expect(getResourceMetricsHistoryTarget(resource)).toStrictEqual({
+      resourceType: 'node',
+      resourceId: 'pve1-node1',
+    });
+  });
+
   it('trims whitespace around metricsTarget fields before returning them', () => {
     // Drives asTrimmedString's "non-empty after trim -> return trimmed" arm for
     // both fields, then the TRUE arm of the `metricsType && metricsId` guard.

@@ -19,8 +19,8 @@ import { GuestDrawerHistory, GuestDrawerHistoryRangeSelect } from './GuestDrawer
 import { GUEST_DRAWER_HISTORY_DEFAULT_RANGE } from './guestDrawerModel';
 import { NodeDrawerOverview } from './NodeDrawerOverview';
 import {
-  NODE_DRAWER_HISTORY_GROUPS,
   getNodeDrawerCurrentMetrics,
+  getNodeDrawerHistoryGroups,
   getNodeDrawerHistoryTarget,
 } from './nodeDrawerModel';
 
@@ -51,6 +51,7 @@ export const NodeDrawer: Component<NodeDrawerProps> = (props) => {
   const headingId = () => `node-drawer-heading-${props.node.id}`;
   const displayName = createMemo(() => getNodeDisplayName(props.node));
   const historyTarget = createMemo(() => getNodeDrawerHistoryTarget(props.node));
+  const historyGroups = createMemo(() => getNodeDrawerHistoryGroups(props.node));
   const currentMetrics = createMemo(() => getNodeDrawerCurrentMetrics(props.node));
   const headerIndicator = createMemo(() => getSimpleStatusIndicator(props.node.status));
   const enabledDiscoveryTarget = createMemo(() =>
@@ -135,7 +136,7 @@ export const NodeDrawer: Component<NodeDrawerProps> = (props) => {
       <div class={activeTab() === 'history' ? '' : 'hidden'} style={{ 'overflow-anchor': 'none' }}>
         <GuestDrawerHistory
           currentMetrics={currentMetrics()}
-          groups={NODE_DRAWER_HISTORY_GROUPS}
+          groups={historyGroups()}
           range={historyRange()}
           target={historyTarget()}
         />

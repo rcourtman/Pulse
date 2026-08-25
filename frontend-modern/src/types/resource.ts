@@ -342,6 +342,7 @@ export interface ResourceChange {
 }
 
 export type MetricsHistoryTargetResourceType =
+  | 'node'
   | 'agent'
   | 'vm'
   | 'system-container'

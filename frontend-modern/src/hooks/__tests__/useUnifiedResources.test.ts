@@ -1759,7 +1759,7 @@ describe('useUnifiedResources', () => {
     dispose();
   });
 
-  it('normalizes legacy node metrics targets at the API load boundary', async () => {
+  it('preserves canonical node metrics targets at the API load boundary', async () => {
     apiFetchMock.mockResolvedValueOnce({
       ok: true,
       json: async () => ({
@@ -1784,7 +1784,7 @@ describe('useUnifiedResources', () => {
 
     await result!.refetch();
     expect(result!.resources()[0].metricsTarget).toEqual({
-      resourceType: 'agent',
+      resourceType: 'node',
       resourceId: 'pve-node-1',
     });
 

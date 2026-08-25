@@ -858,3 +858,30 @@ func TestNodeThresholdOverrideStoredUnderRegistryIDApplies(t *testing.T) {
 		t.Fatalf("alert threshold = %v, want 50", alert.Threshold)
 	}
 }
+
+func TestApplyStorageFallbackAndRecordNodeMetrics_PersistsTemperatureHistory(t *testing.T) {
+	monitor := &Monitor{
+		state:          models.NewState(),
+		metricsHistory: NewMetricsHistory(16, time.Hour),
+		alertManager:   alerts.NewManager(),
+	}
+	nodes := []models.Node{{
+		ID:       "pve1-node1",
+		Name:     "node1",
+		Instance: "pve1",
+		Status:   "online",
+		CPU:      0.25,
+		Temperature: &models.Temperature{
+			Available:  true,
+			CPUPackage: 61.5,
+			CPUMax:     64,
+		},
+	}}
+
+	monitor.applyStorageFallbackAndRecordNodeMetrics("pve1", nil, nodes, nil, nil)
+
+	points := monitor.metricsHistory.GetNodeMetrics("pve1-node1", "temperature", time.Hour)
+	if len(points) != 1 || points[0].Value != 64 {
+		t.Fatalf("temperature history = %+v, want one point at 64C", points)
+	}
+}

@@ -4541,7 +4541,10 @@ no wire delta: the persisted settings keys stay `alert_triggered_analysis`,
 operator label and the API field name are deliberately decoupled, so new copy
 must not rename the transport fields to chase the display string.
 The shared metrics-history API also treats `metric=temperature` as a canonical
-agent/node chart metric for Proxmox node drawers. `resourceType=agent` may serve
+agent/node chart metric for Proxmox node drawers. Agent-backed nodes request
+`resourceType=agent` with the linked agent identity; API-only nodes request
+`resourceType=node` with the canonical Proxmox node identity so node history is
+not routed through an agent compatibility alias. `resourceType=agent` may serve
 the current host-agent CPU package temperature as a live fallback when persisted
 history is still cold, while `resourceType=node` may serve the Proxmox node
 temperature fallback from the same `/api/metrics-store/history` response shape.

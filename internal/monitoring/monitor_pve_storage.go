@@ -206,6 +206,9 @@ func (m *Monitor) applyStorageFallbackAndRecordNodeMetrics(
 				m.metricsHistory.AddNodeMetric(modelNodes[i].ID, "memory", modelNodes[i].Memory.Usage, now)
 			}
 			m.metricsHistory.AddNodeMetric(modelNodes[i].ID, "disk", modelNodes[i].Disk.Usage, now)
+			if temperature := nodePrimaryTemperatureCelsius(modelNodes[i].Temperature); temperature != nil {
+				m.metricsHistory.AddNodeMetric(modelNodes[i].ID, "temperature", *temperature, now)
+			}
 			if nodeNetMetrics != nil {
 				if nodeNetMetrics.hasNetIn {
 					m.metricsHistory.AddNodeMetric(modelNodes[i].ID, "netin", nodeNetMetrics.netIn, now)
@@ -222,6 +225,9 @@ func (m *Monitor) applyStorageFallbackAndRecordNodeMetrics(
 					m.metricsStore.Write("node", modelNodes[i].ID, "memory", modelNodes[i].Memory.Usage, now)
 				}
 				m.metricsStore.Write("node", modelNodes[i].ID, "disk", modelNodes[i].Disk.Usage, now)
+				if temperature := nodePrimaryTemperatureCelsius(modelNodes[i].Temperature); temperature != nil {
+					m.metricsStore.Write("node", modelNodes[i].ID, "temperature", *temperature, now)
+				}
 				if nodeNetMetrics != nil {
 					if nodeNetMetrics.hasNetIn {
 						m.metricsStore.Write("node", modelNodes[i].ID, "netin", nodeNetMetrics.netIn, now)
