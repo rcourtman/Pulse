@@ -445,6 +445,25 @@ TLS-unverified receipts leave the claim at `implemented` or
      mandatory Authenticode unless another explicit, version-bound owner
      decision is recorded.
    - Windows artifacts remain bound by the exact release SHA, immutable
+   candidate manifest, SHA-256 checksums, detached `.sig` and `.sshsig`
+   signatures, and published-digest verification. Public notes must disclose
+   that the binaries are not Authenticode-signed and may display an Unknown
+   Publisher warning.
+16. Windows Authenticode unavailable policy from v6.3.2:
+   - On 2026-08-25, release run `32896554952` failed closed when the SignPath
+     production submission returned `Invalid request to SignPath API` before a
+     signing-request record was created. The release owner explicitly
+     directed stable releases from `v6.3.2` onward to skip Windows Authenticode
+     while production credentials and certificate authorization remain
+     unavailable. The dated decision record is
+     `docs/release-control/v6/internal/records/windows-authenticode-unavailable-owner-policy-2026-08-25.md`.
+   - This standing unavailable state remains active until the release owner
+     explicitly confirms that SignPath production credentials and certificate
+     authorization are ready. New stable versions must not require per-version
+     unsigned allowlist updates while this state is active. Restoring signing
+     requires an explicit policy/code change; credential arrival alone must not
+     silently change release behavior.
+   - Windows artifacts remain bound by the exact release SHA, immutable
      candidate manifest, SHA-256 checksums, detached `.sig` and `.sshsig`
      signatures, and published-digest verification. Public notes must disclose
      that the binaries are not Authenticode-signed and may display an Unknown

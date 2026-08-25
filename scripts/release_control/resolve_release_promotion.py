@@ -17,6 +17,13 @@ from repo_file_io import REPO_ROOT, git_env
 SEMVER_STABLE_RE = re.compile(r"^(\d+)\.(\d+)\.(\d+)$")
 SEMVER_STABLE_TAG_RE = re.compile(r"^v(\d+)\.(\d+)\.(\d+)$")
 SEMVER_PRERELEASE_RE = re.compile(r"-(?:[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)(?:\+[0-9A-Za-z.-]+)?$")
+WINDOWS_AUTHENTICODE_AVAILABLE = False
+WINDOWS_AUTHENTICODE_STANDING_UNSIGNED_MIN_VERSION = (6, 3, 2)
+WINDOWS_AUTHENTICODE_UNAVAILABLE_REASON = (
+    "SignPath production credentials and certificate authorization are unavailable; "
+    "the release owner approved unsigned Windows Unified Agent artifacts until availability "
+    "is explicitly restored."
+)
 
 ROUTINE_PATCH_RC_REQUIRED_RULES: tuple[tuple[str, tuple[str, ...]], ...] = (
     (
@@ -223,6 +230,7 @@ def resolve_metadata(
     release_notes_input: str,
     unsigned_windows_exception: bool = False,
     unsigned_windows_reason_input: str = "",
+    windows_authenticode_available: bool = WINDOWS_AUTHENTICODE_AVAILABLE,
     derive_rollback_when_missing: bool = False,
     list_stable_tags_fn: Callable[[], list[str]] = list_stable_tags,
     list_same_version_rc_tags_fn: Callable[[str], list[str]] = list_same_version_rc_tags,
@@ -243,14 +251,32 @@ def resolve_metadata(
     is_prerelease = is_prerelease_version(version)
     stable_patch = is_stable_patch_version(version)
     promotion_mode = "prerelease" if is_prerelease else "stable-rc-promotion"
+    stable_version_match = SEMVER_STABLE_RE.match(version)
+    stable_version = (
+        tuple(int(part) for part in stable_version_match.groups())
+        if stable_version_match
+        else None
+    )
+    standing_unsigned_windows_policy = bool(
+        stable_version
+        and stable_version >= WINDOWS_AUTHENTICODE_STANDING_UNSIGNED_MIN_VERSION
+        and not windows_authenticode_available
+    )
+    effective_unsigned_windows_exception = (
+        standing_unsigned_windows_policy or unsigned_windows_exception
+    )
 
-    if unsigned_windows_exception:
-        if version not in {"6.1.0", "6.1.1", "6.1.2", "6.2.0", "6.2.1", "6.3.0", "6.3.1"}:
+    if unsigned_windows_exception and not standing_unsigned_windows_policy:
+        if version not in {"6.1.0", "6.1.1", "6.1.2", "6.2.0", "6.2.1", "6.3.0", "6.3.1", "6.3.2"}:
             raise ValueError(
                 "unsigned_windows_exception is approved only for stable v6.1.0, v6.1.1, "
-                "v6.1.2, v6.2.0, v6.2.1, v6.3.0, or v6.3.1. Later stable releases require a new explicit, "
+                "v6.1.2, v6.2.0, v6.2.1, v6.3.0, v6.3.1, or v6.3.2. Later stable releases require a new explicit, "
                 "version-bound owner decision."
             )
+    if standing_unsigned_windows_policy and not unsigned_windows_reason:
+        unsigned_windows_reason = WINDOWS_AUTHENTICODE_UNAVAILABLE_REASON
+
+    if effective_unsigned_windows_exception:
         if not unsigned_windows_reason:
             raise ValueError(
                 "unsigned_windows_reason is required when unsigned_windows_exception is true."
@@ -264,7 +290,7 @@ def resolve_metadata(
             "unsigned_windows_reason is allowed only when unsigned_windows_exception is true."
         )
 
-    require_windows_signing = not is_prerelease and not unsigned_windows_exception
+    require_windows_signing = not is_prerelease and not effective_unsigned_windows_exception
 
     if not rollback_tag and derive_rollback_when_missing:
         rollback_tag = derive_latest_stable_rollback_tag(version, list_stable_tags_fn())
@@ -399,7 +425,7 @@ def resolve_metadata(
         "v5_eos_date": v5_eos_date,
         "hotfix_exception": "true" if hotfix_exception else "false",
         "hotfix_reason": hotfix_reason,
-        "unsigned_windows_exception": "true" if unsigned_windows_exception else "false",
+        "unsigned_windows_exception": "true" if effective_unsigned_windows_exception else "false",
         "unsigned_windows_reason": unsigned_windows_reason,
         "require_windows_signing": "true" if require_windows_signing else "false",
         "soak_hours": soak_hours,

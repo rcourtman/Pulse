@@ -35,8 +35,11 @@ self-container update detection, and fixed polling intervals.
   policies can still generate alert noise on stable.
 - The exact pushed release SHA must pass the governed single-build release
   pipeline and its integrated exact-SHA candidate checks before publication.
-- Windows Unified Agent binaries must be Authenticode-signed for `v6.3.2`; no
-  unsigned Windows owner exception is authorized for this version.
+- Windows Unified Agent binaries are not Authenticode-signed for `v6.3.2` and
+  may display an Unknown Publisher warning. The standing SignPath-unavailable
+  policy changes only Authenticode: exact-SHA candidate binding, checksums,
+  detached signatures, immutable-manifest verification, and published-digest
+  verification remain mandatory.
 - No mobile-facing path changed between `v6.3.1` and this release, so the
   mobile decision is `no-mobile-impact`; no companion build or store rollout
   is required.

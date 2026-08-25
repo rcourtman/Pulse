@@ -24,12 +24,17 @@ _This changelog describes stable `v6.3.2` compared with stable `v6.3.1`._
 - Previous stable: `v6.3.1`
 - Rollback target: `v6.3.1`
 - Rollback command: `./scripts/install.sh --version v6.3.1`
-- Promotion path: emergency stable patch from `main`, using the single-build
-  release workflow after exact-SHA qualification
+- Promotion path: emergency stable patch from `release/v6.3.2`, using the
+  single-build release workflow after exact-SHA qualification
 - Emergency reason: metrics-history memory growth can wedge Pulse under
   container memory limits, while disabled offline policies can still produce
   alert noise on stable
-- Windows signing decision: Authenticode signing is required for `v6.3.2`; no
-  unsigned Windows owner exception is authorized for this version
+- Windows signing decision: the standing SignPath-unavailable policy publishes
+  unsigned Windows Unified Agent binaries from `v6.3.2` until the release owner
+  explicitly restores signing after production credentials and certificate
+  authorization are ready. The binaries may display an Unknown
+  Publisher warning; exact-SHA candidate binding, checksums, detached
+  signatures, immutable-manifest verification, and published-digest
+  verification remain mandatory
 - Mobile decision: `no-mobile-impact`; no governed mobile-facing path changed
   from `v6.3.1`, so no companion build or public store rollout is required

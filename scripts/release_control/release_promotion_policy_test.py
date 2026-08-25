@@ -1255,9 +1255,10 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("if: ${{ inputs.version != '' }}", workflow)
         self.assertIn("require_macos_signing: true", workflow)
         self.assertIn(
-            "require_windows_signing: ${{ !contains(inputs.version, '-') && !((inputs.version == '6.1.0' || inputs.version == '6.1.1' || inputs.version == '6.1.2' || inputs.version == '6.2.0' || inputs.version == '6.2.1' || inputs.version == '6.3.0' || inputs.version == '6.3.1') && inputs.unsigned_windows_exception) }}",
+            "require_windows_signing: false",
             workflow,
         )
+        self.assertIn("WINDOWS_AUTHENTICODE_AVAILABLE", workflow)
         self.assertIn("unsigned_windows_exception:", workflow)
         self.assertIn("unsigned_windows_reason:", workflow)
         self.assertIn("windows_signing_backend: signpath", workflow)
@@ -1455,7 +1456,9 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("require_windows_signing: ${{ needs.prepare.outputs.require_windows_signing == 'true' }}", content)
         self.assertIn("unsigned_windows_exception:", content)
         self.assertIn("unsigned_windows_reason:", content)
-        self.assertIn('version not in {"6.1.0", "6.1.1", "6.1.2", "6.2.0", "6.2.1", "6.3.0", "6.3.1"}', resolver)
+        self.assertIn("WINDOWS_AUTHENTICODE_AVAILABLE = False", resolver)
+        self.assertIn("WINDOWS_AUTHENTICODE_STANDING_UNSIGNED_MIN_VERSION = (6, 3, 2)", resolver)
+        self.assertIn('version not in {"6.1.0", "6.1.1", "6.1.2", "6.2.0", "6.2.1", "6.3.0", "6.3.1", "6.3.2"}', resolver)
         self.assertIn("not Authenticode-signed", resolver)
         self.assertIn("windows_signing_backend: signpath", content)
         self.assertIn('if [[ "$REQUIRE_WINDOWS_SIGNING" == "true" ]]', candidate_workflow)
@@ -1750,6 +1753,18 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("SignPath production certificate remains `CSR PENDING`", patch_signing_record)
         self.assertIn("not Authenticode-signed", patch_signing_record)
         self.assertIn("Unknown Publisher warning", patch_signing_record)
+
+        unavailable_signing_record = normalize_ws(
+            read(
+                "docs/release-control/v6/internal/records/"
+                "windows-authenticode-unavailable-owner-policy-2026-08-25.md"
+            )
+        )
+        self.assertIn("Windows Authenticode unavailable policy from v6.3.2", policy)
+        self.assertIn("must not require per-version unsigned allowlist updates", policy)
+        self.assertIn("Invalid request to SignPath API", unavailable_signing_record)
+        self.assertIn("not Authenticode-signed", unavailable_signing_record)
+        self.assertIn("Unknown Publisher warning", unavailable_signing_record)
 
     def test_release_artifact_workflows_refuse_stable_without_matching_rc(self) -> None:
         publish = read(".github/workflows/publish-docker.yml")

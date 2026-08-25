@@ -720,15 +720,17 @@ upgrade, update, release, or artifact-selection behavior.
    candidate build whenever its required `version` input is non-empty and must
    apply the same channel-specific native-signing policy as a publish run.
    macOS notarization remains mandatory for both prerelease and stable
-   candidates. Windows Authenticode remains mandatory for stable candidates
-   except for the explicitly version-bound `v6.1.0`, `v6.1.1`, `v6.1.2`, and
-   `v6.2.0` owner exceptions; prerelease candidates and those four stable exceptions may
+   candidates. Windows Authenticode is unavailable for stable candidates from
+   `v6.3.2` onward under the standing owner policy until production credentials
+   and certificate authorization are explicitly confirmed ready. Prerelease
+   candidates and stable candidates under that standing unavailable policy may
    retain checksum and detached-signature verification without Authenticode
    while the release packet explicitly discloses the unknown-publisher warning.
-   Prerelease promotion remains blocked on the normal stable signing
-   requirement. Stable releases after each recorded exception restore it
-   automatically unless policy records a new version-bound owner decision. A cheap
-   signing-configuration job
+   New stable versions must not require per-version unsigned allowlist updates
+   while this state is active. Restoring signing requires a reviewed policy and
+   code change after the release owner confirms readiness; external account
+   state alone must not change release behavior. When Authenticode is enabled,
+   a cheap signing-configuration job
    must report every missing secret for the platforms required by that
    candidate before either platform runner is allocated. Stable Windows signing must use SignPath's GitHub
    trusted-build-system action by default, submit an immutable GitHub artifact
@@ -1681,12 +1683,17 @@ release uses the stable hotfix path with `rollback_version=v6.3.1`,
 `hotfix_exception=true`, a release-owner reason, and no fabricated same-version
 RC tag. The emergency reason is metrics-history memory growth that can wedge a
 memory-limited Pulse runtime plus offline-policy alert noise on stable. The
-exact pushed `main` SHA must pass the integrated candidate checks before the
-same SHA is dispatched through the single-build publication workflow. No
+exact pushed `release/v6.3.2` SHA must pass the integrated candidate checks
+before the same SHA is dispatched through the single-build publication workflow. No
 governed mobile-facing path changed from `v6.3.1`, so the release decision is
 `no-mobile-impact` and no companion build or store rollout is required.
-Windows Authenticode remains mandatory for `v6.3.2`; the version-bound
-`v6.3.1` unsigned-Windows exception cannot be reused for this patch.
+Release run `32896554952` failed closed during SignPath request submission. The
+release owner then established a standing SignPath-unavailable policy from
+`v6.3.2` onward: stable releases skip Authenticode until the owner explicitly
+confirms that production credentials and certificate authorization are ready.
+Public Unknown Publisher disclosure and the exact-SHA, checksum,
+detached-signature, immutable-manifest, and published-digest controls remain
+mandatory.
 
 The preceding stable `v6.3.1` cut set the repo-root `VERSION`, repo-root
 `docker-compose.yml` image default, `scripts/install-docker.sh` fallback, and
@@ -3654,11 +3661,13 @@ notarized macOS agent binaries while Windows Authenticode approval is still an
 externally owned bounded residual, but only when the RC packet explicitly
 discloses the unsigned Windows publisher state and the Windows binaries retain
 the exact-SHA candidate, checksum, detached-signature, and post-publication
-digest controls. Stable publication and the stable-path dry-run must continue
-to require both native signing lanes except for the recorded, version-bound
-`v6.1.0`, `v6.1.1`, `v6.1.2`, `v6.2.0`, and `v6.2.1` Windows exceptions;
-subsequent stable versions restore both requirements unless policy records a
-new explicit version-bound owner decision. `scripts/build-release.sh` must replace
+digest controls. Stable publication and the stable-path dry-run must skip the
+Windows native-signing lane from `v6.3.2` onward while the standing
+SignPath-unavailable owner policy is active. New stable versions inherit that
+state without per-version allowlist changes. Authenticode returns only through
+an explicit reviewed policy/code change after the release owner confirms
+production credentials and certificate authorization are ready.
+`scripts/build-release.sh` must replace
 only the native targets required by those independent inputs and must fail
 closed when a required native-binary directory or target is absent.
 Historical published-release repair must flow through

@@ -304,13 +304,20 @@ func TestInstallDockerProofTracksStablePatchReleaseContract(t *testing.T) {
 		"`no-mobile-impact`",
 		"For the active stable `v"+version+"` cut, the repo-root compose default and `scripts/install-docker.sh` fallback must both pin `"+version+"`",
 	)
-	if version == "6.3.1" {
+	switch version {
+	case "6.3.1":
 		assertFileContainsAllNormalized(t, repoFile("docs", "release-control", "v6", "internal", "subsystems", "deployment-installability.md"),
 			"the prior `v"+previous+"` decision could not be reused for this patch",
 			"the release owner recorded that separate `v6.3.1` exception",
 			"public Unknown Publisher disclosure",
 		)
-	} else {
+	case "6.3.2":
+		assertFileContainsAllNormalized(t, repoFile("docs", "release-control", "v6", "internal", "subsystems", "deployment-installability.md"),
+			"standing SignPath-unavailable policy from `v6.3.2` onward",
+			"Public Unknown Publisher disclosure",
+			"until the owner explicitly confirms that production credentials and certificate authorization are ready",
+		)
+	default:
 		assertFileContainsAllNormalized(t, repoFile("docs", "release-control", "v6", "internal", "subsystems", "deployment-installability.md"),
 			"Windows Authenticode remains mandatory for `v"+version+"`",
 		)
