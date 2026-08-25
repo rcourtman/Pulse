@@ -9,6 +9,7 @@ export const AI_COST_BUDGET_LABEL = '30-day budget (USD)';
 export const AI_COST_RESET_HISTORY_LABEL = 'Reset usage history';
 export const AI_COST_EMPTY_STATE =
   'Provider usage data will appear here once Pulse Assistant or Patrol activity is recorded.';
+export const AI_COST_PROVIDER_TABLE_EMPTY_STATE = 'No provider usage recorded for this range.';
 export const AI_COST_DAILY_USD_EMPTY_STATE =
   'Daily spend trend will appear here once provider activity is recorded.';
 export const AI_COST_DAILY_TOKEN_EMPTY_STATE =

@@ -5228,6 +5228,11 @@ shared `frontend-modern/src/components/shared/Table.tsx` primitive instead of
 carrying AI-local scroll wrappers or raw table shell markup. Any future AI
 usage table styling change must extend the shared primitive or its governed
 wrapper affordances first, then consume that contract from the dashboard.
+At phone widths, the provider usage table must retain provider, model, and
+estimated spend as its primary decision fields while token-detail columns stay
+hidden through the shared responsive table boundary. A loaded range with no
+provider/model rows must render an explanatory row inside the table rather
+than leaving a header above an unexplained empty shell.
 
 `internal/ai/` is the live backend AI engine. It owns chat execution, Patrol
 orchestration, findings generation, investigation support, provider selection,

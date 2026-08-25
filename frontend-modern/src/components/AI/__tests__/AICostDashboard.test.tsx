@@ -256,6 +256,17 @@ describe('AICostDashboard', () => {
     expect(totalHeader).toHaveClass('hidden', 'sm:table-cell');
   });
 
+  it('explains an empty provider usage table within the table boundary', async () => {
+    getCostSummaryMock.mockResolvedValue(baseSummary({ provider_models: [] }));
+    renderDashboard();
+
+    const emptyState = await screen.findByText('No provider usage recorded for this range.');
+
+    expect(emptyState.closest('table')).toBeInTheDocument();
+    expect(emptyState).toHaveClass('block', 'whitespace-normal');
+    expect(emptyState.closest('td')).toHaveAttribute('colspan', '6');
+  });
+
   // ---- range buttons ----
 
   it('switches range to 7 days when clicking 7d button', async () => {

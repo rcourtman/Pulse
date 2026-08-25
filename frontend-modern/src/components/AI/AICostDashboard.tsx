@@ -26,6 +26,7 @@ import {
   AI_COST_PANEL_DESCRIPTION,
   AI_COST_PANEL_TITLE,
   AI_COST_PATROL_USE_CASE_LABEL,
+  AI_COST_PROVIDER_TABLE_EMPTY_STATE,
   AI_COST_RESET_HISTORY_LABEL,
   buildAICostExportFilename,
   getAICostBudgetNote,
@@ -556,6 +557,15 @@ export const AICostDashboard: Component = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
+                  <Show when={visibleProviderModels().length === 0}>
+                    <TableRow>
+                      <TableCell colSpan={6} class="px-3 py-6 text-center text-sm text-muted">
+                        <span class="block whitespace-normal">
+                          {AI_COST_PROVIDER_TABLE_EMPTY_STATE}
+                        </span>
+                      </TableCell>
+                    </TableRow>
+                  </Show>
                   <For each={visibleProviderModels()}>
                     {(pm) => (
                       <TableRow class="border-b border-border-subtle">
