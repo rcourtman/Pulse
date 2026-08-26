@@ -253,6 +253,14 @@ print a non-passing receipt skeleton with
 `python3 scripts/release_control/browser_verification_guard.py --print-template`
 after staging the intended frontend paths.
 
+A source diff that is byte-for-byte the locked Prettier output of its parent
+has no rendered behavior or visual delta and does not require a new browser
+receipt. The exemption fails closed when the formatter is unavailable or the
+formatted output differs by even one token. Canonical Governance must install
+the lockfile-pinned frontend formatter before evaluating changed commits so a
+clean runner applies the same deterministic exemption as the commit-time
+guard; its guard tests must run with that formatter present rather than skip.
+
 ## Reporter Test Image Validation Path
 
 When a reviewed fix needs live confirmation from one or a few Docker-based

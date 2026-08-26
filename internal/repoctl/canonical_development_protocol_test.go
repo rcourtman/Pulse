@@ -1863,6 +1863,10 @@ func TestCanonicalGovernanceRunsInCI(t *testing.T) {
 		"repository: rcourtman/pulse-pro",
 		"repository: rcourtman/pulse-enterprise",
 		"repository: rcourtman/pulse-mobile",
+		"Set up Node.js for frontend governance",
+		"cache-dependency-path: repos/pulse/frontend-modern/package-lock.json",
+		"Install locked frontend governance dependencies",
+		"npm ci --ignore-scripts --no-audit --no-fund",
 		"PULSE_REPO_ROOT_PULSE_PRO",
 		"PULSE_REPO_ROOT_PULSE_ENTERPRISE",
 		"PULSE_REPO_ROOT_PULSE_MOBILE",
@@ -1885,6 +1889,12 @@ func TestCanonicalGovernanceRunsInCI(t *testing.T) {
 		"python3 scripts/release_control/status_audit_test.py",
 		"python3 scripts/release_control/subsystem_lookup_test.py",
 	})
+
+	install := strings.Index(workflow, "Install locked frontend governance dependencies")
+	guard := strings.Index(workflow, "Run canonical completion guard against changed commits")
+	if install < 0 || guard < 0 || install > guard {
+		t.Fatal("locked frontend governance dependencies must be installed before the per-commit browser guard")
+	}
 }
 
 func TestLegacyReleaseControlOrchestratorIsRemoved(t *testing.T) {
