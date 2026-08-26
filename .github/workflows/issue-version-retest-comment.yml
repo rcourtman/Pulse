@@ -7,13 +7,19 @@ on:
 
 permissions:
   contents: read
-  issues: write
 
 jobs:
   comment:
     if: ${{ github.event.issue.pull_request == null }}
     runs-on: ubuntu-24.04
     steps:
+      - name: Mint triage bot token
+        id: triage-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: 2484142
+          private-key: ${{ secrets.PULSE_TRIAGE_APP_PRIVATE_KEY }}
+
       - name: Check out triage helper
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
@@ -24,6 +30,7 @@ jobs:
       - name: Post retest guidance when needed
         uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
         with:
+          github-token: ${{ steps.triage-token.outputs.token }}
           script: |
             const triage = require(`${process.env.GITHUB_WORKSPACE}/.github/scripts/issue-version-triage.cjs`);
             await triage.postRetestComment({ github, context, core });

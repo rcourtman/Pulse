@@ -143,6 +143,24 @@ test("postRetestComment comments once for older non-maintainer bug reports", asy
     calls.createComment[0].body,
     /<!-- issue-version-triage:v1 -->/
   );
+  assert.ok(
+    calls.createComment[0].body.endsWith(`\n\n${triage.internals.TRIAGE_FOOTER}`)
+  );
+  assert.equal(
+    calls.createComment[0].body.split(triage.internals.TRIAGE_FOOTER).length - 1,
+    1
+  );
+});
+
+test("timeout close comments use the canonical triage footer", () => {
+  const { buildTimeoutCloseCommentBody, CLOSE_COMMENT_MARKER, TRIAGE_FOOTER } =
+    triage.internals;
+  const body = buildTimeoutCloseCommentBody(7);
+
+  assert.ok(body.startsWith(CLOSE_COMMENT_MARKER));
+  assert.ok(body.endsWith(`\n\n${TRIAGE_FOOTER}`));
+  assert.equal(body.split(TRIAGE_FOOTER).length - 1, 1);
+  assert.doesNotMatch(body, /automated maintainer|supervised by|AI\)/i);
 });
 
 test("postRetestComment skips reopened issues", async () => {

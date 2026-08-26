@@ -2,6 +2,9 @@ const VERSION_LABEL_PREFIX = "affects-";
 const NEEDS_VERSION_LABEL = "needs-version-info";
 const RETEST_LABEL = "needs-retest-on-latest";
 const RETEST_COMMENT_MARKER = "<!-- issue-version-triage:v1 -->";
+const CLOSE_COMMENT_MARKER = "<!-- issue-timeout-close:v1 -->";
+const TRIAGE_FOOTER =
+  "[How Pulse handles triage](https://github.com/rcourtman/Pulse/blob/main/docs/AI_TRANSPARENCY.md)";
 const BUG_LABEL = "bug";
 const DOCS_LABEL = "documentation";
 const ENHANCEMENT_LABEL = "enhancement";
@@ -181,8 +184,13 @@ function keepOnlyReportedVersionLabel(nextLabels, reportedVersion) {
   }
 }
 
+function withTriageFooter(lines) {
+  const body = Array.isArray(lines) ? lines.join("\n") : String(lines || "");
+  return `${body.trimEnd()}\n\n${TRIAGE_FOOTER}`;
+}
+
 function buildRetestCommentBody(reportedVersion, latestVersion) {
-  return [
+  return withTriageFooter([
     RETEST_COMMENT_MARKER,
     "Thanks for the report.",
     "",
@@ -196,7 +204,16 @@ function buildRetestCommentBody(reportedVersion, latestVersion) {
     "If there is no reporter follow-up after 7 days, this issue may be auto-closed until new confirmation is provided.",
     "",
     "If it still reproduces on the latest version, I will keep this open as an active regression.",
-  ].join("\n");
+  ]);
+}
+
+function buildTimeoutCloseCommentBody(staleDays) {
+  return withTriageFooter([
+    CLOSE_COMMENT_MARKER,
+    `Closing due to missing reporter retest confirmation for ${staleDays} days.`,
+    "",
+    "If this still reproduces on the latest stable release, comment with updated version details and logs and I will reopen.",
+  ]);
 }
 
 function canPostRetestComment(issue, action) {
@@ -325,13 +342,16 @@ module.exports = {
   postRetestComment,
   internals: {
     BUG_LABEL,
+    CLOSE_COMMENT_MARKER,
     DOCS_LABEL,
     ENHANCEMENT_LABEL,
     NEEDS_VERSION_LABEL,
     RETEST_COMMENT_MARKER,
     RETEST_LABEL,
+    TRIAGE_FOOTER,
     VERSION_LABEL_PREFIX,
     buildRetestCommentBody,
+    buildTimeoutCloseCommentBody,
     buildTriageState,
     canPostRetestComment,
     classifyV6FeedbackType,
