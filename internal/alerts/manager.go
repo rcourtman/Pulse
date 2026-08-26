@@ -112,6 +112,10 @@ type Manager struct {
 	// Nil until EnableEventLog/SetEventLog; recording is then a no-op.
 	eventLog atomic.Pointer[eventlog.Store]
 
+	// Shadow-mode reducer feed (Phase 1 capstone). Nil until
+	// EnableShadowFeed; all access is under m.mu.
+	shadow *shadowFeed
+
 	// Cached timezone for quiet hours
 	quietHoursLoc *time.Location
 	now           func() time.Time

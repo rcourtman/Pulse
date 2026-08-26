@@ -93,5 +93,19 @@ StartTime parity additionally exercises the lifecycleFirstMatched fix in
 composition. Deferred: the backup-offline deferral sub-policy
 (MaxDeferralSeconds / PostGraceSeconds).
 
-Remaining for later slices: the backup-offline deferral sub-policy and a
-shadow-mode runtime feed.
+Capstone (2026-08-26): the shadow-mode runtime feed. The reducer now runs
+continuously inside the live manager against the same production
+observations — the canonical lifecycle path (connectivity, powered-state,
+discrete-state kinds), the poll-driven recovery paths, manual
+acknowledge/unacknowledge/clear, with persisted-alert seeding at enable —
+and every state disagreement is counted (Manager.ShadowDivergences) and
+recorded in the alert event log as a shadow_divergence event
+(rate-limited per key; the reducer resyncs to the manager after each
+report so one divergence yields one event, including divergences from
+unhooked mutations). Enabled by the monitoring bootstrap next to the
+event log. The divergence rate is the go/no-go evidence for each Phase 2
+family cutover.
+
+Remaining: the backup-offline deferral sub-policy (the shadow feed maps
+its hold to operator suppression, which is behavior-equivalent while
+uncharacterized), and Phase 2 itself.

@@ -3,6 +3,7 @@ package alerts
 import (
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts/reducer"
 	alertspecs "github.com/rcourtman/pulse-go-rewrite/internal/alerts/specs"
 	"github.com/rcourtman/pulse-go-rewrite/internal/operationaltrust"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
@@ -356,6 +357,17 @@ func (m *Manager) evaluateCanonicalLifecycleAlert(params canonicalLifecycleAlert
 	storageKey := canonicalTrackingKeyForSpec(params.Spec, params.AlertID)
 	trackingKey := storageKey
 
+	// Shadow feed: after this evaluation settles (any exit), replay the same
+	// observation through the shadow reducer and compare outcomes. Runs
+	// before the deferred unlock (LIFO), so it still holds m.mu.
+	var shadowIntent *reducer.DiscreteIntent
+	shadowEligible := false
+	defer func() {
+		if shadowEligible {
+			m.shadowObserveLifecycleNoLock(params.Spec, params.Evidence, shadowIntent, storageKey)
+		}
+	}()
+
 	var existing *Alert
 	if current, ok := m.getActiveAlertNoLock(storageKey); ok {
 		existing = current
@@ -383,6 +395,8 @@ func (m *Manager) evaluateCanonicalLifecycleAlert(params canonicalLifecycleAlert
 			Msg("Skipping invalid canonical lifecycle evaluation")
 		return alertspecs.EvaluationResult{}, false
 	}
+
+	shadowEligible = true
 
 	// Persist the canonical confirmation state before applying intent policy.
 	// Grace and operator context are an additional gate; they must not prevent
@@ -412,6 +426,12 @@ func (m *Manager) evaluateCanonicalLifecycleAlert(params canonicalLifecycleAlert
 	if intentSignal != "" && existing == nil {
 		conditionActive := result.State.State == alertspecs.AlertStatePending || result.State.State == alertspecs.AlertStateFiring
 		decision := m.evaluateIntentNoLock(params.Spec.ResourceID, string(params.Spec.ResourceType), intentSignal, storageKey, params.Evidence.ObservedAt, conditionActive, params.IntentBackup)
+		shadowIntent = &reducer.DiscreteIntent{
+			Explicit:           decision.Effective.Explicit,
+			GraceSeconds:       decision.Effective.GraceSeconds,
+			OperatorSuppressed: decision.Suppressed,
+			OperatorReason:     decision.Reason,
+		}
 		if decision.StateChanged {
 			m.saveActiveAlertsAsync("lifecycle intent state")
 		}

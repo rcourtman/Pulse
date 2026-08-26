@@ -294,6 +294,7 @@ func (m *Manager) clearConnectionDegradedAlert(snap ConnectionSnapshot) {
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	defer m.shadowObserveRecoveryNoLock(snap.ID, canonicalDiscreteStateSpecID(snap.ID, connectionDegradedStateKey), alertID, offlineRecoveryConfirmationsDefault)
 
 	if m.connectionDegradedCount[snap.ID] > 0 {
 		log.Debug().

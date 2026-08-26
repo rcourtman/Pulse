@@ -399,3 +399,32 @@ func (s *State) ApplyMetric(signal MetricSignal, rule MetricRule) []Event {
 	// reducer mirrors that so parity diffs stay exact.
 	return nil
 }
+
+// SeedFiringIncident installs a firing incident directly, bypassing the
+// transition functions. Shadow mode uses it to align the reducer with
+// pre-existing manager state (persisted-alert restore, divergence resync);
+// it is not part of normal evaluation.
+func (s *State) SeedFiringIncident(resourceID, subKey string, severity Severity, startedAt time.Time, acknowledged bool) {
+	key := incidentKey(resourceID, subKey)
+	incident := &Incident{
+		ResourceID:     resourceID,
+		Key:            subKey,
+		State:          StateFiring,
+		Severity:       severity,
+		StartedAt:      startedAt,
+		Confirmations:  1,
+		Acknowledged:   acknowledged,
+		LastObservedAt: startedAt,
+	}
+	s.incidents[key] = incident
+	if acknowledged {
+		s.acks[key] = ackRecord{At: startedAt}
+	}
+}
+
+// Forget drops any incident for the key without emitting events — the
+// shadow feed's mirror for manual clears and its divergence resync. Ack
+// and resolved records are left to their own retention.
+func (s *State) Forget(resourceID, subKey string) {
+	delete(s.incidents, incidentKey(resourceID, subKey))
+}

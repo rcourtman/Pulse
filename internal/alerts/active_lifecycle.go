@@ -99,6 +99,7 @@ func (m *Manager) clearAlert(alertID string) {
 	m.mu.Lock()
 	alert, exists := m.getActiveAlertNoLock(alertID)
 	if exists {
+		m.shadowForgetAlertNoLock(alert)
 		m.removeActiveAlertNoLock(alertID)
 	}
 	m.mu.Unlock()
@@ -149,6 +150,7 @@ func (m *Manager) AcknowledgeAlert(alertID, user string) error {
 		user:         user,
 		time:         now,
 	})
+	m.shadowAcknowledgeNoLock(alert, user, now)
 
 	alertCopy := alert.Clone()
 	m.mu.Unlock()
@@ -189,6 +191,7 @@ func (m *Manager) UnacknowledgeAlert(alertID string) error {
 
 	m.setActiveAlertNoLock(key, alert)
 	m.deleteAckRecordNoLock(alert, alertID)
+	m.shadowUnacknowledgeNoLock(alert)
 
 	alertCopy := alert.Clone()
 	m.mu.Unlock()
@@ -602,6 +605,7 @@ func (m *Manager) clearResourceOfflineAlert(resourceID, resourceName, host, reso
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	defer m.shadowObserveRecoveryNoLock(resourceID, canonicalConnectivitySpecID(resourceID), alertID, requiredRecoveryCount)
 
 	if count, exists := m.offlineConfirmations[resourceID]; exists && count > 0 {
 		log.Debug().
@@ -680,6 +684,7 @@ func (m *Manager) clearAlertNoLock(alertID string) {
 		recordAlertResolved(alert)
 	}
 
+	m.shadowForgetAlertNoLock(alert)
 	m.removeActiveAlertNoLock(alertID)
 	resolvedAlert := m.newResolvedAlert(alert, time.Now(), nil)
 

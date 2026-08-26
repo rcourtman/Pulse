@@ -37,6 +37,10 @@ const (
 	TypeNotificationDispatched = "notification_dispatched"
 	TypeNotificationDeferred   = "notification_deferred"
 	TypeNotificationSuppressed = "notification_suppressed"
+	// TypeShadowDivergence records the shadow reducer disagreeing with the
+	// live manager on an alert's state — the always-on parity signal
+	// (docs/ALERT_ENGINE_EVOLUTION.md, Phase 1).
+	TypeShadowDivergence = "shadow_divergence"
 )
 
 // Event is one immutable alert event.

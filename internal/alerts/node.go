@@ -291,6 +291,7 @@ func (m *Manager) clearNodeOfflineAlert(node models.Node) {
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	defer m.shadowObserveRecoveryNoLock(node.ID, canonicalConnectivitySpecID(node.ID), alertID, offlineRecoveryConfirmationsDefault)
 
 	// Reset offline count when node comes back online
 	if m.nodeOfflineCount[node.ID] > 0 {
