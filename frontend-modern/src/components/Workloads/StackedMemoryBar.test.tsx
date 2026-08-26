@@ -227,6 +227,11 @@ describe('StackedMemoryBar', () => {
 
   it('shows sublabel when space permits and total > 0', () => {
     render(() => <StackedMemoryBar used={4 * 1024 ** 3} total={8 * 1024 ** 3} />);
+    // Width flows only from the ResizeObserver's initial delivery.
+    resizeCallback?.(
+      [{ contentRect: { width: 200 } } as ResizeObserverEntry],
+      {} as ResizeObserver,
+    );
     // Should show sublabel in parentheses with bytes format
     const sublabel = screen.getByText(/4\.00 GB/);
     expect(sublabel).toBeInTheDocument();
@@ -247,8 +252,10 @@ describe('StackedMemoryBar', () => {
   });
 
   it('updates sublabel visibility on resize', async () => {
-    Object.defineProperty(HTMLElement.prototype, 'offsetWidth', { configurable: true, value: 20 });
     render(() => <StackedMemoryBar used={4 * 1024 ** 3} total={8 * 1024 ** 3} />);
+    // Width flows only from the ResizeObserver, so the initial narrow
+    // measurement arrives through its callback.
+    resizeCallback?.([{ contentRect: { width: 20 } } as ResizeObserverEntry], {} as ResizeObserver);
     expect(screen.queryByText(/4\.00 GB/)).not.toBeInTheDocument();
 
     // Simulate resize to wider container

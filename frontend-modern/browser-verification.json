@@ -1,51 +1,65 @@
 {
   "version": 1,
-  "base_sha": "9e9c3413a8ae4dcd6da789668a4c6f385f4a7f15",
-  "verified_at": "2026-08-26T14:30:55Z",
+  "base_sha": "8d573cd0ac341f794f88bd940a01db229c54bfbb",
+  "verified_at": "2026-08-26T15:06:01Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx",
-    "frontend-modern/src/components/Infrastructure/resourceDetailDrawerOperationalModel.ts",
-    "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDerivedState.ts",
-    "frontend-modern/src/components/Workloads/NodeDrawerOverview.tsx",
-    "frontend-modern/src/hooks/useUnifiedResources.ts",
-    "frontend-modern/src/types/api.ts",
-    "frontend-modern/src/types/resource.ts",
-    "frontend-modern/src/utils/resourceStateAdapters.ts"
+    "frontend-modern/src/components/Infrastructure/useTableWindowing.ts",
+    "frontend-modern/src/components/Infrastructure/useUnifiedResourceTableViewportSync.ts",
+    "frontend-modern/src/components/Storage/useStoragePoolsTableWindowing.ts",
+    "frontend-modern/src/components/Workloads/WorkloadPanel.tsx",
+    "frontend-modern/src/components/Workloads/useGroupedTableWindowing.ts",
+    "frontend-modern/src/components/Workloads/useMetricBarState.ts",
+    "frontend-modern/src/components/Workloads/useStackedDiskBarState.ts",
+    "frontend-modern/src/components/Workloads/useStackedMemoryBarState.ts",
+    "frontend-modern/src/components/Workloads/useWorkloadViewportSync.ts",
+    "frontend-modern/src/components/shared/windowedPageScroll.ts",
+    "frontend-modern/src/features/platformPage/usePlatformWindowedItems.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx": "9ea9ab621b2a434f4233750aa422baf2965302f795f01e01d0532a14f6d01ad4",
-    "frontend-modern/src/components/Infrastructure/resourceDetailDrawerOperationalModel.ts": "2ad021573bd3bca4fd0f6745cddb5a1ea8954e19f289bc1813cc8539e604c39e",
-    "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDerivedState.ts": "51710198c2bffedb4349949909045540bfb30e6069790497f7d55262fe494676",
-    "frontend-modern/src/components/Workloads/NodeDrawerOverview.tsx": "8113086bacb237aa08e62bc0d715925a24a06ca1fde13f0fc242ef2488c4db3b",
-    "frontend-modern/src/hooks/useUnifiedResources.ts": "634b152af0bce3519c2c5481bb69ac8a23ac20fec20cc394004ad75dd85eb58b",
-    "frontend-modern/src/types/api.ts": "46e442f3fdbe40aed6f1b39a7c9887234d096aa131ebb06d24206ae67f721c03",
-    "frontend-modern/src/types/resource.ts": "10221bcff8ecac650f61be41d81b433795a0aa7562f178c1fa39a21c3e49a1de",
-    "frontend-modern/src/utils/resourceStateAdapters.ts": "56bf97edf5e1d9a9b4920a3503289dba1a1d698f036433dc9a0d2d4a740e24df"
+    "frontend-modern/src/components/Infrastructure/useTableWindowing.ts": "6eea3c4a17afd2d4238e88331e12e98c034a08cb2c104f1d3e46bed92993deff",
+    "frontend-modern/src/components/Infrastructure/useUnifiedResourceTableViewportSync.ts": "91f650cd432ce8929c9fb6d108e6e37b0cfbf40103955ae9a2fcdb5734910721",
+    "frontend-modern/src/components/Storage/useStoragePoolsTableWindowing.ts": "4e30ae20adf83f0b0f1dfe41d87331f0b52b641b29b0d457f392a1c00f185aa6",
+    "frontend-modern/src/components/Workloads/WorkloadPanel.tsx": "d29985e9245a3f60bbb9ca82e3ea330b3f07b08a9b11a079232cba27a6df57ff",
+    "frontend-modern/src/components/Workloads/useGroupedTableWindowing.ts": "187b4b20e623e75d52be00de396e5fef6be9e4c85384207a827768e37d8e0b39",
+    "frontend-modern/src/components/Workloads/useMetricBarState.ts": "1dcfac801c35a81151a0f2776830089067f9bebe5237ccc5f7df53c20d7433bf",
+    "frontend-modern/src/components/Workloads/useStackedDiskBarState.ts": "329a108849bc84fd0cd4c45524ea3cee8208bb01f16217254e3a9f4b772eda2a",
+    "frontend-modern/src/components/Workloads/useStackedMemoryBarState.ts": "dc505c9daa2aebcaf614892cc584a325ea320febc346ce0e177ff4cf37894c85",
+    "frontend-modern/src/components/Workloads/useWorkloadViewportSync.ts": "4b441530125c7544093fcc19247ad0a2037dcaf1b064c1a087c755f1b0f1f6bf",
+    "frontend-modern/src/components/shared/windowedPageScroll.ts": "6749cde8e9a17316ab53e691268e40dfc081c14d8d41b1eb1e331c9b5151ca80",
+    "frontend-modern/src/features/platformPage/usePlatformWindowedItems.ts": "9c89637fcd267edf335e8d516266bd6f9a3965fed2c4289bcc287d63c383543c"
   },
   "routes": [
-    "/proxmox/overview"
+    "/proxmox/overview",
+    "/proxmox/storage",
+    "/docker"
   ],
   "viewports": [
     {
-      "width": 1280,
-      "height": 900
+      "width": 2560,
+      "height": 1240
     },
     {
-      "width": 390,
-      "height": 844
+      "width": 700,
+      "height": 900
     }
   ],
   "states": [
-    "exact 75b6655d6e development build with the mock Proxmox estate connected",
-    "expanded Analytics A Proxmox node with its technical details visible",
-    "Network section populated from the richer linked-agent interface source",
-    "narrow expanded node details with the Network section and address fully inside the viewport"
+    "large mock estate: 50 nodes and 929 guests with the guest table windowed to a 140-row mounted budget",
+    "storage pools table windowed and scrolled while visible on the Storage tab",
+    "storage surface prewarmed but hidden behind the Overview tab while the guest table scrolls",
+    "overview surface hidden behind the Storage tab, then restored at a deep scroll position",
+    "narrow-viewport mobile layout with bottom navigation and compact guest rows",
+    "docker containers page with grouped host/container tables"
   ],
   "interactions": [
-    "opened Proxmox Overview and expanded the Analytics A node at desktop width",
-    "confirmed the Network section rendered eth0 and its address while preserving linked-agent precedence over provider inventory",
-    "resized the same expanded state to 390 by 844 and confirmed the Network row remained visible, readable, and unclipped",
-    "confirmed the narrow document and body scroll widths both remained exactly 390 pixels"
+    "continuous mouse-wheel scrolling through the full 929-guest table with long-animation-frame and rAF cadence instrumentation: runway top-ups now cost 15-31ms in dead-band batches (previously 200-260ms blocking wheel handler)",
+    "isolation battery on the guest table: +/-8px per-frame oscillation (0 frames over 25ms), 600px/s and 2600px/s and 6000px/s scripted continuous scrolls (p50 at native 13.3ms frame time, bounded mutation frames only)",
+    "single synthetic wheel shifts at multiple scroll depths measuring per-shift cost (5-12ms for 4-10 row top-ups)",
+    "scrollbar-style teleport jumps re-centering the mounted window without blanks",
+    "tab switch Overview -> Storage -> Overview with deep scroll in between: hidden surface skips viewport sync, restored surface refills the viewport without spacer blanks",
+    "storage pools table wheel-scrolled while visible: windowed rows advance with correct content",
+    "narrow-viewport scroll through the guest table: windowing intact, metric bars sized by ResizeObserver initial delivery",
+    "docker page scrolled end to end with zero console errors"
   ]
 }

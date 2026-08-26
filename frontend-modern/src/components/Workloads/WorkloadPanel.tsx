@@ -379,8 +379,12 @@ export function WorkloadPanel(props: WorkloadPanelProps) {
         {(groupKey) => {
           const groupGuests = () => props.windowedGroupedGuests()[groupKey] || [];
           const fullGroupGuests = () => props.groupedGuests()[groupKey] || [];
+          // Build the id lookup from the full group, not the windowed slice:
+          // it only rebuilds when the group's data changes, so a runway top-up
+          // leaves every mounted row's guest() dependency untouched instead of
+          // revalidating ~140 rows' memo chains per scroll event.
           const groupGuestById = createMemo(
-            () => new Map(groupGuests().map((guest) => [getCanonicalWorkloadId(guest), guest])),
+            () => new Map(fullGroupGuests().map((guest) => [getCanonicalWorkloadId(guest), guest])),
           );
           const groupGuestIds = createMemo(() => groupGuests().map(getCanonicalWorkloadId));
           const node = () => props.nodeByInstance()[groupKey];

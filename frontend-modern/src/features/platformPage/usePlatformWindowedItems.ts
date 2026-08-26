@@ -1,9 +1,17 @@
-import { createEffect, createMemo, createSignal, onCleanup, type Accessor } from 'solid-js';
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  onCleanup,
+  untrack,
+  type Accessor,
+} from 'solid-js';
 
 import { useTableWindowing } from '@/components/Infrastructure/useTableWindowing';
 import {
   bindWindowedPageScrollEvents,
   findWindowedPageScrollContainer,
+  isWindowedSurfaceHidden,
   wheelDeltaInPixels,
 } from '@/components/shared/windowedPageScroll';
 
@@ -57,7 +65,7 @@ export function usePlatformWindowedItems<Item>(options: PlatformWindowedItemsOpt
   const syncWindowToViewport = (projectedScrollDelta = 0, measureItems = false) => {
     if (typeof window === 'undefined' || !windowing.isWindowed()) return;
     const anchor = anchorRef();
-    if (!anchor) return;
+    if (!anchor || isWindowedSurfaceHidden(anchor)) return;
 
     if (measureItems) {
       const measuredHeight = anchor.nextElementSibling?.getBoundingClientRect().height;
@@ -100,7 +108,10 @@ export function usePlatformWindowedItems<Item>(options: PlatformWindowedItemsOpt
     };
     const handleResize = () => syncWindowToViewport(0, true);
 
-    handleResize();
+    // The initial measurement reads windowing signals the pass itself moves.
+    // Keep those reads outside this setup effect's dependency graph so runway
+    // top-ups during scrolling cannot re-run measurement and listener binding.
+    untrack(handleResize);
     onCleanup(
       bindWindowedPageScrollEvents({
         scrollTarget,

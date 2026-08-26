@@ -181,12 +181,12 @@ describe('useTableWindowing', () => {
         enabled: () => true,
         windowSize: 100,
       });
-      // A jump beyond the initial runway moves the window with 24 rows ahead.
+      // firstVisible = 100 is outside [0, 100) → teleport to 100-45 = 55.
       hook.onScroll(4000, 400, 40);
-      expect(hook.isVisible(75)).toBe(false);
-      expect(hook.isVisible(76)).toBe(true);
-      expect(hook.isVisible(175)).toBe(true);
-      expect(hook.isVisible(176)).toBe(false);
+      expect(hook.isVisible(54)).toBe(false);
+      expect(hook.isVisible(55)).toBe(true);
+      expect(hook.isVisible(154)).toBe(true);
+      expect(hook.isVisible(155)).toBe(false);
     });
   });
 
@@ -201,10 +201,10 @@ describe('useTableWindowing', () => {
         windowSize: 100,
       });
 
-      // firstVisibleRow=100 and the directional runway keeps 24 rows ahead.
+      // firstVisibleRow=100 is outside [0, 100) → teleport re-centers to 55.
       hook.onScroll(4000, 400, 40);
-      expect(hook.startIndex()).toBe(76);
-      expect(hook.endIndex()).toBe(176);
+      expect(hook.startIndex()).toBe(55);
+      expect(hook.endIndex()).toBe(155);
     });
 
     it('clamps start to 0 when scrolled near top', () => {
@@ -214,7 +214,7 @@ describe('useTableWindowing', () => {
         windowSize: 100,
       });
 
-      // scrollTop=100 → firstVisible = 2, start = 2-20 = -18 → clamped to 0
+      // scrollTop=100 → firstVisible = 2, leading deficit clamps at start 0
       hook.onScroll(100, 400, 40);
       expect(hook.startIndex()).toBe(0);
     });
@@ -226,8 +226,8 @@ describe('useTableWindowing', () => {
         windowSize: 100,
       });
 
-      // scrollTop=6000, firstVisible = 150, start = 150-20 = 130
-      // maxStart = 200-100 = 100 → clamped to 100
+      // scrollTop=6000, firstVisible = 150 is outside [0, 100) → teleport
+      // to 150-45 = 105, clamped to maxStart = 200-100 = 100
       hook.onScroll(6000, 400, 40);
       expect(hook.startIndex()).toBe(100);
       expect(hook.endIndex()).toBe(200);
@@ -246,9 +246,9 @@ describe('useTableWindowing', () => {
         enabled: () => true,
         windowSize: 100,
       });
-      // rowHeight=0 → safeRowHeight=40, same calc as normal
+      // rowHeight=0 → safeRowHeight=40, same calc as normal (teleport to 55)
       hook.onScroll(4000, 400, 0);
-      expect(hook.startIndex()).toBe(76);
+      expect(hook.startIndex()).toBe(55);
     });
 
     it('handles negative scrollTop gracefully', () => {
@@ -268,10 +268,9 @@ describe('useTableWindowing', () => {
         windowSize: 100,
       });
       // containerHeight=0 → safeContainerHeight = safeRowHeight = 40
-      // rowsInView = ceil(40/40) = 1
-      // overscan = min(20, max(0, 100-1)) = 20
+      // rowsInView = ceil(40/40) = 1, target = floor(99/2) = 49
       hook.onScroll(800, 0, 40);
-      // firstVisible = 800/40 = 20, start = 20-20 = 0
+      // firstVisible = 20, leading deficit of 29 clamps at start 0
       expect(hook.startIndex()).toBe(0);
     });
 
@@ -282,8 +281,8 @@ describe('useTableWindowing', () => {
         windowSize: 100,
       });
       hook.onScroll(4000, 400, -10);
-      // safeRowHeight = 40 (negative not > 0)
-      expect(hook.startIndex()).toBe(76);
+      // safeRowHeight = 40 (negative not > 0), teleport to 55
+      expect(hook.startIndex()).toBe(55);
     });
 
     it('handles large scrollTop values without error', () => {
@@ -606,14 +605,14 @@ describe('useTableWindowing', () => {
       expect(result.startIndex()).toBe(0);
     });
 
-    it('overscan becomes 0 when rowsInView >= windowSize', () => {
+    it('pins the window to the viewport start when rowsInView >= windowSize', () => {
       const hook = setup({
         totalCount: () => 1000,
         enabled: () => true,
         windowSize: 5,
       });
-      // containerHeight=400, rowHeight=40 → rowsInView = ceil(400/40) = 10
-      // overscan = min(20, max(0, 5 - 10)) = min(20, 0) = 0
+      // containerHeight=400, rowHeight=40 → rowsInView = 10 > windowSize 5,
+      // so buffer/target are 0 and the teleport path lands on firstVisible.
       // firstVisible = floor(2000/40) = 50, start = 50 - 0 = 50
       hook.onScroll(2000, 400, 40);
       expect(hook.startIndex()).toBe(50);

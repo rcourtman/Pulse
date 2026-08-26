@@ -34,8 +34,11 @@ const DEFAULT_WINDOW_SIZE = 140;
 // row budget so consumers cannot accidentally leave a 200-500 row gap between
 // "small table" and "large estate" behaviour.
 const DEFAULT_ENABLE_THRESHOLD = DEFAULT_WINDOW_SIZE;
-const DEFAULT_OVERSCAN_ROWS = 20;
-const DEFAULT_EDGE_RUNWAY_ROWS = 24;
+// A mutation frame costs a near-constant style/layout pass on the mounted
+// table whatever the shift size, so runway top-ups run in dead-band-sized
+// batches: most scroll frames stay compositor-only, and sub-row scroll jitter
+// cannot thrash one-row shifts in alternating directions.
+const TOP_UP_DEADBAND_ROWS = 8;
 
 export const useTableWindowing = (options: UseTableWindowingOptions): UseTableWindowingResult => {
   const [windowStart, setWindowStart] = createSignal(0);
@@ -50,8 +53,6 @@ export const useTableWindowing = (options: UseTableWindowingOptions): UseTableWi
     const enabled = options.enabled?.() ?? total > threshold;
     return enabled && total > 0;
   });
-
-  let lastFirstVisibleRow = 0;
 
   const maxStart = createMemo(() => Math.max(0, options.totalCount() - normalizedWindowSize()));
 
@@ -87,33 +88,28 @@ export const useTableWindowing = (options: UseTableWindowingOptions): UseTableWi
     const firstVisibleRow = Math.floor(Math.max(0, scrollTop) / safeRowHeight);
     const visibleEnd = Math.min(options.totalCount(), firstVisibleRow + rowsInView);
     const availableBuffer = Math.max(0, normalizedWindowSize() - rowsInView);
-    const edgeRunway = Math.min(
-      Math.floor(availableBuffer / 2),
-      Math.max(DEFAULT_EDGE_RUNWAY_ROWS, rowsInView),
-    );
-    const direction = Math.sign(firstVisibleRow - lastFirstVisibleRow);
-    lastFirstVisibleRow = firstVisibleRow;
+    const targetRunway = Math.floor(availableBuffer / 2);
 
     const leadingRunway = firstVisibleRow - startIndex();
     const trailingRunway = endIndex() - visibleEnd;
-    const viewportIsMounted = leadingRunway >= 0 && trailingRunway >= 0;
-    if (
-      viewportIsMounted &&
-      ((direction > 0 && trailingRunway > edgeRunway) ||
-        (direction < 0 && leadingRunway > edgeRunway) ||
-        (direction === 0 && leadingRunway >= edgeRunway && trailingRunway >= edgeRunway))
-    ) {
+    if (leadingRunway < 0 || trailingRunway < 0) {
+      // Teleport (scrollbar drag, deep jump): the viewport left the mounted
+      // window entirely, so re-center the window on it.
+      setClampedStart(firstVisibleRow - targetRunway);
       return;
     }
 
-    const directionalRunway = Math.max(edgeRunway, availableBuffer - edgeRunway);
-    const rowsBeforeViewport =
-      direction < 0
-        ? directionalRunway
-        : direction > 0
-          ? edgeRunway
-          : Math.min(DEFAULT_OVERSCAN_ROWS, availableBuffer);
-    setClampedStart(firstVisibleRow - rowsBeforeViewport);
+    // Top up only the depleted side, and only once its deficit clears the
+    // dead-band, restoring that side to the full target. Leading and trailing
+    // runway always sum to the spare buffer, so at most one side is below
+    // target. Steady scrolling therefore pays one bounded mutation frame per
+    // dead-band of travel instead of a slice update on every scroll event.
+    const topUpThreshold = Math.min(TOP_UP_DEADBAND_ROWS, Math.max(1, Math.ceil(targetRunway / 2)));
+    if (targetRunway - trailingRunway >= topUpThreshold) {
+      setClampedStart(startIndex() + (targetRunway - trailingRunway));
+    } else if (targetRunway - leadingRunway >= topUpThreshold) {
+      setClampedStart(startIndex() - (targetRunway - leadingRunway));
+    }
   };
 
   const isVisible = (index: number) => {

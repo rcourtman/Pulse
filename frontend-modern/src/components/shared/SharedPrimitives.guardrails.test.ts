@@ -1399,7 +1399,7 @@ describe('shared primitive guardrails', () => {
       "addEventListener('scroll', options.onScroll, { passive: true })",
     );
     expect(windowedPageScrollSource).toContain(
-      "addEventListener('wheel', options.onWheel, { passive: false })",
+      "addEventListener('wheel', options.onWheel, { passive: true })",
     );
     expect(windowedPageScrollSource).not.toContain("addEventListener('touch");
     for (const source of [

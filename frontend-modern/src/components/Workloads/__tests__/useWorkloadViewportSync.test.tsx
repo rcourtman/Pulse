@@ -67,7 +67,7 @@ describe('useWorkloadViewportSync', () => {
       passive: true,
     });
     expect(addEventListenerSpy).toHaveBeenCalledWith('wheel', expect.any(Function), {
-      passive: false,
+      passive: true,
     });
     expect(addEventListenerSpy.mock.calls.some(([type]) => String(type).startsWith('touch'))).toBe(
       false,

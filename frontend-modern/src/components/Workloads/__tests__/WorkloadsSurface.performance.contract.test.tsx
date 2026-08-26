@@ -919,8 +919,8 @@ describe('Workloads performance contract', () => {
       expect(workloadsWorkloadDerivedStateSource).toContain('guestIndexAtVirtualOffset');
       expect(workloadsWorkloadDerivedStateSource).toContain('WORKLOADS_TABLE_DIVIDER_HEIGHT');
       expect(groupedTableWindowingSource).toContain('rowIndexAtOffset');
-      expect(groupedTableWindowingSource).toContain('DEFAULT_EDGE_RUNWAY_ROWS');
-      expect(groupedTableWindowingSource).toContain('viewportIsMounted');
+      expect(groupedTableWindowingSource).toContain('targetRunway');
+      expect(groupedTableWindowingSource).toContain('trailingRunway');
       expect(workloadPanelSource).toContain('groupGuests()[0] === fullGroupGuests()[0]');
       expect(workloadPanelSource).toContain('class="h-0 !p-0 !border-0 leading-[0]"');
       expect(workloadPanelSource).toContain('<For each={props.visibleGroupKeys()}');
@@ -1330,13 +1330,13 @@ describe('Workloads performance contract', () => {
       expect(workloadSelectionModelSource).toContain('workloadsHasHoveredWorkload');
       expect(groupedTableWindowingSource).toContain('DEFAULT_WINDOW_SIZE');
       expect(groupedTableWindowingSource).toContain('DEFAULT_ENABLE_THRESHOLD');
-      expect(groupedTableWindowingSource).toContain('DEFAULT_OVERSCAN_ROWS');
+      expect(groupedTableWindowingSource).toContain('targetRunway');
       expect(groupedTableWindowingSource).toContain('getVisibleSlice');
       expect(groupedTableWindowingSource).toContain('onScroll');
       expect(groupedTableWindowingSource).toContain('revealIndex');
       expect(workloadsStateSource).not.toContain('const DEFAULT_WINDOW_SIZE =');
       expect(workloadsStateSource).not.toContain('const DEFAULT_ENABLE_THRESHOLD =');
-      expect(workloadsStateSource).not.toContain('const DEFAULT_OVERSCAN_ROWS =');
+      expect(workloadsStateSource).not.toContain('targetRunway');
       expect(workloadsSource).not.toContain('createMemo(() => getCanonicalWorkloadId(guest()))');
       expect(workloadPanelSource).toContain('groupGuests().map(getCanonicalWorkloadId)');
       expect(workloadPanelSource).toContain('groupGuestById().get(keyedGuestId)');

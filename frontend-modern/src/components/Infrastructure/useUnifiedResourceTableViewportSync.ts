@@ -2,6 +2,7 @@ import { createEffect, createSignal, onCleanup, untrack, type Accessor } from 's
 import {
   bindWindowedPageScrollEvents,
   findWindowedPageScrollContainer,
+  isWindowedSurfaceHidden,
   wheelDeltaInPixels,
 } from '@/components/shared/windowedPageScroll';
 import { useTableWindowing } from './useTableWindowing';
@@ -21,7 +22,7 @@ export function useUnifiedResourceTableViewportSync(
   const syncHostWindowToViewport = (projectedScrollDelta = 0) => {
     if (!hostWindowing.isWindowed() || typeof window === 'undefined') return;
     const body = hostBodyRef();
-    if (!body) return;
+    if (!body || isWindowedSurfaceHidden(body)) return;
     const rect = body.getBoundingClientRect();
     const scrollContainer = findWindowedPageScrollContainer(body);
     if (scrollContainer) {

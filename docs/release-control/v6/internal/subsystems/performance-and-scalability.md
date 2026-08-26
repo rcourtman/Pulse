@@ -908,20 +908,26 @@ change may globally weaken the Task 03 lifecycle-state idempotency invariant.
     cross the virtual window and prevents the visible estate from bumping by a
     header row during continuous scrolling.
     Virtualization must remain visually invisible under rapid wheel and
-    trackpad input. The windowing owner keeps a hysteretic directional runway
-    instead of shifting the slice for every visible-row change, and wheel
-    viewport sync may prewarm that runway before the compositor advances the
-    viewport. Every windowed surface must route listener lifecycle, scroll-
-    ancestor selection, and wheel-delta normalization through
-    `frontend-modern/src/components/shared/windowedPageScroll.ts`. That shared
-    owner may register a non-passive wheel listener, but it must not register a
-    touch listener: phone gestures remain compositor-native and advance the
-    keyed runway only through the passive native scroll event after the page
-    moves. Group and guest iteration must remain keyed so overlapping rows
-    survive window shifts rather than rebinding every mounted row. This
-    anticipation must preserve the existing bounded mounted-row budget;
-    rendering the whole estate or adding per-row observers, timers, or scroll
-    listeners is forbidden.
+    trackpad input, and must never block that input. The windowing owner keeps
+    a symmetric runway and tops up only the depleted side, in dead-band-sized
+    batches: a mutation frame costs a near-constant style/layout pass on the
+    mounted table whatever the shift size, so batching keeps most scroll
+    frames compositor-only while the dead-band absorbs sub-row scroll jitter;
+    only a viewport that leaves the mounted window entirely re-centers it in
+    one jump. Wheel viewport sync may prewarm
+    that runway with the projected delta. Every windowed surface must route
+    listener lifecycle, scroll-ancestor selection, and wheel-delta
+    normalization through
+    `frontend-modern/src/components/shared/windowedPageScroll.ts`. Every
+    listener that shared owner registers must be passive — the compositor
+    must never wait on windowing work — and it must not register a touch
+    listener: phone gestures remain compositor-native and advance the keyed
+    runway only through the passive native scroll event after the page moves.
+    Group and guest iteration must remain keyed so overlapping rows survive
+    window shifts rather than rebinding every mounted row. This anticipation
+    must preserve the existing bounded mounted-row budget; rendering the whole
+    estate or adding per-row observers, timers, or scroll listeners is
+    forbidden.
     That same viewport-sync owner may expose one passive app-shell scroll
     position signal and a smooth back-to-top action for the Workloads surface.
     The control must remain absent near the top, sit above the mobile navigation
@@ -1940,11 +1946,11 @@ which owns the Workloads table body measurement and the scroll/resize listener
 lifecycle. Future viewport sync changes must extend through that hook rather
 than rebuilding browser-event wiring or table-body geometry reads inside
 `frontend-modern/src/components/Workloads/useWorkloadsDerivedState.ts`.
-Its wheel and vertical touch-move prewarm listeners are deliberately
-non-passive so the browser compositor cannot advance beyond the mounted runway
-before the keyed guest window moves; they do not cancel native input, while the
-ordinary scroll-position listener remains passive. This preserves continuous
-rapid scrolling without increasing the bounded mounted-row budget.
+Its wheel prewarm and scroll-position listeners are all passive: the window
+tops its runway up in bounded dead-band batches, so the compositor never waits
+on windowing work and a busy main thread degrades to a briefly delayed top-up
+instead of a frozen wheel. This preserves continuous rapid scrolling without
+increasing the bounded mounted-row budget.
 The canonical public demo intentionally exercises this production hot path:
 its default Proxmox estate contains 50 nodes and more than 900 guests, crossing
 the mounted-row threshold while retaining the hook's 140-row desktop and

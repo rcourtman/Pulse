@@ -1,10 +1,19 @@
-import { batch, createEffect, createMemo, createSignal, onCleanup, type Accessor } from 'solid-js';
+import {
+  batch,
+  createEffect,
+  createMemo,
+  createSignal,
+  onCleanup,
+  untrack,
+  type Accessor,
+} from 'solid-js';
 import { createStore, reconcile, type SetStoreFunction } from 'solid-js/store';
 
 import { useTableWindowing } from '@/components/Infrastructure/useTableWindowing';
 import {
   bindWindowedPageScrollEvents,
   findWindowedPageScrollContainer,
+  isWindowedSurfaceHidden,
   wheelDeltaInPixels,
 } from '@/components/shared/windowedPageScroll';
 import type { StorageRecord } from '@/features/storageBackups/models';
@@ -120,7 +129,7 @@ export const useStoragePoolsTableWindowing = (options: UseStoragePoolsTableWindo
   const syncWindowToViewport = (projectedScrollDelta = 0, measureRows = false) => {
     if (typeof window === 'undefined' || !windowing.isWindowed()) return;
     const body = bodyRef();
-    if (!body) return;
+    if (!body || isWindowedSurfaceHidden(body)) return;
     if (measureRows) {
       const measuredHeight = body
         .querySelector<HTMLTableRowElement>(':scope > tr[data-summary-series-id]')
@@ -164,7 +173,10 @@ export const useStoragePoolsTableWindowing = (options: UseStoragePoolsTableWindo
     };
     const handleResize = () => syncWindowToViewport(0, true);
 
-    handleResize();
+    // The initial measurement reads windowing signals the pass itself moves.
+    // Keep those reads outside this setup effect's dependency graph so runway
+    // top-ups during scrolling cannot re-run measurement and listener binding.
+    untrack(handleResize);
     onCleanup(
       bindWindowedPageScrollEvents({
         scrollTarget,

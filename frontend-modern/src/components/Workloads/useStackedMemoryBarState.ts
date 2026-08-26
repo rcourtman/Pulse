@@ -18,8 +18,10 @@ export function useStackedMemoryBarState(props: StackedMemoryBarProps) {
       return;
     }
 
-    setContainerWidth(containerRef.offsetWidth);
-
+    // Width comes only from the ResizeObserver: its initial delivery fires in
+    // the same frame as observe(), after layout and before paint. A sync
+    // offsetWidth read here would force a full table reflow per mounted bar,
+    // which the virtualized tables pay on every runway top-up while scrolling.
     resizeObserver = new ResizeObserver((entries) => {
       for (const entry of entries) {
         setContainerWidth(entry.contentRect.width);

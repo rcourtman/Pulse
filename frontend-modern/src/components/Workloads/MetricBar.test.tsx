@@ -132,8 +132,10 @@ describe('MetricBar', () => {
   });
 
   it('updates sublabel visibility on resize', async () => {
-    Object.defineProperty(HTMLElement.prototype, 'offsetWidth', { configurable: true, value: 20 });
     render(() => <MetricBar value={50} label="Label" sublabel="Sub" />);
+    // Width flows only from the ResizeObserver, so the initial narrow
+    // measurement arrives through its callback.
+    resizeCallback?.([{ contentRect: { width: 20 } } as ResizeObserverEntry], {} as ResizeObserver);
     expect(screen.queryByText('(Sub)')).not.toBeInTheDocument();
 
     resizeCallback?.(

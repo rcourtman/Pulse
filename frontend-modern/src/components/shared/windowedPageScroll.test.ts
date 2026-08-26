@@ -28,7 +28,7 @@ describe('windowedPageScroll', () => {
     });
 
     expect(addEventListenerSpy).toHaveBeenCalledWith('scroll', onScroll, { passive: true });
-    expect(addEventListenerSpy).toHaveBeenCalledWith('wheel', onWheel, { passive: false });
+    expect(addEventListenerSpy).toHaveBeenCalledWith('wheel', onWheel, { passive: true });
     expect(addEventListenerSpy).toHaveBeenCalledWith('resize', onResize);
     expect(windowedPageScrollSource).not.toContain("addEventListener('touch");
 

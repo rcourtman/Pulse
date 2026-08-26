@@ -1,9 +1,10 @@
-import { createEffect, createSignal, onCleanup, type Accessor } from 'solid-js';
+import { createEffect, createSignal, onCleanup, untrack, type Accessor } from 'solid-js';
 
 import { findInlineDetailElement } from '@/components/shared/contextualFocus';
 import {
   bindWindowedPageScrollEvents,
   findWindowedPageScrollContainer,
+  isWindowedSurfaceHidden,
   wheelDeltaInPixels,
 } from '@/components/shared/windowedPageScroll';
 
@@ -35,7 +36,7 @@ export function useWorkloadViewportSync(options: WorkloadsWorkloadViewportSyncOp
   const syncGuestWindowToViewport = (measureRows = false, projectedScrollDelta = 0) => {
     if (typeof window === 'undefined') return;
     const body = options.tableBodyRef();
-    if (!body) return;
+    if (!body || isWindowedSurfaceHidden(body)) return;
     const selectedGuestId = options.selectedGuestId?.();
     if (selectedGuestId) {
       reportExpandedDetailHeight(body, selectedGuestId);
@@ -129,7 +130,11 @@ export function useWorkloadViewportSync(options: WorkloadsWorkloadViewportSyncOp
       syncGuestWindowToViewport(true);
     };
 
-    handleViewportResize();
+    // The initial measurement pass reads windowing signals (startIndex via
+    // groupedWindowing.onScroll) that the pass itself moves. Tracking them
+    // would re-run this effect — remeasuring rows with forced reflows and
+    // rebinding listeners — on every runway top-up during scrolling.
+    untrack(() => handleViewportResize());
     const scrollContainer = findWindowedPageScrollContainer(options.tableBodyRef()!);
     const scrollTarget = scrollContainer ?? window;
     onCleanup(

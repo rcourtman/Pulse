@@ -176,51 +176,60 @@ describe('useGroupedTableWindowing', () => {
   // onScroll
   // ──────────────────────────────────────────────────────────────
   describe('onScroll', () => {
-    it('keeps the current window while the viewport has a safe forward runway', () => {
+    it('keeps the current window while both runways meet the target', () => {
       const hook = setup({
         totalRowCount: () => 1000,
         enabled: () => true,
         windowSize: 100,
       });
 
-      // Scroll down: scrollTop=2000, containerHeight=400, rowHeight=40
-      // firstVisibleRow = floor(2000/40) = 50
-      // The visible range [50, 60) remains inside [0, 100) with 40 rows
-      // ahead, so the window stays mounted instead of churning every row.
-      hook.onScroll(2000, 400, 40);
+      // scrollTop=1800, containerHeight=400, rowHeight=40
+      // firstVisibleRow = 45, rowsInView = 10, targetRunway = floor(90/2) = 45
+      // leading = 45, trailing = 100 - 55 = 45 → both at target, no churn.
+      hook.onScroll(1800, 400, 40);
       expect(hook.startIndex()).toBe(0);
       expect(hook.endIndex()).toBe(100);
     });
 
-    it('moves once the viewport reaches the forward runway and then holds steady', () => {
+    it('tops up the trailing runway by the full deficit once it clears the dead-band', () => {
       const hook = setup({
         totalRowCount: () => 1000,
         enabled: () => true,
         windowSize: 100,
       });
 
+      // firstVisible = 80, trailing = 100 - 90 = 10, target = 45 → shift 35.
       hook.onScroll(3200, 400, 40);
-      expect(hook.startIndex()).toBe(56);
-      expect(hook.endIndex()).toBe(156);
+      expect(hook.startIndex()).toBe(35);
+      expect(hook.endIndex()).toBe(135);
 
+      // firstVisible = 90, trailing = 135 - 100 = 35 → the 10-row deficit
+      // clears the 8-row dead-band, so the window shifts by the full deficit.
       hook.onScroll(3600, 400, 40);
-      expect(hook.startIndex()).toBe(56);
-      expect(hook.endIndex()).toBe(156);
+      expect(hook.startIndex()).toBe(45);
+      expect(hook.endIndex()).toBe(145);
+
+      // Same position again: both runways sit at target → no further movement.
+      hook.onScroll(3600, 400, 40);
+      expect(hook.startIndex()).toBe(45);
+      expect(hook.endIndex()).toBe(145);
     });
 
-    it('keeps most spare rows behind the viewport while scrolling upward', () => {
+    it('re-centers on a teleport and tops up the leading runway while scrolling upward', () => {
       const hook = setup({
         totalRowCount: () => 1000,
         enabled: () => true,
         windowSize: 100,
       });
 
+      // firstVisible = 200 is fully outside [0, 100) → teleport to 200 - 45.
       hook.onScroll(8000, 400, 40);
-      expect(hook.startIndex()).toBe(176);
+      expect(hook.startIndex()).toBe(155);
 
+      // firstVisible = 170, leading = 15, target = 45 → shift up by 30.
       hook.onScroll(6800, 400, 40);
-      expect(hook.startIndex()).toBe(104);
-      expect(hook.endIndex()).toBe(204);
+      expect(hook.startIndex()).toBe(125);
+      expect(hook.endIndex()).toBe(225);
     });
 
     it('clamps start to 0 when scrolled near top', () => {
@@ -230,7 +239,7 @@ describe('useGroupedTableWindowing', () => {
         windowSize: 100,
       });
 
-      // scrollTop=100 → firstVisible = 2, start = 2-20 = -18 → clamped to 0
+      // scrollTop=100 → firstVisible = 2, leading deficit clamps at start 0
       hook.onScroll(100, 400, 40);
       expect(hook.startIndex()).toBe(0);
     });
@@ -242,8 +251,8 @@ describe('useGroupedTableWindowing', () => {
         windowSize: 100,
       });
 
-      // scrollTop = 6000, firstVisible = 150, start = 150-20 = 130
-      // maxStart = 200-100 = 100 → clamped to 100
+      // scrollTop = 6000, firstVisible = 150 is outside [0, 100) → teleport
+      // to 150-45 = 105, clamped to maxStart = 200-100 = 100
       hook.onScroll(6000, 400, 40);
       expect(hook.startIndex()).toBe(100);
       expect(hook.endIndex()).toBe(200);
@@ -262,7 +271,8 @@ describe('useGroupedTableWindowing', () => {
         enabled: () => true,
         windowSize: 100,
       });
-      // rowHeight=0 → safeRowHeight=40, same calc as normal
+      // rowHeight=0 → safeRowHeight=40, same calc as normal:
+      // firstVisible = 50, trailing deficit is 5, inside the dead-band → hold.
       hook.onScroll(2000, 400, 0);
       expect(hook.startIndex()).toBe(0);
     });
@@ -284,10 +294,9 @@ describe('useGroupedTableWindowing', () => {
         windowSize: 100,
       });
       // containerHeight=0 → safeContainerHeight=40 (fallback to rowHeight)
-      // rowsInView = ceil(40/40) = 1
-      // overscan = min(20, max(0, 100-1)) = 20
+      // rowsInView = ceil(40/40) = 1, target = floor(99/2) = 49
       hook.onScroll(800, 0, 40);
-      // firstVisible = 800/40 = 20, start = 20-20 = 0
+      // firstVisible = 20, leading deficit of 29 clamps at start 0
       expect(hook.startIndex()).toBe(0);
     });
 
@@ -303,8 +312,10 @@ describe('useGroupedTableWindowing', () => {
       hook.onScroll(3200, 400, 32);
 
       expect(rowIndexAtOffset).toHaveBeenCalledWith(3200, 32);
-      expect(hook.startIndex()).toBe(56);
-      expect(hook.endIndex()).toBe(156);
+      // firstVisible = 80 (resolver), rowsInView = 13, target = floor(87/2) = 43
+      // trailing = 100 - 93 = 7 → shift the 36-row deficit.
+      expect(hook.startIndex()).toBe(36);
+      expect(hook.endIndex()).toBe(136);
     });
 
     it('falls back to fixed row math when the grouped offset resolver is non-finite', () => {
@@ -315,6 +326,8 @@ describe('useGroupedTableWindowing', () => {
         rowIndexAtOffset: () => Number.NaN,
       });
 
+      // firstVisible = 50 via fixed math; the 5-row trailing deficit sits
+      // inside the dead-band, so the window holds.
       hook.onScroll(2000, 400, 40);
 
       expect(hook.startIndex()).toBe(0);
@@ -502,9 +515,9 @@ describe('useGroupedTableWindowing', () => {
         enabled: () => true,
         windowSize: 100,
       });
-      // Scroll to [400, 500). Group at index 0..50 is fully before the window.
+      // Teleport far down. Group at index 0..50 is fully before the window.
       hook.onScroll(16800, 400, 40);
-      // firstVisible = 420, overscan=20, start=400
+      // firstVisible = 420 → teleport to 420-45 = 375, window [375, 475)
       const slice = hook.getVisibleSlice('group-early', guests, 0);
       expect(slice).toEqual([]);
     });
@@ -701,14 +714,14 @@ describe('useGroupedTableWindowing', () => {
       expect(result.endIndex()).toBe(100);
     });
 
-    it('overscan becomes 0 when rowsInView >= windowSize', () => {
+    it('pins the window to the viewport start when rowsInView >= windowSize', () => {
       const hook = setup({
         totalRowCount: () => 1000,
         enabled: () => true,
         windowSize: 5,
       });
-      // containerHeight=400, rowHeight=40 → rowsInView = ceil(400/40) = 10
-      // overscan = min(20, max(0, 5 - 10)) = min(20, 0) = 0
+      // containerHeight=400, rowHeight=40 → rowsInView = 10 > windowSize 5,
+      // so buffer/target are 0 and the teleport path lands on firstVisible.
       // firstVisible = floor(2000/40) = 50, start = 50 - 0 = 50
       hook.onScroll(2000, 400, 40);
       expect(hook.startIndex()).toBe(50);
