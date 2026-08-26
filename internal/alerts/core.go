@@ -96,6 +96,6 @@ func (m *Manager) mirrorForgetAlertNoLock(alert *Alert) {
 		return
 	}
 	for _, state := range m.mirrorStatesNoLock() {
-		state.Forget(alert.ResourceID, alert.CanonicalSpecID)
+		state.Forget(alert.ResourceID, alert.CanonicalSpecID, m.policyNow())
 	}
 }

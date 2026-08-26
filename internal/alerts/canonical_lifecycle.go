@@ -654,13 +654,7 @@ func (m *Manager) evaluateCanonicalStatefulAlert(params canonicalStatefulAlertPa
 		migratedAlertIdentity = true
 	}
 
-	var pendingSince time.Time
-	if params.PendingTracking != nil {
-		pendingSince = params.PendingTracking[params.PendingKey]
-	}
-
-	result, err := alertspecs.Evaluate(params.Spec, statefulPreviousState(params.Spec, existing, pendingSince), params.Evidence)
-	if err != nil {
+	if err := params.Spec.Validate(); err != nil {
 		log.Warn().
 			Err(err).
 			Str("alertID", storageKey).
@@ -669,25 +663,105 @@ func (m *Manager) evaluateCanonicalStatefulAlert(params canonicalStatefulAlertPa
 			Msg("Skipping invalid canonical stateful evaluation")
 		return alertspecs.EvaluationResult{}, false
 	}
+	if err := alertspecs.ValidateEvidence(params.Spec.Kind, params.Evidence); err != nil {
+		log.Warn().
+			Err(err).
+			Str("alertID", storageKey).
+			Str("resourceID", params.ResourceID).
+			Str("specID", params.Spec.ID).
+			Msg("Skipping invalid canonical stateful evidence")
+		return alertspecs.EvaluationResult{}, false
+	}
 
-	if params.PendingTracking != nil {
-		switch result.State.State {
-		case alertspecs.AlertStatePending:
-			if pendingSince.IsZero() {
-				params.PendingTracking[params.PendingKey] = params.Evidence.ObservedAt
+	matched, matchSeverity, matchReason := alertspecs.Match(params.Spec, params.Evidence)
+
+	// An existing alert the core does not know about means it was firing:
+	// adopt it, as everywhere else.
+	if existing != nil {
+		if _, known := m.core.Incident(params.Spec.ResourceID, params.Spec.ID); !known {
+			ackAt := time.Time{}
+			if existing.AckTime != nil {
+				ackAt = *existing.AckTime
 			}
-		default:
+			m.core.SeedFiringIncident(params.Spec.ResourceID, params.Spec.ID, shadowSeverityForLevel(existing.Level), existing.StartTime, existing.Acknowledged, existing.AckUser, ackAt)
+		}
+	}
+
+	severity := reducer.SeverityWarning
+	if matchSeverity == alertspecs.AlertSeverityCritical {
+		severity = reducer.SeverityCritical
+	}
+	events := m.core.ApplyDiscrete(reducer.DiscreteSignal{
+		ResourceID: params.Spec.ResourceID,
+		Key:        params.Spec.ID,
+		Matched:    matched,
+		Severity:   severity,
+		ObservedAt: params.Evidence.ObservedAt,
+	}, reducer.DiscreteRule{
+		Confirmations: specConfirmationsRequired(params.Spec),
+		Disabled:      params.Spec.Disabled,
+	})
+	primary := reducer.EventType("")
+	if len(events) > 0 {
+		primary = events[0].Type
+	}
+	incident, hasIncident := m.core.Incident(params.Spec.ResourceID, params.Spec.ID)
+
+	// Legacy pending-since maps stay as read-only mirrors of the core
+	// during the transition.
+	if params.PendingTracking != nil {
+		if hasIncident && incident.State == reducer.StatePending {
+			if _, tracked := params.PendingTracking[params.PendingKey]; !tracked {
+				params.PendingTracking[params.PendingKey] = incident.PendingSince
+			}
+		} else {
 			delete(params.PendingTracking, params.PendingKey)
 		}
 	}
 
-	switch result.State.State {
-	case alertspecs.AlertStatePending:
+	result := alertspecs.EvaluationResult{}
+	result.State.SpecID = params.Spec.ID
+	result.State.LastObservedAt = params.Evidence.ObservedAt
+	result.State.Reason = matchReason
+	transition := func(kind alertspecs.EvaluationTransitionKind, from, to alertspecs.AlertState) *alertspecs.EvaluationTransition {
+		return &alertspecs.EvaluationTransition{
+			Kind:       kind,
+			SpecID:     params.Spec.ID,
+			ResourceID: params.Spec.ResourceID,
+			From:       from,
+			To:         to,
+			At:         params.Evidence.ObservedAt,
+			Severity:   matchSeverity,
+			Reason:     matchReason,
+			Evidence:   params.Evidence,
+		}
+	}
+
+	switch {
+	case hasIncident && incident.State == reducer.StatePending:
+		result.State.State = alertspecs.AlertStatePending
+		result.State.Severity = matchSeverity
+		result.State.ConsecutiveMatches = incident.Confirmations
+		result.State.FirstMatchedAt = incident.PendingSince
+		if primary == reducer.EventPending {
+			result.Transition = transition(alertspecs.EvaluationTransitionPending, alertspecs.AlertStateClear, alertspecs.AlertStatePending)
+		}
 		return result, true
-	case alertspecs.AlertStateFiring:
-		level, ok := alertLevelFromCanonicalSeverity(result.State.Severity)
-		if !ok {
-			level = AlertLevelWarning
+	case hasIncident && incident.State == reducer.StateFiring:
+		level := AlertLevelWarning
+		if incident.Severity == reducer.SeverityCritical {
+			level = AlertLevelCritical
+		}
+		result.State.State = alertspecs.AlertStateFiring
+		result.State.Severity = matchSeverity
+		result.State.ConsecutiveMatches = incident.Confirmations
+		result.State.FirstMatchedAt = incident.StartedAt
+		result.State.ActiveSince = incident.StartedAt
+		switch {
+		case existing == nil:
+			result.Transition = transition(alertspecs.EvaluationTransitionActivated, alertspecs.AlertStatePending, alertspecs.AlertStateFiring)
+		case primary == reducer.EventSeverityChanged:
+			result.Transition = transition(alertspecs.EvaluationTransitionSeverityChanged, alertspecs.AlertStateFiring, alertspecs.AlertStateFiring)
 		}
 		message := params.Message
 		value := params.Value
@@ -695,6 +769,9 @@ func (m *Manager) evaluateCanonicalStatefulAlert(params canonicalStatefulAlertPa
 		if params.MessageBuilder != nil {
 			message, value, threshold = params.MessageBuilder(result)
 		}
+		// The stateful family stamps occurrences at the observation (or the
+		// caller's override, e.g. a backup timestamp), not the pending run
+		// start — preserved from the pre-cutover engine.
 		startTime := params.Evidence.ObservedAt
 		if !params.StartTimeOverride.IsZero() {
 			startTime = params.StartTimeOverride
@@ -729,17 +806,16 @@ func (m *Manager) evaluateCanonicalStatefulAlert(params canonicalStatefulAlertPa
 		}
 
 		if existing == nil {
-			reactivatedStart, reactivatedAt, reactivated, hadResolvedOccurrence := m.consumeRecentlyResolvedForRefireWithPrimaryLock(storageKey, time.Now())
-			if reactivated {
-				if !reactivatedStart.IsZero() {
-					alert.StartTime = reactivatedStart
+			_, _, _, hadResolvedOccurrence := m.consumeRecentlyResolvedForRefireWithPrimaryLock(storageKey, time.Now())
+			if primary == reducer.EventRefired {
+				if !incident.StartedAt.IsZero() {
+					alert.StartTime = incident.StartedAt
 				}
 				if params.AddToHistory {
 					m.historyManager.UpdateAlertLastSeenForAlert(alert, alert.LastSeen)
 				}
 				log.Debug().
 					Str("alertID", storageKey).
-					Time("resolvedAt", reactivatedAt).
 					Msg("Stateful alert re-fired within cooldown, reactivated without new history entry")
 				if params.RateLimit && !m.checkRateLimit(trackingKey) {
 					return result, true
@@ -748,6 +824,7 @@ func (m *Manager) evaluateCanonicalStatefulAlert(params canonicalStatefulAlertPa
 				return result, true
 			}
 
+			m.recordAlertEvent(eventlog.TypeFired, alert, storageKey, matchReason, message, nil)
 			if params.AddToHistory {
 				if hadResolvedOccurrence {
 					m.historyManager.AddAlertTransition(*alert)
@@ -767,7 +844,7 @@ func (m *Manager) evaluateCanonicalStatefulAlert(params canonicalStatefulAlertPa
 			return result, true
 		}
 
-		if result.Transition != nil && result.Transition.Kind == alertspecs.EvaluationTransitionSeverityChanged && params.NotifyOnSeverityChange {
+		if primary == reducer.EventSeverityChanged && params.NotifyOnSeverityChange {
 			if params.AddToHistoryOnSeverityChange {
 				m.historyManager.AddAlertTransition(*alert)
 			}
@@ -784,9 +861,11 @@ func (m *Manager) evaluateCanonicalStatefulAlert(params canonicalStatefulAlertPa
 		m.setActiveAlertNoLock(storageKey, alert)
 		return result, true
 	default:
+		result.State.State = alertspecs.AlertStateClear
 		if existing == nil {
 			return result, true
 		}
+		result.Transition = transition(alertspecs.EvaluationTransitionRecovered, alertspecs.AlertStateFiring, alertspecs.AlertStateClear)
 
 		m.removeActiveAlertNoLock(storageKey)
 		recoveryEvidence, hasRecoveryEvidence := canonicalAlertEvidenceEnvelope(

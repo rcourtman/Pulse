@@ -487,10 +487,20 @@ func (s *State) SeedFiringIncident(resourceID, subKey string, severity Severity,
 }
 
 // Forget drops any incident for the key without emitting events — the
-// shadow feed's mirror for manual clears and its divergence resync. Ack
-// and resolved records are left to their own retention.
-func (s *State) Forget(resourceID, subKey string) {
-	delete(s.incidents, incidentKey(resourceID, subKey))
+// mirror for manual clears and the shadow feed's divergence resync. A
+// firing incident is recorded as a resolved occurrence (the manager's
+// manual clear adds to recently-resolved the same way), so a quick
+// re-fire reactivates it, and its acknowledgement enters the retention
+// window.
+func (s *State) Forget(resourceID, subKey string, at time.Time) {
+	key := incidentKey(resourceID, subKey)
+	if incident, ok := s.incidents[key]; ok {
+		if incident.State == StateFiring {
+			s.recordResolved(key, incident, at)
+			s.markAckInactive(key, at)
+		}
+		delete(s.incidents, key)
+	}
 }
 
 // ShiftResolved moves every resolved-occurrence timestamp by delta

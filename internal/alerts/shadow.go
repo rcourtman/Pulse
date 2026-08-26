@@ -242,7 +242,7 @@ func (m *Manager) shadowCompareNoLock(resourceID, specKey, managerAlertID string
 			ackAt,
 		)
 	} else {
-		feed.state.Forget(resourceID, specKey)
+		feed.state.Forget(resourceID, specKey, observedAt)
 	}
 
 	key := resourceID + "\x00" + specKey

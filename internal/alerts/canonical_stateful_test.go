@@ -107,6 +107,10 @@ func TestStatefulAlertReFireCooldown(t *testing.T) {
 			resolved.ResolvedTime = time.Now().Add(-10 * time.Minute)
 		}
 		m.resolvedMutex.Unlock()
+		// Age the core's resolved ledger in step with the manager's records.
+		m.mu.Lock()
+		m.core.ShiftResolved(-10 * time.Minute)
+		m.mu.Unlock()
 
 		m.syncCanonicalHealthAssessmentAlert(params)
 
