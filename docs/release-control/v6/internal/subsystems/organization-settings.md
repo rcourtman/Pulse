@@ -374,6 +374,14 @@ themselves: RBAC gates may show neutral unavailable-capability copy, but must
 not keep `(Pro)`, plan-tier labels, or paid-action wording after the CTA is
 suppressed.
 
+Community SSO owns mapping identity-provider groups to the built-in `admin`,
+`operator`, and `viewer` roles. That login-time mapping must remain available
+without the `rbac` capability; the paid RBAC boundary begins at custom-role
+creation and manual user-assignment administration. `docs/RBAC.md` and its
+shipped `frontend-modern/public/docs/RBAC.md` mirror must state this boundary
+identically, and the docs-links proof must pin both the byte synchronization
+and the Community-versus-Pro wording.
+
 Organization Settings is a browser-session administration surface even when
 first-run also leaves a generated API token in browser storage. Its API client
 must prefer the active session cookie for organization reads, invitations,

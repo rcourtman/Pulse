@@ -131,6 +131,23 @@ describe('docsLinks', () => {
     expect(rbacGuide).toMatch(/Removal does not disable\s+the upstream IdP account/);
   });
 
+  it('ships the Community SSO and Pro RBAC role boundary', () => {
+    const rbacGuide = readFileSync(path.join(repoRoot, 'docs', 'RBAC.md'), 'utf8');
+    const shippedRBACGuide = readFileSync(
+      path.join(frontendRoot, 'public', 'docs', 'RBAC.md'),
+      'utf8',
+    );
+    const compactGuide = rbacGuide.replace(/\s+/g, ' ');
+
+    expect(shippedRBACGuide).toBe(rbacGuide);
+    expect(compactGuide).toContain(
+      'built-in roles can be automatically assigned based on group membership on every plan',
+    );
+    expect(compactGuide).toContain(
+      'Creating custom roles and manually managing user assignments require Pro RBAC',
+    );
+  });
+
   it('ships the configuration transfer authorization contract', () => {
     const apiReference = readFileSync(path.join(repoRoot, 'docs', 'API.md'), 'utf8');
     const shippedAPIReference = readFileSync(
