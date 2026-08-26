@@ -380,29 +380,39 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
           </div>
 
           <Show when={state.latestRecord()}>
-            <div class="flex items-center gap-2 rounded-md border border-blue-200 bg-blue-50 px-4 py-2 text-xs text-blue-800 dark:border-blue-800 dark:bg-blue-900 dark:text-blue-200">
-              <svg
-                class="h-4 w-4"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
+            <div class="flex flex-col gap-3 rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-xs text-blue-800 dark:border-blue-800 dark:bg-blue-900 dark:text-blue-200 sm:flex-row sm:items-center sm:justify-between">
+              <div class="flex items-center gap-2">
+                <svg
+                  class="h-4 w-4 shrink-0"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+                <span>
+                  {state.latestTokenSource() === 'setup_handoff' ? (
+                    <>
+                      First-host install token <strong>{state.latestRecord()?.name}</strong>{' '}
+                      prepared automatically. Commands below already include this credential.
+                    </>
+                  ) : (
+                    <>
+                      Install token <strong>{state.latestRecord()?.name}</strong> created. Commands
+                      below now include this credential.
+                    </>
+                  )}
+                </span>
+              </div>
+              <Button
+                variant="secondary"
+                size="sm"
+                class="shrink-0 self-start sm:self-auto"
+                onClick={state.showCurrentTokenOnly}
               >
-                <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
-              </svg>
-              <span>
-                {state.latestTokenSource() === 'setup_handoff' ? (
-                  <>
-                    First-host install token <strong>{state.latestRecord()?.name}</strong> prepared
-                    automatically. Commands below already include this credential.
-                  </>
-                ) : (
-                  <>
-                    Install token <strong>{state.latestRecord()?.name}</strong> created. Commands
-                    below now include this credential.
-                  </>
-                )}
-              </span>
+                Show token only
+              </Button>
             </div>
           </Show>
         </div>

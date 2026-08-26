@@ -42,8 +42,16 @@ export const mergeDeliveryLogRows = (
   heldEvents: AlertEvent[],
 ): DeliveryLogRow[] => {
   const rows: DeliveryLogRow[] = [
-    ...entries.map((entry): DeliveryLogRow => ({ kind: 'attempt', timestamp: entry.timestamp, entry })),
-    ...heldEvents.map((event): DeliveryLogRow => ({ kind: 'held', timestamp: event.occurredAt, event })),
+    ...entries.map((entry): DeliveryLogRow => ({
+      kind: 'attempt',
+      timestamp: entry.timestamp,
+      entry,
+    })),
+    ...heldEvents.map((event): DeliveryLogRow => ({
+      kind: 'held',
+      timestamp: event.occurredAt,
+      event,
+    })),
   ];
   return rows.sort((a, b) => {
     const at = new Date(a.timestamp).getTime() || 0;

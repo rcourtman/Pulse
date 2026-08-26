@@ -1,32 +1,22 @@
 {
   "version": 1,
-  "base_sha": "9ddfc69ec71d8db6b313522f54c2f68db88ec914",
-  "verified_at": "2026-08-26T22:30:00Z",
+  "base_sha": "ee35d178b5c7dad09877c20bf20acd2aba8f0b51",
+  "verified_at": "2026-08-26T22:53:00Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx",
-    "frontend-modern/src/components/Workloads/diskListModel.ts",
-    "frontend-modern/src/components/shared/DetailSectionTable.tsx",
-    "frontend-modern/src/components/shared/ProgressBar.tsx",
-    "frontend-modern/src/components/shared/detailSectionModel.ts"
+    "frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx",
+    "frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx": "21bf8fd35d7c79f9bceade2addf8a952a10dfac724a90d3f892769d1d3dbdde1",
-    "frontend-modern/src/components/Workloads/diskListModel.ts": "7e446cbc5b6b87abb12af69e4dc5a78ae26258ffbbc8f5f70235924d3d535084",
-    "frontend-modern/src/components/shared/DetailSectionTable.tsx": "eff0236a3d524a041aefe18fa021cc619f61337fb9b80e74bbea07789a90e69e",
-    "frontend-modern/src/components/shared/ProgressBar.tsx": "8fda21a7dd22a1c00557686604dc07d7b69011d690a9618cf480eaf939e61103",
-    "frontend-modern/src/components/shared/detailSectionModel.ts": "42a6f8e70a03303d366efe8f8d490b1bf1bc8bfd6338d0510db35890d19ddeec"
+    "frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx": "b323df464d7d42fea5b38f553afce74cf3d56c4459199f95a45fc4d48ef17084",
+    "frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx": "e7fbdac65fe0ec225bdf898eac4bad112cdbd490322d37861677faf4be6ae74e"
   },
   "routes": [
-    "/proxmox/overview"
+    "/settings/infrastructure?add=docker"
   ],
   "viewports": [
     {
       "width": 1440,
-      "height": 900
-    },
-    {
-      "width": 768,
       "height": 900
     },
     {
@@ -35,14 +25,15 @@
     }
   ],
   "states": [
-    "multi-filesystem Proxmox guest expanded to its Overview tab on desktop",
-    "same expanded filesystem state in the narrow table layout at tablet width",
-    "same expanded filesystem state at phone width with wrapped detail text"
+    "Docker agent installer immediately after manually generating an install token",
+    "token-only reveal reopened from the generated-token confirmation",
+    "token-only reveal at phone width"
   ],
   "interactions": [
-    "expanded checkout-web-373 and confirmed both known filesystems retain percentage, used/total, and type text",
-    "confirmed each filesystem exposes an accessible progress value matching its rendered fill",
-    "resized through 1440x900, 768x900, and 390x844 and confirmed bar alignment, readable wrapping, and zero document-level horizontal overflow",
-    "reloaded the rebased current build and reconfirmed matching progress values plus zero document-level horizontal overflow at desktop and phone widths"
+    "generated a fresh Docker agent install token and confirmed the token-only dialog opened automatically",
+    "confirmed the dialog exposes the token value and Copy token action without an install command",
+    "dismissed the token dialog and reopened it with Show token only without minting another credential",
+    "confirmed the token wraps, the copy action spans the mobile card, and the page has no horizontal overflow at 390x844",
+    "confirmed the built frontend produced no browser console errors during the verified flows"
   ]
 }

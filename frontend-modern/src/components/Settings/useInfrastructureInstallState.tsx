@@ -4,6 +4,7 @@ import { MonitoringAPI } from '@/api/monitoring';
 import { NodesAPI } from '@/api/nodes';
 import { SecurityAPI, type APITokenRecord } from '@/api/security';
 import { notificationStore } from '@/stores/notifications';
+import { showTokenReveal } from '@/stores/tokenReveal';
 import type { AgentLookupResponse, ConnectedInfrastructureItem } from '@/types/api';
 import type { SecurityStatus } from '@/types/config';
 import { copyToClipboard } from '@/utils/clipboard';
@@ -45,6 +46,8 @@ const SETUP_HANDOFF_INSTALL_STEPS = new Set<InfrastructurePanelStep>([
   'docker',
   'kubernetes',
 ]);
+const INSTALL_TOKEN_REVEAL_NOTE =
+  'Copy just this token for PULSE_TOKEN or Compose environment configuration. The generated install commands remain available after you close this dialog.';
 
 const isActiveInfrastructureItem = (item: ConnectedInfrastructureItem) => item.status === 'active';
 
@@ -245,6 +248,19 @@ Pulse prepares the first-host install token from setup so you can move straight 
     notificationStore.success('Confirmed install commands without an API token.', 3500);
   };
 
+  const showCurrentTokenOnly = () => {
+    const token = currentToken();
+    const record = latestRecord();
+    if (!token || !record) return;
+
+    showTokenReveal({
+      token,
+      record,
+      source: 'agent',
+      note: INSTALL_TOKEN_REVEAL_NOTE,
+    });
+  };
+
   const generateInstallToken = async (
     source: 'manual' | 'setup_handoff',
     options: { notifySuccess?: boolean } = {},
@@ -271,6 +287,14 @@ Pulse prepares the first-host install token from setup so you can move straight 
       setTokenName('');
       setConfirmedNoToken(false);
       setSetupHandoffAutoTokenFailed(false);
+      if (source === 'manual') {
+        showTokenReveal({
+          token,
+          record,
+          source: 'agent',
+          note: INSTALL_TOKEN_REVEAL_NOTE,
+        });
+      }
       if (options.notifySuccess) {
         notificationStore.success(
           withCommands
@@ -606,6 +630,7 @@ Pulse prepares the first-host install token from setup so you can move straight 
     setupHandoff,
     setupHandoffAutoTokenFailed,
     setupHandoffAutoTokenPending,
+    showCurrentTokenOnly,
     tokenName,
   };
 };

@@ -261,6 +261,7 @@ describe('infrastructure operations model', () => {
     );
     expect(infrastructureInstallerSectionSource).toContain('Generate install token');
     expect(infrastructureInstallerSectionSource).toContain('Generate token');
+    expect(infrastructureInstallerSectionSource).toContain('Show token only');
     expect(infrastructureInstallerSectionSource).toContain(
       'This is the Pulse Agent handoff from first-run setup inside Add infrastructure.',
     );

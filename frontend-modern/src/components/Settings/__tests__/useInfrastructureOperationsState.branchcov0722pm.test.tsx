@@ -27,6 +27,7 @@ const mocks = vi.hoisted(() => ({
   notificationSuccess: vi.fn(),
   notificationError: vi.fn(),
   notificationInfo: vi.fn(),
+  showTokenReveal: vi.fn(),
   loggerError: vi.fn(),
   loggerWarn: vi.fn(),
   navigate: vi.fn(),
@@ -67,6 +68,10 @@ vi.mock('@/stores/notifications', () => ({
     error: mocks.notificationError,
     info: mocks.notificationInfo,
   },
+}));
+
+vi.mock('@/stores/tokenReveal', () => ({
+  showTokenReveal: mocks.showTokenReveal,
 }));
 
 vi.mock('@/utils/logger', () => ({
@@ -194,6 +199,30 @@ describe('useInfrastructureOperationsState command-building closures', () => {
       const cmd = state.getUninstallCommand();
       expect(cmd).toContain("--token 'tok-1'");
       expect(cmd).not.toContain('<api-token>');
+      expect(mocks.showTokenReveal).toHaveBeenCalledWith({
+        token: 'tok-1',
+        record: expect.objectContaining({ id: 'rec-1', name: 'Agent' }),
+        source: 'agent',
+        note: expect.stringContaining('PULSE_TOKEN or Compose environment configuration'),
+      });
+      dispose();
+    });
+
+    it('reopens the token-only reveal without minting another credential', async () => {
+      const { state, dispose } = mountHook();
+      await flushAsync();
+      await state.handleGenerateToken();
+      mocks.showTokenReveal.mockClear();
+
+      state.showCurrentTokenOnly();
+
+      expect(mocks.createHostAgentInstallToken).toHaveBeenCalledTimes(1);
+      expect(mocks.showTokenReveal).toHaveBeenCalledWith({
+        token: 'tok-1',
+        record: expect.objectContaining({ id: 'rec-1', name: 'Agent' }),
+        source: 'agent',
+        note: expect.stringContaining('PULSE_TOKEN or Compose environment configuration'),
+      });
       dispose();
     });
 

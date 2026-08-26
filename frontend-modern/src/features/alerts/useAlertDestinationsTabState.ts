@@ -43,8 +43,13 @@ export function useAlertDestinationsTabState(props: AlertDestinationsTabStatePro
     deliveryNeedsAttention,
     loadDeliveryHealth,
   } = useNotificationDeliveryHealth();
-  const { deliveryLog, deliveryLogUnavailable, refreshingDeliveryLog, heldEvents, loadDeliveryLog } =
-    useNotificationDeliveryLog();
+  const {
+    deliveryLog,
+    deliveryLogUnavailable,
+    refreshingDeliveryLog,
+    heldEvents,
+    loadDeliveryLog,
+  } = useNotificationDeliveryLog();
   const webhookState = useAlertWebhookDestinationsState();
 
   const isLoading = createMemo(
