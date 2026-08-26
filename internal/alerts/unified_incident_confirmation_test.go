@@ -226,3 +226,67 @@ func confirmedProviderIncidentResource(observedAt time.Time) unifiedresources.Re
 		}},
 	}
 }
+
+// Regression: several callers reset the confirmation-count maps directly
+// without the evaluator path (clearResourceOfflineAlert among them), which
+// left a stale lifecycleFirstMatched entry that backdated the next run's
+// alert to the previous run's first observation. A new run (pre-evaluation
+// count zero) must re-stamp the first-matched time.
+func TestLifecycleFirstMatchedRestampsAfterDirectCountReset(t *testing.T) {
+	manager := NewManagerWithDataDir(t.TempDir(), WithoutPersistedAlertRestore())
+	t.Cleanup(manager.Stop)
+
+	manager.mu.Lock()
+	manager.config.Enabled = true
+	manager.mu.Unlock()
+
+	epoch := time.Date(2026, 8, 26, 12, 0, 0, 0, time.UTC)
+	observe := func(observed string, at time.Time) {
+		spec, err := buildCanonicalDiscreteStateSpec(
+			"node-9", "node-9", unifiedresources.ResourceTypeAgent,
+			AlertLevelCritical, 3, false, "connectivity", []string{"offline"},
+		)
+		if err != nil {
+			t.Fatalf("build spec: %v", err)
+		}
+		if _, ok := manager.evaluateCanonicalLifecycleAlert(canonicalLifecycleAlertParams{
+			Spec: spec,
+			Evidence: alertspecs.AlertEvidence{
+				ObservedAt:    at,
+				DiscreteState: &alertspecs.DiscreteStateEvidence{StateKey: "connectivity", Observed: observed},
+			},
+			Tracking:     manager.offlineConfirmations,
+			TrackingKey:  "conn:node-9",
+			AlertID:      canonicalDiscreteStateStateID("node-9", "connectivity"),
+			AlertType:    "connectivity",
+			ResourceID:   "node-9",
+			ResourceName: "node-9",
+			Message:      "node offline",
+		}); !ok {
+			t.Fatal("evaluation rejected")
+		}
+	}
+
+	// Two matches begin a run, then the count is reset directly, the way
+	// the healthy-poll paths do — leaving lifecycleFirstMatched stale.
+	observe("offline", epoch)
+	observe("offline", epoch.Add(30*time.Second))
+	manager.mu.Lock()
+	delete(manager.offlineConfirmations, "conn:node-9")
+	manager.mu.Unlock()
+
+	restart := epoch.Add(2 * time.Minute)
+	observe("offline", restart)
+	observe("offline", restart.Add(30*time.Second))
+	observe("offline", restart.Add(60*time.Second))
+
+	manager.mu.Lock()
+	alert, exists := manager.getActiveAlertNoLock(canonicalDiscreteStateStateID("node-9", "connectivity"))
+	manager.mu.Unlock()
+	if !exists || alert == nil {
+		t.Fatal("expected alert to fire after the second run")
+	}
+	if !alert.StartTime.Equal(restart) {
+		t.Fatalf("StartTime = %v, want the second run's first observation %v", alert.StartTime, restart)
+	}
+}

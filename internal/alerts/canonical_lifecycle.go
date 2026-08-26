@@ -390,7 +390,13 @@ func (m *Manager) evaluateCanonicalLifecycleAlert(params canonicalLifecycleAlert
 	if params.Tracking != nil {
 		if result.State.ConsecutiveMatches > 0 {
 			params.Tracking[params.TrackingKey] = result.State.ConsecutiveMatches
-			if _, tracked := m.lifecycleFirstMatched[params.TrackingKey]; !tracked && !result.State.FirstMatchedAt.IsZero() {
+			// Stamp the first-matched time whenever this observation starts
+			// a new confirmation run (the pre-evaluation count was zero).
+			// Several callers reset the count maps directly without going
+			// through this path — clearResourceOfflineAlert among them — so
+			// a keep-if-present guard would let a stale entry from a prior
+			// run backdate the next run's alert.
+			if confirmations == 0 && !result.State.FirstMatchedAt.IsZero() {
 				m.lifecycleFirstMatched[params.TrackingKey] = result.State.FirstMatchedAt
 			}
 		} else {
