@@ -587,6 +587,17 @@ to map access and must not dispatch, persist history, invoke callbacks, or
 perform notification work. Canonical lifecycle and stateful cooldown refires
 consume resolved state through the shared lock-order-aware helper, preserve the
 original alert `StartTime`, and keep the five-minute refire/history semantics.
+The reducer core owns transitions for the canonical stateful family: health
+assessments, posture thresholds, and change thresholds, including ZFS pool
+state, backup and snapshot age, and Docker update-delay state. Legacy
+pending-since maps are read-only mirrors during migration and must not decide
+activation. Stateful occurrences retain their established timestamp boundary:
+the current observation, or a caller-supplied override such as the backup
+timestamp, rather than the pending-run start. A manual clear must pass its
+clear time into the reducer, record the firing incident as recently resolved,
+and start acknowledgement retention so a refire inside five minutes restores
+the same occurrence without duplicating history. Regression ownership is
+`internal/alerts/canonical_stateful_test.go`.
 The browser thresholds surface is also platform-shaped: Proxmox, Docker,
 Kubernetes, TrueNAS, vSphere, PBS, PMG, and Systems. Route-backed platform
 choices must use the shared `Subtabs` navigation above the shared `FilterBar`;
