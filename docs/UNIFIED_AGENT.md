@@ -647,6 +647,29 @@ Set `--health-addr=""` or `PULSE_HEALTH_ADDR=off` to disable the health/metrics 
 
 ## Troubleshooting
 
+### pfSense service disabled after a major upgrade
+
+Pulse installs two service files on pfSense: the FreeBSD rc.d service at
+`/usr/local/etc/rc.d/pulse-agent` and an executable
+`/usr/local/etc/rc.d/pulse_agent.sh` boot wrapper. pfSense only runs custom
+scripts from that directory at boot when their filename ends in `.sh`.
+
+If both files still exist after a pfSense upgrade, run the following as root to
+restore the enable flag, permissions and running service:
+
+```sh
+sysrc pulse_agent_enable=YES
+chmod 755 /usr/local/etc/rc.d/pulse-agent /usr/local/etc/rc.d/pulse_agent.sh
+service pulse-agent start
+service pulse-agent status
+```
+
+If either file is missing, copy the current command from **Settings →
+Infrastructure → Install on a host** and run it again on the same firewall. Do
+not uninstall the existing agent first. The installer repairs the rc.d service,
+enable flag and pfSense boot wrapper in place and reuses saved connection and
+agent identity state when it is still present.
+
 ### Installer Fails With "Not enough free disk space"
 
 The installer stages the agent binary (~34 MiB) in a temporary directory before
