@@ -218,23 +218,20 @@ export function NodeDrawerOverview(props: NodeDrawerOverviewProps) {
   ];
 
   const networkRows = (): NodeOverviewRow[] =>
-    (props.node.networkInterfaces || []).reduce<NodeOverviewRow[]>(
-      (rows, networkInterface) => {
-        const name = cleanText(networkInterface.name);
-        if (!name) return rows;
-        const addresses = (networkInterface.addresses || [])
-          .map((address) => cleanText(address))
-          .filter(Boolean);
-        const mac = cleanText(networkInterface.mac);
-        rows.push({
-          label: name,
-          value: addresses.join(' / ') || mac || 'Configured',
-          title: [...addresses, ...(mac ? [mac] : [])].join(' · ') || undefined,
-        });
-        return rows;
-      },
-      [],
-    );
+    (props.node.networkInterfaces || []).reduce<NodeOverviewRow[]>((rows, networkInterface) => {
+      const name = cleanText(networkInterface.name);
+      if (!name) return rows;
+      const addresses = (networkInterface.addresses || [])
+        .map((address) => cleanText(address))
+        .filter(Boolean);
+      const mac = cleanText(networkInterface.mac);
+      rows.push({
+        label: name,
+        value: addresses.join(' / ') || mac || 'Configured',
+        title: [...addresses, ...(mac ? [mac] : [])].join(' · ') || undefined,
+      });
+      return rows;
+    }, []);
 
   const telemetryRows = (): NodeOverviewRow[] => [
     {
