@@ -19,6 +19,11 @@ import (
 func writeCustomSensorFixture(t *testing.T, configBody string) (string, string) {
 	t.Helper()
 	directory := t.TempDir()
+	if runtime.GOOS != "windows" {
+		if err := os.Chmod(directory, 0o700); err != nil {
+			t.Fatalf("secure custom sensor fixture directory: %v", err)
+		}
+	}
 	commandPath := filepath.Join(directory, "sensor-command")
 	if runtime.GOOS == "windows" {
 		commandPath += ".exe"
