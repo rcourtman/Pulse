@@ -2452,7 +2452,7 @@ describe('frontend resource type boundaries', () => {
     expect(historyChartOverlaySource).not.toContain(
       'Unlock {props.chart.lockTierLabel()} Features',
     );
-    expect(historyChartOverlaySource).toContain('is not enabled on this');
+    expect(historyChartOverlaySource).toContain('requires a higher license plan');
     expect(historyChartTooltipSource).toContain('formatHistoryChartTooltipValue');
     expect(containerUpdateBadgeSource).toContain('useContainerUpdateButtonState');
     expect(containerUpdateBadgeSource).toContain('getUpdateButtonClass');
