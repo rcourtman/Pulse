@@ -675,6 +675,16 @@ the explicit observation clock. The manager's temporary wall-clock comparison
 remains reference behavior only until cutover and is covered by a parity
 harness that aligns the two clocks. Additional alert families and downstream
 delivery behavior require separate contract slices.
+
+Acknowledgement is canonical incident state across reducer families. It may be
+set only on a firing incident, remains attached through per-observation alert
+rebuilds, and is removed explicitly by unacknowledge. Resolution makes the
+acknowledgement record inactive rather than deleting it, so a reactivation
+within one hour restores the original user and acknowledgement time; after that
+inactive retention, reactivation is unacknowledged. The reducer enforces this
+boundary on its observation clock, matching the manager's one-hour cleanup TTL,
+and parity must cover acknowledgement, unacknowledgement, rebuild, short
+resolve/re-fire restoration, and expiry for both metric and discrete families.
 That same guest-threshold owner also governs guest-derived lifecycle and
 posture alerts. Snapshot age, backup age, powered-off state, and
 configuration-change reevaluation must all construct a canonical lightweight
