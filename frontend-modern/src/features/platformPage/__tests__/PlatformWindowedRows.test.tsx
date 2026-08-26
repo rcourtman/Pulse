@@ -83,10 +83,38 @@ describe('PlatformWindowedRows', () => {
     setItems([{ id: 'node-a', label: 'Refreshed snapshot' }]);
 
     expect(await screen.findByText('Refreshed snapshot')).toBeInTheDocument();
-    expect(screen.getByRole('textbox', { name: 'Row-local state' })).toBe(input);
-    expect(input).toHaveValue('still editing');
     expect(mounts).toBe(1);
     expect(disposals).toBe(0);
+    expect(screen.getByRole('textbox', { name: 'Row-local state' })).toBe(input);
+    expect(input).toHaveValue('still editing');
+  });
+
+  it('renders keyed rows once in their latest order', async () => {
+    const [items, setItems] = createSignal([
+      { key: 'alpha', label: 'Alpha' },
+      { key: 'mike', label: 'Mike' },
+      { key: 'zulu', label: 'Zulu' },
+    ]);
+    const { container } = render(() => (
+      <table>
+        <tbody>
+          <PlatformWindowedRows items={items} keyExtractor={(item) => item.key}>
+            {(item) => <tr data-row-key={item.key}>{item.label}</tr>}
+          </PlatformWindowedRows>
+        </tbody>
+      </table>
+    ));
+
+    setItems([
+      { key: 'zulu', label: 'Zulu refreshed' },
+      { key: 'mike', label: 'Mike refreshed' },
+      { key: 'alpha', label: 'Alpha refreshed' },
+    ]);
+
+    expect(await screen.findByText('Zulu refreshed')).toBeInTheDocument();
+    expect([...container.querySelectorAll('[data-row-key]')].map((row) => row.textContent)).toEqual(
+      ['Zulu refreshed', 'Mike refreshed', 'Alpha refreshed'],
+    );
   });
 
   it('keeps estate-sized card lists within their configured mounted-item budget', () => {

@@ -27,8 +27,10 @@ export interface PlatformWindowedRowsProps<Row> {
 }
 
 type StablePlatformRow<Row> = {
+  __platformWindowStableRow: true;
   __platformWindowKey: string | number;
-  value: Row;
+  value: Accessor<Row>;
+  update: (value: Row) => void;
 };
 
 const defaultRowKey = <Row,>(item: Row): string | number | undefined => {
@@ -37,17 +39,41 @@ const defaultRowKey = <Row,>(item: Row): string | number | undefined => {
   return typeof id === 'string' || typeof id === 'number' ? id : undefined;
 };
 
-const buildStableRows = <Row,>(
+const stableRowKeys = <Row,>(
   items: readonly Row[],
   keyExtractor?: (item: Row) => string | number,
-): StablePlatformRow<Row>[] | undefined => {
+): (string | number)[] | undefined => {
   const keys = items.map((item) => keyExtractor?.(item) ?? defaultRowKey(item));
   if (keys.some((key) => key === undefined) || new Set(keys).size !== keys.length) return undefined;
-  return items.map((value, index) => ({
-    __platformWindowKey: keys[index]!,
-    value,
-  }));
+  return keys as (string | number)[];
 };
+
+const createStableRow = <Row,>(key: string | number, initialValue: Row): StablePlatformRow<Row> => {
+  if (typeof initialValue === 'object' && initialValue !== null) {
+    const [value, setValue] = createStore(initialValue);
+    return {
+      __platformWindowStableRow: true,
+      __platformWindowKey: key,
+      value: () => value,
+      update: (nextValue) => {
+        if (typeof nextValue === 'object' && nextValue !== null) {
+          setValue(reconcile(nextValue));
+        }
+      },
+    };
+  }
+
+  const [value, setValue] = createSignal(initialValue);
+  return {
+    __platformWindowStableRow: true,
+    __platformWindowKey: key,
+    value,
+    update: (nextValue) => setValue(() => nextValue),
+  };
+};
+
+const isStableRow = <Row,>(item: Row | StablePlatformRow<Row>): item is StablePlatformRow<Row> =>
+  typeof item === 'object' && item !== null && '__platformWindowStableRow' in item;
 
 /**
  * Canonical bounded renderer for ordinary platform table rows.
@@ -57,24 +83,47 @@ const buildStableRows = <Row,>(
  * prewarms the runway while touch input remains compositor-native.
  */
 export function PlatformWindowedRows<Row>(props: PlatformWindowedRowsProps<Row>) {
-  const initialStableRows = buildStableRows(props.items(), props.keyExtractor);
-  const [stableRows, setStableRows] = createStore<StablePlatformRow<Row>[]>(
-    initialStableRows ?? [],
-  );
-  const [usesStableRows, setUsesStableRows] = createSignal(initialStableRows !== undefined);
+  const rowsByKey = new Map<string | number, StablePlatformRow<Row>>();
+  const initialItems = props.items();
+  const initialKeys = stableRowKeys(initialItems, props.keyExtractor);
+  const initialRows = initialKeys?.map((key, index) => {
+    const row = createStableRow<Row>(key, initialItems[index] as Row);
+    rowsByKey.set(key, row);
+    return row;
+  });
+  const [stableRows, setStableRows] = createStore<StablePlatformRow<Row>[]>(initialRows ?? []);
+  const [usesStableRows, setUsesStableRows] = createSignal(initialRows !== undefined);
 
   createEffect(() => {
-    const next = buildStableRows(props.items(), props.keyExtractor);
-    if (!next) {
+    const items = props.items();
+    const keys = stableRowKeys(items, props.keyExtractor);
+    if (!keys) {
+      rowsByKey.clear();
       setUsesStableRows(false);
       return;
     }
-    setStableRows(reconcile(next, { key: '__platformWindowKey' }));
+
+    const activeKeys = new Set(keys);
+    const nextRows = items.map((item, index) => {
+      const key = keys[index]!;
+      const existing = rowsByKey.get(key);
+      if (existing) {
+        existing.update(item);
+        return existing;
+      }
+      const created = createStableRow<Row>(key, item);
+      rowsByKey.set(key, created);
+      return created;
+    });
+    for (const key of rowsByKey.keys()) {
+      if (!activeKeys.has(key)) rowsByKey.delete(key);
+    }
+    setStableRows(reconcile(nextRows, { key: '__platformWindowKey' }));
     setUsesStableRows(true);
   });
 
-  const renderItems = createMemo<readonly Row[]>(() =>
-    usesStableRows() ? stableRows.map((stableRow) => stableRow.value) : props.items(),
+  const renderItems = createMemo<readonly (Row | StablePlatformRow<Row>)[]>(() =>
+    usesStableRows() ? stableRows : props.items(),
   );
   const windowing = usePlatformWindowedItems({
     items: renderItems,
@@ -83,8 +132,12 @@ export function PlatformWindowedRows<Row>(props: PlatformWindowedRowsProps<Row>)
     windowSize: props.windowSize,
   });
 
-  const renderRows = (items: readonly Row[], globalOffset: number) => (
-    <For each={items}>{(item, index) => props.children(item, () => globalOffset + index())}</For>
+  const renderRows = (items: readonly (Row | StablePlatformRow<Row>)[], globalOffset: number) => (
+    <For each={items}>
+      {(item, index) =>
+        props.children(isStableRow(item) ? item.value() : item, () => globalOffset + index())
+      }
+    </For>
   );
 
   return (
