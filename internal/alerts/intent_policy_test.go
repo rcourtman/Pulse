@@ -4,6 +4,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts/eventlog"
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts/reducer"
 	alertspecs "github.com/rcourtman/pulse-go-rewrite/internal/alerts/specs"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
@@ -357,6 +359,50 @@ func TestLifecycleAlertStartsAtFirstIntentMatch(t *testing.T) {
 	}
 	if !alert.StartTime.Equal(start) {
 		t.Fatalf("alert start = %v, want first match %v", alert.StartTime, start)
+	}
+}
+
+func TestMetricIntentCoreRecordsFiringOnlyAtActivation(t *testing.T) {
+	m := newEventLogManager(t)
+	var tick time.Duration
+	m.intentClock = func() time.Duration { return tick }
+
+	document := NewAlertIntentPolicyDocument()
+	document.Resources["vm:metric-intent"] = map[string]AlertIntentRule{
+		MetricAlertIntentSignal("cpu"): {GraceSeconds: intPointer(60)},
+	}
+	if err := m.LoadIntentPolicies(document); err != nil {
+		t.Fatal(err)
+	}
+
+	threshold := &HysteresisThreshold{Trigger: 80, Clear: 70}
+	stateID := buildCanonicalStateID("vm:metric-intent", "metric-threshold:cpu")
+	m.checkMetric("vm:metric-intent", "database", "node-a", "pve-a", "vm", "cpu", 90, threshold, nil)
+
+	if testHasActiveAlert(t, m, stateID) {
+		t.Fatal("metric alert activated before explicit intent grace elapsed")
+	}
+	m.mu.RLock()
+	pending, ok := m.core.Incident("vm:metric-intent", "metric-threshold:cpu")
+	m.mu.RUnlock()
+	if !ok || pending.State != reducer.StatePending {
+		t.Fatalf("core incident = %+v, found %v; want pending", pending, ok)
+	}
+	if events := queryAlertEvents(t, m, eventlog.Filter{Types: []string{eventlog.TypeFired}}); len(events) != 0 {
+		t.Fatalf("pending metric recorded firing events = %+v", events)
+	}
+
+	tick = 60 * time.Second
+	m.checkMetric("vm:metric-intent", "database", "node-a", "pve-a", "vm", "cpu", 91, threshold, nil)
+	alert := testRequireActiveAlert(t, m, stateID)
+	if !alert.StartTime.Equal(pending.PendingSince) {
+		t.Fatalf("alert start = %v, want pending start %v", alert.StartTime, pending.PendingSince)
+	}
+
+	m.checkMetric("vm:metric-intent", "database", "node-a", "pve-a", "vm", "cpu", 92, threshold, nil)
+	events := queryAlertEvents(t, m, eventlog.Filter{AlertID: stateID, Types: []string{eventlog.TypeFired}})
+	if len(events) != 1 {
+		t.Fatalf("firing events = %+v, want exactly one activation event", events)
 	}
 }
 

@@ -636,13 +636,17 @@ from the existing alert and canonical state ID; removing only the legacy
 `<resourceID>-<metric>` ID can emit a resolved notification while leaving the
 canonical alert active to resolve again on every poll.
 
-`internal/alerts/reducer` is the Phase 1 deterministic characterization of
-metric-threshold transitions. It accepts an explicit observation time and
-models enablement, hysteresis, sustained delay, and warning/critical severity
-without persistence or notification side effects. The alert manager remains
-the runtime owner and reference behavior while the parity harness drives both
-implementations through identical observations; a divergence is a reducer bug
-unless a focused manager regression first proves otherwise.
+`internal/alerts/reducer` is the deterministic lifecycle core. It accepts an
+explicit observation time and models enablement, hysteresis, sustained delay,
+intent gating, acknowledgement, and warning/critical severity without
+persistence or notification side effects. The canonical lifecycle family and
+the shared metric-threshold runtime now use reducer incidents as transition
+truth; the alert manager projects those incidents into active alerts, history,
+persistence, callbacks, and notification policy. Metric incidents are keyed by
+the canonical metric spec ID, while the metric name remains the severity
+classification input. Families not yet cut over continue to use the parity and
+shadow harnesses; a divergence is a reducer bug unless a focused manager
+regression first proves otherwise.
 
 The confirmation/discrete-state slice uses the same boundary for connectivity,
 powered-state, and generic discrete matches. It activates after the resolved
@@ -686,14 +690,17 @@ boundary on its observation clock, matching the manager's one-hour cleanup TTL,
 and parity must cover acknowledgement, unacknowledgement, rebuild, short
 resolve/re-fire restoration, and expiry for both metric and discrete families.
 
-The intent-policy gate composes with discrete confirmation at activation time
-only. An explicit policy grace period or resolved operator suppression keeps a
-matched condition pending while preserving its first active observation and
-clamping its confirmation count at the configured requirement. Grace and
-operator suppression accrue concurrently; once both release, activation uses
-that preserved observation as the incident start. A non-match clears the
-pending run and resets grace. Maintenance, muted or retired monitoring, and
-expected-offline state may hold a new activation when the resolved policy
+The intent-policy gate composes at activation time with both discrete
+confirmation and shared metric thresholds. An explicit policy grace period or
+resolved operator suppression keeps a matched condition pending while
+preserving its first active observation and, for discrete state, clamping its
+confirmation count at the configured requirement. For metrics, the explicit
+`metric.<name>` policy replaces the legacy time-threshold delay and accrues
+grace only from monotonic runtime ticks; a below-trigger observation clears the
+pending run and resets grace. Grace and operator suppression accrue
+concurrently; once both release, activation uses the preserved first
+observation as the incident start. Maintenance, muted or retired monitoring,
+and expected-offline state may hold a new activation when the resolved policy
 honors operator state, but must not clear or suppress an incident that is
 already firing. The reducer applies caller-resolved intent on its observation
 clock, and parity must exercise the manager's real intent-policy and
@@ -934,10 +941,13 @@ unacknowledgement, escalation, flapping detection, dispatch, quiet-hours
 deferral, and suppression append immutable events without changing lifecycle
 or delivery behavior. The write path is non-blocking and fail-open for alert
 evaluation: a full buffer counts and drops its event, while an unavailable
-store disables recording. Events retain for 90 days and prune hourly. A fired
-lifecycle event is deliberately absent until an activation seam can distinguish
-a real firing from persisted-alert restore; the event log must not invent that
-transition from the active-alert storage funnel.
+store disables recording. Events retain for 90 days and prune hourly. Fired and
+refired lifecycle events come only from the reducer core's explicit activation
+events: canonical lifecycle reactivation maps `EventRefired` separately, while
+shared metric activation records one fired event when its pending incident
+becomes firing. Repeated firing observations and persisted-alert restore must
+not append another activation event, and the active-alert storage funnel must
+never invent one.
 The same dispatch policy owns firing-notification evidence on active alerts:
 any alert that passes notification suppression and enters the fired callback
 fan-out must carry `LastNotified` before the callback clone is emitted. Resolved
@@ -1041,10 +1051,11 @@ SSD wearout alerts; future Proxmox disk-health behavior should extend that
 checker owner rather than expanding the central Manager file.
 Shared metric threshold runtime now lives in
 `internal/alerts/metric_runtime.go`. That file owns metric threshold lookup,
-per-metric delay resolution, legacy metric alert creation/update/clear
-behavior, metric runtime options, alert key sanitation, and metric delta
-helpers; future metric-threshold behavior should extend that owner rather than
-adding shared metric logic back to the central Manager file.
+per-metric delay and intent resolution, reducer input composition, active-alert
+projection, delivery side effects, metric runtime options, alert key sanitation,
+and metric delta helpers. The reducer core owns pending, firing, severity, and
+hysteresis transitions; future metric-threshold behavior should extend these
+owners rather than adding shared metric logic back to the central Manager file.
 Shared storage-health assessment alerting now lives in
 `internal/alerts/health_assessment.go`. That file owns storage-health reason
 normalization, ZFS pool/device reason filtering, canonical health-assessment
