@@ -7,6 +7,7 @@ import type {
   Webhook,
 } from '@/api/notifications';
 import { Card } from '@/components/shared/Card';
+import type { AlertEvent } from '@/types/api';
 import {
   getAlertDeliveryLogFailureClassLabel,
   getAlertDeliveryLogOutcomeLabel,
@@ -18,13 +19,38 @@ import {
 } from '@/utils/alertDestinationsPresentation';
 import { formatRelativeTime } from '@/utils/format';
 
+import { describeAlertEventReason } from './deliveryDiagnosisPresentation';
+
 interface AlertDeliveryLogCardProps {
   log: NotificationDeliveryLog | null;
   unavailable: boolean;
   refreshing: boolean;
   onRefresh: () => void;
   webhooks: Webhook[];
+  heldEvents?: AlertEvent[];
 }
+
+type DeliveryLogRow =
+  | { kind: 'attempt'; timestamp: string; entry: NotificationDeliveryLogEntry }
+  | { kind: 'held'; timestamp: string; event: AlertEvent };
+
+// mergeDeliveryLogRows interleaves delivery attempts with held-notification
+// events, newest first, so the activity list tells the whole story: what was
+// sent, what failed, and what was deliberately not attempted and why.
+export const mergeDeliveryLogRows = (
+  entries: NotificationDeliveryLogEntry[],
+  heldEvents: AlertEvent[],
+): DeliveryLogRow[] => {
+  const rows: DeliveryLogRow[] = [
+    ...entries.map((entry): DeliveryLogRow => ({ kind: 'attempt', timestamp: entry.timestamp, entry })),
+    ...heldEvents.map((event): DeliveryLogRow => ({ kind: 'held', timestamp: event.occurredAt, event })),
+  ];
+  return rows.sort((a, b) => {
+    const at = new Date(a.timestamp).getTime() || 0;
+    const bt = new Date(b.timestamp).getTime() || 0;
+    return bt - at;
+  });
+};
 
 const WEBHOOK_DESTINATION_PREFIX = 'webhook:';
 
@@ -67,6 +93,13 @@ export function AlertDeliveryLogCard(props: AlertDeliveryLogCardProps) {
 
   const entries = () => props.log?.entries ?? [];
   const windowDays = () => props.log?.windowDays ?? 7;
+  const rows = () => mergeDeliveryLogRows(entries(), props.heldEvents ?? []);
+
+  const heldResourceLabel = (event: AlertEvent): string => {
+    const resource = event.resourceName || event.alertId;
+    if (event.alertType) return `${resource} (${event.alertType})`;
+    return resource;
+  };
 
   return (
     <Card padding="sm" class="sm:p-4">
@@ -100,7 +133,7 @@ export function AlertDeliveryLogCard(props: AlertDeliveryLogCardProps) {
           }
         >
           <Show
-            when={entries().length > 0}
+            when={rows().length > 0}
             fallback={
               <p class="text-sm text-gray-600 dark:text-gray-400">
                 {getAlertDestinationsDeliveryLogEmpty()}
@@ -108,43 +141,72 @@ export function AlertDeliveryLogCard(props: AlertDeliveryLogCardProps) {
             }
           >
             <ul class="max-h-80 divide-y divide-gray-200 overflow-y-auto dark:divide-gray-700">
-              <For each={entries()}>
-                {(entry) => (
-                  <li class="flex flex-col gap-1 py-2">
-                    <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
-                      <span
-                        class={`inline-flex flex-shrink-0 items-center rounded-full px-2 py-0.5 text-xs font-medium ${outcomeBadgeClasses[entry.outcome]}`}
+              <For each={rows()}>
+                {(row) =>
+                  row.kind === 'attempt' ? (
+                    <li class="flex flex-col gap-1 py-2">
+                      <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+                        <span
+                          class={`inline-flex flex-shrink-0 items-center rounded-full px-2 py-0.5 text-xs font-medium ${outcomeBadgeClasses[row.entry.outcome]}`}
+                        >
+                          {getAlertDeliveryLogOutcomeLabel(row.entry.outcome)}
+                        </span>
+                        <span class="min-w-0 truncate text-sm font-medium text-gray-900 dark:text-gray-100">
+                          {destinationLabel(row.entry)}
+                        </span>
+                        <span
+                          class="min-w-0 truncate text-sm text-gray-600 dark:text-gray-400"
+                          title={row.entry.alertIds.join(', ')}
+                        >
+                          {alertSummary(row.entry)}
+                        </span>
+                        <span class="ml-auto flex-shrink-0 text-xs text-gray-500 dark:text-gray-400">
+                          {formatRelativeTime(row.entry.timestamp)}
+                        </span>
+                      </div>
+                      <Show
+                        when={
+                          !row.entry.success && (row.entry.failureClass || row.entry.errorMessage)
+                        }
                       >
-                        {getAlertDeliveryLogOutcomeLabel(entry.outcome)}
-                      </span>
-                      <span class="min-w-0 truncate text-sm font-medium text-gray-900 dark:text-gray-100">
-                        {destinationLabel(entry)}
-                      </span>
-                      <span
-                        class="min-w-0 truncate text-sm text-gray-600 dark:text-gray-400"
-                        title={entry.alertIds.join(', ')}
-                      >
-                        {alertSummary(entry)}
-                      </span>
-                      <span class="ml-auto flex-shrink-0 text-xs text-gray-500 dark:text-gray-400">
-                        {formatRelativeTime(entry.timestamp)}
-                      </span>
-                    </div>
-                    <Show when={!entry.success && (entry.failureClass || entry.errorMessage)}>
-                      <p class="text-xs leading-5 text-red-700 dark:text-red-300">
-                        <Show when={entry.failureClass}>
-                          {(failureClass) => (
-                            <span class="font-medium">
-                              {getAlertDeliveryLogFailureClassLabel(failureClass())}
-                              {entry.errorMessage ? ': ' : ''}
-                            </span>
-                          )}
-                        </Show>
-                        {entry.errorMessage}
-                      </p>
-                    </Show>
-                  </li>
-                )}
+                        <p class="text-xs leading-5 text-red-700 dark:text-red-300">
+                          <Show when={row.entry.failureClass}>
+                            {(failureClass) => (
+                              <span class="font-medium">
+                                {getAlertDeliveryLogFailureClassLabel(failureClass())}
+                                {row.entry.errorMessage ? ': ' : ''}
+                              </span>
+                            )}
+                          </Show>
+                          {row.entry.errorMessage}
+                        </p>
+                      </Show>
+                    </li>
+                  ) : (
+                    <li class="flex flex-col gap-1 py-2" title={row.event.message}>
+                      <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+                        <span
+                          class={`inline-flex flex-shrink-0 items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                            row.event.type === 'notification_deferred'
+                              ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300'
+                              : 'bg-gray-100 text-gray-600 dark:bg-gray-700/60 dark:text-gray-300'
+                          }`}
+                        >
+                          {row.event.type === 'notification_deferred' ? 'Deferred' : 'Held'}
+                        </span>
+                        <span class="min-w-0 truncate text-sm font-medium text-gray-900 dark:text-gray-100">
+                          {heldResourceLabel(row.event)}
+                        </span>
+                        <span class="min-w-0 truncate text-sm text-gray-600 dark:text-gray-400">
+                          {describeAlertEventReason(row.event.reason)}
+                        </span>
+                        <span class="ml-auto flex-shrink-0 text-xs text-gray-500 dark:text-gray-400">
+                          {formatRelativeTime(row.event.occurredAt)}
+                        </span>
+                      </div>
+                    </li>
+                  )
+                }
               </For>
             </ul>
           </Show>

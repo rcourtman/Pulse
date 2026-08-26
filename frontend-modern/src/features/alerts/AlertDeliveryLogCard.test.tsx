@@ -2,8 +2,9 @@ import { cleanup, render, screen } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { NotificationDeliveryLog, Webhook } from '@/api/notifications';
+import type { AlertEvent } from '@/types/api';
 
-import { AlertDeliveryLogCard } from './AlertDeliveryLogCard';
+import { AlertDeliveryLogCard, mergeDeliveryLogRows } from './AlertDeliveryLogCard';
 
 const webhooks: Webhook[] = [
   {
@@ -95,6 +96,80 @@ describe('AlertDeliveryLogCard', () => {
     ));
 
     expect(screen.getByText(/No alert deliveries were attempted/)).toBeInTheDocument();
+  });
+
+  it('interleaves held notifications with delivery attempts, newest first', () => {
+    const heldEvents: AlertEvent[] = [
+      {
+        id: 1,
+        occurredAt: new Date(Date.now() - 30_000).toISOString(),
+        type: 'notification_suppressed',
+        alertId: 'cpu-alert-1',
+        resourceName: 'pve1',
+        alertType: 'cpu',
+        reason: 'flapping',
+        message: 'Notification suppressed: alert is flapping.',
+      },
+      {
+        id: 2,
+        occurredAt: new Date(Date.now() - 90_000).toISOString(),
+        type: 'notification_deferred',
+        alertId: 'mem-alert-1',
+        resourceName: 'pve2',
+        alertType: 'memory',
+        reason: 'quiet_hours:performance',
+        message: 'Notification deferred by quiet hours; the queue replays it when they end.',
+      },
+    ];
+
+    render(() => (
+      <AlertDeliveryLogCard
+        log={log}
+        unavailable={false}
+        refreshing={false}
+        onRefresh={vi.fn()}
+        webhooks={webhooks}
+        heldEvents={heldEvents}
+      />
+    ));
+
+    expect(screen.getByText('Held')).toBeInTheDocument();
+    expect(screen.getByText('pve1 (cpu)')).toBeInTheDocument();
+    expect(screen.getByText('Flapping')).toBeInTheDocument();
+    expect(screen.getByText('Deferred')).toBeInTheDocument();
+    expect(screen.getByText('pve2 (memory)')).toBeInTheDocument();
+    expect(screen.getByText('Quiet hours')).toBeInTheDocument();
+
+    const rows = mergeDeliveryLogRows(log.entries, heldEvents);
+    expect(rows.map((row) => row.kind)).toEqual(['held', 'attempt', 'held', 'attempt']);
+  });
+
+  it('shows held rows even when no delivery was attempted', () => {
+    render(() => (
+      <AlertDeliveryLogCard
+        log={{ entries: [], windowDays: 7 }}
+        unavailable={false}
+        refreshing={false}
+        onRefresh={vi.fn()}
+        webhooks={[]}
+        heldEvents={[
+          {
+            id: 3,
+            occurredAt: new Date().toISOString(),
+            type: 'notification_suppressed',
+            alertId: 'held-only',
+            resourceName: 'nas-1',
+            alertType: 'usage',
+            reason: 'notifications_inactive',
+            message: 'Notification suppressed: alert delivery is not turned on.',
+          },
+        ]}
+      />
+    ));
+
+    expect(screen.getByText('Held')).toBeInTheDocument();
+    expect(screen.getByText('Delivery not turned on')).toBeInTheDocument();
+    expect(screen.queryByText(/No alert deliveries were attempted/)).not.toBeInTheDocument();
   });
 
   it('reports an unreadable log as unavailable instead of empty', () => {

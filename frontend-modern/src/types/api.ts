@@ -1328,6 +1328,23 @@ export interface ResolvedAlert extends Alert {
   resolvedTime: string;
 }
 
+// One entry from the append-only alert event log
+// (GET /api/alerts/events): a lifecycle transition or a notification
+// decision, including suppressions with the mechanism that held them.
+export interface AlertEvent {
+  id: number;
+  occurredAt: string;
+  type: string;
+  alertId: string;
+  resourceId?: string;
+  resourceName?: string;
+  alertType?: string;
+  level?: string;
+  reason?: string;
+  message?: string;
+  details?: Record<string, string>;
+}
+
 // Read-only projection of notification delivery policy for one active alert,
 // from GET /api/alerts/delivery-diagnosis.
 export interface AlertDeliveryDiagnosis {

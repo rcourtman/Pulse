@@ -244,7 +244,7 @@ export function getAlertDestinationsDeliveryLogTitle() {
 // user who sends a test and then checks this log would otherwise read its
 // absence as a delivery failure.
 export function getAlertDestinationsDeliveryLogDescription(windowDays: number) {
-  return `Delivery attempts for real alerts over the last ${windowDays} days. Test sends skip the queue and are not listed here.`;
+  return `Delivery attempts and held notifications for real alerts over the last ${windowDays} days. Test sends skip the queue and are not listed here.`;
 }
 
 export function getAlertDestinationsDeliveryLogEmpty() {

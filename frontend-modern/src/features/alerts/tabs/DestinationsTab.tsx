@@ -132,6 +132,7 @@ export function DestinationsTab(props: DestinationsTabProps) {
           refreshing={state.refreshingDeliveryLog()}
           onRefresh={() => void state.loadDeliveryLog()}
           webhooks={state.webhooks()}
+          heldEvents={state.heldEvents()}
         />
       </Show>
     </div>

@@ -7,6 +7,34 @@ export interface AlertDeliveryStatusLine {
   tone: 'muted' | 'attention';
 }
 
+// Short chip label for an event-log hold reason (event.reason on
+// notification_suppressed / notification_deferred events). Falls back to the
+// raw reason so a future backend reason is shown rather than hidden.
+export const describeAlertEventReason = (reason?: string): string => {
+  switch ((reason || '').split(':')[0]) {
+    case 'acknowledged':
+      return 'Acknowledged';
+    case 'flapping':
+      return 'Flapping';
+    case 'notifications_inactive':
+      return 'Delivery not turned on';
+    case 'notifications_disabled':
+      return 'Notifications off';
+    case 'monitor_only':
+      return 'Monitor-only';
+    case 'quiet_hours':
+      return 'Quiet hours';
+    case 'rate_limited':
+      return 'Hourly limit';
+    case 'suppression_window':
+      return 'Paused';
+    case 'cooldown':
+      return 'Cooldown';
+    default:
+      return reason || 'Held';
+  }
+};
+
 const formatShortTime = (value?: string): string | null => {
   if (!value) return null;
   const parsed = new Date(value);
