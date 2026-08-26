@@ -630,6 +630,21 @@ runtime must migrate the active alert, history entry, acknowledgment record,
 suppression/rate-limit/flapping tracking, and guest per-disk metric identity
 to the current canonical state instead of reopening a duplicate alert or
 resolving only the stale node-scoped identity.
+Metric alerts stored under a canonical state key must also clear through that
+same identity. Hysteresis resolution must derive the active-alert storage key
+from the existing alert and canonical state ID; removing only the legacy
+`<resourceID>-<metric>` ID can emit a resolved notification while leaving the
+canonical alert active to resolve again on every poll.
+
+`internal/alerts/reducer` is the Phase 1 deterministic characterization of
+metric-threshold transitions. It accepts an explicit observation time and
+models enablement, hysteresis, sustained delay, and warning/critical severity
+without persistence or notification side effects. The alert manager remains
+the runtime owner and reference behavior while the parity harness drives both
+implementations through identical observations; a divergence is a reducer bug
+unless a focused manager regression first proves otherwise. Moving additional
+alert families or downstream delivery behavior into the reducer requires a
+separate contract slice.
 That same guest-threshold owner also governs guest-derived lifecycle and
 posture alerts. Snapshot age, backup age, powered-off state, and
 configuration-change reevaluation must all construct a canonical lightweight

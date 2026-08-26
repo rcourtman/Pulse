@@ -9806,12 +9806,12 @@
       "evidence": [
         {
           "repo": "pulse",
-          "path": "docs/release-control/v6/internal/records/alert-lifecycle-contract-coverage-2026-08-26.md",
+          "path": "docs/ALERT_ENGINE_EVOLUTION.md",
           "kind": "file"
         },
         {
           "repo": "pulse",
-          "path": "docs/ALERT_ENGINE_EVOLUTION.md",
+          "path": "docs/release-control/v6/internal/records/alert-lifecycle-contract-coverage-2026-08-26.md",
           "kind": "file"
         }
       ]
