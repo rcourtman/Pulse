@@ -297,14 +297,19 @@ The websocket store's raw resource-delta baseline is connection-scoped. Closing
 or replacing a socket invalidates that baseline and its recovery throttle; a
 delta from the replacement connection must not patch the previous connection's
 raw snapshot. Only a full snapshot delivered over that socket may establish
-the new delta baseline. Oversized-state REST recovery may refresh the current
-connection's display state, but it is independently built and must remain
-delta-free; a marker or baseline-less delta observed during hydration must
-coalesce one trailing REST refresh after the throttle window so the latest
-invalidation is not lost. Late socket callbacks and REST responses from a
-retired connection must be ignored, while a current oversized connection
-remains free to hydrate without waiting for the retired connection's request
-to settle.
+the new delta baseline. The same lineage rule applies independently to the
+connected-infrastructure and active-alert keyed projections. Dropping an
+oversized state frame invalidates all three raw baselines and their queued
+projection work. Oversized-state REST recovery may refresh the current
+connection's displayed resources, infrastructure, and alerts, but it is
+independently built and must remain delta-free; a later keyed delta without a
+socket-owned baseline is ignored and requests the shared throttled recovery
+path. A marker or baseline-less delta observed during hydration must coalesce
+one trailing REST refresh after the throttle window so the latest invalidation
+is not lost. Alert deltas still apply immediately when their socket baseline
+exists. Late socket callbacks and REST responses from a retired connection
+must be ignored, while a current oversized connection remains free to hydrate
+without waiting for the retired connection's request to settle.
 While the document is hidden, that same connection-scoped baseline must keep
 accepting resource deltas without reconciling the visible resource store on
 every message. The store accumulates changed resource IDs (and their per-key

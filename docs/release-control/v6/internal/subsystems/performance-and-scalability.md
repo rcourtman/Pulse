@@ -265,7 +265,12 @@ the store with reference-stable untouched items so the per-tick deep walk of
 the whole projection is gone. Active alerts travel the same keyed transport
 (`activeAlertsDelta`, replacing the ~37KB whole-array re-ship whenever any
 alert changed) while their application stays immediate per the alerts
-subsystem boundary. Workload table rows derived from canonical
+subsystem boundary. These projection baselines are socket-owned: an oversized
+frame invalidates resources, connected infrastructure, and active alerts
+together, while REST recovery hydrates display state only. A later keyed delta
+without a socket baseline requests the throttled recovery path instead of
+patching an independently built REST array or silently retaining a stale
+projection. Workload table rows derived from canonical
 snapshots reuse the previous row object whenever the serialized row is
 unchanged, and a refresh that changes nothing returns the previous row array
 itself, so per-tick row identity churn stays bounded to guests whose data
@@ -957,7 +962,13 @@ change may globally weaken the Task 03 lifecycle-state idempotency invariant.
     runway only through the passive native scroll event after the page moves.
     Group and guest iteration must remain keyed so overlapping rows survive
     window shifts rather than rebinding every mounted row. This anticipation
-    must preserve the existing bounded mounted-row budget; rendering the whole
+    extends to platform rows rebuilt by live snapshots: a unique logical id or
+    explicit key extractor owns one stable wrapper and independently
+    reconciled row store. Sorting may reorder those wrappers but must not
+    reconcile one row's nested value through another row, duplicate rendered
+    rows, or remount row-local drawer and input state. Missing or duplicate
+    keys fall back to reference-keyed rendering. This anticipation must
+    preserve the existing bounded mounted-row budget; rendering the whole
     estate or adding per-row observers, timers, or scroll listeners is
     forbidden.
     That same viewport-sync owner may expose one passive app-shell scroll

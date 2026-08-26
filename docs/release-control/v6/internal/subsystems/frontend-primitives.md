@@ -105,7 +105,13 @@ browser moves the page, and must update their runway only from the passive
 native scroll event. Spacer geometry is structural only: no feature may present
 it as loading, pagination, or an intentionally blank data region. Settings
 resource pickers, Availability target lists, Actions, alerts, and every
-provider-native platform table share this contract.
+provider-native platform table share this contract. For table rows with unique
+logical ids, or an explicit unique key extractor, `PlatformWindowedRows` owns a
+stable wrapper and independently reconciled store per logical row. A live
+snapshot may reorder those wrappers without remounting row-local input or
+drawer state, and must never reconcile one row's nested value through another
+row or duplicate rows after sorting. Missing or duplicate keys retain the
+reference-keyed fallback.
 
 Shared workload, node, Docker-host, and resource-drawer history presentation
 keeps current readings separate from stored samples. A current metric may
