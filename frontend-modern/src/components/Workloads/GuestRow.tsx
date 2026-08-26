@@ -210,6 +210,7 @@ export function GuestRow(props: GuestRowProps) {
             isMobile(),
             props.workloadTableLayoutMode,
             props.visibleColumnIds,
+            props.columnWidths,
           )}
         >
           <div

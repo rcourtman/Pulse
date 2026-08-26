@@ -31,6 +31,10 @@ build path.
 - Platform search and row visibility share the same predicates, including
   Proxmox nodes and their visible guests. Navigation tabs remain stable across
   WebSocket updates instead of remounting with live state.
+- Workload table columns can be resized at tablet and desktop widths. A resized
+  layout keeps every selected column reachable with horizontal scrolling,
+  persists per surface, and can be shared through the page URL or reset from
+  the Columns menu without changing the compact default layout.
 - Route-level code splitting remains effective on cold start: the frontend no
   longer modulepreloads every lazy route chunk, while integrity coverage stays
   enforced for dynamically loaded assets.

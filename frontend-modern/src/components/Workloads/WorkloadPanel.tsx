@@ -77,6 +77,7 @@ type WorkloadPanelProps = Pick<
   | 'workloadMetricHistory'
   | 'workloadTableLayoutMode'
   | 'workloadTableVisibleColumnIds'
+  | 'workloadColumnWidths'
   | 'workloadTableVisibleColumns'
 >;
 
@@ -579,6 +580,7 @@ export function WorkloadPanel(props: WorkloadPanelProps) {
                         onCustomUrlUpdate={props.handleCustomUrlUpdate}
                         isGroupedView={props.groupingMode() === 'grouped'}
                         visibleColumnIds={props.workloadTableVisibleColumnIds()}
+                        columnWidths={props.workloadColumnWidths()}
                         workloadTableLayoutMode={props.workloadTableLayoutMode()}
                         onClick={() =>
                           props.setSelectedGuestId(

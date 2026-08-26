@@ -66,6 +66,8 @@ export interface WorkloadsFilterProps {
     onColumnToggle: (id: string) => void;
     onColumnReset?: () => void;
     showReset?: boolean;
+    onColumnWidthsReset?: () => void;
+    hasColumnWidthOverrides?: boolean;
   };
   hostFilter?: WorkloadsToolbarFilterConfig;
   platformFilter?: WorkloadsToolbarFilterConfig;

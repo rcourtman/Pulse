@@ -220,6 +220,7 @@ export const STORAGE_KEYS = {
 
   // Column visibility
   WORKLOADS_HIDDEN_COLUMNS: 'workloadsHiddenColumns',
+  WORKLOADS_COLUMN_WIDTHS: 'workloadsColumnWidths',
   RECOVERY_HIDDEN_COLUMNS: 'backupsHiddenColumns',
   STORAGE_HIDDEN_COLUMNS: 'storageHiddenColumns',
 

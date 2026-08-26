@@ -231,6 +231,15 @@ export function WorkloadsSurface(props: WorkloadsSurfaceComponentProps) {
             workloadTableLayoutMode={state.workloadTableLayoutMode}
             workloadTableVisibleColumnIds={state.workloadTableVisibleColumnIds}
             workloadTableVisibleColumns={state.workloadTableVisibleColumns}
+            workloadColumnWidths={state.workloadColumnWidths}
+            workloadManualColumnSizing={state.workloadManualColumnSizing}
+            workloadManualColumnSizingSupported={state.workloadManualColumnSizingSupported}
+            workloadTableManualWidth={state.workloadTableManualWidth}
+            beginWorkloadColumnResize={state.beginWorkloadColumnResize}
+            previewWorkloadColumnWidth={state.previewWorkloadColumnWidth}
+            commitWorkloadColumnResize={state.commitWorkloadColumnResize}
+            cancelWorkloadColumnResize={state.cancelWorkloadColumnResize}
+            clearWorkloadColumnWidth={state.clearWorkloadColumnWidth}
             title={props.tableTitle}
           />
         </Show>

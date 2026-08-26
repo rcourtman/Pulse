@@ -233,6 +233,14 @@ describe('App architecture', () => {
     expect(appStylesSource).not.toContain('white-space: normal;\n    -webkit-box-orient');
   });
 
+  it('keeps manual workload widths inside the existing horizontal table shell', () => {
+    expect(appStylesSource).toContain('.table-scroll-shell > table.workload-table--manual-widths');
+    expect(appStylesSource).toContain('.workload-col-resizer');
+    expect(appStylesSource).toContain('cursor: col-resize');
+    expect(appStylesSource).toContain('touch-action: none');
+    expect(appStylesSource).toContain('@media (prefers-reduced-motion: reduce)');
+  });
+
   it('keeps native form and browser autofill paint on semantic theme tokens', () => {
     expect(appStylesSource).toContain('color-scheme: light');
     expect(appStylesSource).toContain('color-scheme: dark');

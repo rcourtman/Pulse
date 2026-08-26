@@ -32,6 +32,31 @@ import {
   WORKLOAD_TABLE_HISTORY_DEFAULT_RANGE,
   type WorkloadTableMetricHistoryRange,
 } from './workloadMetricHistoryModel';
+import {
+  buildWorkloadColumnLayoutEntries,
+  parseWorkloadColumnLayoutParam,
+  resolveWorkloadColumnLayoutEntries,
+  serializeWorkloadColumnLayout,
+  toggleWorkloadColumnLayoutEntry,
+  workloadColumnLayoutIds,
+  workloadColumnLayoutWidths,
+  WORKLOAD_COLUMNS_URL_PARAM,
+  type WorkloadColumnLayoutEntry,
+} from './workloadColumnLayoutUrl';
+import {
+  hasWorkloadColumnWidths,
+  isWorkloadManualSizingSupported,
+  normalizeWorkloadColumnWidths,
+  pruneWorkloadColumnWidths,
+  seedWorkloadColumnWidthsFromDefaults,
+  snapshotWorkloadColumnWidths,
+  sumWorkloadColumnWidths,
+  WORKLOAD_COLUMN_FALLBACK_WIDTH,
+  withWorkloadColumnWidth,
+  withoutWorkloadColumnWidth,
+  workloadColumnWidthsStorageKey,
+  type WorkloadColumnWidths,
+} from './workloadColumnWidths';
 
 interface WorkloadsControlsStateOptions {
   layoutWidth?: Accessor<number | null | undefined>;
@@ -274,17 +299,151 @@ export function useWorkloadsControlsState(options: WorkloadsControlsStateOptions
   );
 
   const visibleColumns = columnVisibility.visibleColumns;
-  // User choices persist independently of the current width, but the live
-  // table only presents columns its responsive stage can keep readable. A
-  // selected wide-only column therefore disappears while space is tight and
-  // returns automatically when the table grows again.
-  const workloadTableVisibleColumns = createMemo(() =>
-    getWorkloadVisibleColumnsForLayout(visibleColumns(), workloadTableLayoutMode()),
+  const [columnWidths, setColumnWidths] = usePersistentSignal<WorkloadColumnWidths>(
+    workloadColumnWidthsStorageKey(
+      STORAGE_KEYS.WORKLOADS_COLUMN_WIDTHS,
+      options.columnVisibilityStorageScope,
+    ),
+    {},
+    {
+      serialize: (widths) => JSON.stringify(widths),
+      deserialize: (raw) => {
+        try {
+          return normalizeWorkloadColumnWidths(JSON.parse(raw));
+        } catch {
+          return {};
+        }
+      },
+    },
   );
+  const [pendingColumnWidths, setPendingColumnWidths] = createSignal<WorkloadColumnWidths | null>(
+    null,
+  );
+  const manualColumnSizingSupported = createMemo(() =>
+    isWorkloadManualSizingSupported(workloadTableLayoutMode()),
+  );
+  const renderableColumnIds = createMemo(() => {
+    const relevant = relevantColumns();
+    return new Set(
+      workloadColumns
+        .filter((column) => !relevant || relevant.has(column.id))
+        .map((column) => column.id),
+    );
+  });
+  const urlColumnLayout = createMemo<WorkloadColumnLayoutEntry[]>(() => {
+    if (!routeStateEnabled()) return [];
+    return resolveWorkloadColumnLayoutEntries(
+      parseWorkloadColumnLayoutParam(
+        new URLSearchParams(activeRouteSearch()).get(WORKLOAD_COLUMNS_URL_PARAM),
+      ),
+      renderableColumnIds(),
+    );
+  });
+  const hasUrlColumnLayout = createMemo(
+    () => manualColumnSizingSupported() && urlColumnLayout().length > 0,
+  );
+  const manualColumnSizingActive = createMemo(
+    () =>
+      manualColumnSizingSupported() &&
+      (pendingColumnWidths() !== null ||
+        hasUrlColumnLayout() ||
+        hasWorkloadColumnWidths(columnWidths())),
+  );
+  const activeColumnWidths = createMemo<WorkloadColumnWidths>(() => {
+    if (!manualColumnSizingActive()) return {};
+    const pending = pendingColumnWidths();
+    if (pending) return pending;
+    if (hasUrlColumnLayout()) return workloadColumnLayoutWidths(urlColumnLayout());
+    return columnWidths();
+  });
+  const workloadTableVisibleColumns = createMemo(() => {
+    if (hasUrlColumnLayout()) {
+      const byId = new Map(workloadColumns.map((column) => [column.id, column] as const));
+      return workloadColumnLayoutIds(urlColumnLayout())
+        .map((columnId) => byId.get(columnId))
+        .filter((column): column is (typeof workloadColumns)[number] => !!column);
+    }
+    return getWorkloadVisibleColumnsForLayout(visibleColumns(), workloadTableLayoutMode(), {
+      manualSizing: manualColumnSizingActive(),
+    });
+  });
   const workloadTableVisibleColumnIds = createMemo(() =>
     workloadTableVisibleColumns().map((column) => column.id),
   );
   const totalColumns = createMemo(() => workloadTableVisibleColumns().length);
+  const workloadTableManualWidth = createMemo<number | null>(() =>
+    sumWorkloadColumnWidths(activeColumnWidths(), workloadTableVisibleColumnIds()),
+  );
+
+  const beginWorkloadColumnResize = (measuredWidths: Readonly<Record<string, number>>): void => {
+    if (!manualColumnSizingSupported()) return;
+    const measured = snapshotWorkloadColumnWidths(columnWidths(), measuredWidths);
+    setPendingColumnWidths(seedWorkloadColumnWidthsFromDefaults(measured, visibleColumns()));
+  };
+  const previewWorkloadColumnWidth = (columnId: string, width: number): void => {
+    setPendingColumnWidths((current) =>
+      current ? withWorkloadColumnWidth(current, columnId, width) : current,
+    );
+  };
+  const writeColumnLayoutParam = (entries: readonly WorkloadColumnLayoutEntry[] | null): void => {
+    updateSearchParam((params) => {
+      if (!entries || entries.length === 0) params.delete(WORKLOAD_COLUMNS_URL_PARAM);
+      else params.set(WORKLOAD_COLUMNS_URL_PARAM, serializeWorkloadColumnLayout(entries));
+    });
+  };
+  const publishColumnLayout = (
+    widths: WorkloadColumnWidths,
+    orderedIds: readonly string[],
+  ): void => {
+    writeColumnLayoutParam(buildWorkloadColumnLayoutEntries(orderedIds, widths));
+  };
+  const commitWorkloadColumnResize = (): void => {
+    const pending = pendingColumnWidths();
+    if (!pending) return;
+    const renderedColumnIds = workloadTableVisibleColumnIds();
+    const committed = pruneWorkloadColumnWidths(pending, renderedColumnIds);
+    if (!hasUrlColumnLayout()) setColumnWidths(committed);
+    setPendingColumnWidths(null);
+    publishColumnLayout(committed, renderedColumnIds);
+  };
+  const cancelWorkloadColumnResize = (): void => {
+    setPendingColumnWidths(null);
+  };
+  const clearWorkloadColumnWidth = (columnId: string): void => {
+    const renderedColumnIds = workloadTableVisibleColumnIds();
+    const current = activeColumnWidths();
+    setPendingColumnWidths(null);
+    const linkOwnsLayout = hasUrlColumnLayout();
+    const without = withoutWorkloadColumnWidth(current, columnId);
+    if (!hasWorkloadColumnWidths(without)) {
+      if (!linkOwnsLayout) setColumnWidths({});
+      writeColumnLayoutParam(null);
+      return;
+    }
+    const column = workloadColumns.find((candidate) => candidate.id === columnId);
+    const restored = column ? seedWorkloadColumnWidthsFromDefaults(without, [column]) : without;
+    if (!linkOwnsLayout) setColumnWidths(restored);
+    publishColumnLayout(restored, renderedColumnIds);
+  };
+  const resetWorkloadColumnWidths = (): void => {
+    setPendingColumnWidths(null);
+    setColumnWidths({});
+    writeColumnLayoutParam(null);
+  };
+  const toggleWorkloadColumn = (columnId: string): void => {
+    if (!hasUrlColumnLayout()) {
+      columnVisibility.toggle(columnId);
+      return;
+    }
+    const column = workloadColumns.find((candidate) => candidate.id === columnId);
+    const defaultWidth =
+      column?.width && /^\d+(?:\.\d+)?px$/.test(column.width)
+        ? Number.parseFloat(column.width)
+        : WORKLOAD_COLUMN_FALLBACK_WIDTH;
+    writeColumnLayoutParam(
+      toggleWorkloadColumnLayoutEntry(urlColumnLayout(), columnId, defaultWidth),
+    );
+  };
 
   const handleSort = (key: WorkloadsSortKey) => {
     if (sortKey() === key) {
@@ -364,10 +523,16 @@ export function useWorkloadsControlsState(options: WorkloadsControlsStateOptions
     availableColumns: getWorkloadVisibleColumnsForLayout(
       columnVisibility.availableToggles(),
       workloadTableLayoutMode(),
+      { manualSizing: manualColumnSizingActive() },
     ),
-    isColumnHidden: columnVisibility.isHiddenByUser,
-    onColumnToggle: columnVisibility.toggle,
+    isColumnHidden: (columnId: string) =>
+      hasUrlColumnLayout()
+        ? !workloadTableVisibleColumnIds().includes(columnId)
+        : columnVisibility.isHiddenByUser(columnId),
+    onColumnToggle: toggleWorkloadColumn,
     onColumnReset: columnVisibility.resetToDefaults,
+    hasColumnWidthOverrides: manualColumnSizingActive(),
+    onColumnWidthsReset: resetWorkloadColumnWidths,
   }));
 
   return {
@@ -396,6 +561,16 @@ export function useWorkloadsControlsState(options: WorkloadsControlsStateOptions
     workloadTableVisibleColumnIds,
     workloadTableVisibleColumns,
     workloadTableLayoutMode,
+    workloadColumnWidths: activeColumnWidths,
+    workloadManualColumnSizing: manualColumnSizingActive,
+    workloadManualColumnSizingSupported: manualColumnSizingSupported,
+    workloadTableManualWidth,
+    beginWorkloadColumnResize,
+    previewWorkloadColumnWidth,
+    commitWorkloadColumnResize,
+    cancelWorkloadColumnResize,
+    clearWorkloadColumnWidth,
+    resetWorkloadColumnWidths,
     setWorkloadMetricHistoryRange,
     setWorkloadMetricDisplayMode,
   } as const;

@@ -114,6 +114,33 @@ describe('ColumnPicker', () => {
     expect(onReset).toHaveBeenCalledOnce();
   });
 
+  it('explains and clears an active manual-width layout independently of column visibility', async () => {
+    const onResetWidths = vi.fn();
+    render(() => (
+      <ColumnPicker
+        columns={[{ id: 'subject', label: 'Subject' }]}
+        isHidden={() => false}
+        onToggle={vi.fn()}
+        onResetWidths={onResetWidths}
+        hasManualWidths
+      />
+    ));
+
+    fireEvent.click(screen.getByRole('button', { name: /columns/i }));
+
+    expect(
+      await screen.findByText(
+        'Custom widths are active, so every enabled column stays visible and the table scrolls sideways.',
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText('Enabled columns appear when table space allows.'),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Reset widths' }));
+    expect(onResetWidths).toHaveBeenCalledOnce();
+  });
+
   it('closes when the user clicks outside the open picker', async () => {
     render(() => (
       <ColumnPicker

@@ -12,7 +12,9 @@ import {
   COLUMN_PICKER_EMPTY_LABEL,
   COLUMN_PICKER_PANEL_TITLE,
   COLUMN_PICKER_RESPONSIVE_NOTE,
+  COLUMN_PICKER_MANUAL_WIDTH_NOTE,
   COLUMN_PICKER_RESET_LABEL,
+  COLUMN_PICKER_RESET_WIDTHS_LABEL,
   getColumnPickerOptionTextClass,
 } from '@/components/shared/columnPickerModel';
 import {
@@ -29,17 +31,32 @@ export const ColumnPicker: Component<ColumnPickerProps> = (props) => {
       <div class="border-b border-border-subtle px-3 py-2">
         <div class="flex items-center justify-between">
           <span class="text-xs font-medium text-base-content">{COLUMN_PICKER_PANEL_TITLE}</span>
-          <Show when={state.showReset()}>
-            <button
-              type="button"
-              onClick={state.handleResetClick}
-              class="text-[10px] text-blue-600 hover:underline dark:text-blue-400"
-            >
-              {COLUMN_PICKER_RESET_LABEL}
-            </button>
-          </Show>
+          <div class="flex items-center gap-2">
+            <Show when={state.showResetWidths()}>
+              <button
+                type="button"
+                onClick={state.handleResetWidthsClick}
+                class="text-[10px] text-blue-600 hover:underline dark:text-blue-400"
+              >
+                {COLUMN_PICKER_RESET_WIDTHS_LABEL}
+              </button>
+            </Show>
+            <Show when={state.showReset()}>
+              <button
+                type="button"
+                onClick={state.handleResetClick}
+                class="text-[10px] text-blue-600 hover:underline dark:text-blue-400"
+              >
+                {COLUMN_PICKER_RESET_LABEL}
+              </button>
+            </Show>
+          </div>
         </div>
-        <p class="mt-1 text-[10px] leading-4 text-muted">{COLUMN_PICKER_RESPONSIVE_NOTE}</p>
+        <p class="mt-1 text-[10px] leading-4 text-muted">
+          {state.showResetWidths()
+            ? COLUMN_PICKER_MANUAL_WIDTH_NOTE
+            : COLUMN_PICKER_RESPONSIVE_NOTE}
+        </p>
       </div>
 
       <div class="max-h-64 overflow-y-auto py-1">

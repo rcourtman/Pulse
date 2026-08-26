@@ -47,6 +47,8 @@ start a goroutine, timer, or notification lifecycle per target.
 13. `frontend-modern/src/components/Workloads/useWorkloadsState.ts`
 14. `frontend-modern/src/hooks/useWorkloads.ts`
 15. `frontend-modern/src/components/Workloads/useWorkloadsControlsState.ts`
+    15a. `frontend-modern/src/components/Workloads/workloadColumnWidths.ts`
+    15b. `frontend-modern/src/components/Workloads/workloadColumnLayoutUrl.ts`
 16. `frontend-modern/src/components/Workloads/useWorkloadsDerivedState.ts`
 17. `frontend-modern/src/components/Workloads/useWorkloadGuestMetadataState.ts`
 18. `frontend-modern/src/components/Workloads/useWorkloadSelectionState.ts`
@@ -745,6 +747,17 @@ change may globally weaken the Task 03 lifecycle-state idempotency invariant.
     duplicate hot-path type matching.
 16. Extend grouped workload derivation, summary fallbacks, and grouped/windowed table presentation through `frontend-modern/src/components/Workloads/useWorkloadsDerivedState.ts`, extend viewport-driven grouped table synchronization through `frontend-modern/src/components/Workloads/useWorkloadViewportSync.ts`, and extend node parent mapping through `frontend-modern/src/components/Workloads/workloadTopology.ts`, rather than rebuilding grouped selectors, summary snapshot math, scroll listeners, or topology lookups inside `frontend-modern/src/components/Workloads/useWorkloadsState.ts`
 17. Extend workload control defaults, persistent view preferences, keyboard reset behavior, column-visibility ownership, and tag-search flow through `frontend-modern/src/components/Workloads/useWorkloadsControlsState.ts` and `frontend-modern/src/components/Workloads/workloadsFilterModel.ts` rather than rebuilding sort/search/grouping state, reset drift, or column-toggle plumbing inside `frontend-modern/src/components/Workloads/useWorkloadsState.ts`
+    Manual workload column sizing stays dormant until an operator drags a
+    header edge at tablet, compact, or wide layout. The first drag snapshots
+    only the rendered header widths, seeds newly revealed selected columns
+    from their canonical definitions, and publishes one bounded width map at
+    pointer release; it must not measure rows, write storage per pointer move,
+    add global pointer listeners, or change the default responsive
+    no-horizontal-scroll path. Persisted widths are scoped with the owning
+    column-visibility preference. A validated `cols` route parameter may own a
+    shareable ordered layout without overwriting that viewer preference;
+    unknown ids, invalid widths, oversized lists, and phone/mobile layouts must
+    fail closed to the ordinary responsive table.
     A platform-owned memory comparison preference may be supplied as an
     accessor to `useWorkloadsState`. Host-relative sorting must reuse the
     bounded parent-node map from `workloadTopology.ts`; it must not scan the
@@ -2486,6 +2499,13 @@ the canonical owners for desktop and mobile workload column sizing. Global CSS
 must not reintroduce competing `.workload-table [data-workload-col=…]` width
 rules or `min-width: max-content` fallbacks that can blow the table out
 horizontally on Firefox or other desktop browsers.
+Operator-pinned widths remain part of that same contract: the header owns the
+pointer gesture, `workloadColumnWidths.ts` owns clamping, snapshots and totals,
+`workloadColumnLayoutUrl.ts` owns the bounded URL projection, and
+`useWorkloadsControlsState.ts` owns persistence plus reset. Manual mode must
+publish the exact sum of visible pinned widths to the existing table scroll
+shell, while narrow, phone, and mobile layouts ignore both stored and linked
+widths and expose no resize handles.
 The mixed Workloads `Info`/compact `ID` column must also remain sortable by the
 exact scalar rendered for each workload kind. `guestRowModel.tsx` owns that
 projection and `workloadSelectors.ts` owns its natural ordering, including

@@ -1295,3 +1295,54 @@ body,
 .animate-enter {
   animation: enter 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
 }
+
+/* ---------------------------------------------------------------------------
+   Workload table manual column sizing
+
+   Default (no pinned widths): none of this applies and the responsive weights
+   keep the table inside its container, as they always have. Once an operator
+   drags a column edge the table opts into its pinned pixel widths, which means
+   it may exceed the shell — `.table-scroll-shell` already scrolls, so the
+   trade the operator asked for is simply allowed to happen.
+   --------------------------------------------------------------------------- */
+/* The table publishes an explicit pixel width while manual sizing is on (see
+   `sumWorkloadColumnWidths`). `width: auto` would drop the table out of
+   `table-layout: fixed` and let a narrow column snap back to its content
+   minimum, so only the floor is expressed here. */
+.table-scroll-shell > table.workload-table--manual-widths {
+  min-width: 100%;
+}
+
+.workload-col-resizer {
+  position: absolute;
+  top: 0;
+  right: -3px;
+  z-index: 1;
+  display: block;
+  width: 7px;
+  height: 100%;
+  cursor: col-resize;
+  /* Keeps the hit target from selecting header text mid-drag. */
+  user-select: none;
+  touch-action: none;
+  background-clip: content-box;
+  background-color: transparent;
+  border-right: 2px solid transparent;
+  transition: border-color 0.12s ease-in-out;
+}
+
+.workload-col-resizer:hover,
+.workload-col-resizer:focus-visible {
+  border-right-color: var(--color-border-strong, currentColor);
+  outline: none;
+}
+
+.workload-col-resizer:focus-visible {
+  border-right-width: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workload-col-resizer {
+    transition: none;
+  }
+}

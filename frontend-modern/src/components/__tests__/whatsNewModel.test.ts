@@ -265,6 +265,17 @@ describe('post-update telemetry disclosure', () => {
 });
 
 describe('current candidate notification packet', () => {
+  it('keeps manual workload column sizing in the customer-facing release packet', () => {
+    const releaseNotes = readFileSync(
+      path.resolve(process.cwd(), '../docs/releases/RELEASE_NOTES_v6.4.0-rc.1.md'),
+      'utf8',
+    );
+
+    expect(releaseNotes).toContain('Workload table columns can be resized');
+    expect(releaseNotes).toContain('keeps every selected column reachable');
+    expect(releaseNotes).toContain('shared through the page URL or reset');
+  });
+
   it('keeps translation-ready webhook support in both release summaries', () => {
     const releaseNotes = readFileSync(
       path.resolve(process.cwd(), '../docs/releases/RELEASE_NOTES_v6.4.0-rc.3.md'),

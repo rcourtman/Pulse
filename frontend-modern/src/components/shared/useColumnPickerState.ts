@@ -1,6 +1,10 @@
 import { createEffect, createMemo, createSignal, onCleanup } from 'solid-js';
 import type { ColumnDef } from '@/hooks/useColumnVisibility';
-import { getHiddenColumnCount, shouldShowColumnPickerReset } from './columnPickerModel';
+import {
+  getHiddenColumnCount,
+  shouldShowColumnPickerReset,
+  shouldShowColumnPickerWidthReset,
+} from './columnPickerModel';
 
 export interface ColumnPickerProps {
   columns: ColumnDef[];
@@ -8,6 +12,8 @@ export interface ColumnPickerProps {
   onToggle: (id: string) => void;
   onReset?: () => void;
   showReset?: boolean;
+  onResetWidths?: () => void;
+  hasManualWidths?: boolean;
   inline?: boolean;
 }
 
@@ -36,10 +42,15 @@ export function useColumnPickerState(props: ColumnPickerProps) {
   const showReset = createMemo(
     () => Boolean(props.showReset) || shouldShowColumnPickerReset(props.onReset, hiddenCount()),
   );
+  const showResetWidths = createMemo(() =>
+    shouldShowColumnPickerWidthReset(props.onResetWidths, props.hasManualWidths),
+  );
 
   return {
     handleColumnToggle: (id: string) => props.onToggle(id),
     handleResetClick: () => props.onReset?.(),
+    handleResetWidthsClick: () => props.onResetWidths?.(),
+    showResetWidths,
     hiddenCount,
     isColumnChecked: (id: string) => !props.isHidden(id),
     isOpen,

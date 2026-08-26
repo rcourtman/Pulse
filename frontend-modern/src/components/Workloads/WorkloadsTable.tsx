@@ -61,6 +61,15 @@ type WorkloadsTableProps = Pick<
   | 'workloadTableLayoutMode'
   | 'workloadTableVisibleColumnIds'
   | 'workloadTableVisibleColumns'
+  | 'workloadColumnWidths'
+  | 'workloadManualColumnSizing'
+  | 'workloadManualColumnSizingSupported'
+  | 'workloadTableManualWidth'
+  | 'beginWorkloadColumnResize'
+  | 'previewWorkloadColumnWidth'
+  | 'commitWorkloadColumnResize'
+  | 'cancelWorkloadColumnResize'
+  | 'clearWorkloadColumnWidth'
 > & {
   title?: JSX.Element;
 };
@@ -77,7 +86,12 @@ export function WorkloadsTable(props: WorkloadsTableProps) {
         <TableCardHeader title={props.title} />
         <Table
           wrapperRef={props.setTableWrapperRef}
-          class={`platform-table workload-table table-fixed ${props.isMobile() ? `workload-table--mobile ${WORKLOAD_TABLE_MOBILE_MIN_WIDTH_CLASS}` : 'workload-table--desktop min-w-full'}`}
+          class={`platform-table workload-table table-fixed ${props.isMobile() ? `workload-table--mobile ${WORKLOAD_TABLE_MOBILE_MIN_WIDTH_CLASS}` : 'workload-table--desktop min-w-full'}${props.workloadManualColumnSizing() ? ' workload-table--manual-widths' : ''}`}
+          style={
+            props.workloadTableManualWidth() === null
+              ? undefined
+              : { width: `${props.workloadTableManualWidth()}px` }
+          }
         >
           <colgroup>
             <For each={props.workloadTableVisibleColumns()}>
@@ -89,6 +103,7 @@ export function WorkloadsTable(props: WorkloadsTableProps) {
                     props.isMobile(),
                     props.workloadTableLayoutMode(),
                     props.workloadTableVisibleColumnIds(),
+                    props.workloadColumnWidths(),
                   )}
                 />
               )}
@@ -104,6 +119,13 @@ export function WorkloadsTable(props: WorkloadsTableProps) {
             workloadTableLayoutMode={props.workloadTableLayoutMode}
             workloadTableVisibleColumnIds={props.workloadTableVisibleColumnIds}
             workloadTableVisibleColumns={props.workloadTableVisibleColumns}
+            workloadColumnWidths={props.workloadColumnWidths}
+            workloadManualColumnSizingSupported={props.workloadManualColumnSizingSupported}
+            beginWorkloadColumnResize={props.beginWorkloadColumnResize}
+            previewWorkloadColumnWidth={props.previewWorkloadColumnWidth}
+            commitWorkloadColumnResize={props.commitWorkloadColumnResize}
+            cancelWorkloadColumnResize={props.cancelWorkloadColumnResize}
+            clearWorkloadColumnWidth={props.clearWorkloadColumnWidth}
           />
           <WorkloadPanel
             activeAlerts={props.activeAlerts}
@@ -147,6 +169,7 @@ export function WorkloadsTable(props: WorkloadsTableProps) {
             workloadTableLayoutMode={props.workloadTableLayoutMode}
             workloadTableVisibleColumnIds={props.workloadTableVisibleColumnIds}
             workloadTableVisibleColumns={props.workloadTableVisibleColumns}
+            workloadColumnWidths={props.workloadColumnWidths}
           />
         </Table>
       </TableCard>

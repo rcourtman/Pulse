@@ -455,4 +455,230 @@ describe('useWorkloadsControlsState', () => {
       }
     });
   });
+
+  describe('manual column sizing', () => {
+    const withState = (run: (state: ReturnType<typeof useWorkloadsControlsState>) => void) =>
+      createRoot((dispose) => {
+        try {
+          const [showFilters, setShowFilters] = createSignal(false);
+          run(
+            useWorkloadsControlsState({
+              viewMode: () => 'all' as ViewMode,
+              showFilters,
+              setShowFilters,
+            }),
+          );
+        } finally {
+          dispose();
+        }
+      });
+
+    it('is inert until a column edge is dragged', () => {
+      setCompactViewport();
+      withState((state) => {
+        expect(state.workloadManualColumnSizing()).toBe(false);
+        expect(state.workloadColumnWidths()).toEqual({});
+        expect(state.workloadTableManualWidth()).toBeNull();
+        expect(state.workloadTableVisibleColumnIds()).not.toContain('netIo');
+      });
+    });
+
+    it("reveals the operator's full column selection once a width is pinned", () => {
+      setCompactViewport();
+      withState((state) => {
+        state.beginWorkloadColumnResize({ name: 302, cpu: 151 });
+        state.previewWorkloadColumnWidth('name', 172);
+        state.commitWorkloadColumnResize();
+
+        expect(state.workloadManualColumnSizing()).toBe(true);
+        expect(state.workloadColumnWidths().name).toBe(172);
+        expect(state.workloadTableVisibleColumnIds()).toContain('netIo');
+        expect(state.workloadTableVisibleColumnIds()).toContain('diskIo');
+      });
+    });
+
+    it('pins every rendered column so the published table width is complete', () => {
+      setCompactViewport();
+      withState((state) => {
+        state.beginWorkloadColumnResize({ name: 302 });
+        state.previewWorkloadColumnWidth('name', 172);
+        state.commitWorkloadColumnResize();
+
+        const widths = state.workloadColumnWidths();
+        for (const columnId of state.workloadTableVisibleColumnIds()) {
+          expect(widths[columnId], columnId).toBeGreaterThan(0);
+        }
+        expect(state.workloadTableManualWidth()).toBe(
+          state.workloadTableVisibleColumnIds().reduce((total, id) => total + widths[id], 0),
+        );
+      });
+    });
+
+    it('discards an abandoned drag without persisting anything', () => {
+      setCompactViewport();
+      withState((state) => {
+        state.beginWorkloadColumnResize({ name: 302 });
+        state.previewWorkloadColumnWidth('name', 172);
+        state.cancelWorkloadColumnResize();
+
+        expect(state.workloadManualColumnSizing()).toBe(false);
+        expect(state.workloadColumnWidths()).toEqual({});
+      });
+    });
+
+    it('restores one column to its design width rather than leaving it unpinned', () => {
+      // A deleted pin inside an already fully claimed table-fixed table
+      // collapses that column to zero width.
+      setCompactViewport();
+      withState((state) => {
+        state.beginWorkloadColumnResize({ name: 302 });
+        state.previewWorkloadColumnWidth('name', 172);
+        state.commitWorkloadColumnResize();
+
+        state.clearWorkloadColumnWidth('name');
+
+        expect(state.workloadManualColumnSizing()).toBe(true);
+        expect(state.workloadColumnWidths().name).toBe(200);
+        expect(state.workloadTableManualWidth()).not.toBeNull();
+      });
+    });
+
+    it('returns to the responsive layout when the last pin is cleared', () => {
+      setCompactViewport();
+      withState((state) => {
+        state.beginWorkloadColumnResize({ name: 302 });
+        state.previewWorkloadColumnWidth('name', 172);
+        state.commitWorkloadColumnResize();
+
+        state.resetWorkloadColumnWidths();
+
+        expect(state.workloadManualColumnSizing()).toBe(false);
+        expect(state.workloadColumnWidths()).toEqual({});
+        expect(state.workloadTableManualWidth()).toBeNull();
+        expect(state.workloadTableVisibleColumnIds()).not.toContain('netIo');
+      });
+    });
+
+    it('never engages on touch layouts, even with widths already persisted', () => {
+      localStorage.setItem('workloadsColumnWidths', JSON.stringify({ name: 172 }));
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: 600 });
+      withState((state) => {
+        expect(state.workloadManualColumnSizingSupported()).toBe(false);
+        expect(state.workloadManualColumnSizing()).toBe(false);
+        expect(state.workloadColumnWidths()).toEqual({});
+        expect(state.workloadTableVisibleColumnIds()).not.toContain('netIo');
+      });
+    });
+  });
+
+  describe('shareable column layout (?cols=)', () => {
+    const withState = (run: (state: ReturnType<typeof useWorkloadsControlsState>) => void) =>
+      createRoot((dispose) => {
+        try {
+          const [showFilters, setShowFilters] = createSignal(false);
+          run(
+            useWorkloadsControlsState({
+              viewMode: () => 'all' as ViewMode,
+              showFilters,
+              setShowFilters,
+            }),
+          );
+        } finally {
+          dispose();
+        }
+      });
+
+    const currentCols = () => new URLSearchParams(mockRouterSearch()).get('cols');
+
+    it('reproduces the linked table on a profile that has never resized anything', () => {
+      setCompactViewport();
+      setMockRouterSearch('?cols=name:172,cpu:151,netIo:170');
+      withState((state) => {
+        expect(localStorage.getItem('workloadsColumnWidths')).toBeNull();
+        expect(state.workloadManualColumnSizing()).toBe(true);
+        expect(state.workloadTableVisibleColumnIds()).toEqual(['name', 'cpu', 'netIo']);
+        expect(state.workloadColumnWidths()).toEqual({ name: 172, cpu: 151, netIo: 170 });
+      });
+    });
+
+    it("lets the link win over the viewer's stored widths", () => {
+      setCompactViewport();
+      localStorage.setItem('workloadsColumnWidths', JSON.stringify({ name: 500, cpu: 500 }));
+      setMockRouterSearch('?cols=name:172,cpu:151');
+      withState((state) => {
+        expect(state.workloadColumnWidths()).toEqual({ name: 172, cpu: 151 });
+      });
+    });
+
+    it('ignores columns the link names that this view cannot render', () => {
+      setCompactViewport();
+      setMockRouterSearch('?cols=name:172,totallyUnknown:120,cpu:151');
+      withState((state) => {
+        expect(state.workloadTableVisibleColumnIds()).toEqual(['name', 'cpu']);
+      });
+    });
+
+    it('publishes the layout to the URL when a drag is committed', () => {
+      setCompactViewport();
+      withState((state) => {
+        expect(currentCols()).toBeNull();
+
+        state.beginWorkloadColumnResize({ name: 302 });
+        state.previewWorkloadColumnWidth('name', 172);
+        state.commitWorkloadColumnResize();
+
+        const cols = currentCols();
+        expect(cols).toContain('name:172');
+        expect(cols).toContain('netIo:');
+      });
+    });
+
+    it("edits the link rather than the viewer's saved widths while a link is active", () => {
+      setCompactViewport();
+      setMockRouterSearch('?cols=name:172,cpu:151');
+      withState((state) => {
+        state.beginWorkloadColumnResize({ name: 172, cpu: 151 });
+        state.previewWorkloadColumnWidth('cpu', 260);
+        state.commitWorkloadColumnResize();
+
+        expect(currentCols()).toBe('name:172,cpu:260');
+        expect(localStorage.getItem('workloadsColumnWidths')).toBeNull();
+      });
+    });
+
+    it('adds and removes columns through the link, leaving the stored preference alone', () => {
+      setCompactViewport();
+      setMockRouterSearch('?cols=name:172,cpu:151');
+      withState((state) => {
+        const before = state.columnVisibility.hiddenColumns().slice();
+
+        state.workloadsFilterColumnVisibility().onColumnToggle('netIo');
+        expect(currentCols()).toBe('name:172,cpu:151,netIo:170');
+
+        state.workloadsFilterColumnVisibility().onColumnToggle('netIo');
+        expect(currentCols()).toBe('name:172,cpu:151');
+
+        expect(state.columnVisibility.hiddenColumns()).toEqual(before);
+      });
+    });
+
+    it('drops the parameter when widths are reset', () => {
+      setCompactViewport();
+      setMockRouterSearch('?cols=name:172,cpu:151');
+      withState((state) => {
+        state.resetWorkloadColumnWidths();
+        expect(currentCols()).toBeNull();
+        expect(state.workloadManualColumnSizing()).toBe(false);
+      });
+    });
+
+    it('ignores a linked layout on touch layouts', () => {
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: 600 });
+      setMockRouterSearch('?cols=name:172,cpu:151,netIo:170');
+      withState((state) => {
+        expect(state.workloadManualColumnSizing()).toBe(false);
+        expect(state.workloadTableVisibleColumnIds()).not.toContain('netIo');
+      });
+    });
+  });
 });

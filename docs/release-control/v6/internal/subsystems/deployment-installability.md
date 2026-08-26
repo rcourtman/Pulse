@@ -182,10 +182,14 @@ discarding existing explicit disk exclusions.
 
 `frontend-modern/src/utils/localStorage.ts` is a shared browser-preference key
 registry, not deployment state. Workload presentation preferences added there,
-including the Proxmox guest-memory comparison basis, must remain optional,
-client-local, and backwards-compatible: a missing or invalid stored value
-falls back to the shipped guest-allocation view and cannot affect install,
-upgrade, update, release, or artifact-selection behavior.
+including the Proxmox guest-memory comparison basis and per-surface workload
+column widths, must remain optional, client-local, and backwards-compatible. A
+missing or invalid stored memory basis falls back to the shipped guest-allocation
+view; missing or invalid column widths fall back to the responsive table layout.
+The shareable `cols` query parameter may temporarily override the viewer's
+column layout, but it must not rewrite their stored preference. None of these
+presentation values can affect install, upgrade, update, release, or
+artifact-selection behaviour.
 
 1. `frontend-modern/src/api/updates.ts` shared with `api-contracts`: the updates frontend client is both a deployment-installability control surface and a canonical API payload contract boundary.
    The version payload consumed by this client must preserve the distinction

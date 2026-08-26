@@ -50,6 +50,12 @@ stacks. The Proxmox page owns and persists the `Guest` / `Host` memory basis;
 the workload state, table, panel, and row contracts carry the selected basis
 and resolved parent-node data to the canonical memory bar, and the memory
 column header must expose the non-default Host basis after the control closes.
+The shared `ColumnPicker` may also expose `Reset widths` when an owning table
+has active manual column sizing. That action is separate from restoring column
+visibility defaults: feature state owns the width reset callback and active
+flag, while the shared picker owns the discoverable menu placement and button
+presentation. Tables without manual sizing omit both properties and retain the
+existing picker unchanged.
 
 Feature-owned scope controls that use the shared filter rail must keep their
 state in the owning route and use stable, domain-authored option identities.

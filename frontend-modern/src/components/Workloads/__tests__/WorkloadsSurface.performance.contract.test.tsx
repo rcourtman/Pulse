@@ -22,6 +22,8 @@ import workloadFilterConfigModelSource from '../workloadFilterConfigModel.ts?raw
 import workloadRouteModelSource from '../workloadRouteModel.ts?raw';
 import workloadRouteStateModelSource from '../workloadRouteStateModel.ts?raw';
 import workloadUrlSyncModelSource from '../workloadUrlSyncModel.ts?raw';
+import workloadColumnLayoutUrlSource from '../workloadColumnLayoutUrl.ts?raw';
+import workloadColumnWidthsSource from '../workloadColumnWidths.ts?raw';
 import workloadsWorkloadViewportSyncSource from '../useWorkloadViewportSync.ts?raw';
 import workloadsWorkloadRouteStateSource from '../useWorkloadRouteState.ts?raw';
 import workloadsWorkloadUrlSyncSource from '../useWorkloadUrlSync.ts?raw';
@@ -1646,6 +1648,8 @@ describe('Workloads performance contract', () => {
       expect(workloadsWorkloadTableSource).toContain('WORKLOAD_TABLE_MOBILE_MIN_WIDTH_CLASS');
       expect(workloadsWorkloadTableSource).toContain('props.workloadTableLayoutMode()');
       expect(workloadsWorkloadTableSource).toContain('props.workloadTableVisibleColumnIds()');
+      expect(workloadsWorkloadTableSource).toContain('workload-table--manual-widths');
+      expect(workloadsWorkloadTableSource).toContain('props.workloadTableManualWidth()');
       expect(workloadsWorkloadTableSource).toContain('<colgroup>');
       expect(workloadsWorkloadTableSource).not.toContain('<TableHead');
       expect(workloadsWorkloadTableSource).not.toContain('NodeGroupHeader');
@@ -1663,6 +1667,21 @@ describe('Workloads performance contract', () => {
       expect(workloadTableHeaderSource).toContain('props.workloadTableVisibleColumnIds()');
       expect(workloadTableHeaderSource).toContain('aria-hidden="true"');
       expect(workloadTableHeaderSource).toContain('<span class="sr-only">{label()}</span>');
+      expect(workloadTableHeaderSource).toContain('data-workload-col-resizer={col.id}');
+      expect(workloadTableHeaderSource).toContain('event.currentTarget.setPointerCapture');
+      expect(workloadTableHeaderSource).toContain('onPointerCancel={onPointerCancel}');
+      expect(workloadColumnWidthsSource).toContain(
+        'const MANUAL_SIZING_LAYOUT_MODES: ReadonlySet<WorkloadTableLayoutMode>',
+      );
+      expect(workloadColumnWidthsSource).toContain("'tablet'");
+      expect(workloadColumnWidthsSource).toContain("'compact'");
+      expect(workloadColumnWidthsSource).toContain("'wide'");
+      expect(workloadColumnWidthsSource).not.toContain("'phone'");
+      expect(workloadColumnWidthsSource).toContain('sumWorkloadColumnWidths');
+      expect(workloadColumnLayoutUrlSource).toContain(
+        "export const WORKLOAD_COLUMNS_URL_PARAM = 'cols'",
+      );
+      expect(workloadColumnLayoutUrlSource).toContain('resolveWorkloadColumnLayoutEntries');
       expect(workloadTableHeaderSource).not.toContain('style={{');
       expect(workloadTableHeaderSource).not.toContain('NodeGroupHeader');
       expect(workloadPanelSource).toContain('NodeGroupHeader');

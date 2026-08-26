@@ -16,6 +16,7 @@ import type {
   WorkloadTableMetric,
 } from './workloadMetricHistoryModel';
 import type { NestedWorkloadContext } from './nestedWorkloadContext';
+import type { WorkloadColumnWidths } from './workloadColumnWidths';
 import type { WorkloadsMemoryDisplayBasis } from './workloadsFilterModel';
 
 export type WorkloadTableLayoutMode = 'narrow' | 'phone' | 'mobile' | 'tablet' | 'compact' | 'wide';
@@ -113,6 +114,7 @@ export interface GuestRowProps {
   onCustomUrlUpdate?: (guestId: string, url: string) => void;
   isGroupedView?: boolean;
   visibleColumnIds?: string[];
+  columnWidths?: WorkloadColumnWidths;
   onClick?: () => void;
   isExpanded?: boolean;
   isSummaryHighlighted?: boolean;
@@ -557,6 +559,7 @@ const getGuestColumnSizing = (
   isMobile = false,
   layoutMode: WorkloadTableLayoutMode = isMobile ? 'phone' : 'wide',
   visibleColumnIds?: readonly string[],
+  manualWidths?: WorkloadColumnWidths,
 ): Pick<ColumnDef, 'width' | 'minWidth' | 'maxWidth'> | undefined => {
   const column = GUEST_COLUMN_BY_ID.get(columnId);
   if (!column) return undefined;
@@ -567,7 +570,16 @@ const getGuestColumnSizing = (
     maxWidth: column.maxWidth,
   };
 
-  const override = getResponsiveColumnOverride(columnId, layoutMode, visibleColumnIds);
+  const pinned = manualWidths?.[columnId];
+  const manualOverride =
+    typeof pinned === 'number' && Number.isFinite(pinned) && pinned > 0
+      ? (() => {
+          const width = `${Math.round(pinned)}px`;
+          return { width, minWidth: width, maxWidth: width };
+        })()
+      : undefined;
+  const override =
+    manualOverride ?? getResponsiveColumnOverride(columnId, layoutMode, visibleColumnIds);
   if (override) {
     if ('width' in override) sizing.width = override.width ?? undefined;
     if ('minWidth' in override) sizing.minWidth = override.minWidth ?? undefined;
@@ -582,8 +594,15 @@ export const getGuestColumnStyle = (
   isMobile = false,
   layoutMode?: WorkloadTableLayoutMode,
   visibleColumnIds?: readonly string[],
+  manualWidths?: WorkloadColumnWidths,
 ): JSX.CSSProperties | undefined => {
-  const sizing = getGuestColumnSizing(columnId, isMobile, layoutMode, visibleColumnIds);
+  const sizing = getGuestColumnSizing(
+    columnId,
+    isMobile,
+    layoutMode,
+    visibleColumnIds,
+    manualWidths,
+  );
   if (!sizing) return undefined;
 
   const style: JSX.CSSProperties = {};
@@ -600,8 +619,15 @@ export const getGuestColumnWidthStyle = (
   isMobile = false,
   layoutMode?: WorkloadTableLayoutMode,
   visibleColumnIds?: readonly string[],
+  manualWidths?: WorkloadColumnWidths,
 ): JSX.CSSProperties | undefined => {
-  const sizing = getGuestColumnSizing(columnId, isMobile, layoutMode, visibleColumnIds);
+  const sizing = getGuestColumnSizing(
+    columnId,
+    isMobile,
+    layoutMode,
+    visibleColumnIds,
+    manualWidths,
+  );
   if (!sizing?.width) return undefined;
   return { width: sizing.width };
 };
@@ -627,7 +653,15 @@ export const getWorkloadTableLayoutModeForContainer = (width: number): WorkloadT
 export const getWorkloadVisibleColumnsForLayout = (
   columns: ColumnDef[],
   layoutMode: WorkloadTableLayoutMode,
+  options?: { manualSizing?: boolean },
 ): ColumnDef[] => {
+  if (
+    options?.manualSizing &&
+    WORKLOAD_TABLE_LAYOUT_ORDER[layoutMode] >= WORKLOAD_TABLE_LAYOUT_ORDER.tablet
+  ) {
+    return [...columns];
+  }
+
   const layoutRank = WORKLOAD_TABLE_LAYOUT_ORDER[layoutMode];
   return columns.filter((column) => {
     const minimumLayout = WORKLOAD_COLUMN_MIN_LAYOUT[column.id] ?? 'wide';

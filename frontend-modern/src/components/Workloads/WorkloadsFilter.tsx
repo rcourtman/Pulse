@@ -418,6 +418,8 @@ export const WorkloadsFilter: Component<WorkloadsFilterProps> = (props) => {
                   onToggle={visibility().onColumnToggle}
                   onReset={visibility().onColumnReset}
                   showReset={visibility().showReset}
+                  onResetWidths={visibility().onColumnWidthsReset}
+                  hasManualWidths={visibility().hasColumnWidthOverrides}
                 />
               </div>
             )}
