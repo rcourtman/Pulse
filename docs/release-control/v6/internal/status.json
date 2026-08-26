@@ -9790,21 +9790,7 @@
     }
   ],
   "candidate_lanes": [],
-  "work_claims": [
-    {
-      "id": "claude-alert-eventlog-coverage-gap-alert-engine-suppression-observability",
-      "agent_id": "claude-alert-eventlog",
-      "summary": "Phase 0 of ALERT_ENGINE_EVOLUTION: additive alert event log (transitions + suppression reasons), delivery-diagnosis UI surfacing",
-      "target_id": "v6-product-lane-expansion",
-      "claimed_at": "2026-08-26T19:54:04Z",
-      "heartbeat_at": "2026-08-26T19:54:04Z",
-      "expires_at": "2026-08-27T03:54:04Z",
-      "work_item": {
-        "kind": "coverage-gap",
-        "id": "alert-engine-suppression-observability"
-      }
-    }
-  ],
+  "work_claims": [],
   "open_decisions": [],
   "source_of_truth_file": "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",
   "resolved_decisions": [
