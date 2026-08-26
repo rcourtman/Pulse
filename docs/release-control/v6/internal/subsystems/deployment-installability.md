@@ -42,6 +42,14 @@ upgrade must recover those values from both split and `--key=value` service
 arguments and reproduce them in the generated systemd command without
 discarding existing explicit disk exclusions.
 
+The accelerated exact-SHA release worker must preserve release-gate fidelity
+under its own resource envelope. Bounded frontend static checks and integration
+image preparation may overlap, but the full frontend test suite and the
+race-enabled backend release suite must run serially. Both suites saturate the
+dedicated worker when combined; concurrent execution can stretch otherwise
+passing monitoring tests into load-induced failures and must not be used as a
+release-latency optimization.
+
 ## Canonical Files
 
 1. `internal/updates/`

@@ -135,11 +135,14 @@ phase frontend-build npm --prefix frontend-modern run build
 rm -rf internal/api/frontend-modern
 mkdir -p internal/api/frontend-modern
 cp -R frontend-modern/dist internal/api/frontend-modern/
-run_frontend_quality() {
+run_frontend_static_quality() {
   phase frontend-lint npm --prefix frontend-modern run lint
   phase frontend-headers npm --prefix frontend-modern run lint:headers
   phase frontend-duplication npm --prefix frontend-modern run lint:cpd
   phase frontend-types npm --prefix frontend-modern run type-check
+}
+
+run_frontend_tests() {
   phase frontend-tests npm --prefix frontend-modern test
 }
 
@@ -163,12 +166,12 @@ run_integration_prep() {
   phase mock-github-image docker build --tag pulse-mock-github:test tests/integration/mock-github-server
 }
 
-# These lanes have no output dependency on one another. Running them together
-# makes the critical path the slowest lane instead of their sum.
+# Static frontend checks and integration preparation are bounded enough to
+# overlap safely. Keep the full frontend and race-enabled backend test suites
+# serial: both saturate this worker, and concurrent execution can turn healthy
+# monitoring tests into load-induced release-gate failures.
 parallel_pids=()
-run_frontend_quality &
-parallel_pids+=("$!")
-run_backend &
+run_frontend_static_quality &
 parallel_pids+=("$!")
 run_integration_prep &
 parallel_pids+=("$!")
@@ -184,6 +187,9 @@ while [ "$remaining" -gt 0 ]; do
     exit "$status"
   fi
 done
+
+run_frontend_tests
+run_backend
 
 PLAYWRIGHT_VERSION="$(node -p "require('./tests/integration/node_modules/@playwright/test/package.json').version")"
 PLAYWRIGHT_IMAGE="mcr.microsoft.com/playwright:v${PLAYWRIGHT_VERSION}-noble"

@@ -217,6 +217,23 @@ class ReleasePreflightTest(unittest.TestCase):
         )
         self.assertIn("is not reachable from a fetched origin branch", runner)
 
+    def test_worker_serializes_resource_intensive_test_suites(self) -> None:
+        worker = (ROOT / "scripts/release-preflight-worker.sh").read_text()
+        scheduling_block = re.search(
+            r"# Static frontend checks.*?run_backend\n",
+            worker,
+            flags=re.DOTALL,
+        )
+        self.assertIsNotNone(scheduling_block)
+        block = scheduling_block.group(0)
+
+        self.assertIn("run_frontend_static_quality &", block)
+        self.assertIn("run_integration_prep &", block)
+        self.assertNotIn("run_frontend_tests &", block)
+        self.assertNotIn("run_backend &", block)
+        self.assertLess(block.index("done\n"), block.index("run_frontend_tests\n"))
+        self.assertLess(block.index("run_frontend_tests\n"), block.index("run_backend\n"))
+
     def test_api_shard_plan_is_deterministic_complete_and_disjoint(self) -> None:
         test_names = [
             f"TestReleaseCase{index:04d}"
