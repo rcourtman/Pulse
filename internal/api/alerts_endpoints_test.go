@@ -263,6 +263,28 @@ func TestAlertsEndpoints(t *testing.T) {
 		}
 	})
 
+	// The identifier-free form is the list-surface contract. Even with no
+	// active alerts it must route successfully and encode [] rather than null.
+	t.Run("GetAllActiveAlertDeliveryDiagnoses", func(t *testing.T) {
+		res, err := http.Get(srv.server.URL + "/api/alerts/delivery-diagnosis")
+		if err != nil {
+			t.Fatalf("request failed: %v", err)
+		}
+		defer res.Body.Close()
+
+		if res.StatusCode != http.StatusOK {
+			t.Fatalf("status code = %d, want %d", res.StatusCode, http.StatusOK)
+		}
+
+		var diagnoses []alerts.AlertDeliveryDiagnosis
+		if err := json.NewDecoder(res.Body).Decode(&diagnoses); err != nil {
+			t.Fatalf("decode delivery diagnoses: %v", err)
+		}
+		if diagnoses == nil {
+			t.Fatal("delivery diagnoses decoded as nil, want an empty JSON array")
+		}
+	})
+
 	// 5. Get alert history
 	t.Run("GetAlertHistory", func(t *testing.T) {
 		res, err := http.Get(srv.server.URL + "/api/alerts/history")

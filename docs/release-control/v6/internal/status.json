@@ -9761,7 +9761,7 @@
     },
     {
       "id": "alert-engine-suppression-observability",
-      "summary": "Alert notification suppression decisions (cooldown, quiet hours, flapping, grouping, rate limit, activation state) are unobservable: the delivery log records attempts only, the delivery-diagnosis endpoint has no frontend consumer, and lifecycle transitions have no durable event trail, so held notifications read as breakage and lifecycle regressions (#1682, #1683, #1553, #1693) ship without an end-to-end contract gate. Resolution is Phase 0 of docs/ALERT_ENGINE_EVOLUTION.md: an additive SQLite alert event log recording transitions and suppressions with reasons, plus UI surfacing of the existing delivery diagnosis.",
+      "summary": "Alert notification suppression decisions (cooldown, quiet hours, flapping, grouping, rate limit, activation state) lacked operator-visible evidence, so held notifications read as breakage and lifecycle regressions (#1682, #1683, #1553, #1693) could ship without an end-to-end contract gate. Phase 0 of docs/ALERT_ENGINE_EVOLUTION.md now supplies the Alerts Overview delivery-diagnosis projection and an additive SQLite event log/API for notification decisions and the safe lifecycle seams. The remaining gap is the deliberately deferred firing event plus convergence of history and delivery projections onto that log before the later reducer phases.",
       "owner": "project-owner",
       "status": "triaged",
       "recorded_at": "2026-08-26",
@@ -9778,12 +9778,12 @@
       "evidence": [
         {
           "repo": "pulse",
-          "path": "docs/release-control/v6/internal/records/alert-engine-suppression-observability-2026-08-26.md",
+          "path": "docs/ALERT_ENGINE_EVOLUTION.md",
           "kind": "file"
         },
         {
           "repo": "pulse",
-          "path": "docs/ALERT_ENGINE_EVOLUTION.md",
+          "path": "docs/release-control/v6/internal/records/alert-engine-suppression-observability-2026-08-26.md",
           "kind": "file"
         }
       ]

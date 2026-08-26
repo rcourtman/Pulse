@@ -32,6 +32,12 @@ Email rendering treats `patrol_finding` as a finding rather than a numeric
 threshold alert. Single and grouped HTML/text bodies show the finding message
 and optional category, omit meaningless zero-value metrics, preserve mixed
 group headings, and HTML-escape every resource, message, and category field.
+The alerts-owned append-only event log may record notification dispatch,
+quiet-hours deferral, and suppression decisions at the alert manager's policy
+seams. Those events explain why delivery was or was not attempted, but they do
+not replace the notifications-owned queue, delivery log, retry/DLQ state, or
+provider receipts and must not be treated as proof that a destination accepted
+or displayed a notification.
 
 ## Canonical Files
 

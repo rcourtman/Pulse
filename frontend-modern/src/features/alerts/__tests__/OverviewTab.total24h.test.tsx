@@ -1,15 +1,21 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen } from '@solidjs/testing-library';
 import { DEFAULT_LOCALE, setActiveLocale } from '@/i18n';
-import type { Alert } from '@/types/api';
+import type { Alert, AlertDeliveryDiagnosis } from '@/types/api';
 
 vi.mock('@solidjs/router', () => ({
   useLocation: () => ({ hash: '', pathname: '/alerts', search: '', query: {} }),
   A: (props: Record<string, unknown>) => props.children,
 }));
 
+const getDeliveryDiagnoses = vi.fn<() => Promise<AlertDeliveryDiagnosis[]>>();
+
 vi.mock('@/api/alerts', () => ({
-  AlertsAPI: {},
+  AlertsAPI: {
+    get getDeliveryDiagnoses() {
+      return getDeliveryDiagnoses;
+    },
+  },
 }));
 
 vi.mock('@/stores/notifications', () => ({
@@ -57,6 +63,8 @@ function defaultProps(overrides: Record<string, unknown> = {}) {
 describe('OverviewTab Last 24 Hours stat', () => {
   beforeEach(() => {
     setActiveLocale(DEFAULT_LOCALE);
+    getDeliveryDiagnoses.mockReset();
+    getDeliveryDiagnoses.mockResolvedValue([]);
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-03-06T12:00:00Z'));
   });
@@ -174,6 +182,39 @@ describe('OverviewTab Last 24 Hours stat', () => {
     expect(screen.getByText('Unacknowledge')).toBeInTheDocument();
     expect(screen.getAllByText('Acknowledged').length).toBeGreaterThan(0);
     expect(container.querySelector('#alert-acknowledged.bg-surface-alt')).toBeTruthy();
+  });
+
+  it('renders the bulk delivery diagnosis on an unacknowledged active alert card', async () => {
+    const recentTime = new Date(Date.now() - 1_800_000).toISOString();
+    const activeAlerts: Record<string, Alert> = {
+      recent: makeAlert('recent', recentTime),
+    };
+    getDeliveryDiagnoses.mockResolvedValue([
+      {
+        alertIdentifier: 'recent',
+        alertId: 'recent',
+        trackingKey: 'vm-recent/cpu',
+        status: 'suppressed',
+        reason: 'notifications_inactive',
+        message: 'Alert notifications are not active yet.',
+        alertType: 'cpu',
+        level: 'warning',
+        notificationsEnabled: false,
+        activationState: 'pending',
+        cooldownMinutes: 5,
+        maxAlertsHour: 10,
+        recentAlertsInHour: 0,
+        flappingActive: false,
+        flappingHistoryInWindow: 0,
+        flappingThreshold: 5,
+        flappingWindowSeconds: 300,
+      },
+    ]);
+
+    render(() => <OverviewTab {...defaultProps({ activeAlerts })} />);
+
+    expect(await screen.findByText('Notification delivery not turned on')).toBeInTheDocument();
+    expect(getDeliveryDiagnoses).toHaveBeenCalledTimes(1);
   });
 
   it('localizes stats and active alert card controls without translating source fields', () => {

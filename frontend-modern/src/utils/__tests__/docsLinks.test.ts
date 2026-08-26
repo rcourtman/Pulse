@@ -194,6 +194,24 @@ describe('docsLinks', () => {
     expect(apiReference).toContain('without deleting delivery history');
   });
 
+  it('ships the bulk active-alert delivery diagnosis contract', () => {
+    const apiReference = readFileSync(path.join(repoRoot, 'docs', 'API.md'), 'utf8');
+    const shippedAPIReference = readFileSync(
+      path.join(frontendRoot, 'public', 'docs', 'API.md'),
+      'utf8',
+    );
+
+    expect(shippedAPIReference).toBe(apiReference);
+    expect(apiReference).toContain(
+      '`GET /api/alerts/delivery-diagnosis?alertIdentifier=<alert-id>`',
+    );
+    expect(apiReference).toContain(
+      'omit `alertIdentifier` to get the diagnosis array for every active alert',
+    );
+    expect(apiReference).toContain('`GET /api/alerts/events?alertIdentifier=<alert-id>');
+    expect(apiReference).toContain('append-only alert event log');
+  });
+
   it('ships the truthful Patrol objective API contract', () => {
     const apiReference = readFileSync(path.join(repoRoot, 'docs', 'API.md'), 'utf8');
     const shippedAPIReference = readFileSync(

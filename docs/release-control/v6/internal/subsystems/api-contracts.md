@@ -4439,6 +4439,22 @@ manager's current delivery-policy projection for one active alert, including
 replay timing, recent rate-limit counts, and flapping suppression evidence. The
 route requires `monitoring:read`, returns `404` for unknown active alerts, and
 must not send notifications or mutate delivery tracking state.
+When `alertIdentifier` (and its legacy `id` alias) is omitted, the same route
+returns a JSON array containing the diagnosis for every active alert, ordered
+by alert identifier and computed in one manager pass. No active alerts returns
+`[]`, never `null`. This bulk form is the list-surface contract; clients must
+not replace it with one request per alert, and an unavailable diagnosis read
+must not change the independently sourced active-alert projection.
+`GET /api/alerts/events` is the read-only API projection of the additive alert
+event log and also requires `monitoring:read`. Optional `alertIdentifier`,
+comma/repeated `type`, RFC 3339 `since`, and positive `limit` filters narrow a
+newest-first result; the store defaults to 200 rows and caps reads at 1,000.
+Invalid identifiers, timestamps, or limits return `400`, and a manager with no
+event store returns `[]` rather than `null`. The event payload is evidence of
+recorded lifecycle and notification-decision seams only. It must not dispatch,
+acknowledge, resolve, or otherwise mutate alert or notification state, and the
+current absence of a fired lifecycle event must not be inferred as a firing
+that never happened.
 
 The generated PVE setup-script temperature wrapper is part of the API contract
 for legacy SSH sensor collection. Discovery uses non-opening `smartctl --scan`

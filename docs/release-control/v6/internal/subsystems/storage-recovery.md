@@ -2628,6 +2628,15 @@ adjacent only: `/api/alerts/delivery-diagnosis` exposes alerts/API-contract
 read-only notification-policy evidence and creates no storage health,
 recovery-point, backup verification, restore authorization, or provider
 coverage semantics.
+The identifier-free bulk response applies that same boundary to every active
+alert in one read pass. A storage-related row in the array, a held delivery
+reason, or an unavailable diagnosis cannot create, clear, or qualify backup,
+recovery, protection, or restore evidence.
+The adjacent `/api/alerts/events` route carries the same boundary over durable
+alert lifecycle and notification-decision records. Storage-shaped resource
+fields and suppression reasons remain alert evidence only; event presence or
+absence cannot create, clear, verify, or authorize a backup, recovery point,
+protection posture, or restore operation.
 
 Kubernetes pod metadata decoded by `frontend-modern/src/hooks/useUnifiedResources.ts`
 is shared inventory context for storage/recovery handoffs only; Pod phase,

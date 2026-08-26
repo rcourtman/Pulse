@@ -851,6 +851,24 @@ projection used by `/api/alerts/delivery-diagnosis`; that projection may explain
 current gating state, quiet-hours replay timing, cooldown timing, rate-limit
 counts, and flapping suppression, but it must not dispatch callbacks or mutate
 flapping/rate-limit tracking maps.
+Omitting the alert identifier returns one diagnosis for every active alert from
+one manager read pass, ordered by alert identifier, and an empty active set is
+encoded as `[]` rather than `null`. The Alerts Overview consumes that bulk
+projection once per refresh and may render its current delivery outcome on an
+unacknowledged active-alert card. Missing or failed diagnosis reads degrade to
+no delivery line; they must not hide alert truth or trigger per-card requests.
+`internal/alerts/eventlog/` and `internal/alerts/event_emission.go` own the
+additive append-only alert event record. Persistent managers enable a
+SQLite-backed store under the alerts data directory; ephemeral managers record
+nothing unless a store is installed explicitly. Resolution, acknowledgement,
+unacknowledgement, escalation, flapping detection, dispatch, quiet-hours
+deferral, and suppression append immutable events without changing lifecycle
+or delivery behavior. The write path is non-blocking and fail-open for alert
+evaluation: a full buffer counts and drops its event, while an unavailable
+store disables recording. Events retain for 90 days and prune hourly. A fired
+lifecycle event is deliberately absent until an activation seam can distinguish
+a real firing from persisted-alert restore; the event log must not invent that
+transition from the active-alert storage funnel.
 The same dispatch policy owns firing-notification evidence on active alerts:
 any alert that passes notification suppression and enters the fired callback
 fan-out must carry `LastNotified` before the callback clone is emitted. Resolved
@@ -1450,6 +1468,12 @@ Render-heavy alert overview ownership now routes through
 and `frontend-modern/src/features/alerts/AlertOverviewAlertCard.tsx` instead
 of rebuilding stats-card, active-alert, and timeline-card presentation inline
 inside `frontend-modern/src/features/alerts/OverviewTab.tsx`.
+`AlertOverviewAlertCard.tsx` also owns the compact delivery-status placement,
+while `deliveryDiagnosisPresentation.ts` owns the reason-to-copy and tone
+mapping. Acknowledged cards keep their canonical badge and omit that redundant
+line; held delivery states that can surprise an operator use the attention
+tone, while cooldown, quiet-hours, monitor-only, and successful/pending states
+remain neutral.
 The retired dashboard recent-alert panel must not be reintroduced as a
 parallel alert surface. Alert summary/tone copy belongs to the alert overview
 presentation owner, and any future compact alert surface must compose the

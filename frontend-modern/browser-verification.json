@@ -1,25 +1,23 @@
 {
   "version": 1,
-  "base_sha": "8fb7b3764183168f93140d83e2b18b4e953b6cd8",
-  "verified_at": "2026-08-26T19:25:19Z",
+  "base_sha": "515aa319e8c61fe9658f5ecfec417291df30a1da",
+  "verified_at": "2026-08-26T20:18:28Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Workloads/GuestDrawer.tsx",
-    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx",
-    "frontend-modern/src/components/Workloads/WorkloadPanel.tsx",
-    "frontend-modern/src/components/Workloads/WorkloadTableHeader.tsx",
-    "frontend-modern/src/components/Workloads/guestDrawerModel.ts"
+    "frontend-modern/src/api/alerts.ts",
+    "frontend-modern/src/features/alerts/AlertOverviewAlertCard.tsx",
+    "frontend-modern/src/features/alerts/deliveryDiagnosisPresentation.ts",
+    "frontend-modern/src/features/alerts/useAlertOverviewState.ts",
+    "frontend-modern/src/types/api.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Workloads/GuestDrawer.tsx": "0fa154ca920e2e6182fe390130ca687f3a6845fc45b33b2660d57ff236742e06",
-    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx": "b514e2f36de05c63e657e06c4fbf154740708e5ae936ee7a4bf52afefaeebee6",
-    "frontend-modern/src/components/Workloads/WorkloadPanel.tsx": "e80cb5bd3dbdee66a9934f22e11372d2e89aeed71f9d5ed44b4f6371f7f65582",
-    "frontend-modern/src/components/Workloads/WorkloadTableHeader.tsx": "a0938fc2603f51a3e6c0fc996906a3688c26db7d63c762aa2bcd83e23b6cfce8",
-    "frontend-modern/src/components/Workloads/guestDrawerModel.ts": "412b541f2a928b959e52e84673f5a278ff395a78d2e1b9f78adfd878749da89b"
+    "frontend-modern/src/api/alerts.ts": "315ff7f3e2424e736a17a0a440511eec254ed5f1aba5426249c72318e0aac24a",
+    "frontend-modern/src/features/alerts/AlertOverviewAlertCard.tsx": "a16ca92470d7833003d3e6812bc464e51e5c34e4aa600ea2ad1cfda9d32e9635",
+    "frontend-modern/src/features/alerts/deliveryDiagnosisPresentation.ts": "ce55e5c8c2a6474768f62fadba70bd9c00f65d87985931b4eb23166f60c4ca3f",
+    "frontend-modern/src/features/alerts/useAlertOverviewState.ts": "8c923babd58f4942803f04a891f5c1a9a80aa7770d367faa01b9036edfa0015b",
+    "frontend-modern/src/types/api.ts": "076917acef66323e0914db6f56ab54261cd74e10cbb435a0d1d592bb14062c94"
   },
-  "routes": [
-    "/proxmox/overview"
-  ],
+  "routes": ["/alerts/overview"],
   "viewports": [
     {
       "width": 1440,
@@ -31,15 +29,14 @@
     }
   ],
   "states": [
-    "host-relative memory display selected with a live Proxmox guest memory alert",
-    "alerted guest row expanded to its Overview tab on desktop",
-    "same expanded alert state at the narrow responsive layout",
-    "guest memory alert threshold restored to its original 85 percent after verification"
+    "mock-mode Alerts Overview loaded with active critical and warning alerts while external notification delivery was not active",
+    "bulk delivery diagnosis rendered Notification delivery not turned on beside active-alert timing metadata",
+    "the same active-alert delivery state rendered in the narrow responsive card layout"
   ],
   "interactions": [
-    "selected Host capacity in View preferences and filtered to a live alerted guest",
-    "expanded the guest and confirmed the row header reads MEM · HOST",
-    "confirmed the row shows 16% of host capacity while Needs attention shows VM memory at 84.5% (guest allocation · 16% of host capacity)",
-    "resized from 1440x900 to 760x900 and confirmed the clarified warning wraps without clipping or overlap"
+    "loaded the current managed development build at /alerts/overview and confirmed the active-alert list populated from the bulk diagnosis read",
+    "confirmed delivery status appeared inline with Started metadata while Acknowledge, Timeline, monitoring-policy, and investigation controls remained usable on desktop",
+    "resized from 1440x900 to 760x900 and confirmed the delivery status and adjacent metadata wrapped without clipping or overlap",
+    "confirmed the browser console contained no errors across the desktop and narrow checks"
   ]
 }

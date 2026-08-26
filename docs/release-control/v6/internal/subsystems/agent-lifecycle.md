@@ -3110,6 +3110,15 @@ adjacent only: `/api/alerts/delivery-diagnosis` is alerts/API-contract owned
 read-only notification-policy evidence and must not be interpreted as agent
 enrollment, agent liveness, install progress, setup-token authority, or fleet
 repair eligibility.
+Its identifier-free bulk form merely projects the same evidence for every
+active alert in one read pass. Array membership, resource identity, delivery
+reason, and missing diagnosis data grant no agent command or continuity
+authority and must not be folded into agent lifecycle state.
+The adjacent `/api/alerts/events` route and its SQLite source are likewise
+alerts/API-contract evidence only. Alert resource fields, suppression reasons,
+and lifecycle event membership grant no enrollment, heartbeat, command,
+installation, continuity, or repair authority, and a missing event must not be
+reinterpreted as agent liveness evidence.
 
 The router projection-builder (`internal/api/router.go`) that wires
 the operator-state provider into the findings runtime now also

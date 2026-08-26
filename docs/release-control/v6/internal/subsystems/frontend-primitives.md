@@ -428,6 +428,12 @@ alert-owned presentation helpers. Alert IDs, alert types, resource IDs,
 resource names, node names, source messages, event payloads, commands, command
 output, logs, and Assistant model-context labels stay machine-stable and
 untranslated.
+The active-alert card's delivery-status row remains an alerts-owned compact
+presentation composed inside the shared responsive card shell. It consumes one
+bulk diagnosis snapshot per overview refresh, wraps beside started-at and
+threshold metadata at narrow widths, and does not create a second card or
+page-level banner. Acknowledged cards omit the redundant row, and unavailable
+diagnosis data leaves the existing alert card intact.
 The legacy pricing handoff page may also route its visible redirect title and
 manual-link copy through the catalog, but `Pulse Account`, route paths, feature
 keys, query parameters, public URLs, and purchase-return state remain
