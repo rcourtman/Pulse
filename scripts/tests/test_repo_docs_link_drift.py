@@ -16,6 +16,11 @@ FORBIDDEN_PATTERNS = (
     re.compile(r"https://raw\.githubusercontent\.com/[^/\s\"')]+/[^/\s\"')]+/(?:main|master)/docs/"),
 )
 
+ALLOWED_BRANCH_TIP_DOC_URLS = {
+    # Triage replies must always link to the current process disclosure.
+    "https://github.com/rcourtman/Pulse/blob/main/docs/AI_TRANSPARENCY.md",
+}
+
 SKIP_DIR_NAMES = {
     ".claude",
     ".git",
@@ -79,6 +84,9 @@ class RepoDocsLinkDriftTest(unittest.TestCase):
                 content = path.read_text(encoding="utf-8")
             except UnicodeDecodeError:
                 continue
+
+            for allowed_url in ALLOWED_BRANCH_TIP_DOC_URLS:
+                content = content.replace(allowed_url, "")
 
             for pattern in FORBIDDEN_PATTERNS:
                 match = pattern.search(content)
