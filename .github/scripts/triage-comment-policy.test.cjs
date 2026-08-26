@@ -4,20 +4,21 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const workflowDir = path.resolve(__dirname, "../workflows");
-const commentPublisherPatterns = [
+const issueMutationPatterns = [
   /github\.rest\.issues\.createComment/,
   /github\.rest\.pulls\.createReviewComment/,
   /addDiscussionComment/,
-  /postRetestComment/,
+  /post(?:Eligible)?RetestComments?/,
+  /syncLabels/,
 ];
 
-test("automated workflow comments use the dedicated triage identity", () => {
+test("automated workflow issue mutations use the dedicated triage identity", () => {
   const publishers = [];
 
   for (const name of fs.readdirSync(workflowDir)) {
     if (!name.endsWith(".yml") && !name.endsWith(".yaml")) continue;
     const workflow = fs.readFileSync(path.join(workflowDir, name), "utf8");
-    if (!commentPublisherPatterns.some((pattern) => pattern.test(workflow))) continue;
+    if (!issueMutationPatterns.some((pattern) => pattern.test(workflow))) continue;
 
     publishers.push(name);
     assert.match(
@@ -39,6 +40,7 @@ test("automated workflow comments use the dedicated triage identity", () => {
 
   assert.deepEqual(publishers.sort(), [
     "close-needs-retest-timeout.yml",
+    "issue-version-label-sync.yml",
     "issue-version-retest-comment.yml",
   ]);
 });

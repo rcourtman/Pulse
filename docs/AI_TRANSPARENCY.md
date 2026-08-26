@@ -8,9 +8,10 @@ or issue thread.
 ## The short version
 
 Automation contributes to code, tests, documentation, release notes, issue
-triage, and routine repository maintenance. A continuously running automated
-maintainer may investigate reports, implement changes, run verification, and
-land routine work within boundaries I define.
+triage, and routine repository maintenance. Routine changes may be
+investigated, implemented, tested, and merged to `main` without line-by-line
+human review. The continuously running maintainer does this within boundaries
+I define.
 
 I set the product direction, control releases, and remain responsible for
 everything that ships. I do not claim to have personally written every line.
@@ -28,7 +29,11 @@ released builds still go through Pulse's release qualification process.
   and the evidence used to qualify a release.
 - **Issue triage and support.** Automated issue and discussion replies post
   under the dedicated `pulse-triage` bot identity and link back to this page.
-  Automated support replies are sent as Pulse Triage and link here as well.
+  Automated issue state changes use that identity as well. Automated support
+  replies are sent as Pulse Triage and link here as well.
+- **Change provenance.** Commits made by the continuously running maintainer
+  carry a dedicated bot author and committer identity. Issue-driven changes
+  link back to the originating report where applicable.
 
 The link on an automated reply is intentionally understated. It makes the
 process discoverable without turning every technical exchange into a banner
@@ -42,9 +47,9 @@ does not have unrestricted authority. Product direction, architecture,
 acceptable risk, capability boundaries, and release decisions remain mine.
 Release publication and other high-impact actions require explicit approval.
 
-My role is to direct the project, design and maintain those boundaries, review
-outcomes, and answer for the result. If an automated change is wrong, it is
-still my bug and my responsibility to correct it.
+My role is to direct the project, design and maintain those boundaries,
+monitor outcomes, and answer for the result. If an automated change is wrong,
+it is still my bug and my responsibility to correct it.
 
 ## How the work should be judged
 

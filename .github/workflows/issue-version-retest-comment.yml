@@ -1,16 +1,19 @@
 name: Issue Version Retest Comment
 
 on:
-  issues:
-    types:
-      - opened
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
 
 permissions:
   contents: read
 
+concurrency:
+  group: issue-version-retest-comment
+  cancel-in-progress: false
+
 jobs:
   comment:
-    if: ${{ github.event.issue.pull_request == null }}
     runs-on: ubuntu-24.04
     steps:
       - name: Mint triage bot token
@@ -33,4 +36,4 @@ jobs:
           github-token: ${{ steps.triage-token.outputs.token }}
           script: |
             const triage = require(`${process.env.GITHUB_WORKSPACE}/.github/scripts/issue-version-triage.cjs`);
-            await triage.postRetestComment({ github, context, core });
+            await triage.postEligibleRetestComments({ github, context, core });

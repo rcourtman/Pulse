@@ -9,6 +9,8 @@ const BUG_LABEL = "bug";
 const DOCS_LABEL = "documentation";
 const ENHANCEMENT_LABEL = "enhancement";
 const MAINTAINER_AUTHOR_ASSOCIATIONS = new Set(["OWNER", "MEMBER", "COLLABORATOR"]);
+const RETEST_COMMENT_GRACE_MS = 5 * 60 * 1000;
+const RETEST_COMMENT_LOOKBACK_MS = 24 * 60 * 60 * 1000;
 
 function escapeRegExp(value) {
   return String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -297,6 +299,45 @@ async function syncLabels({ github, context, core }) {
   });
 }
 
+async function postRetestCommentForIssue({
+  github,
+  context,
+  core,
+  issue,
+  latestVersion,
+}) {
+  const { reportedVersion, isBugLike, comparison } = buildTriageState(
+    issue,
+    core,
+    latestVersion
+  );
+
+  if (!isBugLike) {
+    core.info("Issue is not bug-like after classification. Skipping public retest guidance.");
+    return false;
+  }
+  if (!reportedVersion) {
+    core.info("Issue is missing Pulse version metadata. Skipping public retest guidance.");
+    return false;
+  }
+  if (comparison === null || comparison >= 0) {
+    core.info("Issue is already on the latest stable core or newer. Skipping public retest guidance.");
+    return false;
+  }
+  if (await hasRetestComment(github, context, issue.number)) {
+    core.info("Retest guidance comment already exists.");
+    return false;
+  }
+
+  await github.rest.issues.createComment({
+    owner: context.repo.owner,
+    repo: context.repo.repo,
+    issue_number: issue.number,
+    body: buildRetestCommentBody(reportedVersion, latestVersion),
+  });
+  return true;
+}
+
 async function postRetestComment({ github, context, core }) {
   const issue = context.payload.issue;
   const action = context.payload.action || "";
@@ -306,38 +347,67 @@ async function postRetestComment({ github, context, core }) {
   }
 
   const latestVersion = await getLatestStableVersion(github, context, core);
-  const { reportedVersion, isBugLike, comparison } = buildTriageState(
-    issue,
+  await postRetestCommentForIssue({
+    github,
+    context,
     core,
-    latestVersion
-  );
-
-  if (!isBugLike) {
-    core.info("Issue is not bug-like after classification. Skipping public retest guidance.");
-    return;
-  }
-  if (!reportedVersion) {
-    core.info("Issue is missing Pulse version metadata. Skipping public retest guidance.");
-    return;
-  }
-  if (comparison === null || comparison >= 0) {
-    core.info("Issue is already on the latest stable core or newer. Skipping public retest guidance.");
-    return;
-  }
-  if (await hasRetestComment(github, context, issue.number)) {
-    core.info("Retest guidance comment already exists.");
-    return;
-  }
-
-  await github.rest.issues.createComment({
-    owner: context.repo.owner,
-    repo: context.repo.repo,
-    issue_number: issue.number,
-    body: buildRetestCommentBody(reportedVersion, latestVersion),
+    issue,
+    latestVersion,
   });
 }
 
+async function postEligibleRetestComments({
+  github,
+  context,
+  core,
+  nowMs = Date.now(),
+  graceMs = RETEST_COMMENT_GRACE_MS,
+  lookbackMs = RETEST_COMMENT_LOOKBACK_MS,
+}) {
+  const issues = await github.paginate(github.rest.issues.listForRepo, {
+    owner: context.repo.owner,
+    repo: context.repo.repo,
+    state: "open",
+    sort: "created",
+    direction: "desc",
+    since: new Date(nowMs - lookbackMs).toISOString(),
+    per_page: 100,
+  });
+  const latestVersion = await getLatestStableVersion(github, context, core);
+  let eligibleCount = 0;
+  let postedCount = 0;
+
+  for (const issue of issues) {
+    if (issue.pull_request || !canPostRetestComment(issue, "opened")) continue;
+
+    const createdMs = new Date(issue.created_at || "").getTime();
+    if (!Number.isFinite(createdMs)) {
+      core.warning(`Issue #${issue.number} has an invalid created_at value.`);
+      continue;
+    }
+
+    const ageMs = nowMs - createdMs;
+    if (ageMs < graceMs || ageMs > lookbackMs) continue;
+    eligibleCount += 1;
+
+    const posted = await postRetestCommentForIssue({
+      github,
+      context,
+      core,
+      issue,
+      latestVersion,
+    });
+    if (posted) postedCount += 1;
+  }
+
+  core.info(
+    `Retest guidance sweep complete: eligible=${eligibleCount}, posted=${postedCount}.`
+  );
+  return { eligibleCount, postedCount };
+}
+
 module.exports = {
+  postEligibleRetestComments,
   syncLabels,
   postRetestComment,
   internals: {
@@ -347,6 +417,8 @@ module.exports = {
     ENHANCEMENT_LABEL,
     NEEDS_VERSION_LABEL,
     RETEST_COMMENT_MARKER,
+    RETEST_COMMENT_GRACE_MS,
+    RETEST_COMMENT_LOOKBACK_MS,
     RETEST_LABEL,
     TRIAGE_FOOTER,
     VERSION_LABEL_PREFIX,

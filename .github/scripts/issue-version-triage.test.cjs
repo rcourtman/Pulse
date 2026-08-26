@@ -7,6 +7,7 @@ function createGithub({
   latestVersion = "6.0.1",
   existingLabels = new Set(),
   existingComments = [],
+  issues = [],
 } = {}) {
   const calls = {
     createComment: [],
@@ -42,6 +43,7 @@ function createGithub({
           calls.createComment.push(payload);
           return { data: payload };
         },
+        listForRepo: Symbol("listForRepo"),
         listComments: Symbol("listComments"),
       },
       repos: {
@@ -51,9 +53,9 @@ function createGithub({
         },
       },
     },
-    async paginate() {
-      calls.paginate.push(true);
-      return existingComments;
+    async paginate(endpoint) {
+      calls.paginate.push(endpoint);
+      return endpoint === github.rest.issues.listForRepo ? issues : existingComments;
     },
   };
 
@@ -149,6 +151,69 @@ test("postRetestComment comments once for older non-maintainer bug reports", asy
   assert.equal(
     calls.createComment[0].body.split(triage.internals.TRIAGE_FOOTER).length - 1,
     1
+  );
+});
+
+test("scheduled retest guidance waits five minutes and reads the current issue", async () => {
+  const nowMs = Date.parse("2026-08-26T09:06:00Z");
+  const issues = [
+    {
+      number: 1780,
+      title: "Agent token scope",
+      body: "## Feedback type\nBug / regression\n\n## Pulse version\n6.3.2\n",
+      labels: [{ name: "bug" }],
+      author_association: "NONE",
+      created_at: "2026-08-26T09:01:51Z",
+    },
+  ];
+  const { github, calls } = createGithub({ latestVersion: "6.3.2", issues });
+
+  const result = await triage.postEligibleRetestComments({
+    github,
+    context: createContext({ issue: null }),
+    core: createCore(),
+    nowMs,
+  });
+
+  assert.deepEqual(result, { eligibleCount: 0, postedCount: 0 });
+  assert.equal(calls.createComment.length, 0);
+
+  const laterResult = await triage.postEligibleRetestComments({
+    github,
+    context: createContext({ issue: null }),
+    core: createCore(),
+    nowMs: Date.parse("2026-08-26T09:07:00Z"),
+  });
+
+  assert.deepEqual(laterResult, { eligibleCount: 1, postedCount: 0 });
+  assert.equal(calls.createComment.length, 0);
+});
+
+test("scheduled retest guidance posts once after the grace window", async () => {
+  const issues = [
+    {
+      number: 1200,
+      title: "Upgrade regression",
+      body: "## Feedback type\nRegression\n\n## Pulse version\n5.1.9\n",
+      labels: [{ name: "bug" }],
+      author_association: "NONE",
+      created_at: "2026-08-26T08:55:00Z",
+    },
+  ];
+  const { github, calls } = createGithub({ latestVersion: "6.3.2", issues });
+
+  const result = await triage.postEligibleRetestComments({
+    github,
+    context: createContext({ issue: null }),
+    core: createCore(),
+    nowMs: Date.parse("2026-08-26T09:01:00Z"),
+  });
+
+  assert.deepEqual(result, { eligibleCount: 1, postedCount: 1 });
+  assert.equal(calls.createComment.length, 1);
+  assert.equal(calls.createComment[0].issue_number, 1200);
+  assert.ok(
+    calls.createComment[0].body.endsWith(`\n\n${triage.internals.TRIAGE_FOOTER}`)
   );
 });
 
