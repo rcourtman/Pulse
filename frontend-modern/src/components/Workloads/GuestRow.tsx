@@ -322,8 +322,8 @@ export function GuestRow(props: GuestRowProps) {
 
         {/* Info - merged identifier (VMID / image / namespace) for mixed-type views */}
         <Show when={isColVisible('info')}>
-          <td class="px-0.5 py-0.5 align-middle sm:px-2">
-            <div class="flex justify-center text-xs text-muted whitespace-nowrap">
+          <td class="px-0.5 py-0.5 align-middle text-center sm:px-2" data-workload-col="info">
+            <div class="text-xs text-muted whitespace-nowrap">
               <Show
                 when={infoValue()}
                 fallback={
@@ -344,8 +344,8 @@ export function GuestRow(props: GuestRowProps) {
 
         {/* VMID */}
         <Show when={isColVisible('vmid')}>
-          <td class="px-1.5 sm:px-2 py-0.5 align-middle">
-            <div class="flex justify-center text-xs text-muted whitespace-nowrap">
+          <td class="px-1.5 sm:px-2 py-0.5 align-middle text-center" data-workload-col="vmid">
+            <div class="text-xs text-muted tabular-nums whitespace-nowrap">
               <Show
                 when={displayId()}
                 fallback={

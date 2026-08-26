@@ -471,12 +471,22 @@ describe('GuestRow', () => {
   });
 
   describe('displayId logic', () => {
+    it('centers the shared info identifier beside the workload type', () => {
+      const { container } = renderGuestRow({
+        guest: makeGuest({ vmid: 123, displayId: undefined }),
+        visibleColumnIds: ['name', 'info'],
+      });
+
+      expect(container.querySelector('[data-workload-col="info"]')).toHaveClass('text-center');
+    });
+
     it('shows vmid when displayId is not set', () => {
-      renderGuestRow({
+      const { container } = renderGuestRow({
         guest: makeGuest({ vmid: 123, displayId: undefined }),
         visibleColumnIds: ['name', 'vmid'],
       });
       expect(screen.getByText('123')).toBeTruthy();
+      expect(container.querySelector('[data-workload-col="vmid"]')).toHaveClass('text-center');
     });
 
     it('shows displayId when set', () => {

@@ -1,42 +1,41 @@
 {
   "version": 1,
-  "base_sha": "52a3373ae6cafaffcd97bb466c42216b896fe5ce",
-  "verified_at": "2026-08-26T05:42:38Z",
+  "base_sha": "af370a8dda01852586e6462b3208a7d822ee1261",
+  "verified_at": "2026-08-26T09:08:45Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx",
-    "frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts",
-    "frontend-modern/src/routing/resourceLinks.ts"
+    "frontend-modern/src/components/Workloads/GuestRow.tsx",
+    "frontend-modern/src/components/Workloads/WorkloadTableHeader.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx": "8f4b168bc6748f9318d04d67f3b2a614bdeb0e5c6d884d5aec309e1b7d202886",
-    "frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts": "5fb8dd36ee2144095e3ad979109dc750649c5818f36e9587caafaef1313be4ec",
-    "frontend-modern/src/routing/resourceLinks.ts": "cdd803824f883dab64654fcceb92da963bd18013eae3d1cf768880a3f77bb96b"
+    "frontend-modern/src/components/Workloads/GuestRow.tsx": "c1886d219bb44a9560a93e3227e022e370d0df7e3e396fa6e69ac4d982f275e2",
+    "frontend-modern/src/components/Workloads/WorkloadTableHeader.tsx": "9ed1b7fe10646efa7ec366a2ceca0c69fe30e77aff9334d2440ca6ede3f65fb8"
   },
   "routes": [
-    "/proxmox/backups/date",
-    "/proxmox/backups/coverage"
+    "/proxmox/overview"
   ],
   "viewports": [
     {
-      "width": 1280,
-      "height": 800
+      "width": 1920,
+      "height": 1200
     },
     {
-      "width": 390,
-      "height": 844
+      "width": 768,
+      "height": 1000
     }
   ],
   "states": [
-    "unfiltered 3018-point By date inventory with multiple PBS servers and datastores",
-    "By date narrowed to backup-vault / offsite-vault with unrelated primary-vault and PVE evidence absent",
-    "Coverage narrowed to backup-vault / primary-vault with 381 of 932 targets and location-scoped expanded restore evidence",
-    "mobile Coverage filter rail with the active backup-location chip, clear control, and filtered target count"
+    "loaded grouped guest table with running and stopped VM and LXC rows",
+    "wide table with shared Info/ID, Net I/O, and Disk I/O columns visible",
+    "narrow table with the responsive Info/ID column visible and I/O columns omitted",
+    "active descending Net I/O sort indicator"
   ],
   "interactions": [
-    "opened the Backup location filter and selected backup-vault / offsite-vault on the current development build",
-    "confirmed the URL-owned location query appeared and the By date table retained offsite-vault evidence while removing primary-vault evidence",
-    "switched to Coverage and confirmed the location query persisted, the target count narrowed, and an expanded row showed only primary-vault restore evidence",
-    "repeated the filtered Coverage state at 390x844, expanded the mobile filter rail, checked placement and clipping, and removed the location chip"
+    "reloaded the Proxmox overview after the final source change",
+    "confirmed Type and the shared Info/ID header and cells use balanced centered alignment at desktop and narrow widths",
+    "confirmed Net I/O and Disk I/O headers stay centered over their paired directional readings",
+    "sorted by ID and Net I/O and confirmed the sort indicator preserves the corrected alignment",
+    "confirmed table and scroll-shell width parity at 1920px and 768px without unintended horizontal overflow",
+    "confirmed no browser console warnings or errors and restored the viewport override"
   ]
 }

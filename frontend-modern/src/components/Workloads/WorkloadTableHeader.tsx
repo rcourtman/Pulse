@@ -6,6 +6,7 @@ import {
   getPlatformColumnAlign,
   type PlatformTableColumnKind,
 } from '@/features/platformPage/columnAlignment';
+import type { PlatformTableCellAlign } from '@/features/platformPage/sharedPlatformPage';
 
 import { getGuestColumnStyle } from './guestRowModel';
 import type { WorkloadsMemoryDisplayBasis } from './workloadsFilterModel';
@@ -44,12 +45,24 @@ export const getWorkloadColumnHeaderLabel = (
 // 'name' is forced to left because the first column is always the
 // primary identifier regardless of how the column model labels it.
 // Unknown / unset kinds fall back to text → left.
+const CENTERED_WORKLOAD_COLUMN_IDS = new Set(['info', 'vmid', 'netIo', 'diskIo']);
+
+export const getWorkloadColumnHeaderAlign = (
+  columnId: string,
+  kind: PlatformTableColumnKind | undefined,
+  isFirst: boolean,
+): PlatformTableCellAlign => {
+  const effectiveKind: PlatformTableColumnKind = isFirst ? 'name' : (kind ?? 'text');
+  if (CENTERED_WORKLOAD_COLUMN_IDS.has(columnId)) return 'center';
+  return getPlatformColumnAlign(effectiveKind);
+};
+
 const resolveAlignClasses = (
+  columnId: string,
   kind: PlatformTableColumnKind | undefined,
   isFirst: boolean,
 ): { textAlign: string; flexJustify: string } => {
-  const effectiveKind: PlatformTableColumnKind = isFirst ? 'name' : (kind ?? 'text');
-  const align = getPlatformColumnAlign(effectiveKind);
+  const align = getWorkloadColumnHeaderAlign(columnId, kind, isFirst);
   if (align === 'right') {
     return { textAlign: 'text-right', flexJustify: 'justify-end' };
   }
@@ -66,7 +79,7 @@ export function WorkloadTableHeader(props: WorkloadTableHeaderProps) {
         <For each={props.workloadTableVisibleColumns()}>
           {(col) => {
             const isFirst = () => col.id === props.visibleColumns()[0]?.id;
-            const alignClasses = () => resolveAlignClasses(col.kind, isFirst());
+            const alignClasses = () => resolveAlignClasses(col.id, col.kind, isFirst());
             const sortKeyForCol = col.sortKey as WorkloadSortKey | undefined;
             const isSortable = !!sortKeyForCol;
             const isSorted = () => sortKeyForCol && props.sortKey() === sortKeyForCol;

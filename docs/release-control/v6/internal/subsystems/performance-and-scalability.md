@@ -932,6 +932,11 @@ change may globally weaken the Task 03 lifecycle-state idempotency invariant.
     the column label must remain present through an `sr-only` label so the
     header row exposes names such as Uptime, Image, Context, and Node instead
     of collapsing to only the visible text columns.
+    Info/ID headers and cells must center as compact identifiers beside the
+    workload Type column, while compound Net I/O and Disk I/O headers center
+    over their paired directional values. Header alignment exceptions belong
+    in `WorkloadTableHeader.tsx`; page CSS and duplicated platform table
+    schemas must not reposition them.
     Sort-direction presentation must remain a constant-time shared helper call:
     inactive headers render no repeated marker, while the active header consumes
     `frontend-modern/src/components/shared/tableSortPresentation.ts`. It must not
