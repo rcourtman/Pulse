@@ -187,7 +187,7 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 			Key:        canonicalSpecID,
 			Metric:     metricType,
 			Value:      value,
-			ObservedAt: time.Now(),
+			ObservedAt: m.policyNow(),
 		}, reducer.MetricRule{})
 		m.mu.Unlock()
 		m.clearAlert(canonicalStateID)
@@ -292,7 +292,7 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 		Value:            value,
 		RuntimeTick:      m.intentTickNoLock(),
 		RuntimeTickValid: true,
-		ObservedAt:       time.Now(),
+		ObservedAt:       m.policyNow(),
 	}, reducer.MetricRule{
 		Trigger:      threshold.Trigger,
 		Clear:        threshold.Clear,

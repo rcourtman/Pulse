@@ -52,6 +52,14 @@ type MetricRule struct {
 	// Clear is the hysteresis release threshold. When <= 0 it falls back to
 	// Trigger, exactly as the manager does.
 	Clear float64
+	// Critical, when set, escalates severity at/above it (the canonical
+	// spec family carries an explicit critical threshold). When nil, the
+	// legacy derived escalation (trigger+10, percent-capped at 99) applies
+	// unless CriticalDisabled — the canonical family omits escalation
+	// entirely at triggers where the derived value would not exceed the
+	// trigger.
+	Critical         *float64
+	CriticalDisabled bool
 	// DelaySeconds is the sustained-above-trigger duration required before
 	// firing. Zero fires on the first exceeding observation. Ignored when
 	// an explicit Intent gate is supplied — the manager's explicit intent
@@ -303,8 +311,17 @@ func criticalThreshold(trigger float64, metric string) float64 {
 	return critical
 }
 
-func severityFor(value, trigger float64, metric string) Severity {
-	if value >= criticalThreshold(trigger, metric) {
+func severityFor(value float64, rule MetricRule, metric string) Severity {
+	if rule.Critical != nil {
+		if value >= *rule.Critical {
+			return SeverityCritical
+		}
+		return SeverityWarning
+	}
+	if rule.CriticalDisabled {
+		return SeverityWarning
+	}
+	if value >= criticalThreshold(rule.Trigger, metric) {
 		return SeverityCritical
 	}
 	return SeverityWarning
@@ -348,7 +365,7 @@ func (s *State) ApplyMetric(signal MetricSignal, rule MetricRule) []Event {
 		// escalate while firing.
 		if incident != nil && incident.State == StateFiring {
 			previous := incident.Severity
-			incident.Severity = severityFor(signal.Value, rule.Trigger, signal.Metric)
+			incident.Severity = severityFor(signal.Value, rule, signal.Metric)
 			incident.LastValue = signal.Value
 			incident.LastObservedAt = signal.ObservedAt
 			if incident.Severity != previous {
@@ -406,7 +423,7 @@ func (s *State) ApplyMetric(signal MetricSignal, rule MetricRule) []Event {
 			}
 		}
 
-		severity := severityFor(signal.Value, rule.Trigger, signal.Metric)
+		severity := severityFor(signal.Value, rule, signal.Metric)
 		incident.State = StateFiring
 		incident.Severity = severity
 		incident.StartedAt = incident.PendingSince

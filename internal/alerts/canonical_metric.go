@@ -5,6 +5,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts/eventlog"
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts/reducer"
 	alertspecs "github.com/rcourtman/pulse-go-rewrite/internal/alerts/specs"
 	"github.com/rcourtman/pulse-go-rewrite/internal/operationaltrust"
 	"github.com/rs/zerolog/log"
@@ -103,6 +105,13 @@ func (m *Manager) evaluateCanonicalMetricAlert(spec alertspecs.ResourceAlertSpec
 	if spec.Disabled || spec.MetricThreshold.Trigger <= 0 {
 		m.mu.Lock()
 		delete(m.pendingAlerts, trackingKey)
+		m.core.ApplyMetric(reducer.MetricSignal{
+			ResourceID: spec.ResourceID,
+			Key:        spec.ID,
+			Metric:     metricType,
+			Value:      value,
+			ObservedAt: time.Now(),
+		}, reducer.MetricRule{})
 		m.mu.Unlock()
 		// A guest that moved nodes may hold this alert under its old node-scoped
 		// identity; re-home it first so the clear below can resolve it.
@@ -111,7 +120,7 @@ func (m *Manager) evaluateCanonicalMetricAlert(spec alertspecs.ResourceAlertSpec
 		return
 	}
 
-	observedAt := time.Now()
+	observedAt := m.policyNow()
 
 	m.mu.Lock()
 	migratedAlertIdentity := false
@@ -142,38 +151,24 @@ func (m *Manager) evaluateCanonicalMetricAlert(spec alertspecs.ResourceAlertSpec
 	}
 
 	triggered := alertspecsMetricTriggered(spec.MetricThreshold, value)
-	alertStartTime := observedAt
-	if !exists && triggered {
-		effectiveIntent := m.resolveEffectiveIntentPolicyNoLock(spec.ResourceID, resourceType, MetricAlertIntentSignal(metricType))
-		if effectiveIntent.Explicit {
-			decision := m.evaluateIntentNoLock(spec.ResourceID, resourceType, MetricAlertIntentSignal(metricType), trackingKey, observedAt, true, BackupIntentContext{})
-			if pending, ok := m.intentPending[trackingKey]; ok && !pending.FirstMatchedAt.IsZero() {
-				alertStartTime = pending.FirstMatchedAt
-			}
-			if decision.StateChanged {
-				m.saveActiveAlertsAsync("canonical metric intent pending state")
-			}
-			if !decision.ShouldActivate {
-				return
-			}
-			m.clearIntentPendingNoLock(trackingKey)
-			m.saveActiveAlertsAsync("canonical metric intent activated")
-		} else if timeThreshold := m.getTimeThreshold(spec.ResourceID, resourceType, metricType); timeThreshold > 0 {
-			if pendingTime, isPending := m.pendingAlerts[trackingKey]; isPending {
-				if time.Since(pendingTime) >= time.Duration(timeThreshold)*time.Second {
-					delete(m.pendingAlerts, trackingKey)
-					if !pendingTime.IsZero() {
-						alertStartTime = pendingTime
-					}
-				} else {
-					return
-				}
-			} else {
-				m.pendingAlerts[trackingKey] = alertStartTime
-				return
-			}
-		}
 
+	// An existing alert the core does not know about (guest migration,
+	// direct injection) means it was firing: adopt it.
+	if exists && existingAlert != nil {
+		if _, known := m.core.Incident(spec.ResourceID, spec.ID); !known {
+			ackAt := time.Time{}
+			if existingAlert.AckTime != nil {
+				ackAt = *existingAlert.AckTime
+			}
+			m.core.SeedFiringIncident(spec.ResourceID, spec.ID, shadowSeverityForLevel(existingAlert.Level), existingAlert.StartTime, existingAlert.Acknowledged, existingAlert.AckUser, ackAt)
+		}
+	}
+
+	// Suppress a would-be new occurrence within the minimum delta of a
+	// recent one before it reaches the core.
+	coreIncidentBefore, hadCoreIncident := m.core.Incident(spec.ResourceID, spec.ID)
+	wouldBeNew := !hadCoreIncident || coreIncidentBefore.State != reducer.StateFiring
+	if wouldBeNew && triggered {
 		if recent, hasRecent := m.recentAlerts[trackingKey]; hasRecent &&
 			m.config.MinimumDelta > 0 &&
 			time.Since(recent.StartTime) < time.Duration(m.config.SuppressionWindow)*time.Minute &&
@@ -183,12 +178,23 @@ func (m *Manager) evaluateCanonicalMetricAlert(spec alertspecs.ResourceAlertSpec
 		}
 	}
 
-	if !triggered {
-		decision := m.evaluateIntentNoLock(spec.ResourceID, resourceType, MetricAlertIntentSignal(metricType), trackingKey, observedAt, false, BackupIntentContext{})
+	// Intent context: explicit metric policies replace the legacy delay.
+	var intent *reducer.DiscreteIntent
+	delaySeconds := 0
+	effectiveIntent := m.resolveEffectiveIntentPolicyNoLock(spec.ResourceID, resourceType, MetricAlertIntentSignal(metricType))
+	if effectiveIntent.Explicit {
+		decision := m.evaluateIntentNoLock(spec.ResourceID, resourceType, MetricAlertIntentSignal(metricType), trackingKey, observedAt, triggered, BackupIntentContext{})
 		if decision.StateChanged {
-			m.saveActiveAlertsAsync("canonical metric intent cleared")
+			m.saveActiveAlertsAsync("canonical metric intent pending state")
 		}
-		delete(m.pendingAlerts, trackingKey)
+		intent = &reducer.DiscreteIntent{
+			Explicit:           decision.Effective.Explicit,
+			GraceSeconds:       decision.Effective.GraceSeconds,
+			OperatorSuppressed: decision.Suppressed && strings.HasPrefix(decision.Reason, "operator_"),
+			OperatorReason:     decision.Reason,
+		}
+	} else if triggered {
+		delaySeconds = m.getTimeThreshold(spec.ResourceID, resourceType, metricType)
 	}
 
 	evidence := alertspecs.AlertEvidence{
@@ -202,23 +208,46 @@ func (m *Manager) evaluateCanonicalMetricAlert(spec alertspecs.ResourceAlertSpec
 			Critical:  spec.MetricThreshold.Critical,
 		},
 	}
-	result, err := alertspecs.Evaluate(spec, metricPreviousState(spec, existingAlert), evidence)
-	if err != nil {
-		log.Warn().
-			Err(err).
-			Str("alertID", storageKey).
-			Str("resourceID", spec.ResourceID).
-			Str("metricType", metricType).
-			Msg("Skipping invalid canonical metric evaluation")
-		return
-	}
 
-	switch result.State.State {
-	case alertspecs.AlertStateFiring:
-		level, ok := alertLevelFromCanonicalSeverity(result.State.Severity)
-		if !ok {
-			level = AlertLevelWarning
+	clearThreshold := 0.0
+	if spec.MetricThreshold.Recovery != nil {
+		clearThreshold = *spec.MetricThreshold.Recovery
+	}
+	events := m.core.ApplyMetric(reducer.MetricSignal{
+		ResourceID:       spec.ResourceID,
+		Key:              spec.ID,
+		Metric:           metricType,
+		Value:            value,
+		RuntimeTick:      m.intentTickNoLock(),
+		RuntimeTickValid: true,
+		ObservedAt:       observedAt,
+	}, reducer.MetricRule{
+		Trigger:          spec.MetricThreshold.Trigger,
+		Clear:            clearThreshold,
+		Critical:         spec.MetricThreshold.Critical,
+		CriticalDisabled: spec.MetricThreshold.Critical == nil,
+		DelaySeconds:     delaySeconds,
+		Intent:           intent,
+	})
+	primary := reducer.EventType("")
+	if len(events) > 0 {
+		primary = events[0].Type
+	}
+	incident, hasIncident := m.core.Incident(spec.ResourceID, spec.ID)
+
+	switch {
+	case hasIncident && incident.State == reducer.StatePending:
+		return
+	case hasIncident && incident.State == reducer.StateFiring:
+		if intent != nil && (primary == reducer.EventFired || primary == reducer.EventRefired) {
+			m.clearIntentPendingNoLock(trackingKey)
+			m.saveActiveAlertsAsync("canonical metric intent activated")
 		}
+		level := AlertLevelWarning
+		if incident.Severity == reducer.SeverityCritical {
+			level = AlertLevelCritical
+		}
+		alertStartTime := incident.StartedAt
 
 		message, unit := metricAlertMessage(resourceType, metricType, value, opts)
 		alertMetadata := map[string]interface{}{
@@ -256,9 +285,22 @@ func (m *Manager) evaluateCanonicalMetricAlert(spec alertspecs.ResourceAlertSpec
 			applyCanonicalIdentity(alert, spec.ID, string(spec.Kind))
 			applyCanonicalOperationalEvidence(alert, spec, evidence, time.Now())
 			m.preserveAlertState(storageKey, alert)
+			// The reducer core is authoritative for occurrence start and
+			// acknowledgement restoration.
+			alert.StartTime = incident.StartedAt
+			alert.Acknowledged = incident.Acknowledged
+			alert.AckUser = incident.AckUser
+			if incident.Acknowledged && !incident.AckAt.IsZero() {
+				ackAt := incident.AckAt
+				alert.AckTime = &ackAt
+			} else if !incident.Acknowledged {
+				alert.AckTime = nil
+				alert.AckUser = ""
+			}
 			m.setActiveAlertNoLock(storageKey, alert)
 			m.recentAlerts[trackingKey] = alert
 			m.historyManager.AddAlert(*alert)
+			m.recordAlertEvent(eventlog.TypeFired, alert, storageKey, "metric-threshold", message, nil)
 
 			m.saveActiveAlertsAsync("canonical metric create")
 
@@ -288,7 +330,9 @@ func (m *Manager) evaluateCanonicalMetricAlert(spec alertspecs.ResourceAlertSpec
 			return
 		}
 
-		if !triggered && result.Transition == nil {
+		if !triggered && primary == "" {
+			// Hysteresis latch: below trigger but above recovery — hold
+			// without refreshing, as the pre-cutover engine did.
 			return
 		}
 
@@ -330,7 +374,7 @@ func (m *Manager) evaluateCanonicalMetricAlert(spec alertspecs.ResourceAlertSpec
 		}
 		m.setActiveAlertNoLock(storageKey, existingAlert)
 	default:
-		if !exists {
+		if !exists || existingAlert == nil {
 			return
 		}
 

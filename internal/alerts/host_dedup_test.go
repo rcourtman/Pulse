@@ -29,9 +29,8 @@ func TestHostAgentDeduplicatesNodeAlerts(t *testing.T) {
 		m.CheckNode(node)
 
 		// The key test: pendingAlerts should have an entry because metrics WERE checked
-		trackingKey := canonicalMetricStateID(node.ID, "cpu")
 		m.mu.RLock()
-		_, hasPending := m.pendingAlerts[trackingKey]
+		_, hasPending := m.core.Incident(node.ID, canonicalMetricSpecID(node.ID, "cpu"))
 		m.mu.RUnlock()
 
 		if !hasPending {
@@ -63,9 +62,8 @@ func TestHostAgentDeduplicatesNodeAlerts(t *testing.T) {
 		m.CheckNode(node)
 
 		// The key test: pendingAlerts should NOT have an entry because metrics were SKIPPED
-		trackingKey := canonicalMetricStateID(node.ID, "cpu")
 		m.mu.RLock()
-		_, hasPending := m.pendingAlerts[trackingKey]
+		_, hasPending := m.core.Incident(node.ID, canonicalMetricSpecID(node.ID, "cpu"))
 		m.mu.RUnlock()
 
 		if hasPending {
@@ -98,9 +96,8 @@ func TestHostAgentDeduplicatesNodeAlerts(t *testing.T) {
 		m.CheckNode(node)
 
 		// The key test: pendingAlerts should have an entry because metrics WERE checked
-		trackingKey := canonicalMetricStateID(node.ID, "cpu")
 		m.mu.RLock()
-		_, hasPending := m.pendingAlerts[trackingKey]
+		_, hasPending := m.core.Incident(node.ID, canonicalMetricSpecID(node.ID, "cpu"))
 		m.mu.RUnlock()
 
 		if !hasPending {
