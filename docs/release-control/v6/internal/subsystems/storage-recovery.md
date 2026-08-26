@@ -5588,3 +5588,14 @@ not storage inventory, recovery evidence, or an action capability; it grants
 no backup, snapshot, restore, retention, cleanup, or verification authority.
 The storage/recovery resource query and its admission, freshness, and
 persistence contracts are unchanged.
+
+### Token deletion preserves restart-time persistence truth
+
+The shared `internal/api` token revocation path treats its persisted inventory
+as the commit boundary. It snapshots the complete in-memory inventory before
+removal, persists only the intended reduced set, and restores the snapshot and
+legacy primary-token projection if that write fails. This adds no backup,
+restore, or recovery authority; it prevents a successful API response from
+describing credential state that the next restart would undo. The exact-token
+and forced-write-failure proofs live in
+`internal/api/security_tokens_lifecycle_test.go`.

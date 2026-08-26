@@ -2335,3 +2335,13 @@ profile and is relaxed only when a sudo grant is active, because NNP blocks
 sudo outright; that relaxation is part of the grant's declared cost. The agent-reported privilege profile is
 informational: the fleet doctor presents it descriptively and must not treat
 a non-root agent as unhealthy on that evidence alone.
+
+### API token revocation is a durable credential transition
+
+Revocation may not create different live and restart-time credential sets.
+The token-management API therefore retains a complete pre-mutation inventory
+until the reduced inventory is persisted. A failed write restores the prior
+tokens and primary-token projection, emits only a failed `token_deleted` audit
+event, and returns an error; a successful response identifies a deletion that
+will survive restart. Exact multi-token removal and persistence-failure
+rollback are exercised in `internal/api/security_tokens_lifecycle_test.go`.

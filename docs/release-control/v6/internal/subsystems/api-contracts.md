@@ -9903,3 +9903,15 @@ facet on the wire. `internal/models/metrics_types_test.go`,
 `frontend-modern/src/hooks/__tests__/useUnifiedResources.test.ts`, and
 `frontend-modern/src/utils/__tests__/resourceStateAdapters.test.ts` pin the
 wire shape and both client projections.
+
+### API token deletion commits durable state before reporting success
+
+`DELETE /api/security/tokens/{id}` removes exactly the requested token and
+returns `204` only after the resulting token inventory is durably persisted.
+If persistence fails, the runtime restores the complete prior inventory,
+recomputes its legacy primary-token projection, records a failed audit event,
+and returns `500`; it must not report a revocation that will reverse on restart.
+`TestSecurityTokensDeletePersistsOnlyRequestedRemoval` and
+`TestSecurityTokensDeleteRollsBackWhenPersistenceFails` in
+`internal/api/security_tokens_lifecycle_test.go` pin both the multi-token
+identity boundary and the failed-commit response.
