@@ -4,7 +4,7 @@
 
 ## What's improved
 
-- **Steadier large-estate screens** — Resource, infrastructure, and alert updates now use keyed deltas. Pulse defers expensive live merges while an operator is interacting, then applies the queued state afterward.
+- **Steadier large-estate screens** — Resource, infrastructure, and alert updates now use keyed per-client deltas. Pulse defers expensive live merges while an operator is interacting, then applies the queued state afterward.
 - **Smaller resource snapshots** — Repeated capability descriptions and default policy metadata are deduplicated without changing the resource shape consumed by the web interface.
 - **More useful workload tables** — Workload IDs can be sorted, columns can be resized deliberately, and header alignment remains stable across the table.
 - **Restored Proxmox network details** — Node network interfaces and their configuration are visible again in the Proxmox detail view.
