@@ -2583,11 +2583,11 @@ demo shell. Health checks and entry-asset parity are necessary but not
 sufficient; after those checks pass, the governed helpers
 `scripts/run_demo_public_browser_smoke.sh` and
 `scripts/demo_public_browser_smoke.cjs` must exercise the public demo in a real
-Chromium session and prove the login shell actually renders instead of failing
-open on API-only reachability. That proof must treat the visible login controls
-as the readiness signal and must not block on Playwright `networkidle`, because
-the public demo shell can keep background activity alive after the page is
-already usable.
+Chromium session and prove both that the login shell renders and that a public
+demo login reaches the connected workspace instead of failing open on API-only
+reachability or remaining on the authenticated loading shell. The proof must
+use visible UI state rather than Playwright `networkidle`, because the public
+demo can keep background activity alive after the page is already usable.
 That same demo-update verification boundary also owns the canonical v6 mock
 runtime state contract. `.github/workflows/update-demo-server.yml` must verify
 mock-mode readiness through the unified `/api/state` `resources[]` collection,
@@ -2742,16 +2742,18 @@ while installing an exact tagged binary, it must inspect that tag before
 converging the runtime environment. The 50-node profile is permitted only when
 the tagged runtime contains both bounded eager guest history and cohort-based
 metric updates. A stable tag that predates either capability must receive the
-bounded compatibility profile (the estate size declared by that tag's own demo
-workflow, six hours of eager history, and a ten-second full-estate update
-cadence), preventing newer workflow defaults from imposing an unqualified
-memory and CPU load on an older binary. Tags without a readable numeric demo
-node declaration fall back to the last legacy stable baseline of 32 nodes.
+bounded compatibility profile across every fixture family: 8 Proxmox nodes
+with 6 VMs and 4 LXCs per node, 2 Docker hosts with 8 containers each, 2
+generic hosts, and 1 Kubernetes cluster with 3 nodes, 12 pods, and 4
+deployments. That profile retains two hours of eager history and uses a
+15-second full-estate update cadence, preventing newer workflow defaults from
+imposing an unqualified bootstrap, memory, and CPU load on an older binary.
 The manually dispatched stable-demo recovery path consumes that same resolver
-and may mutate only the three bounded mock-profile values before restarting the
-already-installed `pulse` service. It must retain the current stable binary,
+and may mutate only the resolver-owned bounded mock-profile values before
+restarting the already-installed `pulse` service. It must retain the current stable binary,
 unit, drop-ins, Relay process, and billing state; prove the expected hostname
-and release version plus public health, frontend parity, and browser readiness;
+and release version plus public health, frontend parity, and authenticated
+connected-workspace browser readiness;
 and restore the prior runtime configuration while stopping the failed service
 if post-mutation validation fails. It must not install artifacts, invoke release
 convergence, or accept caller-selected target/version inputs.

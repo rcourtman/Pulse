@@ -19,21 +19,47 @@ if git grep -q 'mockEagerHistoryPVEGuestLimit' "${TAG_REF}" -- internal/monitori
    git grep -q 'UpdateMetricCohort' "${TAG_REF}" -- internal/mock/integration.go; then
   PROFILE="large-estate"
   MOCK_NODES=50
+  MOCK_VMS_PER_NODE=10
+  MOCK_LXCS_PER_NODE=8
+  MOCK_DOCKER_HOSTS=5
+  MOCK_DOCKER_CONTAINERS=14
+  MOCK_GENERIC_HOSTS=4
+  MOCK_K8S_CLUSTERS=3
+  MOCK_K8S_NODES=5
+  MOCK_K8S_PODS=40
+  MOCK_K8S_DEPLOYMENTS=14
   MOCK_SEED_DURATION=48h
   MOCK_UPDATE_INTERVAL=2s
 else
   PROFILE="legacy-bounded"
-  MOCK_NODES="$({
-    git show "${TAG_REF}:.github/workflows/update-demo-server.yml" 2>/dev/null || true
-  } | sed -n -E 's/^[[:space:]]*set_env_value PULSE_MOCK_NODES ([0-9]+)[[:space:]]*$/\1/p' | tail -1)"
-  if [[ ! "${MOCK_NODES}" =~ ^[1-9][0-9]*$ ]]; then
-    MOCK_NODES=32
-  fi
-  MOCK_SEED_DURATION=6h
-  MOCK_UPDATE_INTERVAL=10s
+  # Older runtimes update every fixture on every tick and eagerly retain every
+  # history series. Keep their public-demo payload deliberately compact; the
+  # tagged workflow's former 32-node default still produced a 4 MB state
+  # bootstrap and could leave real browsers parked on the loading shell.
+  MOCK_NODES=8
+  MOCK_VMS_PER_NODE=6
+  MOCK_LXCS_PER_NODE=4
+  MOCK_DOCKER_HOSTS=2
+  MOCK_DOCKER_CONTAINERS=8
+  MOCK_GENERIC_HOSTS=2
+  MOCK_K8S_CLUSTERS=1
+  MOCK_K8S_NODES=3
+  MOCK_K8S_PODS=12
+  MOCK_K8S_DEPLOYMENTS=4
+  MOCK_SEED_DURATION=2h
+  MOCK_UPDATE_INTERVAL=15s
 fi
 
 printf 'profile=%s\n' "$PROFILE"
 printf 'mock_nodes=%s\n' "$MOCK_NODES"
+printf 'mock_vms_per_node=%s\n' "$MOCK_VMS_PER_NODE"
+printf 'mock_lxcs_per_node=%s\n' "$MOCK_LXCS_PER_NODE"
+printf 'mock_docker_hosts=%s\n' "$MOCK_DOCKER_HOSTS"
+printf 'mock_docker_containers=%s\n' "$MOCK_DOCKER_CONTAINERS"
+printf 'mock_generic_hosts=%s\n' "$MOCK_GENERIC_HOSTS"
+printf 'mock_k8s_clusters=%s\n' "$MOCK_K8S_CLUSTERS"
+printf 'mock_k8s_nodes=%s\n' "$MOCK_K8S_NODES"
+printf 'mock_k8s_pods=%s\n' "$MOCK_K8S_PODS"
+printf 'mock_k8s_deployments=%s\n' "$MOCK_K8S_DEPLOYMENTS"
 printf 'mock_seed_duration=%s\n' "$MOCK_SEED_DURATION"
 printf 'mock_update_interval=%s\n' "$MOCK_UPDATE_INTERVAL"

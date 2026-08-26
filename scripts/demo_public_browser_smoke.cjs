@@ -1,6 +1,8 @@
 const { chromium } = require('playwright');
 
 const siteUrl = String(process.env.PULSE_PUBLIC_SITE_URL || '').trim();
+const authUser = String(process.env.PULSE_DEMO_AUTH_USER || '').trim();
+const authPass = String(process.env.PULSE_DEMO_AUTH_PASS || '');
 
 function assert(condition, message) {
   if (!condition) {
@@ -16,6 +18,7 @@ function normalizeText(value) {
 
 async function main() {
   assert(siteUrl, 'PULSE_PUBLIC_SITE_URL is required');
+  assert(Boolean(authUser) === Boolean(authPass), 'PULSE_DEMO_AUTH_USER and PULSE_DEMO_AUTH_PASS must be provided together');
 
   const browser = await chromium.launch({ headless: true });
   try {
@@ -40,6 +43,21 @@ async function main() {
     const bodyText = normalizeText(await page.locator('body').innerText());
     for (const expected of ['Welcome to Pulse', 'Username', 'Password', 'Sign in to Pulse']) {
       assert(bodyText.includes(expected), `Public demo body missing ${JSON.stringify(expected)}`);
+    }
+
+    if (authUser) {
+      const loginStartedAt = Date.now();
+      await page.getByLabel('Username').fill(authUser);
+      await page.getByLabel('Password').fill(authPass);
+      await page.getByRole('button', { name: 'Sign in to Pulse' }).click();
+
+      await page.locator('main').waitFor({ state: 'visible', timeout: 60000 });
+      await page.getByText('Connected', { exact: true }).first().waitFor({ state: 'visible', timeout: 60000 });
+
+      const authenticatedBody = normalizeText(await page.locator('body').innerText());
+      assert(authenticatedBody !== 'Loading...', 'Public demo remained on the authenticated loading shell');
+      assert(authenticatedBody.includes('Pulse'), 'Authenticated public demo body is missing the Pulse workspace');
+      console.log(`authenticated workspace became connected in ${Date.now() - loginStartedAt}ms`);
     }
 
     console.log(`public demo browser smoke passed for ${siteUrl}`);

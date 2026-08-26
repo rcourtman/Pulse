@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [ "$#" -ne 6 ]; then
-  echo "usage: recover-demo-runtime.sh EXPECTED_HOSTNAME LOCAL_BASE_URL EXPECTED_VERSION MOCK_NODES MOCK_SEED_DURATION MOCK_UPDATE_INTERVAL" >&2
+if [ "$#" -ne 15 ]; then
+  echo "usage: recover-demo-runtime.sh EXPECTED_HOSTNAME LOCAL_BASE_URL EXPECTED_VERSION MOCK_NODES MOCK_VMS_PER_NODE MOCK_LXCS_PER_NODE MOCK_DOCKER_HOSTS MOCK_DOCKER_CONTAINERS MOCK_GENERIC_HOSTS MOCK_K8S_CLUSTERS MOCK_K8S_NODES MOCK_K8S_PODS MOCK_K8S_DEPLOYMENTS MOCK_SEED_DURATION MOCK_UPDATE_INTERVAL" >&2
   exit 2
 fi
 
@@ -10,8 +10,17 @@ EXPECTED_HOSTNAME="$1"
 LOCAL_BASE_URL="${2%/}"
 EXPECTED_VERSION="${3#v}"
 MOCK_NODES="$4"
-MOCK_SEED_DURATION="$5"
-MOCK_UPDATE_INTERVAL="$6"
+MOCK_VMS_PER_NODE="$5"
+MOCK_LXCS_PER_NODE="$6"
+MOCK_DOCKER_HOSTS="$7"
+MOCK_DOCKER_CONTAINERS="$8"
+MOCK_GENERIC_HOSTS="$9"
+MOCK_K8S_CLUSTERS="${10}"
+MOCK_K8S_NODES="${11}"
+MOCK_K8S_PODS="${12}"
+MOCK_K8S_DEPLOYMENTS="${13}"
+MOCK_SEED_DURATION="${14}"
+MOCK_UPDATE_INTERVAL="${15}"
 SERVICE_NAME="pulse"
 RELAY_SERVICE_NAME="pulse-relay"
 EXPECTED_BINARY="/opt/pulse/bin/pulse"
@@ -19,7 +28,19 @@ EXPECTED_UNIT="/etc/systemd/system/pulse.service"
 MUTATED=false
 BACKUP_DIR=""
 
-[[ "$MOCK_NODES" =~ ^[1-9][0-9]*$ ]]
+for fixture_count in \
+  "$MOCK_NODES" \
+  "$MOCK_VMS_PER_NODE" \
+  "$MOCK_LXCS_PER_NODE" \
+  "$MOCK_DOCKER_HOSTS" \
+  "$MOCK_DOCKER_CONTAINERS" \
+  "$MOCK_GENERIC_HOSTS" \
+  "$MOCK_K8S_CLUSTERS" \
+  "$MOCK_K8S_NODES" \
+  "$MOCK_K8S_PODS" \
+  "$MOCK_K8S_DEPLOYMENTS"; do
+  [[ "$fixture_count" =~ ^[1-9][0-9]*$ ]]
+done
 [[ "$MOCK_SEED_DURATION" =~ ^[1-9][0-9]*[smhd]$ ]]
 [[ "$MOCK_UPDATE_INTERVAL" =~ ^[1-9][0-9]*[smh]$ ]]
 
@@ -71,6 +92,15 @@ set_env_value() {
 
 runtime_profile_matches() {
   sudo grep -Fxq "PULSE_MOCK_NODES=${MOCK_NODES}" /etc/pulse/.env &&
+    sudo grep -Fxq "PULSE_MOCK_VMS_PER_NODE=${MOCK_VMS_PER_NODE}" /etc/pulse/.env &&
+    sudo grep -Fxq "PULSE_MOCK_LXCS_PER_NODE=${MOCK_LXCS_PER_NODE}" /etc/pulse/.env &&
+    sudo grep -Fxq "PULSE_MOCK_DOCKER_HOSTS=${MOCK_DOCKER_HOSTS}" /etc/pulse/.env &&
+    sudo grep -Fxq "PULSE_MOCK_DOCKER_CONTAINERS=${MOCK_DOCKER_CONTAINERS}" /etc/pulse/.env &&
+    sudo grep -Fxq "PULSE_MOCK_GENERIC_HOSTS=${MOCK_GENERIC_HOSTS}" /etc/pulse/.env &&
+    sudo grep -Fxq "PULSE_MOCK_K8S_CLUSTERS=${MOCK_K8S_CLUSTERS}" /etc/pulse/.env &&
+    sudo grep -Fxq "PULSE_MOCK_K8S_NODES=${MOCK_K8S_NODES}" /etc/pulse/.env &&
+    sudo grep -Fxq "PULSE_MOCK_K8S_PODS=${MOCK_K8S_PODS}" /etc/pulse/.env &&
+    sudo grep -Fxq "PULSE_MOCK_K8S_DEPLOYMENTS=${MOCK_K8S_DEPLOYMENTS}" /etc/pulse/.env &&
     sudo grep -Fxq "PULSE_MOCK_TRENDS_SEED_DURATION=${MOCK_SEED_DURATION}" /etc/pulse/.env &&
     sudo grep -Fxq "PULSE_MOCK_UPDATE_INTERVAL=${MOCK_UPDATE_INTERVAL}" /etc/pulse/.env
 }
@@ -137,6 +167,15 @@ emit_evidence() {
     --arg version "$version" \
     --arg expected_version "$EXPECTED_VERSION" \
     --arg mock_nodes "$MOCK_NODES" \
+    --arg mock_vms_per_node "$MOCK_VMS_PER_NODE" \
+    --arg mock_lxcs_per_node "$MOCK_LXCS_PER_NODE" \
+    --arg mock_docker_hosts "$MOCK_DOCKER_HOSTS" \
+    --arg mock_docker_containers "$MOCK_DOCKER_CONTAINERS" \
+    --arg mock_generic_hosts "$MOCK_GENERIC_HOSTS" \
+    --arg mock_k8s_clusters "$MOCK_K8S_CLUSTERS" \
+    --arg mock_k8s_nodes "$MOCK_K8S_NODES" \
+    --arg mock_k8s_pods "$MOCK_K8S_PODS" \
+    --arg mock_k8s_deployments "$MOCK_K8S_DEPLOYMENTS" \
     --arg mock_seed_duration "$MOCK_SEED_DURATION" \
     --arg mock_update_interval "$MOCK_UPDATE_INTERVAL" \
     '{schema_version: 1, status: $status, mutated: $mutated,
@@ -157,6 +196,15 @@ emit_evidence() {
       after_runtime_config_sha256: $after_runtime_config_sha256,
       version: $version, expected_version: $expected_version,
       runtime_profile: {mock_nodes: $mock_nodes,
+        mock_vms_per_node: $mock_vms_per_node,
+        mock_lxcs_per_node: $mock_lxcs_per_node,
+        mock_docker_hosts: $mock_docker_hosts,
+        mock_docker_containers: $mock_docker_containers,
+        mock_generic_hosts: $mock_generic_hosts,
+        mock_k8s_clusters: $mock_k8s_clusters,
+        mock_k8s_nodes: $mock_k8s_nodes,
+        mock_k8s_pods: $mock_k8s_pods,
+        mock_k8s_deployments: $mock_k8s_deployments,
         mock_seed_duration: $mock_seed_duration,
         mock_update_interval: $mock_update_interval}}'
 }
@@ -220,6 +268,15 @@ trap rollback_on_error ERR
 log "applying the target-compatible demo runtime profile and restarting only pulse.service"
 MUTATED=true
 set_env_value PULSE_MOCK_NODES "$MOCK_NODES"
+set_env_value PULSE_MOCK_VMS_PER_NODE "$MOCK_VMS_PER_NODE"
+set_env_value PULSE_MOCK_LXCS_PER_NODE "$MOCK_LXCS_PER_NODE"
+set_env_value PULSE_MOCK_DOCKER_HOSTS "$MOCK_DOCKER_HOSTS"
+set_env_value PULSE_MOCK_DOCKER_CONTAINERS "$MOCK_DOCKER_CONTAINERS"
+set_env_value PULSE_MOCK_GENERIC_HOSTS "$MOCK_GENERIC_HOSTS"
+set_env_value PULSE_MOCK_K8S_CLUSTERS "$MOCK_K8S_CLUSTERS"
+set_env_value PULSE_MOCK_K8S_NODES "$MOCK_K8S_NODES"
+set_env_value PULSE_MOCK_K8S_PODS "$MOCK_K8S_PODS"
+set_env_value PULSE_MOCK_K8S_DEPLOYMENTS "$MOCK_K8S_DEPLOYMENTS"
 set_env_value PULSE_MOCK_TRENDS_SEED_DURATION "$MOCK_SEED_DURATION"
 set_env_value PULSE_MOCK_UPDATE_INTERVAL "$MOCK_UPDATE_INTERVAL"
 sudo chown pulse:pulse /etc/pulse/.env

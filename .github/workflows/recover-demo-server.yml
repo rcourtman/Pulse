@@ -18,6 +18,8 @@ jobs:
       DEMO_EXPECTED_HOSTNAME: ${{ vars.DEMO_EXPECTED_HOSTNAME }}
       DEMO_LOCAL_BASE_URL: ${{ vars.DEMO_LOCAL_BASE_URL }}
       DEMO_PUBLIC_HEALTH_URL: ${{ vars.DEMO_PUBLIC_HEALTH_URL }}
+      DEMO_AUTH_USER: ${{ vars.DEMO_AUTH_USER }}
+      DEMO_AUTH_PASS: ${{ vars.DEMO_AUTH_PASS }}
 
     steps:
       - name: Checkout exact recovery implementation
@@ -93,6 +95,15 @@ jobs:
           DEMO_SERVER_USER: ${{ secrets.DEMO_SERVER_USER }}
           EXPECTED_VERSION: ${{ steps.stable.outputs.tag }}
           MOCK_NODES: ${{ steps.runtime_profile.outputs.mock_nodes }}
+          MOCK_VMS_PER_NODE: ${{ steps.runtime_profile.outputs.mock_vms_per_node }}
+          MOCK_LXCS_PER_NODE: ${{ steps.runtime_profile.outputs.mock_lxcs_per_node }}
+          MOCK_DOCKER_HOSTS: ${{ steps.runtime_profile.outputs.mock_docker_hosts }}
+          MOCK_DOCKER_CONTAINERS: ${{ steps.runtime_profile.outputs.mock_docker_containers }}
+          MOCK_GENERIC_HOSTS: ${{ steps.runtime_profile.outputs.mock_generic_hosts }}
+          MOCK_K8S_CLUSTERS: ${{ steps.runtime_profile.outputs.mock_k8s_clusters }}
+          MOCK_K8S_NODES: ${{ steps.runtime_profile.outputs.mock_k8s_nodes }}
+          MOCK_K8S_PODS: ${{ steps.runtime_profile.outputs.mock_k8s_pods }}
+          MOCK_K8S_DEPLOYMENTS: ${{ steps.runtime_profile.outputs.mock_k8s_deployments }}
           MOCK_SEED_DURATION: ${{ steps.runtime_profile.outputs.mock_seed_duration }}
           MOCK_UPDATE_INTERVAL: ${{ steps.runtime_profile.outputs.mock_update_interval }}
         run: |
@@ -102,7 +113,7 @@ jobs:
             -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile=~/.ssh/known_hosts \
             "$DEMO_SERVER_USER@$DEMO_SERVER_HOST" \
-            "bash -s -- $(printf '%q ' "$DEMO_EXPECTED_HOSTNAME" "$DEMO_LOCAL_BASE_URL" "$EXPECTED_VERSION" "$MOCK_NODES" "$MOCK_SEED_DURATION" "$MOCK_UPDATE_INTERVAL")" \
+            "bash -s -- $(printf '%q ' "$DEMO_EXPECTED_HOSTNAME" "$DEMO_LOCAL_BASE_URL" "$EXPECTED_VERSION" "$MOCK_NODES" "$MOCK_VMS_PER_NODE" "$MOCK_LXCS_PER_NODE" "$MOCK_DOCKER_HOSTS" "$MOCK_DOCKER_CONTAINERS" "$MOCK_GENERIC_HOSTS" "$MOCK_K8S_CLUSTERS" "$MOCK_K8S_NODES" "$MOCK_K8S_PODS" "$MOCK_K8S_DEPLOYMENTS" "$MOCK_SEED_DURATION" "$MOCK_UPDATE_INTERVAL")" \
             < .github/scripts/recover-demo-runtime.sh \
             > demo-runtime-recovery.json
           jq -e '.schema_version == 1 and (.status == "recovered" or .status == "healthy_noop")' \
@@ -139,6 +150,8 @@ jobs:
         run: |
           set -euo pipefail
           export PULSE_PUBLIC_SITE_URL="${DEMO_PUBLIC_HEALTH_URL%/api/health}/"
+          export PULSE_DEMO_AUTH_USER="${DEMO_AUTH_USER:-demo}"
+          export PULSE_DEMO_AUTH_PASS="${DEMO_AUTH_PASS:-demo}"
           ./scripts/run_demo_public_browser_smoke.sh
 
       - name: Compensate failed mutated recovery
