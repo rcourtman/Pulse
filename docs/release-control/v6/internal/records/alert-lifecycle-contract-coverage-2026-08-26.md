@@ -80,5 +80,18 @@ and the parity expiry scenario exercises the manager's real Cleanup pass.
 Applies to both families (checkMetric shares preserveAlertState). Second
 consecutive slice with no manager defect found.
 
-Remaining for later slices: intent-policy interaction and a shadow-mode
-runtime feed.
+Sixth slice (2026-08-26): the intent gate — operator suppression
+(expected offline, muted, retired, active maintenance windows) and
+explicit grace policies hold ACTIVATION only, while confirmations keep
+counting; release activates with the run's first active observation as
+the alert start; an already-firing incident is never suppressed by
+intent. The manager accrues grace on monotonic process runtime while the
+reducer measures the signal clock — coincident under continuous
+operation, recorded as a nuance that disappears at cutover. Third
+consecutive parity slice with no manager defect; the operator scenarios'
+StartTime parity additionally exercises the lifecycleFirstMatched fix in
+composition. Deferred: the backup-offline deferral sub-policy
+(MaxDeferralSeconds / PostGraceSeconds).
+
+Remaining for later slices: the backup-offline deferral sub-policy and a
+shadow-mode runtime feed.

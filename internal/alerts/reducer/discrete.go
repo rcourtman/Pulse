@@ -43,6 +43,52 @@ type DiscreteRule struct {
 	// bypassing recovery confirmations, exactly as the manager's disable
 	// paths call clearAlert directly.
 	Disabled bool
+	// Intent is the resolved intent-policy context for this observation;
+	// nil means no gate. See DiscreteIntent.
+	Intent *DiscreteIntent
+}
+
+// DiscreteIntent characterizes the manager's intent gate
+// (evaluateIntentNoLock as composed by evaluateCanonicalLifecycleAlert):
+// it holds ACTIVATION only — an already-firing incident is never
+// suppressed by intent — and while held, the incident stays pending with
+// the condition's first active observation preserved as the eventual
+// start time. Operator context and policy are resolved by the caller per
+// observation; the reducer only applies the gate. The backup-offline
+// deferral sub-policy is not characterized yet (deferred slice).
+type DiscreteIntent struct {
+	// Explicit reports whether any intent rule applies to this
+	// resource+signal; only explicit policies impose the grace gate.
+	Explicit bool
+	// GraceSeconds is how long the condition must have been active before
+	// activation (explicit policies only). The manager accrues this on
+	// monotonic process runtime; the reducer measures it on the signal
+	// clock, which coincides under continuous operation.
+	GraceSeconds int
+	// OperatorSuppressed holds activation for operator context: an active
+	// maintenance window, muted or retired monitoring, or expected-offline
+	// for offline-family signals. The caller resolves it, honoring the
+	// policy's HonorOperatorState (default true).
+	OperatorSuppressed bool
+	// OperatorReason names the suppression, e.g. "operator_maintenance".
+	OperatorReason string
+}
+
+// intentHoldsActivation reports whether the gate keeps a would-be
+// activation pending. Grace accrues from the condition run's first active
+// observation, concurrently with any operator suppression — exactly as the
+// manager accrues elapsed time while suppressed.
+func intentHoldsActivation(intent *DiscreteIntent, activeSince, observedAt time.Time) bool {
+	if intent == nil {
+		return false
+	}
+	if intent.OperatorSuppressed {
+		return true
+	}
+	if !intent.Explicit {
+		return false
+	}
+	return observedAt.Sub(activeSince) < time.Duration(intent.GraceSeconds)*time.Second
 }
 
 // recordResolved remembers a resolved occurrence for re-fire restoration.
@@ -160,8 +206,14 @@ func (s *State) ApplyDiscrete(signal DiscreteSignal, rule DiscreteRule) []Event 
 		if incident.Confirmations < required {
 			return nil
 		}
-		incident.State = StateFiring
 		incident.Confirmations = required
+		// The intent gate holds activation only: the incident stays
+		// pending, counts clamped at the requirement, and the run's first
+		// active observation remains the eventual start time.
+		if intentHoldsActivation(rule.Intent, incident.PendingSince, signal.ObservedAt) {
+			return nil
+		}
+		incident.State = StateFiring
 		incident.StartedAt = incident.PendingSince
 		s.restoreAck(key, incident, signal.ObservedAt)
 		if restored, ok := s.consumeRefire(key, signal.ObservedAt); ok {
@@ -173,6 +225,21 @@ func (s *State) ApplyDiscrete(signal DiscreteSignal, rule DiscreteRule) []Event 
 
 	// First matching observation.
 	if required <= 1 {
+		// With the intent gate holding, even a single-confirmation
+		// condition enters pending: the manager's wrapper forces the
+		// evaluator's would-be activation back to pending state.
+		if intentHoldsActivation(rule.Intent, signal.ObservedAt, signal.ObservedAt) {
+			s.incidents[key] = &Incident{
+				ResourceID:     signal.ResourceID,
+				Key:            signal.Key,
+				State:          StatePending,
+				Severity:       signal.Severity,
+				PendingSince:   signal.ObservedAt,
+				Confirmations:  1,
+				LastObservedAt: signal.ObservedAt,
+			}
+			return []Event{event(EventPending, "")}
+		}
 		created := &Incident{
 			ResourceID:     signal.ResourceID,
 			Key:            signal.Key,
