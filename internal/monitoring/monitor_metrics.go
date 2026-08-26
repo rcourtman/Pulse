@@ -1319,17 +1319,28 @@ func (m *Monitor) mockGuestMetricsForChart(
 		return cached
 	}
 
-	var computed map[string][]MetricPoint
-	switch {
-	case hasSufficientChartMapCoverage(inMemoryResult, duration):
-		computed = downsampleMetricMapForMockChart(inMemoryResult, duration)
-	case len(sqlResourceID) > 0:
-		if synthetic := mockGuestMetricsForChart(sqlResourceType, sqlResourceID, duration); len(synthetic) > 0 {
-			computed = downsampleMetricMapForMockChart(synthetic, duration)
+	// Resolve mock coverage per series, not per resource. A resource can have a
+	// full window of CPU/memory/disk while I/O or thermal series are absent; a
+	// resource-level coverage check would then return the partial map unchanged
+	// and leave whole drawer groups stuck in "Collecting history".
+	synthetic := mockGuestMetricsForChart(sqlResourceType, sqlResourceID, duration)
+	computed := make(map[string][]MetricPoint, len(inMemoryResult)+len(synthetic))
+	for metricType, points := range inMemoryResult {
+		if hasSufficientChartSeriesCoverage(points, duration) {
+			computed[metricType] = downsampleMetricSeriesForMockChart(points, duration)
+			continue
 		}
+		if fallback := synthetic[metricType]; len(fallback) > 0 {
+			computed[metricType] = downsampleMetricSeriesForMockChart(fallback, duration)
+			continue
+		}
+		computed[metricType] = downsampleMetricSeriesForMockChart(points, duration)
 	}
-	if computed == nil {
-		computed = downsampleMetricMapForMockChart(inMemoryResult, duration)
+	for metricType, points := range synthetic {
+		if len(computed[metricType]) > 0 {
+			continue
+		}
+		computed[metricType] = downsampleMetricSeriesForMockChart(points, duration)
 	}
 	return m.writeMockChartMetricMapCache(key, computed)
 }

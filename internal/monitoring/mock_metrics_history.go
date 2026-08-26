@@ -700,11 +700,17 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, graph mock.Fi
 		cpuSeries := canonicalMetricSeriesWithSampler(sampler, "node", node.ID, "cpu", seedTimestamps)
 		memSeries := canonicalMetricSeriesWithSampler(sampler, "node", node.ID, "memory", seedTimestamps)
 		diskSeries := canonicalMetricSeriesWithSampler(sampler, "node", node.ID, "disk", seedTimestamps)
+		netInSeries := canonicalMetricSeriesWithSampler(sampler, "node", node.ID, "netin", seedTimestamps)
+		netOutSeries := canonicalMetricSeriesWithSampler(sampler, "node", node.ID, "netout", seedTimestamps)
+		temperatureSeries := canonicalMetricSeriesWithSampler(sampler, "node", node.ID, "temperature", seedTimestamps)
 
 		mh.addNodeMetricSeries(node.ID, "cpu", cpuSeries, seedTimestamps)
 		mh.addNodeMetricSeries(node.ID, "memory", memSeries, seedTimestamps)
 		mh.addNodeMetricSeries(node.ID, "disk", diskSeries, seedTimestamps)
-		seedStoreSeries("node", node.ID, "cpu", "memory", "disk")
+		mh.addNodeMetricSeries(node.ID, "netin", netInSeries, seedTimestamps)
+		mh.addNodeMetricSeries(node.ID, "netout", netOutSeries, seedTimestamps)
+		mh.addNodeMetricSeries(node.ID, "temperature", temperatureSeries, seedTimestamps)
+		seedStoreSeries("node", node.ID, "cpu", "memory", "disk", "netin", "netout", "temperature")
 	}
 
 	recordGuest := func(
@@ -776,6 +782,24 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, graph mock.Fi
 			storeMetrics = append(storeMetrics, "netin", "netout")
 		}
 		seedStoreSeries(storeType, storeID, storeMetrics...)
+	}
+	recordGuestTemperature := func(metricIDs []string, storeType, storeID string) {
+		if len(metricIDs) == 0 || strings.TrimSpace(storeID) == "" {
+			return
+		}
+		temperatureSeries := canonicalMetricSeriesWithSampler(
+			sampler,
+			storeType,
+			storeID,
+			"temperature",
+			seedTimestamps,
+		)
+		for _, metricID := range metricIDs {
+			if id := strings.TrimSpace(metricID); id != "" {
+				mh.addGuestMetricSeries(id, "temperature", temperatureSeries, seedTimestamps)
+			}
+		}
+		seedStoreSeries(storeType, storeID, "temperature")
 	}
 	recordGuestMemoryUsed := func(metricIDs []string, storeType, storeID string, memoryTotal float64) {
 		if len(metricIDs) == 0 || strings.TrimSpace(storeID) == "" || memoryTotal <= 0 {
@@ -947,6 +971,7 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, graph mock.Fi
 			true,
 			true,
 		)
+		recordGuestTemperature([]string{"dockerHost:" + host.ID}, "dockerHost", host.ID)
 
 		for _, container := range host.Containers {
 			if container.ID == "" {
@@ -957,8 +982,8 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, graph mock.Fi
 				"dockerContainer",
 				container.ID,
 				true,
-				false,
-				false,
+				true,
+				true,
 			)
 		}
 	}
@@ -977,6 +1002,7 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, graph mock.Fi
 			true,
 			true,
 		)
+		recordGuestTemperature([]string{"agent:" + host.ID}, "agent", host.ID)
 	}
 
 	platformFixtures := graph.PlatformFixtures
@@ -996,6 +1022,7 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, graph mock.Fi
 		true,
 		true,
 	)
+	recordGuestTemperature(systemMetricIDs, "agent", trueNASFixtures.System.Hostname)
 
 	for _, pool := range trueNASFixtures.Pools {
 		poolKey := mock.TrueNASPoolMetricID(trueNASFixtures.System.Hostname, pool.Name)
@@ -1465,9 +1492,13 @@ func recordMockStateToMetricsHistory(mh *MetricsHistory, ms *metrics.Store, grap
 		cpu := sampler.SampleMetric("node", node.ID, "cpu", ts)
 		memory := sampler.SampleMetric("node", node.ID, "memory", ts)
 		disk := sampler.SampleMetric("node", node.ID, "disk", ts)
+		netIn := sampler.SampleMetric("node", node.ID, "netin", ts)
+		netOut := sampler.SampleMetric("node", node.ID, "netout", ts)
 		mh.AddNodeMetric(node.ID, "cpu", cpu, ts)
 		mh.AddNodeMetric(node.ID, "memory", memory, ts)
 		mh.AddNodeMetric(node.ID, "disk", disk, ts)
+		mh.AddNodeMetric(node.ID, "netin", netIn, ts)
+		mh.AddNodeMetric(node.ID, "netout", netOut, ts)
 		if temperature := nodePrimaryTemperatureCelsius(node.Temperature); temperature != nil {
 			mh.AddNodeMetric(node.ID, "temperature", *temperature, ts)
 		}
@@ -1476,6 +1507,8 @@ func recordMockStateToMetricsHistory(mh *MetricsHistory, ms *metrics.Store, grap
 			ms.Write("node", node.ID, "cpu", cpu, ts)
 			ms.Write("node", node.ID, "memory", memory, ts)
 			ms.Write("node", node.ID, "disk", disk, ts)
+			ms.Write("node", node.ID, "netin", netIn, ts)
+			ms.Write("node", node.ID, "netout", netOut, ts)
 			if temperature := nodePrimaryTemperatureCelsius(node.Temperature); temperature != nil {
 				ms.Write("node", node.ID, "temperature", *temperature, ts)
 			}
@@ -1622,14 +1655,29 @@ func recordMockStateToMetricsHistory(mh *MetricsHistory, ms *metrics.Store, grap
 		cpu := sampler.SampleMetric("dockerHost", host.ID, "cpu", ts)
 		memory := sampler.SampleMetric("dockerHost", host.ID, "memory", ts)
 		disk := sampler.SampleMetric("dockerHost", host.ID, "disk", ts)
+		diskRead := sampler.SampleMetric("dockerHost", host.ID, "diskread", ts)
+		diskWrite := sampler.SampleMetric("dockerHost", host.ID, "diskwrite", ts)
+		netIn := sampler.SampleMetric("dockerHost", host.ID, "netin", ts)
+		netOut := sampler.SampleMetric("dockerHost", host.ID, "netout", ts)
+		temperature := sampler.SampleMetric("dockerHost", host.ID, "temperature", ts)
 		mh.AddGuestMetric(hostKey, "cpu", cpu, ts)
 		mh.AddGuestMetric(hostKey, "memory", memory, ts)
 		mh.AddGuestMetric(hostKey, "disk", disk, ts)
+		mh.AddGuestMetric(hostKey, "diskread", diskRead, ts)
+		mh.AddGuestMetric(hostKey, "diskwrite", diskWrite, ts)
+		mh.AddGuestMetric(hostKey, "netin", netIn, ts)
+		mh.AddGuestMetric(hostKey, "netout", netOut, ts)
+		mh.AddGuestMetric(hostKey, "temperature", temperature, ts)
 
 		if ms != nil {
 			ms.Write("dockerHost", host.ID, "cpu", cpu, ts)
 			ms.Write("dockerHost", host.ID, "memory", memory, ts)
 			ms.Write("dockerHost", host.ID, "disk", disk, ts)
+			ms.Write("dockerHost", host.ID, "diskread", diskRead, ts)
+			ms.Write("dockerHost", host.ID, "diskwrite", diskWrite, ts)
+			ms.Write("dockerHost", host.ID, "netin", netIn, ts)
+			ms.Write("dockerHost", host.ID, "netout", netOut, ts)
+			ms.Write("dockerHost", host.ID, "temperature", temperature, ts)
 		}
 
 		for _, container := range host.Containers {
@@ -1641,14 +1689,26 @@ func recordMockStateToMetricsHistory(mh *MetricsHistory, ms *metrics.Store, grap
 			cpu := sampler.SampleMetric("dockerContainer", container.ID, "cpu", ts)
 			memory := sampler.SampleMetric("dockerContainer", container.ID, "memory", ts)
 			disk := sampler.SampleMetric("dockerContainer", container.ID, "disk", ts)
+			diskRead := sampler.SampleMetric("dockerContainer", container.ID, "diskread", ts)
+			diskWrite := sampler.SampleMetric("dockerContainer", container.ID, "diskwrite", ts)
+			netIn := sampler.SampleMetric("dockerContainer", container.ID, "netin", ts)
+			netOut := sampler.SampleMetric("dockerContainer", container.ID, "netout", ts)
 			mh.AddGuestMetric(metricKey, "cpu", cpu, ts)
 			mh.AddGuestMetric(metricKey, "memory", memory, ts)
 			mh.AddGuestMetric(metricKey, "disk", disk, ts)
+			mh.AddGuestMetric(metricKey, "diskread", diskRead, ts)
+			mh.AddGuestMetric(metricKey, "diskwrite", diskWrite, ts)
+			mh.AddGuestMetric(metricKey, "netin", netIn, ts)
+			mh.AddGuestMetric(metricKey, "netout", netOut, ts)
 
 			if ms != nil {
 				ms.Write("dockerContainer", container.ID, "cpu", cpu, ts)
 				ms.Write("dockerContainer", container.ID, "memory", memory, ts)
 				ms.Write("dockerContainer", container.ID, "disk", disk, ts)
+				ms.Write("dockerContainer", container.ID, "diskread", diskRead, ts)
+				ms.Write("dockerContainer", container.ID, "diskwrite", diskWrite, ts)
+				ms.Write("dockerContainer", container.ID, "netin", netIn, ts)
+				ms.Write("dockerContainer", container.ID, "netout", netOut, ts)
 			}
 		}
 	}

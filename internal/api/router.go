@@ -6827,7 +6827,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 			}
 			return buildHistoryPoints(points, stepSecs), guestChartSource(), true
 		case "node":
-			points := monitor.GetNodeMetrics(resourceID, metricType, duration)
+			points := monitor.GetNodeMetricsForChart(resourceID, metricType, duration)
 			if len(points) == 0 {
 				livePoints := liveMetricPoints(runtimeResourceType, resourceID)
 				if live, ok := livePoints[metricType]; ok {
@@ -6835,7 +6835,11 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 				}
 				return nil, "", false
 			}
-			return buildHistoryPoints(points, stepSecs), historySourceMemory, true
+			source := historySourceMemory
+			if mock.IsMockEnabled() {
+				source = historySourceMock
+			}
+			return buildHistoryPoints(points, stepSecs), source, true
 		case "storage":
 			metrics := monitor.GetStorageMetrics(resourceID, duration)
 			points := metrics[queryMetric]
@@ -6873,6 +6877,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 
 		var metrics map[string][]monitoring.MetricPoint
 		guestHistory := false
+		source := historySourceMemory
 		switch runtimeResourceType {
 		case "vm", "system-container", "oci-container", "k8s", "docker-host":
 			metrics, guestHistory = guestChartMetrics()
@@ -6899,9 +6904,15 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 		default:
 			if runtimeResourceType == "node" {
 				metrics = map[string][]monitoring.MetricPoint{
-					"cpu":    monitor.GetNodeMetrics(resourceID, "cpu", duration),
-					"memory": monitor.GetNodeMetrics(resourceID, "memory", duration),
-					"disk":   monitor.GetNodeMetrics(resourceID, "disk", duration),
+					"cpu":         monitor.GetNodeMetricsForChart(resourceID, "cpu", duration),
+					"memory":      monitor.GetNodeMetricsForChart(resourceID, "memory", duration),
+					"disk":        monitor.GetNodeMetricsForChart(resourceID, "disk", duration),
+					"netin":       monitor.GetNodeMetricsForChart(resourceID, "netin", duration),
+					"netout":      monitor.GetNodeMetricsForChart(resourceID, "netout", duration),
+					"temperature": monitor.GetNodeMetricsForChart(resourceID, "temperature", duration),
+				}
+				if mock.IsMockEnabled() {
+					source = historySourceMock
 				}
 			} else {
 				return nil, "", false
@@ -6909,7 +6920,6 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 		}
 
 		apiData := make(map[string][]map[string]interface{})
-		source := historySourceMemory
 		if guestHistory {
 			source = guestChartSource()
 		}
@@ -7163,6 +7173,30 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 					}
 				}
 				apiData[metric] = apiPoints
+			}
+
+			// QueryAll can return a non-empty but incomplete mock metric map. Fill
+			// only the absent series from the deterministic chart fallback so one
+			// populated metric cannot suppress entire drawer groups.
+			if mock.IsMockEnabled() {
+				if fallbackData, fallbackSource, ok := fallbackAll(); ok {
+					supplemented := false
+					for metric, points := range fallbackData {
+						if len(apiData[metric]) > 0 || len(points) == 0 {
+							continue
+						}
+						apiData[metric] = points
+						supplemented = true
+					}
+					if supplemented {
+						source = fallbackSource
+						log.Info().
+							Str("resourceType", runtimeResourceType).
+							Str("resourceId", resourceID).
+							Str("source", source).
+							Msg("Metrics store incomplete; supplementing missing mock history series")
+					}
+				}
 			}
 
 			response = map[string]interface{}{

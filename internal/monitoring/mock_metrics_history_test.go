@@ -1898,6 +1898,9 @@ func TestRecordMockStateToMetricsHistory_UsesCanonicalMetricModelForStateBackedR
 	if got, want := mh.GetNodeMetrics("node-live", "cpu", lookback)[0].Value, mock.SampleMetric("node", "node-live", "cpu", ts); math.Abs(got-want) > 1e-9 {
 		t.Fatalf("expected node cpu live tick to use canonical metric model: got=%f want=%f", got, want)
 	}
+	if got, want := mh.GetNodeMetrics("node-live", "netin", lookback)[0].Value, mock.SampleMetric("node", "node-live", "netin", ts); math.Abs(got-want) > 1e-9 {
+		t.Fatalf("expected node netin live tick to use canonical metric model: got=%f want=%f", got, want)
+	}
 	if got, want := mh.GetGuestMetrics("vm-live", "diskread", lookback)[0].Value, mock.SampleMetric("vm", "vm-live", "diskread", ts); math.Abs(got-want) > 1e-9 {
 		t.Fatalf("expected vm diskread live tick to use canonical metric model: got=%f want=%f", got, want)
 	}
@@ -1921,8 +1924,14 @@ func TestRecordMockStateToMetricsHistory_UsesCanonicalMetricModelForStateBackedR
 	if got, want := mh.GetGuestMetrics("dockerHost:docker-host-live", "disk", lookback)[0].Value, mock.SampleMetric("dockerHost", "docker-host-live", "disk", ts); math.Abs(got-want) > 1e-9 {
 		t.Fatalf("expected docker host disk live tick to use canonical metric model: got=%f want=%f", got, want)
 	}
+	if got, want := mh.GetGuestMetrics("dockerHost:docker-host-live", "temperature", lookback)[0].Value, mock.SampleMetric("dockerHost", "docker-host-live", "temperature", ts); math.Abs(got-want) > 1e-9 {
+		t.Fatalf("expected docker host temperature live tick to use canonical metric model: got=%f want=%f", got, want)
+	}
 	if got, want := mh.GetGuestMetrics("docker:docker-cont-live", "cpu", lookback)[0].Value, mock.SampleMetric("dockerContainer", "docker-cont-live", "cpu", ts); math.Abs(got-want) > 1e-9 {
 		t.Fatalf("expected docker container cpu live tick to use canonical metric model: got=%f want=%f", got, want)
+	}
+	if got, want := mh.GetGuestMetrics("docker:docker-cont-live", "netin", lookback)[0].Value, mock.SampleMetric("dockerContainer", "docker-cont-live", "netin", ts); math.Abs(got-want) > 1e-9 {
+		t.Fatalf("expected docker container netin live tick to use canonical metric model: got=%f want=%f", got, want)
 	}
 	if got, want := mh.GetGuestMetrics("agent:agent-live", "netin", lookback)[0].Value, mock.SampleMetric("agent", "agent-live", "netin", ts); math.Abs(got-want) > 1e-9 {
 		t.Fatalf("expected agent netin live tick to use canonical metric model: got=%f want=%f", got, want)
@@ -2058,10 +2067,56 @@ func TestMockDockerHostSeedCoversTheSameSeriesAsTheSyntheticGenerator(t *testing
 	seedMockMetricsHistory(history, nil, graph, now, 2*time.Hour, time.Minute)
 
 	hostID := graph.State.DockerHosts[0].ID
-	for _, metricType := range mockGuestChartMetricTypes {
+	for _, metricType := range mockHostChartMetricTypes {
 		points := history.GetGuestMetrics("dockerHost:"+hostID, metricType, 2*time.Hour)
 		if len(points) == 0 {
 			t.Fatalf("seeded docker host %s is missing the %s series", hostID, metricType)
+		}
+	}
+}
+
+func TestMockDockerContainerSeedCoversDrawerHistorySeries(t *testing.T) {
+	previous := mock.IsMockEnabled()
+	mustSetMockEnabled(t, true)
+	defer mustSetMockEnabled(t, previous)
+
+	history := NewMetricsHistory(4096, 24*time.Hour)
+	graph := mock.CurrentFixtureGraph()
+	if len(graph.State.DockerHosts) == 0 || len(graph.State.DockerHosts[0].Containers) == 0 {
+		t.Fatal("mock fixture graph has no Docker containers")
+	}
+
+	now := time.Now().UTC()
+	seedMockMetricsHistory(history, nil, graph, now, 2*time.Hour, time.Minute)
+
+	containerID := graph.State.DockerHosts[0].Containers[0].ID
+	for _, metricType := range mockGuestChartMetricTypes {
+		points := history.GetGuestMetrics("docker:"+containerID, metricType, 2*time.Hour)
+		if len(points) == 0 {
+			t.Fatalf("seeded Docker container %s is missing the %s series", containerID, metricType)
+		}
+	}
+}
+
+func TestMockNodeSeedCoversDrawerHistorySeries(t *testing.T) {
+	previous := mock.IsMockEnabled()
+	mustSetMockEnabled(t, true)
+	defer mustSetMockEnabled(t, previous)
+
+	history := NewMetricsHistory(4096, 24*time.Hour)
+	graph := mock.CurrentFixtureGraph()
+	if len(graph.State.Nodes) == 0 {
+		t.Fatal("mock fixture graph has no Proxmox nodes")
+	}
+
+	now := time.Now().UTC()
+	seedMockMetricsHistory(history, nil, graph, now, 2*time.Hour, time.Minute)
+
+	nodeID := graph.State.Nodes[0].ID
+	for _, metricType := range mockNodeChartMetricTypes {
+		points := history.GetNodeMetrics(nodeID, metricType, 2*time.Hour)
+		if len(points) == 0 {
+			t.Fatalf("seeded node %s is missing the %s series", nodeID, metricType)
 		}
 	}
 }

@@ -548,6 +548,66 @@ func TestGetGuestMetricsForChart_UsesCanonicalMockSamplerInMockMode(t *testing.T
 	assertFollowsCanonicalMockSeries(t, result["memory"], "vm", "vm-1", "memory")
 }
 
+func TestGetGuestMetricsForChart_SynthesizesMockHostTemperature(t *testing.T) {
+	previous := mock.IsMockEnabled()
+	mustSetMockEnabled(t, true)
+	defer mustSetMockEnabled(t, previous)
+
+	monitor := newChartFallbackTestMonitor(t)
+	for _, tc := range []struct {
+		name            string
+		inMemoryKey     string
+		sqlResourceType string
+		resourceID      string
+	}{
+		{name: "agent", inMemoryKey: "agent:host-1", sqlResourceType: "agent", resourceID: "host-1"},
+		{name: "docker host", inMemoryKey: "dockerHost:runtime-1", sqlResourceType: "dockerHost", resourceID: "runtime-1"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			result := monitor.GetGuestMetricsForChart(tc.inMemoryKey, tc.sqlResourceType, tc.resourceID, time.Hour)
+			if len(result["temperature"]) < 2 {
+				t.Fatalf("expected drawable mock temperature history, got %+v", result["temperature"])
+			}
+			assertFollowsCanonicalMockSeries(t, result["temperature"], tc.sqlResourceType, tc.resourceID, "temperature")
+		})
+	}
+}
+
+func TestGetGuestMetricsForChart_SupplementsPartialMockHistoryPerSeries(t *testing.T) {
+	previous := mock.IsMockEnabled()
+	mustSetMockEnabled(t, true)
+	defer mustSetMockEnabled(t, previous)
+
+	monitor := newChartFallbackTestMonitor(t)
+	now := time.Now().UTC().Truncate(time.Second)
+	duration := time.Hour
+	for _, sample := range []struct {
+		offset time.Duration
+		value  float64
+	}{
+		{-58 * time.Minute, 12.5},
+		{-30 * time.Minute, 37.25},
+		{-1 * time.Minute, 81.75},
+	} {
+		monitor.metricsHistory.AddGuestMetric("docker:container-1", "cpu", sample.value, now.Add(sample.offset))
+	}
+
+	result := monitor.GetGuestMetricsForChart(
+		"docker:container-1",
+		"dockerContainer",
+		"container-1",
+		duration,
+	)
+	if len(result["cpu"]) != 3 || result["cpu"][0].Value != 12.5 || result["cpu"][2].Value != 81.75 {
+		t.Fatalf("expected seeded CPU history to win, got %+v", result["cpu"])
+	}
+	for _, metricType := range []string{"netin", "netout", "diskread", "diskwrite"} {
+		if len(result[metricType]) < 2 {
+			t.Fatalf("expected missing %s history to be synthesized, got %+v", metricType, result[metricType])
+		}
+	}
+}
+
 func TestGetGuestMetricsForChart_PrefersSeededMockHistoryInMockMode(t *testing.T) {
 	previous := mock.IsMockEnabled()
 	mustSetMockEnabled(t, true)

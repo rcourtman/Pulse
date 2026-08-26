@@ -8,7 +8,7 @@ import type {
 } from '@/components/Workloads/guestDrawerModel';
 
 export interface DockerHostDrawerHistoryTarget extends GuestDrawerHistoryTarget {
-  resourceType: Extract<HistoryResourceType, 'agent'>;
+  resourceType: Extract<HistoryResourceType, 'agent' | 'docker-host'>;
 }
 
 const stripAgentPrefix = (value: string): string =>
@@ -22,6 +22,12 @@ export const DOCKER_HOST_DRAWER_HISTORY_GROUPS: GuestDrawerHistoryGroupConfig[] 
 export const getDockerHostDrawerHistoryTarget = (
   host: Resource,
 ): DockerHostDrawerHistoryTarget | null => {
+  const explicitType = host.metricsTarget?.resourceType;
+  const explicitId = host.metricsTarget?.resourceId.trim();
+  if ((explicitType === 'agent' || explicitType === 'docker-host') && explicitId) {
+    return { resourceType: explicitType, resourceId: explicitId };
+  }
+
   const candidate = host.agent?.agentId || host.id || host.name || '';
   const resourceId = stripAgentPrefix(candidate.trim());
   if (!resourceId) return null;

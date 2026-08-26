@@ -201,6 +201,124 @@ func TestMetricsHistoryFallbackSynthesizesUnseededMockWorkloadHistory(t *testing
 	}
 }
 
+func TestMetricsHistoryFallbackSynthesizesMockHostAndNodeDrawerSeries(t *testing.T) {
+	setMockModeForTest(t, true)
+
+	monitor := &monitoring.Monitor{}
+	setUnexportedField(t, monitor, "metricsHistory", monitoring.NewMetricsHistory(10, time.Hour))
+	router := &Router{monitor: monitor}
+
+	for _, tc := range []struct {
+		name         string
+		resourceType string
+		resourceID   string
+		metrics      []string
+	}{
+		{
+			name:         "docker host",
+			resourceType: "docker-host",
+			resourceID:   "runtime-host-9",
+			metrics:      []string{"cpu", "netin", "diskread", "temperature"},
+		},
+		{
+			name:         "Proxmox node",
+			resourceType: "node",
+			resourceID:   "cluster-1-node-9",
+			metrics:      []string{"cpu", "netin", "temperature"},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(
+				http.MethodGet,
+				"/api/metrics-store/history?resourceType="+tc.resourceType+"&resourceId="+tc.resourceID+"&range=24h",
+				nil,
+			)
+			rec := httptest.NewRecorder()
+			router.handleMetricsHistory(rec, req)
+
+			if rec.Code != http.StatusOK {
+				t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
+			}
+
+			var resp struct {
+				Source  string                       `json:"source"`
+				Metrics map[string][]json.RawMessage `json:"metrics"`
+			}
+			if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+				t.Fatalf("failed to unmarshal response: %v", err)
+			}
+			if resp.Source != "mock_synthetic" {
+				t.Fatalf("expected source mock_synthetic, got %q", resp.Source)
+			}
+			for _, metric := range tc.metrics {
+				if len(resp.Metrics[metric]) < 2 {
+					t.Fatalf("expected drawable %s history, got %d points", metric, len(resp.Metrics[metric]))
+				}
+			}
+		})
+	}
+}
+
+func TestMetricsHistoryFallbackSupplementsPartialMockStoreSeries(t *testing.T) {
+	setMockModeForTest(t, true)
+
+	store, err := metrics.NewStore(metrics.DefaultConfig(t.TempDir()))
+	if err != nil {
+		t.Fatalf("metrics.NewStore() error = %v", err)
+	}
+	defer func() { _ = store.Close() }()
+
+	resourceID := "container-partial-1"
+	now := time.Now().UTC()
+	for _, sample := range []struct {
+		offset time.Duration
+		value  float64
+	}{
+		{-50 * time.Minute, 15},
+		{-25 * time.Minute, 25},
+		{-time.Minute, 35},
+	} {
+		store.Write("dockerContainer", resourceID, "cpu", sample.value, now.Add(sample.offset))
+	}
+	store.Flush()
+
+	monitor := &monitoring.Monitor{}
+	setUnexportedField(t, monitor, "metricsHistory", monitoring.NewMetricsHistory(10, time.Hour))
+	setUnexportedField(t, monitor, "metricsStore", store)
+	router := &Router{monitor: monitor}
+
+	req := httptest.NewRequest(
+		http.MethodGet,
+		"/api/metrics-store/history?resourceType=app-container&resourceId="+resourceID+"&range=1h",
+		nil,
+	)
+	rec := httptest.NewRecorder()
+	router.handleMetricsHistory(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp struct {
+		Source  string                       `json:"source"`
+		Metrics map[string][]json.RawMessage `json:"metrics"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
+	if resp.Source != "mock_synthetic" {
+		t.Fatalf("expected supplemented source mock_synthetic, got %q", resp.Source)
+	}
+	if len(resp.Metrics["cpu"]) != 3 {
+		t.Fatalf("expected the three stored CPU points to be preserved, got %d", len(resp.Metrics["cpu"]))
+	}
+	for _, metricType := range []string{"netin", "netout", "diskread", "diskwrite"} {
+		if len(resp.Metrics[metricType]) < 2 {
+			t.Fatalf("expected missing %s store history to be supplemented, got %d points", metricType, len(resp.Metrics[metricType]))
+		}
+	}
+}
+
 func TestMetricsHistoryFallbackMockDiskSynthesizesSeries(t *testing.T) {
 	setMockModeForTest(t, true)
 

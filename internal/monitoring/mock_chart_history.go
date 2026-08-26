@@ -10,7 +10,8 @@ import (
 
 var (
 	mockGuestChartMetricTypes = []string{"cpu", "memory", "disk", "diskread", "diskwrite", "netin", "netout"}
-	mockNodeChartMetricTypes  = []string{"cpu", "memory", "disk", "netin", "netout"}
+	mockHostChartMetricTypes  = []string{"cpu", "memory", "disk", "diskread", "diskwrite", "netin", "netout", "temperature"}
+	mockNodeChartMetricTypes  = []string{"cpu", "memory", "disk", "netin", "netout", "temperature"}
 	mockDiskChartMetricTypes  = []string{"disk", "diskread", "diskwrite", "smart_temp"}
 )
 
@@ -77,8 +78,12 @@ func mockGuestMetricsForChart(resourceType, resourceID string, duration time.Dur
 	}
 
 	timestamps := mockChartTimestamps(duration)
-	result := make(map[string][]MetricPoint, len(mockGuestChartMetricTypes)+1)
-	for _, metricType := range mockGuestChartMetricTypes {
+	metricTypes := mockGuestChartMetricTypes
+	if resourceType == "agent" || resourceType == "dockerHost" {
+		metricTypes = mockHostChartMetricTypes
+	}
+	result := make(map[string][]MetricPoint, len(metricTypes)+1)
+	for _, metricType := range metricTypes {
 		result[metricType] = mockCanonicalMetricSeries(resourceType, resourceID, metricType, timestamps)
 	}
 	if series := mockGuestMemoryUsedSeries(resourceType, resourceID, result["memory"]); len(series) > 0 {

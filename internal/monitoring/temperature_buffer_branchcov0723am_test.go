@@ -322,7 +322,7 @@ func TestBranchcov0723Am_MockNodeMetricsForChart(t *testing.T) {
 		// Comprehensive ordering check across the default set + a custom type,
 		// exercising every codepath that materialises MetricPoint slices.
 		types := append([]string(nil), mockNodeChartMetricTypes...)
-		types = append(types, "temperature")
+		types = append(types, "custom_ordered_metric")
 		got := mockNodeMetricsForChart(nodeID, types, 2*time.Hour)
 		expectKeysExact(t, got, types)
 		for k, pts := range got {

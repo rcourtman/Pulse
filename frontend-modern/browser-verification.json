@@ -1,19 +1,19 @@
 {
   "version": 1,
-  "base_sha": "4d457159fc7684e7e63c9fd68b85db313300f2ed",
-  "verified_at": "2026-08-26T11:03:57Z",
+  "base_sha": "18b74c0adb07749cdd00caf9fc01ec09849029cd",
+  "verified_at": "2026-08-26T11:10:47Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/utils/alertWebhookPresentation.ts"
+    "frontend-modern/src/features/docker/dockerHostDrawerModel.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/utils/alertWebhookPresentation.ts": "aaf1bc2327b6b232470569f9110159a88222e7c8cd7b0bf4e473ff0c34eb5147"
+    "frontend-modern/src/features/docker/dockerHostDrawerModel.ts": "af67dd2e6ae26a4c220ba77342842a5782a52dae77d664b5b56d37e996abdb79"
   },
-  "routes": ["/alerts/notifications"],
+  "routes": ["/docker/overview", "/proxmox/overview"],
   "viewports": [
     {
-      "width": 1280,
-      "height": 800
+      "width": 1230,
+      "height": 1234
     },
     {
       "width": 390,
@@ -21,14 +21,17 @@
     }
   ],
   "states": [
-    "new Generic webhook editor with its default custom-payload placeholder visible",
-    "translation-ready variable list showing Event, MessageKey, ResourceType and NodeDisplayName",
-    "narrow webhook editor with no page-level horizontal overflow"
+    "Docker host History at 24 hours and 7 days with utilization, network I/O, disk I/O, and thermals populated",
+    "Docker app-container History at 24 hours and 7 days with utilization, network I/O, and disk I/O populated",
+    "Proxmox guest History with utilization, network I/O, and disk I/O populated",
+    "Proxmox node History at 24 hours and 7 days with utilization, network I/O, disk I/O, and thermals populated",
+    "narrow Docker host History stacked without document-level horizontal overflow"
   ],
   "interactions": [
-    "signed into the current local mock build and opened Alerts, Notifications, then Add Webhook",
-    "confirmed the Generic payload placeholder includes event, message_key and resource_type at desktop width",
-    "confirmed the available-variable help exposes MessageKey, ResourceType and NodeDisplayName",
-    "rechecked the open editor at 390 by 844 and measured document scroll width equal to the 390-pixel viewport"
+    "opened Edge Apps 01 from the Docker hosts table and selected History; confirmed four chart groups and zero Collecting history placeholders",
+    "opened nextcloud from the Docker containers table and selected History; confirmed three chart groups and zero Collecting history placeholders",
+    "switched Docker host, Docker container, and Proxmox node History selectors to 7 days; every expected group remained populated",
+    "opened checkout-web-265 and Analytics A on the Proxmox overview; guest and node History drawers rendered their full chart catalogs",
+    "rechecked Edge Apps 01 at 390 by 844; confirmed four stacked groups, no horizontal overflow, and row focus return after collapse"
   ]
 }

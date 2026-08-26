@@ -12,6 +12,7 @@ type HostOverrides = {
   agent?: { agentId?: string } | undefined;
   id?: string;
   name?: string;
+  metricsTarget?: Resource['metricsTarget'];
   temperature?: number;
   docker?: { temperature?: number } | undefined;
 };
@@ -25,12 +26,25 @@ const makeHost = (over: HostOverrides = {}): Resource =>
     name: over.name ?? '',
     type: 'docker-host',
     agent: over.agent,
+    metricsTarget: over.metricsTarget,
     temperature: over.temperature,
     docker: over.docker,
   }) as unknown as Resource;
 
 describe('dockerHostDrawerModel', () => {
   describe('getDockerHostDrawerHistoryTarget', () => {
+    it('prefers the canonical backend metrics target over display and agent identities', () => {
+      expect(
+        getDockerHostDrawerHistoryTarget(
+          makeHost({
+            metricsTarget: { resourceType: 'docker-host', resourceId: ' runtime-host-9 ' },
+            agent: { agentId: 'agent-9' },
+            id: 'display-row-9',
+          }),
+        ),
+      ).toEqual({ resourceType: 'docker-host', resourceId: 'runtime-host-9' });
+    });
+
     it('builds an agent-scoped target from the agent agentId', () => {
       expect(getDockerHostDrawerHistoryTarget(makeHost({ agent: { agentId: 'agent-9' } }))).toEqual(
         {
