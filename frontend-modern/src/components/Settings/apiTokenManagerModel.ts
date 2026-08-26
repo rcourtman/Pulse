@@ -2,6 +2,8 @@ import { unwrap } from 'solid-js/store';
 import type { APITokenRecord } from '@/api/security';
 import {
   AUDIT_READ_SCOPE,
+  AGENT_CONFIG_READ_SCOPE,
+  AGENT_MANAGE_SCOPE,
   AGENT_REPORT_SCOPE,
   API_SCOPE_OPTIONS,
   DOCKER_MANAGE_SCOPE,
@@ -90,8 +92,9 @@ export const getAPITokenScopePresets = (
     {
       id: API_TOKEN_AGENT_PRESET_ID,
       label: 'Agent',
-      scopes: [AGENT_REPORT_SCOPE],
-      description: 'Allow the Pulse agent to submit OS, CPU, and disk metrics.',
+      scopes: [AGENT_REPORT_SCOPE, AGENT_CONFIG_READ_SCOPE, AGENT_MANAGE_SCOPE],
+      description:
+        'Allow the Pulse agent to report host metrics, fetch its configuration, and unregister during uninstall.',
     },
     {
       id: API_TOKEN_DOCKER_REPORT_PRESET_ID,

@@ -9,6 +9,7 @@ export interface APIScopeOption {
 
 export const AGENT_REPORT_SCOPE = 'agent:report';
 export const AGENT_CONFIG_READ_SCOPE = 'agent:config:read';
+export const AGENT_MANAGE_SCOPE = 'agent:manage';
 export const DOCKER_REPORT_SCOPE = 'docker:report';
 export const DOCKER_MANAGE_SCOPE = 'docker:manage';
 export const KUBERNETES_REPORT_SCOPE = 'kubernetes:report';
@@ -84,6 +85,12 @@ export const API_SCOPE_OPTIONS: APIScopeOption[] = [
     value: AGENT_CONFIG_READ_SCOPE,
     label: 'Agent config fetch',
     description: 'Allow the agent to retrieve its assigned configuration profile.',
+    group: 'Agents',
+  },
+  {
+    value: AGENT_MANAGE_SCOPE,
+    label: 'Agent lifecycle management',
+    description: 'Allow an agent to update its configuration or unregister during uninstall.',
     group: 'Agents',
   },
   {

@@ -1744,6 +1744,11 @@ canonical scope constants. `apiTokenManagerModel.ts` may expose a
 `getAPITokenScopePresets()` factory, but it must not freeze preset scope data
 at module-load time in a way that can break security settings initialization in
 production chunks.
+Operator-created Agent tokens must default to the least authority needed for a
+long-lived agent lifecycle: `agent:report`, `agent:config:read`, and
+`agent:manage`. The custom scope chooser and in-place editor must expose
+`agent:manage`; server-minted bootstrap, mobile-relay, and granular governed-
+action scopes remain unavailable as general-purpose operator choices.
 The manifest-derived full-surface preset may keep the internal
 `pulse_intelligence_agent` id for route compatibility, but its visible label and
 default token name must be `Patrol external agent` so API Access presents the

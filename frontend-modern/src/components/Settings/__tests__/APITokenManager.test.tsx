@@ -6,6 +6,8 @@ import type { APITokenRecord } from '@/api/security';
 import type { Resource } from '@/types/resource';
 import {
   AI_EXECUTE_SCOPE,
+  AGENT_CONFIG_READ_SCOPE,
+  AGENT_MANAGE_SCOPE,
   AGENT_REPORT_SCOPE,
   AUDIT_READ_SCOPE,
   DOCKER_MANAGE_SCOPE,
@@ -306,6 +308,51 @@ describe('APITokenManager', () => {
       ).toBeGreaterThanOrEqual(2);
       expect(screen.getAllByText('Docker / Podman reporting').length).toBeGreaterThanOrEqual(2);
     });
+  });
+
+  it('creates manually cycled agent tokens with the runtime lifecycle scopes', async () => {
+    createTokenMock.mockResolvedValue(
+      makeToken({
+        name: 'Replacement agent token',
+        scopes: [AGENT_REPORT_SCOPE, AGENT_CONFIG_READ_SCOPE, AGENT_MANAGE_SCOPE],
+      }),
+    );
+
+    render(() => <APITokenManager onTokensChanged={vi.fn()} canManage />);
+
+    fireEvent.input(screen.getByPlaceholderText('e.g. Docker / Podman automation'), {
+      target: { value: 'Replacement agent token' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Agent' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Generate' }));
+
+    await waitFor(() => {
+      expect(createTokenMock).toHaveBeenCalledWith('Replacement agent token', [
+        AGENT_CONFIG_READ_SCOPE,
+        AGENT_MANAGE_SCOPE,
+        AGENT_REPORT_SCOPE,
+      ]);
+    });
+  });
+
+  it('offers agent lifecycle management when editing token scopes', async () => {
+    listTokensMock.mockResolvedValue([
+      makeToken({
+        id: 'agent-token-edit',
+        name: 'Agent token',
+        scopes: [AGENT_REPORT_SCOPE],
+      }),
+    ]);
+
+    render(() => <APITokenManager onTokensChanged={vi.fn()} canManage />);
+
+    const row = await findTokenTableRow('Agent token');
+    fireEvent.click(within(row).getByRole('button', { name: 'Edit scopes' }));
+
+    const dialog = await screen.findByRole('dialog', { name: 'Edit API token scopes' });
+    expect(
+      within(dialog).getByRole('checkbox', { name: /Agent lifecycle management/i }),
+    ).not.toBeChecked();
   });
 
   it('requires an explicit scope selection before generating a token', async () => {

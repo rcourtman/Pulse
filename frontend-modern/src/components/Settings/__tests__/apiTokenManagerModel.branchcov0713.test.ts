@@ -3,6 +3,8 @@ import type { APITokenRecord } from '@/api/security';
 import {
   API_SCOPE_OPTIONS,
   type APIScopeOption,
+  AGENT_CONFIG_READ_SCOPE,
+  AGENT_MANAGE_SCOPE,
   AGENT_REPORT_SCOPE,
   AUDIT_READ_SCOPE,
   DOCKER_MANAGE_SCOPE,
@@ -515,7 +517,13 @@ describe('getAPITokenScopePresets (full structure)', () => {
       description:
         'Read-only access for wall displays. Use ?token=xxx&kiosk=1 in the URL to hide navigation and filters.',
     });
-    expect(byId.get(API_TOKEN_AGENT_PRESET_ID)?.scopes).toStrictEqual([AGENT_REPORT_SCOPE]);
+    expect(byId.get(API_TOKEN_AGENT_PRESET_ID)).toStrictEqual({
+      id: API_TOKEN_AGENT_PRESET_ID,
+      label: 'Agent',
+      scopes: [AGENT_REPORT_SCOPE, AGENT_CONFIG_READ_SCOPE, AGENT_MANAGE_SCOPE],
+      description:
+        'Allow the Pulse agent to report host metrics, fetch its configuration, and unregister during uninstall.',
+    });
     expect(byId.get(API_TOKEN_DOCKER_REPORT_PRESET_ID)).toStrictEqual({
       id: API_TOKEN_DOCKER_REPORT_PRESET_ID,
       label: API_TOKEN_DOCKER_REPORT_PRESET_LABEL,

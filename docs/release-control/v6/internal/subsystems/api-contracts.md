@@ -8218,6 +8218,13 @@ canonical scope constants: `apiTokenManagerModel.ts` may expose
 `getAPITokenScopePresets()`, but it must not publish an eagerly evaluated
 top-level preset array that can reintroduce settings-chunk initialization-order
 failures in production bundles.
+The operator-created Agent preset must match the long-lived lifecycle minimum
+used by server-issued agent credentials: `agent:report`, `agent:config:read`,
+and `agent:manage`. The custom create and edit surfaces must expose
+`agent:manage` so an operator can cycle a credential without losing config
+fetch or self-unregister authority. Single-use `agent:enroll`, dedicated
+`relay:mobile:access`, and granular governed-action scopes remain backend-owned
+and must not be presented as general-purpose token choices.
 That same boundary now also includes
 `frontend-modern/src/utils/apiTokenPresentation.ts`, so token load/create/
 update/revoke errors keep one governed customer-facing message source instead of

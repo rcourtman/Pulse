@@ -614,8 +614,12 @@ reinstalled or reconfigured with a valid token.
 | `agent:report` | Agent host telemetry submission |
 | `agent:config:read` | Read agent config payloads |
 | `agent:manage` | Manage registered agents (unlink/delete/config) |
+| `agent:exec` | Establish agent command WebSocket connections |
+| `ai:chat` | Use Pulse Assistant chat and read knowledge |
+| `ai:execute` | Use governed Patrol plans, approvals, actions, and history |
 | `settings:read` | Read configuration |
 | `settings:write` | Modify configuration |
+| `audit:read` | Read audit events, verification results, summaries, and exports |
 
 ### Presets
 
@@ -624,7 +628,7 @@ The UI offers quick presets for common use cases:
 | Preset | Scopes | Use Case |
 | -------- | -------- | ---------- |
 | **Kiosk / Dashboard** | `monitoring:read` | Read-only dashboard displays |
-| **Agent host** | `agent:report` | Agent host telemetry authentication |
+| **Agent host** | `agent:report`, `agent:config:read`, `agent:manage` | Agent telemetry, configuration fetch, and uninstall cleanup |
 | **Docker / Podman report** | `docker:report` | Docker / Podman agent (read-only) |
 | **Docker / Podman manage** | `docker:report`, `docker:manage` | Docker / Podman agent with actions |
 | **Settings read** | `settings:read` | Read-only config access |
