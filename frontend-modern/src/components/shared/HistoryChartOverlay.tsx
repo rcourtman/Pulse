@@ -74,7 +74,7 @@ export const HistoryChartOverlay: Component<HistoryChartOverlayProps> = (props) 
             {props.chart.lockDays()}-Day History
           </h3>
           <p class="text-sm text-muted text-center max-w-[220px] mb-4">
-            Historical data beyond {props.chart.lockDays()} days is not enabled on this instance.
+            Historical data beyond {props.chart.lockDays()} days requires a higher license plan.
           </p>
         </div>
       </Show>

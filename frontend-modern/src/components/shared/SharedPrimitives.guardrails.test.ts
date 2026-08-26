@@ -5220,7 +5220,7 @@ describe('shared primitive guardrails', () => {
 
     expect(historyChartOverlaySource).toContain('Collecting data... History will appear here.');
     expect(historyChartOverlaySource).toContain(
-      'Historical data beyond {props.chart.lockDays()} days is not enabled on this instance.',
+      'Historical data beyond {props.chart.lockDays()} days requires a higher license plan.',
     );
     expect(historyChartOverlaySource).not.toContain(
       'Unlock {props.chart.lockTierLabel()} Features',

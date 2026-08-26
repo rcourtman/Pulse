@@ -1,37 +1,39 @@
 {
   "version": 1,
-  "base_sha": "a8e84b4011afec482def5775b776b0f24a30d412",
-  "verified_at": "2026-08-26T09:27:37Z",
+  "base_sha": "b727bc62e4d5909e32ef81ac27cc39fa7a57f95b",
+  "verified_at": "2026-08-26T09:46:10Z",
   "result": "passed",
-  "changed_paths": ["frontend-modern/src/components/shared/DetailSectionTable.tsx"],
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx",
+    "frontend-modern/src/components/shared/HistoryChartOverlay.tsx"
+  ],
   "content_sha256": {
-    "frontend-modern/src/components/shared/DetailSectionTable.tsx": "07a1cd5c6489fe055842417468014bdfee01aa79785b531f15cea69c0532796a"
+    "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx": "893176213ad2b8b5f876b62759443ec280135f6894db39195a7ccdd3df99051d",
+    "frontend-modern/src/components/shared/HistoryChartOverlay.tsx": "942d0f601b8d8db5f8f8dacd7e08be6aa443633c16ea955a3458feee6888d705"
   },
-  "routes": ["/proxmox/overview", "/docker/overview"],
+  "routes": [
+    "/proxmox/overview",
+    "/proxmox/storage"
+  ],
   "viewports": [
     {
-      "width": 1920,
-      "height": 600
-    },
-    {
       "width": 1280,
-      "height": 800
+      "height": 720
     },
     {
-      "width": 390,
-      "height": 844
+      "width": 375,
+      "height": 812
     }
   ],
   "states": [
-    "Proxmox guest drawer with four detail sections filling one equal-height desktop row",
-    "Docker host drawer with five detail sections balanced across three- and two-card desktop rows",
-    "phone detail sections retained the compact single-table presentation"
+    "Node drawer History tab (Analytics B) with 30d range selected on a 7-day runtime: locked panel shows '30 days history requires a higher license plan. This instance's plan retains 7 days.' (desktop 1280)",
+    "Guest drawer History tab (artifact-cache-322) with 30d range selected: same locked panel copy renders and wraps cleanly at 375px width",
+    "Unlocked ranges (24h) on the same drawers still render charts, no lock panel",
+    "HistoryChartOverlay locked state is unreachable live on this entitlement: Storage pool detail History range selector offers only 24h/7d because StoragePoolDetail/DiskDetail filter options via getUnlockedHistoryRangeOptions and clamp via resolveHistoryRangeWithinLimit; overlay copy change is the defensive path, covered by SharedPrimitives.guardrails and HistoryChart source-pin tests"
   ],
   "interactions": [
-    "opened the backup-orchestrator-311 Proxmox guest drawer at 1920 by 600 and measured four 432-pixel cards filling the 1752-pixel detail row with equal 112-pixel heights",
-    "rechecked the Proxmox guest drawer at 1280 by 800 and confirmed four 273-pixel cards, a 124-pixel label-to-value distance, no truncation of Node agent connected, and no horizontal overflow",
-    "opened the auth-service-01 Docker host drawer at 1280 by 800 and confirmed five sections balance into three 367-pixel cards and two 555-pixel cards without a stranded full-width final card",
-    "measured the shared detail renderer at 390 by 844 and confirmed native table, table-row-group, and table-row display with no horizontal overflow",
-    "restored the browser viewport override to 1280 by 800"
+    "Signed in, expanded node row Analytics B, opened History tab, changed range select 24h -> 30d, observed locked panel copy",
+    "Storage pool west-f-service-pool expanded, History tab opened, confirmed range selector exposes only 24h/7d on max_history_days=7 runtime",
+    "At 375x812: expanded guest artifact-cache-322, opened History tab, set range to 30d, observed locked panel copy and layout"
   ]
 }

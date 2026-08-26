@@ -97,14 +97,14 @@ describe('HistoryChart', () => {
 
     expect(historyChartOverlaySource).toContain('Collecting data... History will appear here.');
     expect(historyChartOverlaySource).toContain(
-      'Historical data beyond {props.chart.lockDays()} days is not enabled on this instance.',
+      'Historical data beyond {props.chart.lockDays()} days requires a higher license plan.',
     );
     expect(historyChartOverlaySource).not.toContain(
       'Unlock {props.chart.lockTierLabel()} Features',
     );
     expect(historyChartOverlaySource).not.toContain('presentationPolicyHidesUpgradePrompts');
     expect(historyChartOverlaySource).not.toContain('free 14-day trial');
-    expect(historyChartOverlaySource).toContain('is not enabled on this');
+    expect(historyChartOverlaySource).toContain('requires a higher license plan');
     expect(historyChartOverlaySource).not.toContain('ChartsAPI.getMetricsHistory');
     expect(historyChartOverlaySource).not.toContain('setupCanvasDPR');
 

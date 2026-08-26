@@ -455,8 +455,8 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
           when={!locked()}
           fallback={
             <div class="rounded-sm border border-border bg-surface p-5 text-sm text-muted">
-              {formatRangeLabel(props.range)} history is not enabled on this instance. Current
-              runtime allows {maxHistoryDays()} days.
+              {formatRangeLabel(props.range)} history requires a higher license plan. This
+              instance's plan retains {maxHistoryDays()} days.
             </div>
           }
         >
