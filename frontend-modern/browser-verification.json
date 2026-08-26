@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "base_sha": "b727bc62e4d5909e32ef81ac27cc39fa7a57f95b",
-  "verified_at": "2026-08-26T09:48:05Z",
+  "base_sha": "09b11719765180a2b7097748e20bc3862dbb3fa9",
+  "verified_at": "2026-08-26T09:54:53Z",
   "result": "passed",
   "changed_paths": [
     "frontend-modern/src/constants/apiScopes.ts",
@@ -18,6 +18,10 @@
     {
       "width": 1440,
       "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
     }
   ],
   "states": [
@@ -25,13 +29,15 @@
     "expanded custom Agent scopes",
     "Agent quick preset selected",
     "generated Agent token inventory row",
-    "opened in-place token scope editor"
+    "opened in-place token scope editor",
+    "loaded and exercised the scope picker at narrow mobile width"
   ],
   "interactions": [
     "opened Settings API Access in an isolated mock-backed development build",
     "expanded Custom scopes and confirmed Agent lifecycle management is selectable",
     "selected the Agent preset and confirmed agent:report, agent:config:read, and agent:manage are active while agent:exec remains opt-in",
     "generated an isolated replacement Agent token and confirmed all three lifecycle scopes appear on its inventory row",
-    "opened Edit scopes and confirmed Agent lifecycle management is present and checked"
+    "opened Edit scopes and confirmed Agent lifecycle management is present and checked",
+    "repeated the custom-scope and Agent-preset checks at 390x844 and confirmed all lifecycle choices remain reachable"
   ]
 }
