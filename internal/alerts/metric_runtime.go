@@ -525,8 +525,12 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 				// Threshold cleared with hysteresis - auto resolve
 				resolvedAlert := m.newResolvedAlert(existingAlert, time.Now(), nil)
 
-				// Remove from active alerts
-				m.removeActiveAlertNoLock(alertID)
+				// Remove from active alerts by the key it is actually stored
+				// under. Canonical-identity alerts are keyed by canonical
+				// state, and the legacy alertID is not registered as an
+				// alias, so removing by alertID silently no-ops and leaves a
+				// stale active alert that re-resolves on every poll.
+				m.removeActiveAlertNoLock(activeAlertStorageKey(existingAlert, alertID))
 
 				m.saveActiveAlertsAsync("metric resolution")
 
