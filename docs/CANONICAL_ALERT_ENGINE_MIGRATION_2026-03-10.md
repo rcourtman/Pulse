@@ -1,8 +1,22 @@
 ## v6 Canonical Alert-Engine Migration
 
-Status: Draft
+Status: Superseded in scope by `docs/ALERT_ENGINE_EVOLUTION.md` (2026-08-26)
 Date: 2026-03-10
 Scope: `pulse` only
+
+> **Supersession note (2026-08-26).** This document's input-layer direction
+> (canonical identity, specs, the `monitor_alerts.go` fan-out boundary)
+> stands. Its two freezes do **not**: the transition core and the
+> suppression path are being replaced by the deterministic reducer
+> (`internal/alerts/reducer`) per `docs/ALERT_ENGINE_EVOLUTION.md`, and
+> "reuse `checkMetric`/`dispatchAlert` mechanics, don't replace them" is no
+> longer current direction. The "Stable Behaviors" list below is not a
+> freeze: it is a characterization inventory, now pinned as executable
+> parity scenarios (`internal/alerts/reducer_parity_*_test.go`). Listed
+> behaviors may change deliberately — update the pinned scenario first,
+> then the implementation, and ship a migration when persisted user state
+> (alert IDs, override keys, acks) is affected. Do not treat this file as
+> authority for new work.
 
 ## Purpose
 
