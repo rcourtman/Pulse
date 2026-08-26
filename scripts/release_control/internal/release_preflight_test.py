@@ -404,12 +404,15 @@ class ReleasePreflightTest(unittest.TestCase):
         workflow = (ROOT / ".github/workflows/create-release.yml").read_text()
         backend = (ROOT / "scripts/run-release-backend-tests.sh").read_text()
         self.assertIn("frontend_bundle:", workflow)
-        self.assertIn("runs-on: [self-hosted, Linux, X64, pulse-pve-build]", workflow)
-        self.assertIn("runs-on: [self-hosted, Linux, X64, pulse-pve-tests]", workflow)
+        bundle_job = workflow[
+            workflow.index("  frontend_bundle:") : workflow.index("  frontend_checks:")
+        ]
+        self.assertIn('"pulse-pve-build"', bundle_job)
         self.assertIn("./scripts/run-release-backend-tests.sh", workflow)
         backend_job = workflow[
             workflow.index("  backend_tests:") : workflow.index("  integration_tests:")
         ]
+        self.assertIn('"pulse-pve-tests"', backend_job)
         self.assertNotIn("      - frontend_checks\n    if:", backend_job)
         self.assertIn("go test -c -race", backend)
         self.assertIn("python3 scripts/shard_go_tests.py", backend)
@@ -418,7 +421,8 @@ class ReleasePreflightTest(unittest.TestCase):
             'MEMORY_WAIT_SECONDS="${PULSE_BACKEND_TEST_MEMORY_WAIT_SECONDS:-120}"',
             backend,
         )
-        self.assertIn("backend shard admission requires", backend)
+        self.assertIn("shard_admission_required_kib", backend)
+        self.assertIn("Degrading to $cpu_shards API shard(s)", backend)
         self.assertIn(
             "TestWebSocketOriginAllowsTrustedForwardedHostedOriginIPv6Loopback,"
             "TestServerInfoEndpointMethodNotAllowed",

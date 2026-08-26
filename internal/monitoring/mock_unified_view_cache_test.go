@@ -2,14 +2,26 @@ package monitoring
 
 import (
 	"testing"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 )
 
 func TestCurrentUnifiedStateViewCachedBetweenMockTicks(t *testing.T) {
 	previous := mock.IsMockEnabled()
+	previousConfig := mock.GetConfig()
+	if previous {
+		mustSetMockEnabled(t, false)
+	}
+	testConfig := previousConfig
+	testConfig.UpdateInterval = 5 * time.Minute
+	mock.SetMockConfig(testConfig)
 	mustSetMockEnabled(t, true)
-	t.Cleanup(func() { mustSetMockEnabled(t, previous) })
+	t.Cleanup(func() {
+		mustSetMockEnabled(t, false)
+		mock.SetMockConfig(previousConfig)
+		mustSetMockEnabled(t, previous)
+	})
 
 	m := &Monitor{}
 
