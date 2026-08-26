@@ -585,6 +585,7 @@ func (r *Router) handleDeleteAPIToken(w http.ResponseWriter, req *http.Request) 
 	config.Mu.Lock()
 	defer config.Mu.Unlock()
 
+	previousTokens := append([]config.APITokenRecord(nil), r.config.APITokens...)
 	removed := r.config.RemoveAPIToken(tokenID)
 	if removed == nil {
 		r.auditTokenEvent(req, "token_deleted", false, fmt.Sprintf("API token id=%s not found for deletion", tokenID))
@@ -614,7 +615,13 @@ func (r *Router) handleDeleteAPIToken(w http.ResponseWriter, req *http.Request) 
 
 	if r.persistence != nil {
 		if err := r.persistence.SaveAPITokens(r.config.APITokens); err != nil {
-			log.Warn().Err(err).Msg("Failed to persist API tokens after deletion")
+			r.config.APITokens = previousTokens
+			r.config.SortAPITokens()
+			r.auditTokenEvent(req, "token_deleted", false,
+				fmt.Sprintf("Failed to persist API token deletion for id=%s", tokenID))
+			log.Error().Err(err).Msg("Failed to persist API tokens after deletion")
+			http.Error(w, "Failed to save token deletion", http.StatusInternalServerError)
+			return
 		}
 	}
 
