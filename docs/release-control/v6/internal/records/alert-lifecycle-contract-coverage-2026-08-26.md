@@ -47,7 +47,17 @@ had already fixed this once for unified incidents via
 with `lifecycleFirstMatched`, mirroring that precedent, before the parity
 slice landed.
 
-Remaining for later slices: recovery-confirmation gating
-(`offlineRecoveryConfirmations`), re-fire-within-retention start
-restoration, ack/snooze lifecycle, intent-policy interaction, and a
-shadow-mode runtime feed.
+Third slice (2026-08-26): the recovery-confirmation gate — the poll-driven
+offline composition where offline polls reset the recovery counter and run
+the evaluator while healthy polls skip the evaluator and run
+`clearResourceOfflineAlert` (N consecutive healthy polls to resolve,
+default 3, storage 2; pending still clears on one healthy poll). The
+harness caught a defect in the slice-2 fix itself: callers that reset
+confirmation counts directly (bypassing the evaluator path) left a stale
+`lifecycleFirstMatched` entry that backdated the next run's alert to the
+previous run's first observation. Fixed by re-stamping whenever an
+observation starts a new run.
+
+Remaining for later slices: re-fire-within-retention start restoration,
+ack/snooze lifecycle, intent-policy interaction, and a shadow-mode
+runtime feed.

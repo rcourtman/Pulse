@@ -75,7 +75,11 @@ type Incident struct {
 	LastValue    float64
 	// Confirmations is the consecutive-match count for the confirmation
 	// family; unused by the metric family.
-	Confirmations  int
+	Confirmations int
+	// RecoveryCount is the consecutive non-matching count while firing,
+	// toward DiscreteRule.RecoveryConfirmations; reset by any matching
+	// observation. Unused by the metric family.
+	RecoveryCount  int
 	LastObservedAt time.Time
 }
 

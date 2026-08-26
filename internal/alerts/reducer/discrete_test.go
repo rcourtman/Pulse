@@ -134,3 +134,78 @@ func TestDiscreteRefireRequiresFullConfirmations(t *testing.T) {
 		t.Fatalf("events = %+v, want re-fire after full confirmations", events)
 	}
 }
+
+func TestDiscreteRecoveryGateHoldsUntilConsecutiveConfirmations(t *testing.T) {
+	state := NewState()
+	rule := DiscreteRule{Confirmations: 1, RecoveryConfirmations: 3}
+
+	state.ApplyDiscrete(discreteSignalAt(true, SeverityCritical, 0), rule)
+
+	// Two healthy observations: still firing.
+	if events := state.ApplyDiscrete(discreteSignalAt(false, "", time.Minute), rule); len(events) != 0 {
+		t.Fatalf("first healthy emitted %+v", events)
+	}
+	if events := state.ApplyDiscrete(discreteSignalAt(false, "", 2*time.Minute), rule); len(events) != 0 {
+		t.Fatalf("second healthy emitted %+v", events)
+	}
+	incident, ok := state.Incident("node-1", "connectivity")
+	if !ok || incident.State != StateFiring || incident.RecoveryCount != 2 {
+		t.Fatalf("incident = %+v, want firing with recovery count 2", incident)
+	}
+
+	events := state.ApplyDiscrete(discreteSignalAt(false, "", 3*time.Minute), rule)
+	if len(events) != 1 || events[0].Type != EventResolved {
+		t.Fatalf("events = %+v, want resolved on third consecutive healthy", events)
+	}
+	if _, ok := state.Incident("node-1", "connectivity"); ok {
+		t.Fatal("incident should be gone after gated resolve")
+	}
+}
+
+func TestDiscreteMatchedObservationResetsRecoveryRun(t *testing.T) {
+	state := NewState()
+	rule := DiscreteRule{Confirmations: 1, RecoveryConfirmations: 3}
+
+	state.ApplyDiscrete(discreteSignalAt(true, SeverityWarning, 0), rule)
+	state.ApplyDiscrete(discreteSignalAt(false, "", time.Minute), rule)
+	state.ApplyDiscrete(discreteSignalAt(false, "", 2*time.Minute), rule)
+
+	// Back offline: recovery run resets.
+	state.ApplyDiscrete(discreteSignalAt(true, SeverityWarning, 3*time.Minute), rule)
+	incident, _ := state.Incident("node-1", "connectivity")
+	if incident.RecoveryCount != 0 {
+		t.Fatalf("RecoveryCount = %d, want reset to 0", incident.RecoveryCount)
+	}
+
+	// Two healthy observations are again not enough.
+	state.ApplyDiscrete(discreteSignalAt(false, "", 4*time.Minute), rule)
+	if events := state.ApplyDiscrete(discreteSignalAt(false, "", 5*time.Minute), rule); len(events) != 0 {
+		t.Fatalf("post-reset second healthy emitted %+v", events)
+	}
+	events := state.ApplyDiscrete(discreteSignalAt(false, "", 6*time.Minute), rule)
+	if len(events) != 1 || events[0].Type != EventResolved {
+		t.Fatalf("events = %+v, want resolved after full recovery run", events)
+	}
+}
+
+func TestDiscretePendingClearsImmediatelyDespiteRecoveryGate(t *testing.T) {
+	state := NewState()
+	rule := DiscreteRule{Confirmations: 3, RecoveryConfirmations: 3}
+
+	state.ApplyDiscrete(discreteSignalAt(true, SeverityWarning, 0), rule)
+	events := state.ApplyDiscrete(discreteSignalAt(false, "", time.Minute), rule)
+	if len(events) != 1 || events[0].Type != EventPendingCleared {
+		t.Fatalf("events = %+v, want pending cleared on single healthy observation", events)
+	}
+}
+
+func TestDiscreteDisableBypassesRecoveryGate(t *testing.T) {
+	state := NewState()
+	rule := DiscreteRule{Confirmations: 1, RecoveryConfirmations: 3}
+
+	state.ApplyDiscrete(discreteSignalAt(true, SeverityWarning, 0), rule)
+	events := state.ApplyDiscrete(discreteSignalAt(true, SeverityWarning, time.Minute), DiscreteRule{Confirmations: 1, RecoveryConfirmations: 3, Disabled: true})
+	if len(events) != 1 || events[0].Type != EventResolved {
+		t.Fatalf("events = %+v, want immediate resolve on disable", events)
+	}
+}

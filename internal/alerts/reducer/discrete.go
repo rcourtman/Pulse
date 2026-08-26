@@ -31,9 +31,17 @@ type DiscreteRule struct {
 	// floor. (The manager's spec defaults: connectivity 3, powered-state
 	// 2; callers pass the resolved value.)
 	Confirmations int
-	// Disabled clears any pending or firing incident, mirroring the
-	// evaluator's terminal disabled transition and the manager's resolve
-	// of an existing alert.
+	// RecoveryConfirmations is the number of consecutive non-matching
+	// observations required before a firing incident resolves. Values
+	// <= 1 resolve on the first non-matching observation — the plain
+	// evaluator behavior. The manager's poll-driven offline paths compose
+	// this gate on top (default 3, storage 2), with any matching
+	// observation resetting the run; pending incidents always clear on a
+	// single non-matching observation regardless of this setting.
+	RecoveryConfirmations int
+	// Disabled clears any pending or firing incident immediately —
+	// bypassing recovery confirmations, exactly as the manager's disable
+	// paths call clearAlert directly.
 	Disabled bool
 }
 
@@ -54,9 +62,9 @@ func (s *State) ApplyDiscrete(signal DiscreteSignal, rule DiscreteRule) []Event 
 		}
 	}
 
-	// A non-matching observation and a disabled rule both clear at this
-	// layer: pending resets entirely, firing resolves.
-	if rule.Disabled || !signal.Matched {
+	// A disabled rule clears immediately: pending resets, firing resolves,
+	// recovery confirmations do not apply.
+	if rule.Disabled {
 		if incident == nil {
 			return nil
 		}
@@ -65,6 +73,32 @@ func (s *State) ApplyDiscrete(signal DiscreteSignal, rule DiscreteRule) []Event 
 			return []Event{event(EventResolved, incident.Severity)}
 		}
 		return []Event{event(EventPendingCleared, "")}
+	}
+
+	if !signal.Matched {
+		if incident == nil {
+			return nil
+		}
+		// Pending always clears on a single non-matching observation.
+		if incident.State != StateFiring {
+			delete(s.incidents, key)
+			return []Event{event(EventPendingCleared, "")}
+		}
+		// Firing: the recovery gate. Consecutive non-matching observations
+		// count toward the requirement; the incident stays firing until it
+		// is met.
+		requiredRecovery := rule.RecoveryConfirmations
+		if requiredRecovery <= 1 {
+			delete(s.incidents, key)
+			return []Event{event(EventResolved, incident.Severity)}
+		}
+		incident.RecoveryCount++
+		incident.LastObservedAt = signal.ObservedAt
+		if incident.RecoveryCount < requiredRecovery {
+			return nil
+		}
+		delete(s.incidents, key)
+		return []Event{event(EventResolved, incident.Severity)}
 	}
 
 	required := rule.Confirmations
@@ -79,6 +113,9 @@ func (s *State) ApplyDiscrete(signal DiscreteSignal, rule DiscreteRule) []Event 
 		previous := incident.Severity
 		incident.Severity = signal.Severity
 		incident.Confirmations = required
+		// A matching observation interrupts any recovery run: recovery
+		// confirmations must be consecutive.
+		incident.RecoveryCount = 0
 		incident.LastObservedAt = signal.ObservedAt
 		if incident.Severity != previous {
 			return []Event{event(EventSeverityChanged, incident.Severity)}
