@@ -5,6 +5,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts/eventlog"
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts/reducer"
 	alertspecs "github.com/rcourtman/pulse-go-rewrite/internal/alerts/specs"
 	"github.com/rs/zerolog/log"
 )
@@ -179,19 +181,19 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 		// A guest that moved nodes may hold this alert under its old node-scoped
 		// identity; re-home it first so the clear below can resolve it.
 		m.rehomeStrandedGuestAlert(canonicalStateID, canonicalSpecID, string(alertspecs.AlertSpecKindMetricThreshold), resourceID, resourceName, node, instance, resourceType)
+		m.mu.Lock()
+		m.core.ApplyMetric(reducer.MetricSignal{
+			ResourceID: resourceID,
+			Key:        canonicalSpecID,
+			Metric:     metricType,
+			Value:      value,
+			ObservedAt: time.Now(),
+		}, reducer.MetricRule{})
+		m.mu.Unlock()
 		m.clearAlert(canonicalStateID)
 		m.clearAlert(alertID)
 		return
 	}
-
-	log.Debug().
-		Str("resource", resourceName).
-		Str("metric", metricType).
-		Float64("value", value).
-		Float64("trigger", threshold.Trigger).
-		Float64("clear", threshold.Clear).
-		Bool("exceeds", value >= threshold.Trigger).
-		Msg("Checking metric threshold")
 
 	m.mu.Lock()
 	migratedAlertIdentity := false
@@ -229,208 +231,102 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 		return
 	}
 
-	if value >= threshold.Trigger {
-		// Threshold exceeded
-		if !exists {
-			alertStartTime := time.Now()
-
-			effectiveIntent := m.resolveEffectiveIntentPolicyNoLock(resourceID, resourceType, MetricAlertIntentSignal(metricType))
-			if effectiveIntent.Explicit {
-				decision := m.evaluateIntentNoLock(resourceID, resourceType, MetricAlertIntentSignal(metricType), trackingKey, alertStartTime, true, BackupIntentContext{})
-				if pending, ok := m.intentPending[trackingKey]; ok && !pending.FirstMatchedAt.IsZero() {
-					alertStartTime = pending.FirstMatchedAt
-				}
-				if decision.StateChanged {
-					m.saveActiveAlertsAsync("metric intent pending state")
-				}
-				if !decision.ShouldActivate {
-					return
-				}
-				m.clearIntentPendingNoLock(trackingKey)
-				m.saveActiveAlertsAsync("metric intent activated")
-			} else if timeThreshold := m.getTimeThreshold(resourceID, resourceType, metricType); timeThreshold > 0 {
-				// Check if this threshold was already pending
-				if pendingTime, isPending := m.pendingAlerts[trackingKey]; isPending {
-					// Check if enough time has passed
-					if time.Since(pendingTime) >= time.Duration(timeThreshold)*time.Second {
-						// Time threshold met, proceed with alert
-						delete(m.pendingAlerts, trackingKey)
-						if !pendingTime.IsZero() {
-							alertStartTime = pendingTime
-						}
-						log.Debug().
-							Str("alertID", alertID).
-							Int("timeThreshold", timeThreshold).
-							Dur("elapsed", time.Since(pendingTime)).
-							Msg("Time threshold met, triggering alert")
-					} else {
-						// Still waiting for time threshold
-						log.Debug().
-							Str("alertID", alertID).
-							Int("timeThreshold", timeThreshold).
-							Dur("elapsed", time.Since(pendingTime)).
-							Msg("Threshold exceeded but waiting for time threshold")
-						return
-					}
-				} else {
-					// First time exceeding threshold, start tracking
-					m.pendingAlerts[trackingKey] = alertStartTime
-					log.Debug().
-						Str("alertID", alertID).
-						Str("trackingKey", trackingKey).
-						Int("timeThreshold", timeThreshold).
-						Msg("Threshold exceeded, starting time threshold tracking")
-					return
-				}
+	// An existing alert the core does not know about (guest migration,
+	// direct injection) means it was firing: adopt it.
+	if exists && existingAlert != nil {
+		if _, known := m.core.Incident(resourceID, canonicalSpecID); !known {
+			ackAt := time.Time{}
+			if existingAlert.AckTime != nil {
+				ackAt = *existingAlert.AckTime
 			}
+			m.core.SeedFiringIncident(resourceID, canonicalSpecID, shadowSeverityForLevel(existingAlert.Level), existingAlert.StartTime, existingAlert.Acknowledged, existingAlert.AckUser, ackAt)
+		}
+	}
 
-			// Check for recent similar alert to prevent spam
-			if recent, hasRecent := m.recentAlerts[trackingKey]; hasRecent {
-				// Check minimum delta
-				if m.config.MinimumDelta > 0 &&
-					time.Since(recent.StartTime) < time.Duration(m.config.SuppressionWindow)*time.Minute &&
-					abs(recent.Value-value) < m.config.MinimumDelta {
-					log.Debug().
-						Str("alertID", alertID).
-						Float64("recentValue", recent.Value).
-						Float64("currentValue", value).
-						Float64("delta", abs(recent.Value-value)).
-						Float64("minimumDelta", m.config.MinimumDelta).
-						Msg("Alert suppressed due to minimum delta")
-
-					// Set suppression window
-					m.suppressedUntil[trackingKey] = time.Now().Add(time.Duration(m.config.SuppressionWindow) * time.Minute)
-					return
-				}
-			}
-
-			// New alert
-			message := ""
-			var unit string
-			if opts != nil && opts.Message != "" {
-				message = opts.Message
-			} else {
-				switch metricType {
-				case "usage":
-					message = fmt.Sprintf("%s at %.1f%%", resourceType, value)
-				case "diskRead", "diskWrite", "networkIn", "networkOut":
-					message = fmt.Sprintf("%s %s at %.1f MB/s", resourceType, metricType, value)
-					unit = "MB/s"
-				case "temperature", "disk_temperature", "diskTemperature":
-					message = fmt.Sprintf("%s %s at %.1f°C", resourceType, metricType, value)
-					unit = "°C"
-				default:
-					message = fmt.Sprintf("%s %s at %.1f%%", resourceType, metricType, value)
-				}
-			}
-
-			alertMetadata := map[string]interface{}{
-				"resourceType":   resourceType,
-				"clearThreshold": threshold.Clear,
-			}
-			if unit != "" {
-				alertMetadata["unit"] = unit
-			}
-			if opts != nil && opts.Metadata != nil {
-				for k, v := range opts.Metadata {
-					alertMetadata[k] = v
-				}
-			}
-			alertMetadata["monitorOnly"] = monitorOnly
-
-			alert := &Alert{
-				ID:              alertID,
-				Type:            metricType,
-				Level:           AlertLevelWarning,
-				ResourceID:      resourceID,
-				ResourceName:    resourceName,
-				Node:            node,
-				NodeDisplayName: m.resolveNodeDisplayName(instance, node),
-				Instance:        instance,
-				Message:         message,
-				Value:           value,
-				Threshold:       threshold.Trigger,
-				StartTime:       alertStartTime,
-				LastSeen:        time.Now(),
-				Metadata:        alertMetadata,
-			}
-			applyCanonicalIdentity(alert, canonicalSpecID, string(alertspecs.AlertSpecKindMetricThreshold))
-
-			// Set level based on how much over threshold
-			if value >= computeCriticalThreshold(threshold.Trigger, metricType) {
-				alert.Level = AlertLevelCritical
-			}
-
-			log.Debug().
-				Str("alertID", alertID).
-				Time("alertStartTime", alertStartTime).
-				Time("now", time.Now()).
-				Dur("initialDuration", time.Since(alertStartTime)).
-				Msg("Creating new alert with start time")
-
-			m.preserveAlertState(canonicalStateID, alert)
-			trackingKey = canonicalTrackingKeyOrFallback(alert, canonicalStateID)
-			m.setActiveAlertNoLock(canonicalStateID, alert)
-			m.recentAlerts[trackingKey] = alert
-			m.historyManager.AddAlert(*alert)
-
-			m.saveActiveAlertsAsync("metric create")
-
-			log.Warn().
-				Str("alertID", alertID).
-				Str("resource", resourceName).
-				Str("metric", metricType).
-				Float64("value", value).
-				Float64("trigger", threshold.Trigger).
-				Float64("clear", threshold.Clear).
-				Int("activeAlerts", len(m.activeAlerts)).
-				Msg("Alert triggered")
-
-			// Trigger AI analysis callback unconditionally (bypasses notification suppression)
-			if callbacks := m.getAlertForAICallbacks(); len(callbacks) > 0 {
-				alertCopy := cloneAlertForOutput(alert)
-				go func(a *Alert, fns []func(*Alert)) {
-					defer func() {
-						if r := recover(); r != nil {
-							log.Error().Interface("panic", r).Str("alertID", a.ID).Msg("panic in AI alert callback")
-						}
-					}()
-					for _, callback := range fns {
-						callback(a)
-					}
-				}(alertCopy, callbacks)
-			}
-
-			// Check rate limit (but don't remove alert from tracking)
-			if !m.checkRateLimit(trackingKey) {
+	// Suppress a would-be new occurrence when it is within the minimum
+	// delta of a recent one (spam guard), before it reaches the core.
+	coreIncidentBefore, hadCoreIncident := m.core.Incident(resourceID, canonicalSpecID)
+	wouldBeNew := !hadCoreIncident || coreIncidentBefore.State != reducer.StateFiring
+	if wouldBeNew && value >= threshold.Trigger {
+		if recent, hasRecent := m.recentAlerts[trackingKey]; hasRecent {
+			if m.config.MinimumDelta > 0 &&
+				time.Since(recent.StartTime) < time.Duration(m.config.SuppressionWindow)*time.Minute &&
+				abs(recent.Value-value) < m.config.MinimumDelta {
 				log.Debug().
 					Str("alertID", alertID).
-					Str("trackingKey", trackingKey).
-					Int("maxPerHour", m.config.Schedule.MaxAlertsHour).
-					Msg("Alert notification suppressed due to rate limit")
-				// Don't delete the alert, just suppress notifications
+					Float64("recentValue", recent.Value).
+					Float64("currentValue", value).
+					Float64("minimumDelta", m.config.MinimumDelta).
+					Msg("Alert suppressed due to minimum delta")
+				m.suppressedUntil[trackingKey] = time.Now().Add(time.Duration(m.config.SuppressionWindow) * time.Minute)
 				return
 			}
+		}
+	}
 
-			// Notify callback (may be suppressed by quiet hours)
-			if len(m.getAlertCallbacks()) > 0 {
-				now := time.Now()
-				alert.LastNotified = &now
-				if m.dispatchAlert(alert, true) {
-					log.Info().Str("alertID", alertID).Msg("calling onAlert callback")
-				} else {
-					alert.LastNotified = nil
-				}
-			} else {
-				log.Warn().Msg("no onAlert callback set!")
-			}
-		} else {
+	// Intent context: explicit metric policies replace the legacy
+	// time-threshold delay; the gate itself lives in the reducer.
+	conditionActive := value >= threshold.Trigger
+	effectiveIntent := m.resolveEffectiveIntentPolicyNoLock(resourceID, resourceType, MetricAlertIntentSignal(metricType))
+	var intent *reducer.DiscreteIntent
+	delaySeconds := 0
+	if effectiveIntent.Explicit {
+		decision := m.evaluateIntentNoLock(resourceID, resourceType, MetricAlertIntentSignal(metricType), trackingKey, time.Now(), conditionActive, BackupIntentContext{})
+		if decision.StateChanged {
+			m.saveActiveAlertsAsync("metric intent pending state")
+		}
+		intent = &reducer.DiscreteIntent{
+			Explicit:           decision.Effective.Explicit,
+			GraceSeconds:       decision.Effective.GraceSeconds,
+			OperatorSuppressed: decision.Suppressed && strings.HasPrefix(decision.Reason, "operator_"),
+			OperatorReason:     decision.Reason,
+		}
+	} else if conditionActive {
+		delaySeconds = m.getTimeThreshold(resourceID, resourceType, metricType)
+	}
+
+	events := m.core.ApplyMetric(reducer.MetricSignal{
+		ResourceID:       resourceID,
+		Key:              canonicalSpecID,
+		Metric:           metricType,
+		Value:            value,
+		RuntimeTick:      m.intentTickNoLock(),
+		RuntimeTickValid: true,
+		ObservedAt:       time.Now(),
+	}, reducer.MetricRule{
+		Trigger:      threshold.Trigger,
+		Clear:        threshold.Clear,
+		DelaySeconds: delaySeconds,
+		Intent:       intent,
+	})
+	primary := reducer.EventType("")
+	if len(events) > 0 {
+		primary = events[0].Type
+	}
+
+	incident, hasIncident := m.core.Incident(resourceID, canonicalSpecID)
+
+	if hasIncident && incident.State == reducer.StatePending {
+		return
+	}
+
+	if hasIncident && incident.State == reducer.StateFiring {
+		if intent != nil && intent.Explicit && (primary == reducer.EventFired || primary == reducer.EventRefired) {
+			m.clearIntentPendingNoLock(trackingKey)
+			m.saveActiveAlertsAsync("metric intent activated")
+		}
+
+		level := AlertLevelWarning
+		if incident.Severity == reducer.SeverityCritical {
+			level = AlertLevelCritical
+		}
+
+		if exists && existingAlert != nil {
 			// Update existing alert
 			applyCanonicalIdentity(existingAlert, canonicalSpecID, string(alertspecs.AlertSpecKindMetricThreshold))
 			m.setActiveAlertNoLock(canonicalStateID, existingAlert)
 			existingAlert.LastSeen = time.Now()
 			existingAlert.Value = value
-			// Keep display name current (handles upgrades and renames).
 			if dn := m.resolveNodeDisplayName(existingAlert.Instance, existingAlert.Node); dn != "" {
 				existingAlert.NodeDisplayName = dn
 			}
@@ -451,13 +347,8 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 				}
 			}
 
-			// Update level if needed
 			oldLevel := existingAlert.Level
-			if value >= computeCriticalThreshold(threshold.Trigger, metricType) {
-				existingAlert.Level = AlertLevelCritical
-			} else {
-				existingAlert.Level = AlertLevelWarning
-			}
+			existingAlert.Level = level
 
 			// Check if we should re-notify based on cooldown period
 			// Never re-notify acknowledged alerts (user has already seen it)
@@ -468,27 +359,14 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 					Msg("Alert is acknowledged, skipping re-notification")
 			} else if m.shouldNotifyAfterCooldown(existingAlert) {
 				shouldRenotify = m.allowNotificationByRateLimit(trackingKey, existingAlert, "cooldown")
-				if shouldRenotify {
-					log.Debug().
-						Str("alertID", alertID).
-						Dur("cooldown", time.Duration(m.config.Schedule.Cooldown)*time.Minute).
-						Msg("Cooldown period has passed, will re-notify")
-				}
 			} else if oldLevel != existingAlert.Level && existingAlert.Level == AlertLevelCritical {
 				// Always re-notify if alert escalated to critical
 				shouldRenotify = m.allowNotificationByRateLimit(trackingKey, existingAlert, "critical-escalation")
-				if shouldRenotify {
-					log.Debug().
-						Str("alertID", alertID).
-						Msg("Alert escalated to critical, will re-notify despite cooldown")
-				}
 			}
 
-			// Send re-notification if appropriate (may be suppressed by quiet hours)
 			if shouldRenotify && len(m.getAlertCallbacks()) > 0 {
 				now := time.Now()
 				existingAlert.LastNotified = &now
-				// Dispatch asynchronously so callback I/O cannot block alert evaluation.
 				if m.dispatchAlert(existingAlert, true) {
 					log.Info().
 						Str("alertID", alertID).
@@ -498,61 +376,147 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 					existingAlert.LastNotified = nil
 				}
 			}
+			return
 		}
-	} else {
-		// Value is below trigger threshold
-		intentDecision := m.evaluateIntentNoLock(resourceID, resourceType, MetricAlertIntentSignal(metricType), trackingKey, time.Now(), false, BackupIntentContext{})
-		if intentDecision.StateChanged {
-			m.saveActiveAlertsAsync("metric intent cleared")
+
+		// New occurrence.
+		message := ""
+		var unit string
+		if opts != nil && opts.Message != "" {
+			message = opts.Message
+		} else {
+			switch metricType {
+			case "usage":
+				message = fmt.Sprintf("%s at %.1f%%", resourceType, value)
+			case "diskRead", "diskWrite", "networkIn", "networkOut":
+				message = fmt.Sprintf("%s %s at %.1f MB/s", resourceType, metricType, value)
+				unit = "MB/s"
+			case "temperature", "disk_temperature", "diskTemperature":
+				message = fmt.Sprintf("%s %s at %.1f°C", resourceType, metricType, value)
+				unit = "°C"
+			default:
+				message = fmt.Sprintf("%s %s at %.1f%%", resourceType, metricType, value)
+			}
 		}
-		// Clear any pending alert for this metric
-		if _, isPending := m.pendingAlerts[trackingKey]; isPending {
-			delete(m.pendingAlerts, trackingKey)
+
+		alertMetadata := map[string]interface{}{
+			"resourceType":   resourceType,
+			"clearThreshold": threshold.Clear,
+		}
+		if unit != "" {
+			alertMetadata["unit"] = unit
+		}
+		if opts != nil && opts.Metadata != nil {
+			for k, v := range opts.Metadata {
+				alertMetadata[k] = v
+			}
+		}
+		alertMetadata["monitorOnly"] = monitorOnly
+
+		alert := &Alert{
+			ID:              alertID,
+			Type:            metricType,
+			Level:           level,
+			ResourceID:      resourceID,
+			ResourceName:    resourceName,
+			Node:            node,
+			NodeDisplayName: m.resolveNodeDisplayName(instance, node),
+			Instance:        instance,
+			Message:         message,
+			Value:           value,
+			Threshold:       threshold.Trigger,
+			StartTime:       incident.StartedAt,
+			LastSeen:        time.Now(),
+			Metadata:        alertMetadata,
+		}
+		applyCanonicalIdentity(alert, canonicalSpecID, string(alertspecs.AlertSpecKindMetricThreshold))
+
+		m.preserveAlertState(canonicalStateID, alert)
+		// The reducer core is authoritative for occurrence start and
+		// acknowledgement restoration.
+		alert.StartTime = incident.StartedAt
+		alert.Acknowledged = incident.Acknowledged
+		alert.AckUser = incident.AckUser
+		if incident.Acknowledged && !incident.AckAt.IsZero() {
+			ackAt := incident.AckAt
+			alert.AckTime = &ackAt
+		} else if !incident.Acknowledged {
+			alert.AckTime = nil
+			alert.AckUser = ""
+		}
+		trackingKey = canonicalTrackingKeyOrFallback(alert, canonicalStateID)
+		m.setActiveAlertNoLock(canonicalStateID, alert)
+		m.recentAlerts[trackingKey] = alert
+		m.historyManager.AddAlert(*alert)
+		m.recordAlertEvent(eventlog.TypeFired, alert, canonicalStateID, "metric-threshold", message, nil)
+
+		m.saveActiveAlertsAsync("metric create")
+
+		log.Warn().
+			Str("alertID", alertID).
+			Str("resource", resourceName).
+			Str("metric", metricType).
+			Float64("value", value).
+			Float64("trigger", threshold.Trigger).
+			Float64("clear", threshold.Clear).
+			Int("activeAlerts", len(m.activeAlerts)).
+			Msg("Alert triggered")
+
+		// Trigger AI analysis callback unconditionally (bypasses notification suppression)
+		if callbacks := m.getAlertForAICallbacks(); len(callbacks) > 0 {
+			alertCopy := cloneAlertForOutput(alert)
+			go func(a *Alert, fns []func(*Alert)) {
+				defer func() {
+					if r := recover(); r != nil {
+						log.Error().Interface("panic", r).Str("alertID", a.ID).Msg("panic in AI alert callback")
+					}
+				}()
+				for _, callback := range fns {
+					callback(a)
+				}
+			}(alertCopy, callbacks)
+		}
+
+		// Check rate limit (but don't remove alert from tracking)
+		if !m.checkRateLimit(trackingKey) {
 			log.Debug().
 				Str("alertID", alertID).
 				Str("trackingKey", trackingKey).
-				Msg("Value dropped below threshold, clearing pending alert")
+				Int("maxPerHour", m.config.Schedule.MaxAlertsHour).
+				Msg("Alert notification suppressed due to rate limit")
+			return
 		}
 
-		if exists {
-			// Use hysteresis for resolution - only resolve if below clear threshold
-			clearThreshold := threshold.Clear
-			if clearThreshold <= 0 {
-				clearThreshold = threshold.Trigger // Fallback to trigger if clear not set
+		// Notify callback (may be suppressed by quiet hours)
+		if len(m.getAlertCallbacks()) > 0 {
+			now := time.Now()
+			alert.LastNotified = &now
+			if m.dispatchAlert(alert, true) {
+				log.Info().Str("alertID", alertID).Msg("calling onAlert callback")
+			} else {
+				alert.LastNotified = nil
 			}
-
-			if value <= clearThreshold {
-				// Threshold cleared with hysteresis - auto resolve
-				resolvedAlert := m.newResolvedAlert(existingAlert, time.Now(), nil)
-
-				// Remove from active alerts by the key it is actually stored
-				// under. Canonical-identity alerts are keyed by canonical
-				// state, and the legacy alertID is not registered as an
-				// alias, so removing by alertID silently no-ops and leaves a
-				// stale active alert that re-resolves on every poll.
-				m.removeActiveAlertNoLock(activeAlertStorageKey(existingAlert, alertID))
-
-				m.saveActiveAlertsAsync("metric resolution")
-
-				// Add to recently resolved while preventing lock-order inversions
-				m.addRecentlyResolvedWithPrimaryLock(resolvedAlert)
-
-				log.Info().
-					Str("alertID", alertID).
-					Msg("Added alert to recently resolved")
-
-				log.Info().
-					Str("resource", resourceName).
-					Str("metric", metricType).
-					Float64("value", value).
-					Float64("clearThreshold", clearThreshold).
-					Bool("wasAcknowledged", existingAlert.Acknowledged).
-					Msg("Alert resolved with hysteresis")
-
-				m.safeCallResolvedAlertCallback(existingAlert, alertID, true)
-			}
+		} else {
+			log.Warn().Msg("no onAlert callback set!")
 		}
+		return
 	}
+
+	// Clear: the core holds no incident.
+	if !exists || existingAlert == nil {
+		return
+	}
+	resolvedAlert := m.newResolvedAlert(existingAlert, time.Now(), nil)
+	m.removeActiveAlertNoLock(activeAlertStorageKey(existingAlert, alertID))
+	m.saveActiveAlertsAsync("metric resolution")
+	m.addRecentlyResolvedWithPrimaryLock(resolvedAlert)
+	log.Info().
+		Str("resource", resourceName).
+		Str("metric", metricType).
+		Float64("value", value).
+		Bool("wasAcknowledged", existingAlert.Acknowledged).
+		Msg("Alert resolved with hysteresis")
+	m.safeCallResolvedAlertCallback(existingAlert, alertID, true)
 }
 
 func sanitizeAlertKey(label string) string {

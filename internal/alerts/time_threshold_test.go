@@ -3,6 +3,8 @@ package alerts
 import (
 	"testing"
 	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts/reducer"
 )
 
 func TestGetTimeThresholdMappings(t *testing.T) {
@@ -101,13 +103,16 @@ func TestCheckMetricUsesPendingStartTime(t *testing.T) {
 		t.Fatalf("expected no active alerts after initial exceedance")
 	}
 
-	if _, ok := manager.pendingAlerts[buildCanonicalStateID("guest-123", "metric-threshold:cpu")]; !ok {
+	incident, pending := manager.core.Incident("guest-123", "metric-threshold:cpu")
+	if !pending || incident.State != reducer.StatePending {
 		manager.mu.Unlock()
-		t.Fatalf("expected pending alert tracking to be started")
+		t.Fatalf("expected core pending run to be started")
 	}
 
-	forcedStart := time.Now().Add(-3 * time.Second)
-	manager.pendingAlerts[buildCanonicalStateID("guest-123", "metric-threshold:cpu")] = forcedStart
+	// Age the core's pending run past the delay.
+	manager.core.ShiftPending(-3 * time.Second)
+	forcedIncident, _ := manager.core.Incident("guest-123", "metric-threshold:cpu")
+	forcedStart := forcedIncident.PendingSince
 	manager.mu.Unlock()
 
 	// Second exceedance should trigger the alert using the pending start time.

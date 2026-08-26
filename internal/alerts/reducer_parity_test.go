@@ -78,11 +78,9 @@ func newManagerParityEngine(t *testing.T, scenario parityScenario) *managerParit
 
 func (e *managerParityEngine) observe(step parityStep) {
 	if step.advance > 0 {
-		// Simulate elapsed time for the wall-clock delay tracker.
+		// Simulate elapsed time for the core's sustained-for delay.
 		e.manager.mu.Lock()
-		for key, since := range e.manager.pendingAlerts {
-			e.manager.pendingAlerts[key] = since.Add(-step.advance)
-		}
+		e.manager.core.ShiftPending(-step.advance)
 		e.manager.mu.Unlock()
 	}
 

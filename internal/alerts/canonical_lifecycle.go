@@ -4,6 +4,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts/eventlog"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts/reducer"
 	alertspecs "github.com/rcourtman/pulse-go-rewrite/internal/alerts/specs"
 	"github.com/rcourtman/pulse-go-rewrite/internal/operationaltrust"
@@ -553,6 +554,12 @@ func (m *Manager) evaluateCanonicalLifecycleAlert(params canonicalLifecycleAlert
 			m.saveActiveAlertsAsync("lifecycle intent activated")
 		}
 		result.Transition = transition(alertspecs.EvaluationTransitionActivated, alertspecs.AlertStatePending, alertspecs.AlertStateFiring)
+
+		firedType := eventlog.TypeFired
+		if primary == reducer.EventRefired {
+			firedType = eventlog.TypeRefired
+		}
+		m.recordAlertEvent(firedType, alert, storageKey, matchReason, params.Message, nil)
 
 		// Consume the recently-resolved entry for map hygiene and the
 		// new-occurrence history distinction; the reducer already decided

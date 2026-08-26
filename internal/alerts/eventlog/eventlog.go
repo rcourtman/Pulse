@@ -24,11 +24,14 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-// Event types recorded by the alert manager. Lifecycle "fired" is
-// deliberately absent: the active-alert store funnel also runs on persisted
-// restore, so firing cannot be recorded there without misreporting restarts.
-// It arrives with the explicit activation seam in a later phase.
+// Event types recorded by the alert manager.
 const (
+	// TypeFired marks a new occurrence activating; TypeRefired marks a
+	// reactivation that resumed a recently resolved occurrence. Both come
+	// from the reducer core's explicit activation events, so persisted
+	// restores are never misreported as firings.
+	TypeFired                  = "fired"
+	TypeRefired                = "refired"
 	TypeResolved               = "resolved"
 	TypeAcknowledged           = "acknowledged"
 	TypeUnacknowledged         = "unacknowledged"

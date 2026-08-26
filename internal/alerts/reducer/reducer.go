@@ -24,9 +24,24 @@ import (
 // MetricSignal is one observation of one metric on one resource.
 type MetricSignal struct {
 	ResourceID string
-	Metric     string
-	Value      float64
-	ObservedAt time.Time
+	// Key is the incident sub-key (the canonical metric spec ID). When
+	// empty it falls back to Metric, which older callers and tests use.
+	Key string
+	// Metric is the metric name, used for percentage classification.
+	Metric string
+	Value  float64
+	// RuntimeTick mirrors DiscreteSignal: a monotonic reading (valid when
+	// RuntimeTickValid) that the intent gate accrues grace on.
+	RuntimeTick      time.Duration
+	RuntimeTickValid bool
+	ObservedAt       time.Time
+}
+
+func (s MetricSignal) subKey() string {
+	if s.Key != "" {
+		return s.Key
+	}
+	return s.Metric
 }
 
 // MetricRule is the resolved threshold policy for one resource+metric.
@@ -38,8 +53,13 @@ type MetricRule struct {
 	// Trigger, exactly as the manager does.
 	Clear float64
 	// DelaySeconds is the sustained-above-trigger duration required before
-	// firing. Zero fires on the first exceeding observation.
+	// firing. Zero fires on the first exceeding observation. Ignored when
+	// an explicit Intent gate is supplied — the manager's explicit intent
+	// policies replace the legacy time-threshold delay.
 	DelaySeconds int
+	// Intent is the resolved intent-policy context for this observation
+	// (metric.<name> signals); nil means no gate.
+	Intent *DiscreteIntent
 }
 
 // Severity mirrors the manager's two-level model.
@@ -294,14 +314,14 @@ func severityFor(value, trigger float64, metric string) Severity {
 // and returns the transition events, in order. It is deterministic: the
 // same state, signal, and rule always produce the same result.
 func (s *State) ApplyMetric(signal MetricSignal, rule MetricRule) []Event {
-	key := incidentKey(signal.ResourceID, signal.Metric)
+	key := incidentKey(signal.ResourceID, signal.subKey())
 	incident := s.incidents[key]
 
 	event := func(eventType EventType, severity Severity) Event {
 		return Event{
 			Type:       eventType,
 			ResourceID: signal.ResourceID,
-			Key:        signal.Metric,
+			Key:        signal.subKey(),
 			Severity:   severity,
 			Value:      signal.Value,
 			At:         signal.ObservedAt,
@@ -337,49 +357,60 @@ func (s *State) ApplyMetric(signal MetricSignal, rule MetricRule) []Event {
 			return nil
 		}
 
-		// Sustained-for delay: enter pending on the first exceeding
-		// observation, fire once the delay has elapsed. StartedAt is the
-		// pending entry time, matching the manager's use of the pending
-		// timestamp as the alert start time.
-		if rule.DelaySeconds > 0 {
-			if incident == nil {
-				s.incidents[key] = &Incident{
-					ResourceID:     signal.ResourceID,
-					Key:            signal.Metric,
-					State:          StatePending,
-					PendingSince:   signal.ObservedAt,
-					LastValue:      signal.Value,
-					LastObservedAt: signal.ObservedAt,
-				}
-				return []Event{event(EventPending, "")}
+		// The run enters or advances pending, then attempts activation.
+		// An explicit Intent gate replaces the legacy sustained-for delay,
+		// exactly as the manager's explicit intent policies replace the
+		// time-threshold branch. StartedAt is the pending entry time,
+		// matching the manager's use of the pending timestamp as the alert
+		// start time.
+		entered := false
+		if incident == nil {
+			incident = &Incident{
+				ResourceID:      signal.ResourceID,
+				Key:             signal.subKey(),
+				State:           StatePending,
+				PendingSince:    signal.ObservedAt,
+				LastValue:       signal.Value,
+				TicksSupplied:   signal.RuntimeTickValid,
+				LastRuntimeTick: signal.RuntimeTick,
+				LastObservedAt:  signal.ObservedAt,
 			}
-			if signal.ObservedAt.Sub(incident.PendingSince) < time.Duration(rule.DelaySeconds)*time.Second {
-				incident.LastValue = signal.Value
-				incident.LastObservedAt = signal.ObservedAt
-				return nil
-			}
-			severity := severityFor(signal.Value, rule.Trigger, signal.Metric)
-			incident.State = StateFiring
-			incident.Severity = severity
-			incident.StartedAt = incident.PendingSince
+			s.incidents[key] = incident
+			entered = true
+		} else {
 			incident.LastValue = signal.Value
 			incident.LastObservedAt = signal.ObservedAt
-			s.restoreAck(key, incident, signal.ObservedAt)
-			return []Event{event(EventFired, severity)}
+			if signal.RuntimeTickValid {
+				if incident.TicksSupplied && signal.RuntimeTick >= incident.LastRuntimeTick {
+					incident.GraceElapsed += signal.RuntimeTick - incident.LastRuntimeTick
+				}
+				incident.TicksSupplied = true
+				incident.LastRuntimeTick = signal.RuntimeTick
+			}
+		}
+
+		pendingResult := func() []Event {
+			if entered {
+				return []Event{event(EventPending, "")}
+			}
+			return nil
+		}
+
+		if rule.Intent != nil {
+			if intentHoldsActivation(rule.Intent, incident, signal.ObservedAt) {
+				return pendingResult()
+			}
+		} else if rule.DelaySeconds > 0 {
+			if signal.ObservedAt.Sub(incident.PendingSince) < time.Duration(rule.DelaySeconds)*time.Second {
+				return pendingResult()
+			}
 		}
 
 		severity := severityFor(signal.Value, rule.Trigger, signal.Metric)
-		created := &Incident{
-			ResourceID:     signal.ResourceID,
-			Key:            signal.Metric,
-			State:          StateFiring,
-			Severity:       severity,
-			StartedAt:      signal.ObservedAt,
-			LastValue:      signal.Value,
-			LastObservedAt: signal.ObservedAt,
-		}
-		s.incidents[key] = created
-		s.restoreAck(key, created, signal.ObservedAt)
+		incident.State = StateFiring
+		incident.Severity = severity
+		incident.StartedAt = incident.PendingSince
+		s.restoreAck(key, incident, signal.ObservedAt)
 		return []Event{event(EventFired, severity)}
 	}
 
@@ -453,5 +484,16 @@ func (s *State) ShiftResolved(delta time.Duration) {
 	for key, record := range s.resolved {
 		record.ResolvedAt = record.ResolvedAt.Add(delta)
 		s.resolved[key] = record
+	}
+}
+
+// ShiftPending moves every pending run's start (and observation anchor) by
+// delta (negative = older), for tests that simulate elapsed sustained-for
+// time without waiting.
+func (s *State) ShiftPending(delta time.Duration) {
+	for _, incident := range s.incidents {
+		if incident.State == StatePending {
+			incident.PendingSince = incident.PendingSince.Add(delta)
+		}
 	}
 }
