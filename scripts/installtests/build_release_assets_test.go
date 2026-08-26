@@ -1526,6 +1526,11 @@ func TestReleaseContainerQualificationBindsCheckoutToCallerCommit(t *testing.T) 
 	if err != nil {
 		t.Fatalf("read create-release.yml: %v", err)
 	}
+	contractBytes, err := os.ReadFile(repoFile("docs", "release-control", "v6", "internal", "subsystems", "deployment-installability.md"))
+	if err != nil {
+		t.Fatalf("read deployment-installability contract: %v", err)
+	}
+	contract := strings.Join(strings.Fields(string(contractBytes)), " ")
 
 	qualifier := string(qualifierBytes)
 	qualifyJob := workflowJobBlock(t, qualifier, "qualify")
@@ -1546,6 +1551,15 @@ func TestReleaseContainerQualificationBindsCheckoutToCallerCommit(t *testing.T) 
 	} {
 		if strings.Contains(qualifier, forbidden) {
 			t.Fatalf("release container qualification must not accept an arbitrary source ref: %s", forbidden)
+		}
+	}
+	for _, required := range []string{
+		"must not accept a caller-selected source revision",
+		"checks out that commit without persisting credentials",
+		"binds candidate-manifest verification to the same SHA",
+	} {
+		if !strings.Contains(contract, required) {
+			t.Fatalf("deployment installability contract is missing the release source-trust boundary: %s", required)
 		}
 	}
 

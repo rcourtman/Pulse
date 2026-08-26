@@ -602,7 +602,11 @@ upgrade, update, release, or artifact-selection behavior.
    candidate bytes
    before exercising the same local runtime through the Helm install/upgrade
    smoke. The reusable `qualify-release-containers.yml` workflow owns this
-   proof. Standalone candidate dispatches and dry runs invoke it inside the
+   proof. That reusable qualifier must not accept a caller-selected source
+   revision: it inherits the caller event's immutable `github.sha`, checks out
+   that commit without persisting credentials, verifies the checked-out HEAD,
+   and binds candidate-manifest verification to the same SHA before executing
+   repository code. Standalone candidate dispatches and dry runs invoke it inside the
    candidate workflow; publishing releases invoke it as a sibling of inert
    draft staging so qualification and upload overlap without weakening the
    activation join.
