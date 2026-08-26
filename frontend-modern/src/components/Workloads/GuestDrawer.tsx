@@ -120,6 +120,8 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
           hasWorkloadActionAgent={hasWorkloadActionAgent()}
           showInGuestAgentInstallCue={showInGuestAgentInstallCue()}
           workloadActionAgentTitle={workloadActionAgentTitle()}
+          parentMemoryTotal={props.parentMemoryTotal}
+          memoryDisplayBasis={props.memoryDisplayBasis}
           alerts={props.alerts}
         />
       </div>

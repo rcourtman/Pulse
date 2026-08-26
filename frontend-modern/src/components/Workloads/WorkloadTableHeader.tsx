@@ -40,7 +40,9 @@ export const getWorkloadColumnHeaderLabel = (
   compact = false,
 ): string => {
   if (compact && columnId === 'availability') return 'Up';
-  if (compact && columnId === 'memory') return 'Mem';
+  if (compact && columnId === 'memory') {
+    return memoryDisplayBasis === 'host' ? 'Mem · Host' : 'Mem';
+  }
   if (compact && columnId === 'info') return 'ID';
   if (compact && columnId === 'uptime') return 'Age';
   return columnId === 'memory' && memoryDisplayBasis === 'host'

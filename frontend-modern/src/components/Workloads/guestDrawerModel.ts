@@ -15,6 +15,7 @@ import {
   resolveWorkloadType,
 } from '@/utils/workloads';
 import type { NestedWorkloadContext } from './nestedWorkloadContext';
+import type { WorkloadsMemoryDisplayBasis } from './workloadsFilterModel';
 
 type Guest = WorkloadGuest;
 
@@ -25,6 +26,8 @@ export interface GuestDrawerProps {
   customUrl?: string;
   onCustomUrlChange?: (guestId: string, url: string) => void;
   parentNodeOnline?: boolean;
+  parentMemoryTotal?: number;
+  memoryDisplayBasis?: WorkloadsMemoryDisplayBasis;
   nestedWorkloadContext?: NestedWorkloadContext;
   alerts?: Alert[];
 }
@@ -62,6 +65,31 @@ export interface GuestDrawerBackupPresentation {
 }
 
 export const isGuestDrawerVM = (guest: Guest): guest is VM => resolveWorkloadType(guest) === 'vm';
+
+export const getGuestDrawerAlertMessage = (
+  alert: Alert,
+  context: Pick<GuestDrawerProps, 'guest' | 'memoryDisplayBasis' | 'parentMemoryTotal'>,
+): string => {
+  if (context.memoryDisplayBasis !== 'host' || alert.type.trim().toLowerCase() !== 'memory') {
+    return alert.message;
+  }
+
+  const used = context.guest.memory?.used;
+  const hostTotal = context.parentMemoryTotal;
+  const hostShare =
+    typeof used === 'number' &&
+    Number.isFinite(used) &&
+    used >= 0 &&
+    typeof hostTotal === 'number' &&
+    Number.isFinite(hostTotal) &&
+    hostTotal > 0
+      ? formatPercent((used / hostTotal) * 100)
+      : null;
+  const comparison = hostShare
+    ? `guest allocation · ${hostShare} of host capacity`
+    : 'guest allocation · row uses host capacity';
+  return `${alert.message} (${comparison})`;
+};
 
 // Current-value metrics displayed beside history legends while the metrics
 // store is still accumulating samples. These values never become chart points:

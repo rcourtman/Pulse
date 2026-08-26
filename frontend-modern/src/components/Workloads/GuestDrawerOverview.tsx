@@ -17,7 +17,11 @@ import { getWorkloadsGuestProtectionPresentation } from '@/utils/workloadGuestPr
 
 import { AvailabilityProbeSuggestionCard } from './AvailabilityProbeSuggestionCard';
 import { buildWorkloadsDiskPresentation } from './diskListModel';
-import { getGuestDrawerMemoryRows, isGuestDrawerVM } from './guestDrawerModel';
+import {
+  getGuestDrawerAlertMessage,
+  getGuestDrawerMemoryRows,
+  isGuestDrawerVM,
+} from './guestDrawerModel';
 import type { NestedWorkloadContext } from './nestedWorkloadContext';
 import { WORKLOAD_ACTION_AGENT_LABEL } from './workloadAgentReadiness';
 
@@ -47,6 +51,8 @@ interface GuestDrawerOverviewProps {
   diskThresholds?: MetricDisplayThresholds | null;
   discoveryIdentifiedSummary?: DiscoveryIdentifiedSummary | null;
   workloadActionAgentTitle: string;
+  parentMemoryTotal?: GuestDrawerProps['parentMemoryTotal'];
+  memoryDisplayBasis?: GuestDrawerProps['memoryDisplayBasis'];
   alerts?: Alert[];
 }
 
@@ -245,7 +251,11 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
       <DrawerAttentionSection
         items={(props.alerts ?? []).map((alert) => ({
           id: alert.id,
-          message: alert.message,
+          message: getGuestDrawerAlertMessage(alert, {
+            guest: props.guest,
+            memoryDisplayBasis: props.memoryDisplayBasis,
+            parentMemoryTotal: props.parentMemoryTotal,
+          }),
           severity: alert.level,
           acknowledged: alert.acknowledged,
         }))}

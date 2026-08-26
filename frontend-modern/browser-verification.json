@@ -1,40 +1,45 @@
 {
   "version": 1,
-  "base_sha": "cba1e2abeb713c507f4d5d84a0b847177b298ac9",
-  "verified_at": "2026-08-26T17:45:01Z",
+  "base_sha": "8fb7b3764183168f93140d83e2b18b4e953b6cd8",
+  "verified_at": "2026-08-26T19:25:19Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/stores/websocket.ts",
-    "frontend-modern/src/types/api.ts",
-    "frontend-modern/src/types/resource.ts"
+    "frontend-modern/src/components/Workloads/GuestDrawer.tsx",
+    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx",
+    "frontend-modern/src/components/Workloads/WorkloadPanel.tsx",
+    "frontend-modern/src/components/Workloads/WorkloadTableHeader.tsx",
+    "frontend-modern/src/components/Workloads/guestDrawerModel.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/stores/websocket.ts": "6d8001a49231dba9646fdb53bd70ef29c005717c1cc119af0353cd9126d64e93",
-    "frontend-modern/src/types/api.ts": "f7c31896b70859c2ca77134c777fd6f0bdd99636253aaba7fb346f0231fdc96f",
-    "frontend-modern/src/types/resource.ts": "d61e61a0219bb38bd40b6b34f0f14313376c7f20031d022d5cbb41453a624f99"
+    "frontend-modern/src/components/Workloads/GuestDrawer.tsx": "0fa154ca920e2e6182fe390130ca687f3a6845fc45b33b2660d57ff236742e06",
+    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx": "b514e2f36de05c63e657e06c4fbf154740708e5ae936ee7a4bf52afefaeebee6",
+    "frontend-modern/src/components/Workloads/WorkloadPanel.tsx": "e80cb5bd3dbdee66a9934f22e11372d2e89aeed71f9d5ed44b4f6371f7f65582",
+    "frontend-modern/src/components/Workloads/WorkloadTableHeader.tsx": "a0938fc2603f51a3e6c0fc996906a3688c26db7d63c762aa2bcd83e23b6cfce8",
+    "frontend-modern/src/components/Workloads/guestDrawerModel.ts": "412b541f2a928b959e52e84673f5a278ff395a78d2e1b9f78adfd878749da89b"
   },
   "routes": [
     "/proxmox/overview"
   ],
   "viewports": [
     {
-      "width": 2560,
-      "height": 1240
+      "width": 1440,
+      "height": 900
     },
     {
-      "width": 700,
+      "width": 760,
       "height": 900
     }
   ],
   "states": [
-    "isolated test backend built from this change serving a large mock estate (1857 resources) over the state websocket",
-    "fresh socket snapshot carrying policyCatalog (5 entries, 1KB) and aiSafeSummaryCatalog (56 entries, 7KB) with per-resource refs",
-    "estate rendering live from catalog-expanded policies and summaries"
+    "host-relative memory display selected with a live Proxmox guest memory alert",
+    "alerted guest row expanded to its Overview tab on desktop",
+    "same expanded alert state at the narrow responsive layout",
+    "guest memory alert threshold restored to its original 85 percent after verification"
   ],
   "interactions": [
-    "raw websocket snapshot capture: zero resources with inline policy or aiSafeSummary (previously ~150KB inline across 743 rows); 743 rows carry policyRef and aiSafeSummaryRef resolving into the state catalogs",
-    "alias audit across all 1857 resources: zero alias lists contain the row wire id (deduped), 1854 retain the primary id per the alias-vocabulary invariant",
-    "store-level expansion unit-verified: refs expand to inline policy/summary at ingestion, default posture still synthesized for ref-less rows, and a delta moving a policyRef re-expands from the catalog entry riding the same frame",
-    "client rendered 140 workload rows with zero console errors on desktop; narrow 700px emulated viewport rendered the estate live on the 36-row phone mounted-window budget"
+    "selected Host capacity in View preferences and filtered to a live alerted guest",
+    "expanded the guest and confirmed the row header reads MEM · HOST",
+    "confirmed the row shows 16% of host capacity while Needs attention shows VM memory at 84.5% (guest allocation · 16% of host capacity)",
+    "resized from 1440x900 to 760x900 and confirmed the clarified warning wraps without clipping or overlap"
   ]
 }

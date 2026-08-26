@@ -619,6 +619,8 @@ export function WorkloadPanel(props: WorkloadPanelProps) {
                             nestedWorkloadContext={nestedWorkloadContext()}
                             onCustomUrlChange={props.handleCustomUrlUpdate}
                             parentNodeOnline={parentNodeOnline()}
+                            parentMemoryTotal={parentNode()?.memory?.total}
+                            memoryDisplayBasis={props.workloadMemoryDisplayBasis()}
                             alerts={getAlertsForResource(
                               [
                                 guestId(),

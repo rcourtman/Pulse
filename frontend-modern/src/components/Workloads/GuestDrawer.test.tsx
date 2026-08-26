@@ -249,6 +249,44 @@ describe('GuestDrawer', () => {
     expect(screen.queryByTestId('guest-manage-tab')).not.toBeInTheDocument();
   });
 
+  it('reconciles a guest-allocation memory alert with the host-relative row value', () => {
+    solidRender(() => (
+      <GuestDrawer
+        guest={makeGuest({
+          memory: {
+            total: 3 * 1024 ** 3,
+            used: 2.52 * 1024 ** 3,
+            free: 0.48 * 1024 ** 3,
+            usage: 84,
+          },
+        })}
+        memoryDisplayBasis="host"
+        parentMemoryTotal={15.4 * 1024 ** 3}
+        alerts={[
+          {
+            id: 'alert-memory-host-comparison',
+            type: 'memory',
+            level: 'warning',
+            resourceId: 'inst1-node1-100',
+            resourceName: 'test-vm',
+            node: 'node1',
+            instance: 'inst1',
+            message: 'VM memory at 86.6%',
+            value: 86.6,
+            threshold: 85,
+            startTime: new Date().toISOString(),
+            acknowledged: false,
+          },
+        ]}
+        onClose={vi.fn()}
+      />
+    ));
+
+    expect(
+      screen.getByText('VM memory at 86.6% (guest allocation · 16% of host capacity)'),
+    ).toBeInTheDocument();
+  });
+
   it('keeps generic Assistant and context-copy actions out of the drawer header', () => {
     render(() => <GuestDrawer guest={makeGuest({ name: 'homeassistant' })} onClose={vi.fn()} />);
 
