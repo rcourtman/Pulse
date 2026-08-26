@@ -9818,21 +9818,7 @@
     }
   ],
   "candidate_lanes": [],
-  "work_claims": [
-    {
-      "id": "claude-alert-reducer-coverage-gap-alert-lifecycle-contract-coverage",
-      "agent_id": "claude-alert-reducer",
-      "summary": "Phase 1 slice: metric-family reducer + parity harness; includes checkMetric stale-resolve fix",
-      "target_id": "v6-product-lane-expansion",
-      "claimed_at": "2026-08-26T21:52:17Z",
-      "heartbeat_at": "2026-08-26T21:52:17Z",
-      "expires_at": "2026-08-27T01:52:17Z",
-      "work_item": {
-        "kind": "coverage-gap",
-        "id": "alert-lifecycle-contract-coverage"
-      }
-    }
-  ],
+  "work_claims": [],
   "open_decisions": [],
   "source_of_truth_file": "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",
   "resolved_decisions": [
