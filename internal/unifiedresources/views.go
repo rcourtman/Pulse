@@ -824,6 +824,13 @@ func (v NodeView) LoadAverage() []float64 {
 	return cloneFloat64Slice(v.r.Proxmox.LoadAverage)
 }
 
+func (v NodeView) NetworkInterfaces() []NetworkInterface {
+	if v.r == nil || v.r.Proxmox == nil {
+		return nil
+	}
+	return cloneNetworkInterfaces(v.r.Proxmox.NetworkInterfaces)
+}
+
 func (v NodeView) PendingUpdates() int {
 	if v.r == nil || v.r.Proxmox == nil {
 		return 0

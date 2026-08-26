@@ -118,31 +118,32 @@ type ResolvedAlert struct {
 
 // Node represents a Proxmox VE node
 type Node struct {
-	ID                           string       `json:"id"`
-	NodeIdentity                 string       `json:"nodeIdentity,omitempty"`
-	Name                         string       `json:"name"`
-	NativeNameAliases            []string     `json:"nativeNameAliases,omitempty"`
-	DisplayName                  string       `json:"displayName,omitempty"`
-	Instance                     string       `json:"instance"`
-	Host                         string       `json:"host"`     // Full host URL from config
-	GuestURL                     string       `json:"guestURL"` // Optional guest-accessible URL (for navigation)
-	Status                       string       `json:"status"`
-	Type                         string       `json:"type"`
-	CPU                          float64      `json:"cpu"`
-	Memory                       Memory       `json:"memory"`
-	Disk                         Disk         `json:"disk"`
-	Uptime                       int64        `json:"uptime"`
-	LoadAverage                  []float64    `json:"loadAverage"`
-	KernelVersion                string       `json:"kernelVersion"`
-	PVEVersion                   string       `json:"pveVersion"`
-	CPUInfo                      CPUInfo      `json:"cpuInfo"`
-	Temperature                  *Temperature `json:"temperature,omitempty"`                  // CPU/NVMe temperatures
-	TemperatureMonitoringEnabled *bool        `json:"temperatureMonitoringEnabled,omitempty"` // Per-node temperature monitoring override
-	LastSeen                     time.Time    `json:"lastSeen"`
-	ConnectionHealth             string       `json:"connectionHealth"`
-	IsClusterMember              bool         `json:"isClusterMember"` // True if part of a cluster
-	ClusterName                  string       `json:"clusterName"`     // Name of cluster (empty if standalone)
-	ProviderScopedIdentity       bool         `json:"providerScopedIdentity,omitempty"`
+	ID                           string                 `json:"id"`
+	NodeIdentity                 string                 `json:"nodeIdentity,omitempty"`
+	Name                         string                 `json:"name"`
+	NativeNameAliases            []string               `json:"nativeNameAliases,omitempty"`
+	DisplayName                  string                 `json:"displayName,omitempty"`
+	Instance                     string                 `json:"instance"`
+	Host                         string                 `json:"host"`     // Full host URL from config
+	GuestURL                     string                 `json:"guestURL"` // Optional guest-accessible URL (for navigation)
+	Status                       string                 `json:"status"`
+	Type                         string                 `json:"type"`
+	CPU                          float64                `json:"cpu"`
+	Memory                       Memory                 `json:"memory"`
+	Disk                         Disk                   `json:"disk"`
+	Uptime                       int64                  `json:"uptime"`
+	LoadAverage                  []float64              `json:"loadAverage"`
+	KernelVersion                string                 `json:"kernelVersion"`
+	PVEVersion                   string                 `json:"pveVersion"`
+	CPUInfo                      CPUInfo                `json:"cpuInfo"`
+	NetworkInterfaces            []HostNetworkInterface `json:"networkInterfaces,omitempty"`
+	Temperature                  *Temperature           `json:"temperature,omitempty"`                  // CPU/NVMe temperatures
+	TemperatureMonitoringEnabled *bool                  `json:"temperatureMonitoringEnabled,omitempty"` // Per-node temperature monitoring override
+	LastSeen                     time.Time              `json:"lastSeen"`
+	ConnectionHealth             string                 `json:"connectionHealth"`
+	IsClusterMember              bool                   `json:"isClusterMember"` // True if part of a cluster
+	ClusterName                  string                 `json:"clusterName"`     // Name of cluster (empty if standalone)
+	ProviderScopedIdentity       bool                   `json:"providerScopedIdentity,omitempty"`
 	// TLSFingerprint is the TOFU-captured TLS certificate fingerprint recorded
 	// in configuration for this node's API endpoint, when known. It is machine
 	// identity evidence for state aggregation only, never a polling or trust
@@ -160,6 +161,12 @@ type Node struct {
 func (n Node) NormalizeCollections() Node {
 	if n.LoadAverage == nil {
 		n.LoadAverage = []float64{}
+	}
+	if n.NetworkInterfaces == nil {
+		n.NetworkInterfaces = []HostNetworkInterface{}
+	}
+	for i := range n.NetworkInterfaces {
+		n.NetworkInterfaces[i] = n.NetworkInterfaces[i].NormalizeCollections()
 	}
 	if n.Temperature != nil {
 		temp := n.Temperature.NormalizeCollections()

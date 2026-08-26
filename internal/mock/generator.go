@@ -1061,8 +1061,12 @@ func generateNode(name string, highLoad bool, config MockConfig) models.Node {
 			MHz:     "2400",
 		},
 		Temperature: temp,
-		Host:        fmt.Sprintf("https://%s.local:8006", name),
-		ID:          "", // Will be set by generateNodes to match real format: instance-nodename
+		NetworkInterfaces: []models.HostNetworkInterface{
+			{Name: "eno1", Addresses: []string{}},
+			{Name: "vmbr0", Addresses: []string{"192.168.10.21/24", "fd42:7065:6c73::21/64"}},
+		},
+		Host: fmt.Sprintf("https://%s.local:8006", name),
+		ID:   "", // Will be set by generateNodes to match real format: instance-nodename
 	}
 }
 

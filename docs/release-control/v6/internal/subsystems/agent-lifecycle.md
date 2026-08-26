@@ -2664,6 +2664,15 @@ Agent` secondary handoff against the live setup wizard instead of relying
 
 ## Current State
 
+### Linked-agent interface precedence remains singular
+
+A Proxmox node may now carry PVE API interface inventory alongside an optional
+linked Unified Agent. This does not create a second agent identity or lifecycle
+channel: the linked agent remains authoritative for richer live interface
+telemetry, and the shared drawer presents that view once instead of rendering
+both source inventories. `internal/models/metrics_types_test.go` pins the node
+report collection shape used at this merge boundary.
+
 ### Docker update preflight and execution share one late-bound capability
 
 The unified agent's late-bound Docker updater now carries the read-only typed

@@ -2,12 +2,62 @@ package monitoring
 
 import (
 	"context"
+	"errors"
+	"reflect"
 	"testing"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 )
+
+type nodeNetworkFailureClient struct {
+	PVEClientInterface
+	err   error
+	calls *int
+}
+
+func (c nodeNetworkFailureClient) GetNodeNetworkInterfaces(context.Context, string) ([]proxmox.NodeNetworkInterface, error) {
+	if c.calls != nil {
+		*c.calls++
+	}
+	return nil, c.err
+}
+
+func TestPVENodeNetworkFailurePreservesLastKnownInventory(t *testing.T) {
+	previous := []models.Node{{
+		ID: "lab-pve1", Instance: "lab", Name: "pve1",
+		NetworkInterfaces: []models.HostNetworkInterface{{Name: "vmbr0", Addresses: []string{"192.0.2.10/24"}}},
+	}}
+	client := nodeNetworkFailureClient{err: errors.New("temporary network inventory failure")}
+
+	got := collectPVENodeNetworkInterfaces(context.Background(), client, "lab", "lab-pve1", "pve1", previous)
+	if !reflect.DeepEqual(got, previous[0].NetworkInterfaces) {
+		t.Fatalf("network interfaces = %#v, want previous %#v", got, previous[0].NetworkInterfaces)
+	}
+	got[0].Addresses[0] = "mutated"
+	if previous[0].NetworkInterfaces[0].Addresses[0] != "192.0.2.10/24" {
+		t.Fatal("last-known interface fallback aliases previous state")
+	}
+}
+
+func TestPVENodeNetworkRefreshIsBoundedWithinPollingWindow(t *testing.T) {
+	calls := 0
+	previous := []models.Node{{
+		ID: "lab-pve1", Instance: "lab", Name: "pve1", LastSeen: time.Now(),
+		NetworkInterfaces: []models.HostNetworkInterface{{Name: "vmbr0", Addresses: []string{"192.0.2.10/24"}}},
+	}}
+	client := nodeNetworkFailureClient{err: errors.New("must not be called"), calls: &calls}
+
+	got := collectPVENodeNetworkInterfaces(context.Background(), client, "lab", "lab-pve1", "pve1", previous)
+	if calls != 0 {
+		t.Fatalf("network inventory calls = %d, want 0 within refresh window", calls)
+	}
+	if !reflect.DeepEqual(got, previous[0].NetworkInterfaces) {
+		t.Fatalf("network interfaces = %#v, want previous %#v", got, previous[0].NetworkInterfaces)
+	}
+}
 
 func TestResolveNodeMemoryCharacterization(t *testing.T) {
 	t.Setenv("PULSE_DATA_DIR", t.TempDir())

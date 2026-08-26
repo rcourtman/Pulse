@@ -1661,6 +1661,15 @@ artifact-selection behaviour.
 
 ## Current State
 
+### Candidate notes cover restored Proxmox node network details
+
+The current v6.4 candidate notes record that configured PVE node interface
+names and IPv4/IPv6 addresses are visible without a linked agent. This is a
+runtime presentation addition only: it changes no installer permission,
+artifact, upgrade, rollback, signing, or promotion boundary.
+`frontend-modern/src/utils/__tests__/docsLinks.test.ts` pins the candidate-note
+line so the release packet cannot silently omit the user-visible restoration.
+
 Pulse v6.2.1 is the first active published release with the signed,
 evaluation-capable provider MSP deploy bundle. Public MSP guidance pins that
 exact version, verifies its detached SSH signature and checksum before root

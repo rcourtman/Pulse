@@ -129,7 +129,19 @@ describe('NodeDrawer', () => {
   });
 
   it('shows a guest-drawer style Proxmox node overview with detailed node context', () => {
-    render(() => <NodeDrawer node={makeNode()} />);
+    render(() => (
+      <NodeDrawer
+        node={makeNode({
+          networkInterfaces: [
+            { name: 'eno1', addresses: [] },
+            {
+              name: 'vmbr0',
+              addresses: ['192.168.10.21/24', 'fd42:7065:6c73::21/64'],
+            },
+          ],
+        })}
+      />
+    ));
     const technical = openTechnicalDetails();
 
     expect(screen.getByText('Overview')).toBeInTheDocument();
@@ -139,6 +151,10 @@ describe('NodeDrawer', () => {
     expect(technical.getAllByText('Platform').length).toBeGreaterThan(0);
     expect(technical.getByText('Hardware')).toBeInTheDocument();
     expect(technical.getByText('Telemetry')).toBeInTheDocument();
+    expect(technical.getByText('Network')).toBeInTheDocument();
+    expect(technical.getByText('eno1')).toBeInTheDocument();
+    expect(technical.getByText('vmbr0')).toBeInTheDocument();
+    expect(technical.getByText('192.168.10.21/24 / fd42:7065:6c73::21/64')).toBeInTheDocument();
     expect(technical.getByText('Ryzen')).toBeInTheDocument();
     expect(technical.getByText('6.8.0')).toBeInTheDocument();
     expect(technical.getByText('8')).toBeInTheDocument();

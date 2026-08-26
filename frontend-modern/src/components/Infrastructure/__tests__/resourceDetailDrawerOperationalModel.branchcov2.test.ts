@@ -201,8 +201,8 @@ describe('buildHostDetailCards branch coverage', () => {
     ).toEqual([]);
   });
 
-  it('emits only system/hardware/storage when only the proxmox node flag is set', () => {
-    // The agent-section counts must be ignored entirely when hasAgentDetails is false.
+  it('emits Proxmox system/hardware/storage plus provider network inventory', () => {
+    // Agent-only disk, RAID and temperature counts remain ignored without agent details.
     expect(
       buildHostDetailCards({
         hasProxmoxNode: true,
@@ -212,7 +212,7 @@ describe('buildHostDetailCards branch coverage', () => {
         raidCount: 9,
         temperatureRowCount: 9,
       }),
-    ).toEqual(['system', 'hardware', 'storage']);
+    ).toEqual(['system', 'hardware', 'storage', 'network']);
   });
 
   it('emits system/hardware plus every optional agent section when all counts are positive', () => {

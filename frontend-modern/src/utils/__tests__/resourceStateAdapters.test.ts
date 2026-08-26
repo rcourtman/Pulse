@@ -178,6 +178,37 @@ describe('resourceStateAdapters nodeFromResource', () => {
     expect(node?.diskWrite).toBe(8192);
   });
 
+  it('uses Proxmox network inventory unless a linked agent has richer interface data', () => {
+    const proxmoxOnly = nodeFromResource({
+      ...createNodeResource({}),
+      proxmox: {
+        nodeName: 'pve-node-2',
+        networkInterfaces: [
+          { name: 'eno1', addresses: [] },
+          { name: 'vmbr0', addresses: ['192.168.10.21/24'] },
+        ],
+      },
+    } as Resource);
+    expect(proxmoxOnly?.networkInterfaces).toEqual([
+      { name: 'eno1', addresses: [] },
+      { name: 'vmbr0', addresses: ['192.168.10.21/24'] },
+    ]);
+
+    const linkedAgent = nodeFromResource({
+      ...createNodeResource({}),
+      proxmox: {
+        nodeName: 'pve-node-2',
+        networkInterfaces: [{ name: 'vmbr0', addresses: ['192.168.10.21/24'] }],
+      },
+      agent: {
+        networkInterfaces: [{ name: 'eth0', addresses: ['192.168.10.22'] }],
+      },
+    } as Resource);
+    expect(linkedAgent?.networkInterfaces).toEqual([
+      { name: 'eth0', addresses: ['192.168.10.22'] },
+    ]);
+  });
+
   it('maps PBS display and host identity through shared resource helpers', () => {
     const instance = pbsInstanceFromResource(
       createServiceResource('pbs', {

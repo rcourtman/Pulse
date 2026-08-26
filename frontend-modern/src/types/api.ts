@@ -158,6 +158,7 @@ export interface Node {
   networkOut?: number;
   diskRead?: number;
   diskWrite?: number;
+  networkInterfaces?: HostNetworkInterface[];
   uptime: number;
   loadAverage: number[];
   kernelVersion: string;

@@ -1107,6 +1107,20 @@ cleanup so readers cannot retain orphaned runtime or alert projections.
 
 ## Current State
 
+### Proxmox node network inventory is secondary and continuity-safe
+
+Online PVE node polls read `/nodes/{node}/network` through an optional client
+capability after the primary status read. Standalone and cluster clients both
+support it; clusters retain normal endpoint failover. Interface inventory never
+turns a healthy node poll into a failure: transient errors and offline cycles
+retain last-known data, while an authoritative empty response clears it. CIDR
+is preferred over a duplicate bare IPv4 value, IPv6 is preserved, configured
+bridges remain visible, and output order is stable by interface name.
+`internal/monitoring/monitor_pve_cluster_refresh_test.go`,
+`internal/monitoring/node_memory_sources_test.go`, and
+`internal/models/metrics_types_test.go` pin mapping, failure continuity, and
+the runtime report shape.
+
 ### Poll task concurrency remains bounded across tenants
 
 Without an override, each monitor retains the established client-derived

@@ -2,7 +2,9 @@ package monitoring
 
 import (
 	"context"
+	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
@@ -11,7 +13,88 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-const nodeMemoryCarryForwardMaxAge = 2 * time.Minute
+const (
+	nodeMemoryCarryForwardMaxAge  = 2 * time.Minute
+	pveNodeNetworkRefreshInterval = 5 * time.Minute
+)
+
+type pveNodeNetworkGetter interface {
+	GetNodeNetworkInterfaces(context.Context, string) ([]proxmox.NodeNetworkInterface, error)
+}
+
+func previousNodeNetworkInterfaces(previous []models.Node, instance, nodeID, nodeName string) ([]models.HostNetworkInterface, time.Time, bool) {
+	for _, candidate := range previous {
+		if strings.TrimSpace(candidate.Instance) != strings.TrimSpace(instance) {
+			continue
+		}
+		if strings.TrimSpace(candidate.ID) == strings.TrimSpace(nodeID) ||
+			strings.EqualFold(strings.TrimSpace(candidate.Name), strings.TrimSpace(nodeName)) {
+			interfaces := make([]models.HostNetworkInterface, len(candidate.NetworkInterfaces))
+			for i, iface := range candidate.NetworkInterfaces {
+				interfaces[i] = iface
+				interfaces[i].Addresses = append([]string(nil), iface.Addresses...)
+			}
+			return interfaces, candidate.LastSeen, true
+		}
+	}
+	return nil, time.Time{}, false
+}
+
+func mapPVENodeNetworkInterfaces(interfaces []proxmox.NodeNetworkInterface) []models.HostNetworkInterface {
+	mapped := make([]models.HostNetworkInterface, 0, len(interfaces))
+	for _, iface := range interfaces {
+		name := strings.TrimSpace(iface.Iface)
+		if name == "" {
+			continue
+		}
+		addresses := make([]string, 0, 2)
+		seen := make(map[string]struct{}, 2)
+		ipv4 := strings.TrimSpace(iface.CIDR)
+		if ipv4 == "" {
+			ipv4 = strings.TrimSpace(iface.Address)
+		}
+		for _, address := range []string{ipv4, iface.Address6} {
+			address = strings.TrimSpace(address)
+			if address == "" {
+				continue
+			}
+			if _, ok := seen[address]; ok {
+				continue
+			}
+			seen[address] = struct{}{}
+			addresses = append(addresses, address)
+		}
+		mapped = append(mapped, models.HostNetworkInterface{Name: name, Addresses: addresses})
+	}
+	sort.SliceStable(mapped, func(i, j int) bool {
+		return strings.ToLower(mapped[i].Name) < strings.ToLower(mapped[j].Name)
+	})
+	return mapped
+}
+
+func collectPVENodeNetworkInterfaces(
+	ctx context.Context,
+	client PVEClientInterface,
+	instance, nodeID, nodeName string,
+	previous []models.Node,
+) []models.HostNetworkInterface {
+	fallback, previousPollAt, foundPrevious := previousNodeNetworkInterfaces(previous, instance, nodeID, nodeName)
+	if foundPrevious && !previousPollAt.IsZero() &&
+		previousPollAt.Truncate(pveNodeNetworkRefreshInterval) == time.Now().Truncate(pveNodeNetworkRefreshInterval) {
+		return fallback
+	}
+	getter, ok := client.(pveNodeNetworkGetter)
+	if !ok {
+		return fallback
+	}
+	interfaces, err := getter.GetNodeNetworkInterfaces(ctx, nodeName)
+	if err != nil {
+		log.Debug().Err(err).Str("instance", instance).Str("node", nodeName).
+			Msg("Could not refresh Proxmox node network interfaces; retaining last-known inventory")
+		return fallback
+	}
+	return mapPVENodeNetworkInterfaces(interfaces)
+}
 
 func (m *Monitor) canCarryForwardNodeMemory(instance, node string, now time.Time) bool {
 	if m == nil {
@@ -218,6 +301,16 @@ func (m *Monitor) pollPVENode(
 				}
 			}
 		}
+	}
+
+	if effectiveStatus == "online" {
+		modelNode.NetworkInterfaces = collectPVENodeNetworkInterfaces(
+			ctx, client, instanceName, nodeID, node.Node, prevInstanceNodes,
+		)
+	} else {
+		modelNode.NetworkInterfaces, _, _ = previousNodeNetworkInterfaces(
+			prevInstanceNodes, instanceName, nodeID, node.Node,
+		)
 	}
 
 	// If we couldn't update memory metrics using detailed status, preserve previous accurate values if available

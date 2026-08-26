@@ -41,6 +41,23 @@ func TestResourceFromProxmoxNodeIncludesTemperature(t *testing.T) {
 	}
 }
 
+func TestResourceFromProxmoxNodeIncludesNetworkInterfaces(t *testing.T) {
+	node := models.Node{
+		ID: "mock-cluster-pve1", Name: "pve1", Status: "online",
+		NetworkInterfaces: []models.HostNetworkInterface{{
+			Name: "vmbr0", Addresses: []string{"192.0.2.10/24"},
+		}},
+	}
+
+	resource, _ := resourceFromProxmoxNode(node, nil)
+	if resource.Proxmox == nil || len(resource.Proxmox.NetworkInterfaces) != 1 {
+		t.Fatalf("expected proxmox network interface projection, got %+v", resource.Proxmox)
+	}
+	if got := resource.Proxmox.NetworkInterfaces[0]; got.Name != "vmbr0" || !reflect.DeepEqual(got.Addresses, []string{"192.0.2.10/24"}) {
+		t.Fatalf("network interface = %+v", got)
+	}
+}
+
 func TestResourceFromHostProjectsXCPNGPoolIdentity(t *testing.T) {
 	host := models.Host{
 		ID:       "agent-one",

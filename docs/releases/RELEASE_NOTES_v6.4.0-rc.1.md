@@ -31,6 +31,9 @@ build path.
 - Platform search and row visibility share the same predicates, including
   Proxmox nodes and their visible guests. Navigation tabs remain stable across
   WebSocket updates instead of remounting with live state.
+- Proxmox node details show the configured interface names and IPv4/IPv6
+  addresses reported by the PVE API, including bridge interfaces, without
+  requiring a linked Unified Agent.
 - Workload table columns can be resized at tablet and desktop widths. A resized
   layout keeps every selected column reachable with horizontal scrolling,
   persists per surface, and can be shared through the page URL or reset from

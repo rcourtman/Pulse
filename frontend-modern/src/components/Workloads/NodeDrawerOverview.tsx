@@ -217,6 +217,25 @@ export function NodeDrawerOverview(props: NodeDrawerOverviewProps) {
     { label: 'Root free', value: formatBytes(props.node.disk?.free || 0) },
   ];
 
+  const networkRows = (): NodeOverviewRow[] =>
+    (props.node.networkInterfaces || []).reduce<NodeOverviewRow[]>(
+      (rows, networkInterface) => {
+        const name = cleanText(networkInterface.name);
+        if (!name) return rows;
+        const addresses = (networkInterface.addresses || [])
+          .map((address) => cleanText(address))
+          .filter(Boolean);
+        const mac = cleanText(networkInterface.mac);
+        rows.push({
+          label: name,
+          value: addresses.join(' / ') || mac || 'Configured',
+          title: [...addresses, ...(mac ? [mac] : [])].join(' · ') || undefined,
+        });
+        return rows;
+      },
+      [],
+    );
+
   const telemetryRows = (): NodeOverviewRow[] => [
     {
       label: 'Temp monitor',
@@ -235,6 +254,7 @@ export function NodeDrawerOverview(props: NodeDrawerOverviewProps) {
       { label: 'Platform', rows: toDetailRows(platformRows()) },
       { label: 'Hardware', rows: toDetailRows(hardwareRows()) },
       { label: 'Memory', rows: toDetailRows(memoryRows()) },
+      { label: 'Network', rows: toDetailRows(networkRows()) },
       {
         label: 'Storage',
         rows:

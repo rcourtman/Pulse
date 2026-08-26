@@ -19,6 +19,21 @@ func TestMetricPoint_ZeroValue(t *testing.T) {
 	}
 }
 
+func TestNodeNetworkInterfacesNormalizeCollections(t *testing.T) {
+	node := Node{NetworkInterfaces: []HostNetworkInterface{{Name: "vmbr0"}}}.NormalizeCollections()
+	if node.NetworkInterfaces == nil || node.NetworkInterfaces[0].Addresses == nil {
+		t.Fatalf("node network interface collections must be non-nil: %#v", node.NetworkInterfaces)
+	}
+
+	payload, err := json.Marshal(node)
+	if err != nil {
+		t.Fatalf("Marshal() error = %v", err)
+	}
+	if !strings.Contains(string(payload), `"networkInterfaces":[{"name":"vmbr0","addresses":[]}]`) {
+		t.Fatalf("node JSON omitted normalized network interfaces: %s", payload)
+	}
+}
+
 func TestIOMetrics_Fields(t *testing.T) {
 	now := time.Now()
 	metrics := IOMetrics{

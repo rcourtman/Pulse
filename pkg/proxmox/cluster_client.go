@@ -1111,6 +1111,21 @@ func (cc *ClusterClient) GetNodeStatus(ctx context.Context, node string) (*NodeS
 	return result, err
 }
 
+// GetNodeNetworkInterfaces returns the configured interfaces for a node using
+// the same cluster failover boundary as the rest of the node inventory.
+func (cc *ClusterClient) GetNodeNetworkInterfaces(ctx context.Context, node string) ([]NodeNetworkInterface, error) {
+	var result []NodeNetworkInterface
+	err := cc.executeWithFailover(ctx, func(client *Client) error {
+		interfaces, err := client.GetNodeNetworkInterfaces(ctx, node)
+		if err != nil {
+			return err
+		}
+		result = interfaces
+		return nil
+	})
+	return result, err
+}
+
 func (cc *ClusterClient) GetNodeRRDData(ctx context.Context, node, timeframe, cf string, ds []string) ([]NodeRRDPoint, error) {
 	var result []NodeRRDPoint
 	err := cc.executeWithFailover(ctx, func(client *Client) error {

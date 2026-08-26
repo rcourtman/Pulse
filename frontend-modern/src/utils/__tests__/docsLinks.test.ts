@@ -61,6 +61,16 @@ function getRuntimeSourceFiles(dir: string): string[] {
 }
 
 describe('docsLinks', () => {
+  it('keeps restored Proxmox node network details in the candidate packet', () => {
+    const releaseNotes = readFileSync(
+      path.join(repoRoot, 'docs', 'releases', 'RELEASE_NOTES_v6.4.0-rc.1.md'),
+      'utf8',
+    );
+    expect(releaseNotes).toContain(
+      'Proxmox node details show the configured interface names and IPv4/IPv6',
+    );
+  });
+
   // These now resolve to the in-app viewer route rather than the raw asset.
   // The raw file is still served at the same path plus .md, which is what the
   // viewer fetches, so the source remains reachable.

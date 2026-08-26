@@ -1396,6 +1396,42 @@ describe('useUnifiedResources', () => {
     dispose();
   });
 
+  it('projects Proxmox node network interfaces into the resource facet', async () => {
+    apiFetchMock.mockResolvedValue(
+      resourceResponse([
+        {
+          ...v2Resource,
+          sources: ['proxmox'],
+          proxmox: {
+            nodeName: 'pve1',
+            networkInterfaces: [
+              { name: 'eno1', addresses: [] },
+              {
+                name: 'vmbr0',
+                addresses: ['192.168.10.21/24', 'fd42:7065:6c73::21/64'],
+              },
+            ],
+          },
+        },
+      ]),
+    );
+
+    let result: ReturnType<typeof useUnifiedResources> | undefined;
+    createRoot((dispose) => {
+      result = useUnifiedResources();
+      void dispose;
+    });
+    await waitForResourceCount(() => result?.resources().length ?? 0);
+
+    expect(result!.resources()[0]?.proxmox?.networkInterfaces).toEqual([
+      { name: 'eno1', addresses: [] },
+      {
+        name: 'vmbr0',
+        addresses: ['192.168.10.21/24', 'fd42:7065:6c73::21/64'],
+      },
+    ]);
+  });
+
   it('falls back to proxmox temperature when agent temperature is unavailable', async () => {
     apiFetchMock.mockResolvedValueOnce({
       ok: true,

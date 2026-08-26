@@ -159,6 +159,9 @@ const HostDetailsDisclosure: Component<{
             <SystemInfoCard variant="node" node={node()} />
             <HardwareCard variant="node" node={node()} />
             <RootDiskCard node={node()} />
+            <Show when={!props.drawer.agentInfo()?.networkInterfaces?.length}>
+              <NetworkInterfacesCard interfaces={props.drawer.proxmoxNetworkInterfaces()} />
+            </Show>
           </>
         )}
       </Show>

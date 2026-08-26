@@ -118,6 +118,19 @@ describe('resourceDetailDrawerOperationalModel', () => {
     expect(hasRuntimeOperationalContext([])).toBe(false);
   });
 
+  it('includes provider network inventory for a Proxmox-only node', () => {
+    expect(
+      buildHostDetailCards({
+        hasProxmoxNode: true,
+        hasAgentDetails: false,
+        networkInterfaceCount: 2,
+        diskCount: 0,
+        raidCount: 0,
+        temperatureRowCount: 0,
+      }),
+    ).toEqual(['system', 'hardware', 'storage', 'network']);
+  });
+
   it('returns no cross-jump links for docker-host resources after the platform-first migration', () => {
     // Surface link injection through buildResourceSurfaceLinksForResource was
     // retired with the old broad cross-surface chip strip;

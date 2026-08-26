@@ -3,6 +3,7 @@ import { getDiscovery } from '@/api/discovery';
 import { createNonSuspendingQuery } from '@/hooks/createNonSuspendingQuery';
 import type { ResourceDiscovery, ResourceType as DiscoveryResourceType } from '@/types/discovery';
 import type { Resource, ResourceRelationship } from '@/types/resource';
+import type { HostNetworkInterface } from '@/types/api';
 import { requiresGovernedResourceDisplay } from '@/types/resource';
 import type { ResourceVMwareMeta } from '@/types/resource';
 import { formatAbsoluteTime, formatRelativeTime } from '@/utils/format';
@@ -183,6 +184,13 @@ export const useResourceDetailDrawerDerivedState = (
   );
 
   const proxmoxNode = createMemo(() => toNodeFromProxmox(resource));
+  const proxmoxNetworkInterfaces = createMemo(
+    () =>
+      resource.proxmox?.networkInterfaces ??
+      (platformData()?.proxmox as { networkInterfaces?: HostNetworkInterface[] } | undefined)
+        ?.networkInterfaces ??
+      [],
+  );
   const agentInfo = createMemo(() => toAgentFromResource(resource, agentMeta()));
   const temperatureRows = createMemo(() => buildTemperatureRows(agentInfo()?.sensors));
   const customSensorRows = createMemo(() => buildCustomSensorRows(agentInfo()?.sensors));
@@ -322,7 +330,10 @@ export const useResourceDetailDrawerDerivedState = (
     buildHostDetailCards({
       hasProxmoxNode: Boolean(proxmoxNode()),
       hasAgentDetails: Boolean(agentInfo()),
-      networkInterfaceCount: agentInfo()?.networkInterfaces?.length ?? 0,
+      networkInterfaceCount: Math.max(
+        agentInfo()?.networkInterfaces?.length ?? 0,
+        proxmoxNetworkInterfaces().length,
+      ),
       diskCount: agentInfo()?.disks?.length ?? 0,
       raidCount: agentMeta()?.raid?.length ?? 0,
       temperatureRowCount: temperatureRows().length + customSensorRows().length,
@@ -440,6 +451,7 @@ export const useResourceDetailDrawerDerivedState = (
     vmwareData,
     kubernetesCapabilityBadges,
     proxmoxNode,
+    proxmoxNetworkInterfaces,
     agentInfo,
     temperatureRows,
     customSensorRows,

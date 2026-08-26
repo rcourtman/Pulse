@@ -4779,3 +4779,19 @@ The drawer header contains no generic Assistant handoff or agent-context copy
 action. Those shell-level capabilities must not consume object identity space;
 only the close control and a capability-backed object lifecycle action may sit
 beside the heading.
+
+Proxmox node host details include configured interface names and addresses from
+the PVE `/nodes/{node}/network` inventory. The secondary network read must not
+fail or erase an otherwise healthy node poll: a transient error retains the
+last-known interface inventory, while an authoritative empty response clears
+it. Cluster connections use the normal endpoint-failover boundary. When a
+linked Unified Agent supplies richer interface telemetry, the drawer presents
+that agent view once instead of duplicating the PVE inventory.
+`internal/monitoring/monitor_pve_cluster_refresh_test.go`,
+`internal/monitoring/node_memory_sources_test.go`,
+`internal/unifiedresources/adapters_test.go`,
+`frontend-modern/src/components/Infrastructure/__tests/ResourceDetailDrawer.identity-runtime.test.tsx`,
+`frontend-modern/src/components/Workloads/NodeDrawer.test.tsx`, and
+`frontend-modern/src/utils/__tests__/resourceStateAdapters.test.ts`
+pin collection continuity, canonical projection, and both unified and
+Proxmox-page drawer presentation.

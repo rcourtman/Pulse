@@ -724,6 +724,7 @@ export interface ResourceProxmoxMeta {
   diskStatusReason?: string;
   guestAgentStatus?: string;
   guestAgentExpected?: boolean;
+  networkInterfaces?: HostNetworkInterface[];
   swapUsed?: number;
   swapTotal?: number;
   balloon?: number;

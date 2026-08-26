@@ -5570,3 +5570,12 @@ presented indistinguishably from current provider data.
 `frontend-modern/src/features/storageBackups/__tests__/storageAdapters.test.ts`
 pins the canonical freshness and error projection, while the row-presentation
 tests pin the operator-facing state and observation age.
+
+### Proxmox node network projection does not widen recovery authority
+
+The shared unified-resource transport now preserves optional configured
+Proxmox node interfaces for host-detail presentation. This read-only facet is
+not storage inventory, recovery evidence, or an action capability; it grants
+no backup, snapshot, restore, retention, cleanup, or verification authority.
+The storage/recovery resource query and its admission, freshness, and
+persistence contracts are unchanged.

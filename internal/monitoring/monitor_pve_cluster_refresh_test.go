@@ -3,6 +3,7 @@ package monitoring
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"testing"
 	"time"
 
@@ -10,6 +11,21 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 )
+
+func TestMapPVENodeNetworkInterfacesKeepsConfiguredBridgesAndAddresses(t *testing.T) {
+	got := mapPVENodeNetworkInterfaces([]proxmox.NodeNetworkInterface{
+		{Iface: "vmbr0", Type: "bridge", CIDR: "192.0.2.10/24", Address: "192.0.2.10", Address6: "2001:db8::10/64", Active: 1},
+		{Iface: " eno1 ", Type: "eth", Active: 1},
+		{Iface: "", Address: "198.51.100.1"},
+	})
+	want := []models.HostNetworkInterface{
+		{Name: "eno1", Addresses: []string{}},
+		{Name: "vmbr0", Addresses: []string{"192.0.2.10/24", "2001:db8::10/64"}},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("network interfaces = %#v, want %#v", got, want)
+	}
+}
 
 // Refreshing an existing cluster's endpoints when the cluster re-IPs (#1493):
 // the stored add-time addresses must be replaced with what the cluster

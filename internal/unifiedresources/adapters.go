@@ -69,6 +69,7 @@ func resourceFromProxmoxNode(node models.Node, linkedHost *models.Host) (Resourc
 		Uptime:                       node.Uptime,
 		CPUInfo:                      &CPUInfo{Model: node.CPUInfo.Model, Cores: node.CPUInfo.Cores, Sockets: node.CPUInfo.Sockets},
 		LoadAverage:                  append([]float64(nil), node.LoadAverage...),
+		NetworkInterfaces:            convertInterfaces(node.NetworkInterfaces),
 		PendingUpdates:               node.PendingUpdates,
 		TemperatureMonitoringEnabled: cloneBoolPtr(node.TemperatureMonitoringEnabled),
 		PendingUpdatesCheckedAt:      zeroTimeToPtr(node.PendingUpdatesCheckedAt),

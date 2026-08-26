@@ -2770,3 +2770,15 @@ checks before handing the request to either body-decoding handler. Denied
 requests perform no configuration export loads, import transaction work,
 metadata replacement, or runtime reload. Authorized archive encryption,
 decryption, transactional persistence, and reload costs are unchanged.
+
+### Proxmox node network inventory uses a bounded refresh cadence
+
+Configured node interfaces are slow-changing provider inventory, not a hot
+metric. Each online node may perform one bounded PVE network read on initial
+observation and at most once per five-minute wall-clock window thereafter;
+ordinary node polls within the same window reuse the deep-copied last-known
+inventory. Offline nodes perform no network read. The call uses the existing
+poll context and cluster failover boundary, adds no goroutine or frontend
+request, and a failed read retains the previous bounded slice.
+`internal/monitoring/node_memory_sources_test.go` pins both failure continuity
+and the within-window no-call path.

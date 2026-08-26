@@ -1,5 +1,6 @@
 import type {
   Disk,
+  HostNetworkInterface,
   Memory,
   Node,
   PBSBackupJob,
@@ -1279,6 +1280,10 @@ export const nodeFromResource = (resource: Resource): Node | null => {
   const linkedAgentId =
     asString(platform?.linkedAgentId) || getActionableAgentIdFromResource(resource);
   const agentFacet = resource.agent;
+  const agentNetworkInterfaces = agentFacet?.networkInterfaces;
+  const proxmoxNetworkInterfaces = Array.isArray(proxmox?.networkInterfaces)
+    ? (proxmox.networkInterfaces as HostNetworkInterface[])
+    : [];
   const pveVersion =
     asString(proxmox?.pveVersion) ||
     ((agentFacet?.osName || '').toLowerCase().includes('proxmox')
@@ -1311,6 +1316,10 @@ export const nodeFromResource = (resource: Resource): Node | null => {
     networkOut: resource.network?.txBytes,
     diskRead: resource.diskIO?.readRate,
     diskWrite: resource.diskIO?.writeRate,
+    networkInterfaces:
+      agentNetworkInterfaces && agentNetworkInterfaces.length > 0
+        ? agentNetworkInterfaces
+        : proxmoxNetworkInterfaces,
     uptime: resource.uptime ?? asNumber(proxmox?.uptime) ?? 0,
     loadAverage: asArray(proxmox?.loadAverage)
       .map((value) => asNumber(value))

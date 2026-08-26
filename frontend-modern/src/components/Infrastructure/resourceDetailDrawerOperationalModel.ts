@@ -142,7 +142,11 @@ export const buildHostDetailCards = (options: {
 
   if (options.hasAgentDetails) {
     cards.push('system', 'hardware');
-    if (options.networkInterfaceCount > 0) cards.push('network');
+  }
+
+  if (options.networkInterfaceCount > 0) cards.push('network');
+
+  if (options.hasAgentDetails) {
     if (options.diskCount > 0) cards.push('disks');
     if (options.raidCount > 0) cards.push('raid');
     if (options.temperatureRowCount > 0) cards.push('temperatures');

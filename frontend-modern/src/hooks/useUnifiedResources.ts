@@ -244,6 +244,7 @@ type APIResource = {
     };
     template?: boolean;
     disks?: APIAgentDiskInfo[];
+    networkInterfaces?: APIAgentNetworkInterface[];
     swapUsed?: number;
     swapTotal?: number;
     balloon?: number;
@@ -844,6 +845,7 @@ const toResource = (v2: APIResource): Resource => {
           cpus: v2.proxmox.cpus,
           template: v2.proxmox.template,
           disks: normalizeDiskArray(v2.proxmox.disks),
+          networkInterfaces: v2.proxmox.networkInterfaces,
           swapUsed: v2.proxmox.swapUsed,
           swapTotal: v2.proxmox.swapTotal,
           balloon: v2.proxmox.balloon,

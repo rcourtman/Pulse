@@ -3379,6 +3379,7 @@ func nodeFromReadStateView(view *unifiedresources.NodeView) models.Node {
 		KernelVersion:                view.KernelVersion(),
 		PVEVersion:                   view.PVEVersion(),
 		CPUInfo:                      view.CPUInfo(),
+		NetworkInterfaces:            hostNetworkInterfacesFromReadStateView(view.NetworkInterfaces()),
 		Temperature:                  view.TemperatureDetails(),
 		TemperatureMonitoringEnabled: view.TemperatureMonitoringEnabled(),
 		LastSeen:                     view.LastSeen(),

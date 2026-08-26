@@ -490,6 +490,19 @@ func TestGenerateNodesBoundsDirectConfiguration(t *testing.T) {
 	}
 }
 
+func TestGenerateNodeIncludesProxmoxNetworkInventory(t *testing.T) {
+	node := generateNode("pve1", false, DefaultConfig)
+	if len(node.NetworkInterfaces) != 2 {
+		t.Fatalf("network interface count = %d, want 2", len(node.NetworkInterfaces))
+	}
+	if node.NetworkInterfaces[0].Name != "eno1" || node.NetworkInterfaces[1].Name != "vmbr0" {
+		t.Fatalf("unexpected network interfaces: %+v", node.NetworkInterfaces)
+	}
+	if len(node.NetworkInterfaces[1].Addresses) != 2 {
+		t.Fatalf("bridge addresses = %v, want IPv4 and IPv6", node.NetworkInterfaces[1].Addresses)
+	}
+}
+
 func TestBuildFixtureStateIncludesKubernetesStorageInventory(t *testing.T) {
 	cfg := DefaultConfig
 	cfg.K8sClusterCount = 1

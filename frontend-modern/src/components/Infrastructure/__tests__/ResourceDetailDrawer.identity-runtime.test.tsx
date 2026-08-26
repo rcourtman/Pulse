@@ -355,6 +355,39 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
     expect(getByText('eth0')).toBeInTheDocument();
   });
 
+  it('shows PVE API network inventory when no linked agent supplies interfaces', async () => {
+    const resource = baseResource({
+      type: 'agent',
+      platformType: 'proxmox-pve',
+      sourceType: 'api',
+      platformData: {
+        sources: ['proxmox'],
+        proxmox: {
+          nodeName: 'pve-1',
+          pveVersion: '8.4.1',
+          kernelVersion: '6.8.12',
+          networkInterfaces: [
+            { name: 'eno1', addresses: [] },
+            { name: 'vmbr0', addresses: ['192.0.2.10/24', '2001:db8::10/64'] },
+          ],
+        },
+      },
+    });
+
+    const { getByRole, getByText, queryByText } = render(() => (
+      <ResourceDetailDrawer resource={resource} />
+    ));
+
+    expect(getByText('System, Hardware, Storage, and Network')).toBeInTheDocument();
+    expect(queryByText('vmbr0')).toBeNull();
+    fireEvent.click(getByRole('button', { name: 'Show host' }));
+
+    await waitFor(() => expect(getByText('vmbr0')).toBeInTheDocument());
+    expect(getByText('eno1')).toBeInTheDocument();
+    expect(getByText('192.0.2.10/24')).toBeInTheDocument();
+    expect(getByText('2001:db8::10/64')).toBeInTheDocument();
+  });
+
   it('surfaces VMware read-only placement and signal context on the shared drawer path', async () => {
     const resource = baseResource({
       type: 'vm',

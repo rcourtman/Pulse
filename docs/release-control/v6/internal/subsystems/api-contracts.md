@@ -9853,3 +9853,18 @@ it appears only when the agent reported a profile, it never carries
 credentials or paths, and consumers must not derive health status from it.
 The unified agent report contract (`pkg/agents/host/report.go`) gains the
 matching agent-authored `privilege` block with the same fields.
+
+### Proxmox node network inventory is an optional canonical facet
+
+Canonical Proxmox node resources may carry `proxmox.networkInterfaces`, using
+the existing host-interface wire shape: a required interface name, optional
+MAC and counters, and an optional address list. The provider projection
+populates configured interface names plus IPv4/IPv6 addresses from the PVE
+node-network endpoint; older servers and cached resources may omit the field.
+The frontend transport and legacy node adapter must preserve this optional
+facet without changing resource identity, status, or metric fields. A linked
+agent may supply the richer presentation source, but does not change the PVE
+facet on the wire. `internal/models/metrics_types_test.go`,
+`frontend-modern/src/hooks/__tests__/useUnifiedResources.test.ts`, and
+`frontend-modern/src/utils/__tests__/resourceStateAdapters.test.ts` pin the
+wire shape and both client projections.
