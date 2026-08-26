@@ -464,6 +464,10 @@ export function createWebSocketStore(url: string) {
   let rawConnectedInfrastructure: ConnectedInfrastructureItem[] | null = null;
   const pendingInfrastructureIds = new Set<string>();
   let pendingInfrastructureFull = false;
+  // Active alerts ride the same keyed delta transport, but their application
+  // is never gated: alert lifecycle updates stay immediate during operator
+  // input (alerts subsystem contract), so this baseline only slims the wire.
+  let rawActiveAlerts: Alert[] | null = null;
   // lastUpdate is the realtime tick token every downstream consumer keys on
   // (unified resource projections, workload remaps). It defers with the rest
   // so a mid-interaction tick triggers no derived recomputation at all.
@@ -569,6 +573,7 @@ export function createWebSocketStore(url: string) {
     rawConnectedInfrastructure = null;
     pendingInfrastructureIds.clear();
     pendingInfrastructureFull = false;
+    rawActiveAlerts = null;
     deferredLastUpdate = null;
     lastFullStateRecoveryAt = 0;
     oversizedSnapshotObserved = false;
@@ -1156,15 +1161,41 @@ export function createWebSocketStore(url: string) {
             }
             // Sync active alerts from state
             if (message.data.activeAlerts !== undefined) {
+              const alertsArray =
+                message.data.activeAlerts && Array.isArray(message.data.activeAlerts)
+                  ? (message.data.activeAlerts as Alert[])
+                  : [];
+              // A full payload re-establishes the keyed alert baseline.
+              rawActiveAlerts = structuredClone(alertsArray);
               const newAlerts: Record<string, Alert> = {};
-              if (message.data.activeAlerts && Array.isArray(message.data.activeAlerts)) {
-                message.data.activeAlerts.forEach((alert: Alert) => {
-                  newAlerts[alert.id] = alert;
-                });
-              }
+              alertsArray.forEach((alert: Alert) => {
+                newAlerts[alert.id] = alert;
+              });
 
               lastActiveAlertsPayload = newAlerts;
               applyActiveAlerts(alertsEnabled ? newAlerts : {});
+            } else if (
+              'activeAlertsDelta' in message.data &&
+              message.data.activeAlertsDelta !== undefined
+            ) {
+              if (rawActiveAlerts !== null) {
+                const appliedAlerts = applyKeyedStateDelta(
+                  rawActiveAlerts,
+                  message.data.activeAlertsDelta as KeyedStateDelta,
+                );
+                rawActiveAlerts = appliedAlerts.entries;
+                // Cloned on the way out so the alerts store never adopts
+                // baseline-owned objects. Applied immediately, input-active or
+                // not: alert lifecycle truth does not wait for idle.
+                const newAlerts: Record<string, Alert> = {};
+                for (const alert of rawActiveAlerts) {
+                  newAlerts[alert.id] = structuredClone(alert);
+                }
+                lastActiveAlertsPayload = newAlerts;
+                applyActiveAlerts(alertsEnabled ? newAlerts : {});
+              }
+              // No baseline: leave current alerts; the next full payload
+              // (reconnect or snapshot) re-establishes it.
             }
             // Sync recently resolved alerts
             if (message.data.recentlyResolved !== undefined) {

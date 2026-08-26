@@ -11,20 +11,35 @@ import (
 const resourceDeltaField = "resourceDelta"
 const infrastructureField = "connectedInfrastructure"
 const infrastructureDeltaField = "connectedInfrastructureDelta"
+const activeAlertsField = "activeAlerts"
+const activeAlertsDeltaField = "activeAlertsDelta"
+
+// Keyed delta fields are id-keyed arrays that travel as per-item merge
+// patches once a client baseline exists, instead of re-shipping the whole
+// array on every broadcast. When a payload cannot be keyed (an entry without
+// an id), it stays in fields and diffs whole, so the keyed path can never
+// corrupt the projection.
+var keyedDeltaFields = []struct {
+	field      string
+	deltaField string
+}{
+	{infrastructureField, infrastructureDeltaField},
+	{activeAlertsField, activeAlertsDeltaField},
+}
+
+type keyedFieldSnapshot struct {
+	entries map[string]json.RawMessage
+	order   []string
+	raw     json.RawMessage
+}
 
 type clientStateSnapshot struct {
 	fields        map[string]json.RawMessage
 	resources     map[string]json.RawMessage
 	resourceOrder []string
-	// The connected-infrastructure projection is keyed the same way as
-	// resources so per-item merge patches replace re-shipping the whole
-	// projection on every broadcast. When the payload cannot be keyed (an
-	// entry without an id), it stays in fields and diffs whole, so the
-	// keyed path can never corrupt the projection.
-	infrastructure      map[string]json.RawMessage
-	infrastructureOrder []string
-	infrastructureRaw   json.RawMessage
-	infrastructureKeyed bool
+	// Keyed snapshots by field name; a field is present only when every
+	// entry keyed by id.
+	keyed map[string]*keyedFieldSnapshot
 }
 
 type resourceDeltaPayload struct {
@@ -87,20 +102,24 @@ func buildClientStateSnapshot(state interface{}) (*clientStateSnapshot, error) {
 		fields:        fields,
 		resources:     resources,
 		resourceOrder: resourceOrder,
+		keyed:         make(map[string]*keyedFieldSnapshot),
 	}
 
-	if encodedInfrastructure, ok := fields[infrastructureField]; ok {
-		infrastructure, infrastructureOrder, keyErr := extractKeyedEntries(
-			encodedInfrastructure,
-			infrastructureField,
-		)
-		if keyErr == nil {
-			snapshot.infrastructure = infrastructure
-			snapshot.infrastructureOrder = infrastructureOrder
-			snapshot.infrastructureRaw = append(json.RawMessage(nil), encodedInfrastructure...)
-			snapshot.infrastructureKeyed = true
-			delete(fields, infrastructureField)
+	for _, keyedField := range keyedDeltaFields {
+		encodedField, ok := fields[keyedField.field]
+		if !ok {
+			continue
 		}
+		entries, order, keyErr := extractKeyedEntries(encodedField, keyedField.field)
+		if keyErr != nil {
+			continue
+		}
+		snapshot.keyed[keyedField.field] = &keyedFieldSnapshot{
+			entries: entries,
+			order:   order,
+			raw:     append(json.RawMessage(nil), encodedField...),
+		}
+		delete(fields, keyedField.field)
 	}
 
 	return snapshot, nil
@@ -175,35 +194,40 @@ func buildClientStateDelta(previous, current *clientStateSnapshot) (map[string]i
 		delta[resourceDeltaField] = resourceDelta
 	}
 
-	switch {
-	case previous.infrastructureKeyed && current.infrastructureKeyed:
-		infrastructureDelta, err := buildKeyedArrayDelta(
-			previous.infrastructure,
-			current.infrastructure,
-			previous.infrastructureOrder,
-			current.infrastructureOrder,
-			infrastructureField,
-		)
-		if err != nil {
-			return nil, err
-		}
-		if !infrastructureDelta.isEmpty() {
-			delta[infrastructureDeltaField] = infrastructureDelta
-		}
-	case current.infrastructureKeyed:
-		// The previous snapshot carried the projection as a plain field (or
-		// not at all): fall back to shipping the full array once so the
-		// client re-adopts a clean baseline.
-		if previousRaw, ok := previous.fields[infrastructureField]; !ok ||
-			!bytes.Equal(previousRaw, current.infrastructureRaw) {
-			delta[infrastructureField] = current.infrastructureRaw
-		}
-	case previous.infrastructureKeyed:
-		// The projection left the keyed path. If the current snapshot still
-		// carries it as a plain field, the fields loop above already shipped
-		// it whole; if it vanished entirely, clear it like any removed field.
-		if _, ok := current.fields[infrastructureField]; !ok {
-			delta[infrastructureField] = nil
+	for _, keyedField := range keyedDeltaFields {
+		previousSnapshot := previous.keyed[keyedField.field]
+		currentSnapshot := current.keyed[keyedField.field]
+		switch {
+		case previousSnapshot != nil && currentSnapshot != nil:
+			keyedDelta, err := buildKeyedArrayDelta(
+				previousSnapshot.entries,
+				currentSnapshot.entries,
+				previousSnapshot.order,
+				currentSnapshot.order,
+				keyedField.field,
+			)
+			if err != nil {
+				return nil, err
+			}
+			if !keyedDelta.isEmpty() {
+				delta[keyedField.deltaField] = keyedDelta
+			}
+		case currentSnapshot != nil:
+			// The previous snapshot carried the array as a plain field (or
+			// not at all): fall back to shipping the full array once so the
+			// client re-adopts a clean baseline.
+			if previousRaw, ok := previous.fields[keyedField.field]; !ok ||
+				!bytes.Equal(previousRaw, currentSnapshot.raw) {
+				delta[keyedField.field] = currentSnapshot.raw
+			}
+		case previousSnapshot != nil:
+			// The array left the keyed path. If the current snapshot still
+			// carries it as a plain field, the fields loop above already
+			// shipped it whole; if it vanished entirely, clear it like any
+			// removed field.
+			if _, ok := current.fields[keyedField.field]; !ok {
+				delta[keyedField.field] = nil
+			}
 		}
 	}
 

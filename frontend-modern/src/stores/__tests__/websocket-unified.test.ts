@@ -1133,6 +1133,76 @@ describe('websocket store unified resource contract', () => {
     }
   });
 
+  it('applies alert deltas immediately even while operator input is active', async () => {
+    const { store, dispose } = await createStoreHarness();
+    try {
+      await waitForOpenTick();
+      emitMessage({
+        type: 'initialState',
+        data: {
+          resources: [],
+          lastUpdate: 100,
+          activeAlerts: [
+            { id: 'alert-1', type: 'cpu', level: 'warning', resourceId: 'vm-1', value: 85 },
+          ],
+          recentlyResolved: [],
+        },
+      });
+      expect(store.state.activeAlerts).toHaveLength(1);
+      expect(store.state.activeAlerts[0]?.level).toBe('warning');
+
+      // Alert lifecycle truth does not wait for input idle: a delta arriving
+      // mid-gesture escalates and adds alerts immediately.
+      window.dispatchEvent(new Event('scroll'));
+      emitMessage({
+        type: 'rawData',
+        data: {
+          lastUpdate: 200,
+          activeAlertsDelta: {
+            upserts: [
+              { id: 'alert-1', level: 'critical', value: 97 },
+              { id: 'alert-2', type: 'memory', level: 'warning', resourceId: 'vm-2', value: 91 },
+            ],
+          },
+        },
+      });
+      const byId = new Map(store.state.activeAlerts.map((alert) => [alert.id, alert]));
+      expect(byId.get('alert-1')?.level).toBe('critical');
+      expect(byId.get('alert-1')?.value).toBe(97);
+      expect(byId.get('alert-1')?.resourceId).toBe('vm-1');
+      expect(byId.get('alert-2')?.level).toBe('warning');
+
+      // Resolution rides the same payload and is equally immediate.
+      emitMessage({
+        type: 'rawData',
+        data: {
+          lastUpdate: 300,
+          activeAlertsDelta: { removed: ['alert-1'] },
+        },
+      });
+      expect(store.state.activeAlerts.map((alert) => alert.id)).toEqual(['alert-2']);
+    } finally {
+      dispose();
+    }
+  });
+
+  it('ignores alert deltas that arrive without an alert baseline', async () => {
+    const { store, dispose } = await createStoreHarness();
+    try {
+      await waitForOpenTick();
+      emitMessage({
+        type: 'rawData',
+        data: {
+          lastUpdate: 200,
+          activeAlertsDelta: { upserts: [{ id: 'alert-1', level: 'warning' }] },
+        },
+      });
+      expect(store.state.activeAlerts).toEqual([]);
+    } finally {
+      dispose();
+    }
+  });
+
   it('drops scroll-queued deltas when a full snapshot supersedes their baseline', async () => {
     const { store, dispose } = await createStoreHarness();
     try {

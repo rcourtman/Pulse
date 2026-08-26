@@ -257,7 +257,10 @@ id-keyed merge patches for changed items only (at 50-node scale, timestamp
 patches of a few hundred bytes instead of the full ~55KB projection every
 tick), and the client applies them to an isolated baseline then reconciles
 the store with reference-stable untouched items so the per-tick deep walk of
-the whole projection is gone. Workload table rows derived from canonical
+the whole projection is gone. Active alerts travel the same keyed transport
+(`activeAlertsDelta`, replacing the ~37KB whole-array re-ship whenever any
+alert changed) while their application stays immediate per the alerts
+subsystem boundary. Workload table rows derived from canonical
 snapshots reuse the previous row object whenever the serialized row is
 unchanged, and a refresh that changes nothing returns the previous row array
 itself, so per-tick row identity churn stays bounded to guests whose data

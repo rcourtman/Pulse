@@ -200,7 +200,7 @@ func TestClientStateDeltaFallsBackToFullInfrastructureWhenUnkeyed(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if previous.infrastructureKeyed {
+	if previous.keyed[infrastructureField] != nil {
 		t.Fatal("id-less projection must not key")
 	}
 	current, err := buildClientStateSnapshot(currentState)
@@ -248,6 +248,89 @@ func TestClientStateDeltaShipsFullInfrastructureWhenBaselineWasUnkeyed(t *testin
 	full, ok := delta[infrastructureField].(json.RawMessage)
 	if !ok || !strings.Contains(string(full), `"id":"a"`) {
 		t.Fatalf("full field = %v, want whole projection re-ship", delta[infrastructureField])
+	}
+}
+
+func TestClientStateDeltaShipsActiveAlertsAsKeyedPatches(t *testing.T) {
+	previousState := models.EmptyStateFrontend()
+	previousState.ActiveAlerts = []models.Alert{
+		{
+			ID: "alert-1", Type: "cpu", Level: "warning", ResourceID: "vm-1",
+			Message: strings.Repeat("m", 4*1024), Value: 85,
+		},
+		{ID: "alert-2", Type: "memory", Level: "warning", ResourceID: "vm-2", Value: 70},
+	}
+	currentState := previousState
+	currentState.ActiveAlerts = append([]models.Alert(nil), previousState.ActiveAlerts...)
+	currentState.ActiveAlerts[0].Level = "critical"
+	currentState.ActiveAlerts[0].Value = 97
+
+	previous, err := buildClientStateSnapshot(previousState)
+	if err != nil {
+		t.Fatal(err)
+	}
+	current, err := buildClientStateSnapshot(currentState)
+	if err != nil {
+		t.Fatal(err)
+	}
+	delta, err := buildClientStateDelta(previous, current)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := delta[activeAlertsField]; ok {
+		t.Fatal("state delta re-shipped the full activeAlerts array")
+	}
+	payload, ok := delta[activeAlertsDeltaField].(resourceDeltaPayload)
+	if !ok {
+		t.Fatalf("alerts delta type = %T", delta[activeAlertsDeltaField])
+	}
+	if len(payload.Upserts) != 1 {
+		t.Fatalf("upserts = %d, want 1", len(payload.Upserts))
+	}
+	patch := string(payload.Upserts[0])
+	if !strings.Contains(patch, `"id":"alert-1"`) || !strings.Contains(patch, `"level":"critical"`) {
+		t.Fatalf("patch = %s, want id + level", patch)
+	}
+	if strings.Contains(patch, strings.Repeat("m", 128)) {
+		t.Fatal("patch re-shipped the unchanged alert message")
+	}
+	if len(patch) >= 256 {
+		t.Fatalf("patch = %d bytes, want a bounded lifecycle patch", len(patch))
+	}
+}
+
+func TestClientStateDeltaTracksResolvedAlertRemoval(t *testing.T) {
+	previousState := models.EmptyStateFrontend()
+	previousState.ActiveAlerts = []models.Alert{
+		{ID: "alert-1", Type: "cpu", Level: "warning", ResourceID: "vm-1"},
+		{ID: "alert-2", Type: "memory", Level: "warning", ResourceID: "vm-2"},
+	}
+	currentState := models.EmptyStateFrontend()
+	currentState.ActiveAlerts = []models.Alert{
+		{ID: "alert-2", Type: "memory", Level: "warning", ResourceID: "vm-2"},
+	}
+
+	previous, err := buildClientStateSnapshot(previousState)
+	if err != nil {
+		t.Fatal(err)
+	}
+	current, err := buildClientStateSnapshot(currentState)
+	if err != nil {
+		t.Fatal(err)
+	}
+	delta, err := buildClientStateDelta(previous, current)
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, ok := delta[activeAlertsDeltaField].(resourceDeltaPayload)
+	if !ok {
+		t.Fatalf("alerts delta type = %T", delta[activeAlertsDeltaField])
+	}
+	if len(payload.Removed) != 1 || payload.Removed[0] != "alert-1" {
+		t.Fatalf("removed = %#v, want [alert-1]", payload.Removed)
+	}
+	if len(payload.Upserts) != 0 {
+		t.Fatalf("upserts = %d, want none", len(payload.Upserts))
 	}
 }
 

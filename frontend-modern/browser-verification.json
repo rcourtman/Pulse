@@ -1,17 +1,16 @@
 {
   "version": 1,
-  "base_sha": "20503086ffc1eca6a4bb2121fe2c2ebd67160a0b",
-  "verified_at": "2026-08-26T17:08:31Z",
+  "base_sha": "f3d34346528fb981631238a394672d375d7092e9",
+  "verified_at": "2026-08-26T17:23:36Z",
   "result": "passed",
   "changed_paths": [
     "frontend-modern/src/stores/websocket.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/stores/websocket.ts": "c648fbef42e36c2ae8502d258a6da2ab009f3d6bb9718e36192ba05085c3b760"
+    "frontend-modern/src/stores/websocket.ts": "a1f05a8bbe44d9e99349d9f3651304823458a04fc20949ecc305f5bc22bab9af"
   },
   "routes": [
-    "/proxmox/overview",
-    "/settings/infrastructure"
+    "/proxmox/overview"
   ],
   "viewports": [
     {
@@ -24,17 +23,15 @@
     }
   ],
   "states": [
-    "isolated test backend built from this change serving the 50-node/929-guest mock estate over the state websocket",
-    "fresh socket connection: initialState ships the full connectedInfrastructure projection once to establish the client baseline",
-    "steady realtime ticks carrying connectedInfrastructureDelta merge patches with zero full projection re-ships",
-    "Connected systems settings surface rendering the delta-maintained projection with live per-item freshness",
-    "narrow 700px viewport rendering the same projection surface"
+    "isolated test backend built from this change serving the mock estate with churning alerts (13 active / 62 unacknowledged)",
+    "fresh socket: initialState ships the full activeAlerts array once to establish the client baseline",
+    "steady realtime ticks carrying activeAlertsDelta merge patches with zero full alert-array re-ships",
+    "alert badge and estate rendering live throughout on desktop and narrow viewports"
   ],
   "interactions": [
-    "raw websocket capture: ticks carry connectedInfrastructureDelta at 0.7-4KB of id+lastSeen merge patches instead of the ~55-60KB full projection previously re-shipped every tick; the full array shipped exactly once at initialState",
-    "client message counting over 30s: 3 delta ticks consumed, 0 full projection re-ships, 140 workload rows mounted, no console errors",
-    "Connected systems surface observed live at /settings/infrastructure: 71 systems with per-item freshness reading 1-5s ago, values that now only travel as merge patches, updating across ticks",
-    "unit-verified reference stability: untouched projection items keep their store identity across a delta sync, so reconcile no longer deep-walks the whole projection per tick",
-    "narrow 700px emulated viewport rendered the projection surface with live freshness text"
+    "raw websocket capture over 40s: 4 activeAlertsDelta payloads at 184-1981 bytes replacing the previous ~37-75KB whole-array re-ship whenever any alert changed; zero full re-ships after initialState",
+    "client consumed all delta ticks with 140 workload rows mounted and no console errors",
+    "unit-verified: alert level escalation, new-alert arrival, and resolution removal propagate to the store immediately even while operator input is active, encoding the alerts-subsystem immediacy boundary",
+    "narrow 700px emulated viewport rendered the alerts badge and estate live"
   ]
 }
