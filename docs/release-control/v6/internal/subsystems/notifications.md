@@ -198,6 +198,13 @@ its tenant block only when an identity is present so single-tenant payloads
 keep their existing shape. PSA/ticket-bridge receivers must get tenant routing
 identity from this payload boundary, not by inferring it from webhook endpoint
 configuration.
+That payload boundary also owns the language-neutral `MessageKey` exposed to
+custom templates. Canonical alerts derive it from `canonicalAlertKind` and the
+alert type (for example `metric-threshold.disk`); legacy alert paths use the
+alert type directly. The generic JSON templates must emit the message key,
+event, resource type, node display name and formatted metric values explicitly
+so external receivers can translate or reconstruct notifications without
+parsing English message text or reaching into the metadata map.
 That same transport boundary also owns outbound delivery integrity. A webhook
 config may carry an optional signing secret; when present, every JSON delivery
 through the canonical webhook transport must send `X-Pulse-Timestamp` and

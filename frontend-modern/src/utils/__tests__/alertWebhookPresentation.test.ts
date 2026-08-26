@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  ALERT_WEBHOOK_PAYLOAD_TEMPLATE_PLACEHOLDER,
+  ALERT_WEBHOOK_PAYLOAD_VARIABLES,
   ALERT_WEBHOOK_TEST_FAILURE,
   ALERT_WEBHOOK_TEST_SUCCESS,
   getAlertWebhookServices,
@@ -15,6 +17,18 @@ import {
 } from '@/utils/alertWebhookPresentation';
 
 describe('alertWebhookPresentation', () => {
+  it('advertises translation-ready generic webhook variables', () => {
+    expect(ALERT_WEBHOOK_PAYLOAD_TEMPLATE_PLACEHOLDER).toContain(
+      '"message_key": "{{.MessageKey}}"',
+    );
+    expect(ALERT_WEBHOOK_PAYLOAD_TEMPLATE_PLACEHOLDER).toContain(
+      '"resource_type": "{{.ResourceType}}"',
+    );
+    expect(ALERT_WEBHOOK_PAYLOAD_VARIABLES).toContain('{{.MessageKey}}');
+    expect(ALERT_WEBHOOK_PAYLOAD_VARIABLES).toContain('{{.ResourceType}}');
+    expect(ALERT_WEBHOOK_PAYLOAD_VARIABLES).toContain('{{.NodeDisplayName}}');
+  });
+
   it('returns canonical webhook test-result copy', () => {
     expect(ALERT_WEBHOOK_TEST_SUCCESS).toBe('Test webhook sent successfully!');
     expect(ALERT_WEBHOOK_TEST_FAILURE).toBe('Failed to send test webhook');

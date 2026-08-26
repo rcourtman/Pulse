@@ -112,13 +112,16 @@ export const ALERT_WEBHOOK_MENTION_HELP_LABEL = 'Optional — tag users or group
 export const ALERT_WEBHOOK_MENTION_FALLBACK_PLACEHOLDER = '@everyone';
 export const ALERT_WEBHOOK_PAYLOAD_HELP_LABEL = 'Optional — leave empty to use default';
 export const ALERT_WEBHOOK_PAYLOAD_TEMPLATE_PLACEHOLDER = `{
+  "event": "{{.Event}}",
+  "message_key": "{{.MessageKey}}",
   "text": "Alert: {{.Level}} - {{.Message}}",
+  "resource_type": "{{.ResourceType}}",
   "resource": "{{.ResourceName}}",
   "value": {{.Value}},
   "threshold": {{.Threshold}}
 }`;
 export const ALERT_WEBHOOK_PAYLOAD_VARIABLES =
-  '{{.ID}}, {{.Level}}, {{.Type}}, {{.ResourceName}}, {{.Node}}, {{.Message}}, {{.Value}}, {{.Threshold}}, {{.Duration}}, {{.Timestamp}}';
+  '{{.ID}}, {{.Event}}, {{.MessageKey}}, {{.Level}}, {{.Type}}, {{.ResourceType}}, {{.ResourceName}}, {{.Node}}, {{.NodeDisplayName}}, {{.Message}}, {{.Value}}, {{.Threshold}}, {{.Duration}}, {{.Timestamp}}';
 export const ALERT_WEBHOOK_CUSTOM_FIELDS_HELP = 'Available as';
 export const ALERT_WEBHOOK_CUSTOM_FIELDS_REFERENCE = '{{.CustomFields.<name>}}';
 export const ALERT_WEBHOOK_CUSTOM_FIELD_KEY_PLACEHOLDER = 'Field name';

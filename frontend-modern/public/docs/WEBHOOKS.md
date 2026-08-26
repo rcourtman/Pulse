@@ -28,8 +28,8 @@ Pulse includes built-in templates for popular services and a generic JSON templa
 For generic webhooks, use Go templates to format the JSON payload.
 
 **Variables (common):**
-- `{{.ID}}`, `{{.Level}}`, `{{.Type}}`
-- `{{.ResourceName}}`, `{{.ResourceID}}`, `{{.ResourceType}}`, `{{.Node}}`
+- `{{.ID}}`, `{{.Event}}`, `{{.MessageKey}}`, `{{.Level}}`, `{{.Type}}`
+- `{{.ResourceName}}`, `{{.ResourceID}}`, `{{.ResourceType}}`, `{{.Node}}`, `{{.NodeDisplayName}}`
 - `{{.Message}}`, `{{.Value}}`, `{{.Threshold}}`, `{{.Duration}}`, `{{.Timestamp}}`
 - `{{.Instance}}` (Pulse public URL if configured)
 - `{{.TenantID}}`, `{{.TenantName}}` (tenant identity in multi-tenant orgs and MSP client runtimes; empty on plain single-tenant installs)
@@ -70,6 +70,8 @@ These fields and behaviors are stable; ticket-routing integrations can rely on t
 **Severity.** `{{.Level}}` is `"warning"` or `"critical"`. Pulse has exactly these two alert levels.
 
 **Alert type.** `{{.Type}}` is the metric or condition that fired: `cpu`, `memory`, `disk`, `diskRead`, `diskWrite`, `networkIn`, `networkOut`, `connectivity`, and similar. The alert ID (`{{.ID}}`) is stable for the lifetime of an alert occurrence, so the `resolved` event carries the same ID as the `alert` event it closes.
+
+**Message key.** `{{.MessageKey}}` is the stable, language-neutral condition key for rebuilding or translating a notification. Canonical alerts use `<kind>.<type>` (for example, `metric-threshold.disk`); older alert paths fall back to `{{.Type}}`. Combine it with `{{.Event}}` and `{{.ResourceType}}` when the receiving system needs separate wording for firing/recovery events or different resource classes. Unlike a numeric message index, the symbolic key does not change when another alert type is added.
 
 **Tenant identity.** In multi-tenant organizations and MSP client runtimes, `{{.TenantID}}` and `{{.TenantName}}` identify which tenant fired the alert. Client runtimes get identity from the `PULSE_TENANT_ID` / `PULSE_TENANT_NAME` environment; shared-process organizations stamp the org ID and display name automatically.
 
@@ -192,11 +194,13 @@ stable severity/type fields from the [delivery contract](#-delivery-contract):
 {
   "event": "{{.Event}}",
   "alertId": "{{.ID | jsonString}}",
+  "messageKey": "{{.MessageKey | jsonString}}",
   "severity": "{{.Level | jsonString}}",
   "alertType": "{{.Type | jsonString}}",
   "tenantId": "{{.TenantID | jsonString}}",
   "tenantName": "{{.TenantName | jsonString}}",
   "resource": "{{.ResourceName | jsonString}}",
+  "resourceType": "{{.ResourceType | jsonString}}",
   "node": "{{.Node | jsonString}}",
   "summary": "{{.Message | jsonString}}",
   "value": {{.Value}},

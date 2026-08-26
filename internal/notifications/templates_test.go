@@ -438,6 +438,21 @@ func TestGetWebhookTemplates_GenericSettings(t *testing.T) {
 	if generic.Method != "POST" {
 		t.Errorf("Generic Method = %q, want POST", generic.Method)
 	}
+	for _, field := range []string{
+		`"event": "{{.Event | jsonString}}"`,
+		`"message_key": "{{.MessageKey | jsonString}}"`,
+		`"resource_type": "{{.ResourceType | jsonString}}"`,
+		`"node_display_name": "{{.NodeDisplayName | jsonString}}"`,
+		`"value_formatted": "{{.ValueFormatted | jsonString}}"`,
+		`"threshold_formatted": "{{.ThresholdFormatted | jsonString}}"`,
+	} {
+		if !strings.Contains(generic.PayloadTemplate, field) {
+			t.Errorf("Generic PayloadTemplate missing %s", field)
+		}
+	}
+	if !strings.Contains(generic.ResolvedPayloadTemplate, `"message_key": "{{.MessageKey | jsonString}}"`) {
+		t.Error("Generic ResolvedPayloadTemplate missing message_key")
+	}
 }
 
 func TestGetWebhookTemplates_PayloadTemplatesHaveRequiredFields(t *testing.T) {

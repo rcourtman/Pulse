@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { extractChangelog, extractHighlights, isReleaseVersion } from '../whatsNewModel';
 import whatsNewCardSource from '../WhatsNewCard.tsx?raw';
 
@@ -259,5 +261,21 @@ describe('post-update telemetry disclosure', () => {
     expect(whatsNewCardSource).toContain('actionLabel="See what\'s new"');
     expect(whatsNewCardSource).toContain('setDialogVisible(true)');
     expect(whatsNewCardSource).not.toContain('setDialogVisible(true);\n      markVersionSeen');
+  });
+});
+
+describe('current candidate notification packet', () => {
+  it('keeps translation-ready webhook support in both release summaries', () => {
+    const releaseNotes = readFileSync(
+      path.resolve(process.cwd(), '../docs/releases/RELEASE_NOTES_v6.4.0-rc.3.md'),
+      'utf8',
+    );
+    const changelog = readFileSync(
+      path.resolve(process.cwd(), '../docs/releases/V6_CHANGELOG_v6.4.0-rc.3.md'),
+      'utf8',
+    );
+
+    expect(releaseNotes).toContain('Translation-ready webhooks');
+    expect(changelog).toContain('stable language-neutral message key');
   });
 });

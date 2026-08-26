@@ -2293,6 +2293,35 @@ func TestPrepareWebhookData(t *testing.T) {
 		}
 	})
 
+	t.Run("builds a language-neutral key from canonical alert identity", func(t *testing.T) {
+		nm := &NotificationManager{}
+		alert := &alerts.Alert{
+			ID:        "test-1",
+			Type:      "disk",
+			StartTime: time.Now(),
+			Metadata: map[string]interface{}{
+				"canonicalAlertKind": "metric-threshold",
+			},
+		}
+
+		result := nm.prepareWebhookData(alert, nil)
+
+		if result.MessageKey != "metric-threshold.disk" {
+			t.Fatalf("expected canonical message key, got %q", result.MessageKey)
+		}
+	})
+
+	t.Run("uses alert type as the message key for legacy alert paths", func(t *testing.T) {
+		nm := &NotificationManager{}
+		alert := &alerts.Alert{ID: "test-1", Type: "connectivity", StartTime: time.Now()}
+
+		result := nm.prepareWebhookData(alert, nil)
+
+		if result.MessageKey != "connectivity" {
+			t.Fatalf("expected legacy message key, got %q", result.MessageKey)
+		}
+	})
+
 	t.Run("resourceType empty when not in metadata", func(t *testing.T) {
 		nm := &NotificationManager{}
 		alert := &alerts.Alert{

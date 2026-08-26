@@ -1,19 +1,15 @@
 {
   "version": 1,
-  "base_sha": "e27585b0a25bfcfc5b99d72f8dd3dcf7c668811e",
-  "verified_at": "2026-08-26T10:17:12Z",
+  "base_sha": "4d457159fc7684e7e63c9fd68b85db313300f2ed",
+  "verified_at": "2026-08-26T11:03:57Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Workloads/guestDrawerModel.ts",
-    "frontend-modern/src/hooks/useWorkloads.ts",
-    "frontend-modern/src/types/workloads.ts"
+    "frontend-modern/src/utils/alertWebhookPresentation.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Workloads/guestDrawerModel.ts": "8cf63f54a06cd0d2d0a02fbec871c553dc61d31d82724efa4dfa737ddbd5745e",
-    "frontend-modern/src/hooks/useWorkloads.ts": "87d048e258d71d04087d76d3fb5a3fcf109d454beaed915d1992f50ab4996c94",
-    "frontend-modern/src/types/workloads.ts": "b10648f1bcc689e1cd078ae1ab8f9f0651a6fab6d0106c30f0eddc797d13c249"
+    "frontend-modern/src/utils/alertWebhookPresentation.ts": "aaf1bc2327b6b232470569f9110159a88222e7c8cd7b0bf4e473ff0c34eb5147"
   },
-  "routes": ["/proxmox/overview"],
+  "routes": ["/alerts/notifications"],
   "viewports": [
     {
       "width": 1280,
@@ -25,17 +21,14 @@
     }
   ],
   "states": [
-    "checkout-web-265 VM row filtered and expanded from the Proxmox guest table",
-    "24-hour History tab with utilization, network I/O, and disk I/O series rendered",
-    "1-hour History range loaded with the same three drawable chart groups",
-    "narrow History layout stacked vertically without page-level horizontal overflow",
-    "drawer collapsed with focus returned to the workload row toggle"
+    "new Generic webhook editor with its default custom-payload placeholder visible",
+    "translation-ready variable list showing Event, MessageKey, ResourceType and NodeDisplayName",
+    "narrow webhook editor with no page-level horizontal overflow"
   ],
   "interactions": [
-    "signed into the current local build and filtered the Proxmox guest table to checkout-web-265",
-    "expanded checkout-web-265 and selected History at 1280 by 800; confirmed three chart groups, seven SVG paths, and zero Collecting history placeholders",
-    "switched the history selector from 24 hours to 1 hour and back; both ranges retained seven drawable SVG paths with no collection placeholder",
-    "rechecked the open History drawer at 390 by 844; confirmed the three charts stack vertically and the 390-pixel page has no horizontal overflow",
-    "restored the viewport override, collapsed checkout-web-265, and confirmed focus returned to the row expansion control"
+    "signed into the current local mock build and opened Alerts, Notifications, then Add Webhook",
+    "confirmed the Generic payload placeholder includes event, message_key and resource_type at desktop width",
+    "confirmed the available-variable help exposes MessageKey, ResourceType and NodeDisplayName",
+    "rechecked the open editor at 390 by 844 and measured document scroll width equal to the 390-pixel viewport"
   ]
 }

@@ -25,6 +25,9 @@ in the existing customer-facing section and have exact packet proof in
 `render_release_body_test.py`; a note about repository-scoped Proxmox backup
 review must name both PBS server and datastore rather than implying that a
 workload or node filter provides the same boundary.
+The next-candidate release notes and changelog must also describe newly stable
+integration fields when external receivers need them to consume the release;
+packet proof keeps the customer-facing summary and detailed changelog aligned.
 
 Provider-hosted MSP deploy artifacts must package the provider control plane as
 a least-privilege Docker provisioner. The packaged compose/setup path must avoid

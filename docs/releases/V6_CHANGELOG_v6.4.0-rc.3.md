@@ -7,6 +7,9 @@ next minor release._
 
 ## Added
 
+- Generic alert webhooks expose a stable language-neutral message key plus
+  explicit event, resource type, display name and formatted metric fields for
+  external notification translation and reconstruction.
 - Notification delivery history exposes recent redacted delivery outcomes,
   while test sends report when delivery is paused instead of claiming success.
 - A least-privilege Unified Agent install profile creates a non-login service

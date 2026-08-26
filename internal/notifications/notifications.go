@@ -3052,9 +3052,16 @@ func (n *NotificationManager) prepareWebhookData(alert *alerts.Alert, customFiel
 	}
 
 	resourceType := ""
+	messageKey := strings.TrimSpace(alert.Type)
 	if alert.Metadata != nil {
 		if rt, ok := alert.Metadata["resourceType"].(string); ok {
 			resourceType = rt
+		}
+		if kind, ok := alert.Metadata["canonicalAlertKind"].(string); ok && strings.TrimSpace(kind) != "" {
+			messageKey = strings.TrimSpace(kind)
+			if alertType := strings.TrimSpace(alert.Type); alertType != "" {
+				messageKey += "." + alertType
+			}
 		}
 	}
 
@@ -3079,6 +3086,7 @@ func (n *NotificationManager) prepareWebhookData(alert *alerts.Alert, customFiel
 
 	return WebhookPayloadData{
 		ID:                 alert.ID,
+		MessageKey:         messageKey,
 		Level:              string(alert.Level),
 		Type:               alert.Type,
 		ResourceName:       alert.ResourceName,

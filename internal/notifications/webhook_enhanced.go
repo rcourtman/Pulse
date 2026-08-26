@@ -40,6 +40,7 @@ type WebhookFilterRules struct {
 type WebhookPayloadData struct {
 	// Alert fields
 	ID                 string
+	MessageKey         string
 	Level              string
 	Type               string
 	ResourceName       string

@@ -7,6 +7,7 @@
 - **Faster large-estate navigation** — Storage and platform cold loads fell from roughly 15.6 seconds to 1.1 seconds in the measured large-estate case, with windowed tables keeping scrolling responsive.
 - **Lighter live updates** — The `/api/state` response fell from 4.75 MB to 4.09 MB, while changed-item catch-up and faster patch merging reduce work after reconnects and open mobile Alerts reliably.
 - **Visible notification delivery** — A recent-delivery log shows redacted outcomes, and test sends now say when delivery is paused instead of implying that a message was sent.
+- **Translation-ready webhooks** — Generic alert payloads include a stable message key and explicit resource context, so external systems can rebuild notifications in another language without parsing Pulse's English message.
 - **Safer agent operation** — A least-privilege install profile limits the agent account and sudo access, while Docker and Kubernetes recovery controls allow deliberate re-enrolment after removal.
 - **Clearer plan choices** — MSP evaluation mode supports provider trials, and the Business tier is now available for teams that need the annual business plan.
 - **Simpler saved filtering** — Saved views have been removed; bookmarkable filtered URLs remain available for returning to useful table filters.

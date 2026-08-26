@@ -434,6 +434,12 @@ inspectability, or convert missing/stale evidence into health.
 
 ## Current State
 
+The alert webhook editor exposes the delivery contract's language-neutral
+`MessageKey`, event, resource type and node display name alongside the existing
+type, severity and metric fields. Presentation must advertise the backend-owned
+template data rather than asking operators to parse the English alert message
+or reach into metadata for canonical alert identity.
+
 ### Agent custom sensors use canonical health-assessment alerts
 
 Typed `HostSensorSummary.Custom` numeric, boolean, or timestamp readings with
