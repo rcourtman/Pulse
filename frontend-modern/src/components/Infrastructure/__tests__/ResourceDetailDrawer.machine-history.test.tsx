@@ -15,6 +15,7 @@ vi.mock('@/components/Workloads/GuestDrawerHistory', () => ({
     target: { resourceType: string; resourceId: string } | null;
     range: string;
     currentMetrics?: Record<string, number | undefined>;
+    groups?: Array<{ id: string; series: Array<{ metric: string }> }>;
   }) => (
     <div
       data-testid="machine-history"
@@ -23,6 +24,10 @@ vi.mock('@/components/Workloads/GuestDrawerHistory', () => ({
       data-range={props.range}
       data-cpu={props.currentMetrics?.cpu}
       data-netin={props.currentMetrics?.netin}
+      data-groups={props.groups?.map((group) => group.id).join(',')}
+      data-metrics={props.groups
+        ?.flatMap((group) => group.series.map((series) => series.metric))
+        .join(',')}
     />
   ),
   GuestDrawerHistoryRangeSelect: (props: {
@@ -121,6 +126,47 @@ describe('ResourceDetailDrawer machine metrics history', () => {
     ));
 
     expect(screen.queryByRole('tab', { name: 'History' })).not.toBeInTheDocument();
+  });
+
+  it('renders storage history with the capacity catalog instead of workload metrics', async () => {
+    render(() => (
+      <ResourceDetailDrawer
+        resource={resource({
+          id: 'storage-pool-tank',
+          type: 'storage',
+          metricsTarget: { resourceType: 'storage', resourceId: 'pool:tank' },
+          disk: { current: 0, used: 30, total: 100 },
+        })}
+      />
+    ));
+
+    await fireEvent.click(screen.getByRole('tab', { name: 'History' }));
+
+    const history = screen.getByTestId('machine-history');
+    expect(history).toHaveAttribute('data-resource-type', 'storage');
+    expect(history).toHaveAttribute('data-groups', 'capacity');
+    expect(history).toHaveAttribute('data-metrics', 'usage');
+  });
+
+  it('renders physical-disk history with only canonical disk metrics', async () => {
+    render(() => (
+      <ResourceDetailDrawer
+        resource={resource({
+          id: 'disk-sdc',
+          type: 'storage',
+          metricsTarget: { resourceType: 'disk', resourceId: 'WD-WX12A3456' },
+          disk: { current: 42 },
+          temperature: 39,
+        })}
+      />
+    ));
+
+    await fireEvent.click(screen.getByRole('tab', { name: 'History' }));
+
+    const history = screen.getByTestId('machine-history');
+    expect(history).toHaveAttribute('data-resource-type', 'disk');
+    expect(history).toHaveAttribute('data-groups', 'disk-activity,disk-io,disk-thermal');
+    expect(history).toHaveAttribute('data-metrics', 'disk,diskread,diskwrite,smart_temp');
   });
 
   it('adds a first-class discovery tab for Pulse Agent machines', async () => {

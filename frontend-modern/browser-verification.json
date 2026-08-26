@@ -1,15 +1,15 @@
 {
   "version": 1,
-  "base_sha": "18b74c0adb07749cdd00caf9fc01ec09849029cd",
-  "verified_at": "2026-08-26T11:10:47Z",
+  "base_sha": "5d46e7d0e76ddd069a12f62fb670fd3ec0356e9e",
+  "verified_at": "2026-08-26T11:27:33Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/features/docker/dockerHostDrawerModel.ts"
+    "frontend-modern/src/components/Infrastructure/resourceDetailDrawerMetricsHistoryModel.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/docker/dockerHostDrawerModel.ts": "af67dd2e6ae26a4c220ba77342842a5782a52dae77d664b5b56d37e996abdb79"
+    "frontend-modern/src/components/Infrastructure/resourceDetailDrawerMetricsHistoryModel.ts": "6767cf06b2f3c42931deba2b9620858210d8c7ce55d261b042e752b6680a4223"
   },
-  "routes": ["/docker/overview", "/proxmox/overview"],
+  "routes": ["/truenas/storage"],
   "viewports": [
     {
       "width": 1230,
@@ -21,17 +21,15 @@
     }
   ],
   "states": [
-    "Docker host History at 24 hours and 7 days with utilization, network I/O, disk I/O, and thermals populated",
-    "Docker app-container History at 24 hours and 7 days with utilization, network I/O, and disk I/O populated",
-    "Proxmox guest History with utilization, network I/O, and disk I/O populated",
-    "Proxmox node History at 24 hours and 7 days with utilization, network I/O, disk I/O, and thermals populated",
-    "narrow Docker host History stacked without document-level horizontal overflow"
+    "TrueNAS pool History with only the canonical capacity series populated",
+    "TrueNAS dataset History with only the canonical capacity series populated",
+    "TrueNAS physical-disk History at 24 hours and 7 days with activity, disk I/O, and temperature populated",
+    "narrow TrueNAS physical-disk History with the same populated chart catalog"
   ],
   "interactions": [
-    "opened Edge Apps 01 from the Docker hosts table and selected History; confirmed four chart groups and zero Collecting history placeholders",
-    "opened nextcloud from the Docker containers table and selected History; confirmed three chart groups and zero Collecting history placeholders",
-    "switched Docker host, Docker container, and Proxmox node History selectors to 7 days; every expected group remained populated",
-    "opened checkout-web-265 and Analytics A on the Proxmox overview; guest and node History drawers rendered their full chart catalogs",
-    "rechecked Edge Apps 01 at 390 by 844; confirmed four stacked groups, no horizontal overflow, and row focus return after collapse"
+    "opened archive and archive/cold from the TrueNAS storage table; each drawer rendered one populated Capacity chart and no workload-only charts",
+    "opened physical disk sdc and selected History; confirmed Activity, Disk I/O, and Temperature charts with zero Collecting history placeholders",
+    "switched the physical-disk History selector to 7 days; all three groups remained populated",
+    "rechecked sdc at 390 by 844; the responsive table and populated disk history remained usable"
   ]
 }

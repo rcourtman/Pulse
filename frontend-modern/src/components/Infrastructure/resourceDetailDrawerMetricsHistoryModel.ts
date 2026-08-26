@@ -68,13 +68,67 @@ const GPU_HISTORY_GROUPS: GuestDrawerHistoryGroupConfig[] = [
   },
 ];
 
+const NODE_METRICS_HISTORY_GROUPS = HOST_METRICS_HISTORY_GROUPS.filter(
+  (group) => group.id !== 'disk-io',
+);
+
+const STORAGE_METRICS_HISTORY_GROUPS: GuestDrawerHistoryGroupConfig[] = [
+  {
+    id: 'capacity',
+    label: 'Capacity',
+    unit: '%',
+    series: [{ metric: 'usage', label: 'Used', unit: '%', color: '#22c55e' }],
+  },
+];
+
+const DISK_METRICS_HISTORY_GROUPS: GuestDrawerHistoryGroupConfig[] = [
+  {
+    id: 'disk-activity',
+    label: 'Activity',
+    unit: '%',
+    series: [{ metric: 'disk', label: 'Busy', unit: '%', color: '#8b5cf6' }],
+  },
+  {
+    id: 'disk-io',
+    label: 'Disk I/O',
+    unit: 'B/s',
+    series: [
+      { metric: 'diskread', label: 'Read', unit: 'B/s', color: '#3b82f6' },
+      { metric: 'diskwrite', label: 'Write', unit: 'B/s', color: '#f59e0b' },
+    ],
+  },
+  {
+    id: 'disk-thermal',
+    label: 'Temperature',
+    unit: 'C',
+    series: [{ metric: 'smart_temp', label: 'Disk', unit: 'C', color: '#ef4444' }],
+  },
+];
+
+const getBaseMetricsHistoryGroups = (
+  resourceType: MetricsHistoryResourceType | undefined,
+): GuestDrawerHistoryGroupConfig[] => {
+  switch (resourceType) {
+    case 'agent':
+      return HOST_METRICS_HISTORY_GROUPS;
+    case 'node':
+      return NODE_METRICS_HISTORY_GROUPS;
+    case 'storage':
+      return STORAGE_METRICS_HISTORY_GROUPS;
+    case 'disk':
+      return DISK_METRICS_HISTORY_GROUPS;
+    default:
+      return GUEST_DRAWER_HISTORY_GROUPS;
+  }
+};
+
 export const getResourceMetricsHistoryGroups = (
   resource: Resource,
 ): GuestDrawerHistoryGroupConfig[] => {
   const target = getResourceMetricsHistoryTarget(resource);
-  const baseGroups =
-    target?.resourceType === 'agent' ? HOST_METRICS_HISTORY_GROUPS : GUEST_DRAWER_HISTORY_GROUPS;
-  return (resource.agent?.sensors?.gpu?.length ?? 0) > 0
+  const baseGroups = getBaseMetricsHistoryGroups(target?.resourceType);
+  const supportsGPUHistory = target?.resourceType === 'agent' || target?.resourceType === 'node';
+  return supportsGPUHistory && (resource.agent?.sensors?.gpu?.length ?? 0) > 0
     ? [...baseGroups, ...GPU_HISTORY_GROUPS]
     : baseGroups;
 };
@@ -101,7 +155,9 @@ export const getResourceMetricsHistoryTarget = (
 
 // Any resource that resolves a metrics history target can chart history —
 // the backend stores and serves series for every type resolveMetricsTarget
-// hands out (agent, vm, system-container, app-container, pod, disk, ceph).
+// hands out. Each target type selects the catalog that matches the metrics
+// actually persisted for it; storage and physical disks must not inherit the
+// CPU/network workload catalog merely because they use the shared renderer.
 // Gating on type === 'agent' silently hid history for Docker containers
 // even though the store records their CPU/memory/disk/IO samples.
 export const resourceSupportsMetricsHistory = (resource: Resource): boolean =>
@@ -110,15 +166,19 @@ export const resourceSupportsMetricsHistory = (resource: Resource): boolean =>
 export const getResourceMetricsHistoryCurrentMetrics = (
   resource: Resource,
 ): Record<string, number | undefined> => {
+  const diskPercent = resource.disk ? finiteMetric(getDiskPercent(resource)) : undefined;
+  const temperature = finiteMetric(resource.temperature);
   return {
     cpu: finiteMetric(resource.cpu?.current),
     memory: resource.memory ? finiteMetric(getMemoryPercent(resource)) : undefined,
-    disk: resource.disk ? finiteMetric(getDiskPercent(resource)) : undefined,
+    disk: diskPercent,
+    usage: diskPercent,
     netin: finiteMetric(resource.network?.rxBytes),
     netout: finiteMetric(resource.network?.txBytes),
     diskread: finiteMetric(resource.diskIO?.readRate),
     diskwrite: finiteMetric(resource.diskIO?.writeRate),
-    temperature: finiteMetric(resource.temperature),
+    temperature,
+    smart_temp: temperature,
     gpu: getResourceGPUUtilizationPercent(resource),
     gpu_memory: getResourceGPUMemoryPercent(resource),
     gpu_temperature: getResourceGPUTemperatureCelsius(resource),

@@ -6406,7 +6406,11 @@ source-aware subset of that catalog: utilization, network, and thermals remain,
 while host disk throughput is omitted because the PVE node API does not expose
 that stream. The drawer must not leave an unsupported disk-I/O chart in a
 permanent `Collecting history` state. Non-host workloads retain the default
-workload history groups unchanged.
+workload history groups unchanged. Storage metrics targets select a dedicated
+capacity catalog backed by the canonical `usage` series, while physical-disk
+targets select only the canonical busy, read, write, and SMART-temperature
+series. Neither target may inherit guest CPU, memory, or network charts that
+its backend history model does not record.
 Rendered table proof belongs in
 `frontend-modern/src/features/standalone/__tests__/AgentsMachinesTable.test.tsx`;
 drawer grouping and fallback proof belongs in

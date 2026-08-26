@@ -135,11 +135,13 @@ describe('getResourceMetricsHistoryCurrentMetrics branch coverage', () => {
       cpu: 12.5,
       memory: 30, // (30 / 100) * 100
       disk: 40, // (80 / 200) * 100
+      usage: 40,
       netin: 1000,
       netout: 2000,
       diskread: 3000,
       diskwrite: 4000,
       temperature: undefined,
+      smart_temp: undefined,
       gpu: undefined,
       gpu_memory: undefined,
       gpu_temperature: undefined,
@@ -154,11 +156,13 @@ describe('getResourceMetricsHistoryCurrentMetrics branch coverage', () => {
       cpu: undefined,
       memory: undefined,
       disk: undefined,
+      usage: undefined,
       netin: undefined,
       netout: undefined,
       diskread: undefined,
       diskwrite: undefined,
       temperature: undefined,
+      smart_temp: undefined,
       gpu: undefined,
       gpu_memory: undefined,
       gpu_temperature: undefined,
@@ -222,11 +226,13 @@ describe('getResourceMetricsHistoryCurrentMetrics branch coverage', () => {
       cpu: undefined,
       memory: undefined,
       disk: undefined,
+      usage: undefined,
       netin: undefined,
       netout: undefined,
       diskread: undefined,
       diskwrite: undefined,
       temperature: undefined,
+      smart_temp: undefined,
       gpu: undefined,
       gpu_memory: undefined,
       gpu_temperature: undefined,
@@ -293,6 +299,64 @@ describe('getResourceMetricsHistoryCurrentMetrics branch coverage', () => {
       'utilization',
       'network',
       'disk-io',
+    ]);
+  });
+
+  it('uses only canonical capacity history for storage targets', () => {
+    const resource = baseResource({
+      type: 'storage',
+      metricsTarget: { resourceType: 'storage', resourceId: 'pool:tank' },
+      disk: { current: 0, used: 30, total: 100 },
+    });
+
+    expect(getResourceMetricsHistoryGroups(resource)).toStrictEqual([
+      {
+        id: 'capacity',
+        label: 'Capacity',
+        unit: '%',
+        series: [{ metric: 'usage', label: 'Used', unit: '%', color: '#22c55e' }],
+      },
+    ]);
+    expect(getResourceMetricsHistoryCurrentMetrics(resource).usage).toBe(30);
+  });
+
+  it('uses canonical activity, throughput, and SMART temperature history for disk targets', () => {
+    const resource = baseResource({
+      type: 'storage',
+      metricsTarget: { resourceType: 'disk', resourceId: 'SERIAL-1' },
+      disk: { current: 17 },
+      diskIO: { readRate: 1024, writeRate: 2048 },
+      temperature: 41,
+    });
+
+    expect(getResourceMetricsHistoryGroups(resource).map((group) => group.id)).toEqual([
+      'disk-activity',
+      'disk-io',
+      'disk-thermal',
+    ]);
+    expect(
+      getResourceMetricsHistoryGroups(resource).flatMap((group) =>
+        group.series.map((series) => series.metric),
+      ),
+    ).toEqual(['disk', 'diskread', 'diskwrite', 'smart_temp']);
+    expect(getResourceMetricsHistoryCurrentMetrics(resource)).toMatchObject({
+      disk: 17,
+      diskread: 1024,
+      diskwrite: 2048,
+      smart_temp: 41,
+    });
+  });
+
+  it('uses the source-aware host subset for API-only Proxmox node targets', () => {
+    const resource = baseResource({
+      type: 'agent',
+      metricsTarget: { resourceType: 'node', resourceId: 'pve1-node1' },
+    });
+
+    expect(getResourceMetricsHistoryGroups(resource).map((group) => group.id)).toEqual([
+      'utilization',
+      'network',
+      'thermals',
     ]);
   });
 
