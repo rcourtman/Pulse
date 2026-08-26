@@ -8,7 +8,7 @@ export type WorkloadsStatusMode = 'all' | 'running' | 'degraded' | 'stopped';
 export type WorkloadsGroupingMode = 'grouped' | 'flat';
 export type WorkloadsMetricDisplayMode = 'bars' | 'sparklines';
 export type WorkloadsMemoryDisplayBasis = 'guest' | 'host';
-export type WorkloadsSortKey = keyof WorkloadGuest | 'diskIo' | 'netIo';
+export type WorkloadsSortKey = keyof WorkloadGuest | 'diskIo' | 'info' | 'netIo';
 
 export interface WorkloadsStatusOption {
   value: WorkloadsStatusMode;

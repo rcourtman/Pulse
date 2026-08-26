@@ -2486,6 +2486,12 @@ the canonical owners for desktop and mobile workload column sizing. Global CSS
 must not reintroduce competing `.workload-table [data-workload-col=…]` width
 rules or `min-width: max-content` fallbacks that can blow the table out
 horizontally on Firefox or other desktop browsers.
+The mixed Workloads `Info`/compact `ID` column must also remain sortable by the
+exact scalar rendered for each workload kind. `guestRowModel.tsx` owns that
+projection and `workloadSelectors.ts` owns its natural ordering, including
+numeric VM IDs, text fallbacks for images and namespaces, and empty values
+remaining last. Header code must consume the column model's `sortKey` instead
+of adding a second display-specific sorting path.
 The same `internal/api/router.go` payload boundary also keeps the
 will_fix_later remind-at deadline scoped to a single optional pointer
 (`*time.Time`) per finding on both API write paths, so adding the

@@ -60,6 +60,7 @@ import guestRowCellsSource from '../GuestRowCells.tsx?raw';
 import guestDrawerStateSource from '../useGuestDrawerState.ts?raw';
 import guestRowModelSource from '../guestRowModel.tsx?raw';
 import guestRowStateSource from '../useGuestRowState.ts?raw';
+import workloadSelectorsSource from '../workloadSelectors.ts?raw';
 import workloadTopologySource from '../workloadTopology.ts?raw';
 import {
   filterWorkloads,
@@ -1652,6 +1653,11 @@ describe('Workloads performance contract', () => {
       expect(workloadTableHeaderSource).toContain('TableHead');
       expect(workloadTableHeaderSource).toContain('col.sortKey as WorkloadSortKey');
       expect(workloadTableHeaderSource).toContain('getTableSortIndicator');
+      expect(guestRowModelSource).toContain(
+        "id: 'info', label: 'Info', width: '100px', sortKey: 'info'",
+      );
+      expect(workloadSelectorsSource).toContain("sortKey === 'info'");
+      expect(workloadSelectorsSource).toContain('getWorkloadInfoValue');
       expect(workloadTableHeaderSource).toContain('style={getGuestColumnStyle(');
       expect(workloadTableHeaderSource).toContain('props.workloadTableLayoutMode()');
       expect(workloadTableHeaderSource).toContain('props.workloadTableVisibleColumnIds()');

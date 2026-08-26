@@ -7,7 +7,7 @@ import type { Container } from '@/types/api';
 import type { DisplayMetricType } from '@/utils/metricThresholds';
 import { buildMetricKey } from '@/utils/metricsKeys';
 import { getGuestHealthIndicator, isGuestRunning } from '@/utils/status';
-import { getShortImageName, formatBytes } from '@/utils/format';
+import { formatBytes } from '@/utils/format';
 import { getContainerRuntimeBadgeForRuntime } from '@/utils/resourceBadgePresentation';
 import {
   getCanonicalWorkloadId,
@@ -31,6 +31,8 @@ import {
   EMPTY_IO_EMPHASIS,
   GROUPED_FIRST_CELL_INDENT,
   getOutlierEmphasis,
+  getWorkloadDisplayId,
+  getWorkloadInfoValue,
   type GuestRowProps,
 } from './guestRowModel';
 
@@ -76,14 +78,7 @@ export function useGuestRowState(props: GuestRowProps) {
 
   const customUrl = createMemo(() => props.customUrl?.trim() ?? '');
 
-  const displayId = createMemo(() => {
-    const provided = props.guest.displayId?.trim();
-    if (provided) return provided;
-    if (typeof props.guest.vmid === 'number' && props.guest.vmid > 0) {
-      return String(props.guest.vmid);
-    }
-    return '';
-  });
+  const displayId = createMemo(() => getWorkloadDisplayId(props.guest));
 
   const ipAddresses = createMemo(() => props.guest.ipAddresses ?? []);
   const networkInterfaces = createMemo(() => props.guest.networkInterfaces ?? []);
@@ -107,13 +102,7 @@ export function useGuestRowState(props: GuestRowProps) {
     return type === 'vm' || type === 'system-container';
   });
 
-  const infoValue = createMemo(() => {
-    const type = workloadType();
-    if (type === 'vm' || type === 'system-container') return displayId();
-    if (type === 'app-container') return dockerImage() ? getShortImageName(dockerImage()) : '';
-    if (type === 'pod') return namespace();
-    return '';
-  });
+  const infoValue = createMemo(() => getWorkloadInfoValue(props.guest));
 
   const infoTooltip = createMemo(() => {
     if (workloadType() === 'app-container') return dockerImage();

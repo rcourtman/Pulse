@@ -640,6 +640,64 @@ describe('workloadSelectors', () => {
       expect([...guests].sort(cpuAsc!).map((g) => g.id)).toEqual(['id-1', 'id-2', 'id-3']);
       expect(createWorkloadSortComparator('', 'asc')).toBeNull();
     });
+
+    it('sorts the mixed Info/ID projection naturally and keeps empty values last', () => {
+      const guests = [
+        makeGuest(1, {
+          id: 'vm-10',
+          name: 'vm-10',
+          type: 'vm',
+          workloadType: 'vm',
+          displayId: '10',
+        }),
+        makeGuest(2, {
+          id: 'container-nginx',
+          name: 'container-nginx',
+          type: 'app-container',
+          workloadType: 'app-container',
+          image: 'docker.io/library/nginx:2',
+        }),
+        makeGuest(3, {
+          id: 'vm-2',
+          name: 'vm-2',
+          type: 'vm',
+          workloadType: 'vm',
+          displayId: '2',
+        }),
+        makeGuest(4, {
+          id: 'pod-production',
+          name: 'pod-production',
+          type: 'pod',
+          workloadType: 'pod',
+          namespace: 'production',
+        }),
+        makeGuest(5, {
+          id: 'pod-empty',
+          name: 'pod-empty',
+          type: 'pod',
+          workloadType: 'pod',
+          namespace: '',
+        }),
+      ];
+
+      const infoAsc = createWorkloadSortComparator('info', 'asc')!;
+      const infoDesc = createWorkloadSortComparator('info', 'desc')!;
+
+      expect([...guests].sort(infoAsc).map((guest) => guest.id)).toEqual([
+        'vm-2',
+        'vm-10',
+        'container-nginx',
+        'pod-production',
+        'pod-empty',
+      ]);
+      expect([...guests].sort(infoDesc).map((guest) => guest.id)).toEqual([
+        'pod-production',
+        'container-nginx',
+        'vm-10',
+        'vm-2',
+        'pod-empty',
+      ]);
+    });
   });
 
   describe('groupWorkloads', () => {

@@ -1,15 +1,19 @@
 {
   "version": 1,
-  "base_sha": "af370a8dda01852586e6462b3208a7d822ee1261",
-  "verified_at": "2026-08-26T09:08:45Z",
+  "base_sha": "3b866458f665ff7be80e611cc60286d622a66e92",
+  "verified_at": "2026-08-26T09:20:54Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Workloads/GuestRow.tsx",
-    "frontend-modern/src/components/Workloads/WorkloadTableHeader.tsx"
+    "frontend-modern/src/components/Workloads/guestRowModel.tsx",
+    "frontend-modern/src/components/Workloads/useGuestRowState.ts",
+    "frontend-modern/src/components/Workloads/workloadSelectors.ts",
+    "frontend-modern/src/components/Workloads/workloadsFilterModel.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Workloads/GuestRow.tsx": "c1886d219bb44a9560a93e3227e022e370d0df7e3e396fa6e69ac4d982f275e2",
-    "frontend-modern/src/components/Workloads/WorkloadTableHeader.tsx": "9ed1b7fe10646efa7ec366a2ceca0c69fe30e77aff9334d2440ca6ede3f65fb8"
+    "frontend-modern/src/components/Workloads/guestRowModel.tsx": "e5bdf0f4bcb070227c7c40d512863eaff1bcb80db53c19d59a9b9085b648d344",
+    "frontend-modern/src/components/Workloads/useGuestRowState.ts": "591c98dbdb3213636ae5465f65fff4df03882ef428b57589c33eec36dc22fb85",
+    "frontend-modern/src/components/Workloads/workloadSelectors.ts": "98fe0f042d5e114f5b3b99080cc894e7da99d490f208ce6cd94867aa5a8aaff3",
+    "frontend-modern/src/components/Workloads/workloadsFilterModel.ts": "085dbf2b61d3cd87aec04b54aa3fcc15f0a12d3d70c4014830c45a807788cb79"
   },
   "routes": [
     "/proxmox/overview"
@@ -26,16 +30,15 @@
   ],
   "states": [
     "loaded grouped guest table with running and stopped VM and LXC rows",
-    "wide table with shared Info/ID, Net I/O, and Disk I/O columns visible",
-    "narrow table with the responsive Info/ID column visible and I/O columns omitted",
-    "active descending Net I/O sort indicator"
+    "wide table with the shared Info/ID column visible",
+    "narrow table with the responsive Info/ID column visible",
+    "active ascending and descending ID sort indicators"
   ],
   "interactions": [
-    "reloaded the Proxmox overview after the final source change",
-    "confirmed Type and the shared Info/ID header and cells use balanced centered alignment at desktop and narrow widths",
-    "confirmed Net I/O and Disk I/O headers stay centered over their paired directional readings",
-    "sorted by ID and Net I/O and confirmed the sort indicator preserves the corrected alignment",
-    "confirmed table and scroll-shell width parity at 1920px and 768px without unintended horizontal overflow",
-    "confirmed no browser console warnings or errors and restored the viewport override"
+    "loaded the Proxmox overview from the final source at desktop and narrow widths",
+    "clicked the shared ID header to sort ascending and confirmed the first group ordered IDs from 663 upward",
+    "clicked the shared ID header again to sort descending and confirmed the first group ordered IDs from 680 downward",
+    "confirmed the ID sort indicator and centered header-cell alignment remain coherent at 1920px and 768px",
+    "confirmed the responsive table remained readable without clipping the changed header and restored the viewport override"
   ]
 }

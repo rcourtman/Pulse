@@ -1104,6 +1104,11 @@ describe('GUEST_COLUMNS', () => {
     expect(columnIds.slice(dockerTailStart)).toEqual(['netIo', 'diskIo', 'update']);
   });
 
+  it('sorts the mixed Info/ID column by its rendered value', () => {
+    expect(GUEST_COLUMNS.find((column) => column.id === 'info')?.sortKey).toBe('info');
+    expect(GUEST_COLUMNS.find((column) => column.id === 'vmid')?.sortKey).toBe('vmid');
+  });
+
   it('marks toggleable columns correctly', () => {
     const toggleable = GUEST_COLUMNS.filter((c) => c.toggleable);
     const toggleableIds = toggleable.map((c) => c.id);

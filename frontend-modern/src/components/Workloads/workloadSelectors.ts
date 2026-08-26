@@ -1,6 +1,6 @@
 import type { Node } from '@/types/api';
 import type { WorkloadGuest, ViewMode, WorkloadType } from '@/types/workloads';
-import type { WorkloadIOEmphasis } from './guestRowModel';
+import { getWorkloadInfoValue, type WorkloadIOEmphasis } from './guestRowModel';
 import { computeIOScale } from '@/components/Infrastructure/infrastructureSelectors';
 import type { SummarySeriesGroupScope } from '@/components/shared/summaryCardInteraction';
 import { parseFilterStack, evaluateFilterStack, splitSearchExclusions } from '@/utils/searchQuery';
@@ -307,12 +307,19 @@ export const createWorkloadSortComparator = (
     if (nameA !== nameB) return nameA < nameB ? -1 : 1;
     return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
   };
+  const naturalTextCollator = new Intl.Collator(undefined, {
+    numeric: true,
+    sensitivity: 'base',
+  });
 
   return (a: WorkloadGuest, b: WorkloadGuest): number => {
     let aVal: SortValue = null;
     let bVal: SortValue = null;
 
-    if (sortKey === 'cpu') {
+    if (sortKey === 'info') {
+      aVal = getWorkloadInfoValue(a);
+      bVal = getWorkloadInfoValue(b);
+    } else if (sortKey === 'cpu') {
       aVal = getWorkloadCPUPercent(a.cpu) ?? 0;
       bVal = getWorkloadCPUPercent(b.cpu) ?? 0;
     } else if (sortKey === 'memory') {
@@ -349,7 +356,9 @@ export const createWorkloadSortComparator = (
     const bStr = String(bVal).toLowerCase();
 
     if (aStr === bStr) return tiebreak(a, b);
-    const comparison = aStr < bStr ? -1 : 1;
+    const comparison =
+      sortKey === 'info' ? naturalTextCollator.compare(aStr, bStr) : aStr < bStr ? -1 : 1;
+    if (comparison === 0) return tiebreak(a, b);
     return sortDirection === 'asc' ? comparison : -comparison;
   };
 };

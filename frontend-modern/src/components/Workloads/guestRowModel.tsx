@@ -8,6 +8,8 @@ import {
   PLATFORM_TABLE_PHONE_IDENTITY_WIDTH_PERCENT,
 } from '@/features/platformPage/sharedPlatformPage';
 import type { WorkloadGuest, WorkloadType, ViewMode } from '@/types/workloads';
+import { getShortImageName } from '@/utils/format';
+import { resolveWorkloadType } from '@/utils/workloads';
 import { createVisibleCanonicalTypeColumn } from '@/utils/typeColumnDefinition';
 import type {
   WorkloadMetricHistoryReader,
@@ -184,6 +186,27 @@ export const getOutlierEmphasis = (value: number, stats: IODistributionStats): I
   return { className: 'text-muted', showOutlierHint: false };
 };
 
+export const getWorkloadDisplayId = (guest: WorkloadGuest): string => {
+  const provided = guest.displayId?.trim();
+  if (provided) return provided;
+  if (typeof guest.vmid === 'number' && guest.vmid > 0) return String(guest.vmid);
+  return '';
+};
+
+// The mixed Info column projects one scalar from each workload kind. Sorting
+// must use this same projection so the header never orders rows by a hidden or
+// provider-specific field that differs from the rendered value.
+export const getWorkloadInfoValue = (guest: WorkloadGuest): string => {
+  const type = resolveWorkloadType(guest);
+  if (type === 'vm' || type === 'system-container') return getWorkloadDisplayId(guest);
+  if (type === 'app-container') {
+    const image = guest.image?.trim() ?? '';
+    return image ? getShortImageName(image) : '';
+  }
+  if (type === 'pod') return guest.namespace?.trim() ?? '';
+  return '';
+};
+
 export const GUEST_COLUMNS: ColumnDef[] = [
   {
     id: 'name',
@@ -213,7 +236,7 @@ export const GUEST_COLUMNS: ColumnDef[] = [
     kind: 'text',
   },
   createVisibleCanonicalTypeColumn(),
-  { id: 'info', label: 'Info', width: '100px', kind: 'numeric-value' },
+  { id: 'info', label: 'Info', width: '100px', sortKey: 'info', kind: 'numeric-value' },
   { id: 'vmid', label: 'ID', width: '45px', sortKey: 'vmid', kind: 'numeric-value' },
   { id: 'cpu', label: 'CPU', width: '140px', sortKey: 'cpu', kind: 'metric-bar' },
   { id: 'memory', label: 'Mem', width: '140px', sortKey: 'memory', kind: 'metric-bar' },
