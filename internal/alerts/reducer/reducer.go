@@ -64,13 +64,18 @@ const (
 // Incident is the reducer's record for one resource+metric key. Absence
 // from State means idle.
 type Incident struct {
-	ResourceID     string
-	Metric         string
-	State          IncidentState
-	Severity       Severity
-	PendingSince   time.Time
-	StartedAt      time.Time
-	LastValue      float64
+	ResourceID string
+	// Key is the incident sub-key: the metric name for the metric family,
+	// the discrete state key for the confirmation family.
+	Key          string
+	State        IncidentState
+	Severity     Severity
+	PendingSince time.Time
+	StartedAt    time.Time
+	LastValue    float64
+	// Confirmations is the consecutive-match count for the confirmation
+	// family; unused by the metric family.
+	Confirmations  int
 	LastObservedAt time.Time
 }
 
@@ -89,7 +94,7 @@ const (
 type Event struct {
 	Type       EventType
 	ResourceID string
-	Metric     string
+	Key        string
 	Severity   Severity
 	Value      float64
 	At         time.Time
@@ -106,16 +111,16 @@ func NewState() *State {
 	return &State{incidents: make(map[string]*Incident)}
 }
 
-func incidentKey(resourceID, metric string) string {
-	return fmt.Sprintf("%s\x00%s", resourceID, metric)
+func incidentKey(resourceID, subKey string) string {
+	return fmt.Sprintf("%s\x00%s", resourceID, subKey)
 }
 
 // Incident returns a copy of the tracked incident for the key, if any.
-func (s *State) Incident(resourceID, metric string) (Incident, bool) {
+func (s *State) Incident(resourceID, subKey string) (Incident, bool) {
 	if s == nil {
 		return Incident{}, false
 	}
-	incident, ok := s.incidents[incidentKey(resourceID, metric)]
+	incident, ok := s.incidents[incidentKey(resourceID, subKey)]
 	if !ok {
 		return Incident{}, false
 	}
@@ -172,7 +177,7 @@ func (s *State) ApplyMetric(signal MetricSignal, rule MetricRule) []Event {
 		return Event{
 			Type:       eventType,
 			ResourceID: signal.ResourceID,
-			Metric:     signal.Metric,
+			Key:        signal.Metric,
 			Severity:   severity,
 			Value:      signal.Value,
 			At:         signal.ObservedAt,
@@ -215,7 +220,7 @@ func (s *State) ApplyMetric(signal MetricSignal, rule MetricRule) []Event {
 			if incident == nil {
 				s.incidents[key] = &Incident{
 					ResourceID:     signal.ResourceID,
-					Metric:         signal.Metric,
+					Key:            signal.Metric,
 					State:          StatePending,
 					PendingSince:   signal.ObservedAt,
 					LastValue:      signal.Value,
@@ -240,7 +245,7 @@ func (s *State) ApplyMetric(signal MetricSignal, rule MetricRule) []Event {
 		severity := severityFor(signal.Value, rule.Trigger, signal.Metric)
 		s.incidents[key] = &Incident{
 			ResourceID:     signal.ResourceID,
-			Metric:         signal.Metric,
+			Key:            signal.Metric,
 			State:          StateFiring,
 			Severity:       severity,
 			StartedAt:      signal.ObservedAt,

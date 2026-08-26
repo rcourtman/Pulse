@@ -34,5 +34,20 @@ poll (guest per-disk usage alerts were the remaining production caller;
 user-visible as the stale-alert class, e.g. #1580). Fixed at the caller
 with a focused regression test before the parity slice landed.
 
-Remaining for later slices: offline/confirmation families, ack/snooze
-lifecycle, intent-policy interaction, and a shadow-mode runtime feed.
+Second slice (2026-08-26): the confirmation (discrete-state) family —
+N-consecutive-match activation, single-observation recovery at the
+evaluator layer, spec-carried severity — characterized against
+`evaluateCanonicalLifecycleAlert`. The harness again surfaced a real
+defect: the confirmation maps persist only counts, so
+`lifecyclePreviousState` reconstructed pending runs dated at the current
+observation and activation stamped StartTime at the final confirming poll,
+understating outage start by the whole confirmation window (the manager
+had already fixed this once for unified incidents via
+`unifiedIncidentFirstSeen` but not for the generic lifecycle path). Fixed
+with `lifecycleFirstMatched`, mirroring that precedent, before the parity
+slice landed.
+
+Remaining for later slices: recovery-confirmation gating
+(`offlineRecoveryConfirmations`), re-fire-within-retention start
+restoration, ack/snooze lifecycle, intent-policy interaction, and a
+shadow-mode runtime feed.
