@@ -651,9 +651,30 @@ non-match at the evaluator layer, and re-derives spec-carried severity on every
 firing observation. Both manager and reducer must date first activation at the
 first matched observation, not the final confirming poll. Alerts runtime owns
 that first-match timestamp alongside the confirmation counter and must clear it
-whenever the run resets or its tracking state is removed. Offline recovery
-confirmation, recently-resolved re-fire restoration, additional alert families,
-and downstream delivery behavior require separate contract slices.
+whenever the run resets or its tracking state is removed. A direct reset of the
+confirmation counter also begins a new run: the next matched observation must
+replace any stale first-match timestamp so a later alert cannot be backdated to
+an earlier outage.
+
+Poll-driven offline recovery composes an additional confirmation gate over that
+evaluator-layer lifecycle. A firing incident resolves only after consecutive
+healthy observations (three for nodes, PBS, and PMG; two for storage), and an
+offline observation resets the healthy run. Pending incidents still clear on
+the first healthy observation, while disabling the rule bypasses recovery
+confirmation and resolves immediately. The reducer's recovery state and the
+manager composition must remain step-for-step equivalent under the parity
+harness.
+
+A discrete incident that reactivates within the five-minute recently-resolved
+retention is the same occurrence: it restores the original first-activation
+time and emits the reducer's `EventRefired`, matching the manager path that
+reactivates without adding a second history occurrence. The resolved record is
+consumed by reactivation; after the retention window, activation starts a new
+occurrence at the new matched observation. The reducer measures retention on
+the explicit observation clock. The manager's temporary wall-clock comparison
+remains reference behavior only until cutover and is covered by a parity
+harness that aligns the two clocks. Additional alert families and downstream
+delivery behavior require separate contract slices.
 That same guest-threshold owner also governs guest-derived lifecycle and
 posture alerts. Snapshot age, backup age, powered-off state, and
 configuration-change reevaluation must all construct a canonical lightweight
