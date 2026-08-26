@@ -1021,19 +1021,30 @@ export function createWebSocketStore(url: string) {
               const connectedInfrastructure = Array.isArray(message.data.connectedInfrastructure)
                 ? (message.data.connectedInfrastructure as ConnectedInfrastructureItem[])
                 : [];
-              // A full payload re-establishes the projection baseline the way
-              // a full resource snapshot re-establishes rawServerResources.
-              rawConnectedInfrastructure = structuredClone(connectedInfrastructure);
               pendingInfrastructureIds.clear();
-              pendingInfrastructureFull = true;
-              if (
-                typeof document !== 'undefined' &&
-                document.visibilityState !== 'hidden' &&
-                isOperatorInputActive()
-              ) {
-                scheduleDeferredResourceFlush();
+              if (source === 'websocket') {
+                // Only a socket payload shares the server's per-client delta
+                // lineage. A REST recovery is an independently built display
+                // snapshot and must never become the baseline for later socket
+                // patches.
+                rawConnectedInfrastructure = structuredClone(connectedInfrastructure);
+                pendingInfrastructureFull = true;
+                if (
+                  typeof document !== 'undefined' &&
+                  document.visibilityState !== 'hidden' &&
+                  isOperatorInputActive()
+                ) {
+                  scheduleDeferredResourceFlush();
+                } else {
+                  syncInfrastructureStore();
+                }
               } else {
-                syncInfrastructureStore();
+                rawConnectedInfrastructure = null;
+                pendingInfrastructureFull = false;
+                setState(
+                  'connectedInfrastructure',
+                  reconcile(structuredClone(connectedInfrastructure), { key: 'id' }),
+                );
               }
             } else if (
               'connectedInfrastructureDelta' in message.data &&
@@ -1057,9 +1068,9 @@ export function createWebSocketStore(url: string) {
                 } else {
                   syncInfrastructureStore();
                 }
+              } else {
+                requestFullStateRecovery(connectionId);
               }
-              // No baseline: leave the current projection; the next full
-              // payload (reconnect or snapshot) re-establishes it.
             }
             if (message.data.metrics !== undefined) setState('metrics', message.data.metrics);
             if (message.data.performance !== undefined)
@@ -1193,8 +1204,9 @@ export function createWebSocketStore(url: string) {
                 message.data.activeAlerts && Array.isArray(message.data.activeAlerts)
                   ? (message.data.activeAlerts as Alert[])
                   : [];
-              // A full payload re-establishes the keyed alert baseline.
-              rawActiveAlerts = structuredClone(alertsArray);
+              // Only the socket can establish the server-owned keyed baseline.
+              // REST recovery still refreshes the displayed alerts below.
+              rawActiveAlerts = source === 'websocket' ? structuredClone(alertsArray) : null;
               const newAlerts: Record<string, Alert> = {};
               alertsArray.forEach((alert: Alert) => {
                 newAlerts[alert.id] = alert;
@@ -1221,9 +1233,9 @@ export function createWebSocketStore(url: string) {
                 }
                 lastActiveAlertsPayload = newAlerts;
                 applyActiveAlerts(alertsEnabled ? newAlerts : {});
+              } else {
+                requestFullStateRecovery(connectionId);
               }
-              // No baseline: leave current alerts; the next full payload
-              // (reconnect or snapshot) re-establishes it.
             }
             // Sync recently resolved alerts
             if (message.data.recentlyResolved !== undefined) {
@@ -1278,6 +1290,13 @@ export function createWebSocketStore(url: string) {
         // client's delta baseline. Invalidate any prior baseline before REST
         // hydration and remain delta-free until a full socket snapshot lands.
         rawServerResources = null;
+        deferredResourceIds.clear();
+        deferredResourceKeys.clear();
+        deferredResourceDeltaQueue.length = 0;
+        rawConnectedInfrastructure = null;
+        pendingInfrastructureIds.clear();
+        pendingInfrastructureFull = false;
+        rawActiveAlerts = null;
         oversizedSnapshotObserved = true;
         logger.warn('Server withheld an oversized state payload. Recovering over REST', {
           supersedes: message.data.supersedes,
@@ -1465,7 +1484,7 @@ export function createWebSocketStore(url: string) {
     if (now - lastFullStateRecoveryAt < 30000) return;
     lastFullStateRecoveryAt = now;
 
-    logger.warn('Received resource delta without a full snapshot baseline. Requesting full state');
+    logger.warn('Received keyed delta without a socket snapshot baseline. Requesting full state');
     if (ws && ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify({ type: 'requestData' }));
     }
@@ -1528,6 +1547,16 @@ export function createWebSocketStore(url: string) {
         // 32 MiB guard trips around 12000 resources). Recover over REST rather
         // than waiting for a baseline-less delta to notice, otherwise the first
         // paint on a large estate is an empty UI.
+        // The frame may supersede any of the keyed projections. Once it is
+        // dropped, none of their socket lineages are safe to patch further.
+        rawServerResources = null;
+        deferredResourceIds.clear();
+        deferredResourceKeys.clear();
+        deferredResourceDeltaQueue.length = 0;
+        rawConnectedInfrastructure = null;
+        pendingInfrastructureIds.clear();
+        pendingInfrastructureFull = false;
+        rawActiveAlerts = null;
         oversizedSnapshotObserved = true;
         lastServerActivityAt = Date.now();
         requestFullStateRecovery(connectionId);

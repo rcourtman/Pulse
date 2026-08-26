@@ -1139,7 +1139,7 @@ describe('websocket store unified resource contract', () => {
     }
   });
 
-  it('ignores infrastructure deltas that arrive without a projection baseline', async () => {
+  it('requests recovery for infrastructure deltas without a projection baseline', async () => {
     const { store, dispose } = await createStoreHarness();
     try {
       await waitForOpenTick();
@@ -1152,6 +1152,7 @@ describe('websocket store unified resource contract', () => {
         },
       });
       expect(store.state.connectedInfrastructure).toEqual([]);
+      expect(sentMessageTypes()).toContain('requestData');
     } finally {
       dispose();
     }
@@ -1253,7 +1254,7 @@ describe('websocket store unified resource contract', () => {
     }
   });
 
-  it('ignores alert deltas that arrive without an alert baseline', async () => {
+  it('requests recovery for alert deltas without an alert baseline', async () => {
     const { store, dispose } = await createStoreHarness();
     try {
       await waitForOpenTick();
@@ -1265,6 +1266,7 @@ describe('websocket store unified resource contract', () => {
         },
       });
       expect(store.state.activeAlerts).toEqual([]);
+      expect(sentMessageTypes()).toContain('requestData');
     } finally {
       dispose();
     }
@@ -1383,6 +1385,12 @@ describe('websocket store unified resource contract', () => {
       apiFetchJSONMock.mockResolvedValue({
         lastUpdate: 500,
         resources: [{ id: 'agent-host-1', type: 'agent', name: 'host-1', lastSeen: 100 }],
+        connectedInfrastructure: [
+          { id: 'infra-1', name: 'host-1', status: 'online', lastSeen: 100 },
+        ],
+        activeAlerts: [
+          { id: 'alert-1', type: 'cpu', level: 'warning', resourceId: 'agent-host-1', value: 85 },
+        ],
       });
 
       const { store, dispose } = await createStoreHarness();
@@ -1392,15 +1400,24 @@ describe('websocket store unified resource contract', () => {
         emitRawMessage(frameOfExactly(MAX_INBOUND_WEBSOCKET_MESSAGE_BYTES + 1));
         await flushMicrotasks();
         expect(store.state.resources).toHaveLength(1);
+        expect(store.state.connectedInfrastructure[0]?.lastSeen).toBe(100);
+        expect(store.state.activeAlerts[0]?.level).toBe('warning');
 
         // The server's withheld snapshot and this later REST response are not
-        // guaranteed to be identical, so the delta must not patch the REST copy.
+        // guaranteed to be identical, so none of the socket deltas may patch
+        // their corresponding REST copies.
         emitMessage({
           type: 'rawData',
           data: {
             lastUpdate: 600,
             resourceDelta: {
               upserts: [{ id: 'agent-host-1', lastSeen: 200 }],
+            },
+            connectedInfrastructureDelta: {
+              upserts: [{ id: 'infra-1', lastSeen: 200 }],
+            },
+            activeAlertsDelta: {
+              upserts: [{ id: 'alert-1', level: 'critical', value: 99 }],
             },
           },
         });
@@ -1409,6 +1426,9 @@ describe('websocket store unified resource contract', () => {
         expect(store.state.resources).toHaveLength(1);
         expect(store.state.resources[0]?.lastSeen).toBe(100);
         expect(store.state.resources[0]?.name).toBe('host-1');
+        expect(store.state.connectedInfrastructure[0]?.lastSeen).toBe(100);
+        expect(store.state.activeAlerts[0]?.level).toBe('warning');
+        expect(store.state.activeAlerts[0]?.value).toBe(85);
         expect(sentMessageTypes()).not.toContain('requestData');
       } finally {
         dispose();
