@@ -62,10 +62,17 @@ type Manager struct {
 	backupIntentResolver   BackupIntentContextResolver
 	resourceIntentResolver ResourceIntentIdentityResolver
 	// Offline confirmation tracking
-	nodeOfflineCount             map[string]int                  // Track consecutive offline counts for nodes (legacy)
-	connectionDegradedCount      map[string]int                  // Track consecutive degraded counts for platform connections (pve/pbs/pmg/vmware/truenas)
-	offlineConfirmations         map[string]int                  // Track consecutive offline counts for all resources
-	offlineRecoveryConfirmations map[string]int                  // Track consecutive healthy confirmations before clearing poll-driven offline alerts
+	nodeOfflineCount             map[string]int // Track consecutive offline counts for nodes (legacy)
+	connectionDegradedCount      map[string]int // Track consecutive degraded counts for platform connections (pve/pbs/pmg/vmware/truenas)
+	offlineConfirmations         map[string]int // Track consecutive offline counts for all resources
+	offlineRecoveryConfirmations map[string]int // Track consecutive healthy confirmations before clearing poll-driven offline alerts
+	// lifecycleFirstMatched preserves when a canonical-lifecycle confirmation
+	// run first matched, keyed by tracking key. The confirmation maps hold
+	// only counts, so without this the reconstructed pending state dated the
+	// run at the current observation and activation stamped StartTime at the
+	// final confirming poll — understating outage start by the whole
+	// confirmation window. Mirrors unifiedIncidentFirstSeen.
+	lifecycleFirstMatched        map[string]time.Time
 	unifiedIncidentConfirmations map[string]int                  // Track consecutive provider-incident observations before activation
 	unifiedIncidentFirstSeen     map[string]time.Time            // Preserve the first confirmed observation as lifecycle start
 	unifiedIncidentRecoveries    map[string]int                  // Track consecutive healthy observations before provider-incident recovery
@@ -181,6 +188,7 @@ func NewManagerWithDataDir(dataDir string, options ...ManagerOption) *Manager {
 		connectionDegradedCount:         make(map[string]int),
 		offlineConfirmations:            make(map[string]int),
 		offlineRecoveryConfirmations:    make(map[string]int),
+		lifecycleFirstMatched:           make(map[string]time.Time),
 		unifiedIncidentConfirmations:    make(map[string]int),
 		unifiedIncidentFirstSeen:        make(map[string]time.Time),
 		unifiedIncidentRecoveries:       make(map[string]int),

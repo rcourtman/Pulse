@@ -265,7 +265,7 @@ func canonicalAlertSeverity(level AlertLevel) alertspecs.AlertSeverity {
 	}
 }
 
-func lifecyclePreviousState(spec alertspecs.ResourceAlertSpec, existing *Alert, confirmations int, observedAt time.Time) alertspecs.EvaluatorState {
+func lifecyclePreviousState(spec alertspecs.ResourceAlertSpec, existing *Alert, confirmations int, firstMatched, observedAt time.Time) alertspecs.EvaluatorState {
 	if existing != nil {
 		required := spec.ConfirmationsRequired
 		if confirmations > required {
@@ -282,12 +282,19 @@ func lifecyclePreviousState(spec alertspecs.ResourceAlertSpec, existing *Alert, 
 		}
 	}
 	if confirmations > 0 {
+		// Date the reconstructed pending run at its preserved first match so
+		// activation stamps StartTime at the first failing observation, not
+		// at the final confirming poll.
+		matchedAt := firstMatched
+		if matchedAt.IsZero() {
+			matchedAt = observedAt
+		}
 		return alertspecs.EvaluatorState{
 			SpecID:             spec.ID,
 			State:              alertspecs.AlertStatePending,
 			Severity:           spec.Severity,
 			ConsecutiveMatches: confirmations,
-			FirstMatchedAt:     observedAt,
+			FirstMatchedAt:     matchedAt,
 		}
 	}
 	return alertspecs.EvaluatorState{
@@ -361,8 +368,12 @@ func (m *Manager) evaluateCanonicalLifecycleAlert(params canonicalLifecycleAlert
 	if params.Tracking != nil {
 		confirmations = params.Tracking[params.TrackingKey]
 	}
+	firstMatched := time.Time{}
+	if confirmations > 0 {
+		firstMatched = m.lifecycleFirstMatched[params.TrackingKey]
+	}
 
-	result, err := alertspecs.Evaluate(params.Spec, lifecyclePreviousState(params.Spec, existing, confirmations, params.Evidence.ObservedAt), params.Evidence)
+	result, err := alertspecs.Evaluate(params.Spec, lifecyclePreviousState(params.Spec, existing, confirmations, firstMatched, params.Evidence.ObservedAt), params.Evidence)
 	if err != nil {
 		log.Warn().
 			Err(err).
@@ -379,8 +390,12 @@ func (m *Manager) evaluateCanonicalLifecycleAlert(params canonicalLifecycleAlert
 	if params.Tracking != nil {
 		if result.State.ConsecutiveMatches > 0 {
 			params.Tracking[params.TrackingKey] = result.State.ConsecutiveMatches
+			if _, tracked := m.lifecycleFirstMatched[params.TrackingKey]; !tracked && !result.State.FirstMatchedAt.IsZero() {
+				m.lifecycleFirstMatched[params.TrackingKey] = result.State.FirstMatchedAt
+			}
 		} else {
 			delete(params.Tracking, params.TrackingKey)
+			delete(m.lifecycleFirstMatched, params.TrackingKey)
 		}
 	}
 
