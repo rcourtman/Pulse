@@ -313,6 +313,13 @@ contamination) and performs one canonical catch-up reconciliation on
 `visibilitychange` to visible. Alert and
 resolved-alert truth continues to update normally while hidden; this resource
 optimization must not defer, clear, or reinterpret alert lifecycle state.
+Active operator input applies the same separation: scroll, wheel, pointer
+press, and key activity may defer resource deltas, reporting projection, and
+the shared realtime tick token until the input-idle flush, but alert and
+resolved-alert payloads must still commit on the message that carries them.
+The input gate must never delay acknowledgement, recovery, navigation counts,
+resource alert indicators, or notification-facing alert truth merely because
+the resource projection is waiting for an idle window.
 The visible-tick resource commit may apply metrics-only rows as per-key
 subtree writes instead of whole-row reconciles, but alert truth is outside
 that fast path entirely: active-alert and resolved-alert stores keep their
