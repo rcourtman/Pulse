@@ -200,8 +200,45 @@ describe('NodeDrawer', () => {
     expect(screen.getByTestId('node-technical-details').querySelector('table')).toBeTruthy();
   });
 
-  it('renders node-only thermal history without requiring a table temperature column', async () => {
-    render(() => <NodeDrawer node={makeNode()} />);
+  it('renders API-only node history without unavailable disk throughput', async () => {
+    render(() => (
+      <NodeDrawer
+        node={makeNode({
+          id: 'homelab-pve-node-1',
+          type: 'node',
+          linkedAgentId: '',
+        })}
+      />
+    ));
+
+    await fireEvent.click(screen.getByText('History'));
+
+    await waitFor(() => {
+      expect(chartsApiMocks.getMetricsHistory).toHaveBeenCalledWith(
+        expect.objectContaining({
+          resourceType: 'node',
+          resourceId: 'homelab-pve-node-1',
+          range: '24h',
+        }),
+      );
+    });
+
+    const charts = screen.getAllByTestId('guest-history-group-chart');
+    expect(charts).toHaveLength(3);
+    expect(charts.map((chart) => chart.dataset.historyGroup)).toEqual([
+      'utilization',
+      'network',
+      'thermals',
+    ]);
+
+    const thermalChart = charts[2];
+    expect(within(thermalChart).getByText('Thermals')).toBeInTheDocument();
+    expect(thermalChart).toHaveTextContent('65°C');
+    expect(screen.getByTestId('guest-history-range-control')).toBeInTheDocument();
+  });
+
+  it('keeps agent history and disk throughput when a Unified Agent is linked', async () => {
+    render(() => <NodeDrawer node={makeNode({ linkedAgentId: 'agent:pve-node-1' })} />);
 
     await fireEvent.click(screen.getByText('History'));
 
@@ -216,17 +253,11 @@ describe('NodeDrawer', () => {
     });
 
     const charts = screen.getAllByTestId('guest-history-group-chart');
-    expect(charts).toHaveLength(4);
     expect(charts.map((chart) => chart.dataset.historyGroup)).toEqual([
       'utilization',
       'network',
       'disk-io',
       'thermals',
     ]);
-
-    const thermalChart = charts[3];
-    expect(within(thermalChart).getByText('Thermals')).toBeInTheDocument();
-    expect(thermalChart).toHaveTextContent('65°C');
-    expect(screen.getByTestId('guest-history-range-control')).toBeInTheDocument();
   });
 });
