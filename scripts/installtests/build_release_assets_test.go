@@ -1513,6 +1513,56 @@ func TestReleaseWorkflowsUseSecretSafeAttestedImageBuilds(t *testing.T) {
 	}
 }
 
+func TestReleaseContainerQualificationBindsCheckoutToCallerCommit(t *testing.T) {
+	qualifierBytes, err := os.ReadFile(repoFile(".github", "workflows", "qualify-release-containers.yml"))
+	if err != nil {
+		t.Fatalf("read qualify-release-containers.yml: %v", err)
+	}
+	candidateBytes, err := os.ReadFile(repoFile(".github", "workflows", "build-release-candidate.yml"))
+	if err != nil {
+		t.Fatalf("read build-release-candidate.yml: %v", err)
+	}
+	releaseBytes, err := os.ReadFile(repoFile(".github", "workflows", "create-release.yml"))
+	if err != nil {
+		t.Fatalf("read create-release.yml: %v", err)
+	}
+
+	qualifier := string(qualifierBytes)
+	qualifyJob := workflowJobBlock(t, qualifier, "qualify")
+	for _, required := range []string{
+		`ref: ${{ github.sha }}`,
+		`persist-credentials: false`,
+		`EXPECTED_SOURCE_SHA: ${{ github.sha }}`,
+		`test "$(git rev-parse HEAD)" = "${EXPECTED_SOURCE_SHA}"`,
+		`--source-sha "${{ github.sha }}"`,
+	} {
+		if !strings.Contains(qualifyJob, required) {
+			t.Fatalf("release container qualification does not fail closed on the exact caller commit: %s", required)
+		}
+	}
+	for _, forbidden := range []string{
+		"inputs.source_sha",
+		"source_sha:",
+	} {
+		if strings.Contains(qualifier, forbidden) {
+			t.Fatalf("release container qualification must not accept an arbitrary source ref: %s", forbidden)
+		}
+	}
+
+	callerJobs := map[string]string{
+		"build-release-candidate.yml": workflowJobBlock(t, string(candidateBytes), "qualify-release-containers"),
+		"create-release.yml":          workflowJobBlock(t, string(releaseBytes), "qualify_release_containers"),
+	}
+	for caller, job := range callerJobs {
+		if strings.Contains(job, "source_sha:") {
+			t.Fatalf("%s must not forward a caller-selectable source ref to container qualification", caller)
+		}
+		if !strings.Contains(job, "uses: ./.github/workflows/qualify-release-containers.yml") {
+			t.Fatalf("%s no longer calls the trusted container qualifier", caller)
+		}
+	}
+}
+
 func TestDeploymentDefaultsPinVersionedImagesAndHelmDocsChecksum(t *testing.T) {
 	versionBytes, err := os.ReadFile(repoFile("VERSION"))
 	if err != nil {

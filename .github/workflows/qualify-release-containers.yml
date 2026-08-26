@@ -11,10 +11,6 @@ on:
         description: 'Exact-candidate container payload artifact from this run'
         required: true
         type: string
-      source_sha:
-        description: 'Exact source commit bound to the candidate payload'
-        required: true
-        type: string
 
 permissions:
   contents: read
@@ -31,7 +27,16 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
-          ref: ${{ inputs.source_sha }}
+          # A reusable workflow inherits github.sha from its caller. Do not
+          # accept a caller-controlled checkout ref: the caller event commit is
+          # the immutable source identity for both code and candidate payload.
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Verify exact caller source
+        env:
+          EXPECTED_SOURCE_SHA: ${{ github.sha }}
+        run: test "$(git rev-parse HEAD)" = "${EXPECTED_SOURCE_SHA}"
 
       - name: Download exact-candidate container payload
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -45,7 +50,7 @@ jobs:
             --release-dir "$RUNNER_TEMP/release-container-payload/payload" \
             --manifest "$RUNNER_TEMP/release-container-payload/release-container-payload.json" \
             --version "${{ inputs.version }}" \
-            --source-sha "${{ inputs.source_sha }}"
+            --source-sha "${{ github.sha }}"
 
       - name: Assemble exact-candidate runtime and agent images
         run: |
