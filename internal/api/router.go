@@ -6710,6 +6710,37 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 		return points
 	}
 
+	guestChartMetrics := func() (map[string][]monitoring.MetricPoint, bool) {
+		inMemoryKey := resourceID
+		sqlResourceType := ""
+		switch runtimeResourceType {
+		case "vm":
+			sqlResourceType = "vm"
+		case "system-container", "oci-container":
+			sqlResourceType = "container"
+		case "k8s":
+			sqlResourceType = "k8s"
+		case "docker-host":
+			inMemoryKey = fmt.Sprintf("dockerHost:%s", resourceID)
+			sqlResourceType = "dockerHost"
+		case "agent":
+			inMemoryKey = fmt.Sprintf("agent:%s", resourceID)
+			sqlResourceType = "agent"
+		case "app-container":
+			inMemoryKey = fmt.Sprintf("docker:%s", resourceID)
+			sqlResourceType = "dockerContainer"
+		default:
+			return nil, false
+		}
+		return monitor.GetGuestMetricsForChart(inMemoryKey, sqlResourceType, resourceID, duration), true
+	}
+	guestChartSource := func() string {
+		if mock.IsMockEnabled() {
+			return historySourceMock
+		}
+		return historySourceMemory
+	}
+
 	fallbackSingle := func() ([]map[string]interface{}, string, bool) {
 		if !fallbackAllowed || metricType == "" {
 			return nil, "", false
@@ -6738,7 +6769,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 
 		switch runtimeResourceType {
 		case "vm", "system-container", "oci-container":
-			metrics := monitor.GetGuestMetrics(resourceID, duration)
+			metrics, _ := guestChartMetrics()
 			points := metrics[metricType]
 			if len(points) == 0 {
 				livePoints := liveMetricPoints(runtimeResourceType, resourceID)
@@ -6747,9 +6778,9 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 				}
 				return nil, "", false
 			}
-			return buildHistoryPoints(points, stepSecs), historySourceMemory, true
+			return buildHistoryPoints(points, stepSecs), guestChartSource(), true
 		case "docker-host":
-			metrics := monitor.GetGuestMetrics(fmt.Sprintf("dockerHost:%s", resourceID), duration)
+			metrics, _ := guestChartMetrics()
 			points := metrics[metricType]
 			if len(points) == 0 {
 				livePoints := liveMetricPoints(runtimeResourceType, resourceID)
@@ -6758,9 +6789,9 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 				}
 				return nil, "", false
 			}
-			return buildHistoryPoints(points, stepSecs), historySourceMemory, true
+			return buildHistoryPoints(points, stepSecs), guestChartSource(), true
 		case "agent":
-			metrics := monitor.GetGuestMetrics(fmt.Sprintf("agent:%s", resourceID), duration)
+			metrics, _ := guestChartMetrics()
 			points := metrics[metricType]
 			if len(points) == 0 {
 				points = monitor.GetNodeMetrics(resourceID, metricType, duration)
@@ -6772,9 +6803,9 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 				}
 				return nil, "", false
 			}
-			return buildHistoryPoints(points, stepSecs), historySourceMemory, true
+			return buildHistoryPoints(points, stepSecs), guestChartSource(), true
 		case "app-container":
-			metrics := monitor.GetGuestMetrics(fmt.Sprintf("docker:%s", resourceID), duration)
+			metrics, _ := guestChartMetrics()
 			points := metrics[metricType]
 			if len(points) == 0 {
 				livePoints := liveMetricPoints(runtimeResourceType, resourceID)
@@ -6783,9 +6814,9 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 				}
 				return nil, "", false
 			}
-			return buildHistoryPoints(points, stepSecs), historySourceMemory, true
+			return buildHistoryPoints(points, stepSecs), guestChartSource(), true
 		case "k8s":
-			metrics := monitor.GetGuestMetrics(resourceID, duration)
+			metrics, _ := guestChartMetrics()
 			points := metrics[metricType]
 			if len(points) == 0 {
 				livePoints := liveMetricPoints(runtimeResourceType, resourceID)
@@ -6794,7 +6825,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 				}
 				return nil, "", false
 			}
-			return buildHistoryPoints(points, stepSecs), historySourceMemory, true
+			return buildHistoryPoints(points, stepSecs), guestChartSource(), true
 		case "node":
 			points := monitor.GetNodeMetrics(resourceID, metricType, duration)
 			if len(points) == 0 {
@@ -6841,15 +6872,12 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 		}
 
 		var metrics map[string][]monitoring.MetricPoint
+		guestHistory := false
 		switch runtimeResourceType {
-		case "vm", "system-container", "oci-container":
-			metrics = monitor.GetGuestMetrics(resourceID, duration)
-		case "k8s":
-			metrics = monitor.GetGuestMetrics(resourceID, duration)
-		case "docker-host":
-			metrics = monitor.GetGuestMetrics(fmt.Sprintf("dockerHost:%s", resourceID), duration)
+		case "vm", "system-container", "oci-container", "k8s", "docker-host":
+			metrics, guestHistory = guestChartMetrics()
 		case "agent":
-			metrics = monitor.GetGuestMetrics(fmt.Sprintf("agent:%s", resourceID), duration)
+			metrics, guestHistory = guestChartMetrics()
 			if len(metrics) == 0 {
 				metrics = map[string][]monitoring.MetricPoint{
 					"cpu":    monitor.GetNodeMetrics(resourceID, "cpu", duration),
@@ -6858,7 +6886,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 				}
 			}
 		case "app-container":
-			metrics = monitor.GetGuestMetrics(fmt.Sprintf("docker:%s", resourceID), duration)
+			metrics, guestHistory = guestChartMetrics()
 		case "storage":
 			metrics = monitor.GetStorageMetrics(resourceID, duration)
 		case "disk":
@@ -6882,6 +6910,9 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 
 		apiData := make(map[string][]map[string]interface{})
 		source := historySourceMemory
+		if guestHistory {
+			source = guestChartSource()
+		}
 		for metric, points := range metrics {
 			if len(points) == 0 {
 				continue

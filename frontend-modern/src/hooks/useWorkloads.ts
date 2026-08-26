@@ -25,6 +25,7 @@ import type {
   ResourceAvailabilityMeta,
   ResourceDiscoveryReadiness,
   ResourceDiscoveryTarget,
+  ResourceMetricsTarget,
   ResourceVMwareTag,
 } from '@/types/resource';
 
@@ -71,9 +72,7 @@ type APIResource = {
   lastSeen?: string;
   sources?: string[];
   platformScopes?: string[];
-  metricsTarget?: {
-    resourceId?: string;
-  };
+  metricsTarget?: ResourceMetricsTarget;
   canonicalIdentity?: {
     primaryId?: string;
     aliases?: string[];
@@ -523,6 +522,7 @@ const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
   return {
     id: guestId,
     alertResourceIds: buildAlertResourceIds(resource),
+    metricsTarget: resource.metricsTarget,
     vmid: Number.isFinite(vmid) ? vmid : 0,
     name: name || resource.id,
     node,

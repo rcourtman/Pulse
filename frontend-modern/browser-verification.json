@@ -1,23 +1,23 @@
 {
   "version": 1,
-  "base_sha": "09b11719765180a2b7097748e20bc3862dbb3fa9",
-  "verified_at": "2026-08-26T09:54:53Z",
+  "base_sha": "e27585b0a25bfcfc5b99d72f8dd3dcf7c668811e",
+  "verified_at": "2026-08-26T10:17:12Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/constants/apiScopes.ts",
-    "frontend-modern/src/components/Settings/apiTokenManagerModel.ts"
+    "frontend-modern/src/components/Workloads/guestDrawerModel.ts",
+    "frontend-modern/src/hooks/useWorkloads.ts",
+    "frontend-modern/src/types/workloads.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/constants/apiScopes.ts": "fd85effc73f4791390f96d7bcc03893abe688138fe616e5b039c5e01ae9160f6",
-    "frontend-modern/src/components/Settings/apiTokenManagerModel.ts": "b1ec43891a5342da234604efecd8a32d1117c50a3ad8c00408181b3eef7006ed"
+    "frontend-modern/src/components/Workloads/guestDrawerModel.ts": "8cf63f54a06cd0d2d0a02fbec871c553dc61d31d82724efa4dfa737ddbd5745e",
+    "frontend-modern/src/hooks/useWorkloads.ts": "87d048e258d71d04087d76d3fb5a3fcf109d454beaed915d1992f50ab4996c94",
+    "frontend-modern/src/types/workloads.ts": "b10648f1bcc689e1cd078ae1ab8f9f0651a6fab6d0106c30f0eddc797d13c249"
   },
-  "routes": [
-    "/settings/security/api"
-  ],
+  "routes": ["/proxmox/overview"],
   "viewports": [
     {
-      "width": 1440,
-      "height": 1000
+      "width": 1280,
+      "height": 800
     },
     {
       "width": 390,
@@ -25,19 +25,17 @@
     }
   ],
   "states": [
-    "loaded API Access token creation and inventory surface",
-    "expanded custom Agent scopes",
-    "Agent quick preset selected",
-    "generated Agent token inventory row",
-    "opened in-place token scope editor",
-    "loaded and exercised the scope picker at narrow mobile width"
+    "checkout-web-265 VM row filtered and expanded from the Proxmox guest table",
+    "24-hour History tab with utilization, network I/O, and disk I/O series rendered",
+    "1-hour History range loaded with the same three drawable chart groups",
+    "narrow History layout stacked vertically without page-level horizontal overflow",
+    "drawer collapsed with focus returned to the workload row toggle"
   ],
   "interactions": [
-    "opened Settings API Access in an isolated mock-backed development build",
-    "expanded Custom scopes and confirmed Agent lifecycle management is selectable",
-    "selected the Agent preset and confirmed agent:report, agent:config:read, and agent:manage are active while agent:exec remains opt-in",
-    "generated an isolated replacement Agent token and confirmed all three lifecycle scopes appear on its inventory row",
-    "opened Edit scopes and confirmed Agent lifecycle management is present and checked",
-    "repeated the custom-scope and Agent-preset checks at 390x844 and confirmed all lifecycle choices remain reachable"
+    "signed into the current local build and filtered the Proxmox guest table to checkout-web-265",
+    "expanded checkout-web-265 and selected History at 1280 by 800; confirmed three chart groups, seven SVG paths, and zero Collecting history placeholders",
+    "switched the history selector from 24 hours to 1 hour and back; both ranges retained seven drawable SVG paths with no collection placeholder",
+    "rechecked the open History drawer at 390 by 844; confirmed the three charts stack vertically and the 390-pixel page has no horizontal overflow",
+    "restored the viewport override, collapsed checkout-web-265, and confirmed focus returned to the row expansion control"
   ]
 }

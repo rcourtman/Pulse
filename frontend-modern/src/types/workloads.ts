@@ -4,6 +4,7 @@ import type {
   ResourceAvailabilityMeta,
   ResourceDiscoveryReadiness,
   ResourceDiscoveryTarget,
+  ResourceMetricsTarget,
 } from './resource';
 
 export type WorkloadType = 'vm' | 'system-container' | 'app-container' | 'pod';
@@ -23,6 +24,8 @@ export type WorkloadGuest = (VM | Container) & {
   workloadType?: WorkloadType;
   /** Backend identities that may own active alerts for this canonical workload. */
   alertResourceIds?: string[];
+  /** Backend-owned coordinates for metrics history; distinct from the stable workload row id. */
+  metricsTarget?: ResourceMetricsTarget;
   /** Canonical unified-resource health, kept separate from runtime power state in `status`. */
   resourceStatus?: string;
   displayId?: string;

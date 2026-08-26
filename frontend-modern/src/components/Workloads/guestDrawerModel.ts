@@ -256,6 +256,12 @@ export const getGuestDrawerHistoryRangeBounds = (
 };
 
 export const getGuestDrawerHistoryTarget = (guest: Guest): GuestDrawerHistoryTarget | null => {
+  const explicitResourceType = guest.metricsTarget?.resourceType;
+  const explicitResourceId = guest.metricsTarget?.resourceId?.trim();
+  if (explicitResourceType && explicitResourceId) {
+    return { resourceType: explicitResourceType, resourceId: explicitResourceId };
+  }
+
   const resourceId = getCanonicalWorkloadId(guest).trim();
   if (!resourceId) return null;
 

@@ -239,7 +239,7 @@ describe('useWorkloads', () => {
         platformType: 'proxmox-pve',
         sources: ['proxmox'],
         identity: { hostname: 'vm-101', ips: ['192.0.2.101'] },
-        metricsTarget: { resourceId: 'cluster-a-pve1-101' },
+        metricsTarget: { resourceType: 'vm', resourceId: 'mock-cluster-a-pve1-101' },
         canonicalIdentity: {
           primaryId: 'vm:cluster-a-pve1-101',
           aliases: ['legacy-vm-101'],
@@ -275,8 +275,10 @@ describe('useWorkloads', () => {
         name: 'vm-101',
         vmid: 101,
         node: 'pve1',
+        metricsTarget: { resourceType: 'vm', resourceId: 'mock-cluster-a-pve1-101' },
         alertResourceIds: expect.arrayContaining([
           'cluster-a-pve1-101',
+          'mock-cluster-a-pve1-101',
           'vm:cluster-a-pve1-101',
           'legacy-vm-101',
         ]),

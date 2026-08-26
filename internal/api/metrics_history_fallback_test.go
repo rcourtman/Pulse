@@ -167,6 +167,40 @@ func TestMetricsHistoryFallbackUsesLivePoint(t *testing.T) {
 	}
 }
 
+func TestMetricsHistoryFallbackSynthesizesUnseededMockWorkloadHistory(t *testing.T) {
+	setMockModeForTest(t, true)
+
+	monitor := &monitoring.Monitor{}
+	setUnexportedField(t, monitor, "metricsHistory", monitoring.NewMetricsHistory(10, time.Hour))
+	router := &Router{monitor: monitor}
+
+	req := httptest.NewRequest(
+		http.MethodGet,
+		"/api/metrics-store/history?resourceType=vm&resourceId=mock-cluster-6-pve31-673&range=24h",
+		nil,
+	)
+	rec := httptest.NewRecorder()
+	router.handleMetricsHistory(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp struct {
+		Source  string                       `json:"source"`
+		Metrics map[string][]json.RawMessage `json:"metrics"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
+	if resp.Source != "mock_synthetic" {
+		t.Fatalf("expected source mock_synthetic, got %q", resp.Source)
+	}
+	if len(resp.Metrics["cpu"]) < 2 {
+		t.Fatalf("expected drawable mock CPU history, got %d points", len(resp.Metrics["cpu"]))
+	}
+}
+
 func TestMetricsHistoryFallbackMockDiskSynthesizesSeries(t *testing.T) {
 	setMockModeForTest(t, true)
 

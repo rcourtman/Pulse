@@ -355,6 +355,19 @@ describe('guestDrawerModel (branch coverage)', () => {
   });
 
   describe('getGuestDrawerHistoryTarget', () => {
+    it('prefers the backend metrics target over the workload row identity', () => {
+      expect(
+        getGuestDrawerHistoryTarget(
+          makeGuest({
+            id: 'cluster-a:pve1:101',
+            type: 'qemu',
+            workloadType: 'vm',
+            metricsTarget: { resourceType: 'vm', resourceId: 'mock-cluster-a-pve1-101' },
+          }),
+        ),
+      ).toStrictEqual({ resourceType: 'vm', resourceId: 'mock-cluster-a-pve1-101' });
+    });
+
     it('returns null when the canonical id trims to empty', () => {
       expect(
         getGuestDrawerHistoryTarget(
