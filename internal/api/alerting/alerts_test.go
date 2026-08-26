@@ -15,6 +15,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts/eventlog"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/notifications"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
@@ -83,6 +84,12 @@ func (m *MockAlertManager) DiagnoseAlertDelivery(alertIdentifier string) (alerts
 func (m *MockAlertManager) DiagnoseActiveAlertDeliveries() []alerts.AlertDeliveryDiagnosis {
 	args := m.Called()
 	return args.Get(0).([]alerts.AlertDeliveryDiagnosis)
+}
+
+func (m *MockAlertManager) AlertEvents(filter eventlog.Filter) ([]eventlog.Event, error) {
+	args := m.Called(filter)
+	events, _ := args.Get(0).([]eventlog.Event)
+	return events, args.Error(1)
 }
 
 func (m *MockAlertManager) NotifyExistingAlert(id string) {
@@ -340,6 +347,65 @@ func TestGetAlertDeliveryDiagnosis(t *testing.T) {
 	assert.Equal(t, expected.Status, resp.Status)
 	assert.Equal(t, expected.Reason, resp.Reason)
 	assert.Equal(t, expected.TrackingKey, resp.TrackingKey)
+}
+
+func TestGetAlertEventsReturnsFilteredEvents(t *testing.T) {
+	mockMonitor := new(MockAlertMonitor)
+	mockManager := new(MockAlertManager)
+	mockMonitor.On("GetAlertManager").Return(mockManager)
+
+	expectedFilter := eventlog.Filter{
+		AlertID: "a1",
+		Types:   []string{eventlog.TypeNotificationSuppressed, eventlog.TypeResolved},
+		Limit:   10,
+	}
+	mockManager.On("AlertEvents", expectedFilter).Return([]eventlog.Event{
+		{ID: 2, Type: eventlog.TypeNotificationSuppressed, AlertID: "a1", Reason: "flapping"},
+	}, nil)
+
+	h := NewAlertHandlers(nil, mockMonitor, nil)
+
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/alerts/events?alertIdentifier=a1&type=notification_suppressed,resolved&limit=10", nil)
+	w := httptest.NewRecorder()
+
+	h.GetAlertEvents(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var resp []eventlog.Event
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	assert.Len(t, resp, 1)
+	assert.Equal(t, "flapping", resp[0].Reason)
+}
+
+func TestGetAlertEventsWritesEmptyArrayWithoutEventLog(t *testing.T) {
+	mockMonitor := new(MockAlertMonitor)
+	mockManager := new(MockAlertManager)
+	mockMonitor.On("GetAlertManager").Return(mockManager)
+	mockManager.On("AlertEvents", eventlog.Filter{}).Return([]eventlog.Event(nil), nil)
+
+	h := NewAlertHandlers(nil, mockMonitor, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/alerts/events", nil)
+	w := httptest.NewRecorder()
+
+	h.GetAlertEvents(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, "[]", strings.TrimSpace(w.Body.String()))
+}
+
+func TestGetAlertEventsRejectsBadSince(t *testing.T) {
+	h := NewAlertHandlers(nil, new(MockAlertMonitor), nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/alerts/events?since=yesterday", nil)
+	w := httptest.NewRecorder()
+
+	h.GetAlertEvents(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
 
 func TestGetAlertDeliveryDiagnosisWithoutIdentifierReturnsAllActive(t *testing.T) {

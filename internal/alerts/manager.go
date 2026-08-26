@@ -4,8 +4,10 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts/eventlog"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rs/zerolog/log"
 )
@@ -98,6 +100,10 @@ type Manager struct {
 	instanceNodeDisplayNames map[string]string
 	// License checking for Pro-only alert features
 	hasProFeature func(feature string) bool
+
+	// Append-only alert event log (transitions + notification decisions).
+	// Nil until EnableEventLog/SetEventLog; recording is then a no-op.
+	eventLog atomic.Pointer[eventlog.Store]
 
 	// Cached timezone for quiet hours
 	quietHoursLoc *time.Location

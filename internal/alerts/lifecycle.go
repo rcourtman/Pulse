@@ -23,6 +23,10 @@ func (m *Manager) Stop() {
 		if err := m.SaveActiveAlerts(); err != nil {
 			log.Error().Err(err).Msg("Failed to save active alerts on stop")
 		}
+
+		// Drain and close the event log last so shutdown-time transitions
+		// are still recorded.
+		m.SetEventLog(nil)
 	})
 }
 

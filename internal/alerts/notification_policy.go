@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts/eventlog"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rs/zerolog/log"
 )
@@ -167,6 +168,8 @@ func (m *Manager) dispatchAlert(alert *Alert, async bool) bool {
 			Str("alertID", alert.ID).
 			Str("ackUser", alert.AckUser).
 			Msg("Alert notification suppressed - already acknowledged")
+		m.recordAlertEvent(eventlog.TypeNotificationSuppressed, alert, "",
+			AlertDeliveryReasonAcknowledged, "Notification suppressed: alert is acknowledged.", nil)
 		return false
 	}
 
@@ -180,6 +183,9 @@ func (m *Manager) dispatchAlert(alert *Alert, async bool) bool {
 	// to take its own locks or re-enter the alerts package.
 	suppress, justTransitioned := m.checkFlappingLocked(trackingKey)
 	if justTransitioned {
+		m.recordAlertEvent(eventlog.TypeFlappingDetected, alert, "",
+			AlertDeliveryReasonFlapping, "Alert entered flapping suppression.",
+			map[string]string{"trackingKey": trackingKey})
 		cb := m.callbacks.flappingDetectedCallback()
 		if cb != nil {
 			alertCopy := cloneAlertForOutput(alert)
@@ -202,6 +208,9 @@ func (m *Manager) dispatchAlert(alert *Alert, async bool) bool {
 			Str("alertID", alert.ID).
 			Str("trackingKey", trackingKey).
 			Msg("Alert suppressed due to flapping")
+		m.recordAlertEvent(eventlog.TypeNotificationSuppressed, alert, "",
+			AlertDeliveryReasonFlapping, "Notification suppressed: alert is flapping.",
+			map[string]string{"trackingKey": trackingKey})
 		return false
 	}
 
@@ -211,6 +220,9 @@ func (m *Manager) dispatchAlert(alert *Alert, async bool) bool {
 			Str("alertID", alert.ID).
 			Str("activationState", string(m.config.ActivationState)).
 			Msg("Alert notification suppressed - not activated")
+		m.recordAlertEvent(eventlog.TypeNotificationSuppressed, alert, "",
+			AlertDeliveryReasonNotificationsInactive, "Notification suppressed: alert delivery is not turned on.",
+			map[string]string{"activationState": string(m.config.ActivationState)})
 		return false
 	}
 
@@ -224,6 +236,13 @@ func (m *Manager) dispatchAlert(alert *Alert, async bool) bool {
 			Str("quietHoursRule", reason).
 			Time("replayAt", replayAt).
 			Msg("Alert notification deferred during quiet hours")
+		deferredReason := AlertDeliveryReasonQuietHours
+		if reason != "" {
+			deferredReason += ":" + reason
+		}
+		m.recordAlertEvent(eventlog.TypeNotificationDeferred, alert, "",
+			deferredReason, "Notification deferred by quiet hours; the queue replays it when they end.",
+			map[string]string{"replayAt": replayAt.UTC().Format(time.RFC3339)})
 	} else {
 		clearQuietHoursNotificationReplay(alert)
 	}
@@ -234,6 +253,8 @@ func (m *Manager) dispatchAlert(alert *Alert, async bool) bool {
 			Str("resource", alert.ResourceName).
 			Bool("monitorOnly", true).
 			Msg("Monitor-only alert detected, skipping alert dispatch")
+		m.recordAlertEvent(eventlog.TypeNotificationSuppressed, alert, "",
+			AlertDeliveryReasonMonitorOnly, "Notification suppressed: alert is monitor-only.", nil)
 		return false
 	}
 
@@ -245,6 +266,8 @@ func (m *Manager) dispatchAlert(alert *Alert, async bool) bool {
 	notifiedAt := time.Now()
 	m.recordAlertNotifiedNoLock(alert, notifiedAt)
 	m.saveActiveAlertsAsync("alert-dispatch")
+	m.recordAlertEvent(eventlog.TypeNotificationDispatched, alert, "",
+		AlertDeliveryReasonReady, "Notification dispatched to the delivery pipeline.", nil)
 
 	alertCopy := cloneAlertForOutput(alert)
 	if async {

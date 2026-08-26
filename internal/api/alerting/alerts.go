@@ -14,6 +14,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts/eventlog"
 	"github.com/rcourtman/pulse-go-rewrite/internal/api/apicontext"
 	"github.com/rcourtman/pulse-go-rewrite/internal/api/apihttp"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
@@ -33,6 +34,7 @@ type AlertManager interface {
 	GetActiveAlerts() []alerts.Alert
 	DiagnoseAlertDelivery(alertIdentifier string) (alerts.AlertDeliveryDiagnosis, bool)
 	DiagnoseActiveAlertDeliveries() []alerts.AlertDeliveryDiagnosis
+	AlertEvents(filter eventlog.Filter) ([]eventlog.Event, error)
 	NotifyExistingAlert(id string)
 	ClearAlertHistory() error
 	UnacknowledgeAlert(id string) error
@@ -472,6 +474,72 @@ func (h *AlertHandlers) GetAlertDeliveryDiagnosis(w http.ResponseWriter, r *http
 
 	if err := utils.WriteJSONResponse(w, diagnosis); err != nil {
 		log.Error().Err(err).Msg("Failed to write alert delivery diagnosis response")
+	}
+}
+
+// GetAlertEvents returns entries from the append-only alert event log:
+// lifecycle transitions and notification decisions, including suppressions
+// with reasons. Newest first.
+func (h *AlertHandlers) GetAlertEvents(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	query := r.URL.Query()
+	filter := eventlog.Filter{
+		AlertID: strings.TrimSpace(query.Get("alertIdentifier")),
+	}
+	if filter.AlertID != "" && !validateAlertIdentifier(filter.AlertID) {
+		http.Error(w, "Invalid alert identifier", http.StatusBadRequest)
+		return
+	}
+	for _, raw := range query["type"] {
+		for _, part := range strings.Split(raw, ",") {
+			if trimmed := strings.TrimSpace(part); trimmed != "" {
+				filter.Types = append(filter.Types, trimmed)
+			}
+		}
+	}
+	if since := strings.TrimSpace(query.Get("since")); since != "" {
+		parsed, err := time.Parse(time.RFC3339, since)
+		if err != nil {
+			http.Error(w, "since must be RFC3339", http.StatusBadRequest)
+			return
+		}
+		filter.Since = parsed
+	}
+	if limitRaw := strings.TrimSpace(query.Get("limit")); limitRaw != "" {
+		limit, err := strconv.Atoi(limitRaw)
+		if err != nil || limit <= 0 {
+			http.Error(w, "limit must be a positive integer", http.StatusBadRequest)
+			return
+		}
+		filter.Limit = limit
+	}
+
+	monitor := h.getMonitor(r.Context())
+	if monitor == nil {
+		http.Error(w, "monitor is not initialized", http.StatusServiceUnavailable)
+		return
+	}
+	manager := monitor.GetAlertManager()
+	if manager == nil {
+		http.Error(w, "alert manager is not initialized", http.StatusServiceUnavailable)
+		return
+	}
+
+	events, err := manager.AlertEvents(filter)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to query alert event log")
+		http.Error(w, "failed to query alert events", http.StatusInternalServerError)
+		return
+	}
+	if events == nil {
+		events = []eventlog.Event{}
+	}
+	if err := utils.WriteJSONResponse(w, events); err != nil {
+		log.Error().Err(err).Msg("Failed to write alert events response")
 	}
 }
 
@@ -1215,6 +1283,11 @@ func (h *AlertHandlers) HandleAlerts(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		h.GetAlertDeliveryDiagnosis(w, r)
+	case path == "events" && r.Method == http.MethodGet:
+		if !apihttp.EnsureScope(w, r, config.ScopeMonitoringRead) {
+			return
+		}
+		h.GetAlertEvents(w, r)
 	case path == "history" && r.Method == http.MethodGet:
 		if !apihttp.EnsureScope(w, r, config.ScopeMonitoringRead) {
 			return

@@ -1758,6 +1758,7 @@ func New(cfg *config.Config) (*Monitor, error) {
 	}
 	m.hydrateRemovedHostAgents(time.Now().UTC())
 	m.alertManager.SetBackupIntentContextResolver(m.resolveBackupIntentContext)
+	m.alertManager.EnableEventLog()
 	m.registerBuiltInPollProviders()
 	m.buildInstanceInfoCache(cfg)
 

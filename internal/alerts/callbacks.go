@@ -1,8 +1,10 @@
 package alerts
 
 import (
+	"strconv"
 	"sync"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts/eventlog"
 	"github.com/rs/zerolog/log"
 )
 
@@ -343,6 +345,10 @@ func (m *Manager) getEscalateCallback() func(alert *Alert, level int) {
 // preserving canonical state as the internal identity and emitting the public
 // alert ID to external callbacks for compatibility.
 func (m *Manager) safeCallResolvedAlertCallback(alert *Alert, fallbackID string, async bool) {
+	// Record the resolution before the callback guard: this funnel is the
+	// resolve seam for every lifecycle path, with or without subscribers.
+	m.recordAlertEvent(eventlog.TypeResolved, alert, fallbackID, "", "Alert resolved.", nil)
+
 	callbacks := m.getResolvedCallbacks()
 	if len(callbacks) == 0 {
 		return
@@ -375,6 +381,9 @@ func (m *Manager) safeCallResolvedAlertCallback(alert *Alert, fallbackID string,
 
 // safeCallAcknowledgedCallback invokes onAcknowledged with panic recovery and alert cloning.
 func (m *Manager) safeCallAcknowledgedCallback(alert *Alert, user string) {
+	m.recordAlertEvent(eventlog.TypeAcknowledged, alert, "", "", "Alert acknowledged.",
+		map[string]string{"user": user})
+
 	callback := m.getAcknowledgedCallback()
 	if callback == nil || alert == nil {
 		return
@@ -396,6 +405,9 @@ func (m *Manager) safeCallAcknowledgedCallback(alert *Alert, user string) {
 
 // safeCallUnacknowledgedCallback invokes onUnacknowledged with panic recovery and alert cloning.
 func (m *Manager) safeCallUnacknowledgedCallback(alert *Alert, user string) {
+	m.recordAlertEvent(eventlog.TypeUnacknowledged, alert, "", "", "Alert acknowledgement removed.",
+		map[string]string{"user": user})
+
 	callback := m.getUnacknowledgedCallback()
 	if callback == nil || alert == nil {
 		return
@@ -417,6 +429,9 @@ func (m *Manager) safeCallUnacknowledgedCallback(alert *Alert, user string) {
 
 // safeCallEscalateCallback invokes onEscalate with panic recovery and alert cloning.
 func (m *Manager) safeCallEscalateCallback(alert *Alert, level int) {
+	m.recordAlertEvent(eventlog.TypeEscalated, alert, "", "", "Alert escalated.",
+		map[string]string{"level": strconv.Itoa(level)})
+
 	callback := m.getEscalateCallback()
 	if callback == nil {
 		return

@@ -618,6 +618,7 @@ Alert configuration and history (requires `monitoring:read`/`monitoring:write`).
 - `POST /api/alerts/activate`
 - `GET /api/alerts/active`
 - `GET /api/alerts/delivery-diagnosis?alertIdentifier=<alert-id>` (omit `alertIdentifier` to get the diagnosis array for every active alert)
+- `GET /api/alerts/events?alertIdentifier=<alert-id>&type=<event-type,...>&since=<RFC3339>&limit=<n>` — append-only alert event log: lifecycle transitions and notification decisions, including suppressions with reasons; all parameters optional, newest first
 - `GET /api/alerts/history`
 - `DELETE /api/alerts/history`
 - `GET /api/alerts/incidents`
