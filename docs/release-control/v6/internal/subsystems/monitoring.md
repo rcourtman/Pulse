@@ -32,6 +32,11 @@ monitor restart.
 Monitor construction also applies the persisted grouping enabled flag, window,
 and node/guest keys as one notification-manager policy, so restart behavior is
 identical to a live alert-configuration save.
+Monitor construction enables the alerts-owned persistent event log once for
+each tenant alert manager. This is bootstrap wiring only: monitoring does not
+own event types, retention, query semantics, or lifecycle/notification truth,
+and an event-store startup or append failure must not interrupt polling, state
+assembly, alert evaluation, or notification delivery.
 Monitoring also owns the distinction between Proxmox VM power state and QEMU
 guest-agent reachability: fresh or never-healthy VMs with an enabled but
 unavailable guest agent stay `not-running`, while only VMs with recent healthy

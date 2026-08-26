@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts/eventlog"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
@@ -16,6 +17,10 @@ import (
 
 func newHostRemovalLifecycleMonitor(t *testing.T, dataPath string) *Monitor {
 	t.Helper()
+	events, err := eventlog.OpenInMemory()
+	if err != nil {
+		t.Fatalf("open alert event log: %v", err)
+	}
 	monitor := &Monitor{
 		state:               models.NewState(),
 		alertManager:        alerts.NewManagerWithDataDir(dataPath),
@@ -25,6 +30,10 @@ func newHostRemovalLifecycleMonitor(t *testing.T, dataPath string) *Monitor {
 		config:              &config.Config{DataPath: dataPath},
 		hostContinuityStore: config.NewHostContinuityStore(dataPath, nil),
 	}
+	// Production monitor construction enables the alerts-owned event log.
+	// Exercise agent removal and re-enrollment with the same adjacent runtime
+	// enabled so it cannot accidentally become lifecycle authority.
+	monitor.alertManager.SetEventLog(events)
 	t.Cleanup(func() { monitor.alertManager.Stop() })
 	return monitor
 }

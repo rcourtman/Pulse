@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts/eventlog"
 )
 
 func TestAlertsEndpoints(t *testing.T) {
@@ -282,6 +283,26 @@ func TestAlertsEndpoints(t *testing.T) {
 		}
 		if diagnoses == nil {
 			t.Fatal("delivery diagnoses decoded as nil, want an empty JSON array")
+		}
+	})
+
+	t.Run("GetAlertEvents", func(t *testing.T) {
+		res, err := http.Get(srv.server.URL + "/api/alerts/events")
+		if err != nil {
+			t.Fatalf("request failed: %v", err)
+		}
+		defer res.Body.Close()
+
+		if res.StatusCode != http.StatusOK {
+			t.Fatalf("status code = %d, want %d", res.StatusCode, http.StatusOK)
+		}
+
+		var events []eventlog.Event
+		if err := json.NewDecoder(res.Body).Decode(&events); err != nil {
+			t.Fatalf("decode alert events: %v", err)
+		}
+		if events == nil {
+			t.Fatal("alert events decoded as nil, want an empty JSON array")
 		}
 	})
 

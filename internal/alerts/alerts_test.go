@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts/eventlog"
 	alertspecs "github.com/rcourtman/pulse-go-rewrite/internal/alerts/specs"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/proxmoxidentity"
@@ -29,6 +30,23 @@ var testEnvMu sync.Mutex
 func ptrTime(t time.Time) *time.Time {
 	tt := t
 	return &tt
+}
+
+func TestAlertEventLogDoesNotInventFiringFromActiveStorage(t *testing.T) {
+	manager := newEventLogManager(t)
+	addEventLogAlert(manager, &Alert{
+		ID:           "restored-alert",
+		Type:         "cpu",
+		Level:        AlertLevelWarning,
+		ResourceID:   "node-1",
+		ResourceName: "node-1",
+		StartTime:    time.Now().Add(-10 * time.Minute),
+	})
+
+	events := queryAlertEvents(t, manager, eventlog.Filter{AlertID: "restored-alert"})
+	if len(events) != 0 {
+		t.Fatalf("active-storage insertion recorded events = %+v, want none", events)
+	}
 }
 
 func TestGuestAlertIncludesTagsForNotificationRouting(t *testing.T) {
