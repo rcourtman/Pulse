@@ -288,6 +288,27 @@ describe('getResourceMetricsHistoryCurrentMetrics branch coverage', () => {
     expect(getResourceMetricsHistoryCurrentMetrics(resource).temperature).toBe(57.5);
   });
 
+  it('uses canonical host and GPU groups for an explicit Docker host target', () => {
+    const resource = baseResource({
+      type: 'docker-host',
+      metricsTarget: { resourceType: 'docker-host', resourceId: 'nebula-1-mock' },
+      agent: {
+        sensors: {
+          gpu: [{ id: '0', name: 'NVIDIA A6000', utilizationPercent: 72 }],
+        },
+      },
+    });
+
+    expect(getResourceMetricsHistoryGroups(resource).map((group) => group.id)).toEqual([
+      'utilization',
+      'network',
+      'disk-io',
+      'thermals',
+      'gpu-utilization',
+      'gpu-thermal',
+    ]);
+  });
+
   it('keeps workload history groups free of host-only thermals', () => {
     const resource = baseResource({
       type: 'vm',

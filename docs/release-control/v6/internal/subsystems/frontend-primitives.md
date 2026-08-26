@@ -6391,8 +6391,9 @@ when at least one current machine has finite utilization evidence, so estates
 without GPU telemetry do not carry an empty default column or an inert toggle.
 
 The shared resource drawer keeps `GuestDrawerHistory` as the sole history
-renderer. Agent-backed hosts, including standalone Unraid machines, Proxmox
-nodes, and Docker/Podman hosts, consume the single
+renderer. Agent-backed hosts and explicit `docker-host` metrics targets,
+including standalone Unraid machines, Proxmox nodes, and Docker/Podman hosts,
+consume the single
 `frontend-modern/src/components/shared/hostMetricsHistoryModel.ts`
 `HOST_METRICS_HISTORY_GROUPS` catalog so CPU temperature history cannot drift
 out of one host surface while remaining on another. Host resources provide the

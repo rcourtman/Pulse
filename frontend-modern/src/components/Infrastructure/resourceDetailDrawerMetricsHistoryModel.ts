@@ -110,6 +110,7 @@ const getBaseMetricsHistoryGroups = (
 ): GuestDrawerHistoryGroupConfig[] => {
   switch (resourceType) {
     case 'agent':
+    case 'docker-host':
       return HOST_METRICS_HISTORY_GROUPS;
     case 'node':
       return NODE_METRICS_HISTORY_GROUPS;
@@ -127,7 +128,10 @@ export const getResourceMetricsHistoryGroups = (
 ): GuestDrawerHistoryGroupConfig[] => {
   const target = getResourceMetricsHistoryTarget(resource);
   const baseGroups = getBaseMetricsHistoryGroups(target?.resourceType);
-  const supportsGPUHistory = target?.resourceType === 'agent' || target?.resourceType === 'node';
+  const supportsGPUHistory =
+    target?.resourceType === 'agent' ||
+    target?.resourceType === 'docker-host' ||
+    target?.resourceType === 'node';
   return supportsGPUHistory && (resource.agent?.sensors?.gpu?.length ?? 0) > 0
     ? [...baseGroups, ...GPU_HISTORY_GROUPS]
     : baseGroups;

@@ -169,6 +169,29 @@ describe('ResourceDetailDrawer machine metrics history', () => {
     expect(history).toHaveAttribute('data-metrics', 'disk,diskread,diskwrite,smart_temp');
   });
 
+  it('renders explicit Docker host history with the canonical host catalog', async () => {
+    render(() => (
+      <ResourceDetailDrawer
+        resource={resource({
+          id: 'nebula-1-mock',
+          type: 'docker-host',
+          metricsTarget: { resourceType: 'docker-host', resourceId: 'nebula-1-mock' },
+          temperature: 58,
+        })}
+      />
+    ));
+
+    await fireEvent.click(screen.getByRole('tab', { name: 'History' }));
+
+    const history = screen.getByTestId('machine-history');
+    expect(history).toHaveAttribute('data-resource-type', 'docker-host');
+    expect(history).toHaveAttribute('data-groups', 'utilization,network,disk-io,thermals');
+    expect(history).toHaveAttribute(
+      'data-metrics',
+      'cpu,memory,disk,netin,netout,diskread,diskwrite,temperature',
+    );
+  });
+
   it('adds a first-class discovery tab for Pulse Agent machines', async () => {
     syncAIRuntimeSettings({ discovery_enabled: true } as Parameters<
       typeof syncAIRuntimeSettings

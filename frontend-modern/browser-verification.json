@@ -1,15 +1,15 @@
 {
   "version": 1,
-  "base_sha": "5d46e7d0e76ddd069a12f62fb670fd3ec0356e9e",
-  "verified_at": "2026-08-26T11:27:33Z",
+  "base_sha": "08b8144fcff526519a8b7d7706dcc044bebf170c",
+  "verified_at": "2026-08-26T11:44:58Z",
   "result": "passed",
   "changed_paths": [
     "frontend-modern/src/components/Infrastructure/resourceDetailDrawerMetricsHistoryModel.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Infrastructure/resourceDetailDrawerMetricsHistoryModel.ts": "6767cf06b2f3c42931deba2b9620858210d8c7ce55d261b042e752b6680a4223"
+    "frontend-modern/src/components/Infrastructure/resourceDetailDrawerMetricsHistoryModel.ts": "63066dea7134226ea5348be26147fd433e56225b429b88854825410dba80111a"
   },
-  "routes": ["/truenas/storage"],
+  "routes": ["/docker/overview"],
   "viewports": [
     {
       "width": 1230,
@@ -21,15 +21,13 @@
     }
   ],
   "states": [
-    "TrueNAS pool History with only the canonical capacity series populated",
-    "TrueNAS dataset History with only the canonical capacity series populated",
-    "TrueNAS physical-disk History at 24 hours and 7 days with activity, disk I/O, and temperature populated",
-    "narrow TrueNAS physical-disk History with the same populated chart catalog"
+    "explicit Docker host History at 24 hours with utilization, network I/O, disk I/O, and thermal series populated",
+    "explicit Docker host History at 7 days with the same canonical host chart catalog populated",
+    "narrow explicit Docker host History with the complete host chart catalog and no collecting placeholders"
   ],
   "interactions": [
-    "opened archive and archive/cold from the TrueNAS storage table; each drawer rendered one populated Capacity chart and no workload-only charts",
-    "opened physical disk sdc and selected History; confirmed Activity, Disk I/O, and Temperature charts with zero Collecting history placeholders",
-    "switched the physical-disk History selector to 7 days; all three groups remained populated",
-    "rechecked sdc at 390 by 844; the responsive table and populated disk history remained usable"
+    "expanded auth-service-01 from the Docker host table and selected History; confirmed Utilization, Network I/O, Disk I/O, and Thermals with zero Collecting history placeholders",
+    "switched the host History selector to 7 days and back to 24 hours; all four canonical host groups remained populated",
+    "rechecked auth-service-01 at 390 by 844 and scrolled through Thermals; charts, range control, table rows, and page navigation remained visible and usable"
   ]
 }
