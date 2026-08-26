@@ -261,9 +261,12 @@ consumes realtime projection work. Re-entering an inactive tab must catch up
 from the shared canonical cache rather than replaying every missed delta.
 Hidden tabs continue advancing the raw baseline without reconciling the estate;
 all hidden changes are materialized once when the document becomes visible.
-Active operator scrolling gates realtime resource work harder still: a tick
-arriving mid-gesture queues its delta unapplied, in arrival order, because on
-a large estate even the baseline patch walks the whole resource array. The
+Active operator input gates realtime resource work harder still — scrolling,
+wheel, pointer presses, and typing all count, while bare pointer movement
+deliberately does not, so a resting hand cannot starve data freshness. A tick
+arriving mid-interaction queues its delta unapplied, in arrival order,
+because on a large estate even the baseline patch walks the whole resource
+array. The
 reporting projection and the realtime tick token (`lastUpdate`) defer
 latest-wins alongside — the token is what every downstream realtime consumer
 keys on, so holding it keeps unified projections and workload remaps fully

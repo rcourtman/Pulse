@@ -1,13 +1,13 @@
 {
   "version": 1,
-  "base_sha": "c154fa7aed228ea03d37e35833770940c1858a77",
-  "verified_at": "2026-08-26T16:18:38Z",
+  "base_sha": "99afae02b1af9274697b958d50891ed5d86d5208",
+  "verified_at": "2026-08-26T16:33:39Z",
   "result": "passed",
   "changed_paths": [
     "frontend-modern/src/stores/websocket.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/stores/websocket.ts": "0c28ea223ca92422fe2f64bf8b0db336c29381c00a8300c3993c8d38f8903b46"
+    "frontend-modern/src/stores/websocket.ts": "1bcd852509d823c4520a7d55f283fe27955c6881ea175e86516937e79be93d3f"
   },
   "routes": [
     "/proxmox/overview"
@@ -23,16 +23,15 @@
     }
   ],
   "states": [
-    "large mock estate: 50 nodes and 929 guests with realtime delta ticks arriving every few seconds over the websocket",
-    "continuous operator scrolling spanning multiple realtime ticks",
-    "scroll idle immediately after a gesture with deferred ticks pending",
-    "narrow-viewport mobile layout scrolling across a realtime tick"
+    "large mock estate: 50 nodes and 929 guests with realtime delta ticks arriving every few seconds",
+    "sustained simulated typing (keydown burst every 120ms) spanning multiple realtime ticks",
+    "input idle immediately after a typing burst with deferred ticks pending",
+    "narrow-viewport mobile layout during a typing burst across a realtime tick"
   ],
   "interactions": [
-    "long-animation-frame instrumentation across 16-20s continuous scrolls: zero websocket onmessage long frames during scrolling (previously 200-560ms per tick), one coalesced flush landing 300-450ms after scroll idle via the deferral timer",
-    "store-internal probes confirming mid-scroll ticks queue their resource deltas, defer the reporting projection and lastUpdate token latest-wins, and drain fully at idle",
-    "per-message section timing showing mid-scroll tick cost at or below ~1ms with alert application still live",
-    "Last refresh footer observed advancing across scrolls on desktop and narrow viewports, confirming deferred ticks still land and data stays live",
+    "long-animation-frame instrumentation across a 12s typing burst on desktop: zero long frames of any kind during input, one coalesced deferral flush (426ms) landing ~520ms after the last keystroke",
+    "pointerdown dispatched mid-window extends the input-active gate (unit-tested), keydown and scroll both verified live as gate sources",
+    "Last refresh footer observed advancing across typing bursts on desktop and narrow viewports, confirming deferred ticks still land and data stays live",
     "zero console errors across desktop and narrow passes"
   ]
 }

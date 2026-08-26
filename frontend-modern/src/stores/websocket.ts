@@ -424,15 +424,17 @@ export function createWebSocketStore(url: string) {
   // Per-key change shapes for deferred ids, unioned across the hidden ticks so
   // the resume merge can still take the fast path for metrics-only rows.
   const deferredResourceKeys = new Map<string, readonly string[] | null>();
-  // Resource ticks defer while the operator is actively scrolling, not just
-  // while the tab is hidden: on a large estate even the baseline patch walks
-  // the whole resource array, so a mid-gesture tick blocks the main thread for
-  // hundreds of milliseconds and hitches input. Scroll-gated ticks queue
-  // unapplied in arrival order and land at scroll idle, when nothing is
-  // visually moving. Hidden tabs keep the in-place baseline advance instead:
-  // a tab can stay hidden for hours, and the queue must stay bounded by one
-  // gesture's length.
-  const OPERATOR_SCROLL_ACTIVE_WINDOW_MS = 250;
+  // Resource ticks defer while operator input is active (scrolling, wheel,
+  // pointer presses, typing), not just while the tab is hidden: on a large
+  // estate even the baseline patch walks the whole resource array, so a tick
+  // landing mid-interaction blocks the main thread for hundreds of
+  // milliseconds and delays the response to that input. Input-gated ticks
+  // queue unapplied in arrival order and land at input idle, when nothing is
+  // reacting to the operator. Bare pointer movement deliberately does not
+  // gate: a resting hand on the mouse must not starve data freshness. Hidden
+  // tabs keep the in-place baseline advance instead: a tab can stay hidden
+  // for hours, and the queue must stay bounded by one interaction burst.
+  const OPERATOR_INPUT_ACTIVE_WINDOW_MS = 250;
   const DEFERRED_FLUSH_RECHECK_MS = 300;
   const deferredResourceDeltaQueue: { upserts?: unknown; removed?: unknown; order?: unknown }[] =
     [];
@@ -442,9 +444,9 @@ export function createWebSocketStore(url: string) {
   let deferredConnectedInfrastructure: ConnectedInfrastructureItem[] | null = null;
   // lastUpdate is the realtime tick token every downstream consumer keys on
   // (unified resource projections, workload remaps). It defers with the rest
-  // so a mid-scroll tick triggers no derived recomputation at all.
+  // so a mid-interaction tick triggers no derived recomputation at all.
   let deferredLastUpdate: number | null = null;
-  let lastOperatorScrollAt = 0;
+  let lastOperatorInputAt = 0;
   let deferredFlushTimer = 0;
   // Latest capabilityCatalog from the state payload. Broadcast resources carry
   // capabilitiesRef instead of inline capability blobs; ingestion expands the
@@ -679,8 +681,8 @@ export function createWebSocketStore(url: string) {
     syncContainerCommands(nextResources, changedResourceIds);
   };
 
-  const isOperatorScrollActive = () =>
-    Date.now() - lastOperatorScrollAt < OPERATOR_SCROLL_ACTIVE_WINDOW_MS;
+  const isOperatorInputActive = () =>
+    Date.now() - lastOperatorInputAt < OPERATOR_INPUT_ACTIVE_WINDOW_MS;
 
   // Deltas queued during an active scroll apply strictly in arrival order.
   // Draining advances the raw baseline and unions the change shapes into the
@@ -757,7 +759,7 @@ export function createWebSocketStore(url: string) {
       return;
     }
     if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
-    if (!isOperatorScrollActive()) {
+    if (!isOperatorInputActive()) {
       flushDeferredResources();
       return;
     }
@@ -773,9 +775,10 @@ export function createWebSocketStore(url: string) {
     scheduleDeferredResourceFlush();
   };
 
-  const handleOperatorScroll = () => {
-    lastOperatorScrollAt = Date.now();
+  const handleOperatorInput = () => {
+    lastOperatorInputAt = Date.now();
   };
+  const OPERATOR_INPUT_EVENTS = ['scroll', 'wheel', 'pointerdown', 'keydown'] as const;
 
   if (typeof document !== 'undefined') {
     document.addEventListener('visibilitychange', handleResourceVisibilityChange, {
@@ -785,8 +788,11 @@ export function createWebSocketStore(url: string) {
   if (typeof window !== 'undefined') {
     // Capture phase: scroll events do not bubble, so a window-level capture
     // listener is the only way to observe every scroller (app shell, drawers)
-    // without adding per-surface listeners.
-    window.addEventListener('scroll', handleOperatorScroll, { capture: true, passive: true });
+    // without adding per-surface listeners; the other input events ride the
+    // same registration.
+    for (const eventName of OPERATOR_INPUT_EVENTS) {
+      window.addEventListener(eventName, handleOperatorInput, { capture: true, passive: true });
+    }
   }
 
   const beginConnection = () => {
@@ -933,7 +939,7 @@ export function createWebSocketStore(url: string) {
               if (
                 typeof document !== 'undefined' &&
                 document.visibilityState !== 'hidden' &&
-                isOperatorScrollActive()
+                isOperatorInputActive()
               ) {
                 // Latest-wins: a newer payload simply replaces the pending one.
                 deferredConnectedInfrastructure = connectedInfrastructure;
@@ -1005,7 +1011,7 @@ export function createWebSocketStore(url: string) {
                 if (
                   typeof document !== 'undefined' &&
                   document.visibilityState !== 'hidden' &&
-                  (isOperatorScrollActive() || deferredResourceDeltaQueue.length > 0)
+                  (isOperatorInputActive() || deferredResourceDeltaQueue.length > 0)
                 ) {
                   // Mid-gesture ticks queue unapplied so they cost nothing
                   // until scroll idle. A non-empty queue keeps queueing even
@@ -1118,7 +1124,7 @@ export function createWebSocketStore(url: string) {
             if (
               typeof document !== 'undefined' &&
               document.visibilityState !== 'hidden' &&
-              isOperatorScrollActive()
+              isOperatorInputActive()
             ) {
               deferredLastUpdate = nextLastUpdate;
               scheduleDeferredResourceFlush();
@@ -1466,7 +1472,9 @@ export function createWebSocketStore(url: string) {
     pendingAckTimeouts.clear();
     if (typeof window !== 'undefined') {
       window.removeEventListener(ALERTS_DETECTION_EVENT, handleAlertsDetectionEvent);
-      window.removeEventListener('scroll', handleOperatorScroll, { capture: true });
+      for (const eventName of OPERATOR_INPUT_EVENTS) {
+        window.removeEventListener(eventName, handleOperatorInput, { capture: true });
+      }
     }
     if (typeof document !== 'undefined') {
       document.removeEventListener('visibilitychange', handleResourceVisibilityChange);

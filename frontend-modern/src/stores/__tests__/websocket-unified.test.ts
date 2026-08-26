@@ -827,6 +827,53 @@ describe('websocket store unified resource contract', () => {
     }
   });
 
+  it('defers resource deltas while the operator types and flushes at input idle', async () => {
+    const { store, dispose } = await createStoreHarness();
+    try {
+      await waitForOpenTick();
+      emitMessage({
+        type: 'initialState',
+        data: {
+          resources: [
+            {
+              id: 'vm-1',
+              type: 'vm',
+              name: 'vm-1',
+              status: 'running',
+              cpu: { current: 10 },
+            },
+          ],
+          lastUpdate: 100,
+          activeAlerts: [],
+          recentlyResolved: [],
+        },
+      });
+
+      // A tick landing mid-keystroke must not delay the input's response.
+      window.dispatchEvent(new Event('keydown'));
+      emitMessage({
+        type: 'rawData',
+        data: {
+          lastUpdate: 200,
+          resourceDelta: { upserts: [{ id: 'vm-1', cpu: { current: 20 } }] },
+        },
+      });
+      expect(store.state.resources[0]?.cpu?.current).toBe(10);
+
+      // A pointer press extends the same input-active window.
+      vi.advanceTimersByTime(200);
+      window.dispatchEvent(new Event('pointerdown'));
+      vi.advanceTimersByTime(200);
+      expect(store.state.resources[0]?.cpu?.current).toBe(10);
+
+      vi.advanceTimersByTime(600);
+      expect(store.state.resources[0]?.cpu?.current).toBe(20);
+      expect(store.state.lastUpdate).toBe(200);
+    } finally {
+      dispose();
+    }
+  });
+
   it('holds hidden-tab deferrals through an active scroll and lands them at idle', async () => {
     const visibility = vi.spyOn(document, 'visibilityState', 'get');
     visibility.mockReturnValue('visible');
