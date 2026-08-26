@@ -69,5 +69,16 @@ manager's retention check mixes wall-clock now against evidence-stamped
 resolve times, which the reducer normalizes to ObservedAt throughout —
 that difference disappears at cutover.
 
-Remaining for later slices: ack/snooze lifecycle, intent-policy
-interaction, and a shadow-mode runtime feed.
+Fifth slice (2026-08-26): the acknowledge lifecycle — ack marks a firing
+incident and its canonical record, survives per-tick alert rebuilds
+(preserveAlertState's existing branch) and short resolve/re-fire cycles
+(the restore branch), is removed by unacknowledge, and expires once the
+inactive record passes the one-hour cleanup TTL. The manager's restore
+has no age check of its own — expiry is cleanup's pruning — so the
+reducer draws the hour deterministically at restore time (AckRetention),
+and the parity expiry scenario exercises the manager's real Cleanup pass.
+Applies to both families (checkMetric shares preserveAlertState). Second
+consecutive slice with no manager defect found.
+
+Remaining for later slices: intent-policy interaction and a shadow-mode
+runtime feed.

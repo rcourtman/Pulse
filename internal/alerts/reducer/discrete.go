@@ -92,6 +92,7 @@ func (s *State) ApplyDiscrete(signal DiscreteSignal, rule DiscreteRule) []Event 
 		delete(s.incidents, key)
 		if incident.State == StateFiring {
 			s.recordResolved(key, incident, signal.ObservedAt)
+			s.markAckInactive(key, signal.ObservedAt)
 			return []Event{event(EventResolved, incident.Severity)}
 		}
 		return []Event{event(EventPendingCleared, "")}
@@ -113,6 +114,7 @@ func (s *State) ApplyDiscrete(signal DiscreteSignal, rule DiscreteRule) []Event 
 		if requiredRecovery <= 1 {
 			delete(s.incidents, key)
 			s.recordResolved(key, incident, signal.ObservedAt)
+			s.markAckInactive(key, signal.ObservedAt)
 			return []Event{event(EventResolved, incident.Severity)}
 		}
 		incident.RecoveryCount++
@@ -122,6 +124,7 @@ func (s *State) ApplyDiscrete(signal DiscreteSignal, rule DiscreteRule) []Event 
 		}
 		delete(s.incidents, key)
 		s.recordResolved(key, incident, signal.ObservedAt)
+		s.markAckInactive(key, signal.ObservedAt)
 		return []Event{event(EventResolved, incident.Severity)}
 	}
 
@@ -160,6 +163,7 @@ func (s *State) ApplyDiscrete(signal DiscreteSignal, rule DiscreteRule) []Event 
 		incident.State = StateFiring
 		incident.Confirmations = required
 		incident.StartedAt = incident.PendingSince
+		s.restoreAck(key, incident, signal.ObservedAt)
 		if restored, ok := s.consumeRefire(key, signal.ObservedAt); ok {
 			incident.StartedAt = restored
 			return []Event{event(EventRefired, incident.Severity)}
@@ -179,6 +183,7 @@ func (s *State) ApplyDiscrete(signal DiscreteSignal, rule DiscreteRule) []Event 
 			LastObservedAt: signal.ObservedAt,
 		}
 		s.incidents[key] = created
+		s.restoreAck(key, created, signal.ObservedAt)
 		if restored, ok := s.consumeRefire(key, signal.ObservedAt); ok {
 			created.StartedAt = restored
 			return []Event{event(EventRefired, signal.Severity)}

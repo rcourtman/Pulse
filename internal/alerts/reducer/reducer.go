@@ -80,6 +80,9 @@ type Incident struct {
 	// toward DiscreteRule.RecoveryConfirmations; reset by any matching
 	// observation. Unused by the metric family.
 	RecoveryCount  int
+	Acknowledged   bool
+	AckUser        string
+	AckAt          time.Time
 	LastObservedAt time.Time
 }
 
@@ -105,6 +108,14 @@ const (
 // measured on the signal's ObservedAt.
 const RefireRetention = 5 * time.Minute
 
+// AckRetention is how long an acknowledgement survives after its incident
+// resolves: a re-activation inside this window starts acknowledged. The
+// manager restores from its ack records with no age check and relies on
+// cleanup pruning (one-hour inactive TTL) for expiry; the reducer draws
+// that line deterministically at the same hour, measured on the signal's
+// ObservedAt.
+const AckRetention = time.Hour
+
 // Event is one transition emitted by Apply.
 type Event struct {
 	Type       EventType
@@ -123,11 +134,21 @@ type resolvedRecord struct {
 	ResolvedAt time.Time
 }
 
+// ackRecord preserves an acknowledgement across incident rebuilds and
+// short resolve/re-fire cycles, mirroring the manager's canonical ack
+// records.
+type ackRecord struct {
+	User       string
+	At         time.Time
+	InactiveAt time.Time // zero while the incident is still firing
+}
+
 // State holds every incident the reducer tracks. It is not safe for
 // concurrent use; the owner serializes Apply calls.
 type State struct {
 	incidents map[string]*Incident
 	resolved  map[string]resolvedRecord
+	acks      map[string]ackRecord
 }
 
 // NewState returns an empty reducer state.
@@ -135,7 +156,72 @@ func NewState() *State {
 	return &State{
 		incidents: make(map[string]*Incident),
 		resolved:  make(map[string]resolvedRecord),
+		acks:      make(map[string]ackRecord),
 	}
+}
+
+// Acknowledge marks a firing incident acknowledged and records the
+// acknowledgement so rebuilds and short resolve/re-fire cycles keep it.
+// Returns false when no firing incident exists for the key, mirroring the
+// manager's not-found error.
+func (s *State) Acknowledge(resourceID, subKey, user string, at time.Time) bool {
+	key := incidentKey(resourceID, subKey)
+	incident, ok := s.incidents[key]
+	if !ok || incident.State != StateFiring {
+		return false
+	}
+	if incident.Acknowledged {
+		return true
+	}
+	incident.Acknowledged = true
+	incident.AckUser = user
+	incident.AckAt = at
+	s.acks[key] = ackRecord{User: user, At: at}
+	return true
+}
+
+// Unacknowledge removes an acknowledgement from a firing incident and
+// deletes its record. Returns false when no firing incident exists.
+func (s *State) Unacknowledge(resourceID, subKey string) bool {
+	key := incidentKey(resourceID, subKey)
+	incident, ok := s.incidents[key]
+	if !ok || incident.State != StateFiring {
+		return false
+	}
+	incident.Acknowledged = false
+	incident.AckUser = ""
+	incident.AckAt = time.Time{}
+	delete(s.acks, key)
+	return true
+}
+
+// markAckInactive stamps the ack record when its incident resolves, which
+// starts the AckRetention window.
+func (s *State) markAckInactive(key string, at time.Time) {
+	if record, ok := s.acks[key]; ok && record.InactiveAt.IsZero() {
+		record.InactiveAt = at
+		s.acks[key] = record
+	}
+}
+
+// restoreAck applies a preserved acknowledgement to a newly activated
+// incident when its record is still inside AckRetention; expired records
+// are dropped.
+func (s *State) restoreAck(key string, incident *Incident, observedAt time.Time) {
+	record, ok := s.acks[key]
+	if !ok {
+		return
+	}
+	if !record.InactiveAt.IsZero() && !record.InactiveAt.After(observedAt.Add(-AckRetention)) {
+		delete(s.acks, key)
+		return
+	}
+	// The record becomes live again with the incident.
+	record.InactiveAt = time.Time{}
+	s.acks[key] = record
+	incident.Acknowledged = true
+	incident.AckUser = record.User
+	incident.AckAt = record.At
 }
 
 func incidentKey(resourceID, subKey string) string {
@@ -219,6 +305,7 @@ func (s *State) ApplyMetric(signal MetricSignal, rule MetricRule) []Event {
 		}
 		delete(s.incidents, key)
 		if incident.State == StateFiring {
+			s.markAckInactive(key, signal.ObservedAt)
 			return []Event{event(EventResolved, incident.Severity)}
 		}
 		return []Event{event(EventPendingCleared, "")}
@@ -266,11 +353,12 @@ func (s *State) ApplyMetric(signal MetricSignal, rule MetricRule) []Event {
 			incident.StartedAt = incident.PendingSince
 			incident.LastValue = signal.Value
 			incident.LastObservedAt = signal.ObservedAt
+			s.restoreAck(key, incident, signal.ObservedAt)
 			return []Event{event(EventFired, severity)}
 		}
 
 		severity := severityFor(signal.Value, rule.Trigger, signal.Metric)
-		s.incidents[key] = &Incident{
+		created := &Incident{
 			ResourceID:     signal.ResourceID,
 			Key:            signal.Metric,
 			State:          StateFiring,
@@ -279,6 +367,8 @@ func (s *State) ApplyMetric(signal MetricSignal, rule MetricRule) []Event {
 			LastValue:      signal.Value,
 			LastObservedAt: signal.ObservedAt,
 		}
+		s.incidents[key] = created
+		s.restoreAck(key, created, signal.ObservedAt)
 		return []Event{event(EventFired, severity)}
 	}
 
@@ -300,6 +390,7 @@ func (s *State) ApplyMetric(signal MetricSignal, rule MetricRule) []Event {
 	if signal.Value <= clear {
 		severity := incident.Severity
 		delete(s.incidents, key)
+		s.markAckInactive(key, signal.ObservedAt)
 		return []Event{event(EventResolved, severity)}
 	}
 
