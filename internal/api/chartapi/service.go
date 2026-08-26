@@ -1322,7 +1322,7 @@ func buildSyntheticMetricHistorySeries(
 	current float64,
 ) []monitoring.MetricPoint {
 	switch metricType {
-	case "disk", "diskread", "diskwrite":
+	case "disk", "diskread", "diskwrite", "usage":
 	case "smart_temp":
 		if current <= 0 {
 			return nil

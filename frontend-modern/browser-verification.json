@@ -1,50 +1,21 @@
 {
   "version": 1,
-  "base_sha": "3414a5abdad055f99192d44fc4d11becc6d73d7a",
-  "verified_at": "2026-08-26T12:08:15Z",
+  "base_sha": "5fcb0d665585802a94fa4a462eac877439e45088",
+  "verified_at": "2026-08-26T12:53:43Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Workloads/GuestRow.tsx",
-    "frontend-modern/src/components/Workloads/WorkloadPanel.tsx",
-    "frontend-modern/src/components/Workloads/WorkloadTableHeader.tsx",
-    "frontend-modern/src/components/Workloads/WorkloadsFilter.tsx",
-    "frontend-modern/src/components/Workloads/WorkloadsSurface.tsx",
-    "frontend-modern/src/components/Workloads/WorkloadsTable.tsx",
-    "frontend-modern/src/components/Workloads/guestRowModel.tsx",
-    "frontend-modern/src/components/Workloads/useWorkloadsControlsState.ts",
-    "frontend-modern/src/components/Workloads/useWorkloadsState.ts",
-    "frontend-modern/src/components/Workloads/workloadColumnLayoutUrl.ts",
-    "frontend-modern/src/components/Workloads/workloadColumnWidths.ts",
-    "frontend-modern/src/components/Workloads/workloadsFilterModel.ts",
-    "frontend-modern/src/components/shared/ColumnPicker.tsx",
-    "frontend-modern/src/components/shared/columnPickerModel.ts",
-    "frontend-modern/src/components/shared/useColumnPickerState.ts",
-    "frontend-modern/src/index.css",
-    "frontend-modern/src/utils/localStorage.ts"
+    "frontend-modern/src/components/Storage/useStoragePoolsTableWindowing.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Workloads/GuestRow.tsx": "ca36c0adf46aacefe7f2d40c54fbb682077095e8754b6d6c3322ca73ecdfd310",
-    "frontend-modern/src/components/Workloads/WorkloadPanel.tsx": "867aaa1c71471385f3a26d4aeb535e063f33fe32402d44e2695933ee45663416",
-    "frontend-modern/src/components/Workloads/WorkloadTableHeader.tsx": "6a3b4e9e7efd702d1f9a9a549865808a1cfb80a259cfb65130beb8779655cc76",
-    "frontend-modern/src/components/Workloads/WorkloadsFilter.tsx": "564caa9752878f3b416e0953a895ed2113b93090438da64f6c32524336c45c79",
-    "frontend-modern/src/components/Workloads/WorkloadsSurface.tsx": "73e31b9b3c4ac4d28687b71c2f029ae4605c5697ddec19d604e4706c0184cebd",
-    "frontend-modern/src/components/Workloads/WorkloadsTable.tsx": "955090567fd1302828d7e156e04b43e2c2841ac71f50ee5cd6dac8f3eabece50",
-    "frontend-modern/src/components/Workloads/guestRowModel.tsx": "fb6324c436f3b160d4655fb0d758956ed856c0b811a07c49bdf1a49d7375bb21",
-    "frontend-modern/src/components/Workloads/useWorkloadsControlsState.ts": "e40a0a099092a7578f39b433b989c61219a01351f41009ea8fed6ab279f9ea78",
-    "frontend-modern/src/components/Workloads/useWorkloadsState.ts": "9a6fd576040ec74f7e45d9af1622a0fad401e18c249ad93449dfa7e808b8250e",
-    "frontend-modern/src/components/Workloads/workloadColumnLayoutUrl.ts": "6df93e2f9ca5b7db0d2230cb4786700fe337cf6974630fa1f334e755fa63cc40",
-    "frontend-modern/src/components/Workloads/workloadColumnWidths.ts": "bb8db7a4891ec714e0ec7c42c821f6106f4a2e52f38bc885b47954d23873eb8a",
-    "frontend-modern/src/components/Workloads/workloadsFilterModel.ts": "fe413753be3f22165e991630598f89952dfee65f2bdb8d4012e181d308b6f057",
-    "frontend-modern/src/components/shared/ColumnPicker.tsx": "93570c648a3fd2f8b085019a868715f00e0cb2bf41cdcb89c1fdcc6dafd468b0",
-    "frontend-modern/src/components/shared/columnPickerModel.ts": "374a27ad36f65531df322f424e8df813260df4d7ad0595b7afced661fcc1aa23",
-    "frontend-modern/src/components/shared/useColumnPickerState.ts": "548bb62622c4e81728435a3c93536df58d2664afc6bbc3b0a2576f30bbdd3ba6",
-    "frontend-modern/src/index.css": "7b28bd7056b4f846a9c71cc17f3fdef1f9dfaa2edb4491c91181ebd475129710",
-    "frontend-modern/src/utils/localStorage.ts": "bd1b11bf5aa0fbf216faf1c7df3bc1b6e6238c607c7ea46e65a69a876dabec60"
+    "frontend-modern/src/components/Storage/useStoragePoolsTableWindowing.ts": "c98956a094139a8d32484c547d201f6413c7cf9a6c1d84d3ffe68e5f379321c6"
   },
-  "routes": ["/proxmox/guests"],
+  "routes": [
+    "/proxmox/storage?q=offsite-vault",
+    "/proxmox/storage?q=ceph-rbd"
+  ],
   "viewports": [
     {
-      "width": 1280,
+      "width": 1440,
       "height": 900
     },
     {
@@ -53,17 +24,14 @@
     }
   ],
   "states": [
-    "desktop responsive default with eight fitted columns and no horizontal overflow",
-    "desktop manual layout with all eleven selected columns and horizontal overflow",
-    "clean shared-link restoration with URL-owned widths and no stored preference",
-    "column picker explaining the active manual layout and offering Reset widths",
-    "narrow shared-link fallback with five responsive columns, no resize handles, and no page overflow"
+    "expanded PBS datastore History with populated 24-hour and 7-day capacity series",
+    "expanded Ceph pool History with populated 7-day capacity series",
+    "History tab and selected 24-hour range retained after live storage polling",
+    "narrow expanded PBS datastore History with chart, range control, row, and navigation visible"
   ],
   "interactions": [
-    "dragged the Name header edge from 324 to 172 pixels; confirmed the cols URL, stored widths, eleven resize handles, and a 1420-pixel table inside a 1173-pixel scroll shell",
-    "cleared the workload-width preference and reloaded the shared cols URL; confirmed the 172-pixel Name width and complete manual layout without adopting the URL as a stored preference",
-    "opened View then Columns and selected Reset widths; confirmed the clean route, 324-pixel responsive Name width, eight handles, and no horizontal overflow",
-    "loaded the same shared cols URL at 390 by 844; confirmed the responsive five-column table, zero resize handles, and a document width equal to the viewport",
-    "inspected the browser console after desktop and narrow checks; no errors were reported"
+    "expanded offsite-vault, selected History, switched from 7 days to 24 hours, and confirmed the chart remained populated and selected across repeated live refreshes",
+    "rechecked the same expanded History state at 390 by 844 and confirmed the chart and selector remained visible, unclipped, and usable after polling",
+    "searched for ceph-rbd, expanded the row, selected History, and confirmed the populated 7-day chart and selected tab survived a live refresh cycle"
   ]
 }

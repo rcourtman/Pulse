@@ -6367,17 +6367,29 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 	}
 	// Most requests are served from the metrics store. Keep the fallback/read-state
 	// snapshots lazy so store-backed history does not pay an O(fleet-size) copy cost.
+	type storageMetricFallback struct {
+		ID         string
+		ResourceID string
+		Used       int64
+		Total      int64
+		Percent    float64
+	}
 	var (
 		fallbackStateOnce sync.Once
 		vms               []models.VM
 		containers        []models.Container
 		nodes             []models.Node
-		storagePools      []models.Storage
 		dockerHosts       []models.DockerHost
 		hosts             []models.Host
 
+		legacyStorageFallbackOnce sync.Once
+		storagePools              []models.Storage
+
 		diskFallbackOnce sync.Once
 		physicalDisks    []unifiedresources.Resource
+
+		storageFallbackOnce sync.Once
+		unifiedStorage      []storageMetricFallback
 	)
 
 	loadFallbackState := func() {
@@ -6385,9 +6397,14 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 			vms = monitor.VMsSnapshot()
 			containers = monitor.ContainersSnapshot()
 			nodes = monitor.NodesSnapshot()
-			storagePools = monitor.StorageSnapshot()
 			dockerHosts = monitor.DockerHostsSnapshot()
 			hosts = monitor.HostsSnapshot()
+		})
+	}
+
+	loadLegacyStorage := func() {
+		legacyStorageFallbackOnce.Do(func() {
+			storagePools = monitor.StorageSnapshot()
 		})
 	}
 
@@ -6396,6 +6413,57 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 			for _, resource := range monitor.GetUnifiedResources() {
 				if resource.Type == unifiedresources.ResourceTypePhysicalDisk && resource.PhysicalDisk != nil {
 					physicalDisks = append(physicalDisks, resource)
+				}
+			}
+		})
+	}
+
+	loadUnifiedStorage := func() {
+		storageFallbackOnce.Do(func() {
+			readState := monitor.GetUnifiedReadStateOrSnapshot()
+			seen := make(map[string]struct{})
+			if readState != nil {
+				for _, pool := range readState.StoragePools() {
+					if pool == nil {
+						continue
+					}
+					unifiedStorage = append(unifiedStorage, storageMetricFallback{
+						ID:         pool.ID(),
+						ResourceID: pool.SourceID(),
+						Used:       pool.DiskUsed(),
+						Total:      pool.DiskTotal(),
+						Percent:    pool.DiskPercent(),
+					})
+					seen[pool.ID()] = struct{}{}
+				}
+			}
+			resolver, _ := readState.(monitoring.MetricsTargetResourceStore)
+			for _, resource := range monitor.GetUnifiedResources() {
+				if (resource.Type == unifiedresources.ResourceTypeStorage || resource.Type == unifiedresources.ResourceTypeCeph) &&
+					resource.Metrics != nil && resource.Metrics.Disk != nil {
+					if _, ok := seen[resource.ID]; ok {
+						continue
+					}
+					if resource.MetricsTarget == nil && resolver != nil {
+						resource.MetricsTarget = resolver.MetricsTargetForResource(resource.ID)
+					}
+					targetID := ""
+					if resource.MetricsTarget != nil {
+						targetID = strings.TrimSpace(resource.MetricsTarget.ResourceID)
+					}
+					disk := resource.Metrics.Disk
+					fallback := storageMetricFallback{
+						ID:         resource.ID,
+						ResourceID: targetID,
+						Percent:    disk.Percent,
+					}
+					if disk.Used != nil {
+						fallback.Used = *disk.Used
+					}
+					if disk.Total != nil {
+						fallback.Total = *disk.Total
+					}
+					unifiedStorage = append(unifiedStorage, fallback)
 				}
 			}
 		})
@@ -6460,13 +6528,40 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 	}
 
 	findStorage := func(id string) *models.Storage {
-		loadFallbackState()
+		loadLegacyStorage()
 		for i := range storagePools {
 			if storagePools[i].ID == id {
 				return &storagePools[i]
 			}
 		}
 		return nil
+	}
+
+	findUnifiedStorage := func(id string) *storageMetricFallback {
+		loadUnifiedStorage()
+		target := strings.TrimSpace(id)
+		if target == "" {
+			return nil
+		}
+		for i := range unifiedStorage {
+			if strings.EqualFold(unifiedStorage[i].ID, target) {
+				return &unifiedStorage[i]
+			}
+		}
+		matchIndex := -1
+		for i := range unifiedStorage {
+			if !strings.EqualFold(strings.TrimSpace(unifiedStorage[i].ResourceID), target) {
+				continue
+			}
+			if matchIndex >= 0 {
+				return nil
+			}
+			matchIndex = i
+		}
+		if matchIndex < 0 {
+			return nil
+		}
+		return &unifiedStorage[matchIndex]
 	}
 
 	findDockerHost := func(id string) *models.DockerHost {
@@ -6596,18 +6691,33 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 			}
 		case "storage":
 			storage := findStorage(resourceID)
-			if storage == nil {
+			if storage != nil {
+				usagePercent := float64(0)
+				if storage.Total > 0 {
+					usagePercent = (float64(storage.Used) / float64(storage.Total)) * 100
+				}
+				points["disk"] = monitoring.MetricPoint{Timestamp: now, Value: usagePercent}
+				points["usage"] = monitoring.MetricPoint{Timestamp: now, Value: usagePercent}
+				points["used"] = monitoring.MetricPoint{Timestamp: now, Value: float64(storage.Used)}
+				points["total"] = monitoring.MetricPoint{Timestamp: now, Value: float64(storage.Total)}
+				points["avail"] = monitoring.MetricPoint{Timestamp: now, Value: float64(storage.Free)}
 				return points
 			}
-			usagePercent := float64(0)
-			if storage.Total > 0 {
-				usagePercent = (float64(storage.Used) / float64(storage.Total)) * 100
+			resource := findUnifiedStorage(resourceID)
+			if resource == nil {
+				return points
+			}
+			usagePercent := resource.Percent
+			if resource.Total > 0 {
+				usagePercent = (float64(resource.Used) / float64(resource.Total)) * 100
 			}
 			points["disk"] = monitoring.MetricPoint{Timestamp: now, Value: usagePercent}
 			points["usage"] = monitoring.MetricPoint{Timestamp: now, Value: usagePercent}
-			points["used"] = monitoring.MetricPoint{Timestamp: now, Value: float64(storage.Used)}
-			points["total"] = monitoring.MetricPoint{Timestamp: now, Value: float64(storage.Total)}
-			points["avail"] = monitoring.MetricPoint{Timestamp: now, Value: float64(storage.Free)}
+			if resource.Total > 0 {
+				points["used"] = monitoring.MetricPoint{Timestamp: now, Value: float64(resource.Used)}
+				points["total"] = monitoring.MetricPoint{Timestamp: now, Value: float64(resource.Total)}
+				points["avail"] = monitoring.MetricPoint{Timestamp: now, Value: float64(resource.Total - resource.Used)}
+			}
 		case "docker-host":
 			host := findDockerHost(resourceID)
 			if host == nil {
@@ -6767,6 +6877,23 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 			}
 		}
 
+		if mock.IsMockEnabled() && runtimeResourceType == "storage" && queryMetric == "usage" {
+			if current, ok := liveMetricPoints(runtimeResourceType, resourceID)["usage"]; ok {
+				series := chartapi.BuildSyntheticMetricHistorySeries(
+					end,
+					duration,
+					historyMaxPoints,
+					"storage",
+					resourceID,
+					"usage",
+					current.Value,
+				)
+				if len(series) > 0 {
+					return buildHistoryPoints(series, stepSecs), historySourceMock, true
+				}
+			}
+		}
+
 		switch runtimeResourceType {
 		case "vm", "system-container", "oci-container":
 			metrics, _ := guestChartMetrics()
@@ -6894,6 +7021,22 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 			metrics, guestHistory = guestChartMetrics()
 		case "storage":
 			metrics = monitor.GetStorageMetrics(resourceID, duration)
+			if mock.IsMockEnabled() && len(metrics["usage"]) == 0 {
+				if current, ok := liveMetricPoints(runtimeResourceType, resourceID)["usage"]; ok {
+					metrics = map[string][]monitoring.MetricPoint{
+						"usage": chartapi.BuildSyntheticMetricHistorySeries(
+							end,
+							duration,
+							historyMaxPoints,
+							"storage",
+							resourceID,
+							"usage",
+							current.Value,
+						),
+					}
+					source = historySourceMock
+				}
+			}
 		case "disk":
 			metrics = map[string][]monitoring.MetricPoint{
 				"disk":       monitor.GetDiskMetricsForChart(resourceID, "disk", duration),
@@ -6940,6 +7083,37 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 			return nil, "", false
 		}
 		return apiData, source, true
+	}
+
+	// Mock storage targets with current capacity are fully answerable from the
+	// in-memory history/live fallback. Serve that path before entering the
+	// persistent store: provider-derived targets may have no stored series, and
+	// a legacy row can still expose only a sparse point while demo backfill keeps
+	// the store busy.
+	if mock.IsMockEnabled() && runtimeResourceType == "storage" {
+		response := map[string]interface{}{
+			"resourceType": responseResourceType,
+			"resourceId":   resourceID,
+			"range":        timeRange,
+			"start":        start.UnixMilli(),
+			"end":          end.UnixMilli(),
+		}
+		if metricType != "" {
+			if apiPoints, source, ok := fallbackSingle(); ok {
+				response["metric"] = metricType
+				response["points"] = apiPoints
+				response["source"] = source
+				w.Header().Set("Content-Type", "application/json")
+				json.NewEncoder(w).Encode(response)
+				return
+			}
+		} else if apiData, source, ok := fallbackAll(); ok {
+			response["metrics"] = apiData
+			response["source"] = source
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(response)
+			return
+		}
 	}
 
 	store := monitor.GetMetricsStore()

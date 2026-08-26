@@ -372,6 +372,116 @@ func TestMetricsHistoryFallbackMockDiskSynthesizesSeries(t *testing.T) {
 	}
 }
 
+func TestMetricsHistoryFallbackMockUnifiedStorageSynthesizesSeries(t *testing.T) {
+	setMockModeForTest(t, true)
+
+	used := int64(7_140_000_000_000)
+	total := int64(20_000_000_000_000)
+	resourceID := "offsite-vault"
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestResources([]unifiedresources.Resource{
+		{
+			ID:       "storage-offsite-vault",
+			Type:     unifiedresources.ResourceTypeStorage,
+			Name:     "Offsite Vault",
+			Status:   unifiedresources.StatusOnline,
+			LastSeen: time.Now().UTC(),
+			MetricsTarget: &unifiedresources.MetricsTarget{
+				ResourceType: "storage",
+				ResourceID:   resourceID,
+			},
+			Metrics: &unifiedresources.ResourceMetrics{
+				Disk: &unifiedresources.MetricValue{
+					Used:    &used,
+					Total:   &total,
+					Percent: 35.7,
+				},
+			},
+		},
+	})
+
+	monitor := &monitoring.Monitor{}
+	monitor.SetResourceStore(unifiedresources.NewMonitorAdapter(registry))
+	router := &Router{monitor: monitor}
+
+	for _, query := range []string{
+		"resourceType=storage&resourceId=" + resourceID + "&metric=usage&range=24h",
+		"resourceType=storage&resourceId=" + resourceID + "&range=24h",
+	} {
+		req := httptest.NewRequest(http.MethodGet, "/api/metrics-store/history?"+query, nil)
+		rec := httptest.NewRecorder()
+		router.handleMetricsHistory(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
+		}
+		var resp struct {
+			Source string `json:"source"`
+			Points []struct {
+				Value float64 `json:"value"`
+			} `json:"points"`
+			Metrics map[string][]struct {
+				Value float64 `json:"value"`
+			} `json:"metrics"`
+		}
+		if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("failed to unmarshal response: %v", err)
+		}
+		if resp.Source != "mock_synthetic" {
+			t.Fatalf("expected source mock_synthetic, got %q: %s", resp.Source, rec.Body.String())
+		}
+		points := resp.Points
+		if len(points) == 0 {
+			points = resp.Metrics["usage"]
+		}
+		if len(points) < 24 {
+			t.Fatalf("expected dense synthetic storage history, got %d points", len(points))
+		}
+		if math.Abs(points[len(points)-1].Value-35.7) > 0.001 {
+			t.Fatalf("expected last point 35.7, got %f", points[len(points)-1].Value)
+		}
+	}
+}
+
+func TestMetricsHistoryFallbackMockStorageBypassesSparseStoreSeries(t *testing.T) {
+	setMockModeForTest(t, true)
+
+	resourceID := "pbs-main/offsite-vault"
+	store, err := metrics.NewStore(metrics.DefaultConfig(t.TempDir()))
+	if err != nil {
+		t.Fatalf("metrics.NewStore() error = %v", err)
+	}
+	defer func() { _ = store.Close() }()
+	store.Write("storage", resourceID, "usage", 35.7, time.Now().UTC().Add(-time.Minute))
+	store.Flush()
+
+	monitor := &monitoring.Monitor{}
+	setUnexportedField(t, monitor, "metricsStore", store)
+	router := &Router{monitor: monitor}
+
+	req := httptest.NewRequest(
+		http.MethodGet,
+		"/api/metrics-store/history?resourceType=storage&resourceId="+resourceID+"&metric=usage&range=24h",
+		nil,
+	)
+	rec := httptest.NewRecorder()
+	router.handleMetricsHistory(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var resp metricsHistoryResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
+	if resp.Source != "mock_synthetic" {
+		t.Fatalf("expected sparse store series to be bypassed, got %q: %s", resp.Source, rec.Body.String())
+	}
+	if len(resp.Points) < 24 {
+		t.Fatalf("expected dense synthetic storage history, got %d points", len(resp.Points))
+	}
+}
+
 func TestMetricsHistoryDiskIOMetricsUseMemoryFallback(t *testing.T) {
 	mh := monitoring.NewMetricsHistory(1000, time.Hour)
 	now := time.Now().UTC().Truncate(time.Second)

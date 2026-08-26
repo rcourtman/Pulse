@@ -1,4 +1,5 @@
-import { createEffect, createMemo, createSignal, onCleanup, type Accessor } from 'solid-js';
+import { batch, createEffect, createMemo, createSignal, onCleanup, type Accessor } from 'solid-js';
+import { createStore, reconcile, type SetStoreFunction } from 'solid-js/store';
 
 import { useTableWindowing } from '@/components/Infrastructure/useTableWindowing';
 import {
@@ -49,12 +50,41 @@ type UseStoragePoolsTableWindowingOptions = {
   expandedPoolId: Accessor<string | null>;
 };
 
+type StableStoragePoolsTableItem = {
+  item: StoragePoolsTableItem;
+  setItem: SetStoreFunction<StoragePoolsTableItem>;
+};
+
 export const useStoragePoolsTableWindowing = (options: UseStoragePoolsTableWindowingOptions) => {
   const [bodyRef, setBodyRef] = createSignal<HTMLTableSectionElement | null>(null);
   const [estimatedRowHeight, setEstimatedRowHeight] = createSignal(
     STORAGE_POOL_ESTIMATED_ROW_HEIGHT,
   );
-  const items = createMemo(() => buildStoragePoolsTableItems(options.groups()));
+  const itemCache = new Map<string, StableStoragePoolsTableItem>();
+  const stabilizeItems = (nextItems: readonly StoragePoolsTableItem[]) => {
+    const liveKeys = new Set(nextItems.map((item) => item.key));
+    const stableItems = nextItems.map((nextItem) => {
+      const cached = itemCache.get(nextItem.key);
+      if (cached && cached.item.kind === nextItem.kind) {
+        cached.setItem(reconcile(nextItem));
+        return cached.item;
+      }
+      const [item, setItem] = createStore<StoragePoolsTableItem>(nextItem);
+      itemCache.set(nextItem.key, { item, setItem });
+      return item;
+    });
+    for (const key of itemCache.keys()) {
+      if (!liveKeys.has(key)) itemCache.delete(key);
+    }
+    return stableItems;
+  };
+  const [items, setItems] = createSignal<readonly StoragePoolsTableItem[]>(
+    stabilizeItems(buildStoragePoolsTableItems(options.groups())),
+  );
+  createEffect(() => {
+    const nextItems = buildStoragePoolsTableItems(options.groups());
+    batch(() => setItems(stabilizeItems(nextItems)));
+  });
   const expandedRecordIndex = createMemo(() => {
     const expandedId = options.expandedPoolId();
     if (!expandedId) return null;

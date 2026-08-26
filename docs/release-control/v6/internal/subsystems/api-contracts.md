@@ -3096,6 +3096,13 @@ a new API state machine, queue contract, or verification-accounting field.
     safe remediation workflows.
 29. Keep storage chart identity canonical on that same shared API surface: the shared storage charts endpoint must key pool and physical-disk series by the resolved unified-resource `MetricsTarget.ResourceID`, not by canonical resource IDs or page-local aliases, so storage rows, focused summary cards, sticky summary shells, and detail charts all address the same history series in live and mock mode.
 30. Keep synthetic summary-chart fallback identity canonical on that same shared API surface: when `internal/api/chartapi/service.go` has to synthesize mock summary history for infrastructure, workloads, or storage cards, it must derive the fallback from canonical `resourceType`, `resourceID`, and `metricType` ownership instead of raw min/max seed-prefix helpers, so range changes and runtime mock updates stay on one governed timeline.
+    Mock storage follows the same rule at `/api/metrics-store/history`: when a
+    storage or Ceph resource has current capacity in canonical live state, the
+    handler must return its in-memory or deterministic `usage` series for both
+    metric-specific and all-metrics requests before querying the persistent
+    demo store. This includes provider-derived targets with no legacy history
+    row and legacy rows whose persistent series is still sparse while fleet
+    backfill is running.
     The same compact chart boundary also owns aggregate-only storage summary
     transport. `/api/charts/storage-summary` may batch only the canonical
     `used` and `avail` storage series required for the aggregate capacity

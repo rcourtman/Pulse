@@ -2447,6 +2447,19 @@ metrics-history retention and recovery-ingest ownership: increasing backup
 polling or server-side recovery enumeration must not expand the browser cache
 outside the fixed remount budget.
 
+### Expanded storage history is poll-stable
+
+`useStoragePoolsTableWindowing.ts` reconciles flattened group and pool items by
+their stable logical key. A refreshed unified-resource snapshot updates the
+existing row proxy instead of remounting `StoragePoolDetail`, so the selected
+Overview/History tab and history range survive normal polling. Provider-derived
+mock storage and Ceph rows resolve capacity history through their canonical
+metrics target and receive deterministic `usage` fallback from current unified
+capacity when no legacy history row exists. The row-identity regression and
+the metric-specific plus all-metrics backend regression are the required proof;
+direct detail-component tests alone are insufficient because they do not cross
+the polling/remount boundary.
+
 ### vSphere member composition is inventory, not protection evidence
 
 ESXi host members projected under a vCenter connection in the grouped

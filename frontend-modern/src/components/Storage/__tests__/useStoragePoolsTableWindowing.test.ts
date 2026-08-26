@@ -71,4 +71,43 @@ describe('useStoragePoolsTableWindowing', () => {
     expect(result.visibleItems()).toHaveLength(72);
     expect(result.visibleItems().some((item) => item.key === 'record:storage-150')).toBe(true);
   });
+
+  it('preserves row identity while live storage snapshots refresh', () => {
+    const [groups, setGroups] = createSignal([
+      makeGroup('estate', [makeRecord(1)], { showHeader: false }),
+    ]);
+    const { result } = renderHook(() =>
+      useStoragePoolsTableWindowing({ groups, expandedPoolId: () => 'storage-1' }),
+    );
+    const firstItem = result.visibleItems()[0];
+    const firstRecord = firstItem?.kind === 'record' ? firstItem.record : null;
+
+    setGroups([
+      makeGroup('estate', [{ ...makeRecord(1), name: 'pool-1 refreshed' }], { showHeader: false }),
+    ]);
+
+    const refreshedItem = result.visibleItems()[0];
+    expect(refreshedItem).toBe(firstItem);
+    expect(refreshedItem?.kind).toBe('record');
+    if (refreshedItem?.kind !== 'record') throw new Error('expected storage record item');
+    expect(refreshedItem.record).toBe(firstRecord);
+    expect(refreshedItem.record.name).toBe('pool-1 refreshed');
+  });
+
+  it('preserves distinct row identity when the ordered snapshot reverses', () => {
+    const [groups, setGroups] = createSignal([
+      makeGroup('estate', [makeRecord(1), makeRecord(2)], { showHeader: false }),
+    ]);
+    const { result } = renderHook(() =>
+      useStoragePoolsTableWindowing({ groups, expandedPoolId: () => null }),
+    );
+    const firstItems = [...result.visibleItems()];
+
+    setGroups([makeGroup('estate', [makeRecord(2), makeRecord(1)], { showHeader: false })]);
+
+    const reversedItems = result.visibleItems();
+    expect(reversedItems.map((item) => item.key)).toEqual(['record:storage-2', 'record:storage-1']);
+    expect(reversedItems[0]).toBe(firstItems[1]);
+    expect(reversedItems[1]).toBe(firstItems[0]);
+  });
 });
