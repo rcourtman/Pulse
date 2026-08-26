@@ -113,9 +113,12 @@ const pbsPayload = {
   meta: { totalBackups: 1 },
 };
 
-function mockBackupAPIs(state: 'protected' | 'attention' = 'protected') {
+function mockBackupAPIs(
+  state: 'protected' | 'attention' = 'protected',
+  pbsResponse: typeof pbsPayload = pbsPayload,
+) {
   apiFetchMock.mockImplementation((url: string) => {
-    if (url === '/api/backups/pbs') return Promise.resolve(jsonResponse(pbsPayload));
+    if (url === '/api/backups/pbs') return Promise.resolve(jsonResponse(pbsResponse));
     if (url === '/api/backups/pve') return Promise.resolve(jsonResponse(pvePayload));
     return Promise.resolve(jsonResponse({}));
   });
@@ -352,7 +355,7 @@ describe('ProxmoxBackupsTable', () => {
     window.history.replaceState(
       {},
       '',
-      '/?view=date&q=pbs-docker&source=pbs&node=pve-a&type=ct&day=2026-05-25',
+      '/?view=date&q=pbs-docker&source=pbs&location=pbs%3Apbs-main%3Amain&node=pve-a&type=ct&day=2026-05-25',
     );
 
     renderInRouter(() => (
@@ -367,6 +370,9 @@ describe('ProxmoxBackupsTable', () => {
       'true',
     );
     expect(screen.getByRole('button', { name: /clear date filter/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Backup location: pbs-main / main' }),
+    ).toBeInTheDocument();
 
     await fireEvent.click(screen.getByRole('button', { name: /clear filters/i }));
 
@@ -375,11 +381,63 @@ describe('ProxmoxBackupsTable', () => {
       expect(params.get('view')).toBeNull();
       expect(params.get('q')).toBeNull();
       expect(params.get('source')).toBeNull();
+      expect(params.get('location')).toBeNull();
       expect(params.get('node')).toBeNull();
       expect(params.get('type')).toBeNull();
       expect(params.get('day')).toBeNull();
     });
     expect(screen.getByPlaceholderText(/search backups by workload/i)).toHaveValue('');
+  });
+
+  it('filters restore points and coverage by PBS server and datastore', async () => {
+    const offsitePayload = {
+      ...pbsPayload,
+      data: {
+        backups: [
+          ...pbsPayload.data.backups,
+          {
+            ...pbsPayload.data.backups[0],
+            id: 'pbs-offsite/offsite/minipc/ct/112/2026-05-24T01:34:25Z',
+            instance: 'pbs-offsite',
+            datastore: 'offsite',
+            backupTime: '2026-05-24T01:34:25Z',
+          },
+        ],
+      },
+    };
+    mockBackupAPIs('protected', offsitePayload);
+
+    renderInRouter(() => (
+      <ProxmoxBackupsTable emptyIcon={<span />} workloads={[workloadResource]} />
+    ));
+
+    await screen.findByText('offsite / minipc');
+    const filterSelect = screen.getByRole('combobox', { name: 'Filter' });
+    const offsiteOption = screen.getByRole('option', {
+      name: 'Backup location: pbs-offsite / offsite',
+    }) as HTMLOptionElement;
+    await fireEvent.change(filterSelect, { target: { value: offsiteOption.value } });
+
+    await waitFor(() =>
+      expect(new URLSearchParams(window.location.search).get('location')).toBe(
+        'pbs:pbs-offsite:offsite',
+      ),
+    );
+    expect(screen.getByText('offsite / minipc')).toBeInTheDocument();
+    expect(screen.queryByText('main / minipc')).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Backup location: pbs-offsite / offsite' }),
+    ).toBeInTheDocument();
+
+    await fireEvent.click(screen.getByRole('link', { name: /coverage/i }));
+    await waitFor(() => expect(window.location.pathname).toBe('/proxmox/backups/coverage'));
+    expect(new URLSearchParams(window.location.search).get('location')).toBe(
+      'pbs:pbs-offsite:offsite',
+    );
+    expect(screen.getAllByText('pbs-docker').length).toBeGreaterThan(0);
+    await fireEvent.click(screen.getByRole('button', { name: /expand details for pbs-docker/i }));
+    expect(screen.getByText('offsite / minipc')).toBeInTheDocument();
+    expect(screen.queryByText('main / minipc')).not.toBeInTheDocument();
   });
 
   it('clears incompatible URL facets when switching backup views', async () => {

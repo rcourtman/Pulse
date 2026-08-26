@@ -484,6 +484,18 @@ The Proxmox backup view selector follows the same ownership split:
 storage/recovery owns the chronological-versus-coverage view values and backup
 semantics, while the visible segmented selector shell must compose the
 frontend-primitives `FilterButtonGroup`.
+Backup-location filtering is repository-scoped rather than host-scoped. Its
+identity combines source kind, provider instance, and datastore/storage so two
+PBS instances with the same datastore name remain distinct and the workload's
+PVE node never masquerades as backup ownership. The route query owns that scope
+across the chronological and coverage views. Coverage rows must narrow their
+artifact collection, latest evidence, and per-source counts before rendering;
+they retain the server-owned canonical protection posture rather than deriving
+a location-local posture from incomplete client evidence. The focused model and
+rendered-route proofs in
+`frontend-modern/src/features/proxmox/__tests__/proxmoxBackupRecoveryModel.test.ts`
+and `frontend-modern/src/features/proxmox/__tests__/ProxmoxBackupsTable.test.tsx`
+pin this boundary.
 Tenant report branding settings are adjacent tenant-local configuration, not a
 storage or recovery product state. `reportBranding` persisted in a tenant
 runtime's `system.json` should be preserved by the existing tenant data

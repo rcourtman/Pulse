@@ -19,6 +19,13 @@ Own server installation, deployment bootstrap behavior, provider-hosted MSP
 deployment artifacts, update planning, and server-side update execution
 surfaces.
 
+Operator-facing prerelease notes may accumulate already-landed customer
+outcomes before the next candidate is cut. Each added product claim must stay
+in the existing customer-facing section and have exact packet proof in
+`render_release_body_test.py`; a note about repository-scoped Proxmox backup
+review must name both PBS server and datastore rather than implying that a
+workload or node filter provides the same boundary.
+
 Provider-hosted MSP deploy artifacts must package the provider control plane as
 a least-privilege Docker provisioner. The packaged compose/setup path must avoid
 whole-host and Docker-data read mounts, expose storage admission only through

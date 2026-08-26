@@ -224,7 +224,7 @@ No manual migration is required.
             render_release_body._requires_customer_facing_standard("6.4.0")
         )
 
-    def test_v640_rc1_packet_records_stale_container_health_fix(self) -> None:
+    def test_v640_rc1_packet_records_current_customer_fixes(self) -> None:
         notes = (
             _REPO_ROOT / "docs" / "releases" / "RELEASE_NOTES_v6.4.0-rc.1.md"
         ).read_text(encoding="utf-8")
@@ -234,6 +234,11 @@ No manual migration is required.
         self.assertIn(
             "Stopped Docker and Podman containers no longer re-fire health alerts "
             "from the stale health-check result retained by the container runtime.",
+            normalized_notes,
+        )
+        self.assertIn(
+            "Backup-location filters distinguish PBS servers and datastores so "
+            "local and off-site restore points can be reviewed independently.",
             normalized_notes,
         )
 

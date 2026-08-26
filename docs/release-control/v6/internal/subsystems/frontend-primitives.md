@@ -51,6 +51,14 @@ the workload state, table, panel, and row contracts carry the selected basis
 and resolved parent-node data to the canonical memory bar, and the memory
 column header must expose the non-default Host basis after the control closes.
 
+Feature-owned scope controls that use the shared filter rail must keep their
+state in the owning route and use stable, domain-authored option identities.
+The Proxmox Backups `Backup location` control composes the shared filter
+catalog, reads PBS instance plus datastore identity from the recovery model,
+and persists unchanged between the By date and Coverage views. Clearing the
+shared filter rail must remove that route value along with the other active
+facets; the feature must not replace the shared rail with a page-local select.
+
 Large-estate platform pages must keep one canonical inventory snapshot for the
 initial read and explicit refresh path. The Proxmox overview owns its unified
 resource request and passes that snapshot into the shared workloads state; the

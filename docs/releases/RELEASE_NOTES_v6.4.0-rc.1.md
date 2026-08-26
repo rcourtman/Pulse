@@ -35,7 +35,9 @@ build path.
   longer modulepreloads every lazy route chunk, while integrity coverage stays
   enforced for dynamically loaded assets.
 - Proxmox backup views use canonical routes, compact healthy-state shields, and
-  recovery pagination derived from the normalized query limit.
+  recovery pagination derived from the normalized query limit. Backup-location
+  filters distinguish PBS servers and datastores so local and off-site restore
+  points can be reviewed independently.
 - Mobile and touch layouts keep native page scrolling and gestures, avoid hover
   tooltips, use consistent disclosure affordances, and retain reachable table
   actions at narrow widths.

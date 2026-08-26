@@ -45,6 +45,7 @@ import {
   coverageRowMatchesSearch,
   recoverableArtifactMatchesSearch,
   type RecoverableArtifact,
+  type WorkloadCoverageRow,
 } from './proxmoxBackupRecoveryModel';
 import {
   COVERAGE_SORT_DEFAULT_DIRECTION,
@@ -184,6 +185,14 @@ export const ProxmoxBackupsTable: Component<{
     return !selected || node === selected;
   };
 
+  const locationFilter = (): string => queryValue(PROXMOX_BACKUPS_QUERY_PARAMS.location);
+  const setLocationFilter = (value: string): void =>
+    setSearchParams({ [PROXMOX_BACKUPS_QUERY_PARAMS.location]: value || null }, { replace: true });
+  const locationMatches = (artifact: RecoverableArtifact): boolean => {
+    const selected = locationFilter();
+    return !selected || artifact.locationKey === selected;
+  };
+
   // Type scope normalizes vm/qemu and ct/lxc to a canonical token before
   // comparing, since the recovery model keeps PBS-native ct internally.
   const typeFilter = (): string => queryValue(PROXMOX_BACKUPS_QUERY_PARAMS.type);
@@ -290,6 +299,21 @@ export const ProxmoxBackupsTable: Component<{
     ];
   });
 
+  const locationOptions = createMemo<FilterSelectOption[]>(() => {
+    const locations = new Map<string, string>();
+    for (const artifact of recoveryModel().recoverableArtifacts) {
+      if (artifact.locationKey && artifact.locationLabel) {
+        locations.set(artifact.locationKey, artifact.locationLabel);
+      }
+    }
+    return [
+      { value: '', label: 'All backup locations' },
+      ...[...locations]
+        .sort((a, b) => a[1].localeCompare(b[1]))
+        .map(([value, label]) => ({ value, label })),
+    ];
+  });
+
   // Source columns auto-hide when no workload anywhere has that data (computed
   // over the full set so columns don't flicker as filters change). A PBS-only
   // fleet drops the Archive and Snapshot columns.
@@ -308,10 +332,45 @@ export const ProxmoxBackupsTable: Component<{
     recoveryModel().coverageRows.some((row) => Boolean(row.latestTask)),
   );
 
+  const coverageRowsForLocation = createMemo<WorkloadCoverageRow[]>(() => {
+    const selected = locationFilter();
+    if (!selected) return recoveryModel().coverageRows;
+    const newestArtifact = (artifacts: RecoverableArtifact[]): RecoverableArtifact | undefined =>
+      artifacts.reduce<RecoverableArtifact | undefined>((latest, artifact) => {
+        if (!latest) return artifact;
+        return (artifact.createdMs ?? Number.NEGATIVE_INFINITY) >
+          (latest.createdMs ?? Number.NEGATIVE_INFINITY)
+          ? artifact
+          : latest;
+      }, undefined);
+
+    return recoveryModel().coverageRows.flatMap((row) => {
+      const artifacts = row.artifacts.filter(locationMatches);
+      if (artifacts.length === 0) return [];
+      return [
+        {
+          ...row,
+          artifacts,
+          latestRecovery: newestArtifact(artifacts),
+          latestPBS: newestArtifact(artifacts.filter((artifact) => artifact.sourceKind === 'pbs')),
+          latestArchive: newestArtifact(
+            artifacts.filter((artifact) => artifact.sourceKind === 'archive'),
+          ),
+          latestSnapshot: newestArtifact(
+            artifacts.filter((artifact) => artifact.sourceKind === 'snapshot'),
+          ),
+          pbsCount: artifacts.filter((artifact) => artifact.sourceKind === 'pbs').length,
+          archiveCount: artifacts.filter((artifact) => artifact.sourceKind === 'archive').length,
+          snapshotCount: artifacts.filter((artifact) => artifact.sourceKind === 'snapshot').length,
+        },
+      ];
+    });
+  });
+
   const filteredCoverageRows = createMemo(() => {
     const term = search().trim().toLowerCase();
     const filter = coverageFilter();
-    const list = recoveryModel().coverageRows.filter((row) => {
+    const list = coverageRowsForLocation().filter((row) => {
       if (!nodeMatches(row.workload.node)) return false;
       if (!typeMatches(row.workload.type)) return false;
       if (filter !== 'all' && row.posture !== filter) return false;
@@ -432,6 +491,7 @@ export const ProxmoxBackupsTable: Component<{
     const list = recoveryModel().recoverableArtifacts.filter((artifact) => {
       if (!nodeMatches(artifact.workload.node)) return false;
       if (!typeMatches(artifact.workload.type)) return false;
+      if (!locationMatches(artifact)) return false;
       if (
         (filter === 'pbs' || filter === 'archive' || filter === 'snapshot') &&
         artifact.sourceKind !== filter
@@ -494,6 +554,15 @@ export const ProxmoxBackupsTable: Component<{
         defaultValue: '',
       },
       {
+        id: 'location',
+        label: 'Backup location',
+        group: 'scope',
+        options: locationOptions,
+        value: locationFilter,
+        setValue: setLocationFilter,
+        defaultValue: '',
+      },
+      {
         id: 'type',
         label: 'Type',
         group: 'scope',
@@ -532,6 +601,7 @@ export const ProxmoxBackupsTable: Component<{
     Boolean(
       search().trim() ||
       nodeFilter() ||
+      locationFilter() ||
       typeFilter() ||
       coverageFilter() !== 'all' ||
       recoverableFilter() !== 'all' ||
@@ -543,6 +613,7 @@ export const ProxmoxBackupsTable: Component<{
         [PROXMOX_BACKUPS_QUERY_PARAMS.query]: null,
         [PROXMOX_BACKUPS_QUERY_PARAMS.view]: null,
         [PROXMOX_BACKUPS_QUERY_PARAMS.node]: null,
+        [PROXMOX_BACKUPS_QUERY_PARAMS.location]: null,
         [PROXMOX_BACKUPS_QUERY_PARAMS.type]: null,
         [PROXMOX_BACKUPS_QUERY_PARAMS.source]: null,
         [PROXMOX_BACKUPS_QUERY_PARAMS.posture]: null,

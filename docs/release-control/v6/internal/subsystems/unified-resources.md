@@ -2128,6 +2128,11 @@ in `frontend-modern/src/routing/resourceLinks.ts` now serialize query state
 only; the owning platform/runtime route supplies the pathname. New drawer or
 correlation surfaces must anchor on platform routes (or stay-in-place drawer
 expansion) instead of resurrecting the retired top-level paths.
+The Proxmox Backups route-state vocabulary includes the opaque `location`
+facet. Its value is owned by the backup recovery model, not by canonical
+resource identity: PBS instance and datastore form the repository scope, and
+the same value must survive the date/coverage route handoff so both views
+apply one repository selection without inventing a top-level recovery route.
 Unified-resource drawers and Kubernetes drill-down controls may own resource
 timeline filter semantics, namespace choices, and destination routes, but their
 native select chrome must compose the frontend-primitives-owned `FormSelect`.

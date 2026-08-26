@@ -1,21 +1,22 @@
 {
   "version": 1,
-  "base_sha": "8f7d5c2e98120adeb11502d897733a6947a6b479",
-  "verified_at": "2026-08-25T23:41:08Z",
+  "base_sha": "52a3373ae6cafaffcd97bb466c42216b896fe5ce",
+  "verified_at": "2026-08-26T05:42:38Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/api/charts.ts",
-    "frontend-modern/src/components/Workloads/NodeDrawer.tsx",
-    "frontend-modern/src/components/Workloads/nodeDrawerModel.ts",
-    "frontend-modern/src/types/resource.ts"
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx",
+    "frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts",
+    "frontend-modern/src/routing/resourceLinks.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/api/charts.ts": "b50cbfac778a32cc6a0ad51f48bcd673e5fc4242729a6ea81fcada1b76058ff1",
-    "frontend-modern/src/components/Workloads/NodeDrawer.tsx": "b64d2f349d951fd134294118334421f022aa8cf01fab7c0caed176d9140d6ed1",
-    "frontend-modern/src/components/Workloads/nodeDrawerModel.ts": "671738353bf22d5047743343b8e2f8ba7576870dc59e53843b52db131f11fb76",
-    "frontend-modern/src/types/resource.ts": "b13c44c92ef18da5a895b5378b8874c353d55b605c22ae02ca00cbff5d2f0eb9"
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx": "8f4b168bc6748f9318d04d67f3b2a614bdeb0e5c6d884d5aec309e1b7d202886",
+    "frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts": "5fb8dd36ee2144095e3ad979109dc750649c5818f36e9587caafaef1313be4ec",
+    "frontend-modern/src/routing/resourceLinks.ts": "cdd803824f883dab64654fcceb92da963bd18013eae3d1cf768880a3f77bb96b"
   },
-  "routes": ["/proxmox/overview"],
+  "routes": [
+    "/proxmox/backups/date",
+    "/proxmox/backups/coverage"
+  ],
   "viewports": [
     {
       "width": 1280,
@@ -27,16 +28,15 @@
     }
   ],
   "states": [
-    "collapsed and expanded Proxmox node rows in the loaded overview table",
-    "agent-backed node history with utilization, network I/O, disk I/O, and thermal groups",
-    "API-only PVE node history with utilization, network I/O, and thermal groups and no unsupported disk I/O group",
-    "24-hour history with populated series and collecting states for unavailable mock series"
+    "unfiltered 3018-point By date inventory with multiple PBS servers and datastores",
+    "By date narrowed to backup-vault / offsite-vault with unrelated primary-vault and PVE evidence absent",
+    "Coverage narrowed to backup-vault / primary-vault with 381 of 932 targets and location-scoped expanded restore evidence",
+    "mobile Coverage filter rail with the active backup-location chip, clear control, and filtered target count"
   ],
   "interactions": [
-    "signed in to the current development build, expanded Analytics A, and opened its History tab",
-    "inspected the complete agent-backed chart row at 1280x800 and the stacked cards, scrolling, and thermals at 390x844",
-    "injected an API-only Analytics A websocket fixture into the committed frontend build and repeated the History interaction at both viewports",
-    "confirmed the API-only drawer requested resourceType=node with a canonical node ID and received HTTP 200",
-    "confirmed API-only history remained aligned and unclipped while omitting Disk I/O, and agent-backed history retained Disk I/O"
+    "opened the Backup location filter and selected backup-vault / offsite-vault on the current development build",
+    "confirmed the URL-owned location query appeared and the By date table retained offsite-vault evidence while removing primary-vault evidence",
+    "switched to Coverage and confirmed the location query persisted, the target count narrowed, and an expanded row showed only primary-vault restore evidence",
+    "repeated the filtered Coverage state at 390x844, expanded the mobile filter rail, checked placement and clipping, and removed the location chip"
   ]
 }

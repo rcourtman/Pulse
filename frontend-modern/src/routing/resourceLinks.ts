@@ -35,6 +35,7 @@ export const PROXMOX_BACKUPS_QUERY_PARAMS = {
   node: 'node',
   type: 'type',
   source: 'source',
+  location: 'location',
   posture: 'posture',
   day: 'day',
 } as const;

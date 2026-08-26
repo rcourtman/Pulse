@@ -173,6 +173,7 @@ describe('resource link routing contract', () => {
       node: 'node',
       type: 'type',
       source: 'source',
+      location: 'location',
       posture: 'posture',
       day: 'day',
     });
