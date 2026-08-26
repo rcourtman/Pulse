@@ -685,6 +685,20 @@ inactive retention, reactivation is unacknowledged. The reducer enforces this
 boundary on its observation clock, matching the manager's one-hour cleanup TTL,
 and parity must cover acknowledgement, unacknowledgement, rebuild, short
 resolve/re-fire restoration, and expiry for both metric and discrete families.
+
+The intent-policy gate composes with discrete confirmation at activation time
+only. An explicit policy grace period or resolved operator suppression keeps a
+matched condition pending while preserving its first active observation and
+clamping its confirmation count at the configured requirement. Grace and
+operator suppression accrue concurrently; once both release, activation uses
+that preserved observation as the incident start. A non-match clears the
+pending run and resets grace. Maintenance, muted or retired monitoring, and
+expected-offline state may hold a new activation when the resolved policy
+honors operator state, but must not clear or suppress an incident that is
+already firing. The reducer applies caller-resolved intent on its observation
+clock, and parity must exercise the manager's real intent-policy and
+maintenance-window composition. Backup-offline deferral remains outside this
+characterized slice.
 That same guest-threshold owner also governs guest-derived lifecycle and
 posture alerts. Snapshot age, backup age, powered-off state, and
 configuration-change reevaluation must all construct a canonical lightweight
