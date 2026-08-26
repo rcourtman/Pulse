@@ -57,8 +57,8 @@ describe('DetailSectionTable', () => {
     expect(formatDetailCountValue(undefined, 'disk')).toBeNull();
   });
 
-  it('renders section tables with shared value tone classes', () => {
-    render(() => (
+  it('keeps compact table rows on narrow screens and bounded section cards on desktop', () => {
+    const { container } = render(() => (
       <DetailSectionTable
         sections={[
           {
@@ -68,6 +68,10 @@ describe('DetailSectionTable', () => {
               { label: 'Resource', value: 'tower', title: 'tower.example.test' },
             ],
           },
+          {
+            label: 'Runtime',
+            rows: [{ label: 'Kernel', value: '6.8.0' }],
+          },
         ]}
       />
     ));
@@ -76,6 +80,40 @@ describe('DetailSectionTable', () => {
     expect(screen.getByText('Severity')).toBeInTheDocument();
     expect(screen.getByText('Warning').closest('td')).toHaveClass('text-amber-700');
     expect(screen.getByText('tower').closest('td')).toHaveAttribute('title', 'tower.example.test');
+
+    const table = container.querySelector('table');
+    expect(table).toHaveClass('table-fixed', 'lg:flex', 'lg:flex-wrap', 'lg:items-stretch');
+    const sections = container.querySelectorAll('tbody');
+    expect(sections).toHaveLength(2);
+    expect(sections[0]).toHaveClass(
+      'lg:flex',
+      'lg:flex-1',
+      'lg:basis-[calc(25%-0.5rem)]',
+      'lg:rounded',
+      'lg:border',
+      'lg:p-3',
+    );
+    expect(screen.getByText('Severity').closest('tr')).toHaveClass(
+      'lg:grid',
+      'lg:grid-cols-[7rem_minmax(0,1fr)]',
+      'lg:gap-3',
+    );
+    expect(screen.getByText('Warning').closest('td')).toHaveClass('lg:text-left');
+  });
+
+  it('balances five desktop sections across three- and two-card rows', () => {
+    const { container } = render(() => (
+      <DetailSectionTable
+        sections={Array.from({ length: 5 }, (_, index) => ({
+          label: `Section ${index + 1}`,
+          rows: [{ label: 'Value', value: String(index + 1) }],
+        }))}
+      />
+    ));
+
+    const sections = container.querySelectorAll('tbody');
+    expect(sections).toHaveLength(5);
+    sections.forEach((section) => expect(section).toHaveClass('lg:basis-[calc(33.333%-0.5rem)]'));
   });
 
   it('lazily renders technical details with the same compact section rows', () => {

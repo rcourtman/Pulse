@@ -3716,7 +3716,15 @@ compact `DetailSectionTable` rows as Overview; those facts must not switch to a
 provider-local card mosaic or require another tap. Only genuinely large or
 interactive provider-support content belongs behind
 `TechnicalDetailsDisclosure`, which owns its collapsed, lazily mounted
-boundary. Monitoring mode, lifecycle, notes, maintenance,
+boundary. `DetailSectionTable` keeps the single bordered table at narrow widths
+where density matters, then presents those same canonical rows as bounded
+section cards on desktop. Desktop cards share the available row width, stretch
+to the same row height, balance five- and six-section drawers across three-card
+rows, and use a bounded local label column with left-aligned values so the
+layout has no ragged fixed-width island, stranded full-width final card, or
+full-drawer scan distance. The responsive presentation stays owned by the shared primitive;
+provider drawers must not fork their own desktop card renderers. Monitoring
+mode, lifecycle, notes, maintenance,
 automatic-action policy, saved access configuration, and action audit belong
 to a dedicated `Manage` tab and must not render inside Overview. Guest, node,
 Docker-host, and unified-resource drawers must compose these shared primitives

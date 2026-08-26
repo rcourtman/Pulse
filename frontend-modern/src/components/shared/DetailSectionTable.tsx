@@ -24,54 +24,64 @@ const detailValueToneClass = (tone: DetailValueTone | undefined): string => {
   return 'text-base-content';
 };
 
+const detailSectionDesktopBasisClass = (sectionCount: number): string =>
+  sectionCount === 5 || sectionCount === 6
+    ? 'lg:basis-[calc(33.333%-0.5rem)]'
+    : 'lg:basis-[calc(25%-0.5rem)]';
+
 export const DetailSectionTable: Component<{
   sections: DetailSection[];
   class?: string;
 }> = (props) => (
-  <div class={props.class ?? 'overflow-hidden rounded border border-border bg-surface'}>
-    <Table class="w-full table-fixed text-[11px]">
-      <TableBody class="divide-y divide-border">
-        <For each={props.sections}>
-          {(section) => (
-            <>
-              <TableRow class="bg-surface-alt">
-                <TableHead
-                  colspan={2}
-                  class="px-2 py-1 text-left text-[10px] font-semibold uppercase tracking-wide text-muted"
-                >
-                  {section.label}
-                </TableHead>
-              </TableRow>
-              <For each={section.rows}>
-                {(row) => (
-                  <TableRow>
-                    <TableCell class="w-[38%] px-2 py-1 align-top text-muted">
-                      {row.label}
-                    </TableCell>
-                    <TableCell
-                      class={`px-2 py-1 text-right align-top font-medium ${detailValueToneClass(
-                        row.tone,
-                      )}`}
+  <div
+    class={`${props.class ?? 'overflow-hidden rounded border border-border bg-surface'} lg:overflow-visible lg:border-0 lg:bg-transparent`}
+  >
+    <Table
+      class="w-full table-fixed text-[11px] lg:flex lg:flex-wrap lg:items-stretch lg:gap-2"
+      wrapperClass="lg:overflow-visible"
+    >
+      <For each={props.sections}>
+        {(section) => (
+          <TableBody
+            class={`divide-y divide-border lg:flex lg:min-w-[16rem] lg:flex-1 lg:flex-col lg:overflow-hidden lg:rounded lg:border lg:border-border lg:bg-surface lg:p-3 lg:shadow-sm lg:divide-y-0 ${detailSectionDesktopBasisClass(props.sections.length)}`}
+          >
+            <TableRow class="bg-surface-alt lg:mb-1 lg:block lg:bg-transparent lg:hover:bg-transparent">
+              <TableHead
+                colspan={2}
+                class="px-2 py-1 text-left text-[10px] font-semibold uppercase tracking-wide text-muted lg:block lg:px-0 lg:pb-1 lg:pt-0 lg:text-base-content"
+              >
+                {section.label}
+              </TableHead>
+            </TableRow>
+            <For each={section.rows}>
+              {(row) => (
+                <TableRow class="lg:grid lg:min-w-0 lg:grid-cols-[7rem_minmax(0,1fr)] lg:items-start lg:gap-3 lg:py-0.5 lg:hover:bg-transparent">
+                  <TableCell class="w-[38%] px-2 py-1 align-top text-muted lg:w-auto lg:px-0 lg:py-0">
+                    {row.label}
+                  </TableCell>
+                  <TableCell
+                    class={`px-2 py-1 text-right align-top font-medium lg:min-w-0 lg:px-0 lg:py-0 lg:text-left ${detailValueToneClass(
+                      row.tone,
+                    )}`}
+                    title={row.title ?? row.value}
+                  >
+                    <span
                       title={row.title ?? row.value}
+                      class={
+                        row.wrap
+                          ? 'block whitespace-normal break-words text-left leading-snug'
+                          : 'block truncate'
+                      }
                     >
-                      <span
-                        title={row.title ?? row.value}
-                        class={
-                          row.wrap
-                            ? 'block whitespace-normal break-words text-left leading-snug'
-                            : 'block truncate'
-                        }
-                      >
-                        {row.value}
-                      </span>
-                    </TableCell>
-                  </TableRow>
-                )}
-              </For>
-            </>
-          )}
-        </For>
-      </TableBody>
+                      {row.value}
+                    </span>
+                  </TableCell>
+                </TableRow>
+              )}
+            </For>
+          </TableBody>
+        )}
+      </For>
     </Table>
   </div>
 );
