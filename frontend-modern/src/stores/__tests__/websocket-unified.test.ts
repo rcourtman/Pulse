@@ -1017,6 +1017,122 @@ describe('websocket store unified resource contract', () => {
     }
   });
 
+  it('applies infrastructure merge-patch deltas touching only changed items', async () => {
+    const { store, dispose } = await createStoreHarness();
+    try {
+      await waitForOpenTick();
+      emitMessage({
+        type: 'initialState',
+        data: {
+          connectedInfrastructure: [
+            { id: 'infra-1', name: 'host-1', status: 'online', lastSeen: 100 },
+            { id: 'infra-2', name: 'host-2', status: 'online', lastSeen: 100 },
+          ],
+          resources: [],
+          lastUpdate: 100,
+          activeAlerts: [],
+          recentlyResolved: [],
+        },
+      });
+      const { unwrap } = await import('solid-js/store');
+      const untouchedBefore = unwrap(store.state.connectedInfrastructure)[1];
+
+      emitMessage({
+        type: 'rawData',
+        data: {
+          lastUpdate: 200,
+          connectedInfrastructureDelta: { upserts: [{ id: 'infra-1', lastSeen: 200 }] },
+        },
+      });
+
+      expect(store.state.connectedInfrastructure[0]?.lastSeen).toBe(200);
+      expect(store.state.connectedInfrastructure[0]?.name).toBe('host-1');
+      // The untouched item keeps its store identity: the sync hands reconcile
+      // reference-equal objects so it never deep-walks the rest.
+      expect(unwrap(store.state.connectedInfrastructure)[1]).toBe(untouchedBefore);
+
+      // Removal and reorder ride the same keyed payload.
+      emitMessage({
+        type: 'rawData',
+        data: {
+          lastUpdate: 300,
+          connectedInfrastructureDelta: {
+            upserts: [{ id: 'infra-3', name: 'host-3', status: 'online', lastSeen: 300 }],
+            removed: ['infra-1'],
+            order: ['infra-3', 'infra-2'],
+          },
+        },
+      });
+      expect(store.state.connectedInfrastructure.map((item) => item.id)).toEqual([
+        'infra-3',
+        'infra-2',
+      ]);
+    } finally {
+      dispose();
+    }
+  });
+
+  it('ignores infrastructure deltas that arrive without a projection baseline', async () => {
+    const { store, dispose } = await createStoreHarness();
+    try {
+      await waitForOpenTick();
+      // No full payload has delivered connectedInfrastructure on this socket.
+      emitMessage({
+        type: 'rawData',
+        data: {
+          lastUpdate: 200,
+          connectedInfrastructureDelta: { upserts: [{ id: 'infra-1', lastSeen: 200 }] },
+        },
+      });
+      expect(store.state.connectedInfrastructure).toEqual([]);
+    } finally {
+      dispose();
+    }
+  });
+
+  it('defers infrastructure deltas during operator input and coalesces them at idle', async () => {
+    const { store, dispose } = await createStoreHarness();
+    try {
+      await waitForOpenTick();
+      emitMessage({
+        type: 'initialState',
+        data: {
+          connectedInfrastructure: [
+            { id: 'infra-1', name: 'host-1', status: 'online', lastSeen: 100 },
+          ],
+          resources: [],
+          lastUpdate: 100,
+          activeAlerts: [],
+          recentlyResolved: [],
+        },
+      });
+
+      window.dispatchEvent(new Event('scroll'));
+      emitMessage({
+        type: 'rawData',
+        data: {
+          lastUpdate: 200,
+          connectedInfrastructureDelta: { upserts: [{ id: 'infra-1', lastSeen: 200 }] },
+        },
+      });
+      vi.advanceTimersByTime(200);
+      window.dispatchEvent(new Event('scroll'));
+      emitMessage({
+        type: 'rawData',
+        data: {
+          lastUpdate: 300,
+          connectedInfrastructureDelta: { upserts: [{ id: 'infra-1', lastSeen: 300 }] },
+        },
+      });
+      expect(store.state.connectedInfrastructure[0]?.lastSeen).toBe(100);
+
+      vi.advanceTimersByTime(800);
+      expect(store.state.connectedInfrastructure[0]?.lastSeen).toBe(300);
+    } finally {
+      dispose();
+    }
+  });
+
   it('drops scroll-queued deltas when a full snapshot supersedes their baseline', async () => {
     const { store, dispose } = await createStoreHarness();
     try {

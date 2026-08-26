@@ -1,31 +1,40 @@
 {
   "version": 1,
-  "base_sha": "6ecdc81d1c0062d131a15ac0381dd20335f969a9",
-  "verified_at": "2026-08-26T17:00:35Z",
+  "base_sha": "20503086ffc1eca6a4bb2121fe2c2ebd67160a0b",
+  "verified_at": "2026-08-26T17:08:31Z",
   "result": "passed",
-  "changed_paths": ["frontend-modern/src/features/docker/DockerContainersTable.tsx"],
+  "changed_paths": [
+    "frontend-modern/src/stores/websocket.ts"
+  ],
   "content_sha256": {
-    "frontend-modern/src/features/docker/DockerContainersTable.tsx": "1874570ea11ff3c0a4e9e6de8028ca84629322c367ec2126e212b2b7eccd3b1f"
+    "frontend-modern/src/stores/websocket.ts": "c648fbef42e36c2ae8502d258a6da2ab009f3d6bb9718e36192ba05085c3b760"
   },
-  "routes": ["/docker/overview"],
+  "routes": [
+    "/proxmox/overview",
+    "/settings/infrastructure"
+  ],
   "viewports": [
     {
       "width": 2560,
-      "height": 1063
+      "height": 1240
     },
     {
-      "width": 768,
-      "height": 688
+      "width": 700,
+      "height": 900
     }
   ],
   "states": [
-    "default multi-host grouped Docker inventory with an active nginx text search",
-    "expanded nginx container drawer with History selected and a non-default 1 hour range",
-    "desktop and half-width responsive layouts while live resource refreshes continued"
+    "isolated test backend built from this change serving the 50-node/929-guest mock estate over the state websocket",
+    "fresh socket connection: initialState ships the full connectedInfrastructure projection once to establish the client baseline",
+    "steady realtime ticks carrying connectedInfrastructureDelta merge patches with zero full projection re-ships",
+    "Connected systems settings surface rendering the delta-maintained projection with live per-item freshness",
+    "narrow 700px viewport rendering the same projection surface"
   ],
   "interactions": [
-    "searched for nginx in the default grouped multi-host view, expanded its drawer, selected History, and changed the range from 24 hours to 1 hour",
-    "observed multiple live refresh ticks on desktop and half-width layouts; the drawer remained expanded with History and 1 hour selected",
-    "verified the full resource-snapshot replacement path with the focused regression test, which fails without the grouped key extractor and passes with it"
+    "raw websocket capture: ticks carry connectedInfrastructureDelta at 0.7-4KB of id+lastSeen merge patches instead of the ~55-60KB full projection previously re-shipped every tick; the full array shipped exactly once at initialState",
+    "client message counting over 30s: 3 delta ticks consumed, 0 full projection re-ships, 140 workload rows mounted, no console errors",
+    "Connected systems surface observed live at /settings/infrastructure: 71 systems with per-item freshness reading 1-5s ago, values that now only travel as merge patches, updating across ticks",
+    "unit-verified reference stability: untouched projection items keep their store identity across a delta sync, so reconcile no longer deep-walks the whole projection per tick",
+    "narrow 700px emulated viewport rendered the projection surface with live freshness text"
   ]
 }

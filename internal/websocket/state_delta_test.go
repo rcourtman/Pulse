@@ -93,6 +93,164 @@ func TestClientStateDeltaTracksResourceRemovalAndOrder(t *testing.T) {
 	}
 }
 
+func TestClientStateDeltaShipsInfrastructureAsKeyedPatches(t *testing.T) {
+	previousState := models.EmptyStateFrontend()
+	previousState.ConnectedInfrastructure = []models.ConnectedInfrastructureItemFrontend{
+		{
+			ID: "infra-1", Name: "host-1", Status: "online", LastSeen: 100,
+			Surfaces: []models.ConnectedInfrastructureSurfaceFrontend{{
+				ID: "surface-1", Kind: "agent", Label: strings.Repeat("s", 8*1024),
+			}},
+		},
+		{ID: "infra-2", Name: "host-2", Status: "online", LastSeen: 100},
+	}
+	currentState := previousState
+	currentState.ConnectedInfrastructure = append(
+		[]models.ConnectedInfrastructureItemFrontend(nil),
+		previousState.ConnectedInfrastructure...,
+	)
+	currentState.ConnectedInfrastructure[0].LastSeen = 200
+
+	previous, err := buildClientStateSnapshot(previousState)
+	if err != nil {
+		t.Fatal(err)
+	}
+	current, err := buildClientStateSnapshot(currentState)
+	if err != nil {
+		t.Fatal(err)
+	}
+	delta, err := buildClientStateDelta(previous, current)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := delta[infrastructureField]; ok {
+		t.Fatal("state delta re-shipped the full connectedInfrastructure projection")
+	}
+	payload, ok := delta[infrastructureDeltaField].(resourceDeltaPayload)
+	if !ok {
+		t.Fatalf("infrastructure delta type = %T", delta[infrastructureDeltaField])
+	}
+	if len(payload.Upserts) != 1 {
+		t.Fatalf("upserts = %d, want 1", len(payload.Upserts))
+	}
+	patch := string(payload.Upserts[0])
+	if !strings.Contains(patch, `"id":"infra-1"`) || !strings.Contains(patch, `"lastSeen":200`) {
+		t.Fatalf("patch = %s, want id + lastSeen", patch)
+	}
+	if strings.Contains(patch, strings.Repeat("s", 128)) {
+		t.Fatal("patch re-shipped the unchanged surfaces payload")
+	}
+	if len(patch) >= 256 {
+		t.Fatalf("patch = %d bytes, want a bounded timestamp patch", len(patch))
+	}
+}
+
+func TestClientStateDeltaTracksInfrastructureRemovalAndOrder(t *testing.T) {
+	previousState := models.EmptyStateFrontend()
+	previousState.ConnectedInfrastructure = []models.ConnectedInfrastructureItemFrontend{
+		{ID: "a", Name: "a", Status: "online"},
+		{ID: "b", Name: "b", Status: "online"},
+	}
+	currentState := models.EmptyStateFrontend()
+	currentState.ConnectedInfrastructure = []models.ConnectedInfrastructureItemFrontend{
+		{ID: "c", Name: "c", Status: "online"},
+		{ID: "a", Name: "a", Status: "online"},
+	}
+
+	previous, err := buildClientStateSnapshot(previousState)
+	if err != nil {
+		t.Fatal(err)
+	}
+	current, err := buildClientStateSnapshot(currentState)
+	if err != nil {
+		t.Fatal(err)
+	}
+	delta, err := buildClientStateDelta(previous, current)
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, ok := delta[infrastructureDeltaField].(resourceDeltaPayload)
+	if !ok {
+		t.Fatalf("infrastructure delta type = %T", delta[infrastructureDeltaField])
+	}
+	if len(payload.Removed) != 1 || payload.Removed[0] != "b" {
+		t.Fatalf("removed = %#v, want [b]", payload.Removed)
+	}
+	if len(payload.Order) != 2 || payload.Order[0] != "c" || payload.Order[1] != "a" {
+		t.Fatalf("order = %#v, want [c a]", payload.Order)
+	}
+	if len(payload.Upserts) != 1 || !strings.Contains(string(payload.Upserts[0]), `"id":"c"`) {
+		t.Fatalf("upserts = %s, want full item c", payload.Upserts)
+	}
+}
+
+func TestClientStateDeltaFallsBackToFullInfrastructureWhenUnkeyed(t *testing.T) {
+	// An entry without an id cannot key: the projection must fall back to the
+	// plain whole-field diff instead of corrupting the keyed path.
+	previousState := models.EmptyStateFrontend()
+	previousState.ConnectedInfrastructure = []models.ConnectedInfrastructureItemFrontend{
+		{Name: "anonymous", Status: "online"},
+	}
+	currentState := models.EmptyStateFrontend()
+	currentState.ConnectedInfrastructure = []models.ConnectedInfrastructureItemFrontend{
+		{Name: "anonymous", Status: "offline"},
+	}
+
+	previous, err := buildClientStateSnapshot(previousState)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if previous.infrastructureKeyed {
+		t.Fatal("id-less projection must not key")
+	}
+	current, err := buildClientStateSnapshot(currentState)
+	if err != nil {
+		t.Fatal(err)
+	}
+	delta, err := buildClientStateDelta(previous, current)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := delta[infrastructureDeltaField]; ok {
+		t.Fatal("unkeyed projection produced a keyed delta")
+	}
+	full, ok := delta[infrastructureField].(json.RawMessage)
+	if !ok || !strings.Contains(string(full), `"offline"`) {
+		t.Fatalf("full field = %v, want whole projection", delta[infrastructureField])
+	}
+}
+
+func TestClientStateDeltaShipsFullInfrastructureWhenBaselineWasUnkeyed(t *testing.T) {
+	previousState := models.EmptyStateFrontend()
+	previousState.ConnectedInfrastructure = []models.ConnectedInfrastructureItemFrontend{
+		{Name: "anonymous", Status: "online"},
+	}
+	currentState := models.EmptyStateFrontend()
+	currentState.ConnectedInfrastructure = []models.ConnectedInfrastructureItemFrontend{
+		{ID: "a", Name: "a", Status: "online"},
+	}
+
+	previous, err := buildClientStateSnapshot(previousState)
+	if err != nil {
+		t.Fatal(err)
+	}
+	current, err := buildClientStateSnapshot(currentState)
+	if err != nil {
+		t.Fatal(err)
+	}
+	delta, err := buildClientStateDelta(previous, current)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := delta[infrastructureDeltaField]; ok {
+		t.Fatal("keyed delta emitted against an unkeyed baseline")
+	}
+	full, ok := delta[infrastructureField].(json.RawMessage)
+	if !ok || !strings.Contains(string(full), `"id":"a"`) {
+		t.Fatalf("full field = %v, want whole projection re-ship", delta[infrastructureField])
+	}
+}
+
 func TestClientStateBaselineAdvancesOnlyAfterDeltaIsQueued(t *testing.T) {
 	initial := models.EmptyStateFrontend()
 	initial.LastUpdate = 100

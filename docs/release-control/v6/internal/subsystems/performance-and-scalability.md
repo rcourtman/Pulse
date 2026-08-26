@@ -251,7 +251,13 @@ through the state-level `capabilityCatalog` and per-resource
 `capabilitiesRef`, default-posture policy and AI-safe prose are omitted and
 synthesized at ingestion, and superseded canonical ids are not duplicated
 into the alias list, so full snapshots, REST recovery, and reconnects do not
-re-ship static metadata per resource. Workload table rows derived from canonical
+re-ship static metadata per resource. The connected-infrastructure reporting
+projection rides the same per-client keyed delta engine: a broadcast carries
+id-keyed merge patches for changed items only (at 50-node scale, timestamp
+patches of a few hundred bytes instead of the full ~55KB projection every
+tick), and the client applies them to an isolated baseline then reconciles
+the store with reference-stable untouched items so the per-tick deep walk of
+the whole projection is gone. Workload table rows derived from canonical
 snapshots reuse the previous row object whenever the serialized row is
 unchanged, and a refresh that changes nothing returns the previous row array
 itself, so per-tick row identity churn stays bounded to guests whose data

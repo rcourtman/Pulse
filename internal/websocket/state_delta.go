@@ -9,17 +9,57 @@ import (
 )
 
 const resourceDeltaField = "resourceDelta"
+const infrastructureField = "connectedInfrastructure"
+const infrastructureDeltaField = "connectedInfrastructureDelta"
 
 type clientStateSnapshot struct {
 	fields        map[string]json.RawMessage
 	resources     map[string]json.RawMessage
 	resourceOrder []string
+	// The connected-infrastructure projection is keyed the same way as
+	// resources so per-item merge patches replace re-shipping the whole
+	// projection on every broadcast. When the payload cannot be keyed (an
+	// entry without an id), it stays in fields and diffs whole, so the
+	// keyed path can never corrupt the projection.
+	infrastructure      map[string]json.RawMessage
+	infrastructureOrder []string
+	infrastructureRaw   json.RawMessage
+	infrastructureKeyed bool
 }
 
 type resourceDeltaPayload struct {
 	Upserts []json.RawMessage `json:"upserts,omitempty"`
 	Removed []string          `json:"removed,omitempty"`
 	Order   []string          `json:"order,omitempty"`
+}
+
+func extractKeyedEntries(
+	encoded json.RawMessage,
+	field string,
+) (map[string]json.RawMessage, []string, error) {
+	var entries []json.RawMessage
+	if err := json.Unmarshal(encoded, &entries); err != nil {
+		return nil, nil, fmt.Errorf("decode state %s: %w", field, err)
+	}
+	byID := make(map[string]json.RawMessage)
+	order := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		var identity struct {
+			ID string `json:"id"`
+		}
+		if err := json.Unmarshal(entry, &identity); err != nil {
+			return nil, nil, fmt.Errorf("decode state %s identity: %w", field, err)
+		}
+		if identity.ID == "" {
+			return nil, nil, fmt.Errorf("state %s entry is missing id", field)
+		}
+		if _, exists := byID[identity.ID]; exists {
+			return nil, nil, fmt.Errorf("state %s id %q is duplicated", field, identity.ID)
+		}
+		byID[identity.ID] = append(json.RawMessage(nil), entry...)
+		order = append(order, identity.ID)
+	}
+	return byID, order, nil
 }
 
 func buildClientStateSnapshot(state interface{}) (*clientStateSnapshot, error) {
@@ -36,34 +76,72 @@ func buildClientStateSnapshot(state interface{}) (*clientStateSnapshot, error) {
 	resources := make(map[string]json.RawMessage)
 	resourceOrder := make([]string, 0)
 	if encodedResources, ok := fields["resources"]; ok {
-		var entries []json.RawMessage
-		if err := json.Unmarshal(encodedResources, &entries); err != nil {
-			return nil, fmt.Errorf("decode state resources: %w", err)
-		}
-		for _, entry := range entries {
-			var identity struct {
-				ID string `json:"id"`
-			}
-			if err := json.Unmarshal(entry, &identity); err != nil {
-				return nil, fmt.Errorf("decode state resource identity: %w", err)
-			}
-			if identity.ID == "" {
-				return nil, fmt.Errorf("state resource is missing id")
-			}
-			if _, exists := resources[identity.ID]; exists {
-				return nil, fmt.Errorf("state resource id %q is duplicated", identity.ID)
-			}
-			resources[identity.ID] = append(json.RawMessage(nil), entry...)
-			resourceOrder = append(resourceOrder, identity.ID)
+		resources, resourceOrder, err = extractKeyedEntries(encodedResources, "resource")
+		if err != nil {
+			return nil, err
 		}
 		delete(fields, "resources")
 	}
 
-	return &clientStateSnapshot{
+	snapshot := &clientStateSnapshot{
 		fields:        fields,
 		resources:     resources,
 		resourceOrder: resourceOrder,
-	}, nil
+	}
+
+	if encodedInfrastructure, ok := fields[infrastructureField]; ok {
+		infrastructure, infrastructureOrder, keyErr := extractKeyedEntries(
+			encodedInfrastructure,
+			infrastructureField,
+		)
+		if keyErr == nil {
+			snapshot.infrastructure = infrastructure
+			snapshot.infrastructureOrder = infrastructureOrder
+			snapshot.infrastructureRaw = append(json.RawMessage(nil), encodedInfrastructure...)
+			snapshot.infrastructureKeyed = true
+			delete(fields, infrastructureField)
+		}
+	}
+
+	return snapshot, nil
+}
+
+func buildKeyedArrayDelta(
+	previousEntries, currentEntries map[string]json.RawMessage,
+	previousOrder, currentOrder []string,
+	label string,
+) (resourceDeltaPayload, error) {
+	payload := resourceDeltaPayload{}
+	for _, id := range currentOrder {
+		currentEntry := currentEntries[id]
+		previousEntry, exists := previousEntries[id]
+		if !exists {
+			payload.Upserts = append(payload.Upserts, currentEntry)
+			continue
+		}
+		if bytes.Equal(previousEntry, currentEntry) {
+			continue
+		}
+		patch, err := createJSONMergePatch(previousEntry, currentEntry)
+		if err != nil {
+			return resourceDeltaPayload{}, fmt.Errorf("build %s %q patch: %w", label, id, err)
+		}
+		payload.Upserts = append(payload.Upserts, patch)
+	}
+	for id := range previousEntries {
+		if _, exists := currentEntries[id]; !exists {
+			payload.Removed = append(payload.Removed, id)
+		}
+	}
+	sort.Strings(payload.Removed)
+	if !reflect.DeepEqual(previousOrder, currentOrder) {
+		payload.Order = append([]string(nil), currentOrder...)
+	}
+	return payload, nil
+}
+
+func (p resourceDeltaPayload) isEmpty() bool {
+	return len(p.Upserts) == 0 && len(p.Removed) == 0 && len(p.Order) == 0
 }
 
 func buildClientStateDelta(previous, current *clientStateSnapshot) (map[string]interface{}, error) {
@@ -83,34 +161,50 @@ func buildClientStateDelta(previous, current *clientStateSnapshot) (map[string]i
 		}
 	}
 
-	resourceDelta := resourceDeltaPayload{}
-	for _, id := range current.resourceOrder {
-		currentResource := current.resources[id]
-		previousResource, exists := previous.resources[id]
-		if !exists {
-			resourceDelta.Upserts = append(resourceDelta.Upserts, currentResource)
-			continue
-		}
-		if bytes.Equal(previousResource, currentResource) {
-			continue
-		}
-		patch, err := createJSONMergePatch(previousResource, currentResource)
-		if err != nil {
-			return nil, fmt.Errorf("build resource %q patch: %w", id, err)
-		}
-		resourceDelta.Upserts = append(resourceDelta.Upserts, patch)
+	resourceDelta, err := buildKeyedArrayDelta(
+		previous.resources,
+		current.resources,
+		previous.resourceOrder,
+		current.resourceOrder,
+		"resource",
+	)
+	if err != nil {
+		return nil, err
 	}
-	for id := range previous.resources {
-		if _, exists := current.resources[id]; !exists {
-			resourceDelta.Removed = append(resourceDelta.Removed, id)
-		}
-	}
-	sort.Strings(resourceDelta.Removed)
-	if !reflect.DeepEqual(previous.resourceOrder, current.resourceOrder) {
-		resourceDelta.Order = append([]string(nil), current.resourceOrder...)
-	}
-	if len(resourceDelta.Upserts) > 0 || len(resourceDelta.Removed) > 0 || len(resourceDelta.Order) > 0 {
+	if !resourceDelta.isEmpty() {
 		delta[resourceDeltaField] = resourceDelta
+	}
+
+	switch {
+	case previous.infrastructureKeyed && current.infrastructureKeyed:
+		infrastructureDelta, err := buildKeyedArrayDelta(
+			previous.infrastructure,
+			current.infrastructure,
+			previous.infrastructureOrder,
+			current.infrastructureOrder,
+			infrastructureField,
+		)
+		if err != nil {
+			return nil, err
+		}
+		if !infrastructureDelta.isEmpty() {
+			delta[infrastructureDeltaField] = infrastructureDelta
+		}
+	case current.infrastructureKeyed:
+		// The previous snapshot carried the projection as a plain field (or
+		// not at all): fall back to shipping the full array once so the
+		// client re-adopts a clean baseline.
+		if previousRaw, ok := previous.fields[infrastructureField]; !ok ||
+			!bytes.Equal(previousRaw, current.infrastructureRaw) {
+			delta[infrastructureField] = current.infrastructureRaw
+		}
+	case previous.infrastructureKeyed:
+		// The projection left the keyed path. If the current snapshot still
+		// carries it as a plain field, the fields loop above already shipped
+		// it whole; if it vanished entirely, clear it like any removed field.
+		if _, ok := current.fields[infrastructureField]; !ok {
+			delta[infrastructureField] = nil
+		}
 	}
 
 	return delta, nil

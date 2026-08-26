@@ -6770,6 +6770,14 @@ arrays at all for this surface; Connected infrastructure row
 identity, reporting-surface labels, and ignore/reconnect scope must be owned
 by the backend payload contract, with frontend rendering limited to
 presentation and operator actions.
+Over the state WebSocket that projection now travels the same per-client
+keyed delta transport as resources: once a full payload establishes the
+client's baseline, `connectedInfrastructureDelta` carries id-keyed JSON merge
+patches plus removed ids and order instead of re-shipping the whole
+projection on every broadcast. An entry that cannot key by id drops the
+whole field back to plain whole-payload diffing, and a client without a
+baseline ignores the delta and heals on the next full payload, so the keyed
+path can never corrupt the projection.
 That same install-command payload continuity now also applies when auth is
 optional: copied install and upgrade commands must omit token arguments
 entirely on token-optional Pulse instances rather than serializing a fake

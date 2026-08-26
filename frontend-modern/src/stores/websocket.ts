@@ -1,5 +1,5 @@
 import { createSignal, onCleanup, batch } from 'solid-js';
-import { createStore, produce, reconcile } from 'solid-js/store';
+import { createStore, produce, reconcile, unwrap } from 'solid-js/store';
 import type {
   State,
   WSMessage,
@@ -118,11 +118,13 @@ const collectResourcePatchKeys = (patch: Record<string, unknown>): readonly stri
   return keys;
 };
 
-const applyResourceStateDelta = (
-  current: readonly Resource[],
-  delta: { upserts?: unknown; removed?: unknown; order?: unknown },
+type KeyedStateDelta = { upserts?: unknown; removed?: unknown; order?: unknown };
+
+const applyKeyedStateDelta = <T extends { id: string }>(
+  current: readonly T[],
+  delta: KeyedStateDelta,
 ): {
-  resources: Resource[];
+  entries: T[];
   changedIds: Set<string>;
   changedKeys: Map<string, readonly string[] | null>;
 } => {
@@ -151,7 +153,7 @@ const applyResourceStateDelta = (
       } else {
         changedKeys.set(id, collectResourcePatchKeys(patchRecord));
       }
-      const next = applyJSONMergePatch(resourcesById.get(id), patch) as Resource;
+      const next = applyJSONMergePatch(resourcesById.get(id), patch) as T;
       if (next.id === id) resourcesById.set(id, next);
     });
   }
@@ -165,12 +167,28 @@ const applyResourceStateDelta = (
   ];
   const ordered = order
     .map((id) => resourcesById.get(id))
-    .filter((resource): resource is Resource => Boolean(resource));
+    .filter((resource): resource is T => Boolean(resource));
   const included = new Set(ordered.map((resource) => resource.id));
   resourcesById.forEach((resource, id) => {
     if (!included.has(id)) ordered.push(resource);
   });
-  return { resources: ordered, changedIds, changedKeys };
+  return { entries: ordered, changedIds, changedKeys };
+};
+
+const applyResourceStateDelta = (
+  current: readonly Resource[],
+  delta: KeyedStateDelta,
+): {
+  resources: Resource[];
+  changedIds: Set<string>;
+  changedKeys: Map<string, readonly string[] | null>;
+} => {
+  const applied = applyKeyedStateDelta(current, delta);
+  return {
+    resources: applied.entries,
+    changedIds: applied.changedIds,
+    changedKeys: applied.changedKeys,
+  };
 };
 
 const parseTimestampMs = (value: unknown): number | null => {
@@ -438,10 +456,14 @@ export function createWebSocketStore(url: string) {
   const DEFERRED_FLUSH_RECHECK_MS = 300;
   const deferredResourceDeltaQueue: { upserts?: unknown; removed?: unknown; order?: unknown }[] =
     [];
-  // The reporting projection is a whole-array replace, so mid-gesture ticks
-  // keep only the latest payload instead of a queue; reconciling it deep-walks
-  // every entry and is the other main-thread cost a tick pays.
-  let deferredConnectedInfrastructure: ConnectedInfrastructureItem[] | null = null;
+  // The reporting projection arrives as per-item merge patches keyed like
+  // resources. The raw baseline mirrors the server's per-client snapshot and
+  // stays isolated from the store; the pending set records which items the
+  // store has not reconciled yet, so a sync touches only changed items and a
+  // tick never deep-walks the whole projection again.
+  let rawConnectedInfrastructure: ConnectedInfrastructureItem[] | null = null;
+  const pendingInfrastructureIds = new Set<string>();
+  let pendingInfrastructureFull = false;
   // lastUpdate is the realtime tick token every downstream consumer keys on
   // (unified resource projections, workload remaps). It defers with the rest
   // so a mid-interaction tick triggers no derived recomputation at all.
@@ -544,7 +566,9 @@ export function createWebSocketStore(url: string) {
     deferredResourceIds.clear();
     deferredResourceKeys.clear();
     deferredResourceDeltaQueue.length = 0;
-    deferredConnectedInfrastructure = null;
+    rawConnectedInfrastructure = null;
+    pendingInfrastructureIds.clear();
+    pendingInfrastructureFull = false;
     deferredLastUpdate = null;
     lastFullStateRecoveryAt = 0;
     oversizedSnapshotObserved = false;
@@ -708,9 +732,35 @@ export function createWebSocketStore(url: string) {
     }
   };
 
+  // Reconcile the projection store from the raw baseline, touching only items
+  // whose ids are pending. Untouched items keep their current store references
+  // so reconcile's per-item identity check skips them outright; changed items
+  // are cloned so the store never adopts baseline-owned objects.
+  const syncInfrastructureStore = () => {
+    const baseline = rawConnectedInfrastructure;
+    if (baseline === null) return;
+    if (pendingInfrastructureFull) {
+      pendingInfrastructureFull = false;
+      pendingInfrastructureIds.clear();
+      setState('connectedInfrastructure', reconcile(structuredClone(baseline), { key: 'id' }));
+      return;
+    }
+    if (pendingInfrastructureIds.size === 0) return;
+    const changed = new Set(pendingInfrastructureIds);
+    pendingInfrastructureIds.clear();
+    const currentItems = unwrap(state.connectedInfrastructure) as ConnectedInfrastructureItem[];
+    const currentById = new Map(currentItems.map((item) => [item.id, item] as const));
+    const next = baseline.map((item) => {
+      if (!changed.has(item.id)) {
+        const existing = currentById.get(item.id);
+        if (existing) return existing;
+      }
+      return structuredClone(item);
+    });
+    setState('connectedInfrastructure', reconcile(next, { key: 'id' }));
+  };
+
   const flushDeferredResources = () => {
-    const pendingInfrastructure = deferredConnectedInfrastructure;
-    deferredConnectedInfrastructure = null;
     const pendingLastUpdate = deferredLastUpdate;
     deferredLastUpdate = null;
     if (rawServerResources !== null) {
@@ -732,13 +782,14 @@ export function createWebSocketStore(url: string) {
       commitDeferredMerge = () =>
         commitResources(nextResources, changedResourceIds, changedResourceKeys);
     }
-    if (!commitDeferredMerge && !pendingInfrastructure && pendingLastUpdate === null) {
+    const hasInfrastructureFlush =
+      rawConnectedInfrastructure !== null &&
+      (pendingInfrastructureFull || pendingInfrastructureIds.size > 0);
+    if (!commitDeferredMerge && !hasInfrastructureFlush && pendingLastUpdate === null) {
       return;
     }
     batch(() => {
-      if (pendingInfrastructure) {
-        setState('connectedInfrastructure', reconcile(pendingInfrastructure, { key: 'id' }));
-      }
+      syncInfrastructureStore();
       commitDeferredMerge?.();
       if (pendingLastUpdate !== null) {
         setState('lastUpdate', pendingLastUpdate);
@@ -753,7 +804,8 @@ export function createWebSocketStore(url: string) {
     if (
       deferredResourceIds.size === 0 &&
       deferredResourceDeltaQueue.length === 0 &&
-      deferredConnectedInfrastructure === null &&
+      !pendingInfrastructureFull &&
+      pendingInfrastructureIds.size === 0 &&
       deferredLastUpdate === null
     ) {
       return;
@@ -936,21 +988,45 @@ export function createWebSocketStore(url: string) {
               const connectedInfrastructure = Array.isArray(message.data.connectedInfrastructure)
                 ? (message.data.connectedInfrastructure as ConnectedInfrastructureItem[])
                 : [];
+              // A full payload re-establishes the projection baseline the way
+              // a full resource snapshot re-establishes rawServerResources.
+              rawConnectedInfrastructure = structuredClone(connectedInfrastructure);
+              pendingInfrastructureIds.clear();
+              pendingInfrastructureFull = true;
               if (
                 typeof document !== 'undefined' &&
                 document.visibilityState !== 'hidden' &&
                 isOperatorInputActive()
               ) {
-                // Latest-wins: a newer payload simply replaces the pending one.
-                deferredConnectedInfrastructure = connectedInfrastructure;
                 scheduleDeferredResourceFlush();
               } else {
-                deferredConnectedInfrastructure = null;
-                setState(
-                  'connectedInfrastructure',
-                  reconcile(connectedInfrastructure, { key: 'id' }),
-                );
+                syncInfrastructureStore();
               }
+            } else if (
+              'connectedInfrastructureDelta' in message.data &&
+              message.data.connectedInfrastructureDelta !== undefined
+            ) {
+              if (rawConnectedInfrastructure !== null) {
+                const appliedInfrastructure = applyKeyedStateDelta(
+                  rawConnectedInfrastructure,
+                  message.data.connectedInfrastructureDelta as KeyedStateDelta,
+                );
+                rawConnectedInfrastructure = appliedInfrastructure.entries;
+                appliedInfrastructure.changedIds.forEach((id) => {
+                  pendingInfrastructureIds.add(id);
+                });
+                if (
+                  typeof document !== 'undefined' &&
+                  document.visibilityState !== 'hidden' &&
+                  isOperatorInputActive()
+                ) {
+                  scheduleDeferredResourceFlush();
+                } else {
+                  syncInfrastructureStore();
+                }
+              }
+              // No baseline: leave the current projection; the next full
+              // payload (reconnect or snapshot) re-establishes it.
             }
             if (message.data.metrics !== undefined) setState('metrics', message.data.metrics);
             if (message.data.performance !== undefined)
