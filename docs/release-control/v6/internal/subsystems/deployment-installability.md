@@ -1774,25 +1774,29 @@ diagnostics. The same release workflow also executes the generated self-signed
 and custom-CA Windows installer commands through Windows PowerShell 5.1 before
 release assembly, so the first HTTPS fetch is release proof rather than a
 string-shape assertion.
-The active prerelease `v6.4.0-rc.3` cut sets the repo-root `VERSION`, repo-root
+The active prerelease `v6.4.0-rc.4` cut sets the repo-root `VERSION`, repo-root
 `docker-compose.yml` image default, `scripts/install-docker.sh` fallback, and
-Helm chart release metadata to the same `6.4.0-rc.3` release version. It follows
-`v6.4.0-rc.2` on the published `v6.4.0` candidate line. This prerelease keeps
+Helm chart release metadata to the same `6.4.0-rc.4` release version. It follows
+`v6.4.0-rc.3` on the published `v6.4.0` candidate line. This prerelease keeps
 `rollback_version=v6.3.2`, publishes a versioned public GitHub prerelease
 plus versioned Docker and Helm artifacts, and does not move stable/latest
-install pointers or stable semver aliases. The candidate makes large-estate
-workload, infrastructure, storage, and platform rendering incremental;
-canonicalizes table, drawer, touch, disclosure, sorting, and navigation
-behavior; adds notification delivery history and a least-privilege agent
-profile; provides deliberate Docker and Kubernetes re-enrolment recovery; and
-fixes metrics-history retention, Patrol startup recovery, backup pagination,
-stale storage and stale container-health presentation, and backup scope
-persistence. API-only Proxmox nodes also retain node metrics history without
-presenting agent-only disk I/O. The changes since `v6.4.0-rc.2` do not require a Pulse Mobile
+install pointers or stable semver aliases. The candidate moves resources,
+Connected infrastructure, and active alerts onto keyed per-client deltas;
+defers expensive realtime merges during operator input; preserves windowed-row
+identity across reordered snapshots; and isolates REST recovery from the
+websocket delta baseline. It also restores Proxmox network details, hardens
+backup and drawer history targeting, clears committed notification delivery
+warnings immediately, and keeps supported Proxmox VM/LXC lifecycle requests on
+the governed action path without a QEMU guest-agent prerequisite or manual
+command fallback. The changes since `v6.4.0-rc.3` do not require a Pulse Mobile
 client change and preserve
 the existing mobile, Relay, onboarding, and mobile-facing API contracts, so the
 server cut is classified `no-mobile-impact`; no companion upload or public
-mobile-store rollout is part of this candidate. The prerelease Windows path
+mobile-store rollout is part of this candidate. The canonical mobile
+compatibility projection and route/method/scope, request/response, pairing, and
+push checks passed against Pulse Mobile revision
+`57353a83eb950d1102c90074aa8fe67e1559685b`, iOS build 12, and Android build 9.
+The prerelease Windows path
 retains exact-SHA, checksum, and detached-signature verification without
 Authenticode. Stable `v6.4.0` also skips SignPath under the standing unavailable
 policy and retains the same exact-SHA, checksum, detached-signature, manifest,
@@ -1801,9 +1805,15 @@ only after the release owner explicitly confirms that production credentials
 and certificate authorization are ready and a reviewed policy/code change
 restores it.
 
+The preceding `v6.4.0-rc.3` cut published from exact source SHA
+`cf0ca6f127540e9997c2eb97eeed32f27619d242`. Its tag and versioned artifacts
+remain immutable; `v6.4.0-rc.4` supersedes it without moving stable install
+pointers or stable semver aliases from `v6.3.2`.
+
 The preceding `v6.4.0-rc.2` publication attempt built and staged the exact
 candidate artifacts but failed release convergence before public activation.
-Its tag is immutable and the candidate is superseded by `v6.4.0-rc.3`; stable
+Its tag is immutable and the candidate is superseded by later `v6.4.0`
+prereleases; stable
 install pointers and stable semver aliases remained on `v6.3.2`.
 
 The preceding prerelease `v6.4.0-rc.1` cut set the repo-root `VERSION`,
@@ -2237,8 +2247,8 @@ For the active stable `v6.1.2` cut, the repo-root compose default and
 `scripts/install-docker.sh` fallback must both pin `6.1.2` whenever the
 governed `VERSION` is that stable cut. The stable promotion guard remains in
 force and rejects leftover `-rc.` defaults.
-For the active prerelease `v6.4.0-rc.3` cut, the repo-root compose default and
-`scripts/install-docker.sh` fallback must both pin `6.4.0-rc.3` until the next
+For the active prerelease `v6.4.0-rc.4` cut, the repo-root compose default and
+`scripts/install-docker.sh` fallback must both pin `6.4.0-rc.4` until the next
 governed stable cut moves them forward. Each new release moves
 these two pins together with the repo-root `VERSION` and the Helm chart metadata
 in the same commit; a cut that leaves any of the four on a superseded value is a
