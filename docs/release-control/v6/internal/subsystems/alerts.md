@@ -642,9 +642,18 @@ models enablement, hysteresis, sustained delay, and warning/critical severity
 without persistence or notification side effects. The alert manager remains
 the runtime owner and reference behavior while the parity harness drives both
 implementations through identical observations; a divergence is a reducer bug
-unless a focused manager regression first proves otherwise. Moving additional
-alert families or downstream delivery behavior into the reducer requires a
-separate contract slice.
+unless a focused manager regression first proves otherwise.
+
+The confirmation/discrete-state slice uses the same boundary for connectivity,
+powered-state, and generic discrete matches. It activates after the resolved
+number of consecutive matches, clears pending state or firing state on a
+non-match at the evaluator layer, and re-derives spec-carried severity on every
+firing observation. Both manager and reducer must date first activation at the
+first matched observation, not the final confirming poll. Alerts runtime owns
+that first-match timestamp alongside the confirmation counter and must clear it
+whenever the run resets or its tracking state is removed. Offline recovery
+confirmation, recently-resolved re-fire restoration, additional alert families,
+and downstream delivery behavior require separate contract slices.
 That same guest-threshold owner also governs guest-derived lifecycle and
 posture alerts. Snapshot age, backup age, powered-off state, and
 configuration-change reevaluation must all construct a canonical lightweight
