@@ -34,9 +34,9 @@ Restrict access to specific users or groups:
 - **Allowed Domains**: Restrict to specific email domains (e.g., `example.com`).
 - **Allowed Emails**: Allow specific email addresses.
 
-### Group-to-Role Mapping (Pro and Above)
+### Group-to-Role Mapping
 
-Automatically assign Pulse roles based on OIDC group membership. When a user logs in, Pulse checks their groups claim and assigns the corresponding roles.
+Automatically assign Pulse roles based on OIDC group membership. When a user logs in, Pulse checks their groups claim and assigns the corresponding roles. Mapping groups to the built-in `admin`, `operator`, and `viewer` roles is included with Community SSO. Creating custom roles and manually managing user assignments remain Pro RBAC features.
 
 **Configuration:**
 Group-role mappings are configured per SSO provider through the UI (or the
@@ -129,7 +129,7 @@ Create the provider in Pulse first (**Settings → Security → Single Sign-On �
 
 > **Warning — group overage**: if a user belongs to more groups than Entra will fit in a token, Entra omits the `groups` claim entirely and sends a `_claim_names` / `_claim_sources` overage marker pointing at Microsoft Graph instead. Pulse does not follow that marker, so it sees the user as having no groups — and because a configured group-role mapping is authoritative, that login **clears** the user's role assignments instead of leaving them alone. Selecting **Groups assigned to the application** rather than **Security groups** in Token configuration keeps the claim small and avoids the overage. If the token still carries every security group after that, check the app registration **Manifest**: `groupMembershipClaims` must be exactly `"ApplicationGroup"`. A value like `"SecurityGroup, ApplicationGroup"` (left over from an earlier Token configuration choice) keeps emitting all security groups no matter what **Assignment required** is set to, so edit the manifest to drop `SecurityGroup`.
 
-> **Note**: Group-to-role mapping requires a Pro (or above) license. Plain SSO login and **Allowed Groups** gating work on any plan.
+> **Note**: Plain SSO login, **Allowed Groups** gating, and group mapping to built-in roles work on every plan. Creating custom roles and manually managing user assignments require Pro RBAC.
 
 ## 🔧 Troubleshooting
 

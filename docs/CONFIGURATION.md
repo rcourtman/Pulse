@@ -111,7 +111,7 @@ Environment overrides (lock the corresponding UI fields):
 | `OIDC_ALLOWED_GROUPS` | Allowed groups (space or comma-separated) |
 | `OIDC_ALLOWED_DOMAINS` | Allowed email domains (space or comma-separated) |
 | `OIDC_ALLOWED_EMAILS` | Allowed emails (space or comma-separated) |
-| `OIDC_GROUP_ROLE_MAPPINGS` | Comma-separated group=role mappings (Pro/legacy Pro+/Cloud) |
+| `OIDC_GROUP_ROLE_MAPPINGS` | Comma-separated group=role mappings (built-in roles on every plan; custom-role administration requires Pro RBAC) |
 | `OIDC_CA_BUNDLE` | Custom CA bundle path |
 
 </details>

@@ -143,9 +143,9 @@ This matrix reflects the entitlement keys enforced in code plus the runtime hist
 | `FeatureKubernetesAI` | `kubernetes_ai` | Kubernetes AI Analysis (Compatibility) | N | N | Y | Y | Legacy compatibility gate for `/api/ai/kubernetes/analyze`; not a primary marketed v6 Pro plan pillar. |
 | `FeatureAgentProfiles` | `agent_profiles` | Centralized Agent Profiles | N | N | Y | Y | API route gating via `RequireLicenseFeature(..., agent_profiles, ...)`. |
 | `FeatureUpdateAlerts` | `update_alerts` | Update Alerts (Container/Package Updates) | Y | Y | Y | Y | Included in Community tier per `TierFeatures[TierFree]`. |
-| `FeatureSSO` | `sso` | Core SSO (OIDC/SAML) | Y | Y | Y | Y | OIDC and SAML SSO are included in Community tier. |
+| `FeatureSSO` | `sso` | Core SSO (OIDC/SAML) | Y | Y | Y | Y | OIDC and SAML SSO, including group mapping to built-in roles, are included in Community tier. |
 | `FeatureAdvancedSSO` | `advanced_sso` | Multi-Provider SSO | Y | Y | Y | Y | Compatibility capability key; retained for existing entitlement payloads and included in Community to avoid an SSO tax. |
-| `FeatureRBAC` | `rbac` | Role-Based Access Control (RBAC) | N | N | Y | Y | API route gating via `RequireLicenseFeature(..., rbac, ...)`. |
+| `FeatureRBAC` | `rbac` | Role-Based Access Control (RBAC) | N | N | Y | Y | Custom-role and manual user-assignment administration is gated via `RequireLicenseFeature(..., rbac, ...)`. |
 | `FeatureAuditLogging` | `audit_logging` | Audit Logging | N | N | Y | Y | API route gating for audit query, verify, and export endpoints. |
 | `FeatureAdvancedReporting` | `advanced_reporting` | PDF/CSV Reporting | N | N | Y | Y | API route gating via `RequireLicenseFeature(..., advanced_reporting, ...)`. |
 | `FeatureLongTermMetrics` | `long_term_metrics` | Extended Metric History | N | Y | Y | Y | Runtime history limits are tier-aware through `max_history_days`: Community `7`, Relay `14`, Pro `90`. |
