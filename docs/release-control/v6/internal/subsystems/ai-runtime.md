@@ -5903,7 +5903,15 @@ That same boundary also governs shared Assistant wording in
 base system prompt and `pulse_control` schema/description must not claim that a
 generic `vm` or `system-container` is controllable. Shared AI text must describe
 control as capability-gated and explicitly allow read-only platform variants
-such as VMware phase-1 guests.
+such as VMware phase-1 guests. For a canonical Proxmox VM or LXC that does
+advertise a lifecycle capability, that advertised hypervisor action is the
+authority: start, stop, shutdown, and reboot do not depend on QEMU guest-agent
+availability, and Assistant must not replace the offered governed action with
+manual `qm` or `pct` instructions. Claims that a guest agent or capability is
+unavailable require current tool evidence. The provider-facing `pulse_control`
+schema exposes only `type=resource`, `resource_id`, and `action`; retired guest,
+raw-command, target-host, host-routing, and force fields must not remain in the
+schema as misleading alternate paths.
 That same VMware AI rule also includes the investigation path. Alarm, health,
 event, task, metrics-history, and snapshot-tree context for VMware-backed
 resources must stay reachable through those same shared read/query surfaces

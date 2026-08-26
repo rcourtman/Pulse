@@ -14,6 +14,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/notifications"
 	"github.com/rcourtman/pulse-go-rewrite/internal/operationreceipt"
 	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
@@ -5189,5 +5190,50 @@ func TestApplyHostReportCarriesAgentPrivilegeProfile(t *testing.T) {
 	}
 	if legacyHost.AgentPrivilege != nil {
 		t.Fatalf("legacy report invented a privilege profile: %+v", legacyHost.AgentPrivilege)
+	}
+}
+
+func TestMonitorConstructionWiresNotificationDeliveryReconciliation(t *testing.T) {
+	monitor, err := New(&config.Config{DataPath: t.TempDir()})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	t.Cleanup(func() { monitor.Stop() })
+
+	queue := monitor.GetNotificationManager().GetQueue()
+	if queue == nil {
+		t.Fatal("expected notification queue")
+	}
+	if err := queue.Enqueue(&notifications.QueuedNotification{
+		ID:          "delivery-reconcile",
+		Type:        "webhook",
+		Status:      notifications.QueueStatusPending,
+		MaxAttempts: 8,
+		Config:      json.RawMessage(`{}`),
+	}); err != nil {
+		t.Fatalf("Enqueue: %v", err)
+	}
+	if err := queue.UpdateStatus("delivery-reconcile", notifications.QueueStatusDLQ, "destination unavailable"); err != nil {
+		t.Fatalf("mark DLQ: %v", err)
+	}
+
+	found := false
+	for _, active := range monitor.GetAlertManager().GetActiveAlerts() {
+		if active.Type == alerts.NotificationDeliveryAlertType {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatal("expected committed DLQ transition to raise notification delivery alert")
+	}
+
+	if _, err := queue.DismissTerminalFailures(); err != nil {
+		t.Fatalf("DismissTerminalFailures: %v", err)
+	}
+	for _, active := range monitor.GetAlertManager().GetActiveAlerts() {
+		if active.Type == alerts.NotificationDeliveryAlertType {
+			t.Fatalf("notification delivery alert remained active after committed recovery: %+v", active)
+		}
 	}
 }

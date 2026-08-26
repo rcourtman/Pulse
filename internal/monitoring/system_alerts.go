@@ -23,6 +23,18 @@ const notificationDeliveryCheckInterval = 5 * time.Minute
 // RaiseSystemAlert is idempotent for an unchanged condition, so repeating this
 // on a timer neither re-notifies nor accumulates alerts.
 func (m *Monitor) evaluateNotificationDelivery(now time.Time) {
+	m.evaluateNotificationDeliveryAt(now, false)
+}
+
+// reconcileNotificationDelivery projects a committed queue-health transition
+// immediately. Timer-driven evaluations remain throttled, but an operator's
+// retry or dismissal must not leave a known-stale warning visible until the
+// next polling interval.
+func (m *Monitor) reconcileNotificationDelivery() {
+	m.evaluateNotificationDeliveryAt(time.Now(), true)
+}
+
+func (m *Monitor) evaluateNotificationDeliveryAt(now time.Time, force bool) {
 	if m == nil {
 		return
 	}
@@ -31,7 +43,7 @@ func (m *Monitor) evaluateNotificationDelivery(now time.Time) {
 	}
 
 	m.mu.Lock()
-	if !m.lastDeliveryHealthCheck.IsZero() &&
+	if !force && !m.lastDeliveryHealthCheck.IsZero() &&
 		now.Sub(m.lastDeliveryHealthCheck) < notificationDeliveryCheckInterval {
 		m.mu.Unlock()
 		return

@@ -1387,6 +1387,14 @@ func TestGetQueueStats(t *testing.T) {
 			t.Fatalf("NewNotificationQueue: %v", err)
 		}
 		defer func() { _ = nq.Stop() }()
+		observedHealth := make([]DeliveryHealth, 0, 6)
+		nq.SetDeliveryHealthChangedCallback(func() {
+			stats, statsErr := nq.GetQueueStats()
+			if statsErr != nil {
+				t.Fatalf("read queue health from committed callback: %v", statsErr)
+			}
+			observedHealth = append(observedHealth, ClassifyQueueHealth(stats))
+		})
 
 		for _, notif := range []*QueuedNotification{
 			{ID: "failed-recovery", Type: "email", Status: QueueStatusPending, Attempts: 8, MaxAttempts: 8, Config: []byte(`{}`)},
@@ -1410,6 +1418,9 @@ func TestGetQueueStats(t *testing.T) {
 		}
 		if affected != 2 {
 			t.Fatalf("retry affected = %d, want 2", affected)
+		}
+		if len(observedHealth) == 0 || !observedHealth[len(observedHealth)-1].Healthy {
+			t.Fatalf("health after retry = %#v, want healthy callback after commit", observedHealth)
 		}
 		for _, id := range []string{"failed-recovery", "dlq-recovery"} {
 			var status string
@@ -1438,6 +1449,9 @@ func TestGetQueueStats(t *testing.T) {
 		}
 		if affected != 2 {
 			t.Fatalf("dismiss affected = %d, want 2", affected)
+		}
+		if len(observedHealth) == 0 || !observedHealth[len(observedHealth)-1].Healthy {
+			t.Fatalf("health after dismiss = %#v, want healthy callback after commit", observedHealth)
 		}
 		stats, err := nq.GetQueueStats()
 		if err != nil {

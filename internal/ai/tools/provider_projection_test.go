@@ -71,6 +71,34 @@ func TestPulseToolExecutorAssistantProviderToolsUsesRuntimeAvailability(t *testi
 	if controlTool.BehaviorHints == nil || controlTool.BehaviorHints.DestructiveHint == nil || !*controlTool.BehaviorHints.DestructiveHint {
 		t.Fatalf("%s provider behavior hints = %+v, want destructive hint", agentcapabilities.PulseControlToolName, controlTool.BehaviorHints)
 	}
+	if !strings.Contains(controlTool.Description, "Proxmox VM and LXC lifecycle actions do not require the QEMU guest agent") {
+		t.Fatalf("%s provider description does not distinguish lifecycle actions from guest-agent operations: %q", agentcapabilities.PulseControlToolName, controlTool.Description)
+	}
+	properties, ok := controlTool.InputSchema["properties"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("%s provider properties = %#v, want object", agentcapabilities.PulseControlToolName, controlTool.InputSchema["properties"])
+	}
+	for _, retired := range []string{"guest_id", "command", "target_host", "run_on_host", "force"} {
+		if _, exists := properties[retired]; exists {
+			t.Fatalf("%s provider schema still exposes retired %q input", agentcapabilities.PulseControlToolName, retired)
+		}
+	}
+	required, ok := controlTool.InputSchema["required"].([]string)
+	if !ok {
+		t.Fatalf("%s provider required fields = %#v, want array", agentcapabilities.PulseControlToolName, controlTool.InputSchema["required"])
+	}
+	for _, field := range []string{"type", "resource_id", "action"} {
+		found := false
+		for _, value := range required {
+			if value == field {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("%s provider schema required fields = %#v, missing %q", agentcapabilities.PulseControlToolName, required, field)
+		}
+	}
 }
 
 func TestPulseToolExecutorAssistantProviderToolsEnterThroughManifestSurfaceAffordances(t *testing.T) {

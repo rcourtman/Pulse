@@ -119,6 +119,10 @@ func TestNotificationQueueHandlers_RetryAndDelete(t *testing.T) {
 func TestNotificationQueueHandlers_BulkTerminalFailureRecovery(t *testing.T) {
 	handler, queue := newNotificationQueueHandlers(t)
 	enqueueDLQNotification(t, queue, "notif-bulk")
+	if err := queue.UpdateStatus("notif-bulk", notifications.QueueStatusDLQ, "destination unavailable"); err != nil {
+		t.Fatalf("mark notification DLQ: %v", err)
+	}
+	assertNotificationDeliveryAlertActive(t, handler.monitor)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/notifications/terminal-failures/retry", nil)
 	rec := httptest.NewRecorder()
@@ -135,10 +139,16 @@ func TestNotificationQueueHandlers_BulkTerminalFailureRecovery(t *testing.T) {
 	if response.Affected != 1 {
 		t.Fatalf("retry affected = %d, want 1", response.Affected)
 	}
+	for _, active := range handler.monitor.GetAlertManager().GetActiveAlerts() {
+		if active.Type == alerts.NotificationDeliveryAlertType {
+			t.Fatalf("notification delivery alert remained active after retry: %+v", active)
+		}
+	}
 
 	if err := queue.UpdateStatus("notif-bulk", notifications.QueueStatusDLQ, "still unavailable"); err != nil {
 		t.Fatalf("mark retried notification DLQ: %v", err)
 	}
+	assertNotificationDeliveryAlertActive(t, handler.monitor)
 	req = httptest.NewRequest(http.MethodPost, "/api/notifications/terminal-failures/dismiss", nil)
 	rec = httptest.NewRecorder()
 	handler.DismissTerminalFailures(rec, req)
@@ -151,6 +161,21 @@ func TestNotificationQueueHandlers_BulkTerminalFailureRecovery(t *testing.T) {
 	if response.Affected != 1 {
 		t.Fatalf("dismiss affected = %d, want 1", response.Affected)
 	}
+	for _, active := range handler.monitor.GetAlertManager().GetActiveAlerts() {
+		if active.Type == alerts.NotificationDeliveryAlertType {
+			t.Fatalf("notification delivery alert remained active after dismiss: %+v", active)
+		}
+	}
+}
+
+func assertNotificationDeliveryAlertActive(t *testing.T, monitor *monitoring.Monitor) {
+	t.Helper()
+	for _, active := range monitor.GetAlertManager().GetActiveAlerts() {
+		if active.Type == alerts.NotificationDeliveryAlertType {
+			return
+		}
+	}
+	t.Fatal("expected notification delivery alert to be active")
 }
 
 func TestNotificationQueueHandlers_HandleNotificationQueue(t *testing.T) {

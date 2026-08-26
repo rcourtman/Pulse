@@ -1753,6 +1753,9 @@ func New(cfg *config.Config) (*Monitor, error) {
 	}
 
 	m.executor = newRealExecutor(m)
+	if queue := m.notificationMgr.GetQueue(); queue != nil {
+		queue.SetDeliveryHealthChangedCallback(m.reconcileNotificationDelivery)
+	}
 	m.hydrateRemovedHostAgents(time.Now().UTC())
 	m.alertManager.SetBackupIntentContextResolver(m.resolveBackupIntentContext)
 	m.registerBuiltInPollProviders()

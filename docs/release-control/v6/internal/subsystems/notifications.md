@@ -67,7 +67,13 @@ group headings, and HTML-escape every resource, message, and category field.
    reports `unavailable` and never `healthy`, because an unreadable queue must
    not be mistaken for successful delivery. `internal/api/alerting/notifications.go`
    delegates to this rule rather than reimplementing it, and `monitoring`
-   consumes it to raise the notification-delivery system alert.
+   consumes it to raise the notification-delivery system alert. The queue also
+   emits one process-local health-changed callback after a relevant transition
+   has committed and after its database lock is released. Monitoring installs
+   that callback and owns the alert projection; notification code must not
+   raise or clear alerts directly. Retry and dismissal reconcile even when no
+   row changed, because an already-repaired queue may still have a persisted
+   stale warning from an earlier process.
 
 ## Forbidden Paths
 

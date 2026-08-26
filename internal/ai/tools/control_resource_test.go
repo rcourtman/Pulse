@@ -76,8 +76,16 @@ func TestPulseToolExecutor_ListTools_PulseControlDescriptionStaysCapabilityBound
 		if !strings.Contains(tool.Description, "never executes commands") {
 			t.Fatalf("expected pulse_control description to name the command-free boundary, got %q", tool.Description)
 		}
+		if !strings.Contains(tool.Description, "Proxmox VM and LXC lifecycle actions do not require the QEMU guest agent") {
+			t.Fatalf("expected pulse_control description to distinguish hypervisor lifecycle from guest-agent operations, got %q", tool.Description)
+		}
 		if action := tool.InputSchema.Properties["action"].Description; !strings.Contains(action, "Advertised resource capability") {
 			t.Fatalf("expected pulse_control action schema to describe shared action gating, got %q", action)
+		}
+		for _, retired := range []string{"guest_id", "command", "target_host", "run_on_host", "force"} {
+			if _, exists := tool.InputSchema.Properties[retired]; exists {
+				t.Fatalf("pulse_control schema still exposes retired %q input", retired)
+			}
 		}
 		return
 	}

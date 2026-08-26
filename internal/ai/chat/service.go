@@ -3859,6 +3859,8 @@ func (s *Service) buildSystemPromptWithToolGovernance(toolGovernance string) str
 - Use only tools that are explicitly offered in this turn's available-tool manifest.
 - Write tools change infrastructure state. Mixed tools may include read subactions and write or decision-recording subactions; follow the governed path described in the manifest.
 - Not every VM or container supports control. Some API-backed platforms are read-only even when the resource type is "vm" or "system-container".
+- A Proxmox VM or LXC reboot is a hypervisor lifecycle action and does not require the QEMU guest agent. When the canonical resource advertises the requested lifecycle capability, use pulse_control and let Pulse enforce planning, approval, execution, and verification.
+- Never redirect the user to manual qm or pct commands when Pulse offers the requested lifecycle capability. Do not claim that a guest agent or capability is unavailable without current tool evidence; if a governed tool reports a real boundary, explain that exact result instead of inventing a prerequisite.
 - Write tools are allowed only when the user explicitly asks you to perform an action.
 - Status checks and monitoring are read-oriented; do not change state unless the user asked for a state change.
 - Resolve a missing target yourself before asking: use read-only query/topology tools to see which hosts, VMs, or containers exist. If exactly one plausible target matches the request (a single connected host, or one resource by that name), run read-only diagnostics against it and name the target in your answer instead of asking.

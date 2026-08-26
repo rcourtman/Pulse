@@ -23,7 +23,7 @@ func (e *PulseToolExecutor) registerControlTools() {
 	e.registry.registerBuiltin(RegisteredTool{
 		Definition: Tool{
 			Name:        agentcapabilities.PulseControlToolName,
-			Description: `Plan one typed action for a canonical resource that explicitly advertises the requested capability. The plan is persisted on Pulse's shared action lifecycle; this tool never executes commands or contacts infrastructure directly.`,
+			Description: `Plan one typed action for a canonical resource that explicitly advertises the requested capability. The plan is persisted on Pulse's shared action lifecycle; this tool never executes commands or contacts infrastructure directly. Proxmox VM and LXC lifecycle actions do not require the QEMU guest agent; they use the advertised hypervisor capability.`,
 			InputSchema: InputSchema{
 				Type: "object",
 				Properties: map[string]PropertySchema{
@@ -32,37 +32,17 @@ func (e *PulseToolExecutor) registerControlTools() {
 						Description: "Canonical control type. Only resource is supported.",
 						Enum:        []string{"resource"},
 					},
-					"guest_id": {
-						Type:        "string",
-						Description: "For guest: VMID or name",
-					},
 					"resource_id": {
 						Type:        "string",
-						Description: "For resource: discovered resource name or canonical resource ID from pulse_query",
+						Description: "Discovered resource name or canonical resource ID from pulse_query",
 					},
 					"action": {
 						Type:        "string",
-						Description: "Advertised resource capability name, such as start, stop, shutdown, reboot, or restart",
+						Description: "Advertised resource capability name, such as start, stop, shutdown, reboot, or restart. Proxmox lifecycle capabilities operate at the hypervisor boundary and do not require in-guest QEMU agent functionality.",
 						Enum:        []string{"start", "stop", "shutdown", "reboot", "restart"},
 					},
-					"command": {
-						Type:        "string",
-						Description: "For command type: the shell command to execute",
-					},
-					"target_host": {
-						Type:        "string",
-						Description: "For command type: hostname to run command on",
-					},
-					"run_on_host": {
-						Type:        "boolean",
-						Description: "For command type: run on host (default true)",
-					},
-					"force": {
-						Type:        "boolean",
-						Description: "For guest stop: force stop without graceful shutdown",
-					},
 				},
-				Required: []string{"type"},
+				Required: []string{"type", "resource_id", "action"},
 			},
 		},
 		Handler: func(ctx context.Context, exec *PulseToolExecutor, args map[string]interface{}) (CallToolResult, error) {

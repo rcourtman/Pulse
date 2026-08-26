@@ -327,6 +327,15 @@ func TestBuildSystemPrompt_DoesNotClaimGenericVMControl(t *testing.T) {
 	if !strings.Contains(prompt, "Plans shared Pulse resource actions; approval and execution stay on the canonical action lifecycle") {
 		t.Fatalf("expected system prompt to describe capability-bound pulse_control usage, got %q", prompt)
 	}
+	if !strings.Contains(prompt, "A Proxmox VM or LXC reboot is a hypervisor lifecycle action and does not require the QEMU guest agent") {
+		t.Fatalf("expected system prompt to distinguish Proxmox lifecycle control from guest-agent operations, got %q", prompt)
+	}
+	if !strings.Contains(prompt, "Never redirect the user to manual qm or pct commands when Pulse offers the requested lifecycle capability") {
+		t.Fatalf("expected system prompt to keep offered Proxmox lifecycle actions on the governed Pulse path, got %q", prompt)
+	}
+	if !strings.Contains(prompt, "Do not claim that a guest agent or capability is unavailable without current tool evidence") {
+		t.Fatalf("expected system prompt to prohibit invented guest-agent limitations, got %q", prompt)
+	}
 	if !strings.Contains(prompt, "## AVAILABLE TOOL GOVERNANCE") {
 		t.Fatalf("expected system prompt to include generated tool governance section, got %q", prompt)
 	}

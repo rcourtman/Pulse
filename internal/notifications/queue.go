@@ -161,20 +161,21 @@ type QueuedNotification struct {
 
 // NotificationQueue manages persistent notification delivery with retries and DLQ
 type NotificationQueue struct {
-	mu              sync.RWMutex
-	deliveryGateMu  sync.Mutex
-	deliveryGates   map[string]*notificationDeliveryGate
-	stopOnce        sync.Once
-	stopErr         error
-	db              *sql.DB
-	dbPath          string
-	stopChan        chan struct{}
-	wg              sync.WaitGroup
-	processorTicker *time.Ticker
-	cleanupTicker   *time.Ticker
-	notifyChan      chan struct{}                   // Signal when new notifications are added
-	processor       func(*QueuedNotification) error // Notification processor function
-	workerSem       chan struct{}                   // Semaphore for limiting concurrent workers
+	mu                    sync.RWMutex
+	deliveryGateMu        sync.Mutex
+	deliveryGates         map[string]*notificationDeliveryGate
+	stopOnce              sync.Once
+	stopErr               error
+	db                    *sql.DB
+	dbPath                string
+	stopChan              chan struct{}
+	wg                    sync.WaitGroup
+	processorTicker       *time.Ticker
+	cleanupTicker         *time.Ticker
+	notifyChan            chan struct{}                   // Signal when new notifications are added
+	processor             func(*QueuedNotification) error // Notification processor function
+	deliveryHealthChanged func()                          // Reconcile the monitoring-owned delivery alert after health-changing transitions
+	workerSem             chan struct{}                   // Semaphore for limiting concurrent workers
 }
 
 // notificationDeliveryGate orders delivery and cancellation for a single
@@ -830,9 +831,22 @@ func (nq *NotificationQueue) Enqueue(notif *QueuedNotification) error {
 // UpdateStatus updates the status of a queued notification without incrementing attempts
 func (nq *NotificationQueue) UpdateStatus(id string, status NotificationQueueStatus, errorMsg string) error {
 	nq.mu.Lock()
-	defer nq.mu.Unlock()
+	err := nq.updateNotificationStatusNoLock(id, status, errorMsg, time.Now())
+	nq.mu.Unlock()
 
-	return nq.updateNotificationStatusNoLock(id, status, errorMsg, time.Now())
+	if err == nil && notificationStatusChangesDeliveryHealth(status) {
+		nq.notifyDeliveryHealthChanged()
+	}
+	return err
+}
+
+func notificationStatusChangesDeliveryHealth(status NotificationQueueStatus) bool {
+	switch status {
+	case QueueStatusFailed, QueueStatusDLQ, QueueStatusCancelled:
+		return true
+	default:
+		return false
+	}
 }
 
 func (nq *NotificationQueue) updateNotificationStatusNoLock(
@@ -1189,10 +1203,10 @@ func (nq *NotificationQueue) ScheduleRetry(id string, attempt int) error {
 	nextRetry := time.Now().Add(backoff)
 
 	nq.mu.Lock()
-	defer nq.mu.Unlock()
 
 	links, err := nq.readNotificationLinksNoLock(id)
 	if err != nil {
+		nq.mu.Unlock()
 		return err
 	}
 	links = transitionNotificationLinks(
@@ -1202,6 +1216,7 @@ func (nq *NotificationQueue) ScheduleRetry(id string, attempt int) error {
 	)
 	linksJSON, err := json.Marshal(links)
 	if err != nil {
+		nq.mu.Unlock()
 		return fmt.Errorf("marshal notification links for retry: %w", err)
 	}
 	query := `
@@ -1219,8 +1234,10 @@ func (nq *NotificationQueue) ScheduleRetry(id string, attempt int) error {
 		id,
 	)
 	if err != nil {
+		nq.mu.Unlock()
 		return fmt.Errorf("failed to schedule retry: %w", err)
 	}
+	nq.mu.Unlock()
 
 	log.Debug().
 		Str("id", id).
@@ -1229,6 +1246,7 @@ func (nq *NotificationQueue) ScheduleRetry(id string, attempt int) error {
 		Time("nextRetry", nextRetry).
 		Msg("notification retry scheduled")
 
+	nq.notifyDeliveryHealthChanged()
 	return nil
 }
 
@@ -1300,8 +1318,19 @@ func (nq *NotificationQueue) resolveTerminalFailures(retry bool) (int, error) {
 	}
 
 	nq.mu.Lock()
-	defer nq.mu.Unlock()
+	affected, err := nq.resolveTerminalFailuresNoLock(retry)
+	nq.mu.Unlock()
+	if err != nil {
+		return 0, err
+	}
 
+	// Reconcile even when no rows were affected. A prior process may already
+	// have repaired the queue while leaving a persisted system alert active.
+	nq.notifyDeliveryHealthChanged()
+	return affected, nil
+}
+
+func (nq *NotificationQueue) resolveTerminalFailuresNoLock(retry bool) (int, error) {
 	rows, err := nq.db.Query(`
 		SELECT id, operational_links
 		FROM notification_queue
@@ -1392,6 +1421,31 @@ func (nq *NotificationQueue) resolveTerminalFailures(retry bool) (int, error) {
 		}
 	}
 	return affected, nil
+}
+
+// SetDeliveryHealthChangedCallback installs the monitoring-owned reconciliation
+// hook. Notification delivery owns queue truth; monitoring owns its system
+// alert projection, so the queue only announces that the verdict may have
+// changed after committing and releasing its database lock.
+func (nq *NotificationQueue) SetDeliveryHealthChangedCallback(callback func()) {
+	if nq == nil {
+		return
+	}
+	nq.mu.Lock()
+	nq.deliveryHealthChanged = callback
+	nq.mu.Unlock()
+}
+
+func (nq *NotificationQueue) notifyDeliveryHealthChanged() {
+	if nq == nil {
+		return
+	}
+	nq.mu.RLock()
+	callback := nq.deliveryHealthChanged
+	nq.mu.RUnlock()
+	if callback != nil {
+		callback()
+	}
 }
 
 // RecordAudit records a notification delivery attempt in the audit log

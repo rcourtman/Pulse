@@ -959,7 +959,13 @@ cleanup so readers cannot retain orphaned runtime or alert projections.
     result must be raised through `alerts.RaiseSystemAlert` so identity and
     idempotence stay owned by the alerts subsystem. Evaluation runs on the poll
     ticker and must stay throttled well below the polling cadence, because
-    reading queue health costs a database query. New Monitor struct fields
+    reading queue health costs a database query. Monitor construction also
+    registers the notification queue's committed health-transition callback;
+    that path bypasses the timer throttle so terminal failures appear and
+    operator retry/dismissal clears the warning immediately. The callback may
+    run only after the queue has released its database lock, and monitoring
+    must still derive the result from the canonical notification verdict rather
+    than trusting the transition that triggered the refresh. New Monitor struct fields
     added for this must fit the existing field alignment column: a longer name
     makes gofmt re-pad the whole block and breaks the canonical guardrail tests
     that pin those declarations verbatim.
