@@ -1,6 +1,7 @@
 package alerts
 
 import (
+	"sort"
 	"strings"
 	"time"
 
@@ -679,6 +680,42 @@ func (m *Manager) DiagnoseAlertDelivery(alertIdentifier string) (AlertDeliveryDi
 		return diagnosis, false
 	}
 
+	resolved := m.diagnoseActiveAlertLocked(alert)
+	resolved.AlertIdentifier = diagnosis.AlertIdentifier
+	return resolved, true
+}
+
+// DiagnoseActiveAlertDeliveries reports the delivery policy outcome for every
+// active alert in one pass, with AlertIdentifier set to the canonical alert
+// ID. Like DiagnoseAlertDelivery it is read-only: it sends nothing and
+// advances no delivery tracking state.
+func (m *Manager) DiagnoseActiveAlertDeliveries() []AlertDeliveryDiagnosis {
+	if m == nil {
+		return nil
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	diagnoses := make([]AlertDeliveryDiagnosis, 0, len(m.activeAlerts))
+	for _, alert := range m.activeAlerts {
+		if alert == nil {
+			continue
+		}
+		diagnosis := m.diagnoseActiveAlertLocked(alert)
+		diagnosis.AlertIdentifier = alert.ID
+		diagnoses = append(diagnoses, diagnosis)
+	}
+	sort.Slice(diagnoses, func(i, j int) bool {
+		return diagnoses[i].AlertID < diagnoses[j].AlertID
+	})
+	return diagnoses
+}
+
+// diagnoseActiveAlertLocked computes the delivery diagnosis for one active
+// alert. Caller MUST hold m.mu.
+func (m *Manager) diagnoseActiveAlertLocked(alert *Alert) AlertDeliveryDiagnosis {
+	var diagnosis AlertDeliveryDiagnosis
 	now := m.policyNow()
 	trackingKey := canonicalTrackingKeyForAlert(alert)
 	diagnosis.AlertID = alert.ID
@@ -748,7 +785,7 @@ func (m *Manager) DiagnoseAlertDelivery(alertIdentifier string) (AlertDeliveryDi
 		diagnosis.Message = "Alert delivery is currently eligible for notification delivery."
 	}
 
-	return diagnosis, true
+	return diagnosis
 }
 
 func (d *AlertDeliveryDiagnosis) setSuppressed(reason, message string) {

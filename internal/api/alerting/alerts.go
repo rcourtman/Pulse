@@ -32,6 +32,7 @@ type AlertManager interface {
 	UpdateConfig(alerts.AlertConfig)
 	GetActiveAlerts() []alerts.Alert
 	DiagnoseAlertDelivery(alertIdentifier string) (alerts.AlertDeliveryDiagnosis, bool)
+	DiagnoseActiveAlertDeliveries() []alerts.AlertDeliveryDiagnosis
 	NotifyExistingAlert(id string)
 	ClearAlertHistory() error
 	UnacknowledgeAlert(id string) error
@@ -420,8 +421,11 @@ func (h *AlertHandlers) PreviewAlertIntentPolicy(w http.ResponseWriter, r *http.
 	}
 }
 
-// GetAlertDeliveryDiagnosis explains current notification delivery policy for
-// one active alert without sending a notification or mutating delivery state.
+// GetAlertDeliveryDiagnosis explains current notification delivery policy
+// without sending a notification or mutating delivery state. With an
+// alertIdentifier query parameter it returns one diagnosis object; without
+// one it returns the diagnosis array for every active alert in a single
+// pass so list surfaces do not need a request per alert.
 func (h *AlertHandlers) GetAlertDeliveryDiagnosis(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -432,11 +436,7 @@ func (h *AlertHandlers) GetAlertDeliveryDiagnosis(w http.ResponseWriter, r *http
 	if alertIdentifier == "" {
 		alertIdentifier = strings.TrimSpace(r.URL.Query().Get("id"))
 	}
-	if alertIdentifier == "" {
-		http.Error(w, "alertIdentifier is required", http.StatusBadRequest)
-		return
-	}
-	if !validateAlertIdentifier(alertIdentifier) {
+	if alertIdentifier != "" && !validateAlertIdentifier(alertIdentifier) {
 		http.Error(w, "Invalid alert identifier", http.StatusBadRequest)
 		return
 	}
@@ -450,6 +450,17 @@ func (h *AlertHandlers) GetAlertDeliveryDiagnosis(w http.ResponseWriter, r *http
 	manager := monitor.GetAlertManager()
 	if manager == nil {
 		http.Error(w, "alert manager is not initialized", http.StatusServiceUnavailable)
+		return
+	}
+
+	if alertIdentifier == "" {
+		diagnoses := manager.DiagnoseActiveAlertDeliveries()
+		if diagnoses == nil {
+			diagnoses = []alerts.AlertDeliveryDiagnosis{}
+		}
+		if err := utils.WriteJSONResponse(w, diagnoses); err != nil {
+			log.Error().Err(err).Msg("Failed to write alert delivery diagnoses response")
+		}
 		return
 	}
 

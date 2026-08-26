@@ -617,7 +617,7 @@ Alert configuration and history (requires `monitoring:read`/`monitoring:write`).
 - `PUT /api/alerts/config`
 - `POST /api/alerts/activate`
 - `GET /api/alerts/active`
-- `GET /api/alerts/delivery-diagnosis?alertIdentifier=<alert-id>`
+- `GET /api/alerts/delivery-diagnosis?alertIdentifier=<alert-id>` (omit `alertIdentifier` to get the diagnosis array for every active alert)
 - `GET /api/alerts/history`
 - `DELETE /api/alerts/history`
 - `GET /api/alerts/incidents`

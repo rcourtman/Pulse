@@ -19713,6 +19713,54 @@ func TestDiagnoseAlertDeliverySuppressesCooldown(t *testing.T) {
 	}
 }
 
+func TestDiagnoseActiveAlertDeliveriesCoversEveryActiveAlert(t *testing.T) {
+	manager, now := newDeliveryDiagnosisManager(t)
+	ready := addDeliveryDiagnosisAlert(manager, &Alert{
+		ID:           "alert-bulk-ready",
+		Type:         "cpu",
+		Level:        AlertLevelWarning,
+		ResourceID:   "node-1",
+		ResourceName: "node-1",
+		StartTime:    now.Add(-10 * time.Minute),
+	})
+	acked := addDeliveryDiagnosisAlert(manager, &Alert{
+		ID:           "alert-bulk-acked",
+		Type:         "memory",
+		Level:        AlertLevelCritical,
+		ResourceID:   "node-2",
+		ResourceName: "node-2",
+		StartTime:    now.Add(-10 * time.Minute),
+		Acknowledged: true,
+	})
+
+	diagnoses := manager.DiagnoseActiveAlertDeliveries()
+	if len(diagnoses) != 2 {
+		t.Fatalf("len(diagnoses) = %d, want 2", len(diagnoses))
+	}
+
+	byID := make(map[string]AlertDeliveryDiagnosis, len(diagnoses))
+	for _, diagnosis := range diagnoses {
+		if diagnosis.AlertIdentifier != diagnosis.AlertID {
+			t.Fatalf("AlertIdentifier = %q, want canonical alert ID %q", diagnosis.AlertIdentifier, diagnosis.AlertID)
+		}
+		byID[diagnosis.AlertID] = diagnosis
+	}
+	if got := byID[ready.ID]; got.Status != AlertDeliveryStatusWouldSend || got.Reason != AlertDeliveryReasonReady {
+		t.Fatalf("ready alert diagnosis = %q/%q, want %q/%q", got.Status, got.Reason, AlertDeliveryStatusWouldSend, AlertDeliveryReasonReady)
+	}
+	if got := byID[acked.ID]; got.Status != AlertDeliveryStatusSuppressed || got.Reason != AlertDeliveryReasonAcknowledged {
+		t.Fatalf("acked alert diagnosis = %q/%q, want %q/%q", got.Status, got.Reason, AlertDeliveryStatusSuppressed, AlertDeliveryReasonAcknowledged)
+	}
+
+	single, ok := manager.DiagnoseAlertDelivery(ready.ID)
+	if !ok {
+		t.Fatal("expected single-alert diagnosis to keep working")
+	}
+	if single.Status != byID[ready.ID].Status || single.Reason != byID[ready.ID].Reason {
+		t.Fatalf("single diagnosis %q/%q diverged from bulk %q/%q", single.Status, single.Reason, byID[ready.ID].Status, byID[ready.ID].Reason)
+	}
+}
+
 func TestDiagnoseAlertDeliverySuppressesRateLimitWithoutMutating(t *testing.T) {
 	manager, now := newDeliveryDiagnosisManager(t)
 	cfg := manager.GetConfig()

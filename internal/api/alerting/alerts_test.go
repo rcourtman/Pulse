@@ -80,6 +80,11 @@ func (m *MockAlertManager) DiagnoseAlertDelivery(alertIdentifier string) (alerts
 	return args.Get(0).(alerts.AlertDeliveryDiagnosis), args.Bool(1)
 }
 
+func (m *MockAlertManager) DiagnoseActiveAlertDeliveries() []alerts.AlertDeliveryDiagnosis {
+	args := m.Called()
+	return args.Get(0).([]alerts.AlertDeliveryDiagnosis)
+}
+
 func (m *MockAlertManager) NotifyExistingAlert(id string) {
 	m.Called(id)
 }
@@ -337,16 +342,59 @@ func TestGetAlertDeliveryDiagnosis(t *testing.T) {
 	assert.Equal(t, expected.TrackingKey, resp.TrackingKey)
 }
 
-func TestGetAlertDeliveryDiagnosisRejectsMissingIdentifier(t *testing.T) {
-	h := NewAlertHandlers(nil, new(MockAlertMonitor), nil)
+func TestGetAlertDeliveryDiagnosisWithoutIdentifierReturnsAllActive(t *testing.T) {
+	mockMonitor := new(MockAlertMonitor)
+	mockManager := new(MockAlertManager)
+	mockMonitor.On("GetAlertManager").Return(mockManager)
+
+	expected := []alerts.AlertDeliveryDiagnosis{
+		{
+			AlertIdentifier: "a1",
+			AlertID:         "a1",
+			Status:          alerts.AlertDeliveryStatusWouldSend,
+			Reason:          alerts.AlertDeliveryReasonReady,
+		},
+		{
+			AlertIdentifier: "a2",
+			AlertID:         "a2",
+			Status:          alerts.AlertDeliveryStatusSuppressed,
+			Reason:          alerts.AlertDeliveryReasonCooldown,
+		},
+	}
+	mockManager.On("DiagnoseActiveAlertDeliveries").Return(expected)
+
+	h := NewAlertHandlers(nil, mockMonitor, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/alerts/delivery-diagnosis", nil)
 	w := httptest.NewRecorder()
 
 	h.GetAlertDeliveryDiagnosis(w, req)
 
-	assert.Equal(t, http.StatusBadRequest, w.Code)
-	assert.Contains(t, w.Body.String(), "alertIdentifier is required")
+	assert.Equal(t, http.StatusOK, w.Code)
+	var resp []alerts.AlertDeliveryDiagnosis
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	assert.Len(t, resp, 2)
+	assert.Equal(t, expected[0].AlertIdentifier, resp[0].AlertIdentifier)
+	assert.Equal(t, expected[1].Reason, resp[1].Reason)
+}
+
+func TestGetAlertDeliveryDiagnosisWithoutIdentifierWritesEmptyArray(t *testing.T) {
+	mockMonitor := new(MockAlertMonitor)
+	mockManager := new(MockAlertManager)
+	mockMonitor.On("GetAlertManager").Return(mockManager)
+	mockManager.On("DiagnoseActiveAlertDeliveries").Return([]alerts.AlertDeliveryDiagnosis(nil))
+
+	h := NewAlertHandlers(nil, mockMonitor, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/alerts/delivery-diagnosis", nil)
+	w := httptest.NewRecorder()
+
+	h.GetAlertDeliveryDiagnosis(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, "[]", strings.TrimSpace(w.Body.String()))
 }
 
 func TestGetAlertDeliveryDiagnosisNotFound(t *testing.T) {
