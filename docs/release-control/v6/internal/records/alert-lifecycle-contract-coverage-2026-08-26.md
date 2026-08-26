@@ -106,6 +106,12 @@ unhooked mutations). Enabled by the monitoring bootstrap next to the
 event log. The divergence rate is the go/no-go evidence for each Phase 2
 family cutover.
 
-Remaining: the backup-offline deferral sub-policy (the shadow feed maps
-its hold to operator suppression, which is behavior-equivalent while
-uncharacterized), and Phase 2 itself.
+Backup-offline deferral (2026-08-26): characterized — deferral while the
+backup runs bounded by the max-deferral cap on total condition-active
+time, post-grace from the backup's end still bounded by the cap — with
+unit tests and parity against the real LoadIntentPolicies/IntentBackup
+composition. The shadow feed now models the deferral independently
+instead of echoing the manager's hold. Phase 1 characterization is
+complete: every discrete-family and metric-family behavior is pinned.
+
+Remaining: Phase 2 itself.

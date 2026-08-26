@@ -79,11 +79,16 @@ type Incident struct {
 	// RecoveryCount is the consecutive non-matching count while firing,
 	// toward DiscreteRule.RecoveryConfirmations; reset by any matching
 	// observation. Unused by the metric family.
-	RecoveryCount  int
-	Acknowledged   bool
-	AckUser        string
-	AckAt          time.Time
-	LastObservedAt time.Time
+	RecoveryCount int
+	Acknowledged  bool
+	AckUser       string
+	AckAt         time.Time
+	// Backup-run bookkeeping for the intent gate's backup-offline deferral
+	// sub-policy (confirmation family only).
+	BackupActive       bool
+	BackupEnded        bool
+	BackupEndedElapsed time.Duration
+	LastObservedAt     time.Time
 }
 
 // EventType enumerates transition events emitted by Apply.

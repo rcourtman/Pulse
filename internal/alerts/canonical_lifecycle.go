@@ -1,6 +1,7 @@
 package alerts
 
 import (
+	"strings"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts/reducer"
@@ -427,10 +428,19 @@ func (m *Manager) evaluateCanonicalLifecycleAlert(params canonicalLifecycleAlert
 		conditionActive := result.State.State == alertspecs.AlertStatePending || result.State.State == alertspecs.AlertStateFiring
 		decision := m.evaluateIntentNoLock(params.Spec.ResourceID, string(params.Spec.ResourceType), intentSignal, storageKey, params.Evidence.ObservedAt, conditionActive, params.IntentBackup)
 		shadowIntent = &reducer.DiscreteIntent{
-			Explicit:           decision.Effective.Explicit,
-			GraceSeconds:       decision.Effective.GraceSeconds,
-			OperatorSuppressed: decision.Suppressed,
+			Explicit:     decision.Effective.Explicit,
+			GraceSeconds: decision.Effective.GraceSeconds,
+			// Operator suppression only: the backup-offline deferral is
+			// modeled independently below so the reducer computes its own
+			// hold rather than echoing the manager's.
+			OperatorSuppressed: decision.Suppressed && strings.HasPrefix(decision.Reason, "operator_"),
 			OperatorReason:     decision.Reason,
+		}
+		if backupOffline := decision.Effective.BackupOffline; backupOffline != nil && backupOffline.Enabled && intentSignal == string(AlertIntentSignalOffline) {
+			shadowIntent.BackupEnabled = true
+			shadowIntent.BackupActive = params.IntentBackup.Active
+			shadowIntent.BackupPostGraceSeconds = backupOffline.PostGraceSeconds
+			shadowIntent.BackupMaxDeferralSeconds = backupOffline.MaxDeferralSeconds
 		}
 		if decision.StateChanged {
 			m.saveActiveAlertsAsync("lifecycle intent state")

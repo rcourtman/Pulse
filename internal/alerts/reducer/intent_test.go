@@ -113,3 +113,76 @@ func TestIntentGraceComposesWithConfirmations(t *testing.T) {
 		t.Fatalf("StartedAt = %v, want run start %v", incident.StartedAt, t0)
 	}
 }
+
+func backupIntent(grace, post, cap int, backupActive bool) *DiscreteIntent {
+	return &DiscreteIntent{
+		Explicit:                 true,
+		GraceSeconds:             grace,
+		BackupEnabled:            true,
+		BackupActive:             backupActive,
+		BackupPostGraceSeconds:   post,
+		BackupMaxDeferralSeconds: cap,
+	}
+}
+
+func TestBackupDeferralHoldsWhileBackupRuns(t *testing.T) {
+	state := NewState()
+	rule := func(active bool) DiscreteRule {
+		return DiscreteRule{Confirmations: 1, Intent: backupIntent(60, 120, 600, active)}
+	}
+
+	// Offline with a backup running: held well past the plain grace.
+	state.ApplyDiscrete(discreteSignalAt(true, SeverityCritical, 0), rule(true))
+	if events := state.ApplyDiscrete(discreteSignalAt(true, SeverityCritical, 3*time.Minute), rule(true)); len(events) != 0 {
+		t.Fatalf("backup-deferred observation emitted %+v", events)
+	}
+
+	// Backup ends at 4m: eligibility extends to 4m + 120s post-grace.
+	if events := state.ApplyDiscrete(discreteSignalAt(true, SeverityCritical, 4*time.Minute), rule(false)); len(events) != 0 {
+		t.Fatalf("post-backup grace emitted %+v", events)
+	}
+	if events := state.ApplyDiscrete(discreteSignalAt(true, SeverityCritical, 5*time.Minute), rule(false)); len(events) != 0 {
+		t.Fatalf("still inside post-grace emitted %+v", events)
+	}
+	events := state.ApplyDiscrete(discreteSignalAt(true, SeverityCritical, 6*time.Minute), rule(false))
+	if len(events) != 1 || events[0].Type != EventFired {
+		t.Fatalf("events = %+v, want fired at backup end + post-grace", events)
+	}
+	incident, _ := state.Incident("node-1", "connectivity")
+	if !incident.StartedAt.Equal(t0) {
+		t.Fatalf("StartedAt = %v, want run start %v", incident.StartedAt, t0)
+	}
+}
+
+func TestBackupDeferralCapBoundsTheHold(t *testing.T) {
+	state := NewState()
+	rule := DiscreteRule{Confirmations: 1, Intent: backupIntent(60, 120, 300, true)}
+
+	// Backup never ends: activation at the max-deferral cap (5m).
+	state.ApplyDiscrete(discreteSignalAt(true, SeverityWarning, 0), rule)
+	if events := state.ApplyDiscrete(discreteSignalAt(true, SeverityWarning, 4*time.Minute), rule); len(events) != 0 {
+		t.Fatalf("under cap emitted %+v", events)
+	}
+	events := state.ApplyDiscrete(discreteSignalAt(true, SeverityWarning, 5*time.Minute), rule)
+	if len(events) != 1 || events[0].Type != EventFired {
+		t.Fatalf("events = %+v, want fired at deferral cap", events)
+	}
+}
+
+func TestBackupPostGraceCappedByMaxDeferral(t *testing.T) {
+	state := NewState()
+	// Backup ends at 4m; post-grace would extend to 4m+180s=7m, but the cap
+	// is 5m — activation at 5m.
+	rule := func(active bool) DiscreteRule {
+		return DiscreteRule{Confirmations: 1, Intent: backupIntent(60, 180, 300, active)}
+	}
+	state.ApplyDiscrete(discreteSignalAt(true, SeverityWarning, 0), rule(true))
+	state.ApplyDiscrete(discreteSignalAt(true, SeverityWarning, 4*time.Minute), rule(false))
+	if events := state.ApplyDiscrete(discreteSignalAt(true, SeverityWarning, 4*time.Minute+30*time.Second), rule(false)); len(events) != 0 {
+		t.Fatalf("under cap emitted %+v", events)
+	}
+	events := state.ApplyDiscrete(discreteSignalAt(true, SeverityWarning, 5*time.Minute), rule(false))
+	if len(events) != 1 || events[0].Type != EventFired {
+		t.Fatalf("events = %+v, want fired at cap despite longer post-grace", events)
+	}
+}

@@ -72,13 +72,28 @@ type DiscreteIntent struct {
 	OperatorSuppressed bool
 	// OperatorReason names the suppression, e.g. "operator_maintenance".
 	OperatorReason string
+	// BackupEnabled arms the backup-offline deferral sub-policy for this
+	// condition (offline-family signals with an explicit backupOffline
+	// rule): while a backup is running the activation is deferred, bounded
+	// by BackupMaxDeferralSeconds of total condition-active time; after
+	// the backup ends the grace extends to the backup's end point plus
+	// BackupPostGraceSeconds, still bounded by the cap.
+	BackupEnabled bool
+	// BackupActive is the observation-time backup context.
+	BackupActive             bool
+	BackupPostGraceSeconds   int
+	BackupMaxDeferralSeconds int
 }
 
 // intentHoldsActivation reports whether the gate keeps a would-be
-// activation pending. Grace accrues from the condition run's first active
-// observation, concurrently with any operator suppression — exactly as the
-// manager accrues elapsed time while suppressed.
-func intentHoldsActivation(intent *DiscreteIntent, activeSince, observedAt time.Time) bool {
+// activation pending, updating the incident's backup-run bookkeeping.
+// Grace accrues from the condition run's first active observation,
+// concurrently with any operator suppression — exactly as the manager
+// accrues elapsed time while suppressed. The backup-offline sub-policy
+// mirrors evaluateIntentNoLock: deferral while the backup runs, bounded
+// by the max-deferral cap on total condition-active time; post-grace from
+// the backup's end, still bounded by the cap.
+func intentHoldsActivation(intent *DiscreteIntent, incident *Incident, observedAt time.Time) bool {
 	if intent == nil {
 		return false
 	}
@@ -88,7 +103,32 @@ func intentHoldsActivation(intent *DiscreteIntent, activeSince, observedAt time.
 	if !intent.Explicit {
 		return false
 	}
-	return observedAt.Sub(activeSince) < time.Duration(intent.GraceSeconds)*time.Second
+	elapsed := observedAt.Sub(incident.PendingSince)
+	eligible := time.Duration(intent.GraceSeconds) * time.Second
+	if intent.BackupEnabled {
+		if intent.BackupActive {
+			incident.BackupActive = true
+			incident.BackupEnded = false
+		} else if incident.BackupActive {
+			incident.BackupActive = false
+			incident.BackupEnded = true
+			incident.BackupEndedElapsed = elapsed
+		}
+		deferralCap := time.Duration(intent.BackupMaxDeferralSeconds) * time.Second
+		if incident.BackupActive && elapsed < deferralCap {
+			return true
+		}
+		if incident.BackupEnded {
+			post := incident.BackupEndedElapsed + time.Duration(intent.BackupPostGraceSeconds)*time.Second
+			if post > eligible {
+				eligible = post
+			}
+		}
+		if eligible > deferralCap {
+			eligible = deferralCap
+		}
+	}
+	return elapsed < eligible
 }
 
 // recordResolved remembers a resolved occurrence for re-fire restoration.
@@ -196,75 +236,53 @@ func (s *State) ApplyDiscrete(signal DiscreteSignal, rule DiscreteRule) []Event 
 		return nil
 	}
 
-	// Matching while pending: count consecutive matches; fire once the
-	// requirement is met, with StartedAt at the first matched observation
-	// (the manager uses FirstMatchedAt as the alert start time).
-	if incident != nil {
-		incident.Confirmations++
-		incident.Severity = signal.Severity
-		incident.LastObservedAt = signal.ObservedAt
-		if incident.Confirmations < required {
-			return nil
-		}
-		incident.Confirmations = required
-		// The intent gate holds activation only: the incident stays
-		// pending, counts clamped at the requirement, and the run's first
-		// active observation remains the eventual start time.
-		if intentHoldsActivation(rule.Intent, incident.PendingSince, signal.ObservedAt) {
-			return nil
-		}
-		incident.State = StateFiring
-		incident.StartedAt = incident.PendingSince
-		s.restoreAck(key, incident, signal.ObservedAt)
-		if restored, ok := s.consumeRefire(key, signal.ObservedAt); ok {
-			incident.StartedAt = restored
-			return []Event{event(EventRefired, incident.Severity)}
-		}
-		return []Event{event(EventFired, incident.Severity)}
-	}
-
-	// First matching observation.
-	if required <= 1 {
-		// With the intent gate holding, even a single-confirmation
-		// condition enters pending: the manager's wrapper forces the
-		// evaluator's would-be activation back to pending state.
-		if intentHoldsActivation(rule.Intent, signal.ObservedAt, signal.ObservedAt) {
-			s.incidents[key] = &Incident{
-				ResourceID:     signal.ResourceID,
-				Key:            signal.Key,
-				State:          StatePending,
-				Severity:       signal.Severity,
-				PendingSince:   signal.ObservedAt,
-				Confirmations:  1,
-				LastObservedAt: signal.ObservedAt,
-			}
-			return []Event{event(EventPending, "")}
-		}
-		created := &Incident{
+	// Matching while pending (or first match): the run enters or advances
+	// pending, then attempts activation. The intent gate holds activation
+	// only — the incident stays pending with counts clamped at the
+	// requirement, and the run's first active observation remains the
+	// eventual start time (the manager uses FirstMatchedAt as the alert
+	// start time).
+	entered := false
+	if incident == nil {
+		incident = &Incident{
 			ResourceID:     signal.ResourceID,
 			Key:            signal.Key,
-			State:          StateFiring,
+			State:          StatePending,
 			Severity:       signal.Severity,
-			StartedAt:      signal.ObservedAt,
+			PendingSince:   signal.ObservedAt,
 			Confirmations:  1,
 			LastObservedAt: signal.ObservedAt,
 		}
-		s.incidents[key] = created
-		s.restoreAck(key, created, signal.ObservedAt)
-		if restored, ok := s.consumeRefire(key, signal.ObservedAt); ok {
-			created.StartedAt = restored
-			return []Event{event(EventRefired, signal.Severity)}
+		s.incidents[key] = incident
+		entered = true
+	} else {
+		incident.Confirmations++
+		incident.Severity = signal.Severity
+		incident.LastObservedAt = signal.ObservedAt
+	}
+
+	pendingResult := func() []Event {
+		if entered {
+			return []Event{event(EventPending, "")}
 		}
-		return []Event{event(EventFired, signal.Severity)}
+		return nil
 	}
-	s.incidents[key] = &Incident{
-		ResourceID:     signal.ResourceID,
-		Key:            signal.Key,
-		State:          StatePending,
-		Severity:       signal.Severity,
-		PendingSince:   signal.ObservedAt,
-		Confirmations:  1,
-		LastObservedAt: signal.ObservedAt,
+
+	if incident.Confirmations < required {
+		return pendingResult()
 	}
-	return []Event{event(EventPending, "")}
+	incident.Confirmations = required
+
+	if intentHoldsActivation(rule.Intent, incident, signal.ObservedAt) {
+		return pendingResult()
+	}
+
+	incident.State = StateFiring
+	incident.StartedAt = incident.PendingSince
+	s.restoreAck(key, incident, signal.ObservedAt)
+	if restored, ok := s.consumeRefire(key, signal.ObservedAt); ok {
+		incident.StartedAt = restored
+		return []Event{event(EventRefired, incident.Severity)}
+	}
+	return []Event{event(EventFired, incident.Severity)}
 }
