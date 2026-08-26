@@ -1,21 +1,34 @@
 {
   "version": 1,
-  "base_sha": "5fcb0d665585802a94fa4a462eac877439e45088",
-  "verified_at": "2026-08-26T12:53:43Z",
+  "base_sha": "9e9c3413a8ae4dcd6da789668a4c6f385f4a7f15",
+  "verified_at": "2026-08-26T14:30:55Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Storage/useStoragePoolsTableWindowing.ts"
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx",
+    "frontend-modern/src/components/Infrastructure/resourceDetailDrawerOperationalModel.ts",
+    "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDerivedState.ts",
+    "frontend-modern/src/components/Workloads/NodeDrawerOverview.tsx",
+    "frontend-modern/src/hooks/useUnifiedResources.ts",
+    "frontend-modern/src/types/api.ts",
+    "frontend-modern/src/types/resource.ts",
+    "frontend-modern/src/utils/resourceStateAdapters.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Storage/useStoragePoolsTableWindowing.ts": "c98956a094139a8d32484c547d201f6413c7cf9a6c1d84d3ffe68e5f379321c6"
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx": "9ea9ab621b2a434f4233750aa422baf2965302f795f01e01d0532a14f6d01ad4",
+    "frontend-modern/src/components/Infrastructure/resourceDetailDrawerOperationalModel.ts": "2ad021573bd3bca4fd0f6745cddb5a1ea8954e19f289bc1813cc8539e604c39e",
+    "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDerivedState.ts": "51710198c2bffedb4349949909045540bfb30e6069790497f7d55262fe494676",
+    "frontend-modern/src/components/Workloads/NodeDrawerOverview.tsx": "8113086bacb237aa08e62bc0d715925a24a06ca1fde13f0fc242ef2488c4db3b",
+    "frontend-modern/src/hooks/useUnifiedResources.ts": "634b152af0bce3519c2c5481bb69ac8a23ac20fec20cc394004ad75dd85eb58b",
+    "frontend-modern/src/types/api.ts": "46e442f3fdbe40aed6f1b39a7c9887234d096aa131ebb06d24206ae67f721c03",
+    "frontend-modern/src/types/resource.ts": "10221bcff8ecac650f61be41d81b433795a0aa7562f178c1fa39a21c3e49a1de",
+    "frontend-modern/src/utils/resourceStateAdapters.ts": "56bf97edf5e1d9a9b4920a3503289dba1a1d698f036433dc9a0d2d4a740e24df"
   },
   "routes": [
-    "/proxmox/storage?q=offsite-vault",
-    "/proxmox/storage?q=ceph-rbd"
+    "/proxmox/overview"
   ],
   "viewports": [
     {
-      "width": 1440,
+      "width": 1280,
       "height": 900
     },
     {
@@ -24,14 +37,15 @@
     }
   ],
   "states": [
-    "expanded PBS datastore History with populated 24-hour and 7-day capacity series",
-    "expanded Ceph pool History with populated 7-day capacity series",
-    "History tab and selected 24-hour range retained after live storage polling",
-    "narrow expanded PBS datastore History with chart, range control, row, and navigation visible"
+    "exact 75b6655d6e development build with the mock Proxmox estate connected",
+    "expanded Analytics A Proxmox node with its technical details visible",
+    "Network section populated from the richer linked-agent interface source",
+    "narrow expanded node details with the Network section and address fully inside the viewport"
   ],
   "interactions": [
-    "expanded offsite-vault, selected History, switched from 7 days to 24 hours, and confirmed the chart remained populated and selected across repeated live refreshes",
-    "rechecked the same expanded History state at 390 by 844 and confirmed the chart and selector remained visible, unclipped, and usable after polling",
-    "searched for ceph-rbd, expanded the row, selected History, and confirmed the populated 7-day chart and selected tab survived a live refresh cycle"
+    "opened Proxmox Overview and expanded the Analytics A node at desktop width",
+    "confirmed the Network section rendered eth0 and its address while preserving linked-agent precedence over provider inventory",
+    "resized the same expanded state to 390 by 844 and confirmed the Network row remained visible, readable, and unclipped",
+    "confirmed the narrow document and body scroll widths both remained exactly 390 pixels"
   ]
 }
