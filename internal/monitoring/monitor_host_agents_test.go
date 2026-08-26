@@ -148,6 +148,11 @@ func TestBroadcastSlimmingKeepsHostAgentSupersededIdentityResolvable(t *testing.
 			t.Fatalf("aliases = %v, want %q retained", canonical.Aliases, required)
 		}
 	}
+	// The row's own wire id is a self-reference every consumer unions
+	// independently; it must not travel inside aliases.
+	if _, ok := aliasSet["agent-core2026"]; ok {
+		t.Fatalf("aliases = %v, must not duplicate the wire id", canonical.Aliases)
+	}
 }
 
 func TestHostAgentCorrelationKeepsSameNamedProxmoxProvidersDistinct(t *testing.T) {

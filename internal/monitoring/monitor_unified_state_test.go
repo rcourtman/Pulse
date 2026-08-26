@@ -1039,7 +1039,8 @@ func TestBroadcastPayloadSlimsStaticMetadata(t *testing.T) {
 		},
 	}
 
-	frontend, catalog := convertResourcesForBroadcast(resources)
+	frontend, catalogs := convertResourcesForBroadcast(resources)
+	catalog := catalogs.capabilities
 	if len(frontend) != 3 {
 		t.Fatalf("expected 3 frontend resources, got %d", len(frontend))
 	}
@@ -1066,16 +1067,40 @@ func TestBroadcastPayloadSlimsStaticMetadata(t *testing.T) {
 	if _, ok := vm["aiSafeSummary"]; ok {
 		t.Fatalf("default-posture vm must omit aiSafeSummary, got %s", vm["aiSafeSummary"])
 	}
-	// Sensitive storage keeps its governed posture inline.
+	// Sensitive storage keeps its governed posture, deduped through the
+	// policy catalog instead of inline duplication.
 	storage := byID["storage-1"]
+	if _, ok := storage["policy"]; ok {
+		t.Fatalf("catalog broadcast must not inline non-default policy, got %s", storage["policy"])
+	}
+	var storagePolicyRef string
+	if err := json.Unmarshal(storage["policyRef"], &storagePolicyRef); err != nil || storagePolicyRef == "" {
+		t.Fatalf("sensitive storage must carry policyRef: %v (payload %s)", err, storage["policyRef"])
+	}
+	policyEntry, ok := catalogs.policies[storagePolicyRef]
+	if !ok {
+		t.Fatalf("policy catalog missing ref %q (catalog %v)", storagePolicyRef, catalogs.policies)
+	}
 	var storagePolicy struct {
 		Sensitivity string `json:"sensitivity"`
 	}
-	if err := json.Unmarshal(storage["policy"], &storagePolicy); err != nil {
-		t.Fatalf("sensitive storage must keep policy inline: %v (payload %s)", err, storage["policy"])
+	if err := json.Unmarshal(policyEntry, &storagePolicy); err != nil {
+		t.Fatalf("decode policy catalog entry: %v", err)
 	}
 	if storagePolicy.Sensitivity != "sensitive" {
 		t.Fatalf("storage sensitivity = %q", storagePolicy.Sensitivity)
+	}
+	if summaryRefRaw, ok := storage["aiSafeSummaryRef"]; ok {
+		var summaryRef string
+		if err := json.Unmarshal(summaryRefRaw, &summaryRef); err != nil || summaryRef == "" {
+			t.Fatalf("aiSafeSummaryRef must be a non-empty string: %v", err)
+		}
+		if _, ok := catalogs.aiSafeSummaries[summaryRef]; !ok {
+			t.Fatalf("summary catalog missing ref %q", summaryRef)
+		}
+	}
+	if _, ok := storage["aiSafeSummary"]; ok {
+		t.Fatalf("catalog broadcast must not inline aiSafeSummary, got %s", storage["aiSafeSummary"])
 	}
 
 	// Superseded ids stay resolvable via supersededIds but are no longer

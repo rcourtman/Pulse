@@ -4171,7 +4171,11 @@ func (m *Monitor) buildBroadcastFrontendStateFromSnapshot(snapshot models.StateS
 	metricsTargetResolver := broadcastMetricsTargetResolver(unifiedView.readState)
 	broadcastResources := unifiedresources.CoalescePresentationHostResources(unifiedView.resources)
 	broadcastResources = m.applyPersistedMetadataToUnifiedResources(broadcastResources)
-	frontendState.Resources, frontendState.CapabilityCatalog = convertResourcesForBroadcast(broadcastResources, metricsTargetResolver)
+	broadcastFrontendResources, broadcastCatalogs := convertResourcesForBroadcast(broadcastResources, metricsTargetResolver)
+	frontendState.Resources = broadcastFrontendResources
+	frontendState.CapabilityCatalog = broadcastCatalogs.capabilities
+	frontendState.PolicyCatalog = broadcastCatalogs.policies
+	frontendState.AISafeSummaryCatalog = broadcastCatalogs.aiSafeSummaries
 	frontendState.ConnectedInfrastructure = buildConnectedInfrastructure(broadcastResources, snapshot)
 	if !unifiedView.freshness.IsZero() {
 		frontendState.LastUpdate = unifiedView.freshness.UnixMilli()
@@ -5815,15 +5819,23 @@ func (m *Monitor) dockerAppContainerCustomURL(
 	return "", false
 }
 
+// broadcastResourceCatalogs carries the content-addressed dedupe catalogs the
+// broadcast conversion extracts from per-resource static metadata.
+type broadcastResourceCatalogs struct {
+	capabilities    map[string]json.RawMessage
+	policies        map[string]json.RawMessage
+	aiSafeSummaries map[string]string
+}
+
 // convertResourcesForBroadcast converts unified resources into the frontend
 // payload shape. Distinct capability blobs are deduped into the returned
 // catalog and referenced per resource via capabilitiesRef.
 func convertResourcesForBroadcast(
 	allResources []unifiedresources.Resource,
 	metricsTargetResolvers ...MetricsTargetResourceStore,
-) ([]models.ResourceFrontend, map[string]json.RawMessage) {
+) ([]models.ResourceFrontend, broadcastResourceCatalogs) {
 	if len(allResources) == 0 {
-		return []models.ResourceFrontend{}, nil
+		return []models.ResourceFrontend{}, broadcastResourceCatalogs{}
 	}
 	allResources = attachBroadcastMetricsTargets(
 		allResources,
@@ -5837,14 +5849,33 @@ func convertResourcesForBroadcast(
 	}
 
 	converted := make([]broadcastResource, 0, len(allResources))
-	capabilityCatalog := make(map[string]json.RawMessage)
+	catalogs := broadcastResourceCatalogs{
+		capabilities:    make(map[string]json.RawMessage),
+		policies:        make(map[string]json.RawMessage),
+		aiSafeSummaries: make(map[string]string),
+	}
 	for _, r := range allResources {
 		input := monitorResourceToConvertInput(r)
 		if len(input.Capabilities) > 0 {
 			id := capabilityCatalogID(input.Capabilities)
-			capabilityCatalog[id] = input.Capabilities
+			catalogs.capabilities[id] = input.Capabilities
 			input.CapabilitiesRef = id
 			input.Capabilities = nil
+		}
+		// Non-default policies and AI-safe summaries dedupe the same way:
+		// estates carry a handful of distinct postures and templated summary
+		// strings, so refs replace per-resource inline duplication.
+		if len(input.Policy) > 0 {
+			id := capabilityCatalogID(input.Policy)
+			catalogs.policies[id] = input.Policy
+			input.PolicyRef = id
+			input.Policy = nil
+		}
+		if input.AISafeSummary != "" {
+			id := capabilityCatalogID(json.RawMessage(input.AISafeSummary))
+			catalogs.aiSafeSummaries[id] = input.AISafeSummary
+			input.AISafeSummaryRef = id
+			input.AISafeSummary = ""
 		}
 		sortKey := strings.ToLower(input.DisplayName)
 		if sortKey == "" {
@@ -5868,10 +5899,16 @@ func convertResourcesForBroadcast(
 	for i, resource := range converted {
 		result[i] = models.ConvertResourceToFrontend(resource.input)
 	}
-	if len(capabilityCatalog) == 0 {
-		capabilityCatalog = nil
+	if len(catalogs.capabilities) == 0 {
+		catalogs.capabilities = nil
 	}
-	return result, capabilityCatalog
+	if len(catalogs.policies) == 0 {
+		catalogs.policies = nil
+	}
+	if len(catalogs.aiSafeSummaries) == 0 {
+		catalogs.aiSafeSummaries = nil
+	}
+	return result, catalogs
 }
 
 func broadcastMetricsTargetResolver(source interface{}) MetricsTargetResourceStore {
@@ -6040,15 +6077,22 @@ func slimResourceForBroadcast(resource *unifiedresources.Resource) {
 	if resource == nil {
 		return
 	}
-	if canonical := resource.Canonical; canonical != nil && len(canonical.SupersededIDs) > 0 &&
-		len(canonical.Aliases) > 0 {
-		superseded := make(map[string]struct{}, len(canonical.SupersededIDs))
+	if canonical := resource.Canonical; canonical != nil && len(canonical.Aliases) > 0 {
+		duplicated := make(map[string]struct{}, len(canonical.SupersededIDs)+2)
 		for _, id := range canonical.SupersededIDs {
-			superseded[strings.ToLower(strings.TrimSpace(id))] = struct{}{}
+			duplicated[strings.ToLower(strings.TrimSpace(id))] = struct{}{}
+		}
+		// The row's own wire id is a self-reference: every identity consumer
+		// unions resource.id beside the alias spread, so the wire never needs
+		// it inside aliases. The primary id stays: aliases remain the complete
+		// live vocabulary a host is reachable by (see
+		// TestBroadcastSlimmingKeepsHostAgentSupersededIdentityResolvable).
+		if resource.ID != "" {
+			duplicated[strings.ToLower(strings.TrimSpace(resource.ID))] = struct{}{}
 		}
 		aliases := make([]string, 0, len(canonical.Aliases))
 		for _, alias := range canonical.Aliases {
-			if _, dup := superseded[strings.ToLower(strings.TrimSpace(alias))]; dup {
+			if _, dup := duplicated[strings.ToLower(strings.TrimSpace(alias))]; dup {
 				continue
 			}
 			aliases = append(aliases, alias)

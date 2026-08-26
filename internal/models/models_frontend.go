@@ -971,6 +971,12 @@ type StateFrontend struct {
 	// top-level state fields generically, so catalog changes ride the same
 	// frame as the resource refs that need them.
 	CapabilityCatalog map[string]json.RawMessage `json:"capabilityCatalog,omitempty"`
+	// PolicyCatalog and AISafeSummaryCatalog dedupe the equally small sets of
+	// distinct non-default policy postures and templated AI-safe summaries the
+	// same way, referenced by ResourceFrontend.PolicyRef and
+	// ResourceFrontend.AISafeSummaryRef.
+	PolicyCatalog        map[string]json.RawMessage `json:"policyCatalog,omitempty"`
+	AISafeSummaryCatalog map[string]string          `json:"aiSafeSummaryCatalog,omitempty"`
 }
 
 // EmptyStateFrontend returns a canonical empty frontend state with stable
@@ -1082,7 +1088,13 @@ type ResourceFrontend struct {
 	// through the catalog instead of inlining ~3KB per resource; consumers
 	// resolve the ref at ingestion. Inline Capabilities remains valid for
 	// producers that do not carry a catalog.
-	CapabilitiesRef    string          `json:"capabilitiesRef,omitempty"`
+	CapabilitiesRef string `json:"capabilitiesRef,omitempty"`
+	// PolicyRef and AISafeSummaryRef reference entries in
+	// StateFrontend.PolicyCatalog / AISafeSummaryCatalog under the same
+	// dedupe contract; inline Policy / AISafeSummary remain valid for
+	// producers that do not carry catalogs.
+	PolicyRef          string          `json:"policyRef,omitempty"`
+	AISafeSummaryRef   string          `json:"aiSafeSummaryRef,omitempty"`
 	Relationships      json.RawMessage `json:"relationships,omitempty"`
 	RecentChanges      json.RawMessage `json:"recentChanges,omitempty"`
 	FacetCounts        json.RawMessage `json:"facetCounts,omitempty"`

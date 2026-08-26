@@ -478,9 +478,13 @@ export function createWebSocketStore(url: string) {
   // capabilitiesRef instead of inline capability blobs; ingestion expands the
   // ref back into `capabilities` so consumers keep the inline shape.
   let capabilityCatalog: Record<string, ResourceCapability[]> = {};
-  // Records which catalog ref an expanded capabilities array was cloned from,
-  // so a patched row re-expands only when its ref actually changed.
+  // Same dedupe contract for non-default policies and AI-safe summaries.
+  let policyCatalog: Record<string, Resource['policy']> = {};
+  let aiSafeSummaryCatalog: Record<string, string> = {};
+  // Records which catalog ref an expanded capabilities array or policy was
+  // cloned from, so a patched row re-expands only when its ref changed.
   const capabilitiesExpandedFromRef = new WeakMap<object, string>();
+  const policyExpandedFromRef = new WeakMap<object, string>();
 
   const hydrateSlimResource = (resource: Resource): void => {
     if (!resource || typeof resource !== 'object') return;
@@ -497,6 +501,24 @@ export function createWebSocketStore(url: string) {
           resource.capabilities = expanded;
         }
       }
+    }
+    const policyRef = resource.policyRef;
+    if (policyRef) {
+      const currentPolicy = resource.policy as unknown as object | undefined;
+      if (!currentPolicy || policyExpandedFromRef.get(currentPolicy) !== policyRef) {
+        const policyEntry = policyCatalog[policyRef];
+        if (policyEntry) {
+          // Per-row clone: reconcile mutates adopted objects in place.
+          const expandedPolicy = structuredClone(policyEntry);
+          policyExpandedFromRef.set(expandedPolicy as unknown as object, policyRef);
+          resource.policy = expandedPolicy;
+        }
+      }
+    }
+    if (resource.aiSafeSummaryRef) {
+      const summary = aiSafeSummaryCatalog[resource.aiSafeSummaryRef];
+      // Strings are immutable; no clone needed.
+      if (summary) resource.aiSafeSummary = summary;
     }
     if (!resource.policy) {
       resource.policy = createDefaultResourcePolicy();
@@ -984,6 +1006,12 @@ export function createWebSocketStore(url: string) {
             // first resource that references a new entry.
             if (message.data.capabilityCatalog !== undefined) {
               capabilityCatalog = message.data.capabilityCatalog ?? {};
+            }
+            if (message.data.policyCatalog !== undefined) {
+              policyCatalog = message.data.policyCatalog ?? {};
+            }
+            if (message.data.aiSafeSummaryCatalog !== undefined) {
+              aiSafeSummaryCatalog = message.data.aiSafeSummaryCatalog ?? {};
             }
 
             // Canonical resource contract:

@@ -6780,7 +6780,12 @@ alert deltas immediately on arrival — alert lifecycle truth never waits for
 the operator-input idle gate that defers resource work. An entry that cannot
 key by id drops the whole field back to plain whole-payload diffing, and a
 client without a baseline ignores the delta and heals on the next full
-payload, so the keyed path can never corrupt either array.
+payload, so the keyed path can never corrupt either array. Per-resource
+static metadata dedupes through state-level catalogs: `capabilityCatalog`,
+`policyCatalog`, and `aiSafeSummaryCatalog` hold the distinct blobs,
+resources carry `capabilitiesRef`/`policyRef`/`aiSafeSummaryRef`, and
+ingestion expands refs back to the inline shape so consumers never see the
+dedupe. Inline values remain valid from producers that carry no catalogs.
 That same install-command payload continuity now also applies when auth is
 optional: copied install and upgrade commands must omit token arguments
 entirely on token-optional Pulse instances rather than serializing a fake

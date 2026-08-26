@@ -248,10 +248,15 @@ clone-canonicalize-merge path, and the fast output must remain
 content-equivalent to that path. The broadcast payload
 itself is a scalability surface: duplicated capability blobs travel once
 through the state-level `capabilityCatalog` and per-resource
-`capabilitiesRef`, default-posture policy and AI-safe prose are omitted and
-synthesized at ingestion, and superseded canonical ids are not duplicated
-into the alias list, so full snapshots, REST recovery, and reconnects do not
-re-ship static metadata per resource. The connected-infrastructure reporting
+`capabilitiesRef`, and non-default policy postures and AI-safe prose dedupe
+the same way through `policyCatalog`/`policyRef` and
+`aiSafeSummaryCatalog`/`aiSafeSummaryRef` (estates carry only a handful of
+distinct postures and templated summaries); default-posture policy is
+omitted and synthesized at ingestion, and neither superseded canonical ids
+nor the row's own wire id are duplicated into the alias list — the primary
+id stays so aliases remain the complete live vocabulary a host is reachable
+by — so full snapshots, REST recovery, and reconnects do not re-ship static
+metadata per resource. The connected-infrastructure reporting
 projection rides the same per-client keyed delta engine: a broadcast carries
 id-keyed merge patches for changed items only (at 50-node scale, timestamp
 patches of a few hundred bytes instead of the full ~55KB projection every

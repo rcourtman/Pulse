@@ -1,6 +1,6 @@
 // Properly typed TypeScript interfaces for Pulse API
 
-import type { Resource, ResourceCapability } from './resource';
+import type { Resource, ResourceCapability, ResourcePolicy } from './resource';
 import type { EvidenceEnvelope, LifecycleTransition, OperationalRecord } from './operationalTrust';
 
 export interface APITokenRecord {
@@ -34,6 +34,10 @@ export interface State {
   // Distinct capability blobs referenced by Resource.capabilitiesRef; the
   // websocket store expands refs into inline capabilities at ingestion.
   capabilityCatalog?: Record<string, ResourceCapability[]> | null;
+  // Distinct non-default policy postures and templated AI-safe summaries
+  // referenced by Resource.policyRef / Resource.aiSafeSummaryRef.
+  policyCatalog?: Record<string, ResourcePolicy> | null;
+  aiSafeSummaryCatalog?: Record<string, string> | null;
 }
 
 export interface ResourceStateDelta {

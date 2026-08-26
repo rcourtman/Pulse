@@ -1017,6 +1017,73 @@ describe('websocket store unified resource contract', () => {
     }
   });
 
+  it('expands policyRef and aiSafeSummaryRef from the state catalogs at ingestion', async () => {
+    const { store, dispose } = await createStoreHarness();
+    try {
+      await waitForOpenTick();
+      emitMessage({
+        type: 'initialState',
+        data: {
+          connectedInfrastructure: [],
+          policyCatalog: {
+            pol1: {
+              sensitivity: 'sensitive',
+              routing: { scope: 'local-first', redact: ['hostname'] },
+            },
+          },
+          aiSafeSummaryCatalog: {
+            sum1: 'storage resource; status online; redacted for cloud summary',
+          },
+          resources: [
+            {
+              id: 'storage-1',
+              type: 'storage',
+              name: 'tank',
+              status: 'online',
+              policyRef: 'pol1',
+              aiSafeSummaryRef: 'sum1',
+            },
+            { id: 'vm-1', type: 'vm', name: 'vm-1', status: 'running' },
+          ],
+          lastUpdate: 100,
+          activeAlerts: [],
+          recentlyResolved: [],
+        },
+      });
+
+      const storage = store.state.resources.find((resource) => resource.id === 'storage-1');
+      expect(storage?.policy?.sensitivity).toBe('sensitive');
+      expect(storage?.policy?.routing?.redact).toEqual(['hostname']);
+      expect(storage?.aiSafeSummary).toBe(
+        'storage resource; status online; redacted for cloud summary',
+      );
+      // A row without refs still synthesizes the default posture.
+      const vm = store.state.resources.find((resource) => resource.id === 'vm-1');
+      expect(vm?.policy?.sensitivity).toBe('internal');
+
+      // A posture change moves the ref; the catalog change rides the same
+      // frame and the patched row re-expands from the new entry.
+      emitMessage({
+        type: 'rawData',
+        data: {
+          lastUpdate: 200,
+          policyCatalog: {
+            pol1: {
+              sensitivity: 'sensitive',
+              routing: { scope: 'local-first', redact: ['hostname'] },
+            },
+            pol2: { sensitivity: 'public', routing: { scope: 'cloud-summary' } },
+          },
+          resourceDelta: { upserts: [{ id: 'storage-1', policyRef: 'pol2' }] },
+        },
+      });
+      const storageAfter = store.state.resources.find((resource) => resource.id === 'storage-1');
+      expect(storageAfter?.policy?.sensitivity).toBe('public');
+    } finally {
+      dispose();
+    }
+  });
+
   it('applies infrastructure merge-patch deltas touching only changed items', async () => {
     const { store, dispose } = await createStoreHarness();
     try {

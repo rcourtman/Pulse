@@ -1604,6 +1604,11 @@ export interface Resource {
   // expands it into `capabilities` at ingestion so consumers keep reading the
   // inline shape.
   capabilitiesRef?: string;
+  // References into the state payload's policyCatalog / aiSafeSummaryCatalog;
+  // the websocket store expands them into `policy` / `aiSafeSummary` at
+  // ingestion under the same contract.
+  policyRef?: string;
+  aiSafeSummaryRef?: string;
   actionReadiness?: ResourceActionReadiness[];
   sourceStatus?: Record<string, ResourceSourceStatus>;
   relationships?: ResourceRelationship[];
