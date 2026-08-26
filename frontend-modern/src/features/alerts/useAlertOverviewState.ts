@@ -1,7 +1,8 @@
-import { createMemo, createSignal, onCleanup } from 'solid-js';
+import { createEffect, createMemo, createSignal, onCleanup } from 'solid-js';
 import type { Accessor } from 'solid-js';
 
-import type { Alert } from '@/types/api';
+import { AlertsAPI } from '@/api/alerts';
+import type { Alert, AlertDeliveryDiagnosis } from '@/types/api';
 import type { Override } from './types';
 import { useAlertAcknowledgementState } from './useAlertAcknowledgementState';
 
@@ -47,6 +48,47 @@ export function useAlertOverviewState(props: UseAlertOverviewStateProps) {
 
   onCleanup(() => {
     clearInterval(tickInterval);
+  });
+
+  // Delivery diagnoses answer "did/will this alert notify?" per card. One
+  // bulk request covers every active alert; a failed refresh keeps the last
+  // snapshot and the card simply shows no delivery line for unknown alerts.
+  const [deliveryDiagnoses, setDeliveryDiagnoses] = createSignal<
+    Record<string, AlertDeliveryDiagnosis>
+  >({});
+  let diagnosisStateDisposed = false;
+  onCleanup(() => {
+    diagnosisStateDisposed = true;
+  });
+  const refreshDeliveryDiagnoses = async () => {
+    if (activeAlerts().length === 0) {
+      setDeliveryDiagnoses({});
+      return;
+    }
+    try {
+      const list = await AlertsAPI.getDeliveryDiagnoses();
+      if (diagnosisStateDisposed) return;
+      const next: Record<string, AlertDeliveryDiagnosis> = {};
+      for (const diagnosis of list) {
+        next[diagnosis.alertIdentifier || diagnosis.alertId] = diagnosis;
+      }
+      setDeliveryDiagnoses(next);
+    } catch {
+      // Silent degrade: no diagnosis, no delivery line.
+    }
+  };
+  const activeAlertIdsKey = createMemo(() =>
+    activeAlerts()
+      .map((alert) => alert.id)
+      .sort()
+      .join('\n'),
+  );
+  createEffect(() => {
+    // Refresh when the active alert set changes and on the shared minute
+    // tick, so time-based holds (cooldown, quiet hours) stay current.
+    activeAlertIdsKey();
+    tick();
+    void refreshDeliveryDiagnoses();
   });
 
   const alertStats = createMemo(() => {
@@ -108,6 +150,8 @@ export function useAlertOverviewState(props: UseAlertOverviewStateProps) {
     unacknowledgedAlerts,
     processingAlerts,
     bulkAckProcessing,
+    deliveryDiagnoses,
+    refreshDeliveryDiagnoses,
     handleAlertAcknowledgement,
     handleBulkAcknowledge,
     handleGroupAcknowledge,

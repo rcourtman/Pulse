@@ -18,6 +18,7 @@ import {
 } from '@/utils/alertOverviewPresentation';
 
 import { alertTypeDisplayLabel } from './helpers';
+import { describeAlertDeliveryStatus } from './deliveryDiagnosisPresentation';
 import { getCanonicalAlertId } from './identity';
 import type { AlertIncidentTimelineState } from './useAlertIncidentTimelineState';
 import type { AlertOverviewState } from './useAlertOverviewState';
@@ -37,6 +38,10 @@ export function AlertOverviewAlertCard(props: AlertOverviewAlertCardProps) {
       props.alert.acknowledged,
       props.state.processingAlerts().has(alertKey()),
     );
+
+  const deliveryDiagnosis = () => props.state.deliveryDiagnoses()[alertKey()];
+  const deliveryStatusLine = () =>
+    describeAlertDeliveryStatus(deliveryDiagnosis(), props.alert.acknowledged);
 
   const resourceLink = (): string => {
     const rid = props.alert.resourceId ?? '';
@@ -151,6 +156,18 @@ export function AlertOverviewAlertCard(props: AlertOverviewAlertCardProps) {
                   {props.alert.type === 'temperature' || props.alert.type === 'diskTemperature'
                     ? '°C'
                     : '%'}
+                </span>
+              </Show>
+              <Show when={deliveryStatusLine()}>
+                <span
+                  class={
+                    deliveryStatusLine()?.tone === 'attention'
+                      ? 'text-xs text-amber-600 dark:text-amber-400'
+                      : 'text-xs text-muted'
+                  }
+                  title={deliveryDiagnosis()?.message}
+                >
+                  {deliveryStatusLine()?.label}
                 </span>
               </Show>
             </div>

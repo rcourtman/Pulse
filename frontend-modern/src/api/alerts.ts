@@ -1,4 +1,4 @@
-import type { Alert, Incident } from '@/types/api';
+import type { Alert, AlertDeliveryDiagnosis, Incident } from '@/types/api';
 import type { AlertConfig } from '@/types/alerts';
 import { apiFetchJSON } from '@/utils/apiClient';
 import { arrayOrEmpty } from './responseUtils';
@@ -28,6 +28,13 @@ export class AlertsAPI {
     }
 
     return apiFetchJSON(`${this.baseUrl}/history?${queryParams}`);
+  }
+
+  static async getDeliveryDiagnoses(): Promise<AlertDeliveryDiagnosis[]> {
+    const diagnoses = (await apiFetchJSON(
+      `${this.baseUrl}/delivery-diagnosis`,
+    )) as AlertDeliveryDiagnosis[];
+    return arrayOrEmpty<AlertDeliveryDiagnosis>(diagnoses);
   }
 
   static async getIncidentTimeline(

@@ -1328,6 +1328,35 @@ export interface ResolvedAlert extends Alert {
   resolvedTime: string;
 }
 
+// Read-only projection of notification delivery policy for one active alert,
+// from GET /api/alerts/delivery-diagnosis.
+export interface AlertDeliveryDiagnosis {
+  alertIdentifier: string;
+  alertId: string;
+  trackingKey: string;
+  status: 'would_send' | 'deferred' | 'suppressed';
+  reason: string;
+  message: string;
+  alertType: string;
+  level: 'warning' | 'critical';
+  resourceId?: string;
+  resourceName?: string;
+  node?: string;
+  notificationsEnabled: boolean;
+  activationState: string;
+  cooldownMinutes: number;
+  maxAlertsHour: number;
+  recentAlertsInHour: number;
+  flappingActive: boolean;
+  flappingHistoryInWindow: number;
+  flappingThreshold: number;
+  flappingWindowSeconds: number;
+  lastNotified?: string;
+  nextEligibleAt?: string;
+  quietHoursReplayAt?: string;
+  suppressedUntil?: string;
+}
+
 export interface IncidentEvent {
   id: string;
   type: string;
