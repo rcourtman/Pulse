@@ -894,6 +894,19 @@ evaluation, backup rollup age evaluation, backup inventory readiness, PVE
 template subject matching, namespace disambiguation, and snapshot/backup active
 alert cleanup; future backup or snapshot alert behavior should extend that
 owner rather than expanding the central Manager file.
+
+### Backup-age attribution follows live identity
+
+Backup rollup subject refs are historical hints, not unconditional proof of a
+guest's current placement. An exact `instance:node:vmid` ref is authoritative
+only while it resolves to a live guest of the same type. Otherwise backup-age
+evaluation retries typed VMID attribution and prefers live candidates carrying
+a resource ID over last-known display metadata. A PVE-owned ref can still name
+its authoritative orphan after the PVE inventory is ready; a stale PBS ref that
+cannot be resolved uniquely remains unattributed instead of pinning an alert to
+an old or wrong PVE node. `TestCheckBackupsRemapsStaleSubjectRefToUniqueLiveGuest`
+and the PVE orphan/inventory-readiness tests in `internal/alerts/alerts_test.go`
+pin both sides of this boundary.
 Per-guest backup and snapshot overrides are sparse, not frozen copies. A
 zero-valued threshold field in an override (`warningDays`, `criticalDays`,
 `freshHours`, `staleHours`, and the snapshot size pair) inherits the current

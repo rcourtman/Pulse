@@ -257,6 +257,23 @@ func filterGuestsByBackupType(guests []GuestLookup, backupType string) []GuestLo
 	return filtered
 }
 
+// preferLiveGuestCandidates prevents last-known display metadata from
+// competing with current inventory during backup attribution. Persisted
+// entries intentionally have no ResourceID; they remain useful when a backup
+// is genuinely orphaned, but a live typed guest is stronger identity evidence.
+func preferLiveGuestCandidates(guests []GuestLookup) []GuestLookup {
+	live := make([]GuestLookup, 0, len(guests))
+	for _, guest := range guests {
+		if strings.TrimSpace(guest.ResourceID) != "" {
+			live = append(live, guest)
+		}
+	}
+	if len(live) > 0 {
+		return live
+	}
+	return guests
+}
+
 func backupOrphanInventoryReady(scope *BackupInventoryScope, record backupRecord) bool {
 	if scope == nil || scope.PVEOrphanInventoryReady == nil {
 		return true
@@ -691,6 +708,8 @@ func (m *Manager) CheckBackupsWithInventory(
 			node        string
 			vmID        string
 			subjectType string
+			refInstance string
+			refNode     string
 		)
 
 		ref := rollup.SubjectRef
@@ -701,22 +720,28 @@ func (m *Manager) CheckBackupsWithInventory(
 		// Primary: subjectRef.ID is the canonical proxmox guest source ID (instance:node:vmid) when linked.
 		if ref != nil && strings.TrimSpace(ref.ID) != "" {
 			if inst, nd, vmid, ok := parseGuestID(ref.ID); ok {
-				key = BuildGuestKey(inst, nd, vmid)
-				info = guestsByKey[key]
+				refInstance = inst
+				refNode = nd
+				candidateKey := BuildGuestKey(inst, nd, vmid)
+				candidate, live := guestsByKey[candidateKey]
 				// A vm and a container can share instance:node:vmid; never
 				// attribute the backup to a guest of the wrong kind.
-				if !guestMatchesBackupType(info, subjectType) {
-					info = GuestLookup{}
+				if live && guestMatchesBackupType(candidate, subjectType) {
+					key = candidateKey
+					info = candidate
+					instance = inst
+					node = nd
 				}
-				instance = inst
-				node = nd
 				vmID = strconv.Itoa(vmid)
 			}
 		}
 
 		// Secondary: attempt to map by VMID for orphaned/ambiguous backups.
 		if key == "" && ref != nil {
-			vmidStr := strings.TrimSpace(ref.ID)
+			vmidStr := strings.TrimSpace(vmID)
+			if vmidStr == "" {
+				vmidStr = strings.TrimSpace(ref.ID)
+			}
 			if vmidStr == "" {
 				vmidStr = strings.TrimSpace(ref.Name)
 			}
@@ -725,7 +750,7 @@ func (m *Manager) CheckBackupsWithInventory(
 					vmID = vmidStr
 					// Drop same-VMID guests of the wrong kind so a vm backup is
 					// not matched to an lxc container (or vice-versa).
-					guests := filterGuestsByBackupType(guestsByVMID[vmidStr], subjectType)
+					guests := preferLiveGuestCandidates(filterGuestsByBackupType(guestsByVMID[vmidStr], subjectType))
 					if len(guests) == 1 {
 						info = guests[0]
 					} else if len(guests) > 1 && strings.TrimSpace(ref.Namespace) != "" {
@@ -764,6 +789,20 @@ func (m *Manager) CheckBackupsWithInventory(
 						node = info.Node
 					}
 				}
+			}
+		}
+
+		// A PVE rollup's source ref belongs to the authoritative PVE
+		// enumeration, so retain its location for a genuine orphan after the
+		// current-inventory fallback fails. PBS historical links are not given
+		// that authority: they can outlive or predate the guest's current PVE
+		// placement and must remain unattributed when the live candidates are
+		// ambiguous.
+		if key == "" && source == "PVE" && refInstance != "" && refNode != "" && vmID != "" {
+			if vmid, err := strconv.Atoi(vmID); err == nil && vmid > 0 {
+				key = BuildGuestKey(refInstance, refNode, vmid)
+				instance = refInstance
+				node = refNode
 			}
 		}
 

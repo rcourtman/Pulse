@@ -1764,6 +1764,79 @@ func TestCheckBackupsDisambiguatesWithNamespace(t *testing.T) {
 	}
 }
 
+func TestCheckBackupsRemapsStaleSubjectRefToUniqueLiveGuest(t *testing.T) {
+	m := newTestManager(t)
+	m.ClearActiveAlerts()
+
+	m.mu.Lock()
+	m.config.Enabled = true
+	m.config.BackupDefaults = BackupAlertConfig{
+		Enabled:      true,
+		WarningDays:  3,
+		CriticalDays: 5,
+	}
+	m.mu.Unlock()
+
+	now := time.Now()
+	current := GuestLookup{
+		ResourceID: "pve-current:node-a:100",
+		Name:       "web-current",
+		Instance:   "pve-current",
+		Node:       "node-a",
+		Type:       "qemu",
+		VMID:       100,
+	}
+	staleMetadata := GuestLookup{
+		Name:     "web-old",
+		Instance: "pve-retired",
+		Node:     "node-b",
+		Type:     "qemu",
+		VMID:     100,
+	}
+
+	rollups := []recovery.ProtectionRollup{
+		{
+			RollupID: "res:vm-web",
+			SubjectRef: &recovery.ExternalRef{
+				Type:      "proxmox-vm",
+				Namespace: "pve-retired",
+				Name:      "web-old",
+				ID:        "pve-retired:node-b:100",
+				Class:     "node-b",
+			},
+			LastSuccessAt: ptrTime(now.Add(-6 * 24 * time.Hour)),
+			LastOutcome:   recovery.OutcomeSuccess,
+			Providers:     []recovery.Provider{recovery.ProviderProxmoxPBS},
+		},
+	}
+	guestsByKey := map[string]GuestLookup{
+		BuildGuestKey(current.Instance, current.Node, current.VMID): current,
+	}
+	guestsByVMID := map[string][]GuestLookup{
+		"100": {current, staleMetadata},
+	}
+
+	m.CheckBackups(rollups, guestsByKey, guestsByVMID)
+
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	expectedKey := "backup-age-" + sanitizeAlertKey(BuildGuestKey(current.Instance, current.Node, current.VMID))
+	alert, exists := testLookupActiveAlert(t, m, expectedKey)
+	if !exists {
+		var keys []string
+		for storageKey, active := range m.activeAlerts {
+			keys = append(keys, effectiveAlertID(active, storageKey))
+		}
+		t.Fatalf("expected alert remapped to current guest %q, found %v", expectedKey, keys)
+	}
+	if alert.Instance != current.Instance || alert.Node != current.Node {
+		t.Fatalf("alert location = %q/%q, want current guest %q/%q", alert.Instance, alert.Node, current.Instance, current.Node)
+	}
+	if alert.ResourceName != current.Name+" backup" {
+		t.Fatalf("alert resource name = %q, want %q", alert.ResourceName, current.Name+" backup")
+	}
+}
+
 // TestCheckBackupsVMIDCollisionNonMatchingNamespace verifies that when multiple guests
 // share a VMID and the PBS backup namespace matches none of them, the alert uses the
 // generic PBS key rather than falsely attributing to a specific guest.
