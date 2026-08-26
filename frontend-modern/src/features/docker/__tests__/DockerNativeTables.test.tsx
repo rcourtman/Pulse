@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
 import { Route, Router } from '@solidjs/router';
-import type { JSX } from 'solid-js';
+import { createSignal, type JSX } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { ResourceActionsAPI } from '@/api/resourceActions';
@@ -609,6 +609,63 @@ describe('Docker native tables', () => {
 
     expect(screen.getByText('edge-web')).toBeInTheDocument();
     expect(screen.queryByText('edge-cache')).not.toBeInTheDocument();
+  });
+
+  it('preserves grouped search drawer history state when a live snapshot replaces resources', async () => {
+    window.history.pushState({}, '', '/?q=nginx');
+    const makeContainers = (restartCount: number) => [
+      makeResource({
+        id: 'container-1',
+        type: 'app-container',
+        name: 'nginx',
+        status: 'running',
+        metricsTarget: { resourceType: 'app-container', resourceId: 'container-1' },
+        docker: {
+          hostname: 'edge-01',
+          image: 'nginx:latest',
+          containerState: 'running',
+          restartCount,
+        },
+      }),
+      makeResource({
+        id: 'container-2',
+        type: 'app-container',
+        name: 'redis',
+        status: 'running',
+        metricsTarget: { resourceType: 'app-container', resourceId: 'container-2' },
+        docker: {
+          hostname: 'edge-02',
+          image: 'redis:7.4',
+          containerState: 'running',
+        },
+      }),
+    ];
+    const [resources, setResources] = createSignal(makeContainers(0));
+
+    renderInRouter(() => (
+      <DockerContainersTable
+        resources={resources()}
+        emptyIcon={<span />}
+        emptyTitle="No containers"
+        emptyDescription="No containers"
+      />
+    ));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Expand details for nginx' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'History' }));
+    const historyRange = screen.getByRole('combobox', { name: 'History range' });
+    fireEvent.change(historyRange, { target: { value: '1h' } });
+
+    expect(screen.getByRole('tab', { name: 'History' })).toHaveAttribute('aria-selected', 'true');
+    expect(historyRange).toHaveValue('1h');
+
+    setResources(makeContainers(1));
+
+    await waitFor(() =>
+      expect(screen.getByRole('tab', { name: 'History' })).toHaveAttribute('aria-selected', 'true'),
+    );
+    expect(screen.getByRole('combobox', { name: 'History range' })).toHaveValue('1h');
+    expect(screen.getByRole('button', { name: 'Collapse details for nginx' })).toBeInTheDocument();
   });
 
   it('applies the URL status filter to container rows', () => {

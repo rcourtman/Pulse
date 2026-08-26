@@ -1,37 +1,31 @@
 {
   "version": 1,
-  "base_sha": "99afae02b1af9274697b958d50891ed5d86d5208",
-  "verified_at": "2026-08-26T16:33:39Z",
+  "base_sha": "6ecdc81d1c0062d131a15ac0381dd20335f969a9",
+  "verified_at": "2026-08-26T17:00:35Z",
   "result": "passed",
-  "changed_paths": [
-    "frontend-modern/src/stores/websocket.ts"
-  ],
+  "changed_paths": ["frontend-modern/src/features/docker/DockerContainersTable.tsx"],
   "content_sha256": {
-    "frontend-modern/src/stores/websocket.ts": "1bcd852509d823c4520a7d55f283fe27955c6881ea175e86516937e79be93d3f"
+    "frontend-modern/src/features/docker/DockerContainersTable.tsx": "1874570ea11ff3c0a4e9e6de8028ca84629322c367ec2126e212b2b7eccd3b1f"
   },
-  "routes": [
-    "/proxmox/overview"
-  ],
+  "routes": ["/docker/overview"],
   "viewports": [
     {
       "width": 2560,
-      "height": 1240
+      "height": 1063
     },
     {
-      "width": 700,
-      "height": 900
+      "width": 768,
+      "height": 688
     }
   ],
   "states": [
-    "large mock estate: 50 nodes and 929 guests with realtime delta ticks arriving every few seconds",
-    "sustained simulated typing (keydown burst every 120ms) spanning multiple realtime ticks",
-    "input idle immediately after a typing burst with deferred ticks pending",
-    "narrow-viewport mobile layout during a typing burst across a realtime tick"
+    "default multi-host grouped Docker inventory with an active nginx text search",
+    "expanded nginx container drawer with History selected and a non-default 1 hour range",
+    "desktop and half-width responsive layouts while live resource refreshes continued"
   ],
   "interactions": [
-    "long-animation-frame instrumentation across a 12s typing burst on desktop: zero long frames of any kind during input, one coalesced deferral flush (426ms) landing ~520ms after the last keystroke",
-    "pointerdown dispatched mid-window extends the input-active gate (unit-tested), keydown and scroll both verified live as gate sources",
-    "Last refresh footer observed advancing across typing bursts on desktop and narrow viewports, confirming deferred ticks still land and data stays live",
-    "zero console errors across desktop and narrow passes"
+    "searched for nginx in the default grouped multi-host view, expanded its drawer, selected History, and changed the range from 24 hours to 1 hour",
+    "observed multiple live refresh ticks on desktop and half-width layouts; the drawer remained expanded with History and 1 hour selected",
+    "verified the full resource-snapshot replacement path with the focused regression test, which fails without the grouped key extractor and passes with it"
   ]
 }

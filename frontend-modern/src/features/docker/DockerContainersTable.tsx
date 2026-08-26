@@ -844,7 +844,11 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
                   </PlatformWindowedRows>
                 }
               >
-                <PlatformWindowedRows items={groupedRenderItems} estimatedRowHeight={32}>
+                <PlatformWindowedRows
+                  items={groupedRenderItems}
+                  keyExtractor={(item) => item.key}
+                  estimatedRowHeight={32}
+                >
                   {(item) =>
                     item.kind === 'group'
                       ? renderHostGroupHeader(item.group)
