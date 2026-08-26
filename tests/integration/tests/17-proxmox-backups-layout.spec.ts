@@ -17,6 +17,15 @@ async function openProxmoxBackups(page: Page) {
   await expect(sections).toBeVisible({ timeout: 60_000 });
   await sections.getByRole("link", { name: "Backups", exact: true }).click();
   await expect(page).toHaveURL(/\/proxmox\/backups\/date$/);
+  // The route commits before the Proxmox snapshot finishes loading. CI can
+  // take longer than the default locator timeout while all E2E shards share
+  // the runner, so wait for the destination surface rather than the URL alone.
+  await expect(page.getByText("Backups per day").first()).toBeVisible({
+    timeout: 60_000,
+  });
+  await expect(
+    page.getByRole("group", { name: "Activity range" }),
+  ).toBeVisible({ timeout: 60_000 });
 }
 
 // Layout guards for the Proxmox Backups section, which replaced the retired
@@ -38,7 +47,6 @@ test.describe("Proxmox backups layout guards", () => {
     await openProxmoxBackups(page);
 
     // The Backups section now opens the date view directly.
-    await expect(page.getByText("Backups per day").first()).toBeVisible();
     const dayButtons = page.getByRole("button", { name: /: \d+ backups?$/ });
     await expect.poll(() => dayButtons.count()).toBeGreaterThanOrEqual(7);
 
