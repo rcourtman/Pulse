@@ -1,94 +1,62 @@
-# AI-Assisted Development
+# Development and Automation Transparency
 
-Pulse is built with AI tools, extensively and deliberately. This page exists so
-there is no ambiguity about that, and so nobody has to guess.
+Pulse is maintained by me and developed with extensive automation, including
+coding agents. This page is the standing disclosure for that process, so the
+same explanation does not need to be repeated across every commit, release,
+or issue thread.
 
 ## The short version
 
-I am the sole maintainer of Pulse. I use AI assistance throughout the project.
-Code, tests, documentation, release notes, and issue replies may all be
-produced with AI tools in the loop. Everything ships under my direction and
-my responsibility. Automated changes land through the same test and audit
-gates as my own; I review the stream of what lands and answer for all of it.
-If something is wrong, it is my bug, regardless of what typed the first
-draft.
+Automation contributes to code, tests, documentation, release notes, issue
+triage, and routine repository maintenance. A continuously running automated
+maintainer may investigate reports, implement changes, run verification, and
+land routine work within boundaries I define.
 
-## Why
+I set the product direction, control releases, and remain responsible for
+everything that ships. I do not claim to have personally written every line.
+Automated changes must pass the applicable project tests and audit gates, and
+released builds still go through Pulse's release qualification process.
 
-Pulse monitors Proxmox, PBS, Docker, Kubernetes, TrueNAS, and vSphere. Around
-that sits a web UI, a mobile app, host agents, installers, release tooling,
-security processes, and a support queue. That surface area is well beyond what
-one person can sustain by hand at any reasonable quality bar.
+## How it is used
 
-AI assistance is the reason a solo project can cover that breadth, ship
-frequent releases, and usually turn a reproducible bug report into a fix in
-days rather than months. Refusing these tools would not make Pulse better. It
-would make it slower and buggier. Used responsibly, these tools help me sustain
-the project's scope and quality. They accelerate the work without removing the
-need for judgment, verification, or accountability.
+- **Code and tests.** Coding agents implement and test changes from product,
+  architectural, issue, and operational requirements.
+- **Maintenance.** Automation monitors project signals, investigates defects,
+  prepares fixes, and performs bounded routine repository work continuously.
+- **Documentation and releases.** Automation may draft documentation,
+  changelogs, and release material, which must stay consistent with the code
+  and the evidence used to qualify a release.
+- **Issue triage and support.** Automated issue and discussion replies post
+  under the dedicated `pulse-triage` bot identity and link back to this page.
+  Automated support replies are sent as Pulse Triage and link here as well.
 
-## Where it is used
+The link on an automated reply is intentionally understated. It makes the
+process discoverable without turning every technical exchange into a banner
+about how the work was produced. Individual commits, fixes, and release notes
+are not given tool-specific labels.
 
-Declaring the general position is easy. Declaring where it applies is more
-useful, so here is the breakdown.
+## Authority and responsibility
 
-- **Code and tests.** Much of both is written with AI coding tools, working
-  from my direction and landing through the same review, test, and audit
-  gates as anything else.
-- **Documentation and release notes.** Drafted with AI assistance and checked
-  against the actual code and behaviour before publishing.
-- **Issue triage and support.** AI helps investigate reports, reproduce
-  bugs, and draft replies — and much of Pulse's day-to-day GitHub activity,
-  replies and fixes alike, is produced by automation working under my
-  direction. Some routine triage posts appear under the dedicated
-  pulse-triage bot account; the rest happens under my own account, and I do
-  not stamp those messages individually. This page is the standing
-  disclosure, and the tracker's around-the-clock pace is part of what it
-  discloses. If you ask in a thread whether you are talking to automation,
-  you will get a straight answer from me, not from the machine. Support
-  email is different: a reply handled end to end by automation is sent as
-  Pulse Triage from the normal support address rather than as me, and
-  links back here.
+The automation can operate continuously, but it is not the project owner and
+does not have unrestricted authority. Product direction, architecture,
+acceptable risk, capability boundaries, and release decisions remain mine.
+Release publication and other high-impact actions require explicit approval.
 
-## What stays human
+My role is to direct the project, design and maintain those boundaries, review
+outcomes, and answer for the result. If an automated change is wrong, it is
+still my bug and my responsibility to correct it.
 
-The tools write a lot of the code. They do not decide what Pulse is. Product
-direction, architecture, what gets built and what gets cut, and every
-release decision are mine. When you report a bug, the investigation and
-often the fix may be automated, but the bar it must clear is mine, and I own
-the outcome of every thread either way.
+## How the work should be judged
 
-## What it does not change
+The relevant standard is the resulting software: whether a change is
+understandable, maintainable, secure, covered by appropriate tests, and borne
+out by real behaviour. Pulse's issue history, source, test gates, release
+process, and corrections remain visible so specific concerns can be evaluated
+on their merits.
 
-Pulse is judged the same way all software should be judged, by what it does.
-The test suites, the audit gates that run before anything lands, the release
-candidate process, and the issue tracker history are all public. If you find a
-bug, report it with steps to reproduce and it will get fixed. Specific concerns
-about correctness, security, reliability, or maintainability are welcome and
-will be investigated on their merits.
+This document describes the current standing policy. Older repository and
+issue activity may predate it and may not carry the same link or identity.
 
-## From here on
-
-This document sets the standard from the day it landed, not a claim about the
-past. I used AI for a long time before writing any of this down, and some of
-that use was not declared, including automated issue replies that carried
-nothing to say they were automated. I am not going to rewrite history or
-pretend otherwise. What I can do is state the rules now and hold to them going
-forward.
-
-## If you object on principle
-
-That is your call, and I am not going to argue anyone out of it. This document
-is not intended to persuade everyone, but to make Pulse's development process
-clear enough for users to make an informed decision.
-
-AI assistance is increasingly common in software development, but disclosure
-is inconsistent. I would rather be explicit about how it is used here.
-
-Judge Pulse on what it does on your infrastructure and on the track record in
-the [issue tracker](https://github.com/rcourtman/Pulse/issues). Those are the
-things that matter, and they are the things I stand behind.
-
-For what Pulse itself does with AI as a product (Pulse Patrol, Assistant, and
-MCP, all optional and off by default until you configure a provider), see
-[AI.md](AI.md).
+For what Pulse itself does with AI as a product, including Pulse Patrol,
+Assistant, and MCP, see [AI.md](AI.md). Those features are separate from the
+development process described here.

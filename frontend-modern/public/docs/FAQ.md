@@ -170,4 +170,4 @@ real capacity. Stage a large rollout and measure it using the checklist in
 ## 🧑‍💻 The Project
 
 ### Is Pulse developed with AI?
-Yes, extensively and openly. Code, docs, and issue replies may all involve AI tools, and everything ships under the maintainer's review and responsibility. See [AI-Assisted Development](AI_TRANSPARENCY.md) for the full position.
+Yes. Pulse uses coding agents and other automation across development and triage. The maintainer sets product direction, controls releases, and remains responsible for the result. See [Development and Automation Transparency](AI_TRANSPARENCY.md) for the standing policy.
