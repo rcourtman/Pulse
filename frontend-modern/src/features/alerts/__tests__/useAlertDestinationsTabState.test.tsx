@@ -2,6 +2,7 @@ import { renderHook, waitFor } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { AlertsAPI } from '@/api/alerts';
 import { NotificationsAPI } from '@/api/notifications';
 import { notificationStore } from '@/stores/notifications';
 import { showErrorWithDetail } from '@/utils/toast';
@@ -21,6 +22,12 @@ vi.mock('@/api/notifications', () => ({
     testNotification: vi.fn(),
     testWebhook: vi.fn(),
     updateWebhook: vi.fn(),
+  },
+}));
+
+vi.mock('@/api/alerts', () => ({
+  AlertsAPI: {
+    getEvents: vi.fn(),
   },
 }));
 
@@ -75,6 +82,8 @@ const buildAppriseConfig = (): UIAppriseConfig => ({
 
 describe('useAlertDestinationsTabState', () => {
   beforeEach(() => {
+    vi.mocked(AlertsAPI.getEvents).mockReset();
+    vi.mocked(AlertsAPI.getEvents).mockResolvedValue([]);
     vi.mocked(NotificationsAPI.createWebhook).mockReset();
     vi.mocked(NotificationsAPI.deleteWebhook).mockReset();
     vi.mocked(NotificationsAPI.getDeliveryLog).mockReset();
@@ -154,6 +163,18 @@ describe('useAlertDestinationsTabState', () => {
       ],
       windowDays: 7,
     });
+    vi.mocked(AlertsAPI.getEvents).mockResolvedValue([
+      {
+        id: 41,
+        occurredAt: '2026-08-20T12:01:00Z',
+        type: 'notification_suppressed',
+        alertId: 'disk-critical-2',
+        resourceName: 'backup-pool',
+        alertType: 'usage',
+        reason: 'notifications_inactive',
+        message: 'Notification suppressed: alert delivery is not turned on.',
+      },
+    ]);
     vi.mocked(NotificationsAPI.testNotification).mockResolvedValue({ status: 'success' } as never);
     vi.mocked(NotificationsAPI.testWebhook).mockResolvedValue({ success: true } as never);
 
@@ -172,8 +193,18 @@ describe('useAlertDestinationsTabState', () => {
     await waitFor(() => expect(NotificationsAPI.getWebhooks).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(NotificationsAPI.getHealth).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(NotificationsAPI.getDeliveryLog).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(AlertsAPI.getEvents).toHaveBeenCalledTimes(1));
+    expect(AlertsAPI.getEvents).toHaveBeenCalledWith(
+      expect.objectContaining({
+        types: ['notification_suppressed', 'notification_deferred'],
+        limit: 100,
+      }),
+    );
     expect(result.deliveryHealth()?.queue.status).toBe('healthy');
     expect(result.deliveryLog()?.entries).toHaveLength(1);
+    expect(result.heldEvents()).toEqual([
+      expect.objectContaining({ reason: 'notifications_inactive', resourceName: 'backup-pool' }),
+    ]);
     expect(result.deliveryLogUnavailable()).toBe(false);
     expect(result.webhooks()).toEqual([
       expect.objectContaining({ id: 'hook-1', service: 'generic' }),
@@ -209,6 +240,7 @@ describe('useAlertDestinationsTabState', () => {
     await waitFor(() => expect(NotificationsAPI.getWebhooks).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(NotificationsAPI.getHealth).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(NotificationsAPI.getDeliveryLog).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(AlertsAPI.getEvents).toHaveBeenCalledTimes(2));
     expect(notificationStore.success).toHaveBeenCalledTimes(2);
     expect(notificationStore.warning).not.toHaveBeenCalled();
     expect(showErrorWithDetail).not.toHaveBeenCalled();

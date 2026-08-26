@@ -205,6 +205,7 @@ describe('alert destinations delivery log copy', () => {
     expect(getAlertDestinationsDeliveryLogTitle()).toBe('Recent delivery activity');
     const description = getAlertDestinationsDeliveryLogDescription(7);
     expect(description).toContain('last 7 days');
+    expect(description).toContain('held notifications');
     expect(description).toContain('Test sends skip the queue');
     expect(getAlertDestinationsDeliveryLogEmpty()).toContain('No alert deliveries were attempted');
     // An unreadable log must never present itself as an empty one.

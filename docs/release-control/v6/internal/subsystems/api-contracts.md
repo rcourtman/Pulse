@@ -4454,7 +4454,12 @@ event store returns `[]` rather than `null`. The event payload is evidence of
 recorded lifecycle and notification-decision seams only. It must not dispatch,
 acknowledge, resolve, or otherwise mutate alert or notification state, and the
 current absence of a fired lifecycle event must not be inferred as a firing
-that never happened.
+that never happened. `frontend-modern/src/api/alerts.ts` owns the typed client
+projection and shared `arrayOrEmpty` normalization. The Destinations surface
+requests only the two held-notification event types over the same seven-day
+window as its delivery-attempt log, with an explicit bounded limit. That event
+request runs independently of `GET /api/notifications/delivery-log`; failure
+of either API must not recast the other response as empty or unavailable.
 
 The generated PVE setup-script temperature wrapper is part of the API contract
 for legacy SSH sensor collection. Discovery uses non-opening `smartctl --scan`

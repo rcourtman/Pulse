@@ -434,6 +434,15 @@ bulk diagnosis snapshot per overview refresh, wraps beside started-at and
 threshold metadata at narrow widths, and does not create a second card or
 page-level banner. Acknowledged cards omit the redundant row, and unavailable
 diagnosis data leaves the existing alert card intact.
+The Destinations delivery-activity surface follows the same ownership split:
+alerts own the `AlertDeliveryLogCard` composition inside the shared `Card`,
+button, badge, list, and responsive wrapping primitives. Its single
+newest-first list may mix notification delivery attempts with alert-policy held
+events, but each row retains its owning outcome vocabulary and evidence
+tooltip. At narrow widths, resource, reason, and relative-time fields wrap or
+truncate inside the card without creating page-level horizontal overflow, and
+the shared refresh action remains independently usable while the bounded list
+scrolls.
 The legacy pricing handoff page may also route its visible redirect title and
 manual-link copy through the catalog, but `Pulse Account`, route paths, feature
 keys, query parameters, public URLs, and purchase-return state remain

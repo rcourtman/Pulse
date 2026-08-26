@@ -1863,7 +1863,15 @@ newest-first record of real alert delivery attempts with plain-language
 outcome labels, destination names resolved from the loaded webhook configs,
 failure classes, and secret-redacted error text. The card names its retention
 window and says that test sends skip the queue, and an unreadable log renders
-as unavailable rather than empty. Test-send results that report
+as unavailable rather than empty. The same card interleaves alert-owned
+`notification_suppressed` and `notification_deferred` evidence from
+`GET /api/alerts/events` with those attempts, ordered by the recorded event or
+attempt time. Held rows name the affected resource, alert type, and
+plain-language policy reason even when no delivery attempt exists. The event
+read is independent and fail-soft: an unavailable event log removes held rows
+without delaying, hiding, or marking the notifications-owned attempt log as
+unavailable. Refreshing delivery evidence starts both reads from one operator
+action while preserving that failure isolation. Test-send results that report
 `deliveryPaused` surface as a warning toast, never plain success, across the
 email, Apprise, and webhook test actions in `useAlertDestinationsTabState`
 and `useAlertWebhookDestinationsState`. Delivery evidence remains

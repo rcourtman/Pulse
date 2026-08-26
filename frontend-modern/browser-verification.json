@@ -1,23 +1,11 @@
 {
   "version": 1,
-  "base_sha": "515aa319e8c61fe9658f5ecfec417291df30a1da",
-  "verified_at": "2026-08-26T20:18:28Z",
+  "base_sha": "954ea1050aa121558b34d364ff484d8a4d482421",
+  "verified_at": "2026-08-26T21:47:28Z",
   "result": "passed",
-  "changed_paths": [
-    "frontend-modern/src/api/alerts.ts",
-    "frontend-modern/src/features/alerts/AlertOverviewAlertCard.tsx",
-    "frontend-modern/src/features/alerts/deliveryDiagnosisPresentation.ts",
-    "frontend-modern/src/features/alerts/useAlertOverviewState.ts",
-    "frontend-modern/src/types/api.ts"
-  ],
-  "content_sha256": {
-    "frontend-modern/src/api/alerts.ts": "315ff7f3e2424e736a17a0a440511eec254ed5f1aba5426249c72318e0aac24a",
-    "frontend-modern/src/features/alerts/AlertOverviewAlertCard.tsx": "a16ca92470d7833003d3e6812bc464e51e5c34e4aa600ea2ad1cfda9d32e9635",
-    "frontend-modern/src/features/alerts/deliveryDiagnosisPresentation.ts": "ce55e5c8c2a6474768f62fadba70bd9c00f65d87985931b4eb23166f60c4ca3f",
-    "frontend-modern/src/features/alerts/useAlertOverviewState.ts": "8c923babd58f4942803f04a891f5c1a9a80aa7770d367faa01b9036edfa0015b",
-    "frontend-modern/src/types/api.ts": "076917acef66323e0914db6f56ab54261cd74e10cbb435a0d1d592bb14062c94"
-  },
-  "routes": ["/alerts/overview"],
+  "changed_paths": [],
+  "content_sha256": {},
+  "routes": ["/alerts/notifications"],
   "viewports": [
     {
       "width": 1440,
@@ -29,14 +17,15 @@
     }
   ],
   "states": [
-    "mock-mode Alerts Overview loaded with active critical and warning alerts while external notification delivery was not active",
-    "bulk delivery diagnosis rendered Notification delivery not turned on beside active-alert timing metadata",
-    "the same active-alert delivery state rendered in the narrow responsive card layout"
+    "mock-mode Alerts Notifications loaded with notification delivery paused and an empty delivery-attempt log",
+    "the append-only alert event log supplied 100 bounded held-notification rows with resource, alert type, policy reason, and recorded message evidence",
+    "the same held-only activity state rendered in the narrow responsive card layout"
   ],
   "interactions": [
-    "loaded the current managed development build at /alerts/overview and confirmed the active-alert list populated from the bulk diagnosis read",
-    "confirmed delivery status appeared inline with Started metadata while Acknowledge, Timeline, monitoring-policy, and investigation controls remained usable on desktop",
-    "resized from 1440x900 to 760x900 and confirmed the delivery status and adjacent metadata wrapped without clipping or overlap",
-    "confirmed the browser console contained no errors across the desktop and narrow checks"
+    "loaded the current managed mock build at /alerts/notifications and confirmed Recent delivery activity rendered Held rows even though no delivery attempt existed",
+    "confirmed every inspected row exposed its full recorded suppression message while its visible badge, resource/type label, plain-language reason, and relative time remained distinct",
+    "used Refresh delivery status and confirmed the independently loaded held rows updated and remained newest first",
+    "resized from 1440x900 to 760x900 and confirmed the activity header, refresh action, and held rows remained usable without clipping or page-level horizontal overflow",
+    "confirmed the browser console contained no errors across the desktop, refresh, and narrow checks"
   ]
 }
