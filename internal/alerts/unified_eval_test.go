@@ -1116,16 +1116,20 @@ func TestCheckNodeOfflineAnnotatesCanonicalSpecMetadata(t *testing.T) {
 	configureUnifiedEvalManager(t, m, unifiedEvalBaseConfig())
 
 	m.mu.Lock()
-	m.nodeOfflineCount["node/pve-1"] = 2
 	m.mu.Unlock()
 
-	m.CheckNode(models.Node{
+	// Confirmation runs live in the reducer core: drive the
+	// preceding observations for real instead of seeding maps.
+	target := models.Node{
 		ID:               "node/pve-1",
 		Name:             "pve-1",
 		Instance:         "pve1",
 		Status:           "offline",
 		ConnectionHealth: "failed",
-	})
+	}
+	m.CheckNode(target)
+	m.CheckNode(target)
+	m.CheckNode(target)
 
 	alert := activeAlert(t, m, buildCanonicalStateID("node/pve-1", "node/pve-1-connectivity"))
 	if got := alert.Metadata["canonicalAlertKind"]; got != "connectivity" {
@@ -1141,16 +1145,20 @@ func TestCheckPBSOfflineAnnotatesCanonicalSpecMetadata(t *testing.T) {
 	configureUnifiedEvalManager(t, m, unifiedEvalBaseConfig())
 
 	m.mu.Lock()
-	m.offlineConfirmations["pbs-1"] = 2
 	m.mu.Unlock()
 
-	m.CheckPBS(models.PBSInstance{
+	// Confirmation runs live in the reducer core: drive the
+	// preceding observations for real instead of seeding maps.
+	target := models.PBSInstance{
 		ID:               "pbs-1",
 		Name:             "pbs-main",
 		Host:             "pbs-host",
 		Status:           "online",
 		ConnectionHealth: "unhealthy",
-	})
+	}
+	m.CheckPBS(target)
+	m.CheckPBS(target)
+	m.CheckPBS(target)
 
 	alert := activeAlert(t, m, "pbs-offline-pbs-1")
 	if got := alert.Metadata["canonicalAlertKind"]; got != "connectivity" {
@@ -1166,16 +1174,19 @@ func TestCheckStorageOfflineAnnotatesCanonicalSpecMetadata(t *testing.T) {
 	configureUnifiedEvalManager(t, m, unifiedEvalBaseConfig())
 
 	m.mu.Lock()
-	m.offlineConfirmations["storage-1"] = 1
 	m.mu.Unlock()
 
-	m.CheckStorage(models.Storage{
+	// Confirmation runs live in the reducer core: drive the
+	// preceding observations for real instead of seeding maps.
+	target := models.Storage{
 		ID:       "storage-1",
 		Name:     "local-lvm",
 		Node:     "pve-1",
 		Instance: "pve1",
 		Status:   "unavailable",
-	})
+	}
+	m.CheckStorage(target)
+	m.CheckStorage(target)
 
 	alert := activeAlert(t, m, "storage-offline-storage-1")
 	if got := alert.Metadata["canonicalAlertKind"]; got != "connectivity" {
@@ -1191,16 +1202,20 @@ func TestCheckPMGOfflineAnnotatesCanonicalSpecMetadata(t *testing.T) {
 	configureUnifiedEvalManager(t, m, unifiedEvalBaseConfig())
 
 	m.mu.Lock()
-	m.offlineConfirmations["pmg-1"] = 2
 	m.mu.Unlock()
 
-	m.CheckPMG(models.PMGInstance{
+	// Confirmation runs live in the reducer core: drive the
+	// preceding observations for real instead of seeding maps.
+	target := models.PMGInstance{
 		ID:               "pmg-1",
 		Name:             "pmg-main",
 		Host:             "pmg-host",
 		Status:           "online",
 		ConnectionHealth: "unhealthy",
-	})
+	}
+	m.CheckPMG(target)
+	m.CheckPMG(target)
+	m.CheckPMG(target)
 
 	alert := activeAlert(t, m, "pmg-offline-pmg-1")
 	if got := alert.Metadata["canonicalAlertKind"]; got != "connectivity" {
@@ -1216,15 +1231,19 @@ func TestHandleDockerHostOfflineAnnotatesCanonicalSpecMetadata(t *testing.T) {
 	configureUnifiedEvalManager(t, m, unifiedEvalBaseConfig())
 
 	m.mu.Lock()
-	m.dockerOfflineCount["docker1"] = 2
 	m.mu.Unlock()
 
-	m.HandleDockerHostOffline(models.DockerHost{
+	// Confirmation runs live in the reducer core: drive the
+	// preceding observations for real instead of seeding maps.
+	target := models.DockerHost{
 		ID:          "docker1",
 		DisplayName: "Docker Host 1",
 		Hostname:    "docker.local",
 		AgentID:     "agent-123",
-	})
+	}
+	m.HandleDockerHostOffline(target)
+	m.HandleDockerHostOffline(target)
+	m.HandleDockerHostOffline(target)
 
 	alert := activeAlert(t, m, "docker-host-offline-docker1")
 	if got := alert.Metadata["canonicalAlertKind"]; got != "connectivity" {

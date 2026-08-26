@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts/eventlog"
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts/reducer"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rs/zerolog/log"
 )
@@ -66,13 +67,13 @@ type Manager struct {
 	connectionDegradedCount      map[string]int // Track consecutive degraded counts for platform connections (pve/pbs/pmg/vmware/truenas)
 	offlineConfirmations         map[string]int // Track consecutive offline counts for all resources
 	offlineRecoveryConfirmations map[string]int // Track consecutive healthy confirmations before clearing poll-driven offline alerts
-	// lifecycleFirstMatched preserves when a canonical-lifecycle confirmation
-	// run first matched, keyed by tracking key. The confirmation maps hold
-	// only counts, so without this the reconstructed pending state dated the
-	// run at the current observation and activation stamped StartTime at the
-	// final confirming poll — understating outage start by the whole
-	// confirmation window. Mirrors unifiedIncidentFirstSeen.
-	lifecycleFirstMatched        map[string]time.Time
+	// core is the authoritative transition state for the canonical
+	// lifecycle (match-spec) family: the deterministic reducer owns
+	// confirmations, pending runs, first-matched anchoring, recovery
+	// gates, re-fire retention, and ack restoration for alerts that flow
+	// through evaluateCanonicalLifecycleAlert and the poll-driven recovery
+	// paths (docs/ALERT_ENGINE_EVOLUTION.md, Phase 2). Access under m.mu.
+	core                         *reducer.State
 	unifiedIncidentConfirmations map[string]int                  // Track consecutive provider-incident observations before activation
 	unifiedIncidentFirstSeen     map[string]time.Time            // Preserve the first confirmed observation as lifecycle start
 	unifiedIncidentRecoveries    map[string]int                  // Track consecutive healthy observations before provider-incident recovery
@@ -192,7 +193,7 @@ func NewManagerWithDataDir(dataDir string, options ...ManagerOption) *Manager {
 		connectionDegradedCount:         make(map[string]int),
 		offlineConfirmations:            make(map[string]int),
 		offlineRecoveryConfirmations:    make(map[string]int),
-		lifecycleFirstMatched:           make(map[string]time.Time),
+		core:                            reducer.NewState(),
 		unifiedIncidentConfirmations:    make(map[string]int),
 		unifiedIncidentFirstSeen:        make(map[string]time.Time),
 		unifiedIncidentRecoveries:       make(map[string]int),
@@ -225,6 +226,10 @@ func NewManagerWithDataDir(dataDir string, options ...ManagerOption) *Manager {
 	} else if err := m.LoadActiveAlerts(); err != nil {
 		log.Error().Err(err).Msg("failed to load active alerts")
 	}
+
+	// Seed the authoritative reducer core from restored alerts so a restart
+	// resumes firing incidents instead of re-running their confirmations.
+	m.seedReducerCoreNoLock()
 
 	// Start background workers.
 	m.workerWG.Add(3)

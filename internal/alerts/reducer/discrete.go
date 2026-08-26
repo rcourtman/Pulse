@@ -18,10 +18,18 @@ import "time"
 type DiscreteSignal struct {
 	ResourceID string
 	// Key identifies the condition, e.g. "connectivity" or a state key.
-	Key        string
-	Matched    bool
-	Severity   Severity
-	ObservedAt time.Time
+	Key      string
+	Matched  bool
+	Severity Severity
+	// RuntimeTick is an optional monotonic process-runtime reading,
+	// valid when RuntimeTickValid is set (zero is a legitimate reading at
+	// process start). When supplied on matched observations, the intent
+	// gate's grace and backup deferral accrue on it instead of ObservedAt
+	// deltas, preserving the manager's wall-clock immunity (suspend and
+	// NTP jumps neither fire nor starve gated activations).
+	RuntimeTick      time.Duration
+	RuntimeTickValid bool
+	ObservedAt       time.Time
 }
 
 // DiscreteRule is the resolved policy for one discrete condition.
@@ -104,6 +112,9 @@ func intentHoldsActivation(intent *DiscreteIntent, incident *Incident, observedA
 		return false
 	}
 	elapsed := observedAt.Sub(incident.PendingSince)
+	if incident.TicksSupplied {
+		elapsed = incident.GraceElapsed
+	}
 	eligible := time.Duration(intent.GraceSeconds) * time.Second
 	if intent.BackupEnabled {
 		if intent.BackupActive {
@@ -245,13 +256,15 @@ func (s *State) ApplyDiscrete(signal DiscreteSignal, rule DiscreteRule) []Event 
 	entered := false
 	if incident == nil {
 		incident = &Incident{
-			ResourceID:     signal.ResourceID,
-			Key:            signal.Key,
-			State:          StatePending,
-			Severity:       signal.Severity,
-			PendingSince:   signal.ObservedAt,
-			Confirmations:  1,
-			LastObservedAt: signal.ObservedAt,
+			ResourceID:      signal.ResourceID,
+			Key:             signal.Key,
+			State:           StatePending,
+			Severity:        signal.Severity,
+			PendingSince:    signal.ObservedAt,
+			Confirmations:   1,
+			TicksSupplied:   signal.RuntimeTickValid,
+			LastRuntimeTick: signal.RuntimeTick,
+			LastObservedAt:  signal.ObservedAt,
 		}
 		s.incidents[key] = incident
 		entered = true
@@ -259,6 +272,13 @@ func (s *State) ApplyDiscrete(signal DiscreteSignal, rule DiscreteRule) []Event 
 		incident.Confirmations++
 		incident.Severity = signal.Severity
 		incident.LastObservedAt = signal.ObservedAt
+		if signal.RuntimeTickValid {
+			if incident.TicksSupplied && signal.RuntimeTick >= incident.LastRuntimeTick {
+				incident.GraceElapsed += signal.RuntimeTick - incident.LastRuntimeTick
+			}
+			incident.TicksSupplied = true
+			incident.LastRuntimeTick = signal.RuntimeTick
+		}
 	}
 
 	pendingResult := func() []Event {

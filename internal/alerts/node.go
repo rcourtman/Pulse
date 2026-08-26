@@ -293,46 +293,11 @@ func (m *Manager) clearNodeOfflineAlert(node models.Node) {
 	defer m.mu.Unlock()
 	defer m.shadowObserveRecoveryNoLock(node.ID, canonicalConnectivitySpecID(node.ID), alertID, offlineRecoveryConfirmationsDefault)
 
-	// Reset offline count when node comes back online
+	// Reset the legacy offline counter; the reducer core owns the
+	// confirmation run itself.
 	if m.nodeOfflineCount[node.ID] > 0 {
-		log.Debug().
-			Str("node", node.Name).
-			Int("previousCount", m.nodeOfflineCount[node.ID]).
-			Msg("Node back online, resetting offline count")
 		delete(m.nodeOfflineCount, node.ID)
 	}
 
-	// Check if offline alert exists
-	alert, exists := m.getActiveAlertNoLock(alertID)
-	if !exists {
-		delete(m.offlineRecoveryConfirmations, alertID)
-		return
-	}
-
-	recoveryCount, confirmed := m.confirmOfflineRecoveryNoLock(alertID, offlineRecoveryConfirmationsDefault)
-	if !confirmed {
-		log.Debug().
-			Str("node", node.Name).
-			Int("confirmations", recoveryCount).
-			Int("required", offlineRecoveryConfirmationsDefault).
-			Msg("Node appears back online, waiting for recovery confirmation")
-		return
-	}
-
-	// Remove from active alerts
-	m.removeActiveAlertNoLock(alertID)
-
-	resolvedAlert := m.newResolvedAlert(alert, time.Now(), nil)
-	m.addRecentlyResolvedWithPrimaryLock(resolvedAlert)
-
-	// Send recovery notification (async to avoid deadlock — callback acquires m.mu.RLock
-	// via ShouldSuppressResolvedNotification, and we currently hold m.mu.Lock)
-	m.safeCallResolvedAlertCallback(alert, alertID, true)
-
-	// Log recovery
-	log.Info().
-		Str("node", node.Name).
-		Str("instance", node.Instance).
-		Dur("downtime", time.Since(alert.StartTime)).
-		Msg("Node is back online")
+	m.resolveDiscreteRecoveryNoLock(node.ID, canonicalConnectivitySpecID(node.ID), alertID, offlineRecoveryConfirmationsDefault, "Node", node.Name, node.Instance)
 }

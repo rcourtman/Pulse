@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts/reducer"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
 
@@ -33,6 +34,11 @@ func TestHistoryNewOccurrenceAfterResolveAppendsRow(t *testing.T) {
 		m.recentlyResolved[key] = resolved
 	}
 	m.resolvedMutex.Unlock()
+	// The reducer core keeps its own resolved ledger for refire decisions;
+	// age it in step with the manager's records.
+	m.mu.Lock()
+	m.core.ShiftResolved(-2 * reducer.RefireRetention)
+	m.mu.Unlock()
 
 	fire()
 

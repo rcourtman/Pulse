@@ -88,7 +88,13 @@ type Incident struct {
 	BackupActive       bool
 	BackupEnded        bool
 	BackupEndedElapsed time.Duration
-	LastObservedAt     time.Time
+	// GraceElapsed accrues the intent gate's condition-active time from the
+	// signal's monotonic RuntimeTick when supplied, making the gate immune
+	// to wall-clock jumps exactly as the manager's intent machinery is.
+	GraceElapsed    time.Duration
+	TicksSupplied   bool
+	LastRuntimeTick time.Duration
+	LastObservedAt  time.Time
 }
 
 // EventType enumerates transition events emitted by Apply.
@@ -409,7 +415,7 @@ func (s *State) ApplyMetric(signal MetricSignal, rule MetricRule) []Event {
 // transition functions. Shadow mode uses it to align the reducer with
 // pre-existing manager state (persisted-alert restore, divergence resync);
 // it is not part of normal evaluation.
-func (s *State) SeedFiringIncident(resourceID, subKey string, severity Severity, startedAt time.Time, acknowledged bool) {
+func (s *State) SeedFiringIncident(resourceID, subKey string, severity Severity, startedAt time.Time, acknowledged bool, ackUser string, ackAt time.Time) {
 	key := incidentKey(resourceID, subKey)
 	incident := &Incident{
 		ResourceID:     resourceID,
@@ -419,11 +425,16 @@ func (s *State) SeedFiringIncident(resourceID, subKey string, severity Severity,
 		StartedAt:      startedAt,
 		Confirmations:  1,
 		Acknowledged:   acknowledged,
+		AckUser:        ackUser,
+		AckAt:          ackAt,
 		LastObservedAt: startedAt,
 	}
 	s.incidents[key] = incident
 	if acknowledged {
-		s.acks[key] = ackRecord{At: startedAt}
+		if ackAt.IsZero() {
+			ackAt = startedAt
+		}
+		s.acks[key] = ackRecord{User: ackUser, At: ackAt}
 	}
 }
 
@@ -432,4 +443,15 @@ func (s *State) SeedFiringIncident(resourceID, subKey string, severity Severity,
 // and resolved records are left to their own retention.
 func (s *State) Forget(resourceID, subKey string) {
 	delete(s.incidents, incidentKey(resourceID, subKey))
+}
+
+// ShiftResolved moves every resolved-occurrence timestamp by delta
+// (negative = older). It exists for tests and simulations that age
+// resolved records past RefireRetention; production code has no reason to
+// rewrite history.
+func (s *State) ShiftResolved(delta time.Duration) {
+	for key, record := range s.resolved {
+		record.ResolvedAt = record.ResolvedAt.Add(delta)
+		s.resolved[key] = record
+	}
 }

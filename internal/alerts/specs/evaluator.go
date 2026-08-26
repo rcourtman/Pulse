@@ -432,6 +432,22 @@ func terminalEvaluation(spec ResourceAlertSpec, previous EvaluatorState, evidenc
 	return result
 }
 
+// ValidateEvidence reports whether the evidence carries the payload the
+// spec kind requires, mirroring Evaluate's up-front check for callers that
+// use Match directly.
+func ValidateEvidence(kind AlertSpecKind, evidence AlertEvidence) error {
+	return evidence.validateForKind(kind)
+}
+
+// Match reports whether one observation matches a spec's trigger
+// condition, with the severity and reason the match carries. It is the
+// spec-domain predicate shared by the evaluator and the reducer-backed
+// lifecycle wrapper: transition logic changes engines, the match
+// predicate does not.
+func Match(spec ResourceAlertSpec, evidence AlertEvidence) (bool, AlertSeverity, string) {
+	return matches(spec, evidence)
+}
+
 func matches(spec ResourceAlertSpec, evidence AlertEvidence) (bool, AlertSeverity, string) {
 	switch spec.Kind {
 	case AlertSpecKindSeverityThreshold:

@@ -291,44 +291,17 @@ func (m *Manager) CheckConnection(snap ConnectionSnapshot) {
 // resolve a real outage. Callers hold no manager locks.
 func (m *Manager) clearConnectionDegradedAlert(snap ConnectionSnapshot) {
 	alertID := canonicalDiscreteStateStateID(snap.ID, connectionDegradedStateKey)
+	specKey := canonicalDiscreteStateSpecID(snap.ID, connectionDegradedStateKey)
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	defer m.shadowObserveRecoveryNoLock(snap.ID, canonicalDiscreteStateSpecID(snap.ID, connectionDegradedStateKey), alertID, offlineRecoveryConfirmationsDefault)
+	defer m.shadowObserveRecoveryNoLock(snap.ID, specKey, alertID, offlineRecoveryConfirmationsDefault)
 
+	// Reset the legacy degraded counter; the reducer core owns the
+	// confirmation run itself.
 	if m.connectionDegradedCount[snap.ID] > 0 {
-		log.Debug().
-			Str("connection", snap.Name).
-			Int("previousCount", m.connectionDegradedCount[snap.ID]).
-			Msg("Connection healthy, resetting degraded count")
 		delete(m.connectionDegradedCount, snap.ID)
 	}
 
-	alert, exists := m.getActiveAlertNoLock(alertID)
-	if !exists {
-		delete(m.offlineRecoveryConfirmations, alertID)
-		return
-	}
-
-	recoveryCount, confirmed := m.confirmOfflineRecoveryNoLock(alertID, offlineRecoveryConfirmationsDefault)
-	if !confirmed {
-		log.Debug().
-			Str("connection", snap.Name).
-			Int("confirmations", recoveryCount).
-			Int("required", offlineRecoveryConfirmationsDefault).
-			Msg("Connection appears healthy, waiting for recovery confirmation")
-		return
-	}
-
-	m.removeActiveAlertNoLock(alertID)
-
-	resolvedAlert := m.newResolvedAlert(alert, time.Now(), nil)
-	m.addRecentlyResolvedWithPrimaryLock(resolvedAlert)
-	m.safeCallResolvedAlertCallback(alert, alertID, true)
-
-	log.Info().
-		Str("connection", snap.Name).
-		Str("connectionID", snap.ID).
-		Dur("downtime", time.Since(alert.StartTime)).
-		Msg("Connection back to active")
+	m.resolveDiscreteRecoveryNoLock(snap.ID, specKey, alertID, offlineRecoveryConfirmationsDefault, "Connection", snap.Name, snap.ID)
 }

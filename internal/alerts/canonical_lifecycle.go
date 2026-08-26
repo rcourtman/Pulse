@@ -267,44 +267,6 @@ func canonicalAlertSeverity(level AlertLevel) alertspecs.AlertSeverity {
 	}
 }
 
-func lifecyclePreviousState(spec alertspecs.ResourceAlertSpec, existing *Alert, confirmations int, firstMatched, observedAt time.Time) alertspecs.EvaluatorState {
-	if existing != nil {
-		required := spec.ConfirmationsRequired
-		if confirmations > required {
-			required = confirmations
-		}
-		return alertspecs.EvaluatorState{
-			SpecID:             spec.ID,
-			State:              alertspecs.AlertStateFiring,
-			Severity:           canonicalAlertSeverity(existing.Level),
-			ConsecutiveMatches: required,
-			FirstMatchedAt:     existing.StartTime,
-			ActiveSince:        existing.StartTime,
-			LastObservedAt:     existing.LastSeen,
-		}
-	}
-	if confirmations > 0 {
-		// Date the reconstructed pending run at its preserved first match so
-		// activation stamps StartTime at the first failing observation, not
-		// at the final confirming poll.
-		matchedAt := firstMatched
-		if matchedAt.IsZero() {
-			matchedAt = observedAt
-		}
-		return alertspecs.EvaluatorState{
-			SpecID:             spec.ID,
-			State:              alertspecs.AlertStatePending,
-			Severity:           spec.Severity,
-			ConsecutiveMatches: confirmations,
-			FirstMatchedAt:     matchedAt,
-		}
-	}
-	return alertspecs.EvaluatorState{
-		SpecID: spec.ID,
-		State:  alertspecs.AlertStateClear,
-	}
-}
-
 func statefulPreviousState(spec alertspecs.ResourceAlertSpec, existing *Alert, pendingSince time.Time) alertspecs.EvaluatorState {
 	if existing != nil {
 		return alertspecs.EvaluatorState{
@@ -377,17 +339,9 @@ func (m *Manager) evaluateCanonicalLifecycleAlert(params canonicalLifecycleAlert
 		migratedAlertIdentity = true
 	}
 
-	confirmations := 0
-	if params.Tracking != nil {
-		confirmations = params.Tracking[params.TrackingKey]
-	}
-	firstMatched := time.Time{}
-	if confirmations > 0 {
-		firstMatched = m.lifecycleFirstMatched[params.TrackingKey]
-	}
-
-	result, err := alertspecs.Evaluate(params.Spec, lifecyclePreviousState(params.Spec, existing, confirmations, firstMatched, params.Evidence.ObservedAt), params.Evidence)
-	if err != nil {
+	// Validate the spec and evidence exactly as the evaluator did, so
+	// malformed input is skipped rather than misread as a recovery.
+	if err := params.Spec.Validate(); err != nil {
 		log.Warn().
 			Err(err).
 			Str("alertID", storageKey).
@@ -396,38 +350,30 @@ func (m *Manager) evaluateCanonicalLifecycleAlert(params canonicalLifecycleAlert
 			Msg("Skipping invalid canonical lifecycle evaluation")
 		return alertspecs.EvaluationResult{}, false
 	}
-
-	shadowEligible = true
-
-	// Persist the canonical confirmation state before applying intent policy.
-	// Grace and operator context are an additional gate; they must not prevent
-	// the underlying evaluator from reaching its configured confirmation count.
-	if params.Tracking != nil {
-		if result.State.ConsecutiveMatches > 0 {
-			params.Tracking[params.TrackingKey] = result.State.ConsecutiveMatches
-			// Stamp the first-matched time whenever this observation starts
-			// a new confirmation run (the pre-evaluation count was zero).
-			// Several callers reset the count maps directly without going
-			// through this path — clearResourceOfflineAlert among them — so
-			// a keep-if-present guard would let a stale entry from a prior
-			// run backdate the next run's alert.
-			if confirmations == 0 && !result.State.FirstMatchedAt.IsZero() {
-				m.lifecycleFirstMatched[params.TrackingKey] = result.State.FirstMatchedAt
-			}
-		} else {
-			delete(params.Tracking, params.TrackingKey)
-			delete(m.lifecycleFirstMatched, params.TrackingKey)
-		}
+	if err := alertspecs.ValidateEvidence(params.Spec.Kind, params.Evidence); err != nil {
+		log.Warn().
+			Err(err).
+			Str("alertID", storageKey).
+			Str("resourceID", params.ResourceID).
+			Str("specID", params.Spec.ID).
+			Msg("Skipping invalid canonical lifecycle evidence")
+		return alertspecs.EvaluationResult{}, false
 	}
 
+	matched, matchSeverity, matchReason := alertspecs.Match(params.Spec, params.Evidence)
+
+	// Intent context resolves before the transition, exactly when the old
+	// engine consulted it: only while no alert is active. Its bookkeeping
+	// (intentPending, preview surfaces) is preserved; the gate itself now
+	// lives in the reducer.
 	intentSignal := params.IntentSignal
 	if intentSignal == "" && (params.Spec.Kind == alertspecs.AlertSpecKindConnectivity || params.Spec.Kind == alertspecs.AlertSpecKindPoweredState) {
 		intentSignal = string(AlertIntentSignalOffline)
 	}
+	var intent *reducer.DiscreteIntent
 	if intentSignal != "" && existing == nil {
-		conditionActive := result.State.State == alertspecs.AlertStatePending || result.State.State == alertspecs.AlertStateFiring
-		decision := m.evaluateIntentNoLock(params.Spec.ResourceID, string(params.Spec.ResourceType), intentSignal, storageKey, params.Evidence.ObservedAt, conditionActive, params.IntentBackup)
-		shadowIntent = &reducer.DiscreteIntent{
+		decision := m.evaluateIntentNoLock(params.Spec.ResourceID, string(params.Spec.ResourceType), intentSignal, storageKey, params.Evidence.ObservedAt, matched, params.IntentBackup)
+		intent = &reducer.DiscreteIntent{
 			Explicit:     decision.Effective.Explicit,
 			GraceSeconds: decision.Effective.GraceSeconds,
 			// Operator suppression only: the backup-offline deferral is
@@ -437,38 +383,115 @@ func (m *Manager) evaluateCanonicalLifecycleAlert(params canonicalLifecycleAlert
 			OperatorReason:     decision.Reason,
 		}
 		if backupOffline := decision.Effective.BackupOffline; backupOffline != nil && backupOffline.Enabled && intentSignal == string(AlertIntentSignalOffline) {
-			shadowIntent.BackupEnabled = true
-			shadowIntent.BackupActive = params.IntentBackup.Active
-			shadowIntent.BackupPostGraceSeconds = backupOffline.PostGraceSeconds
-			shadowIntent.BackupMaxDeferralSeconds = backupOffline.MaxDeferralSeconds
+			intent.BackupEnabled = true
+			intent.BackupActive = params.IntentBackup.Active
+			intent.BackupPostGraceSeconds = backupOffline.PostGraceSeconds
+			intent.BackupMaxDeferralSeconds = backupOffline.MaxDeferralSeconds
 		}
+		shadowIntent = intent
 		if decision.StateChanged {
 			m.saveActiveAlertsAsync("lifecycle intent state")
 		}
-		if conditionActive && !decision.ShouldActivate && (decision.Effective.Explicit || decision.Suppressed) {
-			result.State.State = alertspecs.AlertStatePending
-			result.State.Reason = decision.Reason
-			if pending, ok := m.intentPending[storageKey]; ok && !pending.FirstMatchedAt.IsZero() {
-				result.State.FirstMatchedAt = pending.FirstMatchedAt
+	}
+
+	severity := reducer.SeverityWarning
+	if matchSeverity == alertspecs.AlertSeverityCritical {
+		severity = reducer.SeverityCritical
+	}
+
+	// An existing alert the core does not know about (guest migration,
+	// direct injection, any unhooked path) means it was firing: adopt it,
+	// exactly as the old engine reconstructed previous state as firing
+	// whenever an active alert existed.
+	if existing != nil {
+		if _, known := m.core.Incident(params.Spec.ResourceID, params.Spec.ID); !known {
+			ackAt := time.Time{}
+			if existing.AckTime != nil {
+				ackAt = *existing.AckTime
 			}
-			return result, true
-		}
-		if decision.Effective.Explicit && result.State.State == alertspecs.AlertStateFiring {
-			if pending, ok := m.intentPending[storageKey]; ok && !pending.FirstMatchedAt.IsZero() {
-				result.State.FirstMatchedAt = pending.FirstMatchedAt
-			}
-			m.clearIntentPendingNoLock(storageKey)
-			m.saveActiveAlertsAsync("lifecycle intent activated")
+			m.core.SeedFiringIncident(
+				params.Spec.ResourceID,
+				params.Spec.ID,
+				shadowSeverityForLevel(existing.Level),
+				existing.StartTime,
+				existing.Acknowledged,
+				existing.AckUser,
+				ackAt,
+			)
 		}
 	}
 
-	switch result.State.State {
-	case alertspecs.AlertStatePending:
+	events := m.core.ApplyDiscrete(reducer.DiscreteSignal{
+		ResourceID:       params.Spec.ResourceID,
+		Key:              params.Spec.ID,
+		Matched:          matched,
+		Severity:         severity,
+		RuntimeTick:      m.intentTickNoLock(),
+		RuntimeTickValid: true,
+		ObservedAt:       params.Evidence.ObservedAt,
+	}, reducer.DiscreteRule{
+		Confirmations: specConfirmationsRequired(params.Spec),
+		Disabled:      params.Spec.Disabled,
+		Intent:        intent,
+	})
+	primary := reducer.EventType("")
+	if len(events) > 0 {
+		primary = events[0].Type
+	}
+
+	shadowEligible = true
+
+	incident, hasIncident := m.core.Incident(params.Spec.ResourceID, params.Spec.ID)
+
+	// The legacy count maps are maintained as read-only mirrors of the core
+	// during the Phase 2 transition, for external readers; the engine never
+	// consults them. They are deleted with the Phase 3 cleanup.
+	if params.Tracking != nil {
+		if hasIncident {
+			params.Tracking[params.TrackingKey] = incident.Confirmations
+		} else {
+			delete(params.Tracking, params.TrackingKey)
+		}
+	}
+
+	// Synthesize the evaluator-shaped result the callers consume.
+	result := alertspecs.EvaluationResult{}
+	result.State.SpecID = params.Spec.ID
+	result.State.LastObservedAt = params.Evidence.ObservedAt
+	result.State.Reason = matchReason
+
+	transition := func(kind alertspecs.EvaluationTransitionKind, from, to alertspecs.AlertState) *alertspecs.EvaluationTransition {
+		return &alertspecs.EvaluationTransition{
+			Kind:       kind,
+			SpecID:     params.Spec.ID,
+			ResourceID: params.Spec.ResourceID,
+			From:       from,
+			To:         to,
+			At:         params.Evidence.ObservedAt,
+			Severity:   matchSeverity,
+			Reason:     matchReason,
+			Evidence:   params.Evidence,
+		}
+	}
+
+	if hasIncident && incident.State == reducer.StatePending {
+		result.State.State = alertspecs.AlertStatePending
+		result.State.Severity = matchSeverity
+		result.State.ConsecutiveMatches = incident.Confirmations
+		result.State.FirstMatchedAt = incident.PendingSince
+		if intent != nil && intent.OperatorReason != "" {
+			result.State.Reason = intent.OperatorReason
+		}
+		if primary == reducer.EventPending {
+			result.Transition = transition(alertspecs.EvaluationTransitionPending, alertspecs.AlertStateClear, alertspecs.AlertStatePending)
+		}
 		return result, true
-	case alertspecs.AlertStateFiring:
-		level, ok := alertLevelFromCanonicalSeverity(result.State.Severity)
-		if !ok {
-			level = AlertLevelWarning
+	}
+
+	if hasIncident && incident.State == reducer.StateFiring {
+		level := AlertLevelWarning
+		if incident.Severity == reducer.SeverityCritical {
+			level = AlertLevelCritical
 		}
 		alert := &Alert{
 			ID:           storageKey,
@@ -481,7 +504,7 @@ func (m *Manager) evaluateCanonicalLifecycleAlert(params canonicalLifecycleAlert
 			Message:      params.Message,
 			Value:        0,
 			Threshold:    0,
-			StartTime:    params.Evidence.ObservedAt,
+			StartTime:    incident.StartedAt,
 			LastSeen:     params.Evidence.ObservedAt,
 			Metadata:     cloneMetadata(params.Metadata),
 		}
@@ -492,31 +515,56 @@ func (m *Manager) evaluateCanonicalLifecycleAlert(params canonicalLifecycleAlert
 			alert.Metadata["resourceType"] = string(params.Spec.ResourceType)
 		}
 		applyCanonicalIdentity(alert, params.Spec.ID, string(params.Spec.Kind))
-		if !result.State.FirstMatchedAt.IsZero() {
-			alert.StartTime = result.State.FirstMatchedAt
-		}
 		applyCanonicalOperationalEvidence(alert, params.Spec, params.Evidence, time.Now())
 		m.preserveAlertState(storageKey, alert)
+		// The reducer core is authoritative for occurrence start and
+		// acknowledgement restoration.
+		alert.StartTime = incident.StartedAt
+		alert.Acknowledged = incident.Acknowledged
+		alert.AckUser = incident.AckUser
+		if incident.Acknowledged && !incident.AckAt.IsZero() {
+			ackAt := incident.AckAt
+			alert.AckTime = &ackAt
+		} else if !incident.Acknowledged {
+			alert.AckTime = nil
+			alert.AckUser = ""
+		}
 		m.setActiveAlertNoLock(storageKey, alert)
 		if params.AddToRecent {
 			m.recentAlerts[trackingKey] = alert
 		}
 
+		result.State.State = alertspecs.AlertStateFiring
+		result.State.Severity = matchSeverity
+		result.State.ConsecutiveMatches = incident.Confirmations
+		result.State.FirstMatchedAt = incident.StartedAt
+		result.State.ActiveSince = incident.StartedAt
+
 		if existing != nil {
+			if primary == reducer.EventSeverityChanged {
+				result.Transition = transition(alertspecs.EvaluationTransitionSeverityChanged, alertspecs.AlertStateFiring, alertspecs.AlertStateFiring)
+			}
 			return result, true
 		}
 
-		reactivatedStart, reactivatedAt, reactivated, hadResolvedOccurrence := m.consumeRecentlyResolvedForRefireWithPrimaryLock(storageKey, time.Now())
-		if reactivated {
-			if !reactivatedStart.IsZero() {
-				alert.StartTime = reactivatedStart
-			}
+		// Activation. Intent bookkeeping closes out exactly as before.
+		if intent != nil && intent.Explicit {
+			m.clearIntentPendingNoLock(storageKey)
+			m.saveActiveAlertsAsync("lifecycle intent activated")
+		}
+		result.Transition = transition(alertspecs.EvaluationTransitionActivated, alertspecs.AlertStatePending, alertspecs.AlertStateFiring)
+
+		// Consume the recently-resolved entry for map hygiene and the
+		// new-occurrence history distinction; the reducer already decided
+		// whether this is a reactivation (EventRefired) and restored the
+		// start time.
+		_, _, _, hadResolvedOccurrence := m.consumeRecentlyResolvedForRefireWithPrimaryLock(storageKey, time.Now())
+		if primary == reducer.EventRefired {
 			if params.AddToHistory {
 				m.historyManager.UpdateAlertLastSeenForAlert(alert, alert.LastSeen)
 			}
 			log.Debug().
 				Str("alertID", storageKey).
-				Time("resolvedAt", reactivatedAt).
 				Msg("Alert re-fired within cooldown, reactivated without new history entry")
 			if params.RateLimit && !m.checkRateLimit(trackingKey) {
 				return result, true
@@ -544,31 +592,34 @@ func (m *Manager) evaluateCanonicalLifecycleAlert(params canonicalLifecycleAlert
 
 		m.dispatchAlert(alert, params.DispatchAsync)
 		return result, true
-	default:
-		if existing == nil {
-			return result, true
-		}
+	}
 
-		m.removeActiveAlertNoLock(storageKey)
-		recoveryEvidence, hasRecoveryEvidence := canonicalAlertEvidenceEnvelope(
-			params.Spec,
-			params.Evidence,
-			existing.Instance,
-			time.Now(),
-		)
-		var recoveryEvidenceRef *operationaltrust.EvidenceEnvelope
-		if hasRecoveryEvidence {
-			recoveryEvidenceRef = &recoveryEvidence
-		}
-		resolvedAlert := m.newResolvedAlert(
-			existing,
-			params.Evidence.ObservedAt,
-			recoveryEvidenceRef,
-		)
-		m.addRecentlyResolvedWithPrimaryLock(resolvedAlert)
-		m.safeCallResolvedAlertCallback(existing, storageKey, true)
+	// Clear: the core holds no incident for this key.
+	result.State.State = alertspecs.AlertStateClear
+	if existing == nil {
 		return result, true
 	}
+
+	result.Transition = transition(alertspecs.EvaluationTransitionRecovered, alertspecs.AlertStateFiring, alertspecs.AlertStateClear)
+	m.removeActiveAlertNoLock(storageKey)
+	recoveryEvidence, hasRecoveryEvidence := canonicalAlertEvidenceEnvelope(
+		params.Spec,
+		params.Evidence,
+		existing.Instance,
+		time.Now(),
+	)
+	var recoveryEvidenceRef *operationaltrust.EvidenceEnvelope
+	if hasRecoveryEvidence {
+		recoveryEvidenceRef = &recoveryEvidence
+	}
+	resolvedAlert := m.newResolvedAlert(
+		existing,
+		params.Evidence.ObservedAt,
+		recoveryEvidenceRef,
+	)
+	m.addRecentlyResolvedWithPrimaryLock(resolvedAlert)
+	m.safeCallResolvedAlertCallback(existing, storageKey, true)
+	return result, true
 }
 
 func (m *Manager) evaluateCanonicalStatefulAlert(params canonicalStatefulAlertParams) (alertspecs.EvaluationResult, bool) {

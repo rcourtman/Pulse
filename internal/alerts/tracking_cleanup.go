@@ -92,25 +92,6 @@ func (m *Manager) cleanupStaleMaps() {
 		}
 	}
 
-	// lifecycleFirstMatched entries share tracking keys with the
-	// confirmation-count maps and follow the same retention rule: keep only
-	// while a related active alert exists. A leaked entry would otherwise
-	// backdate an unrelated future confirmation run for the same key.
-	for trackingKey := range m.lifecycleFirstMatched {
-		hasRelatedAlert := false
-		for storageKey, alert := range m.activeAlerts {
-			alertID := effectiveAlertID(alert, storageKey)
-			if strings.Contains(alertID, trackingKey) || strings.Contains(trackingKey, alert.ResourceID) {
-				hasRelatedAlert = true
-				break
-			}
-		}
-		if !hasRelatedAlert {
-			delete(m.lifecycleFirstMatched, trackingKey)
-			cleaned++
-		}
-	}
-
 	for nodeID := range m.nodeOfflineCount {
 		hasRelatedAlert := false
 		for storageKey, alert := range m.activeAlerts {

@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts/reducer"
 	"github.com/rcourtman/pulse-go-rewrite/internal/operationaltrust"
 	"github.com/rs/zerolog/log"
 )
@@ -99,7 +100,7 @@ func (m *Manager) clearAlert(alertID string) {
 	m.mu.Lock()
 	alert, exists := m.getActiveAlertNoLock(alertID)
 	if exists {
-		m.shadowForgetAlertNoLock(alert)
+		m.mirrorForgetAlertNoLock(alert)
 		m.removeActiveAlertNoLock(alertID)
 	}
 	m.mu.Unlock()
@@ -150,7 +151,7 @@ func (m *Manager) AcknowledgeAlert(alertID, user string) error {
 		user:         user,
 		time:         now,
 	})
-	m.shadowAcknowledgeNoLock(alert, user, now)
+	m.mirrorAcknowledgeNoLock(alert, user, now)
 
 	alertCopy := alert.Clone()
 	m.mu.Unlock()
@@ -191,7 +192,7 @@ func (m *Manager) UnacknowledgeAlert(alertID string) error {
 
 	m.setActiveAlertNoLock(key, alert)
 	m.deleteAckRecordNoLock(alert, alertID)
-	m.shadowUnacknowledgeNoLock(alert)
+	m.mirrorUnacknowledgeNoLock(alert)
 
 	alertCopy := alert.Clone()
 	m.mu.Unlock()
@@ -599,7 +600,8 @@ func (m *Manager) confirmOfflineRecoveryNoLock(alertID string, required int) (in
 }
 
 // clearResourceOfflineAlert removes an offline alert when a poll-driven resource
-// stays healthy for enough consecutive polls to confirm recovery.
+// stays healthy for enough consecutive polls to confirm recovery. The
+// reducer core owns the recovery gate.
 func (m *Manager) clearResourceOfflineAlert(resourceID, resourceName, host, resourceKind string, requiredRecoveryCount int) {
 	alertID := canonicalConnectivityStateID(resourceID)
 
@@ -607,28 +609,65 @@ func (m *Manager) clearResourceOfflineAlert(resourceID, resourceName, host, reso
 	defer m.mu.Unlock()
 	defer m.shadowObserveRecoveryNoLock(resourceID, canonicalConnectivitySpecID(resourceID), alertID, requiredRecoveryCount)
 
-	if count, exists := m.offlineConfirmations[resourceID]; exists && count > 0 {
-		log.Debug().
-			Str(strings.ToLower(resourceKind), resourceName).
-			Int("previousCount", count).
-			Msg(resourceKind + " is online, resetting offline confirmation count")
-		delete(m.offlineConfirmations, resourceID)
+	m.resolveDiscreteRecoveryNoLock(resourceID, canonicalConnectivitySpecID(resourceID), alertID, requiredRecoveryCount, resourceKind, resourceName, host)
+}
+
+// resolveDiscreteRecoveryNoLock feeds one healthy observation for a
+// poll-driven discrete condition to the reducer core and resolves the
+// active alert once the core's recovery gate confirms. Caller holds m.mu.
+func (m *Manager) resolveDiscreteRecoveryNoLock(resourceID, specKey, alertID string, requiredRecoveryCount int, resourceKind, resourceName, host string) {
+	// An existing alert the core does not know about means it was firing:
+	// adopt it before the healthy observation, exactly as the old engine
+	// treated any active alert as previously firing.
+	if adopted, adoptedExists := m.getActiveAlertNoLock(alertID); adoptedExists && adopted != nil {
+		if _, known := m.core.Incident(resourceID, specKey); !known {
+			ackAt := time.Time{}
+			if adopted.AckTime != nil {
+				ackAt = *adopted.AckTime
+			}
+			m.core.SeedFiringIncident(resourceID, specKey, shadowSeverityForLevel(adopted.Level), adopted.StartTime, adopted.Acknowledged, adopted.AckUser, ackAt)
+		}
+	}
+
+	events := m.core.ApplyDiscrete(reducer.DiscreteSignal{
+		ResourceID: resourceID,
+		Key:        specKey,
+		Matched:    false,
+		ObservedAt: time.Now(),
+	}, reducer.DiscreteRule{RecoveryConfirmations: requiredRecoveryCount})
+
+	// Legacy-map mirrors (read-only during Phase 2; deleted in Phase 3):
+	// a healthy poll clears any confirmation-run mirror and reflects the
+	// core's recovery count.
+	delete(m.offlineConfirmations, resourceID)
+	if incident, tracked := m.core.Incident(resourceID, specKey); tracked && incident.RecoveryCount > 0 {
+		m.offlineRecoveryConfirmations[alertID] = incident.RecoveryCount
+	} else {
+		delete(m.offlineRecoveryConfirmations, alertID)
 	}
 
 	alert, exists := m.getActiveAlertNoLock(alertID)
 	if !exists {
-		delete(m.offlineRecoveryConfirmations, alertID)
 		return
 	}
 
-	recoveryCount, confirmed := m.confirmOfflineRecoveryNoLock(alertID, requiredRecoveryCount)
-	if !confirmed {
-		log.Debug().
-			Str(strings.ToLower(resourceKind), resourceName).
-			Int("confirmations", recoveryCount).
-			Int("required", requiredRecoveryCount).
-			Msg(resourceKind + " appears back online, waiting for recovery confirmation")
-		return
+	resolved := false
+	for _, event := range events {
+		if event.Type == reducer.EventResolved {
+			resolved = true
+			break
+		}
+	}
+	if !resolved {
+		// Self-heal in the authoritative direction: an alert with no core
+		// incident resolves immediately rather than sticking.
+		if _, hasIncident := m.core.Incident(resourceID, specKey); hasIncident {
+			log.Debug().
+				Str(strings.ToLower(resourceKind), resourceName).
+				Int("required", requiredRecoveryCount).
+				Msg(resourceKind + " appears back online, waiting for recovery confirmation")
+			return
+		}
 	}
 
 	m.removeActiveAlertNoLock(alertID)
@@ -684,7 +723,7 @@ func (m *Manager) clearAlertNoLock(alertID string) {
 		recordAlertResolved(alert)
 	}
 
-	m.shadowForgetAlertNoLock(alert)
+	m.mirrorForgetAlertNoLock(alert)
 	m.removeActiveAlertNoLock(alertID)
 	resolvedAlert := m.newResolvedAlert(alert, time.Now(), nil)
 

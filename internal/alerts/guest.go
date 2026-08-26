@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts/reducer"
 	alertspecs "github.com/rcourtman/pulse-go-rewrite/internal/alerts/specs"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
@@ -558,6 +559,15 @@ func (m *Manager) clearGuestPoweredOffAlert(guestID, name string) {
 	if decision := m.evaluateIntentNoLock(guestID, "", string(AlertIntentSignalOffline), alertID, m.policyNow().UTC(), false, BackupIntentContext{}); decision.StateChanged {
 		m.saveActiveAlertsAsync("guest offline intent cleared")
 	}
+	// A running guest is a healthy observation for the core's powered-state
+	// run: pending clears, and a firing incident resolves immediately (the
+	// powered-off family has no recovery gate).
+	m.core.ApplyDiscrete(reducer.DiscreteSignal{
+		ResourceID: guestID,
+		Key:        canonicalPoweredStateSpecID(guestID),
+		Matched:    false,
+		ObservedAt: m.policyNow(),
+	}, reducer.DiscreteRule{})
 
 	// Check if powered-off alert exists. A guest that moved nodes may still
 	// hold the alert under its old node-scoped identity; re-home it so it

@@ -62,12 +62,18 @@ func (m *Manager) EnableShadowFeed() {
 		if alert.ResourceID == "" || alert.CanonicalSpecID == "" {
 			continue
 		}
+		ackAt := time.Time{}
+		if alert.AckTime != nil {
+			ackAt = *alert.AckTime
+		}
 		feed.state.SeedFiringIncident(
 			alert.ResourceID,
 			alert.CanonicalSpecID,
 			shadowSeverityForLevel(alert.Level),
 			alert.StartTime,
 			alert.Acknowledged,
+			alert.AckUser,
+			ackAt,
 		)
 	}
 	m.shadow = feed
@@ -127,7 +133,7 @@ func shadowSpecSeverity(spec alertspecs.ResourceAlertSpec) reducer.Severity {
 	return reducer.SeverityWarning
 }
 
-func shadowSpecConfirmations(spec alertspecs.ResourceAlertSpec) int {
+func specConfirmationsRequired(spec alertspecs.ResourceAlertSpec) int {
 	if spec.ConfirmationsRequired > 0 {
 		return spec.ConfirmationsRequired
 	}
@@ -163,13 +169,15 @@ func (m *Manager) shadowObserveLifecycleNoLock(
 		observedAt = m.policyNow()
 	}
 	m.shadow.state.ApplyDiscrete(reducer.DiscreteSignal{
-		ResourceID: spec.ResourceID,
-		Key:        spec.ID,
-		Matched:    matched,
-		Severity:   shadowSpecSeverity(spec),
-		ObservedAt: observedAt,
+		ResourceID:       spec.ResourceID,
+		Key:              spec.ID,
+		Matched:          matched,
+		Severity:         shadowSpecSeverity(spec),
+		RuntimeTick:      m.intentTickNoLock(),
+		RuntimeTickValid: true,
+		ObservedAt:       observedAt,
 	}, reducer.DiscreteRule{
-		Confirmations: shadowSpecConfirmations(spec),
+		Confirmations: specConfirmationsRequired(spec),
 		Disabled:      spec.Disabled,
 		Intent:        intent,
 	})
@@ -191,44 +199,6 @@ func (m *Manager) shadowObserveRecoveryNoLock(resourceID, specKey, managerAlertI
 		ObservedAt: observedAt,
 	}, reducer.DiscreteRule{RecoveryConfirmations: requiredRecovery})
 	m.shadowCompareNoLock(resourceID, specKey, managerAlertID, observedAt)
-}
-
-// shadowAcknowledgeNoLock mirrors a user acknowledgement into the shadow
-// reducer.
-func (m *Manager) shadowAcknowledgeNoLock(alert *Alert, user string, at time.Time) {
-	if m == nil || m.shadow == nil || alert == nil {
-		return
-	}
-	backfillCanonicalIdentity(alert)
-	if alert.ResourceID == "" || alert.CanonicalSpecID == "" {
-		return
-	}
-	m.shadow.state.Acknowledge(alert.ResourceID, alert.CanonicalSpecID, user, at)
-}
-
-// shadowUnacknowledgeNoLock mirrors an acknowledgement removal.
-func (m *Manager) shadowUnacknowledgeNoLock(alert *Alert) {
-	if m == nil || m.shadow == nil || alert == nil {
-		return
-	}
-	backfillCanonicalIdentity(alert)
-	if alert.ResourceID == "" || alert.CanonicalSpecID == "" {
-		return
-	}
-	m.shadow.state.Unacknowledge(alert.ResourceID, alert.CanonicalSpecID)
-}
-
-// shadowForgetAlertNoLock mirrors a manual clear: the reducer drops the
-// incident without treating it as an evaluated recovery.
-func (m *Manager) shadowForgetAlertNoLock(alert *Alert) {
-	if m == nil || m.shadow == nil || alert == nil {
-		return
-	}
-	backfillCanonicalIdentity(alert)
-	if alert.ResourceID == "" || alert.CanonicalSpecID == "" {
-		return
-	}
-	m.shadow.state.Forget(alert.ResourceID, alert.CanonicalSpecID)
 }
 
 // shadowCompareNoLock diffs the reducer's incident for a key against the
@@ -259,11 +229,17 @@ func (m *Manager) shadowCompareNoLock(resourceID, specKey, managerAlertID string
 	// Resync before rate limiting so state converges even when the report
 	// is suppressed.
 	if managerFiring {
+		ackAt := time.Time{}
+		if alert.AckTime != nil {
+			ackAt = *alert.AckTime
+		}
 		feed.state.SeedFiringIncident(
 			resourceID, specKey,
 			shadowSeverityForLevel(alert.Level),
 			alert.StartTime,
 			alert.Acknowledged,
+			alert.AckUser,
+			ackAt,
 		)
 	} else {
 		feed.state.Forget(resourceID, specKey)

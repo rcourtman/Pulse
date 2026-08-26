@@ -198,10 +198,10 @@ func TestLifecycleAlertStartTimeIsFirstMatchedObservation(t *testing.T) {
 
 	observe("online", epoch.Add(90*time.Second))
 	manager.mu.Lock()
-	_, tracked := manager.lifecycleFirstMatched["conn:node-9"]
+	_, hasIncident := manager.core.Incident("node-9", "node-9-connectivity")
 	manager.mu.Unlock()
-	if tracked {
-		t.Fatal("first-matched entry should clear with the confirmation run")
+	if hasIncident {
+		t.Fatal("core incident should clear with the confirmation run")
 	}
 }
 
@@ -227,12 +227,12 @@ func confirmedProviderIncidentResource(observedAt time.Time) unifiedresources.Re
 	}
 }
 
-// Regression: several callers reset the confirmation-count maps directly
-// without the evaluator path (clearResourceOfflineAlert among them), which
-// left a stale lifecycleFirstMatched entry that backdated the next run's
-// alert to the previous run's first observation. A new run (pre-evaluation
-// count zero) must re-stamp the first-matched time.
-func TestLifecycleFirstMatchedRestampsAfterDirectCountReset(t *testing.T) {
+// The reducer core owns confirmation runs: resetting the legacy count
+// maps directly (the pre-cutover healthy-poll behavior) no longer
+// disturbs a run in progress — only a genuine non-matching observation
+// resets it. This replaces the pre-cutover restamp regression test, whose
+// premise (reconstructing runs from the count maps) no longer exists.
+func TestLifecycleRunImmuneToLegacyCountResets(t *testing.T) {
 	manager := NewManagerWithDataDir(t.TempDir(), WithoutPersistedAlertRestore())
 	t.Cleanup(manager.Stop)
 
@@ -267,26 +267,35 @@ func TestLifecycleFirstMatchedRestampsAfterDirectCountReset(t *testing.T) {
 		}
 	}
 
-	// Two matches begin a run, then the count is reset directly, the way
-	// the healthy-poll paths do — leaving lifecycleFirstMatched stale.
+	// Two matches begin a run; a direct legacy count reset is a no-op for
+	// the core-owned run, so the third consecutive match fires with the
+	// run's true first observation as the start.
 	observe("offline", epoch)
 	observe("offline", epoch.Add(30*time.Second))
 	manager.mu.Lock()
 	delete(manager.offlineConfirmations, "conn:node-9")
 	manager.mu.Unlock()
-
-	restart := epoch.Add(2 * time.Minute)
-	observe("offline", restart)
-	observe("offline", restart.Add(30*time.Second))
-	observe("offline", restart.Add(60*time.Second))
+	observe("offline", epoch.Add(time.Minute))
 
 	manager.mu.Lock()
 	alert, exists := manager.getActiveAlertNoLock(canonicalDiscreteStateStateID("node-9", "connectivity"))
 	manager.mu.Unlock()
 	if !exists || alert == nil {
-		t.Fatal("expected alert to fire after the second run")
+		t.Fatal("expected alert to fire on the third consecutive match")
 	}
-	if !alert.StartTime.Equal(restart) {
-		t.Fatalf("StartTime = %v, want the second run's first observation %v", alert.StartTime, restart)
+	if !alert.StartTime.Equal(epoch) {
+		t.Fatalf("StartTime = %v, want the run's first observation %v", alert.StartTime, epoch)
+	}
+
+	// A genuine non-matching observation does reset the run.
+	observe("online", epoch.Add(90*time.Second))
+	restart := epoch.Add(2 * time.Minute)
+	observe("offline", restart)
+	observe("offline", restart.Add(30*time.Second))
+	manager.mu.Lock()
+	_, midRun := manager.getActiveAlertNoLock(canonicalDiscreteStateStateID("node-9", "connectivity"))
+	manager.mu.Unlock()
+	if midRun {
+		t.Fatal("run must restart after a genuine recovery")
 	}
 }

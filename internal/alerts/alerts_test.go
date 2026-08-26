@@ -8747,7 +8747,6 @@ func TestHandleDockerHostOffline(t *testing.T) {
 		m := newTestManager(t)
 		m.mu.Lock()
 		m.config.Enabled = true
-		m.dockerOfflineCount["docker1"] = 2 // Pre-set to trigger on next call
 		m.mu.Unlock()
 
 		host := models.DockerHost{
@@ -8757,6 +8756,10 @@ func TestHandleDockerHostOffline(t *testing.T) {
 			AgentID:     "agent-123",
 		}
 
+		// Confirmation runs live in the reducer core: drive the
+		// preceding observations for real instead of seeding maps.
+		m.HandleDockerHostOffline(host)
+		m.HandleDockerHostOffline(host)
 		m.HandleDockerHostOffline(host)
 
 		m.mu.RLock()
@@ -9601,7 +9604,6 @@ func TestCheckNodeOffline(t *testing.T) {
 		// t.Parallel()
 		m := newTestManager(t)
 		m.mu.Lock()
-		m.nodeOfflineCount["node1"] = 2 // Pre-set to trigger on next call
 		m.mu.Unlock()
 
 		node := models.Node{
@@ -9612,6 +9614,10 @@ func TestCheckNodeOffline(t *testing.T) {
 			ConnectionHealth: "disconnected",
 		}
 
+		// Confirmation runs live in the reducer core: drive the
+		// preceding observations for real instead of seeding maps.
+		m.checkNodeOffline(node)
+		m.checkNodeOffline(node)
 		m.checkNodeOffline(node)
 
 		m.mu.RLock()
@@ -9640,10 +9646,13 @@ func TestCheckNodeOffline(t *testing.T) {
 		// t.Parallel()
 		m := newTestManager(t)
 		m.mu.Lock()
-		m.nodeOfflineCount["node1"] = 2
 		m.mu.Unlock()
 
 		node := models.Node{ID: "node1", Name: "Node 1", Instance: "pve1"}
+		// Confirmation runs live in the reducer core: drive the
+		// preceding observations for real instead of seeding maps.
+		m.checkNodeOffline(node)
+		m.checkNodeOffline(node)
 		m.checkNodeOffline(node)
 
 		// Check history
@@ -9737,10 +9746,13 @@ func TestCheckPBSOffline(t *testing.T) {
 		// t.Parallel()
 		m := newTestManager(t)
 		m.mu.Lock()
-		m.offlineConfirmations["pbs1"] = 2
 		m.mu.Unlock()
 
 		pbs := models.PBSInstance{ID: "pbs1", Name: "PBS 1", Host: "pbs.local"}
+		// Confirmation runs live in the reducer core: drive the
+		// preceding observations for real instead of seeding maps.
+		m.checkPBSOffline(pbs)
+		m.checkPBSOffline(pbs)
 		m.checkPBSOffline(pbs)
 
 		m.mu.RLock()
@@ -9863,10 +9875,13 @@ func TestCheckPMGOffline(t *testing.T) {
 		// t.Parallel()
 		m := newTestManager(t)
 		m.mu.Lock()
-		m.offlineConfirmations["pmg1"] = 2
 		m.mu.Unlock()
 
 		pmg := models.PMGInstance{ID: "pmg1", Name: "PMG 1", Host: "pmg.local"}
+		// Confirmation runs live in the reducer core: drive the
+		// preceding observations for real instead of seeding maps.
+		m.checkPMGOffline(pmg)
+		m.checkPMGOffline(pmg)
 		m.checkPMGOffline(pmg)
 
 		m.mu.RLock()
@@ -14451,7 +14466,6 @@ func TestCheckNode(t *testing.T) {
 
 		// Pre-set count to trigger alert on this call
 		m.mu.Lock()
-		m.nodeOfflineCount["node1"] = 2
 		m.mu.Unlock()
 
 		node := models.Node{
@@ -14460,6 +14474,10 @@ func TestCheckNode(t *testing.T) {
 			Instance: "pve1",
 			Status:   "offline",
 		}
+		// Confirmation runs live in the reducer core: drive the
+		// preceding observations for real instead of seeding maps.
+		m.CheckNode(node)
+		m.CheckNode(node)
 		m.CheckNode(node)
 
 		m.mu.RLock()
@@ -14479,7 +14497,6 @@ func TestCheckNode(t *testing.T) {
 		m := newTestManager(t)
 
 		m.mu.Lock()
-		m.nodeOfflineCount["node1"] = 2
 		m.mu.Unlock()
 
 		node := models.Node{
@@ -14489,6 +14506,10 @@ func TestCheckNode(t *testing.T) {
 			Status:           "online",
 			ConnectionHealth: "error",
 		}
+		// Confirmation runs live in the reducer core: drive the
+		// preceding observations for real instead of seeding maps.
+		m.CheckNode(node)
+		m.CheckNode(node)
 		m.CheckNode(node)
 
 		m.mu.RLock()
@@ -14505,7 +14526,6 @@ func TestCheckNode(t *testing.T) {
 		m := newTestManager(t)
 
 		m.mu.Lock()
-		m.nodeOfflineCount["node1"] = 2
 		m.mu.Unlock()
 
 		node := models.Node{
@@ -14515,6 +14535,10 @@ func TestCheckNode(t *testing.T) {
 			Status:           "online",
 			ConnectionHealth: "failed",
 		}
+		// Confirmation runs live in the reducer core: drive the
+		// preceding observations for real instead of seeding maps.
+		m.CheckNode(node)
+		m.CheckNode(node)
 		m.CheckNode(node)
 
 		m.mu.RLock()
@@ -15073,7 +15097,6 @@ func TestCheckGuest(t *testing.T) {
 
 		// Pre-set confirmation count to trigger alert
 		m.mu.Lock()
-		m.offlineConfirmations["vm100"] = 2
 		m.mu.Unlock()
 
 		vm := models.VM{
@@ -15083,6 +15106,10 @@ func TestCheckGuest(t *testing.T) {
 			Status: "stopped",
 		}
 
+		// Confirmation runs live in the reducer core: drive the
+		// preceding observations for real instead of seeding maps.
+		m.CheckGuest(vm, "pve1")
+		m.CheckGuest(vm, "pve1")
 		m.CheckGuest(vm, "pve1")
 
 		m.mu.RLock()
@@ -16817,7 +16844,6 @@ func TestCheckPBSComprehensive(t *testing.T) {
 
 		m.mu.Lock()
 		// Pre-populate confirmation count to bypass waiting period
-		m.offlineConfirmations["pbs1"] = 2
 		m.mu.Unlock()
 
 		pbs := models.PBSInstance{
@@ -16826,6 +16852,10 @@ func TestCheckPBSComprehensive(t *testing.T) {
 			Status: "offline",
 		}
 
+		// Confirmation runs live in the reducer core: drive the
+		// preceding observations for real instead of seeding maps.
+		m.CheckPBS(pbs)
+		m.CheckPBS(pbs)
 		m.CheckPBS(pbs)
 
 		m.mu.RLock()
@@ -16846,7 +16876,6 @@ func TestCheckPBSComprehensive(t *testing.T) {
 
 		m.mu.Lock()
 		// Pre-populate confirmation count to bypass waiting period
-		m.offlineConfirmations["pbs1"] = 2
 		m.mu.Unlock()
 
 		pbs := models.PBSInstance{
@@ -16856,6 +16885,10 @@ func TestCheckPBSComprehensive(t *testing.T) {
 			ConnectionHealth: "error",
 		}
 
+		// Confirmation runs live in the reducer core: drive the
+		// preceding observations for real instead of seeding maps.
+		m.CheckPBS(pbs)
+		m.CheckPBS(pbs)
 		m.CheckPBS(pbs)
 
 		m.mu.RLock()
@@ -16873,7 +16906,6 @@ func TestCheckPBSComprehensive(t *testing.T) {
 
 		m.mu.Lock()
 		// Pre-populate confirmation count to bypass waiting period
-		m.offlineConfirmations["pbs1"] = 2
 		m.mu.Unlock()
 
 		pbs := models.PBSInstance{
@@ -16883,6 +16915,10 @@ func TestCheckPBSComprehensive(t *testing.T) {
 			ConnectionHealth: "unhealthy",
 		}
 
+		// Confirmation runs live in the reducer core: drive the
+		// preceding observations for real instead of seeding maps.
+		m.CheckPBS(pbs)
+		m.CheckPBS(pbs)
 		m.CheckPBS(pbs)
 
 		m.mu.RLock()
@@ -16902,7 +16938,6 @@ func TestCheckPBSComprehensive(t *testing.T) {
 		m.config.TimeThresholds = map[string]int{}
 		m.activeAlerts["pbs1-cpu"] = &Alert{ID: "pbs1-cpu", Type: "cpu"}
 		m.activeAlerts["pbs1-memory"] = &Alert{ID: "pbs1-memory", Type: "memory"}
-		m.offlineConfirmations["pbs1"] = 2 // trigger offline alert immediately
 		m.mu.Unlock()
 
 		pbs := models.PBSInstance{
@@ -16914,6 +16949,10 @@ func TestCheckPBSComprehensive(t *testing.T) {
 			Memory:           99,
 		}
 
+		// Confirmation runs live in the reducer core: drive the
+		// preceding observations for real instead of seeding maps.
+		m.CheckPBS(pbs)
+		m.CheckPBS(pbs)
 		m.CheckPBS(pbs)
 
 		m.mu.RLock()
@@ -17164,7 +17203,6 @@ func TestCheckPMGComprehensive(t *testing.T) {
 
 		m.mu.Lock()
 		// Pre-populate confirmation count to bypass waiting period (3 required)
-		m.offlineConfirmations["pmg1"] = 2
 		m.mu.Unlock()
 
 		pmg := models.PMGInstance{
@@ -17173,6 +17211,10 @@ func TestCheckPMGComprehensive(t *testing.T) {
 			Status: "offline",
 		}
 
+		// Confirmation runs live in the reducer core: drive the
+		// preceding observations for real instead of seeding maps.
+		m.CheckPMG(pmg)
+		m.CheckPMG(pmg)
 		m.CheckPMG(pmg)
 
 		m.mu.RLock()
@@ -17193,7 +17235,6 @@ func TestCheckPMGComprehensive(t *testing.T) {
 
 		m.mu.Lock()
 		// Pre-populate confirmation count to bypass waiting period
-		m.offlineConfirmations["pmg1"] = 2
 		m.mu.Unlock()
 
 		pmg := models.PMGInstance{
@@ -17203,6 +17244,10 @@ func TestCheckPMGComprehensive(t *testing.T) {
 			ConnectionHealth: "error",
 		}
 
+		// Confirmation runs live in the reducer core: drive the
+		// preceding observations for real instead of seeding maps.
+		m.CheckPMG(pmg)
+		m.CheckPMG(pmg)
 		m.CheckPMG(pmg)
 
 		m.mu.RLock()
@@ -17220,7 +17265,6 @@ func TestCheckPMGComprehensive(t *testing.T) {
 
 		m.mu.Lock()
 		// Pre-populate confirmation count to bypass waiting period
-		m.offlineConfirmations["pmg1"] = 2
 		m.mu.Unlock()
 
 		pmg := models.PMGInstance{
@@ -17230,6 +17274,10 @@ func TestCheckPMGComprehensive(t *testing.T) {
 			ConnectionHealth: "unhealthy",
 		}
 
+		// Confirmation runs live in the reducer core: drive the
+		// preceding observations for real instead of seeding maps.
+		m.CheckPMG(pmg)
+		m.CheckPMG(pmg)
 		m.CheckPMG(pmg)
 
 		m.mu.RLock()
@@ -17245,7 +17293,6 @@ func TestCheckPMGComprehensive(t *testing.T) {
 		m := newTestManager(t)
 
 		m.mu.Lock()
-		m.offlineConfirmations["pmg1"] = 2
 		m.mu.Unlock()
 
 		pmg := models.PMGInstance{
@@ -17255,6 +17302,10 @@ func TestCheckPMGComprehensive(t *testing.T) {
 			ConnectionHealth: " UNHEALTHY ",
 		}
 
+		// Confirmation runs live in the reducer core: drive the
+		// preceding observations for real instead of seeding maps.
+		m.CheckPMG(pmg)
+		m.CheckPMG(pmg)
 		m.CheckPMG(pmg)
 
 		m.mu.RLock()
@@ -17286,7 +17337,6 @@ func TestCheckPMGComprehensive(t *testing.T) {
 			Type:       "queue-hold",
 			ResourceID: "pmg1",
 		}
-		m.offlineConfirmations["pmg1"] = 2 // trigger offline alert immediately
 		m.mu.Unlock()
 
 		pmg := models.PMGInstance{
@@ -17296,6 +17346,10 @@ func TestCheckPMGComprehensive(t *testing.T) {
 			ConnectionHealth: "unhealthy",
 		}
 
+		// Confirmation runs live in the reducer core: drive the
+		// preceding observations for real instead of seeding maps.
+		m.CheckPMG(pmg)
+		m.CheckPMG(pmg)
 		m.CheckPMG(pmg)
 
 		m.mu.RLock()
@@ -17646,7 +17700,6 @@ func TestCheckStorageComprehensive(t *testing.T) {
 
 		m.mu.Lock()
 		// Pre-populate confirmation count (requires 2)
-		m.offlineConfirmations["storage1"] = 1
 		m.mu.Unlock()
 
 		storage := models.Storage{
@@ -17655,6 +17708,9 @@ func TestCheckStorageComprehensive(t *testing.T) {
 			Status: "offline",
 		}
 
+		// Confirmation runs live in the reducer core: drive the
+		// preceding observations for real instead of seeding maps.
+		m.CheckStorage(storage)
 		m.CheckStorage(storage)
 
 		m.mu.RLock()
@@ -17672,7 +17728,6 @@ func TestCheckStorageComprehensive(t *testing.T) {
 
 		m.mu.Lock()
 		// Pre-populate confirmation count (requires 2)
-		m.offlineConfirmations["storage1"] = 1
 		m.mu.Unlock()
 
 		storage := models.Storage{
@@ -17681,6 +17736,9 @@ func TestCheckStorageComprehensive(t *testing.T) {
 			Status: "unavailable",
 		}
 
+		// Confirmation runs live in the reducer core: drive the
+		// preceding observations for real instead of seeding maps.
+		m.CheckStorage(storage)
 		m.CheckStorage(storage)
 
 		m.mu.RLock()

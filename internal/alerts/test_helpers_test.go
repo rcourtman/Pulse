@@ -3,6 +3,9 @@ package alerts
 import (
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts/reducer"
 )
 
 func testNewCanonicalAlert(resourceID, specID, kind, alertType string) (string, *Alert) {
@@ -186,4 +189,50 @@ func testLookupResolvedAlert(t testing.TB, m *Manager, alertID string) (*Resolve
 		}
 	}
 	return nil, false
+}
+
+// testCoreConfirmations reads the reducer core's confirmation count for a
+// key — the post-cutover replacement for asserting the legacy count maps.
+func testCoreConfirmations(m *Manager, resourceID, specID string) int {
+	incident, ok := m.core.Incident(resourceID, specID)
+	if !ok {
+		return 0
+	}
+	return incident.Confirmations
+}
+
+// testCoreRecoveryCount reads the reducer core's consecutive-healthy count
+// for a firing incident.
+func testCoreRecoveryCount(m *Manager, resourceID, specID string) int {
+	incident, ok := m.core.Incident(resourceID, specID)
+	if !ok {
+		return 0
+	}
+	return incident.RecoveryCount
+}
+
+// testCoreHasIncident reports whether the reducer core tracks any incident
+// (pending or firing) for the key.
+func testCoreHasIncident(m *Manager, resourceID, specID string) bool {
+	_, ok := m.core.Incident(resourceID, specID)
+	return ok
+}
+
+// testSeedCoreConfirmations fast-forwards a confirmation run in the
+// reducer core — the post-cutover replacement for pre-seeding the legacy
+// count maps. It applies matched observations directly to the core so the
+// next real observation is the Nth confirmation.
+func testSeedCoreConfirmations(m *Manager, resourceID, specID string, count int, severity reducer.Severity, confirmationsRequired int) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	base := time.Now().Add(-time.Duration(count) * time.Minute)
+	for i := 0; i < count; i++ {
+		m.core.ApplyDiscrete(reducer.DiscreteSignal{
+			ResourceID: resourceID,
+			Key:        specID,
+			Matched:    true,
+			Severity:   severity,
+			ObservedAt: base.Add(time.Duration(i) * time.Minute),
+		}, reducer.DiscreteRule{Confirmations: confirmationsRequired})
+	}
 }

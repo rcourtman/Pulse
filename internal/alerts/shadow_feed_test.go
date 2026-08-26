@@ -115,7 +115,7 @@ func TestShadowFeedRecordsAndResyncsDivergence(t *testing.T) {
 	manager.mu.Lock()
 	manager.shadow.state.SeedFiringIncident(
 		resourceID, canonicalConnectivitySpecID(resourceID),
-		reducer.SeverityCritical, time.Now().Add(-time.Minute), false,
+		reducer.SeverityCritical, time.Now().Add(-time.Minute), false, "", time.Time{},
 	)
 	manager.mu.Unlock()
 
