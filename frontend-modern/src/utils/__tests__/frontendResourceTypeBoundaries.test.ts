@@ -754,10 +754,10 @@ describe('frontend resource type boundaries', () => {
     expect(workloadsWorkloadDerivedStateSource).not.toContain('getBoundingClientRect');
     expect(workloadsStateSource).not.toContain('const DEFAULT_WINDOW_SIZE =');
     expect(workloadsStateSource).not.toContain('const DEFAULT_ENABLE_THRESHOLD =');
-    expect(workloadsStateSource).not.toContain('const DEFAULT_OVERSCAN_ROWS =');
+    expect(workloadsStateSource).not.toContain('const TOP_UP_DEADBAND_ROWS =');
     expect(groupedTableWindowingSource).toContain('const DEFAULT_WINDOW_SIZE');
     expect(groupedTableWindowingSource).toContain('const DEFAULT_ENABLE_THRESHOLD');
-    expect(groupedTableWindowingSource).toContain('const DEFAULT_OVERSCAN_ROWS');
+    expect(groupedTableWindowingSource).toContain('const TOP_UP_DEADBAND_ROWS');
     expect(groupedTableWindowingSource).toContain('getVisibleSlice');
     expect(groupedTableWindowingSource).toContain('onScroll');
     expect(groupedTableWindowingSource).toContain('revealIndex');
