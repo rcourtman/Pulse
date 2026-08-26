@@ -44,11 +44,8 @@ func TestRecentlyResolvedProductionPathsAreRaceAndDeadlockFree(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	lifecycleTracking := make(map[string]int)
 	lifecycleParams := canonicalLifecycleAlertParams{
 		Spec:         lifecycleSpec,
-		Tracking:     lifecycleTracking,
-		TrackingKey:  lifecycleResourceID,
 		AlertID:      "host-offline-issue-1590-lifecycle",
 		AlertType:    "connectivity",
 		ResourceID:   lifecycleResourceID,

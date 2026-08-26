@@ -170,8 +170,6 @@ func TestLifecycleAlertStartTimeIsFirstMatchedObservation(t *testing.T) {
 				ObservedAt:    at,
 				DiscreteState: &alertspecs.DiscreteStateEvidence{StateKey: "connectivity", Observed: observed},
 			},
-			Tracking:     manager.offlineConfirmations,
-			TrackingKey:  "conn:node-9",
 			AlertID:      canonicalDiscreteStateStateID("node-9", "connectivity"),
 			AlertType:    "connectivity",
 			ResourceID:   "node-9",
@@ -255,8 +253,6 @@ func TestLifecycleRunImmuneToLegacyCountResets(t *testing.T) {
 				ObservedAt:    at,
 				DiscreteState: &alertspecs.DiscreteStateEvidence{StateKey: "connectivity", Observed: observed},
 			},
-			Tracking:     manager.offlineConfirmations,
-			TrackingKey:  "conn:node-9",
 			AlertID:      canonicalDiscreteStateStateID("node-9", "connectivity"),
 			AlertType:    "connectivity",
 			ResourceID:   "node-9",
@@ -272,9 +268,6 @@ func TestLifecycleRunImmuneToLegacyCountResets(t *testing.T) {
 	// run's true first observation as the start.
 	observe("offline", epoch)
 	observe("offline", epoch.Add(30*time.Second))
-	manager.mu.Lock()
-	delete(manager.offlineConfirmations, "conn:node-9")
-	manager.mu.Unlock()
 	observe("offline", epoch.Add(time.Minute))
 
 	manager.mu.Lock()

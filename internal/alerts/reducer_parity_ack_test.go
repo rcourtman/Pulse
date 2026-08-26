@@ -111,8 +111,6 @@ func (e *managerAckParityEngine) step(t *testing.T, s ackParityStep) {
 			ObservedAt:    e.clock,
 			DiscreteState: &alertspecs.DiscreteStateEvidence{StateKey: "parity-state", Observed: observed},
 		},
-		Tracking:     e.manager.offlineConfirmations,
-		TrackingKey:  "parity:" + ackParityResourceID,
 		AlertID:      e.alertID(),
 		AlertType:    "parity-state",
 		ResourceID:   ackParityResourceID,

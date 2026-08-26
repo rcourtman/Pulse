@@ -44,8 +44,6 @@ func shadowObserveConnectivity(t *testing.T, manager *Manager, resourceID string
 			ObservedAt:   at,
 			Connectivity: &alertspecs.ConnectivityEvidence{Signal: "status", Connected: connected},
 		},
-		Tracking:     manager.offlineConfirmations,
-		TrackingKey:  resourceID,
 		AlertID:      canonicalConnectivityStateID(resourceID),
 		AlertType:    "offline",
 		ResourceID:   resourceID,

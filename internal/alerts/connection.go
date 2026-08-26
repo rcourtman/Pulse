@@ -148,8 +148,6 @@ func (m *Manager) suppressConnectionDegradedAlert(snap ConnectionSnapshot) {
 	alertID := canonicalDiscreteStateStateID(snap.ID, connectionDegradedStateKey)
 
 	m.mu.Lock()
-	delete(m.connectionDegradedCount, snap.ID)
-	delete(m.offlineRecoveryConfirmations, alertID)
 	m.mu.Unlock()
 
 	m.clearAlert(alertID)
@@ -186,7 +184,6 @@ func (m *Manager) CheckConnection(snap ConnectionSnapshot) {
 		// later degraded run starts from zero instead of accumulating across
 		// a transient pending blip.
 		m.mu.Lock()
-		delete(m.connectionDegradedCount, snap.ID)
 		m.mu.Unlock()
 		return
 	}
@@ -200,7 +197,6 @@ func (m *Manager) CheckConnection(snap ConnectionSnapshot) {
 	// confirmations — recovery must build back up from zero.
 	alertID := canonicalDiscreteStateStateID(snap.ID, connectionDegradedStateKey)
 	m.mu.Lock()
-	delete(m.offlineRecoveryConfirmations, alertID)
 	m.mu.Unlock()
 
 	spec, err := buildCanonicalDiscreteStateSpec(
@@ -269,8 +265,6 @@ func (m *Manager) CheckConnection(snap ConnectionSnapshot) {
 		PolicyDisabledNoLock: func() bool {
 			return m.connectionDegradedPolicyDisabledNoLock(snap.ID, snap.PolicyResourceID, snap.Type)
 		},
-		Tracking:      m.connectionDegradedCount,
-		TrackingKey:   snap.ID,
 		AlertID:       alertID,
 		AlertType:     connectionDegradedAlertType,
 		ResourceID:    snap.ID,
@@ -299,9 +293,6 @@ func (m *Manager) clearConnectionDegradedAlert(snap ConnectionSnapshot) {
 
 	// Reset the legacy degraded counter; the reducer core owns the
 	// confirmation run itself.
-	if m.connectionDegradedCount[snap.ID] > 0 {
-		delete(m.connectionDegradedCount, snap.ID)
-	}
 
 	m.resolveDiscreteRecoveryNoLock(snap.ID, specKey, alertID, offlineRecoveryConfirmationsDefault, "Connection", snap.Name, snap.ID)
 }

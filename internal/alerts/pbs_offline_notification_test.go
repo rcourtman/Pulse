@@ -131,7 +131,7 @@ func TestCheckPBSOfflineCanonicalOverrideBlocksAlertAndNotification(t *testing.T
 			t.Fatalf("disabled PBS offline policy created active alerts: %+v", active)
 		}
 		m.mu.RLock()
-		_, tracked := m.offlineConfirmations[pbs.ID]
+		tracked := testCoreHasIncident(m, pbs.ID, canonicalConnectivitySpecID(pbs.ID))
 		m.mu.RUnlock()
 		if tracked {
 			t.Fatalf("disabled PBS offline policy retained confirmation tracking for %q", pbs.ID)
@@ -240,7 +240,6 @@ func TestCheckPBSOfflineDoesNotRenotifyExistingAlert(t *testing.T) {
 	}
 
 	m.mu.Lock()
-	m.offlineConfirmations["pbs1"] = 3
 	m.setActiveAlertNoLock(state, existing)
 	m.mu.Unlock()
 

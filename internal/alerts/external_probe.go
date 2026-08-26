@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts/reducer"
 	alertspecs "github.com/rcourtman/pulse-go-rewrite/internal/alerts/specs"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rs/zerolog/log"
@@ -110,7 +111,6 @@ func (m *Manager) checkExternalProbe(snapshot ExternalProbeSnapshot) {
 
 	resourceID := hostResourceID(snapshot.AgentID)
 	alertID := canonicalDiscreteStateStateID(resourceID, externalProbeUnavailableStateKey)
-	trackingKey := externalProbeUnavailableTrackingPrefix + snapshot.AgentID
 
 	targetIDs := normalizedExternalProbeTargetIDs(snapshot.TargetIDs)
 	staleTargetIDs := normalizedExternalProbeTargetIDs(snapshot.StaleTargetIDs)
@@ -156,8 +156,6 @@ func (m *Manager) checkExternalProbe(snapshot ExternalProbeSnapshot) {
 				Observed: string(ExternalProbeStateUnavailable),
 			},
 		},
-		Tracking:     m.offlineConfirmations,
-		TrackingKey:  trackingKey,
 		AlertID:      alertID,
 		AlertType:    ExternalProbeUnavailableAlertType,
 		ResourceID:   resourceID,
@@ -190,10 +188,10 @@ func (m *Manager) clearExternalProbeAlert(agentID string) {
 	}
 	resourceID := hostResourceID(agentID)
 	alertID := canonicalDiscreteStateStateID(resourceID, externalProbeUnavailableStateKey)
-	trackingKey := externalProbeUnavailableTrackingPrefix + agentID
 
 	m.mu.Lock()
-	delete(m.offlineConfirmations, trackingKey)
+	// Clear any pending core run alongside the alert.
+	m.core.ApplyDiscrete(reducer.DiscreteSignal{ResourceID: resourceID, Key: canonicalDiscreteStateSpecID(resourceID, externalProbeUnavailableStateKey), Matched: false, ObservedAt: m.policyNow()}, reducer.DiscreteRule{})
 	exists := m.hasActiveAlertNoLock(alertID)
 	m.mu.Unlock()
 	if exists {

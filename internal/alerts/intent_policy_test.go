@@ -329,7 +329,6 @@ func TestLifecycleAlertStartsAtFirstIntentMatch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	tracking := make(map[string]int)
 	params := canonicalLifecycleAlertParams{
 		Spec: spec,
 		Evidence: alertspecs.AlertEvidence{
@@ -339,7 +338,7 @@ func TestLifecycleAlertStartsAtFirstIntentMatch(t *testing.T) {
 				Observed: alertspecs.PowerStateOff,
 			},
 		},
-		Tracking: tracking, TrackingKey: "vm:101", AlertID: "guest-powered-off-vm:101",
+		AlertID:   "guest-powered-off-vm:101",
 		AlertType: "powered-off", ResourceID: "vm:101", ResourceName: "database",
 	}
 	if result, _ := m.evaluateCanonicalLifecycleAlert(params); result.State.State != alertspecs.AlertStatePending {

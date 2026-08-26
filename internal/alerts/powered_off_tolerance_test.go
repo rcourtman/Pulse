@@ -63,11 +63,8 @@ func TestPoweredOffToleranceUsesElapsedTimeForVMAndLXC(t *testing.T) {
 			if hasPoweredOffAlert(manager, test.resourceID) {
 				t.Fatal("duplicate reports activated the alert before the duration elapsed")
 			}
-			manager.mu.RLock()
-			_, counted := manager.offlineConfirmations[test.resourceID]
-			manager.mu.RUnlock()
-			if counted {
-				t.Fatal("duration-based powered-off policy must not retain poll confirmations")
+			if testCoreConfirmations(manager, test.resourceID, canonicalPoweredStateSpecID(test.resourceID)) > 1 {
+				t.Fatal("duration-based powered-off policy must not accumulate poll confirmations")
 			}
 
 			clock.wall, clock.tick = start.Add(299*time.Second), 299*time.Second

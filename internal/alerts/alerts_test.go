@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts/eventlog"
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts/reducer"
 	alertspecs "github.com/rcourtman/pulse-go-rewrite/internal/alerts/specs"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/proxmoxidentity"
@@ -582,7 +583,7 @@ func TestCheckGuestSkipsAlertsWhenMetricDisabled(t *testing.T) {
 	}
 
 	m.mu.RLock()
-	_, isPending := m.pendingAlerts[canonicalMetricStateID(vmID, "cpu")]
+	isPending := testCoreIsPending(m, vmID, canonicalMetricSpecID(vmID, "cpu"))
 	m.mu.RUnlock()
 	if isPending {
 		t.Fatalf("expected pending alert entry to be cleared after disabling metric")
@@ -752,7 +753,7 @@ func TestClearAlertByCanonicalAliasRemovesActiveState(t *testing.T) {
 	canonicalState := buildCanonicalStateID(resourceID, "metric-threshold:cpu")
 	now := time.Now()
 	alert := &Alert{
-		ID:              "legacy-guest-200-cpu",
+		ID:              "guest-200-cpu",
 		Type:            "cpu",
 		Level:           AlertLevelWarning,
 		ResourceID:      resourceID,
@@ -766,7 +767,7 @@ func TestClearAlertByCanonicalAliasRemovesActiveState(t *testing.T) {
 
 	m.mu.Lock()
 	m.setActiveAlertNoLock(alert.ID, alert)
-	m.pendingAlerts[canonicalState] = now
+	m.core.ApplyDiscrete(reducer.DiscreteSignal{ResourceID: resourceID, Key: "metric-threshold:cpu", Matched: true, Severity: reducer.SeverityWarning, ObservedAt: now}, reducer.DiscreteRule{Confirmations: 3})
 	m.suppressedUntil[canonicalState] = now.Add(time.Minute)
 	m.alertRateLimit[canonicalState] = []time.Time{now}
 	m.mu.Unlock()
@@ -777,7 +778,7 @@ func TestClearAlertByCanonicalAliasRemovesActiveState(t *testing.T) {
 
 	m.mu.RLock()
 	_, active := m.getActiveAlertNoLock(canonicalState)
-	_, pending := m.pendingAlerts[canonicalState]
+	pending := testCoreIsPending(m, resourceID, "metric-threshold:cpu")
 	_, suppressed := m.suppressedUntil[canonicalState]
 	_, rateLimited := m.alertRateLimit[canonicalState]
 	m.mu.RUnlock()
@@ -842,8 +843,6 @@ func TestHandleDockerHostRemovedClearsAlertsAndTracking(t *testing.T) {
 	m.setActiveAlertNoLock(hostStorageKey, hostAlert)
 	containerStorageKey, containerAlert := testNewCanonicalAlert(containerResourceID, canonicalDiscreteStateSpecID(containerResourceID, "runtime-state"), "discrete-state", "docker-container-state")
 	m.setActiveAlertNoLock(containerStorageKey, containerAlert)
-	m.dockerOfflineCount[host.ID] = 2
-	m.dockerStateConfirm[containerResourceID] = 1
 	m.dockerRestartTracking[containerResourceID] = &dockerRestartRecord{}
 	m.mu.Unlock()
 
@@ -858,10 +857,10 @@ func TestHandleDockerHostRemovedClearsAlertsAndTracking(t *testing.T) {
 	if testHasActiveAlert(t, m, hostAlertID) {
 		t.Fatalf("expected host offline alert to be cleared")
 	}
-	if _, exists := m.dockerOfflineCount[host.ID]; exists {
+	if testCoreHasIncident(m, "docker:"+host.ID, canonicalConnectivitySpecID("docker:"+host.ID)) {
 		t.Fatalf("expected offline tracking to be cleared")
 	}
-	if _, exists := m.dockerStateConfirm[containerResourceID]; exists {
+	if testCoreHasIncident(m, containerResourceID, canonicalDiscreteStateSpecID(containerResourceID, "runtime-state")) {
 		t.Fatalf("expected state confirmation to be cleared")
 	}
 	if _, exists := m.dockerRestartTracking[containerResourceID]; exists {
@@ -1007,7 +1006,7 @@ func TestHandleHostOfflineRequiresConfirmations(t *testing.T) {
 	if testHasActiveAlert(t, m, alertID) {
 		t.Fatalf("expected no alert after first offline detection")
 	}
-	if count := m.offlineConfirmations[resourceKey]; count != 1 {
+	if count := testCoreConfirmations(m, resourceKey, canonicalConnectivitySpecID(resourceKey)); count != 1 {
 		t.Fatalf("expected confirmation count to be 1, got %d", count)
 	}
 	m.mu.RUnlock()
@@ -1017,7 +1016,7 @@ func TestHandleHostOfflineRequiresConfirmations(t *testing.T) {
 	if testHasActiveAlert(t, m, alertID) {
 		t.Fatalf("expected no alert after second offline detection")
 	}
-	if count := m.offlineConfirmations[resourceKey]; count != 2 {
+	if count := testCoreConfirmations(m, resourceKey, canonicalConnectivitySpecID(resourceKey)); count != 2 {
 		t.Fatalf("expected confirmation count to be 2, got %d", count)
 	}
 	m.mu.RUnlock()
@@ -1034,7 +1033,7 @@ func TestHandleHostOfflineRequiresConfirmations(t *testing.T) {
 	if testHasActiveAlert(t, m, alertID) {
 		t.Fatalf("expected offline alert %q to be cleared after host online", alertID)
 	}
-	if _, exists := m.offlineConfirmations[resourceKey]; exists {
+	if testCoreHasIncident(m, resourceKey, canonicalConnectivitySpecID(resourceKey)) {
 		t.Fatalf("expected offline confirmations to be cleared when host online")
 	}
 	m.mu.RUnlock()
@@ -2579,7 +2578,7 @@ func TestCheckDockerHostIgnoresContainersByPrefix(t *testing.T) {
 	if testHasActiveAlert(t, m, alertID) {
 		t.Fatalf("expected no state alert for ignored container")
 	}
-	if _, exists := m.dockerStateConfirm[resourceID]; exists {
+	if testCoreHasIncident(m, resourceID, canonicalDiscreteStateSpecID(resourceID, "runtime-state")) {
 		t.Fatalf("expected no state confirmation tracking for ignored container")
 	}
 }
@@ -3642,7 +3641,6 @@ func TestCheckDockerHostIgnoredPrefixClearsExistingAlerts(t *testing.T) {
 	m.activeAlerts[stateAlertID] = &Alert{ID: stateAlertID, ResourceID: resourceID}
 	m.activeAlerts[healthAlertID] = &Alert{ID: healthAlertID, ResourceID: resourceID}
 	m.activeAlerts[restartAlertID] = &Alert{ID: restartAlertID, ResourceID: resourceID}
-	m.dockerStateConfirm[resourceID] = 2
 	m.dockerRestartTracking[resourceID] = &dockerRestartRecord{}
 	m.mu.Unlock()
 
@@ -3660,7 +3658,7 @@ func TestCheckDockerHostIgnoredPrefixClearsExistingAlerts(t *testing.T) {
 	if testHasActiveAlert(t, m, restartAlertID) {
 		t.Fatalf("expected restart alert cleared for ignored container")
 	}
-	if _, exists := m.dockerStateConfirm[resourceID]; exists {
+	if testCoreHasIncident(m, resourceID, canonicalDiscreteStateSpecID(resourceID, "runtime-state")) {
 		t.Fatalf("expected state confirmation tracking cleared")
 	}
 	if _, exists := m.dockerRestartTracking[resourceID]; exists {
@@ -4594,7 +4592,7 @@ func TestDisableAllStorageClearsExistingAlerts(t *testing.T) {
 
 	// Pending alert should be cleared
 	m.mu.RLock()
-	_, isPending := m.pendingAlerts[canonicalMetricStateID(storageID, "usage")]
+	isPending := testCoreIsPending(m, storageID, canonicalMetricSpecID(storageID, "usage"))
 	m.mu.RUnlock()
 	if isPending {
 		t.Fatalf("expected pending alert entry to be cleared after disabling all storage")
@@ -6017,7 +6015,6 @@ func TestClearStorageOfflineAlert(t *testing.T) {
 			Level:     "critical",
 			StartTime: time.Now().Add(-10 * time.Minute),
 		}
-		m.offlineConfirmations[storage.ID] = 3
 		m.mu.Unlock()
 
 		resolvedCh := make(chan string, 1)
@@ -6028,7 +6025,7 @@ func TestClearStorageOfflineAlert(t *testing.T) {
 		m.clearStorageOfflineAlert(storage)
 		m.mu.RLock()
 		_, existsAfterFirst := testLookupActiveAlert(t, m, alertID)
-		recoveryCountAfterFirst := m.offlineRecoveryConfirmations[canonicalConnectivityStateID(storage.ID)]
+		recoveryCountAfterFirst := testCoreRecoveryCount(m, storage.ID, canonicalConnectivitySpecID(storage.ID))
 		m.mu.RUnlock()
 		if !existsAfterFirst {
 			t.Fatal("expected storage alert to remain active until recovery confirmations are satisfied")
@@ -6041,7 +6038,7 @@ func TestClearStorageOfflineAlert(t *testing.T) {
 
 		m.mu.RLock()
 		_, alertExists := testLookupActiveAlert(t, m, alertID)
-		_, confirmExists := m.offlineConfirmations[storage.ID]
+		confirmExists := testCoreHasIncident(m, storage.ID, canonicalConnectivitySpecID(storage.ID))
 		m.mu.RUnlock()
 
 		if alertExists {
@@ -6095,13 +6092,13 @@ func TestClearStorageOfflineAlert(t *testing.T) {
 
 		// Set confirmation without alert
 		m.mu.Lock()
-		m.offlineConfirmations[storage.ID] = 2
+		m.core.ApplyDiscrete(reducer.DiscreteSignal{ResourceID: storage.ID, Key: canonicalConnectivitySpecID(storage.ID), Matched: true, Severity: reducer.SeverityCritical, ObservedAt: time.Now()}, reducer.DiscreteRule{Confirmations: 3})
 		m.mu.Unlock()
 
 		m.clearStorageOfflineAlert(storage)
 
 		m.mu.RLock()
-		_, confirmExists := m.offlineConfirmations[storage.ID]
+		confirmExists := testCoreHasIncident(m, storage.ID, canonicalConnectivitySpecID(storage.ID))
 		m.mu.RUnlock()
 
 		if confirmExists {
@@ -6466,7 +6463,7 @@ func TestHandleDockerHostRemovedEmptyID(t *testing.T) {
 	// Create some alerts that should not be touched
 	m.mu.Lock()
 	m.activeAlerts["docker-host-offline-host1"] = &Alert{ID: "docker-host-offline-host1"}
-	m.dockerOfflineCount["host1"] = 3
+	m.core.ApplyDiscrete(reducer.DiscreteSignal{ResourceID: "docker:host1", Key: canonicalConnectivitySpecID("docker:host1"), Matched: true, Severity: reducer.SeverityCritical, ObservedAt: time.Now()}, reducer.DiscreteRule{Confirmations: 3})
 	m.mu.Unlock()
 
 	// Call with empty ID - should be noop
@@ -6475,7 +6472,7 @@ func TestHandleDockerHostRemovedEmptyID(t *testing.T) {
 
 	m.mu.RLock()
 	_, alertExists := testLookupActiveAlert(t, m, "docker-host-offline-host1")
-	_, countExists := m.dockerOfflineCount["host1"]
+	countExists := testCoreHasIncident(m, "docker:host1", canonicalConnectivitySpecID("docker:host1"))
 	m.mu.RUnlock()
 
 	if !alertExists {
@@ -6499,14 +6496,13 @@ func TestHandleDockerHostOnline(t *testing.T) {
 		// Set up offline alert and tracking
 		m.mu.Lock()
 		m.activeAlerts[alertID] = &Alert{ID: alertID, ResourceID: fmt.Sprintf("docker:%s", host.ID)}
-		m.dockerOfflineCount[host.ID] = 5
 		m.mu.Unlock()
 
 		m.HandleDockerHostOnline(host)
 
 		m.mu.RLock()
 		_, alertExists := testLookupActiveAlert(t, m, alertID)
-		_, countExists := m.dockerOfflineCount[host.ID]
+		countExists := testCoreHasIncident(m, "docker:"+host.ID, canonicalConnectivitySpecID("docker:"+host.ID))
 		m.mu.RUnlock()
 
 		if alertExists {
@@ -6525,13 +6521,13 @@ func TestHandleDockerHostOnline(t *testing.T) {
 
 		// Set up only tracking, no alert
 		m.mu.Lock()
-		m.dockerOfflineCount[host.ID] = 2
+		m.core.ApplyDiscrete(reducer.DiscreteSignal{ResourceID: "docker:" + host.ID, Key: canonicalConnectivitySpecID("docker:" + host.ID), Matched: true, Severity: reducer.SeverityCritical, ObservedAt: time.Now()}, reducer.DiscreteRule{Confirmations: 3})
 		m.mu.Unlock()
 
 		m.HandleDockerHostOnline(host)
 
 		m.mu.RLock()
-		_, countExists := m.dockerOfflineCount[host.ID]
+		countExists := testCoreHasIncident(m, "docker:"+host.ID, canonicalConnectivitySpecID("docker:"+host.ID))
 		m.mu.RUnlock()
 
 		if countExists {
@@ -6546,7 +6542,7 @@ func TestHandleDockerHostOnline(t *testing.T) {
 		// Create some data that should not be touched
 		m.mu.Lock()
 		m.activeAlerts["docker-host-offline-other"] = &Alert{ID: "docker-host-offline-other"}
-		m.dockerOfflineCount["other"] = 3
+		m.core.ApplyDiscrete(reducer.DiscreteSignal{ResourceID: "docker:other", Key: canonicalConnectivitySpecID("docker:other"), Matched: true, Severity: reducer.SeverityCritical, ObservedAt: time.Now()}, reducer.DiscreteRule{Confirmations: 3})
 		m.mu.Unlock()
 
 		host := models.DockerHost{ID: ""}
@@ -6554,7 +6550,7 @@ func TestHandleDockerHostOnline(t *testing.T) {
 
 		m.mu.RLock()
 		_, alertExists := testLookupActiveAlert(t, m, "docker-host-offline-other")
-		_, countExists := m.dockerOfflineCount["other"]
+		countExists := testCoreHasIncident(m, "docker:other", canonicalConnectivitySpecID("docker:other"))
 		m.mu.RUnlock()
 
 		if !alertExists {
@@ -6590,9 +6586,9 @@ func TestCleanupDockerContainerAlerts(t *testing.T) {
 			ID:         "container3-alert",
 			ResourceID: prefix + "container3",
 		}
-		m.dockerStateConfirm[prefix+"container1"] = 2
-		m.dockerStateConfirm[prefix+"container2"] = 1
-		m.dockerStateConfirm[prefix+"container3"] = 3
+		m.core.ApplyDiscrete(reducer.DiscreteSignal{ResourceID: prefix + "container1", Key: canonicalDiscreteStateSpecID(prefix+"container1", "runtime-state"), Matched: true, Severity: reducer.SeverityWarning, ObservedAt: time.Now()}, reducer.DiscreteRule{Confirmations: 3})
+		m.core.ApplyDiscrete(reducer.DiscreteSignal{ResourceID: prefix + "container2", Key: canonicalDiscreteStateSpecID(prefix+"container2", "runtime-state"), Matched: true, Severity: reducer.SeverityWarning, ObservedAt: time.Now()}, reducer.DiscreteRule{Confirmations: 3})
+		m.core.ApplyDiscrete(reducer.DiscreteSignal{ResourceID: prefix + "container3", Key: canonicalDiscreteStateSpecID(prefix+"container3", "runtime-state"), Matched: true, Severity: reducer.SeverityWarning, ObservedAt: time.Now()}, reducer.DiscreteRule{Confirmations: 3})
 		m.mu.Unlock()
 
 		// Only container1 and container2 are in seen set
@@ -6607,9 +6603,9 @@ func TestCleanupDockerContainerAlerts(t *testing.T) {
 		_, c1Exists := testLookupActiveAlert(t, m, "container1-alert")
 		_, c2Exists := testLookupActiveAlert(t, m, "container2-alert")
 		_, c3Exists := testLookupActiveAlert(t, m, "container3-alert")
-		_, s1Exists := m.dockerStateConfirm[prefix+"container1"]
-		_, s2Exists := m.dockerStateConfirm[prefix+"container2"]
-		_, s3Exists := m.dockerStateConfirm[prefix+"container3"]
+		s1Exists := testCoreHasIncident(m, prefix+"container1", canonicalDiscreteStateSpecID(prefix+"container1", "runtime-state"))
+		s2Exists := testCoreHasIncident(m, prefix+"container2", canonicalDiscreteStateSpecID(prefix+"container2", "runtime-state"))
+		s3Exists := testCoreHasIncident(m, prefix+"container3", canonicalDiscreteStateSpecID(prefix+"container3", "runtime-state"))
 		m.mu.RUnlock()
 
 		if !c1Exists {
@@ -6671,14 +6667,14 @@ func TestCleanupDockerContainerAlerts(t *testing.T) {
 			ID:         "to-clear",
 			ResourceID: prefix + "container1",
 		}
-		m.dockerStateConfirm[prefix+"container1"] = 1
+		m.core.ApplyDiscrete(reducer.DiscreteSignal{ResourceID: prefix + "container1", Key: canonicalDiscreteStateSpecID(prefix+"container1", "runtime-state"), Matched: true, Severity: reducer.SeverityWarning, ObservedAt: time.Now()}, reducer.DiscreteRule{Confirmations: 3})
 		m.mu.Unlock()
 
 		m.cleanupDockerContainerAlerts(host, map[string]struct{}{})
 
 		m.mu.RLock()
 		_, alertExists := testLookupActiveAlert(t, m, "to-clear")
-		_, stateExists := m.dockerStateConfirm[prefix+"container1"]
+		stateExists := testCoreHasIncident(m, prefix+"container1", canonicalDiscreteStateSpecID(prefix+"container1", "runtime-state"))
 		m.mu.RUnlock()
 
 		if alertExists {
@@ -6921,14 +6917,13 @@ func TestHandleHostOnline(t *testing.T) {
 		// Set up offline alert and tracking
 		m.mu.Lock()
 		m.activeAlerts[alertID] = &Alert{ID: alertID, ResourceID: resourceKey}
-		m.offlineConfirmations[resourceKey] = 5
 		m.mu.Unlock()
 
 		m.HandleHostOnline(host)
 
 		m.mu.RLock()
 		_, alertExists := testLookupActiveAlert(t, m, alertID)
-		_, confirmExists := m.offlineConfirmations[resourceKey]
+		confirmExists := testCoreHasIncident(m, resourceKey, canonicalConnectivitySpecID(resourceKey))
 		m.mu.RUnlock()
 
 		if alertExists {
@@ -6948,13 +6943,13 @@ func TestHandleHostOnline(t *testing.T) {
 
 		// Only tracking, no alert
 		m.mu.Lock()
-		m.offlineConfirmations[resourceKey] = 2
+		m.core.ApplyDiscrete(reducer.DiscreteSignal{ResourceID: resourceKey, Key: canonicalConnectivitySpecID(resourceKey), Matched: true, Severity: reducer.SeverityCritical, ObservedAt: time.Now()}, reducer.DiscreteRule{Confirmations: 3})
 		m.mu.Unlock()
 
 		m.HandleHostOnline(host)
 
 		m.mu.RLock()
-		_, exists := m.offlineConfirmations[resourceKey]
+		exists := testCoreHasIncident(m, resourceKey, canonicalConnectivitySpecID(resourceKey))
 		m.mu.RUnlock()
 
 		if exists {
@@ -6969,7 +6964,7 @@ func TestHandleHostOnline(t *testing.T) {
 		// Create data that should not be touched
 		m.mu.Lock()
 		m.activeAlerts["host-offline-other"] = &Alert{ID: "host-offline-other"}
-		m.offlineConfirmations[hostResourceID("other")] = 3
+		m.core.ApplyDiscrete(reducer.DiscreteSignal{ResourceID: hostResourceID("other"), Key: canonicalConnectivitySpecID(hostResourceID("other")), Matched: true, Severity: reducer.SeverityCritical, ObservedAt: time.Now()}, reducer.DiscreteRule{Confirmations: 3})
 		m.mu.Unlock()
 
 		host := models.Host{ID: ""}
@@ -6977,7 +6972,7 @@ func TestHandleHostOnline(t *testing.T) {
 
 		m.mu.RLock()
 		_, alertExists := testLookupActiveAlert(t, m, "host-offline-other")
-		_, confirmExists := m.offlineConfirmations[hostResourceID("other")]
+		confirmExists := testCoreHasIncident(m, hostResourceID("other"), canonicalConnectivitySpecID(hostResourceID("other")))
 		m.mu.RUnlock()
 
 		if !alertExists {
@@ -7105,8 +7100,8 @@ func TestClearActiveAlertsEmptyMaps(t *testing.T) {
 	if len(m.activeAlerts) != 0 {
 		t.Fatalf("expected activeAlerts to be empty, got %d", len(m.activeAlerts))
 	}
-	if len(m.pendingAlerts) != 0 {
-		t.Fatalf("expected pendingAlerts to be empty, got %d", len(m.pendingAlerts))
+	if m.core.PendingCount() != 0 {
+		t.Fatalf("expected no pending core incidents, got %d", m.core.PendingCount())
 	}
 
 	// Call ClearActiveAlerts on empty manager - should return early without panic
@@ -7127,15 +7122,10 @@ func TestClearActiveAlertsWithExistingAlerts(t *testing.T) {
 	m.activeAlerts["test-alert-1"] = &Alert{ID: "test-alert-1", Type: "cpu-usage"}
 	m.activeAlerts["test-alert-2"] = &Alert{ID: "test-alert-2", Type: "memory-usage"}
 	m.activeAlertAlias["canonical-test-alert-1"] = "test-alert-1"
-	m.pendingAlerts["pending-1"] = time.Now()
+	m.core.ApplyDiscrete(reducer.DiscreteSignal{ResourceID: "pending-1", Key: "pending-1-spec", Matched: true, Severity: reducer.SeverityWarning, ObservedAt: time.Now()}, reducer.DiscreteRule{Confirmations: 3})
 	m.recentAlerts["recent-1"] = &Alert{ID: "recent-1", Type: "disk-usage"}
 	m.suppressedUntil["suppressed-1"] = time.Now().Add(time.Hour)
 	m.alertRateLimit["rate-1"] = []time.Time{time.Now()}
-	m.nodeOfflineCount["node-1"] = 3
-	m.offlineConfirmations["node-1"] = 2
-	m.offlineRecoveryConfirmations["test-alert-1"] = 2
-	m.dockerOfflineCount["docker-1"] = 1
-	m.dockerStateConfirm["docker-1"] = 1
 	m.dockerRestartTracking["docker-1"] = &dockerRestartRecord{}
 	m.dockerUpdateFirstSeen["docker-1"] = time.Now()
 	m.dockerUpdateFirstSeenByIdentity["docker-1"] = time.Now()
@@ -7161,8 +7151,8 @@ func TestClearActiveAlertsWithExistingAlerts(t *testing.T) {
 	if len(m.activeAlertAlias) != 0 {
 		t.Errorf("expected activeAlertAlias to be empty, got %d", len(m.activeAlertAlias))
 	}
-	if len(m.pendingAlerts) != 0 {
-		t.Errorf("expected pendingAlerts to be empty, got %d", len(m.pendingAlerts))
+	if m.core.PendingCount() != 0 {
+		t.Errorf("expected no pending core incidents, got %d", m.core.PendingCount())
 	}
 	if len(m.recentAlerts) != 0 {
 		t.Errorf("expected recentAlerts to be empty, got %d", len(m.recentAlerts))
@@ -7173,20 +7163,8 @@ func TestClearActiveAlertsWithExistingAlerts(t *testing.T) {
 	if len(m.alertRateLimit) != 0 {
 		t.Errorf("expected alertRateLimit to be empty, got %d", len(m.alertRateLimit))
 	}
-	if len(m.nodeOfflineCount) != 0 {
-		t.Errorf("expected nodeOfflineCount to be empty, got %d", len(m.nodeOfflineCount))
-	}
-	if len(m.offlineConfirmations) != 0 {
-		t.Errorf("expected offlineConfirmations to be empty, got %d", len(m.offlineConfirmations))
-	}
-	if len(m.offlineRecoveryConfirmations) != 0 {
-		t.Errorf("expected offlineRecoveryConfirmations to be empty, got %d", len(m.offlineRecoveryConfirmations))
-	}
-	if len(m.dockerOfflineCount) != 0 {
-		t.Errorf("expected dockerOfflineCount to be empty, got %d", len(m.dockerOfflineCount))
-	}
-	if len(m.dockerStateConfirm) != 0 {
-		t.Errorf("expected dockerStateConfirm to be empty, got %d", len(m.dockerStateConfirm))
+	if n := m.core.FiringCount(); n != 0 {
+		t.Errorf("expected no firing core incidents, got %d", n)
 	}
 	if len(m.dockerRestartTracking) != 0 {
 		t.Errorf("expected dockerRestartTracking to be empty, got %d", len(m.dockerRestartTracking))
@@ -7457,9 +7435,6 @@ func TestApplyGlobalOfflineSettingsLocked(t *testing.T) {
 		m.setActiveAlertNoLock(node2State, node2Alert)
 		// Add non-node alert
 		m.activeAlerts["cpu-alert"] = &Alert{ID: "cpu-alert", Type: "cpu"}
-		// Add to nodeOfflineCount
-		m.nodeOfflineCount["node1"] = 3
-		m.nodeOfflineCount["node2"] = 2
 
 		m.config.DisableAllNodesOffline = true
 
@@ -7478,10 +7453,6 @@ func TestApplyGlobalOfflineSettingsLocked(t *testing.T) {
 		if !testHasActiveAlert(t, m, "cpu-alert") {
 			t.Error("expected cpu-alert to remain")
 		}
-		// nodeOfflineCount should be reset
-		if len(m.nodeOfflineCount) != 0 {
-			t.Errorf("expected nodeOfflineCount to be empty, got %d entries", len(m.nodeOfflineCount))
-		}
 	})
 
 	t.Run("DisableAllPBSOffline clears PBS offline alerts", func(t *testing.T) {
@@ -7494,8 +7465,6 @@ func TestApplyGlobalOfflineSettingsLocked(t *testing.T) {
 		m.setActiveAlertNoLock(pbsState, pbsAlert)
 		// Add non-PBS alert
 		m.activeAlerts["cpu-alert"] = &Alert{ID: "cpu-alert", Type: "cpu"}
-		// Add to offlineConfirmations
-		m.offlineConfirmations["pbs1"] = 3
 
 		m.config.DisableAllPBSOffline = true
 
@@ -7511,10 +7480,6 @@ func TestApplyGlobalOfflineSettingsLocked(t *testing.T) {
 		if !testHasActiveAlert(t, m, "cpu-alert") {
 			t.Error("expected cpu-alert to remain")
 		}
-		// offlineConfirmations for PBS should be removed
-		if _, exists := m.offlineConfirmations["pbs1"]; exists {
-			t.Error("expected offlineConfirmations for pbs1 to be removed")
-		}
 	})
 
 	t.Run("DisableAllGuestsOffline clears guest powered off alerts", func(t *testing.T) {
@@ -7526,8 +7491,6 @@ func TestApplyGlobalOfflineSettingsLocked(t *testing.T) {
 		m.setActiveAlertNoLock(guestState, guestAlert)
 		// Add non-guest alert
 		m.activeAlerts["cpu-alert"] = &Alert{ID: "cpu-alert", Type: "cpu"}
-		// Add to offlineConfirmations
-		m.offlineConfirmations["vm1"] = 2
 
 		m.config.DisableAllGuestsOffline = true
 
@@ -7543,10 +7506,6 @@ func TestApplyGlobalOfflineSettingsLocked(t *testing.T) {
 		if !testHasActiveAlert(t, m, "cpu-alert") {
 			t.Error("expected cpu-alert to remain")
 		}
-		// offlineConfirmations for guest should be removed
-		if _, exists := m.offlineConfirmations["vm1"]; exists {
-			t.Error("expected offlineConfirmations for vm1 to be removed")
-		}
 	})
 
 	t.Run("DisableAllDockerHostsOffline clears docker host alerts", func(t *testing.T) {
@@ -7559,8 +7518,6 @@ func TestApplyGlobalOfflineSettingsLocked(t *testing.T) {
 		m.setActiveAlertNoLock(dockerState, dockerAlert)
 		// Add non-docker host alert
 		m.activeAlerts["cpu-alert"] = &Alert{ID: "cpu-alert", Type: "cpu"}
-		// Add to dockerOfflineCount
-		m.dockerOfflineCount["host1"] = 3
 
 		m.config.DisableAllDockerHostsOffline = true
 
@@ -7576,10 +7533,6 @@ func TestApplyGlobalOfflineSettingsLocked(t *testing.T) {
 		if !testHasActiveAlert(t, m, "cpu-alert") {
 			t.Error("expected cpu-alert to remain")
 		}
-		// dockerOfflineCount should be reset
-		if len(m.dockerOfflineCount) != 0 {
-			t.Errorf("expected dockerOfflineCount to be empty, got %d entries", len(m.dockerOfflineCount))
-		}
 	})
 
 	t.Run("DisableAllDockerContainers clears docker container alerts", func(t *testing.T) {
@@ -7592,7 +7545,6 @@ func TestApplyGlobalOfflineSettingsLocked(t *testing.T) {
 		// Add non-container alert
 		m.activeAlerts["cpu-alert"] = &Alert{ID: "cpu-alert", Type: "cpu"}
 		// Add tracking state
-		m.dockerStateConfirm["c1"] = 2
 		m.dockerRestartTracking["c1"] = &dockerRestartRecord{count: 5}
 
 		m.config.DisableAllDockerContainers = true
@@ -7613,9 +7565,6 @@ func TestApplyGlobalOfflineSettingsLocked(t *testing.T) {
 			t.Error("expected cpu-alert to remain")
 		}
 		// Tracking state should be reset
-		if len(m.dockerStateConfirm) != 0 {
-			t.Errorf("expected dockerStateConfirm to be empty, got %d entries", len(m.dockerStateConfirm))
-		}
 		if len(m.dockerRestartTracking) != 0 {
 			t.Errorf("expected dockerRestartTracking to be empty, got %d entries", len(m.dockerRestartTracking))
 		}
@@ -7708,7 +7657,6 @@ func TestHandleHostOffline(t *testing.T) {
 		// Pre-create an alert and confirmation
 		alertID := "host-offline-host1"
 		m.activeAlerts[alertID] = &Alert{ID: alertID, Type: "host-offline"}
-		m.offlineConfirmations[hostResourceID("host1")] = 5
 
 		host := models.Host{ID: "host1", Hostname: "test-host"}
 		m.HandleHostOffline(host)
@@ -7717,7 +7665,7 @@ func TestHandleHostOffline(t *testing.T) {
 		if testHasActiveAlert(t, m, alertID) {
 			t.Error("expected alert to be cleared")
 		}
-		if _, exists := m.offlineConfirmations[hostResourceID("host1")]; exists {
+		if testCoreHasIncident(m, hostResourceID("host1"), canonicalConnectivitySpecID(hostResourceID("host1"))) {
 			t.Error("expected offlineConfirmations to be cleared")
 		}
 	})
@@ -7733,7 +7681,6 @@ func TestHandleHostOffline(t *testing.T) {
 		// Pre-create an alert and confirmation
 		alertID := "host-offline-host1"
 		m.activeAlerts[alertID] = &Alert{ID: alertID, Type: "host-offline"}
-		m.offlineConfirmations[hostResourceID("host1")] = 5
 
 		host := models.Host{ID: "host1", Hostname: "test-host"}
 		m.HandleHostOffline(host)
@@ -7742,7 +7689,7 @@ func TestHandleHostOffline(t *testing.T) {
 		if testHasActiveAlert(t, m, alertID) {
 			t.Error("expected alert to be cleared")
 		}
-		if _, exists := m.offlineConfirmations[hostResourceID("host1")]; exists {
+		if testCoreHasIncident(m, hostResourceID("host1"), canonicalConnectivitySpecID(hostResourceID("host1"))) {
 			t.Error("expected offlineConfirmations to be cleared")
 		}
 	})
@@ -7756,7 +7703,6 @@ func TestHandleHostOffline(t *testing.T) {
 
 		alertID := canonicalConnectivityStateID(hostResourceID("host1"))
 		m.activeAlerts[alertID] = &Alert{ID: alertID, Type: "host-offline"}
-		m.offlineConfirmations[hostResourceID("host1")] = 5
 
 		host := models.Host{ID: "host1", Hostname: "test-host", LinkedNodeID: "cluster-node1"}
 		m.HandleHostOffline(host)
@@ -7764,7 +7710,7 @@ func TestHandleHostOffline(t *testing.T) {
 		if testHasActiveAlert(t, m, alertID) {
 			t.Error("expected alert to be cleared")
 		}
-		if _, exists := m.offlineConfirmations[hostResourceID("host1")]; exists {
+		if testCoreHasIncident(m, hostResourceID("host1"), canonicalConnectivitySpecID(hostResourceID("host1"))) {
 			t.Error("expected offlineConfirmations to be cleared")
 		}
 	})
@@ -7820,16 +7766,16 @@ func TestHandleHostOffline(t *testing.T) {
 		if len(m.activeAlerts) != 0 {
 			t.Errorf("expected 0 alerts after 1st call, got %d", len(m.activeAlerts))
 		}
-		if m.offlineConfirmations[resourceKey] != 1 {
-			t.Errorf("expected 1 confirmation, got %d", m.offlineConfirmations[resourceKey])
+		if testCoreConfirmations(m, resourceKey, canonicalConnectivitySpecID(resourceKey)) != 1 {
+			t.Errorf("expected 1 confirmation, got %d", testCoreConfirmations(m, resourceKey, canonicalConnectivitySpecID(resourceKey)))
 		}
 
 		m.HandleHostOffline(host)
 		if len(m.activeAlerts) != 0 {
 			t.Errorf("expected 0 alerts after 2nd call, got %d", len(m.activeAlerts))
 		}
-		if m.offlineConfirmations[resourceKey] != 2 {
-			t.Errorf("expected 2 confirmations, got %d", m.offlineConfirmations[resourceKey])
+		if testCoreConfirmations(m, resourceKey, canonicalConnectivitySpecID(resourceKey)) != 2 {
+			t.Errorf("expected 2 confirmations, got %d", testCoreConfirmations(m, resourceKey, canonicalConnectivitySpecID(resourceKey)))
 		}
 	})
 
@@ -8205,14 +8151,13 @@ func TestHandleHostRemoved(t *testing.T) {
 			ID:         "host-offline-host1",
 			ResourceID: hostResourceID("host1"),
 		}
-		m.offlineConfirmations[hostResourceID("host1")] = 5
 		m.mu.Unlock()
 
 		m.HandleHostRemoved(models.Host{ID: "host1", Hostname: "testhost"})
 
 		m.mu.RLock()
 		_, alertExists := testLookupActiveAlert(t, m, "host-offline-host1")
-		_, confirmExists := m.offlineConfirmations[hostResourceID("host1")]
+		confirmExists := testCoreHasIncident(m, hostResourceID("host1"), canonicalConnectivitySpecID(hostResourceID("host1")))
 		m.mu.RUnlock()
 
 		if alertExists {
@@ -8293,7 +8238,6 @@ func TestHandleHostRemoved(t *testing.T) {
 		m.setActiveAlertNoLock(cpuState, cpuAlert)
 		m.setActiveAlertNoLock(memState, memAlert)
 		m.activeAlerts["agent:host1/disk:sda-usage"] = &Alert{ID: "agent:host1/disk:sda-usage", ResourceID: fmt.Sprintf("%s/disk:sda", hostResourceID("host1"))}
-		m.offlineConfirmations[hostResourceID("host1")] = 3
 		m.mu.Unlock()
 
 		m.HandleHostRemoved(models.Host{ID: "host1", Hostname: "testhost"})
@@ -8305,7 +8249,7 @@ func TestHandleHostRemoved(t *testing.T) {
 				alertCount++
 			}
 		}
-		_, confirmExists := m.offlineConfirmations[hostResourceID("host1")]
+		confirmExists := testCoreHasIncident(m, hostResourceID("host1"), canonicalConnectivitySpecID(hostResourceID("host1")))
 		m.mu.RUnlock()
 
 		if alertCount > 0 {
@@ -8496,7 +8440,7 @@ func TestReevaluateGuestAlert(t *testing.T) {
 		state, alert := testNewCanonicalAlert("guest1", canonicalMetricSpecID("guest1", "cpu"), string(alertspecs.AlertSpecKindMetricThreshold), "cpu")
 		alert.Value = 90
 		m.setActiveAlertNoLock(state, alert)
-		m.pendingAlerts[state] = time.Now()
+		m.core.ApplyDiscrete(reducer.DiscreteSignal{ResourceID: "guest1", Key: canonicalMetricSpecID("guest1", "cpu"), Matched: true, Severity: reducer.SeverityWarning, ObservedAt: time.Now()}, reducer.DiscreteRule{Confirmations: 3})
 		m.config.GuestDefaults.CPU = nil // Disabled
 		m.mu.Unlock()
 
@@ -8504,7 +8448,7 @@ func TestReevaluateGuestAlert(t *testing.T) {
 
 		m.mu.RLock()
 		_, alertExists := testLookupActiveAlert(t, m, state)
-		_, pendingExists := m.pendingAlerts[state]
+		pendingExists := testCoreIsPending(m, "guest1", canonicalMetricSpecID("guest1", "cpu"))
 		m.mu.RUnlock()
 		if alertExists {
 			t.Error("expected active alert to be cleared")
@@ -8617,7 +8561,6 @@ func TestHandleDockerHostOffline(t *testing.T) {
 		m.mu.Lock()
 		m.config.Enabled = true
 		m.config.DisableAllDockerHostsOffline = true
-		m.dockerOfflineCount["docker1"] = 5
 		state, alert := testNewCanonicalAlert("docker:docker1", canonicalConnectivitySpecID("docker:docker1"), string(alertspecs.AlertSpecKindConnectivity), "docker-host-offline")
 		m.setActiveAlertNoLock(state, alert)
 		m.mu.Unlock()
@@ -8626,7 +8569,7 @@ func TestHandleDockerHostOffline(t *testing.T) {
 
 		m.mu.RLock()
 		_, alertExists := testLookupActiveAlert(t, m, state)
-		_, countExists := m.dockerOfflineCount["docker1"]
+		countExists := testCoreHasIncident(m, "docker:docker1", canonicalConnectivitySpecID("docker:docker1"))
 		m.mu.RUnlock()
 		if alertExists {
 			t.Error("expected alert to be cleared")
@@ -8644,7 +8587,6 @@ func TestHandleDockerHostOffline(t *testing.T) {
 		m.config.Overrides = map[string]ThresholdConfig{
 			"docker1": {DisableConnectivity: true},
 		}
-		m.dockerOfflineCount["docker1"] = 3
 		state, alert := testNewCanonicalAlert("docker:docker1", canonicalConnectivitySpecID("docker:docker1"), string(alertspecs.AlertSpecKindConnectivity), "docker-host-offline")
 		m.setActiveAlertNoLock(state, alert)
 		m.mu.Unlock()
@@ -8653,7 +8595,7 @@ func TestHandleDockerHostOffline(t *testing.T) {
 
 		m.mu.RLock()
 		_, alertExists := testLookupActiveAlert(t, m, state)
-		_, countExists := m.dockerOfflineCount["docker1"]
+		countExists := testCoreHasIncident(m, "docker:docker1", canonicalConnectivitySpecID("docker:docker1"))
 		m.mu.RUnlock()
 		if alertExists {
 			t.Error("expected alert to be cleared with override")
@@ -8699,7 +8641,7 @@ func TestHandleDockerHostOffline(t *testing.T) {
 		// First call - confirmation 1
 		m.HandleDockerHostOffline(host)
 		m.mu.RLock()
-		count1 := m.dockerOfflineCount["docker1"]
+		count1 := testCoreConfirmations(m, "docker:docker1", canonicalConnectivitySpecID("docker:docker1"))
 		alert1, _ := testLookupActiveAlert(t, m, "docker-host-offline-docker1")
 		m.mu.RUnlock()
 		if count1 != 1 {
@@ -8712,7 +8654,7 @@ func TestHandleDockerHostOffline(t *testing.T) {
 		// Second call - confirmation 2
 		m.HandleDockerHostOffline(host)
 		m.mu.RLock()
-		count2 := m.dockerOfflineCount["docker1"]
+		count2 := testCoreConfirmations(m, "docker:docker1", canonicalConnectivitySpecID("docker:docker1"))
 		alert2, _ := testLookupActiveAlert(t, m, "docker-host-offline-docker1")
 		m.mu.RUnlock()
 		if count2 != 2 {
@@ -8725,7 +8667,7 @@ func TestHandleDockerHostOffline(t *testing.T) {
 		// Third call - confirmation 3 - should create alert
 		m.HandleDockerHostOffline(host)
 		m.mu.RLock()
-		count3 := m.dockerOfflineCount["docker1"]
+		count3 := testCoreConfirmations(m, "docker:docker1", canonicalConnectivitySpecID("docker:docker1"))
 		alert3 := testRequireActiveAlert(t, m, "docker-host-offline-docker1")
 		m.mu.RUnlock()
 		if count3 != 3 {
@@ -9081,14 +9023,14 @@ func TestClearNodeOfflineAlert(t *testing.T) {
 		// t.Parallel()
 		m := newTestManager(t)
 		m.mu.Lock()
-		m.nodeOfflineCount["node1"] = 5
+		m.core.ApplyDiscrete(reducer.DiscreteSignal{ResourceID: "node1", Key: canonicalConnectivitySpecID("node1"), Matched: true, Severity: reducer.SeverityCritical, ObservedAt: time.Now()}, reducer.DiscreteRule{Confirmations: 3})
 		m.mu.Unlock()
 
 		node := models.Node{ID: "node1", Name: "Node 1"}
 		m.clearNodeOfflineAlert(node)
 
 		m.mu.RLock()
-		_, exists := m.nodeOfflineCount["node1"]
+		exists := testCoreHasIncident(m, "node1", canonicalConnectivitySpecID("node1"))
 		m.mu.RUnlock()
 		if exists {
 			t.Error("expected offline count to be cleared")
@@ -9104,7 +9046,6 @@ func TestClearNodeOfflineAlert(t *testing.T) {
 		})
 
 		m.mu.Lock()
-		m.nodeOfflineCount["node1"] = 3
 		state, alert := testNewCanonicalAlert("node1", canonicalConnectivitySpecID("node1"), string(alertspecs.AlertSpecKindConnectivity), "offline")
 		alert.StartTime = time.Now().Add(-10 * time.Minute)
 		m.setActiveAlertNoLock(state, alert)
@@ -9114,7 +9055,7 @@ func TestClearNodeOfflineAlert(t *testing.T) {
 		m.clearNodeOfflineAlert(node)
 		m.mu.RLock()
 		_, existsAfterFirst := testLookupActiveAlert(t, m, state)
-		recoveryCountAfterFirst := m.offlineRecoveryConfirmations[state]
+		recoveryCountAfterFirst := testCoreRecoveryCount(m, "node1", canonicalConnectivitySpecID("node1"))
 		m.mu.RUnlock()
 		if !existsAfterFirst {
 			t.Fatal("expected node alert to remain active until recovery confirmations are satisfied")
@@ -9126,7 +9067,7 @@ func TestClearNodeOfflineAlert(t *testing.T) {
 		m.clearNodeOfflineAlert(node)
 		m.mu.RLock()
 		_, existsAfterSecond := testLookupActiveAlert(t, m, state)
-		recoveryCountAfterSecond := m.offlineRecoveryConfirmations[state]
+		recoveryCountAfterSecond := testCoreRecoveryCount(m, "node1", canonicalConnectivitySpecID("node1"))
 		m.mu.RUnlock()
 		if !existsAfterSecond {
 			t.Fatal("expected node alert to remain active after second recovery confirmation")
@@ -9139,7 +9080,7 @@ func TestClearNodeOfflineAlert(t *testing.T) {
 
 		m.mu.RLock()
 		_, alertExists := testLookupActiveAlert(t, m, state)
-		_, countExists := m.nodeOfflineCount["node1"]
+		countExists := testCoreHasIncident(m, "node1", canonicalConnectivitySpecID("node1"))
 		m.mu.RUnlock()
 
 		if alertExists {
@@ -9315,14 +9256,14 @@ func TestClearPBSOfflineAlert(t *testing.T) {
 		// t.Parallel()
 		m := newTestManager(t)
 		m.mu.Lock()
-		m.offlineConfirmations["pbs1"] = 5
+		m.core.ApplyDiscrete(reducer.DiscreteSignal{ResourceID: "pbs1", Key: canonicalConnectivitySpecID("pbs1"), Matched: true, Severity: reducer.SeverityCritical, ObservedAt: time.Now()}, reducer.DiscreteRule{Confirmations: 3})
 		m.mu.Unlock()
 
 		pbs := models.PBSInstance{ID: "pbs1", Name: "PBS 1"}
 		m.clearPBSOfflineAlert(pbs)
 
 		m.mu.RLock()
-		_, exists := m.offlineConfirmations["pbs1"]
+		exists := testCoreHasIncident(m, "pbs1", canonicalConnectivitySpecID("pbs1"))
 		m.mu.RUnlock()
 		if exists {
 			t.Error("expected offline confirmation count to be cleared")
@@ -9338,7 +9279,6 @@ func TestClearPBSOfflineAlert(t *testing.T) {
 		})
 
 		m.mu.Lock()
-		m.offlineConfirmations["pbs1"] = 3
 		m.activeAlerts["pbs-offline-pbs1"] = &Alert{
 			ID:        "pbs-offline-pbs1",
 			Type:      "offline",
@@ -9350,7 +9290,7 @@ func TestClearPBSOfflineAlert(t *testing.T) {
 		m.clearPBSOfflineAlert(pbs)
 		m.mu.RLock()
 		_, existsAfterFirst := testLookupActiveAlert(t, m, "pbs-offline-pbs1")
-		recoveryCountAfterFirst := m.offlineRecoveryConfirmations[canonicalConnectivityStateID("pbs1")]
+		recoveryCountAfterFirst := testCoreRecoveryCount(m, "pbs1", canonicalConnectivitySpecID("pbs1"))
 		m.mu.RUnlock()
 		if !existsAfterFirst {
 			t.Fatal("expected PBS alert to remain active until recovery confirmations are satisfied")
@@ -9362,7 +9302,7 @@ func TestClearPBSOfflineAlert(t *testing.T) {
 		m.clearPBSOfflineAlert(pbs)
 		m.mu.RLock()
 		_, existsAfterSecond := testLookupActiveAlert(t, m, "pbs-offline-pbs1")
-		recoveryCountAfterSecond := m.offlineRecoveryConfirmations[canonicalConnectivityStateID("pbs1")]
+		recoveryCountAfterSecond := testCoreRecoveryCount(m, "pbs1", canonicalConnectivitySpecID("pbs1"))
 		m.mu.RUnlock()
 		if !existsAfterSecond {
 			t.Fatal("expected PBS alert to remain active after second recovery confirmation")
@@ -9375,7 +9315,7 @@ func TestClearPBSOfflineAlert(t *testing.T) {
 
 		m.mu.RLock()
 		_, alertExists := testLookupActiveAlert(t, m, "pbs-offline-pbs1")
-		_, countExists := m.offlineConfirmations["pbs1"]
+		countExists := testCoreHasIncident(m, "pbs1", canonicalConnectivitySpecID("pbs1"))
 		m.mu.RUnlock()
 
 		if alertExists {
@@ -9422,14 +9362,14 @@ func TestClearPMGOfflineAlert(t *testing.T) {
 		// t.Parallel()
 		m := newTestManager(t)
 		m.mu.Lock()
-		m.offlineConfirmations["pmg1"] = 5
+		m.core.ApplyDiscrete(reducer.DiscreteSignal{ResourceID: "pmg1", Key: canonicalConnectivitySpecID("pmg1"), Matched: true, Severity: reducer.SeverityCritical, ObservedAt: time.Now()}, reducer.DiscreteRule{Confirmations: 3})
 		m.mu.Unlock()
 
 		pmg := models.PMGInstance{ID: "pmg1", Name: "PMG 1"}
 		m.clearPMGOfflineAlert(pmg)
 
 		m.mu.RLock()
-		_, exists := m.offlineConfirmations["pmg1"]
+		exists := testCoreHasIncident(m, "pmg1", canonicalConnectivitySpecID("pmg1"))
 		m.mu.RUnlock()
 		if exists {
 			t.Error("expected offline confirmation count to be cleared")
@@ -9445,7 +9385,6 @@ func TestClearPMGOfflineAlert(t *testing.T) {
 		})
 
 		m.mu.Lock()
-		m.offlineConfirmations["pmg1"] = 3
 		m.activeAlerts["pmg-offline-pmg1"] = &Alert{
 			ID:        "pmg-offline-pmg1",
 			Type:      "offline",
@@ -9457,7 +9396,7 @@ func TestClearPMGOfflineAlert(t *testing.T) {
 		m.clearPMGOfflineAlert(pmg)
 		m.mu.RLock()
 		_, existsAfterFirst := testLookupActiveAlert(t, m, "pmg-offline-pmg1")
-		recoveryCountAfterFirst := m.offlineRecoveryConfirmations[canonicalConnectivityStateID("pmg1")]
+		recoveryCountAfterFirst := testCoreRecoveryCount(m, "pmg1", canonicalConnectivitySpecID("pmg1"))
 		m.mu.RUnlock()
 		if !existsAfterFirst {
 			t.Fatal("expected PMG alert to remain active until recovery confirmations are satisfied")
@@ -9469,7 +9408,7 @@ func TestClearPMGOfflineAlert(t *testing.T) {
 		m.clearPMGOfflineAlert(pmg)
 		m.mu.RLock()
 		_, existsAfterSecond := testLookupActiveAlert(t, m, "pmg-offline-pmg1")
-		recoveryCountAfterSecond := m.offlineRecoveryConfirmations[canonicalConnectivityStateID("pmg1")]
+		recoveryCountAfterSecond := testCoreRecoveryCount(m, "pmg1", canonicalConnectivitySpecID("pmg1"))
 		m.mu.RUnlock()
 		if !existsAfterSecond {
 			t.Fatal("expected PMG alert to remain active after second recovery confirmation")
@@ -9482,7 +9421,7 @@ func TestClearPMGOfflineAlert(t *testing.T) {
 
 		m.mu.RLock()
 		_, alertExists := testLookupActiveAlert(t, m, "pmg-offline-pmg1")
-		_, countExists := m.offlineConfirmations["pmg1"]
+		countExists := testCoreHasIncident(m, "pmg1", canonicalConnectivitySpecID("pmg1"))
 		m.mu.RUnlock()
 
 		if alertExists {
@@ -9519,7 +9458,6 @@ func TestCheckNodeOffline(t *testing.T) {
 		}
 		state, alert := testNewCanonicalAlert("node1", canonicalConnectivitySpecID("node1"), string(alertspecs.AlertSpecKindConnectivity), "offline")
 		m.setActiveAlertNoLock(state, alert)
-		m.nodeOfflineCount["node1"] = 5
 		m.mu.Unlock()
 
 		node := models.Node{ID: "node1", Name: "Node 1"}
@@ -9527,7 +9465,7 @@ func TestCheckNodeOffline(t *testing.T) {
 
 		m.mu.RLock()
 		_, alertExists := testLookupActiveAlert(t, m, state)
-		_, countExists := m.nodeOfflineCount["node1"]
+		countExists := testCoreHasIncident(m, "node1", canonicalConnectivitySpecID("node1"))
 		m.mu.RUnlock()
 
 		if alertExists {
@@ -9576,7 +9514,7 @@ func TestCheckNodeOffline(t *testing.T) {
 		// First call - count 1
 		m.checkNodeOffline(node)
 		m.mu.RLock()
-		count1 := m.nodeOfflineCount["node1"]
+		count1 := testCoreConfirmations(m, "node1", canonicalConnectivitySpecID("node1"))
 		alert1, _ := testLookupActiveAlert(t, m, "node-offline-node1")
 		m.mu.RUnlock()
 		if count1 != 1 {
@@ -9589,7 +9527,7 @@ func TestCheckNodeOffline(t *testing.T) {
 		// Second call - count 2
 		m.checkNodeOffline(node)
 		m.mu.RLock()
-		count2 := m.nodeOfflineCount["node1"]
+		count2 := testCoreConfirmations(m, "node1", canonicalConnectivitySpecID("node1"))
 		alert2, _ := testLookupActiveAlert(t, m, "node-offline-node1")
 		m.mu.RUnlock()
 		if count2 != 2 {
@@ -9622,7 +9560,7 @@ func TestCheckNodeOffline(t *testing.T) {
 
 		m.mu.RLock()
 		alert := testRequireActiveAlert(t, m, "node-offline-node1")
-		count := m.nodeOfflineCount["node1"]
+		count := testCoreConfirmations(m, "node1", canonicalConnectivitySpecID("node1"))
 		m.mu.RUnlock()
 
 		if count != 3 {
@@ -9730,7 +9668,7 @@ func TestCheckPBSOffline(t *testing.T) {
 		m.checkPBSOffline(pbs)
 
 		m.mu.RLock()
-		count := m.offlineConfirmations["pbs1"]
+		count := testCoreConfirmations(m, "pbs1", canonicalConnectivitySpecID("pbs1"))
 		_, alertExists := testLookupActiveAlert(t, m, "pbs-offline-pbs1")
 		m.mu.RUnlock()
 
@@ -9757,7 +9695,7 @@ func TestCheckPBSOffline(t *testing.T) {
 
 		m.mu.RLock()
 		alert := testRequireActiveAlert(t, m, "pbs-offline-pbs1")
-		count := m.offlineConfirmations["pbs1"]
+		count := testCoreConfirmations(m, "pbs1", canonicalConnectivitySpecID("pbs1"))
 		m.mu.RUnlock()
 
 		if count != 3 {
@@ -9779,7 +9717,6 @@ func TestCheckPBSOffline(t *testing.T) {
 		m := newTestManager(t)
 		oldTime := time.Now().Add(-1 * time.Hour)
 		m.mu.Lock()
-		m.offlineConfirmations["pbs1"] = 3
 		state, existing := testNewCanonicalAlert("pbs1", canonicalConnectivitySpecID("pbs1"), string(alertspecs.AlertSpecKindConnectivity), "offline")
 		existing.LastSeen = oldTime
 		m.setActiveAlertNoLock(state, existing)
@@ -9859,7 +9796,7 @@ func TestCheckPMGOffline(t *testing.T) {
 		m.checkPMGOffline(pmg)
 
 		m.mu.RLock()
-		count := m.offlineConfirmations["pmg1"]
+		count := testCoreConfirmations(m, "pmg1", canonicalConnectivitySpecID("pmg1"))
 		_, alertExists := testLookupActiveAlert(t, m, "pmg-offline-pmg1")
 		m.mu.RUnlock()
 
@@ -9886,7 +9823,7 @@ func TestCheckPMGOffline(t *testing.T) {
 
 		m.mu.RLock()
 		alert := testRequireActiveAlert(t, m, "pmg-offline-pmg1")
-		count := m.offlineConfirmations["pmg1"]
+		count := testCoreConfirmations(m, "pmg1", canonicalConnectivitySpecID("pmg1"))
 		m.mu.RUnlock()
 
 		if count != 3 {
@@ -9908,7 +9845,6 @@ func TestCheckPMGOffline(t *testing.T) {
 		m := newTestManager(t)
 		oldTime := time.Now().Add(-1 * time.Hour)
 		m.mu.Lock()
-		m.offlineConfirmations["pmg1"] = 3
 		state, existing := testNewCanonicalAlert("pmg1", canonicalConnectivitySpecID("pmg1"), string(alertspecs.AlertSpecKindConnectivity), "offline")
 		existing.LastSeen = oldTime
 		m.setActiveAlertNoLock(state, existing)
@@ -10701,7 +10637,7 @@ func TestCheckStorageOffline(t *testing.T) {
 		m.checkStorageOffline(storage)
 
 		m.mu.RLock()
-		confirmCount := m.offlineConfirmations["local-lvm"]
+		confirmCount := testCoreConfirmations(m, "local-lvm", canonicalConnectivitySpecID("local-lvm"))
 		_, alertExists := testLookupActiveAlert(t, m, "storage-offline-local-lvm")
 		m.mu.RUnlock()
 
@@ -10756,7 +10692,6 @@ func TestCheckStorageOffline(t *testing.T) {
 
 		oldTime := time.Now().Add(-1 * time.Hour)
 		m.mu.Lock()
-		m.offlineConfirmations["local-lvm"] = 5 // Already confirmed
 		state, alert := testNewCanonicalAlert("local-lvm", canonicalConnectivitySpecID("local-lvm"), string(alertspecs.AlertSpecKindConnectivity), "offline")
 		alert.LastSeen = oldTime
 		m.setActiveAlertNoLock(state, alert)
@@ -10849,7 +10784,7 @@ func TestCheckGuestPoweredOff(t *testing.T) {
 		m.checkGuestPoweredOff("vm100", "TestVM", "pve-node1", "pve-instance", "VM", false)
 
 		m.mu.RLock()
-		confirmCount := m.offlineConfirmations["vm100"]
+		confirmCount := testCoreConfirmations(m, "vm100", canonicalPoweredStateSpecID("vm100"))
 		_, alertExists := testLookupActiveAlert(t, m, "guest-powered-off-vm100")
 		m.mu.RUnlock()
 
@@ -10942,7 +10877,6 @@ func TestCheckGuestPoweredOff(t *testing.T) {
 		// Pre-create an alert and confirmation count
 		m.mu.Lock()
 		m.activeAlerts["guest-powered-off-vm100"] = &Alert{ID: "guest-powered-off-vm100"}
-		m.offlineConfirmations["vm100"] = 5
 		m.config.Overrides = map[string]ThresholdConfig{
 			"vm100": {Disabled: true},
 		}
@@ -10952,7 +10886,7 @@ func TestCheckGuestPoweredOff(t *testing.T) {
 
 		m.mu.RLock()
 		_, alertExists := testLookupActiveAlert(t, m, "guest-powered-off-vm100")
-		_, confirmExists := m.offlineConfirmations["vm100"]
+		confirmExists := testCoreHasIncident(m, "vm100", canonicalPoweredStateSpecID("vm100"))
 		m.mu.RUnlock()
 
 		if alertExists {
@@ -11344,13 +11278,13 @@ func TestCleanup(t *testing.T) {
 		m := newTestManager(t)
 
 		m.mu.Lock()
-		m.pendingAlerts["stale-pending"] = time.Now().Add(-15 * time.Minute)
+		m.core.ApplyDiscrete(reducer.DiscreteSignal{ResourceID: "stale-pending", Key: "stale-pending-spec", Matched: true, Severity: reducer.SeverityWarning, ObservedAt: time.Now().Add(-15 * time.Minute)}, reducer.DiscreteRule{Confirmations: 3})
 		m.mu.Unlock()
 
 		m.Cleanup(1 * time.Hour)
 
 		m.mu.RLock()
-		_, exists := m.pendingAlerts["stale-pending"]
+		exists := testCoreIsPending(m, "stale-pending", "stale-pending-spec")
 		m.mu.RUnlock()
 
 		if exists {
@@ -14124,11 +14058,11 @@ func TestSuppressGuestAlerts(t *testing.T) {
 			ResourceID: "vm100",
 			Type:       "cpu",
 		}
-		m.pendingAlerts["vm100-memory"] = now
+		m.core.ApplyDiscrete(reducer.DiscreteSignal{ResourceID: "vm100", Key: canonicalMetricSpecID("vm100", "memory"), Matched: true, Severity: reducer.SeverityWarning, ObservedAt: now}, reducer.DiscreteRule{Confirmations: 3})
 		m.recentAlerts["vm100-disk"] = &Alert{ID: "vm100-disk", ResourceID: "vm100"}
 		m.suppressedUntil["vm100-network"] = now.Add(time.Hour)
 		m.alertRateLimit["vm100-io"] = []time.Time{now}
-		m.offlineConfirmations["vm100"] = 1
+		m.core.ApplyDiscrete(reducer.DiscreteSignal{ResourceID: "vm100", Key: canonicalPoweredStateSpecID("vm100"), Matched: true, Severity: reducer.SeverityWarning, ObservedAt: now}, reducer.DiscreteRule{Confirmations: 3})
 		m.mu.Unlock()
 
 		result := m.suppressGuestAlerts("vm100")
@@ -14142,7 +14076,7 @@ func TestSuppressGuestAlerts(t *testing.T) {
 		if testHasActiveAlert(t, m, "vm100-cpu") {
 			t.Error("expected activeAlerts to be cleared")
 		}
-		if _, exists := m.pendingAlerts["vm100-memory"]; exists {
+		if testCoreIsPending(m, "vm100", canonicalMetricSpecID("vm100", "memory")) {
 			t.Error("expected pendingAlerts to be cleared")
 		}
 		if _, exists := m.recentAlerts["vm100-disk"]; exists {
@@ -14154,7 +14088,7 @@ func TestSuppressGuestAlerts(t *testing.T) {
 		if _, exists := m.alertRateLimit["vm100-io"]; exists {
 			t.Error("expected alertRateLimit to be cleared")
 		}
-		if _, exists := m.offlineConfirmations["vm100"]; exists {
+		if testCoreHasIncident(m, "vm100", canonicalPoweredStateSpecID("vm100")) {
 			t.Error("expected offlineConfirmations to be cleared")
 		}
 	})
@@ -14214,11 +14148,11 @@ func TestSuppressGuestAlerts(t *testing.T) {
 		now := time.Now()
 		m.mu.Lock()
 		// No active alerts, but has entries in auxiliary maps
-		m.pendingAlerts["vm100-memory"] = now
+		m.core.ApplyDiscrete(reducer.DiscreteSignal{ResourceID: "vm100", Key: canonicalMetricSpecID("vm100", "memory"), Matched: true, Severity: reducer.SeverityWarning, ObservedAt: now}, reducer.DiscreteRule{Confirmations: 3})
 		m.recentAlerts["vm100-disk"] = &Alert{ID: "vm100-disk", ResourceID: "vm100"}
 		m.suppressedUntil["vm100-network"] = now.Add(time.Hour)
 		m.alertRateLimit["vm100-io"] = []time.Time{now}
-		m.offlineConfirmations["vm100"] = 1
+		m.core.ApplyDiscrete(reducer.DiscreteSignal{ResourceID: "vm100", Key: canonicalPoweredStateSpecID("vm100"), Matched: true, Severity: reducer.SeverityWarning, ObservedAt: now}, reducer.DiscreteRule{Confirmations: 3})
 		m.mu.Unlock()
 
 		result := m.suppressGuestAlerts("vm100")
@@ -14231,7 +14165,7 @@ func TestSuppressGuestAlerts(t *testing.T) {
 		defer m.mu.RUnlock()
 
 		// But auxiliary maps should still be cleared
-		if _, exists := m.pendingAlerts["vm100-memory"]; exists {
+		if testCoreIsPending(m, "vm100", canonicalMetricSpecID("vm100", "memory")) {
 			t.Error("expected pendingAlerts to be cleared")
 		}
 		if _, exists := m.recentAlerts["vm100-disk"]; exists {
@@ -14243,7 +14177,7 @@ func TestSuppressGuestAlerts(t *testing.T) {
 		if _, exists := m.alertRateLimit["vm100-io"]; exists {
 			t.Error("expected alertRateLimit to be cleared")
 		}
-		if _, exists := m.offlineConfirmations["vm100"]; exists {
+		if testCoreHasIncident(m, "vm100", canonicalPoweredStateSpecID("vm100")) {
 			t.Error("expected offlineConfirmations to be cleared")
 		}
 	})
@@ -14397,7 +14331,6 @@ func TestCheckNode(t *testing.T) {
 		m.activeAlerts["node1-disk"] = &Alert{ID: "node1-disk", ResourceID: "node1", Type: "disk"}
 		m.activeAlerts["node1-temperature"] = &Alert{ID: "node1-temperature", ResourceID: "node1", Type: "temperature"}
 		m.activeAlerts["node-offline-node1"] = &Alert{ID: "node-offline-node1", ResourceID: "node1", Type: "connectivity"}
-		m.nodeOfflineCount["node1"] = 5
 		m.config.DisableAllNodes = true
 		m.mu.Unlock()
 
@@ -14410,7 +14343,7 @@ func TestCheckNode(t *testing.T) {
 		_, diskExists := testLookupActiveAlert(t, m, "node1-disk")
 		_, tempExists := testLookupActiveAlert(t, m, "node1-temperature")
 		_, offlineExists := testLookupActiveAlert(t, m, "node-offline-node1")
-		_, countExists := m.nodeOfflineCount["node1"]
+		countExists := testCoreHasIncident(m, "node1", canonicalConnectivitySpecID("node1"))
 		m.mu.RUnlock()
 
 		if cpuExists {
@@ -14440,7 +14373,6 @@ func TestCheckNode(t *testing.T) {
 		// Pre-create offline alert and tracking
 		m.mu.Lock()
 		m.activeAlerts["node-offline-node1"] = &Alert{ID: "node-offline-node1", ResourceID: "node1", Type: "connectivity"}
-		m.nodeOfflineCount["node1"] = 3
 		m.config.DisableAllNodesOffline = true
 		m.mu.Unlock()
 
@@ -14449,7 +14381,7 @@ func TestCheckNode(t *testing.T) {
 
 		m.mu.RLock()
 		_, alertExists := testLookupActiveAlert(t, m, "node-offline-node1")
-		_, countExists := m.nodeOfflineCount["node1"]
+		countExists := testCoreHasIncident(m, "node1", canonicalConnectivitySpecID("node1"))
 		m.mu.RUnlock()
 
 		if alertExists {
@@ -14553,7 +14485,6 @@ func TestCheckNode(t *testing.T) {
 	t.Run("online node clears offline alert", func(t *testing.T) {
 		// t.Parallel()
 		m := newTestManager(t)
-		state := canonicalConnectivityStateID("node1")
 
 		// Pre-create offline alert
 		m.mu.Lock()
@@ -14562,7 +14493,6 @@ func TestCheckNode(t *testing.T) {
 			ResourceID: "node1",
 			Type:       "connectivity",
 		}
-		m.nodeOfflineCount["node1"] = 5
 		m.mu.Unlock()
 
 		node := models.Node{
@@ -14575,7 +14505,7 @@ func TestCheckNode(t *testing.T) {
 		m.CheckNode(node)
 		m.mu.RLock()
 		_, alertExistsAfterFirst := testLookupActiveAlert(t, m, "node-offline-node1")
-		recoveryCountAfterFirst := m.offlineRecoveryConfirmations[state]
+		recoveryCountAfterFirst := testCoreRecoveryCount(m, "node1", canonicalConnectivitySpecID("node1"))
 		m.mu.RUnlock()
 		if !alertExistsAfterFirst {
 			t.Fatal("expected offline alert to remain active until recovery confirmations are satisfied")
@@ -14587,7 +14517,7 @@ func TestCheckNode(t *testing.T) {
 		m.CheckNode(node)
 		m.mu.RLock()
 		_, alertExistsAfterSecond := testLookupActiveAlert(t, m, "node-offline-node1")
-		recoveryCountAfterSecond := m.offlineRecoveryConfirmations[state]
+		recoveryCountAfterSecond := testCoreRecoveryCount(m, "node1", canonicalConnectivitySpecID("node1"))
 		m.mu.RUnlock()
 		if !alertExistsAfterSecond {
 			t.Fatal("expected offline alert to remain active after second recovery confirmation")
@@ -14600,8 +14530,8 @@ func TestCheckNode(t *testing.T) {
 
 		m.mu.RLock()
 		_, alertExists := testLookupActiveAlert(t, m, "node-offline-node1")
-		_, countExists := m.nodeOfflineCount["node1"]
-		_, recoveryExists := m.offlineRecoveryConfirmations[state]
+		countExists := testCoreHasIncident(m, "node1", canonicalConnectivitySpecID("node1"))
+		recoveryExists := testCoreRecoveryCount(m, "node1", canonicalConnectivitySpecID("node1")) != 0
 		m.mu.RUnlock()
 
 		if alertExists {
@@ -15127,7 +15057,6 @@ func TestCheckGuest(t *testing.T) {
 
 		m.mu.Lock()
 		m.config.DisableAllGuestsOffline = true
-		m.offlineConfirmations["vm100"] = 5
 		m.activeAlerts["guest-powered-off-vm100"] = &Alert{
 			ID:         "guest-powered-off-vm100",
 			ResourceID: "vm100",
@@ -15146,7 +15075,7 @@ func TestCheckGuest(t *testing.T) {
 
 		m.mu.RLock()
 		_, alertExists := testLookupActiveAlert(t, m, "guest-powered-off-vm100")
-		_, countExists := m.offlineConfirmations["vm100"]
+		countExists := testCoreHasIncident(m, "vm100", canonicalPoweredStateSpecID("vm100"))
 		m.mu.RUnlock()
 
 		if alertExists {
@@ -15311,7 +15240,6 @@ func TestCheckGuest(t *testing.T) {
 			ResourceID: "vm100",
 			Type:       "powered-off",
 		}
-		m.offlineConfirmations["vm100"] = 5
 		m.mu.Unlock()
 
 		vm := models.VM{
@@ -16360,7 +16288,6 @@ func TestCheckHostComprehensive(t *testing.T) {
 			ID:   "host-offline-host1",
 			Type: "connectivity",
 		}
-		m.offlineConfirmations[resourceKey] = 5
 		m.mu.Unlock()
 
 		host := models.Host{
@@ -16372,7 +16299,7 @@ func TestCheckHostComprehensive(t *testing.T) {
 
 		m.mu.RLock()
 		_, alertExists := testLookupActiveAlert(t, m, "host-offline-host1")
-		_, countExists := m.offlineConfirmations[resourceKey]
+		countExists := testCoreHasIncident(m, resourceKey, canonicalConnectivitySpecID(resourceKey))
 		m.mu.RUnlock()
 
 		if alertExists {
@@ -16576,7 +16503,6 @@ func TestCheckPBSComprehensive(t *testing.T) {
 		m.activeAlerts[canonicalMetricStateID("pbs1", "cpu")] = &Alert{ID: canonicalMetricStateID("pbs1", "cpu"), Type: "cpu"}
 		m.activeAlerts[canonicalMetricStateID("pbs1", "memory")] = &Alert{ID: canonicalMetricStateID("pbs1", "memory"), Type: "memory"}
 		m.activeAlerts["pbs-offline-pbs1"] = &Alert{ID: "pbs-offline-pbs1", Type: "connectivity"}
-		m.offlineConfirmations["pbs1"] = 3
 		m.config.DisableAllPBS = true
 		m.mu.Unlock()
 
@@ -16591,7 +16517,7 @@ func TestCheckPBSComprehensive(t *testing.T) {
 		_, cpuExists := testLookupActiveAlert(t, m, canonicalMetricStateID("pbs1", "cpu"))
 		_, memExists := testLookupActiveAlert(t, m, canonicalMetricStateID("pbs1", "memory"))
 		_, offlineExists := testLookupActiveAlert(t, m, "pbs-offline-pbs1")
-		_, confirmExists := m.offlineConfirmations["pbs1"]
+		confirmExists := testCoreHasIncident(m, "pbs1", canonicalConnectivitySpecID("pbs1"))
 		m.mu.RUnlock()
 
 		if cpuExists {
@@ -16644,7 +16570,6 @@ func TestCheckPBSComprehensive(t *testing.T) {
 		m.activeAlerts[canonicalMetricStateID("pbs1", "cpu")] = &Alert{ID: canonicalMetricStateID("pbs1", "cpu"), Type: "cpu"}
 		m.activeAlerts[canonicalMetricStateID("pbs1", "memory")] = &Alert{ID: canonicalMetricStateID("pbs1", "memory"), Type: "memory"}
 		m.activeAlerts["pbs-offline-pbs1"] = &Alert{ID: "pbs-offline-pbs1", Type: "connectivity"}
-		m.offlineConfirmations["pbs1"] = 3
 		m.config.Overrides = map[string]ThresholdConfig{
 			"pbs1": {Disabled: true},
 		}
@@ -16661,7 +16586,7 @@ func TestCheckPBSComprehensive(t *testing.T) {
 		_, cpuExists := testLookupActiveAlert(t, m, canonicalMetricStateID("pbs1", "cpu"))
 		_, memExists := testLookupActiveAlert(t, m, canonicalMetricStateID("pbs1", "memory"))
 		_, offlineExists := testLookupActiveAlert(t, m, "pbs-offline-pbs1")
-		_, confirmExists := m.offlineConfirmations["pbs1"]
+		confirmExists := testCoreHasIncident(m, "pbs1", canonicalConnectivitySpecID("pbs1"))
 		m.mu.RUnlock()
 
 		if cpuExists {
@@ -16684,7 +16609,6 @@ func TestCheckPBSComprehensive(t *testing.T) {
 
 		m.mu.Lock()
 		m.activeAlerts["pbs-offline-pbs1"] = &Alert{ID: "pbs-offline-pbs1", Type: "connectivity"}
-		m.offlineConfirmations["pbs1"] = 3
 		m.config.DisableAllPBSOffline = true
 		m.mu.Unlock()
 
@@ -16698,7 +16622,7 @@ func TestCheckPBSComprehensive(t *testing.T) {
 
 		m.mu.RLock()
 		_, offlineExists := testLookupActiveAlert(t, m, "pbs-offline-pbs1")
-		_, confirmExists := m.offlineConfirmations["pbs1"]
+		confirmExists := testCoreHasIncident(m, "pbs1", canonicalConnectivitySpecID("pbs1"))
 		m.mu.RUnlock()
 
 		if offlineExists {
@@ -16975,11 +16899,9 @@ func TestCheckPBSComprehensive(t *testing.T) {
 	t.Run("clears offline alert when back online", func(t *testing.T) {
 		// t.Parallel()
 		m := newTestManager(t)
-		state := canonicalConnectivityStateID("pbs1")
 
 		m.mu.Lock()
 		m.activeAlerts["pbs-offline-pbs1"] = &Alert{ID: "pbs-offline-pbs1", Type: "connectivity"}
-		m.offlineConfirmations["pbs1"] = 5
 		m.mu.Unlock()
 
 		pbs := models.PBSInstance{
@@ -16992,7 +16914,7 @@ func TestCheckPBSComprehensive(t *testing.T) {
 		m.CheckPBS(pbs)
 		m.mu.RLock()
 		_, offlineExistsAfterFirst := testLookupActiveAlert(t, m, "pbs-offline-pbs1")
-		recoveryCountAfterFirst := m.offlineRecoveryConfirmations[state]
+		recoveryCountAfterFirst := testCoreRecoveryCount(m, "pbs1", canonicalConnectivitySpecID("pbs1"))
 		m.mu.RUnlock()
 		if !offlineExistsAfterFirst {
 			t.Fatal("expected offline alert to remain active until recovery confirmations are satisfied")
@@ -17004,7 +16926,7 @@ func TestCheckPBSComprehensive(t *testing.T) {
 		m.CheckPBS(pbs)
 		m.mu.RLock()
 		_, offlineExistsAfterSecond := testLookupActiveAlert(t, m, "pbs-offline-pbs1")
-		recoveryCountAfterSecond := m.offlineRecoveryConfirmations[state]
+		recoveryCountAfterSecond := testCoreRecoveryCount(m, "pbs1", canonicalConnectivitySpecID("pbs1"))
 		m.mu.RUnlock()
 		if !offlineExistsAfterSecond {
 			t.Fatal("expected offline alert to remain active after second recovery confirmation")
@@ -17017,8 +16939,8 @@ func TestCheckPBSComprehensive(t *testing.T) {
 
 		m.mu.RLock()
 		_, offlineExists := testLookupActiveAlert(t, m, "pbs-offline-pbs1")
-		_, confirmExists := m.offlineConfirmations["pbs1"]
-		_, recoveryExists := m.offlineRecoveryConfirmations[state]
+		confirmExists := testCoreHasIncident(m, "pbs1", canonicalConnectivitySpecID("pbs1"))
+		recoveryExists := testCoreRecoveryCount(m, "pbs1", canonicalConnectivitySpecID("pbs1")) != 0
 		m.mu.RUnlock()
 
 		if offlineExists {
@@ -17079,7 +17001,6 @@ func TestCheckPMGComprehensive(t *testing.T) {
 		m.setActiveAlertNoLock(queueHoldStorageKey, queueHoldAlert)
 		m.setActiveAlertNoLock(oldestMessageStorageKey, oldestMessageAlert)
 		m.setActiveAlertNoLock(offlineState, offlineAlert)
-		m.offlineConfirmations["pmg1"] = 3
 		m.config.DisableAllPMG = true
 		m.mu.Unlock()
 
@@ -17096,7 +17017,7 @@ func TestCheckPMGComprehensive(t *testing.T) {
 		_, queueHoldExists := testLookupActiveAlert(t, m, queueHoldState)
 		_, oldestMsgExists := testLookupActiveAlert(t, m, oldestMessageState)
 		_, offlineExists := testLookupActiveAlert(t, m, offlineState)
-		_, confirmExists := m.offlineConfirmations["pmg1"]
+		confirmExists := testCoreHasIncident(m, "pmg1", canonicalConnectivitySpecID("pmg1"))
 		m.mu.RUnlock()
 
 		if queueTotalExists {
@@ -17132,7 +17053,6 @@ func TestCheckPMGComprehensive(t *testing.T) {
 		m.setActiveAlertNoLock(queueTotalStorageKey, queueTotalAlert)
 		m.setActiveAlertNoLock(oldestMessageStorageKey, oldestMessageAlert)
 		m.setActiveAlertNoLock(offlineState, offlineAlert)
-		m.offlineConfirmations["pmg1"] = 3
 		m.config.Overrides = map[string]ThresholdConfig{
 			"pmg1": {Disabled: true},
 		}
@@ -17149,7 +17069,7 @@ func TestCheckPMGComprehensive(t *testing.T) {
 		_, queueExists := testLookupActiveAlert(t, m, queueTotalState)
 		_, oldestExists := testLookupActiveAlert(t, m, oldestMessageState)
 		_, offlineExists := testLookupActiveAlert(t, m, offlineState)
-		_, confirmExists := m.offlineConfirmations["pmg1"]
+		confirmExists := testCoreHasIncident(m, "pmg1", canonicalConnectivitySpecID("pmg1"))
 		m.mu.RUnlock()
 
 		if queueExists {
@@ -17172,7 +17092,6 @@ func TestCheckPMGComprehensive(t *testing.T) {
 
 		m.mu.Lock()
 		m.activeAlerts["pmg-offline-pmg1"] = &Alert{ID: "pmg-offline-pmg1", Type: "connectivity"}
-		m.offlineConfirmations["pmg1"] = 3
 		m.config.DisableAllPMGOffline = true
 		m.mu.Unlock()
 
@@ -17186,7 +17105,7 @@ func TestCheckPMGComprehensive(t *testing.T) {
 
 		m.mu.RLock()
 		_, offlineExists := testLookupActiveAlert(t, m, "pmg-offline-pmg1")
-		_, confirmExists := m.offlineConfirmations["pmg1"]
+		confirmExists := testCoreHasIncident(m, "pmg1", canonicalConnectivitySpecID("pmg1"))
 		m.mu.RUnlock()
 
 		if offlineExists {
@@ -17376,11 +17295,9 @@ func TestCheckPMGComprehensive(t *testing.T) {
 	t.Run("clears offline alert when back online", func(t *testing.T) {
 		// t.Parallel()
 		m := newTestManager(t)
-		state := canonicalConnectivityStateID("pmg1")
 
 		m.mu.Lock()
 		m.activeAlerts["pmg-offline-pmg1"] = &Alert{ID: "pmg-offline-pmg1", Type: "connectivity"}
-		m.offlineConfirmations["pmg1"] = 5
 		m.mu.Unlock()
 
 		pmg := models.PMGInstance{
@@ -17393,7 +17310,7 @@ func TestCheckPMGComprehensive(t *testing.T) {
 		m.CheckPMG(pmg)
 		m.mu.RLock()
 		_, offlineExistsAfterFirst := testLookupActiveAlert(t, m, "pmg-offline-pmg1")
-		recoveryCountAfterFirst := m.offlineRecoveryConfirmations[state]
+		recoveryCountAfterFirst := testCoreRecoveryCount(m, "pmg1", canonicalConnectivitySpecID("pmg1"))
 		m.mu.RUnlock()
 		if !offlineExistsAfterFirst {
 			t.Fatal("expected offline alert to remain active until recovery confirmations are satisfied")
@@ -17405,7 +17322,7 @@ func TestCheckPMGComprehensive(t *testing.T) {
 		m.CheckPMG(pmg)
 		m.mu.RLock()
 		_, offlineExistsAfterSecond := testLookupActiveAlert(t, m, "pmg-offline-pmg1")
-		recoveryCountAfterSecond := m.offlineRecoveryConfirmations[state]
+		recoveryCountAfterSecond := testCoreRecoveryCount(m, "pmg1", canonicalConnectivitySpecID("pmg1"))
 		m.mu.RUnlock()
 		if !offlineExistsAfterSecond {
 			t.Fatal("expected offline alert to remain active after second recovery confirmation")
@@ -17418,8 +17335,8 @@ func TestCheckPMGComprehensive(t *testing.T) {
 
 		m.mu.RLock()
 		_, offlineExists := testLookupActiveAlert(t, m, "pmg-offline-pmg1")
-		_, confirmExists := m.offlineConfirmations["pmg1"]
-		_, recoveryExists := m.offlineRecoveryConfirmations[state]
+		confirmExists := testCoreHasIncident(m, "pmg1", canonicalConnectivitySpecID("pmg1"))
+		recoveryExists := testCoreRecoveryCount(m, "pmg1", canonicalConnectivitySpecID("pmg1")) != 0
 		m.mu.RUnlock()
 
 		if offlineExists {
@@ -17753,11 +17670,9 @@ func TestCheckStorageComprehensive(t *testing.T) {
 	t.Run("clears offline alert when back online", func(t *testing.T) {
 		// t.Parallel()
 		m := newTestManager(t)
-		state := canonicalConnectivityStateID("storage1")
 
 		m.mu.Lock()
 		m.activeAlerts["storage-offline-storage1"] = &Alert{ID: "storage-offline-storage1", Type: "connectivity"}
-		m.offlineConfirmations["storage1"] = 5
 		m.mu.Unlock()
 
 		storage := models.Storage{
@@ -17769,7 +17684,7 @@ func TestCheckStorageComprehensive(t *testing.T) {
 		m.CheckStorage(storage)
 		m.mu.RLock()
 		_, offlineExistsAfterFirst := testLookupActiveAlert(t, m, "storage-offline-storage1")
-		recoveryCountAfterFirst := m.offlineRecoveryConfirmations[state]
+		recoveryCountAfterFirst := testCoreRecoveryCount(m, "storage1", canonicalConnectivitySpecID("storage1"))
 		m.mu.RUnlock()
 		if !offlineExistsAfterFirst {
 			t.Fatal("expected offline alert to remain active until recovery confirmations are satisfied")
@@ -17782,8 +17697,8 @@ func TestCheckStorageComprehensive(t *testing.T) {
 
 		m.mu.RLock()
 		_, offlineExists := testLookupActiveAlert(t, m, "storage-offline-storage1")
-		_, confirmExists := m.offlineConfirmations["storage1"]
-		_, recoveryExists := m.offlineRecoveryConfirmations[state]
+		confirmExists := testCoreHasIncident(m, "storage1", canonicalConnectivitySpecID("storage1"))
+		recoveryExists := testCoreRecoveryCount(m, "storage1", canonicalConnectivitySpecID("storage1")) != 0
 		m.mu.RUnlock()
 
 		if offlineExists {
@@ -18839,7 +18754,7 @@ func TestCheckPMGAnomalies(t *testing.T) {
 
 		m.mu.RLock()
 		_, alertExists := testLookupActiveAlert(t, m, "pmg1-anomaly-spamIn")
-		_, pendingExists := m.pendingAlerts["pmg-anomaly-pmg1-spamIn"]
+		pendingExists := testCoreIsPending(m, "pmg1", "pmg1-anomaly-spamIn")
 		m.mu.RUnlock()
 
 		if alertExists {
@@ -18861,7 +18776,7 @@ func TestCheckPMGAnomalies(t *testing.T) {
 
 		m.mu.RLock()
 		alert := testRequireActiveAlert(t, m, "pmg1-anomaly-spamIn")
-		_, pendingExists = m.pendingAlerts["pmg-anomaly-pmg1-spamIn"]
+		pendingExists = testCoreIsPending(m, "pmg1", "pmg1-anomaly-spamIn")
 		m.mu.RUnlock()
 
 		if alert == nil {
@@ -18903,7 +18818,7 @@ func TestCheckPMGAnomalies(t *testing.T) {
 
 		m.mu.RLock()
 		_, alertExists := testLookupActiveAlert(t, m, "pmg1-anomaly-spamIn")
-		_, pendingExists := m.pendingAlerts["pmg-anomaly-pmg1-spamIn"]
+		pendingExists := testCoreIsPending(m, "pmg1", "pmg1-anomaly-spamIn")
 		m.mu.RUnlock()
 
 		if alertExists {
@@ -18934,7 +18849,7 @@ func TestCheckPMGAnomalies(t *testing.T) {
 		m.mu.RLock()
 		tracker := m.pmgAnomalyTrackers["pmg1"]
 		_, alertExists := testLookupActiveAlert(t, m, "pmg1-anomaly-spamIn")
-		_, pendingExists := m.pendingAlerts["pmg-anomaly-pmg1-spamIn"]
+		pendingExists := testCoreIsPending(m, "pmg1", "pmg1-anomaly-spamIn")
 		m.mu.RUnlock()
 
 		if tracker == nil || len(tracker.Samples) != 1 {
@@ -19445,16 +19360,15 @@ func TestLoadActiveAlertsHardensExistingFilePermissions(t *testing.T) {
 	}
 
 	m := &Manager{
-		alertsDir:            alertsDir,
-		activeAlerts:         make(map[string]*Alert),
-		activeAlertAlias:     make(map[string]string),
-		ackState:             make(map[string]ackRecord),
-		ackStateByCanonical:  make(map[string]ackRecord),
-		escalationStop:       make(chan struct{}),
-		recentlyResolved:     make(map[string]*ResolvedAlert),
-		resolvedAlias:        make(map[string]string),
-		pendingAlerts:        make(map[string]time.Time),
-		offlineConfirmations: make(map[string]int),
+		alertsDir:           alertsDir,
+		activeAlerts:        make(map[string]*Alert),
+		activeAlertAlias:    make(map[string]string),
+		ackState:            make(map[string]ackRecord),
+		ackStateByCanonical: make(map[string]ackRecord),
+		escalationStop:      make(chan struct{}),
+		recentlyResolved:    make(map[string]*ResolvedAlert),
+		resolvedAlias:       make(map[string]string),
+		core:                reducer.NewState(),
 	}
 
 	if err := m.LoadActiveAlerts(); err != nil {

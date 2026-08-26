@@ -108,7 +108,7 @@ func TestCheckGuestStoppedUsesResolvedThresholdsForPoweredOff(t *testing.T) {
 
 	m.mu.RLock()
 	_, alertExists := m.activeAlerts["guest-powered-off-"+guestID]
-	_, confirmationExists := m.offlineConfirmations[guestID]
+	confirmationExists := testCoreHasIncident(m, guestID, canonicalPoweredStateSpecID(guestID))
 	m.mu.RUnlock()
 
 	if alertExists {
@@ -202,7 +202,6 @@ func TestCheckNodeDisabledOverrideClearsExistingAlerts(t *testing.T) {
 	offlineState, offlineAlert := testNewCanonicalAlert(node.ID, canonicalConnectivitySpecID(node.ID), string(alertspecs.AlertSpecKindConnectivity), "offline")
 	m.setActiveAlertNoLock(cpuState, cpuAlert)
 	m.setActiveAlertNoLock(offlineState, offlineAlert)
-	m.nodeOfflineCount[node.ID] = 3
 	m.mu.Unlock()
 
 	m.CheckNode(node)
@@ -210,7 +209,7 @@ func TestCheckNodeDisabledOverrideClearsExistingAlerts(t *testing.T) {
 	m.mu.RLock()
 	_, cpuExists := m.activeAlerts[cpuState]
 	_, offlineExists := m.activeAlerts[offlineState]
-	_, countExists := m.nodeOfflineCount[node.ID]
+	countExists := testCoreHasIncident(m, node.ID, canonicalConnectivitySpecID(node.ID))
 	m.mu.RUnlock()
 
 	if cpuExists {
@@ -361,14 +360,13 @@ func TestCheckStorageOfflineUsesSharedThresholdResolution(t *testing.T) {
 		},
 	}
 	m.activeAlerts["storage-offline-"+storage.ID] = &Alert{ID: "storage-offline-" + storage.ID}
-	m.offlineConfirmations[storage.ID] = 1
 	m.mu.Unlock()
 
 	m.checkStorageOffline(storage)
 
 	m.mu.RLock()
 	_, alertExists := m.activeAlerts["storage-offline-"+storage.ID]
-	_, confirmExists := m.offlineConfirmations[storage.ID]
+	confirmExists := testCoreHasIncident(m, storage.ID, canonicalConnectivitySpecID(storage.ID))
 	m.mu.RUnlock()
 
 	if alertExists {

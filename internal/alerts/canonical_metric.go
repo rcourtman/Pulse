@@ -12,29 +12,6 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-func metricPreviousState(spec alertspecs.ResourceAlertSpec, existing *Alert) alertspecs.EvaluatorState {
-	if existing == nil {
-		return alertspecs.EvaluatorState{
-			SpecID: spec.ID,
-			State:  alertspecs.AlertStateClear,
-		}
-	}
-
-	severity := alertspecs.AlertSeverityWarning
-	if existing.Level == AlertLevelCritical {
-		severity = alertspecs.AlertSeverityCritical
-	}
-
-	return alertspecs.EvaluatorState{
-		SpecID:         spec.ID,
-		State:          alertspecs.AlertStateFiring,
-		Severity:       severity,
-		ActiveSince:    existing.StartTime,
-		FirstMatchedAt: existing.StartTime,
-		LastObservedAt: existing.LastSeen,
-	}
-}
-
 func metricClearThreshold(spec *alertspecs.MetricThresholdSpec, threshold *HysteresisThreshold) float64 {
 	if threshold != nil && threshold.Clear > 0 {
 		return threshold.Clear
@@ -104,7 +81,6 @@ func (m *Manager) evaluateCanonicalMetricAlert(spec alertspecs.ResourceAlertSpec
 	metricType := spec.MetricThreshold.Metric
 	if spec.Disabled || spec.MetricThreshold.Trigger <= 0 {
 		m.mu.Lock()
-		delete(m.pendingAlerts, trackingKey)
 		m.core.ApplyMetric(reducer.MetricSignal{
 			ResourceID: spec.ResourceID,
 			Key:        spec.ID,

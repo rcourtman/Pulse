@@ -138,8 +138,6 @@ func TestReducerParityWithManagerIntentGate(t *testing.T) {
 						ObservedAt:   simClock,
 						Connectivity: &alertspecs.ConnectivityEvidence{Signal: "status", Connected: !step.matched},
 					},
-					Tracking:     manager.offlineConfirmations,
-					TrackingKey:  "parity:" + intentParityResourceID,
 					AlertID:      alertID,
 					AlertType:    "offline",
 					ResourceID:   intentParityResourceID,

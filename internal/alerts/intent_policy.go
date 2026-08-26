@@ -485,7 +485,6 @@ func (m *Manager) PreviewIntentPolicy(request AlertIntentPolicyPreviewRequest) (
 			elapsed = 0
 		}
 		m.intentPending[trackingKey] = IntentPendingState{
-			TrackingKey: trackingKey, ResourceID: request.ResourceID, ResourceType: request.ResourceType,
 			Signal: request.Signal, FirstMatchedAt: firstMatchedAt, LastObservedAt: now, ElapsedNanos: int64(elapsed),
 		}
 		m.intentRuntimeTicks[trackingKey] = m.intentTickNoLock()

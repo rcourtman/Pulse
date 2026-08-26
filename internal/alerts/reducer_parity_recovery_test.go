@@ -55,7 +55,6 @@ func (e *managerRecoveryParityEngine) observe(t *testing.T, step recoveryParityS
 	}
 
 	e.manager.mu.Lock()
-	delete(e.manager.offlineRecoveryConfirmations, canonicalConnectivityStateID(recoveryParityResourceID))
 	e.manager.mu.Unlock()
 
 	spec, err := buildCanonicalConnectivitySpec(
@@ -71,8 +70,6 @@ func (e *managerRecoveryParityEngine) observe(t *testing.T, step recoveryParityS
 			ObservedAt:   e.clock,
 			Connectivity: &alertspecs.ConnectivityEvidence{Signal: "status", Connected: false},
 		},
-		Tracking:     e.manager.offlineConfirmations,
-		TrackingKey:  recoveryParityResourceID,
 		AlertID:      fmt.Sprintf("pbs-offline-%s", recoveryParityResourceID),
 		AlertType:    "offline",
 		ResourceID:   recoveryParityResourceID,

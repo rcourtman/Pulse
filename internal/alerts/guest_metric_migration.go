@@ -236,10 +236,9 @@ func (m *Manager) moveAlertTrackingStateNoLock(oldTrackingKey, newTrackingKey st
 		return
 	}
 
-	if pending, exists := m.pendingAlerts[oldTrackingKey]; exists {
-		delete(m.pendingAlerts, oldTrackingKey)
-		m.pendingAlerts[newTrackingKey] = pending
-	}
+	// Pending sustained-for runs are core-owned and keyed by resource ID;
+	// a node move restarts an in-flight pending run (firing continuity is
+	// preserved through alert adoption). Deliberate simplification.
 
 	if recent, exists := m.recentAlerts[oldTrackingKey]; exists {
 		delete(m.recentAlerts, oldTrackingKey)

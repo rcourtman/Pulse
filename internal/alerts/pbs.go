@@ -38,7 +38,6 @@ func (m *Manager) CheckPBS(pbs models.PBSInstance) {
 		// Clear any existing PBS alerts when all PBS alerts are disabled
 		m.mu.Lock()
 		// Reset offline confirmation tracking
-		delete(m.offlineConfirmations, pbs.ID)
 		// Clear CPU alert
 		cpuAlertID := canonicalMetricStateID(pbs.ID, "cpu")
 		if m.clearActiveAlertIfPresentNoLock(cpuAlertID) {
@@ -75,7 +74,6 @@ func (m *Manager) CheckPBS(pbs models.PBSInstance) {
 	if thresholds.Disabled {
 		m.mu.Lock()
 		// Reset offline confirmation tracking
-		delete(m.offlineConfirmations, pbs.ID)
 		// Clear CPU alert
 		cpuAlertID := canonicalMetricStateID(pbs.ID, "cpu")
 		if m.clearActiveAlertIfPresentNoLock(cpuAlertID) {
@@ -109,7 +107,6 @@ func (m *Manager) CheckPBS(pbs models.PBSInstance) {
 	if disablePBSOffline || thresholds.DisableConnectivity {
 		// Clear tracking and any existing offline alerts when globally disabled
 		m.mu.Lock()
-		delete(m.offlineConfirmations, pbs.ID)
 		m.mu.Unlock()
 		m.clearAlert(canonicalConnectivityStateID(pbs.ID))
 	} else {
@@ -153,7 +150,6 @@ func (m *Manager) checkPBSOffline(pbs models.PBSInstance) {
 // between this observation's pre-dispatch gate and lifecycle evaluation.
 func (m *Manager) checkPBSOfflineWithThresholds(pbs models.PBSInstance, thresholds ThresholdConfig) {
 	m.mu.Lock()
-	delete(m.offlineRecoveryConfirmations, canonicalConnectivityStateID(pbs.ID))
 	m.mu.Unlock()
 
 	spec, err := buildCanonicalConnectivitySpec(pbs.ID, pbs.Name, unifiedresources.ResourceTypePBS, AlertLevelCritical, 3, thresholds.Disabled || thresholds.DisableConnectivity)
@@ -169,8 +165,6 @@ func (m *Manager) checkPBSOfflineWithThresholds(pbs models.PBSInstance, threshol
 	_, _ = m.evaluateCanonicalLifecycleAlert(canonicalLifecycleAlertParams{
 		Spec:         spec,
 		Evidence:     alertspecs.AlertEvidence{ObservedAt: time.Now(), Connectivity: &alertspecs.ConnectivityEvidence{Signal: "status", Connected: false}},
-		Tracking:     m.offlineConfirmations,
-		TrackingKey:  pbs.ID,
 		AlertID:      fmt.Sprintf("pbs-offline-%s", pbs.ID),
 		AlertType:    "offline",
 		ResourceID:   pbs.ID,

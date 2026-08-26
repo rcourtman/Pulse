@@ -17,8 +17,6 @@ type canonicalLifecycleAlertParams struct {
 	Evidence             alertspecs.AlertEvidence
 	IntentSignal         string
 	PolicyDisabledNoLock func() bool
-	Tracking             map[string]int
-	TrackingKey          string
 	AlertID              string
 	AlertType            string
 	ResourceID           string
@@ -37,8 +35,6 @@ type canonicalLifecycleAlertParams struct {
 type canonicalStatefulAlertParams struct {
 	Spec                         alertspecs.ResourceAlertSpec
 	Evidence                     alertspecs.AlertEvidence
-	PendingTracking              map[string]time.Time
-	PendingKey                   string
 	AlertID                      string
 	AlertType                    string
 	ResourceID                   string
@@ -268,34 +264,6 @@ func canonicalAlertSeverity(level AlertLevel) alertspecs.AlertSeverity {
 	}
 }
 
-func statefulPreviousState(spec alertspecs.ResourceAlertSpec, existing *Alert, pendingSince time.Time) alertspecs.EvaluatorState {
-	if existing != nil {
-		return alertspecs.EvaluatorState{
-			SpecID:         spec.ID,
-			State:          alertspecs.AlertStateFiring,
-			Severity:       canonicalAlertSeverity(existing.Level),
-			Reason:         "",
-			ActiveSince:    existing.StartTime,
-			FirstMatchedAt: existing.StartTime,
-			LastObservedAt: existing.LastSeen,
-		}
-	}
-	if !pendingSince.IsZero() {
-		return alertspecs.EvaluatorState{
-			SpecID:             spec.ID,
-			State:              alertspecs.AlertStatePending,
-			Severity:           spec.Severity,
-			ConsecutiveMatches: 1,
-			FirstMatchedAt:     pendingSince,
-			LastObservedAt:     pendingSince,
-		}
-	}
-	return alertspecs.EvaluatorState{
-		SpecID: spec.ID,
-		State:  alertspecs.AlertStateClear,
-	}
-}
-
 func (m *Manager) evaluateCanonicalLifecycleAlert(params canonicalLifecycleAlertParams) (alertspecs.EvaluationResult, bool) {
 	if params.Evidence.ObservedAt.IsZero() {
 		params.Evidence.ObservedAt = time.Now()
@@ -443,17 +411,6 @@ func (m *Manager) evaluateCanonicalLifecycleAlert(params canonicalLifecycleAlert
 	shadowEligible = true
 
 	incident, hasIncident := m.core.Incident(params.Spec.ResourceID, params.Spec.ID)
-
-	// The legacy count maps are maintained as read-only mirrors of the core
-	// during the Phase 2 transition, for external readers; the engine never
-	// consults them. They are deleted with the Phase 3 cleanup.
-	if params.Tracking != nil {
-		if hasIncident {
-			params.Tracking[params.TrackingKey] = incident.Confirmations
-		} else {
-			delete(params.Tracking, params.TrackingKey)
-		}
-	}
 
 	// Synthesize the evaluator-shaped result the callers consume.
 	result := alertspecs.EvaluationResult{}
@@ -706,18 +663,6 @@ func (m *Manager) evaluateCanonicalStatefulAlert(params canonicalStatefulAlertPa
 		primary = events[0].Type
 	}
 	incident, hasIncident := m.core.Incident(params.Spec.ResourceID, params.Spec.ID)
-
-	// Legacy pending-since maps stay as read-only mirrors of the core
-	// during the transition.
-	if params.PendingTracking != nil {
-		if hasIncident && incident.State == reducer.StatePending {
-			if _, tracked := params.PendingTracking[params.PendingKey]; !tracked {
-				params.PendingTracking[params.PendingKey] = incident.PendingSince
-			}
-		} else {
-			delete(params.PendingTracking, params.PendingKey)
-		}
-	}
 
 	result := alertspecs.EvaluationResult{}
 	result.State.SpecID = params.Spec.ID

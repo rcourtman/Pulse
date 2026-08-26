@@ -3,7 +3,6 @@ package alerts
 import (
 	"encoding/json"
 	"testing"
-	"time"
 )
 
 // TestPerMetricDelayConfiguration demonstrates the per-metric delay feature
@@ -133,8 +132,7 @@ func TestPerMetricDelayConfiguration(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create a manager with the test config
 			manager := &Manager{
-				config:        tt.config,
-				pendingAlerts: make(map[string]time.Time),
+				config: tt.config,
 			}
 
 			// Get the time threshold for this resource/metric combination

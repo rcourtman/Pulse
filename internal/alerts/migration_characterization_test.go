@@ -363,7 +363,7 @@ func TestAlertCharacterizationDisableConnectivitySuppressesPoweredOffButNotMetri
 	assertAlertMissing(t, m, "guest-powered-off-"+resourceID)
 
 	m.mu.RLock()
-	_, hasConfirmations := m.offlineConfirmations[resourceID]
+	hasConfirmations := testCoreHasIncident(m, resourceID, canonicalPoweredStateSpecID(resourceID))
 	m.mu.RUnlock()
 	if hasConfirmations {
 		t.Fatalf("expected powered-off tracking to stay clear when connectivity is disabled")
@@ -388,7 +388,7 @@ func TestAlertCharacterizationOnBootFalseSuppressesPoweredOffAlert(t *testing.T)
 	assertAlertMissing(t, m, "guest-powered-off-"+resourceID)
 
 	m.mu.RLock()
-	_, hasConfirmations := m.offlineConfirmations[resourceID]
+	hasConfirmations := testCoreHasIncident(m, resourceID, canonicalPoweredStateSpecID(resourceID))
 	m.mu.RUnlock()
 	if hasConfirmations {
 		t.Fatalf("expected no powered-off tracking for guest with onboot=false")

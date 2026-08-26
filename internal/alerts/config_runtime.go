@@ -170,7 +170,6 @@ func (m *Manager) applyGlobalOfflineSettingsLocked() {
 		for _, alertID := range nodeAlerts {
 			m.clearAlertNoLock(alertID)
 		}
-		m.nodeOfflineCount = make(map[string]int)
 	}
 
 	if m.config.DisableAllPBSOffline {
@@ -180,7 +179,6 @@ func (m *Manager) applyGlobalOfflineSettingsLocked() {
 				if resourceType, _ := alert.Metadata["resourceType"].(string); resourceType == "pbs" {
 					pbsAlerts = append(pbsAlerts, storageKey)
 				}
-				delete(m.offlineConfirmations, alert.ResourceID)
 			}
 		}
 		for _, alertID := range pbsAlerts {
@@ -193,7 +191,6 @@ func (m *Manager) applyGlobalOfflineSettingsLocked() {
 		for storageKey, alert := range m.activeAlerts {
 			if alert != nil && alert.CanonicalKind == string(alertspecs.AlertSpecKindPoweredState) {
 				guestAlerts = append(guestAlerts, storageKey)
-				delete(m.offlineConfirmations, alert.ResourceID)
 			}
 		}
 		for _, alertID := range guestAlerts {
@@ -213,7 +210,6 @@ func (m *Manager) applyGlobalOfflineSettingsLocked() {
 		for _, alertID := range hostAlerts {
 			m.clearAlertNoLock(alertID)
 		}
-		m.dockerOfflineCount = make(map[string]int)
 	}
 
 	if m.config.DisableAllDockerContainers {
@@ -227,7 +223,6 @@ func (m *Manager) applyGlobalOfflineSettingsLocked() {
 		for _, alertID := range containerAlerts {
 			m.clearAlertNoLock(alertID)
 		}
-		m.dockerStateConfirm = make(map[string]int)
 		m.dockerRestartTracking = make(map[string]*dockerRestartRecord)
 		m.dockerUpdateFirstSeen = make(map[string]time.Time)
 		m.dockerUpdateFirstSeenByIdentity = make(map[string]time.Time)
@@ -381,8 +376,6 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 			policyResourceID := metadataStringValue(alert.Metadata, "policyResourceID")
 			if m.connectionDegradedPolicyDisabledNoLock(resourceID, policyResourceID, connectionType) {
 				alertsToResolve = append(alertsToResolve, alertID)
-				delete(m.connectionDegradedCount, resourceID)
-				delete(m.offlineRecoveryConfirmations, alertID)
 			}
 			continue
 		}
@@ -590,14 +583,7 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 		if alert, exists := m.getActiveAlertNoLock(alertID); exists {
 			resolvedAlert := m.newResolvedAlert(alert, time.Now(), nil)
 
-			trackingKey := canonicalTrackingKeyForAlert(alert)
-			if _, isPending := m.pendingAlerts[trackingKey]; isPending {
-				delete(m.pendingAlerts, trackingKey)
-				log.Debug().
-					Str("alertID", alertID).
-					Msg("Cleared pending alert after configuration update")
-			}
-
+			m.mirrorForgetAlertNoLock(alert)
 			m.removeActiveAlertNoLock(alertID)
 			m.addRecentlyResolvedWithPrimaryLock(resolvedAlert)
 

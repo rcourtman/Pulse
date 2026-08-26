@@ -60,13 +60,6 @@ func (m *Manager) ReevaluateGuestAlert(guest any, guestID string) {
 		// If threshold is disabled or doesn't exist, clear the alert
 		if threshold == nil || threshold.Trigger <= 0 {
 			m.clearAlertNoLock(trackingKey)
-			// Also clear any pending alert for this metric
-			if _, isPending := m.pendingAlerts[trackingKey]; isPending {
-				delete(m.pendingAlerts, trackingKey)
-				log.Debug().
-					Str("alertID", alertID).
-					Msg("Cleared pending alert - threshold disabled")
-			}
 			log.Info().
 				Str("alertID", alertID).
 				Str("metric", metricType).
@@ -166,7 +159,6 @@ func (m *Manager) CheckGuest(guest any, instanceName string) {
 			if disableAllGuestsOffline {
 				// Clear any pending powered-off tracking and alerts when globally disabled
 				m.mu.Lock()
-				delete(m.offlineConfirmations, guestID)
 				intentCleared := m.clearIntentPendingNoLock(canonicalPoweredStateStateID(guestID))
 				m.mu.Unlock()
 				if intentCleared {
@@ -178,7 +170,6 @@ func (m *Manager) CheckGuest(guest any, instanceName string) {
 				// Guest is explicitly not configured to autostart (onboot=0).
 				// Being stopped is the expected state — suppress the alert.
 				m.mu.Lock()
-				delete(m.offlineConfirmations, guestID)
 				m.mu.Unlock()
 				m.clearAlert(canonicalPoweredStateStateID(guestID))
 				m.clearGuestPoweredOffAlert(guestID, name)
@@ -481,7 +472,6 @@ func (m *Manager) checkGuestPoweredOffWithThresholdsAndIntentAndTags(guestID, na
 	effectiveIntent := m.resolveEffectiveIntentPolicyNoLock(guestID, string(resourceType), string(AlertIntentSignalOffline))
 	m.mu.RUnlock()
 	confirmations := 2
-	tracking := m.offlineConfirmations
 	durationAuthoritative := effectiveIntent.Sources["graceSeconds"] != "factory" ||
 		(effectiveIntent.BackupOffline != nil && effectiveIntent.BackupOffline.Enabled)
 	if durationAuthoritative {
@@ -489,7 +479,6 @@ func (m *Manager) checkGuestPoweredOffWithThresholdsAndIntentAndTags(guestID, na
 		// grace therefore fires on the first stopped observation, while a
 		// positive grace is independent of polling cadence.
 		confirmations = 1
-		tracking = nil
 	}
 	spec, err := buildCanonicalPoweredStateSpec(guestID, name, resourceType, severity, confirmations, thresholds.Disabled || thresholds.DisableConnectivity)
 	if err != nil {
@@ -518,8 +507,6 @@ func (m *Manager) checkGuestPoweredOffWithThresholdsAndIntentAndTags(guestID, na
 				Observed: alertspecs.PowerStateOff,
 			},
 		},
-		Tracking:      tracking,
-		TrackingKey:   guestID,
 		AlertID:       alertID,
 		AlertType:     "powered-off",
 		ResourceID:    guestID,
@@ -549,13 +536,6 @@ func (m *Manager) clearGuestPoweredOffAlert(guestID, name string) {
 	defer m.mu.Unlock()
 
 	// Reset confirmation count when guest comes back online
-	if count, exists := m.offlineConfirmations[guestID]; exists && count > 0 {
-		log.Debug().
-			Str("guest", name).
-			Int("previousCount", count).
-			Msg("Guest is running, resetting powered-off confirmation count")
-		delete(m.offlineConfirmations, guestID)
-	}
 	if decision := m.evaluateIntentNoLock(guestID, "", string(AlertIntentSignalOffline), alertID, m.policyNow().UTC(), false, BackupIntentContext{}); decision.StateChanged {
 		m.saveActiveAlertsAsync("guest offline intent cleared")
 	}
@@ -718,18 +698,13 @@ func (m *Manager) suppressGuestAlerts(guestID string) bool {
 			guestAlertBelongsToGuest(alert.ResourceID, guestID) {
 			m.clearAlertNoLock(alertID)
 			delete(m.recentAlerts, trackingKey)
-			delete(m.pendingAlerts, trackingKey)
 			delete(m.suppressedUntil, trackingKey)
 			delete(m.alertRateLimit, trackingKey)
 			cleared = true
 		}
 	}
 
-	for key := range m.pendingAlerts {
-		if strings.HasPrefix(key, guestID) {
-			delete(m.pendingAlerts, key)
-		}
-	}
+	m.core.DropPendingForResource(guestID)
 	for key := range m.recentAlerts {
 		if strings.HasPrefix(key, guestID) {
 			delete(m.recentAlerts, key)
@@ -746,7 +721,6 @@ func (m *Manager) suppressGuestAlerts(guestID string) bool {
 		}
 	}
 
-	delete(m.offlineConfirmations, guestID)
 	for key, pending := range m.intentPending {
 		if pending.ResourceID == guestID || strings.HasPrefix(pending.ResourceID, guestID+"/") {
 			if m.clearIntentPendingNoLock(key) {

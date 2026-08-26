@@ -23,10 +23,6 @@ func TestCleanupStaleMaps(t *testing.T) {
 	m.suppressedUntil["expired-suppression"] = oldTime
 	m.suppressedUntil["active-suppression"] = time.Now().Add(1 * time.Hour)
 
-	// Pending alerts
-	m.pendingAlerts["stale-pending"] = oldTime
-	m.pendingAlerts["recent-pending"] = recentTime
-
 	// Should not be cleaned if active alert exists
 	m.flappingHistory["active-alert-flapping"] = []time.Time{oldTime}
 	m.activeAlerts["active-alert-flapping"] = &Alert{ID: "active-alert-flapping"}
@@ -61,50 +57,12 @@ func TestCleanupStaleMaps(t *testing.T) {
 		t.Error("active-suppression should NOT get removed")
 	}
 
-	if _, exists := m.pendingAlerts["stale-pending"]; exists {
-		t.Error("stale-pending should get removed")
-	}
-	if _, exists := m.pendingAlerts["recent-pending"]; !exists {
-		t.Error("recent-pending should NOT get removed")
-	}
-
 	if _, exists := m.flappingHistory["active-alert-flapping"]; !exists {
 		t.Error("active-alert-flapping should NOT get removed")
 	}
 	m.mu.Unlock()
 
-	// Should not be cleaned if active alert exists for pending
 	m.mu.Lock()
-	m.pendingAlerts["active-alert-pending"] = oldTime
-	m.activeAlerts["active-alert-pending"] = &Alert{ID: "active-alert-pending"}
-	m.mu.Unlock()
-
-	// Run cleanup
-	m.cleanupStaleMaps()
-
-	// Verify
-	m.mu.Lock()
-	// Test additional maps
-	// Offline confirmations
-	m.offlineConfirmations["stale-node"] = 3
-	m.activeAlerts["node:active-node:offline"] = &Alert{ID: "node:active-node:offline"}
-	m.offlineConfirmations["active-node"] = 3
-
-	// Node offline count
-	m.nodeOfflineCount["stale-node-legacy"] = 5
-	m.activeAlerts["node:active-node-legacy:offline"] = &Alert{ID: "node:active-node-legacy:offline"}
-	m.nodeOfflineCount["active-node-legacy"] = 5
-
-	// Docker state confirm
-	m.dockerStateConfirm["stale-container"] = 2
-	m.activeAlerts["docker:active-container:state"] = &Alert{ID: "docker:active-container:state"}
-	m.dockerStateConfirm["active-container"] = 2
-
-	// Docker offline count
-	m.dockerOfflineCount["stale-host"] = 4
-	m.activeAlerts["docker:active-host:offline"] = &Alert{ID: "docker:active-host:offline"}
-	m.dockerOfflineCount["active-host"] = 4
-
 	// Docker restart tracking
 	m.dockerRestartTracking["stale-restart"] = &dockerRestartRecord{lastChecked: oldTime}
 	m.dockerRestartTracking["recent-restart"] = &dockerRestartRecord{lastChecked: recentTime}
@@ -132,34 +90,6 @@ func TestCleanupStaleMaps(t *testing.T) {
 	// Verify additional maps
 	m.mu.Lock()
 	defer m.mu.Unlock()
-
-	if _, exists := m.offlineConfirmations["stale-node"]; exists {
-		t.Error("stale-node offline connection should be removed")
-	}
-	if _, exists := m.offlineConfirmations["active-node"]; !exists {
-		t.Error("active-node offline connection should NOT be removed")
-	}
-
-	if _, exists := m.nodeOfflineCount["stale-node-legacy"]; exists {
-		t.Error("stale-node-legacy should be removed")
-	}
-	if _, exists := m.nodeOfflineCount["active-node-legacy"]; !exists {
-		t.Error("active-node-legacy should NOT be removed")
-	}
-
-	if _, exists := m.dockerStateConfirm["stale-container"]; exists {
-		t.Error("stale-container should be removed")
-	}
-	if _, exists := m.dockerStateConfirm["active-container"]; !exists {
-		t.Error("active-container should NOT be removed")
-	}
-
-	if _, exists := m.dockerOfflineCount["stale-host"]; exists {
-		t.Error("stale-host should be removed")
-	}
-	if _, exists := m.dockerOfflineCount["active-host"]; !exists {
-		t.Error("active-host should NOT be removed")
-	}
 
 	if _, exists := m.dockerRestartTracking["stale-restart"]; exists {
 		t.Error("stale-restart should be removed")

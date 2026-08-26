@@ -290,6 +290,32 @@ func (s *State) FiringCount() int {
 	return count
 }
 
+// PruneStalePending drops pending (never-activated) incidents whose last
+// observation is older than cutoff. A resource that stops being observed
+// mid-run would otherwise leak its pending incident forever.
+func (s *State) PruneStalePending(cutoff time.Time) int {
+	removed := 0
+	for key, incident := range s.incidents {
+		if incident.State == StatePending && incident.LastObservedAt.Before(cutoff) {
+			delete(s.incidents, key)
+			removed++
+		}
+	}
+	return removed
+}
+
+// PendingCount reports how many incidents are in a pending (not yet
+// activated) confirmation or delay run.
+func (s *State) PendingCount() int {
+	count := 0
+	for _, incident := range s.incidents {
+		if incident.State == StatePending {
+			count++
+		}
+	}
+	return count
+}
+
 // isPercentageMetric mirrors the manager's classification: these metrics
 // live on a 0–100 scale, which caps the derived critical threshold.
 func isPercentageMetric(metric string) bool {
@@ -523,4 +549,46 @@ func (s *State) ShiftPending(delta time.Duration) {
 			incident.PendingSince = incident.PendingSince.Add(delta)
 		}
 	}
+}
+
+// Reset drops every incident and record — the mirror for the manager's
+// full transition-state clears (mock-mode switches, clear-all actions).
+func (s *State) Reset() {
+	s.incidents = make(map[string]*Incident)
+	s.resolved = make(map[string]resolvedRecord)
+	s.acks = make(map[string]ackRecord)
+}
+
+// DropPendingForResource clears pending (not firing) incidents for one
+// resource — the mirror for the manager's per-resource pending resets
+// (guest suppression, threshold changes). It reports how many runs were
+// dropped so callers can tell whether anything was cleared.
+func (s *State) DropPendingForResource(resourceID string) int {
+	dropped := 0
+	for key, incident := range s.incidents {
+		if incident.ResourceID == resourceID && incident.State == StatePending {
+			delete(s.incidents, key)
+			dropped++
+		}
+	}
+	return dropped
+}
+
+// PendingResourceIDs lists the resource IDs with a pending (not firing)
+// incident — the enumeration hook for callers that reap runs whose
+// resources disappeared (removed containers, decommissioned hosts).
+func (s *State) PendingResourceIDs() []string {
+	ids := make([]string, 0)
+	seen := make(map[string]struct{})
+	for _, incident := range s.incidents {
+		if incident.State != StatePending {
+			continue
+		}
+		if _, dup := seen[incident.ResourceID]; dup {
+			continue
+		}
+		seen[incident.ResourceID] = struct{}{}
+		ids = append(ids, incident.ResourceID)
+	}
+	return ids
 }

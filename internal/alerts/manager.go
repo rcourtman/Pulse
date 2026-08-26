@@ -49,8 +49,6 @@ type Manager struct {
 	recentlyResolved map[string]*ResolvedAlert
 	resolvedAlias    map[string]string
 	resolvedMutex    sync.RWMutex // Secondary lock - see Lock Ordering Documentation above
-	// Time threshold tracking
-	pendingAlerts map[string]time.Time // Track when thresholds were first exceeded
 	// Intent-policy pending state retains server timestamps, accumulated
 	// monotonic elapsed time, and transient-context evidence for policy-enabled
 	// candidates. It is keyed by canonical alert tracking key and persisted
@@ -63,10 +61,6 @@ type Manager struct {
 	backupIntentResolver   BackupIntentContextResolver
 	resourceIntentResolver ResourceIntentIdentityResolver
 	// Offline confirmation tracking
-	nodeOfflineCount             map[string]int // Track consecutive offline counts for nodes (legacy)
-	connectionDegradedCount      map[string]int // Track consecutive degraded counts for platform connections (pve/pbs/pmg/vmware/truenas)
-	offlineConfirmations         map[string]int // Track consecutive offline counts for all resources
-	offlineRecoveryConfirmations map[string]int // Track consecutive healthy confirmations before clearing poll-driven offline alerts
 	// core is the authoritative transition state for the canonical
 	// lifecycle (match-spec) family: the deterministic reducer owns
 	// confirmations, pending runs, first-matched anchoring, recovery
@@ -77,8 +71,6 @@ type Manager struct {
 	unifiedIncidentConfirmations map[string]int                  // Track consecutive provider-incident observations before activation
 	unifiedIncidentFirstSeen     map[string]time.Time            // Preserve the first confirmed observation as lifecycle start
 	unifiedIncidentRecoveries    map[string]int                  // Track consecutive healthy observations before provider-incident recovery
-	dockerOfflineCount           map[string]int                  // Track consecutive offline counts for Docker hosts
-	dockerStateConfirm           map[string]int                  // Track consecutive state confirmations for Docker containers
 	dockerRestartTracking        map[string]*dockerRestartRecord // Track restart counts and times for restart loop detection
 	dockerUpdateFirstSeen        map[string]time.Time            // Track when image updates were first detected for alert delay
 	// Stable identity tracking prevents update-delay resets when host IDs churn.
@@ -185,20 +177,13 @@ func NewManagerWithDataDir(dataDir string, options ...ManagerOption) *Manager {
 		suppressedUntil:                 make(map[string]time.Time),
 		recentlyResolved:                make(map[string]*ResolvedAlert),
 		resolvedAlias:                   make(map[string]string),
-		pendingAlerts:                   make(map[string]time.Time),
 		intentPending:                   make(map[string]IntentPendingState),
 		intentRuntimeTicks:              make(map[string]time.Duration),
 		intentPolicies:                  NewAlertIntentPolicyDocument(),
-		nodeOfflineCount:                make(map[string]int),
-		connectionDegradedCount:         make(map[string]int),
-		offlineConfirmations:            make(map[string]int),
-		offlineRecoveryConfirmations:    make(map[string]int),
 		core:                            reducer.NewState(),
 		unifiedIncidentConfirmations:    make(map[string]int),
 		unifiedIncidentFirstSeen:        make(map[string]time.Time),
 		unifiedIncidentRecoveries:       make(map[string]int),
-		dockerOfflineCount:              make(map[string]int),
-		dockerStateConfirm:              make(map[string]int),
 		dockerRestartTracking:           make(map[string]*dockerRestartRecord),
 		dockerUpdateFirstSeen:           make(map[string]time.Time),
 		dockerUpdateFirstSeenByIdentity: make(map[string]time.Time),

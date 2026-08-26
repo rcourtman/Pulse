@@ -78,7 +78,6 @@ func (m *Manager) CheckPMG(pmg models.PMGInstance) {
 		m.mu.RUnlock()
 		// Clear any existing PMG alerts when all PMG alerts are disabled.
 		m.mu.Lock()
-		delete(m.offlineConfirmations, pmg.ID)
 		m.mu.Unlock()
 		m.clearPMGMetricAlerts(pmg.ID)
 		m.clearAlert(canonicalConnectivityStateID(pmg.ID))
@@ -94,7 +93,6 @@ func (m *Manager) CheckPMG(pmg models.PMGInstance) {
 	// Check override disable BEFORE offline detection to prevent spurious notifications
 	if hasOverride && override.Disabled {
 		m.mu.Lock()
-		delete(m.offlineConfirmations, pmg.ID)
 		m.mu.Unlock()
 		m.clearPMGMetricAlerts(pmg.ID)
 		m.clearAlert(canonicalConnectivityStateID(pmg.ID))
@@ -107,7 +105,6 @@ func (m *Manager) CheckPMG(pmg models.PMGInstance) {
 	if disablePMGOffline {
 		// Clear tracking and any existing offline alerts when globally disabled
 		m.mu.Lock()
-		delete(m.offlineConfirmations, pmg.ID)
 		m.mu.Unlock()
 		m.clearAlert(canonicalConnectivityStateID(pmg.ID))
 	} else {
@@ -141,7 +138,6 @@ func (m *Manager) CheckPMG(pmg models.PMGInstance) {
 // checkPMGOffline creates an alert for offline PMG instances
 func (m *Manager) checkPMGOffline(pmg models.PMGInstance) {
 	m.mu.Lock()
-	delete(m.offlineRecoveryConfirmations, canonicalConnectivityStateID(pmg.ID))
 	m.mu.Unlock()
 
 	m.mu.RLock()
@@ -161,8 +157,6 @@ func (m *Manager) checkPMGOffline(pmg models.PMGInstance) {
 	_, _ = m.evaluateCanonicalLifecycleAlert(canonicalLifecycleAlertParams{
 		Spec:         spec,
 		Evidence:     alertspecs.AlertEvidence{ObservedAt: time.Now(), Connectivity: &alertspecs.ConnectivityEvidence{Signal: "status", Connected: false}},
-		Tracking:     m.offlineConfirmations,
-		TrackingKey:  pmg.ID,
 		AlertID:      fmt.Sprintf("pmg-offline-%s", pmg.ID),
 		AlertType:    "offline",
 		ResourceID:   pmg.ID,
@@ -952,7 +946,6 @@ func (m *Manager) checkAnomalyMetric(pmg models.PMGInstance, tracker *pmgAnomaly
 	}
 
 	alertID := fmt.Sprintf("%s-anomaly-%s", pmg.ID, metricName)
-	pendingKey := fmt.Sprintf("pmg-anomaly-%s-%s", pmg.ID, metricName)
 	spec, err := buildCanonicalBaselineAnomalySpec(alertID, pmg.ID, pmg.Name, unifiedresources.ResourceTypePMG, metricName, 2, false)
 	if err != nil {
 		log.Warn().
@@ -965,16 +958,14 @@ func (m *Manager) checkAnomalyMetric(pmg models.PMGInstance, tracker *pmgAnomaly
 	}
 
 	result, _ := m.evaluateCanonicalStatefulAlert(canonicalStatefulAlertParams{
-		Spec:            spec,
-		Evidence:        alertspecs.AlertEvidence{ObservedAt: now, BaselineAnomaly: &alertspecs.BaselineAnomalyEvidence{Metric: metricName, Observed: current, Baseline: baseline}},
-		PendingTracking: m.pendingAlerts,
-		PendingKey:      pendingKey,
-		AlertID:         alertID,
-		AlertType:       fmt.Sprintf("anomaly-%s", metricName),
-		ResourceID:      pmg.ID,
-		ResourceName:    pmg.Name,
-		Node:            pmg.Host,
-		Instance:        pmg.Name,
+		Spec:         spec,
+		Evidence:     alertspecs.AlertEvidence{ObservedAt: now, BaselineAnomaly: &alertspecs.BaselineAnomalyEvidence{Metric: metricName, Observed: current, Baseline: baseline}},
+		AlertID:      alertID,
+		AlertType:    fmt.Sprintf("anomaly-%s", metricName),
+		ResourceID:   pmg.ID,
+		ResourceName: pmg.Name,
+		Node:         pmg.Host,
+		Instance:     pmg.Name,
 		MessageBuilder: func(_ alertspecs.EvaluationResult) (string, float64, float64) {
 			return anomalyAlertMessage(pmg, metricName, current, baseline), current, baseline
 		},

@@ -29,7 +29,6 @@ func (m *Manager) CheckNode(node models.Node) {
 		// Clear any existing node alerts when all node alerts are disabled
 		m.mu.Lock()
 		// Clear offline tracking
-		delete(m.nodeOfflineCount, node.ID)
 		// Clear all possible node alert types
 		alertTypes := []string{"cpu", "memory", "disk", "temperature"}
 		for _, alertType := range alertTypes {
@@ -60,7 +59,6 @@ func (m *Manager) CheckNode(node models.Node) {
 
 	if thresholds.Disabled {
 		m.mu.Lock()
-		delete(m.nodeOfflineCount, node.ID)
 		m.mu.Unlock()
 		for _, alertID := range []string{
 			canonicalMetricStateID(node.ID, "cpu"),
@@ -77,7 +75,6 @@ func (m *Manager) CheckNode(node models.Node) {
 	if disableNodesOffline || thresholds.DisableConnectivity {
 		// Clear tracking and any existing offline alerts when globally disabled
 		m.mu.Lock()
-		delete(m.nodeOfflineCount, node.ID)
 		m.mu.Unlock()
 		m.clearAlert(canonicalConnectivityStateID(node.ID))
 	} else {
@@ -247,7 +244,6 @@ func (m *Manager) checkNodeOffline(node models.Node) {
 	alertID := fmt.Sprintf("node-offline-%s", node.ID)
 
 	m.mu.Lock()
-	delete(m.offlineRecoveryConfirmations, canonicalConnectivityStateID(node.ID))
 	m.mu.Unlock()
 
 	thresholds := m.resolveResourceThresholds("node", node.ID)
@@ -264,8 +260,6 @@ func (m *Manager) checkNodeOffline(node models.Node) {
 	_, _ = m.evaluateCanonicalLifecycleAlert(canonicalLifecycleAlertParams{
 		Spec:         spec,
 		Evidence:     alertspecs.AlertEvidence{ObservedAt: time.Now(), Connectivity: &alertspecs.ConnectivityEvidence{Signal: "status", Connected: false}},
-		Tracking:     m.nodeOfflineCount,
-		TrackingKey:  node.ID,
 		AlertID:      alertID,
 		AlertType:    "connectivity",
 		ResourceID:   node.ID,
@@ -295,9 +289,6 @@ func (m *Manager) clearNodeOfflineAlert(node models.Node) {
 
 	// Reset the legacy offline counter; the reducer core owns the
 	// confirmation run itself.
-	if m.nodeOfflineCount[node.ID] > 0 {
-		delete(m.nodeOfflineCount, node.ID)
-	}
 
 	m.resolveDiscreteRecoveryNoLock(node.ID, canonicalConnectivitySpecID(node.ID), alertID, offlineRecoveryConfirmationsDefault, "Node", node.Name, node.Instance)
 }

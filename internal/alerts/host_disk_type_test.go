@@ -131,9 +131,9 @@ func TestHostDiskFillUsesPerTypeThresholdForNVMe(t *testing.T) {
 		t.Fatalf("expected no alert for nvme disk at 91%% (nvme trigger 92), got active: %v", alertKeys(m))
 	}
 	m.mu.RLock()
-	if _, pending := m.pendingAlerts[trackingKey]; pending {
+	if m.core.PendingCount() != 0 {
 		m.mu.RUnlock()
-		t.Fatalf("expected no pending alert for nvme disk at 91%%, but pendingAlerts has %q", trackingKey)
+		t.Fatalf("expected no pending alert for nvme disk at 91%%, but the core has a pending run")
 	}
 	m.mu.RUnlock()
 
@@ -209,9 +209,9 @@ func TestHostDiskFillPerTypeThresholdDoesNotOverrideDisabledGlobalDefault(t *tes
 		t.Fatalf("expected no alert when global agent disk threshold is disabled, active: %v", alertKeys(m))
 	}
 	m.mu.RLock()
-	if _, pending := m.pendingAlerts[trackingKey]; pending {
+	if m.core.PendingCount() != 0 {
 		m.mu.RUnlock()
-		t.Fatalf("expected no pending alert when global agent disk threshold is disabled, but pendingAlerts has %q", trackingKey)
+		t.Fatalf("expected no pending alert when global agent disk threshold is disabled, but the core has a pending run")
 	}
 	m.mu.RUnlock()
 }
@@ -241,9 +241,9 @@ func TestHostDiskTempUsesNVMeThreshold(t *testing.T) {
 		t.Fatalf("expected no alert for nvme disk at 62C (nvme trigger 70), got active: %v", alertKeys(m))
 	}
 	m.mu.RLock()
-	if _, pending := m.pendingAlerts[trackingKey]; pending {
+	if m.core.PendingCount() != 0 {
 		m.mu.RUnlock()
-		t.Fatalf("expected no pending alert for nvme disk at 62C, but pendingAlerts has %q", trackingKey)
+		t.Fatalf("expected no pending alert for nvme disk at 62C, but the core has a pending run")
 	}
 	m.mu.RUnlock()
 
@@ -308,9 +308,9 @@ func TestHostDiskTempPerTypeThresholdDoesNotOverrideDisabledGlobalDefault(t *tes
 		t.Fatalf("expected no alert when global agent disk temperature threshold is disabled, active: %v", alertKeys(m))
 	}
 	m.mu.RLock()
-	if _, pending := m.pendingAlerts[trackingKey]; pending {
+	if m.core.PendingCount() != 0 {
 		m.mu.RUnlock()
-		t.Fatalf("expected no pending alert when global agent disk temperature threshold is disabled, but pendingAlerts has %q", trackingKey)
+		t.Fatalf("expected no pending alert when global agent disk temperature threshold is disabled, but the core has a pending run")
 	}
 	m.mu.RUnlock()
 }
@@ -352,9 +352,9 @@ func TestHostDiskTempExplicitOverrideBeatsPerTypeThreshold(t *testing.T) {
 		t.Fatalf("expected no alert for nvme disk at 75C with explicit override trigger 80, active: %v", alertKeys(m))
 	}
 	m.mu.RLock()
-	if _, pending := m.pendingAlerts[trackingKey]; pending {
+	if m.core.PendingCount() != 0 {
 		m.mu.RUnlock()
-		t.Fatalf("expected no pending alert for nvme disk at 75C with explicit override trigger 80, but pendingAlerts has %q", trackingKey)
+		t.Fatalf("expected no pending alert for nvme disk at 75C with explicit override trigger 80, but the core has a pending run")
 	}
 	m.mu.RUnlock()
 }

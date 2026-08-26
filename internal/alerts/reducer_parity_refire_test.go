@@ -75,8 +75,6 @@ func (e *managerRefireParityEngine) observe(t *testing.T, step refireParityStep)
 			ObservedAt:    e.clock,
 			DiscreteState: &alertspecs.DiscreteStateEvidence{StateKey: "parity-state", Observed: observed},
 		},
-		Tracking:     e.manager.offlineConfirmations,
-		TrackingKey:  "parity:" + refireParityResourceID,
 		AlertID:      canonicalDiscreteStateStateID(refireParityResourceID, "parity-state"),
 		AlertType:    "parity-state",
 		ResourceID:   refireParityResourceID,

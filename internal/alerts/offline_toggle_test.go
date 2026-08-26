@@ -13,7 +13,7 @@ func TestDisableAllNodesOfflinePreventsOfflineAlert(t *testing.T) {
 	// Reset state to avoid interference from persisted alerts.
 	manager.mu.Lock()
 	manager.activeAlerts = make(map[string]*Alert)
-	manager.nodeOfflineCount = make(map[string]int)
+	manager.core.Reset()
 	manager.mu.Unlock()
 
 	config := manager.GetConfig()
@@ -31,7 +31,7 @@ func TestDisableAllNodesOfflinePreventsOfflineAlert(t *testing.T) {
 
 	manager.mu.RLock()
 	_, alertExists := manager.activeAlerts["node-offline-node-1"]
-	_, counterExists := manager.nodeOfflineCount["node-1"]
+	counterExists := testCoreHasIncident(manager, "node-1", canonicalConnectivitySpecID("node-1"))
 	manager.mu.RUnlock()
 
 	if alertExists {
@@ -47,7 +47,7 @@ func TestUpdateConfigClearsExistingNodeOfflineAlerts(t *testing.T) {
 
 	manager.mu.Lock()
 	manager.activeAlerts = make(map[string]*Alert)
-	manager.nodeOfflineCount = make(map[string]int)
+	manager.core.Reset()
 	manager.activeAlerts["node-offline-node-1"] = &Alert{
 		ID:           "node-offline-node-1",
 		Type:         "connectivity",
@@ -57,7 +57,6 @@ func TestUpdateConfigClearsExistingNodeOfflineAlerts(t *testing.T) {
 		StartTime:    time.Now().Add(-5 * time.Minute),
 		LastSeen:     time.Now(),
 	}
-	manager.nodeOfflineCount["node-1"] = 3
 	manager.mu.Unlock()
 
 	config := manager.GetConfig()
@@ -69,7 +68,7 @@ func TestUpdateConfigClearsExistingNodeOfflineAlerts(t *testing.T) {
 
 	manager.mu.RLock()
 	_, alertExists := manager.activeAlerts["node-offline-node-1"]
-	_, counterExists := manager.nodeOfflineCount["node-1"]
+	counterExists := testCoreHasIncident(manager, "node-1", canonicalConnectivitySpecID("node-1"))
 	manager.mu.RUnlock()
 
 	if alertExists {
@@ -101,7 +100,6 @@ func TestUpdateConfigClearsDockerContainerAlertsWhenDisabled(t *testing.T) {
 	for _, id := range containerAlertIDs {
 		manager.activeAlerts[id] = &Alert{ID: id, ResourceID: containerResourceID}
 	}
-	manager.dockerStateConfirm[containerResourceID] = 2
 	manager.dockerRestartTracking[containerResourceID] = &dockerRestartRecord{}
 	manager.mu.Unlock()
 
@@ -118,8 +116,8 @@ func TestUpdateConfigClearsDockerContainerAlertsWhenDisabled(t *testing.T) {
 			t.Fatalf("expected docker container alert %s to be cleared when DisableAllDockerContainers is enabled", id)
 		}
 	}
-	if len(manager.dockerStateConfirm) != 0 {
-		t.Fatalf("expected dockerStateConfirm map to be cleared when DisableAllDockerContainers is enabled")
+	if testCoreHasIncident(manager, containerResourceID, canonicalDiscreteStateSpecID(containerResourceID, "runtime-state")) {
+		t.Fatalf("expected container state confirmation tracking to be cleared when DisableAllDockerContainers is enabled")
 	}
 	if len(manager.dockerRestartTracking) != 0 {
 		t.Fatalf("expected dockerRestartTracking map to be cleared when DisableAllDockerContainers is enabled")

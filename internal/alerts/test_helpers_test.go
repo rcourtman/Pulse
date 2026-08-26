@@ -218,6 +218,13 @@ func testCoreHasIncident(m *Manager, resourceID, specID string) bool {
 	return ok
 }
 
+// testCoreIsPending reports whether the reducer core tracks a pending (not
+// yet activated) incident for the key.
+func testCoreIsPending(m *Manager, resourceID, specID string) bool {
+	incident, ok := m.core.Incident(resourceID, specID)
+	return ok && incident.State == reducer.StatePending
+}
+
 // testSeedCoreConfirmations fast-forwards a confirmation run in the
 // reducer core — the post-cutover replacement for pre-seeding the legacy
 // count maps. It applies matched observations directly to the core so the

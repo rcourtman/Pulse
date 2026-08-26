@@ -32,7 +32,7 @@ func TestCheckConnection(t *testing.T) {
 			t.Fatal("expected no alert for active connection")
 		}
 		m.mu.RLock()
-		count := m.connectionDegradedCount[snap.ID]
+		count := testCoreConfirmations(m, snap.ID, canonicalDiscreteStateSpecID(snap.ID, connectionDegradedStateKey))
 		m.mu.RUnlock()
 		if count != 0 {
 			t.Errorf("expected degraded count 0, got %d", count)
@@ -171,7 +171,7 @@ func TestCheckConnection(t *testing.T) {
 			t.Fatal("expected no alert for non-platform connection type")
 		}
 		m.mu.RLock()
-		count := m.connectionDegradedCount[snap.ID]
+		count := testCoreConfirmations(m, snap.ID, canonicalDiscreteStateSpecID(snap.ID, connectionDegradedStateKey))
 		m.mu.RUnlock()
 		if count != 0 {
 			t.Errorf("expected degraded count untouched for non-platform type, got %d", count)
@@ -224,7 +224,7 @@ func TestCheckConnectionHonorsOwningResourceAvailabilityPolicy(t *testing.T) {
 			t.Fatal("offline-disabled PBS created a connection-degraded alert")
 		}
 		m.mu.RLock()
-		_, tracked := m.connectionDegradedCount[snap.ID]
+		tracked := testCoreHasIncident(m, snap.ID, canonicalDiscreteStateSpecID(snap.ID, connectionDegradedStateKey))
 		m.mu.RUnlock()
 		if tracked {
 			t.Fatal("offline-disabled PBS retained connection-degraded confirmation state")
@@ -278,7 +278,7 @@ func TestCheckConnectionHonorsOwningResourceAvailabilityPolicy(t *testing.T) {
 			t.Fatal("policy update did not immediately resolve connection-degraded")
 		}
 		m.mu.RLock()
-		_, tracked := m.connectionDegradedCount[snap.ID]
+		tracked := testCoreHasIncident(m, snap.ID, canonicalDiscreteStateSpecID(snap.ID, connectionDegradedStateKey))
 		m.mu.RUnlock()
 		if tracked {
 			t.Fatal("policy update left connection-degraded confirmation state")
@@ -382,7 +382,7 @@ func TestClearConnectionDegradedAlert(t *testing.T) {
 			t.Fatal("expected alert to remain active until recovery confirmations are met")
 		}
 		m.mu.RLock()
-		count1 := m.offlineRecoveryConfirmations[alertID]
+		count1 := testCoreRecoveryCount(m, snap.ID, canonicalDiscreteStateSpecID(snap.ID, connectionDegradedStateKey))
 		m.mu.RUnlock()
 		if count1 != 1 {
 			t.Errorf("expected recovery confirmation 1, got %d", count1)
@@ -415,7 +415,7 @@ func TestClearConnectionDegradedAlert(t *testing.T) {
 
 		m.mu.RLock()
 		alertCount := len(m.activeAlerts)
-		recovery := m.offlineRecoveryConfirmations[canonicalDiscreteStateStateID(snap.ID, connectionDegradedStateKey)]
+		recovery := testCoreRecoveryCount(m, snap.ID, canonicalDiscreteStateSpecID(snap.ID, connectionDegradedStateKey))
 		m.mu.RUnlock()
 
 		if alertCount != 0 {
@@ -441,7 +441,7 @@ func TestClearConnectionDegradedAlert(t *testing.T) {
 		snap.State = ConnectionStateActive
 		m.CheckConnection(snap)
 		m.mu.RLock()
-		recoveryBefore := m.offlineRecoveryConfirmations[alertID]
+		recoveryBefore := testCoreRecoveryCount(m, snap.ID, canonicalDiscreteStateSpecID(snap.ID, connectionDegradedStateKey))
 		m.mu.RUnlock()
 		if recoveryBefore != 1 {
 			t.Fatalf("expected 1 recovery confirmation, got %d", recoveryBefore)
@@ -452,7 +452,7 @@ func TestClearConnectionDegradedAlert(t *testing.T) {
 		snap.State = ConnectionStateStale
 		m.CheckConnection(snap)
 		m.mu.RLock()
-		recoveryAfter := m.offlineRecoveryConfirmations[alertID]
+		recoveryAfter := testCoreRecoveryCount(m, snap.ID, canonicalDiscreteStateSpecID(snap.ID, connectionDegradedStateKey))
 		m.mu.RUnlock()
 		if recoveryAfter != 0 {
 			t.Errorf("expected recovery confirmations reset to 0, got %d", recoveryAfter)

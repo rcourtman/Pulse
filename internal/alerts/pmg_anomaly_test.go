@@ -59,9 +59,8 @@ func TestCheckPMGAnomalies_QuietSite(t *testing.T) {
 	feedSample(spikeTime, 100)
 
 	// Verify pending
-	pendingKey := "pmg-anomaly-pmg1-spamIn"
 	m.mu.Lock()
-	_, isPending := m.pendingAlerts[pendingKey]
+	isPending := testCoreIsPending(m, "pmg1", "pmg1-anomaly-spamIn")
 	m.mu.Unlock()
 	if !isPending {
 		t.Errorf("Expected pending alert for first spike")
@@ -136,9 +135,8 @@ func TestCheckPMGAnomalies_NormalSite(t *testing.T) {
 	feedSample(spikeTime, val) // Pending
 
 	// Verify pending
-	pendingKey := "pmg-anomaly-pmg2-spamIn"
 	m.mu.Lock()
-	_, isPending := m.pendingAlerts[pendingKey]
+	isPending := testCoreIsPending(m, "pmg2", "pmg2-anomaly-spamIn")
 	m.mu.Unlock()
 	if !isPending {
 		t.Errorf("Expected pending alert for first spike")

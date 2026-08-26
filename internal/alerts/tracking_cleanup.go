@@ -1,7 +1,6 @@
 package alerts
 
 import (
-	"strings"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -34,6 +33,8 @@ func (m *Manager) cleanupStaleMaps() {
 	staleThreshold := StaleTrackingThreshold
 	cleaned := 0
 
+	cleaned += m.core.PruneStalePending(now.Add(-staleThreshold))
+
 	for alertID, history := range m.flappingHistory {
 		if !m.hasActiveAlertNoLock(alertID) {
 			if len(history) == 0 || now.Sub(history[len(history)-1]) > staleThreshold {
@@ -51,88 +52,12 @@ func (m *Manager) cleanupStaleMaps() {
 		}
 	}
 
-	for alertID, pendingTime := range m.pendingAlerts {
-		if !m.hasActiveAlertNoLock(alertID) {
-			if now.Sub(pendingTime) > staleThreshold {
-				delete(m.pendingAlerts, alertID)
-				cleaned++
-			}
-		}
-	}
-
 	for trackingKey, pending := range m.intentPending {
 		if m.hasActiveAlertNoLock(trackingKey) {
 			continue
 		}
 		if pending.LastObservedAt.IsZero() || now.Sub(pending.LastObservedAt) > staleThreshold {
 			m.clearIntentPendingNoLock(trackingKey)
-			cleaned++
-		}
-	}
-
-	for resourceID := range m.offlineConfirmations {
-		hasRelatedAlert := false
-		for storageKey, alert := range m.activeAlerts {
-			alertID := effectiveAlertID(alert, storageKey)
-			if strings.Contains(alertID, resourceID) {
-				hasRelatedAlert = true
-				break
-			}
-		}
-		if !hasRelatedAlert {
-			delete(m.offlineConfirmations, resourceID)
-			cleaned++
-		}
-	}
-
-	for alertID := range m.offlineRecoveryConfirmations {
-		if !m.hasActiveAlertNoLock(alertID) {
-			delete(m.offlineRecoveryConfirmations, alertID)
-			cleaned++
-		}
-	}
-
-	for nodeID := range m.nodeOfflineCount {
-		hasRelatedAlert := false
-		for storageKey, alert := range m.activeAlerts {
-			alertID := effectiveAlertID(alert, storageKey)
-			if strings.Contains(alertID, nodeID) {
-				hasRelatedAlert = true
-				break
-			}
-		}
-		if !hasRelatedAlert {
-			delete(m.nodeOfflineCount, nodeID)
-			cleaned++
-		}
-	}
-
-	for containerID := range m.dockerStateConfirm {
-		hasRelatedAlert := false
-		for storageKey, alert := range m.activeAlerts {
-			alertID := effectiveAlertID(alert, storageKey)
-			if strings.Contains(alertID, containerID) {
-				hasRelatedAlert = true
-				break
-			}
-		}
-		if !hasRelatedAlert {
-			delete(m.dockerStateConfirm, containerID)
-			cleaned++
-		}
-	}
-
-	for hostID := range m.dockerOfflineCount {
-		hasRelatedAlert := false
-		for storageKey, alert := range m.activeAlerts {
-			alertID := effectiveAlertID(alert, storageKey)
-			if strings.Contains(alertID, hostID) {
-				hasRelatedAlert = true
-				break
-			}
-		}
-		if !hasRelatedAlert {
-			delete(m.dockerOfflineCount, hostID)
 			cleaned++
 		}
 	}

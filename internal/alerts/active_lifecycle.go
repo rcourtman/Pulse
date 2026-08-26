@@ -567,36 +567,13 @@ func (m *Manager) removeActiveAlertNoLock(alertID string) {
 		m.unregisterActiveAlertAliasNoLock(key, alert)
 	}
 	if exists {
-		delete(m.offlineRecoveryConfirmations, key)
 		delete(m.activeAlerts, key)
 	}
-	delete(m.offlineRecoveryConfirmations, alertID)
 
 	// Preserve acknowledgement state so quick alert rebuilds keep user intent.
 	if exists {
 		m.markAckInactiveNoLock(currentAlert, publicID, time.Now())
 	}
-}
-
-func (m *Manager) confirmOfflineRecoveryNoLock(alertID string, required int) (int, bool) {
-	alertID = strings.TrimSpace(alertID)
-	if alertID == "" {
-		return 0, false
-	}
-
-	if required <= 1 {
-		delete(m.offlineRecoveryConfirmations, alertID)
-		return required, true
-	}
-
-	m.offlineRecoveryConfirmations[alertID]++
-	confirmations := m.offlineRecoveryConfirmations[alertID]
-	if confirmations < required {
-		return confirmations, false
-	}
-
-	delete(m.offlineRecoveryConfirmations, alertID)
-	return confirmations, true
 }
 
 // clearResourceOfflineAlert removes an offline alert when a poll-driven resource
@@ -635,16 +612,6 @@ func (m *Manager) resolveDiscreteRecoveryNoLock(resourceID, specKey, alertID str
 		Matched:    false,
 		ObservedAt: time.Now(),
 	}, reducer.DiscreteRule{RecoveryConfirmations: requiredRecoveryCount})
-
-	// Legacy-map mirrors (read-only during Phase 2; deleted in Phase 3):
-	// a healthy poll clears any confirmation-run mirror and reflects the
-	// core's recovery count.
-	delete(m.offlineConfirmations, resourceID)
-	if incident, tracked := m.core.Incident(resourceID, specKey); tracked && incident.RecoveryCount > 0 {
-		m.offlineRecoveryConfirmations[alertID] = incident.RecoveryCount
-	} else {
-		delete(m.offlineRecoveryConfirmations, alertID)
-	}
 
 	alert, exists := m.getActiveAlertNoLock(alertID)
 	if !exists {
@@ -696,12 +663,10 @@ func (m *Manager) ClearAlert(alertID string) bool {
 
 	m.clearAlertNoLock(alertID)
 	delete(m.recentAlerts, alertID)
-	delete(m.pendingAlerts, alertID)
 	delete(m.suppressedUntil, alertID)
 	delete(m.alertRateLimit, alertID)
 	if trackingKey != "" && trackingKey != alertID {
 		delete(m.recentAlerts, trackingKey)
-		delete(m.pendingAlerts, trackingKey)
 		delete(m.suppressedUntil, trackingKey)
 		delete(m.alertRateLimit, trackingKey)
 	}

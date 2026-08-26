@@ -101,8 +101,6 @@ func (e *managerDiscreteParityEngine) observe(t *testing.T, step discreteParityS
 				Observed: observed,
 			},
 		},
-		Tracking:      e.manager.offlineConfirmations,
-		TrackingKey:   "parity:" + discreteParityResourceID,
 		AlertID:       canonicalDiscreteStateStateID(discreteParityResourceID, discreteParityStateKey),
 		AlertType:     "parity-state",
 		ResourceID:    discreteParityResourceID,

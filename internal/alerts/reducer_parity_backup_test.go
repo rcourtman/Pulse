@@ -112,8 +112,6 @@ func TestReducerParityWithManagerBackupDeferral(t *testing.T) {
 						ObservedAt:   simClock,
 						Connectivity: &alertspecs.ConnectivityEvidence{Signal: "status", Connected: !step.matched},
 					},
-					Tracking:     manager.offlineConfirmations,
-					TrackingKey:  "parity:" + backupParityResourceID,
 					AlertID:      alertID,
 					AlertType:    "offline",
 					ResourceID:   backupParityResourceID,

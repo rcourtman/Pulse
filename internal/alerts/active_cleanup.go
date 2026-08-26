@@ -143,16 +143,9 @@ func (m *Manager) Cleanup(maxAge time.Duration) {
 	m.pruneRecentlyResolvedUnlocked(now)
 	m.resolvedMutex.Unlock()
 
-	maxPendingAge := 10 * time.Minute
-	for id, pendingTime := range m.pendingAlerts {
-		if now.Sub(pendingTime) > maxPendingAge {
-			delete(m.pendingAlerts, id)
-			log.Debug().
-				Str("resourceID", id).
-				Dur("age", now.Sub(pendingTime)).
-				Msg("Cleaned up stale pending alert entry")
-		}
-	}
+	// Pending confirmation/delay runs whose resource stopped being observed
+	// mid-run would otherwise linger in the core forever.
+	m.core.PruneStalePending(now.Add(-10 * time.Minute))
 
 	flappingCleanupAge := 1 * time.Hour
 	for alertID := range m.flappingHistory {
@@ -321,23 +314,18 @@ func (m *Manager) CleanupAlertsForNodes(existingNodes map[string]bool) {
 // ClearActiveAlerts removes all active and pending alerts, resetting the manager state.
 func (m *Manager) ClearActiveAlerts() {
 	m.mu.Lock()
-	if len(m.activeAlerts) == 0 && len(m.pendingAlerts) == 0 && len(m.intentPending) == 0 {
+	if len(m.activeAlerts) == 0 && len(m.intentPending) == 0 {
 		m.mu.Unlock()
 		return
 	}
 	m.activeAlerts = make(map[string]*Alert)
 	m.activeAlertAlias = make(map[string]string)
-	m.pendingAlerts = make(map[string]time.Time)
+	m.core.Reset()
 	m.intentPending = make(map[string]IntentPendingState)
 	m.intentRuntimeTicks = make(map[string]time.Duration)
 	m.recentAlerts = make(map[string]*Alert)
 	m.suppressedUntil = make(map[string]time.Time)
 	m.alertRateLimit = make(map[string][]time.Time)
-	m.nodeOfflineCount = make(map[string]int)
-	m.offlineConfirmations = make(map[string]int)
-	m.offlineRecoveryConfirmations = make(map[string]int)
-	m.dockerOfflineCount = make(map[string]int)
-	m.dockerStateConfirm = make(map[string]int)
 	m.dockerRestartTracking = make(map[string]*dockerRestartRecord)
 	m.dockerUpdateFirstSeen = make(map[string]time.Time)
 	m.dockerUpdateFirstSeenByIdentity = make(map[string]time.Time)

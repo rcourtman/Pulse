@@ -15,9 +15,9 @@ import (
 // a reducer bug by definition (docs/ALERT_ENGINE_EVOLUTION.md, Phase 1).
 //
 // Time is simulated. The reducer takes it via ObservedAt; the manager's
-// delay tracking uses the wall clock, so the harness backdates
-// m.pendingAlerts between steps — the same trick the existing
-// time-threshold tests use.
+// delay tracking uses the wall clock, so the harness backdates the core's
+// pending-run start times between steps (m.core.ShiftPending) — the same
+// trick the existing time-threshold tests use.
 
 type parityStep struct {
 	value float64

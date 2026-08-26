@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts/reducer"
 	alertspecs "github.com/rcourtman/pulse-go-rewrite/internal/alerts/specs"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
@@ -50,7 +51,9 @@ func (m *Manager) CheckStorage(storage models.Storage) {
 	if thresholds.Disabled {
 		m.mu.Lock()
 		for _, resourceID := range resourceIDs {
-			delete(m.offlineConfirmations, resourceID)
+			// Clear any pending core runs alongside the alerts.
+			m.core.ApplyDiscrete(reducer.DiscreteSignal{ResourceID: resourceID, Key: canonicalConnectivitySpecID(resourceID), Matched: false, ObservedAt: m.policyNow()}, reducer.DiscreteRule{})
+			m.core.ApplyMetric(reducer.MetricSignal{ResourceID: resourceID, Key: canonicalMetricSpecID(resourceID, "usage"), Metric: "usage", ObservedAt: m.policyNow()}, reducer.MetricRule{})
 		}
 		m.mu.Unlock()
 		for _, resourceID := range resourceIDs {
@@ -67,7 +70,7 @@ func (m *Manager) CheckStorage(storage models.Storage) {
 	if thresholds.DisableConnectivity {
 		m.mu.Lock()
 		for _, resourceID := range resourceIDs {
-			delete(m.offlineConfirmations, resourceID)
+			m.core.ApplyDiscrete(reducer.DiscreteSignal{ResourceID: resourceID, Key: canonicalConnectivitySpecID(resourceID), Matched: false, ObservedAt: m.policyNow()}, reducer.DiscreteRule{})
 		}
 		m.mu.Unlock()
 		for _, resourceID := range resourceIDs {
@@ -403,7 +406,6 @@ func (m *Manager) checkStorageOffline(storage models.Storage) {
 	alertID := fmt.Sprintf("storage-offline-%s", storage.ID)
 
 	m.mu.Lock()
-	delete(m.offlineRecoveryConfirmations, canonicalConnectivityStateID(storage.ID))
 	m.mu.Unlock()
 
 	m.mu.RLock()
@@ -422,8 +424,6 @@ func (m *Manager) checkStorageOffline(storage models.Storage) {
 	_, _ = m.evaluateCanonicalLifecycleAlert(canonicalLifecycleAlertParams{
 		Spec:         spec,
 		Evidence:     alertspecs.AlertEvidence{ObservedAt: time.Now(), Connectivity: &alertspecs.ConnectivityEvidence{Signal: "status", Connected: false}},
-		Tracking:     m.offlineConfirmations,
-		TrackingKey:  storage.ID,
 		AlertID:      alertID,
 		AlertType:    "offline",
 		ResourceID:   storage.ID,

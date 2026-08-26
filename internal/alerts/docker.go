@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts/reducer"
 	alertspecs "github.com/rcourtman/pulse-go-rewrite/internal/alerts/specs"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
@@ -655,11 +656,14 @@ func (m *Manager) HandleDockerHostOnline(host models.DockerHost) {
 		return
 	}
 
-	alertID := canonicalConnectivityStateID(fmt.Sprintf("docker:%s", strings.TrimSpace(host.ID)))
+	resourceID := fmt.Sprintf("docker:%s", strings.TrimSpace(host.ID))
+	alertID := canonicalConnectivityStateID(resourceID)
 
 	m.mu.Lock()
-	delete(m.dockerOfflineCount, host.ID)
 	exists := m.hasActiveAlertNoLock(alertID)
+	// The host was observed online: a healthy observation ends any
+	// in-flight offline confirmation run in the core.
+	m.core.ApplyDiscrete(reducer.DiscreteSignal{ResourceID: resourceID, Key: canonicalConnectivitySpecID(resourceID), Matched: false, ObservedAt: m.policyNow()}, reducer.DiscreteRule{})
 	m.mu.Unlock()
 
 	if exists {
@@ -700,7 +704,6 @@ func (m *Manager) HandleDockerHostOffline(host models.DockerHost) {
 
 	if disableDockerHostsOffline {
 		m.mu.Lock()
-		delete(m.dockerOfflineCount, host.ID)
 		m.mu.Unlock()
 		m.clearAlert(alertID)
 		return
@@ -716,7 +719,6 @@ func (m *Manager) HandleDockerHostOffline(host models.DockerHost) {
 	if disableConnectivity {
 		m.clearAlert(alertID)
 		m.mu.Lock()
-		delete(m.dockerOfflineCount, host.ID)
 		m.mu.Unlock()
 		return
 	}
@@ -734,8 +736,6 @@ func (m *Manager) HandleDockerHostOffline(host models.DockerHost) {
 	result, ok := m.evaluateCanonicalLifecycleAlert(canonicalLifecycleAlertParams{
 		Spec:         spec,
 		Evidence:     alertspecs.AlertEvidence{ObservedAt: time.Now(), Connectivity: &alertspecs.ConnectivityEvidence{Signal: "status", Connected: false}},
-		Tracking:     m.dockerOfflineCount,
-		TrackingKey:  host.ID,
 		AlertID:      alertID,
 		AlertType:    "docker-host-offline",
 		ResourceID:   resourceID,
@@ -783,7 +783,6 @@ func (m *Manager) HandleDockerHostOffline(host models.DockerHost) {
 
 func (m *Manager) checkDockerContainerState(host models.DockerHost, container models.DockerContainer, resourceID, containerName, instanceName, nodeName string) {
 	alertID := fmt.Sprintf("docker-container-state-%s", resourceID)
-	stateKey := resourceID
 
 	m.mu.RLock()
 	override, hasOverride := m.lookupDockerContainerOverrideNoLock(host.ID, container.Name, resourceID)
@@ -835,8 +834,6 @@ func (m *Manager) checkDockerContainerState(host models.DockerHost, container mo
 				Observed: observedState,
 			},
 		},
-		Tracking:      m.dockerStateConfirm,
-		TrackingKey:   stateKey,
 		AlertID:       alertID,
 		AlertType:     "docker-container-state",
 		ResourceID:    resourceID,
@@ -853,7 +850,6 @@ func (m *Manager) checkDockerContainerState(host models.DockerHost, container mo
 
 func (m *Manager) clearDockerContainerStateAlert(resourceID string) {
 	m.mu.Lock()
-	delete(m.dockerStateConfirm, resourceID)
 	m.mu.Unlock()
 	m.clearAlert(canonicalDiscreteStateStateID(resourceID, "runtime-state"))
 }
@@ -1465,10 +1461,12 @@ func (m *Manager) cleanupDockerContainerAlertsWithTracking(host models.DockerHos
 		}
 		toClear = append(toClear, alertID)
 	}
-	for resourceID := range m.dockerStateConfirm {
+	// Removed containers stop being observed, so their in-flight
+	// confirmation runs in the core would never see a closing observation.
+	for _, resourceID := range m.core.PendingResourceIDs() {
 		if strings.HasPrefix(resourceID, prefix) {
 			if _, exists := seen[resourceID]; !exists {
-				delete(m.dockerStateConfirm, resourceID)
+				m.core.DropPendingForResource(resourceID)
 			}
 		}
 	}
@@ -1509,9 +1507,9 @@ func (m *Manager) clearDockerHostContainerAlerts(host models.DockerHost) {
 			toClear = append(toClear, alertID)
 		}
 	}
-	for resourceID := range m.dockerStateConfirm {
+	for _, resourceID := range m.core.PendingResourceIDs() {
 		if strings.HasPrefix(resourceID, prefix) {
-			delete(m.dockerStateConfirm, resourceID)
+			m.core.DropPendingForResource(resourceID)
 		}
 	}
 	for resourceID := range m.dockerRestartTracking {

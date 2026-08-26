@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts/reducer"
 	alertspecs "github.com/rcourtman/pulse-go-rewrite/internal/alerts/specs"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
@@ -593,8 +594,10 @@ func (m *Manager) HandleHostOnline(host models.Host) {
 	alertID := canonicalConnectivityStateID(resourceKey)
 
 	m.mu.Lock()
-	delete(m.offlineConfirmations, resourceKey)
 	exists := m.hasActiveAlertNoLock(alertID)
+	// The host was observed online: a healthy observation ends any
+	// in-flight offline confirmation run in the core.
+	m.core.ApplyDiscrete(reducer.DiscreteSignal{ResourceID: resourceKey, Key: canonicalConnectivitySpecID(resourceKey), Matched: false, ObservedAt: m.policyNow()}, reducer.DiscreteRule{})
 	m.mu.Unlock()
 
 	if exists {
@@ -735,7 +738,6 @@ func (m *Manager) HandleHostOffline(host models.Host) {
 
 	if disableHostsOffline {
 		m.mu.Lock()
-		delete(m.offlineConfirmations, resourceKey)
 		m.mu.Unlock()
 		m.clearAlert(alertID)
 		return
@@ -744,7 +746,6 @@ func (m *Manager) HandleHostOffline(host models.Host) {
 	if thresholds.Disabled || thresholds.DisableConnectivity {
 		m.clearAlert(alertID)
 		m.mu.Lock()
-		delete(m.offlineConfirmations, resourceKey)
 		m.mu.Unlock()
 		return
 	}
@@ -768,8 +769,6 @@ func (m *Manager) HandleHostOffline(host models.Host) {
 				Connected: false,
 			},
 		},
-		Tracking:     m.offlineConfirmations,
-		TrackingKey:  resourceKey,
 		AlertID:      alertID,
 		AlertType:    HostOfflineAlertType,
 		ResourceID:   resourceKey,
