@@ -87,12 +87,23 @@ type Incident struct {
 type EventType string
 
 const (
-	EventPending         EventType = "pending"
-	EventPendingCleared  EventType = "pending_cleared"
-	EventFired           EventType = "fired"
+	EventPending        EventType = "pending"
+	EventPendingCleared EventType = "pending_cleared"
+	EventFired          EventType = "fired"
+	// EventRefired marks an activation that consumed a recently resolved
+	// occurrence within RefireRetention: the incident keeps the original
+	// occurrence's StartedAt, and downstream consumers treat it as the
+	// same occurrence (the manager reactivates without a new history
+	// entry, while still notifying).
+	EventRefired         EventType = "refired"
 	EventSeverityChanged EventType = "severity_changed"
 	EventResolved        EventType = "resolved"
 )
+
+// RefireRetention is how long a resolved occurrence remains consumable by a
+// re-fire, mirroring the manager's recentlyResolvedRetention. Time is
+// measured on the signal's ObservedAt.
+const RefireRetention = 5 * time.Minute
 
 // Event is one transition emitted by Apply.
 type Event struct {
@@ -104,15 +115,27 @@ type Event struct {
 	At         time.Time
 }
 
+// resolvedRecord remembers one resolved occurrence so a re-fire inside
+// RefireRetention can restore its start time (the confirmation family's
+// canonical lifecycle behavior).
+type resolvedRecord struct {
+	StartedAt  time.Time
+	ResolvedAt time.Time
+}
+
 // State holds every incident the reducer tracks. It is not safe for
 // concurrent use; the owner serializes Apply calls.
 type State struct {
 	incidents map[string]*Incident
+	resolved  map[string]resolvedRecord
 }
 
 // NewState returns an empty reducer state.
 func NewState() *State {
-	return &State{incidents: make(map[string]*Incident)}
+	return &State{
+		incidents: make(map[string]*Incident),
+		resolved:  make(map[string]resolvedRecord),
+	}
 }
 
 func incidentKey(resourceID, subKey string) string {

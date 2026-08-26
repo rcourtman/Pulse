@@ -130,8 +130,13 @@ func TestDiscreteRefireRequiresFullConfirmations(t *testing.T) {
 		t.Fatalf("events = %+v, want pending after recovery", events)
 	}
 	events = state.ApplyDiscrete(discreteSignalAt(true, SeverityWarning, 4*time.Minute), rule)
-	if len(events) != 1 || events[0].Type != EventFired {
-		t.Fatalf("events = %+v, want re-fire after full confirmations", events)
+	if len(events) != 1 || events[0].Type != EventRefired {
+		t.Fatalf("events = %+v, want refired after full confirmations within retention", events)
+	}
+	// Within RefireRetention the original occurrence's start is restored.
+	incident, _ := state.Incident("node-1", "connectivity")
+	if !incident.StartedAt.Equal(t0) {
+		t.Fatalf("StartedAt = %v, want restored original start %v", incident.StartedAt, t0)
 	}
 }
 
@@ -207,5 +212,52 @@ func TestDiscreteDisableBypassesRecoveryGate(t *testing.T) {
 	events := state.ApplyDiscrete(discreteSignalAt(true, SeverityWarning, time.Minute), DiscreteRule{Confirmations: 1, RecoveryConfirmations: 3, Disabled: true})
 	if len(events) != 1 || events[0].Type != EventResolved {
 		t.Fatalf("events = %+v, want immediate resolve on disable", events)
+	}
+}
+
+func TestDiscreteRefireOutsideRetentionStartsFresh(t *testing.T) {
+	state := NewState()
+	rule := DiscreteRule{Confirmations: 1}
+
+	state.ApplyDiscrete(discreteSignalAt(true, SeverityWarning, 0), rule)
+	state.ApplyDiscrete(discreteSignalAt(false, "", time.Minute), rule)
+
+	// Beyond RefireRetention the resolved occurrence is no longer
+	// consumable: a re-fire is a new occurrence with a fresh start.
+	refireAt := time.Minute + RefireRetention + time.Second
+	events := state.ApplyDiscrete(discreteSignalAt(true, SeverityWarning, refireAt), rule)
+	if len(events) != 1 || events[0].Type != EventFired {
+		t.Fatalf("events = %+v, want plain fired outside retention", events)
+	}
+	incident, _ := state.Incident("node-1", "connectivity")
+	if !incident.StartedAt.Equal(t0.Add(refireAt)) {
+		t.Fatalf("StartedAt = %v, want fresh start %v", incident.StartedAt, t0.Add(refireAt))
+	}
+}
+
+func TestDiscreteRefireRecordConsumedOnce(t *testing.T) {
+	state := NewState()
+	rule := DiscreteRule{Confirmations: 1}
+
+	state.ApplyDiscrete(discreteSignalAt(true, SeverityWarning, 0), rule)
+	state.ApplyDiscrete(discreteSignalAt(false, "", time.Minute), rule)
+
+	// First re-fire restores; its own later resolve records a NEW
+	// occurrence whose start is the restored (original) start.
+	events := state.ApplyDiscrete(discreteSignalAt(true, SeverityWarning, 2*time.Minute), rule)
+	if len(events) != 1 || events[0].Type != EventRefired {
+		t.Fatalf("events = %+v, want refired", events)
+	}
+	state.ApplyDiscrete(discreteSignalAt(false, "", 3*time.Minute), rule)
+
+	// Second re-fire within retention restores again — from the second
+	// occurrence's record, which carries the same original start.
+	events = state.ApplyDiscrete(discreteSignalAt(true, SeverityWarning, 4*time.Minute), rule)
+	if len(events) != 1 || events[0].Type != EventRefired {
+		t.Fatalf("events = %+v, want refired from the newer record", events)
+	}
+	incident, _ := state.Incident("node-1", "connectivity")
+	if !incident.StartedAt.Equal(t0) {
+		t.Fatalf("StartedAt = %v, want original start carried through %v", incident.StartedAt, t0)
 	}
 }

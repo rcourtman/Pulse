@@ -58,6 +58,16 @@ confirmation counts directly (bypassing the evaluator path) left a stale
 previous run's first observation. Fixed by re-stamping whenever an
 observation starts a new run.
 
-Remaining for later slices: re-fire-within-retention start restoration,
-ack/snooze lifecycle, intent-policy interaction, and a shadow-mode
-runtime feed.
+Fourth slice (2026-08-26): re-fire-within-retention start restoration —
+a resolve followed by a re-activation inside the recently-resolved
+retention (5 minutes) restores the original occurrence's StartTime and is
+treated as the same occurrence (EventRefired in the reducer; the manager
+reactivates without a new history entry); outside the window the re-fire
+is a fresh occurrence. First slice where parity passed with no manager
+defect found. Known un-characterized nuance, deliberately deferred: the
+manager's retention check mixes wall-clock now against evidence-stamped
+resolve times, which the reducer normalizes to ObservedAt throughout —
+that difference disappears at cutover.
+
+Remaining for later slices: ack/snooze lifecycle, intent-policy
+interaction, and a shadow-mode runtime feed.

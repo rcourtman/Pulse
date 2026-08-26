@@ -45,6 +45,27 @@ type DiscreteRule struct {
 	Disabled bool
 }
 
+// recordResolved remembers a resolved occurrence for re-fire restoration.
+func (s *State) recordResolved(key string, incident *Incident, resolvedAt time.Time) {
+	s.resolved[key] = resolvedRecord{StartedAt: incident.StartedAt, ResolvedAt: resolvedAt}
+}
+
+// consumeRefire consumes a resolved occurrence still inside RefireRetention
+// and returns its start time for restoration. A record too old to
+// reactivate is dropped (the manager keeps it only for its history
+// bookkeeping, then prunes it on the same retention).
+func (s *State) consumeRefire(key string, observedAt time.Time) (time.Time, bool) {
+	record, ok := s.resolved[key]
+	if !ok {
+		return time.Time{}, false
+	}
+	delete(s.resolved, key)
+	if !record.ResolvedAt.After(observedAt.Add(-RefireRetention)) {
+		return time.Time{}, false
+	}
+	return record.StartedAt, true
+}
+
 // ApplyDiscrete advances the state for one discrete observation under one
 // rule and returns the transition events, in order. Deterministic: time
 // enters only through the signal's ObservedAt.
@@ -70,6 +91,7 @@ func (s *State) ApplyDiscrete(signal DiscreteSignal, rule DiscreteRule) []Event 
 		}
 		delete(s.incidents, key)
 		if incident.State == StateFiring {
+			s.recordResolved(key, incident, signal.ObservedAt)
 			return []Event{event(EventResolved, incident.Severity)}
 		}
 		return []Event{event(EventPendingCleared, "")}
@@ -90,6 +112,7 @@ func (s *State) ApplyDiscrete(signal DiscreteSignal, rule DiscreteRule) []Event 
 		requiredRecovery := rule.RecoveryConfirmations
 		if requiredRecovery <= 1 {
 			delete(s.incidents, key)
+			s.recordResolved(key, incident, signal.ObservedAt)
 			return []Event{event(EventResolved, incident.Severity)}
 		}
 		incident.RecoveryCount++
@@ -98,6 +121,7 @@ func (s *State) ApplyDiscrete(signal DiscreteSignal, rule DiscreteRule) []Event 
 			return nil
 		}
 		delete(s.incidents, key)
+		s.recordResolved(key, incident, signal.ObservedAt)
 		return []Event{event(EventResolved, incident.Severity)}
 	}
 
@@ -136,12 +160,16 @@ func (s *State) ApplyDiscrete(signal DiscreteSignal, rule DiscreteRule) []Event 
 		incident.State = StateFiring
 		incident.Confirmations = required
 		incident.StartedAt = incident.PendingSince
+		if restored, ok := s.consumeRefire(key, signal.ObservedAt); ok {
+			incident.StartedAt = restored
+			return []Event{event(EventRefired, incident.Severity)}
+		}
 		return []Event{event(EventFired, incident.Severity)}
 	}
 
 	// First matching observation.
 	if required <= 1 {
-		s.incidents[key] = &Incident{
+		created := &Incident{
 			ResourceID:     signal.ResourceID,
 			Key:            signal.Key,
 			State:          StateFiring,
@@ -149,6 +177,11 @@ func (s *State) ApplyDiscrete(signal DiscreteSignal, rule DiscreteRule) []Event 
 			StartedAt:      signal.ObservedAt,
 			Confirmations:  1,
 			LastObservedAt: signal.ObservedAt,
+		}
+		s.incidents[key] = created
+		if restored, ok := s.consumeRefire(key, signal.ObservedAt); ok {
+			created.StartedAt = restored
+			return []Event{event(EventRefired, signal.Severity)}
 		}
 		return []Event{event(EventFired, signal.Severity)}
 	}
